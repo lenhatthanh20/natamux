@@ -43,6 +43,23 @@ pub struct CreateWorkspaceInput {
     pub base: Option<String>,
 }
 
+/// `MAX_TRIES`: the most copies one fan out makes.
+pub const MAX_TRIES: u32 = 5;
+
+/// The body of `POST /tasks/:id/fan-out`: `count` is 1 to `MAX_TRIES`; with `start`, each copy gets a
+/// workspace and Claude Code at once.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+pub struct FanOutInput {
+    pub count: u32,
+    pub start: bool,
+}
+
+/// The answer of `POST /tasks/:id/fan-out`: the new tries.
+#[derive(Clone, Debug, Deserialize)]
+pub struct FanOutAnswer {
+    pub tasks: Vec<Task>,
+}
+
 /// The step a new workspace is at, while the daemon makes it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -164,6 +181,21 @@ mod tests {
             base: Some("dev".into()),
         };
         assert_eq!(serde_json::to_string(&some).unwrap(), r#"{"base":"dev"}"#);
+    }
+
+    #[test]
+    fn a_fan_out_sends_the_count_and_start_and_reads_the_tries() {
+        let input = FanOutInput {
+            count: 2,
+            start: false,
+        };
+        assert_eq!(
+            serde_json::to_string(&input).unwrap(),
+            r#"{"count":2,"start":false}"#
+        );
+        let answer: FanOutAnswer =
+            serde_json::from_str(&format!(r#"{{"tasks":[{TASK}]}}"#)).unwrap();
+        assert_eq!(answer.tasks[0].id, "T-1");
     }
 
     #[test]

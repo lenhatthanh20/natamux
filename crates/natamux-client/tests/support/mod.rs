@@ -14,8 +14,9 @@ use async_tungstenite::tungstenite::Message;
 use async_tungstenite::tungstenite::protocol::CloseFrame;
 use async_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
 use futures::StreamExt;
-use natamux_client::{Client, Config};
+use natamux_client::{Client, ClientError, Config};
 use natamux_proto::terminals::messages::ClientMessage;
+use serde_json::Value;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc;
@@ -292,4 +293,36 @@ pub fn runtime() -> tokio::runtime::Runtime {
         .enable_all()
         .build()
         .unwrap()
+}
+
+/// Runs one call against a daemon that answers `route` with `body`, and gives back the answer and
+/// the body the client sent (Null when it sent none).
+pub fn exchange<T: Send + 'static>(
+    route: &str,
+    status: &str,
+    body: &str,
+    call: impl FnOnce(&Client) -> natamux_client::Answer<T>,
+) -> (Result<T, ClientError>, Value) {
+    let rt = runtime();
+    let daemon = rt.block_on(FakeDaemon::start());
+    daemon.state(|state| state.answer(route, status, body));
+    let client = daemon.client();
+    let answer = rt.block_on(within(call(&client)));
+    let (seen, sent) = daemon.state(|state| state.last_request());
+    assert_eq!(seen, route);
+    let sent = if sent.is_empty() {
+        Value::Null
+    } else {
+        serde_json::from_str(&sent).unwrap()
+    };
+    (answer, sent)
+}
+
+pub fn ok<T: Send + 'static>(
+    route: &str,
+    body: &str,
+    call: impl FnOnce(&Client) -> natamux_client::Answer<T>,
+) -> (T, Value) {
+    let (answer, sent) = exchange(route, "200 OK", body, call);
+    (answer.unwrap(), sent)
 }

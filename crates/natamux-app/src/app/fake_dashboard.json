@@ -33,14 +33,18 @@
       "workspace": "/work/.natamux/worktrees/T-0143",
       "pr": "https://github.com/lenhatthanh20/natamux/pull/425",
       "prStatus": { "state": "open", "checks": "passing" },
-      "stages": ["spec", "plan", "implement", "agent-review", "review"],
+      "description": "A coupon larger than the cart total gives a negative amount at checkout.",
+      "priority": "high", "labels": ["bug"], "paths": { "kind": "bug" },
+      "stages": ["context","spec",{"id":"kind","paths":[{"id":"bug","stages":["reproduce"]},{"id":"feature","stages":["plan"]}]},{"id":"build","parallel":["test-spec","implement"]},"agent-review","security","review","release"],
+      "stageSince": "2026-10-22T08:10:00.000Z",
       "createdAt": "2026-10-21T07:00:00.000Z", "updatedAt": "2026-10-22T08:10:00.000Z"
     },
     {
       "id": "T-0141", "title": "Count tokens and cost of each task", "state": "needs-input",
-      "stage": "implement", "repo": "natamux", "agent": "claude-code",
+      "stage": "spec", "repo": "natamux", "agent": "claude-code",
       "branch": "natamux/t-0141-task-usage", "workspace": "/work/.natamux/worktrees/T-0141",
-      "stages": ["spec", "plan", "implement", "agent-review", "review"],
+      "stages": ["context","spec",{"id":"kind","paths":[{"id":"bug","stages":["reproduce"]},{"id":"feature","stages":["plan"]}]},{"id":"build","parallel":["test-spec","implement"]},"agent-review","security","review","release"],
+      "stageSince": "2026-10-22T08:56:00.000Z",
       "createdAt": "2026-10-21T09:00:00.000Z", "updatedAt": "2026-10-22T09:25:00.000Z"
     },
     {
@@ -56,7 +60,7 @@
     },
     {
       "id": "T-0135", "title": "Background jobs in the footer", "state": "ready", "stage": "spec",
-      "repo": "natamux", "agent": "gemini",
+      "repo": "natamux", "labels": ["tries-t-0135"], "agent": "gemini",
       "createdAt": "2026-10-20T15:05:00.000Z", "updatedAt": "2026-10-20T15:05:00.000Z"
     },
     {
@@ -92,6 +96,11 @@
   ],
   "events": {
     "T-0141": [
+      {"seq": 30, "accepted": true, "event": {"taskId": "T-0141", "source": "system", "type": "task.created", "at": "2026-10-21T09:00:00.000Z", "payload": {}}},
+      {"seq": 31, "accepted": true, "event": {"taskId": "T-0141", "source": "system", "type": "stage.started", "at": "2026-10-22T08:50:00.000Z", "payload": {"stage": "context"}}},
+      {"seq": 32, "accepted": true, "event": {"taskId": "T-0141", "source": "system", "type": "stage.checked", "at": "2026-10-22T08:55:00.000Z", "payload": {"stage": "context", "passes": ["context.md is written"]}}},
+      {"seq": 33, "accepted": true, "event": {"taskId": "T-0141", "source": "human", "type": "stage.approved", "at": "2026-10-22T08:56:00.000Z", "payload": {"stage": "context"}}},
+      {"seq": 34, "accepted": true, "event": {"taskId": "T-0141", "source": "system", "type": "stage.started", "at": "2026-10-22T08:56:00.000Z", "payload": {"stage": "spec"}}},
       {
         "seq": 41, "accepted": true,
         "event": {
@@ -165,7 +174,15 @@
   },
   "usage": {
     "T-0146": { "tokens": 1840000, "costUsd": 12.4, "unpricedModels": [], "stages": [] },
-    "T-0143": { "tokens": 920000, "costUsd": 6.1, "unpricedModels": [], "stages": [] },
+    "T-0143": {
+      "tokens": 920000, "costUsd": 6.1, "unpricedModels": ["gemini-flash"],
+      "stages": [
+        { "stage": "spec", "agent": "claude-code", "model": "claude-opus-5-5", "input": 8200, "cacheRead": 210000, "cacheWrite": 41000, "output": 12400, "costUsd": 1.2 },
+        { "stage": "implement", "agent": "claude-code", "model": "claude-opus-5-5", "input": 21000, "cacheRead": 480000, "cacheWrite": 90000, "output": 52000, "costUsd": 3.9 },
+        { "stage": "agent-review", "agent": "codex", "model": "gpt-5-codex", "input": 6400, "cacheRead": 0, "cacheWrite": 0, "output": 9100, "costUsd": 1.0 },
+        { "stage": "test-spec", "agent": "gemini", "model": "gemini-flash", "input": 3100, "cacheRead": 0, "cacheWrite": 0, "output": 2600, "costUsd": null }
+      ]
+    },
     "T-0144": { "tokens": 310000, "costUsd": null, "unpricedModels": ["cursor-small"], "stages": [] }
   },
   "diffStats": {

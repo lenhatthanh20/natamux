@@ -22,7 +22,11 @@ fn tasks_of(events: &[DashboardEvent]) -> Option<&Vec<Task>> {
 fn every_part_of_the_seed_reads() {
     let seed: Value = serde_json::from_str(SEED).unwrap();
     let data = Data::seed();
-    assert_eq!(data.tasks.len(), seed["tasks"].as_array().unwrap().len());
+    // Four tasks of `fake_stages.json` come on top of the seed.
+    assert_eq!(
+        data.tasks.len(),
+        seed["tasks"].as_array().unwrap().len() + 4
+    );
     assert_eq!(data.repos.len(), 2);
     assert_eq!(
         data.worktrees_dir.as_deref(),
@@ -31,9 +35,9 @@ fn every_part_of_the_seed_reads() {
     assert_eq!(data.jobs.len(), 2);
     assert_eq!(data.activity.len(), 3);
     assert_eq!(data.usage.len(), 3);
-    assert_eq!(data.diff_stats.len(), 5);
-    assert_eq!(data.terminals.len(), 4);
-    assert_eq!(data.events.len(), 2);
+    assert_eq!(data.diff_stats.len(), 7);
+    assert_eq!(data.terminals.len(), 6);
+    assert_eq!(data.events.len(), 5);
     assert_eq!(data.templates.len(), 2);
     assert_eq!(data.branches.default_branch.as_deref(), Some("main"));
     assert_eq!(data.skills.skills.len(), 1);

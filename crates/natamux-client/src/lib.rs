@@ -16,6 +16,9 @@ pub mod events {
 pub mod projects {
     pub mod api;
 }
+pub mod stages {
+    pub mod api;
+}
 pub mod tasks {
     pub mod api;
 }
@@ -38,13 +41,17 @@ use natamux_proto::agents::activity::{TaskActivity, TaskUsage};
 use natamux_proto::agents::start::StartAgentInput;
 use natamux_proto::events::task_event::{StoredEvent, TaskEventInput};
 use natamux_proto::projects::repo::{BranchList, LoadedSettings, RepoList, SkillList};
+use natamux_proto::stages::actions::{StageActionInput, StageFile};
 use natamux_proto::tasks::job::Job;
-use natamux_proto::tasks::task::{DeleteTaskAnswer, NewTaskInput, Task, TemplateTaskInput};
-use natamux_proto::tasks::template::TaskTemplate;
+use natamux_proto::tasks::task::{
+    DeleteTaskAnswer, NewTaskInput, Task, TaskChanges, TemplateTaskInput,
+};
+use natamux_proto::tasks::template::{TaskTemplate, TemplateInput};
 use natamux_proto::terminals::ended::EndedShell;
 use natamux_proto::terminals::list::TerminalList;
 use natamux_proto::workspaces::workspace::{
-    ChangeEntry, DiffStat, GitGraph, NewWorkspaceInput, PreparingStep, RemoveWorkspaceAnswer,
+    ChangeEntry, DiffStat, FanOutInput, GitGraph, NewWorkspaceInput, PreparingStep,
+    RemoveWorkspaceAnswer,
 };
 
 pub use config::Config;
@@ -173,6 +180,75 @@ impl Client {
         let (task_id, title) = (task_id.to_string(), title.to_string());
         self.with_config(move |config| async move {
             tasks::api::rename_task(&config, &task_id, &title).await
+        })
+    }
+
+    pub fn update_task(&self, task_id: &str, changes: TaskChanges) -> Answer<Task> {
+        let task_id = task_id.to_string();
+        self.with_config(move |config| async move {
+            tasks::api::update_task(&config, &task_id, &changes).await
+        })
+    }
+
+    pub fn save_template(&self, input: TemplateInput) -> Answer<TaskTemplate> {
+        self.with_config(
+            move |config| async move { tasks::api::save_template(&config, &input).await },
+        )
+    }
+
+    pub fn create_issue(&self, task_id: &str) -> Answer<Task> {
+        let task_id = task_id.to_string();
+        self.with_config(
+            move |config| async move { tasks::api::create_issue(&config, &task_id).await },
+        )
+    }
+
+    pub fn stage_action(&self, task_id: &str, input: StageActionInput) -> Answer<Task> {
+        let task_id = task_id.to_string();
+        self.with_config(move |config| async move {
+            stages::api::stage_action(&config, &task_id, &input).await
+        })
+    }
+
+    pub fn set_workflow(&self, task_id: &str, stage: &str, on: bool) -> Answer<Task> {
+        let (task_id, stage) = (task_id.to_string(), stage.to_string());
+        self.with_config(move |config| async move {
+            stages::api::set_workflow(&config, &task_id, &stage, on).await
+        })
+    }
+
+    pub fn set_ci(&self, task_id: &str, stage: &str, on: bool) -> Answer<Task> {
+        let (task_id, stage) = (task_id.to_string(), stage.to_string());
+        self.with_config(move |config| async move {
+            stages::api::set_ci(&config, &task_id, &stage, on).await
+        })
+    }
+
+    pub fn set_skip(&self, task_id: &str, stage: &str, on: bool) -> Answer<Task> {
+        let (task_id, stage) = (task_id.to_string(), stage.to_string());
+        self.with_config(move |config| async move {
+            stages::api::set_skip(&config, &task_id, &stage, on).await
+        })
+    }
+
+    pub fn list_stage_files(&self, task_id: &str) -> Answer<Vec<StageFile>> {
+        let task_id = task_id.to_string();
+        self.with_config(move |config| async move {
+            stages::api::list_stage_files(&config, &task_id).await
+        })
+    }
+
+    pub fn fan_out(&self, task_id: &str, input: FanOutInput) -> Answer<Vec<Task>> {
+        let task_id = task_id.to_string();
+        self.with_config(move |config| async move {
+            workspaces::api::fan_out(&config, &task_id, &input).await
+        })
+    }
+
+    pub fn refresh_pull_request(&self, task_id: &str) -> Answer<Task> {
+        let task_id = task_id.to_string();
+        self.with_config(move |config| async move {
+            workspaces::api::refresh_pull_request(&config, &task_id).await
         })
     }
 

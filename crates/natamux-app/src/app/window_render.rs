@@ -5,7 +5,7 @@ use natamux_proto::tasks::task::TaskState;
 use ui::prelude::*;
 
 use super::{Root, Tool};
-use crate::app::layout_mode::{PANEL_WIDTH, SidebarMode, effective_sidebar_width};
+use crate::app::layout_mode::{DetailsMode, PANEL_WIDTH, SidebarMode, effective_sidebar_width};
 use crate::app::shell_rules::{crumb, is_wide, live_item, running_count, window_title};
 use crate::app::shortcuts::{
     Approve, BlockTask, MarkReady, RequestChanges, ResumeAgent, RetryTask, UnblockTask,
@@ -135,6 +135,7 @@ impl Root {
         let crumb = crumb(open, dashboard.agents_open, &dashboard.data.repos, width);
         let live = live_item(&dashboard.data.link);
         let jobs = dashboard.data.jobs.clone();
+        let notify = dashboard.view().notify;
         let title = window_title(needs_you);
         if title != self.title {
             window.set_window_title(&title);
@@ -144,13 +145,16 @@ impl Root {
             |root: &mut Root, _: &ClickEvent, _: &mut Window, cx: &mut Context<Root>| {
                 root.show_needs_you(cx)
             };
+        let details = (!dashboard.agents_open && dashboard.details_task().is_some())
+            .then(|| self.details_shown(window, cx));
         let title_bar = TitleBar::new(
             sidebar_shown,
             crumb,
             is_wide(width),
             needs_you,
             cx.listener(show_waiting),
-        );
+        )
+        .details(details);
         let status_bar = StatusBar::new(live, running, needs_you, jobs, width)
             .on_running(cx.listener(|root, _: &ClickEvent, _, cx| {
                 root.show_state(Some(TaskState::Running), cx)
@@ -159,12 +163,22 @@ impl Root {
             .on_open_task(cx.listener(|root, id: &str, _, cx| {
                 root.dashboard
                     .update(cx, |dashboard, cx| dashboard.open(id, cx))
-            }));
+            }))
+            .notify(
+                notify,
+                cx.listener(|root, _: &ClickEvent, _, cx| {
+                    root.dashboard
+                        .update(cx, |dashboard, cx| dashboard.toggle_notify(cx))
+                }),
+            );
         (title_bar, status_bar)
     }
 
     fn render_body(&mut self, width: f32, window: &Window, cx: &mut Context<Self>) -> Div {
-        let docked = self.layout(window, cx).sidebar == SidebarMode::Docked;
+        let layout = self.layout(window, cx);
+        let docked = layout.sidebar == SidebarMode::Docked;
+        self.sync_details_mode(window, cx);
+        let details = self.details_shown(window, cx).then_some(layout.details);
         let view = self.dashboard.read(cx).view();
         let sidebar_open = view.sidebar_open;
         let sidebar_width = effective_sidebar_width(view.sidebar_width, Some(width));
@@ -183,6 +197,13 @@ impl Root {
                     .h_full()
                     .bg(cx.theme().colors().editor_background)
                     .child(self.render_main(cx)),
+            )
+            .when(details == Some(DetailsMode::Docked), |this| {
+                this.child(self.render_docked_details(cx))
+            })
+            .when(
+                details.is_some_and(|mode| mode != DetailsMode::Docked),
+                |this| this.child(self.render_sheet(width, layout.compact, cx)),
             )
             .when(!docked && self.drawer_open, |this| {
                 this.child(self.render_drawer(width, cx))
@@ -261,6 +282,14 @@ impl Render for Root {
             .on_action(cx.listener(Self::start_bench))
             .on_action(cx.listener(Self::stop_bench))
             .on_action(cx.listener(Self::check_ime))
+            .on_action(cx.listener(Self::toggle_details))
+            .on_action(cx.listener(Self::toggle_selected_details))
+            .on_action(cx.listener(Self::edit_task))
+            .on_action(cx.listener(Self::show_progress))
+            .on_action(cx.listener(Self::approve_stage))
+            .on_action(cx.listener(Self::report_stage))
+            .on_action(cx.listener(Self::skip_stage))
+            .on_action(cx.listener(Self::send_back_stage))
             .on_action(cx.listener(Self::close))
             .child(title_bar)
             .child(body)

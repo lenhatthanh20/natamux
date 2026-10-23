@@ -17,12 +17,13 @@ use ui::prelude::*;
 
 use super::dashboard::{Dashboard, DashboardChange, TerminalReader};
 use super::layout_mode::{
-    LayoutInput, LayoutMode, PANEL_WIDTH, SidebarMode, decide_layout, effective_sidebar_width,
+    LayoutInput, LayoutMode, SidebarMode, decide_layout, effective_sidebar_width,
 };
+use super::notify::Notifier;
 use super::options::Options;
 use super::shell_rules::window_title;
 use super::shortcuts::{
-    Back, FocusFilter, NewTask, NewWorkspace, ShowAgents, ShowAllTasks, ShowBoard, ShowTable,
+    FocusFilter, NewTask, NewWorkspace, ShowAgents, ShowAllTasks, ShowBoard, ShowTable,
     ToggleSidebar,
 };
 use super::source::Source;
@@ -34,6 +35,7 @@ use crate::components::toasts::{Toaster, push_toast};
 use crate::ime::ime_check::ImeCheck;
 use crate::perf::overlay;
 use crate::sidebar::sidebar::Sidebar;
+use crate::tasks::details_panel::DetailsPanel;
 use crate::tasks::quick_add::StartTask;
 use crate::tasks::task_view::TaskView;
 use crate::terminals::agent_panes::AgentPanes;
@@ -60,6 +62,7 @@ pub struct Root {
     tasks: Entity<TaskView>,
     workspace: Entity<WorkspaceView>,
     agents: Entity<AgentPanes>,
+    details: Entity<DetailsPanel>,
     tool: Tool,
     /// `--gate2`: a bench whose shells keep printing while main shows All tasks.
     parked_bench: Option<Entity<BenchView>>,
@@ -68,6 +71,8 @@ pub struct Root {
     toaster: Entity<Toaster>,
     focus: FocusHandle,
     resize_focus: FocusHandle,
+    details_resize: FocusHandle,
+    notifier: Notifier,
     /// The sidebar drawer under 1024. The docked sidebar's open state is in the view state.
     drawer_open: bool,
     /// The id of the last dashboard toast shown, so each one shows once.
@@ -90,6 +95,7 @@ impl Root {
         let source = source.ok();
         let workspace = cx.new(|cx| WorkspaceView::new(dashboard.clone(), cx));
         let agents = cx.new(|cx| AgentPanes::new(dashboard.clone(), cx));
+        let details = cx.new(|cx| DetailsPanel::new(dashboard.clone(), window, cx));
         cx.subscribe_in(&dashboard, window, Self::on_dashboard)
             .detach();
         // Start a task of the quick add and of the "No tasks yet" state.
@@ -110,6 +116,7 @@ impl Root {
             tasks,
             workspace,
             agents,
+            details,
             tool: Tool::None,
             parked_bench: None,
             menus,
@@ -117,6 +124,8 @@ impl Root {
             toaster,
             focus: cx.focus_handle(),
             resize_focus: cx.focus_handle().tab_stop(true),
+            details_resize: cx.focus_handle().tab_stop(true),
+            notifier: Notifier::default(),
             drawer_open: false,
             toasts_shown: 0,
             title: window_title(0),
@@ -193,6 +202,8 @@ impl Root {
                     .map(|task| task.id.clone())
                     .collect();
                 TerminalCache::set_live(live, cx);
+                let (main, active) = (window.window_handle(), window.is_window_active());
+                self.notifier.after_tasks(&self.dashboard, main, active, cx);
             }
             DashboardChange::Opened(_) | DashboardChange::AgentsOpened => {
                 self.close_tool(cx);
@@ -204,7 +215,9 @@ impl Root {
                 let focus = self.tasks.focus_handle(cx);
                 window.focus(&focus, cx);
             }
-            DashboardChange::WorkspaceChanged(_) | DashboardChange::ShellsChanged(_) => {}
+            DashboardChange::WorkspaceChanged(_)
+            | DashboardChange::ShellsChanged(_)
+            | DashboardChange::TaskLogged(_) => {}
         }
     }
 
@@ -274,7 +287,7 @@ impl Root {
         decide_layout(LayoutInput {
             width: Some(width),
             sidebar_width,
-            details_width: PANEL_WIDTH,
+            details_width: view.details_width,
             coarse: false,
         })
     }
@@ -332,18 +345,6 @@ impl Root {
         let focus = self.filter(cx).focus_handle(cx);
         window.focus(&focus, cx);
         cx.notify();
-    }
-
-    /// Esc closes the top layer first: the drawer, then a tool, then the open task.
-    fn back(&mut self, _: &Back, window: &mut Window, cx: &mut Context<Self>) {
-        if self.drawer_open {
-            self.set_drawer(false, window, cx);
-        } else if !matches!(self.tool, Tool::None) {
-            self.close_tool(cx);
-        } else {
-            self.dashboard
-                .update(cx, |dashboard, cx| dashboard.back(cx));
-        }
     }
 
     fn show_list(&mut self, layout: Option<Layout>, cx: &mut Context<Self>) {
@@ -439,6 +440,9 @@ impl Focusable for Root {
 
 #[path = "window_render.rs"]
 mod render;
+
+#[path = "window_details.rs"]
+mod details;
 
 pub fn open(
     options: &Options,

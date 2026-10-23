@@ -130,7 +130,7 @@ Pass: 100 of 100 in both halves with each input source.
 
 ### Gate 2: frame time and latency
 
-1. Pick a running task. **Tools → Bench: 10 Terminals** (cmd-alt-b). It opens Terminals 901 to 910 of that task, far from the ones its stages use, and each prints about 1 MB/s. The perf overlay comes on.
+1. Pick a running task. **Tools → Bench: 10 Terminals** (cmd-alt-t; cmd-alt-b before screen 3, which gives it to the details panel). It opens Terminals 901 to 910 of that task, far from the ones its stages use, and each prints about 1 MB/s. The perf overlay comes on.
 2. Watch for 60 s. Scroll the task list and a bench terminal meanwhile.
 3. **Tools → Stop Bench** (cmd-alt-x). It stops the floods and ends those shells. Quitting or closing the window also ends them, but the app waits at most 200 ms for that on quit: use **Stop Bench** first, so a slow daemon does not keep them running.
 4. Open a task's terminal, keep the overlay on (cmd-alt-p), and type for a while. The overlay shows key to glyph, and echo: from the key to its echo reaching the app. Echo is the shell, the daemon and the network, without parsing and frames.

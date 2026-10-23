@@ -33,6 +33,27 @@ pub enum DetailsView {
     Details,
 }
 
+impl DetailsView {
+    /// The names of `natamux.details-view`.
+    pub fn name(self) -> &'static str {
+        match self {
+            DetailsView::Progress => "progress",
+            DetailsView::Files => "files",
+            DetailsView::Details => "details",
+        }
+    }
+
+    pub fn parse(text: &str) -> Option<DetailsView> {
+        [
+            DetailsView::Progress,
+            DetailsView::Files,
+            DetailsView::Details,
+        ]
+        .into_iter()
+        .find(|view| view.name() == text)
+    }
+}
+
 /// Until the user picks a view, the details show the progress beside a workspace and the task
 /// itself beside the list.
 pub fn details_view_for(picked: Option<DetailsView>, in_workspace: bool) -> DetailsView {

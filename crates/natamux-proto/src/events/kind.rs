@@ -112,6 +112,12 @@ impl EventKind {
     }
 }
 
+/// `task.updated`: the change added a line to the task's log (the web's `logged`). A sign of life
+/// of its agent, `task.changed`, moves only its time.
+pub fn is_task_updated(text: &str) -> bool {
+    serde_json::from_str::<Envelope>(text).is_ok_and(|message| message.kind == "task.updated")
+}
+
 /// The task a message is about (`taskId`), when it has one. `task.created` and `task.updated`
 /// carry the whole task instead, so read its id from there.
 pub fn task_id_of(text: &str) -> Option<String> {

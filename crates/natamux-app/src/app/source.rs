@@ -13,16 +13,20 @@ use natamux_client::{
 use natamux_proto::agents::start::StartAgentInput;
 use natamux_proto::events::task_event::{StoredEvent, TaskEventInput};
 use natamux_proto::projects::repo::{BranchList, LoadedSettings, SkillList};
-use natamux_proto::tasks::task::{DeleteTaskAnswer, NewTaskInput, Task, TemplateTaskInput};
-use natamux_proto::tasks::template::TaskTemplate;
+use natamux_proto::stages::actions::{StageActionInput, StageFile};
+use natamux_proto::tasks::task::{
+    DeleteTaskAnswer, NewTaskInput, Task, TaskChanges, TemplateTaskInput,
+};
+use natamux_proto::tasks::template::{TaskTemplate, TemplateInput};
 use natamux_proto::terminals::ended::EndedShell;
 use natamux_proto::terminals::list::TerminalList;
 use natamux_proto::workspaces::workspace::{
-    ChangeEntry, GitGraph, NewWorkspaceInput, RemoveWorkspaceAnswer,
+    ChangeEntry, FanOutInput, GitGraph, NewWorkspaceInput, RemoveWorkspaceAnswer,
 };
 
 use super::fake_daemon::{self, FakeDaemon};
 use crate::tasks::delete_finished::{DeleteOutcome, delete_each};
+use crate::tasks::details_commands::StageToggle;
 #[cfg(test)]
 use crate::workspaces::remove_finished_rules::remove_summary;
 use crate::workspaces::remove_finished_rules::{RemoveOutcome, remove_each};
@@ -239,6 +243,73 @@ impl Source {
         self.ask(
             |c| c.close_terminal(task_id, terminal),
             |f| f.close_terminal(task_id, terminal),
+        )
+    }
+
+    // Screen 3: the details panel.
+
+    pub fn stage_action(&self, task_id: &str, input: StageActionInput) -> Answer<Task> {
+        match self {
+            Source::Daemon(client) => client.stage_action(task_id, input),
+            Source::FakeDaemon => ready(fake_daemon::shared().stage_action(task_id, input)),
+        }
+    }
+
+    pub fn set_stage_toggle(
+        &self,
+        task_id: &str,
+        kind: StageToggle,
+        stage: &str,
+        on: bool,
+    ) -> Answer<Task> {
+        match (self, kind) {
+            (Source::Daemon(client), StageToggle::Workflow) => {
+                client.set_workflow(task_id, stage, on)
+            }
+            (Source::Daemon(client), StageToggle::Ci) => client.set_ci(task_id, stage, on),
+            (Source::Daemon(client), StageToggle::Skip) => client.set_skip(task_id, stage, on),
+            (Source::FakeDaemon, kind) => {
+                ready(fake_daemon::shared().set_stage_toggle(task_id, kind.name(), stage, on))
+            }
+        }
+    }
+
+    pub fn list_stage_files(&self, task_id: &str) -> Answer<Vec<StageFile>> {
+        self.ask(
+            |c| c.list_stage_files(task_id),
+            |f| f.list_stage_files(task_id),
+        )
+    }
+
+    pub fn update_task(&self, task_id: &str, changes: TaskChanges) -> Answer<Task> {
+        match self {
+            Source::Daemon(client) => client.update_task(task_id, changes),
+            Source::FakeDaemon => ready(fake_daemon::shared().update_task(task_id, changes)),
+        }
+    }
+
+    pub fn save_template(&self, input: TemplateInput) -> Answer<TaskTemplate> {
+        match self {
+            Source::Daemon(client) => client.save_template(input),
+            Source::FakeDaemon => ready(fake_daemon::shared().save_template(input)),
+        }
+    }
+
+    pub fn fan_out(&self, task_id: &str, input: FanOutInput) -> Answer<Vec<Task>> {
+        match self {
+            Source::Daemon(client) => client.fan_out(task_id, input),
+            Source::FakeDaemon => ready(fake_daemon::shared().fan_out(task_id, input)),
+        }
+    }
+
+    pub fn create_issue(&self, task_id: &str) -> Answer<Task> {
+        self.ask(|c| c.create_issue(task_id), |f| f.create_issue(task_id))
+    }
+
+    pub fn refresh_pull_request(&self, task_id: &str) -> Answer<Task> {
+        self.ask(
+            |c| c.refresh_pull_request(task_id),
+            |f| f.refresh_pull_request(task_id),
         )
     }
 }

@@ -10,7 +10,7 @@ use natamux_client::TerminalStatus;
 use natamux_proto::terminals::list::TerminalList;
 use ui::prelude::*;
 
-use super::pane_facts::{PaneFacts, agent_lanes, pane_facts, restoring_label};
+use super::pane_facts::{PaneFacts, agent_lanes, focus_after_close, pane_facts, restoring_label};
 use super::pane_header::{PaneHeader, PaneTitle};
 use super::pane_rules::{MAX_PANES, PaneLayout, columns_for, pane_span};
 use super::remote_terminal::RemoteTerminal;
@@ -19,6 +19,7 @@ use super::terminal_find::open_find;
 use super::terminal_pane::{TerminalPane, first_agent_terminal};
 use super::terminal_tabs::{next_terminal_name, terminal_names, unlisted_shells};
 use crate::app::dashboard::Dashboard;
+use crate::components::agent_badge::narrow_pane;
 use crate::components::skeleton::SkeletonList;
 use crate::tasks::state_filter::width_probe;
 use crate::workspaces::wrap_up_rules::is_finished_state;
@@ -40,6 +41,8 @@ pub struct ShellPanes {
     maximized: Option<String>,
     /// The terminal to focus once it is on screen.
     focus_next: Option<String>,
+    /// The panes are narrower than the agent badge's name needs.
+    narrow: bool,
     /// `--gate2`: only these terminals show, so it measures a grid of bench shells.
     only: Option<Vec<String>>,
     /// The grid's width, which picks the columns.
@@ -59,6 +62,7 @@ impl ShellPanes {
             closing: BTreeSet::new(),
             maximized: None,
             focus_next: None,
+            narrow: false,
             only: None,
             width,
             _width: observe,
@@ -103,6 +107,14 @@ impl ShellPanes {
             .collect()
     }
 
+    /// The columns of `count` panes; narrow panes show only their agent's icon.
+    fn columns(&mut self, count: usize, cx: &App) -> usize {
+        let width = *self.width.read(cx);
+        let columns = columns_for(PaneLayout::Auto, count, width);
+        self.narrow = narrow_pane(width, columns);
+        columns
+    }
+
     pub fn is_full(&self, cx: &App) -> bool {
         self.names(self.list(cx).as_ref()).len() >= MAX_PANES
     }
@@ -120,11 +132,23 @@ impl ShellPanes {
         cx.notify();
     }
 
-    fn close(&mut self, name: String, cx: &mut Context<Self>) {
+    fn close(&mut self, name: String, window: &Window, cx: &mut Context<Self>) {
         let Some(task_id) = self.task_id.clone() else {
             return;
         };
-        TerminalCache::forget(&terminal_key(&task_id, &name), cx);
+        let key = terminal_key(&task_id, &name);
+        let was_focused = TerminalCache::cached(&key, cx).is_some_and(|terminal| {
+            terminal
+                .read(cx)
+                .view
+                .focus_handle(cx)
+                .contains_focused(window, cx)
+        });
+        if was_focused {
+            let names = self.names(self.list(cx).as_ref());
+            self.focus_next = focus_after_close(&names, &name);
+        }
+        TerminalCache::forget(&key, cx);
         self.added.retain(|each| *each != name);
         self.exited.remove(&name);
         if self.maximized.as_deref() == Some(name.as_str()) {
@@ -219,6 +243,7 @@ impl ShellPanes {
         let maximized = self.maximized.as_deref() == Some(name.as_str());
         let this = cx.weak_entity();
         let mut header = PaneHeader::new(key.clone(), PaneTitle::Terminal(name.clone()))
+            .narrow(self.narrow)
             .state_text(fact.state_text)
             .hint(fact.hint)
             .maximize(maximized, {
@@ -233,8 +258,8 @@ impl ShellPanes {
         }
         if fact.closable {
             let (this, name) = (this.clone(), name.clone());
-            header = header.close("Close terminal (ends the process)", move |_, cx| {
-                this.update(cx, |panes, cx| panes.close(name.clone(), cx))
+            header = header.close("Close terminal (ends the process)", move |window, cx| {
+                this.update(cx, |panes, cx| panes.close(name.clone(), window, cx))
                     .ok();
             });
         }
@@ -353,6 +378,7 @@ impl Render for ShellPanes {
             .collect();
         TerminalCache::claim(Owner::Workspace, keys, cx);
         let finished = is_finished_state(task.state);
+        let columns = self.columns(facts.len(), cx);
         let mut panes = Vec::new();
         for fact in facts {
             let terminal = TerminalCache::terminal(&source, &task_id, &fact.name, window, cx);
@@ -363,8 +389,6 @@ impl Render for ShellPanes {
             }
             panes.push(self.pane(&task_id, fact, terminal, finished, &list, window, cx));
         }
-        let width = *self.width.read(cx);
-        let columns = columns_for(PaneLayout::Auto, panes.len(), width);
         v_flex()
             .id("shell-panes")
             .relative()

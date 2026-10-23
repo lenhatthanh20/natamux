@@ -121,8 +121,9 @@ pub struct Task {
     pub workspace: Option<String>,
     #[serde(default)]
     pub pr: Option<String>,
-    #[serde(default)]
-    pub pr_status: Option<Value>,
+    /// A stored value that is not a status reads as None, so the task still reads.
+    #[serde(default, deserialize_with = "status_or_none")]
+    pub pr_status: Option<PullRequestStatus>,
     #[serde(default)]
     pub depends_on: Vec<String>,
     #[serde(default)]
@@ -196,7 +197,7 @@ impl Task {
 }
 
 /// What GitHub last said about a task's pull request and its checks (`pullRequestStatusSchema`).
-#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub struct PullRequestStatus {
     pub state: String,
     #[serde(default = "no_checks")]
@@ -207,10 +208,17 @@ fn no_checks() -> String {
     "none".into()
 }
 
+fn status_or_none<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<PullRequestStatus>, D::Error> {
+    let value = Value::deserialize(deserializer)?;
+    Ok(serde_json::from_value(value).ok())
+}
+
 impl Task {
     /// None when GitHub was not asked yet, or the stored value is not a status.
     pub fn pull_request_status(&self) -> Option<PullRequestStatus> {
-        serde_json::from_value(self.pr_status.clone()?).ok()
+        self.pr_status.clone()
     }
 }
 
@@ -233,11 +241,23 @@ pub struct TemplateTaskInput {
     pub repo: Option<String>,
 }
 
-/// The body of `PATCH /tasks/:id` that renames a task. The route takes any of title, description,
-/// priority, labels and dependsOn; screen 1 changes the title only.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-pub struct TitlePatch {
-    pub title: String,
+/// `EDITABLE_FIELDS`: what a person may change after a task is created.
+pub const EDITABLE_FIELDS: [&str; 5] = ["title", "description", "priority", "labels", "dependsOn"];
+
+/// The body of `PATCH /tasks/:id` (`updateTaskInputSchema`): a field left out stays as it is.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskChanges {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub priority: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub labels: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub depends_on: Option<Vec<String>>,
 }
 
 /// The answer of `POST /tasks`, `POST /templates/:id/tasks`, `PATCH /tasks/:id`,
@@ -403,10 +423,20 @@ mod tests {
             serde_json::to_string(&template).unwrap(),
             r#"{"title":"x","repo":"a"}"#
         );
-        let patch = TitlePatch {
-            title: "New".into(),
+        let patch = TaskChanges {
+            title: Some("New".into()),
+            ..Default::default()
         };
         assert_eq!(serde_json::to_string(&patch).unwrap(), r#"{"title":"New"}"#);
+        let more = TaskChanges {
+            labels: Some(vec!["a".into()]),
+            depends_on: Some(vec!["T-1".into()]),
+            ..Default::default()
+        };
+        assert_eq!(
+            serde_json::to_string(&more).unwrap(),
+            r#"{"labels":["a"],"dependsOn":["T-1"]}"#
+        );
     }
 
     #[test]
@@ -423,7 +453,11 @@ mod tests {
     fn reads_the_pull_request_status_of_a_task() {
         let mut task: Task = serde_json::from_str(TASK).unwrap();
         assert_eq!(task.pull_request_status(), None);
-        task.pr_status = Some(serde_json::json!({"state":"merged","checks":"passing","x":1}));
+        let text = TASK.replace(
+            r#""prStatus": null"#,
+            r#""prStatus": {"state":"merged","checks":"passing","x":1}"#,
+        );
+        task = serde_json::from_str(&text).unwrap();
         let status = task.pull_request_status().unwrap();
         assert_eq!(
             (status.state.as_str(), status.checks.as_str()),

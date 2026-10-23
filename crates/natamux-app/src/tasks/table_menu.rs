@@ -94,6 +94,12 @@ fn entry(task: &Task, item: RowItem, dashboard: &Entity<Dashboard>) -> Option<Co
         RowItem::Separator => return None,
         RowItem::Open => command_entry("task.open", "Open workspace", "file-diff")
             .handler(move |_, cx| dashboard.update(cx, |dashboard, cx| dashboard.open(&id, cx))),
+        RowItem::Details => command_entry(
+            "task.show-details",
+            title_of("task.show-details"),
+            "panel-right",
+        )
+        .handler(move |_, cx| dashboard.update(cx, |dashboard, cx| dashboard.choose(&id, cx))),
         RowItem::AddSubtask => {
             let task = task.clone();
             let id = "task.add-subtask";

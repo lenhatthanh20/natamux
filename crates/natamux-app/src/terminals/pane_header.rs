@@ -53,6 +53,8 @@ pub struct PaneHeader {
     on_maximize: Option<OnClick>,
     on_open: Option<OnClick>,
     close: Option<(SharedString, OnClick)>,
+    /// The pane is narrow: the agent badge shows only its icon.
+    narrow: bool,
 }
 
 impl PaneHeader {
@@ -69,7 +71,13 @@ impl PaneHeader {
             on_maximize: None,
             on_open: None,
             close: None,
+            narrow: false,
         }
+    }
+
+    pub fn narrow(mut self, narrow: bool) -> Self {
+        self.narrow = narrow;
+        self
     }
 
     pub fn agent_shell(mut self, state: Option<TaskState>, agent: Option<String>) -> Self {
@@ -250,7 +258,10 @@ impl RenderOnce for PaneHeader {
             .border_color(colors.border)
             .child(glyph(&self.key, self.glyph))
             .child(title(&self.key, self.title, color, cx))
-            .children(self.agent.map(AgentBadge::new))
+            .children(
+                self.agent
+                    .map(|agent| AgentBadge::new(agent).icon_only(self.narrow)),
+            )
             .children(state)
             .children(hint)
             .child(div().flex_1())

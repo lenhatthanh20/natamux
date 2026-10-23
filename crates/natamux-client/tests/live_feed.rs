@@ -39,7 +39,8 @@ fn route_of(event: &DashboardEvent) -> Option<String> {
         DashboardEvent::WorkspaceStep(_)
         | DashboardEvent::Status(_)
         | DashboardEvent::WorkspaceChanged { .. }
-        | DashboardEvent::ShellsChanged { .. } => return None,
+        | DashboardEvent::ShellsChanged { .. }
+        | DashboardEvent::TaskLogged { .. } => return None,
     };
     Some(route.to_string())
 }
@@ -48,7 +49,9 @@ fn route_of(event: &DashboardEvent) -> Option<String> {
 async fn next_data(feed: &mut DashboardFeed) -> DashboardEvent {
     loop {
         match next_any(feed).await {
-            DashboardEvent::WorkspaceChanged { .. } | DashboardEvent::ShellsChanged { .. } => {}
+            DashboardEvent::WorkspaceChanged { .. }
+            | DashboardEvent::ShellsChanged { .. }
+            | DashboardEvent::TaskLogged { .. } => {}
             event => return event,
         }
     }

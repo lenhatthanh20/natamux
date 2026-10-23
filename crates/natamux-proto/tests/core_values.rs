@@ -9,12 +9,19 @@ use natamux_proto::agents::start::{LAUNCHABLE_AGENTS, MAX_START_PROMPT_LENGTH};
 use natamux_proto::events::kind::KNOWN_KINDS;
 use natamux_proto::events::task_event::{EVENT_SOURCES, EVENT_TYPES, RECORD_ONLY_EVENT_TYPES};
 use natamux_proto::projects::repo::CONTEXT_SOURCE_TYPES;
+use natamux_proto::stages::actions::{MAX_REASON_LENGTH, MAX_STAGE_ID_LENGTH, STAGE_ACTIONS};
+use natamux_proto::stages::catalog::catalog;
+use natamux_proto::stages::schema::{GATES, STAGE_KINDS};
 use natamux_proto::tasks::attachments;
 use natamux_proto::tasks::task::{
-    CHECK_STATES, MAX_TITLE_LENGTH, PULL_REQUEST_STATES, TASK_PRIORITIES, TASK_STATES,
+    CHECK_STATES, EDITABLE_FIELDS, MAX_TITLE_LENGTH, PULL_REQUEST_STATES, TASK_PRIORITIES,
+    TASK_STATES,
 };
+use natamux_proto::tasks::template::{MAX_TEMPLATE_NAME_LENGTH, MAX_TEMPLATE_TITLE_LENGTH};
 use natamux_proto::terminals::list::SHELL_PROGRAMS;
-use natamux_proto::workspaces::workspace::{CHANGE_STATUSES, MAX_BASE_LENGTH, MAX_PROMPT_LENGTH};
+use natamux_proto::workspaces::workspace::{
+    CHANGE_STATUSES, MAX_BASE_LENGTH, MAX_PROMPT_LENGTH, MAX_TRIES,
+};
 
 const TASK_STATE_TS: &str = include_str!("../../../packages/core/src/tasks/task-state.ts");
 const TASK_TS: &str = include_str!("../../../packages/core/src/tasks/task.ts");
@@ -27,6 +34,13 @@ const TERMINAL_TS: &str = include_str!("../../../packages/core/src/terminals/ter
 const CHANGES_TS: &str = include_str!("../../../packages/core/src/git/changes.ts");
 const GIT_GRAPH_TS: &str = include_str!("../../../packages/core/src/git/git-graph.ts");
 const TERMINAL_LANE_TS: &str = include_str!("../../../packages/core/src/stages/terminal-lane.ts");
+const STAGE_SCHEMA_TS: &str = include_str!("../../../packages/core/src/stages/schema.ts");
+const STAGE_CATALOG_TS: &str = include_str!("../../../packages/core/src/stages/stage-catalog.ts");
+const TEMPLATE_TS: &str = include_str!("../../../packages/core/src/tasks/template.ts");
+const STAGE_ACTIONS_TS: &str = include_str!("../../../packages/daemon/src/stages/stage-actions.ts");
+const STAGE_ROUTES_TS: &str = include_str!("../../../packages/daemon/src/http/routes/stages.ts");
+const TASK_INPUTS_TS: &str = include_str!("../../../packages/daemon/src/tasks/task-inputs.ts");
+const FAN_OUT_TS: &str = include_str!("../../../packages/daemon/src/workspaces/fan-out.ts");
 const EVENT_BUS_TS: &str = include_str!("../../../packages/daemon/src/shared/event-bus.ts");
 const AGENT_LAUNCH_TS: &str = include_str!("../../../packages/daemon/src/agents/agent-launch.ts");
 const WORKSPACE_ROUTES_TS: &str =
@@ -236,4 +250,115 @@ fn ended_shell_fields_match_core() {
         fields,
         ["name", "agent", "stage", "session", "endedAt", "text"]
     );
+}
+
+#[test]
+fn stage_lists_match_core() {
+    same(
+        &STAGE_KINDS,
+        list(STAGE_SCHEMA_TS, "STAGE_KINDS"),
+        "STAGE_KINDS",
+    );
+    same(&GATES, list(STAGE_SCHEMA_TS, "GATES"), "GATES");
+    same(
+        &STAGE_ACTIONS,
+        list(STAGE_ACTIONS_TS, "STAGE_ACTIONS"),
+        "STAGE_ACTIONS",
+    );
+    same(
+        &EDITABLE_FIELDS,
+        list(TASK_INPUTS_TS, "EDITABLE_FIELDS"),
+        "EDITABLE_FIELDS",
+    );
+}
+
+/// The text of `key: <value>` in one stage object, without quotes.
+fn field<'a>(object: &'a str, key: &str) -> Option<&'a str> {
+    let marker = format!("{key}: ");
+    let at = object.find(&marker)? + marker.len();
+    let rest = &object[at..];
+    let end = rest.find([',', '\n', '}']).unwrap_or(rest.len());
+    // A list is read whole, up to its closing bracket.
+    let end = if rest.starts_with('[') {
+        rest.find(']').unwrap() + 1
+    } else {
+        end
+    };
+    Some(rest[..end].trim().trim_matches('\''))
+}
+
+// The stage objects of STAGE_CATALOG hold no braces inside, so the first `}` ends one.
+fn catalog_objects() -> Vec<&'static str> {
+    STAGE_CATALOG_TS
+        .split("stage: {")
+        .skip(1)
+        .map(|part| &part[..part.find('}').unwrap()])
+        .collect()
+}
+
+#[test]
+fn the_stage_catalog_matches_core() {
+    let objects = catalog_objects();
+    let stages = catalog();
+    assert_eq!(objects.len(), stages.len(), "the number of catalog stages");
+    for (object, stage) in objects.iter().zip(stages) {
+        let id = field(object, "id").unwrap();
+        assert_eq!(id, stage.id, "the order of the catalog");
+        let name = |value: &serde_json::Value| value.as_str().unwrap().to_owned();
+        let kind = name(&serde_json::to_value(stage.kind).unwrap());
+        let gate = name(&serde_json::to_value(stage.gate).unwrap());
+        assert_eq!(field(object, "kind"), Some(kind.as_str()), "{id} kind");
+        assert_eq!(field(object, "gate"), Some(gate.as_str()), "{id} gate");
+        assert_eq!(
+            field(object, "output"),
+            stage.output.as_deref(),
+            "{id} output"
+        );
+        assert_eq!(field(object, "name"), stage.name.as_deref(), "{id} name");
+        for (key, value) in [
+            ("workflow", stage.workflow),
+            ("ci", stage.ci),
+            ("ownShell", stage.own_shell),
+        ] {
+            assert_eq!(
+                field(object, key) == Some("true"),
+                value == Some(true),
+                "{id} {key}"
+            );
+        }
+        let written: Option<Vec<String>> = field(object, "sections").map(|text| {
+            let inner = text.trim_start_matches('[').trim_end_matches(']');
+            inner
+                .split(',')
+                .map(|name| name.trim().trim_matches('\'').to_owned())
+                .collect()
+        });
+        assert_eq!(written, stage.sections, "{id} sections");
+    }
+}
+
+#[test]
+fn stage_input_limits_match_core() {
+    let limit = MAX_STAGE_ID_LENGTH;
+    assert!(STAGE_ROUTES_TS.contains(&format!("stage: z.string().min(1).max({limit}).optional()")));
+    assert!(STAGE_ROUTES_TS.contains(&format!("to: z.string().min(1).max({limit}).optional()")));
+    assert!(STAGE_ROUTES_TS.contains(&format!(
+        "const workflowBodySchema = z.object({{ stage: z.string().min(1).max({limit}), on: z.boolean() }})"
+    )));
+    let reason = MAX_REASON_LENGTH.to_string().replace("20000", "20_000");
+    assert!(STAGE_ROUTES_TS.contains(&format!(
+        "reason: z.string().trim().min(1).max({reason}).optional()"
+    )));
+}
+
+#[test]
+fn template_and_fan_out_limits_match_core() {
+    assert!(TEMPLATE_TS.contains(&format!(
+        "name: z.string().trim().min(1).max({MAX_TEMPLATE_NAME_LENGTH})"
+    )));
+    assert!(TEMPLATE_TS.contains(&format!(
+        "title: z.string().trim().min(1).max({MAX_TEMPLATE_TITLE_LENGTH})"
+    )));
+    assert_eq!(value(FAN_OUT_TS, "MAX_TRIES"), MAX_TRIES.to_string());
+    assert!(WORKSPACE_ROUTES_TS.contains("count: z.number().int().min(1).max(MAX_TRIES)"));
 }

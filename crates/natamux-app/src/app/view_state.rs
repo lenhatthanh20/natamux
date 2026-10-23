@@ -8,7 +8,7 @@ use natamux_proto::tasks::task::TaskState;
 use serde_json::{Map, Value, json};
 
 use crate::app::layout_mode::PANEL_WIDTH;
-use crate::app::view_rules::{Entries, parse_pinned, with_seen};
+use crate::app::view_rules::{DetailsView, Entries, parse_pinned, with_seen};
 use crate::sidebar::sidebar_tree::{Folds, with_fold};
 use crate::terminals::pane_rules::{PaneLayout, parse_pane_layout};
 
@@ -16,6 +16,11 @@ pub const FILE_NAME: &str = "view.json";
 /// `useStoredWidth('natamux.sidebar-width', PANEL_WIDTH, 220, 440)`.
 pub const SIDEBAR_MIN: f32 = 220.0;
 pub const SIDEBAR_MAX: f32 = 440.0;
+/// `useStoredWidth('natamux.details-width', PANEL_WIDTH, 320, 560)`.
+pub const DETAILS_MIN: f32 = 320.0;
+pub const DETAILS_MAX: f32 = 560.0;
+/// Folded sections of the details panel kept at most (`natamux.section.<id>`).
+const MAX_SECTIONS: usize = 50;
 
 /// The progress layout is not in the app yet, so a saved progress opens the table.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -50,6 +55,13 @@ pub struct ViewState {
     /// The tasks of the Agents grid, in order. None: the default list (`agentPanes`).
     pub agent_panes: Option<Vec<String>>,
     pub pane_layout: PaneLayout,
+    pub details_width: f32,
+    /// The tab the user last picked in the details panel. None: the default of the place.
+    pub details_view: Option<DetailsView>,
+    /// Sections of the details panel by id, open or folded; a missing one has its default.
+    pub sections: Vec<(String, bool)>,
+    /// System notifications for tasks that start to need the user (off until switched on).
+    pub notify: bool,
 }
 
 impl Default for ViewState {
@@ -66,6 +78,10 @@ impl Default for ViewState {
             last_base: Vec::new(),
             agent_panes: None,
             pane_layout: PaneLayout::default(),
+            details_width: PANEL_WIDTH,
+            details_view: None,
+            sections: Vec::new(),
+            notify: false,
         }
     }
 }
@@ -123,6 +139,23 @@ impl ViewState {
                 _ => None,
             },
             pane_layout: parse_pane_layout(map.get("paneLayout").and_then(Value::as_str)),
+            details_width: map
+                .get("detailsWidth")
+                .and_then(Value::as_f64)
+                .map_or(default.details_width, |width| {
+                    (width as f32).clamp(DETAILS_MIN, DETAILS_MAX)
+                }),
+            details_view: map
+                .get("detailsView")
+                .and_then(Value::as_str)
+                .and_then(DetailsView::parse),
+            sections: pairs("sections")
+                .into_iter()
+                .filter_map(|(id, open)| Some((id, open.as_bool()?)))
+                .fold(Vec::new(), |sections, (id, open)| {
+                    with_section(&sections, &id, open)
+                }),
+            notify: flag(map.get("notify"), default.notify),
         }
     }
 
@@ -154,6 +187,14 @@ impl ViewState {
             "lastBase": last_base,
             "agentPanes": self.agent_panes,
             "paneLayout": self.pane_layout.as_str(),
+            "detailsWidth": self.details_width,
+            "detailsView": self.details_view.map(DetailsView::name),
+            "sections": self
+                .sections
+                .iter()
+                .map(|(id, open)| (id.clone(), Value::Bool(*open)))
+                .collect::<Map<String, Value>>(),
+            "notify": self.notify,
         });
         format!("{value:#}\n")
     }
@@ -183,6 +224,41 @@ impl ViewState {
     pub fn set_sidebar_width(&mut self, width: f32) {
         self.sidebar_width = width.clamp(SIDEBAR_MIN, SIDEBAR_MAX);
     }
+
+    /// `showProgress`: the details of `task_id` open on Progress. Gives the new open flags.
+    pub fn show_progress(&mut self, open: &Entries<bool>, task_id: &str) -> Entries<bool> {
+        self.details_view = Some(DetailsView::Progress);
+        crate::app::view_rules::with_detail_open(open, task_id, true)
+    }
+
+    pub fn set_details_width(&mut self, width: f32) {
+        self.details_width = width.clamp(DETAILS_MIN, DETAILS_MAX);
+    }
+
+    /// Whether a section of the details panel is open; `default` until the user folds it.
+    pub fn section_open(&self, id: &str, default: bool) -> bool {
+        self.sections
+            .iter()
+            .find(|(each, _)| each == id)
+            .map_or(default, |(_, open)| *open)
+    }
+
+    pub fn set_section(&mut self, id: &str, open: bool) {
+        self.sections = with_section(&self.sections, id, open);
+    }
+}
+
+/// The newest choice last; the oldest go when there are too many.
+fn with_section(current: &[(String, bool)], id: &str, open: bool) -> Vec<(String, bool)> {
+    let mut next: Vec<(String, bool)> = current
+        .iter()
+        .filter(|(each, _)| each != id)
+        .cloned()
+        .collect();
+    next.push((id.to_owned(), open));
+    let extra = next.len().saturating_sub(MAX_SECTIONS);
+    next.drain(..extra);
+    next
 }
 
 fn strings(value: Option<&Value>) -> Vec<String> {
@@ -233,145 +309,5 @@ pub fn folder_for(os: &str, var: impl Fn(&str) -> Option<std::ffi::OsString>) ->
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn temp_folder(name: &str) -> PathBuf {
-        let unique = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        std::env::temp_dir().join(format!("natamux-view-{name}-{unique}"))
-    }
-
-    #[test]
-    fn a_saved_view_reads_back_the_same() {
-        let mut state = ViewState {
-            folds: vec![("repo:r1".into(), false), ("task:T-1".into(), true)],
-            blurred: vec!["r2".into()],
-            pinned: vec!["T-3".into(), "T-1".into()],
-            layout: Layout::Board,
-            sidebar_open: false,
-            sidebar_width: 300.0,
-            show_finished: true,
-            seen: vec![
-                ("T-1".into(), TaskState::Running),
-                ("T-2".into(), TaskState::NeedsInput),
-            ],
-            last_base: Vec::new(),
-            agent_panes: Some(vec!["T-2".into(), "T-1".into()]),
-            pane_layout: PaneLayout::Two,
-        };
-        state.remember_base("r1", "main");
-        let folder = temp_folder("round");
-        save(&folder, &state).unwrap();
-        assert_eq!(load(&folder), state);
-        assert!(!folder.join("view.json.partial").exists());
-        std::fs::remove_dir_all(folder).ok();
-    }
-
-    #[test]
-    fn a_missing_file_is_the_default_view() {
-        assert_eq!(load(&temp_folder("missing")), ViewState::default());
-    }
-
-    #[test]
-    fn a_broken_file_is_ignored_and_replaced_on_the_next_save() {
-        let folder = temp_folder("broken");
-        std::fs::create_dir_all(&folder).unwrap();
-        std::fs::write(folder.join(FILE_NAME), "{\"pinned\": [\"T-1\"").unwrap();
-        let mut state = load(&folder);
-        assert_eq!(state, ViewState::default());
-        state.pinned.push("T-2".into());
-        save(&folder, &state).unwrap();
-        assert_eq!(load(&folder).pinned, ["T-2"]);
-        std::fs::remove_dir_all(folder).ok();
-    }
-
-    #[test]
-    fn a_part_of_the_wrong_kind_falls_back_to_its_default() {
-        let state = ViewState::parse(
-            r#"{"folds": [1], "pinned": "T-1", "layout": "progress", "sidebarOpen": "no",
-                "sidebarWidth": 9000, "seen": {"T-1": "running", "T-2": 4},
-                "lastBase": {"r1": "dev", "r2": 3}}"#,
-        );
-        assert_eq!(state.folds, Vec::new());
-        assert_eq!(state.pinned, Vec::<String>::new());
-        assert_eq!(state.layout, Layout::Table);
-        assert!(state.sidebar_open);
-        assert_eq!(state.sidebar_width, SIDEBAR_MAX);
-        assert_eq!(state.seen, vec![("T-1".into(), TaskState::Running)]);
-        assert_eq!(state.last_base, vec![("r1".into(), "dev".into())]);
-    }
-
-    #[test]
-    fn the_agents_grid_keeps_the_users_list_and_columns() {
-        let chosen = ViewState::parse(r#"{"agentPanes": ["T-2", 3, "T-1"], "paneLayout": "4"}"#);
-        assert_eq!(chosen.agent_panes, Some(vec!["T-2".into(), "T-1".into()]));
-        assert_eq!(chosen.pane_layout, PaneLayout::Four);
-        let default = ViewState::parse(r#"{"agentPanes": null, "paneLayout": "9"}"#);
-        assert_eq!(default.agent_panes, None);
-        assert_eq!(default.pane_layout, PaneLayout::Auto);
-    }
-
-    #[test]
-    fn keeps_the_newest_300_folds_and_1000_seen_states() {
-        let folds: Map<String, Value> = (0..310)
-            .map(|at| (format!("task:T-{at}"), Value::Bool(true)))
-            .collect();
-        let seen: Map<String, Value> = (0..1010)
-            .map(|at| (format!("T-{at}"), Value::from("done")))
-            .collect();
-        let text = json!({"folds": folds, "seen": seen}).to_string();
-        let state = ViewState::parse(&text);
-        assert_eq!(state.folds.len(), 300);
-        assert_eq!(state.folds[0].0, "task:T-10");
-        assert_eq!(state.seen.len(), 1000);
-        assert_eq!(state.seen[0].0, "T-10");
-    }
-
-    #[test]
-    fn remembers_one_base_per_project_and_blurs_by_toggle() {
-        let mut state = ViewState::default();
-        state.remember_base("r1", "main");
-        state.remember_base("r2", "dev");
-        state.remember_base("r1", "release");
-        assert_eq!(state.last_base("r1"), Some("release"));
-        assert_eq!(state.last_base("r3"), None);
-        state.toggle_blurred("r1");
-        state.toggle_blurred("r2");
-        state.toggle_blurred("r1");
-        assert_eq!(state.blurred, ["r2"]);
-        state.set_sidebar_width(100.0);
-        assert_eq!(state.sidebar_width, SIDEBAR_MIN);
-    }
-
-    #[test]
-    fn the_data_folder_follows_each_os() {
-        let env = |name: &str| match name {
-            "HOME" => Some("/Users/an".into()),
-            "APPDATA" => Some("C:\\Users\\an\\AppData\\Roaming".into()),
-            _ => None,
-        };
-        assert_eq!(
-            folder_for("macos", env),
-            Some(PathBuf::from(
-                "/Users/an/Library/Application Support/Natamux Native"
-            ))
-        );
-        assert_eq!(
-            folder_for("windows", env),
-            Some(PathBuf::from("C:\\Users\\an\\AppData\\Roaming").join("Natamux Native"))
-        );
-        assert_eq!(
-            folder_for("linux", env),
-            Some(PathBuf::from("/Users/an/.local/share/natamux-native"))
-        );
-        let xdg = |name: &str| (name == "XDG_DATA_HOME").then(|| "/data".into());
-        assert_eq!(
-            folder_for("linux", xdg),
-            Some(PathBuf::from("/data/natamux-native"))
-        );
-        assert_eq!(folder_for("macos", |_| None), None);
-    }
-}
+#[path = "view_state_tests.rs"]
+mod tests;

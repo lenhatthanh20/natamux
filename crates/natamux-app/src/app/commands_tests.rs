@@ -1,5 +1,7 @@
 use std::collections::BTreeMap;
 
+use natamux_proto::tasks::task::TaskState;
+
 use super::*;
 
 #[test]
@@ -196,4 +198,29 @@ fn leaves_keys_to_the_shell_except_cmd_function_and_ctrl_shift_chords() {
     assert!(is_single_key("Shift+R"));
     assert!(!is_single_key("F2"));
     assert!(!is_single_key("Mod+B"));
+}
+
+#[test]
+fn has_the_keys_of_the_details_panel() {
+    assert_eq!(shortcut_of("details.toggle"), Some("Mod+Alt+B"));
+    assert_eq!(shortcut_of("task.details"), Some("i"));
+    assert_eq!(shortcut_of("task.edit"), Some("e"));
+    assert_eq!(shortcut_of("tools.bench"), Some("Mod+Alt+T"));
+    let approve = command_by_id("task.review.approved").map(|command| command.contexts);
+    assert!(approve.is_some_and(|contexts| contexts.contains(&DETAILS)));
+}
+
+#[test]
+fn offers_the_stage_commands_only_in_an_open_workspace_with_a_stage_at_work() {
+    let skip = command_by_id("stage.skip").map(|command| command.when);
+    let state = |task_open: bool, selected_state: Option<TaskState>| CommandState {
+        task_open,
+        has_selection: selected_state.is_some(),
+        selected_state,
+    };
+    let holds = |state: CommandState| skip.is_some_and(|when| when.holds(&state));
+    assert!(holds(state(true, Some(TaskState::Review))));
+    assert!(holds(state(true, Some(TaskState::NeedsInput))));
+    assert!(!holds(state(false, Some(TaskState::Review))));
+    assert!(!holds(state(true, Some(TaskState::Done))));
 }

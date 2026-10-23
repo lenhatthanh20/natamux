@@ -4,9 +4,9 @@ use hyper::Method;
 use natamux_proto::events::task_event::{EventList, StoredEvent, TaskEventInput};
 use natamux_proto::tasks::job::{Job, JobList};
 use natamux_proto::tasks::task::{
-    DeleteTaskAnswer, NewTaskInput, Task, TaskAnswer, TaskList, TemplateTaskInput, TitlePatch,
+    DeleteTaskAnswer, NewTaskInput, Task, TaskAnswer, TaskChanges, TaskList, TemplateTaskInput,
 };
-use natamux_proto::tasks::template::{TaskTemplate, TemplateList};
+use natamux_proto::tasks::template::{TaskTemplate, TemplateAnswer, TemplateInput, TemplateList};
 use natamux_proto::terminals::query::encode;
 use serde::Deserialize;
 
@@ -68,11 +68,36 @@ pub async fn send_event(
 }
 
 pub async fn rename_task(config: &Config, task_id: &str, title: &str) -> Result<Task, ClientError> {
-    let path = format!("/tasks/{}", encode(task_id));
-    let patch = TitlePatch {
-        title: title.to_string(),
+    let changes = TaskChanges {
+        title: Some(title.to_string()),
+        ..TaskChanges::default()
     };
-    let answer: TaskAnswer = call_with(config, Method::PATCH, &path, &patch).await?;
+    update_task(config, task_id, &changes).await
+}
+
+/// Changes the fields that are set; the others stay.
+pub async fn update_task(
+    config: &Config,
+    task_id: &str,
+    changes: &TaskChanges,
+) -> Result<Task, ClientError> {
+    let path = format!("/tasks/{}", encode(task_id));
+    let answer: TaskAnswer = call_with(config, Method::PATCH, &path, changes).await?;
+    Ok(answer.task)
+}
+
+pub async fn save_template(
+    config: &Config,
+    input: &TemplateInput,
+) -> Result<TaskTemplate, ClientError> {
+    let answer: TemplateAnswer = call_with(config, Method::POST, "/templates", input).await?;
+    Ok(answer.template)
+}
+
+/// Makes the issue of the task in the project's tracker.
+pub async fn create_issue(config: &Config, task_id: &str) -> Result<Task, ClientError> {
+    let path = format!("/tasks/{}/issue", encode(task_id));
+    let answer: TaskAnswer = call(config, Method::POST, &path).await?;
     Ok(answer.task)
 }
 

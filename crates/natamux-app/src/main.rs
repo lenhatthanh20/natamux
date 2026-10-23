@@ -9,6 +9,7 @@ mod app {
     pub mod asset_table;
     pub mod assets;
     pub mod clock;
+    pub mod command_when;
     pub mod commands;
     pub mod dashboard;
     pub mod dashboard_data;
@@ -16,6 +17,8 @@ mod app {
     pub mod gate2;
     pub mod jobs;
     pub mod layout_mode;
+    pub mod notify;
+    pub mod notify_rules;
     pub mod options;
     pub mod shell_rules;
     pub mod shortcut_text;
@@ -38,13 +41,16 @@ mod components {
     pub mod chips;
     pub mod colors;
     pub mod confirm;
+    pub mod detail_section;
     pub mod dialog;
     pub mod empty_state;
+    pub mod form;
     pub mod glyph;
     pub mod input_rules;
     pub mod menu;
     pub mod resize_handle;
     pub mod resize_rules;
+    pub mod scroll_rules;
     pub mod segmented;
     pub mod shape;
     pub mod skeleton;
@@ -77,9 +83,26 @@ mod sidebar {
     pub mod workspace_row;
     pub mod workspace_tree;
 }
+mod stages {
+    pub mod card_rules;
+    pub mod overview_rules;
+    pub mod progress_tab;
+    pub mod send_back_dialog;
+    pub mod send_back_rules;
+    pub mod stage_card;
+    pub mod stage_choices;
+    pub mod stage_marker;
+    pub mod stage_view_rules;
+}
 mod tasks {
     pub mod add_subtask_dialog;
     pub mod delete_finished;
+    pub mod details_commands;
+    pub mod details_panel;
+    pub mod details_rules;
+    pub mod edit_form;
+    pub mod edit_rules;
+    pub mod fan_out_dialog;
     pub mod frozen_order;
     pub mod quick_add;
     pub mod state_filter;
@@ -91,6 +114,7 @@ mod tasks {
     pub mod task_board;
     pub mod task_changes;
     pub mod task_confirms;
+    pub mod task_events_rules;
     pub mod task_rules;
     pub mod task_sort;
     pub mod task_table;
@@ -98,6 +122,8 @@ mod tasks {
     pub mod task_time;
     pub mod task_view;
     pub mod task_view_rules;
+    pub mod tries_rules;
+    pub mod usage_rules;
 }
 mod terminals {
     pub mod agent_panes;

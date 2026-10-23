@@ -87,6 +87,15 @@ pub fn pane_facts(
         .collect()
 }
 
+/// The pane that takes the focus when the focused one closes: the next one, else the one before.
+pub fn focus_after_close(names: &[String], closed: &str) -> Option<String> {
+    let at = names.iter().position(|name| name == closed)?;
+    names
+        .get(at + 1)
+        .or_else(|| at.checked_sub(1).and_then(|before| names.get(before)))
+        .cloned()
+}
+
 #[cfg(test)]
 mod tests {
     use serde_json::json;
@@ -179,5 +188,14 @@ mod tests {
         );
         assert_eq!(facts[1].agent_state, Some(Some(TaskState::Running)));
         assert_eq!(facts[1].hint, None);
+    }
+
+    #[test]
+    fn closing_the_focused_pane_moves_the_focus_to_the_next_else_the_one_before() {
+        let shown = names(&["1", "5", "8"]);
+        assert_eq!(focus_after_close(&shown, "5"), Some("8".into()));
+        assert_eq!(focus_after_close(&shown, "8"), Some("5".into()));
+        assert_eq!(focus_after_close(&names(&["1"]), "1"), None);
+        assert_eq!(focus_after_close(&shown, "3"), None);
     }
 }

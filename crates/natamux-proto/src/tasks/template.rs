@@ -26,9 +26,48 @@ pub struct TemplateList {
     pub templates: Vec<TaskTemplate>,
 }
 
+/// Longest `name` and `title` of a template.
+pub const MAX_TEMPLATE_NAME_LENGTH: usize = 100;
+pub const MAX_TEMPLATE_TITLE_LENGTH: usize = 200;
+
+/// The body of `POST /templates`. The daemon makes the id from the name.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct TemplateInput {
+    pub name: String,
+    pub title: String,
+    pub description: String,
+    pub priority: String,
+    pub labels: Vec<String>,
+}
+
+/// The answer of `POST /templates`.
+#[derive(Clone, Debug, Deserialize)]
+pub struct TemplateAnswer {
+    pub template: TaskTemplate,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sends_a_template_and_reads_the_saved_one() {
+        let input = TemplateInput {
+            name: "Bug".into(),
+            title: "Fix: ".into(),
+            description: "Steps".into(),
+            priority: "high".into(),
+            labels: vec!["bug".into()],
+        };
+        assert_eq!(
+            serde_json::to_string(&input).unwrap(),
+            r#"{"name":"Bug","title":"Fix: ","description":"Steps","priority":"high","labels":["bug"]}"#
+        );
+        let answer: TemplateAnswer =
+            serde_json::from_str(r#"{"template":{"id":"bug","name":"Bug","title":"Fix: "}}"#)
+                .unwrap();
+        assert_eq!(answer.template.id, "bug");
+    }
 
     #[test]
     fn reads_templates_and_fills_defaults() {

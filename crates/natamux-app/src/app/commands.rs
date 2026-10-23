@@ -2,10 +2,6 @@
 //! the keys work and when it applies. Key bindings, the menu bar and the key text of menus and
 //! tooltips all read it, so a key is defined once. `app/shortcuts.rs` gives each id its action.
 
-use natamux_proto::tasks::task::TaskState;
-
-use crate::tasks::task_rules::actions_for;
-
 /// Key contexts (gpui predicates). Views add these names to their `KeyContext`.
 /// Root adds `body` while its own focus handle, not a child's, has the focus: the web's "body".
 pub const BODY: &str = "Natamux && body";
@@ -18,8 +14,10 @@ pub const IME_CHECK: &str = "ImeCheck";
 /// Zed's terminal view, and the find bar of a pane (`terminals/terminal_find.rs`).
 pub const TERMINAL: &str = "Terminal";
 pub const TERMINAL_FIND: &str = "TerminalFind";
+/// The details panel, while none of its text boxes has the focus.
+pub const DETAILS: &str = "NatamuxDetails && not_editing";
 /// Where single keys work: outside text boxes and terminals.
-const SINGLE: &[&str] = &[BODY, LIST];
+const SINGLE: &[&str] = &[BODY, LIST, DETAILS];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Category {
@@ -34,57 +32,31 @@ pub enum Category {
 pub enum MenuName {
     App,
     View,
+    Task,
     Tools,
 }
 
 impl MenuName {
-    pub const ALL: [MenuName; 3] = [MenuName::App, MenuName::View, MenuName::Tools];
+    pub const ALL: [MenuName; 4] = [
+        MenuName::App,
+        MenuName::View,
+        MenuName::Task,
+        MenuName::Tools,
+    ];
 
     pub fn title(self) -> &'static str {
         match self {
             MenuName::App => "Natamux",
             MenuName::View => "View",
+            MenuName::Task => "Task",
             MenuName::Tools => "Tools",
         }
     }
 }
 
-// `when` gates the command palette of a later screen.
-#[cfg_attr(not(test), allow(dead_code))]
-/// What the view knows when a key comes (`CommandState`).
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct CommandState {
-    /// A task fills the main area (the terminal pane until screen 2).
-    pub task_open: bool,
-    pub has_selection: bool,
-    pub selected_state: Option<TaskState>,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum When {
-    Always,
-    /// The task list is on screen, not an open task.
-    ListShown,
-    HasSelection,
-    /// The selected task's state offers this event without asking first.
-    TaskAction(&'static str),
-}
-
-impl When {
-    #[cfg_attr(not(test), allow(dead_code))]
-    pub fn holds(self, state: &CommandState) -> bool {
-        match self {
-            When::Always => true,
-            When::ListShown => !state.task_open,
-            When::HasSelection => state.has_selection,
-            When::TaskAction(event) => state.selected_state.is_some_and(|selected| {
-                actions_for(selected)
-                    .iter()
-                    .any(|action| action.event_type == event && !action.confirm)
-            }),
-        }
-    }
-}
+#[cfg(test)]
+pub use super::command_when::CommandState;
+pub use super::command_when::When;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Command {
@@ -258,6 +230,7 @@ pub const COMMANDS: &[Command] = &[
     // Menu items with no key of their own: the row, project and table menus run them; the key
     // of an item that has one comes from its command above.
     command("task.add-subtask", "Add subtask\u{2026}", Task),
+    command("task.show-details", "Show details", Task),
     command("row.pin", "Pin to the top", Task),
     command("row.unpin", "Unpin", Task),
     command("row.copy-branch", "Copy branch name", Task),
@@ -290,6 +263,80 @@ pub const COMMANDS: &[Command] = &[
     ),
     task_action("task.task.unblocked", "Unblock", "task.unblocked"),
     task_action("task.task.retried", "Retry", "task.retried"),
+    // Screen 3: the details panel. The web runs the stage commands from its palette, which
+    // comes with screen 7; until then they are in the Task menu.
+    menu(
+        keys(
+            command("details.toggle", "Show or hide the details", View),
+            &["Mod+Alt+B"],
+            &[],
+        ),
+        MenuName::View,
+        2,
+    ),
+    when(
+        keys(
+            command(
+                "task.details",
+                "Show or hide the details of the selected task",
+                Task,
+            ),
+            &["i"],
+            SINGLE,
+        ),
+        When::HasSelection,
+    ),
+    when(
+        keys(
+            command("task.edit", "Edit the selected task", Task),
+            &["e"],
+            SINGLE,
+        ),
+        When::HasSelection,
+    ),
+    menu(
+        command("progress.show", "Show the task progress", Task),
+        MenuName::Task,
+        0,
+    ),
+    menu(
+        when(
+            command("stage.approve", "Approve the stage anyway", Task),
+            When::StageOpen,
+        ),
+        MenuName::Task,
+        1,
+    ),
+    menu(
+        when(
+            command("stage.report", "Mark the stage as done", Task),
+            When::StageOpen,
+        ),
+        MenuName::Task,
+        1,
+    ),
+    menu(
+        when(
+            command("stage.skip", "Skip the stage", Task),
+            When::StageOpen,
+        ),
+        MenuName::Task,
+        1,
+    ),
+    menu(
+        when(
+            command(
+                "stage.send-back",
+                "Send the task back to an earlier stage",
+                Task,
+            ),
+            When::StageOpen,
+        ),
+        MenuName::Task,
+        1,
+    ),
+    command("task.save-template", "Save as template", Task),
+    command("task.fan-out", "Run more tries\u{2026}", Task),
     // Screen 2: the panes of a workspace and the Agents grid (`paneCommands`).
     keys(
         command(
@@ -343,7 +390,7 @@ pub const COMMANDS: &[Command] = &[
     menu(
         keys(
             command("tools.bench", "Bench: 10 Terminals", Tools),
-            &["Mod+Alt+B"],
+            &["Mod+Alt+T"],
             &[],
         ),
         MenuName::Tools,

@@ -168,7 +168,7 @@ impl TaskTable {
             if event.click_count() > 1 {
                 dashboard.open(&id, cx);
             } else {
-                dashboard.select(Some(id), cx);
+                dashboard.choose(&id, cx);
             }
         });
     }
