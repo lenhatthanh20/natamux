@@ -4,7 +4,9 @@ name: Rust
 # (docs/plan-rust-migration.md, "Safe local setup").
 on:
   push:
-    # natamux-ci/* holds snapshots that tasks push for a CI check (Check on CI).
+    # natamux-ci/* holds snapshots that tasks push for a CI check (Check on CI). Rust tasks share
+    # natamux-ci/rust (every job) and natamux-ci/rust-check (check only), so their caches stay warm.
+    # Daemon tasks (phase 4) share natamux-ci/daemon and natamux-ci/daemon-check the same way.
     branches: [dev, 'natamux-ci/**']
   pull_request:
 
@@ -54,6 +56,9 @@ jobs:
   # The app for the owner to run (phase 1): built, checked, attested. Also answers whether GPUI
   # draws on the macOS runner, from the screenshots.
   app-macos:
+    # A -check branch is the compile loop: only the check job runs there. Daemon snapshots do not
+    # touch the app.
+    if: ${{ !endsWith(github.ref, '-check') && github.ref != 'refs/heads/natamux-ci/daemon' }}
     runs-on: macos-15
     timeout-minutes: 120
     permissions:
@@ -294,6 +299,7 @@ jobs:
   # them with the version (a new version comes back); save with the old version (409); save a pipeline
   # that breaks the rules (400); put the first file back with the current version.
   live-daemon:
+    if: ${{ !endsWith(github.ref, '-check') }}
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
@@ -344,6 +350,7 @@ jobs:
   # command's (scripts/cli-parity.sh), and the agent hook specs run with it first on the agents'
   # PATH (compose.rust-cli.yaml). Then the Linux build, attested. See docs/rust-phase2.md.
   cli:
+    if: ${{ !endsWith(github.ref, '-check') }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -427,8 +434,181 @@ jobs:
           path: dist/natamux-cli-linux-x64.tar.gz
           compression-level: 0
 
+  # Phase 4, part 1: the daemon's terminal crates on macOS and on Windows (ConPTY). Linux runs them
+  # in `check`. Not on the snapshots of phase 3 (docs/rust-phase4.md).
+  daemon-os:
+    if: ${{ !endsWith(github.ref, '-check') && github.ref != 'refs/heads/natamux-ci/rust' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: rustup toolchain install
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: rust-daemon-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
+          restore-keys: rust-daemon-${{ runner.os }}-
+      - run: cargo test --locked -p natamux-pty -p natamux-screen -p natamux-daemon
+
+  # Phase 4, part 1: the contract suite. The Node daemon of main and the Rust daemon run side by
+  # side from the same image (compose.rust-daemon.yaml); the terminal scenarios of
+  # crates/natamux-contract run on both and compare the answers, then xterm.js replays the
+  # snapshots of both (scripts/xterm-grid.mjs).
+  daemon-contract:
+    if: ${{ !endsWith(github.ref, '-check') && github.ref != 'refs/heads/natamux-ci/rust' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ github.token }}
+      NATAMUX_TOKEN: e2e-token
+      NATAMUX_REPO: e2e-repo
+      E2E_EXTRA_COMPOSE: compose.rust-daemon.yaml
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # A static build runs in the Debian image of the daemon, whatever its glibc.
+      - run: |
+          rustup toolchain install
+          rustup target add x86_64-unknown-linux-musl
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: rust-daemon-contract-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
+          restore-keys: rust-daemon-contract-${{ runner.os }}-
+      - run: cargo build --release --locked -p natamux-daemon --target x86_64-unknown-linux-musl
+      - run: cargo test --locked -p natamux-contract --test terminals --no-run
+      - name: Start the Node daemon of main and the Rust daemon beside it
+        run: |
+          scripts/e2e.sh up
+          # e2e.sh starts daemon and web only; the Rust one runs from the image e2e.sh checked.
+          image=$(docker inspect -f '{{.Config.Image}}' natamux-e2e-daemon-1)
+          echo "NATAMUX_DAEMON_IMAGE=$image" >> "$GITHUB_ENV"
+          NATAMUX_DAEMON_IMAGE="$image" docker compose -p natamux-e2e -f compose.prod.yaml \
+            -f compose.e2e.yaml -f compose.rust-daemon.yaml up -d --no-build daemon-rust
+          for _ in $(seq 60); do
+            curl -fsS http://127.0.0.1:4318/health && exit 0
+            sleep 0.5
+          done
+          docker logs natamux-e2e-daemon-rust-1
+          exit 1
+      # As makeShellTask in e2e/tests/terminal-helpers.ts: a task past its agent, with a workspace.
+      - name: Make a task with a workspace
+        id: task
+        env:
+          NATAMUX_URL: http://127.0.0.1:8080/api
+        run: |
+          api() { curl -fsS -H "authorization: Bearer $NATAMUX_TOKEN" -H 'content-type: application/json' "$@"; }
+          repo=$(api "$NATAMUX_URL/repos" | jq -r '.repos[0].id')
+          id=$(api -X POST "$NATAMUX_URL/tasks" -d "{\"title\":\"Daemon contract\",\"repo\":\"$repo\"}" | jq -r .task.id)
+          for _ in $(seq 60); do
+            state=$(api "$NATAMUX_URL/tasks/$id" | jq -r .task.state)
+            [ "$state" = ready ] || [ "$state" = review ] && break
+            sleep 0.5
+          done
+          api -X POST "$NATAMUX_URL/tasks/$id/events" \
+            -d '{"source":"human","type":"state.overridden","payload":{"to":"review","stage":"context"}}' >/dev/null
+          api -X POST "$NATAMUX_URL/tasks/$id/workspace" -d '{}' >/dev/null
+          for _ in $(seq 60); do
+            [ "$(api "$NATAMUX_URL/tasks/$id" | jq -r .task.workspace)" != null ] && break
+            sleep 0.5
+          done
+          api "$NATAMUX_URL/tasks/$id" | jq -r .task.workspace
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+      - name: The terminal scenarios on both daemons
+        env:
+          NATAMUX_CONTRACT_NODE: http://127.0.0.1:8080/api
+          NATAMUX_CONTRACT_RUST: http://127.0.0.1:4318
+          NATAMUX_CONTRACT_TOKEN: e2e-token
+          NATAMUX_CONTRACT_TASK: ${{ steps.task.outputs.id }}
+          NATAMUX_CONTRACT_NODE_RESTART: >-
+            cd "$GITHUB_WORKSPACE" && docker compose -p natamux-e2e -f compose.prod.yaml -f compose.e2e.yaml
+            -f compose.rust-daemon.yaml restart daemon
+          NATAMUX_CONTRACT_RUST_RESTART: >-
+            cd "$GITHUB_WORKSPACE" && docker compose -p natamux-e2e -f compose.prod.yaml -f compose.e2e.yaml
+            -f compose.rust-daemon.yaml restart daemon-rust
+          NATAMUX_CONTRACT_DUMPS: ${{ runner.temp }}/dumps
+          NATAMUX_CONTRACT_REPORT: ${{ runner.temp }}/contract.md
+        run: |
+          printf '| scenario | step | result |\n|---|---|---|\n' > "$NATAMUX_CONTRACT_REPORT"
+          status=0
+          cargo test --locked -p natamux-contract --test terminals -- --ignored --test-threads=1 || status=$?
+          cat "$NATAMUX_CONTRACT_REPORT" >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        if: always()
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: always()
+        with:
+          node-version: 22
+      - name: Replay the snapshots of both daemons in xterm.js
+        if: always()
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+        run: |
+          pnpm install --frozen-lockfile --filter "@natamux/daemon"
+          node scripts/xterm-grid.mjs "$RUNNER_TEMP/dumps"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: contract-dumps
+          path: ${{ runner.temp }}/dumps
+          if-no-files-found: ignore
+      - if: failure()
+        run: scripts/e2e.sh logs
+      - if: always()
+        run: scripts/e2e.sh down
+
+  # Phase 4, part 1: the terminal bench of the Node daemon and of the Rust one, on the same runner.
+  # The gate: a snapshot as fast as Node's, parsing at least as fast (compare-terminal-bench.py).
+  daemon-bench:
+    if: ${{ !endsWith(github.ref, '-check') && github.ref != 'refs/heads/natamux-ci/rust' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: rust-daemon-bench-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
+          restore-keys: rust-daemon-bench-${{ runner.os }}-
+      - run: cargo test --release --locked -p natamux-daemon --test terminal_bench --no-run
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - name: The Node bench
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+          NATAMUX_BENCH: "1"
+        run: |
+          pnpm install --frozen-lockfile --filter "@natamux/daemon..."
+          pnpm --filter @natamux/core build
+          pnpm --filter @natamux/daemon exec vitest run src/terminals/__tests__/terminal-bench.test.ts | tee "$RUNNER_TEMP/node-bench.txt"
+      - name: The Rust bench
+        run: cargo test --release --locked -p natamux-daemon --test terminal_bench -- --ignored --nocapture | tee "$RUNNER_TEMP/rust-bench.txt"
+      - run: python3 scripts/compare-terminal-bench.test.py
+      - run: python3 scripts/compare-terminal-bench.py "$RUNNER_TEMP/node-bench.txt" "$RUNNER_TEMP/rust-bench.txt"
+
   # The tools come as prebuilt binaries at pinned versions; install-action checks their hashes.
   supply-chain:
+    if: ${{ !endsWith(github.ref, '-check') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
