@@ -3961,6 +3961,7 @@ dependencies = [
  "http",
  "http-body",
  "httparse",
+ "httpdate",
  "itoa",
  "pin-project-lite",
  "smallvec",
@@ -5522,11 +5523,62 @@ dependencies = [
 ]
 
 [[package]]
+name = "natamux-contract"
+version = "0.1.0"
+dependencies = [
+ "async-tungstenite",
+ "futures",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "natamux-proto",
+ "natamux-screen",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "natamux-daemon"
+version = "0.1.0"
+dependencies = [
+ "async-tungstenite",
+ "base64",
+ "futures",
+ "getrandom 0.3.4",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "natamux-proto",
+ "natamux-pty",
+ "natamux-screen",
+ "serde",
+ "serde_json",
+ "subtle",
+ "tokio",
+]
+
+[[package]]
 name = "natamux-proto"
 version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "natamux-pty"
+version = "0.1.0"
+dependencies = [
+ "alacritty_terminal",
+ "nix",
+]
+
+[[package]]
+name = "natamux-screen"
+version = "0.1.0"
+dependencies = [
+ "alacritty_terminal",
+ "natamux-proto",
 ]
 
 [[package]]
@@ -9181,6 +9233,7 @@ dependencies = [
  "libc",
  "mio",
  "pin-project-lite",
+ "signal-hook-registry",
  "socket2",
  "tokio-macros",
  "windows-sys 0.61.2",

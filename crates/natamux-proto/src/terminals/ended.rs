@@ -2,9 +2,12 @@
 //! `packages/daemon/src/http/routes/terminals.ts`, `endedShellSchema` in core): the last screen of
 //! each shell of a done or cancelled task.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+/// `ENDED_SHELL_MAX_CHARS`: the file keeps at most this many UTF-16 units of each screen, the end.
+pub const ENDED_SHELL_MAX_CHARS: usize = 64 * 1024;
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EndedShell {
     pub name: String,
@@ -18,7 +21,7 @@ pub struct EndedShell {
     pub text: String,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EndedShellList {
     #[serde(default)]
     pub shells: Vec<EndedShell>,
@@ -41,6 +44,22 @@ mod tests {
         assert_eq!(list.shells[0].ended_at, "2026-10-22T00:00:00.000Z");
         assert_eq!(list.shells[1].agent, None);
         assert_eq!(list.shells[1].session, None);
+    }
+
+    #[test]
+    fn writes_the_fields_in_the_order_of_the_schema() {
+        let shell = EndedShell {
+            name: "2".into(),
+            agent: None,
+            stage: None,
+            session: None,
+            ended_at: "2026-10-22T00:00:01.000Z".into(),
+            text: "$".into(),
+        };
+        assert_eq!(
+            serde_json::to_string(&shell).unwrap(),
+            r#"{"name":"2","agent":null,"stage":null,"session":null,"endedAt":"2026-10-22T00:00:01.000Z","text":"$"}"#
+        );
     }
 
     #[test]

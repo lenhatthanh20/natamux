@@ -25,6 +25,10 @@ pub const RECONNECT_BASE: Duration = Duration::from_millis(500);
 pub const RECONNECT_MAX: Duration = Duration::from_secs(10);
 pub const RECONNECT_JITTER: f64 = 0.2;
 
+/// The daemon drops a socket that sent nothing for this long (`SILENT_CLOSE_MS`): a page in the
+/// background still pings, a laptop that slept does not.
+pub const SILENT_CLOSE: Duration = Duration::from_secs(90);
+
 /// A catch-up whose `replayed` never comes ends after this, so a daemon bug never leaves a blank
 /// pane.
 pub const CATCH_UP_TIMEOUT: Duration = Duration::from_secs(10);
@@ -70,6 +74,20 @@ impl ClientMessage {
         // A plain enum of strings and numbers always serializes.
         serde_json::to_string(self).unwrap_or_default()
     }
+
+    /// The daemon's side: the rules of `terminalClientMessageSchema` that the JSON shape does not
+    /// hold. A message that breaks one is ignored, as Node ignores it.
+    pub fn is_valid(&self) -> bool {
+        let size = |value: u16| (1..=MAX_SIZE).contains(&value);
+        match self {
+            ClientMessage::Input { data } => data.encode_utf16().count() <= MAX_INPUT_UNITS,
+            ClientMessage::Resize { cols, rows } => size(*cols) && size(*rows),
+            ClientMessage::Visible { cols, rows, .. } => {
+                cols.is_none_or(size) && rows.is_none_or(size)
+            }
+            ClientMessage::Ack { .. } | ClientMessage::Ping => true,
+        }
+    }
 }
 
 /// From the daemon to the client. `hello` is always first. `snapshot` and `resume` start a
@@ -105,6 +123,12 @@ impl ServerMessage {
     /// None for anything that is not one of the messages above, as the web client ignores it.
     pub fn parse(text: &str) -> Option<ServerMessage> {
         serde_json::from_str(text).ok()
+    }
+
+    /// The daemon's side: one JSON text frame, keys in the order Node writes them.
+    pub fn to_json(&self) -> String {
+        // A plain enum of strings and numbers always serializes.
+        serde_json::to_string(self).unwrap_or_default()
     }
 }
 
@@ -227,6 +251,28 @@ mod tests {
                 Some(message)
             );
         }
+    }
+
+    #[test]
+    fn the_daemon_checks_sizes_and_input_length() {
+        let valid = |json: &str| {
+            serde_json::from_str::<ClientMessage>(json)
+                .unwrap()
+                .is_valid()
+        };
+        assert!(valid(r#"{"type":"resize","cols":1000,"rows":1}"#));
+        assert!(!valid(r#"{"type":"resize","cols":0,"rows":24}"#));
+        assert!(!valid(r#"{"type":"visible","visible":true,"cols":1001}"#));
+        assert!(valid(r#"{"type":"visible","visible":false}"#));
+        assert!(valid(r#"{"type":"ack","offset":0}"#));
+        let long = ClientMessage::Input {
+            data: "a".repeat(MAX_INPUT_UNITS + 1),
+        };
+        assert!(!long.is_valid());
+        assert_eq!(
+            ServerMessage::Exit { code: None }.to_json(),
+            r#"{"type":"exit","code":null}"#
+        );
     }
 
     #[test]
