@@ -19,7 +19,7 @@ pub enum ThemeMode {
     Dark,
 }
 
-/// The screen-1 and screen-2 states CI shoots (`--shot`). `app/shots.rs` puts the window in each one.
+/// The screen-1 to screen-4 states CI shoots (`--shot`). `app/shots.rs` puts the window in each one.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Shot {
     TasksTable,
@@ -57,10 +57,17 @@ pub enum Shot {
     CompareTries,
     DetailsMoreMenu,
     FanOut,
+    WorkspaceChangesEmpty,
+    WorkspaceChangesList,
+    WorkspaceChangesDiff,
+    WorkspaceChangesAsk,
+    Rollback,
+    ImageDiff,
+    WorkspaceHistory,
 }
 
 impl Shot {
-    pub const ALL: [Shot; 35] = [
+    pub const ALL: [Shot; 42] = [
         Shot::TasksTable,
         Shot::TasksBoard,
         Shot::BoardHoverCard,
@@ -96,6 +103,13 @@ impl Shot {
         Shot::CompareTries,
         Shot::DetailsMoreMenu,
         Shot::FanOut,
+        Shot::WorkspaceChangesEmpty,
+        Shot::WorkspaceChangesList,
+        Shot::WorkspaceChangesDiff,
+        Shot::WorkspaceChangesAsk,
+        Shot::Rollback,
+        Shot::ImageDiff,
+        Shot::WorkspaceHistory,
     ];
 
     pub fn name(self) -> &'static str {
@@ -135,6 +149,13 @@ impl Shot {
             Shot::CompareTries => "compare-tries",
             Shot::DetailsMoreMenu => "details-more-menu",
             Shot::FanOut => "fan-out",
+            Shot::WorkspaceChangesEmpty => "workspace-changes-empty",
+            Shot::WorkspaceChangesList => "workspace-changes-list",
+            Shot::WorkspaceChangesDiff => "workspace-changes-diff",
+            Shot::WorkspaceChangesAsk => "workspace-changes-ask",
+            Shot::Rollback => "rollback",
+            Shot::ImageDiff => "image-diff",
+            Shot::WorkspaceHistory => "workspace-history",
         }
     }
 
@@ -293,7 +314,7 @@ mod tests {
         };
         let names: Vec<&str> = Shot::ALL.iter().map(|shot| shot.name()).collect();
         assert_eq!(part("STATES: >-", "DOCKED:"), names);
-        // The docked size: the table, and every screen-2 and screen-3 state.
+        // The docked size: the table, and every state of screens 2 to 4.
         let docked = part("DOCKED: >-", "run:");
         assert_eq!(docked.first(), Some(&"tasks-table"));
         assert_eq!(docked[1..], names[16..]);

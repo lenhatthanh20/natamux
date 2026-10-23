@@ -56,9 +56,11 @@ allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 # Zed (the owner's fork of it, docs/rust-phase1.md) and the forks that its manifest pins at our
 # Zed rev. Each one by its exact URL.
 allow-git = [
+  "https://github.com/camdencheek/tree-sitter-go-mod",
   "https://github.com/lenhatthanh20/zed",
   "https://github.com/smol-rs/async-task.git",
   "https://github.com/tree-sitter/tree-sitter",
+  "https://github.com/tree-sitter/tree-sitter-cpp",
   "https://github.com/zed-industries/alacritty",
   "https://github.com/zed-industries/async-process.git",
   "https://github.com/zed-industries/async-tar",
@@ -68,6 +70,11 @@ allow-git = [
   "https://github.com/zed-industries/lsp-types",
   "https://github.com/zed-industries/notify",
   "https://github.com/zed-industries/trash-rs",
+  "https://github.com/zed-industries/tree-sitter-git-commit",
+  "https://github.com/zed-industries/tree-sitter-go-work",
+  "https://github.com/zed-industries/tree-sitter-markdown",
+  "https://github.com/zed-industries/tree-sitter-typescript",
+  "https://github.com/zed-industries/tree-sitter-yaml",
   "https://github.com/zed-industries/wasm_thread",
   "https://github.com/zed-industries/xim-rs.git",
 ]

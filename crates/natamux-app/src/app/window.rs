@@ -217,7 +217,8 @@ impl Root {
             }
             DashboardChange::WorkspaceChanged(_)
             | DashboardChange::ShellsChanged(_)
-            | DashboardChange::TaskLogged(_) => {}
+            | DashboardChange::TaskLogged(_)
+            | DashboardChange::UndoRollback(_) => {}
         }
     }
 
@@ -443,6 +444,9 @@ mod render;
 
 #[path = "window_details.rs"]
 mod details;
+
+#[path = "window_git.rs"]
+mod git_commands;
 
 pub fn open(
     options: &Options,

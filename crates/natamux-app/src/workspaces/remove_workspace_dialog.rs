@@ -15,9 +15,11 @@ use super::remove_dialog_rules::{
 };
 use crate::app::dashboard::Dashboard;
 use crate::app::source::reason;
+use crate::components::colors::change_color;
 use crate::components::dialog::{
     DialogFrame, DialogLayer, DialogView, cancel_button, primary_button,
 };
+use crate::git::change_rules::status_tone;
 
 /// Opens the dialog for the task's workspace, Cancel focused.
 pub fn open(dashboard: &Entity<Dashboard>, task: Task, window: &mut Window, cx: &mut App) {
@@ -40,6 +42,7 @@ pub struct RemoveWorkspaceDialog {
     error: Option<String>,
     focus: FocusHandle,
     cancel: FocusHandle,
+    view_changes: FocusHandle,
     branch: FocusHandle,
     submit: FocusHandle,
     _reads: Vec<gpui::Task<()>>,
@@ -58,6 +61,7 @@ impl RemoveWorkspaceDialog {
             error: None,
             focus: cx.focus_handle(),
             cancel: cx.focus_handle(),
+            view_changes: cx.focus_handle(),
             branch: cx.focus_handle(),
             submit: cx.focus_handle(),
             _reads: Vec::new(),
@@ -115,6 +119,15 @@ impl RemoveWorkspaceDialog {
         choice.can_delete && !self.keep_branch
     }
 
+    /// View changes and Commit…: closes the dialog, then shows the Changes tab of the task, which
+    /// drafts a message into an empty commit box for Commit….
+    fn open_changes(&mut self, commit: bool, cx: &mut Context<Self>) {
+        let id = self.task.id.clone();
+        cx.emit(DismissEvent);
+        self.dashboard
+            .update(cx, |dashboard, cx| dashboard.open_changes(&id, commit, cx));
+    }
+
     fn confirm(&mut self, cx: &mut Context<Self>) {
         if self.removing || self.changes.is_none() || self.not_committed().is_some() {
             return;
@@ -154,7 +167,11 @@ impl Focusable for RemoveWorkspaceDialog {
 impl DialogView for RemoveWorkspaceDialog {
     fn tab_ring(&self, _: &App) -> Vec<FocusHandle> {
         if self.not_committed().is_some() {
-            return vec![self.cancel.clone()];
+            return vec![
+                self.cancel.clone(),
+                self.view_changes.clone(),
+                self.submit.clone(),
+            ];
         }
         let mut ring = vec![self.cancel.clone()];
         if self.task.branch.is_some() {
@@ -169,6 +186,10 @@ impl DialogView for RemoveWorkspaceDialog {
     }
 
     fn submit(&mut self, _: &mut Window, cx: &mut Context<Self>) {
+        if self.not_committed().is_some() {
+            self.open_changes(true, cx);
+            return;
+        }
         self.confirm(cx);
     }
 }
@@ -204,9 +225,9 @@ impl RemoveWorkspaceDialog {
                 h_flex()
                     .gap_2()
                     .child(
-                        Label::new(file.status.clone())
+                        Label::new(file.status.letter())
                             .size(LabelSize::Small)
-                            .color(Color::Muted)
+                            .color(Color::Custom(change_color(status_tone(file.status), cx)))
                             .buffer_font(cx),
                     )
                     .child(
@@ -216,12 +237,24 @@ impl RemoveWorkspaceDialog {
                             .truncate(),
                     )
             }));
-        // View changes and Commit… come with the Changes screen.
         DialogFrame::new(not_committed_title(files.len()), close)
             .description(NOT_COMMITTED)
             .child(list)
             .children(more.map(|more| Label::new(more).size(LabelSize::Small).color(Color::Muted)))
             .footer(cancel_button("Close", &self.cancel, cancel))
+            .footer(
+                Button::new("remove-view-changes", "View changes")
+                    .style(ButtonStyle::Outlined)
+                    .track_focus(&self.view_changes)
+                    .on_click(cx.listener(|this, _, _, cx| this.open_changes(false, cx))),
+            )
+            .footer(primary_button(
+                "Commit\u{2026}",
+                &self.submit,
+                false,
+                false,
+                cx.listener(|this, _, _, cx| this.open_changes(true, cx)),
+            ))
             .into_any_element()
     }
 

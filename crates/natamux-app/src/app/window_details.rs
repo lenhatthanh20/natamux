@@ -234,6 +234,7 @@ impl Root {
             task_open: true,
             has_selection: true,
             selected_state: Some(task.state),
+            workspace_open: task.workspace.is_some(),
         };
         if !When::StageOpen.holds(&state) {
             return;

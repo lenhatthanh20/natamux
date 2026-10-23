@@ -17,15 +17,25 @@ use crate::workspaces::workspace_rules::{GitStep, next_git_step};
 
 impl Dashboard {
     /// A failed git step: the step's own sentence, the daemon's message under it.
-    fn git_failed(error: &ClientError, text: &str, cx: &mut App) {
+    pub(super) fn git_failed(error: &ClientError, text: &str, cx: &mut App) {
         push_toast(text, ToastTone::Error, Some(reason(error)), Vec::new(), cx);
     }
 
     /// The action of a success toast for the step that comes next (`nextGitStep`).
-    fn next_step_action(&self, done: GitStep, task: &Task, cx: &Context<Self>) -> Vec<ToastAction> {
+    pub(super) fn next_step_action(
+        &self,
+        done: GitStep,
+        task: &Task,
+        cx: &Context<Self>,
+    ) -> Vec<ToastAction> {
         let dashboard = cx.weak_entity();
         let id = task.id.clone();
         match next_git_step(done, task.pr.is_some()) {
+            Some(GitStep::Push) => vec![ToastAction::new("Push", move |_, cx| {
+                dashboard
+                    .update(cx, |dashboard, cx| dashboard.push(&id, cx).detach())
+                    .ok();
+            })],
             Some(GitStep::PullRequest) => vec![ToastAction::new("Create PR", move |_, cx| {
                 dashboard
                     .update(cx, |dashboard, cx| {
@@ -165,7 +175,7 @@ impl Dashboard {
     }
 
     /// The step's error toast once its quiet write fails; the answer goes on to the caller.
-    fn on_failure<T: 'static>(
+    pub(super) fn on_failure<T: 'static>(
         answer: Written<T>,
         text: &'static str,
         cx: &mut Context<Self>,

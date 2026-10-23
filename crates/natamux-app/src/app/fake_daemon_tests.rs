@@ -41,7 +41,7 @@ fn every_part_of_the_seed_reads() {
     assert_eq!(data.templates.len(), 2);
     assert_eq!(data.branches.default_branch.as_deref(), Some("main"));
     assert_eq!(data.skills.skills.len(), 1);
-    assert_eq!(data.changes.len(), 1);
+    assert_eq!(data.changes.len(), 3);
     assert_eq!(data.graphs.len(), 5);
     assert_eq!(data.ended["T-0139"].len(), 5);
 }
@@ -217,7 +217,7 @@ fn makes_a_workspace_for_a_task_that_has_none() {
 fn a_push_leaves_nothing_to_push_and_a_pull_request_gets_its_link() {
     let fake = FakeDaemon::default();
     fake.push("T-0146").unwrap();
-    let pushed = fake.graph("T-0146").unwrap();
+    let pushed = fake.graph("T-0146", false).unwrap();
     assert_eq!(
         pushed.push,
         Some(PushStatus::Tracked {

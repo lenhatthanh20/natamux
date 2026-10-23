@@ -9,6 +9,7 @@ use natamux_client::ClientError;
 use natamux_proto::agents::start::StartAgentInput;
 use natamux_proto::events::task_event::TaskEventInput;
 use natamux_proto::tasks::task::{NewTaskInput, TemplateTaskInput};
+use natamux_proto::workspaces::changes::ChangeStatus;
 use natamux_proto::workspaces::workspace::{NewWorkspaceInput, PreparingStep, PushStatus};
 use serde_json::{Value, json};
 use support::{exchange, ok};
@@ -114,13 +115,13 @@ fn reads_the_terminals_events_changes_and_graph_of_a_task() {
 
     let body = r#"{"changes":[{"path":"a.ts","status":"M","added":1,"removed":0}]}"#;
     let (changes, _) = ok("GET /tasks/T-0009/changes", body, |client| {
-        client.list_changes("T-0009")
+        client.list_changes("T-0009", false)
     });
-    assert_eq!(changes[0].status, "M");
+    assert_eq!(changes[0].status, ChangeStatus::Modified);
 
     let body = r#"{"branch":"natamux/t-0009","head":"abc","base":"main","ahead":2,"behind":0,"push":{"remote":"new","unpushed":2},"commits":[],"truncated":false}"#;
     let (graph, _) = ok("GET /tasks/T-0009/graph", body, |client| {
-        client.graph("T-0009")
+        client.graph("T-0009", false)
     });
     assert_eq!(graph.push, Some(PushStatus::New { unpushed: 2 }));
 }

@@ -2345,8 +2345,44 @@ criteria = "safe-to-deploy"
 version = "0.1.35"
 criteria = "safe-to-deploy"
 
+[[exemptions.tree-sitter-bash]]
+version = "0.25.1"
+criteria = "safe-to-deploy"
+
+[[exemptions.tree-sitter-c]]
+version = "0.24.2"
+criteria = "safe-to-deploy"
+
+[[exemptions.tree-sitter-css]]
+version = "0.23.2"
+criteria = "safe-to-deploy"
+
+[[exemptions.tree-sitter-diff]]
+version = "0.1.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.tree-sitter-go]]
+version = "0.25.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.tree-sitter-jsdoc]]
+version = "0.23.2"
+criteria = "safe-to-deploy"
+
 [[exemptions.tree-sitter-json]]
 version = "0.24.8"
+criteria = "safe-to-deploy"
+
+[[exemptions.tree-sitter-python]]
+version = "0.25.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.tree-sitter-regex]]
+version = "0.24.3"
+criteria = "safe-to-deploy"
+
+[[exemptions.tree-sitter-rust]]
+version = "0.24.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.try-lock]]
@@ -2587,10 +2623,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.web-sys]]
 version = "0.3.97"
-criteria = "safe-to-deploy"
-
-[[exemptions.web-time]]
-version = "1.1.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.web_atoms]]

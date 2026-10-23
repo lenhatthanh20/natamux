@@ -13,6 +13,8 @@ pub struct CommandState {
     pub task_open: bool,
     pub has_selection: bool,
     pub selected_state: Option<TaskState>,
+    /// The open task has a workspace (its tabs, files and diff).
+    pub workspace_open: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -25,6 +27,8 @@ pub enum When {
     TaskAction(&'static str),
     /// A workspace is open and its task has a stage at work or waiting (`stage.*`).
     StageOpen,
+    /// A workspace is open (`inWorkspace` of the web).
+    InWorkspace,
 }
 
 impl When {
@@ -39,6 +43,7 @@ impl When {
                     .iter()
                     .any(|action| action.event_type == event && !action.confirm)
             }),
+            When::InWorkspace => state.workspace_open,
             When::StageOpen => {
                 state.task_open
                     && matches!(

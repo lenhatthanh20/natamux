@@ -6,7 +6,7 @@ use super::*;
 
 #[test]
 fn gives_every_command_its_own_id() {
-    let mut ids: Vec<&str> = COMMANDS.iter().map(|command| command.id).collect();
+    let mut ids: Vec<&str> = all_commands().map(|command| command.id).collect();
     ids.sort_unstable();
     let count = ids.len();
     ids.dedup();
@@ -16,7 +16,7 @@ fn gives_every_command_its_own_id() {
 /// Both platforms, as gpui gets them.
 fn bindings(mac: bool) -> Vec<(&'static str, String, &'static str)> {
     let mut out = Vec::new();
-    for command in COMMANDS {
+    for command in all_commands() {
         for key in command.keys {
             let stroke = keystroke(key, mac);
             if command.contexts.is_empty() {
@@ -102,7 +102,7 @@ fn keeps_cancel_task_out_of_the_keys_and_the_palette_because_it_asks_first() {
 // user types in a text box.
 #[test]
 fn puts_no_single_key_command_in_the_menu_bar() {
-    for command in COMMANDS.iter().filter(|command| command.menu.is_some()) {
+    for command in all_commands().filter(|command| command.menu.is_some()) {
         assert!(
             command.keys.iter().all(|key| !is_single_key(key)),
             "{}",
@@ -217,10 +217,81 @@ fn offers_the_stage_commands_only_in_an_open_workspace_with_a_stage_at_work() {
         task_open,
         has_selection: selected_state.is_some(),
         selected_state,
+        ..CommandState::default()
     };
     let holds = |state: CommandState| skip.is_some_and(|when| when.holds(&state));
     assert!(holds(state(true, Some(TaskState::Review))));
     assert!(holds(state(true, Some(TaskState::NeedsInput))));
     assert!(!holds(state(false, Some(TaskState::Review))));
     assert!(!holds(state(true, Some(TaskState::Done))));
+}
+
+#[test]
+fn drafts_the_commit_message_with_mod_shift_g_only_from_the_commit_box() {
+    let draft = command_by_id("diff.draft-commit");
+    assert_eq!(shortcut_of("diff.draft-commit"), Some("Mod+Shift+G"));
+    assert_eq!(
+        draft.map(|command| command.contexts),
+        Some(&[COMMIT_BOX][..])
+    );
+}
+
+#[test]
+fn offers_the_workspace_tabs_and_files_only_with_a_workspace_open() {
+    let ids = [
+        "tab.terminal",
+        "tab.changes",
+        "tab.history",
+        "diff.next-file",
+        "diff.prev-file",
+        "changes.refresh",
+        "task.commit",
+    ];
+    let open = CommandState {
+        workspace_open: true,
+        ..CommandState::default()
+    };
+    for id in ids {
+        let when = command_by_id(id).map(|command| command.when);
+        assert_eq!(when, Some(When::InWorkspace), "{id}");
+        assert_eq!(
+            when.map(|when| when.holds(&CommandState::default())),
+            Some(false),
+            "{id}"
+        );
+        assert_eq!(when.map(|when| when.holds(&open)), Some(true), "{id}");
+    }
+}
+
+#[test]
+fn has_the_keys_of_the_changes_tab() {
+    let keys_of = |id| command_by_id(id).map(|command| command.keys);
+    assert_eq!(keys_of("tab.terminal"), Some(&["1"][..]));
+    assert_eq!(keys_of("tab.changes"), Some(&["2"][..]));
+    assert_eq!(keys_of("tab.history"), Some(&["3"][..]));
+    assert_eq!(keys_of("changes.refresh"), Some(&["Shift+R"][..]));
+    assert_eq!(keys_of("diff.next-change"), Some(&["Alt+F5"][..]));
+    assert_eq!(keys_of("diff.prev-change"), Some(&["Shift+Alt+F5"][..]));
+    assert_eq!(keys_of("changes.rollback"), Some(&["Mod+Alt+Z"][..]));
+    assert_eq!(shortcut_of("task.commit"), None);
+}
+
+#[test]
+fn keeps_single_keys_out_of_text_boxes_and_terminals() {
+    for command in all_commands().filter(|command| command.keys.iter().any(|k| is_single_key(k))) {
+        assert!(!command.contexts.contains(&TERMINAL), "{}", command.id);
+        assert!(!command.contexts.contains(&CHANGES_ANY), "{}", command.id);
+        assert!(!command.contexts.contains(&COMMIT_BOX), "{}", command.id);
+    }
+}
+
+#[test]
+fn binds_no_command_to_the_4_or_5_key_which_showed_the_docs_tab_before() {
+    for command in all_commands() {
+        assert!(
+            !command.keys.iter().any(|key| *key == "4" || *key == "5"),
+            "{}",
+            command.id
+        );
+    }
 }

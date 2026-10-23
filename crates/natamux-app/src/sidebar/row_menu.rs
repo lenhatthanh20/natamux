@@ -157,6 +157,9 @@ impl WorkspaceTree {
             return;
         };
         match command {
+            RowCommand::ViewChanges => self.dashboard.update(cx, |dashboard, cx| {
+                dashboard.open_changes(task_id, false, cx)
+            }),
             RowCommand::Rename => self.start_rename(task_id, window, cx),
             RowCommand::AddSubtask => add_subtask_dialog::open(task, window, cx),
             RowCommand::TogglePin => self

@@ -27,17 +27,22 @@ tokio = { version = "1.52", features = ["macros", "net", "rt-multi-thread", "syn
 # and parses its output off the main thread.
 # Upgrade them together, in their own PR (docs/plan-rust-migration.md, "Cargo workspace").
 assets = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "4c9b8fe899637d0fcc01cb3e0df41d2edaaf72bd" }
+buffer_diff = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "4c9b8fe899637d0fcc01cb3e0df41d2edaaf72bd" }
 editor = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "4c9b8fe899637d0fcc01cb3e0df41d2edaaf72bd" }
+grammars = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "4c9b8fe899637d0fcc01cb3e0df41d2edaaf72bd", features = ["load-grammars"] }
 gpui = { version = "0.2.2", git = "https://github.com/lenhatthanh20/zed", rev = "4c9b8fe899637d0fcc01cb3e0df41d2edaaf72bd" }
 gpui_platform = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "4c9b8fe899637d0fcc01cb3e0df41d2edaaf72bd", features = ["font-kit", "wayland", "x11"] }
+language = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "4c9b8fe899637d0fcc01cb3e0df41d2edaaf72bd" }
 release_channel = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "4c9b8fe899637d0fcc01cb3e0df41d2edaaf72bd" }
 settings = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "4c9b8fe899637d0fcc01cb3e0df41d2edaaf72bd" }
+text = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "4c9b8fe899637d0fcc01cb3e0df41d2edaaf72bd" }
 terminal = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "4c9b8fe899637d0fcc01cb3e0df41d2edaaf72bd" }
 terminal_view = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "4c9b8fe899637d0fcc01cb3e0df41d2edaaf72bd" }
 theme = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "4c9b8fe899637d0fcc01cb3e0df41d2edaaf72bd" }
 theme_settings = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "4c9b8fe899637d0fcc01cb3e0df41d2edaaf72bd" }
 ui = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "4c9b8fe899637d0fcc01cb3e0df41d2edaaf72bd" }
-util = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "4c9b8fe899637d0fcc01cb3e0df41d2edaaf72bd" }
+# debug-embed: without it, debug builds look for the grammar queries in a Zed checkout.
+util = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "4c9b8fe899637d0fcc01cb3e0df41d2edaaf72bd", features = ["debug-embed"] }
 
 [workspace.lints.clippy]
 unwrap_used = "deny"

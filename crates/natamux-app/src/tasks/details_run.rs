@@ -150,6 +150,9 @@ impl DetailsPanel {
             PanelCommand::RemoveWorkspace => {
                 remove_workspace_dialog::open(&dashboard, task.clone(), window, cx)
             }
+            PanelCommand::ViewChanges => {
+                dashboard.update(cx, |d, cx| d.open_changes(&id, false, cx))
+            }
             PanelCommand::CheckPullRequest => {
                 self.busy_call(cx, move |d, cx| d.refresh_pull_request(&id, cx), |_, _| {});
             }

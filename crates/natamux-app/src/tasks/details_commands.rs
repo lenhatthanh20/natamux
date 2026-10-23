@@ -65,6 +65,8 @@ pub enum PanelCommand {
     CreateWorkspace,
     PickBase(String),
     RemoveWorkspace,
+    /// Opens the Changes tab of the task's workspace.
+    ViewChanges,
     CheckPullRequest,
     AddSubtask,
     KeepTry(String),

@@ -7,9 +7,7 @@
 // Test code: a failed unwrap is a failed test. clippy.toml allows it only inside #[test] fns.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use std::any::Any;
 use std::panic::AssertUnwindSafe;
-use std::sync::Mutex;
 use std::time::Duration;
 
 use futures::{FutureExt, StreamExt};
@@ -21,6 +19,10 @@ use natamux_proto::stages::actions::{StageAction, StageActionInput};
 use natamux_proto::tasks::task::{NewTaskInput, TaskChanges};
 use natamux_proto::tasks::template::TemplateInput;
 use natamux_proto::workspaces::workspace::{FanOutInput, NewWorkspaceInput};
+
+mod live;
+
+use live::{Made, finish, runtime};
 
 const WAIT: Duration = Duration::from_secs(20);
 // Not Terminal 1, where the task's agent may run.
@@ -77,13 +79,6 @@ async fn read_until(
             TerminalEvent::Status(_) | TerminalEvent::Reset { .. } => {}
         }
     }
-}
-
-fn runtime() -> tokio::runtime::Runtime {
-    tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .unwrap()
 }
 
 #[test]
@@ -234,8 +229,8 @@ fn runs_the_reads_and_writes_of_screen_1() {
         .await;
         assert!(!end.failed(), "the workspace failed: {:?}", end.error);
         client.list_terminals(&made.id).await.unwrap();
-        client.list_changes(&made.id).await.unwrap();
-        client.graph(&made.id).await.unwrap();
+        client.list_changes(&made.id, false).await.unwrap();
+        client.graph(&made.id, false).await.unwrap();
 
         let removed = client.remove_workspace(&made.id, true).await.unwrap();
         assert_eq!(removed.task.workspace, None);
@@ -262,29 +257,6 @@ async fn wait_for_terminals(client: &Client, task: &str, done: impl Fn(&[String]
             list.terminals
         );
         tokio::time::sleep(Duration::from_millis(200)).await;
-    }
-}
-
-/// The tasks a flow made, so they go even when a step fails.
-#[derive(Default)]
-struct Made(Mutex<Vec<String>>);
-
-impl Made {
-    fn add(&self, id: &str) {
-        self.0.lock().unwrap().push(id.to_string());
-    }
-}
-
-/// Removes the workspaces and deletes the tasks of `made`, the newest first. A task that is gone
-/// already is no error here. Then the failure of the flow, if any, goes on.
-async fn finish(client: &Client, made: &Made, result: Result<(), Box<dyn Any + Send>>) {
-    let ids = made.0.lock().unwrap().clone();
-    for id in ids.iter().rev() {
-        let _ = client.remove_workspace(id, true).await;
-        let _ = client.delete_task(id).await;
-    }
-    if let Err(panic) = result {
-        std::panic::resume_unwind(panic);
     }
 }
 

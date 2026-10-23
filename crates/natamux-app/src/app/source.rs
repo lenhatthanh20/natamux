@@ -133,11 +133,14 @@ impl Source {
 
     /// The files not committed in a task's workspace.
     pub fn list_changes(&self, task_id: &str) -> Answer<Vec<ChangeEntry>> {
-        self.ask(|c| c.list_changes(task_id), |f| f.list_changes(task_id))
+        self.ask(
+            |c| c.list_changes(task_id, false),
+            |f| f.list_changes(task_id, false),
+        )
     }
 
     pub fn graph(&self, task_id: &str) -> Answer<GitGraph> {
-        self.ask(|c| c.graph(task_id), |f| f.graph(task_id))
+        self.ask(|c| c.graph(task_id, false), |f| f.graph(task_id, false))
     }
 
     pub fn list_terminals(&self, task_id: &str) -> Answer<TerminalList> {
@@ -351,6 +354,9 @@ pub fn reason(error: &ClientError) -> String {
         other => other.to_string(),
     }
 }
+
+#[path = "source_git.rs"]
+mod git;
 
 #[cfg(test)]
 mod tests {

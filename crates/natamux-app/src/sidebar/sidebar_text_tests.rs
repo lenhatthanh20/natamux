@@ -155,6 +155,7 @@ fn row_menu_puts_the_destructive_items_last() {
     assert_eq!(
         labels_of(&row_menu(&task(TaskState::Done), true)),
         [
+            "View changes",
             "Rename",
             "Add subtask…",
             "Unpin",
@@ -164,6 +165,19 @@ fn row_menu_puts_the_destructive_items_last() {
             "Remove workspace",
             "Delete task"
         ]
+    );
+}
+
+#[test]
+fn offers_view_changes_only_with_a_workspace() {
+    let no_workspace = Task {
+        workspace: None,
+        ..task(TaskState::Draft)
+    };
+    assert!(!labels_of(&row_menu(&no_workspace, false)).contains(&"View changes"));
+    assert_eq!(
+        labels_of(&row_menu(&task(TaskState::Running), false))[0],
+        "View changes"
     );
 }
 

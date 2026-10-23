@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 
 use hyper::Method;
 use natamux_proto::agents::activity::{ActivityList, TaskActivity, TaskUsage, UsageList};
-use natamux_proto::agents::start::StartAgentInput;
+use natamux_proto::agents::start::{AgentMessage, StartAgentInput};
 use natamux_proto::tasks::task::{Task, TaskAnswer};
 use natamux_proto::terminals::query::encode;
 
@@ -40,5 +40,16 @@ pub async fn start_agent(
 pub async fn reopen_agent(config: &Config, task_id: &str) -> Result<Task, ClientError> {
     let path = format!("/tasks/{}/agent/reopen", encode(task_id));
     let answer: TaskAnswer = call(config, Method::POST, &path).await?;
+    Ok(answer.task)
+}
+
+/// Types text into the task's running agent.
+pub async fn send_to_agent(
+    config: &Config,
+    task_id: &str,
+    message: &AgentMessage,
+) -> Result<Task, ClientError> {
+    let path = format!("/tasks/{}/agent/message", encode(task_id));
+    let answer: TaskAnswer = call_with(config, Method::POST, &path, message).await?;
     Ok(answer.task)
 }

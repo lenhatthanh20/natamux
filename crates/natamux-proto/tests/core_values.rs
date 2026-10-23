@@ -19,6 +19,11 @@ use natamux_proto::tasks::task::{
 };
 use natamux_proto::tasks::template::{MAX_TEMPLATE_NAME_LENGTH, MAX_TEMPLATE_TITLE_LENGTH};
 use natamux_proto::terminals::list::SHELL_PROGRAMS;
+use natamux_proto::workspaces::changes::{
+    COMMIT_SUBJECT_MAX, ChangeStatus, IMAGE_TYPES, ImageSide, MAX_AGENT_MESSAGE,
+    MAX_COMMIT_MESSAGE, MAX_FILE_BYTES, MAX_GRAPH_COMMITS, MAX_IMAGE_BYTES, MAX_PATH_LENGTH,
+    MAX_ROLLBACK_PATHS,
+};
 use natamux_proto::workspaces::workspace::{
     CHANGE_STATUSES, MAX_BASE_LENGTH, MAX_PROMPT_LENGTH, MAX_TRIES,
 };
@@ -33,6 +38,10 @@ const ATTACHMENTS_TS: &str = include_str!("../../../packages/core/src/tasks/atta
 const TERMINAL_TS: &str = include_str!("../../../packages/core/src/terminals/terminal.ts");
 const CHANGES_TS: &str = include_str!("../../../packages/core/src/git/changes.ts");
 const GIT_GRAPH_TS: &str = include_str!("../../../packages/core/src/git/git-graph.ts");
+const COMMIT_MESSAGE_TS: &str = include_str!("../../../packages/core/src/git/commit-message.ts");
+const CHANGE_LABELS_TS: &str = include_str!("../../../packages/web/src/lib/changes.ts");
+const FILE_DIFF_TS: &str = include_str!("../../../packages/daemon/src/git/file-diff.ts");
+const GRAPH_TS: &str = include_str!("../../../packages/daemon/src/git/graph.ts");
 const TERMINAL_LANE_TS: &str = include_str!("../../../packages/core/src/stages/terminal-lane.ts");
 const STAGE_SCHEMA_TS: &str = include_str!("../../../packages/core/src/stages/schema.ts");
 const STAGE_CATALOG_TS: &str = include_str!("../../../packages/core/src/stages/stage-catalog.ts");
@@ -361,4 +370,79 @@ fn template_and_fan_out_limits_match_core() {
     )));
     assert_eq!(value(FAN_OUT_TS, "MAX_TRIES"), MAX_TRIES.to_string());
     assert!(WORKSPACE_ROUTES_TS.contains("count: z.number().int().min(1).max(MAX_TRIES)"));
+}
+
+/// A number written like `1_000_000` in the right side of `export const NAME = `.
+fn number(source: &str, name: &str) -> u64 {
+    value(source, name).replace('_', "").parse().unwrap()
+}
+
+#[test]
+fn change_labels_match_the_web_dashboard() {
+    let start = CHANGE_LABELS_TS.find("export const CHANGE_LABEL").unwrap();
+    let object = &CHANGE_LABELS_TS[start..];
+    let object = &object[..object.find("\n}").unwrap()];
+    let written: Vec<(&str, &str)> = object
+        .lines()
+        .skip(1)
+        .map(|line| {
+            let (letter, label) = line.trim().split_once(": ").unwrap();
+            (letter, label.trim_end_matches(',').trim_matches('\''))
+        })
+        .collect();
+    let rust: Vec<(&str, &str)> = ChangeStatus::ALL
+        .iter()
+        .map(|status| (status.letter(), status.label()))
+        .collect();
+    assert_eq!(rust, written);
+}
+
+#[test]
+fn image_types_and_sides_match_core() {
+    let start = CHANGES_TS.find("export const IMAGE_TYPES").unwrap();
+    let object = &CHANGES_TS[start..];
+    let object = &object[..object.find("} as const").unwrap()];
+    let written: Vec<(&str, &str)> = object
+        .lines()
+        .skip(1)
+        .map(|line| {
+            let (extension, mime) = line.trim().split_once(": ").unwrap();
+            (extension, mime.trim_end_matches(',').trim_matches('\''))
+        })
+        .collect();
+    assert_eq!(IMAGE_TYPES.to_vec(), written);
+    // The route reads `side` as one of these two words.
+    assert_eq!(ImageSide::Original.name(), "original");
+    assert_eq!(ImageSide::Modified.name(), "modified");
+    assert_eq!(list(CHANGES_TS, "IMAGE_SIDES"), ["original", "modified"]);
+}
+
+#[test]
+fn git_limits_match_the_daemon() {
+    assert_eq!(
+        number(COMMIT_MESSAGE_TS, "COMMIT_SUBJECT_MAX"),
+        COMMIT_SUBJECT_MAX as u64
+    );
+    assert_eq!(
+        number(GRAPH_TS, "MAX_GRAPH_COMMITS"),
+        MAX_GRAPH_COMMITS as u64
+    );
+    assert_eq!(number(FILE_DIFF_TS, "MAX_IMAGE_BYTES"), MAX_IMAGE_BYTES);
+    assert_eq!(number(FILE_DIFF_TS, "MAX_FILE_BYTES"), MAX_FILE_BYTES);
+}
+
+#[test]
+fn commit_rollback_and_message_limits_match_the_daemon() {
+    let commit = MAX_COMMIT_MESSAGE.to_string().replace("10000", "10_000");
+    assert!(
+        WORKSPACE_ROUTES_TS.contains(&format!("message: z.string().trim().min(1).max({commit})"))
+    );
+    assert!(WORKSPACE_ROUTES_TS.contains(&format!(
+        "paths: z.array(changedFileQuerySchema.shape.path).min(1).max({MAX_ROLLBACK_PATHS})"
+    )));
+    assert!(
+        WORKSPACE_ROUTES_TS.contains(&format!("path: z.string().min(1).max({MAX_PATH_LENGTH})"))
+    );
+    let text = MAX_AGENT_MESSAGE.to_string().replace("20000", "20_000");
+    assert!(AGENT_ROUTES_TS.contains(&format!("text: z.string().trim().min(1).max({text})")));
 }

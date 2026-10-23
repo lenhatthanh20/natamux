@@ -1,4 +1,4 @@
-//! `--shot STATE`: opens the window in one screen-1, 2 or 3 state of the fake daemon, for the CI
+//! `--shot STATE`: opens the window in one screen-1 to 4 state of the fake daemon, for the CI
 //! screenshots (docs/rust-phase3.md). The clock stops at the fake's time and the view state is
 //! fixed and never saved, so a shot is the same on every run.
 
@@ -12,7 +12,7 @@ use super::dashboard::Dashboard;
 use super::fake_daemon::{self, FakeLink, NOW, PINNED};
 use super::options::Shot;
 use super::shortcuts::{FindInTerminal, OpenRowMenu};
-use super::view_rules::DetailsView;
+use super::view_rules::{DetailsView, WorkspaceTab};
 use super::view_state::{Layout, ViewState};
 use super::window::Root;
 use crate::tasks::task_time::parse_iso_ms;
@@ -49,6 +49,13 @@ const A_TRY: &str = "T-0152";
 const SEND_BACK_REASON: &str = "Add the error cases for an empty list.";
 /// The Tries section is the sixth part of the Details tab of a try with an agent.
 const TRIES_PART: usize = 5;
+/// Screen 4: a running task with no file to commit, one with a new image; the reviewed task has
+/// two changed files.
+const CLEAN: &str = "T-0144";
+const IMAGE: &str = "T-0147";
+const CHANGED_FILE: &str = "src/checkout.ts";
+/// The lines Ask agent quotes: the new body of the function.
+const ASKED_LINES: (u32, u32) = (5, 6);
 
 /// Sets the fake's data before the window watches it. Call it before `window::open`.
 pub fn prepare(shot: Shot) {
@@ -87,7 +94,12 @@ pub fn run(handle: WindowHandle<Root>, shot: Shot, cx: &mut App) {
         }
         if matches!(
             shot,
-            Shot::SendBack | Shot::DetailsMoreMenu | Shot::CompareTries
+            Shot::SendBack
+                | Shot::DetailsMoreMenu
+                | Shot::CompareTries
+                | Shot::WorkspaceChangesDiff
+                | Shot::WorkspaceChangesAsk
+                | Shot::Rollback
         ) {
             cx.background_executor().timer(SETTLE).await;
             handle
@@ -107,12 +119,15 @@ pub fn run(handle: WindowHandle<Root>, shot: Shot, cx: &mut App) {
 fn view_of(shot: Shot) -> ViewState {
     let board = matches!(shot, Shot::TasksBoard | Shot::BoardHoverCard);
     let agents = (shot == Shot::AgentsGrid).then(|| vec![ASKING.to_string(), RUNNING.to_string()]);
-    ViewState {
+    let mut view = ViewState {
         pinned: PINNED.iter().map(|id| id.to_string()).collect(),
         layout: if board { Layout::Board } else { Layout::Table },
         agent_panes: agents,
         ..ViewState::default()
-    }
+    };
+    // The Ask agent shot shows the inline diff; the others keep side by side.
+    view.diff.side_by_side = shot != Shot::WorkspaceChangesAsk;
+    view
 }
 
 /// Puts the window in the state. The data is there: the fake's feed sends it at once.
@@ -159,15 +174,7 @@ fn enter(shot: Shot, root: &mut Root, window: &mut Window, cx: &mut gpui::Contex
         }
         // The sidebar row's menu (ui-spec 4.13). Both shot sizes are under 1024, so the sidebar is
         // the drawer. Each step waits a frame: the drawer lays the tree out, then the focused row.
-        Shot::TaskContextMenu => {
-            root.set_drawer(true, window, cx);
-            let tree = root.sidebar().read(cx).tree().clone();
-            window.on_next_frame(move |window, cx| {
-                tree.update(cx, |tree, cx| tree.focus_task(TASK, window, cx));
-                window
-                    .on_next_frame(|window, cx| window.dispatch_action(Box::new(OpenRowMenu), cx));
-            });
-        }
+        Shot::TaskContextMenu => row_menu(root, window, cx),
         Shot::FilterMiss => {
             let filter = root.filter(cx);
             filter.update(cx, |editor, cx| editor.set_text("zebra", window, cx));
@@ -193,8 +200,41 @@ fn enter(shot: Shot, root: &mut Root, window: &mut Window, cx: &mut gpui::Contex
                 fan_out_dialog::open(&dashboard, &task, window, cx);
             }
         }
-        Shot::Toast | Shot::Skeleton | Shot::Empty | Shot::NoProjects | Shot::LoadError => {}
+        // Screen 4, and the states that need no step.
+        _ => enter_git(shot, &dashboard, cx),
     }
+}
+
+/// Screen 4: the workspace of the state's task on Changes or History.
+fn enter_git(shot: Shot, dashboard: &gpui::Entity<Dashboard>, cx: &mut App) {
+    match shot {
+        Shot::WorkspaceChangesEmpty => changes(dashboard, CLEAN, cx),
+        Shot::WorkspaceChangesList
+        | Shot::WorkspaceChangesDiff
+        | Shot::WorkspaceChangesAsk
+        | Shot::Rollback => changes(dashboard, REVIEWED, cx),
+        Shot::ImageDiff => changes(dashboard, IMAGE, cx),
+        Shot::WorkspaceHistory => dashboard.update(cx, |dashboard, cx| {
+            dashboard.open(REVIEWED, cx);
+            dashboard.pick_tab(WorkspaceTab::History, cx);
+        }),
+        _ => {}
+    }
+}
+
+/// The drawer, then the task's row focused, then its menu, each a frame after the other.
+fn row_menu(root: &mut Root, window: &mut Window, cx: &mut gpui::Context<Root>) {
+    root.set_drawer(true, window, cx);
+    let tree = root.sidebar().read(cx).tree().clone();
+    window.on_next_frame(move |window, cx| {
+        tree.update(cx, |tree, cx| tree.focus_task(TASK, window, cx));
+        window.on_next_frame(|window, cx| window.dispatch_action(Box::new(OpenRowMenu), cx));
+    });
+}
+
+/// The task's workspace on its Changes tab.
+fn changes(dashboard: &gpui::Entity<Dashboard>, id: &str, cx: &mut App) {
+    dashboard.update(cx, |dashboard, cx| dashboard.open_changes(id, false, cx));
 }
 
 fn open(dashboard: &gpui::Entity<Dashboard>, id: &str, cx: &mut App) {
@@ -225,7 +265,8 @@ fn choose(root: &mut Root, id: &str, window: &mut Window, cx: &mut gpui::Context
         .update(cx, |dashboard, cx| dashboard.choose(id, cx));
 }
 
-/// What needs the panel drawn first: the Send back dialog, the "..." menu, the Tries section.
+/// What needs the panel or the diff drawn first: the Send back dialog, the "..." menu, the
+/// Tries section, a change of the diff, Ask agent, Rollback.
 fn panel_step(shot: Shot, root: &mut Root, window: &mut Window, cx: &mut gpui::Context<Root>) {
     let panel = root.details_panel().clone();
     match shot {
@@ -239,6 +280,16 @@ fn panel_step(shot: Shot, root: &mut Root, window: &mut Window, cx: &mut gpui::C
         }
         Shot::DetailsMoreMenu => panel.update(cx, |panel, cx| panel.open_more_menu(window, cx)),
         Shot::CompareTries => panel.update(cx, |panel, cx| panel.center_on(TRIES_PART, cx)),
+        Shot::WorkspaceChangesDiff | Shot::WorkspaceChangesAsk | Shot::Rollback => {
+            let changes = root.workspace_view().read(cx).changes_view().clone();
+            changes.update(cx, |changes, cx| match shot {
+                Shot::WorkspaceChangesDiff => changes.shot_change(CHANGED_FILE, 2, window, cx),
+                Shot::WorkspaceChangesAsk => {
+                    changes.shot_ask(ASKED_LINES.0, ASKED_LINES.1, window, cx)
+                }
+                _ => changes.shot_rollback(window, cx),
+            });
+        }
         _ => {}
     }
 }
@@ -307,11 +358,11 @@ mod tests {
         let fake = fake_daemon::FakeDaemon::default();
         for id in [TASK, REMOVED] {
             assert!(fake.list_events(id).is_ok());
-            assert!(fake.graph(id).is_ok());
+            assert!(fake.graph(id, false).is_ok());
         }
         for id in [RUNNING, ASKING, REVIEWED, PLAN_GATE, PLAN_FAILED] {
             assert!(fake.list_terminals(id).is_ok(), "{id}");
-            assert!(fake.graph(id).is_ok(), "{id}");
+            assert!(fake.graph(id, false).is_ok(), "{id}");
         }
         let tasks = fake.tasks();
         let task = |id: &str| tasks.iter().find(|task| task.id == id).cloned().unwrap();
@@ -325,6 +376,13 @@ mod tests {
         assert!(task(FINISHED).workspace.is_some());
         assert_eq!(fake.ended_shells(FINISHED).unwrap().len(), 5);
         assert!(fake.list_terminals(REMOVED).is_ok());
-        assert!(fake.list_changes(REMOVED).unwrap().is_empty());
+        assert!(fake.list_changes(REMOVED, false).unwrap().is_empty());
+        assert!(fake.list_changes(CLEAN, false).unwrap().is_empty());
+        let reviewed = fake.list_changes(REVIEWED, false).unwrap();
+        assert!(reviewed.iter().any(|entry| entry.path == CHANGED_FILE));
+        assert!(fake.file_diff(REVIEWED, CHANGED_FILE).is_ok());
+        assert!(!fake.graph(REVIEWED, false).unwrap().commits.is_empty());
+        let image = fake.list_changes(IMAGE, false).unwrap();
+        assert!(image.iter().any(|entry| entry.path.ends_with(".png")));
     }
 }
