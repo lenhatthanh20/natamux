@@ -1,0 +1,15 @@
+{
+  "stages": [
+    { "id": "outline", "kind": "manual", "gate": "manual" },
+    {
+      "id": "build",
+      "name": "Build",
+      "parallel": [
+        { "id": "left", "kind": "manual", "gate": "manual" },
+        { "id": "right", "kind": "manual", "gate": "auto" }
+      ]
+    },
+    { "id": "signoff", "kind": "review", "gate": "manual" },
+    { "id": "ship", "kind": "release", "gate": "manual" }
+  ]
+}

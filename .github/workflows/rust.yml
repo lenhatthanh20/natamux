@@ -465,7 +465,7 @@ jobs:
             target
           key: rust-daemon-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
           restore-keys: rust-daemon-${{ runner.os }}-
-      - run: cargo test --locked -p natamux-pty -p natamux-screen -p natamux-daemon
+      - run: cargo test --locked -p natamux-core -p natamux-store -p natamux-pty -p natamux-screen -p natamux-daemon
 
   # Phase 4, part 1: the contract suite. The Node daemon of main and the Rust daemon run side by
   # side from the same image (compose.rust-daemon.yaml); the terminal scenarios of
@@ -496,8 +496,12 @@ jobs:
             target
           key: rust-daemon-contract-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
           restore-keys: rust-daemon-contract-${{ runner.os }}-
+      # The bundled SQLite of rusqlite is C: musl-gcc builds it for the static binary.
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends musl-tools
       - run: cargo build --release --locked -p natamux-daemon --target x86_64-unknown-linux-musl
-      - run: cargo test --locked -p natamux-contract --test terminals --no-run
+        env:
+          CC_x86_64_unknown_linux_musl: musl-gcc
+      - run: cargo test --locked -p natamux-contract --tests --no-run
       - name: Start the Node daemon of main and the Rust daemon beside it
         run: |
           scripts/e2e.sh up
@@ -535,6 +539,22 @@ jobs:
           done
           api "$NATAMUX_URL/tasks/$id" | jq -r .task.workspace
           echo "id=$id" >> "$GITHUB_OUTPUT"
+      # Part 2: the Rust daemon reads the same project and the part-1 task, from files Node wrote.
+      # The contract pipeline has only stages that wait for a person, so Node's stage runner starts
+      # nothing and both daemons see only the events the scenarios send.
+      - name: Give the Rust daemon the project, the task and the contract settings
+        env:
+          TASK: ${{ steps.task.outputs.id }}
+        run: |
+          compose() { docker compose -p natamux-e2e -f compose.prod.yaml -f compose.e2e.yaml -f compose.rust-daemon.yaml "$@"; }
+          compose exec -T daemon sh -c "mkdir -p /data/rust/tasks && cp /data/repos.json /data/rust/ && cp /data/tasks/$TASK.md /data/tasks/$TASK.events.jsonl /data/rust/tasks/"
+          compose exec -T daemon sh -c 'cat > /repo/.natamux.json' < crates/natamux-contract/tests/fixtures/natamux.json
+          compose restart daemon-rust
+          for _ in $(seq 60); do
+            curl -fsS http://127.0.0.1:4318/health && exit 0
+            sleep 0.5
+          done
+          exit 1
       - name: The terminal scenarios on both daemons
         env:
           NATAMUX_CONTRACT_NODE: http://127.0.0.1:8080/api
@@ -549,10 +569,17 @@ jobs:
             -f compose.rust-daemon.yaml restart daemon-rust
           NATAMUX_CONTRACT_DUMPS: ${{ runner.temp }}/dumps
           NATAMUX_CONTRACT_REPORT: ${{ runner.temp }}/contract.md
+          # Both daemons share the data volume; one container reads and copies the files of both.
+          NATAMUX_CONTRACT_EXEC: >-
+            docker compose -p natamux-e2e -f compose.prod.yaml -f compose.e2e.yaml
+            -f compose.rust-daemon.yaml exec -T daemon
+          NATAMUX_CONTRACT_NODE_DATA: /data
+          NATAMUX_CONTRACT_RUST_DATA: /data/rust
         run: |
           printf '| scenario | step | result |\n|---|---|---|\n' > "$NATAMUX_CONTRACT_REPORT"
           status=0
           cargo test --locked -p natamux-contract --test terminals -- --ignored --test-threads=1 || status=$?
+          cargo test --locked -p natamux-contract --test tasks -- --ignored --test-threads=1 || status=$?
           cat "$NATAMUX_CONTRACT_REPORT" >> "$GITHUB_STEP_SUMMARY"
           exit "$status"
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
@@ -568,11 +595,20 @@ jobs:
         run: |
           pnpm install --frozen-lockfile --filter "@natamux/daemon"
           node scripts/xterm-grid.mjs "$RUNNER_TEMP/dumps"
+      # gray-matter and js-yaml of the Node daemon write the fixtures the Rust store is held to.
+      - name: The task file fixtures equal gray-matter's output
+        if: always()
+        run: |
+          node scripts/task-file-golden.mjs crates/natamux-store/tests/fixtures/front_matter
+          git status --porcelain crates/natamux-store/tests/fixtures
+          test -z "$(git status --porcelain crates/natamux-store/tests/fixtures)"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: contract-dumps
-          path: ${{ runner.temp }}/dumps
+          path: |
+            ${{ runner.temp }}/dumps
+            crates/natamux-store/tests/fixtures
           if-no-files-found: ignore
       - if: failure()
         run: scripts/e2e.sh logs

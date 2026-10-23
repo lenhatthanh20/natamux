@@ -15,7 +15,7 @@ pub struct AttachmentUpload {
 
 /// A file kept with a task, as `GET /tasks/:id/attachments` lists it. `kind` (JSON `type`): the
 /// image type the app may show, None for a file that only downloads.
-#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Attachment {
     pub name: String,
     pub size: u64,

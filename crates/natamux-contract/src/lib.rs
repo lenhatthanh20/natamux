@@ -4,5 +4,6 @@
 //! `--ignored`.
 
 pub mod daemon;
+pub mod events;
 pub mod socket;
 pub mod transcript;

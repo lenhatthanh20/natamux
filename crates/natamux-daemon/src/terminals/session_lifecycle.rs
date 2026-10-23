@@ -104,8 +104,14 @@ pub fn spawn_session(new: NewSession<'_>) -> Result<SessionRef, TerminalError> {
 /// Output of a running shell: whole characters to the screen and the clients. Gives the bytes it
 /// took, for the output listeners.
 pub fn take_output(session: &mut Session, read: Vec<u8>) -> Vec<u8> {
-    let mut all = std::mem::take(&mut session.partial);
-    all.extend(read);
+    // Most reads end on a whole character: then no copy.
+    let mut all = if session.partial.is_empty() {
+        read
+    } else {
+        let mut all = std::mem::take(&mut session.partial);
+        all.extend(read);
+        all
+    };
     let end = whole_chars(&all);
     session.partial = all.split_off(end);
     if all.is_empty() {

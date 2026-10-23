@@ -7,6 +7,7 @@ ignore = [
   { id = "RUSTSEC-2023-0071", reason = "rsa timing attack, no fix exists; only Zed's sign-in RPC uses it, and the app never signs in to Zed" },
   { id = "RUSTSEC-2026-0194", reason = "quick-xml, fixed only in 0.41 (breaking); Zed's deps read local XML only" },
   { id = "RUSTSEC-2026-0195", reason = "quick-xml, fixed only in 0.41 (breaking); Zed's deps read local XML only" },
+  { id = "RUSTSEC-2026-0386", reason = "tokio AsyncFd constructors are unsound; no Natamux crate calls AsyncFd; tokio 1.53.3 fixes it, through Dependabot" },
   { id = "RUSTSEC-2026-0378", reason = "wasmtime, fix 48.0.7 is inside the 7-day cooldown; update after 2026-10-27. The app loads no Wasm" },
   { id = "RUSTSEC-2026-0379", reason = "wasmtime, fix 48.0.7 is inside the 7-day cooldown; update after 2026-10-27. The app loads no Wasm" },
   { id = "RUSTSEC-2026-0381", reason = "webpki-roots, fix 1.0.10 is inside the 7-day cooldown; update after 2026-10-27. The app talks plain HTTP to its daemon" },

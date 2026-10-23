@@ -3,7 +3,7 @@
 use hyper::Method;
 use natamux_contract::daemon::Daemon;
 use natamux_contract::socket::Socket;
-use natamux_contract::transcript::{Allowed, Transcript};
+use natamux_contract::transcript::Transcript;
 use serde_json::json;
 
 use crate::{both, rows, run, shell};
@@ -42,61 +42,53 @@ async fn health_auth_and_unknown_routes() {
 #[tokio::test]
 #[ignore = "needs both daemons: the daemon-contract CI job"]
 async fn tickets() {
-    let allowed = [Allowed {
-        step: "ticket of an unknown task",
-        reason: "no task store in part 1: the Rust daemon answers 409 (no workspace), Node 404",
-    }];
-    both(
-        "tickets",
-        &allowed,
-        |d: Daemon, mut t: Transcript| async move {
-            let (status, body) = d
-                .call(
-                    Method::POST,
-                    &format!("/tasks/{}/terminal/ticket", d.task),
-                    true,
-                )
-                .await;
-            let ticket = body["ticket"].as_str().unwrap_or_default().to_string();
-            t.note("ticket", json!([status, body, ticket.len()]));
-            let unknown = d
-                .call(Method::POST, "/tasks/T-99999/terminal/ticket", true)
-                .await;
-            t.note("ticket of an unknown task", json!(unknown));
-            let (status, bad) = d
-                .call(Method::POST, "/tasks/nope/terminal/ticket", true)
-                .await;
-            let issues = bad["issues"].as_array().map_or(0, Vec::len);
-            t.note(
-                "bad task id",
-                json!([status, bad["error"], bad["message"], issues]),
-            );
+    both("tickets", &[], |d: Daemon, mut t: Transcript| async move {
+        let (status, body) = d
+            .call(
+                Method::POST,
+                &format!("/tasks/{}/terminal/ticket", d.task),
+                true,
+            )
+            .await;
+        let ticket = body["ticket"].as_str().unwrap_or_default().to_string();
+        t.note("ticket", json!([status, body, ticket.len()]));
+        let unknown = d
+            .call(Method::POST, "/tasks/T-99999/terminal/ticket", true)
+            .await;
+        t.note("ticket of an unknown task", json!(unknown));
+        let (status, bad) = d
+            .call(Method::POST, "/tasks/nope/terminal/ticket", true)
+            .await;
+        let issues = bad["issues"].as_array().map_or(0, Vec::len);
+        t.note(
+            "bad task id",
+            json!([status, bad["error"], bad["message"], issues]),
+        );
 
-            let mut first =
-                Socket::open_raw(&d, &format!("ticket={ticket}&cols=80&rows=24&terminal=2")).await;
-            first.until(|socket| socket.count("replayed") > 0).await;
-            let mut reused =
-                Socket::open_raw(&d, &format!("ticket={ticket}&cols=80&rows=24&terminal=2")).await;
-            t.note(
-                "reused ticket",
-                json!([reused.close_code().await, reused.frames.len()]),
-            );
-            let mut unknown = Socket::open_raw(&d, "ticket=nope&cols=80&rows=24&terminal=2").await;
-            t.note(
-                "unknown ticket",
-                json!([unknown.close_code().await, unknown.frames.len()]),
-            );
-            let fresh = d.ticket().await;
-            let mut bad_size =
-                Socket::open_raw(&d, &format!("ticket={fresh}&cols=0&rows=24&terminal=2")).await;
-            t.note("bad size", json!(bad_size.close_code().await));
-            let mut after =
-                Socket::open_raw(&d, &format!("ticket={fresh}&cols=80&rows=24&terminal=2")).await;
-            let works = after.until(|socket| socket.count("replayed") > 0).await;
-            t.note("the ticket of a refused query still works", json!(works));
-            t
-        },
-    )
+        let mut first =
+            Socket::open_raw(&d, &format!("ticket={ticket}&cols=80&rows=24&terminal=2")).await;
+        first.until(|socket| socket.count("replayed") > 0).await;
+        let mut reused =
+            Socket::open_raw(&d, &format!("ticket={ticket}&cols=80&rows=24&terminal=2")).await;
+        t.note(
+            "reused ticket",
+            json!([reused.close_code().await, reused.frames.len()]),
+        );
+        let mut unknown = Socket::open_raw(&d, "ticket=nope&cols=80&rows=24&terminal=2").await;
+        t.note(
+            "unknown ticket",
+            json!([unknown.close_code().await, unknown.frames.len()]),
+        );
+        let fresh = d.ticket().await;
+        let mut bad_size =
+            Socket::open_raw(&d, &format!("ticket={fresh}&cols=0&rows=24&terminal=2")).await;
+        t.note("bad size", json!(bad_size.close_code().await));
+        let mut after =
+            Socket::open_raw(&d, &format!("ticket={fresh}&cols=80&rows=24&terminal=2")).await;
+        let works = after.until(|socket| socket.count("replayed") > 0).await;
+        t.note("the ticket of a refused query still works", json!(works));
+        t
+    })
     .await;
 }
 

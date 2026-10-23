@@ -52,6 +52,43 @@ pub fn daemons() -> (Daemon, Daemon) {
     )
 }
 
+/// The body of a request.
+pub enum Body {
+    None,
+    Json(Value),
+    /// A content type (or none) and bytes.
+    Raw(Option<&'static str>, Vec<u8>),
+}
+
+/// Which token a request carries.
+pub enum Token<'a> {
+    None,
+    Daemon,
+    Given(&'a str),
+}
+
+/// What a daemon answered.
+#[derive(Clone, Debug)]
+pub struct Answer {
+    pub status: u16,
+    pub headers: Vec<(String, String)>,
+    pub body: Value,
+}
+
+/// The headers the contract compares.
+const KEPT_HEADERS: [&str; 6] = [
+    "content-type",
+    "content-disposition",
+    "cache-control",
+    "x-content-type-options",
+    "content-security-policy",
+    "content-length",
+];
+
+fn shell_quote(text: &str) -> String {
+    format!("'{}'", text.replace('\'', "'\\''"))
+}
+
 /// `http://host:port/path` cut in its address and path.
 fn split(url: &str) -> (String, String) {
     let rest = url.trim_start_matches("http://");
@@ -96,6 +133,122 @@ impl Daemon {
             .map(|body| body.to_bytes())
             .unwrap_or_default();
         (status, serde_json::from_slice(&body).unwrap_or(Value::Null))
+    }
+
+    /// One request with any body and token; the status, the headers named in `keep`, and the body
+    /// as JSON (or as text in `{"text": ...}` when it is not JSON).
+    pub async fn request(
+        &self,
+        method: Method,
+        path: &str,
+        body: Body,
+        token: Token<'_>,
+    ) -> Answer {
+        let (host, prefix) = split(&self.base);
+        let failed = Answer {
+            status: 0,
+            headers: Vec::new(),
+            body: Value::Null,
+        };
+        let Ok(stream) = TcpStream::connect(&host).await else {
+            return failed;
+        };
+        let Ok((mut sender, connection)) =
+            hyper::client::conn::http1::handshake(TokioIo::new(stream)).await
+        else {
+            return failed;
+        };
+        tokio::spawn(connection);
+        let mut request = Request::builder()
+            .method(method)
+            .uri(format!("{prefix}{path}"))
+            .header("host", host.as_str());
+        match token {
+            Token::Daemon => {
+                request = request.header("authorization", format!("Bearer {}", self.token))
+            }
+            Token::Given(token) => {
+                request = request.header("authorization", format!("Bearer {token}"))
+            }
+            Token::None => {}
+        }
+        let bytes = match body {
+            Body::None => Vec::new(),
+            Body::Json(value) => {
+                request = request.header("content-type", "application/json");
+                value.to_string().into_bytes()
+            }
+            Body::Raw(kind, bytes) => {
+                if let Some(kind) = kind {
+                    request = request.header("content-type", kind);
+                }
+                bytes
+            }
+        };
+        let Ok(request) = request.body(Full::new(Bytes::from(bytes))) else {
+            return failed;
+        };
+        let Ok(answer) = sender.send_request(request).await else {
+            return failed;
+        };
+        let status = answer.status().as_u16();
+        let headers = KEPT_HEADERS
+            .iter()
+            .filter_map(|name| {
+                let value = answer.headers().get(*name)?.to_str().ok()?;
+                Some((name.to_string(), value.to_string()))
+            })
+            .collect();
+        let raw = answer
+            .into_body()
+            .collect()
+            .await
+            .map(|body| body.to_bytes())
+            .unwrap_or_default();
+        let body = serde_json::from_slice(&raw)
+            .unwrap_or_else(|_| serde_json::json!({ "text": String::from_utf8_lossy(&raw) }));
+        Answer {
+            status,
+            headers,
+            body,
+        }
+    }
+
+    /// Runs `script` in the daemon container (both share the data volume), and gives its output.
+    pub async fn exec(&self, script: &str) -> String {
+        let command = format!(
+            "{} sh -c {}",
+            env("NATAMUX_CONTRACT_EXEC"),
+            shell_quote(script)
+        );
+        let output = tokio::task::spawn_blocking(move || {
+            std::process::Command::new("sh")
+                .args(["-c", &command])
+                .output()
+        })
+        .await;
+        match output {
+            Ok(Ok(output)) => String::from_utf8_lossy(&output.stdout).into_owned(),
+            _ => String::new(),
+        }
+    }
+
+    /// The data folder of this daemon inside the container.
+    pub fn data_dir(&self) -> String {
+        env(if self.name == "node" {
+            "NATAMUX_CONTRACT_NODE_DATA"
+        } else {
+            "NATAMUX_CONTRACT_RUST_DATA"
+        })
+    }
+
+    /// The `/events` URL with the token in the query.
+    pub fn events_url(&self, token: Option<&str>) -> String {
+        let base = self.base.replacen("http://", "ws://", 1);
+        match token {
+            Some(token) => format!("{base}/events?token={token}"),
+            None => format!("{base}/events"),
+        }
     }
 
     pub async fn ticket(&self) -> String {

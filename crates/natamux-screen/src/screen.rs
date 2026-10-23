@@ -152,9 +152,7 @@ const SOFT_RESET: &[u8] = b"\x1b[!p";
 const SOFT_RESET_PARTS: &[u8] = b"\x1b[?25h\x1b[4l\x1b[?7h\x1b[?1l\x1b>\x1b[0m";
 
 fn find(bytes: &[u8], needle: &[u8]) -> Option<usize> {
-    bytes
-        .windows(needle.len())
-        .position(|window| window == needle)
+    memchr::memmem::find(bytes, needle)
 }
 
 const BEGIN_SYNC: &[u8] = b"\x1b[?2026h";
@@ -168,23 +166,33 @@ struct SyncFrame {
 }
 
 impl SyncFrame {
+    // Every marker starts with ESC, which plain output rarely has: only those places are looked at.
     fn scan(&mut self, data: &[u8]) {
-        let mut bytes = std::mem::take(&mut self.tail);
-        bytes.extend_from_slice(&data[data.len().saturating_sub(64 * 1024)..]);
-        let mut last: Option<(usize, bool)> = None;
-        for start in 0..bytes.len().saturating_sub(BEGIN_SYNC.len() - 1) {
-            let window = &bytes[start..start + BEGIN_SYNC.len()];
-            if window == BEGIN_SYNC {
-                last = Some((start, true));
-            } else if window == END_SYNC {
-                last = Some((start, false));
+        let marker_at = |bytes: &[u8], at: usize| {
+            let rest = &bytes[at..];
+            if rest.starts_with(BEGIN_SYNC) {
+                Some(true)
+            } else if rest.starts_with(END_SYNC) {
+                Some(false)
+            } else {
+                None
             }
-        }
-        if let Some((_, open)) = last {
+        };
+        let last = memchr::memrchr_iter(0x1b, data).find_map(|at| marker_at(data, at));
+        let keep = BEGIN_SYNC.len() - 1;
+        let found = last.or_else(|| {
+            // A marker cut between two writes starts in the tail.
+            let mut joined = self.tail.clone();
+            let tail_len = joined.len();
+            joined.extend_from_slice(&data[..data.len().min(keep)]);
+            (0..tail_len).rev().find_map(|at| marker_at(&joined, at))
+        });
+        if let Some(open) = found {
             self.open = open;
         }
-        let keep = BEGIN_SYNC.len() - 1;
-        self.tail = bytes[bytes.len().saturating_sub(keep)..].to_vec();
+        let mut tail = std::mem::take(&mut self.tail);
+        tail.extend_from_slice(&data[data.len().saturating_sub(keep)..]);
+        self.tail = tail.split_off(tail.len().saturating_sub(keep));
     }
 }
 

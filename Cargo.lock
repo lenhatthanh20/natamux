@@ -2645,6 +2645,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "fallible-iterator"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2acce4a10f12dc2fb14a218589d4f1f62ef011b2d0cc4b3cb1bba8e94da14649"
+
+[[package]]
+name = "fallible-streaming-iterator"
+version = "0.1.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7360491ce676a36bf9bb3c56c1aa791658183a54d2744120f27285738d90465a"
+
+[[package]]
 name = "fancy-regex"
 version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3743,6 +3755,9 @@ name = "hashbrown"
 version = "0.14.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e5274423e17b7c9fc20b6e7e208532f9b19825d82dfd615708b70edd83df41f1"
+dependencies = [
+ "ahash",
+]
 
 [[package]]
 name = "hashbrown"
@@ -3775,6 +3790,15 @@ dependencies = [
  "foldhash 0.2.0",
  "serde",
  "serde_core",
+]
+
+[[package]]
+name = "hashlink"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6ba4ff7128dee98c7dc9794b6a411377e1404dba1c97deb8d1a55297bd25d8af"
+dependencies = [
+ "hashbrown 0.14.5",
 ]
 
 [[package]]
@@ -5538,6 +5562,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "natamux-core"
+version = "0.1.0"
+dependencies = [
+ "natamux-proto",
+ "serde",
+ "serde_json",
+ "url",
+]
+
+[[package]]
 name = "natamux-daemon"
 version = "0.1.0"
 dependencies = [
@@ -5548,9 +5582,11 @@ dependencies = [
  "http-body-util",
  "hyper",
  "hyper-util",
+ "natamux-core",
  "natamux-proto",
  "natamux-pty",
  "natamux-screen",
+ "natamux-store",
  "serde",
  "serde_json",
  "subtle",
@@ -5578,7 +5614,20 @@ name = "natamux-screen"
 version = "0.1.0"
 dependencies = [
  "alacritty_terminal",
+ "memchr",
  "natamux-proto",
+]
+
+[[package]]
+name = "natamux-store"
+version = "0.1.0"
+dependencies = [
+ "natamux-core",
+ "natamux-proto",
+ "notify",
+ "rusqlite",
+ "serde_json",
+ "yaml-rust2",
 ]
 
 [[package]]
@@ -7595,6 +7644,20 @@ dependencies = [
  "spki",
  "subtle",
  "zeroize",
+]
+
+[[package]]
+name = "rusqlite"
+version = "0.32.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7753b721174eb8ff87a9a0e799e2d7bc3749323e773db92e0984debb00019d6e"
+dependencies = [
+ "bitflags 2.13.1",
+ "fallible-iterator",
+ "fallible-streaming-iterator",
+ "hashlink",
+ "libsqlite3-sys",
+ "smallvec",
 ]
 
 [[package]]
@@ -11658,6 +11721,17 @@ name = "y4m"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a5a4b21e1a62b67a2970e6831bc091d7b87e119e7f9791aef9702e3bef04448"
+
+[[package]]
+name = "yaml-rust2"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2a1a1c0bc9823338a3bdf8c61f994f23ac004c6fa32c08cd152984499b445e8d"
+dependencies = [
+ "arraydeque",
+ "encoding_rs",
+ "hashlink",
+]
 
 [[package]]
 name = "yawc"

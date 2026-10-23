@@ -240,7 +240,21 @@ fn forgets_the_shells_of_a_task_whose_workspace_was_removed() {
     let s = setup(dir.path());
     s.shells.load(T, &[]);
 
-    s.publish(DaemonMessage::WorkspaceRemoved { task_id: T.into() });
+    let event = serde_json::from_value(serde_json::json!({
+        "taskId": T, "source": "system", "type": "workspace.removed",
+        "at": "2026-10-08T09:00:00.000Z", "payload": {}
+    }))
+    .unwrap();
+    let task = natamux_proto::tasks::task::Task {
+        id: T.into(),
+        ..Default::default()
+    };
+    s.publish(DaemonMessage::TaskUpdated {
+        task,
+        event,
+        accepted: true,
+        moved: None,
+    });
 
     assert!(s.shells.waiting(T).is_empty());
     assert!(!s.file_exists(T));

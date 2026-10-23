@@ -13,6 +13,7 @@ use std::time::Duration;
 use alacritty_terminal::event::{OnResize, WindowSize};
 use alacritty_terminal::tty::{self, ChildEvent, EventedPty, EventedReadWrite, Options, Shell};
 
+use crate::da1::{DA1_ANSWER, Da1Filter};
 use crate::pty::{Pty, PtyEvents, Signal, SpawnOptions};
 use crate::shell_command::shell_command;
 
@@ -37,13 +38,6 @@ pub fn spawn(options: SpawnOptions) -> io::Result<Box<dyn Pty>> {
         escape_args: true,
     };
     let mut pty = tty::new(&config, size(options.cols, options.rows), 0)?;
-    // Newer ConPTY asks the terminal for its attributes (DA1) at start and waits for the answer
-    // before the shell's output flows; the daemon's screen is not a terminal that answers.
-    // shortcut: the answer of a VT220-class terminal, sent once; drop it if CI shows ConPTY does
-    // not wait for it.
-    let _ = pty
-        .writer()
-        .write(b"\x1b[?61;4;6;7;14;21;22;23;24;28;32;42c");
     let pid = pty.child_watcher().pid().map(|pid| pid.get());
     let (input, inputs) = mpsc::channel();
     Ok(Box::new(WindowsPty {
@@ -115,6 +109,7 @@ fn run(mut pty: tty::Pty, inputs: Receiver<Input>, events: PtyEvents, paused: &A
     } = events;
     let mut buffer = vec![0u8; 64 * 1024];
     let mut pending: Vec<u8> = Vec::new();
+    let mut da1 = Da1Filter::default();
     let mut exited: Option<Option<i32>> = None;
     loop {
         let mut busy = false;
@@ -142,7 +137,13 @@ fn run(mut pty: tty::Pty, inputs: Receiver<Input>, events: PtyEvents, paused: &A
             match pty.reader().read(&mut buffer) {
                 Ok(0) => break,
                 Ok(read) => {
-                    on_data(buffer[..read].to_vec());
+                    let (data, answer) = da1.feed(&buffer[..read]);
+                    if answer {
+                        pending.extend_from_slice(DA1_ANSWER);
+                    }
+                    if !data.is_empty() {
+                        on_data(data);
+                    }
                     busy = true;
                 }
                 Err(error) if error.kind() == ErrorKind::Interrupted => continue,
@@ -159,6 +160,10 @@ fn run(mut pty: tty::Pty, inputs: Receiver<Input>, events: PtyEvents, paused: &A
             break;
         }
         thread::sleep(if busy { BUSY_POLL } else { IDLE_POLL });
+    }
+    let held = da1.flush();
+    if !held.is_empty() {
+        on_data(held);
     }
     on_exit(exited.flatten());
 }
