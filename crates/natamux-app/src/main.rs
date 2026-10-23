@@ -11,6 +11,7 @@ mod app {
     pub mod clock;
     pub mod command_when;
     pub mod commands;
+    pub mod commands_files;
     pub mod commands_git;
     pub mod commands_stages;
     pub mod dashboard;
@@ -27,11 +28,13 @@ mod app {
     pub mod shortcut_text;
     pub mod shortcuts;
     pub mod shots;
+    pub mod shots_files;
     pub mod shots_stages;
     pub mod smoke;
     pub mod source;
     pub mod status_bar;
     pub mod status_layout;
+    pub mod tab_rules;
     pub mod title_bar;
     pub mod view_rules;
     pub mod view_state;
@@ -63,6 +66,19 @@ mod components {
     pub mod timing_rules;
     pub mod toast_rules;
     pub mod toasts;
+}
+mod files {
+    pub mod draft_store;
+    pub mod explorer_tree;
+    pub mod file_drafts;
+    pub mod file_editor;
+    pub mod file_editor_body;
+    pub mod file_icon_view;
+    pub mod file_icons;
+    pub mod file_reads;
+    pub mod file_tree;
+    pub mod file_tree_rows;
+    pub mod file_writes;
 }
 mod git {
     pub mod change_rules;
@@ -186,9 +202,11 @@ mod tasks {
 mod terminals {
     pub mod agent_panes;
     pub mod find_rules;
+    pub mod pane_drop;
     pub mod pane_facts;
     pub mod pane_header;
     pub mod pane_rules;
+    pub mod paste_rules;
     pub mod remote_terminal;
     pub mod shell_panes;
     pub mod terminal_cache;
@@ -198,6 +216,12 @@ mod terminals {
 }
 mod workspaces {
     pub mod branches;
+    pub mod docs_list;
+    pub mod docs_markdown;
+    pub mod docs_rules;
+    pub mod docs_tab;
+    pub mod docs_view;
+    pub mod docs_writes;
     pub mod finished_banner;
     pub mod finished_rules;
     pub mod finished_summary;

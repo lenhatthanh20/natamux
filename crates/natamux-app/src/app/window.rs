@@ -134,17 +134,12 @@ impl Root {
 
     /// The bench's quit handling, the system look and the perf overlay's refresh.
     fn watch_window(window: &mut Window, cx: &mut Context<Self>) {
-        // Closing the window drops Root before an app quit runs its handlers, so with a bench
-        // running the window quits the app instead: the quit handler below then still finds Root.
+        // Unsaved edits ask first; a running bench quits the app (`window_files.rs`).
         let weak_root = cx.weak_entity();
-        window.on_window_should_close(cx, move |_, cx| {
-            let bench_runs = weak_root
-                .read_with(cx, |root, _| matches!(root.tool, Tool::Bench(_)))
-                .unwrap_or(false);
-            if bench_runs {
-                cx.quit();
-            }
-            !bench_runs
+        window.on_window_should_close(cx, move |window, cx| {
+            weak_root
+                .update(cx, |root, cx| root.window_may_close(window, cx))
+                .unwrap_or(true)
         });
         // A bench left running would flood the daemon after the app is gone.
         cx.on_app_quit(|root, cx| {
@@ -447,6 +442,9 @@ mod details;
 
 #[path = "window_git.rs"]
 mod git_commands;
+
+#[path = "window_files.rs"]
+mod file_commands;
 
 pub fn open(
     options: &Options,

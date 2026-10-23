@@ -1,7 +1,7 @@
 //! The details panel (docs/ui-spec.md 3.2 and 4.27, `features/tasks/TaskDetail.tsx`): a 40 px
-//! header with the id, Edit, the "..." menu and Close, the Progress and Details tabs, and the
-//! edit form over either tab. It keeps what it read for the task it shows, and runs the clicks
-//! of both tabs. The Files tab comes with screen 6.
+//! header with the id, Edit, the "..." menu and Close, the Progress, Files (with a workspace) and
+//! Details tabs, and the edit form over them. It keeps what it read for the task it shows, and
+//! runs the clicks of the tabs.
 
 use std::collections::BTreeSet;
 use std::time::Duration;
@@ -19,8 +19,10 @@ use crate::app::dashboard::details::PanelRequest;
 use crate::app::dashboard::{Dashboard, DashboardChange};
 use crate::app::layout_mode::DetailsMode;
 use crate::app::settings_reads::{SettingsReads, SettingsRefreshed};
+use crate::app::tab_rules::{ShowWatch, details_tabs};
 use crate::app::view_rules::DetailsView;
 use crate::components::chips::tip_with_keys;
+use crate::files::file_tree::FileTree;
 
 /// `FALLBACK_POLL_MS`: the feed says when the log changed; this covers a lost message.
 const POLL: Duration = Duration::from_secs(60);
@@ -61,6 +63,10 @@ pub struct DetailsPanel {
     pub(super) dashboard: Entity<Dashboard>,
     pub(super) shown: Option<Shown>,
     pub(super) edit: Option<Entity<EditForm>>,
+    /// The Files tab of the task shown, made when it first shows.
+    pub(super) files: Option<Entity<FileTree>>,
+    /// The Files tab showed in the last draw: a hidden tree reads again when it shows.
+    pub(super) tree_shown: ShowWatch,
     pub(super) subtask: Entity<Editor>,
     pub(super) mode: DetailsMode,
     /// A request that needs the window: done on the next draw.
@@ -99,6 +105,7 @@ impl DetailsPanel {
                 let poll = |panel: &mut Self, cx: &mut Context<Self>| {
                     if panel.is_open(cx) {
                         panel.read_log(cx);
+                        panel.refresh_tree(cx);
                     }
                 };
                 if panel.update(cx, poll).is_err() {
@@ -110,6 +117,8 @@ impl DetailsPanel {
             dashboard,
             shown: None,
             edit: None,
+            files: None,
+            tree_shown: ShowWatch::default(),
             subtask,
             mode: DetailsMode::Docked,
             pending: None,
@@ -140,22 +149,30 @@ impl DetailsPanel {
 
     fn on_change(&mut self, change: &DashboardChange, cx: &mut Context<Self>) {
         if !self.is_open(cx) {
-            // The next time it shows, the panel reads everything again.
+            // The next time it shows, the panel reads everything again, the tree too.
             if let Some(shown) = self.shown.as_mut() {
                 shown.read = false;
             }
+            self.tree_shown.hide();
             return;
         }
         let ours = |id: &str| self.shown.as_ref().is_some_and(|shown| shown.task_id == id);
         match change {
             DashboardChange::TaskLogged(id) if ours(id) => self.read_log(cx),
-            DashboardChange::WorkspaceChanged(id) if ours(id) => self.read_files(cx),
+            DashboardChange::WorkspaceChanged(id) if ours(id) => {
+                self.read_files(cx);
+                self.refresh_tree(cx);
+            }
             _ => {}
         }
     }
 
     /// Follows the task the dashboard shows the details of, and takes a request meant for it.
     fn sync(&mut self, cx: &mut Context<Self>) {
+        // A closed panel is not drawn: its tree reads again when it opens.
+        if !self.is_open(cx) {
+            self.tree_shown.hide();
+        }
         let id = self
             .dashboard
             .read(cx)
@@ -247,8 +264,14 @@ impl DetailsPanel {
             .child(close)
     }
 
-    fn render_tabs(&self, view: DetailsView, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_tabs(
+        &self,
+        view: DetailsView,
+        has_workspace: bool,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
         let colors = cx.theme().colors();
+        let tabs = details_tabs(has_workspace);
         let tab = |id: &'static str, label: &'static str, this: DetailsView| {
             let picked = view == this;
             div()
@@ -283,23 +306,26 @@ impl DetailsPanel {
             .on_key_down(
                 cx.listener(move |panel, event: &gpui::KeyDownEvent, _, cx| {
                     // One tab stop; the arrows move between the tabs.
-                    let next = match event.keystroke.key.as_str() {
-                        "left" | "right" | "home" | "end" => match view {
-                            DetailsView::Details => DetailsView::Progress,
-                            _ => DetailsView::Details,
-                        },
+                    let tabs = details_tabs(has_workspace);
+                    let at = tabs.iter().position(|tab| *tab == view).unwrap_or(0);
+                    let last = tabs.len() - 1;
+                    let to = match event.keystroke.key.as_str() {
+                        "left" => at.checked_sub(1).unwrap_or(last),
+                        "right" => (at + 1) % tabs.len(),
+                        "home" => 0,
+                        "end" => last,
                         _ => return,
                     };
+                    let next = tabs[to];
                     cx.stop_propagation();
                     panel.pick_tab(next, cx);
                 }),
             )
-            .child(tab(
-                "details-tab-progress",
-                "Progress",
-                DetailsView::Progress,
-            ))
-            .child(tab("details-tab-details", "Details", DetailsView::Details))
+            .children(tabs.into_iter().map(|this| match this {
+                DetailsView::Progress => tab("details-tab-progress", "Progress", this),
+                DetailsView::Files => tab("details-tab-files", "Files", this),
+                DetailsView::Details => tab("details-tab-details", "Details", this),
+            }))
     }
 
     fn pick_tab(&mut self, view: DetailsView, cx: &mut Context<Self>) {
@@ -342,9 +368,17 @@ impl Render for DetailsPanel {
         if !self.editing(window, cx) {
             context.add("not_editing");
         }
+        let has_workspace = task.workspace.is_some();
+        // The tree scrolls by itself, under its own header.
+        let tree = (self.edit.is_none() && view == DetailsView::Files)
+            .then(|| self.files_body(&task.id, window, cx));
+        if tree.is_none() {
+            self.tree_shown.hide();
+        }
         let body = match (&self.edit, view) {
             (Some(edit), _) => vec![edit.clone().into_any_element()],
             (None, DetailsView::Details) => self.render_details(&task, window, cx),
+            (None, DetailsView::Files) => Vec::new(),
             (None, _) => self.render_progress(&task, cx),
         };
         if let Some(index) = self.center.take() {
@@ -357,16 +391,19 @@ impl Render for DetailsPanel {
             .track_focus(&self.focus)
             .bg(cx.theme().colors().panel_background)
             .child(self.render_header(&task, cx))
-            .child(self.render_tabs(view, cx))
-            .child(
-                v_flex()
-                    .id("details-body")
-                    .flex_1()
-                    .min_h_0()
-                    .overflow_y_scroll()
-                    .track_scroll(&self.scroll)
-                    .children(body),
-            )
+            .child(self.render_tabs(view, has_workspace, cx))
+            .map(|this| match tree {
+                Some(tree) => this.child(v_flex().flex_1().min_h_0().child(tree)),
+                None => this.child(
+                    v_flex()
+                        .id("details-body")
+                        .flex_1()
+                        .min_h_0()
+                        .overflow_y_scroll()
+                        .track_scroll(&self.scroll)
+                        .children(body),
+                ),
+            })
             .into_any_element()
     }
 }
@@ -388,3 +425,6 @@ mod tab;
 
 #[path = "details_lists.rs"]
 mod lists;
+
+#[path = "details_files.rs"]
+mod files;

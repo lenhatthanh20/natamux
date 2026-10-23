@@ -1,9 +1,12 @@
 //! The routes of `packages/daemon/src/http/routes/stages.ts` that the app calls.
 
 use hyper::Method;
-use natamux_proto::stages::actions::{StageActionInput, StageFile, StageFileList, StageToggle};
+use natamux_proto::stages::actions::{
+    StageActionInput, StageFile, StageFileList, StageFileText, StageToggle,
+};
 use natamux_proto::tasks::task::{Task, TaskAnswer};
 use natamux_proto::terminals::query::encode;
+use natamux_proto::workspaces::files::FileText;
 
 use crate::config::Config;
 use crate::error::ClientError;
@@ -74,4 +77,28 @@ pub async fn list_stage_files(
     let path = format!("/tasks/{}/files", encode(task_id));
     let list: StageFileList = call(config, Method::GET, &path).await?;
     Ok(list.files)
+}
+
+/// One stage file. 404: "<id> has no <name>".
+pub async fn read_stage_file(
+    config: &Config,
+    task_id: &str,
+    name: &str,
+) -> Result<StageFileText, ClientError> {
+    let path = format!("/tasks/{}/files/{}", encode(task_id), encode(name));
+    call(config, Method::GET, &path).await
+}
+
+/// An edit by hand of a stage file.
+pub async fn write_stage_file(
+    config: &Config,
+    task_id: &str,
+    name: &str,
+    text: &str,
+) -> Result<StageFileText, ClientError> {
+    let path = format!("/tasks/{}/files/{}", encode(task_id), encode(name));
+    let body = FileText {
+        text: text.to_string(),
+    };
+    call_with(config, Method::PUT, &path, &body).await
 }

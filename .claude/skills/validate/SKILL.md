@@ -59,6 +59,7 @@ Jobs:
 | Rust | `check` | `cargo xtask ci`: fmt, clippy, tests, layers |
 | Rust | `supply-chain` | `cargo deny --locked check`, `cargo audit`, `cargo vet --locked` |
 
+- Rust snapshots: every task pushes to the shared `natamux-ci/rust` (all jobs, `app-macos` shots) and `natamux-ci/rust-check` (only `check`, for the compile loop), so the caches stay warm. Keep both branches and their caches at cleanup.
 - A test that fails in one shard: the log names the file. `--shard` splits files the same way each run, so a rerun hits the same shard.
 
 ## Fixing without running anything

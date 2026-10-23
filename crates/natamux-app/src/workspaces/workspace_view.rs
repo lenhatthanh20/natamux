@@ -2,7 +2,7 @@
 //! workspace part of `Dashboard.tsx`): a task with no workspace shows the no-workspace view or,
 //! once finished, its summary; one with a workspace shows its header, the finished banner, the
 //! tab row and the body of its tab: the terminal panes (or the wrap-up of a finished task),
-//! Changes, or History. Docs comes with screen 6.
+//! Changes, History, Docs, or the open file.
 
 use std::time::Duration;
 
@@ -20,8 +20,10 @@ use crate::app::dashboard::{Dashboard, DashboardChange, TerminalReader};
 use crate::app::view_rules::WorkspaceTab;
 use crate::components::toast_rules::ToastTone;
 use crate::components::toasts::toast;
+use crate::files::file_editor::FileEditor;
 use crate::git::changes_view::ChangesView;
 use crate::terminals::shell_panes::ShellPanes;
+use crate::workspaces::docs_tab::DocsTab;
 
 /// `FALLBACK_POLL_MS`: the daemon says when a workspace changed; this covers a lost event.
 const POLL: Duration = Duration::from_secs(60);
@@ -54,6 +56,10 @@ pub struct WorkspaceView {
     dashboard: Entity<Dashboard>,
     panes: Entity<ShellPanes>,
     changes: Entity<ChangesView>,
+    docs: Option<Entity<DocsTab>>,
+    editor: Option<Entity<FileEditor>>,
+    /// Docs or the editor tab as last drawn: a hidden one reads again when it shows.
+    file_tab_shown: Option<WorkspaceTab>,
     shown: Option<Shown>,
     width: Entity<Option<f32>>,
     _poll: gpui::Task<()>,
@@ -73,7 +79,11 @@ impl WorkspaceView {
         let poll = cx.spawn(async move |view, cx| {
             loop {
                 cx.background_executor().timer(POLL).await;
-                if view.update(cx, |view, cx| view.read_git(cx)).is_err() {
+                let read = |view: &mut Self, cx: &mut Context<Self>| {
+                    view.read_git(cx);
+                    view.refresh_file_tabs(cx);
+                };
+                if view.update(cx, read).is_err() {
                     break;
                 }
             }
@@ -82,6 +92,9 @@ impl WorkspaceView {
             dashboard,
             panes,
             changes: changes_view,
+            docs: None,
+            editor: None,
+            file_tab_shown: None,
             shown: None,
             width,
             _poll: poll,
@@ -119,7 +132,11 @@ impl WorkspaceView {
         match change {
             DashboardChange::Opened(task) => self.show(&task.id, cx),
             DashboardChange::BackToList | DashboardChange::AgentsOpened => self.hide(cx),
-            DashboardChange::WorkspaceChanged(id) if open(id, self) => self.read_git(cx),
+            DashboardChange::WorkspaceChanged(id) if open(id, self) => {
+                self.read_git(cx);
+                self.refresh_file_tabs(cx);
+            }
+            DashboardChange::TaskLogged(id) if open(id, self) => self.refresh_docs(cx),
             DashboardChange::ShellsChanged(id) if open(id, self) => self.read_ended(cx),
             DashboardChange::Tasks => self.after_tasks(cx),
             DashboardChange::UndoRollback(id) => self.undo_rollback(id, cx),
@@ -147,6 +164,8 @@ impl WorkspaceView {
 
     fn hide(&mut self, cx: &mut Context<Self>) {
         self.shown = None;
+        self.docs = None;
+        self.editor = None;
         self.panes.update(cx, |panes, cx| panes.set_task(None, cx));
         self.dashboard
             .read(cx)
@@ -200,7 +219,7 @@ impl Render for WorkspaceView {
         let element = if task.workspace.is_none() {
             self.render_no_workspace(task, &shown, cx)
         } else {
-            self.render_workspace(task, &shown, cx)
+            self.render_workspace(task, &shown, window, cx)
         };
         self.shown = Some(shown);
         element
@@ -215,3 +234,6 @@ mod parts;
 
 #[path = "workspace_tabs.rs"]
 mod tabs;
+
+#[path = "workspace_file_tabs.rs"]
+mod file_tabs;

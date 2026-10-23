@@ -2,6 +2,7 @@
 
 use hyper::Method;
 use natamux_proto::events::task_event::{EventList, StoredEvent, TaskEventInput};
+use natamux_proto::tasks::attachments::{Attachment, AttachmentList};
 use natamux_proto::tasks::job::{Job, JobList};
 use natamux_proto::tasks::task::{
     DeleteTaskAnswer, NewTaskInput, Task, TaskAnswer, TaskChanges, TaskList, TemplateTaskInput,
@@ -12,7 +13,7 @@ use serde::Deserialize;
 
 use crate::config::Config;
 use crate::error::ClientError;
-use crate::http::{call, call_with};
+use crate::http::{call, call_with, send};
 
 /// The answer of `POST /tasks/:id/events`. `accepted`: the event changed the task.
 #[derive(Clone, Debug, Deserialize)]
@@ -105,4 +106,24 @@ pub async fn create_issue(config: &Config, task_id: &str) -> Result<Task, Client
 pub async fn delete_task(config: &Config, task_id: &str) -> Result<DeleteTaskAnswer, ClientError> {
     let path = format!("/tasks/{}", encode(task_id));
     call(config, Method::DELETE, &path).await
+}
+
+/// The files kept with the task.
+pub async fn list_attachments(
+    config: &Config,
+    task_id: &str,
+) -> Result<Vec<Attachment>, ClientError> {
+    let path = format!("/tasks/{}/attachments", encode(task_id));
+    let list: AttachmentList = call(config, Method::GET, &path).await?;
+    Ok(list.attachments)
+}
+
+/// The raw bytes of one attachment. 404: "<id> has no <name>".
+pub async fn read_attachment(
+    config: &Config,
+    task_id: &str,
+    name: &str,
+) -> Result<Vec<u8>, ClientError> {
+    let path = format!("/tasks/{}/attachments/{}", encode(task_id), encode(name));
+    Ok(send(config, Method::GET, &path, None).await?.to_vec())
 }

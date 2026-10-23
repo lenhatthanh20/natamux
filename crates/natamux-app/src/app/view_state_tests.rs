@@ -33,6 +33,7 @@ fn a_saved_view_reads_back_the_same() {
             ("T-1".into(), WorkspaceTab::Changes),
             ("T-2".into(), WorkspaceTab::History),
         ],
+        docs_source: true,
         changes_view: FileViewMode::Tree,
         files_width: 300,
         diff: DiffFlags {
@@ -311,7 +312,13 @@ fn a_bad_value_of_the_changes_tab_is_its_default() {
         r#"{"tabs": {"T-1": "docs", "T-2": "editor", "T-3": "nope", "T-4": 3, "T-5": "changes"},
             "changesView": "grid", "filesWidth": "wide", "diff": {"wrapCode": "yes", "showMoves": 1}}"#,
     );
-    assert_eq!(state.tabs, vec![("T-5".into(), WorkspaceTab::Changes)]);
+    assert_eq!(
+        state.tabs,
+        vec![
+            ("T-1".into(), WorkspaceTab::Docs),
+            ("T-5".into(), WorkspaceTab::Changes)
+        ]
+    );
     assert_eq!(state.changes_view, FileViewMode::List);
     assert_eq!(state.files_width, FILES_DEFAULT);
     assert_eq!(state.diff, DiffFlags::default());
@@ -358,9 +365,33 @@ fn does_not_remember_the_editor_tab_which_needs_an_open_file() {
     let mut state = ViewState::default();
     state.remember_tab("T-1", WorkspaceTab::Terminal);
     state.remember_tab("T-1", WorkspaceTab::Editor);
-    state.remember_tab("T-2", WorkspaceTab::Docs);
     assert_eq!(state.tab_of("T-1"), Some(WorkspaceTab::Terminal));
-    assert_eq!(state.tab_of("T-2"), None);
+}
+
+#[test]
+fn keeps_a_remembered_docs_tab_after_a_reload() {
+    let state = ViewState::parse(r#"{"tabs": {"T-0001": "docs"}}"#);
+    assert_eq!(state.tab_of("T-0001"), Some(WorkspaceTab::Docs));
+    assert_eq!(ViewState::parse(&state.to_json()).tabs, state.tabs);
+}
+
+#[test]
+fn opens_the_details_of_a_task_on_its_files_and_remembers_that_view() {
+    let mut state = ViewState::default();
+    let open = state.show_files(&Vec::new(), "T-0003");
+    assert_eq!(open, vec![("T-0003".into(), true)]);
+    assert_eq!(state.details_view, Some(DetailsView::Files));
+    assert_eq!(
+        ViewState::parse(&state.to_json()).details_view,
+        Some(DetailsView::Files)
+    );
+}
+
+#[test]
+fn keeps_the_docs_view_mode_and_starts_on_rendered() {
+    assert!(!ViewState::default().docs_source);
+    assert!(ViewState::parse(r#"{"docsSource": true}"#).docs_source);
+    assert!(!ViewState::parse(r#"{"docsSource": "source"}"#).docs_source);
 }
 
 #[test]

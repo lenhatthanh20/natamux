@@ -51,6 +51,7 @@ struct Data {
     ended: BTreeMap<String, Vec<EndedShell>>,
     git: git::GitState,
     settings: settings::SettingsFiles,
+    files: files::FilesState,
     next_number: u32,
     feeds: Vec<UnboundedSender<DashboardEvent>>,
     link: FakeLink,
@@ -98,6 +99,7 @@ impl Data {
             ended: part!(seed, "endedShells"),
             git: git::GitState::default(),
             settings: settings::SettingsFiles::default(),
+            files: files::FilesState::default(),
             next_number: 200,
             feeds: Vec::new(),
             link: FakeLink::Live,
@@ -105,6 +107,7 @@ impl Data {
         data.add_stage_seed();
         data.add_git_seed();
         data.add_settings_seed();
+        data.add_files_seed();
         data
     }
 
@@ -472,6 +475,9 @@ mod git;
 
 #[path = "fake_settings.rs"]
 mod settings;
+
+#[path = "fake_files.rs"]
+mod files;
 
 #[cfg(test)]
 #[path = "fake_daemon_tests.rs"]

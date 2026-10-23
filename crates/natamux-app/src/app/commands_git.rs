@@ -5,9 +5,10 @@ use super::commands::{
     BODY, CHANGES, CHANGES_ANY, COMMIT_BOX, Category, Command, MenuName, When, command, keys, menu,
     when,
 };
+use super::commands_files::DOCS;
 
-/// Single keys of the workspace: its body, and its Changes and History tabs.
-const TAB_KEYS: &[&str] = &[BODY, CHANGES];
+/// Single keys of the workspace: its body, its Changes and History tabs, and Docs.
+const TAB_KEYS: &[&str] = &[BODY, CHANGES, DOCS];
 
 const fn in_workspace(command: Command) -> Command {
     when(command, When::InWorkspace)
@@ -17,7 +18,7 @@ const fn tab(id: &'static str, title: &'static str, key: &'static [&'static str]
     in_workspace(keys(command(id, title, Category::View), key, TAB_KEYS))
 }
 
-/// The Docs tab (key 4) and the editor tab come with screen 6: 4 and 5 stay unbound.
+/// Key 4 (Docs) is in `commands_files.rs`.
 pub const GIT_COMMANDS: &[Command] = &[
     tab("tab.terminal", "Show the Terminal tab", &["1"]),
     tab("tab.changes", "Show the Changes tab", &["2"]),

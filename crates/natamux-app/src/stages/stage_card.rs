@@ -187,7 +187,7 @@ fn body(input: &CardInput, on: &OnCommand, cx: &App) -> Vec<AnyElement> {
     if let Some(branch) = &input.ci_branch {
         parts.push(running_note("Checking on CI", branch, cx).into_any_element());
     }
-    let chips = chips(input, cx);
+    let chips = chips(input, on, cx);
     if !chips.is_empty() {
         parts.push(
             h_flex()

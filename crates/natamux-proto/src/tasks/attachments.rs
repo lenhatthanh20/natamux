@@ -1,6 +1,6 @@
 //! Limits of the files attached to a new task (`packages/core/src/tasks/attachments.ts`).
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 pub const MAX_ATTACHMENT_COUNT: usize = 20;
 pub const MAX_ATTACHMENT_SIZE: u64 = 20_000_000;
@@ -11,6 +11,22 @@ pub const MAX_TASK_ATTACHMENT_SIZE: u64 = 50_000_000;
 pub struct AttachmentUpload {
     pub name: String,
     pub data: String,
+}
+
+/// A file kept with a task, as `GET /tasks/:id/attachments` lists it. `kind` (JSON `type`): the
+/// image type the app may show, None for a file that only downloads.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+pub struct Attachment {
+    pub name: String,
+    pub size: u64,
+    #[serde(rename = "type", default)]
+    pub kind: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct AttachmentList {
+    #[serde(default)]
+    pub attachments: Vec<Attachment>,
 }
 
 const MB: u64 = 1_000_000;
@@ -69,5 +85,15 @@ mod tests {
             attachment_limit_error(&files(&[20_000_000, 20_000_000, 20_000_000])).as_deref(),
             Some("f2.txt is not attached: the files of a task take at most 50 MB together")
         );
+    }
+
+    #[test]
+    fn reads_the_attachments_with_their_type() {
+        let list: AttachmentList = serde_json::from_str(
+            r#"{"attachments":[{"name":"a.png","size":3,"type":"image/png"},{"name":"n.pdf","size":9,"type":null}]}"#,
+        )
+        .unwrap();
+        assert_eq!(list.attachments[0].kind.as_deref(), Some("image/png"));
+        assert_eq!(list.attachments[1].kind, None);
     }
 }
