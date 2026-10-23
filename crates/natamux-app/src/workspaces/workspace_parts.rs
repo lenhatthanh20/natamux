@@ -244,11 +244,12 @@ impl WorkspaceView {
     }
 
     /// A task with a workspace: header, finished banner, tab row, and the body of its tab: the
-    /// panes or the wrap-up, Changes, or History.
+    /// panes or the wrap-up, Changes, History, Docs, or the open file.
     pub(super) fn render_workspace(
-        &self,
+        &mut self,
         task: Task,
         shown: &Shown,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let finished = is_finished_state(task.state);
@@ -268,12 +269,17 @@ impl WorkspaceView {
         let banner = finished.then(|| {
             FinishedBanner::new(task.clone(), facts.clone(), shown.pending, banner_actions)
         });
-        let tab = self.dashboard.read(cx).workspace_tab;
+        let tab = self.dashboard.read(cx).shown_workspace_tab();
+        if !matches!(tab, WorkspaceTab::Docs | WorkspaceTab::Editor) {
+            self.file_tab_shown = None;
+        }
         let uncommitted = shown.changes.as_ref().map(Vec::len);
         let tab_row = self.tab_row(&task, tab, panes_shown, uncommitted, cx);
         let body: AnyElement = match tab {
             WorkspaceTab::Changes => self.changes.clone().into_any_element(),
             WorkspaceTab::History => self.history(&task, shown, cx),
+            WorkspaceTab::Docs => self.docs_body(&task.id, window, cx),
+            WorkspaceTab::Editor => self.editor_body(&task.id, window, cx),
             _ if panes_shown => self.panes.clone().into_any_element(),
             _ => WrapUp {
                 task: task.clone(),

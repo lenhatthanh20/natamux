@@ -1,6 +1,7 @@
 //! The tab row of a workspace (`ChangesView.tsx` tabs, docs/ui-spec.md tabs): Terminal, Changes
-//! with the count of files to commit, and History; keys 1 to 3. Docs and the editor tab come
-//! with screen 6. "Back to wrap-up" and "New terminal" sit at the right of the Terminal tab.
+//! with the count of files to commit, History and Docs (keys 1 to 4), then the open file's tab
+//! while a file is open. "Back to wrap-up" and "New terminal" sit at the right of the Terminal
+//! tab.
 
 use gpui::ClickEvent;
 use natamux_proto::tasks::task::Task;
@@ -16,10 +17,18 @@ use crate::terminals::pane_rules::MAX_PANES;
 use crate::workspaces::workspace_rules::closes_details_for;
 use crate::workspaces::wrap_up_rules::is_finished_state;
 
-const TABS: [(WorkspaceTab, &str, &str, &str); 3] = [
+type TabSpec = (
+    WorkspaceTab,
+    SharedString,
+    &'static str,
+    Option<&'static str>,
+);
+
+const TABS: [(WorkspaceTab, &str, &str, &str); 4] = [
     (WorkspaceTab::Terminal, "Terminal", "terminal", "1"),
     (WorkspaceTab::Changes, "Changes", "file-diff", "2"),
     (WorkspaceTab::History, "History", "git-graph", "3"),
+    (WorkspaceTab::Docs, "Docs", "file-text", "4"),
 ];
 
 impl WorkspaceView {
@@ -57,7 +66,7 @@ impl WorkspaceView {
 
     fn tab(
         &self,
-        (tab, label, icon, key): (WorkspaceTab, &'static str, &'static str, &'static str),
+        (tab, label, icon, key): TabSpec,
         shown_tab: WorkspaceTab,
         uncommitted: Option<usize>,
         cx: &mut Context<Self>,
@@ -68,9 +77,13 @@ impl WorkspaceView {
             .then_some(uncommitted)
             .flatten()
             .filter(|count| *count > 0);
+        let named = match key {
+            Some(key) => format!("{label} ({key})"),
+            None => label.to_string(),
+        };
         let tip = match badge {
-            Some(count) => format!("{label} ({key}), {}", tab_count_label(count as u64)),
-            None => format!("{label} ({key})"),
+            Some(count) => format!("{named}, {}", tab_count_label(count as u64)),
+            None => named,
         };
         h_flex()
             .id(SharedString::from(format!("workspace-tab-{icon}")))
@@ -108,7 +121,26 @@ impl WorkspaceView {
         cx: &mut Context<Self>,
     ) -> impl IntoElement + use<> {
         let border = cx.theme().colors().border;
-        let tabs = TABS.map(|tab| self.tab(tab, shown_tab, uncommitted, cx));
+        let open_file = self
+            .dashboard
+            .read(cx)
+            .files
+            .editor_file(&task.id)
+            .map(|path| {
+                let name = path.rsplit('/').next().unwrap_or(path).to_owned();
+                (
+                    WorkspaceTab::Editor,
+                    SharedString::from(name),
+                    "file-code",
+                    None,
+                )
+            });
+        let tabs: Vec<_> = TABS
+            .into_iter()
+            .map(|(tab, label, icon, key)| (tab, SharedString::from(label), icon, Some(key)))
+            .chain(open_file)
+            .map(|spec| self.tab(spec, shown_tab, uncommitted, cx))
+            .collect();
         let on_terminal = shown_tab == WorkspaceTab::Terminal;
         let full = self.panes.read(cx).is_full(cx);
         let new_terminal = (on_terminal && panes_shown).then(|| {
@@ -153,10 +185,12 @@ impl WorkspaceView {
     }
 }
 
-/// The History tab takes Zed's git graph icon: the app's Lucide set has no history icon.
+/// The History tab takes Zed's git graph icon and the open file Zed's code file icon: the app's
+/// Lucide set has neither.
 fn tab_icon(name: &str) -> Icon {
     match name {
         "git-graph" => Icon::new(IconName::GitGraph),
+        "file-code" => Icon::new(IconName::FileCode),
         _ => Icon::from_path(format!("icons/lucide/{name}.svg")),
     }
 }

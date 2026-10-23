@@ -12,11 +12,12 @@ use gpui::{App, Entity, Focusable, Task, WeakEntity};
 use natamux_client::{SessionOptions, TerminalEvent, TerminalHandle, TerminalStatus};
 use settings::Settings;
 use terminal::terminal_settings::TerminalSettings;
-use terminal::{DisplayOnlyWriter, Terminal, TerminalBuilder};
+use terminal::{DisplayOnlyWriter, Modes, Terminal, TerminalBuilder};
 use terminal_view::TerminalView;
 use ui::prelude::*;
 use util::paths::PathStyle;
 
+use super::paste_rules::bracketed;
 use crate::app::source::Source;
 
 /// How often a size change of the pane is looked for. Output and input never wait for it.
@@ -41,6 +42,9 @@ pub struct RemoteTerminal {
     size: (u16, u16),
     /// "T-1/1": the task and terminal, for the perf overlay.
     label: String,
+    /// Which shell of which task this is, for a drop of a path.
+    task_id: String,
+    name: String,
     /// Text to type once the socket is open.
     pending: Vec<String>,
     /// On screen: only then it claims the shell's size.
@@ -67,6 +71,7 @@ impl RemoteTerminal {
         cx: &mut Context<Self>,
     ) -> Self {
         let label = format!("{}/{}", target.task_id, target.terminal);
+        let (task_id, name) = (target.task_id.clone(), target.terminal.clone());
         let settings = TerminalSettings::get_global(cx).clone();
         let terminal = cx.new(|cx| {
             TerminalBuilder::new_display_only(
@@ -111,6 +116,8 @@ impl RemoteTerminal {
             status: TerminalStatus::Connecting,
             size: (0, 0),
             label,
+            task_id,
+            name,
             pending: Vec::new(),
             visible: true,
             last_key: None,
@@ -118,6 +125,14 @@ impl RemoteTerminal {
             replaying: false,
             _tasks: vec![watch],
         }
+    }
+
+    pub fn task_id(&self) -> &str {
+        &self.task_id
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
     }
 
     pub fn status(&self) -> &TerminalStatus {
@@ -162,6 +177,18 @@ impl RemoteTerminal {
             (Some(handle), TerminalStatus::Open) => handle.input(text),
             _ => self.pending.push(text.to_string()),
         }
+    }
+
+    /// Pastes as xterm does: wrapped in the bracketed paste marks when the program asked for them
+    /// (the display terminal's mode), with no Enter.
+    pub fn paste_text(&mut self, text: &str, cx: &App) {
+        let on = self
+            .terminal
+            .read(cx)
+            .last_content()
+            .mode
+            .contains(Modes::BRACKETED_PASTE);
+        self.type_text(&bracketed(text, on));
     }
 
     /// The grid size the view laid out, once it did.

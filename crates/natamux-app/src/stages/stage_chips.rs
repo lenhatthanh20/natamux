@@ -33,9 +33,9 @@ pub(super) fn running_note(label: &'static str, text: &str, cx: &App) -> impl In
         )
 }
 
-pub(super) fn chips(input: &CardInput, cx: &App) -> Vec<AnyElement> {
+pub(super) fn chips(input: &CardInput, on: &OnCommand, cx: &App) -> Vec<AnyElement> {
     let entry = &input.entry;
-    let mut chips: Vec<AnyElement> = file_chip(input, cx).into_iter().collect();
+    let mut chips: Vec<AnyElement> = file_chip(input, on, cx).into_iter().collect();
     let passes = entry.passes.len();
     if passes > 0 {
         let checks = if passes == 1 { "check" } else { "checks" };
@@ -82,7 +82,7 @@ pub(super) fn chips(input: &CardInput, cx: &App) -> Vec<AnyElement> {
 }
 
 /// The output file: its name and size, or why there is none yet.
-fn file_chip(input: &CardInput, cx: &App) -> Option<AnyElement> {
+fn file_chip(input: &CardInput, on: &OnCommand, cx: &App) -> Option<AnyElement> {
     let entry = &input.entry;
     let (Some(output), Some(file)) = (&input.stage.output, &input.file) else {
         return None;
@@ -93,11 +93,16 @@ fn file_chip(input: &CardInput, cx: &App) -> Option<AnyElement> {
         FileChip::Missing => "not written yet".to_owned(),
         FileChip::Written(file) => kilobytes(file.size),
     };
-    // Opening the file is the Docs tab of screen 6; until then the chip only shows it.
     let written = matches!(file, FileChip::Written(_));
+    let (open, name) = (on.clone(), output.clone());
     Some(
         small_chip(SharedString::from(format!("file-{}", entry.stage)), cx)
             .when(!written, |this| this.opacity(0.6))
+            .when(written, |this| {
+                this.cursor_pointer().on_click(move |_, window, cx| {
+                    open(PanelCommand::OpenStageFile(name.clone()), window, cx)
+                })
+            })
             .child(icon("file-text").color(Color::Muted))
             .child(
                 Label::new(output.clone())

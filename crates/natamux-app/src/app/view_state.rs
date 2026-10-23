@@ -120,8 +120,10 @@ pub struct ViewState {
     pub sections: Vec<(String, bool)>,
     /// System notifications for tasks that start to need the user (off until switched on).
     pub notify: bool,
-    /// The last workspace tab of each task (`tabByTask`): terminal, changes or history.
+    /// The last workspace tab of each task (`tabByTask`): terminal, changes, history or docs.
     pub tabs: Entries<WorkspaceTab>,
+    /// The Docs tab shows the raw text (`natamux.docs-source`).
+    pub docs_source: bool,
     pub changes_view: FileViewMode,
     pub files_width: u32,
     pub diff: DiffFlags,
@@ -146,6 +148,7 @@ impl Default for ViewState {
             sections: Vec::new(),
             notify: false,
             tabs: Vec::new(),
+            docs_source: false,
             changes_view: FileViewMode::List,
             files_width: FILES_DEFAULT,
             diff: DiffFlags::default(),
@@ -239,6 +242,7 @@ impl ViewState {
                 }),
             notify: flag(map.get("notify"), default.notify),
             tabs: tabs_of(pairs("tabs")),
+            docs_source: flag(map.get("docsSource"), default.docs_source),
             changes_view: map
                 .get("changesView")
                 .and_then(Value::as_str)
@@ -289,6 +293,7 @@ impl ViewState {
                 .iter()
                 .map(|(id, tab)| (id.clone(), Value::from(tab.name())))
                 .collect::<Map<String, Value>>(),
+            "docsSource": self.docs_source,
             "changesView": self.changes_view.name(),
             "filesWidth": self.files_width,
             "diff": self.diff.to_json(),
@@ -328,11 +333,17 @@ impl ViewState {
         crate::app::view_rules::with_detail_open(open, task_id, true)
     }
 
+    /// `showFiles`: the details of `task_id` open on Files. Gives the new open flags.
+    pub fn show_files(&mut self, open: &Entries<bool>, task_id: &str) -> Entries<bool> {
+        self.details_view = Some(DetailsView::Files);
+        crate::app::view_rules::with_detail_open(open, task_id, true)
+    }
+
     pub fn set_details_width(&mut self, width: f32) {
         self.details_width = width.clamp(DETAILS_MIN, DETAILS_MAX);
     }
 
-    /// `rememberTab`: Editor needs an open file and Docs is not in the app, so neither is kept.
+    /// `rememberTab`: Editor needs an open file, so it is not kept.
     pub fn remember_tab(&mut self, task_id: &str, tab: WorkspaceTab) {
         if WorkspaceTab::parse(tab.name()).is_some() {
             self.tabs = with_tab(&self.tabs, task_id, tab);

@@ -12,6 +12,7 @@ use natamux_proto::tasks::task::Task;
 use natamux_proto::terminals::list::TerminalList;
 use ui::{ButtonLike, Tooltip, prelude::*};
 
+use super::pane_drop::with_drop;
 use super::pane_header::PaneHeader;
 use super::remote_terminal::RemoteTerminal;
 use super::terminal_find::TerminalFind;
@@ -326,7 +327,7 @@ impl RenderOnce for TerminalPane {
         };
         let on_find = self.on_find.clone();
         let on_maximize = self.on_maximize.clone();
-        v_flex()
+        let pane = v_flex()
             .id(self.key.clone())
             .size_full()
             .min_h_0()
@@ -343,7 +344,8 @@ impl RenderOnce for TerminalPane {
             .child(self.header.focused(self.focused))
             .children(strip)
             .child(body)
-            .children(ended_bar)
+            .children(ended_bar);
+        with_drop(pane, &self.terminal, cx)
     }
 }
 

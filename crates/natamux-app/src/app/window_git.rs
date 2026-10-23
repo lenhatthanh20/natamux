@@ -9,14 +9,14 @@ use crate::app::view_rules::WorkspaceTab;
 
 impl Root {
     /// The id of the open task, only when it has a workspace (`When::InWorkspace`).
-    fn open_workspace_task(&self, cx: &App) -> Option<String> {
+    pub(super) fn open_workspace_task(&self, cx: &App) -> Option<String> {
         let dashboard = self.dashboard.read(cx);
         let id = dashboard.open_task.as_deref()?;
         dashboard.data.task(id)?.workspace.as_ref()?;
         Some(id.to_owned())
     }
 
-    fn show_tab(&mut self, tab: WorkspaceTab, cx: &mut Context<Self>) {
+    pub(super) fn show_tab(&mut self, tab: WorkspaceTab, cx: &mut Context<Self>) {
         if self.open_workspace_task(cx).is_some() {
             self.dashboard
                 .update(cx, |dashboard, cx| dashboard.pick_tab(tab, cx));

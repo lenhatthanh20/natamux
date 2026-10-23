@@ -15,78 +15,7 @@ const MAX_REMEMBERED_DETAILS: usize = 200;
 const MAX_REMEMBERED_SEEN: usize = 1000;
 pub const MAX_RECENT: usize = 20;
 
-/// `editor` shows only while a file of the worktree is open.
-#[allow(dead_code)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum WorkspaceTab {
-    Changes,
-    History,
-    Terminal,
-    Docs,
-    Editor,
-}
-
-impl WorkspaceTab {
-    pub fn name(self) -> &'static str {
-        match self {
-            WorkspaceTab::Changes => "changes",
-            WorkspaceTab::History => "history",
-            WorkspaceTab::Terminal => "terminal",
-            WorkspaceTab::Docs => "docs",
-            WorkspaceTab::Editor => "editor",
-        }
-    }
-
-    /// Only the tabs the app remembers read back: Docs is not in the app yet, and Editor needs
-    /// an open file.
-    pub fn parse(text: &str) -> Option<WorkspaceTab> {
-        [
-            WorkspaceTab::Terminal,
-            WorkspaceTab::Changes,
-            WorkspaceTab::History,
-        ]
-        .into_iter()
-        .find(|tab| tab.name() == text)
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum DetailsView {
-    Progress,
-    Files,
-    Details,
-}
-
-impl DetailsView {
-    /// The names of `natamux.details-view`.
-    pub fn name(self) -> &'static str {
-        match self {
-            DetailsView::Progress => "progress",
-            DetailsView::Files => "files",
-            DetailsView::Details => "details",
-        }
-    }
-
-    pub fn parse(text: &str) -> Option<DetailsView> {
-        [
-            DetailsView::Progress,
-            DetailsView::Files,
-            DetailsView::Details,
-        ]
-        .into_iter()
-        .find(|view| view.name() == text)
-    }
-}
-
-/// Until the user picks a view, the details show the progress beside a workspace and the task
-/// itself beside the list.
-pub fn details_view_for(picked: Option<DetailsView>, in_workspace: bool) -> DetailsView {
-    picked.unwrap_or(if in_workspace {
-        DetailsView::Progress
-    } else {
-        DetailsView::Details
-    })
-}
+pub use crate::app::tab_rules::{DetailsView, WorkspaceTab, details_view_for};
 
 /// Until the user opens or closes them, the details are open where they dock beside a workspace.
 pub fn details_open_for(choice: Option<bool>, docked_beside_workspace: bool) -> bool {

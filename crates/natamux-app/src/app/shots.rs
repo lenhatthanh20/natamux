@@ -1,4 +1,4 @@
-//! `--shot STATE`: opens the window in one screen-1 to 5 state of the fake daemon, for the CI
+//! `--shot STATE`: opens the window in one screen-1 to 6 state of the fake daemon, for the CI
 //! screenshots (docs/rust-phase3.md). The clock stops at the fake's time and the view state is
 //! fixed and never saved, so a shot is the same on every run.
 
@@ -12,6 +12,7 @@ use super::dashboard::Dashboard;
 use super::fake_daemon::{self, FakeLink, NOW, PINNED};
 use super::options::Shot;
 use super::shortcuts::{FindInTerminal, OpenRowMenu};
+use super::shots_files;
 use super::shots_stages;
 use super::view_rules::{DetailsView, WorkspaceTab};
 use super::view_state::{Layout, ViewState};
@@ -88,6 +89,10 @@ pub fn run(handle: WindowHandle<Root>, shot: Shot, cx: &mut App) {
         cx.background_executor().timer(SETTLE).await;
         if shots_stages::is_settings_shot(shot) {
             shots_stages::run(handle, shot, cx).await;
+            return;
+        }
+        if shots_files::is_files_shot(shot) {
+            shots_files::run(handle, shot, cx).await;
             return;
         }
         if let Err(error) = handle.update(cx, |root, window, cx| enter(shot, root, window, cx)) {

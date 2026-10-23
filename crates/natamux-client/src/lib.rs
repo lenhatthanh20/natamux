@@ -5,6 +5,7 @@
 
 pub mod config;
 pub mod error;
+mod files_methods;
 mod git_methods;
 mod http;
 mod settings_methods;

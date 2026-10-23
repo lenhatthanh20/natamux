@@ -2,10 +2,16 @@
 //! keymap names actions of crates the app does not have, so the app binds only what its screens
 //! use: the registry's commands, and the editor and terminal keys below.
 
-use gpui::{Action, App, KeyBinding, Menu, MenuItem, NoAction, actions};
+use std::rc::Rc;
+
+use gpui::{
+    Action, App, DummyKeyboardMapper, KeyBinding, KeyBindingContextPredicate, Menu, MenuItem,
+    NoAction, actions,
+};
 
 use super::commands::{MenuName, all_commands, command_by_id, keystroke, menu_items};
 use super::commands::{is_single_key, reaches_app_from_terminal};
+pub use super::commands_files::{SaveFile, ShowDocsTab, ShowOpenFile, ShowWorktreeFiles};
 pub use super::commands_stages::{MoveStageDown, MoveStageUp, ShowTasksProgress};
 use crate::ime::ime_check::SubmitWord;
 
@@ -157,6 +163,10 @@ command_actions! {
     "view.progress" => ShowTasksProgress,
     "stage.move-up" => MoveStageUp,
     "stage.move-down" => MoveStageDown,
+    "tab.docs" => ShowDocsTab,
+    "tab.editor" => ShowOpenFile,
+    "files.show" => ShowWorktreeFiles,
+    "file.save" => SaveFile,
 }
 
 fn push_bindings<A: Action + Clone>(id: &str, action: A, mac: bool, out: &mut Vec<KeyBinding>) {
@@ -229,6 +239,7 @@ pub fn bind(cx: &mut App) {
         KeyBinding::new(copy, terminal::Copy, Some("Terminal")),
         KeyBinding::new(paste, terminal::Paste, Some("Terminal")),
     ]);
+    bind_full_editor(cx, mac);
     if mac {
         cx.bind_keys([
             KeyBinding::new(
@@ -245,6 +256,51 @@ pub fn bind(cx: &mut App) {
             KeyBinding::new("alt-right", editor::actions::MoveToNextWordEnd, editor),
         ]);
     }
+}
+
+/// A full editor (the editor tab, the Docs edit) edits many lines. Single-line boxes leave the
+/// arrows and Enter to the lists and forms around them.
+fn bind_full_editor(cx: &mut App, mac: bool) {
+    let full = "Editor && mode == full";
+    let context = Some(full);
+    let (start, end) = if mac {
+        ("cmd-up", "cmd-down")
+    } else {
+        ("ctrl-home", "ctrl-end")
+    };
+    cx.bind_keys([
+        KeyBinding::new("enter", editor::actions::Newline, context),
+        KeyBinding::new("tab", editor::actions::Tab, context),
+        KeyBinding::new("shift-tab", editor::actions::Backtab, context),
+        KeyBinding::new("shift-up", editor::actions::SelectUp, context),
+        KeyBinding::new("shift-down", editor::actions::SelectDown, context),
+        KeyBinding::new("pageup", editor::actions::MovePageUp::default(), context),
+        KeyBinding::new(
+            "pagedown",
+            editor::actions::MovePageDown::default(),
+            context,
+        ),
+        KeyBinding::new(start, editor::actions::MoveToBeginning, context),
+        KeyBinding::new(end, editor::actions::MoveToEnd, context),
+    ]);
+    // Zed's MoveUp and MoveDown live in a crate the app does not take: they bind by name.
+    let by_name = [("up", "editor::MoveUp"), ("down", "editor::MoveDown")]
+        .into_iter()
+        .filter_map(|(keys, name)| {
+            let action = cx.build_action(name, None).ok()?;
+            let predicate = KeyBindingContextPredicate::parse(full).ok()?;
+            KeyBinding::load(
+                keys,
+                action,
+                Some(Rc::new(predicate)),
+                false,
+                None,
+                &DummyKeyboardMapper,
+            )
+            .ok()
+        })
+        .collect::<Vec<_>>();
+    cx.bind_keys(by_name);
 }
 
 /// The menu bar (macOS): the registry's commands that have a menu, a separator between

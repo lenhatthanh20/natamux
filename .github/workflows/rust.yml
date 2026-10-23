@@ -4,7 +4,8 @@ name: Rust
 # (docs/plan-rust-migration.md, "Safe local setup").
 on:
   push:
-    # natamux-ci/* holds snapshots that tasks push for a CI check (Check on CI).
+    # natamux-ci/* holds snapshots that tasks push for a CI check (Check on CI). Rust tasks share
+    # natamux-ci/rust (every job) and natamux-ci/rust-check (check only), so their caches stay warm.
     branches: [dev, 'natamux-ci/**']
   pull_request:
 
@@ -54,6 +55,8 @@ jobs:
   # The app for the owner to run (phase 1): built, checked, attested. Also answers whether GPUI
   # draws on the macOS runner, from the screenshots.
   app-macos:
+    # A -check branch is the compile loop: only the check job runs there.
+    if: ${{ !endsWith(github.ref, '-check') }}
     runs-on: macos-15
     timeout-minutes: 120
     permissions:
@@ -86,7 +89,7 @@ jobs:
               sips -s format bmp "shots/window-$theme-$size.png" --out "shots/window-$theme-$size.bmp" >/dev/null
             done
           done
-      # Screens 1 to 5 of phase 3: every state in both themes at two sizes, and the DOCKED ones at
+      # Screens 1 to 6 of phase 3: every state in both themes at two sizes, and the DOCKED ones at
       # 1024x720 too, where the sidebar docks; the runner's screen is 1024x768, so the details panel,
       # which docks from 1280, is shot as a sheet (docs/rust-phase3.md).
       # The shot is the app's window itself, found by its process id: macOS moves a window that
@@ -105,6 +108,9 @@ jobs:
             workspace-changes-ask rollback image-diff workspace-history tasks-progress
             project-settings-tab-stages project-settings-agent-stage project-settings-stage-picker
             project-settings-branch project-settings-problems project-settings-conflict
+            details-files workspace-docs workspace-docs-edit workspace-editor
+            workspace-editor-source workspace-editor-draft workspace-editor-conflict
+            terminal-drop-target
           DOCKED: >-
             tasks-table workspace-terminal-running terminal-find workspace-terminal-needs-input
             workspace-terminal-review no-workspace workspace-preparing finished-wrap-up agents-grid
@@ -114,6 +120,9 @@ jobs:
             workspace-changes-ask rollback image-diff workspace-history tasks-progress
             project-settings-tab-stages project-settings-agent-stage project-settings-stage-picker
             project-settings-branch project-settings-problems project-settings-conflict
+            details-files workspace-docs workspace-docs-edit workspace-editor
+            workspace-editor-source workspace-editor-draft workspace-editor-conflict
+            terminal-drop-target
         run: |
           mkdir -p shots
           window_of() {
@@ -285,15 +294,20 @@ jobs:
           compression-level: 0
 
   # natamux-client against the real daemon: the checked images of main, as scripts/e2e.sh starts them.
-  # `--ignored` runs every ignored test of live_daemon.rs, live_daemon_git.rs and
-  # live_daemon_settings.rs: the terminal test, the live list, and the flows of phase 3: screen 1
-  # (create, rename, subtask, workspace, preparing, remove, delete), screen 2, screen 3, and screen 4
+  # `--ignored` runs every ignored test of live_daemon.rs, live_daemon_git.rs,
+  # live_daemon_settings.rs and live_daemon_files.rs: the terminal test, the live list, and the
+  # flows of phase 3: screen 1 (create, rename, subtask, workspace, preparing, remove, delete),
+  # screen 2, screen 3, and screen 4
   # (changes, graph, and the refused commit, commit message, undo, file diff, image and agent
   # message).
   # Screen 5 (live_daemon_settings.rs): read the settings and the skills of the default project; save
   # them with the version (a new version comes back); save with the old version (409); save a pipeline
   # that breaks the rules (400); put the first file back with the current version.
+  # Screen 6 (live_daemon_files.rs): read the tree and a file, save it with its version, save with
+  # the old version (409), a path outside the worktree (409), write and read a stage file, list the
+  # attachments.
   live-daemon:
+    if: ${{ !endsWith(github.ref, '-check') }}
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
@@ -311,7 +325,7 @@ jobs:
             target
           key: rust-live-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
           restore-keys: rust-live-${{ runner.os }}-
-      - run: cargo test --locked -p natamux-client --test live_daemon --test live_daemon_git --test live_daemon_settings --no-run
+      - run: cargo test --locked -p natamux-client --test live_daemon --test live_daemon_git --test live_daemon_settings --test live_daemon_files --no-run
       - name: Start the daemon and the dashboard of main
         run: scripts/e2e.sh up
       # As makeShellTask in e2e/tests/terminal-helpers.ts: a task past its agent, with a workspace.
@@ -334,7 +348,7 @@ jobs:
             sleep 0.5
           done
           echo "id=$id" >> "$GITHUB_OUTPUT"
-      - run: cargo test --locked -p natamux-client --test live_daemon --test live_daemon_git --test live_daemon_settings -- --ignored
+      - run: cargo test --locked -p natamux-client --test live_daemon --test live_daemon_git --test live_daemon_settings --test live_daemon_files -- --ignored
         env:
           NATAMUX_LIVE_TASK: ${{ steps.task.outputs.id }}
       - if: failure()
@@ -344,6 +358,7 @@ jobs:
   # command's (scripts/cli-parity.sh), and the agent hook specs run with it first on the agents'
   # PATH (compose.rust-cli.yaml). Then the Linux build, attested. See docs/rust-phase2.md.
   cli:
+    if: ${{ !endsWith(github.ref, '-check') }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -429,6 +444,7 @@ jobs:
 
   # The tools come as prebuilt binaries at pinned versions; install-action checks their hashes.
   supply-chain:
+    if: ${{ !endsWith(github.ref, '-check') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

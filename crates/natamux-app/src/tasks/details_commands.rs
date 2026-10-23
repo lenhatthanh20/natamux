@@ -65,6 +65,8 @@ pub enum PanelCommand {
     CreateWorkspace,
     PickBase(String),
     RemoveWorkspace,
+    /// The output file chip of a stage card: the Docs tab with that file.
+    OpenStageFile(String),
     /// Opens the Changes tab of the task's workspace.
     ViewChanges,
     CheckPullRequest,

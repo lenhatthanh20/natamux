@@ -71,10 +71,18 @@ pub enum Shot {
     ProjectSettingsBranch,
     ProjectSettingsProblems,
     ProjectSettingsConflict,
+    DetailsFiles,
+    WorkspaceDocs,
+    WorkspaceDocsEdit,
+    WorkspaceEditor,
+    WorkspaceEditorSource,
+    WorkspaceEditorDraft,
+    WorkspaceEditorConflict,
+    TerminalDropTarget,
 }
 
 impl Shot {
-    pub const ALL: [Shot; 49] = [
+    pub const ALL: [Shot; 57] = [
         Shot::TasksTable,
         Shot::TasksBoard,
         Shot::BoardHoverCard,
@@ -124,6 +132,14 @@ impl Shot {
         Shot::ProjectSettingsBranch,
         Shot::ProjectSettingsProblems,
         Shot::ProjectSettingsConflict,
+        Shot::DetailsFiles,
+        Shot::WorkspaceDocs,
+        Shot::WorkspaceDocsEdit,
+        Shot::WorkspaceEditor,
+        Shot::WorkspaceEditorSource,
+        Shot::WorkspaceEditorDraft,
+        Shot::WorkspaceEditorConflict,
+        Shot::TerminalDropTarget,
     ];
 
     pub fn name(self) -> &'static str {
@@ -177,6 +193,14 @@ impl Shot {
             Shot::ProjectSettingsBranch => "project-settings-branch",
             Shot::ProjectSettingsProblems => "project-settings-problems",
             Shot::ProjectSettingsConflict => "project-settings-conflict",
+            Shot::DetailsFiles => "details-files",
+            Shot::WorkspaceDocs => "workspace-docs",
+            Shot::WorkspaceDocsEdit => "workspace-docs-edit",
+            Shot::WorkspaceEditor => "workspace-editor",
+            Shot::WorkspaceEditorSource => "workspace-editor-source",
+            Shot::WorkspaceEditorDraft => "workspace-editor-draft",
+            Shot::WorkspaceEditorConflict => "workspace-editor-conflict",
+            Shot::TerminalDropTarget => "terminal-drop-target",
         }
     }
 

@@ -1,0 +1,51 @@
+//! Screen 6's commands: the Docs tab, the open file and the files of the worktree (`view.ts` of
+//! the web), and Save in the editor tab. Same registry as `commands.rs`; `all_commands` joins the
+//! lists. The actions are declared here; `shortcuts.rs` maps the ids to them.
+
+use gpui::actions;
+
+use super::commands::{
+    BODY, CHANGES, Category, Command, MenuName, When, command, keys, menu, when,
+};
+
+actions!(
+    natamux,
+    [ShowDocsTab, ShowOpenFile, ShowWorktreeFiles, SaveFile]
+);
+
+/// The Docs tab, while none of its text boxes has the focus.
+pub const DOCS: &str = "NatamuxDocs && not_editing";
+/// The editor tab: Save works in its editor.
+pub const FILE_EDITOR: &str = "NatamuxFileEditor";
+
+const fn in_workspace(command: Command) -> Command {
+    when(command, When::InWorkspace)
+}
+
+/// No command takes 5: it showed the Docs tab before, and the open file has no key.
+pub const FILE_COMMANDS: &[Command] = &[
+    in_workspace(keys(
+        command("tab.docs", "Show the Docs tab", Category::View),
+        &["4"],
+        &[BODY, CHANGES, DOCS],
+    )),
+    menu(
+        in_workspace(command("tab.editor", "Show the open file", Category::View)),
+        MenuName::View,
+        3,
+    ),
+    menu(
+        in_workspace(command(
+            "files.show",
+            "Show the files of the worktree",
+            Category::View,
+        )),
+        MenuName::View,
+        3,
+    ),
+    in_workspace(keys(
+        command("file.save", "Save the file", Category::Task),
+        &["Mod+S"],
+        &[FILE_EDITOR],
+    )),
+];
