@@ -9,6 +9,7 @@ use natamux_proto::workspaces::changes::{
     CommitAnswer, CommitInput, CommitMessageDraft, FileDiff, ImageSide, RollbackInput,
     RollbackResult,
 };
+use natamux_proto::workspaces::files::{FileText, SavedFile, TreeEntry, TreeList, WorkspaceFile};
 use natamux_proto::workspaces::workspace::{
     ChangeEntry, ChangeList, CreateWorkspaceInput, DiffStat, DiffStatList, FanOutAnswer,
     FanOutInput, GitGraph, NewWorkspaceInput, PreparingList, PreparingStep, RemoveWorkspaceAnswer,
@@ -16,7 +17,7 @@ use natamux_proto::workspaces::workspace::{
 
 use crate::config::Config;
 use crate::error::ClientError;
-use crate::http::{call, call_with, send};
+use crate::http::{call, call_with, send, send_with_headers};
 
 /// A task, its worktree and its agent in one step. The answer comes before the worktree is made;
 /// `workspace.preparing` tells when it is.
@@ -190,4 +191,50 @@ pub async fn refresh_pull_request(config: &Config, task_id: &str) -> Result<Task
     let path = format!("/tasks/{}/pull-request/refresh", encode(task_id));
     let answer: TaskAnswer = call(config, Method::POST, &path).await?;
     Ok(answer.task)
+}
+
+/// One folder of the worktree; the root is the empty path.
+pub async fn list_folder(
+    config: &Config,
+    task_id: &str,
+    folder: &str,
+) -> Result<Vec<TreeEntry>, ClientError> {
+    let path = format!("/tasks/{}/tree?path={}", encode(task_id), encode(folder));
+    let list: TreeList = call(config, Method::GET, &path).await?;
+    Ok(list.entries)
+}
+
+/// A file of the worktree. 409: the path leaves the worktree (`OutsideWorkspaceError`), 404: no
+/// such file.
+pub async fn read_workspace_file(
+    config: &Config,
+    task_id: &str,
+    file: &str,
+) -> Result<WorkspaceFile, ClientError> {
+    let path = format!("/tasks/{}/file?path={}", encode(task_id), encode(file));
+    call(config, Method::GET, &path).await
+}
+
+/// Saves a file. `version`: the one `read_workspace_file` gave; 409 when the file changed since.
+pub async fn write_workspace_file(
+    config: &Config,
+    task_id: &str,
+    file: &str,
+    text: &str,
+    version: &str,
+) -> Result<SavedFile, ClientError> {
+    let path = format!("/tasks/{}/file?path={}", encode(task_id), encode(file));
+    let body = serde_json::to_vec(&FileText {
+        text: text.to_string(),
+    })
+    .map_err(|error| ClientError::BadAnswer(error.to_string()))?;
+    let answer = send_with_headers(
+        config,
+        Method::PUT,
+        &path,
+        &[("if-match", version)],
+        Some(body),
+    )
+    .await?;
+    serde_json::from_slice(&answer).map_err(|error| ClientError::BadAnswer(error.to_string()))
 }

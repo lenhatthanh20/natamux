@@ -12,6 +12,7 @@ use crate::components::colors::change_color;
 use crate::components::menu::MenuLayer;
 use crate::components::resize_handle::ResizeHandle;
 use crate::components::resize_rules::{Edge, Resize};
+use crate::files::file_icon_view::file_icon;
 use crate::git::change_rules::{split_path, status_tone};
 use crate::git::change_tree::{FileViewMode, entry_counts};
 use crate::terminals::pane_header::icon_button;
@@ -142,11 +143,7 @@ pub(super) fn file_row(
         .gap_1p5()
         .min_w_0()
         .tooltip(Tooltip::text(tip))
-        .child(
-            Icon::new(IconName::File)
-                .size(IconSize::XSmall)
-                .color(Color::Muted),
-        )
+        .child(file_icon(&entry.path, cx).color(Color::Muted))
         .child(
             div().min_w_0().flex_shrink(1.).child(
                 Label::new(name.to_owned())

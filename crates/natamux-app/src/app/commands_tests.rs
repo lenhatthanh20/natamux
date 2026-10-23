@@ -246,6 +246,10 @@ fn offers_the_workspace_tabs_and_files_only_with_a_workspace_open() {
         "diff.prev-file",
         "changes.refresh",
         "task.commit",
+        "tab.docs",
+        "tab.editor",
+        "files.show",
+        "file.save",
     ];
     let open = CommandState {
         workspace_open: true,
@@ -286,12 +290,12 @@ fn keeps_single_keys_out_of_text_boxes_and_terminals() {
 }
 
 #[test]
-fn binds_no_command_to_the_4_or_5_key_which_showed_the_docs_tab_before() {
+fn binds_no_command_to_the_5_key_which_showed_the_docs_tab_before() {
+    assert_eq!(shortcut_of("tab.docs"), Some("4"));
     for command in all_commands() {
-        assert!(
-            !command.keys.iter().any(|key| *key == "4" || *key == "5"),
-            "{}",
-            command.id
-        );
+        let four = command.keys.contains(&"4") && command.id != "tab.docs";
+        assert!(!four && !command.keys.contains(&"5"), "{}", command.id);
     }
+    assert_eq!(shortcut_of("tab.editor"), None);
+    assert_eq!(shortcut_of("file.save"), Some("Mod+S"));
 }

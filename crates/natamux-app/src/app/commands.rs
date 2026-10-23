@@ -63,6 +63,7 @@ impl MenuName {
 #[cfg(test)]
 pub use super::command_when::CommandState;
 pub use super::command_when::When;
+pub use super::commands_files::FILE_COMMANDS;
 pub use super::commands_git::GIT_COMMANDS;
 pub use super::commands_stages::STAGE_COMMANDS;
 
@@ -442,7 +443,11 @@ pub const COMMANDS: &[Command] = &[
 
 /// Every command: this file's, then screen 4's (`commands_git.rs`).
 pub fn all_commands() -> impl Iterator<Item = &'static Command> {
-    COMMANDS.iter().chain(GIT_COMMANDS).chain(STAGE_COMMANDS)
+    COMMANDS
+        .iter()
+        .chain(GIT_COMMANDS)
+        .chain(STAGE_COMMANDS)
+        .chain(FILE_COMMANDS)
 }
 
 pub fn command_by_id(id: &str) -> Option<&'static Command> {

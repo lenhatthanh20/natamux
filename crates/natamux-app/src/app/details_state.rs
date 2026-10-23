@@ -7,6 +7,7 @@ use natamux_proto::tasks::task::Task;
 use ui::prelude::*;
 
 use super::Dashboard;
+use crate::app::tab_rules::shown_details_view;
 use crate::app::view_rules::{DetailsView, details_open_for, details_view_for, with_detail_open};
 
 /// What a key or a command asks the panel to do once it shows the task.
@@ -50,12 +51,13 @@ impl Dashboard {
         details_open_for(choice, docked && self.details_beside_workspace())
     }
 
-    /// The tab shown. The Files tab comes with screen 6, so a remembered Files shows Progress.
+    /// The tab shown. A remembered Files shows Progress for a task with no workspace.
     pub fn details_view_now(&self) -> DetailsView {
-        match details_view_for(self.view().details_view, self.details_beside_workspace()) {
-            DetailsView::Files => DetailsView::Progress,
-            view => view,
-        }
+        let view = details_view_for(self.view().details_view, self.details_beside_workspace());
+        let has_workspace = self
+            .details_task()
+            .is_some_and(|task| task.workspace.is_some());
+        shown_details_view(view, has_workspace)
     }
 
     pub fn set_details_open(&mut self, id: &str, open: bool, cx: &mut Context<Self>) {
@@ -96,6 +98,14 @@ impl Dashboard {
         let open = self.details_open.clone();
         let mut next = Vec::new();
         self.update_view(cx, |state| next = state.show_progress(&open, id));
+        self.details_open = next;
+    }
+
+    /// `files.show` and `showFiles`: the panel of the task open on its Files tab.
+    pub fn show_files(&mut self, id: &str, cx: &mut Context<Self>) {
+        let open = self.details_open.clone();
+        let mut next = Vec::new();
+        self.update_view(cx, |state| next = state.show_files(&open, id));
         self.details_open = next;
     }
 

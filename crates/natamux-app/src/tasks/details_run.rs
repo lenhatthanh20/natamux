@@ -153,6 +153,9 @@ impl DetailsPanel {
             PanelCommand::ViewChanges => {
                 dashboard.update(cx, |d, cx| d.open_changes(&id, false, cx))
             }
+            PanelCommand::OpenStageFile(name) => {
+                dashboard.update(cx, |d, cx| d.open_stage_file(&id, &name, cx))
+            }
             PanelCommand::CheckPullRequest => {
                 self.busy_call(cx, move |d, cx| d.refresh_pull_request(&id, cx), |_, _| {});
             }

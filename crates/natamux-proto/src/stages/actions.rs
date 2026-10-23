@@ -72,6 +72,13 @@ pub struct StageFileList {
     pub files: Vec<StageFile>,
 }
 
+/// The answer of `GET` and `PUT /tasks/:id/files/:name`. The PUT body is `FileText`.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+pub struct StageFileText {
+    pub name: String,
+    pub text: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -125,5 +132,15 @@ mod tests {
         .unwrap();
         assert_eq!(list.files[0].name, "spec.md");
         assert_eq!(list.files[0].size, 12);
+    }
+
+    #[test]
+    fn reads_the_text_of_a_stage_file() {
+        let file: StageFileText =
+            serde_json::from_str(r##"{"name":"spec.md","text":"# Spec\n"}"##).unwrap();
+        assert_eq!(
+            (file.name.as_str(), file.text.as_str()),
+            ("spec.md", "# Spec\n")
+        );
     }
 }

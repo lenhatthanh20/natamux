@@ -361,6 +361,9 @@ mod git;
 #[path = "source_settings.rs"]
 mod settings;
 
+#[path = "source_files.rs"]
+mod files;
+
 #[cfg(test)]
 mod tests {
     use super::*;

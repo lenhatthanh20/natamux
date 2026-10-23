@@ -62,25 +62,36 @@ pub fn read_only_editor(
         editor.disable_header_for_buffer(buffer_id, cx);
         editor.set_read_only(true);
         editor.set_diff_hunk_renderer(Some(Arc::new(HiddenDiffHunkRenderer)), cx);
-        editor.set_show_runnables(false, cx);
-        editor.set_show_breakpoints(false, cx);
-        editor.set_show_code_actions(false, cx);
-        editor.set_show_bookmarks(false, cx);
-        editor.set_show_diff_review_button(false, cx);
-        editor.set_show_wrap_guides(false, cx);
-        editor.set_show_indent_guides(false, cx);
-        editor.set_show_edit_predictions(Some(false), window, cx);
-        editor.set_minimap_visibility(editor::MinimapVisibility::Disabled, window, cx);
-        editor.set_soft_wrap_mode(
-            if wrap {
-                SoftWrap::EditorWidth
-            } else {
-                SoftWrap::None
-            },
-            cx,
-        );
+        plain_switches(&mut editor, wrap, window, cx);
         editor
     })
+}
+
+/// The switches every editor of the app shares: no runnables, breakpoints, code actions, guides,
+/// predictions or minimap, and the soft wrap.
+pub fn plain_switches(
+    editor: &mut Editor,
+    wrap: bool,
+    window: &mut Window,
+    cx: &mut Context<Editor>,
+) {
+    editor.set_show_runnables(false, cx);
+    editor.set_show_breakpoints(false, cx);
+    editor.set_show_code_actions(false, cx);
+    editor.set_show_bookmarks(false, cx);
+    editor.set_show_diff_review_button(false, cx);
+    editor.set_show_wrap_guides(false, cx);
+    editor.set_show_indent_guides(false, cx);
+    editor.set_show_edit_predictions(Some(false), window, cx);
+    editor.set_minimap_visibility(editor::MinimapVisibility::Disabled, window, cx);
+    editor.set_soft_wrap_mode(
+        if wrap {
+            SoftWrap::EditorWidth
+        } else {
+            SoftWrap::None
+        },
+        cx,
+    );
 }
 
 /// Empty rows above `before_row` of one side, or below its last row at the end of the file. The

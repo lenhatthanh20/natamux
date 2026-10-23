@@ -79,6 +79,7 @@ pub struct Dashboard {
     /// The tab the open workspace shows, and the task whose commit box Commit… asked for.
     pub workspace_tab: WorkspaceTab,
     pub commit_request: Option<String>,
+    pub files: tabs::FileViews,
     /// The details panel of each task the user opened or closed, this run only.
     pub details_open: Entries<bool>,
     pub panel_request: Option<(String, details::PanelRequest)>,
@@ -129,6 +130,7 @@ impl Dashboard {
             shell_request: None,
             workspace_tab: WorkspaceTab::Terminal,
             commit_request: None,
+            files: tabs::FileViews::default(),
             details_open: Vec::new(),
             panel_request: None,
             terminal_readers: RefCell::new(BTreeMap::new()),
@@ -479,6 +481,9 @@ mod workspace_writes;
 #[path = "details_state.rs"]
 pub mod details;
 
+#[path = "docs_state.rs"]
+mod docs_state;
+
 #[path = "details_writes.rs"]
 mod details_writes;
 
@@ -486,4 +491,4 @@ mod details_writes;
 mod git_writes;
 
 #[path = "tab_state.rs"]
-mod tabs;
+pub mod tabs;
