@@ -89,7 +89,7 @@ jobs:
               sips -s format bmp "shots/window-$theme-$size.png" --out "shots/window-$theme-$size.bmp" >/dev/null
             done
           done
-      # Screens 1 to 6 of phase 3: every state in both themes at two sizes, and the DOCKED ones at
+      # Screens 1 to 7 of phase 3: every state in both themes at two sizes, and the DOCKED ones at
       # 1024x720 too, where the sidebar docks; the runner's screen is 1024x768, so the details panel,
       # which docks from 1280, is shot as a sheet (docs/rust-phase3.md).
       # The shot is the app's window itself, found by its process id: macOS moves a window that
@@ -111,6 +111,10 @@ jobs:
             details-files workspace-docs workspace-docs-edit workspace-editor
             workspace-editor-source workspace-editor-draft workspace-editor-conflict
             terminal-drop-target
+            palette palette-query palette-no-match palette-jump shortcuts account-menu
+            terminal-font settings-dialog projects project-settings project-settings-tab-issues
+            project-settings-tab-json project-settings-json-error import-issues sign-in
+            sign-in-error
           DOCKED: >-
             tasks-table workspace-terminal-running terminal-find workspace-terminal-needs-input
             workspace-terminal-review no-workspace workspace-preparing finished-wrap-up agents-grid
@@ -123,6 +127,10 @@ jobs:
             details-files workspace-docs workspace-docs-edit workspace-editor
             workspace-editor-source workspace-editor-draft workspace-editor-conflict
             terminal-drop-target
+            palette palette-query palette-no-match palette-jump shortcuts account-menu
+            terminal-font settings-dialog projects project-settings project-settings-tab-issues
+            project-settings-tab-json project-settings-json-error import-issues sign-in
+            sign-in-error
         run: |
           mkdir -p shots
           window_of() {
@@ -295,7 +303,7 @@ jobs:
 
   # natamux-client against the real daemon: the checked images of main, as scripts/e2e.sh starts them.
   # `--ignored` runs every ignored test of live_daemon.rs, live_daemon_git.rs,
-  # live_daemon_settings.rs and live_daemon_files.rs: the terminal test, the live list, and the
+  # live_daemon_settings.rs, live_daemon_files.rs and live_daemon_projects.rs: the terminal test, the live list, and the
   # flows of phase 3: screen 1 (create, rename, subtask, workspace, preparing, remove, delete),
   # screen 2, screen 3, and screen 4
   # (changes, graph, and the refused commit, commit message, undo, file diff, image and agent
@@ -306,6 +314,9 @@ jobs:
   # Screen 6 (live_daemon_files.rs): read the tree and a file, save it with its version, save with
   # the old version (409), a path outside the worktree (409), write and read a stage file, list the
   # attachments.
+  # Screen 7 (live_daemon_projects.rs): a wrong token (401) and the right one, the projects, adding a
+  # relative path and a project added already (400), the GitHub issues and their import (409 without
+  # `gh`), an Issues-tab setting saved and put back.
   live-daemon:
     if: ${{ !endsWith(github.ref, '-check') }}
     runs-on: ubuntu-latest
@@ -325,7 +336,7 @@ jobs:
             target
           key: rust-live-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
           restore-keys: rust-live-${{ runner.os }}-
-      - run: cargo test --locked -p natamux-client --test live_daemon --test live_daemon_git --test live_daemon_settings --test live_daemon_files --no-run
+      - run: cargo test --locked -p natamux-client --test live_daemon --test live_daemon_git --test live_daemon_settings --test live_daemon_files --test live_daemon_projects --no-run
       - name: Start the daemon and the dashboard of main
         run: scripts/e2e.sh up
       # As makeShellTask in e2e/tests/terminal-helpers.ts: a task past its agent, with a workspace.
@@ -348,7 +359,7 @@ jobs:
             sleep 0.5
           done
           echo "id=$id" >> "$GITHUB_OUTPUT"
-      - run: cargo test --locked -p natamux-client --test live_daemon --test live_daemon_git --test live_daemon_settings --test live_daemon_files -- --ignored
+      - run: cargo test --locked -p natamux-client --test live_daemon --test live_daemon_git --test live_daemon_settings --test live_daemon_files --test live_daemon_projects -- --ignored
         env:
           NATAMUX_LIVE_TASK: ${{ steps.task.outputs.id }}
       - if: failure()

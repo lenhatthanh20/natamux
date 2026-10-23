@@ -4,7 +4,7 @@
 
 use gpui::actions;
 
-use super::commands::{Category, Command, MenuName, command, keys, menu};
+use super::commands::{Category, Command, MenuName, command, hidden, keys, menu};
 
 actions!(natamux, [ShowTasksProgress, MoveStageUp, MoveStageDown]);
 
@@ -23,12 +23,16 @@ pub const STAGE_COMMANDS: &[Command] = &[
     ),
     // The web's one `stage.move` (Alt+ArrowUp, Alt+ArrowDown), as two commands with one key each.
     keys(
-        command("stage.move-up", "Move the stage up", Category::App),
+        hidden(command("stage.move-up", "Move the stage up", Category::App)),
         &["Alt+ArrowUp"],
         &[STAGE_LIST],
     ),
     keys(
-        command("stage.move-down", "Move the stage down", Category::App),
+        hidden(command(
+            "stage.move-down",
+            "Move the stage down",
+            Category::App,
+        )),
         &["Alt+ArrowDown"],
         &[STAGE_LIST],
     ),

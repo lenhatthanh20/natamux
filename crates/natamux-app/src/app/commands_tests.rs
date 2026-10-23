@@ -16,7 +16,7 @@ fn gives_every_command_its_own_id() {
 /// Both platforms, as gpui gets them.
 fn bindings(mac: bool) -> Vec<(&'static str, String, &'static str)> {
     let mut out = Vec::new();
-    for command in all_commands() {
+    for command in all_commands().filter(|command| crate::app::shortcuts::is_bound(command)) {
         for key in command.keys {
             let stroke = keystroke(key, mac);
             if command.contexts.is_empty() {
@@ -88,6 +88,13 @@ fn has_the_keys_of_section_5_1_of_the_ui_spec() {
     assert_eq!(shortcut_of("row.menu"), Some("Shift+F10"));
     assert_eq!(shortcut_of("form.submit"), Some("Mod+Enter"));
     assert_eq!(
+        command_by_id("palette.open").map(|c| c.keys),
+        Some(&["Mod+K", "F1"][..])
+    );
+    assert_eq!(shortcut_of("jump.open"), Some("Mod+J"));
+    assert_eq!(shortcut_of("app.settings"), Some("Mod+,"));
+    assert_eq!(shortcut_of("help.shortcuts"), Some("?"));
+    assert_eq!(
         command_by_id("list.next").map(|c| c.keys),
         Some(&["j", "ArrowDown"][..])
     );
@@ -141,6 +148,11 @@ fn moves_the_selection_in_the_task_list_only() {
         ..CommandState::default()
     };
     assert_eq!(next.map(|when| when.holds(&open)), Some(false));
+    let agents = CommandState {
+        agents_open: true,
+        ..CommandState::default()
+    };
+    assert_eq!(next.map(|when| when.holds(&agents)), Some(false));
 }
 
 #[test]
@@ -298,4 +310,103 @@ fn binds_no_command_to_the_5_key_which_showed_the_docs_tab_before() {
     }
     assert_eq!(shortcut_of("tab.editor"), None);
     assert_eq!(shortcut_of("file.save"), Some("Mod+S"));
+}
+
+#[test]
+fn offers_the_stage_actions_in_an_open_workspace_of_a_task_that_is_not_finished() {
+    let state = |selected_state| CommandState {
+        task_open: true,
+        workspace_open: true,
+        has_selection: true,
+        selected_state: Some(selected_state),
+        ..CommandState::default()
+    };
+    for id in [
+        "stage.skip",
+        "stage.report",
+        "stage.approve",
+        "stage.send-back",
+    ] {
+        let command = command_by_id(id);
+        assert_eq!(
+            command.map(|c| (c.hidden, c.category)),
+            Some((false, Category::Workspace))
+        );
+        let when = command.map(|c| c.when);
+        assert_eq!(
+            when.map(|w| w.holds(&state(TaskState::Running))),
+            Some(true),
+            "{id}"
+        );
+        assert_eq!(
+            when.map(|w| w.holds(&state(TaskState::Done))),
+            Some(false),
+            "{id}"
+        );
+        assert_eq!(
+            when.map(|w| w.holds(&CommandState::default())),
+            Some(false),
+            "{id}"
+        );
+    }
+}
+
+#[test]
+fn does_not_run_entries_that_only_document_a_key() {
+    for id in [
+        "list.ends",
+        "tree.keys",
+        "stage.move",
+        "palette.move",
+        "palette.open-row",
+        "palette.digit",
+        "palette.scope",
+    ] {
+        let command = command_by_id(id);
+        assert!(
+            command.is_some_and(|c| c.hidden && c.group.is_some() && c.documents_only),
+            "{id}"
+        );
+        assert!(crate::app::shortcuts::action_for(id).is_none(), "{id}");
+    }
+}
+
+#[test]
+fn goes_through_the_actions_of_the_app() {
+    let name = |id: &str| crate::app::shortcuts::action_for(id).map(|action| action.name());
+    assert_eq!(name("palette.open"), Some("natamux::OpenPalette"));
+    assert_eq!(name("jump.open"), Some("natamux::OpenJump"));
+    assert_eq!(name("help.shortcuts"), Some("natamux::ShowShortcuts"));
+    assert_eq!(name("app.settings"), Some("natamux::OpenSettings"));
+    assert_eq!(name("repo.add"), Some("natamux::AddProject"));
+    assert_eq!(name("repo.import"), Some("natamux::ImportIssues"));
+}
+
+#[test]
+fn writes_the_palette_title_with_its_category() {
+    let title = |id: &str| command_by_id(id).map(super::super::command_types::palette_title);
+    assert_eq!(
+        title("task.review.approved").as_deref(),
+        Some("Task: Approve")
+    );
+    assert_eq!(title("repo.add").as_deref(), Some("Project: Add a project"));
+    assert_eq!(
+        title("workspace.new").as_deref(),
+        Some("Task: Start a task")
+    );
+}
+
+/// Review 1: the action check of `shortcuts.rs` failed on `list.ends`, which only names keys.
+#[test]
+fn only_the_sheet_entries_have_keys_and_no_action() {
+    let without: Vec<&str> = all_commands()
+        .filter(|command| !command.keys.is_empty())
+        .filter(|command| crate::app::shortcuts::action_for(command.id).is_none())
+        .map(|command| command.id)
+        .collect();
+    let documented: Vec<&str> = all_commands()
+        .filter(|command| command.documents_only)
+        .map(|command| command.id)
+        .collect();
+    assert_eq!(without, documented);
 }

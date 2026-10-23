@@ -19,8 +19,6 @@ pub const MAX_ID: usize = 40;
 pub const MAX_GROUP: usize = 4;
 pub const MAX_PATHS: usize = 4;
 
-// The Issues tab (screen 7) reads it.
-#[cfg_attr(not(test), allow(dead_code))]
 /// What a project does when `tracker.createIssue` is left out.
 pub const DEFAULT_CREATE_ISSUE: &str = "manual";
 
@@ -188,8 +186,6 @@ pub fn with_steps(raw: &RawSettings, steps: &[Step]) -> RawSettings {
     next
 }
 
-// The Issues tab (screen 7) reads it.
-#[cfg_attr(not(test), allow(dead_code))]
 /// The tracker of the draft, with the defaults for what it leaves out or cannot read.
 pub fn tracker_of(raw: &RawSettings) -> TrackerSettings {
     let value = raw
@@ -204,8 +200,6 @@ pub fn tracker_of(raw: &RawSettings) -> TrackerSettings {
     serde_json::from_value(value).unwrap_or_default()
 }
 
-// The Issues tab (screen 7) reads it.
-#[cfg_attr(not(test), allow(dead_code))]
 /// The settings with this `tracker.createIssue`. The default is left out, like the default
 /// pipeline, and so is a tracker with nothing left. `tracker` keeps its place among the keys.
 pub fn with_create_issue(raw: &RawSettings, create_issue: &str) -> RawSettings {

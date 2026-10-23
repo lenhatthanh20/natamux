@@ -5,7 +5,6 @@
 
 use std::collections::BTreeSet;
 use std::sync::Arc;
-use std::time::Duration;
 
 use editor::Editor;
 use gpui::{
@@ -26,6 +25,7 @@ use super::shortcuts::{
     FocusFilter, NewTask, NewWorkspace, ShowAgents, ShowAllTasks, ShowBoard, ShowTable,
     ToggleSidebar,
 };
+use super::sign_in::{SignIn, StartProblem};
 use super::source::Source;
 use super::view_state::Layout;
 use crate::bench::bench_view::BenchView;
@@ -33,7 +33,7 @@ use crate::components::dialog::DialogLayer;
 use crate::components::menu::MenuLayer;
 use crate::components::toasts::{Toaster, push_toast};
 use crate::ime::ime_check::ImeCheck;
-use crate::perf::overlay;
+use crate::palette::palette_layer::PaletteLayer;
 use crate::sidebar::sidebar::Sidebar;
 use crate::tasks::details_panel::DetailsPanel;
 use crate::tasks::quick_add::StartTask;
@@ -46,8 +46,6 @@ use crate::workspaces::wrap_up_rules::is_finished_state;
 
 const DEFAULT_SIZE: (u32, u32) = (1280, 800);
 const MIN_SIZE: (f32, f32) = (800., 560.);
-/// How often the perf overlay shows new numbers.
-const OVERLAY_REFRESH: Duration = Duration::from_millis(500);
 
 enum Tool {
     None,
@@ -68,6 +66,9 @@ pub struct Root {
     parked_bench: Option<Entity<BenchView>>,
     menus: Entity<MenuLayer>,
     dialogs: Entity<DialogLayer>,
+    palette: Entity<PaletteLayer>,
+    /// Fills the window while the app has no token the daemon takes.
+    sign_in: Option<Entity<SignIn>>,
     toaster: Entity<Toaster>,
     focus: FocusHandle,
     resize_focus: FocusHandle,
@@ -82,12 +83,18 @@ pub struct Root {
 
 impl Root {
     fn new(
-        source: Result<Arc<Source>, String>,
+        source: Result<Arc<Source>, StartProblem>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
+        let wants_sign_in = matches!(source, Err(StartProblem::SignIn));
+        let source = source.map_err(|problem| match problem {
+            StartProblem::SignIn => "No token for the daemon.".to_owned(),
+            StartProblem::Down(reason) => reason,
+        });
         let menus = MenuLayer::init(cx);
         let dialogs = DialogLayer::init(cx);
+        let palette = PaletteLayer::init(cx);
         let toaster = Toaster::init(cx);
         let dashboard = cx.new(|cx| Dashboard::new(source.clone(), cx));
         let sidebar = cx.new(|cx| Sidebar::new(dashboard.clone(), window, cx));
@@ -103,13 +110,14 @@ impl Root {
             root.start_task(event.0.clone(), window, cx)
         })
         .detach();
-        cx.observe(&dashboard, |root, _, cx| {
+        cx.observe_in(&dashboard, window, |root, _, window, cx| {
             root.show_new_toasts(cx);
+            root.after_refused(window, cx);
             cx.notify();
         })
         .detach();
         Self::watch_window(window, cx);
-        Root {
+        let mut root = Root {
             source,
             dashboard,
             sidebar,
@@ -121,6 +129,8 @@ impl Root {
             parked_bench: None,
             menus,
             dialogs,
+            palette,
+            sign_in: None,
             toaster,
             focus: cx.focus_handle(),
             resize_focus: cx.focus_handle().tab_stop(true),
@@ -129,52 +139,11 @@ impl Root {
             drawer_open: false,
             toasts_shown: 0,
             title: window_title(0),
+        };
+        if wants_sign_in {
+            root.show_sign_in(false, window, cx);
         }
-    }
-
-    /// The bench's quit handling, the system look and the perf overlay's refresh.
-    fn watch_window(window: &mut Window, cx: &mut Context<Self>) {
-        // Unsaved edits ask first; a running bench quits the app (`window_files.rs`).
-        let weak_root = cx.weak_entity();
-        window.on_window_should_close(cx, move |window, cx| {
-            weak_root
-                .update(cx, |root, cx| root.window_may_close(window, cx))
-                .unwrap_or(true)
-        });
-        // A bench left running would flood the daemon after the app is gone.
-        cx.on_app_quit(|root, cx| {
-            let stop = root.take_bench_stop(cx);
-            async move {
-                if let Some(stop) = stop {
-                    stop.await;
-                }
-            }
-        })
-        .detach();
-        // Follow the system's light or dark look, as Zed's workspace does.
-        cx.observe_window_appearance(window, |_, window, cx| {
-            *theme::SystemAppearance::global_mut(cx) =
-                theme::SystemAppearance(window.appearance().into());
-            theme_settings::reload_theme(cx);
-        })
-        .detach();
-        cx.spawn(async move |root, cx| {
-            loop {
-                cx.background_executor().timer(OVERLAY_REFRESH).await;
-                let refreshed = root.update(cx, |_, cx| {
-                    if overlay::enabled(cx) {
-                        cx.notify();
-                    }
-                });
-                if refreshed.is_err() {
-                    break;
-                }
-            }
-        })
-        .detach();
-        if overlay::enabled(cx) {
-            overlay::watch_frames(window);
-        }
+        root
     }
 
     fn on_dashboard(
@@ -234,9 +203,18 @@ impl Root {
         }
     }
 
-    /// The text box of the sidebar (the smoke test types into it).
+    /// The text box of the sidebar.
     pub fn filter(&self, cx: &App) -> Entity<Editor> {
         self.sidebar.read(cx).filter().clone()
+    }
+
+    /// The first text box on screen, which the smoke test types into: the token of Sign in, else
+    /// the sidebar filter.
+    pub fn text_box(&self, cx: &App) -> Entity<Editor> {
+        match &self.sign_in {
+            Some(sign_in) => sign_in.read(cx).field().clone(),
+            None => self.filter(cx),
+        }
     }
 
     pub(super) fn dashboard(&self) -> &Entity<Dashboard> {
@@ -380,13 +358,6 @@ impl Root {
             .update(cx, |dashboard, cx| dashboard.set_state_filter(state, cx));
     }
 
-    /// The needs-you pill and "N need you" filter All tasks to every task that needs the user.
-    fn show_needs_you(&mut self, cx: &mut Context<Self>) {
-        self.show_list(None, cx);
-        self.dashboard
-            .update(cx, |dashboard, cx| dashboard.set_needs_you(true, cx));
-    }
-
     fn new_workspace(&mut self, _: &NewWorkspace, window: &mut Window, cx: &mut Context<Self>) {
         new_workspace_dialog::open(&self.dashboard, None, window, cx);
     }
@@ -446,9 +417,15 @@ mod git_commands;
 #[path = "window_files.rs"]
 mod file_commands;
 
+#[path = "window_settings.rs"]
+mod settings_commands;
+
+#[path = "window_watch.rs"]
+mod watch;
+
 pub fn open(
     options: &Options,
-    source: Result<Arc<Source>, String>,
+    source: Result<Arc<Source>, StartProblem>,
     cx: &mut App,
 ) -> anyhow::Result<gpui::WindowHandle<Root>> {
     let (width, height) = options.size.unwrap_or(DEFAULT_SIZE);
@@ -477,9 +454,11 @@ pub fn open(
         },
         |window, cx| {
             let root = cx.new(|cx| Root::new(source, window, cx));
-            // The smoke test types into the sidebar filter; a user starts on the list.
-            let focus = if smoke {
-                root.read(cx).filter(cx).focus_handle(cx)
+            // The smoke test types into the first text box; a user starts on the list, or on
+            // Sign in when the app has no token.
+            let signing_in = root.read(cx).sign_in.is_some();
+            let focus = if smoke || signing_in {
+                root.read(cx).text_box(cx).focus_handle(cx)
             } else {
                 root.read(cx).tasks.focus_handle(cx)
             };

@@ -11,6 +11,7 @@ pub mod events {
     pub mod task_event;
 }
 pub mod projects {
+    pub mod issues;
     pub mod repo;
     pub mod settings_rules;
 }

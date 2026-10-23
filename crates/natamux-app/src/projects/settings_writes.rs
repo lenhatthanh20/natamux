@@ -10,6 +10,7 @@ use serde_json::{Map, Value};
 use ui::prelude::*;
 
 use super::project_settings_dialog::ProjectSettingsDialog;
+use super::settings_tab_rules::reset_ask;
 use super::settings_text::{MAX_IMPORT_BYTES, base_of, import_question};
 use crate::app::settings_reads::SettingsReads;
 use crate::app::source::reason;
@@ -28,7 +29,9 @@ impl ProjectSettingsDialog {
         if self.saving || self.save_blocked(cx).is_some() {
             return;
         }
-        let raw = stages.editor.read(cx).raw().clone();
+        let Some(raw) = stages.editor.read(cx).raw().cloned() else {
+            return;
+        };
         let version = base.version.clone();
         let Some(broken) = base.broken.clone() else {
             self.send(raw, version, cx);
@@ -107,7 +110,9 @@ impl ProjectSettingsDialog {
             return;
         }
         let start = parse_draft(&base.text).ok();
-        let draft = stages.editor.read(cx).raw().clone();
+        let Some(draft) = stages.editor.read(cx).raw().cloned() else {
+            return;
+        };
         let fresh = source.load_settings(&self.repo_id);
         cx.spawn(async move |this, cx| {
             let fresh = fresh.await.ok();
@@ -144,11 +149,9 @@ impl ProjectSettingsDialog {
                 let base = base_of(&fresh);
                 if let Some(stages) = &this.stages {
                     let text = base.text.clone();
-                    // A file the tab cannot read keeps the draft; the read error says why.
                     stages
                         .editor
-                        .update(cx, |editor, cx| editor.replace_text(&text, cx))
-                        .ok();
+                        .update(cx, |editor, cx| editor.set_text(&text, cx));
                 }
                 this.base = Some(base);
                 this.conflict = false;
@@ -160,28 +163,27 @@ impl ProjectSettingsDialog {
         .detach();
     }
 
-    /// Puts the default stages back in the draft, after asking.
+    /// Puts the default stages back in the draft, after asking. Text that cannot be read is
+    /// replaced by `{}`, which is the default settings.
     pub(super) fn reset(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(editor) = self.stages.as_ref().map(|stages| stages.editor.clone()) else {
             return;
         };
+        let ask = reset_ask(self.draft_ok(cx));
         window.defer(cx, move |window, cx| {
-            Confirm::new(
-                "Reset to default",
-                "Put the default stages back? Other settings stay as they are. Nothing is saved \
-                 until you click Save.",
-                "Reset",
-                move |_, cx| {
-                    editor.update(cx, |editor, cx| editor.edit(default_pipeline(), cx));
-                },
-            )
+            Confirm::new("Reset to default", ask.question, "Reset", move |_, cx| {
+                editor.update(cx, |editor, cx| match ask.text {
+                    Some(text) => editor.set_text(text, cx),
+                    None => editor.edit(default_pipeline(), cx),
+                });
+            })
             .safe()
             .open_over(window, cx);
         });
     }
 
-    /// Import…: a `.json` file into the draft only. A file the Stages tab cannot read is refused
-    /// with its reason (the JSON tab comes with screen 7).
+    /// Import…: a `.json` file into the draft only. A file that does not parse goes in too; the
+    /// JSON tab shows its error.
     pub(super) fn import(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let paths = cx.prompt_for_paths(PathPromptOptions {
             files: true,
@@ -220,21 +222,16 @@ impl ProjectSettingsDialog {
                 return;
             }
         };
-        let draft = match parse_draft(&text) {
-            Ok(draft) => draft,
-            Err(problem) => {
-                self.problem = Some(format!("{name} cannot be imported here: {problem}"));
-                cx.notify();
-                return;
-            }
-        };
         let Some(editor) = self.stages.as_ref().map(|stages| stages.editor.clone()) else {
             return;
         };
-        let question = import_question(&name, self.dirty(cx), &shell_fields(&draft.steps));
+        // A file that does not parse lists nothing; the JSON tab shows all of it.
+        let fields =
+            parse_draft(&text).map_or_else(|_| Vec::new(), |draft| shell_fields(&draft.steps));
+        let question = import_question(&name, self.dirty(cx), &fields);
         let dashboard = self.dashboard.clone();
         let apply = move |cx: &mut App| {
-            editor.update(cx, |editor, cx| editor.replace_text(&text, cx).ok());
+            editor.update(cx, |editor, cx| editor.set_text(&text, cx));
             let said = format!("Imported {name}. Review it, then click Save.");
             dashboard.update(cx, |dashboard, cx| {
                 dashboard.toast(&said, ToastTone::Info, None, cx)
@@ -254,10 +251,14 @@ impl ProjectSettingsDialog {
 
     /// Export: the draft into a file the person picks, as `<project>.natamux.json`.
     pub(super) fn export(&mut self, _: &mut Window, cx: &mut Context<Self>) {
-        let Some(stages) = &self.stages else {
+        let Some(raw) = self
+            .stages
+            .as_ref()
+            .and_then(|stages| stages.editor.read(cx).raw().cloned())
+        else {
             return;
         };
-        let text = format!("{}\n", format_settings(stages.editor.read(cx).raw()));
+        let text = format!("{}\n", format_settings(&raw));
         let home = std::env::var_os("HOME").map_or_else(PathBuf::new, PathBuf::from);
         let name = format!("{}.natamux.json", self.repo_name);
         let path = cx.prompt_for_new_path(&home, Some(&name));

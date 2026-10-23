@@ -89,6 +89,11 @@ impl QuickAdd {
     }
 
     /// What is typed, for Start a task.
+    /// The project a new task goes to: Import issues reads that project's issues (`taskRepo`).
+    pub fn repo(&self, cx: &App) -> Option<String> {
+        task_repo(&self.dashboard.read(cx).data.repos, self.repo.as_deref())
+    }
+
     pub fn typed_title(&self, cx: &App) -> Option<String> {
         let title = self.title.read(cx).text(cx).trim().to_string();
         (!title.is_empty()).then_some(title)

@@ -52,6 +52,7 @@ struct Data {
     git: git::GitState,
     settings: settings::SettingsFiles,
     files: files::FilesState,
+    projects: projects::ProjectsState,
     next_number: u32,
     feeds: Vec<UnboundedSender<DashboardEvent>>,
     link: FakeLink,
@@ -100,6 +101,7 @@ impl Data {
             git: git::GitState::default(),
             settings: settings::SettingsFiles::default(),
             files: files::FilesState::default(),
+            projects: projects::ProjectsState::seeded(),
             next_number: 200,
             feeds: Vec::new(),
             link: FakeLink::Live,
@@ -108,6 +110,7 @@ impl Data {
         data.add_git_seed();
         data.add_settings_seed();
         data.add_files_seed();
+        data.add_projects_seed();
         data
     }
 
@@ -478,6 +481,9 @@ mod settings;
 
 #[path = "fake_files.rs"]
 mod files;
+
+#[path = "fake_projects.rs"]
+mod projects;
 
 #[cfg(test)]
 #[path = "fake_daemon_tests.rs"]

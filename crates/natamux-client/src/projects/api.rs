@@ -2,16 +2,22 @@
 
 use hyper::Method;
 use natamux_proto::projects::repo::{
-    BranchList, LoadedSettings, RepoList, SavedSettings, SkillList,
+    AddRepo, AddedRepo, BranchList, LoadedSettings, Repo, RepoList, SavedSettings, SkillList,
 };
 use natamux_proto::terminals::query::encode;
 
 use crate::config::Config;
 use crate::error::ClientError;
-use crate::http::{call, send, send_with_headers};
+use crate::http::{call, call_with, send, send_with_headers};
 
 pub async fn list_repos(config: &Config) -> Result<RepoList, ClientError> {
     call(config, Method::GET, "/repos").await
+}
+
+/// Adds a project. The daemon answers 201, or 400 / 409 with its reason.
+pub async fn add_repo(config: &Config, input: &AddRepo) -> Result<Repo, ClientError> {
+    let added: AddedRepo = call_with(config, Method::POST, "/repos", input).await?;
+    Ok(added.repo)
 }
 
 /// Forgets a project. Its files and worktrees stay.

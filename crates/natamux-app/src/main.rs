@@ -6,11 +6,16 @@ mod agents {
     pub mod agent_choices;
 }
 mod app {
+    pub mod account_menu;
+    pub mod appearance;
+    pub mod appearance_rules;
     pub mod asset_table;
     pub mod assets;
     pub mod clock;
+    pub mod command_types;
     pub mod command_when;
     pub mod commands;
+    pub mod commands_app;
     pub mod commands_files;
     pub mod commands_git;
     pub mod commands_stages;
@@ -23,16 +28,23 @@ mod app {
     pub mod notify;
     pub mod notify_rules;
     pub mod options;
+    pub mod settings_dialog;
     pub mod settings_reads;
+    pub mod sheet_rules;
     pub mod shell_rules;
+    pub mod shortcut_sheet;
     pub mod shortcut_text;
     pub mod shortcuts;
     pub mod shots;
     pub mod shots_files;
+    pub mod shots_settings;
     pub mod shots_stages;
+    pub mod sign_in;
+    pub mod sign_in_rules;
     pub mod smoke;
     pub mod source;
     pub mod status_bar;
+    pub mod status_items;
     pub mod status_layout;
     pub mod tab_rules;
     pub mod title_bar;
@@ -102,13 +114,30 @@ mod ime {
     pub mod ime_check;
     pub mod word_check;
 }
+mod palette {
+    pub mod fuzzy;
+    pub mod jump_rows;
+    pub mod palette_layer;
+    pub mod palette_pick;
+    pub mod palette_row;
+    pub mod palette_rows;
+    pub mod palette_view;
+}
 mod perf {
     pub mod overlay;
     pub mod report;
     pub mod stats;
 }
 mod projects {
+    pub mod issue_import;
+    pub mod issue_rules;
+    pub mod issues_tab;
+    pub mod json_tab;
+    pub mod project_rules;
     pub mod project_settings_dialog;
+    pub mod projects_dialog;
+    pub mod settings_tab_rules;
+    pub mod settings_tabs;
     pub mod settings_text;
     pub mod settings_writes;
 }
@@ -202,6 +231,7 @@ mod tasks {
 mod terminals {
     pub mod agent_panes;
     pub mod find_rules;
+    pub mod ghostty_font;
     pub mod pane_drop;
     pub mod pane_facts;
     pub mod pane_header;
@@ -211,6 +241,8 @@ mod terminals {
     pub mod shell_panes;
     pub mod terminal_cache;
     pub mod terminal_find;
+    pub mod terminal_font;
+    pub mod terminal_font_dialog;
     pub mod terminal_pane;
     pub mod terminal_tabs;
 }
@@ -243,13 +275,14 @@ use std::process::ExitCode;
 use std::sync::Arc;
 use std::time::Duration;
 
-use gpui::{App, UpdateGlobal};
-use settings::SettingsStore;
+use gpui::App;
 
 use app::assets::NatamuxAssets;
-use app::options::{Options, ThemeMode, USAGE};
+use app::options::{Options, USAGE};
+use app::sign_in::StartProblem;
 use app::source::Source;
-use natamux_client::{Client, Config};
+use app::view_state::{self, ViewState};
+use natamux_client::{Client, ClientError, Config};
 
 fn main() -> ExitCode {
     perf::report::mark_start();
@@ -278,7 +311,14 @@ fn start(options: &Options, cx: &mut App) -> anyhow::Result<()> {
         cx,
     );
     settings::init(cx);
-    apply_default_settings(options.theme, cx);
+    // The theme, the UI size and the terminal font of view.json apply before the first frame.
+    let fake = options.fake_daemon || options.shot.is_some();
+    let view = match view_state::folder() {
+        Some(folder) if !fake => view_state::load(&folder),
+        _ => ViewState::default(),
+    };
+    app::appearance::init(options.theme, cx);
+    app::appearance::apply(&view, cx);
     theme_settings::init(theme::LoadThemes::All(Box::new(NatamuxAssets)), cx);
     editor::init(cx);
     git::languages::init(cx);
@@ -323,34 +363,18 @@ fn start(options: &Options, cx: &mut App) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// The daemon, or why the app has none: the window then says so instead of a list.
-fn source(options: &Options) -> Result<Arc<Source>, String> {
+/// The daemon, or why the app has none: the window then asks for a token, or says why.
+fn source(options: &Options) -> Result<Arc<Source>, StartProblem> {
     // A shot never reads a real daemon.
     if options.fake_daemon || options.shot.is_some() {
         return Ok(Arc::new(Source::FakeDaemon));
     }
-    let client = Config::from_env()
-        .and_then(Client::new)
-        .map_err(|error| error.to_string())?;
-    Ok(Arc::new(Source::Daemon(Arc::new(client))))
-}
-
-// The flag wins over the system look, as a user setting would.
-fn apply_default_settings(mode: Option<ThemeMode>, cx: &mut App) {
-    let mode = match mode {
-        Some(ThemeMode::Light) => "light",
-        Some(ThemeMode::Dark) => "dark",
-        None => "system",
+    let access = app::sign_in::access_file();
+    let client = match Config::from_env_with(access.as_deref()) {
+        Err(ClientError::NoToken) => return Err(StartProblem::SignIn),
+        config => config.and_then(Client::new),
     };
-    let content = format!(
-        r#"{{
-            "theme": {{"mode": "{mode}", "light": "Natamux Light", "dark": "Natamux Dark"}},
-            "ui_font_family": "Inter",
-            "buffer_font_family": "JetBrains Mono",
-            "terminal": {{"font_family": "JetBrains Mono"}}
-        }}"#
-    );
-    SettingsStore::update_global(cx, |store, cx| {
-        let _ = store.set_user_settings(&content, cx);
-    });
+    client
+        .map(|client| Arc::new(Source::Daemon(Arc::new(client))))
+        .map_err(|error| StartProblem::Down(error.to_string()))
 }

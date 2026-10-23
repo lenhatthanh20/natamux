@@ -1,6 +1,7 @@
 use natamux_proto::projects::repo::LoadedSettings;
 
 use super::*;
+use crate::stages::editor_draft::parse_draft;
 use crate::stages::editor_fields::{ShellField, ShellKind};
 
 fn loaded(
@@ -124,36 +125,32 @@ fn has_the_four_create_issue_choices_in_order() {
 }
 
 #[test]
-fn a_file_the_app_cannot_read_starts_from_the_defaults_and_says_why() {
+fn a_file_the_app_cannot_read_keeps_its_text_and_the_json_tab_says_why() {
     // Regression (review of T-0151): the screen fell back to {} with Save on, so one Save
-    // replaced the whole file with {}.
+    // replaced the whole file with {}. Now the text stays and the draft does not parse.
     let base = base_of(&loaded(Some("{\"stages\": 3}"), Some("v1"), None, true));
-    assert_eq!(base.text, "{}");
-    assert!(base.unreadable);
-    assert!(
-        base.broken
-            .as_deref()
-            .is_some_and(|why| why.starts_with("The app cannot read it: stages:"))
-    );
+    assert_eq!(base.text, "{\"stages\": 3}");
+    assert_eq!(base.broken, None);
+    assert!(parse_draft(&base.text).is_err_and(|why| why.starts_with("stages:")));
     assert_eq!(base.version.as_deref(), Some("v1"));
 }
 
 #[test]
-fn save_stays_off_for_a_file_the_app_cannot_read_until_an_edit() {
+fn save_stays_off_for_a_file_the_app_cannot_read_until_it_is_fixed() {
     let base = base_of(&loaded(Some("{\"stages\": 3}"), Some("v1"), None, true));
-    assert!(!saves_unchanged(&base));
+    let readable = parse_draft(&base.text).is_ok();
     assert_eq!(
-        blocked_reason(true, 0, false, saves_unchanged(&base)),
-        Some("Nothing changed yet")
+        blocked_reason(readable, 1, false, base.broken.is_some()),
+        Some("Fix the JSON first")
     );
-    assert_eq!(blocked_reason(true, 0, true, saves_unchanged(&base)), None);
+    assert_eq!(blocked_reason(true, 0, true, false), None);
 }
 
 #[test]
 fn a_file_the_daemon_could_not_read_can_be_replaced_without_an_edit() {
     let base = base_of(&loaded(Some("{\"a\":"), Some("v1"), Some("bad JSON"), true));
-    assert!(!base.unreadable);
-    assert!(saves_unchanged(&base));
+    assert!(base.broken.is_some());
+    assert_eq!(blocked_reason(true, 0, false, base.broken.is_some()), None);
     let fine = base_of(&loaded(Some("{}"), Some("v1"), None, true));
-    assert!(!saves_unchanged(&fine));
+    assert!(fine.broken.is_none());
 }

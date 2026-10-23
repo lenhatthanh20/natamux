@@ -18,7 +18,8 @@ use ui::prelude::*;
 use super::dashboard_data::{BulkRuns, DashboardData, Link};
 use super::source::{Feed, Rows, Source};
 use super::view_rules::{
-    Entries, ShellRequest, WorkspaceTab, request_on_open, seen_after_list, toggle_pin, with_seen,
+    Entries, ShellRequest, WorkspaceTab, request_on_open, seen_after_list, toggle_pin, with_recent,
+    with_seen,
 };
 use super::view_state::{self, Layout, ViewState};
 use crate::components::toast_rules::{ToastTone, Toasts, toast_duration};
@@ -87,8 +88,6 @@ pub struct Dashboard {
     /// The sidebar filter text.
     pub filter: String,
     pub state_filter: Option<TaskState>,
-    /// The needs-you pill's filter: every task that needs the user, of any state.
-    pub needs_you: bool,
     pub sort: TaskSort,
     pub bulk: BulkRuns,
 }
@@ -136,7 +135,6 @@ impl Dashboard {
             terminal_readers: RefCell::new(BTreeMap::new()),
             filter: String::new(),
             state_filter: None,
-            needs_you: false,
             sort: None,
             bulk: BulkRuns::default(),
         };
@@ -313,6 +311,7 @@ impl Dashboard {
         self.workspace_tab = self.tab_on_open(&task.id);
         self.open_task = Some(task.id.clone());
         self.view.seen = with_seen(&self.view.seen, &[(&task.id, task.state)], true);
+        self.view.recent = with_recent(&self.view.recent, &task.id);
         self.save_view(cx);
         cx.emit(DashboardChange::Opened(Box::new(task)));
         cx.notify();
@@ -370,20 +369,11 @@ impl Dashboard {
     /// A chip filters to its state; the same chip again shows all.
     pub fn toggle_state_filter(&mut self, state: TaskState, cx: &mut Context<Self>) {
         self.state_filter = (self.state_filter != Some(state)).then_some(state);
-        self.needs_you = false;
         cx.notify();
     }
 
     pub fn set_state_filter(&mut self, state: Option<TaskState>, cx: &mut Context<Self>) {
         self.state_filter = state;
-        self.needs_you = false;
-        cx.notify();
-    }
-
-    /// The needs-you pill and the status bar's "N need you".
-    pub fn set_needs_you(&mut self, on: bool, cx: &mut Context<Self>) {
-        self.needs_you = on;
-        self.state_filter = None;
         cx.notify();
     }
 
@@ -492,3 +482,6 @@ mod git_writes;
 
 #[path = "tab_state.rs"]
 pub mod tabs;
+
+#[path = "dashboard_session.rs"]
+mod session;

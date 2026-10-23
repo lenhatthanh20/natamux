@@ -2,13 +2,10 @@
 //! `ProjectSettingsDialog.tsx`): what the screen starts from, the import question, and why Save is
 //! off.
 
-// The settings dialog uses these; they were ported first, with their tests.
-#![cfg_attr(not(test), allow(dead_code))]
-
 use natamux_proto::projects::repo::LoadedSettings;
 use natamux_proto::stages::capabilities::stage_name_of_id;
 
-use crate::stages::editor_draft::{RawSettings, format_settings, parse_draft, with_steps};
+use crate::stages::editor_draft::{RawSettings, format_settings, with_steps};
 use crate::stages::editor_fields::{ShellField, ShellKind};
 
 /// `CREATE_ISSUE_OPTIONS`: the value and the words of each choice.
@@ -28,17 +25,15 @@ pub const CREATE_ISSUE_OPTIONS: [(&str, &str); 4] = [
 /// A settings file is a few KiB. A bigger pick is the wrong file, and would slow the editor.
 pub const MAX_IMPORT_BYTES: usize = 1024 * 1024;
 
-/// What the screen started from: the text of the file and its version. A broken file starts from
-/// the defaults.
+/// What the screen started from: the text of the file and its version. A file the daemon could
+/// not read starts from the defaults; a file only the app cannot read keeps its text, and the
+/// JSON tab says why.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Base {
     pub text: String,
     pub version: Option<String>,
     pub broken: Option<String>,
     pub path: String,
-    /// The daemon read the file, but the Stages tab cannot (a field of a wrong type, or a value
-    /// of a newer core). `broken` says why.
-    pub unreadable: bool,
 }
 
 pub fn base_of(loaded: &LoadedSettings) -> Base {
@@ -53,28 +48,12 @@ pub fn base_of(loaded: &LoadedSettings) -> Base {
     } else {
         "{}".to_string()
     };
-    let mut base = Base {
+    Base {
         text,
         version: loaded.version.clone(),
         broken: loaded.error.clone(),
         path: loaded.path.clone(),
-        unreadable: false,
-    };
-    // Starting from {} without a word would let one Save replace the whole file with {}.
-    if base.broken.is_none()
-        && let Err(reason) = parse_draft(&base.text)
-    {
-        base.text = "{}".to_string();
-        base.broken = Some(format!("The app cannot read it: {reason}"));
-        base.unreadable = true;
     }
-    base
-}
-
-/// Save can replace the file without an edit: only a file the daemon could not read, which the
-/// screen shows as the defaults. A file only the app cannot read needs an edit first.
-pub fn saves_unchanged(base: &Base) -> bool {
-    base.broken.is_some() && !base.unreadable
 }
 
 fn shell_field_label(field: ShellKind) -> &'static str {

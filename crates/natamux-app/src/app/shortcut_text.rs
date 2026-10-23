@@ -43,8 +43,6 @@ pub fn keystroke(shortcut: &str, mac: bool) -> String {
     out.join("-")
 }
 
-// Kbd and tooltips draw keys with `components::input_rules::kbd_text`.
-#[cfg_attr(not(test), allow(dead_code))]
 /// The key as people read it: `⇧⌘↵` on macOS, `Ctrl+Shift+Enter` elsewhere.
 pub fn key_text(shortcut: &str, mac: bool) -> String {
     let parsed = parse(shortcut);

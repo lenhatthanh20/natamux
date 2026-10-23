@@ -23,125 +23,47 @@ pub const CHANGES_ANY: &str = "NatamuxChanges";
 /// The wrapper of the commit box.
 pub const COMMIT_BOX: &str = "NatamuxCommitBox";
 /// Where single keys work: outside text boxes and terminals.
-const SINGLE: &[&str] = &[BODY, LIST, DETAILS];
+pub(super) const SINGLE: &[&str] = &[BODY, LIST, DETAILS];
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Category {
-    App,
-    View,
-    Task,
-    Tools,
-}
-
-/// The menus of the menu bar, in their order.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum MenuName {
-    App,
-    View,
-    Task,
-    Tools,
-}
-
-impl MenuName {
-    pub const ALL: [MenuName; 4] = [
-        MenuName::App,
-        MenuName::View,
-        MenuName::Task,
-        MenuName::Tools,
-    ];
-
-    pub fn title(self) -> &'static str {
-        match self {
-            MenuName::App => "Natamux",
-            MenuName::View => "View",
-            MenuName::Task => "Task",
-            MenuName::Tools => "Tools",
-        }
-    }
-}
-
-#[cfg(test)]
-pub use super::command_when::CommandState;
-pub use super::command_when::When;
+pub use super::command_types::{Category, Command, MenuName, SheetGroup};
+pub(super) use super::command_types::{command, group, hidden, keys, menu, suggested, when};
+pub use super::command_when::{CommandState, When};
+pub use super::commands_app::APP_COMMANDS;
 pub use super::commands_files::FILE_COMMANDS;
 pub use super::commands_git::GIT_COMMANDS;
 pub use super::commands_stages::STAGE_COMMANDS;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Command {
-    pub id: &'static str,
-    pub title: &'static str,
-    pub category: Category,
-    /// As the web writes them, such as `Mod+B` (Mod is cmd on macOS, ctrl elsewhere). The first
-    /// one shows in menus and tooltips.
-    pub keys: &'static [&'static str],
-    /// Where the keys work. Empty: everywhere.
-    pub contexts: &'static [&'static str],
-    pub when: When,
-    /// The menu it shows in, and its section there.
-    pub menu: Option<(MenuName, u8)>,
-}
-
-pub(super) const fn command(id: &'static str, title: &'static str, category: Category) -> Command {
-    Command {
-        id,
-        title,
-        category,
-        keys: &[],
-        contexts: &[],
-        when: When::Always,
-        menu: None,
-    }
-}
-
-pub(super) const fn keys(
-    command: Command,
-    keys: &'static [&'static str],
-    contexts: &'static [&'static str],
-) -> Command {
-    Command {
-        keys,
-        contexts,
-        ..command
-    }
-}
-
-pub(super) const fn when(command: Command, when: When) -> Command {
-    Command { when, ..command }
-}
-
-pub(super) const fn menu(command: Command, name: MenuName, section: u8) -> Command {
-    Command {
-        menu: Some((name, section)),
-        ..command
-    }
-}
 
 const fn task_action(id: &'static str, title: &'static str, event: &'static str) -> Command {
     when(command(id, title, Category::Task), When::TaskAction(event))
 }
 
-use Category::{App, Task, Tools, View};
+use Category::{App, Task, Tools, View, Workspace};
 
 /// Screen 1 and the Tools menu. Ids are the web's where the web has the command.
 pub const COMMANDS: &[Command] = &[
     menu(
         keys(command("app.quit", "Quit Natamux", App), &["Mod+Q"], &[]),
         MenuName::App,
-        0,
+        1,
     ),
     // Global, but a terminal keeps Esc for its agent (owner, 2026-10-22): `terminal_keeps`.
     keys(
-        command(
-            "escape",
-            "Close the top layer, clear a field, or go back to All tasks",
-            App,
-        ),
+        hidden(group(
+            command(
+                "escape",
+                "Close the top layer, clear a field, or go back to All tasks",
+                App,
+            ),
+            SheetGroup::Global,
+        )),
         &["Escape"],
         &[],
     ),
     keys(
-        command("form.submit", "Submit the current form", App),
+        hidden(group(
+            command("form.submit", "Submit the current form", App),
+            SheetGroup::Global,
+        )),
         &["Mod+Enter"],
         &[DIALOG],
     ),
@@ -152,7 +74,11 @@ pub const COMMANDS: &[Command] = &[
         MenuName::View,
         0,
     ),
-    menu(command("view.agents", "Agents", View), MenuName::View, 0),
+    menu(
+        suggested(command("view.agents", "Agents", View)),
+        MenuName::View,
+        0,
+    ),
     menu(
         command("view.table", "Show tasks as a table", View),
         MenuName::View,
@@ -165,7 +91,10 @@ pub const COMMANDS: &[Command] = &[
     ),
     menu(
         keys(
-            command("sidebar.toggle", "Show or hide the sidebar", View),
+            group(
+                command("sidebar.toggle", "Show or hide the sidebar", View),
+                SheetGroup::Global,
+            ),
             &["Mod+B"],
             &[],
         ),
@@ -173,19 +102,35 @@ pub const COMMANDS: &[Command] = &[
         2,
     ),
     keys(
-        command("filter.focus", "Search the sidebar", View),
+        group(
+            command("filter.focus", "Search the sidebar", View),
+            SheetGroup::SingleKeys,
+        ),
         &["/"],
         SINGLE,
     ),
     keys(
-        command("workspace.new", "Start a task", Task),
+        suggested(group(
+            command("workspace.new", "Start a task", Task),
+            SheetGroup::SingleKeys,
+        )),
         &["c"],
         SINGLE,
     ),
-    keys(command("task.new", "Add a task", Task), &["n"], SINGLE),
+    keys(
+        suggested(group(
+            command("task.new", "Add a task", Task),
+            SheetGroup::SingleKeys,
+        )),
+        &["n"],
+        SINGLE,
+    ),
     when(
         keys(
-            command("list.next", "Select the next task", Task),
+            hidden(group(
+                command("list.next", "Select the next task", Task),
+                SheetGroup::SingleKeys,
+            )),
             &["j", "ArrowDown"],
             SINGLE,
         ),
@@ -193,7 +138,10 @@ pub const COMMANDS: &[Command] = &[
     ),
     when(
         keys(
-            command("list.previous", "Select the previous task", Task),
+            hidden(group(
+                command("list.previous", "Select the previous task", Task),
+                SheetGroup::SingleKeys,
+            )),
             &["k", "ArrowUp"],
             SINGLE,
         ),
@@ -201,38 +149,58 @@ pub const COMMANDS: &[Command] = &[
     ),
     // The web's `list.ends` and `tree.collapse` are one entry for two keys; here each key has
     // its own action.
-    keys(command("list.first", "First row", App), &["Home"], &[LIST]),
-    keys(command("list.last", "Last row", App), &["End"], &[LIST]),
+    keys(
+        hidden(command("list.first", "First row", App)),
+        &["Home"],
+        &[LIST],
+    ),
+    keys(
+        hidden(command("list.last", "Last row", App)),
+        &["End"],
+        &[LIST],
+    ),
     when(
         keys(
-            command("task.open", "Open the selected task", Task),
+            hidden(group(
+                command("task.open", "Open the selected task", Task),
+                SheetGroup::SingleKeys,
+            )),
             &["Enter"],
             SINGLE,
         ),
         When::HasSelection,
     ),
     keys(
-        command("tree.collapse", "Collapse a group", App),
+        hidden(command("tree.collapse", "Collapse a group", App)),
         &["ArrowLeft"],
         &[TREE],
     ),
     keys(
-        command("tree.expand", "Expand a group", App),
+        hidden(command("tree.expand", "Expand a group", App)),
         &["ArrowRight"],
         &[TREE],
     ),
     keys(
-        command("row.rename", "Rename the workspace", App),
+        hidden(group(
+            command("row.rename", "Rename the workspace", App),
+            SheetGroup::ListsAndTrees,
+        )),
         &["F2"],
         &[TREE],
     ),
     keys(
-        command("row.menu", "Open the menu of the row", App),
+        hidden(group(
+            command("row.menu", "Open the menu of the row", App),
+            SheetGroup::ListsAndTrees,
+        )),
         &["Shift+F10", "ContextMenu"],
         &[LIST],
     ),
     keys(
-        command("row.remove", "Remove the workspace (asks first)", App),
+        hidden(group(
+            command("row.remove", "Remove the workspace (asks first)", App),
+            SheetGroup::ListsAndTrees,
+        )),
         &["Delete"],
         &[TREE],
     ),
@@ -259,26 +227,35 @@ pub const COMMANDS: &[Command] = &[
     task_action("task.task.blocked", "Block", "task.blocked"),
     task_action("task.agent.resumed", "Resume the agent", "agent.resumed"),
     keys(
-        task_action("task.review.approved", "Approve", "review.approved"),
+        group(
+            task_action("task.review.approved", "Approve", "review.approved"),
+            SheetGroup::SingleKeys,
+        ),
         &["a"],
         SINGLE,
     ),
     keys(
-        task_action(
-            "task.review.changes-requested",
-            "Request changes",
-            "review.changes-requested",
+        group(
+            task_action(
+                "task.review.changes-requested",
+                "Request changes",
+                "review.changes-requested",
+            ),
+            SheetGroup::SingleKeys,
         ),
         &["r"],
         SINGLE,
     ),
     task_action("task.task.unblocked", "Unblock", "task.unblocked"),
     task_action("task.task.retried", "Retry", "task.retried"),
-    // Screen 3: the details panel. The web runs the stage commands from its palette, which
-    // comes with screen 7; until then they are in the Task menu.
+    // Screen 3: the details panel. The web runs the stage commands from its palette; the app
+    // has them in the Task menu too.
     menu(
         keys(
-            command("details.toggle", "Show or hide the details", View),
+            group(
+                command("details.toggle", "Show or hide the details", View),
+                SheetGroup::Global,
+            ),
             &["Mod+Alt+B"],
             &[],
         ),
@@ -287,10 +264,13 @@ pub const COMMANDS: &[Command] = &[
     ),
     when(
         keys(
-            command(
-                "task.details",
-                "Show or hide the details of the selected task",
-                Task,
+            group(
+                command(
+                    "task.details",
+                    "Show or hide the details of the selected task",
+                    Task,
+                ),
+                SheetGroup::SingleKeys,
             ),
             &["i"],
             SINGLE,
@@ -299,20 +279,23 @@ pub const COMMANDS: &[Command] = &[
     ),
     when(
         keys(
-            command("task.edit", "Edit the selected task", Task),
+            group(
+                command("task.edit", "Edit the selected task", Task),
+                SheetGroup::SingleKeys,
+            ),
             &["e"],
             SINGLE,
         ),
         When::HasSelection,
     ),
     menu(
-        command("progress.show", "Show the task progress", Task),
+        command("progress.show", "Show the task progress", Workspace),
         MenuName::Task,
         0,
     ),
     menu(
         when(
-            command("stage.approve", "Approve the stage anyway", Task),
+            command("stage.approve", "Approve the stage anyway", Workspace),
             When::StageOpen,
         ),
         MenuName::Task,
@@ -320,7 +303,7 @@ pub const COMMANDS: &[Command] = &[
     ),
     menu(
         when(
-            command("stage.report", "Mark the stage as done", Task),
+            command("stage.report", "Mark the stage as done", Workspace),
             When::StageOpen,
         ),
         MenuName::Task,
@@ -328,7 +311,7 @@ pub const COMMANDS: &[Command] = &[
     ),
     menu(
         when(
-            command("stage.skip", "Skip the stage", Task),
+            command("stage.skip", "Skip the stage", Workspace),
             When::StageOpen,
         ),
         MenuName::Task,
@@ -339,7 +322,7 @@ pub const COMMANDS: &[Command] = &[
             command(
                 "stage.send-back",
                 "Send the task back to an earlier stage",
-                Task,
+                Workspace,
             ),
             When::StageOpen,
         ),
@@ -350,33 +333,42 @@ pub const COMMANDS: &[Command] = &[
     command("task.fan-out", "Run more tries\u{2026}", Task),
     // Screen 2: the panes of a workspace and the Agents grid (`paneCommands`).
     keys(
-        command(
-            "pane.maximize",
-            "Maximize or restore the focused pane",
-            View,
+        group(
+            command(
+                "pane.maximize",
+                "Maximize or restore the focused pane",
+                Workspace,
+            ),
+            SheetGroup::Panes,
         ),
         &["Mod+Shift+Enter"],
         &[],
     ),
     keys(
-        command("shell.new", "New terminal", Task),
+        group(
+            command("shell.new", "New terminal", Workspace),
+            SheetGroup::Panes,
+        ),
         &["Ctrl+Shift+`"],
         &[],
     ),
     // Inside a terminal only, so the shell keeps Ctrl+F elsewhere.
     keys(
-        command("terminal.find", "Find in the terminal", View),
+        hidden(group(
+            command("terminal.find", "Find in the terminal", Workspace),
+            SheetGroup::Panes,
+        )),
         &["Mod+F", "Mod+Shift+F"],
         &[TERMINAL],
     ),
     // Esc in the find bar is the global `escape`: the bar takes it before the shell.
     keys(
-        command("find.next", "Next match", View),
+        hidden(command("find.next", "Next match", View)),
         &["Enter"],
         &[TERMINAL_FIND],
     ),
     keys(
-        command("find.previous", "Previous match", View),
+        hidden(command("find.previous", "Previous match", View)),
         &["Shift+Enter"],
         &[TERMINAL_FIND],
     ),
@@ -435,16 +427,17 @@ pub const COMMANDS: &[Command] = &[
         2,
     ),
     keys(
-        command("tools.ime-submit", "Check the typed word", Tools),
+        hidden(command("tools.ime-submit", "Check the typed word", Tools)),
         &["Enter"],
         &[IME_CHECK],
     ),
 ];
 
-/// Every command: this file's, then screen 4's (`commands_git.rs`).
+/// Every command: this file's, then those of the later screens.
 pub fn all_commands() -> impl Iterator<Item = &'static Command> {
     COMMANDS
         .iter()
+        .chain(APP_COMMANDS)
         .chain(GIT_COMMANDS)
         .chain(STAGE_COMMANDS)
         .chain(FILE_COMMANDS)

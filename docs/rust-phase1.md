@@ -31,8 +31,9 @@ The app is not signed yet. If MDM blocks it, ask IT first.
 The app finds the daemon as the `natamux` command does:
 
 - `NATAMUX_URL` and `NATAMUX_TOKEN`, when set;
-- else `http://127.0.0.1:4317` and the token the Electron app saved (`~/Library/Application Support/Natamux/daemon-token`).
-- In a task's terminal (`NATAMUX_TASK_ID` is set), `NATAMUX_TOKEN` is the agent token of that daemon run. It cannot pass gates, and it changes when the daemon restarts. So there the saved token wins when there is one. To point the app at another daemon from a task's terminal, `unset NATAMUX_TASK_ID` first.
+- else `http://127.0.0.1:4317` and a saved token: first the one typed into the app's Sign in (`daemon-access` in the app's data folder, `~/Library/Application Support/Natamux Native/` on macOS), then the one the Electron app saved (`~/Library/Application Support/Natamux/daemon-token`).
+- In a task's terminal (`NATAMUX_TASK_ID` is set), `NATAMUX_TOKEN` is the agent token of that daemon run. It cannot pass gates, and it changes when the daemon restarts. So there the saved tokens win when there is one. To point the app at another daemon from a task's terminal, `unset NATAMUX_TASK_ID` first.
+- With no token, or when the daemon refuses the token (401), the app shows Sign in (screen 7, `rust-phase3.md`). Connect checks the typed token with the task list and keeps it in `daemon-access` (mode 0600) only when the daemon takes it. After a 401 the app deletes its own `daemon-access`; the Electron app's file and the environment are never changed.
 
 So with the Electron app open, the native app shows the same tasks. If 4317 was busy, Electron picked another port: start the native app from a shell with `NATAMUX_URL` set. Only `http://` works.
 
@@ -40,7 +41,7 @@ So with the Electron app open, the native app shows the same tasks. If 4317 was 
 
 | Flag | Does |
 |---|---|
-| `--smoke` | Draws a frame, types `abc` into the filter box, checks it, quits. Exit 1 on failure |
+| `--smoke` | Draws a frame, types `abc` into the first text box (the sidebar filter, or the token field of Sign in when there is no token), checks it, quits. Exit 1 on failure |
 | `--theme light\|dark` | A fixed theme instead of the system look |
 | `--size WxH` | Window size, at the top left of the screen |
 | `--hold SECONDS` | Quits after that long |
