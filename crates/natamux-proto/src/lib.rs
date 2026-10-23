@@ -31,14 +31,17 @@ pub mod stages {
 pub mod tasks {
     pub mod attachments;
     pub mod job;
+    pub mod ports;
     pub mod task;
     pub mod template;
 }
 pub mod terminals {
     pub mod ended;
+    pub mod history;
     pub mod list;
     pub mod messages;
     pub mod query;
+    pub mod text;
 }
 pub mod workspaces {
     pub mod changes;
