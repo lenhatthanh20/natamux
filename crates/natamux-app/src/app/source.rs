@@ -361,6 +361,9 @@ mod git;
 #[path = "source_settings.rs"]
 mod settings;
 
+#[path = "source_projects.rs"]
+mod projects;
+
 #[path = "source_files.rs"]
 mod files;
 

@@ -13,7 +13,7 @@ use ui::{ButtonLike, TintColor, prelude::*};
 use super::add_subtask_dialog;
 use super::frozen_order::{HOLD_MS, freeze_order, is_frozen};
 use super::quick_add::{QuickAdd, StartTask};
-use super::task_attention::{filter_tasks, needs_me_tasks};
+use super::task_attention::filter_tasks;
 use super::task_board::TaskBoard;
 use super::task_sort::sort_tasks;
 use super::task_table::{KeyMoved, TaskTable};
@@ -127,14 +127,11 @@ impl TaskView {
         let (sorted, key) = {
             let dashboard = self.dashboard.read(cx);
             let data = &dashboard.data;
-            let mut visible = filter_tasks(&data.tasks, dashboard.state_filter, &dashboard.filter);
-            if dashboard.needs_you {
-                visible = needs_me_tasks(&visible, now_ms());
-            }
+            let visible = filter_tasks(&data.tasks, dashboard.state_filter, &dashboard.filter);
             let sorted = sort_tasks(&visible, dashboard.sort, &data.diff_stats, &data.usage);
             let key = format!(
-                "{:?}|{:?}|{}|{}",
-                dashboard.sort, dashboard.state_filter, dashboard.needs_you, dashboard.filter
+                "{:?}|{:?}|{}",
+                dashboard.sort, dashboard.state_filter, dashboard.filter
             );
             (sorted, key)
         };
@@ -284,24 +281,14 @@ impl Render for TaskView {
                 Link::Down { reason, retrying } => Some((reason.as_str(), *retrying)),
                 _ => None,
             };
-            let content = match main_content(
+            let content = main_content(
                 data.loaded,
                 down,
                 data.tasks.len(),
                 self.shown_ids.len(),
                 &dashboard.filter,
                 dashboard.state_filter,
-            ) {
-                MainContent::FilterMiss { body, .. }
-                    if dashboard.needs_you && dashboard.filter.trim().is_empty() =>
-                {
-                    MainContent::FilterMiss {
-                        title: "No tasks need you".into(),
-                        body,
-                    }
-                }
-                content => content,
-            };
+            );
             (content, dashboard.view().layout != Layout::Table)
         };
         let loading = content == MainContent::Loading;

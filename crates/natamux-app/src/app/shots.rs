@@ -13,6 +13,7 @@ use super::fake_daemon::{self, FakeLink, NOW, PINNED};
 use super::options::Shot;
 use super::shortcuts::{FindInTerminal, OpenRowMenu};
 use super::shots_files;
+use super::shots_settings;
 use super::shots_stages;
 use super::view_rules::{DetailsView, WorkspaceTab};
 use super::view_state::{Layout, ViewState};
@@ -75,6 +76,7 @@ pub fn prepare(shot: Shot) {
     if shot == Shot::WorkspacePreparing {
         fake_daemon::shared().set_preparing(NO_WORKSPACE, PreparingStep::Fetch);
     }
+    shots_settings::prepare(shot);
 }
 
 pub fn run(handle: WindowHandle<Root>, shot: Shot, cx: &mut App) {
@@ -93,6 +95,10 @@ pub fn run(handle: WindowHandle<Root>, shot: Shot, cx: &mut App) {
         }
         if shots_files::is_files_shot(shot) {
             shots_files::run(handle, shot, cx).await;
+            return;
+        }
+        if shots_settings::is_screen7_shot(shot) {
+            shots_settings::run(handle, shot, cx).await;
             return;
         }
         if let Err(error) = handle.update(cx, |root, window, cx| enter(shot, root, window, cx)) {
@@ -139,6 +145,8 @@ fn view_of(shot: Shot) -> ViewState {
         agent_panes: agents,
         ..ViewState::default()
     };
+    // The palette lists the workspaces opened last.
+    view.recent = vec![RUNNING.to_string(), REVIEWED.to_string()];
     // The Ask agent shot shows the inline diff; the others keep side by side.
     view.diff.side_by_side = shot != Shot::WorkspaceChangesAsk;
     view

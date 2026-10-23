@@ -143,8 +143,8 @@ impl Root {
             self.title = title;
         }
         let show_waiting =
-            |root: &mut Root, _: &ClickEvent, _: &mut Window, cx: &mut Context<Root>| {
-                root.show_needs_you(cx)
+            |root: &mut Root, _: &ClickEvent, window: &mut Window, cx: &mut Context<Root>| {
+                root.show_needs_you(window, cx)
             };
         let details = (!dashboard.agents_open && dashboard.details_task().is_some())
             .then(|| self.details_shown(window, cx));
@@ -171,7 +171,8 @@ impl Root {
                     root.dashboard
                         .update(cx, |dashboard, cx| dashboard.toggle_notify(cx))
                 }),
-            );
+            )
+            .account(self.dashboard.clone());
         (title_bar, status_bar)
     }
 
@@ -243,6 +244,15 @@ impl Root {
 impl Render for Root {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let font = theme_settings::setup_ui_font(window, cx);
+        if let Some(sign_in) = &self.sign_in {
+            return div()
+                .size_full()
+                .font(font)
+                .text_color(cx.theme().colors().text)
+                .child(sign_in.clone())
+                .child(self.toaster.clone())
+                .into_any_element();
+        }
         let width = f32::from(window.viewport_size().width);
         let docked = self.layout(window, cx).sidebar == SidebarMode::Docked;
         if docked {
@@ -260,7 +270,7 @@ impl Render for Root {
         if self.focus.is_focused(window) {
             context.add("body");
         }
-        let shell = Self::task_actions(v_flex(), cx);
+        let shell = Self::settings_actions(Self::task_actions(v_flex(), cx), cx);
         let colors = cx.theme().colors();
         shell
             .size_full()
@@ -309,6 +319,8 @@ impl Render for Root {
             .children(overlay::render(cx))
             .child(self.menus.clone())
             .child(self.dialogs.clone())
+            .child(self.palette.clone())
             .child(self.toaster.clone())
+            .into_any_element()
     }
 }

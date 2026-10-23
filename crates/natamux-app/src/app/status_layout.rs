@@ -2,9 +2,9 @@
 //! how the status bar loses labels and items as it gets narrow. Ids keep the order they were added
 //! in, as the sets of the web do.
 
-// Ported with their tests (spec D11); the bar uses `forced_by_width` until it measures overflow.
-#![cfg_attr(not(test), allow(dead_code))]
-
+// Ported with their tests (spec D11). The bar uses only `forced_by_width` until it measures
+// overflow, so the measured condensing below (marked) is for tests until then.
+#[cfg_attr(not(test), allow(dead_code))]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StatusItem {
     pub id: &'static str,
@@ -16,6 +16,7 @@ pub struct StatusItem {
     pub folds: bool,
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 impl StatusItem {
     pub fn new(id: &'static str, priority: u32, has_label: bool) -> Self {
         Self {
@@ -27,6 +28,7 @@ impl StatusItem {
     }
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum StepKind {
     Label,
@@ -41,6 +43,7 @@ pub struct Condensed {
     pub folded: Vec<&'static str>,
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 fn add(list: &mut Vec<&'static str>, id: &'static str) {
     if !list.contains(&id) {
         list.push(id);
@@ -49,6 +52,7 @@ fn add(list: &mut Vec<&'static str>, id: &'static str) {
 
 /// Every step takes something away. Labels go first, lowest priority first, then the items
 /// themselves go into the menu in the same order.
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn condense_steps(items: &[StatusItem]) -> Vec<(&'static str, StepKind)> {
     let mut low_first: Vec<&StatusItem> = items.iter().collect();
     // Stable, like the web's sort: equal priorities keep their order.
@@ -65,6 +69,7 @@ pub fn condense_steps(items: &[StatusItem]) -> Vec<(&'static str, StepKind)> {
 }
 
 /// The state after `level` steps. Level 0 shows everything in full.
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn condense(items: &[StatusItem], level: usize) -> Condensed {
     let mut out = Condensed::default();
     for (id, kind) in condense_steps(items).into_iter().take(level) {
@@ -77,6 +82,7 @@ pub fn condense(items: &[StatusItem], level: usize) -> Condensed {
 }
 
 /// How many steps exist, so the bar knows when nothing more can be taken away.
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn max_condense_level(items: &[StatusItem]) -> usize {
     condense_steps(items).len()
 }
@@ -97,6 +103,7 @@ pub fn forced_by_width(width: Option<f32>) -> Condensed {
 }
 
 /// The width rules and the measured condensing, put together.
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn merge_condensed(a: &Condensed, b: &Condensed) -> Condensed {
     let mut out = a.clone();
     for id in &b.icon_only {

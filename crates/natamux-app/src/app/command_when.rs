@@ -4,13 +4,13 @@ use natamux_proto::tasks::task::TaskState;
 
 use crate::tasks::task_rules::actions_for;
 
-// `when` gates the command palette of a later screen.
-#[cfg_attr(not(test), allow(dead_code))]
-/// What the view knows when a key comes (`CommandState`).
+/// What the view knows when a key comes or the palette opens (`CommandState`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct CommandState {
-    /// A task fills the main area (the terminal pane until screen 2).
+    /// A task fills the main area.
     pub task_open: bool,
+    /// The Agents grid fills the main area.
+    pub agents_open: bool,
     pub has_selection: bool,
     pub selected_state: Option<TaskState>,
     /// The open task has a workspace (its tabs, files and diff).
@@ -20,7 +20,7 @@ pub struct CommandState {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum When {
     Always,
-    /// The task list is on screen, not an open task.
+    /// The task list is on screen, not an open task nor the Agents grid.
     ListShown,
     HasSelection,
     /// The selected task's state offers this event without asking first.
@@ -32,11 +32,10 @@ pub enum When {
 }
 
 impl When {
-    #[cfg_attr(not(test), allow(dead_code))]
     pub fn holds(self, state: &CommandState) -> bool {
         match self {
             When::Always => true,
-            When::ListShown => !state.task_open,
+            When::ListShown => !state.task_open && !state.agents_open,
             When::HasSelection => state.has_selection,
             When::TaskAction(event) => state.selected_state.is_some_and(|selected| {
                 actions_for(selected)

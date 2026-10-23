@@ -3,7 +3,7 @@
 //! reads the view's fields.
 
 use gpui::FontWeight;
-use ui::{Checkbox, Tooltip, prelude::*};
+use ui::{Checkbox, prelude::*};
 
 use super::TaskView;
 use crate::app::view_state::Layout;
@@ -46,7 +46,6 @@ impl TaskView {
                     .weight(FontWeight::SEMIBOLD),
             )
             .child(CountBadge::new(count))
-            .children(dashboard.needs_you.then(|| self.needs_you_chip()))
             .child(filter)
             .child(
                 h_flex()
@@ -97,18 +96,5 @@ impl TaskView {
             },
         )
         .icon_only(narrow)
-    }
-
-    /// The needs-you pill's filter is on; a click shows every task again.
-    fn needs_you_chip(&self) -> Button {
-        let dashboard = self.dashboard.clone();
-        Button::new("needs-you-chip", "Needs you")
-            .style(ButtonStyle::Subtle)
-            .toggle_state(true)
-            .end_icon(Icon::new(IconName::Close).size(IconSize::XSmall))
-            .tooltip(Tooltip::text("Show every task"))
-            .on_click(move |_, _, cx| {
-                dashboard.update(cx, |dashboard, cx| dashboard.set_needs_you(false, cx))
-            })
     }
 }

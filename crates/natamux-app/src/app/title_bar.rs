@@ -1,7 +1,7 @@
 //! The title bar of docs/ui-spec.md 3.1 (`features/app/TitleBar.tsx`): sidebar toggle, wordmark,
 //! breadcrumb, needs-you pill and Start a task. On macOS it is the window's drag area, with a gutter
-//! for the traffic lights, and the details toggle at the right. The command center comes with
-//! screen 7.
+//! for the traffic lights, and the details toggle at the right. The command
+//! center in the middle opens the palette.
 
 use std::rc::Rc;
 
@@ -12,8 +12,8 @@ use ui::{ButtonLike, Tooltip, prelude::*};
 
 use super::commands::shortcut_of;
 use super::shell_rules::{Crumb, needs_you_text};
-use super::shortcuts::{NewWorkspace, ToggleDetails, ToggleSidebar};
-use crate::components::chips::tip_with_keys;
+use super::shortcuts::{NewWorkspace, OpenPalette, ToggleDetails, ToggleSidebar};
+use crate::components::chips::{Kbd, tip_with_keys};
 use crate::components::colors::signal;
 
 pub const TITLE_BAR_HEIGHT: f32 = 36.;
@@ -106,6 +106,42 @@ fn details_button(details: Option<bool>) -> ButtonLike {
     )
     .toggle_state(details == Some(true))
     .disabled(details.is_none())
+}
+
+/// The command center: a search field that opens the palette, `clamp(200, 36vw, 520)` wide.
+fn command_center(window_width: Pixels, cx: &App) -> impl IntoElement {
+    let colors = cx.theme().colors();
+    let width = (window_width * 0.36).max(px(200.)).min(px(520.));
+    let keys = shortcut_of("palette.open").unwrap_or("Mod+K");
+    h_flex()
+        .id("command-center")
+        .flex_shrink_1()
+        .min_w_0()
+        .w(width)
+        .h(px(26.))
+        .px(px(10.))
+        .gap_2()
+        .rounded_md()
+        .border_1()
+        .border_color(colors.border)
+        .bg(colors.editor_background)
+        .cursor_pointer()
+        .hover(|style| style.border_color(colors.border_focused))
+        .tooltip(command_tip("Search or run a command", "palette.open"))
+        .on_click(|_, window, cx| window.dispatch_action(OpenPalette.boxed_clone(), cx))
+        .child(
+            Icon::from_path("icons/lucide/search.svg")
+                .size(IconSize::Small)
+                .color(Color::Muted),
+        )
+        .child(
+            div().min_w_0().flex_1().child(
+                Label::new("Search or run a command")
+                    .color(Color::Muted)
+                    .truncate(),
+            ),
+        )
+        .child(Kbd::new(keys))
 }
 
 fn render_crumb(crumb: Crumb, cx: &App) -> AnyElement {
@@ -212,6 +248,7 @@ impl RenderOnce for TitleBar {
             .child(
                 h_flex()
                     .flex_1()
+                    .flex_basis(px(0.))
                     .min_w_0()
                     .gap_1p5()
                     .child(
@@ -230,12 +267,26 @@ impl RenderOnce for TitleBar {
                     })
                     .child(div().min_w_0().flex_1().child(render_crumb(self.crumb, cx))),
             )
+            .when(self.wide, |this| {
+                this.child(command_center(window.viewport_size().width, cx))
+            })
             .child(
                 h_flex()
-                    .flex_none()
+                    .flex_1()
+                    .flex_basis(px(0.))
+                    .justify_end()
                     .gap_1()
                     .when(self.needs_you > 0, |this| {
                         this.child(render_pill(self.needs_you, self.on_needs_you, cx))
+                    })
+                    .when(!self.wide, |this| {
+                        this.child(command_button(
+                            "command-center",
+                            "search",
+                            "Search or run a command",
+                            "palette.open",
+                            OpenPalette,
+                        ))
                     })
                     .child(command_button(
                         "start-task",

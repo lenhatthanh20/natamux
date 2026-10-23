@@ -24,11 +24,34 @@ impl Config {
     /// token: it may not pass gates and is new after each daemon restart. There the saved token
     /// wins when there is one.
     pub fn from_env() -> Result<Config, ClientError> {
+        Config::from_env_with(None)
+    }
+
+    /// `from_env` with the app's own saved token read before the Electron app's.
+    pub fn from_env_with(app_file: Option<&Path>) -> Result<Config, ClientError> {
+        let electron = electron_token_file();
+        let files: Vec<&Path> = app_file.into_iter().chain(electron.as_deref()).collect();
         resolve(
             |name| std::env::var(name).ok(),
-            electron_token_file().as_deref(),
+            &files,
             |path| std::fs::read_to_string(path).ok(),
         )
+    }
+
+    /// The daemon's address with no token yet: Sign in starts from it when no token was found.
+    pub fn without_token() -> Result<Config, ClientError> {
+        Ok(Config {
+            base_url: base_url_of(|name| std::env::var(name).ok())?,
+            token: String::new(),
+        })
+    }
+
+    /// The same daemon with another token (the Sign in check).
+    pub fn with_token(&self, token: &str) -> Config {
+        Config {
+            base_url: self.base_url.clone(),
+            token: token.trim().to_string(),
+        }
     }
 
     /// The `ws://` address of a daemon path, from `base_url`.
@@ -41,9 +64,44 @@ impl Config {
     }
 }
 
+/// Saves the token the user typed, so the next start finds it. The file is private to the user and
+/// is replaced whole, never half written.
+pub fn save_access(path: &Path, token: &str) -> std::io::Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let mut partial = path.as_os_str().to_owned();
+    partial.push(".partial");
+    let partial = PathBuf::from(partial);
+    let mut file = open_private(&partial)?;
+    std::io::Write::write_all(&mut file, token.trim().as_bytes())?;
+    file.sync_all()?;
+    std::fs::rename(&partial, path)
+}
+
+/// A new file only the user can read from the first byte on: a mode set after the write would
+/// leave the token readable by others for a moment. A partial file left by a crash goes first,
+/// as it may be wider.
+fn open_private(path: &Path) -> std::io::Result<std::fs::File> {
+    forget_access(path)?;
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+    options.open(path)
+}
+
+/// Removes the saved token. A file that is not there is fine.
+pub fn forget_access(path: &Path) -> std::io::Result<()> {
+    match std::fs::remove_file(path) {
+        Err(error) if error.kind() != std::io::ErrorKind::NotFound => Err(error),
+        _ => Ok(()),
+    }
+}
+
 fn resolve(
     env: impl Fn(&str) -> Option<String>,
-    token_file: Option<&Path>,
+    token_files: &[&Path],
     read: impl Fn(&Path) -> Option<String>,
 ) -> Result<Config, ClientError> {
     let set = |name: &str| {
@@ -51,18 +109,13 @@ fn resolve(
             .map(|value| value.trim().to_string())
             .filter(|v| !v.is_empty())
     };
-    let base_url = set("NATAMUX_URL")
-        .unwrap_or_else(|| DEFAULT_URL.to_string())
-        .trim_end_matches('/')
-        .to_string();
-    if !base_url.starts_with("http://") {
-        return Err(ClientError::BadUrl(base_url));
-    }
+    let base_url = base_url_of(&env)?;
     let saved = || {
-        token_file
-            .and_then(&read)
-            .map(|text| text.trim().to_string())
-            .filter(|token| !token.is_empty())
+        token_files.iter().find_map(|path| {
+            read(path)
+                .map(|text| text.trim().to_string())
+                .filter(|token| !token.is_empty())
+        })
     };
     let token = if set("NATAMUX_TASK_ID").is_some() {
         saved().or_else(|| set("NATAMUX_TOKEN"))
@@ -71,6 +124,20 @@ fn resolve(
     }
     .ok_or(ClientError::NoToken)?;
     Ok(Config { base_url, token })
+}
+
+fn base_url_of(env: impl Fn(&str) -> Option<String>) -> Result<String, ClientError> {
+    let base_url = env("NATAMUX_URL")
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| DEFAULT_URL.to_string())
+        .trim_end_matches('/')
+        .to_string();
+    if base_url.starts_with("http://") {
+        Ok(base_url)
+    } else {
+        Err(ClientError::BadUrl(base_url))
+    }
 }
 
 /// The Electron app's user data folder is the OS's app data folder plus "Natamux".
@@ -113,7 +180,7 @@ mod tests {
                 ("NATAMUX_URL", "http://10.0.0.2:5000/api/"),
                 ("NATAMUX_TOKEN", " abc "),
             ]),
-            Some(Path::new(FILE)),
+            &[Path::new(FILE)],
             saved_token,
         )
         .unwrap();
@@ -123,7 +190,7 @@ mod tests {
 
     #[test]
     fn falls_back_to_the_default_url_and_the_electron_token() {
-        let config = resolve(env(&[]), Some(Path::new(FILE)), saved_token).unwrap();
+        let config = resolve(env(&[]), &[Path::new(FILE)], saved_token).unwrap();
         assert_eq!(config.base_url, DEFAULT_URL);
         assert_eq!(config.token, "from-the-file");
     }
@@ -138,7 +205,7 @@ mod tests {
                 ("NATAMUX_URL", "http://127.0.0.1:4317"),
                 ("NATAMUX_TOKEN", "agent-token"),
             ]),
-            Some(Path::new(FILE)),
+            &[Path::new(FILE)],
             saved_token,
         )
         .unwrap();
@@ -147,7 +214,7 @@ mod tests {
         // No saved token, as against the Docker daemon: the env's token is all there is.
         let config = resolve(
             env(&[("NATAMUX_TASK_ID", "T-1"), ("NATAMUX_TOKEN", "agent-token")]),
-            None,
+            &[],
             |_| None,
         )
         .unwrap();
@@ -158,14 +225,124 @@ mod tests {
     fn no_token_anywhere_is_an_error() {
         let none = |_: &Path| None;
         assert_eq!(
-            resolve(env(&[("NATAMUX_TOKEN", "  ")]), None, none),
+            resolve(env(&[("NATAMUX_TOKEN", "  ")]), &[], none),
             Err(ClientError::NoToken)
         );
         let empty = |_: &Path| Some("\n".to_string());
         assert_eq!(
-            resolve(env(&[]), Some(Path::new(FILE)), empty),
+            resolve(env(&[]), &[Path::new(FILE)], empty),
             Err(ClientError::NoToken)
         );
+    }
+
+    const APP: &str = "/data/natamux/daemon-access";
+
+    fn both(path: &Path) -> Option<String> {
+        match path.to_str()? {
+            APP => Some("from-the-app\n".into()),
+            FILE => Some("from-the-file\n".into()),
+            _ => None,
+        }
+    }
+
+    fn files() -> [&'static Path; 2] {
+        [Path::new(APP), Path::new(FILE)]
+    }
+
+    #[test]
+    fn the_app_file_comes_before_the_electron_file() {
+        let config = resolve(env(&[]), &files(), both).unwrap();
+        assert_eq!(config.token, "from-the-app");
+        // Outside a task terminal the env still wins.
+        let config = resolve(env(&[("NATAMUX_TOKEN", "e")]), &files(), both).unwrap();
+        assert_eq!(config.token, "e");
+    }
+
+    #[test]
+    fn in_a_task_terminal_the_files_win_in_order_then_the_env() {
+        let task = [("NATAMUX_TASK_ID", "T-1"), ("NATAMUX_TOKEN", "agent")];
+        assert_eq!(
+            resolve(env(&task), &files(), both).unwrap().token,
+            "from-the-app"
+        );
+        let only_electron = |path: &Path| both(path).filter(|_| path == Path::new(FILE));
+        assert_eq!(
+            resolve(env(&task), &files(), only_electron).unwrap().token,
+            "from-the-file"
+        );
+        assert_eq!(
+            resolve(env(&task), &files(), |_| None).unwrap().token,
+            "agent"
+        );
+    }
+
+    #[test]
+    fn a_blank_app_file_is_skipped() {
+        let blank_app = |path: &Path| {
+            if path == Path::new(APP) {
+                Some(" \n".to_string())
+            } else {
+                both(path)
+            }
+        };
+        let config = resolve(env(&[]), &files(), blank_app).unwrap();
+        assert_eq!(config.token, "from-the-file");
+    }
+
+    fn scratch(name: &str) -> PathBuf {
+        let dir =
+            std::env::temp_dir().join(format!("natamux-config-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        dir
+    }
+
+    #[test]
+    fn a_saved_token_reads_back_trimmed_and_forget_removes_it() {
+        let dir = scratch("save");
+        let path = dir.join("data").join("daemon-access");
+        save_access(&path, "  abc123\n").unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "abc123");
+        assert!(!dir.join("data/daemon-access.partial").exists());
+        save_access(&path, "next").unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "next");
+        forget_access(&path).unwrap();
+        assert!(!path.exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_saved_file_is_private_to_the_user() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = scratch("mode");
+        let path = dir.join("daemon-access");
+        save_access(&path, "t").unwrap();
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o600);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Review 1: the token was written with the default mask and made private only after.
+    #[cfg(unix)]
+    #[test]
+    fn the_partial_file_is_private_before_the_token_is_written() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = scratch("partial");
+        std::fs::create_dir_all(&dir).unwrap();
+        let partial = dir.join("daemon-access.partial");
+        std::fs::write(&partial, "old").unwrap();
+        std::fs::set_permissions(&partial, std::fs::Permissions::from_mode(0o644)).unwrap();
+        let file = open_private(&partial).unwrap();
+        let mode = file.metadata().unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o600);
+        assert_eq!(file.metadata().unwrap().len(), 0);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn forgetting_a_file_that_is_not_there_is_fine() {
+        let dir = scratch("missing");
+        assert!(forget_access(&dir.join("nothing")).is_ok());
     }
 
     #[test]
@@ -175,7 +352,7 @@ mod tests {
                 ("NATAMUX_URL", "https://example.com"),
                 ("NATAMUX_TOKEN", "t"),
             ]),
-            None,
+            &[],
             |_| None,
         );
         assert_eq!(

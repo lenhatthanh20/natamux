@@ -1,8 +1,6 @@
 # Rust phase 3: the desktop app
 
-Phase 3 of `plan-rust-migration.md`: the native app (`crates/natamux-app`) gets the screens of the React dashboard one by one, on today's Node daemon. This page covers the shared base and screen 1 (T-0146): the app shell, the sidebar, the task table and the task board; screen 2 (T-0148): the workspace with its terminals, and the Agents grid; screen 3 (T-0149): the details panel with the stage timeline and the gate actions; screen 4 (T-0150): the Changes and History tabs of the workspace; screen 5 (T-0151): the Progress layout of All tasks and the pipeline editor of Project settings; and screen 6 (T-0152): the Files tab of the details panel, the editor tab and the Docs tab of the workspace. It says how to get the beta, what CI checks, where the app differs from the React screens, and the gate results.
-
-Screen 7 comes in a later task, with its own spec and its own "Gate results" rows.
+Phase 3 of `plan-rust-migration.md`: the native app (`crates/natamux-app`) gets the screens of the React dashboard one by one, on today's Node daemon. This page covers the shared base and screen 1 (T-0146): the app shell, the sidebar, the task table and the task board; screen 2 (T-0148): the workspace with its terminals, and the Agents grid; screen 3 (T-0149): the details panel with the stage timeline and the gate actions; screen 4 (T-0150): the Changes and History tabs of the workspace; screen 5 (T-0151): the Progress layout of All tasks and the pipeline editor of Project settings; screen 6 (T-0152): the Files tab of the details panel, the editor tab and the Docs tab of the workspace; and screen 7 (T-0154), the last of phase 3: the command palette and the jump palette, the shortcut sheet, the account menu with the terminal font dialog, the Settings dialog, the Projects dialog, the Issues and JSON tabs of Project settings, Import issues, and Sign in. It says how to get the beta, what CI checks, where the app differs from the React screens, and the gate results.
 
 ## Decisions (owner, 2026-10-22)
 
@@ -69,7 +67,7 @@ The flags of `rust-phase1.md` stay. New:
 | `check` | `cargo xtask ci`: fmt, clippy, all tests, the layers, and the colour-literal check (below). `scripts/compare-shots.test.py`. A push to a branch whose name ends in `-check` runs only this job |
 | `app-macos` | Release build, `--smoke`, the GPUI-drew-it check, the screen-1 shots and their comparison, the size of the zipped app (at most 60 MiB), then attest and upload |
 | `app-windows` | Release build and `--smoke` still pass. Runs on PRs into `dev` and on `dev`; snapshot pushes to `natamux-ci/**` skip it, as it is the slowest job |
-| `live-daemon` | `natamux-client` against the daemon image of main, including the screen-1 flow (create a task, rename it, add a subtask, start a workspace, see `workspace.preparing` end, remove the workspace, delete the task) the screen-2 flow (create a task and its workspace, open Terminal 2 by socket, close it, read the ended terminals, push, remove the workspace, delete the task) the screen-3 flow (read the settings and the stage files, edit the notes and priority, set and clear a skip mark, skip a stage, send the task back, save a template, run one more try, then delete the try and the task) the screen-4 flow (`tests/live_daemon_git.rs`: a new workspace has no changes and a graph with commits; commit, the commit message and undo answer 409, a file or an image that did not change 404, a message to the agent is taken (or refused with 409 before the agent runs); the daemon keeps its worktrees in its own volume, so the test cannot change a file there), and the screen-6 flow (`tests/live_daemon_files.rs`: read the tree and a file, save it with its version, save with the old version (409), a path outside the worktree (409), write and read a stage file, list the attachments). Each flow cleans up after a failed step too |
+| `live-daemon` | `natamux-client` against the daemon image of main, including the screen-1 flow (create a task, rename it, add a subtask, start a workspace, see `workspace.preparing` end, remove the workspace, delete the task) the screen-2 flow (create a task and its workspace, open Terminal 2 by socket, close it, read the ended terminals, push, remove the workspace, delete the task) the screen-3 flow (read the settings and the stage files, edit the notes and priority, set and clear a skip mark, skip a stage, send the task back, save a template, run one more try, then delete the try and the task) the screen-4 flow (`tests/live_daemon_git.rs`: a new workspace has no changes and a graph with commits; commit, the commit message and undo answer 409, a file or an image that did not change 404, a message to the agent is taken (or refused with 409 before the agent runs); the daemon keeps its worktrees in its own volume, so the test cannot change a file there), and the screen-6 flow (`tests/live_daemon_files.rs`: read the tree and a file, save it with its version, save with the old version (409), a path outside the worktree (409), write and read a stage file, list the attachments), and the screen-7 flow (`tests/live_daemon_projects.rs`: a wrong token answers 401 and the right one the task list, the projects, adding a relative path or a project that is there already (400), the GitHub issues and their import (409 with no signed-in `gh` in the image), an Issues-tab setting saved and put back). Each flow cleans up after a failed step too |
 | `supply-chain` | `cargo deny`, `cargo audit`, `cargo vet` |
 
 Rust tasks push their CI snapshots to two shared branches (owner, 2026-10-23): `natamux-ci/rust` runs every job (the shots), `natamux-ci/rust-check` only `check`, for the compile loop. Their Actions caches stay warm from task to task, so they are kept at cleanup; a task deletes only the temp branches it made.
@@ -82,7 +80,7 @@ The tests in `cargo xtask ci` that guard the look and the keys:
 
 ## Screenshot baselines
 
-`app-macos` shoots each state in both themes (`light`, `dark`) at 1000x680 and 800x560: 57 states, 228 shots, and the 4 shots of the window check, 232 in all. Both sizes are under 1024, so the sidebar is a drawer there, and the details panel a sheet over main with a scrim. The runner's screen is 1024x768, so `tasks-table` and the states of screens 2 to 6 are shot at 1024x720 too, where the sidebar docks and the details panel is a sheet without a scrim: 84 more shots, 316 in all. The details panel docks only from 1280, so no shot shows it docked: run 39863431903 asked for 1280x720 and every one came out 1024x684 with the sheet, so that size was dropped (see "Screen 3: where it differs"). macOS keeps the window below the menu bar, so these come out 1024x684; the width, which docks the sidebar, holds. If a runner gives the window less than 1024 wide, the comparison says the sizes differ. A shot is the app's window itself (`screencapture -l` with the window id, found by the app's process id), so the menu bar is not in it and the status bar is. Baselines are the PNGs in `crates/natamux-app/tests/shots/`, named `<state>-<theme>-<size>.png`.
+`app-macos` shoots each state in both themes (`light`, `dark`) at 1000x680 and 800x560: 73 states, 292 shots, and the 4 shots of the window check, 296 in all. Both sizes are under 1024, so the sidebar is a drawer there, and the details panel a sheet over main with a scrim. The runner's screen is 1024x768, so `tasks-table` and the states of screens 2 to 7 are shot at 1024x720 too, where the sidebar docks and the details panel is a sheet without a scrim: 116 more shots, 412 in all. The details panel docks only from 1280, so no shot shows it docked: run 39863431903 asked for 1280x720 and every one came out 1024x684 with the sheet, so that size was dropped (see "Screen 3: where it differs"). macOS keeps the window below the menu bar, so these come out 1024x684; the width, which docks the sidebar, holds. If a runner gives the window less than 1024 wide, the comparison says the sizes differ. A shot is the app's window itself (`screencapture -l` with the window id, found by the app's process id), so the menu bar is not in it and the status bar is. Baselines are the PNGs in `crates/natamux-app/tests/shots/`, named `<state>-<theme>-<size>.png`.
 
 `scripts/compare-shots.py` compares a shot with its baseline. It fails when more than 0.5% of the pixels differ by more than 16 in a channel, or when the sizes differ, and it writes a diff image (differing pixels in red). The job summary lists each shot as matches, differs, or no baseline yet.
 
@@ -183,10 +181,33 @@ The fake's T-0143 has a worktree like the reference's storefront (`app/fake_file
 | `workspace-editor-conflict` | The draft after the agent wrote the file: the banner with Reload and Keep mine, Save off |
 | `terminal-drop-target` | T-0146's terminals, Terminal 1 with the drop outline, the details on Files. CI cannot drag, so the shot sets the pane's drop state |
 
+### Screen-7 states
+
+The fake's `natamux` project has three open GitHub issues (one imported already); the Import issues shot turns on the fake's "no `gh`" switch, as the reference's demo has no `gh`.
+
+| State | Shows |
+|---|---|
+| `palette` | All tasks, the palette empty: Needs you, Recent, Suggested, the footer |
+| `palette-query` | The palette with "stage": the matching commands, the matched letters in bold |
+| `palette-no-match` | A query with no match: Add task and Start task with the query |
+| `palette-jump` | The jump palette as the needs-you pill opens it: the Needs you scope chip, the waiting workspaces and their terminals |
+| `shortcuts` | The shortcut sheet: the groups of the keyboard map |
+| `account-menu` | The account menu above the status bar's Account item |
+| `terminal-font` | The terminal font dialog over T-0146's terminals |
+| `settings-dialog` | The Settings dialog: Appearance and Projects |
+| `projects` | The Projects dialog: the projects and the form with the daemon's worktree folder |
+| `project-settings` | Project settings of `natamux` as it opens: the three tabs, Stages |
+| `project-settings-tab-issues` | The Issues tab: the four choices, Manual with Default |
+| `project-settings-tab-json` | The JSON tab with the file |
+| `project-settings-json-error` | The JSON tab with text that is not JSON: the alert, "1 problem", Save off |
+| `import-issues` | Import issues with no `gh`: the error, Retry and Show details |
+| `sign-in` | Sign in with an empty field: Connect off |
+| `sign-in-error` | Sign in after the daemon refused the token: the message and the danger border |
+
 ## Where it differs from the React screens
 
-- **Hidden controls.** Controls that open a screen that is not built yet stay hidden until that screen ships: the command center button, Add a project, and the status bar's Projects, Import issues, Keyboard and Account items. The details toggle, **Show details** in the table's row menu and the status bar's notification item came back with screen 3; View changes, Commit…, and the Changes and History tabs with screen 4; the Progress layout and project Settings (the project menu and the card's gear) with screen 5; the Files tab, the Docs tab and key 4, **Show the open file**, **Show the files of the worktree** and the output chip of a stage card with screen 6. The needs-you pill shows and filters the list to the states that need you, but it opens no jump palette.
-- **View state in a file.** The React app keeps `natamux.*` in the browser's localStorage. The app keeps one `view.json` in its data folder (`~/Library/Application Support/Natamux Native/view.json`, `%APPDATA%` on Windows), written atomically: sidebar folds (at most 300), blurred projects, pinned tasks, layout, sidebar open and width, show finished, seen states (at most 1000) and the last base branch per project. A broken file is ignored and replaced.
+- **Hidden controls.** None since screen 7. Controls that opened a screen not built yet were hidden until it shipped: the details toggle, **Show details** in the table's row menu and the status bar's notification item came back with screen 3; View changes, Commit…, and the Changes and History tabs with screen 4; the Progress layout and project Settings (the project menu and the card's gear) with screen 5; the Files tab, the Docs tab and key 4, **Show the open file**, **Show the files of the worktree** and the output chip of a stage card with screen 6; the command center button, Add a project, the status bar's Projects, Import issues, Keyboard and Account items, and the jump palette of the needs-you pill with screen 7. Two parts of the web stay out on purpose: Sign out (the Electron app has none either) and the Desktop app part of Settings (see "Screen 7: where it differs").
+- **View state in a file.** The React app keeps `natamux.*` in the browser's localStorage. The app keeps one `view.json` in its data folder (`~/Library/Application Support/Natamux Native/view.json`, `%APPDATA%` on Windows), written atomically: sidebar folds (at most 300), blurred projects, pinned tasks, layout, sidebar open and width, show finished, seen states (at most 1000), the last base branch per project, and since screen 7 the theme, the UI size, the terminal font and the workspaces opened last (at most 20; the palette's Recent). A broken file is ignored and replaced. A token typed into Sign in is kept next to it in `daemon-access`.
 - **Pinned and folds are per app.** They are not shared with the browser or the Electron app, which keep their own.
 - **Opening a task.** Enter or a double click opens the task's workspace (screen 2, below). The terminal keeps Esc, so an agent can be stopped with it (owner, 2026-10-22). Cmd+[ on macOS, **View → All tasks** or the sidebar go back.
 - **Looks.** The widgets are Zed's `ui` kit with the Natamux theme, so spacing, focus rings and menus follow Zed, not the CSS of the dashboard.
@@ -195,8 +216,8 @@ The fake's T-0143 has a worktree like the reference's storefront (`app/fake_file
 - **`--gate2`.** It scrolls the sidebar tree and a bench terminal while the bench runs, then shows the task table in main while the bench's 10 shells keep printing out of sight, and scrolls the table for 20 s. Then it opens the task's workspace with four of the bench's shells as panes, still printing, and scrolls the first pane for 20 s (screen 2). Then it closes the bench and types into a quiet shell. It saves four perf reports: bench, table, panes and typing. Every report has `start.first_frame_ms` and `start.first_data_ms`, the times from the start of the app to the first frame and to the first task list.
 - **Smaller differences.**
   - Ages of a week or more show the date in UTC: the app has no local time zone helper yet.
-  - The needs-you pill and the status bar's "N need you" filter the list to every task that needs you (needs input, review, blocked, failed, and running but quiet), in place of the web's jump palette. A "Needs you" chip in the view header shows it and turns it off.
-  - The status bar has a fourth link word, "Not connected", where the web signs out. It does not measure overflow; labels drop by width only. The jobs menu does not update while open, and its spinner is a still icon.
+  - The needs-you pill and the status bar's "N need you" open the jump palette on what needs you, as the web (since screen 7; before, they filtered the list).
+  - The status bar has a fourth link word, "Not connected", while the daemon cannot be used. A token the daemon refuses opens Sign in, as the web (since screen 7). It does not measure overflow; labels drop by width only. The jobs menu does not update while open, and its spinner is a still icon.
   - The drawer has no Tab focus trap. Esc and a click on the scrim close it.
   - Single-key commands are not in the menu bar, because a macOS menu fires a key without a modifier while the user types. Off macOS, Ctrl chords without Shift go to the shell inside a terminal.
   - New command ids: `app.quit`, `list.first` and `list.last` (the web's `list.ends`), `tree.expand` (from `tree.collapse`), and `tools.*`. The menu items that the web writes in its components are commands too, with no key: `task.add-subtask`, `row.pin`, `row.unpin`, `row.copy-branch`, `row.copy-path`, `task.copy-id`, `agent.start`, `agent.restart`, `task.cancel`, `task.delete`, `project.blur`, `project.show-names`, `project.remove-finished` and `project.remove`. A menu item shows the key of its command: F2 for Rename, Delete for Remove workspace, Enter for Open workspace.
@@ -210,7 +231,7 @@ The fake's T-0143 has a worktree like the reference's storefront (`app/fake_file
 ## Screen 2: where it differs from the React screens
 
 - **Tabs.** Terminal, Changes, History and Docs (keys 1 to 4) since screen 6, and the editor tab while a file is open.
-- **Hidden until their screen ships.** "Add to Agents" lives in the palette (screen 7). Commit… and View changes came back with screen 4.
+- **Add to Agents** is Shift+Enter (or Shift and a click) on a task in the palettes, as in the web (screen 7). Commit… and View changes came back with screen 4.
 - **Pickers.** "Branch from" and "Add a pane" are plain menus with no search, as the pickers of screen 1.
 - **Times.** "ended 7:05" of the wrap-up and "Finished" of the summary are in UTC and say so: the app has no local time zone helper yet.
 - **Spinners.** The connection strip, the restore cover and the preparing step show a still loader icon, as the jobs menu does: an endless animation would draw the window every frame. As in React, "Connecting…" and "Reconnecting…" show only after 200 ms, so a quick connect shows no strip; a terminal that could not start says so at once.
@@ -226,7 +247,7 @@ The fake's T-0143 has a worktree like the reference's storefront (`app/fake_file
 - **Tabs.** Progress, Files (since screen 6, only for a task with a workspace) and Details; a remembered Files tab shows Progress for a task with no workspace.
 - **Output chip.** Since screen 6 the output file chip of a stage card opens the file in the Docs tab. A chip of a file that is not written yet opens nothing.
 - **Markers do not move.** The marker of a running stage and the line into it are still, as the screen-2 spinners: an endless animation would draw the window every frame.
-- **Stage commands.** The web runs Skip the stage, Mark the stage as done, Approve the stage anyway, Send back and Show the task progress from its palette (screen 7). Until then they are in the menu bar's **Task** menu, with no key.
+- **Stage commands.** Skip the stage, Mark the stage as done, Approve the stage anyway, Send back and Show the task progress run from the palette, as in the web (since screen 7). The menu bar's **Task** menu keeps them too, with no key.
 - **Keys.** `a` and `r` work from the details panel too (not in its text boxes, nor in a terminal); `e` edits, `i` shows or hides the selected task's panel, Mod+Alt+B shows or hides the panel. The phase-1 bench had Mod+Alt+B: it is Mod+Alt+T now. F6 does not cycle the parts of the window.
 - **Show details** is in the table's row menu, as in the web; the sidebar's row menu has none, as in the web.
 - **Notifications.** GPUI has no system notification API, and the app is not signed (macOS Notification Center needs a signed bundle). So a task that starts to need the user, or becomes done, while the app window is not active shows a small window of the app at the top right of the screen for 10 s, as Zed's agent notification does; a click brings the app forward and opens the task. The status bar's item is the app's own switch (**Notify me** / **Notifications on**, `notify` in `view.json`), off by default as the web starts without the browser's permission.
@@ -251,8 +272,8 @@ The fake's T-0143 has a worktree like the reference's storefront (`app/fake_file
 
 ## Screen 5: where it differs from the React screens
 
-- **Project settings has the Stages tab only.** The Issues and JSON tabs come with screen 7. So a file that the Stages tab cannot read is refused at Import with its reason, where the web opens it on the JSON tab.
-- **A file the app cannot read** (one the daemon reads, with a field the app's types cannot hold) starts the screen from the defaults and says why, as a broken file does. Save stays off until an edit, and then asks before it replaces the file.
+- **Tabs.** Stages, Issues and JSON over one draft since screen 7. A file the Stages tab cannot read opens on the JSON tab, as the web, also when it comes from Import (screen 5 refused it there).
+- **A file the app cannot read** (one the daemon reads, with a field the app's types cannot hold) opens with its text on the JSON tab, which says why (screen 5 started from the defaults).
 - **Tab** moves through the stage rows, Add stage, the text fields on screen (or the picker's), Cancel and Save, in the order they are drawn. The checkboxes and the pick menus are not on it yet.
 - **Dialogs over dialogs.** The questions of the editor (Discard your changes?, Reset to default, Remove, Import, a broken file) open over Project settings, which keeps its state under them.
 - **Stage keys** are written in the order of the schema, not of the file, and a key the schema does not know is dropped from a stage when the steps are written back. A field of the wrong JSON type cannot be read: the file is refused at Import (or the screen starts from the defaults), where the web shows the problem next to its stage.
@@ -280,6 +301,27 @@ The fake's T-0143 has a worktree like the reference's storefront (`app/fake_file
 - **Sizes.** The `edited` and `Modified` marks use Zed's smallest label size (the web's 2xs is smaller). The editor tab and the Docs edit are mono 12; the source view of Docs uses the buffer font size of the theme.
 - **Shots.** At the three shot sizes the details panel is a sheet over main, so it hides the right part of the editor and Docs headers (Revert, Save, the view switch, Edit); the owner checks them docked on the CI build.
 - **Window sizes.** The Docs list is always a column on the left: the window is at least 800 wide.
+
+## Screen 7: where it differs from the React screens
+
+- **The palettes** are the app's own view, not Zed's picker (that crate is not in the lock): the web's ranking (`fuzzy.ts`) is ported as it is, so the same query gives the same rows. The terminal rows of the jump palette come from the terminal lists the app already reads (the sidebar's, the open workspace's and the Agents grid's); the web reads them for the jump palette itself when there are at most 20 workspaces. Alt+1 to 9 match the key, not the typed character (Alt+digit types a symbol on macOS). The footer does not wrap.
+- **Sign in.** The token typed in is kept in `daemon-access` in the app's data folder (mode 0600), not in the browser; the line says "It stays on this computer." Connect asks the daemon for the task list first: a refused token keeps Sign in with the web's message, and another error (the daemon is down) shows its message there too, where the web would open the dashboard and show the load error. A 401 later deletes only the app's own file and opens Sign in; the Electron app's `daemon-token` and `NATAMUX_TOKEN` are never changed. The macOS Keychain would need a new crate. There is no Sign out item, as in the Electron app.
+- **Settings** has no Desktop app part (keep the computer awake, check for updates): those are settings of the Electron app. Theme and UI size use a text-only segmented control.
+- **UI size** sets Zed's UI and buffer font sizes (16 and 15 times 0.92, 1 or 1.077): parts drawn in rems follow, parts with a fixed size in pixels (row heights, the title and status bars) do not, where the web's CSS zoom scales everything. The terminal font size is not scaled.
+- **Terminal font.** With no font picked, the terminals use Ghostty's font, else JetBrains Mono 13 (the web's size; before screen 7 the app used Zed's terminal size). Ghostty's config is read once when the app starts.
+- **The account menu** opens where it was clicked, kept inside the window. "Terminal font…" and "Report an issue" show Zed's FontSize and the Lucide triangle-alert icons until the Lucide `type` and `bug` SVGs come.
+- **Projects** has no Browse buttons: the web shows them only in the Electron app, and the daemon may run on another machine. The text fields use the buffer font.
+- **Import issues** shows the raw message behind the empty state's own "Show details".
+- **Status bar layout rules.** The bar uses only the width rules (`forced_by_width`), as before; the measured condensing of the web (`condense`, the `measure` cases) is ported with its tests but not used yet, so those items keep item-level `allow(dead_code)` in `app/status_layout.rs`.
+- **The JSON tab** is a Zed editor with JSON colours and no line numbers, not a textarea; Tab types a tab there, so Tab does not leave it (Esc closes the dialog as before).
+- **Seen in the CI shots** (run 39979437375):
+  - Palette: the first nine rows show their Alt key (⌥1 to ⌥9) at the right, where the web only names it for screen readers; the footer says "Tab needs you" where the web draws ⇥. Suggested lists the commands in the app's registry order (View: Agents before Task: Start a task); the web starts with Jump to a workspace and Show the keyboard shortcuts. At the shot sizes the list ends inside Suggested and scrolls.
+  - Account menu: the section titles are "Theme" and "UI size" as written, not in caps; "Terminal font…" has the Zed FontSize icon.
+  - Project settings: the tabs are Zed's tab bar (boxed tabs on a strip), not the web's underlined tabs. A Save, Import or Add project that is off keeps its colour and only stops the click, as on screen 5; the web greys it. On the JSON tab the editor is 22 rows high, so at the shot sizes the parse error and the problem list sit under it, below the fold (the footer shows "1 problem").
+  - Import issues: Retry is a plain button with no border.
+  - Projects: the fake daemon's worktree folder is `/work/.natamux/worktrees`, the reference's demo `/data/worktrees`.
+  - Sign in: `NATAMUX_TOKEN` in the help line is not in the mono font; the window keeps the traffic lights and no title bar.
+- **Keys.** F6 and Shift+F6 (move between the parts of the window) and the accessible diff view are not in the app, so the shortcut sheet does not list them. The sheet lists "First or last row", "Collapse or expand a group" and "Move a stage" as one row each, as the web, although the app has a command per key.
 
 ## Ported tests
 
@@ -339,6 +381,17 @@ Screen 6 (T-0152): every case of `features/files/__tests__/explorer-tree.test.ts
 - 'keeps the file of the Changes tab of the same workspace' (`view-store.test.ts`): the Changes tab keeps the file it shows in its own view (`git/changes_view.rs`), and opening a file in the editor tab does not touch it, so there is no shared state to test.
 - The address cases of `view-store.test.ts` and `route.test.ts` ('takes the file of an editor address, and keeps the file of the Changes tab'): the app has no addresses.
 - Regression of review 2: a details panel closed on Files and opened again reads its tree again (`reads_the_tree_again_when_a_closed_panel_opens_on_files`, `ShowWatch` in `app/tab_rules.rs`).
+
+Screen 7 (T-0154): every case of `features/palette/__tests__/fuzzy.test.ts` and `palette.test.ts` (`palette/fuzzy_tests.rs`, `palette/palette_rows_tests.rs`, `palette/jump_rows_tests.rs`), `features/projects/__tests__/issues.test.ts`, `lib/__tests__/theme.test.ts`, `ui-size.test.ts`, `features/terminals/__tests__/terminal-font.test.ts`, `packages/desktop/src/app/__tests__/ghostty-config.test.ts`, `features/stages/editor/__tests__/settings-json.test.ts`, the screen-7 cases of `commands.test.ts` and the Issues tab, JSON tab and one-draft cases of `ProjectSettingsDialog.test.tsx` (`projects/settings_tab_rules_tests.rs`) has a Rust test of the same name, except:
+
+- `CommandPalette.test.tsx`: `capRows`, the scope cycle and the create rows have twins in `palette/palette_rows_tests.rs`; 'keeps its rows in place when tasks change while it is open' is the snapshot the view takes at open; the keys, focus, inert page and the 500-workspace render cases are covered by the shots and the owner's check.
+- `RepoPanel.test.tsx`: the worktree folder rules have twins in `projects/project_rules_tests.rs`; the Browse cases are not ported (no Browse in the app).
+- `TerminalFontDialog.test.tsx` and `SettingsDialog.test.tsx`: their rules are tests of `terminals/terminal_font_tests.rs` and `app/appearance_rules_tests.rs`; the Desktop app cases of `SettingsDialog.test.tsx` are not ported (no Desktop app part).
+- `terminal-font.test.ts`: the cases about the CSS font list (the icon font after the picked font, the UI keeping Geist Mono) have no CSS to check; the family and size fallbacks are tested.
+- `theme.test.ts` `pageTheme`: it reads the page's `data-theme`.
+- `App.test.tsx`: 'goes back to the token form when the daemon rejects the token' is a test of `app/sign_in_rules.rs`; the account menu's items and 'has no sign out in the desktop app, which signs in by itself' are covered by the `account-menu` shot.
+- `ProjectSettingsDialog.test.tsx`: 'saves nothing when closed with Cancel' and the import and export file flows are covered by the shots and the owner's check.
+- Screen 5's `settings_text_tests.rs` cases that encoded the start from the defaults changed with the JSON tab: `a_file_the_app_cannot_read_keeps_its_text_and_the_json_tab_says_why`, `save_stays_off_for_a_file_the_app_cannot_read_until_it_is_fixed`.
 
 ## Gate results
 
@@ -438,9 +491,29 @@ Gate per screen (plan): target numbers met, baselines in both themes, owner sign
 | `live-daemon` screen-6 flow | 2026-10-23 | Pass | Run 39954098408, `runs_the_reads_and_writes_of_screen_6` |
 | `app-macos`: the 8 screen-6 states, both themes, three sizes; shots match baselines | | Open | Shot in run 39954098408 (316 shots); no baselines until the owner signs screen 6 off |
 | `app-macos`: `--smoke`, zip at most 60 MiB | 2026-10-23 | Pass | Run 39954098408 |
-| `app-windows`: build and `--smoke` | | Open | Runs on the PR into `dev` |
+| `app-windows`: build and `--smoke` | 2026-10-23 | Pass | Rust run 39963088535 on PR #435 (1ff379a), job `app-windows`; every job of that run passed. The `dev` run of the merge (39963121785, d5685cd) was cancelled |
 | A file edited and saved in the app, seen in the web dashboard and on disk; an agent's write shows the banner | | | Owner, on the CI build |
 | A path dropped on a real agent's terminal | | | Owner |
 | The Docs of a real task, Rendered, both themes | | | Owner |
 | Vietnamese Telex and VNI in the editor and the Docs edit | | | Owner |
+| Owner sign-off, light and dark | | | |
+
+### Screen 7
+
+| Part | Date | Result | Notes |
+|---|---|---|---|
+| `cargo xtask ci` | 2026-10-23 | Pass | Rust run 39979437375 on `natamux-ci/rust` (f84319a), job `check`; again run 39983890846 on `natamux-ci/rust-check` (df01047, the shortcut sheet's columns kept inside the dialog after the shots) |
+| Ported rule tests (same names as the TypeScript tests) | 2026-10-23 | Pass | In `check`; the cases left out are listed above |
+| Client tests (`POST /repos`, the GitHub issues and import, the token order, the private token file) | 2026-10-23 | Pass | In `check` (`tests/projects_api.rs`, `config.rs`) |
+| `live-daemon` screen-7 flow | 2026-10-23 | Pass | Run 39979437375, `runs_the_reads_and_writes_of_screen_7` |
+| `supply-chain` | 2026-10-23 | Fail | Run 39979437375: `cargo deny` reports RUSTSEC-2026-0386 (tokio 1.52.1, `AsyncFd` I/O safety), an advisory published after the screen-6 runs. It is not from this change: `Cargo.lock` is the one of `dev`. Bumping tokio or allowing the advisory is the owner's call (dependency rules, cooldown) |
+| `app-macos`: the 16 screen-7 states, both themes, three sizes; shots match baselines | | Open | Shot in run 39979437375 (412 shots); no baselines until the owner signs screen 7 off |
+| `app-macos`: `--smoke`, zip at most 60 MiB | 2026-10-23 | Pass | Run 39979437375. With no token on the runner the app starts on Sign in, so `--smoke` types into its token field |
+| `app-windows`: build and `--smoke` | | Open | Runs on the PR into `dev` |
+| The palette and the jump palette on real tasks | | | Owner, on the CI build |
+| A project added and an issue import tried in the app, seen in the web dashboard | | | Owner |
+| An Issues-tab change saved and seen in the web | | | Owner |
+| Sign in with a wrong and the right token | | | Owner |
+| Theme, UI size and terminal font changes | | | Owner |
+| Vietnamese Telex and VNI in the palette, the font dialog, the Projects form, the JSON tab and Sign in | | | Owner |
 | Owner sign-off, light and dark | | | |

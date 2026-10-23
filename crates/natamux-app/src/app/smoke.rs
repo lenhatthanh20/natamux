@@ -12,7 +12,7 @@ const TYPED: &str = "abc";
 pub fn run(handle: WindowHandle<Root>, quit: bool, cx: &mut App) {
     // Read through the editor, not the window: inside a frame callback the window is in use.
     let result = handle.update(cx, |root, window, cx| {
-        let filter = root.filter(cx);
+        let filter = root.text_box(cx);
         window.on_next_frame(move |window, cx| type_and_check(filter, quit, window, cx));
     });
     if let Err(error) = result {

@@ -18,6 +18,24 @@ pub struct Repo {
     pub worktrees_dir: Option<String>,
 }
 
+/// The body of `POST /repos`. `None` fields are left out; the daemon picks the name and uses its
+/// own worktree folder.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AddRepo {
+    pub path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub worktrees_dir: Option<String>,
+}
+
+/// The answer of `POST /repos` (201).
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+pub struct AddedRepo {
+    pub repo: Repo,
+}
+
 /// The body of `GET /repos`. `worktrees_dir` is the daemon's folder for worktrees, for a project
 /// with none of its own.
 #[derive(Clone, Debug, Deserialize)]
@@ -259,6 +277,31 @@ mod tests {
         assert!(plain.settings.stages.is_empty());
         assert_eq!(plain.settings.tracker, TrackerSettings::default());
         assert_eq!(plain.settings.tracker.create_issue, "manual");
+    }
+
+    #[test]
+    fn the_add_body_leaves_out_the_fields_not_given() {
+        let body = AddRepo {
+            path: "/r/app".into(),
+            name: None,
+            worktrees_dir: None,
+        };
+        assert_eq!(
+            serde_json::to_string(&body).unwrap(),
+            r#"{"path":"/r/app"}"#
+        );
+        let body = AddRepo {
+            path: "/r/app".into(),
+            name: Some("App".into()),
+            worktrees_dir: Some("/w".into()),
+        };
+        assert_eq!(
+            serde_json::to_string(&body).unwrap(),
+            r#"{"path":"/r/app","name":"App","worktreesDir":"/w"}"#
+        );
+        let added: AddedRepo =
+            serde_json::from_str(r#"{"repo":{"id":"app","name":"App","path":"/r/app"}}"#).unwrap();
+        assert_eq!(added.repo.id, "app");
     }
 
     #[test]

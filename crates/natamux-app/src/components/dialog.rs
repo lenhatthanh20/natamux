@@ -20,8 +20,6 @@ pub enum DialogSize {
     Small,
     #[default]
     Medium,
-    // Part of the dialog sizes of ui-spec 4.14.
-    #[allow(dead_code)]
     Large,
     /// A screen of its own (Project settings): 88% of the window high, near the top.
     ExtraLarge,

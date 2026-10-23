@@ -8,14 +8,14 @@
 use editor::{Editor, EditorEvent};
 use gpui::{ClickEvent, Entity, FocusHandle, Focusable, FontWeight, Stateful, Subscription};
 use natamux_proto::tasks::task::{Task, TaskState};
-use ui::{Tooltip, prelude::*};
+use ui::{ButtonLike, Tooltip, prelude::*};
 
 use super::workspace_tree::WorkspaceTree;
 use crate::agents::agent_choices::agent_label;
 use crate::app::commands::shortcut_of;
 use crate::app::dashboard::Dashboard;
 use crate::app::dashboard_data::Link;
-use crate::app::shortcuts::Back;
+use crate::app::shortcuts::{AddProject, Back};
 use crate::components::agent_badge::AgentIcon;
 use crate::components::chips::{Kbd, tip_with_keys};
 use crate::components::colors::state_colors;
@@ -159,6 +159,17 @@ impl Sidebar {
                 ),
             )
             .child(
+                ButtonLike::new("workspaces-add-project")
+                    .style(ButtonStyle::Subtle)
+                    .child(
+                        lucide("folder-plus")
+                            .size(IconSize::Small)
+                            .color(Color::Muted),
+                    )
+                    .tooltip(Tooltip::text("Add a project"))
+                    .on_click(|_, window, cx| window.dispatch_action(Box::new(AddProject), cx)),
+            )
+            .child(
                 IconButton::new("workspaces-start", IconName::Plus)
                     .icon_size(IconSize::Small)
                     .tooltip(tip_with_keys("Start a task", keys))
@@ -185,7 +196,19 @@ impl Render for Sidebar {
             && !data.tasks.iter().any(|task| task.workspace.is_some());
         let tree = Loading::new("sidebar-loading", loading, SkeletonList::new(8, 40.))
             .content(self.tree.clone());
-        let none = no_projects.then(|| div().py_1().pl_2().child(small("No projects yet")));
+        let none = no_projects.then(|| {
+            h_flex()
+                .gap_2()
+                .py_1()
+                .pl_2()
+                .child(small("No projects yet"))
+                .child(
+                    Button::new("sidebar-add-project", "Add project")
+                        .style(ButtonStyle::Transparent)
+                        .label_size(LabelSize::Small)
+                        .on_click(|_, window, cx| window.dispatch_action(Box::new(AddProject), cx)),
+                )
+        });
         v_flex()
             .size_full()
             .gap_2()

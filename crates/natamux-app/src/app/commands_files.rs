@@ -5,7 +5,8 @@
 use gpui::actions;
 
 use super::commands::{
-    BODY, CHANGES, Category, Command, MenuName, When, command, keys, menu, when,
+    BODY, CHANGES, Category, Command, MenuName, SheetGroup, When, command, group, hidden, keys,
+    menu, when,
 };
 
 actions!(
@@ -25,7 +26,10 @@ const fn in_workspace(command: Command) -> Command {
 /// No command takes 5: it showed the Docs tab before, and the open file has no key.
 pub const FILE_COMMANDS: &[Command] = &[
     in_workspace(keys(
-        command("tab.docs", "Show the Docs tab", Category::View),
+        group(
+            command("tab.docs", "Show the Docs tab", Category::View),
+            SheetGroup::SingleKeys,
+        ),
         &["4"],
         &[BODY, CHANGES, DOCS],
     )),
@@ -38,13 +42,13 @@ pub const FILE_COMMANDS: &[Command] = &[
         in_workspace(command(
             "files.show",
             "Show the files of the worktree",
-            Category::View,
+            Category::Workspace,
         )),
         MenuName::View,
         3,
     ),
     in_workspace(keys(
-        command("file.save", "Save the file", Category::Task),
+        hidden(command("file.save", "Save the file", Category::Task)),
         &["Mod+S"],
         &[FILE_EDITOR],
     )),

@@ -9,7 +9,7 @@ use serde_json::{Map, Value, json};
 
 use crate::app::layout_mode::PANEL_WIDTH;
 use crate::app::view_rules::{
-    DetailsView, Entries, WorkspaceTab, parse_pinned, with_seen, with_tab,
+    DetailsView, Entries, MAX_RECENT, WorkspaceTab, parse_pinned, with_seen, with_tab,
 };
 use crate::git::change_tree::FileViewMode;
 use crate::sidebar::sidebar_tree::{Folds, with_fold};
@@ -127,6 +127,15 @@ pub struct ViewState {
     pub changes_view: FileViewMode,
     pub files_width: u32,
     pub diff: DiffFlags,
+    /// `natamux.theme`: system, light or dark, read by `app/appearance_rules.rs`.
+    pub theme: String,
+    /// `natamux.ui-size`: compact, default or large.
+    pub ui_size: String,
+    /// `natamux.terminal-font`: `{ family?, size? }` as the user saved it, read by
+    /// `terminals/terminal_font.rs`.
+    pub terminal_font: Option<Value>,
+    /// Task ids of the workspaces opened, newest first (`natamux.recent`).
+    pub recent: Vec<String>,
 }
 
 impl Default for ViewState {
@@ -152,6 +161,10 @@ impl Default for ViewState {
             changes_view: FileViewMode::List,
             files_width: FILES_DEFAULT,
             diff: DiffFlags::default(),
+            theme: "system".to_owned(),
+            ui_size: "default".to_owned(),
+            terminal_font: None,
+            recent: Vec::new(),
         }
     }
 }
@@ -249,6 +262,16 @@ impl ViewState {
                 .map_or(default.changes_view, FileViewMode::parse),
             files_width: files_width_of(map.get("filesWidth"), default.files_width),
             diff: DiffFlags::parse(map.get("diff")),
+            theme: text_or(map.get("theme"), &default.theme),
+            ui_size: text_or(map.get("uiSize"), &default.ui_size),
+            terminal_font: map
+                .get("terminalFont")
+                .filter(|font| font.is_object())
+                .cloned(),
+            recent: strings(map.get("recent"))
+                .into_iter()
+                .take(MAX_RECENT)
+                .collect(),
         }
     }
 
@@ -297,6 +320,10 @@ impl ViewState {
             "changesView": self.changes_view.name(),
             "filesWidth": self.files_width,
             "diff": self.diff.to_json(),
+            "theme": self.theme,
+            "uiSize": self.ui_size,
+            "terminalFont": self.terminal_font,
+            "recent": self.recent,
         });
         format!("{value:#}\n")
     }
@@ -389,6 +416,10 @@ fn with_section(current: &[(String, bool)], id: &str, open: bool) -> Vec<(String
 
 fn strings(value: Option<&Value>) -> Vec<String> {
     parse_pinned(value.map(Value::to_string).as_deref())
+}
+
+fn text_or(value: Option<&Value>, fallback: &str) -> String {
+    value.and_then(Value::as_str).unwrap_or(fallback).to_owned()
 }
 
 fn flag(value: Option<&Value>, fallback: bool) -> bool {

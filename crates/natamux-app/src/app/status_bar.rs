@@ -1,23 +1,28 @@
 //! The status bar of docs/ui-spec.md 4.28 (`features/app/StatusBar.tsx`): Live or Reconnecting,
 //! "N running", "N need you" and the background jobs with their menu. Under 1024 the dot and the
-//! jobs lose their labels (`status_layout`). At the right, the switch of the needs-you
-//! notifications. Projects, Import issues, the keyboard and the account come with later screens.
+//! jobs lose their labels (`status_layout`). At the right: Projects, Import issues, the switch of
+//! the needs-you notifications, the keyboard and the account (`status_items`). Under 1024
+//! Projects, Import issues and the notifications fold into the "More status items" menu.
 
 use std::rc::Rc;
 
-use gpui::{ClickEvent, FontWeight};
+use gpui::{ClickEvent, Entity, FontWeight};
 use natamux_proto::tasks::job::Job;
 use ui::{ButtonLike, ContextMenu, Tooltip, prelude::*};
 
+use super::dashboard::Dashboard;
 use super::jobs::{job_rows, jobs_label};
 use super::shell_rules::{LiveItem, needs_you_text};
+use super::status_items::{
+    Folded, OnClick, account_item, import_item, item_button, item_label, keyboard_item, more_item,
+    projects_item,
+};
 use super::status_layout::forced_by_width;
 use crate::components::colors::signal;
 use crate::components::menu::MenuLayer;
 
 pub const STATUS_BAR_HEIGHT: f32 = 28.;
 
-type OnClick = Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
 type OnOpenTask = Rc<dyn Fn(&str, &mut Window, &mut App)>;
 
 #[derive(IntoElement)]
@@ -33,6 +38,7 @@ pub struct StatusBar {
     on_open_task: OnOpenTask,
     notify: bool,
     on_notify: OnClick,
+    account: Option<Entity<Dashboard>>,
 }
 
 impl StatusBar {
@@ -54,7 +60,14 @@ impl StatusBar {
             on_open_task: Rc::new(|_, _, _| {}),
             notify: false,
             on_notify: Rc::new(|_, _, _| {}),
+            account: None,
         }
+    }
+
+    /// The dashboard the account menu changes. Without it the account item is left out.
+    pub fn account(mut self, dashboard: Entity<Dashboard>) -> Self {
+        self.account = Some(dashboard);
+        self
     }
 
     /// "Notify me" / "Notifications on": the app's own switch, kept in `view.json`.
@@ -89,18 +102,6 @@ impl StatusBar {
 }
 
 pub use crate::app::clock::now_ms;
-
-/// A clickable item: 24 high, a muted label that turns to ink on hover.
-fn item_button(id: &'static str, tip: &'static str, on_click: OnClick) -> ButtonLike {
-    ButtonLike::new(id)
-        .height(px(24.).into())
-        .tooltip(Tooltip::text(tip))
-        .on_click(move |event, window, cx| on_click(event, window, cx))
-}
-
-fn item_label(text: impl Into<SharedString>, color: Color) -> Label {
-    Label::new(text).size(LabelSize::Small).color(color)
-}
 
 /// The jobs menu, opened upward from the bar: one row per job with its task and how long it has
 /// run. A row without a task is not a link.
@@ -168,6 +169,8 @@ impl RenderOnce for StatusBar {
         let colors = cx.theme().colors();
         let condensed = forced_by_width(Some(self.width));
         let icon_only = |id: &str| condensed.icon_only.contains(&id);
+        let folded = |id: &str| condensed.folded.contains(&id);
+        let any_folded = !condensed.folded.is_empty();
         let dot = if self.live.ok {
             cx.theme().status().success
         } else {
@@ -239,6 +242,24 @@ impl RenderOnce for StatusBar {
             .children(needs)
             .children(jobs)
             .child(div().flex_1())
-            .child(notify_item(self.notify, self.on_notify))
+            .when(!folded("repos"), |this| {
+                this.child(projects_item(icon_only("repos")))
+            })
+            .when(!folded("import"), |this| {
+                this.child(import_item(icon_only("import")))
+            })
+            .when(!folded("notifications"), |this| {
+                this.child(notify_item(self.notify, self.on_notify.clone()))
+            })
+            .when(any_folded, |this| {
+                this.child(more_item(Folded {
+                    repos: folded("repos"),
+                    import: folded("import"),
+                    notifications: folded("notifications")
+                        .then(|| (self.notify, self.on_notify.clone())),
+                }))
+            })
+            .child(keyboard_item())
+            .children(self.account.map(account_item))
     }
 }

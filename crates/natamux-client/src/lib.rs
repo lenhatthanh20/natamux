@@ -8,6 +8,7 @@ pub mod error;
 mod files_methods;
 mod git_methods;
 mod http;
+mod projects_methods;
 mod settings_methods;
 pub mod agents {
     pub mod api;
@@ -18,6 +19,7 @@ pub mod events {
 }
 pub mod projects {
     pub mod api;
+    pub mod github_api;
 }
 pub mod stages {
     pub mod api;

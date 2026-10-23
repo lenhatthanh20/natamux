@@ -1,15 +1,17 @@
 //! Project settings (docs/ui-spec.md 4.31, `ProjectSettingsDialog.tsx`): `.natamux.json` of a
-//! project, as a screen of its own. Screen 5 brings the Stages tab only; Issues and JSON come with
-//! screen 7. The tab edits one draft text; Save writes it through `PUT /repos/:id/settings` with
+//! project, as a screen of its own. Its Stages, Issues and JSON tabs edit one draft text, which may
+//! not parse (then the JSON tab shows); Save writes it through `PUT /repos/:id/settings` with
 //! the version that was read, so a file another client changed shows Reload and Overwrite.
 
 use gpui::{
     DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, ScrollHandle, Subscription,
 };
 use natamux_proto::projects::repo::{LoadedSettings, SkillList};
-use ui::{Tab, TabBar, TabPosition, Tooltip, prelude::*};
+use ui::{Tooltip, prelude::*};
 
-use super::settings_text::{Base, base_of, blocked_reason, count_label, saves_unchanged};
+use super::settings_tab_rules::{PIPELINE_NOTE, SettingsTab, export_reason, shows_pipeline_note};
+use super::settings_tabs::SettingsTabs;
+use super::settings_text::{Base, base_of, blocked_reason};
 use crate::app::dashboard::Dashboard;
 use crate::app::source::reason;
 use crate::components::confirm::Confirm;
@@ -17,7 +19,6 @@ use crate::components::dialog::{
     DialogFrame, DialogLayer, DialogSize, DialogView, cancel_button, primary_button,
 };
 use crate::stages::editor_draft::same_settings;
-use crate::stages::kind_icon::problem_icon;
 use crate::stages::pipeline_editor::{DraftEdited, PipelineEditor};
 use crate::stages::pipeline_preview::pipeline_preview;
 use crate::stages::stage_details::DetailsPane;
@@ -53,6 +54,7 @@ pub(super) struct StagesTab {
     pub(super) details: Entity<DetailsPane>,
     /// The picker showed at the last change, so focus moves only when it opens or closes.
     was_picking: bool,
+    pub(super) tabs: SettingsTabs,
 }
 
 pub struct ProjectSettingsDialog {
@@ -61,7 +63,7 @@ pub struct ProjectSettingsDialog {
     pub(super) repo_name: String,
     /// The file as first read: a later read does not move the version a save checks.
     pub(super) base: Option<Base>,
-    read_error: Option<String>,
+    pub(super) read_error: Option<String>,
     pub(super) stages: Option<StagesTab>,
     /// Kept until the tab is made: the skills may be read before the settings.
     skills: Option<Result<SkillList, String>>,
@@ -167,11 +169,13 @@ impl ProjectSettingsDialog {
             cx.observe(&editor, |_, _, cx| cx.notify()),
             cx.observe_in(&editor, window, Self::follow_picker),
         ];
+        let tabs = SettingsTabs::new(&editor, window, cx);
         self.stages = Some(StagesTab {
             editor,
             list,
             details,
             was_picking: false,
+            tabs,
         });
     }
 
@@ -219,19 +223,25 @@ impl ProjectSettingsDialog {
 
     /// Save may replace the file without an edit (a file the daemon could not read).
     fn file_broken(&self) -> bool {
-        self.base.as_ref().is_some_and(saves_unchanged)
+        self.base.as_ref().is_some_and(|base| base.broken.is_some())
     }
 
-    fn errors(&self, cx: &App) -> usize {
+    /// The text of the draft can be read as settings.
+    pub(super) fn draft_ok(&self, cx: &App) -> bool {
         self.stages
             .as_ref()
-            .map_or(0, |stages| stages.editor.read(cx).errors())
+            .is_none_or(|stages| stages.editor.read(cx).parse_error().is_none())
     }
 
     /// Why Save is off; None while it can save.
     pub(super) fn save_blocked(&self, cx: &App) -> Option<&'static str> {
         self.base.as_ref()?;
-        blocked_reason(true, self.errors(cx), self.dirty(cx), self.file_broken())
+        blocked_reason(
+            self.draft_ok(cx),
+            self.errors(cx),
+            self.dirty(cx),
+            self.file_broken(),
+        )
     }
 
     /// Cancel, the close button and Esc: asks first when there are changes.
@@ -259,69 +269,14 @@ impl ProjectSettingsDialog {
         });
     }
 
-    fn render_alerts(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let line = |text: String| {
-            h_flex()
-                .gap_1p5()
-                .items_start()
-                .child(problem_icon().size(IconSize::XSmall).color(Color::Error))
-                .child(Label::new(text).size(LabelSize::Small).color(Color::Error))
-        };
-        let reading = self.base.is_none() && self.read_error.is_none();
-        v_flex()
-            .gap_2()
-            .when(reading, |this| {
-                this.child(Label::new("Reading the settings\u{2026}").color(Color::Muted))
-            })
-            .children(self.read_error.clone().map(line))
-            .children(
-                self.base
-                    .as_ref()
-                    .and_then(|base| base.broken.clone())
-                    .map(|broken| {
-                        line(format!(
-                            "The file has a problem, so the defaults apply: {broken}"
-                        ))
-                    }),
-            )
-            .when(self.conflict, |this| this.child(self.conflict_box(cx)))
-            .children(self.problem.clone().map(line))
-    }
-
-    fn conflict_box(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        h_flex()
-            .flex_wrap()
-            .gap_2()
-            .px_3()
-            .py_2()
-            .rounded_lg()
-            .border_1()
-            .border_color(cx.theme().status().warning_border)
-            .bg(cx.theme().status().warning_background)
-            .child(
-                div().min_w_0().flex_1().child(
-                    Label::new(
-                        "The file changed on disk since you opened it. Reload drops your changes \
-                         here; Overwrite replaces the file with them.",
-                    )
-                    .color(Color::Default),
-                ),
-            )
-            .child(
-                Button::new("settings-reload", "Reload")
-                    .style(ButtonStyle::Outlined)
-                    .on_click(cx.listener(|this, _, _, cx| this.reload(cx))),
-            )
-            .child(
-                Button::new("settings-overwrite", "Overwrite")
-                    .style(ButtonStyle::Tinted(ui::TintColor::Error))
-                    .on_click(cx.listener(|this, _, _, cx| this.overwrite(cx))),
-            )
-    }
-
     /// The preview, then the list and the details: two parts of the body, so a shot can scroll
     /// to the second.
-    fn render_stages(&self, stages: &StagesTab, window: &Window, cx: &mut App) -> [AnyElement; 2] {
+    pub(super) fn render_stages(
+        &self,
+        stages: &StagesTab,
+        window: &Window,
+        cx: &mut App,
+    ) -> [AnyElement; 2] {
         let wide = window.viewport_size().width >= px(SIDE_BY_SIDE_FROM);
         let parts = if wide {
             h_flex()
@@ -347,42 +302,6 @@ impl ProjectSettingsDialog {
         self.body_scroll.scroll_to_top_of_item(3);
         cx.notify();
     }
-
-    fn footer_status(&self, cx: &App) -> impl IntoElement {
-        let (errors, warnings) = self.stages.as_ref().map_or((0, 0), |stages| {
-            let editor = stages.editor.read(cx);
-            (editor.errors(), editor.warnings())
-        });
-        h_flex()
-            .gap_2()
-            .when(errors > 0, |this| {
-                this.child(
-                    Label::new(count_label(errors, "problem"))
-                        .size(LabelSize::Small)
-                        .color(Color::Error),
-                )
-            })
-            .when(warnings > 0, |this| {
-                this.child(
-                    Label::new(count_label(warnings, "warning"))
-                        .size(LabelSize::Small)
-                        .color(Color::Warning),
-                )
-            })
-    }
-
-    fn ghost(
-        &self,
-        id: &'static str,
-        label: &'static str,
-        on_click: impl Fn(&mut Self, &mut Window, &mut Context<Self>) + 'static,
-        cx: &mut Context<Self>,
-    ) -> Button {
-        Button::new(id, label)
-            .style(ButtonStyle::Subtle)
-            .disabled(self.base.is_none())
-            .on_click(cx.listener(move |this, _, window, cx| on_click(this, window, cx)))
-    }
 }
 
 impl EventEmitter<DismissEvent> for ProjectSettingsDialog {}
@@ -402,8 +321,12 @@ impl DialogView for ProjectSettingsDialog {
     fn tab_ring(&self, cx: &App) -> Vec<FocusHandle> {
         let mut ring = Vec::new();
         if let Some(stages) = &self.stages {
-            ring.extend(stages.list.read(cx).tab_stops());
-            ring.extend(stages.details.read(cx).tab_stops(cx));
+            let shown = self.shown_tab(cx);
+            ring.extend(stages.tabs.stops(shown, cx));
+            if shown == SettingsTab::Stages {
+                ring.extend(stages.list.read(cx).tab_stops());
+                ring.extend(stages.details.read(cx).tab_stops(cx));
+            }
         }
         ring.extend([self.cancel.clone(), self.submit.clone()]);
         ring
@@ -459,29 +382,32 @@ impl Render for ProjectSettingsDialog {
         .when_some(blocked, |button, reason| {
             button.tooltip(Tooltip::text(reason))
         });
-        let tabs = TabBar::new("project-settings-tabs").child(
-            Tab::new("project-settings-stages")
-                .position(TabPosition::First)
-                .toggle_state(true)
-                .child(Label::new("Stages")),
-        );
+        let shown = self.shown_tab(cx);
         let alerts = self.render_alerts(cx).into_any_element();
         let mut body = vec![alerts];
         if let Some(stages) = &self.stages {
-            body.push(tabs.into_any_element());
-            body.extend(self.render_stages(stages, window, cx));
+            body.push(self.render_tab_bar(shown, cx));
+            body.extend(self.render_tab_body(stages, shown, window, cx));
         }
         let reset = self.ghost("settings-reset", "Reset to default", Self::reset, cx);
         let import = self.ghost("settings-import", "Import\u{2026}", Self::import, cx);
-        let export = self.ghost("settings-export", "Export", Self::export, cx);
+        let cannot_export = export_reason(self.draft_ok(cx));
+        let export = self
+            .ghost("settings-export", "Export", Self::export, cx)
+            .disabled(self.base.is_none() || cannot_export.is_some())
+            .when_some(cannot_export, |button, reason| {
+                button.tooltip(Tooltip::text(reason))
+            });
+        let frame = DialogFrame::new(format!("Project settings of {}", self.repo_name), close)
+            .tall()
+            .description(description);
+        let frame = if shows_pipeline_note(shown) {
+            frame.footer_note(PIPELINE_NOTE)
+        } else {
+            frame
+        };
         div().track_focus(&self.focus).child(
-            DialogFrame::new(format!("Project settings of {}", self.repo_name), close)
-                .tall()
-                .description(description)
-                .footer_note(
-                    "New tasks use this pipeline. Tasks on their way keep their stages, but use \
-                     the new prompts and approvals.",
-                )
+            frame
                 .track_scroll(&self.body_scroll)
                 .children(body)
                 .footer(reset)

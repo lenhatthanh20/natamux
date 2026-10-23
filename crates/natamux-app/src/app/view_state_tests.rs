@@ -44,6 +44,10 @@ fn a_saved_view_reads_back_the_same() {
             wrap_prose: false,
             wrap_code: true,
         },
+        theme: "dark".into(),
+        ui_size: "large".into(),
+        terminal_font: Some(serde_json::json!({ "family": "Iosevka", "size": 15 })),
+        recent: vec!["T-2".into(), "T-1".into()],
     };
     state.remember_base("r1", "main");
     let folder = temp_folder("round");
@@ -440,4 +444,19 @@ fn keeps_the_progress_layout_in_the_file() {
     assert!(state.to_json().contains(r#""layout": "progress""#));
     let again = ViewState::parse(&state.to_json());
     assert_eq!(again.layout, Layout::Progress);
+}
+
+#[test]
+fn keeps_the_theme_the_text_size_the_terminal_font_and_the_recent_workspaces() {
+    let state = ViewState::parse(
+        r#"{"theme":"light","uiSize":"compact","terminalFont":{"size":18},"recent":["T-3","T-1"]}"#,
+    );
+    assert_eq!(state.theme, "light");
+    assert_eq!(state.ui_size, "compact");
+    assert_eq!(state.terminal_font, Some(serde_json::json!({ "size": 18 })));
+    assert_eq!(state.recent, ["T-3", "T-1"]);
+    let default = ViewState::parse(r#"{"theme":3,"terminalFont":"Menlo"}"#);
+    assert_eq!(default.theme, "system");
+    assert_eq!(default.ui_size, "default");
+    assert_eq!(default.terminal_font, None);
 }

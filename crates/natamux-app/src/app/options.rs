@@ -19,7 +19,7 @@ pub enum ThemeMode {
     Dark,
 }
 
-/// The screen-1 to screen-5 states CI shoots (`--shot`). `app/shots.rs` puts the window in each one.
+/// The screen-1 to screen-7 states CI shoots (`--shot`). `app/shots.rs` puts the window in each one.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Shot {
     TasksTable,
@@ -79,10 +79,26 @@ pub enum Shot {
     WorkspaceEditorDraft,
     WorkspaceEditorConflict,
     TerminalDropTarget,
+    Palette,
+    PaletteQuery,
+    PaletteNoMatch,
+    PaletteJump,
+    Shortcuts,
+    AccountMenu,
+    TerminalFont,
+    SettingsDialog,
+    Projects,
+    ProjectSettings,
+    ProjectSettingsTabIssues,
+    ProjectSettingsTabJson,
+    ProjectSettingsJsonError,
+    ImportIssues,
+    SignIn,
+    SignInError,
 }
 
 impl Shot {
-    pub const ALL: [Shot; 57] = [
+    pub const ALL: [Shot; 73] = [
         Shot::TasksTable,
         Shot::TasksBoard,
         Shot::BoardHoverCard,
@@ -140,6 +156,22 @@ impl Shot {
         Shot::WorkspaceEditorDraft,
         Shot::WorkspaceEditorConflict,
         Shot::TerminalDropTarget,
+        Shot::Palette,
+        Shot::PaletteQuery,
+        Shot::PaletteNoMatch,
+        Shot::PaletteJump,
+        Shot::Shortcuts,
+        Shot::AccountMenu,
+        Shot::TerminalFont,
+        Shot::SettingsDialog,
+        Shot::Projects,
+        Shot::ProjectSettings,
+        Shot::ProjectSettingsTabIssues,
+        Shot::ProjectSettingsTabJson,
+        Shot::ProjectSettingsJsonError,
+        Shot::ImportIssues,
+        Shot::SignIn,
+        Shot::SignInError,
     ];
 
     pub fn name(self) -> &'static str {
@@ -201,6 +233,22 @@ impl Shot {
             Shot::WorkspaceEditorDraft => "workspace-editor-draft",
             Shot::WorkspaceEditorConflict => "workspace-editor-conflict",
             Shot::TerminalDropTarget => "terminal-drop-target",
+            Shot::Palette => "palette",
+            Shot::PaletteQuery => "palette-query",
+            Shot::PaletteNoMatch => "palette-no-match",
+            Shot::PaletteJump => "palette-jump",
+            Shot::Shortcuts => "shortcuts",
+            Shot::AccountMenu => "account-menu",
+            Shot::TerminalFont => "terminal-font",
+            Shot::SettingsDialog => "settings-dialog",
+            Shot::Projects => "projects",
+            Shot::ProjectSettings => "project-settings",
+            Shot::ProjectSettingsTabIssues => "project-settings-tab-issues",
+            Shot::ProjectSettingsTabJson => "project-settings-tab-json",
+            Shot::ProjectSettingsJsonError => "project-settings-json-error",
+            Shot::ImportIssues => "import-issues",
+            Shot::SignIn => "sign-in",
+            Shot::SignInError => "sign-in-error",
         }
     }
 

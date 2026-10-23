@@ -9,8 +9,12 @@ use gpui::{
     NoAction, actions,
 };
 
+use super::commands::{Command, is_single_key, reaches_app_from_terminal};
 use super::commands::{MenuName, all_commands, command_by_id, keystroke, menu_items};
-use super::commands::{is_single_key, reaches_app_from_terminal};
+pub use super::commands_app::{
+    AddProject, ImportIssues, OpenJump, OpenPalette, OpenSettings, ShowShortcuts, UseCompactSize,
+    UseDarkTheme, UseDefaultSize, UseLargeSize, UseLightTheme, UseSystemTheme,
+};
 pub use super::commands_files::{SaveFile, ShowDocsTab, ShowOpenFile, ShowWorktreeFiles};
 pub use super::commands_stages::{MoveStageDown, MoveStageUp, ShowTasksProgress};
 use crate::ime::ime_check::SubmitWord;
@@ -167,6 +171,24 @@ command_actions! {
     "tab.editor" => ShowOpenFile,
     "files.show" => ShowWorktreeFiles,
     "file.save" => SaveFile,
+    "palette.open" => OpenPalette,
+    "jump.open" => OpenJump,
+    "help.shortcuts" => ShowShortcuts,
+    "app.settings" => OpenSettings,
+    "theme.system" => UseSystemTheme,
+    "theme.light" => UseLightTheme,
+    "theme.dark" => UseDarkTheme,
+    "ui-size.compact" => UseCompactSize,
+    "ui-size.default" => UseDefaultSize,
+    "ui-size.large" => UseLargeSize,
+    "repo.add" => AddProject,
+    "repo.import" => ImportIssues,
+}
+
+/// A command with an action. The others only name keys in the shortcut sheet, or are menu items
+/// that the row and project menus run.
+pub fn is_bound(command: &Command) -> bool {
+    action_for(command.id).is_some()
 }
 
 fn push_bindings<A: Action + Clone>(id: &str, action: A, mac: bool, out: &mut Vec<KeyBinding>) {
@@ -188,7 +210,7 @@ fn push_bindings<A: Action + Clone>(id: &str, action: A, mac: bool, out: &mut Ve
 /// So does Esc: agents use it to stop (owner, 2026-10-22).
 fn terminal_keeps(mac: bool) -> Vec<KeyBinding> {
     all_commands()
-        .filter(|command| command.contexts.is_empty())
+        .filter(|command| command.contexts.is_empty() && is_bound(command))
         .flat_map(|command| command.keys.iter())
         .filter(|key| {
             (!is_single_key(key) || **key == "Escape") && !reaches_app_from_terminal(key, mac)
@@ -321,7 +343,7 @@ fn menu_of(name: MenuName) -> Vec<MenuItem> {
         }
         last_section = Some(section);
         items.push(MenuItem::Action {
-            name: command.title.into(),
+            name: menu_title(command).into(),
             action,
             os_action: None,
             checked: false,
@@ -331,14 +353,23 @@ fn menu_of(name: MenuName) -> Vec<MenuItem> {
     items
 }
 
+/// A menu item's text where it differs from the command's title.
+fn menu_title(command: &Command) -> &'static str {
+    match command.id {
+        "app.settings" => "Settings\u{2026}",
+        _ => command.title,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn binds_every_command_with_a_key_or_a_menu_bar_item_to_an_action() {
-        let reached =
-            all_commands().filter(|command| !command.keys.is_empty() || command.menu.is_some());
+        let reached = all_commands().filter(|command| {
+            !command.documents_only && (!command.keys.is_empty() || command.menu.is_some())
+        });
         for command in reached {
             assert!(action_for(command.id).is_some(), "{}", command.id);
         }
@@ -347,6 +378,7 @@ mod tests {
     #[test]
     fn makes_one_binding_per_key_and_context() {
         let expected: usize = all_commands()
+            .filter(|command| is_bound(command))
             .map(|command| command.keys.len() * command.contexts.len().max(1))
             .sum();
         assert_eq!(command_bindings(true).len(), expected);
@@ -356,8 +388,8 @@ mod tests {
     fn leaves_esc_and_the_shells_chords_to_the_terminal() {
         // On macOS only Esc: Cmd chords never reach a shell.
         assert_eq!(terminal_keeps(true).len(), 1);
-        // Esc, and Mod+Q, Mod+B, Mod+[, Mod+Alt+B and the Mod+Alt tools: Ctrl chords without
-        // Shift elsewhere.
-        assert_eq!(terminal_keeps(false).len(), 11);
+        // Esc, and Mod+Q, Mod+B, Mod+[, Mod+Alt+B, Mod+K, Mod+,, Mod+J and the Mod+Alt tools:
+        // Ctrl chords without Shift elsewhere. F1 reaches the app.
+        assert_eq!(terminal_keeps(false).len(), 14);
     }
 }

@@ -1,16 +1,19 @@
-//! The state of the Stages tab of Project settings (`ProjectSettingsDialog.tsx`): the draft text of
-//! `.natamux.json`, its steps and problems, and the picked stage or branch. The preview, the
+//! The draft of Project settings (`ProjectSettingsDialog.tsx`): the text of `.natamux.json` (which
+//! may not parse), its steps and problems, and the picked stage or branch. The preview, the
 //! stage list and the details read it; every edit goes through `edit`, which writes the steps
 //! back into the draft and keeps every other key as it is.
 
 use gpui::EventEmitter;
+use natamux_proto::projects::repo::TrackerSettings;
 use natamux_proto::stages::pipeline_rules::{IssueLevel, PipelineIssue, pipeline_issues};
 use natamux_proto::stages::schema::{Stage, StageBranch, Step};
 use serde_json::{Map, Value};
 use ui::prelude::*;
 
 use super::editor_catalog::unique_issues;
-use super::editor_draft::{Draft, format_settings, parse_draft, with_steps};
+use super::editor_draft::{
+    Draft, format_settings, parse_draft, tracker_of, with_create_issue, with_steps,
+};
 use super::editor_find::{find_branch, find_stage};
 
 /// The draft changed: the dialog works out again whether it differs from the file.
@@ -18,7 +21,10 @@ pub struct DraftEdited;
 
 pub struct PipelineEditor {
     text: String,
+    /// The settings of `text`; the default pipeline with no other keys while `error` is set.
     draft: Draft,
+    /// Why `text` cannot be read as settings. The person fixes it on the JSON tab.
+    error: Option<String>,
     issues: Vec<PipelineIssue>,
     /// The stage or branch the user picked; None until then.
     picked: Option<String>,
@@ -29,19 +35,33 @@ pub struct PipelineEditor {
 impl EventEmitter<DraftEdited> for PipelineEditor {}
 
 impl PipelineEditor {
-    /// `text` is the file as read, or `{}`; a text the tab cannot read starts from `{}`.
+    /// `text` is the file as read, or `{}`. A text the tab cannot read is kept as it is.
     pub fn new(text: &str) -> Self {
-        let (text, draft) = match parse_draft(text) {
-            Ok(draft) => (text.to_owned(), draft),
-            Err(_) => ("{}".to_owned(), empty_draft()),
-        };
-        let issues = issues_of(&draft.steps);
-        PipelineEditor {
-            text,
-            draft,
-            issues,
+        let mut editor = PipelineEditor {
+            text: String::new(),
+            draft: empty_draft(),
+            error: None,
+            issues: Vec::new(),
             picked: None,
             picking: false,
+        };
+        editor.take_text(text);
+        editor
+    }
+
+    fn take_text(&mut self, text: &str) {
+        self.text = text.to_owned();
+        match parse_draft(text) {
+            Ok(draft) => {
+                self.issues = issues_of(&draft.steps);
+                self.draft = draft;
+                self.error = None;
+            }
+            Err(error) => {
+                self.issues = Vec::new();
+                self.draft = empty_draft();
+                self.error = Some(error);
+            }
         }
     }
 
@@ -49,8 +69,19 @@ impl PipelineEditor {
         &self.text
     }
 
-    pub fn raw(&self) -> &Map<String, Value> {
-        &self.draft.raw
+    /// The settings of the draft, or None while the text cannot be read.
+    pub fn raw(&self) -> Option<&Map<String, Value>> {
+        self.error.is_none().then_some(&self.draft.raw)
+    }
+
+    /// Why the text cannot be read; None while it can.
+    pub fn parse_error(&self) -> Option<&str> {
+        self.error.as_deref()
+    }
+
+    /// The tracker of the draft; the defaults while the text cannot be read.
+    pub fn tracker(&self) -> TrackerSettings {
+        self.raw().map(tracker_of).unwrap_or_default()
     }
 
     pub fn steps(&self) -> &[Step] {
@@ -85,25 +116,38 @@ impl PipelineEditor {
             .count()
     }
 
-    /// New steps: the draft text takes them, the problems are worked out again.
+    /// New steps: the draft text takes them, the problems are worked out again. Ignored while the
+    /// text cannot be read.
     pub fn edit(&mut self, steps: Vec<Step>, cx: &mut Context<Self>) {
+        if self.error.is_some() {
+            return;
+        }
         let raw = with_steps(&self.draft.raw, &steps);
-        self.text = format_settings(&raw);
-        self.issues = issues_of(&steps);
-        self.draft = Draft { raw, steps };
-        cx.emit(DraftEdited);
-        cx.notify();
+        self.changed(&format_settings(&raw), cx);
     }
 
-    /// A whole new text (Import, Reload). Refused with the reason when the tab cannot read it.
-    pub fn replace_text(&mut self, text: &str, cx: &mut Context<Self>) -> Result<(), String> {
-        let draft = parse_draft(text)?;
-        self.issues = issues_of(&draft.steps);
-        self.text = text.to_owned();
-        self.draft = draft;
+    /// `tracker.createIssue`. Ignored while the text cannot be read.
+    pub fn set_create_issue(&mut self, value: &str, cx: &mut Context<Self>) {
+        if self.error.is_some() {
+            return;
+        }
+        let raw = with_create_issue(&self.draft.raw, value);
+        self.changed(&format_settings(&raw), cx);
+    }
+
+    /// A whole new text (the JSON tab, Import, Reset, Reload). Any text is kept; one that cannot
+    /// be read shows its error on the JSON tab.
+    pub fn set_text(&mut self, text: &str, cx: &mut Context<Self>) {
+        self.changed(text, cx);
+    }
+
+    fn changed(&mut self, text: &str, cx: &mut Context<Self>) {
+        if text == self.text {
+            return;
+        }
+        self.take_text(text);
         cx.emit(DraftEdited);
         cx.notify();
-        Ok(())
     }
 
     /// The picked branch, if a branch is picked.

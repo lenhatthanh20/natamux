@@ -232,6 +232,7 @@ impl Root {
         };
         let state = CommandState {
             task_open: true,
+            agents_open: false,
             has_selection: true,
             selected_state: Some(task.state),
             workspace_open: task.workspace.is_some(),

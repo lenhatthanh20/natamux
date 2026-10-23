@@ -79,6 +79,8 @@ pub struct Notice {
 #[derive(Debug)]
 pub struct DashboardData {
     pub link: Link,
+    /// The daemon refused the token: the window asks for one (Sign in).
+    pub refused: bool,
     /// The task list came at least once: before that the views show skeletons.
     pub loaded: bool,
     pub tasks: Vec<Task>,
@@ -107,6 +109,7 @@ impl Default for DashboardData {
     fn default() -> Self {
         DashboardData {
             link: Link::Loading,
+            refused: false,
             loaded: false,
             tasks: Vec::new(),
             repos: Vec::new(),
@@ -169,15 +172,21 @@ impl DashboardData {
     fn link_status(&mut self, status: LinkStatus) {
         self.link = match status {
             LinkStatus::Connecting => return,
-            LinkStatus::Live => Link::Live,
+            LinkStatus::Live => {
+                self.refused = false;
+                Link::Live
+            }
             LinkStatus::Reconnecting(error) => Link::Down {
                 reason: error.to_string(),
                 retrying: true,
             },
-            LinkStatus::Refused => Link::Down {
-                reason: ClientError::Unauthorized.to_string(),
-                retrying: false,
-            },
+            LinkStatus::Refused => {
+                self.refused = true;
+                Link::Down {
+                    reason: ClientError::Unauthorized.to_string(),
+                    retrying: false,
+                }
+            }
         };
     }
 
