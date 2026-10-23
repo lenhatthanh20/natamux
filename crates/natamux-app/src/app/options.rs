@@ -19,7 +19,7 @@ pub enum ThemeMode {
     Dark,
 }
 
-/// The screen-1 to screen-4 states CI shoots (`--shot`). `app/shots.rs` puts the window in each one.
+/// The screen-1 to screen-5 states CI shoots (`--shot`). `app/shots.rs` puts the window in each one.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Shot {
     TasksTable,
@@ -64,10 +64,17 @@ pub enum Shot {
     Rollback,
     ImageDiff,
     WorkspaceHistory,
+    TasksProgress,
+    ProjectSettingsTabStages,
+    ProjectSettingsAgentStage,
+    ProjectSettingsStagePicker,
+    ProjectSettingsBranch,
+    ProjectSettingsProblems,
+    ProjectSettingsConflict,
 }
 
 impl Shot {
-    pub const ALL: [Shot; 42] = [
+    pub const ALL: [Shot; 49] = [
         Shot::TasksTable,
         Shot::TasksBoard,
         Shot::BoardHoverCard,
@@ -110,6 +117,13 @@ impl Shot {
         Shot::Rollback,
         Shot::ImageDiff,
         Shot::WorkspaceHistory,
+        Shot::TasksProgress,
+        Shot::ProjectSettingsTabStages,
+        Shot::ProjectSettingsAgentStage,
+        Shot::ProjectSettingsStagePicker,
+        Shot::ProjectSettingsBranch,
+        Shot::ProjectSettingsProblems,
+        Shot::ProjectSettingsConflict,
     ];
 
     pub fn name(self) -> &'static str {
@@ -156,6 +170,13 @@ impl Shot {
             Shot::Rollback => "rollback",
             Shot::ImageDiff => "image-diff",
             Shot::WorkspaceHistory => "workspace-history",
+            Shot::TasksProgress => "tasks-progress",
+            Shot::ProjectSettingsTabStages => "project-settings-tab-stages",
+            Shot::ProjectSettingsAgentStage => "project-settings-agent-stage",
+            Shot::ProjectSettingsStagePicker => "project-settings-stage-picker",
+            Shot::ProjectSettingsBranch => "project-settings-branch",
+            Shot::ProjectSettingsProblems => "project-settings-problems",
+            Shot::ProjectSettingsConflict => "project-settings-conflict",
         }
     }
 
@@ -314,7 +335,7 @@ mod tests {
         };
         let names: Vec<&str> = Shot::ALL.iter().map(|shot| shot.name()).collect();
         assert_eq!(part("STATES: >-", "DOCKED:"), names);
-        // The docked size: the table, and every state of screens 2 to 4.
+        // The docked size: the table, and every state of screens 2 to 5.
         let docked = part("DOCKED: >-", "run:");
         assert_eq!(docked.first(), Some(&"tasks-table"));
         assert_eq!(docked[1..], names[16..]);

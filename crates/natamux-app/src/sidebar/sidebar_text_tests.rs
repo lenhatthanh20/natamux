@@ -216,7 +216,13 @@ fn project_input() -> ProjectMenuInput {
 fn project_menu_offers_remove_finished_only_while_the_group_has_some() {
     assert_eq!(
         labels_of(&project_menu(project_input())),
-        ["Start a task", "Blur names", "-", "Remove project"]
+        [
+            "Start a task",
+            "Settings",
+            "Blur names",
+            "-",
+            "Remove project"
+        ]
     );
     let with_finished = ProjectMenuInput {
         finished: 2,
@@ -227,6 +233,7 @@ fn project_menu_offers_remove_finished_only_while_the_group_has_some() {
         labels_of(&project_menu(with_finished)),
         [
             "Start a task",
+            "Settings",
             "Show names",
             "-",
             "Remove finished workspaces",

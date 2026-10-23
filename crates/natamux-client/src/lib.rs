@@ -7,6 +7,7 @@ pub mod config;
 pub mod error;
 mod git_methods;
 mod http;
+mod settings_methods;
 pub mod agents {
     pub mod api;
 }

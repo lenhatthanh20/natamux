@@ -1,12 +1,13 @@
 //! Dialogs (docs/ui-spec.md 4.14, `ui/Dialog.tsx`): one layer per window over a scrim, sizes 400,
-//! 520 and 640, Esc and a click on the scrim close unless busy, Mod+Enter submits from any field,
-//! Tab stays inside, and focus goes back to the opener. Toasts stay above the scrim.
+//! 520, 640 and 1120, Esc and a click on the scrim close unless busy, Mod+Enter submits from any
+//! field, Tab stays inside, and focus goes back to the opener. A confirm can open over a dialog,
+//! which keeps its state under it. Toasts stay above the scrim.
 
 use std::rc::Rc;
 
 use gpui::{
-    AnyView, ClickEvent, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, Global,
-    KeystrokeEvent, MouseButton, Subscription, anchored, deferred, point,
+    AnyView, ClickEvent, DismissEvent, Entity, EntityId, EventEmitter, FocusHandle, Focusable,
+    Global, KeystrokeEvent, MouseButton, ScrollHandle, Subscription, anchored, deferred, point,
 };
 use ui::{ButtonLike, TintColor, prelude::*};
 
@@ -22,6 +23,8 @@ pub enum DialogSize {
     // Part of the dialog sizes of ui-spec 4.14.
     #[allow(dead_code)]
     Large,
+    /// A screen of its own (Project settings): 88% of the window high, near the top.
+    ExtraLarge,
 }
 
 impl DialogSize {
@@ -30,7 +33,17 @@ impl DialogSize {
             DialogSize::Small => 400.,
             DialogSize::Medium => 520.,
             DialogSize::Large => 640.,
+            DialogSize::ExtraLarge => 1120.,
         })
+    }
+
+    /// The share of the window above the dialog.
+    fn top(self) -> f32 {
+        if self == DialogSize::ExtraLarge {
+            0.06
+        } else {
+            0.14
+        }
     }
 }
 
@@ -52,6 +65,12 @@ pub trait DialogView: Render + Focusable + EventEmitter<DismissEvent> {
 
     /// Mod+Enter from any field, and the primary button.
     fn submit(&mut self, window: &mut Window, cx: &mut Context<Self>);
+
+    /// Esc and a click on the scrim. True: the view handled it (it closed a layer of its own, or
+    /// asks first), so the dialog stays.
+    fn cancel(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> bool {
+        false
+    }
 }
 
 trait DialogHandle {
@@ -61,6 +80,7 @@ trait DialogHandle {
     fn tab_ring(&self, cx: &App) -> Vec<FocusHandle>;
     fn busy(&self, cx: &App) -> bool;
     fn submit(&self, window: &mut Window, cx: &mut App);
+    fn cancel(&self, window: &mut Window, cx: &mut App) -> bool;
 }
 
 impl<V: DialogView> DialogHandle for Entity<V> {
@@ -87,17 +107,23 @@ impl<V: DialogView> DialogHandle for Entity<V> {
     fn submit(&self, window: &mut Window, cx: &mut App) {
         self.update(cx, |view, cx| view.submit(window, cx));
     }
+
+    fn cancel(&self, window: &mut Window, cx: &mut App) -> bool {
+        self.update(cx, |view, cx| view.cancel(window, cx))
+    }
 }
 
 struct OpenDialog {
+    id: EntityId,
     handle: Rc<dyn DialogHandle>,
     opener: Option<FocusHandle>,
     _dismiss: Subscription,
     _keys: Subscription,
 }
 
+/// The open dialogs, bottom first: one dialog, and at most one confirm over it.
 pub struct DialogLayer {
-    open: Option<OpenDialog>,
+    open: Vec<OpenDialog>,
 }
 
 struct GlobalDialogLayer(Entity<DialogLayer>);
@@ -107,7 +133,7 @@ impl Global for GlobalDialogLayer {}
 impl DialogLayer {
     /// Makes the window's dialog layer. The root view renders it as a child.
     pub fn init(cx: &mut App) -> Entity<Self> {
-        let layer = cx.new(|_| DialogLayer { open: None });
+        let layer = cx.new(|_| DialogLayer { open: Vec::new() });
         cx.set_global(GlobalDialogLayer(layer.clone()));
         layer
     }
@@ -118,32 +144,52 @@ impl DialogLayer {
         let Some(layer) = cx.try_global::<GlobalDialogLayer>().map(|g| g.0.clone()) else {
             return;
         };
-        layer.update(cx, |layer, cx| layer.show(view, window, cx));
+        layer.update(cx, |layer, cx| layer.show(view, false, window, cx));
+    }
+
+    /// Shows `view` over the open dialog, which keeps its state; closing `view` gives the focus
+    /// back to it. Without an open dialog it is the same as `open`.
+    pub fn open_over<V: DialogView>(view: Entity<V>, window: &mut Window, cx: &mut App) {
+        let Some(layer) = cx.try_global::<GlobalDialogLayer>().map(|g| g.0.clone()) else {
+            return;
+        };
+        layer.update(cx, |layer, cx| layer.show(view, true, window, cx));
     }
 
     #[allow(dead_code)]
     pub fn is_open(cx: &App) -> bool {
         cx.try_global::<GlobalDialogLayer>()
-            .is_some_and(|g| g.0.read(cx).open.is_some())
+            .is_some_and(|g| !g.0.read(cx).open.is_empty())
     }
 
     fn show<V: DialogView>(
         &mut self,
         view: Entity<V>,
+        over: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let opener = match self.open.take() {
+        // Over a dialog, only the dialog at the bottom stays; a new dialog replaces them all.
+        let keep = usize::from(over && !self.open.is_empty());
+        let replaced = self.open.drain(keep..).next();
+        let opener = match replaced {
             Some(open) => open.opener,
+            None if keep == 1 => window.focused(cx),
             None => MenuLayer::opener(cx).or_else(|| window.focused(cx)),
         };
-        let dismiss = cx.subscribe_in(&view, window, |layer, _, _: &DismissEvent, window, cx| {
-            layer.close(window, cx);
-        });
+        let id = view.entity_id();
+        let dismiss = cx.subscribe_in(
+            &view,
+            window,
+            move |layer, _, _: &DismissEvent, window, cx| {
+                layer.close_dialog(id, window, cx);
+            },
+        );
         let handle: Rc<dyn DialogHandle> = Rc::new(view);
         let keys = self.watch_keys(handle.clone(), cx);
         window.focus(&handle.focus_handle(cx), cx);
-        self.open = Some(OpenDialog {
+        self.open.push(OpenDialog {
+            id,
             handle,
             opener,
             _dismiss: dismiss,
@@ -169,7 +215,9 @@ impl DialogLayer {
                     let layer = layer.clone();
                     // Closing drops this listener, so it waits until the key is handled.
                     window.defer(cx, move |window, cx| {
-                        layer.update(cx, |layer, cx| layer.close(window, cx)).ok();
+                        layer
+                            .update(cx, |layer, cx| layer.close_unless_busy(window, cx))
+                            .ok();
                     });
                 }
                 DialogKey::Submit if !handle.busy(cx) => handle.submit(window, cx),
@@ -186,8 +234,9 @@ impl DialogLayer {
         })
     }
 
+    /// Closes the top dialog.
     fn close(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(open) = self.open.take() else {
+        let Some(open) = self.open.pop() else {
             return;
         };
         if let Some(opener) = open.opener {
@@ -196,8 +245,22 @@ impl DialogLayer {
         cx.notify();
     }
 
+    /// A dialog that closes itself; a dialog under a confirm takes the confirm with it.
+    fn close_dialog(&mut self, id: EntityId, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(index) = self.open.iter().position(|open| open.id == id) else {
+            return;
+        };
+        while self.open.len() > index {
+            self.close(window, cx);
+        }
+    }
+
+    /// Esc and a click outside: the top dialog closes unless it is busy or handles it itself.
     fn close_unless_busy(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.open.as_ref().is_some_and(|open| !open.handle.busy(cx)) {
+        let Some(handle) = self.open.last().map(|open| open.handle.clone()) else {
+            return;
+        };
+        if !handle.busy(cx) && !handle.cancel(window, cx) {
             self.close(window, cx);
         }
     }
@@ -205,38 +268,39 @@ impl DialogLayer {
 
 impl Render for DialogLayer {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let Some(open) = &self.open else {
-            return div().into_any_element();
-        };
         let viewport = window.viewport_size();
         // Zed's modal layer look, read from the theme.
         let mut scrim = cx.theme().colors().elevated_surface_background;
         scrim.fade_out(0.2);
-        let panel = div()
-            .w(open.handle.size(cx).width())
-            .max_w(viewport.width - px(32.))
-            .occlude()
-            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-            .child(open.handle.view());
-        deferred(
-            anchored().position(point(px(0.), px(0.))).child(
-                v_flex()
-                    .id("dialog-scrim")
-                    .w(viewport.width)
-                    .h(viewport.height)
-                    .occlude()
-                    .bg(scrim)
-                    .items_center()
-                    .pt(viewport.height * 0.14)
-                    .on_mouse_down(
-                        MouseButton::Left,
-                        cx.listener(|layer, _, window, cx| layer.close_unless_busy(window, cx)),
-                    )
-                    .child(panel),
-            ),
-        )
-        .with_priority(2)
-        .into_any_element()
+        let top = self.open.len().saturating_sub(1);
+        let layers = self.open.iter().enumerate().map(|(index, open)| {
+            let size = open.handle.size(cx);
+            let panel = div()
+                .w(size.width())
+                .max_w(viewport.width - px(32.))
+                .occlude()
+                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                .child(open.handle.view());
+            let mut layer = v_flex()
+                .id(("dialog-scrim", index))
+                .w(viewport.width)
+                .h(viewport.height)
+                .occlude()
+                .bg(scrim)
+                .items_center()
+                .pt(viewport.height * size.top())
+                .child(panel);
+            // Only the top dialog closes on a click outside it.
+            if index == top {
+                layer = layer.on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(|layer, _, window, cx| layer.close_unless_busy(window, cx)),
+                );
+            }
+            deferred(anchored().position(point(px(0.), px(0.))).child(layer))
+                .with_priority(2 + index)
+        });
+        div().children(layers)
     }
 }
 
@@ -247,6 +311,9 @@ type ClickHandler = Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
 #[derive(IntoElement)]
 pub struct DialogFrame {
     title: SharedString,
+    tall: bool,
+    scroll: Option<ScrollHandle>,
+    note: Option<SharedString>,
     description: Option<SharedString>,
     body: Vec<AnyElement>,
     footer: Vec<AnyElement>,
@@ -261,11 +328,32 @@ impl DialogFrame {
     ) -> Self {
         Self {
             title: title.into(),
+            tall: false,
+            scroll: None,
+            note: None,
             description: None,
             body: Vec::new(),
             footer: Vec::new(),
             on_close: Rc::new(on_close),
         }
+    }
+
+    /// The frame of an `ExtraLarge` dialog: 88% of the window high, the body fills the rest.
+    pub fn tall(mut self) -> Self {
+        self.tall = true;
+        self
+    }
+
+    /// The body's scroll, for a dialog that scrolls to one of its parts.
+    pub fn track_scroll(mut self, handle: &ScrollHandle) -> Self {
+        self.scroll = Some(handle.clone());
+        self
+    }
+
+    /// A line above the footer's buttons.
+    pub fn footer_note(mut self, note: impl Into<SharedString>) -> Self {
+        self.note = Some(note.into());
+        self
     }
 
     pub fn description(mut self, description: impl Into<SharedString>) -> Self {
@@ -312,9 +400,16 @@ impl RenderOnce for DialogFrame {
                     .on_click(move |event, window, cx| on_close(event, window, cx)),
             );
         let has_footer = !self.footer.is_empty();
+        let height = window.viewport_size().height;
         v_flex()
             .w_full()
-            .max_h(window.viewport_size().height * 0.8)
+            .map(|this| {
+                if self.tall {
+                    this.h(height * 0.88)
+                } else {
+                    this.max_h(height * 0.8)
+                }
+            })
             .overflow_hidden()
             .elevation_3(cx)
             .rounded(px(12.))
@@ -326,6 +421,7 @@ impl RenderOnce for DialogFrame {
                         .min_h_0()
                         .flex_1()
                         .overflow_y_scroll()
+                        .when_some(self.scroll, |body, handle| body.track_scroll(&handle))
                         .px(px(20.))
                         .py(px(12.))
                         .gap_4()
@@ -334,15 +430,17 @@ impl RenderOnce for DialogFrame {
             })
             .when(has_footer, |this| {
                 this.child(
-                    h_flex()
+                    v_flex()
                         .flex_none()
-                        .justify_end()
                         .gap_2()
                         .px(px(20.))
                         .py(px(12.))
                         .border_t_1()
                         .border_color(cx.theme().colors().border_variant)
-                        .children(self.footer),
+                        .when_some(self.note, |this, note| {
+                            this.child(Label::new(note).size(LabelSize::Small).color(Color::Muted))
+                        })
+                        .child(h_flex().justify_end().gap_2().children(self.footer)),
                 )
             })
     }

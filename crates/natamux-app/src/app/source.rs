@@ -358,6 +358,9 @@ pub fn reason(error: &ClientError) -> String {
 #[path = "source_git.rs"]
 mod git;
 
+#[path = "source_settings.rs"]
+mod settings;
+
 #[cfg(test)]
 mod tests {
     use super::*;

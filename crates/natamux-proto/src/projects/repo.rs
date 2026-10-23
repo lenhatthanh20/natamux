@@ -139,8 +139,8 @@ fn default_sources() -> Vec<ContextSource> {
     ]
 }
 
-/// The answer of `GET /repos/:id/settings`. `text` is the file as it is, `version` goes back with
-/// a save; neither is read by screen 1.
+/// The answer of `GET /repos/:id/settings`. `text` is the file as it is (None: there is no file),
+/// `version` goes back in `If-Match` with a save.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize)]
 pub struct LoadedSettings {
     #[serde(default)]
@@ -152,6 +152,19 @@ pub struct LoadedSettings {
     pub found: bool,
     #[serde(default)]
     pub path: String,
+    #[serde(default)]
+    pub text: Option<String>,
+    #[serde(default)]
+    pub version: Option<String>,
+}
+
+/// The answer of `PUT /repos/:id/settings`: the settings as saved, and the version of the file now.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize)]
+pub struct SavedSettings {
+    #[serde(default)]
+    pub settings: ProjectSettings,
+    #[serde(default)]
+    pub version: Option<String>,
 }
 
 /// A skill an agent can use (`SkillInfo` in `packages/core/src/agents/skills.ts`).
@@ -278,6 +291,18 @@ mod tests {
         assert_eq!(sources[2].prompt.as_deref(), Some("Read {ref}"));
         assert!(loaded.found);
         assert_eq!(loaded.path, "/r/.natamux.json");
+        assert_eq!(loaded.text.as_deref(), Some("{}"));
+        assert_eq!(loaded.version.as_deref(), Some("v"));
+    }
+
+    #[test]
+    fn reads_the_answer_of_a_save() {
+        let saved: SavedSettings = serde_json::from_str(
+            r#"{"settings":{"stages":[{"id":"spec","kind":"agent","gate":"manual"}]},"version":"v2"}"#,
+        )
+        .unwrap();
+        assert_eq!(saved.settings.stages.len(), 1);
+        assert_eq!(saved.version.as_deref(), Some("v2"));
     }
 
     #[test]

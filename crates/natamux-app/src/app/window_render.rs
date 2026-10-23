@@ -5,6 +5,7 @@ use natamux_proto::tasks::task::TaskState;
 use ui::prelude::*;
 
 use super::{Root, Tool};
+use crate::app::commands_stages::ShowTasksProgress;
 use crate::app::layout_mode::{DetailsMode, PANEL_WIDTH, SidebarMode, effective_sidebar_width};
 use crate::app::shell_rules::{crumb, is_wide, live_item, running_count, window_title};
 use crate::app::shortcuts::{
@@ -13,7 +14,7 @@ use crate::app::shortcuts::{
 use crate::app::status_bar::StatusBar;
 use crate::app::status_bar::now_ms;
 use crate::app::title_bar::TitleBar;
-use crate::app::view_state::{SIDEBAR_MAX, SIDEBAR_MIN};
+use crate::app::view_state::{Layout, SIDEBAR_MAX, SIDEBAR_MIN};
 use crate::components::resize_handle::{Edge, Limits, Resize, ResizeHandle};
 use crate::perf::overlay;
 use crate::tasks::task_attention::needs_me_tasks;
@@ -273,6 +274,9 @@ impl Render for Root {
             .on_action(cx.listener(Self::show_agents))
             .on_action(cx.listener(Self::show_table))
             .on_action(cx.listener(Self::show_board))
+            .on_action(cx.listener(|this, _: &ShowTasksProgress, _, cx| {
+                this.show_list(Some(Layout::Progress), cx)
+            }))
             .on_action(cx.listener(Self::toggle_sidebar))
             .on_action(cx.listener(Self::focus_filter))
             .on_action(cx.listener(Self::new_workspace))

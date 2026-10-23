@@ -18,6 +18,8 @@ pub struct Confirm {
     pub cancel_label: SharedString,
     /// Rows under the description, as (id, title): the tasks a confirm acts on.
     pub rows: Vec<(SharedString, SharedString)>,
+    /// The answer is the danger button; a confirm that loses nothing uses the primary one.
+    pub danger: bool,
     pub on_confirm: Run,
 }
 
@@ -34,8 +36,14 @@ impl Confirm {
             confirm_label: confirm_label.into(),
             cancel_label: "Cancel".into(),
             rows: Vec::new(),
+            danger: true,
             on_confirm: Rc::new(on_confirm),
         }
+    }
+
+    pub fn safe(mut self) -> Self {
+        self.danger = false;
+        self
     }
 
     pub fn cancel_label(mut self, label: impl Into<SharedString>) -> Self {
@@ -50,6 +58,15 @@ impl Confirm {
 
     /// Shows the confirm with Cancel focused.
     pub fn open(self, window: &mut Window, cx: &mut App) {
+        self.show(false, window, cx);
+    }
+
+    /// Shows the confirm over the open dialog, which stays as it is under it.
+    pub fn open_over(self, window: &mut Window, cx: &mut App) {
+        self.show(true, window, cx);
+    }
+
+    fn show(self, over: bool, window: &mut Window, cx: &mut App) {
         let view = cx.new(|cx| ConfirmDialog {
             confirm: self,
             focus: cx.focus_handle(),
@@ -57,7 +74,11 @@ impl Confirm {
             submit: cx.focus_handle(),
         });
         let cancel = view.read(cx).cancel.clone();
-        DialogLayer::open(view, window, cx);
+        if over {
+            DialogLayer::open_over(view, window, cx);
+        } else {
+            DialogLayer::open(view, window, cx);
+        }
         window.focus(&cancel, cx);
     }
 }
@@ -127,7 +148,7 @@ impl Render for ConfirmDialog {
                 .footer(primary_button(
                     confirm.confirm_label.clone(),
                     &self.submit,
-                    true,
+                    confirm.danger,
                     false,
                     submit,
                 )),

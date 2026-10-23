@@ -94,6 +94,26 @@ pub fn files_width(stored: u32, main_width: f32) -> f32 {
     (stored as f32).min((main_width / 2.).max(200.))
 }
 
+/// What a new `show` of the diff does.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DiffRefresh {
+    /// Nothing changed.
+    Keep,
+    /// A newer read of the same file: the texts change inside the editors, so the cursor, the
+    /// selection and the scroll stay.
+    Update,
+    /// Another file, or other options: new editors.
+    Rebuild,
+}
+
+pub fn diff_refresh(same_file: bool, same_read: bool, same_options: bool) -> DiffRefresh {
+    match (same_file, same_read, same_options) {
+        (true, true, true) => DiffRefresh::Keep,
+        (true, false, true) => DiffRefresh::Update,
+        _ => DiffRefresh::Rebuild,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -173,5 +193,20 @@ mod tests {
         assert_eq!(files_width(260, 1200.), 260.);
         assert_eq!(files_width(420, 760.), 380.);
         assert_eq!(files_width(260, 300.), 200.);
+    }
+
+    #[test]
+    fn a_newer_read_of_the_same_file_updates_the_editors_in_place() {
+        // Regression (T-0150): a changed read made new editors, so the cursor was lost.
+        assert_eq!(diff_refresh(true, false, true), DiffRefresh::Update);
+        assert_eq!(diff_refresh(true, true, true), DiffRefresh::Keep);
+    }
+
+    #[test]
+    fn another_file_or_other_options_build_new_editors() {
+        assert_eq!(diff_refresh(false, false, true), DiffRefresh::Rebuild);
+        assert_eq!(diff_refresh(false, true, true), DiffRefresh::Rebuild);
+        assert_eq!(diff_refresh(true, true, false), DiffRefresh::Rebuild);
+        assert_eq!(diff_refresh(true, false, false), DiffRefresh::Rebuild);
     }
 }

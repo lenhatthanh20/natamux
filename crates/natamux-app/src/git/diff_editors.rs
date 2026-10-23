@@ -5,7 +5,7 @@
 use std::ops::Range;
 use std::sync::Arc;
 
-use editor::display_map::{BlockPlacement, BlockProperties, BlockStyle};
+use editor::display_map::{BlockPlacement, BlockProperties, BlockStyle, CustomBlockId};
 use editor::{Editor, HiddenDiffHunkRenderer, MultiBuffer};
 use gpui::Entity;
 use language::Buffer;
@@ -31,6 +31,20 @@ pub fn set_excerpts(
         let all = Point::zero()..buffer.read(cx).max_point();
         multi.set_excerpts_for_buffer(buffer.clone(), [all], 0, cx);
     }
+}
+
+/// The excerpts of an editor's multibuffer again, after a newer read changed the hunks.
+pub fn refit_excerpts(
+    editor: &Entity<Editor>,
+    buffer: &Entity<Buffer>,
+    ranges: Vec<Range<Point>>,
+    collapse: bool,
+    cx: &mut App,
+) {
+    let multi = editor.read(cx).buffer().clone();
+    multi.update(cx, |multi, cx| {
+        set_excerpts(multi, buffer, ranges, collapse, cx)
+    });
 }
 
 /// A read-only editor of `multi`, which shows `buffer`. The file's name is in the toolbar, so the
@@ -69,8 +83,14 @@ pub fn read_only_editor(
     })
 }
 
-/// Empty rows above `before_row` of one side, or below its last row at the end of the file.
-pub fn add_spacer(editor: &Entity<Editor>, buffer: &Entity<Buffer>, spacer: Spacer, cx: &mut App) {
+/// Empty rows above `before_row` of one side, or below its last row at the end of the file. The
+/// id lets a newer read of the file take the rows away again.
+pub fn add_spacer(
+    editor: &Entity<Editor>,
+    buffer: &Entity<Buffer>,
+    spacer: Spacer,
+    cx: &mut App,
+) -> Option<CustomBlockId> {
     let last_row = buffer.read(cx).max_point().row;
     editor.update(cx, |editor, cx| {
         let row = spacer.before_row.min(last_row);
@@ -79,24 +99,24 @@ pub fn add_spacer(editor: &Entity<Editor>, buffer: &Entity<Buffer>, spacer: Spac
                 .buffer()
                 .read(cx)
                 .buffer_point_to_anchor(buffer, Point::new(row, 0), cx);
-        let Some(anchor) = anchor else {
-            return;
-        };
+        let anchor = anchor?;
         let placement = if spacer.before_row > last_row {
             BlockPlacement::Below(anchor)
         } else {
             BlockPlacement::Above(anchor)
         };
-        editor.insert_blocks(
-            [BlockProperties {
-                placement,
-                height: Some(spacer.rows),
-                style: BlockStyle::Spacer,
-                render: Arc::new(|_| div().into_any_element()),
-                priority: 0,
-            }],
-            None,
-            cx,
-        );
-    });
+        editor
+            .insert_blocks(
+                [BlockProperties {
+                    placement,
+                    height: Some(spacer.rows),
+                    style: BlockStyle::Spacer,
+                    render: Arc::new(|_| div().into_any_element()),
+                    priority: 0,
+                }],
+                None,
+                cx,
+            )
+            .pop()
+    })
 }

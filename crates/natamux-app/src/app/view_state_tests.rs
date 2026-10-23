@@ -73,7 +73,7 @@ fn a_broken_file_is_ignored_and_replaced_on_the_next_save() {
 #[test]
 fn a_part_of_the_wrong_kind_falls_back_to_its_default() {
     let state = ViewState::parse(
-        r#"{"folds": [1], "pinned": "T-1", "layout": "progress", "sidebarOpen": "no",
+        r#"{"folds": [1], "pinned": "T-1", "layout": "grid", "sidebarOpen": "no",
             "sidebarWidth": 9000, "seen": {"T-1": "running", "T-2": 4},
             "lastBase": {"r1": "dev", "r2": 3}}"#,
     );
@@ -400,4 +400,13 @@ fn remembers_no_tab_when_the_stored_tabs_are_broken() {
     ] {
         assert!(ViewState::parse(broken).tabs.is_empty(), "{broken}");
     }
+}
+
+#[test]
+fn keeps_the_progress_layout_in_the_file() {
+    let state = ViewState::parse(r#"{"layout": "progress"}"#);
+    assert_eq!(state.layout, Layout::Progress);
+    assert!(state.to_json().contains(r#""layout": "progress""#));
+    let again = ViewState::parse(&state.to_json());
+    assert_eq!(again.layout, Layout::Progress);
 }

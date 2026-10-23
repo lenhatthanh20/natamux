@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 
 /// `STAGE_KINDS`.
 pub const STAGE_KINDS: [&str; 6] = ["context", "agent", "review", "testing", "release", "manual"];
+/// `GROUP_KINDS`: the kinds that may run side by side in a group.
+pub const GROUP_KINDS: [StageKind; 2] = [StageKind::Agent, StageKind::Manual];
 /// `GATES`.
 pub const GATES: [&str; 2] = ["manual", "auto"];
 
@@ -18,6 +20,20 @@ pub enum StageKind {
     Release,
     #[default]
     Manual,
+}
+
+impl StageKind {
+    /// The word of the file: "context", "agent", ...
+    pub fn as_str(self) -> &'static str {
+        match self {
+            StageKind::Context => "context",
+            StageKind::Agent => "agent",
+            StageKind::Review => "review",
+            StageKind::Testing => "testing",
+            StageKind::Release => "release",
+            StageKind::Manual => "manual",
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
@@ -36,6 +52,8 @@ pub struct Stage {
     pub gate: Gate,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prompt: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub output: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -138,6 +156,21 @@ pub enum Step {
 }
 
 impl Step {
+    /// `isGroup`.
+    pub fn is_group(&self) -> bool {
+        matches!(self, Step::Group(_))
+    }
+
+    /// `isBranch`.
+    pub fn is_branch(&self) -> bool {
+        matches!(self, Step::Branch(_))
+    }
+
+    /// `isStage`.
+    pub fn is_stage(&self) -> bool {
+        matches!(self, Step::Stage(_))
+    }
+
     pub fn id(&self) -> &str {
         match self {
             Step::Group(group) => &group.id,
@@ -215,6 +248,27 @@ mod tests {
         );
         assert_eq!(steps[2].stages().len(), 2);
         assert_eq!(steps[2].name(), Some("Bug or feature"));
+    }
+
+    #[test]
+    fn keeps_the_prompt_of_a_stage_and_names_the_kind_of_a_step() {
+        let steps: Vec<Step> = serde_json::from_str(
+            r#"[{"id":"spec","kind":"agent","gate":"manual","prompt":"Do it"}]"#,
+        )
+        .unwrap();
+        assert!(
+            matches!(&steps[0], Step::Stage(stage) if stage.prompt.as_deref() == Some("Do it"))
+        );
+        let again = serde_json::to_value(&steps).unwrap();
+        assert_eq!(again[0]["prompt"], "Do it");
+        assert!(steps[0].is_stage() && !steps[0].is_group() && !steps[0].is_branch());
+        assert_eq!(GROUP_KINDS.map(StageKind::as_str), ["agent", "manual"]);
+        for (kind, word) in [
+            (StageKind::Context, "context"),
+            (StageKind::Testing, "testing"),
+        ] {
+            assert!(STAGE_KINDS.contains(&kind.as_str()) && kind.as_str() == word);
+        }
     }
 
     #[test]

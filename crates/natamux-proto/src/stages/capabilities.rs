@@ -16,6 +16,14 @@ pub fn offers_workflow(stage: &Stage) -> bool {
     stage.kind == StageKind::Agent && stage.workflow == Some(true)
 }
 
+/// Review, manual and release stages start nothing in a shell, so they have none to end.
+pub fn can_end_shell(stage: &Stage) -> bool {
+    matches!(
+        stage.kind,
+        StageKind::Context | StageKind::Agent | StageKind::Testing
+    )
+}
+
 /// CI checks code, so only a stage that changes it (an agent stage without an output file) or a
 /// testing stage can wait for CI.
 pub fn checks_on_ci(stage: &Stage) -> bool {
@@ -141,6 +149,16 @@ mod tests {
         assert!(can_run_workflow(None));
         for agent in ["codex", "gemini", "copilot", "cursor"] {
             assert!(!can_run_workflow(Some(agent)));
+        }
+    }
+
+    #[test]
+    fn ends_the_shell_of_a_stage_that_starts_an_agent_or_a_command_only() {
+        for kind in [StageKind::Context, StageKind::Agent, StageKind::Testing] {
+            assert!(can_end_shell(&of_kind(kind)));
+        }
+        for kind in [StageKind::Review, StageKind::Release, StageKind::Manual] {
+            assert!(!can_end_shell(&of_kind(kind)));
         }
     }
 

@@ -7,7 +7,6 @@ use std::collections::BTreeMap;
 use natamux_client::ClientError;
 use natamux_proto::agents::activity::TaskUsage;
 use natamux_proto::events::task_event::{StoredEvent, TaskEvent};
-use natamux_proto::projects::repo::{LoadedSettings, ProjectSettings};
 use natamux_proto::stages::actions::{StageAction, StageActionInput, StageFile};
 use natamux_proto::stages::catalog::catalog_stage;
 use natamux_proto::stages::position::{describe_condition, path_of};
@@ -34,6 +33,13 @@ pub(super) fn reference_pipeline() -> Vec<Step> {
     let reproduce = Stage {
         name: Some("Reproduce the bug".into()),
         output: Some("repro.md".into()),
+        agent: Some("cursor".into()),
+        args: Some("--model sonnet-4.5".into()),
+        prompt: Some(
+            "Reproduce the bug first. Write the steps and the failing case to repro.md, \
+             then stop for review."
+                .into(),
+        ),
         ..Stage::new("reproduce", StageKind::Agent, Gate::Auto)
     };
     let path = |id: &str, name: &str, when: Option<Condition>, stage: Stage| BranchPath {
@@ -47,6 +53,15 @@ pub(super) fn reference_pipeline() -> Vec<Step> {
         run: "grep -qi bug .natamux-task/context.md".into(),
     };
     let one = |id: &str| catalog_stage(id).unwrap_or_default();
+    let test_spec = Stage {
+        agent: Some("gemini".into()),
+        ..one("test-spec")
+    };
+    let review = Stage {
+        name: Some("Review".into()),
+        agent: Some("codex".into()),
+        ..one("agent-review")
+    };
     vec![
         stage_of("context"),
         stage_of("spec"),
@@ -61,23 +76,13 @@ pub(super) fn reference_pipeline() -> Vec<Step> {
         Step::Group(StageGroup {
             id: "build".into(),
             name: Some("Test spec and Implement".into()),
-            parallel: vec![one("test-spec"), one("implement")],
+            parallel: vec![test_spec, one("implement")],
         }),
-        stage_of("agent-review"),
+        Step::Stage(review),
         stage_of("security"),
         stage_of("review"),
         stage_of("release"),
     ]
-}
-
-pub(super) fn reference_settings() -> LoadedSettings {
-    LoadedSettings {
-        settings: ProjectSettings {
-            stages: reference_pipeline(),
-            ..ProjectSettings::default()
-        },
-        ..LoadedSettings::default()
-    }
 }
 
 /// The stages of a task in the order it runs them: the path it took (the first, before it chose

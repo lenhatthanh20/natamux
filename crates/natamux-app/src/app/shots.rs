@@ -1,4 +1,4 @@
-//! `--shot STATE`: opens the window in one screen-1 to 4 state of the fake daemon, for the CI
+//! `--shot STATE`: opens the window in one screen-1 to 5 state of the fake daemon, for the CI
 //! screenshots (docs/rust-phase3.md). The clock stops at the fake's time and the view state is
 //! fixed and never saved, so a shot is the same on every run.
 
@@ -12,6 +12,7 @@ use super::dashboard::Dashboard;
 use super::fake_daemon::{self, FakeLink, NOW, PINNED};
 use super::options::Shot;
 use super::shortcuts::{FindInTerminal, OpenRowMenu};
+use super::shots_stages;
 use super::view_rules::{DetailsView, WorkspaceTab};
 use super::view_state::{Layout, ViewState};
 use super::window::Root;
@@ -85,6 +86,10 @@ pub fn run(handle: WindowHandle<Root>, shot: Shot, cx: &mut App) {
     }
     cx.spawn(async move |cx| {
         cx.background_executor().timer(SETTLE).await;
+        if shots_stages::is_settings_shot(shot) {
+            shots_stages::run(handle, shot, cx).await;
+            return;
+        }
         if let Err(error) = handle.update(cx, |root, window, cx| enter(shot, root, window, cx)) {
             eprintln!("shot: the window is gone: {error}");
             return;
@@ -121,7 +126,11 @@ fn view_of(shot: Shot) -> ViewState {
     let agents = (shot == Shot::AgentsGrid).then(|| vec![ASKING.to_string(), RUNNING.to_string()]);
     let mut view = ViewState {
         pinned: PINNED.iter().map(|id| id.to_string()).collect(),
-        layout: if board { Layout::Board } else { Layout::Table },
+        layout: match shot {
+            _ if board => Layout::Board,
+            Shot::TasksProgress => Layout::Progress,
+            _ => Layout::Table,
+        },
         agent_panes: agents,
         ..ViewState::default()
     };
@@ -344,10 +353,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn only_the_board_shots_open_the_board() {
+    fn only_the_board_and_progress_shots_leave_the_table() {
         for shot in Shot::ALL {
-            let board = matches!(shot, Shot::TasksBoard | Shot::BoardHoverCard);
-            let layout = if board { Layout::Board } else { Layout::Table };
+            let layout = match shot {
+                Shot::TasksBoard | Shot::BoardHoverCard => Layout::Board,
+                Shot::TasksProgress => Layout::Progress,
+                _ => Layout::Table,
+            };
             assert_eq!(view_of(shot).layout, layout, "{}", shot.name());
             assert_eq!(view_of(shot).pinned, vec!["T-0141".to_string()]);
         }

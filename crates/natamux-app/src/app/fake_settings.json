@@ -1,0 +1,6 @@
+{
+  "natamux": {
+    "context": { "sources": [{ "type": "manual" }, { "type": "github-issue" }] },
+    "tracker": { "type": "github", "createIssue": "manual", "linkInPr": true }
+  }
+}

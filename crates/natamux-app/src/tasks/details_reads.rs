@@ -5,6 +5,7 @@
 use ui::prelude::*;
 
 use super::{DetailsPanel, Shown};
+use crate::app::settings_reads::SettingsReads;
 use crate::app::source::reason;
 use crate::workspaces::wrap_up_rules::is_finished_state;
 
@@ -86,6 +87,9 @@ impl DetailsPanel {
             return;
         };
         let repo = task.repo.clone().unwrap_or_else(|| "default".into());
+        if let Some(reads) = SettingsReads::global(cx) {
+            reads.update(cx, |reads, _| reads.watch(&repo));
+        }
         let answer = source.load_settings(&repo);
         self.read_into(
             answer,
@@ -96,6 +100,17 @@ impl DetailsPanel {
             },
             cx,
         );
+    }
+
+    /// The settings of a project were read again (a save, the window active again): the shown
+    /// task reads its own copy again when it is of that project.
+    pub(super) fn settings_refreshed(&mut self, repo: &str, cx: &mut Context<Self>) {
+        let of_repo = self
+            .task(cx)
+            .is_some_and(|task| task.repo.as_deref().unwrap_or("default") == repo);
+        if of_repo {
+            self.read_settings(cx);
+        }
     }
 
     /// "Start from branch" of a task with no workspace.

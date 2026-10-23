@@ -64,6 +64,7 @@ impl MenuName {
 pub use super::command_when::CommandState;
 pub use super::command_when::When;
 pub use super::commands_git::GIT_COMMANDS;
+pub use super::commands_stages::STAGE_COMMANDS;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Command {
@@ -248,6 +249,7 @@ pub const COMMANDS: &[Command] = &[
     command("agent.restart", "Restart agent", Task),
     command("task.cancel", "Cancel task", Task),
     command("task.delete", "Delete task", Task),
+    command("project.settings", "Settings", App),
     command("project.blur", "Blur names", App),
     command("project.show-names", "Show names", App),
     command("project.remove-finished", "Remove finished workspaces", App),
@@ -440,7 +442,7 @@ pub const COMMANDS: &[Command] = &[
 
 /// Every command: this file's, then screen 4's (`commands_git.rs`).
 pub fn all_commands() -> impl Iterator<Item = &'static Command> {
-    COMMANDS.iter().chain(GIT_COMMANDS)
+    COMMANDS.iter().chain(GIT_COMMANDS).chain(STAGE_COMMANDS)
 }
 
 pub fn command_by_id(id: &str) -> Option<&'static Command> {

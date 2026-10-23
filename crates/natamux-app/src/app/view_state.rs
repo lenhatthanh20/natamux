@@ -29,12 +29,12 @@ pub const FILES_MAX: u32 = 420;
 /// Folded sections of the details panel kept at most (`natamux.section.<id>`).
 const MAX_SECTIONS: usize = 50;
 
-/// The progress layout is not in the app yet, so a saved progress opens the table.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Layout {
     #[default]
     Table,
     Board,
+    Progress,
 }
 
 impl Layout {
@@ -42,6 +42,7 @@ impl Layout {
         match self {
             Layout::Table => "table",
             Layout::Board => "board",
+            Layout::Progress => "progress",
         }
     }
 }
@@ -199,6 +200,7 @@ impl ViewState {
             pinned: strings(map.get("pinned")),
             layout: match map.get("layout").and_then(Value::as_str) {
                 Some("board") => Layout::Board,
+                Some("progress") => Layout::Progress,
                 _ => Layout::Table,
             },
             sidebar_open: flag(map.get("sidebarOpen"), default.sidebar_open),

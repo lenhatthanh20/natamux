@@ -79,6 +79,8 @@ pub struct State {
     pub routes: HashMap<String, (String, String)>,
     /// Every request in order: "METHOD /target" and its body.
     pub requests: Vec<(String, String)>,
+    /// The request line and headers of each request, in the same order, as sent.
+    pub heads: Vec<String>,
     /// How long each answer waits, to keep a read running.
     pub delay: Duration,
 }
@@ -95,6 +97,16 @@ impl State {
             .iter()
             .filter(|(seen, _)| seen == route)
             .count()
+    }
+
+    /// The value of header `name` of the last request.
+    pub fn last_header(&self, name: &str) -> Option<String> {
+        let head = self.heads.last()?;
+        head.lines().find_map(|line| {
+            let (key, value) = line.split_once(':')?;
+            key.eq_ignore_ascii_case(name)
+                .then(|| value.trim().to_string())
+        })
     }
 
     pub fn last_request(&self) -> (String, String) {
@@ -207,6 +219,7 @@ pub async fn serve(
     let delay = {
         let mut state = state.lock().unwrap();
         state.requests.push((route.clone(), body));
+        state.heads.push(head.clone());
         state.delay
     };
     tokio::time::sleep(delay).await;

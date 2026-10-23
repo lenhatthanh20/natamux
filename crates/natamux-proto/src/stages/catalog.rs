@@ -1,7 +1,52 @@
-//! The stage part of `STAGE_CATALOG` (`packages/core/src/stages/stage-catalog.ts`): what a
-//! pipeline holds when a stage is added. Prompts, phases and descriptions are not read here.
+//! `STAGE_CATALOG` (`packages/core/src/stages/stage-catalog.ts`): the stages a project can pick
+//! from, with what a pipeline holds when a stage is added. The long texts are in `catalog_text.rs`.
 
-use crate::stages::schema::{Gate, Stage, StageKind};
+use crate::stages::catalog_text::TEXTS;
+use crate::stages::schema::{Gate, Stage, StageKind, Step};
+
+/// `StagePhase`: the groups of the stage picker.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum StagePhase {
+    Understand,
+    Design,
+    Build,
+    Check,
+    Ship,
+}
+
+/// `STAGE_PHASES`.
+pub const STAGE_PHASES: [StagePhase; 5] = [
+    StagePhase::Understand,
+    StagePhase::Design,
+    StagePhase::Build,
+    StagePhase::Check,
+    StagePhase::Ship,
+];
+
+impl StagePhase {
+    /// `PHASE_NAMES`.
+    pub fn name(self) -> &'static str {
+        match self {
+            StagePhase::Understand => "Understand",
+            StagePhase::Design => "Design",
+            StagePhase::Build => "Build",
+            StagePhase::Check => "Check",
+            StagePhase::Ship => "Ship",
+        }
+    }
+}
+
+/// `CatalogStage`. `prompt` is the default prompt of an agent or testing stage; `{commit}` in it
+/// becomes the commit rule. `needs_command`: a testing stage that only makes sense with the
+/// project's own command.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CatalogStage {
+    pub stage: Stage,
+    pub phase: StagePhase,
+    pub description: &'static str,
+    pub prompt: Option<&'static str>,
+    pub needs_command: bool,
+}
 
 fn stage(id: &str, kind: StageKind, gate: Gate) -> Stage {
     Stage::new(id, kind, gate)
@@ -35,14 +80,40 @@ fn with_own_shell(mut stage: Stage) -> Stage {
     stage
 }
 
-/// Every stage of the catalog, in the order of `STAGE_CATALOG`, built once: the sidebar names a
-/// stage on every row it draws.
+/// Every entry of the catalog, in the order of `STAGE_CATALOG`, built once.
+pub fn catalog_entries() -> &'static [CatalogStage] {
+    static ENTRIES: std::sync::OnceLock<Vec<CatalogStage>> = std::sync::OnceLock::new();
+    ENTRIES.get_or_init(|| {
+        let mut stages = early_stages();
+        stages.extend(later_stages());
+        // `catalog_text.rs` has the same order; a test checks the ids.
+        stages
+            .into_iter()
+            .zip(TEXTS.iter())
+            .map(|(stage, text)| CatalogStage {
+                stage,
+                phase: text.phase,
+                description: text.description,
+                prompt: text.prompt,
+                needs_command: text.needs_command,
+            })
+            .collect()
+    })
+}
+
+/// `catalogEntry(id)`.
+pub fn catalog_entry(id: &str) -> Option<&'static CatalogStage> {
+    catalog_entries().iter().find(|entry| entry.stage.id == id)
+}
+
+/// The stage of every entry, built once: the sidebar names a stage on every row it draws.
 pub fn catalog() -> &'static [Stage] {
     static CATALOG: std::sync::OnceLock<Vec<Stage>> = std::sync::OnceLock::new();
     CATALOG.get_or_init(|| {
-        let mut stages = early_stages();
-        stages.extend(later_stages());
-        stages
+        catalog_entries()
+            .iter()
+            .map(|entry| entry.stage.clone())
+            .collect()
     })
 }
 
@@ -154,10 +225,9 @@ pub fn catalog_stage(id: &str) -> Option<Stage> {
     catalog().iter().find(|stage| stage.id == id).cloned()
 }
 
-/// `DEFAULT_PIPELINE` in core, for tests: the app reads the default from the daemon.
-#[cfg(test)]
-pub(crate) fn default_pipeline() -> Vec<crate::stages::schema::Step> {
-    use crate::stages::schema::{StageGroup, Step};
+/// `DEFAULT_PIPELINE`: what Reset to default puts in the editor.
+pub fn default_pipeline() -> Vec<Step> {
+    use crate::stages::schema::StageGroup;
     let one = |id: &str| catalog_stage(id).unwrap_or_default();
     vec![
         Step::Stage(one("context")),
@@ -175,24 +245,5 @@ pub(crate) fn default_pipeline() -> Vec<crate::stages::schema::Step> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn has_every_stage_once() {
-        let ids: Vec<String> = catalog().iter().map(|stage| stage.id.clone()).collect();
-        assert_eq!(ids.len(), 28);
-        let mut sorted = ids.clone();
-        sorted.sort();
-        sorted.dedup();
-        assert_eq!(sorted.len(), ids.len());
-    }
-
-    #[test]
-    fn finds_a_stage_by_id() {
-        let spec = catalog_stage("spec").unwrap();
-        assert_eq!(spec.output.as_deref(), Some("spec.md"));
-        assert_eq!(spec.sections.unwrap().len(), 5);
-        assert!(catalog_stage("nope").is_none());
-    }
-}
+#[path = "catalog_tests.rs"]
+mod tests;
