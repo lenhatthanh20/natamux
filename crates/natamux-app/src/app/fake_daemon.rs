@@ -11,7 +11,7 @@ use natamux_proto::agents::activity::{TaskActivity, TaskUsage};
 use natamux_proto::agents::start::StartAgentInput;
 use natamux_proto::events::kind::PreparingMessage;
 use natamux_proto::events::task_event::{StoredEvent, TaskEventInput};
-use natamux_proto::projects::repo::{BranchList, LoadedSettings, Repo, SkillList};
+use natamux_proto::projects::repo::{BranchList, Repo, SkillList};
 use natamux_proto::tasks::job::Job;
 use natamux_proto::tasks::task::{
     DeleteTaskAnswer, NewTaskInput, Task, TaskState, TemplateTaskInput,
@@ -50,6 +50,7 @@ struct Data {
     preparing: BTreeMap<String, PreparingStep>,
     ended: BTreeMap<String, Vec<EndedShell>>,
     git: git::GitState,
+    settings: settings::SettingsFiles,
     next_number: u32,
     feeds: Vec<UnboundedSender<DashboardEvent>>,
     link: FakeLink,
@@ -96,12 +97,14 @@ impl Data {
             preparing: BTreeMap::new(),
             ended: part!(seed, "endedShells"),
             git: git::GitState::default(),
+            settings: settings::SettingsFiles::default(),
             next_number: 200,
             feeds: Vec::new(),
             link: FakeLink::Live,
         };
         data.add_stage_seed();
         data.add_git_seed();
+        data.add_settings_seed();
         data
     }
 
@@ -267,10 +270,6 @@ impl FakeDaemon {
 
     pub fn list_branches(&self, _repo: Option<&str>) -> Answer<BranchList> {
         Ok(self.data().branches.clone())
-    }
-
-    pub fn load_settings(&self, _repo_id: &str) -> Answer<LoadedSettings> {
-        Ok(stages::reference_settings())
     }
 
     pub fn list_skills(&self, _repo_id: &str) -> Answer<SkillList> {
@@ -470,6 +469,9 @@ mod stages;
 
 #[path = "fake_git.rs"]
 mod git;
+
+#[path = "fake_settings.rs"]
+mod settings;
 
 #[cfg(test)]
 #[path = "fake_daemon_tests.rs"]

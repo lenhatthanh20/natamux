@@ -1,8 +1,8 @@
 # Rust phase 3: the desktop app
 
-Phase 3 of `plan-rust-migration.md`: the native app (`crates/natamux-app`) gets the screens of the React dashboard one by one, on today's Node daemon. This page covers the shared base and screen 1 (T-0146): the app shell, the sidebar, the task table and the task board; screen 2 (T-0148): the workspace with its terminals, and the Agents grid; screen 3 (T-0149): the details panel with the stage timeline and the gate actions; and screen 4 (T-0150): the Changes and History tabs of the workspace. It says how to get the beta, what CI checks, where the app differs from the React screens, and the gate results.
+Phase 3 of `plan-rust-migration.md`: the native app (`crates/natamux-app`) gets the screens of the React dashboard one by one, on today's Node daemon. This page covers the shared base and screen 1 (T-0146): the app shell, the sidebar, the task table and the task board; screen 2 (T-0148): the workspace with its terminals, and the Agents grid; screen 3 (T-0149): the details panel with the stage timeline and the gate actions; screen 4 (T-0150): the Changes and History tabs of the workspace; and screen 5 (T-0151): the Progress layout of All tasks and the pipeline editor of Project settings. It says how to get the beta, what CI checks, where the app differs from the React screens, and the gate results.
 
-Screens 5 to 7 come in later tasks, each with its own spec and its own "Gate results" rows.
+Screens 6 and 7 come in later tasks, each with its own spec and its own "Gate results" rows.
 
 ## Decisions (owner, 2026-10-22)
 
@@ -16,8 +16,8 @@ Screens 5 to 7 come in later tasks, each with its own spec and its own "Gate res
 
 | Crate | Layer | Job in phase 3 |
 |---|---|---|
-| `natamux-proto` | L0 | The types screen 1 reads and sends: repos with `worktreesDir`, templates, jobs, activity, diff stats, usage, the terminals list, task events, branches, changes, the graph, the new workspace input. `tests/core_values.rs` checks names and limits against `packages/core` |
-| `natamux-client` | L3 | One function per route, in files that mirror the daemon's route files. The live feed reads the whole dashboard (tasks, repos, jobs, activity, usage, diff stats, terminals, the preparing step) |
+| `natamux-proto` | L0 | Screen 5 adds the pipeline rules of core the editor runs (`stages/pipeline_rules.rs`: `pipelineSchema` and `pipelineIssues`), the catalog texts and prompts, `prompt.rs`, `terminal_lane.rs` and the settings rules outside `stages`. The types screen 1 reads and sends: repos with `worktreesDir`, templates, jobs, activity, diff stats, usage, the terminals list, task events, branches, changes, the graph, the new workspace input. `tests/core_values.rs` checks names and limits against `packages/core` |
+| `natamux-client` | L3 | Screen 5 adds `save_settings` (`PUT /repos/:id/settings` with `If-Match`). One function per route, in files that mirror the daemon's route files. The live feed reads the whole dashboard (tasks, repos, jobs, activity, usage, diff stats, terminals, the preparing step) |
 | `natamux-app` | L4 | Screen 4 adds Zed's `buffer_diff`, `language` and `text` (already in `Cargo.lock` through `editor`) and `grammars` with its tree-sitter grammars (new; owner, 2026-10-23) as direct dependencies, at the pinned rev. The Natamux theme, fonts, icons, the command registry, shared parts (dialog, menus, toasts, skeleton), the view state, the shell and screen 1 |
 
 ## Get the beta
@@ -80,7 +80,7 @@ The tests in `cargo xtask ci` that guard the look and the keys:
 
 ## Screenshot baselines
 
-`app-macos` shoots each state in both themes (`light`, `dark`) at 1000x680 and 800x560: 42 states, 168 shots, and the 4 shots of the window check, 172 in all. Both sizes are under 1024, so the sidebar is a drawer there, and the details panel a sheet over main with a scrim. The runner's screen is 1024x768, so `tasks-table` and the states of screens 2 to 4 are shot at 1024x720 too, where the sidebar docks and the details panel is a sheet without a scrim: 54 more shots, 226 in all. The details panel docks only from 1280, so no shot shows it docked: run 39863431903 asked for 1280x720 and every one came out 1024x684 with the sheet, so that size was dropped (see "Screen 3: where it differs"). macOS keeps the window below the menu bar, so these come out 1024x684; the width, which docks the sidebar, holds. If a runner gives the window less than 1024 wide, the comparison says the sizes differ. A shot is the app's window itself (`screencapture -l` with the window id, found by the app's process id), so the menu bar is not in it and the status bar is. Baselines are the PNGs in `crates/natamux-app/tests/shots/`, named `<state>-<theme>-<size>.png`.
+`app-macos` shoots each state in both themes (`light`, `dark`) at 1000x680 and 800x560: 49 states, 196 shots, and the 4 shots of the window check, 200 in all. Both sizes are under 1024, so the sidebar is a drawer there, and the details panel a sheet over main with a scrim. The runner's screen is 1024x768, so `tasks-table` and the states of screens 2 to 5 are shot at 1024x720 too, where the sidebar docks and the details panel is a sheet without a scrim: 68 more shots, 268 in all. The details panel docks only from 1280, so no shot shows it docked: run 39863431903 asked for 1280x720 and every one came out 1024x684 with the sheet, so that size was dropped (see "Screen 3: where it differs"). macOS keeps the window below the menu bar, so these come out 1024x684; the width, which docks the sidebar, holds. If a runner gives the window less than 1024 wide, the comparison says the sizes differ. A shot is the app's window itself (`screencapture -l` with the window id, found by the app's process id), so the menu bar is not in it and the status bar is. Baselines are the PNGs in `crates/natamux-app/tests/shots/`, named `<state>-<theme>-<size>.png`.
 
 `scripts/compare-shots.py` compares a shot with its baseline. It fails when more than 0.5% of the pixels differ by more than 16 in a channel, or when the sizes differ, and it writes a diff image (differing pixels in red). The job summary lists each shot as matches, differs, or no baseline yet.
 
@@ -152,9 +152,23 @@ The fake daemon's pipeline stands in for the storefront one: Context, Spec, the 
 | `image-diff` | T-0147 on Changes: the new `public/banner.png`, After only, on the checkerboard, with its size |
 | `workspace-history` | T-0143 on History: the summary, the lanes, the ref chips with "+1" |
 
+### Screen-5 states
+
+The fake's `natamux` project has a `.natamux.json` with the reference pipeline (Reproduce the bug on Cursor with a prompt of its own, Test spec on Gemini CLI, Review on Codex); `natamux-site` has none.
+
+| State | Shows |
+|---|---|
+| `tasks-progress` | All tasks as Progress: one section per project, the stage columns with their counts and waits, the markers, Next. The fake's screen-1 tasks carry no stages, so they make the section "natamux, earlier pipeline" with no stage column, as the web does for such tasks |
+| `project-settings-tab-stages` | Project settings of natamux as it opens: the preview with the branch and the group, the stage list, Context's details |
+| `project-settings-agent-stage` | The same, Reproduce the bug picked: its agent, arguments and the prompt of its own |
+| `project-settings-stage-picker` | Add stage: the catalog stages by phase and the Custom stage form |
+| `project-settings-branch` | Bug or feature picked: the branch details with its two paths |
+| `project-settings-problems` | Lint and types added with no command: the problem under its row, the preview's danger ring, "1 problem", Save off |
+| `project-settings-conflict` | Save after another client changed the file: Reload and Overwrite |
+
 ## Where it differs from the React screens
 
-- **Hidden controls.** Controls that open a screen that is not built yet stay hidden until that screen ships: the command center button, project Settings, Add a project, the Progress layout, and the status bar's Projects, Import issues, Keyboard and Account items. The details toggle, **Show details** in the table's row menu and the status bar's notification item came back with screen 3; View changes, Commit…, and the Changes and History tabs with screen 4. The needs-you pill shows and filters the list to the states that need you, but it opens no jump palette.
+- **Hidden controls.** Controls that open a screen that is not built yet stay hidden until that screen ships: the command center button, Add a project, and the status bar's Projects, Import issues, Keyboard and Account items. The details toggle, **Show details** in the table's row menu and the status bar's notification item came back with screen 3; View changes, Commit…, and the Changes and History tabs with screen 4; the Progress layout and project Settings (the project menu and the card's gear) with screen 5. The needs-you pill shows and filters the list to the states that need you, but it opens no jump palette.
 - **View state in a file.** The React app keeps `natamux.*` in the browser's localStorage. The app keeps one `view.json` in its data folder (`~/Library/Application Support/Natamux Native/view.json`, `%APPDATA%` on Windows), written atomically: sidebar folds (at most 300), blurred projects, pinned tasks, layout, sidebar open and width, show finished, seen states (at most 1000) and the last base branch per project. A broken file is ignored and replaced.
 - **Pinned and folds are per app.** They are not shared with the browser or the Electron app, which keep their own.
 - **Opening a task.** Enter or a double click opens the task's workspace (screen 2, below). The terminal keeps Esc, so an agent can be stopped with it (owner, 2026-10-22). Cmd+[ on macOS, **View → All tasks** or the sidebar go back.
@@ -219,6 +233,23 @@ The fake daemon's pipeline stands in for the storefront one: Context, Spec, the 
 - **Ages** in History are in UTC, as on the earlier screens.
 - **Shot sizes.** At 1024x720 the sidebar docks and main is under 720 wide, so the Changes states show the narrow layout (the "Changed file" picker, Inline); at 1000x680 the sidebar is a drawer and they show the file panel and Side by side, as the reference does at 1440.
 
+## Screen 5: where it differs from the React screens
+
+- **Project settings has the Stages tab only.** The Issues and JSON tabs come with screen 7. So a file that the Stages tab cannot read is refused at Import with its reason, where the web opens it on the JSON tab.
+- **A file the app cannot read** (one the daemon reads, with a field the app's types cannot hold) starts the screen from the defaults and says why, as a broken file does. Save stays off until an edit, and then asks before it replaces the file.
+- **Tab** moves through the stage rows, Add stage, the text fields on screen (or the picker's), Cancel and Save, in the order they are drawn. The checkboxes and the pick menus are not on it yet.
+- **Dialogs over dialogs.** The questions of the editor (Discard your changes?, Reset to default, Remove, Import, a broken file) open over Project settings, which keeps its state under them.
+- **Stage keys** are written in the order of the schema, not of the file, and a key the schema does not know is dropped from a stage when the steps are written back. A field of the wrong JSON type cannot be read: the file is refused at Import (or the screen starts from the defaults), where the web shows the problem next to its stage.
+- **Messages.** The pipeline problems copy zod's texts; "This is not JSON: …" gives the JSON reader's own message.
+- **Export** asks where to save `<project>.natamux.json` and says "Exported <file>."; the web downloads it.
+- **Settings read again.** The daemon sends no event when a project's settings change. As the web reads them again when its tab gets the focus, the app reads them again when its window becomes active, when the project list changes, and after its own save. The open dialog keeps its draft; a change by another client shows as Reload and Overwrite on Save.
+- **Pickers.** The agent, kind, condition, "Add a stage…" and Insert skill pickers are plain menus with no search, as the pickers of screen 1.
+- **Icons.** The app's Lucide set lacks BookOpen, FlaskConical, Rocket, Hand, UserRound, GitFork and GripVertical: Zed's Book, ToolHammer, PullRequest, Person, GitBranch and Menu icons stand in (`stages/kind_icon.rs`), and the Progress segment uses ListTodo, until the SVGs come.
+- **Progress.** The marker's tooltip names the status without the stage's name; the stage columns scroll sideways between the fixed Task and Next columns; a row's title has no underline on hover, the row is tinted.
+- **Keys.** `stage.move` of the web is two commands, `stage.move-up` (Alt+Up) and `stage.move-down` (Alt+Down), in the stage list. Mod+Enter saves through the dialog's own key.
+- **Shot sizes.** The editor states scroll the dialog to the stage list. At 1024x720 the list and the details sit side by side; at 1000x680 and 800x560 they are one column, so those shots show the list and the details are under it.
+- **Window sizes.** The window is at least 800 wide, so the web's phone rules of the editor and the preview never apply; the list and the details sit side by side from a 1024-wide window.
+
 ## Ported tests
 
 Each TypeScript case of spec Part D item 11 has a Rust test of the same name, except:
@@ -256,6 +287,17 @@ Screen 4 (T-0150): every case of `features/git/__tests__/change-tree.test.ts`, `
 - `view-store.test.ts` 'closes back to the tab the user picked last, or the terminal' and the other cases of the open file: the editor tab comes with screen 6.
 - `cutCommitSubject` and `simpleCommitDraft` (`core/git/commit-message.ts`): the daemon drafts the message; they come with the daemon port (phase 4).
 - `ChangesPanel`, `DiffToolbar`, `MonacoDiff`, `GitGraph` and `FileBody` have no TypeScript tests. Their pure parts have new tests: `body_kind` and the notices, the commit box rules (`git/commit_rules.rs`), the width rules and the hunk shapes (`git/diff_rules.rs`), the lane geometry (`git/graph_lanes.rs`), `image_size`.
+
+Screen 5 (T-0151): every case of `features/stages/editor/__tests__/{settings-json,move,branches,catalog,find,labels,stage-fields}.test.ts`, `lib/__tests__/skill-picker.test.ts`, the `boardSections` cases of `features/stages/__tests__/ProgressBoard.test.ts`, and of the core tests `stages/__tests__/pipeline-schema.test.ts` (pipeline and branch cases), `schema.test.ts`, `prompt.test.ts`, the `pipelineIssues` and catalog cases of `stage-catalog.test.ts`, the `terminalOfStage` and `canHaveOwnAgent` cases of `terminal-lane.test.ts`, `canEndShell`, and `activeSteps` / `stepRefsOf` of `default-pipeline.test.ts` (in `natamux-proto`) has a Rust test of the same name, except:
+
+- 're-renders only the row of the task that changed' (`ProgressBoard.test.ts`): it tests a React memo.
+- `StagePicker.test.tsx`: 14 of 15 have twins in `stages/editor_catalog_tests.rs`; 'adds the stage that is picked' is a click callback, covered by the shots.
+- `PipelinePreview.test.tsx`: the texts, labels, tooltips and edges of 26 cases have twins in `stages/preview_rules_tests.rs`; the clicks, Enter and the ARIA parts ('C20 selects with Enter', 'selects the branch or a stage on click', 'selects with Enter on the If button', 'is not a group: no side by side list') are covered by the shots and the owner's check.
+- `ProjectSettingsDialog.test.tsx` and `BranchDetails.test.tsx` are component tests. Their pure parts have tests in `projects/settings_text_tests.rs` (`base_of`, `import_question`, `blocked_reason`, `unchanged`) and `stages/editor_branches_tests.rs`; the rest is covered by the shots and the owner's check.
+- Core cases with a field of the wrong JSON type (`enabled: "no"`, `endShell: "yes"`, a `workflow` of 1, a group or a branch in a path, a condition type "label"): such a file cannot be read into the app's types, so the Rust tests check that it is refused at read time.
+- "fills every field of an empty file" (`pipeline-schema.test.ts`): the daemon fills the default pipeline; the Rust test checks the context sources and the tracker.
+- `stageOfTerminal`, `terminalLane`, `terminalAtStart`, `endsShell1`, `pinnedTerminalsOf`, `stageAgent` (`terminal-lane.test.ts`): daemon rules, with the daemon port (phase 4).
+- Regression of screen 4: a newer read of the shown file updates the diff's editors in place, so the cursor stays (`a_newer_read_of_the_same_file_updates_the_editors_in_place`, `git/diff_rules.rs`).
 
 ## Gate results
 
@@ -324,8 +366,23 @@ Gate per screen (plan): target numbers met, baselines in both themes, owner sign
 | `supply-chain` with the new grammar crates | 2026-10-23 | Pass | Run 39899125106; the lockfile and the `cargo vet` exemptions came from a CI run (39889128968), not from a local cargo |
 | `app-macos`: the 7 screen-4 states, both themes, three sizes; shots match baselines | | Open | Shot in run 39899125106 (226 shots); no baselines until the owner signs screen 4 off |
 | `app-macos`: `--smoke`, zip at most 60 MiB | 2026-10-23 | Pass | Run 39899125106; the zip is about 50 MB with the grammars |
-| `app-windows`: build and `--smoke` | | Open | Runs on the PR into `dev` |
+| `app-windows`: build and `--smoke` | 2026-10-23 | Pass | Rust run 39910369940 on `dev` (3ed1970, PR #433 merged), job `app-windows`; all its jobs passed |
 | The diff of a real task in both themes and both layouts | | | Owner, on the CI build |
 | Vietnamese Telex and VNI in the commit box and the comment box | | | Owner |
 | Same API call as the React screen for each action, web dashboard shows the result | | | Owner |
+| Owner sign-off, light and dark | | | |
+
+### Screen 5
+
+| Part | Date | Result | Notes |
+|---|---|---|---|
+| `cargo xtask ci` | 2026-10-23 | Pass | Rust run 39927345495 on `natamux-ci/t-0151` (2f57470), job `check` |
+| Ported rule tests (same names as the TypeScript tests) | 2026-10-23 | Pass | In `check`; the cases left out are listed above |
+| Client tests (`save_settings` with and without `If-Match`, 409, 400) | 2026-10-23 | Pass | In `check` (`tests/settings_api.rs`) |
+| `live-daemon` screen-5 flow | 2026-10-23 | Pass | Run 39927345495, `runs_the_reads_and_writes_of_screen_5` |
+| `app-macos`: the 7 screen-5 states, both themes, three sizes; shots match baselines | | Open | Shot in run 39927345495 (268 shots); no baselines until the owner signs screen 5 off |
+| `app-macos`: `--smoke`, zip at most 60 MiB | 2026-10-23 | Pass | Run 39927345495 |
+| `app-windows`: build and `--smoke` | | Open | Runs on the PR into `dev` |
+| Progress of real tasks, a pipeline edit saved and seen in the web dashboard, and a web edit seen in the app | | | Owner, on the CI build |
+| Vietnamese Telex and VNI in the name, prompt and condition fields | | | Owner |
 | Owner sign-off, light and dark | | | |

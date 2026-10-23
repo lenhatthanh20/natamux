@@ -1,40 +1,46 @@
 //! All tasks in main (the main area of `Dashboard.tsx`, ui-spec 4.29): the view header with the
-//! count, the state filter, Show finished and Table / Board; the quick add; then the table or the
-//! board, or the skeleton, error or empty state. The rows keep one order while the pointer is over
+//! count, the state filter, Show finished and Table / Board / Progress (`task_view_header.rs`);
+//! the quick add; then the table, the board or the progress, or the skeleton, error or empty
+//! state. The rows keep one order while the pointer is over
 //! them and 2 s after a key move (`frozen_order`).
 
 use std::time::Duration;
 
-use gpui::{Entity, EventEmitter, FocusHandle, Focusable, FontWeight, Subscription};
+use gpui::{Entity, EventEmitter, FocusHandle, Focusable, Subscription};
 use natamux_proto::tasks::task::Task;
-use ui::{ButtonLike, Checkbox, TintColor, Tooltip, prelude::*};
+use ui::{ButtonLike, TintColor, prelude::*};
 
 use super::add_subtask_dialog;
 use super::frozen_order::{HOLD_MS, freeze_order, is_frozen};
 use super::quick_add::{QuickAdd, StartTask};
-use super::state_filter::{StateFilter, width_probe};
-use super::task_attention::{count_by_state, filter_tasks, needs_me_tasks};
+use super::task_attention::{filter_tasks, needs_me_tasks};
 use super::task_board::TaskBoard;
 use super::task_sort::sort_tasks;
 use super::task_table::{KeyMoved, TaskTable};
-use super::task_view_rules::{MainContent, NARROW_BELOW, filter_states, main_content};
+use super::task_view_rules::{MainContent, main_content};
 use crate::app::commands::shortcut_of;
+use crate::app::commands_stages::ShowTasksProgress;
 use crate::app::dashboard::Dashboard;
 use crate::app::dashboard_data::Link;
+use crate::app::settings_reads;
 use crate::app::shortcuts::{ShowBoard, ShowTable};
 use crate::app::view_state::Layout;
-use crate::components::chips::{CountBadge, Kbd};
+use crate::components::chips::Kbd;
 use crate::components::empty_state::EmptyState;
-use crate::components::segmented::Segmented;
 use crate::components::skeleton::{Loading, SkeletonList};
+use crate::stages::progress_board::ProgressBoard;
 
 pub use crate::app::clock::now_ms;
+
+#[path = "task_view_header.rs"]
+mod header;
 
 pub struct TaskView {
     dashboard: Entity<Dashboard>,
     quick_add: Entity<QuickAdd>,
     table: Entity<TaskTable>,
     board: Entity<TaskBoard>,
+    progress: Entity<ProgressBoard>,
     layout_focus: FocusHandle,
     /// The width of the view header: the main width that picks columns and labels.
     main_width: Entity<Option<f32>>,
@@ -54,6 +60,7 @@ impl Focusable for TaskView {
         match self.dashboard.read(cx).view().layout {
             Layout::Table => self.table.focus_handle(cx),
             Layout::Board => self.board.focus_handle(cx),
+            Layout::Progress => self.progress.focus_handle(cx),
         }
     }
 }
@@ -61,9 +68,12 @@ impl Focusable for TaskView {
 impl TaskView {
     pub fn new(dashboard: Entity<Dashboard>, window: &mut Window, cx: &mut Context<Self>) -> Self {
         add_subtask_dialog::init(&dashboard, cx);
+        // Made here, before the details panel and the progress layout that read it.
+        settings_reads::init(&dashboard, window, cx);
         let quick_add = cx.new(|cx| QuickAdd::new(dashboard.clone(), window, cx));
         let table = cx.new(|cx| TaskTable::new(dashboard.clone(), cx));
         let board = cx.new(|cx| TaskBoard::new(dashboard.clone(), cx));
+        let progress = cx.new(|cx| ProgressBoard::new(dashboard.clone(), cx));
         let main_width = cx.new(|_| None);
         let subscriptions = vec![
             cx.observe(&dashboard, |this, _, cx| this.refresh(cx)),
@@ -78,6 +88,7 @@ impl TaskView {
             quick_add,
             table,
             board,
+            progress,
             layout_focus: cx.focus_handle().tab_stop(true),
             main_width,
             pointer_inside: false,
@@ -144,7 +155,14 @@ impl TaskView {
         self.table
             .update(cx, |table, cx| table.set_rows(ordered.clone(), width, cx));
         self.board
-            .update(cx, |board, cx| board.set_rows(ordered, cx));
+            .update(cx, |board, cx| board.set_rows(ordered.clone(), cx));
+        let progress = self.dashboard.read(cx).view().layout == Layout::Progress;
+        self.progress.update(cx, |board, cx| {
+            board.set_rows(ordered, cx);
+            if progress {
+                board.read_settings(cx);
+            }
+        });
         cx.notify();
     }
 
@@ -169,95 +187,6 @@ impl TaskView {
     fn set_layout(&mut self, layout: Layout, cx: &mut Context<Self>) {
         self.dashboard
             .update(cx, |dashboard, cx| dashboard.set_layout(layout, cx));
-    }
-
-    fn render_header(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        let colors = cx.theme().colors();
-        let main_width = *self.main_width.read(cx);
-        let narrow = main_width.is_some_and(|width| width < NARROW_BELOW);
-        let dashboard = self.dashboard.read(cx);
-        let layout = dashboard.view().layout;
-        let show_finished = dashboard.view().show_finished;
-        let searched = filter_tasks(&dashboard.data.tasks, None, &dashboard.filter);
-        let states = filter_states(&count_by_state(&searched), dashboard.state_filter);
-        let filter = StateFilter::new(
-            self.dashboard.clone(),
-            states,
-            dashboard.state_filter,
-            main_width,
-        );
-        let count = self.shown_ids.len();
-        let toggle = self.dashboard.clone();
-        let pick = self.dashboard.clone();
-        let layouts = [
-            ("Table".into(), IconName::Table),
-            ("Board".into(), IconName::DiffSplit),
-        ];
-        let selected = usize::from(layout == Layout::Board);
-        h_flex()
-            .relative()
-            .flex_none()
-            .h(px(44.))
-            .px_4()
-            .gap_3()
-            .border_b_1()
-            .border_color(colors.border_variant)
-            .child(width_probe(&self.main_width))
-            .child(
-                Label::new("All tasks")
-                    .size(LabelSize::Large)
-                    .weight(FontWeight::SEMIBOLD),
-            )
-            .child(CountBadge::new(count))
-            .children(dashboard.needs_you.then(|| self.needs_you_chip()))
-            .child(filter)
-            .child(
-                h_flex()
-                    .ml_auto()
-                    .flex_none()
-                    .gap_3()
-                    .when(layout == Layout::Board, |row| {
-                        row.child(
-                            Checkbox::new("show-finished", show_finished.into())
-                                .label(if narrow { "Finished" } else { "Show finished" })
-                                .on_click(move |_, _, cx| {
-                                    toggle.update(cx, |dashboard, cx| {
-                                        dashboard.toggle_show_finished(cx)
-                                    })
-                                }),
-                        )
-                    })
-                    .child(
-                        Segmented::new(
-                            "task-layout",
-                            &self.layout_focus,
-                            layouts,
-                            selected,
-                            move |index, _, cx| {
-                                let layout = if index == 0 {
-                                    Layout::Table
-                                } else {
-                                    Layout::Board
-                                };
-                                pick.update(cx, |dashboard, cx| dashboard.set_layout(layout, cx));
-                            },
-                        )
-                        .icon_only(narrow),
-                    ),
-            )
-    }
-
-    /// The needs-you pill's filter is on; a click shows every task again.
-    fn needs_you_chip(&self) -> Button {
-        let dashboard = self.dashboard.clone();
-        Button::new("needs-you-chip", "Needs you")
-            .style(ButtonStyle::Subtle)
-            .toggle_state(true)
-            .end_icon(Icon::new(IconName::Close).size(IconSize::XSmall))
-            .tooltip(Tooltip::text("Show every task"))
-            .on_click(move |_, _, cx| {
-                dashboard.update(cx, |dashboard, cx| dashboard.set_needs_you(false, cx))
-            })
     }
 
     fn key_button(
@@ -340,6 +269,7 @@ impl TaskView {
             MainContent::Tasks => match self.dashboard.read(cx).view().layout {
                 Layout::Table => self.table.clone().into_any_element(),
                 Layout::Board => self.board.clone().into_any_element(),
+                Layout::Progress => self.progress.clone().into_any_element(),
             },
         }
     }
@@ -347,7 +277,7 @@ impl TaskView {
 
 impl Render for TaskView {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let (content, board) = {
+        let (content, edge_to_edge) = {
             let dashboard = self.dashboard.read(cx);
             let data = &dashboard.data;
             let down = match &data.link {
@@ -372,17 +302,21 @@ impl Render for TaskView {
                 }
                 content => content,
             };
-            (content, dashboard.view().layout == Layout::Board)
+            (content, dashboard.view().layout != Layout::Table)
         };
         let loading = content == MainContent::Loading;
-        // The board scrolls sideways edge to edge; everything else has the page margin.
-        let padded = !(board && content == MainContent::Tasks);
+        // The board scrolls sideways edge to edge, and the progress pads itself; everything else
+        // has the page margin.
+        let padded = !(edge_to_edge && content == MainContent::Tasks);
         let body = self.render_body(content, cx);
         v_flex()
             .size_full()
             .min_h_0()
             .on_action(cx.listener(|this, _: &ShowTable, _, cx| this.set_layout(Layout::Table, cx)))
             .on_action(cx.listener(|this, _: &ShowBoard, _, cx| this.set_layout(Layout::Board, cx)))
+            .on_action(cx.listener(|this, _: &ShowTasksProgress, _, cx| {
+                this.set_layout(Layout::Progress, cx)
+            }))
             .child(self.render_header(cx))
             .child(self.quick_add.clone())
             .child(

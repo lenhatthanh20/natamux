@@ -12,19 +12,16 @@ use std::ops::Range;
 use std::sync::Arc;
 
 use buffer_diff::BufferDiff;
-use editor::scroll::Autoscroll;
-use editor::{Editor, EditorEvent, MultiBuffer, SelectionEffects};
-use gpui::{Entity, EventEmitter, Focusable, Subscription};
+use editor::display_map::CustomBlockId;
+use editor::{Editor, EditorEvent, MultiBuffer};
+use gpui::{Entity, EventEmitter, Subscription};
 use language::{Buffer, Capability};
 use text::Point;
 use ui::prelude::*;
 
-use super::change_rules::{
-    LineChange, Side, Step, change_anchor, change_at, step_change, whole_lines,
-};
-use super::comment_rules::Quote;
-use super::diff_editors::{add_spacer, read_only_editor, set_excerpts};
-use super::diff_rules::{HunkRows, line_change, spacers};
+use super::change_rules::{LineChange, Side};
+use super::diff_editors::{add_spacer, read_only_editor, refit_excerpts, set_excerpts};
+use super::diff_rules::{DiffRefresh, HunkRows, diff_refresh, line_change, spacers};
 use super::languages::language_for;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -42,10 +39,12 @@ pub enum DiffEvent {
     CursorMoved,
 }
 
-struct Sides {
+pub(super) struct Sides {
     /// The working tree at the right, or alone when inline.
-    right: Entity<Editor>,
-    left: Option<Entity<Editor>>,
+    pub(super) right: Entity<Editor>,
+    pub(super) left: Option<Entity<Editor>>,
+    /// The empty rows of side by side, taken away when a newer read changes the hunks.
+    spacer_blocks: Vec<(Entity<Editor>, CustomBlockId)>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -53,10 +52,10 @@ pub struct DiffView {
     key: Option<String>,
     version: u64,
     options: Option<DiffOptions>,
-    buffer: Option<Entity<Buffer>>,
+    pub(super) buffer: Option<Entity<Buffer>>,
     diff: Option<Entity<BufferDiff>>,
     hunks: Vec<HunkRows>,
-    sides: Option<Sides>,
+    pub(super) sides: Option<Sides>,
     syncing: bool,
     _update: Option<gpui::Task<()>>,
 }
@@ -79,8 +78,9 @@ impl DiffView {
     }
 
     /// Shows `modified` against `original` (None: the file is new). `key` names the task and the
-    /// file, `version` the read of its texts: the same key with a newer read keeps the scroll
-    /// position. Cheap when nothing changed, so a render may call it.
+    /// file, `version` the read of its texts: a newer read of the same file changes the texts
+    /// inside the editors, so the cursor, the selection and the scroll stay. Cheap when nothing
+    /// changed, so a render may call it.
     #[allow(clippy::too_many_arguments)]
     pub fn show(
         &mut self,
@@ -94,13 +94,42 @@ impl DiffView {
         cx: &mut Context<Self>,
     ) {
         let same_file = self.key.as_deref() == Some(key);
-        if same_file && self.version == version {
-            if self.options != Some(options) {
+        let same_read = same_file && self.version == version;
+        match diff_refresh(same_file, same_read, self.options == Some(options)) {
+            DiffRefresh::Keep => {}
+            DiffRefresh::Update if self.sides.is_some() => {
+                self.version = version;
+                self.update_texts(original, modified, window, cx);
+            }
+            _ if same_read => {
                 self.options = Some(options);
                 self.build(window, cx);
             }
-            return;
+            _ => self.load(
+                key,
+                path,
+                version,
+                (original, modified),
+                options,
+                window,
+                cx,
+            ),
         }
+    }
+
+    /// New buffers for `texts` (original, modified); the same file keeps its scroll position.
+    #[allow(clippy::too_many_arguments)]
+    fn load(
+        &mut self,
+        key: &str,
+        path: &str,
+        version: u64,
+        (original, modified): (Option<&str>, &str),
+        options: DiffOptions,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let same_file = self.key.as_deref() == Some(key);
         let scroll = same_file
             .then_some(self.sides.as_ref())
             .flatten()
@@ -134,6 +163,43 @@ impl DiffView {
                         editor.set_scroll_position(position, window, cx);
                     });
                 }
+                cx.emit(DiffEvent::Ready);
+            })
+            .ok();
+        }));
+    }
+
+    /// A newer read of the shown file: the buffer takes only the edits between the texts, so
+    /// anchors outside them (the cursor, the selection) stay; the base is diffed in place too.
+    fn update_texts(
+        &mut self,
+        original: Option<&str>,
+        modified: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let (Some(buffer), Some(diff)) = (self.buffer.clone(), self.diff.clone()) else {
+            return;
+        };
+        let edits = buffer.read(cx).diff(modified.to_owned(), cx);
+        let base: Option<Arc<str>> = original.map(Arc::from);
+        self._update = Some(cx.spawn_in(window, async move |this, cx| {
+            let edits = edits.await;
+            let Ok(update) = this.update(cx, |_, cx| {
+                let snapshot = buffer.update(cx, |buffer, cx| {
+                    buffer.set_capability(Capability::ReadWrite, cx);
+                    buffer.apply_diff(edits, cx);
+                    buffer.set_capability(Capability::ReadOnly, cx);
+                    buffer.text_snapshot()
+                });
+                diff.update(cx, |diff, cx| diff.set_base_text(base, snapshot, cx))
+            }) else {
+                return;
+            };
+            update.await;
+            this.update(cx, |this, cx| {
+                this.read_hunks(cx);
+                this.refit(cx);
                 cx.emit(DiffEvent::Ready);
             })
             .ok();
@@ -233,19 +299,69 @@ impl DiffView {
         let mut subscriptions = vec![cx.subscribe_in(&right, window, Self::on_editor)];
         if let Some(left) = &left {
             subscriptions.push(cx.subscribe_in(left, window, Self::on_editor));
-            for spacer in spacers(&self.hunks) {
-                let (editor, side_buffer) = match spacer.side {
-                    Side::Old => (left, diff.read(cx).base_text_buffer().clone()),
-                    Side::New => (&right, buffer.clone()),
-                };
-                add_spacer(editor, &side_buffer, spacer, cx);
-            }
         }
+        let spacer_blocks = self.add_spacers(&right, left.as_ref(), cx);
         self.sides = Some(Sides {
             right,
             left,
+            spacer_blocks,
             _subscriptions: subscriptions,
         });
+        cx.notify();
+    }
+
+    /// The empty rows that keep the two sides level; none when inline.
+    fn add_spacers(
+        &self,
+        right: &Entity<Editor>,
+        left: Option<&Entity<Editor>>,
+        cx: &mut App,
+    ) -> Vec<(Entity<Editor>, CustomBlockId)> {
+        let (Some(left), Some(buffer), Some(diff)) = (left, &self.buffer, &self.diff) else {
+            return Vec::new();
+        };
+        let base = diff.read(cx).base_text_buffer().clone();
+        spacers(&self.hunks)
+            .into_iter()
+            .filter_map(|spacer| {
+                let (editor, side_buffer) = match spacer.side {
+                    Side::Old => (left, &base),
+                    Side::New => (right, buffer),
+                };
+                let id = add_spacer(editor, side_buffer, spacer, cx)?;
+                Some((editor.clone(), id))
+            })
+            .collect()
+    }
+
+    /// After a newer read: the excerpts and the empty rows follow the new changes, in the same
+    /// editors.
+    fn refit(&mut self, cx: &mut Context<Self>) {
+        let (Some(buffer), Some(diff), Some(options)) =
+            (self.buffer.clone(), self.diff.clone(), self.options)
+        else {
+            return;
+        };
+        let new_ranges = self.ranges(|hunk| &hunk.new);
+        let old_ranges = self.ranges(|hunk| &hunk.old);
+        let Some(sides) = self.sides.as_mut() else {
+            return;
+        };
+        let (right, left) = (sides.right.clone(), sides.left.clone());
+        for (editor, id) in std::mem::take(&mut sides.spacer_blocks) {
+            editor.update(cx, |editor, cx| {
+                editor.remove_blocks([id].into_iter().collect(), None, cx)
+            });
+        }
+        refit_excerpts(&right, &buffer, new_ranges, options.collapse, cx);
+        if let Some(left) = &left {
+            let base = diff.read(cx).base_text_buffer().clone();
+            refit_excerpts(left, &base, old_ranges, options.collapse, cx);
+        }
+        let blocks = self.add_spacers(&right, left.as_ref(), cx);
+        if let Some(sides) = self.sides.as_mut() {
+            sides.spacer_blocks = blocks;
+        }
         cx.notify();
     }
 
@@ -297,117 +413,6 @@ impl DiffView {
             editor.set_scroll_position(position, window, cx);
         });
         self.syncing = false;
-    }
-
-    /// The line of the working tree under the cursor, 1-based.
-    pub fn cursor_line(&self, cx: &mut App) -> Option<u32> {
-        let right = self.sides.as_ref()?.right.clone();
-        right.update(cx, |editor, cx| {
-            let snapshot = editor.display_snapshot(cx);
-            let head = editor.selections.newest::<Point>(&snapshot).head();
-            let multi = editor.buffer().read(cx).snapshot(cx);
-            let (_, point) = multi.point_to_buffer_point(head)?;
-            Some(point.row + 1)
-        })
-    }
-
-    /// Alt+F5 and Shift+Alt+F5: the cursor goes to the next or the previous change, which
-    /// scrolls to the top. Changes wrap at both ends.
-    pub fn step_change(&mut self, by: Step, window: &mut Window, cx: &mut Context<Self>) {
-        let changes = self.changes();
-        let line = self.cursor_line(cx);
-        let Some(index) = step_change(&changes, line, by) else {
-            return;
-        };
-        let (Some(sides), Some(buffer)) = (&self.sides, &self.buffer) else {
-            return;
-        };
-        let row = change_anchor(&changes[index]).0.saturating_sub(1);
-        let buffer = buffer.clone();
-        sides.right.update(cx, |editor, cx| {
-            let anchor =
-                editor
-                    .buffer()
-                    .read(cx)
-                    .buffer_point_to_anchor(&buffer, Point::new(row, 0), cx);
-            if let Some(anchor) = anchor {
-                let effects = SelectionEffects::scroll(Autoscroll::top_relative(0.));
-                editor.change_selections(effects, window, cx, |selections| {
-                    selections.select_anchor_ranges([anchor..anchor])
-                });
-            }
-        });
-    }
-
-    /// The change the cursor is in, for "2 of 7".
-    pub fn change_index(&self, cx: &mut App) -> Option<usize> {
-        let line = self.cursor_line(cx)?;
-        change_at(&self.changes(), line)
-    }
-
-    /// The whole lines picked in either side, for Ask agent. None without a selection.
-    pub fn selection(&self, window: &Window, cx: &mut App) -> Option<Quote> {
-        let sides = self.sides.as_ref()?;
-        let left_focused = sides
-            .left
-            .as_ref()
-            .is_some_and(|left| left.read(cx).focus_handle(cx).contains_focused(window, cx));
-        let (editor, side) = match (&sides.left, left_focused) {
-            (Some(left), true) => (left.clone(), Side::Old),
-            _ => (sides.right.clone(), Side::New),
-        };
-        editor.update(cx, |editor, cx| {
-            let snapshot = editor.display_snapshot(cx);
-            let picked = editor.selections.newest::<Point>(&snapshot);
-            if picked.is_empty() {
-                return None;
-            }
-            let multi = editor.buffer().read(cx).snapshot(cx);
-            let (text, start) = multi.point_to_buffer_point(picked.start)?;
-            let (_, end) = multi.point_to_buffer_point(picked.end)?;
-            let (first, last) = whole_lines(start.row + 1, end.row + 1, end.column + 1);
-            let range = Point::new(first - 1, 0)..Point::new(last - 1, text.line_len(last - 1));
-            Some(Quote {
-                side,
-                start: first,
-                end: last,
-                text: text.text_for_range(range).collect(),
-            })
-        })
-    }
-
-    /// Picks whole lines `first` to `last` (1-based) of the working tree, as a drag does.
-    pub fn select_lines(
-        &mut self,
-        first: u32,
-        last: u32,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let (Some(sides), Some(buffer)) = (&self.sides, &self.buffer) else {
-            return;
-        };
-        let buffer = buffer.clone();
-        let (first, last) = (first.saturating_sub(1), last.saturating_sub(1));
-        let end_column = buffer.read(cx).text_snapshot().line_len(last);
-        sides.right.update(cx, |editor, cx| {
-            let multi = editor.buffer().read(cx);
-            let start = multi.buffer_point_to_anchor(&buffer, Point::new(first, 0), cx);
-            let end = multi.buffer_point_to_anchor(&buffer, Point::new(last, end_column), cx);
-            if let (Some(start), Some(end)) = (start, end) {
-                editor.change_selections(SelectionEffects::no_scroll(), window, cx, |selections| {
-                    selections.select_anchor_ranges([start..end])
-                });
-            }
-        });
-    }
-
-    /// The editor that takes the keyboard: the working tree.
-    pub fn focus(&self, window: &mut Window, cx: &mut App) {
-        if let Some(sides) = &self.sides {
-            let handle = sides.right.read(cx).focus_handle(cx);
-            window.focus(&handle, cx);
-        }
     }
 }
 

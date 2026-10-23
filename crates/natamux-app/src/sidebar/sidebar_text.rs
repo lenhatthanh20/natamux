@@ -148,6 +148,7 @@ pub fn row_menu(task: &Task, pinned: bool) -> Vec<MenuItem<RowCommand>> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ProjectCommand {
     StartTask,
+    Settings,
     ToggleBlur,
     RemoveFinished,
     RemoveProject,
@@ -168,7 +169,7 @@ pub struct ProjectMenuInput {
     pub workspaces: usize,
 }
 
-/// The project menu (docs/ui-spec.md 4.9). "Settings" waits for the settings screen.
+/// The project menu (docs/ui-spec.md 4.9).
 pub fn project_menu(input: ProjectMenuInput) -> Vec<MenuItem<ProjectCommand>> {
     let blur = if input.blurred {
         item(
@@ -192,6 +193,12 @@ pub fn project_menu(input: ProjectMenuInput) -> Vec<MenuItem<ProjectCommand>> {
             "Start a task",
             "plus",
             ProjectCommand::StartTask,
+        ));
+        items.push(item(
+            "project.settings",
+            "Settings",
+            "settings",
+            ProjectCommand::Settings,
         ));
     }
     items.push(blur);

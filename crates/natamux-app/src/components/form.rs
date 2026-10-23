@@ -2,8 +2,11 @@
 //! text editor with a placeholder.
 
 use editor::Editor;
+use gpui::Focusable;
 use gpui::{Entity, FontWeight};
 use ui::prelude::*;
+
+use super::tab_order;
 
 pub fn field(label: impl Into<SharedString>, control: impl IntoElement) -> impl IntoElement {
     v_flex()
@@ -18,6 +21,7 @@ pub fn field(label: impl Into<SharedString>, control: impl IntoElement) -> impl 
 }
 
 pub fn input_box(editor: &Entity<Editor>, cx: &App) -> impl IntoElement {
+    tab_order::push(&editor.focus_handle(cx));
     let colors = cx.theme().colors();
     div()
         .px_2p5()

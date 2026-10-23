@@ -50,22 +50,34 @@ pub async fn send(
     path: &str,
     json: Option<Vec<u8>>,
 ) -> Result<Bytes, ClientError> {
-    send_within(config, method, path, json, READ_LIMIT).await
+    send_within(config, method, path, &[], json, READ_LIMIT).await
+}
+
+/// `send` with more headers, such as `If-Match`.
+pub async fn send_with_headers(
+    config: &Config,
+    method: Method,
+    path: &str,
+    extra: &[(&str, &str)],
+    json: Option<Vec<u8>>,
+) -> Result<Bytes, ClientError> {
+    send_within(config, method, path, extra, json, READ_LIMIT).await
 }
 
 async fn send_within(
     config: &Config,
     method: Method,
     path: &str,
+    extra: &[(&str, &str)],
     json: Option<Vec<u8>>,
     read_limit: Duration,
 ) -> Result<Bytes, ClientError> {
-    let headers: &[(&str, &str)] = match json {
-        Some(_) => &[("content-type", "application/json")],
-        None => &[],
-    };
+    let mut headers: Vec<(&str, &str)> = extra.to_vec();
+    if json.is_some() {
+        headers.push(("content-type", "application/json"));
+    }
     let is_read = method == Method::GET;
-    let answer = request(config, method, path, headers, json);
+    let answer = request(config, method, path, &headers, json);
     let (status, body) = if is_read {
         tokio::time::timeout(read_limit, answer)
             .await
@@ -206,7 +218,7 @@ mod tests {
                 token: "t".into(),
             };
             let limit = Duration::from_millis(200);
-            send_within(&config, Method::GET, "/diffstats", None, limit).await
+            send_within(&config, Method::GET, "/diffstats", &[], None, limit).await
         });
         assert!(
             matches!(&answer, Err(ClientError::Unreachable { reason, .. }) if reason.contains("did not answer")),

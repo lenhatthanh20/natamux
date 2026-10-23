@@ -12,6 +12,7 @@ mod app {
     pub mod command_when;
     pub mod commands;
     pub mod commands_git;
+    pub mod commands_stages;
     pub mod dashboard;
     pub mod dashboard_data;
     pub mod fake_daemon;
@@ -21,10 +22,12 @@ mod app {
     pub mod notify;
     pub mod notify_rules;
     pub mod options;
+    pub mod settings_reads;
     pub mod shell_rules;
     pub mod shortcut_text;
     pub mod shortcuts;
     pub mod shots;
+    pub mod shots_stages;
     pub mod smoke;
     pub mod source;
     pub mod status_bar;
@@ -55,6 +58,7 @@ mod components {
     pub mod segmented;
     pub mod shape;
     pub mod skeleton;
+    pub mod tab_order;
     pub mod theme_contrast;
     pub mod timing_rules;
     pub mod toast_rules;
@@ -66,6 +70,7 @@ mod git {
     pub mod changes_view;
     pub mod comment_rules;
     pub mod commit_rules;
+    pub mod diff_cursor;
     pub mod diff_editors;
     pub mod diff_rules;
     pub mod diff_view;
@@ -86,8 +91,14 @@ mod perf {
     pub mod report;
     pub mod stats;
 }
+mod projects {
+    pub mod project_settings_dialog;
+    pub mod settings_text;
+    pub mod settings_writes;
+}
 mod sidebar {
     pub mod comet;
+    pub mod project_buttons;
     pub mod project_color;
     pub mod project_header;
     pub mod row_menu;
@@ -102,16 +113,45 @@ mod sidebar {
     pub mod workspace_tree;
 }
 mod stages {
+    pub mod branch_details;
+    pub mod branch_details_fields;
     pub mod card_rules;
+    pub mod editor_branches;
+    pub mod editor_catalog;
+    pub mod editor_draft;
+    pub mod editor_fields;
+    pub mod editor_find;
+    #[cfg(test)]
+    pub mod editor_fixtures;
+    pub mod editor_labels;
+    pub mod editor_moves;
+    pub mod kind_icon;
     pub mod overview_rules;
+    pub mod pipeline_editor;
+    pub mod pipeline_preview;
+    pub mod pipeline_preview_branch;
+    pub mod preview_rules;
+    pub mod progress_board;
+    pub mod progress_board_rules;
     pub mod progress_tab;
+    pub mod prompt_field;
     pub mod send_back_dialog;
     pub mod send_back_rules;
+    pub mod skill_rules;
     pub mod stage_card;
     pub mod stage_choices;
+    pub mod stage_details;
+    pub mod stage_details_fields;
+    pub mod stage_fields_view;
+    pub mod stage_list;
+    pub mod stage_list_menus;
     pub mod stage_marker;
+    pub mod stage_options;
+    pub mod stage_picker;
+    pub mod stage_rows;
     pub mod stage_view_rules;
 }
+
 mod tasks {
     pub mod add_subtask_dialog;
     pub mod delete_finished;

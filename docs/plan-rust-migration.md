@@ -197,7 +197,7 @@ How to get the build, what CI checks, where it differs and the gate results: `ru
 
 ### Phase 3: desktop app on the Node daemon (8–12 weeks)
 
-Started 2026-10-22 (T-0146). Decisions, details, the beta and the gate results of screen 1, screen 2 (T-0148), screen 3 (T-0149) and screen 4 (T-0150): `rust-phase3.md`.
+Started 2026-10-22 (T-0146). Decisions, details, the beta and the gate results of screen 1, screen 2 (T-0148), screen 3 (T-0149), screen 4 (T-0150) and screen 5 (T-0151): `rust-phase3.md`.
 
 Decisions (owner, 2026-10-22):
 

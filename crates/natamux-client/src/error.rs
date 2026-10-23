@@ -19,6 +19,13 @@ pub enum ClientError {
     BadAnswer(String),
 }
 
+impl ClientError {
+    /// The daemon answered 409: the file changed on disk since it was read.
+    pub fn is_conflict(&self) -> bool {
+        matches!(self, ClientError::Status { status: 409, .. })
+    }
+}
+
 impl fmt::Display for ClientError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

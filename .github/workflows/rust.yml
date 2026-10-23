@@ -86,7 +86,7 @@ jobs:
               sips -s format bmp "shots/window-$theme-$size.png" --out "shots/window-$theme-$size.bmp" >/dev/null
             done
           done
-      # Screens 1 to 4 of phase 3: every state in both themes at two sizes, and the DOCKED ones at
+      # Screens 1 to 5 of phase 3: every state in both themes at two sizes, and the DOCKED ones at
       # 1024x720 too, where the sidebar docks; the runner's screen is 1024x768, so the details panel,
       # which docks from 1280, is shot as a sheet (docs/rust-phase3.md).
       # The shot is the app's window itself, found by its process id: macOS moves a window that
@@ -102,14 +102,18 @@ jobs:
             task-details-needs-input answer-banner workspace-terminal-plan-gate workspace-progress
             stage-failed send-back details-details compare-tries details-more-menu fan-out
             workspace-changes-empty workspace-changes-list workspace-changes-diff
-            workspace-changes-ask rollback image-diff workspace-history
+            workspace-changes-ask rollback image-diff workspace-history tasks-progress
+            project-settings-tab-stages project-settings-agent-stage project-settings-stage-picker
+            project-settings-branch project-settings-problems project-settings-conflict
           DOCKED: >-
             tasks-table workspace-terminal-running terminal-find workspace-terminal-needs-input
             workspace-terminal-review no-workspace workspace-preparing finished-wrap-up agents-grid
             task-details-review task-details-needs-input answer-banner workspace-terminal-plan-gate
             workspace-progress stage-failed send-back details-details compare-tries
             details-more-menu fan-out workspace-changes-empty workspace-changes-list workspace-changes-diff
-            workspace-changes-ask rollback image-diff workspace-history
+            workspace-changes-ask rollback image-diff workspace-history tasks-progress
+            project-settings-tab-stages project-settings-agent-stage project-settings-stage-picker
+            project-settings-branch project-settings-problems project-settings-conflict
         run: |
           mkdir -p shots
           window_of() {
@@ -281,10 +285,14 @@ jobs:
           compression-level: 0
 
   # natamux-client against the real daemon: the checked images of main, as scripts/e2e.sh starts them.
-  # `--ignored` runs every ignored test of live_daemon.rs and live_daemon_git.rs: the terminal test,
-  # the live list, and the flows of phase 3: screen 1 (create, rename, subtask, workspace,
-  # preparing, remove, delete), screen 2, screen 3, and screen 4 (changes, graph, and the refused
-  # commit, commit message, undo, file diff, image and agent message).
+  # `--ignored` runs every ignored test of live_daemon.rs, live_daemon_git.rs and
+  # live_daemon_settings.rs: the terminal test, the live list, and the flows of phase 3: screen 1
+  # (create, rename, subtask, workspace, preparing, remove, delete), screen 2, screen 3, and screen 4
+  # (changes, graph, and the refused commit, commit message, undo, file diff, image and agent
+  # message).
+  # Screen 5 (live_daemon_settings.rs): read the settings and the skills of the default project; save
+  # them with the version (a new version comes back); save with the old version (409); save a pipeline
+  # that breaks the rules (400); put the first file back with the current version.
   live-daemon:
     runs-on: ubuntu-latest
     timeout-minutes: 40
@@ -303,7 +311,7 @@ jobs:
             target
           key: rust-live-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
           restore-keys: rust-live-${{ runner.os }}-
-      - run: cargo test --locked -p natamux-client --test live_daemon --test live_daemon_git --no-run
+      - run: cargo test --locked -p natamux-client --test live_daemon --test live_daemon_git --test live_daemon_settings --no-run
       - name: Start the daemon and the dashboard of main
         run: scripts/e2e.sh up
       # As makeShellTask in e2e/tests/terminal-helpers.ts: a task past its agent, with a workspace.
@@ -326,7 +334,7 @@ jobs:
             sleep 0.5
           done
           echo "id=$id" >> "$GITHUB_OUTPUT"
-      - run: cargo test --locked -p natamux-client --test live_daemon --test live_daemon_git -- --ignored
+      - run: cargo test --locked -p natamux-client --test live_daemon --test live_daemon_git --test live_daemon_settings -- --ignored
         env:
           NATAMUX_LIVE_TASK: ${{ steps.task.outputs.id }}
       - if: failure()

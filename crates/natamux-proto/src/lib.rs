@@ -12,15 +12,21 @@ pub mod events {
 }
 pub mod projects {
     pub mod repo;
+    pub mod settings_rules;
 }
 pub mod stages {
     pub mod actions;
     pub mod capabilities;
     pub mod catalog;
+    mod catalog_text;
+    mod field_rules;
+    pub mod pipeline_rules;
     pub mod position;
     pub mod progress;
+    pub mod prompt;
     pub mod resolve;
     pub mod schema;
+    pub mod terminal_lane;
 }
 pub mod tasks {
     pub mod attachments;

@@ -18,6 +18,7 @@ use super::edit_form::EditForm;
 use crate::app::dashboard::details::PanelRequest;
 use crate::app::dashboard::{Dashboard, DashboardChange};
 use crate::app::layout_mode::DetailsMode;
+use crate::app::settings_reads::{SettingsReads, SettingsRefreshed};
 use crate::app::view_rules::DetailsView;
 use crate::components::chips::tip_with_keys;
 
@@ -84,6 +85,14 @@ impl DetailsPanel {
             panel.on_change(change, cx)
         });
         let observe = cx.observe(&dashboard, |panel, _, cx| panel.sync(cx));
+        let mut subscriptions = vec![changes, observe];
+        if let Some(reads) = SettingsReads::global(cx) {
+            subscriptions.push(
+                cx.subscribe(&reads, |panel, _, event: &SettingsRefreshed, cx| {
+                    panel.settings_refreshed(&event.0, cx)
+                }),
+            );
+        }
         let poll = cx.spawn(async move |panel, cx| {
             loop {
                 cx.background_executor().timer(POLL).await;
@@ -109,7 +118,7 @@ impl DetailsPanel {
             tabs_focus: cx.focus_handle().tab_stop(true),
             scroll: ScrollHandle::new(),
             _poll: poll,
-            _subscriptions: vec![changes, observe],
+            _subscriptions: subscriptions,
         }
     }
 

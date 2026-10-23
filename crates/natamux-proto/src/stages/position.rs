@@ -3,13 +3,46 @@
 
 use serde_json::{Map, Value};
 
-use crate::stages::schema::{BranchPath, Condition, StageBranch, Step};
+use crate::stages::schema::{BranchPath, Condition, Stage, StageBranch, StageKind, Step};
 
 /// The index of the step that holds stage or step `id` (`stepIndex`, which gives -1 for none).
 pub fn step_index(steps: &[Step], id: &str) -> Option<usize> {
     steps
         .iter()
         .position(|step| step.id() == id || step.stages().iter().any(|stage| stage.id == id))
+}
+
+/// `findStep`: the step that holds stage or step `id`.
+pub fn find_step<'a>(steps: &'a [Step], id: &str) -> Option<&'a Step> {
+    step_index(steps, id).map(|index| &steps[index])
+}
+
+/// `stepToRun`: the step that runs for stage or step `id`: its group, or the stage itself, also
+/// inside a path.
+pub fn step_to_run(steps: &[Step], id: &str) -> Option<Step> {
+    let step = find_step(steps, id)?;
+    if step.is_branch() {
+        let found = step.stages().into_iter().find(|stage| stage.id == id);
+        return Some(found.map_or_else(|| step.clone(), |stage| Step::Stage(stage.clone())));
+    }
+    Some(step.clone())
+}
+
+/// `codeStage`: the stage of a group that changes code keeps the first terminal; each other stage
+/// gets the next one.
+pub fn code_stage(step: &Step) -> Option<&Stage> {
+    let stages = step.stages();
+    let agents: Vec<&Stage> = stages
+        .iter()
+        .copied()
+        .filter(|stage| stage.kind == StageKind::Agent)
+        .collect();
+    agents
+        .iter()
+        .copied()
+        .find(|stage| stage.output.is_none())
+        .or_else(|| agents.first().copied())
+        .or_else(|| stages.first().copied())
 }
 
 /// The branch and path of a stage in a path, and where the stage is in the path.

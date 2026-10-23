@@ -6,6 +6,7 @@ use gpui::{Action, App, KeyBinding, Menu, MenuItem, NoAction, actions};
 
 use super::commands::{MenuName, all_commands, command_by_id, keystroke, menu_items};
 use super::commands::{is_single_key, reaches_app_from_terminal};
+pub use super::commands_stages::{MoveStageDown, MoveStageUp, ShowTasksProgress};
 use crate::ime::ime_check::SubmitWord;
 
 actions!(
@@ -153,6 +154,9 @@ command_actions! {
     "changes.rollback" => RollbackFile,
     "diff.draft-commit" => DraftCommit,
     "task.commit" => CommitChanges,
+    "view.progress" => ShowTasksProgress,
+    "stage.move-up" => MoveStageUp,
+    "stage.move-down" => MoveStageDown,
 }
 
 fn push_bindings<A: Action + Clone>(id: &str, action: A, mac: bool, out: &mut Vec<KeyBinding>) {
