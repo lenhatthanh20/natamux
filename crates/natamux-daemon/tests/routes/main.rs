@@ -1,10 +1,15 @@
 //! The terminal routes and socket of a running Rust daemon: the part-1 cases of the `terminal`,
-//! `authentication` and `ended shells` groups of `server.test.ts`. Cases that need tasks, stages
-//! or agents wait for later parts (docs/rust-phase4.md).
+//! `authentication` and `ended shells` groups of `server.test.ts`. The task routes are in
+//! `tasks.rs`, `task_events.rs` and `task_extras.rs`; cases that need stages, workspaces or
+//! agents wait for later parts (docs/rust-phase4.md).
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 mod server;
+mod socket;
+mod task_events;
+mod task_extras;
+mod tasks;
 
 use hyper::Method;
 use natamux_daemon::terminals::shell_files::{OpenShell, save_ended_shells, save_open_shells};
@@ -263,7 +268,7 @@ async fn closes_a_resume_of_a_shell_that_no_longer_runs_with_close_gone_and_star
 async fn answers_an_error_and_closes_when_the_shell_cannot_start_without_hello() {
     let d = daemon("refused", true).await;
     let ticket = d.ticket().await;
-    std::fs::remove_dir_all(d.root.join("data/worktrees/T-0001")).unwrap();
+    d.clear_workspace().await;
     let mut socket = d
         .open_with(&format!("ticket={ticket}&cols=80&rows=24"))
         .await;

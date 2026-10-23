@@ -3,6 +3,7 @@
 //! shell gets exactly the environment given, as with node-pty; Windows uses ConPTY through
 //! `alacritty_terminal`. Ported from `packages/daemon/src/terminals/pty.ts` and its helpers.
 
+pub mod da1;
 pub mod input_gap;
 pub mod no_proxy;
 pub mod process_tree;

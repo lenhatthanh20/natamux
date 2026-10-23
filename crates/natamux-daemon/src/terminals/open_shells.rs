@@ -140,8 +140,14 @@ impl OpenShells {
             };
             match message {
                 DaemonMessage::ShellsChanged { task_id } => this.sync(task_id),
-                DaemonMessage::TaskDeleted { task_id }
-                | DaemonMessage::WorkspaceRemoved { task_id } => this.forget(task_id),
+                DaemonMessage::TaskDeleted { task_id } => this.forget(task_id),
+                // Its shells cannot start without the folder.
+                DaemonMessage::TaskUpdated { task, event, .. }
+                    if event.kind == "workspace.removed" =>
+                {
+                    this.forget(&task.id)
+                }
+                _ => {}
             }
         });
         self.lock().subscription = Some(id);

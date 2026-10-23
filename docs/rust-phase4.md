@@ -1,6 +1,6 @@
 # Rust phase 4: the daemon in Rust
 
-Phase 4 of `plan-rust-migration.md` moves the daemon to Rust, behind the same HTTP and WebSocket contract, so the native app, the web dashboard and the CLI cannot tell which daemon answers. It comes in parts. This page covers part 1 (T-0153): the terminals (PTY, input gap, ring, snapshot, resume, backpressure, restore after a restart) and the contract suite that compares the two daemons. Parts 2 to 5 add their own sections.
+Phase 4 of `plan-rust-migration.md` moves the daemon to Rust, behind the same HTTP and WebSocket contract, so the native app, the web dashboard and the CLI cannot tell which daemon answers. It comes in parts. This page covers part 1 (T-0153): the terminals (PTY, input gap, ring, snapshot, resume, backpressure, restore after a restart) and the contract suite that compares the two daemons; and part 2 (T-0155): tasks, events, the files on disk and the index, in [Part 2](#part-2-tasks-events-storage-index). Parts 3 to 5 add their own sections.
 
 The Rust daemon does not replace the Node one yet: it runs only in tests and CI. The phase-4 gate (the E2E suite with `NATAMUX_DAEMON_IMAGE` swapped) comes after part 5.
 
@@ -49,7 +49,7 @@ Daemon tasks push their snapshots to `natamux-ci/daemon` (every job) and `natamu
 | `check` | `cargo xtask ci`: fmt, clippy, every test of the workspace (the Linux PTY tests too), layers, colours |
 | `daemon-os` | The tests of `natamux-pty`, `natamux-screen` and `natamux-daemon` on macOS and on Windows (ConPTY) |
 | `daemon-contract` | The Node daemon of main and the Rust daemon side by side (`compose.rust-daemon.yaml`), the 12 scenarios of `crates/natamux-contract/tests/terminals/`, then `scripts/xterm-grid.mjs` replays the snapshots of both in xterm.js |
-| `daemon-bench` | The terminal bench of Node (`terminal-bench.test.ts`) and of Rust (`tests/terminal_bench.rs`) on the same runner; `scripts/compare-terminal-bench.py` fails when Rust is worse on a gated number |
+| `daemon-bench` | The terminal bench of Node (`terminal-bench.test.ts`) and of Rust (`tests/terminal_bench.rs`) on the same runner; `scripts/compare-terminal-bench.py` fails when Rust is worse on a gated number (parse speed: more than 10% worse, see part 2) |
 
 ## Contract suite
 
@@ -78,7 +78,6 @@ Not in the suite, covered by unit and route tests: the 90 s silence close (a rou
 
 | What | Node | Rust (part 1) | Why |
 |---|---|---|---|
-| Unknown task | 404 `Task <id> not found` | Every valid id is a task: a ticket answers 409 (no workspace), the lists answer empty | No task store until part 2 |
 | `GET /tasks/:id/terminals` | `agents` and `lanes` from the stages | Always `[]` and `{}` | No stages until part 3 |
 | A restored shell that ran an agent | The agent starts again on its session | Listed as restoring with its agent, starts plain | Agents come with part 4 |
 | Hooks of Claude Code in a shell started by hand | Written into the worktree at each spawn | Not written | Part 4 |
@@ -92,7 +91,7 @@ Not in the suite, covered by unit and route tests: the 90 s silence close (a rou
 | `Number()` forms in the socket query (`1e2`, `0x10`) | Read as numbers | `0x10` refused | Hex is never sent by a client |
 | Zod `issues` of a 400 | Zod's objects | The same fields, compared by count | The message, status and code are equal |
 | The login PATH | From the Electron parent | Not waited for | No desktop parent before phase 5 |
-| Windows ConPTY | node-pty | `alacritty_terminal`; the daemon answers the attributes query (DA1) ConPTY sends at start | ConPTY waits for the answer before the shell's output flows |
+| Windows ConPTY | node-pty | `alacritty_terminal`; the daemon answers the first attributes query (DA1) of ConPTY when it comes, and takes it out of the output | ConPTY waits for the answer before the shell's output flows; a dashboard that saw the query would answer it a second time, as typed text (part 2, `natamux-pty/src/da1.rs`) |
 
 ## Ported tests
 
@@ -142,7 +141,8 @@ Gate of part 1 (plan, phase 4): the ported terminal tests green on the three OSe
 | Contract suite | 2026-10-23 | Pass: 12 of 12 equal, or allowed with the reasons above | Run 39964274828, job `daemon-contract` |
 | xterm.js replay | 2026-10-23 | Pass: `history` (7,836 rows) and `alternate` (7,839 rows) draw the same | Run 39964274828, job `daemon-contract` |
 | Bench | 2026-10-23 | Pass | Runs 39956182278, 39961094755 and 39964274828, job `daemon-bench`: table below |
-| This page | | pending (owner) | |
+| `dev` after the merge of PR #436 | 2026-10-23 | Pass | Rust run 39968239738 on `dev`, every job |
+| This page | 2026-10-23 | OK (owner) | T-0155, `natamux ask` |
 
 ### Bench (run 39956182278, same runner)
 
@@ -155,4 +155,129 @@ Gate of part 1 (plan, phase 4): the ported terminal tests green on the three OSe
 | Parse, plain | 72.2 MB/s | 73.8 MB/s |
 | Flood: frames per second | 345.3 | 397.6 |
 
-Not gated: Node's `maxLoopDelayMs` is the longest block of its one event loop (14 to 22 ms, as it slices); Rust's is the time one shell is held while its snapshot is cut and sent (6 to 39 ms), during which only that shell's output waits. Parse speed is close to Node's on the runner: a gate that may flap; the parse path (alacritty's parser plus the batch) is the place to make faster.
+Not gated: Node's `maxLoopDelayMs` is the longest block of its one event loop (14 to 22 ms, as it slices); Rust's is the time one shell is held while its snapshot is cut and sent (6 to 39 ms), during which only that shell's output waits. Parse speed was close to Node's here; part 2 made the parse path faster, see [Parse speed](#parse-speed-part-1s-open-item).
+
+## Part 2: tasks, events, storage, index
+
+Part 2 (T-0155) gives the Rust daemon the task store of the Node daemon: `tasks/<ID>.md` (YAML front matter and notes), `<ID>.events.jsonl`, the `index.sqlite` cache, templates, attachments, jobs, and the `/events` socket. The files are the Node daemon's byte for byte, so a data folder one daemon wrote reads the same in the other. The terminals of part 1 now use the real task.
+
+### Decisions
+
+Owner, 2026-10-23: the crates and dependencies below, the part-1 page, and deleting `natamux-ci/daemon-lock` at the end, with high performance as the aim.
+
+- **Two new crates.** `natamux-core` (L0) holds zod's validation with its issues and texts, the pure task logic that `natamux-proto` lacks (`applyTaskEvent`, `completeEvent`, reopen, `firstPosition`, `makesCycle`, `splitTaskId`, `upgradeTaskFields`, the attachment names) and a JSON writer and reader that work as `JSON.stringify` and `JSON.parse`. `natamux-store` (L1) holds the files: gray-matter's front matter, js-yaml 3's dump (ported) and load (on `yaml-rust2`'s events with js-yaml's scalar rules), the event logs, the SQLite index, the folder watch and `TaskSync`. The daemon keeps the services, the bus, the routes and `/events`. Types come from `natamux-proto`.
+- **Dependencies:** new from crates.io: `rusqlite` 0.32.1 (`bundled`, so every OS builds the same SQLite; it uses the `libsqlite3-sys` 0.30.1 that Zed's `sqlez` already brought), `hashlink`, `fallible-iterator`, `fallible-streaming-iterator`, and `yaml-rust2` 0.9.0, for reading only. From the lock already: `notify` (Zed's fork), `url`, `memchr`. No crate writes YAML as js-yaml 3 does, so the writer is ours; `serde_yaml` is archived and `serde_yml` has an advisory.
+- **Byte for byte.** JSON leaves through `natamux_core::json` (numbers as JS writes them, keys in a JS object's order). Task and template files are checked against golden files that gray-matter itself writes in CI (`scripts/task-file-golden.mjs`, `crates/natamux-store/tests/fixtures/front_matter/`); js-yaml 3 counts UTF-16 units, so a character outside the BMP makes a string double-quoted, as in Node.
+- **zod issues are equal**, every field, in zod 4.6.7's order, for the codes the task routes use.
+- **Without the stage engine (part 3)** events change a task only through `applyTaskEvent`: a new task stays at its first step, a move starts no agent or check, and an event that would enter a branch is refused with 409 `conflict`, as its conditions are the stage engine's to check.
+- **Projects are read only:** `repos.json` and each repository's `.natamux.json`; a file proto cannot read or whose pipeline has an error gives the defaults, as Node's `get` does.
+- **One lock** around the task store, so a call is whole, as on Node's one thread; messages are queued under it and sent after, in order. Store work runs on blocking threads.
+- **A new advisory, RUSTSEC-2026-0386** (tokio's `AsyncFd` constructors are unsound), came while part 2 was built; it fails `cargo deny` on every branch. No Natamux crate calls `AsyncFd`, and the fix (tokio 1.53.3) comes through Dependabot, so it is ignored in `deny.toml` and `.cargo/audit.toml` with that reason until then.
+- **`/events`:** above 1 MB queued for a socket, messages are skipped, and one `resync` follows once it drained (checked every 250 ms).
+
+### Crates
+
+| Crate | Layer | Job | Dependencies |
+|---|---|---|---|
+| `natamux-core` | L0 | zod's rules and texts, JSON as JS, task and event logic | `natamux-proto`, `serde_json`, `url` |
+| `natamux-store` | L1 | Front matter, YAML, event logs, the index, `TaskSync`, attachments | `natamux-core`, `rusqlite`, `yaml-rust2`, `notify` |
+
+### Where it differs from the Node daemon
+
+| What | Node | Rust (part 2) | Why |
+|---|---|---|---|
+| A new task, a move into a stage | The stage runner starts the context stage, agents, checks | Nothing starts | The stage engine is part 3 |
+| An event that enters a branch | The daemon checks the conditions and picks a path | 409 `conflict` | Conditions run commands: part 3 |
+| A done or cancelled task | Its shells end, their last screens kept | Its shells stay | `finish` is the stage engine's |
+| `DELETE` of a task with a workspace | The worktree is removed first | 400 `<id> still has a workspace` | Workspaces are part 5 |
+| `POST /tasks/:id/issue` | Opens a GitHub issue | 404 (no route) | GitHub is part 5 |
+| Notes that start with `---` | gray-matter reads them as front matter when it writes: they are lost or mixed into the fields | Written as they are | A Node bug; Node reads the Rust file right |
+| Template names that differ only in accents or punctuation | ICU's order | Case, then code points | No ICU |
+| The first dashboard on `/events` | Wakes the pull request watcher | Nothing to wake | Part 5 |
+| A body over 1 MB in the contract suite | nginx of the web container answers 413 before the daemon | The route's limit (about 67 MB for `POST /tasks`) | Allowed by name in scenario 18: the Node daemon sits behind nginx there, the Rust one does not |
+| Front matter in `---json` or `---js` | gray-matter's JSON and JavaScript engines | Refused as broken | Task and template files are YAML; `---yml` and `---yaml` are read |
+
+### What CI checks
+
+- `daemon-os` also runs the tests of `natamux-core` and `natamux-store` on macOS and Windows.
+- `daemon-contract` gives the Rust daemon the project, the part-1 task and the contract pipeline (`crates/natamux-contract/tests/fixtures/natamux.json`: stages that only wait for a person, so Node's runner starts nothing), runs the task scenarios after the terminal ones, and checks that gray-matter writes the golden files as committed.
+
+### Contract scenarios
+
+| # | Scenario | What it checks |
+|---|---|---|
+| 13 | `create_and_read` | New tasks, ids from titles, a subtask, lists and `?state`, zod issues, Fastify's body rules, unknown task and repository |
+| 14 | `edit` | `PATCH`, no change, strict keys, dependencies, loops |
+| 15 | `events` | A walk through the contract pipeline, refusals, the agent token and the gate events |
+| 16 | `delete` | Dependents and subtasks set free, files gone |
+| 17 | `templates` | Save, replace, list, a task from a template, the file |
+| 18 | `attachments` | Safe names, headers of each type, limits, a body over 1 MB |
+| 19 | `issue_link` | http and https only |
+| 20 | `events_socket` | Tokens; in order, the messages of a task's life, a task from a template, a task with an attachment, an issue link, a change of nothing (no message), and a delete that sets a subtask and a waiting task free (`task.updated` of each, then `task.deleted`) |
+| 21 | `resync` | A socket that fell behind misses messages and gets a `resync` when it caught up, never two in a row, then live messages; how often it falls behind depends on the buffers (nginx stands before Node), so that count is not compared |
+| 22 | `shared_data_folder` | Node's files read by Rust and back; the same files for the same requests |
+
+The terminal scenarios now use the real task: scenario 2 answers 404 for an unknown task on both daemons.
+
+### Ported tests
+
+Rust tests keep the Node names in snake case.
+
+| Node file | Node cases | Rust | Where |
+|---|---|---|---|
+| `tasks/task-service.test.ts` | 118 | 118 | `natamux-daemon/tests/task_service/` (one file per `describe`) |
+| `tasks/task-files.test.ts` | 14 | 14 | `natamux-store/src/task_files_tests.rs` |
+| `tasks/task-index.test.ts` | 14 | 14 | `natamux-store/src/task_index_tests.rs` |
+| `tasks/attachments.test.ts` | 16 | 16 | `natamux-store/src/attachments_tests.rs`, `natamux-daemon/src/tasks/upload.rs` |
+| `tasks/event-log.test.ts` | 3 | 3 | `natamux-store/src/event_log_tests.rs` |
+| `tasks/template-service.test.ts` | 7 | 7 | `natamux-daemon/tests/templates.rs` |
+| `shared/event-bus.test.ts` | 8 | 8 | `natamux-daemon/src/shared/event_bus_tests.rs` |
+| `shared/jobs.test.ts`, `slug.test.ts`, `ttl-cache.test.ts` | 3, 1, 7 | 3, 1, 7 | `natamux-daemon/src/shared/` |
+| `server.test.ts`: the task groups (Node cases that need no stage, workspace, agent or GitHub) | 40 cases | 40 | `natamux-daemon/tests/routes/` |
+| `server.test.ts`: `eventSender` | 3 | 3 | `natamux-daemon/src/http/event_socket_tests.rs` |
+| core: `events/apply`, `reopen`, `derive`, `schema`; `tasks/task`, `attachments`, `dependencies` (`makesCycle`); `stages/position`, `terminal-lane` (the functions core has) | 36, 9, 11, 4; 28, 15, 2; 8, 27 | 36, 9, 11, 4; 28, 13, 2; 5, 5 | `natamux-core`; the cases of functions `natamux-proto` has are ported there, and the `terminalLane` and `terminalAtStart` cases are left out (below) |
+| (no Node twin) | - | 15 zod texts of the inputs, 16 front matter, 19 YAML load, 8 YAML dump and scalars, 2 golden | `natamux-core/src/tasks/inputs_tests.rs`, `natamux-store` |
+
+Left out or changed, with the reason:
+
+- Spies cannot be ported (`vi.spyOn` on `console.error`, `JSON.stringify`, `mkdirSync`, `DatabaseSync.exec` and `prepare`): each such test checks the real effect instead (what the service keeps, every line written, a failed change leaves nothing, the answers stay right when statements run again), and says so.
+- 'gives tasks that a caller cannot change': a Rust caller gets its own copy; the test changes the copy and checks the service did not change.
+- `server.test.ts` cases that need what later parts bring: branch conditions (replaced by a test of the 409), stage actions and the agent token's stage cases, new workspaces, attachments of a workspace, the pull request watcher, activity after a hook, issue import, usage.
+- Part 1's route test 'answers an error and closes when the shell cannot start, without hello' now clears the task's workspace in its file, as Node's workspace removal does, instead of deleting the worktree folder.
+- `attachmentLimitError` (core) is tested in `natamux-proto` already.
+- `stages/terminal-lane.test.ts`: the 8 cases of `terminalLane` ('gives each terminal of a group the state of its own lane', 'keeps the lanes apart when one needs input', 'shows a finished lane as done, also when it is gone from the lanes', 'gives no lane to a terminal the group does not use', 'shows the shell of a stage before the group as done', 'shows the shell of a group stage as done once the task is past the group', 'gives the task state to Shell 1 outside a group, and no lane to the others', 'uses the stage of the task when its step is unknown') and the 4 cases of `terminalAtStart` ('keeps it at the next start while the stage needs the same kind of shell', 'takes the shell of the settings at the next start when the stage gained or lost its agent', 'moves a stage at its next start when its own shell was turned on or off', 'keeps a group lane at its next start when the lane number changed') are in neither crate: both functions serve the stage engine (the lanes of `GET /terminals`, the terminal a stage starts in), which comes with part 3. The cases of 'a stage with its own agent' and 'a branch' that also call `terminalLane` are ported for their `terminalOfStage` and `stageOfTerminal` checks only, for the same reason.
+
+### Gate results
+
+Gate of part 2 (plan, phase 4): the ported task tests green on the three OSes, the contract suite equal on both daemons for the task and event scenarios (or each difference explained), the cross-daemon data folder test green, the owner's OK on the crates and on this section.
+
+| Check | Date | Result | Where |
+|---|---|---|---|
+| Crates and dependencies | 2026-10-23 | OK (owner) | `natamux ask`, Implement |
+| `cargo xtask ci` | 2026-10-24 | Pass | Rust run 39997025088 on `natamux-ci/daemon` (47d4d07), job `check` |
+| `daemon-os` macOS and Windows | 2026-10-24 | Pass | Run 39997025088; Windows failed in run 39982267090 until the fixtures were checked out without CRs |
+| Contract suite | 2026-10-24 | Pass: terminals 12 of 12, tasks 10 of 10 (scenarios 13 to 22), equal or allowed with the reasons above | Run 39997025088, job `daemon-contract` |
+| Golden task files | 2026-10-23 | Pass: gray-matter writes and reads every fixture as committed | Runs 39984947084 and 39986507617, job `daemon-contract` |
+| Shared data folder | 2026-10-24 | Pass | Run 39997025088, scenario 22 |
+| `supply-chain` | 2026-10-24 | Pass, with RUSTSEC-2026-0386 ignored (see Decisions) | Run 39997025088 |
+| Bench | 2026-10-24 | Pass, parse within the 0.9 margin | Run 39997025088, job `daemon-bench`; parse speed table below |
+| This section | 2026-10-23 | OK (owner), with the RUSTSEC-2026-0386 ignore | T-0155, after Implement |
+
+### Parse speed (part 1's open item)
+
+The screen now looks only at the ESC bytes of the output for the markers it follows (synchronized frames, soft reset), with `memchr`, instead of comparing an 8-byte window at every byte, and a read that ends on a whole character is not copied. Same runner, Node and Rust:
+
+| Run | Plain: Node / Rust MB/s | SGR: Node / Rust MB/s |
+|---|---|---|
+| 39982267090 | 71.0 / 104.6 (1.47×) | 61.1 / 110.5 (1.81×) |
+| 39984947084 | 72.5 / 78.8 (1.09×) | 63.3 / 96.9 (1.53×) |
+| 39986507617 | 74.0 / 91.2 (1.23×) | 62.8 / 82.8 (1.32×) |
+| 39991676288 | 69.2 / 81.4 (1.18×) | 64.3 / 95.4 (1.48×) |
+| 39993316873 | 83.6 / 82.4 (0.99×) | 76.0 / 114.6 (1.51×) |
+| 39997025088 | 74.0 / 97.1 (1.31×) | 61.2 / 98.5 (1.61×) |
+
+The goal of the spec, 1.15 × Node in three runs, is not met for plain text: shared runners vary by about 30% from run to run, and the parse is `alacritty_terminal`'s (Zed's fork, not changed here). Locally, alacritty alone parses about 140 MB/s, `Screen::write` 135 and the whole service path 125, so the daemon's own part is about 10%.
+
+Tried and dropped, as both were slower: parsing on a thread of each shell (a bounded queue; plain 120 MB/s instead of 125 to 130 locally, and a snapshot waited for the queue: 18 ms instead of 5), and the release profile with LTO and one codegen unit (thin: plain 107 MB/s; fat: plain 5% slower, SGR 10% faster, and every app build slower).
+
+Owner, 2026-10-24: whatever is fastest. So the code stays as measured above, and the bench gate (`scripts/compare-terminal-bench.py`) lets parse speed be within 10% of Node's (`margin` 0.9), the noise of the runners, while a snapshot must not be slower at all.

@@ -4,7 +4,7 @@ use hyper::StatusCode;
 use natamux_proto::terminals::query::is_terminal_name;
 use serde_json::{Map, Value, json};
 
-use crate::http::errors::{Answer, Issue, invalid, json_answer, terminal_error};
+use crate::http::errors::{Answer, Issue, invalid, json_answer, task_error, terminal_error};
 use crate::http::server::AppState;
 use crate::terminals::shell_files::read_ended_shells;
 
@@ -68,15 +68,21 @@ pub fn ended_shells(state: &AppState, id: &str) -> Answer {
     if !issues.is_empty() {
         return invalid(&issues);
     }
+    if let Err(error) = state.tasks.get_task(id) {
+        return task_error(&error);
+    }
     ok(json!({ "shells": read_ended_shells(&state.data_dir, id) }))
 }
 
 /// The open shells, and those that wait to come back after a restart, so their panes show.
-/// No stage runs an agent in part 1: `agents` is empty and `lanes` has none.
+/// No stage runs an agent before part 3: `agents` is empty and `lanes` has none.
 pub fn list_terminals(state: &AppState, id: &str) -> Answer {
     let issues = task_id_issues(id);
     if !issues.is_empty() {
         return invalid(&issues);
+    }
+    if let Err(error) = state.tasks.get_task(id) {
+        return task_error(&error);
     }
     let open = state.terminals.list(id);
     let mut terminals = open.clone();

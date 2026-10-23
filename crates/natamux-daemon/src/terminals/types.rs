@@ -53,6 +53,8 @@ pub enum TerminalError {
     Limit(usize),
     /// The shell could not start.
     Spawn(String),
+    /// No task of this id: `TaskNotFoundError`, a 404.
+    TaskNotFound(String),
 }
 
 impl fmt::Display for TerminalError {
@@ -69,6 +71,7 @@ impl fmt::Display for TerminalError {
                 write!(f, "At most {limit} terminals can be open. Close one first.")
             }
             TerminalError::Spawn(message) => write!(f, "{message}"),
+            TerminalError::TaskNotFound(task_id) => write!(f, "Task {task_id} does not exist"),
         }
     }
 }

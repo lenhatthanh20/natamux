@@ -233,3 +233,26 @@ fn names_the_program_in_the_foreground() {
         "{commands:?}"
     );
 }
+
+// Regression: the daemon answered ConPTY's attributes query at spawn, and a dashboard that saw the
+// query in the output answered it again, as typed text.
+#[cfg(windows)]
+#[test]
+fn a_dashboard_that_answers_da1_adds_no_input() {
+    let mut shell = shell("da1", &[]);
+    let queries = |text: &str| text.matches("\x1b[c").count() + text.matches("\x1b[0c").count();
+    let mut answered = 0;
+    let start = Instant::now();
+    // As xterm.js does: each attributes query in the output gets an answer.
+    while start.elapsed() < Duration::from_secs(3) {
+        while answered < queries(&shell.text()) {
+            shell.pty.write(b"\x1b[?1;2c");
+            answered += 1;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    shell.run("Write-Output ('da1' + '-ok')");
+    let text = shell.wait_for("da1-ok\r");
+    assert_eq!(answered, 0, "{text:?}");
+    assert!(!text.contains("1;2c"), "{text:?}");
+}
