@@ -18,7 +18,7 @@ use ui::prelude::*;
 use super::dashboard_data::{BulkRuns, DashboardData, Link};
 use super::source::{Feed, Rows, Source};
 use super::view_rules::{
-    Entries, ShellRequest, request_on_open, seen_after_list, toggle_pin, with_seen,
+    Entries, ShellRequest, WorkspaceTab, request_on_open, seen_after_list, toggle_pin, with_seen,
 };
 use super::view_state::{self, Layout, ViewState};
 use crate::components::toast_rules::{ToastTone, Toasts, toast_duration};
@@ -44,6 +44,8 @@ pub enum DashboardChange {
     /// A line was added to a task's log (`task.updated`): its events, stage files and
     /// settings may have changed.
     TaskLogged(String),
+    /// Undo of a rollback's toast: the task's workspace runs it as one git step.
+    UndoRollback(String),
 }
 
 /// The parts of the app that show terminals of tasks; the feed reads the union.
@@ -74,6 +76,9 @@ pub struct Dashboard {
     pub agents_open: bool,
     /// The terminal the open workspace shows and focuses once its terminals are read.
     pub shell_request: Option<ShellRequest>,
+    /// The tab the open workspace shows, and the task whose commit box Commit… asked for.
+    pub workspace_tab: WorkspaceTab,
+    pub commit_request: Option<String>,
     /// The details panel of each task the user opened or closed, this run only.
     pub details_open: Entries<bool>,
     pub panel_request: Option<(String, details::PanelRequest)>,
@@ -122,6 +127,8 @@ impl Dashboard {
             open_task: None,
             agents_open: false,
             shell_request: None,
+            workspace_tab: WorkspaceTab::Terminal,
+            commit_request: None,
             details_open: Vec::new(),
             panel_request: None,
             terminal_readers: RefCell::new(BTreeMap::new()),
@@ -301,6 +308,7 @@ impl Dashboard {
             &task.id,
         );
         self.agents_open = false;
+        self.workspace_tab = self.tab_on_open(&task.id);
         self.open_task = Some(task.id.clone());
         self.view.seen = with_seen(&self.view.seen, &[(&task.id, task.state)], true);
         self.save_view(cx);
@@ -463,6 +471,7 @@ impl Dashboard {
 
 #[path = "dashboard_writes.rs"]
 mod writes;
+pub use writes::Written;
 
 #[path = "workspace_writes.rs"]
 mod workspace_writes;
@@ -472,3 +481,9 @@ pub mod details;
 
 #[path = "details_writes.rs"]
 mod details_writes;
+
+#[path = "git_writes.rs"]
+mod git_writes;
+
+#[path = "tab_state.rs"]
+mod tabs;

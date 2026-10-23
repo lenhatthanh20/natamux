@@ -1,19 +1,19 @@
-//! The parts of the workspace view: the tab row, the no-workspace view and the finished
-//! summary, the workspace itself, and what the finished banner's and the wrap-up's buttons do.
+//! The parts of the workspace view: the no-workspace view and the finished summary, the
+//! workspace itself with the body of its tab, and what the finished banner's and the wrap-up's
+//! buttons do.
 
 use std::rc::Rc;
 
-use gpui::ClickEvent;
 use natamux_proto::tasks::task::Task;
-use ui::{Tooltip, prelude::*};
+use ui::prelude::*;
 
 use super::{Shown, WorkspaceView};
 use crate::agents::agent_choices::{DEFAULT_AGENT, is_agent_id};
+use crate::app::view_rules::WorkspaceTab;
+use crate::git::history_view::HistoryView;
 use crate::tasks::state_filter::width_probe;
 use crate::tasks::table_rules::waits_for;
-use crate::terminals::pane_header::icon_button;
-use crate::terminals::pane_rules::MAX_PANES;
-use crate::workspaces::finished_banner::{FinishedActions, FinishedBanner};
+use crate::workspaces::finished_banner::{FinishedActions, FinishedBanner, OnClick};
 use crate::workspaces::finished_summary::{FinishedSummary, follow_up_title};
 use crate::workspaces::no_workspace::NoWorkspace;
 use crate::workspaces::workspace_header::WorkspaceHeader;
@@ -23,68 +23,6 @@ use crate::workspaces::wrap_up_rules::{GitFacts, is_finished_state};
 use crate::workspaces::{new_workspace_dialog, remove_workspace_dialog};
 
 impl WorkspaceView {
-    pub(super) fn tab_row(
-        &self,
-        task: &Task,
-        panes_shown: bool,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement + use<> {
-        let colors = cx.theme().colors();
-        let full = self.panes.read(cx).is_full(cx);
-        let new_terminal = panes_shown.then(|| {
-            let mut tip = "New terminal (Ctrl+Shift+`)".to_owned();
-            if task.agent.is_some() {
-                tip.push_str(". Terminal 1 runs the agent.");
-            }
-            let tip = if full {
-                format!("At most {MAX_PANES} terminals")
-            } else {
-                tip
-            };
-            icon_button("tab-new-terminal", "square-split-horizontal")
-                .disabled(full)
-                .tooltip(Tooltip::text(tip))
-                .on_click(cx.listener(|view, _: &ClickEvent, _, cx| {
-                    view.panes.update(cx, |panes, cx| panes.add(cx))
-                }))
-                .child(Label::new("New terminal").size(LabelSize::Small))
-        });
-        let back = (is_finished_state(task.state) && panes_shown).then(|| {
-            Button::new("tab-back-to-wrap-up", "Back to wrap-up")
-                .label_size(LabelSize::Small)
-                .on_click(cx.listener(|view, _: &ClickEvent, _, cx| {
-                    if let Some(shown) = view.shown.as_mut() {
-                        shown.shells_wanted = false;
-                    }
-                    cx.notify();
-                }))
-        });
-        h_flex()
-            .h(px(36.))
-            .flex_none()
-            .px_2()
-            .gap_2()
-            .border_b_1()
-            .border_color(colors.border)
-            .child(
-                h_flex()
-                    .h_full()
-                    .px_2()
-                    .gap_1p5()
-                    .border_b_2()
-                    .border_color(colors.text_accent)
-                    .child(
-                        Icon::from_path("icons/lucide/terminal.svg")
-                            .size(IconSize::Small)
-                            .color(Color::Default),
-                    )
-                    .child(Label::new("Terminal").size(LabelSize::Small)),
-            )
-            .child(div().flex_1())
-            .children(back)
-            .children(new_terminal)
-    }
-
     pub(super) fn render_no_workspace(
         &self,
         task: Task,
@@ -181,11 +119,14 @@ impl WorkspaceView {
                     .ok();
             }
         });
+        let (commit, view_changes) = self.changes_actions(&task.id);
         let dashboard = self.dashboard.clone();
         let removed = task.clone();
         let banner = FinishedActions {
             push: push.clone(),
             pull_request: pull_request.clone(),
+            commit,
+            view_changes: view_changes.clone(),
             remove: Rc::new(move |window: &mut Window, cx: &mut App| {
                 remove_workspace_dialog::open(&dashboard, removed.clone(), window, cx)
             }),
@@ -193,6 +134,7 @@ impl WorkspaceView {
         let wrap_up = WrapUpActions {
             push,
             pull_request,
+            view_changes,
             reopen: Rc::new({
                 let this = this.clone();
                 move |_: &mut Window, cx: &mut App| {
@@ -230,7 +172,79 @@ impl WorkspaceView {
         (banner, wrap_up)
     }
 
-    /// A task with a workspace: header, finished banner, tab row, and its panes or wrap-up.
+    /// Commit… and View changes: the task's Changes tab; Commit… also drafts into an empty box
+    /// and focuses it.
+    fn changes_actions(&self, task_id: &str) -> (OnClick, OnClick) {
+        let open = |commit: bool| -> OnClick {
+            let (dashboard, id) = (self.dashboard.clone(), task_id.to_owned());
+            Rc::new(move |_: &mut Window, cx: &mut App| {
+                dashboard.update(cx, |dashboard, cx| dashboard.open_changes(&id, commit, cx))
+            })
+        };
+        (open(true), open(false))
+    }
+
+    /// The header with its git buttons: Commit… or Push, Create PR, and Show in progress.
+    fn header(
+        &self,
+        task: &Task,
+        shown: &Shown,
+        uncommitted: Option<u64>,
+        cx: &mut Context<Self>,
+    ) -> WorkspaceHeader {
+        let this = cx.weak_entity();
+        WorkspaceHeader::new(
+            task.clone(),
+            shown.graph.clone(),
+            uncommitted,
+            shown.pending,
+            *self.width.read(cx),
+        )
+        .on_push({
+            let this = this.clone();
+            move |_, cx| {
+                this.update(cx, |view, cx| view.git_step(GitStep::Push, cx))
+                    .ok();
+            }
+        })
+        .on_pull_request(move |_, cx| {
+            this.update(cx, |view, cx| view.git_step(GitStep::PullRequest, cx))
+                .ok();
+        })
+        .on_commit({
+            let (dashboard, id) = (self.dashboard.clone(), task.id.clone());
+            move |_, cx| dashboard.update(cx, |dashboard, cx| dashboard.open_changes(&id, true, cx))
+        })
+        .on_progress({
+            let (dashboard, id) = (self.dashboard.clone(), task.id.clone());
+            move |_, cx| dashboard.update(cx, |dashboard, cx| dashboard.show_progress(&id, cx))
+        })
+    }
+
+    /// The History tab: the graph of the task against its base branch.
+    fn history(&self, task: &Task, shown: &Shown, cx: &mut Context<Self>) -> AnyElement {
+        let this = cx.weak_entity();
+        let dashboard = self.dashboard.clone();
+        HistoryView {
+            id: task.id.clone(),
+            graph: shown.graph.clone(),
+            error: shown.graph_error.clone(),
+            uncommitted: shown.changes.as_ref().map(Vec::len).unwrap_or(0),
+            narrow: self.width.read(cx).is_some_and(|width| width < 640.),
+            on_show_changes: Rc::new(move |_: &mut Window, cx: &mut App| {
+                dashboard.update(cx, |dashboard, cx| {
+                    dashboard.pick_tab(WorkspaceTab::Changes, cx)
+                })
+            }),
+            on_refresh: Rc::new(move |_: &mut Window, cx: &mut App| {
+                this.update(cx, |view, cx| view.read_git_fresh(cx)).ok();
+            }),
+        }
+        .into_any_element()
+    }
+
+    /// A task with a workspace: header, finished banner, tab row, and the body of its tab: the
+    /// panes or the wrap-up, Changes, or History.
     pub(super) fn render_workspace(
         &self,
         task: Task,
@@ -249,38 +263,19 @@ impl WorkspaceView {
             .flatten()
             .map(|change| change.path.clone())
             .collect();
-        let this = cx.weak_entity();
-        let header = WorkspaceHeader::new(
-            task.clone(),
-            shown.graph.clone(),
-            facts.uncommitted,
-            shown.pending,
-            *self.width.read(cx),
-        )
-        .on_push({
-            let this = this.clone();
-            move |_, cx| {
-                this.update(cx, |view, cx| view.git_step(GitStep::Push, cx))
-                    .ok();
-            }
-        })
-        .on_pull_request(move |_, cx| {
-            this.update(cx, |view, cx| view.git_step(GitStep::PullRequest, cx))
-                .ok();
-        })
-        .on_progress({
-            let (dashboard, id) = (self.dashboard.clone(), task.id.clone());
-            move |_, cx| dashboard.update(cx, |dashboard, cx| dashboard.show_progress(&id, cx))
-        });
+        let header = self.header(&task, shown, facts.uncommitted, cx);
         let (banner_actions, wrap_up_actions) = self.finished_actions(&task, cx);
         let banner = finished.then(|| {
             FinishedBanner::new(task.clone(), facts.clone(), shown.pending, banner_actions)
         });
-        let tab_row = self.tab_row(&task, panes_shown, cx);
-        let body: AnyElement = if panes_shown {
-            self.panes.clone().into_any_element()
-        } else {
-            WrapUp {
+        let tab = self.dashboard.read(cx).workspace_tab;
+        let uncommitted = shown.changes.as_ref().map(Vec::len);
+        let tab_row = self.tab_row(&task, tab, panes_shown, uncommitted, cx);
+        let body: AnyElement = match tab {
+            WorkspaceTab::Changes => self.changes.clone().into_any_element(),
+            WorkspaceTab::History => self.history(&task, shown, cx),
+            _ if panes_shown => self.panes.clone().into_any_element(),
+            _ => WrapUp {
                 task: task.clone(),
                 facts,
                 paths,
@@ -297,7 +292,7 @@ impl WorkspaceView {
                 pending: shown.pending,
                 actions: wrap_up_actions,
             }
-            .into_any_element()
+            .into_any_element(),
         };
         v_flex()
             .relative()

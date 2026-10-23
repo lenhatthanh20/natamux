@@ -16,6 +16,12 @@ pub const TERMINAL: &str = "Terminal";
 pub const TERMINAL_FIND: &str = "TerminalFind";
 /// The details panel, while none of its text boxes has the focus.
 pub const DETAILS: &str = "NatamuxDetails && not_editing";
+/// The Changes and History tabs, while none of their text boxes has the focus.
+pub const CHANGES: &str = "NatamuxChanges && not_editing";
+/// The same tabs for chords: they work in the diff editor and in the comment box too.
+pub const CHANGES_ANY: &str = "NatamuxChanges";
+/// The wrapper of the commit box.
+pub const COMMIT_BOX: &str = "NatamuxCommitBox";
 /// Where single keys work: outside text boxes and terminals.
 const SINGLE: &[&str] = &[BODY, LIST, DETAILS];
 
@@ -57,6 +63,7 @@ impl MenuName {
 #[cfg(test)]
 pub use super::command_when::CommandState;
 pub use super::command_when::When;
+pub use super::commands_git::GIT_COMMANDS;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Command {
@@ -73,7 +80,7 @@ pub struct Command {
     pub menu: Option<(MenuName, u8)>,
 }
 
-const fn command(id: &'static str, title: &'static str, category: Category) -> Command {
+pub(super) const fn command(id: &'static str, title: &'static str, category: Category) -> Command {
     Command {
         id,
         title,
@@ -85,7 +92,7 @@ const fn command(id: &'static str, title: &'static str, category: Category) -> C
     }
 }
 
-const fn keys(
+pub(super) const fn keys(
     command: Command,
     keys: &'static [&'static str],
     contexts: &'static [&'static str],
@@ -97,11 +104,11 @@ const fn keys(
     }
 }
 
-const fn when(command: Command, when: When) -> Command {
+pub(super) const fn when(command: Command, when: When) -> Command {
     Command { when, ..command }
 }
 
-const fn menu(command: Command, name: MenuName, section: u8) -> Command {
+pub(super) const fn menu(command: Command, name: MenuName, section: u8) -> Command {
     Command {
         menu: Some((name, section)),
         ..command
@@ -231,6 +238,7 @@ pub const COMMANDS: &[Command] = &[
     // of an item that has one comes from its command above.
     command("task.add-subtask", "Add subtask\u{2026}", Task),
     command("task.show-details", "Show details", Task),
+    command("task.view-changes", "View changes", Task),
     command("row.pin", "Pin to the top", Task),
     command("row.unpin", "Unpin", Task),
     command("row.copy-branch", "Copy branch name", Task),
@@ -430,8 +438,13 @@ pub const COMMANDS: &[Command] = &[
     ),
 ];
 
+/// Every command: this file's, then screen 4's (`commands_git.rs`).
+pub fn all_commands() -> impl Iterator<Item = &'static Command> {
+    COMMANDS.iter().chain(GIT_COMMANDS)
+}
+
 pub fn command_by_id(id: &str) -> Option<&'static Command> {
-    COMMANDS.iter().find(|command| command.id == id)
+    all_commands().find(|command| command.id == id)
 }
 
 /// The title of a command, for a menu item.
@@ -446,12 +459,10 @@ pub fn shortcut_of(id: &str) -> Option<&'static str> {
 
 /// The commands of one menu, in registry order, with their section.
 pub fn menu_items(name: MenuName) -> impl Iterator<Item = (&'static Command, u8)> {
-    COMMANDS
-        .iter()
-        .filter_map(move |command| match command.menu {
-            Some((menu, section)) if menu == name => Some((command, section)),
-            _ => None,
-        })
+    all_commands().filter_map(move |command| match command.menu {
+        Some((menu, section)) if menu == name => Some((command, section)),
+        _ => None,
+    })
 }
 
 // How shortcuts are written and read: `app/shortcut_text.rs`.

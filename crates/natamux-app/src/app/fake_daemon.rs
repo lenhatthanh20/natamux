@@ -49,6 +49,7 @@ struct Data {
     graphs: BTreeMap<String, GitGraph>,
     preparing: BTreeMap<String, PreparingStep>,
     ended: BTreeMap<String, Vec<EndedShell>>,
+    git: git::GitState,
     next_number: u32,
     feeds: Vec<UnboundedSender<DashboardEvent>>,
     link: FakeLink,
@@ -94,11 +95,13 @@ impl Data {
             graphs: part!(seed, "graphs"),
             preparing: BTreeMap::new(),
             ended: part!(seed, "endedShells"),
+            git: git::GitState::default(),
             next_number: 200,
             feeds: Vec::new(),
             link: FakeLink::Live,
         };
         data.add_stage_seed();
+        data.add_git_seed();
         data
     }
 
@@ -274,7 +277,7 @@ impl FakeDaemon {
         Ok(self.data().skills.clone())
     }
 
-    pub fn list_changes(&self, task_id: &str) -> Answer<Vec<ChangeEntry>> {
+    pub fn list_changes(&self, task_id: &str, _fresh: bool) -> Answer<Vec<ChangeEntry>> {
         Ok(self
             .data()
             .changes
@@ -283,7 +286,7 @@ impl FakeDaemon {
             .unwrap_or_default())
     }
 
-    pub fn graph(&self, task_id: &str) -> Answer<GitGraph> {
+    pub fn graph(&self, task_id: &str, _fresh: bool) -> Answer<GitGraph> {
         Ok(self.data().graphs.get(task_id).cloned().unwrap_or_default())
     }
 
@@ -464,6 +467,9 @@ mod screens;
 
 #[path = "fake_stages.rs"]
 mod stages;
+
+#[path = "fake_git.rs"]
+mod git;
 
 #[cfg(test)]
 #[path = "fake_daemon_tests.rs"]

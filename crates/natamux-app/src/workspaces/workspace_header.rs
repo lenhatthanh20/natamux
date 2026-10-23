@@ -2,7 +2,8 @@
 //! id, title, state chip, branch chip (click copies), then Push and Create PR with their reasons,
 //! or Open pull request. A done or cancelled task shows only Open pull request: its finished
 //! banner offers the next git step. The state chip of a task that waits for the user shows its
-//! progress. Commit… (screen 4) is not here yet; where React shows Commit…, Push says why it waits.
+//! progress. While origin has every commit and files are not committed, Commit… takes the place
+//! of Push.
 
 use std::rc::Rc;
 
@@ -11,7 +12,7 @@ use natamux_proto::tasks::task::{Task, TaskState};
 use natamux_proto::workspaces::workspace::GitGraph;
 use ui::{ButtonLike, TintColor, Tooltip, prelude::*};
 
-use super::workspace_rules::{GitButton, GitStep, pull_request_button, push_button};
+use super::workspace_rules::{GitButton, GitStep, needs_commit, pull_request_button, push_button};
 use super::wrap_up_rules::is_finished_state;
 use crate::components::chips::StateChip;
 use crate::components::toast_rules::ToastTone;
@@ -44,6 +45,7 @@ pub struct WorkspaceHeader {
     width: Option<f32>,
     on_push: OnClick,
     on_pull_request: OnClick,
+    on_commit: OnClick,
     on_progress: OnClick,
 }
 
@@ -63,6 +65,7 @@ impl WorkspaceHeader {
             width,
             on_push: Rc::new(|_, _| {}),
             on_pull_request: Rc::new(|_, _| {}),
+            on_commit: Rc::new(|_, _| {}),
             on_progress: Rc::new(|_, _| {}),
         }
     }
@@ -80,6 +83,12 @@ impl WorkspaceHeader {
 
     pub fn on_pull_request(mut self, run: impl Fn(&mut Window, &mut App) + 'static) -> Self {
         self.on_pull_request = Rc::new(run);
+        self
+    }
+
+    /// Commit…: opens the Changes tab, which drafts a message into an empty box.
+    pub fn on_commit(mut self, run: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+        self.on_commit = Rc::new(run);
         self
     }
 }
@@ -199,15 +208,36 @@ fn open_pull_request(url: String, compact: bool) -> AnyElement {
 }
 
 impl WorkspaceHeader {
-    /// Push, and Create PR or Open pull request. A finished task has only Open pull request.
+    /// Commit… or Push, and Create PR or Open pull request. A finished task has only Open pull
+    /// request.
     fn git_buttons(&self, compact: bool) -> Vec<AnyElement> {
         let task = &self.task;
         let finished = is_finished_state(task.state);
         let graph = self.graph.as_ref();
         let runs = |step| self.pending == Some(step);
         let other_runs = |step| self.pending.is_some() && self.pending != Some(step);
-        let push = (!finished).then(|| {
-            let push = graph.and_then(|graph| graph.push.as_ref());
+        let push_status = graph.and_then(|graph| graph.push.as_ref());
+        let commit_first = !finished && needs_commit(push_status, self.uncommitted);
+        let commit = commit_first.then(|| {
+            let button = GitButton {
+                label: "Commit…".into(),
+                reason: None,
+                tip: Some("Commit your changes in the Changes tab".into()),
+            };
+            let off = self.pending.is_some();
+            git_button(
+                "workspace-commit",
+                "circle-dot",
+                button,
+                false,
+                false,
+                off,
+                self.on_commit.clone(),
+            )
+            .into_any_element()
+        });
+        let push = (!finished && !commit_first).then(|| {
+            let push = push_status;
             let button = push_button(task.branch.as_deref(), push, self.uncommitted);
             let (busy, off) = (runs(GitStep::Push), other_runs(GitStep::Push));
             git_button(
@@ -247,7 +277,7 @@ impl WorkspaceHeader {
             }
             None => None,
         };
-        [push, pull_request].into_iter().flatten().collect()
+        [commit, push, pull_request].into_iter().flatten().collect()
     }
 }
 

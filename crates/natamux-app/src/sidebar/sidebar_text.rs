@@ -77,6 +77,7 @@ fn disabled<C>(menu_item: MenuItem<C>, off: bool, why: Option<&'static str>) -> 
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RowCommand {
+    ViewChanges,
     Rename,
     AddSubtask,
     TogglePin,
@@ -86,9 +87,18 @@ pub enum RowCommand {
     DeleteTask,
 }
 
-/// The row menu (docs/ui-spec.md 4.9). "View changes" waits for screen 2.
+/// The row menu (docs/ui-spec.md 4.9). "View changes" is first, for a task with a workspace.
 pub fn row_menu(task: &Task, pinned: bool) -> Vec<MenuItem<RowCommand>> {
-    let mut items = vec![item("row.rename", "Rename", "pencil", RowCommand::Rename)];
+    let mut items = Vec::new();
+    if task.workspace.is_some() {
+        items.push(item(
+            "task.view-changes",
+            "View changes",
+            "file-diff",
+            RowCommand::ViewChanges,
+        ));
+    }
+    items.push(item("row.rename", "Rename", "pencil", RowCommand::Rename));
     // Subtasks go one level deep.
     if task.parent_id.is_none() {
         items.push(item(

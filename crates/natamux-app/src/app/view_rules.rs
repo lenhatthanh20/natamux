@@ -26,6 +26,30 @@ pub enum WorkspaceTab {
     Editor,
 }
 
+impl WorkspaceTab {
+    pub fn name(self) -> &'static str {
+        match self {
+            WorkspaceTab::Changes => "changes",
+            WorkspaceTab::History => "history",
+            WorkspaceTab::Terminal => "terminal",
+            WorkspaceTab::Docs => "docs",
+            WorkspaceTab::Editor => "editor",
+        }
+    }
+
+    /// Only the tabs the app remembers read back: Docs is not in the app yet, and Editor needs
+    /// an open file.
+    pub fn parse(text: &str) -> Option<WorkspaceTab> {
+        [
+            WorkspaceTab::Terminal,
+            WorkspaceTab::Changes,
+            WorkspaceTab::History,
+        ]
+        .into_iter()
+        .find(|tab| tab.name() == text)
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DetailsView {
     Progress,

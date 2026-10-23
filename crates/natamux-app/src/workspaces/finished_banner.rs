@@ -1,7 +1,7 @@
 //! The 40 px banner under the header of a done or cancelled task (docs/ui-spec.md 4.29,
 //! `features/workspaces/FinishedBanner.tsx`): "Task done." and the next git step, the first that
-//! matches (`finishedBanner`). Remove workspace is always there. Commit… comes with screen 4: the
-//! text still says the files are not committed, and Remove waits for them.
+//! matches (`finishedBanner`). Remove workspace is always there; it waits while files are not
+//! committed.
 
 use std::rc::Rc;
 
@@ -13,13 +13,16 @@ use super::workspace_rules::{GitStep, push_button};
 use super::wrap_up_rules::{FinishedAction, FinishedBannerText, GitFacts, finished_banner};
 use crate::components::colors::state_colors;
 
-type OnClick = Rc<dyn Fn(&mut Window, &mut App)>;
+pub type OnClick = Rc<dyn Fn(&mut Window, &mut App)>;
 
 /// What the banner's buttons do.
 #[derive(Clone)]
 pub struct FinishedActions {
     pub push: OnClick,
     pub pull_request: OnClick,
+    /// Commit…: the Changes tab, which drafts a message into an empty box.
+    pub commit: OnClick,
+    pub view_changes: OnClick,
     pub remove: OnClick,
 }
 
@@ -66,8 +69,7 @@ fn button(
 }
 
 impl FinishedBanner {
-    /// The next git step's button, the first that matches. Commit… and View changes come with
-    /// screen 4.
+    /// The next git step's button, the first that matches.
     fn main_button(&self, primary: Option<FinishedAction>) -> Option<AnyElement> {
         let busy = self.pending.is_some();
         let graph = self.facts.graph.as_ref();
@@ -108,7 +110,17 @@ impl FinishedBanner {
                         .into_any_element(),
                 )
             }
-            FinishedAction::Commit | FinishedAction::ViewChanges => None,
+            FinishedAction::Commit => {
+                let run = self.actions.commit.clone();
+                Some(button("finished-commit", "Commit…", true, busy, run).into_any_element())
+            }
+            FinishedAction::ViewChanges => {
+                let run = self.actions.view_changes.clone();
+                Some(
+                    button("finished-view-changes", "View changes", true, false, run)
+                        .into_any_element(),
+                )
+            }
         }
     }
 

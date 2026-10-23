@@ -29,6 +29,20 @@ fn a_saved_view_reads_back_the_same() {
         details_view: Some(DetailsView::Details),
         sections: vec![("notes".into(), false), ("details".into(), true)],
         notify: true,
+        tabs: vec![
+            ("T-1".into(), WorkspaceTab::Changes),
+            ("T-2".into(), WorkspaceTab::History),
+        ],
+        changes_view: FileViewMode::Tree,
+        files_width: 300,
+        diff: DiffFlags {
+            side_by_side: false,
+            collapse_unchanged: false,
+            ignore_whitespace: false,
+            show_moves: true,
+            wrap_prose: false,
+            wrap_code: true,
+        },
     };
     state.remember_base("r1", "main");
     let folder = temp_folder("round");
@@ -252,4 +266,138 @@ fn opens_the_details_of_a_task_on_its_progress() {
         open,
         vec![("T-1".to_string(), false), ("T-2".to_string(), true)]
     );
+}
+
+#[test]
+fn the_changes_tab_starts_with_the_defaults_of_the_web() {
+    let state = ViewState::parse("{}");
+    assert!(state.tabs.is_empty());
+    assert_eq!(state.changes_view, FileViewMode::List);
+    assert_eq!(state.files_width, 260);
+    assert_eq!(
+        state.diff,
+        DiffFlags {
+            side_by_side: true,
+            collapse_unchanged: true,
+            ignore_whitespace: true,
+            show_moves: false,
+            wrap_prose: true,
+            wrap_code: false,
+        }
+    );
+    assert_eq!(state, ViewState::default());
+}
+
+#[test]
+fn reads_the_tabs_the_view_and_the_flags_of_the_changes_tab() {
+    let state = ViewState::parse(
+        r#"{"tabs": {"T-1": "terminal", "T-2": "changes", "T-3": "history"},
+            "changesView": "tree", "filesWidth": 330,
+            "diff": {"sideBySide": false, "showMoves": true}}"#,
+    );
+    assert_eq!(state.tab_of("T-1"), Some(WorkspaceTab::Terminal));
+    assert_eq!(state.tab_of("T-2"), Some(WorkspaceTab::Changes));
+    assert_eq!(state.tab_of("T-3"), Some(WorkspaceTab::History));
+    assert_eq!(state.tab_of("T-4"), None);
+    assert_eq!(state.changes_view, FileViewMode::Tree);
+    assert_eq!(state.files_width, 330);
+    assert!(!state.diff.side_by_side && state.diff.show_moves);
+    assert!(state.diff.collapse_unchanged && state.diff.wrap_prose);
+}
+
+#[test]
+fn a_bad_value_of_the_changes_tab_is_its_default() {
+    let state = ViewState::parse(
+        r#"{"tabs": {"T-1": "docs", "T-2": "editor", "T-3": "nope", "T-4": 3, "T-5": "changes"},
+            "changesView": "grid", "filesWidth": "wide", "diff": {"wrapCode": "yes", "showMoves": 1}}"#,
+    );
+    assert_eq!(state.tabs, vec![("T-5".into(), WorkspaceTab::Changes)]);
+    assert_eq!(state.changes_view, FileViewMode::List);
+    assert_eq!(state.files_width, FILES_DEFAULT);
+    assert_eq!(state.diff, DiffFlags::default());
+    let all = ViewState::parse(r#"{"tabs": [1], "changesView": 4, "diff": "x"}"#);
+    assert_eq!(all, ViewState::default());
+}
+
+#[test]
+fn the_files_width_stays_between_200_and_420() {
+    assert_eq!(ViewState::parse(r#"{"filesWidth": 50}"#).files_width, 200);
+    assert_eq!(ViewState::parse(r#"{"filesWidth": 9000}"#).files_width, 420);
+    assert_eq!(ViewState::parse(r#"{"filesWidth": -5}"#).files_width, 200);
+    let mut state = ViewState::default();
+    state.set_files_width(100);
+    assert_eq!(state.files_width, 200);
+    state.set_files_width(500);
+    assert_eq!(state.files_width, 420);
+}
+
+#[test]
+fn keeps_the_newest_200_tabs() {
+    let tabs: Map<String, Value> = (0..205)
+        .map(|at| (format!("T-{at}"), Value::from("changes")))
+        .collect();
+    let state = ViewState::parse(&json!({ "tabs": tabs }).to_string());
+    assert_eq!(state.tabs.len(), 200);
+    assert_eq!(state.tabs[0].0, "T-5");
+    assert_eq!(state.tab_of("T-204"), Some(WorkspaceTab::Changes));
+}
+
+#[test]
+fn remembers_the_last_tab_of_each_workspace_in_the_file() {
+    let mut state = ViewState::default();
+    state.remember_tab("T-1", WorkspaceTab::Changes);
+    state.remember_tab("T-2", WorkspaceTab::History);
+    state.remember_tab("T-1", WorkspaceTab::Terminal);
+    assert_eq!(state.tab_of("T-1"), Some(WorkspaceTab::Terminal));
+    assert_eq!(state.tab_of("T-2"), Some(WorkspaceTab::History));
+    assert_eq!(ViewState::parse(&state.to_json()).tabs, state.tabs);
+}
+
+#[test]
+fn does_not_remember_the_editor_tab_which_needs_an_open_file() {
+    let mut state = ViewState::default();
+    state.remember_tab("T-1", WorkspaceTab::Terminal);
+    state.remember_tab("T-1", WorkspaceTab::Editor);
+    state.remember_tab("T-2", WorkspaceTab::Docs);
+    assert_eq!(state.tab_of("T-1"), Some(WorkspaceTab::Terminal));
+    assert_eq!(state.tab_of("T-2"), None);
+}
+
+#[test]
+fn follows_the_tab_that_the_user_picks_in_the_open_workspace_only() {
+    use crate::workspaces::workspace_rules::shown_after_remember;
+    let mut view = ViewState::default();
+    let open = Some("T-0001");
+    let shown = shown_after_remember(
+        open,
+        WorkspaceTab::Terminal,
+        "T-0001",
+        WorkspaceTab::History,
+    );
+    view.remember_tab("T-0001", WorkspaceTab::History);
+    assert_eq!(shown, WorkspaceTab::History);
+    let shown = shown_after_remember(open, shown, "T-0002", WorkspaceTab::Changes);
+    view.remember_tab("T-0002", WorkspaceTab::Changes);
+    assert_eq!(shown, WorkspaceTab::History);
+    assert_eq!(view.tab_of("T-0002"), Some(WorkspaceTab::Changes));
+}
+
+#[test]
+fn drops_a_remembered_progress_tab_which_is_gone() {
+    let view = ViewState::parse(r#"{"tabs":{"T-0001":"progress","T-0002":"history"}}"#);
+    assert_eq!(
+        view.tabs,
+        vec![("T-0002".to_string(), WorkspaceTab::History)]
+    );
+}
+
+#[test]
+fn remembers_no_tab_when_the_stored_tabs_are_broken() {
+    for broken in [
+        r#"{"tabs":"{oops"}"#,
+        r#"{"tabs":[1,2]}"#,
+        r#"{"tabs":{"T-0001":3}}"#,
+    ] {
+        assert!(ViewState::parse(broken).tabs.is_empty(), "{broken}");
+    }
 }

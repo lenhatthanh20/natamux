@@ -5,6 +5,7 @@
 
 pub mod config;
 pub mod error;
+mod git_methods;
 mod http;
 pub mod agents {
     pub mod api;
@@ -50,8 +51,7 @@ use natamux_proto::tasks::template::{TaskTemplate, TemplateInput};
 use natamux_proto::terminals::ended::EndedShell;
 use natamux_proto::terminals::list::TerminalList;
 use natamux_proto::workspaces::workspace::{
-    ChangeEntry, DiffStat, FanOutInput, GitGraph, NewWorkspaceInput, PreparingStep,
-    RemoveWorkspaceAnswer,
+    DiffStat, FanOutInput, NewWorkspaceInput, PreparingStep, RemoveWorkspaceAnswer,
 };
 
 pub use config::Config;
@@ -337,20 +337,6 @@ impl Client {
 
     pub fn diff_stats(&self) -> Answer<BTreeMap<String, DiffStat>> {
         self.with_config(move |config| async move { workspaces::api::diff_stats(&config).await })
-    }
-
-    pub fn list_changes(&self, task_id: &str) -> Answer<Vec<ChangeEntry>> {
-        let task_id = task_id.to_string();
-        self.with_config(move |config| async move {
-            workspaces::api::list_changes(&config, &task_id).await
-        })
-    }
-
-    pub fn graph(&self, task_id: &str) -> Answer<GitGraph> {
-        let task_id = task_id.to_string();
-        self.with_config(
-            move |config| async move { workspaces::api::graph(&config, &task_id).await },
-        )
     }
 
     pub fn activity(&self) -> Answer<BTreeMap<String, TaskActivity>> {

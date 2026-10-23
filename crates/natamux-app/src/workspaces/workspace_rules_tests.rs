@@ -355,3 +355,28 @@ fn reads_the_question_of_the_newest_ask() {
         }
     );
 }
+
+#[test]
+fn changes_closes_a_docked_details_panel_when_main_is_under_900() {
+    let (terminal, changes) = (Some(WorkspaceTab::Terminal), WorkspaceTab::Changes);
+    assert!(closes_details_for(changes, terminal, Some(899.), true));
+    assert!(!closes_details_for(changes, terminal, Some(900.), true));
+    // A sheet or a page is not beside main; a panel opened again on Changes stays.
+    assert!(!closes_details_for(changes, terminal, Some(700.), false));
+    assert!(!closes_details_for(
+        changes,
+        Some(changes),
+        Some(700.),
+        true
+    ));
+    // A workspace that opens on Changes closes it too, as the web's tab report on mount does.
+    assert!(closes_details_for(changes, None, Some(700.), true));
+    // Until main is measured, nothing is decided.
+    assert!(!closes_details_for(changes, None, None, true));
+    assert!(!closes_details_for(
+        WorkspaceTab::History,
+        terminal,
+        Some(700.),
+        true
+    ));
+}

@@ -8,7 +8,10 @@ use natamux_proto::tasks::task::TaskState;
 use serde_json::{Map, Value, json};
 
 use crate::app::layout_mode::PANEL_WIDTH;
-use crate::app::view_rules::{DetailsView, Entries, parse_pinned, with_seen};
+use crate::app::view_rules::{
+    DetailsView, Entries, WorkspaceTab, parse_pinned, with_seen, with_tab,
+};
+use crate::git::change_tree::FileViewMode;
 use crate::sidebar::sidebar_tree::{Folds, with_fold};
 use crate::terminals::pane_rules::{PaneLayout, parse_pane_layout};
 
@@ -19,6 +22,10 @@ pub const SIDEBAR_MAX: f32 = 440.0;
 /// `useStoredWidth('natamux.details-width', PANEL_WIDTH, 320, 560)`.
 pub const DETAILS_MIN: f32 = 320.0;
 pub const DETAILS_MAX: f32 = 560.0;
+/// The file list of the Changes tab: `useStoredWidth('natamux.files-width', 260, 200, 420)`.
+pub const FILES_DEFAULT: u32 = 260;
+pub const FILES_MIN: u32 = 200;
+pub const FILES_MAX: u32 = 420;
 /// Folded sections of the details panel kept at most (`natamux.section.<id>`).
 const MAX_SECTIONS: usize = 50;
 
@@ -36,6 +43,56 @@ impl Layout {
             Layout::Table => "table",
             Layout::Board => "board",
         }
+    }
+}
+
+/// The switches of the diff, with the defaults of the web.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct DiffFlags {
+    pub side_by_side: bool,
+    pub collapse_unchanged: bool,
+    pub ignore_whitespace: bool,
+    pub show_moves: bool,
+    pub wrap_prose: bool,
+    pub wrap_code: bool,
+}
+
+impl Default for DiffFlags {
+    fn default() -> Self {
+        DiffFlags {
+            side_by_side: true,
+            collapse_unchanged: true,
+            ignore_whitespace: true,
+            show_moves: false,
+            wrap_prose: true,
+            wrap_code: false,
+        }
+    }
+}
+
+impl DiffFlags {
+    fn parse(value: Option<&Value>) -> Self {
+        let default = DiffFlags::default();
+        let get = |name: &str, fallback: bool| flag(value.and_then(|map| map.get(name)), fallback);
+        DiffFlags {
+            side_by_side: get("sideBySide", default.side_by_side),
+            collapse_unchanged: get("collapseUnchanged", default.collapse_unchanged),
+            ignore_whitespace: get("ignoreWhitespace", default.ignore_whitespace),
+            show_moves: get("showMoves", default.show_moves),
+            wrap_prose: get("wrapProse", default.wrap_prose),
+            wrap_code: get("wrapCode", default.wrap_code),
+        }
+    }
+
+    fn to_json(self) -> Value {
+        json!({
+            "sideBySide": self.side_by_side,
+            "collapseUnchanged": self.collapse_unchanged,
+            "ignoreWhitespace": self.ignore_whitespace,
+            "showMoves": self.show_moves,
+            "wrapProse": self.wrap_prose,
+            "wrapCode": self.wrap_code,
+        })
     }
 }
 
@@ -62,6 +119,11 @@ pub struct ViewState {
     pub sections: Vec<(String, bool)>,
     /// System notifications for tasks that start to need the user (off until switched on).
     pub notify: bool,
+    /// The last workspace tab of each task (`tabByTask`): terminal, changes or history.
+    pub tabs: Entries<WorkspaceTab>,
+    pub changes_view: FileViewMode,
+    pub files_width: u32,
+    pub diff: DiffFlags,
 }
 
 impl Default for ViewState {
@@ -82,8 +144,26 @@ impl Default for ViewState {
             details_view: None,
             sections: Vec::new(),
             notify: false,
+            tabs: Vec::new(),
+            changes_view: FileViewMode::List,
+            files_width: FILES_DEFAULT,
+            diff: DiffFlags::default(),
         }
     }
+}
+
+/// The last tab of each workspace, through `with_tab` so the cap holds.
+fn tabs_of(pairs: Map<String, Value>) -> Entries<WorkspaceTab> {
+    pairs
+        .into_iter()
+        .filter_map(|(id, tab)| Some((id, WorkspaceTab::parse(tab.as_str()?)?)))
+        .fold(Vec::new(), |tabs, (id, tab)| with_tab(&tabs, &id, tab))
+}
+
+fn files_width_of(value: Option<&Value>, default: u32) -> u32 {
+    value
+        .and_then(Value::as_f64)
+        .map_or(default, |width| (width as u32).clamp(FILES_MIN, FILES_MAX))
 }
 
 impl ViewState {
@@ -156,6 +236,13 @@ impl ViewState {
                     with_section(&sections, &id, open)
                 }),
             notify: flag(map.get("notify"), default.notify),
+            tabs: tabs_of(pairs("tabs")),
+            changes_view: map
+                .get("changesView")
+                .and_then(Value::as_str)
+                .map_or(default.changes_view, FileViewMode::parse),
+            files_width: files_width_of(map.get("filesWidth"), default.files_width),
+            diff: DiffFlags::parse(map.get("diff")),
         }
     }
 
@@ -195,6 +282,14 @@ impl ViewState {
                 .map(|(id, open)| (id.clone(), Value::Bool(*open)))
                 .collect::<Map<String, Value>>(),
             "notify": self.notify,
+            "tabs": self
+                .tabs
+                .iter()
+                .map(|(id, tab)| (id.clone(), Value::from(tab.name())))
+                .collect::<Map<String, Value>>(),
+            "changesView": self.changes_view.name(),
+            "filesWidth": self.files_width,
+            "diff": self.diff.to_json(),
         });
         format!("{value:#}\n")
     }
@@ -233,6 +328,24 @@ impl ViewState {
 
     pub fn set_details_width(&mut self, width: f32) {
         self.details_width = width.clamp(DETAILS_MIN, DETAILS_MAX);
+    }
+
+    /// `rememberTab`: Editor needs an open file and Docs is not in the app, so neither is kept.
+    pub fn remember_tab(&mut self, task_id: &str, tab: WorkspaceTab) {
+        if WorkspaceTab::parse(tab.name()).is_some() {
+            self.tabs = with_tab(&self.tabs, task_id, tab);
+        }
+    }
+
+    pub fn tab_of(&self, task_id: &str) -> Option<WorkspaceTab> {
+        self.tabs
+            .iter()
+            .find(|(id, _)| id == task_id)
+            .map(|(_, tab)| *tab)
+    }
+
+    pub fn set_files_width(&mut self, width: u32) {
+        self.files_width = width.clamp(FILES_MIN, FILES_MAX);
     }
 
     /// Whether a section of the details panel is open; `default` until the user folds it.

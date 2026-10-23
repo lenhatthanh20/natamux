@@ -4,7 +4,7 @@
 
 use gpui::{Action, App, KeyBinding, Menu, MenuItem, NoAction, actions};
 
-use super::commands::{COMMANDS, MenuName, command_by_id, keystroke, menu_items};
+use super::commands::{MenuName, all_commands, command_by_id, keystroke, menu_items};
 use super::commands::{is_single_key, reaches_app_from_terminal};
 use crate::ime::ime_check::SubmitWord;
 
@@ -57,7 +57,19 @@ actions!(
         ApproveStage,
         ReportStage,
         SkipStage,
-        SendBackStage
+        SendBackStage,
+        ShowTerminalTab,
+        ShowChangesTab,
+        ShowHistoryTab,
+        RefreshChanges,
+        PrevFile,
+        NextFile,
+        NextChange,
+        PrevChange,
+        CommentOnDiff,
+        RollbackFile,
+        DraftCommit,
+        CommitChanges
     ]
 );
 
@@ -129,6 +141,18 @@ command_actions! {
     "stage.report" => ReportStage,
     "stage.skip" => SkipStage,
     "stage.send-back" => SendBackStage,
+    "tab.terminal" => ShowTerminalTab,
+    "tab.changes" => ShowChangesTab,
+    "tab.history" => ShowHistoryTab,
+    "changes.refresh" => RefreshChanges,
+    "diff.prev-file" => PrevFile,
+    "diff.next-file" => NextFile,
+    "diff.next-change" => NextChange,
+    "diff.prev-change" => PrevChange,
+    "diff.comment" => CommentOnDiff,
+    "changes.rollback" => RollbackFile,
+    "diff.draft-commit" => DraftCommit,
+    "task.commit" => CommitChanges,
 }
 
 fn push_bindings<A: Action + Clone>(id: &str, action: A, mac: bool, out: &mut Vec<KeyBinding>) {
@@ -149,8 +173,7 @@ fn push_bindings<A: Action + Clone>(id: &str, action: A, mac: bool, out: &mut Ve
 /// Global chords the shell owns (Ctrl+B and the like off macOS) go to the terminal, not the app.
 /// So does Esc: agents use it to stop (owner, 2026-10-22).
 fn terminal_keeps(mac: bool) -> Vec<KeyBinding> {
-    COMMANDS
-        .iter()
+    all_commands()
         .filter(|command| command.contexts.is_empty())
         .flat_map(|command| command.keys.iter())
         .filter(|key| {
@@ -254,9 +277,8 @@ mod tests {
 
     #[test]
     fn binds_every_command_with_a_key_or_a_menu_bar_item_to_an_action() {
-        let reached = COMMANDS
-            .iter()
-            .filter(|command| !command.keys.is_empty() || command.menu.is_some());
+        let reached =
+            all_commands().filter(|command| !command.keys.is_empty() || command.menu.is_some());
         for command in reached {
             assert!(action_for(command.id).is_some(), "{}", command.id);
         }
@@ -264,8 +286,7 @@ mod tests {
 
     #[test]
     fn makes_one_binding_per_key_and_context() {
-        let expected: usize = COMMANDS
-            .iter()
+        let expected: usize = all_commands()
             .map(|command| command.keys.len() * command.contexts.len().max(1))
             .sum();
         assert_eq!(command_bindings(true).len(), expected);

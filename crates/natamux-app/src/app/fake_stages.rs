@@ -143,7 +143,7 @@ impl Data {
     }
 
     /// Logs an accepted event of the task at the time of every fake write.
-    fn record(&mut self, task_id: &str, source: &str, kind: &str, payload: Value) {
+    pub(super) fn record(&mut self, task_id: &str, source: &str, kind: &str, payload: Value) {
         let list = self.events.entry(task_id.into()).or_default();
         let seq = list.iter().map(|stored| stored.seq).max().unwrap_or(0) + 1;
         let payload: Map<String, Value> = match payload {

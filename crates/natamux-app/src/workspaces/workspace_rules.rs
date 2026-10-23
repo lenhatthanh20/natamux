@@ -56,8 +56,6 @@ fn commit_first(uncommitted: Option<u64>) -> Option<String> {
     Some(format!("Commit your {files} first"))
 }
 
-// Commit… comes with screen 4; until then Push shows its "commit first" reason.
-#[cfg_attr(not(test), allow(dead_code))]
 /// Commit takes the place of Push while origin has every commit and files are not committed.
 pub fn needs_commit(push: Option<&PushStatus>, uncommitted: Option<u64>) -> bool {
     let all_pushed = matches!(
@@ -163,15 +161,14 @@ pub fn pull_request_button(
     }
 }
 
-/// The git actions of a task's workspace. Only one runs at a time. Rollback and its undo join
-/// with screen 4.
+/// The git actions of a task's workspace. Only one runs at a time.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GitStep {
-    // Commit… comes with screen 4; `next_git_step` already knows it.
-    #[cfg_attr(not(test), allow(dead_code))]
     Commit,
     Push,
     PullRequest,
+    Rollback,
+    UndoRollback,
 }
 
 /// The git step to offer after one ends: a commit is pushed next, and a push opens the pull
@@ -225,7 +222,36 @@ pub fn create_blocked_reason(
     (skill.is_some() && agent == Some("")).then_some("Pick an agent to run the skill")
 }
 
-#[cfg_attr(not(test), allow(dead_code))]
+/// `useDashboardLayout`: a docked details panel leaves too little room for a diff below this.
+pub const CHANGES_NEED: f32 = 900.;
+
+/// Showing the Changes tab closes a docked details panel when main is under 900 wide
+/// (`onTabChange` of `Dashboard.tsx`): a change to Changes, and a workspace that opens on it
+/// (`before` is None). Only that moment does it: the user can open the panel again beside
+/// Changes.
+pub fn closes_details_for(
+    tab: WorkspaceTab,
+    before: Option<WorkspaceTab>,
+    main_width: Option<f32>,
+    docked: bool,
+) -> bool {
+    tab == WorkspaceTab::Changes
+        && before != Some(WorkspaceTab::Changes)
+        && docked
+        && main_width.is_some_and(|width| width < CHANGES_NEED)
+}
+
+/// The tab the open workspace shows after a task remembers `tab` (`rememberTab`): it follows
+/// only a pick in the open workspace.
+pub fn shown_after_remember(
+    open: Option<&str>,
+    shown: WorkspaceTab,
+    task_id: &str,
+    tab: WorkspaceTab,
+) -> WorkspaceTab {
+    if open == Some(task_id) { tab } else { shown }
+}
+
 /// A task whose agent works or waits opens on its terminal. Another task opens on the tab that
 /// the user used last in it, and a new one opens on its terminal.
 pub fn tab_to_open(state: TaskState, saved: Option<WorkspaceTab>) -> WorkspaceTab {

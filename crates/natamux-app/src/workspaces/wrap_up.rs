@@ -1,7 +1,6 @@
 //! The Terminal tab of a done or cancelled task (docs/ui-spec.md 4.29,
 //! `features/workspaces/WrapUp.tsx`): what is left before the workspace can go, and the task's
-//! terminals, ended or still running. It opens no terminal by itself. View changes comes with
-//! screen 4.
+//! terminals, ended or still running. It opens no terminal by itself.
 
 use std::rc::Rc;
 
@@ -65,6 +64,7 @@ pub fn agent_to_reopen(
 pub struct WrapUpActions {
     pub push: OnClick,
     pub pull_request: OnClick,
+    pub view_changes: OnClick,
     pub reopen: OnClick,
     pub open_terminals: OnClick,
     /// Asks first, then ends the terminal.
@@ -161,8 +161,12 @@ impl WrapUp {
                 )
                 .into_any_element()
             }),
-            // Commit… and View changes come with screen 4.
-            FinishedAction::Commit | FinishedAction::ViewChanges | FinishedAction::Remove => None,
+            FinishedAction::ViewChanges => Some(
+                small_button(id, "View changes", self.actions.view_changes.clone())
+                    .into_any_element(),
+            ),
+            // The banner above has Commit… and Remove workspace.
+            FinishedAction::Commit | FinishedAction::Remove => None,
         }
     }
 }

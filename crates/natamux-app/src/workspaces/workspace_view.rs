@@ -1,8 +1,8 @@
 //! Main for an open task (docs/ui-spec.md 4.29, `features/workspaces/ChangesView.tsx` and the
 //! workspace part of `Dashboard.tsx`): a task with no workspace shows the no-workspace view or,
 //! once finished, its summary; one with a workspace shows its header, the finished banner, the
-//! tab row and its terminal panes, or the wrap-up of a finished task. Only the Terminal tab is
-//! here: Changes and History come with screen 4, Docs with screen 6.
+//! tab row and the body of its tab: the terminal panes (or the wrap-up of a finished task),
+//! Changes, or History. Docs comes with screen 6.
 
 use std::time::Duration;
 
@@ -17,8 +17,10 @@ use ui::prelude::*;
 use super::workspace_rules::GitStep;
 use super::wrap_up_rules::{finished_text, is_finished_state};
 use crate::app::dashboard::{Dashboard, DashboardChange, TerminalReader};
+use crate::app::view_rules::WorkspaceTab;
 use crate::components::toast_rules::ToastTone;
 use crate::components::toasts::toast;
+use crate::git::changes_view::ChangesView;
 use crate::terminals::shell_panes::ShellPanes;
 
 /// `FALLBACK_POLL_MS`: the daemon says when a workspace changed; this covers a lost event.
@@ -29,6 +31,8 @@ const POLL: Duration = Duration::from_secs(60);
 struct Shown {
     task_id: String,
     graph: Option<GitGraph>,
+    /// A failed first read of the graph, for History.
+    graph_error: Option<String>,
     changes: Option<Vec<ChangeEntry>>,
     ended: Vec<EndedShell>,
     events: Option<Vec<StoredEvent>>,
@@ -40,6 +44,8 @@ struct Shown {
     /// Open a new terminal of the wrap-up: the panes show in place of it.
     shells_wanted: bool,
     shown_screen: Option<String>,
+    /// The tab last drawn, to see a change to Changes.
+    tab_seen: Option<WorkspaceTab>,
     /// The state and workspace last seen, to read again when they change.
     seen: Option<(TaskState, bool)>,
 }
@@ -47,6 +53,7 @@ struct Shown {
 pub struct WorkspaceView {
     dashboard: Entity<Dashboard>,
     panes: Entity<ShellPanes>,
+    changes: Entity<ChangesView>,
     shown: Option<Shown>,
     width: Entity<Option<f32>>,
     _poll: gpui::Task<()>,
@@ -56,6 +63,8 @@ pub struct WorkspaceView {
 impl WorkspaceView {
     pub fn new(dashboard: Entity<Dashboard>, cx: &mut Context<Self>) -> Self {
         let panes = cx.new(|cx| ShellPanes::new(dashboard.clone(), cx));
+        let workspace = cx.weak_entity();
+        let changes_view = cx.new(|cx| ChangesView::new(dashboard.clone(), workspace, cx));
         let width = cx.new(|_| None);
         let changes = cx.subscribe(&dashboard, |view, _, change: &DashboardChange, cx| {
             view.on_change(change, cx)
@@ -72,6 +81,7 @@ impl WorkspaceView {
         WorkspaceView {
             dashboard,
             panes,
+            changes: changes_view,
             shown: None,
             width,
             _poll: poll,
@@ -82,6 +92,21 @@ impl WorkspaceView {
     /// The panes, for `--gate2`.
     pub fn panes(&self) -> &Entity<ShellPanes> {
         &self.panes
+    }
+
+    /// The Changes tab, for the `--shot` states.
+    pub fn changes_view(&self) -> &Entity<ChangesView> {
+        &self.changes
+    }
+
+    /// The git step that runs now, for the dialogs that must wait for it.
+    pub fn git_pending(&self) -> Option<GitStep> {
+        self.shown.as_ref()?.pending
+    }
+
+    /// The changed files last read; None before the first read.
+    pub fn current_changes(&self) -> Option<&[ChangeEntry]> {
+        self.shown.as_ref()?.changes.as_deref()
     }
 
     fn task(&self, cx: &App) -> Option<Task> {
@@ -97,6 +122,7 @@ impl WorkspaceView {
             DashboardChange::WorkspaceChanged(id) if open(id, self) => self.read_git(cx),
             DashboardChange::ShellsChanged(id) if open(id, self) => self.read_ended(cx),
             DashboardChange::Tasks => self.after_tasks(cx),
+            DashboardChange::UndoRollback(id) => self.undo_rollback(id, cx),
             _ => {}
         }
     }
@@ -111,6 +137,7 @@ impl WorkspaceView {
         });
         self.panes
             .update(cx, |panes, cx| panes.set_task(Some(task_id.to_owned()), cx));
+        self.sync_changes(cx);
         self.dashboard
             .read(cx)
             .show_terminals(TerminalReader::Workspace, [task_id.to_owned()]);
@@ -160,13 +187,16 @@ impl WorkspaceView {
 }
 
 impl Render for WorkspaceView {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let Some(task) = self.task(cx) else {
             return div().size_full().into_any_element();
         };
-        let Some(shown) = self.shown.take() else {
+        let Some(mut shown) = self.shown.take() else {
             return div().size_full().into_any_element();
         };
+        if task.workspace.is_some() {
+            self.follow_tab(&mut shown, window, cx);
+        }
         let element = if task.workspace.is_none() {
             self.render_no_workspace(task, &shown, cx)
         } else {
@@ -182,3 +212,6 @@ mod reads;
 
 #[path = "workspace_parts.rs"]
 mod parts;
+
+#[path = "workspace_tabs.rs"]
+mod tabs;

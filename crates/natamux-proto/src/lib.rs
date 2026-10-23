@@ -35,5 +35,6 @@ pub mod terminals {
     pub mod query;
 }
 pub mod workspaces {
+    pub mod changes;
     pub mod workspace;
 }

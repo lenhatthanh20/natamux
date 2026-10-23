@@ -6,34 +6,79 @@ use natamux_proto::tasks::task::Task;
 use ui::prelude::*;
 
 use super::WorkspaceView;
+use crate::app::dashboard::{Dashboard, Written};
 use crate::app::shortcuts::NewTerminal;
+use crate::app::source::reason;
 use crate::components::confirm::Confirm;
+use crate::components::toast_rules::ToastTone;
+use crate::components::toasts::push_toast;
+use crate::git::commit_rules::{BUSY_REASON, UNDO_FAILED};
 use crate::workspaces::workspace_rules::GitStep;
 use crate::workspaces::wrap_up_rules::is_finished_state;
 
 impl WorkspaceView {
     /// The header's and the banner's git facts: ahead, base, push, and the files not committed.
     pub(super) fn read_git(&mut self, cx: &mut Context<Self>) {
+        self.read_git_at(false, cx);
+    }
+
+    /// Refresh (Shift+R) of Changes and History: past the daemon's 5 s cache, and the shown
+    /// file again.
+    pub fn read_git_fresh(&mut self, cx: &mut Context<Self>) {
+        self.read_git_at(true, cx);
+    }
+
+    fn read_git_at(&mut self, fresh: bool, cx: &mut Context<Self>) {
         let Some(task) = self.task(cx).filter(|task| task.workspace.is_some()) else {
             return;
         };
         let Some(source) = self.dashboard.read(cx).source().cloned() else {
             return;
         };
-        let (graph, changes) = (source.graph(&task.id), source.list_changes(&task.id));
+        let graph = source.read_graph(&task.id, fresh);
+        let changes = source.read_changes(&task.id, fresh);
         let id = task.id.clone();
+        self.changes.update(cx, |changes, cx| changes.read_file(cx));
         cx.spawn(async move |view, cx| {
-            let (graph, changes) = (graph.await.ok(), changes.await.ok());
+            let (graph, changes) = (graph.await, changes.await);
             view.update(cx, |view, cx| {
                 if let Some(shown) = view.shown.as_mut().filter(|s| s.task_id == id) {
-                    shown.graph = graph;
-                    shown.changes = changes;
+                    // A failed read keeps what is shown.
+                    match graph {
+                        Ok(graph) => {
+                            shown.graph = Some(graph);
+                            shown.graph_error = None;
+                        }
+                        Err(error) if shown.graph.is_none() => {
+                            shown.graph_error = Some(reason(&error));
+                        }
+                        Err(_) => {}
+                    }
+                    match changes {
+                        Ok(changes) => shown.changes = Some(changes),
+                        Err(error) if shown.changes.is_none() => {
+                            view.changes
+                                .update(cx, |view, cx| view.set_error(reason(&error), cx));
+                        }
+                        Err(_) => {}
+                    }
+                    view.sync_changes(cx);
                     cx.notify();
                 }
             })
             .ok();
         })
         .detach();
+    }
+
+    /// Hands the Changes tab what it shows of the task: its files and the git step that runs.
+    pub(super) fn sync_changes(&mut self, cx: &mut Context<Self>) {
+        let Some(shown) = self.shown.as_ref() else {
+            return;
+        };
+        let (id, list, pending) = (shown.task_id.clone(), shown.changes.clone(), shown.pending);
+        self.changes
+            .update(cx, |changes, cx| changes.set_list(&id, list, pending, cx));
     }
 
     pub(super) fn read_ended(&mut self, cx: &mut Context<Self>) {
@@ -97,19 +142,42 @@ impl WorkspaceView {
         .detach();
     }
 
-    /// Push or Create PR; one git step at a time.
+    /// Push or Create PR of the header, the banner and the wrap-up.
     pub(super) fn git_step(&mut self, step: GitStep, cx: &mut Context<Self>) {
-        let Some(shown) = self.shown.as_mut().filter(|s| s.pending.is_none()) else {
-            return;
-        };
+        let pull_request = step == GitStep::PullRequest;
+        if let Some(answer) = self.run_git(
+            step,
+            move |dashboard, id, cx| {
+                if pull_request {
+                    dashboard.open_pull_request(id, cx)
+                } else {
+                    dashboard.push(id, cx)
+                }
+            },
+            cx,
+        ) {
+            answer.detach();
+        }
+    }
+
+    /// Runs one git step of the task on screen, None while another runs: Push, Create PR,
+    /// Commit all, Roll back, Undo. The git facts are read again after it.
+    pub fn run_git<T: 'static>(
+        &mut self,
+        step: GitStep,
+        start: impl FnOnce(&mut Dashboard, &str, &mut Context<Dashboard>) -> Written<T>,
+        cx: &mut Context<Self>,
+    ) -> Option<Written<T>> {
+        let shown = self.shown.as_mut().filter(|s| s.pending.is_none())?;
         shown.pending = Some(step);
         let id = shown.task_id.clone();
-        let answer = self.dashboard.update(cx, |dashboard, cx| match step {
-            GitStep::PullRequest => dashboard.open_pull_request(&id, cx),
-            _ => dashboard.push(&id, cx),
-        });
-        cx.spawn(async move |view, cx| {
-            answer.await.ok();
+        let answer = self
+            .dashboard
+            .update(cx, |dashboard, cx| start(dashboard, &id, cx));
+        self.sync_changes(cx);
+        cx.notify();
+        Some(cx.spawn(async move |view, cx| {
+            let result = answer.await;
             view.update(cx, |view, cx| {
                 if let Some(shown) = view.shown.as_mut() {
                     shown.pending = None;
@@ -118,9 +186,35 @@ impl WorkspaceView {
                 cx.notify();
             })
             .ok();
-        })
-        .detach();
-        cx.notify();
+            result
+        }))
+    }
+
+    /// Undo of a rollback's toast. In the task's workspace it is one git step, so Commit all,
+    /// Push and Roll back wait for it; another task's runs at once.
+    pub(super) fn undo_rollback(&mut self, task_id: &str, cx: &mut Context<Self>) {
+        let ours = self.shown.as_ref().is_some_and(|s| s.task_id == task_id);
+        if !ours {
+            self.dashboard
+                .update(cx, |dashboard, cx| dashboard.undo_rollback(task_id, cx))
+                .detach();
+            return;
+        }
+        let started = self.run_git(
+            GitStep::UndoRollback,
+            |dashboard, id, cx| dashboard.undo_rollback(id, cx),
+            cx,
+        );
+        match started {
+            Some(answer) => answer.detach(),
+            None => push_toast(
+                UNDO_FAILED,
+                ToastTone::Error,
+                Some(BUSY_REASON.to_owned()),
+                Vec::new(),
+                cx,
+            ),
+        }
     }
 
     /// Create workspace, or Start agent with `agent`.

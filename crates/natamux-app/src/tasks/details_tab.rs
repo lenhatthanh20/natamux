@@ -264,15 +264,7 @@ impl DetailsPanel {
                             .color(Color::Muted),
                     ),
             ))
-            .child(
-                Button::new("details-remove-workspace", "Remove workspace")
-                    .label_size(LabelSize::Small)
-                    .start_icon(
-                        Icon::from_path("icons/lucide/folder-minus.svg").size(IconSize::Small),
-                    )
-                    .disabled(busy)
-                    .on_click(send(on, PanelCommand::RemoveWorkspace)),
-            )
+            .child(workspace_buttons(on, busy))
     }
 
     /// "Start from branch" and Create workspace, for a task with no workspace.
@@ -356,4 +348,25 @@ impl DetailsPanel {
                 .on_click(send(on, PanelCommand::CheckPullRequest)),
         )
     }
+}
+
+/// View changes and Remove workspace, under the workspace's fields.
+fn workspace_buttons(on: &OnCommand, busy: bool) -> impl IntoElement + use<> {
+    h_flex()
+        .flex_wrap()
+        .gap_2()
+        .child(
+            Button::new("details-view-changes", "View changes")
+                .label_size(LabelSize::Small)
+                .style(ButtonStyle::Outlined)
+                .start_icon(Icon::from_path("icons/lucide/file-diff.svg").size(IconSize::Small))
+                .on_click(send(on, PanelCommand::ViewChanges)),
+        )
+        .child(
+            Button::new("details-remove-workspace", "Remove workspace")
+                .label_size(LabelSize::Small)
+                .start_icon(Icon::from_path("icons/lucide/folder-minus.svg").size(IconSize::Small))
+                .disabled(busy)
+                .on_click(send(on, PanelCommand::RemoveWorkspace)),
+        )
 }

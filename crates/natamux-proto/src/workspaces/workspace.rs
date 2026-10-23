@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::tasks::attachments::AttachmentUpload;
 use crate::tasks::task::{Task, TaskContext};
+use crate::workspaces::changes::ChangeStatus;
 
 /// `base` of a new workspace: at most this many characters.
 pub const MAX_BASE_LENGTH: usize = 255;
@@ -101,7 +102,7 @@ pub struct DiffStatList {
 #[serde(rename_all = "camelCase")]
 pub struct ChangeEntry {
     pub path: String,
-    pub status: String,
+    pub status: ChangeStatus,
     #[serde(default)]
     pub original_path: Option<String>,
     #[serde(default)]
@@ -136,9 +137,29 @@ pub enum PushStatus {
     Unknown,
 }
 
-/// The history of a task branch (`gitGraphSchema`), without its commits: the dialogs read the
-/// counts. `base` is the branch the main checkout is on; None, and then `ahead` and `behind`
-/// are None too. `push` is None when HEAD is not on a branch.
+/// One commit of the graph (`graphCommitSchema`), newest first and each before its parents.
+/// `refs` are branch and tag names; `on_branch` is false for a commit of the base branch only.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GraphCommit {
+    pub hash: String,
+    #[serde(default)]
+    pub parents: Vec<String>,
+    #[serde(default)]
+    pub author: String,
+    #[serde(default)]
+    pub date: String,
+    #[serde(default)]
+    pub subject: String,
+    #[serde(default)]
+    pub refs: Vec<String>,
+    #[serde(default)]
+    pub on_branch: bool,
+}
+
+/// The history of a task branch (`gitGraphSchema`). `base` is the branch the main checkout is
+/// on; None, and then `ahead` and `behind` are None too. `push` is None when HEAD is not on a
+/// branch. `truncated` says the daemon left older commits out.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize)]
 pub struct GitGraph {
     #[serde(default)]
@@ -153,6 +174,8 @@ pub struct GitGraph {
     pub behind: Option<u64>,
     #[serde(default)]
     pub push: Option<PushStatus>,
+    #[serde(default)]
+    pub commits: Vec<GraphCommit>,
     #[serde(default)]
     pub truncated: bool,
 }
@@ -274,6 +297,7 @@ mod tests {
         assert_eq!(list.changes[0].added, Some(3));
         assert_eq!(list.changes[1].added, None);
         assert_eq!(list.changes[2].original_path.as_deref(), Some("d.ts"));
+        assert_eq!(list.changes[1].status, ChangeStatus::Untracked);
     }
 
     #[test]
@@ -287,6 +311,8 @@ mod tests {
             .unwrap()
         };
         assert_eq!(graph(r#"{"remote":"none"}"#).push, Some(PushStatus::None));
+        let commit = &graph("null").commits[0];
+        assert_eq!((commit.hash.as_str(), commit.on_branch), ("abc", true));
         assert_eq!(
             graph(r#"{"remote":"new","unpushed":2}"#).push,
             Some(PushStatus::New { unpushed: 2 })

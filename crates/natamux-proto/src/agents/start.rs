@@ -20,9 +20,22 @@ pub struct StartAgentInput {
     pub base: Option<String>,
 }
 
+/// The body of `POST /tasks/:id/agent/message`: text for the running agent, trimmed, 1 to
+/// `MAX_AGENT_MESSAGE` (in `workspaces/changes.rs`). The answer is `{ task }` (`TaskAnswer`).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct AgentMessage {
+    pub text: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sends_the_message_as_text() {
+        let message = AgentMessage { text: "hi".into() };
+        assert_eq!(serde_json::to_string(&message).unwrap(), r#"{"text":"hi"}"#);
+    }
 
     #[test]
     fn sends_only_what_is_set() {

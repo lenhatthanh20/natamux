@@ -11,6 +11,7 @@ mod app {
     pub mod clock;
     pub mod command_when;
     pub mod commands;
+    pub mod commands_git;
     pub mod dashboard;
     pub mod dashboard_data;
     pub mod fake_daemon;
@@ -58,6 +59,23 @@ mod components {
     pub mod timing_rules;
     pub mod toast_rules;
     pub mod toasts;
+}
+mod git {
+    pub mod change_rules;
+    pub mod change_tree;
+    pub mod changes_view;
+    pub mod comment_rules;
+    pub mod commit_rules;
+    pub mod diff_editors;
+    pub mod diff_rules;
+    pub mod diff_view;
+    pub mod graph_lanes;
+    pub mod graph_layout;
+    pub mod history_view;
+    pub mod image_rules;
+    pub mod languages;
+    pub mod rollback_dialog;
+    pub mod rollback_rules;
 }
 mod ime {
     pub mod ime_check;
@@ -199,6 +217,7 @@ fn start(options: &Options, cx: &mut App) -> anyhow::Result<()> {
     apply_default_settings(options.theme, cx);
     theme_settings::init(theme::LoadThemes::All(Box::new(NatamuxAssets)), cx);
     editor::init(cx);
+    git::languages::init(cx);
     app::shortcuts::bind(cx);
     app::shortcuts::set_menus(cx);
     perf::overlay::init(cx);
