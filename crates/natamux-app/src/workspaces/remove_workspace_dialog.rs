@@ -19,6 +19,7 @@ use crate::components::colors::change_color;
 use crate::components::dialog::{
     DialogFrame, DialogLayer, DialogView, cancel_button, primary_button,
 };
+use crate::components::icons::icon_path;
 use crate::git::change_rules::status_tone;
 
 /// Opens the dialog for the task's workspace, Cancel focused.
@@ -201,7 +202,7 @@ fn row(icon: &'static str, color: Color, text: impl IntoElement, cx: &App) -> im
         .gap_2p5()
         .child(
             svg()
-                .path(format!("icons/lucide/{icon}.svg"))
+                .path(icon_path(icon))
                 .size_3p5()
                 .mt_0p5()
                 .flex_none()

@@ -57,6 +57,7 @@ mod bench {
 }
 mod components {
     pub mod agent_badge;
+    pub mod button_style;
     pub mod chips;
     pub mod colors;
     pub mod confirm;
@@ -65,6 +66,7 @@ mod components {
     pub mod empty_state;
     pub mod form;
     pub mod glyph;
+    pub mod icons;
     pub mod input_rules;
     pub mod menu;
     pub mod resize_handle;
@@ -231,7 +233,6 @@ mod tasks {
 mod terminals {
     pub mod agent_panes;
     pub mod find_rules;
-    pub mod ghostty_font;
     pub mod pane_drop;
     pub mod pane_facts;
     pub mod pane_header;
@@ -317,7 +318,7 @@ fn start(options: &Options, cx: &mut App) -> anyhow::Result<()> {
         Some(folder) if !fake => view_state::load(&folder),
         _ => ViewState::default(),
     };
-    app::appearance::init(options.theme, cx);
+    app::appearance::init(options.theme, options.shot.is_some(), cx);
     app::appearance::apply(&view, cx);
     theme_settings::init(theme::LoadThemes::All(Box::new(NatamuxAssets)), cx);
     editor::init(cx);

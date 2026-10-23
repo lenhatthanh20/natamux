@@ -5480,6 +5480,7 @@ dependencies = [
  "gpui_platform",
  "grammars",
  "language",
+ "markdown",
  "natamux-client",
  "natamux-proto",
  "release_channel",

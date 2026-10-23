@@ -1,6 +1,7 @@
 //! Empty and error states (docs/ui-spec.md 4.19, `ui/EmptyState.tsx`): an icon in a circle, a
 //! title, a sentence, one primary action, and for an error the raw message behind "Show details".
 
+use crate::components::icons::icon_path;
 use gpui::FontWeight;
 use ui::{Disclosure, prelude::*};
 
@@ -20,7 +21,7 @@ impl EmptyState {
     pub fn new(id: impl Into<ElementId>, icon: &str, title: impl Into<SharedString>) -> Self {
         Self {
             id: id.into(),
-            icon: format!("icons/lucide/{icon}.svg").into(),
+            icon: icon_path(icon),
             title: title.into(),
             body: None,
             actions: Vec::new(),
@@ -93,15 +94,15 @@ impl RenderOnce for EmptyState {
         v_flex()
             .id(self.id)
             .mx_auto()
-            .max_w(px(360.))
+            .max_w(rems_from_px(360.0_f32))
             .items_center()
             .gap_2()
             .px_4()
-            .py(px(40.))
+            .py(rems_from_px(40.0_f32))
             .child(
                 h_flex()
                     .mb_1()
-                    .size(px(56.))
+                    .size(rems_from_px(56.0_f32))
                     .justify_center()
                     .rounded_full()
                     .bg(cx.theme().colors().element_background)

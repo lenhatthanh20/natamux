@@ -28,7 +28,8 @@ pub struct PaletteCommand {
     /// "Category: Title".
     pub title: String,
     pub key: Option<&'static str>,
-    pub suggested: bool,
+    /// Its rank in Suggested; none: not suggested.
+    pub suggested: Option<u8>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -280,10 +281,14 @@ fn empty_query(input: &AllInput) -> Vec<PaletteSection> {
                 rows: lately,
             });
         }
-        let suggested: Vec<PaletteRow> = input
+        let mut ranked: Vec<&PaletteCommand> = input
             .commands
             .iter()
-            .filter(|command| command.suggested)
+            .filter(|command| command.suggested.is_some())
+            .collect();
+        ranked.sort_by_key(|command| command.suggested);
+        let suggested: Vec<PaletteRow> = ranked
+            .into_iter()
             .map(|command| command_row(command, Vec::new()))
             .collect();
         if !suggested.is_empty() {

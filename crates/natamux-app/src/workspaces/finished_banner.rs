@@ -11,7 +11,9 @@ use ui::{TintColor, Tooltip, prelude::*};
 
 use super::workspace_rules::{GitStep, push_button};
 use super::wrap_up_rules::{FinishedAction, FinishedBannerText, GitFacts, finished_banner};
+use crate::components::button_style::tinted_style;
 use crate::components::colors::state_colors;
+use crate::components::icons::icon_path;
 
 pub type OnClick = Rc<dyn Fn(&mut Window, &mut App)>;
 
@@ -60,7 +62,7 @@ fn button(
     Button::new(id, label)
         .label_size(LabelSize::Small)
         .style(if primary {
-            ButtonStyle::Tinted(TintColor::Accent)
+            tinted_style(TintColor::Accent, disabled)
         } else {
             ButtonStyle::Outlined
         })
@@ -172,15 +174,15 @@ impl RenderOnce for FinishedBanner {
                 .child(Label::new(sentence).size(LabelSize::Small).truncate())
         });
         h_flex()
-            .h(px(40.))
+            .h(rems_from_px(40.0_f32))
             .flex_none()
             .px_4()
             .gap_2()
-            .bg(tone.bg)
+            .bg(tone.tinted().bg)
             .border_b_1()
             .border_color(cx.theme().colors().border)
             .child(
-                Icon::from_path(format!("icons/lucide/{icon}.svg"))
+                Icon::from_path(icon_path(icon))
                     .size(IconSize::Medium)
                     .color(Color::Custom(tone.fg)),
             )

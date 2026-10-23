@@ -176,7 +176,7 @@ fn path_card(
     v_flex()
         .gap_3()
         .p_3()
-        .rounded_lg()
+        .rounded_md()
         .border_1()
         .border_color(colors.border)
         .bg(colors.elevated_surface_background)
@@ -312,8 +312,8 @@ fn condition_selects(
         .flex_wrap()
         .gap_2()
         .child(Label::new("If").weight(FontWeight::MEDIUM))
-        .child(div().w(px(176.)).child(kind_button))
-        .child(div().w(px(160.)).child(holds_button))
+        .child(div().w(rems_from_px(176.0_f32)).child(kind_button))
+        .child(div().w(rems_from_px(160.0_f32)).child(holds_button))
 }
 
 fn condition_fields(

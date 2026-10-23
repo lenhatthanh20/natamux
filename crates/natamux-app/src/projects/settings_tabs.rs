@@ -155,7 +155,7 @@ impl ProjectSettingsDialog {
             .gap_2()
             .px_3()
             .py_2()
-            .rounded_lg()
+            .rounded_md()
             .border_1()
             .border_color(cx.theme().status().warning_border)
             .bg(cx.theme().status().warning_background)

@@ -40,8 +40,8 @@ pub(super) struct Chart {
 pub(super) fn link(offset: f32, cx: &App) -> impl IntoElement + use<> {
     div()
         .flex_none()
-        .w(px(16.))
-        .h(px(0.))
+        .w(rems_from_px(16.0_f32))
+        .h(rems_from_px(0.0_f32))
         .mt(px(offset))
         .border_t_2()
         .border_dashed()
@@ -68,7 +68,7 @@ pub(super) fn node_box(id: SharedString, selected: bool, cx: &App) -> Stateful<D
         .px_1()
         .pt(px(NODE_TOP))
         .pb_2()
-        .rounded_lg()
+        .rounded_md()
         .cursor_pointer()
         .when(selected, |this| this.bg(colors.element_selected))
         .when(!selected, |this| {
@@ -88,7 +88,7 @@ fn ring(stage: &Stage, error: bool, cx: &App) -> impl IntoElement + use<> {
             .absolute()
             .top(px(top))
             .right(px(-7.))
-            .size(px(14.))
+            .size(rems_from_px(14.0_f32))
             .flex()
             .items_center()
             .justify_center()
@@ -171,10 +171,10 @@ fn group_box(
     v_flex()
         .id(SharedString::from(format!("preview-group-{}", group.id)))
         .flex_none()
-        .p(px(3.))
+        .p(rems_from_px(3.0_f32))
         // The first node's ring sits on the main line.
-        .mt(px(-5.))
-        .rounded_lg()
+        .mt(rems_from_px(-5.0_f32))
+        .rounded_md()
         .border_1()
         .border_dashed()
         .border_color(if error {
@@ -209,7 +209,7 @@ pub fn pipeline_preview(editor: &Entity<PipelineEditor>, cx: &mut App) -> AnyEle
     let frame = v_flex()
         .id("pipeline-preview")
         .flex_none()
-        .rounded_lg()
+        .rounded_md()
         .border_1()
         .border_color(box_border)
         .bg(box_bg);

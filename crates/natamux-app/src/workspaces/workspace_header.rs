@@ -14,7 +14,9 @@ use ui::{ButtonLike, TintColor, Tooltip, prelude::*};
 
 use super::workspace_rules::{GitButton, GitStep, needs_commit, pull_request_button, push_button};
 use super::wrap_up_rules::is_finished_state;
+use crate::components::button_style::{label_color, tinted_style};
 use crate::components::chips::StateChip;
+use crate::components::icons::icon_path;
 use crate::components::toast_rules::ToastTone;
 use crate::components::toasts::toast;
 use crate::tasks::task_rules::lane_summary;
@@ -106,7 +108,7 @@ fn git_button(
     let off = button.reason.is_some() || busy || other_running;
     let tip = button.reason.clone().or(button.tip.clone());
     let style = if primary && button.reason.is_none() {
-        ButtonStyle::Tinted(TintColor::Accent)
+        tinted_style(TintColor::Accent, off)
     } else {
         ButtonStyle::Outlined
     };
@@ -124,8 +126,12 @@ fn git_button(
             h_flex()
                 .gap_1p5()
                 .px_1()
-                .child(Icon::from_path(format!("icons/lucide/{icon}.svg")).size(IconSize::Small))
-                .child(Label::new(button.label).size(LabelSize::Small)),
+                .child(Icon::from_path(icon_path(&icon)).size(IconSize::Small))
+                .child(
+                    Label::new(button.label)
+                        .size(LabelSize::Small)
+                        .color(label_color(off)),
+                ),
         )
 }
 
@@ -169,7 +175,7 @@ fn branch_chip(branch: String, cx: &App) -> impl IntoElement {
             h_flex()
                 .gap_1()
                 .child(
-                    Icon::from_path("icons/lucide/git-branch.svg")
+                    Icon::from_path(icon_path("git-branch"))
                         .size(IconSize::XSmall)
                         .color(Color::Muted),
                 )
@@ -201,7 +207,7 @@ fn open_pull_request(url: String, compact: bool) -> AnyElement {
             h_flex()
                 .gap_1p5()
                 .px_1()
-                .child(Icon::from_path("icons/lucide/external-link.svg").size(IconSize::Small))
+                .child(Icon::from_path(icon_path("external-link")).size(IconSize::Small))
                 .child(Label::new(label).size(LabelSize::Small)),
         )
         .into_any_element()
@@ -292,7 +298,7 @@ impl RenderOnce for WorkspaceHeader {
             .filter(|_| !compact)
             .map(|branch| branch_chip(branch, cx));
         h_flex()
-            .h(px(44.))
+            .h(rems_from_px(44.0_f32))
             .flex_none()
             .px_4()
             .gap_2()

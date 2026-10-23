@@ -25,6 +25,7 @@ use crate::app::dashboard::{Dashboard, TerminalReader};
 use crate::components::agent_badge::narrow_pane;
 use crate::components::chips::CountBadge;
 use crate::components::empty_state::EmptyState;
+use crate::components::icons::icon_path;
 use crate::components::menu::MenuLayer;
 use crate::sidebar::shell_rows::terminal_state;
 use crate::tasks::state_filter::width_probe;
@@ -152,7 +153,7 @@ impl AgentPanes {
                     h_flex()
                         .gap_1p5()
                         .px_1()
-                        .child(Icon::from_path("icons/lucide/plus.svg").size(IconSize::Small))
+                        .child(Icon::from_path(icon_path("plus")).size(IconSize::Small))
                         .child(Label::new("Add a pane").size(LabelSize::Small)),
                 )
         });

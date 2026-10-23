@@ -27,6 +27,7 @@ use crate::app::shortcuts::{ShowBoard, ShowTable};
 use crate::app::view_state::Layout;
 use crate::components::chips::Kbd;
 use crate::components::empty_state::EmptyState;
+use crate::components::icons::icon_path;
 use crate::components::skeleton::{Loading, SkeletonList};
 use crate::stages::progress_board::ProgressBoard;
 
@@ -202,7 +203,7 @@ impl TaskView {
             h_flex()
                 .gap_2()
                 .px_1()
-                .child(Icon::from_path(format!("icons/lucide/{icon}.svg")).size(IconSize::Small))
+                .child(Icon::from_path(icon_path(icon)).size(IconSize::Small))
                 .child(Label::new(label))
                 .child(Kbd::new(shortcut_of(command).unwrap_or_default())),
         )

@@ -1,16 +1,17 @@
 //! The tab row of a workspace (`ChangesView.tsx` tabs, docs/ui-spec.md tabs): Terminal, Changes
 //! with the count of files to commit, History and Docs (keys 1 to 4), then the open file's tab
 //! while a file is open. "Back to wrap-up" and "New terminal" sit at the right of the Terminal
-//! tab.
+//! tab. Zed's `TabBar` and `Tab`, as Zed's pane.
 
 use gpui::ClickEvent;
 use natamux_proto::tasks::task::Task;
-use ui::{Tooltip, prelude::*};
+use ui::{Tab, TabBar, TabPosition, Tooltip, prelude::*};
 
 use super::{Shown, WorkspaceView};
 use crate::app::layout_mode::BREAKPOINT_XL;
 use crate::app::view_rules::WorkspaceTab;
 use crate::components::chips::CountBadge;
+use crate::components::icons::icon_path;
 use crate::git::commit_rules::tab_count_label;
 use crate::terminals::pane_header::icon_button;
 use crate::terminals::pane_rules::MAX_PANES;
@@ -67,11 +68,11 @@ impl WorkspaceView {
     fn tab(
         &self,
         (tab, label, icon, key): TabSpec,
+        position: TabPosition,
         shown_tab: WorkspaceTab,
         uncommitted: Option<usize>,
         cx: &mut Context<Self>,
     ) -> impl IntoElement + use<> {
-        let colors = cx.theme().colors();
         let picked = tab == shown_tab;
         let badge = (tab == WorkspaceTab::Changes)
             .then_some(uncommitted)
@@ -85,31 +86,15 @@ impl WorkspaceView {
             Some(count) => format!("{named}, {}", tab_count_label(count as u64)),
             None => named,
         };
-        h_flex()
-            .id(SharedString::from(format!("workspace-tab-{icon}")))
-            .h_full()
-            .px_2()
-            .gap_1p5()
-            .cursor_pointer()
-            .border_b_2()
-            .border_color(if picked {
-                colors.text_accent
-            } else {
-                gpui::transparent_black()
-            })
+        let color = if picked { Color::Default } else { Color::Muted };
+        Tab::new(SharedString::from(format!("workspace-tab-{icon}")))
+            .position(position)
+            .toggle_state(picked)
             .tooltip(Tooltip::text(tip))
             .on_click(cx.listener(move |view, _: &ClickEvent, _, cx| view.pick_tab(tab, cx)))
-            .child(tab_icon(icon).size(IconSize::Small).color(if picked {
-                Color::Default
-            } else {
-                Color::Muted
-            }))
-            .child(Label::new(label).size(LabelSize::Small).color(if picked {
-                Color::Default
-            } else {
-                Color::Muted
-            }))
-            .children(badge.map(CountBadge::new))
+            .start_slot(tab_icon(icon).size(IconSize::Small).color(color))
+            .end_slot::<CountBadge>(badge.map(CountBadge::new))
+            .child(Label::new(label).color(color))
     }
 
     pub(super) fn tab_row(
@@ -120,7 +105,6 @@ impl WorkspaceView {
         uncommitted: Option<usize>,
         cx: &mut Context<Self>,
     ) -> impl IntoElement + use<> {
-        let border = cx.theme().colors().border;
         let open_file = self
             .dashboard
             .read(cx)
@@ -135,11 +119,27 @@ impl WorkspaceView {
                     None,
                 )
             });
-        let tabs: Vec<_> = TABS
+        let specs: Vec<TabSpec> = TABS
             .into_iter()
             .map(|(tab, label, icon, key)| (tab, SharedString::from(label), icon, Some(key)))
             .chain(open_file)
-            .map(|spec| self.tab(spec, shown_tab, uncommitted, cx))
+            .collect();
+        let last = specs.len() - 1;
+        let picked = specs
+            .iter()
+            .position(|spec| spec.0 == shown_tab)
+            .unwrap_or(0);
+        let tabs: Vec<_> = specs
+            .into_iter()
+            .enumerate()
+            .map(|(index, spec)| {
+                let position = match index {
+                    0 => TabPosition::First,
+                    _ if index == last => TabPosition::Last,
+                    _ => TabPosition::Middle(index.cmp(&picked)),
+                };
+                self.tab(spec, position, shown_tab, uncommitted, cx)
+            })
             .collect();
         let on_terminal = shown_tab == WorkspaceTab::Terminal;
         let full = self.panes.read(cx).is_full(cx);
@@ -171,26 +171,16 @@ impl WorkspaceView {
                     cx.notify();
                 }))
         });
-        h_flex()
-            .h(px(36.))
-            .flex_none()
-            .px_2()
-            .gap_1()
-            .border_b_1()
-            .border_color(border)
-            .children(tabs)
-            .child(div().flex_1())
-            .children(back)
-            .children(new_terminal)
+        TabBar::new("workspace-tabs").children(tabs).end_child(
+            h_flex()
+                .gap_1()
+                .px_1()
+                .children(back)
+                .children(new_terminal),
+        )
     }
 }
 
-/// The History tab takes Zed's git graph icon and the open file Zed's code file icon: the app's
-/// Lucide set has neither.
 fn tab_icon(name: &str) -> Icon {
-    match name {
-        "git-graph" => Icon::new(IconName::GitGraph),
-        "file-code" => Icon::new(IconName::FileCode),
-        _ => Icon::from_path(format!("icons/lucide/{name}.svg")),
-    }
+    Icon::from_path(icon_path(name))
 }

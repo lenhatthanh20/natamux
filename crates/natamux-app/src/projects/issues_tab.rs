@@ -47,8 +47,8 @@ impl IssuesTab {
             colors.border
         };
         div()
-            .mt(px(2.))
-            .size(px(14.))
+            .mt(rems_from_px(2.0_f32))
+            .size(rems_from_px(14.0_f32))
             .flex_none()
             .flex()
             .items_center()
@@ -57,7 +57,12 @@ impl IssuesTab {
             .border_1()
             .border_color(ring)
             .when(checked, |this| {
-                this.child(div().size(px(6.)).rounded_full().bg(colors.text_accent))
+                this.child(
+                    div()
+                        .size(rems_from_px(6.0_f32))
+                        .rounded_full()
+                        .bg(colors.text_accent),
+                )
             })
             .when(off, |this| this.opacity(0.5))
     }
@@ -73,7 +78,7 @@ impl IssuesTab {
         let colors = cx.theme().colors();
         let color = if off { Color::Disabled } else { Color::Default };
         h_flex()
-            .min_h(px(28.))
+            .min_h(rems_from_px(28.0_f32))
             .flex_wrap()
             .gap_2()
             .child(

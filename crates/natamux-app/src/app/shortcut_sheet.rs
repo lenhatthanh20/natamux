@@ -72,7 +72,7 @@ fn group_view(section: &SheetSection) -> impl IntoElement + use<> {
             .iter()
             .map(|key| Kbd::new(&keystroke(key, MAC)));
         h_flex()
-            .min_h(px(28.))
+            .min_h(rems_from_px(28.0_f32))
             .gap_3()
             .justify_between()
             // A long title wraps, so the keys stay in the column.

@@ -199,7 +199,7 @@ impl FileTree {
 
     fn header(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         h_flex()
-            .h(px(32.))
+            .h(rems_from_px(32.0_f32))
             .flex_none()
             .pl_3()
             .pr_1()

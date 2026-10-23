@@ -9,6 +9,7 @@ use ui::{Tooltip, prelude::*};
 use super::editor_labels::{branch_label, branch_name, path_name};
 use super::pipeline_preview::{Chart, bold, link, node_box, select_on_click, stage_node};
 use super::preview_rules::{branch_note_head, fork_label, path_note, skip_text, when_tip};
+use crate::components::icons::icon_path;
 
 /// The diamond node where the paths split.
 fn if_node(chart: &Chart, branch: &StageBranch, cx: &App) -> AnyElement {
@@ -28,14 +29,14 @@ fn if_node(chart: &Chart, branch: &StageBranch, cx: &App) -> AnyElement {
     .child(
         div()
             .flex_none()
-            .size(px(24.))
+            .size(rems_from_px(24.0_f32))
             .flex()
             .items_center()
             .justify_center()
             .child(
                 gpui::svg()
-                    .path("icons/lucide/diamond.svg")
-                    .size(px(20.))
+                    .path(icon_path("diamond"))
+                    .size(rems_from_px(20.0_f32))
                     .text_color(diamond_color),
             ),
     )
@@ -84,10 +85,10 @@ pub(super) fn branch_chart(
                 .id(SharedString::from(format!("preview-lanes-{}", branch.id)))
                 .flex_none()
                 // The first lane's line sits on the main line, its condition above it.
-                .mt(px(-32.))
+                .mt(rems_from_px(-32.0_f32))
                 .p_1()
                 .gap_1()
-                .rounded_lg()
+                .rounded_md()
                 .border_1()
                 .border_dashed()
                 .border_color(if error {

@@ -1,7 +1,8 @@
-//! The JSON tab of Project settings (`JsonTab.tsx`): the draft text in a full Zed editor, the
-//! error under it while the text cannot be read, and the problems of the pipeline. The editor and
-//! the draft follow each other: a user edit sets the draft text, a text set from outside (Stages,
-//! Issues, Import, Reset, Reload) goes into the same buffer as an edit of the changed parts.
+//! The JSON tab of Project settings (`JsonTab.tsx`): the draft text in a full Zed editor, with the
+//! error while the text cannot be read and the problems of the pipeline above it, so they show
+//! without scrolling (the web puts them under its shorter textarea). The editor and the draft
+//! follow each other: a user edit sets the draft text, a text set from outside (Stages, Issues,
+//! Import, Reset, Reload) goes into the same buffer as an edit of the changed parts.
 
 use editor::{CurrentLineHighlight, Editor, EditorEvent, MultiBuffer};
 use gpui::{Entity, FocusHandle, Focusable, Subscription, TextStyleRefinement};
@@ -139,17 +140,6 @@ impl Render for JsonTab {
         };
         v_flex()
             .gap_2()
-            .child(
-                div()
-                    .h(px(EDITOR_HEIGHT))
-                    .w_full()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(border)
-                    .bg(colors.editor_background)
-                    .overflow_hidden()
-                    .child(self.editor.clone()),
-            )
             .children(error.map(|text| {
                 h_flex()
                     .gap_1p5()
@@ -173,5 +163,16 @@ impl Render for JsonTab {
                     },
                 )))
             })
+            .child(
+                div()
+                    .h(px(EDITOR_HEIGHT))
+                    .w_full()
+                    .rounded_md()
+                    .border_1()
+                    .border_color(border)
+                    .bg(colors.editor_background)
+                    .overflow_hidden()
+                    .child(self.editor.clone()),
+            )
     }
 }

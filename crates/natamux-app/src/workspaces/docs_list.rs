@@ -13,6 +13,7 @@ use super::docs_tab::DocsTab;
 use crate::app::clock::now_ms;
 use crate::app::source::reason;
 use crate::components::colors::signal;
+use crate::components::icons::icon_path;
 use crate::tasks::task_time::{AgeStyle, format_age};
 
 /// An attached image shown in place of the file; `read` is None while it loads.
@@ -29,7 +30,7 @@ impl DocsTab {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let colors = cx.theme().colors();
-        let (hover, selected) = (colors.element_hover, colors.element_selected);
+        let (hover, selected) = (colors.ghost_element_hover, colors.ghost_element_selected);
         let edited_color = Color::Custom(signal(cx).fg);
         let rows: Vec<AnyElement> = entries
             .iter()
@@ -56,7 +57,7 @@ impl DocsTab {
                         h_flex()
                             .gap_1p5()
                             .child(
-                                Icon::from_path("icons/lucide/file-text.svg")
+                                Icon::from_path(icon_path("file-text"))
                                     .size(IconSize::Small)
                                     .color(Color::Muted),
                             )
@@ -83,7 +84,7 @@ impl DocsTab {
             .collect();
         v_flex()
             .id("docs-list")
-            .w(px(208.))
+            .w(rems_from_px(208.0_f32))
             .flex_none()
             .h_full()
             .p_2()
@@ -102,7 +103,7 @@ impl DocsTab {
             return div().into_any_element();
         }
         let colors = cx.theme().colors();
-        let (hover, selected) = (colors.element_hover, colors.element_selected);
+        let (hover, selected) = (colors.ghost_element_hover, colors.ghost_element_selected);
         let rows: Vec<AnyElement> = self
             .attachments
             .iter()
@@ -113,7 +114,7 @@ impl DocsTab {
                     .as_ref()
                     .is_some_and(|image| image.name == item.name);
                 let icon = if download {
-                    Icon::from_path("icons/lucide/download.svg")
+                    Icon::from_path(icon_path("download"))
                 } else {
                     Icon::new(IconName::Image)
                 };
@@ -217,7 +218,7 @@ impl DocsTab {
             .min_h_0()
             .child(
                 h_flex()
-                    .h(px(40.))
+                    .h(rems_from_px(40.0_f32))
                     .flex_none()
                     .px_3()
                     .border_b_1()

@@ -170,7 +170,7 @@ impl DetailsPanel {
             .p_3()
             .child(
                 h_flex()
-                    .rounded_lg()
+                    .rounded_md()
                     .border_1()
                     .border_color(colors.border_variant)
                     .bg(colors.elevated_surface_background)
@@ -281,11 +281,11 @@ impl DetailsPanel {
                 .gap_2()
                 .child(
                     div()
-                        .w(px(96.))
+                        .w(rems_from_px(96.0_f32))
                         .child(Label::new(bar.name).size(LabelSize::Small).truncate()),
                 )
                 .child(
-                    div().flex_1().h(px(6.)).child(
+                    div().flex_1().h(rems_from_px(6.0_f32)).child(
                         div()
                             .h_full()
                             .rounded_sm()

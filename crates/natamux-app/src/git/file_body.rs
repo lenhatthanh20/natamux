@@ -168,7 +168,7 @@ fn image_side(side: ImageSide, read: Option<&Result<ShownImage, String>>, cx: &A
             .child(
                 img(shown.image.clone())
                     .max_w_full()
-                    .max_h(px(480.))
+                    .max_h(rems_from_px(480.0_f32))
                     .object_fit(ObjectFit::Contain),
             )
             .into_any_element(),

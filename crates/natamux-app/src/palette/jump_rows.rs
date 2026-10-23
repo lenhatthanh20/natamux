@@ -6,7 +6,8 @@ use std::collections::BTreeMap;
 use natamux_proto::tasks::task::{Task, TaskState};
 
 use super::palette_rows::{
-    PaletteRow, PaletteScope, PaletteSection, match_task, scoped, sorted_by_score, task_row,
+    PaletteMode, PaletteRow, PaletteScope, PaletteSection, match_task, scoped, sorted_by_score,
+    task_row,
 };
 use crate::tasks::task_attention::is_quiet;
 use crate::tasks::task_sort::{state_rank, task_number};
@@ -19,6 +20,25 @@ pub struct JumpInput<'a> {
     pub scope: Option<&'a PaletteScope>,
     /// Task id to the names of its open terminals, in order.
     pub terminals: &'a BTreeMap<String, Vec<String>>,
+}
+
+/// The jump palette reads the terminals of the workspaces itself up to this many, as the web.
+const MAX_TERMINAL_READS: usize = 20;
+
+/// The tasks whose terminals the palette asks for while it is open (the `enabled` of the web's
+/// shell queries): in the jump palette, every task with a workspace, unless there are more
+/// than 20; the command palette lists no terminals.
+pub fn terminal_reads(mode: PaletteMode, tasks: &[Task]) -> Vec<String> {
+    let workspaces: Vec<String> = tasks
+        .iter()
+        .filter(|task| task.workspace.is_some())
+        .map(|task| task.id.clone())
+        .collect();
+    if mode == PaletteMode::Jump && workspaces.len() <= MAX_TERMINAL_READS {
+        workspaces
+    } else {
+        Vec::new()
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

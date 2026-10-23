@@ -71,7 +71,7 @@ impl ChangesView {
             });
         let all = list.clone();
         h_flex()
-            .h(px(36.))
+            .h(rems_from_px(36.0_f32))
             .flex_none()
             .px_2()
             .gap_1()
@@ -94,7 +94,7 @@ impl ChangesView {
     }
 }
 
-/// A toolbar button with one of Zed's icons, for the few the app's Lucide set lacks.
+/// A toolbar button with one of Zed's icons.
 pub(super) fn zed_button(id: &'static str, icon: IconName) -> IconButton {
     IconButton::new(id, icon)
         .icon_size(IconSize::Small)
@@ -168,7 +168,7 @@ pub(super) fn file_row(
         .child(
             div()
                 .id(SharedString::from(format!("status-{}", entry.path)))
-                .w(px(16.))
+                .w(rems_from_px(16.0_f32))
                 .flex_none()
                 .flex()
                 .justify_center()

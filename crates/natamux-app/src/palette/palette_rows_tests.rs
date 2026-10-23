@@ -33,7 +33,7 @@ pub(super) fn no_workspace(mut task: Task) -> Task {
     task
 }
 
-pub(super) fn command(id: &'static str, title: &str, suggested: bool) -> PaletteCommand {
+pub(super) fn command(id: &'static str, title: &str, suggested: Option<u8>) -> PaletteCommand {
     PaletteCommand {
         id,
         title: title.into(),
@@ -45,14 +45,18 @@ pub(super) fn command(id: &'static str, title: &str, suggested: bool) -> Palette
 // The commands that can run now with nothing open, in registry order.
 pub(super) fn commands() -> Vec<PaletteCommand> {
     vec![
-        command("workspace.new", "Task: Start a task", true),
-        command("help.shortcuts", "App: Show the keyboard shortcuts", true),
-        command("view.board", "View: Board", false),
-        command("theme.system", "Theme: Follow the system", false),
-        command("theme.light", "Theme: Light", false),
-        command("theme.dark", "Theme: Dark", false),
-        command("repo.add", "Project: Add a project", false),
-        command("repo.import", "Project: Import GitHub issues", false),
+        command("workspace.new", "Task: Start a task", Some(3)),
+        command(
+            "help.shortcuts",
+            "App: Show the keyboard shortcuts",
+            Some(2),
+        ),
+        command("view.board", "View: Board", None),
+        command("theme.system", "Theme: Follow the system", None),
+        command("theme.light", "Theme: Light", None),
+        command("theme.dark", "Theme: Dark", None),
+        command("repo.add", "Project: Add a project", None),
+        command("repo.import", "Project: Import GitHub issues", None),
     ]
 }
 
@@ -179,6 +183,18 @@ fn caps_needs_you_at_5_and_recent_at_5() {
     let sections = input.all("");
     assert_eq!(sections[0].rows.len(), 5);
     assert_eq!(sections[1].rows.len(), 5);
+}
+
+// The web lists them in its registry order; the app's registry has another order, so a rank.
+#[test]
+fn lists_the_suggested_commands_by_their_rank() {
+    let sections = base().all("");
+    let suggested = sections
+        .iter()
+        .find(|section| section.id == "suggested")
+        .map(|section| ids(std::slice::from_ref(section)))
+        .unwrap_or_default();
+    assert_eq!(suggested, ["help.shortcuts", "workspace.new"]);
 }
 
 // The caller passes only the commands that can run now: the rule is that nothing else is listed.

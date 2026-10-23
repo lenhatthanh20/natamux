@@ -75,7 +75,7 @@ pub const COMMANDS: &[Command] = &[
         0,
     ),
     menu(
-        suggested(command("view.agents", "Agents", View)),
+        suggested(5, command("view.agents", "Agents", View)),
         MenuName::View,
         0,
     ),
@@ -110,18 +110,24 @@ pub const COMMANDS: &[Command] = &[
         SINGLE,
     ),
     keys(
-        suggested(group(
-            command("workspace.new", "Start a task", Task),
-            SheetGroup::SingleKeys,
-        )),
+        suggested(
+            3,
+            group(
+                command("workspace.new", "Start a task", Task),
+                SheetGroup::SingleKeys,
+            ),
+        ),
         &["c"],
         SINGLE,
     ),
     keys(
-        suggested(group(
-            command("task.new", "Add a task", Task),
-            SheetGroup::SingleKeys,
-        )),
+        suggested(
+            4,
+            group(
+                command("task.new", "Add a task", Task),
+                SheetGroup::SingleKeys,
+            ),
+        ),
         &["n"],
         SINGLE,
     ),

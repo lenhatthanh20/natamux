@@ -16,6 +16,7 @@ use super::editor_moves::{can_move, join_above, join_problem, remove_stage, run_
 use super::stage_list::StageList;
 use crate::app::shortcuts::{MoveStageDown, MoveStageUp};
 use crate::components::confirm::Confirm;
+use crate::components::icons::icon_path;
 use crate::components::menu::MenuLayer;
 
 type Run = Rc<dyn Fn(&mut Window, &mut App)>;
@@ -54,7 +55,7 @@ fn fill(mut menu: ContextMenu, parts: Vec<Part>) -> ContextMenu {
             .handler(move |window, cx| run(window, cx));
         if let Some(icon) = icon {
             entry = entry
-                .custom_icon_path(format!("icons/lucide/{icon}.svg"))
+                .custom_icon_path(icon_path(icon))
                 .icon_position(IconPosition::Start)
                 .icon_color(if danger { Color::Error } else { Color::Muted });
         }

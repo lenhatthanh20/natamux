@@ -117,7 +117,7 @@ impl Render for ConfirmDialog {
         let rows = (!confirm.rows.is_empty()).then(|| {
             v_flex()
                 .id("confirm-rows")
-                .max_h(px(160.))
+                .max_h(rems_from_px(160.0_f32))
                 .overflow_y_scroll()
                 .gap_0p5()
                 .children(confirm.rows.iter().map(|(id, title)| {

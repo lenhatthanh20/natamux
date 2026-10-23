@@ -19,6 +19,7 @@ use crate::app::shortcuts::{AddProject, Back};
 use crate::components::agent_badge::AgentIcon;
 use crate::components::chips::{Kbd, tip_with_keys};
 use crate::components::colors::state_colors;
+use crate::components::icons::icon_path;
 use crate::components::skeleton::{Loading, SkeletonList};
 use crate::sidebar::sidebar_text::{pull_request_number, pull_request_summary};
 use crate::terminals::pane_rules::agent_pane_tasks;
@@ -101,10 +102,10 @@ impl Sidebar {
         });
         let hint = empty.then(|| Kbd::new(shortcut_of("filter.focus").unwrap_or("/")));
         h_flex()
-            .h(px(28.))
+            .h(rems_from_px(28.0_f32))
             .px_2()
-            .gap(px(6.))
-            .rounded(px(6.))
+            .gap(rems_from_px(6.0_f32))
+            .rounded(rems_from_px(6.0_f32))
             .border_1()
             .border_color(colors.border)
             .bg(colors.editor_background)
@@ -147,9 +148,9 @@ impl Sidebar {
         let keys = shortcut_of("workspace.new").unwrap_or_default();
         let dashboard = self.dashboard.clone();
         h_flex()
-            .h(px(28.))
+            .h(rems_from_px(28.0_f32))
             .pl_2()
-            .pr(px(2.))
+            .pr(rems_from_px(2.0_f32))
             .child(
                 div().flex_1().child(
                     Label::new("WORKSPACES")
@@ -243,13 +244,14 @@ fn nav_row(
     let colors = cx.theme().colors();
     h_flex()
         .id(id)
-        .h(px(28.))
+        .h(rems_from_px(28.0_f32))
         .px_2()
-        .gap(px(6.))
-        .rounded(px(6.))
+        .gap(rems_from_px(6.0_f32))
+        .rounded_sm()
         .cursor_pointer()
-        .hover(|style| style.bg(colors.element_hover))
-        .when(active, |row| row.bg(colors.element_selected))
+        .hover(|style| style.bg(colors.ghost_element_hover))
+        .active(|style| style.bg(colors.ghost_element_active))
+        .when(active, |row| row.bg(colors.ghost_element_selected))
         .child(lucide(icon).size(IconSize::Small).color(Color::Muted))
         .child(
             div().flex_1().child(
@@ -292,7 +294,7 @@ pub(super) fn mono(text: impl Into<SharedString>, cx: &App) -> Label {
 }
 
 pub(super) fn lucide(name: &str) -> Icon {
-    Icon::from_path(format!("icons/lucide/{name}.svg")).size(IconSize::XSmall)
+    Icon::from_path(icon_path(name)).size(IconSize::XSmall)
 }
 
 /// The agent of a task or a terminal, as a small mark with its name in the tooltip.
@@ -334,5 +336,9 @@ pub(super) fn pull_request_mark(task: &Task) -> Option<Stateful<Div>> {
 /// The 6 px dot of a state, such as the one after the count of a folded group.
 pub(super) fn state_dot(state: TaskState, cx: &App) -> impl IntoElement {
     let color = state_colors(state, cx).fg;
-    div().flex_none().size(px(6.)).rounded_full().bg(color)
+    div()
+        .flex_none()
+        .size(rems_from_px(6.0_f32))
+        .rounded_full()
+        .bg(color)
 }

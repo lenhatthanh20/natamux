@@ -187,7 +187,7 @@ impl Render for DetailsPane {
         self.stops = tab_order::end();
         div()
             .p_3()
-            .rounded_lg()
+            .rounded_md()
             .border_1()
             .border_color(cx.theme().colors().border)
             .child(body)

@@ -54,7 +54,7 @@ fn render(row: Row, _cx: &App) -> AnyElement {
         .gap_1()
         .child(
             h_flex()
-                .min_h(px(28.))
+                .min_h(rems_from_px(28.0_f32))
                 .flex_wrap()
                 .gap_2()
                 .child(

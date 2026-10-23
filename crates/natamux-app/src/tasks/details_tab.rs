@@ -8,9 +8,11 @@ use ui::{ButtonLike, TintColor, Tooltip, prelude::*};
 
 use super::DetailsPanel;
 use crate::app::clock::now_ms;
+use crate::components::button_style::{label_color, tinted_style};
 use crate::components::chips::{StateChip, label_chip, tip_with_keys};
 use crate::components::colors::signal;
 use crate::components::detail_section::{DetailSection, field};
+use crate::components::icons::icon_path;
 use crate::tasks::details_commands::{OnCommand, PanelCommand};
 use crate::tasks::details_rules::{
     NO_NOTES, NO_WORKSPACE, PORTS_HINT, agent_button, details_start_branch, ports_text,
@@ -84,10 +86,10 @@ impl DetailsPanel {
             div()
                 .px_3()
                 .py_2()
-                .rounded_lg()
+                .rounded_md()
                 .border_1()
-                .border_color(tone.border)
-                .bg(tone.bg)
+                .border_color(tone.tinted().border)
+                .bg(tone.tinted().bg)
                 .child(Label::new(text).size(LabelSize::Small))
         };
         let chips = h_flex()
@@ -128,7 +130,7 @@ impl DetailsPanel {
         let buttons =
             actions.into_iter().enumerate().map(|(index, action)| {
                 let style = if index == 0 {
-                    ButtonStyle::Tinted(TintColor::Accent)
+                    tinted_style(TintColor::Accent, busy)
                 } else {
                     ButtonStyle::Outlined
                 };
@@ -142,7 +144,11 @@ impl DetailsPanel {
                             h_flex()
                                 .gap_2()
                                 .px_1()
-                                .child(Label::new(label).size(LabelSize::Small))
+                                .child(
+                                    Label::new(label)
+                                        .size(LabelSize::Small)
+                                        .color(label_color(busy)),
+                                )
                                 .children(action.hotkey.map(|key| {
                                     crate::components::chips::Kbd::new(&key.to_string())
                                 })),
@@ -163,10 +169,7 @@ impl DetailsPanel {
                     h_flex()
                         .gap_1p5()
                         .px_1()
-                        .child(
-                            Icon::from_path(format!("icons/lucide/{}.svg", shown.icon))
-                                .size(IconSize::Small),
-                        )
+                        .child(Icon::from_path(icon_path(shown.icon)).size(IconSize::Small))
                         .child(Label::new(shown.label).size(LabelSize::Small)),
                 )
                 .into_any_element()
@@ -333,7 +336,7 @@ impl DetailsPanel {
         .child(
             Button::new("details-pr-link", pull_request_label(&url).to_owned())
                 .label_size(LabelSize::Small)
-                .end_icon(Icon::from_path("icons/lucide/external-link.svg").size(IconSize::XSmall))
+                .end_icon(Icon::from_path(icon_path("external-link")).size(IconSize::XSmall))
                 .on_click(move |_, _, cx| cx.open_url(&link)),
         )
         .children(pull_request_summary(task).map(|summary| {
@@ -359,13 +362,13 @@ fn workspace_buttons(on: &OnCommand, busy: bool) -> impl IntoElement + use<> {
             Button::new("details-view-changes", "View changes")
                 .label_size(LabelSize::Small)
                 .style(ButtonStyle::Outlined)
-                .start_icon(Icon::from_path("icons/lucide/file-diff.svg").size(IconSize::Small))
+                .start_icon(Icon::from_path(icon_path("file-diff")).size(IconSize::Small))
                 .on_click(send(on, PanelCommand::ViewChanges)),
         )
         .child(
             Button::new("details-remove-workspace", "Remove workspace")
                 .label_size(LabelSize::Small)
-                .start_icon(Icon::from_path("icons/lucide/folder-minus.svg").size(IconSize::Small))
+                .start_icon(Icon::from_path(icon_path("folder-minus")).size(IconSize::Small))
                 .disabled(busy)
                 .on_click(send(on, PanelCommand::RemoveWorkspace)),
         )

@@ -12,6 +12,7 @@ use super::workspace_tree::WorkspaceTree;
 use crate::app::commands::shortcut_of;
 use crate::app::dashboard_data::BulkRun;
 use crate::app::shortcuts::action_for;
+use crate::components::icons::icon_path;
 use crate::components::menu::MenuLayer;
 use crate::components::toast_rules::ToastTone;
 use crate::sidebar::sidebar_text::{
@@ -46,7 +47,7 @@ pub(super) fn fill_menu<C: Copy + 'static>(
         };
         let run = run.clone();
         let mut entry = ContextMenuEntry::new(label)
-            .custom_icon_path(format!("icons/lucide/{icon}.svg"))
+            .custom_icon_path(icon_path(icon))
             .icon_position(IconPosition::Start)
             .icon_color(if danger { Color::Error } else { Color::Muted })
             .disabled(disabled)

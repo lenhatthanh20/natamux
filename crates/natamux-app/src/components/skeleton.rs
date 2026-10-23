@@ -30,7 +30,7 @@ fn bar(height: f32, width: f32, cx: &App) -> Div {
     div()
         .h(px(height))
         .w(relative(width))
-        .rounded(px(4.))
+        .rounded(rems_from_px(4.0_f32))
         .bg(cx.theme().colors().element_background)
 }
 
@@ -41,7 +41,7 @@ impl RenderOnce for SkeletonList {
             v_flex()
                 .h(px(self.row_height))
                 .justify_center()
-                .gap(px(6.))
+                .gap(rems_from_px(6.0_f32))
                 .px_2()
                 .child(bar(12., WIDTHS[index % WIDTHS.len()], cx))
                 .when(two_bars, |this| {

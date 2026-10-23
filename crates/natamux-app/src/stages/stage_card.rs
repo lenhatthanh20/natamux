@@ -71,7 +71,7 @@ fn small_chip(id: impl Into<ElementId>, cx: &App) -> Stateful<Div> {
     let colors = cx.theme().colors();
     h_flex()
         .id(id.into())
-        .h(px(24.))
+        .h(rems_from_px(24.0_f32))
         .max_w_full()
         .min_w_0()
         .gap_1p5()
@@ -83,7 +83,7 @@ fn small_chip(id: impl Into<ElementId>, cx: &App) -> Stateful<Div> {
 }
 
 fn icon(name: &str) -> Icon {
-    Icon::from_path(format!("icons/lucide/{name}.svg")).size(IconSize::Small)
+    Icon::from_path(icon_path(name)).size(IconSize::Small)
 }
 
 fn badge(text: String, cx: &App) -> impl IntoElement {
@@ -137,12 +137,18 @@ pub fn text_chip(text: &'static str, state: TaskState, cx: &App) -> impl IntoEle
     let colors = state_colors(state, cx);
     h_flex()
         .flex_none()
-        .h(px(20.))
-        .px(px(8.))
-        .gap(px(6.))
+        .h(rems_from_px(20.0_f32))
+        .px(rems_from_px(8.0_f32))
+        .gap(rems_from_px(6.0_f32))
         .rounded_full()
         .bg(colors.bg)
-        .child(div().flex_none().size(px(6.)).rounded_full().bg(colors.fg))
+        .child(
+            div()
+                .flex_none()
+                .size(rems_from_px(6.0_f32))
+                .rounded_full()
+                .bg(colors.fg),
+        )
         .child(
             Label::new(text)
                 .size(LabelSize::Small)
@@ -216,6 +222,7 @@ use chips::{chips, evidence, notices, running_note};
 
 #[path = "stage_actions.rs"]
 mod actions;
+use crate::components::icons::icon_path;
 use actions::actions_row;
 
 /// The whole card.
@@ -227,7 +234,7 @@ pub fn stage_card(input: CardInput, on: &OnCommand, cx: &App) -> AnyElement {
             .gap_2()
             .px_3()
             .py_2p5()
-            .rounded_xl()
+            .rounded_md()
             .border_1()
             .border_dashed()
             .border_color(colors.border)
@@ -250,7 +257,7 @@ pub fn stage_card(input: CardInput, on: &OnCommand, cx: &App) -> AnyElement {
         .gap_2p5()
         .px_3()
         .py_2p5()
-        .rounded_xl()
+        .rounded_md()
         .border_1()
         .when(upcoming, |this| {
             this.border_dashed().border_color(colors.border)

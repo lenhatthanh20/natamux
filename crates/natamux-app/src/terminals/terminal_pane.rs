@@ -17,6 +17,7 @@ use super::pane_header::PaneHeader;
 use super::remote_terminal::RemoteTerminal;
 use super::terminal_find::TerminalFind;
 use crate::app::shortcuts::{FindInTerminal, MaximizePane};
+use crate::components::icons::icon_path;
 use crate::components::skeleton::SkeletonList;
 
 type OnClick = Rc<dyn Fn(&mut Window, &mut App)>;
@@ -190,7 +191,7 @@ impl TerminalPane {
                 .border_color(colors.border)
                 .when(!failed, |strip| {
                     strip.child(
-                        Icon::from_path("icons/lucide/loader-circle.svg")
+                        Icon::from_path(icon_path("loader-circle"))
                             .size(IconSize::XSmall)
                             .color(Color::Muted),
                     )
@@ -219,7 +220,7 @@ impl TerminalPane {
                 .gap_2()
                 .bg(cx.theme().colors().terminal_background)
                 .child(
-                    Icon::from_path("icons/lucide/loader-circle.svg")
+                    Icon::from_path(icon_path("loader-circle"))
                         .size(IconSize::Medium)
                         .color(Color::Muted),
                 )
@@ -236,7 +237,7 @@ impl TerminalPane {
                     h_flex()
                         .gap_1()
                         .px_1()
-                        .child(Icon::from_path("icons/lucide/arrow-down.svg").size(IconSize::Small))
+                        .child(Icon::from_path(icon_path("arrow-down")).size(IconSize::Small))
                         .child(Label::new("Jump to latest").size(LabelSize::Small)),
                 )
                 .on_click(move |_, _, cx| {
@@ -257,7 +258,7 @@ impl TerminalPane {
             .border_t_1()
             .border_color(colors.border)
             .child(
-                Icon::from_path("icons/lucide/square-terminal.svg")
+                Icon::from_path(icon_path("square-terminal"))
                     .size(IconSize::Small)
                     .color(Color::Muted),
             )

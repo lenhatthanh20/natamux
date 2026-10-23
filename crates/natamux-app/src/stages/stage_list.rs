@@ -16,6 +16,7 @@ use super::kind_icon::branch_icon;
 use super::pipeline_editor::PipelineEditor;
 use super::stage_rows::{DragGhost, DraggedStage, issue_lines};
 use crate::app::shortcuts::{MoveStageDown, MoveStageUp};
+use crate::components::icons::icon_path;
 use crate::components::tab_order;
 
 pub struct StageList {
@@ -130,7 +131,7 @@ impl StageList {
             )
             .child(
                 Button::new("add-stage", "Add stage")
-                    .start_icon(Icon::from_path("icons/lucide/plus.svg").size(IconSize::Small))
+                    .start_icon(Icon::from_path(icon_path("plus")).size(IconSize::Small))
                     .style(ButtonStyle::Outlined)
                     .label_size(LabelSize::Small)
                     .toggle_state(picking)

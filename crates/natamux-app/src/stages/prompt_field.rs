@@ -15,6 +15,7 @@ use super::stage_fields_view::{change, default_mark, labelled};
 use crate::agents::agent_choices::{AGENT_CHOICES, agent_label};
 use crate::components::colors::signal;
 use crate::components::form::input_box;
+use crate::components::icons::icon_path;
 use crate::components::menu::MenuLayer;
 
 type Skills = Option<Result<SkillList, String>>;
@@ -111,7 +112,7 @@ impl DetailsPane {
         let skills = Button::new("insert-skill", "Insert skill")
             .style(ButtonStyle::Outlined)
             .size(ButtonSize::Compact)
-            .start_icon(Icon::from_path("icons/lucide/sparkles.svg").size(IconSize::Small))
+            .start_icon(Icon::from_path(icon_path("sparkles")).size(IconSize::Small))
             .disabled(reason.is_some())
             .when_some(reason, |this, reason| this.tooltip(Tooltip::text(reason)))
             .on_click(cx.listener(|this, event: &ClickEvent, window, cx| {

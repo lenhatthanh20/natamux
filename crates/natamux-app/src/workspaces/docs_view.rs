@@ -46,7 +46,7 @@ impl DocsTab {
         let failed = self.text_failed(name);
         let busy = self.saving;
         let row = h_flex()
-            .h(px(40.))
+            .h(rems_from_px(40.0_f32))
             .flex_none()
             .gap_2()
             .px_3()

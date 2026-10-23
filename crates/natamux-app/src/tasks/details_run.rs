@@ -14,6 +14,7 @@ use super::DetailsPanel;
 use crate::agents::agent_choices::{DEFAULT_AGENT, is_agent_id};
 use crate::app::dashboard::Dashboard;
 use crate::app::layout_mode::DetailsMode;
+use crate::components::icons::icon_path;
 use crate::components::menu::MenuLayer;
 use crate::components::scroll_rules::centred_offset;
 use crate::components::toast_rules::ToastTone;
@@ -394,7 +395,7 @@ fn build_more_menu(
             };
             let (task, dashboard, on) = (task.clone(), dashboard.clone(), on.clone());
             let entry = ContextMenuEntry::new(label)
-                .custom_icon_path(format!("icons/lucide/{icon}.svg"))
+                .custom_icon_path(icon_path(icon))
                 .when(danger, |entry| entry.icon_color(Color::Error))
                 .handler(move |window, cx| match action {
                     MenuAction::SaveTemplate => on(PanelCommand::SaveTemplate, window, cx),

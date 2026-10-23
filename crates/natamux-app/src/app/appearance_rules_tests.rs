@@ -59,7 +59,7 @@ fn font(family: &str, size: f32) -> ResolvedFont {
 }
 
 fn settings(mode: &str, zoom: f32, terminal: &ResolvedFont) -> Value {
-    serde_json::from_str(&user_settings(mode, zoom, terminal)).unwrap_or(Value::Null)
+    serde_json::from_str(&user_settings(mode, zoom, terminal, false)).unwrap_or(Value::Null)
 }
 
 #[test]
@@ -68,8 +68,8 @@ fn builds_the_settings_with_the_theme_the_sizes_and_the_terminal_font() {
     assert_eq!(value["theme"]["mode"], "dark");
     assert_eq!(value["theme"]["light"], "Natamux Light");
     assert_eq!(value["theme"]["dark"], "Natamux Dark");
-    assert_eq!(value["ui_font_family"], "Inter");
-    assert_eq!(value["buffer_font_family"], "JetBrains Mono");
+    assert_eq!(value["ui_font_family"], ".ZedSans");
+    assert_eq!(value["buffer_font_family"], ".ZedMono");
     assert_eq!(value["ui_font_size"], 16.0);
     assert_eq!(value["buffer_font_size"], 15.0);
     assert_eq!(value["terminal"]["font_family"], "Iosevka");
@@ -78,7 +78,7 @@ fn builds_the_settings_with_the_theme_the_sizes_and_the_terminal_font() {
 
 #[test]
 fn scales_the_ui_and_buffer_sizes_by_the_zoom_to_one_decimal() {
-    let terminal = font("JetBrains Mono", 13.0);
+    let terminal = font("Lilex", 13.0);
     let compact = settings("system", UiSize::Compact.zoom(), &terminal);
     assert_eq!(compact["ui_font_size"], 14.7);
     assert_eq!(compact["buffer_font_size"], 13.8);
@@ -94,4 +94,29 @@ fn escapes_the_font_family() {
     let value = settings("light", 1.0, &font("Fira \"Code\\", 13.5));
     assert_eq!(value["terminal"]["font_family"], "Fira \"Code\\");
     assert_eq!(value["terminal"]["font_size"], 13.5);
+}
+
+// Zed's terminal with no font of its own takes the buffer font and its size, so the UI size
+// scales it.
+#[test]
+fn leaves_the_built_in_terminal_font_to_zed() {
+    let built_in = ResolvedFont {
+        family: "Lilex".into(),
+        size: 15.0,
+        source: FontSource::Default,
+    };
+    let value = settings("dark", UiSize::Large.zoom(), &built_in);
+    assert!(value["terminal"].get("font_family").is_none());
+    assert!(value["terminal"].get("font_size").is_none());
+}
+
+// Zed shows an editor's scrollbar for a moment after it scrolls, so a shot caught it or not
+// (run 40008781483, the Changes shots).
+#[test]
+fn hides_the_editor_scrollbars_in_a_shot_only() {
+    let font = font("Lilex", 15.0);
+    let shot: Value =
+        serde_json::from_str(&user_settings("dark", 1.0, &font, true)).unwrap_or(Value::Null);
+    assert_eq!(shot["scrollbar"]["show"], "never");
+    assert!(settings("dark", 1.0, &font).get("scrollbar").is_none());
 }

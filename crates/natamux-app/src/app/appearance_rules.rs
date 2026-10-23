@@ -3,7 +3,7 @@
 
 use serde_json::json;
 
-use crate::terminals::terminal_font::ResolvedFont;
+use crate::terminals::terminal_font::{FontSource, ResolvedFont};
 
 // Zed's own defaults (`assets/settings/default.json`): the base the UI size scales.
 pub const BASE_UI_FONT_SIZE: f64 = 16.0;
@@ -114,17 +114,32 @@ fn f64_of(size: f32) -> f64 {
 }
 
 /// The user settings JSON for Zed: `theme_mode` is `ThemeChoice::name` (a `--theme` flag wins
-/// before this call), `ui_zoom` is `UiSize::zoom`.
-pub fn user_settings(theme_mode: &str, ui_zoom: f32, terminal: &ResolvedFont) -> String {
-    json!({
+/// before this call), `ui_zoom` is `UiSize::zoom`. Zed's own fonts; the terminal gets a font only
+/// when the user picked one, else Zed gives it the buffer font and size. A `--shot` hides the
+/// editors' scrollbars, which Zed shows for a moment after a scroll.
+pub fn user_settings(
+    theme_mode: &str,
+    ui_zoom: f32,
+    terminal: &ResolvedFont,
+    shot: bool,
+) -> String {
+    let terminal = if terminal.source == FontSource::Default {
+        json!({})
+    } else {
+        json!({"font_family": terminal.family, "font_size": f64_of(terminal.size)})
+    };
+    let mut settings = json!({
         "theme": {"mode": theme_mode, "light": "Natamux Light", "dark": "Natamux Dark"},
-        "ui_font_family": "Inter",
+        "ui_font_family": ".ZedSans",
         "ui_font_size": scaled(BASE_UI_FONT_SIZE, ui_zoom),
-        "buffer_font_family": "JetBrains Mono",
+        "buffer_font_family": ".ZedMono",
         "buffer_font_size": scaled(BASE_BUFFER_FONT_SIZE, ui_zoom),
-        "terminal": {"font_family": terminal.family, "font_size": f64_of(terminal.size)},
-    })
-    .to_string()
+        "terminal": terminal,
+    });
+    if shot {
+        settings["scrollbar"] = json!({"show": "never"});
+    }
+    settings.to_string()
 }
 
 #[cfg(test)]

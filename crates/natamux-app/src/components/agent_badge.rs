@@ -6,6 +6,7 @@ use gpui::img;
 use ui::{Tooltip, prelude::*};
 
 use crate::agents::agent_choices::{agent_icon_path, agent_label};
+use crate::components::icons::icon_path;
 
 /// The icon of an agent at 12 px.
 #[derive(IntoElement)]
@@ -25,9 +26,9 @@ impl RenderOnce for AgentIcon {
         match agent_icon_path(self.agent.as_deref(), light) {
             Some(path) => img(SharedString::from(path))
                 .flex_none()
-                .size(px(12.))
+                .size(rems_from_px(12.0_f32))
                 .into_any_element(),
-            None => Icon::from_path("icons/lucide/bot.svg")
+            None => Icon::from_path(icon_path("bot"))
                 .size(IconSize::XSmall)
                 .color(Color::Muted)
                 .into_any_element(),

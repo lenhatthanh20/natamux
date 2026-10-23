@@ -82,8 +82,6 @@ impl ViewMode {
 }
 
 /// Only web and mail addresses open, so a file cannot start a program through another scheme.
-// Used by the Markdown view, which waits for the owner's OK of Zed's markdown crate.
-#[cfg_attr(not(test), allow(dead_code))]
 pub fn is_safe_link(href: &str) -> bool {
     let Some((scheme, _)) = href.split_once(':') else {
         return false;

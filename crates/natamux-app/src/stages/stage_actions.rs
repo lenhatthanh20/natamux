@@ -6,6 +6,7 @@ use ui::prelude::*;
 
 use super::{ActionsInput, CardInput};
 use crate::components::chips::tip_with_keys;
+use crate::components::icons::icon_path;
 use crate::stages::card_rules::CardButton;
 use crate::stages::stage_view_rules::finished_when;
 use crate::tasks::details_commands::{OnCommand, PanelCommand};
@@ -83,7 +84,7 @@ fn row_button(
             on,
             PanelCommand::StartStageAgent,
         ))
-        .start_icon(Icon::from_path("icons/lucide/play.svg").size(IconSize::XSmall))
+        .start_icon(Icon::from_path(icon_path("play")).size(IconSize::XSmall))
         .disabled(busy),
         CardButton::MarkAsDone => outlined(button(
             id("report"),

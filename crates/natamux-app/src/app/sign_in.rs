@@ -16,6 +16,7 @@ use super::sign_in_rules::{BLANK_REASON, HELP, INTRO, REJECTED, connect_problem,
 use super::source::{Source, reason};
 use super::view_state;
 use crate::components::form::text_editor;
+use crate::components::icons::icon_path;
 
 /// The file of the token typed here. The name leaves out the word the owner's tools guard.
 const ACCESS_FILE: &str = "daemon-access";
@@ -180,7 +181,7 @@ impl Render for SignIn {
             h_flex()
                 .gap_1p5()
                 .child(
-                    Icon::from_path("icons/lucide/circle-alert.svg")
+                    Icon::from_path(icon_path("circle-alert"))
                         .size(IconSize::Small)
                         .color(Color::Error),
                 )

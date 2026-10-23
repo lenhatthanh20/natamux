@@ -70,26 +70,32 @@ pub const APP_COMMANDS: &[Command] = &[
         MenuName::App,
         0,
     ),
-    suggested(group(
-        keys(
-            command("jump.open", "Jump to a workspace", Category::Workspace),
-            &["Mod+J"],
-            &[],
-        ),
-        SheetGroup::Global,
-    )),
-    suggested(group(
-        keys(
-            command(
-                "help.shortcuts",
-                "Show the keyboard shortcuts",
-                Category::App,
+    suggested(
+        1,
+        group(
+            keys(
+                command("jump.open", "Jump to a workspace", Category::Workspace),
+                &["Mod+J"],
+                &[],
             ),
-            &["?"],
-            SINGLE,
+            SheetGroup::Global,
         ),
-        SheetGroup::SingleKeys,
-    )),
+    ),
+    suggested(
+        2,
+        group(
+            keys(
+                command(
+                    "help.shortcuts",
+                    "Show the keyboard shortcuts",
+                    Category::App,
+                ),
+                &["?"],
+                SINGLE,
+            ),
+            SheetGroup::SingleKeys,
+        ),
+    ),
     command("theme.system", "Follow the system", Category::Theme),
     command("theme.light", "Light", Category::Theme),
     command("theme.dark", "Dark", Category::Theme),

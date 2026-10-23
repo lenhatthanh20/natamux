@@ -1,16 +1,18 @@
-//! The terminal font: what is saved, what Ghostty gives, what a terminal uses, and the rules of
-//! the Terminal font dialog (`features/terminals/terminal-font.ts`, `TerminalFontDialog.tsx`).
+//! The terminal font: what is saved, what a terminal uses, and the rules of the Terminal font
+//! dialog (`features/terminals/terminal-font.ts`, `TerminalFontDialog.tsx`). Unlike the web, the
+//! app reads no Ghostty config: with no font picked, a terminal is as Zed's (owner, 2026-10-24).
 
 use serde_json::{Map, Value, json};
 
 pub const MIN_SIZE: f32 = 8.0;
 pub const MAX_SIZE: f32 = 32.0;
-pub const BUILT_IN_FAMILY: &str = "JetBrains Mono";
-pub const BUILT_IN_SIZE: f32 = 13.0;
+/// Zed's buffer font (`.ZedMono`) and size: a terminal with no font of its own uses them, as Zed.
+pub const BUILT_IN_FAMILY: &str = "Lilex";
+pub const BUILT_IN_SIZE: f32 = 15.0;
 pub const SIZE_REASON: &str = "Pick a size from 8 to 32";
 pub const PREVIEW: &str = "git commit -m \"Fix café → naïve\" ✓ │ 0O 1lI {}";
 
-/// A saved font. A part left out comes from Ghostty's or the built-in font.
+/// A saved font. A part left out comes from the built-in font.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct TerminalFont {
     pub family: Option<String>,
@@ -20,7 +22,6 @@ pub struct TerminalFont {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FontSource {
     Custom,
-    Ghostty,
     Default,
 }
 
@@ -82,25 +83,16 @@ pub fn clean_family(family: &str) -> String {
     family.replace(['"', '\\'], "").trim().to_owned()
 }
 
-/// Each part from the user's font first, then Ghostty's, then the built-in one.
-pub fn terminal_font(
-    custom: Option<&TerminalFont>,
-    ghostty: Option<&TerminalFont>,
-) -> ResolvedFont {
+/// Each part from the user's font, else the built-in one.
+pub fn terminal_font(custom: Option<&TerminalFont>) -> ResolvedFont {
     let family = custom
         .and_then(|font| font.family.as_deref())
-        .or_else(|| ghostty.and_then(|font| font.family.as_deref()))
         .map(clean_family)
         .filter(|name| !name.is_empty())
         .unwrap_or_else(|| BUILT_IN_FAMILY.to_owned());
-    let size = custom
-        .and_then(|font| font.size)
-        .or_else(|| ghostty.and_then(|font| font.size))
-        .unwrap_or(BUILT_IN_SIZE);
+    let size = custom.and_then(|font| font.size).unwrap_or(BUILT_IN_SIZE);
     let source = if custom.is_some() {
         FontSource::Custom
-    } else if ghostty.is_some() {
-        FontSource::Ghostty
     } else {
         FontSource::Default
     };
@@ -109,18 +101,6 @@ pub fn terminal_font(
         size,
         source,
     }
-}
-
-/// What an empty family field uses: shown as its placeholder.
-pub fn fallback_family(ghostty: Option<&TerminalFont>) -> String {
-    ghostty
-        .and_then(|font| font.family.clone())
-        .unwrap_or_else(|| BUILT_IN_FAMILY.to_owned())
-}
-
-/// What an empty size field uses: shown as its placeholder.
-pub fn fallback_size(ghostty: Option<&TerminalFont>) -> f32 {
-    ghostty.and_then(|font| font.size).unwrap_or(BUILT_IN_SIZE)
 }
 
 /// The size of the field: the fallback when it is empty. None unless a number from 8 to 32.
@@ -148,26 +128,14 @@ pub fn font_to_save(family_field: &str, size_field: &str) -> Option<TerminalFont
     (font.family.is_some() || font.size.is_some()).then_some(font)
 }
 
-pub fn dialog_description(ghostty: Option<&TerminalFont>) -> String {
-    let family = fallback_family(ghostty);
-    let size = fallback_size(ghostty);
-    if ghostty.is_some() {
-        format!("Empty fields use your Ghostty font: {family}, {size}px.")
-    } else {
-        format!(
-            "Empty fields use the built-in font, {family}, {size}px. A font that is not installed falls back to it."
-        )
-    }
+pub fn dialog_description() -> String {
+    format!(
+        "Empty fields use the built-in font, {BUILT_IN_FAMILY}, {BUILT_IN_SIZE}px. A font that is not installed falls back to it."
+    )
 }
 
 /// The ghost button that clears a custom font.
-pub fn reset_label(ghostty_present: bool) -> &'static str {
-    if ghostty_present {
-        "Use Ghostty font"
-    } else {
-        "Use built-in font"
-    }
-}
+pub const RESET_LABEL: &str = "Use built-in font";
 
 #[cfg(test)]
 #[path = "terminal_font_tests.rs"]

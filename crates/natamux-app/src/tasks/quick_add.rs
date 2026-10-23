@@ -12,6 +12,7 @@ use super::task_view_rules::{add_blocked_reason, task_repo};
 use crate::app::commands::shortcut_of;
 use crate::app::dashboard::Dashboard;
 use crate::components::chips::Kbd;
+use crate::components::icons::icon_path;
 use crate::components::menu::MenuLayer;
 
 /// Start a task was asked for, with the typed title when there is one.
@@ -255,12 +256,12 @@ impl Render for QuickAdd {
         let typed = self.typed_title(cx).is_some();
         let field = div()
             .flex_1()
-            .min_w(px(256.))
-            .h(px(28.))
-            .px(px(10.))
+            .min_w(rems_from_px(256.0_f32))
+            .h(rems_from_px(28.0_f32))
+            .px(rems_from_px(10.0_f32))
             .flex()
             .items_center()
-            .rounded(px(6.))
+            .rounded(rems_from_px(6.0_f32))
             .border_1()
             .border_color(colors.border)
             .bg(colors.editor_background)
@@ -273,7 +274,7 @@ impl Render for QuickAdd {
             .child(self.title.clone());
         // Not busy while a task is added: the next title is often typed before the answer.
         let add = Button::new("quick-add-submit", "Add task")
-            .start_icon(Icon::from_path("icons/lucide/plus.svg").size(IconSize::Small))
+            .start_icon(Icon::from_path(icon_path("plus")).size(IconSize::Small))
             .style(ButtonStyle::Filled)
             .disabled(blocked.is_some())
             .when_some(blocked, |button, reason| {
@@ -291,9 +292,7 @@ impl Render for QuickAdd {
                 h_flex()
                     .gap_2()
                     .px_1()
-                    .child(
-                        Icon::from_path("icons/lucide/square-terminal.svg").size(IconSize::Small),
-                    )
+                    .child(Icon::from_path(icon_path("square-terminal")).size(IconSize::Small))
                     .child(Label::new("Start a task"))
                     .child(Kbd::new(start_keys)),
             );

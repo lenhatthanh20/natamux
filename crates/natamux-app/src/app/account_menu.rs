@@ -10,15 +10,12 @@ use super::dashboard::Dashboard;
 use super::shortcut_text::keystroke;
 use super::shortcuts::{OpenSettings, ShowShortcuts};
 use crate::components::chips::Kbd;
+use crate::components::icons::icon_path;
 use crate::components::menu::MenuLayer;
 use crate::terminals::terminal_font_dialog;
 
 const MAC: bool = cfg!(target_os = "macos");
 const ISSUES_URL: &str = "https://github.com/lenhatthanh20/natamux/issues/new";
-
-fn lucide(name: &str) -> String {
-    format!("icons/lucide/{name}.svg")
-}
 
 /// A row with an icon, a label and the key chip of command `id`. Written by hand because the
 /// menu's own key column needs the key bound where the menu was opened.
@@ -36,7 +33,7 @@ fn keyed_entry(
                 .w_full()
                 .gap_2()
                 .child(
-                    Icon::from_path(lucide(icon))
+                    Icon::from_path(icon_path(icon))
                         .size(IconSize::Small)
                         .color(Color::Muted),
                 )
@@ -89,7 +86,6 @@ pub fn open_account_menu(
             );
         }
         let font = dashboard.clone();
-        // Stand-in: the Lucide `type` icon is not in the app yet.
         menu = menu.item(
             ContextMenuEntry::new("Terminal font…")
                 .icon(IconName::FontSize)
@@ -104,10 +100,9 @@ pub fn open_account_menu(
             "help.shortcuts",
             |window, cx| window.dispatch_action(Box::new(ShowShortcuts), cx),
         );
-        // Stand-in: the Lucide `bug` icon is not in the app yet.
         menu.item(
             ContextMenuEntry::new("Report an issue")
-                .custom_icon_path(lucide("triangle-alert"))
+                .icon(IconName::Debug)
                 .icon_color(Color::Muted)
                 .handler(|_, cx| cx.open_url(ISSUES_URL)),
         )
