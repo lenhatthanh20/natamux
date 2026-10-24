@@ -17,7 +17,7 @@ use ui::prelude::*;
 use super::card_rules::card_facts;
 use super::stage_card::{ActionsInput, CardInput, FileChip, stage_card};
 use super::stage_choices::ChoiceBox;
-use super::stage_marker::{marker, rail_line};
+use super::stage_marker::{RailLine, marker};
 use super::stage_view_rules::{
     branch_status, find_stage, link_kind, missing_skills, ran_with_workflow, stage_count,
     waiting_for_ci,
@@ -258,7 +258,7 @@ impl Ctx<'_> {
             .and_then(|next| self.entries(next).first().copied());
         let line = steps
             .get(index + 1)
-            .map(|_| rail_line(link_kind(last, next), cx).into_any_element());
+            .map(|_| RailLine::new(link_kind(last, next)).into_any_element());
         let is_branch = matches!(step, Step::Branch(_));
         let content = match step {
             Step::Stage(stage) => self

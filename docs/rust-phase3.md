@@ -59,6 +59,7 @@ The flags of `rust-phase1.md` stay. New:
 | Flag | Does |
 |---|---|
 | `--shot STATE` | Opens the window in one named state of the fake daemon (it implies `--fake-daemon`). Use it with `--theme` and `--size`. The clock stops at the fake's time and the view state is fixed and never saved, so each run looks the same. The states are below |
+| `--count-draws` | Prints `draws <n> active <true\|false>` once a second: the window's draws in that second and whether it has focus. It forces no frame (the perf overlay draws every frame). `scripts/motion-cost.sh` uses it (see "Motion") |
 
 ## What CI checks
 
@@ -223,7 +224,7 @@ The fake's `natamux` project has three open GitHub issues (one imported already)
 - **Smaller differences.**
   - Ages of a week or more show the date in UTC: the app has no local time zone helper yet.
   - The status bar's "N need you" (the title bar pill until T-0158) opens the jump palette on what needs you, as the web (since screen 7; before, they filtered the list).
-  - The status bar has a fourth link word, "Not connected", while the daemon cannot be used. A token the daemon refuses opens Sign in, as the web (since screen 7). It does not measure overflow; labels drop by width only. The jobs menu does not update while open, and its spinner is a still icon.
+  - The status bar has a fourth link word, "Not connected", while the daemon cannot be used. A token the daemon refuses opens Sign in, as the web (since screen 7). It does not measure overflow; labels drop by width only. The jobs menu does not update while open.
   - The drawer has no Tab focus trap. Esc and a click on the scrim close it.
   - Single-key commands are not in the menu bar, because a macOS menu fires a key without a modifier while the user types. Off macOS, Ctrl chords without Shift go to the shell inside a terminal.
   - New command ids: `app.quit`, `list.first` and `list.last` (the web's `list.ends`), `tree.expand` (from `tree.collapse`), and `tools.*`. The menu items that the web writes in its components are commands too, with no key: `task.add-subtask`, `row.pin`, `row.unpin`, `row.copy-branch`, `row.copy-path`, `task.copy-id`, `agent.start`, `agent.restart`, `task.cancel`, `task.delete`, `project.blur`, `project.show-names`, `project.remove-finished` and `project.remove`. A menu item shows the key of its command: F2 for Rename, Delete for Remove workspace, Enter for Open workspace.
@@ -232,7 +233,7 @@ The fake's `natamux` project has three open GitHub issues (one imported already)
   - Board: a folded column's name is in its tooltip (no vertical text); no edge fades or scroll arrows. Table header cells are mouse-only. A disabled Start agent item has no "Waits for …" hint.
   - Start a task: the branch and skill pickers are plain menus with no search; pasting a screenshot is not supported. The files-not-committed dialog of Remove workspace offers Close, View changes and Commit… (since screen 4).
   - Agent icons (T-0148): the web's icons, `claude`, `gemini-ai`, `copilot`, `cursor` from material-icon-theme 5.39.0 (MIT) and the app's own `codex` (shape from lobe-icons, MIT), in `assets/icons/agents/` with both licences. In the light theme a `_light` icon is used when there is one. An unknown agent shows the generic bot icon.
-  - The skeleton does not pulse, the toast timer pauses on hover only, the resize handle collapses during the drag, and context menus have no type-ahead.
+  - The toast timer pauses on hover only, the resize handle collapses during the drag, and context menus have no type-ahead.
 
 ## Screen 2: where it differs from the React screens
 
@@ -240,7 +241,7 @@ The fake's `natamux` project has three open GitHub issues (one imported already)
 - **Add to Agents** is Shift+Enter (or Shift and a click) on a task in the palettes, as in the web (screen 7). Commit… and View changes came back with screen 4.
 - **Pickers.** "Branch from" and "Add a pane" are plain menus with no search, as the pickers of screen 1.
 - **Times.** "ended 7:05" of the wrap-up and "Finished" of the summary are in UTC and say so: the app has no local time zone helper yet.
-- **Spinners.** The connection strip, the restore cover and the preparing step show a still loader icon, as the jobs menu does: an endless animation would draw the window every frame. As in React, "Connecting…" and "Reconnecting…" show only after 200 ms, so a quick connect shows no strip; a terminal that could not start says so at once.
+- **Connection strip.** As in React, "Connecting…" and "Reconnecting…" show only after 200 ms, so a quick connect shows no strip; a terminal that could not start says so at once.
 - **Close a terminal.** No confirm, as in the React screen (`ShellPanes.tsx`), although `ui-spec.md` 4.23 asks for one when a program other than the shell runs. The wrap-up's Stop asks first, as React does.
 - **Grid.** The panes sit in flex rows; the last pane of the last row takes the rest of it, as `paneSpan` does in the CSS grid.
 - **Hidden terminals.** As `terminal-cache.ts`: at most 8 terminals stay connected off screen, each at most 20 minutes; the terminals of a task that is gone, finished or has no workspace go once hidden. The 20-minute limit is checked when the app draws, not by a timer.
@@ -252,7 +253,6 @@ The fake's `natamux` project has three open GitHub issues (one imported already)
 - **Details panel modes.** Docked at 1280 and wider while main keeps 640, a sheet from 768 to 1279 (with a scrim under 1024), as `decideLayout`. The window is at least 800 wide, so the page mode of the web (under 768) never shows. The panel is 320 to 560 wide, kept in `view.json` (`detailsWidth`). As the web, the open state of each task's panel is not kept across runs; the picked tab is (`detailsView`).
 - **Tabs.** Progress, Files (since screen 6, only for a task with a workspace) and Details; a remembered Files tab shows Progress for a task with no workspace.
 - **Output chip.** Since screen 6 the output file chip of a stage card opens the file in the Docs tab. A chip of a file that is not written yet opens nothing.
-- **Markers do not move.** The marker of a running stage and the line into it are still, as the screen-2 spinners: an endless animation would draw the window every frame.
 - **Stage commands.** Skip the stage, Mark the stage as done, Approve the stage anyway, Send back and Show the task progress run from the palette, as in the web (since screen 7). The menu bar's **Task** menu keeps them too, with no key.
 - **Keys.** `a` and `r` work from the details panel too (not in its text boxes, nor in a terminal); `e` edits, `i` shows or hides the selected task's panel, Mod+Alt+B shows or hides the panel. The phase-1 bench had Mod+Alt+B: it is Mod+Alt+T now. F6 does not cycle the parts of the window.
 - **Show details** is in the table's row menu, as in the web; the sidebar's row menu has none, as in the web.
@@ -341,6 +341,22 @@ The owner asked for a layout as lean as Zed's (2026-10-24). Three mockups were r
 - **Details dock.** The panel docks at the right and pushes main from 768 wide while main keeps 400 (was 1280 and 640). The sidebar starts 280 wide (was 320, the same as the details), so at 1024 wide both dock beside a 424 px main. It is open or closed for all tasks at once, as a Zed dock, and `view.json` keeps it (`detailsOpen`, open by default). With no task picked it says "Select a task". It hides while the Agents grid shows. As a Zed dock it has no close button (the status bar toggle, Mod+Alt+B and Esc close it); a sheet or a page keeps its close or Back. It never closes by itself: the web closes the panel when Changes opens and main is under 900; the app does not, as the flag is saved for every task. The status bar toggle is off, with its reason in the tooltip, over the Agents grid and where there is no task and the details would be a sheet or a page.
 - **Text sizes.** One scale (owner, 2026-10-24: the terminal looked big and the views did not match): code 13 (terminal, diff, editors; was 15 for the terminal and diff, 12 for the editors), the main text of a row or tab 13 (sidebar, task table, file trees, changed files, history, workspace and details tabs; `components/text_size.rs`), meta text 12, uppercase section heads 11.
 - **Dialogs.** No description line, except Remove workspace (data loss), confirms and Project settings. The removed sentences are the tooltips of the dialogs' main buttons.
+
+## Motion (T-0160)
+
+The app moves what the web moves (`docs/ui-spec.md` 2.8), on the same 125 ms ticks: a running state glyph blinks once every 2 s (ticks 8 and 9), the busy spinner steps one of its 8 dashes a tick (the jobs item, the connection strip, the restore cover, the preparing step, a busy git button), the line into a running stage fills and fades on the blink's clock, and the skeleton list pulses. Nothing else moves.
+
+- **How it stays light.** One clock for the app (`components/motion.rs`, frames in `components/motion_rules.rs`). An item asks for its frame while it renders, which marks the view that drew it. One timer sleeps until the next tick where a shown kind changes and notifies only those views; the sidebar and the task list are cached views, so a blink in one does not draw the other. With no moving item on screen no timer runs. No `with_animation`, no `request_animation_frame` loop.
+- **Still forms.** A window without focus, and every `--shot`, draws the still forms, as the web's reduced motion: the disk, three dots, a full line, still bars. The timer stops without focus.
+- **Reduce motion.** Not followed: GPUI has `App::reduce_motion`, but it never reads the macOS setting (Zed sets the flag from its own setting), and reading it needs an Objective-C call.
+- **Cost.** `scripts/motion-cost.sh` runs the fake daemon's task table (3 running tasks, 2 jobs, no terminal output) for 15 s with focus and 15 s behind Finder, on the macOS runner, with `--count-draws`. CI runs it on a snapshot push with a line `Measure: motion` in its commit message.
+
+  | Build | Focused CPU % | Focused draws/s | Background CPU % | Background draws/s | Run |
+  |---|---|---|---|---|---|
+  | Before (still icons) | 0.7 | 0 | 0.7 | 0 | 40063971436 |
+  | After (motion) | 2.2 | 8.3 | 0.9 | 0.07 | 40066463345 |
+
+  With focus the window draws 8 times a second, for the jobs spinner; the blinks fall on its ticks, so they add no draws. Behind Finder it drew once, when the focus left (0.07 a second over 15 s). The still forms keep the shots the same as before, except the spinner places, which show three dots instead of the loader icon.
 
 ## Ported tests
 

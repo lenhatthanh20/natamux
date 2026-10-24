@@ -2,7 +2,7 @@
 
 pub const USAGE: &str =
     "usage: natamux-app [--smoke] [--theme light|dark] [--size WxH] [--hold SECONDS] [--fake-daemon]
-                   [--gate2 TASK] [--shot STATE]
+                   [--gate2 TASK] [--shot STATE] [--count-draws]
   --smoke   draw a frame, type into the text box, check it, then quit (exit 1 on failure)
   --theme   use this theme instead of following the system
   --size    window size in points, placed at the top left of the screen
@@ -10,6 +10,7 @@ pub const USAGE: &str =
   --fake-daemon  show fixed tasks and a fixed terminal instead of the daemon's (for screenshots)
   --gate2   run gate 2 on TASK's shells 901-912, save the perf report, print its path, then quit
   --shot    open the window in one screen-1 or screen-2 state, for the CI screenshots (docs/rust-phase3.md)
+  --count-draws  print the window's draws once a second, to measure the cost of motion
 
 The daemon: NATAMUX_URL and NATAMUX_TOKEN, else http://127.0.0.1:4317 and the Natamux app's token.";
 
@@ -275,6 +276,7 @@ pub struct Options {
     pub fake_daemon: bool,
     pub gate2: Option<String>,
     pub shot: Option<Shot>,
+    pub count_draws: bool,
 }
 
 impl Options {
@@ -287,12 +289,14 @@ impl Options {
             fake_daemon: false,
             gate2: None,
             shot: None,
+            count_draws: false,
         };
         let mut args = args.into_iter();
         while let Some(arg) = args.next() {
             match arg.as_str() {
                 "--smoke" => options.smoke = true,
                 "--fake-daemon" => options.fake_daemon = true,
+                "--count-draws" => options.count_draws = true,
                 "--theme" => options.theme = Some(parse_theme(&value(&mut args, &arg)?)?),
                 "--size" => options.size = Some(parse_size(&value(&mut args, &arg)?)?),
                 "--gate2" => options.gate2 = Some(value(&mut args, &arg)?),
@@ -352,6 +356,7 @@ mod tests {
         assert!(!options.fake_daemon);
         assert_eq!(options.gate2, None);
         assert_eq!(options.shot, None);
+        assert!(!options.count_draws);
     }
 
     #[test]
@@ -369,8 +374,10 @@ mod tests {
             "T-0145",
             "--shot",
             "task-context-menu",
+            "--count-draws",
         ])
         .unwrap();
+        assert!(options.count_draws);
         assert_eq!(options.shot, Some(Shot::TaskContextMenu));
         assert_eq!(options.gate2.as_deref(), Some("T-0145"));
         assert!(options.smoke);

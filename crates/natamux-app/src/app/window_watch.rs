@@ -6,6 +6,7 @@ use std::time::Duration;
 use ui::prelude::*;
 
 use super::Root;
+use crate::components::motion;
 use crate::perf::overlay;
 
 /// How often the perf overlay shows new numbers.
@@ -29,6 +30,12 @@ impl Root {
                     stop.await;
                 }
             }
+        })
+        .detach();
+        // Motion runs only while the window has focus, as the web's `lib/window-focus.ts`.
+        motion::set_active(window.is_window_active(), cx);
+        cx.observe_window_activation(window, |_, window, cx| {
+            motion::set_active(window.is_window_active(), cx);
         })
         .detach();
         // Follow the system's light or dark look, as Zed's workspace does.

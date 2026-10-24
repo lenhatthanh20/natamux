@@ -91,6 +91,11 @@ jobs:
       - run: cargo build --release --locked -p natamux-app
       - name: Smoke test
         run: target/release/natamux-app --smoke
+      # CPU and draws of an idle window, with focus and in the background (docs/rust-phase3.md
+      # "Motion"). Only a snapshot push whose commit message has a line "Measure: motion".
+      - name: Motion cost
+        if: "github.event_name == 'push' && contains(github.event.head_commit.message, 'Measure: motion')"
+        run: scripts/motion-cost.sh
       - name: Screenshots
         run: |
           mkdir -p shots

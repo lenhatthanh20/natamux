@@ -15,6 +15,7 @@ use super::workspace_rules::{GitButton, GitStep, needs_commit, pull_request_butt
 use super::wrap_up_rules::is_finished_state;
 use crate::components::button_style::label_color;
 use crate::components::icons::icon_path;
+use crate::components::spinner::Spinner;
 
 type OnClick = Rc<dyn Fn(&mut Window, &mut App)>;
 
@@ -86,9 +87,11 @@ fn git_button(
         (false, tip) => tip,
     };
     let icon = if busy {
-        "loader-circle".to_owned()
+        Spinner::new(IconSize::Small).into_any_element()
     } else {
-        icon.to_owned()
+        Icon::from_path(icon_path(icon))
+            .size(IconSize::Small)
+            .into_any_element()
     };
     ButtonLike::new(id)
         .style(ButtonStyle::Subtle)
@@ -100,7 +103,7 @@ fn git_button(
             h_flex()
                 .gap_1p5()
                 .px_1()
-                .child(Icon::from_path(icon_path(&icon)).size(IconSize::Small))
+                .child(icon)
                 .when(!icon_only, |row| {
                     row.child(
                         Label::new(button.label)

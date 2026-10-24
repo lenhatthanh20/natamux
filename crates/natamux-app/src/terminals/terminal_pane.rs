@@ -19,6 +19,7 @@ use super::terminal_find::TerminalFind;
 use crate::app::shortcuts::{FindInTerminal, MaximizePane};
 use crate::components::icons::icon_path;
 use crate::components::skeleton::SkeletonList;
+use crate::components::spinner::Spinner;
 
 type OnClick = Rc<dyn Fn(&mut Window, &mut App)>;
 
@@ -189,13 +190,7 @@ impl TerminalPane {
                 .gap_1p5()
                 .border_b_1()
                 .border_color(colors.border)
-                .when(!failed, |strip| {
-                    strip.child(
-                        Icon::from_path(icon_path("loader-circle"))
-                            .size(IconSize::XSmall)
-                            .color(Color::Muted),
-                    )
-                })
+                .when(!failed, |strip| strip.child(Spinner::new(IconSize::XSmall)))
                 .child(Label::new(text).size(LabelSize::Small).color(if failed {
                     Color::Error
                 } else {
@@ -219,11 +214,7 @@ impl TerminalPane {
                 .justify_center()
                 .gap_2()
                 .bg(cx.theme().colors().terminal_background)
-                .child(
-                    Icon::from_path(icon_path("loader-circle"))
-                        .size(IconSize::Medium)
-                        .color(Color::Muted),
-                )
+                .child(Spinner::new(IconSize::Medium))
                 .child(Label::new(label).size(LabelSize::Small).color(Color::Muted)),
         )
     }

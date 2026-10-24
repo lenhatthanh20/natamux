@@ -69,12 +69,15 @@ mod components {
     pub mod icons;
     pub mod input_rules;
     pub mod menu;
+    pub mod motion;
+    pub mod motion_rules;
     pub mod resize_handle;
     pub mod resize_rules;
     pub mod scroll_rules;
     pub mod segmented;
     pub mod shape;
     pub mod skeleton;
+    pub mod spinner;
     pub mod tab_order;
     pub mod text_size;
     pub mod theme_contrast;
@@ -127,6 +130,7 @@ mod palette {
     pub mod palette_view;
 }
 mod perf {
+    pub mod draws;
     pub mod overlay;
     pub mod report;
     pub mod stats;
@@ -327,6 +331,7 @@ fn start(options: &Options, cx: &mut App) -> anyhow::Result<()> {
     app::shortcuts::bind(cx);
     app::shortcuts::set_menus(cx);
     perf::overlay::init(cx);
+    components::motion::init(options.shot.is_some(), cx);
 
     // One window: closing it quits. With a bench running, the window quits first instead
     // (app/window.rs), so the quit handler that ends the bench's shells still finds it.
@@ -351,6 +356,9 @@ fn start(options: &Options, cx: &mut App) -> anyhow::Result<()> {
     }
     if let Some(task) = &options.gate2 {
         app::gate2::run(window, task.clone(), cx);
+    }
+    if options.count_draws {
+        perf::draws::start(window, cx);
     }
     if let Some(seconds) = options.hold_seconds {
         cx.spawn(async move |cx| {
