@@ -1,4 +1,4 @@
-//! The task table (`features/tasks/TaskTable.tsx`, ui-spec 4.25): a virtual list of 40 px rows,
+//! The task table (`features/tasks/TaskTable.tsx`, ui-spec 4.25): a virtual list of 28 px rows,
 //! columns by the main width (`table_columns`), sortable headers, a card list under 560, one tab
 //! stop with j/k, arrows, Home/End, Enter, Shift+F10 and type-ahead, and the row menu.
 
@@ -27,9 +27,9 @@ use crate::components::glyph::StateGlyph;
 use crate::components::icons::icon_path;
 use crate::components::menu::MenuLayer;
 
-const ROW: f32 = 40.;
+const ROW: f32 = 28.;
 const CARD_ROW: f32 = 56.;
-const HEADER: f32 = 32.;
+const HEADER: f32 = 26.;
 
 /// A key moved the selection: the rows hold still for a moment (`onKeyboardMove`).
 pub struct KeyMoved;
@@ -254,7 +254,6 @@ impl TaskTable {
                     .child(
                         Label::new(column_label(column))
                             .size(LabelSize::Small)
-                            .weight(FontWeight::MEDIUM)
                             .color(if sorted.is_some() {
                                 Color::Default
                             } else {
@@ -291,7 +290,8 @@ impl TaskTable {
             .when(bg.is_none(), |row| {
                 row.hover(|row| row.bg(colors.ghost_element_hover))
             })
-            // The inset focus ring of the row with the list's focus (ui-spec 5.2).
+            // The inset focus ring of the row with the list's focus (ui-spec 5.2), and the 2 px
+            // bar on the left of the selected row.
             .when(selected && focused, |row| {
                 row.child(
                     div()
@@ -299,6 +299,17 @@ impl TaskTable {
                         .inset_0()
                         .border_1()
                         .border_color(colors.border_focused),
+                )
+            })
+            .when(selected, |row| {
+                row.child(
+                    div()
+                        .absolute()
+                        .left_0()
+                        .top_0()
+                        .bottom_0()
+                        .w(px(2.))
+                        .bg(colors.border_focused),
                 )
             })
             .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
@@ -422,7 +433,6 @@ fn card(row: &RowData, cx: &App) -> impl IntoElement {
 
 impl Render for TaskTable {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let colors = cx.theme().colors();
         let layout = self.layout(cx);
         let mut context = KeyContext::default();
         context.add("NatamuxList");
@@ -455,10 +465,6 @@ impl Render for TaskTable {
             .on_key_down(cx.listener(Self::type_ahead))
             .size_full()
             .overflow_hidden()
-            .rounded_md()
-            .border_1()
-            .border_color(colors.border_variant)
-            .bg(colors.surface_background)
             .children(header)
             .child(list)
     }

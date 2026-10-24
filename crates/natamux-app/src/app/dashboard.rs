@@ -83,8 +83,10 @@ pub struct Dashboard {
     pub workspace_tab: WorkspaceTab,
     pub commit_request: Option<String>,
     pub files: tabs::FileViews,
-    /// The details panel of each task the user opened or closed, this run only.
-    pub details_open: Entries<bool>,
+    /// The tabs the user closed in each task's workspace, this run only (T-0158).
+    pub closed_tabs: Entries<Vec<WorkspaceTab>>,
+    /// The project last picked in Add task; Import issues starts on it.
+    pub last_add_repo: Option<String>,
     pub panel_request: Option<(String, details::PanelRequest)>,
     terminal_readers: RefCell<BTreeMap<TerminalReader, BTreeSet<String>>>,
     /// The sidebar filter text.
@@ -132,7 +134,8 @@ impl Dashboard {
             workspace_tab: WorkspaceTab::Terminal,
             commit_request: None,
             files: tabs::FileViews::default(),
-            details_open: Vec::new(),
+            closed_tabs: Vec::new(),
+            last_add_repo: None,
             panel_request: None,
             terminal_readers: RefCell::new(BTreeMap::new()),
             filter: String::new(),

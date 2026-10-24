@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use natamux_proto::tasks::task::TaskState;
 use serde_json::{Map, Value, json};
 
-use crate::app::layout_mode::PANEL_WIDTH;
+use crate::app::layout_mode::{PANEL_WIDTH, SIDEBAR_WIDTH};
 use crate::app::view_rules::{
     DetailsView, Entries, MAX_RECENT, WorkspaceTab, parse_pinned, with_seen, with_tab,
 };
@@ -16,7 +16,7 @@ use crate::sidebar::sidebar_tree::{Folds, with_fold};
 use crate::terminals::pane_rules::{PaneLayout, parse_pane_layout};
 
 pub const FILE_NAME: &str = "view.json";
-/// `useStoredWidth('natamux.sidebar-width', PANEL_WIDTH, 220, 440)`.
+/// `useStoredWidth('natamux.sidebar-width', …, 220, 440)`; the default is `SIDEBAR_WIDTH`.
 pub const SIDEBAR_MIN: f32 = 220.0;
 pub const SIDEBAR_MAX: f32 = 440.0;
 /// `useStoredWidth('natamux.details-width', PANEL_WIDTH, 320, 560)`.
@@ -118,6 +118,8 @@ pub struct ViewState {
     pub details_view: Option<DetailsView>,
     /// Sections of the details panel by id, open or folded; a missing one has its default.
     pub sections: Vec<(String, bool)>,
+    /// The details dock is open, for every task at once (one flag, as a Zed dock).
+    pub details_open: bool,
     /// System notifications for tasks that start to need the user (off until switched on).
     pub notify: bool,
     /// The last workspace tab of each task (`tabByTask`): terminal, changes, history or docs.
@@ -146,7 +148,7 @@ impl Default for ViewState {
             pinned: Vec::new(),
             layout: Layout::Table,
             sidebar_open: true,
-            sidebar_width: PANEL_WIDTH,
+            sidebar_width: SIDEBAR_WIDTH,
             show_finished: false,
             seen: Vec::new(),
             last_base: Vec::new(),
@@ -155,6 +157,7 @@ impl Default for ViewState {
             details_width: PANEL_WIDTH,
             details_view: None,
             sections: Vec::new(),
+            details_open: true,
             notify: false,
             tabs: Vec::new(),
             docs_source: false,
@@ -183,6 +186,42 @@ fn files_width_of(value: Option<&Value>, default: u32) -> u32 {
         .map_or(default, |width| (width as u32).clamp(FILES_MIN, FILES_MAX))
 }
 
+// Through the rules, so the caps hold for a file written by hand too.
+fn folds_of(pairs: Map<String, Value>) -> Folds {
+    pairs
+        .into_iter()
+        .filter_map(|(key, open)| open.as_bool().map(|open| (key, open)))
+        .fold(Vec::new(), |folds, (key, open)| {
+            with_fold(&folds, &key, open)
+        })
+}
+
+fn seen_of(pairs: Map<String, Value>) -> Entries<TaskState> {
+    let seen: Vec<(String, TaskState)> = pairs
+        .into_iter()
+        .filter_map(|(id, state)| Some((id, serde_json::from_value(state).ok()?)))
+        .collect();
+    let refs: Vec<(&str, TaskState)> = seen
+        .iter()
+        .map(|(id, state)| (id.as_str(), *state))
+        .collect();
+    with_seen(&[], &refs, true)
+}
+
+fn layout_of(value: Option<&Value>) -> Layout {
+    match value.and_then(Value::as_str) {
+        Some("board") => Layout::Board,
+        Some("progress") => Layout::Progress,
+        _ => Layout::Table,
+    }
+}
+
+fn panel_width_of(value: Option<&Value>, default: f32, min: f32, max: f32) -> f32 {
+    value
+        .and_then(Value::as_f64)
+        .map_or(default, |width| (width as f32).clamp(min, max))
+}
+
 impl ViewState {
     /// Each part that cannot be read falls back to its default; text that is no JSON object is
     /// the default view.
@@ -195,39 +234,20 @@ impl ViewState {
             Some(Value::Object(entries)) => entries.clone(),
             _ => Map::new(),
         };
-        // Through the rules, so the caps hold for a file written by hand too.
-        let folds = pairs("folds")
-            .into_iter()
-            .filter_map(|(key, open)| open.as_bool().map(|open| (key, open)))
-            .fold(Vec::new(), |folds, (key, open)| {
-                with_fold(&folds, &key, open)
-            });
-        let seen_pairs: Vec<(String, TaskState)> = pairs("seen")
-            .into_iter()
-            .filter_map(|(id, state)| Some((id, serde_json::from_value(state).ok()?)))
-            .collect();
-        let seen_refs: Vec<(&str, TaskState)> = seen_pairs
-            .iter()
-            .map(|(id, state)| (id.as_str(), *state))
-            .collect();
         ViewState {
-            folds,
+            folds: folds_of(pairs("folds")),
             blurred: strings(map.get("blurred")),
             pinned: strings(map.get("pinned")),
-            layout: match map.get("layout").and_then(Value::as_str) {
-                Some("board") => Layout::Board,
-                Some("progress") => Layout::Progress,
-                _ => Layout::Table,
-            },
+            layout: layout_of(map.get("layout")),
             sidebar_open: flag(map.get("sidebarOpen"), default.sidebar_open),
-            sidebar_width: map
-                .get("sidebarWidth")
-                .and_then(Value::as_f64)
-                .map_or(default.sidebar_width, |width| {
-                    (width as f32).clamp(SIDEBAR_MIN, SIDEBAR_MAX)
-                }),
+            sidebar_width: panel_width_of(
+                map.get("sidebarWidth"),
+                default.sidebar_width,
+                SIDEBAR_MIN,
+                SIDEBAR_MAX,
+            ),
             show_finished: flag(map.get("showFinished"), default.show_finished),
-            seen: with_seen(&[], &seen_refs, true),
+            seen: seen_of(pairs("seen")),
             last_base: pairs("lastBase")
                 .into_iter()
                 .filter_map(|(repo, base)| Some((repo, base.as_str()?.to_owned())))
@@ -237,12 +257,12 @@ impl ViewState {
                 _ => None,
             },
             pane_layout: parse_pane_layout(map.get("paneLayout").and_then(Value::as_str)),
-            details_width: map
-                .get("detailsWidth")
-                .and_then(Value::as_f64)
-                .map_or(default.details_width, |width| {
-                    (width as f32).clamp(DETAILS_MIN, DETAILS_MAX)
-                }),
+            details_width: panel_width_of(
+                map.get("detailsWidth"),
+                default.details_width,
+                DETAILS_MIN,
+                DETAILS_MAX,
+            ),
             details_view: map
                 .get("detailsView")
                 .and_then(Value::as_str)
@@ -253,6 +273,7 @@ impl ViewState {
                 .fold(Vec::new(), |sections, (id, open)| {
                     with_section(&sections, &id, open)
                 }),
+            details_open: flag(map.get("detailsOpen"), default.details_open),
             notify: flag(map.get("notify"), default.notify),
             tabs: tabs_of(pairs("tabs")),
             docs_source: flag(map.get("docsSource"), default.docs_source),
@@ -310,6 +331,7 @@ impl ViewState {
                 .iter()
                 .map(|(id, open)| (id.clone(), Value::Bool(*open)))
                 .collect::<Map<String, Value>>(),
+            "detailsOpen": self.details_open,
             "notify": self.notify,
             "tabs": self
                 .tabs
@@ -354,16 +376,16 @@ impl ViewState {
         self.sidebar_width = width.clamp(SIDEBAR_MIN, SIDEBAR_MAX);
     }
 
-    /// `showProgress`: the details of `task_id` open on Progress. Gives the new open flags.
-    pub fn show_progress(&mut self, open: &Entries<bool>, task_id: &str) -> Entries<bool> {
+    /// `showProgress`: the details dock open on Progress.
+    pub fn show_progress(&mut self) {
         self.details_view = Some(DetailsView::Progress);
-        crate::app::view_rules::with_detail_open(open, task_id, true)
+        self.details_open = true;
     }
 
-    /// `showFiles`: the details of `task_id` open on Files. Gives the new open flags.
-    pub fn show_files(&mut self, open: &Entries<bool>, task_id: &str) -> Entries<bool> {
+    /// `showFiles`: the details dock open on Files.
+    pub fn show_files(&mut self) {
         self.details_view = Some(DetailsView::Files);
-        crate::app::view_rules::with_detail_open(open, task_id, true)
+        self.details_open = true;
     }
 
     pub fn set_details_width(&mut self, width: f32) {

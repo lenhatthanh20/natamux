@@ -77,6 +77,7 @@ fn disabled<C>(menu_item: MenuItem<C>, off: bool, why: Option<&'static str>) -> 
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RowCommand {
+    Answer,
     ViewChanges,
     Rename,
     AddSubtask,
@@ -87,9 +88,19 @@ pub enum RowCommand {
     DeleteTask,
 }
 
-/// The row menu (docs/ui-spec.md 4.9). "View changes" is first, for a task with a workspace.
+/// The row menu (docs/ui-spec.md 4.9). "Answer" is first for a task that needs input, then "View
+/// changes" for a task with a workspace.
 pub fn row_menu(task: &Task, pinned: bool) -> Vec<MenuItem<RowCommand>> {
     let mut items = Vec::new();
+    // The row has no Answer button any more, so the menu keeps it.
+    if task.state == TaskState::NeedsInput {
+        items.push(item(
+            "task.answer",
+            "Answer",
+            "square-terminal",
+            RowCommand::Answer,
+        ));
+    }
     if task.workspace.is_some() {
         items.push(item(
             "task.view-changes",
@@ -300,6 +311,88 @@ pub fn card_line(task: &Task, events: Option<&[StoredEvent]>) -> Option<String> 
         _ if task.state == TaskState::NeedsInput => Some("Waiting for your answer".to_owned()),
         _ => None,
     }
+}
+
+/// What a blurred project shows in place of private text (names, titles, ids, questions).
+pub fn masked(text: &str) -> String {
+    "•".repeat(text.chars().count().clamp(3, 12))
+}
+
+/// The short word on the right of an attention row, in the state colour. None for other states.
+/// A blurred project hides the stage name.
+pub fn short_reason(state: TaskState, stage: Option<&str>, blurred: bool) -> Option<String> {
+    match state {
+        TaskState::NeedsInput => Some("Answer".to_owned()),
+        TaskState::Blocked => Some("Blocked".to_owned()),
+        TaskState::Failed => Some(match stage.filter(|_| !blurred) {
+            Some(stage) => format!("{stage} failed"),
+            None => "Failed".to_owned(),
+        }),
+        _ => None,
+    }
+}
+
+/// What a row's title tooltip says. All parts are optional except the id.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct RowTip<'a> {
+    /// The project name, for a pinned row, which has no project header over it.
+    pub project: Option<&'a str>,
+    pub id: &'a str,
+    /// "3/5", from `step_text`.
+    pub step: Option<&'a str>,
+    pub stage: Option<&'a str>,
+    /// "2/5" subtasks done.
+    pub subtasks: Option<&'a str>,
+    pub activity: Option<&'a str>,
+    /// The pull request URL.
+    pub pr: Option<&'a str>,
+    /// "open, checks pass", from `pull_request_summary`.
+    pub pr_summary: Option<&'a str>,
+    /// The agent's name.
+    pub agent: Option<&'a str>,
+    /// The full reason, from `card_line`, for attention rows.
+    pub reason: Option<&'a str>,
+}
+
+/// `[project ·] id · step stage · subtasks · activity · #PR (summary) · agent`, then the full reason on its own line. A blurred
+/// project masks every part but the step and the agent.
+pub fn row_tooltip(tip: &RowTip, blurred: bool) -> String {
+    let hide = |text: &str| {
+        if blurred {
+            masked(text)
+        } else {
+            text.to_owned()
+        }
+    };
+    let place = [tip.step.map(str::to_owned), tip.stage.map(hide)]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let parts: Vec<String> = [
+        tip.project.map(hide),
+        Some(hide(tip.id)),
+        Some(place).filter(|place| !place.is_empty()),
+        tip.subtasks.map(|done| format!("{done} subtasks")),
+        tip.activity.map(hide),
+        tip.pr.map(|url| {
+            let number = hide(&pull_request_number(url));
+            match tip.pr_summary.filter(|_| !blurred) {
+                Some(summary) => format!("{number} ({summary})"),
+                None => number,
+            }
+        }),
+        tip.agent.map(str::to_owned),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    let mut text = parts.join(" · ");
+    if let Some(reason) = tip.reason {
+        text.push('\n');
+        text.push_str(&hide(reason));
+    }
+    text
 }
 
 /// "3/5" for a task with 2 steps or more.

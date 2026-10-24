@@ -1,12 +1,9 @@
-//! The project groups of the sidebar tree (docs/ui-spec.md 4.9, `RepoHeader.tsx`): the card
-//! around a group, its header with colour, count and fold (its buttons and menu are in
+//! The project groups of the sidebar tree (docs/ui-spec.md 4.9, `RepoHeader.tsx`): a flat tree,
+//! each group's header with colour, count and fold (its buttons and menu are in
 //! `project_buttons.rs`), the "N finished" fold, the lines of an empty group and the pinned
 //! header. Also the loop that draws every line of the tree in order.
 
-use gpui::{
-    AnyElement, ClickEvent, Entity, FontWeight, MouseButton, MouseDownEvent, linear_color_stop,
-    linear_gradient,
-};
+use gpui::{AnyElement, ClickEvent, Entity, FontWeight, MouseButton, MouseDownEvent};
 use ui::{Tooltip, prelude::*};
 
 use super::project_buttons::hover_button;
@@ -16,6 +13,7 @@ use crate::app::dashboard::Dashboard;
 use crate::app::dashboard_data::BulkRun;
 use crate::components::chips::{BadgeTone, CountBadge};
 use crate::components::colors::project_color;
+use crate::components::text_size::row_text;
 use crate::sidebar::project_color::project_color as project_color_index;
 use crate::sidebar::sidebar_text::{shown_name, workspace_count};
 use crate::sidebar::tree_entries::EntryAction;
@@ -23,45 +21,11 @@ use crate::sidebar::tree_model::{GroupInfo, Line, TreeModel};
 use crate::sidebar::workspace_groups::{RepoGroup, collapsed_hint};
 use crate::workspaces::{new_workspace_dialog, remove_finished};
 
-/// Where a line sits in its project card.
-struct CardPart {
-    group: Option<usize>,
-    first: bool,
-    last: bool,
-    header: bool,
-    /// The first line of the tree: the card keeps the small gap under the tree's header.
-    top: bool,
-}
-
-fn in_card(element: AnyElement, part: CardPart, cx: &App) -> AnyElement {
-    if part.group.is_none() {
-        return element;
-    }
-    let colors = cx.theme().colors();
-    div()
-        .bg(colors.surface_background.opacity(0.55))
-        .border_color(colors.border_variant)
-        .border_l_1()
-        .border_r_1()
-        .when(!part.header, |card| card.px(rems_from_px(2.0_f32)))
-        .when(part.first, |card| {
-            card.border_t_1()
-                .rounded_t(px(10.))
-                .mt(px(if part.top { 4. } else { 8. }))
-        })
-        .when(part.last, |card| card.border_b_1().rounded_b(px(10.)))
-        .when(part.last && !part.header, |card| {
-            card.pb(rems_from_px(4.0_f32))
-        })
-        .child(element)
-        .into_any_element()
-}
-
-/// The 1 px guide under the task glyph, in front of the rows under a task.
+/// The 1 px guide in front of the rows under a task: 12 px of indent per level, as Zed's
+/// `ListItem`.
 fn under_guide(element: AnyElement, cx: &App) -> AnyElement {
     div()
-        .ml(rems_from_px(16.0_f32))
-        .pl(rems_from_px(7.0_f32))
+        .ml(rems_from_px(11.0_f32))
         .border_l_1()
         .border_color(cx.theme().colors().border_variant)
         .child(element)
@@ -75,25 +39,12 @@ impl WorkspaceTree {
         };
         let lines = &model.lines;
         let mut out = Vec::with_capacity(lines.len());
-        for (index, line) in lines.iter().enumerate() {
-            let group = line.group();
-            let part = CardPart {
-                group,
-                first: index == 0 || lines[index - 1].group() != group,
-                last: lines.get(index + 1).map(Line::group) != Some(group),
-                header: matches!(line, Line::GroupHeader { .. }),
-                top: index == 0,
-            };
+        for line in lines {
             let element = match line {
                 Line::PinnedHeader { count } => pinned_header(*count),
                 Line::GroupHeader { group } => self.group_header(*group, model, snap, cx),
-                Line::Task {
-                    task,
-                    nested,
-                    pinned_row,
-                    ..
-                } => {
-                    let row = self.task_row(task, *pinned_row, model, snap, cx);
+                Line::Task { task, nested, .. } => {
+                    let row = self.task_row(task, model, snap, cx);
                     if *nested { under_guide(row, cx) } else { row }
                 }
                 Line::Terminal { task_id, row, .. } => {
@@ -104,7 +55,7 @@ impl WorkspaceTree {
                 Line::NoMatches { group } => no_matches(*group, model, snap),
                 Line::Finished { group } => self.finished_row(*group, model, snap, cx),
             };
-            out.push(in_card(element, part, cx));
+            out.push(element);
         }
         out
     }
@@ -128,31 +79,20 @@ impl WorkspaceTree {
         };
         let repo = &repo_group.repo;
         let key = format!("repo:{}", repo.id);
-        let color = project_color(project_color_index(&repo.id), cx);
         let ring = if snap.focused && snap.stop.as_deref() == Some(key.as_str()) {
             cx.theme().colors().border_focused
         } else {
             gpui::transparent_black()
         };
-        let collapsed = !info.open;
-        let band = |from: f32, to: f32| {
-            linear_gradient(
-                90.,
-                linear_color_stop(color.opacity(from), 0.),
-                linear_color_stop(color.opacity(to), 0.85),
-            )
-        };
         let fold = self.header_fold(repo_group, info, snap, cx);
         let buttons = self.header_buttons(repo, info, snap, cx);
         h_flex()
             .group(SharedString::from(format!("header-{}", repo.id)))
-            .h(rems_from_px(28.0_f32))
+            .h(rems_from_px(26.0_f32))
             .pr(rems_from_px(2.0_f32))
-            .bg(band(0.16, 0.))
-            .hover(|style| style.bg(band(0.2, 0.04)))
-            .when(collapsed, |header| header.rounded_md())
-            .when(!collapsed, |header| header.rounded_t_md())
-            .border_2()
+            .rounded_sm()
+            .hover(|style| style.bg(cx.theme().colors().ghost_element_hover))
+            .border_1()
             .border_color(ring)
             .child(fold)
             .children(buttons)
@@ -203,7 +143,7 @@ impl WorkspaceTree {
             )
             .child(
                 Label::new(private(&repo.name, blurred))
-                    .size(LabelSize::Custom(rems_from_px(13_f32)))
+                    .size(row_text())
                     .weight(FontWeight::SEMIBOLD)
                     .truncate(),
             )
@@ -304,7 +244,7 @@ impl WorkspaceTree {
 /// "Pinned" and its count, over the pinned rows.
 fn pinned_header(count: usize) -> AnyElement {
     h_flex()
-        .h(rems_from_px(28.0_f32))
+        .h(rems_from_px(26.0_f32))
         .px_2()
         .gap(rems_from_px(6.0_f32))
         .child(lucide("pin").color(Color::Muted))

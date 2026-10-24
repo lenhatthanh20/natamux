@@ -76,6 +76,7 @@ mod components {
     pub mod shape;
     pub mod skeleton;
     pub mod tab_order;
+    pub mod text_size;
     pub mod theme_contrast;
     pub mod timing_rules;
     pub mod toast_rules;
@@ -201,6 +202,7 @@ mod stages {
 
 mod tasks {
     pub mod add_subtask_dialog;
+    pub mod add_task_dialog;
     pub mod delete_finished;
     pub mod details_commands;
     pub mod details_panel;
@@ -209,7 +211,6 @@ mod tasks {
     pub mod edit_rules;
     pub mod fan_out_dialog;
     pub mod frozen_order;
-    pub mod quick_add;
     pub mod state_filter;
     pub mod state_filter_rules;
     pub mod table_columns;

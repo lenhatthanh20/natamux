@@ -271,9 +271,11 @@ impl Render for IssueImport {
             count == 0 || self.importing,
             cx.listener(|this, _, _, cx| this.import(cx)),
         )
-        .when(count == 0, |button| {
-            button.tooltip(Tooltip::text("Pick an issue first"))
-        });
+        .tooltip(Tooltip::text(if count == 0 {
+            "Pick an issue first"
+        } else {
+            "Each issue you pick becomes a task."
+        }));
         let close = cancel_button(
             "Close",
             &self.close_focus,
@@ -286,7 +288,6 @@ impl Render for IssueImport {
                 "Import GitHub issues",
                 cx.listener(|_, _, _, cx| cx.emit(DismissEvent)),
             )
-            .description("Open GitHub issues of this project. Each one you pick becomes a task.")
             .children(error)
             .child(list)
             .footer(close)

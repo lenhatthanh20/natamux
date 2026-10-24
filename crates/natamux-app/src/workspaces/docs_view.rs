@@ -215,9 +215,4 @@ pub(super) fn plain(editor: &mut Editor, window: &mut Window, cx: &mut Context<E
     editor.set_show_edit_predictions(Some(false), window, cx);
     editor.set_minimap_visibility(editor::MinimapVisibility::Disabled, window, cx);
     editor.set_soft_wrap_mode(SoftWrap::EditorWidth, cx);
-    // Mono 12, as the source view and the editor tab.
-    editor.set_text_style_refinement(gpui::TextStyleRefinement {
-        font_size: Some(px(12.).into()),
-        ..Default::default()
-    });
 }

@@ -104,7 +104,7 @@ fn panel(dashboard: &Entity<Dashboard>, id: &str, view: DetailsView, cx: &mut Ap
     dashboard.update(cx, |dashboard, cx| {
         dashboard.open(id, cx);
         dashboard.set_details_view(view, cx);
-        dashboard.set_details_open(id, true, cx);
+        dashboard.set_details_open(true, cx);
     });
 }
 

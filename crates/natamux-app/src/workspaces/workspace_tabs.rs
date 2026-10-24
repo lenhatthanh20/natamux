@@ -1,21 +1,23 @@
 //! The tab row of a workspace (`ChangesView.tsx` tabs, docs/ui-spec.md tabs): Terminal, Changes
 //! with the count of files to commit, History and Docs (keys 1 to 4), then the open file's tab
-//! while a file is open. "Back to wrap-up" and "New terminal" sit at the right of the Terminal
-//! tab. Zed's `TabBar` and `Tab`, as Zed's pane.
+//! while a file is open. Changes, History, Docs and the editor tab have a close button; a closed
+//! tab stays hidden for the task until it is picked again. The git buttons, "Back to wrap-up" and
+//! "New terminal" sit at the end of the bar. Zed's `TabBar` and `Tab`, as Zed's pane.
 
 use gpui::ClickEvent;
 use natamux_proto::tasks::task::Task;
-use ui::{Tab, TabBar, TabPosition, Tooltip, prelude::*};
+use ui::{IconButtonShape, Tab, TabBar, TabPosition, Tooltip, prelude::*};
 
-use super::{Shown, WorkspaceView};
-use crate::app::layout_mode::BREAKPOINT_XL;
+use super::WorkspaceView;
+use crate::app::tab_rules::{is_closable, visible_tabs};
 use crate::app::view_rules::WorkspaceTab;
 use crate::components::chips::CountBadge;
 use crate::components::icons::icon_path;
+use crate::components::text_size::row_text;
 use crate::git::commit_rules::tab_count_label;
 use crate::terminals::pane_header::icon_button;
 use crate::terminals::pane_rules::MAX_PANES;
-use crate::workspaces::workspace_rules::closes_details_for;
+use crate::workspaces::workspace_header::ICON_ONLY_BELOW;
 use crate::workspaces::wrap_up_rules::is_finished_state;
 
 type TabSpec = (
@@ -39,34 +41,9 @@ impl WorkspaceView {
             .update(cx, |dashboard, cx| dashboard.pick_tab(tab, cx));
     }
 
-    /// Showing Changes closes a docked details panel when main is too narrow for a diff beside
-    /// it: a click, keys 1 to 3, View changes or Commit…, also for a workspace that opens on
-    /// Changes (another task's View changes, or a saved Changes tab).
-    pub(super) fn follow_tab(
-        &mut self,
-        shown: &mut Shown,
-        window: &Window,
-        cx: &mut Context<Self>,
-    ) {
-        let tab = self.dashboard.read(cx).workspace_tab;
-        // The first frame has no width yet: the tab counts as seen once main is measured.
-        if self.width.read(cx).is_none() {
-            return;
-        }
-        let before = shown.tab_seen.replace(tab);
-        let docked = window.viewport_size().width >= px(BREAKPOINT_XL);
-        if closes_details_for(tab, before, *self.width.read(cx), docked) {
-            let (dashboard, id) = (self.dashboard.clone(), shown.task_id.clone());
-            cx.defer(move |cx| {
-                dashboard.update(cx, |dashboard, cx| {
-                    dashboard.set_details_open(&id, false, cx)
-                })
-            });
-        }
-    }
-
     fn tab(
         &self,
+        task_id: &str,
         (tab, label, icon, key): TabSpec,
         position: TabPosition,
         shown_tab: WorkspaceTab,
@@ -87,14 +64,60 @@ impl WorkspaceView {
             None => named,
         };
         let color = if picked { Color::Default } else { Color::Muted };
+        // Terminal is the home tab and has no close button.
+        let close = (is_closable(tab) || tab == WorkspaceTab::Editor).then(|| {
+            let id = task_id.to_owned();
+            IconButton::new(
+                SharedString::from(format!("workspace-tab-close-{icon}")),
+                IconName::Close,
+            )
+            .shape(IconButtonShape::Square)
+            .icon_size(IconSize::XSmall)
+            .icon_color(Color::Muted)
+            .when(!picked, |button| button.visible_on_hover(""))
+            .tooltip(Tooltip::text("Close tab"))
+            .on_click(cx.listener(move |view, _: &ClickEvent, _, cx| {
+                view.dashboard
+                    .update(cx, |dashboard, cx| dashboard.close_tab(&id, tab, cx));
+                cx.stop_propagation();
+            }))
+        });
         Tab::new(SharedString::from(format!("workspace-tab-{icon}")))
             .position(position)
             .toggle_state(picked)
             .tooltip(Tooltip::text(tip))
             .on_click(cx.listener(move |view, _: &ClickEvent, _, cx| view.pick_tab(tab, cx)))
             .start_slot(tab_icon(icon).size(IconSize::Small).color(color))
-            .end_slot::<CountBadge>(badge.map(CountBadge::new))
-            .child(Label::new(label).color(color))
+            .end_slot::<IconButton>(close)
+            .child(Label::new(label).size(row_text()).color(color))
+            .children(badge.map(CountBadge::new))
+    }
+
+    /// The tabs the task shows: the ones not closed, and the editor tab while a file is open.
+    fn tab_specs(&self, task_id: &str, cx: &App) -> Vec<TabSpec> {
+        let dashboard = self.dashboard.read(cx);
+        let file = dashboard.files.editor_file(task_id);
+        let shown = visible_tabs(dashboard.closed_of(task_id), file.is_some());
+        let editor_name = file.map(|path| path.rsplit('/').next().unwrap_or(path).to_owned());
+        shown
+            .into_iter()
+            .filter_map(|tab| match tab {
+                WorkspaceTab::Editor => editor_name.clone().map(|name| {
+                    (
+                        WorkspaceTab::Editor,
+                        SharedString::from(name),
+                        "file-code",
+                        None,
+                    )
+                }),
+                _ => TABS
+                    .into_iter()
+                    .find(|spec| spec.0 == tab)
+                    .map(|(tab, label, icon, key)| {
+                        (tab, SharedString::from(label), icon, Some(key))
+                    }),
+            })
+            .collect()
     }
 
     pub(super) fn tab_row(
@@ -103,28 +126,15 @@ impl WorkspaceView {
         shown_tab: WorkspaceTab,
         panes_shown: bool,
         uncommitted: Option<usize>,
+        git_buttons: Vec<AnyElement>,
         cx: &mut Context<Self>,
     ) -> impl IntoElement + use<> {
-        let open_file = self
-            .dashboard
+        let icon_only = self
+            .width
             .read(cx)
-            .files
-            .editor_file(&task.id)
-            .map(|path| {
-                let name = path.rsplit('/').next().unwrap_or(path).to_owned();
-                (
-                    WorkspaceTab::Editor,
-                    SharedString::from(name),
-                    "file-code",
-                    None,
-                )
-            });
-        let specs: Vec<TabSpec> = TABS
-            .into_iter()
-            .map(|(tab, label, icon, key)| (tab, SharedString::from(label), icon, Some(key)))
-            .chain(open_file)
-            .collect();
-        let last = specs.len() - 1;
+            .is_none_or(|width| width < ICON_ONLY_BELOW);
+        let specs = self.tab_specs(&task.id, cx);
+        let last = specs.len().saturating_sub(1);
         let picked = specs
             .iter()
             .position(|spec| spec.0 == shown_tab)
@@ -138,7 +148,7 @@ impl WorkspaceView {
                     _ if index == last => TabPosition::Last,
                     _ => TabPosition::Middle(index.cmp(&picked)),
                 };
-                self.tab(spec, position, shown_tab, uncommitted, cx)
+                self.tab(&task.id, spec, position, shown_tab, uncommitted, cx)
             })
             .collect();
         let on_terminal = shown_tab == WorkspaceTab::Terminal;
@@ -159,7 +169,9 @@ impl WorkspaceView {
                 .on_click(cx.listener(|view, _: &ClickEvent, _, cx| {
                     view.panes.update(cx, |panes, cx| panes.add(cx))
                 }))
-                .child(Label::new("New terminal").size(LabelSize::Small))
+                .when(!icon_only, |button| {
+                    button.child(Label::new("New terminal").size(LabelSize::Small))
+                })
         });
         let back = (on_terminal && is_finished_state(task.state) && panes_shown).then(|| {
             Button::new("tab-back-to-wrap-up", "Back to wrap-up")
@@ -175,6 +187,7 @@ impl WorkspaceView {
             h_flex()
                 .gap_1()
                 .px_1()
+                .children(git_buttons)
                 .children(back)
                 .children(new_terminal),
         )

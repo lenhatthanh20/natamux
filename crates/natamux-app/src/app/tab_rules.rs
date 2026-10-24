@@ -105,6 +105,52 @@ pub fn shown_tab(picked: WorkspaceTab, file_open: bool) -> WorkspaceTab {
     }
 }
 
+/// The tabs the user can close: Terminal is the home tab, the editor tab closes its file.
+pub fn is_closable(tab: WorkspaceTab) -> bool {
+    matches!(
+        tab,
+        WorkspaceTab::Changes | WorkspaceTab::History | WorkspaceTab::Docs
+    )
+}
+
+/// The tabs to draw, in order: Terminal always, the others unless closed, the editor while a
+/// file is open.
+pub fn visible_tabs(closed: &[WorkspaceTab], has_editor: bool) -> Vec<WorkspaceTab> {
+    [
+        WorkspaceTab::Terminal,
+        WorkspaceTab::Changes,
+        WorkspaceTab::History,
+        WorkspaceTab::Docs,
+    ]
+    .into_iter()
+    .filter(|tab| !is_closable(*tab) || !closed.contains(tab))
+    .chain(has_editor.then_some(WorkspaceTab::Editor))
+    .collect()
+}
+
+/// The closed set after closing `tab`; Terminal and the editor never join it.
+pub fn with_closed(closed: &[WorkspaceTab], tab: WorkspaceTab) -> Vec<WorkspaceTab> {
+    let mut next = closed.to_vec();
+    if is_closable(tab) && !next.contains(&tab) {
+        next.push(tab);
+    }
+    next
+}
+
+/// The closed set after showing `tab` again.
+pub fn without_closed(closed: &[WorkspaceTab], tab: WorkspaceTab) -> Vec<WorkspaceTab> {
+    closed.iter().copied().filter(|c| *c != tab).collect()
+}
+
+/// The tab shown after `closing` closes: Terminal when it was the active one.
+pub fn after_close(active: WorkspaceTab, closing: WorkspaceTab) -> WorkspaceTab {
+    if active == closing {
+        WorkspaceTab::Terminal
+    } else {
+        active
+    }
+}
+
 /// What `workspace.dirty` and the 60 s fallback poll read again (`WORKSPACE_KEYS` of
 /// `lib/live.ts`, which reads only the queries on screen): the git state while the workspace is
 /// open, and each screen-6 view only while it shows. The shells are not read again.
@@ -203,6 +249,41 @@ impl FileViews {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn closed_tabs_hide_and_reopen() {
+        use WorkspaceTab::*;
+        assert_eq!(
+            visible_tabs(&[], false),
+            vec![Terminal, Changes, History, Docs]
+        );
+        assert_eq!(
+            visible_tabs(&[History], true),
+            vec![Terminal, Changes, Docs, Editor]
+        );
+        let closed = with_closed(&with_closed(&[], Docs), Docs);
+        assert_eq!(closed, vec![Docs]);
+        assert_eq!(without_closed(&closed, Docs), Vec::<WorkspaceTab>::new());
+    }
+
+    #[test]
+    fn terminal_and_editor_never_join_the_closed_set() {
+        assert!(with_closed(&[], WorkspaceTab::Terminal).is_empty());
+        assert!(with_closed(&[], WorkspaceTab::Editor).is_empty());
+        assert!(visible_tabs(&[WorkspaceTab::Terminal], false).contains(&WorkspaceTab::Terminal));
+    }
+
+    #[test]
+    fn closing_the_active_tab_shows_terminal() {
+        assert_eq!(
+            after_close(WorkspaceTab::Docs, WorkspaceTab::Docs),
+            WorkspaceTab::Terminal
+        );
+        assert_eq!(
+            after_close(WorkspaceTab::Changes, WorkspaceTab::Docs),
+            WorkspaceTab::Changes
+        );
+    }
 
     #[test]
     fn reads_back_every_tab_but_the_editor() {

@@ -358,6 +358,8 @@ impl DialogFrame {
         self
     }
 
+    /// A line under the title, for warnings only (T-0158): what a button does goes in its
+    /// tooltip, so dialogs stay short.
     pub fn description(mut self, description: impl Into<SharedString>) -> Self {
         self.description = Some(description.into());
         self
@@ -425,7 +427,7 @@ impl RenderOnce for DialogFrame {
                         .when_some(self.scroll, |body, handle| body.track_scroll(&handle))
                         .px(DynamicSpacing::Base12.rems(cx))
                         .py(DynamicSpacing::Base08.rems(cx))
-                        .gap(DynamicSpacing::Base16.rems(cx))
+                        .gap(DynamicSpacing::Base12.rems(cx))
                         .children(self.body),
                 )
             })

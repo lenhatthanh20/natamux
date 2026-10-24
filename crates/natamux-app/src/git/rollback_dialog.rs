@@ -227,11 +227,10 @@ impl Render for RollbackDialog {
             reason.is_some(),
             submit,
         )
-        .when_some(reason, |button, reason| {
-            button.tooltip(Tooltip::text(reason))
-        });
+        .tooltip(Tooltip::text(reason.unwrap_or(
+            "The checked files go back to how they are in the last commit.",
+        )));
         let frame = DialogFrame::new("Roll back changes", close)
-            .description("The checked files go back to how they are in the last commit.")
             .child(all_box)
             .child(self.file_list(cx))
             .children(

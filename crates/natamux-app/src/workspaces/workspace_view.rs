@@ -1,6 +1,6 @@
 //! Main for an open task (docs/ui-spec.md 4.29, `features/workspaces/ChangesView.tsx` and the
 //! workspace part of `Dashboard.tsx`): a task with no workspace shows the no-workspace view or,
-//! once finished, its summary; one with a workspace shows its header, the finished banner, the
+//! once finished, its summary; one with a workspace shows the finished banner, the
 //! tab row and the body of its tab: the terminal panes (or the wrap-up of a finished task),
 //! Changes, History, Docs, or the open file.
 
@@ -46,8 +46,6 @@ struct Shown {
     /// Open a new terminal of the wrap-up: the panes show in place of it.
     shells_wanted: bool,
     shown_screen: Option<String>,
-    /// The tab last drawn, to see a change to Changes.
-    tab_seen: Option<WorkspaceTab>,
     /// The state and workspace last seen, to read again when they change.
     seen: Option<(TaskState, bool)>,
 }
@@ -210,12 +208,9 @@ impl Render for WorkspaceView {
         let Some(task) = self.task(cx) else {
             return div().size_full().into_any_element();
         };
-        let Some(mut shown) = self.shown.take() else {
+        let Some(shown) = self.shown.take() else {
             return div().size_full().into_any_element();
         };
-        if task.workspace.is_some() {
-            self.follow_tab(&mut shown, window, cx);
-        }
         let element = if task.workspace.is_none() {
             self.render_no_workspace(task, &shown, cx)
         } else {

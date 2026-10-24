@@ -286,7 +286,7 @@ The owner's Mac is a company Mac (owner, 2026-10-22): MDM profiles, a VPN and en
 - **Default: CI builds, the owner runs them.** CI builds, tests and attests; the owner downloads the artifact, runs `gh attestation verify`, then runs the app. No build script or proc macro runs on the Mac.
 - Running the app still runs the runtime code of every crate in it, as the Electron app does with npm packages today. `cargo vet`, `cargo deny` and the 7-day cooldown lower that risk; they do not remove it.
 - The app is unsigned until the Apple account exists. After `gh attestation verify`, clear the quarantine flag (`xattr -dr com.apple.quarantine Natamux.app`). If MDM blocks unsigned apps, ask IT before going further.
-- Optional: Docker for headless crates, with the hardened command below. The run step has no network, so the VPN is out of reach.
+- Optional: Docker for headless crates, with the hardened command below. The run step has no network, so the VPN is out of reach. Owner, 2026-10-24: Rust builds and checks run on CI only; this path stays written down but unused.
 - `natamux-dev` user: only on a personal Mac, or on the company Mac after IT says yes.
 
 | Where | What runs there | Keys |
@@ -301,6 +301,7 @@ Docker command. The repo is mounted read only: a build script that can write to 
 ```sh
 img=rust@sha256:4cd829461bd5c4d511c32e269da9cb8929223b666519d8004e35fc8d1d771ab7 # rust:1.98.1-slim
 common=(--rm --user "$(id -u):$(id -g)" --cap-drop ALL --security-opt no-new-privileges
+  --memory 6g --pids-limit 512 --tmpfs /tmp:rw,size=2g
   -v "$PWD":/w:ro -w /w -v natamux-cargo-registry:/usr/local/cargo/registry -v natamux-rustup:/usr/local/rustup
   -v natamux-cargo-target:/target -e CARGO_TARGET_DIR=/target)
 # Downloads only: crates, and the rustfmt and clippy components. Nothing is built while the network is on.

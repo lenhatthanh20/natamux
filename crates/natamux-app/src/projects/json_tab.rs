@@ -5,7 +5,7 @@
 //! Import, Reset, Reload) goes into the same buffer as an edit of the changed parts.
 
 use editor::{CurrentLineHighlight, Editor, EditorEvent, MultiBuffer};
-use gpui::{Entity, FocusHandle, Focusable, Subscription, TextStyleRefinement};
+use gpui::{Entity, FocusHandle, Focusable, Subscription};
 use language::Buffer;
 use natamux_proto::stages::pipeline_rules::IssueLevel;
 use ui::prelude::*;
@@ -17,8 +17,6 @@ use crate::git::languages::language_for;
 use crate::stages::kind_icon::problem_icon;
 use crate::stages::pipeline_editor::PipelineEditor;
 
-/// The font size of code in the app, as the diff has it.
-const CODE_SIZE: f32 = 12.;
 /// 22 rows of 20 px, and the padding of the box.
 const EDITOR_HEIGHT: f32 = 22. * 20. + 16.;
 
@@ -45,10 +43,6 @@ impl JsonTab {
             plain_switches(&mut editor, false, window, cx);
             editor.set_show_gutter(false, cx);
             editor.set_current_line_highlight(Some(CurrentLineHighlight::None));
-            editor.set_text_style_refinement(TextStyleRefinement {
-                font_size: Some(px(CODE_SIZE).into()),
-                ..Default::default()
-            });
             editor
         });
         let subscriptions = vec![

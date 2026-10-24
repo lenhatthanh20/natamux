@@ -1,20 +1,18 @@
-//! The items at the right of the status bar (docs/ui-spec.md 4.28): Projects, Import issues, the
-//! keyboard and the account, and the "More status items" menu that holds the ones the width
-//! folds away (`status_layout`).
+//! The items of the status bar (docs/ui-spec.md 4.28): the toggles at the left, the keyboard and
+//! the account at the right.
 
 use std::rc::Rc;
 
 use gpui::{Action, ClickEvent, Entity};
-use ui::{ButtonLike, ContextMenu, ContextMenuEntry, Tooltip, prelude::*};
+use ui::{ButtonLike, Tooltip, prelude::*};
 
 use super::account_menu::open_account_menu;
 use super::commands::shortcut_of;
 use super::dashboard::Dashboard;
 use super::shortcut_text::keystroke;
-use super::shortcuts::{AddProject, ImportIssues, ShowShortcuts};
+use super::shortcuts::ShowShortcuts;
 use crate::components::chips::tip_with_keys;
 use crate::components::icons::icon_path;
-use crate::components::menu::MenuLayer;
 
 pub(super) type OnClick = Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
 
@@ -38,46 +36,30 @@ fn icon(name: &str) -> Icon {
         .color(Color::Muted)
 }
 
-/// An item that runs an app command: an icon, and a label unless the width took it.
-fn command_item(
+/// A 24 px icon toggle that runs a command's action: the selected look while `on`. Disabled, it
+/// shows `why` as its tooltip.
+pub(super) fn toggle_item(
     id: &'static str,
-    tip: &'static str,
     icon_name: &str,
-    label: &'static str,
-    icon_only: bool,
+    tip: &'static str,
+    command: &'static str,
+    on: bool,
+    disabled_why: Option<&'static str>,
     action: fn() -> Box<dyn Action>,
 ) -> ButtonLike {
-    let run: OnClick = Rc::new(move |_, window, cx| window.dispatch_action(action(), cx));
-    item_button(id, tip, run).child(
-        h_flex()
-            .gap(rems_from_px(6.0_f32))
-            .child(icon(icon_name))
-            .when(!icon_only, |this| {
-                this.child(item_label(label, Color::Muted))
-            }),
-    )
-}
-
-pub(super) fn projects_item(icon_only: bool) -> ButtonLike {
-    command_item(
-        "status-projects",
-        "Projects",
-        "folder-git-2",
-        "Projects",
-        icon_only,
-        || Box::new(AddProject),
-    )
-}
-
-pub(super) fn import_item(icon_only: bool) -> ButtonLike {
-    command_item(
-        "status-import",
-        "Import GitHub issues",
-        "download",
-        "Import issues",
-        icon_only,
-        || Box::new(ImportIssues),
-    )
+    let keys = shortcut_of(command);
+    let button = ButtonLike::new(id)
+        .height(rems_from_px(24.0_f32).into())
+        .toggle_state(on)
+        .on_click(move |_, window, cx| window.dispatch_action(action(), cx))
+        .child(icon(icon_name));
+    match disabled_why {
+        Some(why) => button.disabled(true).tooltip(Tooltip::text(why)),
+        None => button.tooltip(move |window, cx| match keys {
+            Some(keys) => tip_with_keys(tip, keys)(window, cx),
+            None => Tooltip::text(tip)(window, cx),
+        }),
+    }
 }
 
 pub(super) fn keyboard_item() -> ButtonLike {
@@ -100,59 +82,4 @@ pub(super) fn account_item(dashboard: Entity<Dashboard>) -> ButtonLike {
             open_account_menu(&dashboard, event.position(), window, cx)
         })
         .child(icon("circle-user"))
-}
-
-/// What the folded ids of `status_layout` show in the menu, in the order of the bar.
-pub(super) struct Folded {
-    pub repos: bool,
-    pub import: bool,
-    pub notifications: Option<(bool, OnClick)>,
-}
-
-pub(super) fn more_item(folded: Folded) -> ButtonLike {
-    ButtonLike::new("status-more")
-        .height(rems_from_px(24.0_f32).into())
-        .tooltip(Tooltip::text("More status items"))
-        .on_click(move |event, window, cx| {
-            let position = event.position();
-            let event = event.clone();
-            let (repos, import) = (folded.repos, folded.import);
-            let notify = folded.notifications.clone();
-            let menu = ContextMenu::build(window, cx, move |mut menu, _, _| {
-                if repos {
-                    menu = menu.item(entry("Projects", "folder-git-2", |window, cx| {
-                        window.dispatch_action(Box::new(AddProject), cx)
-                    }));
-                }
-                if import {
-                    menu = menu.item(entry("Import issues", "download", |window, cx| {
-                        window.dispatch_action(Box::new(ImportIssues), cx)
-                    }));
-                }
-                if let Some((on, toggle)) = notify {
-                    let (name, label) = if on {
-                        ("bell-off", "Notifications on")
-                    } else {
-                        ("bell", "Notify me")
-                    };
-                    menu = menu.item(entry(label, name, move |window, cx| {
-                        toggle(&event, window, cx)
-                    }));
-                }
-                menu
-            });
-            MenuLayer::open(menu, position, window, cx);
-        })
-        .child(icon("ellipsis"))
-}
-
-fn entry(
-    label: &'static str,
-    icon_name: &str,
-    run: impl Fn(&mut Window, &mut App) + 'static,
-) -> ContextMenuEntry {
-    ContextMenuEntry::new(label)
-        .custom_icon_path(icon_path(icon_name))
-        .icon_color(Color::Muted)
-        .handler(run)
 }

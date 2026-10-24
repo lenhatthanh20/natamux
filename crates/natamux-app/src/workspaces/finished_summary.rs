@@ -8,7 +8,6 @@ use natamux_proto::events::task_event::StoredEvent;
 use natamux_proto::tasks::task::{Task, TaskState};
 use ui::prelude::*;
 
-use super::no_workspace::bare_header;
 use super::wrap_up_rules::finished_at;
 use crate::components::glyph::StateGlyph;
 use crate::components::shape::ShapeSize;
@@ -105,7 +104,6 @@ impl RenderOnce for FinishedSummary {
         .style(ButtonStyle::Subtle);
         v_flex()
             .size_full()
-            .child(bare_header(task, cx))
             .child(
                 div().flex_1().flex().items_center().justify_center().child(
                     v_flex()

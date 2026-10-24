@@ -25,7 +25,7 @@ pub enum Shot {
     TasksTable,
     TasksBoard,
     BoardHoverCard,
-    AddTaskTyped,
+    AddTaskDialog,
     StartTask,
     RemoveWorkspace,
     ClearFinished,
@@ -95,14 +95,16 @@ pub enum Shot {
     ImportIssues,
     SignIn,
     SignInError,
+    AddMenu,
+    DetailsEmpty,
 }
 
 impl Shot {
-    pub const ALL: [Shot; 73] = [
+    pub const ALL: [Shot; 75] = [
         Shot::TasksTable,
         Shot::TasksBoard,
         Shot::BoardHoverCard,
-        Shot::AddTaskTyped,
+        Shot::AddTaskDialog,
         Shot::StartTask,
         Shot::RemoveWorkspace,
         Shot::ClearFinished,
@@ -172,6 +174,8 @@ impl Shot {
         Shot::ImportIssues,
         Shot::SignIn,
         Shot::SignInError,
+        Shot::AddMenu,
+        Shot::DetailsEmpty,
     ];
 
     pub fn name(self) -> &'static str {
@@ -179,7 +183,7 @@ impl Shot {
             Shot::TasksTable => "tasks-table",
             Shot::TasksBoard => "tasks-board",
             Shot::BoardHoverCard => "board-hover-card",
-            Shot::AddTaskTyped => "add-task-typed",
+            Shot::AddTaskDialog => "add-task-dialog",
             Shot::StartTask => "start-task",
             Shot::RemoveWorkspace => "remove-workspace",
             Shot::ClearFinished => "clear-finished",
@@ -249,6 +253,8 @@ impl Shot {
             Shot::ImportIssues => "import-issues",
             Shot::SignIn => "sign-in",
             Shot::SignInError => "sign-in-error",
+            Shot::AddMenu => "add-menu",
+            Shot::DetailsEmpty => "details-empty",
         }
     }
 

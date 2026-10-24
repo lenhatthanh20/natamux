@@ -17,6 +17,7 @@ use crate::components::dialog::{DialogFrame, DialogLayer, DialogView, primary_bu
 use crate::components::form::{field, text_editor};
 use crate::components::icons::icon_path;
 
+/// What a project is, in the Add project tooltip.
 const DESCRIPTION: &str = "Git repositories on the daemon's machine. The workspace of each task is a git worktree of one of them.";
 
 pub fn open(dashboard: &Entity<Dashboard>, window: &mut Window, cx: &mut App) {
@@ -370,9 +371,13 @@ impl Render for ProjectsDialog {
             empty || self.busy,
             cx.listener(|this, _, window, cx| this.add(window, cx)),
         )
-        .when(self.folder.read(cx).text(cx).trim().is_empty(), |button| {
-            button.tooltip(Tooltip::text("Enter the folder first"))
-        });
+        .tooltip(Tooltip::text(
+            if self.folder.read(cx).text(cx).trim().is_empty() {
+                "Enter the folder first"
+            } else {
+                DESCRIPTION
+            },
+        ));
         let mut rows = Vec::new();
         for (index, repo) in repos.iter().enumerate() {
             rows.push(self.repo_row(index, repo, cx).into_any_element());
@@ -394,7 +399,6 @@ impl Render for ProjectsDialog {
             ));
         div().track_focus(&self.focus).child(
             DialogFrame::new("Projects", cx.listener(|_, _, _, cx| cx.emit(DismissEvent)))
-                .description(DESCRIPTION)
                 .child(list)
                 .child(form)
                 .footer(add),

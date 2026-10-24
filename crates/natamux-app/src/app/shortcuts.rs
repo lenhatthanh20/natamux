@@ -15,7 +15,9 @@ pub use super::commands_app::{
     AddProject, ImportIssues, OpenJump, OpenPalette, OpenSettings, ShowShortcuts, UseCompactSize,
     UseDarkTheme, UseDefaultSize, UseLargeSize, UseLightTheme, UseSystemTheme,
 };
-pub use super::commands_files::{SaveFile, ShowDocsTab, ShowOpenFile, ShowWorktreeFiles};
+pub use super::commands_files::{
+    CloseTab, ReopenTabs, SaveFile, ShowDocsTab, ShowOpenFile, ShowWorktreeFiles,
+};
 pub use super::commands_stages::{MoveStageDown, MoveStageUp, ShowTasksProgress};
 use crate::ime::ime_check::SubmitWord;
 
@@ -56,6 +58,7 @@ actions!(
         CheckIme,
         CloseTool,
         ShowAgents,
+        ToggleAgents,
         MaximizePane,
         NewTerminal,
         FindInTerminal,
@@ -139,6 +142,7 @@ command_actions! {
     "tools.close" => CloseTool,
     "tools.ime-submit" => SubmitWord,
     "view.agents" => ShowAgents,
+    "agents.toggle" => ToggleAgents,
     "pane.maximize" => MaximizePane,
     "shell.new" => NewTerminal,
     "terminal.find" => FindInTerminal,
@@ -171,6 +175,8 @@ command_actions! {
     "tab.editor" => ShowOpenFile,
     "files.show" => ShowWorktreeFiles,
     "file.save" => SaveFile,
+    "tab.close" => CloseTab,
+    "tab.reopen" => ReopenTabs,
     "palette.open" => OpenPalette,
     "jump.open" => OpenJump,
     "help.shortcuts" => ShowShortcuts,
@@ -388,8 +394,8 @@ mod tests {
     fn leaves_esc_and_the_shells_chords_to_the_terminal() {
         // On macOS only Esc: Cmd chords never reach a shell.
         assert_eq!(terminal_keeps(true).len(), 1);
-        // Esc, and Mod+Q, Mod+B, Mod+[, Mod+Alt+B, Mod+K, Mod+,, Mod+J and the Mod+Alt tools:
-        // Ctrl chords without Shift elsewhere. F1 reaches the app.
-        assert_eq!(terminal_keeps(false).len(), 14);
+        // Esc, and Mod+Q, Mod+B, Mod+[, Mod+Alt+B, Mod+K, Mod+,, Mod+J, Mod+W (a shell's delete
+        // word) and the Mod+Alt tools: Ctrl chords without Shift elsewhere. F1 reaches the app.
+        assert_eq!(terminal_keeps(false).len(), 15);
     }
 }

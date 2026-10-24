@@ -17,6 +17,7 @@ use crate::app::{settings_dialog, shortcut_sheet};
 use crate::palette::palette_layer::PaletteLayer;
 use crate::palette::palette_rows::{PaletteMode, PaletteScope};
 use crate::projects::{issue_import, projects_dialog};
+use crate::tasks::task_view_rules::task_repo;
 use crate::terminals::terminal_cache::{Owner, TerminalCache};
 
 impl Root {
@@ -90,13 +91,16 @@ impl Root {
             .update(cx, |dashboard, cx| dashboard.set_ui_size(size.name(), cx));
     }
 
-    /// The issues of the open task's project, else of the project the quick add picked.
+    /// The issues of the open task's project, else of the project Add task picked last, else the
+    /// first project.
     fn import_issues(&mut self, _: &ImportIssues, window: &mut Window, cx: &mut Context<Self>) {
         let open_repo = self
             .current_task(cx)
             .filter(|_| self.dashboard.read(cx).open_task.is_some())
             .and_then(|task| task.repo);
-        let repo = open_repo.or_else(|| self.tasks.read(cx).quick_add().read(cx).repo(cx));
+        let dashboard = self.dashboard.read(cx);
+        let repo = open_repo
+            .or_else(|| task_repo(&dashboard.data.repos, dashboard.last_add_repo.as_deref()));
         issue_import::open(&self.dashboard, repo, window, cx);
     }
 

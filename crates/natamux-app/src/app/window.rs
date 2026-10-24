@@ -20,10 +20,10 @@ use super::layout_mode::{
 };
 use super::notify::Notifier;
 use super::options::Options;
-use super::shell_rules::window_title;
+use super::shell_rules::{AgentsToggle, agents_toggle, window_title};
 use super::shortcuts::{
     FocusFilter, NewTask, NewWorkspace, ShowAgents, ShowAllTasks, ShowBoard, ShowTable,
-    ToggleSidebar,
+    ToggleAgents, ToggleSidebar,
 };
 use super::sign_in::{SignIn, StartProblem};
 use super::source::Source;
@@ -35,12 +35,12 @@ use crate::components::toasts::{Toaster, push_toast};
 use crate::ime::ime_check::ImeCheck;
 use crate::palette::palette_layer::PaletteLayer;
 use crate::sidebar::sidebar::Sidebar;
+use crate::tasks::add_task_dialog;
 use crate::tasks::details_panel::DetailsPanel;
-use crate::tasks::quick_add::StartTask;
 use crate::tasks::task_view::TaskView;
 use crate::terminals::agent_panes::AgentPanes;
 use crate::terminals::terminal_cache::{Owner, TerminalCache};
-use crate::workspaces::new_workspace_dialog::{self, Created};
+use crate::workspaces::new_workspace_dialog;
 use crate::workspaces::workspace_view::WorkspaceView;
 use crate::workspaces::wrap_up_rules::is_finished_state;
 
@@ -76,6 +76,8 @@ pub struct Root {
     notifier: Notifier,
     /// The sidebar drawer under 1024. The docked sidebar's open state is in the view state.
     drawer_open: bool,
+    /// The task open before the agents toggle showed the Agents grid; None: All tasks.
+    agents_back: Option<String>,
     /// The id of the last dashboard toast shown, so each one shows once.
     toasts_shown: u64,
     title: String,
@@ -105,11 +107,6 @@ impl Root {
         let details = cx.new(|cx| DetailsPanel::new(dashboard.clone(), window, cx));
         cx.subscribe_in(&dashboard, window, Self::on_dashboard)
             .detach();
-        // Start a task of the quick add and of the "No tasks yet" state.
-        cx.subscribe_in(&tasks, window, |root, _, event: &StartTask, window, cx| {
-            root.start_task(event.0.clone(), window, cx)
-        })
-        .detach();
         cx.observe_in(&dashboard, window, |root, _, window, cx| {
             root.show_new_toasts(cx);
             root.after_refused(window, cx);
@@ -137,6 +134,7 @@ impl Root {
             details_resize: cx.focus_handle().tab_stop(true),
             notifier: Notifier::default(),
             drawer_open: false,
+            agents_back: None,
             toasts_shown: 0,
             title: window_title(0),
         };
@@ -343,6 +341,32 @@ impl Root {
             .update(cx, |dashboard, cx| dashboard.open_agents(cx));
     }
 
+    /// The status bar's agents toggle: the grid, or back to the task or list shown before it.
+    fn toggle_agents(&mut self, _: &ToggleAgents, _: &mut Window, cx: &mut Context<Self>) {
+        let dashboard = self.dashboard.read(cx);
+        let step = agents_toggle(
+            dashboard.agents_open,
+            dashboard.open_task.as_deref(),
+            self.agents_back.as_deref(),
+        );
+        self.close_tool(cx);
+        self.drawer_open = false;
+        match step {
+            AgentsToggle::Open { back } => {
+                self.agents_back = back;
+                self.dashboard
+                    .update(cx, |dashboard, cx| dashboard.open_agents(cx));
+            }
+            AgentsToggle::Back(back) => {
+                self.agents_back = None;
+                self.dashboard.update(cx, |dashboard, cx| match back {
+                    Some(id) if dashboard.data.task(&id).is_some() => dashboard.open(&id, cx),
+                    _ => dashboard.back(cx),
+                });
+            }
+        }
+    }
+
     fn show_table(&mut self, _: &ShowTable, _: &mut Window, cx: &mut Context<Self>) {
         self.show_list(Some(Layout::Table), cx);
     }
@@ -362,31 +386,10 @@ impl Root {
         new_workspace_dialog::open(&self.dashboard, None, window, cx);
     }
 
-    /// The dialog starts with the typed title; once the task is made, the quick add gives the
-    /// title up unless something else was typed since.
-    fn start_task(&mut self, title: Option<String>, window: &mut Window, cx: &mut Context<Self>) {
-        let dialog =
-            new_workspace_dialog::open_with(&self.dashboard, None, title.clone(), window, cx);
-        let (Some(dialog), Some(title)) = (dialog, title) else {
-            return;
-        };
-        let quick_add = self.tasks.read(cx).quick_add().clone();
-        cx.subscribe_in(&dialog, window, move |_, _, _: &Created, window, cx| {
-            if quick_add.read(cx).typed_title(cx).as_deref() == Some(title.as_str()) {
-                quick_add.update(cx, |quick_add, cx| quick_add.clear(window, cx));
-            }
-        })
-        .detach();
-    }
-
-    /// `n` from anywhere outside a text field: All tasks, then the backlog field once drawn.
+    /// `n` from anywhere outside a text field, the title bar's + menu and the palette: the Add
+    /// task dialog over what main shows.
     fn new_task(&mut self, _: &NewTask, window: &mut Window, cx: &mut Context<Self>) {
-        self.show_list(None, cx);
-        let quick_add = self.tasks.read(cx).quick_add().clone();
-        window.on_next_frame(move |window, cx| {
-            let field = quick_add.read(cx).focus_handle(cx);
-            window.focus(&field, cx);
-        });
+        add_task_dialog::open(&self.dashboard, None, window, cx);
     }
 
     /// The state action keys work from the list, the tree and an open task.

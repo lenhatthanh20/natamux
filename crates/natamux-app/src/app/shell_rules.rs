@@ -1,12 +1,11 @@
 //! What the app shell says, with no gpui: the window title, the title bar's breadcrumb and
-//! needs-you pill, and the status bar's items (`features/app/TitleBar.tsx`, `StatusBar.tsx` and
+//! needs-you text, and the status bar's items (`features/app/TitleBar.tsx`, `StatusBar.tsx` and
 //! the document title of `Dashboard.tsx`).
 
 use natamux_proto::projects::repo::Repo;
 use natamux_proto::tasks::task::{Task, TaskState};
 
 use super::dashboard_data::Link;
-use super::layout_mode::BREAKPOINT_LG;
 
 /// "1 needs you", "3 need you".
 pub fn needs_you_text(count: usize) -> String {
@@ -71,33 +70,24 @@ pub fn live_item(link: &Link) -> LiveItem {
     }
 }
 
-/// The title bar's "where you are": a view name, or `repo / T-0018 title` for an open task.
+/// The title bar's "where you are": a view name, or `repo / T-0018 title` and the state for an
+/// open task.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Crumb {
     View(&'static str),
     Task {
         repo: Option<String>,
         id: String,
-        title: Option<String>,
+        title: String,
+        state: TaskState,
+        branch: Option<String>,
     },
 }
 
-/// Under 1024 the wordmark goes and the crumb of a task is its id only.
-pub fn is_wide(width: f32) -> bool {
-    width >= BREAKPOINT_LG
-}
-
-pub fn crumb(open: Option<&Task>, agents: bool, repos: &[Repo], width: f32) -> Crumb {
+pub fn crumb(open: Option<&Task>, agents: bool, repos: &[Repo]) -> Crumb {
     let Some(task) = open else {
         return Crumb::View(if agents { "Agents" } else { "All tasks" });
     };
-    if !is_wide(width) {
-        return Crumb::Task {
-            repo: None,
-            id: task.id.clone(),
-            title: None,
-        };
-    }
     let repo_id = task.repo.as_deref().unwrap_or("default");
     let repo = repos
         .iter()
@@ -107,7 +97,49 @@ pub fn crumb(open: Option<&Task>, agents: bool, repos: &[Repo], width: f32) -> C
     Crumb::Task {
         repo,
         id: task.id.clone(),
-        title: Some(task.title.clone()),
+        title: task.title.clone(),
+        state: task.state,
+        branch: task.branch.clone(),
+    }
+}
+
+/// The status bar's details toggle: whether the details show, or why it cannot show them. The
+/// Agents grid has no dock; with no task, only a docked panel shows (its empty state).
+pub fn details_toggle(
+    agents_open: bool,
+    has_task: bool,
+    docked: bool,
+    shown: bool,
+) -> Result<bool, &'static str> {
+    if agents_open {
+        Err("The Agents grid has no details")
+    } else if !has_task && !docked {
+        Err("Select a task to show its details")
+    } else {
+        Ok(shown)
+    }
+}
+
+/// What the status bar's agents toggle does.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum AgentsToggle {
+    /// Show the Agents grid; `back` is the task to come back to (None: All tasks).
+    Open { back: Option<String> },
+    /// Leave the grid for the task it was opened from, else All tasks.
+    Back(Option<String>),
+}
+
+pub fn agents_toggle(
+    agents_open: bool,
+    open_task: Option<&str>,
+    back: Option<&str>,
+) -> AgentsToggle {
+    if agents_open {
+        AgentsToggle::Back(back.map(str::to_owned))
+    } else {
+        AgentsToggle::Open {
+            back: open_task.map(str::to_owned),
+        }
     }
 }
 
@@ -199,8 +231,8 @@ mod tests {
 
     #[test]
     fn the_crumb_is_the_view_name_without_an_open_task() {
-        assert_eq!(crumb(None, false, &[], 1280.0), Crumb::View("All tasks"));
-        assert_eq!(crumb(None, true, &[], 1280.0), Crumb::View("Agents"));
+        assert_eq!(crumb(None, false, &[]), Crumb::View("All tasks"));
+        assert_eq!(crumb(None, true, &[]), Crumb::View("Agents"));
     }
 
     #[test]
@@ -209,39 +241,73 @@ mod tests {
         open.repo = Some("r1".into());
         let repos = [repo("r1", "natamux")];
         assert_eq!(
-            crumb(Some(&open), false, &repos, 1280.0),
+            crumb(Some(&open), false, &repos),
             Crumb::Task {
                 repo: Some("natamux".into()),
                 id: "T-0018".into(),
-                title: Some("Title of T-0018".into()),
+                title: "Title of T-0018".into(),
+                state: TaskState::Running,
+                branch: None,
             }
         );
         // An unknown project shows its id; a task with none belongs to the default project.
         open.repo = Some("gone".into());
         assert!(matches!(
-            crumb(Some(&open), false, &repos, 1280.0),
+            crumb(Some(&open), false, &repos),
             Crumb::Task { repo: Some(name), .. } if name == "gone"
         ));
         open.repo = None;
         let repos = [repo("default", "main project")];
         assert!(matches!(
-            crumb(Some(&open), false, &repos, 1280.0),
+            crumb(Some(&open), false, &repos),
             Crumb::Task { repo: Some(name), .. } if name == "main project"
         ));
     }
 
     #[test]
-    fn the_crumb_of_a_task_is_its_id_under_1024() {
-        let open = task("T-0018", TaskState::Running, "2026-10-22T09:29:00.000Z");
+    fn the_crumb_of_a_task_carries_its_state_and_branch() {
+        let mut open = task("T-0018", TaskState::Review, "2026-10-22T09:29:00.000Z");
+        open.branch = Some("natamux/t-0018".into());
+        assert!(matches!(
+            crumb(Some(&open), false, &[]),
+            Crumb::Task { state: TaskState::Review, branch: Some(branch), .. }
+                if branch == "natamux/t-0018"
+        ));
+    }
+
+    #[test]
+    fn the_agents_toggle_comes_back_to_the_view_before_it() {
         assert_eq!(
-            crumb(Some(&open), false, &[], 1000.0),
-            Crumb::Task {
-                repo: None,
-                id: "T-0018".into(),
-                title: None,
+            agents_toggle(false, Some("T-1"), None),
+            AgentsToggle::Open {
+                back: Some("T-1".to_owned())
             }
         );
-        assert!(!is_wide(1023.0));
-        assert!(is_wide(1024.0));
+        assert_eq!(
+            agents_toggle(false, None, Some("T-9")),
+            AgentsToggle::Open { back: None }
+        );
+        assert_eq!(
+            agents_toggle(true, None, Some("T-1")),
+            AgentsToggle::Back(Some("T-1".to_owned()))
+        );
+        assert_eq!(agents_toggle(true, None, None), AgentsToggle::Back(None));
+    }
+
+    /// T-0158 review 1: the toggle said "No task to show" over the Agents grid, and did nothing
+    /// with no task where the details would be a sheet or a page.
+    #[test]
+    fn the_details_toggle_is_off_with_a_reason_when_it_cannot_show_anything() {
+        assert_eq!(
+            details_toggle(true, true, true, false),
+            Err("The Agents grid has no details")
+        );
+        assert_eq!(
+            details_toggle(false, false, false, false),
+            Err("Select a task to show its details")
+        );
+        // Docked, the dock shows its empty state.
+        assert_eq!(details_toggle(false, false, true, true), Ok(true));
+        assert_eq!(details_toggle(false, true, false, false), Ok(false));
     }
 }

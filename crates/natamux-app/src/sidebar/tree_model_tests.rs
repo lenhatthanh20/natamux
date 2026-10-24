@@ -127,6 +127,12 @@ fn a_folded_group_shows_only_its_header() {
 }
 
 #[test]
+fn every_line_of_a_group_knows_its_group() {
+    let model = Fixture::new(vec![task("T-0001", TaskState::Running)]).model();
+    assert!(model.lines.iter().all(|line| line.group() == Some(0)));
+}
+
+#[test]
 fn reads_the_terminals_of_working_waiting_and_open_tasks_only() {
     let mut fixture = Fixture::new(vec![
         task("T-0001", TaskState::Running),

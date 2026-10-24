@@ -28,6 +28,7 @@ fn a_saved_view_reads_back_the_same() {
         details_width: 400.0,
         details_view: Some(DetailsView::Details),
         sections: vec![("notes".into(), false), ("details".into(), true)],
+        details_open: false,
         notify: true,
         tabs: vec![
             ("T-1".into(), WorkspaceTab::Changes),
@@ -106,19 +107,31 @@ fn the_details_panel_keeps_its_width_tab_and_folded_sections() {
     assert!(!broken.notify);
 }
 
-// The details cases of `view-store.test.ts`.
+// The details dock: one global flag.
 
 #[test]
-fn starts_with_the_details_closed_when_nothing_was_stored() {
+fn starts_with_the_details_dock_open_when_nothing_was_stored() {
     let view = ViewState::parse("{}");
     assert_eq!(view.details_view, None);
-    assert!(!crate::app::view_rules::details_open_for(None, false));
+    assert!(view.details_open);
 }
 
 #[test]
-fn does_not_store_the_details_flags() {
-    let text = ViewState::default().to_json();
-    assert!(!text.contains("detailOpen") && !text.contains("detailsOpen"));
+fn keeps_the_details_flag_after_a_reload() {
+    let closed = ViewState::parse(r#"{"detailsOpen": false}"#);
+    assert!(!closed.details_open);
+    assert!(!ViewState::parse(&closed.to_json()).details_open);
+    assert!(ViewState::parse(r#"{"detailsOpen": "no"}"#).details_open);
+}
+
+#[test]
+fn an_old_file_with_per_task_flags_still_loads() {
+    let old = ViewState::parse(
+        r#"{"detailOpen": {"T-1": false}, "detailsOpen": {"T-2": true}, "detailsWidth": 400}"#,
+    );
+    assert!(old.details_open);
+    assert_eq!(old.details_width, 400.0);
+    assert!(!old.to_json().contains("T-1"));
 }
 
 #[test]
@@ -265,12 +278,10 @@ fn opens_the_details_of_a_task_on_its_progress() {
         details_view: Some(DetailsView::Details),
         ..ViewState::default()
     };
-    let open = view.show_progress(&vec![("T-1".into(), false)], "T-2");
+    view.details_open = false;
+    view.show_progress();
     assert_eq!(view.details_view, Some(DetailsView::Progress));
-    assert_eq!(
-        open,
-        vec![("T-1".to_string(), false), ("T-2".to_string(), true)]
-    );
+    assert!(view.details_open);
 }
 
 #[test]
@@ -381,9 +392,12 @@ fn keeps_a_remembered_docs_tab_after_a_reload() {
 
 #[test]
 fn opens_the_details_of_a_task_on_its_files_and_remembers_that_view() {
-    let mut state = ViewState::default();
-    let open = state.show_files(&Vec::new(), "T-0003");
-    assert_eq!(open, vec![("T-0003".into(), true)]);
+    let mut state = ViewState {
+        details_open: false,
+        ..ViewState::default()
+    };
+    state.show_files();
+    assert!(state.details_open);
     assert_eq!(state.details_view, Some(DetailsView::Files));
     assert_eq!(
         ViewState::parse(&state.to_json()).details_view,
@@ -459,4 +473,14 @@ fn keeps_the_theme_the_text_size_the_terminal_font_and_the_recent_workspaces() {
     assert_eq!(default.theme, "system");
     assert_eq!(default.ui_size, "default");
     assert_eq!(default.terminal_font, None);
+}
+
+/// T-0158 review 1: the details dock is one saved flag, as a Zed dock, so a tab never closes it.
+/// Showing Changes closed it before (main under 900), for every task and after a restart too.
+#[test]
+fn showing_the_changes_tab_keeps_the_details_dock_open() {
+    let mut state = ViewState::default();
+    state.remember_tab("T-1", WorkspaceTab::Changes);
+    assert!(state.details_open);
+    assert!(ViewState::parse(&state.to_json()).details_open);
 }

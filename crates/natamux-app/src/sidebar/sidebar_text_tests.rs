@@ -310,6 +310,90 @@ fn shows_the_step_only_with_two_steps_or_more() {
 }
 
 #[test]
+fn short_reason_is_a_word_for_each_attention_state() {
+    let said = |state, stage, blurred| short_reason(state, stage, blurred);
+    let plan = Some("Plan");
+    assert_eq!(
+        said(TaskState::NeedsInput, plan, false).as_deref(),
+        Some("Answer")
+    );
+    assert_eq!(
+        said(TaskState::Blocked, plan, false).as_deref(),
+        Some("Blocked")
+    );
+    assert_eq!(
+        said(TaskState::Failed, plan, false).as_deref(),
+        Some("Plan failed")
+    );
+    assert_eq!(
+        said(TaskState::Failed, None, false).as_deref(),
+        Some("Failed")
+    );
+    assert_eq!(
+        said(TaskState::Failed, plan, true).as_deref(),
+        Some("Failed")
+    );
+    assert_eq!(said(TaskState::Running, plan, false), None);
+    assert_eq!(said(TaskState::Done, None, false), None);
+}
+
+#[test]
+fn the_row_tooltip_joins_what_the_row_no_longer_shows() {
+    let tip = RowTip {
+        project: None,
+        id: "T-0151",
+        step: Some("3/8"),
+        stage: Some("Plan"),
+        subtasks: Some("1/2"),
+        activity: Some("Editing catalog.ts"),
+        pr: Some("https://github.com/o/r/pull/12"),
+        pr_summary: Some("open, checks pass"),
+        agent: Some("Claude Code"),
+        reason: Some("It could not read src/catalog.ts."),
+    };
+    let line = "T-0151 · 3/8 Plan · 1/2 subtasks · Editing catalog.ts · #12 (open, checks pass)";
+    assert_eq!(
+        row_tooltip(&tip, false),
+        format!("{line} · Claude Code\nIt could not read src/catalog.ts.")
+    );
+    let bare = RowTip {
+        id: "T-0001",
+        ..RowTip::default()
+    };
+    assert_eq!(row_tooltip(&bare, false), "T-0001");
+    let pinned = RowTip {
+        project: Some("natamux"),
+        ..bare
+    };
+    assert_eq!(row_tooltip(&pinned, false), "natamux · T-0001");
+}
+
+#[test]
+fn the_row_tooltip_masks_a_blurred_project() {
+    let tip = RowTip {
+        id: "T-0151",
+        step: Some("3/8"),
+        stage: Some("Plan"),
+        activity: Some("Editing catalog.ts"),
+        reason: Some("secret question"),
+        ..RowTip::default()
+    };
+    let text = row_tooltip(&tip, true);
+    assert!(text.starts_with("••••••"), "{text}");
+    for secret in ["T-0151", "Plan", "catalog", "secret"] {
+        assert!(!text.contains(secret), "{secret} leaked in {text}");
+    }
+    assert!(text.contains("3/8"));
+}
+
+#[test]
+fn a_task_that_needs_input_has_answer_first_in_its_menu() {
+    let menu = labels_of(&row_menu(&task(TaskState::NeedsInput), false));
+    assert_eq!(menu[0], "Answer");
+    assert!(!labels_of(&row_menu(&task(TaskState::Failed), false)).contains(&"Answer"));
+}
+
+#[test]
 fn keeps_a_new_title_only_when_it_changes() {
     assert_eq!(renamed_title("  New  ", "Old").as_deref(), Some("New"));
     assert_eq!(renamed_title("   ", "Old"), None);

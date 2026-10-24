@@ -14,6 +14,7 @@ use crate::components::colors::change_color;
 use crate::components::icons::icon_path;
 use crate::components::menu::MenuLayer;
 use crate::components::resize_rules::Limits;
+use crate::components::text_size::row_text;
 use crate::git::change_rules::{count_label, status_tone};
 use crate::git::change_tree::{
     FileViewMode, TreeNode, TreeRow, all_folder_keys, ancestor_keys, build_change_tree,
@@ -378,11 +379,7 @@ impl ChangesView {
                     .gap_1()
                     .min_w_0()
                     .child(Disclosure::new(("folder", index), row.expanded))
-                    .child(
-                        Label::new(folder.name.clone())
-                            .size(LabelSize::Small)
-                            .truncate(),
-                    )
+                    .child(Label::new(folder.name.clone()).size(row_text()).truncate())
                     .child(
                         Label::new(folder.file_count.to_string())
                             .size(LabelSize::XSmall)

@@ -71,7 +71,7 @@ fn builds_the_settings_with_the_theme_the_sizes_and_the_terminal_font() {
     assert_eq!(value["ui_font_family"], ".ZedSans");
     assert_eq!(value["buffer_font_family"], ".ZedMono");
     assert_eq!(value["ui_font_size"], 16.0);
-    assert_eq!(value["buffer_font_size"], 15.0);
+    assert_eq!(value["buffer_font_size"], 13.0);
     assert_eq!(value["terminal"]["font_family"], "Iosevka");
     assert_eq!(value["terminal"]["font_size"], 14.0);
 }
@@ -81,10 +81,10 @@ fn scales_the_ui_and_buffer_sizes_by_the_zoom_to_one_decimal() {
     let terminal = font("Lilex", 13.0);
     let compact = settings("system", UiSize::Compact.zoom(), &terminal);
     assert_eq!(compact["ui_font_size"], 14.7);
-    assert_eq!(compact["buffer_font_size"], 13.8);
+    assert_eq!(compact["buffer_font_size"], 12.0);
     let large = settings("system", UiSize::Large.zoom(), &terminal);
     assert_eq!(large["ui_font_size"], 17.2);
-    assert_eq!(large["buffer_font_size"], 16.2);
+    assert_eq!(large["buffer_font_size"], 14.0);
     // The terminal size is the font's own, not scaled.
     assert_eq!(large["terminal"]["font_size"], 13.0);
 }

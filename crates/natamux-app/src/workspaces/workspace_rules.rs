@@ -222,25 +222,6 @@ pub fn create_blocked_reason(
     (skill.is_some() && agent == Some("")).then_some("Pick an agent to run the skill")
 }
 
-/// `useDashboardLayout`: a docked details panel leaves too little room for a diff below this.
-pub const CHANGES_NEED: f32 = 900.;
-
-/// Showing the Changes tab closes a docked details panel when main is under 900 wide
-/// (`onTabChange` of `Dashboard.tsx`): a change to Changes, and a workspace that opens on it
-/// (`before` is None). Only that moment does it: the user can open the panel again beside
-/// Changes.
-pub fn closes_details_for(
-    tab: WorkspaceTab,
-    before: Option<WorkspaceTab>,
-    main_width: Option<f32>,
-    docked: bool,
-) -> bool {
-    tab == WorkspaceTab::Changes
-        && before != Some(WorkspaceTab::Changes)
-        && docked
-        && main_width.is_some_and(|width| width < CHANGES_NEED)
-}
-
 /// The tab the open workspace shows after a task remembers `tab` (`rememberTab`): it follows
 /// only a pick in the open workspace.
 pub fn shown_after_remember(

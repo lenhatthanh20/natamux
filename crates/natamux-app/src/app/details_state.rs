@@ -1,14 +1,13 @@
 //! What the details panel shows (`useDashboardLayout.ts`, the details part of `view-store`): the
-//! open workspace's task, else the selected one; open or closed per task, which the app does not
-//! keep across runs (as the web: 'does not store the details flags'); the picked tab, which it
-//! keeps.
+//! open workspace's task, else the selected one; open or closed as one flag for every task (a
+//! Zed dock), and the picked tab. Both are kept in `view.json`.
 
 use natamux_proto::tasks::task::Task;
 use ui::prelude::*;
 
 use super::Dashboard;
 use crate::app::tab_rules::shown_details_view;
-use crate::app::view_rules::{DetailsView, details_open_for, details_view_for, with_detail_open};
+use crate::app::view_rules::{DetailsView, details_view_for};
 
 /// What a key or a command asks the panel to do once it shows the task.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -37,18 +36,10 @@ impl Dashboard {
                 .is_some_and(|task| task.workspace.is_some())
     }
 
-    /// `docked`: the window docks the panel. Until the user chooses, it is open where it docks
-    /// beside a workspace.
-    pub fn details_shown(&self, docked: bool) -> bool {
-        let Some(task) = self.details_task() else {
-            return false;
-        };
-        let choice = self
-            .details_open
-            .iter()
-            .find(|(id, _)| *id == task.id)
-            .map(|(_, open)| *open);
-        details_open_for(choice, docked && self.details_beside_workspace())
+    /// The dock shows when the flag is on, except over the Agents grid. With no task it shows
+    /// an empty state.
+    pub fn details_shown(&self) -> bool {
+        self.view().details_open && !self.agents_open
     }
 
     /// The tab shown. A remembered Files shows Progress for a task with no workspace.
@@ -60,53 +51,46 @@ impl Dashboard {
         shown_details_view(view, has_workspace)
     }
 
-    pub fn set_details_open(&mut self, id: &str, open: bool, cx: &mut Context<Self>) {
-        self.details_open = with_detail_open(&self.details_open, id, open);
-        cx.notify();
+    pub fn set_details_open(&mut self, open: bool, cx: &mut Context<Self>) {
+        self.update_view(cx, |state| state.details_open = open);
     }
 
-    /// Mod+Alt+B and the title bar toggle: the panel of the task it is about.
-    pub fn toggle_details(&mut self, docked: bool, cx: &mut Context<Self>) {
-        let shown = self.details_shown(docked);
-        if let Some(id) = self.details_task().map(|task| task.id.clone()) {
-            self.set_details_open(&id, !shown, cx);
-        }
+    /// Mod+Alt+B and the status bar toggle.
+    pub fn toggle_details(&mut self, cx: &mut Context<Self>) {
+        let open = self.view().details_open;
+        self.set_details_open(!open, cx);
     }
 
-    /// `i`: the selected task's panel, open or closed.
-    pub fn toggle_selected_details(&mut self, docked: bool, cx: &mut Context<Self>) {
+    /// `i`: selects the row; the dock closes when it is open and already about that task.
+    pub fn toggle_selected_details(&mut self, cx: &mut Context<Self>) {
         let Some(id) = self.selected.clone() else {
             return;
         };
         let about_it = self.details_task().is_some_and(|task| task.id == id);
-        let shown = about_it && self.details_shown(docked);
-        self.set_details_open(&id, !shown, cx);
+        let close = about_it && self.details_shown();
+        self.select(Some(id), cx);
+        self.set_details_open(!close, cx);
     }
 
     /// A click on a row or a card, and Show details of a row menu (`chooseTask`).
     pub fn choose(&mut self, id: &str, cx: &mut Context<Self>) {
         self.select(Some(id.to_owned()), cx);
-        self.set_details_open(id, true, cx);
+        self.set_details_open(true, cx);
     }
 
     pub fn set_details_view(&mut self, view: DetailsView, cx: &mut Context<Self>) {
         self.update_view(cx, |state| state.details_view = Some(view));
     }
 
-    /// Show in progress, Show progress and `progress.show` (`showProgress`).
-    pub fn show_progress(&mut self, id: &str, cx: &mut Context<Self>) {
-        let open = self.details_open.clone();
-        let mut next = Vec::new();
-        self.update_view(cx, |state| next = state.show_progress(&open, id));
-        self.details_open = next;
+    /// Show in progress, Show progress and `progress.show` (`showProgress`). The panel is about
+    /// `details_task`, so `_id` only keeps the callers' shape.
+    pub fn show_progress(&mut self, _id: &str, cx: &mut Context<Self>) {
+        self.update_view(cx, |state| state.show_progress());
     }
 
-    /// `files.show` and `showFiles`: the panel of the task open on its Files tab.
-    pub fn show_files(&mut self, id: &str, cx: &mut Context<Self>) {
-        let open = self.details_open.clone();
-        let mut next = Vec::new();
-        self.update_view(cx, |state| next = state.show_files(&open, id));
-        self.details_open = next;
+    /// `files.show` and `showFiles`: the dock open on its Files tab.
+    pub fn show_files(&mut self, _id: &str, cx: &mut Context<Self>) {
+        self.update_view(cx, |state| state.show_files());
     }
 
     /// Opens the panel on the task and asks it to do `request` once it shows it.
@@ -114,7 +98,7 @@ impl Dashboard {
         if request == PanelRequest::SendBack {
             self.set_details_view(DetailsView::Progress, cx);
         }
-        self.set_details_open(id, true, cx);
+        self.set_details_open(true, cx);
         self.panel_request = Some((id.to_owned(), request));
         cx.notify();
     }

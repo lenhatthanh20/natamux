@@ -8,7 +8,7 @@ pub const MIN_SIZE: f32 = 8.0;
 pub const MAX_SIZE: f32 = 32.0;
 /// Zed's buffer font (`.ZedMono`) and size: a terminal with no font of its own uses them, as Zed.
 pub const BUILT_IN_FAMILY: &str = "Lilex";
-pub const BUILT_IN_SIZE: f32 = 15.0;
+pub const BUILT_IN_SIZE: f32 = 13.0;
 pub const SIZE_REASON: &str = "Pick a size from 8 to 32";
 pub const PREVIEW: &str = "git commit -m \"Fix café → naïve\" ✓ │ 0O 1lI {}";
 

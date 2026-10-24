@@ -26,9 +26,12 @@ pub struct LayoutMode {
 pub const BREAKPOINT_MD: f32 = 768.0;
 pub const BREAKPOINT_LG: f32 = 1024.0;
 pub const BREAKPOINT_XL: f32 = 1280.0;
-pub const MIN_MAIN_WIDTH_FOR_DOCKED_DETAILS: f32 = 640.0;
-/// One default for both side panels. At 1280 two of them still leave main its 640.
+pub const MIN_MAIN_WIDTH_FOR_DOCKED_DETAILS: f32 = 400.0;
+/// The default of the details dock.
 pub const PANEL_WIDTH: f32 = 320.0;
+/// The default of the sidebar, near Zed's project panel (T-0158): at 1024 wide, main keeps 400
+/// beside the details dock.
+pub const SIDEBAR_WIDTH: f32 = 280.0;
 
 /// Without a measured width the window gets the desktop layout.
 pub const DESKTOP_LAYOUT: LayoutMode = LayoutMode {
@@ -59,14 +62,12 @@ pub fn decide_layout(input: LayoutInput) -> LayoutMode {
     } else {
         SidebarMode::Drawer
     };
-    let mut details = if width >= BREAKPOINT_XL {
+    let mut details = if width >= BREAKPOINT_MD {
         DetailsMode::Docked
-    } else if width >= BREAKPOINT_MD {
-        DetailsMode::Sheet
     } else {
         DetailsMode::Page
     };
-    // A wide sidebar must never crush the main area: then the details float over it.
+    // A wide sidebar must never crush the main area: then the details float over it as a sheet.
     if details == DetailsMode::Docked {
         let sidebar_taken = if sidebar == SidebarMode::Docked {
             input.sidebar_width
@@ -125,38 +126,46 @@ mod tests {
     }
 
     #[test]
-    fn docks_the_details_at_1280_only_while_the_main_area_keeps_640() {
+    fn docks_the_details_while_the_main_area_keeps_400() {
         assert_eq!(base(1280.0).details, DetailsMode::Docked);
+        // 1024 - 272 - 360 = 392 < 400.
+        assert_eq!(base(1024.0).details, DetailsMode::Sheet);
         assert_eq!(
-            layout(Some(1280.0), 320.0, false).details,
-            DetailsMode::Sheet
-        );
-    }
-
-    #[test]
-    fn docks_the_details_at_1280_when_both_panels_have_the_default_width() {
-        let mode = decide_layout(LayoutInput {
-            width: Some(1280.0),
-            sidebar_width: PANEL_WIDTH,
-            details_width: PANEL_WIDTH,
-            coarse: false,
-        });
-        assert_eq!(mode.details, DetailsMode::Docked);
-    }
-
-    #[test]
-    fn counts_a_collapsed_sidebar_as_no_width() {
-        assert_eq!(
-            layout(Some(1280.0), 0.0, false).details,
+            layout(Some(1024.0), 240.0, false).details,
             DetailsMode::Docked
         );
     }
 
     #[test]
-    fn makes_the_details_a_sheet_from_768_to_1279() {
-        for width in [1279.0, 1024.0, 768.0] {
-            assert_eq!(base(width).details, DetailsMode::Sheet, "{width}");
+    fn docks_the_details_at_the_shot_sizes() {
+        let mode = |width| {
+            decide_layout(LayoutInput {
+                width: Some(width),
+                // The sidebar of the mockups is 248 wide; a 320 one leaves main 397 at 1024.
+                sidebar_width: 248.0,
+                details_width: PANEL_WIDTH,
+                coarse: false,
+            })
+        };
+        for width in [800.0, 1000.0, 1024.0] {
+            assert_eq!(mode(width).details, DetailsMode::Docked, "{width}");
         }
+    }
+
+    #[test]
+    fn counts_a_collapsed_sidebar_as_no_width() {
+        assert_eq!(
+            layout(Some(1024.0), 0.0, false).details,
+            DetailsMode::Docked
+        );
+    }
+
+    #[test]
+    fn makes_the_details_a_sheet_when_a_wide_sidebar_crushes_main() {
+        assert_eq!(
+            layout(Some(1100.0), 440.0, false).details,
+            DetailsMode::Sheet
+        );
     }
 
     #[test]

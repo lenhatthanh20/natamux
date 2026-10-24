@@ -6,8 +6,8 @@ use ui::prelude::*;
 
 use super::{Root, Tool};
 use crate::app::commands_stages::ShowTasksProgress;
-use crate::app::layout_mode::{DetailsMode, PANEL_WIDTH, SidebarMode, effective_sidebar_width};
-use crate::app::shell_rules::{crumb, is_wide, live_item, running_count, window_title};
+use crate::app::layout_mode::{DetailsMode, SIDEBAR_WIDTH, SidebarMode, effective_sidebar_width};
+use crate::app::shell_rules::{crumb, live_item, running_count, window_title};
 use crate::app::shortcuts::{
     Approve, BlockTask, MarkReady, RequestChanges, ResumeAgent, RetryTask, UnblockTask,
 };
@@ -30,7 +30,7 @@ impl Root {
         let limits = Limits {
             min: SIDEBAR_MIN,
             max: SIDEBAR_MAX,
-            default: PANEL_WIDTH,
+            default: SIDEBAR_WIDTH,
             collapse_below: Some(SIDEBAR_COLLAPSE_BELOW),
         };
         let resize = ResizeHandle::new(
@@ -133,7 +133,7 @@ impl Root {
             .open_task
             .as_deref()
             .and_then(|id| dashboard.data.task(id));
-        let crumb = crumb(open, dashboard.agents_open, &dashboard.data.repos, width);
+        let crumb = crumb(open, dashboard.agents_open, &dashboard.data.repos);
         let live = live_item(&dashboard.data.link);
         let jobs = dashboard.data.jobs.clone();
         let notify = dashboard.view().notify;
@@ -146,17 +146,11 @@ impl Root {
             |root: &mut Root, _: &ClickEvent, window: &mut Window, cx: &mut Context<Root>| {
                 root.show_needs_you(window, cx)
             };
-        let details = (!dashboard.agents_open && dashboard.details_task().is_some())
-            .then(|| self.details_shown(window, cx));
-        let title_bar = TitleBar::new(
-            sidebar_shown,
-            crumb,
-            is_wide(width),
-            needs_you,
-            cx.listener(show_waiting),
-        )
-        .details(details);
+        let agents_open = dashboard.agents_open;
+        let details = self.details_toggle(window, cx);
+        let title_bar = TitleBar::new(crumb);
         let status_bar = StatusBar::new(live, running, needs_you, jobs, width)
+            .toggles(sidebar_shown, details, agents_open)
             .on_running(cx.listener(|root, _: &ClickEvent, _, cx| {
                 root.show_state(Some(TaskState::Running), cx)
             }))
@@ -214,6 +208,28 @@ impl Root {
 }
 
 impl Root {
+    /// The keys of the details panel, its stages, and the open workspace's tabs and files.
+    fn workspace_actions(shell: Div, cx: &mut Context<Self>) -> Div {
+        shell
+            .on_action(cx.listener(Self::toggle_details))
+            .on_action(cx.listener(Self::toggle_selected_details))
+            .on_action(cx.listener(Self::edit_task))
+            .on_action(cx.listener(Self::show_progress))
+            .on_action(cx.listener(Self::approve_stage))
+            .on_action(cx.listener(Self::report_stage))
+            .on_action(cx.listener(Self::skip_stage))
+            .on_action(cx.listener(Self::send_back_stage))
+            .on_action(cx.listener(Self::show_terminal_tab))
+            .on_action(cx.listener(Self::show_changes_tab))
+            .on_action(cx.listener(Self::show_history_tab))
+            .on_action(cx.listener(Self::commit_changes))
+            .on_action(cx.listener(Self::show_docs_tab))
+            .on_action(cx.listener(Self::show_open_file))
+            .on_action(cx.listener(Self::close_tab))
+            .on_action(cx.listener(Self::reopen_tabs))
+            .on_action(cx.listener(Self::show_worktree_files))
+    }
+
     /// The state action keys of the selected task.
     fn task_actions(shell: Div, cx: &mut Context<Self>) -> Div {
         shell
@@ -271,6 +287,7 @@ impl Render for Root {
             context.add("body");
         }
         let shell = Self::settings_actions(Self::task_actions(v_flex(), cx), cx);
+        let shell = Self::workspace_actions(shell, cx);
         let colors = cx.theme().colors();
         shell
             .size_full()
@@ -282,6 +299,7 @@ impl Render for Root {
             .on_action(cx.listener(Self::back))
             .on_action(cx.listener(Self::show_all))
             .on_action(cx.listener(Self::show_agents))
+            .on_action(cx.listener(Self::toggle_agents))
             .on_action(cx.listener(Self::show_table))
             .on_action(cx.listener(Self::show_board))
             .on_action(cx.listener(|this, _: &ShowTasksProgress, _, cx| {
@@ -296,21 +314,6 @@ impl Render for Root {
             .on_action(cx.listener(Self::start_bench))
             .on_action(cx.listener(Self::stop_bench))
             .on_action(cx.listener(Self::check_ime))
-            .on_action(cx.listener(Self::toggle_details))
-            .on_action(cx.listener(Self::toggle_selected_details))
-            .on_action(cx.listener(Self::edit_task))
-            .on_action(cx.listener(Self::show_progress))
-            .on_action(cx.listener(Self::approve_stage))
-            .on_action(cx.listener(Self::report_stage))
-            .on_action(cx.listener(Self::skip_stage))
-            .on_action(cx.listener(Self::send_back_stage))
-            .on_action(cx.listener(Self::show_terminal_tab))
-            .on_action(cx.listener(Self::show_changes_tab))
-            .on_action(cx.listener(Self::show_history_tab))
-            .on_action(cx.listener(Self::commit_changes))
-            .on_action(cx.listener(Self::show_docs_tab))
-            .on_action(cx.listener(Self::show_open_file))
-            .on_action(cx.listener(Self::show_worktree_files))
             .on_action(cx.listener(Self::quit_app))
             .on_action(cx.listener(Self::close))
             .child(title_bar)

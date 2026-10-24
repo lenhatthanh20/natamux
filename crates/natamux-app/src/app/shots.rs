@@ -4,7 +4,7 @@
 
 use std::time::Duration;
 
-use gpui::{App, AsyncApp, Focusable, Window, WindowHandle};
+use gpui::{App, AsyncApp, Focusable, Window, WindowHandle, point, px};
 use natamux_proto::workspaces::workspace::PreparingStep;
 
 use super::clock;
@@ -15,11 +15,12 @@ use super::shortcuts::{FindInTerminal, OpenRowMenu};
 use super::shots_files;
 use super::shots_settings;
 use super::shots_stages;
+use super::title_bar::open_add_menu;
 use super::view_rules::{DetailsView, WorkspaceTab};
 use super::view_state::{Layout, ViewState};
 use super::window::Root;
 use crate::tasks::task_time::parse_iso_ms;
-use crate::tasks::{add_subtask_dialog, fan_out_dialog};
+use crate::tasks::{add_subtask_dialog, add_task_dialog, fan_out_dialog};
 use crate::terminals::terminal_cache::{TerminalCache, terminal_key};
 use crate::workspaces::{new_workspace_dialog, remove_finished, remove_workspace_dialog};
 
@@ -179,13 +180,14 @@ fn enter(shot: Shot, root: &mut Root, window: &mut Window, cx: &mut gpui::Contex
             let first = board.read(cx).first_card(cx);
             board.update(cx, |board, cx| board.show_hover(first, cx));
         }
-        Shot::AddTaskTyped => {
-            let quick_add = root.task_view().read(cx).quick_add().clone();
-            quick_add.update(cx, |quick_add, cx| {
-                quick_add.set_title(TYPED, window, cx);
-                quick_add.focus(window, cx);
-            });
+        Shot::AddTaskDialog => add_task_dialog::open(&dashboard, Some(TYPED.into()), window, cx),
+        // The title bar's + menu, opened under its button at the right end.
+        Shot::AddMenu => {
+            let width = window.viewport_size().width;
+            open_add_menu(point(width - px(24.), px(30.)), window, cx);
         }
+        // The dock open with no task picked: nothing to do, the list starts with none.
+        Shot::DetailsEmpty => {}
         Shot::StartTask => new_workspace_dialog::open(&dashboard, None, window, cx),
         Shot::RemoveWorkspace => {
             if let Some(task) = task(REMOVED, cx) {
@@ -290,7 +292,7 @@ fn details(dashboard: &gpui::Entity<Dashboard>, id: &str, cx: &mut App) {
     dashboard.update(cx, |dashboard, cx| {
         dashboard.open(id, cx);
         dashboard.set_details_view(DetailsView::Details, cx);
-        dashboard.set_details_open(id, true, cx);
+        dashboard.set_details_open(true, cx);
     });
 }
 

@@ -1,21 +1,15 @@
-//! The title bar of docs/ui-spec.md 3.1 (`features/app/TitleBar.tsx`): sidebar toggle, wordmark,
-//! breadcrumb, needs-you pill and Start a task. On macOS it is the window's drag area, with a gutter
-//! for the traffic lights, and the details toggle at the right. The command
-//! center in the middle opens the palette.
+//! The title bar of docs/ui-spec.md 3.1 (`features/app/TitleBar.tsx`): the breadcrumb and the `+`
+//! menu (Add a task, Start a task). On macOS it is the window's drag area, with a gutter for the
+//! traffic lights. The toggles and the needs-you count live in the status bar.
 
-use std::rc::Rc;
+use gpui::{Action, Entity, FontWeight, MouseButton, Stateful, WindowControlArea};
+use ui::{ButtonLike, ContextMenu, ContextMenuEntry, Tooltip, prelude::*};
 
-use gpui::{
-    Action, AnyView, ClickEvent, Entity, FontWeight, MouseButton, Stateful, WindowControlArea,
-};
-use ui::{ButtonLike, Tooltip, prelude::*};
-
-use super::commands::shortcut_of;
-use super::shell_rules::{Crumb, needs_you_text};
-use super::shortcuts::{NewWorkspace, OpenPalette, ToggleDetails, ToggleSidebar};
-use crate::components::chips::{Kbd, tip_with_keys};
-use crate::components::colors::signal;
+use super::shell_rules::Crumb;
+use super::shortcuts::{NewTask, NewWorkspace};
+use crate::components::glyph::StateGlyph;
 use crate::components::icons::icon_path;
+use crate::components::menu::MenuLayer;
 
 /// Zed's `platform_title_bar_height`: 1.75 rem, at least 34 px (the traffic lights need it).
 fn title_bar_height(window: &Window) -> Pixels {
@@ -24,158 +18,86 @@ fn title_bar_height(window: &Window) -> Pixels {
 
 const MAC: bool = cfg!(target_os = "macos");
 
-type OnClick = Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
-
 #[derive(IntoElement)]
 pub struct TitleBar {
-    sidebar_open: bool,
     crumb: Crumb,
-    /// 1024 and wider: the wordmark shows.
-    wide: bool,
-    needs_you: usize,
-    on_needs_you: OnClick,
-    /// Whether the details show; None while there is no task to show them of.
-    details: Option<bool>,
 }
 
 impl TitleBar {
-    pub fn new(
-        sidebar_open: bool,
-        crumb: Crumb,
-        wide: bool,
-        needs_you: usize,
-        on_needs_you: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    ) -> Self {
-        Self {
-            sidebar_open,
-            crumb,
-            wide,
-            needs_you,
-            on_needs_you: Rc::new(on_needs_you),
-            details: None,
-        }
-    }
-
-    pub fn details(mut self, details: Option<bool>) -> Self {
-        self.details = details;
-        self
+    pub fn new(crumb: Crumb) -> Self {
+        Self { crumb }
     }
 }
 
-/// A tooltip with the command's keys from the registry.
-fn command_tip(
-    title: &'static str,
-    command: &str,
-) -> impl Fn(&mut Window, &mut App) -> AnyView + 'static {
-    let keys = shortcut_of(command);
-    move |window, cx| match keys {
-        Some(keys) => tip_with_keys(title, keys)(window, cx),
-        None => Tooltip::text(title)(window, cx),
-    }
+/// The `+` menu: the keys come from the action's bindings, as in the sidebar's row menu.
+pub fn open_add_menu(position: gpui::Point<Pixels>, window: &mut Window, cx: &mut App) {
+    let entry = |label: &'static str, icon: &str, action: Box<dyn Action>| {
+        let run = action.boxed_clone();
+        ContextMenuEntry::new(label)
+            .custom_icon_path(icon_path(icon))
+            .icon_color(Color::Muted)
+            .action(action)
+            .handler(move |window, cx| window.dispatch_action(run.boxed_clone(), cx))
+    };
+    let menu = ContextMenu::build(window, cx, move |menu, _, _| {
+        menu.item(entry("Add a task", "plus", Box::new(NewTask)))
+            .item(entry("Start a task", "play", Box::new(NewWorkspace)))
+    });
+    MenuLayer::open(menu, position, window, cx);
 }
 
-/// A 28 px icon button that runs a command's action, as the key would.
-fn command_button(
-    id: &'static str,
-    icon: &'static str,
-    tip: &'static str,
-    command: &str,
-    action: impl Action + Clone,
-) -> ButtonLike {
-    ButtonLike::new(id)
+fn add_button() -> ButtonLike {
+    ButtonLike::new("add-task")
         .size(ButtonSize::Medium)
-        .tooltip(command_tip(tip, command))
-        .on_click(move |_, window, cx| window.dispatch_action(action.boxed_clone(), cx))
+        .tooltip(Tooltip::text("Add or start a task"))
+        .on_click(|event, window, cx| open_add_menu(event.position(), window, cx))
         .child(
             div().px_1().child(
-                Icon::from_path(icon_path(icon))
+                Icon::from_path(icon_path("plus"))
                     .size(IconSize::Small)
                     .color(Color::Muted),
             ),
         )
 }
 
-/// The details toggle; off with its reason while there is nothing to show.
-fn details_button(details: Option<bool>) -> ButtonLike {
-    let tip = match details {
-        None => "Select a task to show its details",
-        Some(true) => "Hide details",
-        Some(false) => "Show details",
-    };
-    command_button(
-        "toggle-details",
-        "panel-right",
-        tip,
-        "details.toggle",
-        ToggleDetails,
-    )
-    .toggle_state(details == Some(true))
-    .disabled(details.is_none())
-}
-
-/// The command center: a search field that opens the palette, `clamp(200, 36vw, 520)` wide.
-fn command_center(window_width: Pixels, cx: &App) -> impl IntoElement {
-    let colors = cx.theme().colors();
-    let width = (window_width * 0.36).max(px(200.)).min(px(520.));
-    let keys = shortcut_of("palette.open").unwrap_or("Mod+K");
-    h_flex()
-        .id("command-center")
-        .flex_shrink_1()
-        .min_w_0()
-        .w(width)
-        .h(rems_from_px(26.0_f32))
-        .px(rems_from_px(10.0_f32))
-        .gap_2()
-        .rounded_md()
-        .border_1()
-        .border_color(colors.border)
-        .bg(colors.editor_background)
-        .cursor_pointer()
-        .hover(|style| style.border_color(colors.border_focused))
-        .tooltip(command_tip("Search or run a command", "palette.open"))
-        .on_click(|_, window, cx| window.dispatch_action(OpenPalette.boxed_clone(), cx))
-        .child(
-            Icon::from_path(icon_path("search"))
-                .size(IconSize::Small)
-                .color(Color::Muted),
-        )
-        .child(
-            div().min_w_0().flex_1().child(
-                Label::new("Search or run a command")
-                    .color(Color::Muted)
-                    .truncate(),
-            ),
-        )
-        .child(Kbd::new(keys))
-}
-
 fn render_crumb(crumb: Crumb, cx: &App) -> AnyElement {
     match crumb {
         Crumb::View(name) => Label::new(name)
-            .weight(FontWeight::MEDIUM)
+            .weight(FontWeight::SEMIBOLD)
             .truncate()
             .into_any_element(),
-        Crumb::Task { repo, id, title } => h_flex()
-            .min_w_0()
-            .gap_1p5()
-            .when_some(repo, |this, repo| {
-                this.child(Label::new(repo).color(Color::Muted).single_line())
-                    .child(Label::new("/").color(Color::Disabled))
-            })
-            .child(
-                Label::new(id)
-                    .size(LabelSize::Small)
-                    .color(Color::Muted)
-                    .buffer_font(cx),
-            )
-            .when_some(title, |this, title| {
-                this.child(
+        Crumb::Task {
+            repo,
+            id,
+            title,
+            state,
+            branch,
+        } => {
+            let mut glyph = StateGlyph::new("crumb-state", Some(state));
+            if let Some(branch) = branch {
+                glyph = glyph.tip(branch);
+            }
+            h_flex()
+                .min_w_0()
+                .gap_1p5()
+                .when_some(repo, |this, repo| {
+                    this.child(Label::new(repo).weight(FontWeight::SEMIBOLD).single_line())
+                        .child(Label::new("/").color(Color::Disabled))
+                })
+                .child(
+                    Label::new(id)
+                        .size(LabelSize::Small)
+                        .color(Color::Muted)
+                        .buffer_font(cx),
+                )
+                .child(
                     div()
                         .min_w_0()
                         .child(Label::new(title).color(Color::Muted).truncate()),
                 )
-            })
-            .into_any_element(),
+                .child(glyph)
+                .into_any_element()
+        }
     }
 }
 
@@ -202,28 +124,6 @@ fn drag_to_move(bar: Stateful<Div>, armed: Entity<bool>) -> Stateful<Div> {
         })
 }
 
-fn render_pill(count: usize, on_click: OnClick, cx: &App) -> impl IntoElement {
-    let colors = signal(cx);
-    h_flex()
-        .id("needs-you-pill")
-        .flex_none()
-        .h(rems_from_px(24.0_f32))
-        .px(rems_from_px(10.0_f32))
-        .rounded_full()
-        .border_1()
-        .border_color(colors.border)
-        .bg(colors.bg)
-        .cursor_pointer()
-        .tooltip(Tooltip::text("Show the tasks that wait for you"))
-        .on_click(move |event, window, cx| on_click(event, window, cx))
-        .child(
-            Label::new(needs_you_text(count))
-                .size(LabelSize::Small)
-                .weight(FontWeight::MEDIUM)
-                .color(Color::Custom(colors.fg)),
-        )
-}
-
 impl RenderOnce for TitleBar {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let armed = window.use_keyed_state("title-bar-drag", cx, |_, _| false);
@@ -232,11 +132,6 @@ impl RenderOnce for TitleBar {
             px(ui::utils::TRAFFIC_LIGHT_PADDING)
         } else {
             px(8.)
-        };
-        let toggle_tip = if self.sidebar_open {
-            "Hide sidebar"
-        } else {
-            "Show sidebar"
         };
         h_flex()
             .id("title-bar")
@@ -250,57 +145,7 @@ impl RenderOnce for TitleBar {
             .border_b_1()
             .border_color(colors.border_variant)
             .when(MAC, |this| drag_to_move(this, armed))
-            .child(
-                h_flex()
-                    .flex_1()
-                    .flex_basis(px(0.))
-                    .min_w_0()
-                    .gap_1p5()
-                    .child(
-                        command_button(
-                            "toggle-sidebar",
-                            "panel-left",
-                            toggle_tip,
-                            "sidebar.toggle",
-                            ToggleSidebar,
-                        )
-                        .toggle_state(self.sidebar_open),
-                    )
-                    .when(self.wide, |this| {
-                        this.child(Label::new("Natamux").weight(FontWeight::SEMIBOLD))
-                            .child(div().mx_1().w_px().h_4().bg(colors.border))
-                    })
-                    .child(div().min_w_0().flex_1().child(render_crumb(self.crumb, cx))),
-            )
-            .when(self.wide, |this| {
-                this.child(command_center(window.viewport_size().width, cx))
-            })
-            .child(
-                h_flex()
-                    .flex_1()
-                    .flex_basis(px(0.))
-                    .justify_end()
-                    .gap_1()
-                    .when(self.needs_you > 0, |this| {
-                        this.child(render_pill(self.needs_you, self.on_needs_you, cx))
-                    })
-                    .when(!self.wide, |this| {
-                        this.child(command_button(
-                            "command-center",
-                            "search",
-                            "Search or run a command",
-                            "palette.open",
-                            OpenPalette,
-                        ))
-                    })
-                    .child(command_button(
-                        "start-task",
-                        "plus",
-                        "Start a task",
-                        "workspace.new",
-                        NewWorkspace,
-                    ))
-                    .child(details_button(self.details)),
-            )
+            .child(div().min_w_0().flex_1().child(render_crumb(self.crumb, cx)))
+            .child(add_button())
     }
 }

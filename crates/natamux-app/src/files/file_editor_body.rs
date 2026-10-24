@@ -3,16 +3,13 @@
 //! the owner turns that into a draft.
 
 use editor::{CurrentLineHighlight, Editor, EditorEvent, MultiBuffer};
-use gpui::{Entity, EventEmitter, Subscription, TextStyleRefinement};
+use gpui::{Entity, EventEmitter, Subscription};
 use language::Buffer;
 use ui::prelude::*;
 
 use crate::git::change_rules::wraps_by_default;
 use crate::git::diff_editors::plain_switches;
 use crate::git::languages::language_for;
-
-/// The font size of code in the app, as the diff has it.
-const CODE_SIZE: f32 = 12.;
 
 /// The text of the editor after a change. A text set by `set_disk_text` comes too; the owner
 /// compares it with the disk text, so it makes no draft.
@@ -39,10 +36,6 @@ impl FileEditorBody {
             plain_switches(&mut editor, wrap, window, cx);
             editor.set_show_line_numbers(true, cx);
             editor.set_current_line_highlight(Some(CurrentLineHighlight::None));
-            editor.set_text_style_refinement(TextStyleRefinement {
-                font_size: Some(px(CODE_SIZE).into()),
-                ..Default::default()
-            });
             editor
         });
         let subscription = cx.subscribe(&editor, |_, editor, event: &EditorEvent, cx| {
