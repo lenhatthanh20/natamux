@@ -12,7 +12,7 @@ use crate::app::view_rules::{DetailsView, details_view_for};
 /// What a key or a command asks the panel to do once it shows the task.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PanelRequest {
-    /// `e` and the pencil: the edit form.
+    /// `e` and Edit task of the "..." menu: the edit form.
     Edit,
     /// `stage.send-back`: the Send back dialog of the stage that waits.
     SendBack,

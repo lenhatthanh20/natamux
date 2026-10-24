@@ -1,7 +1,8 @@
-//! The details dock (docs/ui-spec.md 3.2 and 4.27, `features/tasks/TaskDetail.tsx`): a 32 px tab
-//! bar with the Progress, Files (with a workspace) and Details tabs, then Edit, the "..." menu
-//! and Close; the edit form over the tabs; "Select a task" while there is no task. It keeps what it read for the task it shows, and
-//! runs the clicks of the tabs.
+//! The details dock (docs/ui-spec.md 3.2 and 4.27, `features/tasks/TaskDetail.tsx`): a 32 px
+//! header with the task id and stage, the Progress, Files (with a workspace) and Details views as
+//! icon buttons, then the "..." menu and Close; the edit form over the views; "Select a task"
+//! while there is no task. It keeps what it read for the task it shows, and runs the clicks of
+//! the views.
 
 use std::collections::BTreeSet;
 use std::time::Duration;
@@ -12,7 +13,7 @@ use natamux_proto::events::task_event::StoredEvent;
 use natamux_proto::projects::repo::{BranchList, LoadedSettings};
 use natamux_proto::stages::actions::StageFile;
 use natamux_proto::tasks::task::Task;
-use ui::{Tab, TabBar, TabPosition, Tooltip, prelude::*};
+use ui::{Tab, Tooltip, prelude::*};
 
 use super::edit_form::EditForm;
 use crate::app::dashboard::details::PanelRequest;
@@ -25,6 +26,7 @@ use crate::components::chips::tip_with_keys;
 use crate::components::empty_state::EmptyState;
 use crate::components::text_size::row_text;
 use crate::files::file_tree::FileTree;
+use crate::tasks::task_rules::stage_label;
 
 /// `FALLBACK_POLL_MS`: the feed says when the log changed; this covers a lost message.
 const POLL: Duration = Duration::from_secs(60);
@@ -226,8 +228,8 @@ impl DetailsPanel {
         self.dashboard.read(cx).details_view_now()
     }
 
-    /// The actions at the right end of the tab bar. A dock has no close button, as Zed's: the
-    /// status bar toggle closes it, so the three tabs keep their labels at 320 px.
+    /// The actions at the right end of the header: "...", then Close or Back. A dock has no
+    /// close button, as Zed's: the status bar toggle closes it. Edit is in the "..." menu.
     fn header_actions(&self, task: Option<&Task>, cx: &mut Context<Self>) -> impl IntoElement {
         let close = match self.mode {
             DetailsMode::Docked => None,
@@ -243,21 +245,27 @@ impl DetailsPanel {
             ),
         };
         h_flex()
+            .flex_none()
             .gap_1()
-            .px_1()
-            .when_some(task.filter(|_| self.edit.is_none()), |this, _| {
-                this.child(
-                    IconButton::new("details-edit", IconName::Pencil)
-                        .icon_size(IconSize::Small)
-                        .tooltip(tip_with_keys("Edit", "e"))
-                        .on_click(cx.listener(|panel, _, _, cx| panel.start_edit(cx))),
-                )
-            })
             .children(task.map(|task| self.more_button(task, cx)))
             .children(close)
     }
 
-    /// The dock header: the tabs as Zed tabs in a 32 px bar, the actions at the end.
+    /// The 32 px bar of the dock, as Zed's `TabBar` without its tab cells and their borders.
+    fn header_bar(cx: &App) -> gpui::Div {
+        h_flex()
+            .flex_none()
+            .w_full()
+            .h(Tab::container_height(cx))
+            .gap_1()
+            .px_1()
+            .bg(cx.theme().colors().tab_bar_background)
+            .border_b_1()
+            .border_color(cx.theme().colors().border)
+    }
+
+    /// The dock header (T-0171): the task id and stage at the left; the views as icon buttons,
+    /// a line, then the actions at the right.
     fn render_tabs(
         &self,
         task: &Task,
@@ -265,33 +273,57 @@ impl DetailsPanel {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let has_workspace = task.workspace.is_some();
-        let tabs = details_tabs(has_workspace);
-        let last = tabs.len() - 1;
-        let picked_at = tabs.iter().position(|tab| *tab == view).unwrap_or(0);
-        let tab = |index: usize, id: &'static str, label: &'static str, this: DetailsView| {
-            let picked = view == this;
-            let position = match index {
-                0 => TabPosition::First,
-                _ if index == last => TabPosition::Last,
-                _ => TabPosition::Middle(index.cmp(&picked_at)),
-            };
-            Tab::new(id)
-                .position(position)
-                .toggle_state(picked)
-                .child(Label::new(label).size(row_text()).color(if picked {
-                    Color::Default
-                } else {
-                    Color::Muted
-                }))
-                .on_click(cx.listener(move |panel, _, _, cx| panel.pick_tab(this, cx)))
-        };
-        div()
+        let views: Vec<IconButton> = details_tabs(has_workspace)
+            .into_iter()
+            .map(|this| {
+                let (id, icon, label) = match this {
+                    DetailsView::Progress => {
+                        ("details-tab-progress", IconName::ListTodo, "Progress")
+                    }
+                    DetailsView::Files => ("details-tab-files", IconName::Folder, "Files"),
+                    DetailsView::Details => ("details-tab-details", IconName::Info, "Details"),
+                };
+                let picked = view == this;
+                IconButton::new(id, icon)
+                    .icon_size(IconSize::Small)
+                    .icon_color(if picked { Color::Default } else { Color::Muted })
+                    // Grey, not the accent: the pill alone shows the picked view.
+                    .selected_icon_color(Color::Default)
+                    .toggle_state(picked)
+                    .tooltip(Tooltip::text(label))
+                    .on_click(cx.listener(move |panel, _, _, cx| panel.pick_tab(this, cx)))
+            })
+            .collect();
+        let title = task.title.clone();
+        let task_line = h_flex()
+            .id("details-task")
+            .flex_1()
+            .min_w_0()
+            .gap_1p5()
+            .pl_1()
+            .tooltip(Tooltip::text(title))
+            .child(
+                Label::new(task.id.clone())
+                    .size(LabelSize::Small)
+                    .color(Color::Muted)
+                    .buffer_font(cx),
+            )
+            .children(stage_label(task).map(|stage| {
+                div().min_w_0().child(
+                    Label::new(stage)
+                        .size(row_text())
+                        .color(Color::Muted)
+                        .truncate(),
+                )
+            }));
+        let tabs = h_flex()
             .id("details-tabs")
             .flex_none()
+            .gap_0p5()
             .track_focus(&self.tabs_focus)
             .on_key_down(
                 cx.listener(move |panel, event: &gpui::KeyDownEvent, _, cx| {
-                    // One tab stop; the arrows move between the tabs.
+                    // One tab stop; the arrows move between the views.
                     let tabs = details_tabs(has_workspace);
                     let at = tabs.iter().position(|tab| *tab == view).unwrap_or(0);
                     let last = tabs.len() - 1;
@@ -307,25 +339,18 @@ impl DetailsPanel {
                     panel.pick_tab(next, cx);
                 }),
             )
-            .child(
-                TabBar::new("details-tab-bar")
-                    .children(
-                        tabs.into_iter()
-                            .enumerate()
-                            .map(|(index, this)| match this {
-                                DetailsView::Progress => {
-                                    tab(index, "details-tab-progress", "Progress", this)
-                                }
-                                DetailsView::Files => {
-                                    tab(index, "details-tab-files", "Files", this)
-                                }
-                                DetailsView::Details => {
-                                    tab(index, "details-tab-details", "Details", this)
-                                }
-                            }),
-                    )
-                    .end_child(self.header_actions(Some(task), cx)),
-            )
+            .children(views);
+        let line = div()
+            .flex_none()
+            .w(px(1.))
+            .h(px(14.))
+            .mx_1()
+            .bg(cx.theme().colors().border_variant);
+        Self::header_bar(cx)
+            .child(task_line)
+            .child(tabs)
+            .child(line)
+            .child(self.header_actions(Some(task), cx))
     }
 
     /// The dock while no task is chosen.
@@ -334,7 +359,7 @@ impl DetailsPanel {
             .id("details")
             .size_full()
             .bg(cx.theme().colors().panel_background)
-            .child(TabBar::new("details-tab-bar").end_child(self.header_actions(None, cx)))
+            .child(Self::header_bar(cx).justify_end().child(self.header_actions(None, cx)))
             .child(
                 v_flex()
                     .flex_1()
