@@ -41,7 +41,7 @@ So with the Electron app open, the native app shows the same tasks. If 4317 was 
 
 | Flag | Does |
 |---|---|
-| `--smoke` | Draws a frame, types `abc` into the first text box (the sidebar filter, or the token field of Sign in when there is no token), checks it, quits. Exit 1 on failure |
+| `--smoke` | Draws a frame, types `abc` into the first text box (the sidebar filter, or the token field of Sign in when there is no token), checks it, quits. With `--fake-daemon` it then opens Project settings and checks that the pipeline chart scrolls sideways to its last step. Exit 1 on failure |
 | `--theme light\|dark` | A fixed theme instead of the system look |
 | `--size WxH` | Window size, at the top left of the screen |
 | `--hold SECONDS` | Quits after that long |

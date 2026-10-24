@@ -4,7 +4,7 @@
 
 use std::collections::HashSet;
 
-use gpui::{AnyElement, Div, Entity, FontWeight, Stateful};
+use gpui::{AnyElement, Div, Entity, FontWeight, ScrollHandle, Stateful};
 use natamux_proto::stages::capabilities::stage_name;
 use natamux_proto::stages::resolve::active_steps;
 use natamux_proto::stages::schema::{Stage, Step};
@@ -192,8 +192,12 @@ fn group_box(
         .into_any_element()
 }
 
-/// The preview box. It scrolls sideways when the chart is wide.
-pub fn pipeline_preview(editor: &Entity<PipelineEditor>, cx: &mut App) -> AnyElement {
+/// The preview box. It scrolls sideways when the chart is wide; `scroll` tracks that scroll.
+pub fn pipeline_preview(
+    editor: &Entity<PipelineEditor>,
+    scroll: &ScrollHandle,
+    cx: &mut App,
+) -> AnyElement {
     let colors = cx.theme().colors();
     let (box_bg, box_border) = (colors.elevated_surface_background, colors.border);
     let chart = {
@@ -231,7 +235,26 @@ pub fn pipeline_preview(editor: &Entity<PipelineEditor>, cx: &mut App) -> AnyEle
             _ => None,
         })
         .collect();
-    let mut row = h_flex().items_start();
+    let top = if branches.is_empty() { 12. } else { 40. };
+    // The steps are the scroll box's own children: gpui takes the scroll range from them, so a
+    // row inside the box would be as wide as the box and nothing would scroll.
+    let mut row = h_flex()
+        .id("pipeline-scroll")
+        .items_start()
+        .overflow_x_scroll()
+        .restrict_scroll_to_axis()
+        .track_scroll(scroll)
+        // gpui gives the wheel to every scroller under the pointer: a sideways scroll stops here,
+        // so the dialog body does not scroll down with the chart.
+        .on_scroll_wheel(|event, window, cx| {
+            let delta = event.delta.pixel_delta(window.line_height());
+            if delta.x.abs() > delta.y.abs() {
+                cx.stop_propagation();
+            }
+        })
+        .px_4()
+        .pt(px(top))
+        .pb_3();
     for (index, step) in shown.iter().enumerate() {
         if index > 0 {
             row = row.child(link(LINE_Y, cx));
@@ -244,17 +267,8 @@ pub fn pipeline_preview(editor: &Entity<PipelineEditor>, cx: &mut App) -> AnyEle
             }
         };
     }
-    let top = if branches.is_empty() { 12. } else { 40. };
     frame
-        .child(
-            div()
-                .id("pipeline-scroll")
-                .overflow_x_scroll()
-                .px_4()
-                .pt(px(top))
-                .pb_3()
-                .child(row),
-        )
+        .child(row)
         .children(
             branches
                 .into_iter()
