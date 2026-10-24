@@ -20,6 +20,7 @@ use super::status_layout::forced_by_width;
 use crate::components::colors::signal;
 use crate::components::icons::icon_path;
 use crate::components::menu::MenuLayer;
+use crate::components::spinner::Spinner;
 
 pub const STATUS_BAR_HEIGHT: f32 = 28.;
 
@@ -247,7 +248,6 @@ fn live_item(live: LiveItem, icon_only: bool, cx: &App) -> impl IntoElement {
 /// The background jobs with their menu; none while no job runs.
 fn jobs_item(jobs: Vec<Job>, open: OnOpenTask, icon_only: bool) -> Option<ButtonLike> {
     let label = short_jobs_label(&jobs)?;
-    // A still icon, not a spinner: an endless animation redraws the window every frame.
     Some(
         ButtonLike::new("status-jobs")
             .height(rems_from_px(24.0_f32).into())
@@ -258,11 +258,7 @@ fn jobs_item(jobs: Vec<Job>, open: OnOpenTask, icon_only: bool) -> Option<Button
             .child(
                 h_flex()
                     .gap(rems_from_px(6.0_f32))
-                    .child(
-                        Icon::from_path(icon_path("loader-circle"))
-                            .size(IconSize::Small)
-                            .color(Color::Muted),
-                    )
+                    .child(Spinner::new(IconSize::Small))
                     .when(!icon_only, |this| {
                         this.child(item_label(label, Color::Muted))
                     }),

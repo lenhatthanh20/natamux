@@ -15,6 +15,7 @@ use crate::components::button_style::{label_color, tinted_style};
 use crate::components::empty_state::EmptyState;
 use crate::components::icons::icon_path;
 use crate::components::menu::MenuLayer;
+use crate::components::spinner::Spinner;
 
 type OnClick = Rc<dyn Fn(&mut Window, &mut App)>;
 type OnPick = Rc<dyn Fn(String, &mut Window, &mut App)>;
@@ -135,11 +136,7 @@ impl RenderOnce for NoWorkspace {
             Some(step) => v_flex()
                 .items_center()
                 .gap_1()
-                .child(
-                    Icon::from_path(icon_path("loader-circle"))
-                        .size(IconSize::Medium)
-                        .color(Color::Muted),
-                )
+                .child(Spinner::new(IconSize::Medium))
                 .child(Label::new("Preparing workspace").weight(FontWeight::MEDIUM))
                 .child(Label::new(step_text(step)).color(Color::Muted))
                 .into_any_element(),

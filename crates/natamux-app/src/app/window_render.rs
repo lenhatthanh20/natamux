@@ -16,7 +16,7 @@ use crate::app::status_bar::now_ms;
 use crate::app::title_bar::TitleBar;
 use crate::app::view_state::{Layout, SIDEBAR_MAX, SIDEBAR_MIN};
 use crate::components::resize_handle::{Edge, Limits, Resize, ResizeHandle};
-use crate::perf::overlay;
+use crate::perf::{draws, overlay};
 use crate::tasks::task_attention::needs_me_tasks;
 
 /// The drawer of 768-1023: 300 wide, at most 85% of the window.
@@ -259,6 +259,7 @@ impl Root {
 
 impl Render for Root {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        draws::count();
         let font = theme_settings::setup_ui_font(window, cx);
         if let Some(sign_in) = &self.sign_in {
             return div()

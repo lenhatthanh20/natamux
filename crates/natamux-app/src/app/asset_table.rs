@@ -58,6 +58,8 @@ pub const FILES: &[(&str, &[u8])] = &[
     file!("icons/states/running.svg"),
     file!("icons/lucide/save.svg"),
     file!("icons/lucide/search-x.svg"),
+    file!("icons/motion/spin-dashes.svg"),
+    file!("icons/motion/spin-dots.svg"),
     file!("icons/states/unknown-8.svg"),
     file!("icons/states/unknown.svg"),
 ];

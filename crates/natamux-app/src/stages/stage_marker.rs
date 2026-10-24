@@ -1,7 +1,7 @@
 //! The marker of a step on the timeline and the line to the next one (`StageMarker.tsx`): a done
 //! stage has the check, the current one the shape of its state, a skipped one the dash, and one
-//! not reached yet an empty dashed ring. A branch is a diamond. Nothing moves: an endless
-//! animation would draw the window every frame (`docs/rust-phase3.md`).
+//! not reached yet an empty dashed ring. A branch is a diamond. A running stage's glyph blinks
+//! (`StateGlyph`) and the line into it fills (`motion_rules::fill`); nothing else moves.
 
 use gpui::svg;
 use natamux_proto::stages::progress::StageStatus;
@@ -12,6 +12,8 @@ use super::stage_view_rules::{LinkKind, marker_label};
 use crate::components::colors::state_colors;
 use crate::components::glyph::StateGlyph;
 use crate::components::icons::icon_path;
+use crate::components::motion;
+use crate::components::motion_rules::{Moving, fill};
 
 /// `size` 18 of `StepRow`; a branch's diamond is 16.
 const NODE: f32 = 18.;
@@ -79,19 +81,43 @@ pub fn marker(
     }
 }
 
-/// Green behind the work and into a running stage, dashed ahead, nothing at the end.
-pub fn rail_line(kind: LinkKind, cx: &App) -> impl IntoElement {
-    let done = state_colors(TaskState::Done, cx).fg;
-    let line = div()
-        .flex_1()
-        .min_h(rems_from_px(12.0_f32))
-        .w(rems_from_px(0.0_f32));
-    match kind {
-        LinkKind::Hidden => line,
-        LinkKind::Done | LinkKind::Flow => line.border_l_2().border_color(done),
-        LinkKind::Upcoming => line
-            .border_l_2()
-            .border_dashed()
-            .border_color(cx.theme().colors().border),
+/// Green behind the work and into a running stage, dashed ahead, nothing at the end. The line
+/// into a running stage fills toward it, then fades, on the clock of the blink.
+#[derive(IntoElement)]
+pub struct RailLine {
+    kind: LinkKind,
+}
+
+impl RailLine {
+    pub fn new(kind: LinkKind) -> Self {
+        Self { kind }
+    }
+}
+
+impl RenderOnce for RailLine {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let done = state_colors(TaskState::Done, cx).fg;
+        let line = div()
+            .flex_1()
+            .min_h(rems_from_px(12.0_f32))
+            .w(rems_from_px(0.0_f32));
+        let shown = match self.kind {
+            LinkKind::Flow => fill(motion::frame(Moving::Fill, window, cx)),
+            _ => 1.,
+        };
+        match self.kind {
+            LinkKind::Hidden => line,
+            LinkKind::Flow if shown < 1. => v_flex()
+                .flex_1()
+                .min_h(rems_from_px(12.0_f32))
+                .w(px(2.))
+                .child(div().flex_none().w_full().h(relative(shown)).bg(done))
+                .child(div().flex_1().w_full().bg(done.opacity(0.22))),
+            LinkKind::Done | LinkKind::Flow => line.border_l_2().border_color(done),
+            LinkKind::Upcoming => line
+                .border_l_2()
+                .border_dashed()
+                .border_color(cx.theme().colors().border),
+        }
     }
 }

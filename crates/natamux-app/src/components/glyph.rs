@@ -1,10 +1,13 @@
-//! The state shape of a task or terminal, tinted with its state colour (docs/ui-spec.md 4.10).
+//! The state shape of a task or terminal, tinted with its state colour (docs/ui-spec.md 4.10). A
+//! running shape blinks once every 2 s (`motion_rules::beat`); nothing else moves.
 
-use gpui::svg;
+use gpui::{Transformation, size, svg};
 use natamux_proto::tasks::task::TaskState;
 use ui::{Tooltip, prelude::*};
 
 use super::colors::{signal, state_colors};
+use super::motion;
+use super::motion_rules::{Beat, Moving, beat};
 use super::shape::{ShapeKind, ShapeSize};
 
 /// The shape of `state`, `None` while the task is not loaded. A quiet agent shows the half ring in
@@ -46,8 +49,13 @@ impl StateGlyph {
 }
 
 impl RenderOnce for StateGlyph {
-    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let kind = ShapeKind::of(self.state, self.quiet);
+        let Beat { opacity, scale } = if kind == ShapeKind::Running {
+            beat(motion::frame(Moving::Beat, window, cx))
+        } else {
+            beat(None)
+        };
         let color = match (self.state, kind) {
             (_, ShapeKind::Quiet) => signal(cx).fg,
             (Some(state), _) => state_colors(state, cx).fg,
@@ -67,7 +75,8 @@ impl RenderOnce for StateGlyph {
                     .path(kind.svg_path(self.size))
                     .size(px(edge))
                     .flex_none()
-                    .text_color(color),
+                    .with_transformation(Transformation::scale(size(scale, scale)))
+                    .text_color(color.opacity(opacity)),
             )
             .tooltip(Tooltip::text(label))
     }

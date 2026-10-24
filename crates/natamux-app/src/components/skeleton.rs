@@ -7,13 +7,15 @@ use std::time::{Duration, Instant};
 use gpui::Task;
 use ui::prelude::*;
 
+use super::motion;
+use super::motion_rules::{Moving, pulse};
 use super::timing_rules::DelayedFlag;
 
 /// Fixed widths, so a skeleton looks the same on every render.
 const WIDTHS: [f32; 8] = [0.6, 0.4, 0.75, 0.5, 0.65, 0.45, 0.7, 0.55];
 
-/// Rows of placeholder bars: a title bar, and a meta bar in rows of 40 px or more. The bars are
-/// still (no pulse yet: an endless animation would redraw the window every frame).
+/// Rows of placeholder bars: a title bar, and a meta bar in rows of 40 px or more. The list pulses
+/// its opacity once every 2 s (`motion_rules::pulse`).
 #[derive(IntoElement)]
 pub struct SkeletonList {
     rows: usize,
@@ -35,19 +37,23 @@ fn bar(height: f32, width: f32, cx: &App) -> Div {
 }
 
 impl RenderOnce for SkeletonList {
-    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let two_bars = self.row_height >= 40.;
-        v_flex().w_full().children((0..self.rows).map(|index| {
-            v_flex()
-                .h(px(self.row_height))
-                .justify_center()
-                .gap(rems_from_px(6.0_f32))
-                .px_2()
-                .child(bar(12., WIDTHS[index % WIDTHS.len()], cx))
-                .when(two_bars, |this| {
-                    this.child(bar(10., WIDTHS[(index + 3) % WIDTHS.len()], cx))
-                })
-        }))
+        let opacity = pulse(motion::frame(Moving::Pulse, window, cx));
+        v_flex()
+            .w_full()
+            .opacity(opacity)
+            .children((0..self.rows).map(|index| {
+                v_flex()
+                    .h(px(self.row_height))
+                    .justify_center()
+                    .gap(rems_from_px(6.0_f32))
+                    .px_2()
+                    .child(bar(12., WIDTHS[index % WIDTHS.len()], cx))
+                    .when(two_bars, |this| {
+                        this.child(bar(10., WIDTHS[(index + 3) % WIDTHS.len()], cx))
+                    })
+            }))
     }
 }
 
