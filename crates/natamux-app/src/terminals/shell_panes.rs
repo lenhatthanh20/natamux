@@ -5,7 +5,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use gpui::{Entity, Focusable, Subscription};
+use gpui::{Entity, Focusable, ScrollHandle, Subscription};
 use natamux_client::TerminalStatus;
 use natamux_proto::terminals::list::TerminalList;
 use ui::prelude::*;
@@ -48,6 +48,7 @@ pub struct ShellPanes {
     /// The grid's width, which picks the columns.
     width: Entity<Option<f32>>,
     _width: Subscription,
+    scroll: ScrollHandle,
 }
 
 impl ShellPanes {
@@ -66,6 +67,7 @@ impl ShellPanes {
             only: None,
             width,
             _width: observe,
+            scroll: ScrollHandle::new(),
         }
     }
 
@@ -113,6 +115,16 @@ impl ShellPanes {
         let columns = columns_for(PaneLayout::Auto, count, width);
         self.narrow = narrow_pane(width, columns);
         columns
+    }
+
+    /// The grid's rows are on screen, for `--smoke`.
+    pub fn has_rows(&self) -> bool {
+        self.scroll.bounds_for_item(0).is_some()
+    }
+
+    /// How far the grid can scroll, for `--smoke`: 0 while its panes fit.
+    pub fn scroll_range(&self) -> Pixels {
+        self.scroll.max_offset().y
     }
 
     pub fn is_full(&self, cx: &App) -> bool {
@@ -174,7 +186,7 @@ impl ShellPanes {
         cx.notify();
     }
 
-    fn toggle_maximized(&mut self, name: &str, cx: &mut Context<Self>) {
+    pub fn toggle_maximized(&mut self, name: &str, cx: &mut Context<Self>) {
         self.maximized = if self.maximized.as_deref() == Some(name) {
             None
         } else {
@@ -389,15 +401,22 @@ impl Render for ShellPanes {
             }
             panes.push(self.pane(&task_id, fact, terminal, finished, &list, window, cx));
         }
-        v_flex()
-            .id("shell-panes")
+        // The probe stays out of the scroll box: inside, its padding-box height plus the padding
+        // made the grid scroll 16 px with nothing to scroll (T-0162).
+        div()
             .relative()
             .size_full()
-            .p(px(GAP))
-            .gap(px(GAP))
-            .overflow_y_scroll()
             .child(width_probe(&self.width))
-            .children(grid_rows(panes, columns))
+            .child(
+                v_flex()
+                    .id("shell-panes")
+                    .size_full()
+                    .p(px(GAP))
+                    .gap(px(GAP))
+                    .overflow_y_scroll()
+                    .track_scroll(&self.scroll)
+                    .children(grid_rows(panes, columns)),
+            )
             .into_any_element()
     }
 }

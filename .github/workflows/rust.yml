@@ -173,7 +173,7 @@ jobs:
         run: cargo build --release --locked -p natamux-app
       - name: Smoke test
         run: target/release/natamux-app --smoke
-      - name: Smoke test, pipeline chart
+      - name: Smoke test, terminal grid and pipeline chart
         run: target/release/natamux-app --smoke --fake-daemon
       # CPU and draws of an idle window, with focus and in the background (docs/rust-phase3.md
       # "Motion"). Only a snapshot push whose commit message has a line "Measure: motion".

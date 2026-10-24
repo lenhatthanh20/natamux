@@ -4,7 +4,8 @@ pub const USAGE: &str =
     "usage: natamux-app [--smoke] [--theme light|dark] [--size WxH] [--hold SECONDS] [--fake-daemon]
                    [--gate2 TASK] [--shot STATE] [--count-draws]
   --smoke   draw a frame, type into the text box, check it, then quit (exit 1 on failure)
-            with --fake-daemon, also check that the pipeline chart scrolls to its last step
+            with --fake-daemon, also check that a workspace's terminal grid does not scroll
+            and that the pipeline chart scrolls to its last step
   --theme   use this theme instead of following the system
   --size    window size in points, placed at the top left of the screen
   --hold    quit after this many seconds (for screenshots)
