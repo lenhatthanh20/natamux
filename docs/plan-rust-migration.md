@@ -105,8 +105,8 @@ natamux-app (GPUI, desktop)   web dashboard (React, browser and phone)   natamux
 | L1 | `natamux-git` | Worktrees, branches, changes, diffs, graph, commit, push, rollback; `gh` calls | `tokio::process` (runs `git` and `gh`, as today) |
 | L1 | `natamux-pty` | Spawn, resize, kill the process tree, ConPTY; the Vietnamese input gap | `portable-pty` |
 | L1 | `natamux-screen` | Headless screen per shell and a snapshot the xterm.js web client can replay | `alacritty_terminal`, `vte` |
-| L1 | `natamux-agents` | Adapters and hooks for Claude Code, Codex, Gemini CLI, Copilot, Cursor; usage and cost | |
-| L1 | `natamux-stages` | Stage engine: runner, gates, checks, paths, CI wait, prompts | |
+| L1 | `natamux-agents` | How each agent starts (commands, permission flags, hook files, trust) and the skills it finds (part 3); adapters and hooks for Claude Code, Codex, Gemini CLI, Copilot, Cursor; usage and cost (part 4) | |
+| L1 | `natamux-stages` | Stage logic with no daemon service: checks, branch conditions, prompts, stage files, the git and gh calls of stages, the CI wait trait. The runner that uses it stays in `natamux-daemon`, as it drives the daemon's services (part 3) | |
 | L2 | `natamux-daemon` | HTTP and WebSocket server, auth (bearer, agent token, ticket), serves the web build | `tokio`, `axum`, `subtle`, `rust-embed`, `notify`, `tracing` |
 | L3 | `natamux-client` | Typed API client with reconnect and a live cache from `/events` | `reqwest`, `async-tungstenite` |
 | L4 | `natamux-app` | The desktop app | `gpui`, Zed's `ui`, `theme`, `workspace`, `terminal_view`, `editor`, `buffer_diff`, `git_ui`, `markdown`, `picker` |
@@ -218,7 +218,7 @@ Decisions (owner, 2026-10-22):
 
 ### Phase 4: daemon in Rust (10–14 weeks)
 
-Part 1 (terminals and the contract suite, T-0153) and part 2 (tasks, events, storage, index, T-0155): decisions, crates, what CI checks, where it differs, ported tests and gate results in `rust-phase4.md`.
+Part 1 (terminals and the contract suite, T-0153), part 2 (tasks, events, storage, index, T-0155) and part 3 (stage engine and agent start, T-0157): decisions, crates, what CI checks, where it differs, ported tests and gate results in `rust-phase4.md`.
 
 - Same API, same files. Order by risk:
   1. Terminals: PTY, input gap, ring, snapshot, resume, backpressure, restore after restart.

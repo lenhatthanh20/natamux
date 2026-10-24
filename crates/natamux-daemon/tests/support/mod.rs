@@ -17,6 +17,7 @@ use natamux_daemon::shared::scheduler::Scheduler;
 use natamux_daemon::terminals::service::{
     AttachOptions, OutputListener, TaskCheck, TaskListener, TerminalOptions, TerminalService,
 };
+use natamux_daemon::terminals::session_lifecycle::SpawnPty;
 use natamux_daemon::terminals::shells::Detach;
 use natamux_daemon::terminals::types::{ClientRef, Frame, TerminalClient, TerminalError};
 use natamux_proto::terminals::messages::ServerMessage;
@@ -175,7 +176,7 @@ impl FakePty {
     }
 
     /// Delivers what was queued. True when something was.
-    fn deliver(&self) -> bool {
+    pub fn deliver(&self) -> bool {
         let queued = std::mem::take(&mut lock(&self.0).queued);
         let any = !queued.is_empty();
         for item in queued {
@@ -326,28 +327,7 @@ pub fn setup_with(options: SetupOptions) -> Harness {
     let messages = Arc::new(Mutex::new(Vec::new()));
     let sink = Arc::clone(&messages);
     bus.subscribe(move |message| sink.lock().unwrap().push(message.clone()));
-    let ptys: Arc<Mutex<Vec<FakePty>>> = Arc::new(Mutex::new(Vec::new()));
-    let made = Arc::clone(&ptys);
-    let spawn = move |options: SpawnOptions| -> std::io::Result<Box<dyn Pty>> {
-        let state = Arc::new(Mutex::new(FakeState {
-            pid: NEXT_PID.fetch_add(1, Ordering::SeqCst),
-            options,
-            written: Vec::new(),
-            sizes: Vec::new(),
-            killed: false,
-            signals: Vec::new(),
-            stubborn: false,
-            orphan: false,
-            program: Some("bash".into()),
-            command_lines: None,
-            flow: Vec::new(),
-            paused: false,
-            queued: Vec::new(),
-            events: None,
-        }));
-        made.lock().unwrap().push(FakePty(Arc::clone(&state)));
-        Ok(Box::new(PtySide(state)))
-    };
+    let (spawn, ptys) = fake_spawner();
     let env = options.env.unwrap_or_else(|| {
         [("PATH", "/bin"), ("NATAMUX_TOKEN", "secret")]
             .iter()
@@ -355,7 +335,7 @@ pub fn setup_with(options: SetupOptions) -> Harness {
             .collect()
     });
     let service = TerminalService::new(TerminalOptions {
-        spawn: Arc::new(spawn),
+        spawn,
         workspace_of: Arc::new(|task_id: &str| {
             if task_id == "T-0009" {
                 Err(TerminalError::NoWorkspace(task_id.into()))
@@ -377,6 +357,47 @@ pub fn setup_with(options: SetupOptions) -> Harness {
         messages,
         ptys,
     }
+}
+
+/// Makes a spawn fail with "No shell" when it answers true for (task id, terminal name).
+pub type SpawnGate = Arc<Mutex<Option<Arc<dyn Fn(&str, &str) -> bool + Send + Sync>>>>;
+
+/// A spawner of fake ptys, and the list of those it made, in order.
+pub fn fake_spawner() -> (Arc<SpawnPty>, Arc<Mutex<Vec<FakePty>>>) {
+    fake_spawner_gated(SpawnGate::default())
+}
+
+pub fn fake_spawner_gated(gate: SpawnGate) -> (Arc<SpawnPty>, Arc<Mutex<Vec<FakePty>>>) {
+    let ptys: Arc<Mutex<Vec<FakePty>>> = Arc::new(Mutex::new(Vec::new()));
+    let made = Arc::clone(&ptys);
+    let spawn = move |options: SpawnOptions| -> std::io::Result<Box<dyn Pty>> {
+        let refuse = gate.lock().unwrap().clone();
+        if let Some(refuse) = refuse {
+            let named = |name: &str| options.env.get(name).cloned().unwrap_or_default();
+            if refuse(&named("NATAMUX_TASK_ID"), &named("NATAMUX_TERMINAL")) {
+                return Err(std::io::Error::other("No shell"));
+            }
+        }
+        let state = Arc::new(Mutex::new(FakeState {
+            pid: NEXT_PID.fetch_add(1, Ordering::SeqCst),
+            options,
+            written: Vec::new(),
+            sizes: Vec::new(),
+            killed: false,
+            signals: Vec::new(),
+            stubborn: false,
+            orphan: false,
+            program: Some("bash".into()),
+            command_lines: None,
+            flow: Vec::new(),
+            paused: false,
+            queued: Vec::new(),
+            events: None,
+        }));
+        made.lock().unwrap().push(FakePty(Arc::clone(&state)));
+        Ok(Box::new(PtySide(state)))
+    };
+    (Arc::new(spawn), ptys)
 }
 
 pub fn client() -> (Arc<Recorder>, ClientRef) {

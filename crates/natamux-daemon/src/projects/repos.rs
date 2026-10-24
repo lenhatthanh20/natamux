@@ -24,7 +24,7 @@ const STAT_EVERY_MS: i64 = 1000;
 struct Cached {
     mtime: Option<SystemTime>,
     checked_at: i64,
-    stages: Vec<Step>,
+    settings: ProjectSettings,
 }
 
 pub struct Repos {
@@ -83,63 +83,83 @@ impl Repos {
     }
 
     /// The stages of the project; the defaults for an unknown project or a file that is not
-    /// valid, as Node's `get`. shortcut: a file is valid when proto reads it and its pipeline has
-    /// no error; the zod texts of a broken file come with the settings routes.
+    /// valid, as Node's `get`.
     pub fn stages_of(&self, repo: Option<&str>) -> Vec<Step> {
+        self.settings_of(repo).stages
+    }
+
+    /// The settings of the project, with the default pipeline when the file has no stages. The
+    /// defaults for an unknown project or a file that is not valid. shortcut: a file is valid when
+    /// proto reads it and its pipeline has no error; the zod texts of a broken file come with the
+    /// settings routes.
+    pub fn settings_of(&self, repo: Option<&str>) -> ProjectSettings {
         let Ok(path) = self.path_of(repo) else {
-            return default_pipeline();
+            return default_settings();
         };
         let file = Path::new(&path).join(".natamux.json");
         let now = (self.now)();
         let Ok(mut cache) = self.settings.lock() else {
-            return default_pipeline();
+            return default_settings();
         };
         if let Some(known) = cache.get(&file)
             && now - known.checked_at < STAT_EVERY_MS
         {
-            return known.stages.clone();
+            return known.settings.clone();
         }
         let mtime = std::fs::metadata(&file)
             .and_then(|meta| meta.modified())
             .ok();
-        let stages = match cache.get(&file) {
-            Some(known) if known.mtime == mtime => known.stages.clone(),
-            _ => read_stages(&file, mtime.is_some()),
+        let settings = match cache.get(&file) {
+            Some(known) if known.mtime == mtime => known.settings.clone(),
+            _ => read_settings(&file, mtime.is_some()),
         };
         cache.insert(
             file,
             Cached {
                 mtime,
                 checked_at: now,
-                stages: stages.clone(),
+                settings: settings.clone(),
             },
         );
-        stages
+        settings
     }
 }
 
-fn read_stages(file: &Path, found: bool) -> Vec<Step> {
+fn default_settings() -> ProjectSettings {
+    ProjectSettings {
+        stages: default_pipeline(),
+        ..ProjectSettings::default()
+    }
+}
+
+fn read_settings(file: &Path, found: bool) -> ProjectSettings {
     if !found {
-        return default_pipeline();
+        return default_settings();
     }
     let parsed = std::fs::read_to_string(file)
         .ok()
         .and_then(|text| serde_json::from_str::<Value>(&text).ok());
     let Some(Value::Object(raw)) = parsed else {
-        return default_pipeline();
+        return default_settings();
     };
     if other_settings_problem(&raw).is_some() {
-        return default_pipeline();
+        return default_settings();
     }
-    let Ok(settings) = serde_json::from_value::<ProjectSettings>(Value::Object(raw)) else {
-        return default_pipeline();
+    let Ok(mut settings) = serde_json::from_value::<ProjectSettings>(Value::Object(raw)) else {
+        return default_settings();
     };
-    if settings.stages.is_empty()
-        || pipeline_issues(&settings.stages)
-            .iter()
-            .any(|issue| issue.level == IssueLevel::Error)
-    {
-        return default_pipeline();
+    crate::projects::settings_trim::trim_settings(&mut settings);
+    if settings.stages.is_empty() {
+        return ProjectSettings {
+            stages: default_pipeline(),
+            ..settings
+        };
     }
-    settings.stages
+    if pipeline_issues(&settings.stages)
+        .iter()
+        .any(|issue| issue.level == IssueLevel::Error)
+    {
+        return default_settings();
+    }
+    settings
 }

@@ -9,9 +9,7 @@ use hyper::header::{
     CACHE_CONTROL, CONTENT_DISPOSITION, CONTENT_SECURITY_POLICY, CONTENT_TYPE, HeaderValue,
 };
 use hyper::{Response, StatusCode};
-use natamux_core::events::derive::enters_branch;
 use natamux_core::events::schema::GATE_EVENT_TYPES;
-use natamux_core::stages::position::StagePosition;
 use natamux_core::tasks::attachments::{base64_length, preview_type_of};
 use natamux_core::tasks::inputs::{
     apply_event_input, attachment_params, attachments_body, issue_link_body, list_query,
@@ -25,10 +23,10 @@ use serde_json::{Value, json};
 use crate::http::errors::{
     Answer, error_answer, forbidden, internal_error, json_answer, task_error, zod_answer,
 };
+use crate::http::routes::stages::stage_answer;
 use crate::http::server::AppState;
+use crate::stages::run::EventInput;
 use crate::tasks::errors::{TaskError, TaskResult};
-use crate::tasks::helpers::position_of;
-use crate::tasks::store::Store;
 use crate::tasks::upload::decode_attachments;
 
 /// A new task may bring its attachments in its JSON body, as base64.
@@ -135,40 +133,31 @@ pub async fn post_event(
         }
         input.insert("source".into(), json!("agent"));
     }
-    answer(StatusCode::OK, move || {
-        state.tasks.with(|store| {
-            let event = with_path(store, &id, Value::Object(input))?;
-            let applied = store.apply_event(&id, Some(&event))?;
-            Ok(json!({ "task": to_value(&applied.task), "accepted": applied.accepted, "moved": applied.moved }))
-        })
+    let input = EventInput {
+        source: input
+            .get("source")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string(),
+        kind: input
+            .get("type")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string(),
+        payload: input
+            .get("payload")
+            .and_then(Value::as_object)
+            .cloned()
+            .unwrap_or_default(),
+    };
+    // Any event may end the step before a branch, whose conditions are checked first. Only the
+    // daemon picks the path.
+    stage_answer(StatusCode::OK, move || {
+        let event = state.stages.run.with_path(&id, input)?;
+        let applied = state.tasks.apply_event(&id, Some(&event.to_value()))?;
+        Ok(json!({ "task": to_value(&applied.task), "accepted": applied.accepted, "moved": applied.moved }))
     })
     .await
-}
-
-/// `withPath` without the stage engine: only the daemon picks a path, so the payload's `path` and
-/// `because` go. An event that would enter a branch needs its conditions checked, which part 3
-/// brings; until then it is refused.
-fn with_path(store: &mut Store, id: &str, mut input: Value) -> TaskResult<Value> {
-    let task = store.get_task(id)?;
-    let steps = store.steps_of(&task);
-    let mut probe = input.clone();
-    if let Some(map) = probe.as_object_mut() {
-        map.insert("taskId".into(), json!(id));
-        map.insert("at".into(), json!(store.timestamp()));
-    }
-    let event = natamux_core::events::schema::validate_task_event(&probe)?;
-    let position: StagePosition = position_of(&task);
-    let event = natamux_core::events::apply::complete_event(&position, event, &steps, &Vec::new());
-    if enters_branch(&position, &event, &steps).is_some() {
-        return Err(TaskError::Conflict(format!(
-            "{id} is at a branch; its conditions need the stage engine (phase 4, part 3)"
-        )));
-    }
-    if let Some(payload) = input.get_mut("payload").and_then(Value::as_object_mut) {
-        payload.shift_remove("path");
-        payload.shift_remove("because");
-    }
-    Ok(input)
 }
 
 pub async fn list_templates(state: Arc<AppState>) -> Answer {

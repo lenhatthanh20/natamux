@@ -186,6 +186,21 @@ impl EventBus {
         }
     }
 
+    /// Sends the queued messages and waits while another thread sends them, so a change this
+    /// thread made has reached every listener when it returns, as on Node's one thread. The stage
+    /// runner needs it: a move it applies must start the next stage before it answers. Never call
+    /// it from a listener.
+    pub fn deliver_all(&self) {
+        loop {
+            self.flush();
+            let idle = self.sending.try_lock().is_ok();
+            if idle && self.outbox.lock().map_or(true, |outbox| outbox.is_empty()) {
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_micros(100));
+        }
+    }
+
     fn pop(&self) -> Option<DaemonMessage> {
         self.outbox.lock().ok()?.pop_front()
     }

@@ -19,11 +19,13 @@ http-body-util = "0.1.3"
 hyper = { version = "1.11", features = ["client", "http1"] }
 hyper-util = { version = "0.1.17", features = ["tokio"] }
 memchr = "2.8.3"
+natamux-agents = { path = "crates/natamux-agents" }
 natamux-client = { path = "crates/natamux-client" }
 natamux-core = { path = "crates/natamux-core" }
 natamux-proto = { path = "crates/natamux-proto" }
 natamux-pty = { path = "crates/natamux-pty" }
 natamux-screen = { path = "crates/natamux-screen" }
+natamux-stages = { path = "crates/natamux-stages" }
 natamux-store = { path = "crates/natamux-store" }
 nix = "0.30.1"
 notify = "9.0.0-rc.4"

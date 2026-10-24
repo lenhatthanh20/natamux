@@ -72,10 +72,29 @@ async fn applies_an_event_and_filters_tasks_by_the_new_state() {
     assert_eq!(ready["tasks"].as_array().unwrap().len(), 1);
 }
 
-// Node asks the stage engine for the path of each event; the Rust daemon has none until part 3,
-// so an event that would enter a branch is refused with 409 and nothing is logged.
+/// The payload of each logged event of a task.
+async fn payloads(d: &TestDaemon, id: &str) -> Vec<(String, Value)> {
+    let (_, body) = d
+        .call(Method::GET, &format!("/tasks/{id}/events"), Some(TOKEN))
+        .await;
+    body["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|entry| {
+            let event = &entry["event"];
+            (
+                event["type"].as_str().unwrap().to_string(),
+                event["payload"].clone(),
+            )
+        })
+        .collect()
+}
+
+// Any event may end the step before a branch, so each goes through the conditions. Node spies on
+// `withPath`; this checks what it does: the logged event keeps the path and the reason.
 #[tokio::test(flavor = "multi_thread")]
-async fn refuses_an_event_that_enters_a_branch_with_409() {
+async fn checks_the_conditions_of_a_branch_before_any_event_of_a_person_or_an_agent() {
     let d = bare("branch").await;
     let pipeline = json!({ "stages": [
         { "id": "spec", "kind": "agent", "gate": "auto" },
@@ -86,35 +105,47 @@ async fn refuses_an_event_that_enters_a_branch_with_409() {
         ] },
     ] });
     std::fs::write(d.root.join("repo/.natamux.json"), pipeline.to_string()).unwrap();
-    d.send(
-        Method::POST,
-        "/tasks",
-        Some(TOKEN),
-        &json!({ "title": "Example" }),
-    )
-    .await;
-    for kind in ["task.readied", "agent.started"] {
-        post(
+    for (n, (token, source)) in [(TOKEN, "human"), (AGENT_TOKEN, "agent")]
+        .into_iter()
+        .enumerate()
+    {
+        let created = d
+            .send(
+                Method::POST,
+                "/tasks",
+                Some(TOKEN),
+                &json!({ "title": "Example" }),
+            )
+            .await;
+        assert_eq!(created.0, 201);
+        let id = format!("T-000{}", n + 1);
+        d.give_workspace(&id);
+        for kind in ["task.readied", "agent.started"] {
+            post(&d, TOKEN, &id, json!({ "source": "human", "type": kind })).await;
+        }
+
+        let (status, applied) = post(
             &d,
-            TOKEN,
-            "T-0001",
-            json!({ "source": "human", "type": kind }),
+            token,
+            &id,
+            json!({ "source": "human", "type": "stage.checked" }),
         )
         .await;
+
+        assert_eq!(status, 200, "{source}: {applied}");
+        let logged = payloads(&d, &id).await;
+        let (kind, payload) = logged.last().unwrap();
+        assert_eq!(kind, "stage.checked", "{source}");
+        assert_eq!(payload["path"], "bug", "{source}: {payload}");
+        assert!(payload["because"].is_string(), "{source}: {payload}");
+        // An event that enters no branch has no path and no reason.
+        let readied = logged.iter().find(|(kind, _)| kind == "task.readied");
+        let readied = &readied.unwrap().1;
+        assert!(
+            readied.get("path").is_none() && readied.get("because").is_none(),
+            "{source}"
+        );
     }
-    let before = logged(&d).await;
-
-    let (status, body) = post(
-        &d,
-        TOKEN,
-        "T-0001",
-        json!({ "source": "agent", "type": "stage.checked" }),
-    )
-    .await;
-
-    assert_eq!(status, 409);
-    assert_eq!(body["error"], "conflict");
-    assert_eq!(logged(&d).await, before);
 }
 
 #[tokio::test(flavor = "multi_thread")]

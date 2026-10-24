@@ -88,8 +88,8 @@ impl ContextSource {
     }
 }
 
-/// The part of a project's settings the app reads: context sources, stages and the tracker. Agent
-/// settings are left to the dashboard. The daemon fills the default pipeline in `stages`.
+/// The part of a project's settings the app and the daemon read: context sources, stages, the
+/// tracker and the agents. The daemon fills the default pipeline in `stages`.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize)]
 pub struct ProjectSettings {
     #[serde(default)]
@@ -98,6 +98,28 @@ pub struct ProjectSettings {
     pub stages: Vec<Step>,
     #[serde(default)]
     pub tracker: TrackerSettings,
+    #[serde(default)]
+    pub agents: AgentSettings,
+}
+
+/// `agentSettingsSchema`: `permission_mode` is `auto` or `ask`.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSettings {
+    #[serde(default = "auto")]
+    pub permission_mode: String,
+}
+
+fn auto() -> String {
+    "auto".into()
+}
+
+impl Default for AgentSettings {
+    fn default() -> Self {
+        AgentSettings {
+            permission_mode: auto(),
+        }
+    }
 }
 
 /// `trackerSettingsSchema`: `kind` is `github` or `none`; `create_issue` is one of `never`,
@@ -332,6 +354,7 @@ mod tests {
         assert_eq!(sources[1].kind, "skill");
         assert_eq!(sources[1].skill.as_deref(), Some("jira-issue"));
         assert_eq!(sources[2].prompt.as_deref(), Some("Read {ref}"));
+        assert_eq!(loaded.settings.agents.permission_mode, "auto");
         assert!(loaded.found);
         assert_eq!(loaded.path, "/r/.natamux.json");
         assert_eq!(loaded.text.as_deref(), Some("{}"));
@@ -356,6 +379,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(loaded.settings, ProjectSettings::default());
+        assert_eq!(loaded.settings.agents.permission_mode, "auto");
         assert!(!loaded.found);
         let empty: ProjectSettings = serde_json::from_str("{}").unwrap();
         assert_eq!(empty.context.sources.len(), 2);

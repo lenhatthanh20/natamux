@@ -11,6 +11,8 @@ pub struct Transcript {
     pub daemon: &'static str,
     pub steps: Vec<(String, Value)>,
     shells: Vec<String>,
+    /// Texts each daemon has its own of, such as the id of its twin task, and their placeholder.
+    aliases: Vec<(String, String)>,
 }
 
 /// A step whose answers may differ between the daemons, and why (docs/rust-phase4.md).
@@ -25,7 +27,13 @@ impl Transcript {
             daemon,
             steps: Vec::new(),
             shells: Vec::new(),
+            aliases: Vec::new(),
         }
+    }
+
+    /// Every later note has `text` as `placeholder`.
+    pub fn alias(&mut self, text: &str, placeholder: &str) {
+        self.aliases.push((text.into(), placeholder.into()));
     }
 
     pub fn note(&mut self, step: &str, value: Value) {
@@ -50,6 +58,11 @@ impl Transcript {
             Value::Array(items) => {
                 Value::Array(items.into_iter().map(|item| self.normalize(item)).collect())
             }
+            Value::String(text) => Value::String(
+                self.aliases
+                    .iter()
+                    .fold(text, |text, (from, to)| text.replace(from.as_str(), to)),
+            ),
             other => other,
         }
     }

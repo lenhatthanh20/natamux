@@ -1,0 +1,97 @@
+{
+  "context": { "sources": [{ "type": "manual" }] },
+  "stages": [
+    {
+      "id": "spec",
+      "kind": "agent",
+      "gate": "manual",
+      "output": "spec.md",
+      "sections": ["Goal", "Scope"],
+      "prompt": "Task: {title}\nWrite {dir}/spec.md with these sections: Goal, Scope."
+    },
+    {
+      "id": "route",
+      "name": "Route",
+      "paths": [
+        {
+          "id": "small",
+          "when": { "type": "command", "run": "test -f small.flag" },
+          "stages": [
+            {
+              "id": "patch",
+              "name": "Patch",
+              "kind": "agent",
+              "gate": "auto",
+              "output": "patch.md",
+              "prompt": "Task: {title}\nWrite {dir}/patch.md with these sections: Change."
+            }
+          ]
+        },
+        {
+          "id": "scoped",
+          "when": {
+            "type": "output",
+            "file": "spec.md",
+            "section": "Scope",
+            "contains": "- "
+          },
+          "stages": [
+            {
+              "id": "plan",
+              "kind": "agent",
+              "gate": "auto",
+              "output": "plan.md",
+              "sections": ["Steps"],
+              "prompt": "Task: {title}\nWrite {dir}/plan.md with these sections: Steps."
+            }
+          ]
+        },
+        {
+          "id": "big",
+          "stages": [
+            {
+              "id": "outline",
+              "name": "Outline",
+              "kind": "agent",
+              "gate": "auto",
+              "output": "outline.md",
+              "prompt": "Task: {title}\nWrite {dir}/outline.md with these sections: Parts."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "build",
+      "name": "Build",
+      "parallel": [
+        {
+          "id": "implement",
+          "kind": "agent",
+          "gate": "auto",
+          "requireCommit": true,
+          "prompt": "Task: {title}\nCommit your work."
+        },
+        {
+          "id": "notes",
+          "name": "Notes",
+          "kind": "agent",
+          "gate": "auto",
+          "args": "--model x",
+          "endShell": true,
+          "output": "notes.md",
+          "prompt": "Task: {title}\nWrite {dir}/notes.md with these sections: Notes."
+        }
+      ]
+    },
+    {
+      "id": "tests",
+      "name": "Tests",
+      "kind": "testing",
+      "gate": "auto",
+      "command": "test ! -f fail.flag"
+    },
+    { "id": "review", "kind": "review", "gate": "manual" },
+    { "id": "release", "kind": "release", "gate": "manual" }
+  ]
+}

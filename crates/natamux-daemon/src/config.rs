@@ -1,5 +1,6 @@
 //! The daemon's settings from its environment (`config.ts`).
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use natamux_pty::Env;
@@ -19,6 +20,37 @@ pub struct Config {
     /// The token of the task shells. Only made here, so an agent cannot set it.
     pub agent_token: String,
     pub silent_close: std::time::Duration,
+    pub agents: AgentConfig,
+}
+
+/// How agents start: `NATAMUX_<AGENT>_COMMAND` and `_ARGS` (the agent id in capitals, `CLAUDE`
+/// for Claude Code), and `NATAMUX_BIN_DIR`, the folder of the app's `natamux` command.
+#[derive(Clone, Debug, Default)]
+pub struct AgentConfig {
+    pub programs: HashMap<String, String>,
+    pub extra_args: HashMap<String, String>,
+    pub bin_dir: Option<String>,
+}
+
+fn agent_config(env: &Env) -> AgentConfig {
+    let mut config = AgentConfig {
+        bin_dir: value(env, "NATAMUX_BIN_DIR").map(str::to_string),
+        ..AgentConfig::default()
+    };
+    for agent in natamux_proto::agents::start::LAUNCHABLE_AGENTS {
+        let name = if agent == "claude-code" {
+            "CLAUDE".to_string()
+        } else {
+            agent.to_uppercase()
+        };
+        if let Some(program) = env.get(&format!("NATAMUX_{name}_COMMAND")) {
+            config.programs.insert(agent.into(), program.clone());
+        }
+        if let Some(words) = env.get(&format!("NATAMUX_{name}_ARGS")) {
+            config.extra_args.insert(agent.into(), words.clone());
+        }
+    }
+    config
 }
 
 fn value<'a>(env: &'a Env, name: &str) -> Option<&'a str> {
@@ -54,6 +86,7 @@ pub fn load_config(env: &Env, cwd: &Path) -> Result<Config, String> {
         token_was_generated: configured.is_none(),
         agent_token: random_id(24),
         silent_close: natamux_proto::terminals::messages::SILENT_CLOSE,
+        agents: agent_config(env),
     })
 }
 
@@ -106,6 +139,20 @@ mod tests {
             (config.token.as_str(), config.token_was_generated),
             ("secret", false)
         );
+    }
+
+    #[test]
+    fn reads_the_command_and_words_of_each_agent() {
+        let set = env(&[
+            ("NATAMUX_CLAUDE_COMMAND", "/opt/fake-agent.sh"),
+            ("NATAMUX_CODEX_ARGS", "--model x"),
+            ("NATAMUX_BIN_DIR", "/app/bin"),
+        ]);
+        let config = load_config(&set, Path::new("/")).unwrap().agents;
+        assert_eq!(config.programs["claude-code"], "/opt/fake-agent.sh");
+        assert_eq!(config.extra_args["codex"], "--model x");
+        assert_eq!(config.programs.len() + config.extra_args.len(), 2);
+        assert_eq!(config.bin_dir.as_deref(), Some("/app/bin"));
     }
 
     #[test]

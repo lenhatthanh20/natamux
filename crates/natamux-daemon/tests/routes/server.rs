@@ -14,6 +14,7 @@ use hyper_util::rt::TokioIo;
 use natamux_daemon::config::Config;
 use natamux_daemon::shared::scheduler::Scheduler;
 use natamux_daemon::start::{Daemon, start};
+use natamux_daemon::tasks::records::WorkspaceChange;
 use natamux_proto::tasks::task::Task;
 use natamux_pty::{Pty, PtyEvents, Signal, SpawnOptions};
 use natamux_store::task_files::write_task_file;
@@ -34,6 +35,9 @@ pub struct EchoPty {
     pub options: Arc<SpawnOptions>,
     pub written: Arc<Mutex<Vec<String>>>,
     pub sizes: Arc<Mutex<Vec<(u16, u16)>>>,
+    /// The program in the foreground; "bash" until a test sets another.
+    program: Arc<Mutex<String>>,
+    commands: Arc<Mutex<Option<Vec<String>>>>,
     events: Sender<Event>,
 }
 
@@ -44,6 +48,18 @@ impl EchoPty {
 
     pub fn exit(&self, code: Option<i32>) {
         let _ = self.events.send(Event::Exit(code));
+    }
+
+    pub fn set_program(&self, program: &str) {
+        *self.program.lock().unwrap() = program.to_string();
+    }
+
+    pub fn set_commands(&self, lines: &[&str]) {
+        *self.commands.lock().unwrap() = Some(lines.iter().map(|line| line.to_string()).collect());
+    }
+
+    pub fn written(&self) -> Vec<String> {
+        self.written.lock().unwrap().clone()
     }
 
     pub fn sizes(&self) -> Vec<(u16, u16)> {
@@ -97,7 +113,11 @@ impl Pty for EchoSide {
     }
 
     fn foreground(&self) -> Option<String> {
-        Some("bash".into())
+        Some(self.handle.program.lock().unwrap().clone())
+    }
+
+    fn commands(&self) -> Option<Vec<String>> {
+        self.handle.commands.lock().unwrap().clone()
     }
 }
 
@@ -202,6 +222,7 @@ async fn start_daemon(root: PathBuf, task: Option<bool>, silent_close: Duration)
         token_was_generated: false,
         agent_token: AGENT_TOKEN.into(),
         silent_close,
+        agents: Default::default(),
     };
     let ptys: Arc<Mutex<Vec<EchoPty>>> = Arc::default();
     let made = Arc::clone(&ptys);
@@ -211,6 +232,8 @@ async fn start_daemon(root: PathBuf, task: Option<bool>, silent_close: Duration)
             options: Arc::new(options),
             written: Arc::default(),
             sizes: Arc::default(),
+            program: Arc::new(Mutex::new("bash".into())),
+            commands: Arc::default(),
             events,
         };
         made.lock().unwrap().push(handle.clone());
@@ -226,10 +249,78 @@ async fn start_daemon(root: PathBuf, task: Option<bool>, silent_close: Duration)
     let daemon = start(&config, &env, Arc::new(spawn), Scheduler::real())
         .await
         .unwrap();
+    // Node's server.test.ts builds the runner but never starts it: nothing starts the context
+    // stage of a new task. `start_runner` turns it on for a test that needs it.
+    daemon.state.stages.stop();
     TestDaemon { daemon, ptys, root }
 }
 
 impl TestDaemon {
+    /// Subscribes the stage runner to the bus again.
+    #[allow(dead_code)]
+    pub fn start_runner(&self) {
+        self.daemon.state.stages.start();
+    }
+
+    /// The pipeline of the default project: agent stages that offer no workflow, as the tests of
+    /// Node have it. Write it before the first task is made.
+    pub fn set_simple_pipeline(&self) {
+        let stages = ["implement", "review", "release"]
+            .map(|id| json!({ "id": id, "kind": "agent", "gate": "auto" }));
+        let file = self.root.join("repo/.natamux.json");
+        std::fs::write(file, json!({ "stages": stages }).to_string()).unwrap();
+    }
+
+    /// `POST /tasks` with a title; gives the id.
+    pub async fn make_task(&self, title: &str) -> String {
+        let (status, body) = self
+            .send(
+                Method::POST,
+                "/tasks",
+                Some(TOKEN),
+                &json!({ "title": title }),
+            )
+            .await;
+        assert_eq!(status, 201, "{body}");
+        body["task"]["id"].as_str().unwrap().to_string()
+    }
+
+    /// The (type, source) of each logged event of a task.
+    pub async fn events_of(&self, id: &str) -> Vec<(String, String)> {
+        let (_, body) = self
+            .call(Method::GET, &format!("/tasks/{id}/events"), Some(TOKEN))
+            .await;
+        body["events"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|entry| {
+                let event = &entry["event"];
+                (
+                    event["type"].as_str().unwrap().to_string(),
+                    event["source"].as_str().unwrap().to_string(),
+                )
+            })
+            .collect()
+    }
+
+    /// A worktree folder for `id`, recorded as `WorkspaceService.create` does (workspace routes
+    /// come with part 5). Gives its path.
+    pub fn give_workspace(&self, id: &str) -> PathBuf {
+        let folder = self.root.join("data/worktrees").join(id);
+        std::fs::create_dir_all(&folder).unwrap();
+        let change = WorkspaceChange {
+            workspace: Some(folder.to_string_lossy().into_owned()),
+            branch: None,
+        };
+        self.daemon
+            .state
+            .tasks
+            .record_workspace(id, change)
+            .unwrap();
+        folder
+    }
+
     pub fn ptys(&self) -> Vec<EchoPty> {
         self.ptys.lock().unwrap().clone()
     }

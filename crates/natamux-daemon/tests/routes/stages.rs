@@ -1,0 +1,257 @@
+//! The stage cases of `server.test.ts`: send back, the workflow and skip marks, and what the agent
+//! token may do with a stage. The stage files have no case there.
+
+use hyper::Method;
+use serde_json::{Value, json};
+
+use crate::server::{AGENT_TOKEN, TOKEN, TestDaemon, bare};
+
+async fn task() -> TestDaemon {
+    let d = bare("stages").await;
+    d.set_simple_pipeline();
+    d.make_task("Example").await;
+    d
+}
+
+async fn stage(d: &TestDaemon, token: &str, body: Value) -> (u16, Value) {
+    d.send(Method::POST, "/tasks/T-0001/stage", Some(token), &body)
+        .await
+}
+
+async fn put(d: &TestDaemon, token: &str, path: &str, body: Value) -> (u16, Value) {
+    d.send(
+        Method::PUT,
+        &format!("/tasks/T-0001/{path}"),
+        Some(token),
+        &body,
+    )
+    .await
+}
+
+async fn send_event(d: &TestDaemon, kind: &str) {
+    let body = json!({ "source": "human", "type": kind });
+    d.send(Method::POST, "/tasks/T-0001/events", Some(TOKEN), &body)
+        .await;
+}
+
+/// The task is ready and its agent started.
+async fn running() -> TestDaemon {
+    let d = task().await;
+    send_event(&d, "task.readied").await;
+    send_event(&d, "agent.started").await;
+    d
+}
+
+fn entry(kind: &str, source: &str) -> (String, String) {
+    (kind.to_string(), source.to_string())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn answers_400_for_a_send_back_to_an_unknown_or_later_stage() {
+    let d = task().await;
+    for to in ["nope", "release"] {
+        let (status, body) = stage(&d, TOKEN, json!({ "action": "reopen", "to": to })).await;
+        assert_eq!(status, 400, "{to}");
+        assert!(
+            body["message"]
+                .as_str()
+                .unwrap()
+                .contains(&format!("\"{to}\"")),
+            "{body}"
+        );
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn sets_the_workflow_of_a_stage_and_refuses_a_stage_that_does_not_offer_one() {
+    let d = task().await;
+
+    // The pipeline of these tests offers no workflow on any stage.
+    let (status, body) = put(
+        &d,
+        TOKEN,
+        "workflow",
+        json!({ "stage": "review", "on": true }),
+    )
+    .await;
+    assert_eq!(status, 400);
+    assert!(
+        body["message"]
+            .as_str()
+            .unwrap()
+            .contains("project settings"),
+        "{body}"
+    );
+
+    let (status, body) = put(
+        &d,
+        TOKEN,
+        "workflow",
+        json!({ "stage": "implement", "on": false }),
+    )
+    .await;
+    assert_eq!(status, 200);
+    assert_eq!(body["task"]["id"], "T-0001");
+    assert_eq!(body["task"]["workflowStages"], json!([]));
+
+    let missing = put(&d, TOKEN, "workflow", json!({ "stage": "implement" })).await;
+    assert_eq!(missing.0, 400);
+    let unknown = d
+        .send(
+            Method::PUT,
+            "/tasks/T-0099/workflow",
+            Some(TOKEN),
+            &json!({ "stage": "implement", "on": true }),
+        )
+        .await;
+    assert_eq!(unknown.0, 404);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn marks_a_later_stage_to_skip_and_refuses_the_current_one() {
+    let d = task().await;
+
+    let (status, body) = put(&d, TOKEN, "skip", json!({ "stage": "review", "on": true })).await;
+    assert_eq!(status, 200);
+    assert_eq!(body["task"]["id"], "T-0001");
+    assert_eq!(body["task"]["skipStages"], json!(["review"]));
+
+    let (status, body) = put(
+        &d,
+        TOKEN,
+        "skip",
+        json!({ "stage": "implement", "on": true }),
+    )
+    .await;
+    assert_eq!(status, 400);
+    assert!(body["message"].as_str().unwrap().contains("Skip"), "{body}");
+    for bad in [
+        json!({ "stage": "review" }),
+        json!({ "stage": "review", "on": "yes" }),
+        json!({ "stage": 3, "on": true }),
+    ] {
+        assert_eq!(put(&d, TOKEN, "skip", bad).await.0, 400);
+    }
+    let unknown = d
+        .send(
+            Method::PUT,
+            "/tasks/T-0099/skip",
+            Some(TOKEN),
+            &json!({ "stage": "review", "on": true }),
+        )
+        .await;
+    assert_eq!(unknown.0, 404);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn may_not_approve_skip_or_pass_a_stage() {
+    for action in ["approve", "skip", "pass"] {
+        let d = task().await;
+        let before = d.events_of("T-0001").await;
+
+        let (status, body) = stage(&d, AGENT_TOKEN, json!({ "action": action })).await;
+
+        assert_eq!(status, 403, "{action}");
+        assert!(
+            body["message"].as_str().unwrap().contains("Only a person"),
+            "{body}"
+        );
+        assert_eq!(d.events_of("T-0001").await, before, "{action}");
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn records_a_stage_action_it_may_take_as_the_agent() {
+    let d = running().await;
+
+    let (status, _) = stage(
+        &d,
+        AGENT_TOKEN,
+        json!({ "action": "fail", "reason": "Stuck" }),
+    )
+    .await;
+
+    assert_eq!(status, 200);
+    assert_eq!(
+        d.events_of("T-0001").await.last(),
+        Some(&entry("stage.failed", "agent"))
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn records_a_question_it_sends_as_a_person_as_the_agent() {
+    let d = running().await;
+    let body = json!({
+        "source": "human", "type": "agent.asked", "payload": { "question": "Which file?" },
+    });
+
+    let (_, asked) = d
+        .send(
+            Method::POST,
+            "/tasks/T-0001/events",
+            Some(AGENT_TOKEN),
+            &body,
+        )
+        .await;
+
+    assert_eq!(asked["accepted"], true);
+    assert_eq!(asked["task"]["state"], "needs-input");
+    assert_eq!(
+        d.events_of("T-0001").await.last(),
+        Some(&entry("agent.asked", "agent"))
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn records_a_report_and_a_send_back_as_the_agent_and_a_start_never_as_a_person() {
+    let d = running().await;
+    stage(&d, AGENT_TOKEN, json!({ "action": "report" })).await;
+    let reported: Vec<_> = d
+        .events_of("T-0001")
+        .await
+        .into_iter()
+        .filter(|(kind, _)| kind == "stage.reported")
+        .collect();
+    assert_eq!(reported, [entry("stage.reported", "agent")]);
+
+    let before = d.events_of("T-0001").await.len();
+    let reopen = json!({ "action": "reopen", "to": "implement" });
+    assert_eq!(stage(&d, AGENT_TOKEN, reopen).await.0, 200);
+    assert_eq!(
+        stage(&d, AGENT_TOKEN, json!({ "action": "start" })).await.0,
+        200
+    );
+    let after = d.events_of("T-0001").await.split_off(before);
+    assert!(
+        after.contains(&entry("stage.reopened", "agent")),
+        "{after:?}"
+    );
+    assert!(
+        after.iter().all(|(_, source)| source != "human"),
+        "{after:?}"
+    );
+}
+
+// Left out: the row for `/repos/default/settings` of 'may not change $url': the settings routes
+// come with part 5 (docs/rust-phase4.md). The three stage rows are here.
+#[tokio::test(flavor = "multi_thread")]
+async fn may_not_change_the_marks_of_a_stage() {
+    let rows = [
+        ("skip", json!({ "stage": "review", "on": true })),
+        ("ci", json!({ "stage": "implement", "on": false })),
+        ("workflow", json!({ "stage": "implement", "on": false })),
+    ];
+    for (path, body) in rows {
+        let d = task().await;
+        let tasks = d.call(Method::GET, "/tasks", Some(TOKEN)).await;
+
+        let (status, _) = put(&d, AGENT_TOKEN, path, body).await;
+
+        assert_eq!(status, 403, "{path}");
+        assert_eq!(
+            d.call(Method::GET, "/tasks", Some(TOKEN)).await,
+            tasks,
+            "{path}"
+        );
+    }
+}
