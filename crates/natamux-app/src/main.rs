@@ -286,7 +286,7 @@ mod workspaces {
 }
 
 use std::process::ExitCode;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use gpui::App;
@@ -333,25 +333,26 @@ fn main() -> ExitCode {
     let child = owned
         .as_ref()
         .and_then(|result| result.as_ref().ok().map(OwnedDaemon::child));
+    let owned = Arc::new(Mutex::new(owned.and_then(Result::ok)));
+    let run_owned = Arc::clone(&owned);
     let failed = Arc::new(std::sync::atomic::AtomicBool::new(false));
     let start_failed = Arc::clone(&failed);
     gpui_platform::application()
         .with_assets(NatamuxAssets)
         .run(move |cx| {
-            if let Err(error) = start(&options, local.as_ref(), child.clone(), cx) {
+            if let Err(error) = start(
+                &options,
+                local.as_ref(),
+                child.clone(),
+                Arc::clone(&run_owned),
+                cx,
+            ) {
                 eprintln!("natamux-app: {error:#}");
                 start_failed.store(true, std::sync::atomic::Ordering::Relaxed);
                 cx.quit();
             }
         });
-    app::update::install_on_quit();
-    drop(owned);
-    if let Some(binary) = app::update::take_restart()
-        && let Err(error) = std::process::Command::new(binary).spawn()
-    {
-        eprintln!("natamux-app: could not restart: {error}");
-        return ExitCode::FAILURE;
-    }
+    app::update::finish_quit(&owned);
     if failed.load(std::sync::atomic::Ordering::Relaxed) {
         ExitCode::FAILURE
     } else {
@@ -363,6 +364,7 @@ fn start(
     options: &Options,
     local: Option<&Result<Config, String>>,
     child: Option<Arc<std::sync::Mutex<std::process::Child>>>,
+    owned: Arc<Mutex<Option<OwnedDaemon>>>,
     cx: &mut App,
 ) -> anyhow::Result<()> {
     NatamuxAssets.load_fonts(cx)?;
@@ -398,6 +400,11 @@ fn start(
     if let Some(shot) = options.shot {
         app::shots::prepare(shot);
     }
+    cx.on_app_quit(move |_| {
+        app::update::finish_quit(&owned);
+        async {}
+    })
+    .detach();
     let window = app::window::open(options, source(options, local), cx)?;
     app::update::set_window(window.clone(), cx);
     if !fake && !options.smoke {
@@ -427,11 +434,18 @@ fn start(
         perf::draws::start(window, cx);
     }
     if let Some(seconds) = options.hold_seconds {
+        let smoke_window = options.smoke.then(|| window.clone());
         cx.spawn(async move |cx| {
             cx.background_executor()
                 .timer(Duration::from_secs(seconds))
                 .await;
-            cx.update(|cx| cx.quit());
+            cx.update(|cx| {
+                if let Some(window) = smoke_window {
+                    let _ = window.update(cx, |_, window, _| window.remove_window());
+                } else {
+                    cx.quit();
+                }
+            });
         })
         .detach();
     }

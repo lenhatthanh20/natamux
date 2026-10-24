@@ -4,6 +4,7 @@ set -euo pipefail
 
 app=${1:?usage: scripts/release-smoke.sh <app-binary> <app-data-folder>}
 folder=${2:?missing app data folder}
+rm -f "$folder/daemon-port"
 "$app" --smoke --hold 12 &
 pid=$!
 for _ in $(seq 1 200); do
@@ -17,3 +18,4 @@ port=$(cat "$folder/daemon-port")
 curl --fail --silent --show-error "http://127.0.0.1:$port/health" >/dev/null
 curl --fail --silent --show-error "http://127.0.0.1:$port/" | grep -q '<div id="root"'
 wait "$pid"
+test ! -e "$folder/daemon-port"

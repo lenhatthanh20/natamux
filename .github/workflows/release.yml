@@ -103,6 +103,8 @@ jobs:
           restore-keys: rust-app-${{ runner.os }}-
       - name: Install Linux build tools
         if: runner.os == 'Linux'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libasound2-dev libfontconfig-dev \
@@ -183,8 +185,10 @@ jobs:
         if: runner.os == 'Windows'
         run: |
           mkdir -p dist
+          # NSIS needs Windows paths: with forward slashes File finds no files.
           "C:/Program Files (x86)/NSIS/makensis.exe" \
-            -DBIN="$PWD/target/release" -DOUT="$PWD/dist" scripts/natamux-windows.nsi
+            -DBIN="$(cygpath -w "$PWD/target/release")" -DOUT="$(cygpath -w "$PWD/dist")" \
+            scripts/natamux-windows.nsi
           7z l dist/Natamux-win-x64.exe | grep -q natamux-daemon.exe
           7z x -y -o"$RUNNER_TEMP/unpacked" dist/Natamux-win-x64.exe >/dev/null
           scripts/release-smoke.sh "$RUNNER_TEMP/unpacked/Natamux.exe" \

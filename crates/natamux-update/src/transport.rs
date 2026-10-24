@@ -95,6 +95,11 @@ pub(super) fn curl(url: &str, timeout_seconds: u32, head: bool) -> Result<Comman
         return Err("The update URL is not a GitHub release address".into());
     }
     let mut command = Command::new(if cfg!(windows) { "curl.exe" } else { "curl" });
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    }
     command.args([
         "--location",
         "--fail",

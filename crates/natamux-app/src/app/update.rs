@@ -4,7 +4,7 @@ use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
@@ -20,6 +20,7 @@ use super::view_state;
 use crate::components::toast_rules::ToastTone;
 use crate::components::confirm::Confirm;
 use crate::components::toasts::{ToastAction, push_toast, toast};
+use crate::daemon::process::OwnedDaemon;
 
 static CHECKING: AtomicBool = AtomicBool::new(false);
 static READY: Mutex<Option<Ready>> = Mutex::new(None);
@@ -59,11 +60,19 @@ pub fn toggle_automatic(cx: &mut App) {
     };
     match preferences::save(&file, !automatic()) {
         Ok(()) => toast(
-            if automatic() { "Automatic update checks are on." } else { "Automatic update checks are off." },
+            if automatic() {
+                "Automatic update checks are on."
+            } else {
+                "Automatic update checks are off."
+            },
             ToastTone::Info,
             cx,
         ),
-        Err(error) => toast(&format!("Could not save the update setting: {error}"), ToastTone::Error, cx),
+        Err(error) => toast(
+            &format!("Could not save the update setting: {error}"),
+            ToastTone::Error,
+            cx,
+        ),
     }
     super::shortcuts::set_menus(cx);
     if automatic() {
@@ -76,7 +85,10 @@ pub fn ready() -> bool {
 }
 
 pub fn restart_title() -> String {
-    let version = READY.lock().ok().and_then(|slot| slot.as_ref().map(|ready| ready.release.version.clone()));
+    let version = READY
+        .lock()
+        .ok()
+        .and_then(|slot| slot.as_ref().map(|ready| ready.release.version.clone()));
     restart_title_for(version.as_deref())
 }
 
@@ -218,7 +230,9 @@ fn show_result(result: Result<(CheckOutcome, Option<Ready>), String>, manual: bo
                     format!("Natamux {} is ready", release.version),
                     "Restart to install the signed update.",
                     "Restart Now",
-                    |window, cx| window.dispatch_action(Box::new(super::shortcuts::RestartToUpdate), cx),
+                    |window, cx| {
+                        window.dispatch_action(Box::new(super::shortcuts::RestartToUpdate), cx)
+                    },
                 )
                 .cancel_label("Later"),
                 cx,
@@ -293,7 +307,11 @@ pub fn restart(cx: &mut App) {
             }
             cx.quit();
         }
-        Err(error) => toast(&format!("Could not install the update: {error}"), ToastTone::Error, cx),
+        Err(error) => toast(
+            &format!("Could not install the update: {error}"),
+            ToastTone::Error,
+            cx,
+        ),
     }
 }
 
@@ -314,13 +332,30 @@ pub fn take_restart() -> Option<PathBuf> {
     NEXT_LAUNCH.lock().ok().and_then(|mut next| next.take())
 }
 
-/// A ready macOS update is also installed after an ordinary quit.
-pub fn install_on_quit() {
+/// Finish a ready macOS update and return a queued app relaunch, if it still needs one.
+pub fn finish_on_quit() -> Option<PathBuf> {
+    let launch = take_restart();
     let ready = READY.lock().ok().and_then(|mut slot| slot.take());
     if let Some(ready) = ready.filter(|ready| ready.kind == InstallKind::Mac) {
-        if let Err(error) = install_ready(&ready, false) {
-            log(&ready.folder, &format!("could not install update on quit: {error}"));
+        match install_ready(&ready, launch.is_some()) {
+            Ok(()) => return None,
+            Err(error) => log(&ready.folder, &format!("could not install update on quit: {error}")),
         }
+    }
+    launch
+}
+
+pub fn finish_quit(owned: &Arc<Mutex<Option<OwnedDaemon>>>) {
+    let launch = finish_on_quit();
+    if let Ok(mut slot) = owned.lock() {
+        let daemon = slot.take();
+        drop(slot);
+        drop(daemon);
+    }
+    if let Some(binary) = launch
+        && let Err(error) = Command::new(binary).spawn()
+    {
+        eprintln!("natamux-app: could not restart: {error}");
     }
 }
 
@@ -328,7 +363,11 @@ fn install_ready(ready: &Ready, relaunch: bool) -> io::Result<()> {
     log(&ready.folder, &format!("installing {}", ready.release.tag));
     match ready.kind {
         InstallKind::Mac => {
-            let script = ready.folder.join("updates").join(&ready.release.version).join("install.sh");
+            let script = ready
+                .folder
+                .join("updates")
+                .join(&ready.release.version)
+                .join("install.sh");
             let log_file = ready.folder.join("logs/update.log");
             fs::write(&script, mac_install_script(
                 &ready.current.to_string_lossy(),
@@ -376,7 +415,7 @@ fn log(folder: &Path, message: &str) {
 
 #[cfg(test)]
 mod tests {
-    use super::{queue_launch, restart_title_for, take_restart};
+    use super::{finish_on_quit, queue_launch, restart_title_for, take_restart};
 
     #[test]
     fn the_restart_menu_names_the_ready_version() {
@@ -388,7 +427,7 @@ mod tests {
     fn a_relaunch_is_taken_once_after_the_app_stops() {
         let binary = std::path::PathBuf::from("/tmp/natamux-app");
         queue_launch(binary.clone());
-        assert_eq!(take_restart(), Some(binary));
+        assert_eq!(finish_on_quit(), Some(binary));
         assert_eq!(take_restart(), None);
     }
 }

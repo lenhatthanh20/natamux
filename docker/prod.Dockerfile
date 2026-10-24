@@ -25,7 +25,7 @@ COPY --from=web-build /app/packages/web/dist packages/web/dist
 ENV NATAMUX_REQUIRE_WEB=1
 RUN cargo build --release -p natamux-daemon -p natamux-cli --locked
 
-FROM debian:bookworm-slim AS daemon
+FROM debian:trixie-slim AS daemon
 LABEL org.opencontainers.image.source="https://github.com/lenhatthanh20/natamux"
 RUN apt-get update \
   && apt-get install -y --no-install-recommends bash ca-certificates curl git \

@@ -2,7 +2,7 @@
 //! If it does not arrive, the daemon keeps the app's PATH. The app sends one message over the
 //! child's private stdin.
 
-use std::io::{BufRead, Read};
+use std::io::BufRead;
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
 use std::time::Duration;
 
