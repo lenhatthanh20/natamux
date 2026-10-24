@@ -22,11 +22,11 @@ fn reports_a_gh_that_does_not_finish() {
     let bin = dir.path().join("bin");
     std::fs::create_dir(&bin).unwrap();
     let script = bin.join("gh");
-    std::fs::write(&script, "#!/bin/sh\nsleep 30\n").unwrap();
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let mut command = Command::new(&script);
-    command.current_dir(dir.path());
+    std::fs::write(&script, "sleep 30\n").unwrap();
+    // Run through sh, not exec: exec of a file just written can fail with "Text file busy" when
+    // another test thread forks meanwhile, and the spawn error looked like a gh that finished.
+    let mut command = Command::new("/bin/sh");
+    command.arg(&script).current_dir(dir.path());
     let ran = capture(command, Duration::from_millis(200), 1024);
     assert!(ran.killed());
 }
