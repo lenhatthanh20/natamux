@@ -1,14 +1,14 @@
 //! The view header of All tasks: the title with the count, the state filter, Show finished (on
-//! Board only) and the layout switch [Table | Board | Progress]. A child of `task_view.rs`, so it
+//! Board only) and the layout switch: three icon toggle buttons, in one 32 px toolbar. A child of `task_view.rs`, so it
 //! reads the view's fields.
 
 use gpui::FontWeight;
-use ui::{Checkbox, prelude::*};
+use ui::{Checkbox, Tooltip, prelude::*};
 
 use super::TaskView;
+use crate::app::commands::shortcut_of;
 use crate::app::view_state::Layout;
-use crate::components::chips::CountBadge;
-use crate::components::segmented::Segmented;
+use crate::components::chips::{CountBadge, tip_with_keys};
 use crate::tasks::state_filter::{StateFilter, width_probe};
 use crate::tasks::task_attention::{count_by_state, filter_tasks};
 use crate::tasks::task_view_rules::{NARROW_BELOW, filter_states};
@@ -34,17 +34,13 @@ impl TaskView {
         h_flex()
             .relative()
             .flex_none()
-            .h(rems_from_px(44.0_f32))
-            .px_4()
+            .h(rems_from_px(32.0_f32))
+            .px_3()
             .gap_3()
             .border_b_1()
             .border_color(colors.border_variant)
             .child(width_probe(&self.main_width))
-            .child(
-                Label::new("All tasks")
-                    .size(LabelSize::Large)
-                    .weight(FontWeight::SEMIBOLD),
-            )
+            .child(Label::new("All tasks").weight(FontWeight::SEMIBOLD))
             .child(CountBadge::new(count))
             .child(filter)
             .child(
@@ -63,38 +59,38 @@ impl TaskView {
                                 }),
                         )
                     })
-                    .child(self.layout_switch(layout, narrow)),
+                    .child(self.layout_switch(layout)),
             )
     }
 
-    /// [Table | Board | Progress].
-    fn layout_switch(&self, layout: Layout, narrow: bool) -> Segmented<3> {
-        let pick = self.dashboard.clone();
+    /// Table, Board and Progress as three icon toggle buttons.
+    fn layout_switch(&self, layout: Layout) -> impl IntoElement + use<> {
         let layouts = [
-            ("Table".into(), IconName::Table),
-            ("Board".into(), IconName::DiffSplit),
-            // lucide `list-checks` cannot go in a ToggleButtonWithIcon, which takes an IconName.
-            ("Progress".into(), IconName::ListTodo),
+            (Layout::Table, "Table", IconName::Table, "view.table"),
+            (Layout::Board, "Board", IconName::DiffSplit, "view.board"),
+            // lucide `list-checks` cannot go in an IconButton, which takes an IconName.
+            (
+                Layout::Progress,
+                "Progress",
+                IconName::ListTodo,
+                "view.progress",
+            ),
         ];
-        let selected = match layout {
-            Layout::Table => 0,
-            Layout::Board => 1,
-            Layout::Progress => 2,
-        };
-        Segmented::new(
-            "task-layout",
-            &self.layout_focus,
-            layouts,
-            selected,
-            move |index, _, cx| {
-                let layout = match index {
-                    0 => Layout::Table,
-                    1 => Layout::Board,
-                    _ => Layout::Progress,
+        h_flex()
+            .gap_0p5()
+            .children(layouts.map(|(to, name, icon, command)| {
+                let pick = self.dashboard.clone();
+                let mut button = IconButton::new(("task-layout", to as usize), icon)
+                    .icon_size(IconSize::Small)
+                    .toggle_state(layout == to)
+                    .on_click(move |_, _, cx| {
+                        pick.update(cx, |dashboard, cx| dashboard.set_layout(to, cx));
+                    });
+                button = match shortcut_of(command) {
+                    Some(keys) => button.tooltip(tip_with_keys(name, keys)),
+                    None => button.tooltip(Tooltip::text(name)),
                 };
-                pick.update(cx, |dashboard, cx| dashboard.set_layout(layout, cx));
-            },
-        )
-        .icon_only(narrow)
+                button
+            }))
     }
 }

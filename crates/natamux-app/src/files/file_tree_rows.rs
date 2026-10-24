@@ -10,6 +10,7 @@ use ui::{Disclosure, Tooltip, prelude::*};
 use super::explorer_tree::{DraggedPath, ExplorerRow};
 use super::file_icon_view::file_icon;
 use crate::components::colors::{change_color, signal};
+use crate::components::text_size::row_text;
 use crate::git::change_rules::{StatusTone, status_tone};
 
 /// What a row shows besides its place in the tree.
@@ -167,7 +168,7 @@ fn name_label(row: &ExplorerRow, tone: Color) -> Stateful<Div> {
         .tooltip(Tooltip::text(row.key.clone()))
         .child(
             Label::new(row.name.clone())
-                .size(LabelSize::Small)
+                .size(row_text())
                 .color(tone)
                 .truncate(),
         )

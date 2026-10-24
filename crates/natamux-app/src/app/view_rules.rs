@@ -17,11 +17,6 @@ pub const MAX_RECENT: usize = 20;
 
 pub use crate::app::tab_rules::{DetailsView, WorkspaceTab, details_view_for};
 
-/// Until the user opens or closes them, the details are open where they dock beside a workspace.
-pub fn details_open_for(choice: Option<bool>, docked_beside_workspace: bool) -> bool {
-    choice.unwrap_or(docked_beside_workspace)
-}
-
 /// The workspaces that were opened, newest first, each once.
 pub fn with_recent(current: &[String], task_id: &str) -> Vec<String> {
     std::iter::once(task_id.to_owned())
@@ -46,10 +41,6 @@ fn with_entry<T: Clone>(
     let extra = next.len().saturating_sub(max);
     next.drain(..extra);
     next
-}
-
-pub fn with_detail_open(current: &[(String, bool)], task_id: &str, open: bool) -> Entries<bool> {
-    with_entry(current, task_id, open, MAX_REMEMBERED_DETAILS)
 }
 
 pub fn with_tab(
@@ -166,54 +157,6 @@ pub fn parse_pinned(raw: Option<&str>) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn flags(entries: &[(&str, bool)]) -> Entries<bool> {
-        entries
-            .iter()
-            .map(|&(id, open)| (id.to_owned(), open))
-            .collect()
-    }
-
-    #[test]
-    fn with_detail_open_sets_and_changes_the_flag_of_one_task() {
-        let opened = with_detail_open(&[], "T-0001", true);
-        assert_eq!(opened, flags(&[("T-0001", true)]));
-        assert_eq!(
-            with_detail_open(&opened, "T-0001", false),
-            flags(&[("T-0001", false)])
-        );
-    }
-
-    #[test]
-    fn with_detail_open_keeps_the_other_tasks_as_they_were() {
-        let next = with_detail_open(&flags(&[("T-0001", true)]), "T-0002", false);
-        assert_eq!(next, flags(&[("T-0001", true), ("T-0002", false)]));
-    }
-
-    #[test]
-    fn with_detail_open_forgets_the_oldest_answers_when_there_are_too_many() {
-        let mut current: Entries<bool> = Vec::new();
-        for index in 0..205 {
-            current = with_detail_open(&current, &format!("T-{index}"), true);
-        }
-        assert_eq!(current.len(), 200);
-        assert!(find(&current, "T-0").is_none());
-        assert_eq!(find(&current, "T-204"), Some(&true));
-    }
-
-    #[test]
-    fn details_open_for_follows_the_choice_of_the_user() {
-        assert!(details_open_for(Some(true), false));
-        assert!(details_open_for(Some(true), true));
-        assert!(!details_open_for(Some(false), true));
-        assert!(!details_open_for(Some(false), false));
-    }
-
-    #[test]
-    fn details_open_for_opens_the_details_docked_beside_a_workspace_until_the_user_chooses() {
-        assert!(details_open_for(None, true));
-        assert!(!details_open_for(None, false));
-    }
 
     #[test]
     fn details_view_for_shows_progress_in_a_workspace_and_the_task_beside_the_list() {

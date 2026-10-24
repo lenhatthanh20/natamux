@@ -20,6 +20,7 @@ use crate::components::agent_badge::agent_name;
 use crate::components::chips::{StateChip, label_chip};
 use crate::components::colors::signal;
 use crate::components::icons::icon_path;
+use crate::components::text_size::row_text;
 use crate::sidebar::workspace_groups::short_branch;
 
 /// What a row shows besides the task, read once per frame.
@@ -128,6 +129,7 @@ fn task_cell(row: &RowData, cx: &App) -> AnyElement {
         .child(
             div().min_w_0().child(
                 Label::new(task.title.clone())
+                    .size(row_text())
                     .weight(FontWeight::MEDIUM)
                     .truncate(),
             ),

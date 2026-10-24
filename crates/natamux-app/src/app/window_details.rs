@@ -1,5 +1,5 @@
-//! The details panel in the shell (`AppShell.tsx`, `useDashboardCommands.ts`): docked at the right
-//! of main from 1280 while main keeps 640, else a sheet over main (with a scrim under 1024). Esc
+//! The details panel in the shell (`AppShell.tsx`, `useDashboardCommands.ts`): a dock at the right
+//! of main from 768 while main keeps 400, else a sheet over main (with a scrim under 1024). Esc
 //! closes the top layer first; the panel's keys and the Task menu's stage commands.
 
 use gpui::MouseButton;
@@ -10,6 +10,7 @@ use super::Root;
 use crate::app::command_when::{CommandState, When};
 use crate::app::dashboard::details::PanelRequest;
 use crate::app::layout_mode::{DetailsMode, PANEL_WIDTH};
+use crate::app::shell_rules::details_toggle;
 use crate::app::shortcuts::{
     ApproveStage, Back, EditTask, ReportStage, SendBackStage, ShowProgress, SkipStage,
     ToggleDetails, ToggleSelectedDetails,
@@ -30,10 +31,24 @@ impl Root {
         self.layout(window, cx).details
     }
 
-    /// Whether the panel shows now, in the mode of this width.
+    /// Whether the panel shows now. Without a task the dock shows its empty state; a sheet or
+    /// page needs a task, so a fresh start does not cover main.
     pub(super) fn details_shown(&self, window: &Window, cx: &App) -> bool {
-        let docked = self.details_mode(window, cx) == DetailsMode::Docked;
-        self.dashboard.read(cx).details_shown(docked) && matches!(self.tool, super::Tool::None)
+        let dashboard = self.dashboard.read(cx);
+        let has_task = dashboard.details_task().is_some();
+        let fits = has_task || self.details_mode(window, cx) == DetailsMode::Docked;
+        dashboard.details_shown() && fits && matches!(self.tool, super::Tool::None)
+    }
+
+    /// The status bar toggle and Mod+Alt+B: whether the details show, or why they cannot.
+    pub(super) fn details_toggle(&self, window: &Window, cx: &App) -> Result<bool, &'static str> {
+        let dashboard = self.dashboard.read(cx);
+        details_toggle(
+            dashboard.agents_open,
+            dashboard.details_task().is_some(),
+            self.details_mode(window, cx) == DetailsMode::Docked,
+            self.details_shown(window, cx),
+        )
     }
 
     /// The docked column: the resize line at its left edge, then the panel.
@@ -116,20 +131,12 @@ impl Root {
     }
 
     fn close_details(&mut self, cx: &mut Context<Self>) {
-        let id = self
-            .dashboard
-            .read(cx)
-            .details_task()
-            .map(|task| task.id.clone());
-        if let Some(id) = id {
-            self.dashboard.update(cx, |dashboard, cx| {
-                dashboard.set_details_open(&id, false, cx)
-            });
-        }
+        self.dashboard
+            .update(cx, |dashboard, cx| dashboard.set_details_open(false, cx));
     }
 
     /// Esc closes the top layer first: the drawer, a sheet, a tool, the open task, then the
-    /// panel of the selected task.
+    /// details dock.
     pub(super) fn back(&mut self, _: &Back, window: &mut Window, cx: &mut Context<Self>) {
         let sheet =
             self.details_mode(window, cx) != DetailsMode::Docked && self.details_shown(window, cx);
@@ -149,27 +156,28 @@ impl Root {
         }
     }
 
+    /// Does nothing where the toggle is off (`details_toggle`): flipping the hidden flag there
+    /// would show nothing.
     pub(super) fn toggle_details(
         &mut self,
         _: &ToggleDetails,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let docked = self.details_mode(window, cx) == DetailsMode::Docked;
-        self.dashboard
-            .update(cx, |dashboard, cx| dashboard.toggle_details(docked, cx));
+        if self.details_toggle(window, cx).is_ok() {
+            self.dashboard
+                .update(cx, |dashboard, cx| dashboard.toggle_details(cx));
+        }
     }
 
     pub(super) fn toggle_selected_details(
         &mut self,
         _: &ToggleSelectedDetails,
-        window: &mut Window,
+        _: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let docked = self.details_mode(window, cx) == DetailsMode::Docked;
-        self.dashboard.update(cx, |dashboard, cx| {
-            dashboard.toggle_selected_details(docked, cx)
-        });
+        self.dashboard
+            .update(cx, |dashboard, cx| dashboard.toggle_selected_details(cx));
     }
 
     pub(super) fn edit_task(&mut self, _: &EditTask, _: &mut Window, cx: &mut Context<Self>) {

@@ -30,8 +30,12 @@ jobs:
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # In the background: it takes 1 to 2 minutes, and the next steps need no room yet. The
+      # runner keeps the process across steps; "Wait for the room" waits for it before cargo.
       - name: Make room on the disk
-        run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL
+        run: |
+          nohup sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
+            /opt/hostedtoolcache/CodeQL > "$RUNNER_TEMP/room.log" 2>&1 &
       # The system libraries GPUI builds against on Linux, from Zed's script/linux.
       - name: Install the GPUI libraries
         run: |
@@ -49,6 +53,8 @@ jobs:
             target
           key: rust-check-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
           restore-keys: rust-check-${{ runner.os }}-
+      - name: Wait for the room
+        run: while pgrep -f "rm -rf /usr/local/lib/android" > /dev/null; do sleep 2; done
       - run: cargo xtask ci
       - run: python3 scripts/check-shots.test.py
       - run: python3 scripts/compare-shots.test.py
@@ -65,6 +71,12 @@ jobs:
       contents: read
       id-token: write
       attestations: write
+    # The owner signed the baselines off (docs/rust-phase3.md): a differing shot fails the job.
+    # REPORT_ONLY: "1" is for a change of the look before its new baselines: the compare step is
+    # skipped then (everything differs; the shots are in the artifact). T-0158 (lean layout) sets
+    # it until the owner signs its shots off.
+    env:
+      REPORT_ONLY: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: rustup toolchain install
@@ -98,8 +110,11 @@ jobs:
       # asks for the top of the screen below the menu bar, so a fixed screen rectangle is wrong.
       - name: Screen shots
         env:
+          # A snapshot push may shoot only some states: a line "Shots: <state> ..." in its commit
+          # message (T-0158: about 1 minute instead of 22). A PR and dev shoot every state.
+          MESSAGE: ${{ github.event_name == 'push' && github.event.head_commit.message || '' }}
           STATES: >-
-            tasks-table tasks-board board-hover-card add-task-typed start-task remove-workspace
+            tasks-table tasks-board board-hover-card add-task-dialog start-task remove-workspace
             clear-finished add-subtask task-context-menu skeleton toast empty filter-miss
             no-projects load-error drawer workspace-terminal-running terminal-find
             workspace-terminal-needs-input workspace-terminal-review no-workspace
@@ -116,7 +131,7 @@ jobs:
             palette palette-query palette-no-match palette-jump shortcuts account-menu
             terminal-font settings-dialog projects project-settings project-settings-tab-issues
             project-settings-tab-json project-settings-json-error import-issues sign-in
-            sign-in-error
+            sign-in-error add-menu details-empty
           DOCKED: >-
             tasks-table workspace-terminal-running terminal-find workspace-terminal-needs-input
             workspace-terminal-review no-workspace workspace-preparing finished-wrap-up agents-grid
@@ -132,9 +147,20 @@ jobs:
             palette palette-query palette-no-match palette-jump shortcuts account-menu
             terminal-font settings-dialog projects project-settings project-settings-tab-issues
             project-settings-tab-json project-settings-json-error import-issues sign-in
-            sign-in-error
+            sign-in-error add-menu details-empty
         run: |
           mkdir -p shots
+          only=$(printf '%s\n' "$MESSAGE" | sed -n 's/^Shots: *//p' | head -n 1)
+          if [ -n "$only" ] && [ "$GITHUB_REF" != refs/heads/dev ]; then
+            for state in $only; do
+              case " $STATES " in
+                *" $state "*) ;;
+                *) echo "::error::Shots: no state $state"; exit 1 ;;
+              esac
+            done
+            STATES=$only
+            echo "Shot only: $only" >> "$GITHUB_STEP_SUMMARY"
+          fi
           window_of() {
             osascript -l JavaScript -e "ObjC.import('CoreGraphics');
               const all = ObjC.deepUnwrap(ObjC.castRefToObject(\$.CGWindowListCopyWindowInfo(1, 0)));
@@ -162,12 +188,8 @@ jobs:
               done
             done
           done
-      # The owner signed the baselines off (docs/rust-phase3.md): a differing shot fails the job.
-      # REPORT_ONLY: "1" turns it back into a report, for a change of the look before its new
-      # baselines.
       - name: Compare shots with the baselines
-        env:
-          REPORT_ONLY: ""
+        if: env.REPORT_ONLY == ''
         run: |
           mkdir -p "$RUNNER_TEMP/baselines"
           failed=0
@@ -196,9 +218,6 @@ jobs:
             fi
             echo "| $name | $result |" >> "$GITHUB_STEP_SUMMARY"
           done
-          if [ -n "$REPORT_ONLY" ]; then
-            exit 0
-          fi
           exit "$failed"
       - name: Did GPUI draw
         run: |

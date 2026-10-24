@@ -182,7 +182,11 @@ impl Render for TerminalFontDialog {
             invalid,
             cx.listener(|this, _, _, cx| this.save(cx)),
         )
-        .when(invalid, |button| button.tooltip(Tooltip::text(SIZE_REASON)));
+        .tooltip(Tooltip::text(if invalid {
+            SIZE_REASON.to_owned()
+        } else {
+            dialog_description()
+        }));
         let reset = self.has_custom.then(|| {
             Button::new("terminal-font-reset", RESET_LABEL)
                 .style(ButtonStyle::Subtle)
@@ -192,7 +196,6 @@ impl Render for TerminalFontDialog {
         let close = cx.listener(|_, _, _, cx| cx.emit(DismissEvent));
         let cancel = cx.listener(|_, _, _, cx| cx.emit(DismissEvent));
         let mut frame = DialogFrame::new("Terminal font", close)
-            .description(dialog_description())
             .child(field("Font family", input(&self.family, false, cx)))
             .child(field("Size (px)", size_row))
             .child(self.preview(cx));

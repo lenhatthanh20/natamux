@@ -22,6 +22,9 @@ use crate::components::dialog::{
 };
 use crate::components::toast_rules::ToastTone;
 
+/// What Start a task does, in its tooltip.
+const START_HINT: &str = "A new task with its own workspace: a git worktree on a new branch.";
+
 #[path = "new_workspace_fields.rs"]
 mod fields;
 #[path = "new_workspace_menus.rs"]
@@ -391,9 +394,7 @@ impl Render for NewWorkspaceDialog {
             missing.is_some() || self.busy,
             submit,
         )
-        .when_some(missing, |button, reason| {
-            button.tooltip(ui::Tooltip::text(reason))
-        });
+        .tooltip(ui::Tooltip::text(missing.unwrap_or(START_HINT)));
         let last_base = self.last_base(cx);
         let branch = branch_text(self.branches.as_ref(), &self.base, last_base.as_deref());
         let body = v_flex()
@@ -410,7 +411,6 @@ impl Render for NewWorkspaceDialog {
             );
         div().track_focus(&self.focus).child(
             DialogFrame::new("Start a task", close)
-                .description("A new task with its own workspace: a git worktree on a new branch.")
                 .child(body)
                 .footer(cancel_button("Cancel", &stops.cancel, cancel))
                 .footer(start),

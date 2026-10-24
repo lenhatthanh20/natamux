@@ -5,7 +5,9 @@
 use ui::prelude::*;
 
 use super::{Root, Tool};
-use crate::app::shortcuts::{Quit, ShowDocsTab, ShowOpenFile, ShowWorktreeFiles};
+use crate::app::shortcuts::{
+    CloseTab, Quit, ReopenTabs, ShowDocsTab, ShowOpenFile, ShowWorktreeFiles,
+};
 use crate::app::view_rules::WorkspaceTab;
 use crate::components::confirm::Confirm;
 use crate::files::draft_store::DraftStore;
@@ -28,6 +30,23 @@ impl Root {
         cx: &mut Context<Self>,
     ) {
         self.show_tab(WorkspaceTab::Editor, cx);
+    }
+
+    /// Mod+W: closes the active tab of the open workspace. Terminal stays.
+    pub(super) fn close_tab(&mut self, _: &CloseTab, _: &mut Window, cx: &mut Context<Self>) {
+        if let Some(id) = self.open_workspace_task(cx) {
+            self.dashboard.update(cx, |dashboard, cx| {
+                let tab = dashboard.shown_workspace_tab();
+                dashboard.close_tab(&id, tab, cx)
+            });
+        }
+    }
+
+    pub(super) fn reopen_tabs(&mut self, _: &ReopenTabs, _: &mut Window, cx: &mut Context<Self>) {
+        if let Some(id) = self.open_workspace_task(cx) {
+            self.dashboard
+                .update(cx, |dashboard, cx| dashboard.reopen_tabs(&id, cx));
+        }
     }
 
     pub(super) fn show_worktree_files(

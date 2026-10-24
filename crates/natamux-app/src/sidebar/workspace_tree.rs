@@ -11,8 +11,6 @@ use editor::{Editor, EditorEvent};
 use gpui::{
     Entity, FocusHandle, Focusable, KeyDownEvent, Pixels, Point, ScrollHandle, Subscription,
 };
-use natamux_proto::agents::activity::latest_line;
-use natamux_proto::projects::repo::Repo;
 use natamux_proto::tasks::task::TaskState;
 use ui::prelude::*;
 
@@ -21,8 +19,7 @@ use crate::app::shortcuts::{
     Back, CollapseRow, ExpandRow, OpenRowMenu, OpenSelected, RemoveRow, RenameRow, SelectFirst,
     SelectLast, SelectNext, SelectPrevious,
 };
-use crate::sidebar::sidebar_text::{card_line, renamed_title, type_ahead_target, typed_word};
-use crate::sidebar::sidebar_tree::{RowTier, row_tier, subtask_count};
+use crate::sidebar::sidebar_text::{renamed_title, type_ahead_target, typed_word};
 use crate::sidebar::tree_entries::{EntryAction, TreeKey, move_target, tree_key};
 use crate::sidebar::tree_model::{Line, TreeInput, TreeModel};
 use crate::sidebar::workspace_groups::{Hold, held_id, next_hold};
@@ -47,16 +44,13 @@ pub(super) struct Rename {
 pub(super) struct Snapshot {
     pub(super) current: Option<String>,
     pub(super) blurred: Vec<String>,
-    pub(super) repos: Vec<Repo>,
     pub(super) seen: Vec<(String, TaskState)>,
-    /// The question or failure reason of each attention card.
-    pub(super) cards: BTreeMap<String, String>,
-    /// What the agent of each task does now.
-    pub(super) activity: BTreeMap<String, String>,
-    /// The same per terminal: task id, then terminal name.
+    /// The tooltip of each task's title, already masked for a blurred project.
+    pub(super) tips: BTreeMap<String, String>,
+    /// The short word on the right of each attention row.
+    pub(super) labels: BTreeMap<String, String>,
+    /// What each terminal's agent does: task id, then terminal name.
     pub(super) terminal_activity: BTreeMap<String, BTreeMap<String, String>>,
-    /// "2/5" subtasks done, for tasks that have some.
-    pub(super) subtasks: BTreeMap<String, String>,
     pub(super) now_ms: i64,
     /// The tree has focus, so the row with the tab stop shows the focus ring.
     pub(super) focused: bool,
@@ -404,41 +398,22 @@ impl WorkspaceTree {
         let mut snapshot = Snapshot {
             current,
             blurred: view.blurred.clone(),
-            repos: data.repos.clone(),
             seen: view.seen.clone(),
-            cards: BTreeMap::new(),
-            activity: BTreeMap::new(),
+            tips: BTreeMap::new(),
+            labels: BTreeMap::new(),
             terminal_activity: BTreeMap::new(),
-            subtasks: BTreeMap::new(),
             now_ms: now_ms(),
             focused: self.focus.contains_focused(window, cx),
             stop: None,
         };
         for line in &model.lines {
-            let Line::Task { task, .. } = line else {
+            let Line::Task {
+                task, pinned_row, ..
+            } = line
+            else {
                 continue;
             };
-            let id = &task.id;
-            if row_tier(task.state) == RowTier::Attention {
-                let events = data.events.get(id).map(|(_, events)| events.as_slice());
-                if let Some(text) = card_line(task, events) {
-                    snapshot.cards.insert(id.clone(), text);
-                }
-            }
-            if let Some(activity) = data.activity.get(id) {
-                if let Some(text) = latest_line(activity) {
-                    snapshot.activity.insert(id.clone(), text.to_owned());
-                }
-                let per_terminal = activity
-                    .iter()
-                    .map(|(terminal, line)| (terminal.clone(), line.text.clone()))
-                    .collect();
-                snapshot.terminal_activity.insert(id.clone(), per_terminal);
-            }
-            if let Some(count) = subtask_count(id, &data.tasks) {
-                let text = format!("{}/{}", count.done, count.total);
-                snapshot.subtasks.insert(id.clone(), text);
-            }
+            snapshot.add_task(data, task, *pinned_row, &view.blurred);
         }
         (model, snapshot)
     }

@@ -12,7 +12,6 @@ use ui::{ButtonLike, ContextMenu, TintColor, Tooltip, prelude::*};
 
 use super::branches::branch_options;
 use crate::components::button_style::{label_color, tinted_style};
-use crate::components::chips::StateChip;
 use crate::components::empty_state::EmptyState;
 use crate::components::icons::icon_path;
 use crate::components::menu::MenuLayer;
@@ -47,32 +46,6 @@ pub fn step_text(step: PreparingStep) -> &'static str {
 /// "Waits for T-2, T-3 to be done".
 pub fn waits_text(ids: &[String]) -> Option<String> {
     (!ids.is_empty()).then(|| format!("Waits for {} to be done", ids.join(", ")))
-}
-
-/// The header of a task with no workspace: id, title and state.
-pub fn bare_header(task: &Task, cx: &App) -> impl IntoElement {
-    h_flex()
-        .h(rems_from_px(44.0_f32))
-        .flex_none()
-        .px_4()
-        .gap_2()
-        .border_b_1()
-        .border_color(cx.theme().colors().border)
-        .child(
-            Label::new(task.id.clone())
-                .size(LabelSize::Small)
-                .color(Color::Muted)
-                .buffer_font(cx),
-        )
-        .child(
-            div().min_w_0().flex_shrink(1.).child(
-                Label::new(task.title.clone())
-                    .size(LabelSize::Large)
-                    .weight(FontWeight::SEMIBOLD)
-                    .truncate(),
-            ),
-        )
-        .child(StateChip::new(task.state))
 }
 
 #[derive(IntoElement)]
@@ -216,17 +189,14 @@ impl RenderOnce for NoWorkspace {
                     .into_any_element()
             }
         };
-        v_flex()
-            .size_full()
-            .child(bare_header(&self.task, cx))
-            .child(
-                div()
-                    .flex_1()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .child(body),
-            )
+        v_flex().size_full().child(
+            div()
+                .flex_1()
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(body),
+        )
     }
 }
 

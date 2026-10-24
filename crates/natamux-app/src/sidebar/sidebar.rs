@@ -7,7 +7,7 @@
 
 use editor::{Editor, EditorEvent};
 use gpui::{ClickEvent, Entity, FocusHandle, Focusable, FontWeight, Stateful, Subscription};
-use natamux_proto::tasks::task::{Task, TaskState};
+use natamux_proto::tasks::task::TaskState;
 use ui::{ButtonLike, Tooltip, prelude::*};
 
 use super::workspace_tree::WorkspaceTree;
@@ -21,7 +21,8 @@ use crate::components::chips::{Kbd, tip_with_keys};
 use crate::components::colors::state_colors;
 use crate::components::icons::icon_path;
 use crate::components::skeleton::{Loading, SkeletonList};
-use crate::sidebar::sidebar_text::{pull_request_number, pull_request_summary};
+use crate::components::text_size::row_text;
+use crate::sidebar::sidebar_text::masked;
 use crate::terminals::pane_rules::agent_pane_tasks;
 use crate::workspaces::new_workspace_dialog;
 
@@ -105,10 +106,8 @@ impl Sidebar {
             .h(rems_from_px(28.0_f32))
             .px_2()
             .gap(rems_from_px(6.0_f32))
-            .rounded(rems_from_px(6.0_f32))
-            .border_1()
-            .border_color(colors.border)
-            .bg(colors.editor_background)
+            .border_b_1()
+            .border_color(colors.border_variant)
             .on_action(cx.listener(Self::escape))
             .child(lucide("list-filter").color(Color::Muted))
             .child(div().min_w_0().flex_1().child(self.filter.clone()))
@@ -148,7 +147,7 @@ impl Sidebar {
         let keys = shortcut_of("workspace.new").unwrap_or_default();
         let dashboard = self.dashboard.clone();
         h_flex()
-            .h(rems_from_px(28.0_f32))
+            .h(rems_from_px(26.0_f32))
             .pl_2()
             .pr(rems_from_px(2.0_f32))
             .child(
@@ -195,7 +194,7 @@ impl Render for Sidebar {
         let no_projects = data.loaded
             && data.repos.is_empty()
             && !data.tasks.iter().any(|task| task.workspace.is_some());
-        let tree = Loading::new("sidebar-loading", loading, SkeletonList::new(8, 40.))
+        let tree = Loading::new("sidebar-loading", loading, SkeletonList::new(8, 26.))
             .content(self.tree.clone());
         let none = no_projects.then(|| {
             h_flex()
@@ -232,7 +231,7 @@ impl Render for Sidebar {
     }
 }
 
-/// A 28 px nav row of the sidebar: All tasks and Agents, with their counts.
+/// A 26 px nav row of the sidebar: All tasks and Agents, with their counts.
 fn nav_row(
     id: &'static str,
     icon: &str,
@@ -244,7 +243,7 @@ fn nav_row(
     let colors = cx.theme().colors();
     h_flex()
         .id(id)
-        .h(rems_from_px(28.0_f32))
+        .h(rems_from_px(26.0_f32))
         .px_2()
         .gap(rems_from_px(6.0_f32))
         .rounded_sm()
@@ -254,21 +253,14 @@ fn nav_row(
         .when(active, |row| row.bg(colors.ghost_element_selected))
         .child(lucide(icon).size(IconSize::Small).color(Color::Muted))
         .child(
-            div().flex_1().child(
-                Label::new(label)
-                    .size(LabelSize::Custom(rems_from_px(13_f32)))
-                    .color(Color::Muted),
-            ),
+            div()
+                .flex_1()
+                .child(Label::new(label).size(row_text()).color(Color::Muted)),
         )
         .child(small(count.to_string()))
 }
 
 // Text and icons the sidebar's rows share.
-
-/// What a blurred project shows in place of private text (names, titles, ids, questions).
-fn masked(text: &str) -> String {
-    "•".repeat(text.chars().count().clamp(3, 12))
-}
 
 pub(super) fn private(text: &str, blurred: bool) -> SharedString {
     if blurred {
@@ -304,33 +296,6 @@ pub(super) fn agent_mark(id: ElementId, agent: &str) -> impl IntoElement {
         .flex_none()
         .child(AgentIcon::new(Some(agent.to_owned())))
         .tooltip(Tooltip::text(agent_label(Some(agent))))
-}
-
-/// The colour of a pull request number: green when checks pass, red when they fail.
-fn checks_color(task: &Task) -> Color {
-    match task.pull_request_status().map(|status| status.checks) {
-        Some(checks) if checks == "passing" => Color::Success,
-        Some(checks) if checks == "failing" => Color::Error,
-        Some(checks) if checks == "pending" => Color::Warning,
-        _ => Color::Muted,
-    }
-}
-
-/// The pull request number in the colour of its checks.
-pub(super) fn pull_request_mark(task: &Task) -> Option<Stateful<Div>> {
-    let url = task.pr.as_deref()?;
-    let color = checks_color(task);
-    let summary = pull_request_summary(task.pull_request_status().as_ref());
-    let tip = format!("Pull request {}", summary.unwrap_or_default());
-    Some(
-        h_flex()
-            .id(SharedString::from(format!("pr-{}", task.id)))
-            .flex_none()
-            .gap_0p5()
-            .child(lucide("git-pull-request").color(color))
-            .child(small(pull_request_number(url)).color(color))
-            .tooltip(Tooltip::text(tip.trim().to_owned())),
-    )
 }
 
 /// The 6 px dot of a state, such as the one after the count of a folded group.

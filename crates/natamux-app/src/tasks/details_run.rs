@@ -190,7 +190,7 @@ impl DetailsPanel {
         let sheet = self.mode != DetailsMode::Docked;
         self.dashboard.update(cx, |dashboard, cx| {
             if sheet {
-                dashboard.set_details_open(&id, false, cx);
+                dashboard.set_details_open(false, cx);
             }
             dashboard.open_shell(&id, Some(terminal), cx);
         });
@@ -297,10 +297,9 @@ impl DetailsPanel {
     }
 
     pub(super) fn close(&mut self, cx: &mut Context<Self>) {
-        if let Some(id) = self.shown.as_ref().map(|shown| shown.task_id.clone()) {
-            self.dashboard.update(cx, |dashboard, cx| {
-                dashboard.set_details_open(&id, false, cx)
-            });
+        if self.shown.is_some() {
+            self.dashboard
+                .update(cx, |dashboard, cx| dashboard.set_details_open(false, cx));
         }
     }
 

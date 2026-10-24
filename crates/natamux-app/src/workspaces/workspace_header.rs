@@ -1,81 +1,53 @@
-//! The 44 px header of a workspace (docs/ui-spec.md 4.29, `features/workspaces/WorkspaceHeader.tsx`):
-//! id, title, state chip, branch chip (click copies), then Push and Create PR with their reasons,
-//! or Open pull request. A done or cancelled task shows only Open pull request: its finished
-//! banner offers the next git step. The state chip of a task that waits for the user shows its
-//! progress. While origin has every commit and files are not committed, Commit… takes the place
-//! of Push.
+//! The git buttons of a workspace, drawn at the end of its tab bar: Push and Create PR with
+//! their reasons, or Open pull request. A done or cancelled task shows only Open pull request:
+//! its finished banner offers the next git step. While origin has every commit and files are not
+//! committed, Commit… takes the place of Push. In a main narrower than `ICON_ONLY_BELOW` the buttons are
+//! icon-only.
 
 use std::rc::Rc;
 
-use gpui::{ClickEvent, ClipboardItem, FontWeight};
-use natamux_proto::tasks::task::{Task, TaskState};
+use gpui::ClickEvent;
+use natamux_proto::tasks::task::Task;
 use natamux_proto::workspaces::workspace::GitGraph;
-use ui::{ButtonLike, TintColor, Tooltip, prelude::*};
+use ui::{ButtonLike, Tooltip, prelude::*};
 
 use super::workspace_rules::{GitButton, GitStep, needs_commit, pull_request_button, push_button};
 use super::wrap_up_rules::is_finished_state;
-use crate::components::button_style::{label_color, tinted_style};
-use crate::components::chips::StateChip;
+use crate::components::button_style::label_color;
 use crate::components::icons::icon_path;
-use crate::components::toast_rules::ToastTone;
-use crate::components::toasts::toast;
-use crate::tasks::task_rules::lane_summary;
 
 type OnClick = Rc<dyn Fn(&mut Window, &mut App)>;
 
-/// `COMPACT_BELOW`: under this the branch chip goes.
-pub const COMPACT_BELOW: f32 = 900.;
+/// The main width under which the tab bar's buttons show only their icons, so the tabs keep
+/// their labels beside the details dock.
+pub const ICON_ONLY_BELOW: f32 = 720.;
 
-/// Keeps the start and the end of a long branch name (`MiddleTruncate`).
-pub fn middle_truncate(text: &str, max: usize) -> String {
-    let count = text.chars().count();
-    if count <= max || max < 3 {
-        return text.to_owned();
-    }
-    let keep = max - 1;
-    let head: String = text.chars().take(keep.div_ceil(2)).collect();
-    let tail: String = text.chars().skip(count - keep / 2).collect();
-    format!("{head}\u{2026}{tail}")
-}
-
-#[derive(IntoElement)]
-pub struct WorkspaceHeader {
+pub struct GitButtons {
     task: Task,
     graph: Option<GitGraph>,
     uncommitted: Option<u64>,
     pending: Option<GitStep>,
-    width: Option<f32>,
     on_push: OnClick,
     on_pull_request: OnClick,
     on_commit: OnClick,
-    on_progress: OnClick,
 }
 
-impl WorkspaceHeader {
+impl GitButtons {
     pub fn new(
         task: Task,
         graph: Option<GitGraph>,
         uncommitted: Option<u64>,
         pending: Option<GitStep>,
-        width: Option<f32>,
     ) -> Self {
-        WorkspaceHeader {
+        GitButtons {
             task,
             graph,
             uncommitted,
             pending,
-            width,
             on_push: Rc::new(|_, _| {}),
             on_pull_request: Rc::new(|_, _| {}),
             on_commit: Rc::new(|_, _| {}),
-            on_progress: Rc::new(|_, _| {}),
         }
-    }
-
-    /// The state chip's "Show in progress".
-    pub fn on_progress(mut self, run: impl Fn(&mut Window, &mut App) + 'static) -> Self {
-        self.on_progress = Rc::new(run);
-        self
     }
 
     pub fn on_push(mut self, run: impl Fn(&mut Window, &mut App) + 'static) -> Self {
@@ -95,22 +67,23 @@ impl WorkspaceHeader {
     }
 }
 
-/// A git button: off with its reason as the tooltip, busy while its step runs.
+/// A ghost git button: off with its reason as the tooltip, busy while its step runs. Icon-only
+/// it always has a tooltip, with the label first.
 fn git_button(
     id: &'static str,
     icon: &str,
     button: GitButton,
-    primary: bool,
     busy: bool,
     other_running: bool,
+    icon_only: bool,
     run: OnClick,
 ) -> impl IntoElement {
     let off = button.reason.is_some() || busy || other_running;
     let tip = button.reason.clone().or(button.tip.clone());
-    let style = if primary && button.reason.is_none() {
-        tinted_style(TintColor::Accent, off)
-    } else {
-        ButtonStyle::Outlined
+    let tip = match (icon_only, tip) {
+        (true, Some(tip)) => Some(format!("{}: {tip}", button.label)),
+        (true, None) => Some(button.label.to_string()),
+        (false, tip) => tip,
     };
     let icon = if busy {
         "loader-circle".to_owned()
@@ -118,7 +91,8 @@ fn git_button(
         icon.to_owned()
     };
     ButtonLike::new(id)
-        .style(style)
+        .style(ButtonStyle::Subtle)
+        .size(ButtonSize::Compact)
         .disabled(off)
         .when_some(tip, |button, tip| button.tooltip(Tooltip::text(tip)))
         .on_click(move |_: &ClickEvent, window, cx| run(window, cx))
@@ -127,96 +101,45 @@ fn git_button(
                 .gap_1p5()
                 .px_1()
                 .child(Icon::from_path(icon_path(&icon)).size(IconSize::Small))
-                .child(
-                    Label::new(button.label)
-                        .size(LabelSize::Small)
-                        .color(label_color(off)),
-                ),
+                .when(!icon_only, |row| {
+                    row.child(
+                        Label::new(button.label)
+                            .size(LabelSize::Small)
+                            .color(label_color(off)),
+                    )
+                }),
         )
 }
 
-/// A task that waits for the user: the chip is a button to its progress (tip "Show in progress",
-/// with the lanes of a group first).
-fn state_chip(task: &Task, run: OnClick) -> AnyElement {
-    let waits = matches!(
-        task.state,
-        TaskState::NeedsInput | TaskState::Failed | TaskState::Review
-    );
-    if !waits {
-        return StateChip::new(task.state).into_any_element();
-    }
-    let tip = match lane_summary(task) {
-        Some(lanes) => format!("{lanes} \u{b7} Show in progress"),
-        None => "Show in progress".to_owned(),
-    };
-    div()
-        .id("workspace-state")
-        .flex_none()
-        .cursor_pointer()
-        .tooltip(Tooltip::text(tip))
-        .on_click(move |_, window, cx| run(window, cx))
-        .child(StateChip::new(task.state))
-        .into_any_element()
-}
-
-/// The branch chip: middle-truncated, the full name in the tooltip, a click copies it.
-fn branch_chip(branch: String, cx: &App) -> impl IntoElement {
-    let copied = branch.clone();
-    div()
-        .id("workspace-branch")
-        .flex_none()
-        .cursor_pointer()
-        .px_1p5()
-        .py_0p5()
-        .rounded_sm()
-        .border_1()
-        .border_color(cx.theme().colors().border)
-        .child(
-            h_flex()
-                .gap_1()
-                .child(
-                    Icon::from_path(icon_path("git-branch"))
-                        .size(IconSize::XSmall)
-                        .color(Color::Muted),
-                )
-                .child(
-                    Label::new(middle_truncate(&branch, 48))
-                        .size(LabelSize::Small)
-                        .color(Color::Muted)
-                        .buffer_font(cx)
-                        .single_line(),
-                ),
-        )
-        .tooltip(Tooltip::text(format!("{branch} (click to copy)")))
-        .on_click(move |_, _, cx| {
-            cx.write_to_clipboard(ClipboardItem::new_string(copied.clone()));
-            toast("Copied the branch name.", ToastTone::Success, cx);
-        })
-}
-
-fn open_pull_request(url: String, compact: bool) -> AnyElement {
-    let label = if compact {
+fn open_pull_request(url: String, icon_only: bool) -> AnyElement {
+    let label = if icon_only {
         "Open PR"
     } else {
         "Open pull request"
     };
     ButtonLike::new("workspace-open-pr")
-        .style(ButtonStyle::Outlined)
+        .style(ButtonStyle::Subtle)
+        .size(ButtonSize::Compact)
+        .when(icon_only, |button| {
+            button.tooltip(Tooltip::text("Open pull request"))
+        })
         .on_click(move |_, _, cx| cx.open_url(&url))
         .child(
             h_flex()
                 .gap_1p5()
                 .px_1()
                 .child(Icon::from_path(icon_path("external-link")).size(IconSize::Small))
-                .child(Label::new(label).size(LabelSize::Small)),
+                .when(!icon_only, |row| {
+                    row.child(Label::new(label).size(LabelSize::Small))
+                }),
         )
         .into_any_element()
 }
 
-impl WorkspaceHeader {
+impl GitButtons {
     /// Commit… or Push, and Create PR or Open pull request. A finished task has only Open pull
     /// request.
-    fn git_buttons(&self, compact: bool) -> Vec<AnyElement> {
+    pub fn render(&self, icon_only: bool) -> Vec<AnyElement> {
         let task = &self.task;
         let finished = is_finished_state(task.state);
         let graph = self.graph.as_ref();
@@ -236,8 +159,8 @@ impl WorkspaceHeader {
                 "circle-dot",
                 button,
                 false,
-                false,
                 off,
+                icon_only,
                 self.on_commit.clone(),
             )
             .into_any_element()
@@ -250,15 +173,15 @@ impl WorkspaceHeader {
                 "workspace-push",
                 "arrow-up-from-line",
                 button,
-                false,
                 busy,
                 off,
+                icon_only,
                 self.on_push.clone(),
             )
             .into_any_element()
         });
         let pull_request = match &task.pr {
-            Some(url) => Some(open_pull_request(url.clone(), compact)),
+            Some(url) => Some(open_pull_request(url.clone(), icon_only)),
             None if !finished => {
                 let button = pull_request_button(
                     task.branch.as_deref(),
@@ -273,9 +196,9 @@ impl WorkspaceHeader {
                         "workspace-create-pr",
                         "git-pull-request",
                         button,
-                        true,
                         runs(step),
                         other_runs(step),
+                        icon_only,
                         run,
                     )
                     .into_any_element(),
@@ -284,56 +207,5 @@ impl WorkspaceHeader {
             None => None,
         };
         [commit, push, pull_request].into_iter().flatten().collect()
-    }
-}
-
-impl RenderOnce for WorkspaceHeader {
-    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
-        let compact = self.width.is_some_and(|width| width < COMPACT_BELOW);
-        let buttons = self.git_buttons(compact);
-        let task = &self.task;
-        let branch = task
-            .branch
-            .clone()
-            .filter(|_| !compact)
-            .map(|branch| branch_chip(branch, cx));
-        h_flex()
-            .h(rems_from_px(44.0_f32))
-            .flex_none()
-            .px_4()
-            .gap_2()
-            .border_b_1()
-            .border_color(cx.theme().colors().border)
-            .child(
-                Label::new(task.id.clone())
-                    .size(LabelSize::Small)
-                    .color(Color::Muted)
-                    .buffer_font(cx)
-                    .single_line(),
-            )
-            .child(
-                div().min_w_0().flex_shrink(1.).child(
-                    Label::new(task.title.clone())
-                        .size(LabelSize::Large)
-                        .weight(FontWeight::SEMIBOLD)
-                        .truncate(),
-                ),
-            )
-            .child(state_chip(task, self.on_progress.clone()))
-            .children(branch)
-            .child(div().flex_1())
-            .children(buttons)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn keeps_the_start_and_the_end_of_a_long_branch() {
-        assert_eq!(middle_truncate("natamux/t-1", 20), "natamux/t-1");
-        assert_eq!(middle_truncate("abcdefghij", 7), "abc\u{2026}hij");
-        assert_eq!(middle_truncate("abcdefghij", 6).chars().count(), 6);
     }
 }

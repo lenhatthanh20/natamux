@@ -1,8 +1,7 @@
-//! The status bar of docs/ui-spec.md 4.28 (`features/app/StatusBar.tsx`): Live or Reconnecting,
-//! "N running", "N need you" and the background jobs with their menu. Under 1024 the dot and the
-//! jobs lose their labels (`status_layout`). At the right: Projects, Import issues, the switch of
-//! the needs-you notifications, the keyboard and the account (`status_items`). Under 1024
-//! Projects, Import issues and the notifications fold into the "More status items" menu.
+//! The status bar of docs/ui-spec.md 4.28 (`features/app/StatusBar.tsx`): at the left the sidebar,
+//! details and agents toggles. At the right: "N need you", "N running", the background jobs with
+//! their menu, Live, then the notify switch, the keyboard and the account (`status_items`). Under
+//! 1024 jobs and Live lose their labels and running hides (`status_layout`).
 
 use std::rc::Rc;
 
@@ -13,9 +12,9 @@ use ui::{ButtonLike, ContextMenu, Tooltip, prelude::*};
 use super::dashboard::Dashboard;
 use super::jobs::{job_rows, jobs_label};
 use super::shell_rules::{LiveItem, needs_you_text};
+use super::shortcuts::{ToggleAgents, ToggleDetails, ToggleSidebar};
 use super::status_items::{
-    Folded, OnClick, account_item, import_item, item_button, item_label, keyboard_item, more_item,
-    projects_item,
+    OnClick, account_item, item_button, item_label, keyboard_item, toggle_item,
 };
 use super::status_layout::forced_by_width;
 use crate::components::colors::signal;
@@ -40,6 +39,10 @@ pub struct StatusBar {
     notify: bool,
     on_notify: OnClick,
     account: Option<Entity<Dashboard>>,
+    sidebar: bool,
+    /// Whether the details show, or why the toggle cannot show them (`details_toggle`).
+    details: Result<bool, &'static str>,
+    agents: bool,
 }
 
 impl StatusBar {
@@ -62,7 +65,23 @@ impl StatusBar {
             notify: false,
             on_notify: Rc::new(|_, _, _| {}),
             account: None,
+            sidebar: false,
+            details: Ok(false),
+            agents: false,
         }
+    }
+
+    /// The states of the three toggles at the left.
+    pub fn toggles(
+        mut self,
+        sidebar: bool,
+        details: Result<bool, &'static str>,
+        agents: bool,
+    ) -> Self {
+        self.sidebar = sidebar;
+        self.details = details;
+        self.agents = agents;
+        self
     }
 
     /// The dashboard the account menu changes. Without it the account item is left out.
@@ -139,29 +158,115 @@ fn open_jobs_menu(
     MenuLayer::open(menu, event.position(), window, cx);
 }
 
+/// "N jobs" for two or more; one job keeps its own label.
+fn short_jobs_label(jobs: &[Job]) -> Option<String> {
+    match jobs {
+        [] | [_] => jobs_label(jobs),
+        many => Some(format!("{} jobs", many.len())),
+    }
+}
+
 fn notify_item(on: bool, on_click: OnClick) -> ButtonLike {
-    let (icon, label, tip) = if on {
-        (
-            "bell-off",
-            "Notifications on",
-            "Stop the notifications of tasks that need you",
-        )
+    let (icon, tip) = if on {
+        ("bell-off", "Stop the notifications of tasks that need you")
     } else {
         (
             "bell",
-            "Notify me",
             "Notify me when a task needs me while the app is in the background",
         )
     };
     item_button("status-notify", tip, on_click).child(
-        h_flex()
-            .gap(rems_from_px(6.0_f32))
+        Icon::from_path(icon_path(icon))
+            .size(IconSize::Small)
+            .color(Color::Muted),
+    )
+}
+
+/// The three toggles at the left: sidebar, details, agents.
+fn toggles(sidebar: bool, details: Result<bool, &'static str>, agents: bool) -> impl IntoElement {
+    let on = |shown: bool, hide: &'static str, show: &'static str| if shown { hide } else { show };
+    let details_on = details == Ok(true);
+    h_flex()
+        .gap(rems_from_px(2.0_f32))
+        .child(toggle_item(
+            "toggle-sidebar",
+            "panel-left",
+            on(sidebar, "Hide sidebar", "Show sidebar"),
+            "sidebar.toggle",
+            sidebar,
+            None,
+            || Box::new(ToggleSidebar),
+        ))
+        .child(toggle_item(
+            "toggle-details",
+            "panel-right",
+            on(details_on, "Hide details", "Show details"),
+            "details.toggle",
+            details_on,
+            details.err(),
+            || Box::new(ToggleDetails),
+        ))
+        .child(toggle_item(
+            "toggle-agents",
+            "layout-grid",
+            on(agents, "Hide agents", "Show agents"),
+            "agents.toggle",
+            agents,
+            None,
+            || Box::new(ToggleAgents),
+        ))
+}
+
+/// The connection: a dot in the link's colour, and its label unless the bar is narrow.
+fn live_item(live: LiveItem, icon_only: bool, cx: &App) -> impl IntoElement {
+    let dot = if live.ok {
+        cx.theme().status().success
+    } else {
+        signal(cx).fg
+    };
+    let tip: SharedString = live.tip.clone().into();
+    h_flex()
+        .id("status-live")
+        .h(rems_from_px(24.0_f32))
+        .px(rems_from_px(6.0_f32))
+        .gap(rems_from_px(6.0_f32))
+        .rounded(rems_from_px(6.0_f32))
+        .tooltip(Tooltip::text(tip))
+        .child(
+            div()
+                .flex_none()
+                .size(rems_from_px(6.0_f32))
+                .rounded_full()
+                .bg(dot),
+        )
+        .when(!icon_only, |this| {
+            this.child(item_label(live.label, Color::Muted))
+        })
+}
+
+/// The background jobs with their menu; none while no job runs.
+fn jobs_item(jobs: Vec<Job>, open: OnOpenTask, icon_only: bool) -> Option<ButtonLike> {
+    let label = short_jobs_label(&jobs)?;
+    // A still icon, not a spinner: an endless animation redraws the window every frame.
+    Some(
+        ButtonLike::new("status-jobs")
+            .height(rems_from_px(24.0_f32).into())
+            .tooltip(Tooltip::text("Show background jobs"))
+            .on_click(move |event, window, cx| {
+                open_jobs_menu(&jobs, open.clone(), event, window, cx)
+            })
             .child(
-                Icon::from_path(icon_path(icon))
-                    .size(IconSize::Small)
-                    .color(Color::Muted),
-            )
-            .child(item_label(label, Color::Muted)),
+                h_flex()
+                    .gap(rems_from_px(6.0_f32))
+                    .child(
+                        Icon::from_path(icon_path("loader-circle"))
+                            .size(IconSize::Small)
+                            .color(Color::Muted),
+                    )
+                    .when(!icon_only, |this| {
+                        this.child(item_label(label, Color::Muted))
+                    }),
+            ),
     )
 }
 
@@ -171,30 +276,6 @@ impl RenderOnce for StatusBar {
         let condensed = forced_by_width(Some(self.width));
         let icon_only = |id: &str| condensed.icon_only.contains(&id);
         let folded = |id: &str| condensed.folded.contains(&id);
-        let any_folded = !condensed.folded.is_empty();
-        let dot = if self.live.ok {
-            cx.theme().status().success
-        } else {
-            signal(cx).fg
-        };
-        let live_tip: SharedString = self.live.tip.clone().into();
-        let live = h_flex()
-            .id("status-live")
-            .h(rems_from_px(24.0_f32))
-            .px(rems_from_px(6.0_f32))
-            .gap(rems_from_px(6.0_f32))
-            .rounded(rems_from_px(6.0_f32))
-            .tooltip(Tooltip::text(live_tip))
-            .child(
-                div()
-                    .flex_none()
-                    .size(rems_from_px(6.0_f32))
-                    .rounded_full()
-                    .bg(dot),
-            )
-            .when(!icon_only("live"), |this| {
-                this.child(item_label(self.live.label, Color::Muted))
-            });
         let running =
             item_button("status-running", "Show the running tasks", self.on_running).child(
                 item_label(format!("{} running", self.running), Color::Muted),
@@ -212,28 +293,6 @@ impl RenderOnce for StatusBar {
                     .color(Color::Custom(signal(cx).fg)),
             )
         });
-        let jobs = jobs_label(&self.jobs).map(|label| {
-            let (list, open) = (self.jobs, self.on_open_task);
-            // A still icon, not a spinner: an endless animation redraws the window every frame.
-            ButtonLike::new("status-jobs")
-                .height(rems_from_px(24.0_f32).into())
-                .tooltip(Tooltip::text("Show background jobs"))
-                .on_click(move |event, window, cx| {
-                    open_jobs_menu(&list, open.clone(), event, window, cx)
-                })
-                .child(
-                    h_flex()
-                        .gap(rems_from_px(6.0_f32))
-                        .child(
-                            Icon::from_path(icon_path("loader-circle"))
-                                .size(IconSize::Small)
-                                .color(Color::Muted),
-                        )
-                        .when(!icon_only("jobs"), |this| {
-                            this.child(item_label(label, Color::Muted))
-                        }),
-                )
-        });
         h_flex()
             .flex_none()
             .w_full()
@@ -244,29 +303,35 @@ impl RenderOnce for StatusBar {
             .bg(colors.status_bar_background)
             .border_t_1()
             .border_color(colors.border_variant)
-            .child(live)
-            .child(running)
-            .children(needs)
-            .children(jobs)
+            .child(toggles(self.sidebar, self.details, self.agents))
             .child(div().flex_1())
-            .when(!folded("repos"), |this| {
-                this.child(projects_item(icon_only("repos")))
-            })
-            .when(!folded("import"), |this| {
-                this.child(import_item(icon_only("import")))
-            })
-            .when(!folded("notifications"), |this| {
-                this.child(notify_item(self.notify, self.on_notify.clone()))
-            })
-            .when(any_folded, |this| {
-                this.child(more_item(Folded {
-                    repos: folded("repos"),
-                    import: folded("import"),
-                    notifications: folded("notifications")
-                        .then(|| (self.notify, self.on_notify.clone())),
-                }))
-            })
+            .children(needs)
+            .when(!folded("running"), |this| this.child(running))
+            .children(jobs_item(self.jobs, self.on_open_task, icon_only("jobs")))
+            .child(live_item(self.live, icon_only("live"), cx))
+            .child(notify_item(self.notify, self.on_notify.clone()))
             .child(keyboard_item())
             .children(self.account.map(account_item))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn job(label: &str) -> Job {
+        serde_json::from_value(serde_json::json!({
+            "id": label, "kind": "push", "label": label, "taskId": null, "startedAt": "2026-10-21T09:00:00.000Z"
+        }))
+        .expect("a job")
+    }
+
+    #[test]
+    fn says_n_jobs_for_two_or_more() {
+        assert_eq!(short_jobs_label(&[]), None);
+        assert_eq!(
+            short_jobs_label(&[job("a"), job("b")]).as_deref(),
+            Some("2 jobs")
+        );
     }
 }

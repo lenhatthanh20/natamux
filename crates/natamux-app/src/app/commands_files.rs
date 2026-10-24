@@ -1,5 +1,5 @@
 //! Screen 6's commands: the Docs tab, the open file and the files of the worktree (`view.ts` of
-//! the web), and Save in the editor tab. Same registry as `commands.rs`; `all_commands` joins the
+//! the web), Save in the editor tab, and closing and reopening the tabs. Same registry as `commands.rs`; `all_commands` joins the
 //! lists. The actions are declared here; `shortcuts.rs` maps the ids to them.
 
 use gpui::actions;
@@ -11,7 +11,14 @@ use super::commands::{
 
 actions!(
     natamux,
-    [ShowDocsTab, ShowOpenFile, ShowWorktreeFiles, SaveFile]
+    [
+        ShowDocsTab,
+        ShowOpenFile,
+        ShowWorktreeFiles,
+        SaveFile,
+        CloseTab,
+        ReopenTabs
+    ]
 );
 
 /// The Docs tab, while none of its text boxes has the focus.
@@ -51,5 +58,19 @@ pub const FILE_COMMANDS: &[Command] = &[
         hidden(command("file.save", "Save the file", Category::Task)),
         &["Mod+S"],
         &[FILE_EDITOR],
+    )),
+    // T-0158: the workspace tabs close as Zed's pane tabs. Terminal stays.
+    in_workspace(keys(
+        group(
+            command("tab.close", "Close the tab", Category::View),
+            SheetGroup::Global,
+        ),
+        &["Mod+W"],
+        &[],
+    )),
+    in_workspace(command(
+        "tab.reopen",
+        "Reopen the closed tabs",
+        Category::View,
     )),
 ];

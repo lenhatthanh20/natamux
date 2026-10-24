@@ -2,8 +2,15 @@ name: CI
 
 on:
   push:
-    # natamux-ci/* holds snapshots that tasks push for a CI check (Check on CI).
-    branches: [main, 'natamux-ci/**']
+    # natamux-ci/* holds snapshots that tasks push for a CI check (Check on CI). The Rust and
+    # daemon snapshot branches run only rust.yml: they do not change the Node packages.
+    branches:
+      - main
+      - 'natamux-ci/**'
+      - '!natamux-ci/rust'
+      - '!natamux-ci/rust-check'
+      - '!natamux-ci/daemon'
+      - '!natamux-ci/daemon-check'
   pull_request:
 
 permissions:

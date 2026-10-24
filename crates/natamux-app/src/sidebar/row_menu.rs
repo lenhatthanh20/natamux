@@ -1,6 +1,7 @@
-//! The row menu of a workspace and its commands (docs/ui-spec.md 4.9): Rename, Add subtask…,
-//! Pin to the top / Unpin, Copy branch name, Copy folder path, Remove workspace, Delete task. The
-//! items are `sidebar_text::row_menu`; the dialogs of other screens open through their `open`.
+//! The row menu of a workspace and its commands (docs/ui-spec.md 4.9): Answer (needs input), Rename,
+//! Add subtask…, Pin to the top / Unpin, Copy branch name, Copy folder path, Remove workspace,
+//! Delete task. The items are `sidebar_text::row_menu`; the dialogs of other screens open through
+//! their `open`.
 //! The project menu opens here too; `project_header` runs its commands.
 
 use std::rc::Rc;
@@ -158,6 +159,7 @@ impl WorkspaceTree {
             return;
         };
         match command {
+            RowCommand::Answer => self.answer(task_id, cx),
             RowCommand::ViewChanges => self.dashboard.update(cx, |dashboard, cx| {
                 dashboard.open_changes(task_id, false, cx)
             }),

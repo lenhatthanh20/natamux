@@ -13,7 +13,7 @@ fn is_the_built_in_font_when_nothing_is_set() {
         terminal_font(None),
         ResolvedFont {
             family: "Lilex".into(),
-            size: 15.0,
+            size: 13.0,
             source: FontSource::Default
         }
     );
@@ -30,7 +30,7 @@ fn takes_the_users_font_part_by_part_and_the_built_in_one_for_the_rest() {
     );
     let custom = font(Some("Fira Code"), None);
     assert_eq!(terminal_font(Some(&custom)).family, "Fira Code");
-    assert_eq!(terminal_font(Some(&custom)).size, 15.0);
+    assert_eq!(terminal_font(Some(&custom)).size, 13.0);
 }
 
 #[test]
@@ -79,7 +79,7 @@ fn saves_the_font_the_user_types_and_closes() {
 
 #[test]
 fn names_the_built_in_font_in_the_text_and_as_the_placeholder() {
-    assert!(dialog_description().contains("built-in font, Lilex, 15px"));
+    assert!(dialog_description().contains("built-in font, Lilex, 13px"));
     assert_eq!(RESET_LABEL, "Use built-in font");
 }
 

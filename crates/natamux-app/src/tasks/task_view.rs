@@ -1,18 +1,17 @@
 //! All tasks in main (the main area of `Dashboard.tsx`, ui-spec 4.29): the view header with the
 //! count, the state filter, Show finished and Table / Board / Progress (`task_view_header.rs`);
-//! the quick add; then the table, the board or the progress, or the skeleton, error or empty
+//! then the table, the board or the progress, or the skeleton, error or empty
 //! state. The rows keep one order while the pointer is over
 //! them and 2 s after a key move (`frozen_order`).
 
 use std::time::Duration;
 
-use gpui::{Entity, EventEmitter, FocusHandle, Focusable, Subscription};
+use gpui::{Entity, FocusHandle, Focusable, Subscription};
 use natamux_proto::tasks::task::Task;
 use ui::{ButtonLike, TintColor, prelude::*};
 
 use super::add_subtask_dialog;
 use super::frozen_order::{HOLD_MS, freeze_order, is_frozen};
-use super::quick_add::{QuickAdd, StartTask};
 use super::task_attention::filter_tasks;
 use super::task_board::TaskBoard;
 use super::task_sort::sort_tasks;
@@ -23,7 +22,7 @@ use crate::app::commands_stages::ShowTasksProgress;
 use crate::app::dashboard::Dashboard;
 use crate::app::dashboard_data::Link;
 use crate::app::settings_reads;
-use crate::app::shortcuts::{ShowBoard, ShowTable};
+use crate::app::shortcuts::{NewTask, NewWorkspace, ShowBoard, ShowTable};
 use crate::app::view_state::Layout;
 use crate::components::chips::Kbd;
 use crate::components::empty_state::EmptyState;
@@ -38,11 +37,9 @@ mod header;
 
 pub struct TaskView {
     dashboard: Entity<Dashboard>,
-    quick_add: Entity<QuickAdd>,
     table: Entity<TaskTable>,
     board: Entity<TaskBoard>,
     progress: Entity<ProgressBoard>,
-    layout_focus: FocusHandle,
     /// The width of the view header: the main width that picks columns and labels.
     main_width: Entity<Option<f32>>,
     pointer_inside: bool,
@@ -53,8 +50,6 @@ pub struct TaskView {
     _hold: Option<gpui::Task<()>>,
     _subscriptions: Vec<Subscription>,
 }
-
-impl EventEmitter<StartTask> for TaskView {}
 
 impl Focusable for TaskView {
     fn focus_handle(&self, cx: &App) -> FocusHandle {
@@ -71,7 +66,6 @@ impl TaskView {
         add_subtask_dialog::init(&dashboard, cx);
         // Made here, before the details panel and the progress layout that read it.
         settings_reads::init(&dashboard, window, cx);
-        let quick_add = cx.new(|cx| QuickAdd::new(dashboard.clone(), window, cx));
         let table = cx.new(|cx| TaskTable::new(dashboard.clone(), cx));
         let board = cx.new(|cx| TaskBoard::new(dashboard.clone(), cx));
         let progress = cx.new(|cx| ProgressBoard::new(dashboard.clone(), cx));
@@ -79,18 +73,13 @@ impl TaskView {
         let subscriptions = vec![
             cx.observe(&dashboard, |this, _, cx| this.refresh(cx)),
             cx.observe(&main_width, |this, _, cx| this.refresh(cx)),
-            cx.subscribe(&quick_add, |_, _, event: &StartTask, cx| {
-                cx.emit(event.clone())
-            }),
             cx.subscribe(&table, |this, _, _: &KeyMoved, cx| this.hold(cx)),
         ];
         let mut view = TaskView {
             dashboard,
-            quick_add,
             table,
             board,
             progress,
-            layout_focus: cx.focus_handle().tab_stop(true),
             main_width,
             pointer_inside: false,
             held_at: None,
@@ -101,16 +90,6 @@ impl TaskView {
         };
         view.refresh(cx);
         view
-    }
-
-    /// `n`: the backlog field.
-    pub fn focus_new_task(&self, window: &mut Window, cx: &mut App) {
-        let field = self.quick_add.read(cx).focus_handle(cx);
-        window.focus(&field, cx);
-    }
-
-    pub fn quick_add(&self) -> &Entity<QuickAdd> {
-        &self.quick_add
     }
 
     /// The table, for `--gate2` scrolling.
@@ -234,9 +213,9 @@ impl TaskView {
                 .body("Add a task to the backlog, or start one now in its own workspace.")
                 .action(
                     Self::key_button("tasks-empty-add", "Add task", "plus", "task.new", true)
-                        .on_click(
-                            cx.listener(|this, _, window, cx| this.focus_new_task(window, cx)),
-                        ),
+                        .on_click(|_, window, cx| {
+                            window.dispatch_action(Box::new(NewTask), cx);
+                        }),
                 )
                 .action(
                     Self::key_button(
@@ -246,7 +225,9 @@ impl TaskView {
                         "workspace.new",
                         false,
                     )
-                    .on_click(cx.listener(|_, _, _, cx| cx.emit(StartTask(None)))),
+                    .on_click(|_, window, cx| {
+                        window.dispatch_action(Box::new(NewWorkspace), cx);
+                    }),
                 )
                 .into_any_element(),
             MainContent::FilterMiss { title, body } => {
@@ -275,27 +256,26 @@ impl TaskView {
 
 impl Render for TaskView {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let (content, edge_to_edge) = {
+        let content = {
             let dashboard = self.dashboard.read(cx);
             let data = &dashboard.data;
             let down = match &data.link {
                 Link::Down { reason, retrying } => Some((reason.as_str(), *retrying)),
                 _ => None,
             };
-            let content = main_content(
+            main_content(
                 data.loaded,
                 down,
                 data.tasks.len(),
                 self.shown_ids.len(),
                 &dashboard.filter,
                 dashboard.state_filter,
-            );
-            (content, dashboard.view().layout != Layout::Table)
+            )
         };
         let loading = content == MainContent::Loading;
-        // The board scrolls sideways edge to edge, and the progress pads itself; everything else
-        // has the page margin.
-        let padded = !(edge_to_edge && content == MainContent::Tasks);
+        // The table sits flush, the board scrolls sideways edge to edge and the progress pads
+        // itself; the empty and error states keep the page margin.
+        let padded = content != MainContent::Tasks;
         let body = self.render_body(content, cx);
         v_flex()
             .size_full()
@@ -306,7 +286,6 @@ impl Render for TaskView {
                 this.set_layout(Layout::Progress, cx)
             }))
             .child(self.render_header(cx))
-            .child(self.quick_add.clone())
             .child(
                 div()
                     .id("task-view-content")
@@ -319,7 +298,7 @@ impl Render for TaskView {
                         this.set_pointer_inside(*hovered, cx)
                     }))
                     .child(
-                        Loading::new("tasks-loading", loading, SkeletonList::new(8, 40.))
+                        Loading::new("tasks-loading", loading, SkeletonList::new(12, 28.))
                             .content(body),
                     ),
             )

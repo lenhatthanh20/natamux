@@ -98,6 +98,8 @@ impl Line {
         }
     }
 
+    /// The project group a line belongs to; the pinned header and pinned rows have none.
+    #[cfg(test)]
     pub fn group(&self) -> Option<usize> {
         match self {
             Line::PinnedHeader { .. } => None,

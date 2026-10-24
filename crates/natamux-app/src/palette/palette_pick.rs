@@ -2,14 +2,13 @@
 //! of `useDashboardCommands.ts`). The layer closes first, so focus is back on the opener.
 
 use gpui::Entity;
-use natamux_proto::tasks::task::NewTaskInput;
 use ui::prelude::*;
 
 use super::palette_rows::{PaletteRow, add_to_agents};
 use crate::app::dashboard::Dashboard;
 use crate::app::shortcuts::action_for;
 use crate::components::toast_rules::ToastTone;
-use crate::tasks::task_view_rules::{add_blocked_reason, task_repo};
+use crate::tasks::add_task_dialog;
 use crate::terminals::pane_rules::agent_pane_tasks;
 use crate::workspaces::new_workspace_dialog;
 
@@ -45,31 +44,14 @@ pub fn run(
         PaletteRow::Repo { repo, .. } => {
             new_workspace_dialog::open(dashboard, Some(repo.id), window, cx);
         }
-        PaletteRow::CreateTask { title } => create_task(dashboard, title.trim(), cx),
+        PaletteRow::CreateTask { title } => {
+            add_task_dialog::open(dashboard, Some(title.trim().to_owned()), window, cx);
+        }
         PaletteRow::NewWorkspace { title } => {
             let title = title.trim().to_owned();
             new_workspace_dialog::open_with(dashboard, None, Some(title), window, cx);
         }
     }
-}
-
-/// A backlog task with the typed title, as the quick add makes it.
-fn create_task(dashboard: &Entity<Dashboard>, title: &str, cx: &mut App) {
-    let title = title.to_owned();
-    dashboard.update(cx, |dashboard, cx| {
-        let no_projects = dashboard.data.loaded && dashboard.data.repos.is_empty();
-        if let Some(reason) = add_blocked_reason(no_projects, &title) {
-            dashboard.toast(&format!("{reason}."), ToastTone::Info, None, cx);
-            return;
-        }
-        let input = NewTaskInput {
-            title,
-            parent_id: None,
-            repo: task_repo(&dashboard.data.repos, None),
-        };
-        // The dashboard toasts an error itself.
-        dashboard.create_task(input, None, cx).detach();
-    });
 }
 
 /// `addToAgents`: the task joins the grid, which then shows; a full grid says so instead.

@@ -5,7 +5,7 @@
 use gpui::{ClickEvent, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable};
 use natamux_proto::tasks::task::Task;
 use natamux_proto::workspaces::workspace::MAX_TRIES;
-use ui::{ButtonLike, Checkbox, ContextMenu, prelude::*};
+use ui::{ButtonLike, Checkbox, ContextMenu, Tooltip, prelude::*};
 
 use crate::app::dashboard::Dashboard;
 use crate::components::dialog::{
@@ -129,21 +129,23 @@ impl Render for FanOutDialog {
             "Run more tries",
             cx.listener(|_, _, _, cx| cx.emit(DismissEvent)),
         )
-        .description(
-            "Each try is a copy of this task in its own workspace, so the agents do not meet.",
-        )
         .footer(cancel_button(
             "Cancel",
             &self.cancel_focus,
             cx.listener(|_, _, _, cx| cx.emit(DismissEvent)),
         ))
-        .footer(primary_button(
-            "Run tries",
-            &self.submit_focus,
-            false,
-            false,
-            cx.listener(|this, _, window, cx| this.submit(window, cx)),
-        ))
+        .footer(
+            primary_button(
+                "Run tries",
+                &self.submit_focus,
+                false,
+                false,
+                cx.listener(|this, _, window, cx| this.submit(window, cx)),
+            )
+            .tooltip(Tooltip::text(
+                "Each try is a copy of this task in its own workspace, so the agents do not meet.",
+            )),
+        )
         .child(
             h_flex()
                 .gap_2()

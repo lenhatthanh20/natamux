@@ -14,6 +14,7 @@ use crate::app::clock::now_ms;
 use crate::components::colors::lane_color;
 use crate::components::icons::icon_path;
 use crate::components::skeleton::{Loading, SkeletonList};
+use crate::components::text_size::row_text;
 use crate::tasks::task_time::{AgeStyle, format_age, format_exact};
 use crate::workspaces::finished_banner::OnClick;
 
@@ -168,6 +169,21 @@ fn ref_chip(
         )
 }
 
+/// The short hash, the full one in its tooltip.
+fn hash_cell(index: usize, commit: &GraphCommit, cx: &App) -> impl IntoElement {
+    let hash: String = commit.hash.chars().take(7).collect();
+    div()
+        .id(element_id("history-hash", index))
+        .flex_none()
+        .tooltip(Tooltip::text(commit.hash.clone()))
+        .child(
+            Label::new(hash)
+                .size(LabelSize::Small)
+                .color(Color::Muted)
+                .buffer_font(cx),
+        )
+}
+
 fn commit_row(
     index: usize,
     commit: &GraphCommit,
@@ -195,6 +211,7 @@ fn commit_row(
             ref_chip(id, text, hidden_refs_tip(&commit.refs), true, cx)
         }));
     let subject = Label::new(commit.subject.clone())
+        .size(row_text())
         .color(color)
         .weight(if head {
             FontWeight::SEMIBOLD
@@ -202,7 +219,6 @@ fn commit_row(
             FontWeight::NORMAL
         })
         .truncate();
-    let hash: String = commit.hash.chars().take(7).collect();
     let age = format_age(&commit.date, now, AgeStyle::Short, OFFSET_MINUTES);
     h_flex()
         .id(element_id("history-row", index))
@@ -221,21 +237,12 @@ fn commit_row(
                 .child(div().min_w_0().child(subject)),
         )
         .when(!narrow, |this| {
-            let author = Label::new(commit.author.clone()).color(Color::Muted);
+            let author = Label::new(commit.author.clone())
+                .size(LabelSize::Small)
+                .color(Color::Muted);
             this.child(div().flex_none().max_w(px(160.)).child(author.truncate()))
         })
-        .child(
-            div()
-                .id(element_id("history-hash", index))
-                .flex_none()
-                .tooltip(Tooltip::text(commit.hash.clone()))
-                .child(
-                    Label::new(hash)
-                        .size(LabelSize::Small)
-                        .color(Color::Muted)
-                        .buffer_font(cx),
-                ),
-        )
+        .child(hash_cell(index, commit, cx))
         .child(
             h_flex()
                 .id(element_id("history-age", index))

@@ -53,7 +53,7 @@ impl Dashboard {
         self.data.merge_task(task.clone());
     }
 
-    /// Quick add (`n`) and Add subtask: a task, or one from a template when `template` is set.
+    /// Add a task (`n`) and Add subtask: a task, or one from a template when `template` is set.
     pub fn create_task(
         &mut self,
         input: NewTaskInput,

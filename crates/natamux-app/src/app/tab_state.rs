@@ -6,7 +6,7 @@ use ui::prelude::*;
 
 use super::Dashboard;
 pub use crate::app::tab_rules::FileViews;
-use crate::app::tab_rules::shown_tab;
+use crate::app::tab_rules::{after_close, is_closable, shown_tab, with_closed, without_closed};
 use crate::app::view_rules::WorkspaceTab;
 use crate::app::view_state::DiffFlags;
 use crate::git::change_tree::FileViewMode;
@@ -18,7 +18,54 @@ impl Dashboard {
     pub(super) fn tab_on_open(&self, id: &str) -> WorkspaceTab {
         let saved = self.view.tab_of(id);
         let state = self.data.task(id).map(|task| task.state);
-        state.map_or(WorkspaceTab::Terminal, |state| tab_to_open(state, saved))
+        let tab = state.map_or(WorkspaceTab::Terminal, |state| tab_to_open(state, saved));
+        if self.closed_of(id).contains(&tab) {
+            WorkspaceTab::Terminal
+        } else {
+            tab
+        }
+    }
+
+    /// The tabs closed in `id`'s workspace this run.
+    pub fn closed_of(&self, id: &str) -> &[WorkspaceTab] {
+        self.closed_tabs
+            .iter()
+            .find(|(task, _)| task == id)
+            .map_or(&[], |(_, tabs)| tabs.as_slice())
+    }
+
+    fn set_closed(&mut self, id: &str, tabs: Vec<WorkspaceTab>) {
+        self.closed_tabs.retain(|(task, _)| task != id);
+        if !tabs.is_empty() {
+            self.closed_tabs.push((id.to_owned(), tabs));
+        }
+    }
+
+    /// The close button of a tab, and Mod+W: Changes, History and Docs hide for this task and
+    /// Terminal shows if it was the active one. The editor tab closes its file. Terminal stays.
+    pub fn close_tab(&mut self, id: &str, tab: WorkspaceTab, cx: &mut Context<Self>) {
+        if tab == WorkspaceTab::Editor {
+            self.close_file(id, cx);
+            return;
+        }
+        if !is_closable(tab) {
+            return;
+        }
+        let closed = with_closed(self.closed_of(id), tab);
+        self.set_closed(id, closed);
+        if self.open_task.as_deref() == Some(id) {
+            self.workspace_tab = after_close(self.workspace_tab, tab);
+        }
+        if self.view.tab_of(id) == Some(tab) {
+            self.update_view(cx, |view| view.remember_tab(id, WorkspaceTab::Terminal));
+        }
+        cx.notify();
+    }
+
+    /// "Reopen closed tabs": every tab of the task shows again.
+    pub fn reopen_tabs(&mut self, id: &str, cx: &mut Context<Self>) {
+        self.set_closed(id, Vec::new());
+        cx.notify();
     }
 
     /// Keys 1 to 4, a click on a tab, and History's "N files not committed.": the open
@@ -30,6 +77,8 @@ impl Dashboard {
         if shown_tab(tab, self.files.editor_file(&id).is_some()) != tab {
             return;
         }
+        let closed = without_closed(self.closed_of(&id), tab);
+        self.set_closed(&id, closed);
         self.workspace_tab =
             shown_after_remember(self.open_task.as_deref(), self.workspace_tab, &id, tab);
         self.update_view(cx, |view| view.remember_tab(&id, tab));
@@ -42,6 +91,8 @@ impl Dashboard {
         if self.open_task.as_deref() != Some(id) {
             return;
         }
+        let closed = without_closed(self.closed_of(id), WorkspaceTab::Changes);
+        self.set_closed(id, closed);
         self.workspace_tab = WorkspaceTab::Changes;
         if commit {
             self.commit_request = Some(id.to_owned());

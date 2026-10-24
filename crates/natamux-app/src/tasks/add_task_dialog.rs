@@ -1,61 +1,93 @@
-//! The quick add under the view header (ui-spec 4.3, the form of `Dashboard.tsx`): the backlog
-//! field (`n`), the project select when there are several projects, the template select when
-//! templates exist, Add task, and Start a task.
+//! The Add task dialog (F4): a backlog task with a title, a project when there are several, and a
+//! template when templates exist. Enter adds it. Mod+Enter (or the Start a task button) closes and
+//! opens the Start a task dialog with the typed title.
 
 use editor::{Editor, EditorEvent};
-use gpui::{ClickEvent, Entity, EventEmitter, FocusHandle, Focusable, KeyDownEvent, Subscription};
+use gpui::{
+    ClickEvent, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, KeyDownEvent,
+    Subscription,
+};
 use natamux_proto::tasks::task::NewTaskInput;
 use natamux_proto::tasks::template::TaskTemplate;
 use ui::{ButtonLike, ContextMenu, TintColor, Tooltip, prelude::*};
 
 use super::task_view_rules::{add_blocked_reason, task_repo};
-use crate::app::commands::shortcut_of;
 use crate::app::dashboard::Dashboard;
 use crate::components::chips::Kbd;
-use crate::components::icons::icon_path;
+use crate::components::dialog::{DialogFrame, DialogLayer, DialogSize, DialogView};
 use crate::components::menu::MenuLayer;
+use crate::workspaces::new_workspace_dialog;
 
-/// Start a task was asked for, with the typed title when there is one.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct StartTask(pub Option<String>);
+/// Opens the dialog with the title focused, and `title` typed in it when given.
+pub fn open(
+    dashboard: &Entity<Dashboard>,
+    title: Option<String>,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    let dashboard = dashboard.clone();
+    let dialog = cx.new(|cx| AddTaskDialog::new(dashboard, title, window, cx));
+    let field = dialog.read(cx).title.focus_handle(cx);
+    DialogLayer::open(dialog, window, cx);
+    window.focus(&field, cx);
+}
 
-pub struct QuickAdd {
+pub struct AddTaskDialog {
     dashboard: Entity<Dashboard>,
     title: Entity<Editor>,
     /// The project picked in the select; `task_repo` falls back to the first.
     repo: Option<String>,
     template: Option<String>,
     templates: Vec<TaskTemplate>,
+    busy: bool,
+    focus: FocusHandle,
+    project_focus: FocusHandle,
+    template_focus: FocusHandle,
+    start_focus: FocusHandle,
+    add_focus: FocusHandle,
     _edits: Subscription,
 }
 
-impl EventEmitter<StartTask> for QuickAdd {}
-
-impl QuickAdd {
-    pub fn new(dashboard: Entity<Dashboard>, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let title = cx.new(|cx| {
+impl AddTaskDialog {
+    fn new(
+        dashboard: Entity<Dashboard>,
+        title: Option<String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let field = cx.new(|cx| {
             let mut editor = Editor::single_line(window, cx);
-            editor.set_placeholder_text("Add a task to the backlog (n)", window, cx);
+            editor.set_placeholder_text("Title", window, cx);
+            if let Some(title) = title {
+                editor.set_text(title, window, cx);
+            }
             editor
         });
-        let edits = cx.subscribe(&title, |_, _, event: &EditorEvent, cx| {
+        let edits = cx.subscribe(&field, |_, _, event: &EditorEvent, cx| {
             if matches!(event, EditorEvent::BufferEdited) {
                 cx.notify();
             }
         });
-        let quick_add = QuickAdd {
+        let repo = dashboard.read(cx).last_add_repo.clone();
+        let dialog = AddTaskDialog {
             dashboard,
-            title,
-            repo: None,
+            title: field,
+            repo,
             template: None,
             templates: Vec::new(),
+            busy: false,
+            focus: cx.focus_handle(),
+            project_focus: cx.focus_handle(),
+            template_focus: cx.focus_handle(),
+            start_focus: cx.focus_handle(),
+            add_focus: cx.focus_handle(),
             _edits: edits,
         };
-        quick_add.read_templates(cx);
-        quick_add
+        dialog.read_templates(cx);
+        dialog
     }
 
-    /// Templates change only in project files, so they are read once (the web's query).
+    /// Templates change only in project files, so they are read once.
     fn read_templates(&self, cx: &mut Context<Self>) {
         let Some(source) = self.dashboard.read(cx).source().cloned() else {
             return;
@@ -73,76 +105,61 @@ impl QuickAdd {
         .detach();
     }
 
-    /// `n`: the backlog field.
-    pub fn focus(&self, window: &mut Window, cx: &mut App) {
-        window.focus(&self.title.focus_handle(cx), cx);
+    fn typed(&self, cx: &App) -> String {
+        self.title.read(cx).text(cx).trim().to_string()
     }
 
-    /// Puts `text` in the field, as typing it would (the `add-task-typed` shot).
-    pub fn set_title(&self, text: &str, window: &mut Window, cx: &mut App) {
-        self.title
-            .update(cx, |editor, cx| editor.set_text(text, window, cx));
-    }
-
-    /// Start a task used up the typed title.
-    pub fn clear(&self, window: &mut Window, cx: &mut App) {
-        self.title.update(cx, |editor, cx| editor.clear(window, cx));
-    }
-
-    /// What is typed, for Start a task.
-    /// The project a new task goes to: Import issues reads that project's issues (`taskRepo`).
-    pub fn repo(&self, cx: &App) -> Option<String> {
-        task_repo(&self.dashboard.read(cx).data.repos, self.repo.as_deref())
-    }
-
-    pub fn typed_title(&self, cx: &App) -> Option<String> {
-        let title = self.title.read(cx).text(cx).trim().to_string();
-        (!title.is_empty()).then_some(title)
+    fn no_projects(&self, cx: &App) -> bool {
+        let data = &self.dashboard.read(cx).data;
+        data.loaded && data.repos.is_empty()
     }
 
     fn blocked_reason(&self, cx: &App) -> Option<&'static str> {
-        let data = &self.dashboard.read(cx).data;
-        let no_projects = data.loaded && data.repos.is_empty();
-        add_blocked_reason(no_projects, &self.title.read(cx).text(cx))
+        add_blocked_reason(self.no_projects(cx), &self.typed(cx))
     }
 
-    fn submit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.blocked_reason(cx).is_some() {
+    fn add(&mut self, cx: &mut Context<Self>) {
+        if self.busy || self.blocked_reason(cx).is_some() {
             return;
         }
-        let Some(title) = self.typed_title(cx) else {
-            return;
-        };
+        let title = self.typed(cx);
         let repo = task_repo(&self.dashboard.read(cx).data.repos, self.repo.as_deref());
         let input = NewTaskInput {
-            title: title.clone(),
+            title,
             parent_id: None,
-            repo,
+            repo: repo.clone(),
         };
         let template = self.template.clone();
-        // Cleared now, not when the daemon answers: the next title may be typed meanwhile.
-        self.title.update(cx, |editor, cx| editor.clear(window, cx));
+        self.busy = true;
         let written = self.dashboard.update(cx, |dashboard, cx| {
+            dashboard.last_add_repo = repo;
             dashboard.create_task(input, template, cx)
         });
-        let editor = self.title.downgrade();
-        cx.spawn_in(window, async move |_, cx| {
-            if written.await.is_err() {
-                // The dashboard toasted the error; the title comes back unless a new one is typed.
-                editor
-                    .update_in(cx, |editor, window, cx| {
-                        if editor.is_empty(cx) {
-                            editor.set_text(title, window, cx);
-                        }
-                    })
-                    .ok();
-            }
+        cx.spawn(async move |this, cx| {
+            let result = written.await;
+            this.update(cx, |this, cx| {
+                this.busy = false;
+                // On an error the dashboard toasted it; the dialog stays with the title.
+                if result.is_ok() {
+                    cx.emit(DismissEvent);
+                }
+                cx.notify();
+            })
+            .ok();
         })
         .detach();
+        cx.notify();
     }
 
-    fn start_task(&mut self, _: &ClickEvent, _: &mut Window, cx: &mut Context<Self>) {
-        cx.emit(StartTask(self.typed_title(cx)));
+    /// Mod+Enter and the Start a task button.
+    fn start(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let typed = self.typed(cx);
+        let title = (!typed.is_empty()).then_some(typed);
+        let dashboard = self.dashboard.clone();
+        cx.emit(DismissEvent);
+        window.defer(cx, move |window, cx| {
+            new_workspace_dialog::open_with(&dashboard, None, title, window, cx);
+        });
     }
 
     fn open_select(
@@ -219,24 +236,25 @@ impl QuickAdd {
 
     fn select_button(&self, repos: bool, cx: &mut Context<Self>) -> Button {
         let data = &self.dashboard.read(cx).data;
-        let (id, label, name) = if repos {
+        let (id, label, name, focus) = if repos {
             let picked = task_repo(&data.repos, self.repo.as_deref());
             let name = data
                 .repos
                 .iter()
                 .find(|repo| Some(&repo.id) == picked.as_ref())
                 .map_or_else(String::new, |repo| repo.name.clone());
-            ("quick-add-project", "Project", name)
+            ("add-task-project", "Project", name, &self.project_focus)
         } else {
             let name = self
                 .templates
                 .iter()
                 .find(|template| Some(&template.id) == self.template.as_ref())
                 .map_or_else(|| "No template".to_string(), |t| t.name.clone());
-            ("quick-add-template", "Template", name)
+            ("add-task-template", "Template", name, &self.template_focus)
         };
         Button::new(id, name)
             .style(ButtonStyle::Outlined)
+            .track_focus(focus)
             .end_icon(Icon::new(IconName::ChevronDown).size(IconSize::Small))
             .tooltip(Tooltip::text(label))
             .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
@@ -245,19 +263,51 @@ impl QuickAdd {
     }
 }
 
-impl Render for QuickAdd {
+impl EventEmitter<DismissEvent> for AddTaskDialog {}
+
+impl Focusable for AddTaskDialog {
+    fn focus_handle(&self, _: &App) -> FocusHandle {
+        self.focus.clone()
+    }
+}
+
+impl DialogView for AddTaskDialog {
+    fn size(&self) -> DialogSize {
+        DialogSize::Small
+    }
+
+    fn tab_ring(&self, cx: &App) -> Vec<FocusHandle> {
+        let data = &self.dashboard.read(cx).data;
+        let mut ring = vec![self.title.focus_handle(cx)];
+        if data.repos.len() > 1 {
+            ring.push(self.project_focus.clone());
+        }
+        if !self.templates.is_empty() {
+            ring.push(self.template_focus.clone());
+        }
+        ring.push(self.start_focus.clone());
+        ring.push(self.add_focus.clone());
+        ring
+    }
+
+    fn busy(&self, _: &App) -> bool {
+        self.busy
+    }
+
+    /// Mod+Enter: Start a task.
+    fn submit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.start(window, cx);
+    }
+}
+
+impl Render for AddTaskDialog {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let colors = cx.theme().colors();
         let blocked = self.blocked_reason(cx);
-        let data = &self.dashboard.read(cx).data;
-        let several_repos = data.repos.len() > 1;
-        let has_tasks = !data.tasks.is_empty();
+        let several_repos = self.dashboard.read(cx).data.repos.len() > 1;
         let has_templates = !self.templates.is_empty();
-        let typed = self.typed_title(cx).is_some();
         let field = div()
-            .flex_1()
-            .min_w(rems_from_px(256.0_f32))
-            .h(rems_from_px(28.0_f32))
+            .h(rems_from_px(32.0_f32))
             .px(rems_from_px(10.0_f32))
             .flex()
             .items_center()
@@ -265,57 +315,63 @@ impl Render for QuickAdd {
             .border_1()
             .border_color(colors.border)
             .bg(colors.editor_background)
-            .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
+            // Enter adds; Mod+Enter is the dialog layer's.
+            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
                 if event.keystroke.key == "enter" && !event.keystroke.modifiers.modified() {
                     cx.stop_propagation();
-                    this.submit(window, cx);
+                    this.add(cx);
                 }
             }))
             .child(self.title.clone());
-        // Not busy while a task is added: the next title is often typed before the answer.
-        let add = Button::new("quick-add-submit", "Add task")
-            .start_icon(Icon::from_path(icon_path("plus")).size(IconSize::Small))
-            .style(ButtonStyle::Filled)
-            .disabled(blocked.is_some())
-            .when_some(blocked, |button, reason| {
-                button.tooltip(Tooltip::text(reason))
-            })
-            .on_click(cx.listener(|this, _, window, cx| this.submit(window, cx)));
-        let start_keys = shortcut_of("workspace.new").unwrap_or_default();
-        let start = ButtonLike::new("quick-add-start")
-            .style(ButtonStyle::Tinted(TintColor::Accent))
-            .when(typed, |button| {
-                button.tooltip(Tooltip::text("Start a task with this title"))
-            })
-            .on_click(cx.listener(Self::start_task))
+        let selects = (several_repos || has_templates).then(|| {
+            h_flex()
+                .gap_2()
+                .when(several_repos, |row| row.child(self.select_button(true, cx)))
+                .when(has_templates, |row| {
+                    row.child(self.select_button(false, cx))
+                })
+        });
+        let start = ButtonLike::new("add-task-start")
+            .style(ButtonStyle::Outlined)
+            .track_focus(&self.start_focus)
+            .on_click(cx.listener(|this, _: &ClickEvent, window, cx| this.start(window, cx)))
             .child(
                 h_flex()
                     .gap_2()
                     .px_1()
-                    .child(Icon::from_path(icon_path("square-terminal")).size(IconSize::Small))
                     .child(Label::new("Start a task"))
-                    .child(Kbd::new(start_keys)),
+                    .child(Kbd::new("mod-enter")),
             );
-        h_flex()
-            .flex_none()
-            .flex_wrap()
-            .gap_2()
-            .px_4()
-            .pt_4()
-            .pb_3()
-            .child(field)
-            .when(several_repos, |row| row.child(self.select_button(true, cx)))
-            .when(has_templates, |row| {
-                row.child(self.select_button(false, cx))
+        let add = ButtonLike::new("add-task-submit")
+            .style(ButtonStyle::Tinted(TintColor::Accent))
+            .track_focus(&self.add_focus)
+            .disabled(blocked.is_some())
+            .when_some(blocked, |button, reason| {
+                button.tooltip(Tooltip::text(reason))
             })
-            .child(add)
-            // Starting an agent is the main daily action; the empty state offers it already.
-            .when(has_tasks, |row| row.child(start))
-    }
-}
-
-impl Focusable for QuickAdd {
-    fn focus_handle(&self, cx: &App) -> FocusHandle {
-        self.title.focus_handle(cx)
+            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.add(cx)))
+            .child(
+                h_flex()
+                    .gap_2()
+                    .px_1()
+                    .child(Label::new("Add"))
+                    .child(Kbd::new("enter")),
+            );
+        let mut frame = DialogFrame::new(
+            "Add a task",
+            cx.listener(|_, _, _, cx| cx.emit(DismissEvent)),
+        );
+        if self.no_projects(cx) {
+            frame = frame.footer_note("Add a project first");
+        }
+        let frame = frame
+            .footer(start)
+            .footer(add)
+            .child(field)
+            .children(selects);
+        div()
+            .key_context("Dialog")
+            .track_focus(&self.focus)
+            .child(frame)
     }
 }

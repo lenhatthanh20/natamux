@@ -12,6 +12,7 @@ use crate::components::colors::change_color;
 use crate::components::menu::MenuLayer;
 use crate::components::resize_handle::ResizeHandle;
 use crate::components::resize_rules::{Edge, Resize};
+use crate::components::text_size::row_text;
 use crate::files::file_icon_view::file_icon;
 use crate::git::change_rules::{split_path, status_tone};
 use crate::git::change_tree::{FileViewMode, entry_counts};
@@ -147,7 +148,7 @@ pub(super) fn file_row(
         .child(
             div().min_w_0().flex_shrink(1.).child(
                 Label::new(name.to_owned())
-                    .size(LabelSize::Small)
+                    .size(row_text())
                     .color(Color::Custom(colour))
                     .when(deleted, |label| label.strikethrough())
                     .truncate(),

@@ -7,7 +7,7 @@ use gpui::{ClickEvent, DismissEvent, Entity, EventEmitter, FocusHandle, Focusabl
 use natamux_proto::stages::actions::{StageAction, StageActionInput};
 use natamux_proto::stages::progress::StageProgress;
 use natamux_proto::tasks::task::Task;
-use ui::{ContextMenu, prelude::*};
+use ui::{ContextMenu, Tooltip, prelude::*};
 
 use super::send_back_rules::{default_send_back_to, earlier_stages, send_back_reason};
 use crate::app::dashboard::Dashboard;
@@ -177,19 +177,23 @@ impl Render for SendBackDialog {
             "Send the task back",
             cx.listener(|_, _, _, cx| cx.emit(DismissEvent)),
         )
-        .description("The stage runs again, and the agent gets your reason with its prompt.")
         .footer(cancel_button(
             "Cancel",
             &self.cancel_focus,
             cx.listener(|_, _, _, cx| cx.emit(DismissEvent)),
         ))
-        .footer(primary_button(
-            "Send back",
-            &self.submit_focus,
-            false,
-            self.busy,
-            cx.listener(|this, _, window, cx| this.submit(window, cx)),
-        ))
+        .footer(
+            primary_button(
+                "Send back",
+                &self.submit_focus,
+                false,
+                self.busy,
+                cx.listener(|this, _, window, cx| this.submit(window, cx)),
+            )
+            .tooltip(Tooltip::text(
+                "The stage runs again, and the agent gets your reason with its prompt.",
+            )),
+        )
         .child(field("Back to", picker))
         .child(field("What should change?", input_box(&self.reason, cx)));
         div()

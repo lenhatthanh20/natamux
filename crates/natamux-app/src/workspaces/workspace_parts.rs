@@ -16,7 +16,7 @@ use crate::tasks::table_rules::waits_for;
 use crate::workspaces::finished_banner::{FinishedActions, FinishedBanner, OnClick};
 use crate::workspaces::finished_summary::{FinishedSummary, follow_up_title};
 use crate::workspaces::no_workspace::NoWorkspace;
-use crate::workspaces::workspace_header::WorkspaceHeader;
+use crate::workspaces::workspace_header::{GitButtons, ICON_ONLY_BELOW};
 use crate::workspaces::workspace_rules::GitStep;
 use crate::workspaces::wrap_up::{WrapUp, WrapUpActions};
 use crate::workspaces::wrap_up_rules::{GitFacts, is_finished_state};
@@ -184,21 +184,21 @@ impl WorkspaceView {
         (open(true), open(false))
     }
 
-    /// The header with its git buttons: Commit… or Push, Create PR, and Show in progress.
-    fn header(
+    /// The git buttons of the tab bar end: Commit… or Push, and Create PR or Open PR.
+    fn git_buttons(
         &self,
         task: &Task,
         shown: &Shown,
         uncommitted: Option<u64>,
+        icon_only: bool,
         cx: &mut Context<Self>,
-    ) -> WorkspaceHeader {
+    ) -> Vec<AnyElement> {
         let this = cx.weak_entity();
-        WorkspaceHeader::new(
+        GitButtons::new(
             task.clone(),
             shown.graph.clone(),
             uncommitted,
             shown.pending,
-            *self.width.read(cx),
         )
         .on_push({
             let this = this.clone();
@@ -215,10 +215,7 @@ impl WorkspaceView {
             let (dashboard, id) = (self.dashboard.clone(), task.id.clone());
             move |_, cx| dashboard.update(cx, |dashboard, cx| dashboard.open_changes(&id, true, cx))
         })
-        .on_progress({
-            let (dashboard, id) = (self.dashboard.clone(), task.id.clone());
-            move |_, cx| dashboard.update(cx, |dashboard, cx| dashboard.show_progress(&id, cx))
-        })
+        .render(icon_only)
     }
 
     /// The History tab: the graph of the task against its base branch.
@@ -243,7 +240,7 @@ impl WorkspaceView {
         .into_any_element()
     }
 
-    /// A task with a workspace: header, finished banner, tab row, and the body of its tab: the
+    /// A task with a workspace: finished banner, tab row, and the body of its tab: the
     /// panes or the wrap-up, Changes, History, Docs, or the open file.
     pub(super) fn render_workspace(
         &mut self,
@@ -264,7 +261,11 @@ impl WorkspaceView {
             .flatten()
             .map(|change| change.path.clone())
             .collect();
-        let header = self.header(&task, shown, facts.uncommitted, cx);
+        let icon_only = self
+            .width
+            .read(cx)
+            .is_none_or(|width| width < ICON_ONLY_BELOW);
+        let git_buttons = self.git_buttons(&task, shown, facts.uncommitted, icon_only, cx);
         let (banner_actions, wrap_up_actions) = self.finished_actions(&task, cx);
         let banner = finished.then(|| {
             FinishedBanner::new(task.clone(), facts.clone(), shown.pending, banner_actions)
@@ -274,7 +275,7 @@ impl WorkspaceView {
             self.file_tab_shown = None;
         }
         let uncommitted = shown.changes.as_ref().map(Vec::len);
-        let tab_row = self.tab_row(&task, tab, panes_shown, uncommitted, cx);
+        let tab_row = self.tab_row(&task, tab, panes_shown, uncommitted, git_buttons, cx);
         let body: AnyElement = match tab {
             WorkspaceTab::Changes => self.changes.clone().into_any_element(),
             WorkspaceTab::History => self.history(&task, shown, cx),
@@ -305,7 +306,6 @@ impl WorkspaceView {
             .size_full()
             .on_action(cx.listener(Self::new_terminal))
             .child(width_probe(&self.width))
-            .child(header)
             .children(banner)
             .child(tab_row)
             .child(div().flex_1().min_h_0().child(body))

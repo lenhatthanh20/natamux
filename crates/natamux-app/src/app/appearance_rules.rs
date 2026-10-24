@@ -5,9 +5,10 @@ use serde_json::json;
 
 use crate::terminals::terminal_font::{FontSource, ResolvedFont};
 
-// Zed's own defaults (`assets/settings/default.json`): the base the UI size scales.
+// The base the UI size scales. The UI is Zed's default; code (terminal, diff, editors) is 13, not
+// Zed's 15, so it sits beside the 13 px rows of the lists (owner, 2026-10-24: 15 looked big).
 pub const BASE_UI_FONT_SIZE: f64 = 16.0;
-pub const BASE_BUFFER_FONT_SIZE: f64 = 15.0;
+pub const BASE_BUFFER_FONT_SIZE: f64 = 13.0;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ThemeChoice {

@@ -39,7 +39,7 @@ pub enum StepKind {
 pub struct Condensed {
     /// Items shown as an icon with a tooltip.
     pub icon_only: Vec<&'static str>,
-    /// Items moved into the "..." menu.
+    /// Items moved into the "..." menu, or hidden (the bar has no menu now).
     pub folded: Vec<&'static str>,
 }
 
@@ -87,17 +87,14 @@ pub fn max_condense_level(items: &[StatusItem]) -> usize {
     condense_steps(items).len()
 }
 
-/// What the window width alone decides, before anything is measured (spec section 3.2).
+/// What the window width alone decides, before anything is measured (spec section 3.2). Under
+/// 1024 jobs and Live are icon-only and running is hidden (`folded`). The toggles and need you
+/// never fold.
 pub fn forced_by_width(width: Option<f32>) -> Condensed {
     let mut out = Condensed::default();
-    if let Some(width) = width {
-        if width < 1280.0 {
-            out.icon_only.extend(["repos", "import"]);
-        }
-        if width < 1024.0 {
-            out.icon_only.extend(["live", "jobs"]);
-            out.folded.extend(["repos", "import", "notifications"]);
-        }
+    if width.is_some_and(|width| width < 1024.0) {
+        out.icon_only.extend(["live", "jobs"]);
+        out.folded.push("running");
     }
     out
 }
@@ -198,23 +195,27 @@ mod tests {
     }
 
     #[test]
-    fn turns_projects_and_import_into_icons_from_1024_to_1279() {
-        let out = forced_by_width(Some(1100.0));
-        assert_eq!(sorted(&out.icon_only), ["import", "repos"]);
-        assert!(out.folded.is_empty());
+    fn keeps_every_label_from_1024_up() {
+        let out = forced_by_width(Some(1024.0));
+        assert!(out.icon_only.is_empty() && out.folded.is_empty());
     }
 
     #[test]
-    fn keeps_only_the_main_items_under_1024() {
+    fn shortens_jobs_and_live_and_hides_running_under_1024() {
         let out = forced_by_width(Some(800.0));
-        assert!(out.icon_only.contains(&"live") && out.icon_only.contains(&"jobs"));
-        assert_eq!(sorted(&out.folded), ["import", "notifications", "repos"]);
+        assert_eq!(sorted(&out.icon_only), ["jobs", "live"]);
+        assert_eq!(out.folded, ["running"]);
+        // The toggles and need you never fold.
+        assert!(!out.folded.contains(&"needs-you") && !out.folded.contains(&"toggles"));
     }
 
     #[test]
     fn merges_with_the_measured_result() {
-        let merged = merge_condensed(&forced_by_width(Some(1100.0)), &condense(&items(), 4));
-        assert_eq!(sorted(&merged.icon_only), ["import", "live", "repos"]);
-        assert_eq!(merged.folded, ["import"]);
+        let merged = merge_condensed(&forced_by_width(Some(800.0)), &condense(&items(), 4));
+        assert_eq!(
+            sorted(&merged.icon_only),
+            ["import", "jobs", "live", "repos"]
+        );
+        assert_eq!(merged.folded, ["running", "import"]);
     }
 }

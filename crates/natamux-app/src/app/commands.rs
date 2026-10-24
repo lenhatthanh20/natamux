@@ -79,6 +79,8 @@ pub const COMMANDS: &[Command] = &[
         MenuName::View,
         0,
     ),
+    // The status bar's agents toggle: on shows the grid, off goes back to the view before it.
+    command("agents.toggle", "Show or hide the agents", View),
     menu(
         command("view.table", "Show tasks as a table", View),
         MenuName::View,

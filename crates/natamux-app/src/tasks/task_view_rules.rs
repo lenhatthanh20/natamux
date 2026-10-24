@@ -1,5 +1,5 @@
 //! Pure rules of the All tasks view (`Dashboard.tsx`, `StateFilter.tsx`, `TaskBoard.tsx`): what
-//! main shows, the states of the filter, the board's columns and folds, and the quick add.
+//! main shows, the states of the filter, the board's columns and folds, and when a task can be added.
 
 use natamux_proto::projects::repo::Repo;
 use natamux_proto::tasks::task::TaskState;
@@ -14,7 +14,7 @@ pub const MORE_WIDTH: f32 = 40.0;
 /// Under this main width the layout switch shows icons only and the board's toggle is short.
 pub const NARROW_BELOW: f32 = 560.0;
 
-/// What the main area shows under the quick add.
+/// What the main area shows under the view header.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MainContent {
     /// The task list has not come yet.
