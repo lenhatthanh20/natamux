@@ -46,7 +46,8 @@ ENV NATAMUX_HOST=0.0.0.0 \
 USER natamux
 WORKDIR /app
 EXPOSE 4317
-CMD ["natamux-daemon"]
+# The full path: e2e/tests/daemon-rss.ts finds the daemon by a command that ends in /natamux-daemon.
+CMD ["/usr/local/bin/natamux-daemon"]
 
 FROM nginxinc/nginx-unprivileged:stable-alpine AS web
 LABEL org.opencontainers.image.source="https://github.com/lenhatthanh20/natamux"

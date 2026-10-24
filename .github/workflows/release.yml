@@ -191,7 +191,9 @@ jobs:
             scripts/natamux-windows.nsi
           7z l dist/Natamux-win-x64.exe | grep -q natamux-daemon.exe
           7z x -y -o"$RUNNER_TEMP/unpacked" dist/Natamux-win-x64.exe >/dev/null
-          scripts/release-smoke.sh "$RUNNER_TEMP/unpacked/Natamux.exe" \
+          test -f "$RUNNER_TEMP/unpacked/natamux-app.exe"
+          test -f "$RUNNER_TEMP/unpacked/natamux.exe"
+          scripts/release-smoke.sh "$RUNNER_TEMP/unpacked/natamux-app.exe" \
             "$(cygpath -u "$APPDATA")/Natamux"
       - name: Keep startup logs on failure
         if: failure()

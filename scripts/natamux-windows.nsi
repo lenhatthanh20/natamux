@@ -13,19 +13,20 @@ Unicode True
 
 Section "Install"
   SetOutPath "$INSTDIR"
-  File "/oname=Natamux.exe" "${BIN}\natamux-app.exe"
+  ; Not Natamux.exe: Windows names ignore case, so it would be the CLI natamux.exe.
+  File "${BIN}\natamux-app.exe"
   File "${BIN}\natamux-daemon.exe"
   File "${BIN}\natamux.exe"
   File "${BIN}\nmx.exe"
-  CreateShortcut "$DESKTOP\Natamux.lnk" "$INSTDIR\Natamux.exe"
-  CreateShortcut "$SMPROGRAMS\Natamux.lnk" "$INSTDIR\Natamux.exe"
+  CreateShortcut "$DESKTOP\Natamux.lnk" "$INSTDIR\natamux-app.exe"
+  CreateShortcut "$SMPROGRAMS\Natamux.lnk" "$INSTDIR\natamux-app.exe"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
 SectionEnd
 
 Section "Uninstall"
   Delete "$DESKTOP\Natamux.lnk"
   Delete "$SMPROGRAMS\Natamux.lnk"
-  Delete "$INSTDIR\Natamux.exe"
+  Delete "$INSTDIR\natamux-app.exe"
   Delete "$INSTDIR\natamux-daemon.exe"
   Delete "$INSTDIR\natamux.exe"
   Delete "$INSTDIR\nmx.exe"
