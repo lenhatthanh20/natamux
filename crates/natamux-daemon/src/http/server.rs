@@ -20,7 +20,9 @@ use super::errors::{Answer, json_answer, not_found, unauthorized};
 use super::routes::stages::Mark;
 use super::routes::{agents, stages, tasks, terminals};
 use super::{event_socket, terminal_socket};
+use crate::agents::hook_service::HookService;
 use crate::agents::runner::AgentRunner;
+use crate::agents::usage_service::UsageService;
 use crate::projects::repos::Repos;
 use crate::shared::event_bus::EventBus;
 use crate::shared::jobs::Jobs;
@@ -34,6 +36,8 @@ use crate::terminals::service::TerminalService;
 pub struct AppState {
     pub stages: StageRunner,
     pub agents: Arc<AgentRunner>,
+    pub hooks: Arc<HookService>,
+    pub usage: Arc<UsageService>,
     pub token: String,
     /// The token of the task shells.
     pub agent_token: String,
@@ -180,6 +184,11 @@ pub async fn handle(request: Request<Incoming>, state: Arc<AppState>) -> Answer 
         }
         (&Method::POST, ["tasks", id, "terminal", "ticket"]) => terminals::ticket(&state, id),
         (&Method::GET, ["jobs"]) => tasks::list_jobs(&state),
+        (&Method::GET, ["activity"]) => agents::activity(&state),
+        (&Method::GET, ["usage"]) => agents::usage(&state),
+        (&Method::POST, ["hooks", agent]) => {
+            agents::post_hook(request, state, agent.to_string(), query.to_string()).await
+        }
         (&Method::GET, ["tasks"]) => tasks::list_tasks(state, query_value(query, "state")).await,
         (&Method::GET, ["templates"]) => tasks::list_templates(state).await,
         (&Method::GET, ["tasks", id]) => tasks::get_task(state, id.to_string()).await,

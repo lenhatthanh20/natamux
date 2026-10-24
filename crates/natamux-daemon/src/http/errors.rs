@@ -8,7 +8,7 @@ use serde_json::{Value, json};
 use natamux_core::json::to_js_string;
 use natamux_core::zod::ZodError;
 
-use crate::agents::errors::AgentError;
+use crate::agents::errors::{AgentError, HookError};
 use crate::stages::errors::StageError;
 use crate::tasks::errors::TaskError;
 use crate::terminals::types::TerminalError;
@@ -165,6 +165,21 @@ pub fn stage_error(error: &StageError) -> Answer {
         StageError::Task(error) | StageError::Agent(AgentError::Task(error)) => task_error(error),
         StageError::Terminal(error) | StageError::Agent(AgentError::Terminal(error)) => {
             terminal_error(error)
+        }
+    }
+}
+
+/// The answer of each hook error (`UnknownAgentError` is 404 `unknown_agent`).
+pub fn hook_error(error: &HookError) -> Answer {
+    match error {
+        HookError::UnknownAgent(_) => {
+            error_answer(StatusCode::NOT_FOUND, "unknown_agent", &error.to_string())
+        }
+        HookError::Invalid(issues) => zod_answer(issues),
+        HookError::Task(error) => task_error(error),
+        HookError::Failed(message) => {
+            eprintln!("{message}");
+            internal_error()
         }
     }
 }

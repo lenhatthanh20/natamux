@@ -8,13 +8,19 @@ const UI_CRATES: &[&str] = &["natamux-app", "natamux-cli", "natamux-update"];
 
 const USAGE: &str = "usage: cargo xtask <task>
   ci      fmt, clippy, tests, layers, colour literals
+  ci [--no-app] [--all-errors]
+          --no-app: natamux-app left out of clippy and tests
+          --all-errors: every step runs after a failure, for CI snapshots
   layers  fail when a crate below L4 uses gpui
   colours fail on a colour literal in crates/natamux-app/src outside the theme files";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let result = match args.iter().map(String::as_str).collect::<Vec<_>>()[..] {
-        ["ci"] => ci(),
+        ["ci", ref flags @ ..] => match ci_options(flags) {
+            Some(options) => ci(options),
+            None => Err(USAGE.to_string()),
+        },
         ["layers"] => layers(),
         ["colours"] => colours(),
         _ => {
@@ -31,20 +37,80 @@ fn main() -> ExitCode {
     }
 }
 
-fn ci() -> Result<(), String> {
-    run(&["fmt", "--all", "--check"])?;
-    run(&[
-        "clippy",
-        "--workspace",
-        "--all-targets",
-        "--locked",
-        "--",
-        "-D",
-        "warnings",
-    ])?;
-    run(&["test", "--workspace", "--locked"])?;
-    layers()?;
-    colours()
+#[derive(Clone, Copy, Default)]
+struct CiOptions {
+    no_app: bool,
+    all_errors: bool,
+}
+
+fn ci_options(flags: &[&str]) -> Option<CiOptions> {
+    let mut options = CiOptions::default();
+    for flag in flags {
+        match *flag {
+            "--no-app" => options.no_app = true,
+            "--all-errors" => options.all_errors = true,
+            _ => return None,
+        }
+    }
+    Some(options)
+}
+
+fn ci(options: CiOptions) -> Result<(), String> {
+    let mut failed = Vec::new();
+    for args in ci_cargo_args(options) {
+        if let Err(error) = run(&args) {
+            if !options.all_errors {
+                return Err(error);
+            }
+            failed.push(error);
+        }
+    }
+    for check in [layers, colours] {
+        if let Err(error) = check() {
+            if !options.all_errors {
+                return Err(error);
+            }
+            failed.push(error);
+        }
+    }
+    if failed.is_empty() {
+        Ok(())
+    } else {
+        Err(failed.join("\n"))
+    }
+}
+
+/// The cargo runs of `ci`: fmt, clippy, test. `no_app` leaves out natamux-app, which pulls in the
+/// whole GPUI graph, for the daemon snapshots. `all_errors` shows every error of a snapshot in one
+/// run, as nothing builds on the owner's Mac.
+fn ci_cargo_args(options: CiOptions) -> Vec<Vec<&'static str>> {
+    let exclude: &[&str] = if options.no_app {
+        &["--exclude", "natamux-app"]
+    } else {
+        &[]
+    };
+    let (keep_going, no_fail_fast): (&[&str], &[&str]) = if options.all_errors {
+        (&["--keep-going"], &["--no-fail-fast"])
+    } else {
+        (&[], &[])
+    };
+    vec![
+        vec!["fmt", "--all", "--check"],
+        [
+            &["clippy", "--workspace"][..],
+            exclude,
+            keep_going,
+            &["--all-targets", "--locked", "--", "-D", "warnings"],
+        ]
+        .concat(),
+        [
+            &["test", "--workspace"][..],
+            exclude,
+            no_fail_fast,
+            &["--locked"],
+        ]
+        .concat(),
+    ]
 }
 
 /// Views read colours from the theme, never as literals (docs/ui-spec.md, 2.3).
@@ -255,6 +321,59 @@ natamux-store v0.1.0 (/w/crates/natamux-store)
 
 xtask v0.0.0 (/w/xtask)
 ";
+
+    fn lines(no_app: bool, all_errors: bool) -> Vec<String> {
+        ci_cargo_args(CiOptions { no_app, all_errors })
+            .iter()
+            .map(|args| args.join(" "))
+            .collect()
+    }
+
+    #[test]
+    fn ci_runs_the_whole_workspace_by_default() {
+        assert_eq!(
+            lines(false, false),
+            [
+                "fmt --all --check",
+                "clippy --workspace --all-targets --locked -- -D warnings",
+                "test --workspace --locked",
+            ]
+        );
+    }
+
+    #[test]
+    fn no_app_excludes_it_from_clippy_and_test_only() {
+        assert_eq!(
+            lines(true, false),
+            [
+                "fmt --all --check",
+                "clippy --workspace --exclude natamux-app --all-targets --locked -- -D warnings",
+                "test --workspace --exclude natamux-app --locked",
+            ]
+        );
+    }
+
+    #[test]
+    fn all_errors_keeps_clippy_and_the_tests_going() {
+        assert_eq!(
+            lines(true, true),
+            [
+                "fmt --all --check",
+                "clippy --workspace --exclude natamux-app --keep-going --all-targets --locked -- -D \
+                 warnings",
+                "test --workspace --exclude natamux-app --no-fail-fast --locked",
+            ]
+        );
+    }
+
+    #[test]
+    fn reads_the_ci_flags_and_refuses_others() {
+        assert!(
+            ci_options(&["--no-app", "--all-errors"]).is_some_and(|o| o.no_app && o.all_errors)
+        );
+        assert!(ci_options(&[]).is_some_and(|o| !o.no_app && !o.all_errors));
+        assert!(ci_options(&["--app"]).is_none());
+    }
 
     #[test]
     fn finds_colour_literals_by_line() {

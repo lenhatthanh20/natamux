@@ -220,7 +220,7 @@ Decisions (owner, 2026-10-22):
 
 ### Phase 4: daemon in Rust (10–14 weeks)
 
-Part 1 (terminals and the contract suite, T-0153), part 2 (tasks, events, storage, index, T-0155) and part 3 (stage engine and agent start, T-0157): decisions, crates, what CI checks, where it differs, ported tests and gate results in `rust-phase4.md`.
+Part 1 (terminals and the contract suite, T-0153), part 2 (tasks, events, storage, index, T-0155), part 3 (stage engine and agent start, T-0157) and part 4 (agent hooks, and CI that runs only what a change needs, T-0159): decisions, crates, what CI checks, where it differs, ported tests and gate results in `rust-phase4.md`.
 
 - Same API, same files. Order by risk:
   1. Terminals: PTY, input gap, ring, snapshot, resume, backpressure, restore after restart.

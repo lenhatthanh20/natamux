@@ -6,6 +6,9 @@
 services:
   daemon:
     hostname: natamux
+    # Contract job only: E2E's compose.e2e.yaml keeps the pauses.
+    environment:
+      NATAMUX_FAKE_AGENT_FAST: "1"
 
   daemon-rust:
     image: ${NATAMUX_DAEMON_IMAGE:-natamux-daemon:local}
@@ -30,6 +33,7 @@ services:
       GIT_CONFIG_VALUE_0: /repo
       # The fake agent and the git identity of compose.e2e.yaml's daemon, for the stage scenarios.
       NATAMUX_CLAUDE_COMMAND: /opt/natamux/fake-agent.sh
+      NATAMUX_FAKE_AGENT_FAST: "1"
       GIT_AUTHOR_NAME: Natamux e2e
       GIT_AUTHOR_EMAIL: e2e@example.invalid
       GIT_COMMITTER_NAME: Natamux e2e

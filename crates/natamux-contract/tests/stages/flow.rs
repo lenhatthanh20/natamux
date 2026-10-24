@@ -1,7 +1,7 @@
 //! 24 `gates_and_checks`, 25 `branch`, 26 `group`, 27 `send_back`.
 
 use natamux_contract::daemon::Daemon;
-use natamux_contract::transcript::{Allowed, Transcript};
+use natamux_contract::transcript::Transcript;
 use serde_json::json;
 
 use crate::{
@@ -16,23 +16,10 @@ use crate::{
 #[ignore = "needs both daemons: the daemon-contract CI job"]
 async fn gates_and_checks() {
     make_twins(&[2401], "[miss-section] Gates", "").await;
-    // The fake agent ends its turn after it wrote the spec; on Node that hook sets the stage to
-    // needs-input, sooner or later than the report. Rust hears no hook before part 4.
-    let hooks = "state: Node's hook of the agent's turn end (needs-input); hooks are part 4";
-    let allowed = [
-        Allowed {
-            step: "first report",
-            reason: hooks,
-        },
-        Allowed {
-            step: "after the failed check",
-            reason: hooks,
-        },
-    ];
     both(
         "gates_and_checks",
         2401,
-        &allowed,
+        &[],
         |d: Daemon, id, mut t: Transcript| async move {
             start(&d, &id).await;
             wait_file(&d, &id, "spec.md", "## Goal").await;

@@ -1,5 +1,5 @@
-//! The agent-start cases of `server.test.ts`: 'shows the shell of an earlier stage as done', 'sends
-//! a review comment', 'start an agent' and 'reopen the agent of a finished task'.
+//! The agent cases of `server.test.ts`: 'shows the shell of an earlier stage as done', 'sends a
+//! review comment', 'start an agent' and 'reopen the agent of a finished task', with their hooks.
 
 use hyper::Method;
 use natamux_daemon::terminals::shell_files::save_ended_shells;
@@ -46,8 +46,44 @@ async fn shows_the_shell_of_an_earlier_stage_as_done_until_its_agent_gets_a_new_
         listed["lanes"]["2"],
         json!({ "stage": "test-spec", "state": "done", "agent": "cursor" })
     );
-    // Left out: the second half, a `beforeSubmitPrompt` hook that sets the lane running; the hook
-    // routes come with part 4.
+    // The second half, a `beforeSubmitPrompt` hook that sets the lane running, is the next test:
+    // it needs a shell that no stage uses, as Node's mock of `laneOfTerminal` cannot be set here.
+}
+
+// The by-hand shell state: a hook from Terminal 2, where no stage of the pipeline works, gives its
+// agent a state of its own, which the list of the terminals shows (`terminals_of`).
+#[tokio::test(flavor = "multi_thread")]
+async fn shows_the_state_the_hooks_gave_an_agent_in_a_shell_no_stage_uses() {
+    let d = bare("lane-hook").await;
+    d.set_simple_pipeline();
+    d.make_task("Fix the bug").await;
+    d.give_workspace("T-0001");
+    let mut first = d.open("cols=80&rows=24").await;
+    first.until(|socket| socket.replayed()).await;
+    let mut second = d.open("cols=80&rows=24&terminal=2").await;
+    second.until(|socket| socket.replayed()).await;
+    let shell = d.ptys()[1].clone();
+    shell.set_program("node");
+    shell.set_commands(&[
+        "/home/me/.local/bin/agent --use-system-ca /home/me/.local/share/cursor-agent/1/index.js",
+    ]);
+
+    let (status, _) = d
+        .hook(
+            "cursor",
+            "",
+            &[("x-natamux-task", "T-0001"), ("x-natamux-terminal", "2")],
+            Some(TOKEN),
+            &json!({ "hook_event_name": "beforeSubmitPrompt" }),
+        )
+        .await;
+
+    assert_eq!(status, 200);
+    let (_, listed) = d
+        .call(Method::GET, "/tasks/T-0001/terminals", Some(TOKEN))
+        .await;
+    assert_eq!(listed["lanes"]["2"]["state"], "running");
+    assert_eq!(listed["lanes"]["2"]["agent"], "cursor");
 }
 
 async fn message(d: &TestDaemon, text: &str) -> (u16, serde_json::Value) {
@@ -147,8 +183,6 @@ async fn done_task(name: &str) -> TestDaemon {
     d
 }
 
-// Left out: the hooks half of the first case (UserPromptSubmit, PreToolUse and Stop leave the task
-// done): the hook routes come with part 4.
 // Node's server tests run on a fixed platform (linux); the Rust test daemon runs the real one,
 // and on Windows a launch is typed in full, with no script.
 #[cfg(unix)]
@@ -165,6 +199,18 @@ async fn starts_the_agent_in_terminal_1_on_its_session() {
     assert!(typed.contains("agent-launch-T-0001.sh"), "{typed}");
     let script = std::fs::read_to_string(d.root.join("data/agent-launch-T-0001.sh")).unwrap();
     assert!(script.contains("--resume 's-1'"), "{script}");
+
+    // Its hooks leave the task done.
+    let headers = [("x-natamux-task", "T-0001"), ("x-natamux-terminal", "1")];
+    for name in ["UserPromptSubmit", "PreToolUse", "Stop"] {
+        let body = json!({ "hook_event_name": name, "session_id": "s-2" });
+        let (status, _) = d
+            .hook("claude-code", "", &headers, Some(TOKEN), &body)
+            .await;
+        assert_eq!(status, 200, "{name}");
+    }
+    let (_, task) = d.call(Method::GET, "/tasks/T-0001", Some(TOKEN)).await;
+    assert_eq!(task["task"]["state"], "done");
 }
 
 #[tokio::test(flavor = "multi_thread")]

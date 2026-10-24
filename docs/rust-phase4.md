@@ -1,6 +1,6 @@
 # Rust phase 4: the daemon in Rust
 
-Phase 4 of `plan-rust-migration.md` moves the daemon to Rust, behind the same HTTP and WebSocket contract, so the native app, the web dashboard and the CLI cannot tell which daemon answers. It comes in parts. This page covers part 1 (T-0153): the terminals (PTY, input gap, ring, snapshot, resume, backpressure, restore after a restart) and the contract suite that compares the two daemons; part 2 (T-0155): tasks, events, the files on disk and the index, in [Part 2](#part-2-tasks-events-storage-index); and part 3 (T-0157): the stage engine and agent start, in [Part 3](#part-3-the-stage-engine). Parts 4 and 5 add their own sections. A row of a part's "where it differs" table that a later part closed is taken out.
+Phase 4 of `plan-rust-migration.md` moves the daemon to Rust, behind the same HTTP and WebSocket contract, so the native app, the web dashboard and the CLI cannot tell which daemon answers. It comes in parts. This page covers part 1 (T-0153): the terminals (PTY, input gap, ring, snapshot, resume, backpressure, restore after a restart) and the contract suite that compares the two daemons; part 2 (T-0155): tasks, events, the files on disk and the index, in [Part 2](#part-2-tasks-events-storage-index); part 3 (T-0157): the stage engine and agent start, in [Part 3](#part-3-the-stage-engine); and part 4 (T-0159): the hooks, signals, activity and usage of the agents, and a faster CI, in [Part 4](#part-4-agent-hooks). Part 5 adds its own section. A row of a part's "where it differs" table that a later part closed is taken out.
 
 The Rust daemon does not replace the Node one yet: it runs only in tests and CI. The phase-4 gate (the E2E suite with `NATAMUX_DAEMON_IMAGE` swapped) comes after part 5.
 
@@ -20,7 +20,7 @@ Made in the spec and while building:
 - **The screen parses output at once** (`alacritty_terminal`'s `Term`, in `natamux-screen`). A snapshot is cut, serialized and sent in one go, under the shell's lock: a new client gets `hello`, `snapshot`, the snapshot frames and `replayed` before `attach` returns. Only a synchronized frame (mode 2026) makes it wait, up to 150 ms or until the frame ends; clients that come meanwhile share that snapshot. So the Node mechanisms that exist because xterm.js parses later are not ported: snapshot slices (`SERIALIZE_SLICE_MS`, `SNAPSHOT_*_SLICE_ROWS`), sending over several turns (`SNAPSHOT_SEND_BYTES`), the waiting lists, and the screen watermarks that pause the pty (`SCREEN_HIGH_WATER`, `SCREEN_LOW_WATER`). A shell that floods is slowed by the parse itself.
 - **Timers** run on one thread (`shared/scheduler.rs`); tests use a manual clock, as vitest's fake timers.
 - **Locks:** the map of shells is only held for a lookup; nothing is published on the event bus while a lock is held, as the open-shells list listens to the bus.
-- **Restore after a restart without stages:** at start, every `<data>/tasks/*.open-shells.json` whose task has a worktree is loaded; its shells wait and are listed with `restoring`, and an attach starts one plain. Restarting the agent of a shell is part 4.
+- **Restore after a restart without stages:** at start, every `<data>/tasks/*.open-shells.json` whose task has a worktree is loaded; its shells wait and are listed with `restoring`, and an attach starts one plain. Restarting the agent of a shell came with part 3, its session from the hooks with part 4.
 - **The login PATH** is ported (`wait_for_login_path`), but the Rust daemon has no desktop parent yet, so it waits for nothing; phase 5 picks the channel.
 
 ## Crates
@@ -36,13 +36,13 @@ Made in the spec and while building:
 
 ## Run it
 
-Nothing is built on the owner's Mac. CI builds and tests everything. The headless crates can also be tested in the hardened Docker command of `plan-rust-migration.md` ("Safe local setup"); `natamux-app` is left out of that copy of the workspace, as its git dependencies are not in the local cache.
+Nothing is built on the owner's Mac, also not in Docker (owner, 2026-10-24: a crate's build script or proc macro is code that runs at build time). CI builds, formats and tests everything; see [What CI checks](#what-ci-checks) for the loop.
 
 The binary reads the Node daemon's variables: `NATAMUX_PORT` (4317), `NATAMUX_HOST` (127.0.0.1), `NATAMUX_TOKEN` (made and printed when unset), `NATAMUX_DATA_DIR` (`./.natamux`), `NATAMUX_WORKTREES_DIR` (`<data>/worktrees`). SIGTERM or Ctrl+C: the open-shells list stops, every shell ends (SIGHUP, then SIGKILL after 2 s), the daemon exits.
 
 ## What CI checks
 
-Daemon tasks push their snapshots to `natamux-ci/daemon` (every job) and `natamux-ci/daemon-check` (`check` only); `natamux-ci/daemon` skips `app-macos`. The daemon jobs do not run on `natamux-ci/rust` or any `-check` branch.
+Daemon tasks push their snapshots to `natamux-ci/daemon` (every job the change needs) and `natamux-ci/daemon-check` (`check` only); `natamux-ci/daemon` skips `app-macos`. The daemon jobs do not run on `natamux-ci/rust` or any `-check` branch. Since part 4, a first job, `changes` (`scripts/ci-changes.py`), reads the files the branch changed against `dev` and each job runs only when they can break it; a pull request into `dev` and `dev` itself run everything. See [Part 4, CI](#ci-only-what-the-change-needs).
 
 | Job | What |
 |---|---|
@@ -78,7 +78,6 @@ Not in the suite, covered by unit and route tests: the 90 s silence close (a rou
 
 | What | Node | Rust (part 1) | Why |
 |---|---|---|---|
-| Hooks of Claude Code in a shell started by hand | Written into the worktree at each spawn | Not written | Part 4 |
 | Snapshot bytes | xterm's `SerializeAddon` | `natamux-screen`'s own; the same screen in xterm.js | No byte-for-byte copy of another serializer |
 | Mouse encoding in a snapshot | Lost (xterm does not report it) | `?1006h` kept | A dashboard keeps SGR mouse reports after a reconnect |
 | The pen after a snapshot | Not restored | Restored | The next output keeps the program's colours |
@@ -310,8 +309,6 @@ The owner said on 2026-10-24 not to ask, so these were decided in the spec and w
 | A stage that waits for CI | Pushes a snapshot to `natamux-ci/<branch>` and waits for its runs | Fails the check at once, finally, with Node's text for a missing `gh` | `gh` and pushes are part 5 |
 | A finished task that used CI | Its CI branch is deleted on GitHub | Kept | Part 5 |
 | `POST /tasks/:id/agent` on a task without a workspace | Makes the workspace, then starts the agent | 409 `<id> has no workspace` | Workspaces are part 5 |
-| `GET /tasks/:id/terminals`, a shell on no current stage | Its lane's state, or the state its hooks gave | Its lane's state | Hooks are part 4 |
-| An agent's hooks (turn end, question, session id) | Move the task (`needs-input`, …) and name the session | Not heard | Part 4; the contract scenarios leave the events of hooks out |
 
 ### What CI checks
 
@@ -320,7 +317,7 @@ The owner said on 2026-10-24 not to ask, so these were decided in the spec and w
 
 ### Contract scenarios
 
-The Rust daemon makes no worktree before part 5, so each scenario makes twin tasks on Node with their worktrees, `CT-<n>` for the Node run and `CR-<n>` for the Rust run; the files of `CR-<n>` are copied to the Rust data folder. The first stage of the pipeline is an agent stage, so a new task waits there (until `start`) and Node starts nothing for the Rust twin. A daemon reads the log of a task file that appears while it runs only at its next start (Node too), so the Rust daemon restarts once the twins of a scenario are copied. Ids, worktree paths, branches, commits and times become placeholders. The fake agent's hooks reach only Node, so the events of hooks (`agent.*` from the agent) are left out of what is compared. The daemon image has no `natamux` command, so the fake agent's `natamux done` and a test command's `natamux stage pass` reach no daemon: a scenario reports a stage itself (`POST /tasks/:id/stage`, `report` from Terminal 1) once the agent wrote its file. The fake agent is a bash script: 30 s after its launch nothing tells it from a shell (`LAUNCH_GRACE_MS`), so a scenario does not hand it a second prompt after that.
+The Rust daemon makes no worktree before part 5, so each scenario makes twin tasks on Node with their worktrees, `CT-<n>` for the Node run and `CR-<n>` for the Rust run; the files of `CR-<n>` are copied to the Rust data folder. The first stage of the pipeline is an agent stage, so a new task waits there (until `start`) and Node starts nothing for the Rust twin. A daemon reads the log of a task file that appears while it runs only at its next start (Node too), so the Rust daemon restarts once the twins of a scenario are copied. Ids, worktree paths, branches, commits and times become placeholders. Part 3 left the events of hooks (`agent.*` from the agent) out of what was compared; part 4 found that the fake agent's hooks reach neither daemon (the images have no `natamux` command), took the filter out, and lets scenarios send hooks themselves ([Part 4](#part-4-agent-hooks)). The daemon image has no `natamux` command, so the fake agent's `natamux done` and a test command's `natamux stage pass` reach no daemon: a scenario reports a stage itself (`POST /tasks/:id/stage`, `report` from Terminal 1) once the agent wrote its file. The fake agent is a bash script: 30 s after its launch nothing tells it from a shell (`LAUNCH_GRACE_MS`), so a scenario does not hand it a second prompt after that.
 
 | # | Scenario | What it checks |
 |---|---|---|
@@ -338,7 +335,7 @@ The Rust daemon makes no worktree before part 5, so each scenario makes twin tas
 
 Not in the suite, covered by unit tests: CI rounds (a fake `CiCheck`), the result of a test command, `requireCommit`, the send-back limit of agents, context sources of skills and MCP servers, GitHub issue context.
 
-Allowed by name: in `gates_and_checks`, the state after the first report — the fake agent ends its turn after it wrote the spec, and on Node that hook sets `needs-input` sooner or later than the report; Rust hears no hook before part 4.
+Part 3 allowed by name, in `gates_and_checks`, the state after the first report, for a hook that never came; part 4 took that out.
 
 ### Ported tests
 
@@ -360,7 +357,7 @@ Left out or changed, with the reason:
 - `stages/ci-check.test.ts` (12): `checkOnCi` runs `gh` and pushes: part 5.
 - Spies (`vi.spyOn` on `startLanes`, `withPath`, `laneOfTerminal`, `terminals.run`, `agents.start`, `console.error`, `console.warn`) cannot be ported: each test checks the real effect instead (the next stage started, the event's `path`, a spawn that fails), and says so. 'logs stages that fail to start' is left out: no real input makes `startLanes` fail after a report.
 - `makeWorkspace` of `startByHand` is part 5: 'makes the missing workspace and starts the agent the person picked in it' is left out, and the 404 half of 'answers 404 for an agent it cannot start, and makes a missing workspace' is kept.
-- Hooks are part 4: the hook halves of the first reopen case and of 'shows the shell of an earlier stage as done' are left out.
+- Hooks are part 4: the hook halves of the first reopen case and of 'shows the shell of an earlier stage as done' were left out here and came with part 4.
 - `/repos/:id/settings` (a row of 'may not change $url') comes with the project routes.
 - `commandHolds` with a command that throws: a Rust `RunCommand` gives an exit code and cannot throw, as Node's `runShellCommand` never does.
 - The race of 'starts one agent when a person starts it while the new workspace starts the stage' is gone in Rust: the worktree is made before the start; the test checks the same single launch.
@@ -380,4 +377,117 @@ Gate of part 3 (plan, phase 4): the ported stage and agent-start tests green on 
 | Contract suite | 2026-10-24 | Pass: terminals 12 of 12, tasks 10 of 10, stages 11 of 11 (scenarios 23 to 32), equal or allowed with the reasons above | Run 40054247152, job `daemon-contract` |
 | Stage start time | 2026-10-24 | Pass: Rust 121–124 ms (median 122), Node 128–136 ms (median 129) | Run 40054247152; also runs 40052883125 (121 / 127) and 40053575393 (117 / 125); run 40049467032, before HEAD was read from the files, had Rust 166 / Node 134 |
 | Bench | 2026-10-24 | Pass: parse plain 72.6 / 90.4 MB/s, SGR 61.2 / 93.3 | Run 40054247152, job `daemon-bench` |
-| This section | | Waits for the owner | Review of T-0157 |
+| This section | | Waits for the owner | Review of T-0159's pull request |
+
+## Part 4: agent hooks
+
+Part 4 (T-0159) gives the Rust daemon the ears of the Node one: `POST /hooks/:agent` for Claude Code, Codex, Gemini CLI, Copilot (`?event=`) and Cursor, the adapters that read each hook body, the hook service that moves a task from what its agent reports, the signs of life in terminal output, `GET /activity` with `activity.changed`, and the token usage and cost of each task with `GET /usage` and `usage.changed`. It also made CI run only what a change needs, since nothing builds on the owner's Mac.
+
+### Decisions
+
+The owner said on 2026-10-24 not to ask, so these were decided in the spec and while building:
+
+- **Pure parts in `natamux-agents`, state in the daemon.** The adapters, the signal table (`planSignalEvents`), the tool summaries, the usage readers, the price table and the session-file check are pure, so they went into `natamux-agents` (`hooks.rs`, `hooks/`, `usage.rs`, `usage/`). The hook service, the generic signals and the usage service move tasks or hold state, so they are in `natamux-daemon/src/agents/`, beside `AgentRunner`. The hook service reaches the stage runner through a two-method trait (`StageLookup`: `lane_for`, `take_report`), so its tests can set a lane.
+- **No new crates.io crate.** `std::fs` and `BufRead` read the session files, byte checks replace Node's regular expressions, `serde_json` (with `preserve_order`) keeps Node's key order.
+- **The terminal path.** `GenericSignals::on_output` only takes a small lock, reads the clock and looks for a bell (0x07) in the chunk; reading and moving the task runs on one signals thread. Hook requests run in `spawn_blocking`, off the HTTP threads; the usage of a session file is read on its own thread, one read per file at a time, as Node.
+- **Hook files at each shell spawn.** The spawn function the terminals get is wrapped: it writes the hook files of every agent into the shell's folder (`prepare_agent_hooks`), then spawns, as Node's `main.ts`.
+- **Workspace touch is part 5.** Node's `workspaces.touch` after a tool ran (diff stats, `workspace.dirty`) waits for the workspaces of part 5; the hook service has the callback, unset in the daemon, and its tests check the calls.
+- **JSON out** is built as `serde_json::Value` in Node's key order (tasks and terminals in insertion order), not through the proto types, whose `BTreeMap`s sort.
+- **The usage file** `<tasks>/<TASK>.usage.json` is written as Node's `JSON.stringify` writes it (`.tmp`, then rename), so either daemon reads the other's.
+- **Nothing builds on the Mac.** The task asked for a hardened Docker loop on the Mac; the owner stopped it during the build ("ở local đừng run build hay gì nha"). Code is written without a compiler and CI is the loop; see the next section.
+
+### CI: only what the change needs
+
+| Job | Runs when | Notes |
+|---|---|---|
+| `changes` | Always | `scripts/ci-changes.py flags`: flags from `git diff --name-only origin/dev...HEAD`; every flag on for a pull request, `dev`, or a change to `rust.yml`, `rust-toolchain.toml`, the root `Cargo.toml`, `.cargo/`, `xtask/` or the script |
+| `check` | Always | On `natamux-ci/daemon*`: no disk cleanup, no GPUI libraries, `cargo xtask ci --no-app`. On any `natamux-ci/*` snapshot: `cargo fmt` runs first and its patch is an artifact (`fmt-patch`), and `--all-errors` lets clippy, the tests, layers and colours all run after a failure; the job still fails |
+| `daemon-os` | A daemon crate or one that depends on it changed | `cargo test` of those crates only (`-p` list from the dependency graph of `crates/*/Cargo.toml`) |
+| `daemon-contract` | A daemon crate, the contract suite, `compose.rust-daemon.yaml` or the fake agent changed | The suites of a `[contract: hooks,stages]` tag in the head commit's message; no tag: `terminals`, `tasks`, `stages`, `hooks` |
+| `daemon-bench` | The terminal path changed (`natamux-pty`, `natamux-screen`, the daemon's `terminals/`) | |
+| `live-daemon`, `cli` | `natamux-client`, `natamux-cli` or `natamux-proto` changed | |
+| `supply-chain` | `Cargo.lock`, `deny.toml`, `supply-chain/` or `.cargo/audit.toml` changed | |
+| `app-macos` | As before; on `natamux-ci/rust*` only when the app changed | |
+
+A snapshot's commit message may name the suites (`[contract: hooks,stages]`) and the commit to compare with (`[base: <sha>]`, for measuring; default `origin/dev`).
+
+Caches: each job restores `rust-<job>-<os>-<lock hash>-<sha>` with the older keys as fallbacks, and saves under its own commit once its build passed. Before the build, `ci-changes.py mtimes` gives every file the same old time and touches only the files changed since the commit the cache was built from (`target/.ci-commit`): cargo decides by file times, and a fresh checkout would make every crate look changed. After the save, the older caches of the job and branch are deleted, so each keeps one.
+
+The fake agent skips its 2–5 s pauses with `NATAMUX_FAKE_AGENT_FAST=1`; only the `daemon-contract` job sets it, on both daemons. E2E keeps the pauses.
+
+### CI speed
+
+One run on `natamux-ci/daemon`, wall time from the push to the last job, and the runner minutes of its jobs. "Before" is the `rust.yml` of `dev` (0d67194b), "after" the one of this part. The "after" runs name the gate run's commit as their base (`[base: <sha>]` in the message, read by `ci-changes.py`), so they see only their own change, as a branch will once this part is on `dev`.
+
+| Change | Before | After |
+|---|---|---|
+| (a) No code change | 15 min 0 s, 8 jobs, 60 runner minutes (run 40056666951; `check` alone 15 min) | 1 min 22 s, `changes` and `check`, 1.5 runner minutes (run 40063122059) |
+| (b) One line in a daemon file (`natamux-daemon/src/agents/errors.rs`) | 4 min 34 s, 8 jobs, 23 runner minutes (run 40057752558) | 3 min 59 s, `check`, `daemon-os` on macOS and Windows, `daemon-contract`: 10 runner minutes (run 40063240156) |
+| Every job and suite (the gate run of this part) | | 4 min 41 s, 18 runner minutes (run 40062747678) |
+
+Target met: a daemon-only change is green in 4 minutes (target 8). The wall time of (b) is held by `daemon-contract` (3 min 47 s: start both daemons, then the suites); the gain is mostly in the jobs that no longer run, and in `check`, which is 1 to 1.5 min with the commit-keyed cache instead of 4 to 15.
+
+### Crates
+
+`natamux-agents` gained `hooks` (signals, adapters for the five agents, summaries) and `usage` (readers, prices, the session-file check). No crate gained a dependency.
+
+### Where it differs from the Node daemon
+
+| What | Node | Rust (part 4) | Why |
+|---|---|---|---|
+| A tool ran in a workspace | `workspace.dirty`, new diff stats | Nothing | Workspaces are part 5 |
+| A summary cut inside a surrogate pair | Keeps half the pair | Drops the whole character | A Rust string holds no lone surrogate |
+| A hook POST with no body | Zod says `undefined` | Zod says `null` | The same 400 |
+| A session file that cannot be read | The read throws, nothing changes | Reads as no usage, nothing changes | The same answer |
+
+### Contract scenarios
+
+The daemon images have no `natamux` command, so the fake agent's own hooks reach neither daemon. Each scenario sends the hooks itself, with the body and headers of `natamux hook claude-code` (the agent token, `X-Natamux-Task`, `X-Natamux-Terminal`). The scenarios live in `tests/stages/hooks.rs` (module `hooks`, CI filter `hooks::`).
+
+| # | Scenario | What it checks |
+|---|---|---|
+| 33 | `hook_turn_end` | A prompt, a tool (the activity line, `activity.changed`, `GET /activity`), a turn end (`needs-input`), a new prompt, a turn end with background work (stays running, "Waiting for …") |
+| 34 | `hook_question` | Permission and question notifications ask; other notification types change nothing; a tool that ran answers the question |
+| 35 | `stopped_early` | A turn end without a report; a report, then a turn end that changes nothing (`take_report`) |
+| 36 | `session_resume` | A session id from a hook, a restart, the agent starts again on that session |
+| 37 | `hooks_route` | 401, 404 naming the agents, 400, no task, the task by its folder, Copilot's `?event=`, a failure, a shell no stage uses gets the state its hooks gave |
+| 38 | `usage` | A session file in each daemon's home, `usage.changed` and `GET /usage` equal, a path outside home ignored, a second turn adds only what is new. No delete: the Rust daemon refuses to delete a task that has a workspace until part 5 (400); the removal of the usage file has a unit test |
+| 39 | `hook_time` | The time from a hook POST to its `task.updated`, five turn ends and five prompts on each daemon, taking turns |
+
+### Ported tests
+
+| Node file | Node cases | Rust | Where |
+|---|---|---|---|
+| `agents/agent-hook-service.test.ts` | 58 | 58 | `natamux-daemon/tests/hook_service/` |
+| `agents/claude-code-hooks.test.ts` | 30 | 30 | `natamux-agents/src/hooks/claude_code_tests.rs` |
+| `agents/agent-adapters.test.ts` (Codex, Copilot, Cursor, Gemini have no own tests) | 21 | 21 | `natamux-agents/src/hooks/adapters_tests.rs` |
+| `agents/agent-signals.test.ts` | 14 | 18 (with `tool_summary` and `shorten`) | `natamux-agents/src/hooks_tests.rs` |
+| `agents/usage-service.test.ts` | 13 | 10, plus 4 of `sessionFile` | `natamux-daemon/tests/usage_service/`, `natamux-agents/src/usage/session_file_tests.rs` |
+| `agents/generic-signals.test.ts` | 8 | 8 | `natamux-daemon/tests/generic_signals.rs` |
+| `agents/model-prices.test.ts` | 6 | 6 | `natamux-agents/src/usage/prices_tests.rs` |
+| `agents/usage-readers.test.ts` | 5 | 5 | `natamux-agents/src/usage/readers_tests.rs` (fixtures in `tests/fixtures/usage/`) |
+| `server.test.ts`: "Claude Code hooks", "agent activity", "GET /usage" | 12 | 14 | `natamux-daemon/tests/routes/hooks.rs` |
+| `server.test.ts`: the hook halves part 3 left out, the activity after a hook | 3 | 3 | `routes/agents.rs`, `routes/task_events.rs` |
+
+Counted as `it` blocks; an `it.each` is one Rust test that loops over its cases.
+
+Left out or changed, with the reason:
+
+- The `workspace.dirty` half of 'sends the activity after a hook, and touches the workspace after a tool ran': part 5. The hook service tests check the touch callback.
+- `vi.spyOn` checks (`workspaceChanged`, `sessionSeen`, `usageSeen`) became recording callbacks.
+- 'shows the shell of an earlier stage as done, until its agent gets a new prompt': its hook half needs Node's `laneOfTerminal` mock; the Rust test gives a shell no stage uses its hook state on the plain pipeline instead.
+- `packages/core/src/agents/` has no tests: `claudeCodeHookSettings` is covered by part 3, the usage shape by the route tests.
+
+### Gate results
+
+| Check | Date | Result | Where |
+|---|---|---|---|
+| Crates, the split, no new dependency | 2026-10-24 | Decided in the spec (the owner said not to ask) | T-0159 spec |
+| `cargo xtask ci` | 2026-10-24 | Pass | Rust run 40062747678 on `natamux-ci/daemon` (01485ca), job `check` |
+| `daemon-os` macOS and Windows | 2026-10-24 | Pass | Run 40062747678; Windows first failed in `ci-changes.py mtimes` (no `utime` of a link on Windows), fixed |
+| Contract suite | 2026-10-24 | Pass: terminals 12 of 12, tasks 10 of 10, stages 11 of 11, hooks 7 of 7, all equal, with the hook events compared and no step allowed (part 2's 1 MB row stays) | Run 40062747678, job `daemon-contract` |
+| Hook to `/events` time | 2026-10-24 | Pass: Rust 1 ms each (median 1), Node 2–5 ms (median 3, through nginx) | Run 40062747678; also run 40060311226 (1 / 3) |
+| Stage start time (part 3's check, again) | 2026-10-24 | Pass: Rust median 122 ms, Node 128 | Run 40062747678 |
+| Bench | 2026-10-24 | Pass: parse plain 69.7 / 83.2 MB/s, SGR 63.9 / 94.5 | Run 40062747678, job `daemon-bench` |
+| CI speed | 2026-10-24 | Pass: (b) 3 min 59 s, at most 8 | Runs above |
+| This section | | Waits for the owner | Review of T-0159's pull request |

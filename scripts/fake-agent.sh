@@ -78,7 +78,9 @@ say() {
   printf '%s\n\n' "$1"
 }
 
+# The contract job sets FAST: its scenarios wait for the agent, not for the pretend work.
 pause() {
+  [ "${NATAMUX_FAKE_AGENT_FAST:-}" = 1 ] && return
   sleep "$((RANDOM % 4 + 2))"
 }
 

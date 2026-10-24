@@ -4,14 +4,19 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 
-use natamux_agents::hook_files::{WorkspaceHooks, gemini_hook_settings, hook_file_text_of};
+use natamux_agents::hook_files::{
+    WorkspaceHooks, gemini_hook_settings, hook_file_text_of, prepare_agent_hooks,
+};
 use natamux_agents::trust::trust_paths;
 use natamux_core::agents::hook_settings::claude_code_hook_settings;
-use natamux_pty::Env;
+use natamux_pty::{Env, SpawnOptions};
 use natamux_store::task_index::TaskIndex;
 use tokio::task::JoinHandle;
 
+use crate::agents::generic_signals::GenericSignals;
+use crate::agents::hook_service::{HookOptions, HookService};
 use crate::agents::runner::{AgentLaunch, AgentRunner, AgentRunnerOptions};
+use crate::agents::usage_service::{UsageOptions, UsageService};
 use crate::config::{Config, shell_env};
 use crate::http::server::{AppState, bind, serve};
 use crate::projects::repos::Repos;
@@ -61,6 +66,29 @@ pub fn workspace_of(tasks: TaskService) -> impl Fn(&str) -> Result<PathBuf, Term
     }
 }
 
+/// The user's home folder: where agents keep their sessions.
+fn home_dir() -> PathBuf {
+    std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .map_or_else(PathBuf::new, PathBuf::from)
+}
+
+/// The home folder in the daemon's own environment, where its hooks may read session files.
+fn home_of(env: &Env) -> PathBuf {
+    env.get("HOME")
+        .or_else(|| env.get("USERPROFILE"))
+        .map_or_else(PathBuf::new, PathBuf::from)
+}
+
+/// An agent the user starts by hand in a shell finds its hooks there: the files are written at
+/// each shell start, and only there, not on the output path.
+fn with_hook_files(spawn: Arc<SpawnPty>) -> Arc<SpawnPty> {
+    Arc::new(move |options: SpawnOptions| {
+        prepare_agent_hooks(&options.cwd, WorkspaceHooks { claude_code: true });
+        (*spawn)(options)
+    })
+}
+
 fn io_error(error: TaskError) -> std::io::Error {
     std::io::Error::other(error.to_string())
 }
@@ -71,6 +99,8 @@ struct TaskStore {
     repos: Arc<Repos>,
     jobs: Arc<Jobs>,
     bus: Arc<EventBus>,
+    /// What output alone tells of a task (bell, sign of life, a shell that lacks the agent).
+    signals: Arc<GenericSignals>,
 }
 
 fn task_store(config: &Config) -> std::io::Result<TaskStore> {
@@ -89,7 +119,9 @@ fn task_store(config: &Config) -> std::io::Result<TaskStore> {
         clock: None,
     });
     tasks.init().map_err(io_error)?;
+    let signals = Arc::new(GenericSignals::new(tasks.clone(), None));
     Ok(TaskStore {
+        signals,
         tasks,
         repos,
         jobs,
@@ -107,6 +139,7 @@ fn agent_runner(
     terminals: &TerminalService,
     repos: &Arc<Repos>,
     open_shells: &Arc<OpenShells>,
+    signals: &Arc<GenericSignals>,
     daemon_url: &str,
 ) -> std::io::Result<AgentRunner> {
     // Shells reach the daemon on loopback, so do the hooks of the agents they start.
@@ -120,11 +153,10 @@ fn agent_runner(
         &gemini_settings_path,
         hook_file_text_of(&gemini_hook_settings()),
     )?;
-    let home = std::env::var_os("HOME")
-        .or_else(|| std::env::var_os("USERPROFILE"))
-        .map_or_else(PathBuf::new, PathBuf::from);
+    let home = home_dir();
     let settings = Arc::clone(repos);
     let open = Arc::clone(open_shells);
+    let signals = Arc::clone(signals);
     Ok(AgentRunner::new(AgentRunnerOptions {
         tasks: tasks.clone(),
         terminals: terminals.clone(),
@@ -137,6 +169,7 @@ fn agent_runner(
         launch_dir: None,
         bin_dir: config.agents.bin_dir.clone(),
         on_launch: Some(Arc::new(move |launch: &AgentLaunch| {
+            signals.watch_launch(launch);
             open.note_launch(
                 &launch.task_id,
                 &launch.terminal,
@@ -183,6 +216,7 @@ fn terminal_service(
     runner: &RunnerCell,
 ) -> TerminalService {
     let output = Arc::clone(runner);
+    let signalled = Arc::clone(&store.signals);
     let ended = store.tasks.clone();
     TerminalService::new(TerminalOptions {
         spawn,
@@ -194,6 +228,7 @@ fn terminal_service(
                 if let Some(runner) = output.get() {
                     runner.run.on_output(task_id, terminal, data);
                 }
+                signalled.on_output(task_id, terminal, data);
             },
         )),
         is_ended: Some(Arc::new(move |task_id: &str| {
@@ -233,6 +268,45 @@ fn open_shells(
     })
 }
 
+/// The hook service and the usage service it tells of each turn.
+fn hook_services(
+    config: &Config,
+    env: &Env,
+    store: &TaskStore,
+    stages: &StageRunner,
+    open_shells: &Arc<OpenShells>,
+) -> (Arc<HookService>, Arc<UsageService>) {
+    let home = home_of(env);
+    let usage = Arc::new(UsageService::new(UsageOptions {
+        data_dir: config.data_dir.clone(),
+        bus: Some(Arc::clone(&store.bus)),
+        home: home.clone(),
+    }));
+    let noted = Arc::clone(open_shells);
+    let seen = Arc::clone(&usage);
+    let hooks = Arc::new(HookService::new(
+        store.tasks.clone(),
+        Arc::new(stages.clone()),
+        HookOptions {
+            bus: Some(Arc::clone(&store.bus)),
+            // Part 5: `workspaces.touch`.
+            workspace_changed: None,
+            session_seen: Some(Arc::new(
+                move |task: &str, terminal: &str, agent: &str, session: &str| {
+                    noted.note_session(task, terminal, agent, session);
+                },
+            )),
+            usage_seen: Some(Arc::new(
+                move |task: &str, stage: Option<&str>, agent: &str, transcript: &str| {
+                    seen.seen(task, stage, agent, transcript);
+                },
+            )),
+            home,
+        },
+    ));
+    (hooks, usage)
+}
+
 /// `env`: the daemon's own environment, the base of the shells' one.
 pub async fn start(
     config: &Config,
@@ -247,6 +321,7 @@ pub async fn start(
     // Shells run on the same machine as the daemon, so they reach it on loopback.
     let daemon_url = format!("http://127.0.0.1:{}", address.port());
     let runner: RunnerCell = Arc::default();
+    let spawn = with_hook_files(spawn);
     let terminals = terminal_service(config, env, spawn, &scheduler, &store, &daemon_url, &runner);
     let open_shells = open_shells(config, &store, &terminals, &scheduler, &runner);
     let agents = Arc::new(agent_runner(
@@ -255,6 +330,7 @@ pub async fn start(
         &terminals,
         &store.repos,
         &open_shells,
+        &store.signals,
         &daemon_url,
     )?);
     let stages = stage_runner(
@@ -265,6 +341,7 @@ pub async fn start(
         &open_shells,
     );
     let _ = runner.set(stages.clone());
+    let (hooks, usage) = hook_services(config, env, &store, &stages, &open_shells);
     // Before the listen, so no dashboard attaches to a shell before it is known to wait.
     open_shells.start();
     stages.run.load_open_shells();
@@ -274,10 +351,13 @@ pub async fn start(
         repos,
         jobs,
         bus,
+        signals: _,
     } = store;
     let state = Arc::new(AppState {
         stages: stages.clone(),
         agents,
+        hooks,
+        usage,
         token: config.token.clone(),
         agent_token: config.agent_token.clone(),
         data_dir: config.data_dir.clone(),

@@ -108,16 +108,26 @@ fn terminals_of(state: &AppState, id: &str) -> Answer {
         .filter(|name| run.agent_runs(id, name))
         .cloned()
         .collect();
+    state.hooks.forget_shells_except(id, &agents);
     // Each agent shows the state of its own stage, not the state of the whole task, and the
-    // agent that runs there, which may not be the task's. shortcut: Node falls back to the state
-    // the hooks gave a shell on no current stage; hooks come with part 4.
+    // agent that runs there, which may not be the task's. An agent on no stage of the current
+    // step has the state its hooks gave, if any.
     let mut lanes = Map::new();
     for name in &agents {
         let agent = run.agent_in(id, name);
         let lane = run.lane_of_terminal(&task, name).unwrap_or_default();
+        let current = lane
+            .stage
+            .as_ref()
+            .is_some_and(|stage| *stage == task.stage || task.lanes.contains_key(stage.as_str()));
+        let lane_state = if current {
+            lane.state
+        } else {
+            state.hooks.shell_state(id, name).or(lane.state)
+        };
         lanes.insert(
             name.clone(),
-            json!({ "stage": lane.stage, "state": lane.state, "agent": agent }),
+            json!({ "stage": lane.stage, "state": lane_state, "agent": agent }),
         );
     }
     let mut programs = Map::new();

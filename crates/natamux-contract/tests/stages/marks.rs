@@ -1,5 +1,7 @@
 //! 28 `marks`, 29 `stage_files`, 32 `agent_token`.
 
+use std::time::{Duration, Instant};
+
 use hyper::Method;
 use natamux_contract::daemon::{Body, Daemon, Token};
 use natamux_contract::transcript::Transcript;
@@ -7,7 +9,7 @@ use serde_json::{Value, json};
 
 use crate::{
     agent_token, both, call, cancel, event, get, kept, launch_script, make_twins, put,
-    stage_events, start, task, wait_event,
+    stage_events, start, task, wait_event, wait_file,
 };
 
 async fn mark(d: &Daemon, id: &str, which: &str, stage: &str, on: bool) -> Value {
@@ -51,6 +53,12 @@ async fn marks() {
             );
             t.note("to the group", moved.await);
             wait_event(&d, &id, "stage.started", "implement", 1).await;
+            // The lanes of the group start one after the other; the fast fake agent made that
+            // visible. Wait until the skipped lane left `ready` (or a deadline, then compare).
+            let deadline = Instant::now() + Duration::from_secs(30);
+            while task(&d, &id).await["lanes"]["notes"] == "ready" && Instant::now() < deadline {
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
             t.note("at the group", task(&d, &id).await);
             t.note("implement launch", launch_script(&d, &id, "1").await);
             t.note("events", stage_events(&d, &id).await);
@@ -101,6 +109,8 @@ async fn stage_files() {
             );
             start(&d, &id).await;
             wait_event(&d, &id, "stage.started", "spec", 1).await;
+            // The fast fake agent may be writing the spec: wait until it is whole, on both daemons.
+            wait_file(&d, &id, "spec.md", "## Scope").await;
             let passed = kept(
                 &call(
                     &d,
@@ -153,6 +163,8 @@ async fn agent_token_scenario() {
             };
             start(&d, &id).await;
             wait_event(&d, &id, "stage.started", "spec", 1).await;
+            // The fast fake agent may be writing the spec: wait until it is whole, on both daemons.
+            wait_file(&d, &id, "spec.md", "## Scope").await;
             let stage = format!("/tasks/{id}/stage");
             for action in ["approve", "skip", "pass"] {
                 let body = json!({ "action": action, "stage": "spec" });

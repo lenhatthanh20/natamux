@@ -4,6 +4,7 @@
 
 pub mod git_files;
 pub mod hook_files;
+pub mod hooks;
 pub mod launch;
 mod paths;
 pub mod skill_list;
@@ -12,3 +13,4 @@ pub mod skills;
 #[cfg(test)]
 mod test_support;
 pub mod trust;
+pub mod usage;

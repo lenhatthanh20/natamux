@@ -165,6 +165,7 @@ pub async fn bare(name: &str) -> TestDaemon {
         test_root(name),
         None,
         natamux_proto::terminals::messages::SILENT_CLOSE,
+        None,
     )
     .await
 }
@@ -175,7 +176,7 @@ pub async fn daemon_silent_after(
     with_workspace: bool,
     silent_close: Duration,
 ) -> TestDaemon {
-    start_daemon(root, Some(with_workspace), silent_close).await
+    start_daemon(root, Some(with_workspace), silent_close, None).await
 }
 
 /// T-0001 is a task file in `<data>/tasks`; its workspace is the worktree folder, or none.
@@ -207,8 +208,14 @@ fn seed_repos(root: &std::path::Path) {
     std::fs::write(root.join("data/repos.json"), repos.to_string()).unwrap();
 }
 
-/// `task`: T-0001 is seeded, with a workspace or without; None: no task.
-async fn start_daemon(root: PathBuf, task: Option<bool>, silent_close: Duration) -> TestDaemon {
+/// `task`: T-0001 is seeded, with a workspace or without; None: no task. `home`: the daemon's
+/// `HOME`.
+pub async fn start_daemon(
+    root: PathBuf,
+    task: Option<bool>,
+    silent_close: Duration,
+    home: Option<PathBuf>,
+) -> TestDaemon {
     seed_repos(&root);
     if let Some(with_workspace) = task {
         seed_task(&root, with_workspace);
@@ -242,10 +249,13 @@ async fn start_daemon(root: PathBuf, task: Option<bool>, silent_close: Duration)
             receiver: Some(receiver),
         }))
     };
-    let env = [("PATH", "/bin")]
+    let mut env: natamux_pty::Env = [("PATH", "/bin")]
         .iter()
         .map(|(name, value)| (name.to_string(), value.to_string()))
         .collect();
+    if let Some(home) = home {
+        env.insert("HOME".into(), home.to_string_lossy().into_owned());
+    }
     let daemon = start(&config, &env, Arc::new(spawn), Scheduler::real())
         .await
         .unwrap();
@@ -351,10 +361,19 @@ impl TestDaemon {
 
     /// The status of a request sent as raw bytes, so a path with "\\" reaches the daemon as it is.
     pub async fn raw_status(&self, method: &str, path: &str) -> u16 {
+        self.raw_status_as(method, path, None).await
+    }
+
+    /// `raw_status` with a bearer token.
+    pub async fn raw_status_as(&self, method: &str, path: &str, token: Option<&str>) -> u16 {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
         let mut stream = TcpStream::connect(self.daemon.address).await.unwrap();
-        let request =
-            format!("{method} {path} HTTP/1.1\r\nhost: localhost\r\nconnection: close\r\n\r\n");
+        let auth = token.map_or_else(String::new, |token| {
+            format!("authorization: Bearer {token}\r\n")
+        });
+        let request = format!(
+            "{method} {path} HTTP/1.1\r\nhost: localhost\r\n{auth}connection: close\r\n\r\n"
+        );
         stream.write_all(request.as_bytes()).await.unwrap();
         let mut answer = Vec::new();
         let _ = stream.read_to_end(&mut answer).await;
@@ -385,6 +404,17 @@ impl TestDaemon {
         token: Option<&str>,
         body: Option<&Value>,
     ) -> (u16, hyper::HeaderMap, Vec<u8>) {
+        self.exchange_with(method, path, token, &[], body).await
+    }
+
+    pub async fn exchange_with(
+        &self,
+        method: Method,
+        path: &str,
+        token: Option<&str>,
+        headers: &[(&str, &str)],
+        body: Option<&Value>,
+    ) -> (u16, hyper::HeaderMap, Vec<u8>) {
         let stream = TcpStream::connect(self.daemon.address).await.unwrap();
         let (mut sender, connection) = hyper::client::conn::http1::handshake(TokioIo::new(stream))
             .await
@@ -396,6 +426,9 @@ impl TestDaemon {
             .header("host", "localhost");
         if let Some(token) = token {
             request = request.header("authorization", format!("Bearer {token}"));
+        }
+        for (name, value) in headers {
+            request = request.header(*name, *value);
         }
         let payload = body.map_or_else(Bytes::new, |body| Bytes::from(body.to_string()));
         if body.is_some() {

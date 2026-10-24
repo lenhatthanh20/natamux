@@ -144,6 +144,18 @@ impl Daemon {
         body: Body,
         token: Token<'_>,
     ) -> Answer {
+        self.request_with(method, path, body, token, &[]).await
+    }
+
+    /// Like `request`, with more headers (the task and terminal headers of a hook).
+    pub async fn request_with(
+        &self,
+        method: Method,
+        path: &str,
+        body: Body,
+        token: Token<'_>,
+        headers: &[(&str, &str)],
+    ) -> Answer {
         let (host, prefix) = split(&self.base);
         let failed = Answer {
             status: 0,
@@ -171,6 +183,9 @@ impl Daemon {
                 request = request.header("authorization", format!("Bearer {token}"))
             }
             Token::None => {}
+        }
+        for (name, value) in headers {
+            request = request.header(*name, *value);
         }
         let bytes = match body {
             Body::None => Vec::new(),
@@ -221,6 +236,27 @@ impl Daemon {
             env("NATAMUX_CONTRACT_EXEC"),
             shell_quote(script)
         );
+        let output = tokio::task::spawn_blocking(move || {
+            std::process::Command::new("sh")
+                .args(["-c", &command])
+                .output()
+        })
+        .await;
+        match output {
+            Ok(Ok(output)) => String::from_utf8_lossy(&output.stdout).into_owned(),
+            _ => String::new(),
+        }
+    }
+
+    /// Runs `script` in this daemon's own container: Node's is `NATAMUX_CONTRACT_EXEC`, Rust's is
+    /// `NATAMUX_CONTRACT_RUST_EXEC`, which only the scenarios that need it require.
+    pub async fn exec_in(&self, script: &str) -> String {
+        let name = if self.name == "node" {
+            "NATAMUX_CONTRACT_EXEC"
+        } else {
+            "NATAMUX_CONTRACT_RUST_EXEC"
+        };
+        let command = format!("{} sh -c {}", env(name), shell_quote(script));
         let output = tokio::task::spawn_blocking(move || {
             std::process::Command::new("sh")
                 .args(["-c", &command])

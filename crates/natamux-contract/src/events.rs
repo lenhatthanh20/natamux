@@ -68,6 +68,30 @@ impl Events {
         true
     }
 
+    /// Reads message by message until `want` holds for a new one, at most 20 seconds. Gives the
+    /// moment of arrival, which `until` (slices of 100 ms) does not.
+    pub async fn next(&mut self, want: impl Fn(&Value) -> bool) -> bool {
+        let Some(socket) = &mut self.socket else {
+            return false;
+        };
+        let deadline = Instant::now() + Duration::from_secs(20);
+        while let Some(left) = deadline.checked_duration_since(Instant::now()) {
+            match tokio::time::timeout(left, socket.next()).await {
+                Ok(Some(Ok(Message::Text(text)))) => {
+                    let message = serde_json::from_str(text.as_str()).unwrap_or(Value::Null);
+                    let found = want(&message);
+                    self.messages.push(message);
+                    if found {
+                        return true;
+                    }
+                }
+                Ok(Some(Ok(_))) => {}
+                _ => return false,
+            }
+        }
+        false
+    }
+
     /// The messages about these tasks, or of a kind that names no task (`jobs.changed`, `resync`).
     pub fn about(&self, tasks: &[&str]) -> Vec<Value> {
         self.messages
