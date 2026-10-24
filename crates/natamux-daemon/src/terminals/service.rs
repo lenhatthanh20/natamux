@@ -72,6 +72,7 @@ impl TerminalService {
                 output_seen: Mutex::new(HashMap::new()),
                 next_attach: AtomicU64::new(1),
                 starting: Mutex::new(()),
+                parsing: Mutex::new(()),
                 this: this.clone(),
             }),
         }

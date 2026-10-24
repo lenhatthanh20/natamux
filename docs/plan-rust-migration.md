@@ -221,7 +221,7 @@ Decisions (owner, 2026-10-22):
 
 ### Phase 4: daemon in Rust (10–14 weeks)
 
-Part 1 (terminals and the contract suite, T-0153), part 2 (tasks, events, storage, index, T-0155), part 3 (stage engine and agent start, T-0157) part 4 (agent hooks, and CI that runs only what a change needs, T-0159) and part 5 (git, workspaces, GitHub, T-0161): decisions, crates, what CI checks, where it differs, ported tests and gate results in `rust-phase4.md`.
+Part 1 (terminals and the contract suite, T-0153), part 2 (tasks, events, storage, index, T-0155), part 3 (stage engine and agent start, T-0157), part 4 (agent hooks, and CI that runs only what a change needs, T-0159), part 5 (git, workspaces, GitHub, T-0161) and the gate (project routes, E2E against the Rust daemon, T-0166): decisions, crates, what CI checks, where it differs, ported tests and gate results in `rust-phase4.md`.
 
 - Same API, same files. Order by risk:
   1. Terminals: PTY, input gap, ring, snapshot, resume, backpressure, restore after restart.
@@ -235,6 +235,7 @@ Part 1 (terminals and the contract suite, T-0153), part 2 (tasks, events, storag
   - the E2E suite green with the Rust daemon image swapped in (`NATAMUX_DAEMON_IMAGE`), mainly `terminal-protocol`, `terminal-cache`, `terminal-end`, `live-push`, `tasks`, `stages`, `branches`, `workflow`, `resume`, `needs-input`, `commit-draft`, `rollback`, `workspace`;
   - the contract suite equal on both daemons;
   - bench numbers better than Node.
+- Phase 4 is done when the gate passes and the owner OKs it at the review of the gate's pull request (T-0166). How E2E runs against the Rust daemon, the results per spec file and the gate table: `rust-phase4.md`, "Gate".
 
 ### Phase 5: cut over (2–3 weeks)
 

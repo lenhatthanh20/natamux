@@ -35,5 +35,31 @@ class Compare(unittest.TestCase):
         self.assertIn("no Rust result", failed[1])
 
 
+class Medians(unittest.TestCase):
+    def runs(self, serialize):
+        return [[dict(NODE[0], serializeMs=ms), NODE[1]] for ms in serialize]
+
+    def test_one_slow_node_sample_does_not_decide(self):
+        node = bench.medians(self.runs([40, 80, 40, 41, 39]))
+        self.assertEqual(node[0]["serializeMs"], 40)
+        rust = [dict(NODE[0], serializeMs=40), NODE[1]]
+        _, failed = bench.compare(node, rust)
+        self.assertEqual(failed, [])
+
+    def test_medians_that_fail(self):
+        node = bench.medians(self.runs([40, 41, 39, 40, 42]))
+        rust = bench.medians([[dict(NODE[0], serializeMs=ms), NODE[1]] for ms in [60, 61, 10, 62, 63]])
+        _, failed = bench.compare(node, rust)
+        self.assertEqual(len(failed), 1)
+        self.assertIn("serializeMs", failed[0])
+
+    def test_one_run_per_side_is_unchanged(self):
+        self.assertEqual(bench.medians([NODE]), NODE)
+
+    def test_sides_read_both_command_line_forms(self):
+        self.assertEqual(bench.sides(["x", "n", "r"]), (["n"], ["r"]))
+        self.assertEqual(bench.sides(["x", "--node", "n1", "n2", "--rust", "r1"]), (["n1", "n2"], ["r1"]))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -58,7 +58,12 @@ impl Events {
 
     /// Reads until `done` holds, at most 20 seconds.
     pub async fn until(&mut self, done: impl Fn(&[Value]) -> bool) -> bool {
-        let deadline = Instant::now() + Duration::from_secs(20);
+        self.until_within(done, Duration::from_secs(20)).await
+    }
+
+    /// Reads until `done` holds, at most `limit`.
+    pub async fn until_within(&mut self, done: impl Fn(&[Value]) -> bool, limit: Duration) -> bool {
+        let deadline = Instant::now() + limit;
         while !done(&self.messages) {
             if Instant::now() > deadline || self.socket.is_none() {
                 return false;

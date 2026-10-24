@@ -11,7 +11,6 @@ use natamux_agents::trust::trust_paths;
 use natamux_core::agents::hook_settings::claude_code_hook_settings;
 use natamux_pty::{Env, SpawnOptions};
 use natamux_stages::ci_check::GhCi;
-use natamux_store::task_index::TaskIndex;
 use tokio::task::JoinHandle;
 
 use crate::agents::generic_signals::GenericSignals;
@@ -22,12 +21,12 @@ use crate::config::{Config, shell_env};
 use crate::http::server::{AppState, bind, serve};
 use crate::projects::repos::Repos;
 use crate::shared::event_bus::EventBus;
-use crate::shared::jobs::{Jobs, system_clock};
+use crate::shared::jobs::Jobs;
 use crate::shared::scheduler::Scheduler;
 use crate::stages::run::StageRunOptions;
 use crate::stages::runner::StageRunner;
 use crate::tasks::errors::TaskError;
-use crate::tasks::service::{TaskService, TaskServiceOptions, is_task_ended};
+use crate::tasks::service::{TaskService, is_task_ended};
 use crate::tasks::templates::TemplateService;
 use crate::terminals::open_shells::{OpenShells, OpenShellsOptions, ShellsView};
 use crate::terminals::service::{TerminalOptions, TerminalService};
@@ -38,7 +37,7 @@ use crate::workspaces::service::WorkspaceService;
 #[path = "start_services.rs"]
 mod services;
 
-use services::{github_services, workspace_service};
+use services::{github_services, task_store, workspace_service};
 
 pub struct Daemon {
     pub state: Arc<AppState>,
@@ -96,10 +95,6 @@ fn with_hook_files(spawn: Arc<SpawnPty>) -> Arc<SpawnPty> {
     })
 }
 
-fn io_error(error: TaskError) -> std::io::Error {
-    std::io::Error::other(error.to_string())
-}
-
 /// The task store of the data folder, loaded, and what shares it.
 struct TaskStore {
     tasks: TaskService,
@@ -108,32 +103,6 @@ struct TaskStore {
     bus: Arc<EventBus>,
     /// What output alone tells of a task (bell, sign of life, a shell that lacks the agent).
     signals: Arc<GenericSignals>,
-}
-
-fn task_store(config: &Config) -> std::io::Result<TaskStore> {
-    let index =
-        TaskIndex::open(&config.data_dir.join("index.sqlite")).map_err(std::io::Error::other)?;
-    let bus = EventBus::new();
-    let jobs = Arc::new(Jobs::new(Some(Arc::clone(&bus)), system_clock()));
-    let repos = Repos::new(&config.data_dir, system_clock());
-    let settings = Arc::clone(&repos);
-    let tasks = TaskService::new(TaskServiceOptions {
-        data_dir: config.data_dir.clone(),
-        index,
-        bus: Arc::clone(&bus),
-        now: None,
-        settings_of: Some(Arc::new(move |repo| settings.stages_of(repo))),
-        clock: None,
-    });
-    tasks.init().map_err(io_error)?;
-    let signals = Arc::new(GenericSignals::new(tasks.clone(), None));
-    Ok(TaskStore {
-        signals,
-        tasks,
-        repos,
-        jobs,
-        bus,
-    })
 }
 
 /// Late links between parts that need each other: the terminals call the stage runner on output,
@@ -403,7 +372,7 @@ pub async fn start(
         issues,
         issue_linker,
     };
-    let state = app_state(config, store, &scheduler, built);
+    let state = app_state(config, home_of(env), store, &scheduler, built);
     let server = tokio::spawn(serve(listener, Arc::clone(&state)));
     // After the listen, so the hooks of the agents reach the daemon.
     stages.run.background(|run| run.resume_agents());
@@ -431,6 +400,7 @@ struct Built {
 
 fn app_state(
     config: &Config,
+    home: PathBuf,
     store: TaskStore,
     scheduler: &Arc<Scheduler>,
     built: Built,
@@ -450,6 +420,7 @@ fn app_state(
         token: config.token.clone(),
         agent_token: config.agent_token.clone(),
         data_dir: config.data_dir.clone(),
+        home,
         terminals: built.terminals,
         open_shells: built.open_shells,
         silent_close: config.silent_close,

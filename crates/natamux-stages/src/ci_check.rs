@@ -83,8 +83,18 @@ fn js_text(value: Option<&serde_json::Value>) -> String {
     }
 }
 
+/// The text of Node's `JSON.parse` error (V8), so `is_fatal` sees the word `token` as Node does.
+fn json_error_text(text: &str) -> String {
+    let Some(first) = text.chars().next().filter(|_| !js_trim(text).is_empty()) else {
+        return "Unexpected end of JSON input".to_string();
+    };
+    let shown: String = text.chars().take(10).collect();
+    let dots = if text.chars().count() > 10 { "..." } else { "" };
+    format!("Unexpected token '{first}', \"{shown}\"{dots} is not valid JSON")
+}
+
 fn parse_runs(text: &str) -> Result<Vec<CiRun>, String> {
-    let value: serde_json::Value = serde_json::from_str(text).map_err(|error| error.to_string())?;
+    let value: serde_json::Value = serde_json::from_str(text).map_err(|_| json_error_text(text))?;
     let list = value
         .as_array()
         .ok_or_else(|| format!("could not read the CI runs: {}", text.trim()))?;

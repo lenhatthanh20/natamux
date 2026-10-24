@@ -4,11 +4,16 @@
 holds the results. Writes one table (to GITHUB_STEP_SUMMARY too) and fails when a gated number of
 Rust is worse than Node's.
 
-Usage: compare-terminal-bench.py <node output> <rust output>
+Several runs per side are reduced to the median of each number, so one slow moment of the runner
+does not decide.
+
+Usage: compare-terminal-bench.py --node <output>... --rust <output>...
+       compare-terminal-bench.py <node output> <rust output>
 """
 
 import json
 import os
+import statistics
 import sys
 
 # (measure, field, better, margin): the numbers the phase-4 gate holds Rust to. Parse speed is
@@ -28,6 +33,19 @@ def results(text):
         if at >= 0:
             return json.loads(line[at + len("TERMINAL_BENCH_JSON "):])
     raise ValueError("no TERMINAL_BENCH_JSON line")
+
+
+def medians(runs):
+    """One result list from several: each shown number is the median over the runs that have it."""
+    out = []
+    for row in runs[0]:
+        merged = dict(row)
+        for field in SHOWN:
+            values = [r[field] for run in runs for r in run if key(r) == key(row) and field in r]
+            if values:
+                merged[field] = statistics.median(values)
+        out.append(merged)
+    return out
 
 
 def key(row):
@@ -61,9 +79,26 @@ def compare(node, rust):
     return rows, failed
 
 
+def read(paths):
+    runs = []
+    for path in paths:
+        with open(path) as handle:
+            runs.append(results(handle.read()))
+    return medians(runs)
+
+
+def sides(argv):
+    """The node and rust file lists, from `--node a b --rust c d` or `<node> <rust>`."""
+    args = argv[1:]
+    if args[:1] != ["--node"]:
+        return args[:1], args[1:2]
+    at = args.index("--rust")
+    return args[1:at], args[at + 1:]
+
+
 def main(argv):
-    with open(argv[1]) as node_file, open(argv[2]) as rust_file:
-        node, rust = results(node_file.read()), results(rust_file.read())
+    node_files, rust_files = sides(argv)
+    node, rust = read(node_files), read(rust_files)
     rows, failed = compare(node, rust)
     table = "\n".join(["| case | measure | node | rust | gate |", "|---|---|---|---|---|", *rows])
     print(table)

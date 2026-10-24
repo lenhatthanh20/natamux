@@ -4,14 +4,21 @@ use std::sync::Arc;
 
 use natamux_git::gh::default_run_gh;
 use natamux_proto::tasks::task::Task;
+use natamux_store::task_index::TaskIndex;
 
 use super::TaskStore;
+use crate::agents::generic_signals::GenericSignals;
 use crate::agents::runner::AgentRunner;
 use crate::config::Config;
 use crate::github::issue_importer::{IssueImporter, IssueImporterOptions};
 use crate::github::issue_linker::{IssueLinker, IssueLinkerOptions, LinkError};
 use crate::github::pull_request_watcher::{PullRequestWatcher, PullRequestWatcherOptions};
+use crate::projects::repos::{RepoOptions, Repos, TaskRef};
+use crate::shared::event_bus::EventBus;
+use crate::shared::jobs::{Jobs, system_clock};
 use crate::shared::scheduler::Scheduler;
+use crate::tasks::errors::TaskError;
+use crate::tasks::service::{TaskService, TaskServiceOptions};
 use crate::terminals::limits::MAIN_TERMINAL;
 use crate::terminals::service::TerminalService;
 use crate::terminals::types::DEFAULT_SIZE;
@@ -119,4 +126,56 @@ fn link_failure(error: LinkError) -> WorkspaceError {
         LinkError::GitHub(error) => WorkspaceError::GitHub(error.message),
         LinkError::Link(error) => WorkspaceError::Conflict(error.to_string()),
     }
+}
+
+fn io_error(error: TaskError) -> std::io::Error {
+    std::io::Error::other(error.to_string())
+}
+
+/// The task store of the data folder, loaded, and what shares it.
+pub(super) fn task_store(config: &Config) -> std::io::Result<TaskStore> {
+    let index =
+        TaskIndex::open(&config.data_dir.join("index.sqlite")).map_err(std::io::Error::other)?;
+    let bus = EventBus::new();
+    let jobs = Arc::new(Jobs::new(Some(Arc::clone(&bus)), system_clock()));
+    // A folder that is gone does not stop the start: only repos.json that cannot be read does.
+    let repos = Repos::with_options(RepoOptions {
+        data_dir: config.data_dir.clone(),
+        default_path: config.repo_dir.clone(),
+        worktrees_dir: Some(config.worktrees_dir.clone()),
+        tasks: None,
+        now: system_clock(),
+    })
+    .map_err(std::io::Error::other)?;
+    let settings = Arc::clone(&repos);
+    let tasks = TaskService::new(TaskServiceOptions {
+        data_dir: config.data_dir.clone(),
+        index,
+        bus: Arc::clone(&bus),
+        now: None,
+        settings_of: Some(Arc::new(move |repo| settings.stages_of(repo))),
+        clock: None,
+    });
+    tasks.init().map_err(io_error)?;
+    // The task service is made after the projects, which count its workspaces.
+    let listing = tasks.clone();
+    repos.set_tasks(Arc::new(move || {
+        listing
+            .list_tasks(None)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|task| TaskRef {
+                repo: task.repo,
+                workspace: task.workspace,
+            })
+            .collect()
+    }));
+    let signals = Arc::new(GenericSignals::new(tasks.clone(), None));
+    Ok(TaskStore {
+        signals,
+        tasks,
+        repos,
+        jobs,
+        bus,
+    })
 }

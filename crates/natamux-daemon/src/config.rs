@@ -15,6 +15,8 @@ pub struct Config {
     pub port: u16,
     pub data_dir: PathBuf,
     pub worktrees_dir: PathBuf,
+    /// `NATAMUX_REPO_DIR`: the folder added once as the `default` project.
+    pub repo_dir: Option<PathBuf>,
     pub token: String,
     pub token_was_generated: bool,
     /// The token of the task shells. Only made here, so an agent cannot set it.
@@ -82,6 +84,7 @@ pub fn load_config(env: &Env, cwd: &Path) -> Result<Config, String> {
         port,
         data_dir,
         worktrees_dir,
+        repo_dir: value(env, "NATAMUX_REPO_DIR").map(PathBuf::from),
         token: configured.map_or_else(|| random_id(24), String::from),
         token_was_generated: configured.is_none(),
         agent_token: random_id(24),
@@ -138,6 +141,17 @@ mod tests {
         assert_eq!(
             (config.token.as_str(), config.token_was_generated),
             ("secret", false)
+        );
+    }
+
+    #[test]
+    fn reads_the_default_project_folder() {
+        let config = |pairs: &[(&str, &str)]| load_config(&env(pairs), Path::new("/")).unwrap();
+        assert_eq!(config(&[]).repo_dir, None);
+        assert_eq!(config(&[("NATAMUX_REPO_DIR", "  ")]).repo_dir, None);
+        assert_eq!(
+            config(&[("NATAMUX_REPO_DIR", " /repo ")]).repo_dir,
+            Some(PathBuf::from("/repo"))
         );
     }
 
