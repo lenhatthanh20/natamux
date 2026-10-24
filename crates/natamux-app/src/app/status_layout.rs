@@ -88,13 +88,12 @@ pub fn max_condense_level(items: &[StatusItem]) -> usize {
 }
 
 /// What the window width alone decides, before anything is measured (spec section 3.2). Under
-/// 1024 jobs and Live are icon-only and running is hidden (`folded`). The toggles and need you
-/// never fold.
+/// 1024 the jobs item is icon-only. The other items are an icon and a count already, and the
+/// link word shows only while the link is down, so nothing else changes by width.
 pub fn forced_by_width(width: Option<f32>) -> Condensed {
     let mut out = Condensed::default();
     if width.is_some_and(|width| width < 1024.0) {
-        out.icon_only.extend(["live", "jobs"]);
-        out.folded.push("running");
+        out.icon_only.push("jobs");
     }
     out
 }
@@ -201,12 +200,10 @@ mod tests {
     }
 
     #[test]
-    fn shortens_jobs_and_live_and_hides_running_under_1024() {
+    fn shortens_only_jobs_and_folds_nothing_under_1024() {
         let out = forced_by_width(Some(800.0));
-        assert_eq!(sorted(&out.icon_only), ["jobs", "live"]);
-        assert_eq!(out.folded, ["running"]);
-        // The toggles and need you never fold.
-        assert!(!out.folded.contains(&"needs-you") && !out.folded.contains(&"toggles"));
+        assert_eq!(out.icon_only, ["jobs"]);
+        assert!(out.folded.is_empty());
     }
 
     #[test]
@@ -216,6 +213,6 @@ mod tests {
             sorted(&merged.icon_only),
             ["import", "jobs", "live", "repos"]
         );
-        assert_eq!(merged.folded, ["running", "import"]);
+        assert_eq!(merged.folded, ["import"]);
     }
 }

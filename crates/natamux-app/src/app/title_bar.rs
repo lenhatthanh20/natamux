@@ -1,10 +1,13 @@
-//! The title bar of docs/ui-spec.md 3.1 (`features/app/TitleBar.tsx`): the breadcrumb and the `+`
-//! menu (Add a task, Start a task). On macOS it is the window's drag area, with a gutter for the
-//! traffic lights. The toggles and the needs-you count live in the status bar.
+//! The title bar of docs/ui-spec.md 3.1 (`features/app/TitleBar.tsx`): the breadcrumb, the `+`
+//! menu (Add a task, Start a task) and the account menu, as Zed's user menu at the right end. On
+//! macOS it is the window's drag area, with a gutter for the traffic lights. The toggles and the
+//! needs-you count live in the status bar.
 
 use gpui::{Action, Entity, FontWeight, MouseButton, Stateful, WindowControlArea};
 use ui::{ButtonLike, ContextMenu, ContextMenuEntry, Tooltip, prelude::*};
 
+use super::account_menu::open_account_menu;
+use super::dashboard::Dashboard;
 use super::shell_rules::Crumb;
 use super::shortcuts::{NewTask, NewWorkspace};
 use crate::components::glyph::StateGlyph;
@@ -21,11 +24,13 @@ const MAC: bool = cfg!(target_os = "macos");
 #[derive(IntoElement)]
 pub struct TitleBar {
     crumb: Crumb,
+    /// The dashboard the account menu changes.
+    dashboard: Entity<Dashboard>,
 }
 
 impl TitleBar {
-    pub fn new(crumb: Crumb) -> Self {
-        Self { crumb }
+    pub fn new(crumb: Crumb, dashboard: Entity<Dashboard>) -> Self {
+        Self { crumb, dashboard }
     }
 }
 
@@ -46,18 +51,29 @@ pub fn open_add_menu(position: gpui::Point<Pixels>, window: &mut Window, cx: &mu
     MenuLayer::open(menu, position, window, cx);
 }
 
-fn add_button() -> ButtonLike {
-    ButtonLike::new("add-task")
+fn bar_button(id: &'static str, icon: &str, tip: &'static str) -> ButtonLike {
+    ButtonLike::new(id)
         .size(ButtonSize::Medium)
-        .tooltip(Tooltip::text("Add or start a task"))
-        .on_click(|event, window, cx| open_add_menu(event.position(), window, cx))
+        .tooltip(Tooltip::text(tip))
         .child(
             div().px_1().child(
-                Icon::from_path(icon_path("plus"))
+                Icon::from_path(icon_path(icon))
                     .size(IconSize::Small)
                     .color(Color::Muted),
             ),
         )
+}
+
+fn add_button() -> ButtonLike {
+    bar_button("add-task", "plus", "Add or start a task")
+        .on_click(|event, window, cx| open_add_menu(event.position(), window, cx))
+}
+
+/// The account menu opens at the click and moves in to stay inside the window.
+fn account_button(dashboard: Entity<Dashboard>) -> ButtonLike {
+    bar_button("title-account", "circle-user", "Account").on_click(move |event, window, cx| {
+        open_account_menu(&dashboard, event.position(), window, cx)
+    })
 }
 
 fn render_crumb(crumb: Crumb, cx: &App) -> AnyElement {
@@ -146,6 +162,11 @@ impl RenderOnce for TitleBar {
             .border_color(colors.border_variant)
             .when(MAC, |this| drag_to_move(this, armed))
             .child(div().min_w_0().flex_1().child(render_crumb(self.crumb, cx)))
-            .child(add_button())
+            .child(
+                h_flex()
+                    .gap_0p5()
+                    .child(add_button())
+                    .child(account_button(self.dashboard)),
+            )
     }
 }

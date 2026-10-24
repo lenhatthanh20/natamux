@@ -28,9 +28,9 @@ const NO_MATCH: &str = "qqzz";
 const BROKEN_JSON: &str = "{ \"stages\": [";
 /// The settings are read and drawn within this.
 const READ: Duration = Duration::from_millis(800);
-/// The account menu opens above the status bar's last item.
-const MENU_FROM_RIGHT: f32 = 8.;
-const MENU_FROM_BOTTOM: f32 = 30.;
+/// The account menu opens under the title bar's last button.
+const MENU_FROM_RIGHT: f32 = 12.;
+const MENU_FROM_TOP: f32 = 30.;
 
 pub fn is_screen7_shot(shot: Shot) -> bool {
     matches!(
@@ -113,11 +113,8 @@ fn enter(
         ),
         Shot::Shortcuts => shortcut_sheet::open(window, cx),
         Shot::AccountMenu => {
-            let size = window.viewport_size();
-            let at = point(
-                size.width - px(MENU_FROM_RIGHT),
-                size.height - px(MENU_FROM_BOTTOM),
-            );
+            let width = window.viewport_size().width;
+            let at = point(width - px(MENU_FROM_RIGHT), px(MENU_FROM_TOP));
             open_account_menu(&dashboard, at, window, cx);
         }
         Shot::TerminalFont => terminal_font_dialog::open(&dashboard, window, cx),

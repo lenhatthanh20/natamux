@@ -22,6 +22,11 @@ pub fn window_title(needs_you: usize) -> String {
     }
 }
 
+/// The running item's tooltip: "2 running".
+pub fn running_text(count: usize) -> String {
+    format!("{count} running")
+}
+
 pub fn running_count(tasks: &[Task]) -> usize {
     tasks
         .iter()
@@ -36,6 +41,21 @@ pub struct LiveItem {
     pub tip: String,
     /// The green dot; false shows the signal dot.
     pub ok: bool,
+}
+
+impl LiveItem {
+    /// The word beside the dot: none while live, as the dot says enough.
+    pub fn shown_label(&self) -> Option<&'static str> {
+        (!self.ok).then_some(self.label)
+    }
+
+    /// The tooltip names the state when the bar shows only the dot.
+    pub fn tooltip(&self) -> String {
+        match self.shown_label() {
+            Some(_) => self.tip.clone(),
+            None => format!("{}: {}", self.label, self.tip),
+        }
+    }
 }
 
 pub fn live_item(link: &Link) -> LiveItem {
@@ -228,6 +248,25 @@ mod tests {
         });
         assert_eq!(refused.label, "Not connected");
         assert_eq!(refused.tip, "The daemon refused the token.");
+    }
+
+    #[test]
+    fn shows_the_link_word_only_while_not_live() {
+        let live = live_item(&Link::Live);
+        assert_eq!(live.shown_label(), None);
+        assert_eq!(live.tooltip(), "Live: Changes appear as they happen");
+        let down = live_item(&Link::Down {
+            reason: "The daemon refused the token.".into(),
+            retrying: false,
+        });
+        assert_eq!(down.shown_label(), Some("Not connected"));
+        assert_eq!(down.tooltip(), "The daemon refused the token.");
+        assert_eq!(live_item(&Link::Loading).shown_label(), Some("Connecting"));
+    }
+
+    #[test]
+    fn says_how_many_run() {
+        assert_eq!(running_text(2), "2 running");
     }
 
     #[test]

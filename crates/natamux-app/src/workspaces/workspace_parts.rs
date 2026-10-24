@@ -16,7 +16,7 @@ use crate::tasks::table_rules::waits_for;
 use crate::workspaces::finished_banner::{FinishedActions, FinishedBanner, OnClick};
 use crate::workspaces::finished_summary::{FinishedSummary, follow_up_title};
 use crate::workspaces::no_workspace::NoWorkspace;
-use crate::workspaces::workspace_header::{GitButtons, ICON_ONLY_BELOW};
+use crate::workspaces::workspace_header::GitButtons;
 use crate::workspaces::workspace_rules::GitStep;
 use crate::workspaces::wrap_up::{WrapUp, WrapUpActions};
 use crate::workspaces::wrap_up_rules::{GitFacts, is_finished_state};
@@ -190,7 +190,6 @@ impl WorkspaceView {
         task: &Task,
         shown: &Shown,
         uncommitted: Option<u64>,
-        icon_only: bool,
         cx: &mut Context<Self>,
     ) -> Vec<AnyElement> {
         let this = cx.weak_entity();
@@ -215,7 +214,7 @@ impl WorkspaceView {
             let (dashboard, id) = (self.dashboard.clone(), task.id.clone());
             move |_, cx| dashboard.update(cx, |dashboard, cx| dashboard.open_changes(&id, true, cx))
         })
-        .render(icon_only)
+        .render()
     }
 
     /// The History tab: the graph of the task against its base branch.
@@ -261,11 +260,7 @@ impl WorkspaceView {
             .flatten()
             .map(|change| change.path.clone())
             .collect();
-        let icon_only = self
-            .width
-            .read(cx)
-            .is_none_or(|width| width < ICON_ONLY_BELOW);
-        let git_buttons = self.git_buttons(&task, shown, facts.uncommitted, icon_only, cx);
+        let git_buttons = self.git_buttons(&task, shown, facts.uncommitted, cx);
         let (banner_actions, wrap_up_actions) = self.finished_actions(&task, cx);
         let banner = finished.then(|| {
             FinishedBanner::new(task.clone(), facts.clone(), shown.pending, banner_actions)
