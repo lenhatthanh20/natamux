@@ -247,6 +247,17 @@ Part 1 (terminals and the contract suite, T-0153), part 2 (tasks, events, storag
 - The Docker daemon image becomes the Rust binary.
 - Remove Electron and the Node daemon in their own PR, after one release where both ran fine.
 
+### After phase 5: small fixes
+
+Small items found in phase 4 and left on purpose, to fix once the cut-over is done (owner, 2026-10-24). Each bug fix gets a regression test, as always.
+
+- CI: a daemon-only pull request into `dev` takes 10 min 22 s against the 10 min target (run 40103284008); the musl build of `natamux-daemon` is cold (6 min). Warm it in `rust-cache.yml` (on `main` and `dev`, a `daemon-musl` job saving `target/x86_64-unknown-linux-musl`) and let `daemon-musl` restore it: about 7 min.
+- `DELETE /repos/:id`: when the task list cannot be read, the tasks callback (`start_services.rs`, `list_tasks(None).unwrap_or_default()`) counts no workspaces and lets the delete through; Node fails the request. Fail it too.
+- `workspaces/agent_once.rs` `keep_tail`: once stderr passes 1 MiB, each chunk walks and counts the whole kept text again. Keep a running count, so a stderr flood stays cheap.
+- `natamux-git`: calls other than the worktree ones (`branches`, `changes`, `commit_push`, `rollback`, `file_diff`, `graph`, `exec`'s `git_bytes`) still pass no timeout, which `exec.rs` turns into one year. Give them a real one, as `WORKTREE_TIMEOUT` (10 min).
+- Settings errors (`projects/settings_parse.rs`): a step of `stages` that does not read names the step only (`stages.0: Invalid input`), and broken JSON past its first character gets serde's text; Node gives zod's field text and V8's. Word them as Node if a dashboard needs it (rows in `rust-phase4.md`, Gate, "Where it differs").
+- Flaky checks to watch, each red once: E2E `live-push.spec.ts` 'shows a file that a shell wrote in the changes, within 3 s' (run 40103239773; the 3 dirty messages per 10 s may be used up by a new task); `terminal-protocol.spec.ts` 'shows no history scrolling by while a snapshot is replayed' (Node too); the Windows hang of `tests/new_workspace` (run 40078189308), whose cause the log did not prove — the 30 s `settle_for` deadline now names what still runs.
+
 Rough total: 6–8 months for one developer with agents. These are estimates, not measurements; phase 1 sets the real pace.
 
 ## Contracts to keep
