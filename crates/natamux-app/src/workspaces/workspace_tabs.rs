@@ -2,7 +2,8 @@
 //! with the count of files to commit, History and Docs (keys 1 to 4), then the open file's tab
 //! while a file is open. Changes, History, Docs and the editor tab have a close button; a closed
 //! tab stays hidden for the task until it is picked again. The git buttons, "Back to wrap-up" and
-//! "New terminal" sit at the end of the bar. Zed's `TabBar` and `Tab`, as Zed's pane.
+//! "New terminal" sit at the end of the bar as icon buttons. Zed's `TabBar` and `Tab`, as Zed's
+//! pane.
 
 use gpui::ClickEvent;
 use natamux_proto::tasks::task::Task;
@@ -11,14 +12,12 @@ use ui::{IconButtonShape, Tab, TabBar, TabPosition, Tooltip, prelude::*};
 use super::WorkspaceView;
 use crate::app::tab_rules::{is_closable, visible_tabs};
 use crate::app::view_rules::WorkspaceTab;
-use crate::components::button_style::{action_button, button_icon};
 use crate::components::chips::CountBadge;
 use crate::components::icons::icon_path;
 use crate::components::text_size::row_text;
 use crate::git::commit_rules::tab_count_label;
 use crate::terminals::pane_header::icon_button;
 use crate::terminals::pane_rules::MAX_PANES;
-use crate::workspaces::workspace_header::ICON_ONLY_BELOW;
 use crate::workspaces::wrap_up_rules::is_finished_state;
 
 type TabSpec = (
@@ -132,10 +131,6 @@ impl WorkspaceView {
         git_buttons: Vec<AnyElement>,
         cx: &mut Context<Self>,
     ) -> impl IntoElement + use<> {
-        let icon_only = self
-            .width
-            .read(cx)
-            .is_none_or(|width| width < ICON_ONLY_BELOW);
         let specs = self.tab_specs(&task.id, cx);
         let last = specs.len().saturating_sub(1);
         let picked = specs
@@ -162,31 +157,21 @@ impl WorkspaceView {
                 tip.push_str(". Terminal 1 runs the agent.");
             }
             let tip = if full {
-                format!("At most {MAX_PANES} terminals")
+                format!("New terminal: at most {MAX_PANES} terminals")
             } else {
                 tip
             };
             let add = cx.listener(|view, _: &ClickEvent, _, cx| {
                 view.panes.update(cx, |panes, cx| panes.add(cx))
             });
-            if icon_only {
-                return icon_button("tab-new-terminal", "square-split-horizontal")
-                    .disabled(full)
-                    .tooltip(Tooltip::text(tip))
-                    .on_click(add)
-                    .into_any_element();
-            }
-            action_button("tab-new-terminal", "New terminal")
-                .label_size(LabelSize::Small)
-                .start_icon(button_icon("square-split-horizontal"))
+            icon_button("tab-new-terminal", "square-split-horizontal")
                 .disabled(full)
                 .tooltip(Tooltip::text(tip))
                 .on_click(add)
-                .into_any_element()
         });
         let back = (on_terminal && is_finished_state(task.state) && panes_shown).then(|| {
-            Button::new("tab-back-to-wrap-up", "Back to wrap-up")
-                .label_size(LabelSize::Small)
+            icon_button("tab-back-to-wrap-up", "arrow-left")
+                .tooltip(Tooltip::text("Back to wrap-up"))
                 .on_click(cx.listener(|view, _: &ClickEvent, _, cx| {
                     if let Some(shown) = view.shown.as_mut() {
                         shown.shells_wanted = false;

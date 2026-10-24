@@ -1,24 +1,21 @@
-//! The status bar of docs/ui-spec.md 4.28 (`features/app/StatusBar.tsx`): at the left the sidebar,
-//! details and agents toggles. At the right: "N need you", "N running", the background jobs with
-//! their menu, Live, then the notify switch, the keyboard and the account (`status_items`). Under
-//! 1024 jobs and Live lose their labels and running hides (`status_layout`).
+//! The status bar of docs/ui-spec.md 4.28 (`features/app/StatusBar.tsx`), lean as Zed's: at the
+//! left the sidebar and agents toggles. At the right: need you and running as an icon and a count,
+//! the background jobs with their menu, the link dot (its word only while down), then the details
+//! toggle, as Zed puts the right dock's toggle at the right. The account is in the title bar and the
+//! notify switch in its menu. Under 1024 jobs lose their label (`status_layout`).
 
 use std::rc::Rc;
 
-use gpui::{ClickEvent, Entity, FontWeight};
+use gpui::{ClickEvent, FontWeight};
 use natamux_proto::tasks::job::Job;
 use ui::{ButtonLike, ContextMenu, Tooltip, prelude::*};
 
-use super::dashboard::Dashboard;
 use super::jobs::{job_rows, jobs_label};
-use super::shell_rules::{LiveItem, needs_you_text};
+use super::shell_rules::{LiveItem, needs_you_text, running_text};
 use super::shortcuts::{ToggleAgents, ToggleDetails, ToggleSidebar};
-use super::status_items::{
-    OnClick, account_item, item_button, item_label, keyboard_item, toggle_item,
-};
+use super::status_items::{OnClick, count_item, item_label, toggle_item};
 use super::status_layout::forced_by_width;
 use crate::components::colors::signal;
-use crate::components::icons::icon_path;
 use crate::components::menu::MenuLayer;
 use crate::components::spinner::Spinner;
 
@@ -37,9 +34,6 @@ pub struct StatusBar {
     on_running: OnClick,
     on_needs_you: OnClick,
     on_open_task: OnOpenTask,
-    notify: bool,
-    on_notify: OnClick,
-    account: Option<Entity<Dashboard>>,
     sidebar: bool,
     /// Whether the details show, or why the toggle cannot show them (`details_toggle`).
     details: Result<bool, &'static str>,
@@ -63,16 +57,13 @@ impl StatusBar {
             on_running: Rc::new(|_, _, _| {}),
             on_needs_you: Rc::new(|_, _, _| {}),
             on_open_task: Rc::new(|_, _, _| {}),
-            notify: false,
-            on_notify: Rc::new(|_, _, _| {}),
-            account: None,
             sidebar: false,
             details: Ok(false),
             agents: false,
         }
     }
 
-    /// The states of the three toggles at the left.
+    /// The states of the three toggles: sidebar and agents at the left, details at the right.
     pub fn toggles(
         mut self,
         sidebar: bool,
@@ -82,23 +73,6 @@ impl StatusBar {
         self.sidebar = sidebar;
         self.details = details;
         self.agents = agents;
-        self
-    }
-
-    /// The dashboard the account menu changes. Without it the account item is left out.
-    pub fn account(mut self, dashboard: Entity<Dashboard>) -> Self {
-        self.account = Some(dashboard);
-        self
-    }
-
-    /// "Notify me" / "Notifications on": the app's own switch, kept in `view.json`.
-    pub fn notify(
-        mut self,
-        on: bool,
-        f: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    ) -> Self {
-        self.notify = on;
-        self.on_notify = Rc::new(f);
         self
     }
 
@@ -167,26 +141,12 @@ fn short_jobs_label(jobs: &[Job]) -> Option<String> {
     }
 }
 
-fn notify_item(on: bool, on_click: OnClick) -> ButtonLike {
-    let (icon, tip) = if on {
-        ("bell-off", "Stop the notifications of tasks that need you")
-    } else {
-        (
-            "bell",
-            "Notify me when a task needs me while the app is in the background",
-        )
-    };
-    item_button("status-notify", tip, on_click).child(
-        Icon::from_path(icon_path(icon))
-            .size(IconSize::Small)
-            .color(Color::Muted),
-    )
+fn on(shown: bool, hide: &'static str, show: &'static str) -> &'static str {
+    if shown { hide } else { show }
 }
 
-/// The three toggles at the left: sidebar, details, agents.
-fn toggles(sidebar: bool, details: Result<bool, &'static str>, agents: bool) -> impl IntoElement {
-    let on = |shown: bool, hide: &'static str, show: &'static str| if shown { hide } else { show };
-    let details_on = details == Ok(true);
+/// The two toggles at the left: sidebar, agents.
+fn left_toggles(sidebar: bool, agents: bool) -> impl IntoElement {
     h_flex()
         .gap(rems_from_px(2.0_f32))
         .child(toggle_item(
@@ -199,15 +159,6 @@ fn toggles(sidebar: bool, details: Result<bool, &'static str>, agents: bool) -> 
             || Box::new(ToggleSidebar),
         ))
         .child(toggle_item(
-            "toggle-details",
-            "panel-right",
-            on(details_on, "Hide details", "Show details"),
-            "details.toggle",
-            details_on,
-            details.err(),
-            || Box::new(ToggleDetails),
-        ))
-        .child(toggle_item(
             "toggle-agents",
             "layout-grid",
             on(agents, "Hide agents", "Show agents"),
@@ -218,14 +169,29 @@ fn toggles(sidebar: bool, details: Result<bool, &'static str>, agents: bool) -> 
         ))
 }
 
-/// The connection: a dot in the link's colour, and its label unless the bar is narrow.
-fn live_item(live: LiveItem, icon_only: bool, cx: &App) -> impl IntoElement {
+/// The details toggle, last at the right: it opens the right dock.
+fn details_toggle(details: Result<bool, &'static str>) -> impl IntoElement {
+    let shown = details == Ok(true);
+    toggle_item(
+        "toggle-details",
+        "panel-right",
+        on(shown, "Hide details", "Show details"),
+        "details.toggle",
+        shown,
+        details.err(),
+        || Box::new(ToggleDetails),
+    )
+}
+
+/// The connection: a dot in the link's colour, and its word only while the link is down.
+fn live_item(live: LiveItem, cx: &App) -> impl IntoElement {
     let dot = if live.ok {
         cx.theme().status().success
     } else {
         signal(cx).fg
     };
-    let tip: SharedString = live.tip.clone().into();
+    let tip: SharedString = live.tooltip().into();
+    let label = live.shown_label();
     h_flex()
         .id("status-live")
         .h(rems_from_px(24.0_f32))
@@ -240,8 +206,8 @@ fn live_item(live: LiveItem, icon_only: bool, cx: &App) -> impl IntoElement {
                 .rounded_full()
                 .bg(dot),
         )
-        .when(!icon_only, |this| {
-            this.child(item_label(live.label, Color::Muted))
+        .when_some(label, |this, label| {
+            this.child(item_label(label, Color::Muted))
         })
 }
 
@@ -270,24 +236,21 @@ impl RenderOnce for StatusBar {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let colors = cx.theme().colors();
         let condensed = forced_by_width(Some(self.width));
-        let icon_only = |id: &str| condensed.icon_only.contains(&id);
-        let folded = |id: &str| condensed.folded.contains(&id);
-        let running =
-            item_button("status-running", "Show the running tasks", self.on_running).child(
-                item_label(format!("{} running", self.running), Color::Muted),
-            );
+        let signal_fg = Color::Custom(signal(cx).fg);
         let needs = (self.needs_you > 0).then(|| {
-            item_button(
-                "status-needs-you",
-                "Show the tasks that wait for you",
-                self.on_needs_you,
-            )
-            .child(
-                Label::new(needs_you_text(self.needs_you))
-                    .size(LabelSize::Small)
-                    .weight(FontWeight::MEDIUM)
-                    .color(Color::Custom(signal(cx).fg)),
-            )
+            let count = Label::new(self.needs_you.to_string())
+                .size(LabelSize::Small)
+                .weight(FontWeight::MEDIUM)
+                .color(signal_fg);
+            let tip = needs_you_text(self.needs_you);
+            count_item("status-needs-you", "circle-alert", signal_fg, count, tip)
+                .on_click(move |event, window, cx| (self.on_needs_you)(event, window, cx))
+        });
+        let running = (self.running > 0).then(|| {
+            let count = item_label(self.running.to_string(), Color::Muted);
+            let tip = running_text(self.running);
+            count_item("status-running", "circle-play", Color::Muted, count, tip)
+                .on_click(move |event, window, cx| (self.on_running)(event, window, cx))
         });
         h_flex()
             .flex_none()
@@ -299,15 +262,17 @@ impl RenderOnce for StatusBar {
             .bg(colors.status_bar_background)
             .border_t_1()
             .border_color(colors.border_variant)
-            .child(toggles(self.sidebar, self.details, self.agents))
+            .child(left_toggles(self.sidebar, self.agents))
             .child(div().flex_1())
             .children(needs)
-            .when(!folded("running"), |this| this.child(running))
-            .children(jobs_item(self.jobs, self.on_open_task, icon_only("jobs")))
-            .child(live_item(self.live, icon_only("live"), cx))
-            .child(notify_item(self.notify, self.on_notify.clone()))
-            .child(keyboard_item())
-            .children(self.account.map(account_item))
+            .children(running)
+            .children(jobs_item(
+                self.jobs,
+                self.on_open_task,
+                condensed.icon_only.contains(&"jobs"),
+            ))
+            .child(live_item(self.live, cx))
+            .child(details_toggle(self.details))
     }
 }
 

@@ -8,7 +8,7 @@
 use editor::{Editor, EditorEvent};
 use gpui::{ClickEvent, Entity, FocusHandle, Focusable, FontWeight, Stateful, Subscription};
 use natamux_proto::tasks::task::TaskState;
-use ui::{ButtonLike, Tooltip, prelude::*};
+use ui::{ButtonLike, Tab, Tooltip, prelude::*};
 
 use super::workspace_tree::WorkspaceTree;
 use crate::agents::agent_choices::agent_label;
@@ -103,9 +103,11 @@ impl Sidebar {
                 }))
         });
         let hint = empty.then(|| Kbd::new(shortcut_of("filter.focus").unwrap_or("/")));
+        // A bar as high as Zed's tab bars, so one line runs under the sidebar, main and the dock.
         h_flex()
-            .h(rems_from_px(28.0_f32))
-            .px_2()
+            .flex_none()
+            .h(Tab::container_height(cx))
+            .px_3()
             .gap(rems_from_px(6.0_f32))
             .border_b_1()
             .border_color(colors.border_variant)
@@ -209,25 +211,27 @@ impl Render for Sidebar {
                         .on_click(|_, window, cx| window.dispatch_action(Box::new(AddProject), cx)),
                 )
         });
-        v_flex()
-            .size_full()
-            .gap_2()
-            .pt_2()
-            .child(
-                v_flex().gap_2().px_2().child(self.filter_field(cx)).child(
+        v_flex().size_full().child(self.filter_field(cx)).child(
+            v_flex()
+                .min_h_0()
+                .flex_1()
+                .gap_2()
+                .pt_2()
+                .child(
                     v_flex()
+                        .px_2()
                         .child(self.all_tasks_row(cx))
                         .child(self.agents_row(cx)),
+                )
+                .child(
+                    v_flex()
+                        .min_h_0()
+                        .flex_1()
+                        .child(div().px_2().child(self.workspaces_header()))
+                        .child(div().min_h_0().flex_1().child(tree))
+                        .children(none),
                 ),
-            )
-            .child(
-                v_flex()
-                    .min_h_0()
-                    .flex_1()
-                    .child(div().px_2().child(self.workspaces_header()))
-                    .child(div().min_h_0().flex_1().child(tree))
-                    .children(none),
-            )
+        )
     }
 }
 

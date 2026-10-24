@@ -1,5 +1,6 @@
-//! The account menu (docs/ui-spec.md 4.13, `AccountMenu.tsx`): settings, theme, UI size, terminal
-//! font, the shortcut sheet and the issue page. There is no sign out in the native app.
+//! The account menu (docs/ui-spec.md 4.13, `AccountMenu.tsx`), opened from the title bar: settings,
+//! the notify switch, theme, UI size, terminal font, the shortcut sheet and the issue page. There is
+//! no sign out in the native app.
 
 use gpui::{Entity, Pixels, Point};
 use ui::{ContextMenu, ContextMenuEntry, IconPosition, prelude::*};
@@ -54,6 +55,7 @@ pub fn open_account_menu(
 ) {
     let view = dashboard.read(cx).view();
     let (theme, size) = (parse_theme(&view.theme), parse_ui_size(&view.ui_size));
+    let notify = view.notify;
     let dashboard = dashboard.clone();
     let menu = ContextMenu::build(window, cx, move |mut menu, _, _| {
         menu = keyed_entry(
@@ -62,6 +64,16 @@ pub fn open_account_menu(
             "Settings…",
             "app.settings",
             |window, cx| window.dispatch_action(Box::new(OpenSettings), cx),
+        );
+        // The app's own switch, kept in `view.json`: a small window when a task needs the user
+        // while the app is in the background.
+        let toggle = dashboard.clone();
+        menu = menu.toggleable_entry(
+            "Notify me",
+            notify,
+            IconPosition::Start,
+            None,
+            move |_, cx| toggle.update(cx, |d, cx| d.toggle_notify(cx)),
         );
         menu = menu.separator().header("Theme");
         for choice in ThemeChoice::ALL {

@@ -136,7 +136,6 @@ impl Root {
         let crumb = crumb(open, dashboard.agents_open, &dashboard.data.repos);
         let live = live_item(&dashboard.data.link);
         let jobs = dashboard.data.jobs.clone();
-        let notify = dashboard.view().notify;
         let title = window_title(needs_you);
         if title != self.title {
             window.set_window_title(&title);
@@ -148,7 +147,7 @@ impl Root {
             };
         let agents_open = dashboard.agents_open;
         let details = self.details_toggle(window, cx);
-        let title_bar = TitleBar::new(crumb);
+        let title_bar = TitleBar::new(crumb, self.dashboard.clone());
         let status_bar = StatusBar::new(live, running, needs_you, jobs, width)
             .toggles(sidebar_shown, details, agents_open)
             .on_running(cx.listener(|root, _: &ClickEvent, _, cx| {
@@ -158,15 +157,7 @@ impl Root {
             .on_open_task(cx.listener(|root, id: &str, _, cx| {
                 root.dashboard
                     .update(cx, |dashboard, cx| dashboard.open(id, cx))
-            }))
-            .notify(
-                notify,
-                cx.listener(|root, _: &ClickEvent, _, cx| {
-                    root.dashboard
-                        .update(cx, |dashboard, cx| dashboard.toggle_notify(cx))
-                }),
-            )
-            .account(self.dashboard.clone());
+            }));
         (title_bar, status_bar)
     }
 

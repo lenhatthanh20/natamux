@@ -1,8 +1,8 @@
 //! The git buttons of a workspace, drawn at the end of its tab bar: Push and Create PR with
 //! their reasons, or Open pull request. A done or cancelled task shows only Open pull request:
 //! its finished banner offers the next git step. While origin has every commit and files are not
-//! committed, Commit… takes the place of Push. In a main narrower than `ICON_ONLY_BELOW` the buttons are
-//! icon-only.
+//! committed, Commit… takes the place of Push. The buttons are icon-only, as Zed's tab bar
+//! buttons; the tooltip starts with the label.
 
 use std::rc::Rc;
 
@@ -13,15 +13,10 @@ use ui::{ButtonLike, Tooltip, prelude::*};
 
 use super::workspace_rules::{GitButton, GitStep, needs_commit, pull_request_button, push_button};
 use super::wrap_up_rules::is_finished_state;
-use crate::components::button_style::{action_button, button_icon};
 use crate::components::icons::icon_path;
 use crate::components::spinner::Spinner;
 
 type OnClick = Rc<dyn Fn(&mut Window, &mut App)>;
-
-/// The main width under which the tab bar's buttons show only their icons, so the tabs keep
-/// their labels beside the details dock.
-pub const ICON_ONLY_BELOW: f32 = 720.;
 
 pub struct GitButtons {
     task: Task,
@@ -68,34 +63,21 @@ impl GitButtons {
     }
 }
 
-/// A ghost git button: off with its reason as the tooltip, busy while its step runs. Icon-only
-/// it always has a tooltip, with the label first.
+/// A ghost icon git button: off with its reason in the tooltip, busy while its step runs. The
+/// tooltip starts with the label.
 fn git_button(
     id: &'static str,
     icon: &str,
     button: GitButton,
     busy: bool,
     other_running: bool,
-    icon_only: bool,
     run: OnClick,
 ) -> AnyElement {
     let off = button.reason.is_some() || busy || other_running;
-    let tip = button.reason.clone().or(button.tip.clone());
-    let tip = match (icon_only, tip) {
-        (true, Some(tip)) => Some(format!("{}: {tip}", button.label)),
-        (true, None) => Some(button.label.to_string()),
-        (false, tip) => tip,
+    let tip = match button.reason.clone().or(button.tip.clone()) {
+        Some(tip) => format!("{}: {tip}", button.label),
+        None => button.label.to_string(),
     };
-    if !icon_only {
-        return action_button(id, button.label)
-            .label_size(LabelSize::Small)
-            .start_icon(button_icon(icon))
-            .loading(busy)
-            .disabled(off)
-            .when_some(tip, |button, tip| button.tooltip(Tooltip::text(tip)))
-            .on_click(move |_: &ClickEvent, window, cx| run(window, cx))
-            .into_any_element();
-    }
     let icon = if busy {
         Spinner::new(IconSize::Small).into_any_element()
     } else {
@@ -107,25 +89,13 @@ fn git_button(
         .style(ButtonStyle::Subtle)
         .size(ButtonSize::Compact)
         .disabled(off)
-        .when_some(tip, |button, tip| button.tooltip(Tooltip::text(tip)))
+        .tooltip(Tooltip::text(tip))
         .on_click(move |_: &ClickEvent, window, cx| run(window, cx))
         .child(h_flex().px_1().child(icon))
         .into_any_element()
 }
 
-fn open_pull_request(url: String, icon_only: bool) -> AnyElement {
-    let label = if icon_only {
-        "Open PR"
-    } else {
-        "Open pull request"
-    };
-    if !icon_only {
-        return action_button("workspace-open-pr", label)
-            .label_size(LabelSize::Small)
-            .start_icon(button_icon("external-link"))
-            .on_click(move |_, _, cx| cx.open_url(&url))
-            .into_any_element();
-    }
+fn open_pull_request(url: String) -> AnyElement {
     ButtonLike::new("workspace-open-pr")
         .style(ButtonStyle::Subtle)
         .size(ButtonSize::Compact)
@@ -142,7 +112,7 @@ fn open_pull_request(url: String, icon_only: bool) -> AnyElement {
 impl GitButtons {
     /// Commit… or Push, and Create PR or Open pull request. A finished task has only Open pull
     /// request.
-    pub fn render(&self, icon_only: bool) -> Vec<AnyElement> {
+    pub fn render(&self) -> Vec<AnyElement> {
         let task = &self.task;
         let finished = is_finished_state(task.state);
         let graph = self.graph.as_ref();
@@ -163,7 +133,6 @@ impl GitButtons {
                 button,
                 false,
                 off,
-                icon_only,
                 self.on_commit.clone(),
             )
             .into_any_element()
@@ -178,13 +147,12 @@ impl GitButtons {
                 button,
                 busy,
                 off,
-                icon_only,
                 self.on_push.clone(),
             )
             .into_any_element()
         });
         let pull_request = match &task.pr {
-            Some(url) => Some(open_pull_request(url.clone(), icon_only)),
+            Some(url) => Some(open_pull_request(url.clone())),
             None if !finished => {
                 let button = pull_request_button(
                     task.branch.as_deref(),
@@ -201,7 +169,6 @@ impl GitButtons {
                         button,
                         runs(step),
                         other_runs(step),
-                        icon_only,
                         run,
                     )
                     .into_any_element(),
