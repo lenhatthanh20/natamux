@@ -9,6 +9,7 @@ use super::json_tab::JsonTab;
 use super::project_settings_dialog::{ProjectSettingsDialog, StagesTab};
 use super::settings_tab_rules::{SettingsTab, error_count, shown_tab, step_tab};
 use super::settings_text::count_label;
+use crate::components::button_style::{action_button, quiet_button};
 use crate::stages::kind_icon::problem_icon;
 use crate::stages::pipeline_editor::PipelineEditor;
 
@@ -169,13 +170,11 @@ impl ProjectSettingsDialog {
                 ),
             )
             .child(
-                Button::new("settings-reload", "Reload")
-                    .style(ButtonStyle::Outlined)
+                action_button("settings-reload", "Reload")
                     .on_click(cx.listener(|this, _, _, cx| this.reload(cx))),
             )
             .child(
-                Button::new("settings-overwrite", "Overwrite")
-                    .style(ButtonStyle::Tinted(ui::TintColor::Error))
+                action_button("settings-overwrite", "Overwrite")
                     .on_click(cx.listener(|this, _, _, cx| this.overwrite(cx))),
             )
     }
@@ -219,8 +218,7 @@ impl ProjectSettingsDialog {
         on_click: impl Fn(&mut Self, &mut Window, &mut Context<Self>) + 'static,
         cx: &mut Context<Self>,
     ) -> Button {
-        Button::new(id, label)
-            .style(ButtonStyle::Subtle)
+        quiet_button(id, label)
             .disabled(self.base.is_none())
             .on_click(cx.listener(move |this, _, window, cx| on_click(this, window, cx)))
     }

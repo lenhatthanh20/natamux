@@ -12,6 +12,7 @@ use ui::{ContextMenu, prelude::*};
 
 use super::kind_icon::problem_icon;
 use super::pipeline_editor::PipelineEditor;
+use crate::components::button_style::quiet_button;
 use crate::components::colors::signal;
 use crate::components::form::text_editor;
 use crate::components::menu::MenuLayer;
@@ -168,10 +169,8 @@ pub fn default_mark(
         .gap_2()
         .child(pill("Changed", changed.bg, Color::Custom(changed.fg)))
         .child(
-            Button::new(id.into(), "Use default")
-                .style(ButtonStyle::Subtle)
-                .size(ButtonSize::Compact)
-                .label_size(LabelSize::XSmall)
+            quiet_button(id.into(), "Use default")
+                .label_size(LabelSize::Small)
                 .on_click(move |_, window, cx| on_reset(window, cx)),
         )
         .into_any_element()

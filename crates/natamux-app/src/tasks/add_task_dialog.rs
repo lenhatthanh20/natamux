@@ -9,11 +9,11 @@ use gpui::{
 };
 use natamux_proto::tasks::task::NewTaskInput;
 use natamux_proto::tasks::template::TaskTemplate;
-use ui::{ButtonLike, ContextMenu, TintColor, Tooltip, prelude::*};
+use ui::{ContextMenu, Tooltip, prelude::*};
 
 use super::task_view_rules::{add_blocked_reason, task_repo};
 use crate::app::dashboard::Dashboard;
-use crate::components::chips::Kbd;
+use crate::components::button_style::{action_button, key_hint};
 use crate::components::dialog::{DialogFrame, DialogLayer, DialogSize, DialogView};
 use crate::components::menu::MenuLayer;
 use crate::workspaces::new_workspace_dialog;
@@ -331,32 +331,18 @@ impl Render for AddTaskDialog {
                     row.child(self.select_button(false, cx))
                 })
         });
-        let start = ButtonLike::new("add-task-start")
-            .style(ButtonStyle::Outlined)
+        let start = action_button("add-task-start", "Start a task")
+            .key_binding(key_hint("mod-enter", false))
             .track_focus(&self.start_focus)
-            .on_click(cx.listener(|this, _: &ClickEvent, window, cx| this.start(window, cx)))
-            .child(
-                h_flex()
-                    .gap_2()
-                    .px_1()
-                    .child(Label::new("Start a task"))
-                    .child(Kbd::new("mod-enter")),
-            );
-        let add = ButtonLike::new("add-task-submit")
-            .style(ButtonStyle::Tinted(TintColor::Accent))
+            .on_click(cx.listener(|this, _: &ClickEvent, window, cx| this.start(window, cx)));
+        let add = action_button("add-task-submit", "Add")
+            .key_binding(key_hint("enter", blocked.is_some()))
             .track_focus(&self.add_focus)
             .disabled(blocked.is_some())
             .when_some(blocked, |button, reason| {
                 button.tooltip(Tooltip::text(reason))
             })
-            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.add(cx)))
-            .child(
-                h_flex()
-                    .gap_2()
-                    .px_1()
-                    .child(Label::new("Add"))
-                    .child(Kbd::new("enter")),
-            );
+            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.add(cx)));
         let mut frame = DialogFrame::new(
             "Add a task",
             cx.listener(|_, _, _, cx| cx.emit(DismissEvent)),

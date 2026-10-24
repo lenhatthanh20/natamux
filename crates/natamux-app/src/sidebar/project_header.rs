@@ -11,6 +11,7 @@ use super::sidebar::{lucide, private, small, state_dot};
 use super::workspace_tree::{Snapshot, WorkspaceTree};
 use crate::app::dashboard::Dashboard;
 use crate::app::dashboard_data::BulkRun;
+use crate::components::button_style::quiet_button;
 use crate::components::chips::{BadgeTone, CountBadge};
 use crate::components::colors::project_color;
 use crate::components::text_size::row_text;
@@ -267,11 +268,10 @@ fn no_workspaces(group: usize, model: &TreeModel, dashboard: &Entity<Dashboard>)
     let repo = repo_group.repo.id.clone();
     let dashboard = dashboard.clone();
     let start = (!info.gone).then(|| {
-        Button::new(
+        quiet_button(
             SharedString::from(format!("empty-start-{repo}")),
             "Start a task",
         )
-        .style(ButtonStyle::Transparent)
         .label_size(LabelSize::Small)
         .on_click(move |_, window, cx| {
             new_workspace_dialog::open(&dashboard, Some(repo.clone()), window, cx);

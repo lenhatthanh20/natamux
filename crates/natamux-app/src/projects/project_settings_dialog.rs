@@ -387,7 +387,6 @@ impl Render for ProjectSettingsDialog {
         let save_button = primary_button(
             "Save",
             &self.submit,
-            false,
             self.base.is_none() || blocked.is_some() || self.saving,
             save,
         )

@@ -17,6 +17,7 @@ use crate::app::dashboard::Dashboard;
 use crate::app::dashboard_data::Link;
 use crate::app::shortcuts::{AddProject, Back};
 use crate::components::agent_badge::AgentIcon;
+use crate::components::button_style::quiet_button;
 use crate::components::chips::{Kbd, tip_with_keys};
 use crate::components::colors::state_colors;
 use crate::components::icons::icon_path;
@@ -203,8 +204,7 @@ impl Render for Sidebar {
                 .pl_2()
                 .child(small("No projects yet"))
                 .child(
-                    Button::new("sidebar-add-project", "Add project")
-                        .style(ButtonStyle::Transparent)
+                    quiet_button("sidebar-add-project", "Add project")
                         .label_size(LabelSize::Small)
                         .on_click(|_, window, cx| window.dispatch_action(Box::new(AddProject), cx)),
                 )

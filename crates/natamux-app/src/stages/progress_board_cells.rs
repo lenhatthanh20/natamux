@@ -7,9 +7,10 @@ use natamux_proto::agents::activity::latest_line;
 use natamux_proto::stages::progress::{StageProgress, stage_progress};
 use natamux_proto::stages::schema::Step;
 use natamux_proto::tasks::task::{Task, TaskState};
-use ui::{TintColor, Tooltip, prelude::*};
+use ui::{Tooltip, prelude::*};
 
 use super::{NEXT_WIDTH, ProgressBoard, ROW_HEIGHT, STAGE_WIDTH, TASK_WIDTH};
+use crate::components::button_style::{action_button, quiet_button};
 use crate::components::chips::{CountBadge, StateChip};
 use crate::components::colors::{signal, state_colors};
 use crate::stages::progress_board_rules::{
@@ -75,17 +76,15 @@ impl ProgressBoard {
     pub(super) fn task_cell(&self, task: &Task, now: i64, cx: &Context<Self>) -> impl IntoElement {
         let id = task.id.clone();
         let open_id = task.id.clone();
-        let title = div()
-            .id(SharedString::from(format!("progress-open-{id}")))
-            .min_w_0()
-            .overflow_hidden()
-            .cursor_pointer()
-            .child(
-                Label::new(task.title.clone())
-                    .weight(FontWeight::MEDIUM)
-                    .truncate(),
+        let title = div().min_w_0().overflow_hidden().child(
+            quiet_button(
+                SharedString::from(format!("progress-open-{id}")),
+                task.title.clone(),
             )
-            .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.open_task(&open_id, cx)));
+            .label_size(LabelSize::Small)
+            .truncate(true)
+            .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.open_task(&open_id, cx))),
+        );
         let chip = div()
             .id(SharedString::from(format!("progress-state-{id}")))
             .flex_none()
@@ -126,9 +125,8 @@ impl ProgressBoard {
         let id = task.id.clone();
         let open_id = task.id.clone();
         let body = match next_button(task, now) {
-            Some(label) => Button::new(SharedString::from(format!("progress-next-{id}")), label)
-                .style(ButtonStyle::Tinted(TintColor::Accent))
-                .size(ButtonSize::Compact)
+            Some(label) => action_button(SharedString::from(format!("progress-next-{id}")), label)
+                .label_size(LabelSize::Small)
                 .on_click(cx.listener(move |this, _, _, cx| this.open_task(&open_id, cx)))
                 .into_any_element(),
             None => {

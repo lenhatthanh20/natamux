@@ -4,11 +4,11 @@
 
 use gpui::{AnyElement, FontWeight};
 use natamux_proto::tasks::task::Task;
-use ui::{ButtonLike, TintColor, Tooltip, prelude::*};
+use ui::{Tooltip, prelude::*};
 
 use super::DetailsPanel;
 use crate::app::clock::now_ms;
-use crate::components::button_style::{label_color, tinted_style};
+use crate::components::button_style::{action_button, button_icon, key_hint, quiet_button};
 use crate::components::chips::{StateChip, label_chip, tip_with_keys};
 use crate::components::colors::signal;
 use crate::components::detail_section::{DetailSection, field};
@@ -127,51 +127,28 @@ impl DetailsPanel {
             .into_iter()
             .filter(|action| !action.confirm)
             .collect();
-        let buttons =
-            actions.into_iter().enumerate().map(|(index, action)| {
-                let style = if index == 0 {
-                    tinted_style(TintColor::Accent, busy)
-                } else {
-                    ButtonStyle::Outlined
-                };
-                let label = action.label;
-                let mut button =
-                    ButtonLike::new(SharedString::from(format!("action-{}", action.event_type)))
-                        .style(style)
-                        .disabled(busy)
-                        .on_click(send(on, PanelCommand::TaskEvent(action.event_type)))
-                        .child(
-                            h_flex()
-                                .gap_2()
-                                .px_1()
-                                .child(
-                                    Label::new(label)
-                                        .size(LabelSize::Small)
-                                        .color(label_color(busy)),
-                                )
-                                .children(action.hotkey.map(|key| {
-                                    crate::components::chips::Kbd::new(&key.to_string())
-                                })),
-                        );
-                if let Some(key) = action.hotkey {
-                    button = button.tooltip(tip_with_keys(label, &key.to_string()));
-                }
-                button.into_any_element()
-            });
+        let buttons = actions.into_iter().map(|action| {
+            let label = action.label;
+            let id = SharedString::from(format!("action-{}", action.event_type));
+            let mut button = action_button(id, label)
+                .label_size(LabelSize::Small)
+                .disabled(busy)
+                .on_click(send(on, PanelCommand::TaskEvent(action.event_type)));
+            if let Some(key) = action.hotkey {
+                button = button
+                    .key_binding(key_hint(&key.to_string(), busy))
+                    .tooltip(tip_with_keys(label, &key.to_string()));
+            }
+            button.into_any_element()
+        });
         let agent = agent_action(task.state, task.agent.as_deref()).map(|action| {
             let shown = agent_button(action, waiting, busy);
-            ButtonLike::new("details-agent")
-                .style(ButtonStyle::Outlined)
+            action_button("details-agent", shown.label)
+                .label_size(LabelSize::Small)
+                .start_icon(button_icon(shown.icon))
                 .disabled(shown.disabled)
                 .tooltip(Tooltip::text(shown.tip))
                 .on_click(send(on, PanelCommand::StartAgent))
-                .child(
-                    h_flex()
-                        .gap_1p5()
-                        .px_1()
-                        .child(Icon::from_path(icon_path(shown.icon)).size(IconSize::Small))
-                        .child(Label::new(shown.label).size(LabelSize::Small)),
-                )
                 .into_any_element()
         });
         h_flex()
@@ -334,9 +311,10 @@ impl DetailsPanel {
             self.fold("pull-request", cx),
         )
         .child(
-            Button::new("details-pr-link", pull_request_label(&url).to_owned())
+            quiet_button("details-pr-link", pull_request_label(&url).to_owned())
                 .label_size(LabelSize::Small)
-                .end_icon(Icon::from_path(icon_path("external-link")).size(IconSize::XSmall))
+                .start_icon(button_icon("external-link"))
+                .truncate(true)
                 .on_click(move |_, _, cx| cx.open_url(&link)),
         )
         .children(pull_request_summary(task).map(|summary| {

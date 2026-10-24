@@ -70,7 +70,9 @@ impl RenderOnce for DetailSection {
             .id(SharedString::from(format!("section-{}", self.id)))
             .h(rems_from_px(32.0_f32))
             .gap_1p5()
+            .rounded_sm()
             .cursor_pointer()
+            .hover(|style| style.bg(cx.theme().colors().ghost_element_hover))
             .on_click(move |_, window, cx| on_fold(!open, window, cx))
             .child(
                 Icon::new(chevron)

@@ -3,10 +3,11 @@
 
 use gpui::{AnyElement, FontWeight};
 use natamux_proto::tasks::task::Task;
-use ui::{Tooltip, prelude::*};
+use ui::{ButtonLike, Tooltip, prelude::*};
 
 use super::DetailsPanel;
 use crate::app::clock::now_ms;
+use crate::components::button_style::{action_button, quiet_button};
 use crate::components::chips::StateChip;
 use crate::components::detail_section::{DetailSection, field};
 use crate::components::form::input_box;
@@ -106,7 +107,9 @@ impl DetailsPanel {
             h_flex()
                 .id(SharedString::from(format!("subtask-{}", subtask.id)))
                 .gap_2()
+                .rounded_sm()
                 .cursor_pointer()
+                .hover(|style| style.bg(cx.theme().colors().ghost_element_hover))
                 .on_click(move |_, window, cx| on(PanelCommand::OpenTask(id.clone()), window, cx))
                 .child(
                     small(subtask.id.clone())
@@ -133,8 +136,8 @@ impl DetailsPanel {
                     .gap_2()
                     .child(div().flex_1().child(input_box(&self.subtask, cx)))
                     .child(
-                        Button::new("details-add-subtask", "Add")
-                            .style(ButtonStyle::Outlined)
+                        action_button("details-add-subtask", "Add")
+                            .label_size(LabelSize::Small)
                             .disabled(busy || empty)
                             .on_click(move |_, window, cx| {
                                 add(PanelCommand::AddSubtask, window, cx)
@@ -178,9 +181,9 @@ impl DetailsPanel {
                 h_flex()
                     .gap_2()
                     .child(
-                        div()
-                            .id(SharedString::from(format!("try-{}", each.id)))
-                            .cursor_pointer()
+                        // The open try stays marked: bold, in the buffer font as all ids.
+                        ButtonLike::new(SharedString::from(format!("try-{}", each.id)))
+                            .toggle_state(each.id == task.id)
                             .on_click(move |_, window, cx| {
                                 open(PanelCommand::OpenTask(id.clone()), window, cx)
                             })
@@ -191,11 +194,10 @@ impl DetailsPanel {
                     .child(small(pr).color(Color::Muted))
                     .when(can_keep(each), |this| {
                         this.child(
-                            Button::new(
+                            action_button(
                                 SharedString::from(format!("keep-{}", each.id)),
                                 "Keep this try",
                             )
-                            .style(ButtonStyle::Outlined)
                             .label_size(LabelSize::Small)
                             .disabled(busy)
                             .on_click(move |_, window, cx| {
@@ -230,8 +232,9 @@ impl DetailsPanel {
         section.children(fields.into_iter().map(|each| {
             let value: AnyElement = if each.label == "Part of" {
                 let (on, id) = (on.clone(), each.text.clone());
-                Button::new("details-part-of", each.text.clone())
+                quiet_button("details-part-of", each.text.clone())
                     .label_size(LabelSize::Small)
+                    .truncate(true)
                     .on_click(move |_, window, cx| {
                         on(PanelCommand::OpenTask(id.clone()), window, cx)
                     })

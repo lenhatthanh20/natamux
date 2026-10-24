@@ -5,12 +5,11 @@
 use editor::Editor;
 use gpui::{ClickEvent, Entity, EventEmitter, FocusHandle, Focusable, KeyDownEvent};
 use natamux_proto::tasks::task::{TASK_PRIORITIES, Task, TaskChanges};
-use ui::{ContextMenu, TintColor, prelude::*};
+use ui::{ContextMenu, prelude::*};
 
 use super::edit_rules::{parse_labels, parse_task_ids};
 use crate::app::dashboard::Dashboard;
-use crate::components::button_style::{label_color, tinted_style};
-use crate::components::chips::Kbd;
+use crate::components::button_style::{action_button, key_hint, quiet_button};
 use crate::components::form::{field, input_box, text_editor};
 use crate::components::menu::MenuLayer;
 
@@ -160,17 +159,10 @@ impl Render for EditForm {
             .track_focus(&self.priority_focus)
             .on_click(cx.listener(|this, event, window, cx| this.open_priority(event, window, cx)));
         let off = self.busy || blank;
-        let save = ui::ButtonLike::new("edit-save")
-            .style(tinted_style(TintColor::Accent, off))
+        let save = action_button("edit-save", "Save")
+            .key_binding(key_hint("mod-enter", off))
             .disabled(off)
-            .on_click(cx.listener(|this, _, _, cx| this.save(cx)))
-            .child(
-                h_flex()
-                    .gap_2()
-                    .px_1()
-                    .child(Label::new("Save").color(label_color(off)))
-                    .child(Kbd::new("mod-enter")),
-            );
+            .on_click(cx.listener(|this, _, _, cx| this.save(cx)));
         v_flex()
             .id(SharedString::from(format!("edit-{}", self.task.id)))
             .key_context("NatamuxEdit")
@@ -200,15 +192,16 @@ impl Render for EditForm {
             )
             .child(
                 h_flex()
-                    .h(rems_from_px(52.0_f32))
+                    .min_h(rems_from_px(52.0_f32))
+                    .flex_wrap()
                     .px_3()
                     .gap_2()
                     .justify_end()
                     .border_t_1()
                     .border_color(cx.theme().colors().border_variant)
                     .child(
-                        Button::new("edit-cancel", "Cancel")
-                            .style(ButtonStyle::Subtle)
+                        quiet_button("edit-cancel", "Cancel")
+                            .key_binding(key_hint("escape", false))
                             .on_click(cx.listener(|_, _, _, cx| cx.emit(Saved))),
                     )
                     .child(save),

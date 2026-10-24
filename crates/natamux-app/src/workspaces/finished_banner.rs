@@ -7,11 +7,11 @@ use std::rc::Rc;
 
 use gpui::{ClickEvent, FontWeight};
 use natamux_proto::tasks::task::{Task, TaskState};
-use ui::{TintColor, Tooltip, prelude::*};
+use ui::{Tooltip, prelude::*};
 
 use super::workspace_rules::{GitStep, push_button};
 use super::wrap_up_rules::{FinishedAction, FinishedBannerText, GitFacts, finished_banner};
-use crate::components::button_style::tinted_style;
+use crate::components::button_style::action_button;
 use crate::components::colors::state_colors;
 use crate::components::icons::icon_path;
 
@@ -55,17 +55,11 @@ impl FinishedBanner {
 fn button(
     id: &'static str,
     label: impl Into<SharedString>,
-    primary: bool,
     disabled: bool,
     run: OnClick,
 ) -> Button {
-    Button::new(id, label)
+    action_button(id, label)
         .label_size(LabelSize::Small)
-        .style(if primary {
-            tinted_style(TintColor::Accent, disabled)
-        } else {
-            ButtonStyle::Outlined
-        })
         .disabled(disabled)
         .on_click(move |_: &ClickEvent, window, cx| run(window, cx))
 }
@@ -84,13 +78,7 @@ impl FinishedBanner {
                 );
                 let off = busy || push.reason.is_some();
                 let tip = push.reason.or(push.tip);
-                let main = button(
-                    "finished-push",
-                    push.label,
-                    true,
-                    off,
-                    self.actions.push.clone(),
-                );
+                let main = button("finished-push", push.label, off, self.actions.push.clone());
                 Some(match tip {
                     Some(tip) => main.tooltip(Tooltip::text(tip)).into_any_element(),
                     None => main.into_any_element(),
@@ -98,30 +86,23 @@ impl FinishedBanner {
             }
             FinishedAction::CreatePullRequest => {
                 let run = self.actions.pull_request.clone();
-                Some(button("finished-create-pr", "Create PR", true, busy, run).into_any_element())
+                Some(button("finished-create-pr", "Create PR", busy, run).into_any_element())
             }
             FinishedAction::OpenPullRequest => self.task.pr.clone().map(|url| {
                 let open: OnClick = Rc::new(move |_: &mut Window, cx: &mut App| cx.open_url(&url));
-                button("finished-open-pr", "Open pull request", true, false, open)
-                    .into_any_element()
+                button("finished-open-pr", "Open pull request", false, open).into_any_element()
             }),
             FinishedAction::Remove => {
                 let run = self.actions.remove.clone();
-                Some(
-                    button("finished-remove", "Remove workspace", true, busy, run)
-                        .into_any_element(),
-                )
+                Some(button("finished-remove", "Remove workspace", busy, run).into_any_element())
             }
             FinishedAction::Commit => {
                 let run = self.actions.commit.clone();
-                Some(button("finished-commit", "Commit…", true, busy, run).into_any_element())
+                Some(button("finished-commit", "Commit…", busy, run).into_any_element())
             }
             FinishedAction::ViewChanges => {
                 let run = self.actions.view_changes.clone();
-                Some(
-                    button("finished-view-changes", "View changes", true, false, run)
-                        .into_any_element(),
-                )
+                Some(button("finished-view-changes", "View changes", false, run).into_any_element())
             }
         }
     }
@@ -135,7 +116,6 @@ impl FinishedBanner {
         let remove = button(
             "finished-remove",
             "Remove workspace",
-            false,
             off,
             self.actions.remove.clone(),
         );

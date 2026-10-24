@@ -54,6 +54,7 @@ impl ChangesView {
             .collect();
         let picker = Button::new("changed-file-picker", label)
             .label_size(LabelSize::Small)
+            .truncate(true)
             .end_icon(Icon::new(IconName::ChevronDown).size(IconSize::Small))
             .tooltip(Tooltip::text("Changed file"))
             .on_click(move |event: &ClickEvent, window, cx| {
