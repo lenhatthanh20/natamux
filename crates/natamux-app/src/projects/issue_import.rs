@@ -11,6 +11,7 @@ use super::issue_rules::{import_label, imported_text, issue_problem};
 use super::projects_dialog::alert_line;
 use crate::app::dashboard::Dashboard;
 use crate::app::source::reason;
+use crate::components::button_style::quiet_button;
 use crate::components::chips::label_chip;
 use crate::components::dialog::{
     DialogFrame, DialogLayer, DialogView, cancel_button, primary_button,
@@ -194,7 +195,7 @@ impl IssueImport {
         )
         .body(issue_problem(message))
         .action(
-            Button::new("issues-retry", "Retry")
+            quiet_button("issues-retry", "Retry")
                 .track_focus(&self.retry_focus)
                 .disabled(self.reading)
                 .on_click(cx.listener(|this, _, _, cx| this.read(cx))),
@@ -267,7 +268,6 @@ impl Render for IssueImport {
         let import = primary_button(
             import_label(count),
             &self.submit_focus,
-            false,
             count == 0 || self.importing,
             cx.listener(|this, _, _, cx| this.import(cx)),
         )

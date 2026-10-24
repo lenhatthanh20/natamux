@@ -177,7 +177,6 @@ impl ProjectSettingsDialog {
                     None => editor.edit(default_pipeline(), cx),
                 });
             })
-            .safe()
             .open_over(window, cx);
         });
     }
@@ -243,7 +242,6 @@ impl ProjectSettingsDialog {
                 Confirm::new("Import settings", question, "Import", move |_, cx| {
                     apply(cx)
                 })
-                .safe()
                 .open_over(window, cx);
             }
         }

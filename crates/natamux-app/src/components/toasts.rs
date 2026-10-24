@@ -11,6 +11,7 @@ use ui::prelude::*;
 
 use super::timing_rules::ToastClock;
 use super::toast_rules::{Toast, ToastTone, Toasts, toast_duration};
+use crate::components::button_style::quiet_button;
 use crate::components::icons::icon_path;
 
 type Run = Rc<dyn Fn(&mut Window, &mut App)>;
@@ -170,13 +171,12 @@ impl Toaster {
             .zip(runs)
             .enumerate()
             .map(|(index, (label, run))| {
-                Button::new(("toast-action", index), label.clone())
-                    .style(ButtonStyle::Transparent)
-                    .color(Color::Accent)
-                    .on_click(cx.listener(move |toaster, _, window, cx| {
+                quiet_button(("toast-action", index), label.clone()).on_click(cx.listener(
+                    move |toaster, _, window, cx| {
                         run(window, cx);
                         toaster.dismiss(id, cx);
-                    }))
+                    },
+                ))
             })
             .collect();
         h_flex()
@@ -211,7 +211,13 @@ impl Toaster {
                         )
                     })
                     .when(!toast.actions.is_empty(), |this| {
-                        this.child(h_flex().mt(rems_from_px(6.0_f32)).gap_3().children(actions))
+                        this.child(
+                            h_flex()
+                                .flex_wrap()
+                                .mt(rems_from_px(6.0_f32))
+                                .gap_3()
+                                .children(actions),
+                        )
                     }),
             )
             .child(

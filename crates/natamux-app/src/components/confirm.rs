@@ -1,5 +1,6 @@
 //! The confirm dialog of a destructive action (`ConfirmDialog` in `ui/Dialog.tsx`): it says what
-//! goes and what stays, Cancel has the focus, and the danger button runs the action and closes.
+//! goes and what stays, Cancel has the focus, and the main button runs the action and closes. Both
+//! buttons are grey (T-0168): the title and the label say what goes.
 
 use std::rc::Rc;
 
@@ -18,8 +19,6 @@ pub struct Confirm {
     pub cancel_label: SharedString,
     /// Rows under the description, as (id, title): the tasks a confirm acts on.
     pub rows: Vec<(SharedString, SharedString)>,
-    /// The answer is the danger button; a confirm that loses nothing uses the primary one.
-    pub danger: bool,
     pub on_confirm: Run,
 }
 
@@ -36,14 +35,8 @@ impl Confirm {
             confirm_label: confirm_label.into(),
             cancel_label: "Cancel".into(),
             rows: Vec::new(),
-            danger: true,
             on_confirm: Rc::new(on_confirm),
         }
-    }
-
-    pub fn safe(mut self) -> Self {
-        self.danger = false;
-        self
     }
 
     pub fn cancel_label(mut self, label: impl Into<SharedString>) -> Self {
@@ -148,7 +141,6 @@ impl Render for ConfirmDialog {
                 .footer(primary_button(
                     confirm.confirm_label.clone(),
                     &self.submit,
-                    confirm.danger,
                     false,
                     submit,
                 )),

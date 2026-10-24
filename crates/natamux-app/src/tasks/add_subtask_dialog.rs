@@ -184,7 +184,6 @@ impl Render for AddSubtaskDialog {
         .footer(primary_button(
             "Add subtask",
             &self.submit_focus,
-            false,
             empty || self.busy,
             cx.listener(|this, _, window, cx| this.submit(window, cx)),
         ))

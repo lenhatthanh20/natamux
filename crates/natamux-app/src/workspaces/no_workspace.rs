@@ -8,10 +8,10 @@ use gpui::{ClickEvent, FontWeight};
 use natamux_proto::projects::repo::BranchList;
 use natamux_proto::tasks::task::Task;
 use natamux_proto::workspaces::workspace::PreparingStep;
-use ui::{ButtonLike, ContextMenu, TintColor, Tooltip, prelude::*};
+use ui::{ButtonLike, ContextMenu, Tooltip, prelude::*};
 
 use super::branches::branch_options;
-use crate::components::button_style::{label_color, tinted_style};
+use crate::components::button_style::{action_button, button_icon};
 use crate::components::empty_state::EmptyState;
 use crate::components::icons::icon_path;
 use crate::components::menu::MenuLayer;
@@ -146,25 +146,17 @@ impl RenderOnce for NoWorkspace {
                 let waits = waits_text(&self.waiting_for);
                 let create = {
                     let run = self.on_create.clone();
-                    Button::new("no-workspace-create", "Create workspace")
-                        .style(ButtonStyle::Outlined)
+                    action_button("no-workspace-create", "Create workspace")
                         .disabled(self.busy)
                         .on_click(move |_: &ClickEvent, window, cx| run(window, cx))
                 };
                 let start_agent = {
                     let run = self.on_start.clone();
                     let off = self.busy || waits.is_some();
-                    let button = ButtonLike::new("no-workspace-start")
-                        .style(tinted_style(TintColor::Accent, off))
+                    let button = action_button("no-workspace-start", "Start agent")
+                        .start_icon(button_icon("play"))
                         .disabled(off)
-                        .on_click(move |_: &ClickEvent, window, cx| run(window, cx))
-                        .child(
-                            h_flex()
-                                .gap_1p5()
-                                .px_1()
-                                .child(Icon::from_path(icon_path("play")).size(IconSize::Small))
-                                .child(Label::new("Start agent").color(label_color(off))),
-                        );
+                        .on_click(move |_: &ClickEvent, window, cx| run(window, cx));
                     match waits {
                         Some(reason) => button.tooltip(Tooltip::text(reason)),
                         None => button,
@@ -182,7 +174,7 @@ impl RenderOnce for NoWorkspace {
                         ),
                     )
                     .children(self.picker(start.as_deref(), cx))
-                    .child(h_flex().gap_2().child(create).child(start_agent))
+                    .child(h_flex().flex_wrap().gap_2().child(create).child(start_agent))
                     .into_any_element()
             }
         };

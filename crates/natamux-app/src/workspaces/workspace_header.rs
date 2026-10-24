@@ -13,7 +13,7 @@ use ui::{ButtonLike, Tooltip, prelude::*};
 
 use super::workspace_rules::{GitButton, GitStep, needs_commit, pull_request_button, push_button};
 use super::wrap_up_rules::is_finished_state;
-use crate::components::button_style::label_color;
+use crate::components::button_style::{action_button, button_icon};
 use crate::components::icons::icon_path;
 use crate::components::spinner::Spinner;
 
@@ -78,7 +78,7 @@ fn git_button(
     other_running: bool,
     icon_only: bool,
     run: OnClick,
-) -> impl IntoElement {
+) -> AnyElement {
     let off = button.reason.is_some() || busy || other_running;
     let tip = button.reason.clone().or(button.tip.clone());
     let tip = match (icon_only, tip) {
@@ -86,6 +86,16 @@ fn git_button(
         (true, None) => Some(button.label.to_string()),
         (false, tip) => tip,
     };
+    if !icon_only {
+        return action_button(id, button.label)
+            .label_size(LabelSize::Small)
+            .start_icon(button_icon(icon))
+            .loading(busy)
+            .disabled(off)
+            .when_some(tip, |button, tip| button.tooltip(Tooltip::text(tip)))
+            .on_click(move |_: &ClickEvent, window, cx| run(window, cx))
+            .into_any_element();
+    }
     let icon = if busy {
         Spinner::new(IconSize::Small).into_any_element()
     } else {
@@ -99,19 +109,8 @@ fn git_button(
         .disabled(off)
         .when_some(tip, |button, tip| button.tooltip(Tooltip::text(tip)))
         .on_click(move |_: &ClickEvent, window, cx| run(window, cx))
-        .child(
-            h_flex()
-                .gap_1p5()
-                .px_1()
-                .child(icon)
-                .when(!icon_only, |row| {
-                    row.child(
-                        Label::new(button.label)
-                            .size(LabelSize::Small)
-                            .color(label_color(off)),
-                    )
-                }),
-        )
+        .child(h_flex().px_1().child(icon))
+        .into_any_element()
 }
 
 fn open_pull_request(url: String, icon_only: bool) -> AnyElement {
@@ -120,21 +119,22 @@ fn open_pull_request(url: String, icon_only: bool) -> AnyElement {
     } else {
         "Open pull request"
     };
+    if !icon_only {
+        return action_button("workspace-open-pr", label)
+            .label_size(LabelSize::Small)
+            .start_icon(button_icon("external-link"))
+            .on_click(move |_, _, cx| cx.open_url(&url))
+            .into_any_element();
+    }
     ButtonLike::new("workspace-open-pr")
         .style(ButtonStyle::Subtle)
         .size(ButtonSize::Compact)
-        .when(icon_only, |button| {
-            button.tooltip(Tooltip::text("Open pull request"))
-        })
+        .tooltip(Tooltip::text("Open pull request"))
         .on_click(move |_, _, cx| cx.open_url(&url))
         .child(
             h_flex()
-                .gap_1p5()
                 .px_1()
-                .child(Icon::from_path(icon_path("external-link")).size(IconSize::Small))
-                .when(!icon_only, |row| {
-                    row.child(Label::new(label).size(LabelSize::Small))
-                }),
+                .child(Icon::from_path(icon_path("external-link")).size(IconSize::Small)),
         )
         .into_any_element()
 }
