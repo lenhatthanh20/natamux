@@ -1,10 +1,14 @@
 //! Ports `packages/daemon/src/git/worktrees.ts`: making, removing and finding worktrees.
 
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use crate::exec::{GitError, git, with_git_config};
 
 // One checkout worker per CPU: a big repository checks out much faster. Git before 2.32 ignores it.
+// A worktree call that hangs must end, not wait a year.
+const WORKTREE_TIMEOUT: Duration = Duration::from_secs(10 * 60);
+
 const PARALLEL_CHECKOUT: [(&str, &str); 1] = [("checkout.workers", "0")];
 
 /// The `GIT_CONFIG_*` settings of `add_worktree`, on top of the ones the process already has.
@@ -31,7 +35,7 @@ pub fn add_worktree(
         args.extend(["--no-track", "-b", branch, &*path]);
         args.extend(base_ref);
     }
-    git(repo, &args, None, &add_worktree_env()).map(|_| ())
+    git(repo, &args, Some(WORKTREE_TIMEOUT), &add_worktree_env()).map(|_| ())
 }
 
 /// Refuses to remove a worktree that has changes that are not committed, or submodules checked
@@ -43,13 +47,18 @@ pub fn remove_worktree(repo: &Path, worktree: &Path, force: bool) -> Result<(), 
         args.push("--force");
     }
     args.push(&path);
-    git(repo, &args, None, &[]).map(|_| ())
+    git(repo, &args, Some(WORKTREE_TIMEOUT), &[]).map(|_| ())
 }
 
 /// Whether a submodule is checked out in the worktree. Lines of submodules that are not start
 /// with "-".
 pub fn has_submodules(worktree: &Path) -> Result<bool, GitError> {
-    let output = git(worktree, &["submodule", "status"], None, &[])?;
+    let output = git(
+        worktree,
+        &["submodule", "status"],
+        Some(WORKTREE_TIMEOUT),
+        &[],
+    )?;
     Ok(output
         .split('\n')
         .any(|line| !line.is_empty() && !line.starts_with('-')))
@@ -65,7 +74,12 @@ pub fn parse_worktree_list(output: &str) -> Vec<String> {
 }
 
 pub fn list_worktree_paths(repo: &Path) -> Result<Vec<String>, GitError> {
-    let output = git(repo, &["worktree", "list", "--porcelain"], None, &[])?;
+    let output = git(
+        repo,
+        &["worktree", "list", "--porcelain"],
+        Some(WORKTREE_TIMEOUT),
+        &[],
+    )?;
     Ok(parse_worktree_list(&output))
 }
 

@@ -255,6 +255,21 @@ impl StageRun {
         });
     }
 
+    /// `settle` with a deadline; false when the work was still running after `limit`.
+    pub fn settle_for(&self, limit: std::time::Duration) -> bool {
+        let count = self
+            .pending
+            .count
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let (count, _) = self
+            .pending
+            .idle
+            .wait_timeout_while(count, limit, |count| *count > 0)
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        *count == 0
+    }
+
     /// Waits for the work the runner started in the background. For tests and shutdown.
     pub fn settle(&self) {
         let mut count = self

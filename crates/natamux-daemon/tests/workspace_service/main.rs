@@ -8,8 +8,6 @@
 //! side by side are threads; a test that needs a change to be running holds it with `Gate`.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
-// Each file uses a part of the helpers.
-#![allow(dead_code)]
 
 mod base_branch;
 mod changes;
@@ -63,6 +61,8 @@ pub type Messages = Arc<Mutex<Vec<DaemonMessage>>>;
 // other test runs git at that time. Every other test takes the read side.
 static GIT_LOCK: RwLock<()> = RwLock::new(());
 
+// The guards are held, never read.
+#[allow(dead_code)]
 enum Guard {
     Shared(RwLockReadGuard<'static, ()>),
     Exclusive(RwLockWriteGuard<'static, ()>),

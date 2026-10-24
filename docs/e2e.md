@@ -78,6 +78,8 @@ E2E_RUN=<run-id> scripts/e2e.sh up
 
 `E2E_EXTRA_COMPOSE=<file>` adds a compose file on top of `compose.prod.yaml` and `compose.e2e.yaml`. The Rust workflow's `cli` job uses `compose.rust-cli.yaml`, which mounts the Rust `natamux` and puts it first on the agents' PATH (`docs/rust-phase2.md`).
 
+`compose.rust-e2e.yaml` runs the Rust daemon in place of the Node one: it keeps the `daemon` service of the daemon image and only swaps its program for `target/x86_64-unknown-linux-musl/release/natamux-daemon`. The Rust workflow's `e2e` job builds that binary and runs every group with it (`docs/rust-phase4.md`, "Gate"). The binary is built in CI only, never on a Mac (`AGENTS.md`).
+
 Then try the dashboard by hand or with `playwright-cli`:
 
 ```sh

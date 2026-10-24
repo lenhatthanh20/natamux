@@ -120,7 +120,7 @@ pub fn capture_bytes(mut command: Command, timeout: Duration, limit: usize) -> C
         Err(error) => return CapturedBytes::failed(error.kind() == std::io::ErrorKind::NotFound),
     };
     let (out, err) = (Buffer::default(), Buffer::default());
-    let total = Arc::new(AtomicUsize::new(0));
+    // One counter per pipe: Node's maxBuffer counts stdout and stderr each on its own.
     let overflow = Arc::new(AtomicBool::new(false));
     let (done, finished) = mpsc::channel();
     let mut open = 0;
@@ -128,7 +128,7 @@ pub fn capture_bytes(mut command: Command, timeout: Duration, limit: usize) -> C
         read_pipe(
             pipe,
             out.clone(),
-            total.clone(),
+            Arc::new(AtomicUsize::new(0)),
             overflow.clone(),
             limit,
             done.clone(),
@@ -139,7 +139,7 @@ pub fn capture_bytes(mut command: Command, timeout: Duration, limit: usize) -> C
         read_pipe(
             pipe,
             err.clone(),
-            total.clone(),
+            Arc::new(AtomicUsize::new(0)),
             overflow.clone(),
             limit,
             done,
@@ -149,6 +149,9 @@ pub fn capture_bytes(mut command: Command, timeout: Duration, limit: usize) -> C
     let start = Instant::now();
     let mut timed_out = false;
     let mut killed = false;
+    // After the pipes close the child is about to end: look again soon, then less often, so the
+    // end is seen within a millisecond or two and a child that stays is not polled hard.
+    let mut pause = Duration::from_millis(1);
     let status = loop {
         if open > 0 {
             match finished.recv_timeout(SLICE) {
@@ -160,7 +163,17 @@ pub fn capture_bytes(mut command: Command, timeout: Duration, limit: usize) -> C
         if overflow.load(Ordering::SeqCst) {
             killed = true;
         } else if open == 0 {
-            break child.wait().ok();
+            // The pipes are closed but the child may still run: it keeps the timeout.
+            if let Some(ended) = ended(&mut child) {
+                break ended;
+            }
+            if start.elapsed() >= timeout {
+                timed_out = true;
+                killed = true;
+            } else {
+                thread::sleep(pause);
+                pause = (pause * 2).min(SLICE);
+            }
         } else if let Some(ended) = ended(&mut child) {
             // It ended but a grandchild still holds a pipe: take what came within the grace.
             wait_for_pipes(&finished, open, PIPE_GRACE);
@@ -206,3 +219,7 @@ fn wait_for_pipes(finished: &mpsc::Receiver<()>, mut open: usize, grace: Duratio
         open -= 1;
     }
 }
+
+#[cfg(test)]
+#[path = "process_tests.rs"]
+mod tests;

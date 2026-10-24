@@ -51,6 +51,8 @@ pub struct AppState {
     /// The token of the task shells.
     pub agent_token: String,
     pub data_dir: PathBuf,
+    /// The home folder of the daemon's environment: where the skills of the agents are read.
+    pub home: PathBuf,
     pub terminals: TerminalService,
     pub open_shells: Arc<OpenShells>,
     /// A socket that sent nothing for this long is dropped (`SILENT_CLOSE`; shorter in tests).
@@ -216,6 +218,8 @@ pub async fn handle(request: Request<Incoming>, state: Arc<AppState>) -> Answer 
         | (&Method::POST, ["tasks", _, "agent", "message"])
         | (&Method::POST, ["tasks", _, "workspace" | "commit" | "rollback" | "fan-out"])
         | (&Method::POST, ["workspaces"])
+        | (&Method::POST, ["repos"])
+        | (&Method::PUT, ["repos", _, "settings"])
         | (&Method::POST, ["github", "issues", "import"])
         | (&Method::PUT, ["tasks", _, "file"]) => {
             with_body(request, state, route, query.to_string(), by_agent).await
@@ -307,6 +311,14 @@ async fn workspace_route(
         (&Method::POST, ["tasks", id, "pull-request", "refresh"]) => {
             workspaces::refresh_pull_request(state, id.to_string()).await
         }
+        (&Method::GET, ["repos"]) => projects::list_repos(state).await,
+        (&Method::DELETE, ["repos", id]) => projects::remove_repo(state, id.to_string()).await,
+        (&Method::GET, ["repos", id, "settings"]) => {
+            projects::get_settings(state, id.to_string()).await
+        }
+        (&Method::GET, ["repos", id, "skills"]) => {
+            projects::list_skills(state, id.to_string()).await
+        }
         (&Method::GET, ["git", "branches"]) => projects::branches(state, query).await,
         (&Method::GET, ["github", "issues"]) => github::list_issues(state, query).await,
         (&Method::POST, ["tasks", id, "issue"]) => {
@@ -368,6 +380,10 @@ async fn with_body(
         }
         (&Method::POST, ["tasks", id, "agent", "message"]) => {
             agents::message(state, id.to_string(), body).await
+        }
+        (&Method::POST, ["repos"]) => projects::add_repo(state, body).await,
+        (&Method::PUT, ["repos", id, "settings"]) => {
+            projects::put_settings(state, id.to_string(), head.headers, body, by_agent).await
         }
         _ => workspace_body_route(&method, &parts, state, query, head.headers, body).await,
     }

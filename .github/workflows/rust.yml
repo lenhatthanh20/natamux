@@ -40,6 +40,8 @@ jobs:
       client: ${{ steps.flags.outputs.client }}
       lock: ${{ steps.flags.outputs.lock }}
       contract: ${{ steps.flags.outputs.contract }}
+      e2e: ${{ steps.flags.outputs.e2e }}
+      e2e_groups: ${{ steps.flags.outputs.e2e_groups }}
       crates: ${{ steps.flags.outputs.crates }}
       daemon_crates: ${{ steps.flags.outputs.daemon_crates }}
       suites: ${{ steps.flags.outputs.suites }}
@@ -618,6 +620,34 @@ jobs:
         run: cargo test --locked ${{ needs.changes.outputs.daemon_crates }} --no-run
       - run: cargo test --locked ${{ needs.changes.outputs.daemon_crates }}
 
+  # The static Rust daemon, built once for daemon-contract and e2e. A static build runs in the
+  # Debian image of the daemon, whatever its glibc.
+  daemon-musl:
+    needs: changes
+    if: ${{ !endsWith(github.ref, '-check') && (needs.changes.outputs.contract == 'true' || needs.changes.outputs.e2e == 'true') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: |
+          rustup toolchain install
+          rustup target add x86_64-unknown-linux-musl
+      # The bundled SQLite of rusqlite is C: musl-gcc builds it for the static binary.
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends musl-tools
+      - id: build
+        run: cargo build --release --locked -p natamux-daemon --target x86_64-unknown-linux-musl
+        env:
+          CC_x86_64_unknown_linux_musl: musl-gcc
+          CARGO_PROFILE_RELEASE_DEBUG: "0"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: daemon-musl
+          path: target/x86_64-unknown-linux-musl/release/natamux-daemon
+          retention-days: 1
+          if-no-files-found: error
+
   # Phase 4, part 1: the contract suite. The Node daemon of main and the Rust daemon run side by
   # side from the same image (compose.rust-daemon.yaml); the terminal scenarios of
   # crates/natamux-contract run on both and compare the answers, then xterm.js replays the
@@ -627,6 +657,10 @@ jobs:
     if: ${{ !endsWith(github.ref, '-check') && needs.changes.outputs.contract == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    permissions:
+      contents: read
+      # scripts/ci-wait-artifact.sh reads the jobs and artifacts of this run.
+      actions: read
     env:
       GH_TOKEN: ${{ github.token }}
       NATAMUX_TOKEN: e2e-token
@@ -636,17 +670,18 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # A static build runs in the Debian image of the daemon, whatever its glibc.
-      - run: |
-          rustup toolchain install
-          rustup target add x86_64-unknown-linux-musl
-      # The bundled SQLite of rusqlite is C: musl-gcc builds it for the static binary.
-      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends musl-tools
-      - run: cargo build --release --locked -p natamux-daemon --target x86_64-unknown-linux-musl
-        env:
-          CC_x86_64_unknown_linux_musl: musl-gcc
+      - run: rustup toolchain install
       - id: build
         run: cargo test --locked -p natamux-contract --tests --no-run
+      # daemon-musl builds the binary meanwhile (about 5 minutes); this job does its own setup first.
+      - name: Wait for the Rust daemon of daemon-musl
+        run: scripts/ci-wait-artifact.sh daemon-musl daemon-musl
+      # compose.rust-daemon.yaml mounts the binary from here.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: daemon-musl
+          path: target/x86_64-unknown-linux-musl/release
+      - run: chmod +x target/x86_64-unknown-linux-musl/release/natamux-daemon
       - name: Start the Node daemon of main and the Rust daemon beside it
         run: |
           scripts/e2e.sh up
@@ -729,6 +764,15 @@ jobs:
           wrepo=$(api -X POST "$NATAMUX_URL/repos" -d '{"path":"/data/workspaces-repo","name":"workspaces-repo"}' | jq -r .repo.id)
           echo "NATAMUX_CONTRACT_WORKSPACES_REPO=$wrepo" >> "$GITHUB_ENV"
           api "$NATAMUX_URL/repos/$wrepo/settings" | jq -e '.error == null'
+          # The projects suite: two projects with two skills each, and two plain folders to add.
+          for name in project-node project-rust; do
+            compose exec -T daemon sh -c "set -e; mkdir -p /data/$name/.claude/skills/a /data/$name/.agents/skills/b; cd /data/$name
+              git init -q -b main; git config user.name \"Natamux e2e\"; git config user.email e2e@example.invalid
+              printf -- \"---\nname: a\ndescription: First skill\n---\n\" > .claude/skills/a/SKILL.md
+              printf -- \"---\nname: b\ndescription: Second skill\n---\n\" > .agents/skills/b/SKILL.md
+              git add -A; git commit -q -m \"Start the project repository\""
+          done
+          compose exec -T daemon sh -c 'mkdir -p /data/plain-node /data/plain-rust'
           compose exec -T daemon sh -c 'cp /data/repos.json /data/rust/repos.json'
           compose restart daemon-rust
           for _ in $(seq 60); do
@@ -770,6 +814,7 @@ jobs:
               stages) cargo test --locked -p natamux-contract --test stages -- --ignored --test-threads=1 --skip hooks:: --skip workspaces:: || status=$? ;;
               hooks) cargo test --locked -p natamux-contract --test stages -- --ignored --test-threads=1 hooks:: || status=$? ;;
               workspaces) cargo test --locked -p natamux-contract --test stages -- --ignored --test-threads=1 workspaces:: || status=$? ;;
+              projects) cargo test --locked -p natamux-contract --test projects -- --ignored --test-threads=1 || status=$? ;;
             esac
           done
           tee -a "$GITHUB_STEP_SUMMARY" < "$NATAMUX_CONTRACT_REPORT"
@@ -807,13 +852,107 @@ jobs:
       - if: always()
         run: scripts/e2e.sh down
 
+  # The Playwright E2E specs of main against the Rust daemon (compose.rust-e2e.yaml). A matrix of
+  # the groups of e2e/groups.ts: each group has its own daemon and data, so they run side by side.
+  # The musl binary comes from daemon-musl; each leg installs Playwright while it builds.
+  e2e:
+    name: e2e (${{ matrix.group }})
+    needs: changes
+    if: ${{ !endsWith(github.ref, '-check') && needs.changes.outputs.e2e == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      # scripts/ci-wait-artifact.sh reads the jobs and artifacts of this run.
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        group: ${{ fromJSON(needs.changes.outputs.e2e_groups) }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      NATAMUX_TOKEN: e2e-token
+      NATAMUX_REPO: e2e-repo
+      E2E_EXTRA_COMPOSE: compose.rust-e2e.yaml
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      # e2e/ is not part of the pnpm workspace; its only dependency is pinned to an exact version.
+      - name: Install Playwright
+        working-directory: e2e
+        run: |
+          pnpm install --ignore-workspace --no-frozen-lockfile
+          pnpm exec playwright install --with-deps chromium
+      # daemon-musl builds the binary meanwhile (about 5 minutes); this job does its own setup first.
+      - name: Wait for the Rust daemon of daemon-musl
+        run: scripts/ci-wait-artifact.sh daemon-musl daemon-musl
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: daemon-musl
+          path: target/x86_64-unknown-linux-musl/release
+      - run: chmod +x target/x86_64-unknown-linux-musl/release/natamux-daemon
+      - name: Start the Rust daemon and the dashboard of main
+        run: scripts/e2e.sh up
+      - name: The daemon is the Rust one
+        run: |
+          cmdline=$(docker compose -p natamux-e2e -f compose.prod.yaml -f compose.e2e.yaml -f "$E2E_EXTRA_COMPOSE" \
+            exec -T daemon cat /proc/1/cmdline | tr '\0' ' ')
+          echo "$cmdline"
+          echo "$cmdline" | grep -q natamux-daemon
+      - name: The specs of the group
+        working-directory: e2e
+        run: E2E_GROUP=${{ matrix.group }} PLAYWRIGHT_JSON_OUTPUT_NAME=results.json pnpm e2e --reporter=list,html,json
+      - name: One row per spec file
+        if: always()
+        run: |
+          [ -f e2e/results.json ] || exit 0
+          {
+            echo "### E2E on the Rust daemon, group ${{ matrix.group }}"
+            echo
+            echo "| spec file | passed | flaky | failed | skipped |"
+            echo "|---|---|---|---|---|"
+            jq -r '[.. | objects | select(has("specs")) | .specs[] | {file, status: [.tests[].status]}]
+              | group_by(.file)[]
+              | {file: .[0].file, s: [.[].status[]]}
+              | "| \(.file) | \([.s[] | select(. == "expected")] | length) | \([.s[] | select(. == "flaky")] | length) | \([.s[] | select(. == "unexpected")] | length) | \([.s[] | select(. == "skipped")] | length) |"' e2e/results.json
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: rust-e2e-measures-${{ matrix.group }}
+          path: e2e/test-results/terminal-measures.json
+          if-no-files-found: ignore
+      - name: Report, pictures and traces
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: rust-e2e-report-${{ matrix.group }}
+          path: |
+            e2e/playwright-report
+            e2e/test-results
+            e2e/results.json
+          retention-days: 7
+          if-no-files-found: ignore
+      - name: Logs on failure
+        if: failure()
+        run: scripts/e2e.sh logs
+      - name: Stop
+        if: always()
+        run: scripts/e2e.sh down
+
   # Phase 4, part 1: the terminal bench of the Node daemon and of the Rust one, on the same runner.
   # The gate: a snapshot as fast as Node's, parsing at least as fast (compare-terminal-bench.py).
+  # 5 runs each, interleaved, so a slow moment of the runner hits both; the medians are compared.
   daemon-bench:
     needs: changes
     if: ${{ !endsWith(github.ref, '-check') && needs.changes.outputs.terminal == 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -825,18 +964,22 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
-      - name: The Node bench
+      - name: Build the Node side of the bench
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
-          NATAMUX_BENCH: "1"
         run: |
           pnpm install --frozen-lockfile --filter "@natamux/daemon..."
           pnpm --filter @natamux/core build
-          pnpm --filter @natamux/daemon exec vitest run src/terminals/__tests__/terminal-bench.test.ts | tee "$RUNNER_TEMP/node-bench.txt"
-      - name: The Rust bench
-        run: cargo test --release --locked -p natamux-daemon --test terminal_bench -- --ignored --nocapture | tee "$RUNNER_TEMP/rust-bench.txt"
+      - name: The benches, 5 rounds of Node then Rust
+        env:
+          NATAMUX_BENCH: "1"
+        run: |
+          for i in 1 2 3 4 5; do
+            pnpm --filter @natamux/daemon exec vitest run src/terminals/__tests__/terminal-bench.test.ts | tee "$RUNNER_TEMP/node-bench-$i.txt"
+            cargo test --release --locked -p natamux-daemon --test terminal_bench -- --ignored --nocapture | tee "$RUNNER_TEMP/rust-bench-$i.txt"
+          done
       - run: python3 scripts/compare-terminal-bench.test.py
-      - run: python3 scripts/compare-terminal-bench.py "$RUNNER_TEMP/node-bench.txt" "$RUNNER_TEMP/rust-bench.txt"
+      - run: python3 scripts/compare-terminal-bench.py --node "$RUNNER_TEMP"/node-bench-?.txt --rust "$RUNNER_TEMP"/rust-bench-?.txt
 
   # The tools come as prebuilt binaries at pinned versions; install-action checks their hashes.
   supply-chain:
