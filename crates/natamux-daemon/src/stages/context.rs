@@ -182,7 +182,8 @@ impl StageRun {
             "--json".to_string(),
             "number,title,body,url,labels,comments".into(),
         ]);
-        let output = (self.options.gh)(&self.repo_path(task), &args).map_err(action)?;
+        let output = (self.options.gh)(&self.repo_path(task), &args)
+            .map_err(|error| action(error.message))?;
         let issue = GhIssue::from_json(&output)
             .ok_or_else(|| action("gh gave an answer that is not an issue"))?;
         let linked = self.task(&task.id)?.issue.is_some();

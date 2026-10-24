@@ -8,7 +8,7 @@ use natamux_proto::stages::schema::{Condition, Gate, Stage, StageKind};
 
 use super::*;
 use crate::checks::Ran;
-use crate::test_support::TempDir;
+use natamux_git::test_support::TempDir;
 
 type Log = Arc<Mutex<Vec<(String, PathBuf)>>>;
 

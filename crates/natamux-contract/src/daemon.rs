@@ -269,6 +269,35 @@ impl Daemon {
         }
     }
 
+    /// The folder of this daemon's fake `gh` state (`scripts/fake-gh.sh`).
+    fn fake_gh_dir(&self) -> &'static str {
+        if self.name == "node" {
+            "/data/fake-gh/node"
+        } else {
+            "/data/fake-gh/rust"
+        }
+    }
+
+    /// The `gh` calls this daemon made, one per line; empty when there are none.
+    pub async fn fake_gh_calls(&self) -> String {
+        let path = format!("{}/calls.log", self.fake_gh_dir());
+        self.exec_in(&format!("cat '{path}' 2>/dev/null")).await
+    }
+
+    /// Writes `text` to the file `name` in this daemon's fake `gh` folder (`pr-state.json`, ...).
+    pub async fn write_fake_gh(&self, name: &str, text: &str) {
+        let dir = self.fake_gh_dir();
+        let script = format!(
+            "mkdir -p '{dir}' && cat > '{dir}/{name}' <<'NATAMUX_EOF'\n{text}\nNATAMUX_EOF"
+        );
+        self.exec_in(&script).await;
+    }
+
+    /// The output of `git -C <dir> <args>` in this daemon's container.
+    pub async fn git_in(&self, dir: &str, args: &str) -> String {
+        self.exec_in(&format!("git -C '{dir}' {args} 2>&1")).await
+    }
+
     /// The data folder of this daemon inside the container.
     pub fn data_dir(&self) -> String {
         env(if self.name == "node" {

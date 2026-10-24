@@ -6,6 +6,7 @@ use natamux_daemon::terminals::shell_files::save_ended_shells;
 use natamux_proto::terminals::ended::EndedShell;
 use serde_json::json;
 
+use crate::git_repo::git_daemon;
 use crate::server::{TOKEN, TestDaemon, bare, daemon, eventually};
 
 const REOPEN: &str = "/tasks/T-0001/agent/reopen";
@@ -148,12 +149,9 @@ async fn types_the_agent_command_into_the_task_terminal() {
     assert!(d.ptys()[0].written()[0].contains("agent-launch-"));
 }
 
-// Left out: the half of 'answers 404 for an agent it cannot start, and makes a missing
-// workspace' that starts an agent in a task with no workspace and gets one made: the workspace
-// routes and `WorkspaceService` come with part 5. The 404 half is here.
 #[tokio::test(flavor = "multi_thread")]
-async fn answers_404_for_an_agent_it_cannot_start() {
-    let d = bare("start-404").await;
+async fn answers_404_for_an_agent_it_cannot_start_and_makes_a_missing_workspace() {
+    let d = git_daemon("start-404").await;
     d.make_task("Fix the bug").await;
 
     let (status, _) = start(&d, json!({ "agent": "nope" })).await;
@@ -162,6 +160,15 @@ async fn answers_404_for_an_agent_it_cannot_start() {
     let (_, task) = d.call(Method::GET, "/tasks/T-0001", Some(TOKEN)).await;
     assert!(task["task"]["workspace"].is_null());
     assert!(d.ptys().is_empty());
+
+    let (status, started) = start(&d, json!({ "agent": "claude-code" })).await;
+
+    assert_eq!(status, 200, "{started}");
+    assert!(!started["task"]["workspace"].is_null());
+    // Windows types the launch in full, with no script.
+    if cfg!(unix) {
+        assert!(d.ptys()[0].written().join("").contains("agent-launch-"));
+    }
 }
 
 // T-0001 is done; Claude Code ended in Terminal 1 on session s-1.

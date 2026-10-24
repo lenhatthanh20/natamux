@@ -2,9 +2,12 @@
 //! keys) and plain text, no body when there is none, and its errors with their statuses, which
 //! the error handler answers as `{ error: 'bad_request', message }`.
 
-use http_body_util::{BodyExt, Limited};
-use hyper::body::Incoming;
-use hyper::header::{CONTENT_LENGTH, CONTENT_TYPE, TRANSFER_ENCODING};
+use http_body_util::{BodyExt, Full, Limited};
+use hyper::body::{Bytes, Incoming};
+use hyper::header::{
+    CACHE_CONTROL, CONTENT_LENGTH, CONTENT_SECURITY_POLICY, CONTENT_TYPE, HeaderValue,
+    TRANSFER_ENCODING,
+};
 use hyper::{HeaderMap, StatusCode};
 use serde_json::Value;
 
@@ -28,6 +31,28 @@ impl BodyError {
     pub fn answer(&self) -> Answer {
         bad_request(self.status, &self.message)
     }
+}
+
+/// Raw bytes of a file of the user. An SVG can hold scripts, so the answer may not run anything,
+/// even when it is opened on its own.
+pub fn sandboxed_bytes(content_type: &str, bytes: Vec<u8>) -> Answer {
+    let mut answer = Answer::new(Full::new(Bytes::from(bytes)));
+    let headers = answer.headers_mut();
+    headers.insert(
+        CONTENT_TYPE,
+        HeaderValue::from_str(content_type)
+            .unwrap_or_else(|_| HeaderValue::from_static("application/octet-stream")),
+    );
+    headers.insert(CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    headers.insert(
+        "x-content-type-options",
+        HeaderValue::from_static("nosniff"),
+    );
+    headers.insert(
+        CONTENT_SECURITY_POLICY,
+        HeaderValue::from_static("default-src 'none'; style-src 'unsafe-inline'; sandbox"),
+    );
+    answer
 }
 
 /// Fastify's default `bodyLimit`.

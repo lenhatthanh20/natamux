@@ -8,6 +8,8 @@ use async_tungstenite::tungstenite::Message;
 use futures::StreamExt;
 use serde_json::Value;
 
+use crate::git_repo::git_daemon;
+
 /// What a client got: text frames as JSON, binary ones as text.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Got {
@@ -161,4 +163,19 @@ pub async fn eventually(done: impl Fn() -> bool) {
         assert!(Instant::now() < deadline, "condition not met in time");
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
+}
+
+// The shell is a pty of the test daemon: `killed` is what Node's fake pty records.
+#[tokio::test(flavor = "multi_thread")]
+async fn ends_the_shell_before_the_workspace_is_removed() {
+    let d = git_daemon("shell-before-removal").await;
+    d.task_with_workspace().await;
+    let mut socket = d.open("cols=80&rows=24").await;
+    socket.until(|socket| socket.replayed()).await;
+
+    let (status, removed) = d.delete("/tasks/T-0001/workspace").await;
+
+    assert_eq!(status, 200, "{removed}");
+    assert!(d.ptys()[0].killed());
+    socket.close_code().await;
 }

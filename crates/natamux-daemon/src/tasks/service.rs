@@ -130,6 +130,10 @@ impl TaskService {
         self.with(|store| Ok(store.list_tasks(state)))
     }
 
+    pub fn workspace_list(&self) -> TaskResult<Vec<crate::tasks::store::WorkspaceRef>> {
+        self.with(|store| Ok(store.workspace_list()))
+    }
+
     pub fn list_events(&self, task_id: &str) -> TaskResult<Vec<StoredEvent>> {
         self.with(|store| store.list_events(task_id))
     }

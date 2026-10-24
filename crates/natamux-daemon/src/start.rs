@@ -10,6 +10,7 @@ use natamux_agents::hook_files::{
 use natamux_agents::trust::trust_paths;
 use natamux_core::agents::hook_settings::claude_code_hook_settings;
 use natamux_pty::{Env, SpawnOptions};
+use natamux_stages::ci_check::GhCi;
 use natamux_store::task_index::TaskIndex;
 use tokio::task::JoinHandle;
 
@@ -32,6 +33,12 @@ use crate::terminals::open_shells::{OpenShells, OpenShellsOptions, ShellsView};
 use crate::terminals::service::{TerminalOptions, TerminalService};
 use crate::terminals::session_lifecycle::SpawnPty;
 use crate::terminals::types::TerminalError;
+use crate::workspaces::service::WorkspaceService;
+
+#[path = "start_services.rs"]
+mod services;
+
+use services::{github_services, workspace_service};
 
 pub struct Daemon {
     pub state: Arc<AppState>,
@@ -132,6 +139,15 @@ fn task_store(config: &Config) -> std::io::Result<TaskStore> {
 /// Late links between parts that need each other: the terminals call the stage runner on output,
 /// the open shells ask it which shells run agents.
 type RunnerCell = Arc<OnceLock<StageRunner>>;
+/// The workspace service is built last (it needs the terminals and the agents), but the terminals
+/// and the hooks tell it of output and file changes.
+type WorkspaceCell = Arc<OnceLock<Arc<WorkspaceService>>>;
+
+#[derive(Default)]
+struct Cells {
+    runner: RunnerCell,
+    workspaces: WorkspaceCell,
+}
 
 fn agent_runner(
     config: &Config,
@@ -202,6 +218,7 @@ fn stage_runner(
     );
     options.open_shells = Some(Arc::clone(open_shells));
     options.jobs = Arc::clone(&store.jobs);
+    options.ci = Arc::new(GhCi::default());
     StageRunner::new(options)
 }
 
@@ -213,9 +230,10 @@ fn terminal_service(
     scheduler: &Arc<Scheduler>,
     store: &TaskStore,
     daemon_url: &str,
-    runner: &RunnerCell,
+    cells: &Cells,
 ) -> TerminalService {
-    let output = Arc::clone(runner);
+    let output = Arc::clone(&cells.runner);
+    let idle = Arc::clone(&cells.workspaces);
     let signalled = Arc::clone(&store.signals);
     let ended = store.tasks.clone();
     TerminalService::new(TerminalOptions {
@@ -235,7 +253,12 @@ fn terminal_service(
             is_task_ended(&ended, task_id)
         })),
         bus: Some(Arc::clone(&store.bus)),
-        on_output_idle: None,
+        // Only marks the workspace and plans a timer: no git on the output path.
+        on_output_idle: Some(Arc::new(move |task_id: &str| {
+            if let Some(workspaces) = idle.get() {
+                workspaces.touch(task_id);
+            }
+        })),
     })
 }
 
@@ -275,6 +298,7 @@ fn hook_services(
     store: &TaskStore,
     stages: &StageRunner,
     open_shells: &Arc<OpenShells>,
+    workspaces: &WorkspaceCell,
 ) -> (Arc<HookService>, Arc<UsageService>) {
     let home = home_of(env);
     let usage = Arc::new(UsageService::new(UsageOptions {
@@ -284,13 +308,17 @@ fn hook_services(
     }));
     let noted = Arc::clone(open_shells);
     let seen = Arc::clone(&usage);
+    let changed = Arc::clone(workspaces);
     let hooks = Arc::new(HookService::new(
         store.tasks.clone(),
         Arc::new(stages.clone()),
         HookOptions {
             bus: Some(Arc::clone(&store.bus)),
-            // Part 5: `workspaces.touch`.
-            workspace_changed: None,
+            workspace_changed: Some(Arc::new(move |task_id: &str| {
+                if let Some(workspaces) = changed.get() {
+                    workspaces.touch(task_id);
+                }
+            })),
             session_seen: Some(Arc::new(
                 move |task: &str, terminal: &str, agent: &str, session: &str| {
                     noted.note_session(task, terminal, agent, session);
@@ -320,10 +348,10 @@ pub async fn start(
     let address = listener.local_addr()?;
     // Shells run on the same machine as the daemon, so they reach it on loopback.
     let daemon_url = format!("http://127.0.0.1:{}", address.port());
-    let runner: RunnerCell = Arc::default();
+    let cells = Cells::default();
     let spawn = with_hook_files(spawn);
-    let terminals = terminal_service(config, env, spawn, &scheduler, &store, &daemon_url, &runner);
-    let open_shells = open_shells(config, &store, &terminals, &scheduler, &runner);
+    let terminals = terminal_service(config, env, spawn, &scheduler, &store, &daemon_url, &cells);
+    let open_shells = open_shells(config, &store, &terminals, &scheduler, &cells.runner);
     let agents = Arc::new(agent_runner(
         config,
         &store.tasks,
@@ -340,37 +368,42 @@ pub async fn start(
         Arc::clone(&agents),
         &open_shells,
     );
-    let _ = runner.set(stages.clone());
-    let (hooks, usage) = hook_services(config, env, &store, &stages, &open_shells);
+    let _ = cells.runner.set(stages.clone());
+    let (issues, issue_linker, pull_requests) = github_services(&store, config, &scheduler);
+    let workspaces = workspace_service(
+        config,
+        &store,
+        &scheduler,
+        &terminals,
+        &agents,
+        &issue_linker,
+    );
+    let _ = cells.workspaces.set(Arc::clone(&workspaces));
+    let (hooks, usage) = hook_services(
+        config,
+        env,
+        &store,
+        &stages,
+        &open_shells,
+        &cells.workspaces,
+    );
     // Before the listen, so no dashboard attaches to a shell before it is known to wait.
     open_shells.start();
     stages.run.load_open_shells();
     stages.start();
-    let TaskStore {
-        tasks,
-        repos,
-        jobs,
-        bus,
-        signals: _,
-    } = store;
-    let state = Arc::new(AppState {
+    let built = Built {
         stages: stages.clone(),
         agents,
         hooks,
         usage,
-        token: config.token.clone(),
-        agent_token: config.agent_token.clone(),
-        data_dir: config.data_dir.clone(),
         terminals,
         open_shells,
-        silent_close: config.silent_close,
-        templates: TemplateService::new(&config.data_dir, tasks.clone()),
-        tasks,
-        repos,
-        jobs,
-        bus,
-        scheduler: Arc::clone(&scheduler),
-    });
+        workspaces,
+        pull_requests,
+        issues,
+        issue_linker,
+    };
+    let state = app_state(config, store, &scheduler, built);
     let server = tokio::spawn(serve(listener, Arc::clone(&state)));
     // After the listen, so the hooks of the agents reach the daemon.
     stages.run.background(|run| run.resume_agents());
@@ -382,10 +415,63 @@ pub async fn start(
     })
 }
 
+/// The services `start` made, before they go into the `AppState`.
+struct Built {
+    stages: StageRunner,
+    agents: Arc<AgentRunner>,
+    hooks: Arc<HookService>,
+    usage: Arc<UsageService>,
+    terminals: TerminalService,
+    open_shells: Arc<OpenShells>,
+    workspaces: Arc<WorkspaceService>,
+    pull_requests: Arc<crate::github::pull_request_watcher::PullRequestWatcher>,
+    issues: Arc<crate::github::issue_importer::IssueImporter>,
+    issue_linker: Arc<crate::github::issue_linker::IssueLinker>,
+}
+
+fn app_state(
+    config: &Config,
+    store: TaskStore,
+    scheduler: &Arc<Scheduler>,
+    built: Built,
+) -> Arc<AppState> {
+    let TaskStore {
+        tasks,
+        repos,
+        jobs,
+        bus,
+        signals: _,
+    } = store;
+    Arc::new(AppState {
+        stages: built.stages,
+        agents: built.agents,
+        hooks: built.hooks,
+        usage: built.usage,
+        token: config.token.clone(),
+        agent_token: config.agent_token.clone(),
+        data_dir: config.data_dir.clone(),
+        terminals: built.terminals,
+        open_shells: built.open_shells,
+        silent_close: config.silent_close,
+        templates: TemplateService::new(&config.data_dir, tasks.clone()),
+        tasks,
+        repos,
+        jobs,
+        bus,
+        scheduler: Arc::clone(scheduler),
+        workspaces: built.workspaces,
+        pull_requests: built.pull_requests,
+        issues: built.issues,
+        issue_linker: built.issue_linker,
+    })
+}
+
 impl Daemon {
     /// Before the process exits: the list of open shells is not written again, so the shells
     /// the shutdown ends come back at the next start. Waits until they ended.
     pub fn shut_down(&self) {
+        self.state.pull_requests.stop();
+        self.state.issue_linker.stop();
         self.state.open_shells.stop();
         let ended = self.state.terminals.close_all_and_wait();
         self.state.stages.stop();

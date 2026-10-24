@@ -22,13 +22,24 @@ use crate::http::routes::stages::stage_answer;
 use crate::http::server::{AppState, query_value};
 use crate::stages::errors::{StageError, action};
 use crate::terminals::limits::MAIN_TERMINAL;
+use crate::workspaces::errors::WorkspaceError;
+
+/// A failed workspace as a stage error: a task error keeps its status, the rest is a 409.
+fn workspace_failure(error: WorkspaceError) -> StageError {
+    match error {
+        WorkspaceError::Task(error) => StageError::Task(error),
+        other => action(other.to_string()),
+    }
+}
 
 fn to_value<T: serde::Serialize>(value: &T) -> Value {
     serde_json::to_value(value).unwrap_or(Value::Null)
 }
 
+type StartBody = (String, Option<String>, Option<String>);
+
 /// `startAgentBodySchema`: the agent, and a prompt and a base branch, both optional.
-fn start_body(value: Option<&Value>) -> Result<(String, Option<String>), ZodError> {
+fn start_body(value: Option<&Value>) -> Result<StartBody, ZodError> {
     let mut issues = Issues::default();
     let mut parsed = None;
     if let Some(map) = object(value, &[], &mut issues) {
@@ -46,16 +57,16 @@ fn start_body(value: Option<&Value>) -> Result<(String, Option<String>), ZodErro
                 &mut issues,
             )
         });
-        // The base branch of a new workspace: checked, not used before part 5.
-        if let Some(base) = map.get("base") {
+        // The base branch of a new workspace, for a task that has none.
+        let base = map.get("base").and_then(|base| {
             string(
                 Some(base),
                 &[json!("base")],
                 &[Rule::Min(1), Rule::Max(255)],
                 &mut issues,
-            );
-        }
-        parsed = agent.map(|agent| (agent, prompt.flatten()));
+            )
+        });
+        parsed = agent.map(|agent| (agent, prompt.flatten(), base));
     }
     issues.into_result(parsed)
 }
@@ -153,7 +164,7 @@ pub async fn start_agent(state: Arc<AppState>, id: String, body: Option<Value>) 
         Ok(id) => id,
         Err(error) => return zod_answer(&error),
     };
-    let (agent, prompt) = match start_body(body.as_ref()) {
+    let (agent, prompt, base) = match start_body(body.as_ref()) {
         Ok(parsed) => parsed,
         Err(error) => return zod_answer(&error),
     };
@@ -162,10 +173,17 @@ pub async fn start_agent(state: Arc<AppState>, id: String, body: Option<Value>) 
         return stage_error(&StageError::Agent(AgentError::Unknown(agent)));
     }
     stage_answer(StatusCode::OK, move || {
+        let workspaces = Arc::clone(&state.workspaces);
+        let make = || {
+            workspaces
+                .create(&id, base.as_deref())
+                .map(|_| ())
+                .map_err(workspace_failure)
+        };
         let task = state
             .stages
             .run
-            .start_by_hand(&id, &agent, prompt.as_deref())?;
+            .start_by_hand(&id, &agent, prompt.as_deref(), Some(&make))?;
         Ok(json!({ "task": to_value(&task) }))
     })
     .await

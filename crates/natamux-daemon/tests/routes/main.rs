@@ -1,19 +1,27 @@
 //! The terminal routes and socket of a running Rust daemon: the part-1 cases of the `terminal`,
 //! `authentication` and `ended shells` groups of `server.test.ts`. The task routes are in
-//! `tasks.rs`, `task_events.rs` and `task_extras.rs`; cases that need stages, workspaces or
-//! agents wait for later parts (docs/rust-phase4.md).
+//! `tasks.rs`, `task_events.rs` and `task_extras.rs`; the workspace, git and GitHub routes are in
+//! `workspaces.rs`, `changes.rs`, `git.rs` and `github.rs`.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 mod agents;
+mod changes;
+#[cfg(unix)]
+mod fake_tools;
+mod git;
+mod git_repo;
+mod github;
 mod hook_client;
 mod hooks;
+mod raw_client;
 mod server;
 mod socket;
 mod stages;
 mod task_events;
 mod task_extras;
 mod tasks;
+mod workspaces;
 
 use hyper::Method;
 use natamux_daemon::terminals::shell_files::{OpenShell, save_ended_shells, save_open_shells};
