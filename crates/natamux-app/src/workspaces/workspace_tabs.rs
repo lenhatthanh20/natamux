@@ -87,8 +87,10 @@ impl WorkspaceView {
             .toggle_state(picked)
             .tooltip(Tooltip::text(tip))
             .on_click(cx.listener(move |view, _: &ClickEvent, _, cx| view.pick_tab(tab, cx)))
-            .start_slot(tab_icon(icon).size(IconSize::Small).color(color))
+            // The icon is a child, not the start slot, as Zed's pane tabs: the empty 12 px start
+            // slot then balances the 14 px end slot, so the content sits in the middle.
             .end_slot::<IconButton>(close)
+            .child(tab_icon(icon).size(IconSize::Small).color(color))
             .child(Label::new(label).size(row_text()).color(color))
             .children(badge.map(CountBadge::new))
     }

@@ -97,7 +97,8 @@ pub fn crumb(open: Option<&Task>, agents: bool, repos: &[Repo]) -> Crumb {
     Crumb::Task {
         repo,
         id: task.id.clone(),
-        title: task.title.clone(),
+        // A label breaks at "\n" even when it truncates, and the bar is one line high.
+        title: task.title.split_whitespace().collect::<Vec<_>>().join(" "),
         state: task.state,
         branch: task.branch.clone(),
     }
@@ -272,6 +273,17 @@ mod tests {
             crumb(Some(&open), false, &[]),
             Crumb::Task { state: TaskState::Review, branch: Some(branch), .. }
                 if branch == "natamux/t-0018"
+        ));
+    }
+
+    /// T-0167: a title stored with a newline broke the title bar onto 2 lines.
+    #[test]
+    fn the_crumb_title_is_one_line() {
+        let mut open = task("T-0166", TaskState::Running, "2026-10-22T09:29:00.000Z");
+        open.title = " Phase 4: the gate (E2E with the Rust\n  daemon)\t".into();
+        assert!(matches!(
+            crumb(Some(&open), false, &[]),
+            Crumb::Task { title, .. } if title == "Phase 4: the gate (E2E with the Rust daemon)"
         ));
     }
 

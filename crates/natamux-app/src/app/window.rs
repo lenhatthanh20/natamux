@@ -450,7 +450,8 @@ pub fn open(
             titlebar: Some(TitlebarOptions {
                 title: Some(window_title(0).into()),
                 appears_transparent: mac,
-                traffic_light_position: mac.then(|| point(px(12.), px(11.))),
+                // gpui centers the 16 px buttons at y + 8; 9 matches the 34 px bar, as in Zed.
+                traffic_light_position: mac.then(|| point(px(12.), px(9.))),
             }),
             app_owns_titlebar_drag: mac,
             ..Default::default()
