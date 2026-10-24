@@ -290,3 +290,130 @@ fn a_big_paste_goes_out_in_chunks() {
     let step = protocol.input(&paste);
     assert_eq!(step.send.len(), 2);
 }
+
+/// A socket that resumed shell "s1" and got a snapshot of `cols` x `rows`.
+fn resumed_with_snapshot(protocol: &mut Protocol, cols: u16, rows: u16) {
+    open(protocol);
+    hello(protocol);
+    protocol.closed(None);
+    protocol.query("t".into());
+    protocol.opened();
+    protocol.server(ServerMessage::Snapshot { cols, rows });
+    protocol.server(ServerMessage::Replayed { offset: 7 });
+}
+
+#[test]
+fn focus_claims_the_size_even_when_it_did_not_change() {
+    let mut protocol = Protocol::new("1", 80, 24, true);
+    open(&mut protocol);
+    assert_eq!(
+        protocol.claim_size().send,
+        [ClientMessage::Resize { cols: 80, rows: 24 }]
+    );
+}
+
+#[test]
+fn focus_during_a_catch_up_claims_at_its_end() {
+    let mut protocol = Protocol::new("1", 80, 24, true);
+    open(&mut protocol);
+    hello(&mut protocol);
+    protocol.closed(None);
+    protocol.query("t".into());
+    protocol.opened();
+    protocol.server(ServerMessage::Resume { offset: 0 });
+    assert!(protocol.claim_size().send.is_empty());
+    protocol.server(ServerMessage::Replayed { offset: 3 });
+    assert_eq!(
+        protocol.caught_up(3).send,
+        [
+            ClientMessage::Ack { offset: 3 },
+            ClientMessage::Visible {
+                visible: true,
+                cols: Some(80),
+                rows: Some(24),
+            },
+        ]
+    );
+}
+
+#[test]
+fn focus_claims_nothing_when_down_hidden_or_ended() {
+    let mut hidden = Protocol::new("1", 80, 24, false);
+    open(&mut hidden);
+    assert!(hidden.claim_size().send.is_empty());
+
+    let mut down = Protocol::new("1", 80, 24, true);
+    open(&mut down);
+    down.closed(None);
+    assert!(down.claim_size().send.is_empty());
+
+    let mut ended = Protocol::new("1", 80, 24, true);
+    open(&mut ended);
+    ended.server(ServerMessage::Exit { code: Some(0) });
+    assert!(ended.claim_size().send.is_empty());
+}
+
+// T-0173: the pane drew a snapshot one column wider than its grid and kept that width.
+#[test]
+fn a_visible_resume_with_a_snapshot_of_another_size_takes_the_size() {
+    let mut protocol = Protocol::new("1", 80, 24, true);
+    resumed_with_snapshot(&mut protocol, 81, 24);
+    assert_eq!(
+        protocol.caught_up(7).send,
+        [
+            ClientMessage::Ack { offset: 7 },
+            ClientMessage::Resize { cols: 80, rows: 24 },
+        ]
+    );
+}
+
+#[test]
+fn a_resume_with_a_snapshot_of_the_same_size_or_hidden_claims_nothing() {
+    let mut same = Protocol::new("1", 80, 24, true);
+    resumed_with_snapshot(&mut same, 80, 24);
+    assert_eq!(same.caught_up(7).send, [ClientMessage::Ack { offset: 7 }]);
+
+    let mut off_screen = Protocol::new("1", 80, 24, false);
+    resumed_with_snapshot(&mut off_screen, 81, 24);
+    assert_eq!(
+        off_screen.caught_up(7).send,
+        [ClientMessage::Ack { offset: 7 }]
+    );
+}
+
+/// A socket that resumed shell "s1" from a known offset, with no snapshot.
+fn resumed_from_offset(protocol: &mut Protocol) {
+    open(protocol);
+    hello(protocol);
+    protocol.server(ServerMessage::Replayed { offset: 0 });
+    protocol.caught_up(0);
+    protocol.closed(None);
+    protocol.query("t".into());
+    protocol.opened();
+    protocol.server(ServerMessage::Resume { offset: 0 });
+    protocol.server(ServerMessage::Replayed { offset: 7 });
+}
+
+// T-0173: after a socket drop the shell may keep another client's size.
+#[test]
+fn a_visible_resume_with_no_snapshot_takes_the_size() {
+    let mut protocol = Protocol::new("1", 80, 24, true);
+    resumed_from_offset(&mut protocol);
+    assert_eq!(
+        protocol.caught_up(7).send,
+        [
+            ClientMessage::Ack { offset: 7 },
+            ClientMessage::Resize { cols: 80, rows: 24 },
+        ]
+    );
+}
+
+#[test]
+fn a_hidden_resume_with_no_snapshot_claims_nothing() {
+    let mut protocol = Protocol::new("1", 80, 24, false);
+    resumed_from_offset(&mut protocol);
+    assert_eq!(
+        protocol.caught_up(7).send,
+        [ClientMessage::Ack { offset: 7 }]
+    );
+}

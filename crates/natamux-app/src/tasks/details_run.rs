@@ -400,7 +400,9 @@ fn build_more_menu(
                 .custom_icon_path(icon_path(icon))
                 .when(danger, |entry| entry.icon_color(Color::Error))
                 // The menu shows the key of Edit task (`e`), as the sidebar's row menu does.
-                .when(action == MenuAction::Edit, |entry| entry.action(Box::new(EditTask)))
+                .when(action == MenuAction::Edit, |entry| {
+                    entry.action(Box::new(EditTask))
+                })
                 .handler(move |window, cx| match action {
                     MenuAction::Edit => on(PanelCommand::Edit, window, cx),
                     MenuAction::SaveTemplate => on(PanelCommand::SaveTemplate, window, cx),
