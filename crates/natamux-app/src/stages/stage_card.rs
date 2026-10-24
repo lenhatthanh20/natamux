@@ -14,7 +14,6 @@ use super::card_rules::{CardChip, CardFacts};
 use super::stage_choices::{ChoiceBox, choice_box};
 use super::stage_view_rules::{finished_when, stage_time};
 use crate::components::chips::StateChip;
-use crate::components::colors::state_colors;
 use crate::tasks::details_commands::{OnCommand, PanelCommand};
 
 /// The stage's output file as the card shows it.
@@ -99,7 +98,9 @@ fn badge(text: String, cx: &App) -> impl IntoElement {
         )
 }
 
-fn title_row(input: &CardInput, cx: &App) -> impl IntoElement {
+/// The name, the chip and the badges; `lead` (a finished card's chevron) goes first, so the row
+/// centres it on the name.
+fn title_row(input: &CardInput, lead: Option<AnyElement>, cx: &App) -> impl IntoElement {
     let entry = &input.entry;
     let upcoming = entry.status == StageStatus::Upcoming;
     let marked = input.facts.chip == CardChip::WillBeSkipped;
@@ -118,6 +119,7 @@ fn title_row(input: &CardInput, cx: &App) -> impl IntoElement {
         .flex_wrap()
         .gap_x_2()
         .gap_y_1()
+        .children(lead)
         .child(
             Label::new(entry.name.clone())
                 .weight(FontWeight::SEMIBOLD)
@@ -132,29 +134,9 @@ fn title_row(input: &CardInput, cx: &App) -> impl IntoElement {
         })
 }
 
-/// A chip with the colours of `state` and a text of its own ("Done", "Not started").
-pub fn text_chip(text: &'static str, state: TaskState, cx: &App) -> impl IntoElement {
-    let colors = state_colors(state, cx);
-    h_flex()
-        .flex_none()
-        .h(rems_from_px(20.0_f32))
-        .px(rems_from_px(8.0_f32))
-        .gap(rems_from_px(6.0_f32))
-        .rounded_full()
-        .bg(colors.bg)
-        .child(
-            div()
-                .flex_none()
-                .size(rems_from_px(6.0_f32))
-                .rounded_full()
-                .bg(colors.fg),
-        )
-        .child(
-            Label::new(text)
-                .size(LabelSize::Small)
-                .weight(FontWeight::MEDIUM)
-                .color(Color::Custom(colors.fg)),
-        )
+/// The state chip of `state` with a text of its own ("Done", "Not started").
+pub fn text_chip(text: &'static str, state: TaskState, _: &App) -> impl IntoElement {
+    StateChip::new(state).text(text)
 }
 
 fn fact_line(input: &CardInput) -> Option<impl IntoElement> {
@@ -248,10 +230,6 @@ pub fn stage_card(input: CardInput, on: &OnCommand, cx: &App) -> AnyElement {
     }
     let current = entry.status == StageStatus::Current;
     let upcoming = entry.status == StageStatus::Upcoming;
-    let head = v_flex()
-        .gap_0p5()
-        .child(title_row(&input, cx))
-        .children(fact_line(&input));
     let card = v_flex()
         .id(SharedString::from(format!("card-{}", entry.stage)))
         .gap_2p5()
@@ -270,39 +248,37 @@ pub fn stage_card(input: CardInput, on: &OnCommand, cx: &App) -> AnyElement {
                     colors.border_variant
                 })
         });
-    match entry.status {
-        StageStatus::Done | StageStatus::Skipped => finished_card(card, head, &input, on, cx),
-        StageStatus::Upcoming => card
-            .child(head)
-            .children(upcoming_parts(&input, on, cx))
-            .into_any_element(),
-        _ => card
-            .child(head)
-            .children(body(&input, on, cx))
-            .into_any_element(),
+    if matches!(entry.status, StageStatus::Done | StageStatus::Skipped) {
+        return finished_card(card, &input, on, cx);
     }
+    let head = v_flex()
+        .gap_0p5()
+        .child(title_row(&input, None, cx))
+        .children(fact_line(&input));
+    let parts = if upcoming {
+        upcoming_parts(&input, on, cx)
+    } else {
+        body(&input, on, cx)
+    };
+    card.child(head).children(parts).into_any_element()
 }
 
 /// A finished card: one line that opens, with the chevron.
-fn finished_card(
-    card: Stateful<Div>,
-    head: Div,
-    input: &CardInput,
-    on: &OnCommand,
-    cx: &App,
-) -> AnyElement {
+fn finished_card(card: Stateful<Div>, input: &CardInput, on: &OnCommand, cx: &App) -> AnyElement {
     let on_fold = on.clone();
     let fold = PanelCommand::FoldCard(input.entry.stage.clone());
-    let chevron = if input.opened {
+    let (on_key, fold_key) = (on_fold.clone(), fold.clone());
+    let chevron = Icon::new(if input.opened {
         IconName::ChevronDown
     } else {
         IconName::ChevronRight
-    };
-    let (on_key, fold_key) = (on_fold.clone(), fold.clone());
-    let line = h_flex()
+    })
+    .size(IconSize::XSmall)
+    .color(Color::Muted)
+    .into_any_element();
+    let line = v_flex()
         .id(SharedString::from(format!("fold-{}", input.entry.stage)))
-        .items_start()
-        .gap_1p5()
+        .gap_0p5()
         .cursor_pointer()
         .when_some(input.fold_focus.as_ref(), |this, focus| {
             this.track_focus(focus)
@@ -315,12 +291,9 @@ fn finished_card(
                 on_key(fold_key.clone(), window, cx);
             }
         })
-        .child(
-            Icon::new(chevron)
-                .size(IconSize::XSmall)
-                .color(Color::Muted),
-        )
-        .child(head);
+        .child(title_row(input, Some(chevron), cx))
+        // Under the name: the chevron (12) and the title row's gap (8).
+        .children(fact_line(input).map(|facts| div().pl(rems_from_px(20.0_f32)).child(facts)));
     let parts = if input.opened {
         body(input, on, cx)
     } else {
@@ -359,3 +332,7 @@ fn upcoming_parts(input: &CardInput, on: &OnCommand, cx: &App) -> Vec<AnyElement
     }
     parts
 }
+
+#[cfg(test)]
+#[path = "stage_card_tests.rs"]
+mod tests;

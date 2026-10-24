@@ -11,40 +11,49 @@ use crate::tasks::task_rules::state_label;
 
 const MAC: bool = cfg!(target_os = "macos");
 
-/// A task state as a pill with its dot. It never pulses.
+/// A task state as a grey Zed chip; only its dot has the state's colour. It never pulses.
 #[derive(IntoElement)]
 pub struct StateChip {
     state: TaskState,
+    text: Option<&'static str>,
 }
 
 impl StateChip {
     pub fn new(state: TaskState) -> Self {
-        Self { state }
+        Self { state, text: None }
+    }
+
+    /// A text of its own in place of the state's name ("Not started").
+    pub fn text(mut self, text: &'static str) -> Self {
+        self.text = Some(text);
+        self
     }
 }
 
 impl RenderOnce for StateChip {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
-        let colors = state_colors(self.state, cx);
+        let dot = state_colors(self.state, cx).fg;
+        let colors = cx.theme().colors();
         h_flex()
             .flex_none()
             .h(rems_from_px(20.0_f32))
-            .px(rems_from_px(8.0_f32))
+            .px(rems_from_px(6.0_f32))
             .gap(rems_from_px(6.0_f32))
-            .rounded_full()
-            .bg(colors.bg)
+            .rounded_md()
+            .border_1()
+            .border_color(colors.border_variant)
+            .bg(colors.element_background)
             .child(
                 div()
                     .flex_none()
                     .size(rems_from_px(6.0_f32))
                     .rounded_full()
-                    .bg(colors.fg),
+                    .bg(dot),
             )
             .child(
-                Label::new(state_label(self.state))
+                Label::new(self.text.unwrap_or_else(|| state_label(self.state)))
                     .size(LabelSize::Small)
-                    .weight(FontWeight::MEDIUM)
-                    .color(Color::Custom(colors.fg)),
+                    .color(Color::Muted),
             )
     }
 }
@@ -197,3 +206,7 @@ impl Render for KeysTip {
         })
     }
 }
+
+#[cfg(test)]
+#[path = "chips_tests.rs"]
+mod tests;
