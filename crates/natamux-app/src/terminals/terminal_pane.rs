@@ -288,6 +288,9 @@ impl TerminalPane {
             .pl(px(10.))
             .pr(px(2.))
             .bg(cx.theme().colors().terminal_background)
+            // The terminal takes the wheel but lets it go on to the grid, which then scrolled
+            // too; xterm.js stops it in the web app (T-0162).
+            .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
             .child(
                 div()
                     .size_full()
