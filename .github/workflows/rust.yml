@@ -109,6 +109,7 @@ jobs:
       - id: build
         run: cargo xtask ci${{ startsWith(github.ref, 'refs/heads/natamux-ci/daemon') && ' --no-app' || '' }}${{ startsWith(github.ref, 'refs/heads/natamux-ci/') && ' --all-errors' || '' }}
       - run: python3 scripts/ci-changes.test.py
+      - run: bash scripts/fake-gh.test.sh
       - run: python3 scripts/check-shots.test.py
       - run: python3 scripts/compare-shots.test.py
       - name: Fail when the snapshot needed formatting
@@ -715,6 +716,19 @@ jobs:
           echo "NATAMUX_CONTRACT_STAGES_REPO=$repo" >> "$GITHUB_ENV"
           # A pipeline with an error falls back to the defaults on both daemons: fail early.
           api "$NATAMUX_URL/repos/$repo/settings" | jq -e '.error == null'
+          # The workspaces project: a bare origin to push to, and the fake gh state folders.
+          compose exec -T daemon sh -c 'set -e; mkdir -p /data/workspaces-repo /data/fake-gh/node /data/fake-gh/rust
+            git init -q --bare -b main /data/workspaces-origin.git
+            cd /data/workspaces-repo
+            git init -q -b main; git config user.name "Natamux e2e"; git config user.email e2e@example.invalid
+            printf "# Workspaces\n" > README.md; echo "echo ok > setup-ran.txt" > .natamux-setup'
+          compose exec -T daemon sh -c 'cat > /data/workspaces-repo/.natamux.json' < crates/natamux-contract/tests/fixtures/workspaces.natamux.json
+          compose exec -T daemon sh -c 'set -e; cd /data/workspaces-repo
+            git add README.md .natamux-setup .natamux.json; git commit -q -m "Start the workspaces repository"
+            git remote add origin /data/workspaces-origin.git; git push -q -u origin main'
+          wrepo=$(api -X POST "$NATAMUX_URL/repos" -d '{"path":"/data/workspaces-repo","name":"workspaces-repo"}' | jq -r .repo.id)
+          echo "NATAMUX_CONTRACT_WORKSPACES_REPO=$wrepo" >> "$GITHUB_ENV"
+          api "$NATAMUX_URL/repos/$wrepo/settings" | jq -e '.error == null'
           compose exec -T daemon sh -c 'cp /data/repos.json /data/rust/repos.json'
           compose restart daemon-rust
           for _ in $(seq 60); do
@@ -753,8 +767,9 @@ jobs:
             case "$suite" in
               terminals) cargo test --locked -p natamux-contract --test terminals -- --ignored --test-threads=1 || status=$? ;;
               tasks) cargo test --locked -p natamux-contract --test tasks -- --ignored --test-threads=1 || status=$? ;;
-              stages) cargo test --locked -p natamux-contract --test stages -- --ignored --test-threads=1 --skip hooks:: || status=$? ;;
+              stages) cargo test --locked -p natamux-contract --test stages -- --ignored --test-threads=1 --skip hooks:: --skip workspaces:: || status=$? ;;
               hooks) cargo test --locked -p natamux-contract --test stages -- --ignored --test-threads=1 hooks:: || status=$? ;;
+              workspaces) cargo test --locked -p natamux-contract --test stages -- --ignored --test-threads=1 workspaces:: || status=$? ;;
             esac
           done
           tee -a "$GITHUB_STEP_SUMMARY" < "$NATAMUX_CONTRACT_REPORT"

@@ -1,4 +1,11 @@
-//! Helpers for the unit tests: a temporary folder that goes away at the end, and a git repository.
+//! Helpers for the tests of `natamux-git`, `natamux-stages` and `natamux-daemon` (feature
+//! `test-support`): a temporary folder that goes away at the end, and git repositories.
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test helpers fail the test"
+)]
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -14,7 +21,7 @@ impl TempDir {
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |d| d.as_nanos());
         let path = std::env::temp_dir().join(format!(
-            "natamux-stages-{label}-{}-{nanos}-{}",
+            "natamux-git-{label}-{}-{nanos}-{}",
             std::process::id(),
             COUNTER.fetch_add(1, Ordering::SeqCst)
         ));
@@ -60,6 +67,23 @@ pub fn test_repo() -> (TempDir, PathBuf) {
     run_git(&dir, &["config", "user.name", "Test"]);
     run_git(&dir, &["config", "user.email", "test@example.com"]);
     run_git(&dir, &["config", "commit.gpgsign", "false"]);
+    // Git for Windows turns LF into CRLF on checkout, and tests compare the bytes of files.
+    run_git(&dir, &["config", "core.autocrlf", "false"]);
     run_git(&dir, &["commit", "--allow-empty", "-m", "init"]);
     (root, dir)
+}
+
+/// A bare repository next to the test repository (in `root`), added as its `origin`.
+pub fn bare_origin(root: &Path) -> PathBuf {
+    let remote = root.join("origin.git");
+    let repo = root.join("repo");
+    run_git(
+        root,
+        &["init", "--bare", "-b", "main", remote.to_str().unwrap()],
+    );
+    run_git(
+        &repo,
+        &["remote", "add", "origin", remote.to_str().unwrap()],
+    );
+    remote
 }

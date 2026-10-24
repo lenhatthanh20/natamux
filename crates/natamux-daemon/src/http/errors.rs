@@ -9,9 +9,13 @@ use natamux_core::json::to_js_string;
 use natamux_core::zod::ZodError;
 
 use crate::agents::errors::{AgentError, HookError};
+use crate::github::issue_importer::IssueImportError;
+use crate::github::issue_linker::LinkError;
+use crate::github::pull_request_watcher::WatchError;
 use crate::stages::errors::StageError;
 use crate::tasks::errors::TaskError;
 use crate::terminals::types::TerminalError;
+use crate::workspaces::errors::WorkspaceError;
 
 pub type Answer = Response<Full<Bytes>>;
 
@@ -181,5 +185,46 @@ pub fn hook_error(error: &HookError) -> Answer {
             eprintln!("{message}");
             internal_error()
         }
+    }
+}
+
+/// The answer of each workspace error (`status_and_code` has Node's mapping). A task error keeps
+/// its own answer, which carries zod's issues.
+pub fn workspace_error(error: &WorkspaceError) -> Answer {
+    if let WorkspaceError::Task(error) = error {
+        return task_error(error);
+    }
+    let (status, code) = error.status_and_code();
+    if status == 500 {
+        eprintln!("{error}");
+        return internal_error();
+    }
+    let status = StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+    error_answer(status, code, &error.to_string())
+}
+
+/// `GitHubError` and the issue errors are 409 `conflict`.
+fn conflict(error: &impl std::fmt::Display) -> Answer {
+    error_answer(StatusCode::CONFLICT, "conflict", &error.to_string())
+}
+
+pub fn issue_import_error(error: &IssueImportError) -> Answer {
+    match error {
+        IssueImportError::GitHub(_) => conflict(error),
+        IssueImportError::Task(error) => task_error(error),
+    }
+}
+
+pub fn link_error(error: &LinkError) -> Answer {
+    match error {
+        LinkError::Link(_) | LinkError::GitHub(_) => conflict(error),
+        LinkError::Task(error) => task_error(error),
+    }
+}
+
+pub fn watch_error(error: &WatchError) -> Answer {
+    match error {
+        WatchError::GitHub(_) | WatchError::Git(_) => conflict(error),
+        WatchError::Task(error) => task_error(error),
     }
 }

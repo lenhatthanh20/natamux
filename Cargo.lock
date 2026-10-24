@@ -5594,6 +5594,7 @@ dependencies = [
  "hyper-util",
  "natamux-agents",
  "natamux-core",
+ "natamux-git",
  "natamux-proto",
  "natamux-pty",
  "natamux-screen",
@@ -5601,8 +5602,18 @@ dependencies = [
  "natamux-store",
  "serde",
  "serde_json",
+ "sha2",
  "subtle",
  "tokio",
+]
+
+[[package]]
+name = "natamux-git"
+version = "0.1.0"
+dependencies = [
+ "natamux-core",
+ "natamux-proto",
+ "serde_json",
 ]
 
 [[package]]
@@ -5636,6 +5647,7 @@ version = "0.1.0"
 dependencies = [
  "natamux-agents",
  "natamux-core",
+ "natamux-git",
  "natamux-proto",
  "natamux-store",
  "serde_json",

@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, Weak};
 
 use natamux_core::stages::terminal_lane::{PinnedTerminals, pinned_terminals_of};
+use natamux_git::gh::{RunGh, run_gh};
 use natamux_proto::events::task_event::StoredEvent;
 use natamux_proto::projects::repo::ProjectSettings;
 use natamux_proto::stages::position::step_to_run;
@@ -17,7 +18,6 @@ use natamux_proto::stages::schema::Step;
 use natamux_proto::tasks::task::Task;
 use natamux_stages::checks::{RunCommand, run_shell_command};
 use natamux_stages::ci::{CiCheck, NoCi};
-use natamux_stages::gh::{RunGh, run_gh};
 use serde_json::{Map, Value, json};
 
 use crate::agents::runner::AgentRunner;

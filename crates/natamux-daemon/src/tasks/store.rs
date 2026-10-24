@@ -23,6 +23,14 @@ use natamux_store::task_files::{list_task_ids, read_task_file};
 use natamux_store::task_sync::TaskSync;
 use serde_json::{Map, Value, json};
 
+/// A task's workspace and project, for reads that need no more of the task.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WorkspaceRef {
+    pub id: String,
+    pub workspace: String,
+    pub repo: Option<String>,
+}
+
 use crate::shared::event_bus::{DaemonMessage, EventBus};
 use crate::shared::jobs::Clock;
 use crate::tasks::errors::{TaskError, TaskResult};
@@ -140,6 +148,30 @@ impl Store {
             compare_text(&b.updated_at, &a.updated_at).then_with(|| compare_text(&a.id, &b.id))
         });
         tasks
+    }
+
+    /// The tasks that have a workspace, in the order of `list_tasks`, without copying whole
+    /// tasks: diff stats read this on every refresh, and notes can be large.
+    pub fn workspace_list(&mut self) -> Vec<WorkspaceRef> {
+        self.sync.check_folder();
+        let mut refs: Vec<(&str, WorkspaceRef)> = self
+            .sync
+            .tasks
+            .values()
+            .filter_map(|task| {
+                let workspace = task.workspace.clone()?;
+                let found = WorkspaceRef {
+                    id: task.id.clone(),
+                    workspace,
+                    repo: task.repo.clone(),
+                };
+                Some((task.updated_at.as_str(), found))
+            })
+            .collect();
+        refs.sort_by(|(a_at, a), (b_at, b)| {
+            compare_text(b_at, a_at).then_with(|| compare_text(&a.id, &b.id))
+        });
+        refs.into_iter().map(|(_, found)| found).collect()
     }
 
     pub fn list_events(&mut self, task_id: &str) -> TaskResult<Vec<StoredEvent>> {

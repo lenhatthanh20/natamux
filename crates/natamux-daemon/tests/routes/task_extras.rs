@@ -7,6 +7,7 @@ use hyper::Method;
 use natamux_daemon::shared::event_bus::DaemonMessage;
 use serde_json::{Value, json};
 
+use crate::git_repo::git_daemon;
 use crate::server::{AGENT_TOKEN, TOKEN, TestDaemon, bare, eventually};
 
 const PNG: [u8; 9] = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0];
@@ -142,6 +143,61 @@ async fn takes_a_body_larger_than_1_mb_when_it_brings_files() {
     );
 
     assert_eq!(attachment(&d, "big.bin").await.2.len(), 2_000_000);
+}
+
+/// `POST /workspaces` with files, and the wait for the worktree that is made after the answer.
+async fn new_workspace(d: &TestDaemon, files: Vec<Value>) -> u16 {
+    let body = json!({ "title": "Fix the login", "attachments": files });
+    let (status, _) = d
+        .send(Method::POST, "/workspaces", Some(TOKEN), &body)
+        .await;
+    d.settle();
+    status
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn keeps_the_files_sent_with_a_new_workspace_and_lists_them() {
+    let d = git_daemon("att-ws-list").await;
+    let files = vec![
+        file("login error.png", &PNG),
+        file("spec.docx", b"word"),
+        file("spec.docx", b"word again"),
+    ];
+    assert_eq!(new_workspace(&d, files).await, 202);
+
+    let (_, listed) = d
+        .call(Method::GET, "/tasks/T-0001/attachments", Some(TOKEN))
+        .await;
+    assert_eq!(
+        listed["attachments"],
+        json!([
+            { "name": "login-error.png", "size": PNG.len(), "type": "image/png" },
+            { "name": "spec-2.docx", "size": 10, "type": null },
+            { "name": "spec.docx", "size": 4, "type": null },
+        ])
+    );
+    let (_, events) = d
+        .call(Method::GET, "/tasks/T-0001/events", Some(TOKEN))
+        .await;
+    let added = events["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|entry| entry["event"]["type"] == "attachment.added")
+        .count();
+    assert_eq!(added, 3);
+}
+
+// Node does not check the answer of the removal; the files are in the data folder, not in the
+// worktree, so they stay whether it removes or refuses.
+#[tokio::test(flavor = "multi_thread")]
+async fn keeps_the_files_after_the_workspace_is_removed() {
+    let d = git_daemon("att-ws-removed").await;
+    assert_eq!(new_workspace(&d, vec![file("a.txt", b"a")]).await, 202);
+
+    d.delete("/tasks/T-0001/workspace").await;
+
+    assert_eq!(attachment(&d, "a.txt").await.2, b"a");
 }
 
 fn shells_changed() -> (DaemonMessage, Value) {

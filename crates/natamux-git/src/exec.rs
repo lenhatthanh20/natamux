@@ -1,0 +1,196 @@
+//! Ports `packages/daemon/src/git/exec.ts`: the `git` helper, `GitError`, `withGitConfig`,
+//! and the error text of a git that is missing.
+
+use std::path::Path;
+use std::process::Command;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
+
+use natamux_core::js::js_trim;
+
+use crate::process::{CapturedBytes, capture_bytes};
+
+/// `MAX_OUTPUT_BYTES` of `git/exec.ts`.
+pub const MAX_OUTPUT_BYTES: usize = 10 * 1024 * 1024;
+
+/// `GITHUB_CREDENTIALS`: when git asks for a password for github.com, it asks the GitHub CLI.
+pub const GITHUB_CREDENTIALS: [(&str, &str); 1] = [(
+    "credential.https://github.com.helper",
+    "!gh auth git-credential",
+)];
+
+/// `GitError`: `git <command> failed: <detail>`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GitError(pub String);
+
+impl std::fmt::Display for GitError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for GitError {}
+
+/// `withGitConfig`: the `GIT_CONFIG_*` variables that add `entries` after the ones the
+/// environment has (`current_count` is its `GIT_CONFIG_COUNT`).
+pub fn with_git_config(
+    current_count: Option<&str>,
+    entries: &[(&str, &str)],
+) -> Vec<(String, String)> {
+    let start: usize = current_count
+        .and_then(|count| count.trim().parse().ok())
+        .unwrap_or(0);
+    let mut env = vec![(
+        "GIT_CONFIG_COUNT".to_string(),
+        (start + entries.len()).to_string(),
+    )];
+    for (offset, (key, value)) in entries.iter().enumerate() {
+        env.push((
+            format!("GIT_CONFIG_KEY_{}", start + offset),
+            key.to_string(),
+        ));
+        env.push((
+            format!("GIT_CONFIG_VALUE_{}", start + offset),
+            value.to_string(),
+        ));
+    }
+    env
+}
+
+static SPAWNS: AtomicU64 = AtomicU64::new(0);
+
+#[cfg(test)]
+thread_local! {
+    // Tests run in parallel in one process, so a test reads the spawns of its own thread.
+    static THREAD_SPAWNS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// How many git and gh processes this daemon started, for the benchmark. Not shown to users.
+pub fn spawn_count() -> u64 {
+    SPAWNS.load(Ordering::Relaxed)
+}
+
+/// Counts one spawn. Every git and gh call makes it before it starts the process, so a process
+/// that cannot start is counted too.
+pub fn note_spawn() {
+    SPAWNS.fetch_add(1, Ordering::Relaxed);
+    #[cfg(test)]
+    THREAD_SPAWNS.with(|count| count.set(count.get() + 1));
+}
+
+#[cfg(test)]
+pub(crate) fn thread_spawn_count() -> u64 {
+    THREAD_SPAWNS.with(std::cell::Cell::get)
+}
+
+/// `OutsideWorkspaceError`: a link that leaves the workspace.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct OutsideWorkspaceError(pub String);
+
+impl std::fmt::Display for OutsideWorkspaceError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} points outside the workspace, so it is not shown",
+            self.0
+        )
+    }
+}
+
+impl std::error::Error for OutsideWorkspaceError {}
+
+fn run(
+    cwd: &Path,
+    args: &[&str],
+    timeout: Option<Duration>,
+    env: &[(String, String)],
+) -> Result<Vec<u8>, GitError> {
+    let mut command = Command::new("git");
+    command
+        .args(args)
+        .current_dir(cwd)
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .envs(env.iter().map(|(key, value)| (key, value)));
+    note_spawn();
+    let ran = capture_bytes(
+        command,
+        timeout.unwrap_or(Duration::from_secs(60 * 60 * 24 * 365)),
+        MAX_OUTPUT_BYTES,
+    );
+    if ran.code == Some(0) && !ran.overflow {
+        return Ok(ran.stdout);
+    }
+    Err(GitError(format!(
+        "git {} failed: {}",
+        args.first().unwrap_or(&""),
+        error_text(&ran, args)
+    )))
+}
+
+/// `errorText`: why a git call failed, as Node words it.
+fn error_text(ran: &CapturedBytes, args: &[&str]) -> String {
+    if ran.not_found {
+        return "git is not installed or not on the PATH".into();
+    }
+    let stderr = js_trim(&ran.stderr);
+    if !stderr.is_empty() {
+        return stderr.to_string();
+    }
+    if ran.overflow {
+        return "stdout maxBuffer length exceeded".into();
+    }
+    // The message of Node's `execFile` error: the command, a line break, and the stderr.
+    format!("Command failed: git {}\n{}", args.join(" "), ran.stderr)
+}
+
+/// Runs git with an argument list, never a shell. `timeout` None waits for the end.
+pub fn git(
+    cwd: &Path,
+    args: &[&str],
+    timeout: Option<Duration>,
+    env: &[(String, String)],
+) -> Result<String, GitError> {
+    run(cwd, args, timeout, env).map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
+}
+
+/// `gitBuffer`: the stdout of git as bytes, for a file that may not be text.
+pub fn git_bytes(cwd: &Path, args: &[&str]) -> Result<Vec<u8>, GitError> {
+    run(cwd, args, None, &[])
+}
+
+/// The branch a checkout is on, or None when HEAD is detached.
+pub fn current_branch(cwd: &Path) -> Option<String> {
+    // Diff stats ask this on every read: at the top of a plain repository, `.git/HEAD` says it
+    // without a git process. Anything else (a worktree, a subfolder) asks git.
+    let git_dir = cwd.join(".git");
+    if git_dir.is_dir()
+        && let Ok(head) = std::fs::read_to_string(git_dir.join("HEAD"))
+    {
+        let head = head.trim_end();
+        if let Some(name) = head.strip_prefix("ref: refs/heads/") {
+            return (!name.is_empty()).then(|| name.to_string());
+        }
+        if !head.starts_with("ref: ") {
+            return None;
+        }
+    }
+    let name = git(
+        cwd,
+        &["symbolic-ref", "--quiet", "--short", "HEAD"],
+        None,
+        &[],
+    )
+    .ok()?;
+    let name = js_trim(&name);
+    (!name.is_empty()).then(|| name.to_string())
+}
+
+/// The top folder of the repository that holds `path`. Fails with a GitError when it is not in one.
+pub fn repository_root(path: &Path) -> Result<String, GitError> {
+    let output = git(path, &["rev-parse", "--show-toplevel"], None, &[])?;
+    Ok(js_trim(&output).to_string())
+}
+
+#[cfg(test)]
+#[path = "exec_tests.rs"]
+mod tests;

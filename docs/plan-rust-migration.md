@@ -102,7 +102,7 @@ natamux-app (GPUI, desktop)   web dashboard (React, browser and phone)   natamux
 | L0 | `natamux-core` | Task, event, stage and `.natamux.json` types; validation with the same error messages as the zod schemas | `serde`, `serde_json`, `schemars` |
 | L0 | `natamux-proto` | HTTP bodies, `/events` kinds, terminal frames | `serde` |
 | L1 | `natamux-store` | Markdown + YAML front matter files, JSONL logs, the SQLite index, atomic writes | `serde_yaml`, `rusqlite` |
-| L1 | `natamux-git` | Worktrees, branches, changes, diffs, graph, commit, push, rollback; `gh` calls | `tokio::process` (runs `git` and `gh`, as today) |
+| L1 | `natamux-git` | Worktrees, branches, changes, diffs, graph, commit, push, rollback; `gh` calls | `std::process` (runs `git` and `gh`, called from blocking threads) |
 | L1 | `natamux-pty` | Spawn, resize, kill the process tree, ConPTY; the Vietnamese input gap | `portable-pty` |
 | L1 | `natamux-screen` | Headless screen per shell and a snapshot the xterm.js web client can replay | `alacritty_terminal`, `vte` |
 | L1 | `natamux-agents` | How each agent starts (commands, permission flags, hook files, trust) and the skills it finds (part 3); adapters and hooks for Claude Code, Codex, Gemini CLI, Copilot, Cursor; usage and cost (part 4) | |
@@ -221,7 +221,7 @@ Decisions (owner, 2026-10-22):
 
 ### Phase 4: daemon in Rust (10–14 weeks)
 
-Part 1 (terminals and the contract suite, T-0153), part 2 (tasks, events, storage, index, T-0155), part 3 (stage engine and agent start, T-0157) and part 4 (agent hooks, and CI that runs only what a change needs, T-0159): decisions, crates, what CI checks, where it differs, ported tests and gate results in `rust-phase4.md`.
+Part 1 (terminals and the contract suite, T-0153), part 2 (tasks, events, storage, index, T-0155), part 3 (stage engine and agent start, T-0157) part 4 (agent hooks, and CI that runs only what a change needs, T-0159) and part 5 (git, workspaces, GitHub, T-0161): decisions, crates, what CI checks, where it differs, ported tests and gate results in `rust-phase4.md`.
 
 - Same API, same files. Order by risk:
   1. Terminals: PTY, input gap, ring, snapshot, resume, backpressure, restore after restart.

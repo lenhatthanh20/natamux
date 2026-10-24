@@ -5,6 +5,9 @@ pub mod agents {
     pub mod hook_settings;
 }
 pub mod formats;
+pub mod git {
+    pub mod commit_message;
+}
 pub mod js;
 pub mod json;
 pub mod zod;

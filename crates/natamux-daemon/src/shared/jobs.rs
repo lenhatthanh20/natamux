@@ -36,10 +36,20 @@ struct Running<'a> {
 
 impl Drop for Running<'_> {
     fn drop(&mut self) {
-        if let Ok(mut jobs) = self.jobs.jobs.lock() {
-            jobs.retain(|job| job.id != self.id);
-        }
-        self.jobs.publish();
+        self.jobs.end(&self.id);
+    }
+}
+
+/// A job started on one thread and ended on another, when this is dropped: a new workspace is
+/// listed before its answer, and made in the background.
+pub struct JobGuard {
+    jobs: Arc<Jobs>,
+    id: String,
+}
+
+impl Drop for JobGuard {
+    fn drop(&mut self) {
+        self.jobs.end(&self.id);
     }
 }
 
@@ -77,7 +87,21 @@ impl Jobs {
         work()
     }
 
+    /// Lists the job until the guard is dropped.
+    pub fn start(jobs: &Arc<Jobs>, kind: &str, label: &str, task_id: Option<&str>) -> JobGuard {
+        let id = jobs.add(kind, label, task_id);
+        JobGuard {
+            jobs: Arc::clone(jobs),
+            id,
+        }
+    }
+
     fn begin(&self, kind: &str, label: &str, task_id: Option<&str>) -> Running<'_> {
+        let id = self.add(kind, label, task_id);
+        Running { jobs: self, id }
+    }
+
+    fn add(&self, kind: &str, label: &str, task_id: Option<&str>) -> String {
         let id = format!("job-{}", self.next.fetch_add(1, Ordering::SeqCst));
         let job = Job {
             id: id.clone(),
@@ -90,7 +114,14 @@ impl Jobs {
             jobs.push(job);
         }
         self.publish();
-        Running { jobs: self, id }
+        id
+    }
+
+    fn end(&self, id: &str) {
+        if let Ok(mut jobs) = self.jobs.lock() {
+            jobs.retain(|job| job.id != id);
+        }
+        self.publish();
     }
 
     /// Oldest first.

@@ -3,10 +3,9 @@
 //! the pipeline of `tests/fixtures/stages.natamux.json`, and the fake agent
 //! (`scripts/fake-agent.sh`) on both daemons.
 //!
-//! The Rust daemon makes no worktree before part 5. So each scenario makes twin tasks on Node,
-//! each with its worktree: `CT-<n>` for the Node run, `CR-<n>` for the Rust run, whose files are
-//! copied to the Rust data folder. A new task waits at the first stage (an agent stage), so Node
-//! starts nothing for the Rust twin. Ids, worktree paths and commit hashes become placeholders.
+//! Each scenario makes twin tasks, each daemon making its own with its own worktree: `CT-<n>` on
+//! Node, `CR-<n>` on Rust. A new task waits at the first stage (an agent stage), so no daemon
+//! starts anything on its own. Ids, worktree paths and commit hashes become placeholders.
 //! The daemon images have no `natamux` command, so the fake agent's hooks, its `natamux done` and
 //! a test command's `natamux stage pass` reach no daemon. The scenarios report a stage themselves
 //! once the agent wrote its file, and the hook scenarios (`hooks.rs`) post the hooks themselves,
@@ -19,6 +18,7 @@ mod flow;
 mod hooks;
 mod marks;
 mod start;
+mod workspaces;
 
 use std::future::Future;
 use std::time::{Duration, Instant};
@@ -49,42 +49,33 @@ pub fn on_task(daemon: &Daemon, task: &str) -> Daemon {
     }
 }
 
-/// Makes the twin tasks of `numbers` on Node, each with its worktree, and copies the Rust ones to
-/// the Rust daemon. `ready` runs in each worktree once it exists (flag files of a scenario).
+/// Makes the twin tasks of `numbers`: `CT-<n>` on Node and `CR-<n>` on Rust, each with its
+/// workspace made by its own daemon. `ready` runs in each worktree once it exists (flag files of
+/// a scenario).
 pub async fn make_twins(numbers: &[u32], title: &str, ready: &str) {
     let (node, rust) = daemons();
     for number in numbers {
-        for id in [format!("CT-{number}"), format!("CR-{number}")] {
+        for daemon in [&node, &rust] {
+            let id = twin(daemon, *number);
             let body = json!({
                 "title": format!("{id}: {title}"),
                 "repo": stages_repo(),
                 "agent": "claude-code",
             });
-            let made = post(&node, "/tasks", body).await;
+            let made = post(daemon, "/tasks", body).await;
             assert_eq!(made.status, 201, "{id}: {}", made.body);
-            post(&node, &format!("/tasks/{id}/workspace"), json!({})).await;
-            let workspace = wait_value(&node, &format!("/tasks/{id}"), |task| {
+            post(daemon, &format!("/tasks/{id}/workspace"), json!({})).await;
+            let workspace = wait_value(daemon, &format!("/tasks/{id}"), |task| {
                 task["task"]["workspace"].as_str().map(str::to_string)
             })
             .await;
             if !ready.is_empty() {
-                node.exec(&format!("cd '{workspace}' && {ready}")).await;
+                daemon
+                    .exec_in(&format!("cd '{workspace}' && {ready}"))
+                    .await;
             }
         }
-        copy_to_rust(&node, &rust, &format!("CR-{number}")).await;
     }
-    rust.restart().await;
-}
-
-/// The task files Node wrote, into the Rust data folder. A daemon reads the log of a task file
-/// that appears while it runs only at its next start (Node does the same), so the caller
-/// restarts the Rust daemon once all are copied.
-async fn copy_to_rust(node: &Daemon, rust: &Daemon, id: &str) {
-    let (from, to) = (node.data_dir(), rust.data_dir());
-    node.exec(&format!(
-        "mkdir -p {to}/tasks && cp {from}/tasks/{id}.events.jsonl {from}/tasks/{id}.md {to}/tasks/"
-    ))
-    .await;
 }
 
 /// Runs `scenario` on both daemons, the Node one first, and compares what each saw. The twin
@@ -127,10 +118,15 @@ fn is_sha(text: &str) -> bool {
     text.len() == 40 && text.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
-/// `2026-10-23T09:00:00.000Z` and the like.
+/// An ISO time: `2026-10-23T09:00:00.000Z` from JavaScript, or `…+00:00` from git (commit dates
+/// in the graph).
 fn is_time(text: &str) -> bool {
     let b = text.as_bytes();
-    b.len() >= 20 && b[4] == b'-' && b[10] == b'T' && b[b.len() - 1] == b'Z'
+    if b.len() < 20 || b[4] != b'-' || b[10] != b'T' {
+        return false;
+    }
+    let zone = b[b.len() - 6];
+    b[b.len() - 1] == b'Z' || ((zone == b'+' || zone == b'-') && b[b.len() - 3] == b':')
 }
 
 /// Times become `<time>`, commits `<sha>`; `seq` numbers count from the first of their list.

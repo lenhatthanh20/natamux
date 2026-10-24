@@ -21,13 +21,14 @@ import sys
 import tomllib
 
 BASE = "origin/dev"
-SUITES = ["terminals", "tasks", "stages", "hooks"]
+SUITES = ["terminals", "tasks", "stages", "hooks", "workspaces"]
 DAEMON_CRATES = [
     "natamux-core",
     "natamux-store",
     "natamux-pty",
     "natamux-screen",
     "natamux-agents",
+    "natamux-git",
     "natamux-stages",
     "natamux-daemon",
 ]
@@ -36,8 +37,10 @@ OLD_TIME = 946684800  # 2000-01-01
 
 DAEMON_PATHS = [
     *(f"crates/natamux-{name}/" for name in ("proto", "core", "store", "pty", "screen", "agents", "stages", "daemon")),
+    "crates/natamux-git/",
     "compose.rust-daemon.yaml",
     "scripts/fake-agent.sh",
+    "scripts/fake-gh.sh",
     "scripts/xterm-grid.mjs",
 ]
 TERMINAL_PATHS = [

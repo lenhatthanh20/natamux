@@ -12,11 +12,13 @@ use natamux_core::js::iso_from_millis;
 use natamux_core::stages::lanes::terminal_lane;
 use natamux_core::stages::terminal_lane::stage_of_terminal;
 use natamux_core::tasks::dependencies::{open_subtasks, waiting_on};
+use natamux_git::commit_push::delete_remote_ref;
 use natamux_proto::events::task_event::{RECORD_ONLY_EVENT_TYPES, TaskEvent};
 use natamux_proto::stages::schema::{Stage, StageKind, Step};
 use natamux_proto::tasks::task::{Task, TaskState};
 use natamux_proto::terminals::list::TerminalLane;
 use natamux_stages::actions::{ENDS_STAGE, lane_state};
+use natamux_stages::ci::ci_branch_of;
 use natamux_stages::files::{
     archive_stage_files, exclude_stage_dir, restore_stage_files, working_dir,
 };
@@ -117,7 +119,7 @@ impl StageRun {
         if ["stage.approved", "stage.passed", "stage.checked"].contains(&event.kind.as_str()) {
             self.archive(task);
         }
-        // shortcut: deleting the CI branch of a finished task is part 5 (git); it stays.
+        self.delete_ci_branch(task);
         if event.kind == "workspace.created"
             && let Some(workspace) = &task.workspace
         {
@@ -143,6 +145,28 @@ impl StageRun {
         if ended || event.kind == "task.edited" {
             self.start_waiting();
         }
+    }
+
+    /// The CI branch only held snapshots for checks. A finished task that used CI deletes it once,
+    /// in the project folder. Gone already, or offline: only logged.
+    fn delete_ci_branch(&self, task: &Task) {
+        let used_ci = task
+            .ci_stages
+            .as_ref()
+            .is_some_and(|stages| !stages.is_empty());
+        let (true, true, Some(branch)) = (task.state.is_finished(), used_ci, &task.branch) else {
+            return;
+        };
+        if !self.state().ci_cleaned.insert(task.id.clone()) {
+            return;
+        }
+        let (task_id, ref_name) = (task.id.clone(), ci_branch_of(branch));
+        let folder = self.repo_path(task);
+        self.background(move |_| {
+            if let Err(error) = delete_remote_ref(&folder, &ref_name) {
+                eprintln!("Could not delete the CI branch {ref_name} of {task_id}: {error}");
+            }
+        });
     }
 
     fn archive(&self, task: &Task) {

@@ -1,5 +1,5 @@
 use super::*;
-use crate::test_support::{TempDir, run_git, test_repo};
+use natamux_git::test_support::{TempDir, run_git, test_repo};
 
 #[test]
 fn accepts_markdown_names_only() {

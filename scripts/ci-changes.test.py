@@ -21,9 +21,10 @@ GRAPH = {
     "natamux-screen": set(),
     "natamux-store": {"natamux-core"},
     "natamux-agents": {"natamux-core"},
-    "natamux-stages": {"natamux-core"},
+    "natamux-git": {"natamux-core", "natamux-proto"},
+    "natamux-stages": {"natamux-core", "natamux-git"},
     "natamux-daemon": {"natamux-core", "natamux-store", "natamux-pty", "natamux-screen",
-                       "natamux-agents", "natamux-stages", "natamux-proto"},
+                       "natamux-agents", "natamux-git", "natamux-stages", "natamux-proto"},
     "natamux-client": {"natamux-proto"},
     "natamux-cli": {"natamux-client"},
     "natamux-app": {"natamux-client"},
@@ -85,6 +86,10 @@ class Flags(unittest.TestCase):
     def test_fake_agent_and_compose(self):
         self.assertEqual(true_flags(["scripts/fake-agent.sh"]), ["contract", "daemon"])
         self.assertEqual(true_flags(["compose.rust-daemon.yaml"]), ["contract", "daemon"])
+
+    def test_fake_gh_and_git_crate(self):
+        self.assertEqual(true_flags(["scripts/fake-gh.sh"]), ["contract", "daemon"])
+        self.assertEqual(true_flags(["crates/natamux-git/src/exec.rs"]), ["contract", "daemon"])
 
     def test_docs_only_is_all_false(self):
         self.assertEqual(true_flags(["docs/rust-phase4.md"]), [])
@@ -155,7 +160,7 @@ class Suites(unittest.TestCase):
         with self.assertRaises(ValueError) as caught:
             ci.parse_suites("[contract: hooks,nope]")
         self.assertIn("nope", str(caught.exception))
-        self.assertIn("terminals, tasks, stages, hooks", str(caught.exception))
+        self.assertIn("terminals, tasks, stages, hooks, workspaces", str(caught.exception))
 
 
 class RunAll(unittest.TestCase):
@@ -217,6 +222,14 @@ class Compute(unittest.TestCase):
         self.assertEqual(out["suites"], "terminals")
         self.assertEqual(out["client"], "false")
 
+    def test_git_change_tests_its_daemon_dependents(self):
+        out = ci.compute(["crates/natamux-git/src/changes.rs"], "[contract: workspaces]", False, GRAPH)
+        self.assertEqual(
+            out["daemon_crates"], "-p natamux-git -p natamux-stages -p natamux-daemon"
+        )
+        self.assertEqual(out["suites"], "workspaces")
+        self.assertEqual(out["contract"], "true")
+
     def test_client_change_has_no_daemon_crates(self):
         out = ci.compute(["crates/natamux-cli/src/main.rs"], "", False, GRAPH)
         self.assertEqual(out["daemon_crates"], "")
@@ -224,7 +237,7 @@ class Compute(unittest.TestCase):
     def test_run_all_ignores_the_tag(self):
         out = ci.compute(["docs/x.md"], "[contract: nope]", True, GRAPH)
         self.assertEqual(set(out[k] for k in ["daemon", "app", "client", "lock", "contract"]), {"true"})
-        self.assertEqual(out["suites"], "terminals,tasks,stages,hooks")
+        self.assertEqual(out["suites"], "terminals,tasks,stages,hooks,workspaces")
         self.assertEqual(out["crates"].split(), sorted(GRAPH))
 
     def test_workflow_change_is_all_crates(self):

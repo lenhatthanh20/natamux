@@ -124,16 +124,15 @@ fn names_no_agent_for_a_program_that_is_not_one() {
 fn names_the_agent_it_started_where_the_processes_cannot_be_listed() {
     let f = Fixture::new();
     let task = f.created(json!({ "title": "Export tasks" }));
-    // The new workspace starts the stage with the agent picked here, not the default one. Rust's
-    // `start_by_hand` has no `makeWorkspace` (part 5), so the pick is set around the workspace.
-    let picked = &f.runner.run;
-    picked
-        .state()
-        .chosen_agents
-        .insert(task.id.clone(), "gemini".into());
-    f.with_workspace(&task.id);
-    picked.start_by_hand(&task.id, "gemini", None).unwrap();
-    picked.state().chosen_agents.remove(&task.id);
+    // The new workspace starts the stage with the agent picked here, not the default one.
+    let make = || {
+        f.with_workspace(&task.id);
+        Ok(())
+    };
+    f.runner
+        .run
+        .start_by_hand(&task.id, "gemini", None, Some(&make))
+        .unwrap();
     f.settle();
     let pty = f.pty(0);
     pty.set_program(Some("node"));

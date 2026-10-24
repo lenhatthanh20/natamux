@@ -1,7 +1,7 @@
 //! The Rust daemon (L2): the HTTP and WebSocket server, auth, and the terminals (phase 4, part 1
 //! of `docs/plan-rust-migration.md`), the tasks (part 2), the stage engine with agent start
-//! (part 3), and the hooks, signals, activity and usage of the agents (part 4). It answers as the
-//! Node daemon in `packages/daemon` does.
+//! (part 3), the hooks, signals, activity and usage of the agents (part 4), and the workspaces, git
+//! and GitHub (part 5). It answers as the Node daemon in `packages/daemon` does.
 
 pub mod agents {
     pub mod errors;
@@ -13,6 +13,11 @@ pub mod agents {
     pub mod usage_service;
 }
 pub mod config;
+pub mod github {
+    pub mod issue_importer;
+    pub mod issue_linker;
+    pub mod pull_request_watcher;
+}
 pub mod http {
     pub mod auth;
     pub mod body;
@@ -20,9 +25,13 @@ pub mod http {
     pub mod event_socket;
     pub mod routes {
         pub mod agents;
+        pub mod github;
+        pub mod projects;
         pub mod stages;
         pub mod tasks;
         pub mod terminals;
+        pub mod workspace_files;
+        pub mod workspaces;
     }
     pub mod server;
     pub mod terminal_socket;
@@ -34,6 +43,7 @@ pub mod projects {
 pub mod shared {
     pub mod event_bus;
     pub mod jobs;
+    pub mod map_limit;
     pub mod scheduler;
     pub mod slug;
     pub mod ttl_cache;
@@ -76,4 +86,20 @@ pub mod tasks {
     pub mod store;
     pub mod templates;
     pub mod upload;
+}
+pub mod workspaces {
+    pub mod agent_once;
+    pub mod branch_name;
+    pub mod changes;
+    pub mod create;
+    pub mod diff_stats;
+    pub mod dirty;
+    pub mod errors;
+    pub mod fan_out;
+    pub mod files;
+    pub mod new_workspace;
+    pub mod publish;
+    pub mod remove;
+    pub mod service;
+    pub mod setup_script;
 }

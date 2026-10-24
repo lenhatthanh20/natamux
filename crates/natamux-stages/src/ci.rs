@@ -33,7 +33,7 @@ pub trait CiCheck: Send + Sync {
     fn check(&self, worktree: &Path, branch: &str) -> CiResult;
 }
 
-/// Until the CI check is ported: the answer of Node's `checkOnCi` where `gh` is missing.
+/// For tests: the answer where `gh` is missing. `GhCi` (`ci_check.rs`) is the real check.
 pub struct NoCi;
 
 impl CiCheck for NoCi {

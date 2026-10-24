@@ -1,5 +1,5 @@
 use super::*;
-use crate::test_support::{TempDir, run_git, test_repo};
+use natamux_git::test_support::{TempDir, run_git, test_repo};
 
 #[test]
 fn reads_head_count_and_dirty_files() {
@@ -23,36 +23,6 @@ fn has_no_head_outside_a_repository() {
     assert_eq!(current_head(dir.path()), None);
     let error = commit_count(dir.path(), "HEAD").unwrap_err();
     assert!(error.0.starts_with("git rev-list failed: "));
-}
-
-#[test]
-fn does_not_pull_a_branch_without_an_upstream() {
-    let (_root, repo) = test_repo();
-    assert_eq!(pull_fast_forward(&repo), Ok(false));
-}
-
-#[test]
-fn pulls_new_commits_of_the_upstream() {
-    let (root, repo) = test_repo();
-    let remote = root.path().join("origin.git");
-    run_git(
-        root.path(),
-        &["init", "--bare", "-b", "main", remote.to_str().unwrap()],
-    );
-    run_git(
-        &repo,
-        &["remote", "add", "origin", remote.to_str().unwrap()],
-    );
-    run_git(&repo, &["push", "--set-upstream", "origin", "main"]);
-    let other = root.path().join("other");
-    run_git(
-        root.path(),
-        &["clone", remote.to_str().unwrap(), other.to_str().unwrap()],
-    );
-    run_git(&other, &["commit", "--allow-empty", "-m", "more"]);
-    run_git(&other, &["push"]);
-    assert_eq!(pull_fast_forward(&repo), Ok(true));
-    assert_eq!(commit_count(&repo, "HEAD").unwrap(), 2);
 }
 
 #[test]

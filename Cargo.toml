@@ -22,6 +22,7 @@ memchr = "2.8.3"
 natamux-agents = { path = "crates/natamux-agents" }
 natamux-client = { path = "crates/natamux-client" }
 natamux-core = { path = "crates/natamux-core" }
+natamux-git = { path = "crates/natamux-git" }
 natamux-proto = { path = "crates/natamux-proto" }
 natamux-pty = { path = "crates/natamux-pty" }
 natamux-screen = { path = "crates/natamux-screen" }
@@ -32,6 +33,7 @@ notify = "9.0.0-rc.4"
 rusqlite = { version = "0.32.1", features = ["bundled"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.144"
+sha2 = "0.10.9"
 subtle = "2.6.1"
 tokio = { version = "1.52", features = ["macros", "net", "rt-multi-thread", "sync", "time"] }
 url = "2.5.7"
