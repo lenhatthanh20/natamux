@@ -283,6 +283,21 @@ impl WorkspaceService {
         });
     }
 
+    /// `settle` with a deadline; false when the work was still running after `limit`.
+    pub fn settle_for(&self, limit: std::time::Duration) -> bool {
+        let running = self
+            .background
+            .running
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let (running, _) = self
+            .background
+            .idle
+            .wait_timeout_while(running, limit, |running| *running > 0)
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        *running == 0
+    }
+
     /// For tests: waits until the work in the background is done.
     pub fn settle(&self) {
         let mut running = self

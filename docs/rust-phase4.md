@@ -1,8 +1,8 @@
 # Rust phase 4: the daemon in Rust
 
-Phase 4 of `plan-rust-migration.md` moves the daemon to Rust, behind the same HTTP and WebSocket contract, so the native app, the web dashboard and the CLI cannot tell which daemon answers. It comes in parts. This page covers part 1 (T-0153): the terminals (PTY, input gap, ring, snapshot, resume, backpressure, restore after a restart) and the contract suite that compares the two daemons; part 2 (T-0155): tasks, events, the files on disk and the index, in [Part 2](#part-2-tasks-events-storage-index); part 3 (T-0157): the stage engine and agent start, in [Part 3](#part-3-the-stage-engine); and part 4 (T-0159): the hooks, signals, activity and usage of the agents, and a faster CI, in [Part 4](#part-4-agent-hooks); and part 5 (T-0161): git, workspaces and GitHub, in [Part 5](#part-5-git-workspaces-github). A row of a part's "where it differs" table that a later part closed is taken out.
+Phase 4 of `plan-rust-migration.md` moves the daemon to Rust, behind the same HTTP and WebSocket contract, so the native app, the web dashboard and the CLI cannot tell which daemon answers. It comes in parts. This page covers part 1 (T-0153): the terminals (PTY, input gap, ring, snapshot, resume, backpressure, restore after a restart) and the contract suite that compares the two daemons; part 2 (T-0155): tasks, events, the files on disk and the index, in [Part 2](#part-2-tasks-events-storage-index); part 3 (T-0157): the stage engine and agent start, in [Part 3](#part-3-the-stage-engine); part 4 (T-0159): the hooks, signals, activity and usage of the agents, and a faster CI, in [Part 4](#part-4-agent-hooks); part 5 (T-0161): git, workspaces and GitHub, in [Part 5](#part-5-git-workspaces-github); and the gate (T-0166): the project routes, the E2E suite against the Rust daemon and the open items of part 5, in [Gate](#gate). A row of a part's "where it differs" table that a later part closed is taken out.
 
-The Rust daemon does not replace the Node one yet: it runs only in tests and CI. The phase-4 gate (the E2E suite with `NATAMUX_DAEMON_IMAGE` swapped) is its own task after part 5; it also needs the project routes, which [Part 5](#part-5-git-workspaces-github) lists as not ported yet.
+The Rust daemon does not replace the Node one yet: it runs only in tests and CI. The phase-4 gate (T-0166: the E2E suite with the Rust daemon in place of the Node one, the project routes it still lacked, and the open items of part 5) is in [Gate](#gate).
 
 ## Decisions
 
@@ -119,7 +119,7 @@ Left out or changed, with the reason:
 - 'one snapshot for several clients': the shared snapshot is tested in a synchronized frame, the only case where Rust shares one.
 - Output that came "during a snapshot" comes after `replayed`, live; the offsets are checked as such.
 - 'refuses a task without an open shell' (paste): the "starts no timer" check is gone; the scheduler has no timer count.
-- Route cases that need tasks, stages or agents (agent lanes, the review comment, workspace removal, the agent token's gate events): later parts.
+- Route cases that need tasks, stages or agents (agent lanes, the review comment, the agent token's gate events): later parts.
 - 'before the login PATH came': 'answers what runs no program at once, and holds the rest until it came' and 'lists only GET routes that exist'. The Rust daemon has no `ready` gate and no `NO_PROGRAM_ROUTES` list: the login PATH comes from the Electron parent, which the Rust daemon does not have before phase 5, so there is nothing to wait for. The gate and both cases come with the channel phase 5 picks.
 - 'closes a socket that sent nothing for SILENT_CLOSE_MS, and its client detaches': ported with a 600 ms limit instead of 90 s, and with protocol pings, which do not count (Node counts only `message` events).
 - Found in review and fixed with a regression test: two attaches at once started two shells, one lost and never ended (`races.rs`); the pty fds had no close-on-exec, so every later shell held the terminals of the earlier ones (`a_shell_holds_no_terminal_of_another_shell`); protocol pings kept a silent socket open.
@@ -167,7 +167,7 @@ Owner, 2026-10-23: the crates and dependencies below, the part-1 page, and delet
 - **Byte for byte.** JSON leaves through `natamux_core::json` (numbers as JS writes them, keys in a JS object's order). Task and template files are checked against golden files that gray-matter itself writes in CI (`scripts/task-file-golden.mjs`, `crates/natamux-store/tests/fixtures/front_matter/`); js-yaml 3 counts UTF-16 units, so a character outside the BMP makes a string double-quoted, as in Node.
 - **zod issues are equal**, every field, in zod 4.6.7's order, for the codes the task routes use.
 - **Without the stage engine (part 3)** events changed a task only through `applyTaskEvent`: a new task stayed at its first step, a move started no agent or check, and an event that would enter a branch was refused with 409 `conflict`. Part 3 closed this.
-- **Projects are read only:** `repos.json` and each repository's `.natamux.json`; a file proto cannot read or whose pipeline has an error gives the defaults, as Node's `get` does.
+- **Projects are read only:** `repos.json` and each repository's `.natamux.json`; a file proto cannot read or whose pipeline has an error gives the defaults, as Node's `get` does. The gate (T-0166) added the project routes.
 - **One lock** around the task store, so a call is whole, as on Node's one thread; messages are queued under it and sent after, in order. Store work runs on blocking threads.
 - **A new advisory, RUSTSEC-2026-0386** (tokio's `AsyncFd` constructors are unsound), came while part 2 was built; it fails `cargo deny` on every branch. No Natamux crate calls `AsyncFd`, and the fix (tokio 1.53.3) comes through Dependabot, so it is ignored in `deny.toml` and `.cargo/audit.toml` with that reason until then. On 2026-10-24 (T-0157) no Dependabot pull request for tokio 1.53.3 was open yet, so the ignore stays and waits for it.
 - **`/events`:** above 1 MB queued for a socket, messages are skipped, and one `resync` follows once it drained (checked every 250 ms).
@@ -351,7 +351,7 @@ Left out or changed, with the reason:
 - Spies (`vi.spyOn` on `startLanes`, `withPath`, `laneOfTerminal`, `terminals.run`, `agents.start`, `console.error`, `console.warn`) cannot be ported: each test checks the real effect instead (the next stage started, the event's `path`, a spawn that fails), and says so. 'logs stages that fail to start' is left out: no real input makes `startLanes` fail after a report.
 - `makeWorkspace` of `startByHand`: 'makes the missing workspace and starts the agent the person picked in it' and the workspace half of 'answers 404 for an agent it cannot start, and makes a missing workspace' came with part 5; part 3 kept the 404 half.
 - Hooks are part 4: the hook halves of the first reopen case and of 'shows the shell of an earlier stage as done' were left out here and came with part 4.
-- `/repos/:id/settings` (a row of 'may not change $url') comes with the project routes.
+- `/repos/:id/settings` (a row of 'may not change $url') came with the project routes in the gate (T-0166).
 - `commandHolds` with a command that throws: a Rust `RunCommand` gives an exit code and cannot throw, as Node's `runShellCommand` never does.
 - The race of 'starts one agent when a person starts it while the new workspace starts the stage' is gone in Rust: the worktree is made before the start; the test checks the same single launch.
 - 'runs the checks once for two reports at the same time': Node sends both in one turn and the first runs the check; in Rust either may, and the test waits until the other one returned before the check ends.
@@ -520,7 +520,7 @@ The owner said on 2026-10-24 not to ask, so these were decided in the spec and w
 - **Headers are compared for images only.** nginx of the web container adds `x-content-type-options` and its own `content-security-policy` to every JSON answer of Node; the image route sets them itself on both daemons.
 - **A fake `gh`** (`scripts/fake-gh.sh`) answers on both daemons and logs every call, so the scenarios compare the `gh` calls too.
 - **Matrix fallback.** If a daemon-only change passes 8 minutes in `daemon-contract`, the job becomes a matrix of two legs (`terminals,tasks` and `stages,hooks,workspaces`).
-- **Project routes are not part of part 5.** `GET/POST/PATCH/DELETE /repos…` and `/repos/:id/settings` are not ported; they are left for the phase-4 gate task. Part 5 adds only `GET /git/branches`, `GET /github/issues` and `POST /github/issues/import`.
+- **Project routes are not part of part 5.** `GET/POST/PATCH/DELETE /repos…` and `/repos/:id/settings` are not ported; they were left for the phase-4 gate task, which ported them (see [Gate](#gate)). Part 5 adds only `GET /git/branches`, `GET /github/issues` and `POST /github/issues/import`.
 
 ### Crates
 
@@ -542,8 +542,6 @@ The owner said on 2026-10-24 not to ask, so these were decided in the spec and w
 | Diff stats | `merge-base HEAD <base>`, then `diff --numstat`; the branch from `git symbolic-ref` | One `git diff --numstat --merge-base <base>`; the branch from `.git/HEAD` at the top of a plain repository (else git) | Fewer git processes on a read the dashboards repeat; the same numbers in the usual case. `--merge-base` needs git 2.30 or later, and it refuses a branch with more than one merge base (after criss-cross merges), where Node's `merge-base` picks one: that task then has no diff stat |
 | Order of changed files and branches (`localeCompare`) | ICU's collation | ICU's order for ASCII: spaces, then punctuation, then digits, then letters without regard to case, lower case first on a tie | No ICU. Letters that are not ASCII (`é`, other scripts) sort by code point, so `é` comes after `z`, where Node puts it next to `e` |
 | `parse_pull_request_batch` | In the order GitHub answers | Ordered by number | The same set |
-| The output limit of the commit drafter's agent (1 MiB) | Counted in UTF-16 units | Counted in bytes | The same limit for ASCII; a draft never comes near it |
-| Project routes (`/repos…`, `/repos/:id/settings`) | Served | Not ported yet | Left for the phase-4 gate task |
 
 ### What CI checks
 
@@ -585,12 +583,12 @@ Rust tests keep the Node names in snake case.
 | `git/branches.test.ts` | 9 | 9 | `natamux-git/src/branches_tests.rs` |
 | `git/changes.test.ts` | 15 | 16 | `natamux-git/src/changes_tests.rs` |
 | `git/file-diff.test.ts` | 12 | 12 | `natamux-git/src/file_diff_tests.rs` |
-| `git/graph.test.ts` | 29 | 29 | `natamux-git/src/graph_tests.rs` |
+| `git/graph.test.ts` | 29 | 8 + 21 | `natamux-git/src/graph_tests.rs`, `graph_push_tests.rs` |
 | `git/rollback.test.ts` | 9 | 9 | `natamux-git/src/rollback_tests.rs` |
 | `git/worktrees.test.ts` | 20 | 20 | `natamux-git/src/worktrees_tests.rs` |
 | `git/commit-push.test.ts` | 24 | 24 | `natamux-git/src/commit_push_tests.rs` |
 | `git/commit-drafter.test.ts` | 22 | 11 + 12 | `natamux-git/src/commit_drafter_tests.rs`, `natamux-daemon/src/workspaces/agent_once_tests.rs` |
-| `git/gh.test.ts` | 28 | 30 | `natamux-git/src/gh_tests.rs` |
+| `git/gh.test.ts` | 28 | 16 + 14 | `natamux-git/src/gh_tests.rs`, `gh_batch_tests.rs` |
 | core `git/commit-message.test.ts` | 10 | 11 | `natamux-core/src/git/commit_message_tests.rs` |
 | `stages/ci-check.test.ts` | 12 | 12 | `natamux-stages/src/ci_check_tests.rs` |
 | `github/issue-importer.test.ts` | 6 | 6 | `natamux-daemon/tests/github/issue_importer.rs` |
@@ -612,7 +610,7 @@ Left out or changed, with the reason:
 
 - The zod `commitMessageDraftSchema` case of `commit-message.test.ts`: `natamux-proto` tests it.
 - `rollback.test.ts` has 9 Node cases, not 8; all 9 are ported. The symlink cases are `#[cfg(unix)]`. The `:(top)` rollback case runs on Unix only: Windows file names cannot hold `:`.
-- `server.test.ts` groups `repositories` and `project settings`, and the `/repos/default/settings` row of 'may not change $url': project routes, not ported yet.
+- `server.test.ts` groups `repositories` and `project settings`, and the `/repos/default/settings` row of 'may not change $url': ported in the gate (T-0166).
 - The `runAgentOnce` cases, the commit-draft route cases and the `gh` route cases run on Unix only: their fakes are `sh` scripts (Node's are POSIX too). The route tests put a fake `gh` first on the `PATH` of the test process.
 - Where Node checks that two calls share one promise (`toBe`), the Rust test compares values or counts git processes (`spawn_count`).
 - Spies (`vi.spyOn` on `touch`, `create`, `wake`, the `vi.fn` log) became recording callbacks or real effects (a `workspace.dirty` on the bus, a create that fails through a branch name git refuses, a counter of `wake` calls); each test says so. Fake timers became the manual `Scheduler`.
@@ -643,3 +641,165 @@ Gate of part 5 (plan, phase 4): the ported git, workspace and GitHub tests green
 | Bench | 2026-10-24 | Pass: parse plain 71.1 / 87.4 MB/s (Node / Rust), SGR 63.5 / 88.3 | Run 40085145760, job `daemon-bench`; run 40082994607 failed once on parse plain (Node 124.7, twice its usual) |
 | CI speed | 2026-10-24 | Pass: a daemon-only change in 5 min 14 s, at most 8; the matrix fallback was not needed (`daemon-contract`, 5 min, holds the wall time) | Run 40084073322 |
 | This section | | Waits for the owner | Review of T-0161's pull request |
+
+## Gate
+
+The gate of phase 4 (T-0166): the E2E suite of the dashboard green with the Rust daemon in place of the Node one, the contract suite equal on both daemons with the project scenarios, bench numbers better than Node, a daemon-only change green within T-0165's 10 minutes, and the open items of part 5 closed. It ported what E2E needed and the Rust daemon lacked: the project routes and the default project.
+
+### Decisions
+
+The owner said on 2026-10-24 not to ask, so these were decided in the spec and while building:
+
+- **What E2E lacked, found before the first run.** A diff of the routes left six, all project routes: `GET`/`POST /repos`, `DELETE /repos/:id`, `GET`/`PUT /repos/:id/settings`, `GET /repos/:id/skills`. Two more gaps: the Rust daemon never read `NATAMUX_REPO_DIR`, so on a fresh data folder it had no `default` project (the contract job hid this by copying Node's `repos.json`); and `e2e/tests/daemon-rss.ts` looked only for `node … entry.js`. The first E2E run showed no other gap.
+- **The Rust daemon runs in the Node image.** `compose.rust-e2e.yaml` keeps the `daemon` service of the images of main and swaps only its program for the musl binary, so nginx, `scripts/e2e.sh`, the healthcheck (`node -e fetch`), the user, the volumes and the hardening stay. No Rust daemon image exists before phase 5.
+- **One build, then a matrix.** `daemon-musl` builds the binary once; `daemon-contract` and the four `e2e` legs (one per group of `e2e/groups.ts`, each with its own daemon and data) download it. One job running the groups in a row takes about 20 minutes; a build in each leg costs four times the runner minutes for the same wall time.
+- **The waiting jobs set up first.** `daemon-contract` builds its tests and each `e2e` leg installs Playwright while `daemon-musl` builds, then `scripts/ci-wait-artifact.sh` waits for the artifact (it fails at once when `daemon-musl` ended without it). With `needs: daemon-musl` the contract tests were built only after the binary, and the run took 12 min 39 s (run 40098219816).
+- **No musl cache.** Warming one would change `rust-cache.yml` on `main`, and the task allows no change to main's workflows. The musl build stays cold (about 5 minutes).
+- **Node's E2E thresholds stay.** A Rust result over a threshold is a finding to fix, not a limit to raise. Retries stay at 1, as on main; the summary counts a test that passed only on its retry as flaky.
+- **Shells parse one at a time.** The flood check of `terminal-cache.spec.ts` ('keeps the echo in task Y while the hidden shells of task X flood') allows a longest browser task of 150 ms. Node's daemon has one thread and pauses a shell at 1 MB of unparsed output; the Rust daemon parsed each shell on its own thread, so four floods took both cores of the runner from the browser. Rust's longest task was 92–148 ms with two runs of 203 and 255 ms (9 runs); Node's 0–92 ms (10 runs on main). The terminals now hold one lock (`Inner::parsing`) while a shell's output is parsed: 51–128 ms in 5 runs, median 75. A single shell parses as fast as before; the contract terminal scenarios stay equal.
+- **`RepoError`** (`projects/errors.rs`) holds the project errors instead of new `TaskError` variants, which every task route matches.
+- **Settings answers are JSON values** in zod's key order, as parts 4 and 5 build answers; the proto settings types stay `Deserialize` only. The settings parse (`projects/settings_parse.rs`) words its errors as zod does, from the proto rules.
+- **No new crate.** `sha2` (already a daemon dependency) gives the settings version; `natamux-agents` already had the skill list.
+- **dev runs `groups.spec.ts` against `rust.yml`.** dev has no `e2e.yml` since T-0165, so the check that each group has its own CI job reads `scripts/ci-changes.py` (`E2E_GROUPS`) and `rust.yml` when `e2e.yml` is missing; on `main` it reads `e2e.yml` as before.
+- **Dependabot.** On 2026-10-24 only #428 was open (npm packages, into `main`); none for wasmtime, rustls-webpki or webpki-roots (cooldown until 2026-10-28). Nothing of it is in this task.
+
+### Files
+
+- `natamux-daemon`: `projects/` gained `repo_store` (`repos.json`, `repos-removed.json`, the default marker, `add_default_once`), `repo_add` (add and remove), `errors`, `settings` (load, save, version, the one-second cache, moved from `repos.rs`) and `settings_parse`; `config.rs` reads `NATAMUX_REPO_DIR`; `start_services.rs` builds `Repos` with the default folder and the task list; `http/routes/projects.rs` has the six routes; `AppState` has the daemon's home (skills); `workspace_files.rs` shares its `If-Match` reader; `terminals/shells.rs` has the parse lock.
+- CI and E2E: `compose.rust-e2e.yaml`, `scripts/ci-wait-artifact.sh`, `rust.yml` (`daemon-musl`, `e2e`, `daemon-contract` downloads the binary, `daemon-bench` 5 rounds), `scripts/ci-changes.py` (flag `e2e`, tag `[e2e: …]`, suite `projects`), `scripts/compare-terminal-bench.py` (medians), `e2e/tests/daemon-rss.ts`, `e2e/tests/groups.spec.ts`.
+
+### How E2E runs against the Rust daemon
+
+| Job | What |
+|---|---|
+| `daemon-musl` | `cargo build --release -p natamux-daemon --target x86_64-unknown-linux-musl` (no debug info), artifact `daemon-musl` (1 day). Runs when `contract` or `e2e` is on |
+| `e2e (<group>)` | `scripts/e2e.sh up` with `E2E_EXTRA_COMPOSE=compose.rust-e2e.yaml` (the images of main, pulled and checked), a step that fails unless PID 1 of `daemon` is `natamux-daemon`, then `E2E_GROUP=<group> pnpm e2e` with the list, html and json reporters; the step summary has one row per spec file (passed, flaky, failed, skipped); artifacts `rust-e2e-measures-<group>` and, on failure, `rust-e2e-report-<group>` |
+
+- Flag `e2e` of `scripts/ci-changes.py`: the daemon crates, the fake agent and `gh`, what starts the images of main (`scripts/e2e.sh`, `compose.e2e.yaml`, `compose.prod.yaml`, `e2e/`), `compose.rust-e2e.yaml`, `scripts/ci-wait-artifact.sh`, or anything that runs every job. Not for the contract-only files.
+- A snapshot may pick groups: `[e2e: timing,rest]` in the head commit's message. A pull request, `dev` and `[ci: all]` run all four.
+- By hand (CI or a codespace only): build the musl binary, then `E2E_EXTRA_COMPOSE=compose.rust-e2e.yaml scripts/e2e.sh up` and `E2E_GROUP=<group> pnpm e2e` in `e2e/` (`docs/e2e.md`).
+
+### Where it differs from the Node daemon
+
+| What | Node | Rust (gate) | Why |
+|---|---|---|---|
+| `gh` printed more than 10 MiB | "gh did not finish in 60 seconds" (`killed` is also set by `maxBuffer`) | "gh printed more than 10 MiB of output" | Names the real cause; only a broken `gh` prints that much |
+| A settings file that is broken JSON, past its first character | V8's message, naming the token at its offset | serde's message | V8's wording is copied for an empty file and for a first character that starts no JSON value (`Unexpected token '<', …`); the rest is rare and only shown as the file's error |
+| The folder of a new project's worktrees cannot be made | `… cannot be made: ENOTDIR: …` | `… cannot be made: <the OS error>` | The same prefix, which the dashboard matches |
+| Output of several shells | Parsed on one loop | Parsed one shell at a time, each on its own thread | The same order per shell; see Decisions |
+
+Closed here: the commit drafter's 1 MiB output limit now counts UTF-16 units, as Node (part 5's row is taken out); the project routes are served.
+
+### Contract scenarios
+
+Suite `projects` (`[contract: projects]`, `--test projects`), last in the loop. The setup makes `/data/project-node` and `/data/project-rust` (a git repository with a skill in `.claude/skills/a` and one in `.agents/skills/b`) and `/data/plain-node`, `/data/plain-rust`. Each daemon adds its own folder as `contract-project`; the folders become placeholders. No scenario touches `default` or another suite's project.
+
+| # | Scenario | What it checks |
+|---|---|---|
+| 54 | `repos_add` | `GET /repos`; 400 relative worktree folder, zod 400 `worktreesDir: 42`; 201 and `repos.changed`; 409 a plain folder, 400 relative path, 400 added already, 400 a subfolder |
+| 55 | `repos_remove` | A task with a workspace in the project: 409 "Remove the 1 workspace …"; after the workspace is removed 204 and `repos.changed`; the task keeps its project; added again gives the same id; 404 unknown, 400 bad id, no event for either |
+| 56 | `project_settings` | `GET` with no file; `PUT` with `If-Match: none`, unknown keys kept; a stale version 409; a bad `permissionMode` 400; the agent token 403; a file that is not JSON and one zod refuses give the same error texts |
+| 57 | `project_skills` | `GET /repos/:id/skills`, and 404 for an unknown project |
+
+`DELETE /repos/default` and the default project over a restart are left to the unit and route tests: in the suite they would change what the other suites use. E2E starts the Rust daemon on an empty data folder, so the default project is made there.
+
+Scenario 21 (`resync`) no longer depends on buffer sizes: it posts big tasks in batches of 30 and stops at the first `resync`, at most 150 tasks (see Open items).
+
+### Ported tests
+
+| Node file | Node cases | Rust | Where |
+|---|---|---|---|
+| `projects/repo-service.test.ts` | 31 | 31, plus 4 (`repos.json` written as Node writes it, a start that fails only when `repos.json` cannot be read, zod issues of a bad input, the removed list in key order) | `natamux-daemon/tests/repo_service/` |
+| `projects/project-settings.test.ts` | 17 | 17, plus the version | `natamux-daemon/src/projects/settings_tests.rs` |
+| `server.test.ts`: `repositories`, `project settings` | 7, 3 | 10 | `natamux-daemon/tests/routes/repos.rs` |
+| `server.test.ts`: the `/repos/default/settings` row of 'may not change $url' | 1 | 1 | `tests/routes/stages.rs` |
+
+Left out or changed, with the reason:
+
+- 'refuses a worktree folder that is relative or cannot be made': the half with a folder under a file runs on Unix only (Windows gives another error for it).
+- 'gives copies, so a caller cannot change the list it keeps': Rust returns owned values, so the test only checks that a change to an answer does not reach the next.
+- 'lists the default repository…': the seeded default project of the Rust route tests is named `default`, not `repo`.
+
+### Open items of part 5
+
+From T-0161's review (revision 2, "Minor"); each bug has a regression test.
+
+| Item | Fix | Test |
+|---|---|---|
+| `gh_error_of` read `killed()`, so 10 MiB of output said "did not finish in 60 seconds" | Decides on `timed_out` | `says_gh_printed_too_much_when_the_output_limit_killed_it` |
+| `process.rs`: one 10 MiB cap for both streams; a bare `child.wait()` after the pipes closed | One counter per stream, as `maxBuffer`; the wait keeps the timeout (looks again after 1, 2, 4 … ms, at most 20) | `limit_counts_each_stream_alone`, `kills_a_child_that_closes_its_pipes_and_sleeps` |
+| `agent_once.rs`: reader joins without a deadline; the 1 MiB cap in bytes | The readers get 500 ms after the shell ends; the cap counts UTF-16 units | `finishes_when_a_grandchild_keeps_the_pipe_open`, `counts_the_output_limit_in_utf16_units` |
+| `publish.rs`: a request waiting on a running draft got 500 for the first one's 404 | The waiter gets the same status, code and text (`WorkspaceError::Rebuilt`) | `a_waiting_draft_gets_the_same_404`, a unit test in `publish.rs`: no 404 can come after the agent started, so the `Held` gate of `draft.rs` cannot make one |
+| `ci_check.rs`: an answer that is not JSON was retried | V8's message, which the check takes as fatal; an empty answer is still retried | `a_gh_answer_that_is_not_json_stops_the_check`, `an_empty_gh_answer_is_read_again` |
+| `issue_linker.rs`: a panic in `create_now` left its waiters waiting | A drop guard resolves the flight | `a_panic_in_create_now_resolves_its_flight` |
+| `tests/workspace_service/main.rs`: a crate-wide `allow(dead_code)` | Allows on the two items that need one | clippy |
+| Docs: Part 5 graph and gh rows, part 1's left-out list, the intro, the plan's comma | Done | |
+
+### Flaky checks of part 5
+
+| Check | Cause | Fix |
+|---|---|---|
+| Contract scenario 21 `resync` failed on Node (runs 40081823458, 40086445689) | Node is reached through nginx: the kernel buffers of the extra hop (an estimated 15–20 MB) held the whole 12 MB flood, so Node's socket never fell behind | Posts in batches of 30 big tasks until a `resync` comes (at most 150 tasks); no fixed sleep |
+| Windows hang in `tests/new_workspace` (run 40078189308, 43 minutes silent) | Not proven by the log. Most likely a git child that closed its pipes and did not end: the wait after the pipes closed had no deadline, and worktree calls had a timeout of one year | The wait keeps the timeout; worktree calls get 10 minutes; the fixture waits at most 30 s (`settle_for`) and then fails with its log and what still runs |
+| Bench `parse plain` (run 40082994607) | The runner was faster for that job (Node's SGR parse was 1.7 times its usual too) | `daemon-bench` runs both benches 5 times, taking turns, and compares the medians |
+
+### Results per spec file
+
+Run 40099390579 (`[ci: all]`); the cache group also in the 5-round runs below. Counts are tests (a test of the `phone` project counts once).
+
+| Spec file | Group | Result |
+|---|---|---|
+| `ask-agent.spec.ts` | rest | 1 passed |
+| `branches.spec.ts` | rest | 7 passed |
+| `commit-draft.spec.ts` | rest | 3 passed |
+| `custom-id.spec.ts` | rest | 2 passed |
+| `dashboard-measures.spec.ts` | timing | 4 passed |
+| `files-explorer.spec.ts` | rest | 1 passed |
+| `groups.spec.ts` | rest | 9 passed |
+| `live-push.spec.ts` | rest | 4 passed |
+| `needs-input.spec.ts` | rest | 4 passed |
+| `panel-width.spec.ts` | rest | 15 passed |
+| `phone.spec.ts` | rest | 3 passed |
+| `progress-overview.spec.ts` | rest | 1 passed |
+| `resume.spec.ts` | rest | 1 passed |
+| `rollback.spec.ts` | rest | 1 passed |
+| `shell-agent.spec.ts` | rest | 1 passed |
+| `sidebar-look.spec.ts` | rest | 3 passed |
+| `sidebar-tree.spec.ts` | rest | 2 passed |
+| `sign-in.spec.ts` | rest | 2 passed |
+| `stages.spec.ts` | rest | 6 passed |
+| `start-task.spec.ts` | rest | 2 passed |
+| `tasks.spec.ts` | rest | 4 passed |
+| `terminal-cache.spec.ts` | cache | 10 passed with the parse lock (5 rounds, run 40101827793, and GATE_RUN); before it, the flood check failed in run 40099390579 (see Decisions) |
+| `terminal-end.spec.ts` | rest | 1 passed |
+| `terminal-gpu.spec.ts` | terminal | 2 passed |
+| `terminal-layout.spec.ts` | terminal | 3 passed |
+| `terminal-look.spec.ts` | terminal | 17 passed |
+| `terminal-measures.spec.ts` | timing | 6 passed (the daemon RSS sampler finds the Rust daemon) |
+| `terminal-protocol.spec.ts` | terminal | 5 passed |
+| `typography.spec.ts` | rest | 1 passed |
+| `workflow.spec.ts` | rest | 2 passed |
+| `workspace.spec.ts` | rest | 4 passed |
+
+No test needed its retry, and none was skipped.
+
+### CI speed
+
+| Run | Result |
+|---|---|
+| A daemon-only change (one line in a daemon file, `[base: …]`) | DAEMON_ONLY |
+| Every job (`[ci: all]`) | GATE_TIME |
+
+### Gate results
+
+| Check | Date | Result | Where |
+|---|---|---|---|
+| The split, no new crate, no main workflow changed | 2026-10-24 | Decided in the spec (the owner said not to ask) | T-0166 spec |
+| `cargo xtask ci` | 2026-10-24 | GATE_CHECK | GATE_RUN, job `check` |
+| `daemon-os` macOS and Windows | 2026-10-24 | GATE_OS | GATE_RUN |
+| E2E with the Rust daemon | 2026-10-24 | GATE_E2E | GATE_RUN, jobs `e2e (…)`; table above |
+| Contract suite | 2026-10-24 | GATE_CONTRACT | GATE_RUN, job `daemon-contract` |
+| Bench and times | 2026-10-24 | GATE_BENCH | GATE_RUN |
+| CI speed | 2026-10-24 | GATE_SPEED | Runs above |
+| Open items of part 5 | 2026-10-24 | Closed | Tables above |
+| This section, and the "This section" rows of parts 3, 4 and 5 | | Wait for the owner | Review of T-0166's pull request |

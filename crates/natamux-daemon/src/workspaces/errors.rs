@@ -42,14 +42,23 @@ pub enum WorkspaceError {
     /// A request the route refuses, such as `If-Match is missing`: 400 `invalid_request`.
     BadRequest(String),
     Task(TaskError),
+    /// An error of another request, kept with its status, code and text: a draft that a second
+    /// request waited for.
+    Rebuilt {
+        status: u16,
+        code: &'static str,
+        text: String,
+    },
 }
 
 impl std::fmt::Display for WorkspaceError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Conflict(text) | Self::GitHub(text) | Self::Io(text) | Self::BadRequest(text) => {
-                f.write_str(text)
-            }
+            Self::Conflict(text)
+            | Self::GitHub(text)
+            | Self::Io(text)
+            | Self::BadRequest(text)
+            | Self::Rebuilt { text, .. } => f.write_str(text),
             Self::NotChanged(path) => {
                 write!(f, "{path} is not one of the changed files of the workspace")
             }
@@ -86,6 +95,7 @@ impl WorkspaceError {
     /// `invalid_request`; the route sends zod's issues itself.
     pub fn status_and_code(&self) -> (u16, &'static str) {
         match self {
+            Self::Rebuilt { status, code, .. } => (*status, code),
             Self::NotChanged(_) | Self::PathNotFound(_) => (404, "not_found"),
             Self::NotA { .. } | Self::BadRequest(_) => (400, "invalid_request"),
             Self::TooLarge(_) => (413, "too_large"),

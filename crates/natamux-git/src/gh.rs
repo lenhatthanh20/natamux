@@ -84,9 +84,12 @@ pub fn gh_error_of(ran: &Captured, args: &[String]) -> GitHubError {
         return GitHubError::new("gh is not installed or not on the PATH");
     }
     // The default text of a killed gh is only "Command failed".
-    if ran.killed() {
+    if ran.timed_out {
         let seconds = GH_TIMEOUT.as_secs();
         return GitHubError::new(&format!("gh did not finish in {seconds} seconds"));
+    }
+    if ran.overflow {
+        return GitHubError::new("gh printed more than 10 MiB of output");
     }
     let stderr = js_trim(&ran.stderr);
     if !stderr.is_empty() {

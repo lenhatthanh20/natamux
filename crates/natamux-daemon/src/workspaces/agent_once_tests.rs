@@ -138,6 +138,34 @@ mod real_runs {
     }
 
     #[test]
+    fn finishes_when_a_grandchild_keeps_the_pipe_open() {
+        let dir = TempDir::new("once");
+        let program = fake_agent(&dir, "sleep 30 &\necho ok");
+        let (sender, receiver) = std::sync::mpsc::channel();
+        thread::spawn(move || {
+            let _ = sender.send(run(&dir, &program, 20_000));
+        });
+        let result = receiver
+            .recv_timeout(Duration::from_secs(10))
+            .expect("the run hung on the open pipe");
+        assert_eq!(result.unwrap().trim(), "ok");
+    }
+
+    #[test]
+    fn counts_the_output_limit_in_utf16_units() {
+        let dir = TempDir::new("once");
+        // 1.2 MB, but 600k units: under the limit.
+        let two_bytes = fake_agent(&dir, "yes é | head -n 600000 | tr -d '\\n'");
+        let out = run(&dir, &two_bytes, 20_000).unwrap();
+        assert_eq!(out.chars().count(), 600_000);
+        // 1.2M units: over it.
+        let dir = TempDir::new("once");
+        let emoji = fake_agent(&dir, "yes 😀 | head -n 600000 | tr -d '\\n'");
+        let error = run(&dir, &emoji, 20_000).unwrap_err();
+        assert_eq!(error, format!("{emoji} printed too much"));
+    }
+
+    #[test]
     fn rejects_when_the_program_is_not_there_and_names_it() {
         let dir = TempDir::new("once");
         let missing = dir.path().join("missing").to_string_lossy().into_owned();

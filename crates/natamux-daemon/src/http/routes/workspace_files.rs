@@ -161,6 +161,15 @@ fn text_body(body: Option<&Value>) -> Result<String, ZodError> {
     issues.into_result(text)
 }
 
+/// The one `If-Match` value of a request (`singleHeader`): a header sent twice is as good as none.
+pub fn if_match(headers: &HeaderMap) -> Option<String> {
+    headers
+        .get("if-match")
+        .filter(|_| headers.get_all("if-match").iter().count() == 1)
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_string)
+}
+
 /// `If-Match` holds the version the editor read; a file that changed since is not replaced.
 pub async fn write_file(
     state: Arc<AppState>,
@@ -181,13 +190,7 @@ pub async fn write_file(
         Ok(text) => text,
         Err(error) => return zod_answer(&error),
     };
-    // `singleHeader`: a header sent twice is as good as none.
-    let version = headers
-        .get("if-match")
-        .filter(|_| headers.get_all("if-match").iter().count() == 1)
-        .and_then(|value| value.to_str().ok())
-        .map(str::to_string);
-    let Some(version) = version else {
+    let Some(version) = if_match(&headers) else {
         return workspace_error(&WorkspaceError::BadRequest("If-Match is missing".into()));
     };
     answer(StatusCode::OK, move || {

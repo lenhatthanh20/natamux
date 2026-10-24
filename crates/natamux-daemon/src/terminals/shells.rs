@@ -27,6 +27,9 @@ pub(super) struct Inner {
     pub(super) next_attach: AtomicU64,
     /// Held while a shell starts, so two attaches at once start one shell, and the limit holds.
     pub(super) starting: Mutex<()>,
+    /// Held while one shell's output is parsed: shells parse one at a time, as on Node's one
+    /// loop, so floods in several shells take one core, not every core the dashboards need too.
+    pub(super) parsing: Mutex<()>,
     pub(super) this: Weak<Inner>,
 }
 
@@ -187,6 +190,7 @@ impl Inner {
                     return;
                 }
                 let (data, task_id, terminal) = {
+                    let _turn = lock(&inner.parsing);
                     let mut guard = lock(&session);
                     let data = take_output(&mut guard, read);
                     (data, guard.task_id.clone(), guard.terminal.clone())

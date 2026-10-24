@@ -37,7 +37,12 @@ pub mod http {
     pub mod terminal_socket;
 }
 pub mod projects {
+    pub mod errors;
+    pub mod repo_add;
+    pub mod repo_store;
     pub mod repos;
+    pub mod settings;
+    pub mod settings_parse;
     pub mod settings_trim;
 }
 pub mod shared {

@@ -16,9 +16,9 @@ use serde_json::json;
 use crate::workspaces::errors::{WorkspaceError, WorkspaceResult};
 use crate::workspaces::service::WorkspaceService;
 
-/// What a draft that runs gives the callers that waited for it. The error is kept as its status
-/// class and text, since `WorkspaceError` cannot be copied.
-type DraftResult = Result<CommitMessageDraft, (u16, String)>;
+/// What a draft that runs gives the callers that waited for it. The error is kept as its status,
+/// code and text, since `WorkspaceError` cannot be copied.
+type DraftResult = Result<CommitMessageDraft, (u16, &'static str, String)>;
 
 /// One draft that runs, and the threads that wait for its answer.
 #[derive(Default)]
@@ -63,8 +63,11 @@ struct DraftRun<'a> {
 impl Drop for DraftRun<'_> {
     fn drop(&mut self) {
         if self.cell.lock().is_none() {
-            self.cell
-                .set(Err((500, "The commit message draft failed".to_string())));
+            self.cell.set(Err((
+                500,
+                "internal_error",
+                "The commit message draft failed".to_string(),
+            )));
         }
         self.service
             .drafts
@@ -72,6 +75,12 @@ impl Drop for DraftRun<'_> {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .remove(self.task_id);
     }
+}
+
+// The answer a waiting request gets has the status and code of the first request.
+fn waited(cell: &DraftCell) -> WorkspaceResult<CommitMessageDraft> {
+    cell.wait()
+        .map_err(|(status, code, text)| WorkspaceError::Rebuilt { status, code, text })
 }
 
 impl WorkspaceService {
@@ -108,11 +117,7 @@ impl WorkspaceService {
             }
         };
         if !leader {
-            return cell.wait().map_err(|(status, text)| match status {
-                409 => WorkspaceError::Conflict(text),
-                400 => WorkspaceError::BadRequest(text),
-                _ => WorkspaceError::Io(text),
-            });
+            return waited(&cell);
         }
         let _run = DraftRun {
             service: self,
@@ -122,7 +127,10 @@ impl WorkspaceService {
         let result = self.draft_now(task_id);
         cell.set(match &result {
             Ok(draft) => Ok(draft.clone()),
-            Err(error) => Err((error.status_and_code().0, error.to_string())),
+            Err(error) => {
+                let (status, code) = error.status_and_code();
+                Err((status, code, error.to_string()))
+            }
         });
         result
     }
@@ -213,5 +221,25 @@ impl WorkspaceService {
         Ok(self
             .tasks
             .record_git(task_id, "git.pushed", json!({ "branch": branch }))?)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // The first request cannot hold and then fail with a 404 through the service, so the cell is
+    // set by hand; it is the same path a waiting request takes.
+    #[test]
+    fn a_waiting_draft_gets_the_same_404() {
+        let cell = Arc::new(DraftCell::default());
+        let waiting = {
+            let cell = Arc::clone(&cell);
+            std::thread::spawn(move || waited(&cell))
+        };
+        cell.set(Err((404, "not_found", "T-1 does not exist".to_string())));
+        let error = waiting.join().unwrap().unwrap_err();
+        assert_eq!(error.status_and_code(), (404, "not_found"));
+        assert_eq!(error.to_string(), "T-1 does not exist");
     }
 }

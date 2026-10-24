@@ -232,8 +232,6 @@ async fn records_a_report_and_a_send_back_as_the_agent_and_a_start_never_as_a_pe
     );
 }
 
-// Left out: the row for `/repos/default/settings` of 'may not change $url': the settings routes
-// come with part 5 (docs/rust-phase4.md). The three stage rows are here.
 #[tokio::test(flavor = "multi_thread")]
 async fn may_not_change_the_marks_of_a_stage() {
     let rows = [
@@ -254,4 +252,29 @@ async fn may_not_change_the_marks_of_a_stage() {
             "{path}"
         );
     }
+
+    // The fourth row of 'may not change $url': the settings of a project.
+    let d = task().await;
+    let tasks = d.call(Method::GET, "/tasks", Some(TOKEN)).await;
+    let settings = d
+        .call(Method::GET, "/repos/default/settings", Some(TOKEN))
+        .await;
+    let body = json!({ "agents": { "permissionMode": "ask" } });
+
+    let (status, _) = d
+        .send(
+            Method::PUT,
+            "/repos/default/settings",
+            Some(AGENT_TOKEN),
+            &body,
+        )
+        .await;
+
+    assert_eq!(status, 403);
+    assert_eq!(d.call(Method::GET, "/tasks", Some(TOKEN)).await, tasks);
+    assert_eq!(
+        d.call(Method::GET, "/repos/default/settings", Some(TOKEN))
+            .await,
+        settings
+    );
 }

@@ -6,15 +6,21 @@ export type RssSample = { at: number; rssMb: number }
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url))
 
-// The daemon is `node packages/daemon/dist/entry.js`. The healthcheck is a node process too, and
-// the script of this exec has the path in its own command line, so the second word of each
-// command line is compared, not the whole line.
+// The Node daemon is `node packages/daemon/dist/entry.js`. The healthcheck is a node process too,
+// and the script of this exec has the path in its own command line, so the second word of each
+// command line is compared, not the whole line. The Rust daemon is one word, a path that ends in
+// /natamux-daemon: its first word is compared.
 // The loop waits on stdin instead of sleeping: when the test closes stdin, the loop ends and no
 // process is left in the container.
 const SCRIPT = `
 pid=""
 for dir in /proc/[0-9]*; do
-  second="$(tr '\\0' '\\n' < "$dir/cmdline" 2>/dev/null | sed -n 2p)"
+  words="$(tr '\\0' '\\n' < "$dir/cmdline" 2>/dev/null)"
+  first="$(printf '%s\\n' "$words" | sed -n 1p)"
+  second="$(printf '%s\\n' "$words" | sed -n 2p)"
+  case "$first" in
+    */natamux-daemon) pid="\${dir#/proc/}"; break ;;
+  esac
   case "$second" in
     *packages/daemon/dist/entry.js) pid="\${dir#/proc/}"; break ;;
   esac

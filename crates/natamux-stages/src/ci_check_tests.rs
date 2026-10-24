@@ -47,6 +47,8 @@ fn json_of(runs: &[Run]) -> String {
 enum Answer {
     Runs(Vec<Run>),
     Fail(&'static str),
+    /// What gh prints, as it is.
+    Text(&'static str),
 }
 
 struct Fakes {
@@ -93,6 +95,7 @@ fn fakes(answers: Vec<Answer>, logs: &str, before: Answer) -> Fakes {
             };
             match answer {
                 Answer::Runs(runs) => Ok(json_of(&runs)),
+                Answer::Text(text) => Ok(text.to_string()),
                 Answer::Fail(message) => Err(GitHubError {
                     message: message.into(),
                     output: String::new(),
@@ -362,5 +365,33 @@ fn stops_for_the_user_when_ci_takes_too_long_or_the_push_or_gh_fails() {
 #[test]
 fn reads_again_after_a_gh_error_that_passes() {
     let result = check(&simple(vec![Answer::Fail("HTTP 502"), Answer::Runs(vec![run()])]).deps);
+    assert!(result.passed);
+}
+
+#[test]
+fn a_gh_answer_that_is_not_json_stops_the_check() {
+    let fakes = fakes(
+        vec![Answer::Runs(vec![run()])],
+        "",
+        Answer::Text("<!DOCTYPE html><html>"),
+    );
+
+    let result = check(&fakes.deps);
+
+    assert!(!result.passed && result.final_);
+    assert_eq!(
+        result.reasons[0],
+        "Could not read the CI runs: Unexpected token '<', \"<!DOCTYPE \"... is not valid JSON"
+    );
+    assert!(pushed(&fakes).is_empty());
+}
+
+#[test]
+fn an_empty_gh_answer_is_read_again() {
+    let fakes = fakes(vec![Answer::Runs(vec![run()])], "", Answer::Text(""));
+
+    let result = check(&fakes.deps);
+
+    assert_eq!(pushed(&fakes), ["abc123 natamux-ci/natamux/t-0001-fix"]);
     assert!(result.passed);
 }

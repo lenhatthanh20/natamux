@@ -15,6 +15,7 @@ mod github;
 mod hook_client;
 mod hooks;
 mod raw_client;
+mod repos;
 mod server;
 mod socket;
 mod stages;
