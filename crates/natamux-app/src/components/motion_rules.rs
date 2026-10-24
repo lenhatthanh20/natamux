@@ -11,14 +11,12 @@ pub enum Moving {
     Beat,
     /// The busy spinner (`.hm-spin8`).
     Spin,
-    /// The line into a running stage (`.stage-link[data-kind="flow"]`).
-    Fill,
     /// The skeleton list (`.hm-pulse`).
     Pulse,
 }
 
 impl Moving {
-    pub const ALL: [Moving; 4] = [Moving::Beat, Moving::Spin, Moving::Fill, Moving::Pulse];
+    pub const ALL: [Moving; 3] = [Moving::Beat, Moving::Spin, Moving::Pulse];
 }
 
 pub fn tick_at(elapsed_ms: u64) -> u8 {
@@ -46,15 +44,6 @@ pub fn spin_step(tick: Option<u8>) -> Option<u8> {
     tick.map(|tick| tick % 8)
 }
 
-/// How much of the line is drawn: it grows on ticks 0-7, holds on 8, and is gone from 9 on.
-pub fn fill(tick: Option<u8>) -> f32 {
-    match tick.map(|tick| tick % TICKS) {
-        None | Some(8) => 1.,
-        Some(tick @ 0..=7) => f32::from(tick) / 7.,
-        Some(_) => 0.,
-    }
-}
-
 /// 1 at tick 0, 0.45 at tick 8, eased both ways (smoothstep, close to CSS `ease-in-out`).
 pub fn pulse(tick: Option<u8>) -> f32 {
     let Some(tick) = tick else { return 1. };
@@ -70,7 +59,6 @@ fn frame(kind: Moving, tick: u8) -> (f32, f32) {
             (beat.opacity, beat.scale)
         }
         Moving::Spin => (spin_step(Some(tick)).map_or(0., f32::from), 0.),
-        Moving::Fill => (fill(Some(tick)), 0.),
         Moving::Pulse => (pulse(Some(tick)), 0.),
     }
 }

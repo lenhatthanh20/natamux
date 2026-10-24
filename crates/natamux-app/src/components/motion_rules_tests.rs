@@ -50,15 +50,9 @@ fn the_spinner_steps_one_dash_a_tick() {
 }
 
 #[test]
-fn the_link_fills_then_fades() {
-    assert_eq!(fill(Some(0)), 0.);
-    assert!((fill(Some(1)) - 1. / 7.).abs() < 1e-6);
-    assert_eq!(fill(Some(7)), 1.);
-    assert_eq!(fill(Some(8)), 1.);
-    for tick in 9..16 {
-        assert_eq!(fill(Some(tick)), 0., "tick {tick}");
-    }
-    assert_eq!(fill(None), 1.);
+fn only_the_glyph_spinner_and_skeleton_move() {
+    // The line into a running stage is still; only its glyph blinks (owner, T-0164).
+    assert_eq!(Moving::ALL, [Moving::Beat, Moving::Spin, Moving::Pulse]);
 }
 
 #[test]
@@ -75,7 +69,6 @@ fn the_skeleton_pulses_down_to_045_and_back() {
 fn each_kind_redraws_only_on_ticks_that_change() {
     assert_eq!(changing(Moving::Beat), vec![8, 9, 10]);
     assert_eq!(changing(Moving::Spin), (0..16).collect::<Vec<_>>());
-    assert_eq!(changing(Moving::Fill), vec![1, 2, 3, 4, 5, 6, 7, 9]);
     assert_eq!(changing(Moving::Pulse), (0..16).collect::<Vec<_>>());
 }
 
@@ -84,10 +77,6 @@ fn the_timer_sleeps_until_the_next_change() {
     assert_eq!(ticks_to_next_change(0, &[Moving::Beat]), Some(8));
     assert_eq!(ticks_to_next_change(8, &[Moving::Beat]), Some(1));
     assert_eq!(ticks_to_next_change(10, &[Moving::Beat]), Some(14));
-    assert_eq!(
-        ticks_to_next_change(10, &[Moving::Beat, Moving::Fill]),
-        Some(7)
-    );
     assert_eq!(
         ticks_to_next_change(3, &[Moving::Beat, Moving::Spin]),
         Some(1)
