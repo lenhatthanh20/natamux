@@ -1,5 +1,5 @@
-//! The HTTP server (`server.ts`): `/api` stripped, the token checked, then the route. Part 1
-//! serves the terminal routes only; any other address is a 404 in Fastify's shape.
+//! The HTTP server (`server.ts`): `/api` stripped, the token checked, then the route. Routes not
+//! ported yet answer 404 in Fastify's shape.
 
 use std::convert::Infallible;
 use std::net::SocketAddr;
@@ -17,18 +17,23 @@ use tokio::net::TcpListener;
 use super::auth::{bearer_token, is_authorized};
 use super::body::{DEFAULT_BODY_LIMIT, read_body};
 use super::errors::{Answer, json_answer, not_found, unauthorized};
-use super::routes::{tasks, terminals};
+use super::routes::stages::Mark;
+use super::routes::{agents, stages, tasks, terminals};
 use super::{event_socket, terminal_socket};
+use crate::agents::runner::AgentRunner;
 use crate::projects::repos::Repos;
 use crate::shared::event_bus::EventBus;
 use crate::shared::jobs::Jobs;
 use crate::shared::scheduler::Scheduler;
+use crate::stages::runner::StageRunner;
 use crate::tasks::service::TaskService;
 use crate::tasks::templates::TemplateService;
 use crate::terminals::open_shells::OpenShells;
 use crate::terminals::service::TerminalService;
 
 pub struct AppState {
+    pub stages: StageRunner,
+    pub agents: Arc<AgentRunner>,
     pub token: String,
     /// The token of the task shells.
     pub agent_token: String,
@@ -156,6 +161,9 @@ pub async fn handle(request: Request<Incoming>, state: Arc<AppState>) -> Answer 
             .map(|part| part.to_string())
             .collect::<Vec<_>>(),
     );
+    if let Some(answer) = stage_route(&method, &parts, Arc::clone(&state)).await {
+        return answer;
+    }
     match (&method, parts.as_slice()) {
         (&Method::GET, ["health"]) => json_answer(StatusCode::OK, &json!({ "status": "ok" })),
         (&Method::GET, ["events"]) => event_socket::upgrade(request, state),
@@ -164,7 +172,9 @@ pub async fn handle(request: Request<Incoming>, state: Arc<AppState>) -> Answer 
             terminal_socket::upgrade(request, state, id, query.to_string())
         }
         (&Method::GET, ["tasks", id, "ended-shells"]) => terminals::ended_shells(&state, id),
-        (&Method::GET, ["tasks", id, "terminals"]) => terminals::list_terminals(&state, id),
+        (&Method::GET, ["tasks", id, "terminals"]) => {
+            terminals::list_terminals(state, id.to_string()).await
+        }
         (&Method::DELETE, ["tasks", id, "terminals", terminal]) => {
             terminals::close_terminal(&state, id, terminal)
         }
@@ -186,9 +196,30 @@ pub async fn handle(request: Request<Incoming>, state: Arc<AppState>) -> Answer 
         | (&Method::POST, ["templates", _, "tasks"])
         | (&Method::PATCH, ["tasks", _])
         | (&Method::POST, ["tasks", _, "events"])
-        | (&Method::PUT, ["tasks", _, "issue"]) => with_body(request, state, route, by_agent).await,
+        | (&Method::PUT, ["tasks", _, "issue"])
+        | (&Method::POST, ["tasks", _, "stage"])
+        | (&Method::PUT, ["tasks", _, "workflow" | "ci" | "skip"])
+        | (&Method::PUT, ["tasks", _, "files", _])
+        | (&Method::POST, ["tasks", _, "agent"])
+        | (&Method::POST, ["tasks", _, "agent", "message"]) => {
+            with_body(request, state, route, by_agent).await
+        }
         _ => not_found(method.as_str(), &url),
     }
+}
+
+/// The stage routes that read no body (part 3).
+async fn stage_route(method: &Method, parts: &[&str], state: Arc<AppState>) -> Option<Answer> {
+    Some(match (method, parts) {
+        (&Method::GET, ["tasks", id, "files"]) => stages::list_files(state, id.to_string()).await,
+        (&Method::GET, ["tasks", id, "files", name]) => {
+            stages::read_file(state, id.to_string(), name.to_string()).await
+        }
+        (&Method::POST, ["tasks", id, "agent", "reopen"]) => {
+            agents::reopen_agent(state, id.to_string()).await
+        }
+        _ => return None,
+    })
 }
 
 /// The routes that read a JSON body.
@@ -222,6 +253,26 @@ async fn with_body(
         }
         (&Method::PUT, ["tasks", id, "issue"]) => {
             tasks::link_issue(state, id.to_string(), body).await
+        }
+        (&Method::POST, ["tasks", id, "stage"]) => {
+            stages::act(state, id.to_string(), body, by_agent).await
+        }
+        (&Method::PUT, ["tasks", id, mark @ ("workflow" | "ci" | "skip")]) => {
+            let mark = match *mark {
+                "workflow" => Mark::Workflow,
+                "ci" => Mark::Ci,
+                _ => Mark::Skip,
+            };
+            stages::set_mark(state, id.to_string(), body, by_agent, mark).await
+        }
+        (&Method::PUT, ["tasks", id, "files", name]) => {
+            stages::write_file(state, id.to_string(), name.to_string(), body).await
+        }
+        (&Method::POST, ["tasks", id, "agent"]) => {
+            agents::start_agent(state, id.to_string(), body).await
+        }
+        (&Method::POST, ["tasks", id, "agent", "message"]) => {
+            agents::message(state, id.to_string(), body).await
         }
         _ => not_found(method.as_str(), &parts.join("/")),
     }

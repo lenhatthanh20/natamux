@@ -477,7 +477,7 @@ jobs:
             target
           key: rust-daemon-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
           restore-keys: rust-daemon-${{ runner.os }}-
-      - run: cargo test --locked -p natamux-core -p natamux-store -p natamux-pty -p natamux-screen -p natamux-daemon
+      - run: cargo test --locked -p natamux-core -p natamux-store -p natamux-pty -p natamux-screen -p natamux-agents -p natamux-stages -p natamux-daemon
 
   # Phase 4, part 1: the contract suite. The Node daemon of main and the Rust daemon run side by
   # side from the same image (compose.rust-daemon.yaml); the terminal scenarios of
@@ -486,7 +486,7 @@ jobs:
   daemon-contract:
     if: ${{ !endsWith(github.ref, '-check') && github.ref != 'refs/heads/natamux-ci/rust' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     env:
       GH_TOKEN: ${{ github.token }}
       NATAMUX_TOKEN: e2e-token
@@ -567,6 +567,29 @@ jobs:
             sleep 0.5
           done
           exit 1
+      # Part 3: a second project for the stage scenarios, with the pipeline of
+      # crates/natamux-contract/tests/fixtures/stages.natamux.json, known to both daemons.
+      - name: Give both daemons the stages project
+        env:
+          NATAMUX_URL: http://127.0.0.1:8080/api
+        run: |
+          compose() { docker compose -p natamux-e2e -f compose.prod.yaml -f compose.e2e.yaml -f compose.rust-daemon.yaml "$@"; }
+          api() { curl -fsS -H "authorization: Bearer $NATAMUX_TOKEN" -H 'content-type: application/json' "$@"; }
+          compose exec -T daemon sh -c 'set -e; mkdir -p /data/stages-repo; cd /data/stages-repo
+            git init -q -b main; git config user.name "Natamux e2e"; git config user.email e2e@example.invalid
+            printf "# Stages\n" > README.md; git add README.md; git commit -q -m "Start the stages repository"'
+          compose exec -T daemon sh -c 'cat > /data/stages-repo/.natamux.json' < crates/natamux-contract/tests/fixtures/stages.natamux.json
+          repo=$(api -X POST "$NATAMUX_URL/repos" -d '{"path":"/data/stages-repo","name":"stages-repo"}' | jq -r .repo.id)
+          echo "NATAMUX_CONTRACT_STAGES_REPO=$repo" >> "$GITHUB_ENV"
+          # A pipeline with an error falls back to the defaults on both daemons: fail early.
+          api "$NATAMUX_URL/repos/$repo/settings" | jq -e '.error == null'
+          compose exec -T daemon sh -c 'cp /data/repos.json /data/rust/repos.json'
+          compose restart daemon-rust
+          for _ in $(seq 60); do
+            curl -fsS http://127.0.0.1:4318/health && exit 0
+            sleep 0.5
+          done
+          exit 1
       - name: The terminal scenarios on both daemons
         env:
           NATAMUX_CONTRACT_NODE: http://127.0.0.1:8080/api
@@ -592,7 +615,8 @@ jobs:
           status=0
           cargo test --locked -p natamux-contract --test terminals -- --ignored --test-threads=1 || status=$?
           cargo test --locked -p natamux-contract --test tasks -- --ignored --test-threads=1 || status=$?
-          cat "$NATAMUX_CONTRACT_REPORT" >> "$GITHUB_STEP_SUMMARY"
+          cargo test --locked -p natamux-contract --test stages -- --ignored --test-threads=1 || status=$?
+          tee -a "$GITHUB_STEP_SUMMARY" < "$NATAMUX_CONTRACT_REPORT"
           exit "$status"
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         if: always()

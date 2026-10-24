@@ -145,6 +145,11 @@ async fn open(
         (Arc::clone(&client), Arc::clone(state), id.to_string());
     let terminal = query.terminal.clone();
     let attached = tokio::task::spawn_blocking(move || {
+        // A client that lost its socket only resumes a shell that runs, never one that waits.
+        // Any other attach opens the task: all its agents come back.
+        if query.shell_id.is_none() {
+            attach_state.stages.run.restore_task(&task, &query.terminal);
+        }
         let options = AttachOptions {
             visible: Some(query.visible),
             shell_id: query.shell_id,

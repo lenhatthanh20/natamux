@@ -101,6 +101,48 @@ pub fn to_js_string_of<T: serde::Serialize>(value: &T) -> String {
     }
 }
 
+/// `JSON.stringify(value, null, 2)`: two spaces, `[]` and `{}` for empty ones.
+pub fn to_js_string_pretty(value: &Value) -> String {
+    let mut out = String::new();
+    write_pretty(&mut out, value, 0);
+    out
+}
+
+fn write_pretty(out: &mut String, value: &Value, depth: usize) {
+    let inner = "  ".repeat(depth + 1);
+    match value {
+        Value::Array(items) if !items.is_empty() => {
+            out.push_str("[\n");
+            for (index, item) in items.iter().enumerate() {
+                if index > 0 {
+                    out.push_str(",\n");
+                }
+                out.push_str(&inner);
+                write_pretty(out, item, depth + 1);
+            }
+            out.push('\n');
+            out.push_str(&"  ".repeat(depth));
+            out.push(']');
+        }
+        Value::Object(map) if !map.is_empty() => {
+            out.push_str("{\n");
+            for (index, key) in js_keys(map).into_iter().enumerate() {
+                if index > 0 {
+                    out.push_str(",\n");
+                }
+                out.push_str(&inner);
+                write_string(out, key);
+                out.push_str(": ");
+                write_pretty(out, &map[key.as_str()], depth + 1);
+            }
+            out.push('\n');
+            out.push_str(&"  ".repeat(depth));
+            out.push('}');
+        }
+        other => write_value(out, other),
+    }
+}
+
 fn write_value(out: &mut String, value: &Value) {
     match value {
         Value::Null => out.push_str("null"),
@@ -232,6 +274,17 @@ mod tests {
             to_js_string(&json!("tab\tline\u{2028}")),
             "\"tab\\tline\u{2028}\""
         );
+    }
+
+    #[test]
+    fn writes_pretty_json_as_stringify_with_two_spaces() {
+        let value = json!({"b": [], "a": {}, "2": [1, {"x": null}], "s": "t\"", "n": 1.5});
+        assert_eq!(
+            to_js_string_pretty(&value),
+            "{\n  \"2\": [\n    1,\n    {\n      \"x\": null\n    }\n  ],\n  \"b\": [],\n  \"a\": {},\n  \"s\": \"t\\\"\",\n  \"n\": 1.5\n}"
+        );
+        assert_eq!(to_js_string_pretty(&json!([])), "[]");
+        assert_eq!(to_js_string_pretty(&json!("x")), "\"x\"");
     }
 
     #[test]

@@ -61,6 +61,23 @@ impl Jobs {
         task_id: Option<&str>,
         work: impl Future<Output = T>,
     ) -> T {
+        let _running = self.begin(kind, label, task_id);
+        work.await
+    }
+
+    /// `run` for blocking work on a thread of its own, such as the checks of a stage.
+    pub fn run_blocking<T>(
+        &self,
+        kind: &str,
+        label: &str,
+        task_id: Option<&str>,
+        work: impl FnOnce() -> T,
+    ) -> T {
+        let _running = self.begin(kind, label, task_id);
+        work()
+    }
+
+    fn begin(&self, kind: &str, label: &str, task_id: Option<&str>) -> Running<'_> {
         let id = format!("job-{}", self.next.fetch_add(1, Ordering::SeqCst));
         let job = Job {
             id: id.clone(),
@@ -73,8 +90,7 @@ impl Jobs {
             jobs.push(job);
         }
         self.publish();
-        let _running = Running { jobs: self, id };
-        work.await
+        Running { jobs: self, id }
     }
 
     /// Oldest first.

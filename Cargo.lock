@@ -5492,6 +5492,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "natamux-agents"
+version = "0.1.0"
+dependencies = [
+ "natamux-core",
+ "natamux-proto",
+ "serde_json",
+]
+
+[[package]]
 name = "natamux-app"
 version = "0.1.0"
 dependencies = [
@@ -5583,10 +5592,12 @@ dependencies = [
  "http-body-util",
  "hyper",
  "hyper-util",
+ "natamux-agents",
  "natamux-core",
  "natamux-proto",
  "natamux-pty",
  "natamux-screen",
+ "natamux-stages",
  "natamux-store",
  "serde",
  "serde_json",
@@ -5617,6 +5628,17 @@ dependencies = [
  "alacritty_terminal",
  "memchr",
  "natamux-proto",
+]
+
+[[package]]
+name = "natamux-stages"
+version = "0.1.0"
+dependencies = [
+ "natamux-agents",
+ "natamux-core",
+ "natamux-proto",
+ "natamux-store",
+ "serde_json",
 ]
 
 [[package]]

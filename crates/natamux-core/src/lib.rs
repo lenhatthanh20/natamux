@@ -1,6 +1,9 @@
 //! Task rules of the Rust daemon (L0): the zod schemas with their texts, and the pure task logic of
 //! `packages/core` that `natamux-proto` does not have. Types come from `natamux-proto`.
 
+pub mod agents {
+    pub mod hook_settings;
+}
 pub mod formats;
 pub mod js;
 pub mod json;
@@ -15,6 +18,8 @@ pub mod events {
     pub(crate) mod test_fixture;
 }
 pub mod stages {
+    pub mod capabilities;
+    pub mod lanes;
     pub mod position;
     pub mod terminal_lane;
 }

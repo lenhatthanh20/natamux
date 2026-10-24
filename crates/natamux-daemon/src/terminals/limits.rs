@@ -40,3 +40,5 @@ pub const EXIT_WAIT_MS: u64 = 1000;
 pub const ENDED_IDLE_MS: u64 = 60_000;
 /// The shells of a task that printed nothing for about this long went quiet.
 pub const WORKSPACE_QUIET_MS: u64 = 500;
+/// `ENDED_SHELL_LINES`: the last lines of each shell that a finished task keeps.
+pub const ENDED_SHELL_LINES: usize = 200;

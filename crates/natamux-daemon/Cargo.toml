@@ -17,10 +17,12 @@ getrandom.workspace = true
 http-body-util.workspace = true
 hyper = { workspace = true, features = ["server"] }
 hyper-util = { workspace = true, features = ["server"] }
+natamux-agents.workspace = true
 natamux-core.workspace = true
 natamux-proto.workspace = true
 natamux-pty.workspace = true
 natamux-screen.workspace = true
+natamux-stages.workspace = true
 natamux-store.workspace = true
 serde.workspace = true
 serde_json = { workspace = true, features = ["preserve_order"] }

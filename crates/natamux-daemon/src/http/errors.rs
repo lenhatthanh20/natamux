@@ -8,6 +8,8 @@ use serde_json::{Value, json};
 use natamux_core::json::to_js_string;
 use natamux_core::zod::ZodError;
 
+use crate::agents::errors::AgentError;
+use crate::stages::errors::StageError;
 use crate::tasks::errors::TaskError;
 use crate::terminals::types::TerminalError;
 
@@ -143,6 +145,26 @@ pub fn task_error(error: &TaskError) -> Answer {
         TaskError::Failed(_) => {
             eprintln!("{message}");
             internal_error()
+        }
+    }
+}
+
+/// The answer of each stage engine error, as `ERROR_ANSWERS` in `errors.ts`.
+pub fn stage_error(error: &StageError) -> Answer {
+    let message = error.to_string();
+    match error {
+        StageError::Action(_) | StageError::Agent(AgentError::Waiting { .. }) => {
+            error_answer(StatusCode::CONFLICT, "conflict", &message)
+        }
+        StageError::Input(_) | StageError::File(_) => {
+            error_answer(StatusCode::BAD_REQUEST, "invalid_request", &message)
+        }
+        StageError::Agent(AgentError::Unknown(_)) => {
+            error_answer(StatusCode::NOT_FOUND, "unknown_agent", &message)
+        }
+        StageError::Task(error) | StageError::Agent(AgentError::Task(error)) => task_error(error),
+        StageError::Terminal(error) | StageError::Agent(AgentError::Terminal(error)) => {
+            terminal_error(error)
         }
     }
 }

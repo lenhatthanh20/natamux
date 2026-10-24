@@ -5,8 +5,10 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
+mod agents;
 mod server;
 mod socket;
+mod stages;
 mod task_events;
 mod task_extras;
 mod tasks;
@@ -329,6 +331,9 @@ async fn opens_a_second_terminal_lists_the_terminals_and_closes_one() {
     );
 }
 
+// Node's server tests run on a fixed platform (linux); the Rust test daemon runs the real one,
+// and on Windows a launch is typed in full, with no script.
+#[cfg(unix)]
 #[tokio::test(flavor = "multi_thread")]
 async fn lists_the_shells_that_wait_to_come_back_and_brings_them_back_when_opened() {
     let root = test_root("restore");
@@ -350,7 +355,6 @@ async fn lists_the_shells_that_wait_to_come_back_and_brings_them_back_when_opene
         .call(Method::GET, "/tasks/T-0001/terminals", Some(TOKEN))
         .await
         .1;
-    // Rust part 1: no agent comes back (part 4), so shell 6 comes back plain too.
     assert_eq!(listed["terminals"], json!(["6", "7"]));
     assert_eq!(
         listed["restoring"],
@@ -365,9 +369,17 @@ async fn lists_the_shells_that_wait_to_come_back_and_brings_them_back_when_opene
     assert_eq!(lost.close_code().await, 4410);
     assert!(d.ptys().is_empty());
 
+    // The plain shell opens the task: the agent of shell 6 comes back with it.
     let mut plain = d.open("cols=80&rows=24&terminal=7").await;
     plain.until(|socket| socket.replayed()).await;
-    assert_eq!(d.ptys().len(), 1);
+    assert_eq!(d.ptys().len(), 2);
+    let mut agent = d.open("cols=80&rows=24&terminal=6").await;
+    agent.until(|socket| socket.replayed()).await;
+    assert_eq!(d.ptys().len(), 2);
+    let data = d.root.join("data");
+    let script = std::fs::read_to_string(data.join("agent-launch-T-0001-6.sh")).unwrap();
+    assert!(script.contains("--resume 'a-6'"), "{script}");
+    assert!(!data.join("agent-launch-T-0001-7.sh").exists());
     let listed = d
         .call(Method::GET, "/tasks/T-0001/terminals", Some(TOKEN))
         .await

@@ -74,16 +74,24 @@ pub fn ended_shells(state: &AppState, id: &str) -> Answer {
     ok(json!({ "shells": read_ended_shells(&state.data_dir, id) }))
 }
 
-/// The open shells, and those that wait to come back after a restart, so their panes show.
-/// No stage runs an agent before part 3: `agents` is empty and `lanes` has none.
-pub fn list_terminals(state: &AppState, id: &str) -> Answer {
-    let issues = task_id_issues(id);
+/// The open shells, and those that wait to come back after a restart, so their panes show. The
+/// lanes may run `ps`, so the work runs on a blocking thread.
+pub async fn list_terminals(state: std::sync::Arc<AppState>, id: String) -> Answer {
+    let issues = task_id_issues(&id);
     if !issues.is_empty() {
         return invalid(&issues);
     }
-    if let Err(error) = state.tasks.get_task(id) {
-        return task_error(&error);
+    match tokio::task::spawn_blocking(move || terminals_of(&state, &id)).await {
+        Ok(answer) => answer,
+        Err(_) => crate::http::errors::internal_error(),
     }
+}
+
+fn terminals_of(state: &AppState, id: &str) -> Answer {
+    let task = match state.tasks.get_task(id) {
+        Ok(task) => task,
+        Err(error) => return task_error(&error),
+    };
     let open = state.terminals.list(id);
     let mut terminals = open.clone();
     for name in state.open_shells.waiting(id) {
@@ -92,6 +100,26 @@ pub fn list_terminals(state: &AppState, id: &str) -> Answer {
         }
     }
     terminals.sort_by_key(|name| name.parse::<u32>().unwrap_or(u32::MAX));
+    // The shells where an agent runs now, so a shell left after a restart is not called the
+    // agent's.
+    let run = &state.stages.run;
+    let agents: Vec<String> = open
+        .iter()
+        .filter(|name| run.agent_runs(id, name))
+        .cloned()
+        .collect();
+    // Each agent shows the state of its own stage, not the state of the whole task, and the
+    // agent that runs there, which may not be the task's. shortcut: Node falls back to the state
+    // the hooks gave a shell on no current stage; hooks come with part 4.
+    let mut lanes = Map::new();
+    for name in &agents {
+        let agent = run.agent_in(id, name);
+        let lane = run.lane_of_terminal(&task, name).unwrap_or_default();
+        lanes.insert(
+            name.clone(),
+            json!({ "stage": lane.stage, "state": lane.state, "agent": agent }),
+        );
+    }
     let mut programs = Map::new();
     for name in &open {
         let program = state.terminals.foreground(id, name).map(|program| {
@@ -106,8 +134,8 @@ pub fn list_terminals(state: &AppState, id: &str) -> Answer {
     }
     ok(json!({
         "terminals": terminals,
-        "agents": [],
-        "lanes": {},
+        "agents": agents,
+        "lanes": lanes,
         "programs": programs,
         "restoring": restoring,
     }))
