@@ -1,5 +1,5 @@
 //! The errors of an agent start (`TaskWaitingError` of `agent-runner.ts`) and of a hook
-//! (`UnknownAgentError` of `agent-hook-service.ts`).
+//! (`UnknownAgentError` of `agent-hook-service.ts`), as Node words them.
 
 use std::fmt;
 
