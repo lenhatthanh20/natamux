@@ -42,7 +42,7 @@ const REMOVED: &str = "T-0139";
 const TYPED: &str = "Show the PR checks on the board cards";
 /// Screen 2: a side by side group at work, an agent that asks, a task after review, a task with
 /// no workspace, and a done one.
-const RUNNING: &str = "T-0146";
+pub(crate) const RUNNING: &str = "T-0146";
 const ASKING: &str = "T-0141";
 const REVIEWED: &str = "T-0143";
 const NO_WORKSPACE: &str = "T-0135";
@@ -275,7 +275,7 @@ fn changes(dashboard: &gpui::Entity<Dashboard>, id: &str, cx: &mut App) {
     dashboard.update(cx, |dashboard, cx| dashboard.open_changes(id, false, cx));
 }
 
-fn open(dashboard: &gpui::Entity<Dashboard>, id: &str, cx: &mut App) {
+pub(crate) fn open(dashboard: &gpui::Entity<Dashboard>, id: &str, cx: &mut App) {
     dashboard.update(cx, |dashboard, cx| dashboard.open(id, cx));
 }
 
