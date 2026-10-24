@@ -390,7 +390,6 @@ impl Render for NewWorkspaceDialog {
         let start = primary_button(
             start_label(self.busy),
             &stops.submit,
-            false,
             missing.is_some() || self.busy,
             submit,
         )

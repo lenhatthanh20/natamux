@@ -223,7 +223,6 @@ impl Render for RollbackDialog {
         let confirm = primary_button(
             confirm_label(paths.len()),
             &self.submit,
-            true,
             reason.is_some(),
             submit,
         )

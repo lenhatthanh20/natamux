@@ -10,13 +10,14 @@ use gpui::{ClickEvent, Entity};
 use natamux_client::TerminalStatus;
 use natamux_proto::tasks::task::Task;
 use natamux_proto::terminals::list::TerminalList;
-use ui::{ButtonLike, Tooltip, prelude::*};
+use ui::{Tooltip, prelude::*};
 
 use super::pane_drop::with_drop;
 use super::pane_header::PaneHeader;
 use super::remote_terminal::RemoteTerminal;
 use super::terminal_find::TerminalFind;
 use crate::app::shortcuts::{FindInTerminal, MaximizePane};
+use crate::components::button_style::{action_button, button_icon, quiet_button};
 use crate::components::icons::icon_path;
 use crate::components::skeleton::SkeletonList;
 use crate::components::spinner::Spinner;
@@ -142,9 +143,8 @@ impl TerminalPane {
     fn new_terminal_button(&self, id: &str, label: &'static str) -> Option<impl IntoElement> {
         let run = self.on_new_terminal.clone()?;
         Some(
-            Button::new(SharedString::from(format!("{}-{id}", self.key)), label)
+            quiet_button(SharedString::from(format!("{}-{id}", self.key)), label)
                 .label_size(LabelSize::Small)
-                .style(ButtonStyle::Transparent)
                 .tooltip(Tooltip::text(
                     "Starts a plain terminal in the task's workspace. It does not start the agent.",
                 ))
@@ -222,18 +222,15 @@ impl TerminalPane {
     fn jump(&self) -> Div {
         let terminal = self.terminal.clone();
         div().absolute().bottom_2().right_3().child(
-            ButtonLike::new(SharedString::from(format!("{}-jump", self.key)))
-                .style(ButtonStyle::Filled)
-                .child(
-                    h_flex()
-                        .gap_1()
-                        .px_1()
-                        .child(Icon::from_path(icon_path("arrow-down")).size(IconSize::Small))
-                        .child(Label::new("Jump to latest").size(LabelSize::Small)),
-                )
-                .on_click(move |_, _, cx| {
-                    terminal.update(cx, |terminal, cx| terminal.jump_to_latest(cx))
-                }),
+            action_button(
+                SharedString::from(format!("{}-jump", self.key)),
+                "Jump to latest",
+            )
+            .start_icon(button_icon("arrow-down"))
+            .label_size(LabelSize::Small)
+            .on_click(move |_, _, cx| {
+                terminal.update(cx, |terminal, cx| terminal.jump_to_latest(cx))
+            }),
         )
     }
 

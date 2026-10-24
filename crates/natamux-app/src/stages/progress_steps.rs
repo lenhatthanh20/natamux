@@ -168,7 +168,9 @@ impl Ctx<'_> {
         };
         let row = v_flex()
             .id(SharedString::from(format!("lane-{key}")))
+            .rounded_sm()
             .cursor_pointer()
+            .hover(|style| style.bg(cx.theme().colors().ghost_element_hover))
             .on_click(move |_, window, cx| on(fold.clone(), window, cx))
             .child(
                 h_flex()

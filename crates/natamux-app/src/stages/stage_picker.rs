@@ -17,6 +17,7 @@ use super::editor_labels::kind_label;
 use super::kind_icon::kind_icon;
 use super::pipeline_editor::PipelineEditor;
 use super::stage_fields_view::{Choice, error_line, field_label, open_choices, select};
+use crate::components::button_style::{action_button, quiet_button};
 use crate::components::form::{input_box, text_editor};
 use crate::components::tab_order;
 
@@ -308,15 +309,18 @@ impl StagePicker {
         let (name, id, output) = (form.name.clone(), form.id.clone(), form.output.clone());
         let agent = form.kind == CustomKind::Agent;
         let kind = self.kind_menu(cx);
-        let back = Button::new("custom-back", "Back to the list")
-            .style(ButtonStyle::Subtle)
-            .on_click(cx.listener(|this, _, _, cx| {
+        let back = quiet_button("custom-back", "Back to the list").on_click(cx.listener(
+            |this, _, _, cx| {
                 this.custom = None;
                 cx.notify();
-            }));
-        let add = Button::new("custom-add", "Add custom stage")
-            .style(ButtonStyle::Filled)
-            .start_icon(Icon::new(IconName::Plus).size(IconSize::Small))
+            },
+        ));
+        let add = action_button("custom-add", "Add custom stage")
+            .start_icon(
+                Icon::new(IconName::Plus)
+                    .size(IconSize::Small)
+                    .color(Color::Muted),
+            )
             .on_click(cx.listener(|this, _, _, cx| this.add_custom(cx)));
         let app: &App = cx;
         let group = |label: &'static str, editor: &Entity<Editor>, problem: Option<String>| {

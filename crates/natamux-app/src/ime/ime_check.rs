@@ -6,10 +6,11 @@ use std::sync::Arc;
 use editor::Editor;
 use gpui::{App, Entity, FocusHandle, Focusable, actions};
 use natamux_proto::tasks::task::Task;
-use ui::{Button, prelude::*};
+use ui::prelude::*;
 
 use super::word_check::{WordCheck, terminal_check_command, words};
 use crate::app::source::Source;
+use crate::components::button_style::quiet_button;
 use crate::terminals::remote_terminal::{RemoteTerminal, Target};
 
 actions!(natamux, [SubmitWord]);
@@ -86,7 +87,7 @@ impl ImeCheck {
             .child(
                 h_flex()
                     .gap_2()
-                    .child(Button::new("ime-start", "1. Start").on_click(cx.listener(
+                    .child(quiet_button("ime-start", "1. Start").on_click(cx.listener(
                         |check, _, _, cx| {
                             check.type_in_terminal(&format!("clear; cat > {TYPED_FILE}\r"), cx);
                         },
@@ -94,7 +95,7 @@ impl ImeCheck {
                     .child(
                         Label::new("2. Type every word below, one per line.").color(Color::Muted),
                     )
-                    .child(Button::new("ime-check", "3. Check").on_click(cx.listener(
+                    .child(quiet_button("ime-check", "3. Check").on_click(cx.listener(
                         |check, _, _, cx| {
                             // Ctrl+D ends `cat`, then the shell compares the files.
                             check.type_in_terminal("\x04", cx);

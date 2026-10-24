@@ -17,9 +17,9 @@ use super::task_rules::{lane_summary, stage_state_label};
 use super::task_time::{AgeStyle, format_age, format_exact};
 use crate::app::dashboard_data::DashboardData;
 use crate::components::agent_badge::agent_name;
+use crate::components::button_style::{button_icon, quiet_button};
 use crate::components::chips::{StateChip, label_chip};
 use crate::components::colors::signal;
-use crate::components::icons::icon_path;
 use crate::components::text_size::row_text;
 use crate::sidebar::workspace_groups::short_branch;
 
@@ -151,13 +151,9 @@ fn pr_cell(row: &RowData) -> AnyElement {
     let Some(url) = row.task.pr.clone() else {
         return dash();
     };
-    let link = h_flex()
-        .id("pr-link")
-        .flex_none()
-        .gap_1()
-        .cursor_pointer()
-        .child(Label::new(pull_request_number(&url)).color(Color::Accent))
-        .child(Icon::from_path(icon_path("external-link")).size(IconSize::XSmall))
+    let link = quiet_button("pr-link", pull_request_number(&url))
+        .label_size(LabelSize::Small)
+        .start_icon(button_icon("external-link"))
         // The link opens in the browser and does not pick the row.
         .on_click(move |_, _, cx| {
             cx.stop_propagation();

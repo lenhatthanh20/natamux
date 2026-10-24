@@ -75,6 +75,7 @@ impl IssuesTab {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let (value, words) = CREATE_ISSUE_OPTIONS[index];
+        let hover = cx.theme().colors().ghost_element_hover;
         let colors = cx.theme().colors();
         let color = if off { Color::Disabled } else { Color::Default };
         h_flex()
@@ -88,6 +89,8 @@ impl IssuesTab {
                     .gap_2()
                     .when(!off, |this| {
                         this.cursor_pointer()
+                            .rounded_sm()
+                            .hover(move |style| style.bg(hover))
                             .on_click(cx.listener(move |this, _, window, cx| {
                                 window.focus(&this.focus, cx);
                                 this.pick(index, cx);

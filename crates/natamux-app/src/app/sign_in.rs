@@ -15,6 +15,7 @@ use ui::{Tooltip, prelude::*};
 use super::sign_in_rules::{BLANK_REASON, HELP, INTRO, REJECTED, connect_problem, token_to_send};
 use super::source::{Source, reason};
 use super::view_state;
+use crate::components::button_style::action_button;
 use crate::components::form::text_editor;
 use crate::components::icons::icon_path;
 
@@ -191,8 +192,7 @@ impl Render for SignIn {
                         .color(Color::Error),
                 )
         });
-        let connect = Button::new("sign-in-connect", "Connect")
-            .style(ButtonStyle::Filled)
+        let connect = action_button("sign-in-connect", "Connect")
             .full_width()
             .disabled(blank || self.connecting)
             .when(blank, |button| button.tooltip(Tooltip::text(BLANK_REASON)))

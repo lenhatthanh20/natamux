@@ -11,6 +11,7 @@ use super::graph_layout::{
     uncommitted_label,
 };
 use crate::app::clock::now_ms;
+use crate::components::button_style::quiet_button;
 use crate::components::colors::lane_color;
 use crate::components::icons::icon_path;
 use crate::components::skeleton::{Loading, SkeletonList};
@@ -59,9 +60,8 @@ fn alert(message: String, cx: &App) -> impl IntoElement {
 
 fn summary(graph: &GitGraph, uncommitted: usize, on_show: OnClick, on_refresh: OnClick) -> Div {
     let link = (uncommitted > 0).then(|| {
-        Button::new("history-uncommitted", uncommitted_label(uncommitted))
-            .style(ButtonStyle::Transparent)
-            .color(Color::Accent)
+        quiet_button("history-uncommitted", uncommitted_label(uncommitted))
+            .label_size(LabelSize::Small)
             .on_click(move |_: &ClickEvent, window, cx| on_show(window, cx))
     });
     let text = h_flex()

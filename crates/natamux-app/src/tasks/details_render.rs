@@ -15,6 +15,7 @@ use super::DetailsPanel;
 use super::run::agent_of;
 use crate::agents::agent_choices::agent_label;
 use crate::app::clock::now_ms;
+use crate::components::button_style::{action_button, quiet_button};
 use crate::components::detail_section::{DetailSection, field};
 use crate::stages::overview_rules::{NO_STAGE_STARTED, overview_figures, time_bars};
 use crate::stages::progress_tab::{ProgressInput, counts, current_step, timeline};
@@ -218,15 +219,15 @@ impl DetailsPanel {
         let issue: AnyElement = match &task.issue {
             Some(issue) => {
                 let url = issue.url.clone();
-                Button::new("issue-link", issue.key.clone())
+                quiet_button("issue-link", issue.key.clone())
                     .label_size(LabelSize::Small)
+                    .truncate(true)
                     .on_click(move |_, _, cx| cx.open_url(&url))
                     .into_any_element()
             }
             None if can_create => {
                 let on = self.on_command(cx);
-                Button::new("create-issue", "Create issue")
-                    .style(ButtonStyle::Outlined)
+                action_button("create-issue", "Create issue")
                     .label_size(LabelSize::Small)
                     .disabled(self.shown.as_ref().is_some_and(|shown| shown.busy))
                     .on_click(move |_, window, cx| on(PanelCommand::CreateIssue, window, cx))
@@ -237,11 +238,12 @@ impl DetailsPanel {
         let pr: AnyElement = match &task.pr {
             Some(url) => {
                 let link = url.clone();
-                Button::new(
+                quiet_button(
                     "context-pr",
                     url.trim_start_matches("https://github.com/").to_owned(),
                 )
                 .label_size(LabelSize::Small)
+                .truncate(true)
                 .on_click(move |_, _, cx| cx.open_url(&link))
                 .into_any_element()
             }

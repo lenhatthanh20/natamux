@@ -18,14 +18,13 @@ use crate::terminals::pane_rules::PaneHint;
 
 type OnClick = Rc<dyn Fn(&mut Window, &mut App)>;
 
-/// A 24 px button with a Lucide icon.
+/// A 22 px square button with a Lucide icon, the size of a Zed `IconButton`, so both match in
+/// one toolbar.
 pub fn icon_button(id: impl Into<ElementId>, icon: &str) -> ButtonLike {
-    ButtonLike::new(id).size(ButtonSize::Compact).child(
-        div().px(px(3.)).child(
-            Icon::from_path(icon_path(icon))
-                .size(IconSize::Small)
-                .color(Color::Muted),
-        ),
+    ButtonLike::new(id).width(rems_from_px(22_f32)).child(
+        Icon::from_path(icon_path(icon))
+            .size(IconSize::Small)
+            .color(Color::Muted),
     )
 }
 
@@ -163,6 +162,7 @@ fn glyph(key: &str, glyph: Option<Option<TaskState>>) -> AnyElement {
 }
 
 fn title(key: &str, title: PaneTitle, color: Color, cx: &App) -> AnyElement {
+    let hover = cx.theme().colors().ghost_element_hover;
     match title {
         PaneTitle::Terminal(name) => Label::new(format!("Terminal {name}"))
             .size(LabelSize::Small)
@@ -185,6 +185,9 @@ fn title(key: &str, title: PaneTitle, color: Color, cx: &App) -> AnyElement {
                     .id(SharedString::from(format!("{key}-title")))
                     .min_w_0()
                     .cursor_pointer()
+                    .rounded_sm()
+                    .px_1()
+                    .hover(move |style| style.bg(hover))
                     .child(
                         Label::new(title)
                             .size(LabelSize::Small)

@@ -12,10 +12,9 @@ use gpui::{
     AnyView, ClickEvent, DismissEvent, Entity, EntityId, EventEmitter, FocusHandle, Focusable,
     Global, KeystrokeEvent, MouseButton, ScrollHandle, Subscription, anchored, deferred, point,
 };
-use ui::{ButtonLike, TintColor, prelude::*};
+use ui::prelude::*;
 
-use super::button_style::{label_color, tinted_style};
-use super::chips::Kbd;
+use super::button_style::{action_button, key_hint, quiet_button};
 use super::input_rules::{DialogKey, dialog_key, ring_step};
 use super::menu::{MenuLayer, press_of};
 
@@ -444,48 +443,41 @@ impl RenderOnce for DialogFrame {
                         .when_some(self.note, |this, note| {
                             this.child(Label::new(note).size(LabelSize::Small).color(Color::Muted))
                         })
-                        .child(h_flex().justify_end().gap_1().children(self.footer)),
+                        .child(
+                            h_flex()
+                                .flex_wrap()
+                                .justify_end()
+                                .gap_1()
+                                .children(self.footer),
+                        ),
                 )
             })
     }
 }
 
-/// The safe answer of a dialog. A destructive confirm gives it the first focus.
+/// The safe answer of a dialog, with its Esc hint. A destructive confirm gives it the first focus.
 pub fn cancel_button(
     label: impl Into<SharedString>,
     focus: &FocusHandle,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> Button {
-    Button::new("dialog-cancel", label)
-        .style(ButtonStyle::Subtle)
+    quiet_button("dialog-cancel", label)
+        .key_binding(key_hint("escape", false))
         .track_focus(focus)
         .on_click(on_click)
 }
 
-/// The primary button with its Mod+Enter key chip. `danger` for a destructive answer; while
-/// `busy` it keeps its label and does nothing. Off, it shows no tint and a dimmed label.
+/// The main button with its Mod+Enter hint, grey as every button, also for a destructive answer
+/// (the title and the label say what goes). While busy it keeps its label and does nothing.
 pub fn primary_button(
     label: impl Into<SharedString>,
     focus: &FocusHandle,
-    danger: bool,
     disabled: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> ButtonLike {
-    let tint = if danger {
-        TintColor::Error
-    } else {
-        TintColor::Accent
-    };
-    ButtonLike::new("dialog-submit")
-        .style(tinted_style(tint, disabled))
+) -> Button {
+    action_button("dialog-submit", label)
+        .key_binding(key_hint("mod-enter", disabled))
         .track_focus(focus)
         .disabled(disabled)
         .on_click(on_click)
-        .child(
-            h_flex()
-                .gap_2()
-                .px_1()
-                .child(Label::new(label.into()).color(label_color(disabled)))
-                .child(Kbd::new("mod-enter")),
-        )
 }

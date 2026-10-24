@@ -16,6 +16,7 @@ use crate::app::clock::now_ms;
 use crate::app::dashboard::Dashboard;
 use crate::app::settings_reads::SettingsReads;
 use crate::app::view_rules::WorkspaceTab;
+use crate::components::button_style::quiet_button;
 use crate::components::skeleton::SkeletonList;
 use crate::sidebar::workspace_groups::RepoRef;
 
@@ -167,9 +168,8 @@ impl ProgressBoard {
                 .color(Color::Error),
             )
             .child(
-                Button::new("progress-retry", "Retry")
-                    .style(ButtonStyle::Filled)
-                    .size(ButtonSize::Compact)
+                quiet_button("progress-retry", "Retry")
+                    .label_size(LabelSize::Small)
                     .on_click(cx.listener(|this, _, _, cx| this.retry(cx))),
             )
     }

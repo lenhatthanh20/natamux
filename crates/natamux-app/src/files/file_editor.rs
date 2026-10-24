@@ -4,7 +4,7 @@
 
 use gpui::{ClickEvent, Entity, FocusHandle, Focusable, Subscription};
 use natamux_proto::workspaces::files::WorkspaceFile;
-use ui::{ButtonLike, TintColor, Tooltip, prelude::*};
+use ui::{Tooltip, prelude::*};
 
 use super::draft_store::DraftStore;
 use super::file_drafts::{
@@ -16,8 +16,7 @@ use super::file_icon_view::file_icon;
 use crate::app::dashboard::Dashboard;
 use crate::app::shortcuts::SaveFile;
 use crate::app::source::reason;
-use crate::components::button_style::{label_color, tinted_style};
-use crate::components::chips::Kbd;
+use crate::components::button_style::{action_button, key_hint, quiet_button};
 use crate::components::colors::signal;
 use crate::components::confirm::Confirm;
 use crate::components::skeleton::SkeletonList;
@@ -254,8 +253,9 @@ impl FileEditor {
         let can = can_save(draft.as_ref(), stale, self.saving);
         let colors = cx.theme().colors();
         h_flex()
-            .h(rems_from_px(40.0_f32))
+            .min_h(rems_from_px(40.0_f32))
             .flex_none()
+            .flex_wrap()
             .items_center()
             .gap_2()
             .px_3()
@@ -277,9 +277,7 @@ impl FileEditor {
                     .color(Color::Custom(signal(cx).fg))
             }))
             .child(
-                Button::new("file-revert", "Revert")
-                    .style(ButtonStyle::Transparent)
-                    .size(ButtonSize::Compact)
+                quiet_button("file-revert", "Revert")
                     .label_size(LabelSize::Small)
                     .disabled(!has_draft)
                     .on_click(
@@ -287,21 +285,11 @@ impl FileEditor {
                     ),
             )
             .child(
-                ButtonLike::new("file-save")
-                    .style(tinted_style(TintColor::Accent, !can))
-                    .size(ButtonSize::Compact)
+                action_button("file-save", "Save")
+                    .label_size(LabelSize::Small)
+                    .key_binding(key_hint("mod-s", !can))
                     .disabled(!can)
-                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.save(cx)))
-                    .child(
-                        h_flex()
-                            .gap_1p5()
-                            .child(
-                                Label::new("Save")
-                                    .size(LabelSize::Small)
-                                    .color(label_color(!can)),
-                            )
-                            .child(Kbd::new("mod-s")),
-                    ),
+                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.save(cx))),
             )
             .child(
                 icon_button("file-close", "x")
@@ -331,16 +319,12 @@ impl FileEditor {
                 ),
             )
             .child(
-                Button::new("file-reload", "Reload")
-                    .style(ButtonStyle::Outlined)
-                    .size(ButtonSize::Compact)
+                action_button("file-reload", "Reload")
                     .label_size(LabelSize::Small)
                     .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.reload(cx))),
             )
             .child(
-                Button::new("file-keep-mine", "Keep mine")
-                    .style(ButtonStyle::Outlined)
-                    .size(ButtonSize::Compact)
+                action_button("file-keep-mine", "Keep mine")
                     .label_size(LabelSize::Small)
                     .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.keep_mine(cx))),
             )

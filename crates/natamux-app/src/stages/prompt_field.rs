@@ -13,9 +13,9 @@ use super::skill_rules::{filter_skills, group_skills, skill_agents, skill_warnin
 use super::stage_details::DetailsPane;
 use super::stage_fields_view::{change, default_mark, labelled};
 use crate::agents::agent_choices::{AGENT_CHOICES, agent_label};
+use crate::components::button_style::{action_button, button_icon};
 use crate::components::colors::signal;
 use crate::components::form::input_box;
-use crate::components::icons::icon_path;
 use crate::components::menu::MenuLayer;
 
 type Skills = Option<Result<SkillList, String>>;
@@ -101,18 +101,15 @@ impl DetailsPane {
         let chips = PROMPT_PLACEHOLDERS.iter().map(|name| {
             let token = format!("{{{name}}}");
             let editor = prompt.clone();
-            Button::new(SharedString::from(format!("insert-{name}")), token.clone())
-                .style(ButtonStyle::Outlined)
-                .size(ButtonSize::Compact)
-                .label_size(LabelSize::XSmall)
+            action_button(SharedString::from(format!("insert-{name}")), token.clone())
+                .label_size(LabelSize::Small)
                 .tooltip(Tooltip::text(format!("Insert {token}")))
                 .on_click(move |_, window, cx| insert_at_cursor(&editor, &token, window, cx))
         });
         let reason = skills_reason(&self.skills);
-        let skills = Button::new("insert-skill", "Insert skill")
-            .style(ButtonStyle::Outlined)
-            .size(ButtonSize::Compact)
-            .start_icon(Icon::from_path(icon_path("sparkles")).size(IconSize::Small))
+        let skills = action_button("insert-skill", "Insert skill")
+            .label_size(LabelSize::Small)
+            .start_icon(button_icon("sparkles"))
             .disabled(reason.is_some())
             .when_some(reason, |this, reason| this.tooltip(Tooltip::text(reason)))
             .on_click(cx.listener(|this, event: &ClickEvent, window, cx| {

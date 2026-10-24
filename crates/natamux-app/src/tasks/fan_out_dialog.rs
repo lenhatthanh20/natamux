@@ -139,7 +139,6 @@ impl Render for FanOutDialog {
                 "Run tries",
                 &self.submit_focus,
                 false,
-                false,
                 cx.listener(|this, _, window, cx| this.submit(window, cx)),
             )
             .tooltip(Tooltip::text(
