@@ -6,9 +6,12 @@ on:
   push:
     # natamux-ci/* holds snapshots that tasks push for a CI check (Check on CI). Rust tasks share
     # natamux-ci/rust (every job) and natamux-ci/rust-check (check only); daemon tasks share
-    # natamux-ci/daemon and natamux-ci/daemon-check. Their caches stay warm.
-    # A snapshot runs only the jobs and contract suites its files need (the changes job; a
-    # [contract: hooks] tag in the commit message picks suites). PRs into dev and dev run all.
+    # natamux-ci/daemon and natamux-ci/daemon-check.
+    # A snapshot or a PR runs only the jobs and contract suites its files need (the changes job; a
+    # [contract: hooks] tag in the commit message picks suites). dev, and a push or PR whose head
+    # commit message has [ci: all], run all.
+    # Jobs only restore caches: rust-cache.yml saves them in the scope of main, which every branch
+    # reads. Caches of each branch did not fit in the 10 GB of the repo and pushed each other out.
     branches: [dev, 'natamux-ci/**']
   pull_request:
 
@@ -40,6 +43,8 @@ jobs:
       crates: ${{ steps.flags.outputs.crates }}
       daemon_crates: ${{ steps.flags.outputs.daemon_crates }}
       suites: ${{ steps.flags.outputs.suites }}
+      all: ${{ steps.flags.outputs.all }}
+      shards: ${{ steps.flags.outputs.shards }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -54,9 +59,6 @@ jobs:
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 90
-    permissions:
-      contents: read
-      actions: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # In the background: it takes 1 to 2 minutes, and the next steps need no room yet. The
@@ -114,47 +116,20 @@ jobs:
         run: |
           echo "cargo fmt changed files: apply the fmt-patch artifact (git apply)."
           exit 1
-      - name: Stamp the cache with this commit
-        if: always() && (steps.build.outcome == 'success' || steps.build.outcome == 'failure')
-        run: python3 scripts/ci-changes.py stamp
-      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        if: always() && (steps.build.outcome == 'success' || steps.build.outcome == 'failure')
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: rust-check-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-${{ github.sha }}
-      - name: Keep only the newest cache of this job
-        if: always() && (steps.build.outcome == 'success' || steps.build.outcome == 'failure')
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          gh cache list --ref "$GITHUB_REF" --key "rust-check-${{ runner.os }}-" --json id,key,createdAt \
-            --jq 'sort_by(.createdAt) | reverse | .[1:] | .[].id' |
-            while read -r id; do gh cache delete "$id"; done
 
   # The app for the owner to run (phase 1): built, checked, attested. Also answers whether GPUI
   # draws on the macOS runner, from the screenshots.
   app-macos:
     needs: changes
-    # A -check branch is the compile loop: only the check job runs there. Daemon snapshots do not
-    # touch the app, and a Rust snapshot builds it only when the app changed.
-    if: ${{ !endsWith(github.ref, '-check') && github.ref != 'refs/heads/natamux-ci/daemon' && (needs.changes.outputs.app == 'true' || !startsWith(github.ref, 'refs/heads/natamux-ci/rust')) }}
+    # A -check branch is the compile loop: only the check job runs there. Any other branch or PR
+    # builds the app when the app changed. The state shots run in app-shots.
+    if: ${{ !endsWith(github.ref, '-check') && needs.changes.outputs.app == 'true' }}
     runs-on: macos-15
     timeout-minutes: 120
     permissions:
       contents: read
-      actions: write
       id-token: write
       attestations: write
-    # The owner signed the baselines off (docs/rust-phase3.md): a differing shot fails the job.
-    # REPORT_ONLY: "1" is for a change of the look before its new baselines: the compare step is
-    # skipped then (everything differs; the shots are in the artifact). T-0158 (lean layout) sets
-    # it until the owner signs its shots off.
-    env:
-      REPORT_ONLY: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: rustup toolchain install
@@ -192,6 +167,77 @@ jobs:
               sips -s format bmp "shots/window-$theme-$size.png" --out "shots/window-$theme-$size.bmp" >/dev/null
             done
           done
+      - name: Did GPUI draw
+        run: |
+          for size in 800x560 1000x680; do
+            if python3 scripts/check-shots.py "shots/window-dark-$size.bmp" "shots/window-light-$size.bmp"; then
+              echo "GPUI drew the window on the macOS runner ($size)." >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "GPUI did not draw the window on the macOS runner ($size)." >> "$GITHUB_STEP_SUMMARY"
+              exit 1
+            fi
+          done
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: shots-mac-window
+          path: shots/*.png
+          if-no-files-found: ignore
+      # For app-shots; zip loses the exec bit, which app-shots sets again.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: app-binary
+          path: target/release/natamux-app
+          retention-days: 1
+      - run: scripts/bundle-rust-app.sh dist
+      - name: The zipped app is at most 60 MB
+        run: |
+          size=$(stat -f %z dist/natamux-app-macos-arm64.zip)
+          echo "natamux-app-macos-arm64.zip: $size bytes" >> "$GITHUB_STEP_SUMMARY"
+          [ "$size" -le $((60 * 1024 * 1024)) ]
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/natamux-app-macos-arm64.zip
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: natamux-app-macos-arm64
+          path: dist/natamux-app-macos-arm64.zip
+          compression-level: 0
+      # Phase 2: the Rust `natamux` and `nmx` (docs/rust-phase2.md).
+      - run: cargo build --release --locked -p natamux-cli
+      - run: tar -czf dist/natamux-cli-macos-arm64.tar.gz -C target/release natamux nmx
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/natamux-cli-macos-arm64.tar.gz
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: natamux-cli-macos-arm64
+          path: dist/natamux-cli-macos-arm64.tar.gz
+          compression-level: 0
+
+  # The state shots of app-macos, split over parallel jobs: one after another they took 22 minutes
+  # (T-0165). The changes job picks the shards: one when a Shots: line names a few states.
+  app-shots:
+    needs: [changes, app-macos]
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.changes.outputs.shards) }}
+    runs-on: macos-15
+    timeout-minutes: 30
+    # The owner signed the baselines off (docs/rust-phase3.md): a differing shot fails the job.
+    # REPORT_ONLY: "1" is for a change of the look before its new baselines: the compare step is
+    # skipped then (everything differs; the shots are in the artifact). T-0158 (lean layout) sets
+    # it until the owner signs its shots off.
+    env:
+      REPORT_ONLY: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: app-binary
+          path: target/release
+      - run: chmod +x target/release/natamux-app
       # Screens 1 to 7 of phase 3: every state in both themes at two sizes, and the DOCKED ones at
       # 1024x720 too, where the sidebar docks; the runner's screen is 1024x768, so the details panel,
       # which docks from 1280, is shot as a sheet (docs/rust-phase3.md).
@@ -202,6 +248,8 @@ jobs:
           # A snapshot push may shoot only some states: a line "Shots: <state> ..." in its commit
           # message (T-0158: about 1 minute instead of 22). A PR and dev shoot every state.
           MESSAGE: ${{ github.event_name == 'push' && github.event.head_commit.message || '' }}
+          SHARD: ${{ matrix.shard }}
+          SHARD_COUNT: ${{ strategy.job-total }}
           STATES: >-
             tasks-table tasks-board board-hover-card add-task-dialog start-task remove-workspace
             clear-finished add-subtask task-context-menu skeleton toast empty filter-miss
@@ -256,6 +304,14 @@ jobs:
               const own = all.filter(w => w.kCGWindowOwnerPID === $1 && w.kCGWindowLayer === 0);
               own.length ? String(own[0].kCGWindowNumber) : ''"
           }
+          # State number i goes to shard i % total + 1; a state keeps all its sizes and themes.
+          i=0
+          mine=
+          for state in $STATES; do
+            [ $((i % SHARD_COUNT + 1)) = "$SHARD" ] && mine="$mine $state"
+            i=$((i + 1))
+          done
+          STATES=$mine
           for state in $STATES; do
             sizes="1000x680 800x560"
             case " $DOCKED " in *" $state "*) sizes="$sizes 1024x720" ;; esac
@@ -308,77 +364,36 @@ jobs:
             echo "| $name | $result |" >> "$GITHUB_STEP_SUMMARY"
           done
           exit "$failed"
-      - name: Did GPUI draw
-        run: |
-          for size in 800x560 1000x680; do
-            if python3 scripts/check-shots.py "shots/window-dark-$size.bmp" "shots/window-light-$size.bmp"; then
-              echo "GPUI drew the window on the macOS runner ($size)." >> "$GITHUB_STEP_SUMMARY"
-            else
-              echo "GPUI did not draw the window on the macOS runner ($size)." >> "$GITHUB_STEP_SUMMARY"
-              exit 1
-            fi
-          done
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
-          name: shots-macos
+          name: shots-mac-${{ matrix.shard }}
           path: shots/*.png
           if-no-files-found: ignore
-      - run: scripts/bundle-rust-app.sh dist
-      - name: The zipped app is at most 60 MB
-        run: |
-          size=$(stat -f %z dist/natamux-app-macos-arm64.zip)
-          echo "natamux-app-macos-arm64.zip: $size bytes" >> "$GITHUB_STEP_SUMMARY"
-          [ "$size" -le $((60 * 1024 * 1024)) ]
-      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+
+  # One artifact with every shot, as before the split: gh run download <run> -n shots-macos.
+  shots:
+    needs: app-shots
+    if: ${{ always() && needs.app-shots.result != 'skipped' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/upload-artifact/merge@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          subject-path: dist/natamux-app-macos-arm64.zip
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: natamux-app-macos-arm64
-          path: dist/natamux-app-macos-arm64.zip
-          compression-level: 0
-      # Phase 2: the Rust `natamux` and `nmx` (docs/rust-phase2.md).
-      - run: cargo build --release --locked -p natamux-cli
-      - run: tar -czf dist/natamux-cli-macos-arm64.tar.gz -C target/release natamux nmx
-      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
-        with:
-          subject-path: dist/natamux-cli-macos-arm64.tar.gz
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: natamux-cli-macos-arm64
-          path: dist/natamux-cli-macos-arm64.tar.gz
-          compression-level: 0
-      - name: Stamp the cache with this commit
-        if: always() && steps.build.outcome == 'success'
-        run: python3 scripts/ci-changes.py stamp
-      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        if: always() && steps.build.outcome == 'success'
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: rust-app-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-${{ github.sha }}
-      - name: Keep only the newest cache of this job
-        if: always() && steps.build.outcome == 'success'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          gh cache list --ref "$GITHUB_REF" --key "rust-app-${{ runner.os }}-" --json id,key,createdAt \
-            --jq 'sort_by(.createdAt) | reverse | .[1:] | .[].id' |
-            while read -r id; do gh cache delete "$id"; done
+          name: shots-macos
+          pattern: shots-mac-*
+          delete-merged: true
 
   # Gate 4 of phase 1: a Windows build starts and types.
   app-windows:
-    # The slowest job: snapshot pushes skip it, PRs into dev and dev itself run it (gate 4).
-    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/dev'
+    needs: changes
+    # The slowest job: snapshot pushes skip it unless [ci: all]; PRs that change the app or the
+    # CLI, and dev itself, run it (gate 4).
+    if: ${{ !endsWith(github.ref, '-check') && (needs.changes.outputs.app == 'true' || needs.changes.outputs.client == 'true') && (!startsWith(github.ref, 'refs/heads/natamux-ci/') || needs.changes.outputs.all == 'true') }}
     runs-on: windows-latest
     timeout-minutes: 120
     permissions:
       contents: read
-      actions: write
       id-token: write
       attestations: write
     defaults:
@@ -436,26 +451,6 @@ jobs:
           name: natamux-cli-windows-x64
           path: dist/natamux-cli-windows-x64.zip
           compression-level: 0
-      - name: Stamp the cache with this commit
-        if: always() && steps.build.outcome == 'success'
-        run: python scripts/ci-changes.py stamp
-      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        if: always() && steps.build.outcome == 'success'
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: rust-app-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-${{ github.sha }}
-      - name: Keep only the newest cache of this job
-        if: always() && steps.build.outcome == 'success'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          gh cache list --ref "$GITHUB_REF" --key "rust-app-${{ runner.os }}-" --json id,key,createdAt \
-            --jq 'sort_by(.createdAt) | reverse | .[1:] | .[].id' |
-            while read -r id; do gh cache delete "$id"; done
 
   # natamux-client against the real daemon: the checked images of main, as scripts/e2e.sh starts them.
   # `--ignored` runs every ignored test of live_daemon.rs, live_daemon_git.rs,
@@ -478,9 +473,6 @@ jobs:
     if: ${{ !endsWith(github.ref, '-check') && needs.changes.outputs.client == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 40
-    permissions:
-      contents: read
-      actions: write
     env:
       GH_TOKEN: ${{ github.token }}
       NATAMUX_URL: http://127.0.0.1:8080/api
@@ -488,17 +480,6 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: rustup toolchain install
-      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: rust-live-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-${{ github.sha }}
-          restore-keys: |
-            rust-live-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-
-            rust-live-${{ runner.os }}-
-      - run: python3 scripts/ci-changes.py mtimes
       - id: build
         run: cargo test --locked -p natamux-client --test live_daemon --test live_daemon_git --test live_daemon_settings --test live_daemon_files --test live_daemon_projects --no-run
       - name: Start the daemon and the dashboard of main
@@ -528,26 +509,6 @@ jobs:
           NATAMUX_LIVE_TASK: ${{ steps.task.outputs.id }}
       - if: failure()
         run: scripts/e2e.sh logs
-      - name: Stamp the cache with this commit
-        if: always() && steps.build.outcome == 'success'
-        run: python3 scripts/ci-changes.py stamp
-      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        if: always() && steps.build.outcome == 'success'
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: rust-live-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-${{ github.sha }}
-      - name: Keep only the newest cache of this job
-        if: always() && steps.build.outcome == 'success'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          gh cache list --ref "$GITHUB_REF" --key "rust-live-${{ runner.os }}-" --json id,key,createdAt \
-            --jq 'sort_by(.createdAt) | reverse | .[1:] | .[].id' |
-            while read -r id; do gh cache delete "$id"; done
 
   # Phase 2: the Rust `natamux` against the daemon of main. Its output must equal the TypeScript
   # command's (scripts/cli-parity.sh), and the agent hook specs run with it first on the agents'
@@ -559,7 +520,6 @@ jobs:
     timeout-minutes: 45
     permissions:
       contents: read
-      actions: write
       id-token: write
       attestations: write
     env:
@@ -575,17 +535,6 @@ jobs:
       - run: |
           rustup toolchain install
           rustup target add x86_64-unknown-linux-musl
-      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: rust-cli-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-${{ github.sha }}
-          restore-keys: |
-            rust-cli-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-
-            rust-cli-${{ runner.os }}-
-      - run: python3 scripts/ci-changes.py mtimes
       - id: build
         run: cargo build --release --locked -p natamux-cli --target x86_64-unknown-linux-musl
       - name: Start the daemon and the dashboard of main, with the Rust CLI on the agents' PATH
@@ -642,32 +591,12 @@ jobs:
           name: natamux-cli-linux-x64
           path: dist/natamux-cli-linux-x64.tar.gz
           compression-level: 0
-      - name: Stamp the cache with this commit
-        if: always() && steps.build.outcome == 'success'
-        run: python3 scripts/ci-changes.py stamp
-      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        if: always() && steps.build.outcome == 'success'
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: rust-cli-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-${{ github.sha }}
-      - name: Keep only the newest cache of this job
-        if: always() && steps.build.outcome == 'success'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          gh cache list --ref "$GITHUB_REF" --key "rust-cli-${{ runner.os }}-" --json id,key,createdAt \
-            --jq 'sort_by(.createdAt) | reverse | .[1:] | .[].id' |
-            while read -r id; do gh cache delete "$id"; done
 
   # Phase 4, part 1: the daemon's terminal crates on macOS and on Windows (ConPTY). Linux runs them
-  # in `check`. Not on the snapshots of phase 3 (docs/rust-phase4.md).
+  # in `check` (docs/rust-phase4.md).
   daemon-os:
     needs: changes
-    if: ${{ !endsWith(github.ref, '-check') && github.ref != 'refs/heads/natamux-ci/rust' && needs.changes.outputs.daemon_crates != '' }}
+    if: ${{ !endsWith(github.ref, '-check') && needs.changes.outputs.daemon_crates != '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -678,49 +607,15 @@ jobs:
             py: python
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
-    permissions:
-      contents: read
-      actions: write
     defaults:
       run:
         shell: bash
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: rustup toolchain install
-      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: rust-daemon-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-${{ github.sha }}
-          restore-keys: |
-            rust-daemon-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-
-            rust-daemon-${{ runner.os }}-
-      - run: ${{ matrix.py }} scripts/ci-changes.py mtimes
       - id: build
         run: cargo test --locked ${{ needs.changes.outputs.daemon_crates }} --no-run
       - run: cargo test --locked ${{ needs.changes.outputs.daemon_crates }}
-      - name: Stamp the cache with this commit
-        if: always() && steps.build.outcome == 'success'
-        run: ${{ matrix.py }} scripts/ci-changes.py stamp
-      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        if: always() && steps.build.outcome == 'success'
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: rust-daemon-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-${{ github.sha }}
-      - name: Keep only the newest cache of this job
-        if: always() && steps.build.outcome == 'success'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          gh cache list --ref "$GITHUB_REF" --key "rust-daemon-${{ runner.os }}-" --json id,key,createdAt \
-            --jq 'sort_by(.createdAt) | reverse | .[1:] | .[].id' |
-            while read -r id; do gh cache delete "$id"; done
 
   # Phase 4, part 1: the contract suite. The Node daemon of main and the Rust daemon run side by
   # side from the same image (compose.rust-daemon.yaml); the terminal scenarios of
@@ -728,12 +623,9 @@ jobs:
   # snapshots of both (scripts/xterm-grid.mjs).
   daemon-contract:
     needs: changes
-    if: ${{ !endsWith(github.ref, '-check') && github.ref != 'refs/heads/natamux-ci/rust' && needs.changes.outputs.contract == 'true' }}
+    if: ${{ !endsWith(github.ref, '-check') && needs.changes.outputs.contract == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    permissions:
-      contents: read
-      actions: write
     env:
       GH_TOKEN: ${{ github.token }}
       NATAMUX_TOKEN: e2e-token
@@ -747,17 +639,6 @@ jobs:
       - run: |
           rustup toolchain install
           rustup target add x86_64-unknown-linux-musl
-      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: rust-daemon-contract-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-${{ github.sha }}
-          restore-keys: |
-            rust-daemon-contract-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-
-            rust-daemon-contract-${{ runner.os }}-
-      - run: python3 scripts/ci-changes.py mtimes
       # The bundled SQLite of rusqlite is C: musl-gcc builds it for the static binary.
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends musl-tools
       - run: cargo build --release --locked -p natamux-daemon --target x86_64-unknown-linux-musl
@@ -910,53 +791,19 @@ jobs:
         run: scripts/e2e.sh logs
       - if: always()
         run: scripts/e2e.sh down
-      - name: Stamp the cache with this commit
-        if: always() && steps.build.outcome == 'success'
-        run: python3 scripts/ci-changes.py stamp
-      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        if: always() && steps.build.outcome == 'success'
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: rust-daemon-contract-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-${{ github.sha }}
-      - name: Keep only the newest cache of this job
-        if: always() && steps.build.outcome == 'success'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          gh cache list --ref "$GITHUB_REF" --key "rust-daemon-contract-${{ runner.os }}-" --json id,key,createdAt \
-            --jq 'sort_by(.createdAt) | reverse | .[1:] | .[].id' |
-            while read -r id; do gh cache delete "$id"; done
 
   # Phase 4, part 1: the terminal bench of the Node daemon and of the Rust one, on the same runner.
   # The gate: a snapshot as fast as Node's, parsing at least as fast (compare-terminal-bench.py).
   daemon-bench:
     needs: changes
-    if: ${{ !endsWith(github.ref, '-check') && github.ref != 'refs/heads/natamux-ci/rust' && needs.changes.outputs.terminal == 'true' }}
+    if: ${{ !endsWith(github.ref, '-check') && needs.changes.outputs.terminal == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    permissions:
-      contents: read
-      actions: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - run: rustup toolchain install
-      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: rust-daemon-bench-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-${{ github.sha }}
-          restore-keys: |
-            rust-daemon-bench-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-
-            rust-daemon-bench-${{ runner.os }}-
-      - run: python3 scripts/ci-changes.py mtimes
       - id: build
         run: cargo test --release --locked -p natamux-daemon --test terminal_bench --no-run
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
@@ -975,26 +822,6 @@ jobs:
         run: cargo test --release --locked -p natamux-daemon --test terminal_bench -- --ignored --nocapture | tee "$RUNNER_TEMP/rust-bench.txt"
       - run: python3 scripts/compare-terminal-bench.test.py
       - run: python3 scripts/compare-terminal-bench.py "$RUNNER_TEMP/node-bench.txt" "$RUNNER_TEMP/rust-bench.txt"
-      - name: Stamp the cache with this commit
-        if: always() && steps.build.outcome == 'success'
-        run: python3 scripts/ci-changes.py stamp
-      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        if: always() && steps.build.outcome == 'success'
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: rust-daemon-bench-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-${{ github.sha }}
-      - name: Keep only the newest cache of this job
-        if: always() && steps.build.outcome == 'success'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          gh cache list --ref "$GITHUB_REF" --key "rust-daemon-bench-${{ runner.os }}-" --json id,key,createdAt \
-            --jq 'sort_by(.createdAt) | reverse | .[1:] | .[].id' |
-            while read -r id; do gh cache delete "$id"; done
 
   # The tools come as prebuilt binaries at pinned versions; install-action checks their hashes.
   supply-chain:
