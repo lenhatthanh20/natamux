@@ -18,6 +18,7 @@ mod new_workspace;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
+use std::time::{Duration, Instant};
 
 use natamux_agents::hook_files::WorkspaceHooks;
 use natamux_agents::trust::trust_paths;
@@ -213,11 +214,26 @@ impl Fx {
 
     /// `settle` of Node's tests: the worktree, then the stages it started.
     pub fn settle(&self) {
+        // A hang fails with a message, not at the CI timeout.
+        let until = Instant::now() + Duration::from_secs(30);
+        let left = || until.saturating_duration_since(Instant::now());
         for _ in 0..2 {
-            self.workspaces.settle();
+            if !self.workspaces.settle_for(left()) {
+                self.hung("a workspace is still being made");
+            }
             self.bus.deliver_all();
-            self.runner.settle();
+            if !self.runner.run.settle_for(left()) {
+                self.hung("the stage runner is still running work");
+            }
         }
+    }
+
+    fn hung(&self, what: &str) -> ! {
+        panic!(
+            "settle did not finish in 30 s: {what}\npreparing: {:?}\nlog: {:?}",
+            self.workspaces.preparing(),
+            self.log.lock().unwrap()
+        )
     }
 
     /// The worktree of the next new workspace waits until `release`.

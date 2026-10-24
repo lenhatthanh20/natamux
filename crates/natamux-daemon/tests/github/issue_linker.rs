@@ -180,6 +180,36 @@ fn opens_one_issue_for_two_requests_at_the_same_time() {
 }
 
 #[test]
+fn a_panic_in_create_now_resolves_its_flight() {
+    let fx = Fx::new();
+    let panicked = std::sync::atomic::AtomicBool::new(false);
+    let (gh, _calls) = recording(move |_| {
+        if !panicked.swap(true, std::sync::atomic::Ordering::SeqCst) {
+            panic!("gh broke");
+        }
+        Ok(ISSUE.to_string())
+    });
+    let linker = std::sync::Arc::new(linker_with(&fx, gh));
+    let task = create(&fx, json!({ "title": "Export" }));
+
+    let leader = {
+        let (linker, id) = (std::sync::Arc::clone(&linker), task.id.clone());
+        std::thread::spawn(move || linker.create(&id))
+    };
+    assert!(leader.join().is_err());
+
+    let (sender, receiver) = std::sync::mpsc::channel();
+    let id = task.id.clone();
+    std::thread::spawn(move || {
+        let _ = sender.send(linker.create(&id).is_ok());
+    });
+    assert!(
+        receiver.recv_timeout(Duration::from_secs(10)).is_ok(),
+        "the second request hung on the flight of the panic"
+    );
+}
+
+#[test]
 fn does_not_link_a_new_issue_over_one_linked_while_it_was_opened() {
     let fx = Fx::new();
     let task = create(&fx, json!({ "title": "Export" }));

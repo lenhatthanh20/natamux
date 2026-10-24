@@ -4,9 +4,10 @@
 use std::io::{Read, Write};
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::thread::{self, JoinHandle};
+use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::{Arc, Mutex, PoisonError};
+use std::thread;
 use std::time::{Duration, Instant};
 
 use natamux_agents::launch::{Platform, one_shot_command, quote_argument};
@@ -18,6 +19,8 @@ use natamux_pty::shell_command::shell_command;
 use crate::workspaces::service::RunAgentOnce;
 
 const POLL: Duration = Duration::from_millis(10);
+// How long the output readers get after the shell ended; a grandchild may hold the pipe open.
+const PIPE_GRACE: Duration = Duration::from_millis(500);
 
 /// The process that runs a command line in the user's login shell.
 #[derive(Debug, PartialEq, Eq)]
@@ -103,15 +106,22 @@ fn run_with_env(run: AgentRun, daemon_env: &Env) -> Result<String, String> {
         })
     });
     let too_much = Arc::new(AtomicBool::new(false));
-    let stdout = child
-        .stdout
-        .take()
-        .map(|pipe| read_all(pipe, Some(Arc::clone(&too_much))));
-    let stderr = child.stderr.take().map(|pipe| read_all(pipe, None));
+    let (done, finished) = mpsc::channel();
+    let mut readers = 0;
+    let stdout = child.stdout.take().map(|pipe| {
+        readers += 1;
+        read_all(pipe, Some(Arc::clone(&too_much)), done.clone())
+    });
+    let stderr = child.stderr.take().map(|pipe| {
+        readers += 1;
+        read_all(pipe, None, done.clone())
+    });
+    drop(done);
 
     let failure = wait_for(&mut child, &run, &name, &too_much);
-    let stdout = stdout.map(join_text).unwrap_or_default();
-    let stderr = stderr.map(join_text).unwrap_or_default();
+    wait_for_readers(&finished, readers);
+    let stdout = stdout.map(text_of).unwrap_or_default();
+    let stderr = stderr.map(text_of).unwrap_or_default();
     if let Some(writer) = writer {
         let _ = writer.join();
     }
@@ -141,13 +151,13 @@ enum Failure {
 fn wait_for(child: &mut Child, run: &AgentRun, name: &str, too_much: &AtomicBool) -> Failure {
     let deadline = Instant::now() + Duration::from_millis(run.timeout_ms);
     let reason = loop {
+        if too_much.load(Ordering::SeqCst) {
+            break format!("{name} printed too much");
+        }
         match child.try_wait() {
             Ok(Some(status)) => return Failure::Ended(status.code()),
             Ok(None) => {}
             Err(error) => break format!("{name} could not be waited for: {error}"),
-        }
-        if too_much.load(Ordering::SeqCst) {
-            break format!("{name} printed too much");
         }
         if Instant::now() >= deadline {
             // JavaScript's Math.round: half up.
@@ -160,36 +170,114 @@ fn wait_for(child: &mut Child, run: &AgentRun, name: &str, too_much: &AtomicBool
     Failure::Stopped(reason)
 }
 
+/// What a pipe gave so far. The text is decoded across chunk borders; the length is in UTF-16
+/// units, as Node counts it.
+#[derive(Default)]
+struct Collected {
+    // The start of a character that the next chunk finishes.
+    pending: Vec<u8>,
+    text: String,
+    units: usize,
+}
+
+impl Collected {
+    fn push(&mut self, chunk: &[u8]) {
+        self.pending.extend_from_slice(chunk);
+        loop {
+            let (valid, bad) = match std::str::from_utf8(&self.pending) {
+                Ok(_) => (self.pending.len(), Some(0)),
+                Err(error) => (error.valid_up_to(), error.error_len()),
+            };
+            let head: Vec<u8> = self.pending.drain(..valid).collect();
+            self.append(&String::from_utf8_lossy(&head));
+            match bad {
+                Some(0) | None => break,
+                Some(length) => {
+                    self.append("\u{FFFD}");
+                    self.pending.drain(..length);
+                }
+            }
+        }
+    }
+
+    fn append(&mut self, text: &str) {
+        self.units += text.chars().map(char::len_utf16).sum::<usize>();
+        self.text.push_str(text);
+    }
+
+    // Keeps the last `limit` units; a character is never cut in two.
+    fn keep_tail(&mut self, limit: usize) {
+        let mut excess = self.units.saturating_sub(limit);
+        if excess == 0 {
+            return;
+        }
+        let mut cut = 0;
+        for character in self.text.chars() {
+            if excess == 0 {
+                break;
+            }
+            excess = excess.saturating_sub(character.len_utf16());
+            cut += character.len_utf8();
+        }
+        self.text.drain(..cut);
+        self.units = self.text.chars().map(char::len_utf16).sum();
+    }
+}
+
+type Shared = Arc<Mutex<Collected>>;
+
+fn lock(shared: &Shared) -> std::sync::MutexGuard<'_, Collected> {
+    shared.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
 fn read_all(
     mut pipe: impl Read + Send + 'static,
     cap: Option<Arc<AtomicBool>>,
-) -> JoinHandle<Vec<u8>> {
+    done: Sender<()>,
+) -> Shared {
+    let shared = Shared::default();
+    let kept = Arc::clone(&shared);
     thread::spawn(move || {
-        let mut kept: Vec<u8> = Vec::new();
         let mut chunk = [0u8; 8192];
         while let Ok(read) = pipe.read(&mut chunk) {
             if read == 0 {
                 break;
             }
-            kept.extend_from_slice(&chunk[..read]);
-            match &cap {
-                Some(too_much) if kept.len() > MAX_OUTPUT_CHARS => {
-                    too_much.store(true, Ordering::SeqCst);
-                    break;
+            let mut collected = lock(&kept);
+            collected.push(&chunk[..read]);
+            if collected.units > MAX_OUTPUT_CHARS {
+                match &cap {
+                    Some(too_much) => {
+                        too_much.store(true, Ordering::SeqCst);
+                        break;
+                    }
+                    // The tail is what tells why it failed.
+                    None => collected.keep_tail(MAX_OUTPUT_CHARS),
                 }
-                // The tail is what tells why it failed.
-                None if kept.len() > MAX_OUTPUT_CHARS => {
-                    kept.drain(..kept.len() - MAX_OUTPUT_CHARS);
-                }
-                _ => {}
             }
         }
-        kept
-    })
+        let _ = done.send(());
+    });
+    shared
 }
 
-fn join_text(reader: JoinHandle<Vec<u8>>) -> String {
-    String::from_utf8_lossy(&reader.join().unwrap_or_default()).into_owned()
+// Waits until `count` readers are done, or the grace passed; what was read so far is kept.
+fn wait_for_readers(finished: &Receiver<()>, count: usize) {
+    let until = Instant::now() + PIPE_GRACE;
+    for _ in 0..count {
+        let left = until.saturating_duration_since(Instant::now());
+        if finished.recv_timeout(left).is_err() {
+            break;
+        }
+    }
+}
+
+fn text_of(shared: Shared) -> String {
+    let mut collected = lock(&shared);
+    let rest = std::mem::take(&mut collected.pending);
+    let mut text = std::mem::take(&mut collected.text);
+    text.push_str(&String::from_utf8_lossy(&rest));
+    text
 }
 
 #[cfg(unix)]

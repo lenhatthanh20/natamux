@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { expect, test } from '@playwright/test'
 import { GROUPS, skippedIn } from '../groups'
@@ -110,6 +110,15 @@ test('lists each test of a full run in exactly one group', () => {
 
 test('runs each group in its own CI job', () => {
   const file = new URL('../../.github/workflows/e2e.yml', import.meta.url)
+  // dev has no e2e.yml: its Rust workflow runs the groups against the Rust daemon.
+  if (!existsSync(file)) {
+    const changes = readFileSync(new URL('../../scripts/ci-changes.py', import.meta.url), 'utf8')
+    const listed = changes.match(/^E2E_GROUPS = \[(.*)\]$/m)?.[1].split(', ') ?? []
+    expect(listed.map((group) => group.replaceAll('"', '')).toSorted()).toEqual(ALL.toSorted())
+    const rust = readFileSync(new URL('../../.github/workflows/rust.yml', import.meta.url), 'utf8')
+    expect(rust).toMatch(/E2E_GROUP=\$\{\{ matrix\.group \}\}/)
+    return
+  }
   const workflow = readFileSync(file, 'utf8')
   const matrix = workflow.match(/^ +group: \[(.*)\]$/m)?.[1].split(', ') ?? []
   expect(matrix.toSorted()).toEqual(ALL.toSorted())

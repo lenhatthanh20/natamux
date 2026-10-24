@@ -8,6 +8,7 @@ use natamux_git::gh::RunGh;
 use super::*;
 
 /// The diff stat of one task, as `diff_stats` gives it now.
+#[allow(dead_code)]
 pub fn stat_of(ws: &WorkspaceService, task_id: &str) -> Option<DiffStat> {
     let stats = ws.diff_stats().unwrap();
     stats

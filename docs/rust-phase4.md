@@ -1,6 +1,6 @@
 # Rust phase 4: the daemon in Rust
 
-Phase 4 of `plan-rust-migration.md` moves the daemon to Rust, behind the same HTTP and WebSocket contract, so the native app, the web dashboard and the CLI cannot tell which daemon answers. It comes in parts. This page covers part 1 (T-0153): the terminals (PTY, input gap, ring, snapshot, resume, backpressure, restore after a restart) and the contract suite that compares the two daemons; part 2 (T-0155): tasks, events, the files on disk and the index, in [Part 2](#part-2-tasks-events-storage-index); part 3 (T-0157): the stage engine and agent start, in [Part 3](#part-3-the-stage-engine); and part 4 (T-0159): the hooks, signals, activity and usage of the agents, and a faster CI, in [Part 4](#part-4-agent-hooks); and part 5 (T-0161): git, workspaces and GitHub, in [Part 5](#part-5-git-workspaces-github). A row of a part's "where it differs" table that a later part closed is taken out.
+Phase 4 of `plan-rust-migration.md` moves the daemon to Rust, behind the same HTTP and WebSocket contract, so the native app, the web dashboard and the CLI cannot tell which daemon answers. It comes in parts. This page covers part 1 (T-0153): the terminals (PTY, input gap, ring, snapshot, resume, backpressure, restore after a restart) and the contract suite that compares the two daemons; part 2 (T-0155): tasks, events, the files on disk and the index, in [Part 2](#part-2-tasks-events-storage-index); part 3 (T-0157): the stage engine and agent start, in [Part 3](#part-3-the-stage-engine); part 4 (T-0159): the hooks, signals, activity and usage of the agents, and a faster CI, in [Part 4](#part-4-agent-hooks); and part 5 (T-0161): git, workspaces and GitHub, in [Part 5](#part-5-git-workspaces-github). A row of a part's "where it differs" table that a later part closed is taken out.
 
 The Rust daemon does not replace the Node one yet: it runs only in tests and CI. The phase-4 gate (the E2E suite with `NATAMUX_DAEMON_IMAGE` swapped) is its own task after part 5; it also needs the project routes, which [Part 5](#part-5-git-workspaces-github) lists as not ported yet.
 
@@ -119,7 +119,7 @@ Left out or changed, with the reason:
 - 'one snapshot for several clients': the shared snapshot is tested in a synchronized frame, the only case where Rust shares one.
 - Output that came "during a snapshot" comes after `replayed`, live; the offsets are checked as such.
 - 'refuses a task without an open shell' (paste): the "starts no timer" check is gone; the scheduler has no timer count.
-- Route cases that need tasks, stages or agents (agent lanes, the review comment, workspace removal, the agent token's gate events): later parts.
+- Route cases that need tasks, stages or agents (agent lanes, the review comment, the agent token's gate events): later parts.
 - 'before the login PATH came': 'answers what runs no program at once, and holds the rest until it came' and 'lists only GET routes that exist'. The Rust daemon has no `ready` gate and no `NO_PROGRAM_ROUTES` list: the login PATH comes from the Electron parent, which the Rust daemon does not have before phase 5, so there is nothing to wait for. The gate and both cases come with the channel phase 5 picks.
 - 'closes a socket that sent nothing for SILENT_CLOSE_MS, and its client detaches': ported with a 600 ms limit instead of 90 s, and with protocol pings, which do not count (Node counts only `message` events).
 - Found in review and fixed with a regression test: two attaches at once started two shells, one lost and never ended (`races.rs`); the pty fds had no close-on-exec, so every later shell held the terminals of the earlier ones (`a_shell_holds_no_terminal_of_another_shell`); protocol pings kept a silent socket open.
@@ -585,12 +585,12 @@ Rust tests keep the Node names in snake case.
 | `git/branches.test.ts` | 9 | 9 | `natamux-git/src/branches_tests.rs` |
 | `git/changes.test.ts` | 15 | 16 | `natamux-git/src/changes_tests.rs` |
 | `git/file-diff.test.ts` | 12 | 12 | `natamux-git/src/file_diff_tests.rs` |
-| `git/graph.test.ts` | 29 | 29 | `natamux-git/src/graph_tests.rs` |
+| `git/graph.test.ts` | 29 | 8 + 21 | `natamux-git/src/graph_tests.rs`, `graph_push_tests.rs` |
 | `git/rollback.test.ts` | 9 | 9 | `natamux-git/src/rollback_tests.rs` |
 | `git/worktrees.test.ts` | 20 | 20 | `natamux-git/src/worktrees_tests.rs` |
 | `git/commit-push.test.ts` | 24 | 24 | `natamux-git/src/commit_push_tests.rs` |
 | `git/commit-drafter.test.ts` | 22 | 11 + 12 | `natamux-git/src/commit_drafter_tests.rs`, `natamux-daemon/src/workspaces/agent_once_tests.rs` |
-| `git/gh.test.ts` | 28 | 30 | `natamux-git/src/gh_tests.rs` |
+| `git/gh.test.ts` | 28 | 16 + 14 | `natamux-git/src/gh_tests.rs`, `gh_batch_tests.rs` |
 | core `git/commit-message.test.ts` | 10 | 11 | `natamux-core/src/git/commit_message_tests.rs` |
 | `stages/ci-check.test.ts` | 12 | 12 | `natamux-stages/src/ci_check_tests.rs` |
 | `github/issue-importer.test.ts` | 6 | 6 | `natamux-daemon/tests/github/issue_importer.rs` |

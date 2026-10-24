@@ -1,0 +1,8 @@
+# E2E on the Rust daemon (rust.yml, job e2e): the same daemon service, with the musl binary
+# instead of the Node entry. Env, healthcheck and ports stay as in compose.prod.yaml.
+services:
+  daemon:
+    entrypoint: ["/opt/natamux/bin/natamux-daemon"]
+    command: []
+    volumes:
+      - ./target/x86_64-unknown-linux-musl/release/natamux-daemon:/opt/natamux/bin/natamux-daemon:ro

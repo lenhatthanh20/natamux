@@ -4,7 +4,8 @@
 Usage: ci-changes.py flags | crates | mtimes | stamp
 
 flags   writes key=value lines to $GITHUB_OUTPUT (stdout when unset): the job flags, the changed
-        crates with their dependents, the contract suites to run, `all` and the shot shards.
+        crates with their dependents, the contract suites to run (`[contract: a,b]`), the E2E groups to run (`[e2e: a,b]`; the flag `e2e`
+        says whether the Rust daemon needs E2E at all), `all` and the shot shards.
         A push to dev, or a head commit message with `[ci: all]`, runs everything; a pull request
         and a snapshot run what their diff against origin/dev needs.
 crates  prints the same crate list, one per line.
@@ -13,6 +14,7 @@ stamp   records HEAD in target/.ci-commit; run it before the cache is saved.
 """
 
 import fnmatch
+import json
 import os
 import pathlib
 import re
@@ -21,7 +23,8 @@ import sys
 import tomllib
 
 BASE = "origin/dev"
-SUITES = ["terminals", "tasks", "stages", "hooks", "workspaces"]
+SUITES = ["terminals", "tasks", "stages", "hooks", "workspaces", "projects"]
+E2E_GROUPS = ["timing", "cache", "terminal", "rest"]
 DAEMON_CRATES = [
     "natamux-core",
     "natamux-store",
@@ -58,6 +61,12 @@ APP_PATHS = [
 ]
 # What the jobs that start the images of main read (scripts/e2e.sh up).
 IMAGE_PATHS = ["scripts/e2e.sh", "compose.e2e.yaml", "compose.prod.yaml", "e2e/"]
+# E2E runs the daemon binary in the images of main: the contract-only files do not matter to it.
+E2E_PATHS = [
+    *(p for p in DAEMON_PATHS if p not in ("compose.rust-daemon.yaml", "scripts/xterm-grid.mjs")),
+    *IMAGE_PATHS,
+    "compose.rust-e2e.yaml",
+]
 CLIENT_PATHS = [
     *(f"crates/natamux-{name}/" for name in ("client", "cli", "proto")),
     "compose.rust-cli.yaml",
@@ -90,7 +99,7 @@ def matches(path, patterns):
 def path_flags(files):
     """The job flags for a list of changed paths; None means the diff failed."""
     if files is None or any(matches(f, ALL_PATHS) for f in files):
-        return dict.fromkeys(["daemon", "terminal", "app", "client", "lock", "contract"], True)
+        return dict.fromkeys(["daemon", "terminal", "app", "client", "lock", "contract", "e2e"], True)
     daemon = any(matches(f, DAEMON_PATHS) for f in files)
     return {
         "daemon": daemon,
@@ -99,6 +108,7 @@ def path_flags(files):
         "client": any(matches(f, CLIENT_PATHS) for f in files),
         "lock": any(matches(f, LOCK_PATHS) for f in files),
         "contract": daemon or any(matches(f, CONTRACT_PATHS) for f in files),
+        "e2e": any(matches(f, E2E_PATHS) for f in files),
     }
 
 
@@ -154,6 +164,18 @@ def parse_suites(message):
     return [s for s in SUITES if s in names]
 
 
+def parse_e2e_groups(message):
+    """The groups named by an `[e2e: a,b]` tag; all when there is no tag. Raises ValueError."""
+    found = re.search(r"\[e2e:([^\]]*)\]", message or "")
+    if not found:
+        return list(E2E_GROUPS)
+    names = [n.strip() for n in found.group(1).split(",")]
+    unknown = [n for n in names if n not in E2E_GROUPS]
+    if unknown:
+        raise ValueError(f"unknown e2e group {unknown}; valid names: {', '.join(E2E_GROUPS)}")
+    return [g for g in E2E_GROUPS if g in names]
+
+
 def parse_all(message):
     """True when the message has the tag `[ci: all]`."""
     return re.search(r"\[ci:\s*all\s*\]", message or "") is not None
@@ -183,11 +205,13 @@ def compute(files, message, run_all, graph, ref=""):
     else:
         crates = changed_crates(files, graph)
     suites = list(SUITES) if run_all else parse_suites(message)
+    groups = list(E2E_GROUPS) if run_all else parse_e2e_groups(message)
     daemon = [c for c in DAEMON_CRATES if c in crates]
     out = {k: str(v).lower() for k, v in flags.items()}
     out["crates"] = " ".join(crates)
     out["daemon_crates"] = " ".join(f"-p {c}" for c in daemon)
     out["suites"] = ",".join(suites)
+    out["e2e_groups"] = json.dumps(groups)
     out["all"] = str(run_all).lower()
     out["shards"] = str(shot_shards(message, ref))
     return out

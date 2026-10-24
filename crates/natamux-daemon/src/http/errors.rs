@@ -12,6 +12,7 @@ use crate::agents::errors::{AgentError, HookError};
 use crate::github::issue_importer::IssueImportError;
 use crate::github::issue_linker::LinkError;
 use crate::github::pull_request_watcher::WatchError;
+use crate::projects::errors::RepoError;
 use crate::stages::errors::StageError;
 use crate::tasks::errors::TaskError;
 use crate::terminals::types::TerminalError;
@@ -227,4 +228,18 @@ pub fn watch_error(error: &WatchError) -> Answer {
         WatchError::GitHub(_) | WatchError::Git(_) => conflict(error),
         WatchError::Task(error) => task_error(error),
     }
+}
+
+/// The answer of each project error, as `ERROR_ANSWERS` in `errors.ts`.
+pub fn repo_error_answer(error: &RepoError) -> Answer {
+    if let RepoError::Invalid(issues) = error {
+        return zod_answer(issues);
+    }
+    let (status, code) = error.status_and_code();
+    if status == 500 {
+        eprintln!("{error}");
+        return internal_error();
+    }
+    let status = StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+    error_answer(status, code, &error.to_string())
 }

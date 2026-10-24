@@ -261,6 +261,23 @@ fn says_gh_timed_out_when_the_time_limit_killed_it() {
 }
 
 #[test]
+fn says_gh_printed_too_much_when_the_output_limit_killed_it() {
+    let killed = Captured {
+        code: None,
+        stdout: String::new(),
+        stderr: String::new(),
+        timed_out: false,
+        overflow: true,
+        not_found: false,
+    };
+    let error = gh_error_of(&killed, &words(&["pr", "view"]));
+    assert_eq!(
+        error.message,
+        "GitHub CLI failed: gh printed more than 10 MiB of output"
+    );
+}
+
+#[test]
 fn keeps_the_stderr_and_stdout_of_a_gh_that_failed_by_itself() {
     let failed = Captured {
         code: Some(1),

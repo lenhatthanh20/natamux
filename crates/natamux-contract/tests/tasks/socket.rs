@@ -101,23 +101,39 @@ async fn more_requests(d: &Daemon) {
     call(d, Method::DELETE, "/tasks/CT-2004", Body::None).await;
 }
 
-/// A dashboard that stops reading while big messages come: it misses some, gets a `resync` each
-/// time it caught up (never two in a row), then live messages again. How many come before a gap
-/// depends on the buffers, so only the shape is compared.
+/// A dashboard that stops reading while big messages come: it misses some, gets a `resync` when
+/// it catches up (never two in a row), then live messages again. How many tasks it takes to fall
+/// behind depends on the buffers (nginx stands before the Node daemon), so the flood goes in
+/// batches of 30 until the first `resync` comes, and only the shape is compared.
 #[tokio::test]
 #[ignore = "needs both daemons: the daemon-contract CI job"]
 async fn resync() {
     both("resync", &[], |d: Daemon, mut t: Transcript| async move {
         let mut events = Events::open(&d, Some(&d.token)).await;
         let notes = "x".repeat(400_000);
-        for number in 1..=30 {
-            let task = json!({ "title": format!("CT-21{number:02}: Big"), "description": notes });
-            post(&d, "/tasks", task).await;
+        let mut posted = 0_usize;
+        let mut resynced = false;
+        while !resynced && posted < 150 {
+            for _ in 0..30 {
+                posted += 1;
+                let title = format!("CT-22{posted:03}: Big");
+                post(
+                    &d,
+                    "/tasks",
+                    json!({ "title": title, "description": notes }),
+                )
+                .await;
+            }
+            resynced = events
+                .until_within(
+                    |messages| messages.iter().any(|message| message["kind"] == "resync"),
+                    Duration::from_secs(5),
+                )
+                .await;
         }
-        tokio::time::sleep(Duration::from_millis(500)).await;
-        events.read_for(Duration::from_secs(5)).await;
+        assert!(resynced, "{}: no resync after {posted} big tasks", d.name);
         post(&d, "/tasks", json!({ "title": "CT-2131: After" })).await;
-        events
+        let live = events
             .until(|messages| {
                 messages
                     .iter()
@@ -138,21 +154,21 @@ async fn resync() {
             .filter(|(_, kind)| *kind == "resync")
             .map(|(at, _)| at)
             .collect();
+        // "task.created " is 13 characters and `CT-22<nnn>` 8; the ids `CT-2201` to `CT-2203` of
+        // scenario 22 are 7 and do not count.
         let created = kinds
             .iter()
-            .filter(|kind| kind.starts_with("task.created CT-21"))
+            .filter(|kind| kind.starts_with("task.created CT-22") && kind.len() == 21)
             .count();
-        // Each time the socket falls behind it gets one resync; how often it falls behind
-        // depends on the buffers (nginx stands before the Node daemon), so that count is not
-        // compared.
         t.note("a resync came", json!(!resyncs.is_empty()));
         let twice = resyncs.windows(2).any(|pair| pair[1] == pair[0] + 1);
         t.note("never two in a row", json!(!twice));
-        t.note("some were skipped", json!(created < 31));
-        let live = resyncs
-            .last()
-            .is_some_and(|at| kinds[at + 1..].contains(&"task.created CT-2131".to_string()));
-        t.note("live after it", json!(live));
+        t.note("some were skipped", json!(created < posted));
+        let after = live
+            && resyncs
+                .last()
+                .is_some_and(|at| kinds[at + 1..].contains(&"task.created CT-2131".to_string()));
+        t.note("live after it", json!(after));
         t
     })
     .await;

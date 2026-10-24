@@ -155,6 +155,26 @@ struct Flight {
     ready: Condvar,
 }
 
+/// Ends the flight of a task: removes it from the open ones, and answers the waiting requests
+/// when the leader did not (it panicked).
+struct FlightEnd<'a> {
+    inner: &'a Inner,
+    task_id: &'a str,
+    flight: &'a Flight,
+}
+
+impl Drop for FlightEnd<'_> {
+    fn drop(&mut self) {
+        locked(&self.inner.creating).remove(self.task_id);
+        let mut done = locked(&self.flight.done);
+        if done.is_none() {
+            *done = Some(Err(IssueLinkError("The request ended".into()).into()));
+        }
+        drop(done);
+        self.flight.ready.notify_all();
+    }
+}
+
 struct Inner {
     options: IssueLinkerOptions,
     creating: Mutex<HashMap<String, Arc<Flight>>>,
@@ -335,13 +355,18 @@ impl Inner {
                 None => Err(IssueLinkError("The request ended".into()).into()),
             };
         }
+        // Resolves the flight also when `create_now` panics, so the requests that wait do not hang.
+        let _flight = FlightEnd {
+            inner: self,
+            task_id,
+            flight: &flight,
+        };
         let result =
             self.options
                 .jobs
                 .run_blocking("issue", "Opening GitHub issue", Some(task_id), || {
                     self.create_now(task_id)
                 });
-        locked(&self.creating).remove(task_id);
         let copy = match &result {
             Ok(task) => Ok(task.clone()),
             Err(error) => Err(error.again()),
