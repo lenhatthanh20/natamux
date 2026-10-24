@@ -1,6 +1,7 @@
 //! `--smoke`: CI checks that the app draws and takes typing, on each OS it builds for. With
 //! `--fake-daemon` it also checks that the terminal grid of a workspace does not scroll when its
-//! panes fit (T-0162).
+//! panes fit (T-0162), and that the pipeline chart of Project settings scrolls sideways to its
+//! last step (T-0163).
 
 use std::time::Duration;
 
@@ -8,7 +9,9 @@ use editor::Editor;
 use gpui::{App, AsyncApp, Entity, Keystroke, Window, WindowHandle, px};
 
 use super::shots::{self, RUNNING};
+use super::shots_stages::{PROJECT, READ};
 use super::window::Root;
+use crate::projects::project_settings_dialog;
 
 const TYPED: &str = "abc";
 /// The fake's terminal list comes at once; the grid is drawn well within this.
@@ -18,8 +21,8 @@ const GRID_POLL: Duration = Duration::from_millis(100);
 const GRID_SETTLE: Duration = Duration::from_millis(500);
 
 /// Waits for the first frame, types into the text box through the window's own key dispatch, and
-/// checks the text on the next frame. `grid`: then checks the terminal grid. Exits with 1 on any
-/// failure. `quit`: quit once it passed.
+/// checks the text on the next frame. `grid`: then checks the terminal grid and the pipeline
+/// chart. Exits with 1 on any failure. `quit`: quit once it passed.
 pub fn run(handle: WindowHandle<Root>, quit: bool, grid: bool, cx: &mut App) {
     // Read through the editor, not the window: inside a frame callback the window is in use.
     let result = handle.update(cx, |root, window, cx| {
@@ -104,6 +107,45 @@ async fn check_grid(handle: WindowHandle<Root>, quit: bool, cx: &mut AsyncApp) {
             ));
         }
         println!("smoke: the terminal grid of {RUNNING} does not scroll");
+    });
+    if let Err(error) = result {
+        fail(&format!("the window is gone: {error}"));
+    }
+    check_chart(handle, quit, cx).await;
+}
+
+/// Opens Project settings of the fake project, whose pipeline is wider than the dialog, and fails
+/// if the chart cannot scroll to its last step: the right part was cut off (T-0163).
+async fn check_chart(handle: WindowHandle<Root>, quit: bool, cx: &mut AsyncApp) {
+    let opened = handle.update(cx, |root, window, cx| {
+        project_settings_dialog::open(root.dashboard(), PROJECT, window, cx)
+    });
+    let dialog = match opened {
+        Ok(dialog) => dialog,
+        Err(error) => fail(&format!("the window is gone: {error}")),
+    };
+    cx.background_executor().timer(READ).await;
+    let result = handle.update(cx, |_, _, cx| {
+        let scroll = dialog.read(cx).preview_scroll().clone();
+        let count = scroll.children_count();
+        let Some(last) = count
+            .checked_sub(1)
+            .and_then(|ix| scroll.bounds_for_item(ix))
+        else {
+            fail("the pipeline chart of Project settings was not drawn");
+        };
+        let range = scroll.max_offset().x;
+        if range <= px(0.) {
+            fail("the pipeline chart cannot scroll sideways, yet the fake pipeline is wider");
+        }
+        let short = last.right() - scroll.bounds().right() - range;
+        if short > px(1.) {
+            fail(&format!(
+                "the pipeline chart cannot scroll to its last step ({} px out of reach)",
+                short / px(1.)
+            ));
+        }
+        println!("smoke: the pipeline chart scrolls to its last step");
         pass(quit, cx);
     });
     if let Err(error) = result {

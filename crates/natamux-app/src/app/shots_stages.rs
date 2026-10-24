@@ -15,7 +15,7 @@ use crate::stages::editor_catalog::add_catalog_stage;
 use crate::stages::editor_fields::set_enabled;
 
 /// The project of the shots: it has a `.natamux.json`.
-const PROJECT: &str = "natamux";
+pub(crate) const PROJECT: &str = "natamux";
 /// "Reproduce the bug": an agent stage on its own agent with a prompt of its own.
 const AGENT_STAGE: &str = "reproduce";
 /// "Bug or feature".
@@ -26,7 +26,7 @@ const NEEDS_COMMAND: &str = "lint";
 /// A stage turned off, so the conflict shot has an edit to save.
 const TURNED_OFF: &str = "security";
 /// The settings are read and drawn within this.
-const READ: Duration = Duration::from_millis(800);
+pub(crate) const READ: Duration = Duration::from_millis(800);
 
 pub fn is_settings_shot(shot: Shot) -> bool {
     matches!(

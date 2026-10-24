@@ -71,6 +71,7 @@ pub struct ProjectSettingsDialog {
     pub(super) conflict: bool,
     pub(super) problem: Option<String>,
     body_scroll: ScrollHandle,
+    preview_scroll: ScrollHandle,
     focus: FocusHandle,
     cancel: FocusHandle,
     submit: FocusHandle,
@@ -98,6 +99,7 @@ impl ProjectSettingsDialog {
             conflict: false,
             problem: None,
             body_scroll: ScrollHandle::new(),
+            preview_scroll: ScrollHandle::new(),
             focus: cx.focus_handle(),
             cancel: cx.focus_handle(),
             submit: cx.focus_handle(),
@@ -296,9 +298,14 @@ impl ProjectSettingsDialog {
                 .child(stages.details.clone())
         };
         [
-            pipeline_preview(&stages.editor, cx),
+            pipeline_preview(&stages.editor, &self.preview_scroll, cx),
             parts.into_any_element(),
         ]
+    }
+
+    /// The sideways scroll of the pipeline preview; `--smoke` reads its range.
+    pub fn preview_scroll(&self) -> &ScrollHandle {
+        &self.preview_scroll
     }
 
     /// Scrolls the body to the stage list and the details (the fourth part, after the alerts,
