@@ -352,7 +352,12 @@ fn start(options: &Options, cx: &mut App) -> anyhow::Result<()> {
         app::shots::run(window, shot, cx);
     }
     if options.smoke {
-        app::smoke::run(window, options.hold_seconds.is_none(), options.fake_daemon, cx);
+        app::smoke::run(
+            window,
+            options.hold_seconds.is_none(),
+            options.fake_daemon,
+            cx,
+        );
     }
     if let Some(task) = &options.gate2 {
         app::gate2::run(window, task.clone(), cx);

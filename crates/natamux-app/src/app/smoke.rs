@@ -73,7 +73,10 @@ async fn check_chart(handle: WindowHandle<Root>, quit: bool, cx: &mut AsyncApp) 
     let result = handle.update(cx, |_, _, cx| {
         let scroll = dialog.read(cx).preview_scroll().clone();
         let count = scroll.children_count();
-        let Some(last) = count.checked_sub(1).and_then(|ix| scroll.bounds_for_item(ix)) else {
+        let Some(last) = count
+            .checked_sub(1)
+            .and_then(|ix| scroll.bounds_for_item(ix))
+        else {
             fail("the pipeline chart of Project settings was not drawn");
         };
         let range = scroll.max_offset().x;
