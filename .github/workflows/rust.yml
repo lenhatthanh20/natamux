@@ -375,7 +375,7 @@ jobs:
   # One artifact with every shot, as before the split: gh run download <run> -n shots-macos.
   shots:
     needs: app-shots
-    if: ${{ always() && needs.app-shots.result != 'skipped' }}
+    if: ${{ !cancelled() && needs.app-shots.result != 'skipped' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
