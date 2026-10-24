@@ -167,6 +167,11 @@ async fn run(socket: WebSocketStream<Io>, state: Arc<AppState>) {
     let sender = EventSender::new(socket, Arc::clone(&state.scheduler));
     let listener = sender.clone();
     let id = state.bus.subscribe_client(move |text| listener.send(text));
+    // The pull request statuses may be old: nobody looked while no dashboard listened. Returns at
+    // once; the watcher's own thread asks GitHub.
+    if state.bus.size() == 1 {
+        state.pull_requests.wake();
+    }
     let writing = Arc::clone(&queued);
     let writer = tokio::spawn(async move {
         while let Some(text) = outbox.recv().await {

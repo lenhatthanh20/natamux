@@ -10,7 +10,7 @@ use natamux_proto::stages::schema::Stage;
 use natamux_store::task_files::STAGE_DIR;
 
 use crate::git::{GitError, commit_count, dirty_files};
-use crate::process::capture;
+use natamux_git::process::capture;
 
 pub use crate::git::current_head;
 

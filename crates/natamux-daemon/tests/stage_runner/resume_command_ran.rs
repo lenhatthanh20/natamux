@@ -445,7 +445,7 @@ fn is_no_longer_left_to_a_person_after_start_or_start_agent() {
         } else {
             f.runner
                 .run
-                .start_by_hand(&task.id, "claude-code", None)
+                .start_by_hand(&task.id, "claude-code", None, None)
                 .unwrap();
         }
         f.settle();

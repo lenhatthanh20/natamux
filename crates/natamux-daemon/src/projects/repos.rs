@@ -82,6 +82,18 @@ impl Repos {
         self.get(id).map(|repo| repo.path)
     }
 
+    /// The project's own worktree folder; None means the daemon's. An unknown id gets None too: a
+    /// removed project's tasks still need a place (`RepoService.worktreesDirOf`).
+    pub fn worktrees_dir_of(&self, repo: Option<&str>) -> Option<PathBuf> {
+        let wanted = repo.unwrap_or(DEFAULT_REPO);
+        self.stored()
+            .ok()?
+            .into_iter()
+            .find(|each| each.id == wanted)
+            .and_then(|each| each.worktrees_dir)
+            .map(PathBuf::from)
+    }
+
     /// The stages of the project; the defaults for an unknown project or a file that is not
     /// valid, as Node's `get`.
     pub fn stages_of(&self, repo: Option<&str>) -> Vec<Step> {

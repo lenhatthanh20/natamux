@@ -2,13 +2,14 @@
 
 use std::time::Instant;
 
-use natamux_contract::daemon::{Daemon, daemons};
+use hyper::Method;
+use natamux_contract::daemon::{Body, Daemon, daemons};
 use natamux_contract::events::Events;
 use natamux_contract::transcript::Transcript;
 use serde_json::{Value, json};
 
 use super::{Agent, running};
-use crate::{both, cancel, clean, get, make_twins, stage_events, task, wait_at};
+use crate::{both, call, cancel, clean, get, make_twins, stage_events, task, wait_at};
 
 /// A Claude Code session file: `m1` is written twice (the last line counts), a synthetic message
 /// and a broken line count for nothing, and one model has no price. Counts are round, so the
@@ -46,7 +47,7 @@ fn usage_changes(events: &Events, id: &str) -> Vec<Value> {
         .collect()
 }
 
-/// Deleting a task answers with the list of all tasks, which differs; only the status counts.
+/// Whether the usage file of the task exists: "yes" or "no".
 async fn has_usage_file(d: &Daemon, id: &str) -> String {
     let path = format!("{}/tasks/{id}.usage.json", d.data_dir());
     let script = format!("test -e '{path}' && echo yes || echo no");
@@ -111,9 +112,14 @@ async fn usage() {
             t.note("GET /usage again", clean(all["usage"][&id].clone()));
             t.note("events", stage_events(&d, &id).await);
             t.note("task", task(&d, &id).await);
-            // A delete is left out: the Rust daemon refuses to delete a task that still has a
-            // workspace until part 5 (400); its removal of the usage file has a unit test.
             cancel(&d, &id).await;
+            // The answer is the list of all tasks, which differs; only the status counts.
+            let deleted = call(&d, Method::DELETE, &format!("/tasks/{id}"), Body::None).await;
+            t.note("delete", json!(deleted.status));
+            t.note(
+                "usage file after delete",
+                json!(has_usage_file(&d, &id).await),
+            );
             t
         },
     )

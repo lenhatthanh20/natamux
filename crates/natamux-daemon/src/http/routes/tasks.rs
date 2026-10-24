@@ -21,7 +21,8 @@ use natamux_store::attachments::{list_attachments, read_attachment};
 use serde_json::{Value, json};
 
 use crate::http::errors::{
-    Answer, error_answer, forbidden, internal_error, json_answer, task_error, zod_answer,
+    Answer, error_answer, forbidden, internal_error, json_answer, task_error, workspace_error,
+    zod_answer,
 };
 use crate::http::routes::stages::stage_answer;
 use crate::http::server::AppState;
@@ -83,15 +84,32 @@ pub async fn get_task(state: Arc<AppState>, id: String) -> Answer {
     .await
 }
 
-/// The task and everything stored with it. A task with a workspace is refused until workspaces
-/// come (part 5): Node removes the worktree first.
+/// The task and everything stored with it. A workspace goes too; uncommitted changes refuse the
+/// delete, so the task and the worktree both stay.
 pub async fn delete_task(state: Arc<AppState>, id: String) -> Answer {
-    answer(StatusCode::OK, move || {
-        let id = task_id_param(&id)?;
-        let tasks = state.tasks.delete_task(&id)?;
+    let work = move || -> Result<Value, Box<Answer>> {
+        let id = task_id_param(&id).map_err(|error| Box::new(zod_answer(&error)))?;
+        let current = state
+            .tasks
+            .get_task(&id)
+            .map_err(|error| Box::new(task_error(&error)))?;
+        if current.workspace.is_some() {
+            state
+                .workspaces
+                .remove(&id, true)
+                .map_err(|error| Box::new(workspace_error(&error)))?;
+        }
+        let tasks = state
+            .tasks
+            .delete_task(&id)
+            .map_err(|error| Box::new(task_error(&error)))?;
         Ok(json!({ "id": id, "tasks": to_value(&tasks) }))
-    })
-    .await
+    };
+    match tokio::task::spawn_blocking(work).await {
+        Ok(Ok(body)) => json_answer(StatusCode::OK, &body),
+        Ok(Err(refused)) => *refused,
+        Err(_) => internal_error(),
+    }
 }
 
 pub async fn update_task(state: Arc<AppState>, id: String, body: Option<Value>) -> Answer {

@@ -2,6 +2,7 @@
 //! it (the setup of `server.test.ts`).
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Sender, channel};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -11,7 +12,7 @@ use http_body_util::{BodyExt, Full};
 use hyper::body::Bytes;
 use hyper::{Method, Request};
 use hyper_util::rt::TokioIo;
-use natamux_daemon::config::Config;
+use natamux_daemon::config::{AgentConfig, Config};
 use natamux_daemon::shared::scheduler::Scheduler;
 use natamux_daemon::start::{Daemon, start};
 use natamux_daemon::tasks::records::WorkspaceChange;
@@ -35,6 +36,7 @@ pub struct EchoPty {
     pub options: Arc<SpawnOptions>,
     pub written: Arc<Mutex<Vec<String>>>,
     pub sizes: Arc<Mutex<Vec<(u16, u16)>>>,
+    killed: Arc<AtomicBool>,
     /// The program in the foreground; "bash" until a test sets another.
     program: Arc<Mutex<String>>,
     commands: Arc<Mutex<Option<Vec<String>>>>,
@@ -56,6 +58,12 @@ impl EchoPty {
 
     pub fn set_commands(&self, lines: &[&str]) {
         *self.commands.lock().unwrap() = Some(lines.iter().map(|line| line.to_string()).collect());
+    }
+
+    /// The daemon killed the pty.
+    #[allow(dead_code)]
+    pub fn killed(&self) -> bool {
+        self.killed.load(Ordering::SeqCst)
     }
 
     pub fn written(&self) -> Vec<String> {
@@ -109,6 +117,7 @@ impl Pty for EchoSide {
     fn resume(&mut self) {}
 
     fn kill(&mut self, _signal: Signal) {
+        self.handle.killed.store(true, Ordering::SeqCst);
         let _ = self.handle.events.send(Event::Exit(None));
     }
 
@@ -130,6 +139,8 @@ pub struct TestDaemon {
 impl Drop for TestDaemon {
     fn drop(&mut self) {
         self.daemon.server.abort();
+        self.daemon.state.pull_requests.stop();
+        self.daemon.state.issue_linker.stop();
         self.daemon.scheduler.stop();
         let _ = std::fs::remove_dir_all(&self.root);
     }
@@ -216,6 +227,17 @@ pub async fn start_daemon(
     silent_close: Duration,
     home: Option<PathBuf>,
 ) -> TestDaemon {
+    start_daemon_with(root, task, silent_close, home, AgentConfig::default()).await
+}
+
+/// `start_daemon` with the programs the agents start as (`agents`).
+pub async fn start_daemon_with(
+    root: PathBuf,
+    task: Option<bool>,
+    silent_close: Duration,
+    home: Option<PathBuf>,
+    agents: AgentConfig,
+) -> TestDaemon {
     seed_repos(&root);
     if let Some(with_workspace) = task {
         seed_task(&root, with_workspace);
@@ -229,7 +251,7 @@ pub async fn start_daemon(
         token_was_generated: false,
         agent_token: AGENT_TOKEN.into(),
         silent_close,
-        agents: Default::default(),
+        agents,
     };
     let ptys: Arc<Mutex<Vec<EchoPty>>> = Arc::default();
     let made = Arc::clone(&ptys);
@@ -239,6 +261,7 @@ pub async fn start_daemon(
             options: Arc::new(options),
             written: Arc::default(),
             sizes: Arc::default(),
+            killed: Arc::default(),
             program: Arc::new(Mutex::new("bash".into())),
             commands: Arc::default(),
             events,
@@ -357,31 +380,6 @@ impl TestDaemon {
         let status = answer.status().as_u16();
         let body = answer.into_body().collect().await.unwrap().to_bytes();
         (status, serde_json::from_slice(&body).unwrap_or(Value::Null))
-    }
-
-    /// The status of a request sent as raw bytes, so a path with "\\" reaches the daemon as it is.
-    pub async fn raw_status(&self, method: &str, path: &str) -> u16 {
-        self.raw_status_as(method, path, None).await
-    }
-
-    /// `raw_status` with a bearer token.
-    pub async fn raw_status_as(&self, method: &str, path: &str, token: Option<&str>) -> u16 {
-        use tokio::io::{AsyncReadExt, AsyncWriteExt};
-        let mut stream = TcpStream::connect(self.daemon.address).await.unwrap();
-        let auth = token.map_or_else(String::new, |token| {
-            format!("authorization: Bearer {token}\r\n")
-        });
-        let request = format!(
-            "{method} {path} HTTP/1.1\r\nhost: localhost\r\n{auth}connection: close\r\n\r\n"
-        );
-        stream.write_all(request.as_bytes()).await.unwrap();
-        let mut answer = Vec::new();
-        let _ = stream.read_to_end(&mut answer).await;
-        let text = String::from_utf8_lossy(&answer);
-        text.split_whitespace()
-            .nth(1)
-            .and_then(|code| code.parse().ok())
-            .unwrap_or(0)
     }
 
     /// One request with a JSON body.

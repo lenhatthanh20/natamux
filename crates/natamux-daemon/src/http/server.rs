@@ -18,11 +18,16 @@ use super::auth::{bearer_token, is_authorized};
 use super::body::{DEFAULT_BODY_LIMIT, read_body};
 use super::errors::{Answer, json_answer, not_found, unauthorized};
 use super::routes::stages::Mark;
-use super::routes::{agents, stages, tasks, terminals};
+use super::routes::{
+    agents, github, projects, stages, tasks, terminals, workspace_files, workspaces,
+};
 use super::{event_socket, terminal_socket};
 use crate::agents::hook_service::HookService;
 use crate::agents::runner::AgentRunner;
 use crate::agents::usage_service::UsageService;
+use crate::github::issue_importer::IssueImporter;
+use crate::github::issue_linker::IssueLinker;
+use crate::github::pull_request_watcher::PullRequestWatcher;
 use crate::projects::repos::Repos;
 use crate::shared::event_bus::EventBus;
 use crate::shared::jobs::Jobs;
@@ -32,6 +37,10 @@ use crate::tasks::service::TaskService;
 use crate::tasks::templates::TemplateService;
 use crate::terminals::open_shells::OpenShells;
 use crate::terminals::service::TerminalService;
+use crate::workspaces::service::WorkspaceService;
+
+/// A text of 1 MB sent as JSON: escapes can make it a few times longer.
+const WORKSPACE_FILE_BODY_LIMIT: usize = 4 * 1024 * 1024;
 
 pub struct AppState {
     pub stages: StageRunner,
@@ -52,6 +61,10 @@ pub struct AppState {
     pub jobs: Arc<Jobs>,
     pub bus: Arc<EventBus>,
     pub scheduler: Arc<Scheduler>,
+    pub workspaces: Arc<WorkspaceService>,
+    pub pull_requests: Arc<PullRequestWatcher>,
+    pub issues: Arc<IssueImporter>,
+    pub issue_linker: Arc<IssueLinker>,
 }
 
 /// Serves until the listener fails. Each connection runs on its own task.
@@ -142,22 +155,9 @@ pub async fn handle(request: Request<Incoming>, state: Arc<AppState>) -> Answer 
     let segments: Vec<String> = path.split('/').skip(1).map(segment).collect();
     let parts: Vec<&str> = segments.iter().map(String::as_str).collect();
     let method = request.method().clone();
-    let socket = method == Method::GET && matches!(parts.as_slice(), ["tasks", _, "terminal"]);
-    let events = method == Method::GET && parts.as_slice() == ["events"];
-    let mut by_agent = false;
-    if !(method == Method::GET && parts.as_slice() == ["health"]) {
-        // The terminal socket checks its one-time ticket itself instead.
-        let has_ticket = query
-            .split('&')
-            .any(|pair| pair.split('=').next() == Some("ticket"));
-        let provided = provided_token(&request, events, query);
-        by_agent = is_authorized(provided.as_deref(), &state.agent_token);
-        let allowed =
-            (socket && has_ticket) || is_authorized(provided.as_deref(), &state.token) || by_agent;
-        if !allowed {
-            return unauthorized();
-        }
-    }
+    let Some(by_agent) = caller(&request, &state, &method, &parts, query) else {
+        return unauthorized();
+    };
     let route = (
         method.clone(),
         parts
@@ -166,6 +166,9 @@ pub async fn handle(request: Request<Incoming>, state: Arc<AppState>) -> Answer 
             .collect::<Vec<_>>(),
     );
     if let Some(answer) = stage_route(&method, &parts, Arc::clone(&state)).await {
+        return answer;
+    }
+    if let Some(answer) = workspace_route(&method, &parts, query, Arc::clone(&state)).await {
         return answer;
     }
     match (&method, parts.as_slice()) {
@@ -210,11 +213,40 @@ pub async fn handle(request: Request<Incoming>, state: Arc<AppState>) -> Answer 
         | (&Method::PUT, ["tasks", _, "workflow" | "ci" | "skip"])
         | (&Method::PUT, ["tasks", _, "files", _])
         | (&Method::POST, ["tasks", _, "agent"])
-        | (&Method::POST, ["tasks", _, "agent", "message"]) => {
-            with_body(request, state, route, by_agent).await
+        | (&Method::POST, ["tasks", _, "agent", "message"])
+        | (&Method::POST, ["tasks", _, "workspace" | "commit" | "rollback" | "fan-out"])
+        | (&Method::POST, ["workspaces"])
+        | (&Method::POST, ["github", "issues", "import"])
+        | (&Method::PUT, ["tasks", _, "file"]) => {
+            with_body(request, state, route, query.to_string(), by_agent).await
         }
         _ => not_found(method.as_str(), &url),
     }
+}
+
+/// Who calls: `Some(true)` for the agent token, `Some(false)` for the daemon token, a terminal
+/// ticket or the health check, `None` for no one the daemon knows.
+fn caller(
+    request: &Request<Incoming>,
+    state: &AppState,
+    method: &Method,
+    parts: &[&str],
+    query: &str,
+) -> Option<bool> {
+    if *method == Method::GET && parts == ["health"] {
+        return Some(false);
+    }
+    let socket = *method == Method::GET && matches!(parts, ["tasks", _, "terminal"]);
+    let events = *method == Method::GET && parts == ["events"];
+    // The terminal socket checks its one-time ticket itself instead.
+    let has_ticket = query
+        .split('&')
+        .any(|pair| pair.split('=').next() == Some("ticket"));
+    let provided = provided_token(request, events, query);
+    let by_agent = is_authorized(provided.as_deref(), &state.agent_token);
+    let allowed =
+        (socket && has_ticket) || is_authorized(provided.as_deref(), &state.token) || by_agent;
+    allowed.then_some(by_agent)
 }
 
 /// The stage routes that read no body (part 3).
@@ -231,19 +263,73 @@ async fn stage_route(method: &Method, parts: &[&str], state: Arc<AppState>) -> O
     })
 }
 
+/// The workspace, git and GitHub routes that read no body (part 5).
+async fn workspace_route(
+    method: &Method,
+    parts: &[&str],
+    query: &str,
+    state: Arc<AppState>,
+) -> Option<Answer> {
+    Some(match (method, parts) {
+        (&Method::GET, ["diffstats"]) => workspaces::diff_stats(state).await,
+        (&Method::GET, ["workspaces", "preparing"]) => workspaces::preparing(&state),
+        (&Method::DELETE, ["tasks", id, "workspace"]) => {
+            workspaces::remove(state, id.to_string(), query).await
+        }
+        (&Method::GET, ["tasks", id, "changes"]) => {
+            workspace_files::changes(state, id.to_string(), query).await
+        }
+        (&Method::GET, ["tasks", id, "changes", "file"]) => {
+            workspace_files::changed_file(state, id.to_string(), query).await
+        }
+        (&Method::GET, ["tasks", id, "changes", "image"]) => {
+            workspace_files::changed_image(state, id.to_string(), query).await
+        }
+        (&Method::GET, ["tasks", id, "tree"]) => {
+            workspace_files::tree(state, id.to_string(), query).await
+        }
+        (&Method::GET, ["tasks", id, "file"]) => {
+            workspace_files::read_file(state, id.to_string(), query).await
+        }
+        (&Method::GET, ["tasks", id, "graph"]) => {
+            workspace_files::graph(state, id.to_string(), query).await
+        }
+        (&Method::POST, ["tasks", id, "rollback", "undo"]) => {
+            workspaces::undo_rollback(state, id.to_string()).await
+        }
+        (&Method::POST, ["tasks", id, "commit-message"]) => {
+            workspaces::commit_message(state, id.to_string()).await
+        }
+        (&Method::POST, ["tasks", id, "push"]) => workspaces::push(state, id.to_string()).await,
+        (&Method::POST, ["tasks", id, "pull-request"]) => {
+            workspaces::open_pull_request(state, id.to_string()).await
+        }
+        (&Method::POST, ["tasks", id, "pull-request", "refresh"]) => {
+            workspaces::refresh_pull_request(state, id.to_string()).await
+        }
+        (&Method::GET, ["git", "branches"]) => projects::branches(state, query).await,
+        (&Method::GET, ["github", "issues"]) => github::list_issues(state, query).await,
+        (&Method::POST, ["tasks", id, "issue"]) => {
+            github::create_issue(state, id.to_string()).await
+        }
+        _ => return None,
+    })
+}
+
 /// The routes that read a JSON body.
 async fn with_body(
     request: Request<Incoming>,
     state: Arc<AppState>,
     route: (Method, Vec<String>),
+    query: String,
     by_agent: bool,
 ) -> Answer {
     let (method, parts) = route;
     let parts: Vec<&str> = parts.iter().map(String::as_str).collect();
-    let limit = if method == Method::POST && parts.as_slice() == ["tasks"] {
-        tasks::new_task_body_limit()
-    } else {
-        DEFAULT_BODY_LIMIT
+    let limit = match (&method, parts.as_slice()) {
+        (&Method::POST, ["tasks"] | ["workspaces"]) => tasks::new_task_body_limit(),
+        (&Method::PUT, ["tasks", _, "file"]) => WORKSPACE_FILE_BODY_LIMIT,
+        _ => DEFAULT_BODY_LIMIT,
     };
     let (head, body) = request.into_parts();
     let body = match read_body(&head.headers, body, limit).await {
@@ -283,6 +369,37 @@ async fn with_body(
         (&Method::POST, ["tasks", id, "agent", "message"]) => {
             agents::message(state, id.to_string(), body).await
         }
+        _ => workspace_body_route(&method, &parts, state, query, head.headers, body).await,
+    }
+}
+
+/// The workspace and GitHub routes that read a JSON body.
+async fn workspace_body_route(
+    method: &Method,
+    parts: &[&str],
+    state: Arc<AppState>,
+    query: String,
+    headers: hyper::HeaderMap,
+    body: Option<Value>,
+) -> Answer {
+    match (method, parts) {
+        (&Method::POST, ["tasks", id, "workspace"]) => {
+            workspaces::create(state, id.to_string(), body).await
+        }
+        (&Method::POST, ["tasks", id, "commit"]) => {
+            workspaces::commit(state, id.to_string(), body).await
+        }
+        (&Method::POST, ["tasks", id, "rollback"]) => {
+            workspaces::rollback(state, id.to_string(), body).await
+        }
+        (&Method::POST, ["tasks", id, "fan-out"]) => {
+            workspaces::fan_out_tries(state, id.to_string(), body).await
+        }
+        (&Method::POST, ["workspaces"]) => workspaces::start_workspace(state, body).await,
+        (&Method::PUT, ["tasks", id, "file"]) => {
+            workspace_files::write_file(state, id.to_string(), query, headers, body).await
+        }
+        (&Method::POST, ["github", "issues", "import"]) => github::import_issues(state, body).await,
         _ => not_found(method.as_str(), &parts.join("/")),
     }
 }

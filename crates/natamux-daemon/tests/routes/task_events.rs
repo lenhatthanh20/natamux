@@ -4,7 +4,7 @@ use hyper::Method;
 use natamux_core::events::schema::GATE_EVENT_TYPES;
 use serde_json::{Value, json};
 
-use crate::server::{AGENT_TOKEN, TOKEN, TestDaemon, bare};
+use crate::server::{AGENT_TOKEN, TOKEN, TestDaemon, bare, eventually};
 
 async fn task() -> TestDaemon {
     let d = bare("events").await;
@@ -295,13 +295,11 @@ async fn still_answers_401_to_a_wrong_token_on_a_route_the_agent_token_may_not_u
     assert_eq!(logged(&d).await, [entry("task.created", "system")]);
 }
 
-// The activity half of 'sends the activity after a hook, and touches the workspace after a tool
-// ran' (`pushed to the dashboards`). The other half, that `workspaces.touch` runs after a tool
-// ran, is part 5: the hook service calls its `workspace_changed` callback (tested in
-// `tests/hook_service/pushed.rs`), and the daemon has none yet. Node's `bus.subscribe` is the
-// same here.
+// Node spies on `workspaces.touch`. Here the check is its effect: a `workspace.dirty` message
+// (after the debounce of the dirty tracker). That `PreToolUse` touches nothing is covered by the
+// unit tests of the hook service (`tests/hook_service/pushed.rs`): a negative needs a fixed wait.
 #[tokio::test(flavor = "multi_thread")]
-async fn sends_the_activity_after_a_hook() {
+async fn sends_the_activity_after_a_hook_and_touches_the_workspace_after_a_tool_ran() {
     use natamux_daemon::shared::event_bus::DaemonMessage;
     use std::sync::{Arc, Mutex};
 
@@ -344,4 +342,50 @@ async fn sends_the_activity_after_a_hook() {
     assert_eq!(activity.len(), 1);
     assert_eq!(activity["1"]["text"], "Edit a.ts");
     assert!(activity["1"]["at"].is_string());
+
+    let after_tool = json!({ "hook_event_name": "PostToolUse", "tool_name": "Edit" });
+    let headers = [("x-natamux-task", "T-0001")];
+    let (status, _) = d
+        .hook("claude-code", "", &headers, Some(TOKEN), &after_tool)
+        .await;
+
+    assert_eq!(status, 200);
+    let dirty = || {
+        sent.lock().unwrap().iter().any(|message| {
+            matches!(message, DaemonMessage::WorkspaceDirty { task_id } if task_id == "T-0001")
+        })
+    };
+    eventually(dirty).await;
+}
+
+// Node spies on `pullRequests.wake`. Here the effect is a `gh` call: the watcher asks GitHub for
+// the pull request of a task when the first dashboard comes, and not for the second.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread")]
+async fn wakes_the_pull_request_watcher_for_the_first_dashboard_only() {
+    let d = bare("events-wake").await;
+    d.fake_gh();
+    d.make_task("Fix the bug").await;
+    let url = "https://github.com/o/r/pull/5";
+    let tasks = d.daemon.state.tasks.clone();
+    tasks
+        .record_git("T-0001", "pr.opened", json!({ "url": url }))
+        .unwrap();
+    let watcher = &d.daemon.state.pull_requests;
+    let bus = &d.daemon.state.bus;
+    assert!(d.gh_calls().is_empty());
+
+    let first = d.dashboard(TOKEN).await;
+    eventually(|| !d.gh_calls().is_empty()).await;
+    watcher.settle();
+    let after_first = d.gh_calls();
+    assert!(after_first[0].starts_with("api graphql"), "{after_first:?}");
+
+    let second = d.dashboard(TOKEN).await;
+    eventually(|| bus.size() == 2).await;
+    watcher.settle();
+
+    assert_eq!(d.gh_calls(), after_first);
+    first.drop_connection().await;
+    second.drop_connection().await;
 }

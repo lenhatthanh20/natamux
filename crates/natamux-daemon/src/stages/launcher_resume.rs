@@ -257,16 +257,23 @@ impl StageRun {
 
     /// An agent started by a person: Start agent in the dashboard or the CLI. A stage that waits
     /// for its agent starts it, with the stage prompt. An agent that runs already is left alone,
-    /// since its command would be typed into it; a prompt goes to it instead. shortcut: Node
-    /// makes a missing workspace first (`makeWorkspace`); workspaces come with part 5, so a task
-    /// without one fails as the terminal does.
+    /// since its command would be typed into it; a prompt goes to it instead. A task with no
+    /// workspace gets one from `make_workspace` first.
     pub fn start_by_hand(
         &self,
         task_id: &str,
         agent: &str,
         prompt: Option<&str>,
+        make_workspace: Option<&dyn Fn() -> StageResult<()>>,
     ) -> StageResult<Task> {
         self.options.tasks.set_without_agent(task_id, false)?;
+        if let Some(make) = make_workspace
+            && self.task(task_id)?.workspace.is_none()
+        {
+            // The new workspace starts the stage that waits for it. It must start the agent
+            // picked here, not the task's own.
+            self.start_in_new_workspace(task_id, agent, make)?;
+        }
         // A new workspace may be starting the stage right now.
         self.wait_for_start(task_id);
         if prompt.is_none() && self.continue_failed(task_id)? {
@@ -276,6 +283,23 @@ impl StageRun {
             self.start_lanes_with(task_id, agent)?;
         }
         self.prompt_or_start(task_id, agent, prompt)
+    }
+
+    fn start_in_new_workspace(
+        &self,
+        task_id: &str,
+        agent: &str,
+        make_workspace: &dyn Fn() -> StageResult<()>,
+    ) -> StageResult<()> {
+        self.state()
+            .chosen_agents
+            .insert(task_id.into(), agent.into());
+        let made = make_workspace();
+        if made.is_ok() {
+            self.wait_for_start(task_id);
+        }
+        self.state().chosen_agents.remove(task_id);
+        made
     }
 
     /// The stages that wait for an agent start the one a person picked.

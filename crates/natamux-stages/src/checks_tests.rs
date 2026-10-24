@@ -8,7 +8,7 @@ use std::time::Duration;
 use natamux_proto::stages::schema::{Gate, Stage, StageKind};
 
 use super::*;
-use crate::test_support::{TempDir, test_repo};
+use natamux_git::test_support::{TempDir, test_repo};
 
 fn input(folder: &Path, stage: Stage, started_at: Option<&str>) -> CheckInput {
     CheckInput {

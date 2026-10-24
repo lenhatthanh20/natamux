@@ -169,7 +169,7 @@ fn starts_one_agent_when_a_person_starts_it_while_the_new_workspace_starts_the_s
     let after = f
         .runner
         .run
-        .start_by_hand(&task.id, "claude-code", None)
+        .start_by_hand(&task.id, "claude-code", None, None)
         .unwrap();
     f.settle();
 
@@ -186,9 +186,42 @@ fn starts_one_agent_when_a_person_starts_it_while_the_new_workspace_starts_the_s
     );
 }
 
-// Left out: 'makes the missing workspace and starts the agent the person picked in it': it
-// passes `makeWorkspace` to `startByHand`; making a workspace is part 5, and `start_by_hand`
-// has no such argument.
+#[test]
+fn makes_the_missing_workspace_and_starts_the_agent_the_person_picked_in_it() {
+    let f = Fixture::new();
+    let task = f.created(json!({ "title": "Export tasks", "agent": "claude-code" }));
+    let made = std::cell::Cell::new(0);
+    let make = || {
+        made.set(made.get() + 1);
+        f.with_workspace(&task.id);
+        Ok(())
+    };
+
+    let after = f
+        .runner
+        .run
+        .start_by_hand(&task.id, "codex", None, Some(&make))
+        .unwrap();
+    f.settle();
+
+    assert_eq!(
+        (after.stage.as_str(), after.state, after.agent.as_deref()),
+        ("spec", TaskState::Running, Some("codex"))
+    );
+    assert!(after.workspace.is_some());
+    assert_eq!(f.ptys().len(), 1);
+    assert_eq!(
+        typed(&f.pty(0))
+            .matches(&format!("agent-launch-{}.sh", task.id))
+            .count(),
+        1
+    );
+    f.runner
+        .run
+        .start_by_hand(&task.id, "codex", Some("Also add a test"), Some(&make))
+        .unwrap();
+    assert_eq!(made.get(), 1);
+}
 
 #[test]
 fn gives_a_prompt_to_the_agent_that_runs_rather_than_starting_another() {
@@ -200,7 +233,7 @@ fn gives_a_prompt_to_the_agent_that_runs_rather_than_starting_another() {
 
     f.runner
         .run
-        .start_by_hand(&task.id, "claude-code", Some("Also add a test"))
+        .start_by_hand(&task.id, "claude-code", Some("Also add a test"), None)
         .unwrap();
 
     assert_eq!(f.ptys().len(), 1);
@@ -258,7 +291,7 @@ fn asks_the_agent_that_still_runs_to_go_on() {
     let after = f
         .runner
         .run
-        .start_by_hand(&task.id, "claude-code", None)
+        .start_by_hand(&task.id, "claude-code", None, None)
         .unwrap();
     f.settle();
 
@@ -284,11 +317,11 @@ fn asks_the_agent_to_go_on_once_when_a_person_starts_it_twice() {
 
     f.runner
         .run
-        .start_by_hand(&task.id, "claude-code", None)
+        .start_by_hand(&task.id, "claude-code", None, None)
         .unwrap();
     f.runner
         .run
-        .start_by_hand(&task.id, "claude-code", None)
+        .start_by_hand(&task.id, "claude-code", None, None)
         .unwrap();
     f.settle();
 
@@ -307,7 +340,7 @@ fn starts_the_agent_again_on_the_session_of_the_stage_when_none_runs() {
     let after = f
         .runner
         .run
-        .start_by_hand(&task.id, "claude-code", None)
+        .start_by_hand(&task.id, "claude-code", None, None)
         .unwrap();
     f.settle();
 
@@ -327,7 +360,10 @@ fn goes_on_with_the_agent_of_the_stage_whichever_agent_the_person_picked() {
     let task = failed_spec(&f);
     f.terminals.close(&task.id);
 
-    f.runner.run.start_by_hand(&task.id, "codex", None).unwrap();
+    f.runner
+        .run
+        .start_by_hand(&task.id, "codex", None, None)
+        .unwrap();
     f.settle();
 
     assert_eq!(f.task(&task.id).state, TaskState::Running);
@@ -355,7 +391,7 @@ fn starts_only_the_failed_stage_of_a_group_in_its_own_terminal() {
 
     f.runner
         .run
-        .start_by_hand(&task.id, "claude-code", None)
+        .start_by_hand(&task.id, "claude-code", None, None)
         .unwrap();
     f.settle();
 
