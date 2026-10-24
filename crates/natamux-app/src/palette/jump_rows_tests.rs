@@ -4,6 +4,7 @@ use natamux_proto::tasks::task::{Task, TaskState};
 
 use super::tests::*;
 use super::*;
+use crate::palette::jump_rows::terminal_reads;
 
 fn jump_tasks() -> Vec<Task> {
     vec![
@@ -265,4 +266,28 @@ fn says_nothing_needs_you_when_only_a_finished_task_has_no_workspace() {
         empty_text(PaletteMode::Jump, input.scope.as_ref(), "", ""),
         "Nothing needs you."
     );
+}
+
+// `CommandPalette.tsx` reads the shells of each workspace while the jump palette is open, only
+// when there are at most 20 workspaces.
+#[test]
+fn the_jump_palette_reads_the_terminals_of_every_workspace_up_to_20() {
+    let tasks = jump_tasks();
+    let reads = terminal_reads(PaletteMode::Jump, &tasks);
+    assert_eq!(reads.len(), 8);
+    assert!(!reads.contains(&"T-0008".to_owned()));
+}
+
+#[test]
+fn the_jump_palette_reads_no_terminals_above_20_workspaces() {
+    let tasks: Vec<Task> = (1..=21)
+        .map(|n| task(&format!("T-{n:04}"), TaskState::Running))
+        .collect();
+    assert!(terminal_reads(PaletteMode::Jump, &tasks).is_empty());
+    assert_eq!(terminal_reads(PaletteMode::Jump, &tasks[..20]).len(), 20);
+}
+
+#[test]
+fn the_command_palette_reads_no_terminals() {
+    assert!(terminal_reads(PaletteMode::All, &jump_tasks()).is_empty());
 }

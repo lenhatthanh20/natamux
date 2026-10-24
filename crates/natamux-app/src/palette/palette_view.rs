@@ -1,16 +1,16 @@
 //! The palette panel (`CommandPalette.tsx`, ui-spec 4.17): the input row, the sections and the
-//! footer. Its rows come from a snapshot taken when it opens; only the query and the scope
-//! change them while it is open.
+//! footer. Its rows come from a snapshot taken when it opens; only the query, the scope and the
+//! terminal lists the jump palette asked for change them while it is open.
 
 use std::collections::BTreeMap;
 
 use editor::{Editor, EditorEvent};
 use gpui::{
     ClickEvent, Entity, EntityInputHandler, EventEmitter, FocusHandle, Focusable, Keystroke,
-    ScrollHandle, Subscription, transparent_black,
+    ScrollHandle, Subscription,
 };
 use natamux_proto::tasks::task::Task;
-use ui::{IconButton, Tooltip, prelude::*};
+use ui::{IconButton, ListItem, ListItemSpacing, Tooltip, prelude::*};
 
 use super::jump_rows::{JumpInput, jump_sections};
 use super::palette_pick::{PaletteKey, classify};
@@ -28,6 +28,7 @@ use crate::app::dashboard::Dashboard;
 use crate::app::shortcuts::is_bound;
 use crate::components::colors::signal;
 use crate::components::form::text_editor;
+use crate::components::icons::icon_path;
 use crate::components::input_rules::kbd_text;
 
 const MAC: bool = cfg!(target_os = "macos");
@@ -97,13 +98,17 @@ fn take_snapshot(dashboard: &Dashboard) -> Snapshot {
             })
             .collect(),
         commands,
-        terminals: dashboard
-            .data
-            .terminals
-            .iter()
-            .map(|(id, list)| (id.clone(), terminal_names(&list.terminals)))
-            .collect(),
+        terminals: terminal_map(dashboard),
     }
+}
+
+fn terminal_map(dashboard: &Dashboard) -> BTreeMap<String, Vec<String>> {
+    dashboard
+        .data
+        .terminals
+        .iter()
+        .map(|(id, list)| (id.clone(), terminal_names(&list.terminals)))
+        .collect()
 }
 
 pub struct PaletteView {
@@ -117,6 +122,7 @@ pub struct PaletteView {
     active: Option<String>,
     scroll: ScrollHandle,
     _edits: Subscription,
+    _terminals: Option<Subscription>,
 }
 
 impl Focusable for PaletteView {
@@ -143,6 +149,16 @@ impl PaletteView {
                 this.refresh(cx);
             }
         });
+        // The terminal lists the layer asked for come after the palette opens.
+        let terminals = (mode == PaletteMode::Jump).then(|| {
+            cx.observe(dashboard, |this: &mut Self, dashboard, cx| {
+                let terminals = terminal_map(dashboard.read(cx));
+                if terminals != this.snapshot.terminals {
+                    this.snapshot.terminals = terminals;
+                    this.refresh(cx);
+                }
+            })
+        });
         let mut view = PaletteView {
             mode,
             scope,
@@ -153,6 +169,7 @@ impl PaletteView {
             active: None,
             scroll: ScrollHandle::new(),
             _edits: edits,
+            _terminals: terminals,
         };
         view.refresh(cx);
         view
@@ -299,9 +316,9 @@ impl PaletteView {
         let tip = format!("Remove the {name} scope");
         h_flex()
             .flex_none()
-            .h(px(24.))
-            .max_w(px(160.))
-            .pl(px(8.))
+            .h(rems_from_px(24.0_f32))
+            .max_w(rems_from_px(160.0_f32))
+            .pl(rems_from_px(8.0_f32))
             .gap_1()
             .rounded_md()
             .border_1()
@@ -328,13 +345,13 @@ impl PaletteView {
         let scope = self.scope.clone();
         h_flex()
             .flex_none()
-            .h(px(44.))
+            .h(rems_from_px(44.0_f32))
             .px_3()
             .gap_2()
             .border_b_1()
             .border_color(cx.theme().colors().border_variant)
             .child(
-                Icon::from_path("icons/lucide/search.svg")
+                Icon::from_path(icon_path("search"))
                     .size(IconSize::Medium)
                     .color(Color::Muted),
             )
@@ -342,35 +359,24 @@ impl PaletteView {
             .when_some(scope, |this, scope| this.child(self.scope_chip(&scope, cx)))
     }
 
+    /// As Zed's `ListSubHeader`: the title as written, small and muted.
     fn section_header(title: &'static str) -> impl IntoElement {
-        h_flex().flex_none().h(px(24.)).px_2().child(
-            Label::new(title.to_uppercase())
-                .size(LabelSize::XSmall)
-                .weight(gpui::FontWeight::MEDIUM)
-                .color(Color::Muted),
-        )
+        h_flex()
+            .flex_none()
+            .h(rems_from_px(24.0_f32))
+            .px_1p5()
+            .child(Label::new(title).size(LabelSize::Small).color(Color::Muted))
     }
 
     fn list_row(&self, index: usize, row: &PaletteRow, cx: &mut Context<Self>) -> impl IntoElement {
-        let colors = cx.theme().colors();
         let active = index == self.active_index();
-        h_flex()
-            .id(("palette-row", index))
-            .flex_none()
-            .h(px(row_height(row)))
-            .px_2()
-            .gap_2()
-            .rounded(px(6.))
-            .border_1()
-            .border_color(if active {
-                colors.border_focused
-            } else {
-                transparent_black()
-            })
-            .when(active, |this| this.bg(colors.element_selected))
-            .cursor_pointer()
-            .on_mouse_move(cx.listener(move |this, _, _, cx| {
-                if this.active_index() != index || this.active.is_none() {
+        ListItem::new(("palette-row", index))
+            .inset(true)
+            .spacing(ListItemSpacing::Sparse)
+            .height(rems_from_px(row_height(row)))
+            .toggle_state(active)
+            .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
+                if *hovered && (this.active_index() != index || this.active.is_none()) {
                     this.active = this.rows.get(index).map(PaletteRow::key);
                     cx.notify();
                 }
@@ -378,13 +384,15 @@ impl PaletteView {
             .on_click(cx.listener(move |this, event: &ClickEvent, _, cx| {
                 this.pick(index, event.modifiers().shift, cx)
             }))
+            .end_slot::<AnyElement>(
+                digit_of(index).map(|digit| digit_hint(digit).into_any_element()),
+            )
             .child(div().flex_1().min_w_0().h_full().child(row_body(
                 row,
                 index,
                 self.snapshot.now_ms,
                 cx,
             )))
-            .when_some(digit_of(index), |this, digit| this.child(digit_hint(digit)))
     }
 
     fn list(&self, window: &Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -416,7 +424,7 @@ impl PaletteView {
         v_flex()
             .id("palette-list")
             .max_h(max)
-            .p(px(6.))
+            .p(rems_from_px(6.0_f32))
             .overflow_y_scroll()
             .track_scroll(&self.scroll)
             .children(children)
@@ -436,7 +444,7 @@ impl PaletteView {
         };
         h_flex()
             .flex_none()
-            .h(px(28.))
+            .h(rems_from_px(28.0_f32))
             .px_3()
             .gap_3()
             .border_t_1()
@@ -461,7 +469,6 @@ impl Render for PaletteView {
             .w_full()
             .overflow_hidden()
             .elevation_3(cx)
-            .rounded(px(12.))
             .child(self.input_row(cx))
             .child(self.list(window, cx))
             .child(Self::footer(cx))

@@ -7,6 +7,7 @@ use super::fuzzy::Range;
 use super::palette_rows::PaletteRow;
 use crate::components::chips::Kbd;
 use crate::components::glyph::StateGlyph;
+use crate::components::icons::icon_path;
 use crate::components::input_rules::kbd_text;
 use crate::tasks::task_time::{AgeStyle, format_age};
 
@@ -41,7 +42,7 @@ fn highlighted(text: &str, ranges: &[Range], ink: Hsla) -> impl IntoElement {
 }
 
 fn icon(name: &'static str) -> impl IntoElement {
-    Icon::from_path(format!("icons/lucide/{name}.svg"))
+    Icon::from_path(icon_path(name))
         .size(IconSize::Small)
         .color(Color::Default)
 }
@@ -106,11 +107,17 @@ pub fn row_body(row: &PaletteRow, index: usize, now_ms: i64, cx: &App) -> AnyEle
                         .child(highlighted(&task.title, title_ranges, ink))
                         .child(second_line(line)),
                 )
-                .child(div().flex_none().self_start().pt(px(4.)).child(small(
-                    format_age(&task.updated_at, now_ms, AgeStyle::Short, 0),
-                    false,
-                    cx,
-                )))
+                .child(
+                    div()
+                        .flex_none()
+                        .self_start()
+                        .pt(rems_from_px(4.0_f32))
+                        .child(small(
+                            format_age(&task.updated_at, now_ms, AgeStyle::Short, 0),
+                            false,
+                            cx,
+                        )),
+                )
                 .into_any_element()
         }
         PaletteRow::Shell { task, name } => h_flex()

@@ -11,6 +11,7 @@ use super::task_rules::state_label;
 use super::task_view_rules::{MENU_BELOW, MORE_WIDTH, state_button_text, state_count_label};
 use crate::app::dashboard::Dashboard;
 use crate::components::colors::state_colors;
+use crate::components::icons::icon_path;
 use crate::components::menu::MenuLayer;
 
 /// Fills its parent (which must be `relative`) and writes the parent's width into `state` after
@@ -122,9 +123,15 @@ fn chip(
         })
         .child(
             h_flex()
-                .px(px(8.))
-                .gap(px(6.))
-                .child(div().flex_none().size(px(6.)).rounded_full().bg(dot))
+                .px(rems_from_px(8.0_f32))
+                .gap(rems_from_px(6.0_f32))
+                .child(
+                    div()
+                        .flex_none()
+                        .size(rems_from_px(6.0_f32))
+                        .rounded_full()
+                        .bg(dot),
+                )
                 .child(
                     Label::new(state_label(state))
                         .size(LabelSize::Small)
@@ -149,7 +156,7 @@ impl RenderOnce for StateFilter {
             let text = state_button_text(&states, active);
             return Button::new("state-filter-menu", text)
                 .style(ButtonStyle::Subtle)
-                .start_icon(Icon::from_path("icons/lucide/list-filter.svg").size(IconSize::Small))
+                .start_icon(Icon::from_path(icon_path("list-filter")).size(IconSize::Small))
                 .on_click(move |event, window, cx| {
                     open_menu(&dashboard, &states, active, event, window, cx)
                 })

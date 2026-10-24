@@ -59,7 +59,7 @@ impl ChangesView {
             .children(self.toggles(&entry.path, kind, options.wrap, cx))
             .child(self.file_steps(cx));
         h_flex()
-            .min_h(px(36.))
+            .min_h(rems_from_px(36.0_f32))
             .flex_none()
             .flex_wrap()
             .px_3()

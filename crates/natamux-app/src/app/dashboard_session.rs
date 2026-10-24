@@ -22,7 +22,7 @@ impl Dashboard {
         appearance::apply(&self.view, cx);
     }
 
-    /// None: the terminals use Ghostty's font, else the built-in one.
+    /// None: the terminals use the built-in font (Zed's buffer font).
     pub fn set_terminal_font(&mut self, font: Option<Value>, cx: &mut Context<Self>) {
         self.update_view(cx, |view| view.terminal_font = font);
         appearance::apply(&self.view, cx);

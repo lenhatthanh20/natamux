@@ -196,8 +196,6 @@ impl FakeDaemon {
     }
 
     /// For the reference shot: the GitHub CLI is not installed.
-    // The `import-issues` shot (a later wave) calls it.
-    #[cfg_attr(not(test), allow(dead_code))]
     pub fn set_gh_missing(&self, missing: bool) {
         self.data().projects.gh_missing = missing;
     }

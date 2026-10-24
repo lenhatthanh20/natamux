@@ -2,7 +2,9 @@
 //! job of .github/workflows/rust.yml runs it with `--ignored`.
 //!
 //! It sets `tracker.createIssue` of the daemon's first project, then puts the first settings text
-//! back (`{}` when the project had no file), also when a step fails.
+//! back (`{}` when the project had no file), also when a step fails. The daemon has no route that
+//! deletes a settings file, so a project that had none keeps a `{}` file; the job's daemon
+//! container is thrown away after the run.
 
 // Test code: a failed unwrap is a failed test. clippy.toml allows it only inside #[test] fns.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]

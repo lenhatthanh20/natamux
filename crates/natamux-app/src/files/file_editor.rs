@@ -16,6 +16,7 @@ use super::file_icon_view::file_icon;
 use crate::app::dashboard::Dashboard;
 use crate::app::shortcuts::SaveFile;
 use crate::app::source::reason;
+use crate::components::button_style::{label_color, tinted_style};
 use crate::components::chips::Kbd;
 use crate::components::colors::signal;
 use crate::components::confirm::Confirm;
@@ -253,7 +254,7 @@ impl FileEditor {
         let can = can_save(draft.as_ref(), stale, self.saving);
         let colors = cx.theme().colors();
         h_flex()
-            .h(px(40.))
+            .h(rems_from_px(40.0_f32))
             .flex_none()
             .items_center()
             .gap_2()
@@ -287,14 +288,18 @@ impl FileEditor {
             )
             .child(
                 ButtonLike::new("file-save")
-                    .style(ButtonStyle::Tinted(TintColor::Accent))
+                    .style(tinted_style(TintColor::Accent, !can))
                     .size(ButtonSize::Compact)
                     .disabled(!can)
                     .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.save(cx)))
                     .child(
                         h_flex()
                             .gap_1p5()
-                            .child(Label::new("Save").size(LabelSize::Small))
+                            .child(
+                                Label::new("Save")
+                                    .size(LabelSize::Small)
+                                    .color(label_color(!can)),
+                            )
                             .child(Kbd::new("mod-s")),
                     ),
             )

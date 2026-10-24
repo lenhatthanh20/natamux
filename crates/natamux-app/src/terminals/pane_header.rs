@@ -12,6 +12,7 @@ use crate::app::commands::shortcut_of;
 use crate::components::agent_badge::AgentBadge;
 use crate::components::chips::tip_with_keys;
 use crate::components::glyph::StateGlyph;
+use crate::components::icons::icon_path;
 use crate::components::shape::ShapeSize;
 use crate::terminals::pane_rules::PaneHint;
 
@@ -21,7 +22,7 @@ type OnClick = Rc<dyn Fn(&mut Window, &mut App)>;
 pub fn icon_button(id: impl Into<ElementId>, icon: &str) -> ButtonLike {
     ButtonLike::new(id).size(ButtonSize::Compact).child(
         div().px(px(3.)).child(
-            Icon::from_path(format!("icons/lucide/{icon}.svg"))
+            Icon::from_path(icon_path(icon))
                 .size(IconSize::Small)
                 .color(Color::Muted),
         ),
@@ -154,7 +155,7 @@ fn glyph(key: &str, glyph: Option<Option<TaskState>>) -> AnyElement {
         Some(state) => StateGlyph::new(SharedString::from(format!("{key}-glyph")), state)
             .size(ShapeSize::Terminal)
             .into_any_element(),
-        None => Icon::from_path("icons/lucide/square-terminal.svg")
+        None => Icon::from_path(icon_path("square-terminal"))
             .size(IconSize::Small)
             .color(Color::Muted)
             .into_any_element(),

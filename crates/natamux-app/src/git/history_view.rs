@@ -12,6 +12,7 @@ use super::graph_layout::{
 };
 use crate::app::clock::now_ms;
 use crate::components::colors::lane_color;
+use crate::components::icons::icon_path;
 use crate::components::skeleton::{Loading, SkeletonList};
 use crate::tasks::task_time::{AgeStyle, format_age, format_exact};
 use crate::workspaces::finished_banner::OnClick;
@@ -48,7 +49,7 @@ fn alert(message: String, cx: &App) -> impl IntoElement {
         .border_color(status.error_border)
         .bg(status.error_background)
         .child(
-            Icon::from_path("icons/lucide/circle-alert.svg")
+            Icon::from_path(icon_path("circle-alert"))
                 .size(IconSize::Small)
                 .color(Color::Error),
         )

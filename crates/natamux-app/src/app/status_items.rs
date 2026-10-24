@@ -13,6 +13,7 @@ use super::dashboard::Dashboard;
 use super::shortcut_text::keystroke;
 use super::shortcuts::{AddProject, ImportIssues, ShowShortcuts};
 use crate::components::chips::tip_with_keys;
+use crate::components::icons::icon_path;
 use crate::components::menu::MenuLayer;
 
 pub(super) type OnClick = Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
@@ -22,7 +23,7 @@ const MAC: bool = cfg!(target_os = "macos");
 /// A clickable item: 24 high, a muted label that turns to ink on hover.
 pub(super) fn item_button(id: &'static str, tip: &'static str, on_click: OnClick) -> ButtonLike {
     ButtonLike::new(id)
-        .height(px(24.).into())
+        .height(rems_from_px(24.0_f32).into())
         .tooltip(Tooltip::text(tip))
         .on_click(move |event, window, cx| on_click(event, window, cx))
 }
@@ -32,7 +33,7 @@ pub(super) fn item_label(text: impl Into<SharedString>, color: Color) -> Label {
 }
 
 fn icon(name: &str) -> Icon {
-    Icon::from_path(format!("icons/lucide/{name}.svg"))
+    Icon::from_path(icon_path(name))
         .size(IconSize::Small)
         .color(Color::Muted)
 }
@@ -49,7 +50,7 @@ fn command_item(
     let run: OnClick = Rc::new(move |_, window, cx| window.dispatch_action(action(), cx));
     item_button(id, tip, run).child(
         h_flex()
-            .gap(px(6.))
+            .gap(rems_from_px(6.0_f32))
             .child(icon(icon_name))
             .when(!icon_only, |this| {
                 this.child(item_label(label, Color::Muted))
@@ -84,7 +85,7 @@ pub(super) fn keyboard_item() -> ButtonLike {
         .map(|key| keystroke(key, MAC))
         .unwrap_or_default();
     ButtonLike::new("status-keyboard")
-        .height(px(24.).into())
+        .height(rems_from_px(24.0_f32).into())
         .tooltip(tip_with_keys("Keyboard shortcuts", &keys))
         .on_click(|_, window, cx| window.dispatch_action(Box::new(ShowShortcuts), cx))
         .child(icon("keyboard"))
@@ -93,7 +94,7 @@ pub(super) fn keyboard_item() -> ButtonLike {
 /// The account menu opens at the click: the menu moves up to stay inside the window.
 pub(super) fn account_item(dashboard: Entity<Dashboard>) -> ButtonLike {
     ButtonLike::new("status-account")
-        .height(px(24.).into())
+        .height(rems_from_px(24.0_f32).into())
         .tooltip(Tooltip::text("Account"))
         .on_click(move |event, window, cx| {
             open_account_menu(&dashboard, event.position(), window, cx)
@@ -110,7 +111,7 @@ pub(super) struct Folded {
 
 pub(super) fn more_item(folded: Folded) -> ButtonLike {
     ButtonLike::new("status-more")
-        .height(px(24.).into())
+        .height(rems_from_px(24.0_f32).into())
         .tooltip(Tooltip::text("More status items"))
         .on_click(move |event, window, cx| {
             let position = event.position();
@@ -151,7 +152,7 @@ fn entry(
     run: impl Fn(&mut Window, &mut App) + 'static,
 ) -> ContextMenuEntry {
     ContextMenuEntry::new(label)
-        .custom_icon_path(format!("icons/lucide/{icon_name}.svg"))
+        .custom_icon_path(icon_path(icon_name))
         .icon_color(Color::Muted)
         .handler(run)
 }

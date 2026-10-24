@@ -11,6 +11,7 @@ use ui::prelude::*;
 
 use super::timing_rules::ToastClock;
 use super::toast_rules::{Toast, ToastTone, Toasts, toast_duration};
+use crate::components::icons::icon_path;
 
 type Run = Rc<dyn Fn(&mut Window, &mut App)>;
 
@@ -158,9 +159,9 @@ impl Toaster {
     fn render_toast(&self, toast: &Toast, cx: &mut Context<Self>) -> impl IntoElement {
         let id = toast.id;
         let (icon, color) = match toast.tone {
-            ToastTone::Info => ("icons/lucide/info.svg", Color::Accent),
-            ToastTone::Success => ("icons/lucide/circle-check.svg", Color::Success),
-            ToastTone::Error => ("icons/lucide/circle-alert.svg", Color::Error),
+            ToastTone::Info => (icon_path("info"), Color::Accent),
+            ToastTone::Success => (icon_path("circle-check"), Color::Success),
+            ToastTone::Error => (icon_path("circle-alert"), Color::Error),
         };
         let runs = self.runs.get(&id).cloned().unwrap_or_default();
         let actions: Vec<Button> = toast
@@ -182,19 +183,19 @@ impl Toaster {
             .id(("toast", id))
             .w_full()
             .items_start()
-            .gap(px(10.))
-            .pl(px(14.))
-            .pr(px(12.))
-            .py(px(12.))
+            .gap(rems_from_px(10.0_f32))
+            .pl(rems_from_px(14.0_f32))
+            .pr(rems_from_px(12.0_f32))
+            .py(rems_from_px(12.0_f32))
             .elevation_2(cx)
-            .rounded(px(8.))
+            .rounded(rems_from_px(8.0_f32))
             .on_hover(cx.listener(move |toaster, hovered: &bool, _, cx| {
                 toaster.hover(id, *hovered, cx);
             }))
             .child(
                 div()
                     .flex_none()
-                    .mt(px(2.))
+                    .mt(rems_from_px(2.0_f32))
                     .child(Icon::from_path(icon).size(IconSize::Medium).color(color)),
             )
             .child(
@@ -210,7 +211,7 @@ impl Toaster {
                         )
                     })
                     .when(!toast.actions.is_empty(), |this| {
-                        this.child(h_flex().mt(px(6.)).gap_3().children(actions))
+                        this.child(h_flex().mt(rems_from_px(6.0_f32)).gap_3().children(actions))
                     }),
             )
             .child(
@@ -241,7 +242,7 @@ impl Render for Toaster {
                 .position(point(viewport.width - px(16.), viewport.height - px(40.)))
                 .child(
                     v_flex()
-                        .w(px(360.))
+                        .w(rems_from_px(360.0_f32))
                         .max_w(viewport.width - px(32.))
                         .gap_2()
                         .children(items),

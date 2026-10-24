@@ -15,8 +15,13 @@ use super::shell_rules::{Crumb, needs_you_text};
 use super::shortcuts::{NewWorkspace, OpenPalette, ToggleDetails, ToggleSidebar};
 use crate::components::chips::{Kbd, tip_with_keys};
 use crate::components::colors::signal;
+use crate::components::icons::icon_path;
 
-pub const TITLE_BAR_HEIGHT: f32 = 36.;
+/// Zed's `platform_title_bar_height`: 1.75 rem, at least 34 px (the traffic lights need it).
+fn title_bar_height(window: &Window) -> Pixels {
+    (window.rem_size() * 1.75).max(px(34.))
+}
+
 const MAC: bool = cfg!(target_os = "macos");
 
 type OnClick = Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
@@ -83,7 +88,7 @@ fn command_button(
         .on_click(move |_, window, cx| window.dispatch_action(action.boxed_clone(), cx))
         .child(
             div().px_1().child(
-                Icon::from_path(format!("icons/lucide/{icon}.svg"))
+                Icon::from_path(icon_path(icon))
                     .size(IconSize::Small)
                     .color(Color::Muted),
             ),
@@ -118,8 +123,8 @@ fn command_center(window_width: Pixels, cx: &App) -> impl IntoElement {
         .flex_shrink_1()
         .min_w_0()
         .w(width)
-        .h(px(26.))
-        .px(px(10.))
+        .h(rems_from_px(26.0_f32))
+        .px(rems_from_px(10.0_f32))
         .gap_2()
         .rounded_md()
         .border_1()
@@ -130,7 +135,7 @@ fn command_center(window_width: Pixels, cx: &App) -> impl IntoElement {
         .tooltip(command_tip("Search or run a command", "palette.open"))
         .on_click(|_, window, cx| window.dispatch_action(OpenPalette.boxed_clone(), cx))
         .child(
-            Icon::from_path("icons/lucide/search.svg")
+            Icon::from_path(icon_path("search"))
                 .size(IconSize::Small)
                 .color(Color::Muted),
         )
@@ -202,8 +207,8 @@ fn render_pill(count: usize, on_click: OnClick, cx: &App) -> impl IntoElement {
     h_flex()
         .id("needs-you-pill")
         .flex_none()
-        .h(px(24.))
-        .px(px(10.))
+        .h(rems_from_px(24.0_f32))
+        .px(rems_from_px(10.0_f32))
         .rounded_full()
         .border_1()
         .border_color(colors.border)
@@ -237,7 +242,7 @@ impl RenderOnce for TitleBar {
             .id("title-bar")
             .flex_none()
             .w_full()
-            .h(px(TITLE_BAR_HEIGHT))
+            .h(title_bar_height(window))
             .pl(left_pad)
             .pr_2()
             .gap_2()

@@ -11,6 +11,7 @@ use ui::{Tooltip, prelude::*};
 use super::stage_view_rules::{LinkKind, marker_label};
 use crate::components::colors::state_colors;
 use crate::components::glyph::StateGlyph;
+use crate::components::icons::icon_path;
 
 /// `size` 18 of `StepRow`; a branch's diamond is 16.
 const NODE: f32 = 18.;
@@ -48,7 +49,7 @@ pub fn marker(
             .justify_center()
             .child(
                 svg()
-                    .path("icons/lucide/diamond.svg")
+                    .path(icon_path("diamond"))
                     .size(px(DIAMOND))
                     .text_color(color),
             )
@@ -81,7 +82,10 @@ pub fn marker(
 /// Green behind the work and into a running stage, dashed ahead, nothing at the end.
 pub fn rail_line(kind: LinkKind, cx: &App) -> impl IntoElement {
     let done = state_colors(TaskState::Done, cx).fg;
-    let line = div().flex_1().min_h(px(12.)).w(px(0.));
+    let line = div()
+        .flex_1()
+        .min_h(rems_from_px(12.0_f32))
+        .w(rems_from_px(0.0_f32));
     match kind {
         LinkKind::Hidden => line,
         LinkKind::Done | LinkKind::Flow => line.border_l_2().border_color(done),

@@ -19,6 +19,7 @@ use crate::app::dashboard_data::DashboardData;
 use crate::components::agent_badge::agent_name;
 use crate::components::chips::{StateChip, label_chip};
 use crate::components::colors::signal;
+use crate::components::icons::icon_path;
 use crate::sidebar::workspace_groups::short_branch;
 
 /// What a row shows besides the task, read once per frame.
@@ -154,7 +155,7 @@ fn pr_cell(row: &RowData) -> AnyElement {
         .gap_1()
         .cursor_pointer()
         .child(Label::new(pull_request_number(&url)).color(Color::Accent))
-        .child(Icon::from_path("icons/lucide/external-link.svg").size(IconSize::XSmall))
+        .child(Icon::from_path(icon_path("external-link")).size(IconSize::XSmall))
         // The link opens in the browser and does not pick the row.
         .on_click(move |_, _, cx| {
             cx.stop_propagation();

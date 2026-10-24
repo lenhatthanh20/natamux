@@ -10,6 +10,7 @@ use super::super::new_workspace_rules::{PickedFile, SourceChoice, fit_attachment
 use super::{NewWorkspaceDialog, Pick};
 use crate::agents::agent_choices::agent_label;
 use crate::components::form::{field, input_box};
+use crate::components::icons::icon_path;
 
 fn hint(text: impl Into<SharedString>) -> impl IntoElement {
     Label::new(text).size(LabelSize::Small).color(Color::Muted)
@@ -69,7 +70,7 @@ impl NewWorkspaceDialog {
             };
             let button = self
                 .select("new-task-skill", Pick::Skill, text, false, cx)
-                .start_icon(Icon::from_path("icons/lucide/sparkles.svg").size(IconSize::Small));
+                .start_icon(Icon::from_path(icon_path("sparkles")).size(IconSize::Small));
             field("Skill", button)
         });
         let text = if manual {
@@ -100,7 +101,7 @@ impl NewWorkspaceDialog {
         let add = Button::new("new-task-files", "Add files")
             .style(ButtonStyle::Outlined)
             .size(ButtonSize::Compact)
-            .start_icon(Icon::from_path("icons/lucide/paperclip.svg").size(IconSize::Small))
+            .start_icon(Icon::from_path(icon_path("paperclip")).size(IconSize::Small))
             .track_focus(&self.stops.files)
             .on_click(cx.listener(|this, _, _, cx| this.pick_files(cx)));
         let picker = h_flex()

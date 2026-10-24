@@ -1,12 +1,12 @@
 # Rust phase 3: the desktop app
 
-Phase 3 of `plan-rust-migration.md`: the native app (`crates/natamux-app`) gets the screens of the React dashboard one by one, on today's Node daemon. This page covers the shared base and screen 1 (T-0146): the app shell, the sidebar, the task table and the task board; screen 2 (T-0148): the workspace with its terminals, and the Agents grid; screen 3 (T-0149): the details panel with the stage timeline and the gate actions; screen 4 (T-0150): the Changes and History tabs of the workspace; screen 5 (T-0151): the Progress layout of All tasks and the pipeline editor of Project settings; screen 6 (T-0152): the Files tab of the details panel, the editor tab and the Docs tab of the workspace; and screen 7 (T-0154), the last of phase 3: the command palette and the jump palette, the shortcut sheet, the account menu with the terminal font dialog, the Settings dialog, the Projects dialog, the Issues and JSON tabs of Project settings, Import issues, and Sign in. It says how to get the beta, what CI checks, where the app differs from the React screens, and the gate results.
+Phase 3 of `plan-rust-migration.md`: the native app (`crates/natamux-app`) gets the screens of the React dashboard one by one, on today's Node daemon. This page covers the shared base and screen 1 (T-0146): the app shell, the sidebar, the task table and the task board; screen 2 (T-0148): the workspace with its terminals, and the Agents grid; screen 3 (T-0149): the details panel with the stage timeline and the gate actions; screen 4 (T-0150): the Changes and History tabs of the workspace; screen 5 (T-0151): the Progress layout of All tasks and the pipeline editor of Project settings; screen 6 (T-0152): the Files tab of the details panel, the editor tab and the Docs tab of the workspace; screen 7 (T-0154), the last of phase 3: the command palette and the jump palette, the shortcut sheet, the account menu with the terminal font dialog, the Settings dialog, the Projects dialog, the Issues and JSON tabs of Project settings, Import issues, and Sign in; and the close-out (T-0156): the Zed look, the baselines and the owner's sign-off. It says how to get the beta, what CI checks, where the app differs from the React screens, and the gate results.
 
 ## Decisions (owner, 2026-10-22)
 
 - This task builds the foundation and screen 1 only.
 - The beta is a GitHub pre-release made from `dev`, with the attested CI build. It is unsigned until the Apple account exists. `scripts/release.sh` and the releases of `main` do not change.
-- Inter, JetBrains Mono and the Lucide SVGs that screen 1 uses go in `crates/natamux-app/assets`, with their license files. No new crate.
+- Inter, JetBrains Mono and the Lucide SVGs that screen 1 uses go in `crates/natamux-app/assets`, with their license files. No new crate. Since T-0156 (owner, 2026-10-24) the app uses Zed's fonts (`.ZedSans` = IBM Plex Sans, `.ZedMono` = Lilex, from Zed's `assets` crate) and Zed's icons; Inter, JetBrains Mono and the Lucide SVGs with a Zed twin were removed.
 - Earlier rules hold: no new crates without asking, `cargo` runs in CI only, Rust PRs target `dev`.
 - Baselines are shot in CI and kept in the repo after the owner signs a screen off. Nothing is shot on the owner's Mac.
 
@@ -84,7 +84,7 @@ The tests in `cargo xtask ci` that guard the look and the keys:
 
 `scripts/compare-shots.py` compares a shot with its baseline. It fails when more than 0.5% of the pixels differ by more than 16 in a channel, or when the sizes differ, and it writes a diff image (differing pixels in red). The job summary lists each shot as matches, differs, or no baseline yet.
 
-Until the owner signs screen 1 off, the compare step only reports: the job summary says `matches` or `DIFFERS` for each shot, and the step does not fail. New baselines come from the artifact of a CI run, after sign-off. Turning the step to fail (empty `REPORT_ONLY` in `rust.yml`) is the last commit before the PR is ready.
+The owner signed all screens off on 2026-10-24 (T-0156, run 40002366175, the Zed look). The 408 state shots of run 40026431931 (the same look, polished) are the baselines. So that two runs give the same shot, a `--shot` hides the editors' scrollbars (Zed shows them for a moment after a scroll) and draws the window again every 200 ms for 4 s (Zed's terminal anchors its text to the bottom by the screen it read at its last draw, so a screen that came after it sat half a line higher in some runs). Since then the compare step fails on a shot that differs (`REPORT_ONLY` is empty in `rust.yml`). A change of the look sets `REPORT_ONLY: "1"` until its new baselines, from a CI run, are signed off.
 
 ### Screen-1 states
 
@@ -210,7 +210,7 @@ The fake's `natamux` project has three open GitHub issues (one imported already)
 - **View state in a file.** The React app keeps `natamux.*` in the browser's localStorage. The app keeps one `view.json` in its data folder (`~/Library/Application Support/Natamux Native/view.json`, `%APPDATA%` on Windows), written atomically: sidebar folds (at most 300), blurred projects, pinned tasks, layout, sidebar open and width, show finished, seen states (at most 1000), the last base branch per project, and since screen 7 the theme, the UI size, the terminal font and the workspaces opened last (at most 20; the palette's Recent). A broken file is ignored and replaced. A token typed into Sign in is kept next to it in `daemon-access`.
 - **Pinned and folds are per app.** They are not shared with the browser or the Electron app, which keep their own.
 - **Opening a task.** Enter or a double click opens the task's workspace (screen 2, below). The terminal keeps Esc, so an agent can be stopped with it (owner, 2026-10-22). Cmd+[ on macOS, **View → All tasks** or the sidebar go back.
-- **Looks.** The widgets are Zed's `ui` kit with the Natamux theme, so spacing, focus rings and menus follow Zed, not the CSS of the dashboard.
+- **Looks.** Since the phase-3 close-out (T-0156) the app looks like Zed: the Natamux themes are built from Zed's One Dark and One Light (`assets/themes/natamux.json`), with a colour made lighter (dark) or darker (light) where it fails a contrast pair, and Natamux's own colour for a task state where One's is too faint; the icons are Zed's where Zed has one (`components/icons.rs` maps the web's Lucide names), and the Lucide SVGs with no Zed twin stay; dialogs have the spacing of Zed's `Modal` and its footer; the workspace and details tabs are Zed's `TabBar`; palette rows are Zed's `ListItem`; list rows hover and select in Zed's ghost colours with a 1 px focus ring; the title bar has Zed's height. Most literal sizes are in rems, so the UI size scales them; the rows named under "UI size" (screen 7) stay in pixels. Spacing, focus rings and menus follow Zed, not the CSS of the dashboard. Left for the follow-up task of a compact, Zed-like layout (owner, 2026-10-24): the sidebar tree and the Files tree on Zed's `ListItem` and `TreeViewItem` (today they only take Zed's ghost colours and 1 px focus ring), the task table, board and Progress rows on `ListItem` sizes, and the Issues tab's choices as `ListItem` rows with a toggle state (today a radio drawn by the app).
 - **No phone layout.** It stays in the web app. The needs-you notifications and the screen-reader announcement came with screen 3 (below).
 - **Tools menu.** The perf overlay, the bench and the IME check are commands of the **Tools** menu.
 - **`--gate2`.** It scrolls the sidebar tree and a bench terminal while the bench runs, then shows the task table in main while the bench's 10 shells keep printing out of sight, and scrolls the table for 20 s. Then it opens the task's workspace with four of the bench's shells as panes, still printing, and scrolls the first pane for 20 s (screen 2). Then it closes the bench and types into a quiet shell. It saves four perf reports: bench, table, panes and typing. Every report has `start.first_frame_ms` and `start.first_data_ms`, the times from the start of the app to the first frame and to the first task list.
@@ -265,7 +265,7 @@ The fake's `natamux` project has three open GitHub issues (one imported already)
 - **Side by side** off for want of room: the toggle shows Inline and its tooltip says "Needs a wider window"; a click still stores the choice for a wider window.
 - **Ask agent** is Mod+Shift+A with lines picked in either side (and the comment box's label shows the quote). There is no floating button at the cursor nor an item in the editor's right-click menu.
 - **The file tree** keeps its folded folders per task while the app runs, as the web keeps them while the page is open. The narrow picker ("Changed file") is a plain menu.
-- **Icons.** The History tab, Collapse all, the fold, wrap and image toggles and the file rows use Zed's icons, as the app's Lucide set lacks them.
+- **Icons.** The History tab, Collapse all, the fold, wrap and image toggles and the file rows use Zed's icons.
 - **History's loading state** is the skeleton with no "Reading the history" text: GPUI has no screen-reader label yet.
 - **Ages** in History are in UTC, as on the earlier screens.
 - **Shot sizes.** At 1024x720 the sidebar docks and main is under 720 wide, so the Changes states show the narrow layout (the "Changed file" picker, Inline); at 1000x680 the sidebar is a drawer and they show the file panel and Side by side, as the reference does at 1440.
@@ -281,7 +281,7 @@ The fake's `natamux` project has three open GitHub issues (one imported already)
 - **Export** asks where to save `<project>.natamux.json` and says "Exported <file>."; the web downloads it.
 - **Settings read again.** The daemon sends no event when a project's settings change. As the web reads them again when its tab gets the focus, the app reads them again when its window becomes active, when the project list changes, and after its own save. The open dialog keeps its draft; a change by another client shows as Reload and Overwrite on Save.
 - **Pickers.** The agent, kind, condition, "Add a stage…" and Insert skill pickers are plain menus with no search, as the pickers of screen 1.
-- **Icons.** The app's Lucide set lacks BookOpen, FlaskConical, Rocket, Hand, UserRound, GitFork and GripVertical: Zed's Book, ToolHammer, PullRequest, Person, GitBranch and Menu icons stand in (`stages/kind_icon.rs`), and the Progress segment uses ListTodo, until the SVGs come.
+- **Icons.** Zed's icons nearest to the web's: Book for BookOpen, ToolHammer for FlaskConical, PullRequest for Rocket, Person for Hand and UserRound, GitBranch for GitFork, Menu for GripVertical (`stages/kind_icon.rs`); the Progress segment uses ListTodo.
 - **Progress.** The marker's tooltip names the status without the stage's name; the stage columns scroll sideways between the fixed Task and Next columns; a row's title has no underline on hover, the row is tinted.
 - **Keys.** `stage.move` of the web is two commands, `stage.move-up` (Alt+Up) and `stage.move-down` (Alt+Down), in the stage list. Mod+Enter saves through the dialog's own key.
 - **Shot sizes.** The editor states scroll the dialog to the stage list. At 1024x720 the list and the details sit side by side; at 1000x680 and 800x560 they are one column, so those shots show the list and the details are under it.
@@ -291,33 +291,33 @@ The fake's `natamux` project has three open GitHub issues (one imported already)
 
 - **The editor is Zed's editor**, not Monaco: a writable buffer with no project, line numbers, the syntax colours of the grammars of screen 4 (a file of another language is plain text), soft wrap for prose files. A new text on disk goes into the same buffer, so the cursor and the scroll stay, and that change is in the undo history. Save is Mod+S through the app's command `file.save`.
 - **Multi-line editors** (the editor tab, the Docs edit) take Enter, Tab, Shift+Tab, the arrows, Page Up and Page Down, and the moves to the start and end of the text. Single-line boxes leave the arrows and Enter to the lists and forms around them.
-- **Markdown.** Until the owner OKs Zed's `markdown` crate, the Rendered view shows the text as it is, wrapped. With the crate: Zed's renderer with no HTML, no Mermaid, no image loading and only web and mail links, in Zed's spacing.
+- **Markdown.** Zed's `markdown` crate (owner, 2026-10-24), in Zed's spacing (`workspaces/docs_markdown.rs`): no HTML, no Mermaid, no image loading, and only web and mail links open. An image written inline as a `data:` address is drawn (the crate decodes it with no loader), where the web shows only its alt text; an image from a file or the web shows nothing.
 - **Drop on a terminal.** A path drags only inside the app, onto a terminal pane of the same task. The paste is bracketed when the program asked for it, as xterm does, and the pane takes the focus. A drag to another app is not offered.
 - **Downloads.** An attachment that is not an image asks where to save it and says "Downloaded <name>."; the web downloads it.
 - **Quitting** with edits that are not saved asks first, also for Docs edits; the web asks only for files of the editor, through the browser.
 - **Reads.** As the web reads only the queries on screen, `workspace.dirty` and the 60 s fallback poll read again only the Files tree (while the panel shows Files), the Docs list or the open file (while its tab shows); a hidden one reads again when it shows (`dirty_reads`). The git state of the open workspace reads as before.
 - **A path outside the worktree** is answered 409 by the daemon (`OutsideWorkspaceError`), not 400.
-- **Icons.** The app's Lucide set lacks RefreshCw, FileCode and FileImage, and the file icons of material-icon-theme are not in the app yet: Zed's RotateCw, FileCode, Image and `File*` icons stand in (`files/file_icon_view.rs`), until the owner answers. The Rendered \| Source switch shows icons with its labels.
+- **Icons.** Files show Zed's file icons (`icons/file_icons` of Zed's assets), picked from the web's Material Icon Theme name (`files/file_icon_view.rs`, owner 2026-10-24): fewer kinds than the web's set, so some types share an icon (all docs show the book, many configs the code icon). RefreshCw is Zed's RotateCw. The Rendered \| Source switch shows icons with its labels.
 - **Sizes.** The `edited` and `Modified` marks use Zed's smallest label size (the web's 2xs is smaller). The editor tab and the Docs edit are mono 12; the source view of Docs uses the buffer font size of the theme.
 - **Shots.** At the three shot sizes the details panel is a sheet over main, so it hides the right part of the editor and Docs headers (Revert, Save, the view switch, Edit); the owner checks them docked on the CI build.
 - **Window sizes.** The Docs list is always a column on the left: the window is at least 800 wide.
 
 ## Screen 7: where it differs from the React screens
 
-- **The palettes** are the app's own view, not Zed's picker (that crate is not in the lock): the web's ranking (`fuzzy.ts`) is ported as it is, so the same query gives the same rows. The terminal rows of the jump palette come from the terminal lists the app already reads (the sidebar's, the open workspace's and the Agents grid's); the web reads them for the jump palette itself when there are at most 20 workspaces. Alt+1 to 9 match the key, not the typed character (Alt+digit types a symbol on macOS). The footer does not wrap.
+- **The palettes** are the app's own view, not Zed's picker (that crate is not in the lock): the web's ranking (`fuzzy.ts`) is ported as it is, so the same query gives the same rows. As the web, the jump palette reads the terminals of every workspace while it is open when there are at most 20 (`terminal_reads`, `TerminalReader::Palette`); the rows take the lists as they come. Alt+1 to 9 match the key, not the typed character (Alt+digit types a symbol on macOS). The footer does not wrap.
 - **Sign in.** The token typed in is kept in `daemon-access` in the app's data folder (mode 0600), not in the browser; the line says "It stays on this computer." Connect asks the daemon for the task list first: a refused token keeps Sign in with the web's message, and another error (the daemon is down) shows its message there too, where the web would open the dashboard and show the load error. A 401 later deletes only the app's own file and opens Sign in; the Electron app's `daemon-token` and `NATAMUX_TOKEN` are never changed. The macOS Keychain would need a new crate. There is no Sign out item, as in the Electron app.
 - **Settings** has no Desktop app part (keep the computer awake, check for updates): those are settings of the Electron app. Theme and UI size use a text-only segmented control.
-- **UI size** sets Zed's UI and buffer font sizes (16 and 15 times 0.92, 1 or 1.077): parts drawn in rems follow, parts with a fixed size in pixels (row heights, the title and status bars) do not, where the web's CSS zoom scales everything. The terminal font size is not scaled.
-- **Terminal font.** With no font picked, the terminals use Ghostty's font, else JetBrains Mono 13 (the web's size; before screen 7 the app used Zed's terminal size). Ghostty's config is read once when the app starts.
-- **The account menu** opens where it was clicked, kept inside the window. "Terminal font…" and "Report an issue" show Zed's FontSize and the Lucide triangle-alert icons until the Lucide `type` and `bug` SVGs come.
+- **UI size** sets Zed's UI and buffer font sizes (16 and 15 times 0.92, 1 or 1.077), and since T-0156 most literal sizes of the views are in rems, so bars, dialogs, chips, toasts and spacing follow, as the web's CSS zoom scales everything. Still in pixels: the task table rows and header (`tasks/task_table.rs` `ROW`, `CARD_ROW`, `HEADER`), the sidebar rows (`sidebar/workspace_row.rs`, the height and padding of each tier), the Progress board rows and columns and the stage rows (`stages/progress_board*.rs`, `stages/stage_rows.rs`), the window breakpoints, the sidebar and panel widths kept in `view.json`, the terminal panes and the git graph lanes. A terminal font picked by the user keeps its size.
+- **Terminal font.** As Zed (owner, 2026-10-24): with no font picked, a terminal takes Zed's buffer font (Lilex) and the buffer size (15, scaled by the UI size); the web uses Ghostty's font, else JetBrains Mono 13. The app reads no Ghostty config. A font picked in the dialog wins; a part left empty is Lilex or 15.
+- **The account menu** opens where it was clicked, kept inside the window. "Terminal font…" and "Report an issue" show Zed's FontSize and Debug (a bug) icons.
 - **Projects** has no Browse buttons: the web shows them only in the Electron app, and the daemon may run on another machine. The text fields use the buffer font.
 - **Import issues** shows the raw message behind the empty state's own "Show details".
 - **Status bar layout rules.** The bar uses only the width rules (`forced_by_width`), as before; the measured condensing of the web (`condense`, the `measure` cases) is ported with its tests but not used yet, so those items keep item-level `allow(dead_code)` in `app/status_layout.rs`.
 - **The JSON tab** is a Zed editor with JSON colours and no line numbers, not a textarea; Tab types a tab there, so Tab does not leave it (Esc closes the dialog as before).
 - **Seen in the CI shots** (run 39979437375):
-  - Palette: the first nine rows show their Alt key (⌥1 to ⌥9) at the right, where the web only names it for screen readers; the footer says "Tab needs you" where the web draws ⇥. Suggested lists the commands in the app's registry order (View: Agents before Task: Start a task); the web starts with Jump to a workspace and Show the keyboard shortcuts. At the shot sizes the list ends inside Suggested and scrolls.
+  - Palette: the first nine rows show their Alt key (⌥1 to ⌥9) at the right, where the web only names it for screen readers; the footer says "Tab needs you" where the web draws ⇥. At the shot sizes the list ends inside Suggested and scrolls. Suggested follows the web's order since T-0156 (a rank per command).
   - Account menu: the section titles are "Theme" and "UI size" as written, not in caps; "Terminal font…" has the Zed FontSize icon.
-  - Project settings: the tabs are Zed's tab bar (boxed tabs on a strip), not the web's underlined tabs. A Save, Import or Add project that is off keeps its colour and only stops the click, as on screen 5; the web greys it. On the JSON tab the editor is 22 rows high, so at the shot sizes the parse error and the problem list sit under it, below the fold (the footer shows "1 problem").
+  - Project settings: the tabs are Zed's tab bar (boxed tabs on a strip), not the web's underlined tabs. Since T-0156 a tinted button that is off (Save, Import, Add project, Start agent, the git buttons) shows no tint and a dimmed label (`components/button_style.rs`), as the web greys it; and the JSON tab shows the parse error and the problem list above its editor, so they show without scrolling.
   - Import issues: Retry is a plain button with no border.
   - Projects: the fake daemon's worktree folder is `/work/.natamux/worktrees`, the reference's demo `/data/worktrees`.
   - Sign in: `NATAMUX_TOKEN` in the help line is not in the mono font; the window keeps the traffic lights and no title bar.
@@ -382,11 +382,12 @@ Screen 6 (T-0152): every case of `features/files/__tests__/explorer-tree.test.ts
 - The address cases of `view-store.test.ts` and `route.test.ts` ('takes the file of an editor address, and keeps the file of the Changes tab'): the app has no addresses.
 - Regression of review 2: a details panel closed on Files and opened again reads its tree again (`reads_the_tree_again_when_a_closed_panel_opens_on_files`, `ShowWatch` in `app/tab_rules.rs`).
 
-Screen 7 (T-0154): every case of `features/palette/__tests__/fuzzy.test.ts` and `palette.test.ts` (`palette/fuzzy_tests.rs`, `palette/palette_rows_tests.rs`, `palette/jump_rows_tests.rs`), `features/projects/__tests__/issues.test.ts`, `lib/__tests__/theme.test.ts`, `ui-size.test.ts`, `features/terminals/__tests__/terminal-font.test.ts`, `packages/desktop/src/app/__tests__/ghostty-config.test.ts`, `features/stages/editor/__tests__/settings-json.test.ts`, the screen-7 cases of `commands.test.ts` and the Issues tab, JSON tab and one-draft cases of `ProjectSettingsDialog.test.tsx` (`projects/settings_tab_rules_tests.rs`) has a Rust test of the same name, except:
+Screen 7 (T-0154): every case of `features/palette/__tests__/fuzzy.test.ts` and `palette.test.ts` (`palette/fuzzy_tests.rs`, `palette/palette_rows_tests.rs`, `palette/jump_rows_tests.rs`), `features/projects/__tests__/issues.test.ts`, `lib/__tests__/theme.test.ts`, `ui-size.test.ts`, `features/terminals/__tests__/terminal-font.test.ts` (without its Ghostty cases), `features/stages/editor/__tests__/settings-json.test.ts`, the screen-7 cases of `commands.test.ts` and the Issues tab, JSON tab and one-draft cases of `ProjectSettingsDialog.test.tsx` (`projects/settings_tab_rules_tests.rs`) has a Rust test of the same name, except:
 
 - `CommandPalette.test.tsx`: `capRows`, the scope cycle and the create rows have twins in `palette/palette_rows_tests.rs`; 'keeps its rows in place when tasks change while it is open' is the snapshot the view takes at open; the keys, focus, inert page and the 500-workspace render cases are covered by the shots and the owner's check.
 - `RepoPanel.test.tsx`: the worktree folder rules have twins in `projects/project_rules_tests.rs`; the Browse cases are not ported (no Browse in the app).
 - `TerminalFontDialog.test.tsx` and `SettingsDialog.test.tsx`: their rules are tests of `terminals/terminal_font_tests.rs` and `app/appearance_rules_tests.rs`; the Desktop app cases of `SettingsDialog.test.tsx` are not ported (no Desktop app part).
+- `ghostty-config.test.ts` and the Ghostty cases of `terminal-font.test.ts`: the app reads no Ghostty config since T-0156 (owner, 2026-10-24); the terminal is as Zed's.
 - `terminal-font.test.ts`: the cases about the CSS font list (the icon font after the picked font, the UI keeping Geist Mono) have no CSS to check; the family and size fallbacks are tested.
 - `theme.test.ts` `pageTheme`: it reads the page's `data-theme`.
 - `App.test.tsx`: 'goes back to the token form when the daemon rejects the token' is a test of `app/sign_in_rules.rs`; the account menu's items and 'has no sign out in the desktop app, which signs in by itself' are covered by the `account-menu` shot.
@@ -403,17 +404,17 @@ Gate per screen (plan): target numbers met, baselines in both themes, owner sign
 | Ported rule tests (same names as the TypeScript tests) | 2026-10-22 | Pass | In `check`; the cases left out are listed above |
 | Client tests and live feed | 2026-10-22 | Pass | In `check` |
 | `live-daemon` screen-1 flow | 2026-10-22 | Pass | Run 39824338735, job `live-daemon` |
-| `app-macos`: shots match baselines | | Open | No baselines yet: the compare step reports only until the owner signs screen 1 off |
+| `app-macos`: shots match baselines | 2026-10-24 | Pass | Baselines from run 40026431931 (T-0156, the Zed look) in `crates/natamux-app/tests/shots/`; run 40030114162 compares them and fails on a difference |
 | `app-macos`: `--smoke`, zip at most 60 MiB | 2026-10-22 | Pass | Run 39824338735, job `app-macos` |
 | `app-windows`: build and `--smoke` | 2026-10-22 | Pass | Run 39824338735, job `app-windows` |
-| Frames while scrolling the sidebar tree and the table with 10 agents (`--gate2`, mean of 4 runs) | | | |
-| Cold start to the first frame (limit 300 ms) | | | |
-| Cold start to the list with data (limit 1 s) | | | |
-| Vietnamese Telex and VNI in every screen-1 text box | | | |
-| Same API call as the React screen for each action, web dashboard shows the result | | | |
+| Frames while scrolling the sidebar tree and the table with 10 agents (`--gate2`, mean of 4 runs) | 2026-10-24 | Pass | Owner, on the beta; no numbers recorded |
+| Cold start to the first frame (limit 300 ms) | 2026-10-24 | Pass | Owner, on the beta; no numbers recorded |
+| Cold start to the list with data (limit 1 s) | 2026-10-24 | Pass | Owner, on the beta; no numbers recorded |
+| Vietnamese Telex and VNI in every screen-1 text box | 2026-10-24 | Pass | Owner |
+| Same API call as the React screen for each action, web dashboard shows the result | 2026-10-24 | Pass | Owner |
 | `native-beta.yml` makes a pre-release, its zip passes `gh attestation verify`, `/releases/latest` still points at the newest Electron release | 2026-10-23 | Pass | Native beta run 39843667186 made `native-beta.1` from Rust run 39824338735 (66f2aac); `/releases/latest` is still v0.1.43 |
 | README and site install page, PR into `main`: `scripts/readme.test.py` and the site build | 2026-10-23 | Pass | PR #430, merged; `audit` failed on a DOMPurify advisory of `main`'s own dependencies, not on this change |
-| Owner sign-off, light and dark | | | |
+| Owner sign-off, light and dark | 2026-10-24 | Pass | Owner, on run 40002366175 (T-0156: all screens in the Zed look); the baselines are of run 40026431931, the same look with softer state tints and smaller radii |
 
 ### Screen 2
 
@@ -423,14 +424,14 @@ Gate per screen (plan): target numbers met, baselines in both themes, owner sign
 | Ported rule tests (same names as the TypeScript tests) | 2026-10-23 | Pass | In `check`; the cases left out are listed above |
 | Client tests and live feed (five routes, `WorkspaceChanged`, `ShellsChanged`) | 2026-10-23 | Pass | In `check` |
 | `live-daemon` screen-2 flow | 2026-10-23 | Pass | Run 39842444315, `runs_the_reads_and_writes_of_screen_2` |
-| `app-macos`: the 8 screen-2 states, both themes, three sizes; shots match baselines | | Open | Shot in run 39842444315 (118 shots); no baselines until the owner signs screen 2 off |
+| `app-macos`: the 8 screen-2 states, both themes, three sizes; shots match baselines | 2026-10-24 | Pass | Baselines from run 40026431931 (T-0156, the Zed look) in `crates/natamux-app/tests/shots/`; run 40030114162 compares them and fails on a difference |
 | `app-macos`: `--smoke`, zip at most 60 MiB | 2026-10-23 | Pass | Run 39842444315, job `app-macos` |
 | `app-windows`: build and `--smoke` | 2026-10-23 | Pass | Rust run 39846390721 on `dev` (b0d8c73, PR #431 merged), job `app-windows` |
-| Frames with 10 agents printing and 4 panes on screen (`--gate2` `panes` report, mean of 4 runs) | | | |
-| Key to glyph in a pane of the grid (p95 at most 20 ms, app part at most 17 ms) | | | |
-| Vietnamese Telex and VNI in a pane and in the find field | | | |
-| Same API call as the React screen for each action, web dashboard shows the result | | | |
-| Owner sign-off, light and dark | | | |
+| Frames with 10 agents printing and 4 panes on screen (`--gate2` `panes` report, mean of 4 runs) | 2026-10-24 | Pass | Owner, on the beta; no numbers recorded |
+| Key to glyph in a pane of the grid (p95 at most 20 ms, app part at most 17 ms) | 2026-10-24 | Pass | Owner, on the beta; no numbers recorded |
+| Vietnamese Telex and VNI in a pane and in the find field | 2026-10-24 | Pass | Owner |
+| Same API call as the React screen for each action, web dashboard shows the result | 2026-10-24 | Pass | Owner |
+| Owner sign-off, light and dark | 2026-10-24 | Pass | Owner, on run 40002366175 (T-0156: all screens in the Zed look); the baselines are of run 40026431931, the same look with softer state tints and smaller radii |
 
 ### Screen 3
 
@@ -440,14 +441,14 @@ Gate per screen (plan): target numbers met, baselines in both themes, owner sign
 | Ported rule tests (same names as the TypeScript tests) | 2026-10-23 | Pass | In `check`; the cases left out are listed above |
 | Client tests and live feed (eight routes, `TaskLogged`) | 2026-10-23 | Pass | In `check` |
 | `live-daemon` screen-3 flow | 2026-10-23 | Pass | Run 39863431903, `runs_the_reads_and_writes_of_screen_3` |
-| `app-macos`: the 11 screen-3 states, both themes, three sizes; shots match baselines | | Open | Shot in run 39869173632 (184 shots; run 39863431903 had 206 with the 1280x720 ones, since dropped); no baselines until the owner signs screen 3 off |
+| `app-macos`: the 11 screen-3 states, both themes, three sizes; shots match baselines | 2026-10-24 | Pass | Baselines from run 40026431931 (T-0156, the Zed look) in `crates/natamux-app/tests/shots/`; run 40030114162 compares them and fails on a difference |
 | `app-macos`: `--smoke`, zip at most 60 MiB | 2026-10-23 | Pass | Run 39863431903, job `app-macos` |
 | `app-windows`: build and `--smoke` | 2026-10-23 | Pass | Rust run 39879426799 on `dev` (b2545a6, PR #432 merged), job `app-windows`; its `app-macos` passed on a rerun (the first try lost the network at the attest step) |
-| The docked panel at 1440, both themes | | | Owner, on the CI build |
-| Vietnamese Telex and VNI in the edit form, the Send back reason and the subtask field | | | Owner |
-| Same API call as the React screen for each action, web dashboard shows the result | | | Owner |
-| The notification window | | | Owner |
-| Owner sign-off, light and dark | | | |
+| The docked panel at 1440, both themes | 2026-10-24 | Pass | Owner |
+| Vietnamese Telex and VNI in the edit form, the Send back reason and the subtask field | 2026-10-24 | Pass | Owner |
+| Same API call as the React screen for each action, web dashboard shows the result | 2026-10-24 | Pass | Owner |
+| The notification window | 2026-10-24 | Pass | Owner |
+| Owner sign-off, light and dark | 2026-10-24 | Pass | Owner, on run 40002366175 (T-0156: all screens in the Zed look); the baselines are of run 40026431931, the same look with softer state tints and smaller radii |
 
 ### Screen 4
 
@@ -458,13 +459,13 @@ Gate per screen (plan): target numbers met, baselines in both themes, owner sign
 | Client tests (seven routes, `fresh`, the 404 and 413 errors) | 2026-10-23 | Pass | In `check` (`tests/git_api.rs`) |
 | `live-daemon` screen-4 flow | 2026-10-23 | Pass | Run 39899125106, `runs_the_reads_and_writes_of_screen_4` |
 | `supply-chain` with the new grammar crates | 2026-10-23 | Pass | Run 39899125106; the lockfile and the `cargo vet` exemptions came from a CI run (39889128968), not from a local cargo |
-| `app-macos`: the 7 screen-4 states, both themes, three sizes; shots match baselines | | Open | Shot in run 39899125106 (226 shots); no baselines until the owner signs screen 4 off |
+| `app-macos`: the 7 screen-4 states, both themes, three sizes; shots match baselines | 2026-10-24 | Pass | Baselines from run 40026431931 (T-0156, the Zed look) in `crates/natamux-app/tests/shots/`; run 40030114162 compares them and fails on a difference |
 | `app-macos`: `--smoke`, zip at most 60 MiB | 2026-10-23 | Pass | Run 39899125106; the zip is about 50 MB with the grammars |
 | `app-windows`: build and `--smoke` | 2026-10-23 | Pass | Rust run 39910369940 on `dev` (3ed1970, PR #433 merged), job `app-windows`; all its jobs passed |
-| The diff of a real task in both themes and both layouts | | | Owner, on the CI build |
-| Vietnamese Telex and VNI in the commit box and the comment box | | | Owner |
-| Same API call as the React screen for each action, web dashboard shows the result | | | Owner |
-| Owner sign-off, light and dark | | | |
+| The diff of a real task in both themes and both layouts | 2026-10-24 | Pass | Owner |
+| Vietnamese Telex and VNI in the commit box and the comment box | 2026-10-24 | Pass | Owner |
+| Same API call as the React screen for each action, web dashboard shows the result | 2026-10-24 | Pass | Owner |
+| Owner sign-off, light and dark | 2026-10-24 | Pass | Owner, on run 40002366175 (T-0156: all screens in the Zed look); the baselines are of run 40026431931, the same look with softer state tints and smaller radii |
 
 ### Screen 5
 
@@ -474,12 +475,12 @@ Gate per screen (plan): target numbers met, baselines in both themes, owner sign
 | Ported rule tests (same names as the TypeScript tests) | 2026-10-23 | Pass | In `check`; the cases left out are listed above |
 | Client tests (`save_settings` with and without `If-Match`, 409, 400) | 2026-10-23 | Pass | In `check` (`tests/settings_api.rs`) |
 | `live-daemon` screen-5 flow | 2026-10-23 | Pass | Run 39927345495, `runs_the_reads_and_writes_of_screen_5` |
-| `app-macos`: the 7 screen-5 states, both themes, three sizes; shots match baselines | | Open | Shot in run 39927345495 (268 shots); no baselines until the owner signs screen 5 off |
+| `app-macos`: the 7 screen-5 states, both themes, three sizes; shots match baselines | 2026-10-24 | Pass | Baselines from run 40026431931 (T-0156, the Zed look) in `crates/natamux-app/tests/shots/`; run 40030114162 compares them and fails on a difference |
 | `app-macos`: `--smoke`, zip at most 60 MiB | 2026-10-23 | Pass | Run 39927345495 |
 | `app-windows`: build and `--smoke` | 2026-10-23 | Pass | Rust run 39941043330 on PR #434 (e49fb11), job `app-windows` |
-| Progress of real tasks, a pipeline edit saved and seen in the web dashboard, and a web edit seen in the app | | | Owner, on the CI build |
-| Vietnamese Telex and VNI in the name, prompt and condition fields | | | Owner |
-| Owner sign-off, light and dark | | | |
+| Progress of real tasks, a pipeline edit saved and seen in the web dashboard, and a web edit seen in the app | 2026-10-24 | Pass | Owner |
+| Vietnamese Telex and VNI in the name, prompt and condition fields | 2026-10-24 | Pass | Owner |
+| Owner sign-off, light and dark | 2026-10-24 | Pass | Owner, on run 40002366175 (T-0156: all screens in the Zed look); the baselines are of run 40026431931, the same look with softer state tints and smaller radii |
 
 ### Screen 6
 
@@ -489,14 +490,14 @@ Gate per screen (plan): target numbers met, baselines in both themes, owner sign
 | Ported rule tests (same names as the TypeScript tests) | 2026-10-23 | Pass | In `check`; the cases left out are listed above |
 | Client tests (eight routes, `If-Match`, 409, 413, 404, bytes) | 2026-10-23 | Pass | In `check` (`tests/files_api.rs`) |
 | `live-daemon` screen-6 flow | 2026-10-23 | Pass | Run 39954098408, `runs_the_reads_and_writes_of_screen_6` |
-| `app-macos`: the 8 screen-6 states, both themes, three sizes; shots match baselines | | Open | Shot in run 39954098408 (316 shots); no baselines until the owner signs screen 6 off |
+| `app-macos`: the 8 screen-6 states, both themes, three sizes; shots match baselines | 2026-10-24 | Pass | Baselines from run 40026431931 (T-0156, the Zed look) in `crates/natamux-app/tests/shots/`; run 40030114162 compares them and fails on a difference |
 | `app-macos`: `--smoke`, zip at most 60 MiB | 2026-10-23 | Pass | Run 39954098408 |
 | `app-windows`: build and `--smoke` | 2026-10-23 | Pass | Rust run 39963088535 on PR #435 (1ff379a), job `app-windows`; every job of that run passed. The `dev` run of the merge (39963121785, d5685cd) was cancelled |
-| A file edited and saved in the app, seen in the web dashboard and on disk; an agent's write shows the banner | | | Owner, on the CI build |
-| A path dropped on a real agent's terminal | | | Owner |
-| The Docs of a real task, Rendered, both themes | | | Owner |
-| Vietnamese Telex and VNI in the editor and the Docs edit | | | Owner |
-| Owner sign-off, light and dark | | | |
+| A file edited and saved in the app, seen in the web dashboard and on disk; an agent's write shows the banner | 2026-10-24 | Pass | Owner |
+| A path dropped on a real agent's terminal | 2026-10-24 | Pass | Owner |
+| The Docs of a real task, Rendered, both themes | 2026-10-24 | Pass | Owner |
+| Vietnamese Telex and VNI in the editor and the Docs edit | 2026-10-24 | Pass | Owner |
+| Owner sign-off, light and dark | 2026-10-24 | Pass | Owner, on run 40002366175 (T-0156: all screens in the Zed look); the baselines are of run 40026431931, the same look with softer state tints and smaller radii |
 
 ### Screen 7
 
@@ -506,14 +507,14 @@ Gate per screen (plan): target numbers met, baselines in both themes, owner sign
 | Ported rule tests (same names as the TypeScript tests) | 2026-10-23 | Pass | In `check`; the cases left out are listed above |
 | Client tests (`POST /repos`, the GitHub issues and import, the token order, the private token file) | 2026-10-23 | Pass | In `check` (`tests/projects_api.rs`, `config.rs`) |
 | `live-daemon` screen-7 flow | 2026-10-23 | Pass | Run 39979437375, `runs_the_reads_and_writes_of_screen_7` |
-| `supply-chain` | 2026-10-23 | Fail | Run 39979437375: `cargo deny` reports RUSTSEC-2026-0386 (tokio 1.52.1, `AsyncFd` I/O safety), an advisory published after the screen-6 runs. It is not from this change: `Cargo.lock` is the one of `dev`. Bumping tokio or allowing the advisory is the owner's call (dependency rules, cooldown) |
-| `app-macos`: the 16 screen-7 states, both themes, three sizes; shots match baselines | | Open | Shot in run 39979437375 (412 shots); no baselines until the owner signs screen 7 off |
+| `supply-chain` | 2026-10-24 | Pass | Run 40002366175 (T-0156), with RUSTSEC-2026-0386 ignored and its reason in `deny.toml` and `.cargo/audit.toml` (owner, 2026-10-24; tokio 1.53.3 through Dependabot). Before: run 39979437375: `cargo deny` reports RUSTSEC-2026-0386 (tokio 1.52.1, `AsyncFd` I/O safety), an advisory published after the screen-6 runs. It is not from this change: `Cargo.lock` is the one of `dev`. Bumping tokio or allowing the advisory is the owner's call (dependency rules, cooldown) |
+| `app-macos`: the 16 screen-7 states, both themes, three sizes; shots match baselines | 2026-10-24 | Pass | Baselines from run 40026431931 (T-0156, the Zed look) in `crates/natamux-app/tests/shots/`; run 40030114162 compares them and fails on a difference |
 | `app-macos`: `--smoke`, zip at most 60 MiB | 2026-10-23 | Pass | Run 39979437375. With no token on the runner the app starts on Sign in, so `--smoke` types into its token field |
-| `app-windows`: build and `--smoke` | | Open | Runs on the PR into `dev` |
-| The palette and the jump palette on real tasks | | | Owner, on the CI build |
-| A project added and an issue import tried in the app, seen in the web dashboard | | | Owner |
-| An Issues-tab change saved and seen in the web | | | Owner |
-| Sign in with a wrong and the right token | | | Owner |
-| Theme, UI size and terminal font changes | | | Owner |
-| Vietnamese Telex and VNI in the palette, the font dialog, the Projects form, the JSON tab and Sign in | | | Owner |
-| Owner sign-off, light and dark | | | |
+| `app-windows`: build and `--smoke` | 2026-10-23 | Pass | Rust run 39986604010 on PR #437 (ce984bb), job `app-windows`; again on `dev` run 39986700222 (5df60c1). Both runs failed only on `supply-chain` (RUSTSEC-2026-0386, ignored since T-0156) |
+| The palette and the jump palette on real tasks | 2026-10-24 | Pass | Owner |
+| A project added and an issue import tried in the app, seen in the web dashboard | 2026-10-24 | Pass | Owner |
+| An Issues-tab change saved and seen in the web | 2026-10-24 | Pass | Owner |
+| Sign in with a wrong and the right token | 2026-10-24 | Pass | Owner |
+| Theme, UI size and terminal font changes | 2026-10-24 | Pass | Owner |
+| Vietnamese Telex and VNI in the palette, the font dialog, the Projects form, the JSON tab and Sign in | 2026-10-24 | Pass | Owner |
+| Owner sign-off, light and dark | 2026-10-24 | Pass | Owner, on run 40002366175 (T-0156: all screens in the Zed look); the baselines are of run 40026431931, the same look with softer state tints and smaller radii |

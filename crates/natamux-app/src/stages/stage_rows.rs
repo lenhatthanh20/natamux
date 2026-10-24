@@ -105,7 +105,7 @@ impl StageList {
             .absolute()
             .left(px(4.))
             .right(px(4.))
-            .h(px(2.))
+            .h(rems_from_px(2.0_f32))
             .rounded_full()
             .bg(cx.theme().colors().text_accent);
         Some(match side {
@@ -215,7 +215,7 @@ impl StageList {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let colors = cx.theme().colors();
-        let (hover, selected_bg) = (colors.element_hover, colors.element_selected);
+        let (hover, selected_bg) = (colors.ghost_element_hover, colors.ghost_element_selected);
         let id = stage.id.clone();
         let mine = ctx.of(&id);
         let failing = mine.iter().any(|issue| issue.level == IssueLevel::Error);
@@ -258,7 +258,12 @@ impl StageList {
             .relative()
             .child(line)
             .when(!mine.is_empty(), |this| {
-                this.child(div().pb_1().pl(px(48.)).child(issue_lines(&mine, cx)))
+                this.child(
+                    div()
+                        .pb_1()
+                        .pl(rems_from_px(48.0_f32))
+                        .child(issue_lines(&mine, cx)),
+                )
             })
             .children(self.drop_line(&id, cx));
         self.drop_zone(shell, &id, cx).into_any_element()
@@ -284,7 +289,7 @@ impl StageList {
         let mine = ctx.of(&id);
         let head = h_flex()
             .id(SharedString::from(format!("group-head-{id}")))
-            .h(px(24.))
+            .h(rems_from_px(24.0_f32))
             .gap_1p5()
             .px_1()
             .cursor_grab()
@@ -306,7 +311,7 @@ impl StageList {
             .id(SharedString::from(format!("group-{id}")))
             .relative()
             .p_1()
-            .rounded_lg()
+            .rounded_md()
             .border_1()
             .border_color(colors.border)
             .bg(colors.elevated_surface_background)
@@ -339,7 +344,7 @@ impl StageList {
             .id(SharedString::from(format!("branch-{id}")))
             .relative()
             .p_1()
-            .rounded_lg()
+            .rounded_md()
             .border_1()
             .border_color(colors.border)
             .bg(colors.elevated_surface_background)
@@ -349,7 +354,7 @@ impl StageList {
                     .left_0()
                     .top_0()
                     .bottom_0()
-                    .w(px(2.))
+                    .w(rems_from_px(2.0_f32))
                     .rounded_l_lg()
                     .bg(colors.text_accent),
             )
@@ -379,7 +384,7 @@ impl StageList {
         };
         let title = h_flex()
             .id(SharedString::from(format!("path-{}", path.id)))
-            .min_h(px(24.))
+            .min_h(rems_from_px(24.0_f32))
             .gap_1p5()
             .px_1()
             .child(caps(&path_name(path)))
@@ -417,7 +422,7 @@ impl StageList {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let colors = cx.theme().colors();
-        let (hover, selected_bg) = (colors.element_hover, colors.element_selected);
+        let (hover, selected_bg) = (colors.ghost_element_hover, colors.ghost_element_selected);
         let id = branch.id.clone();
         let name = branch_name(branch);
         let handle = self.focus_of(&id, cx);

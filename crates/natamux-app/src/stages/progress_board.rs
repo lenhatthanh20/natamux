@@ -212,7 +212,7 @@ impl ProgressBoard {
         v_flex()
             .flex_none()
             .overflow_hidden()
-            .rounded(px(12.))
+            .rounded_md()
             .border_1()
             .border_color(border)
             .bg(surface)

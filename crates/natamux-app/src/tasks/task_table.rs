@@ -24,6 +24,7 @@ use crate::app::dashboard::Dashboard;
 use crate::app::shortcuts::SelectPrevious;
 use crate::app::shortcuts::{OpenRowMenu, OpenSelected, SelectFirst, SelectLast, SelectNext};
 use crate::components::glyph::StateGlyph;
+use crate::components::icons::icon_path;
 use crate::components::menu::MenuLayer;
 
 const ROW: f32 = 40.;
@@ -239,11 +240,13 @@ impl TaskTable {
                 h_flex()
                     .id(("table-header", column as usize))
                     .h_full()
-                    .px(px(12.))
+                    .px(rems_from_px(12.0_f32))
                     .gap_1()
                     .cursor_pointer()
                     .when_some(*width, |cell, width| cell.w(px(width)).flex_none())
-                    .when(width.is_none(), |cell| cell.flex_1().min_w(px(240.)))
+                    .when(width.is_none(), |cell| {
+                        cell.flex_1().min_w(rems_from_px(240.0_f32))
+                    })
                     .when(header_align_end(column), |cell| cell.justify_end())
                     .on_click(move |_, _, cx| {
                         dashboard.update(cx, |dashboard, cx| dashboard.sort_by(column, cx))
@@ -259,10 +262,7 @@ impl TaskTable {
                             }),
                     )
                     .when_some(arrow, |cell, arrow| {
-                        cell.child(
-                            Icon::from_path(format!("icons/lucide/{arrow}.svg"))
-                                .size(IconSize::XSmall),
-                        )
+                        cell.child(Icon::from_path(icon_path(arrow)).size(IconSize::XSmall))
                     })
             }))
     }
@@ -297,7 +297,7 @@ impl TaskTable {
                     div()
                         .absolute()
                         .inset_0()
-                        .border_2()
+                        .border_1()
                         .border_color(colors.border_focused),
                 )
             })
@@ -344,13 +344,15 @@ impl TaskTable {
                         .children(widths.iter().map(|(column, width)| {
                             div()
                                 .h_full()
-                                .px(px(12.))
+                                .px(rems_from_px(12.0_f32))
                                 .flex()
                                 .items_center()
                                 // An end-aligned number (Changes) may use the padding, not be cut.
                                 .when(!header_align_end(*column), |cell| cell.overflow_hidden())
                                 .when_some(*width, |cell, width| cell.w(px(width)).flex_none())
-                                .when(width.is_none(), |cell| cell.flex_1().min_w(px(240.)))
+                                .when(width.is_none(), |cell| {
+                                    cell.flex_1().min_w(rems_from_px(240.0_f32))
+                                })
                                 .when(header_align_end(*column), |cell| cell.justify_end())
                                 .child(cell(*column, &row, cx))
                         }))
@@ -378,7 +380,7 @@ fn card(row: &RowData, cx: &App) -> impl IntoElement {
         .w_full()
         .min_w_0()
         .gap_2()
-        .px(px(12.))
+        .px(rems_from_px(12.0_f32))
         .child(glyph)
         .child(
             v_flex()
@@ -453,7 +455,7 @@ impl Render for TaskTable {
             .on_key_down(cx.listener(Self::type_ahead))
             .size_full()
             .overflow_hidden()
-            .rounded(px(8.))
+            .rounded_md()
             .border_1()
             .border_color(colors.border_variant)
             .bg(colors.surface_background)

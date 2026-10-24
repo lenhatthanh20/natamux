@@ -7,10 +7,11 @@ use gpui::{
 };
 use ui::prelude::*;
 
+use super::jump_rows::terminal_reads;
 use super::palette_pick;
 use super::palette_rows::{PaletteMode, PaletteScope};
 use super::palette_view::{PaletteEvent, PaletteView};
-use crate::app::dashboard::Dashboard;
+use crate::app::dashboard::{Dashboard, TerminalReader};
 use crate::components::menu::MenuLayer;
 
 struct OpenPalette {
@@ -78,6 +79,11 @@ impl PaletteLayer {
             Some(open) => open.opener,
             None => MenuLayer::opener(cx).or_else(|| window.focused(cx)),
         };
+        {
+            let dashboard = dashboard.read(cx);
+            let reads = terminal_reads(mode, &dashboard.data.tasks);
+            dashboard.show_terminals(TerminalReader::Palette, reads);
+        }
         let view = cx.new(|cx| PaletteView::new(&dashboard, mode, scope, window, cx));
         let events = cx.subscribe_in(
             &view,
@@ -131,6 +137,9 @@ impl PaletteLayer {
         let Some(open) = self.open.take() else {
             return;
         };
+        open.dashboard
+            .read(cx)
+            .show_terminals(TerminalReader::Palette, Vec::new());
         if let Some(opener) = open.opener {
             window.focus(&opener, cx);
         }
@@ -153,7 +162,7 @@ impl Render for PaletteLayer {
         let mut scrim = cx.theme().colors().elevated_surface_background;
         scrim.fade_out(0.2);
         let panel = div()
-            .w(px(640.))
+            .w(rems_from_px(640.0_f32))
             .max_w(viewport.width - px(32.))
             .occlude()
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())

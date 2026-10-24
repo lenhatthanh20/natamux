@@ -18,7 +18,7 @@ pub(super) fn running_note(label: &'static str, text: &str, cx: &App) -> impl In
         .gap_2()
         .px_2p5()
         .py_1p5()
-        .rounded_lg()
+        .rounded_md()
         .bg(colors.bg)
         .child(
             Label::new(label)
@@ -193,7 +193,7 @@ fn boxed(failed: bool, lines: Vec<AnyElement>, cx: &App) -> AnyElement {
         .gap_1()
         .px_3()
         .py_2()
-        .rounded_lg()
+        .rounded_md()
         .border_1()
         .border_color(tone.border)
         .bg(tone.bg)

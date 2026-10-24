@@ -10,55 +10,36 @@ fn font(family: Option<&str>, size: Option<f32>) -> TerminalFont {
 #[test]
 fn is_the_built_in_font_when_nothing_is_set() {
     assert_eq!(
-        terminal_font(None, None),
+        terminal_font(None),
         ResolvedFont {
-            family: "JetBrains Mono".into(),
-            size: 13.0,
+            family: "Lilex".into(),
+            size: 15.0,
             source: FontSource::Default
         }
     );
 }
 
+// The app reads no Ghostty config (owner, 2026-10-24): a part the user left out is Zed's.
 #[test]
-fn uses_ghosttys_font_and_the_users_choice_before_it_part_by_part() {
-    let ghostty = font(Some("Iosevka"), Some(14.0));
-    let resolved = terminal_font(None, Some(&ghostty));
-    assert_eq!(
-        (resolved.family.as_str(), resolved.size, resolved.source),
-        ("Iosevka", 14.0, FontSource::Ghostty)
-    );
-
+fn takes_the_users_font_part_by_part_and_the_built_in_one_for_the_rest() {
     let custom = font(None, Some(16.0));
-    let resolved = terminal_font(Some(&custom), Some(&ghostty));
+    let resolved = terminal_font(Some(&custom));
     assert_eq!(
         (resolved.family.as_str(), resolved.size, resolved.source),
-        ("Iosevka", 16.0, FontSource::Custom)
+        ("Lilex", 16.0, FontSource::Custom)
     );
-
-    assert_eq!(
-        terminal_font(None, Some(&ghostty)).source,
-        FontSource::Ghostty
-    );
-}
-
-#[test]
-fn puts_the_users_font_before_ghosttys() {
-    let ghostty = font(Some("Iosevka"), None);
     let custom = font(Some("Fira Code"), None);
-    assert_eq!(
-        terminal_font(Some(&custom), Some(&ghostty)).family,
-        "Fira Code"
-    );
-    assert_eq!(terminal_font(None, Some(&ghostty)).family, "Iosevka");
+    assert_eq!(terminal_font(Some(&custom)).family, "Fira Code");
+    assert_eq!(terminal_font(Some(&custom)).size, 15.0);
 }
 
 #[test]
 fn keeps_quotes_out_of_the_family_so_the_css_stays_one_list() {
     let custom = font(Some("Fira \"Code\\"), None);
-    assert_eq!(terminal_font(Some(&custom), None).family, "Fira Code");
+    assert_eq!(terminal_font(Some(&custom)).family, "Fira Code");
     assert_eq!(clean_family("Fira \"Code\\"), "Fira Code");
     let blank = font(Some("  "), None);
-    assert_eq!(terminal_font(Some(&blank), None).family, "JetBrains Mono");
+    assert_eq!(terminal_font(Some(&blank)).family, "Lilex");
 }
 
 #[test]
@@ -87,7 +68,7 @@ fn reads_and_writes_a_font_as_json() {
 fn saves_the_font_the_user_types_and_closes() {
     let saved = font_to_save(" Iosevka ", "15");
     assert_eq!(saved, Some(font(Some("Iosevka"), Some(15.0))));
-    let resolved = terminal_font(saved.as_ref(), None);
+    let resolved = terminal_font(saved.as_ref());
     assert_eq!(
         (resolved.family.as_str(), resolved.size, resolved.source),
         ("Iosevka", 15.0, FontSource::Custom)
@@ -97,24 +78,9 @@ fn saves_the_font_the_user_types_and_closes() {
 }
 
 #[test]
-fn shows_ghosttys_font_as_what_empty_fields_use_and_goes_back_to_it() {
-    let ghostty = font(Some("JetBrains Mono"), Some(14.0));
-    assert!(dialog_description(Some(&ghostty)).contains("your Ghostty font: JetBrains Mono, 14px"));
-    assert_eq!(reset_label(true), "Use Ghostty font");
-    // The reset clears the custom font: Ghostty's shows again.
-    let resolved = terminal_font(None, Some(&ghostty));
-    assert_eq!(
-        (resolved.family.as_str(), resolved.size, resolved.source),
-        ("JetBrains Mono", 14.0, FontSource::Ghostty)
-    );
-}
-
-#[test]
-fn names_jetbrains_mono_as_the_built_in_font_in_the_text_and_as_the_placeholder() {
-    assert!(dialog_description(None).contains("built-in font, JetBrains Mono, 13px"));
-    assert_eq!(fallback_family(None), "JetBrains Mono");
-    assert_eq!(fallback_size(None), 13.0);
-    assert_eq!(reset_label(false), "Use built-in font");
+fn names_the_built_in_font_in_the_text_and_as_the_placeholder() {
+    assert!(dialog_description().contains("built-in font, Lilex, 15px"));
+    assert_eq!(RESET_LABEL, "Use built-in font");
 }
 
 #[test]

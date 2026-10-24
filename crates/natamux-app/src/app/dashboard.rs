@@ -55,6 +55,8 @@ pub enum TerminalReader {
     Sidebar,
     Workspace,
     Agents,
+    /// The jump palette while it is open.
+    Palette,
 }
 
 /// The view file is written at most this often, off the main thread.

@@ -25,6 +25,11 @@ use crate::workspaces::{new_workspace_dialog, remove_finished, remove_workspace_
 
 /// The feed and the first frames come well within this.
 const SETTLE: Duration = Duration::from_millis(800);
+/// Zed's terminal anchors its text to the bottom by the screen it read at its last draw, so a
+/// screen that comes in after the last draw sat half a line higher in some runs (run
+/// 40022329180). The window draws again this often, for as long as CI takes to shoot it.
+const REDRAW_EVERY: Duration = Duration::from_millis(200);
+const REDRAWS: usize = 20;
 /// A toast lasts 5 s; it is shown again before it goes, so the shot always has it.
 const TOAST_AGAIN: Duration = Duration::from_secs(3);
 /// The task of the row menu, Remove workspace and Add subtask shots.
@@ -87,6 +92,15 @@ pub fn run(handle: WindowHandle<Root>, shot: Shot, cx: &mut App) {
     if fixed.is_err() {
         return;
     }
+    cx.spawn(async move |cx| {
+        for _ in 0..REDRAWS {
+            cx.background_executor().timer(REDRAW_EVERY).await;
+            if handle.update(cx, |_, window, _| window.refresh()).is_err() {
+                return;
+            }
+        }
+    })
+    .detach();
     cx.spawn(async move |cx| {
         cx.background_executor().timer(SETTLE).await;
         if shots_stages::is_settings_shot(shot) {

@@ -1,15 +1,14 @@
 //! The Terminal font dialog (docs/ui-spec.md 4.34, `TerminalFontDialog.tsx`): a family and a size
-//! for the terminals, with a preview. Empty fields use Ghostty's font, else the built-in one.
+//! for the terminals, with a preview. Empty fields use the built-in font.
 
 use editor::{Editor, EditorEvent};
 use gpui::{DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, Subscription};
 use ui::{Tooltip, prelude::*};
 
 use super::terminal_font::{
-    PREVIEW, SIZE_REASON, TerminalFont, clean_family, dialog_description, fallback_family,
-    fallback_size, font_to_save, parse_terminal_font, reset_label, size_ok,
+    BUILT_IN_FAMILY, BUILT_IN_SIZE, PREVIEW, RESET_LABEL, SIZE_REASON, clean_family,
+    dialog_description, font_to_save, parse_terminal_font, size_ok,
 };
-use crate::app::appearance::ghostty_font;
 use crate::app::dashboard::Dashboard;
 use crate::components::dialog::{
     DialogFrame, DialogLayer, DialogSize, DialogView, cancel_button, primary_button,
@@ -30,7 +29,6 @@ pub struct TerminalFontDialog {
     dashboard: Entity<Dashboard>,
     family: Entity<Editor>,
     size: Entity<Editor>,
-    ghostty: Option<TerminalFont>,
     /// Whether a custom font is saved: only then the reset button shows.
     has_custom: bool,
     focus: FocusHandle,
@@ -42,20 +40,14 @@ pub struct TerminalFontDialog {
 
 impl TerminalFontDialog {
     fn new(dashboard: Entity<Dashboard>, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let ghostty = ghostty_font(cx);
         let custom = dashboard
             .read(cx)
             .view()
             .terminal_font
             .as_ref()
             .and_then(parse_terminal_font);
-        let family = text_editor(&fallback_family(ghostty.as_ref()), None, window, cx);
-        let size = text_editor(
-            &fallback_size(ghostty.as_ref()).to_string(),
-            None,
-            window,
-            cx,
-        );
+        let family = text_editor(BUILT_IN_FAMILY, None, window, cx);
+        let size = text_editor(&BUILT_IN_SIZE.to_string(), None, window, cx);
         if let Some(font) = &custom {
             if let Some(name) = &font.family {
                 family.update(cx, |editor, cx| editor.set_text(name.clone(), window, cx));
@@ -80,7 +72,6 @@ impl TerminalFontDialog {
             dashboard,
             family,
             size,
-            ghostty,
             has_custom: custom.is_some(),
             focus: cx.focus_handle(),
             reset: cx.focus_handle(),
@@ -92,7 +83,7 @@ impl TerminalFontDialog {
 
     fn size_valid(&self, cx: &App) -> bool {
         let text = self.size.read(cx).text(cx);
-        size_ok(&text, fallback_size(self.ghostty.as_ref())).is_some()
+        size_ok(&text, BUILT_IN_SIZE).is_some()
     }
 
     fn save(&mut self, cx: &mut Context<Self>) {
@@ -116,12 +107,11 @@ impl TerminalFontDialog {
     fn preview(&self, cx: &App) -> impl IntoElement + use<> {
         let typed = clean_family(&self.family.read(cx).text(cx));
         let family = if typed.is_empty() {
-            fallback_family(self.ghostty.as_ref())
+            BUILT_IN_FAMILY.to_owned()
         } else {
             typed
         };
-        let fallback = fallback_size(self.ghostty.as_ref());
-        let size = size_ok(&self.size.read(cx).text(cx), fallback).unwrap_or(fallback);
+        let size = size_ok(&self.size.read(cx).text(cx), BUILT_IN_SIZE).unwrap_or(BUILT_IN_SIZE);
         div()
             .px_3()
             .py_2()
@@ -182,7 +172,9 @@ impl DialogView for TerminalFontDialog {
 impl Render for TerminalFontDialog {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let invalid = !self.size_valid(cx);
-        let size_row = div().w(px(96.)).child(input(&self.size, invalid, cx));
+        let size_row = div()
+            .w(rems_from_px(96.0_f32))
+            .child(input(&self.size, invalid, cx));
         let save = primary_button(
             "Save",
             &self.submit,
@@ -192,7 +184,7 @@ impl Render for TerminalFontDialog {
         )
         .when(invalid, |button| button.tooltip(Tooltip::text(SIZE_REASON)));
         let reset = self.has_custom.then(|| {
-            Button::new("terminal-font-reset", reset_label(self.ghostty.is_some()))
+            Button::new("terminal-font-reset", RESET_LABEL)
                 .style(ButtonStyle::Subtle)
                 .track_focus(&self.reset)
                 .on_click(cx.listener(|this, _, _, cx| this.reset(cx)))
@@ -200,7 +192,7 @@ impl Render for TerminalFontDialog {
         let close = cx.listener(|_, _, _, cx| cx.emit(DismissEvent));
         let cancel = cx.listener(|_, _, _, cx| cx.emit(DismissEvent));
         let mut frame = DialogFrame::new("Terminal font", close)
-            .description(dialog_description(self.ghostty.as_ref()))
+            .description(dialog_description())
             .child(field("Font family", input(&self.family, false, cx)))
             .child(field("Size (px)", size_row))
             .child(self.preview(cx));

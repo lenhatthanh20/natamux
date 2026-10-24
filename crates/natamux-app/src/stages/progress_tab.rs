@@ -215,7 +215,7 @@ fn row(marker_el: AnyElement, line: Option<AnyElement>, content: AnyElement) -> 
         .gap_2()
         .child(
             v_flex()
-                .w(px(20.))
+                .w(rems_from_px(20.0_f32))
                 .flex_none()
                 .items_center()
                 .gap_1()

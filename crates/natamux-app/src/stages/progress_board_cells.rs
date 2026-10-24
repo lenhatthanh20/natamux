@@ -28,7 +28,10 @@ pub(super) fn head_label(text: &'static str) -> Label {
 
 /// A horizontal line between two markers.
 pub(super) fn link(kind: LinkKind, cx: &App) -> impl IntoElement + use<> {
-    let line = div().flex_1().min_w(px(8.)).h(px(0.));
+    let line = div()
+        .flex_1()
+        .min_w(rems_from_px(8.0_f32))
+        .h(rems_from_px(0.0_f32));
     match kind {
         LinkKind::Hidden => line,
         LinkKind::Done | LinkKind::Flow => line
@@ -225,7 +228,7 @@ impl ProgressBoard {
         let hover_bg = cx.theme().colors().ghost_element_hover;
         h_flex()
             .id(SharedString::from(format!("progress-done-{}", section.key)))
-            .h(px(36.))
+            .h(rems_from_px(36.0_f32))
             .px_4()
             .gap_1p5()
             .cursor_pointer()

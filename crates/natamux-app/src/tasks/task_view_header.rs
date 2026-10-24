@@ -34,7 +34,7 @@ impl TaskView {
         h_flex()
             .relative()
             .flex_none()
-            .h(px(44.))
+            .h(rems_from_px(44.0_f32))
             .px_4()
             .gap_3()
             .border_b_1()

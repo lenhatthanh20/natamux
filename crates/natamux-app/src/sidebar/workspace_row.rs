@@ -23,24 +23,18 @@ use crate::tasks::task_rules::lane_summary;
 use crate::tasks::task_time::{AgeStyle, format_age, format_exact};
 
 impl WorkspaceTree {
-    /// The look every focusable row shares: hover, the open task, and the focus ring.
+    /// The look every focusable row shares, as Zed's `ListItem`: hover, the open task, and the
+    /// focus ring.
     pub(super) fn row_frame(&self, key: &str, current: bool, snap: &Snapshot, cx: &App) -> Div {
         let colors = cx.theme().colors();
         let focused = snap.focused && snap.stop.as_deref() == Some(key);
         div()
             .w_full()
-            .rounded(px(6.))
+            .rounded_sm()
             .cursor_pointer()
-            .hover(|style| style.bg(colors.element_hover))
-            .when(current, |row| {
-                let bg = if snap.focused {
-                    colors.element_selected
-                } else {
-                    colors.ghost_element_selected
-                };
-                row.bg(bg)
-            })
-            .border_2()
+            .hover(|style| style.bg(colors.ghost_element_hover))
+            .when(current, |row| row.bg(colors.ghost_element_selected))
+            .border_1()
             .border_color(if focused {
                 colors.border_focused
             } else {
@@ -89,7 +83,7 @@ impl WorkspaceTree {
             .flex_col()
             .justify_center()
             .min_h(px(min_height))
-            .px(px(10.))
+            .px(rems_from_px(10.0_f32))
             .py(px(pad_y))
             .child(title)
             .on_click(cx.listener(move |tree, _: &ClickEvent, window, cx| {
@@ -104,7 +98,10 @@ impl WorkspaceTree {
                 }),
             );
         if tier == RowTier::Attention {
-            row = row.rounded(px(8.)).my(px(2.)).bg(colors.bg);
+            row = row
+                .rounded_md()
+                .my(rems_from_px(2.0_f32))
+                .bg(colors.tinted().bg);
         }
         let meta = self.meta_line(task, tier, pinned_row, model, snap, blurred, cx);
         let menu_button = (!is_renaming).then(|| {
@@ -150,7 +147,7 @@ impl WorkspaceTree {
         let rename_id = task.id.clone();
         h_flex()
             .w_full()
-            .h(px(16.))
+            .h(rems_from_px(16.0_f32))
             .gap_2()
             .child(glyph)
             .child(
@@ -171,7 +168,7 @@ impl WorkspaceTree {
                 line.child(
                     div()
                         .flex_none()
-                        .size(px(6.))
+                        .size(rems_from_px(6.0_f32))
                         .rounded_full()
                         .bg(cx.theme().colors().text_accent),
                 )
@@ -210,7 +207,7 @@ impl WorkspaceTree {
         cx: &mut Context<Self>,
     ) -> Vec<AnyElement> {
         let said = snap.cards.get(&task.id).map(|text| {
-            div().pl(px(22.)).mt_1().line_clamp(2).child(
+            div().pl(rems_from_px(22.0_f32)).mt_1().line_clamp(2).child(
                 Label::new(private(text, blurred)).size(LabelSize::Custom(rems_from_px(12_f32))),
             )
         });
@@ -225,7 +222,7 @@ impl WorkspaceTree {
                 }))
         });
         let last = meta_row()
-            .mt(px(6.))
+            .mt(rems_from_px(6.0_f32))
             .children(answer)
             .child(parts.id)
             .children(parts.step)
@@ -256,7 +253,7 @@ impl WorkspaceTree {
         let glyph: AnyElement = if row.plain {
             div()
                 .flex_none()
-                .size(px(14.))
+                .size(rems_from_px(14.0_f32))
                 .flex()
                 .items_center()
                 .justify_center()
@@ -298,7 +295,7 @@ impl WorkspaceTree {
         let open = key.clone();
         self.row_frame(&key, false, snap, cx)
             .id(SharedString::from(key.clone()))
-            .h(px(22.))
+            .h(rems_from_px(22.0_f32))
             .px_2()
             .flex()
             .items_center()
@@ -325,9 +322,9 @@ impl WorkspaceTree {
     ) -> AnyElement {
         let colors = cx.theme().colors();
         div()
-            .h(px(24.))
+            .h(rems_from_px(24.0_f32))
             .w_full()
-            .px(px(6.))
+            .px(rems_from_px(6.0_f32))
             .flex()
             .items_center()
             .rounded_sm()
@@ -397,7 +394,11 @@ fn age_label(task: &Task, snap: &Snapshot) -> Stateful<Div> {
 }
 
 fn meta_row() -> Div {
-    h_flex().w_full().min_w_0().gap(px(6.)).pl(px(22.))
+    h_flex()
+        .w_full()
+        .min_w_0()
+        .gap(rems_from_px(6.0_f32))
+        .pl(rems_from_px(22.0_f32))
 }
 
 /// The parts that live rows and cards share.
@@ -474,7 +475,7 @@ fn live_line(
         .flatten()
         .map(|text| small(private(text, blurred)).truncate());
     meta_row()
-        .mt(px(2.))
+        .mt(rems_from_px(2.0_f32))
         .children(repo_chip)
         .child(parts.id)
         .children(parts.step)

@@ -43,14 +43,16 @@ fn in_card(element: AnyElement, part: CardPart, cx: &App) -> AnyElement {
         .border_color(colors.border_variant)
         .border_l_1()
         .border_r_1()
-        .when(!part.header, |card| card.px(px(2.)))
+        .when(!part.header, |card| card.px(rems_from_px(2.0_f32)))
         .when(part.first, |card| {
             card.border_t_1()
                 .rounded_t(px(10.))
                 .mt(px(if part.top { 4. } else { 8. }))
         })
         .when(part.last, |card| card.border_b_1().rounded_b(px(10.)))
-        .when(part.last && !part.header, |card| card.pb(px(4.)))
+        .when(part.last && !part.header, |card| {
+            card.pb(rems_from_px(4.0_f32))
+        })
         .child(element)
         .into_any_element()
 }
@@ -58,8 +60,8 @@ fn in_card(element: AnyElement, part: CardPart, cx: &App) -> AnyElement {
 /// The 1 px guide under the task glyph, in front of the rows under a task.
 fn under_guide(element: AnyElement, cx: &App) -> AnyElement {
     div()
-        .ml(px(16.))
-        .pl(px(7.))
+        .ml(rems_from_px(16.0_f32))
+        .pl(rems_from_px(7.0_f32))
         .border_l_1()
         .border_color(cx.theme().colors().border_variant)
         .child(element)
@@ -144,12 +146,12 @@ impl WorkspaceTree {
         let buttons = self.header_buttons(repo, info, snap, cx);
         h_flex()
             .group(SharedString::from(format!("header-{}", repo.id)))
-            .h(px(28.))
-            .pr(px(2.))
+            .h(rems_from_px(28.0_f32))
+            .pr(rems_from_px(2.0_f32))
             .bg(band(0.16, 0.))
             .hover(|style| style.bg(band(0.2, 0.04)))
-            .when(collapsed, |header| header.rounded(px(9.)))
-            .when(!collapsed, |header| header.rounded_t(px(9.)))
+            .when(collapsed, |header| header.rounded_md())
+            .when(!collapsed, |header| header.rounded_t_md())
             .border_2()
             .border_color(ring)
             .child(fold)
@@ -186,8 +188,8 @@ impl WorkspaceTree {
             .flex_1()
             .min_w_0()
             .h_full()
-            .gap(px(6.))
-            .px(px(6.))
+            .gap(rems_from_px(6.0_f32))
+            .px(rems_from_px(6.0_f32))
             .cursor_pointer()
             .child(
                 Icon::new(chevron)
@@ -260,12 +262,12 @@ impl WorkspaceTree {
         h_flex()
             .group(group_name.clone())
             .w_full()
-            .pr(px(2.))
+            .pr(rems_from_px(2.0_f32))
             .child(
                 self.row_frame(&key, false, snap, cx)
                     .id(SharedString::from(key.clone()))
-                    .h(px(24.))
-                    .pl(px(22.))
+                    .h(rems_from_px(24.0_f32))
+                    .pl(rems_from_px(22.0_f32))
                     .flex()
                     .items_center()
                     .gap_1()
@@ -302,9 +304,9 @@ impl WorkspaceTree {
 /// "Pinned" and its count, over the pinned rows.
 fn pinned_header(count: usize) -> AnyElement {
     h_flex()
-        .h(px(28.))
+        .h(rems_from_px(28.0_f32))
         .px_2()
-        .gap(px(6.))
+        .gap(rems_from_px(6.0_f32))
         .child(lucide("pin").color(Color::Muted))
         .child(
             Label::new("PINNED")
@@ -337,7 +339,7 @@ fn no_workspaces(group: usize, model: &TreeModel, dashboard: &Entity<Dashboard>)
     });
     h_flex()
         .py_1()
-        .pl(px(32.))
+        .pl(rems_from_px(32.0_f32))
         .gap_1()
         .child(small("No workspaces."))
         .children(start)
@@ -354,7 +356,7 @@ fn no_matches(group: usize, model: &TreeModel, snap: &Snapshot) -> AnyElement {
     let name = private(&repo.name, snap.blurred.contains(&repo.id));
     div()
         .py_1()
-        .pl(px(32.))
+        .pl(rems_from_px(32.0_f32))
         .child(small(format!(
             "No matches in {name} ({} hidden)",
             info.hidden

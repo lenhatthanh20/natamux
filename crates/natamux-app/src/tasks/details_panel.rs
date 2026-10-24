@@ -12,7 +12,7 @@ use natamux_proto::events::task_event::StoredEvent;
 use natamux_proto::projects::repo::{BranchList, LoadedSettings};
 use natamux_proto::stages::actions::StageFile;
 use natamux_proto::tasks::task::Task;
-use ui::{Tooltip, prelude::*};
+use ui::{Tab, TabBar, TabPosition, Tooltip, prelude::*};
 
 use super::edit_form::EditForm;
 use crate::app::dashboard::details::PanelRequest;
@@ -239,7 +239,7 @@ impl DetailsPanel {
                 .on_click(cx.listener(|panel, _, _, cx| panel.close(cx)))
         };
         h_flex()
-            .h(px(40.))
+            .h(rems_from_px(40.0_f32))
             .flex_none()
             .px_3()
             .gap_1()
@@ -270,38 +270,25 @@ impl DetailsPanel {
         has_workspace: bool,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let colors = cx.theme().colors();
         let tabs = details_tabs(has_workspace);
-        let tab = |id: &'static str, label: &'static str, this: DetailsView| {
+        let last = tabs.len() - 1;
+        let picked_at = tabs.iter().position(|tab| *tab == view).unwrap_or(0);
+        let tab = |index: usize, id: &'static str, label: &'static str, this: DetailsView| {
             let picked = view == this;
-            div()
-                .id(id)
-                .h_full()
-                .px_2()
-                .flex()
-                .items_center()
-                .cursor_pointer()
-                .border_b_2()
-                .border_color(if picked {
-                    colors.text_accent
-                } else {
-                    gpui::transparent_black()
-                })
-                .child(Label::new(label).size(LabelSize::Small).color(if picked {
-                    Color::Default
-                } else {
-                    Color::Muted
-                }))
+            let position = match index {
+                0 => TabPosition::First,
+                _ if index == last => TabPosition::Last,
+                _ => TabPosition::Middle(index.cmp(&picked_at)),
+            };
+            Tab::new(id)
+                .position(position)
+                .toggle_state(picked)
+                .child(Label::new(label).color(if picked { Color::Default } else { Color::Muted }))
                 .on_click(cx.listener(move |panel, _, _, cx| panel.pick_tab(this, cx)))
         };
-        h_flex()
+        div()
             .id("details-tabs")
-            .h(px(36.))
             .flex_none()
-            .px_2()
-            .gap_1()
-            .border_b_1()
-            .border_color(colors.border_variant)
             .track_focus(&self.tabs_focus)
             .on_key_down(
                 cx.listener(move |panel, event: &gpui::KeyDownEvent, _, cx| {
@@ -321,11 +308,17 @@ impl DetailsPanel {
                     panel.pick_tab(next, cx);
                 }),
             )
-            .children(tabs.into_iter().map(|this| match this {
-                DetailsView::Progress => tab("details-tab-progress", "Progress", this),
-                DetailsView::Files => tab("details-tab-files", "Files", this),
-                DetailsView::Details => tab("details-tab-details", "Details", this),
-            }))
+            .child(
+                TabBar::new("details-tab-bar").children(tabs.into_iter().enumerate().map(
+                    |(index, this)| match this {
+                        DetailsView::Progress => {
+                            tab(index, "details-tab-progress", "Progress", this)
+                        }
+                        DetailsView::Files => tab(index, "details-tab-files", "Files", this),
+                        DetailsView::Details => tab(index, "details-tab-details", "Details", this),
+                    },
+                )),
+            )
     }
 
     fn pick_tab(&mut self, view: DetailsView, cx: &mut Context<Self>) {

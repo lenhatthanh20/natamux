@@ -15,6 +15,7 @@ use crate::app::dashboard::Dashboard;
 use crate::app::source::reason;
 use crate::components::dialog::{DialogFrame, DialogLayer, DialogView, primary_button};
 use crate::components::form::{field, text_editor};
+use crate::components::icons::icon_path;
 
 const DESCRIPTION: &str = "Git repositories on the daemon's machine. The workspace of each task is a git worktree of one of them.";
 
@@ -249,7 +250,7 @@ impl ProjectsDialog {
             .py_1p5()
             .rounded_md()
             .child(
-                Icon::from_path("icons/lucide/folder-git-2.svg")
+                Icon::from_path(icon_path("folder-git-2"))
                     .size(IconSize::Small)
                     .color(Color::Muted),
             )
@@ -284,7 +285,7 @@ pub(super) fn alert_line(text: impl Into<SharedString>) -> impl IntoElement {
         .items_start()
         .gap_1p5()
         .child(
-            Icon::from_path("icons/lucide/circle-alert.svg")
+            Icon::from_path(icon_path("circle-alert"))
                 .size(IconSize::XSmall)
                 .color(Color::Error),
         )

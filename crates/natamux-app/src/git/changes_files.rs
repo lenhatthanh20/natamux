@@ -11,6 +11,7 @@ use ui::{ContextMenu, ContextMenuEntry, Disclosure, Tooltip, prelude::*};
 use super::ChangesView;
 use super::rows::{counts_label, file_row, zed_button};
 use crate::components::colors::change_color;
+use crate::components::icons::icon_path;
 use crate::components::menu::MenuLayer;
 use crate::components::resize_rules::Limits;
 use crate::git::change_rules::{count_label, status_tone};
@@ -143,7 +144,7 @@ impl ChangesView {
         let menu = ContextMenu::build(window, cx, move |menu, _, _| {
             let menu = menu.context(focus).header(format!("Actions for {name}"));
             let entry = ContextMenuEntry::new("Rollback…")
-                .custom_icon_path("icons/lucide/undo-2.svg")
+                .custom_icon_path(icon_path("undo-2"))
                 .icon_position(IconPosition::Start)
                 .icon_color(Color::Muted)
                 .disabled(offer.off_reason.is_some())
@@ -304,7 +305,7 @@ impl ChangesView {
         });
         let all = list.to_vec();
         h_flex()
-            .h(px(32.))
+            .h(rems_from_px(32.0_f32))
             .flex_none()
             .px_2()
             .gap_1()
@@ -391,7 +392,7 @@ impl ChangesView {
                     .children(counts)
                     .child(
                         div()
-                            .size(px(6.))
+                            .size(rems_from_px(6.0_f32))
                             .rounded_full()
                             .bg(change_color(status_tone(folder.status), cx)),
                     )
@@ -401,16 +402,16 @@ impl ChangesView {
         let node = row.node.clone();
         h_flex()
             .id(SharedString::from(format!("changed-row-{}", row.key)))
-            .h(px(28.))
+            .h(rems_from_px(28.0_f32))
             .pl(px(6. + indent))
             .pr_1p5()
             .rounded_sm()
             .cursor_pointer()
-            .when(picked, |this| this.bg(colors.element_selected))
+            .when(picked, |this| this.bg(colors.ghost_element_selected))
             .when(at_cursor, |this| {
                 this.border_1().border_color(colors.border_focused)
             })
-            .hover(|this| this.bg(colors.element_hover))
+            .hover(|this| this.bg(colors.ghost_element_hover))
             .child(content)
             .on_click(cx.listener(move |view, _: &ClickEvent, _, cx| view.activate(&row, cx)))
             .on_mouse_down(

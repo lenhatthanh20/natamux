@@ -18,6 +18,18 @@ pub struct StateColors {
     pub border: Hsla,
 }
 
+impl StateColors {
+    /// The look of a card or a banner of the state, as Zed's `Banner`: the state colour at 10%,
+    /// its border at 20%, so it tints what is under it.
+    pub fn tinted(self) -> Self {
+        Self {
+            fg: self.fg,
+            bg: self.fg.opacity(0.1),
+            border: self.fg.opacity(0.2),
+        }
+    }
+}
+
 fn pick(status: &StatusColors, key: StatusKey) -> StateColors {
     let (fg, bg, border) = match key {
         StatusKey::Ignored => (

@@ -150,7 +150,7 @@ impl RollbackDialog {
             .id(SharedString::from(format!("rollback-row-{}", entry.path)))
             .gap_2()
             .px_2()
-            .h(px(32.))
+            .h(rems_from_px(32.0_f32))
             .flex_none()
             .items_center()
             .when_some(row_tip(entry), |this, tip| this.tooltip(Tooltip::text(tip)))
@@ -192,7 +192,7 @@ impl RollbackDialog {
             .child(
                 v_flex()
                     .id("rollback-files")
-                    .max_h(px(288.))
+                    .max_h(rems_from_px(288.0_f32))
                     .overflow_y_scroll()
                     .rounded_md()
                     .border_1()

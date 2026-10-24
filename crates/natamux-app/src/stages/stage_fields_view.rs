@@ -139,7 +139,7 @@ pub fn labelled(
         .gap_1p5()
         .child(
             h_flex()
-                .min_h(px(24.))
+                .min_h(rems_from_px(24.0_f32))
                 .flex_wrap()
                 .gap_2()
                 .child(field_label(label))

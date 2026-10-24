@@ -1,7 +1,10 @@
 //! Dialogs (docs/ui-spec.md 4.14, `ui/Dialog.tsx`): one layer per window over a scrim, sizes 400,
-//! 520, 640 and 1120, Esc and a click on the scrim close unless busy, Mod+Enter submits from any
-//! field, Tab stays inside, and focus goes back to the opener. A confirm can open over a dialog,
-//! which keeps its state under it. Toasts stay above the scrim.
+//! 520, 640 and 1120 (in rems, so the UI size scales them), Esc and a click on the scrim close
+//! unless busy, Mod+Enter submits from any field, Tab stays inside, and focus goes back to the
+//! opener. A confirm can open over a dialog, which keeps its state under it. Toasts stay above the
+//! scrim. The frame has the spacing of Zed's `Modal`, `ModalHeader` and `ModalFooter`; the header
+//! and footer are the app's own: Zed's close button sends an action the app does not bind, and a
+//! footer note needs a line of its own.
 
 use std::rc::Rc;
 
@@ -11,6 +14,7 @@ use gpui::{
 };
 use ui::{ButtonLike, TintColor, prelude::*};
 
+use super::button_style::{label_color, tinted_style};
 use super::chips::Kbd;
 use super::input_rules::{DialogKey, dialog_key, ring_step};
 use super::menu::{MenuLayer, press_of};
@@ -26,9 +30,9 @@ pub enum DialogSize {
 }
 
 impl DialogSize {
-    pub fn width(self) -> Pixels {
-        px(match self {
-            DialogSize::Small => 400.,
+    pub fn width(self) -> Rems {
+        rems_from_px(match self {
+            DialogSize::Small => 400_f32,
             DialogSize::Medium => 520.,
             DialogSize::Large => 640.,
             DialogSize::ExtraLarge => 1120.,
@@ -377,16 +381,16 @@ impl RenderOnce for DialogFrame {
         let on_close = self.on_close;
         let header = h_flex()
             .items_start()
-            .gap_3()
-            .px(px(20.))
-            .pt(px(20.))
-            .pb(px(8.))
+            .gap(DynamicSpacing::Base08.rems(cx))
+            .px(DynamicSpacing::Base12.rems(cx))
+            .pt(DynamicSpacing::Base08.rems(cx))
+            .pb(DynamicSpacing::Base04.rems(cx))
             .child(
                 v_flex()
                     .min_w_0()
                     .flex_1()
                     .gap_1()
-                    .child(Headline::new(self.title).size(HeadlineSize::XSmall))
+                    .child(Headline::new(self.title).size(HeadlineSize::Small))
                     .when_some(self.description, |this, text| {
                         this.child(Label::new(text).color(Color::Muted))
                     }),
@@ -410,7 +414,6 @@ impl RenderOnce for DialogFrame {
             })
             .overflow_hidden()
             .elevation_3(cx)
-            .rounded(px(12.))
             .child(header)
             .when(!self.body.is_empty(), |this| {
                 this.child(
@@ -420,25 +423,26 @@ impl RenderOnce for DialogFrame {
                         .flex_1()
                         .overflow_y_scroll()
                         .when_some(self.scroll, |body, handle| body.track_scroll(&handle))
-                        .px(px(20.))
-                        .py(px(12.))
-                        .gap_4()
+                        .px(DynamicSpacing::Base12.rems(cx))
+                        .py(DynamicSpacing::Base08.rems(cx))
+                        .gap(DynamicSpacing::Base16.rems(cx))
                         .children(self.body),
                 )
             })
+            // Zed's `ModalFooter` spacing; the note gets a line of its own, so a long one never
+            // pushes the buttons out of the dialog.
             .when(has_footer, |this| {
                 this.child(
                     v_flex()
                         .flex_none()
-                        .gap_2()
-                        .px(px(20.))
-                        .py(px(12.))
+                        .gap_1()
+                        .p(DynamicSpacing::Base08.rems(cx))
                         .border_t_1()
                         .border_color(cx.theme().colors().border_variant)
                         .when_some(self.note, |this, note| {
                             this.child(Label::new(note).size(LabelSize::Small).color(Color::Muted))
                         })
-                        .child(h_flex().justify_end().gap_2().children(self.footer)),
+                        .child(h_flex().justify_end().gap_1().children(self.footer)),
                 )
             })
     }
@@ -457,7 +461,7 @@ pub fn cancel_button(
 }
 
 /// The primary button with its Mod+Enter key chip. `danger` for a destructive answer; while
-/// `busy` it keeps its label and does nothing.
+/// `busy` it keeps its label and does nothing. Off, it shows no tint and a dimmed label.
 pub fn primary_button(
     label: impl Into<SharedString>,
     focus: &FocusHandle,
@@ -471,7 +475,7 @@ pub fn primary_button(
         TintColor::Accent
     };
     ButtonLike::new("dialog-submit")
-        .style(ButtonStyle::Tinted(tint))
+        .style(tinted_style(tint, disabled))
         .track_focus(focus)
         .disabled(disabled)
         .on_click(on_click)
@@ -479,7 +483,7 @@ pub fn primary_button(
             h_flex()
                 .gap_2()
                 .px_1()
-                .child(Label::new(label.into()))
+                .child(Label::new(label.into()).color(label_color(disabled)))
                 .child(Kbd::new("mod-enter")),
         )
 }

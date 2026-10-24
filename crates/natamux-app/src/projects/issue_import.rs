@@ -169,7 +169,7 @@ impl IssueImport {
                     .visualization_only(true),
                 )
                 .child(
-                    div().w(px(48.)).flex_none().child(
+                    div().w(rems_from_px(48.0_f32)).flex_none().child(
                         Label::new(format!("#{number}"))
                             .color(Color::Muted)
                             .buffer_font(cx),

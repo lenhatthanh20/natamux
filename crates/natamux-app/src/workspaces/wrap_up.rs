@@ -13,6 +13,7 @@ use ui::{Tooltip, prelude::*};
 use super::workspace_rules::{GitStep, push_button};
 use super::wrap_up_rules::{FinishedAction, GitFacts, RowTone, wrap_up_rows};
 use crate::agents::agent_choices::agent_label;
+use crate::components::icons::icon_path;
 use crate::sidebar::sidebar_tree::stage_name;
 use crate::tasks::task_time::parse_iso_ms;
 
@@ -97,15 +98,15 @@ fn card(title: &'static str, caption: &'static str, cx: &App) -> Div {
     let colors = cx.theme().colors();
     v_flex()
         .w_full()
-        .rounded(px(8.))
+        .rounded_md()
         .border_1()
         .border_color(colors.border)
         .bg(colors.surface_background)
         .child(
             h_flex()
-                .px(px(14.))
+                .px(rems_from_px(14.0_f32))
                 .py_3()
-                .gap(px(10.))
+                .gap(rems_from_px(10.0_f32))
                 .child(
                     Label::new(title)
                         .size(LabelSize::Default)
@@ -121,10 +122,10 @@ fn card(title: &'static str, caption: &'static str, cx: &App) -> Div {
 
 fn line(cx: &App) -> Div {
     h_flex()
-        .min_h(px(40.))
-        .px(px(14.))
+        .min_h(rems_from_px(40.0_f32))
+        .px(rems_from_px(14.0_f32))
         .py_1()
-        .gap(px(10.))
+        .gap(rems_from_px(10.0_f32))
         .border_t_1()
         .border_color(cx.theme().colors().border)
 }
@@ -202,9 +203,9 @@ impl WrapUp {
             });
             wrap_up = wrap_up.child(
                 line(cx)
-                    .min_h(px(44.))
+                    .min_h(rems_from_px(44.0_f32))
                     .child(
-                        Icon::from_path(format!("icons/lucide/{icon}.svg"))
+                        Icon::from_path(icon_path(icon))
                             .size(IconSize::Medium)
                             .color(color),
                     )
@@ -246,7 +247,7 @@ impl WrapUp {
             self.actions.open_terminals.clone(),
         );
         h_flex()
-            .px(px(14.))
+            .px(rems_from_px(14.0_f32))
             .pb_2()
             .gap_2()
             .children(reopen)
@@ -265,7 +266,7 @@ impl WrapUp {
         let stopped = name.to_owned();
         line(cx)
             .child(
-                Icon::from_path("icons/lucide/square-terminal.svg")
+                Icon::from_path(icon_path("square-terminal"))
                     .size(IconSize::Small)
                     .color(Color::Success),
             )
@@ -297,11 +298,11 @@ impl WrapUp {
         let name = shell.name.clone();
         let screen = open.then(|| {
             div()
-                .mx(px(14.))
+                .mx(rems_from_px(14.0_f32))
                 .mb_3()
-                .max_h(px(240.))
+                .max_h(rems_from_px(240.0_f32))
                 .overflow_hidden()
-                .rounded(px(6.))
+                .rounded(rems_from_px(6.0_f32))
                 .px_3()
                 .py_2()
                 .bg(cx.theme().colors().terminal_background)
@@ -329,11 +330,11 @@ impl WrapUp {
             .border_color(cx.theme().colors().border)
             .child(
                 h_flex()
-                    .min_h(px(40.))
-                    .px(px(14.))
-                    .gap(px(10.))
+                    .min_h(rems_from_px(40.0_f32))
+                    .px(rems_from_px(14.0_f32))
+                    .gap(rems_from_px(10.0_f32))
                     .child(
-                        Icon::from_path("icons/lucide/square-terminal.svg")
+                        Icon::from_path(icon_path("square-terminal"))
                             .size(IconSize::Small)
                             .color(Color::Muted),
                     )

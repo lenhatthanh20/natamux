@@ -45,6 +45,7 @@ editor = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev 
 grammars = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "4c9b8fe899637d0fcc01cb3e0df41d2edaaf72bd", features = ["load-grammars"] }
 gpui = { version = "0.2.2", git = "https://github.com/lenhatthanh20/zed", rev = "4c9b8fe899637d0fcc01cb3e0df41d2edaaf72bd" }
 gpui_platform = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "4c9b8fe899637d0fcc01cb3e0df41d2edaaf72bd", features = ["font-kit", "wayland", "x11"] }
+markdown = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "4c9b8fe899637d0fcc01cb3e0df41d2edaaf72bd" }
 language = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "4c9b8fe899637d0fcc01cb3e0df41d2edaaf72bd" }
 release_channel = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "4c9b8fe899637d0fcc01cb3e0df41d2edaaf72bd" }
 settings = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "4c9b8fe899637d0fcc01cb3e0df41d2edaaf72bd" }

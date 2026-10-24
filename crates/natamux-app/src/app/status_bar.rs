@@ -19,6 +19,7 @@ use super::status_items::{
 };
 use super::status_layout::forced_by_width;
 use crate::components::colors::signal;
+use crate::components::icons::icon_path;
 use crate::components::menu::MenuLayer;
 
 pub const STATUS_BAR_HEIGHT: f32 = 28.;
@@ -154,9 +155,9 @@ fn notify_item(on: bool, on_click: OnClick) -> ButtonLike {
     };
     item_button("status-notify", tip, on_click).child(
         h_flex()
-            .gap(px(6.))
+            .gap(rems_from_px(6.0_f32))
             .child(
-                Icon::from_path(format!("icons/lucide/{icon}.svg"))
+                Icon::from_path(icon_path(icon))
                     .size(IconSize::Small)
                     .color(Color::Muted),
             )
@@ -179,12 +180,18 @@ impl RenderOnce for StatusBar {
         let live_tip: SharedString = self.live.tip.clone().into();
         let live = h_flex()
             .id("status-live")
-            .h(px(24.))
-            .px(px(6.))
-            .gap(px(6.))
-            .rounded(px(6.))
+            .h(rems_from_px(24.0_f32))
+            .px(rems_from_px(6.0_f32))
+            .gap(rems_from_px(6.0_f32))
+            .rounded(rems_from_px(6.0_f32))
             .tooltip(Tooltip::text(live_tip))
-            .child(div().flex_none().size(px(6.)).rounded_full().bg(dot))
+            .child(
+                div()
+                    .flex_none()
+                    .size(rems_from_px(6.0_f32))
+                    .rounded_full()
+                    .bg(dot),
+            )
             .when(!icon_only("live"), |this| {
                 this.child(item_label(self.live.label, Color::Muted))
             });
@@ -209,16 +216,16 @@ impl RenderOnce for StatusBar {
             let (list, open) = (self.jobs, self.on_open_task);
             // A still icon, not a spinner: an endless animation redraws the window every frame.
             ButtonLike::new("status-jobs")
-                .height(px(24.).into())
+                .height(rems_from_px(24.0_f32).into())
                 .tooltip(Tooltip::text("Show background jobs"))
                 .on_click(move |event, window, cx| {
                     open_jobs_menu(&list, open.clone(), event, window, cx)
                 })
                 .child(
                     h_flex()
-                        .gap(px(6.))
+                        .gap(rems_from_px(6.0_f32))
                         .child(
-                            Icon::from_path("icons/lucide/loader-circle.svg")
+                            Icon::from_path(icon_path("loader-circle"))
                                 .size(IconSize::Small)
                                 .color(Color::Muted),
                         )
@@ -230,9 +237,9 @@ impl RenderOnce for StatusBar {
         h_flex()
             .flex_none()
             .w_full()
-            .h(px(STATUS_BAR_HEIGHT))
-            .px(px(6.))
-            .gap(px(2.))
+            .h(rems_from_px(STATUS_BAR_HEIGHT))
+            .px(rems_from_px(6.0_f32))
+            .gap(rems_from_px(2.0_f32))
             .overflow_hidden()
             .bg(colors.status_bar_background)
             .border_t_1()

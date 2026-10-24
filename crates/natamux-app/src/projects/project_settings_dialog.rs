@@ -282,7 +282,12 @@ impl ProjectSettingsDialog {
             h_flex()
                 .items_start()
                 .gap_4()
-                .child(div().w(px(352.)).flex_none().child(stages.list.clone()))
+                .child(
+                    div()
+                        .w(rems_from_px(352.0_f32))
+                        .flex_none()
+                        .child(stages.list.clone()),
+                )
                 .child(div().min_w_0().flex_1().child(stages.details.clone()))
         } else {
             v_flex()

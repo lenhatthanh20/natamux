@@ -410,3 +410,22 @@ fn only_the_sheet_entries_have_keys_and_no_action() {
         .collect();
     assert_eq!(without, documented);
 }
+
+#[test]
+fn suggests_the_commands_of_the_web_in_its_order() {
+    let mut suggested: Vec<(u8, &str)> = all_commands()
+        .filter_map(|command| command.suggested.map(|rank| (rank, command.id)))
+        .collect();
+    suggested.sort();
+    let ids: Vec<&str> = suggested.iter().map(|(_, id)| *id).collect();
+    assert_eq!(
+        ids,
+        [
+            "jump.open",
+            "help.shortcuts",
+            "workspace.new",
+            "task.new",
+            "view.agents"
+        ]
+    );
+}

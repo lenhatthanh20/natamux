@@ -45,7 +45,7 @@ fn fact(name: &'static str, value: String) -> impl IntoElement {
         .gap_3()
         .child(
             div()
-                .w(px(96.))
+                .w(rems_from_px(96.0_f32))
                 .child(Label::new(name).size(LabelSize::Small).color(Color::Muted)),
         )
         .child(Label::new(value).size(LabelSize::Small))
@@ -110,10 +110,10 @@ impl RenderOnce for FinishedSummary {
                 div().flex_1().flex().items_center().justify_center().child(
                     v_flex()
                         .w_full()
-                        .max_w(px(520.))
+                        .max_w(rems_from_px(520.0_f32))
                         .gap_3()
                         .p_4()
-                        .rounded(px(8.))
+                        .rounded_md()
                         .border_1()
                         .border_color(cx.theme().colors().border)
                         .child(

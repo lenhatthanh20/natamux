@@ -68,7 +68,7 @@ impl RenderOnce for DetailSection {
         };
         let header = h_flex()
             .id(SharedString::from(format!("section-{}", self.id)))
-            .h(px(32.))
+            .h(rems_from_px(32.0_f32))
             .gap_1p5()
             .cursor_pointer()
             .on_click(move |_, window, cx| on_fold(!open, window, cx))
@@ -109,7 +109,7 @@ pub fn field(label: &'static str, value: impl IntoElement) -> impl IntoElement {
         .gap_2()
         .child(
             div()
-                .w(px(96.))
+                .w(rems_from_px(96.0_f32))
                 .flex_none()
                 .child(Label::new(label).size(LabelSize::Small).color(Color::Muted)),
         )

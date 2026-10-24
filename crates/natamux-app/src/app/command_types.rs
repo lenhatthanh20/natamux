@@ -105,8 +105,8 @@ pub struct Command {
     pub group: Option<SheetGroup>,
     /// Not a row of the palette (keys that only make sense where they are pressed).
     pub hidden: bool,
-    /// Offered by the palette before anything is typed.
-    pub suggested: bool,
+    /// Offered by the palette before anything is typed, at this rank (the web's order).
+    pub suggested: Option<u8>,
     /// Only names keys in the shortcut sheet: it has no action of its own.
     pub documents_only: bool,
 }
@@ -122,7 +122,7 @@ pub(super) const fn command(id: &'static str, title: &'static str, category: Cat
         menu: None,
         group: None,
         hidden: false,
-        suggested: false,
+        suggested: None,
         documents_only: false,
     }
 }
@@ -164,9 +164,9 @@ pub(super) const fn hidden(command: Command) -> Command {
     }
 }
 
-pub(super) const fn suggested(command: Command) -> Command {
+pub(super) const fn suggested(rank: u8, command: Command) -> Command {
     Command {
-        suggested: true,
+        suggested: Some(rank),
         ..command
     }
 }

@@ -78,7 +78,7 @@ pub fn tree_row(
     let chip = (row.key.clone(), row.name.clone(), row.kind);
     h_flex()
         .id(SharedString::from(format!("file-row-{}", row.key)))
-        .h(px(28.))
+        .h(rems_from_px(28.0_f32))
         .pl(px(4. + 12. * (row.level.saturating_sub(1)) as f32))
         .pr_2()
         .gap_1p5()
@@ -88,14 +88,14 @@ pub fn tree_row(
         .when(look.at_cursor, |this| {
             this.border_1().border_color(colors.border_focused)
         })
-        .hover(|this| this.bg(colors.element_hover))
+        .hover(|this| this.bg(colors.ghost_element_hover))
         .on_drag(dragged, move |_, _, _, cx| {
             let (path, name, kind) = chip.clone();
             cx.new(|_| DragChip { path, name, kind })
         })
         .child(
             div()
-                .w(px(16.))
+                .w(rems_from_px(16.0_f32))
                 .flex_none()
                 .flex()
                 .justify_center()
@@ -113,12 +113,17 @@ pub fn tree_row(
         .children(look.status.map(|status| status_letter(status, tone, cx)))
         .when(!is_file && look.changed_below, |this| {
             this.child(
-                div().w(px(16.)).flex_none().flex().justify_center().child(
-                    div()
-                        .size(px(6.))
-                        .rounded_full()
-                        .bg(change_color(StatusTone::Modified, cx)),
-                ),
+                div()
+                    .w(rems_from_px(16.0_f32))
+                    .flex_none()
+                    .flex()
+                    .justify_center()
+                    .child(
+                        div()
+                            .size(rems_from_px(6.0_f32))
+                            .rounded_full()
+                            .bg(change_color(StatusTone::Modified, cx)),
+                    ),
             )
         })
 }
@@ -128,13 +133,18 @@ fn change_color_of(status: ChangeStatus, cx: &App) -> Color {
 }
 
 fn status_letter(status: ChangeStatus, tone: Color, cx: &App) -> Div {
-    div().w(px(16.)).flex_none().flex().justify_center().child(
-        Label::new(status.letter())
-            .size(LabelSize::XSmall)
-            .weight(FontWeight::SEMIBOLD)
-            .buffer_font(cx)
-            .color(tone),
-    )
+    div()
+        .w(rems_from_px(16.0_f32))
+        .flex_none()
+        .flex()
+        .justify_center()
+        .child(
+            Label::new(status.letter())
+                .size(LabelSize::XSmall)
+                .weight(FontWeight::SEMIBOLD)
+                .buffer_font(cx)
+                .color(tone),
+        )
 }
 
 /// The chevron of a folder, the icon of a file.

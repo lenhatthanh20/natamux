@@ -15,11 +15,8 @@ use crate::agents::agent_choices::{DEFAULT_AGENT, is_agent_id};
 use crate::app::commands::{shortcut_of, title_of};
 use crate::app::dashboard::Dashboard;
 use crate::app::shortcuts::action_for;
+use crate::components::icons::icon_path;
 use crate::components::toast_rules::ToastTone;
-
-fn icon_path(name: &str) -> String {
-    format!("icons/lucide/{name}.svg")
-}
 
 /// The icon of a state action (`ACTION_ICON`).
 fn action_icon(event: &str) -> &'static str {

@@ -90,7 +90,7 @@ fn segment<const N: usize>(
 
 fn row(label: impl Into<SharedString>, control: impl IntoElement) -> Div {
     h_flex()
-        .min_h(px(28.))
+        .min_h(rems_from_px(28.0_f32))
         .gap_3()
         .justify_between()
         .child(Label::new(label))
@@ -151,7 +151,6 @@ impl SettingsDialog {
             ))
             .child(row(
                 "Terminal",
-                // Stand-in: the Lucide `type` icon is not in the app yet.
                 Button::new("settings-terminal-font", "Terminal font…")
                     .style(ButtonStyle::Outlined)
                     .start_icon(Icon::new(IconName::FontSize).size(IconSize::Small))

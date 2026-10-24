@@ -162,11 +162,12 @@ jobs:
               done
             done
           done
-      # Report only until the owner has signed the baselines off (docs/rust-phase3.md). Then
-      # REPORT_ONLY is emptied and a differing shot fails the job.
+      # The owner signed the baselines off (docs/rust-phase3.md): a differing shot fails the job.
+      # REPORT_ONLY: "1" turns it back into a report, for a change of the look before its new
+      # baselines.
       - name: Compare shots with the baselines
         env:
-          REPORT_ONLY: "1"
+          REPORT_ONLY: ""
         run: |
           mkdir -p "$RUNNER_TEMP/baselines"
           failed=0

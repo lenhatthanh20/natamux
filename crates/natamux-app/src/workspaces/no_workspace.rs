@@ -11,8 +11,10 @@ use natamux_proto::workspaces::workspace::PreparingStep;
 use ui::{ButtonLike, ContextMenu, TintColor, Tooltip, prelude::*};
 
 use super::branches::branch_options;
+use crate::components::button_style::{label_color, tinted_style};
 use crate::components::chips::StateChip;
 use crate::components::empty_state::EmptyState;
+use crate::components::icons::icon_path;
 use crate::components::menu::MenuLayer;
 
 type OnClick = Rc<dyn Fn(&mut Window, &mut App)>;
@@ -50,7 +52,7 @@ pub fn waits_text(ids: &[String]) -> Option<String> {
 /// The header of a task with no workspace: id, title and state.
 pub fn bare_header(task: &Task, cx: &App) -> impl IntoElement {
     h_flex()
-        .h(px(44.))
+        .h(rems_from_px(44.0_f32))
         .flex_none()
         .px_4()
         .gap_2()
@@ -107,7 +109,7 @@ impl NoWorkspace {
         Some(
             v_flex()
                 .gap_1()
-                .w(px(320.))
+                .w(rems_from_px(320.0_f32))
                 .child(Label::new("Branch from").size(LabelSize::Small))
                 .child(
                     ButtonLike::new("no-workspace-branch")
@@ -144,7 +146,7 @@ impl NoWorkspace {
                                 .justify_between()
                                 .child(Label::new(label).size(LabelSize::Small).buffer_font(cx))
                                 .child(
-                                    Icon::from_path("icons/lucide/chevron-down.svg")
+                                    Icon::from_path(icon_path("chevron-down"))
                                         .size(IconSize::Small)
                                         .color(Color::Muted),
                                 ),
@@ -161,7 +163,7 @@ impl RenderOnce for NoWorkspace {
                 .items_center()
                 .gap_1()
                 .child(
-                    Icon::from_path("icons/lucide/loader-circle.svg")
+                    Icon::from_path(icon_path("loader-circle"))
                         .size(IconSize::Medium)
                         .color(Color::Muted),
                 )
@@ -181,18 +183,17 @@ impl RenderOnce for NoWorkspace {
                 };
                 let start_agent = {
                     let run = self.on_start.clone();
+                    let off = self.busy || waits.is_some();
                     let button = ButtonLike::new("no-workspace-start")
-                        .style(ButtonStyle::Tinted(TintColor::Accent))
-                        .disabled(self.busy || waits.is_some())
+                        .style(tinted_style(TintColor::Accent, off))
+                        .disabled(off)
                         .on_click(move |_: &ClickEvent, window, cx| run(window, cx))
                         .child(
                             h_flex()
                                 .gap_1p5()
                                 .px_1()
-                                .child(
-                                    Icon::from_path("icons/lucide/play.svg").size(IconSize::Small),
-                                )
-                                .child(Label::new("Start agent")),
+                                .child(Icon::from_path(icon_path("play")).size(IconSize::Small))
+                                .child(Label::new("Start agent").color(label_color(off))),
                         );
                     match waits {
                         Some(reason) => button.tooltip(Tooltip::text(reason)),
