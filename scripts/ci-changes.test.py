@@ -63,8 +63,22 @@ class Flags(unittest.TestCase):
         self.assertEqual(true_flags(["scripts/cli-parity.sh"]), ["client"])
 
     def test_lock(self):
-        self.assertEqual(true_flags(["Cargo.lock"]), ["lock"])
         self.assertEqual(true_flags(["supply-chain/config.toml"]), ["lock"])
+        self.assertEqual(true_flags(["deny.toml"]), ["lock"])
+
+    def test_lock_file_can_break_any_build(self):
+        self.assertEqual(len(true_flags(["Cargo.lock"])), 6)
+
+    def test_inputs_of_the_daemon_image_jobs(self):
+        for path in ["scripts/e2e.sh", "compose.e2e.yaml", "compose.prod.yaml", "e2e/tests/terminal-helpers.ts"]:
+            self.assertEqual(true_flags([path]), ["client", "contract"], path)
+
+    def test_inputs_of_the_contract_job(self):
+        self.assertEqual(true_flags(["scripts/task-file-golden.mjs"]), ["contract"])
+        self.assertEqual(true_flags(["scripts/xterm-grid.mjs"]), ["contract", "daemon"])
+
+    def test_motion_script_is_app(self):
+        self.assertEqual(true_flags(["scripts/motion-cost.sh"]), ["app"])
 
     def test_contract_crate_only(self):
         self.assertEqual(true_flags(["crates/natamux-contract/tests/tasks.rs"]), ["contract"])
@@ -83,7 +97,8 @@ class Flags(unittest.TestCase):
 
     def test_all_true_paths(self):
         for path in [".github/workflows/rust.yml", "rust-toolchain.toml", "Cargo.toml",
-                     ".cargo/config.toml", "xtask/src/main.rs", "scripts/ci-changes.py"]:
+                     ".cargo/config.toml", "xtask/src/main.rs", "scripts/ci-changes.py",
+                     ".github/workflows/rust-cache.yml"]:
             self.assertEqual(len(true_flags([path])), 6, path)
 
     def test_failed_diff_is_all_true(self):
@@ -148,6 +163,49 @@ class Suites(unittest.TestCase):
         self.assertIn("terminals, tasks, stages, hooks, workspaces", str(caught.exception))
 
 
+class RunAll(unittest.TestCase):
+    def test_tag(self):
+        self.assertTrue(ci.parse_all("Probe\n\n[ci: all]"))
+        self.assertTrue(ci.parse_all("[ci:all]"))
+        self.assertFalse(ci.parse_all("Probe"))
+        self.assertFalse(ci.parse_all("[ci: some]"))
+
+    def run_all(self, ref, message):
+        return ci.wants_all(ref, message)
+
+    def test_dev_push_runs_all(self):
+        self.assertTrue(self.run_all("refs/heads/dev", "Fix"))
+
+    def test_pull_request_reads_the_diff(self):
+        self.assertFalse(self.run_all("refs/pull/7/merge", ""))
+        self.assertFalse(self.run_all("refs/pull/7/merge", "Fix"))
+
+    def test_pull_request_runs_all_with_the_tag(self):
+        self.assertTrue(self.run_all("refs/pull/7/merge", "Fix [ci: all]"))
+
+    def test_snapshot_runs_all_only_with_the_tag(self):
+        self.assertFalse(self.run_all("refs/heads/natamux-ci/rust", "Snap"))
+        self.assertTrue(self.run_all("refs/heads/natamux-ci/rust", "Snap [ci: all]"))
+
+
+SNAP = "refs/heads/natamux-ci/rust"
+
+
+class Shards(unittest.TestCase):
+    def test_full_run_has_four(self):
+        self.assertEqual(ci.shot_shards("Fix a thing", SNAP), [1, 2, 3, 4])
+        self.assertEqual(ci.shot_shards("", SNAP), [1, 2, 3, 4])
+
+    def test_shots_line_has_one(self):
+        self.assertEqual(ci.shot_shards("Snap\n\nShots: palette toast\n", SNAP), [1])
+
+    def test_dev_always_has_four(self):
+        self.assertEqual(ci.shot_shards("Snap\n\nShots: palette\n", "refs/heads/dev"), [1, 2, 3, 4])
+
+    def test_shots_word_inside_a_line_is_not_a_shots_line(self):
+        self.assertEqual(ci.shot_shards("More Shots: later", SNAP), [1, 2, 3, 4])
+
+
 class Base(unittest.TestCase):
     def test_base_tag_names_a_commit(self):
         self.assertEqual(ci.parse_base("Probe [base: 0d67194b]"), "0d67194b")
@@ -186,9 +244,28 @@ class Compute(unittest.TestCase):
         out = ci.compute([".github/workflows/rust.yml"], "", False, GRAPH)
         self.assertEqual(out["crates"].split(), sorted(GRAPH))
 
+    def test_lock_change_is_all_crates(self):
+        out = ci.compute(["Cargo.lock"], "", False, GRAPH)
+        self.assertEqual(out["crates"].split(), sorted(GRAPH))
+
     def test_failed_diff(self):
         out = ci.compute(None, "", False, GRAPH)
         self.assertEqual(out["app"], "true")
+
+    def test_all_and_shards_outputs(self):
+        out = ci.compute(["docs/x.md"], "Shots: palette", False, GRAPH)
+        self.assertEqual(out["all"], "false")
+        self.assertEqual(out["shards"], "[1]")
+        out = ci.compute(["docs/x.md"], "", True, GRAPH)
+        self.assertEqual(out["all"], "true")
+        self.assertEqual(out["shards"], "[1, 2, 3, 4]")
+        out = ci.compute(None, "Shots: palette", True, GRAPH, "refs/heads/dev")
+        self.assertEqual(out["shards"], "[1, 2, 3, 4]")
+
+    def test_docs_only_pull_request_needs_no_job_flag(self):
+        out = ci.compute(["docs/x.md"], "", False, GRAPH)
+        self.assertEqual({out[k] for k in ["daemon", "terminal", "app", "client", "lock", "contract"]}, {"false"})
+        self.assertEqual(out["crates"], "")
 
 
 def git(root, *args):

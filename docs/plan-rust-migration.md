@@ -150,6 +150,7 @@ Branches (owner, 2026-10-22):
 - `main` stays the Electron app and keeps its releases from `scripts/release.sh`.
 - Merge `main` into `dev` after each Electron release, so fixes reach both.
 - `dev` merges into `main` only at the phase 5 cut over.
+- CI of `dev` is Rust only (T-0165): `rust.yml`, `rust-cache.yml`, `native-beta.yml`, and `site.yml` for `site/`. The Node workflows (`ci.yml`, `e2e.yml`, `desktop.yml`, `release.yml`) are deleted on `dev` and stay on `main`. When a merge of `main` into `dev` brings a change to one of them, it is a modify/delete conflict: keep the delete. `rust-cache.yml` is on both branches, the same file.
 
 ### Phase 0: decide and prepare (1 week)
 
@@ -240,6 +241,7 @@ Part 1 (terminals and the contract suite, T-0153), part 2 (tasks, events, storag
 - Ship two Rust binaries (app and daemon) with the web build embedded.
 - Updater in Rust with the same pinned key (`RELEASE_SIGNER`) and trusted comment `natamux <tag>`.
 - `release.yml` builds dmg (arm64, x64), Windows installer, AppImage, deb, tar.gz.
+- The cut-over merge deletes `main`'s Node workflows (`dev` has none): bring the Rust `release.yml` in the same PR, and keep `site.yml`.
 - `SHA256SUMS.txt`, owner signing with `sign-release.sh` and the `natamux-release` skill stay as they are.
 - The Docker daemon image becomes the Rust binary.
 - Remove Electron and the Node daemon in their own PR, after one release where both ran fine.

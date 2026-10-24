@@ -1,11 +1,17 @@
 name: Rust cache
 
-# Warm Cargo caches in the scope of main, the default branch. A branch restores caches of its own
-# and of main, not of other branches, so a new natamux-ci/* snapshot branch, or one whose cache
-# was evicted (10 GB per repo), built the Zed graph from scratch: 33 minutes for the macOS app
-# (T-0158). main has no Rust code yet: the jobs build dev, with the keys rust.yml uses. A key that
-# main already holds is only read, which keeps it from being evicted.
+# Warm Cargo caches in the scope of main, the default branch: every branch, PR and snapshot reads
+# them, and rust.yml only restores. A cache of dev is read only by PRs into dev, and one of a
+# snapshot branch only by itself; a set of caches for each did not fit in the 10 GB of the repo, so
+# runs pushed each other's caches out and built from scratch (T-0165).
+# This file must be on main: a schedule and a workflow_run run only from the default branch, and
+# in its scope. Keep the same file on dev. main has no Rust code: the jobs build dev.
+# Keep the cargo commands, env and keys in step with rust.yml.
 on:
+  workflow_run:
+    workflows: [Rust]
+    types: [requested]
+    branches: [dev]
   schedule:
     - cron: '23 19 * * *'
   workflow_dispatch:
@@ -22,16 +28,26 @@ env:
   CARGO_INCREMENTAL: "0"
   CARGO_PROFILE_DEV_DEBUG: "0"
   CARGO_PROFILE_TEST_DEBUG: "0"
+  DEV_SHA: ${{ github.event.workflow_run.head_sha || 'dev' }}
 
+# The warm set: the jobs that are slow cold (check 12 min, app-macos 34, app-windows 30; 1 to 5
+# warm), 7.5 GB together. The other jobs of rust.yml take about as long without a cache.
+# Each warm job runs for a dev push of this repo only: a fork's PR from a branch named dev also
+# starts a Rust run with head_branch dev, and its code must not fill the caches every branch reads.
 jobs:
   # What the check job of rust.yml builds: clippy and the tests of the workspace.
   check:
+    if: ${{ github.event_name != 'workflow_run' || (github.event.workflow_run.event == 'push' && github.event.workflow_run.head_repository.full_name == github.repository) }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    permissions:
+      contents: read
+      actions: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: dev
+          ref: ${{ env.DEV_SHA }}
+          fetch-depth: 0
       - name: Make room on the disk
         run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL
       - name: Install the GPUI libraries
@@ -41,38 +57,153 @@ jobs:
             libglib2.0-dev libssl-dev libva-dev libvulkan1 libwayland-dev libx11-xcb-dev \
             libxkbcommon-x11-dev libzstd-dev libsqlite3-dev
       - run: rustup toolchain install
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - id: sha
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: rust-check-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
-          restore-keys: rust-check-${{ runner.os }}-
+          key: rust-check-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-${{ steps.sha.outputs.sha }}
+          restore-keys: |
+            rust-check-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-
+            rust-check-${{ runner.os }}-
+      - run: python3 scripts/ci-changes.py mtimes
       # A lint or a test that fails on dev must not stop the cache from being saved.
       - name: Build what the check job builds
         run: |
           cargo clippy --workspace --all-targets --locked -- -D warnings || true
           cargo test --workspace --locked --no-run || true
-
-  # What the app-macos job of rust.yml builds.
-  app-macos:
-    runs-on: macos-15
-    timeout-minutes: 90
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: dev
-      - run: rustup toolchain install
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - run: python3 scripts/ci-changes.py stamp
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: rust-app-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
-          restore-keys: rust-app-${{ runner.os }}-
+          key: rust-check-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-${{ steps.sha.outputs.sha }}
+      - name: Keep only the newest cache of this job
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh cache list --ref refs/heads/main --key "rust-check-${{ runner.os }}-" --json id,createdAt \
+            --jq 'sort_by(.createdAt) | reverse | .[1:] | .[].id' |
+            while read -r id; do gh cache delete "$id"; done
+
+  # What the app-macos job of rust.yml builds.
+  app-macos:
+    if: ${{ github.event_name != 'workflow_run' || (github.event.workflow_run.event == 'push' && github.event.workflow_run.head_repository.full_name == github.repository) }}
+    runs-on: macos-15
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.DEV_SHA }}
+          fetch-depth: 0
+      - run: rustup toolchain install
+      - id: sha
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: rust-app-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-${{ steps.sha.outputs.sha }}
+          restore-keys: |
+            rust-app-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-
+            rust-app-${{ runner.os }}-
+      - run: python3 scripts/ci-changes.py mtimes
       - name: Build what the app-macos job builds
         run: |
           cargo build --release --locked -p natamux-app || true
           cargo build --release --locked -p natamux-cli || true
+      - run: python3 scripts/ci-changes.py stamp
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: rust-app-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-${{ steps.sha.outputs.sha }}
+      - name: Keep only the newest cache of this job
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh cache list --ref refs/heads/main --key "rust-app-${{ runner.os }}-" --json id,createdAt \
+            --jq 'sort_by(.createdAt) | reverse | .[1:] | .[].id' |
+            while read -r id; do gh cache delete "$id"; done
+
+  # What the app-windows job of rust.yml builds.
+  app-windows:
+    if: ${{ github.event_name != 'workflow_run' || (github.event.workflow_run.event == 'push' && github.event.workflow_run.head_repository.full_name == github.repository) }}
+    runs-on: windows-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      actions: write
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.DEV_SHA }}
+          fetch-depth: 0
+      - run: rustup toolchain install
+      - id: sha
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: rust-app-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-${{ steps.sha.outputs.sha }}
+          restore-keys: |
+            rust-app-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-
+            rust-app-${{ runner.os }}-
+      - run: python scripts/ci-changes.py mtimes
+      - name: Build what the app-windows job builds
+        run: |
+          cargo build --release --locked -p natamux-app || true
+          cargo build --release --locked -p natamux-cli || true
+      - run: python scripts/ci-changes.py stamp
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: rust-app-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-${{ steps.sha.outputs.sha }}
+      - name: Keep only the newest cache of this job
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh cache list --ref refs/heads/main --key "rust-app-${{ runner.os }}-" --json id,createdAt \
+            --jq 'sort_by(.createdAt) | reverse | .[1:] | .[].id' |
+            while read -r id; do gh cache delete "$id"; done
+
+  # The warm set must leave room under the 10 GB of the repo, or GitHub evicts parts of it.
+  usage:
+    needs: [check, app-macos, app-windows]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - run: |
+          bytes=$(gh api "repos/$GITHUB_REPOSITORY/actions/cache/usage" --jq .active_caches_size_in_bytes)
+          main=$(gh cache list -R "$GITHUB_REPOSITORY" --ref refs/heads/main -L 100 --json sizeInBytes --jq 'map(.sizeInBytes) | add // 0')
+          echo "Caches: $((bytes / 1048576)) MB in all, $((main / 1048576)) MB of main." >> "$GITHUB_STEP_SUMMARY"
+          [ "$bytes" -le $((9500 * 1048576)) ]

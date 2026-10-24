@@ -42,7 +42,7 @@ The binary reads the Node daemon's variables: `NATAMUX_PORT` (4317), `NATAMUX_HO
 
 ## What CI checks
 
-Daemon tasks push their snapshots to `natamux-ci/daemon` (every job the change needs) and `natamux-ci/daemon-check` (`check` only); `natamux-ci/daemon` skips `app-macos`. The daemon jobs do not run on `natamux-ci/rust` or any `-check` branch. Since part 4, a first job, `changes` (`scripts/ci-changes.py`), reads the files the branch changed against `dev` and each job runs only when they can break it; a pull request into `dev` and `dev` itself run everything. See [Part 4, CI](#ci-only-what-the-change-needs).
+Daemon tasks push their snapshots to `natamux-ci/daemon` (every job the change needs) and `natamux-ci/daemon-check` (`check` only). The daemon jobs do not run on any `-check` branch. Since part 4, a first job, `changes` (`scripts/ci-changes.py`), reads the files the branch changed against `dev` and each job runs only when they can break it. Since T-0165 a pull request into `dev` does the same; `dev` itself, and a push or PR whose head commit message has `[ci: all]`, run everything. See [Part 4, CI](#ci-only-what-the-change-needs).
 
 | Job | What |
 |---|---|
@@ -393,18 +393,19 @@ The owner said on 2026-10-24 not to ask, so these were decided in the spec and w
 
 | Job | Runs when | Notes |
 |---|---|---|
-| `changes` | Always | `scripts/ci-changes.py flags`: flags from `git diff --name-only origin/dev...HEAD`; every flag on for a pull request, `dev`, or a change to `rust.yml`, `rust-toolchain.toml`, the root `Cargo.toml`, `.cargo/`, `xtask/` or the script |
+| `changes` | Always | `scripts/ci-changes.py flags`: flags from `git diff --name-only origin/dev...HEAD`, for a snapshot and a pull request alike; every flag on for `dev`, `[ci: all]` in the head commit message (of a push, or of a PR's head, `HEAD^2` of the merge checkout; a PR reads no other tag), or a change to `rust.yml`, `rust-cache.yml`, `rust-toolchain.toml`, the root `Cargo.toml`, `Cargo.lock`, `.cargo/`, `xtask/` or the script. Also gives `all` and `shards` (the `app-shots` jobs) |
 | `check` | Always | On `natamux-ci/daemon*`: no disk cleanup, no GPUI libraries, `cargo xtask ci --no-app`. On any `natamux-ci/*` snapshot: `cargo fmt` runs first and its patch is an artifact (`fmt-patch`), and `--all-errors` lets clippy, the tests, layers and colours all run after a failure; the job still fails |
 | `daemon-os` | A daemon crate or one that depends on it changed | `cargo test` of those crates only (`-p` list from the dependency graph of `crates/*/Cargo.toml`) |
-| `daemon-contract` | A daemon crate (`natamux-git` too), the contract suite, `compose.rust-daemon.yaml`, the fake agent or the fake `gh` (`scripts/fake-gh.sh`) changed | The suites of a `[contract: hooks,stages]` tag in the head commit's message; no tag: `terminals`, `tasks`, `stages`, `hooks`, `workspaces` (part 5) |
+| `daemon-contract` | A daemon crate (`natamux-git` too), the contract suite, `compose.rust-daemon.yaml`, the fake agent, the fake `gh` (`scripts/fake-gh.sh`), `scripts/xterm-grid.mjs`, `scripts/task-file-golden.mjs`, or what starts the images of main (`scripts/e2e.sh`, `compose.e2e.yaml`, `compose.prod.yaml`, `e2e/`) changed | The suites of a `[contract: hooks,stages]` tag in the head commit's message; no tag: `terminals`, `tasks`, `stages`, `hooks`, `workspaces` (part 5) |
 | `daemon-bench` | The terminal path changed (`natamux-pty`, `natamux-screen`, the daemon's `terminals/`) | |
-| `live-daemon`, `cli` | `natamux-client`, `natamux-cli` or `natamux-proto` changed | |
+| `live-daemon`, `cli` | `natamux-client`, `natamux-cli`, `natamux-proto`, `compose.rust-cli.yaml`, `scripts/cli-parity.sh`, or what starts the images of main changed | |
 | `supply-chain` | `Cargo.lock`, `deny.toml`, `supply-chain/` or `.cargo/audit.toml` changed | |
-| `app-macos` | As before; on `natamux-ci/rust*` only when the app changed | |
+| `app-macos`, `app-shots` | The app, a shots script, `scripts/bundle-rust-app.sh` or `scripts/motion-cost.sh` changed; never on a `-check` branch | |
+| `app-windows` | The app or the CLI changed, on a PR or `dev`; on a snapshot only with `[ci: all]` | |
 
 A snapshot's commit message may name the suites (`[contract: hooks,stages]`) and the commit to compare with (`[base: <sha>]`, for measuring; default `origin/dev`).
 
-Caches: each job restores `rust-<job>-<os>-<lock hash>-<sha>` with the older keys as fallbacks, and saves under its own commit once its build passed. Before the build, `ci-changes.py mtimes` gives every file the same old time and touches only the files changed since the commit the cache was built from (`target/.ci-commit`): cargo decides by file times, and a fresh checkout would make every crate look changed. After the save, the older caches of the job and branch are deleted, so each keeps one.
+Caches: `check`, `app-macos` and `app-windows` restore `rust-<job>-<os>-<lock hash>-<sha>` with the older keys as fallbacks. Since T-0165 only `rust-cache.yml` saves them, in the scope of `main`, under the `dev` commit it built; it then deletes the older caches of the job, so each keeps one (docs/rust-phase3.md, "What CI checks"). The other jobs have no cache. Before the build, `ci-changes.py mtimes` gives every file the same old time and touches only the files changed since the commit the cache was built from (`target/.ci-commit`): cargo decides by file times, and a fresh checkout would make every crate look changed.
 
 The fake agent skips its 2–5 s pauses with `NATAMUX_FAKE_AGENT_FAST=1`; only the `daemon-contract` job sets it, on both daemons. E2E keeps the pauses.
 
@@ -419,6 +420,21 @@ One run on `natamux-ci/daemon`, wall time from the push to the last job, and the
 | Every job and suite (the gate run of this part) | | 4 min 41 s, 18 runner minutes (run 40062747678) |
 
 Target met: a daemon-only change is green in 4 minutes (target 8). The wall time of (b) is held by `daemon-contract` (3 min 47 s: start both daemons, then the suites); the gain is mostly in the jobs that no longer run, and in `check`, which is 1 to 1.5 min with the commit-keyed cache instead of 4 to 15.
+
+### CI speed (T-0165)
+
+Rust wall time, from the first job's start to the last job's end. "Before": runs of 2026-10-24, when the daemon snapshots held every cache. "Target": with the warm caches of `main`. The "after" runs come once `rust-cache.yml` is on `main` and has run once.
+
+| Run | Before | Target |
+|---|---|---|
+| PR into `dev` that changes the app | 28–60 min (runs 40081183594, 40074517009) | 15 min |
+| PR into `dev` that changes only daemon crates | every job ran | 10 min, no app jobs |
+| PR into `dev` that changes only docs | every job ran | 5 min, `changes` and `check` |
+| `natamux-ci/rust` with an app change, no `Shots:` line | 11–34 min | 15 min |
+| `natamux-ci/rust-check`, `natamux-ci/daemon-check` | 2–15 min | 5 min |
+| `dev` push, every job | 39–53 min (runs 40077894224, 40072982494) | 20 min |
+
+Where the time went: cold builds (`app-macos` 34 min, `app-windows` 30–34, `check` 12–14) and the state shots, 410 one after another (22.5 min).
 
 ### Crates
 

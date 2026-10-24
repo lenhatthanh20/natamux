@@ -4,7 +4,9 @@
 Usage: ci-changes.py flags | crates | mtimes | stamp
 
 flags   writes key=value lines to $GITHUB_OUTPUT (stdout when unset): the job flags, the changed
-        crates with their dependents, and the contract suites to run.
+        crates with their dependents, the contract suites to run, `all` and the shot shards.
+        A push to dev, or a head commit message with `[ci: all]`, runs everything; a pull request
+        and a snapshot run what their diff against origin/dev needs.
 crates  prints the same crate list, one per line.
 mtimes  sets file mtimes so cargo rebuilds only what changed since the cache was saved.
 stamp   records HEAD in target/.ci-commit; run it before the cache is saved.
@@ -39,6 +41,7 @@ DAEMON_PATHS = [
     "compose.rust-daemon.yaml",
     "scripts/fake-agent.sh",
     "scripts/fake-gh.sh",
+    "scripts/xterm-grid.mjs",
 ]
 TERMINAL_PATHS = [
     "crates/natamux-pty/",
@@ -47,22 +50,34 @@ TERMINAL_PATHS = [
     "crates/natamux-daemon/tests/terminal_bench.rs",
     "scripts/compare-terminal-bench.py",
 ]
-APP_PATHS = ["crates/natamux-app/", "scripts/*shots*", "scripts/bundle-rust-app.sh"]
+APP_PATHS = [
+    "crates/natamux-app/",
+    "scripts/*shots*",
+    "scripts/bundle-rust-app.sh",
+    "scripts/motion-cost.sh",
+]
+# What the jobs that start the images of main read (scripts/e2e.sh up).
+IMAGE_PATHS = ["scripts/e2e.sh", "compose.e2e.yaml", "compose.prod.yaml", "e2e/"]
 CLIENT_PATHS = [
     *(f"crates/natamux-{name}/" for name in ("client", "cli", "proto")),
     "compose.rust-cli.yaml",
     "scripts/cli-parity.sh",
+    *IMAGE_PATHS,
 ]
 LOCK_PATHS = ["Cargo.lock", "deny.toml", "supply-chain/", ".cargo/audit.toml"]
-CONTRACT_PATHS = ["crates/natamux-contract/"]
+CONTRACT_PATHS = ["crates/natamux-contract/", "scripts/task-file-golden.mjs", *IMAGE_PATHS]
+# Cargo.lock: a new version of a dependency can break any build.
 ALL_PATHS = [
     ".github/workflows/rust.yml",
+    ".github/workflows/rust-cache.yml",
     "rust-toolchain.toml",
     "Cargo.toml",
+    "Cargo.lock",
     ".cargo/",
     "xtask/",
     "scripts/ci-changes.py",
 ]
+SHARDS = [1, 2, 3, 4]
 
 
 def matches(path, patterns):
@@ -139,14 +154,31 @@ def parse_suites(message):
     return [s for s in SUITES if s in names]
 
 
-def compute(files, message, run_all, graph):
-    """All outputs of `flags`. run_all: a push to dev or a pull request."""
+def parse_all(message):
+    """True when the message has the tag `[ci: all]`."""
+    return re.search(r"\[ci:\s*all\s*\]", message or "") is not None
+
+
+def wants_all(ref, message):
+    """Every job runs on a push to dev and for `[ci: all]` in the head commit message (of a push,
+    or of a pull request's head); else the jobs read the diff."""
+    return ref == "refs/heads/dev" or parse_all(message)
+
+
+def shot_shards(message, ref):
+    """The app-shots jobs: one when a `Shots:` line picks a few states, else all of SHARDS.
+    dev shoots every state."""
+    few = ref != "refs/heads/dev" and re.search(r"^Shots:", message or "", re.MULTILINE)
+    return [1] if few else list(SHARDS)
+
+
+def compute(files, message, run_all, graph, ref=""):
+    """All outputs of `flags`. run_all: from wants_all."""
     if run_all:
         files = None
     flags = path_flags(files)
     everything = files is None or any(matches(f, ALL_PATHS) for f in files)
-    # The lock file changes the resolved version of every crate.
-    if everything or "Cargo.lock" in files:
+    if everything:
         crates = sorted(graph)
     else:
         crates = changed_crates(files, graph)
@@ -156,6 +188,8 @@ def compute(files, message, run_all, graph):
     out["crates"] = " ".join(crates)
     out["daemon_crates"] = " ".join(f"-p {c}" for c in daemon)
     out["suites"] = ",".join(suites)
+    out["all"] = str(run_all).lower()
+    out["shards"] = str(shot_shards(message, ref))
     return out
 
 
@@ -181,14 +215,20 @@ def head_message():
     return os.environ.get("HEAD_MESSAGE") or git("log", "-1", "--format=%B").stdout
 
 
+def pr_head_message():
+    """The message of a pull request's head commit: the second parent of the merge checkout."""
+    return git("log", "-1", "--format=%B", "HEAD^2", check=False).stdout
+
+
 def outputs():
-    run_all = (
-        os.environ.get("GITHUB_REF") == "refs/heads/dev"
-        or os.environ.get("GITHUB_EVENT_NAME") == "pull_request"
-    )
-    message = "" if run_all else head_message()
+    ref = os.environ.get("GITHUB_REF", "")
+    event = os.environ.get("GITHUB_EVENT_NAME", "")
+    # The head of a pull request is a merge commit: only [ci: all] is read, from the PR's own head.
+    pull_request = event == "pull_request"
+    message = "" if ref == "refs/heads/dev" or pull_request else head_message()
+    run_all = wants_all(ref, pr_head_message() if pull_request else message)
     files = None if run_all else changed_files(parse_base(message))
-    return compute(files, message, run_all, workspace_graph())
+    return compute(files, message, run_all, workspace_graph(), ref)
 
 
 def known_commit(root):
