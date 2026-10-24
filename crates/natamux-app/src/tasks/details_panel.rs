@@ -359,7 +359,11 @@ impl DetailsPanel {
             .id("details")
             .size_full()
             .bg(cx.theme().colors().panel_background)
-            .child(Self::header_bar(cx).justify_end().child(self.header_actions(None, cx)))
+            .child(
+                Self::header_bar(cx)
+                    .justify_end()
+                    .child(self.header_actions(None, cx)),
+            )
             .child(
                 v_flex()
                     .flex_1()

@@ -136,7 +136,10 @@ fn puts_edit_task_first_with_a_line_after_it() {
         menu_labels(&menu),
         ["Edit task", "---", "Save as template", "---", "Delete task"]
     );
-    assert_eq!(menu_labels(&more_menu(true, false, false, None, false)), ["Edit task"]);
+    assert_eq!(
+        menu_labels(&more_menu(true, false, false, None, false)),
+        ["Edit task"]
+    );
     assert!(!menu_labels(&more_menu(false, true, false, None, true)).contains(&"Edit task"));
 }
 
