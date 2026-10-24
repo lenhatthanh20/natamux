@@ -1,10 +1,16 @@
 //! The Rust daemon (L2): the HTTP and WebSocket server, auth, and the terminals (phase 4, part 1
-//! of `docs/plan-rust-migration.md`), the tasks (part 2) and the stage engine with agent start
-//! (part 3). It answers as the Node daemon in `packages/daemon` does.
+//! of `docs/plan-rust-migration.md`), the tasks (part 2), the stage engine with agent start
+//! (part 3), and the hooks, signals, activity and usage of the agents (part 4). It answers as the
+//! Node daemon in `packages/daemon` does.
 
 pub mod agents {
     pub mod errors;
+    pub mod generic_signals;
+    mod hook_activity;
+    pub mod hook_service;
     pub mod runner;
+    mod usage_file;
+    pub mod usage_service;
 }
 pub mod config;
 pub mod http {

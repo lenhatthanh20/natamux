@@ -1,0 +1,257 @@
+#!/usr/bin/env python3
+"""What a change needs from the Rust CI (.github/workflows/rust.yml), and cache-friendly mtimes.
+
+Usage: ci-changes.py flags | crates | mtimes | stamp
+
+flags   writes key=value lines to $GITHUB_OUTPUT (stdout when unset): the job flags, the changed
+        crates with their dependents, and the contract suites to run.
+crates  prints the same crate list, one per line.
+mtimes  sets file mtimes so cargo rebuilds only what changed since the cache was saved.
+stamp   records HEAD in target/.ci-commit; run it before the cache is saved.
+"""
+
+import fnmatch
+import os
+import pathlib
+import re
+import subprocess
+import sys
+import tomllib
+
+BASE = "origin/dev"
+SUITES = ["terminals", "tasks", "stages", "hooks"]
+DAEMON_CRATES = [
+    "natamux-core",
+    "natamux-store",
+    "natamux-pty",
+    "natamux-screen",
+    "natamux-agents",
+    "natamux-stages",
+    "natamux-daemon",
+]
+STAMP = pathlib.Path("target/.ci-commit")
+OLD_TIME = 946684800  # 2000-01-01
+
+DAEMON_PATHS = [
+    *(f"crates/natamux-{name}/" for name in ("proto", "core", "store", "pty", "screen", "agents", "stages", "daemon")),
+    "compose.rust-daemon.yaml",
+    "scripts/fake-agent.sh",
+]
+TERMINAL_PATHS = [
+    "crates/natamux-pty/",
+    "crates/natamux-screen/",
+    "crates/natamux-daemon/src/terminals/",
+    "crates/natamux-daemon/tests/terminal_bench.rs",
+    "scripts/compare-terminal-bench.py",
+]
+APP_PATHS = ["crates/natamux-app/", "scripts/*shots*", "scripts/bundle-rust-app.sh"]
+CLIENT_PATHS = [
+    *(f"crates/natamux-{name}/" for name in ("client", "cli", "proto")),
+    "compose.rust-cli.yaml",
+    "scripts/cli-parity.sh",
+]
+LOCK_PATHS = ["Cargo.lock", "deny.toml", "supply-chain/", ".cargo/audit.toml"]
+CONTRACT_PATHS = ["crates/natamux-contract/"]
+ALL_PATHS = [
+    ".github/workflows/rust.yml",
+    "rust-toolchain.toml",
+    "Cargo.toml",
+    ".cargo/",
+    "xtask/",
+    "scripts/ci-changes.py",
+]
+
+
+def matches(path, patterns):
+    """A pattern ending in / is a folder prefix; any other is a glob."""
+    return any(
+        path.startswith(p) if p.endswith("/") else fnmatch.fnmatchcase(path, p) for p in patterns
+    )
+
+
+def path_flags(files):
+    """The job flags for a list of changed paths; None means the diff failed."""
+    if files is None or any(matches(f, ALL_PATHS) for f in files):
+        return dict.fromkeys(["daemon", "terminal", "app", "client", "lock", "contract"], True)
+    daemon = any(matches(f, DAEMON_PATHS) for f in files)
+    return {
+        "daemon": daemon,
+        "terminal": any(matches(f, TERMINAL_PATHS) for f in files),
+        "app": any(matches(f, APP_PATHS) for f in files),
+        "client": any(matches(f, CLIENT_PATHS) for f in files),
+        "lock": any(matches(f, LOCK_PATHS) for f in files),
+        "contract": daemon or any(matches(f, CONTRACT_PATHS) for f in files),
+    }
+
+
+def workspace_graph(root="."):
+    """{crate: set of workspace crates it depends on}, from the Cargo.toml files."""
+    root = pathlib.Path(root)
+    graph = {}
+    for manifest in [*sorted(root.glob("crates/*/Cargo.toml")), root / "xtask" / "Cargo.toml"]:
+        if not manifest.is_file():
+            continue
+        data = tomllib.loads(manifest.read_text())
+        tables = [data, *data.get("target", {}).values()]
+        deps = set()
+        for table in tables:
+            for kind in ("dependencies", "dev-dependencies", "build-dependencies"):
+                for name, spec in table.get(kind, {}).items():
+                    local = isinstance(spec, dict) and ("path" in spec or spec.get("workspace"))
+                    if name.startswith("natamux-") and local:
+                        deps.add(name)
+        graph[data["package"]["name"]] = deps
+    return graph
+
+
+def changed_crates(files, graph):
+    """Crates with a changed file, plus every crate that depends on one, transitively."""
+    dirs = {name: name for name in graph}
+    out = set()
+    for f in files:
+        parts = f.split("/")
+        if parts[0] == "xtask":
+            out.add("xtask")
+        elif parts[0] == "crates" and len(parts) > 2 and parts[1] in dirs:
+            out.add(parts[1])
+    grew = True
+    while grew:
+        grew = False
+        for name, deps in graph.items():
+            if name not in out and deps & out:
+                out.add(name)
+                grew = True
+    return sorted(out & set(graph))
+
+
+def parse_suites(message):
+    """The suites named by a `[contract: a,b]` tag; all when there is no tag. Raises ValueError."""
+    found = re.search(r"\[contract:([^\]]*)\]", message or "")
+    if not found:
+        return list(SUITES)
+    names = [n.strip() for n in found.group(1).split(",")]
+    unknown = [n for n in names if n not in SUITES]
+    if unknown:
+        raise ValueError(f"unknown contract suite {unknown}; valid names: {', '.join(SUITES)}")
+    return [s for s in SUITES if s in names]
+
+
+def compute(files, message, run_all, graph):
+    """All outputs of `flags`. run_all: a push to dev or a pull request."""
+    if run_all:
+        files = None
+    flags = path_flags(files)
+    everything = files is None or any(matches(f, ALL_PATHS) for f in files)
+    # The lock file changes the resolved version of every crate.
+    if everything or "Cargo.lock" in files:
+        crates = sorted(graph)
+    else:
+        crates = changed_crates(files, graph)
+    suites = list(SUITES) if run_all else parse_suites(message)
+    daemon = [c for c in DAEMON_CRATES if c in crates]
+    out = {k: str(v).lower() for k, v in flags.items()}
+    out["crates"] = " ".join(crates)
+    out["daemon_crates"] = " ".join(f"-p {c}" for c in daemon)
+    out["suites"] = ",".join(suites)
+    return out
+
+
+def parse_base(message):
+    """The commit a `[base: <sha>]` tag names, else origin/dev. For measuring CI on a snapshot as
+    if its other changes were on dev already."""
+    found = re.search(r"\[base:\s*([0-9a-f]{7,40})\s*\]", message or "")
+    return found.group(1) if found else BASE
+
+
+def git(*args, check=True):
+    return subprocess.run(["git", *args], capture_output=True, text=True, check=check)
+
+
+def changed_files(base):
+    try:
+        return git("diff", "--name-only", f"{base}...HEAD").stdout.split()
+    except (subprocess.CalledProcessError, OSError):
+        return None
+
+
+def head_message():
+    return os.environ.get("HEAD_MESSAGE") or git("log", "-1", "--format=%B").stdout
+
+
+def outputs():
+    run_all = (
+        os.environ.get("GITHUB_REF") == "refs/heads/dev"
+        or os.environ.get("GITHUB_EVENT_NAME") == "pull_request"
+    )
+    message = "" if run_all else head_message()
+    files = None if run_all else changed_files(parse_base(message))
+    return compute(files, message, run_all, workspace_graph())
+
+
+def known_commit(root):
+    """The commit in target/.ci-commit when git has it, else None."""
+    stamp = root / STAMP
+    if not stamp.is_file():
+        return None
+    sha = stamp.read_text().strip()
+    exists = ["-C", str(root), "cat-file", "-e", sha + "^{commit}"]
+    if git(*exists, check=False).returncode != 0:
+        # A shallow checkout lacks it: fetch just that commit.
+        git("-C", str(root), "fetch", "-q", "--depth=1", "origin", sha, check=False)
+        if git(*exists, check=False).returncode != 0:
+            return None
+    return sha
+
+
+def set_mtimes(root="."):
+    # Cargo decides freshness of workspace crates by mtime, and a fresh checkout makes every file new.
+    root = pathlib.Path(root)
+    tracked = git("-C", str(root), "ls-files").stdout.splitlines()
+    # Windows cannot set the time of a link itself.
+    follow = os.utime not in os.supports_follow_symlinks
+    for f in tracked:
+        try:
+            os.utime(root / f, (OLD_TIME, OLD_TIME), follow_symlinks=follow)
+        except OSError:
+            pass
+    sha = known_commit(root)
+    touch = git("-C", str(root), "diff", "--name-only", sha, "HEAD").stdout.split() if sha else tracked
+    for f in touch:
+        if (root / f).exists():
+            os.utime(root / f, None)
+
+
+def stamp_head(root="."):
+    path = pathlib.Path(root) / STAMP
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(git("-C", str(root), "rev-parse", "HEAD").stdout.strip() + "\n")
+
+
+def main(argv):
+    command = argv[0] if argv else ""
+    if command == "flags":
+        try:
+            out = outputs()
+        except ValueError as error:
+            print(f"ci-changes: {error}", file=sys.stderr)
+            return 1
+        text = "".join(f"{k}={v}\n" for k, v in out.items())
+        target = os.environ.get("GITHUB_OUTPUT")
+        if target:
+            with open(target, "a") as handle:
+                handle.write(text)
+        print(text, end="")
+    elif command == "crates":
+        print(*outputs()["crates"].split(), sep="\n")
+    elif command == "mtimes":
+        set_mtimes()
+    elif command == "stamp":
+        stamp_head()
+    else:
+        print(__doc__, file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

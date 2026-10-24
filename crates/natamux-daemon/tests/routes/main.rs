@@ -6,6 +6,8 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 mod agents;
+mod hook_client;
+mod hooks;
 mod server;
 mod socket;
 mod stages;
@@ -90,6 +92,12 @@ async fn decides_by_the_route_that_matched_not_by_a_path_with_a_backslash_in_it(
     ] {
         assert_eq!(d.raw_status(method, path).await, 401, "{method} {path}");
     }
+    // Node's test sends no token, so all answer 401 there. With the token the hook path reaches
+    // its route, as agent `claude-code\..\..\health`, which no adapter has: 404, not /health.
+    let status = d
+        .raw_status_as("POST", r"/hooks/claude-code\..\..\health", Some(TOKEN))
+        .await;
+    assert_eq!(status, 404);
 }
 
 // The silence limit is 90 s; this daemon's is 600 ms, the rest is as in Node.

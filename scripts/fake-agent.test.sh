@@ -9,8 +9,10 @@ trap 'rm -rf "$tmp"' EXIT
 stubs="$tmp/bin"
 mkdir "$stubs"
 printf '#!/bin/sh\nexit 0\n' >"$stubs/natamux"
-printf '#!/bin/sh\nexit 0\n' >"$stubs/sleep"
+printf '#!/bin/sh\necho "$*" >>"$SLEEP_LOG"\n' >"$stubs/sleep"
 chmod +x "$stubs/natamux" "$stubs/sleep"
+sleeps="$tmp/sleeps"
+unset NATAMUX_FAKE_AGENT_FAST
 
 # run <title> <prompt>: one stage in a new repo; prints the repo path.
 run() {
@@ -19,7 +21,7 @@ run() {
   git -C "$repo" init -q && git -C "$repo" -c user.name=t -c user.email=t@t commit -q --allow-empty -m init
   mkdir -p "$repo/.natamux-task"
   printf '# test-spec\n\n## Cases\n\n### Kept\n' >"$repo/.natamux-task/test-spec.md"
-  (cd "$repo" && PATH="$stubs:$PATH" GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t \
+  (cd "$repo" && PATH="$stubs:$PATH" SLEEP_LOG="$sleeps" GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t \
     bash "$agent" --settings x "$2" </dev/null >/dev/null 2>&1)
   printf '%s' "$repo"
 }
@@ -63,6 +65,15 @@ Read .natamux-task/spec.md.
 Write the tests first, then the code that makes them pass. Commit your work when it is done.
 $DONE")
 check "[no-commit] with commit asked: no commit the first time" '[ "$(commits "$r")" = 1 ] && changed "$r"'
+
+: >"$sleeps"
+r=$(NATAMUX_FAKE_AGENT_FAST=1 run T "$impl Do not commit. Leave the changes for review.
+$DONE")
+check "FAST=1: no sleep call, work still done" '[ ! -s "$sleeps" ] && changed "$r"'
+: >"$sleeps"
+r=$(run T "$impl Do not commit. Leave the changes for review.
+$DONE")
+check "without FAST: sleeps" '[ -s "$sleeps" ]'
 
 draft=$(printf 'Write one git commit message.\nTask: T\n' | bash "$agent" -p 2>/dev/null)
 check "-p: prints one message" '[ "$draft" = "Add fixed message" ]'

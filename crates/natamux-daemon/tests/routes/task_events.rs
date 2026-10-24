@@ -294,3 +294,54 @@ async fn still_answers_401_to_a_wrong_token_on_a_route_the_agent_token_may_not_u
     assert_eq!(status, 401);
     assert_eq!(logged(&d).await, [entry("task.created", "system")]);
 }
+
+// The activity half of 'sends the activity after a hook, and touches the workspace after a tool
+// ran' (`pushed to the dashboards`). The other half, that `workspaces.touch` runs after a tool
+// ran, is part 5: the hook service calls its `workspace_changed` callback (tested in
+// `tests/hook_service/pushed.rs`), and the daemon has none yet. Node's `bus.subscribe` is the
+// same here.
+#[tokio::test(flavor = "multi_thread")]
+async fn sends_the_activity_after_a_hook() {
+    use natamux_daemon::shared::event_bus::DaemonMessage;
+    use std::sync::{Arc, Mutex};
+
+    let d = bare("events-activity").await;
+    let sent: Arc<Mutex<Vec<DaemonMessage>>> = Arc::default();
+    let sink = Arc::clone(&sent);
+    d.daemon
+        .state
+        .bus
+        .subscribe(move |message| sink.lock().unwrap().push(message.clone()));
+    d.make_task("Fix the bug").await;
+    let edit = json!({
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Edit",
+        "tool_input": { "file_path": "a.ts" },
+    });
+
+    let (status, _) = d
+        .hook(
+            "claude-code",
+            "",
+            &[("x-natamux-task", "T-0001")],
+            Some(TOKEN),
+            &edit,
+        )
+        .await;
+
+    assert_eq!(status, 200);
+    let activity = sent
+        .lock()
+        .unwrap()
+        .iter()
+        .find_map(|message| match message {
+            DaemonMessage::ActivityChanged { task_id, activity } if task_id == "T-0001" => {
+                Some(activity.clone())
+            }
+            _ => None,
+        })
+        .unwrap();
+    assert_eq!(activity.len(), 1);
+    assert_eq!(activity["1"]["text"], "Edit a.ts");
+    assert!(activity["1"]["at"].is_string());
+}

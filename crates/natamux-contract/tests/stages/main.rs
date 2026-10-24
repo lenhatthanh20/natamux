@@ -7,15 +7,16 @@
 //! each with its worktree: `CT-<n>` for the Node run, `CR-<n>` for the Rust run, whose files are
 //! copied to the Rust data folder. A new task waits at the first stage (an agent stage), so Node
 //! starts nothing for the Rust twin. Ids, worktree paths and commit hashes become placeholders.
-//! The fake agent's hooks reach Node only (Rust has no hook route before part 4), so the events
-//! of hooks are left out of what is compared. The daemon image has no `natamux` command, so the
-//! fake agent's `natamux done` and a test command's `natamux stage pass` reach no daemon: the
-//! scenarios report a stage themselves once the agent wrote its file.
+//! The daemon images have no `natamux` command, so the fake agent's hooks, its `natamux done` and
+//! a test command's `natamux stage pass` reach no daemon. The scenarios report a stage themselves
+//! once the agent wrote its file, and the hook scenarios (`hooks.rs`) post the hooks themselves,
+//! as `natamux hook claude-code` would.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 mod finish;
 mod flow;
+mod hooks;
 mod marks;
 mod start;
 
@@ -179,15 +180,7 @@ pub async fn task(daemon: &Daemon, id: &str) -> Value {
     task_view(&get(daemon, &format!("/tasks/{id}")).await.body["task"])
 }
 
-/// Events an agent's hooks make: Node has them, Rust has no hook route before part 4.
-fn from_hook(event: &Value) -> bool {
-    event["source"] == "agent"
-        && event["type"]
-            .as_str()
-            .is_some_and(|kind| kind.starts_with("agent."))
-}
-
-/// The task's log without the events of hooks, as (type, source, payload).
+/// The task's log as (type, source, payload).
 pub async fn stage_events(daemon: &Daemon, id: &str) -> Value {
     let body = get(daemon, &format!("/tasks/{id}/events")).await.body;
     let events: Vec<Value> = body["events"]
@@ -195,7 +188,6 @@ pub async fn stage_events(daemon: &Daemon, id: &str) -> Value {
         .into_iter()
         .flatten()
         .map(|entry| &entry["event"])
-        .filter(|event| !from_hook(event))
         .map(|event| {
             json!([
                 event["type"],
