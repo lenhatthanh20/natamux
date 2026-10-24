@@ -81,7 +81,7 @@ Dashboard at http://localhost:8080. Write the token down: you paste it into the 
 
 What is in it:
 
-- `daemon`: Node, git and the built daemon. Data (tasks, index, worktrees) in the volume `natamux-data`, mounted at `/data`.
+- `daemon`: the Rust daemon, Rust CLI, git and curl. The dashboard build is embedded in the daemon. Data (tasks, index, worktrees) is in the volume `natamux-data`, mounted at `/data`.
 - `web`: nginx, the built dashboard, and `/api` passed to the daemon (WebSocket too).
 - Both: read-only file system, no Linux capabilities, `no-new-privileges`, restart unless stopped.
 

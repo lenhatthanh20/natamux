@@ -248,6 +248,7 @@ pub async fn start_daemon_with(
         data_dir: root.join("data"),
         worktrees_dir: root.join("data/worktrees"),
         repo_dir: None,
+        web_dir: None,
         token: TOKEN.into(),
         token_was_generated: false,
         agent_token: AGENT_TOKEN.into(),

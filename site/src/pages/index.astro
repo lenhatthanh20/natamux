@@ -862,8 +862,8 @@ pnpm db:seed</pre>
                   <a class="btn big" href={latest('Natamux-linux-amd64.deb')}>Download .deb</a>
                 </div>
                 <ol class="dl-steps">
-                  <li>AppImage: make it executable, then start it. On Ubuntu 24.04 and later, add <code>--no-sandbox</code> if it does not start, or use the <code>.deb</code>.</li>
-                  <li>Debian and Ubuntu: install the <code>.deb</code> with apt. The app is <code>natamux-desktop</code>.</li>
+                  <li>AppImage: make it executable, then start it. Install <code>curl</code> for update checks.</li>
+                  <li>Debian and Ubuntu: install the <code>.deb</code> with apt. The app is in <code>/opt/Natamux</code>.</li>
                 </ol>
                 <div class="cmd"><code>sudo apt install ./Natamux-linux-amd64.deb</code><button type="button" data-copy>Copy</button></div>
               </div>

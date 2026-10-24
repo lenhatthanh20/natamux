@@ -11,7 +11,7 @@ export NATAMUX_REPO=e2e-repo
 URL="http://127.0.0.1:$NATAMUX_PORT"
 IMAGES="${E2E_IMAGES:-ghcr.io/lenhatthanh20/natamux}"
 TAG="${E2E_TAG:-main}"
-# The repository whose E2E workflow must have built the images.
+# The repository whose Rust or earlier E2E workflow built the images.
 SOURCE="${E2E_SOURCE:-lenhatthanh20/natamux}"
 # The tests in e2e/ look for these titles.
 DEMO_TITLE="Demo: changes and history"
@@ -24,9 +24,9 @@ Usage: scripts/e2e.sh <command>
   up     Pull and check the images built on main, start them, then add demo data.
          E2E_BUILD=1 builds them first (CI and codespaces only). E2E_LOCAL=1 starts the
          natamux-daemon:local and natamux-web:local images that are there already.
-         E2E_RUN=<run-id> loads the images that an E2E run built (any branch, kept 7 days)
+         E2E_RUN=<run-id> loads the images that a Rust run built (any branch, kept 3 days)
          and starts them. The run of a branch:
-           gh run list -w e2e.yml -b <branch> -L 1 --json databaseId --jq '.[0].databaseId'
+           gh run list -w rust.yml -b <branch> -L 1 --json databaseId --jq '.[0].databaseId'
          E2E_EXTRA_COMPOSE=<file> adds a compose file on top, such as compose.rust-cli.yaml.
   build  Build the images (CI and codespaces only)
   seed   Add the demo data, unless it is there
@@ -52,7 +52,7 @@ build() {
   compose build daemon web
 }
 
-# Pulls an image of main and prints its digest, once GitHub confirms that the E2E workflow on main
+# Pulls an image of main and prints its digest, once GitHub confirms that a workflow on main
 # of SOURCE built it. A tag can move, so the containers start from the digest that was checked.
 pull_checked() {
   local ref="$IMAGES-$1:$TAG" digest
@@ -60,25 +60,32 @@ pull_checked() {
   digest="$(docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$ref" |
     grep -F -m 1 "$IMAGES-$1@")"
   if ! gh attestation verify "oci://$digest" --repo "$SOURCE" \
-    --signer-workflow "$SOURCE/.github/workflows/e2e.yml" --source-ref refs/heads/main \
-    >/dev/null; then
+    --signer-workflow "$SOURCE/.github/workflows/rust.yml" --source-ref refs/heads/main \
+    >/dev/null 2>&1 \
+    && ! gh attestation verify "oci://$digest" --repo "$SOURCE" \
+      --signer-workflow "$SOURCE/.github/workflows/e2e.yml" --source-ref refs/heads/main \
+      >/dev/null; then
     echo "$digest was not built by the E2E workflow on main of $SOURCE. Not starting it." >&2
     exit 1
   fi
   echo "$digest"
 }
 
-# Loads the images that an E2E run of SOURCE built, so a branch can be tried before it merges.
+# Loads the images that a Rust or older E2E run of SOURCE built before a branch merges.
 # They have no attestation, so the run must be of the E2E workflow and of SOURCE itself, not a fork.
 load_run() {
-  local found dir
+  local found dir artifact
   found="$(gh api "repos/$SOURCE/actions/runs/$1" --jq '.path + " " + .head_repository.full_name')"
-  if [ "$found" != ".github/workflows/e2e.yml $SOURCE" ]; then
+  case "$found" in
+    ".github/workflows/rust.yml $SOURCE") artifact=rust-production-images ;;
+    ".github/workflows/e2e.yml $SOURCE") artifact=images ;;
+    *)
     echo "Run $1 is not an E2E run of $SOURCE ($found). Not loading its images." >&2
     exit 1
-  fi
+    ;;
+  esac
   dir="$(mktemp -d)"
-  if ! gh run download "$1" --repo "$SOURCE" -n images -D "$dir"; then
+  if ! gh run download "$1" --repo "$SOURCE" -n "$artifact" -D "$dir"; then
     rm -rf "$dir"
     echo "Run $1 has no images artifact. Its build job makes it, and it is kept 7 days." >&2
     exit 1

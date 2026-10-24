@@ -35,6 +35,9 @@ pub mod http {
     }
     pub mod server;
     pub mod terminal_socket;
+    pub mod web;
+    #[cfg(test)]
+    mod web_tests;
 }
 pub mod projects {
     pub mod errors;

@@ -34,6 +34,8 @@ pub struct SettingsDialog {
     theme_focus: FocusHandle,
     size_focus: FocusHandle,
     font_focus: FocusHandle,
+    update_focus: FocusHandle,
+    check_focus: FocusHandle,
     /// One stop per project button, or the one of "Add a project". Grown while drawing.
     project_stops: Vec<FocusHandle>,
     _follow: Subscription,
@@ -49,6 +51,8 @@ impl SettingsDialog {
             theme_focus: cx.focus_handle().tab_stop(true),
             size_focus: cx.focus_handle().tab_stop(true),
             font_focus: cx.focus_handle(),
+            update_focus: cx.focus_handle(),
+            check_focus: cx.focus_handle(),
             project_stops: Vec::new(),
             _follow: follow,
         }
@@ -198,6 +202,30 @@ impl SettingsDialog {
         };
         v_flex().gap_1().child(heading("Projects")).child(body)
     }
+
+    fn updates(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        let enabled = super::update::automatic();
+        v_flex()
+            .gap_1()
+            .child(heading("Updates"))
+            .child(row(
+                "Check for Updates Automatically",
+                Button::new("settings-update-auto", if enabled { "On" } else { "Off" })
+                    .style(ButtonStyle::Outlined)
+                    .track_focus(&self.update_focus)
+                    .on_click(cx.listener(|_, _, _, cx| {
+                        super::update::toggle_automatic(cx);
+                        cx.notify();
+                    })),
+            ))
+            .child(row(
+                "Check now",
+                Button::new("settings-update-check", "Check for Updates…")
+                    .style(ButtonStyle::Outlined)
+                    .track_focus(&self.check_focus)
+                    .on_click(|_, _, cx| super::update::check(true, cx)),
+            ))
+    }
 }
 
 impl EventEmitter<DismissEvent> for SettingsDialog {}
@@ -219,6 +247,8 @@ impl DialogView for SettingsDialog {
             self.theme_focus.clone(),
             self.size_focus.clone(),
             self.font_focus.clone(),
+            self.update_focus.clone(),
+            self.check_focus.clone(),
         ];
         ring.extend(self.project_stops.iter().take(repos).cloned());
         ring
@@ -232,9 +262,11 @@ impl Render for SettingsDialog {
         let close = cx.listener(|_, _, _, cx| cx.emit(DismissEvent));
         let appearance = self.appearance(cx);
         let projects = self.projects(cx);
+        let updates = self.updates(cx);
         div().track_focus(&self.focus).child(
             DialogFrame::new("Settings", close)
                 .child(appearance)
+                .child(updates)
                 .child(projects),
         )
     }

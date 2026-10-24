@@ -253,21 +253,21 @@ fn the_data_folder_follows_each_os() {
     assert_eq!(
         folder_for("macos", env),
         Some(PathBuf::from(
-            "/Users/an/Library/Application Support/Natamux Native"
+            "/Users/an/Library/Application Support/Natamux"
         ))
     );
     assert_eq!(
         folder_for("windows", env),
-        Some(PathBuf::from("C:\\Users\\an\\AppData\\Roaming").join("Natamux Native"))
+        Some(PathBuf::from("C:\\Users\\an\\AppData\\Roaming").join("Natamux"))
     );
     assert_eq!(
         folder_for("linux", env),
-        Some(PathBuf::from("/Users/an/.local/share/natamux-native"))
+        Some(PathBuf::from("/Users/an/.config/Natamux"))
     );
-    let xdg = |name: &str| (name == "XDG_DATA_HOME").then(|| "/data".into());
+    let xdg = |name: &str| (name == "XDG_CONFIG_HOME").then(|| "/data".into());
     assert_eq!(
         folder_for("linux", xdg),
-        Some(PathBuf::from("/data/natamux-native"))
+        Some(PathBuf::from("/data/Natamux"))
     );
     assert_eq!(folder_for("macos", |_| None), None);
 }

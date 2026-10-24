@@ -121,7 +121,7 @@ jobs:
       - run: python3 scripts/ci-changes.py mtimes
       - name: Build what the app-macos job builds
         run: |
-          cargo build --release --locked -p natamux-app || true
+          cargo build --release --locked -p natamux-app -p natamux-daemon -p natamux-cli || true
           cargo build --release --locked -p natamux-cli || true
       - run: python3 scripts/ci-changes.py stamp
       - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -172,7 +172,7 @@ jobs:
       - run: python scripts/ci-changes.py mtimes
       - name: Build what the app-windows job builds
         run: |
-          cargo build --release --locked -p natamux-app || true
+          cargo build --release --locked -p natamux-app -p natamux-daemon -p natamux-cli || true
           cargo build --release --locked -p natamux-cli || true
       - run: python scripts/ci-changes.py stamp
       - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0

@@ -1,3 +1,5 @@
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+
 //! Natamux native app (docs/plan-rust-migration.md, phase 3): screen 1 (the app shell, the
 //! sidebar, the task table and board) and screen 2 (the workspace, its terminals and the Agents
 //! grid), on the daemon's HTTP and WebSocket API.
@@ -48,6 +50,7 @@ mod app {
     pub mod status_layout;
     pub mod tab_rules;
     pub mod title_bar;
+    pub mod update;
     pub mod view_rules;
     pub mod view_state;
     pub mod window;
@@ -84,6 +87,11 @@ mod components {
     pub mod timing_rules;
     pub mod toast_rules;
     pub mod toasts;
+}
+mod daemon {
+    pub mod process;
+    #[cfg(test)]
+    mod process_tests;
 }
 mod files {
     pub mod draft_store;
@@ -288,6 +296,9 @@ use app::options::{Options, USAGE};
 use app::sign_in::StartProblem;
 use app::source::Source;
 use app::view_state::{self, ViewState};
+use components::toast_rules::ToastTone;
+use components::toasts::{ToastAction, push_toast};
+use daemon::process::OwnedDaemon;
 use natamux_client::{Client, ClientError, Config};
 
 fn main() -> ExitCode {
@@ -299,18 +310,61 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
+    let owned = if options.fake_daemon
+        || options.shot.is_some()
+        || std::env::var_os("NATAMUX_URL").is_some()
+    {
+        None
+    } else {
+        Some(OwnedDaemon::start())
+    };
+    if options.smoke && owned.as_ref().is_some_and(Result::is_err) {
+        if let Some(Err(error)) = owned.as_ref() {
+            eprintln!("smoke: the app could not start its daemon: {error}");
+        }
+        return ExitCode::FAILURE;
+    }
+    let local = owned.as_ref().map(|result| {
+        result
+            .as_ref()
+            .map(OwnedDaemon::config)
+            .map_err(std::string::ToString::to_string)
+    });
+    let child = owned
+        .as_ref()
+        .and_then(|result| result.as_ref().ok().map(OwnedDaemon::child));
+    let failed = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let start_failed = Arc::clone(&failed);
     gpui_platform::application()
         .with_assets(NatamuxAssets)
         .run(move |cx| {
-            if let Err(error) = start(&options, cx) {
+            if let Err(error) = start(&options, local.as_ref(), child.clone(), cx) {
                 eprintln!("natamux-app: {error:#}");
-                std::process::exit(1);
+                start_failed.store(true, std::sync::atomic::Ordering::Relaxed);
+                cx.quit();
             }
         });
-    ExitCode::SUCCESS
+    app::update::install_on_quit();
+    drop(owned);
+    if let Some(binary) = app::update::take_restart()
+        && let Err(error) = std::process::Command::new(binary).spawn()
+    {
+        eprintln!("natamux-app: could not restart: {error}");
+        return ExitCode::FAILURE;
+    }
+    if failed.load(std::sync::atomic::Ordering::Relaxed) {
+        ExitCode::FAILURE
+    } else {
+        ExitCode::SUCCESS
+    }
 }
 
-fn start(options: &Options, cx: &mut App) -> anyhow::Result<()> {
+fn start(
+    options: &Options,
+    local: Option<&Result<Config, String>>,
+    child: Option<Arc<std::sync::Mutex<std::process::Child>>>,
+    cx: &mut App,
+) -> anyhow::Result<()> {
     NatamuxAssets.load_fonts(cx)?;
     release_channel::init(
         release_channel::AppVersion::load(env!("CARGO_PKG_VERSION"), None, None),
@@ -344,7 +398,14 @@ fn start(options: &Options, cx: &mut App) -> anyhow::Result<()> {
     if let Some(shot) = options.shot {
         app::shots::prepare(shot);
     }
-    let window = app::window::open(options, source(options), cx)?;
+    let window = app::window::open(options, source(options, local), cx)?;
+    app::update::set_window(window.clone(), cx);
+    if !fake && !options.smoke {
+        app::update::start_timers(cx);
+    }
+    if let Some(child) = child {
+        watch_daemon(child, cx);
+    }
     window.update(cx, |_, window, _| {
         window.on_next_frame(|_, _| perf::report::mark_first_frame())
     })?;
@@ -378,16 +439,48 @@ fn start(options: &Options, cx: &mut App) -> anyhow::Result<()> {
     Ok(())
 }
 
+fn watch_daemon(child: Arc<std::sync::Mutex<std::process::Child>>, cx: &mut App) {
+    cx.spawn(async move |cx| {
+        loop {
+            cx.background_executor().timer(Duration::from_millis(500)).await;
+            let exited = child
+                .lock()
+                .map_or(true, |mut process| process.try_wait().ok().flatten().is_some());
+            if exited {
+                let _ = cx.update(|cx| {
+                    push_toast(
+                        "The Natamux daemon stopped.",
+                        ToastTone::Error,
+                        Some("Restart the app to reconnect.".into()),
+                        vec![ToastAction::new("Restart", |_, cx| {
+                            app::update::request_restart(cx);
+                        })],
+                        cx,
+                    );
+                });
+                break;
+            }
+        }
+    })
+    .detach();
+}
+
 /// The daemon, or why the app has none: the window then asks for a token, or says why.
-fn source(options: &Options) -> Result<Arc<Source>, StartProblem> {
+fn source(options: &Options, local: Option<&Result<Config, String>>) -> Result<Arc<Source>, StartProblem> {
     // A shot never reads a real daemon.
     if options.fake_daemon || options.shot.is_some() {
         return Ok(Arc::new(Source::FakeDaemon));
     }
-    let access = app::sign_in::access_file();
-    let client = match Config::from_env_with(access.as_deref()) {
-        Err(ClientError::NoToken) => return Err(StartProblem::SignIn),
-        config => config.and_then(Client::new),
+    let client = match local {
+        Some(Err(reason)) => return Err(StartProblem::Down(reason.clone())),
+        Some(Ok(config)) => Client::new(config.clone()),
+        None => {
+            let access = app::sign_in::access_file();
+            match Config::from_env_with(access.as_deref()) {
+                Err(ClientError::NoToken) => return Err(StartProblem::SignIn),
+                config => config.and_then(Client::new),
+            }
+        }
     };
     client
         .map(|client| Arc::new(Source::Daemon(Arc::new(client))))

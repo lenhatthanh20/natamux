@@ -5493,7 +5493,7 @@ dependencies = [
 
 [[package]]
 name = "natamux-agents"
-version = "0.1.0"
+version = "0.1.43"
 dependencies = [
  "natamux-core",
  "natamux-proto",
@@ -5502,13 +5502,14 @@ dependencies = [
 
 [[package]]
 name = "natamux-app"
-version = "0.1.0"
+version = "0.1.43"
 dependencies = [
  "anyhow",
  "assets",
  "buffer_diff",
  "editor",
  "futures",
+ "getrandom 0.3.4",
  "gpui",
  "gpui_platform",
  "grammars",
@@ -5516,6 +5517,8 @@ dependencies = [
  "markdown",
  "natamux-client",
  "natamux-proto",
+ "natamux-update",
+ "nix",
  "release_channel",
  "serde_json",
  "settings",
@@ -5530,7 +5533,7 @@ dependencies = [
 
 [[package]]
 name = "natamux-cli"
-version = "0.1.0"
+version = "0.1.43"
 dependencies = [
  "base64",
  "natamux-client",
@@ -5542,7 +5545,7 @@ dependencies = [
 
 [[package]]
 name = "natamux-client"
-version = "0.1.0"
+version = "0.1.43"
 dependencies = [
  "async-tungstenite",
  "fastrand",
@@ -5558,7 +5561,7 @@ dependencies = [
 
 [[package]]
 name = "natamux-contract"
-version = "0.1.0"
+version = "0.1.43"
 dependencies = [
  "async-tungstenite",
  "futures",
@@ -5573,7 +5576,7 @@ dependencies = [
 
 [[package]]
 name = "natamux-core"
-version = "0.1.0"
+version = "0.1.43"
 dependencies = [
  "natamux-proto",
  "serde",
@@ -5583,7 +5586,7 @@ dependencies = [
 
 [[package]]
 name = "natamux-daemon"
-version = "0.1.0"
+version = "0.1.43"
 dependencies = [
  "async-tungstenite",
  "base64",
@@ -5609,7 +5612,7 @@ dependencies = [
 
 [[package]]
 name = "natamux-git"
-version = "0.1.0"
+version = "0.1.43"
 dependencies = [
  "natamux-core",
  "natamux-proto",
@@ -5618,7 +5621,7 @@ dependencies = [
 
 [[package]]
 name = "natamux-proto"
-version = "0.1.0"
+version = "0.1.43"
 dependencies = [
  "serde",
  "serde_json",
@@ -5626,7 +5629,7 @@ dependencies = [
 
 [[package]]
 name = "natamux-pty"
-version = "0.1.0"
+version = "0.1.43"
 dependencies = [
  "alacritty_terminal",
  "nix",
@@ -5634,7 +5637,7 @@ dependencies = [
 
 [[package]]
 name = "natamux-screen"
-version = "0.1.0"
+version = "0.1.43"
 dependencies = [
  "alacritty_terminal",
  "memchr",
@@ -5643,7 +5646,7 @@ dependencies = [
 
 [[package]]
 name = "natamux-stages"
-version = "0.1.0"
+version = "0.1.43"
 dependencies = [
  "natamux-agents",
  "natamux-core",
@@ -5655,7 +5658,7 @@ dependencies = [
 
 [[package]]
 name = "natamux-store"
-version = "0.1.0"
+version = "0.1.43"
 dependencies = [
  "natamux-core",
  "natamux-proto",
@@ -5663,6 +5666,16 @@ dependencies = [
  "rusqlite",
  "serde_json",
  "yaml-rust2",
+]
+
+[[package]]
+name = "natamux-update"
+version = "0.1.43"
+dependencies = [
+ "base64",
+ "ring",
+ "serde_json",
+ "sha2",
 ]
 
 [[package]]

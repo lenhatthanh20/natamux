@@ -7,8 +7,8 @@ use crate::error::ClientError;
 /// The daemon's default address (`DEFAULT_URL` in `packages/cli/src/default-url.ts`).
 pub const DEFAULT_URL: &str = "http://127.0.0.1:4317";
 
-/// The file where the Electron app keeps the daemon's token, inside its user data folder.
-const ELECTRON_TOKEN_FILE: &str = "daemon-token";
+/// The app's daemon token, inside its user data folder.
+const APP_TOKEN_FILE: &str = "daemon-token";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Config {
@@ -19,7 +19,7 @@ pub struct Config {
 
 impl Config {
     /// `NATAMUX_URL` and `NATAMUX_TOKEN`. Without them: the default address and the token of the
-    /// Electron app on this machine, so the app finds the daemon that the Electron app started.
+    /// Natamux app on this machine, so the CLI finds the daemon that the app started.
     /// In a task's terminal (`NATAMUX_TASK_ID` set), `NATAMUX_TOKEN` is that daemon run's agent
     /// token: it may not pass gates and is new after each daemon restart. There the saved token
     /// wins when there is one.
@@ -27,12 +27,17 @@ impl Config {
         Config::from_env_with(None)
     }
 
-    /// `from_env` with the app's own saved token read before the Electron app's.
+    /// `from_env` with the app's own saved token read first.
     pub fn from_env_with(app_file: Option<&Path>) -> Result<Config, ClientError> {
-        let electron = electron_token_file();
-        let files: Vec<&Path> = app_file.into_iter().chain(electron.as_deref()).collect();
+        let saved = app_token_file();
+        let files: Vec<&Path> = app_file.into_iter().chain(saved.as_deref()).collect();
+        let app_url = app_daemon_url();
         resolve(
-            |name| std::env::var(name).ok(),
+            |name| {
+                std::env::var(name)
+                    .ok()
+                    .or_else(|| (name == "NATAMUX_URL").then(|| app_url.clone()).flatten())
+            },
             &files,
             |path| std::fs::read_to_string(path).ok(),
         )
@@ -40,8 +45,13 @@ impl Config {
 
     /// The daemon's address with no token yet: Sign in starts from it when no token was found.
     pub fn without_token() -> Result<Config, ClientError> {
+        let app_url = app_daemon_url();
         Ok(Config {
-            base_url: base_url_of(|name| std::env::var(name).ok())?,
+            base_url: base_url_of(|name| {
+                std::env::var(name)
+                    .ok()
+                    .or_else(|| (name == "NATAMUX_URL").then(|| app_url.clone()).flatten())
+            })?,
             token: String::new(),
         })
     }
@@ -140,8 +150,8 @@ fn base_url_of(env: impl Fn(&str) -> Option<String>) -> Result<String, ClientErr
     }
 }
 
-/// The Electron app's user data folder is the OS's app data folder plus "Natamux".
-fn electron_token_file() -> Option<PathBuf> {
+/// The app's user data folder is the OS's app data folder plus "Natamux".
+fn app_token_file() -> Option<PathBuf> {
     let base = if cfg!(target_os = "macos") {
         PathBuf::from(std::env::var_os("HOME")?).join("Library/Application Support")
     } else if cfg!(windows) {
@@ -151,7 +161,17 @@ fn electron_token_file() -> Option<PathBuf> {
             .map(PathBuf::from)
             .or_else(|| Some(PathBuf::from(std::env::var_os("HOME")?).join(".config")))?
     };
-    Some(base.join("Natamux").join(ELECTRON_TOKEN_FILE))
+    Some(base.join("Natamux").join(APP_TOKEN_FILE))
+}
+
+fn app_daemon_url() -> Option<String> {
+    let file = app_token_file()?.with_file_name("daemon-port");
+    url_from_port(&std::fs::read_to_string(file).ok()?)
+}
+
+fn url_from_port(text: &str) -> Option<String> {
+    let port = text.trim().parse::<u16>().ok().filter(|port| *port > 0)?;
+    Some(format!("http://127.0.0.1:{port}"))
 }
 
 #[cfg(test)]
@@ -186,6 +206,14 @@ mod tests {
         .unwrap();
         assert_eq!(config.base_url, "http://10.0.0.2:5000/api");
         assert_eq!(config.token, "abc");
+    }
+
+    #[test]
+    fn the_app_port_file_supplies_a_loopback_url_only_for_a_valid_port() {
+        assert_eq!(url_from_port("21720\n"), Some("http://127.0.0.1:21720".into()));
+        assert_eq!(url_from_port("0"), None);
+        assert_eq!(url_from_port("65536"), None);
+        assert_eq!(url_from_port("bad"), None);
     }
 
     #[test]
