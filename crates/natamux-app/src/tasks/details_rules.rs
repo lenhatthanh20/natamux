@@ -76,6 +76,7 @@ pub fn can_fan_out(state: TaskState, agent_button: Option<AgentAction>) -> bool 
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MenuAction {
+    Edit,
     SaveTemplate,
     RunMoreTries,
     Cancel,
@@ -102,8 +103,9 @@ fn item(label: &str, icon: &'static str, danger: bool, action: MenuAction) -> Mo
     }
 }
 
-/// The "..." menu: save and run more tries, a line, then cancel and delete.
+/// The "..." menu: edit and a line, save and run more tries, a line, then cancel and delete.
 pub fn more_menu(
+    can_edit: bool,
     can_save_template: bool,
     can_fan_out: bool,
     cancel: Option<&TaskAction>,
@@ -133,12 +135,19 @@ pub fn more_menu(
     if can_delete {
         danger.push(item("Delete task", "trash", true, MenuAction::Delete));
     }
-    let separator = !leading.is_empty() && !danger.is_empty();
-    let mut menu = leading;
-    if separator {
-        menu.push(MoreItem::Separator);
+    let mut menu = Vec::new();
+    if can_edit {
+        menu.push(item("Edit task", "pencil", false, MenuAction::Edit));
     }
-    menu.extend(danger);
+    for group in [leading, danger] {
+        if group.is_empty() {
+            continue;
+        }
+        if !menu.is_empty() {
+            menu.push(MoreItem::Separator);
+        }
+        menu.extend(group);
+    }
     menu
 }
 

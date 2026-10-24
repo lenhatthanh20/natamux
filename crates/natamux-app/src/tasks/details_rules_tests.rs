@@ -112,16 +112,9 @@ fn offers_more_tries_only_for_a_task_that_is_not_finished_and_has_an_agent_butto
 fn lists_the_items_of_the_more_menu_with_a_line_before_the_danger_ones() {
     let actions = actions_for(TaskState::Ready);
     let cancel = actions.iter().find(|action| action.confirm);
-    let menu = more_menu(true, true, cancel, true);
-    let labels: Vec<&str> = menu
-        .iter()
-        .map(|entry| match entry {
-            MoreItem::Item { label, .. } => label.as_str(),
-            MoreItem::Separator => "---",
-        })
-        .collect();
+    let menu = more_menu(false, true, true, cancel, true);
     assert_eq!(
-        labels,
+        menu_labels(&menu),
         [
             "Save as template",
             "Run more tries...",
@@ -130,9 +123,30 @@ fn lists_the_items_of_the_more_menu_with_a_line_before_the_danger_ones() {
             "Delete task"
         ]
     );
-    assert!(more_menu(false, false, None, false).is_empty());
-    assert_eq!(more_menu(false, false, None, true).len(), 1);
-    assert_eq!(more_menu(true, false, None, false).len(), 1);
+    assert!(more_menu(false, false, false, None, false).is_empty());
+    assert_eq!(more_menu(false, false, false, None, true).len(), 1);
+    assert_eq!(more_menu(false, true, false, None, false).len(), 1);
+}
+
+/// T-0171: the pencil left the dock header, so Edit task leads the menu while no form is open.
+#[test]
+fn puts_edit_task_first_with_a_line_after_it() {
+    let menu = more_menu(true, true, false, None, true);
+    assert_eq!(
+        menu_labels(&menu),
+        ["Edit task", "---", "Save as template", "---", "Delete task"]
+    );
+    assert_eq!(menu_labels(&more_menu(true, false, false, None, false)), ["Edit task"]);
+    assert!(!menu_labels(&more_menu(false, true, false, None, true)).contains(&"Edit task"));
+}
+
+fn menu_labels(menu: &[MoreItem]) -> Vec<&str> {
+    menu.iter()
+        .map(|entry| match entry {
+            MoreItem::Item { label, .. } => label.as_str(),
+            MoreItem::Separator => "---",
+        })
+        .collect()
 }
 
 #[test]

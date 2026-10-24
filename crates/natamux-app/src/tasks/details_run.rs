@@ -14,6 +14,7 @@ use super::DetailsPanel;
 use crate::agents::agent_choices::{DEFAULT_AGENT, is_agent_id};
 use crate::app::dashboard::Dashboard;
 use crate::app::layout_mode::DetailsMode;
+use crate::app::shortcuts::EditTask;
 use crate::components::icons::icon_path;
 use crate::components::menu::MenuLayer;
 use crate::components::scroll_rules::centred_offset;
@@ -139,6 +140,7 @@ impl DetailsPanel {
                     move |panel, cx| panel.dashboard.update(cx, |d, cx| d.open(&opened, cx)),
                 );
             }
+            PanelCommand::Edit => self.start_edit(cx),
             PanelCommand::SaveTemplate => {
                 let task = task.clone();
                 self.busy_call(cx, move |d, cx| d.save_template(&task, cx), |_, _| {});
@@ -224,7 +226,7 @@ impl DetailsPanel {
         let Some(task) = self.task(cx) else {
             return;
         };
-        let items = menu_items(&task);
+        let items = menu_items(&task, self.edit.is_none());
         let on = self.on_command(cx);
         let menu = build_more_menu(
             &items,
@@ -320,7 +322,7 @@ impl DetailsPanel {
 
     /// The "..." button and its menu (4.13).
     pub(super) fn more_button(&self, task: &Task, cx: &mut Context<Self>) -> impl IntoElement {
-        let items = menu_items(task);
+        let items = menu_items(task, self.edit.is_none());
         let on = self.on_command(cx);
         let task = task.clone();
         let dashboard = self.dashboard.clone();
@@ -361,11 +363,12 @@ fn fold(set: Option<&mut std::collections::BTreeSet<String>>, key: String) {
     }
 }
 
-fn menu_items(task: &Task) -> Vec<MoreItem> {
+/// `can_edit`: no edit form is open, as the pencil it replaces.
+fn menu_items(task: &Task, can_edit: bool) -> Vec<MoreItem> {
     let agent = agent_action(task.state, task.agent.as_deref());
     let actions = actions_for(task.state);
     let cancel = actions.iter().find(|action| action.confirm);
-    more_menu(true, can_fan_out(task.state, agent), cancel, true)
+    more_menu(can_edit, true, can_fan_out(task.state, agent), cancel, true)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -396,7 +399,10 @@ fn build_more_menu(
             let entry = ContextMenuEntry::new(label)
                 .custom_icon_path(icon_path(icon))
                 .when(danger, |entry| entry.icon_color(Color::Error))
+                // The menu shows the key of Edit task (`e`), as the sidebar's row menu does.
+                .when(action == MenuAction::Edit, |entry| entry.action(Box::new(EditTask)))
                 .handler(move |window, cx| match action {
+                    MenuAction::Edit => on(PanelCommand::Edit, window, cx),
                     MenuAction::SaveTemplate => on(PanelCommand::SaveTemplate, window, cx),
                     MenuAction::RunMoreTries => fan_out_dialog::open(&dashboard, &task, window, cx),
                     MenuAction::Cancel => confirm_cancel_task(&dashboard, &task, window, cx),

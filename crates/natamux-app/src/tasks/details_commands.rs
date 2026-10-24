@@ -58,6 +58,8 @@ pub enum PanelCommand {
     FoldLane(String),
     CreateIssue,
     // The Details tab
+    /// Edit task of the "..." menu: the edit form, as `e`.
+    Edit,
     SaveTemplate,
     /// A state action of the action row, by its event type.
     TaskEvent(&'static str),
