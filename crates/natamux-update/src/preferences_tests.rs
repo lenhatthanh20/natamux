@@ -9,7 +9,11 @@ fn stores_the_switch_without_losing_other_settings() {
     assert!(!super::preferences::load(&file).expect("load"));
     super::preferences::save(&file, true).expect("save");
     assert!(super::preferences::load(&file).expect("load"));
-    assert!(std::fs::read_to_string(&file).expect("read").contains("/work"));
+    assert!(
+        std::fs::read_to_string(&file)
+            .expect("read")
+            .contains("/work")
+    );
     std::fs::remove_dir_all(folder).expect("cleanup");
 }
 

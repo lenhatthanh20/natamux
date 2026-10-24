@@ -4,8 +4,8 @@ use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use gpui::{App, Global, WindowHandle};
@@ -17,8 +17,8 @@ use natamux_update::transport::{CurlFeed, download_asset};
 use natamux_update::updater::{CheckOutcome, check_now};
 
 use super::view_state;
-use crate::components::toast_rules::ToastTone;
 use crate::components::confirm::Confirm;
+use crate::components::toast_rules::ToastTone;
 use crate::components::toasts::{ToastAction, push_toast, toast};
 use crate::daemon::process::OwnedDaemon;
 
@@ -55,7 +55,11 @@ pub fn automatic() -> bool {
 
 pub fn toggle_automatic(cx: &mut App) {
     let Some(file) = settings_file() else {
-        toast("The app settings folder is unavailable.", ToastTone::Error, cx);
+        toast(
+            "The app settings folder is unavailable.",
+            ToastTone::Error,
+            cx,
+        );
         return;
     };
     match preferences::save(&file, !automatic()) {
@@ -104,14 +108,18 @@ pub fn start_timers(cx: &mut App) {
         return;
     }
     cx.spawn(async move |cx| {
-        cx.background_executor().timer(Duration::from_secs(30)).await;
+        cx.background_executor()
+            .timer(Duration::from_secs(30))
+            .await;
         loop {
-            let _ = cx.update(|cx| {
+            cx.update(|cx| {
                 if automatic() {
                     check(false, cx);
                 }
             });
-            cx.background_executor().timer(Duration::from_secs(6 * 60 * 60)).await;
+            cx.background_executor()
+                .timer(Duration::from_secs(6 * 60 * 60))
+                .await;
         }
     })
     .detach();
@@ -120,7 +128,11 @@ pub fn start_timers(cx: &mut App) {
 pub fn check(manual: bool, cx: &mut App) {
     if !packaged() {
         if manual {
-            toast("Updates are available in packaged apps.", ToastTone::Info, cx);
+            toast(
+                "Updates are available in packaged apps.",
+                ToastTone::Info,
+                cx,
+            );
         }
         return;
     }
@@ -137,7 +149,7 @@ pub fn check(manual: bool, cx: &mut App) {
     cx.spawn(async move |cx| {
         let result = job.await;
         CHECKING.store(false, Ordering::Release);
-        let _ = cx.update(|cx| show_result(result, manual, cx));
+        cx.update(|cx| show_result(result, manual, cx));
     })
     .detach();
 }
@@ -172,22 +184,37 @@ fn fetch() -> Result<(CheckOutcome, Option<Ready>), String> {
     let running = std::env::var("NATAMUX_UPDATE_AS_VERSION")
         .unwrap_or_else(|_| env!("CARGO_PKG_VERSION").into());
     let outcome = check_now(&CurlFeed, &running, kind, arch, RELEASE_SIGNER)?;
-    let ready = if let CheckOutcome::Asset { release, name, sha256 } = &outcome {
+    let ready = if let CheckOutcome::Asset {
+        release,
+        name,
+        sha256,
+    } = &outcome
+    {
         let update_folder = folder.join("updates").join(&release.version);
         let file = update_folder.join(name);
         log(&folder, &format!("downloading {name} for {}", release.tag));
         download_asset(&format!("{}{}", release.downloads, name), &file, sha256)?;
         let downloaded = if kind == InstallKind::Mac {
             #[cfg(target_os = "macos")]
-            { natamux_update::install::prepare_mac(&file, &update_folder, &release.version)
-                .map_err(|error| error.to_string())? }
+            {
+                natamux_update::install::prepare_mac(&file, &update_folder, &release.version)
+                    .map_err(|error| error.to_string())?
+            }
             #[cfg(not(target_os = "macos"))]
-            { file.clone() }
+            {
+                file.clone()
+            }
         } else {
             file
         };
         log(&folder, &format!("ready: {}", release.tag));
-        Some(Ready { release: release.clone(), kind, downloaded, current: replace, folder })
+        Some(Ready {
+            release: release.clone(),
+            kind,
+            downloaded,
+            current: replace,
+            folder,
+        })
     } else {
         None
     };
@@ -201,7 +228,11 @@ fn show_result(result: Result<(CheckOutcome, Option<Ready>), String>, manual: bo
                 log(&folder, &format!("failed: {error}"));
             }
             if manual {
-                toast(&format!("Update check failed: {error}"), ToastTone::Error, cx);
+                toast(
+                    &format!("Update check failed: {error}"),
+                    ToastTone::Error,
+                    cx,
+                );
             }
         }
         Ok((CheckOutcome::UpToDate(_), _)) => {
@@ -242,7 +273,9 @@ fn show_result(result: Result<(CheckOutcome, Option<Ready>), String>, manual: bo
                 &format!("Natamux {} is ready.", release.version),
                 ToastTone::Success,
                 Some("Restart to install the update.".into()),
-                vec![ToastAction::new("What's New", move |_, cx| cx.open_url(&page))],
+                vec![ToastAction::new("What's New", move |_, cx| {
+                    cx.open_url(&page)
+                })],
                 cx,
             );
         }
@@ -251,7 +284,7 @@ fn show_result(result: Result<(CheckOutcome, Option<Ready>), String>, manual: bo
 }
 
 fn offer(dialog: Confirm, cx: &mut App) {
-    let window = cx.try_global::<UpdateWindow>().map(|global| global.0.clone());
+    let window = cx.try_global::<UpdateWindow>().map(|global| global.0);
     if let Some(window) = window {
         let _ = window.update(cx, |_, window, cx| dialog.open(window, cx));
     }
@@ -276,7 +309,7 @@ pub fn restart(cx: &mut App) {
         });
         cx.spawn(async move |cx| {
             let (ready, result) = job.await;
-            let _ = cx.update(|cx| match result {
+            cx.update(|cx| match result {
                 Ok(status) if status.success() => {
                     log(&ready.folder, "installed update");
                     queue_launch(ready.current);
@@ -287,7 +320,10 @@ pub fn restart(cx: &mut App) {
                     push_toast(
                         "The package was not installed.",
                         ToastTone::Error,
-                        Some(format!("Run: sudo apt install {}", ready.downloaded.display())),
+                        Some(format!(
+                            "Run: sudo apt install {}",
+                            ready.downloaded.display()
+                        )),
                         Vec::new(),
                         cx,
                     );
@@ -339,7 +375,10 @@ pub fn finish_on_quit() -> Option<PathBuf> {
     if let Some(ready) = ready.filter(|ready| ready.kind == InstallKind::Mac) {
         match install_ready(&ready, launch.is_some()) {
             Ok(()) => return None,
-            Err(error) => log(&ready.folder, &format!("could not install update on quit: {error}")),
+            Err(error) => log(
+                &ready.folder,
+                &format!("could not install update on quit: {error}"),
+            ),
         }
     }
     launch
@@ -369,12 +408,15 @@ fn install_ready(ready: &Ready, relaunch: bool) -> io::Result<()> {
                 .join(&ready.release.version)
                 .join("install.sh");
             let log_file = ready.folder.join("logs/update.log");
-            fs::write(&script, mac_install_script(
-                &ready.current.to_string_lossy(),
-                &ready.downloaded.to_string_lossy(),
-                &log_file.to_string_lossy(),
-                relaunch,
-            ))?;
+            fs::write(
+                &script,
+                mac_install_script(
+                    &ready.current.to_string_lossy(),
+                    &ready.downloaded.to_string_lossy(),
+                    &log_file.to_string_lossy(),
+                    relaunch,
+                ),
+            )?;
             Command::new("/bin/sh")
                 .arg(script)
                 .arg(std::process::id().to_string())
@@ -386,8 +428,14 @@ fn install_ready(ready: &Ready, relaunch: bool) -> io::Result<()> {
         InstallKind::AppImage => {
             natamux_update::install::replace_appimage(&ready.downloaded, &ready.current)?;
         }
-        InstallKind::Deb => return Err(io::Error::other("The package installer must finish before restart")),
-        InstallKind::Manual => return Err(io::Error::other("This installation needs a manual update")),
+        InstallKind::Deb => {
+            return Err(io::Error::other(
+                "The package installer must finish before restart",
+            ));
+        }
+        InstallKind::Manual => {
+            return Err(io::Error::other("This installation needs a manual update"));
+        }
     }
     Ok(())
 }
@@ -419,7 +467,10 @@ mod tests {
 
     #[test]
     fn the_restart_menu_names_the_ready_version() {
-        assert_eq!(restart_title_for(Some("0.2.0")), "Restart to Update to 0.2.0");
+        assert_eq!(
+            restart_title_for(Some("0.2.0")),
+            "Restart to Update to 0.2.0"
+        );
         assert_eq!(restart_title_for(None), "Restart to Update");
     }
 

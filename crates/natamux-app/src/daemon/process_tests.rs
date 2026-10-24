@@ -1,4 +1,7 @@
-use super::process::{clear_port_file, pick_port, probe_daemon, sibling_daemon, startup_error, stop_child, token_at, wait_for_health, wait_for_healthy_child};
+use super::process::{
+    clear_port_file, pick_port, probe_daemon, sibling_daemon, startup_error, stop_child, token_at,
+    wait_for_health, wait_for_healthy_child,
+};
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::time::Duration;
@@ -16,7 +19,10 @@ fn child_waiting_for_stdin() -> Child {
         command.args(["/C", "more >NUL"]);
         command
     };
-    command.stdin(Stdio::piped()).spawn().expect("waiting child")
+    command
+        .stdin(Stdio::piped())
+        .spawn()
+        .expect("waiting child")
 }
 
 fn child_exiting_with_error() -> Child {
@@ -38,7 +44,9 @@ fn child_exiting_with_error() -> Child {
 #[test]
 fn finds_the_daemon_beside_the_app() {
     assert_eq!(
-        sibling_daemon(Path::new("/Applications/Natamux.app/Contents/MacOS/natamux-app")),
+        sibling_daemon(Path::new(
+            "/Applications/Natamux.app/Contents/MacOS/natamux-app"
+        )),
         Path::new("/Applications/Natamux.app/Contents/MacOS/natamux-daemon")
     );
     assert_eq!(
@@ -70,7 +78,8 @@ fn keeps_the_daemon_token_between_starts() {
 
 #[test]
 fn refuses_a_saved_token_that_could_inject_an_http_header() {
-    let root = std::env::temp_dir().join(format!("natamux-app-token-header-{}", std::process::id()));
+    let root =
+        std::env::temp_dir().join(format!("natamux-app-token-header-{}", std::process::id()));
     std::fs::create_dir_all(&root).expect("temp folder");
     let path = root.join("daemon-token");
     std::fs::write(&path, "a".repeat(32) + "\r\nX-Forged: yes").expect("bad token");
@@ -126,7 +135,13 @@ fn closing_the_parent_pipe_lets_the_child_exit_cleanly() {
     let mut pipe = child.stdin.take();
     stop_child(&mut child, &mut pipe, Duration::from_secs(5));
     assert!(pipe.is_none());
-    assert!(child.try_wait().expect("status").expect("reaped child").success());
+    assert!(
+        child
+            .try_wait()
+            .expect("status")
+            .expect("reaped child")
+            .success()
+    );
 }
 
 #[test]
@@ -147,7 +162,8 @@ fn another_listener_cannot_pass_the_owned_daemon_probe() {
             }
             let request = String::from_utf8_lossy(&request);
             let status = if request.starts_with("GET /api/tasks ")
-                && request.contains("Authorization: Bearer owned-token\r\n") {
+                && request.contains("Authorization: Bearer owned-token\r\n")
+            {
                 "200 OK"
             } else {
                 "401 Unauthorized"

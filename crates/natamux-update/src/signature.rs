@@ -13,7 +13,10 @@ pub const MAX_SIGNED_BYTES: usize = 64 * 1024;
 
 pub fn verify_download(bytes: &[u8], expected: &str) -> bool {
     let actual = Sha256::digest(bytes);
-    let actual = actual.iter().map(|byte| format!("{byte:02x}")).collect::<String>();
+    let actual = actual
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
     actual.eq_ignore_ascii_case(expected)
 }
 

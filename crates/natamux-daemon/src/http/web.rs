@@ -4,9 +4,9 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use http_body_util::Full;
+use hyper::Method;
 use hyper::body::Bytes;
 use hyper::header::{CACHE_CONTROL, CONTENT_TYPE, HeaderValue};
-use hyper::Method;
 
 use super::errors::Answer;
 
@@ -57,7 +57,10 @@ impl WebAssets {
                     .then(|| std::fs::read(file).ok())
                     .flatten()
             }
-            None => self.embedded.get(&path.to_string_lossy().replace('\\', "/")).cloned(),
+            None => self
+                .embedded
+                .get(&path.to_string_lossy().replace('\\', "/"))
+                .cloned(),
         }
     }
 
@@ -93,11 +96,17 @@ impl WebAssets {
                 "no-cache"
             }),
         );
-        headers.insert("x-content-type-options", HeaderValue::from_static("nosniff"));
+        headers.insert(
+            "x-content-type-options",
+            HeaderValue::from_static("nosniff"),
+        );
         if kind.starts_with("text/html") {
             headers.insert("x-frame-options", HeaderValue::from_static("DENY"));
             headers.insert("referrer-policy", HeaderValue::from_static("no-referrer"));
-            headers.insert("content-security-policy", HeaderValue::from_static(PAGE_CSP));
+            headers.insert(
+                "content-security-policy",
+                HeaderValue::from_static(PAGE_CSP),
+            );
         }
         Some(answer)
     }
@@ -117,7 +126,9 @@ pub(super) fn clean_path(url: &str) -> Option<PathBuf> {
         let decoded = decode_segment(segment)?;
         if decoded == "."
             || decoded == ".."
-            || decoded.chars().any(|part| matches!(part, '/' | '\\' | ':' | '\0'))
+            || decoded
+                .chars()
+                .any(|part| matches!(part, '/' | '\\' | ':' | '\0'))
         {
             return None;
         }
@@ -151,7 +162,9 @@ fn decode_segment(segment: &str) -> Option<String> {
 
 fn reserved_path(path: &Path) -> bool {
     matches!(
-        path.components().next().and_then(|part| part.as_os_str().to_str()),
+        path.components()
+            .next()
+            .and_then(|part| part.as_os_str().to_str()),
         Some(
             "health"
                 | "api"

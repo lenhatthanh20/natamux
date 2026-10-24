@@ -18,7 +18,10 @@ impl ReleaseFeed for Feed {
     }
 
     fn small_file(&self, url: &str, _: usize) -> Result<Vec<u8>, String> {
-        self.files.get(url).cloned().ok_or_else(|| format!("missing {url}"))
+        self.files
+            .get(url)
+            .cloned()
+            .ok_or_else(|| format!("missing {url}"))
     }
 }
 
@@ -34,14 +37,22 @@ fn feed() -> Feed {
 
 #[test]
 fn offers_only_an_asset_named_in_the_signed_sums() {
-    let outcome = check_now(&feed(), "1.2.2", InstallKind::Mac, "arm64", TEST_KEY)
-        .expect("signed release");
-    let CheckOutcome::Asset { release, name, sha256 } = outcome else {
+    let outcome =
+        check_now(&feed(), "1.2.2", InstallKind::Mac, "arm64", TEST_KEY).expect("signed release");
+    let CheckOutcome::Asset {
+        release,
+        name,
+        sha256,
+    } = outcome
+    else {
         panic!("expected a verified asset");
     };
     assert_eq!(release.tag, "v1.2.3");
     assert_eq!(name, "Natamux-mac-arm64.dmg");
-    assert_eq!(sha256, "a3a807cf10fc02efe46f50cd4fd0eaa7a457d787c9d8a1bbfac1fa036e26cc36");
+    assert_eq!(
+        sha256,
+        "a3a807cf10fc02efe46f50cd4fd0eaa7a457d787c9d8a1bbfac1fa036e26cc36"
+    );
 }
 
 #[test]
@@ -57,7 +68,9 @@ fn manual_offer_still_requires_a_valid_signature() {
 
 #[test]
 fn rejects_the_old_release_before_downloading_files() {
-    let empty = Feed { files: HashMap::new() };
+    let empty = Feed {
+        files: HashMap::new(),
+    };
     assert!(matches!(
         check_now(&empty, "1.2.3", InstallKind::Mac, "arm64", TEST_KEY),
         Ok(CheckOutcome::UpToDate(_))

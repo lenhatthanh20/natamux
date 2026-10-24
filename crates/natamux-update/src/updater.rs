@@ -34,18 +34,24 @@ pub fn check_now(
         return Ok(CheckOutcome::UpToDate(release));
     }
     let sums = small(feed, &format!("{}SHA256SUMS.txt", release.downloads))?;
-    let signature = small(feed, &format!("{}SHA256SUMS.txt.minisig", release.downloads))?;
-    let signature = std::str::from_utf8(&signature)
-        .map_err(|_| "The release signature is not UTF-8")?;
+    let signature = small(
+        feed,
+        &format!("{}SHA256SUMS.txt.minisig", release.downloads),
+    )?;
+    let signature =
+        std::str::from_utf8(&signature).map_err(|_| "The release signature is not UTF-8")?;
     verify_sums(&sums, signature, public_key, &release.tag, current)?;
     let Some(name) = asset_name(kind, arch) else {
         return Ok(CheckOutcome::Manual(release));
     };
-    let sums_text = std::str::from_utf8(&sums)
-        .map_err(|_| "SHA256SUMS.txt is not UTF-8")?;
+    let sums_text = std::str::from_utf8(&sums).map_err(|_| "SHA256SUMS.txt is not UTF-8")?;
     let sha256 = sha256_from(sums_text, name)
         .ok_or_else(|| format!("SHA256SUMS.txt has no hash for {name}"))?;
-    Ok(CheckOutcome::Asset { release, name, sha256 })
+    Ok(CheckOutcome::Asset {
+        release,
+        name,
+        sha256,
+    })
 }
 
 fn small(feed: &impl ReleaseFeed, url: &str) -> Result<Vec<u8>, String> {

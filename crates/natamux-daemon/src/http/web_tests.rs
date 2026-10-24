@@ -22,27 +22,50 @@ fn serves_embedded_files_and_html_deep_links_without_a_token() {
     let file = web
         .answer(&Method::GET, "/assets/app.js", "*/*")
         .expect("asset response");
-    let home = web.answer(&Method::GET, "/", "*/*").expect("dashboard page");
+    let home = web
+        .answer(&Method::GET, "/", "*/*")
+        .expect("dashboard page");
     assert_eq!(home.headers()[CONTENT_TYPE], "text/html; charset=utf-8");
     assert!(home.headers().contains_key("content-security-policy"));
-    assert_eq!(file.headers()[CONTENT_TYPE], "text/javascript; charset=utf-8");
+    assert_eq!(
+        file.headers()[CONTENT_TYPE],
+        "text/javascript; charset=utf-8"
+    );
     assert_eq!(
         file.headers()[CACHE_CONTROL],
         "public, max-age=31536000, immutable"
     );
-    assert!(web.answer(&Method::GET, "/tasks/T-1", "application/json").is_none());
+    assert!(
+        web.answer(&Method::GET, "/tasks/T-1", "application/json")
+            .is_none()
+    );
     let page = web
         .answer(&Method::GET, "/w/T-1/changes", "text/html")
         .expect("deep link");
     assert_eq!(page.headers()[CONTENT_TYPE], "text/html; charset=utf-8");
     assert_eq!(page.headers()[CACHE_CONTROL], "no-cache");
     assert!(web.answer(&Method::POST, "/", "text/html").is_none());
-    assert!(web.answer(&Method::GET, "/api/missing", "text/html").is_none());
-    assert!(web.answer(&Method::GET, "/a%70i/tasks", "text/html").is_none());
+    assert!(
+        web.answer(&Method::GET, "/api/missing", "text/html")
+            .is_none()
+    );
+    assert!(
+        web.answer(&Method::GET, "/a%70i/tasks", "text/html")
+            .is_none()
+    );
     assert!(web.answer(&Method::GET, "/tasks", "text/html").is_none());
-    assert!(web.answer(&Method::GET, "/t%61sks/T-1", "text/html").is_none());
-    assert!(web.answer(&Method::GET, "/%2e%2e/secret", "text/html").is_none());
-    assert!(web.answer(&Method::GET, "/assets/%2fsecret", "text/html").is_none());
+    assert!(
+        web.answer(&Method::GET, "/t%61sks/T-1", "text/html")
+            .is_none()
+    );
+    assert!(
+        web.answer(&Method::GET, "/%2e%2e/secret", "text/html")
+            .is_none()
+    );
+    assert!(
+        web.answer(&Method::GET, "/assets/%2fsecret", "text/html")
+            .is_none()
+    );
 }
 
 #[test]

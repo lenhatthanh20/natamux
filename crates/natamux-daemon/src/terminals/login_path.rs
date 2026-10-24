@@ -20,7 +20,11 @@ const MAX_MESSAGE_BYTES: usize = 8192;
 
 /// The child's stdin is private to its parent. Read one line and leave the bounded wait to the
 /// receiver, so a parent that dies or never writes cannot hold daemon startup forever.
-pub fn read_path_message(input: impl BufRead, send: Sender<Value>, parent_end: oneshot::Sender<()>) {
+pub fn read_path_message(
+    input: impl BufRead,
+    send: Sender<Value>,
+    parent_end: oneshot::Sender<()>,
+) {
     let mut limited = input.take(MAX_MESSAGE_BYTES as u64 + 1);
     let mut line = String::new();
     if limited.read_line(&mut line).is_ok()
@@ -117,7 +121,11 @@ mod tests {
     fn reads_one_path_message_from_the_private_pipe() {
         let (send, receive) = channel();
         let (parent_end, mut ended) = oneshot::channel();
-        read_path_message(std::io::Cursor::new(b"{\"path\":\"/bin\"}\nignored\n"), send, parent_end);
+        read_path_message(
+            std::io::Cursor::new(b"{\"path\":\"/bin\"}\nignored\n"),
+            send,
+            parent_end,
+        );
         assert_eq!(receive.try_recv().unwrap(), json!({ "path": "/bin" }));
         assert!(receive.try_recv().is_err());
         assert!(ended.try_recv().is_ok());

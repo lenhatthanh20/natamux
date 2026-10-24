@@ -29,15 +29,27 @@ impl OwnedDaemon {
         let binary = sibling_daemon(&std::env::current_exe()?);
         let token = token_at(&folder.join("daemon-token"))?;
         let port_file = folder.join("daemon-port");
-        if let Some(port) = fs::read_to_string(&port_file).ok().and_then(|text| text.trim().parse().ok())
+        if let Some(port) = fs::read_to_string(&port_file)
+            .ok()
+            .and_then(|text| text.trim().parse().ok())
             && probe_daemon(port, &token)
         {
-            return Err(io::Error::new(io::ErrorKind::AlreadyExists, "Natamux already has a running daemon for this data folder"));
+            return Err(io::Error::new(
+                io::ErrorKind::AlreadyExists,
+                "Natamux already has a running daemon for this data folder",
+            ));
         }
         let port = pick_port(4317)?;
         let log_path = folder.join("logs/daemon.log");
-        fs::create_dir_all(log_path.parent().ok_or_else(|| io::Error::other("No log folder"))?)?;
-        let log = OpenOptions::new().create(true).append(true).open(&log_path)?;
+        fs::create_dir_all(
+            log_path
+                .parent()
+                .ok_or_else(|| io::Error::other("No log folder"))?,
+        )?;
+        let log = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&log_path)?;
         let mut command = Command::new(binary);
         command
             .env("NATAMUX_HOST", "127.0.0.1")
@@ -45,7 +57,12 @@ impl OwnedDaemon {
             .env("NATAMUX_TOKEN", &token)
             .env("NATAMUX_PARENT_PIPE", "1")
             .env("NATAMUX_DATA_DIR", folder.join("data"))
-            .env("NATAMUX_BIN_DIR", std::env::current_exe()?.parent().ok_or_else(|| io::Error::other("No binary folder"))?)
+            .env(
+                "NATAMUX_BIN_DIR",
+                std::env::current_exe()?
+                    .parent()
+                    .ok_or_else(|| io::Error::other("No binary folder"))?,
+            )
             .stdout(Stdio::from(log.try_clone()?))
             .stderr(Stdio::from(log))
             .stdin(Stdio::piped());
@@ -63,13 +80,12 @@ impl OwnedDaemon {
         let mut parent_pipe = child.stdin.take();
         #[cfg(unix)]
         if let Some(input) = parent_pipe.as_mut() {
-            let path = login_shell_path().unwrap_or_else(|| std::env::var("PATH").unwrap_or_default());
+            let path =
+                login_shell_path().unwrap_or_else(|| std::env::var("PATH").unwrap_or_default());
             let message = serde_json::json!({ "path": path }).to_string();
             let _ = writeln!(input, "{message}");
         }
-        if let Err(error) = wait_for_healthy_child(&mut child, port, &token, &log_path, START_WAIT) {
-            return Err(error);
-        }
+        wait_for_healthy_child(&mut child, port, &token, &log_path, START_WAIT)?;
         if let Err(error) = save_access(&port_file, &port.to_string()) {
             stop_child(&mut child, &mut parent_pipe, Duration::from_secs(5));
             return Err(error);
@@ -105,7 +121,11 @@ impl Drop for OwnedDaemon {
     }
 }
 
-pub(super) fn stop_child(child: &mut Child, pipe: &mut Option<std::process::ChildStdin>, wait: Duration) {
+pub(super) fn stop_child(
+    child: &mut Child,
+    pipe: &mut Option<std::process::ChildStdin>,
+    wait: Duration,
+) {
     // Closing stdin tells the owned daemon to finish its shells and flush its data.
     pipe.take();
     let until = Instant::now() + wait;
@@ -151,19 +171,30 @@ pub(super) fn token_at(file: &Path) -> io::Result<String> {
     if let Ok(token) = fs::read_to_string(file) {
         let token = token.trim();
         if token.len() >= 32
-            && token.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+            && token
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
         {
             return Ok(token.to_string());
         }
     }
     let mut bytes = [0_u8; 24];
     getrandom::fill(&mut bytes).map_err(|error| io::Error::other(error.to_string()))?;
-    let token = bytes.iter().map(|byte| format!("{byte:02x}")).collect::<String>();
+    let token = bytes
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
     save_access(file, &token)?;
     Ok(token)
 }
 
-pub(super) fn wait_for_healthy_child(child: &mut Child, port: u16, token: &str, log: &Path, wait: Duration) -> io::Result<()> {
+pub(super) fn wait_for_healthy_child(
+    child: &mut Child,
+    port: u16,
+    token: &str,
+    log: &Path,
+    wait: Duration,
+) -> io::Result<()> {
     let result = wait_for_health(child, port, token, log, wait);
     if result.is_err() {
         let _ = child.kill();
@@ -172,31 +203,52 @@ pub(super) fn wait_for_healthy_child(child: &mut Child, port: u16, token: &str, 
     result
 }
 
-pub(super) fn wait_for_health(child: &mut Child, port: u16, token: &str, log: &Path, wait: Duration) -> io::Result<()> {
+pub(super) fn wait_for_health(
+    child: &mut Child,
+    port: u16,
+    token: &str,
+    log: &Path,
+    wait: Duration,
+) -> io::Result<()> {
     let until = Instant::now() + wait;
     while Instant::now() < until {
         if let Some(status) = child.try_wait()? {
-            return Err(startup_error(log, &format!("The daemon stopped while it started ({status})")));
+            return Err(startup_error(
+                log,
+                &format!("The daemon stopped while it started ({status})"),
+            ));
         }
         if probe_daemon(port, token) {
             return Ok(());
         }
         std::thread::sleep(Duration::from_millis(200));
     }
-    Err(startup_error(log, "The daemon did not answer within 30 seconds"))
+    Err(startup_error(
+        log,
+        "The daemon did not answer within 30 seconds",
+    ))
 }
 
 pub(super) fn probe_daemon(port: u16, token: &str) -> bool {
-    let Some(address) = ("127.0.0.1", port).to_socket_addrs().ok().and_then(|mut addresses| addresses.next()) else {
+    let Some(address) = ("127.0.0.1", port)
+        .to_socket_addrs()
+        .ok()
+        .and_then(|mut addresses| addresses.next())
+    else {
         return false;
     };
     let Ok(mut stream) = TcpStream::connect_timeout(&address, Duration::from_millis(200)) else {
         return false;
     };
-    if stream.set_read_timeout(Some(Duration::from_millis(200))).is_err() {
+    if stream
+        .set_read_timeout(Some(Duration::from_millis(200)))
+        .is_err()
+    {
         return false;
     }
-    let request = format!("GET /api/tasks HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer {token}\r\nConnection: close\r\n\r\n");
+    let request = format!(
+        "GET /api/tasks HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer {token}\r\nConnection: close\r\n\r\n"
+    );
     if stream.write_all(request.as_bytes()).is_err() {
         return false;
     }
@@ -206,7 +258,10 @@ pub(super) fn probe_daemon(port: u16, token: &str) -> bool {
 
 pub(super) fn startup_error(log: &Path, reason: &str) -> io::Error {
     let detail = fs::read_to_string(log).ok().and_then(|text| {
-        text.lines().rev().find(|line| !line.trim().is_empty()).map(str::to_string)
+        text.lines()
+            .rev()
+            .find(|line| !line.trim().is_empty())
+            .map(str::to_string)
     });
     io::Error::other(match detail {
         Some(detail) => format!("{reason}. Last daemon log line: {detail}"),
@@ -218,7 +273,10 @@ pub(super) fn startup_error(log: &Path, reason: &str) -> io::Error {
 fn login_shell_path() -> Option<String> {
     let shell = std::env::var_os("SHELL")?;
     let mut child = Command::new(shell)
-        .args(["-ilc", "printf '__NATAMUX_PATH__%s__NATAMUX_PATH__' \"$PATH\""])
+        .args([
+            "-ilc",
+            "printf '__NATAMUX_PATH__%s__NATAMUX_PATH__' \"$PATH\"",
+        ])
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .spawn()

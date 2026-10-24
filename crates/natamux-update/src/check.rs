@@ -29,8 +29,8 @@ pub fn parse_version(text: &str) -> Option<[u64; 3]> {
         (!part.is_empty()
             && (part == "0" || !part.starts_with('0'))
             && part.bytes().all(|byte| byte.is_ascii_digit()))
-            .then(|| part.parse::<u64>().ok())
-            .flatten()
+        .then(|| part.parse::<u64>().ok())
+        .flatten()
     };
     let result = [read()?, read()?, read()?];
     parts.next().is_none().then_some(result)

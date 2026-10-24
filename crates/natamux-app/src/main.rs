@@ -406,7 +406,7 @@ fn start(
     })
     .detach();
     let window = app::window::open(options, source(options, local), cx)?;
-    app::update::set_window(window.clone(), cx);
+    app::update::set_window(window, cx);
     if !fake && !options.smoke {
         app::update::start_timers(cx);
     }
@@ -434,7 +434,7 @@ fn start(
         perf::draws::start(window, cx);
     }
     if let Some(seconds) = options.hold_seconds {
-        let smoke_window = options.smoke.then(|| window.clone());
+        let smoke_window = options.smoke.then_some(window);
         cx.spawn(async move |cx| {
             cx.background_executor()
                 .timer(Duration::from_secs(seconds))
@@ -456,12 +456,14 @@ fn start(
 fn watch_daemon(child: Arc<std::sync::Mutex<std::process::Child>>, cx: &mut App) {
     cx.spawn(async move |cx| {
         loop {
-            cx.background_executor().timer(Duration::from_millis(500)).await;
-            let exited = child
-                .lock()
-                .map_or(true, |mut process| process.try_wait().ok().flatten().is_some());
+            cx.background_executor()
+                .timer(Duration::from_millis(500))
+                .await;
+            let exited = child.lock().map_or(true, |mut process| {
+                process.try_wait().ok().flatten().is_some()
+            });
             if exited {
-                let _ = cx.update(|cx| {
+                cx.update(|cx| {
                     push_toast(
                         "The Natamux daemon stopped.",
                         ToastTone::Error,
@@ -480,7 +482,10 @@ fn watch_daemon(child: Arc<std::sync::Mutex<std::process::Child>>, cx: &mut App)
 }
 
 /// The daemon, or why the app has none: the window then asks for a token, or says why.
-fn source(options: &Options, local: Option<&Result<Config, String>>) -> Result<Arc<Source>, StartProblem> {
+fn source(
+    options: &Options,
+    local: Option<&Result<Config, String>>,
+) -> Result<Arc<Source>, StartProblem> {
     // A shot never reads a real daemon.
     if options.fake_daemon || options.shot.is_some() {
         return Ok(Arc::new(Source::FakeDaemon));

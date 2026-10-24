@@ -46,6 +46,8 @@ fn main() -> io::Result<()> {
         ));
     }
     text.push_str("];\n");
-    let out = PathBuf::from(std::env::var_os("OUT_DIR").ok_or_else(|| io::Error::other("OUT_DIR is missing"))?);
+    let out = PathBuf::from(
+        std::env::var_os("OUT_DIR").ok_or_else(|| io::Error::other("OUT_DIR is missing"))?,
+    );
     fs::write(out.join("web_assets.rs"), text)
 }

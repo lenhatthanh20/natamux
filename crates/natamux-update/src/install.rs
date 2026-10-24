@@ -46,11 +46,17 @@ pub fn replace_appimage(verified: &Path, current: &Path) -> io::Result<()> {
     let staged = sibling(current, ".natamux-new")?;
     let backup = sibling(current, ".natamux-old")?;
     if backup.exists() {
-        return Err(io::Error::new(io::ErrorKind::AlreadyExists, "An old update backup exists"));
+        return Err(io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            "An old update backup exists",
+        ));
     }
     let result = (|| {
         let mut input = fs::File::open(verified)?;
-        let mut output = OpenOptions::new().write(true).create_new(true).open(&staged)?;
+        let mut output = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&staged)?;
         io::copy(&mut input, &mut output)?;
         output.flush()?;
         output.sync_all()?;
@@ -75,7 +81,9 @@ pub fn replace_appimage(verified: &Path, current: &Path) -> io::Result<()> {
 }
 
 fn sibling(path: &Path, suffix: &str) -> io::Result<PathBuf> {
-    let name = path.file_name().ok_or_else(|| io::Error::other("No app file name"))?;
+    let name = path
+        .file_name()
+        .ok_or_else(|| io::Error::other("No app file name"))?;
     let mut name = name.to_os_string();
     name.push(suffix);
     Ok(path.with_file_name(name))
@@ -104,7 +112,9 @@ pub fn mac_install_script(current: &str, staged: &str, log: &str, relaunch: bool
            {reopen}\
            exit 1\n\
          fi\n",
-        shell_quote(current), shell_quote(staged), shell_quote(log)
+        shell_quote(current),
+        shell_quote(staged),
+        shell_quote(log)
     )
 }
 
@@ -125,7 +135,10 @@ pub fn prepare_mac(dmg: &Path, folder: &Path, version: &str) -> io::Result<PathB
     if !attached.success() {
         return Err(io::Error::other("The update disk image did not mount"));
     }
-    let copied = Command::new("ditto").arg(mount.join("Natamux.app")).arg(&staged).status();
+    let copied = Command::new("ditto")
+        .arg(mount.join("Natamux.app"))
+        .arg(&staged)
+        .status();
     let detached = Command::new("hdiutil").arg("detach").arg(&mount).status();
     if !copied?.success() || !detached?.success() {
         return Err(io::Error::other("The update app could not be copied"));
@@ -136,7 +149,9 @@ pub fn prepare_mac(dmg: &Path, folder: &Path, version: &str) -> io::Result<PathB
         .status()?
         .success()
     {
-        return Err(io::Error::other("The update app failed the code signature check"));
+        return Err(io::Error::other(
+            "The update app failed the code signature check",
+        ));
     }
     let output = Command::new("plutil")
         .args(["-extract", "CFBundleShortVersionString", "raw", "-o", "-"])

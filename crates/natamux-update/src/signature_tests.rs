@@ -19,14 +19,26 @@ fn rejects_tampering_downgrades_and_wrong_comments() {
 
 #[test]
 fn rejects_the_wrong_key_and_a_prehash_signature() {
-    assert!(verify_sums(SUMS.as_bytes(), SIGNATURE, RELEASE_SIGNER, "v1.2.3", "1.2.2").is_err());
+    assert!(
+        verify_sums(
+            SUMS.as_bytes(),
+            SIGNATURE,
+            RELEASE_SIGNER,
+            "v1.2.3",
+            "1.2.2"
+        )
+        .is_err()
+    );
     assert!(verify_sums(SUMS.as_bytes(), PREHASHED, TEST_KEY, "v1.2.3", "1.2.2").is_err());
 }
 
 #[test]
 fn rejects_each_wrong_trusted_comment() {
     for comment in ["natamux v1.2.2", "natamux  v1.2.3", "v1.2.3"] {
-        let changed = SIGNATURE.replace("trusted comment: natamux v1.2.3", &format!("trusted comment: {comment}"));
+        let changed = SIGNATURE.replace(
+            "trusted comment: natamux v1.2.3",
+            &format!("trusted comment: {comment}"),
+        );
         assert_ne!(changed, SIGNATURE);
         assert!(verify_sums(SUMS.as_bytes(), &changed, TEST_KEY, "v1.2.3", "1.2.2").is_err());
     }

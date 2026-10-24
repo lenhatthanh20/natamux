@@ -14,11 +14,18 @@ impl Drop for PartGuard {
     }
 }
 
-pub fn save_verified(mut source: impl Read, target: &Path, expected: &str, max_bytes: u64) -> io::Result<u64> {
+pub fn save_verified(
+    mut source: impl Read,
+    target: &Path,
+    expected: &str,
+    max_bytes: u64,
+) -> io::Result<u64> {
     if expected.len() != 64 || !expected.bytes().all(|byte| byte.is_ascii_hexdigit()) {
         return Err(io::Error::other("The signed SHA-256 is invalid"));
     }
-    let parent = target.parent().ok_or_else(|| io::Error::other("No update folder"))?;
+    let parent = target
+        .parent()
+        .ok_or_else(|| io::Error::other("No update folder"))?;
     fs::create_dir_all(parent)?;
     let mut part = target.as_os_str().to_owned();
     part.push(".part");
@@ -39,14 +46,22 @@ pub fn save_verified(mut source: impl Read, target: &Path, expected: &str, max_b
         }
         total = total.saturating_add(size as u64);
         if total > max_bytes {
-            return Err(io::Error::other("The update is larger than the download limit"));
+            return Err(io::Error::other(
+                "The update is larger than the download limit",
+            ));
         }
         hash.update(&block[..size]);
         file.write_all(&block[..size])?;
     }
-    let actual = hash.finalize().iter().map(|byte| format!("{byte:02x}")).collect::<String>();
+    let actual = hash
+        .finalize()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
     if !actual.eq_ignore_ascii_case(expected) {
-        return Err(io::Error::other("The update does not match signed SHA256SUMS.txt"));
+        return Err(io::Error::other(
+            "The update does not match signed SHA256SUMS.txt",
+        ));
     }
     file.sync_all()?;
     drop(file);

@@ -26,10 +26,22 @@ fn only_a_stable_github_release_redirect_is_used() {
 
 #[test]
 fn keeps_the_asset_names_of_the_last_electron_updater() {
-    assert_eq!(asset_name(InstallKind::Mac, "arm64"), Some("Natamux-mac-arm64.dmg"));
-    assert_eq!(asset_name(InstallKind::Mac, "x64"), Some("Natamux-mac-x64.dmg"));
-    assert_eq!(asset_name(InstallKind::AppImage, "x64"), Some("Natamux-linux-x86_64.AppImage"));
-    assert_eq!(asset_name(InstallKind::Deb, "x64"), Some("Natamux-linux-amd64.deb"));
+    assert_eq!(
+        asset_name(InstallKind::Mac, "arm64"),
+        Some("Natamux-mac-arm64.dmg")
+    );
+    assert_eq!(
+        asset_name(InstallKind::Mac, "x64"),
+        Some("Natamux-mac-x64.dmg")
+    );
+    assert_eq!(
+        asset_name(InstallKind::AppImage, "x64"),
+        Some("Natamux-linux-x86_64.AppImage")
+    );
+    assert_eq!(
+        asset_name(InstallKind::Deb, "x64"),
+        Some("Natamux-linux-amd64.deb")
+    );
     assert_eq!(asset_name(InstallKind::Manual, "x64"), None);
 }
 

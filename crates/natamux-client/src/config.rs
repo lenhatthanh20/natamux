@@ -210,7 +210,10 @@ mod tests {
 
     #[test]
     fn the_app_port_file_supplies_a_loopback_url_only_for_a_valid_port() {
-        assert_eq!(url_from_port("21720\n"), Some("http://127.0.0.1:21720".into()));
+        assert_eq!(
+            url_from_port("21720\n"),
+            Some("http://127.0.0.1:21720".into())
+        );
         assert_eq!(url_from_port("0"), None);
         assert_eq!(url_from_port("65536"), None);
         assert_eq!(url_from_port("bad"), None);

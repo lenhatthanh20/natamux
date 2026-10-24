@@ -37,7 +37,9 @@ impl Root {
             .on_action(cx.listener(|root, _: &OpenSettings, window, cx| {
                 settings_dialog::open(&root.dashboard, window, cx)
             }))
-            .on_action(cx.listener(|_, _: &CheckForUpdates, _, cx| crate::app::update::check(true, cx)))
+            .on_action(
+                cx.listener(|_, _: &CheckForUpdates, _, cx| crate::app::update::check(true, cx)),
+            )
             .on_action(cx.listener(|_, _: &ToggleAutomaticUpdates, _, cx| {
                 crate::app::update::toggle_automatic(cx)
             }))

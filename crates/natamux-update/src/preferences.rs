@@ -36,7 +36,9 @@ pub fn save(file: &Path, enabled: bool) -> io::Result<()> {
         Err(error) => return Err(error),
     };
     let saved = set_auto_update(&text, enabled).map_err(io::Error::other)?;
-    let parent = file.parent().ok_or_else(|| io::Error::other("No settings folder"))?;
+    let parent = file
+        .parent()
+        .ok_or_else(|| io::Error::other("No settings folder"))?;
     fs::create_dir_all(parent)?;
     let mut part = file.as_os_str().to_owned();
     part.push(format!(".{}.part", std::process::id()));

@@ -3,18 +3,77 @@ use super::install::{InstallInput, install_kind, mac_bundle};
 
 #[test]
 fn mac_install_requires_a_writable_app_bundle() {
-    assert_eq!(mac_bundle("/Applications/Natamux.app/Contents/MacOS/natamux-app"), Some("/Applications/Natamux.app"));
-    assert_eq!(install_kind(InstallInput { platform: "macos", executable: "/Applications/Natamux.app/Contents/MacOS/natamux-app", appimage: None, writable: true }), InstallKind::Mac);
-    assert_eq!(install_kind(InstallInput { platform: "macos", executable: "/Volumes/Natamux/Natamux.app/Contents/MacOS/natamux-app", appimage: None, writable: true }), InstallKind::Manual);
-    assert_eq!(install_kind(InstallInput { platform: "macos", executable: "/Applications/Natamux.app/Contents/MacOS/natamux-app", appimage: None, writable: false }), InstallKind::Manual);
+    assert_eq!(
+        mac_bundle("/Applications/Natamux.app/Contents/MacOS/natamux-app"),
+        Some("/Applications/Natamux.app")
+    );
+    assert_eq!(
+        install_kind(InstallInput {
+            platform: "macos",
+            executable: "/Applications/Natamux.app/Contents/MacOS/natamux-app",
+            appimage: None,
+            writable: true
+        }),
+        InstallKind::Mac
+    );
+    assert_eq!(
+        install_kind(InstallInput {
+            platform: "macos",
+            executable: "/Volumes/Natamux/Natamux.app/Contents/MacOS/natamux-app",
+            appimage: None,
+            writable: true
+        }),
+        InstallKind::Manual
+    );
+    assert_eq!(
+        install_kind(InstallInput {
+            platform: "macos",
+            executable: "/Applications/Natamux.app/Contents/MacOS/natamux-app",
+            appimage: None,
+            writable: false
+        }),
+        InstallKind::Manual
+    );
 }
 
 #[test]
 fn linux_install_kind_follows_the_packaging() {
-    assert_eq!(install_kind(InstallInput { platform: "linux", executable: "/tmp/.mount/Natamux", appimage: Some("/home/a/Natamux.AppImage"), writable: true }), InstallKind::AppImage);
-    assert_eq!(install_kind(InstallInput { platform: "linux", executable: "/tmp/.mount/Natamux", appimage: Some("/home/a/Natamux.AppImage"), writable: false }), InstallKind::Manual);
-    assert_eq!(install_kind(InstallInput { platform: "linux", executable: "/opt/Natamux/natamux-app", appimage: None, writable: false }), InstallKind::Deb);
-    assert_eq!(install_kind(InstallInput { platform: "windows", executable: "C:\\Natamux\\natamux-app.exe", appimage: None, writable: true }), InstallKind::Manual);
+    assert_eq!(
+        install_kind(InstallInput {
+            platform: "linux",
+            executable: "/tmp/.mount/Natamux",
+            appimage: Some("/home/a/Natamux.AppImage"),
+            writable: true
+        }),
+        InstallKind::AppImage
+    );
+    assert_eq!(
+        install_kind(InstallInput {
+            platform: "linux",
+            executable: "/tmp/.mount/Natamux",
+            appimage: Some("/home/a/Natamux.AppImage"),
+            writable: false
+        }),
+        InstallKind::Manual
+    );
+    assert_eq!(
+        install_kind(InstallInput {
+            platform: "linux",
+            executable: "/opt/Natamux/natamux-app",
+            appimage: None,
+            writable: false
+        }),
+        InstallKind::Deb
+    );
+    assert_eq!(
+        install_kind(InstallInput {
+            platform: "windows",
+            executable: "C:\\Natamux\\natamux-app.exe",
+            appimage: None,
+            writable: true
+        }),
+        InstallKind::Manual
+    );
 }
 
 #[test]
@@ -33,7 +92,8 @@ fn appimage_swap_replaces_only_a_verified_download() {
 
 #[test]
 fn appimage_swap_keeps_the_current_app_when_staging_fails() {
-    let folder = std::env::temp_dir().join(format!("natamux-appimage-failed-{}", std::process::id()));
+    let folder =
+        std::env::temp_dir().join(format!("natamux-appimage-failed-{}", std::process::id()));
     std::fs::create_dir_all(&folder).expect("folder");
     let current = folder.join("Natamux.AppImage");
     std::fs::write(&current, b"old").expect("old app");

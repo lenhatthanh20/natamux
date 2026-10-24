@@ -56,7 +56,10 @@ pub fn download_asset(url: &str, target: &Path, sha256: &str) -> Result<u64, Str
         .stderr(Stdio::null())
         .spawn()
         .map_err(|error| format!("The update download could not start: {error}"))?;
-    let stdout = child.stdout.take().ok_or("The update download has no response")?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or("The update download has no response")?;
     let saved = save_verified(stdout, target, sha256, ASSET_LIMIT);
     if saved.is_err() {
         let _ = child.kill();
@@ -71,7 +74,10 @@ pub fn download_asset(url: &str, target: &Path, sha256: &str) -> Result<u64, Str
 }
 
 pub(super) fn release_url(url: &str) -> bool {
-    let Some(path) = url.strip_prefix(RELEASE_ROOT).and_then(|rest| rest.strip_prefix('/')) else {
+    let Some(path) = url
+        .strip_prefix(RELEASE_ROOT)
+        .and_then(|rest| rest.strip_prefix('/'))
+    else {
         return false;
     };
     let parts: Vec<&str> = path.split('/').collect();
@@ -114,10 +120,14 @@ pub(super) fn curl(url: &str, timeout_seconds: u32, head: bool) -> Result<Comman
         "--max-time",
     ]);
     command.arg(timeout_seconds.to_string());
-    command.arg("--user-agent").arg(format!("Natamux/{}", env!("CARGO_PKG_VERSION")));
+    command
+        .arg("--user-agent")
+        .arg(format!("Natamux/{}", env!("CARGO_PKG_VERSION")));
     if head {
         command.arg("--head");
-        command.arg("--output").arg(if cfg!(windows) { "NUL" } else { "/dev/null" });
+        command
+            .arg("--output")
+            .arg(if cfg!(windows) { "NUL" } else { "/dev/null" });
         command.arg("--write-out").arg("%{url_effective}");
     }
     command.arg("--").arg(url);
