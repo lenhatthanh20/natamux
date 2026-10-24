@@ -163,6 +163,7 @@ fn glyph(key: &str, glyph: Option<Option<TaskState>>) -> AnyElement {
 }
 
 fn title(key: &str, title: PaneTitle, color: Color, cx: &App) -> AnyElement {
+    let hover = cx.theme().colors().ghost_element_hover;
     match title {
         PaneTitle::Terminal(name) => Label::new(format!("Terminal {name}"))
             .size(LabelSize::Small)
@@ -185,6 +186,9 @@ fn title(key: &str, title: PaneTitle, color: Color, cx: &App) -> AnyElement {
                     .id(SharedString::from(format!("{key}-title")))
                     .min_w_0()
                     .cursor_pointer()
+                    .rounded_sm()
+                    .px_1()
+                    .hover(move |style| style.bg(hover))
                     .child(
                         Label::new(title)
                             .size(LabelSize::Small)

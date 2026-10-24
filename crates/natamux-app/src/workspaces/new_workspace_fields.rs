@@ -9,6 +9,7 @@ use ui::prelude::*;
 use super::super::new_workspace_rules::{PickedFile, SourceChoice, fit_attachments, format_bytes};
 use super::{NewWorkspaceDialog, Pick};
 use crate::agents::agent_choices::agent_label;
+use crate::components::button_style::{action_button, button_icon};
 use crate::components::form::{field, input_box};
 use crate::components::icons::icon_path;
 
@@ -98,10 +99,8 @@ impl NewWorkspaceDialog {
     }
 
     fn render_files(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let add = Button::new("new-task-files", "Add files")
-            .style(ButtonStyle::Outlined)
-            .size(ButtonSize::Compact)
-            .start_icon(Icon::from_path(icon_path("paperclip")).size(IconSize::Small))
+        let add = action_button("new-task-files", "Add files")
+            .start_icon(button_icon("paperclip"))
             .track_focus(&self.stops.files)
             .on_click(cx.listener(|this, _, _, cx| this.pick_files(cx)));
         let picker = h_flex()

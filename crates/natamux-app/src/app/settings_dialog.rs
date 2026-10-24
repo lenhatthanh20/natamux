@@ -13,6 +13,7 @@ use ui::{ToggleButtonGroup, ToggleButtonGroupStyle, ToggleButtonSimple, Tooltip,
 use super::appearance_rules::{ThemeChoice, UiSize, parse_theme, parse_ui_size};
 use super::dashboard::Dashboard;
 use super::shortcuts::AddProject;
+use crate::components::button_style::{action_button, button_icon, quiet_button};
 use crate::components::dialog::{DialogFrame, DialogLayer, DialogSize, DialogView};
 use crate::components::input_rules::segment_step;
 use crate::projects::project_settings_dialog;
@@ -174,9 +175,8 @@ impl SettingsDialog {
         let body = if repos.is_empty() {
             row(
                 "No projects yet",
-                Button::new("settings-add-project", "Add a project")
-                    .style(ButtonStyle::Outlined)
-                    .size(ButtonSize::Compact)
+                action_button("settings-add-project", "Add a project")
+                    .start_icon(button_icon("plus"))
                     .track_focus(&self.project_stops[0])
                     .on_click(|_, window, cx| window.dispatch_action(Box::new(AddProject), cx)),
             )
@@ -184,9 +184,8 @@ impl SettingsDialog {
         } else {
             let rows = repos.into_iter().enumerate().map(|(index, (id, name))| {
                 let tip = format!("Settings of {name}");
-                let button = Button::new(("settings-project", index), "Settings")
-                    .style(ButtonStyle::Subtle)
-                    .size(ButtonSize::Compact)
+                let button = quiet_button(("settings-project", index), "Settings")
+                    .label_size(LabelSize::Small)
                     .tooltip(Tooltip::text(tip))
                     .track_focus(&self.project_stops[index])
                     .on_click(cx.listener(move |this, _, window, cx| {

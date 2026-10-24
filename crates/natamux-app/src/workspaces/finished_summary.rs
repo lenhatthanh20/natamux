@@ -9,6 +9,7 @@ use natamux_proto::tasks::task::{Task, TaskState};
 use ui::prelude::*;
 
 use super::wrap_up_rules::finished_at;
+use crate::components::button_style::{action_button, quiet_button};
 use crate::components::glyph::StateGlyph;
 use crate::components::shape::ShapeSize;
 use crate::sidebar::sidebar_text::{pull_request_number, pull_request_summary};
@@ -51,7 +52,7 @@ fn fact(name: &'static str, value: String) -> impl IntoElement {
 }
 
 fn button(id: &'static str, label: &'static str, run: OnClick) -> Button {
-    Button::new(id, label).on_click(move |_: &ClickEvent, window, cx| run(window, cx))
+    action_button(id, label).on_click(move |_: &ClickEvent, window, cx| run(window, cx))
 }
 
 /// The Pull request and Branch rows.
@@ -86,22 +87,17 @@ impl RenderOnce for FinishedSummary {
             .and_then(finished_at)
             .map_or_else(|| "\u{2014}".into(), |at| exact_time(&at));
         let open_pr = task.pr.clone().map(|url| {
-            Button::new("summary-open-pr", "Open pull request")
-                .style(ButtonStyle::Outlined)
+            action_button("summary-open-pr", "Open pull request")
                 .on_click(move |_: &ClickEvent, _, cx| cx.open_url(&url))
         });
         let follow_up = button(
             "summary-follow-up",
             "Start a follow-up task",
             self.on_follow_up.clone(),
-        )
-        .style(ButtonStyle::Outlined);
-        let progress = button(
-            "summary-progress",
-            "Show progress",
-            self.on_progress.clone(),
-        )
-        .style(ButtonStyle::Subtle);
+        );
+        let on_progress = self.on_progress.clone();
+        let progress = quiet_button("summary-progress", "Show progress")
+            .on_click(move |_: &ClickEvent, window, cx| on_progress(window, cx));
         v_flex()
             .size_full()
             .child(
@@ -134,6 +130,7 @@ impl RenderOnce for FinishedSummary {
                         .child(fact("Finished", finished))
                         .child(
                             h_flex()
+                                .flex_wrap()
                                 .gap_2()
                                 .children(open_pr)
                                 .child(follow_up)

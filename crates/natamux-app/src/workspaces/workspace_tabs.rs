@@ -11,6 +11,7 @@ use ui::{IconButtonShape, Tab, TabBar, TabPosition, Tooltip, prelude::*};
 use super::WorkspaceView;
 use crate::app::tab_rules::{is_closable, visible_tabs};
 use crate::app::view_rules::WorkspaceTab;
+use crate::components::button_style::{action_button, button_icon};
 use crate::components::chips::CountBadge;
 use crate::components::icons::icon_path;
 use crate::components::text_size::row_text;
@@ -163,15 +164,23 @@ impl WorkspaceView {
             } else {
                 tip
             };
-            icon_button("tab-new-terminal", "square-split-horizontal")
+            let add = cx.listener(|view, _: &ClickEvent, _, cx| {
+                view.panes.update(cx, |panes, cx| panes.add(cx))
+            });
+            if icon_only {
+                return icon_button("tab-new-terminal", "square-split-horizontal")
+                    .disabled(full)
+                    .tooltip(Tooltip::text(tip))
+                    .on_click(add)
+                    .into_any_element();
+            }
+            action_button("tab-new-terminal", "New terminal")
+                .label_size(LabelSize::Small)
+                .start_icon(button_icon("square-split-horizontal"))
                 .disabled(full)
                 .tooltip(Tooltip::text(tip))
-                .on_click(cx.listener(|view, _: &ClickEvent, _, cx| {
-                    view.panes.update(cx, |panes, cx| panes.add(cx))
-                }))
-                .when(!icon_only, |button| {
-                    button.child(Label::new("New terminal").size(LabelSize::Small))
-                })
+                .on_click(add)
+                .into_any_element()
         });
         let back = (on_terminal && is_finished_state(task.state) && panes_shown).then(|| {
             Button::new("tab-back-to-wrap-up", "Back to wrap-up")

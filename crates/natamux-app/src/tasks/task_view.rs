@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use gpui::{Entity, FocusHandle, Focusable, Subscription};
 use natamux_proto::tasks::task::Task;
-use ui::{ButtonLike, TintColor, prelude::*};
+use ui::prelude::*;
 
 use super::add_subtask_dialog;
 use super::frozen_order::{HOLD_MS, freeze_order, is_frozen};
@@ -24,9 +24,8 @@ use crate::app::dashboard_data::Link;
 use crate::app::settings_reads;
 use crate::app::shortcuts::{NewTask, NewWorkspace, ShowBoard, ShowTable};
 use crate::app::view_state::Layout;
-use crate::components::chips::Kbd;
+use crate::components::button_style::{action_button, button_icon, key_hint, quiet_button};
 use crate::components::empty_state::EmptyState;
-use crate::components::icons::icon_path;
 use crate::components::skeleton::{Loading, SkeletonList};
 use crate::stages::progress_board::ProgressBoard;
 
@@ -171,21 +170,10 @@ impl TaskView {
         label: &'static str,
         icon: &'static str,
         command: &str,
-        primary: bool,
-    ) -> ButtonLike {
-        let style = if primary {
-            ButtonStyle::Tinted(TintColor::Accent)
-        } else {
-            ButtonStyle::Filled
-        };
-        ButtonLike::new(id).style(style).child(
-            h_flex()
-                .gap_2()
-                .px_1()
-                .child(Icon::from_path(icon_path(icon)).size(IconSize::Small))
-                .child(Label::new(label))
-                .child(Kbd::new(shortcut_of(command).unwrap_or_default())),
-        )
+    ) -> Button {
+        action_button(id, label)
+            .start_icon(button_icon(icon))
+            .key_binding(key_hint(shortcut_of(command).unwrap_or_default(), false))
     }
 
     fn render_body(&self, content: MainContent, cx: &mut Context<Self>) -> AnyElement {
@@ -199,23 +187,22 @@ impl TaskView {
                 };
                 EmptyState::error("tasks-error", "Could not load tasks", reason)
                     .body(body)
-                    .action(
-                        Button::new("tasks-retry", "Retry")
-                            .style(ButtonStyle::Filled)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.dashboard
-                                    .update(cx, |dashboard, cx| dashboard.watch(cx))
-                            })),
-                    )
+                    .action(quiet_button("tasks-retry", "Retry").on_click(cx.listener(
+                        |this, _, _, cx| {
+                            this.dashboard
+                                .update(cx, |dashboard, cx| dashboard.watch(cx))
+                        },
+                    )))
                     .into_any_element()
             }
             MainContent::NoTasks => EmptyState::new("tasks-empty", "list-todo", "No tasks yet")
                 .body("Add a task to the backlog, or start one now in its own workspace.")
                 .action(
-                    Self::key_button("tasks-empty-add", "Add task", "plus", "task.new", true)
-                        .on_click(|_, window, cx| {
+                    Self::key_button("tasks-empty-add", "Add task", "plus", "task.new").on_click(
+                        |_, window, cx| {
                             window.dispatch_action(Box::new(NewTask), cx);
-                        }),
+                        },
+                    ),
                 )
                 .action(
                     Self::key_button(
@@ -223,7 +210,6 @@ impl TaskView {
                         "Start a task",
                         "square-terminal",
                         "workspace.new",
-                        false,
                     )
                     .on_click(|_, window, cx| {
                         window.dispatch_action(Box::new(NewWorkspace), cx);
@@ -234,14 +220,14 @@ impl TaskView {
                 EmptyState::new("tasks-miss", "search-x", title)
                     .body(body)
                     .action(
-                        Button::new("tasks-clear-filter", "Clear filter")
-                            .style(ButtonStyle::Filled)
-                            .on_click(cx.listener(|this, _, _, cx| {
+                        action_button("tasks-clear-filter", "Clear filter").on_click(cx.listener(
+                            |this, _, _, cx| {
                                 this.dashboard.update(cx, |dashboard, cx| {
                                     dashboard.set_filter(String::new(), cx);
                                     dashboard.set_state_filter(None, cx);
                                 })
-                            })),
+                            },
+                        )),
                     )
                     .into_any_element()
             }

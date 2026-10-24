@@ -15,6 +15,7 @@ use super::remove_dialog_rules::{
 };
 use crate::app::dashboard::Dashboard;
 use crate::app::source::reason;
+use crate::components::button_style::action_button;
 use crate::components::colors::change_color;
 use crate::components::dialog::{
     DialogFrame, DialogLayer, DialogView, cancel_button, primary_button,
@@ -244,15 +245,13 @@ impl RemoveWorkspaceDialog {
             .children(more.map(|more| Label::new(more).size(LabelSize::Small).color(Color::Muted)))
             .footer(cancel_button("Close", &self.cancel, cancel))
             .footer(
-                Button::new("remove-view-changes", "View changes")
-                    .style(ButtonStyle::Outlined)
+                action_button("remove-view-changes", "View changes")
                     .track_focus(&self.view_changes)
                     .on_click(cx.listener(|this, _, _, cx| this.open_changes(false, cx))),
             )
             .footer(primary_button(
                 "Commit\u{2026}",
                 &self.submit,
-                false,
                 false,
                 cx.listener(|this, _, _, cx| this.open_changes(true, cx)),
             ))
@@ -349,7 +348,7 @@ impl RemoveWorkspaceDialog {
                     .child(Label::new(error).size(LabelSize::Small).color(Color::Error))
             }))
             .footer(cancel_button("Cancel", &self.cancel, cancel).disabled(self.removing))
-            .footer(primary_button(label, &self.submit, true, waiting, submit))
+            .footer(primary_button(label, &self.submit, waiting, submit))
             .into_any_element()
     }
 }

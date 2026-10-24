@@ -186,7 +186,6 @@ impl Render for SendBackDialog {
             primary_button(
                 "Send back",
                 &self.submit_focus,
-                false,
                 self.busy,
                 cx.listener(|this, _, window, cx| this.submit(window, cx)),
             )

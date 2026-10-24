@@ -5,12 +5,12 @@
 use editor::Editor;
 use editor::actions::MoveToEnd;
 use gpui::{ClickEvent, Entity, Focusable, KeyContext};
-use ui::{ButtonLike, Tooltip, prelude::*};
+use ui::{Tooltip, prelude::*};
 
 use super::ChangesView;
 use crate::agents::agent_choices::{DEFAULT_AGENT, agent_label};
 use crate::app::source::reason;
-use crate::components::chips::Kbd;
+use crate::components::button_style::{action_button, key_hint, quiet_button};
 use crate::components::form::{input_box, text_editor};
 use crate::git::comment_rules::{
     REMOVE_QUOTE_LABEL, SENT_TEXT, chip_text, comment_for_agent, comment_label, placeholder,
@@ -188,32 +188,31 @@ impl ChangesView {
             .and_then(|id| self.dashboard.read(cx).data.task(id))
             .and_then(|task| task.agent.clone());
         let agent = agent_label(Some(agent.as_deref().unwrap_or(DEFAULT_AGENT)));
-        let generate = Button::new("commit-generate", "Generate")
-            .style(ButtonStyle::Subtle)
-            .start_icon(Icon::new(IconName::Sparkle).size(IconSize::Small))
+        let generate = quiet_button("commit-generate", "Generate")
+            .start_icon(
+                Icon::new(IconName::Sparkle)
+                    .size(IconSize::Small)
+                    .color(Color::Muted),
+            )
             .disabled(self.drafting)
             .tooltip(Tooltip::text(format!(
                 "{} (Mod+Shift+G)",
                 draft_tip(&agent)
             )))
             .on_click(cx.listener(|view, _: &ClickEvent, window, cx| view.draft(window, cx)));
-        let commit = ButtonLike::new("commit-all")
-            .style(ButtonStyle::Filled)
-            .full_width()
-            .disabled(reason.is_some() || committing)
-            .on_click(cx.listener(|view, _: &ClickEvent, window, cx| view.commit(window, cx)))
-            .child(
-                h_flex()
-                    .w_full()
-                    .justify_center()
-                    .gap_2()
-                    .child(Label::new(if committing {
-                        "Committing…"
-                    } else {
-                        "Commit all"
-                    }))
-                    .child(Kbd::new("mod-enter")),
-            );
+        let off = reason.is_some() || committing;
+        let commit = action_button(
+            "commit-all",
+            if committing {
+                "Committing…"
+            } else {
+                "Commit all"
+            },
+        )
+        .full_width()
+        .key_binding(key_hint("mod-enter", off))
+        .disabled(off)
+        .on_click(cx.listener(|view, _: &ClickEvent, window, cx| view.commit(window, cx)));
         let commit = match reason {
             Some(reason) => commit.tooltip(Tooltip::text(reason)).into_any_element(),
             None => commit.into_any_element(),
@@ -236,6 +235,7 @@ impl ChangesView {
             .child(input_box(&message, cx))
             .child(
                 h_flex()
+                    .flex_wrap()
                     .gap_2()
                     .child(generate)
                     .child(div().flex_1().child(commit)),
@@ -290,17 +290,11 @@ impl ChangesView {
         });
         let chip = self.quote_chip(cx);
         let reason = send_reason(&written);
-        let send = ButtonLike::new("comment-send")
-            .style(ButtonStyle::Outlined)
-            .disabled(reason.is_some() || self.sending)
-            .on_click(cx.listener(|view, _: &ClickEvent, window, cx| view.send(window, cx)))
-            .child(
-                h_flex()
-                    .gap_2()
-                    .px_1()
-                    .child(Label::new("Send to agent"))
-                    .child(Kbd::new("mod-enter")),
-            );
+        let off = reason.is_some() || self.sending;
+        let send = action_button("comment-send", "Send to agent")
+            .key_binding(key_hint("mod-enter", off))
+            .disabled(off)
+            .on_click(cx.listener(|view, _: &ClickEvent, window, cx| view.send(window, cx)));
         let send = match reason {
             Some(reason) => send.tooltip(Tooltip::text(reason)).into_any_element(),
             None => send.into_any_element(),

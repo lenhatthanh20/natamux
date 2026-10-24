@@ -10,6 +10,7 @@ use super::terminal_font::{
     dialog_description, font_to_save, parse_terminal_font, size_ok,
 };
 use crate::app::dashboard::Dashboard;
+use crate::components::button_style::quiet_button;
 use crate::components::dialog::{
     DialogFrame, DialogLayer, DialogSize, DialogView, cancel_button, primary_button,
 };
@@ -178,7 +179,6 @@ impl Render for TerminalFontDialog {
         let save = primary_button(
             "Save",
             &self.submit,
-            false,
             invalid,
             cx.listener(|this, _, _, cx| this.save(cx)),
         )
@@ -188,8 +188,7 @@ impl Render for TerminalFontDialog {
             dialog_description()
         }));
         let reset = self.has_custom.then(|| {
-            Button::new("terminal-font-reset", RESET_LABEL)
-                .style(ButtonStyle::Subtle)
+            quiet_button("terminal-font-reset", RESET_LABEL)
                 .track_focus(&self.reset)
                 .on_click(cx.listener(|this, _, _, cx| this.reset(cx)))
         });

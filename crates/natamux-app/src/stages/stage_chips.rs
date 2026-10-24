@@ -7,6 +7,7 @@ use natamux_proto::tasks::task::TaskState;
 use ui::prelude::*;
 
 use super::{CardInput, FileChip, icon, kilobytes, small_chip};
+use crate::components::button_style::{button_icon, quiet_button};
 use crate::components::colors::{signal, state_colors};
 use crate::sidebar::sidebar_text::banner_text;
 use crate::stages::card_rules::{CardNotice, ReasonPart, reason_parts};
@@ -77,7 +78,7 @@ pub(super) fn chips(input: &CardInput, on: &OnCommand, cx: &App) -> Vec<AnyEleme
                 .into_any_element(),
         );
     }
-    chips.extend(pr_chip(input, cx));
+    chips.extend(pr_chip(input));
     chips
 }
 
@@ -119,21 +120,22 @@ fn file_chip(input: &CardInput, on: &OnCommand, cx: &App) -> Option<AnyElement> 
 }
 
 /// The pull request of a release stage, with "merged" once it is.
-fn pr_chip(input: &CardInput, cx: &App) -> Option<AnyElement> {
+fn pr_chip(input: &CardInput) -> Option<AnyElement> {
     let entry = &input.entry;
     let (url, merged) = input.pr.as_ref()?;
     let shown = url.trim_start_matches("https://github.com/").to_owned();
     let link = url.clone();
     Some(
-        small_chip(SharedString::from(format!("pr-{}", entry.stage)), cx)
-            .cursor_pointer()
-            .on_click(move |_, _, cx| cx.open_url(&link))
-            .child(icon("external-link").color(Color::Accent))
+        h_flex()
+            .max_w_full()
+            .min_w_0()
+            .gap_1p5()
             .child(
-                Label::new(shown)
-                    .size(LabelSize::XSmall)
-                    .color(Color::Accent)
-                    .truncate(),
+                quiet_button(SharedString::from(format!("pr-{}", entry.stage)), shown)
+                    .label_size(LabelSize::Small)
+                    .start_icon(button_icon("external-link"))
+                    .truncate(true)
+                    .on_click(move |_, _, cx| cx.open_url(&link)),
             )
             .when(*merged, |this| {
                 this.child(
@@ -226,17 +228,13 @@ fn reason_text(text: &str, _: &App) -> AnyElement {
                 ReasonPart::Text(text) => {
                     Label::new(text).size(LabelSize::Small).into_any_element()
                 }
-                ReasonPart::Link { url, shown } => div()
-                    .id(SharedString::from(format!("reason-link-{at}-{url}")))
-                    .cursor_pointer()
-                    .tooltip(ui::Tooltip::text(url.clone()))
-                    .on_click(move |_, _, cx| cx.open_url(&url))
-                    .child(
-                        Label::new(shown)
-                            .size(LabelSize::Small)
-                            .color(Color::Accent),
-                    )
-                    .into_any_element(),
+                ReasonPart::Link { url, shown } => {
+                    quiet_button(SharedString::from(format!("reason-link-{at}-{url}")), shown)
+                        .label_size(LabelSize::Small)
+                        .tooltip(ui::Tooltip::text(url.clone()))
+                        .on_click(move |_, _, cx| cx.open_url(&url))
+                        .into_any_element()
+                }
             }
         }))
         .into_any_element()
@@ -256,21 +254,15 @@ pub(super) fn evidence(input: &CardInput, on: &OnCommand, _: &App) -> impl IntoE
     v_flex()
         .gap_1()
         .child(
-            h_flex()
-                .id(SharedString::from(format!("evidence-{}", entry.stage)))
-                .gap_1()
-                .cursor_pointer()
-                .on_click(move |_, window, cx| on(fold.clone(), window, cx))
-                .child(
-                    Icon::new(chevron)
-                        .size(IconSize::XSmall)
-                        .color(Color::Muted),
+            h_flex().child(
+                quiet_button(
+                    SharedString::from(format!("evidence-{}", entry.stage)),
+                    "Show evidence",
                 )
-                .child(
-                    Label::new("Show evidence")
-                        .size(LabelSize::XSmall)
-                        .color(Color::Muted),
-                ),
+                .label_size(LabelSize::Small)
+                .start_icon(Icon::new(chevron).size(IconSize::Small).color(Color::Muted))
+                .on_click(move |_, window, cx| on(fold.clone(), window, cx)),
+            ),
         )
         .when(open, |this| {
             this.children(entry.passes.iter().map(|pass| {

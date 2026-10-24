@@ -13,6 +13,7 @@ use super::project_rules::{
 use super::project_settings_dialog;
 use crate::app::dashboard::Dashboard;
 use crate::app::source::reason;
+use crate::components::button_style::quiet_button;
 use crate::components::dialog::{DialogFrame, DialogLayer, DialogView, primary_button};
 use crate::components::form::{field, text_editor};
 use crate::components::icons::icon_path;
@@ -229,12 +230,10 @@ impl ProjectsDialog {
 
     fn repo_row(&self, index: usize, repo: &Repo, cx: &mut Context<Self>) -> impl IntoElement {
         let id = repo.id.clone();
-        let mut button = Button::new(
+        let mut button = quiet_button(
             SharedString::from(format!("settings-{}", repo.id)),
             "Settings",
         )
-        .size(ButtonSize::Compact)
-        .style(ButtonStyle::Subtle)
         .label_size(LabelSize::Small)
         .tooltip(Tooltip::text(format!("Settings of {}", repo.name)))
         .on_click(cx.listener(move |this, _, window, cx| {
@@ -367,7 +366,6 @@ impl Render for ProjectsDialog {
         let add = primary_button(
             "Add project",
             &self.submit_focus,
-            false,
             empty || self.busy,
             cx.listener(|this, _, window, cx| this.add(window, cx)),
         )

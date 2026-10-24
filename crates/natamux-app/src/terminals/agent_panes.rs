@@ -23,9 +23,9 @@ use super::terminal_find::open_find;
 use super::terminal_pane::TerminalPane;
 use crate::app::dashboard::{Dashboard, TerminalReader};
 use crate::components::agent_badge::narrow_pane;
+use crate::components::button_style::{action_button, button_icon};
 use crate::components::chips::CountBadge;
 use crate::components::empty_state::EmptyState;
-use crate::components::icons::icon_path;
 use crate::components::menu::MenuLayer;
 use crate::sidebar::shell_rows::terminal_state;
 use crate::tasks::state_filter::width_probe;
@@ -144,18 +144,12 @@ impl AgentPanes {
         let layout = self.dashboard.read(cx).view().pane_layout;
         let fits = max_columns(width);
         let add = can_add.then(|| {
-            ButtonLike::new("agents-add-pane")
-                .style(ButtonStyle::Outlined)
+            action_button("agents-add-pane", "Add a pane")
+                .start_icon(button_icon("plus"))
+                .label_size(LabelSize::Small)
                 .on_click(cx.listener(|panes, event: &ClickEvent, window, cx| {
                     panes.add_menu(event.position(), window, cx)
                 }))
-                .child(
-                    h_flex()
-                        .gap_1p5()
-                        .px_1()
-                        .child(Icon::from_path(icon_path("plus")).size(IconSize::Small))
-                        .child(Label::new("Add a pane").size(LabelSize::Small)),
-                )
         });
         let columns = h_flex().gap_0p5().children(PANE_LAYOUTS.iter().map(|each| {
             let each = *each;
@@ -184,7 +178,8 @@ impl AgentPanes {
             }
         }));
         h_flex()
-            .h(px(44.))
+            .min_h(px(44.))
+            .flex_wrap()
             .flex_none()
             .px_4()
             .gap_2()
@@ -339,8 +334,8 @@ impl Render for AgentPanes {
                 .body("Start an agent on a task, or add a pane.");
             if can_add {
                 empty = empty.action(
-                    Button::new("agents-empty-add", "Add a pane")
-                        .style(ButtonStyle::Filled)
+                    action_button("agents-empty-add", "Add a pane")
+                        .start_icon(button_icon("plus"))
                         .on_click(cx.listener(|panes, event: &ClickEvent, window, cx| {
                             panes.add_menu(event.position(), window, cx)
                         })),

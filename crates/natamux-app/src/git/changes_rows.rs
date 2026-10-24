@@ -54,6 +54,7 @@ impl ChangesView {
             .collect();
         let picker = Button::new("changed-file-picker", label)
             .label_size(LabelSize::Small)
+            .truncate(true)
             .end_icon(Icon::new(IconName::ChevronDown).size(IconSize::Small))
             .tooltip(Tooltip::text("Changed file"))
             .on_click(move |event: &ClickEvent, window, cx| {
@@ -98,6 +99,7 @@ impl ChangesView {
 /// A toolbar button with one of Zed's icons.
 pub(super) fn zed_button(id: &'static str, icon: IconName) -> IconButton {
     IconButton::new(id, icon)
+        .size(ButtonSize::Compact)
         .icon_size(IconSize::Small)
         .icon_color(Color::Muted)
 }

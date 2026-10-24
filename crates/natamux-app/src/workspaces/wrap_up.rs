@@ -13,6 +13,7 @@ use ui::{Tooltip, prelude::*};
 use super::workspace_rules::{GitStep, push_button};
 use super::wrap_up_rules::{FinishedAction, GitFacts, RowTone, wrap_up_rows};
 use crate::agents::agent_choices::agent_label;
+use crate::components::button_style::{action_button, quiet_button};
 use crate::components::icons::icon_path;
 use crate::sidebar::sidebar_tree::stage_name;
 use crate::tasks::task_time::parse_iso_ms;
@@ -88,9 +89,8 @@ pub struct WrapUp {
 }
 
 fn small_button(id: impl Into<ElementId>, label: impl Into<SharedString>, run: OnClick) -> Button {
-    Button::new(id, label)
+    action_button(id, label)
         .label_size(LabelSize::Small)
-        .style(ButtonStyle::Outlined)
         .on_click(move |_: &ClickEvent, window, cx| run(window, cx))
 }
 
@@ -280,12 +280,12 @@ impl WrapUp {
                 ),
             )
             .child(
-                Button::new(SharedString::from(format!("wrap-up-open-{name}")), "Open")
+                action_button(SharedString::from(format!("wrap-up-open-{name}")), "Open")
                     .label_size(LabelSize::Small)
                     .on_click(move |_: &ClickEvent, window, cx| open(window, cx)),
             )
             .child(
-                Button::new(SharedString::from(format!("wrap-up-stop-{name}")), "Stop")
+                action_button(SharedString::from(format!("wrap-up-stop-{name}")), "Stop")
                     .label_size(LabelSize::Small)
                     .on_click(move |_: &ClickEvent, window, cx| stop(&stopped, window, cx)),
             )
@@ -318,12 +318,11 @@ impl WrapUp {
         } else {
             "Show last screen"
         };
-        let toggle_button = Button::new(
+        let toggle_button = quiet_button(
             SharedString::from(format!("wrap-up-screen-{}", shell.name)),
             label,
         )
         .label_size(LabelSize::Small)
-        .color(Color::Accent)
         .on_click(move |_: &ClickEvent, window, cx| toggle(&name, window, cx));
         v_flex()
             .border_t_1()

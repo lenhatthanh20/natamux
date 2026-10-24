@@ -3,10 +3,11 @@
 
 use editor::Editor;
 use language::language_settings::SoftWrap;
-use ui::{Button, ButtonSize, ButtonStyle, prelude::*};
+use ui::prelude::*;
 
 use super::docs_rules::{EMPTY_TEXT, STALE_LINE, is_stale};
 use super::docs_tab::DocsTab;
+use crate::components::button_style::{action_button, quiet_button};
 use crate::components::colors::signal;
 use crate::components::segmented::Segmented;
 use crate::components::skeleton::{Loading, SkeletonList};
@@ -46,8 +47,9 @@ impl DocsTab {
         let failed = self.text_failed(name);
         let busy = self.saving;
         let row = h_flex()
-            .h(rems_from_px(40.0_f32))
+            .min_h(rems_from_px(40.0_f32))
             .flex_none()
+            .flex_wrap()
             .gap_2()
             .px_3()
             .border_b_1()
@@ -62,17 +64,13 @@ impl DocsTab {
         if draft {
             return row
                 .child(
-                    Button::new("docs-cancel", "Cancel")
-                        .label_size(LabelSize::XSmall)
-                        .size(ButtonSize::Compact)
-                        .style(ButtonStyle::Subtle)
+                    quiet_button("docs-cancel", "Cancel")
+                        .label_size(LabelSize::Small)
                         .on_click(cx.listener(|this, _, window, cx| this.cancel(window, cx))),
                 )
                 .child(
-                    Button::new("docs-save", "Save")
-                        .label_size(LabelSize::XSmall)
-                        .size(ButtonSize::Compact)
-                        .style(ButtonStyle::Filled)
+                    action_button("docs-save", "Save")
+                        .label_size(LabelSize::Small)
                         .loading(busy)
                         .disabled(busy)
                         .on_click(cx.listener(|this, _, window, cx| this.save(window, cx))),
@@ -98,10 +96,8 @@ impl DocsTab {
             ))
         })
         .child(
-            Button::new("docs-edit", "Edit")
-                .label_size(LabelSize::XSmall)
-                .size(ButtonSize::Compact)
-                .style(ButtonStyle::Outlined)
+            action_button("docs-edit", "Edit")
+                .label_size(LabelSize::Small)
                 .disabled(off)
                 .on_click(cx.listener(move |this, _, _, cx| this.start_edit(&own, cx))),
         )
@@ -188,10 +184,8 @@ impl DocsTab {
             .items_start()
             .child(Label::new(EMPTY_TEXT).color(Color::Muted))
             .child(
-                Button::new("docs-write-first", "Write context.md")
-                    .label_size(LabelSize::XSmall)
-                    .size(ButtonSize::Compact)
-                    .style(ButtonStyle::Outlined)
+                action_button("docs-write-first", "Write context.md")
+                    .label_size(LabelSize::Small)
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.start_new = true;
                         this.start_edit(super::docs_rules::FIRST_FILE, cx);

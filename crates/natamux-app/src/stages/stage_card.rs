@@ -13,6 +13,7 @@ use ui::prelude::*;
 use super::card_rules::{CardChip, CardFacts};
 use super::stage_choices::{ChoiceBox, choice_box};
 use super::stage_view_rules::{finished_when, stage_time};
+use crate::components::button_style::quiet_button;
 use crate::components::chips::StateChip;
 use crate::components::colors::state_colors;
 use crate::tasks::details_commands::{OnCommand, PanelCommand};
@@ -350,7 +351,7 @@ fn upcoming_parts(input: &CardInput, on: &OnCommand, cx: &App) -> Vec<AnyElement
             on: !marked,
         };
         parts.push(
-            Button::new(SharedString::from(format!("skip-mark-{stage_id}")), label)
+            quiet_button(SharedString::from(format!("skip-mark-{stage_id}")), label)
                 .label_size(LabelSize::Small)
                 .disabled(busy)
                 .on_click(move |_, window, cx| on(command.clone(), window, cx))

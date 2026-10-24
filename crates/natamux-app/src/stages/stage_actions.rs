@@ -5,16 +5,15 @@
 use ui::prelude::*;
 
 use super::{ActionsInput, CardInput};
+use crate::components::button_style::{action_button, button_icon, key_hint, quiet_button};
 use crate::components::chips::tip_with_keys;
-use crate::components::icons::icon_path;
 use crate::stages::card_rules::CardButton;
 use crate::stages::stage_view_rules::finished_when;
 use crate::tasks::details_commands::{OnCommand, PanelCommand};
 
-fn button(id: String, label: &'static str, on: &OnCommand, command: PanelCommand) -> Button {
+fn button(base: Button, on: &OnCommand, command: PanelCommand) -> Button {
     let on = on.clone();
-    Button::new(SharedString::from(id), label)
-        .label_size(LabelSize::Small)
+    base.label_size(LabelSize::Small)
         .on_click(move |_, window, cx| on(command.clone(), window, cx))
 }
 
@@ -43,16 +42,17 @@ fn approve_button(input: &CardInput, anyway: bool, busy: bool, on: &OnCommand) -
     let stage = &input.entry.stage;
     let label = if anyway { "Approve anyway" } else { "Approve" };
     button(
-        format!("approve-{stage}"),
-        label,
+        action_button(SharedString::from(format!("approve-{stage}")), label),
         on,
         PanelCommand::Approve(stage.clone()),
     )
-    .style(ButtonStyle::Filled)
     .full_width()
     .disabled(busy)
     // The key approves a review; needs input has no key.
-    .when(!anyway, |this| this.tooltip(tip_with_keys("Approve", "a")))
+    .when(!anyway, |this| {
+        this.key_binding(key_hint("a", busy))
+            .tooltip(tip_with_keys("Approve", "a"))
+    })
 }
 
 fn row_button(
@@ -64,34 +64,32 @@ fn row_button(
     let stage = &input.entry.stage;
     let id = |name: &str| format!("{name}-{stage}");
     let busy = actions.busy;
-    let outlined = |button: Button| button.style(ButtonStyle::Outlined);
+    let act = |name: &str, label: &'static str| action_button(SharedString::from(id(name)), label);
+    let quiet = |name: &str, label: &'static str| quiet_button(SharedString::from(id(name)), label);
     let button = match which {
-        CardButton::AnswerInTerminal => outlined(button(
-            id("answer"),
-            "Answer in terminal",
+        CardButton::AnswerInTerminal => button(
+            act("answer", "Answer in terminal"),
             on,
             PanelCommand::AnswerInTerminal,
-        )),
+        ),
         CardButton::Resume => {
-            button(id("resume"), "Resume", on, PanelCommand::Resume).disabled(actions.resuming)
+            button(quiet("resume", "Resume"), on, PanelCommand::Resume).disabled(actions.resuming)
         }
         CardButton::PickAgent => {
             return agent_picker(stage, &actions.agent_label, busy, on).into_any_element();
         }
-        CardButton::StartAgent => outlined(button(
-            id("start-agent"),
-            "Start agent",
+        CardButton::StartAgent => button(
+            act("start-agent", "Start agent"),
             on,
             PanelCommand::StartStageAgent,
-        ))
-        .start_icon(Icon::from_path(icon_path("play")).size(IconSize::XSmall))
+        )
+        .start_icon(button_icon("play"))
         .disabled(busy),
-        CardButton::MarkAsDone => outlined(button(
-            id("report"),
-            "Mark as done",
+        CardButton::MarkAsDone => button(
+            act("report", "Mark as done"),
             on,
             PanelCommand::Report(stage.clone()),
-        ))
+        )
         .disabled(busy),
         CardButton::FinishedWhen => {
             return Label::new(finished_when(&input.stage))
@@ -99,19 +97,17 @@ fn row_button(
                 .color(Color::Muted)
                 .into_any_element();
         }
-        CardButton::Start => outlined(button(
-            id("start"),
-            "Start",
+        CardButton::Start => button(
+            act("start", "Start"),
             on,
             PanelCommand::Start(stage.clone()),
-        ))
+        )
         .disabled(busy),
         CardButton::Skip => {
-            button(id("skip"), "Skip", on, PanelCommand::Skip(stage.clone())).disabled(busy)
+            button(quiet("skip", "Skip"), on, PanelCommand::Skip(stage.clone())).disabled(busy)
         }
         CardButton::SendBack => button(
-            id("send-back"),
-            "Send back",
+            quiet("send-back", "Send back"),
             on,
             PanelCommand::SendBack(stage.clone()),
         )
