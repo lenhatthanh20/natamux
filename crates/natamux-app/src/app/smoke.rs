@@ -8,8 +8,9 @@ use std::time::Duration;
 
 use editor::Editor;
 use gpui::{
-    App, AsyncApp, Entity, FocusHandle, Focusable, Keystroke, Modifiers, MouseButton,
-    MouseDownEvent, MouseMoveEvent, MouseUpEvent, PlatformInput, Window, WindowHandle, point, px,
+    App, AppContext as _, AsyncApp, Entity, FocusHandle, Focusable, Keystroke, Modifiers,
+    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, PlatformInput, Window, WindowHandle,
+    point, px,
 };
 
 use super::settings_rules::SettingsPage;
