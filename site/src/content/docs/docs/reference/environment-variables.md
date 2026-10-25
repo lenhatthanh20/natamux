@@ -31,8 +31,8 @@ See [Agents](/docs/agents/claude-code/) for how each agent is started. **Generat
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `NATAMUX_TOKEN` | none | The daemon's token. Required, except for `hooks claude-code` |
-| `NATAMUX_URL` | `http://127.0.0.1:4317` | The daemon's address |
+| `NATAMUX_TOKEN` | The desktop app's saved token, if present | The daemon's token. Set it for another daemon; `hooks claude-code` does not need one |
+| `NATAMUX_URL` | The desktop app's saved daemon port, then `http://127.0.0.1:4317` | The daemon's address |
 | `NATAMUX_TASK_ID` | none | The task for `ask`, `done`, `task show` and `hook` |
 | `NATAMUX_TERMINAL` | none | The terminal of the task |
 | `NATAMUX_DEBUG` | none | `natamux hook` prints problems to stderr when set |

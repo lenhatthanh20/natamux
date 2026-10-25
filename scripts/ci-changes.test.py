@@ -41,17 +41,17 @@ class Flags(unittest.TestCase):
     def test_terminal_change(self):
         self.assertEqual(
             true_flags(["crates/natamux-daemon/src/terminals/mod.rs"]),
-            ["contract", "daemon", "e2e", "terminal"],
+            ["daemon", "e2e", "terminal"],
         )
 
     def test_daemon_source_is_not_terminal(self):
-        self.assertEqual(true_flags(["crates/natamux-daemon/src/agents/errors.rs"]), ["contract", "daemon", "e2e"])
+        self.assertEqual(true_flags(["crates/natamux-daemon/src/agents/errors.rs"]), ["daemon", "e2e"])
 
     def test_pty_is_daemon_and_terminal(self):
-        self.assertEqual(true_flags(["crates/natamux-pty/src/lib.rs"]), ["contract", "daemon", "e2e", "terminal"])
+        self.assertEqual(true_flags(["crates/natamux-pty/src/lib.rs"]), ["daemon", "e2e", "terminal"])
 
     def test_proto_is_daemon_and_client(self):
-        self.assertEqual(true_flags(["crates/natamux-proto/src/lib.rs"]), ["client", "contract", "daemon", "e2e"])
+        self.assertEqual(true_flags(["crates/natamux-proto/src/lib.rs"]), ["client", "daemon", "e2e"])
 
     def test_app_and_shots_scripts(self):
         self.assertEqual(true_flags(["crates/natamux-app/src/main.rs"]), ["app"])
@@ -65,48 +65,38 @@ class Flags(unittest.TestCase):
 
     def test_client_and_cli(self):
         self.assertEqual(true_flags(["crates/natamux-cli/src/main.rs"]), ["client"])
-        self.assertEqual(true_flags(["scripts/cli-parity.sh"]), ["client"])
 
     def test_lock(self):
         self.assertEqual(true_flags(["supply-chain/config.toml"]), ["lock"])
         self.assertEqual(true_flags(["deny.toml"]), ["lock"])
 
     def test_lock_file_can_break_any_build(self):
-        self.assertEqual(len(true_flags(["Cargo.lock"])), 7)
+        self.assertEqual(len(true_flags(["Cargo.lock"])), 6)
 
     def test_inputs_of_the_daemon_image_jobs(self):
         for path in ["scripts/e2e.sh", "compose.e2e.yaml", "compose.prod.yaml", "e2e/tests/terminal-helpers.ts"]:
-            self.assertEqual(true_flags([path]), ["client", "contract", "e2e"], path)
-
-    def test_inputs_of_the_contract_job(self):
-        self.assertEqual(true_flags(["scripts/task-file-golden.mjs"]), ["contract"])
-        self.assertEqual(true_flags(["scripts/xterm-grid.mjs"]), ["contract", "daemon"])
+            self.assertEqual(true_flags([path]), ["client", "e2e"], path)
 
     def test_motion_script_is_app(self):
         self.assertEqual(true_flags(["scripts/motion-cost.sh"]), ["app"])
 
-    def test_contract_crate_only(self):
-        self.assertEqual(true_flags(["crates/natamux-contract/tests/tasks.rs"]), ["contract"])
+    def test_retired_contract_crate_has_no_job(self):
+        self.assertEqual(true_flags(["crates/natamux-contract/tests/tasks.rs"]), [])
 
-    def test_fake_agent_and_compose(self):
-        self.assertEqual(true_flags(["scripts/fake-agent.sh"]), ["contract", "daemon", "e2e"])
-        self.assertEqual(true_flags(["compose.rust-daemon.yaml"]), ["contract", "daemon"])
+    def test_fake_agent(self):
+        self.assertEqual(true_flags(["scripts/fake-agent.sh"]), ["daemon", "e2e"])
 
     def test_fake_gh_and_git_crate(self):
-        self.assertEqual(true_flags(["scripts/fake-gh.sh"]), ["contract", "daemon", "e2e"])
-        self.assertEqual(true_flags(["crates/natamux-git/src/exec.rs"]), ["contract", "daemon", "e2e"])
+        self.assertEqual(true_flags(["scripts/fake-gh.sh"]), ["daemon", "e2e"])
+        self.assertEqual(true_flags(["crates/natamux-git/src/exec.rs"]), ["daemon", "e2e"])
 
     def test_e2e_follows_the_daemon_and_the_images(self):
-        for path in ["crates/natamux-daemon/src/main.rs", "compose.rust-e2e.yaml", "e2e/playwright.config.ts",
+        for path in ["crates/natamux-daemon/src/main.rs", "e2e/playwright.config.ts",
                      "scripts/e2e.sh", ".github/workflows/rust.yml"]:
             self.assertIn("e2e", true_flags([path]), path)
 
-    def test_the_artifact_wait_runs_the_jobs_that_use_it(self):
-        self.assertEqual(true_flags(["scripts/ci-wait-artifact.sh"]), ["contract", "e2e"])
-
-    def test_e2e_is_off_for_contract_only_app_and_docs_paths(self):
-        for path in ["crates/natamux-contract/tests/tasks.rs", "scripts/task-file-golden.mjs",
-                     "compose.rust-daemon.yaml", "scripts/xterm-grid.mjs",
+    def test_e2e_is_off_for_retired_contract_app_and_docs_paths(self):
+        for path in ["crates/natamux-contract/tests/tasks.rs",
                      "crates/natamux-app/src/main.rs", "docs/rust-phase4.md"]:
             self.assertNotIn("e2e", true_flags([path]), path)
 
@@ -118,10 +108,10 @@ class Flags(unittest.TestCase):
         for path in [".github/workflows/rust.yml", "rust-toolchain.toml", "Cargo.toml",
                      ".cargo/config.toml", "xtask/src/main.rs", "scripts/ci-changes.py",
                      ".github/workflows/rust-cache.yml"]:
-            self.assertEqual(len(true_flags([path])), 7, path)
+            self.assertEqual(len(true_flags([path])), 6, path)
 
     def test_failed_diff_is_all_true(self):
-        self.assertEqual(len(true_flags(None)), 7)
+        self.assertEqual(len(true_flags(None)), 6)
 
 
 class Closure(unittest.TestCase):
@@ -164,24 +154,6 @@ class Closure(unittest.TestCase):
         self.assertEqual(graph["natamux-d"], {"natamux-c"})
 
 
-class Suites(unittest.TestCase):
-    def test_no_tag_is_all(self):
-        self.assertEqual(ci.parse_suites("Fix a thing"), ci.SUITES)
-
-    def test_one_and_two_names(self):
-        self.assertEqual(ci.parse_suites("x [contract: hooks]"), ["hooks"])
-        self.assertEqual(ci.parse_suites("x [contract: hooks, stages]"), ["stages", "hooks"])
-
-    def test_spaces(self):
-        self.assertEqual(ci.parse_suites("[contract:  tasks ,  terminals ]"), ["terminals", "tasks"])
-
-    def test_unknown_name_names_the_valid_ones(self):
-        with self.assertRaises(ValueError) as caught:
-            ci.parse_suites("[contract: hooks,nope]")
-        self.assertIn("nope", str(caught.exception))
-        self.assertIn("terminals, tasks, stages, hooks, workspaces", str(caught.exception))
-
-
 class E2eGroups(unittest.TestCase):
     def test_no_tag_is_all(self):
         self.assertEqual(ci.parse_e2e_groups("Fix a thing"), ["timing", "cache", "terminal", "rest"])
@@ -195,9 +167,6 @@ class E2eGroups(unittest.TestCase):
             ci.parse_e2e_groups("[e2e: timing,nope]")
         self.assertIn("nope", str(caught.exception))
         self.assertIn("timing, cache, terminal, rest", str(caught.exception))
-
-    def test_projects_is_a_contract_suite(self):
-        self.assertEqual(ci.parse_suites("[contract: projects]"), ["projects"])
 
     def test_compute_gives_json_for_a_tag(self):
         out = ci.compute(["crates/natamux-daemon/src/main.rs"], "[e2e: timing,rest]", False, GRAPH)
@@ -219,8 +188,8 @@ class RunAll(unittest.TestCase):
     def run_all(self, ref, message):
         return ci.wants_all(ref, message)
 
-    def test_dev_push_runs_all(self):
-        self.assertTrue(self.run_all("refs/heads/dev", "Fix"))
+    def test_main_push_runs_all(self):
+        self.assertTrue(self.run_all("refs/heads/main", "Fix"))
 
     def test_pull_request_reads_the_diff(self):
         self.assertFalse(self.run_all("refs/pull/7/merge", ""))
@@ -245,8 +214,8 @@ class Shards(unittest.TestCase):
     def test_shots_line_has_one(self):
         self.assertEqual(ci.shot_shards("Snap\n\nShots: palette toast\n", SNAP), [1])
 
-    def test_dev_always_has_four(self):
-        self.assertEqual(ci.shot_shards("Snap\n\nShots: palette\n", "refs/heads/dev"), [1, 2, 3, 4])
+    def test_main_always_has_four(self):
+        self.assertEqual(ci.shot_shards("Snap\n\nShots: palette\n", "refs/heads/main"), [1, 2, 3, 4])
 
     def test_shots_word_inside_a_line_is_not_a_shots_line(self):
         self.assertEqual(ci.shot_shards("More Shots: later", SNAP), [1, 2, 3, 4])
@@ -256,34 +225,31 @@ class Base(unittest.TestCase):
     def test_base_tag_names_a_commit(self):
         self.assertEqual(ci.parse_base("Probe [base: 0d67194b]"), "0d67194b")
 
-    def test_no_or_bad_tag_means_dev(self):
-        self.assertEqual(ci.parse_base("Probe"), "origin/dev")
-        self.assertEqual(ci.parse_base("[base: dev]"), "origin/dev")
+    def test_no_or_bad_tag_means_main(self):
+        self.assertEqual(ci.parse_base("Probe"), "origin/main")
+        self.assertEqual(ci.parse_base("[base: dev]"), "origin/main")
 
 
 class Compute(unittest.TestCase):
     def test_daemon_only_change(self):
-        out = ci.compute(["crates/natamux-pty/src/lib.rs"], "[contract: terminals]", False, GRAPH)
+        out = ci.compute(["crates/natamux-pty/src/lib.rs"], "", False, GRAPH)
         self.assertEqual(out["daemon_crates"], "-p natamux-pty -p natamux-daemon")
-        self.assertEqual(out["suites"], "terminals")
         self.assertEqual(out["client"], "false")
 
     def test_git_change_tests_its_daemon_dependents(self):
-        out = ci.compute(["crates/natamux-git/src/changes.rs"], "[contract: workspaces]", False, GRAPH)
+        out = ci.compute(["crates/natamux-git/src/changes.rs"], "", False, GRAPH)
         self.assertEqual(
             out["daemon_crates"], "-p natamux-git -p natamux-stages -p natamux-daemon"
         )
-        self.assertEqual(out["suites"], "workspaces")
-        self.assertEqual(out["contract"], "true")
+        self.assertEqual(out["daemon"], "true")
 
     def test_client_change_has_no_daemon_crates(self):
         out = ci.compute(["crates/natamux-cli/src/main.rs"], "", False, GRAPH)
         self.assertEqual(out["daemon_crates"], "")
 
     def test_run_all_ignores_the_tag(self):
-        out = ci.compute(["docs/x.md"], "[contract: nope]", True, GRAPH)
-        self.assertEqual(set(out[k] for k in ["daemon", "app", "client", "lock", "contract"]), {"true"})
-        self.assertEqual(out["suites"], "terminals,tasks,stages,hooks,workspaces,projects")
+        out = ci.compute(["docs/x.md"], "", True, GRAPH)
+        self.assertEqual(set(out[k] for k in ["daemon", "app", "client", "lock"]), {"true"})
         self.assertEqual(out["crates"].split(), sorted(GRAPH))
 
     def test_workflow_change_is_all_crates(self):
@@ -305,12 +271,12 @@ class Compute(unittest.TestCase):
         out = ci.compute(["docs/x.md"], "", True, GRAPH)
         self.assertEqual(out["all"], "true")
         self.assertEqual(out["shards"], "[1, 2, 3, 4]")
-        out = ci.compute(None, "Shots: palette", True, GRAPH, "refs/heads/dev")
+        out = ci.compute(None, "Shots: palette", True, GRAPH, "refs/heads/main")
         self.assertEqual(out["shards"], "[1, 2, 3, 4]")
 
     def test_docs_only_pull_request_needs_no_job_flag(self):
         out = ci.compute(["docs/x.md"], "", False, GRAPH)
-        self.assertEqual({out[k] for k in ["daemon", "terminal", "app", "client", "lock", "contract", "e2e"]}, {"false"})
+        self.assertEqual({out[k] for k in ["daemon", "terminal", "app", "client", "lock", "e2e"]}, {"false"})
         self.assertEqual(out["crates"], "")
 
 

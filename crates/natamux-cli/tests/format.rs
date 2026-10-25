@@ -74,7 +74,7 @@ fn names_the_skill_of_the_context_picked_or_from_the_settings() {
 
 #[test]
 fn usage_matches_the_typescript_text() {
-    let source = include_str!("../../../packages/cli/src/format.ts");
+    let source = include_str!("fixtures/format.ts");
     let start_mark = "export const USAGE = `";
     let start = source.find(start_mark).unwrap() + start_mark.len();
     let template = &source[start..];

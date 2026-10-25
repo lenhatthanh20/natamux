@@ -172,10 +172,11 @@ On macOS and Linux you should see `OK` for the file you downloaded. On Windows t
 For contributors. Natamux is developed in a GitHub Codespace, where Docker, Node.js and pnpm are ready. In the codespace terminal:
 
 ```sh
-scripts/dev.sh demo
+scripts/e2e.sh build
+E2E_LOCAL=1 scripts/e2e.sh up
 ```
 
-Open port 5173 and sign in with the token `devtoken`. The demo has a task with a workspace, commits and changes. `scripts/dev.sh seed` makes tasks in every state with fake agents at work. See `docs/dev-setup.md` and `docs/docker.md` in the repository.
+Open port 8080 and sign in with the token `e2e-token`. The demo has tasks in several states and uses a fake agent. See `docs/dev-setup.md` and `docs/docker.md` in the repository.
 
 The native app and daemon are built in CI by `.github/workflows/release.yml`. Do not run a Rust build on the owner's Mac.
 

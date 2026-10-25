@@ -164,12 +164,13 @@ The [quick start](https://natamux.github.io/docs/getting-started/quick-start/) w
 No install needed. [Open this repository in GitHub Codespaces](https://codespaces.new/lenhatthanh20/natamux), then run:
 
 ```sh
-scripts/dev.sh demo
+scripts/e2e.sh build
+E2E_LOCAL=1 scripts/e2e.sh up
 ```
 
-Open forwarded port **5173** and sign in with the token **`devtoken`**. The demo includes a task with a workspace, commits and changes to inspect.
+Open forwarded port **8080** and sign in with the token **`e2e-token`**. The demo includes tasks, workspaces, commits and changes to inspect.
 
-To see tasks in every state, run `scripts/dev.sh seed`. It starts fake agents through `scripts/fake-agent.sh`; the development Docker images do not include a real coding agent. Run `scripts/dev.sh up` to return to the normal development setup. See [Docker setup](docs/docker.md) for details.
+The demo starts fake agents through `scripts/fake-agent.sh`; the images do not include a real coding agent. Run `scripts/e2e.sh down` to stop it. See [Docker setup](docs/docker.md) for details.
 
 ## Command line
 

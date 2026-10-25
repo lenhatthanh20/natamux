@@ -4,10 +4,10 @@
 Usage: ci-changes.py flags | crates | mtimes | stamp
 
 flags   writes key=value lines to $GITHUB_OUTPUT (stdout when unset): the job flags, the changed
-        crates with their dependents, the contract suites to run (`[contract: a,b]`), the E2E groups to run (`[e2e: a,b]`; the flag `e2e`
+        crates with their dependents, the E2E groups to run (`[e2e: a,b]`; the flag `e2e`
         says whether the Rust daemon needs E2E at all), `all` and the shot shards.
-        A push to dev, or a head commit message with `[ci: all]`, runs everything; a pull request
-        and a snapshot run what their diff against origin/dev needs.
+        A push to main, or a head commit message with `[ci: all]`, runs everything; a pull request
+        and a snapshot run what their diff against origin/main needs.
 crates  prints the same crate list, one per line.
 mtimes  sets file mtimes so cargo rebuilds only what changed since the cache was saved.
 stamp   records HEAD in target/.ci-commit; run it before the cache is saved.
@@ -22,8 +22,7 @@ import subprocess
 import sys
 import tomllib
 
-BASE = "origin/dev"
-SUITES = ["terminals", "tasks", "stages", "hooks", "workspaces", "projects"]
+BASE = "origin/main"
 E2E_GROUPS = ["timing", "cache", "terminal", "rest"]
 DAEMON_CRATES = [
     "natamux-core",
@@ -41,17 +40,14 @@ OLD_TIME = 946684800  # 2000-01-01
 DAEMON_PATHS = [
     *(f"crates/natamux-{name}/" for name in ("proto", "core", "store", "pty", "screen", "agents", "stages", "daemon")),
     "crates/natamux-git/",
-    "compose.rust-daemon.yaml",
     "scripts/fake-agent.sh",
     "scripts/fake-gh.sh",
-    "scripts/xterm-grid.mjs",
 ]
 TERMINAL_PATHS = [
     "crates/natamux-pty/",
     "crates/natamux-screen/",
     "crates/natamux-daemon/src/terminals/",
     "crates/natamux-daemon/tests/terminal_bench.rs",
-    "scripts/compare-terminal-bench.py",
 ]
 APP_PATHS = [
     "crates/natamux-app/",
@@ -63,28 +59,18 @@ APP_PATHS = [
     "scripts/bundle-rust-app.sh",
     "scripts/motion-cost.sh",
 ]
-# What the jobs that start the images of main read (scripts/e2e.sh up).
+# What the jobs that start the production images read (scripts/e2e.sh up).
 IMAGE_PATHS = ["scripts/e2e.sh", "compose.e2e.yaml", "compose.prod.yaml", "docker/prod.Dockerfile", "e2e/"]
-# E2E runs the daemon binary in the images of main: the contract-only files do not matter to it.
+# E2E runs the daemon binary in the images of main.
 E2E_PATHS = [
-    *(p for p in DAEMON_PATHS if p not in ("compose.rust-daemon.yaml", "scripts/xterm-grid.mjs")),
+    *DAEMON_PATHS,
     *IMAGE_PATHS,
-    "compose.rust-e2e.yaml",
-    "scripts/ci-wait-artifact.sh",
 ]
 CLIENT_PATHS = [
     *(f"crates/natamux-{name}/" for name in ("client", "cli", "proto")),
-    "compose.rust-cli.yaml",
-    "scripts/cli-parity.sh",
     *IMAGE_PATHS,
 ]
 LOCK_PATHS = ["Cargo.lock", "deny.toml", "supply-chain/", ".cargo/audit.toml"]
-CONTRACT_PATHS = [
-    "crates/natamux-contract/",
-    "scripts/task-file-golden.mjs",
-    "scripts/ci-wait-artifact.sh",
-    *IMAGE_PATHS,
-]
 # Cargo.lock: a new version of a dependency can break any build.
 ALL_PATHS = [
     ".github/workflows/rust.yml",
@@ -109,7 +95,7 @@ def matches(path, patterns):
 def path_flags(files):
     """The job flags for a list of changed paths; None means the diff failed."""
     if files is None or any(matches(f, ALL_PATHS) for f in files):
-        return dict.fromkeys(["daemon", "terminal", "app", "client", "lock", "contract", "e2e"], True)
+        return dict.fromkeys(["daemon", "terminal", "app", "client", "lock", "e2e"], True)
     daemon = any(matches(f, DAEMON_PATHS) for f in files)
     return {
         "daemon": daemon,
@@ -117,7 +103,6 @@ def path_flags(files):
         "app": any(matches(f, APP_PATHS) for f in files),
         "client": any(matches(f, CLIENT_PATHS) for f in files),
         "lock": any(matches(f, LOCK_PATHS) for f in files),
-        "contract": daemon or any(matches(f, CONTRACT_PATHS) for f in files),
         "e2e": any(matches(f, E2E_PATHS) for f in files),
     }
 
@@ -162,18 +147,6 @@ def changed_crates(files, graph):
     return sorted(out & set(graph))
 
 
-def parse_suites(message):
-    """The suites named by a `[contract: a,b]` tag; all when there is no tag. Raises ValueError."""
-    found = re.search(r"\[contract:([^\]]*)\]", message or "")
-    if not found:
-        return list(SUITES)
-    names = [n.strip() for n in found.group(1).split(",")]
-    unknown = [n for n in names if n not in SUITES]
-    if unknown:
-        raise ValueError(f"unknown contract suite {unknown}; valid names: {', '.join(SUITES)}")
-    return [s for s in SUITES if s in names]
-
-
 def parse_e2e_groups(message):
     """The groups named by an `[e2e: a,b]` tag; all when there is no tag. Raises ValueError."""
     found = re.search(r"\[e2e:([^\]]*)\]", message or "")
@@ -192,15 +165,15 @@ def parse_all(message):
 
 
 def wants_all(ref, message):
-    """Every job runs on a push to dev and for `[ci: all]` in the head commit message (of a push,
+    """Every job runs on a push to main and for `[ci: all]` in the head commit message (of a push,
     or of a pull request's head); else the jobs read the diff."""
-    return ref == "refs/heads/dev" or parse_all(message)
+    return ref == "refs/heads/main" or parse_all(message)
 
 
 def shot_shards(message, ref):
     """The app-shots jobs: one when a `Shots:` line picks a few states, else all of SHARDS.
-    dev shoots every state."""
-    few = ref != "refs/heads/dev" and re.search(r"^Shots:", message or "", re.MULTILINE)
+    main shoots every state."""
+    few = ref != "refs/heads/main" and re.search(r"^Shots:", message or "", re.MULTILINE)
     return [1] if few else list(SHARDS)
 
 
@@ -214,13 +187,11 @@ def compute(files, message, run_all, graph, ref=""):
         crates = sorted(graph)
     else:
         crates = changed_crates(files, graph)
-    suites = list(SUITES) if run_all else parse_suites(message)
     groups = list(E2E_GROUPS) if run_all else parse_e2e_groups(message)
     daemon = [c for c in DAEMON_CRATES if c in crates]
     out = {k: str(v).lower() for k, v in flags.items()}
     out["crates"] = " ".join(crates)
     out["daemon_crates"] = " ".join(f"-p {c}" for c in daemon)
-    out["suites"] = ",".join(suites)
     out["e2e_groups"] = json.dumps(groups)
     out["all"] = str(run_all).lower()
     out["shards"] = str(shot_shards(message, ref))
@@ -228,8 +199,8 @@ def compute(files, message, run_all, graph, ref=""):
 
 
 def parse_base(message):
-    """The commit a `[base: <sha>]` tag names, else origin/dev. For measuring CI on a snapshot as
-    if its other changes were on dev already."""
+    """The commit a `[base: <sha>]` tag names, else origin/main. For measuring CI on a snapshot as
+    if its other changes were on main already."""
     found = re.search(r"\[base:\s*([0-9a-f]{7,40})\s*\]", message or "")
     return found.group(1) if found else BASE
 
@@ -259,7 +230,7 @@ def outputs():
     event = os.environ.get("GITHUB_EVENT_NAME", "")
     # The head of a pull request is a merge commit: only [ci: all] is read, from the PR's own head.
     pull_request = event == "pull_request"
-    message = "" if ref == "refs/heads/dev" or pull_request else head_message()
+    message = "" if ref == "refs/heads/main" or pull_request else head_message()
     run_all = wants_all(ref, pr_head_message() if pull_request else message)
     files = None if run_all else changed_files(parse_base(message))
     return compute(files, message, run_all, workspace_graph(), ref)

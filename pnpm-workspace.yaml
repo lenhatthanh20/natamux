@@ -4,15 +4,7 @@ packages:
 minimumReleaseAge: 1440
 strictDepBuilds: true
 
-# node-pty compiles its native part when no prebuilt one fits. The terminal of a task needs it.
-# electron downloads its runtime for the desktop app.
-onlyBuiltDependencies:
-  - electron
-  - node-pty
-
-# electron-winstaller is for Squirrel installers; the Windows app uses NSIS.
 ignoredBuiltDependencies:
-  - electron-winstaller
   - esbuild
 
 # monaco-editor pins dompurify 3.4.15, which has GHSA-cg2g-xh64-v4q7 and GHSA-mrv2-3pqr-j5jr;

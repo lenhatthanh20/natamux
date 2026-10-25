@@ -68,5 +68,5 @@ The dashboard runs for hours with many agents. A change of one task must render 
 
 - CI's `E2E` workflow runs the dashboard from the PR's code. On a failure its artifact has screenshots.
 - `scripts/e2e.sh up` plus `playwright-cli` shows **main** on localhost:8080. See the `e2e` skill.
-- To see a branch before it merges, use the codespace (`scripts/dev.sh demo` or `seed`, port 5173), and take screenshots there.
+- To see a branch before it merges, build its production images in the codespace (`scripts/e2e.sh build`, then `E2E_LOCAL=1 scripts/e2e.sh up`) and take screenshots on port 8080.
 - Look at: dark and light, 1440×900 and 390×844, keyboard focus visible, long titles truncated, empty states.

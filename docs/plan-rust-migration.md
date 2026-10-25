@@ -239,6 +239,8 @@ Part 1 (terminals and the contract suite, T-0153), part 2 (tasks, events, storag
 
 ### Phase 5: cut over (2–3 weeks)
 
+Status: Rust implementation merged to `dev` in PR #460. The cutover to `main` and its CI gates are still pending. See [Phase 5 gate results](rust-phase5.md#gate-results).
+
 - Ship two Rust binaries (app and daemon) with the web build embedded.
 - Updater in Rust with the same pinned key (`RELEASE_SIGNER`) and trusted comment `natamux <tag>`.
 - `release.yml` builds dmg (arm64, x64), Windows installer, AppImage, deb, tar.gz.

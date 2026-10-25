@@ -14,7 +14,7 @@ nmx <command> [options]
 
 Run `natamux help`, `natamux --help` or `natamux -h` to print the usage text.
 
-Task ids look like `T-42`. Inside a Natamux terminal, the token, the daemon address and the task are already set. Outside one, set `NATAMUX_TOKEN` (see [Environment](#environment)).
+Task ids look like `T-42`. Inside a Natamux terminal, the token, the daemon address and the task are already set. Outside one, the Rust CLI reads the running desktop app's saved token and port when available. Set `NATAMUX_TOKEN` and `NATAMUX_URL` for a different daemon (see [Environment](#environment)).
 
 ## Commands
 
@@ -192,8 +192,8 @@ natamux task list --json
 
 | Variable | Meaning |
 |---|---|
-| `NATAMUX_TOKEN` | The daemon's token. Required, except for `hooks claude-code` |
-| `NATAMUX_URL` | The daemon's address. Default: `http://127.0.0.1:4317` |
+| `NATAMUX_TOKEN` | The daemon's token. The CLI reads the app's saved token when it is available. Required for a separate daemon, except for `hooks claude-code` |
+| `NATAMUX_URL` | The daemon's address. The CLI reads the app's saved `daemon-port` when it is available, then falls back to `http://127.0.0.1:4317` |
 | `NATAMUX_TASK_ID` | The task of this terminal. Used by `ask`, `done`, `task show`, `task create` (for its project) and hooks. Natamux terminals set it |
 | `NATAMUX_TERMINAL` | The terminal of the task. Tells the daemon which stage `done` is about. Natamux terminals set it |
 | `NATAMUX_DEBUG` | `natamux hook` only. Any value prints problems to stderr |

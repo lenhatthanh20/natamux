@@ -1,6 +1,6 @@
 # Natamux — Feature Plan
 
-Status: draft v0.1. Natamux is an independent product. Other tools are used as reference only; no code, text or structure is copied.
+Status: historical feature plan. Natamux is an independent product. The current native app, daemon and CLI are Rust; see [Rust migration](plan-rust-migration.md). Other tools are used as reference only; no code, text or structure is copied.
 
 ## 1. Vision
 
@@ -171,7 +171,7 @@ Goals:
 ## 7. Release plan
 
 1. **MVP**: daemon, CLI, Claude Code adapter, worktree tasks, terminal, task states, dashboard (table plus needs-me strip), diff view, notifications. Runs in a browser tab, no desktop shell.
-2. **v1**: desktop app (Electron, macOS and Windows), board view, approval gates, dependencies, GitHub import and PR, inline review comments, templates, generic adapter, Claude Code plugin.
+2. **v1**: desktop app (now Rust and GPUI), board view, approval gates, dependencies, GitHub import and PR, inline review comments, templates, generic adapter, Claude Code plugin.
 3. **Later**: remote workspaces, scheduling, plugin API, mobile read-only page, team sync.
 
 ## 8. Success checks for the MVP

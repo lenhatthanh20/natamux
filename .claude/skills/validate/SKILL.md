@@ -45,7 +45,7 @@ Codespace gotchas:
    gh run view <run-id> --log-failed | tail -80
    ```
 
-Jobs. On `dev`, PRs into `dev` and Rust snapshots only `Rust` runs (and `Site` for `site/**`); the Node workflows (CI, E2E) run on `main` and PRs into `main` only.
+Jobs. Rust PRs target `main`. The Rust workflow runs on `main`, PRs into `main`, and snapshots. The slim `CI` workflow checks web and core; `Site` checks site changes.
 
 | Workflow | Job | Checks |
 |---|---|---|
@@ -57,7 +57,7 @@ Jobs. On `dev`, PRs into `dev` and Rust snapshots only `Rust` runs (and `Site` f
 | E2E | `build`, `test (<group>)`, `publish` | production images and Playwright, see the `e2e` skill |
 | Site | `build` | only when `site/**` changes |
 | Rust | `check` | `cargo xtask ci`: fmt, clippy, tests, layers. Always runs |
-| Rust | `app-macos`, `app-shots (1..4)`, `app-windows`, daemon and client jobs | only when the change can break them (`scripts/ci-changes.py`); `dev` runs all |
+| Rust | `app-macos`, `app-shots (1..4)`, `app-windows`, daemon and client jobs | only when the change can break them (`scripts/ci-changes.py`); `main` runs all |
 | Rust | `supply-chain` | `cargo deny --locked check`, `cargo audit`, `cargo vet --locked` |
 
 - Rust snapshots: every task pushes to the shared `natamux-ci/rust` (the jobs the change needs) and `natamux-ci/rust-check` (only `check`, for the compile loop). Keep both branches at cleanup. Rust jobs only restore caches; `rust-cache.yml` on `main` saves them.

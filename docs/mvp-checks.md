@@ -1,14 +1,10 @@
 # MVP checks
 
-How to check the success criteria of `plan-features.md` section 8 by hand, in a codespace. Run them before calling the MVP done, and again after big changes.
+How to check the success criteria of `plan-features.md` section 8 by hand in the Rust desktop app. The 2026-10-09 results below were recorded with the older Node build.
 
 ## Setup
 
-```sh
-scripts/dev.sh demo
-```
-
-Open port 5173, token `devtoken`. Claude Code must be installed and logged in where the daemon runs (`NATAMUX_CLAUDE_COMMAND` if it is not `claude` on the `PATH`). Without it, `scripts/dev.sh seed` starts the daemon with the fake agent (`scripts/fake-agent.sh`), which calls the same hooks.
+Install and open the desktop app. Add a git project and make sure Claude Code is installed and logged in on the same machine. For a fake-agent browser demo, use `scripts/e2e.sh build` and `E2E_LOCAL=1 scripts/e2e.sh up` in a codespace.
 
 ## 1. Start 3 agents on 3 tasks from one repo in under 2 minutes
 
@@ -31,7 +27,7 @@ Pass: with three tasks in different states, a person who has not watched the ter
 
 ## 4. Closing and reopening the app restores all tasks and states
 
-1. `scripts/dev.sh down`, then `scripts/dev.sh up`.
+1. Quit and reopen the desktop app.
 2. Reload the dashboard.
 
 Pass: the same tasks, states, workspaces, pull requests and activity. The agents of running, waiting and in-review tasks start again in their terminals when the daemon starts. The other shells of a task come back, with the same names, when the task is opened: every agent the person did not quit or close, on its last session, the rest as plain shells, after a quit as after a kill (see `docs/claude-code-adapter.md`, "Resume after a restart"). The screens of plain shells and the programs in them do not survive.

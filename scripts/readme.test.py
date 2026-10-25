@@ -117,13 +117,13 @@ class ReadmeAcceptance(unittest.TestCase):
         self.assertIn("Natamux-mac-arm64.dmg", self.install)
         self.assertIn("Natamux-mac-arm64.dmg", self.readme)
         self.assertIn("macOS on Apple silicon", self.readme)
-        self.assertIn("scripts/dev.sh demo", self.readme)
-        self.assertIn("scripts/dev.sh seed", self.readme)
-        for value in ("5173", "devtoken"):
+        self.assertIn("scripts/e2e.sh build", self.readme)
+        self.assertIn("E2E_LOCAL=1 scripts/e2e.sh up", self.readme)
+        for value in ("8080", "e2e-token"):
             self.assertIn(value, self.readme)
             self.assertIn(value, self.docker)
-        self.assertRegex(self.readme, r"(?s)scripts/dev\.sh seed.{0,80}fake agents")
-        self.assertRegex(self.readme, r"(?s)development Docker images.{0,80}do not include a real coding agent")
+        self.assertIn("fake agents", self.readme)
+        self.assertIn("do not include a real coding agent", self.readme)
         for name in ("Natamux-mac-x64.dmg", "Natamux-win-x64.exe", "Natamux-linux-x86_64.AppImage", "Natamux-linux-amd64.deb"):
             self.assertIn(name, self.readme)
             self.assertIn(name, self.install)

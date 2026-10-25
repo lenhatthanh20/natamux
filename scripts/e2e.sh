@@ -11,7 +11,7 @@ export NATAMUX_REPO=e2e-repo
 URL="http://127.0.0.1:$NATAMUX_PORT"
 IMAGES="${E2E_IMAGES:-ghcr.io/lenhatthanh20/natamux}"
 TAG="${E2E_TAG:-main}"
-# The repository whose Rust or earlier E2E workflow built the images.
+# The repository whose Rust workflow built the images.
 SOURCE="${E2E_SOURCE:-lenhatthanh20/natamux}"
 # The tests in e2e/ look for these titles.
 DEMO_TITLE="Demo: changes and history"
@@ -27,7 +27,6 @@ Usage: scripts/e2e.sh <command>
          E2E_RUN=<run-id> loads the images that a Rust run built (any branch, kept 3 days)
          and starts them. The run of a branch:
            gh run list -w rust.yml -b <branch> -L 1 --json databaseId --jq '.[0].databaseId'
-         E2E_EXTRA_COMPOSE=<file> adds a compose file on top, such as compose.rust-cli.yaml.
   build  Build the images (CI and codespaces only)
   seed   Add the demo data, unless it is there
   logs   Show the logs
@@ -38,8 +37,7 @@ TEXT
 }
 
 compose() {
-  docker compose -p natamux-e2e -f compose.prod.yaml -f compose.e2e.yaml \
-    ${E2E_EXTRA_COMPOSE:+-f "$E2E_EXTRA_COMPOSE"} "$@"
+  docker compose -p natamux-e2e -f compose.prod.yaml -f compose.e2e.yaml "$@"
 }
 
 build() {
@@ -61,24 +59,20 @@ pull_checked() {
     grep -F -m 1 "$IMAGES-$1@")"
   if ! gh attestation verify "oci://$digest" --repo "$SOURCE" \
     --signer-workflow "$SOURCE/.github/workflows/rust.yml" --source-ref refs/heads/main \
-    >/dev/null 2>&1 \
-    && ! gh attestation verify "oci://$digest" --repo "$SOURCE" \
-      --signer-workflow "$SOURCE/.github/workflows/e2e.yml" --source-ref refs/heads/main \
-      >/dev/null; then
-    echo "$digest was not built by the E2E workflow on main of $SOURCE. Not starting it." >&2
+    >/dev/null; then
+    echo "$digest was not built by Rust on main of $SOURCE. Not starting it." >&2
     exit 1
   fi
   echo "$digest"
 }
 
-# Loads the images that a Rust or older E2E run of SOURCE built before a branch merges.
-# They have no attestation, so the run must be of the E2E workflow and of SOURCE itself, not a fork.
+# Loads the images that a Rust run of SOURCE built before a branch merges.
+# They have no attestation, so the run must belong to SOURCE itself, not a fork.
 load_run() {
   local found dir artifact
   found="$(gh api "repos/$SOURCE/actions/runs/$1" --jq '.path + " " + .head_repository.full_name')"
   case "$found" in
     ".github/workflows/rust.yml $SOURCE") artifact=rust-production-images ;;
-    ".github/workflows/e2e.yml $SOURCE") artifact=images ;;
     *)
     echo "Run $1 is not an E2E run of $SOURCE ($found). Not loading its images." >&2
     exit 1
@@ -87,7 +81,7 @@ load_run() {
   dir="$(mktemp -d)"
   if ! gh run download "$1" --repo "$SOURCE" -n "$artifact" -D "$dir"; then
     rm -rf "$dir"
-    echo "Run $1 has no images artifact. Its build job makes it, and it is kept 7 days." >&2
+    echo "Run $1 has no images artifact. Its build job makes it, and it is kept 3 days." >&2
     exit 1
   fi
   if ! docker load -i "$dir/images.tar.zst"; then
@@ -182,7 +176,7 @@ seed() {
 
   # A workspace with two commits on a branch that diverges from its base, and changes that are not
   # committed, for the Changes and History tabs. Each task is held at its first stage, so the next
-  # stage does not start an agent in its terminal (see scripts/dev.sh seed).
+  # stage does not start an agent in its terminal.
   local demo workspace
   demo="$(new_task "{\"title\":\"$DEMO_TITLE\",\"labels\":[\"demo\"]}")"
   hold_at_first_stage "$demo"
@@ -210,7 +204,7 @@ seed() {
     >/dev/null
   override "$(new_task '{"title":"Windows path tests for repos","labels":["windows"]}')" \
     '{"to":"blocked"}'
-  override "$(new_task '{"title":"Electron shell spike","priority":"low"}')" '{"to":"draft"}'
+  override "$(new_task '{"title":"Desktop window layout","priority":"low"}')" '{"to":"draft"}'
   override "$(new_task '{"title":"Show the diff of a workspace","labels":["ui"]}')" \
     '{"to":"done","stage":"release"}'
 

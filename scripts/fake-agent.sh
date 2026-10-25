@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# A stand-in for Claude Code in the development setup, where claude is not installed.
-# scripts/dev.sh seed starts the daemon with it. It prints steps, edits a notes file in the
+# A stand-in for Claude Code in the E2E image, where claude is not installed.
+# compose.e2e.yaml starts the daemon with it. It prints steps, edits a notes file in the
 # workspace, and reports to Natamux through the same hooks that Claude Code calls.
 #
 # A stage prompt (it ends with "run `natamux done`") is done for real, roughly: the files the

@@ -1,6 +1,6 @@
 # Natamux — Tech Stack Plan
 
-Status: draft v0.1. Pairs with `plan-features.md`. Choices marked **Decide** are open.
+Status: historical plan. The current app, daemon and CLI are Rust; the dashboard and shared web types remain TypeScript. See [Rust migration](plan-rust-migration.md) and [Phase 5](rust-phase5.md) for the current build and release flow. The older choices below explain how the product started.
 
 ## 1. Goals that drive the stack
 
@@ -130,7 +130,7 @@ Then first move more data into `index.sqlite`, before any new database engine.
 
 ## 6. Desktop shell
 
-Decision (2026-10-22): move to **Rust + GPUI**, as `plan-rust-migration.md` describes. The `dev` branch holds that work. **Electron + TypeScript** stays the shipped app on `main`, with bug fixes only, until the phase 5 cut over.
+Decision (2026-10-22): move to **Rust + GPUI**, as `plan-rust-migration.md` describes. The last Electron version remains on `legacy/electron`; the Rust cutover replaces it on `main`.
 
 The rest of this section is the Electron decision of 2026-10-08, kept for history and for the app that ships until then. Electron targets **macOS and Windows**.
 

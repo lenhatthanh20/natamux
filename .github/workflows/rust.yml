@@ -7,13 +7,13 @@ on:
     # natamux-ci/* holds snapshots that tasks push for a CI check (Check on CI). Rust tasks share
     # natamux-ci/rust (every job) and natamux-ci/rust-check (check only); daemon tasks share
     # natamux-ci/daemon and natamux-ci/daemon-check.
-    # A snapshot or a PR runs only the jobs and contract suites its files need (the changes job; a
-    # [contract: hooks] tag in the commit message picks suites). dev, and a push or PR whose head
+    # A snapshot or a PR runs only the jobs its files need (the changes job). main, and a push or PR whose head
     # commit message has [ci: all], run all.
     # Jobs only restore caches: rust-cache.yml saves them in the scope of main, which every branch
     # reads. Caches of each branch did not fit in the 10 GB of the repo and pushed each other out.
-    branches: [dev, 'natamux-ci/**']
+    branches: [main, 'natamux-ci/**']
   pull_request:
+    branches: [main]
 
 permissions:
   contents: read
@@ -29,7 +29,7 @@ env:
   CARGO_PROFILE_TEST_DEBUG: "0"
 
 jobs:
-  # What the change touches decides which jobs and contract suites run (scripts/ci-changes.py).
+  # What the change touches decides which jobs run (scripts/ci-changes.py).
   changes:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -39,19 +39,17 @@ jobs:
       app: ${{ steps.flags.outputs.app }}
       client: ${{ steps.flags.outputs.client }}
       lock: ${{ steps.flags.outputs.lock }}
-      contract: ${{ steps.flags.outputs.contract }}
       e2e: ${{ steps.flags.outputs.e2e }}
       e2e_groups: ${{ steps.flags.outputs.e2e_groups }}
       crates: ${{ steps.flags.outputs.crates }}
       daemon_crates: ${{ steps.flags.outputs.daemon_crates }}
-      suites: ${{ steps.flags.outputs.suites }}
       all: ${{ steps.flags.outputs.all }}
       shards: ${{ steps.flags.outputs.shards }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - run: git rev-parse --verify -q origin/dev || git fetch origin dev
+      - run: git rev-parse --verify -q origin/main || git fetch origin main
       - id: flags
         env:
           HEAD_MESSAGE: ${{ github.event.head_commit.message }}
@@ -252,7 +250,7 @@ jobs:
       - name: Screen shots
         env:
           # A snapshot push may shoot only some states: a line "Shots: <state> ..." in its commit
-          # message (T-0158: about 1 minute instead of 22). A PR and dev shoot every state.
+          # message (T-0158: about 1 minute instead of 22). A PR and main shoot every state.
           MESSAGE: ${{ github.event_name == 'push' && github.event.head_commit.message || '' }}
           SHARD: ${{ matrix.shard }}
           SHARD_COUNT: ${{ strategy.job-total }}
@@ -294,7 +292,7 @@ jobs:
         run: |
           mkdir -p shots
           only=$(printf '%s\n' "$MESSAGE" | sed -n 's/^Shots: *//p' | head -n 1)
-          if [ -n "$only" ] && [ "$GITHUB_REF" != refs/heads/dev ]; then
+          if [ -n "$only" ] && [ "$GITHUB_REF" != refs/heads/main ]; then
             for state in $only; do
               case " $STATES " in
                 *" $state "*) ;;
@@ -394,7 +392,7 @@ jobs:
   app-windows:
     needs: changes
     # The slowest job: snapshot pushes skip it unless [ci: all]; PRs that change the app or the
-    # CLI, and dev itself, run it (gate 4).
+    # CLI, and main itself, run it (gate 4).
     if: ${{ !endsWith(github.ref, '-check') && (needs.changes.outputs.app == 'true' || needs.changes.outputs.client == 'true') && (!startsWith(github.ref, 'refs/heads/natamux-ci/') || needs.changes.outputs.all == 'true') }}
     runs-on: windows-latest
     timeout-minutes: 120
@@ -475,7 +473,7 @@ jobs:
   # relative path and a project added already (400), the GitHub issues and their import (409 without
   # `gh`), an Issues-tab setting saved and put back.
   live-daemon:
-    needs: changes
+    needs: [changes, e2e-image]
     if: ${{ !endsWith(github.ref, '-check') && needs.changes.outputs.client == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 40
@@ -483,13 +481,19 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       NATAMUX_URL: http://127.0.0.1:8080/api
       NATAMUX_TOKEN: e2e-token
+      E2E_LOCAL: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: rustup toolchain install
       - id: build
         run: cargo test --locked -p natamux-client --test live_daemon --test live_daemon_git --test live_daemon_settings --test live_daemon_files --test live_daemon_projects --no-run
-      - name: Start the daemon and the dashboard of main
-        run: scripts/e2e.sh up
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: rust-production-images
+      - name: Start the Rust daemon and dashboard of this run
+        run: |
+          docker load -i images.tar.zst
+          scripts/e2e.sh up
       # As makeShellTask in e2e/tests/terminal-helpers.ts: a task past its agent, with a workspace.
       - name: Make a task with a workspace
         id: task
@@ -515,12 +519,12 @@ jobs:
           NATAMUX_LIVE_TASK: ${{ steps.task.outputs.id }}
       - if: failure()
         run: scripts/e2e.sh logs
+      - if: always()
+        run: scripts/e2e.sh down
 
-  # Phase 2: the Rust `natamux` against the daemon of main. Its output must equal the TypeScript
-  # command's (scripts/cli-parity.sh), and the agent hook specs run with it first on the agents'
-  # PATH (compose.rust-cli.yaml). Then the Linux build, attested. See docs/rust-phase2.md.
+  # The Rust CLI from this tree runs against the same Rust daemon image as the E2E jobs.
   cli:
-    needs: changes
+    needs: [changes, e2e-image]
     if: ${{ !endsWith(github.ref, '-check') && needs.changes.outputs.client == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -532,35 +536,32 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       NATAMUX_URL: http://127.0.0.1:8080/api
       NATAMUX_TOKEN: e2e-token
-      E2E_EXTRA_COMPOSE: compose.rust-cli.yaml
+      E2E_LOCAL: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # A static build runs in the Debian image of the daemon, whatever its glibc.
+      # A static CLI build runs on the runner; the production image also contains the CLI.
       - run: |
           rustup toolchain install
           rustup target add x86_64-unknown-linux-musl
       - id: build
         run: cargo build --release --locked -p natamux-cli --target x86_64-unknown-linux-musl
-      - name: Start the daemon and the dashboard of main, with the Rust CLI on the agents' PATH
-        run: scripts/e2e.sh up
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: rust-production-images
+      - name: Start the Rust daemon and dashboard of this run
+        run: |
+          docker load -i images.tar.zst
+          scripts/e2e.sh up
       - name: The agents' PATH finds the Rust CLI
         run: |
-          docker compose -p natamux-e2e -f compose.prod.yaml -f compose.e2e.yaml -f "$E2E_EXTRA_COMPOSE" \
+          docker compose -p natamux-e2e -f compose.prod.yaml -f compose.e2e.yaml \
             exec -T daemon sh -c 'PATH="$NATAMUX_BIN_DIR:$PATH"; command -v natamux; natamux help | head -n 1'
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
-      - name: Build the TypeScript CLI
-        env:
-          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
-        run: |
-          pnpm install --frozen-lockfile --filter "@natamux/cli..."
-          pnpm --filter @natamux/core --filter @natamux/cli build
-      - name: Same output as the TypeScript CLI
-        run: scripts/cli-parity.sh packages/cli/dist/main.js target/x86_64-unknown-linux-musl/release/natamux
       # e2e/ is not part of the pnpm workspace; its only dependency is pinned to an exact version.
       - name: Install Playwright
         working-directory: e2e
@@ -623,11 +624,10 @@ jobs:
         run: cargo test --locked ${{ needs.changes.outputs.daemon_crates }} --no-run
       - run: cargo test --locked ${{ needs.changes.outputs.daemon_crates }}
 
-  # The static Rust daemon, built once for daemon-contract and e2e. A static build runs in the
-  # Debian image of the daemon, whatever its glibc.
+  # Check that the Rust daemon still builds for musl, independent of the production image.
   daemon-musl:
     needs: changes
-    if: ${{ !endsWith(github.ref, '-check') && (needs.changes.outputs.contract == 'true' || needs.changes.outputs.e2e == 'true') }}
+    if: ${{ !endsWith(github.ref, '-check') && needs.changes.outputs.daemon == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -651,214 +651,10 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
-  # Phase 4, part 1: the contract suite. The Node daemon of main and the Rust daemon run side by
-  # side from the same image (compose.rust-daemon.yaml); the terminal scenarios of
-  # crates/natamux-contract run on both and compare the answers, then xterm.js replays the
-  # snapshots of both (scripts/xterm-grid.mjs).
-  daemon-contract:
-    needs: changes
-    if: ${{ !endsWith(github.ref, '-check') && needs.changes.outputs.contract == 'true' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    permissions:
-      contents: read
-      # scripts/ci-wait-artifact.sh reads the jobs and artifacts of this run.
-      actions: read
-    env:
-      GH_TOKEN: ${{ github.token }}
-      NATAMUX_TOKEN: e2e-token
-      NATAMUX_REPO: e2e-repo
-      E2E_EXTRA_COMPOSE: compose.rust-daemon.yaml
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - run: rustup toolchain install
-      - id: build
-        run: cargo test --locked -p natamux-contract --tests --no-run
-      # daemon-musl builds the binary meanwhile (about 5 minutes); this job does its own setup first.
-      - name: Wait for the Rust daemon of daemon-musl
-        run: scripts/ci-wait-artifact.sh daemon-musl daemon-musl
-      # compose.rust-daemon.yaml mounts the binary from here.
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: daemon-musl
-          path: target/x86_64-unknown-linux-musl/release
-      - run: chmod +x target/x86_64-unknown-linux-musl/release/natamux-daemon
-      - name: Start the Node daemon of main and the Rust daemon beside it
-        run: |
-          scripts/e2e.sh up
-          # e2e.sh starts daemon and web only; the Rust one runs from the image e2e.sh checked.
-          image=$(docker inspect -f '{{.Config.Image}}' natamux-e2e-daemon-1)
-          echo "NATAMUX_DAEMON_IMAGE=$image" >> "$GITHUB_ENV"
-          NATAMUX_DAEMON_IMAGE="$image" docker compose -p natamux-e2e -f compose.prod.yaml \
-            -f compose.e2e.yaml -f compose.rust-daemon.yaml up -d --no-build daemon-rust
-          for _ in $(seq 60); do
-            curl -fsS http://127.0.0.1:4318/health && exit 0
-            sleep 0.5
-          done
-          docker logs natamux-e2e-daemon-rust-1
-          exit 1
-      # As makeShellTask in e2e/tests/terminal-helpers.ts: a task past its agent, with a workspace.
-      - name: Make a task with a workspace
-        id: task
-        env:
-          NATAMUX_URL: http://127.0.0.1:8080/api
-        run: |
-          api() { curl -fsS -H "authorization: Bearer $NATAMUX_TOKEN" -H 'content-type: application/json' "$@"; }
-          repo=$(api "$NATAMUX_URL/repos" | jq -r '.repos[0].id')
-          id=$(api -X POST "$NATAMUX_URL/tasks" -d "{\"title\":\"Daemon contract\",\"repo\":\"$repo\"}" | jq -r .task.id)
-          for _ in $(seq 60); do
-            state=$(api "$NATAMUX_URL/tasks/$id" | jq -r .task.state)
-            [ "$state" = ready ] || [ "$state" = review ] && break
-            sleep 0.5
-          done
-          api -X POST "$NATAMUX_URL/tasks/$id/events" \
-            -d '{"source":"human","type":"state.overridden","payload":{"to":"review","stage":"context"}}' >/dev/null
-          api -X POST "$NATAMUX_URL/tasks/$id/workspace" -d '{}' >/dev/null
-          for _ in $(seq 60); do
-            [ "$(api "$NATAMUX_URL/tasks/$id" | jq -r .task.workspace)" != null ] && break
-            sleep 0.5
-          done
-          api "$NATAMUX_URL/tasks/$id" | jq -r .task.workspace
-          echo "id=$id" >> "$GITHUB_OUTPUT"
-      # Part 2: the Rust daemon reads the same project and the part-1 task, from files Node wrote.
-      # The contract pipeline has only stages that wait for a person, so Node's stage runner starts
-      # nothing and both daemons see only the events the scenarios send.
-      - name: Give the Rust daemon the project, the task and the contract settings
-        env:
-          TASK: ${{ steps.task.outputs.id }}
-        run: |
-          compose() { docker compose -p natamux-e2e -f compose.prod.yaml -f compose.e2e.yaml -f compose.rust-daemon.yaml "$@"; }
-          compose exec -T daemon sh -c "mkdir -p /data/rust/tasks && cp /data/repos.json /data/rust/ && cp /data/tasks/$TASK.md /data/tasks/$TASK.events.jsonl /data/rust/tasks/"
-          compose exec -T daemon sh -c 'cat > /repo/.natamux.json' < crates/natamux-contract/tests/fixtures/natamux.json
-          compose restart daemon-rust
-          for _ in $(seq 60); do
-            curl -fsS http://127.0.0.1:4318/health && exit 0
-            sleep 0.5
-          done
-          exit 1
-      # Part 3: a second project for the stage scenarios, with the pipeline of
-      # crates/natamux-contract/tests/fixtures/stages.natamux.json, known to both daemons.
-      - name: Give both daemons the stages project
-        env:
-          NATAMUX_URL: http://127.0.0.1:8080/api
-        run: |
-          compose() { docker compose -p natamux-e2e -f compose.prod.yaml -f compose.e2e.yaml -f compose.rust-daemon.yaml "$@"; }
-          api() { curl -fsS -H "authorization: Bearer $NATAMUX_TOKEN" -H 'content-type: application/json' "$@"; }
-          compose exec -T daemon sh -c 'set -e; mkdir -p /data/stages-repo; cd /data/stages-repo
-            git init -q -b main; git config user.name "Natamux e2e"; git config user.email e2e@example.invalid
-            printf "# Stages\n" > README.md; git add README.md; git commit -q -m "Start the stages repository"'
-          compose exec -T daemon sh -c 'cat > /data/stages-repo/.natamux.json' < crates/natamux-contract/tests/fixtures/stages.natamux.json
-          repo=$(api -X POST "$NATAMUX_URL/repos" -d '{"path":"/data/stages-repo","name":"stages-repo"}' | jq -r .repo.id)
-          echo "NATAMUX_CONTRACT_STAGES_REPO=$repo" >> "$GITHUB_ENV"
-          # A pipeline with an error falls back to the defaults on both daemons: fail early.
-          api "$NATAMUX_URL/repos/$repo/settings" | jq -e '.error == null'
-          # The workspaces project: a bare origin to push to, and the fake gh state folders.
-          compose exec -T daemon sh -c 'set -e; mkdir -p /data/workspaces-repo /data/fake-gh/node /data/fake-gh/rust
-            git init -q --bare -b main /data/workspaces-origin.git
-            cd /data/workspaces-repo
-            git init -q -b main; git config user.name "Natamux e2e"; git config user.email e2e@example.invalid
-            printf "# Workspaces\n" > README.md; echo "echo ok > setup-ran.txt" > .natamux-setup'
-          compose exec -T daemon sh -c 'cat > /data/workspaces-repo/.natamux.json' < crates/natamux-contract/tests/fixtures/workspaces.natamux.json
-          compose exec -T daemon sh -c 'set -e; cd /data/workspaces-repo
-            git add README.md .natamux-setup .natamux.json; git commit -q -m "Start the workspaces repository"
-            git remote add origin /data/workspaces-origin.git; git push -q -u origin main'
-          wrepo=$(api -X POST "$NATAMUX_URL/repos" -d '{"path":"/data/workspaces-repo","name":"workspaces-repo"}' | jq -r .repo.id)
-          echo "NATAMUX_CONTRACT_WORKSPACES_REPO=$wrepo" >> "$GITHUB_ENV"
-          api "$NATAMUX_URL/repos/$wrepo/settings" | jq -e '.error == null'
-          # The projects suite: two projects with two skills each, and two plain folders to add.
-          for name in project-node project-rust; do
-            compose exec -T daemon sh -c "set -e; mkdir -p /data/$name/.claude/skills/a /data/$name/.agents/skills/b; cd /data/$name
-              git init -q -b main; git config user.name \"Natamux e2e\"; git config user.email e2e@example.invalid
-              printf -- \"---\nname: a\ndescription: First skill\n---\n\" > .claude/skills/a/SKILL.md
-              printf -- \"---\nname: b\ndescription: Second skill\n---\n\" > .agents/skills/b/SKILL.md
-              git add -A; git commit -q -m \"Start the project repository\""
-          done
-          compose exec -T daemon sh -c 'mkdir -p /data/plain-node /data/plain-rust'
-          compose exec -T daemon sh -c 'cp /data/repos.json /data/rust/repos.json'
-          compose restart daemon-rust
-          for _ in $(seq 60); do
-            curl -fsS http://127.0.0.1:4318/health && exit 0
-            sleep 0.5
-          done
-          exit 1
-      - name: The terminal scenarios on both daemons
-        env:
-          NATAMUX_CONTRACT_NODE: http://127.0.0.1:8080/api
-          NATAMUX_CONTRACT_RUST: http://127.0.0.1:4318
-          NATAMUX_CONTRACT_TOKEN: e2e-token
-          NATAMUX_CONTRACT_TASK: ${{ steps.task.outputs.id }}
-          NATAMUX_CONTRACT_NODE_RESTART: >-
-            cd "$GITHUB_WORKSPACE" && docker compose -p natamux-e2e -f compose.prod.yaml -f compose.e2e.yaml
-            -f compose.rust-daemon.yaml restart daemon
-          NATAMUX_CONTRACT_RUST_RESTART: >-
-            cd "$GITHUB_WORKSPACE" && docker compose -p natamux-e2e -f compose.prod.yaml -f compose.e2e.yaml
-            -f compose.rust-daemon.yaml restart daemon-rust
-          NATAMUX_CONTRACT_DUMPS: ${{ runner.temp }}/dumps
-          NATAMUX_CONTRACT_REPORT: ${{ runner.temp }}/contract.md
-          # Both daemons share the data volume; one container reads and copies the files of both.
-          NATAMUX_CONTRACT_EXEC: >-
-            docker compose -p natamux-e2e -f compose.prod.yaml -f compose.e2e.yaml
-            -f compose.rust-daemon.yaml exec -T daemon
-          NATAMUX_CONTRACT_RUST_EXEC: >-
-            docker compose -p natamux-e2e -f compose.prod.yaml -f compose.e2e.yaml
-            -f compose.rust-daemon.yaml exec -T daemon-rust
-          NATAMUX_CONTRACT_NODE_DATA: /data
-          NATAMUX_CONTRACT_RUST_DATA: /data/rust
-          SUITES: ${{ needs.changes.outputs.suites }}
-        run: |
-          printf '| scenario | step | result |\n|---|---|---|\n' > "$NATAMUX_CONTRACT_REPORT"
-          status=0
-          for suite in ${SUITES//,/ }; do
-            case "$suite" in
-              terminals) cargo test --locked -p natamux-contract --test terminals -- --ignored --test-threads=1 || status=$? ;;
-              tasks) cargo test --locked -p natamux-contract --test tasks -- --ignored --test-threads=1 || status=$? ;;
-              stages) cargo test --locked -p natamux-contract --test stages -- --ignored --test-threads=1 --skip hooks:: --skip workspaces:: || status=$? ;;
-              hooks) cargo test --locked -p natamux-contract --test stages -- --ignored --test-threads=1 hooks:: || status=$? ;;
-              workspaces) cargo test --locked -p natamux-contract --test stages -- --ignored --test-threads=1 workspaces:: || status=$? ;;
-              projects) cargo test --locked -p natamux-contract --test projects -- --ignored --test-threads=1 || status=$? ;;
-            esac
-          done
-          tee -a "$GITHUB_STEP_SUMMARY" < "$NATAMUX_CONTRACT_REPORT"
-          exit "$status"
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-        if: ${{ always() && (contains(needs.changes.outputs.suites, 'terminals') || contains(needs.changes.outputs.suites, 'tasks')) }}
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        if: ${{ always() && (contains(needs.changes.outputs.suites, 'terminals') || contains(needs.changes.outputs.suites, 'tasks')) }}
-        with:
-          node-version: 22
-      - name: Replay the snapshots of both daemons in xterm.js
-        if: ${{ always() && contains(needs.changes.outputs.suites, 'terminals') }}
-        env:
-          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
-        run: |
-          pnpm install --frozen-lockfile --filter "@natamux/daemon"
-          node scripts/xterm-grid.mjs "$RUNNER_TEMP/dumps"
-      # gray-matter and js-yaml of the Node daemon write the fixtures the Rust store is held to.
-      - name: The task file fixtures equal gray-matter's output
-        if: ${{ always() && contains(needs.changes.outputs.suites, 'tasks') }}
-        run: |
-          node scripts/task-file-golden.mjs crates/natamux-store/tests/fixtures/front_matter
-          git status --porcelain crates/natamux-store/tests/fixtures
-          test -z "$(git status --porcelain crates/natamux-store/tests/fixtures)"
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: always()
-        with:
-          name: contract-dumps
-          path: |
-            ${{ runner.temp }}/dumps
-            crates/natamux-store/tests/fixtures
-          if-no-files-found: ignore
-      - if: failure()
-        run: scripts/e2e.sh logs
-      - if: always()
-        run: scripts/e2e.sh down
-
   # Build the production Rust daemon image once for the four E2E groups.
   e2e-image:
     needs: changes
-    if: ${{ !endsWith(github.ref, '-check') && needs.changes.outputs.e2e == 'true' }}
+    if: ${{ !endsWith(github.ref, '-check') && (needs.changes.outputs.e2e == 'true' || needs.changes.outputs.client == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 50
     outputs:
@@ -1013,9 +809,7 @@ jobs:
           subject-name: ghcr.io/${{ github.repository_owner }}/natamux-web
           subject-digest: ${{ steps.push.outputs.web }}
 
-  # Phase 4, part 1: the terminal bench of the Node daemon and of the Rust one, on the same runner.
-  # The gate: a snapshot as fast as Node's, parsing at least as fast (compare-terminal-bench.py).
-  # 5 runs each, interleaved, so a slow moment of the runner hits both; the medians are compared.
+  # Keep the Rust terminal bench runnable after the Node comparison has been retired.
   daemon-bench:
     needs: changes
     if: ${{ !endsWith(github.ref, '-check') && needs.changes.outputs.terminal == 'true' }}
@@ -1028,26 +822,10 @@ jobs:
       - run: rustup toolchain install
       - id: build
         run: cargo test --release --locked -p natamux-daemon --test terminal_bench --no-run
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 22
-      - name: Build the Node side of the bench
-        env:
-          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
-        run: |
-          pnpm install --frozen-lockfile --filter "@natamux/daemon..."
-          pnpm --filter @natamux/core build
-      - name: The benches, 5 rounds of Node then Rust
+      - name: Run the Rust terminal bench
         env:
           NATAMUX_BENCH: "1"
-        run: |
-          for i in 1 2 3 4 5; do
-            pnpm --filter @natamux/daemon exec vitest run src/terminals/__tests__/terminal-bench.test.ts | tee "$RUNNER_TEMP/node-bench-$i.txt"
-            cargo test --release --locked -p natamux-daemon --test terminal_bench -- --ignored --nocapture | tee "$RUNNER_TEMP/rust-bench-$i.txt"
-          done
-      - run: python3 scripts/compare-terminal-bench.test.py
-      - run: python3 scripts/compare-terminal-bench.py --node "$RUNNER_TEMP"/node-bench-?.txt --rust "$RUNNER_TEMP"/rust-bench-?.txt
+        run: cargo test --release --locked -p natamux-daemon --test terminal_bench -- --ignored --nocapture
 
   # The tools come as prebuilt binaries at pinned versions; install-action checks their hashes.
   supply-chain:

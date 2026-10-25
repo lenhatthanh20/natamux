@@ -21,7 +21,7 @@ The dashboard is on http://localhost:8080 with the token `e2e-token`. Set `NATAM
 
 ## In CI
 
-Rust CI runs these jobs when the daemon, image, or E2E code changes. It builds the production images from the branch, so the tests check the code of the pull request. On the Phase 5 cutover, every group is required on the `main` PR. A failed group keeps its Playwright report and measures. The images stay as the `rust-production-images` artifact for three days.
+Rust CI runs these jobs when the daemon, image, or E2E code changes. It builds the production images from the branch, so the tests check the code of the pull request. A failed group keeps its Playwright report and measures. The images stay as the `rust-production-images` artifact for three days.
 
 The Rust workflow has three E2E jobs:
 
@@ -50,7 +50,7 @@ On `main`, after the tests pass, the images go to `ghcr.io/lenhatthanh20/natamux
 
 Needs Docker (for example colima) and the GitHub CLI, signed in. Nothing is built: the images come from ghcr.io.
 
-Before it starts them, `scripts/e2e.sh up` runs `gh attestation verify` on each image. It accepts images from the Rust workflow on `main`; it also accepts older images from the former E2E workflow during the migration. The containers start from the digest that was checked.
+Before it starts them, `scripts/e2e.sh up` runs `gh attestation verify` on each image. It accepts images from the Rust workflow on `main`. The containers start from the digest that was checked.
 
 ```sh
 scripts/e2e.sh up      # pull and check the images of main, start them, add the demo data
@@ -69,14 +69,12 @@ gh run list -w rust.yml -b <branch> -L 1 --json databaseId --jq '.[0].databaseId
 E2E_RUN=<run-id> scripts/e2e.sh up
 ```
 
-- It reads the run first and refuses it unless it is a run of `rust.yml` or the former `e2e.yml` in `lenhatthanh20/natamux` itself, not of a fork. These branch images have no attestation; this check takes its place.
-- It downloads the `rust-production-images` artifact (or the former `images` artifact), loads `natamux-daemon:local` and `natamux-web:local`, and starts them as `E2E_LOCAL=1` does.
+- It reads the run first and refuses it unless it is a run of `rust.yml` in `lenhatthanh20/natamux` itself, not of a fork. These branch images have no attestation; this check takes its place.
+- It downloads the `rust-production-images` artifact, loads `natamux-daemon:local` and `natamux-web:local`, and starts them as `E2E_LOCAL=1` does.
 - The artifact is there once the run's `build` job ends, and for 7 days.
 - `scripts/e2e.test.sh` checks the run check with stubs for `gh` and `docker`.
 
 `E2E_TAG=sha-<commit>` picks the images of another commit of `main`. The tag `main` moves with every merge, so a `sha-` tag picks a known build. Images published before the workflow attested its builds fail the check. The images are built for x86 Linux; on a Mac with Apple silicon, Docker runs them with Rosetta (colima: `--vz-rosetta`).
-
-`E2E_EXTRA_COMPOSE=<file>` adds a compose file on top of `compose.prod.yaml` and `compose.e2e.yaml`. The Rust workflow's `cli` job uses `compose.rust-cli.yaml`, which mounts the Rust `natamux` and puts it first on the agents' PATH (`docs/rust-phase2.md`).
 
 The Rust workflow's `e2e` job runs the real production Rust daemon image in every group. It does not replace the daemon inside an older image. The image is built in CI only, never on the owner's Mac.
 

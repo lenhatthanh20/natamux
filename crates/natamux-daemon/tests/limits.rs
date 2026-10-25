@@ -1,5 +1,4 @@
-//! The numbers of `terminal-limits.ts` and `open-shells.ts` stay the source of truth until phase 5:
-//! this fails when the TypeScript changes and the Rust copy does not.
+//! The fixtures keep the last Node limits as a regression reference after cutover.
 
 #![allow(clippy::unwrap_used, clippy::panic)]
 
@@ -8,8 +7,8 @@ use natamux_daemon::terminals::open_shells::{
     EXIT_CONFIRM_MS, RESTORE_POLL_MS, RESTORE_SPINNER_MS,
 };
 
-const LIMITS_TS: &str = include_str!("../../../packages/daemon/src/terminals/terminal-limits.ts");
-const OPEN_SHELLS_TS: &str = include_str!("../../../packages/daemon/src/terminals/open-shells.ts");
+const LIMITS_TS: &str = include_str!("fixtures/terminal-limits.ts");
+const OPEN_SHELLS_TS: &str = include_str!("fixtures/open-shells.ts");
 
 /// The right side of `export const NAME = <value>`: `64 * 1024` and `30_000` work.
 fn number(source: &str, name: &str) -> u64 {

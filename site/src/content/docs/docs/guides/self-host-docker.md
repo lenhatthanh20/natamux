@@ -78,4 +78,4 @@ docker compose -f compose.prod.yaml up -d --build   # rebuilds with new code
 
 ## Development setup
 
-`compose.yaml` is the development setup: Vite dev server on port 5173, daemon on 4317 published to loopback, and the default token `devtoken`. It is meant for a codespace and for working on Natamux itself. See `docs/docker.md` in the repository.
+In a Codespace, build the Rust production images with `scripts/e2e.sh build`, then run `E2E_LOCAL=1 scripts/e2e.sh up` for demo data on port 8080. See `docs/dev-setup.md` and `docs/docker.md` in the repository.

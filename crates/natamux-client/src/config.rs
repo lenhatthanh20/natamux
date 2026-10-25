@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use crate::error::ClientError;
 
-/// The daemon's default address (`DEFAULT_URL` in `packages/cli/src/default-url.ts`).
+/// The daemon's fallback address when the app has no saved port.
 pub const DEFAULT_URL: &str = "http://127.0.0.1:4317";
 
 /// The app's daemon token, inside its user data folder.

@@ -5,6 +5,7 @@ on:
   push:
     tags: ['v*']
   pull_request:
+    branches: [main]
     paths:
       - .github/workflows/release.yml
       - scripts/package-rust-desktop.sh
