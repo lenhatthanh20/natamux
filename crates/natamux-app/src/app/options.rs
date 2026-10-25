@@ -88,8 +88,9 @@ pub enum Shot {
     PaletteJump,
     Shortcuts,
     AccountMenu,
-    TerminalFont,
-    SettingsDialog,
+    Settings,
+    SettingsGeneral,
+    SettingsSearch,
     Projects,
     ProjectSettings,
     ProjectSettingsTabIssues,
@@ -103,7 +104,7 @@ pub enum Shot {
 }
 
 impl Shot {
-    pub const ALL: [Shot; 75] = [
+    pub const ALL: [Shot; 76] = [
         Shot::TasksTable,
         Shot::TasksBoard,
         Shot::BoardHoverCard,
@@ -167,8 +168,9 @@ impl Shot {
         Shot::PaletteJump,
         Shot::Shortcuts,
         Shot::AccountMenu,
-        Shot::TerminalFont,
-        Shot::SettingsDialog,
+        Shot::Settings,
+        Shot::SettingsGeneral,
+        Shot::SettingsSearch,
         Shot::Projects,
         Shot::ProjectSettings,
         Shot::ProjectSettingsTabIssues,
@@ -246,8 +248,9 @@ impl Shot {
             Shot::PaletteJump => "palette-jump",
             Shot::Shortcuts => "shortcuts",
             Shot::AccountMenu => "account-menu",
-            Shot::TerminalFont => "terminal-font",
-            Shot::SettingsDialog => "settings-dialog",
+            Shot::Settings => "settings",
+            Shot::SettingsGeneral => "settings-general",
+            Shot::SettingsSearch => "settings-search",
             Shot::Projects => "projects",
             Shot::ProjectSettings => "project-settings",
             Shot::ProjectSettingsTabIssues => "project-settings-tab-issues",

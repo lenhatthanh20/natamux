@@ -1,5 +1,5 @@
 //! Dialogs (docs/ui-spec.md 4.14, `ui/Dialog.tsx`): one layer per window over a scrim, sizes 400,
-//! 520, 640 and 1120 (in rems, so the UI size scales them), Esc and a click on the scrim close
+//! 520 and 640 (in rems, so the UI size scales them), Esc and a click on the scrim close
 //! unless busy, Mod+Enter submits from any field, Tab stays inside, and focus goes back to the
 //! opener. A confirm can open over a dialog, which keeps its state under it. Toasts stay above the
 //! scrim. The frame has the spacing of Zed's `Modal`, `ModalHeader` and `ModalFooter`; the header
@@ -10,7 +10,7 @@ use std::rc::Rc;
 
 use gpui::{
     AnyView, ClickEvent, DismissEvent, Entity, EntityId, EventEmitter, FocusHandle, Focusable,
-    Global, KeystrokeEvent, MouseButton, ScrollHandle, Subscription, anchored, deferred, point,
+    Global, KeystrokeEvent, MouseButton, Subscription, anchored, deferred, point,
 };
 use ui::prelude::*;
 
@@ -24,8 +24,6 @@ pub enum DialogSize {
     #[default]
     Medium,
     Large,
-    /// A screen of its own (Project settings): 88% of the window high, near the top.
-    ExtraLarge,
 }
 
 impl DialogSize {
@@ -34,19 +32,12 @@ impl DialogSize {
             DialogSize::Small => 400_f32,
             DialogSize::Medium => 520.,
             DialogSize::Large => 640.,
-            DialogSize::ExtraLarge => 1120.,
         })
     }
-
-    /// The share of the window above the dialog.
-    fn top(self) -> f32 {
-        if self == DialogSize::ExtraLarge {
-            0.06
-        } else {
-            0.14
-        }
-    }
 }
+
+/// The share of the window above a dialog.
+const TOP: f32 = 0.14;
 
 /// A view shown by `DialogLayer::open`. Its root element tracks its focus handle, so the layer
 /// can tell that focus is inside; it closes itself with `cx.emit(DismissEvent)`. Focus starts on
@@ -157,7 +148,7 @@ impl DialogLayer {
         layer.update(cx, |layer, cx| layer.show(view, true, window, cx));
     }
 
-    #[allow(dead_code)]
+    /// A dialog is open: the Settings page leaves its keys to it.
     pub fn is_open(cx: &App) -> bool {
         cx.try_global::<GlobalDialogLayer>()
             .is_some_and(|g| !g.0.read(cx).open.is_empty())
@@ -289,7 +280,7 @@ impl Render for DialogLayer {
                 .occlude()
                 .bg(scrim)
                 .items_center()
-                .pt(viewport.height * size.top())
+                .pt(viewport.height * TOP)
                 .child(panel);
             // Only the top dialog closes on a click outside it.
             if index == top {
@@ -312,8 +303,6 @@ type ClickHandler = Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
 #[derive(IntoElement)]
 pub struct DialogFrame {
     title: SharedString,
-    tall: bool,
-    scroll: Option<ScrollHandle>,
     note: Option<SharedString>,
     description: Option<SharedString>,
     body: Vec<AnyElement>,
@@ -329,26 +318,12 @@ impl DialogFrame {
     ) -> Self {
         Self {
             title: title.into(),
-            tall: false,
-            scroll: None,
             note: None,
             description: None,
             body: Vec::new(),
             footer: Vec::new(),
             on_close: Rc::new(on_close),
         }
-    }
-
-    /// The frame of an `ExtraLarge` dialog: 88% of the window high, the body fills the rest.
-    pub fn tall(mut self) -> Self {
-        self.tall = true;
-        self
-    }
-
-    /// The body's scroll, for a dialog that scrolls to one of its parts.
-    pub fn track_scroll(mut self, handle: &ScrollHandle) -> Self {
-        self.scroll = Some(handle.clone());
-        self
     }
 
     /// A line above the footer's buttons.
@@ -406,13 +381,7 @@ impl RenderOnce for DialogFrame {
         let height = window.viewport_size().height;
         v_flex()
             .w_full()
-            .map(|this| {
-                if self.tall {
-                    this.h(height * 0.88)
-                } else {
-                    this.max_h(height * 0.8)
-                }
-            })
+            .max_h(height * 0.8)
             .overflow_hidden()
             .elevation_3(cx)
             .child(header)
@@ -423,7 +392,6 @@ impl RenderOnce for DialogFrame {
                         .min_h_0()
                         .flex_1()
                         .overflow_y_scroll()
-                        .when_some(self.scroll, |body, handle| body.track_scroll(&handle))
                         .px(DynamicSpacing::Base12.rems(cx))
                         .py(DynamicSpacing::Base08.rems(cx))
                         .gap(DynamicSpacing::Base12.rems(cx))

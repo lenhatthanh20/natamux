@@ -8,10 +8,10 @@ use std::time::Duration;
 use editor::Editor;
 use gpui::{App, AsyncApp, Entity, Keystroke, Window, WindowHandle, px};
 
+use super::settings_rules::SettingsPage;
 use super::shots::{self, RUNNING};
 use super::shots_stages::{PROJECT, READ};
 use super::window::Root;
-use crate::projects::project_settings_dialog;
 
 const TYPED: &str = "abc";
 /// The fake's terminal list comes at once; the grid is drawn well within this.
@@ -114,14 +114,15 @@ async fn check_grid(handle: WindowHandle<Root>, quit: bool, cx: &mut AsyncApp) {
     check_chart(handle, quit, cx).await;
 }
 
-/// Opens Project settings of the fake project, whose pipeline is wider than the dialog, and fails
+/// Opens Project settings of the fake project, whose pipeline is wider than the page, and fails
 /// if the chart cannot scroll to its last step: the right part was cut off (T-0163).
 async fn check_chart(handle: WindowHandle<Root>, quit: bool, cx: &mut AsyncApp) {
     let opened = handle.update(cx, |root, window, cx| {
-        project_settings_dialog::open(root.dashboard(), PROJECT, window, cx)
+        root.show_settings(SettingsPage::Project(PROJECT.to_owned()), window, cx)
     });
     let dialog = match opened {
-        Ok(dialog) => dialog,
+        Ok(Some(dialog)) => dialog,
+        Ok(None) => fail("Project settings did not open"),
         Err(error) => fail(&format!("the window is gone: {error}")),
     };
     cx.background_executor().timer(READ).await;

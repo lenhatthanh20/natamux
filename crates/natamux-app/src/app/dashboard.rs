@@ -9,14 +9,14 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use futures::StreamExt;
 use gpui::EventEmitter;
 use natamux_client::DashboardEvent;
 use natamux_proto::tasks::task::{Task, TaskState};
 use ui::prelude::*;
 
 use super::dashboard_data::{BulkRuns, DashboardData, Link};
-use super::source::{Feed, Rows, Source};
+use super::settings_rules::{SettingsFocus, SettingsPage};
+use super::source::{Rows, Source};
 use super::view_rules::{
     Entries, ShellRequest, WorkspaceTab, request_on_open, seen_after_list, toggle_pin, with_recent,
     with_seen,
@@ -47,6 +47,10 @@ pub enum DashboardChange {
     TaskLogged(String),
     /// Undo of a rollback's toast: the task's workspace runs it as one git step.
     UndoRollback(String),
+    /// The Settings page opened, or was asked for again (T-0174).
+    SettingsOpened(SettingsFocus),
+    /// Settings closed by its close button or Esc: main shows again.
+    SettingsClosed,
 }
 
 /// The parts of the app that show terminals of tasks; the feed reads the union.
@@ -77,6 +81,9 @@ pub struct Dashboard {
     pub open_task: Option<String>,
     /// Main shows the Agents grid (then no task is open).
     pub agents_open: bool,
+    /// The Settings page fills the body over main (T-0174); None: closed.
+    pub settings: Option<SettingsPage>,
+    last_settings_page: SettingsPage,
     /// The terminal the open workspace shows and focuses once its terminals are read.
     pub shell_request: Option<ShellRequest>,
     /// The tab the open workspace shows, and the task whose commit box Commit… asked for.
@@ -130,6 +137,8 @@ impl Dashboard {
             selected: None,
             open_task: None,
             agents_open: false,
+            settings: None,
+            last_settings_page: SettingsPage::Appearance,
             shell_request: None,
             workspace_tab: WorkspaceTab::Terminal,
             commit_request: None,
@@ -160,24 +169,6 @@ impl Dashboard {
     pub fn use_view(&mut self, view: ViewState, cx: &mut Context<Self>) {
         self.view = view;
         self.view_folder = None;
-        cx.notify();
-    }
-
-    /// Follows the feed again from the start: Retry of "Could not load tasks".
-    pub fn watch(&mut self, cx: &mut Context<Self>) {
-        let Some(source) = self.source.clone() else {
-            return;
-        };
-        let Feed { mut events, rows } = source.watch_dashboard();
-        self.rows = Some(rows);
-        self.data.link = Link::Loading;
-        self._feed = Some(cx.spawn(async move |this, cx| {
-            while let Some(event) = events.next().await {
-                if this.update(cx, |this, cx| this.apply(event, cx)).is_err() {
-                    break;
-                }
-            }
-        }));
         cx.notify();
     }
 
@@ -313,6 +304,7 @@ impl Dashboard {
             &task.id,
         );
         self.agents_open = false;
+        self.settings = None;
         self.workspace_tab = self.tab_on_open(&task.id);
         self.open_task = Some(task.id.clone());
         self.view.seen = with_seen(&self.view.seen, &[(&task.id, task.state)], true);
@@ -350,6 +342,7 @@ impl Dashboard {
     pub fn open_agents(&mut self, cx: &mut Context<Self>) {
         self.open_task = None;
         self.shell_request = None;
+        self.settings = None;
         if !self.agents_open {
             self.agents_open = true;
             cx.emit(DashboardChange::AgentsOpened);
