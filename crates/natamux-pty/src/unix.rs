@@ -169,8 +169,10 @@ impl Pty for UnixPty {
         process_name(group.as_raw())
     }
 
+    /// A fresh table: a one-off caller wants what runs now. The daemon shares one through
+    /// `processes`.
     fn commands(&self) -> Option<Vec<String>> {
-        self.commands_in(&read_processes(false))
+        self.commands_in(&read_processes(true))
     }
 
     fn commands_in(&self, table: &ProcessTable) -> Option<Vec<String>> {
