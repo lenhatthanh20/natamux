@@ -7,14 +7,6 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
-## v0.1.44 (2026-10-25)
-
-- Output in one terminal draws only that terminal. The sidebar, the task list, the details panel and the other panes draw again only when their own data changes.
-- A window without focus stops the age clock of the sidebar and the 60-second checks of the open task. When the window has focus again, it reads once what it skipped. Changes the daemon sends are still read in the background.
-- The open task reads its git state, its events, its stage files and its settings at most once a second. Many changes in a row make one read, and the screen draws again only when the result differs.
-- The sidebar lays out only the rows on screen. The time labels of the sidebar, the task list and the details panel draw again only when one of them changes.
-- In the daemon, a shell that prints a lot no longer holds up the other shells.
-
 ## v0.1.43 (2026-10-21)
 
 - The stage settings in **Project settings → Stages** have a **Run in a terminal of its own** checkbox (`ownShell`). Checked, the stage runs in Terminal 5 with a new session. Unchecked, it runs in Terminal 1 with the task's agent. Unchecking also clears the stage's **Agent** and **Arguments** when it can no longer have them. See [The Stages tab](/docs/guides/project-settings/#the-stages-tab) and [Stages in their own terminal](/docs/concepts/stages/#stages-in-their-own-terminal).
