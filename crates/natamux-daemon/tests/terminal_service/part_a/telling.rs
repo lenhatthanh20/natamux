@@ -132,7 +132,10 @@ fn sends_shells_changed_when_the_program_in_front_changes_while_output_goes_on()
     h.pty(0).set_program(Some("claude"));
     busy(&h);
     assert_eq!(changes(&h), started + 1);
-    assert_eq!(h.messages().last(), Some(&shells_changed("T-0001")));
+    assert_eq!(
+        h.messages().last(),
+        Some(&programs_changed("T-0001", &["1"]))
+    );
 
     h.pty(0).set_program(Some("zsh"));
     busy(&h);
