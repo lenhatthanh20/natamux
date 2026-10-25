@@ -1,7 +1,7 @@
 import type { Task, TaskState, TerminalLane } from '@natamux/core'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { SquareSplitHorizontal, SquareTerminal } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { StatusGlyph } from '../../components/StatusGlyph'
 import { Button } from '../../components/ui/Button'
@@ -122,15 +122,48 @@ export function ShellPanes({
   // keep their last screen and "Open a new shell" until the user closes them. A shell the daemon
   // closed (exit code null) leaves.
   const [exited, setExited] = useState<string[]>([])
-  const noteExit = (name: string, code: number | null) =>
+  // The list can drop a shell on screen before its pane hears how the shell ended, and only the
+  // pane can tell `exit` from a shell the daemon closed. So the shell stays until its pane says.
+  const [leaving, setLeaving] = useState<string[]>([])
+  const rendered = useRef<string[]>([])
+  const reported = useRef(new Set<string>())
+  const noteExit = (name: string, code: number | null) => {
+    reported.current.add(name)
+    setLeaving((current) =>
+      current.includes(name) ? current.filter((item) => item !== name) : current,
+    )
     setExited((current) => {
       if (code === null) {
         return current.includes(name) ? current.filter((item) => item !== name) : current
       }
       return current.includes(name) ? current : [...current, name]
     })
+  }
   // Shells that are being closed. They leave the screen at once, not when the list is read again.
   const [closing, setClosing] = useState<string[]>([])
+  // In render, not in an effect: a pane that left the screen for one render would attach again.
+  const [listSeen, setListSeen] = useState(open.data)
+  if (listSeen !== open.data) {
+    setListSeen(open.data)
+    const listed = open.data ?? []
+    for (const name of listed) {
+      if (!listSeen?.includes(name)) {
+        reported.current.delete(name)
+      }
+    }
+    const dropped = rendered.current.filter(
+      (name) =>
+        !listed.includes(name) &&
+        !added.includes(name) &&
+        !exited.includes(name) &&
+        !closing.includes(name) &&
+        !reported.current.has(name),
+    )
+    setLeaving((current) => [
+      ...current.filter((name) => !listed.includes(name)),
+      ...dropped.filter((name) => !current.includes(name)),
+    ])
+  }
   const [shown, setShown] = useState('1')
   const [maximized, setMaximized] = useState<string | null>(null)
   const [gridRef, gridWidth] = useElementWidth<HTMLDivElement>()
@@ -153,9 +186,13 @@ export function ShellPanes({
     )
   const phone = usePhone()
   const names = terminalNames(
-    [...(open.data ?? []), ...exited].filter((name) => !closing.includes(name)),
+    [...(open.data ?? []), ...exited, ...leaving].filter((name) => !closing.includes(name)),
     added,
   )
+  const gridShown = measured && listChecked.current
+  useLayoutEffect(() => {
+    rendered.current = gridShown ? names : []
+  })
 
   // On a phone one terminal fills the screen, and chips switch between them.
   const active = names.includes(shown) ? shown : (names[0] ?? '1')
@@ -185,6 +222,7 @@ export function ShellPanes({
       return
     }
     const name = nextTerminalName(names)
+    reported.current.delete(name)
     setAdded((current) => [...current, name])
     // The view mounts again on each task switch, and must list this shell before the list is read.
     queryClient.setQueryData<string[]>(['terminals', taskId], (current) =>
@@ -201,6 +239,7 @@ export function ShellPanes({
     setClosing((current) => [...current, name])
     setAdded((current) => current.filter((item) => item !== name))
     setExited((current) => current.filter((item) => item !== name))
+    setLeaving((current) => current.filter((item) => item !== name))
     if (maximized === name) {
       setMaximized(null)
     }
@@ -314,8 +353,7 @@ export function ShellPanes({
         style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
         className="hm-fade-in grid min-h-0 flex-1 auto-rows-[minmax(12rem,1fr)] gap-2 overflow-auto"
       >
-        {measured &&
-          listChecked.current &&
+        {gridShown &&
           names.map((name) => {
             const state = agentState(name)
             const isAgent = state !== undefined
