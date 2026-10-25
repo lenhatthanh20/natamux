@@ -349,7 +349,8 @@ fn main() -> ExitCode {
             ) {
                 eprintln!("natamux-app: {error:#}");
                 start_failed.store(true, std::sync::atomic::Ordering::Relaxed);
-                cx.quit();
+                // On Linux a quit asked before the event loop runs is lost: ask from a task.
+                cx.spawn(async move |cx| cx.update(|cx| cx.quit())).detach();
             }
         });
     app::update::finish_quit(&owned);

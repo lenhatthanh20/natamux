@@ -107,9 +107,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           sudo apt-get update
+          # mesa-vulkan-drivers is a software Vulkan: without it the app has no surface in Xvfb.
           sudo apt-get install -y --no-install-recommends libasound2-dev libfontconfig-dev \
             libglib2.0-dev libssl-dev libva-dev libvulkan1 libwayland-dev libx11-xcb-dev \
-            libxkbcommon-x11-dev libzstd-dev libsqlite3-dev xvfb squashfs-tools dpkg-dev
+            libxkbcommon-x11-dev libzstd-dev libsqlite3-dev xvfb squashfs-tools dpkg-dev \
+            mesa-vulkan-drivers
           gh release download 1.9.1 -R AppImage/appimagetool \
             -p appimagetool-x86_64.AppImage -D "$RUNNER_TEMP"
           gh release download 20251108 -R AppImage/type2-runtime \
