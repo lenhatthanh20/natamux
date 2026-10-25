@@ -24,12 +24,12 @@ xattr -dr com.apple.quarantine /Applications/Natamux.app
 
 The installer is not signed with a Windows certificate, so SmartScreen shows **Windows protected your PC**. Click **More info**, then **Run anyway**. Check the file against `SHA256SUMS.txt` first if you like; see [Verify the download](/docs/getting-started/install/#verify-the-download).
 
-## The AppImage does not start on Ubuntu
+## The AppImage does not start
 
-Ubuntu 24.04 and later can block Chromium's sandbox. Either install the `.deb`, or start the AppImage with `--no-sandbox`:
+An AppImage mounts itself with FUSE, which some systems do not have. Either install the `.deb`, or start the AppImage without FUSE:
 
 ```sh
-./Natamux-linux-x86_64.AppImage --no-sandbox
+./Natamux-linux-x86_64.AppImage --appimage-extract-and-run
 ```
 
 ## "command not found" when I start an agent
