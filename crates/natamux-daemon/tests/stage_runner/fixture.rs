@@ -145,6 +145,19 @@ impl Fixture {
 
     /// `makeRunner`: a runner of this fixture, with open shells when given.
     pub fn make_runner(&self, open_shells: Option<Arc<OpenShells>>) -> StageRunner {
+        StageRunner::new(self.runner_options(open_shells))
+    }
+
+    /// A new runner whose closing shells wait `ms` for the turn end of their agent.
+    pub fn with_end_shell_grace(&mut self, ms: u64) {
+        self.runner.stop();
+        let mut options = self.runner_options(None);
+        options.end_shell_grace_ms = ms;
+        self.runner = StageRunner::new(options);
+        self.runner.start();
+    }
+
+    fn runner_options(&self, open_shells: Option<Arc<OpenShells>>) -> StageRunOptions {
         let repo = self.repo.to_string_lossy().into_owned();
         let settings = Arc::clone(&self.settings);
         let mut options = StageRunOptions::new(
@@ -174,7 +187,7 @@ impl Fixture {
         options.ci = Arc::clone(&self.ci) as Arc<dyn CiCheck>;
         options.open_shells = open_shells;
         options.jobs = Arc::clone(&self.jobs);
-        StageRunner::new(options)
+        options
     }
 
     /// From now on a shell for which `fails(task id, terminal)` holds cannot start.

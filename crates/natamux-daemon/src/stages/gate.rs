@@ -39,17 +39,33 @@ impl StageRun {
             "stage.reported",
             json!({ "stage": stage }),
         );
-        if !self.apply(task_id, &input)?.accepted {
+        // Noted before the report moves the task: a shell that the move ends waits for this
+        // agent's turn end.
+        let shell = terminal
+            .filter(|_| source == "agent")
+            .map(|terminal| key(task_id, terminal));
+        let before = shell
+            .as_ref()
+            .and_then(|shell| self.state().reported.insert(shell.clone(), stage.into()));
+        let accepted = self.apply(task_id, &input).map(|applied| applied.accepted);
+        if let (false, Some(shell)) = (matches!(accepted, Ok(true)), &shell) {
+            self.restore_report(shell, before);
+        }
+        if !accepted? {
             return Err(action(format!(
                 "{task_id}: the {stage} stage is not running"
             )));
         }
-        if let (Some(terminal), "agent") = (terminal, source) {
-            self.state()
-                .reported
-                .insert(key(task_id, terminal), stage.into());
-        }
         self.check(task_id, stage)
+    }
+
+    /// Undoes a report noted for an action that did not happen.
+    pub fn restore_report(&self, shell: &str, before: Option<String>) {
+        let mut state = self.state();
+        match before {
+            Some(stage) => state.reported.insert(shell.to_string(), stage),
+            None => state.reported.remove(shell),
+        };
     }
 
     pub fn last_start(&self, task_id: &str, stage: &str) -> LastStart {

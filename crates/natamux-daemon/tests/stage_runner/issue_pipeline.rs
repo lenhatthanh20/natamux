@@ -246,7 +246,8 @@ fn keeps_the_stage_of_a_running_agent_when_the_settings_change() {
     let next = report(&f, &task, "7");
 
     assert_eq!(state_of(&next), ("implement", TaskState::Running));
-    // Its endShell closes the shell it ran in.
+    // Its endShell closes the shell it ran in, at the turn end of its agent.
+    assert!(f.runner.run.take_report(&task.id, "7"));
     assert_eq!(f.terminals.list(&task.id), ["1"]);
 }
 

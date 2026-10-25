@@ -1,6 +1,8 @@
 //! `stage-shells.ts`, live part: which agent runs where, and closing the shell of a stage when it
 //! ends. Finishing a task and bringing shells back after a restart are in `shells_finish.rs`.
 
+use std::sync::{Arc, OnceLock};
+
 use natamux_agents::launch::agent_of_command;
 use natamux_core::stages::terminal_lane::{ends_shell1, terminal_of_stage_pinned};
 use natamux_proto::events::task_event::TaskEvent;
@@ -10,6 +12,7 @@ use natamux_proto::stages::schema::{Stage, StageKind, Step};
 use natamux_proto::tasks::task::Task;
 use serde_json::Value;
 
+use crate::shared::scheduler::TimerId;
 use crate::stages::run::{StageRun, key};
 use crate::terminals::limits::SHELL_PROGRAMS;
 
@@ -32,8 +35,9 @@ pub fn is_shell(program: &str) -> bool {
 
 impl StageRun {
     /// A stage set to end its shell closes it once its lane is done. This runs before the next
-    /// stage starts, so a next stage in the same shell starts a new agent. A finished task is
-    /// left to `finish`, which keeps the screens.
+    /// stage starts; a next stage in the same shell closes one that still waits for its agent's
+    /// turn end, so it starts a new agent. A finished task is left to `finish`, which keeps the
+    /// screens.
     pub fn end_stage_shell(&self, task: &Task, event: &TaskEvent) {
         let Some(stage_id) = event.payload.get("stage").and_then(Value::as_str) else {
             return;
@@ -83,7 +87,8 @@ impl StageRun {
     }
 
     /// Ends the agent or command of a stage set to end its shell, and closes the shell. Shell 1
-    /// keeps the task's agent and is never closed.
+    /// keeps the task's agent and is never closed. An agent that ended the stage itself, by
+    /// `natamux done` or a send back, still runs that command: its shell closes at the turn end.
     fn close_stage_shell(&self, task_id: &str, steps: &[Step], stage: &Stage) {
         let pinned = self.pinned(task_id);
         if stage.end_shell != Some(true)
@@ -101,10 +106,65 @@ impl StageRun {
         let Some(terminal) = terminal else {
             return;
         };
-        self.options.terminals.close_one(task_id, &terminal);
+        if self.state().reported.contains_key(&key(task_id, &terminal)) {
+            self.close_at_turn_end(task_id, &terminal);
+        } else {
+            self.close_shell_now(task_id, &terminal);
+        }
+    }
+
+    /// The shell waits for the turn end of its agent (`take_report`), or for the grace time when
+    /// that never comes.
+    fn close_at_turn_end(&self, task_id: &str, terminal: &str) {
+        let scheduler = self.options.terminals.scheduler();
+        let run = self.weak();
+        let (task, name) = (task_id.to_string(), terminal.to_string());
+        let own: Arc<OnceLock<TimerId>> = Arc::default();
+        let mine = Arc::clone(&own);
+        let timer = scheduler.after(self.options.end_shell_grace_ms, move || {
+            if let (Some(run), Some(timer)) = (run.upgrade(), mine.get()) {
+                run.close_on_timer(&task, &name, *timer);
+            }
+        });
+        let _ = own.set(timer);
+        let before = self.state().closing.insert(key(task_id, terminal), timer);
+        if let Some(before) = before {
+            scheduler.cancel(before);
+        }
+    }
+
+    /// The grace time is over. A cancel cannot stop a job the scheduler took already, so a timer
+    /// of an earlier round closes nothing: the shell of a newer round waits for its own.
+    fn close_on_timer(&self, task_id: &str, terminal: &str, timer: TimerId) {
+        let shell = key(task_id, terminal);
+        let mine = {
+            let mut state = self.state();
+            let mine = state.closing.get(&shell) == Some(&timer);
+            if mine {
+                state.closing.remove(&shell);
+            }
+            mine
+        };
+        if mine {
+            self.close_shell_now(task_id, terminal);
+        }
+    }
+
+    /// Closes now a shell that waits for the turn end of its agent: the turn ended, or a next
+    /// stage starts in it.
+    pub fn close_pending_shell(&self, task_id: &str, terminal: &str) {
+        let timer = self.state().closing.remove(&key(task_id, terminal));
+        if let Some(timer) = timer {
+            self.options.terminals.scheduler().cancel(timer);
+            self.close_shell_now(task_id, terminal);
+        }
+    }
+
+    fn close_shell_now(&self, task_id: &str, terminal: &str) {
+        self.options.terminals.close_one(task_id, terminal);
         // The killed agent never ends its turn, so its report would swallow the first turn end
         // of the next agent in this shell.
-        let shell = key(task_id, &terminal);
+        let shell = key(task_id, terminal);
         let mut state = self.state();
         state.reported.remove(&shell);
         state.launched.remove(&shell);

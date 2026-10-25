@@ -92,6 +92,11 @@ impl TerminalService {
         lock(&self.inner.tickets).redeem(ticket, task_id, now)
     }
 
+    /// The timers of the shells, for work that waits on a shell.
+    pub fn scheduler(&self) -> Arc<Scheduler> {
+        Arc::clone(&self.inner.options.scheduler)
+    }
+
     pub fn is_open(&self, task_id: &str, terminal: &str) -> bool {
         self.inner.get(task_id, terminal).is_some()
     }

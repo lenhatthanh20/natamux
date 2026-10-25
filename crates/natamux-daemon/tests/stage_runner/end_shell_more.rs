@@ -142,8 +142,8 @@ fn last_event(f: &Fixture, id: &str, kind: &str) -> Option<Value> {
 }
 
 /// A testing stage of your own with its own agent in Shell 7 fails on CI, so the task goes back
-/// to Implement.
-fn failed_on_ci(f: &Fixture, end_shell: bool) -> Task {
+/// to Implement. Its agent ends the turn of its report before CI ends, or after.
+fn failed_on_ci(f: &Fixture, end_shell: bool, turn_end_first: bool) -> Task {
     let mut smoke = stage("smoke", StageKind::Testing, Gate::Auto);
     smoke.agent = Some("codex".into());
     smoke.ci = Some(true);
@@ -166,6 +166,9 @@ fn failed_on_ci(f: &Fixture, end_shell: bool) -> Task {
         .run
         .act(&task.id, StageAction::Report, &input(Some("7"), None, None))
         .unwrap();
+    if turn_end_first {
+        f.runner.run.take_report(&task.id, "7");
+    }
     f.ci.finish(CiResult {
         passed: false,
         reasons: vec!["CI E2E failure: u".into()],
@@ -186,7 +189,23 @@ fn failed_on_ci(f: &Fixture, end_shell: bool) -> Task {
 #[test]
 fn closes_its_shell_when_ci_sends_the_task_back_from_it() {
     let f = Fixture::new();
-    let task = failed_on_ci(&f, true);
+    let task = failed_on_ci(&f, true, true);
+
+    assert!(killed(&f, 1));
+    assert!(!killed(&f, 0));
+    assert_eq!(terminals(&f, &task.id), ["1"]);
+}
+
+#[test]
+fn keeps_its_shell_when_ci_sends_the_task_back_before_its_agent_ends_the_turn() {
+    let f = Fixture::new();
+    let task = failed_on_ci(&f, true, false);
+
+    assert!(!killed(&f, 1));
+    assert_eq!(terminals(&f, &task.id), ["1", "7"]);
+
+    assert!(f.runner.run.take_report(&task.id, "7"));
+    f.settle();
 
     assert!(killed(&f, 1));
     assert!(!killed(&f, 0));
@@ -196,7 +215,7 @@ fn closes_its_shell_when_ci_sends_the_task_back_from_it() {
 #[test]
 fn keeps_the_shell_of_a_stage_without_it_when_ci_sends_the_task_back() {
     let f = Fixture::new();
-    let task = failed_on_ci(&f, false);
+    let task = failed_on_ci(&f, false, true);
 
     assert!(!any_killed(&f));
     assert_eq!(terminals(&f, &task.id), ["1", "7"]);

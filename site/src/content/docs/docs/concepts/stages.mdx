@@ -272,6 +272,7 @@ Check **End the agent and close its terminal when the stage is done** in the sta
 - Done means the stage passed, was approved or was skipped, or sent the task back to an earlier stage. A stage that waits for your approval keeps its terminal until you approve.
 - Without the setting, Natamux does not close the stage's terminal while the task runs.
 - Natamux ends the agent or command in the stage's terminal and closes the terminal. Other terminals go on.
+- When the stage's own agent ends the stage (`natamux done`, or `natamux stage back`), Natamux waits until that agent ends its turn, at most 60 seconds, so its last command is not cut off. A next stage in the same terminal does not wait.
 - Terminal 1 is never closed, because it keeps the task's agent and its session. A stage there shows "This stage runs in Terminal 1, which cannot be closed." in place of the checkbox, and `"endShell": true` on it is ignored.
 - A next stage in the same terminal starts a new agent with a new session and the full stage prompt.
 - A send back to the stage starts a new agent in its terminal.

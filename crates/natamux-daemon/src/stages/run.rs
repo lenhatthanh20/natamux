@@ -23,6 +23,7 @@ use serde_json::{Map, Value, json};
 use crate::agents::runner::AgentRunner;
 use crate::shared::event_bus::EventBus;
 use crate::shared::jobs::{Clock, Jobs, system_clock};
+use crate::shared::scheduler::TimerId;
 use crate::stages::errors::{StageResult, action};
 use crate::tasks::errors::TaskError;
 use crate::tasks::service::TaskService;
@@ -34,6 +35,10 @@ use crate::terminals::service::TerminalService;
 pub type RepoPath = Arc<dyn Fn(Option<&str>) -> Result<String, TaskError> + Send + Sync>;
 /// The settings of a repository (`.natamux.json`), read again at each call.
 pub type SettingsOf = Arc<dyn Fn(Option<&str>) -> ProjectSettings + Send + Sync>;
+
+/// How long the shell of a stage that ends it waits for the turn end of its agent. An agent ends
+/// its turn a few seconds after its last command; this does not cut a slow one.
+pub const END_SHELL_GRACE_MS: u64 = 60_000;
 
 pub struct StageRunOptions {
     pub tasks: TaskService,
@@ -55,6 +60,8 @@ pub struct StageRunOptions {
     /// The shells that were open, to bring back after a restart.
     pub open_shells: Option<Arc<OpenShells>>,
     pub jobs: Arc<Jobs>,
+    /// `END_SHELL_GRACE_MS`; tests set a short one.
+    pub end_shell_grace_ms: u64,
 }
 
 impl StageRunOptions {
@@ -87,6 +94,7 @@ impl StageRunOptions {
             windows: cfg!(windows),
             home,
             open_shells: None,
+            end_shell_grace_ms: END_SHELL_GRACE_MS,
         }
     }
 }
@@ -134,6 +142,9 @@ pub struct State {
     /// Terminals whose agent reported a stage done, with that stage: the turn end that follows
     /// the report is not a "stopped early".
     pub reported: HashMap<String, String>,
+    /// Shells of stages that end them, closed at the turn end of their agent, with the timer
+    /// that closes them when that turn end never comes.
+    pub closing: HashMap<String, TimerId>,
     /// Tasks whose agent stage waits for a workspace.
     pub waiting_for_workspace: HashSet<String>,
     /// Tasks whose agent stage waits for the tasks it depends on to be done.
