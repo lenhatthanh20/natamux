@@ -110,3 +110,32 @@ fn names_only_the_shell_whose_program_changed_of_three() {
     h.advance(WORKSPACE_QUIET_MS * 2);
     assert_eq!(changes(&h), started + 1);
 }
+
+// An agent such as Claude Code redraws its spinner all through its turn, so its output never
+// goes quiet: the dashboards must still learn that it took the foreground.
+#[test]
+fn sends_shells_changed_when_the_program_in_front_changes_while_output_goes_on() {
+    let (h, quiet) = watched();
+    attach_at(&h, "T-0001", SIZE, "1");
+    h.pty(0).set_program(Some("zsh"));
+    h.pty(0).emit("$ ");
+    h.advance(WORKSPACE_QUIET_MS * 2);
+    let started = changes(&h);
+    let quiet_moments = quiet.lock().unwrap().len();
+    let busy = |h: &Harness| {
+        for _ in 0..6 {
+            h.pty(0).emit("working\r\n");
+            h.advance(WORKSPACE_QUIET_MS / 2);
+        }
+    };
+
+    h.pty(0).set_program(Some("claude"));
+    busy(&h);
+    assert_eq!(changes(&h), started + 1);
+    assert_eq!(h.messages().last(), Some(&shells_changed("T-0001")));
+
+    h.pty(0).set_program(Some("zsh"));
+    busy(&h);
+    assert_eq!(changes(&h), started + 2);
+    assert_eq!(quiet.lock().unwrap().len(), quiet_moments);
+}

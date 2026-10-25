@@ -29,15 +29,15 @@ Open the forwarded port 5173 and paste the token. The dev server sends `/api` to
 
 ## Keyboard
 
-| Key | Action |
-|---|---|
-| `j` / `k` or arrows | Move the selection |
-| `Enter` | Open the workspace of the task |
-| `i` | Show or hide the details |
-| `Esc` | Close the open workspace or details, or leave a field |
-| `/` | Search |
-| `n` | New task title |
-| `a` / `r` | Approve / request changes on the selected task in review |
+| Key                 | Action                                                   |
+| ------------------- | -------------------------------------------------------- |
+| `j` / `k` or arrows | Move the selection                                       |
+| `Enter`             | Open the workspace of the task                           |
+| `i`                 | Show or hide the details                                 |
+| `Esc`               | Close the open workspace or details, or leave a field    |
+| `/`                 | Search                                                   |
+| `n`                 | New task title                                           |
+| `a` / `r`           | Approve / request changes on the selected task in review |
 
 ## Not done yet
 

@@ -259,6 +259,7 @@ impl Inner {
             if seen.get(&task_id) == Some(&true) {
                 seen.insert(task_id.clone(), false);
                 drop(seen);
+                inner.note_foreground(&task_id);
                 inner.check_quiet(task_id);
                 return;
             }
@@ -272,7 +273,8 @@ impl Inner {
     }
 
     /// A program that starts or ends in a shell prints something. The dashboards show it: tell
-    /// them when it changed.
+    /// them when it changed. Checked on each tick while output goes on too, as an agent's
+    /// spinner keeps the output from going quiet for its whole turn.
     pub(super) fn note_foreground(&self, task_id: &str) {
         let mut changed = Vec::new();
         for session in self.sessions_where(|session| session.task_id == task_id) {
