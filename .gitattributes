@@ -1,4 +1,4 @@
 # Signed test files: a signature covers the exact bytes, so Windows checkouts must not add CRs.
-packages/desktop/src/__tests__/fixtures/minisign/** -text
+crates/natamux-update/tests/fixtures/minisign/** -text
 # The task file fixtures hold the exact bytes gray-matter writes: no CRs on Windows either.
 crates/natamux-store/tests/fixtures/** -text

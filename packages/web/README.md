@@ -4,11 +4,11 @@ The dashboard. It shows every task, and the tasks that need you come first.
 
 ## Run it in a codespace
 
-Two terminals, after `pnpm build`:
+Two terminals:
 
 ```sh
-# 1: the daemon. It prints a token.
-pnpm --filter @natamux/daemon dev
+# 1: the Rust daemon. It prints a token.
+cargo run -p natamux-daemon
 
 # 2: the dashboard
 pnpm --filter @natamux/web dev
