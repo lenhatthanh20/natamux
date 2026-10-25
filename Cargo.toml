@@ -38,7 +38,7 @@ sha2 = "0.10.9"
 subtle = "2.6.1"
 tokio = { version = "1.52", features = ["macros", "net", "rt-multi-thread", "sync", "time"] }
 url = "2.5.7"
-yaml-rust2 = "0.9.0"
+yaml-rust2 = "0.13.0"
 
 # Zed crates: all at one rev, the v1.24.2 release (2026-10-14) plus two patches on the owner's fork
 # (branch natamux/display-only-input-v1.24.2): a display-only terminal gives its input to the app,
