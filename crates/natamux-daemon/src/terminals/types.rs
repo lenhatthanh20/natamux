@@ -157,6 +157,9 @@ pub struct Session {
     pub pending: VecDeque<Input>,
     pub last_write: Option<(u64, InputKind)>,
     pub write_timer: Option<TimerId>,
+    /// `NATAMUX_INPUT_TRACE=1`, see `input_trace`, and when it last logged a line.
+    pub trace_input: bool,
+    pub traced_at: Option<u64>,
     /// The first bytes of a character that the last read cut.
     pub partial: Vec<u8>,
     /// The program in the foreground when the output last went quiet.

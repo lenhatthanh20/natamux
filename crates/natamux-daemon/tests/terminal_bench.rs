@@ -59,6 +59,7 @@ fn setup() -> (TerminalService, Sink) {
         is_ended: None,
         bus: None,
         on_output_idle: None,
+        trace_input: false,
     });
     (service, sink)
 }

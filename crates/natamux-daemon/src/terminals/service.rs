@@ -15,6 +15,7 @@ use natamux_proto::terminals::messages::ServerMessage;
 use natamux_proto::terminals::text::plain_text;
 use natamux_pty::Env;
 
+use super::input_trace::{Step, trace};
 use super::session_input::{set_size, submit, touch, write};
 use super::session_lifecycle::{EndWait, SpawnPty, session_key};
 use super::session_output::{flush_output, ring_since};
@@ -44,6 +45,8 @@ pub struct TerminalOptions {
     pub bus: Option<Arc<EventBus>>,
     /// Called once the shells of a task went quiet after output: files may have changed.
     pub on_output_idle: Option<Arc<TaskListener>>,
+    /// `NATAMUX_INPUT_TRACE=1`: log the input of every shell, see `input_trace`.
+    pub trace_input: bool,
 }
 
 #[derive(Default)]
@@ -323,6 +326,7 @@ impl TerminalService {
         if let Some(state) = client.and_then(|client| touch(&mut guard, client)) {
             set_size(&mut guard, state.size);
         }
+        trace(&mut guard, Step::Recv, data);
         write(&mut guard, data);
     }
 

@@ -168,6 +168,7 @@ impl Inner {
             terminal,
             size,
             scheduler: &self.options.scheduler,
+            trace_input: self.options.trace_input,
         })?;
         let key = session_key(task_id, terminal);
         lock(&self.sessions).insert(key.clone(), Arc::clone(&session));

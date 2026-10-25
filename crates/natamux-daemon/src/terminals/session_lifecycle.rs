@@ -44,6 +44,7 @@ pub struct NewSession<'a> {
     pub terminal: &'a str,
     pub size: Size,
     pub scheduler: &'a Arc<Scheduler>,
+    pub trace_input: bool,
 }
 
 pub fn spawn_session(new: NewSession<'_>) -> Result<SessionRef, TerminalError> {
@@ -93,6 +94,8 @@ pub fn spawn_session(new: NewSession<'_>) -> Result<SessionRef, TerminalError> {
             pending: VecDeque::new(),
             last_write: None,
             write_timer: None,
+            trace_input: new.trace_input,
+            traced_at: None,
             partial: Vec::new(),
             program,
             scheduler: Arc::clone(new.scheduler),

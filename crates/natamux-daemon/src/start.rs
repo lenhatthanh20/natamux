@@ -29,6 +29,7 @@ use crate::stages::runner::StageRunner;
 use crate::tasks::errors::TaskError;
 use crate::tasks::service::{TaskService, is_task_ended};
 use crate::tasks::templates::TemplateService;
+use crate::terminals::input_trace::trace_input_on;
 use crate::terminals::open_shells::{OpenShells, OpenShellsOptions, ShellsView};
 use crate::terminals::service::{TerminalOptions, TerminalService};
 use crate::terminals::session_lifecycle::SpawnPty;
@@ -229,6 +230,7 @@ fn terminal_service(
                 workspaces.touch(task_id);
             }
         })),
+        trace_input: trace_input_on(env.get("NATAMUX_INPUT_TRACE").map(String::as_str)),
     })
 }
 
