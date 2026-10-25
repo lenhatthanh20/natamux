@@ -14,7 +14,7 @@
     "test:coverage": "pnpm -r --if-present run test --coverage"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.15",
-    "@vitest/coverage-v8": "^5.0.4"
+    "@biomejs/biome": "^2.6.2",
+    "@vitest/coverage-v8": "^5.0.5"
   }
 }
