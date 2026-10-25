@@ -21,7 +21,7 @@ pub const NO_WORKSPACE: &str = "No workspace.";
 /// How long until a time the panel shows changes by the clock alone: the ages of the task and of
 /// its events, the quiet banner, and the times of the Progress tab.
 pub fn details_wait<'a>(
-    task: &Task,
+    task: &'a Task,
     event_times: impl IntoIterator<Item = &'a str>,
     progress: &[StageProgress],
     now_ms: i64,

@@ -2,7 +2,7 @@
 //! title. Enter or a blur saves, Esc drops.
 
 use editor::{Editor, EditorEvent};
-use gpui::{Entity, Subscription};
+use gpui::{Entity, Focusable, Subscription};
 use ui::prelude::*;
 
 use crate::sidebar::sidebar_text::renamed_title;
