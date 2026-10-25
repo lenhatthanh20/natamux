@@ -16,6 +16,7 @@ pub fn init(cx: &mut TestAppContext) {
         theme_settings::init(theme::LoadThemes::JustBase, cx);
         editor::init(cx);
         crate::components::motion::init(false, cx);
+        crate::perf::overlay::init(cx);
     });
 }
 
