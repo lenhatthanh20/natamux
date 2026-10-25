@@ -12,7 +12,6 @@ use ui::{ButtonLike, ContextMenu, Tooltip, prelude::*};
 
 use super::jobs::{job_rows, jobs_label};
 use super::shell_rules::{LiveItem, needs_you_text, running_text};
-use super::shortcuts::{ToggleAgents, ToggleDetails, ToggleSidebar};
 use super::status_items::{OnClick, count_item, item_label, toggle_item};
 use super::status_layout::forced_by_width;
 use crate::components::colors::signal;
@@ -34,6 +33,9 @@ pub struct StatusBar {
     on_running: OnClick,
     on_needs_you: OnClick,
     on_open_task: OnOpenTask,
+    on_toggle_sidebar: OnClick,
+    on_toggle_details: OnClick,
+    on_toggle_agents: OnClick,
     sidebar: bool,
     /// Whether the details show, or why the toggle cannot show them (`details_toggle`).
     details: Result<bool, &'static str>,
@@ -57,6 +59,9 @@ impl StatusBar {
             on_running: Rc::new(|_, _, _| {}),
             on_needs_you: Rc::new(|_, _, _| {}),
             on_open_task: Rc::new(|_, _, _| {}),
+            on_toggle_sidebar: Rc::new(|_, _, _| {}),
+            on_toggle_details: Rc::new(|_, _, _| {}),
+            on_toggle_agents: Rc::new(|_, _, _| {}),
             sidebar: false,
             details: Ok(false),
             agents: false,
@@ -92,6 +97,19 @@ impl StatusBar {
     /// A row of the jobs menu opens its task.
     pub fn on_open_task(mut self, f: impl Fn(&str, &mut Window, &mut App) + 'static) -> Self {
         self.on_open_task = Rc::new(f);
+        self
+    }
+
+    /// The clicks of the sidebar, details and agents toggles.
+    pub fn on_toggles(
+        mut self,
+        sidebar: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+        details: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+        agents: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.on_toggle_sidebar = Rc::new(sidebar);
+        self.on_toggle_details = Rc::new(details);
+        self.on_toggle_agents = Rc::new(agents);
         self
     }
 }
@@ -146,7 +164,12 @@ fn on(shown: bool, hide: &'static str, show: &'static str) -> &'static str {
 }
 
 /// The two toggles at the left: sidebar, agents.
-fn left_toggles(sidebar: bool, agents: bool) -> impl IntoElement {
+fn left_toggles(
+    sidebar: bool,
+    agents: bool,
+    on_sidebar: OnClick,
+    on_agents: OnClick,
+) -> impl IntoElement {
     h_flex()
         .gap(rems_from_px(2.0_f32))
         .child(toggle_item(
@@ -156,7 +179,7 @@ fn left_toggles(sidebar: bool, agents: bool) -> impl IntoElement {
             "sidebar.toggle",
             sidebar,
             None,
-            || Box::new(ToggleSidebar),
+            on_sidebar,
         ))
         .child(toggle_item(
             "toggle-agents",
@@ -165,12 +188,12 @@ fn left_toggles(sidebar: bool, agents: bool) -> impl IntoElement {
             "agents.toggle",
             agents,
             None,
-            || Box::new(ToggleAgents),
+            on_agents,
         ))
 }
 
 /// The details toggle, last at the right: it opens the right dock.
-fn details_toggle(details: Result<bool, &'static str>) -> impl IntoElement {
+fn details_toggle(details: Result<bool, &'static str>, on_click: OnClick) -> impl IntoElement {
     let shown = details == Ok(true);
     toggle_item(
         "toggle-details",
@@ -179,7 +202,7 @@ fn details_toggle(details: Result<bool, &'static str>) -> impl IntoElement {
         "details.toggle",
         shown,
         details.err(),
-        || Box::new(ToggleDetails),
+        on_click,
     )
 }
 
@@ -262,7 +285,12 @@ impl RenderOnce for StatusBar {
             .bg(colors.status_bar_background)
             .border_t_1()
             .border_color(colors.border_variant)
-            .child(left_toggles(self.sidebar, self.agents))
+            .child(left_toggles(
+                self.sidebar,
+                self.agents,
+                self.on_toggle_sidebar,
+                self.on_toggle_agents,
+            ))
             .child(div().flex_1())
             .children(needs)
             .children(running)
@@ -272,7 +300,7 @@ impl RenderOnce for StatusBar {
                 condensed.icon_only.contains(&"jobs"),
             ))
             .child(live_item(self.live, cx))
-            .child(details_toggle(self.details))
+            .child(details_toggle(self.details, self.on_toggle_details))
     }
 }
 
