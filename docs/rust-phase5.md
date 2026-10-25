@@ -26,7 +26,7 @@ Done. The Rust implementation was merged into `dev` through [PR #460](https://gi
 | Phase 4 bench method | Passed in [Rust run 40103239773](https://github.com/lenhatthanh20/natamux/actions/runs/40103239773): five alternating rounds. Plain parsing: Node 72.9 MB/s, Rust 94.1 MB/s; SGR parsing: 60.6 / 97.7 MB/s; a 10,000-line snapshot: 62.2 / 6.6 ms. See [Phase 4 gate](rust-phase4.md#gate). `daemon-bench` passed on the cutover tree. |
 | Light and dark screenshots at two sizes | `check-shots.py` passed for `shots-mac-window` at 800×560 and 1000×680 in both themes. The owner approved the state shots on 2026-10-25; they are the baselines in `crates/natamux-app/tests/shots/`, and `app-shots` compares against them (`REPORT_ONLY` is off). |
 | Release scripts and signing tests | Passed in `check` and `release` on [PR #467 checks](https://github.com/lenhatthanh20/natamux/pull/467/checks). |
-| Cutover PR green on `main` | [PR #463](https://github.com/lenhatthanh20/natamux/pull/463) merged. `main` green at MAIN_RUN. `dev` and the `natamux-ci/*` branches were deleted after that; `legacy/electron` is unchanged. |
+| Cutover PR green on `main` | [PR #463](https://github.com/lenhatthanh20/natamux/pull/463) merged. `main` green at `e0353668` ([run 40194095330](https://github.com/lenhatthanh20/natamux/actions/runs/40194095330)). `dev` and the `natamux-ci/*` branches were deleted after that; `legacy/electron` is unchanged. |
 
 No Rust, Node or Docker build ran on the owner's Mac.
 
