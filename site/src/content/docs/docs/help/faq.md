@@ -23,7 +23,7 @@ The **Review** stage uses the task's agent unless you choose another one in **Pr
 
 ## What does it cost?
 
-Natamux is open source under the MIT license and free. The agents you run have their own prices and plans.
+Natamux is open source under the GPL-3.0-or-later license and free. The agents you run have their own prices and plans.
 
 ## Do I need to log in to Natamux?
 

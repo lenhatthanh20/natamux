@@ -1,6 +1,6 @@
 # End-to-end test of task stages
 
-How to test stages, context, issues and pull requests on a real repository. Run in a codespace. First run: 2026-10-09 on `lenhatthanh20/natamux-test`, with the fake agent and with GitHub Copilot.
+Historical record of testing stages, context, issues and pull requests on a real repository. First run: 2026-10-09 on `lenhatthanh20/natamux-test`, with the last Node build, a fake agent and GitHub Copilot. The setup below belongs to `legacy/electron`; use [End-to-end tests](e2e.md) for the current Rust build.
 
 ## Set up
 

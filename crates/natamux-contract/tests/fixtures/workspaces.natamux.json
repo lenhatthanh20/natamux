@@ -1,0 +1,17 @@
+{
+  "context": { "sources": [{ "type": "manual" }] },
+  "tracker": { "type": "github", "createIssue": "on-pr", "linkInPr": true },
+  "stages": [
+    {
+      "id": "build",
+      "name": "Build",
+      "kind": "agent",
+      "gate": "manual",
+      "requireCommit": true,
+      "ci": true,
+      "prompt": "Task: {title}\nCommit your work."
+    },
+    { "id": "review", "kind": "review", "gate": "manual" },
+    { "id": "release", "kind": "release", "gate": "manual" }
+  ]
+}

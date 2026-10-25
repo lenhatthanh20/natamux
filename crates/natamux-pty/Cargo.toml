@@ -1,0 +1,15 @@
+[package]
+name = "natamux-pty"
+version = "0.1.43"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+nix = { workspace = true, features = ["fs", "process", "signal", "term"] }
+
+[target.'cfg(windows)'.dependencies]
+alacritty_terminal.workspace = true
+
+[lints]
+workspace = true

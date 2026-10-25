@@ -372,7 +372,7 @@ const works = ['Claude Code', 'Codex', 'Gemini CLI', 'Copilot CLI', 'Cursor CLI'
           </div>
           <p class="fine">
             <span data-hero-note data-version={version}>Version {version} for Apple silicon.</span>{' '}
-            <a href="#download">Other systems</a>. MIT licensed, no account.
+            <a href="#download">Other systems</a>. GPL-3.0 licensed, no account.
           </p>
         </div>
 
@@ -800,7 +800,7 @@ pnpm db:seed</pre>
           <ul>
             <li><b>No account, no telemetry.</b> Besides the update check, it talks to GitHub only through your own <code>git</code> and <code>gh</code>, for example to follow your pull requests and CI.</li>
             <li><b>Local daemon.</b> It listens on 127.0.0.1 and wants a token on every request.</li>
-            <li><b>Open source.</b> MIT licensed. Your agents and the GitHub CLI use their own sign-in.</li>
+            <li><b>Open source.</b> GPL-3.0 licensed. Your agents and the GitHub CLI use their own sign-in.</li>
           </ul>
         </div>
       </section>
@@ -862,8 +862,8 @@ pnpm db:seed</pre>
                   <a class="btn big" href={latest('Natamux-linux-amd64.deb')}>Download .deb</a>
                 </div>
                 <ol class="dl-steps">
-                  <li>AppImage: make it executable, then start it. On Ubuntu 24.04 and later, add <code>--no-sandbox</code> if it does not start, or use the <code>.deb</code>.</li>
-                  <li>Debian and Ubuntu: install the <code>.deb</code> with apt. The app is <code>natamux-desktop</code>.</li>
+                  <li>AppImage: make it executable, then start it. Install <code>curl</code> for update checks.</li>
+                  <li>Debian and Ubuntu: install the <code>.deb</code> with apt. The app is in <code>/opt/Natamux</code>.</li>
                 </ol>
                 <div class="cmd"><code>sudo apt install ./Natamux-linux-amd64.deb</code><button type="button" data-copy>Copy</button></div>
               </div>
@@ -892,7 +892,7 @@ pnpm db:seed</pre>
             <ul class="dl-links">
               <li><a href={`${docs}getting-started/install/`}>Install guide</a>, with checks and the command line in your shell</li>
               <li><a href={`${repo}/releases/tag/v${version}`}>Release notes of {version}</a> and <a href={`${docs}help/changelog/`}>the changelog</a></li>
-              <li><a href={`${docs}guides/self-host-docker/`}>Run with Docker</a> or from source with <code>scripts/dev.sh up</code></li>
+              <li><a href={`${docs}guides/self-host-docker/`}>Run with Docker</a> or build the Rust images in a Codespace</li>
             </ul>
           </div>
         </div>
@@ -902,7 +902,7 @@ pnpm db:seed</pre>
     <footer class="foot">
       <div class="wrap foot-row">
         <a class="brand" href={base} aria-label="Natamux home"><img src={`${base}icon.svg`} alt="" width="22" height="22" /><span>Natamux</span></a>
-        <p>MIT licensed. Made for people who run more than one agent.</p>
+        <p>GPL-3.0 licensed. Made for people who run more than one agent.</p>
         <nav aria-label="Footer">
           <a href={docs}>Docs</a>
           <a href={`${docs}help/changelog/`}>Changelog</a>

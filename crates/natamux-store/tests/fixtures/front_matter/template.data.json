@@ -1,0 +1,9 @@
+{
+  "data": {
+    "name": "Bug report",
+    "title": "Bug: something",
+    "priority": "normal",
+    "labels": []
+  },
+  "content": "Steps to see it.\n"
+}

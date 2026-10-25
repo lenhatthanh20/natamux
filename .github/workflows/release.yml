@@ -1,30 +1,30 @@
 name: Release
 
-# Pushing a tag such as v0.1.0 builds the desktop app for macOS (Apple silicon and Intel), Linux
-# x64 and Windows x64, then makes one draft GitHub release with every file. The notes come from
-# docs/releases/<tag>.md. The owner signs SHA256SUMS.txt offline and publishes the draft with
-# scripts/sign-release.sh; apps install no update without that signature. The apps are not signed
-# with a certificate yet (build order step 11). A pull request that changes the packaging builds
-# and starts the app on every system, without a release.
+# The owner signs SHA256SUMS.txt offline and publishes the draft with sign-release.sh.
 on:
   push:
     tags: ['v*']
   pull_request:
+    branches: [main]
     paths:
       - .github/workflows/release.yml
-      - scripts/package-desktop.sh
-      - packages/desktop/**
-      - packages/daemon/package.json
-      - pnpm-lock.yaml
+      - scripts/package-rust-desktop.sh
+      - scripts/natamux-windows.nsi
+      - scripts/bundle-rust-app.sh
+      - crates/natamux-app/**
+      - crates/natamux-daemon/**
+      - crates/natamux-update/**
+      - packages/web/**
+      - Cargo.lock
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing tag to build and publish, such as v0.1.0, or a branch for a dry run
+        description: Existing tag to publish, or a branch for a dry run
         required: true
       publish:
-        description: Publish a release. Off for a dry run that only builds and tests.
+        description: Draft a release after the build
         type: boolean
-        default: true
+        default: false
 
 permissions:
   contents: read
@@ -35,168 +35,189 @@ concurrency:
 
 env:
   TAG: ${{ inputs.tag || github.ref_name }}
+  CARGO_INCREMENTAL: "0"
+  CARGO_PROFILE_RELEASE_DEBUG: "0"
 
 jobs:
-  package:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { name: mac-arm64, os: macos-26, args: --mac --arm64 }
-          - { name: mac-x64, os: macos-26-intel, args: --mac --x64 }
-          - { name: linux-x64, os: ubuntu-latest, args: --linux --x64 }
-          - { name: win-x64, os: windows-latest, args: --win --x64 }
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # A pull request builds its merge commit.
-          ref: ${{ github.event_name != 'pull_request' && env.TAG || '' }}
-      - name: Check the version
-        if: github.event_name == 'push'
-        shell: bash
-        run: |
-          test -f "docs/releases/$TAG.md" || { echo "docs/releases/$TAG.md is missing"; exit 1; }
-          for dir in cli core daemon desktop web; do
-            version=$(sed -n 's/^  "version": "\(.*\)",$/\1/p' "packages/$dir/package.json")
-            test "$version" = "${TAG#v}" || { echo "packages/$dir is $version, not ${TAG#v}"; exit 1; }
-          done
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || '' }}
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: pnpm
-      - name: Package
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @natamux/core --filter @natamux/web build
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-web
+          path: packages/web/dist
+          retention-days: 3
+
+  package:
+    needs: web
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: mac-arm64, os: macos-26 }
+          - { name: mac-x64, os: macos-26-intel }
+          - { name: linux-x64, os: ubuntu-latest }
+          - { name: win-x64, os: windows-latest }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    defaults:
+      run:
         shell: bash
-        env:
-          # The temp folder of the runner is on the drive of the checkout (see package-desktop.sh).
-          TMPDIR: ${{ runner.temp }}
-        run: scripts/package-desktop.sh ${{ matrix.args }} --publish never
-      # Each start also opens a task: a shell in its worktree must answer, and a stand-in agent
-      # must run the app's own `natamux` command. Then the app's own crypto must check a known
-      # minisign signature (packages/desktop/src/smoke.ts).
-      - name: Start the packaged app (Linux)
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || '' }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-web
+          path: packages/web/dist
+      - name: Check version and release notes
+        if: github.event_name == 'push' || inputs.publish
+        run: |
+          test -f "docs/releases/$TAG.md"
+          scripts/release.test.sh
+          version=$(sed -n 's/^version = "\([^"]*\)"$/\1/p' crates/natamux-app/Cargo.toml | head -n 1)
+          test "$version" = "${TAG#v}"
+      - run: rustup toolchain install
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: rust-app-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-${{ github.sha }}
+          restore-keys: rust-app-${{ runner.os }}-
+      - name: Install Linux build tools
         if: runner.os == 'Linux'
         env:
-          NATAMUX_DESKTOP_SMOKE: "1"
-        run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq xvfb
-          printf '#!/bin/sh\nnatamux task show > natamux-smoke.txt\n' > "$RUNNER_TEMP/smoke-agent"
-          chmod +x "$RUNNER_TEMP/smoke-agent"
-          export NATAMUX_CLAUDE_COMMAND="$RUNNER_TEMP/smoke-agent"
-          user_dir="$RUNNER_TEMP/desktop-user"
-          mkdir -p "$user_dir"
-          jq -n --arg repoDir "$GITHUB_WORKSPACE" '{$repoDir}' > "$user_dir/settings.json"
-          xvfb-run -a packages/desktop/release/linux-unpacked/natamux-desktop --no-sandbox --user-data-dir="$user_dir"
-      # Acting as version 0.0.0, the new app must download the AppImage of the latest release,
-      # check it and put it in its own place.
-      - name: Update to the latest release (dry run)
-        if: runner.os == 'Linux' && github.event_name == 'workflow_dispatch' && !inputs.publish
-        env:
-          NATAMUX_UPDATE_AS_VERSION: 0.0.0
-          APPIMAGE_EXTRACT_AND_RUN: "1"
           GH_TOKEN: ${{ github.token }}
         run: |
-          asset=Natamux-linux-x86_64.AppImage
-          for file in "$asset" SHA256SUMS.txt.minisig; do
-            gh release view --json assets --jq '.assets[].name' | grep -qx "$file" \
-              || { echo "::notice::The latest release has no $file; the update check is skipped"; exit 0; }
+          sudo apt-get update
+          # mesa-vulkan-drivers is a software Vulkan: without it the app has no surface in Xvfb.
+          sudo apt-get install -y --no-install-recommends libasound2-dev libfontconfig-dev \
+            libglib2.0-dev libssl-dev libva-dev libvulkan1 libwayland-dev libx11-xcb-dev \
+            libxkbcommon-x11-dev libzstd-dev libsqlite3-dev xvfb squashfs-tools dpkg-dev \
+            mesa-vulkan-drivers
+          gh release download 1.9.1 -R AppImage/appimagetool \
+            -p appimagetool-x86_64.AppImage -D "$RUNNER_TEMP"
+          gh release download 20251108 -R AppImage/type2-runtime \
+            -p runtime-x86_64 -D "$RUNNER_TEMP"
+          for item in 'AppImage/appimagetool 1.9.1 appimagetool-x86_64.AppImage' \
+            'AppImage/type2-runtime 20251108 runtime-x86_64'; do
+            read -r repo tag file <<< "$item"
+            digest=$(gh api "repos/$repo/releases/tags/$tag" \
+              --jq ".assets[] | select(.name == \"$file\") | .digest")
+            [[ $digest =~ ^sha256:[0-9a-f]{64}$ ]]
+            echo "${digest#sha256:}  $RUNNER_TEMP/$file" | sha256sum -c
           done
-          user_dir="$RUNNER_TEMP/update-user"
-          mkdir -p "$user_dir"
-          jq -n --arg repoDir "$GITHUB_WORKSPACE" '{$repoDir}' > "$user_dir/settings.json"
-          app="$RUNNER_TEMP/Natamux.AppImage"
-          cp "packages/desktop/release/$asset" "$app"
-          timeout 240 xvfb-run -a "$app" --no-sandbox --user-data-dir="$user_dir" || true
-          cat "$user_dir/logs/update.log"
-          gh release download --pattern SHA256SUMS.txt --output - \
-            | grep " $asset\$" | sed "s| .*|  $app|" | sha256sum -c
-      - name: Start the packaged app (macOS)
-        if: runner.os == 'macOS'
-        env:
-          NATAMUX_DESKTOP_SMOKE: "1"
-        run: |
-          printf '#!/bin/sh\nnatamux task show > natamux-smoke.txt\n' > "$RUNNER_TEMP/smoke-agent"
-          chmod +x "$RUNNER_TEMP/smoke-agent"
-          export NATAMUX_CLAUDE_COMMAND="$RUNNER_TEMP/smoke-agent"
-          user_dir="$RUNNER_TEMP/desktop-user"
-          mkdir -p "$user_dir"
-          jq -n --arg repoDir "$GITHUB_WORKSPACE" '{$repoDir}' > "$user_dir/settings.json"
-          app=$(ls -d packages/desktop/release/mac*/Natamux.app | head -n 1)
-          "$app/Contents/MacOS/Natamux" --user-data-dir="$user_dir"
-      # Acting as version 0.0.0, a copy of the new app must download the .dmg of the latest
-      # release, check it and unpack a Natamux.app of that version. Killed before it quits, so the
-      # copy is not replaced.
-      - name: Update to the latest release (dry run, macOS)
-        if: runner.os == 'macOS' && github.event_name == 'workflow_dispatch' && !inputs.publish
-        env:
-          NATAMUX_UPDATE_AS_VERSION: 0.0.0
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          asset=Natamux-${{ matrix.name }}.dmg
-          for file in "$asset" SHA256SUMS.txt.minisig; do
-            gh release view --json assets --jq '.assets[].name' | grep -qx "$file" \
-              || { echo "::notice::The latest release has no $file; the update check is skipped"; exit 0; }
-          done
-          user_dir="$RUNNER_TEMP/update-user"
-          mkdir -p "$user_dir"
-          jq -n --arg repoDir "$GITHUB_WORKSPACE" '{$repoDir}' > "$user_dir/settings.json"
-          app="$RUNNER_TEMP/Natamux.app"
-          ditto "$(ls -d packages/desktop/release/mac*/Natamux.app | head -n 1)" "$app"
-          "$app/Contents/MacOS/Natamux" --user-data-dir="$user_dir" &
-          pid=$!
-          log="$user_dir/logs/update.log"
-          for _ in $(seq 240); do
-            grep -qE ' (ready|failed): ' "$log" 2>/dev/null && break
-            sleep 1
-          done
-          kill -9 "$pid" || true
-          cat "$log"
-          grep -q ' ready: ' "$log"
-          latest=$(gh release view --json tagName --jq .tagName)
-          version=$(plutil -extract CFBundleShortVersionString raw "$user_dir"/updates/*/Natamux.app/Contents/Info.plist)
-          test "$version" = "${latest#v}"
-      # Windows updates by hand (the app opens the release page), so it has no update check.
-      - name: Start the packaged app (Windows)
+          chmod +x "$RUNNER_TEMP/appimagetool-x86_64.AppImage"
+      - name: Install Windows installer tool
         if: runner.os == 'Windows'
-        shell: bash
+        run: choco install nsis -y --no-progress
+      - name: Build the app and its daemon
         env:
-          NATAMUX_DESKTOP_SMOKE: "1"
+          NATAMUX_REQUIRE_WEB: "1"
+        run: cargo build --release --locked -p natamux-app -p natamux-daemon -p natamux-cli
+      - name: Start the app and its owned daemon
+        timeout-minutes: 5
         run: |
-          printf '@call natamux task show > natamux-smoke.txt\r\n' > "$RUNNER_TEMP/smoke-agent.cmd"
-          export NATAMUX_CLAUDE_COMMAND="$RUNNER_TEMP\\smoke-agent.cmd"
-          user_dir="$RUNNER_TEMP/desktop-user"
-          mkdir -p "$user_dir"
-          jq -n --arg repoDir "$GITHUB_WORKSPACE" '{$repoDir}' > "$user_dir/settings.json"
-          packages/desktop/release/win-unpacked/Natamux.exe --user-data-dir="$user_dir"
-          # The app's output does not reach this console; its log says what happened.
-          cat "$user_dir/logs/daemon.log"
-          grep -q 'smoke passed' "$user_dir/logs/daemon.log"
-      - name: Keep the logs of a failed start
+          if [ "$RUNNER_OS" = Linux ]; then
+            xvfb-run -a scripts/release-smoke.sh target/release/natamux-app "$HOME/.config/Natamux"
+          elif [ "$RUNNER_OS" = Windows ]; then
+            scripts/release-smoke.sh target/release/natamux-app.exe "$(cygpath -u "$APPDATA")/Natamux"
+          else
+            scripts/release-smoke.sh target/release/natamux-app "$HOME/Library/Application Support/Natamux"
+          fi
+      - name: Package macOS
+        if: runner.os == 'macOS'
+        run: |
+          scripts/package-rust-desktop.sh dist "${{ matrix.name }}"
+          hdiutil attach -nobrowse -readonly -mountpoint "$RUNNER_TEMP/natamux-mnt" \
+            "dist/Natamux-${{ matrix.name }}.dmg"
+          scripts/release-smoke.sh \
+            "$RUNNER_TEMP/natamux-mnt/Natamux.app/Contents/MacOS/natamux-app" \
+            "$HOME/Library/Application Support/Natamux"
+          hdiutil detach "$RUNNER_TEMP/natamux-mnt"
+      - name: Check the last Electron updater's DMG contract
+        if: runner.os == 'macOS'
+        run: |
+          git fetch --depth=1 origin legacy/electron
+          git show FETCH_HEAD:packages/desktop/src/update/update-check.ts \
+            | grep -Fq 'Natamux-mac-${arch}.dmg'
+          git show FETCH_HEAD:packages/desktop/src/update/mac-install.ts \
+            | grep -Fq "join(mount, 'Natamux.app')"
+          mkdir -p "$RUNNER_TEMP/old-updater"
+          hdiutil attach -nobrowse -readonly -mountpoint "$RUNNER_TEMP/natamux-mnt" \
+            "dist/Natamux-${{ matrix.name }}.dmg"
+          ditto "$RUNNER_TEMP/natamux-mnt/Natamux.app" \
+            "$RUNNER_TEMP/old-updater/Natamux.app"
+          hdiutil detach "$RUNNER_TEMP/natamux-mnt"
+          codesign --verify --deep --strict "$RUNNER_TEMP/old-updater/Natamux.app"
+          version=$(plutil -extract CFBundleShortVersionString raw -o - \
+            "$RUNNER_TEMP/old-updater/Natamux.app/Contents/Info.plist")
+          test "$version" = "$(sed -n 's/^version = "\([^"]*\)"$/\1/p' crates/natamux-app/Cargo.toml | head -n 1)"
+      - name: Package Linux
+        if: runner.os == 'Linux'
+        env:
+          APPIMAGETOOL: ${{ runner.temp }}/appimagetool-x86_64.AppImage
+          APPIMAGETOOL_RUNTIME_FILE: ${{ runner.temp }}/runtime-x86_64
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+        run: |
+          scripts/package-rust-desktop.sh dist linux-x64
+          xvfb-run -a scripts/release-smoke.sh dist/AppDir/AppRun "$HOME/.config/Natamux"
+          xvfb-run -a scripts/release-smoke.sh \
+            dist/Natamux-linux-x86_64.AppImage "$HOME/.config/Natamux"
+          dist/Natamux-linux-x86_64.AppImage --appimage-extract >/dev/null
+          test -f squashfs-root/usr/bin/natamux-daemon
+          dpkg-deb -c dist/Natamux-linux-amd64.deb | grep natamux-daemon >/dev/null
+      - name: Package Windows
+        if: runner.os == 'Windows'
+        run: |
+          mkdir -p dist
+          # NSIS needs Windows paths: with forward slashes File finds no files.
+          "C:/Program Files (x86)/NSIS/makensis.exe" \
+            -DBIN="$(cygpath -w "$PWD/target/release")" -DOUT="$(cygpath -w "$PWD/dist")" \
+            scripts/natamux-windows.nsi
+          7z l dist/Natamux-win-x64.exe | grep natamux-daemon.exe >/dev/null
+          7z x -y -o"$RUNNER_TEMP/unpacked" dist/Natamux-win-x64.exe >/dev/null
+          test -f "$RUNNER_TEMP/unpacked/natamux-app.exe"
+          test -f "$RUNNER_TEMP/unpacked/natamux.exe"
+          scripts/release-smoke.sh "$RUNNER_TEMP/unpacked/natamux-app.exe" \
+            "$(cygpath -u "$APPDATA")/Natamux"
+      - name: Keep startup logs on failure
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: smoke-logs-${{ matrix.name }}
-          path: ${{ runner.temp }}/desktop-user/logs
-          retention-days: 3
+          name: release-logs-${{ matrix.name }}
+          path: ${{ runner.temp }}/**/logs/*.log
           if-no-files-found: ignore
-      # The release job of the same run takes the files at once; they stay three days for a re-run.
+          retention-days: 3
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/Natamux-*
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: natamux-${{ matrix.name }}
-          path: |
-            packages/desktop/release/*.dmg
-            packages/desktop/release/*.AppImage
-            packages/desktop/release/*.deb
-            packages/desktop/release/*.tar.gz
-            packages/desktop/release/*.exe
-          # scripts/sign-release.sh checks the release files against these, so sign within 3 days.
+          path: dist/Natamux-*
           retention-days: 3
           if-no-files-found: error
 
   release:
-    if: github.event_name == 'push' || inputs.publish
     needs: package
     runs-on: ubuntu-latest
     permissions:
@@ -204,35 +225,38 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ env.TAG }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || '' }}
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: artifacts
           pattern: natamux-*
           merge-multiple: true
-      # A re-run can find package files of an earlier attempt expired; never publish a partial release.
-      - name: Check that every file is there
+      - name: Check the six assets
         run: |
-          for f in Natamux-mac-arm64.dmg Natamux-mac-x64.dmg Natamux-win-x64.exe Natamux-linux-x86_64.AppImage Natamux-linux-amd64.deb Natamux-linux-x64.tar.gz; do
-            test -f "artifacts/$f" || { echo "missing $f"; exit 1; }
+          for file in Natamux-mac-arm64.dmg Natamux-mac-x64.dmg Natamux-win-x64.exe \
+            Natamux-linux-x86_64.AppImage Natamux-linux-amd64.deb Natamux-linux-x64.tar.gz; do
+            test -s "artifacts/$file" || { echo "missing $file" >&2; exit 1; }
           done
-      - name: Checksums
-        run: cd artifacts && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
-      # A draft: /releases/latest skips it, so no app sees the release before the owner signs it.
+          test "$(find artifacts -maxdepth 1 -type f -name 'Natamux-*' | wc -l)" -eq 6
+          cd artifacts
+          sha256sum Natamux-* > SHA256SUMS.txt
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-dry-run
+          path: artifacts/*
+          retention-days: 3
       - name: Draft the release
+        if: github.event_name == 'push' || inputs.publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           draft=$(gh release view "$TAG" --json isDraft --jq .isDraft 2>/dev/null || true)
           if [ "$draft" = true ]; then
-            # A re-run: the draft of the first attempt gets this run's files.
             gh release upload "$TAG" artifacts/* --clobber
           elif [ -n "$draft" ]; then
-            echo "::error::Release $TAG is published already"
+            echo "Release $TAG is published already" >&2
             exit 1
           else
-            prerelease=()
-            [[ "$TAG" == *-* ]] && prerelease=(--prerelease)
-            gh release create "$TAG" --draft --verify-tag "${prerelease[@]}" \
+            gh release create "$TAG" --draft --verify-tag \
               --title "Natamux $TAG" --notes-file "docs/releases/$TAG.md" artifacts/*
           fi

@@ -1,51 +1,42 @@
 # Development setup
 
-Develop in a codespace. On the local machine, only edit files.
+Edit locally. Run builds and checks in CI or a codespace. Rust build scripts and proc macros can execute code, so `cargo` does not run on the owner's Mac.
 
-## First time
+## Codespace
 
-1. Create the GitHub repository and push `main`.
-2. Open it in a codespace (the badge in the README, or github.com/codespaces).
-3. In the codespace terminal:
+Open the repository in a GitHub Codespace. The dev container installs Node 22, pnpm, Docker and the GitHub CLI. For the web dashboard and shared types:
 
 ```sh
-pnpm install
+pnpm install --frozen-lockfile
+pnpm --filter @natamux/core --filter @natamux/web build
 ```
 
-4. Commit the generated `pnpm-lock.yaml`.
+For a full Rust daemon and dashboard, build the production images in the codespace and start the demo:
 
-## Supply-chain settings
+```sh
+scripts/e2e.sh build
+E2E_LOCAL=1 scripts/e2e.sh up
+```
 
-Set in `pnpm-workspace.yaml`:
-
-- `minimumReleaseAge: 1440` — skip package versions published in the last 24 hours.
-- `strictDepBuilds: true` — fail when a dependency has an unapproved install script. Approve only what is needed with `onlyBuiltDependencies`. Nothing is approved today; `esbuild` is in `ignoredBuiltDependencies`. SQLite comes from Node itself (`node:sqlite`), so it needs Node 22.13 or newer.
+Open forwarded port 8080. The demo token is `e2e-token`. Run `scripts/e2e.sh down` to stop it and remove the demo data. See [Docker](docker.md) and [End-to-end tests](e2e.md).
 
 ## Checks
 
-```sh
-pnpm build && pnpm lint && pnpm test
-```
-
-Run `build` first: packages import each other through their built `dist` folders, so `lint` (type check) and `test` need `@natamux/core` built. `pnpm format` fixes formatting and import order.
-
-## CI
-
-`.github/workflows/ci.yml` runs on pushes to `main` and on pull requests: frozen install, then `build` and `lint` in one job, and `test` split over three jobs (`vitest --shard`). The root scripts use `--if-present`, so a package without one of them is skipped.
-
-Every action in `.github/workflows/` is pinned to a full commit SHA, with the version in a comment, for example `actions/checkout@<sha> # v7.0.1`. A moved tag then cannot change what a job runs. Dependabot updates the SHA and the comment together. When you add an action, pin it the same way.
-
-## Run the daemon and the dashboard
-
-With Docker. The codespace starts it for you each time it starts. By hand:
+Run these in the codespace or CI only:
 
 ```sh
-scripts/dev.sh up     # or: scripts/dev.sh demo, for a task with commits and changes
-scripts/dev.sh seed   # tasks in every state, with fake agents at work
+cargo xtask ci
+pnpm --filter @natamux/core --filter @natamux/web build
+pnpm --filter @natamux/core --filter @natamux/web typecheck
+pnpm --filter @natamux/core --filter @natamux/web test
 ```
 
-See `docs/docker.md`, which also covers the production setup. Without Docker, see `packages/web/README.md`: the dev container forwards port 5173 (the dashboard), and the daemon stays on `127.0.0.1:4317` and is reached through the dashboard's `/api` proxy.
+`.github/workflows/rust.yml` checks Rust, operating systems, the release image and E2E. `.github/workflows/ci.yml` checks web and core. `.github/workflows/release.yml` builds six native release assets and runs a dry run on pull requests. Rust pull requests target `main`. Only `.github/workflows/rust-cache.yml` saves Cargo caches.
 
-## Not set up yet
+Every action in `.github/workflows/` is pinned to a full commit SHA. When adding an action, pin it the same way.
 
-- License: undecided. See `docs/plan-features.md`, section 9.
+## Dependencies
+
+`pnpm-workspace.yaml` keeps a 24-hour minimum release age and requires an explicit decision for dependency build scripts. `esbuild` is ignored. Ask before adding a package or Rust crate. The package manager version is pinned in `package.json`; use pnpm only.
+
+See [Rust migration](plan-rust-migration.md) for the safe local setup and the reason for the CI-only Rust build rule.

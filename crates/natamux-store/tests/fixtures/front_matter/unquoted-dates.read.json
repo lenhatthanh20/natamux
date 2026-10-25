@@ -1,0 +1,16 @@
+{
+  "data": {
+    "id": "T-0001",
+    "title": "Written by hand",
+    "createdAt": {
+      "$date": "2026-10-08T09:00:00.000Z"
+    },
+    "updatedAt": {
+      "$date": "2026-10-08T02:00:00.000Z"
+    },
+    "day": {
+      "$date": "2026-10-08T00:00:00.000Z"
+    }
+  },
+  "content": "A note.\n"
+}

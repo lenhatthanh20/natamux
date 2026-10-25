@@ -7,7 +7,7 @@ The production images, started with demo data, tested in a real browser with Pla
 | `compose.e2e.yaml` | On top of `compose.prod.yaml`: a fake agent (`scripts/fake-agent.sh`) in place of Claude Code, git names for commits, and a throwaway repository in a volume |
 | `scripts/e2e.sh` | Checks and starts the images, adds the demo data, stops them. Needs Docker, curl and the GitHub CLI |
 | `e2e/` | The Playwright tests. Not part of the pnpm workspace, so the images do not install it |
-| `.github/workflows/e2e.yml` | Builds the images, runs the tests, and on `main` publishes the images to ghcr.io |
+| `.github/workflows/rust.yml` | Builds the Rust production images, runs the four test groups, and on `main` publishes the images to ghcr.io |
 
 ## Demo data
 
@@ -21,15 +21,15 @@ The dashboard is on http://localhost:8080 with the token `e2e-token`. Set `NATAM
 
 ## In CI
 
-Every pull request and every push to `main` runs the workflow. It builds the images from the branch, so the tests check the code of the pull request. When a test fails, the run keeps the Playwright report, with pictures, videos and traces, as the `e2e-report-<group>` artifact. Every run keeps the terminal numbers as one `e2e-measures-<group>` artifact per group that records them (see [Terminal measures](#terminal-measures)), and the images as the `images` artifact for 7 days. In CI a failed test is tried once more; if it fails again, its group stops there and the other groups are cancelled. Each test job stops after 20 minutes.
+Rust CI runs these jobs when the daemon, image, or E2E code changes. It builds the production images from the branch, so the tests check the code of the pull request. A failed group keeps its Playwright report and measures. The images stay as the `rust-production-images` artifact for three days.
 
-The workflow has three jobs:
+The Rust workflow has three E2E jobs:
 
 | Job | Does | Can write packages |
 |---|---|---|
-| `build` | `scripts/e2e.sh build`, then saves the images (`images.tar.zst`) as an artifact and their ids as outputs | no |
-| `test` | one job per group: loads the images, `E2E_LOCAL=1 scripts/e2e.sh up`, installs Playwright, runs the tests of its group | no |
-| `publish` | on `main` only: checks the image ids against `build`, pushes the images, attests their build provenance | yes |
+| `e2e-image` | `scripts/e2e.sh build`, then saves the production Rust images and their ids | no |
+| `e2e` | one job per group: loads the images, starts them, installs Playwright, runs the group | no |
+| `e2e-publish` | on `main` only: checks the image ids, pushes the images, attests their build provenance | yes |
 
 The tests share one daemon, so in one job they run one at a time. To save time, CI runs them in groups, each in its own `test` job with its own daemon and demo data. `e2e/groups.ts` names the groups, and the job sets `E2E_GROUP`:
 
@@ -44,13 +44,13 @@ Without `E2E_GROUP`, `pnpm e2e` runs every spec file. `E2E_GROUP=<group> pnpm e2
 
 Only `publish` can push images, and it installs no packages. A bad package in the Playwright install of `test` cannot push an image, and it cannot swap the artifact either, because `publish` checks the ids.
 
-On `main`, after the tests pass, the images go to `ghcr.io/lenhatthanh20/natamux-daemon` and `natamux-web`, tagged `main` and `sha-<commit>`, each with a signed build provenance attestation.
+On `main`, after the tests pass, the images go to `ghcr.io/lenhatthanh20/natamux-daemon` and `natamux-web`, tagged `main` and `sha-<commit>`, each with a signed build provenance attestation from `rust.yml`.
 
 ## On your machine
 
 Needs Docker (for example colima) and the GitHub CLI, signed in. Nothing is built: the images come from ghcr.io.
 
-Before it starts them, `scripts/e2e.sh up` runs `gh attestation verify` on each image. The check passes only for an image that the E2E workflow built on `main` of `lenhatthanh20/natamux`. The containers then start from the digest that was checked, not from the tag, so a tag moved after the check changes nothing.
+Before it starts them, `scripts/e2e.sh up` runs `gh attestation verify` on each image. It accepts images from the Rust workflow on `main`. The containers start from the digest that was checked.
 
 ```sh
 scripts/e2e.sh up      # pull and check the images of main, start them, add the demo data
@@ -62,19 +62,21 @@ Nothing is installed on your machine. `scripts/e2e.sh build` and `E2E_BUILD=1`, 
 
 ### A branch before it merges
 
-`E2E_RUN=<run-id> scripts/e2e.sh up` starts the images that an E2E run built, for example the run of a pull request or of a `natamux-ci/` branch. It needs the GitHub CLI and Docker only.
+`E2E_RUN=<run-id> scripts/e2e.sh up` starts the images that a Rust run built, for example the run of a pull request or of a `natamux-ci/` branch. It needs the GitHub CLI and Docker only.
 
 ```sh
-gh run list -w e2e.yml -b <branch> -L 1 --json databaseId --jq '.[0].databaseId'
+gh run list -w rust.yml -b <branch> -L 1 --json databaseId --jq '.[0].databaseId'
 E2E_RUN=<run-id> scripts/e2e.sh up
 ```
 
-- It reads the run first and refuses it unless it is a run of `.github/workflows/e2e.yml` in `lenhatthanh20/natamux` itself, not of another workflow or a fork. These images have no attestation; this check takes its place.
-- It downloads the `images` artifact, loads `natamux-daemon:local` and `natamux-web:local`, and starts them as `E2E_LOCAL=1` does.
+- It reads the run first and refuses it unless it is a run of `rust.yml` in `lenhatthanh20/natamux` itself, not of a fork. These branch images have no attestation; this check takes its place.
+- It downloads the `rust-production-images` artifact, loads `natamux-daemon:local` and `natamux-web:local`, and starts them as `E2E_LOCAL=1` does.
 - The artifact is there once the run's `build` job ends, and for 7 days.
 - `scripts/e2e.test.sh` checks the run check with stubs for `gh` and `docker`.
 
 `E2E_TAG=sha-<commit>` picks the images of another commit of `main`. The tag `main` moves with every merge, so a `sha-` tag picks a known build. Images published before the workflow attested its builds fail the check. The images are built for x86 Linux; on a Mac with Apple silicon, Docker runs them with Rosetta (colima: `--vz-rosetta`).
+
+The Rust workflow's `e2e` job runs the real production Rust daemon image in every group. It does not replace the daemon inside an older image. The image is built in CI only, never on the owner's Mac.
 
 Then try the dashboard by hand or with `playwright-cli`:
 

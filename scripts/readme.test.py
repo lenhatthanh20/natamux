@@ -117,13 +117,13 @@ class ReadmeAcceptance(unittest.TestCase):
         self.assertIn("Natamux-mac-arm64.dmg", self.install)
         self.assertIn("Natamux-mac-arm64.dmg", self.readme)
         self.assertIn("macOS on Apple silicon", self.readme)
-        self.assertIn("scripts/dev.sh demo", self.readme)
-        self.assertIn("scripts/dev.sh seed", self.readme)
-        for value in ("5173", "devtoken"):
+        self.assertIn("scripts/e2e.sh build", self.readme)
+        self.assertIn("E2E_LOCAL=1 scripts/e2e.sh up", self.readme)
+        for value in ("8080", "e2e-token"):
             self.assertIn(value, self.readme)
             self.assertIn(value, self.docker)
-        self.assertRegex(self.readme, r"(?s)scripts/dev\.sh seed.{0,80}fake agents")
-        self.assertRegex(self.readme, r"(?s)development Docker images.{0,80}do not include a real coding agent")
+        self.assertIn("fake agents", self.readme)
+        self.assertIn("do not include a real coding agent", self.readme)
         for name in ("Natamux-mac-x64.dmg", "Natamux-win-x64.exe", "Natamux-linux-x86_64.AppImage", "Natamux-linux-amd64.deb"):
             self.assertIn(name, self.readme)
             self.assertIn(name, self.install)
@@ -163,7 +163,10 @@ class ReadmeAcceptance(unittest.TestCase):
         self.assertIn("Natamux does not sandbox agents", self.readme)
         self.assertIn("Natamux does not sandbox agents", (ROOT / "SECURITY.md").read_text())
         self.assertIn("private vulnerability reporting", self.readme)
-        self.assertTrue((ROOT / "LICENSE").read_text().startswith("MIT License"))
+        license_text = (ROOT / "LICENSE").read_text()
+        self.assertTrue(license_text.lstrip().startswith("GNU GENERAL PUBLIC LICENSE"))
+        self.assertIn("Version 3, 29 June 2007", license_text)
+        self.assertIn("GPL-3.0-or-later", self.readme)
         for target in ("PRIVACY.md", "SECURITY.md", "LICENSE"):
             self.assertIn(target, [destination for _, _, destination in self.links])
         self.assertNotRegex(

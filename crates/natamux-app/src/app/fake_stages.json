@@ -1,0 +1,73 @@
+{
+  "tasks": [
+    {"id": "T-0150", "title": "Show a discount code field at checkout", "state": "review", "stage": "plan", "repo": "natamux", "agent": "claude-code", "branch": "natamux/t-0150-discount-code-field", "workspace": "/work/.natamux/worktrees/T-0150", "stages": ["context","spec",{"id":"kind","paths":[{"id":"bug","stages":["reproduce"]},{"id":"feature","stages":["plan"]}]},{"id":"build","parallel":["test-spec","implement"]},"agent-review","security","review","release"], "paths": {"kind": "feature"}, "stageSince": "2026-10-22T08:21:00.000Z", "createdAt": "2026-10-22T07:00:00.000Z", "updatedAt": "2026-10-22T08:21:00.000Z"},
+    {"id": "T-0151", "title": "Export the order list as CSV", "state": "failed", "stage": "plan", "repo": "natamux", "agent": "claude-code", "branch": "natamux/t-0151-export-orders-csv", "workspace": "/work/.natamux/worktrees/T-0151", "stages": ["context","spec",{"id":"kind","paths":[{"id":"bug","stages":["reproduce"]},{"id":"feature","stages":["plan"]}]},{"id":"build","parallel":["test-spec","implement"]},"agent-review","security","review","release"], "paths": {"kind": "feature"}, "stageSince": "2026-10-22T07:45:00.000Z", "createdAt": "2026-10-22T07:00:00.000Z", "updatedAt": "2026-10-22T08:20:00.000Z"},
+    {"id": "T-0152", "title": "Background jobs in the footer (try 2)", "state": "review", "stage": "implement", "repo": "natamux", "agent": "gemini", "branch": "natamux/t-0152-background-jobs-try-2", "workspace": "/work/.natamux/worktrees/T-0152", "labels": ["tries-t-0135"], "createdAt": "2026-10-20T15:10:00.000Z", "updatedAt": "2026-10-22T07:10:00.000Z"},
+    {"id": "T-0153", "title": "Background jobs in the footer (try 3)", "state": "review", "stage": "implement", "repo": "natamux", "agent": "gemini", "branch": "natamux/t-0153-background-jobs-try-3", "workspace": "/work/.natamux/worktrees/T-0153", "labels": ["tries-t-0135"], "createdAt": "2026-10-20T15:10:00.000Z", "updatedAt": "2026-10-22T07:20:00.000Z"}
+  ],
+  "events": {
+    "T-0143": [
+      {"seq": 1, "accepted": true, "event": {"taskId": "T-0143", "source": "system", "type": "task.created", "at": "2026-10-21T07:00:00.000Z", "payload": {}}},
+      {"seq": 2, "accepted": true, "event": {"taskId": "T-0143", "source": "system", "type": "stage.started", "at": "2026-10-22T05:00:00.000Z", "payload": {"stage": "context"}}},
+      {"seq": 3, "accepted": true, "event": {"taskId": "T-0143", "source": "system", "type": "stage.checked", "at": "2026-10-22T05:04:00.000Z", "payload": {"stage": "context", "passes": ["context.md is written"]}}},
+      {"seq": 4, "accepted": true, "event": {"taskId": "T-0143", "source": "human", "type": "stage.approved", "at": "2026-10-22T05:06:00.000Z", "payload": {"stage": "context"}}},
+      {"seq": 5, "accepted": true, "event": {"taskId": "T-0143", "source": "system", "type": "stage.started", "at": "2026-10-22T05:06:00.000Z", "payload": {"stage": "spec"}}},
+      {"seq": 6, "accepted": true, "event": {"taskId": "T-0143", "source": "agent", "type": "stage.reported", "at": "2026-10-22T05:40:00.000Z", "payload": {"stage": "spec"}}},
+      {"seq": 7, "accepted": true, "event": {"taskId": "T-0143", "source": "system", "type": "stage.checked", "at": "2026-10-22T05:41:00.000Z", "payload": {"stage": "spec", "passes": ["spec.md is written", "spec.md has Goal, Scope, Out of scope, Acceptance criteria, Code map"]}}},
+      {"seq": 8, "accepted": true, "event": {"taskId": "T-0143", "source": "human", "type": "stage.approved", "at": "2026-10-22T05:55:00.000Z", "payload": {"stage": "spec"}}},
+      {"seq": 9, "accepted": true, "event": {"taskId": "T-0143", "source": "system", "type": "stage.started", "at": "2026-10-22T05:55:00.000Z", "payload": {"stage": "reproduce", "path": "bug", "because": "grep -qi bug .natamux-task/context.md succeeds"}}},
+      {"seq": 10, "accepted": true, "event": {"taskId": "T-0143", "source": "system", "type": "stage.checked", "at": "2026-10-22T06:10:00.000Z", "payload": {"stage": "reproduce", "passes": ["repro.md is written"]}}},
+      {"seq": 11, "accepted": true, "event": {"taskId": "T-0143", "source": "system", "type": "stage.started", "at": "2026-10-22T06:10:00.000Z", "payload": {"stage": "test-spec"}}},
+      {"seq": 12, "accepted": true, "event": {"taskId": "T-0143", "source": "system", "type": "stage.checked", "at": "2026-10-22T06:40:00.000Z", "payload": {"stage": "test-spec", "passes": ["test-spec.md is written", "test-spec.md has Cases"]}}},
+      {"seq": 13, "accepted": true, "event": {"taskId": "T-0143", "source": "human", "type": "stage.approved", "at": "2026-10-22T06:45:00.000Z", "payload": {"stage": "test-spec"}}},
+      {"seq": 14, "accepted": true, "event": {"taskId": "T-0143", "source": "system", "type": "stage.started", "at": "2026-10-22T06:45:00.000Z", "payload": {"stage": "implement"}}},
+      {"seq": 15, "accepted": true, "event": {"taskId": "T-0143", "source": "system", "type": "stage.checked", "at": "2026-10-22T07:20:00.000Z", "payload": {"stage": "implement", "passes": ["the work is committed"]}}},
+      {"seq": 16, "accepted": true, "event": {"taskId": "T-0143", "source": "system", "type": "stage.started", "at": "2026-10-22T07:20:00.000Z", "payload": {"stage": "agent-review"}}},
+      {"seq": 17, "accepted": true, "event": {"taskId": "T-0143", "source": "system", "type": "stage.checked", "at": "2026-10-22T07:30:00.000Z", "payload": {"stage": "agent-review", "passes": ["review.md is written"]}}},
+      {"seq": 18, "accepted": true, "event": {"taskId": "T-0143", "source": "agent", "type": "stage.reopened", "at": "2026-10-22T07:31:00.000Z", "payload": {"stage": "agent-review", "to": "implement", "reason": "A coupon larger than the cart total still gives a negative amount.", "byAgent": true}}},
+      {"seq": 19, "accepted": true, "event": {"taskId": "T-0143", "source": "system", "type": "stage.started", "at": "2026-10-22T07:31:00.000Z", "payload": {"stage": "implement"}}},
+      {"seq": 20, "accepted": true, "event": {"taskId": "T-0143", "source": "system", "type": "stage.checked", "at": "2026-10-22T07:50:00.000Z", "payload": {"stage": "implement", "passes": ["the work is committed"]}}},
+      {"seq": 21, "accepted": true, "event": {"taskId": "T-0143", "source": "system", "type": "stage.started", "at": "2026-10-22T07:50:00.000Z", "payload": {"stage": "agent-review"}}},
+      {"seq": 22, "accepted": true, "event": {"taskId": "T-0143", "source": "system", "type": "stage.checked", "at": "2026-10-22T08:00:00.000Z", "payload": {"stage": "agent-review", "passes": ["review.md is written", "review.md has Findings"]}}},
+      {"seq": 23, "accepted": true, "event": {"taskId": "T-0143", "source": "system", "type": "stage.started", "at": "2026-10-22T08:00:00.000Z", "payload": {"stage": "security"}}},
+      {"seq": 24, "accepted": true, "event": {"taskId": "T-0143", "source": "system", "type": "stage.checked", "at": "2026-10-22T08:05:00.000Z", "payload": {"stage": "security", "passes": ["security.md is written"]}}},
+      {"seq": 25, "accepted": true, "event": {"taskId": "T-0143", "source": "human", "type": "stage.approved", "at": "2026-10-22T08:08:00.000Z", "payload": {"stage": "security"}}},
+      {"seq": 26, "accepted": true, "event": {"taskId": "T-0143", "source": "system", "type": "stage.started", "at": "2026-10-22T08:10:00.000Z", "payload": {"stage": "review"}}}
+    ],
+    "T-0150": [
+      {"seq": 1, "accepted": true, "event": {"taskId": "T-0150", "source": "system", "type": "task.created", "at": "2026-10-22T07:00:00.000Z", "payload": {}}},
+      {"seq": 2, "accepted": true, "event": {"taskId": "T-0150", "source": "system", "type": "stage.started", "at": "2026-10-22T07:05:00.000Z", "payload": {"stage": "context"}}},
+      {"seq": 3, "accepted": true, "event": {"taskId": "T-0150", "source": "system", "type": "stage.checked", "at": "2026-10-22T07:08:00.000Z", "payload": {"stage": "context", "passes": ["context.md is written"]}}},
+      {"seq": 4, "accepted": true, "event": {"taskId": "T-0150", "source": "human", "type": "stage.approved", "at": "2026-10-22T07:10:00.000Z", "payload": {"stage": "context"}}},
+      {"seq": 5, "accepted": true, "event": {"taskId": "T-0150", "source": "system", "type": "stage.started", "at": "2026-10-22T07:10:00.000Z", "payload": {"stage": "spec"}}},
+      {"seq": 6, "accepted": true, "event": {"taskId": "T-0150", "source": "system", "type": "stage.checked", "at": "2026-10-22T07:40:00.000Z", "payload": {"stage": "spec", "passes": ["spec.md is written", "spec.md has Goal, Scope, Out of scope, Acceptance criteria, Code map"]}}},
+      {"seq": 7, "accepted": true, "event": {"taskId": "T-0150", "source": "human", "type": "stage.approved", "at": "2026-10-22T07:45:00.000Z", "payload": {"stage": "spec"}}},
+      {"seq": 8, "accepted": true, "event": {"taskId": "T-0150", "source": "system", "type": "stage.started", "at": "2026-10-22T07:45:00.000Z", "payload": {"stage": "plan", "path": "feature", "because": "Otherwise"}}},
+      {"seq": 9, "accepted": true, "event": {"taskId": "T-0150", "source": "agent", "type": "stage.reported", "at": "2026-10-22T08:20:00.000Z", "payload": {"stage": "plan"}}},
+      {"seq": 10, "accepted": true, "event": {"taskId": "T-0150", "source": "system", "type": "stage.checked", "at": "2026-10-22T08:21:00.000Z", "payload": {"stage": "plan", "passes": ["plan.md is written", "plan.md has Steps, Files, Tests"]}}}
+    ],
+    "T-0151": [
+      {"seq": 1, "accepted": true, "event": {"taskId": "T-0151", "source": "system", "type": "task.created", "at": "2026-10-22T07:00:00.000Z", "payload": {}}},
+      {"seq": 2, "accepted": true, "event": {"taskId": "T-0151", "source": "system", "type": "stage.started", "at": "2026-10-22T07:05:00.000Z", "payload": {"stage": "context"}}},
+      {"seq": 3, "accepted": true, "event": {"taskId": "T-0151", "source": "system", "type": "stage.checked", "at": "2026-10-22T07:08:00.000Z", "payload": {"stage": "context", "passes": ["context.md is written"]}}},
+      {"seq": 4, "accepted": true, "event": {"taskId": "T-0151", "source": "human", "type": "stage.approved", "at": "2026-10-22T07:10:00.000Z", "payload": {"stage": "context"}}},
+      {"seq": 5, "accepted": true, "event": {"taskId": "T-0151", "source": "system", "type": "stage.started", "at": "2026-10-22T07:10:00.000Z", "payload": {"stage": "spec"}}},
+      {"seq": 6, "accepted": true, "event": {"taskId": "T-0151", "source": "system", "type": "stage.checked", "at": "2026-10-22T07:40:00.000Z", "payload": {"stage": "spec", "passes": ["spec.md is written", "spec.md has Goal, Scope, Out of scope, Acceptance criteria, Code map"]}}},
+      {"seq": 7, "accepted": true, "event": {"taskId": "T-0151", "source": "human", "type": "stage.approved", "at": "2026-10-22T07:45:00.000Z", "payload": {"stage": "spec"}}},
+      {"seq": 8, "accepted": true, "event": {"taskId": "T-0151", "source": "system", "type": "stage.started", "at": "2026-10-22T07:45:00.000Z", "payload": {"stage": "plan", "path": "feature", "because": "Otherwise"}}},
+      {"seq": 9, "accepted": true, "event": {"taskId": "T-0151", "source": "system", "type": "agent.failed", "at": "2026-10-22T08:20:00.000Z", "payload": {"stage": "plan", "reason": "The Plan agent stopped: it could not read src/catalog.ts."}}}
+    ]
+  },
+  "diffStats": {
+    "T-0152": {"files": 4, "added": 8, "removed": 0},
+    "T-0153": {"files": 3, "added": 8, "removed": 0}
+  },
+  "terminals": {
+    "T-0150": {"terminals": ["1"], "agents": ["1"], "lanes": {"1": {"stage": "plan", "state": "review", "agent": "claude-code"}}, "programs": {"1": "claude"}, "restoring": {}},
+    "T-0151": {"terminals": ["1"], "agents": ["1"], "lanes": {"1": {"stage": "plan", "state": "failed", "agent": "claude-code"}}, "programs": {"1": "claude"}, "restoring": {}}
+  },
+  "stageFiles": {
+    "T-0143": [{"name": "context.md", "size": 1840, "modifiedAt": "2026-10-22T05:04:00.000Z"}, {"name": "spec.md", "size": 4210, "modifiedAt": "2026-10-22T05:41:00.000Z"}, {"name": "repro.md", "size": 960, "modifiedAt": "2026-10-22T06:10:00.000Z"}, {"name": "test-spec.md", "size": 2750, "modifiedAt": "2026-10-22T06:40:00.000Z"}, {"name": "review.md", "size": 1320, "modifiedAt": "2026-10-22T08:00:00.000Z"}, {"name": "security.md", "size": 640, "modifiedAt": "2026-10-22T08:05:00.000Z"}],
+    "T-0150": [{"name": "context.md", "size": 1500, "modifiedAt": "2026-10-22T07:08:00.000Z"}, {"name": "spec.md", "size": 3980, "modifiedAt": "2026-10-22T07:40:00.000Z"}, {"name": "plan.md", "size": 110, "modifiedAt": "2026-10-22T08:21:00.000Z"}]
+  }
+}

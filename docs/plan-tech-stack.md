@@ -1,6 +1,6 @@
 # Natamux — Tech Stack Plan
 
-Status: draft v0.1. Pairs with `plan-features.md`. Choices marked **Decide** are open.
+Status: historical plan. The current app, daemon and CLI are Rust; the dashboard and shared web types remain TypeScript. See [Rust migration](plan-rust-migration.md) and [Phase 5](rust-phase5.md) for the current build and release flow. The older choices below explain how the product started.
 
 ## 1. Goals that drive the stack
 
@@ -128,11 +128,13 @@ Look at this again when:
 
 Then first move more data into `index.sqlite`, before any new database engine.
 
-## 6. Desktop shell (Decided)
+## 6. Desktop shell
 
-Decision: **Electron + TypeScript**, for **macOS and Windows**. Linux is not a target for now.
+Decision (2026-10-22): move to **Rust + GPUI**, as `plan-rust-migration.md` describes. The last Electron version remains on `legacy/electron`; the Rust cutover replaces it on `main`.
 
-Why:
+The rest of this section is the Electron decision of 2026-10-08, kept for history and for the app that ships until then. Electron targets **macOS and Windows**.
+
+Why Electron was chosen:
 - The daemon is Node and uses `node-pty`. Electron runs it with no extra sidecar process.
 - Tauri would need a Rust toolchain and a per-OS sidecar for the daemon. Too much for one developer.
 - Swift is macOS only and would need a second codebase for Windows. Rejected.
@@ -184,6 +186,7 @@ Keep a small `native` area for things the web layer cannot do. Add only when nee
 - Disable install scripts by default; allow them only for packages that need them (such as `node-pty`).
 - Develop and run in a dev container or Codespaces. On the personal machine, edit files only.
 - Enable dependency and secret scanning in the GitHub repo.
+- Rust: no `cargo` on the owner's Mac; builds run in CI. `Cargo.lock` is committed and every build uses `--locked`. CI runs `cargo deny`, `cargo audit` and `cargo vet`; Dependabot updates crates after a 7-day cooldown. Details: `plan-rust-migration.md`, "Safe local setup".
 
 ## 9. Repository layout (draft)
 
@@ -198,7 +201,13 @@ natamux/
 │   ├── desktop/              Electron shell (after the MVP)
 │   ├── native/               per-OS code, only when needed
 │   └── claude-plugin/        Claude Code plugin (skills, hooks)
+├── xtask/                    `cargo xtask ci` and `cargo xtask layers`
+├── crates/                   Rust crates (from phase 1 of plan-rust-migration.md)
+├── supply-chain/             cargo vet audits and imports
 ├── .devcontainer/
+├── Cargo.toml                Cargo workspace
+├── rust-toolchain.toml       pinned Rust version
+├── deny.toml                 cargo deny rules
 ├── package.json
 └── pnpm-workspace.yaml
 ```

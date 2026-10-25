@@ -1,0 +1,180 @@
+{
+ "changes": {
+  "T-0143": [
+   {
+    "path": "src/checkout.ts",
+    "status": "M",
+    "added": 3,
+    "removed": 1
+   },
+   {
+    "path": "test/coupon.test.ts",
+    "status": "U",
+    "added": 5,
+    "removed": 0
+   }
+  ],
+  "T-0147": [
+   {
+    "path": "public/banner.png",
+    "status": "U"
+   }
+  ]
+ },
+ "graphs": {
+  "T-0143": {
+   "branch": "natamux/t-0143-rust-migration-phase-1",
+   "head": "5e1f2a3",
+   "base": "dev",
+   "ahead": 6,
+   "behind": 0,
+   "push": {
+    "remote": "tracked",
+    "unpushed": 2,
+    "unpulled": 0
+   },
+   "commits": [
+    {
+     "hash": "5e1f2a3",
+     "parents": [
+      "094681f"
+     ],
+     "author": "Natamux e2e",
+     "date": "2026-10-22T09:24:00.000Z",
+     "subject": "Port the dashboard client",
+     "refs": [
+      "natamux/t-0143-rust-migration-phase-1"
+     ],
+     "onBranch": true
+    },
+    {
+     "hash": "094681f",
+     "parents": [
+      "a7c3e90"
+     ],
+     "author": "Natamux e2e",
+     "date": "2026-10-22T09:21:00.000Z",
+     "subject": "Add the app shell and the fake daemon",
+     "refs": [],
+     "onBranch": true
+    },
+    {
+     "hash": "a7c3e90",
+     "parents": [
+      "3b1d6f2"
+     ],
+     "author": "Natamux e2e",
+     "date": "2026-10-22T09:17:00.000Z",
+     "subject": "Add the client crate and its tests",
+     "refs": [],
+     "onBranch": true
+    },
+    {
+     "hash": "3b1d6f2",
+     "parents": [
+      "c9e5d41"
+     ],
+     "author": "Natamux e2e",
+     "date": "2026-10-22T09:12:00.000Z",
+     "subject": "Add the proto crate",
+     "refs": [],
+     "onBranch": true
+    },
+    {
+     "hash": "c9e5d41",
+     "parents": [
+      "e02ab77"
+     ],
+     "author": "Natamux e2e",
+     "date": "2026-10-22T09:08:00.000Z",
+     "subject": "Add the layers check to xtask",
+     "refs": [],
+     "onBranch": true
+    },
+    {
+     "hash": "e02ab77",
+     "parents": [
+      "f3fe1f5"
+     ],
+     "author": "Natamux e2e",
+     "date": "2026-10-22T09:03:00.000Z",
+     "subject": "Start the Rust workspace",
+     "refs": [],
+     "onBranch": true
+    },
+    {
+     "hash": "f3fe1f5",
+     "parents": [
+      "7bee0ca"
+     ],
+     "author": "Natamux e2e",
+     "date": "2026-10-21T18:28:00.000Z",
+     "subject": "Add the Natamux stage runner",
+     "refs": [
+      "natamux/t-0145-rust-phase-2",
+      "natamux/t-0142-rust-phase-0",
+      "dev"
+     ],
+     "onBranch": false
+    },
+    {
+     "hash": "7bee0ca",
+     "parents": [
+      "36fa1b3"
+     ],
+     "author": "Natamux e2e",
+     "date": "2026-10-21T18:20:00.000Z",
+     "subject": "Set up CI",
+     "refs": [],
+     "onBranch": false
+    },
+    {
+     "hash": "36fa1b3",
+     "parents": [
+      "9d7766e"
+     ],
+     "author": "Natamux e2e",
+     "date": "2026-10-21T18:10:00.000Z",
+     "subject": "Add the cart, checkout and catalog",
+     "refs": [],
+     "onBranch": false
+    },
+    {
+     "hash": "9d7766e",
+     "parents": [],
+     "author": "Natamux e2e",
+     "date": "2026-10-21T18:00:00.000Z",
+     "subject": "Start the storefront",
+     "refs": [],
+     "onBranch": false
+    }
+   ],
+   "truncated": false
+  }
+ },
+ "files": {
+  "T-0143": [
+   {
+    "path": "src/checkout.ts",
+    "status": "M",
+    "original": "import { total, type Item } from './cart.js'\n\nexport function checkout(items: Item[], coupon = 0) {\n  return total(items) - coupon\n}\n\nexport const roundMoney = (value: number) => Math.round(value * 100) / 100\n",
+    "modified": "import { total, type Item } from './cart.js'\n\n// A coupon can take the total down to zero, never below it.\nexport function checkout(items: Item[], coupon = 0) {\n  const amount = total(items) - Math.max(0, coupon)\n  return Math.max(0, amount)\n}\n\nexport const roundMoney = (value: number) => Math.round(value * 100) / 100\n"
+   },
+   {
+    "path": "test/coupon.test.ts",
+    "status": "U",
+    "original": null,
+    "modified": "import { expect, test } from 'vitest'\nimport { checkout } from '../src/checkout.js'\ntest('a big coupon never makes the total negative', () => {\n  expect(checkout([{ price: 5 }], 9)).toBe(0)\n})\n"
+   }
+  ],
+  "T-0147": [
+   {
+    "path": "public/banner.png",
+    "status": "U",
+    "original": null,
+    "modified": null,
+    "binary": true
+   }
+  ]
+ }
+}

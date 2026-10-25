@@ -1,0 +1,58 @@
+{
+ "worktrees": {
+  "T-0143": {
+   "files": {
+    ".gitignore": "node_modules\ndist\n.natamux-task\n",
+    ".natamux.json": "{\n  \"tracker\": { \"type\": \"none\" }\n}\n",
+    "package.json": "{\n  \"name\": \"storefront\",\n  \"version\": \"0.3.0\",\n  \"type\": \"module\",\n  \"scripts\": { \"test\": \"vitest run\" }\n}\n",
+    "README.md": "# Storefront\n\nA small shop: catalog, cart and checkout.\n",
+    ".claude/settings.json": "{\n  \"permissions\": { \"allow\": [\"Bash(pnpm test)\"] }\n}\n",
+    ".codex/config.toml": "model = \"gpt-5\"\napproval_policy = \"on-request\"\n",
+    ".github/workflows/ci.yml": "name: ci\non: [push]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - run: pnpm install && pnpm test\n",
+    "src/cart.ts": "export type Item = { price: number }\n\nexport const total = (items: Item[]) => items.reduce((sum, item) => sum + item.price, 0)\n",
+    "src/format.ts": "export const money = (value: number) => `$${value.toFixed(2)}`\n",
+    "src/checkout.ts": "import { total, type Item } from './cart.js'\n\nexport function checkout(items: Item[], coupon = 0) {\n  return total(items) - coupon\n}\n\nexport const roundMoney = (value: number) => Math.round(value * 100) / 100\n",
+    "public/logo.png": null,
+    "data/catalog.json": null
+   },
+   "binary": [
+    "public/logo.png"
+   ],
+   "tooLarge": [
+    "data/catalog.json"
+   ]
+  },
+  "T-0146": {
+   "files": {
+    "README.md": "# Terminals\n\nThe terminal pane of the native app.\n",
+    "src/main.ts": "console.log('terminals')\n"
+   },
+   "binary": [],
+   "tooLarge": []
+  }
+ },
+ "stageTexts": {
+  "T-0143": {
+   "context.md": "# Fix the bug where a big coupon makes the total negative\n\nA coupon larger than the cart total gives a negative amount at checkout.\n",
+   "repro.md": "# Repro\n\n1. Add one item of 5 to the cart.\n2. Apply a coupon of 9.\n3. Open the checkout.\n\nExpected: a total of 0. Actual: -4.\n",
+   "spec.md": "# Spec: the coupon never takes the total below zero\n\n## Goal\n\nThe total at checkout is never negative, whatever the coupon is worth.\n\n## Changes\n\n- `checkout` clamps the amount to zero.\n- A negative coupon counts as no coupon.\n- `roundMoney` stays as it is.\n\n## Cases\n\n| Cart | Coupon | Total |\n|---|---|---|\n| 5 | 0 | 5 |\n| 5 | 9 | 0 |\n| 5 | -3 | 5 |\n\n## Code\n\n```ts\nconst amount = total(items) - Math.max(0, coupon)\nreturn Math.max(0, amount)\n```\n\nSee the [coupon rules](https://example.com/coupons) for the business side.\n",
+   "test-spec.md": "# Test spec\n\n- A coupon larger than the cart gives 0.\n- A coupon equal to the cart gives 0.\n- A negative coupon changes nothing.\n",
+   "review.md": "# Review\n\nThe change is small and clear.\n\n- The comment above `checkout` says why the amount is clamped.\n- The new test covers the bug.\n",
+   "security.md": "# Security\n\nNo input from outside reaches a shell or a file. Nothing to report.\n"
+  }
+ },
+ "attachments": {
+  "T-0143": [
+   {
+    "name": "screen.png",
+    "type": "image/png",
+    "size": 0
+   },
+   {
+    "name": "notes.pdf",
+    "type": null,
+    "size": 0
+   }
+  ]
+ }
+}

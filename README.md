@@ -27,7 +27,7 @@
 <p align="center">
   <a href="https://github.com/lenhatthanh20/natamux/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/lenhatthanh20/natamux?style=flat-square&label=release&color=3b6fd8"></a>
   <a href="https://github.com/lenhatthanh20/natamux/actions/workflows/ci.yml"><img alt="CI status of main" src="https://img.shields.io/github/actions/workflow/status/lenhatthanh20/natamux/ci.yml?branch=main&style=flat-square&label=CI"></a>
-  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/github/license/lenhatthanh20/natamux?style=flat-square&color=3b6fd8"></a>
+  <a href="LICENSE"><img alt="GPL-3.0 license" src="https://img.shields.io/github/license/lenhatthanh20/natamux?style=flat-square&color=3b6fd8"></a>
   <a href="https://natamux.github.io/docs/getting-started/install/"><img alt="Platforms: macOS, Windows, Linux" src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-3b6fd8?style=flat-square"></a>
 </p>
 
@@ -142,7 +142,6 @@ Download the file for your system from the [latest release](https://github.com/l
 | Linux, any distribution | [`Natamux-linux-x86_64.AppImage`](https://github.com/lenhatthanh20/natamux/releases/latest/download/Natamux-linux-x86_64.AppImage) |
 | Debian and Ubuntu | [`Natamux-linux-amd64.deb`](https://github.com/lenhatthanh20/natamux/releases/latest/download/Natamux-linux-amd64.deb) |
 | Linux, no install | [`Natamux-linux-x64.tar.gz`](https://github.com/lenhatthanh20/natamux/releases/latest/download/Natamux-linux-x64.tar.gz) |
-| Native app (beta), macOS Apple silicon | [Native app releases](https://github.com/lenhatthanh20/natamux/releases?q=native-beta) |
 
 > [!NOTE]
 > The apps are not signed with an Apple or Windows certificate yet, so the system asks once. macOS: **System Settings → Privacy & Security → Open Anyway**. Windows: SmartScreen **More info → Run anyway**. Linux: `chmod +x` the AppImage first. Check any file against the signed `SHA256SUMS.txt` of the release.
@@ -165,12 +164,13 @@ The [quick start](https://natamux.github.io/docs/getting-started/quick-start/) w
 No install needed. [Open this repository in GitHub Codespaces](https://codespaces.new/lenhatthanh20/natamux), then run:
 
 ```sh
-scripts/dev.sh demo
+scripts/e2e.sh build
+E2E_LOCAL=1 scripts/e2e.sh up
 ```
 
-Open forwarded port **5173** and sign in with the token **`devtoken`**. The demo includes a task with a workspace, commits and changes to inspect.
+Open forwarded port **8080** and sign in with the token **`e2e-token`**. The demo includes tasks, workspaces, commits and changes to inspect.
 
-To see tasks in every state, run `scripts/dev.sh seed`. It starts fake agents through `scripts/fake-agent.sh`; the development Docker images do not include a real coding agent. Run `scripts/dev.sh up` to return to the normal development setup. See [Docker setup](docs/docker.md) for details.
+The demo starts fake agents through `scripts/fake-agent.sh`; the images do not include a real coding agent. Run `scripts/e2e.sh down` to stop it. See [Docker setup](docs/docker.md) for details.
 
 ## Command line
 
@@ -184,7 +184,7 @@ To see tasks in every state, run `scripts/dev.sh seed`. It starts fake agents th
 | `nmx stage back T-0001 --reason "..."` | Send the task back to an earlier stage |
 | `natamux ask "Which API?"` / `natamux done` | What agents run to ask you, or to finish a stage |
 
-See the [CLI reference](https://natamux.github.io/docs/reference/cli/) and [CLI usage](packages/cli/README.md).
+See the [CLI reference](https://natamux.github.io/docs/reference/cli/) and [Rust CLI](crates/natamux-cli/).
 
 ## Security and privacy
 
@@ -203,10 +203,11 @@ Read [Privacy](PRIVACY.md) for what stays on your machine and what leaves it, an
 | Path | Purpose |
 | --- | --- |
 | [`packages/core`](packages/core/) | Task model, stages, events and shared schemas |
-| [`packages/daemon`](packages/daemon/) | Tasks, stages, git worktrees, terminals, and the HTTP/WebSocket API |
+| [`crates/natamux-daemon`](crates/natamux-daemon/) | Tasks, stages, git worktrees, terminals, and the HTTP/WebSocket API |
 | [`packages/web`](packages/web/) | React dashboard |
-| [`packages/desktop`](packages/desktop/) | Desktop app and bundled daemon |
-| [`packages/cli`](packages/cli/) | `natamux` / `nmx` command line |
+| [`crates/natamux-app`](crates/natamux-app/) | Native desktop app |
+| [`crates/natamux-update`](crates/natamux-update/) | Signed desktop updates |
+| [`crates/natamux-cli`](crates/natamux-cli/) | `natamux` / `nmx` command line |
 | [`plugins/natamux`](plugins/natamux/) | Claude Code plugin |
 | [`site`](site/) | Homepage and documentation site |
 
@@ -217,9 +218,12 @@ The [documentation site](https://natamux.github.io/docs/) covers tasks, stages, 
 Natamux is young and moves fast. Issues and pull requests are welcome.
 
 - Set up with the [contributor setup](docs/dev-setup.md). Development runs in a GitHub codespace.
-- Every pull request runs the build, lint and tests, a dependency audit, a Docker smoke test, and Playwright end-to-end tests against the production images. Each push to `main` also runs the tests on Node 24, macOS and Windows, and starts the desktop app on macOS and Windows.
+- Rust CI checks formatting, Clippy, tests, layers, startup, and the required E2E groups. Web and core CI checks Biome, types, and tests. Release CI packages and checks the native app on macOS, Windows, and Linux.
 - Report a vulnerability privately, as [Security](SECURITY.md) describes. Do not open a public issue for it.
 
 ## License
 
-[MIT](LICENSE)
+Natamux is free software under the [GNU General Public License, version 3 or later](LICENSE) (GPL-3.0-or-later).
+Copyright (c) 2026 lenhatthanh20 and the Natamux contributors.
+
+Releases before the move to Rust were published under the MIT License.

@@ -10,7 +10,8 @@ export PATH="/data/bin:$PATH"
 me=${STANDIN_NAME:-$(basename "$0")}
 # Per task controls in /data/standin/: <task>.pace (tenths of the base pause, default from
 # /data/standin-pace or 10), <task>.ask (ask a question in the first stage), <task>.clean (the review
-# finds nothing). Title marks [ask] and [clean] work too.
+# finds nothing), <task>.fail (fail the Plan stage with this reason). Title marks [ask] and [clean]
+# work too.
 ctl=/data/standin/${NATAMUX_TASK_ID:-none}
 pace=$(cat "$ctl.pace" 2>/dev/null || cat /data/standin-pace 2>/dev/null || echo 10)
 
@@ -155,6 +156,15 @@ do_stage() {
     local answer; answer=$(read_prompt)
     hook UserPromptSubmit
     say "Got it: $answer"
+  fi
+  if [ -e "$ctl.fail" ] && [[ $current == *"plan.md"* ]]; then
+    local reason; reason=$(cat "$ctl.fail")
+    tool Read "$PWD/$(some_file)"; pause
+    printf '  %s✗ %s%s\n\n' "$red" "$reason" "$off"
+    tool Bash "natamux stage fail \$NATAMUX_TASK_ID --reason \"…\"" command
+    natamux stage fail "${NATAMUX_TASK_ID:-}" --reason "$reason" >/dev/null 2>&1
+    hook Stop
+    return
   fi
   local done=yes
   if [[ $current == *"The checks of this stage failed"* ]]; then

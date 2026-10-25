@@ -1,0 +1,273 @@
+{
+  "worktreesDir": "/work/.natamux/worktrees",
+  "repos": [
+    { "id": "natamux", "name": "natamux", "path": "/work/natamux" },
+    { "id": "natamux-site", "name": "natamux-site", "path": "/work/natamux-site" }
+  ],
+  "tasks": [
+    {
+      "id": "T-0146", "title": "Rust migration phase 3", "state": "running", "stage": "implement",
+      "lanes": { "implement": "running", "test-spec": "done", "docs": "running" },
+      "repo": "natamux", "agent": "claude-code", "branch": "natamux/t-0146-rust-migration-phase-3",
+      "workspace": "/work/.natamux/worktrees/T-0146",
+      "stages": ["spec", "plan", "implement", "agent-review", "review"],
+      "stageSince": "2026-10-22T09:05:00.000Z",
+      "createdAt": "2026-10-22T07:00:00.000Z", "updatedAt": "2026-10-22T09:30:00.000Z"
+    },
+    {
+      "id": "T-0147", "title": "Port the sidebar tree", "state": "running", "stage": "implement",
+      "repo": "natamux", "agent": "codex", "parentId": "T-0146",
+      "branch": "natamux/t-0147-port-the-sidebar-tree",
+      "workspace": "/work/.natamux/worktrees/T-0147",
+      "createdAt": "2026-10-22T08:00:00.000Z", "updatedAt": "2026-10-22T09:28:00.000Z"
+    },
+    {
+      "id": "T-0148", "title": "Port the task table", "state": "done", "stage": "review",
+      "repo": "natamux", "agent": "claude-code", "parentId": "T-0146",
+      "branch": "natamux/t-0148-port-the-task-table",
+      "createdAt": "2026-10-22T08:00:00.000Z", "updatedAt": "2026-10-22T09:10:00.000Z"
+    },
+    {
+      "id": "T-0143", "title": "Rust migration phase 1", "state": "review", "stage": "review",
+      "repo": "natamux", "agent": "claude-code", "branch": "natamux/t-0143-rust-migration-phase-1",
+      "workspace": "/work/.natamux/worktrees/T-0143",
+      "pr": "https://github.com/lenhatthanh20/natamux/pull/425",
+      "prStatus": { "state": "open", "checks": "passing" },
+      "description": "A coupon larger than the cart total gives a negative amount at checkout.",
+      "priority": "high", "labels": ["bug"], "paths": { "kind": "bug" },
+      "stages": ["context","spec",{"id":"kind","paths":[{"id":"bug","stages":["reproduce"]},{"id":"feature","stages":["plan"]}]},{"id":"build","parallel":["test-spec","implement"]},"agent-review","security","review","release"],
+      "stageSince": "2026-10-22T08:10:00.000Z",
+      "createdAt": "2026-10-21T07:00:00.000Z", "updatedAt": "2026-10-22T08:10:00.000Z"
+    },
+    {
+      "id": "T-0141", "title": "Count tokens and cost of each task", "state": "needs-input",
+      "stage": "spec", "repo": "natamux", "agent": "claude-code",
+      "branch": "natamux/t-0141-task-usage", "workspace": "/work/.natamux/worktrees/T-0141",
+      "stages": ["context","spec",{"id":"kind","paths":[{"id":"bug","stages":["reproduce"]},{"id":"feature","stages":["plan"]}]},{"id":"build","parallel":["test-spec","implement"]},"agent-review","security","review","release"],
+      "stageSince": "2026-10-22T08:56:00.000Z",
+      "createdAt": "2026-10-21T09:00:00.000Z", "updatedAt": "2026-10-22T09:25:00.000Z"
+    },
+    {
+      "id": "T-0137", "title": "Stable terminals for stage agents", "state": "failed",
+      "stage": "check", "repo": "natamux", "agent": "copilot",
+      "branch": "natamux/t-0137-stable-terminals", "workspace": "/work/.natamux/worktrees/T-0137",
+      "createdAt": "2026-10-21T08:00:00.000Z", "updatedAt": "2026-10-22T09:20:00.000Z"
+    },
+    {
+      "id": "T-0136", "title": "Sign the macOS build", "state": "blocked", "stage": "spec",
+      "repo": "natamux", "agent": "claude-code",
+      "createdAt": "2026-10-20T08:00:00.000Z", "updatedAt": "2026-10-21T16:00:00.000Z"
+    },
+    {
+      "id": "T-0135", "title": "Background jobs in the footer", "state": "ready", "stage": "spec",
+      "repo": "natamux", "labels": ["tries-t-0135"], "agent": "gemini",
+      "createdAt": "2026-10-20T15:05:00.000Z", "updatedAt": "2026-10-20T15:05:00.000Z"
+    },
+    {
+      "id": "T-0131", "title": "Gõ tiếng Việt trong ô tìm kiếm", "state": "draft", "stage": "spec",
+      "repo": "natamux",
+      "createdAt": "2026-10-19T10:00:00.000Z", "updatedAt": "2026-10-19T10:00:00.000Z"
+    },
+    {
+      "id": "T-0139", "title": "Own terminal toggle on the Stages tab", "state": "done",
+      "stage": "release", "repo": "natamux", "agent": "claude-code",
+      "branch": "natamux/t-0139-own-terminal-toggle", "workspace": "/work/.natamux/worktrees/T-0139",
+      "pr": "https://github.com/lenhatthanh20/natamux/pull/419",
+      "prStatus": { "state": "merged", "checks": "passing" },
+      "createdAt": "2026-10-21T08:00:00.000Z", "updatedAt": "2026-10-21T11:00:00.000Z"
+    },
+    {
+      "id": "T-0149", "title": "Archive old screenshots", "state": "paused", "stage": "spec",
+      "repo": "natamux",
+      "createdAt": "2026-10-21T08:00:00.000Z", "updatedAt": "2026-10-21T09:00:00.000Z"
+    },
+    {
+      "id": "T-0144", "title": "Install page for the native beta", "state": "running",
+      "stage": "implement", "repo": "natamux-site", "agent": "cursor",
+      "branch": "natamux/t-0144-install-page", "workspace": "/work/.natamux/worktrees/T-0144",
+      "createdAt": "2026-10-22T08:30:00.000Z", "updatedAt": "2026-10-22T09:15:00.000Z"
+    },
+    {
+      "id": "T-0120", "title": "Old landing page", "state": "cancelled", "stage": "spec",
+      "repo": "natamux-site", "workspace": "/work/.natamux/worktrees/T-0120",
+      "branch": "natamux/t-0120-old-landing-page",
+      "createdAt": "2026-10-10T08:00:00.000Z", "updatedAt": "2026-10-12T08:00:00.000Z"
+    }
+  ],
+  "events": {
+    "T-0141": [
+      {"seq": 30, "accepted": true, "event": {"taskId": "T-0141", "source": "system", "type": "task.created", "at": "2026-10-21T09:00:00.000Z", "payload": {}}},
+      {"seq": 31, "accepted": true, "event": {"taskId": "T-0141", "source": "system", "type": "stage.started", "at": "2026-10-22T08:50:00.000Z", "payload": {"stage": "context"}}},
+      {"seq": 32, "accepted": true, "event": {"taskId": "T-0141", "source": "system", "type": "stage.checked", "at": "2026-10-22T08:55:00.000Z", "payload": {"stage": "context", "passes": ["context.md is written"]}}},
+      {"seq": 33, "accepted": true, "event": {"taskId": "T-0141", "source": "human", "type": "stage.approved", "at": "2026-10-22T08:56:00.000Z", "payload": {"stage": "context"}}},
+      {"seq": 34, "accepted": true, "event": {"taskId": "T-0141", "source": "system", "type": "stage.started", "at": "2026-10-22T08:56:00.000Z", "payload": {"stage": "spec"}}},
+      {
+        "seq": 41, "accepted": true,
+        "event": {
+          "taskId": "T-0141", "source": "agent", "type": "agent.asked",
+          "at": "2026-10-22T09:25:00.000Z",
+          "payload": { "message": "Show the cost in USD, or only the tokens, when a model has no list price?" }
+        }
+      }
+    ],
+    "T-0137": [
+      {
+        "seq": 12, "accepted": true,
+        "event": {
+          "taskId": "T-0137", "source": "system", "type": "agent.failed",
+          "at": "2026-10-22T09:20:00.000Z",
+          "payload": { "reason": "The check command exited with 1: 3 tests failed." }
+        }
+      }
+    ]
+  },
+  "terminals": {
+    "T-0146": {
+      "terminals": ["1", "2", "10", "12"], "agents": ["1", "10", "12"],
+      "lanes": {
+        "1": { "stage": "implement", "state": "running", "agent": "claude-code" },
+        "10": { "stage": "test-spec", "state": "done", "agent": "gemini" },
+        "12": { "stage": "docs", "state": "running", "agent": "codex" }
+      },
+      "programs": { "1": "claude", "2": "cargo", "10": "gemini", "12": "codex" },
+      "restoring": {}
+    },
+    "T-0143": {
+      "terminals": ["1", "8", "10", "12", "13"], "agents": ["1", "8", "10", "12", "13"],
+      "lanes": {
+        "1": { "stage": "review", "state": "review", "agent": "claude-code" },
+        "8": { "stage": "reproduce", "state": "done", "agent": "cursor" },
+        "10": { "stage": "test-spec", "state": "done", "agent": "gemini" },
+        "12": { "stage": "agent-review", "state": "done", "agent": "codex" },
+        "13": { "stage": "security-review", "state": "done", "agent": "copilot" }
+      },
+      "programs": { "1": "claude", "8": "cursor-agent", "10": "gemini", "12": "codex", "13": "copilot" },
+      "restoring": {}
+    },
+    "T-0141": {
+      "terminals": ["1"], "agents": ["1"],
+      "lanes": { "1": { "stage": "implement", "state": "needs-input", "agent": "claude-code" } },
+      "programs": { "1": "claude" }, "restoring": {}
+    },
+    "T-0139": {
+      "terminals": ["1", "2"], "agents": [],
+      "lanes": {}, "programs": { "1": null, "2": "pnpm" }, "restoring": {}
+    }
+  },
+  "jobs": [
+    {
+      "id": "job-1", "kind": "workspace", "label": "Making the workspace of T-0144",
+      "taskId": "T-0144", "startedAt": "2026-10-22T09:29:00.000Z"
+    },
+    {
+      "id": "job-2", "kind": "fetch", "label": "Fetching natamux",
+      "startedAt": "2026-10-22T09:29:30.000Z"
+    }
+  ],
+  "activity": {
+    "T-0146": {
+      "1": { "text": "Writing crates/natamux-app/src/app/dashboard.rs", "at": "2026-10-22T09:30:00.000Z" },
+      "12": { "text": "Editing docs/rust-phase3.md", "at": "2026-10-22T09:30:00.000Z" }
+    },
+    "T-0147": { "1": { "text": "Running cargo test -p natamux-app", "at": "2026-10-22T09:28:00.000Z" } },
+    "T-0144": { "1": { "text": "Reading site/src/content/docs", "at": "2026-10-22T09:15:00.000Z" } }
+  },
+  "usage": {
+    "T-0146": { "tokens": 1840000, "costUsd": 12.4, "unpricedModels": [], "stages": [] },
+    "T-0143": {
+      "tokens": 920000, "costUsd": 6.1, "unpricedModels": ["gemini-flash"],
+      "stages": [
+        { "stage": "spec", "agent": "claude-code", "model": "claude-opus-5-5", "input": 8200, "cacheRead": 210000, "cacheWrite": 41000, "output": 12400, "costUsd": 1.2 },
+        { "stage": "implement", "agent": "claude-code", "model": "claude-opus-5-5", "input": 21000, "cacheRead": 480000, "cacheWrite": 90000, "output": 52000, "costUsd": 3.9 },
+        { "stage": "agent-review", "agent": "codex", "model": "gpt-5-codex", "input": 6400, "cacheRead": 0, "cacheWrite": 0, "output": 9100, "costUsd": 1.0 },
+        { "stage": "test-spec", "agent": "gemini", "model": "gemini-flash", "input": 3100, "cacheRead": 0, "cacheWrite": 0, "output": 2600, "costUsd": null }
+      ]
+    },
+    "T-0144": { "tokens": 310000, "costUsd": null, "unpricedModels": ["cursor-small"], "stages": [] }
+  },
+  "diffStats": {
+    "T-0146": { "files": 42, "added": 3120, "removed": 410 },
+    "T-0147": { "files": 6, "added": 720, "removed": 0 },
+    "T-0143": { "files": 18, "added": 960, "removed": 120 },
+    "T-0141": { "files": 3, "added": 88, "removed": 12 },
+    "T-0139": { "files": 1, "added": 4, "removed": 1 }
+  },
+  "templates": [
+    {
+      "id": "bug", "name": "Bug report", "title": "Fix: ", "description": "What happens, and what should happen.",
+      "priority": "high", "labels": ["bug"]
+    },
+    {
+      "id": "release", "name": "Release", "title": "Release v0.1.", "description": "",
+      "priority": "normal", "labels": ["release"]
+    }
+  ],
+  "branches": {
+    "branches": ["main", "dev", "natamux/t-0146-rust-migration-phase-3", "natamux/t-0143-rust-migration-phase-1"],
+    "current": "dev", "defaultBranch": "main"
+  },
+  "skills": {
+    "skills": [
+      {
+        "name": "natamux-stage-check", "description": "Check that a stage did every step.",
+        "origin": "project", "agents": ["claude-code"], "path": ".claude/skills/natamux-stage-check/SKILL.md"
+      }
+    ],
+    "notices": []
+  },
+  "changes": {
+    "T-0137": [
+      { "path": "crates/natamux-app/src/terminals/terminal_pane.rs", "status": "M", "added": 12, "removed": 3 },
+      { "path": "docs/rust-phase3.md", "status": "A", "added": 40, "removed": 0 }
+    ]
+  },
+  "graphs": {
+    "T-0137": {
+      "branch": "natamux/t-0137-stable-terminals", "head": "4f2c9e1", "base": "main",
+      "ahead": 3, "behind": 0, "push": { "remote": "new", "unpushed": 3 }, "truncated": false
+    },
+    "T-0139": {
+      "branch": "natamux/t-0139-own-terminal-toggle", "head": "9a0b1c2", "base": "main",
+      "ahead": 0, "behind": 2, "push": { "remote": "tracked", "unpushed": 0, "unpulled": 0 },
+      "truncated": false
+    },
+    "T-0146": {
+      "branch": "natamux/t-0146-rust-migration-phase-3", "head": "c0ffee1", "base": "dev",
+      "ahead": 4, "behind": 0, "push": { "remote": "new", "unpushed": 4 }, "truncated": false
+    },
+    "T-0143": {
+      "branch": "natamux/t-0143-rust-migration-phase-1", "head": "5e1f2a3", "base": "dev",
+      "ahead": 6, "behind": 0, "push": { "remote": "tracked", "unpushed": 2, "unpulled": 0 },
+      "truncated": false
+    },
+    "T-0141": {
+      "branch": "natamux/t-0141-task-usage", "head": "77aa001", "base": "main",
+      "ahead": 0, "behind": 0, "push": { "remote": "none" }, "truncated": false
+    }
+  },
+  "endedShells": {
+    "T-0139": [
+      {
+        "name": "1", "agent": "claude-code", "stage": "implement", "session": "s-1",
+        "endedAt": "2026-10-21T11:00:00.000Z",
+        "text": "• Bash pnpm test\n  ✓ 55 passed\n• Bash git commit -m \"Own terminal toggle\"\nDone with this stage.\n• Bash natamux done"
+      },
+      {
+        "name": "8", "agent": "cursor", "stage": "reproduce", "session": "s-8",
+        "endedAt": "2026-10-21T11:00:00.000Z", "text": "• Write .natamux-task/repro.md\nDone with this stage."
+      },
+      {
+        "name": "10", "agent": "gemini", "stage": "test-spec", "session": "s-10",
+        "endedAt": "2026-10-21T11:00:00.000Z", "text": "• Write .natamux-task/test-spec.md\nDone with this stage."
+      },
+      {
+        "name": "12", "agent": "codex", "stage": "agent-review", "session": "s-12",
+        "endedAt": "2026-10-21T11:00:00.000Z", "text": "• Write .natamux-task/review.md\n  ✓ No problems found"
+      },
+      {
+        "name": "13", "agent": "copilot", "stage": "security-review", "session": "s-13",
+        "endedAt": "2026-10-21T11:00:00.000Z", "text": "• Write .natamux-task/security.md\n  ✓ No problems found"
+      }
+    ]
+  }
+}

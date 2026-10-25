@@ -37,9 +37,8 @@ Every file:
 | Linux, any distribution | [`Natamux-linux-x86_64.AppImage`](https://github.com/lenhatthanh20/natamux/releases/latest/download/Natamux-linux-x86_64.AppImage) |
 | Debian, Ubuntu | [`Natamux-linux-amd64.deb`](https://github.com/lenhatthanh20/natamux/releases/latest/download/Natamux-linux-amd64.deb) |
 | Linux, no install | [`Natamux-linux-x64.tar.gz`](https://github.com/lenhatthanh20/natamux/releases/latest/download/Natamux-linux-x64.tar.gz) |
-| Native app (beta), macOS Apple silicon | [Native app releases](https://github.com/lenhatthanh20/natamux/releases?q=native-beta) |
 
-Not sure which Mac you have? Open **Apple menu → About This Mac**. **Chip: Apple M…** means Apple silicon; **Processor: Intel** means Intel. You can also build the app from source with `scripts/package-desktop.sh`; see `packages/desktop/README.md`.
+Not sure which Mac you have? Open **Apple menu → About This Mac**. **Chip: Apple M…** means Apple silicon; **Processor: Intel** means Intel. Rust app builds run in CI. For a server install, see [Docker](/docs/guides/self-host-docker/).
 
 ## Install
 
@@ -92,11 +91,7 @@ Pick one of three files.
    ./Natamux-linux-x86_64.AppImage
    ```
 
-2. On Ubuntu 24.04 and later, the system can block Chromium's sandbox, and the app does not start. Either install the `.deb` instead, or start the AppImage with `--no-sandbox`:
-
-   ```sh frame="terminal"
-   ./Natamux-linux-x86_64.AppImage --no-sandbox
-   ```
+2. Keep the AppImage in a folder you can write if you want the app to replace it during an update. The updater also needs `curl` on your PATH.
 
 </Steps>
 
@@ -106,11 +101,11 @@ Pick one of three files.
 sudo apt install ./Natamux-linux-amd64.deb
 ```
 
-The package installs the app as `natamux-desktop`, so the name `natamux` stays free for the command line.
+The package installs the app in `/opt/Natamux/natamux-app` and the Rust `natamux` command in `/usr/bin`.
 
 **tar.gz**
 
-Unpack `Natamux-linux-x64.tar.gz` anywhere and run the app from the folder. The same sandbox note as for the AppImage applies.
+Unpack `Natamux-linux-x64.tar.gz` anywhere and run `natamux-app` from the folder. Keep `natamux-daemon`, `natamux` and `nmx` beside it. Install `curl` for update checks.
 
 </TabItem>
 <TabItem label="Docker">
@@ -177,12 +172,13 @@ On macOS and Linux you should see `OK` for the file you downloaded. On Windows t
 For contributors. Natamux is developed in a GitHub Codespace, where Docker, Node.js and pnpm are ready. In the codespace terminal:
 
 ```sh
-scripts/dev.sh demo
+scripts/e2e.sh build
+E2E_LOCAL=1 scripts/e2e.sh up
 ```
 
-Open port 5173 and sign in with the token `devtoken`. The demo has a task with a workspace, commits and changes. `scripts/dev.sh seed` makes tasks in every state with fake agents at work. See `docs/dev-setup.md` and `docs/docker.md` in the repository.
+Open port 8080 and sign in with the token `e2e-token`. The demo has tasks in several states and uses a fake agent. See `docs/dev-setup.md` and `docs/docker.md` in the repository.
 
-To start the desktop app from the source tree, see `packages/desktop/README.md`.
+The native app and daemon are built in CI by `.github/workflows/release.yml`. Do not run a Rust build on the owner's Mac.
 
 :::note
 The development containers have no real coding agent. Use the desktop app to work with real agents.

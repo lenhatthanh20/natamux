@@ -13,12 +13,9 @@
   },
   "onCreateCommand": "sudo apt-get update && sudo apt-get install -y --no-install-recommends python3 build-essential",
   "postCreateCommand": "pnpm install --frozen-lockfile && pnpm build",
-  "postStartCommand": "scripts/dev.sh up",
-  "forwardPorts": [5173, 4317, 8080],
+  "forwardPorts": [8080],
   "portsAttributes": {
-    "5173": { "label": "Natamux dashboard (dev)", "onAutoForward": "notify" },
-    "4317": { "label": "Natamux daemon (dev)", "onAutoForward": "silent" },
-    "8080": { "label": "Natamux (production compose)", "onAutoForward": "silent" }
+    "8080": { "label": "Natamux dashboard", "onAutoForward": "notify" }
   },
   "hostRequirements": {
     "cpus": 2

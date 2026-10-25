@@ -52,7 +52,7 @@ All tiers end in the same task events (`agent.started`, `agent.asked`, `agent.fi
 
 - **`natamux hook <agent>`**: a command that reads a hook's JSON from stdin and forwards it to the daemon. Most agents (Codex, Gemini CLI, Cursor, Copilot CLI) can only run a command, not call a URL. A command also keeps working on a machine with a proxy: in the first real test of the Claude Code `http` hook, the proxy of the machine refused the request to the daemon until `NO_PROXY` was set. It reads the token and the task id from the environment, and it must never make the agent fail: if the daemon is down it exits 0 quietly. Claude Code can keep using its `http` hook, which needs no process.
 - **`POST /hooks/:agent`** on the daemon, where the agent name picks the adapter.
-- **An adapter interface** (done): for each agent, a function that turns the raw hook input into one of six signals: `prompt`, `activity`, `asking`, `turn-ended`, `turn-paused`, `failed` (plus the working directory and some details). The code that decides which task events follow from a signal (`agent-signals.ts`), and which task a hook belongs to (`agent-hook-service.ts`), is shared by all agents. An adapter is one file in `packages/daemon/src`, listed in `agent-adapters.ts`; `claude-code-hooks.ts` is the example.
+- **An adapter interface** (done): for each agent, a function that turns the raw hook input into one of six signals: `prompt`, `activity`, `asking`, `turn-ended`, `turn-paused`, `failed` (plus the working directory and some details). The Rust adapters are in `crates/natamux-agents/src/hooks/`; `crates/natamux-daemon/src/agents/hook_service.rs` decides which task events follow and which task a hook belongs to. `claude_code.rs` is an example.
 - **A config generator per agent**: `natamux hooks <agent>` prints the settings for that agent's own file format (Claude Code settings JSON, Codex `hooks`, Gemini `settings.json`, Cursor `hooks.json`, Copilot `.github/hooks/*.json`).
 
 ### How a hook finds its task
@@ -111,7 +111,7 @@ Notes:
 
 ## Skills
 
-Checked on 2026-10-11 by reading each vendor's docs. Agents change quickly: check again before relying on it. The code is `packages/daemon/src/agents/agent-skills.ts` (`SKILL_SOURCES`).
+Checked on 2026-10-11 by reading each vendor's docs. Agents change quickly: check again before relying on it. The current code is in `crates/natamux-agents/src/skills.rs` and `skill_list.rs`.
 
 | Agent | Project folders | User folders | Other | How a prompt calls a skill | Label |
 |---|---|---|---|---|---|
@@ -141,7 +141,7 @@ Sources:
 
 ## Usage
 
-Tokens and cost per task, read from the files the agents write. Checked on 2026-10-21 against real session files (Claude Code, Codex, Copilot CLI, Cursor) and the vendor docs (Gemini CLI). Code: `packages/daemon/src/agents/` (`usage-service.ts`, `model-prices.ts`).
+Tokens and cost per task, read from the files the agents write. Checked on 2026-10-21 against real session files (Claude Code, Codex, Copilot CLI, Cursor) and the vendor docs (Gemini CLI). Current code: `crates/natamux-daemon/src/agents/usage_service.rs` and `crates/natamux-agents/src/usage/`.
 
 | Agent | Where the usage is | Fields | Model | Support |
 |---|---|---|---|---|
