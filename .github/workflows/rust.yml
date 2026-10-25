@@ -293,10 +293,9 @@ jobs:
     timeout-minutes: 30
     # The owner signed the baselines off (docs/rust-phase3.md): a differing shot fails the job.
     # REPORT_ONLY: "1" is for a change of the look before its new baselines: the compare step is
-    # skipped then (everything differs; the shots are in the artifact). T-0158 (lean layout) sets
-    # it until the owner signs its shots off.
+    # skipped then (everything differs; the shots are in the artifact).
     env:
-      REPORT_ONLY: "1"
+      REPORT_ONLY: ""
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2

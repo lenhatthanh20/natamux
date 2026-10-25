@@ -23,6 +23,6 @@ git fetch --no-tags origin main && git switch --detach origin/main
 scripts/release.sh vX.Y.Z
 ```
 
-`release.sh` asks before it pushes a signed tag. Release CI then builds a draft. `scripts/sign-release.sh` checks the artifacts and asks before it signs and publishes. The minisign secret key stays on the owner's Mac. Do not put it in CI. Run `scripts/release.test.sh --published` after signing.
+`release.sh` asks before it pushes a signed tag. Release CI then builds a draft. `scripts/sign-release.sh` checks the artifacts and asks before it signs and publishes. The minisign secret key stays on the owner's Mac. Do not put it in CI. Run `scripts/release.test.sh --published` after signing. For the first Rust release, the owner also updates a running Electron app to it (`docs/release-process.md`, step 6).
 
 Never publish an unsigned draft. Do not push a `v*` tag from a feature task.

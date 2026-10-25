@@ -239,7 +239,7 @@ Part 1 (terminals and the contract suite, T-0153), part 2 (tasks, events, storag
 
 ### Phase 5: cut over (2–3 weeks)
 
-Status: Rust implementation merged to `dev` in PR #460. The cutover to `main` and its CI gates are still pending. See [Phase 5 gate results](rust-phase5.md#gate-results).
+Status: done, 2026-10-25. Rust implementation merged to `dev` in PR #460, cutover into `main` in PR #463; `dev` is gone. The first Rust release is the owner's next step. See [Phase 5 gate results](rust-phase5.md#gate-results).
 
 - Ship two Rust binaries (app and daemon) with the web build embedded.
 - Updater in Rust with the same pinned key (`RELEASE_SIGNER`) and trusted comment `natamux <tag>`.
@@ -254,7 +254,7 @@ Status: Rust implementation merged to `dev` in PR #460. The cutover to `main` an
 
 Small items found in phase 4 and left on purpose, to fix once the cut-over is done (owner, 2026-10-24). Each bug fix gets a regression test, as always.
 
-- CI: a daemon-only pull request into `dev` takes 10 min 22 s against the 10 min target (run 40103284008); the musl build of `natamux-daemon` is cold (6 min). Warm it in `rust-cache.yml` (on `main` and `dev`, a `daemon-musl` job saving `target/x86_64-unknown-linux-musl`) and let `daemon-musl` restore it: about 7 min.
+- CI: done in #472. `daemon-musl` is removed (nothing used its artifact), and a main push saves the caches of `check`, `app-macos` and `app-windows`.
 - `DELETE /repos/:id`: when the task list cannot be read, the tasks callback (`start_services.rs`, `list_tasks(None).unwrap_or_default()`) counts no workspaces and lets the delete through; Node fails the request. Fail it too.
 - `workspaces/agent_once.rs` `keep_tail`: once stderr passes 1 MiB, each chunk walks and counts the whole kept text again. Keep a running count, so a stderr flood stays cheap.
 - `natamux-git`: calls other than the worktree ones (`branches`, `changes`, `commit_push`, `rollback`, `file_diff`, `graph`, `exec`'s `git_bytes`) still pass no timeout, which `exec.rs` turns into one year. Give them a real one, as `WORKTREE_TIMEOUT` (10 min).
