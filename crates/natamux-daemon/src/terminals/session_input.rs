@@ -2,6 +2,7 @@
 
 use natamux_pty::input_gap::{InputKind, pieces, wait_before};
 
+use super::input_trace::{Step, trace};
 use super::session_output::flush_output;
 use super::types::{ClientRef, ClientState, Input, Session, Size, same_client};
 
@@ -37,6 +38,7 @@ pub fn flush(session: &mut Session) {
             return;
         }
         if let Some(part) = session.pending.pop_front() {
+            trace(session, Step::Write(kind), &part.data);
             session.pty.write(part.data.as_bytes());
             session.last_write = Some((session.now(), kind));
         }

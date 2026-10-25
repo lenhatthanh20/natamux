@@ -213,6 +213,18 @@ A dropped socket does not end the shell. The dashboard comes back by itself and 
 - **Acks.** Outside a catch-up, `offset` counts bytes; after a write is parsed, `ack(offset)` when `offset - acked >= ACK_EVERY_BYTES` (64 KB). Bytes during a catch-up are not counted, but bytes after `replayed` are, even before xterm parsed the catch-up: live output comes right after `replayed`, and leaving it out made the client ack too little forever, so the daemon never caught it up once behind (the e2e flood froze on this).
 - `exit` and `error` end a catch-up without an offset.
 
+## Input trace
+
+For typing bugs (lost or extra letters, wrong order). `crates/natamux-daemon/src/terminals/input_trace.rs`.
+
+- On only when the daemon starts with `NATAMUX_INPUT_TRACE=1`. The app passes it to the daemon: `open -n <Natamux.app> --env NATAMUX_INPUT_TRACE=1`.
+- Lines go to stderr, so to `<user data>/logs/daemon.log`:
+  - `input T-1/1 recv +<ms> "<text>"`: one `input` message from a client, before the DEL split. Shows what the app sent.
+  - `input T-1/1 write +<ms> <text|erase|submit> "<text>"`: one write to the pty, after the `INPUT_GAP_MS` queue. Shows what the program got.
+  - `+<ms>`: time since the line before of that shell. Text is Rust `{:?}`: DEL is `\u{7f}`, ESC `\u{1b}`. Cut at 200 characters with `…`.
+- It logs passwords too. Turn it off after use.
+- To check what a program does with the recorded bytes, replay them into it in a pty: a short Python script with `pty.fork()`, `os.write` per piece, the recorded gaps, then read the output with ANSI removed (T-0177 did this for the Cursor CLI; Python, so no Node runs locally).
+
 ## Known issues that are not Natamux bugs
 
 | Symptom | Cause | What to tell the user |
@@ -220,7 +232,7 @@ A dropped socket does not end the shell. The dashboard comes back by itself and 
 | Old lines stay narrow after a pane is widened | Claude Code wraps lines itself, with hard newlines and its gutter (`+`, indent). No terminal can reflow them | Nothing to fix. Keep the pane wide before long output |
 | Empty rows under Claude Code's footer (classic TUI) | Its inline renderer erases rows when its live area shrinks (spinner, notices, menus gone), but cannot move the screen back down, so the rows stay empty until new output. A narrow pane wraps the footer into more rows. The pty has xterm's size after first show, pane resize, maximize and back, and task switch (checked on T-0072, `stty -F /dev/pts/N size` in the daemon container vs xterm rows/cols). Under the last row, a pane shows its 9 px padding plus less than one row left by the fit: that band is not a row. A captured 18x53 start shows the shrink (`\x1b[2K`, `\x1b[1A\x1b[K`) | `/tui fullscreen` ends it. A wider pane makes the footer shorter |
 | Blocks of output repeat after a resize | Claude Code's classic renderer repaints on every width change, and rows already in the scrollback cannot be erased (anthropics/claude-code#84247). It also happens when its live area is taller than the pane | `/tui fullscreen` (alternate screen) ends it. Natamux keeps resizes few |
-| Vietnamese letters lost or mixed up | Input methods (GoTiengViet, EVKey, OpenKey, Unikey) send DEL and then the accented letter. Claude Code drops text it reads in the same chunk as a DEL (anthropics/claude-code#30240) | `INPUT_GAP_MS` makes this rare. If it still happens, look at the gap and at the order in `write()` |
+| Vietnamese letters lost or mixed up | Input methods (GoTiengViet, EVKey, OpenKey, Unikey) send DEL and then the accented letter. Claude Code drops text it reads in the same chunk as a DEL (anthropics/claude-code#30240) | `INPUT_GAP_MS` makes this rare. If it still happens, record it with the input trace (below) |
 
 Before calling something a Natamux bug, check whether the bytes are wrong (daemon), the size is wrong (several clients, resize order), or the program draws that way.
 

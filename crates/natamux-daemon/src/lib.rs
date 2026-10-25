@@ -57,6 +57,7 @@ pub mod shared {
     pub mod ttl_cache;
 }
 pub mod terminals {
+    pub mod input_trace;
     pub mod limits;
     pub mod login_path;
     pub mod open_shells;

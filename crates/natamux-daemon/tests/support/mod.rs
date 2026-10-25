@@ -349,6 +349,7 @@ pub fn setup_with(options: SetupOptions) -> Harness {
         is_ended: options.is_ended,
         bus: Some(Arc::clone(&bus)),
         on_output_idle: options.on_output_idle,
+        trace_input: false,
     });
     Harness {
         service,
