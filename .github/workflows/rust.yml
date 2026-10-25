@@ -9,8 +9,8 @@ on:
     # natamux-ci/daemon and natamux-ci/daemon-check.
     # A snapshot or a PR runs only the jobs its files need (the changes job). main, and a push or PR whose head
     # commit message has [ci: all], run all.
-    # Jobs only restore caches: rust-cache.yml saves them in the scope of main, which every branch
-    # reads. Caches of each branch did not fit in the 10 GB of the repo and pushed each other out.
+    # Only a main push saves caches (check, app-macos, app-windows), in the scope of main, which
+    # every branch reads. Caches of each branch did not fit in the 10 GB of the repo.
     branches: [main, 'natamux-ci/**']
   pull_request:
     branches: [main]
@@ -20,13 +20,15 @@ permissions:
 
 concurrency:
   group: rust-${{ github.ref }}
-  cancel-in-progress: true
+  # A newer main push must not cancel a run that is nearly done: main would never get a result.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
   CARGO_INCREMENTAL: "0"
   # Debug info of the Zed graph fills the runner's disk.
   CARGO_PROFILE_DEV_DEBUG: "0"
   CARGO_PROFILE_TEST_DEBUG: "0"
+  SAVE_CACHE: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
 
 jobs:
   # What the change touches decides which jobs run (scripts/ci-changes.py).
@@ -34,7 +36,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      daemon: ${{ steps.flags.outputs.daemon }}
       terminal: ${{ steps.flags.outputs.terminal }}
       app: ${{ steps.flags.outputs.app }}
       client: ${{ steps.flags.outputs.client }}
@@ -45,6 +46,7 @@ jobs:
       daemon_crates: ${{ steps.flags.outputs.daemon_crates }}
       all: ${{ steps.flags.outputs.all }}
       shards: ${{ steps.flags.outputs.shards }}
+      shots: ${{ steps.flags.outputs.shots }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -59,6 +61,9 @@ jobs:
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    permissions:
+      contents: read
+      actions: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # In the background: it takes 1 to 2 minutes, and the next steps need no room yet. The
@@ -108,6 +113,39 @@ jobs:
           path: ${{ runner.temp }}/fmt.patch
       - id: build
         run: cargo xtask ci${{ startsWith(github.ref, 'refs/heads/natamux-ci/daemon') && ' --no-app' || '' }}${{ startsWith(github.ref, 'refs/heads/natamux-ci/') && ' --all-errors' || '' }}
+      # A main push saves the cache; a red lint or test still leaves the build in it.
+      - name: Stamp the cache
+        if: ${{ !cancelled() && env.SAVE_CACHE == 'true' && steps.build.outcome != 'skipped' }}
+        run: python3 scripts/ci-changes.py stamp
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: ${{ !cancelled() && env.SAVE_CACHE == 'true' && steps.build.outcome != 'skipped' }}
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: rust-check-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-${{ github.sha }}
+      - name: Keep only the newest cache of this job
+        if: ${{ !cancelled() && env.SAVE_CACHE == 'true' && steps.build.outcome != 'skipped' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh cache list --ref refs/heads/main --key "rust-check-${{ runner.os }}-" --json id,createdAt \
+            --jq 'sort_by(.createdAt) | reverse | .[1:] | .[].id' |
+            while read -r id; do gh cache delete "$id"; done
+      # GitHub evicts the oldest caches above 10 GB itself, so this only warns.
+      - name: Cache usage
+        if: ${{ !cancelled() && env.SAVE_CACHE == 'true' }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          bytes=$(gh api "repos/$GITHUB_REPOSITORY/actions/cache/usage" --jq .active_caches_size_in_bytes)
+          echo "Caches: $((bytes / 1048576)) MB of 10240." >> "$GITHUB_STEP_SUMMARY"
+          if [ "$bytes" -gt $((9500 * 1048576)) ]; then
+            echo "::warning::Caches use $((bytes / 1048576)) MB; GitHub evicts the oldest above 10 GB."
+          fi
       - run: python3 scripts/ci-changes.test.py
       - run: bash scripts/fake-gh.test.sh
       - run: python3 scripts/check-shots.test.py
@@ -132,6 +170,7 @@ jobs:
     timeout-minutes: 120
     permissions:
       contents: read
+      actions: write
       id-token: write
       attestations: write
     steps:
@@ -150,6 +189,27 @@ jobs:
       - run: python3 scripts/ci-changes.py mtimes
       - id: build
         run: cargo build --release --locked -p natamux-app -p natamux-daemon -p natamux-cli
+      # A main push saves the cache; a failed build still leaves its finished crates in it.
+      - name: Stamp the cache
+        if: ${{ !cancelled() && env.SAVE_CACHE == 'true' && steps.build.outcome != 'skipped' }}
+        run: python3 scripts/ci-changes.py stamp
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: ${{ !cancelled() && env.SAVE_CACHE == 'true' && steps.build.outcome != 'skipped' }}
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: rust-app-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-${{ github.sha }}
+      - name: Keep only the newest cache of this job
+        if: ${{ !cancelled() && env.SAVE_CACHE == 'true' && steps.build.outcome != 'skipped' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh cache list --ref refs/heads/main --key "rust-app-${{ runner.os }}-" --json id,createdAt \
+            --jq 'sort_by(.createdAt) | reverse | .[1:] | .[].id' |
+            while read -r id; do gh cache delete "$id"; done
       - name: Smoke test
         run: target/release/natamux-app --smoke
       - name: Smoke test, terminal grid and pipeline chart
@@ -207,8 +267,7 @@ jobs:
           name: natamux-app-macos-arm64
           path: dist/natamux-app-macos-arm64.zip
           compression-level: 0
-      # Phase 2: the Rust `natamux` and `nmx` (docs/rust-phase2.md).
-      - run: cargo build --release --locked -p natamux-cli
+      # Phase 2: the Rust `natamux` and `nmx` (docs/rust-phase2.md), from the build above.
       - run: tar -czf dist/natamux-cli-macos-arm64.tar.gz -C target/release natamux nmx
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
@@ -220,9 +279,12 @@ jobs:
           compression-level: 0
 
   # The state shots of app-macos, split over parallel jobs: one after another they took 22 minutes
-  # (T-0165). The changes job picks the shards: one when a Shots: line names a few states.
+  # (T-0165). On demand only (the changes job picks the shards): one job for a Shots: line that
+  # names a few states, 4 for [ci: shots] or [ci: all], none on main. They took 4 of the 5 macOS
+  # runners of the account, and runs waited up to an hour for them.
   app-shots:
     needs: [changes, app-macos]
+    if: ${{ needs.changes.outputs.shards != '[]' }}
     strategy:
       fail-fast: false
       matrix:
@@ -249,9 +311,10 @@ jobs:
       # asks for the top of the screen below the menu bar, so a fixed screen rectangle is wrong.
       - name: Screen shots
         env:
-          # A snapshot push may shoot only some states: a line "Shots: <state> ..." in its commit
-          # message (T-0158: about 1 minute instead of 22). A PR and main shoot every state.
-          MESSAGE: ${{ github.event_name == 'push' && github.event.head_commit.message || '' }}
+          # A line "Shots: <state> ..." in the head commit message (of a push, or of a PR's head)
+          # shoots only those states (T-0158: about 1 minute instead of 22); [ci: shots] shoots
+          # every state. The changes job reads the line.
+          ONLY: ${{ needs.changes.outputs.shots }}
           SHARD: ${{ matrix.shard }}
           SHARD_COUNT: ${{ strategy.job-total }}
           STATES: >-
@@ -293,8 +356,8 @@ jobs:
             sign-in-error add-menu details-empty
         run: |
           mkdir -p shots
-          only=$(printf '%s\n' "$MESSAGE" | sed -n 's/^Shots: *//p' | head -n 1)
-          if [ -n "$only" ] && [ "$GITHUB_REF" != refs/heads/main ]; then
+          only=$ONLY
+          if [ -n "$only" ]; then
             for state in $only; do
               case " $STATES " in
                 *" $state "*) ;;
@@ -400,6 +463,7 @@ jobs:
     timeout-minutes: 120
     permissions:
       contents: read
+      actions: write
       id-token: write
       attestations: write
     defaults:
@@ -421,6 +485,27 @@ jobs:
       - run: python scripts/ci-changes.py mtimes
       - id: build
         run: cargo build --release --locked -p natamux-app -p natamux-daemon -p natamux-cli
+      # A main push saves the cache; a failed build still leaves its finished crates in it.
+      - name: Stamp the cache
+        if: ${{ !cancelled() && env.SAVE_CACHE == 'true' && steps.build.outcome != 'skipped' }}
+        run: python scripts/ci-changes.py stamp
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: ${{ !cancelled() && env.SAVE_CACHE == 'true' && steps.build.outcome != 'skipped' }}
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: rust-app-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-${{ github.sha }}
+      - name: Keep only the newest cache of this job
+        if: ${{ !cancelled() && env.SAVE_CACHE == 'true' && steps.build.outcome != 'skipped' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh cache list --ref refs/heads/main --key "rust-app-${{ runner.os }}-" --json id,createdAt \
+            --jq 'sort_by(.createdAt) | reverse | .[1:] | .[].id' |
+            while read -r id; do gh cache delete "$id"; done
       - name: Smoke test
         run: target/release/natamux-app.exe --smoke
       - name: Screenshots
@@ -444,8 +529,7 @@ jobs:
           name: shots-windows
           path: shots/*.bmp
           if-no-files-found: ignore
-      # Phase 2: the Rust `natamux` and `nmx` (docs/rust-phase2.md).
-      - run: cargo build --release --locked -p natamux-cli
+      # Phase 2: the Rust `natamux` and `nmx` (docs/rust-phase2.md), from the build above.
       - run: |
           mkdir -p dist
           powershell -NoProfile -Command "Compress-Archive -Path target/release/natamux.exe, target/release/nmx.exe -DestinationPath dist/natamux-cli-windows-x64.zip"
@@ -474,11 +558,16 @@ jobs:
   # Screen 7 (live_daemon_projects.rs): a wrong token (401) and the right one, the projects, adding a
   # relative path and a project added already (400), the GitHub issues and their import (409 without
   # `gh`), an Issues-tab setting saved and put back.
+  # It builds while e2e-image builds the images, then waits for them (scripts/ci-wait-artifact.sh).
   live-daemon:
-    needs: [changes, e2e-image]
+    needs: changes
     if: ${{ !endsWith(github.ref, '-check') && needs.changes.outputs.client == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    permissions:
+      contents: read
+      # scripts/ci-wait-artifact.sh reads the jobs and artifacts of this run.
+      actions: read
     env:
       GH_TOKEN: ${{ github.token }}
       NATAMUX_URL: http://127.0.0.1:8080/api
@@ -489,6 +578,8 @@ jobs:
       - run: rustup toolchain install
       - id: build
         run: cargo test --locked -p natamux-client --test live_daemon --test live_daemon_git --test live_daemon_settings --test live_daemon_files --test live_daemon_projects --no-run
+      - name: Wait for the images of e2e-image
+        run: scripts/ci-wait-artifact.sh rust-production-images e2e-image
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: rust-production-images
@@ -524,14 +615,16 @@ jobs:
       - if: always()
         run: scripts/e2e.sh down
 
-  # The Rust CLI from this tree runs against the same Rust daemon image as the E2E jobs.
+  # The Rust CLI from this tree runs against the same Rust daemon image as the E2E jobs. It builds
+  # while e2e-image builds the images, then waits for them.
   cli:
-    needs: [changes, e2e-image]
+    needs: changes
     if: ${{ !endsWith(github.ref, '-check') && needs.changes.outputs.client == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
       contents: read
+      actions: read
       id-token: write
       attestations: write
     env:
@@ -549,6 +642,8 @@ jobs:
           rustup target add x86_64-unknown-linux-musl
       - id: build
         run: cargo build --release --locked -p natamux-cli --target x86_64-unknown-linux-musl
+      - name: Wait for the images of e2e-image
+        run: scripts/ci-wait-artifact.sh rust-production-images e2e-image
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: rust-production-images
@@ -626,33 +721,6 @@ jobs:
         run: cargo test --locked ${{ needs.changes.outputs.daemon_crates }} --no-run
       - run: cargo test --locked ${{ needs.changes.outputs.daemon_crates }}
 
-  # Check that the Rust daemon still builds for musl, independent of the production image.
-  daemon-musl:
-    needs: changes
-    if: ${{ !endsWith(github.ref, '-check') && needs.changes.outputs.daemon == 'true' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - run: |
-          rustup toolchain install
-          rustup target add x86_64-unknown-linux-musl
-      # The bundled SQLite of rusqlite is C: musl-gcc builds it for the static binary.
-      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends musl-tools
-      - id: build
-        run: cargo build --release --locked -p natamux-daemon --target x86_64-unknown-linux-musl
-        env:
-          CC_x86_64_unknown_linux_musl: musl-gcc
-          CARGO_PROFILE_RELEASE_DEBUG: "0"
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: daemon-musl
-          path: target/x86_64-unknown-linux-musl/release/natamux-daemon
-          retention-days: 1
-          if-no-files-found: error
-
   # Build the production Rust daemon image once for the four E2E groups.
   e2e-image:
     needs: changes
@@ -679,15 +747,17 @@ jobs:
           compression-level: 0
           retention-days: 3
 
-  # Each group runs on a real image built from docker/prod.Dockerfile.
+  # Each group runs on a real image built from docker/prod.Dockerfile. It installs Playwright while
+  # e2e-image builds the images, then waits for them.
   e2e:
     name: e2e (${{ matrix.group }})
-    needs: [changes, e2e-image]
+    needs: changes
     if: ${{ !endsWith(github.ref, '-check') && needs.changes.outputs.e2e == 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     permissions:
       contents: read
+      actions: read
     strategy:
       fail-fast: false
       matrix:
@@ -711,6 +781,8 @@ jobs:
         run: |
           pnpm install --ignore-workspace --no-frozen-lockfile
           pnpm exec playwright install --with-deps chromium
+      - name: Wait for the images of e2e-image
+        run: scripts/ci-wait-artifact.sh rust-production-images e2e-image
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: rust-production-images
@@ -844,3 +916,33 @@ jobs:
       - run: cargo deny --locked check
       - run: cargo audit
       - run: cargo vet --locked
+
+  # The one required check of this workflow (ruleset of main): red when any job failed or was
+  # cancelled. A job that its change does not need is skipped, which is fine.
+  rust-ok:
+    needs:
+      - changes
+      - check
+      - app-macos
+      - app-shots
+      - shots
+      - app-windows
+      - live-daemon
+      - cli
+      - daemon-os
+      - e2e-image
+      - e2e
+      - e2e-publish
+      - daemon-bench
+      - supply-chain
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Results: $RESULTS"
+          case " $RESULTS " in
+            *" failure "* | *" cancelled "*) exit 1 ;;
+          esac

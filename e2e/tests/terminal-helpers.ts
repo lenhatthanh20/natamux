@@ -363,7 +363,7 @@ export async function installScreenSampler(
     const pane = `section[aria-label="${label}"]`
     const selector = `${pane} section[aria-label="Terminal screen"] .xterm-rows`
     const skeleton = '[role="status"][aria-label="Loading the terminal"]'
-    const look = () => {
+    const read = () => {
       const element = document.querySelector(selector)
       if (element !== null && frames.length < 20_000) {
         const text = element.textContent ?? ''
@@ -374,6 +374,16 @@ export async function installScreenSampler(
           skeleton: document.querySelector(skeleton) !== null,
         })
       }
+    }
+    // A frame callback may run before xterm's own, which draws the rows of this frame: the rows
+    // then still hold text from before. Resize observers run after every frame callback and before
+    // the paint, and a new one fires once, so read() sees what this frame paints.
+    const look = () => {
+      const observer = new ResizeObserver(() => {
+        observer.disconnect()
+        read()
+      })
+      observer.observe(document.documentElement)
       requestAnimationFrame(look)
     }
     requestAnimationFrame(look)

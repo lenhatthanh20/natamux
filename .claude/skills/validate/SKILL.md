@@ -57,10 +57,12 @@ Jobs. Rust PRs target `main`. The Rust workflow runs on `main`, PRs into `main`,
 | E2E | `build`, `test (<group>)`, `publish` | production images and Playwright, see the `e2e` skill |
 | Site | `build` | only when `site/**` changes |
 | Rust | `check` | `cargo xtask ci`: fmt, clippy, tests, layers. Always runs |
-| Rust | `app-macos`, `app-shots (1..4)`, `app-windows`, daemon and client jobs | only when the change can break them (`scripts/ci-changes.py`); `main` runs all |
+| Rust | `app-macos`, `app-windows`, daemon and client jobs | only when the change can break them (`scripts/ci-changes.py`); `main` runs all |
+| Rust | `app-shots (1..4)` | on demand only: a `Shots:` line (1 job) or `[ci: shots]` / `[ci: all]` (4 jobs) in the head commit message; never on `main` |
+| Rust | `rust-ok` | red when any Rust job failed or was cancelled. Required, with `web-core` of `ci.yml`, to merge into `main` |
 | Rust | `supply-chain` | `cargo deny --locked check`, `cargo audit`, `cargo vet --locked` |
 
-- Rust snapshots: every task pushes to the shared `natamux-ci/rust` (the jobs the change needs) and `natamux-ci/rust-check` (only `check`, for the compile loop). Keep both branches at cleanup. Rust jobs only restore caches; `rust-cache.yml` on `main` saves them.
+- Rust snapshots: every task pushes to the shared `natamux-ci/rust` (the jobs the change needs) and `natamux-ci/rust-check` (only `check`, for the compile loop). Keep both branches at cleanup. Only a push to `main` saves Cargo caches (`check`, `app-macos`, `app-windows`); every other run restores them.
 - `[ci: all]` in the head commit message of a snapshot or a PR runs every job, `app-windows` too.
 - A test that fails in one shard: the log names the file. `--shard` splits files the same way each run, so a rerun hits the same shard.
 

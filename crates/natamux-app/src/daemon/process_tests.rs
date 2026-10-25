@@ -1,6 +1,6 @@
 use super::process::{
-    clear_port_file, pick_port, probe_daemon, sibling_daemon, startup_error, stop_child, token_at,
-    wait_for_health, wait_for_healthy_child,
+    clear_port_file, pick_port, probe_daemon_within, sibling_daemon, startup_error, stop_child,
+    token_at, wait_for_health, wait_for_healthy_child,
 };
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
@@ -172,8 +172,10 @@ fn another_listener_cannot_pass_the_owned_daemon_probe() {
             let _ = write!(stream, "HTTP/1.1 {status}\r\nContent-Length: 0\r\n\r\n");
         }
     });
-    assert!(!probe_daemon(port, "other-token"));
-    assert!(probe_daemon(port, "owned-token"));
+    // Not the 200 ms of the app: a loaded runner can start the server thread later than that.
+    let wait = Duration::from_secs(5);
+    assert!(!probe_daemon_within(port, "other-token", wait));
+    assert!(probe_daemon_within(port, "owned-token", wait));
     server.join().expect("server");
 }
 

@@ -5,7 +5,9 @@ Usage: ci-changes.py flags | crates | mtimes | stamp
 
 flags   writes key=value lines to $GITHUB_OUTPUT (stdout when unset): the job flags, the changed
         crates with their dependents, the E2E groups to run (`[e2e: a,b]`; the flag `e2e`
-        says whether the Rust daemon needs E2E at all), `all` and the shot shards.
+        says whether the Rust daemon needs E2E at all), `all` and the shot shards (`Shots:`
+        line, `[ci: shots]` or `[ci: all]`; none on main) and `shots`, the states of the
+        `Shots:` line.
         A push to main, or a head commit message with `[ci: all]`, runs everything; a pull request
         and a snapshot run what their diff against origin/main needs.
 crates  prints the same crate list, one per line.
@@ -74,13 +76,13 @@ LOCK_PATHS = ["Cargo.lock", "deny.toml", "supply-chain/", ".cargo/audit.toml"]
 # Cargo.lock: a new version of a dependency can break any build.
 ALL_PATHS = [
     ".github/workflows/rust.yml",
-    ".github/workflows/rust-cache.yml",
     "rust-toolchain.toml",
     "Cargo.toml",
     "Cargo.lock",
     ".cargo/",
     "xtask/",
     "scripts/ci-changes.py",
+    "scripts/ci-wait-artifact.sh",
 ]
 SHARDS = [1, 2, 3, 4]
 
@@ -171,10 +173,16 @@ def wants_all(ref, message):
 
 
 def shot_shards(message, ref):
-    """The app-shots jobs: one when a `Shots:` line picks a few states, else all of SHARDS.
-    main shoots every state."""
-    few = ref != "refs/heads/main" and re.search(r"^Shots:", message or "", re.MULTILINE)
-    return [1] if few else list(SHARDS)
+    """The app-shots jobs, on demand only: all of SHARDS for `[ci: shots]` or `[ci: all]`, one for
+    a `Shots:` line that picks a few states, else none. main never shoots: with REPORT_ONLY nothing
+    compares the shots, and the 4 macOS jobs waited up to an hour for a runner."""
+    if ref == "refs/heads/main":
+        return []
+    if parse_all(message) or re.search(r"\[ci:\s*shots\s*\]", message or ""):
+        return list(SHARDS)
+    if re.search(r"^Shots:", message or "", re.MULTILINE):
+        return [1]
+    return []
 
 
 def compute(files, message, run_all, graph, ref=""):
@@ -195,7 +203,15 @@ def compute(files, message, run_all, graph, ref=""):
     out["e2e_groups"] = json.dumps(groups)
     out["all"] = str(run_all).lower()
     out["shards"] = str(shot_shards(message, ref))
+    out["shots"] = shot_states(message, ref)
     return out
+
+
+def shot_states(message, ref):
+    """The states of the first `Shots:` line, for the app-shots jobs; "" for every state. main
+    never picks states."""
+    found = re.search(r"^Shots: *(.*)$", message or "", re.MULTILINE)
+    return found.group(1).strip() if found and ref != "refs/heads/main" else ""
 
 
 def parse_base(message):
@@ -233,7 +249,13 @@ def outputs():
     message = "" if ref == "refs/heads/main" or pull_request else head_message()
     run_all = wants_all(ref, pr_head_message() if pull_request else message)
     files = None if run_all else changed_files(parse_base(message))
-    return compute(files, message, run_all, workspace_graph(), ref)
+    out = compute(files, message, run_all, workspace_graph(), ref)
+    if pull_request:
+        # As [ci: all], a PR reads its shot tags from its own head commit.
+        head = pr_head_message()
+        out["shards"] = str(shot_shards(head, ref))
+        out["shots"] = shot_states(head, ref)
+    return out
 
 
 def known_commit(root):
