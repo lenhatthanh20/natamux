@@ -9,7 +9,8 @@ use crate::app::commands_stages::ShowTasksProgress;
 use crate::app::layout_mode::{DetailsMode, SIDEBAR_WIDTH, SidebarMode, effective_sidebar_width};
 use crate::app::shell_rules::{Crumb, crumb, live_item, running_count, window_title};
 use crate::app::shortcuts::{
-    Approve, BlockTask, MarkReady, RequestChanges, ResumeAgent, RetryTask, UnblockTask,
+    Approve, BlockTask, MarkReady, RequestChanges, ResumeAgent, RetryTask, ToggleAgents,
+    ToggleDetails, ToggleSidebar, UnblockTask,
 };
 use crate::app::status_bar::StatusBar;
 use crate::app::status_bar::now_ms;
@@ -161,6 +162,17 @@ impl Root {
         let title_bar = TitleBar::new(crumb, self.dashboard.clone());
         let status_bar = StatusBar::new(live, running, needs_you, jobs, width)
             .toggles(sidebar_shown, details, agents_open)
+            .on_toggles(
+                cx.listener(|root, _: &ClickEvent, window, cx| {
+                    root.toggle_sidebar(&ToggleSidebar, window, cx)
+                }),
+                cx.listener(|root, _: &ClickEvent, window, cx| {
+                    root.toggle_details(&ToggleDetails, window, cx)
+                }),
+                cx.listener(|root, _: &ClickEvent, window, cx| {
+                    root.toggle_agents(&ToggleAgents, window, cx)
+                }),
+            )
             .on_running(cx.listener(|root, _: &ClickEvent, _, cx| {
                 root.show_state(Some(TaskState::Running), cx)
             }))

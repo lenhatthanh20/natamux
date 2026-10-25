@@ -2,7 +2,7 @@
 
 use std::rc::Rc;
 
-use gpui::{Action, ClickEvent};
+use gpui::ClickEvent;
 use ui::{ButtonLike, Tooltip, prelude::*};
 
 use super::commands::shortcut_of;
@@ -44,8 +44,9 @@ fn icon(name: &str) -> Icon {
         .color(Color::Muted)
 }
 
-/// A 24 px icon toggle that runs a command's action: the selected look while `on`. Disabled, it
-/// shows `why` as its tooltip.
+/// A 24 px icon toggle with the tooltip and keys of `command`: the selected look while `on`.
+/// Disabled, it shows `why` as its tooltip. A click calls `on_click` itself: an action would
+/// start at the focused element, and a hidden or no focused element never reaches Root.
 pub(super) fn toggle_item(
     id: &'static str,
     icon_name: &str,
@@ -53,13 +54,13 @@ pub(super) fn toggle_item(
     command: &'static str,
     on: bool,
     disabled_why: Option<&'static str>,
-    action: fn() -> Box<dyn Action>,
+    on_click: OnClick,
 ) -> ButtonLike {
     let keys = shortcut_of(command);
     let button = ButtonLike::new(id)
         .height(rems_from_px(24.0_f32).into())
         .toggle_state(on)
-        .on_click(move |_, window, cx| window.dispatch_action(action(), cx))
+        .on_click(move |event, window, cx| on_click(event, window, cx))
         .child(icon(icon_name));
     match disabled_why {
         Some(why) => button.disabled(true).tooltip(Tooltip::text(why)),

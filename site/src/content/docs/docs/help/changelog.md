@@ -7,6 +7,10 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v0.1.44 (2026-10-25)
+
+- Fix: in the desktop app, a click on the sidebar toggle or the details toggle in the status bar could do nothing. It failed after the focused panel was hidden, or when nothing had focus. Now a click always shows or hides the panel. See [Layout](/docs/guides/dashboard/#layout).
+
 ## v0.1.43 (2026-10-21)
 
 - The stage settings in **Project settings → Stages** have a **Run in a terminal of its own** checkbox (`ownShell`). Checked, the stage runs in Terminal 5 with a new session. Unchecked, it runs in Terminal 1 with the task's agent. Unchecking also clears the stage's **Agent** and **Arguments** when it can no longer have them. See [The Stages tab](/docs/guides/project-settings/#the-stages-tab) and [Stages in their own terminal](/docs/concepts/stages/#stages-in-their-own-terminal).
