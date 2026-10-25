@@ -13,8 +13,8 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Result, anyhow};
 use gpui::{
-    App, AppContext as _, AsyncApp, Keystroke, ListOffset, Modifiers, Pixels, PlatformInput,
-    Point, ScrollDelta, ScrollWheelEvent, TouchPhase, Window, WindowHandle, point, px,
+    App, AppContext as _, AsyncApp, Keystroke, ListOffset, Modifiers, Pixels, PlatformInput, Point,
+    ScrollDelta, ScrollWheelEvent, TouchPhase, Window, WindowHandle, point, px,
 };
 
 use super::window::Root;

@@ -81,7 +81,10 @@ fn sends_shells_changed_when_the_output_stops_and_the_program_in_front_is_anothe
     h.pty(1).emit("vim notes.txt\r\n");
     h.advance(WORKSPACE_QUIET_MS * 2);
     assert_eq!(changes(&h), started + 1);
-    assert_eq!(h.messages().last(), Some(&programs_changed("T-0001", &["2"])));
+    assert_eq!(
+        h.messages().last(),
+        Some(&programs_changed("T-0001", &["2"]))
+    );
 }
 
 #[test]
@@ -98,7 +101,10 @@ fn names_only_the_shell_whose_program_changed_of_three() {
     }
     h.advance(WORKSPACE_QUIET_MS * 2);
     assert_eq!(changes(&h), started + 1);
-    assert_eq!(h.messages().last(), Some(&programs_changed("T-0001", &["2"])));
+    assert_eq!(
+        h.messages().last(),
+        Some(&programs_changed("T-0001", &["2"]))
+    );
 
     // Nothing changed: nothing is sent.
     h.pty(0).emit("more\r\n");

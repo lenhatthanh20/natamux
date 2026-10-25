@@ -81,5 +81,8 @@ fn a_spinner_step_draws_only_the_status_bar(cx: &mut TestAppContext) {
     let after = draws(&host, cx);
     assert!(after.2 > before.2, "the spinner did not step");
     assert_eq!(after.0, before.0, "the title bar drew for the spinner");
-    assert_eq!(after.1, before.1, "the rest of the window drew for the spinner");
+    assert_eq!(
+        after.1, before.1,
+        "the rest of the window drew for the spinner"
+    );
 }

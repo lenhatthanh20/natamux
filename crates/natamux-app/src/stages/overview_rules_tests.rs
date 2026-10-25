@@ -222,4 +222,3 @@ fn the_progress_tab_follows_the_stage_that_runs_and_the_figures_of_an_open_task(
         Some(30_000)
     );
 }
-

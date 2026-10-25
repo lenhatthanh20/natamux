@@ -62,7 +62,10 @@ impl DetailsPanel {
             return;
         };
         let events = shown.events.as_ref().and_then(|read| read.as_ref().ok());
-        let times = events.into_iter().flatten().map(|stored| stored.event.at.as_str());
+        let times = events
+            .into_iter()
+            .flatten()
+            .map(|stored| stored.event.at.as_str());
         let wait = details_wait(task, times, progress.as_deref().unwrap_or_default(), now);
         shown.clock.set_for(wait.map(|wait| now + wait));
         let wait = shown.clock.at.map(|at| at - now);

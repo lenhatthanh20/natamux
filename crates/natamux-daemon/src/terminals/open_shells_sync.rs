@@ -72,9 +72,10 @@ impl OpenShells {
             if state.stopped {
                 return;
             }
-            state.entries.get(task_id).is_some_and(|shells| {
-                terminals.iter().all(|name| shells.contains_key(name))
-            })
+            state
+                .entries
+                .get(task_id)
+                .is_some_and(|shells| terminals.iter().all(|name| shells.contains_key(name)))
         };
         if !known || (self.options.is_ended)(task_id) {
             self.sync(task_id);

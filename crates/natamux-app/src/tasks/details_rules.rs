@@ -9,8 +9,8 @@ use natamux_proto::stages::progress::StageProgress;
 use natamux_proto::tasks::task::{Task, TaskState};
 use natamux_proto::terminals::list::{TerminalLane, TerminalList};
 
-use super::task_rules::{AgentAction, TaskAction};
 use super::task_attention::next_row_change_ms;
+use super::task_rules::{AgentAction, TaskAction};
 use super::task_time::{AgeStyle, format_age, format_exact, next_age_change_ms};
 use crate::stages::overview_rules::next_progress_change_ms;
 use crate::workspaces::new_workspace_rules::start_branch;

@@ -262,7 +262,10 @@ impl TreeModel {
             .zip(&self.infos)
             .filter(|(_, info)| !info.open)
             .filter_map(|(group, _)| next_hint_change_ms(group, now_ms));
-        next_row_change_ms(rows, now_ms).into_iter().chain(folded).min()
+        next_row_change_ms(rows, now_ms)
+            .into_iter()
+            .chain(folded)
+            .min()
     }
 
     fn make_entries(

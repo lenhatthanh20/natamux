@@ -192,7 +192,10 @@ fn idle_shells() -> (f64, f64) {
     let after = rss_kib().unwrap_or(0);
     service.close_all();
     let grown = after.saturating_sub(before) as f64;
-    ((after as f64 / 1024.0 * 10.0).round() / 10.0, (grown / shells as f64).round())
+    (
+        (after as f64 / 1024.0 * 10.0).round() / 10.0,
+        (grown / shells as f64).round(),
+    )
 }
 
 /// The echo delay of a quiet shell while 5 others flood: p50 and p95 in ms.

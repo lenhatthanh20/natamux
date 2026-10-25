@@ -150,10 +150,9 @@ impl Pty for UnixPty {
     }
 
     fn kill_in(&mut self, signal: Signal, table: &ProcessTable) {
-        self.tree
-            .kill(table, self.pid, signal, &mut |pid, signal| {
-                send(pid, signal)
-            });
+        self.tree.kill(table, self.pid, signal, &mut |pid, signal| {
+            send(pid, signal)
+        });
         send(self.pid, signal);
     }
 

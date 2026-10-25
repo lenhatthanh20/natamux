@@ -15,7 +15,6 @@ use natamux_proto::stages::actions::StageFile;
 use natamux_proto::tasks::task::Task;
 use ui::{Tab, Tooltip, prelude::*};
 
-use reads::ReadPaces;
 use super::edit_form::EditForm;
 use crate::app::dashboard::details::PanelRequest;
 use crate::app::dashboard::{Dashboard, DashboardChange};
@@ -29,6 +28,7 @@ use crate::components::motion;
 use crate::components::text_size::row_text;
 use crate::files::file_tree::FileTree;
 use crate::tasks::task_rules::stage_label;
+use reads::ReadPaces;
 
 /// `FALLBACK_POLL_MS`: the feed says when the log changed; this covers a lost message.
 const POLL: Duration = Duration::from_secs(60);

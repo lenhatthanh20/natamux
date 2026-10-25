@@ -242,12 +242,7 @@ impl TerminalService {
     }
 
     /// The output sent since `offset`, while it is still kept.
-    pub fn output_since(
-        &self,
-        task_id: &str,
-        offset: u64,
-        terminal: &str,
-    ) -> Option<Vec<Bytes>> {
+    pub fn output_since(&self, task_id: &str, offset: u64, terminal: &str) -> Option<Vec<Bytes>> {
         let session = self.inner.get(task_id, terminal)?;
         ring_since(&lock(&session), offset)
     }

@@ -341,7 +341,10 @@ impl WorkspaceTree {
 
     /// Draws the tree again when the soonest time label changes (`follow_labels`).
     fn follow_clock(&mut self, now: i64, cx: &mut Context<Self>) {
-        let wait = self.model.as_ref().and_then(|model| model.next_label_change_ms(now));
+        let wait = self
+            .model
+            .as_ref()
+            .and_then(|model| model.next_label_change_ms(now));
         follow_labels(&mut self.clock, wait, cx, |tree, cx| {
             tree.clock = None;
             cx.notify();

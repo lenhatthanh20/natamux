@@ -283,4 +283,3 @@ fn the_panel_waits_for_the_soonest_time_it_shows() {
     assert_eq!(details_wait(&done, [event], &[], now), Some(40_000));
     assert_eq!(details_wait(&done, [], &[], now), Some(40_000));
 }
-

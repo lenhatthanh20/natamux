@@ -6,8 +6,8 @@ use std::sync::{Arc, Mutex, Weak};
 
 use hyper::body::Bytes;
 use natamux_proto::terminals::messages::ServerMessage;
-use natamux_pty::{Pty, TableReader};
 use natamux_pty::input_gap::InputKind;
+use natamux_pty::{Pty, TableReader};
 use natamux_screen::Screen;
 
 use crate::shared::scheduler::{Scheduler, TimerId};

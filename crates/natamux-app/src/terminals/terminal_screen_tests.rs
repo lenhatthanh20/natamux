@@ -83,10 +83,15 @@ fn output_draws_only_the_view_of_its_terminal(cx: &mut TestAppContext) {
     let rest_draws = rest.read_with(cx, |rest, _| rest.draws);
 
     let zed = terminals[0].read_with(cx, |terminal, _| terminal.terminal().clone());
-    zed.update(cx, |terminal, cx| terminal.write_output(b"built in 2.1 s\n", cx));
+    zed.update(cx, |terminal, cx| {
+        terminal.write_output(b"built in 2.1 s\n", cx)
+    });
     cx.run_until_parked();
 
-    assert!(view_notifies[0].get() > 0, "the terminal with output did not draw");
+    assert!(
+        view_notifies[0].get() > 0,
+        "the terminal with output did not draw"
+    );
     assert_eq!(view_notifies[1].get(), 0, "the other terminal drew");
     let told: usize = terminal_notifies.iter().map(|count| count.get()).sum();
     assert_eq!(told, 0, "output went through RemoteTerminal");

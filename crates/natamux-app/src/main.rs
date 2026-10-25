@@ -53,12 +53,12 @@ mod app {
     pub mod status_items;
     pub mod status_layout;
     pub mod tab_rules;
+    #[cfg(test)]
+    pub mod test_views;
     pub mod title_bar;
     pub mod update;
     pub mod view_rules;
     pub mod view_state;
-    #[cfg(test)]
-    pub mod test_views;
     pub mod window;
 }
 mod bench {

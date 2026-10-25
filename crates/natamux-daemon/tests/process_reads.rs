@@ -30,7 +30,10 @@ impl Pty for PsPty {
     fn pause(&mut self) {}
     fn resume(&mut self) {}
     fn kill(&mut self, signal: Signal) {
-        self.log.lock().unwrap().push(format!("{signal:?} with no table"));
+        self.log
+            .lock()
+            .unwrap()
+            .push(format!("{signal:?} with no table"));
     }
     fn processes(&self) -> Option<TableReader> {
         Some(Arc::clone(&self.read))

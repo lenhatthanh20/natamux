@@ -135,7 +135,8 @@ impl Root {
     /// Tells the panel how it is shown (the Back of a page, the sheet's Answer in terminal).
     pub(super) fn sync_details_mode(&self, window: &Window, cx: &mut Context<Self>) {
         let mode = self.details_mode(window, cx);
-        self.details.update(cx, |panel, cx| panel.set_mode(mode, cx));
+        self.details
+            .update(cx, |panel, cx| panel.set_mode(mode, cx));
     }
 
     fn close_details(&mut self, cx: &mut Context<Self>) {

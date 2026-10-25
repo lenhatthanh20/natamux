@@ -275,7 +275,11 @@ impl AgentPanes {
             let none = TerminalList::default();
             let list = dashboard.data.terminals.get(id).unwrap_or(&none);
             let header = self.header_of(task, list, cx);
-            (header, restoring_label(list, "1"), dashboard.source()?.clone())
+            (
+                header,
+                restoring_label(list, "1"),
+                dashboard.source()?.clone(),
+            )
         };
         let key = terminal_key(id, "1");
         let terminal = TerminalCache::terminal(&source, id, "1", window, cx);
