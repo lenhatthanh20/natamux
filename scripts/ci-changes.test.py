@@ -107,7 +107,7 @@ class Flags(unittest.TestCase):
     def test_all_true_paths(self):
         for path in [".github/workflows/rust.yml", "rust-toolchain.toml", "Cargo.toml",
                      ".cargo/config.toml", "xtask/src/main.rs", "scripts/ci-changes.py",
-                     ".github/workflows/rust-cache.yml"]:
+                     "scripts/ci-wait-artifact.sh"]:
             self.assertEqual(len(true_flags([path])), 6, path)
 
     def test_failed_diff_is_all_true(self):
@@ -207,18 +207,40 @@ SNAP = "refs/heads/natamux-ci/rust"
 
 
 class Shards(unittest.TestCase):
-    def test_full_run_has_four(self):
-        self.assertEqual(ci.shot_shards("Fix a thing", SNAP), [1, 2, 3, 4])
-        self.assertEqual(ci.shot_shards("", SNAP), [1, 2, 3, 4])
+    def test_no_tag_shoots_nothing(self):
+        self.assertEqual(ci.shot_shards("Fix a thing", SNAP), [])
+        self.assertEqual(ci.shot_shards("", SNAP), [])
 
     def test_shots_line_has_one(self):
         self.assertEqual(ci.shot_shards("Snap\n\nShots: palette toast\n", SNAP), [1])
 
-    def test_main_always_has_four(self):
-        self.assertEqual(ci.shot_shards("Snap\n\nShots: palette\n", "refs/heads/main"), [1, 2, 3, 4])
+    def test_shots_or_all_tag_has_four(self):
+        self.assertEqual(ci.shot_shards("Snap [ci: shots]", SNAP), [1, 2, 3, 4])
+        self.assertEqual(ci.shot_shards("Snap [ci: all]", SNAP), [1, 2, 3, 4])
+        self.assertEqual(ci.shot_shards("Snap [ci: shots]\n\nShots: palette\n", SNAP), [1, 2, 3, 4])
+
+    def test_main_never_shoots(self):
+        self.assertEqual(ci.shot_shards("Snap\n\nShots: palette\n", "refs/heads/main"), [])
+        self.assertEqual(ci.shot_shards("Snap [ci: shots]", "refs/heads/main"), [])
 
     def test_shots_word_inside_a_line_is_not_a_shots_line(self):
-        self.assertEqual(ci.shot_shards("More Shots: later", SNAP), [1, 2, 3, 4])
+        self.assertEqual(ci.shot_shards("More Shots: later", SNAP), [])
+
+
+class ShotStates(unittest.TestCase):
+    def test_states_of_the_first_shots_line(self):
+        self.assertEqual(ci.shot_states("Snap\n\nShots:  palette toast \nShots: skeleton\n", SNAP), "palette toast")
+
+    def test_no_line_or_main_gives_none(self):
+        self.assertEqual(ci.shot_states("Snap [ci: shots]", SNAP), "")
+        self.assertEqual(ci.shot_states("More Shots: later", SNAP), "")
+        self.assertEqual(ci.shot_states("Shots: palette", "refs/heads/main"), "")
+
+    def test_compute_gives_the_states(self):
+        out = ci.compute(["docs/x.md"], "Snap\n\nShots: palette\n", False, GRAPH, SNAP)
+        self.assertEqual(out["shots"], "palette")
+        out = ci.compute(["docs/x.md"], "Snap", False, GRAPH, SNAP)
+        self.assertEqual(out["shots"], "")
 
 
 class Base(unittest.TestCase):
@@ -268,11 +290,11 @@ class Compute(unittest.TestCase):
         out = ci.compute(["docs/x.md"], "Shots: palette", False, GRAPH)
         self.assertEqual(out["all"], "false")
         self.assertEqual(out["shards"], "[1]")
-        out = ci.compute(["docs/x.md"], "", True, GRAPH)
+        out = ci.compute(["docs/x.md"], "Snap [ci: all]", True, GRAPH, SNAP)
         self.assertEqual(out["all"], "true")
         self.assertEqual(out["shards"], "[1, 2, 3, 4]")
         out = ci.compute(None, "Shots: palette", True, GRAPH, "refs/heads/main")
-        self.assertEqual(out["shards"], "[1, 2, 3, 4]")
+        self.assertEqual(out["shards"], "[]")
 
     def test_docs_only_pull_request_needs_no_job_flag(self):
         out = ci.compute(["docs/x.md"], "", False, GRAPH)

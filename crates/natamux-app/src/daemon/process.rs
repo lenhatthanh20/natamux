@@ -230,6 +230,11 @@ pub(super) fn wait_for_health(
 }
 
 pub(super) fn probe_daemon(port: u16, token: &str) -> bool {
+    probe_daemon_within(port, token, Duration::from_millis(200))
+}
+
+// Tests pass a longer timeout: a loaded CI runner can start the test server after 200 ms.
+pub(super) fn probe_daemon_within(port: u16, token: &str, timeout: Duration) -> bool {
     let Some(address) = ("127.0.0.1", port)
         .to_socket_addrs()
         .ok()
@@ -237,13 +242,10 @@ pub(super) fn probe_daemon(port: u16, token: &str) -> bool {
     else {
         return false;
     };
-    let Ok(mut stream) = TcpStream::connect_timeout(&address, Duration::from_millis(200)) else {
+    let Ok(mut stream) = TcpStream::connect_timeout(&address, timeout) else {
         return false;
     };
-    if stream
-        .set_read_timeout(Some(Duration::from_millis(200)))
-        .is_err()
-    {
+    if stream.set_read_timeout(Some(timeout)).is_err() {
         return false;
     }
     let request = format!(

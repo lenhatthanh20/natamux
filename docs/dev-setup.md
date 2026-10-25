@@ -31,7 +31,7 @@ pnpm --filter @natamux/core --filter @natamux/web typecheck
 pnpm --filter @natamux/core --filter @natamux/web test
 ```
 
-`.github/workflows/rust.yml` checks Rust, operating systems, the release image and E2E. `.github/workflows/ci.yml` checks web and core. `.github/workflows/release.yml` builds six native release assets and runs a dry run on pull requests. Rust pull requests target `main`. Only `.github/workflows/rust-cache.yml` saves Cargo caches.
+`.github/workflows/rust.yml` checks Rust, operating systems, the release image and E2E. `.github/workflows/ci.yml` checks web and core. `.github/workflows/release.yml` builds six native release assets, and runs a dry run on pull requests that change packaging and on release pull requests. Rust pull requests target `main`. Only a push to `main` saves Cargo caches. `rust-ok` (Rust) and `web-core` (web and core) must be green to merge into `main`.
 
 Every action in `.github/workflows/` is pinned to a full commit SHA. When adding an action, pin it the same way.
 

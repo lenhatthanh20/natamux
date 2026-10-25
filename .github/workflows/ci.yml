@@ -11,10 +11,11 @@ permissions:
 
 concurrency:
   group: web-core-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
-  check:
+  # A required check of main's ruleset, with rust-ok of rust.yml; the name must stay unique.
+  web-core:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:

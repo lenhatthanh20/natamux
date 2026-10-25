@@ -74,7 +74,7 @@ The `build` job of every E2E run uploads the production images of that commit as
 | Command palette opened with Cmd+K | in review, fake agent running `loop:` | agent terminal output: `● Read`, `● Edit notes/…`, `✓ N passed` |
 | Fix token refresh race in the daemon | ready | |
 | Windows path tests for repos | blocked | |
-| Electron shell spike | draft | |
+| Desktop window layout | draft | |
 | Show the diff of a workspace | done | |
 
 - The token is `e2e-token` and the port is 8080. `NATAMUX_TOKEN` and `NATAMUX_PORT` change them.

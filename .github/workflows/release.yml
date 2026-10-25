@@ -4,6 +4,8 @@ name: Release
 on:
   push:
     tags: ['v*']
+  # A dry run when packaging changes, and on a release PR (it adds docs/releases/vX.Y.Z.md).
+  # app-macos and app-windows of rust.yml build the app on every app PR.
   pull_request:
     branches: [main]
     paths:
@@ -11,11 +13,8 @@ on:
       - scripts/package-rust-desktop.sh
       - scripts/natamux-windows.nsi
       - scripts/bundle-rust-app.sh
-      - crates/natamux-app/**
-      - crates/natamux-daemon/**
-      - crates/natamux-update/**
-      - packages/web/**
-      - Cargo.lock
+      - scripts/release-smoke.sh
+      - docs/releases/**
   workflow_dispatch:
     inputs:
       tag:
@@ -94,7 +93,9 @@ jobs:
           version=$(sed -n 's/^version = "\([^"]*\)"$/\1/p' crates/natamux-app/Cargo.toml | head -n 1)
           test "$version" = "${TAG#v}"
       - run: rustup toolchain install
+      # The macOS cache is of arm64: of no use to the Intel build.
       - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: matrix.name != 'mac-x64'
         with:
           path: |
             ~/.cargo/registry
