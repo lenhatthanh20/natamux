@@ -55,12 +55,16 @@ TERMINAL_PATHS = [
 ]
 APP_PATHS = [
     "crates/natamux-app/",
+    "crates/natamux-update/",
+    "crates/natamux-daemon/src/main.rs",
+    "crates/natamux-daemon/src/config.rs",
+    "crates/natamux-daemon/src/start.rs",
     "scripts/*shots*",
     "scripts/bundle-rust-app.sh",
     "scripts/motion-cost.sh",
 ]
 # What the jobs that start the images of main read (scripts/e2e.sh up).
-IMAGE_PATHS = ["scripts/e2e.sh", "compose.e2e.yaml", "compose.prod.yaml", "e2e/"]
+IMAGE_PATHS = ["scripts/e2e.sh", "compose.e2e.yaml", "compose.prod.yaml", "docker/prod.Dockerfile", "e2e/"]
 # E2E runs the daemon binary in the images of main: the contract-only files do not matter to it.
 E2E_PATHS = [
     *(p for p in DAEMON_PATHS if p not in ("compose.rust-daemon.yaml", "scripts/xterm-grid.mjs")),

@@ -114,6 +114,9 @@ jobs:
       - run: bash scripts/fake-gh.test.sh
       - run: python3 scripts/check-shots.test.py
       - run: python3 scripts/compare-shots.test.py
+      - run: bash scripts/sign-release.test.sh
+      - run: bash scripts/release.test.sh
+      - run: bash scripts/e2e.test.sh
       - name: Fail when the snapshot needed formatting
         if: steps.fmt.outputs.changed == 'true'
         run: |
@@ -148,7 +151,7 @@ jobs:
             rust-app-${{ runner.os }}-
       - run: python3 scripts/ci-changes.py mtimes
       - id: build
-        run: cargo build --release --locked -p natamux-app
+        run: cargo build --release --locked -p natamux-app -p natamux-daemon -p natamux-cli
       - name: Smoke test
         run: target/release/natamux-app --smoke
       - name: Smoke test, terminal grid and pipeline chart
@@ -419,7 +422,7 @@ jobs:
             rust-app-${{ runner.os }}-
       - run: python scripts/ci-changes.py mtimes
       - id: build
-        run: cargo build --release --locked -p natamux-app
+        run: cargo build --release --locked -p natamux-app -p natamux-daemon -p natamux-cli
       - name: Smoke test
         run: target/release/natamux-app.exe --smoke
       - name: Screenshots
@@ -854,19 +857,41 @@ jobs:
       - if: always()
         run: scripts/e2e.sh down
 
-  # The Playwright E2E specs of main against the Rust daemon (compose.rust-e2e.yaml). A matrix of
-  # the groups of e2e/groups.ts: each group has its own daemon and data, so they run side by side.
-  # The musl binary comes from daemon-musl; each leg installs Playwright while it builds.
+  # Build the production Rust daemon image once for the four E2E groups.
+  e2e-image:
+    needs: changes
+    if: ${{ !endsWith(github.ref, '-check') && needs.changes.outputs.e2e == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    outputs:
+      daemon: ${{ steps.save.outputs.daemon }}
+      web: ${{ steps.save.outputs.web }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Build the production images
+        run: scripts/e2e.sh build
+      - id: save
+        run: |
+          docker save natamux-daemon:local natamux-web:local | zstd -T0 --fast=1 > images.tar.zst
+          for name in daemon web; do
+            echo "$name=$(docker image inspect --format '{{.Id}}' "natamux-$name:local")" >> "$GITHUB_OUTPUT"
+          done
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: rust-production-images
+          path: images.tar.zst
+          compression-level: 0
+          retention-days: 3
+
+  # Each group runs on a real image built from docker/prod.Dockerfile.
   e2e:
     name: e2e (${{ matrix.group }})
-    needs: changes
+    needs: [changes, e2e-image]
     if: ${{ !endsWith(github.ref, '-check') && needs.changes.outputs.e2e == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
       contents: read
-      # scripts/ci-wait-artifact.sh reads the jobs and artifacts of this run.
-      actions: read
     strategy:
       fail-fast: false
       matrix:
@@ -875,7 +900,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       NATAMUX_TOKEN: e2e-token
       NATAMUX_REPO: e2e-repo
-      E2E_EXTRA_COMPOSE: compose.rust-e2e.yaml
+      E2E_LOCAL: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -890,19 +915,16 @@ jobs:
         run: |
           pnpm install --ignore-workspace --no-frozen-lockfile
           pnpm exec playwright install --with-deps chromium
-      # daemon-musl builds the binary meanwhile (about 5 minutes); this job does its own setup first.
-      - name: Wait for the Rust daemon of daemon-musl
-        run: scripts/ci-wait-artifact.sh daemon-musl daemon-musl
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: daemon-musl
-          path: target/x86_64-unknown-linux-musl/release
-      - run: chmod +x target/x86_64-unknown-linux-musl/release/natamux-daemon
-      - name: Start the Rust daemon and the dashboard of main
-        run: scripts/e2e.sh up
+          name: rust-production-images
+      - name: Start the production Rust daemon and dashboard
+        run: |
+          docker load -i images.tar.zst
+          scripts/e2e.sh up
       - name: The daemon is the Rust one
         run: |
-          cmdline=$(docker compose -p natamux-e2e -f compose.prod.yaml -f compose.e2e.yaml -f "$E2E_EXTRA_COMPOSE" \
+          cmdline=$(docker compose -p natamux-e2e -f compose.prod.yaml -f compose.e2e.yaml \
             exec -T daemon cat /proc/1/cmdline | tr '\0' ' ')
           echo "$cmdline"
           echo "$cmdline" | grep -q natamux-daemon
@@ -946,6 +968,52 @@ jobs:
       - name: Stop
         if: always()
         run: scripts/e2e.sh down
+
+  e2e-publish:
+    needs: [e2e-image, e2e]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: rust-production-images
+      - name: Load the tested images
+        env:
+          DAEMON_ID: ${{ needs.e2e-image.outputs.daemon }}
+          WEB_ID: ${{ needs.e2e-image.outputs.web }}
+        run: |
+          docker load -i images.tar.zst
+          test "$(docker image inspect --format '{{.Id}}' natamux-daemon:local)" = "$DAEMON_ID"
+          test "$(docker image inspect --format '{{.Id}}' natamux-web:local)" = "$WEB_ID"
+      - name: Publish the images
+        id: push
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGES: ghcr.io/${{ github.repository_owner }}/natamux
+        run: |
+          echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          for name in daemon web; do
+            for tag in main "sha-${GITHUB_SHA::7}"; do
+              docker tag "natamux-$name:local" "$IMAGES-$name:$tag"
+              docker push --quiet "$IMAGES-$name:$tag"
+            done
+            digest=$(docker image inspect --format '{{index .RepoDigests 0}}' "$IMAGES-$name:main")
+            echo "$name=${digest#*@}" >> "$GITHUB_OUTPUT"
+          done
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ghcr.io/${{ github.repository_owner }}/natamux-daemon
+          subject-digest: ${{ steps.push.outputs.daemon }}
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ghcr.io/${{ github.repository_owner }}/natamux-web
+          subject-digest: ${{ steps.push.outputs.web }}
 
   # Phase 4, part 1: the terminal bench of the Node daemon and of the Rust one, on the same runner.
   # The gate: a snapshot as fast as Node's, parsing at least as fast (compare-terminal-bench.py).

@@ -61,6 +61,8 @@ pub fn page_title(page: &SettingsPage, repos: &[Repo]) -> String {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SettingRow {
     Notify,
+    UpdatesAuto,
+    UpdatesCheck,
     Theme,
     UiSize,
     FontFamily,
@@ -68,8 +70,10 @@ pub enum SettingRow {
 }
 
 impl SettingRow {
-    pub const ALL: [SettingRow; 5] = [
+    pub const ALL: [SettingRow; 7] = [
         SettingRow::Notify,
+        SettingRow::UpdatesAuto,
+        SettingRow::UpdatesCheck,
         SettingRow::Theme,
         SettingRow::UiSize,
         SettingRow::FontFamily,
@@ -78,7 +82,9 @@ impl SettingRow {
 
     pub fn page(self) -> SettingsPage {
         match self {
-            SettingRow::Notify => SettingsPage::General,
+            SettingRow::Notify | SettingRow::UpdatesAuto | SettingRow::UpdatesCheck => {
+                SettingsPage::General
+            }
             _ => SettingsPage::Appearance,
         }
     }
@@ -86,6 +92,8 @@ impl SettingRow {
     pub fn label(self) -> &'static str {
         match self {
             SettingRow::Notify => "Notify me",
+            SettingRow::UpdatesAuto => "Check for updates automatically",
+            SettingRow::UpdatesCheck => "Check for updates",
             SettingRow::Theme => "Theme",
             SettingRow::UiSize => "UI size",
             SettingRow::FontFamily => "Font family",
@@ -96,6 +104,8 @@ impl SettingRow {
     pub fn description(self) -> &'static str {
         match self {
             SettingRow::Notify => "Show a system notification when a task starts to need you.",
+            SettingRow::UpdatesAuto => "Look up new versions in the background.",
+            SettingRow::UpdatesCheck => "Look up a new version now.",
             SettingRow::Theme => "Follow the system, or always light or dark.",
             SettingRow::UiSize => "Text and row size of the whole app.",
             SettingRow::FontFamily => "The font of the terminals. Empty uses the built-in Lilex.",
@@ -107,6 +117,7 @@ impl SettingRow {
     fn keywords(self) -> &'static str {
         match self {
             SettingRow::Notify => "notifications alert",
+            SettingRow::UpdatesAuto | SettingRow::UpdatesCheck => "update version release",
             SettingRow::Theme => "dark light system colors",
             SettingRow::UiSize => "compact large zoom",
             SettingRow::FontFamily | SettingRow::FontSize => "terminal font",

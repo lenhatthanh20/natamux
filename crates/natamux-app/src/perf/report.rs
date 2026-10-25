@@ -122,15 +122,15 @@ fn report(stats: &PerfStats, now: Instant) -> Value {
 fn folder() -> Option<PathBuf> {
     let home = || std::env::var_os("HOME").map(PathBuf::from);
     if cfg!(target_os = "macos") {
-        Some(home()?.join("Library/Logs/Natamux Native"))
+        Some(home()?.join("Library/Logs/Natamux"))
     } else if cfg!(windows) {
         Some(
             PathBuf::from(std::env::var_os("LOCALAPPDATA")?)
-                .join("Natamux Native")
+                .join("Natamux")
                 .join("Logs"),
         )
     } else {
-        Some(home()?.join(".local/state/natamux-native"))
+        Some(home()?.join(".local/state/natamux"))
     }
 }
 

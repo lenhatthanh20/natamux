@@ -112,6 +112,8 @@ The check is one `HEAD` request to `github.com` without any data about you or yo
 
 ## Files
 
+The Rust implementation lives in `crates/natamux-update/src/` for release checks, signatures, downloads, and install rules, and in `crates/natamux-app/src/app/update.rs` for the app menu, dialogs, timers, and quit flow. The files below describe the last Electron implementation kept on `legacy/electron`.
+
 - `packages/desktop/src/update/update-check.ts`: no Electron: version compare, install kind, file pick, checksum parse, the install script.
 - `packages/desktop/src/release-signature.ts`: no Electron: `RELEASE_SIGNER` and the minisign check.
 - `packages/desktop/src/update/update-popup.ts`: no Electron: the popup page, its texts and its window options.

@@ -13,8 +13,9 @@ use crate::app::settings_rules::{SettingsFocus, SettingsPage};
 use crate::app::settings_view::SettingsView;
 use crate::app::shortcut_sheet;
 use crate::app::shortcuts::{
-    AddProject, ImportIssues, OpenJump, OpenPalette, OpenSettings, ShowShortcuts, UseCompactSize,
-    UseDarkTheme, UseDefaultSize, UseLargeSize, UseLightTheme, UseSystemTheme,
+    AddProject, CheckForUpdates, ImportIssues, OpenJump, OpenPalette, OpenSettings,
+    RestartToUpdate, ShowShortcuts, ToggleAutomaticUpdates, UseCompactSize, UseDarkTheme,
+    UseDefaultSize, UseLargeSize, UseLightTheme, UseSystemTheme,
 };
 use crate::app::sign_in::{SignIn, SignedIn, access_file};
 use crate::palette::palette_layer::PaletteLayer;
@@ -41,6 +42,17 @@ impl Root {
                 root.dashboard.update(cx, |dashboard, cx| {
                     dashboard.open_settings(None, SettingsFocus::Search, cx)
                 })
+            }))
+            .on_action(
+                cx.listener(|_, _: &CheckForUpdates, _, cx| crate::app::update::check(true, cx)),
+            )
+            .on_action(cx.listener(|_, _: &ToggleAutomaticUpdates, _, cx| {
+                crate::app::update::toggle_automatic(cx)
+            }))
+            .on_action(cx.listener(|root, _: &RestartToUpdate, window, cx| {
+                if !root.ask_before_quit_with(window, cx, |_, cx| crate::app::update::restart(cx)) {
+                    crate::app::update::restart(cx);
+                }
             }))
             .on_action(cx.listener(|root, _: &AddProject, window, cx| {
                 projects_dialog::open(&root.dashboard, window, cx)

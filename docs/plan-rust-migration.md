@@ -245,7 +245,8 @@ Part 1 (terminals and the contract suite, T-0153), part 2 (tasks, events, storag
 - The cut-over merge deletes `main`'s Node workflows (`dev` has none): bring the Rust `release.yml` in the same PR, and keep `site.yml`.
 - `SHA256SUMS.txt`, owner signing with `sign-release.sh` and the `natamux-release` skill stay as they are.
 - The Docker daemon image becomes the Rust binary.
-- Remove Electron and the Node daemon in their own PR, after one release where both ran fine.
+- Remove Electron, the Node daemon and the Node CLI in the cutover after the Rust release dry run,
+  E2E and startup gates pass. Keep the last Electron version on `legacy/electron`.
 
 ### After phase 5: small fixes
 

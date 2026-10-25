@@ -19,9 +19,9 @@ fail() {
   exit 1
 }
 
-# release_signer <release-signature.ts>: the RELEASE_SIGNER public key in it.
+# release_signer <signature.rs>: the RELEASE_SIGNER public key in it.
 release_signer() {
-  sed -n "s/^export const RELEASE_SIGNER = '\(.*\)'$/\1/p" "$1"
+  sed -n 's/^pub const RELEASE_SIGNER: &str = "\(.*\)";$/\1/p' "$1"
 }
 
 # valid_tag <tag>: a stable release tag such as v1.2.3. The app takes no other.
@@ -91,9 +91,9 @@ main() {
   [ -f "$secret" ] || fail "no minisign secret key at $secret (NATAMUX_MINISIGN_SECRET names another)"
   local signers=${NATAMUX_TAG_SIGNERS:-$HOME/.ssh/allowed_signers}
   local signer
-  signer=$(release_signer packages/desktop/src/release-signature.ts)
+  signer=$(release_signer crates/natamux-update/src/signature.rs)
   [[ $signer =~ ^RW[A-Za-z0-9+/]{54}$ ]] \
-    || fail "RELEASE_SIGNER in packages/desktop/src/release-signature.ts is not a minisign public key"
+    || fail "RELEASE_SIGNER in crates/natamux-update/src/signature.rs is not a minisign public key"
 
   # The tag the owner made here is the trusted one: whoever can push to GitHub can move a tag there.
   local object commit status

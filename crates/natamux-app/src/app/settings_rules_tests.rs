@@ -50,7 +50,13 @@ fn a_project_page_is_titled_with_the_project_name() {
 
 #[test]
 fn rows_sit_on_their_pages() {
-    assert_eq!(SettingRow::Notify.page(), SettingsPage::General);
+    for row in [
+        SettingRow::Notify,
+        SettingRow::UpdatesAuto,
+        SettingRow::UpdatesCheck,
+    ] {
+        assert_eq!(row.page(), SettingsPage::General);
+    }
     for row in [
         SettingRow::Theme,
         SettingRow::UiSize,
@@ -84,6 +90,15 @@ fn finds_the_font_rows_by_their_words() {
 fn finds_a_row_by_a_keyword() {
     let found = search("dark", &[]);
     assert_eq!(found.map(|found| found.rows), Some(vec![SettingRow::Theme]));
+}
+
+#[test]
+fn finds_both_update_rows() {
+    let found = search("update", &[]);
+    assert_eq!(
+        found.map(|found| found.rows),
+        Some(vec![SettingRow::UpdatesAuto, SettingRow::UpdatesCheck])
+    );
 }
 
 #[test]

@@ -73,6 +73,8 @@ pub struct SettingsView {
     theme_focus: FocusHandle,
     size_focus: FocusHandle,
     notify_focus: FocusHandle,
+    update_focus: FocusHandle,
+    check_focus: FocusHandle,
     pub(super) font: FontRows,
     /// One stop per nav row. Grown while drawing.
     nav_stops: Vec<FocusHandle>,
@@ -110,6 +112,8 @@ impl SettingsView {
             theme_focus: cx.focus_handle().tab_stop(true),
             size_focus: cx.focus_handle().tab_stop(true),
             notify_focus: cx.focus_handle(),
+            update_focus: cx.focus_handle(),
+            check_focus: cx.focus_handle(),
             font,
             nav_stops: Vec::new(),
             projects: BTreeMap::new(),
@@ -267,7 +271,11 @@ impl SettingsView {
             return ring;
         }
         match self.page(cx) {
-            SettingsPage::General => ring.push(self.notify_focus.clone()),
+            SettingsPage::General => ring.extend([
+                self.notify_focus.clone(),
+                self.update_focus.clone(),
+                self.check_focus.clone(),
+            ]),
             SettingsPage::Appearance => {
                 ring.extend([self.theme_focus.clone(), self.size_focus.clone()]);
                 ring.extend(self.font.stops(cx));
@@ -284,6 +292,8 @@ impl SettingsView {
     fn row_stops(&self, row: SettingRow, cx: &App) -> Vec<FocusHandle> {
         match row {
             SettingRow::Notify => vec![self.notify_focus.clone()],
+            SettingRow::UpdatesAuto => vec![self.update_focus.clone()],
+            SettingRow::UpdatesCheck => vec![self.check_focus.clone()],
             SettingRow::Theme => vec![self.theme_focus.clone()],
             SettingRow::UiSize => vec![self.size_focus.clone()],
             SettingRow::FontFamily => vec![self.font.family.focus_handle(cx)],

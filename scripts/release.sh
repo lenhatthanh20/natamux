@@ -28,7 +28,12 @@ commit=$(git rev-parse HEAD)
 [ -z "$(git status --porcelain --untracked-files=no)" ] || fail "commit or stash your changes first"
 version=$(sed -n 's/^  "version": "\(.*\)",$/\1/p' packages/web/package.json)
 [ "v$version" = "$tag" ] || fail "main has version $version, not ${tag#v}; merge the release pull request first"
+for manifest in crates/*/Cargo.toml; do
+  rust_version=$(sed -n 's/^version = "\(.*\)"$/\1/p' "$manifest" | head -n 1)
+  [ "$rust_version" = "$version" ] || fail "$manifest is $rust_version, not $version"
+done
 [ -f "docs/releases/$tag.md" ] || fail "docs/releases/$tag.md is missing; merge the release pull request first"
+scripts/release.test.sh || fail "release files do not agree; fix the release pull request first"
 
 if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
   # A run that stopped after tagging can go on with the same tag.

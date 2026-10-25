@@ -18,6 +18,9 @@ actions!(
         OpenJump,
         ShowShortcuts,
         OpenSettings,
+        CheckForUpdates,
+        ToggleAutomaticUpdates,
+        RestartToUpdate,
         UseSystemTheme,
         UseLightTheme,
         UseDarkTheme,
@@ -69,6 +72,37 @@ pub const APP_COMMANDS: &[Command] = &[
         ),
         MenuName::App,
         0,
+    ),
+    menu(
+        command("app.update-check", "Check for Updates…", Category::App),
+        if cfg!(target_os = "macos") {
+            MenuName::App
+        } else {
+            MenuName::Help
+        },
+        2,
+    ),
+    menu(
+        command(
+            "app.update-auto",
+            "Check for Updates Automatically",
+            Category::App,
+        ),
+        if cfg!(target_os = "macos") {
+            MenuName::App
+        } else {
+            MenuName::Help
+        },
+        2,
+    ),
+    menu(
+        command("app.update-restart", "Restart to Update", Category::App),
+        if cfg!(target_os = "macos") {
+            MenuName::App
+        } else {
+            MenuName::Help
+        },
+        2,
     ),
     suggested(
         1,

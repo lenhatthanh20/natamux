@@ -183,7 +183,7 @@ To see tasks in every state, run `scripts/dev.sh seed`. It starts fake agents th
 | `nmx stage back T-0001 --reason "..."` | Send the task back to an earlier stage |
 | `natamux ask "Which API?"` / `natamux done` | What agents run to ask you, or to finish a stage |
 
-See the [CLI reference](https://natamux.github.io/docs/reference/cli/) and [CLI usage](packages/cli/README.md).
+See the [CLI reference](https://natamux.github.io/docs/reference/cli/) and [Rust CLI](crates/natamux-cli/).
 
 ## Security and privacy
 
@@ -202,10 +202,11 @@ Read [Privacy](PRIVACY.md) for what stays on your machine and what leaves it, an
 | Path | Purpose |
 | --- | --- |
 | [`packages/core`](packages/core/) | Task model, stages, events and shared schemas |
-| [`packages/daemon`](packages/daemon/) | Tasks, stages, git worktrees, terminals, and the HTTP/WebSocket API |
+| [`crates/natamux-daemon`](crates/natamux-daemon/) | Tasks, stages, git worktrees, terminals, and the HTTP/WebSocket API |
 | [`packages/web`](packages/web/) | React dashboard |
-| [`packages/desktop`](packages/desktop/) | Desktop app and bundled daemon |
-| [`packages/cli`](packages/cli/) | `natamux` / `nmx` command line |
+| [`crates/natamux-app`](crates/natamux-app/) | Native desktop app |
+| [`crates/natamux-update`](crates/natamux-update/) | Signed desktop updates |
+| [`crates/natamux-cli`](crates/natamux-cli/) | `natamux` / `nmx` command line |
 | [`plugins/natamux`](plugins/natamux/) | Claude Code plugin |
 | [`site`](site/) | Homepage and documentation site |
 
@@ -216,7 +217,7 @@ The [documentation site](https://natamux.github.io/docs/) covers tasks, stages, 
 Natamux is young and moves fast. Issues and pull requests are welcome.
 
 - Set up with the [contributor setup](docs/dev-setup.md). Development runs in a GitHub codespace.
-- Every pull request runs the build, lint and tests, a dependency audit, a Docker smoke test, and Playwright end-to-end tests against the production images. Each push to `main` also runs the tests on Node 24, macOS and Windows, and starts the desktop app on macOS and Windows.
+- Rust CI checks formatting, Clippy, tests, layers, startup, and the required E2E groups. Web and core CI checks Biome, types, and tests. Release CI packages and checks the native app on macOS, Windows, and Linux.
 - Report a vulnerability privately, as [Security](SECURITY.md) describes. Do not open a public issue for it.
 
 ## License

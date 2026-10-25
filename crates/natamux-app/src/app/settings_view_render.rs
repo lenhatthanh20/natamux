@@ -9,6 +9,7 @@ use ui::{Indicator, ListItem, ListItemSpacing, Switch, Tab, Tooltip, prelude::*}
 use super::super::appearance_rules::{ThemeChoice, UiSize, parse_theme, parse_ui_size};
 use super::super::settings_rules::{SearchResults, SettingRow, SettingsPage, page_title, search};
 use super::super::shortcuts::AddProject;
+use super::super::update;
 use super::{
     APP_ITEMS, NAV_WIDTH, NavItem, PAGE_MAX, SettingsView, heading, nav_items, nav_matches, segment,
 };
@@ -60,6 +61,12 @@ impl SettingsView {
     fn control(&mut self, row: SettingRow, cx: &mut Context<Self>) -> AnyElement {
         match row {
             SettingRow::Notify => self.notify_switch(cx),
+            SettingRow::UpdatesAuto => self.updates_switch(cx),
+            SettingRow::UpdatesCheck => Button::new("settings-update-check", "Check now\u{2026}")
+                .style(ButtonStyle::Outlined)
+                .track_focus(&self.check_focus)
+                .on_click(|_, _, cx| update::check(true, cx))
+                .into_any_element(),
             SettingRow::Theme => self.theme_control(cx),
             SettingRow::UiSize => self.size_control(cx),
             SettingRow::FontFamily => self.font.family_control(cx),
@@ -90,6 +97,30 @@ impl SettingsView {
                 }
             })
             .child(Switch::new("settings-notify", on.into()).on_click(move |_, _, cx| flip(cx)))
+            .into_any_element()
+    }
+
+    /// The updater keeps this switch in its own file, not in `view.json`.
+    fn updates_switch(&self, cx: &mut Context<Self>) -> AnyElement {
+        div()
+            .id("settings-update-stop")
+            .track_focus(&self.update_focus)
+            .on_key_down(cx.listener(|_, event: &KeyDownEvent, _, cx| {
+                let keys = &event.keystroke;
+                if matches!(keys.key.as_str(), "space" | "enter") && !keys.modifiers.modified() {
+                    cx.stop_propagation();
+                    update::toggle_automatic(cx);
+                    cx.notify();
+                }
+            }))
+            .child(
+                Switch::new("settings-update-auto", update::automatic().into()).on_click(
+                    cx.listener(|_, _, _, cx| {
+                        update::toggle_automatic(cx);
+                        cx.notify();
+                    }),
+                ),
+            )
             .into_any_element()
     }
 
@@ -135,7 +166,15 @@ impl SettingsView {
 
     fn general(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let notify = self.row(SettingRow::Notify, cx);
-        scroll_body("settings-general", v_flex().child(notify))
+        let updates =
+            [SettingRow::UpdatesAuto, SettingRow::UpdatesCheck].map(|row| self.row(row, cx));
+        scroll_body(
+            "settings-general",
+            v_flex()
+                .child(notify)
+                .child(section("Updates"))
+                .children(updates),
+        )
     }
 
     fn appearance(&mut self, cx: &mut Context<Self>) -> AnyElement {

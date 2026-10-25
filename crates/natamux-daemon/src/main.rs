@@ -1,17 +1,36 @@
-//! `natamux-daemon`: the Rust daemon of phase 4. It runs only in tests and CI until phase 5.
+//! The Natamux daemon used by the app, CLI, and browser dashboard.
 
+use std::io::Read;
 use std::sync::Arc;
 
 use natamux_daemon::config::load_config;
 use natamux_daemon::shared::scheduler::Scheduler;
 use natamux_daemon::start::start;
-use natamux_daemon::terminals::login_path::{WAIT, wait_for_login_path};
+use natamux_daemon::terminals::login_path::{WAIT, read_path_message, wait_for_login_path};
 use natamux_pty::{Env, spawn_shell};
 
 #[tokio::main]
 async fn main() -> std::process::ExitCode {
     let mut env: Env = std::env::vars().collect();
-    wait_for_login_path(&mut env, None, WAIT);
+    let app_pipe = env.remove("NATAMUX_PARENT_PIPE").as_deref() == Some("1");
+    let (path_pipe, parent_end) =
+        if env.get("NATAMUX_PATH_PENDING").map(String::as_str) == Some("1") {
+            let (send, receive) = std::sync::mpsc::channel();
+            let (end_send, end_receive) = tokio::sync::oneshot::channel();
+            std::thread::spawn(move || {
+                read_path_message(std::io::stdin().lock(), send, end_send);
+            });
+            (Some(receive), Some(end_receive))
+        } else if app_pipe {
+            let (end_send, end_receive) = tokio::sync::oneshot::channel();
+            std::thread::spawn(move || {
+                read_parent_end(std::io::stdin().lock(), end_send);
+            });
+            (None, Some(end_receive))
+        } else {
+            (None, None)
+        };
+    wait_for_login_path(&mut env, path_pipe.as_ref(), WAIT);
     let cwd = std::env::current_dir().unwrap_or_default();
     let config = match load_config(&env, &cwd) {
         Ok(config) => config,
@@ -36,13 +55,25 @@ async fn main() -> std::process::ExitCode {
     if config.token_was_generated {
         println!("Token for this run: {}", config.token);
     }
-    stopped().await;
+    stopped(parent_end).await;
     // A second signal must not exit before the shells have ended: it is not listened to.
     let _ = tokio::task::spawn_blocking(move || daemon.shut_down()).await;
     std::process::ExitCode::SUCCESS
 }
 
-async fn stopped() {
+fn read_parent_end(mut input: impl Read, ended: tokio::sync::oneshot::Sender<()>) {
+    let _ = std::io::copy(&mut input, &mut std::io::sink());
+    let _ = ended.send(());
+}
+
+async fn stopped(parent_end: Option<tokio::sync::oneshot::Receiver<()>>) {
+    let parent_ended = async move {
+        if let Some(receiver) = parent_end {
+            let _ = receiver.await;
+        } else {
+            std::future::pending::<()>().await;
+        }
+    };
     #[cfg(unix)]
     {
         use tokio::signal::unix::{SignalKind, signal};
@@ -51,15 +82,34 @@ async fn stopped() {
                 tokio::select! {
                     _ = terminate.recv() => {}
                     _ = tokio::signal::ctrl_c() => {}
+                    _ = parent_ended => {}
                 }
             }
             Err(_) => {
-                let _ = tokio::signal::ctrl_c().await;
+                tokio::select! {
+                    _ = tokio::signal::ctrl_c() => {}
+                    _ = parent_ended => {}
+                }
             }
         }
     }
     #[cfg(not(unix))]
     {
-        let _ = tokio::signal::ctrl_c().await;
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {}
+            _ = parent_ended => {}
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::read_parent_end;
+
+    #[test]
+    fn parent_pipe_eof_sends_the_shutdown_signal() {
+        let (ended, mut receiver) = tokio::sync::oneshot::channel();
+        read_parent_end(std::io::Cursor::new(b""), ended);
+        assert!(receiver.try_recv().is_ok());
     }
 }

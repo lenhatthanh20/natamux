@@ -17,8 +17,7 @@ Set these in the environment where the daemon starts.
 | `NATAMUX_DATA_DIR` | `<current folder>/.natamux` | Task files and the SQLite index |
 | `NATAMUX_REPO_DIR` | none | A git repository to add once as the first project, with the id `default`. Without it the daemon starts with no project. A project removed later does not come back |
 | `NATAMUX_WORKTREES_DIR` | `<data dir>/worktrees` | Where worktrees go, one folder per task |
-| `NATAMUX_WEB_DIR` | none | The built dashboard. With it, the daemon serves the dashboard and the API under `/api` on its own port |
-| `NATAMUX_WEB_INDEX` | `<web dir>/index.html` when `NATAMUX_WEB_DIR` is set | The dashboard's `index.html`, for deep links |
+| `NATAMUX_WEB_DIR` | none | Override the dashboard embedded in the Rust daemon with files from this folder. The API stays under `/api` |
 | `NATAMUX_CLAUDE_COMMAND` | `claude` | Program that starts Claude Code |
 | `NATAMUX_CODEX_COMMAND` | `codex` | Program that starts Codex |
 | `NATAMUX_GEMINI_COMMAND` | `gemini` | Program that starts Gemini CLI |
@@ -63,10 +62,10 @@ The desktop app starts the daemon and sets these for it. It passes your other `N
 | `NATAMUX_TOKEN` | A token kept in the app's user data folder |
 | `NATAMUX_DATA_DIR` | `<user data>/data` |
 | `NATAMUX_REPO_DIR` | The repository an older version asked for, if any. Not set on a new install |
-| `NATAMUX_WEB_DIR` | The dashboard in the app's resources, unless you set it |
+| `NATAMUX_WEB_DIR` | Optional override for the dashboard embedded in the daemon |
 | `NATAMUX_PATH_PENDING` | `1` on macOS and Linux: the PATH of your login shell comes after the start. The daemon waits for it before it runs programs, and does not pass the variable on |
 
-The desktop app also reads `NATAMUX_DESKTOP_SMOKE` and `NATAMUX_DESKTOP_SMOKE_SHOT`. They are for testing the app.
+The Rust app uses `--smoke` and `--shot` for CI checks. `NATAMUX_UPDATE_AS_VERSION` overrides the running version for update tests.
 
 ## Docker
 
@@ -79,4 +78,4 @@ The desktop app also reads `NATAMUX_DESKTOP_SMOKE` and `NATAMUX_DESKTOP_SMOKE_SH
 
 The production image sets `NATAMUX_HOST=0.0.0.0`, `NATAMUX_DATA_DIR=/data`, `NATAMUX_REPO_DIR=/repo` and `NATAMUX_WORKTREES_DIR=/data/worktrees` inside the container. See [Self-host with Docker](/docs/guides/self-host-docker/).
 
-The development setup (`compose.yaml`) is for working on Natamux itself. It reads `NATAMUX_TOKEN` (default `devtoken`), `NATAMUX_CLAUDE_COMMAND`, `NATAMUX_UID`, `NATAMUX_GID`, `NATAMUX_GIT_NAME` and `NATAMUX_GIT_EMAIL`.
+The production compose file is `compose.prod.yaml`. Development builds run in Codespaces or CI.

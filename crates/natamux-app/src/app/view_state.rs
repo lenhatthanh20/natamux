@@ -477,12 +477,12 @@ pub fn folder_for(os: &str, var: impl Fn(&str) -> Option<std::ffi::OsString>) ->
             .map(PathBuf::from)
     };
     match os {
-        "macos" => Some(set("HOME")?.join("Library/Application Support/Natamux Native")),
-        "windows" => Some(set("APPDATA")?.join("Natamux Native")),
+        "macos" => Some(set("HOME")?.join("Library/Application Support/Natamux")),
+        "windows" => Some(set("APPDATA")?.join("Natamux")),
         _ => Some(
-            set("XDG_DATA_HOME")
-                .or_else(|| Some(set("HOME")?.join(".local/share")))?
-                .join("natamux-native"),
+            set("XDG_CONFIG_HOME")
+                .or_else(|| Some(set("HOME")?.join(".config")))?
+                .join("Natamux"),
         ),
     }
 }

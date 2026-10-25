@@ -12,7 +12,7 @@ check() {
 }
 
 tmp=$(mktemp -d)
-sums=packages/desktop/src/__tests__/fixtures/minisign/SHA256SUMS.txt
+sums=crates/natamux-update/tests/fixtures/minisign/SHA256SUMS.txt
 # The release files as the GitHub API lists them, with the digests it computed.
 awk '{ print $2 " sha256:" $1 " 1" }' "$sums" >"$tmp/assets"
 printf 'SHA256SUMS.txt sha256:%064d 2\nSHA256SUMS.txt.minisig none 3\n' 0 >>"$tmp/assets"
@@ -22,10 +22,10 @@ compare() {
   echo $?
 }
 
-printf "export const RELEASE_SIGNER = 'RWQabc+/='\nconst other = 'x'\n" >"$tmp/signer.ts"
-check "release_signer reads the constant" '[ "$(release_signer "$tmp/signer.ts")" = "RWQabc+/=" ]'
+printf 'pub const RELEASE_SIGNER: &str = "RWQabc+/=";\n' >"$tmp/signer.rs"
+check "release_signer reads the constant" '[ "$(release_signer "$tmp/signer.rs")" = "RWQabc+/=" ]'
 check "release_signer reads the app's constant" \
-  '[ -n "$(release_signer packages/desktop/src/release-signature.ts)" ]'
+  '[ -n "$(release_signer crates/natamux-update/src/signature.rs)" ]'
 
 check "valid_tag takes v1.2.3" 'valid_tag v1.2.3 && valid_tag v10.0.31'
 check "valid_tag refuses other tags" \
@@ -65,7 +65,7 @@ check "tag_signed refuses an unsigned tag" '! in_repo v1.0.2 "$tmp/signers"'
 check "tag_signed refuses with an empty signers file" '! in_repo v1.0.0 "$tmp/no-signers"'
 check "tag_signed refuses without a signers file" '! in_repo v1.0.0 "$tmp/missing"'
 
-fixtures=packages/desktop/src/__tests__/fixtures/minisign
+fixtures=crates/natamux-update/tests/fixtures/minisign
 check "is_legacy takes a legacy signature" 'is_legacy "$fixtures/SHA256SUMS.txt.legacy.minisig"'
 check "is_legacy refuses a prehashed signature" '! is_legacy "$fixtures/SHA256SUMS.txt.minisig"'
 
