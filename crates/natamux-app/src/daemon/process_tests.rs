@@ -168,7 +168,8 @@ fn another_listener_cannot_pass_the_owned_daemon_probe() {
             } else {
                 "401 Unauthorized"
             };
-            write!(stream, "HTTP/1.1 {status}\r\nContent-Length: 0\r\n\r\n").expect("reply");
+            // The probe may give up on a slow runner and close first; its answer is still false.
+            let _ = write!(stream, "HTTP/1.1 {status}\r\nContent-Length: 0\r\n\r\n");
         }
     });
     assert!(!probe_daemon(port, "other-token"));
