@@ -59,6 +59,7 @@ The flags of `rust-phase1.md` stay. New:
 | Flag | Does |
 |---|---|
 | `--shot STATE` | Opens the window in one named state of the fake daemon (it implies `--fake-daemon`). Use it with `--theme` and `--size`. The clock stops at the fake's time and the view state is fixed and never saved, so each run looks the same. The states are below |
+| `--open-task TASK` | Opens TASK once the dashboard lists it, as a click on its row does. A task it never lists prints `open-task: ...` on stderr and the app goes on. With `--fake-daemon`, no background job runs. `scripts/motion-cost.sh` uses it (see "Motion") |
 | `--count-draws` | Prints `draws <n> active <true\|false>` once a second: the window's draws in that second and whether it has focus. It forces no frame (the perf overlay draws every frame). `scripts/motion-cost.sh` uses it (see "Motion") |
 
 ## What CI checks
@@ -355,7 +356,7 @@ The app moves what the web moves (`docs/ui-spec.md` 2.8), on the same 125 ms tic
 - **How it stays light.** One clock for the app (`components/motion.rs`, frames in `components/motion_rules.rs`). An item asks for its frame while it renders, which marks the view that drew it. One timer sleeps until the next tick where a shown kind changes and notifies only those views; the sidebar and the task list are cached views, so a blink in one does not draw the other. With no moving item on screen no timer runs. No `with_animation`, no `request_animation_frame` loop.
 - **Still forms.** A window without focus, and every `--shot`, draws the still forms, as the web's reduced motion: the disk, three dots, still bars. The timer stops without focus.
 - **Reduce motion.** Not followed: GPUI has `App::reduce_motion`, but it never reads the macOS setting (Zed sets the flag from its own setting), and reading it needs an Objective-C call.
-- **Cost.** `scripts/motion-cost.sh` runs the fake daemon's task table (3 running tasks, 2 jobs, no terminal output) for 15 s with focus and 15 s behind Finder, on the macOS runner, with `--count-draws`. CI runs it on a snapshot push with a line `Measure: motion` in its commit message.
+- **Cost.** `scripts/motion-cost.sh` runs the fake daemon's task table (3 running tasks, 2 jobs, no terminal output) for 15 s with focus and 15 s behind Finder, on the macOS runner, with `--count-draws`. CI runs it on a snapshot push with a line `Measure: motion` in its commit message. A second run opens task T-0146 with `--open-task` (4 shell panes, nothing printing), with no shot, so motion and the clock run as for a user. In that run the fake daemon has no running job, so it measures an idle open task: only the running glyphs blink, twice every 2 s. Both runs fail above 0.2 draws a second in the background. The open-task run also fails above 1 draw a second or 2% CPU with focus, and when a number is missing. The task-table run only reports with focus, as the jobs spinner of the fake daemon draws 8 times a second.
 
   | Build | Focused CPU % | Focused draws/s | Background CPU % | Background draws/s | Run |
   |---|---|---|---|---|---|

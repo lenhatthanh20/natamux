@@ -11,11 +11,13 @@ use super::limits::{ENDED_IDLE_MS, MAX_SESSIONS, SHELL_PROGRAMS, WORKSPACE_QUIET
 use super::service::TerminalOptions;
 use super::session_input::set_size;
 use super::session_lifecycle::{
-    NewSession, close_session, session_key, shell_exited, spawn_session, take_output,
+    NewSession, close_session, parse_in_turns, session_key, shell_exited, spawn_session,
+    table_at_exit, take_output,
 };
 use super::tickets::Tickets;
 use super::types::{ClientRef, Session, SessionRef, Size, TerminalError, same_client};
 use crate::shared::event_bus::DaemonMessage;
+use crate::shared::turns::Turns;
 
 pub(super) struct Inner {
     pub(super) options: TerminalOptions,
@@ -29,7 +31,8 @@ pub(super) struct Inner {
     pub(super) starting: Mutex<()>,
     /// Held while one shell's output is parsed: shells parse one at a time, as on Node's one
     /// loop, so floods in several shells take one core, not every core the dashboards need too.
-    pub(super) parsing: Mutex<()>,
+    /// Turns go in order, so a flood never keeps a quiet shell waiting more than a turn.
+    pub(super) parsing: Turns,
     pub(super) this: Weak<Inner>,
 }
 
@@ -190,24 +193,26 @@ impl Inner {
                 if !inner.is_current(&key, &session) {
                     return;
                 }
-                let (data, task_id, terminal) = {
-                    let _turn = lock(&inner.parsing);
+                let parse = |piece| {
                     let mut guard = lock(&session);
-                    let data = take_output(&mut guard, read);
+                    let data = take_output(&mut guard, piece);
                     (data, guard.task_id.clone(), guard.terminal.clone())
                 };
-                if !data.is_empty() {
-                    inner.output(&task_id, &terminal, &data);
-                }
+                parse_in_turns(&inner.parsing, &read, parse, |(data, task_id, terminal)| {
+                    if !data.is_empty() {
+                        inner.output(&task_id, &terminal, &data);
+                    }
+                });
             }),
             on_exit: Box::new(move |code| {
                 let (Some(inner), Some(session)) = (exit_inner.upgrade(), exit_weak.upgrade())
                 else {
                     return;
                 };
+                let table = table_at_exit(&session);
                 let task_id = {
                     let mut guard = lock(&session);
-                    shell_exited(&mut guard, code);
+                    shell_exited(&mut guard, code, table.as_deref());
                     guard.task_id.clone()
                 };
                 let removed = {
@@ -273,15 +278,24 @@ impl Inner {
     /// them when it changed. Checked on each tick while output goes on too, as an agent's
     /// spinner keeps the output from going quiet for its whole turn.
     pub(super) fn note_foreground(&self, task_id: &str) {
-        let mut changed = false;
+        let mut changed = Vec::new();
         for session in self.sessions_where(|session| session.task_id == task_id) {
             let mut guard = lock(&session);
             let program = guard.pty.foreground();
-            changed = changed || program != guard.program;
+            if program != guard.program {
+                changed.push(guard.terminal.clone());
+            }
             guard.program = program;
         }
-        if changed {
-            self.publish_shells_changed(task_id);
+        if changed.is_empty() {
+            return;
+        }
+        changed.sort();
+        if let Some(bus) = &self.options.bus {
+            bus.publish(DaemonMessage::ProgramsChanged {
+                task_id: task_id.into(),
+                terminals: changed,
+            });
         }
     }
 

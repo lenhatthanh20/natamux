@@ -140,6 +140,9 @@ impl OpenShells {
             };
             match message {
                 DaemonMessage::ShellsChanged { task_id } => this.sync(task_id),
+                DaemonMessage::ProgramsChanged { task_id, terminals } => {
+                    this.sync_programs(task_id, terminals)
+                }
                 DaemonMessage::TaskDeleted { task_id } => this.forget(task_id),
                 // Its shells cannot start without the folder.
                 DaemonMessage::TaskUpdated { task, event, .. }

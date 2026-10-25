@@ -78,6 +78,13 @@ pub fn set_active(active: bool, cx: &mut App) {
     cx.refresh_windows();
 }
 
+/// The main window has focus. Background work that only keeps the screen fresh waits for it:
+/// `set_active` draws every window again when focus comes back.
+pub fn window_active(cx: &App) -> bool {
+    cx.try_global::<Motion>()
+        .is_some_and(|motion| motion.active)
+}
+
 /// How long to sleep until the next tick where a shown kind changes; `None` with nothing shown.
 fn next_wait(motion: &Motion) -> Option<Duration> {
     let shown: Vec<Moving> = Moving::ALL

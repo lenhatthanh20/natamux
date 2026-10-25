@@ -11,6 +11,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
+use hyper::body::Bytes;
 use natamux_proto::terminals::messages::ServerMessage;
 use natamux_proto::terminals::text::plain_text;
 use natamux_pty::Env;
@@ -25,6 +26,7 @@ use super::tickets::Tickets;
 use super::types::{ClientRef, ClientState, Frame, Phase, Size, TerminalError};
 use crate::shared::event_bus::EventBus;
 use crate::shared::scheduler::Scheduler;
+use crate::shared::turns::Turns;
 
 pub type WorkspaceOf = dyn Fn(&str) -> Result<PathBuf, TerminalError> + Send + Sync;
 pub type OutputListener = dyn Fn(&str, &str, &[u8]) + Send + Sync;
@@ -75,7 +77,7 @@ impl TerminalService {
                 output_seen: Mutex::new(HashMap::new()),
                 next_attach: AtomicU64::new(1),
                 starting: Mutex::new(()),
-                parsing: Mutex::new(()),
+                parsing: Turns::default(),
                 this: this.clone(),
             }),
         }
@@ -246,12 +248,7 @@ impl TerminalService {
     }
 
     /// The output sent since `offset`, while it is still kept.
-    pub fn output_since(
-        &self,
-        task_id: &str,
-        offset: u64,
-        terminal: &str,
-    ) -> Option<Vec<Arc<[u8]>>> {
+    pub fn output_since(&self, task_id: &str, offset: u64, terminal: &str) -> Option<Vec<Bytes>> {
         let session = self.inner.get(task_id, terminal)?;
         ring_since(&lock(&session), offset)
     }
@@ -316,9 +313,16 @@ impl TerminalService {
         lock(&session).pty.foreground()
     }
 
+    /// The `ps` behind this runs with no session lock held, and its table is shared with the
+    /// other shells for a moment.
     pub fn commands(&self, task_id: &str, terminal: &str) -> Option<Vec<String>> {
         let session = self.inner.get(task_id, terminal)?;
-        lock(&session).pty.commands()
+        let read = lock(&session).processes.clone();
+        let Some(read) = read else {
+            return lock(&session).pty.commands();
+        };
+        let table = read(false);
+        lock(&session).pty.commands_in(&table)
     }
 
     /// Input from a client gives the shell that client's size first: the user types where they

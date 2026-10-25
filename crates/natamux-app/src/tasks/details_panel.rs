@@ -24,9 +24,11 @@ use crate::app::tab_rules::{ShowWatch, details_tabs};
 use crate::app::view_rules::DetailsView;
 use crate::components::chips::tip_with_keys;
 use crate::components::empty_state::EmptyState;
+use crate::components::motion;
 use crate::components::text_size::row_text;
 use crate::files::file_tree::FileTree;
 use crate::tasks::task_rules::stage_label;
+use reads::ReadPaces;
 
 /// `FALLBACK_POLL_MS`: the feed says when the log changed; this covers a lost message.
 const POLL: Duration = Duration::from_secs(60);
@@ -57,10 +59,13 @@ pub struct Shown {
     pub scrolled: bool,
     /// The task's data was read since the panel showed it: reads wait until it shows.
     pub read: bool,
+    /// The reads that follow the task's log, at most one of each kind a second.
+    pub paces: ReadPaces,
     /// Cards whose "Show evidence" is open.
     pub open_evidence: BTreeSet<String>,
     /// The focus of each folded card, so Enter and Space open it.
     pub card_focus: std::collections::BTreeMap<String, FocusHandle>,
+    pub clock: crate::app::clock::LabelClock,
 }
 
 pub struct DetailsPanel {
@@ -80,6 +85,8 @@ pub struct DetailsPanel {
     focus: FocusHandle,
     tabs_focus: FocusHandle,
     pub(super) scroll: ScrollHandle,
+    /// A poll came while the window had no focus: it reads once when the focus comes back.
+    pub(super) missed_poll: bool,
     _poll: gpui::Task<()>,
     _subscriptions: Vec<Subscription>,
 }
@@ -94,7 +101,11 @@ impl DetailsPanel {
         let changes = cx.subscribe(&dashboard, |panel, _, change: &DashboardChange, cx| {
             panel.on_change(change, cx)
         });
-        let observe = cx.observe(&dashboard, |panel, _, cx| panel.sync(cx));
+        // Root caches the panel: a change of the dashboard draws it again from here.
+        let observe = cx.observe(&dashboard, |panel, _, cx| {
+            panel.sync(cx);
+            cx.notify();
+        });
         let mut subscriptions = vec![changes, observe];
         if let Some(reads) = SettingsReads::global(cx) {
             subscriptions.push(
@@ -107,9 +118,13 @@ impl DetailsPanel {
             loop {
                 cx.background_executor().timer(POLL).await;
                 let poll = |panel: &mut Self, cx: &mut Context<Self>| {
-                    if panel.is_open(cx) {
-                        panel.read_log(cx);
-                        panel.refresh_tree(cx);
+                    if !panel.is_open(cx) {
+                        return;
+                    }
+                    if motion::window_active(cx) {
+                        panel.read_polled(cx);
+                    } else {
+                        panel.missed_poll = true;
                     }
                 };
                 if panel.update(cx, poll).is_err() {
@@ -130,13 +145,18 @@ impl DetailsPanel {
             focus: cx.focus_handle(),
             tabs_focus: cx.focus_handle().tab_stop(true),
             scroll: ScrollHandle::new(),
+            missed_poll: false,
             _poll: poll,
             _subscriptions: subscriptions,
         }
     }
 
-    pub fn set_mode(&mut self, mode: DetailsMode) {
-        self.mode = mode;
+    /// The panel draws by itself (Root caches it), so a new mode draws it again.
+    pub fn set_mode(&mut self, mode: DetailsMode, cx: &mut Context<Self>) {
+        if self.mode != mode {
+            self.mode = mode;
+            cx.notify();
+        }
     }
 
     pub(super) fn task(&self, cx: &App) -> Option<Task> {
@@ -412,6 +432,7 @@ impl Render for DetailsPanel {
             self.read_all(cx);
         }
         self.take_pending(&task, window, cx);
+        self.follow_times(&task, cx);
         let view = self.view(cx);
         let mut context = KeyContext::new_with_defaults();
         context.add("NatamuxDetails");

@@ -215,10 +215,13 @@ jobs:
       - name: Smoke test, terminal grid and pipeline chart
         run: target/release/natamux-app --smoke --fake-daemon
       # CPU and draws of an idle window, with focus and in the background (docs/rust-phase3.md
-      # "Motion"). Only a snapshot push whose commit message has a line "Measure: motion".
+      # "Motion"): the task table, then a task open with its terminals. Only a snapshot push
+      # whose commit message has a line "Measure: motion".
       - name: Motion cost
         if: "github.event_name == 'push' && contains(github.event.head_commit.message, 'Measure: motion')"
-        run: scripts/motion-cost.sh
+        run: |
+          scripts/motion-cost.sh
+          scripts/motion-cost.sh target/release/natamux-app T-0146
       - name: Screenshots
         run: |
           mkdir -p shots
@@ -894,11 +897,16 @@ jobs:
           persist-credentials: false
       - run: rustup toolchain install
       - id: build
-        run: cargo test --release --locked -p natamux-daemon --test terminal_bench --no-run
+        run: cargo test --release --locked -p natamux-daemon --test terminal_bench --test daemon_bench --no-run
       - name: Run the Rust terminal bench
         env:
           NATAMUX_BENCH: "1"
         run: cargo test --release --locked -p natamux-daemon --test terminal_bench -- --ignored --nocapture
+      # RSS of idle shells, echo while others flood, snapshot and serialize: to the job summary.
+      - name: Run the daemon bench
+        env:
+          NATAMUX_BENCH: "1"
+        run: cargo test --release --locked -p natamux-daemon --test daemon_bench -- --nocapture
 
   # The tools come as prebuilt binaries at pinned versions; install-action checks their hashes.
   supply-chain:

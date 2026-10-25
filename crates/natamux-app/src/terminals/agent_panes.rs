@@ -76,19 +76,21 @@ pub struct AgentPanes {
     width: Entity<Option<f32>>,
     /// The panes are narrower than the agent badge's name needs.
     narrow: bool,
-    _width: Subscription,
+    _subscriptions: [Subscription; 2],
 }
 
 impl AgentPanes {
     pub fn new(dashboard: Entity<Dashboard>, cx: &mut Context<Self>) -> Self {
         let width = cx.new(|_| None);
         let observe = cx.observe(&width, |_, _, cx| cx.notify());
+        // Root caches the grid: its tasks and their terminals come from the dashboard.
+        let follow = cx.observe(&dashboard, |_, _, cx| cx.notify());
         AgentPanes {
             dashboard,
             maximized: None,
             width,
             narrow: false,
-            _width: observe,
+            _subscriptions: [observe, follow],
         }
     }
 
@@ -225,7 +227,7 @@ impl AgentPanes {
             .activity
             .get(&task.id)
             .and_then(|lines| lines.get("1"))
-            .map(|line| line.text.clone());
+            .map(|line| line.text.as_str());
         let lanes = agent_lanes(list);
         let lane = lanes.get("1");
         let state = lane
@@ -248,7 +250,7 @@ impl AgentPanes {
             title: task.title.clone(),
             open: open.clone(),
         };
-        let text = pane_state_text(state, activity.as_deref());
+        let text = pane_state_text(state, activity);
         PaneHeader::new(terminal_key(&id, "1"), title)
             .narrow(self.narrow)
             .agent_shell(Some(state), agent)
@@ -265,19 +267,22 @@ impl AgentPanes {
             )
     }
 
-    fn pane(&self, task: &Task, window: &mut Window, cx: &mut Context<Self>) -> Option<AnyElement> {
-        let source = self.dashboard.read(cx).source().cloned()?;
-        let list = self
-            .dashboard
-            .read(cx)
-            .data
-            .terminals
-            .get(&task.id)
-            .cloned()
-            .unwrap_or_default();
-        let header = self.header_of(task, &list, cx);
-        let key = terminal_key(&task.id, "1");
-        let terminal = TerminalCache::terminal(&source, &task.id, "1", window, cx);
+    /// The pane of one task. Its task and list are read where the dashboard holds them.
+    fn pane(&self, id: &str, window: &mut Window, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let (header, restoring, source) = {
+            let dashboard = self.dashboard.read(cx);
+            let task = dashboard.data.task(id)?;
+            let none = TerminalList::default();
+            let list = dashboard.data.terminals.get(id).unwrap_or(&none);
+            let header = self.header_of(task, list, cx);
+            (
+                header,
+                restoring_label(list, "1"),
+                dashboard.source()?.clone(),
+            )
+        };
+        let key = terminal_key(id, "1");
+        let terminal = TerminalCache::terminal(&source, id, "1", window, cx);
         let focused = terminal
             .read(cx)
             .view
@@ -288,14 +293,14 @@ impl AgentPanes {
         Some(
             TerminalPane::new(key.clone(), terminal.clone(), header)
                 .focused(focused)
-                .restoring(restoring_label(&list, "1"))
+                .restoring(restoring)
                 .find(find, move |window, cx| {
                     this.update(cx, |_, cx| {
                         open_find(key.clone(), terminal.clone(), window, cx)
                     })
                     .ok();
                 })
-                .on_maximize(self.toggle_of(&task.id, cx))
+                .on_maximize(self.toggle_of(id, cx))
                 .into_any_element(),
         )
     }
@@ -303,31 +308,21 @@ impl AgentPanes {
 
 impl Render for AgentPanes {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let (tasks, candidates, layout) = {
+        let (ids, candidates, layout) = {
             let dashboard = self.dashboard.read(cx);
-            let shown: Vec<Task> = agent_pane_tasks(
-                dashboard.view().agent_panes.as_deref(),
-                &dashboard.data.tasks,
-            )
-            .into_iter()
-            .cloned()
-            .collect();
-            let ids: Vec<String> = shown.iter().map(|task| task.id.clone()).collect();
+            let ids = self.shown_ids(cx);
             let candidates = pane_candidates(&dashboard.data.tasks, &ids).len();
-            dashboard.show_terminals(TerminalReader::Agents, ids);
-            (shown, candidates, dashboard.view().pane_layout)
+            dashboard.show_terminals(TerminalReader::Agents, ids.clone());
+            (ids, candidates, dashboard.view().pane_layout)
         };
         let width = *self.width.read(cx);
-        let can_add = candidates > 0 && tasks.len() < MAX_PANES;
-        let header = self.header(tasks.len(), can_add, width, cx);
-        let visible: Vec<&Task> = match &self.maximized {
-            Some(id) => tasks.iter().filter(|task| task.id == *id).collect(),
-            None => tasks.iter().collect(),
+        let can_add = candidates > 0 && ids.len() < MAX_PANES;
+        let header = self.header(ids.len(), can_add, width, cx);
+        let visible: Vec<&String> = match &self.maximized {
+            Some(id) => ids.iter().filter(|each| *each == id).collect(),
+            None => ids.iter().collect(),
         };
-        let keys: BTreeSet<String> = visible
-            .iter()
-            .map(|task| terminal_key(&task.id, "1"))
-            .collect();
+        let keys: BTreeSet<String> = visible.iter().map(|id| terminal_key(id, "1")).collect();
         TerminalCache::claim(Owner::Agents, keys, cx);
         let body: AnyElement = if visible.is_empty() {
             let mut empty = EmptyState::new("agents-empty", "layout-grid", "No agent is working")
@@ -357,7 +352,7 @@ impl Render for AgentPanes {
             self.narrow = narrow_pane(width, columns);
             let panes: Vec<AnyElement> = visible
                 .iter()
-                .filter_map(|task| self.pane(task, window, cx))
+                .filter_map(|id| self.pane(id, window, cx))
                 .collect();
             v_flex()
                 .id("agent-panes")

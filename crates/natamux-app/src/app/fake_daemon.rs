@@ -251,6 +251,12 @@ impl FakeDaemon {
         }
     }
 
+    /// No background job runs: `--open-task` measures an idle open task, and the spinner of the
+    /// jobs would draw 8 times a second.
+    pub fn clear_jobs(&self) {
+        self.data().jobs.clear();
+    }
+
     /// The terminal rows of these tasks, to one feed. Tasks with no terminals send nothing, as
     /// the daemon's 404 does.
     pub fn send_terminals(&self, feed: &UnboundedSender<DashboardEvent>, ids: &BTreeSet<String>) {

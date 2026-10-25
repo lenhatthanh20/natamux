@@ -55,6 +55,7 @@ pub mod shared {
     pub mod scheduler;
     pub mod slug;
     pub mod ttl_cache;
+    pub mod turns;
 }
 pub mod terminals {
     pub mod input_trace;

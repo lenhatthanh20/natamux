@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Result, anyhow};
 use gpui::{
-    App, AppContext as _, AsyncApp, Keystroke, Modifiers, Pixels, PlatformInput, Point,
+    App, AppContext as _, AsyncApp, Keystroke, ListOffset, Modifiers, Pixels, PlatformInput, Point,
     ScrollDelta, ScrollWheelEvent, TouchPhase, Window, WindowHandle, point, px,
 };
 
@@ -72,7 +72,7 @@ async fn steps(handle: WindowHandle<Root>, task_id: &str, cx: &mut AsyncApp) -> 
     // Each scroll starts at the top, so runs compare.
     handle.update(cx, |root, _, cx| {
         let tree = root.sidebar().read(cx).tree().clone();
-        tree.read(cx).scroll_handle().scroll_to_item(0);
+        tree.read(cx).list_state().scroll_to(ListOffset::default());
     })?;
     println!("gate2: bench on {task_id} for {} s", BENCH.as_secs());
     let started = Instant::now();

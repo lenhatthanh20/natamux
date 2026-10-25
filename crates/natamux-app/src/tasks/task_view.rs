@@ -12,11 +12,12 @@ use ui::prelude::*;
 
 use super::add_subtask_dialog;
 use super::frozen_order::{HOLD_MS, freeze_order, is_frozen};
-use super::task_attention::filter_tasks;
+use super::task_attention::{filter_tasks, next_row_change_ms};
 use super::task_board::TaskBoard;
 use super::task_sort::sort_tasks;
 use super::task_table::{KeyMoved, TaskTable};
 use super::task_view_rules::{MainContent, main_content};
+use crate::app::clock::follow_labels;
 use crate::app::commands::shortcut_of;
 use crate::app::commands_stages::ShowTasksProgress;
 use crate::app::dashboard::Dashboard;
@@ -46,6 +47,9 @@ pub struct TaskView {
     /// The order last shown, and what it was sorted and filtered by.
     shown_ids: Vec<String>,
     shown_key: String,
+    /// When a row shown next changes a time label, in Unix ms, and the timer that draws it.
+    next_change: Option<i64>,
+    clock: Option<gpui::Task<()>>,
     _hold: Option<gpui::Task<()>>,
     _subscriptions: Vec<Subscription>,
 }
@@ -84,6 +88,8 @@ impl TaskView {
             held_at: None,
             shown_ids: Vec::new(),
             shown_key: String::new(),
+            next_change: None,
+            clock: None,
             _hold: None,
             _subscriptions: subscriptions,
         };
@@ -114,10 +120,11 @@ impl TaskView {
             );
             (sorted, key)
         };
+        let now = now_ms();
         let frozen = is_frozen(
             self.pointer_inside,
             self.held_at,
-            now_ms(),
+            now,
             key == self.shown_key,
         );
         let ordered: Vec<Task> = if frozen {
@@ -127,19 +134,36 @@ impl TaskView {
         };
         self.shown_ids = ordered.iter().map(|task| task.id.clone()).collect();
         self.shown_key = key;
+        self.next_change = next_row_change_ms(&ordered, now).map(|wait| now + wait);
+        self.clock = None;
         let width = *self.main_width.read(cx);
-        self.table
-            .update(cx, |table, cx| table.set_rows(ordered.clone(), width, cx));
-        self.board
-            .update(cx, |board, cx| board.set_rows(ordered.clone(), cx));
-        let progress = self.dashboard.read(cx).view().layout == Layout::Progress;
-        self.progress.update(cx, |board, cx| {
-            board.set_rows(ordered, cx);
-            if progress {
+        // Only the layout on screen gets the rows. A switch of layout changes the dashboard,
+        // which refreshes again for the new one.
+        match self.dashboard.read(cx).view().layout {
+            Layout::Table => self
+                .table
+                .update(cx, |table, cx| table.set_rows(ordered, width, cx)),
+            Layout::Board => self
+                .board
+                .update(cx, |board, cx| board.set_rows(ordered, cx)),
+            Layout::Progress => self.progress.update(cx, |board, cx| {
+                board.set_rows(ordered, cx);
                 board.read_settings(cx);
-            }
-        });
+            }),
+        }
         cx.notify();
+    }
+
+    /// A time label of the layout on screen changed by the clock alone: it draws again, and the
+    /// order and the next wait are made again.
+    fn labels_changed(&mut self, cx: &mut Context<Self>) {
+        self.clock = None;
+        self.refresh(cx);
+        match self.dashboard.read(cx).view().layout {
+            Layout::Table => self.table.update(cx, |_, cx| cx.notify()),
+            Layout::Board => self.board.update(cx, |_, cx| cx.notify()),
+            Layout::Progress => self.progress.update(cx, |_, cx| cx.notify()),
+        }
     }
 
     /// A key moved the selection: the order holds for 2 s, then takes the live order again.
@@ -242,6 +266,8 @@ impl TaskView {
 
 impl Render for TaskView {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let wait = self.next_change.map(|at| at - now_ms());
+        follow_labels(&mut self.clock, wait, cx, Self::labels_changed);
         let content = {
             let dashboard = self.dashboard.read(cx);
             let data = &dashboard.data;

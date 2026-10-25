@@ -12,6 +12,7 @@ use super::word_check::{WordCheck, terminal_check_command, words};
 use crate::app::source::Source;
 use crate::components::button_style::quiet_button;
 use crate::terminals::remote_terminal::{RemoteTerminal, Target};
+use crate::terminals::terminal_screen::terminal_screen;
 
 actions!(natamux, [SubmitWord]);
 
@@ -110,7 +111,7 @@ impl ImeCheck {
                 div()
                     .flex_1()
                     .min_h_0()
-                    .child(terminal.read(cx).view.clone()),
+                    .child(terminal_screen(terminal, false, cx)),
             )
             .into_any_element()
     }

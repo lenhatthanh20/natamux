@@ -3,7 +3,10 @@
 //! would write to a PTY (keys, pastes, IME text, answers to queries) goes to the socket. The input
 //! hook is the one patch on our Zed fork, `Terminal::set_display_only_input`.
 
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
+use std::task::{Context as TaskContext, Poll};
 use std::time::{Duration, Instant};
 
 use futures::StreamExt;
@@ -12,17 +15,23 @@ use gpui::{App, Entity, Focusable, Task, WeakEntity};
 use natamux_client::{SessionOptions, TerminalEvent, TerminalHandle, TerminalStatus};
 use settings::Settings;
 use terminal::terminal_settings::TerminalSettings;
-use terminal::{DisplayOnlyWriter, Modes, Terminal, TerminalBuilder};
+use terminal::{DisplayOnlyWriter, Modes, Terminal, TerminalBounds, TerminalBuilder};
 use terminal_view::TerminalView;
 use ui::prelude::*;
 use util::paths::PathStyle;
 
 use super::paste_rules::bracketed;
 use crate::app::source::Source;
+use crate::terminals::terminal_size::{
+    FIRST_HISTORY_COLS, SizeStep, history_lines, size_step, waits,
+};
 
-/// How often a size change of the pane is looked for. Output and input never wait for it.
-const SIZE_CHECK: Duration = Duration::from_millis(100);
-
+/// A new pane size goes to the shell once it held this long (two looks, T-0173). Output and input
+/// never wait for it.
+const SIZE_SETTLE: Duration = Duration::from_millis(100);
+/// The most output parsed before the parser lets other work of the thread pool run. The paint
+/// waits for the terminal's lock while a piece is parsed.
+const PARSE_PIECE: usize = 4 * 1024;
 /// Work for the parser thread of one terminal, in the order the socket gave it.
 enum Job {
     /// Parse these bytes, then ack `ack` when it is set.
@@ -43,6 +52,12 @@ pub struct RemoteTerminal {
     size: (u16, u16),
     /// The grid size at the last check, for the settle rule.
     seen: Option<(u16, u16)>,
+    /// The grid size at the last layout that was looked at.
+    laid: Option<(u16, u16)>,
+    /// Counts the waits for a new size to hold; only the newest one looks again.
+    settle: u64,
+    source: Arc<Source>,
+    target: Target,
     /// "T-1/1": the task and terminal, for the perf overlay.
     label: String,
     /// Which shell of which task this is, for a drop of a path.
@@ -58,9 +73,12 @@ pub struct RemoteTerminal {
     jobs: Option<UnboundedSender<Job>>,
     /// A snapshot is being written: the pane shows its skeleton, not the history scrolling by.
     replaying: bool,
+    /// The history limit Zed's terminal was built with.
+    history: Option<usize>,
     _tasks: Vec<Task<()>>,
 }
 
+#[derive(Clone)]
 pub struct Target {
     pub task_id: String,
     pub terminal: String,
@@ -75,52 +93,14 @@ impl RemoteTerminal {
     ) -> Self {
         let label = format!("{}/{}", target.task_id, target.terminal);
         let (task_id, name) = (target.task_id.clone(), target.terminal.clone());
-        let settings = TerminalSettings::get_global(cx).clone();
-        let terminal = cx.new(|cx| {
-            TerminalBuilder::new_display_only(
-                settings.cursor_shape,
-                settings.alternate_scroll,
-                settings.max_scroll_history_lines,
-                cx.entity_id().as_u64(),
-                cx.background_executor(),
-                PathStyle::local(),
-            )
-            .subscribe(cx)
-        });
-        let view = cx.new(|cx| {
-            TerminalView::new(
-                terminal.clone(),
-                WeakEntity::new_invalid(),
-                None,
-                WeakEntity::new_invalid(),
-                window,
-                cx,
-            )
-        });
-        // Focus claims the shell's size, as the web's textarea focus does: after a resume the
-        // shell may still have another client's size.
-        let focus = view.focus_handle(cx);
-        cx.on_focus_in(&focus, window, |this, _, _| {
-            if let Some(handle) = &this.handle {
-                handle.claim();
-            }
-        })
-        .detach();
+        let history = history_lines(FIRST_HISTORY_COLS);
+        let (terminal, view) = build_screen(history, None, window, cx);
         cx.observe_keystrokes(|this, _, window, cx| {
             if this.view.focus_handle(cx).contains_focused(window, cx) {
                 this.last_key = Some(Instant::now());
             }
         })
         .detach();
-        let watch = cx.spawn(async move |this, cx| {
-            loop {
-                cx.background_executor().timer(SIZE_CHECK).await;
-                let alive = this.update(cx, |this, cx| this.check_size(&source, &target, cx));
-                if alive.is_err() {
-                    break;
-                }
-            }
-        });
         RemoteTerminal {
             view,
             terminal,
@@ -128,6 +108,10 @@ impl RemoteTerminal {
             status: TerminalStatus::Connecting,
             size: (0, 0),
             seen: None,
+            laid: None,
+            settle: 0,
+            source,
+            target,
             label,
             task_id,
             name,
@@ -136,7 +120,8 @@ impl RemoteTerminal {
             last_key: None,
             jobs: None,
             replaying: false,
-            _tasks: vec![watch],
+            history,
+            _tasks: Vec::new(),
         }
     }
 
@@ -184,6 +169,13 @@ impl RemoteTerminal {
         }
     }
 
+    /// The pane shows this terminal's state. The views that show it are cached and draw again
+    /// only when a view in them changed, so the terminal's own view is told too.
+    fn changed(&mut self, cx: &mut Context<Self>) {
+        cx.notify();
+        self.view.update(cx, |_, cx| cx.notify());
+    }
+
     /// Types into the shell, as keys would; waits until the socket is open.
     pub fn type_text(&mut self, text: &str) {
         match (&self.handle, &self.status) {
@@ -212,9 +204,40 @@ impl RemoteTerminal {
         Some((cols, rows))
     }
 
+    /// The view laid out at another grid size than the last one looked at. Read only, so a
+    /// paint can ask it.
+    pub fn layout_changed(&self, cx: &App) -> bool {
+        self.grid_size(cx) != self.laid
+    }
+
+    /// The view laid out at a new grid size: connect at it, or send it once it held.
+    pub fn laid_out(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.laid = self.grid_size(cx);
+        self.check_size(Some(window), cx);
+    }
+
+    /// Zed's terminal keeps the history limit it was built with, and the pane's width is known
+    /// only once the view laid out. So the terminal is built again at its first size, before the
+    /// shell connects and any output comes, with the daemon's rule at that width. A later resize
+    /// keeps the limit.
+    fn build_at(&mut self, cols: u16, window: &mut Window, cx: &mut Context<Self>) {
+        let history = history_lines(cols);
+        if history == self.history {
+            return;
+        }
+        let bounds = self.terminal.read(cx).last_content().terminal_bounds;
+        let focused = self.view.focus_handle(cx).contains_focused(window, cx);
+        let (terminal, view) = build_screen(history, Some(bounds), window, cx);
+        if focused {
+            window.focus(&view.focus_handle(cx), cx);
+        }
+        (self.terminal, self.view, self.history) = (terminal, view, history);
+        self.changed(cx);
+    }
+
     /// Connects once the view knows its size, so the shell starts at that size; later sends a
-    /// new size once it settled.
-    fn check_size(&mut self, source: &Source, target: &Target, cx: &mut Context<Self>) {
+    /// new size once it settled. `window`: None from the settle timer.
+    fn check_size(&mut self, window: Option<&mut Window>, cx: &mut Context<Self>) {
         let Some(now) = self.grid_size(cx) else {
             return;
         };
@@ -222,7 +245,11 @@ impl RemoteTerminal {
         match size_step(self.handle.is_some(), seen, now, self.size) {
             Some(SizeStep::Connect(size)) => {
                 self.size = size;
-                self.connect(source, target, size, cx);
+                if let Some(window) = window {
+                    self.build_at(size.0, window, cx);
+                }
+                let (source, target) = (self.source.clone(), self.target.clone());
+                self.connect(&source, &target, size, cx);
             }
             Some(SizeStep::Resize(size)) => {
                 self.size = size;
@@ -231,6 +258,21 @@ impl RemoteTerminal {
                 }
             }
             None => {}
+        }
+        // A later layout or look starts a new wait; the older one then does nothing.
+        self.settle += 1;
+        if waits(now, self.size) {
+            let settle = self.settle;
+            cx.spawn(async move |this, cx| {
+                cx.background_executor().timer(SIZE_SETTLE).await;
+                this.update(cx, |this, cx| {
+                    if this.settle == settle {
+                        this.check_size(None, cx);
+                    }
+                })
+                .ok();
+            })
+            .detach();
         }
     }
 
@@ -257,7 +299,7 @@ impl RemoteTerminal {
             .update(cx, |terminal, _| terminal.set_display_only_input(sink));
         if let Err(error) = attached {
             self.status = TerminalStatus::Failed(error.to_string());
-            cx.notify();
+            self.changed(cx);
             return;
         }
         // Zed parses a PTY terminal's output on a background thread; this one does the same, so
@@ -266,7 +308,7 @@ impl RemoteTerminal {
             Ok(writer) => writer,
             Err(error) => {
                 self.status = TerminalStatus::Failed(error.to_string());
-                cx.notify();
+                self.changed(cx);
                 return;
             }
         };
@@ -320,7 +362,7 @@ impl RemoteTerminal {
                 }
                 TerminalEvent::Reset { .. } => {
                     self.replaying = true;
-                    cx.notify();
+                    self.changed(cx);
                     // A snapshot draws the whole screen again on a clean one. It keeps the pane's
                     // size: the daemon replays at the shell's size, which this pane claimed.
                     let writer = self.terminal.update(cx, |terminal, cx| {
@@ -331,14 +373,14 @@ impl RemoteTerminal {
                         Ok(writer) => Job::Writer(Box::new(writer)),
                         Err(error) => {
                             self.status = TerminalStatus::Failed(error.to_string());
-                            cx.notify();
+                            self.changed(cx);
                             return;
                         }
                     }
                 }
                 TerminalEvent::CaughtUp { offset } => {
                     self.replaying = false;
-                    cx.notify();
+                    self.changed(cx);
                     Job::CaughtUp(offset)
                 }
                 TerminalEvent::Status(status) => {
@@ -348,7 +390,7 @@ impl RemoteTerminal {
                         }
                     }
                     self.status = status;
-                    cx.notify();
+                    self.changed(cx);
                     continue;
                 }
             };
@@ -358,32 +400,63 @@ impl RemoteTerminal {
     }
 }
 
-/// What a size check does.
-#[derive(Debug, PartialEq, Eq)]
-enum SizeStep {
-    /// The first size: the shell starts at it, at once.
-    Connect((u16, u16)),
-    /// A new size that settled.
-    Resize((u16, u16)),
+/// Pending once, so other work of the thread pool runs between two pieces of a flood.
+struct YieldNow(bool);
+
+impl Future for YieldNow {
+    type Output = ();
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut TaskContext<'_>) -> Poll<()> {
+        if self.0 {
+            return Poll::Ready(());
+        }
+        self.0 = true;
+        cx.waker().wake_by_ref();
+        Poll::Pending
+    }
 }
 
-/// What a size check does with the grid size `now`. A grid with no columns or rows is not laid
-/// out yet. A later new size goes to the shell only once two checks in a row saw it (the web's
-/// `FIT_DELAY_MS`): each resize makes a TUI repaint, and a layout change passes through sizes
-/// (T-0173).
-fn size_step(
-    has_handle: bool,
-    seen: Option<(u16, u16)>,
-    now: (u16, u16),
-    sent: (u16, u16),
-) -> Option<SizeStep> {
-    if now.0 == 0 || now.1 == 0 || now == sent {
-        return None;
-    }
-    if !has_handle {
-        return Some(SizeStep::Connect(now));
-    }
-    (seen == Some(now)).then_some(SizeStep::Resize(now))
+/// Zed's terminal and its view. `bounds`: the grid the last one laid out, so the new one starts
+/// at it.
+fn build_screen(
+    history: Option<usize>,
+    bounds: Option<TerminalBounds>,
+    window: &mut Window,
+    cx: &mut Context<RemoteTerminal>,
+) -> (Entity<Terminal>, Entity<TerminalView>) {
+    let settings = TerminalSettings::get_global(cx).clone();
+    let terminal = cx.new(|cx| {
+        TerminalBuilder::new_display_only_with_bounds(
+            settings.cursor_shape,
+            settings.alternate_scroll,
+            history,
+            cx.entity_id().as_u64(),
+            cx.background_executor(),
+            PathStyle::local(),
+            bounds.unwrap_or_default(),
+        )
+        .subscribe(cx)
+    });
+    let view = cx.new(|cx| {
+        TerminalView::new(
+            terminal.clone(),
+            WeakEntity::new_invalid(),
+            None,
+            WeakEntity::new_invalid(),
+            window,
+            cx,
+        )
+    });
+    // Focus claims the shell's size, as the web's textarea focus does: after a resume the shell
+    // may still have another client's size.
+    let focus = view.focus_handle(cx);
+    cx.on_focus_in(&focus, window, |this, _, _| {
+        if let Some(handle) = &this.handle {
+            handle.claim();
+        }
+    })
+    .detach();
+    (terminal, view)
 }
 
 /// The parser thread of one terminal. It acks only what it parsed, so a flood slows down to the
@@ -396,8 +469,12 @@ async fn parse(
     while let Some(job) = jobs.next().await {
         match job {
             Job::Write { bytes, ack } => {
-                if !bytes.is_empty() {
-                    writer.write(&bytes);
+                let mut pieces = bytes.chunks(PARSE_PIECE).peekable();
+                while let Some(piece) = pieces.next() {
+                    writer.write(piece);
+                    if pieces.peek().is_some() {
+                        YieldNow(false).await;
+                    }
                 }
                 if let Some(offset) = ack {
                     handle.parsed(offset);
@@ -411,53 +488,12 @@ async fn parse(
 
 #[cfg(test)]
 mod tests {
-    use super::{SizeStep, size_step};
+    use super::PARSE_PIECE;
 
     #[test]
-    fn the_first_size_connects_at_once() {
-        assert_eq!(
-            size_step(false, None, (80, 24), (0, 0)),
-            Some(SizeStep::Connect((80, 24)))
-        );
-        // A connect that failed is not tried again at the same size.
-        assert_eq!(size_step(false, Some((80, 24)), (80, 24), (80, 24)), None);
-    }
-
-    #[test]
-    fn a_new_size_waits_for_a_second_check() {
-        assert_eq!(size_step(true, Some((80, 24)), (81, 24), (80, 24)), None);
-        assert_eq!(size_step(true, None, (81, 24), (80, 24)), None);
-    }
-
-    #[test]
-    fn a_size_seen_twice_goes_out_once() {
-        assert_eq!(
-            size_step(true, Some((81, 24)), (81, 24), (80, 24)),
-            Some(SizeStep::Resize((81, 24)))
-        );
-        assert_eq!(size_step(true, Some((81, 24)), (81, 24), (81, 24)), None);
-    }
-
-    // T-0173: a layout that passes through a size and comes back sends nothing.
-    #[test]
-    fn a_size_that_comes_back_sends_nothing() {
-        assert_eq!(size_step(true, Some((81, 24)), (80, 24), (80, 24)), None);
-        assert_eq!(size_step(true, Some((80, 24)), (80, 24), (80, 24)), None);
-    }
-
-    #[test]
-    fn three_different_sizes_in_three_checks_send_nothing() {
-        let mut seen = Some((80, 24));
-        for now in [(81, 24), (82, 24), (83, 24)] {
-            assert_eq!(size_step(true, seen, now, (80, 24)), None);
-            seen = Some(now);
-        }
-    }
-
-    #[test]
-    fn a_grid_with_no_columns_or_rows_never_connects_or_resizes() {
-        assert_eq!(size_step(false, None, (0, 24), (0, 0)), None);
-        assert_eq!(size_step(false, Some((80, 0)), (80, 0), (0, 0)), None);
-        assert_eq!(size_step(true, Some((0, 0)), (0, 0), (80, 24)), None);
+    fn parses_in_pieces_of_4_kib() {
+        let flood = vec![b'x'; 64 * 1024];
+        assert_eq!(flood.chunks(PARSE_PIECE).count(), 16);
+        assert!(flood.chunks(PARSE_PIECE).all(|piece| piece.len() <= 4096));
     }
 }

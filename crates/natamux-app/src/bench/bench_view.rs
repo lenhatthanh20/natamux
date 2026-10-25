@@ -9,6 +9,7 @@ use ui::prelude::*;
 
 use crate::app::source::Source;
 use crate::terminals::remote_terminal::{RemoteTerminal, Target};
+use crate::terminals::terminal_screen::terminal_screen;
 
 /// Far from the terminals a task's stages use (1, 2, 5, 6 and up), so the bench never types into
 /// an agent.
@@ -161,7 +162,7 @@ impl Render for BenchView {
                             div()
                                 .flex_1()
                                 .min_h_0()
-                                .child(terminal.read(cx).view.clone()),
+                                .child(terminal_screen(terminal, false, cx)),
                         )
                 }))
         });

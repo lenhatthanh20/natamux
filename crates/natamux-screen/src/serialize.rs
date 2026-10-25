@@ -29,7 +29,7 @@ pub fn serialize(term: &mut Term<VoidListener>) -> Vec<u8> {
     // The pen a program set last, for the output that comes after the snapshot.
     let pen = Style::of(&term.grid().cursor.template);
     if pen != Style::default() {
-        out.push_str(&sgr(&pen));
+        write_sgr(&mut out, &pen);
     }
     out.into_bytes()
 }
@@ -73,7 +73,7 @@ fn write_grid(out: &mut String, grid: &Grid<Cell>) {
             }
             let style = Style::of(cell);
             if style != pen {
-                out.push_str(&sgr(&style));
+                write_sgr(out, &style);
                 pen = style;
             }
             out.push(if cell.c == '\0' { ' ' } else { cell.c });
@@ -207,9 +207,10 @@ impl Style {
     }
 }
 
-/// The SGR sequence that sets `style` from a reset pen.
-fn sgr(style: &Style) -> String {
-    let mut codes = vec!["0".to_string()];
+/// Writes the SGR sequence that sets `style` from a reset pen. Into the snapshot itself: a
+/// snapshot of a coloured screen has one per change of style.
+fn write_sgr(out: &mut String, style: &Style) {
+    out.push_str("\x1b[0");
     let flags = [
         (Flags::BOLD, "1"),
         (Flags::DIM, "2"),
@@ -225,34 +226,35 @@ fn sgr(style: &Style) -> String {
     ];
     for (flag, code) in flags {
         if style.flags.contains(flag) {
-            codes.push(code.to_string());
+            out.push(';');
+            out.push_str(code);
         }
     }
-    codes.extend(color(style.fg, 30, 90, 38));
-    codes.extend(color(style.bg, 40, 100, 48));
+    write_color(out, style.fg, 30, 90, 38);
+    write_color(out, style.bg, 40, 100, 48);
     if let Some(underline) = style.underline {
-        codes.extend(color(underline, 0, 0, 58));
+        write_color(out, underline, 0, 0, 58);
     }
-    format!("\x1b[{}m", codes.join(";"))
+    out.push('m');
 }
 
 /// The SGR codes of a colour: 16 colours as `base + n` and `bright + n` (xterm keeps them apart
 /// from the same 256-colour index), the 256 colours as `extended;5;n`, true colour as
 /// `extended;2;r;g;b`. A default colour adds nothing.
-fn color(color: Color, base: u16, bright: u16, extended: u16) -> Option<String> {
-    match color {
+fn write_color(out: &mut String, color: Color, base: u16, bright: u16, extended: u16) {
+    let _ = match color {
         Color::Named(named) => {
             let index = named as u16;
             match index {
-                0..=7 if base > 0 => Some((base + index).to_string()),
-                8..=15 if bright > 0 => Some((bright + index - 8).to_string()),
-                0..=15 => Some(format!("{extended};5;{index}")),
-                _ => None,
+                0..=7 if base > 0 => write!(out, ";{}", base + index),
+                8..=15 if bright > 0 => write!(out, ";{}", bright + index - 8),
+                0..=15 => write!(out, ";{extended};5;{index}"),
+                _ => Ok(()),
             }
         }
-        Color::Indexed(index) => Some(format!("{extended};5;{index}")),
-        Color::Spec(rgb) => Some(format!("{extended};2;{};{};{}", rgb.r, rgb.g, rgb.b)),
-    }
+        Color::Indexed(index) => write!(out, ";{extended};5;{index}"),
+        Color::Spec(rgb) => write!(out, ";{extended};2;{};{};{}", rgb.r, rgb.g, rgb.b),
+    };
 }
 
 #[cfg(test)]
@@ -288,6 +290,13 @@ mod tests {
         assert!(snapshot.contains("\x1b[0;38;5;1mindex"), "{snapshot:?}");
         assert!(snapshot.contains("\x1b[0;48;2;1;2;3mrgb"), "{snapshot:?}");
         assert!(copy.last_lines(5).contains("người 中文 😀"));
+    }
+
+    #[test]
+    fn writes_bright_colours_and_the_underline_colour() {
+        let (snapshot, _) = round_trip(20, 4, b"\x1b[92;4;58;5;3mlink\x1b[0m");
+        let snapshot = text(&snapshot);
+        assert!(snapshot.contains("\x1b[0;4;92;58;5;3mlink"), "{snapshot:?}");
     }
 
     #[test]

@@ -2,7 +2,7 @@
 
 pub const USAGE: &str =
     "usage: natamux-app [--smoke] [--theme light|dark] [--size WxH] [--hold SECONDS] [--fake-daemon]
-                   [--gate2 TASK] [--shot STATE] [--count-draws]
+                   [--gate2 TASK] [--shot STATE] [--count-draws] [--open-task TASK]
   --smoke   draw a frame, type into the text box, check it, then quit (exit 1 on failure)
             with --fake-daemon, also check that a workspace's terminal grid does not scroll
             and that the pipeline chart scrolls to its last step
@@ -13,6 +13,7 @@ pub const USAGE: &str =
   --gate2   run gate 2 on TASK's shells 901-912, save the perf report, print its path, then quit
   --shot    open the window in one screen-1 or screen-2 state, for the CI screenshots (docs/rust-phase3.md)
   --count-draws  print the window's draws once a second, to measure the cost of motion
+  --open-task    open TASK once the dashboard has it, as a click on its row does
 
 The daemon: NATAMUX_URL and NATAMUX_TOKEN, else http://127.0.0.1:4317 and the Natamux app's token.";
 
@@ -282,6 +283,7 @@ pub struct Options {
     pub gate2: Option<String>,
     pub shot: Option<Shot>,
     pub count_draws: bool,
+    pub open_task: Option<String>,
 }
 
 impl Options {
@@ -295,6 +297,7 @@ impl Options {
             gate2: None,
             shot: None,
             count_draws: false,
+            open_task: None,
         };
         let mut args = args.into_iter();
         while let Some(arg) = args.next() {
@@ -305,6 +308,7 @@ impl Options {
                 "--theme" => options.theme = Some(parse_theme(&value(&mut args, &arg)?)?),
                 "--size" => options.size = Some(parse_size(&value(&mut args, &arg)?)?),
                 "--gate2" => options.gate2 = Some(value(&mut args, &arg)?),
+                "--open-task" => options.open_task = Some(value(&mut args, &arg)?),
                 "--shot" => options.shot = Some(Shot::parse(&value(&mut args, &arg)?)?),
                 "--hold" => {
                     let seconds = value(&mut args, &arg)?;
@@ -362,6 +366,7 @@ mod tests {
         assert_eq!(options.gate2, None);
         assert_eq!(options.shot, None);
         assert!(!options.count_draws);
+        assert_eq!(options.open_task, None);
     }
 
     #[test]
@@ -380,9 +385,12 @@ mod tests {
             "--shot",
             "task-context-menu",
             "--count-draws",
+            "--open-task",
+            "T-0146",
         ])
         .unwrap();
         assert!(options.count_draws);
+        assert_eq!(options.open_task.as_deref(), Some("T-0146"));
         assert_eq!(options.shot, Some(Shot::TaskContextMenu));
         assert_eq!(options.gate2.as_deref(), Some("T-0145"));
         assert!(options.smoke);
@@ -403,6 +411,20 @@ mod tests {
         assert!(parse(&["--fast"]).is_err());
         assert!(parse(&["--shot", "tasks"]).is_err());
         assert!(parse(&["--shot"]).is_err());
+        assert_eq!(
+            parse(&["--open-task"]),
+            Err("--open-task needs a value".to_string())
+        );
+    }
+
+    #[test]
+    fn opens_a_task_with_the_fake_daemon_or_with_gate_2() {
+        let options = parse(&["--fake-daemon", "--open-task", "T-0001"]).unwrap();
+        assert!(options.fake_daemon);
+        assert_eq!(options.open_task.as_deref(), Some("T-0001"));
+        let options = parse(&["--open-task", "T-0001", "--gate2", "T-0002"]).unwrap();
+        assert_eq!(options.open_task.as_deref(), Some("T-0001"));
+        assert_eq!(options.gate2.as_deref(), Some("T-0002"));
     }
 
     #[test]

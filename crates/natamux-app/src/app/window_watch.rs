@@ -13,7 +13,7 @@ use crate::perf::overlay;
 const OVERLAY_REFRESH: Duration = Duration::from_millis(500);
 
 impl Root {
-    /// The bench's quit handling, the system look and the perf overlay's refresh.
+    /// The bench's quit handling and the system look.
     pub(super) fn watch_window(window: &mut Window, cx: &mut Context<Self>) {
         // Unsaved edits ask first; a running bench quits the app (`window_files.rs`).
         let weak_root = cx.weak_entity();
@@ -34,8 +34,13 @@ impl Root {
         .detach();
         // Motion runs only while the window has focus, as the web's `lib/window-focus.ts`.
         motion::set_active(window.is_window_active(), cx);
-        cx.observe_window_activation(window, |_, window, cx| {
-            motion::set_active(window.is_window_active(), cx);
+        cx.observe_window_activation(window, |root, window, cx| {
+            let active = window.is_window_active();
+            motion::set_active(active, cx);
+            if active {
+                root.workspace.update(cx, |view, cx| view.read_missed(cx));
+                root.details.update(cx, |panel, cx| panel.read_missed(cx));
+            }
         })
         .detach();
         // Follow the system's light or dark look, as Zed's workspace does.
@@ -45,22 +50,22 @@ impl Root {
             theme_settings::reload_theme(cx);
         })
         .detach();
-        cx.spawn(async move |root, cx| {
-            loop {
-                cx.background_executor().timer(OVERLAY_REFRESH).await;
-                let refreshed = root.update(cx, |_, cx| {
-                    if overlay::enabled(cx) {
-                        cx.notify();
-                    }
-                });
-                if refreshed.is_err() {
-                    break;
-                }
-            }
-        })
-        .detach();
         if overlay::enabled(cx) {
             overlay::watch_frames(window);
         }
+    }
+
+    /// The overlay shows new numbers while it is on; off, nothing wakes for it.
+    pub(super) fn follow_overlay(&mut self, cx: &mut Context<Self>) {
+        self.overlay_refresh = overlay::enabled(cx).then(|| {
+            cx.spawn(async move |root, cx| {
+                loop {
+                    cx.background_executor().timer(OVERLAY_REFRESH).await;
+                    if root.update(cx, |_, cx| cx.notify()).is_err() {
+                        break;
+                    }
+                }
+            })
+        });
     }
 }

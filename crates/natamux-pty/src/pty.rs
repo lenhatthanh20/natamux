@@ -2,6 +2,8 @@ use std::collections::BTreeMap;
 use std::io;
 use std::path::PathBuf;
 
+use crate::process_table::{ProcessTable, TableReader};
+
 /// The environment of a shell, whole: nothing of the daemon's own environment is added to it.
 pub type Env = BTreeMap<String, String>;
 
@@ -52,6 +54,21 @@ pub trait Pty: Send {
     /// The command lines of the processes under the shell, parents first, when the platform tells.
     fn commands(&self) -> Option<Vec<String>> {
         None
+    }
+    /// How this pty reads the process table for `kill_in`, `leftover_in` and `commands_in`. None
+    /// when it needs no table (a fake): then the plain methods run.
+    fn processes(&self) -> Option<TableReader> {
+        None
+    }
+    /// `kill` with a table read before, by a caller that must not run `ps` itself.
+    fn kill_in(&mut self, signal: Signal, _table: &ProcessTable) {
+        self.kill(signal);
+    }
+    fn leftover_in(&self, _table: &ProcessTable) -> bool {
+        self.leftover()
+    }
+    fn commands_in(&self, _table: &ProcessTable) -> Option<Vec<String>> {
+        self.commands()
     }
 }
 

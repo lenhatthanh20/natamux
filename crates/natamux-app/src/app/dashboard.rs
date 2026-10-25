@@ -172,8 +172,11 @@ impl Dashboard {
         cx.notify();
     }
 
+    /// Every view that shows the dashboard draws again on its notify, so an event that changes
+    /// nothing notifies nobody. The three workspace events only go to their subscribers.
     fn apply(&mut self, event: DashboardEvent, cx: &mut Context<Self>) {
-        let tasks_changed = matches!(event, DashboardEvent::Tasks(_));
+        let changed = self.data.changes(&event);
+        let tasks_changed = changed && matches!(event, DashboardEvent::Tasks(_));
         match &event {
             DashboardEvent::WorkspaceChanged { task_id } => {
                 cx.emit(DashboardChange::WorkspaceChanged(task_id.clone()))
@@ -193,7 +196,9 @@ impl Dashboard {
             crate::perf::report::mark_first_data();
             self.after_tasks(cx);
         }
-        cx.notify();
+        if changed {
+            cx.notify();
+        }
     }
 
     fn after_tasks(&mut self, cx: &mut Context<Self>) {

@@ -2,7 +2,7 @@
 //! of main from 768 while main keeps 400, else a sheet over main (with a scrim under 1024). Esc
 //! closes the top layer first; the panel's keys and the Task menu's stage commands.
 
-use gpui::MouseButton;
+use gpui::{MouseButton, StyleRefinement};
 use natamux_proto::stages::actions::{StageAction, StageActionInput};
 use ui::prelude::*;
 
@@ -79,7 +79,11 @@ impl Root {
                 .h_full()
                 .border_l_1()
                 .border_color(cx.theme().colors().border)
-                .child(self.details.clone()),
+                .child(
+                    self.details
+                        .clone()
+                        .cached(StyleRefinement::default().size_full()),
+                ),
         )
     }
 
@@ -120,14 +124,19 @@ impl Root {
                     .border_l_1()
                     .border_color(colors.border)
                     .elevation_3(cx)
-                    .child(self.details.clone()),
+                    .child(
+                        self.details
+                            .clone()
+                            .cached(StyleRefinement::default().size_full()),
+                    ),
             )
     }
 
     /// Tells the panel how it is shown (the Back of a page, the sheet's Answer in terminal).
     pub(super) fn sync_details_mode(&self, window: &Window, cx: &mut Context<Self>) {
         let mode = self.details_mode(window, cx);
-        self.details.update(cx, |panel, _| panel.set_mode(mode));
+        self.details
+            .update(cx, |panel, cx| panel.set_mode(mode, cx));
     }
 
     fn close_details(&mut self, cx: &mut Context<Self>) {

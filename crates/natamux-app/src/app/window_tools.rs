@@ -76,6 +76,7 @@ impl Root {
         cx: &mut Context<Self>,
     ) {
         overlay::toggle(window, cx);
+        self.follow_overlay(cx);
         cx.notify();
     }
 
@@ -137,6 +138,7 @@ impl Root {
         self.close_tool(cx);
         if !overlay::enabled(cx) {
             overlay::toggle(window, cx);
+            self.follow_overlay(cx);
         }
         let bench = cx.new(|cx| view(source, task, window, cx));
         self.set_tool(Tool::Bench(bench.clone()), cx);

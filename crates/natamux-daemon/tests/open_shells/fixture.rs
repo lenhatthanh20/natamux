@@ -44,6 +44,8 @@ pub struct FakeTerminals {
     bus: Arc<EventBus>,
     open: Mutex<HashMap<String, Vec<String>>>,
     programs: Mutex<HashMap<String, String>>,
+    /// The shells whose foreground was read, as "task/terminal".
+    pub looks: Mutex<Vec<String>>,
 }
 
 impl FakeTerminals {
@@ -54,13 +56,27 @@ impl FakeTerminals {
     }
 
     pub fn start_shell(&self, task: &str, terminal: &str) {
+        self.start_shell_quiet(task, terminal);
+        self.changed(task);
+    }
+
+    /// A shell starts with no message on the bus.
+    pub fn start_shell_quiet(&self, task: &str, terminal: &str) {
         self.open
             .lock()
             .unwrap()
             .entry(task.into())
             .or_default()
             .push(terminal.into());
-        self.changed(task);
+    }
+
+    /// The program in front of one shell changes, as TerminalService tells once output stops.
+    pub fn set_program_in(&self, task: &str, terminal: &str, program: Option<&str>) {
+        self.set_program_quiet(task, terminal, program);
+        self.bus.publish(DaemonMessage::ProgramsChanged {
+            task_id: task.into(),
+            terminals: vec![terminal.into()],
+        });
     }
 
     /// An agent starts or quits: the foreground changes, as TerminalService tells.
@@ -109,6 +125,10 @@ impl ShellsView for FakeTerminals {
     }
 
     fn foreground(&self, task_id: &str, terminal: &str) -> Option<String> {
+        self.looks
+            .lock()
+            .unwrap()
+            .push(format!("{task_id}/{terminal}"));
         let program = self
             .programs
             .lock()
@@ -167,6 +187,7 @@ pub fn setup_with(dir: &Path, ended_tasks: &[&str], agent_in: Option<Arc<AgentIn
         bus: Arc::clone(&bus),
         open: Mutex::default(),
         programs: Mutex::default(),
+        looks: Mutex::default(),
     });
     let ended = Arc::new(Mutex::new(
         ended_tasks

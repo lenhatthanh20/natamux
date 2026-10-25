@@ -12,6 +12,9 @@ pub const TICKET_TTL_MS: u64 = 30_000;
 /// goes out at once; anything else waits this long for more.
 pub const OUTPUT_COALESCE_MS: u64 = 4;
 pub const OUTPUT_IDLE_BYTES: usize = 1024;
+/// Shells parse one at a time. A read is parsed in turns of at most this much, so a flood in one
+/// shell does not hold the others for a whole 64 KiB read.
+pub const PARSE_TURN_BYTES: usize = 16 * 1024;
 /// No frame is larger, so a big snapshot or a flood never makes one huge message.
 pub const OUTPUT_FRAME_BYTES: usize = 64 * 1024;
 /// The last output sent, kept for a client that comes back and only needs what it missed.

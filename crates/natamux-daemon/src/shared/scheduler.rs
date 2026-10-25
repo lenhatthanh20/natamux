@@ -75,6 +75,19 @@ impl Scheduler {
         TimerId(id)
     }
 
+    /// Runs a slow job, such as a `ps`, on a thread of its own, so no timer waits for it. A manual
+    /// clock runs it as a job that is due now, so tests stay in step.
+    pub fn off_thread(&self, job: impl FnOnce() + Send + 'static) {
+        match &self.clock {
+            Clock::Real(_) => {
+                std::thread::spawn(job);
+            }
+            Clock::Manual(_) => {
+                self.after(0, job);
+            }
+        }
+    }
+
     pub fn cancel(&self, timer: TimerId) {
         let mut jobs = self.lock();
         if let Some(at) = jobs.times.remove(&timer.0) {
@@ -202,6 +215,37 @@ mod tests {
         });
         scheduler.advance(10);
         assert_eq!(ran.load(Ordering::SeqCst), 10);
+    }
+
+    /// The `ps` of one shell (here 500 ms) must not hold the 4 ms flush of another.
+    #[test]
+    fn a_slow_job_off_the_thread_does_not_hold_the_flush_of_another_shell() {
+        let scheduler = Scheduler::real();
+        let (slow_done, slow) = std::sync::mpsc::channel();
+        scheduler.off_thread(move || {
+            std::thread::sleep(Duration::from_millis(500));
+            slow_done.send(()).unwrap();
+        });
+        let (flushed, flush) = std::sync::mpsc::channel();
+        let start = Instant::now();
+        scheduler.after(4, move || flushed.send(Instant::now()).unwrap());
+        let at = flush.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert!(at.duration_since(start) < Duration::from_millis(250));
+        slow.recv_timeout(Duration::from_secs(5)).unwrap();
+        scheduler.stop();
+    }
+
+    #[test]
+    fn a_manual_clock_runs_a_job_off_the_thread_on_the_next_advance() {
+        let scheduler = Scheduler::manual();
+        let ran = Arc::new(AtomicU64::new(0));
+        let counter = Arc::clone(&ran);
+        scheduler.off_thread(move || {
+            counter.fetch_add(1, Ordering::SeqCst);
+        });
+        assert_eq!(ran.load(Ordering::SeqCst), 0);
+        scheduler.advance(0);
+        assert_eq!(ran.load(Ordering::SeqCst), 1);
     }
 
     #[test]

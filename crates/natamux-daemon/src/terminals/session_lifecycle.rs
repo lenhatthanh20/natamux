@@ -1,5 +1,6 @@
 //! A shell's start and end (`session-lifecycle.ts`).
 
+use std::borrow::Cow;
 use std::collections::VecDeque;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
@@ -8,16 +9,17 @@ use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use natamux_proto::tasks::ports::port_range;
 use natamux_proto::terminals::messages::ServerMessage;
-use natamux_pty::{Env, Pty, Signal, SpawnOptions};
+use natamux_pty::{Env, ProcessTable, Pty, Signal, SpawnOptions};
 use natamux_screen::Screen;
 use natamux_screen::frames::whole_chars;
 
-use super::limits::{EXIT_WAIT_MS, KILL_GRACE_MS};
+use super::limits::{EXIT_WAIT_MS, KILL_GRACE_MS, PARSE_TURN_BYTES};
 use super::session_input::set_paused;
 use super::session_output::{flush_output, queue_output};
 use super::session_snapshot::{end_snapshots, frame_parsed};
 use super::types::{Frame, Session, SessionRef, Size, TerminalError};
 use crate::shared::scheduler::Scheduler;
+use crate::shared::turns::Turns;
 
 pub type SpawnPty = dyn Fn(SpawnOptions) -> std::io::Result<Box<dyn Pty>> + Send + Sync;
 
@@ -66,12 +68,14 @@ pub fn spawn_session(new: NewSession<'_>) -> Result<SessionRef, TerminalError> {
     })
     .map_err(|error| TerminalError::Spawn(error.to_string()))?;
     let program = pty.foreground();
+    let processes = pty.processes();
     Ok(Arc::new_cyclic(|this| {
         Mutex::new(Session {
             task_id: new.task_id.into(),
             terminal: new.terminal.into(),
             shell_id: random_id(16),
             pty,
+            processes,
             screen: Screen::new(new.size.cols, new.size.rows),
             clients: Vec::new(),
             size: new.size,
@@ -104,19 +108,43 @@ pub fn spawn_session(new: NewSession<'_>) -> Result<SessionRef, TerminalError> {
     }))
 }
 
+/// Shells parse one at a time: a read is parsed in turns of PARSE_TURN_BYTES, ranges of the read
+/// with no copy, and the `parsing` lock is free between them, so another shell's read goes in
+/// between. `parse` runs under the lock, `after` (the output listeners) without it.
+pub fn parse_in_turns<'a, T>(
+    parsing: &Turns,
+    read: &'a [u8],
+    mut parse: impl FnMut(&'a [u8]) -> T,
+    mut after: impl FnMut(T),
+) {
+    for piece in read.chunks(PARSE_TURN_BYTES) {
+        let taken = {
+            let _turn = parsing.take();
+            parse(piece)
+        };
+        after(taken);
+    }
+}
+
 /// Output of a running shell: whole characters to the screen and the clients. Gives the bytes it
-/// took, for the output listeners.
-pub fn take_output(session: &mut Session, read: Vec<u8>) -> Vec<u8> {
-    // Most reads end on a whole character: then no copy.
-    let mut all = if session.partial.is_empty() {
-        read
+/// took, for the output listeners: a range of `read`, unless the read before cut a character.
+pub fn take_output<'a>(session: &mut Session, read: &'a [u8]) -> Cow<'a, [u8]> {
+    let all = if session.partial.is_empty() {
+        Cow::Borrowed(read)
     } else {
         let mut all = std::mem::take(&mut session.partial);
-        all.extend(read);
-        all
+        all.extend_from_slice(read);
+        Cow::Owned(all)
     };
     let end = whole_chars(&all);
-    session.partial = all.split_off(end);
+    session.partial = all[end..].to_vec();
+    let all = match all {
+        Cow::Borrowed(read) => Cow::Borrowed(&read[..end]),
+        Cow::Owned(mut all) => {
+            all.truncate(end);
+            Cow::Owned(all)
+        }
+    };
     if all.is_empty() {
         return all;
     }
@@ -126,10 +154,24 @@ pub fn take_output(session: &mut Session, read: Vec<u8>) -> Vec<u8> {
     all
 }
 
-/// The shell ended. `removed`: the service forgot it now (it had not closed it). A program that
-/// ignored SIGHUP can outlive its shell: it still gets the SIGKILL.
-pub fn shell_exited(session: &mut Session, code: Option<i32>) {
-    if !session.pty.leftover() {
+/// The process table for `shell_exited`, read with no lock held: only a shell being closed needs
+/// one, to tell if a program outlived it.
+pub fn table_at_exit(session: &SessionRef) -> Option<Arc<ProcessTable>> {
+    let reader = {
+        let session = session.lock().ok()?;
+        session.kill_timer.and(session.processes.clone())?
+    };
+    Some(reader(true))
+}
+
+/// The shell ended. A program that ignored SIGHUP can outlive its shell: it still gets the
+/// SIGKILL. `table`: from `table_at_exit`.
+pub fn shell_exited(session: &mut Session, code: Option<i32>, table: Option<&ProcessTable>) {
+    let leftover = match table {
+        Some(table) => session.pty.leftover_in(table),
+        None => session.processes.is_none() && session.pty.leftover(),
+    };
+    if !leftover {
         stop_kill_timer(session);
     }
     session.exited = true;
@@ -165,16 +207,51 @@ pub fn close_session(session: &mut Session, strong: SessionRef) {
         client.send(Frame::Message(ServerMessage::Exit { code: None }));
     }
     // A shell that ignores SIGHUP (or a program in it that does) must not stay alive.
+    let killing = Arc::clone(&strong);
     session.kill_timer = Some(scheduler.after(KILL_GRACE_MS, move || {
-        if let Ok(mut session) = strong.lock() {
-            session.kill_timer = None;
-            session.pty.kill(Signal::Kill);
-            session.kill_done = true;
-        }
+        let Ok(mut session) = killing.lock() else {
+            return;
+        };
+        session.kill_timer = None;
+        drop(session);
+        kill(&killing, Signal::Kill);
     }));
     // A paused shell blocks on its output and might never get to end.
     set_paused(session, false);
-    session.pty.kill(Signal::Hup);
+    match session.processes.clone() {
+        None => session.pty.kill(Signal::Hup),
+        Some(read) => {
+            scheduler.off_thread(move || {
+                let table = read(true);
+                if let Ok(mut session) = strong.lock() {
+                    session.pty.kill_in(Signal::Hup, &table);
+                }
+            });
+        }
+    }
+}
+
+/// Signals the shell and what runs in it. The `ps` this needs runs off the timer thread and with
+/// no lock held; a pty that reads no table is signalled at once.
+fn kill(session: &SessionRef, signal: Signal) {
+    let Ok(mut guard) = session.lock() else {
+        return;
+    };
+    let Some(read) = guard.processes.clone() else {
+        guard.pty.kill(signal);
+        guard.kill_done = true;
+        return;
+    };
+    let scheduler = Arc::clone(&guard.scheduler);
+    drop(guard);
+    let session = Arc::clone(session);
+    scheduler.off_thread(move || {
+        let table = read(true);
+        if let Ok(mut session) = session.lock() {
+            session.pty.kill_in(signal, &table);
+            session.kill_done = true;
+        }
+    });
 }
 
 /// The end of closing shells: done once each ended and its SIGKILL went out or is not needed, or
@@ -209,5 +286,73 @@ impl EndWait {
         while !self.is_done() {
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::mpsc::channel;
+    use std::time::Duration;
+
+    use super::{PARSE_TURN_BYTES, parse_in_turns};
+    use crate::shared::turns::Turns;
+
+    #[test]
+    fn a_big_read_is_parsed_in_turns_of_16_kib_and_keeps_every_byte() {
+        let read: Vec<u8> = (0..40 * 1024).map(|at| (at % 251) as u8).collect();
+        let parsing = Turns::default();
+        let mut turns: Vec<&[u8]> = Vec::new();
+        parse_in_turns(&parsing, &read, |piece| piece, |piece| turns.push(piece));
+        let sizes: Vec<usize> = turns.iter().map(|turn| turn.len()).collect();
+        assert_eq!(sizes, [PARSE_TURN_BYTES, PARSE_TURN_BYTES, 8 * 1024]);
+        assert_eq!(turns.concat(), read);
+        // Ranges of the read, not copies.
+        assert_eq!(turns[0].as_ptr(), read.as_ptr());
+    }
+
+    #[test]
+    fn a_small_read_is_one_turn() {
+        let parsing = Turns::default();
+        let mut turns = 0;
+        parse_in_turns(&parsing, b"ls\r\n", |_| (), |()| turns += 1);
+        assert_eq!(turns, 1);
+        let full = vec![7; PARSE_TURN_BYTES];
+        parse_in_turns(&parsing, &full, |_| (), |()| turns += 1);
+        assert_eq!(turns, 2);
+    }
+
+    /// The 64 KiB read of one shell does not hold the others: between two of its turns another
+    /// shell takes the lock and parses.
+    #[test]
+    fn another_shell_parses_between_the_turns_of_a_flood() {
+        let parsing = Turns::default();
+        let flood = vec![b'x'; 64 * 1024];
+        let mut order = Vec::new();
+        std::thread::scope(|scope| {
+            parse_in_turns(
+                &parsing,
+                &flood,
+                |piece| {
+                    assert_eq!(parsing.asked(), 1, "a turn holds the lock");
+                    piece.len()
+                },
+                |len| {
+                    order.push(format!("flood {len}"));
+                    if order.len() == 1 {
+                        let (done, heard) = channel();
+                        let parsing = &parsing;
+                        scope.spawn(move || {
+                            let _turn = parsing.take();
+                            done.send(()).unwrap();
+                        });
+                        heard.recv_timeout(Duration::from_secs(5)).unwrap();
+                        order.push("other shell".to_string());
+                    }
+                },
+            );
+        });
+        let turn = format!("flood {PARSE_TURN_BYTES}");
+        let turn = turn.as_str();
+        assert_eq!(order, [turn, "other shell", turn, turn, turn]);
     }
 }

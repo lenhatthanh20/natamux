@@ -470,3 +470,15 @@ fn holds_a_task_whose_row_came_after_the_selection() {
         Some("T-0001")
     );
 }
+
+#[test]
+fn the_hint_of_a_folded_group_changes_when_its_first_task_turns_quiet() {
+    let running = make_task(json!({"id": "T-0001", "updatedAt": "2026-10-08T09:00:30.000Z"}));
+    let waiting = make_task(json!({"id": "T-0002", "state": "review"}));
+    let mut nested = make_task(json!({"id": "T-0003", "updatedAt": "2026-10-08T09:00:10.000Z"}));
+    nested.parent_id = Some("T-0001".into());
+    let mut group = group(vec![running, waiting], vec![]);
+    assert_eq!(next_hint_change_ms(&group, now()), Some(570_000));
+    group.nested = vec![nested];
+    assert_eq!(next_hint_change_ms(&group, now()), Some(550_000));
+}

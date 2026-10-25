@@ -3,7 +3,8 @@
 //! here, in a grid whose last pane fills its row. A side by side group is several agent panes.
 //! New terminal, Close, Maximize, the first focus and the terminal a sidebar row asks for.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
+use std::sync::Arc;
 
 use gpui::{Entity, Focusable, ScrollHandle, Subscription};
 use natamux_client::TerminalStatus;
@@ -19,6 +20,7 @@ use super::terminal_find::open_find;
 use super::terminal_pane::{TerminalPane, first_agent_terminal};
 use super::terminal_tabs::{next_terminal_name, terminal_names, unlisted_shells};
 use crate::app::dashboard::Dashboard;
+use crate::app::source::Source;
 use crate::components::agent_badge::narrow_pane;
 use crate::components::skeleton::SkeletonList;
 use crate::tasks::state_filter::width_probe;
@@ -28,6 +30,14 @@ use crate::workspaces::wrap_up_rules::is_finished_state;
 const GAP: f32 = 8.;
 /// `minmax(12rem, 1fr)`: a row is at least this high.
 const MIN_ROW: f32 = 192.;
+
+/// What one pane shows, read from the dashboard before the pane is drawn.
+struct Pane {
+    fact: PaneFacts,
+    terminal: Entity<RemoteTerminal>,
+    finished: bool,
+    restoring: Option<String>,
+}
 
 pub struct ShellPanes {
     dashboard: Entity<Dashboard>,
@@ -197,12 +207,12 @@ impl ShellPanes {
 
     /// The request of a sidebar row or of opening the workspace: show, un-maximize and focus that
     /// terminal once the list is read. A name the list does not have falls back to the first
-    /// agent terminal, else Terminal 1.
+    /// agent terminal (`first_agent`), else Terminal 1.
     fn take_request(
         &mut self,
         task_id: &str,
-        list: &TerminalList,
         names: &[String],
+        first_agent: Option<String>,
         cx: &mut Context<Self>,
     ) {
         let request = self
@@ -214,12 +224,53 @@ impl ShellPanes {
         let wanted = request
             .name
             .filter(|name| names.contains(name))
-            .or_else(|| first_agent_terminal(Some(list)))
+            .or(first_agent)
             .unwrap_or_else(|| "1".into());
         if self.maximized.as_ref().is_some_and(|max| *max != wanted) {
             self.maximized = None;
         }
         self.focus_next = Some(wanted);
+    }
+
+    /// The names of the task's panes, its first agent terminal and the daemon. None until the
+    /// task and its first list are read.
+    fn read_names(
+        &mut self,
+        task_id: &str,
+        cx: &App,
+    ) -> Option<(Vec<String>, Option<String>, Arc<Source>)> {
+        let dashboard = self.dashboard.read(cx);
+        let data = &dashboard.data;
+        data.task(task_id)?;
+        let list = data.terminals.get(task_id)?;
+        let source = dashboard.source()?.clone();
+        self.note_exits(task_id, list, cx);
+        let names = self.names(Some(list));
+        Some((names, first_agent_terminal(Some(list)), source))
+    }
+
+    /// The header facts of the `visible` panes, their restore covers, and whether the task is
+    /// finished.
+    fn read_facts(
+        &self,
+        task_id: &str,
+        visible: &[String],
+        cx: &App,
+    ) -> Option<(Vec<PaneFacts>, Vec<Option<String>>, bool)> {
+        let data = &self.dashboard.read(cx).data;
+        let (task, list) = (data.task(task_id)?, data.terminals.get(task_id)?);
+        let lanes = agent_lanes(list);
+        let shown_agents = visible
+            .iter()
+            .filter(|name| lanes.contains_key(*name))
+            .count();
+        let activity = data.activity.get(task_id);
+        let facts = pane_facts(task, list, visible, activity, shown_agents);
+        let restoring = facts
+            .iter()
+            .map(|fact| restoring_label(list, &fact.name))
+            .collect();
+        Some((facts, restoring, is_finished_state(task.state)))
     }
 
     /// Ended shells keep their pane; one the daemon closed (no exit code) leaves the grid.
@@ -234,17 +285,19 @@ impl ShellPanes {
         self.added.retain(|name| !list.terminals.contains(name));
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn pane(
         &self,
         task_id: &str,
-        fact: PaneFacts,
-        terminal: Entity<RemoteTerminal>,
-        finished: bool,
-        list: &TerminalList,
+        pane: Pane,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        let Pane {
+            fact,
+            terminal,
+            finished,
+            restoring,
+        } = pane;
         let key = terminal_key(task_id, &fact.name);
         let focused = terminal
             .read(cx)
@@ -278,7 +331,7 @@ impl ShellPanes {
         let find = TerminalCache::find(&key, cx);
         TerminalPane::new(key.clone(), terminal.clone(), header)
             .focused(focused)
-            .restoring(restoring_label(list, &name))
+            .restoring(restoring)
             .task_finished(finished)
             .find(find, {
                 let (this, key, terminal) = (this.clone(), key.clone(), terminal.clone());
@@ -338,28 +391,11 @@ impl Render for ShellPanes {
             TerminalCache::claim(Owner::Workspace, BTreeSet::new(), cx);
             return div().into_any_element();
         };
-        let (task, list, source, activity) = {
-            let dashboard = self.dashboard.read(cx);
-            let activity: BTreeMap<String, String> = dashboard
-                .data
-                .activity
-                .get(&task_id)
-                .map(|lines| {
-                    lines
-                        .iter()
-                        .map(|(name, line)| (name.clone(), line.text.clone()))
-                        .collect()
-                })
-                .unwrap_or_default();
-            (
-                dashboard.data.task(&task_id).cloned(),
-                dashboard.data.terminals.get(&task_id).cloned(),
-                dashboard.source().cloned(),
-                activity,
-            )
-        };
+        // The task, its list and its lines are read where the dashboard holds them, twice: the
+        // shell request in between needs the dashboard to change.
+        let read = self.read_names(&task_id, cx);
         // The grid waits for the first list, so no pane starts a shell the daemon already has.
-        let (Some(task), Some(list), Some(source)) = (task, list, source) else {
+        let Some((names, first_agent, source)) = read else {
             TerminalCache::claim(Owner::Workspace, BTreeSet::new(), cx);
             return div()
                 .size_full()
@@ -367,9 +403,7 @@ impl Render for ShellPanes {
                 .child(SkeletonList::new(6, 28.))
                 .into_any_element();
         };
-        self.note_exits(&task_id, &list, cx);
-        let names = self.names(Some(&list));
-        self.take_request(&task_id, &list, &names, cx);
+        self.take_request(&task_id, &names, first_agent, cx);
         let visible: Vec<String> = match (&self.maximized, &self.only) {
             (Some(name), _) if names.contains(name) => vec![name.clone()],
             (_, Some(only)) => names
@@ -378,28 +412,34 @@ impl Render for ShellPanes {
                 .collect(),
             _ => names,
         };
-        let lanes = agent_lanes(&list);
-        let shown_agents = visible
-            .iter()
-            .filter(|name| lanes.contains_key(*name))
-            .count();
-        let facts = pane_facts(&task, &list, &visible, &activity, shown_agents);
+        let Some((facts, restoring, finished)) = self.read_facts(&task_id, &visible, cx) else {
+            return div().into_any_element();
+        };
         let keys: BTreeSet<String> = visible
             .iter()
             .map(|name| terminal_key(&task_id, name))
             .collect();
         TerminalCache::claim(Owner::Workspace, keys, cx);
-        let finished = is_finished_state(task.state);
         let columns = self.columns(facts.len(), cx);
         let mut panes = Vec::new();
-        for fact in facts {
+        for (fact, restoring) in facts.into_iter().zip(restoring) {
             let terminal = TerminalCache::terminal(&source, &task_id, &fact.name, window, cx);
             if self.focus_next.as_deref() == Some(fact.name.as_str()) {
                 self.focus_next = None;
-                let focus = terminal.read(cx).view.focus_handle(cx);
-                window.on_next_frame(move |window, cx| window.focus(&focus, cx));
+                // Read then: the first layout builds the view again (`build_at`).
+                let next = terminal.clone();
+                window.on_next_frame(move |window, cx| {
+                    let focus = next.read(cx).view.focus_handle(cx);
+                    window.focus(&focus, cx);
+                });
             }
-            panes.push(self.pane(&task_id, fact, terminal, finished, &list, window, cx));
+            let pane = Pane {
+                fact,
+                terminal,
+                finished,
+                restoring,
+            };
+            panes.push(self.pane(&task_id, pane, window, cx));
         }
         // The probe stays out of the scroll box: inside, its padding-box height plus the padding
         // made the grid scroll 16 px with nothing to scroll (T-0162).

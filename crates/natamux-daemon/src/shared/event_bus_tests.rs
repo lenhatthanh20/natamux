@@ -165,6 +165,14 @@ fn writes_each_kind_as_the_node_daemon() {
             },
             r#"{"kind":"workspace.dirty","taskId":"T-1"}"#,
         ),
+        // The dashboards read it as any `shells.changed`; the names stay in the daemon.
+        (
+            DaemonMessage::ProgramsChanged {
+                task_id: "T-1".into(),
+                terminals: vec!["2".into()],
+            },
+            r#"{"kind":"shells.changed","taskId":"T-1"}"#,
+        ),
         (
             DaemonMessage::JobsChanged { jobs: Vec::new() },
             r#"{"kind":"jobs.changed","jobs":[]}"#,
