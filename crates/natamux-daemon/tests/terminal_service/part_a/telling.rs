@@ -2,7 +2,6 @@
 
 use std::sync::{Arc, Mutex};
 
-use natamux_daemon::shared::event_bus::DaemonMessage;
 use natamux_daemon::terminals::limits::WORKSPACE_QUIET_MS;
 
 use super::util::attach_at;
