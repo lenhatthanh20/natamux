@@ -131,6 +131,7 @@ jobs:
           NATAMUX_REQUIRE_WEB: "1"
         run: cargo build --release --locked -p natamux-app -p natamux-daemon -p natamux-cli
       - name: Start the app and its owned daemon
+        timeout-minutes: 5
         run: |
           if [ "$RUNNER_OS" = Linux ]; then
             xvfb-run -a scripts/release-smoke.sh target/release/natamux-app "$HOME/.config/Natamux"
