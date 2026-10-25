@@ -237,6 +237,8 @@ impl StageRun {
         session: Option<&str>,
         own: &StageAgent,
     ) -> StageResult<()> {
+        // The agent of the stage before still ends its turn there; this stage needs a new one.
+        self.close_pending_shell(task_id, terminal);
         let result = if session.is_none() && self.agent_runs(task_id, terminal) {
             self.options
                 .terminals

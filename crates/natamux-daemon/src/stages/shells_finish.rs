@@ -64,7 +64,20 @@ impl StageRun {
         state.command_terminals.remove(task_id);
         state.waiting_for_workspace.remove(task_id);
         state.waiting_for_tasks.remove(task_id);
+        let mut timers = Vec::new();
+        state.closing.retain(|shell, timer| {
+            let other = !shell.starts_with(&prefix);
+            if !other {
+                timers.push(*timer);
+            }
+            other
+        });
         drop(state);
+        // The shells end with the task: no later timer may close a shell of a new round.
+        let scheduler = self.options.terminals.scheduler();
+        for timer in timers {
+            scheduler.cancel(timer);
+        }
         if let Some(open) = &self.options.open_shells {
             open.forget(task_id);
         }

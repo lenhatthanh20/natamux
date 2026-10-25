@@ -106,21 +106,24 @@ impl StageRun {
             payload.insert("from".into(), json!(from));
             payload.insert("byAgent".into(), json!(true));
         }
+        // Its turn ends after this, as after `natamux done`. Noted before the send back, so a
+        // shell that it ends waits for that turn end.
+        let shell = input
+            .terminal
+            .as_deref()
+            .filter(|_| from.is_some())
+            .map(|terminal| key(task_id, terminal));
+        let before = match (&shell, &from) {
+            (Some(shell), Some(from)) => self.state().reported.insert(shell.clone(), from.clone()),
+            _ => None,
+        };
         self.state().leaving.insert(task_id.clone(), step.clone());
         let applied = self.apply_action(task_id, "stage.reopened", payload, source);
         self.state().leaving.remove(task_id);
-        applied?;
-        // Its turn ends after this, as after `natamux done`. A closed shell has no turn left.
-        if let (Some(from), Some(terminal)) = (from, input.terminal.as_deref())
-            && self
-                .options
-                .terminals
-                .list(task_id)
-                .iter()
-                .any(|name| name == terminal)
-        {
-            self.state().reported.insert(key(task_id, terminal), from);
+        if let (true, Some(shell)) = (applied.is_err(), &shell) {
+            self.restore_report(shell, before);
         }
+        applied?;
         self.after_start(task_id)
     }
 

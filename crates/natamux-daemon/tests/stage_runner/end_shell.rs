@@ -10,6 +10,8 @@ use crate::{Fixture, expect_submitted, expect_written};
 
 #[path = "end_shell_more.rs"]
 mod more;
+#[path = "end_shell_turn.rs"]
+mod turn;
 
 fn stage(id: &str, kind: StageKind, gate: Gate) -> Stage {
     Stage::new(id, kind, gate)
@@ -105,6 +107,13 @@ fn terminals(f: &Fixture, id: &str) -> Vec<String> {
     f.terminals.list(id)
 }
 
+/// The agent in the terminal ends its turn; true when it followed a report.
+fn turn_end(f: &Fixture, id: &str, terminal: &str) -> bool {
+    let reported = f.runner.run.take_report(id, terminal);
+    f.settle();
+    reported
+}
+
 #[test]
 fn closes_its_shell_when_the_stage_passes_and_shell_1_goes_on_with_the_next_stage() {
     let f = Fixture::new();
@@ -112,6 +121,8 @@ fn closes_its_shell_when_the_stage_passes_and_shell_1_goes_on_with_the_next_stag
     let task = writing_docs(&f);
 
     report(&f, &task.id, "7");
+    assert!(!killed(&f, 1));
+    assert!(turn_end(&f, &task.id, "7"));
 
     assert_at(&f, &task.id, "finish", TaskState::Running);
     assert_eq!(f.ptys().len(), 2);
@@ -129,6 +140,7 @@ fn drops_the_report_of_the_closed_agent_so_a_next_agent_in_its_shell_reports_its
     let task = writing_docs(&f);
 
     report(&f, &task.id, "7");
+    assert!(turn_end(&f, &task.id, "7"));
 
     assert_at(&f, &task.id, "finish", TaskState::Running);
     assert!(!f.runner.run.take_report(&task.id, "7"));
@@ -141,6 +153,7 @@ fn starts_a_new_agent_in_a_new_shell_with_the_send_back_prompt_and_closes_it_aga
     with_stages(&f, ends_shell, vec![qa], nothing);
     let task = writing_docs(&f);
     report(&f, &task.id, "7");
+    turn_end(&f, &task.id, "7");
     assert_at(&f, &task.id, "qa", TaskState::Review);
     assert_eq!(terminals(&f, &task.id), ["1"]);
 
@@ -158,6 +171,8 @@ fn starts_a_new_agent_in_a_new_shell_with_the_send_back_prompt_and_closes_it_aga
 
     report(&f, &task.id, "7");
     assert_eq!(f.task(&task.id).stage, "qa");
+    assert!(!killed(&f, 2));
+    turn_end(&f, &task.id, "7");
     assert!(killed(&f, 2));
     assert!(!killed(&f, 0));
 }
@@ -184,13 +199,17 @@ fn closes_its_shell_when_its_agent_sends_the_task_back_and_starts_a_new_agent_ne
     let back = input(Some("7"), Some("implement"), Some("Fix the dates"));
     act(&f, &task.id, StageAction::Reopen, &back);
 
+    // Regression: its agent still runs `natamux stage back`, so the shell waits for the turn end.
     assert_at(&f, &task.id, "implement", TaskState::Running);
+    assert!(!killed(&f, 1));
+    assert_eq!(terminals(&f, &task.id), ["1", "7"]);
+    expect_written(&f.pty(0), "What to change: Fix the dates");
+
+    assert!(turn_end(&f, &task.id, "7"));
     assert!(killed(&f, 1));
     assert!(!killed(&f, 0));
     assert_eq!(terminals(&f, &task.id), ["1"]);
-    // The killed agent never ends its turn, so nothing waits for it.
     assert!(!f.runner.run.take_report(&task.id, "7"));
-    expect_written(&f.pty(0), "What to change: Fix the dates");
 
     report(&f, &task.id, "1");
 
@@ -328,6 +347,7 @@ fn keeps_the_shell_while_the_stage_waits_for_approval_and_closes_it_on_approval(
 
     report(&f, &task.id, "7");
     assert_at(&f, &task.id, "write-docs", TaskState::Review);
+    assert!(turn_end(&f, &task.id, "7"));
     assert!(!killed(&f, 1));
 
     act(

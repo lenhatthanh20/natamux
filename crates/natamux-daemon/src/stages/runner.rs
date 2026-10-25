@@ -435,12 +435,16 @@ impl StageRun {
         Ok(terminal_lane(&position_of(task), &steps, terminal, &pinned))
     }
 
-    /// True once for the turn end that follows a report from this terminal.
+    /// True once for the turn end that follows a report from this terminal. A shell that waits
+    /// for this turn end to close closes now.
     pub fn take_report(&self, task_id: &str, terminal: &str) -> bool {
-        self.state()
+        let taken = self
+            .state()
             .reported
             .remove(&key(task_id, terminal))
-            .is_some()
+            .is_some();
+        self.close_pending_shell(task_id, terminal);
+        taken
     }
 
     /// A task made with no agent: its stages that need one stay ready, and no agent starts in its
