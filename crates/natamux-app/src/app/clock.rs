@@ -67,7 +67,7 @@ pub fn follow_labels<V: 'static>(
     *clock = Some(cx.spawn(async move |view, cx| {
         let wait = Duration::from_millis(u64::try_from(wait).unwrap_or(0));
         cx.background_executor().timer(wait).await;
-        view.update(cx, |view, cx| fired(view, cx)).ok();
+        view.update(cx, fired).ok();
     }));
 }
 
