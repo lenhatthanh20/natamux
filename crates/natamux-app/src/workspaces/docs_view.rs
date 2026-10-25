@@ -56,7 +56,7 @@ impl DocsTab {
             .border_color(cx.theme().colors().border)
             .child(
                 Label::new(name.to_owned())
-                    .size(LabelSize::XSmall)
+                    .size(LabelSize::Small)
                     .buffer_font(cx)
                     .color(Color::Muted),
             )
@@ -163,7 +163,7 @@ impl DocsTab {
                 .border_color(cx.theme().colors().border)
                 .child(
                     Label::new(STALE_LINE)
-                        .size(LabelSize::XSmall)
+                        .size(LabelSize::Small)
                         .color(Color::Custom(signal(cx).fg)),
                 )
         });

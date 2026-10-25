@@ -14,6 +14,7 @@ use crate::app::clock::now_ms;
 use crate::app::source::reason;
 use crate::components::colors::signal;
 use crate::components::icons::icon_path;
+use crate::components::text_size::row_text;
 use crate::tasks::task_time::{AgeStyle, format_age};
 
 /// An attached image shown in place of the file; `read` is None while it loads.
@@ -63,20 +64,20 @@ impl DocsTab {
                             )
                             .child(
                                 Label::new(file.name.clone())
-                                    .size(LabelSize::XSmall)
+                                    .size(row_text())
                                     .buffer_font(cx),
                             )
                             .when(edited, |row| {
                                 row.child(
                                     Label::new("edited")
-                                        .size(LabelSize::XSmall)
+                                        .size(LabelSize::Small)
                                         .color(edited_color),
                                 )
                             }),
                     )
                     .child(
                         Label::new(format!("changed {age}"))
-                            .size(LabelSize::XSmall)
+                            .size(LabelSize::Small)
                             .color(Color::Muted),
                     )
                     .into_any_element()
@@ -137,13 +138,13 @@ impl DocsTab {
                             .child(icon.size(IconSize::Small).color(Color::Muted))
                             .child(
                                 Label::new(item.name.clone())
-                                    .size(LabelSize::XSmall)
+                                    .size(row_text())
                                     .buffer_font(cx),
                             ),
                     )
                     .child(
                         Label::new(attachment_meta(item.size, download))
-                            .size(LabelSize::XSmall)
+                            .size(LabelSize::Small)
                             .color(Color::Muted),
                     )
                     .into_any_element()
@@ -154,7 +155,7 @@ impl DocsTab {
             .child(
                 div().px_2().pt_3().pb_1().child(
                     Label::new("ATTACHMENTS")
-                        .size(LabelSize::XSmall)
+                        .size(LabelSize::Custom(rems_from_px(11_f32)))
                         .weight(FontWeight::SEMIBOLD)
                         .color(Color::Muted),
                 ),
@@ -225,7 +226,7 @@ impl DocsTab {
                     .border_color(cx.theme().colors().border)
                     .child(
                         Label::new(shown.name.clone())
-                            .size(LabelSize::XSmall)
+                            .size(LabelSize::Small)
                             .buffer_font(cx)
                             .color(Color::Muted),
                     ),
