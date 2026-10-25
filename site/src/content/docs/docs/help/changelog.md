@@ -7,6 +7,26 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v1.0.0 (2026-10-26)
+
+- Natamux is now a native app: the desktop app, the daemon and the `natamux` and `nmx` commands are Rust programs. The app draws its own window; the daemon still serves the dashboard to your browser. See [Desktop app](/docs/guides/desktop-app/).
+- The app uses the same data folder as the version before, so it opens with your tasks, worktrees, settings and daemon token.
+- The daemon starts on port 4317, or on another free port when 4317 is taken. The `natamux` command in a task terminal finds it.
+- The app checks the signature of a release with the same release key as before, and installs nothing that fails the check. See [Updates](/docs/guides/desktop-app/#updates).
+- The Docs tab uses the app's text sizes for markdown and for its file list.
+- The Docker image `natamux-daemon` runs the Rust daemon. See [Self-host with Docker](/docs/guides/self-host-docker/).
+- On Debian and Ubuntu the package is still `natamux`, so `apt install` replaces the old version. The app is `/opt/Natamux/natamux-app`; the `natamux-desktop` command is gone. If the AppImage does not start, start it with `--appimage-extract-and-run`. See [The AppImage does not start](/docs/help/troubleshooting/#the-appimage-does-not-start).
+- Each task shows how many tokens its agents used and an estimated cost in USD: a **Usage** section in the task's **Details** tab, a line such as `$0.42 est. · 610K tokens` under each stage card, and a **Cost** column in the task table. The cost is an estimate at API list prices. Cursor does not report usage. See [Usage](/docs/guides/dashboard/#usage).
+- Output in one terminal draws only that terminal. The sidebar, the task list, the details panel and the other panes draw again only when their own data changes.
+- A window without focus stops the age clock of the sidebar and the 60-second checks of the open task. When the window has focus again, it reads once what it skipped. Changes the daemon sends are still read in the background.
+- The open task reads its git state, its events, its stage files and its settings at most once a second. Many changes in a row make one read, and the screen draws again only when the result differs.
+- The sidebar lays out only the rows on screen. The time labels of the sidebar, the task list and the details panel draw again only when one of them changes.
+- In the daemon, a shell that prints a lot no longer holds up the other shells.
+- Fix: a click on the sidebar or details toggle in the status bar could do nothing. Now every click shows or hides the panel.
+- Fix: while Claude Code worked in Terminal 1, the sidebar row and the pane header showed a plain `zsh` terminal until the agent's turn ended. Now they show the agent while it prints.
+- Fix: when the agent of a stage with **End the agent and close its terminal** ended the stage itself (`natamux done` or `natamux stage back`), its terminal closed before the agent saw the answer. Now the terminal closes when the agent ends its turn, at most 60 seconds later. See [End a stage's terminal](/docs/concepts/stages/#end-a-stages-terminal).
+- Fix: in the dashboard, a terminal you ended with `exit` could leave the screen at once. Now it keeps its last screen and **Open a new terminal**.
+
 ## v0.1.43 (2026-10-21)
 
 - The stage settings in **Project settings → Stages** have a **Run in a terminal of its own** checkbox (`ownShell`). Checked, the stage runs in Terminal 5 with a new session. Unchecked, it runs in Terminal 1 with the task's agent. Unchecking also clears the stage's **Agent** and **Arguments** when it can no longer have them. See [The Stages tab](/docs/guides/project-settings/#the-stages-tab) and [Stages in their own terminal](/docs/concepts/stages/#stages-in-their-own-terminal).

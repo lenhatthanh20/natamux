@@ -172,7 +172,10 @@ for file in $files; do
 done
 check "$notes does not say builds are paused" '! grep -q "builds are paused" "$notes"'
 # v0.1.18 brought back every system, so the notes before it have another Download section.
-if [ -n "$prev" ] && grep -qF "Natamux-win-x64.exe" "docs/releases/$prev.md"; then
+# v1.0.0 is the Rust app, so the install steps of the Electron versions before it differ.
+if [ -n "$prev" ] && [ "${prev%%.*}" != "${tag%%.*}" ]; then
+  skip "$notes has Download and Before you open it as in $prev (new major version)"
+elif [ -n "$prev" ] && grep -qF "Natamux-win-x64.exe" "docs/releases/$prev.md"; then
   check "$notes has Download and Before you open it as in $prev" \
     'diff -q <(sed -n "/^## Download$/,\$p" "$notes") <(sed -n "/^## Download$/,\$p" "docs/releases/$prev.md") >/dev/null'
 else
