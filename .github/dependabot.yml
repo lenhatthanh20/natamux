@@ -20,3 +20,10 @@ updates:
     ignore:
       - dependency-name: node
         update-types: [version-update:semver-major]
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 1
