@@ -1088,6 +1088,31 @@ describe('ShellPanes stage shells', () => {
     await waitFor(() => expect(noPane('Terminal 2')).toBeNull())
   })
 
+  // The list read after `exit` can come before the pane hears the exit code.
+  it.each([
+    ['keeps a shell that ended by itself', 0, true],
+    ['drops a shell the daemon closed', null, false],
+  ])('%s when the list drops it before its pane hears how', async (_, code, kept) => {
+    const { client, state, loadTerminals, connects, view } = daemon(['1', '2'], { '1': IMPLEMENT })
+    render(view(implementing))
+    const ended = await screen.findByRole('region', { name: 'Terminal 2' })
+
+    state.terminals = ['1']
+    act(() => applyLiveMessages(client, [{ kind: 'shells.changed', taskId: 'T-0001' }]))
+    await waitFor(() => expect(loadTerminals).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(client.isFetching({ queryKey: ['terminals', 'T-0001'] })).toBe(0))
+    expect(pane('Terminal 2')).toBe(ended)
+
+    act(() => exits.get('T-0001/2')?.(code))
+    await poll()
+    if (kept) {
+      expect(pane('Terminal 2')).toBe(ended)
+    } else {
+      expect(noPane('Terminal 2')).toBeNull()
+    }
+    expect(connects('2')).toHaveLength(1)
+  })
+
   it('drops a hand-added shell that a stage took once the daemon closes it', async () => {
     const { client, state, loadTerminals, connects, view, startGroup } = daemon(['1'], {
       '1': IMPLEMENT,
