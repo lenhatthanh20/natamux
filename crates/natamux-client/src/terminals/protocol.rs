@@ -71,6 +71,8 @@ pub struct Protocol {
     typed: Vec<String>,
     size: (u16, u16),
     sent_size: Option<(u16, u16)>,
+    /// The shell's size, from this socket's snapshot.
+    shell_size: Option<(u16, u16)>,
     /// This client took the shell's size.
     claimed: bool,
     visible: bool,
@@ -94,6 +96,7 @@ impl Protocol {
             typed: Vec::new(),
             size: (cols, rows),
             sent_size: None,
+            shell_size: None,
             claimed: false,
             visible,
             sent_visible: false,
@@ -128,6 +131,7 @@ impl Protocol {
         self.claimed = self.visible && self.shell_id.is_none();
         self.sent_visible = self.visible;
         self.sent_size = Some(self.size);
+        self.shell_size = None;
         TerminalQuery {
             ticket,
             cols: self.size.0,
@@ -159,6 +163,7 @@ impl Protocol {
                 self.tries = 0;
             }
             ServerMessage::Snapshot { cols, rows } => {
+                self.shell_size = Some((cols, rows));
                 self.begin_catch_up();
                 step.emit.push(TerminalEvent::Reset { cols, rows });
             }
@@ -269,6 +274,21 @@ impl Protocol {
         step
     }
 
+    /// The terminal took the focus: it claims the shell's size, as the web's textarea focus
+    /// does. During a catch-up the claim waits for its end.
+    pub fn claim_size(&mut self) -> Step {
+        let mut step = Step::default();
+        if !self.connected || self.ended || !self.visible {
+            return step;
+        }
+        if self.catch_up {
+            self.claim_after_catch_up = true;
+        } else {
+            self.send_size(true, &mut step);
+        }
+        step
+    }
+
     /// The screen parsed the output up to `offset`.
     pub fn parsed(&mut self, offset: u64) -> Step {
         let mut step = Step::default();
@@ -311,6 +331,11 @@ impl Protocol {
         }
         if std::mem::take(&mut self.claim_after_catch_up) && self.visible {
             self.claim(step);
+        }
+        // A resume on screen with no snapshot, or one at another size: the shell may have
+        // another client's size, so the pane takes its own (T-0173).
+        if !self.claimed && self.visible && self.shell_size != Some(self.size) {
+            self.send_size(true, step);
         }
         for data in std::mem::take(&mut self.typed) {
             step.send.extend(

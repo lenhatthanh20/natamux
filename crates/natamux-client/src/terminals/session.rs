@@ -27,6 +27,7 @@ enum Command {
     Input(String),
     Resize(u16, u16),
     Visible(bool),
+    Claim,
     Parsed(u64),
     CaughtUp(u64),
     Reconnect,
@@ -49,6 +50,11 @@ impl TerminalHandle {
 
     pub fn set_visible(&self, visible: bool) {
         self.send(Command::Visible(visible));
+    }
+
+    /// The terminal took the focus: it takes the shell's size.
+    pub fn claim(&self) {
+        self.send(Command::Claim);
     }
 
     /// The screen parsed output up to `offset` (the `end` of an Output event).
@@ -294,6 +300,7 @@ fn apply(protocol: &mut Protocol, command: Command) -> Step {
         Command::Input(data) => protocol.input(&data),
         Command::Resize(cols, rows) => protocol.resize(cols, rows),
         Command::Visible(visible) => protocol.set_visible(visible),
+        Command::Claim => protocol.claim_size(),
         Command::Parsed(offset) => protocol.parsed(offset),
         Command::CaughtUp(offset) => protocol.caught_up(offset),
         // Only a socket can be dropped; while waiting there is none.

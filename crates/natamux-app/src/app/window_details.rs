@@ -135,9 +135,12 @@ impl Root {
             .update(cx, |dashboard, cx| dashboard.set_details_open(false, cx));
     }
 
-    /// Esc closes the top layer first: the drawer, a sheet, a tool, the open task, then the
-    /// details dock.
+    /// Esc closes the top layer first: Settings (when focus is outside it), the drawer, a sheet,
+    /// a tool, the open task, then the details dock.
     pub(super) fn back(&mut self, _: &Back, window: &mut Window, cx: &mut Context<Self>) {
+        if self.close_settings(cx) {
+            return;
+        }
         let sheet =
             self.details_mode(window, cx) != DetailsMode::Docked && self.details_shown(window, cx);
         let dashboard = self.dashboard.read(cx);
@@ -164,6 +167,9 @@ impl Root {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.close_settings(cx) {
+            return;
+        }
         if self.details_toggle(window, cx).is_ok() {
             self.dashboard
                 .update(cx, |dashboard, cx| dashboard.toggle_details(cx));
@@ -176,6 +182,9 @@ impl Root {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.close_settings(cx) {
+            return;
+        }
         self.dashboard
             .update(cx, |dashboard, cx| dashboard.toggle_selected_details(cx));
     }

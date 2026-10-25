@@ -1,7 +1,7 @@
 //! The window and the root view, the app shell of docs/ui-spec.md 3.1 (`features/app/AppShell.tsx`):
 //! title bar, the sidebar (docked, or a drawer under 1024), main and the status bar, with the menu,
 //! dialog and toast layers on top. Main shows All tasks, the open task's workspace, the Agents
-//! grid, or a tool of phase 1 (bench, IME check).
+//! grid, or a tool of phase 1 (bench, IME check). The Settings page fills the body over them.
 
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -20,6 +20,7 @@ use super::layout_mode::{
 };
 use super::notify::Notifier;
 use super::options::Options;
+use super::settings_view::SettingsView;
 use super::shell_rules::{AgentsToggle, agents_toggle, window_title};
 use super::shortcuts::{
     FocusFilter, NewTask, NewWorkspace, ShowAgents, ShowAllTasks, ShowBoard, ShowTable,
@@ -61,6 +62,7 @@ pub struct Root {
     workspace: Entity<WorkspaceView>,
     agents: Entity<AgentPanes>,
     details: Entity<DetailsPanel>,
+    settings: Entity<SettingsView>,
     tool: Tool,
     /// `--gate2`: a bench whose shells keep printing while main shows All tasks.
     parked_bench: Option<Entity<BenchView>>,
@@ -105,6 +107,7 @@ impl Root {
         let workspace = cx.new(|cx| WorkspaceView::new(dashboard.clone(), cx));
         let agents = cx.new(|cx| AgentPanes::new(dashboard.clone(), cx));
         let details = cx.new(|cx| DetailsPanel::new(dashboard.clone(), window, cx));
+        let settings = cx.new(|cx| SettingsView::new(dashboard.clone(), window, cx));
         cx.subscribe_in(&dashboard, window, Self::on_dashboard)
             .detach();
         cx.observe_in(&dashboard, window, |root, _, window, cx| {
@@ -122,6 +125,7 @@ impl Root {
             workspace,
             agents,
             details,
+            settings,
             tool: Tool::None,
             parked_bench: None,
             menus,
@@ -177,6 +181,8 @@ impl Root {
                 let focus = self.tasks.focus_handle(cx);
                 window.focus(&focus, cx);
             }
+            DashboardChange::SettingsOpened(focus) => self.settings_opened(*focus, window, cx),
+            DashboardChange::SettingsClosed => self.settings_closed(window, cx),
             DashboardChange::WorkspaceChanged(_)
             | DashboardChange::ShellsChanged(_)
             | DashboardChange::TaskLogged(_)
@@ -264,11 +270,11 @@ impl Root {
         })
     }
 
-    /// The terminals give up their size while something else fills main. The workspace and the
-    /// Agents grid claim theirs again when they draw.
+    /// The terminals give up their size while something else fills main (a tool, Settings). The
+    /// workspace and the Agents grid claim theirs again when they draw.
     fn sync_pane(&mut self, cx: &mut Context<Self>) {
         let dashboard = self.dashboard.read(cx);
-        let tool = !matches!(self.tool, Tool::None);
+        let tool = !matches!(self.tool, Tool::None) || dashboard.settings.is_some();
         let (workspace, agents) = (dashboard.open_task.is_some(), dashboard.agents_open);
         if tool || !workspace {
             TerminalCache::claim(Owner::Workspace, BTreeSet::new(), cx);
@@ -287,6 +293,9 @@ impl Root {
     // The shell's commands
 
     fn toggle_sidebar(&mut self, _: &ToggleSidebar, window: &mut Window, cx: &mut Context<Self>) {
+        if self.close_settings(cx) {
+            return;
+        }
         match self.layout(window, cx).sidebar {
             SidebarMode::Drawer => self.set_drawer(!self.drawer_open, window, cx),
             SidebarMode::Docked => self
@@ -323,6 +332,7 @@ impl Root {
         self.close_tool(cx);
         self.drawer_open = false;
         self.dashboard.update(cx, |dashboard, cx| {
+            dashboard.close_settings(cx);
             if let Some(layout) = layout {
                 dashboard.set_layout(layout, cx);
             }
@@ -343,6 +353,9 @@ impl Root {
 
     /// The status bar's agents toggle: the grid, or back to the task or list shown before it.
     fn toggle_agents(&mut self, _: &ToggleAgents, _: &mut Window, cx: &mut Context<Self>) {
+        if self.agents_over_settings(cx) {
+            return;
+        }
         let dashboard = self.dashboard.read(cx);
         let step = agents_toggle(
             dashboard.agents_open,

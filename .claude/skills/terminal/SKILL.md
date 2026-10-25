@@ -195,6 +195,10 @@ A dropped socket does not end the shell. The dashboard comes back by itself and 
 - Detach: the last client in the map that claimed gives its size back. No claiming client left: size stays; with no client at all, the idle close may start.
 - `setSize` tells the pty only when the size really changes (a resize makes programs redraw).
 - Client side: `claimed` starts as the page visibility at `start`. `sendSize` sets it when a resize goes out. `sendInput` claims first when not claimed. A textarea focus claims (`claimSize`). `sendVisible(true)` claims with the size.
+- Native app (`natamux-client` `protocol.rs`, `natamux-app` `remote_terminal.rs`, T-0173):
+  - A new grid size goes out only once two size checks in a row (100 ms apart) saw it (`size_step`). The first connect does not wait; a grid with 0 columns or rows does nothing.
+  - Focus on the terminal view claims (`claim_size`); during a catch-up it claims at its end.
+  - A visible resume sends its size when the catch-up ends, unless its `snapshot` came at that same size. Hidden: nothing.
 
 ## Client catch-up (web)
 

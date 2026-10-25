@@ -1,15 +1,15 @@
-//! What the footer and the conflict box of Project settings do (`ProjectSettingsDialog.tsx`):
+//! What the bottom bar and the conflict box of Project settings do (`ProjectSettingsDialog.tsx`):
 //! Save, Overwrite, Reload, Reset to default, Import and Export. Import and Export change only the
 //! draft or the picked file; only Save and Overwrite write `.natamux.json`.
 
 use std::path::{Path, PathBuf};
 
-use gpui::{DismissEvent, PathPromptOptions};
+use gpui::PathPromptOptions;
 use natamux_proto::stages::catalog::default_pipeline;
 use serde_json::{Map, Value};
 use ui::prelude::*;
 
-use super::project_settings_dialog::ProjectSettingsDialog;
+use super::project_settings_page::ProjectSettingsPage;
 use super::settings_tab_rules::reset_ask;
 use super::settings_text::{MAX_IMPORT_BYTES, base_of, import_question};
 use crate::app::settings_reads::SettingsReads;
@@ -19,10 +19,10 @@ use crate::components::toast_rules::ToastTone;
 use crate::stages::editor_draft::{format_settings, merge_changes, parse_draft};
 use crate::stages::editor_fields::shell_fields;
 
-impl ProjectSettingsDialog {
+impl ProjectSettingsPage {
     /// Save and Mod+Enter: ignored while reading, saving, with problems, or with nothing changed.
     /// A broken file asks first, since the screen started from the defaults.
-    pub(super) fn save(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub fn save(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let (Some(base), Some(stages)) = (&self.base, &self.stages) else {
             return;
         };
@@ -94,7 +94,27 @@ impl ProjectSettingsDialog {
             let repo = self.repo_id.clone();
             reads.update(cx, |reads, cx| reads.refresh(&repo, cx));
         }
-        cx.emit(DismissEvent);
+        // The page stays open: the saved file is what the draft is now compared with.
+        self.reload_base(cx);
+    }
+
+    /// Reads the file again as the base of the draft, and keeps the draft.
+    fn reload_base(&mut self, cx: &mut Context<Self>) {
+        let Some(source) = self.dashboard.read(cx).source().cloned() else {
+            return;
+        };
+        let fresh = source.load_settings(&self.repo_id);
+        cx.spawn(async move |this, cx| {
+            let Ok(fresh) = fresh.await else {
+                return;
+            };
+            this.update(cx, |this, cx| {
+                this.base = Some(base_of(&fresh));
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
     }
 
     /// Saves the edits over the file as it is now: keys the person did not change keep the

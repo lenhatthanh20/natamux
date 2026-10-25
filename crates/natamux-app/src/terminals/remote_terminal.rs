@@ -39,7 +39,10 @@ pub struct RemoteTerminal {
     terminal: Entity<Terminal>,
     handle: Option<Arc<TerminalHandle>>,
     status: TerminalStatus,
+    /// The size the shell was told.
     size: (u16, u16),
+    /// The grid size at the last check, for the settle rule.
+    seen: Option<(u16, u16)>,
     /// "T-1/1": the task and terminal, for the perf overlay.
     label: String,
     /// Which shell of which task this is, for a drop of a path.
@@ -94,6 +97,15 @@ impl RemoteTerminal {
                 cx,
             )
         });
+        // Focus claims the shell's size, as the web's textarea focus does: after a resume the
+        // shell may still have another client's size.
+        let focus = view.focus_handle(cx);
+        cx.on_focus_in(&focus, window, |this, _, _| {
+            if let Some(handle) = &this.handle {
+                handle.claim();
+            }
+        })
+        .detach();
         cx.observe_keystrokes(|this, _, window, cx| {
             if this.view.focus_handle(cx).contains_focused(window, cx) {
                 this.last_key = Some(Instant::now());
@@ -115,6 +127,7 @@ impl RemoteTerminal {
             handle: None,
             status: TerminalStatus::Connecting,
             size: (0, 0),
+            seen: None,
             label,
             task_id,
             name,
@@ -191,27 +204,33 @@ impl RemoteTerminal {
         self.type_text(&bracketed(text, on));
     }
 
-    /// The grid size the view laid out, once it did.
+    /// The grid size the view laid out; 0 before it did.
     fn grid_size(&self, cx: &App) -> Option<(u16, u16)> {
         let content = self.terminal.read(cx).last_content();
         let cols = u16::try_from(content.columns).ok()?.min(1000);
         let rows = u16::try_from(content.screen_lines).ok()?.min(1000);
-        (cols > 0 && rows > 0).then_some((cols, rows))
+        Some((cols, rows))
     }
 
-    /// Connects once the view knows its size, so the shell starts at that size; later sends each
-    /// new size.
+    /// Connects once the view knows its size, so the shell starts at that size; later sends a
+    /// new size once it settled.
     fn check_size(&mut self, source: &Source, target: &Target, cx: &mut Context<Self>) {
-        let Some(size) = self.grid_size(cx) else {
+        let Some(now) = self.grid_size(cx) else {
             return;
         };
-        if size == self.size {
-            return;
-        }
-        self.size = size;
-        match &self.handle {
-            Some(handle) => handle.resize(size.0, size.1),
-            None => self.connect(source, target, size, cx),
+        let seen = self.seen.replace(now);
+        match size_step(self.handle.is_some(), seen, now, self.size) {
+            Some(SizeStep::Connect(size)) => {
+                self.size = size;
+                self.connect(source, target, size, cx);
+            }
+            Some(SizeStep::Resize(size)) => {
+                self.size = size;
+                if let Some(handle) = &self.handle {
+                    handle.resize(size.0, size.1);
+                }
+            }
+            None => {}
         }
     }
 
@@ -339,6 +358,34 @@ impl RemoteTerminal {
     }
 }
 
+/// What a size check does.
+#[derive(Debug, PartialEq, Eq)]
+enum SizeStep {
+    /// The first size: the shell starts at it, at once.
+    Connect((u16, u16)),
+    /// A new size that settled.
+    Resize((u16, u16)),
+}
+
+/// What a size check does with the grid size `now`. A grid with no columns or rows is not laid
+/// out yet. A later new size goes to the shell only once two checks in a row saw it (the web's
+/// `FIT_DELAY_MS`): each resize makes a TUI repaint, and a layout change passes through sizes
+/// (T-0173).
+fn size_step(
+    has_handle: bool,
+    seen: Option<(u16, u16)>,
+    now: (u16, u16),
+    sent: (u16, u16),
+) -> Option<SizeStep> {
+    if now.0 == 0 || now.1 == 0 || now == sent {
+        return None;
+    }
+    if !has_handle {
+        return Some(SizeStep::Connect(now));
+    }
+    (seen == Some(now)).then_some(SizeStep::Resize(now))
+}
+
 /// The parser thread of one terminal. It acks only what it parsed, so a flood slows down to the
 /// speed it parses at.
 async fn parse(
@@ -359,5 +406,58 @@ async fn parse(
             Job::CaughtUp(offset) => handle.caught_up(offset),
             Job::Writer(new) => writer = *new,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{SizeStep, size_step};
+
+    #[test]
+    fn the_first_size_connects_at_once() {
+        assert_eq!(
+            size_step(false, None, (80, 24), (0, 0)),
+            Some(SizeStep::Connect((80, 24)))
+        );
+        // A connect that failed is not tried again at the same size.
+        assert_eq!(size_step(false, Some((80, 24)), (80, 24), (80, 24)), None);
+    }
+
+    #[test]
+    fn a_new_size_waits_for_a_second_check() {
+        assert_eq!(size_step(true, Some((80, 24)), (81, 24), (80, 24)), None);
+        assert_eq!(size_step(true, None, (81, 24), (80, 24)), None);
+    }
+
+    #[test]
+    fn a_size_seen_twice_goes_out_once() {
+        assert_eq!(
+            size_step(true, Some((81, 24)), (81, 24), (80, 24)),
+            Some(SizeStep::Resize((81, 24)))
+        );
+        assert_eq!(size_step(true, Some((81, 24)), (81, 24), (81, 24)), None);
+    }
+
+    // T-0173: a layout that passes through a size and comes back sends nothing.
+    #[test]
+    fn a_size_that_comes_back_sends_nothing() {
+        assert_eq!(size_step(true, Some((81, 24)), (80, 24), (80, 24)), None);
+        assert_eq!(size_step(true, Some((80, 24)), (80, 24), (80, 24)), None);
+    }
+
+    #[test]
+    fn three_different_sizes_in_three_checks_send_nothing() {
+        let mut seen = Some((80, 24));
+        for now in [(81, 24), (82, 24), (83, 24)] {
+            assert_eq!(size_step(true, seen, now, (80, 24)), None);
+            seen = Some(now);
+        }
+    }
+
+    #[test]
+    fn a_grid_with_no_columns_or_rows_never_connects_or_resizes() {
+        assert_eq!(size_step(false, None, (0, 24), (0, 0)), None);
+        assert_eq!(size_step(false, Some((80, 0)), (80, 0), (0, 0)), None);
+        assert_eq!(size_step(true, Some((0, 0)), (0, 0), (80, 24)), None);
     }
 }

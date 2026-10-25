@@ -1,5 +1,6 @@
-//! Screen 7's `--shot` states: the palettes, the shortcut sheet, the account menu, the settings
-//! and font dialogs, the project dialogs and tabs, and Sign in.
+//! Screen 7's `--shot` states: the palettes, the shortcut sheet, the account menu, the Settings
+//! page (T-0174) with its app pages, a search and a project's tabs, the Projects dialog, and Sign
+//! in.
 
 use std::time::Duration;
 
@@ -8,21 +9,21 @@ use gpui::{AsyncApp, Entity, WindowHandle, point, px};
 use super::account_menu::open_account_menu;
 use super::fake_daemon;
 use super::options::Shot;
+use super::settings_rules::SettingsPage;
+use super::shortcut_sheet;
 use super::window::Root;
-use super::{settings_dialog, shortcut_sheet};
 use crate::palette::palette_layer::PaletteLayer;
 use crate::palette::palette_rows::{PaletteMode, PaletteScope};
-use crate::projects::project_settings_dialog::ProjectSettingsDialog;
+use crate::projects::project_settings_page::ProjectSettingsPage;
 use crate::projects::settings_tab_rules::SettingsTab;
-use crate::projects::{issue_import, project_settings_dialog, projects_dialog};
-use crate::terminals::terminal_font_dialog;
+use crate::projects::{issue_import, projects_dialog};
 
 /// The project of the settings shots: it has a `.natamux.json`.
 const PROJECT: &str = "natamux";
-/// The task whose terminals sit under the font dialog.
-const RUNNING: &str = "T-0146";
 /// The palette queries: one that finds commands, one that finds nothing.
 const QUERY: &str = "stage";
+/// The Settings search: it finds the terminal font rows.
+const SETTINGS_QUERY: &str = "font";
 const NO_MATCH: &str = "qqzz";
 /// JSON that does not parse, as the reference's parse error.
 const BROKEN_JSON: &str = "{ \"stages\": [";
@@ -41,8 +42,9 @@ pub fn is_screen7_shot(shot: Shot) -> bool {
             | Shot::PaletteJump
             | Shot::Shortcuts
             | Shot::AccountMenu
-            | Shot::TerminalFont
-            | Shot::SettingsDialog
+            | Shot::Settings
+            | Shot::SettingsGeneral
+            | Shot::SettingsSearch
             | Shot::Projects
             | Shot::ProjectSettings
             | Shot::ProjectSettingsTabIssues
@@ -60,16 +62,7 @@ pub fn prepare(shot: Shot) {
 }
 
 pub async fn run(handle: WindowHandle<Root>, shot: Shot, cx: &mut AsyncApp) {
-    if matches!(shot, Shot::TerminalFont) {
-        handle
-            .update(cx, |root, _, cx| {
-                root.dashboard()
-                    .update(cx, |dashboard, cx| dashboard.open(RUNNING, cx))
-            })
-            .ok();
-        cx.background_executor().timer(READ).await;
-    }
-    let Ok(dialog) = handle.update(cx, |root, window, cx| enter(shot, root, window, cx)) else {
+    let Ok(page) = handle.update(cx, |root, window, cx| enter(shot, root, window, cx)) else {
         return;
     };
     let tab = match shot {
@@ -77,21 +70,21 @@ pub async fn run(handle: WindowHandle<Root>, shot: Shot, cx: &mut AsyncApp) {
         Shot::ProjectSettingsTabJson | Shot::ProjectSettingsJsonError => Some(SettingsTab::Json),
         _ => None,
     };
-    if let (Some(tab), Some(dialog)) = (tab, dialog) {
+    if let (Some(tab), Some(page)) = (tab, page) {
         cx.background_executor().timer(READ).await;
         handle
-            .update(cx, |_, _, cx| pick_tab(shot, tab, &dialog, cx))
+            .update(cx, |_, _, cx| pick_tab(shot, tab, &page, cx))
             .ok();
     }
 }
 
-/// Puts the window in the state; Project settings gives its dialog for the tab step.
+/// Puts the window in the state; Project settings gives its page for the tab step.
 fn enter(
     shot: Shot,
     root: &mut Root,
     window: &mut gpui::Window,
     cx: &mut gpui::Context<Root>,
-) -> Option<Entity<ProjectSettingsDialog>> {
+) -> Option<Entity<ProjectSettingsPage>> {
     let dashboard = root.dashboard().clone();
     match shot {
         Shot::Palette => PaletteLayer::open(&dashboard, PaletteMode::All, None, window, cx),
@@ -117,16 +110,24 @@ fn enter(
             let at = point(width - px(MENU_FROM_RIGHT), px(MENU_FROM_TOP));
             open_account_menu(&dashboard, at, window, cx);
         }
-        Shot::TerminalFont => terminal_font_dialog::open(&dashboard, window, cx),
-        Shot::SettingsDialog => settings_dialog::open(&dashboard, window, cx),
+        Shot::Settings => {
+            root.show_settings(SettingsPage::Appearance, window, cx);
+        }
+        Shot::SettingsGeneral => {
+            root.show_settings(SettingsPage::General, window, cx);
+        }
+        Shot::SettingsSearch => {
+            root.show_settings(SettingsPage::Appearance, window, cx);
+            root.settings_view().update(cx, |settings, cx| {
+                settings.set_query(SETTINGS_QUERY, window, cx)
+            });
+        }
         Shot::Projects => projects_dialog::open(&dashboard, window, cx),
         Shot::ProjectSettings
         | Shot::ProjectSettingsTabIssues
         | Shot::ProjectSettingsTabJson
         | Shot::ProjectSettingsJsonError => {
-            return Some(project_settings_dialog::open(
-                &dashboard, PROJECT, window, cx,
-            ));
+            return root.show_settings(SettingsPage::Project(PROJECT.to_owned()), window, cx);
         }
         Shot::ImportIssues => issue_import::open(&dashboard, Some(PROJECT.to_owned()), window, cx),
         Shot::SignIn => root.show_sign_in(false, window, cx),
@@ -139,13 +140,13 @@ fn enter(
 fn pick_tab(
     shot: Shot,
     tab: SettingsTab,
-    dialog: &Entity<ProjectSettingsDialog>,
+    page: &Entity<ProjectSettingsPage>,
     cx: &mut gpui::Context<Root>,
 ) {
     if shot == Shot::ProjectSettingsJsonError
-        && let Some(editor) = dialog.read(cx).pipeline()
+        && let Some(editor) = page.read(cx).pipeline()
     {
         editor.update(cx, |editor, cx| editor.set_text(BROKEN_JSON, cx));
     }
-    dialog.update(cx, |dialog, cx| dialog.pick_tab(tab, cx));
+    page.update(cx, |page, cx| page.pick_tab(tab, cx));
 }
