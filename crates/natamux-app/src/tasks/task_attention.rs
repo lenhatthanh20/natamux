@@ -4,7 +4,7 @@
 use natamux_proto::tasks::task::{Task, TaskState};
 
 use super::task_rules::needs_me;
-use super::task_time::parse_iso_ms;
+use super::task_time::{next_age_change_ms, parse_iso_ms};
 
 /// Ten minutes: a long command can keep an agent silent for a while without a problem.
 pub const QUIET_AFTER_MS: i64 = 10 * 60 * 1000;
@@ -15,6 +15,49 @@ pub fn is_quiet(task: &Task, now_ms: i64) -> bool {
     task.state == TaskState::Running
         && task.background_since.is_none()
         && parse_iso_ms(&task.updated_at).is_some_and(|at| now_ms - at >= QUIET_AFTER_MS)
+}
+
+/// How long until the next running task turns quiet: then it needs the user by the clock alone,
+/// with no change of the data. None when no task can turn quiet.
+pub fn next_quiet_ms<'a>(tasks: impl IntoIterator<Item = &'a Task>, now_ms: i64) -> Option<i64> {
+    tasks
+        .into_iter()
+        .filter_map(|task| quiet_wait(task, now_ms))
+        .min()
+}
+
+fn quiet_wait(task: &Task, now_ms: i64) -> Option<i64> {
+    if task.state != TaskState::Running || task.background_since.is_some() {
+        return None;
+    }
+    let wait = parse_iso_ms(&task.updated_at)? + QUIET_AFTER_MS - now_ms;
+    (wait > 0).then_some(wait)
+}
+
+/// How long until a row of these tasks shows another label by the clock alone: the age of its
+/// last change, or the quiet mark. None when nothing will change.
+pub fn next_row_change_ms<'a>(
+    tasks: impl IntoIterator<Item = &'a Task>,
+    now_ms: i64,
+) -> Option<i64> {
+    tasks
+        .into_iter()
+        .flat_map(|task| {
+            [
+                next_age_change_ms(&task.updated_at, now_ms),
+                quiet_wait(task, now_ms),
+            ]
+        })
+        .flatten()
+        .min()
+}
+
+/// How many tasks `needs_me_tasks` gives, with no copy of them.
+pub fn needs_me_count(tasks: &[Task], now_ms: i64) -> usize {
+    tasks
+        .iter()
+        .filter(|task| needs_me(task.state) || is_quiet(task, now_ms))
+        .count()
 }
 
 /// Tasks that need the user: waiting on them, or running but quiet. The longest wait comes first.
@@ -125,6 +168,22 @@ mod tests {
 
     fn quiet_task() -> Task {
         with("T-0001", TaskState::Running, "2026-10-08T09:00:00.000Z")
+    }
+
+    #[test]
+    fn counts_the_tasks_that_need_the_user_as_the_list_does() {
+        let now = at_ms("2026-10-08T09:30:00.000Z");
+        let tasks: Vec<Task> = ALL_STATES
+            .iter()
+            .enumerate()
+            .map(|(at, state)| with(&format!("T-{at}"), *state, "2026-10-08T09:00:00.000Z"))
+            .chain([with("T-9", TaskState::Running, "2026-10-08T09:29:00.000Z")])
+            .collect();
+        assert_eq!(
+            needs_me_count(&tasks, now),
+            needs_me_tasks(&tasks, now).len()
+        );
+        assert_eq!(needs_me_count(&[], now), 0);
     }
 
     #[test]
@@ -348,5 +407,55 @@ mod tests {
     #[test]
     fn combines_the_state_and_the_search() {
         assert_eq!(filter_ids(Some(TaskState::Review), "export"), ["T-0002"]);
+    }
+
+    #[test]
+    fn the_next_quiet_time_is_the_soonest_running_task_to_go_quiet() {
+        let now = at_ms("2026-10-08T09:05:00.000Z");
+        let tasks = [
+            with("T-1", TaskState::Running, "2026-10-08T09:00:00.000Z"),
+            with("T-2", TaskState::Running, "2026-10-08T09:03:00.000Z"),
+            with("T-3", TaskState::Review, "2026-10-08T08:59:00.000Z"),
+        ];
+        assert_eq!(next_quiet_ms(&tasks, now), Some(5 * 60 * 1000));
+        // At that time T-1 has turned quiet and counts, with the task in review; T-2 is next.
+        let later = now + 5 * 60 * 1000;
+        assert_eq!(needs_me_count(&tasks, now), 1);
+        assert_eq!(needs_me_count(&tasks, later), 2);
+        assert_eq!(next_quiet_ms(&tasks, later), Some(3 * 60 * 1000));
+    }
+
+    #[test]
+    fn no_quiet_time_for_a_quiet_waiting_or_stopped_task() {
+        let now = at_ms("2026-10-08T09:30:00.000Z");
+        let waiting = make(|task| {
+            task.state = TaskState::Running;
+            task.updated_at = "2026-10-08T09:25:00.000Z".into();
+            task.background_since = Some(task.updated_at.clone());
+        });
+        let tasks = [
+            quiet_task(),
+            waiting,
+            with("T-2", TaskState::Draft, "2026-10-08T09:29:00.000Z"),
+            with("T-3", TaskState::Running, "soon"),
+        ];
+        assert_eq!(next_quiet_ms(&tasks, now), None);
+        assert_eq!(next_quiet_ms(Vec::<Task>::new().iter(), now), None);
+    }
+
+    #[test]
+    fn a_row_changes_at_the_next_minute_of_its_age_or_when_it_turns_quiet() {
+        let now = at_ms("2026-10-08T09:09:40.000Z");
+        // 9m 40s old: the age shows 10m in 20 s, as the task turns quiet.
+        let running = with("T-1", TaskState::Running, "2026-10-08T09:00:00.000Z");
+        assert_eq!(next_row_change_ms([&running], now), Some(20_000));
+        // 30 s old: its age changes in 30 s, before it can turn quiet.
+        let fresh = with("T-2", TaskState::Review, "2026-10-08T09:09:10.000Z");
+        assert_eq!(next_row_change_ms([&running, &fresh], now), Some(20_000));
+        assert_eq!(next_row_change_ms([&fresh], now), Some(30_000));
+        // Past a week the age is a date, and a stopped task never turns quiet.
+        let old = with("T-3", TaskState::Done, "2026-09-01T09:00:00.000Z");
+        assert_eq!(next_row_change_ms([&old], now), None);
+        assert_eq!(next_row_change_ms(Vec::<Task>::new().iter(), now), None);
     }
 }

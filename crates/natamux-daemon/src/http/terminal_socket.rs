@@ -104,7 +104,7 @@ async fn run(socket: Socket, state: Arc<AppState>, id: String, query: String) {
 async fn write_frames(mut sink: SocketSink, mut outbox: UnboundedReceiver<Out>) {
     while let Some(next) = outbox.recv().await {
         let message = match next {
-            Out::Frame(Frame::Bytes(bytes)) => Message::Binary(Bytes::from_owner(bytes)),
+            Out::Frame(Frame::Bytes(bytes)) => Message::Binary(bytes),
             Out::Frame(Frame::Message(message)) => Message::Text(message.to_json().into()),
             Out::Close(code) => {
                 let frame = code.map(|(code, reason)| CloseFrame {

@@ -11,6 +11,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
+use hyper::body::Bytes;
 use natamux_proto::terminals::messages::ServerMessage;
 use natamux_proto::terminals::text::plain_text;
 use natamux_pty::Env;
@@ -246,7 +247,7 @@ impl TerminalService {
         task_id: &str,
         offset: u64,
         terminal: &str,
-    ) -> Option<Vec<Arc<[u8]>>> {
+    ) -> Option<Vec<Bytes>> {
         let session = self.inner.get(task_id, terminal)?;
         ring_since(&lock(&session), offset)
     }
@@ -311,9 +312,16 @@ impl TerminalService {
         lock(&session).pty.foreground()
     }
 
+    /// The `ps` behind this runs with no session lock held, and its table is shared with the
+    /// other shells for a moment.
     pub fn commands(&self, task_id: &str, terminal: &str) -> Option<Vec<String>> {
         let session = self.inner.get(task_id, terminal)?;
-        lock(&session).pty.commands()
+        let read = lock(&session).processes.clone();
+        let Some(read) = read else {
+            return lock(&session).pty.commands();
+        };
+        let table = read(false);
+        lock(&session).pty.commands_in(&table)
     }
 
     /// Input from a client gives the shell that client's size first: the user types where they

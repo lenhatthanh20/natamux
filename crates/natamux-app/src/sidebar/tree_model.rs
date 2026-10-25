@@ -12,9 +12,9 @@ use crate::sidebar::shell_rows::{ShellRow, shell_rows};
 use crate::sidebar::sidebar_tree::{RowTier, is_fold_open, row_tier, with_parents};
 use crate::sidebar::tree_entries::{Entry, TreeSource, tree_entries};
 use crate::sidebar::workspace_groups::{
-    DEFAULT_REPO_ID, RepoGroup, RepoRef, WorkspaceGroups, workspace_groups,
+    DEFAULT_REPO_ID, RepoGroup, RepoRef, WorkspaceGroups, next_hint_change_ms, workspace_groups,
 };
-use crate::tasks::task_attention::filter_tasks;
+use crate::tasks::task_attention::{filter_tasks, next_row_change_ms};
 
 /// What the tree reads from the dashboard and the saved view.
 pub struct TreeInput<'a> {
@@ -246,6 +246,23 @@ impl TreeModel {
                     .collect()
             })
             .unwrap_or_default()
+    }
+
+    /// The wait until a label of the tree changes by the clock alone: the age or the quiet mark of
+    /// a task row, or the hint of a folded group. None with nothing to follow.
+    pub fn next_label_change_ms(&self, now_ms: i64) -> Option<i64> {
+        let rows = self.lines.iter().filter_map(|line| match line {
+            Line::Task { task, .. } => Some(&**task),
+            _ => None,
+        });
+        let folded = self
+            .groups
+            .groups
+            .iter()
+            .zip(&self.infos)
+            .filter(|(_, info)| !info.open)
+            .filter_map(|(group, _)| next_hint_change_ms(group, now_ms));
+        next_row_change_ms(rows, now_ms).into_iter().chain(folded).min()
     }
 
     fn make_entries(

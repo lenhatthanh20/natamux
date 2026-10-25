@@ -1,8 +1,8 @@
 //! Output of a shell to its clients (`session-output.ts`): batches, frames, the ring, and the
-//! clients that fall behind.
+//! clients that fall behind. A byte is copied at most once into the batch and once into its
+//! frame; a frame of a batch is a range of it.
 
-use std::sync::Arc;
-
+use hyper::body::Bytes;
 use natamux_screen::frames::{char_border, split_frames};
 
 use super::limits::{
@@ -14,7 +14,7 @@ use super::types::{ClientState, Frame, Phase, Session};
 
 /// The frames sent since `offset`, while the ring still has them. None when it does not (too
 /// old, in the future, or inside a frame).
-pub fn ring_since(session: &Session, offset: u64) -> Option<Vec<Arc<[u8]>>> {
+pub fn ring_since(session: &Session, offset: u64) -> Option<Vec<Bytes>> {
     if offset < session.ring_start || offset > session.offset {
         return None;
     }
@@ -50,10 +50,8 @@ pub fn queue_output(session: &mut Session, bytes: &[u8]) {
     session.recent.push_back((now, bytes.len() as u64));
     session.recent_bytes += bytes.len() as u64;
     drop_old_output(session, now);
-    session.batch.extend_from_slice(bytes);
-    if session.batch.len() >= OUTPUT_FRAME_BYTES {
-        send_full_frames(session);
-    }
+    let rest = send_full_frames(session, bytes);
+    session.batch.extend_from_slice(rest);
     if session.batch.is_empty() || session.flush_timer.is_some() {
         return;
     }
@@ -71,17 +69,36 @@ pub fn queue_output(session: &mut Session, bytes: &[u8]) {
     }));
 }
 
-/// Sends the full frames of the batch and keeps the rest. A planned flush stays planned for it.
-fn send_full_frames(session: &mut Session) {
-    let all = std::mem::take(&mut session.batch);
-    let mut start = 0;
-    while all.len() - start >= OUTPUT_FRAME_BYTES {
-        let end = char_border(&all, start, start + OUTPUT_FRAME_BYTES);
-        send_frame(session, &all[start..end]);
-        start = end;
+/// Sends the frames that the batch and `bytes` fill: the batch topped up from `bytes`, then full
+/// frames straight from `bytes`. Gives the rest, for the batch. A planned flush stays planned.
+fn send_full_frames<'a>(session: &mut Session, bytes: &'a [u8]) -> &'a [u8] {
+    if session.batch.len() + bytes.len() < OUTPUT_FRAME_BYTES {
+        return bytes;
     }
-    session.batch = all[start..].to_vec();
+    let mut rest = bytes;
+    if !session.batch.is_empty() {
+        let take = fits(rest, OUTPUT_FRAME_BYTES - session.batch.len());
+        session.batch.extend_from_slice(&rest[..take]);
+        rest = &rest[take..];
+        let batch = Bytes::from(std::mem::take(&mut session.batch));
+        send_frame(session, batch);
+    }
+    while rest.len() >= OUTPUT_FRAME_BYTES {
+        let end = char_border(rest, 0, OUTPUT_FRAME_BYTES);
+        send_frame(session, Bytes::copy_from_slice(&rest[..end]));
+        rest = &rest[end..];
+    }
     session.last_flush_at = Some(session.now());
+    rest
+}
+
+/// The most of `bytes` that fits in `room` and ends on a character border; 0 when none does.
+fn fits(bytes: &[u8], room: usize) -> usize {
+    let mut end = room.min(bytes.len());
+    while end > 0 && end < bytes.len() && bytes[end] & 0xc0 == 0x80 {
+        end -= 1;
+    }
+    end
 }
 
 /// Also called before every control message and pty resize, so output comes before them.
@@ -90,19 +107,18 @@ pub fn flush_output(session: &mut Session) {
     if session.batch.is_empty() {
         return;
     }
-    let bytes = std::mem::take(&mut session.batch);
+    let bytes = Bytes::from(std::mem::take(&mut session.batch));
     session.last_flush_at = Some(session.now());
     for frame in split_frames(&bytes, OUTPUT_FRAME_BYTES) {
-        send_frame(session, frame);
+        send_frame(session, bytes.slice_ref(frame));
     }
 }
 
-fn send_frame(session: &mut Session, bytes: &[u8]) {
+fn send_frame(session: &mut Session, frame: Bytes) {
     let start = session.offset;
-    let frame: Arc<[u8]> = Arc::from(bytes);
     session.offset += frame.len() as u64;
     session.ring_bytes += frame.len();
-    session.ring.push_back(Arc::clone(&frame));
+    session.ring.push_back(frame.clone());
     while session.ring_bytes > OUTPUT_RING_BYTES && session.ring.len() > 1 {
         if let Some(dropped) = session.ring.pop_front() {
             session.ring_bytes -= dropped.len();
@@ -117,7 +133,7 @@ fn send_frame(session: &mut Session, bytes: &[u8]) {
             continue;
         }
         if admits(state, frame.len() as u64, now) {
-            client.send(Frame::Bytes(Arc::clone(&frame)));
+            client.send(Frame::Bytes(frame.clone()));
             state.sent = offset;
         } else {
             // Dropped, not queued, so a slow or hidden client costs no memory.
@@ -155,4 +171,23 @@ fn admits(state: &mut ClientState, bytes: u64, now: u64) -> bool {
     }
     state.budget_bytes += bytes;
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::fits;
+
+    #[test]
+    fn a_top_up_never_ends_inside_a_character() {
+        let text = "aé€".as_bytes();
+        assert_eq!(fits(text, 10), text.len());
+        assert_eq!(fits(text, 1), 1);
+        // "é" is bytes 1 and 2: room for 2 takes only the "a".
+        assert_eq!(fits(text, 2), 1);
+        assert_eq!(fits(text, 3), 3);
+        // "€" is bytes 3 to 5.
+        assert_eq!(fits(text, 5), 3);
+        assert_eq!(fits("é".as_bytes(), 1), 0);
+        assert_eq!(fits(b"", 4), 0);
+    }
 }

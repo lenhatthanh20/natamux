@@ -483,3 +483,10 @@ pub fn shells_changed(task_id: &str) -> DaemonMessage {
         task_id: task_id.into(),
     }
 }
+
+pub fn programs_changed(task_id: &str, terminals: &[&str]) -> DaemonMessage {
+    DaemonMessage::ProgramsChanged {
+        task_id: task_id.into(),
+        terminals: terminals.iter().map(|name| name.to_string()).collect(),
+    }
+}

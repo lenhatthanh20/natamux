@@ -82,7 +82,10 @@ pub struct Root {
     agents_back: Option<String>,
     /// The id of the last dashboard toast shown, so each one shows once.
     toasts_shown: u64,
-    title: String,
+    title_bar: Entity<TitleBarView>,
+    status_bar: Entity<StatusBarView>,
+    /// Draws the perf overlay's numbers again, only while it is on.
+    overlay_refresh: Option<gpui::Task<()>>,
 }
 
 impl Root {
@@ -117,6 +120,9 @@ impl Root {
         })
         .detach();
         Self::watch_window(window, cx);
+        let title_bar = cx.new(|cx| TitleBarView::new(dashboard.clone(), cx));
+        let weak_root = cx.weak_entity();
+        let status_bar = cx.new(|cx| StatusBarView::new(weak_root, dashboard.clone(), cx));
         let mut root = Root {
             source,
             dashboard,
@@ -140,8 +146,11 @@ impl Root {
             drawer_open: false,
             agents_back: None,
             toasts_shown: 0,
-            title: window_title(0),
+            title_bar,
+            status_bar,
+            overlay_refresh: None,
         };
+        root.follow_overlay(cx);
         if wants_sign_in {
             root.show_sign_in(false, window, cx);
         }
@@ -221,7 +230,7 @@ impl Root {
         }
     }
 
-    pub(super) fn dashboard(&self) -> &Entity<Dashboard> {
+    pub(crate) fn dashboard(&self) -> &Entity<Dashboard> {
         &self.dashboard
     }
 
@@ -423,6 +432,10 @@ impl Focusable for Root {
 
 #[path = "window_render.rs"]
 mod render;
+
+#[path = "window_bars.rs"]
+mod bars;
+use bars::{StatusBarView, TitleBarView};
 
 #[path = "window_details.rs"]
 mod details;

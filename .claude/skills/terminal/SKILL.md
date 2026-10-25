@@ -21,7 +21,7 @@ The dashboard keeps live terminals in a cache (`terminal-cache.ts`). A pane that
 |---|---|
 | `crates/natamux-daemon/src/terminals/service.rs` | The terminal service: sessions, attach and detach, close. The work is in `session_lifecycle.rs` (spawn, wire output and exit, close), `session_output.rs` (batching, ring, flow control), `session_snapshot.rs` (snapshot jobs, resume, catch-up), `session_input.rs` (input queue, size) |
 | `crates/natamux-screen/src/` | The screen of a shell on `alacritty_terminal`, the frames and the snapshot text. `crates/natamux-daemon/src/terminals/limits.rs` and `types.rs`: the tuning constants, the shared types and errors |
-| `crates/natamux-pty/src/` | The PTY: `pty.rs`, `unix.rs`, `windows.rs`. `process_tree.rs` signals the whole process tree, then the shell. `input_gap.rs` keeps the DEL gap |
+| `crates/natamux-pty/src/` | The PTY: `pty.rs`, `unix.rs`, `windows.rs`. `process_table.rs` parses `ps` once for all shells; `process_tree.rs` signals the whole process tree, then the shell. `input_gap.rs` keeps the DEL gap |
 | `crates/natamux-pty/src/shell_command.rs` | Which shell: `$SHELL` or bash, as a login shell |
 | `crates/natamux-daemon/src/http/terminal_socket.rs`, `tickets.rs` in `terminals/` | WebSocket route. A one-time ticket (`POST /tasks/:id/terminal/ticket`, 30 s) replaces the token, because a browser cannot set headers. Answers `ping`, drops a silent socket, closes a resume of a gone shell with the gone close code |
 | `crates/natamux-daemon/src/agents/runner.rs`, `stages/runner.rs` (`stages/shells.rs`) | An agent starts by sourcing `<dataDir>/agent-launch-<id>.sh` in shell 1. The agent counts as running while the foreground program is not a shell |
@@ -199,6 +199,14 @@ A dropped socket does not end the shell. The dashboard comes back by itself and 
 - Client side: `claimed` starts as the page visibility at `start`. `sendSize` sets it when a resize goes out. `sendInput` claims first when not claimed. A textarea focus claims (`claimSize`). `sendVisible(true)` claims with the size.
 - Native app (`natamux-client` `protocol.rs`, `natamux-app` `remote_terminal.rs`, T-0173):
   - A new grid size goes out only once two size checks in a row (100 ms apart) saw it (`size_step`). The first connect does not wait; a grid with 0 columns or rows does nothing.
+  - No timer runs while the size stays the same. `terminal_screen.rs` checks the grid after each layout and starts one 100 ms check only while a new size waits.
+  - The terminal view is a cached GPUI view: output draws that terminal only. `RemoteTerminal` notifies the view itself when its own state changes. An ended terminal draws uncached, as its opacity is not part of the cache key.
+  - Output is parsed in 4 KiB pieces, with a yield between them.
+  - The history keeps the daemon's rule, `scrollback_lines(cols)` at the pane's own width (`terminal_size.rs` `history_lines`), so a snapshot loses no row. Zed's terminal has no setter for the limit, so `RemoteTerminal::build_at` builds the terminal and its view again at the first grid size, before connect and before any output. A later resize keeps the limit of that first width. Code that focuses the view later reads `view` then, as the first layout replaces it.
+- Daemon:
+  - Shells parse one at a time (`parsing` in `shells.rs`), in turns of at most `PARSE_TURN_BYTES` (16 KiB), so a flood in one shell does not hold the others for a whole 64 KiB read. A turn is a slice of the read, not a copy.
+  - Output frames are `Bytes`: a frame and the ring share the batch or the snapshot they were cut from, with no second copy.
+  - `ps` never runs on the scheduler thread or under a session lock. `natamux-pty` `process_table.rs` parses one table that all shells share for `PROCESS_TABLE_TTL` (2 s); a kill or a leftover check reads a fresh one. The SIGHUP, the SIGKILL and `find_agent` read it with `Scheduler::off_thread`; `commands` reads it with no lock held.
   - Focus on the terminal view claims (`claim_size`); during a catch-up it claims at its end.
   - A visible resume sends its size when the catch-up ends, unless its `snapshot` came at that same size. Hidden: nothing.
 

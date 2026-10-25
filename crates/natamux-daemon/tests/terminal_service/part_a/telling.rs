@@ -6,7 +6,7 @@ use natamux_daemon::shared::event_bus::DaemonMessage;
 use natamux_daemon::terminals::limits::WORKSPACE_QUIET_MS;
 
 use super::util::attach_at;
-use crate::support::{Harness, SIZE, SetupOptions, setup_with, shells_changed};
+use crate::support::{Harness, SIZE, SetupOptions, programs_changed, setup_with, shells_changed};
 
 fn watched() -> (Harness, Arc<Mutex<Vec<String>>>) {
     let quiet = Arc::new(Mutex::new(Vec::<String>::new()));
@@ -23,7 +23,7 @@ fn watched() -> (Harness, Arc<Mutex<Vec<String>>>) {
 fn changes(h: &Harness) -> usize {
     h.messages()
         .iter()
-        .filter(|message| matches!(message, DaemonMessage::ShellsChanged { .. }))
+        .filter(|message| message.kind() == "shells.changed")
         .count()
 }
 
@@ -81,5 +81,27 @@ fn sends_shells_changed_when_the_output_stops_and_the_program_in_front_is_anothe
     h.pty(1).emit("vim notes.txt\r\n");
     h.advance(WORKSPACE_QUIET_MS * 2);
     assert_eq!(changes(&h), started + 1);
-    assert_eq!(h.messages().last(), Some(&shells_changed("T-0001")));
+    assert_eq!(h.messages().last(), Some(&programs_changed("T-0001", &["2"])));
+}
+
+#[test]
+fn names_only_the_shell_whose_program_changed_of_three() {
+    let (h, _) = watched();
+    for name in ["1", "2", "3"] {
+        attach_at(&h, "T-0001", SIZE, name);
+    }
+    let started = changes(&h);
+
+    h.pty(1).set_program(Some("vim"));
+    for index in 0..3 {
+        h.pty(index).emit("working\r\n");
+    }
+    h.advance(WORKSPACE_QUIET_MS * 2);
+    assert_eq!(changes(&h), started + 1);
+    assert_eq!(h.messages().last(), Some(&programs_changed("T-0001", &["2"])));
+
+    // Nothing changed: nothing is sent.
+    h.pty(0).emit("more\r\n");
+    h.advance(WORKSPACE_QUIET_MS * 2);
+    assert_eq!(changes(&h), started + 1);
 }

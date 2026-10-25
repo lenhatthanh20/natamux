@@ -79,6 +79,40 @@ pub struct TimeBar {
     pub state: TaskState,
 }
 
+/// How long until `format_duration(from, now)` shows another text: the minutes round at half a
+/// minute, after "<1m". A time in days changes less often; it draws once a minute too.
+pub fn next_duration_change_ms(from: &str, now_ms: i64) -> Option<i64> {
+    const MINUTE_MS: i64 = 60_000;
+    let span = (now_ms - parse_iso_ms(from)?).max(0);
+    if span < MINUTE_MS {
+        return Some(MINUTE_MS - span);
+    }
+    let wait = (MINUTE_MS / 2 - span % MINUTE_MS).rem_euclid(MINUTE_MS);
+    Some(if wait == 0 { MINUTE_MS } else { wait })
+}
+
+/// How long until a time of the Progress tab changes by the clock alone: the figures of a task
+/// that has not ended, and the bar of the stage that runs.
+pub fn next_progress_change_ms(
+    task: &Task,
+    progress: &[StageProgress],
+    now_ms: i64,
+) -> Option<i64> {
+    let running = progress
+        .iter()
+        .filter(|entry| entry.status == StageStatus::Current)
+        .filter_map(|entry| entry.started_at.as_deref());
+    let ended = matches!(task.state, TaskState::Done | TaskState::Cancelled);
+    let figures = [Some(task.created_at.as_str()), task.stage_since.as_deref()]
+        .into_iter()
+        .flatten()
+        .filter(|_| !ended);
+    running
+        .chain(figures)
+        .filter_map(|from| next_duration_change_ms(from, now_ms))
+        .min()
+}
+
 /// One bar per stage that started. The longest stage has the full width, and a short one keeps a
 /// sliver so it can be seen.
 pub fn time_bars(progress: &[StageProgress], now_ms: i64) -> Vec<TimeBar> {

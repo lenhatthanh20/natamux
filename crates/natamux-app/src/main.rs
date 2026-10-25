@@ -22,6 +22,7 @@ mod app {
     pub mod commands_git;
     pub mod commands_stages;
     pub mod dashboard;
+    pub mod dashboard_changes;
     pub mod dashboard_data;
     pub mod fake_daemon;
     pub mod gate2;
@@ -30,6 +31,7 @@ mod app {
     pub mod notify;
     pub mod notify_rules;
     pub mod options;
+    pub mod read_pace;
     pub mod settings_font;
     pub mod settings_reads;
     pub mod settings_rules;
@@ -55,6 +57,8 @@ mod app {
     pub mod update;
     pub mod view_rules;
     pub mod view_state;
+    #[cfg(test)]
+    pub mod test_views;
     pub mod window;
 }
 mod bench {
@@ -170,6 +174,7 @@ mod sidebar {
     pub mod sidebar_tree;
     pub mod tree_entries;
     pub mod tree_model;
+    pub mod tree_rename;
     pub mod workspace_groups;
     pub mod workspace_row;
     pub mod workspace_tree;
@@ -259,6 +264,8 @@ mod terminals {
     pub mod terminal_find;
     pub mod terminal_font;
     pub mod terminal_pane;
+    pub mod terminal_screen;
+    pub mod terminal_size;
     pub mod terminal_tabs;
 }
 mod workspaces {
@@ -402,6 +409,9 @@ fn start(
     if let Some(shot) = options.shot {
         app::shots::prepare(shot);
     }
+    if options.fake_daemon && options.open_task.is_some() {
+        app::fake_daemon::shared().clear_jobs();
+    }
     cx.on_app_quit(move |_| {
         app::update::finish_quit(&owned);
         async {}
@@ -434,6 +444,9 @@ fn start(
     }
     if options.count_draws {
         perf::draws::start(window, cx);
+    }
+    if let Some(task) = &options.open_task {
+        perf::draws::open_task(window, task.clone(), cx);
     }
     if let Some(seconds) = options.hold_seconds {
         let smoke_window = options.smoke.then_some(window);

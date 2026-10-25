@@ -6,6 +6,7 @@
 pub mod da1;
 pub mod input_gap;
 pub mod no_proxy;
+pub mod process_table;
 pub mod process_tree;
 mod pty;
 pub mod shell_command;
@@ -14,4 +15,5 @@ mod unix;
 #[cfg(windows)]
 mod windows;
 
+pub use process_table::{ProcessTable, TableReader};
 pub use pty::{Env, Pty, PtyEvents, Signal, SpawnOptions, spawn_shell};

@@ -4,8 +4,9 @@ use std::collections::VecDeque;
 use std::fmt;
 use std::sync::{Arc, Mutex, Weak};
 
+use hyper::body::Bytes;
 use natamux_proto::terminals::messages::ServerMessage;
-use natamux_pty::Pty;
+use natamux_pty::{Pty, TableReader};
 use natamux_pty::input_gap::InputKind;
 use natamux_screen::Screen;
 
@@ -14,7 +15,8 @@ use crate::shared::scheduler::{Scheduler, TimerId};
 /// A binary frame (output bytes for xterm) or a control message (sent as JSON text).
 #[derive(Clone, Debug, PartialEq)]
 pub enum Frame {
-    Bytes(Arc<[u8]>),
+    /// Bytes, so a frame can be a range of a batch or a snapshot, with no copy.
+    Bytes(Bytes),
     Message(ServerMessage),
 }
 
@@ -129,6 +131,8 @@ pub struct Session {
     /// Random, set when the shell starts, so a client can tell a new shell from the one it had.
     pub shell_id: String,
     pub pty: Box<dyn Pty>,
+    /// How the pty reads the process table, taken once: it runs with no session lock held.
+    pub processes: Option<TableReader>,
     pub screen: Screen,
     /// The client used last is the last one.
     pub clients: Vec<(ClientRef, ClientState)>,
@@ -140,7 +144,7 @@ pub struct Session {
     pub last_flush_at: Option<u64>,
     pub flush_timer: Option<TimerId>,
     /// The last frames sent, at most OUTPUT_RING_BYTES (or one frame), from offset `ring_start`.
-    pub ring: VecDeque<Arc<[u8]>>,
+    pub ring: VecDeque<Bytes>,
     pub ring_bytes: usize,
     pub ring_start: u64,
     pub snapshot: Option<SnapshotJob>,

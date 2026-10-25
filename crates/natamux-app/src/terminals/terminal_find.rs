@@ -32,11 +32,11 @@ pub fn open_find<V: 'static>(
         None => {
             let zed = terminal.read(cx).terminal().clone();
             let find = cx.new(|cx| TerminalFind::new(zed, window, cx));
-            let view = terminal.read(cx).view.clone();
+            let back = terminal.clone();
             let closed = key.clone();
             cx.subscribe_in(&find, window, move |_, _, _: &FindClosed, window, cx| {
                 TerminalCache::set_find(&closed, None, cx);
-                let focus = view.focus_handle(cx);
+                let focus = back.read(cx).view.focus_handle(cx);
                 window.focus(&focus, cx);
                 cx.notify();
             })

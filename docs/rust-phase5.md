@@ -30,6 +30,22 @@ Done. The Rust implementation was merged into `dev` through [PR #460](https://gi
 
 No Rust, Node or Docker build ran on the owner's Mac.
 
+## Performance (T-0178)
+
+The app and the daemon with many shells open: fewer draws, reads and copies. Before is the last run before T-0178, after is its CI run on macOS. The numbers come from CI; a cell with "CI" is filled from the first run of the branch.
+
+| Case | Measure | Before | After | Run |
+|---|---|---|---|---|
+| Motion, task table (`scripts/motion-cost.sh`) | Draws/s with focus, behind Finder | 8.3, 0.07 | CI | CI |
+| Motion, open task T-0146 (`--open-task`, 4 quiet panes) | Draws/s and CPU % with focus; draws/s behind Finder | Not measured | CI (limits 1, 2%, 0.2) | CI |
+| Gate 2 (`--gate2`, owner's Mac) | Frames over 1 refresh, `panes` report | Pass, no numbers recorded | CI | Owner |
+| Daemon bench (`NATAMUX_BENCH=1`, `tests/daemon_bench.rs`) | RSS with 30 idle shells | Not measured | CI | CI |
+| Daemon bench | Echo p50 / p95 of a quiet shell while 5 flood | Not measured | CI (limit p95 10 ms) | CI |
+| Daemon bench | Snapshot of a full history at 120 cols: ms, allocations, MiB | Not measured | CI | CI |
+| Daemon bench | Attach of a shell with a full history | Not measured | CI | CI |
+
+The daemon bench writes its table to the job summary of the `daemon-bench` job.
+
 ## Cutover deletions
 
 The Rust crate tests now keep their last Node text fixtures under their own `tests/fixtures/` folders. This lets `include_str!` work after the Node sources are removed.

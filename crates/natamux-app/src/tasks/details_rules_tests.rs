@@ -268,3 +268,19 @@ fn answers_in_the_terminal_whose_agent_asks() {
     assert_eq!(asking_terminal(Some(&quiet), &asking), "5");
     assert_eq!(asking_terminal(None, &asking), "1");
 }
+
+#[test]
+fn the_panel_waits_for_the_soonest_time_it_shows() {
+    let now = parse_iso_ms("2026-10-08T09:30:20.000Z").unwrap();
+    // The task's ages change at 09:31:00 and its figures at 09:30:30.
+    let open = task(TaskState::Review);
+    assert_eq!(details_wait(&open, [], &[], now), Some(10_000));
+    // An event of 09:30:15 shows a new age at 09:31:15; the figures still come first.
+    let event = "2026-10-08T09:30:15.000Z";
+    assert_eq!(details_wait(&open, [event], &[], now), Some(10_000));
+    // A done task shows no running figures: its next change is the age at 09:31:00.
+    let done = task(TaskState::Done);
+    assert_eq!(details_wait(&done, [event], &[], now), Some(40_000));
+    assert_eq!(details_wait(&done, [], &[], now), Some(40_000));
+}
+

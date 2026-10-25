@@ -17,7 +17,9 @@ use ui::prelude::*;
 use super::workspace_rules::GitStep;
 use super::wrap_up_rules::{finished_text, is_finished_state};
 use crate::app::dashboard::{Dashboard, DashboardChange, TerminalReader};
+use crate::app::read_pace::ReadPace;
 use crate::app::view_rules::WorkspaceTab;
+use crate::components::motion;
 use crate::components::toast_rules::ToastTone;
 use crate::components::toasts::toast;
 use crate::files::file_editor::FileEditor;
@@ -48,6 +50,7 @@ struct Shown {
     shown_screen: Option<String>,
     /// The state and workspace last seen, to read again when they change.
     seen: Option<(TaskState, bool)>,
+    git_reads: ReadPace,
 }
 
 pub struct WorkspaceView {
@@ -60,6 +63,8 @@ pub struct WorkspaceView {
     file_tab_shown: Option<WorkspaceTab>,
     shown: Option<Shown>,
     width: Entity<Option<f32>>,
+    /// A poll came while the window had no focus: it reads once when the focus comes back.
+    missed_poll: bool,
     _poll: gpui::Task<()>,
     _subscriptions: Vec<Subscription>,
 }
@@ -74,12 +79,17 @@ impl WorkspaceView {
             view.on_change(change, cx)
         });
         let observe = cx.observe(&width, |_, _, cx| cx.notify());
+        // Root caches this view: the task, its terminals and their lines come from the dashboard.
+        let follow = cx.observe(&dashboard, |_, _, cx| cx.notify());
         let poll = cx.spawn(async move |view, cx| {
             loop {
                 cx.background_executor().timer(POLL).await;
                 let read = |view: &mut Self, cx: &mut Context<Self>| {
-                    view.read_git(cx);
-                    view.refresh_file_tabs(cx);
+                    if motion::window_active(cx) {
+                        view.read_polled(cx);
+                    } else {
+                        view.missed_poll = true;
+                    }
                 };
                 if view.update(cx, read).is_err() {
                     break;
@@ -95,8 +105,21 @@ impl WorkspaceView {
             file_tab_shown: None,
             shown: None,
             width,
+            missed_poll: false,
             _poll: poll,
-            _subscriptions: vec![changes, observe],
+            _subscriptions: vec![changes, observe, follow],
+        }
+    }
+
+    fn read_polled(&mut self, cx: &mut Context<Self>) {
+        self.read_git(cx);
+        self.refresh_file_tabs(cx);
+    }
+
+    /// The window has focus again: the poll it skipped reads once now.
+    pub fn read_missed(&mut self, cx: &mut Context<Self>) {
+        if std::mem::take(&mut self.missed_poll) {
+            self.read_polled(cx);
         }
     }
 

@@ -4,6 +4,7 @@
 
 use std::collections::BTreeMap;
 
+use natamux_proto::agents::activity::TaskActivity;
 use natamux_proto::tasks::task::{Task, TaskState};
 use natamux_proto::terminals::list::{TerminalLane, TerminalList};
 
@@ -47,13 +48,18 @@ pub struct PaneFacts {
     pub closable: bool,
 }
 
+/// The last line of terminal `name`, read where the dashboard holds it.
+fn activity_text<'a>(activity: Option<&'a TaskActivity>, name: &str) -> Option<&'a str> {
+    Some(activity?.get(name)?.text.as_str())
+}
+
 /// The header of each pane. `shown` is how many agent panes are on screen: the needs-input text
 /// shows only beside another agent pane, so it says which one waits.
 pub fn pane_facts(
     task: &Task,
     list: &TerminalList,
     names: &[String],
-    activity: &BTreeMap<String, String>,
+    activity: Option<&TaskActivity>,
     shown_agents: usize,
 ) -> Vec<PaneFacts> {
     let lanes = agent_lanes(list);
@@ -69,7 +75,7 @@ pub fn pane_facts(
                 if waits && shown_agents < 2 {
                     return None;
                 }
-                let text = pane_state_text(state, activity.get(name).map(String::as_str));
+                let text = pane_state_text(state, activity_text(activity, name));
                 Some((text, waits))
             });
             let hint = (name == "1" && lane.is_none())
@@ -153,10 +159,13 @@ mod tests {
             "terminals": ["1", "2"], "agents": ["1", "2"],
             "lanes": { "1": { "stage": "implement" }, "2": { "stage": "test-spec", "state": "running", "agent": "codex" } }
         }));
-        let alone = pane_facts(&waiting, &shells, &names(&["1"]), &BTreeMap::new(), 1);
+        let alone = pane_facts(&waiting, &shells, &names(&["1"]), None, 1);
         assert_eq!(alone[0].state_text, None);
-        let activity = BTreeMap::from([("2".to_string(), "Reading the prompt".to_string())]);
-        let both = pane_facts(&waiting, &shells, &names(&["1", "2"]), &activity, 2);
+        let activity: TaskActivity = serde_json::from_value(json!({
+            "2": { "text": "Reading the prompt", "at": "2026-10-22T00:00:00.000Z" }
+        }))
+        .unwrap();
+        let both = pane_facts(&waiting, &shells, &names(&["1", "2"]), Some(&activity), 2);
         assert_eq!(both[0].state_text, Some(("Needs input".into(), true)));
         assert_eq!(
             both[1].state_text,
@@ -174,13 +183,7 @@ mod tests {
             "terminals": ["1", "5"], "agents": ["5"],
             "lanes": { "5": { "stage": "spec", "agent": "claude-code" } }
         }));
-        let facts = pane_facts(
-            &own_shell,
-            &shells,
-            &names(&["1", "5"]),
-            &BTreeMap::new(),
-            1,
-        );
+        let facts = pane_facts(&own_shell, &shells, &names(&["1", "5"]), None, 1);
         assert_eq!(facts[0].agent_state, None);
         assert_eq!(
             facts[0].hint.as_ref().map(|hint| hint.text.as_str()),

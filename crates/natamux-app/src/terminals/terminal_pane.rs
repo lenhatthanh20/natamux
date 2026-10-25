@@ -16,6 +16,7 @@ use super::pane_drop::with_drop;
 use super::pane_header::PaneHeader;
 use super::remote_terminal::RemoteTerminal;
 use super::terminal_find::TerminalFind;
+use super::terminal_screen::terminal_screen;
 use crate::app::shortcuts::{FindInTerminal, MaximizePane};
 use crate::components::button_style::{action_button, button_icon, quiet_button};
 use crate::components::icons::icon_path;
@@ -288,12 +289,7 @@ impl TerminalPane {
             // The terminal takes the wheel but lets it go on to the grid, which then scrolled
             // too; xterm.js stops it in the web app (T-0162).
             .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
-            .child(
-                div()
-                    .size_full()
-                    .when(ended, |screen| screen.opacity(0.6))
-                    .child(remote.view.clone()),
-            )
+            .child(terminal_screen(&self.terminal, ended, cx))
             .children(skeleton)
             .children(cover)
             .children(jump)

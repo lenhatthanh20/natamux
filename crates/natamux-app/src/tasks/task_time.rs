@@ -111,6 +111,22 @@ pub fn format_age(iso_time: &str, now_ms: i64, style: AgeStyle, offset_minutes: 
     }
 }
 
+/// How long until `format_age` of `iso_time` shows another label: at the next minute, hour or
+/// day of its age. None for a date (a week or more), which stays the same, and a bad time.
+pub fn next_age_change_ms(iso_time: &str, now_ms: i64) -> Option<i64> {
+    let age = (now_ms - parse_iso_ms(iso_time)?).max(0);
+    let unit = if age < 3_600_000 {
+        60_000
+    } else if age < 86_400_000 {
+        3_600_000
+    } else if age < WEEK_SECONDS * 1000 {
+        86_400_000
+    } else {
+        return None;
+    };
+    Some(unit - age % unit)
+}
+
 /// The exact local date and time for the tooltip of a relative time, like `Oct 8, 2026, 9:00:00 AM`.
 pub fn format_exact(iso_time: &str, offset_minutes: i32) -> String {
     let Some(ms) = parse_iso_ms(iso_time) else {
@@ -134,6 +150,19 @@ mod tests {
 
     fn now() -> i64 {
         parse_iso_ms("2026-10-08T12:00:00.000Z").unwrap()
+    }
+
+    #[test]
+    fn a_label_changes_at_the_next_minute_hour_or_day_of_its_age() {
+        let at = |text: &str| next_age_change_ms(text, now());
+        assert_eq!(at("2026-10-08T12:00:00.000Z"), Some(60_000));
+        assert_eq!(at("2026-10-08T11:59:30.000Z"), Some(30_000));
+        assert_eq!(at("2026-10-08T11:58:50.000Z"), Some(50_000));
+        assert_eq!(at("2026-10-08T10:30:00.000Z"), Some(1_800_000));
+        assert_eq!(at("2026-10-06T06:00:00.000Z"), Some(64_800_000));
+        assert_eq!(at("2026-10-01T12:00:00.000Z"), None);
+        assert_eq!(at("2026-10-09T12:00:00.000Z"), Some(60_000));
+        assert_eq!(at("soon"), None);
     }
 
     #[test]

@@ -5,40 +5,34 @@
 //! draw the lines.
 
 use std::collections::BTreeMap;
-use std::time::Duration;
 
-use editor::{Editor, EditorEvent};
 use gpui::{
-    Entity, FocusHandle, Focusable, KeyDownEvent, Pixels, Point, ScrollHandle, Subscription,
+    Entity, FocusHandle, Focusable, KeyDownEvent, ListAlignment, ListState, Pixels, Point,
+    Subscription, list,
 };
 use natamux_proto::tasks::task::TaskState;
 use ui::prelude::*;
 
+use crate::app::clock::follow_labels;
 use crate::app::dashboard::{Dashboard, TerminalReader};
 use crate::app::shortcuts::{
     Back, CollapseRow, ExpandRow, OpenRowMenu, OpenSelected, RemoveRow, RenameRow, SelectFirst,
     SelectLast, SelectNext, SelectPrevious,
 };
-use crate::sidebar::sidebar_text::{renamed_title, type_ahead_target, typed_word};
+use crate::sidebar::sidebar_text::{type_ahead_target, typed_word};
 use crate::sidebar::tree_entries::{EntryAction, TreeKey, move_target, tree_key};
 use crate::sidebar::tree_model::{Line, TreeInput, TreeModel};
+use crate::sidebar::tree_rename::Rename;
 use crate::sidebar::workspace_groups::{Hold, held_id, next_hold};
 
-/// The ages on the rows move on: the tree draws again this often.
-const CLOCK: Duration = Duration::from_secs(30);
+/// Rows laid out above and below the visible ones, so a scroll does not show them late.
+const OVERDRAW: f32 = 200.;
 
 /// shortcut: ages use UTC for dates a week old or more; pass the local offset once the app has a
 /// helper for it.
 pub(super) const OFFSET_MINUTES: i32 = 0;
 
 pub(super) use crate::app::clock::now_ms;
-
-/// The inline rename of a row: a one-line editor in place of the title.
-pub(super) struct Rename {
-    pub(super) task_id: String,
-    pub(super) editor: Entity<Editor>,
-    _blur: Subscription,
-}
 
 /// What the rows read from the dashboard besides the lines, taken once per frame.
 pub(super) struct Snapshot {
@@ -60,47 +54,50 @@ pub(super) struct Snapshot {
 pub struct WorkspaceTree {
     pub(super) dashboard: Entity<Dashboard>,
     pub(super) focus: FocusHandle,
-    pub(super) scroll: ScrollHandle,
+    /// The lines of the tree: only the ones on screen are laid out.
+    list: ListState,
+    /// What the rows read this frame besides the lines.
+    pub(super) shown: Option<Snapshot>,
     /// The row with the tree's tab stop, by entry key.
-    active: Option<String>,
+    pub(super) active: Option<String>,
     hold: Hold,
     pub(super) rename: Option<Rename>,
     /// The word typed for type-ahead, and when its last letter came.
     typed: (String, i64),
     /// The tree as last drawn, for keys and menus.
     pub(super) model: Option<TreeModel>,
+    /// The model was built after the dashboard's last change.
+    model_fresh: bool,
     _observe: Subscription,
-    _clock: gpui::Task<()>,
+    /// Draws the tree again when the next age label changes; only while the window has focus.
+    clock: Option<gpui::Task<()>>,
 }
 
 impl WorkspaceTree {
     pub fn new(dashboard: Entity<Dashboard>, cx: &mut Context<Self>) -> Self {
-        let observe = cx.observe(&dashboard, |_, _, cx| cx.notify());
-        let clock = cx.spawn(async move |tree, cx| {
-            loop {
-                cx.background_executor().timer(CLOCK).await;
-                if tree.update(cx, |_, cx| cx.notify()).is_err() {
-                    break;
-                }
-            }
+        let observe = cx.observe(&dashboard, |tree, _, cx| {
+            tree.model_fresh = false;
+            cx.notify();
         });
         WorkspaceTree {
             dashboard,
             focus: cx.focus_handle(),
-            scroll: ScrollHandle::new(),
+            list: ListState::new(0, ListAlignment::Top, px(OVERDRAW)),
+            shown: None,
             active: None,
             hold: Hold::default(),
             rename: None,
             typed: (String::new(), 0),
             model: None,
+            model_fresh: false,
             _observe: observe,
-            _clock: clock,
+            clock: None,
         }
     }
 
-    /// The scroll of the tree, for `--gate2`.
-    pub fn scroll_handle(&self) -> &ScrollHandle {
-        &self.scroll
+    /// The list of the tree, for `--gate2`.
+    pub fn list_state(&self) -> &ListState {
+        &self.list
     }
 
     fn entry_keys(&self) -> Vec<String> {
@@ -140,9 +137,9 @@ impl WorkspaceTree {
     /// Where a menu opened by the keyboard goes: under the row.
     pub(super) fn row_corner(&self, key: &str) -> Point<Pixels> {
         self.line_index(key)
-            .and_then(|index| self.scroll.bounds_for_item(index))
+            .and_then(|index| self.list.bounds_for_item(index))
             .map_or_else(
-                || self.scroll.bounds().origin,
+                || self.list.viewport_bounds().origin,
                 |bounds| bounds.bottom_left(),
             )
     }
@@ -154,7 +151,7 @@ impl WorkspaceTree {
 
     pub(super) fn focus_key(&mut self, key: String, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(index) = self.line_index(&key) {
-            self.scroll.scroll_to_item(index);
+            self.list.scroll_to_reveal_item(index);
         }
         self.active = Some(key);
         window.focus(&self.focus, cx);
@@ -311,90 +308,52 @@ impl WorkspaceTree {
         }
     }
 
-    pub(super) fn start_rename(
-        &mut self,
-        task_id: &str,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(task) = self.dashboard.read(cx).data.task(task_id).cloned() else {
+    /// The tree of the dashboard as it is now. It is built again only after the dashboard
+    /// changed: the beat of a running glyph and the age clock draw the same tree.
+    fn build_model(&mut self, cx: &App) {
+        if self.model_fresh && self.model.is_some() {
             return;
-        };
-        let editor = cx.new(|cx| {
-            let mut editor = Editor::single_line(window, cx);
-            editor.set_text(task.title.clone(), window, cx);
-            editor.select_all(&editor::actions::SelectAll, window, cx);
-            editor
-        });
-        // Leaving the field keeps the name, as Enter does.
-        let blur = cx.subscribe_in(
-            &editor,
-            window,
-            |tree, _, event: &EditorEvent, window, cx| {
-                if matches!(event, EditorEvent::Blurred) {
-                    tree.finish_rename(true, false, window, cx);
-                }
-            },
-        );
-        window.focus(&editor.focus_handle(cx), cx);
-        self.active = Some(format!("task:{task_id}"));
-        self.rename = Some(Rename {
-            task_id: task_id.to_owned(),
-            editor,
-            _blur: blur,
-        });
-        cx.notify();
-    }
-
-    /// `keep`: Enter or a blur saves, Esc drops. `refocus`: focus goes back to the row.
-    pub(super) fn finish_rename(
-        &mut self,
-        keep: bool,
-        refocus: bool,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(rename) = self.rename.take() else {
-            return;
-        };
-        let draft = rename.editor.read(cx).text(cx);
-        let title = self
-            .dashboard
-            .read(cx)
-            .data
-            .task(&rename.task_id)
-            .map(|task| task.title.clone())
-            .unwrap_or_default();
-        if keep && let Some(title) = renamed_title(&draft, &title) {
-            self.dashboard
-                .update(cx, |dashboard, cx| {
-                    dashboard.rename_task(&rename.task_id, &title, cx)
-                })
-                .detach();
         }
-        if refocus {
-            window.focus(&self.focus, cx);
-        }
-        cx.notify();
-    }
-
-    fn snapshot(&mut self, window: &Window, cx: &App) -> (TreeModel, Snapshot) {
         let dashboard = self.dashboard.read(cx);
         let data = &dashboard.data;
         let view = dashboard.view();
-        let current = dashboard.open_task.clone();
-        self.hold = next_hold(&self.hold, current.as_deref(), &data.tasks);
+        let current = dashboard.open_task.as_deref();
+        self.hold = next_hold(&self.hold, current, &data.tasks);
         let model = TreeModel::build(&TreeInput {
             repos: &data.repos,
             tasks: &data.tasks,
             filter: &dashboard.filter,
-            current_id: current.as_deref(),
+            current_id: current,
             held_id: held_id(&self.hold),
             pinned: &view.pinned,
             folds: &view.folds,
             terminals: &data.terminals,
         });
         dashboard.show_terminals(TerminalReader::Sidebar, model.reads_terminals.clone());
+        // A fold or a new task changes the lines: the list keeps the row at its top.
+        let top = self.list.logical_scroll_top();
+        self.list.reset(model.lines.len());
+        self.list.scroll_to(top);
+        self.model = Some(model);
+        self.model_fresh = true;
+        self.clock = None;
+    }
+
+    /// Draws the tree again when the soonest time label changes (`follow_labels`).
+    fn follow_clock(&mut self, now: i64, cx: &mut Context<Self>) {
+        let wait = self.model.as_ref().and_then(|model| model.next_label_change_ms(now));
+        follow_labels(&mut self.clock, wait, cx, |tree, cx| {
+            tree.clock = None;
+            cx.notify();
+        });
+    }
+
+    fn snapshot(&mut self, window: &Window, cx: &App) -> Snapshot {
+        self.build_model(cx);
+        let dashboard = self.dashboard.read(cx);
+        let data = &dashboard.data;
+        let view = dashboard.view();
+        let current = dashboard.open_task.clone();
         let mut snapshot = Snapshot {
             current,
             blurred: view.blurred.clone(),
@@ -406,7 +365,8 @@ impl WorkspaceTree {
             focused: self.focus.contains_focused(window, cx),
             stop: None,
         };
-        for line in &model.lines {
+        let lines = self.model.as_ref().map_or(&[][..], |model| &model.lines);
+        for line in lines {
             let Line::Task {
                 task, pinned_row, ..
             } = line
@@ -415,7 +375,7 @@ impl WorkspaceTree {
             };
             snapshot.add_task(data, task, *pinned_row, &view.blurred);
         }
-        (model, snapshot)
+        snapshot
     }
 }
 
@@ -432,10 +392,11 @@ impl Focusable for WorkspaceTree {
 
 impl Render for WorkspaceTree {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let (model, mut snapshot) = self.snapshot(window, cx);
-        self.model = Some(model);
+        let mut snapshot = self.snapshot(window, cx);
         snapshot.stop = self.stop(snapshot.current.as_deref());
-        let lines = self.render_lines(&snapshot, cx);
+        self.follow_clock(snapshot.now_ms, cx);
+        self.shown = Some(snapshot);
+        let rows = cx.processor(|tree, index: usize, _, cx| tree.render_line(index, cx));
         // Bindings of lists stay off while the rename field takes keys.
         let context = if self.rename.is_some() {
             "NatamuxList WorkspaceTree editing"
@@ -466,10 +427,6 @@ impl Render for WorkspaceTree {
             .on_key_down(cx.listener(Self::type_ahead))
             .size_full()
             .min_h_0()
-            .overflow_y_scroll()
-            .track_scroll(&self.scroll)
-            .px_2()
-            .pb_3()
-            .children(lines)
+            .child(list(self.list.clone(), rows).size_full().px_2().pb_3())
     }
 }

@@ -1,24 +1,17 @@
 //! How Root draws the shell: the bars, the docked sidebar or the drawer, and main.
 
-use gpui::{ClickEvent, KeyContext, MouseButton, StyleRefinement};
-use natamux_proto::tasks::task::TaskState;
+use gpui::{KeyContext, MouseButton, StyleRefinement};
 use ui::prelude::*;
 
 use super::{Root, Tool};
 use crate::app::commands_stages::ShowTasksProgress;
 use crate::app::layout_mode::{DetailsMode, SIDEBAR_WIDTH, SidebarMode, effective_sidebar_width};
-use crate::app::shell_rules::{Crumb, crumb, live_item, running_count, window_title};
 use crate::app::shortcuts::{
-    Approve, BlockTask, MarkReady, RequestChanges, ResumeAgent, RetryTask, ToggleAgents,
-    ToggleDetails, ToggleSidebar, UnblockTask,
+    Approve, BlockTask, MarkReady, RequestChanges, ResumeAgent, RetryTask, UnblockTask,
 };
-use crate::app::status_bar::StatusBar;
-use crate::app::status_bar::now_ms;
-use crate::app::title_bar::TitleBar;
 use crate::app::view_state::{Layout, SIDEBAR_MAX, SIDEBAR_MIN};
 use crate::components::resize_handle::{Edge, Limits, Resize, ResizeHandle};
 use crate::perf::{draws, overlay};
-use crate::tasks::task_attention::needs_me_tasks;
 
 /// The drawer of 768-1023: 300 wide, at most 85% of the window.
 const DRAWER_WIDTH: f32 = 300.;
@@ -99,89 +92,28 @@ impl Root {
             )
     }
 
+    /// Main is drawn again only when what it shows changed: output of one terminal, a blink in
+    /// the bars or a dashboard event draws Root, not the other views.
     fn render_main(&self, cx: &App) -> AnyElement {
         match &self.tool {
             Tool::Bench(bench) => bench.clone().into_any_element(),
             Tool::Ime(check) => check.clone().into_any_element(),
-            Tool::None if self.dashboard.read(cx).open_task.is_some() => {
-                self.workspace.clone().into_any_element()
-            }
-            Tool::None if self.dashboard.read(cx).agents_open => {
-                self.agents.clone().into_any_element()
-            }
+            Tool::None if self.dashboard.read(cx).open_task.is_some() => self
+                .workspace
+                .clone()
+                .cached(StyleRefinement::default().size_full())
+                .into_any_element(),
+            Tool::None if self.dashboard.read(cx).agents_open => self
+                .agents
+                .clone()
+                .cached(StyleRefinement::default().size_full())
+                .into_any_element(),
             Tool::None => self
                 .tasks
                 .clone()
                 .cached(StyleRefinement::default().size_full())
                 .into_any_element(),
         }
-    }
-
-    /// The title bar and the status bar, and the window title "(N) Natamux".
-    fn render_bars(
-        &mut self,
-        width: f32,
-        sidebar_shown: bool,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> (TitleBar, StatusBar) {
-        let dashboard = self.dashboard.read(cx);
-        let tasks = &dashboard.data.tasks;
-        let now = now_ms();
-        let needs_you = needs_me_tasks(tasks, now).len();
-        let running = running_count(tasks);
-        let open = dashboard
-            .open_task
-            .as_deref()
-            .and_then(|id| dashboard.data.task(id));
-        let settings = dashboard.settings.is_some();
-        let crumb = if settings {
-            Crumb::View("Settings")
-        } else {
-            crumb(open, dashboard.agents_open, &dashboard.data.repos)
-        };
-        let live = live_item(&dashboard.data.link);
-        let jobs = dashboard.data.jobs.clone();
-        let title = window_title(needs_you);
-        if title != self.title {
-            window.set_window_title(&title);
-            self.title = title;
-        }
-        let show_waiting =
-            |root: &mut Root, _: &ClickEvent, window: &mut Window, cx: &mut Context<Root>| {
-                root.show_needs_you(window, cx)
-            };
-        let agents_open = dashboard.agents_open;
-        // Over Settings both toggles show off; a click closes Settings (`close_settings`).
-        let details = if settings {
-            Ok(false)
-        } else {
-            self.details_toggle(window, cx)
-        };
-        let sidebar_shown = sidebar_shown && !settings;
-        let title_bar = TitleBar::new(crumb, self.dashboard.clone());
-        let status_bar = StatusBar::new(live, running, needs_you, jobs, width)
-            .toggles(sidebar_shown, details, agents_open)
-            .on_toggles(
-                cx.listener(|root, _: &ClickEvent, window, cx| {
-                    root.toggle_sidebar(&ToggleSidebar, window, cx)
-                }),
-                cx.listener(|root, _: &ClickEvent, window, cx| {
-                    root.toggle_details(&ToggleDetails, window, cx)
-                }),
-                cx.listener(|root, _: &ClickEvent, window, cx| {
-                    root.toggle_agents(&ToggleAgents, window, cx)
-                }),
-            )
-            .on_running(cx.listener(|root, _: &ClickEvent, _, cx| {
-                root.show_state(Some(TaskState::Running), cx)
-            }))
-            .on_needs_you(cx.listener(show_waiting))
-            .on_open_task(cx.listener(|root, id: &str, _, cx| {
-                root.dashboard
-                    .update(cx, |dashboard, cx| dashboard.open(id, cx))
-            }));
-        (title_bar, status_bar)
     }
 
     fn render_body(&mut self, width: f32, window: &Window, cx: &mut Context<Self>) -> Div {
@@ -301,7 +233,7 @@ impl Render for Root {
         } else {
             self.drawer_open
         };
-        let (title_bar, status_bar) = self.render_bars(width, sidebar_shown, window, cx);
+        let (title_bar, status_bar) = self.render_bars(sidebar_shown, window, cx);
         let body = self.render_body(width, window, cx);
         let mut context = KeyContext::new_with_defaults();
         context.add("Natamux");

@@ -5,15 +5,35 @@
 #![cfg_attr(not(test), allow(dead_code))]
 
 use natamux_proto::projects::repo::BranchList;
+use natamux_proto::stages::progress::StageProgress;
 use natamux_proto::tasks::task::{Task, TaskState};
 use natamux_proto::terminals::list::{TerminalLane, TerminalList};
 
 use super::task_rules::{AgentAction, TaskAction};
-use super::task_time::{AgeStyle, format_age, format_exact};
+use super::task_attention::next_row_change_ms;
+use super::task_time::{AgeStyle, format_age, format_exact, next_age_change_ms};
+use crate::stages::overview_rules::next_progress_change_ms;
 use crate::workspaces::new_workspace_rules::start_branch;
 
 pub const NO_NOTES: &str = "No notes. Add some with Edit.";
 pub const NO_WORKSPACE: &str = "No workspace.";
+
+/// How long until a time the panel shows changes by the clock alone: the ages of the task and of
+/// its events, the quiet banner, and the times of the Progress tab.
+pub fn details_wait<'a>(
+    task: &Task,
+    event_times: impl IntoIterator<Item = &'a str>,
+    progress: &[StageProgress],
+    now_ms: i64,
+) -> Option<i64> {
+    let ages = event_times
+        .into_iter()
+        .chain([task.created_at.as_str()])
+        .filter_map(|at| next_age_change_ms(at, now_ms));
+    ages.chain(next_row_change_ms([task], now_ms))
+        .chain(next_progress_change_ms(task, progress, now_ms))
+        .min()
+}
 
 /// "No sign of life for 12m. The agent may be stuck." The caller shows it when `is_quiet`.
 pub fn quiet_banner(updated_at: &str, now_ms: i64, offset_minutes: i32) -> String {

@@ -64,6 +64,30 @@ impl OpenShells {
         }
     }
 
+    /// The program in front of these shells changed: only they are looked at again. A shell the
+    /// list does not have yet, or an ended task, needs the whole `sync`.
+    pub(super) fn sync_programs(&self, task_id: &str, terminals: &[String]) {
+        let known = {
+            let state = self.lock();
+            if state.stopped {
+                return;
+            }
+            state.entries.get(task_id).is_some_and(|shells| {
+                terminals.iter().all(|name| shells.contains_key(name))
+            })
+        };
+        if !known || (self.options.is_ended)(task_id) {
+            self.sync(task_id);
+            return;
+        }
+        for name in terminals {
+            if self.options.terminals.is_open(task_id, name) {
+                self.watch_exit(task_id, name);
+                self.find_agent(task_id, name);
+            }
+        }
+    }
+
     /// A stage or a person started a shell of a waiting name, or of one that just closed: it is a
     /// new shell, not the old one. The stage of a held shell started its agent again. Gives those
     /// names, out of the waiting, held and closing lists, with their quit watch stopped.
@@ -210,8 +234,8 @@ impl OpenShells {
         state.probed.insert(key, program);
         let this = self.this.clone();
         let (task, name) = (task_id.to_string(), terminal.to_string());
-        // `ps` may take a moment: not in the caller's turn.
-        self.options.scheduler.after(0, move || {
+        // `ps` may take a moment: not in the caller's turn, and not on the timer thread.
+        self.options.scheduler.off_thread(move || {
             let Some(agent) = agent_in(&task, &name) else {
                 return;
             };

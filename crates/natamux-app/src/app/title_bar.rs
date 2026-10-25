@@ -15,7 +15,7 @@ use crate::components::icons::icon_path;
 use crate::components::menu::MenuLayer;
 
 /// Zed's `platform_title_bar_height`: 1.75 rem, at least 34 px (the traffic lights need it).
-fn title_bar_height(window: &Window) -> Pixels {
+pub fn title_bar_height(window: &Window) -> Pixels {
     (window.rem_size() * 1.75).max(px(34.))
 }
 

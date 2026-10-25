@@ -761,6 +761,10 @@ criteria = "safe-to-deploy"
 version = "0.3.34"
 criteria = "safe-to-deploy"
 
+[[exemptions.futures-concurrency]]
+version = "7.7.1"
+criteria = "safe-to-deploy"
+
 [[exemptions.futures-executor]]
 version = "0.3.34"
 criteria = "safe-to-deploy"
@@ -1726,6 +1730,10 @@ version = "0.4.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.quick-error]]
+version = "1.2.3"
+criteria = "safe-to-deploy"
+
+[[exemptions.quick-error]]
 version = "2.0.1"
 criteria = "safe-to-deploy"
 
@@ -1759,6 +1767,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.rand_core]]
 version = "0.9.3"
+criteria = "safe-to-deploy"
+
+[[exemptions.rand_xorshift]]
+version = "0.4.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.range-alloc]]
@@ -1915,6 +1927,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.rustversion]]
 version = "1.0.22"
+criteria = "safe-to-deploy"
+
+[[exemptions.rusty-fork]]
+version = "0.3.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.rustybuzz]]
@@ -2425,6 +2441,10 @@ criteria = "safe-to-deploy"
 version = "1.1.0"
 criteria = "safe-to-deploy"
 
+[[exemptions.unarray]]
+version = "0.1.4"
+criteria = "safe-to-deploy"
+
 [[exemptions.unicode-bidi-mirroring]]
 version = "0.4.0"
 criteria = "safe-to-deploy"
@@ -2503,6 +2523,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.vte]]
 version = "0.15.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.wait-timeout]]
+version = "0.2.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.walkdir]]

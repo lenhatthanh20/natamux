@@ -34,31 +34,29 @@ fn under_guide(element: AnyElement, cx: &App) -> AnyElement {
 }
 
 impl WorkspaceTree {
-    pub(super) fn render_lines(&self, snap: &Snapshot, cx: &mut Context<Self>) -> Vec<AnyElement> {
-        let Some(model) = self.model.as_ref() else {
-            return Vec::new();
+    /// Line `index` of the tree, drawn when the list shows it.
+    pub(super) fn render_line(&self, index: usize, cx: &mut Context<Self>) -> AnyElement {
+        let (Some(model), Some(snap)) = (self.model.as_ref(), self.shown.as_ref()) else {
+            return div().into_any_element();
         };
-        let lines = &model.lines;
-        let mut out = Vec::with_capacity(lines.len());
-        for line in lines {
-            let element = match line {
-                Line::PinnedHeader { count } => pinned_header(*count),
-                Line::GroupHeader { group } => self.group_header(*group, model, snap, cx),
-                Line::Task { task, nested, .. } => {
-                    let row = self.task_row(task, model, snap, cx);
-                    if *nested { under_guide(row, cx) } else { row }
-                }
-                Line::Terminal { task_id, row, .. } => {
-                    let row = self.terminal_row(task_id, row, snap, cx);
-                    under_guide(row, cx)
-                }
-                Line::NoWorkspaces { group } => no_workspaces(*group, model, &self.dashboard),
-                Line::NoMatches { group } => no_matches(*group, model, snap),
-                Line::Finished { group } => self.finished_row(*group, model, snap, cx),
-            };
-            out.push(element);
+        let Some(line) = model.lines.get(index) else {
+            return div().into_any_element();
+        };
+        match line {
+            Line::PinnedHeader { count } => pinned_header(*count),
+            Line::GroupHeader { group } => self.group_header(*group, model, snap, cx),
+            Line::Task { task, nested, .. } => {
+                let row = self.task_row(task, model, snap, cx);
+                if *nested { under_guide(row, cx) } else { row }
+            }
+            Line::Terminal { task_id, row, .. } => {
+                let row = self.terminal_row(task_id, row, snap, cx);
+                under_guide(row, cx)
+            }
+            Line::NoWorkspaces { group } => no_workspaces(*group, model, &self.dashboard),
+            Line::NoMatches { group } => no_matches(*group, model, snap),
+            Line::Finished { group } => self.finished_row(*group, model, snap, cx),
         }
-        out
     }
 
     fn set_fold(&mut self, key: String, open: bool, window: &mut Window, cx: &mut Context<Self>) {

@@ -4,6 +4,7 @@
 
 use std::sync::Arc;
 
+use hyper::body::Bytes;
 use natamux_proto::terminals::messages::{ACK_EVERY_BYTES, ServerMessage};
 use natamux_screen::frames::split_frames;
 
@@ -36,7 +37,7 @@ pub fn resume(session: &mut Session, client: &ClientRef, offset: Option<u64>) ->
     true
 }
 
-fn send_missed(client: &ClientRef, from: u64, frames: Vec<Arc<[u8]>>, to: u64) {
+fn send_missed(client: &ClientRef, from: u64, frames: Vec<Bytes>, to: u64) {
     client.send(Frame::Message(ServerMessage::Resume { offset: from }));
     for frame in frames {
         client.send(Frame::Bytes(frame));
@@ -99,10 +100,11 @@ fn run_snapshot(session: &mut Session, clients: &[ClientRef]) {
     flush_output(session);
     let cut = session.offset;
     let size = session.size;
-    let snapshot = session.screen.snapshot();
-    let frames: Vec<Arc<[u8]>> = split_frames(&snapshot, OUTPUT_FRAME_BYTES)
+    // One buffer for the whole snapshot: each frame is a range of it, for every client.
+    let snapshot = Bytes::from(session.screen.snapshot());
+    let frames: Vec<Bytes> = split_frames(&snapshot, OUTPUT_FRAME_BYTES)
         .into_iter()
-        .map(Arc::from)
+        .map(|frame| snapshot.slice_ref(frame))
         .collect();
     let now = session.now();
     for client in &attached {
@@ -111,7 +113,7 @@ fn run_snapshot(session: &mut Session, clients: &[ClientRef]) {
             rows: size.rows,
         }));
         for frame in &frames {
-            client.send(Frame::Bytes(Arc::clone(frame)));
+            client.send(Frame::Bytes(frame.clone()));
         }
         client.send(Frame::Message(ServerMessage::Replayed { offset: cut }));
         if let Some(state) = session.client_state(client) {

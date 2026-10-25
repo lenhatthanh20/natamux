@@ -44,6 +44,12 @@ pub enum DaemonMessage {
     ShellsChanged {
         task_id: String,
     },
+    /// The program in the foreground of these shells changed; none opened or closed. Goes out as
+    /// `shells.changed`: the names are for `OpenShells`, which looks at only those shells.
+    ProgramsChanged {
+        task_id: String,
+        terminals: Vec<String>,
+    },
     WorkspaceDirty {
         task_id: String,
     },
@@ -78,7 +84,9 @@ impl DaemonMessage {
             DaemonMessage::TaskDeleted { .. } => "task.deleted",
             DaemonMessage::ReposChanged => "repos.changed",
             DaemonMessage::ActivityChanged { .. } => "activity.changed",
-            DaemonMessage::ShellsChanged { .. } => "shells.changed",
+            DaemonMessage::ShellsChanged { .. } | DaemonMessage::ProgramsChanged { .. } => {
+                "shells.changed"
+            }
             DaemonMessage::WorkspaceDirty { .. } => "workspace.dirty",
             DaemonMessage::JobsChanged { .. } => "jobs.changed",
             DaemonMessage::WorkspacePreparing { .. } => "workspace.preparing",
@@ -111,6 +119,7 @@ impl DaemonMessage {
             }
             DaemonMessage::TaskDeleted { task_id }
             | DaemonMessage::ShellsChanged { task_id }
+            | DaemonMessage::ProgramsChanged { task_id, .. }
             | DaemonMessage::WorkspaceDirty { task_id } => {
                 json!({ "kind": kind, "taskId": task_id })
             }

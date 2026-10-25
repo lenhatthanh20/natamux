@@ -144,7 +144,30 @@ struct LaunchWatch {
 #[derive(Default)]
 struct Watching {
     last_look: HashMap<String, i64>,
+    /// Its own clock: output just before a bell must not hide it.
+    last_bell: HashMap<String, i64>,
     launches: HashMap<String, LaunchWatch>,
+}
+
+impl Watching {
+    /// Whether a chunk of the first terminal sends a look job, and if it looks for a bell. A
+    /// program that rings on every line would send a job, and a read of the task, per chunk.
+    fn look_for(&mut self, task_id: &str, bell: bool, now: i64) -> Option<bool> {
+        let due = |looks: &HashMap<String, i64>| {
+            looks
+                .get(task_id)
+                .is_none_or(|last| now - last >= LOOK_EVERY_MS)
+        };
+        let bell = bell && due(&self.last_bell);
+        if !bell && !due(&self.last_look) {
+            return None;
+        }
+        if bell {
+            self.last_bell.insert(task_id.to_string(), now);
+        }
+        self.last_look.insert(task_id.to_string(), now);
+        Some(bell)
+    }
 }
 
 /// Work for the signals thread.
@@ -226,15 +249,15 @@ impl GenericSignals {
         if terminal != MAIN_TERMINAL {
             return;
         }
-        let bell = data.contains(&BELL);
-        {
-            let mut watching = self.watching.lock().unwrap_or_else(PoisonError::into_inner);
-            let last = watching.last_look.get(task_id).copied().unwrap_or(0);
-            if !bell && now - last < LOOK_EVERY_MS {
-                return;
-            }
-            watching.last_look.insert(task_id.to_string(), now);
-        }
+        let rang = data.contains(&BELL);
+        let look = self
+            .watching
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .look_for(task_id, rang, now);
+        let Some(bell) = look else {
+            return;
+        };
         self.send(Job::Look {
             task_id: task_id.to_string(),
             terminal: terminal.to_string(),
@@ -360,5 +383,47 @@ impl Worker {
         if let Err(error) = self.tasks.record_activity(task_id, options) {
             eprintln!("Could not record the activity of {task_id}: {error}");
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const NOW: i64 = 1_000_000;
+
+    #[test]
+    fn many_bells_of_a_task_send_one_look_per_look_time() {
+        let mut watching = Watching::default();
+        assert_eq!(watching.look_for("T-1", true, NOW), Some(true));
+        for later in [1, 500, LOOK_EVERY_MS - 1] {
+            assert_eq!(watching.look_for("T-1", true, NOW + later), None);
+        }
+        assert_eq!(
+            watching.look_for("T-1", true, NOW + LOOK_EVERY_MS),
+            Some(true)
+        );
+    }
+
+    #[test]
+    fn bells_of_two_tasks_send_a_look_each() {
+        let mut watching = Watching::default();
+        assert_eq!(watching.look_for("T-1", true, NOW), Some(true));
+        assert_eq!(watching.look_for("T-2", true, NOW), Some(true));
+    }
+
+    #[test]
+    fn output_just_before_a_bell_does_not_hide_it() {
+        let mut watching = Watching::default();
+        assert_eq!(watching.look_for("T-1", false, NOW), Some(false));
+        assert_eq!(watching.look_for("T-1", false, NOW + 1), None);
+        assert_eq!(watching.look_for("T-1", true, NOW + 2), Some(true));
+    }
+
+    #[test]
+    fn a_held_back_bell_still_counts_as_output_when_a_look_is_due() {
+        let mut watching = Watching::default();
+        watching.last_bell.insert("T-1".to_string(), NOW);
+        assert_eq!(watching.look_for("T-1", true, NOW + 1), Some(false));
     }
 }

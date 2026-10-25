@@ -8,6 +8,8 @@ use natamux_proto::tasks::task::{Task, TaskState};
 /// One ISO parser for the app: it takes the text by characters, so any text is safe.
 pub use crate::tasks::task_time::parse_iso_ms;
 
+use crate::tasks::task_attention::next_quiet_ms;
+
 pub const DEFAULT_REPO_ID: &str = "default";
 
 // A running task with no news for this long counts as one that needs the user.
@@ -217,6 +219,12 @@ pub fn short_branch(task: &Task) -> String {
 
 /// What a folded group hides that the user should still see: a workspace that needs them, else
 /// the workspace that is open. The state of that workspace is the color of the dot. None: nothing.
+/// How long until the hint of a folded group changes by the clock alone: a running task in it
+/// turns quiet, and the hint shows it as one that needs the user.
+pub fn next_hint_change_ms(group: &RepoGroup, now_ms: i64) -> Option<i64> {
+    next_quiet_ms(group.open.iter().chain(&group.nested), now_ms)
+}
+
 pub fn collapsed_hint(
     group: &RepoGroup,
     current_id: Option<&str>,

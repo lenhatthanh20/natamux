@@ -1,6 +1,7 @@
 use natamux_proto::terminals::list::TerminalLane;
 
 use super::*;
+use crate::tasks::task_time::parse_iso_ms;
 
 fn task(id: &str, state: TaskState) -> Task {
     Task {
@@ -243,4 +244,17 @@ fn a_filter_that_matches_a_subtask_keeps_its_parent_open() {
     let model = fixture.model();
     assert!(model.is_open("T-0001"));
     assert_eq!(keys(&model), ["repo:a", "task:T-0001", "task:T-0002"]);
+}
+
+#[test]
+fn a_folded_group_waits_for_its_tasks_to_turn_quiet() {
+    let now = parse_iso_ms("2026-10-22T09:05:00.000Z").unwrap_or_default();
+    let mut fixture = Fixture::new(vec![task("T-0001", TaskState::Running)]);
+    // Shown, the row's age changes at 09:06.
+    assert_eq!(fixture.model().next_label_change_ms(now), Some(60_000));
+    // Folded, the group's hint changes when the task turns quiet at 09:10.
+    fixture.folds = vec![("repo:a".into(), false)];
+    assert_eq!(fixture.model().next_label_change_ms(now), Some(300_000));
+    fixture.tasks = vec![task("T-0001", TaskState::Done)];
+    assert_eq!(fixture.model().next_label_change_ms(now), None);
 }
