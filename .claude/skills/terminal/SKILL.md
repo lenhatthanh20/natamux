@@ -1,6 +1,6 @@
 ---
 name: terminal
-description: How Natamux terminals work, end to end (node-pty shell, daemon screen, WebSocket, xterm.js pane), and the known issues that come from Claude Code, not from Natamux. Use before changing terminal code, or when the user reports broken, duplicated, lost or garbled text, resize trouble, typing problems (Vietnamese input), memory use of shells, or shells that do not end.
+description: How Natamux terminals work, end to end (PTY shell, daemon screen, WebSocket, xterm.js pane or the app's pane), and the known issues that come from Claude Code, not from Natamux. Use before changing terminal code, or when the user reports broken, duplicated, lost or garbled text, resize trouble, typing problems (Vietnamese input), memory use of shells, or shells that do not end.
 ---
 
 # Terminals
@@ -8,7 +8,7 @@ description: How Natamux terminals work, end to end (node-pty shell, daemon scre
 ## Path of the bytes
 
 ```
-node-pty shell (daemon) ──output──▶ ScreenState (headless xterm) ──sliced snapshot on attach──▶ client
+PTY shell (daemon) ───────output──▶ Screen (alacritty_terminal) ──sliced snapshot on attach──▶ client
         ▲                     └─▶ batch ─▶ binary frames (+ 1 MB ring) ─── live output ────────────▶ client
         └── write() queue ◀── input / run / paste ◀── WebSocket /api/tasks/:id/terminal ◀── TerminalSession (xterm 6)
 ```
@@ -19,12 +19,12 @@ The dashboard keeps live terminals in a cache (`terminal-cache.ts`). A pane that
 
 | File | What |
 |---|---|
-| `packages/daemon/src/terminals/terminal-service.ts` | `TerminalService`: sessions, attach and detach, close. The work is in free functions on a `Session`: `session-lifecycle.ts` (spawn, wire output and exit, close), `session-output.ts` (batching, ring, flow control), `session-snapshot.ts` (snapshot jobs, resume, catch-up), `session-input.ts` (input queue, size) |
-| `packages/daemon/src/terminals/screen-state.ts`, `terminal-limits.ts`, `terminal-types.ts` | `ScreenState`, `splitFrames`, `sliceEnd`; the tuning constants; the shared types and errors |
-| `packages/daemon/src/terminals/pty.ts` | node-pty spawn with `encoding: null`: output stays UTF-8 bytes (Windows gives text, encoded once). `pause`/`resume`. `kill` signals the whole process tree (needs `ps`), then the shell. SIGKILL also reaches the processes the SIGHUP reached, after the shell ended; `leftover` tells if one still runs |
-| `packages/daemon/src/terminals/shell-command.ts` | Which shell: `$SHELL` or bash, as a login shell |
-| `packages/daemon/src/http/server.ts` | WebSocket route. A one-time ticket (`POST /tasks/:id/terminal/ticket`, 30 s) replaces the token, because a browser cannot set headers. Answers `ping`, drops a socket silent for `SILENT_CLOSE_MS`, closes a resume of a gone shell with `CLOSE_GONE` |
-| `packages/daemon/src/agents/agent-runner.ts`, `stages/stage-runner.ts` (`stage-shells.ts`) | An agent starts by sourcing `<dataDir>/agent-launch-<id>.sh` in shell 1. `agentRuns` counts the agent as running while the foreground program is not in `SHELLS` |
+| `crates/natamux-daemon/src/terminals/service.rs` | The terminal service: sessions, attach and detach, close. The work is in `session_lifecycle.rs` (spawn, wire output and exit, close), `session_output.rs` (batching, ring, flow control), `session_snapshot.rs` (snapshot jobs, resume, catch-up), `session_input.rs` (input queue, size) |
+| `crates/natamux-screen/src/` | The screen of a shell on `alacritty_terminal`, the frames and the snapshot text. `crates/natamux-daemon/src/terminals/limits.rs` and `types.rs`: the tuning constants, the shared types and errors |
+| `crates/natamux-pty/src/` | The PTY: `pty.rs`, `unix.rs`, `windows.rs`. `process_tree.rs` signals the whole process tree, then the shell. `input_gap.rs` keeps the DEL gap |
+| `crates/natamux-pty/src/shell_command.rs` | Which shell: `$SHELL` or bash, as a login shell |
+| `crates/natamux-daemon/src/http/terminal_socket.rs`, `tickets.rs` in `terminals/` | WebSocket route. A one-time ticket (`POST /tasks/:id/terminal/ticket`, 30 s) replaces the token, because a browser cannot set headers. Answers `ping`, drops a silent socket, closes a resume of a gone shell with the gone close code |
+| `crates/natamux-daemon/src/agents/runner.rs`, `stages/runner.rs` (`stages/shells.rs`) | An agent starts by sourcing `<dataDir>/agent-launch-<id>.sh` in shell 1. The agent counts as running while the foreground program is not a shell |
 | `packages/core/src/terminals/terminal.ts` | Message schemas, close codes, `shellIdSchema`. `ACK_EVERY_BYTES` (64 KB). Heartbeat and reconnect constants. `TERMINAL_HISTORY_BYTES` (10 MB), `scrollbackLines(cols)` (1,000 to 10,000 rows) |
 | `packages/web/src/features/terminals/TerminalView.tsx` | React view: takes a session from the cache in a layout effect, shows it in a second one, shows status (an overlay strip), find, "Jump to latest" |
 | `packages/web/src/features/terminals/session/` | One live terminal outside React: xterm 6, fit, Unicode 11, search, links, socket, reconnect and heartbeat, `sendSize`/`claimSize`, `show`/`hide`. Only `TerminalView.tsx` imports it, so xterm stays out of the first load. `session.search()` makes the `SearchAddon` at the first find (`TerminalFind` calls it); `importWebgl()` loads `@xterm/addon-webgl` with the first GPU renderer |
@@ -34,9 +34,11 @@ The dashboard keeps live terminals in a cache (`terminal-cache.ts`). A pane that
 | `packages/web/src/features/terminals/terminal-theme.ts` | Palettes, scrollbar colors, `TERMINAL_LOOK` (cursor, bold, line height, contrast, fast scroll, scrollbar width through `overviewRuler.width`) |
 | `packages/web/src/lib/fonts.ts`, `src/assets/fonts/` | `TERMINAL_FONT`: JetBrains Mono, then the bundled Nerd Font icons (`ICON_FONT`, `@font-face` in `styles.css`) |
 | `packages/web/src/features/terminals/terminal-font.ts`, `TerminalFontDialog.tsx` | Font: the user's choice, then Ghostty's, then the default. localStorage `natamux.terminal-font` and `natamux.ghostty-font` |
-| `packages/desktop/src/app/ghostty-config.ts` | Reads `font-family` and `font-size` from the Ghostty config files |
+| `crates/natamux-app/src/terminals/terminal_font.rs` | The desktop app's terminal font, also from `font-family` and `font-size` of the Ghostty config files |
 
 ## Rules the code keeps
+
+The daemon sections below were written for the Node daemon, so they use its names (`ScreenState`, xterm write callbacks, node-pty). The Rust daemon keeps the same rules, as the contract suite checked; find its names in the files above.
 
 - **One screen per shell in the daemon.** A client that attaches gets a snapshot of `ScreenState` (see Snapshot). Output that comes in meanwhile waits in `ClientState.waiting`.
 - **Order.** `resize` and `snapshot` run in xterm write callbacks, after the output already received. After `dispose()` the callbacks do nothing. Output is flushed before every control message and pty resize.
@@ -224,7 +226,7 @@ Before calling something a Natamux bug, check whether the bytes are wrong (daemo
 
 ## Tests
 
-- **Daemon:** `terminal-service.test.ts`.
+- **Daemon:** the Rust tests beside the code in `crates/natamux-daemon/src/terminals/`, `crates/natamux-screen` and `crates/natamux-pty`, and `crates/natamux-daemon/tests/`. The helpers below are of the removed Node test file; the last version is on `legacy/electron`.
   - Clients are `client()`: `frames` holds binary and control frames. Helpers: `bytesOf`, `outputOf`, `controls`, `isBytes`, `numbered(count)`, `screenOf(frames, size)`, `headless(size)`, `mixedLines(cols, count)` (colors, wide, emoji, wraps, Vietnamese), `nextTurn()`.
   - `onEachSlice(between)` spies on `SerializeAddon.serialize` and calls `between` on every history slice: use it to send output or resize while a sliced snapshot runs.
   - `fakeSpawner()` and `FakePty` (`terminal-fake.fixture.ts`) record `written`, `sizes`, `signals`, and `flow` (`pause`/`resume` calls in order) with `paused`. `emit()` takes text or bytes and delivers a Buffer, as the real pty; it still delivers while paused. Set `program` to fake the foreground, `stubborn` to ignore SIGHUP, and `orphan` for a program that ignores SIGHUP while the shell ends.
