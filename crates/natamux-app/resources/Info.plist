@@ -5,21 +5,23 @@
   <key>CFBundleDevelopmentRegion</key>
   <string>en</string>
   <key>CFBundleDisplayName</key>
-  <string>Natamux Native</string>
+  <string>Natamux</string>
   <key>CFBundleExecutable</key>
   <string>natamux-app</string>
+  <key>CFBundleIconFile</key>
+  <string>icon.icns</string>
   <key>CFBundleIdentifier</key>
-  <string>dev.natamux.native</string>
+  <string>dev.natamux.app</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundleName</key>
-  <string>Natamux Native</string>
+  <string>Natamux</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
-  <string>0.1.0</string>
+  <string>0.1.43</string>
   <key>CFBundleVersion</key>
-  <string>0.1.0</string>
+  <string>0.1.43</string>
   <key>LSMinimumSystemVersion</key>
   <string>11.0</string>
   <key>NSHighResolutionCapable</key>

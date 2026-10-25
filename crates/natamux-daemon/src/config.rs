@@ -17,6 +17,7 @@ pub struct Config {
     pub worktrees_dir: PathBuf,
     /// `NATAMUX_REPO_DIR`: the folder added once as the `default` project.
     pub repo_dir: Option<PathBuf>,
+    pub web_dir: Option<PathBuf>,
     pub token: String,
     pub token_was_generated: bool,
     /// The token of the task shells. Only made here, so an agent cannot set it.
@@ -85,6 +86,7 @@ pub fn load_config(env: &Env, cwd: &Path) -> Result<Config, String> {
         data_dir,
         worktrees_dir,
         repo_dir: value(env, "NATAMUX_REPO_DIR").map(PathBuf::from),
+        web_dir: value(env, "NATAMUX_WEB_DIR").map(PathBuf::from),
         token: configured.map_or_else(|| random_id(24), String::from),
         token_was_generated: configured.is_none(),
         agent_token: random_id(24),
@@ -106,6 +108,11 @@ pub fn shell_env(env: &Env, agent_token: &str, daemon_url: &str) -> Env {
     }
     out.insert("NATAMUX_TOKEN".into(), agent_token.into());
     out.insert("NATAMUX_URL".into(), daemon_url.into());
+    if let Some(bin_dir) = value(env, "NATAMUX_BIN_DIR") {
+        let path = env.get("PATH").map(String::as_str).unwrap_or("");
+        let separator = if cfg!(windows) { ';' } else { ':' };
+        out.insert("PATH".into(), format!("{bin_dir}{separator}{path}"));
+    }
     out
 }
 
@@ -192,5 +199,13 @@ mod tests {
         assert_eq!(out["LANG"], "C.UTF-8");
         let set = shell_env(&env(&[("LC_ALL", "vi_VN.UTF-8")]), "agent", "u");
         assert!(!set.contains_key("LANG"));
+    }
+
+    #[test]
+    fn task_shells_find_the_sibling_rust_cli_first() {
+        let set = env(&[("NATAMUX_BIN_DIR", "/app/bin"), ("PATH", "/usr/bin")]);
+        let out = shell_env(&set, "agent", "http://127.0.0.1:4317");
+        let separator = if cfg!(windows) { ';' } else { ':' };
+        assert_eq!(out["PATH"], format!("/app/bin{separator}/usr/bin"));
     }
 }

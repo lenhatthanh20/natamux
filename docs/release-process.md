@@ -15,7 +15,7 @@ It does steps 2 to 5: it asks before it makes and pushes the signed tag, waits f
 
 ## Steps
 
-1. On a branch: set the version in `packages/{cli,core,daemon,desktop,web}/package.json` and the homepage, write `docs/releases/vX.Y.Z.md` and the changelog section (the docs skill says how). `scripts/release.test.sh` must pass. Merge to `main`.
+1. On a branch: set the version in every `crates/*/Cargo.toml`, `Cargo.lock`, `packages/{core,web}/package.json`, the macOS app bundle, and the homepage. Write `docs/releases/vX.Y.Z.md` and the changelog section (the docs skill says how). `scripts/release.test.sh` and a Release dry run with `publish=false` must pass in CI. Merge to `main`.
 2. Tag the merge commit with a tag signed by your SSH key (see [The tag key](#the-tag-key)) and push it:
 
    ```sh
@@ -47,7 +47,7 @@ Do not re-run the Release workflow once signing has started. A re-run replaces t
 ## The release key
 
 - A [minisign](https://jedisct1.github.io/minisign/) key pair, made once on the owner's Mac: `minisign -G -p ~/.minisign/natamux.pub -s ~/.minisign/natamux.key`. The secret key has a password, stays on that Mac and an offline backup, and is never on GitHub or in CI. `NATAMUX_MINISIGN_SECRET` points the script at another file.
-- The public key (key id `3F449A1E170BB7A0`) is `RELEASE_SIGNER` in `packages/desktop/src/release-signature.ts`, and it is printed on the install page, the security page and in `SECURITY.md`. The CI job `release-signer` fails when it is not a minisign key, when it is a test key, or when one of those pages does not show it.
+- The public key (key id `3F449A1E170BB7A0`) is `RELEASE_SIGNER` in `crates/natamux-update/src/signature.rs`, and it is printed on the install page, the security page and in `SECURITY.md`. The release checks fail when it is not the pinned minisign key.
 
   ```
   RWSgtwsXHppEP5n4kgg1Q3yNIYODQNGsMQBKF93tjSRwzL1BrjeGoBpo
@@ -68,9 +68,9 @@ It sets this repository to sign tags with the key (`gpg.format ssh`, `user.signi
 
 ## What the app checks
 
-Before it trusts any hash in `SHA256SUMS.txt`, the app downloads `SHA256SUMS.txt.minisig` from the same release and checks, with Node's crypto only (`packages/desktop/src/release-signature.ts`):
+Before it trusts any hash in `SHA256SUMS.txt`, the Rust app downloads `SHA256SUMS.txt.minisig` from the same release and checks it with `natamux-update`:
 
-- the signature file has the four minisign lines, and its algorithm is `Ed`, the legacy form: Ed25519 over the file itself. The default, prehashed form `ED` signs the BLAKE2b-512 of the file, and Electron's crypto (BoringSSL) has no BLAKE2b-512, so the app refuses it. CI proved this: the smoke check failed with `Digest method not supported` for `ED` and passed for `Ed`;
+- the signature file has the four minisign lines, and its algorithm is `Ed`, the legacy form: Ed25519 over the file itself. The last Electron release also needs this form to read the new Rust release;
 - its key id is the id of `RELEASE_SIGNER`;
 - the Ed25519 signature of `SHA256SUMS.txt` is valid for `RELEASE_SIGNER`;
 - the signature of the trusted comment is valid;

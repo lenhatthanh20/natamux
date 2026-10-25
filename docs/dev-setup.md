@@ -12,7 +12,7 @@ Develop in a codespace. On the local machine, only edit files.
 pnpm install
 ```
 
-4. Commit the generated `pnpm-lock.yaml`.
+4. Run checks in the codespace or CI. Do not build on the local Mac.
 
 ## Supply-chain settings
 
@@ -24,20 +24,23 @@ Set in `pnpm-workspace.yaml`:
 ## Checks
 
 ```sh
-pnpm build && pnpm lint && pnpm test
+cargo xtask ci
+pnpm --filter @natamux/core --filter @natamux/web build
+pnpm --filter @natamux/core --filter @natamux/web typecheck
+pnpm --filter @natamux/core --filter @natamux/web test
 ```
 
-Run `build` first: packages import each other through their built `dist` folders, so `lint` (type check) and `test` need `@natamux/core` built. `pnpm format` fixes formatting and import order.
+Run these commands in a codespace or CI only. The web and core build runs before their type checks and tests.
 
 ## CI
 
-`.github/workflows/ci.yml` runs on pushes to `main` and on pull requests: frozen install, then `build` and `lint` in one job, and `test` split over three jobs (`vitest --shard`). The root scripts use `--if-present`, so a package without one of them is skipped.
+`.github/workflows/rust.yml` runs Rust checks, OS startup checks, E2E and benchmarks. `.github/workflows/ci.yml` runs the web and core checks. `.github/workflows/release.yml` builds the six native release assets and runs a dry run on pull requests.
 
 Every action in `.github/workflows/` is pinned to a full commit SHA, with the version in a comment, for example `actions/checkout@<sha> # v7.0.1`. A moved tag then cannot change what a job runs. Dependabot updates the SHA and the comment together. When you add an action, pin it the same way.
 
 ## Rust
 
-The Rust work (`docs/plan-rust-migration.md`) lives on the `dev` branch, and every Rust pull request targets `dev`.
+During the Phase 5 cutover, Rust work (`docs/plan-rust-migration.md`) goes through `dev`, then a green cutover pull request to `main`. After cutover, Rust pull requests target `main`.
 
 - Rust builds and tests run in CI (`.github/workflows/rust.yml`): `cargo xtask ci` (fmt, clippy, tests, layers), then `cargo deny`, `cargo audit` and `cargo vet`.
 - Never run `cargo` on the owner's Mac, not even in a Natamux task terminal. Build scripts and proc macros run code with the user's rights.

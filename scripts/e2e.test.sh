@@ -9,7 +9,8 @@ stubs="$tmp/bin"
 mkdir "$stubs"
 log="$tmp/calls"
 
-# Run 1 is good, 2 is another workflow, 3 is a fork, 4 has no artifact left, 5 does not load.
+# Run 1 is an old E2E run, 2 another workflow, 3 a fork, 4 has no artifact, 5 does not load,
+# and 6 is a Rust production-image run.
 cat >"$stubs/gh" <<'STUB'
 #!/usr/bin/env bash
 echo "gh $*" >>"$CALLS"
@@ -19,8 +20,9 @@ case "$1 $2" in
   echo '.github/workflows/e2e.yml lenhatthanh20/natamux' ;;
 'api repos/lenhatthanh20/natamux/actions/runs/2') echo '.github/workflows/ci.yml lenhatthanh20/natamux' ;;
 'api repos/lenhatthanh20/natamux/actions/runs/3') echo '.github/workflows/e2e.yml someone/natamux' ;;
+'api repos/lenhatthanh20/natamux/actions/runs/6') echo '.github/workflows/rust.yml lenhatthanh20/natamux' ;;
 'run download')
-  [ "$3" = 1 ] || [ "$3" = 5 ] || exit 1
+  [ "$3" = 1 ] || [ "$3" = 5 ] || [ "$3" = 6 ] || exit 1
   touch "${@: -1}/images.tar.zst" ;;
 *) exit 1 ;;
 esac
@@ -59,6 +61,10 @@ check "removes the downloaded file after the load" '[ ! -e "$loaded" ]'
 code=$(load 2)
 check "refuses a run of another workflow" '[ "$code" = 1 ] && grep -q "not an E2E run" "$tmp/err"'
 check "downloads nothing for it" '! grep -q "run download" "$log"'
+
+code=$(load 6)
+check "loads the Rust production images from a Rust CI run" \
+  '[ "$code" = 0 ] && grep -q "^gh run download 6 --repo lenhatthanh20/natamux -n rust-production-images -D " "$log"'
 
 code=$(load 3)
 check "refuses a run from a fork" '[ "$code" = 1 ] && ! grep -q "run download" "$log"'

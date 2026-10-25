@@ -57,6 +57,11 @@ class Flags(unittest.TestCase):
         self.assertEqual(true_flags(["crates/natamux-app/src/main.rs"]), ["app"])
         self.assertEqual(true_flags(["scripts/compare-shots.py"]), ["app"])
         self.assertEqual(true_flags(["scripts/bundle-rust-app.sh"]), ["app"])
+        self.assertEqual(true_flags(["crates/natamux-update/src/signature.rs"]), ["app"])
+        self.assertIn("app", true_flags(["crates/natamux-daemon/src/main.rs"]))
+
+    def test_production_image_change_runs_e2e(self):
+        self.assertIn("e2e", true_flags(["docker/prod.Dockerfile"]))
 
     def test_client_and_cli(self):
         self.assertEqual(true_flags(["crates/natamux-cli/src/main.rs"]), ["client"])

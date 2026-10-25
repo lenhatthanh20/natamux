@@ -21,6 +21,7 @@ use super::routes::stages::Mark;
 use super::routes::{
     agents, github, projects, stages, tasks, terminals, workspace_files, workspaces,
 };
+use super::web::WebAssets;
 use super::{event_socket, terminal_socket};
 use crate::agents::hook_service::HookService;
 use crate::agents::runner::AgentRunner;
@@ -53,6 +54,7 @@ pub struct AppState {
     pub data_dir: PathBuf,
     /// The home folder of the daemon's environment: where the skills of the agents are read.
     pub home: PathBuf,
+    pub web: WebAssets,
     pub terminals: TerminalService,
     pub open_shells: Arc<OpenShells>,
     /// A socket that sent nothing for this long is dropped (`SILENT_CLOSE`; shorter in tests).
@@ -153,6 +155,14 @@ pub async fn handle(request: Request<Incoming>, state: Arc<AppState>) -> Answer 
         .path_and_query()
         .map_or("/", |path| path.as_str());
     let url = strip_api_prefix(raw);
+    let accept = request
+        .headers()
+        .get(hyper::header::ACCEPT)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or("");
+    if let Some(answer) = state.web.answer(request.method(), raw, accept) {
+        return answer;
+    }
     let (path, query) = url.split_once('?').unwrap_or((url.as_str(), ""));
     let segments: Vec<String> = path.split('/').skip(1).map(segment).collect();
     let parts: Vec<&str> = segments.iter().map(String::as_str).collect();

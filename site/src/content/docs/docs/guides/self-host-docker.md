@@ -46,7 +46,7 @@ Compose refuses to start when `NATAMUX_TOKEN` or `NATAMUX_REPO` is missing.
 
 ## What runs
 
-- **daemon**: Node.js, git and the built daemon. Its data (tasks, index, worktrees) is in the volume `natamux-data`, mounted at `/data`. Its port 4317 is not published: only the web container reaches it.
+- **daemon**: the Rust daemon, the Rust CLI, git and curl. Its data (tasks, index, worktrees) is in the volume `natamux-data`, mounted at `/data`. Its port 4317 is not published: only the web container reaches it. The dashboard files are embedded in the daemon too.
 - **web**: nginx with the built dashboard. It passes `/api` to the daemon, WebSocket too.
 - Both containers have a read-only file system, no Linux capabilities and `no-new-privileges`, and restart unless you stop them.
 

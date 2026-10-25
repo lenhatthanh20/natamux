@@ -133,4 +133,4 @@ A browser cannot set headers on a WebSocket, so:
 
 A request with a bad field answers 400 with an error that names the field and the reason, such as which field is too long.
 
-The daemon README lists every endpoint with its body and errors: [packages/daemon/README.md](https://github.com/lenhatthanh20/natamux/blob/main/packages/daemon/README.md).
+The Rust daemon routes define each endpoint and its errors in [crates/natamux-daemon/src/http/routes](https://github.com/lenhatthanh20/natamux/tree/main/crates/natamux-daemon/src/http/routes).

@@ -68,14 +68,16 @@ pub enum MenuName {
     View,
     Task,
     Tools,
+    Help,
 }
 
 impl MenuName {
-    pub const ALL: [MenuName; 4] = [
+    pub const ALL: [MenuName; 5] = [
         MenuName::App,
         MenuName::View,
         MenuName::Task,
         MenuName::Tools,
+        MenuName::Help,
     ];
 
     pub fn title(self) -> &'static str {
@@ -84,6 +86,7 @@ impl MenuName {
             MenuName::View => "View",
             MenuName::Task => "Task",
             MenuName::Tools => "Tools",
+            MenuName::Help => "Help",
         }
     }
 }

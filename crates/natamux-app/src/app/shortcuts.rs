@@ -12,8 +12,9 @@ use gpui::{
 use super::commands::{Command, is_single_key, reaches_app_from_terminal};
 use super::commands::{MenuName, all_commands, command_by_id, keystroke, menu_items};
 pub use super::commands_app::{
-    AddProject, ImportIssues, OpenJump, OpenPalette, OpenSettings, ShowShortcuts, UseCompactSize,
-    UseDarkTheme, UseDefaultSize, UseLargeSize, UseLightTheme, UseSystemTheme,
+    AddProject, CheckForUpdates, ImportIssues, OpenJump, OpenPalette, OpenSettings,
+    RestartToUpdate, ShowShortcuts, ToggleAutomaticUpdates, UseCompactSize, UseDarkTheme,
+    UseDefaultSize, UseLargeSize, UseLightTheme, UseSystemTheme,
 };
 pub use super::commands_files::{
     CloseTab, ReopenTabs, SaveFile, ShowDocsTab, ShowOpenFile, ShowWorktreeFiles,
@@ -181,6 +182,9 @@ command_actions! {
     "jump.open" => OpenJump,
     "help.shortcuts" => ShowShortcuts,
     "app.settings" => OpenSettings,
+    "app.update-check" => CheckForUpdates,
+    "app.update-auto" => ToggleAutomaticUpdates,
+    "app.update-restart" => RestartToUpdate,
     "theme.system" => UseSystemTheme,
     "theme.light" => UseLightTheme,
     "theme.dark" => UseDarkTheme,
@@ -352,24 +356,32 @@ fn menu_of(name: MenuName) -> Vec<MenuItem> {
             name: menu_title(command).into(),
             action,
             os_action: None,
-            checked: false,
-            disabled: false,
+            checked: command.id == "app.update-auto" && super::update::automatic(),
+            disabled: command.id == "app.update-restart" && !super::update::ready(),
         });
     }
     items
 }
 
 /// A menu item's text where it differs from the command's title.
-fn menu_title(command: &Command) -> &'static str {
+fn menu_title(command: &Command) -> String {
     match command.id {
-        "app.settings" => "Settings\u{2026}",
-        _ => command.title,
+        "app.settings" => "Settings\u{2026}".into(),
+        "app.update-restart" => super::update::restart_title(),
+        _ => command.title.into(),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn update_commands_reach_the_app() {
+        assert!(action_for("app.update-check").is_some());
+        assert!(action_for("app.update-auto").is_some());
+        assert!(action_for("app.update-restart").is_some());
+    }
 
     #[test]
     fn binds_every_command_with_a_key_or_a_menu_bar_item_to_an_action() {

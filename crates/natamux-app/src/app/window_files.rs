@@ -83,6 +83,15 @@ impl Root {
 
     /// Opens the question when there are edits to lose; true when it did.
     fn ask_before_quit(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        self.ask_before_quit_with(window, cx, |_, cx| cx.quit())
+    }
+
+    pub(super) fn ask_before_quit_with(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        after: impl Fn(&mut Window, &mut App) + 'static,
+    ) -> bool {
         let store = DraftStore::global(cx);
         let Some(question) = store.read(cx).quit_question() else {
             return false;
@@ -99,7 +108,7 @@ impl Root {
             question.title,
             "These edits are not saved. Quitting drops them.",
             "Quit",
-            |_, cx| cx.quit(),
+            after,
         )
         .rows(rows);
         window.defer(cx, move |window, cx| confirm.open(window, cx));

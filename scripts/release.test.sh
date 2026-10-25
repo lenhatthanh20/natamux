@@ -26,6 +26,15 @@ version_of() {
   sed -n 's/^  "version": "\(.*\)",$/\1/p' "packages/$1/package.json"
 }
 
+rust_version_of() {
+  sed -n 's/^version = "\(.*\)"$/\1/p' "$1" | head -n 1
+}
+
+bundle_version() {
+  sed -n '/<key>CFBundleShortVersionString<\/key>/{n;s/.*<string>\(.*\)<\/string>.*/\1/p;}' \
+    crates/natamux-app/resources/Info.plist
+}
+
 version=$(version_of web)
 tag="v$version"
 notes="docs/releases/$tag.md"
@@ -66,8 +75,8 @@ if [ "${1:-}" = "--published" ]; then
   for file in $files SHA256SUMS.txt SHA256SUMS.txt.minisig; do
     check "release has $file" 'field ".assets[].name" | grep -qx "$file"'
   done
-  # The app installs no update without this signature (packages/desktop/src/release-signature.ts).
-  signer=$(sed -n "s/^export const RELEASE_SIGNER = '\(.*\)'$/\1/p" packages/desktop/src/release-signature.ts)
+  # The app installs no update without this signature.
+  signer=$(sed -n 's/^pub const RELEASE_SIGNER: &str = "\(.*\)";$/\1/p' crates/natamux-update/src/signature.rs)
   if command -v minisign >/dev/null; then
     check "SHA256SUMS.txt is signed by RELEASE_SIGNER for natamux $tag" \
       'gh release download "$tag" --dir "$tmp/signed" --pattern "SHA256SUMS.txt*" \
@@ -111,11 +120,15 @@ links_in() {
   grep -oE '\]\((https://natamux\.github\.io)?/docs/[^)]*\)' | sed -E 's#^\]\((https://natamux\.github\.io)?##; s#\)$##'
 }
 
-# Case 1: the version in all packages.
+# Case 1: the version in the shipped web packages and Rust crates.
 check "version $version looks like X.Y.Z" '[[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]'
-for dir in cli core daemon desktop web; do
+for dir in core web; do
   check "packages/$dir is $version" '[ "$(version_of $dir)" = "$version" ]'
 done
+for manifest in crates/*/Cargo.toml; do
+  check "$manifest is $version" '[ "$(rust_version_of "$manifest")" = "$version" ]'
+done
+check "the macOS bundle is $version" '[ "$(bundle_version)" = "$version" ]'
 check "the root package.json pins pnpm" 'grep -qE "^  \"packageManager\": \"pnpm@[0-9]+\.[0-9]+\.[0-9]+\",$" package.json'
 check "the root package.json has no version" '! grep -q "^  \"version\":" package.json'
 check "packages depend on each other with workspace:*" \
