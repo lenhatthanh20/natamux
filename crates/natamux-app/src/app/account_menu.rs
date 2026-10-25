@@ -1,6 +1,6 @@
 //! The account menu (docs/ui-spec.md 4.13, `AccountMenu.tsx`), opened from the title bar: settings,
-//! the notify switch, theme, UI size, terminal font, the shortcut sheet and the issue page. There is
-//! no sign out in the native app.
+//! the notify switch, theme, UI size, terminal font (the Appearance page of Settings), the shortcut
+//! sheet and the issue page. There is no sign out in the native app.
 
 use gpui::{Entity, Pixels, Point};
 use ui::{ContextMenu, ContextMenuEntry, IconPosition, prelude::*};
@@ -8,12 +8,12 @@ use ui::{ContextMenu, ContextMenuEntry, IconPosition, prelude::*};
 use super::appearance_rules::{ThemeChoice, UiSize, parse_theme, parse_ui_size};
 use super::commands::shortcut_of;
 use super::dashboard::Dashboard;
+use super::settings_rules::{SettingsFocus, SettingsPage};
 use super::shortcut_text::keystroke;
 use super::shortcuts::{OpenSettings, ShowShortcuts};
 use crate::components::chips::Kbd;
 use crate::components::icons::icon_path;
 use crate::components::menu::MenuLayer;
-use crate::terminals::terminal_font_dialog;
 
 const MAC: bool = cfg!(target_os = "macos");
 const ISSUES_URL: &str = "https://github.com/lenhatthanh20/natamux/issues/new";
@@ -102,7 +102,12 @@ pub fn open_account_menu(
             ContextMenuEntry::new("Terminal font…")
                 .icon(IconName::FontSize)
                 .icon_color(Color::Muted)
-                .handler(move |window, cx| terminal_font_dialog::open(&font, window, cx)),
+                .handler(move |_, cx| {
+                    font.update(cx, |dashboard, cx| {
+                        let page = Some(SettingsPage::Appearance);
+                        dashboard.open_settings(page, SettingsFocus::Font, cx)
+                    })
+                }),
         );
         menu = menu.separator();
         menu = keyed_entry(

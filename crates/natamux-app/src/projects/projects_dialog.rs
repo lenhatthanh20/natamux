@@ -10,7 +10,6 @@ use ui::{Tooltip, prelude::*};
 use super::project_rules::{
     RepoField, add_args, field_of_error, repo_path_problem, shown_worktree,
 };
-use super::project_settings_dialog;
 use crate::app::dashboard::Dashboard;
 use crate::app::source::reason;
 use crate::components::button_style::quiet_button;
@@ -236,10 +235,11 @@ impl ProjectsDialog {
         )
         .label_size(LabelSize::Small)
         .tooltip(Tooltip::text(format!("Settings of {}", repo.name)))
-        .on_click(cx.listener(move |this, _, window, cx| {
-            // The dialog layer replaces this dialog with Project settings.
-            let dashboard = this.dashboard.clone();
-            project_settings_dialog::open(&dashboard, &id, window, cx);
+        .on_click(cx.listener(move |this, _, _, cx| {
+            // The dialog closes; Settings shows the project's page.
+            cx.emit(DismissEvent);
+            this.dashboard
+                .update(cx, |dashboard, cx| dashboard.open_project_settings(&id, cx));
         }));
         if let Some(stop) = self.settings_stops.get(index) {
             button = button.track_focus(stop);

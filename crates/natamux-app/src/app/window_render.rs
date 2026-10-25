@@ -7,7 +7,7 @@ use ui::prelude::*;
 use super::{Root, Tool};
 use crate::app::commands_stages::ShowTasksProgress;
 use crate::app::layout_mode::{DetailsMode, SIDEBAR_WIDTH, SidebarMode, effective_sidebar_width};
-use crate::app::shell_rules::{crumb, live_item, running_count, window_title};
+use crate::app::shell_rules::{Crumb, crumb, live_item, running_count, window_title};
 use crate::app::shortcuts::{
     Approve, BlockTask, MarkReady, RequestChanges, ResumeAgent, RetryTask, UnblockTask,
 };
@@ -133,7 +133,12 @@ impl Root {
             .open_task
             .as_deref()
             .and_then(|id| dashboard.data.task(id));
-        let crumb = crumb(open, dashboard.agents_open, &dashboard.data.repos);
+        let settings = dashboard.settings.is_some();
+        let crumb = if settings {
+            Crumb::View("Settings")
+        } else {
+            crumb(open, dashboard.agents_open, &dashboard.data.repos)
+        };
         let live = live_item(&dashboard.data.link);
         let jobs = dashboard.data.jobs.clone();
         let title = window_title(needs_you);
@@ -146,7 +151,13 @@ impl Root {
                 root.show_needs_you(window, cx)
             };
         let agents_open = dashboard.agents_open;
-        let details = self.details_toggle(window, cx);
+        // Over Settings both toggles show off; a click closes Settings (`close_settings`).
+        let details = if settings {
+            Ok(false)
+        } else {
+            self.details_toggle(window, cx)
+        };
+        let sidebar_shown = sidebar_shown && !settings;
         let title_bar = TitleBar::new(crumb, self.dashboard.clone());
         let status_bar = StatusBar::new(live, running, needs_you, jobs, width)
             .toggles(sidebar_shown, details, agents_open)
@@ -162,6 +173,13 @@ impl Root {
     }
 
     fn render_body(&mut self, width: f32, window: &Window, cx: &mut Context<Self>) -> Div {
+        if self.dashboard.read(cx).settings.is_some() {
+            return h_flex()
+                .flex_1()
+                .min_h_0()
+                .w_full()
+                .child(self.settings.clone());
+        }
         let layout = self.layout(window, cx);
         let docked = layout.sidebar == SidebarMode::Docked;
         self.sync_details_mode(window, cx);

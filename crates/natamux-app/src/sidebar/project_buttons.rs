@@ -7,7 +7,6 @@ use ui::{ButtonLike, Tooltip, prelude::*};
 use super::sidebar::lucide;
 use super::workspace_tree::{Snapshot, WorkspaceTree};
 use crate::components::confirm::Confirm;
-use crate::projects::project_settings_dialog;
 use crate::sidebar::sidebar_text::{
     ProjectCommand, remove_project_description, remove_project_title, shown_name,
 };
@@ -64,8 +63,10 @@ impl WorkspaceTree {
                 "settings",
                 format!("Settings of {name}"),
                 group_name.clone(),
-                move |_, window, cx| {
-                    project_settings_dialog::open(&board, &settings_repo, window, cx);
+                move |_, _, cx| {
+                    board.update(cx, |board, cx| {
+                        board.open_project_settings(&settings_repo, cx)
+                    });
                 },
             )
             .into_any_element()
@@ -117,9 +118,9 @@ impl WorkspaceTree {
             ProjectCommand::StartTask => {
                 new_workspace_dialog::open(&self.dashboard, Some(repo_id), window, cx);
             }
-            ProjectCommand::Settings => {
-                project_settings_dialog::open(&self.dashboard, &repo_id, window, cx);
-            }
+            ProjectCommand::Settings => self.dashboard.update(cx, |dashboard, cx| {
+                dashboard.open_project_settings(&repo_id, cx)
+            }),
             ProjectCommand::ToggleBlur => self
                 .dashboard
                 .update(cx, |dashboard, cx| dashboard.toggle_blurred(&repo_id, cx)),

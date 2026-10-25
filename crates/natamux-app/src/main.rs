@@ -28,8 +28,10 @@ mod app {
     pub mod notify;
     pub mod notify_rules;
     pub mod options;
-    pub mod settings_dialog;
+    pub mod settings_font;
     pub mod settings_reads;
+    pub mod settings_rules;
+    pub mod settings_view;
     pub mod sheet_rules;
     pub mod shell_rules;
     pub mod shortcut_sheet;
@@ -141,7 +143,7 @@ mod projects {
     pub mod issues_tab;
     pub mod json_tab;
     pub mod project_rules;
-    pub mod project_settings_dialog;
+    pub mod project_settings_page;
     pub mod projects_dialog;
     pub mod settings_tab_rules;
     pub mod settings_tabs;
@@ -248,7 +250,6 @@ mod terminals {
     pub mod terminal_cache;
     pub mod terminal_find;
     pub mod terminal_font;
-    pub mod terminal_font_dialog;
     pub mod terminal_pane;
     pub mod terminal_tabs;
 }

@@ -1,21 +1,25 @@
-//! Screen 7's commands on Root: the palettes, the shortcut sheet, the settings, the theme and the
-//! UI size, the project dialogs, and Sign in when the daemon has no token for the app.
+//! Screen 7's commands on Root: the palettes, the shortcut sheet, the Settings page (T-0174), the
+//! theme and the UI size, the project dialogs, and Sign in when the daemon has no token for the
+//! app.
 
 use std::collections::BTreeSet;
 
-use gpui::Focusable;
+use gpui::{Entity, Focusable};
 use ui::prelude::*;
 
 use super::Root;
 use crate::app::appearance_rules::{ThemeChoice, UiSize};
+use crate::app::settings_rules::{SettingsFocus, SettingsPage};
+use crate::app::settings_view::SettingsView;
+use crate::app::shortcut_sheet;
 use crate::app::shortcuts::{
     AddProject, ImportIssues, OpenJump, OpenPalette, OpenSettings, ShowShortcuts, UseCompactSize,
     UseDarkTheme, UseDefaultSize, UseLargeSize, UseLightTheme, UseSystemTheme,
 };
 use crate::app::sign_in::{SignIn, SignedIn, access_file};
-use crate::app::{settings_dialog, shortcut_sheet};
 use crate::palette::palette_layer::PaletteLayer;
 use crate::palette::palette_rows::{PaletteMode, PaletteScope};
+use crate::projects::project_settings_page::ProjectSettingsPage;
 use crate::projects::{issue_import, projects_dialog};
 use crate::tasks::task_view_rules::task_repo;
 use crate::terminals::terminal_cache::{Owner, TerminalCache};
@@ -33,8 +37,10 @@ impl Root {
             .on_action(
                 cx.listener(|_, _: &ShowShortcuts, window, cx| shortcut_sheet::open(window, cx)),
             )
-            .on_action(cx.listener(|root, _: &OpenSettings, window, cx| {
-                settings_dialog::open(&root.dashboard, window, cx)
+            .on_action(cx.listener(|root, _: &OpenSettings, _, cx| {
+                root.dashboard.update(cx, |dashboard, cx| {
+                    dashboard.open_settings(None, SettingsFocus::Search, cx)
+                })
             }))
             .on_action(cx.listener(|root, _: &AddProject, window, cx| {
                 projects_dialog::open(&root.dashboard, window, cx)
@@ -64,6 +70,84 @@ impl Root {
             .on_action(
                 cx.listener(|root, _: &UseLargeSize, _, cx| root.set_ui_size(UiSize::Large, cx)),
             )
+    }
+
+    /// Settings fills the body: tools stop, the drawer closes, the terminals give up their size.
+    pub(super) fn settings_opened(
+        &mut self,
+        focus: SettingsFocus,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.close_tool(cx);
+        self.drawer_open = false;
+        self.sync_pane(cx);
+        self.settings
+            .update(cx, |settings, cx| settings.show(focus, window, cx));
+    }
+
+    /// Focus goes back to what main shows.
+    pub(super) fn settings_closed(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let dashboard = self.dashboard.read(cx);
+        let list = dashboard.open_task.is_none() && !dashboard.agents_open;
+        let focus = if list {
+            self.tasks.focus_handle(cx)
+        } else {
+            self.focus.clone()
+        };
+        window.focus(&focus, cx);
+    }
+
+    /// The sidebar and details toggles over Settings close it and change nothing else. True:
+    /// Settings was open.
+    pub(super) fn close_settings(&mut self, cx: &mut Context<Self>) -> bool {
+        if self.dashboard.read(cx).settings.is_none() {
+            return false;
+        }
+        self.dashboard
+            .update(cx, |dashboard, cx| dashboard.close_settings(cx));
+        true
+    }
+
+    /// The agents toggle over Settings shows the grid, also when the grid is under Settings.
+    /// True: Settings was open.
+    pub(super) fn agents_over_settings(&mut self, cx: &mut Context<Self>) -> bool {
+        let dashboard = self.dashboard.read(cx);
+        if dashboard.settings.is_none() {
+            return false;
+        }
+        if !dashboard.agents_open {
+            self.agents_back = dashboard.open_task.clone();
+        }
+        self.dashboard.update(cx, |dashboard, cx| {
+            dashboard.close_settings(cx);
+            dashboard.open_agents(cx);
+        });
+        true
+    }
+
+    /// Opens Settings on `page` at once, for `--shot` and `--smoke`: a project's page is made
+    /// before this returns, so they can drive it.
+    pub fn show_settings(
+        &mut self,
+        page: SettingsPage,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Option<Entity<ProjectSettingsPage>> {
+        let asked = Some(page.clone());
+        self.dashboard.update(cx, |dashboard, cx| {
+            dashboard.open_settings(asked, SettingsFocus::Page, cx)
+        });
+        self.settings_opened(SettingsFocus::Page, window, cx);
+        let SettingsPage::Project(id) = page else {
+            return None;
+        };
+        self.settings.read(cx).project_page(&id)
+    }
+
+    /// The Settings page, for `--shot`.
+    pub fn settings_view(&self) -> &Entity<SettingsView> {
+        &self.settings
     }
 
     pub(super) fn open_palette(

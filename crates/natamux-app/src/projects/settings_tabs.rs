@@ -1,12 +1,12 @@
 //! The tabs of Project settings (`ProjectSettingsDialog.tsx`): Stages, Issues and JSON over one
-//! draft, the tab bar, the body of each tab, and the alerts and the footer count around them.
+//! draft, the tab bar, the body of each tab, and the alerts and the problem count around them.
 
 use gpui::{Entity, FocusHandle, KeyDownEvent};
 use ui::{Tab, TabBar, TabPosition, prelude::*};
 
 use super::issues_tab::IssuesTab;
 use super::json_tab::JsonTab;
-use super::project_settings_dialog::{ProjectSettingsDialog, StagesTab};
+use super::project_settings_page::{ProjectSettingsPage, StagesTab};
 use super::settings_tab_rules::{SettingsTab, error_count, shown_tab, step_tab};
 use super::settings_text::count_label;
 use crate::components::button_style::{action_button, quiet_button};
@@ -26,7 +26,7 @@ impl SettingsTabs {
     pub(super) fn new(
         editor: &Entity<PipelineEditor>,
         window: &mut Window,
-        cx: &mut Context<ProjectSettingsDialog>,
+        cx: &mut Context<ProjectSettingsPage>,
     ) -> Self {
         let pipeline = editor.clone();
         SettingsTabs {
@@ -49,7 +49,7 @@ impl SettingsTabs {
     }
 }
 
-impl ProjectSettingsDialog {
+impl ProjectSettingsPage {
     /// The tab on screen: JSON that cannot be read keeps the person on the JSON tab.
     pub(super) fn shown_tab(&self, cx: &App) -> SettingsTab {
         match &self.stages {
