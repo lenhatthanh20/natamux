@@ -17,6 +17,7 @@ use super::session_lifecycle::{
 use super::tickets::Tickets;
 use super::types::{ClientRef, Session, SessionRef, Size, TerminalError, same_client};
 use crate::shared::event_bus::DaemonMessage;
+use crate::shared::turns::Turns;
 
 pub(super) struct Inner {
     pub(super) options: TerminalOptions,
@@ -30,7 +31,8 @@ pub(super) struct Inner {
     pub(super) starting: Mutex<()>,
     /// Held while one shell's output is parsed: shells parse one at a time, as on Node's one
     /// loop, so floods in several shells take one core, not every core the dashboards need too.
-    pub(super) parsing: Mutex<()>,
+    /// Turns go in order, so a flood never keeps a quiet shell waiting more than a turn.
+    pub(super) parsing: Turns,
     pub(super) this: Weak<Inner>,
 }
 

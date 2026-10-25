@@ -26,6 +26,7 @@ use super::tickets::Tickets;
 use super::types::{ClientRef, ClientState, Frame, Phase, Size, TerminalError};
 use crate::shared::event_bus::EventBus;
 use crate::shared::scheduler::Scheduler;
+use crate::shared::turns::Turns;
 
 pub type WorkspaceOf = dyn Fn(&str) -> Result<PathBuf, TerminalError> + Send + Sync;
 pub type OutputListener = dyn Fn(&str, &str, &[u8]) + Send + Sync;
@@ -76,7 +77,7 @@ impl TerminalService {
                 output_seen: Mutex::new(HashMap::new()),
                 next_attach: AtomicU64::new(1),
                 starting: Mutex::new(()),
-                parsing: Mutex::new(()),
+                parsing: Turns::default(),
                 this: this.clone(),
             }),
         }

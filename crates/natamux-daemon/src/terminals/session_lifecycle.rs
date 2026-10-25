@@ -19,6 +19,7 @@ use super::session_output::{flush_output, queue_output};
 use super::session_snapshot::{end_snapshots, frame_parsed};
 use super::types::{Frame, Session, SessionRef, Size, TerminalError};
 use crate::shared::scheduler::Scheduler;
+use crate::shared::turns::Turns;
 
 pub type SpawnPty = dyn Fn(SpawnOptions) -> std::io::Result<Box<dyn Pty>> + Send + Sync;
 
@@ -111,16 +112,14 @@ pub fn spawn_session(new: NewSession<'_>) -> Result<SessionRef, TerminalError> {
 /// with no copy, and the `parsing` lock is free between them, so another shell's read goes in
 /// between. `parse` runs under the lock, `after` (the output listeners) without it.
 pub fn parse_in_turns<'a, T>(
-    parsing: &Mutex<()>,
+    parsing: &Turns,
     read: &'a [u8],
     mut parse: impl FnMut(&'a [u8]) -> T,
     mut after: impl FnMut(T),
 ) {
     for piece in read.chunks(PARSE_TURN_BYTES) {
         let taken = {
-            let _turn = parsing
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let _turn = parsing.take();
             parse(piece)
         };
         after(taken);
@@ -292,16 +291,16 @@ impl EndWait {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Mutex;
     use std::sync::mpsc::channel;
     use std::time::Duration;
 
     use super::{PARSE_TURN_BYTES, parse_in_turns};
+    use crate::shared::turns::Turns;
 
     #[test]
     fn a_big_read_is_parsed_in_turns_of_16_kib_and_keeps_every_byte() {
         let read: Vec<u8> = (0..40 * 1024).map(|at| (at % 251) as u8).collect();
-        let parsing = Mutex::new(());
+        let parsing = Turns::default();
         let mut turns: Vec<&[u8]> = Vec::new();
         parse_in_turns(&parsing, &read, |piece| piece, |piece| turns.push(piece));
         let sizes: Vec<usize> = turns.iter().map(|turn| turn.len()).collect();
@@ -313,7 +312,7 @@ mod tests {
 
     #[test]
     fn a_small_read_is_one_turn() {
-        let parsing = Mutex::new(());
+        let parsing = Turns::default();
         let mut turns = 0;
         parse_in_turns(&parsing, b"ls\r\n", |_| (), |()| turns += 1);
         assert_eq!(turns, 1);
@@ -326,7 +325,7 @@ mod tests {
     /// shell takes the lock and parses.
     #[test]
     fn another_shell_parses_between_the_turns_of_a_flood() {
-        let parsing = Mutex::new(());
+        let parsing = Turns::default();
         let flood = vec![b'x'; 64 * 1024];
         let mut order = Vec::new();
         std::thread::scope(|scope| {
@@ -334,7 +333,7 @@ mod tests {
                 &parsing,
                 &flood,
                 |piece| {
-                    assert!(parsing.try_lock().is_err(), "a turn holds the lock");
+                    assert_eq!(parsing.asked(), 1, "a turn holds the lock");
                     piece.len()
                 },
                 |len| {
@@ -343,7 +342,7 @@ mod tests {
                         let (done, heard) = channel();
                         let parsing = &parsing;
                         scope.spawn(move || {
-                            let _turn = parsing.lock().unwrap();
+                            let _turn = parsing.take();
                             done.send(()).unwrap();
                         });
                         heard.recv_timeout(Duration::from_secs(5)).unwrap();
