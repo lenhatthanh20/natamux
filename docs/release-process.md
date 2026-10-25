@@ -39,6 +39,7 @@ It does steps 2 to 5: it asks before it makes and pushes the signed tag, waits f
 
    It shows the commit, the run, `SHA256SUMS.txt`, and from your local repository the commits and the changed files since the previous release tag. Read them, then answer. On `y` it signs `SHA256SUMS.txt` in minisign's legacy form (`-l`) with the trusted comment `natamux vX.Y.Z`, checks the signature against `RELEASE_SIGNER`, uploads `SHA256SUMS.txt.minisig`, and publishes the draft as the latest release. minisign asks for the key's password. It works in a new `mktemp -d` folder and leaves it there.
 5. Check the published release: `scripts/release.test.sh --published` (needs `minisign`).
+6. The first Rust release only: on a Mac that runs the last Electron app (v0.1.43), choose **Check for Updates…**. It must find the new release, install the Rust app over `Natamux.app`, and restart into it with the same tasks and sign-in. CI checks the DMG name and the bundle the Electron updater expects, but only a signed release shows the whole update.
 
 Never publish the draft by hand: a release without `SHA256SUMS.txt.minisig` updates no app, and timed checks keep failing until it is signed.
 
