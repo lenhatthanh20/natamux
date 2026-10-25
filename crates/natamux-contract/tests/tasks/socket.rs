@@ -132,6 +132,15 @@ async fn resync() {
                 .await;
         }
         assert!(resynced, "{}: no resync after {posted} big tasks", d.name);
+        // The backlog can still bring a second resync, which would drop the task posted next.
+        let mut seen = events.messages.len();
+        for _ in 0..40 {
+            events.read_for(Duration::from_millis(500)).await;
+            if events.messages.len() == seen {
+                break;
+            }
+            seen = events.messages.len();
+        }
         post(&d, "/tasks", json!({ "title": "CT-2131: After" })).await;
         let live = events
             .until(|messages| {

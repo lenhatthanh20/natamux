@@ -183,7 +183,7 @@ jobs:
             dist/Natamux-linux-x86_64.AppImage "$HOME/.config/Natamux"
           dist/Natamux-linux-x86_64.AppImage --appimage-extract >/dev/null
           test -f squashfs-root/usr/bin/natamux-daemon
-          dpkg-deb -c dist/Natamux-linux-amd64.deb | grep -q natamux-daemon
+          dpkg-deb -c dist/Natamux-linux-amd64.deb | grep natamux-daemon >/dev/null
       - name: Package Windows
         if: runner.os == 'Windows'
         run: |
@@ -192,7 +192,7 @@ jobs:
           "C:/Program Files (x86)/NSIS/makensis.exe" \
             -DBIN="$(cygpath -w "$PWD/target/release")" -DOUT="$(cygpath -w "$PWD/dist")" \
             scripts/natamux-windows.nsi
-          7z l dist/Natamux-win-x64.exe | grep -q natamux-daemon.exe
+          7z l dist/Natamux-win-x64.exe | grep natamux-daemon.exe >/dev/null
           7z x -y -o"$RUNNER_TEMP/unpacked" dist/Natamux-win-x64.exe >/dev/null
           test -f "$RUNNER_TEMP/unpacked/natamux-app.exe"
           test -f "$RUNNER_TEMP/unpacked/natamux.exe"
