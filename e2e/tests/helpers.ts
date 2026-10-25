@@ -9,7 +9,7 @@ export const AGENT_TITLE = 'Command palette opened with Cmd+K'
 export const OTHER_TITLES = [
   'Fix token refresh race in the daemon',
   'Windows path tests for repos',
-  'Electron shell spike',
+  'Desktop window layout',
 ]
 
 function escaped(text: string): string {
