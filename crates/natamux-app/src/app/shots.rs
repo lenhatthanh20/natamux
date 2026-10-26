@@ -56,6 +56,8 @@ const PLAN_GATE: &str = "T-0150";
 const PLAN_FAILED: &str = "T-0151";
 const A_TRY: &str = "T-0152";
 const SEND_BACK_REASON: &str = "Add the error cases for an empty list.";
+/// The finished stage of the asking task whose evidence has a pass longer than the panel.
+const EVIDENCE_STAGE: &str = "context";
 /// The Tries section is the sixth part of the Details tab of a try with an agent.
 const TRIES_PART: usize = 5;
 /// Screen 4: a running task with no file to commit, one with a new image; the reviewed task has
@@ -131,6 +133,7 @@ pub fn run(handle: WindowHandle<Root>, shot: Shot, cx: &mut App) {
                 | Shot::WorkspaceChangesDiff
                 | Shot::WorkspaceChangesAsk
                 | Shot::Rollback
+                | Shot::StageEvidence
         ) {
             cx.background_executor().timer(SETTLE).await;
             handle
@@ -227,7 +230,7 @@ fn enter(shot: Shot, root: &mut Root, window: &mut Window, cx: &mut gpui::Contex
         Shot::AgentsGrid => dashboard.update(cx, |dashboard, cx| dashboard.open_agents(cx)),
         Shot::TaskDetailsReview => choose(root, REVIEWED, window, cx),
         Shot::TaskDetailsNeedsInput => choose(root, ASKING, window, cx),
-        Shot::AnswerBanner => progress(&dashboard, ASKING, cx),
+        Shot::AnswerBanner | Shot::StageEvidence => progress(&dashboard, ASKING, cx),
         Shot::WorkspaceTerminalPlanGate => progress(&dashboard, PLAN_GATE, cx),
         Shot::WorkspaceProgress | Shot::SendBack => progress(&dashboard, REVIEWED, cx),
         Shot::StageFailed => progress(&dashboard, PLAN_FAILED, cx),
@@ -357,7 +360,7 @@ fn choose(root: &mut Root, id: &str, window: &mut Window, cx: &mut gpui::Context
 }
 
 /// What needs the panel or the diff drawn first: the Send back dialog, the "..." menu, the
-/// Tries section, a change of the diff, Ask agent, Rollback.
+/// Tries section, a change of the diff, Ask agent, Rollback, a card's evidence.
 fn panel_step(shot: Shot, root: &mut Root, window: &mut Window, cx: &mut gpui::Context<Root>) {
     let panel = root.details_panel().clone();
     match shot {
@@ -371,6 +374,9 @@ fn panel_step(shot: Shot, root: &mut Root, window: &mut Window, cx: &mut gpui::C
         }
         Shot::DetailsMoreMenu => panel.update(cx, |panel, cx| panel.open_more_menu(window, cx)),
         Shot::CompareTries => panel.update(cx, |panel, cx| panel.center_on(TRIES_PART, cx)),
+        Shot::StageEvidence => {
+            panel.update(cx, |panel, cx| panel.open_evidence(EVIDENCE_STAGE, cx))
+        }
         Shot::WorkspaceChangesDiff | Shot::WorkspaceChangesAsk | Shot::Rollback => {
             let changes = root.workspace_view().read(cx).changes_view().clone();
             changes.update(cx, |changes, cx| match shot {
