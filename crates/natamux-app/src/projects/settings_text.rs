@@ -122,6 +122,34 @@ pub fn blocked_reason(
     }
 }
 
+/// `path` with the home folder as `~`. Only a whole folder name matches, so home `/Users/me`
+/// leaves `/Users/me2` as it is.
+pub fn short_path(path: &str, home: Option<&str>) -> String {
+    let Some(home) = home.map(|home| home.trim_end_matches(['/', '\\'])) else {
+        return path.to_owned();
+    };
+    if home.is_empty() {
+        return path.to_owned();
+    }
+    match path.strip_prefix(home) {
+        Some("") => "~".to_owned(),
+        Some(rest) if rest.starts_with(['/', '\\']) => format!("~{rest}"),
+        _ => path.to_owned(),
+    }
+}
+
+/// The home folder of this computer, for `short_path`.
+pub fn home_folder() -> Option<String> {
+    std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .ok()
+}
+
+/// The tooltip of the path: the full path, and why the file matters.
+pub fn file_hint(path: &str) -> String {
+    format!("Commit {path} to share these settings with your team.")
+}
+
 /// `unchanged` of the dialog.
 pub fn unchanged(dirty: bool, file_broken: bool) -> bool {
     !dirty && !file_broken

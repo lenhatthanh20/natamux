@@ -415,16 +415,20 @@ impl Render for SettingsView {
             Some(_) => "Results".to_owned(),
             None => page_title(&page, &repos),
         };
-        let body = match (&found, &page) {
-            (Some(found), _) => self.results(found, query.trim(), cx),
-            (None, SettingsPage::General) => self.general(cx),
-            (None, SettingsPage::Appearance) => self.appearance(cx),
-            (None, SettingsPage::Project(id)) => self
-                .project_page(id)
-                .map_or_else(|| div().into_any_element(), IntoElement::into_any_element),
+        let project = match (&found, &page) {
+            (None, SettingsPage::Project(id)) => self.project_page(id),
+            _ => None,
+        };
+        // A project page draws its own header, with the file path and the tabs in it.
+        let header = project.is_none().then(|| self.header(title, cx));
+        let body = match (&found, &page, project) {
+            (_, _, Some(project)) => project.into_any_element(),
+            (Some(found), _, None) => self.results(found, query.trim(), cx),
+            (None, SettingsPage::General, None) => self.general(cx),
+            (None, SettingsPage::Appearance, None) => self.appearance(cx),
+            (None, SettingsPage::Project(_), None) => div().into_any_element(),
         };
         let nav = self.nav(&page, found.as_ref(), window, cx);
-        let header = self.header(title, cx);
         h_flex()
             .size_full()
             .track_focus(&self.focus)
@@ -435,7 +439,7 @@ impl Render for SettingsView {
                     .flex_1()
                     .min_w_0()
                     .h_full()
-                    .child(header)
+                    .children(header)
                     .child(body),
             )
     }

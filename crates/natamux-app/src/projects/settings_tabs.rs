@@ -2,7 +2,7 @@
 //! draft, the tab bar, the body of each tab, and the alerts and the problem count around them.
 
 use gpui::{Entity, FocusHandle, KeyDownEvent};
-use ui::{Tab, TabBar, TabPosition, prelude::*};
+use ui::prelude::*;
 
 use super::issues_tab::IssuesTab;
 use super::json_tab::JsonTab;
@@ -72,29 +72,41 @@ impl ProjectSettingsPage {
         cx.notify();
     }
 
+    /// The tabs as views of one file, not as file tabs: underline tabs in a row of their own. The
+    /// row is one Tab stop.
     pub(super) fn render_tab_bar(&self, shown: SettingsTab, cx: &mut Context<Self>) -> AnyElement {
         let Some(stages) = &self.stages else {
             return div().into_any_element();
         };
-        let selected = shown.index();
-        let last = SettingsTab::ALL.len() - 1;
-        let tabs = SettingsTab::ALL.iter().enumerate().map(|(index, tab)| {
-            let tab = *tab;
-            let position = match index {
-                0 => TabPosition::First,
-                _ if index == last => TabPosition::Last,
-                _ => TabPosition::Middle(index.cmp(&selected)),
-            };
-            Tab::new(SharedString::from(format!(
-                "project-settings-{}",
-                tab.label()
-            )))
-            .position(position)
-            .toggle_state(tab == shown)
-            .child(Label::new(tab.label()))
-            .on_click(cx.listener(move |this, _, _, cx| this.pick_tab(tab, cx)))
+        let colors = cx.theme().colors();
+        let (accent, hover, line) = (
+            colors.text_accent,
+            colors.ghost_element_hover,
+            colors.border_variant,
+        );
+        let tabs = SettingsTab::ALL.map(|tab| {
+            let on = tab == shown;
+            let id = format!("project-settings-{}", tab.label());
+            let color = if on { Color::Default } else { Color::Muted };
+            let label = Label::new(tab.label()).color(color);
+            v_flex()
+                .id(SharedString::from(id))
+                .h_full()
+                .px_2()
+                .cursor_pointer()
+                .hover(|style| style.bg(hover))
+                .on_click(cx.listener(move |this, _, _, cx| this.pick_tab(tab, cx)))
+                .child(h_flex().flex_1().child(label))
+                .child(div().h(px(2.)).w_full().when(on, |this| this.bg(accent)))
         });
-        div()
+        h_flex()
+            .id("project-settings-tabs")
+            .flex_none()
+            .h(rems_from_px(32.0_f32))
+            .px_4()
+            .gap_1()
+            .border_b_1()
+            .border_color(line)
             .track_focus(&stages.tabs.focus)
             .on_key_down(cx.listener(move |this, event: &KeyDownEvent, _, cx| {
                 if let Some(next) = step_tab(shown, &event.keystroke.key) {
@@ -102,7 +114,7 @@ impl ProjectSettingsPage {
                     this.pick_tab(next, cx);
                 }
             }))
-            .child(TabBar::new("project-settings-tabs").children(tabs))
+            .children(tabs)
             .into_any_element()
     }
 
