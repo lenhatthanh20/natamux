@@ -2,7 +2,8 @@
 //! project, as a page of Settings (T-0174). Its Stages, Issues and JSON tabs edit one draft text,
 //! which may not parse (then the JSON tab shows); Save writes it through `PUT /repos/:id/settings`
 //! with the version that was read, so a file another client changed shows Reload and Overwrite.
-//! The draft stays while the person looks at other pages; Discard drops it.
+//! The draft stays while the person looks at other pages; Discard drops it. The page draws its own
+//! header (`settings_header.rs`), so the tabs stay while the body scrolls.
 
 use gpui::{Entity, EventEmitter, FocusHandle, Focusable, ScrollHandle, Subscription};
 use natamux_proto::projects::repo::{LoadedSettings, SkillList};
@@ -287,10 +288,10 @@ impl ProjectSettingsPage {
         &self.preview_scroll
     }
 
-    /// Scrolls the body to the stage list and the details (the fifth part, after the file line,
-    /// the alerts, the tab row and the preview).
+    /// Scrolls the body to the stage list and the details (the third part, after the alerts and
+    /// the preview; the header and the tabs are above the body).
     pub fn show_details(&self, cx: &mut Context<Self>) {
-        self.body_scroll.scroll_to_top_of_item(4);
+        self.body_scroll.scroll_to_top_of_item(2);
         cx.notify();
     }
 }
@@ -333,21 +334,10 @@ impl ProjectSettingsPage {
         details.update(cx, |details, cx| details.closes_layer(window, cx))
     }
 
-    fn description(&self) -> String {
-        match &self.base {
-            Some(base) => format!(
-                "Saved in {}. Commit it to share it with your team.",
-                base.path
-            ),
-            None => "The stages, context sources, issue tracker and agent permissions of this \
-                     project."
-                .to_owned(),
-        }
-    }
-
-    /// Under the body, as the dialog's footer: the note, the file buttons, the count, Discard
-    /// and Save.
+    /// Under the body, as the dialog's footer: the note, the path of the file and its buttons,
+    /// the count, Discard and Save.
     fn bottom_bar(&self, shown: SettingsTab, cx: &mut Context<Self>) -> impl IntoElement {
+        let path = self.path_label(cx);
         let blocked = self.save_blocked(cx);
         let save = cx.listener(|this, _, window, cx| this.save(window, cx));
         let save_button = primary_button(
@@ -394,6 +384,7 @@ impl ProjectSettingsPage {
                 h_flex()
                     .flex_wrap()
                     .gap_1()
+                    .children(path)
                     .child(reset)
                     .child(import)
                     .child(export)
@@ -408,16 +399,17 @@ impl ProjectSettingsPage {
 impl Render for ProjectSettingsPage {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let shown = self.shown_tab(cx);
+        let header = self.render_header(shown, cx);
         let alerts = self.render_alerts(cx).into_any_element();
         let mut body = vec![alerts];
         if let Some(stages) = &self.stages {
-            body.push(self.render_tab_bar(shown, cx));
             body.extend(self.render_tab_body(stages, shown, window, cx));
         }
         v_flex()
             .track_focus(&self.focus)
             .size_full()
             .min_h_0()
+            .child(header)
             .child(
                 v_flex()
                     .id("project-settings-body")
@@ -428,7 +420,6 @@ impl Render for ProjectSettingsPage {
                     .px_6()
                     .py_3()
                     .gap_3()
-                    .child(Label::new(self.description()).color(Color::Muted))
                     .children(body),
             )
             .child(self.bottom_bar(shown, cx))

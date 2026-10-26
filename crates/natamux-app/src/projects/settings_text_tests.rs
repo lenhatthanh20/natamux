@@ -154,3 +154,45 @@ fn a_file_the_daemon_could_not_read_can_be_replaced_without_an_edit() {
     let fine = base_of(&loaded(Some("{}"), Some("v1"), None, true));
     assert!(fine.broken.is_none());
 }
+
+#[test]
+fn shortens_a_path_under_the_home_folder() {
+    let home = Some("/Users/me");
+    assert_eq!(
+        short_path("/Users/me/project/natamux/.natamux.json", home),
+        "~/project/natamux/.natamux.json"
+    );
+    assert_eq!(short_path("/Users/me", home), "~");
+    assert_eq!(
+        short_path("/Users/me/a/.natamux.json", Some("/Users/me/")),
+        "~/a/.natamux.json"
+    );
+    assert_eq!(
+        short_path("C:\\Users\\me\\a\\.natamux.json", Some("C:\\Users\\me")),
+        "~\\a\\.natamux.json"
+    );
+}
+
+#[test]
+fn keeps_a_path_outside_the_home_folder() {
+    let home = Some("/Users/me");
+    assert_eq!(
+        short_path("/data/projects/natamux/.natamux.json", home),
+        "/data/projects/natamux/.natamux.json"
+    );
+    assert_eq!(
+        short_path("/Users/me2/a/.natamux.json", home),
+        "/Users/me2/a/.natamux.json"
+    );
+    assert_eq!(short_path("/Users/me/a", None), "/Users/me/a");
+    assert_eq!(short_path("/Users/me/a", Some("")), "/Users/me/a");
+    assert_eq!(short_path("/a", Some("/")), "/a");
+}
+
+#[test]
+fn the_file_hint_names_the_full_path() {
+    assert_eq!(
+        file_hint("/Users/me/a/.natamux.json"),
+        "Commit /Users/me/a/.natamux.json to share these settings with your team."
+    );
+}
