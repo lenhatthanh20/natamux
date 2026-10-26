@@ -3,7 +3,7 @@
 //! `project_buttons.rs`), the "N finished" fold, the lines of an empty group and the pinned
 //! header. Also the loop that draws every line of the tree in order.
 
-use gpui::{AnyElement, ClickEvent, Entity, FontWeight, MouseButton, MouseDownEvent};
+use gpui::{AnyElement, ClickEvent, Entity, FontWeight, Hsla, MouseButton, MouseDownEvent};
 use ui::{Tooltip, prelude::*};
 
 use super::project_buttons::hover_button;
@@ -25,11 +25,40 @@ use crate::workspaces::{new_workspace_dialog, remove_finished};
 /// The 1 px guide in front of the rows under a task: 12 px of indent per level, as Zed's
 /// `ListItem`.
 fn under_guide(element: AnyElement, cx: &App) -> AnyElement {
+    // Padding, not margin: a list lays each line out as a root, and a root's margin only
+    // narrows it.
     div()
-        .ml(rems_from_px(11.0_f32))
-        .border_l_1()
-        .border_color(cx.theme().colors().border_variant)
-        .child(element)
+        .w_full()
+        .pl(rems_from_px(11.0_f32))
+        .child(
+            div()
+                .w_full()
+                .border_l_1()
+                .border_color(cx.theme().colors().border_variant)
+                .child(element),
+        )
+        .into_any_element()
+}
+
+/// A project header line: the fold takes the free width, so the buttons sit at the right end.
+fn header_row(
+    group: SharedString,
+    ring: Hsla,
+    fold: AnyElement,
+    buttons: Vec<AnyElement>,
+    cx: &App,
+) -> AnyElement {
+    h_flex()
+        .group(group)
+        .w_full()
+        .h(rems_from_px(26.0_f32))
+        .pr(rems_from_px(2.0_f32))
+        .rounded_sm()
+        .hover(|style| style.bg(cx.theme().colors().ghost_element_hover))
+        .border_1()
+        .border_color(ring)
+        .child(fold)
+        .children(buttons)
         .into_any_element()
 }
 
@@ -85,17 +114,13 @@ impl WorkspaceTree {
         };
         let fold = self.header_fold(repo_group, info, snap, cx);
         let buttons = self.header_buttons(repo, info, snap, cx);
-        h_flex()
-            .group(SharedString::from(format!("header-{}", repo.id)))
-            .h(rems_from_px(26.0_f32))
-            .pr(rems_from_px(2.0_f32))
-            .rounded_sm()
-            .hover(|style| style.bg(cx.theme().colors().ghost_element_hover))
-            .border_1()
-            .border_color(ring)
-            .child(fold)
-            .children(buttons)
-            .into_any_element()
+        header_row(
+            SharedString::from(format!("header-{}", repo.id)),
+            ring,
+            fold,
+            buttons,
+            cx,
+        )
     }
 
     /// Chevron, project icon, name, count and the dot of a folded group. A click folds; a right
@@ -301,3 +326,7 @@ fn no_matches(group: usize, model: &TreeModel, snap: &Snapshot) -> AnyElement {
         )))
         .into_any_element()
 }
+
+#[cfg(test)]
+#[path = "project_header_tests.rs"]
+mod tests;
