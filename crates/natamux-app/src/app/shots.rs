@@ -60,6 +60,8 @@ const SEND_BACK_REASON: &str = "Add the error cases for an empty list.";
 const EVIDENCE_STAGE: &str = "context";
 /// The Tries section is the sixth part of the Details tab of a try with an agent.
 const TRIES_PART: usize = 5;
+/// The projects of the fake data, blurred in the `sidebar-blurred` shot.
+const BLURRED: [&str; 2] = ["natamux", "natamux-site"];
 /// Screen 4: a running task with no file to commit, one with a new image; the reviewed task has
 /// two changed files.
 const CLEAN: &str = "T-0144";
@@ -154,6 +156,11 @@ fn view_of(shot: Shot) -> ViewState {
     let board = matches!(shot, Shot::TasksBoard | Shot::BoardHoverCard);
     let agents = (shot == Shot::AgentsGrid).then(|| vec![ASKING.to_string(), RUNNING.to_string()]);
     let mut view = ViewState {
+        blurred: if shot == Shot::SidebarBlurred {
+            BLURRED.iter().map(|id| id.to_string()).collect()
+        } else {
+            Vec::new()
+        },
         pinned: PINNED.iter().map(|id| id.to_string()).collect(),
         layout: match shot {
             _ if board => Layout::Board,
@@ -223,6 +230,14 @@ fn enter(shot: Shot, root: &mut Root, window: &mut Window, cx: &mut gpui::Contex
         }
         Shot::Drawer => root.set_drawer(true, window, cx),
         Shot::WorkspaceTerminalRunning => open(&dashboard, RUNNING, cx),
+        // Every project blurred (`view_of`) with the running task open, so its terminal rows show.
+        // Opening a task closes the drawer when the window handles the `Opened` event, which is
+        // after this function returns, so the drawer opens on the next frame. Where the sidebar
+        // docks, the flag changes nothing.
+        Shot::SidebarBlurred => {
+            open(&dashboard, RUNNING, cx);
+            cx.on_next_frame(window, |root, window, cx| root.set_drawer(true, window, cx));
+        }
         Shot::TerminalFind | Shot::WorkspaceTerminalReview => open(&dashboard, REVIEWED, cx),
         Shot::WorkspaceTerminalNeedsInput => open(&dashboard, ASKING, cx),
         Shot::NoWorkspace | Shot::WorkspacePreparing => open(&dashboard, NO_WORKSPACE, cx),

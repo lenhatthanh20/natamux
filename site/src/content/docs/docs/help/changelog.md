@@ -9,6 +9,7 @@ All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/r
 
 ## v1.0.2 (2026-10-26)
 
+- In the desktop app, a project with **Blur names** on shows its names, titles and labels as soft blurred bars, as the web dashboard blurs them, and not as dots. Tooltips still show dots.
 - In **Start a task** in the desktop app, **Branch from** has a folded **Remote branches** group with the branches of `origin` that have no local branch, also ones you never fetched. Pick `origin/<branch>` to start the task from it: Natamux fetches only that branch and makes no local branch for it. See [Base branch](/docs/concepts/workspaces/#base-branch).
 - In the desktop app, the header of a project's Settings page reads "Projects / <name>". **Stages**, **Issues** and **JSON** are tabs under the header that stay on screen while the page scrolls, and the path of `.natamux.json` is in the bottom bar.
 - Fix: in the **Progress** view, a long line under **Show evidence** ran past the right edge of the stage card. Now it wraps inside the card.
