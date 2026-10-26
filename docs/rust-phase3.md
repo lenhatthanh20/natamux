@@ -85,7 +85,7 @@ The tests in `cargo xtask ci` that guard the look and the keys:
 
 ## Screenshot baselines
 
-`app-shots` shoots each state in both themes (`light`, `dark`) at 1000x680 and 800x560: 78 states, 312 shots, and the 4 shots of the window check, 316 in all. Both sizes are under 1024, so the sidebar is a drawer there. The runner's screen is 1024x768, so `tasks-table` and the states after screen 1 are shot at 1024x720 too, where the sidebar docks: 126 more shots, 442 in all. Since the lean layout (T-0158) the details panel docks at every shot size (see "Lean layout"). macOS keeps the window below the menu bar, so these come out 1024x684; the width, which docks the sidebar, holds. If a runner gives the window less than 1024 wide, the comparison says the sizes differ. A shot is the app's window itself (`screencapture -l` with the window id, found by the app's process id), so the menu bar is not in it and the status bar is. Baselines are the PNGs in `crates/natamux-app/tests/shots/`, named `<state>-<theme>-<size>.png`.
+`app-shots` shoots each state in both themes (`light`, `dark`) at 1000x680 and 800x560: 79 states, 316 shots, and the 4 shots of the window check, 320 in all. Both sizes are under 1024, so the sidebar is a drawer there. The runner's screen is 1024x768, so `tasks-table` and the states after screen 1 are shot at 1024x720 too, where the sidebar docks: 128 more shots, 448 in all. Since the lean layout (T-0158) the details panel docks at every shot size (see "Lean layout"). macOS keeps the window below the menu bar, so these come out 1024x684; the width, which docks the sidebar, holds. If a runner gives the window less than 1024 wide, the comparison says the sizes differ. A shot is the app's window itself (`screencapture -l` with the window id, found by the app's process id), so the menu bar is not in it and the status bar is. Baselines are the PNGs in `crates/natamux-app/tests/shots/`, named `<state>-<theme>-<size>.png`.
 
 `scripts/compare-shots.py` compares a shot with its baseline. It fails when more than 0.5% of the pixels differ by more than 16 in a channel, or when the sizes differ, and it writes a diff image (differing pixels in red). The job summary lists each shot as matches, differs, or no baseline yet.
 
@@ -215,6 +215,7 @@ The fake's `natamux` project has three open GitHub issues (one imported already)
 | `details-empty` | All tasks with the details dock open and no task picked: "Select a task" (T-0158) |
 | `rail-closed-panel` | T-0143's workspace with the details panel closed: the terminals and the rail at the right edge (T-0183) |
 | `changes-over-main` | T-0143's Changes over the terminals with the details panel closed: main shows the whole Changes screen, files and commit box too (T-0183) |
+| `stage-evidence` | T-0141's workspace, Progress: the finished Context card open with Show evidence open; a pass longer than the panel wraps inside the card (T-0190) |
 
 ## Where it differs from the React screens
 
