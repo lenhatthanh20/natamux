@@ -37,7 +37,11 @@ pub fn other_settings_problem(raw: &Map<String, Value>) -> Option<String> {
             &["auto", "ask"],
             &mut found,
         );
-        count(agents.get("maxSendBacks"), "agents.maxSendBacks", &mut found);
+        count(
+            agents.get("maxSendBacks"),
+            "agents.maxSendBacks",
+            &mut found,
+        );
     }
     (!found.is_empty()).then(|| found.join("; "))
 }
@@ -52,7 +56,9 @@ fn count(value: Option<&Value>, path: &str, found: &mut Vec<String>) {
             found.push(format!("{path}: Too small: expected number to be >=0"));
         }
         Some(Value::Number(_)) => {
-            found.push(format!("{path}: Invalid input: expected int, received number"));
+            found.push(format!(
+                "{path}: Invalid input: expected int, received number"
+            ));
         }
         Some(other) => found.push(wrong_type(path, "number", other)),
     }

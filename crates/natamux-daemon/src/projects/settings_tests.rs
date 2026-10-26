@@ -367,7 +367,11 @@ fn starts_agents_in_auto_mode_when_the_file_has_a_bad_mode() {
 fn reads_the_most_send_backs_and_has_no_limit_without_it() {
     let setup = setup();
     assert_eq!(setup.repos.settings_of(None).agents.max_send_backs, None);
-    assert!(setup.load()["settings"]["agents"].get("maxSendBacks").is_none());
+    assert!(
+        setup.load()["settings"]["agents"]
+            .get("maxSendBacks")
+            .is_none()
+    );
 
     write(setup.file(), r#"{ "agents": { "maxSendBacks": 0 } }"#).unwrap();
     touch(&setup.file(), 1);
