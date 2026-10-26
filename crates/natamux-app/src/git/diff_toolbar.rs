@@ -1,6 +1,7 @@
 //! The toolbar over the diff (docs/ui-spec.md 4.24, `DiffToolbar.tsx`): the path with Copy path
 //! and the new or deleted badge at the left; the counts, the change navigator, Side by side or
-//! Inline (Stacked for images), the toggles, and the previous and next file at the right.
+//! Inline (Stacked for images), the toggles, and the previous and next file at the right, then the
+//! Terminals button that shows the terminals again (T-0183).
 //!
 //! The diff options menu of the web ("Ignore leading and trailing whitespace", "Show moved
 //! code") is not here: Zed's `buffer_diff` has neither.
@@ -11,8 +12,10 @@ use ui::{Tooltip, prelude::*};
 
 use super::ChangesView;
 use super::rows::{counts_label, zed_button};
+use crate::app::view_rules::WorkspaceTab;
 use crate::app::view_state::DiffFlags;
 use crate::components::segmented::Segmented;
+use crate::components::terminals_button::terminals_button;
 use crate::components::toast_rules::ToastTone;
 use crate::components::toasts::toast;
 use crate::git::change_rules::{
@@ -57,7 +60,14 @@ impl ChangesView {
                     .then(|| self.layout_toggle(kind, options.side_by_side, blocked, compact)),
             )
             .children(self.toggles(&entry.path, kind, options.wrap, cx))
-            .child(self.file_steps(cx));
+            .child(self.file_steps(cx))
+            .child(terminals_button("changes-terminals").on_click(cx.listener(
+                |this, _: &ClickEvent, _, cx| {
+                    this.dashboard.update(cx, |dashboard, cx| {
+                        dashboard.pick_tab(WorkspaceTab::Terminal, cx)
+                    });
+                },
+            )));
         h_flex()
             .min_h(rems_from_px(36.0_f32))
             .flex_none()

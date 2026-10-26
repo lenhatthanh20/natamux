@@ -4,6 +4,7 @@
 //! New terminal, Close, Maximize, the first focus and the terminal a sidebar row asks for.
 
 use std::collections::BTreeSet;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui::{Entity, Focusable, ScrollHandle, Subscription};
@@ -13,7 +14,7 @@ use ui::prelude::*;
 
 use super::pane_facts::{PaneFacts, agent_lanes, focus_after_close, pane_facts, restoring_label};
 use super::pane_header::{PaneHeader, PaneTitle};
-use super::pane_rules::{MAX_PANES, PaneLayout, columns_for, pane_span};
+use super::pane_rules::{MAX_PANES, PaneLayout, columns_for, new_terminal_button, pane_span};
 use super::remote_terminal::RemoteTerminal;
 use super::terminal_cache::{Owner, TerminalCache, terminal_key};
 use super::terminal_find::open_find;
@@ -39,6 +40,8 @@ struct Pane {
     restoring: Option<String>,
 }
 
+type OnClick = Rc<dyn Fn(&mut Window, &mut App)>;
+
 pub struct ShellPanes {
     dashboard: Entity<Dashboard>,
     task_id: Option<String>,
@@ -59,6 +62,8 @@ pub struct ShellPanes {
     width: Entity<Option<f32>>,
     _width: Subscription,
     scroll: ScrollHandle,
+    /// A finished task's terminals show in place of its wrap-up: each header goes back to it.
+    back_to_wrap_up: Option<OnClick>,
 }
 
 impl ShellPanes {
@@ -78,6 +83,16 @@ impl ShellPanes {
             width,
             _width: observe,
             scroll: ScrollHandle::new(),
+            back_to_wrap_up: None,
+        }
+    }
+
+    /// The workspace says whether the headers show Back to wrap-up, and what it does.
+    pub fn set_back_to_wrap_up(&mut self, run: Option<OnClick>, cx: &mut Context<Self>) {
+        let changed = self.back_to_wrap_up.is_some() != run.is_some();
+        self.back_to_wrap_up = run;
+        if changed {
+            cx.notify();
         }
     }
 
@@ -307,6 +322,13 @@ impl ShellPanes {
         let name = fact.name.clone();
         let maximized = self.maximized.as_deref() == Some(name.as_str());
         let this = cx.weak_entity();
+        let has_agent = self
+            .dashboard
+            .read(cx)
+            .data
+            .task(task_id)
+            .is_some_and(|task| task.agent.is_some());
+        let full = self.is_full(cx);
         let mut header = PaneHeader::new(key.clone(), PaneTitle::Terminal(name.clone()))
             .narrow(self.narrow)
             .state_text(fact.state_text)
@@ -318,6 +340,15 @@ impl ShellPanes {
                         .ok();
                 }
             });
+        if let Some((tip, enabled)) = new_terminal_button(false, has_agent, full) {
+            let this = this.clone();
+            header = header.new_terminal(tip, enabled, move |_, cx| {
+                this.update(cx, |panes, cx| panes.add(cx)).ok();
+            });
+        }
+        if let Some(back) = self.back_to_wrap_up.clone() {
+            header = header.back_to_wrap_up(move |window, cx| back(window, cx));
+        }
         if let Some(state) = fact.agent_state {
             header = header.agent_shell(state, fact.agent);
         }

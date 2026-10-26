@@ -1,11 +1,12 @@
-//! The keys and menu items of screen 4 that act on the open workspace as a whole: the tabs and
+//! The keys and menu items of screen 4 that act on the open workspace as a whole: the terminals,
+//! Changes and History (since T-0183 views of the details panel; Changes also covers main) and
 //! Commit… The Changes view handles the diff keys itself.
 
 use ui::prelude::*;
 
 use super::Root;
 use crate::app::shortcuts::{CommitChanges, ShowChangesTab, ShowHistoryTab, ShowTerminalTab};
-use crate::app::view_rules::WorkspaceTab;
+use crate::app::view_rules::{DetailsView, WorkspaceTab};
 
 impl Root {
     /// The id of the open task, only when it has a workspace (`When::InWorkspace`).
@@ -20,6 +21,14 @@ impl Root {
         if self.open_workspace_task(cx).is_some() {
             self.dashboard
                 .update(cx, |dashboard, cx| dashboard.pick_tab(tab, cx));
+        }
+    }
+
+    /// Keys 2 to 4: the panel opens on the view, and Changes or Docs covers the terminals.
+    pub(super) fn show_view(&mut self, view: DetailsView, cx: &mut Context<Self>) {
+        if self.open_workspace_task(cx).is_some() {
+            self.dashboard
+                .update(cx, |dashboard, cx| dashboard.show_view(view, cx));
         }
     }
 
@@ -38,7 +47,7 @@ impl Root {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.show_tab(WorkspaceTab::Changes, cx);
+        self.show_view(DetailsView::Changes, cx);
     }
 
     pub(super) fn show_history_tab(
@@ -47,7 +56,7 @@ impl Root {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.show_tab(WorkspaceTab::History, cx);
+        self.show_view(DetailsView::History, cx);
     }
 
     pub(super) fn commit_changes(

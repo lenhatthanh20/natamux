@@ -293,3 +293,30 @@ fn compares_terminal_names_by_number_not_by_text() {
         hint("Terminal 9 is working", false)
     );
 }
+
+#[test]
+fn new_terminal_tip_by_task_and_room() {
+    assert_eq!(
+        new_terminal_tip(true, false),
+        "New terminal (Ctrl+Shift+`). Terminal 1 runs the agent."
+    );
+    assert_eq!(
+        new_terminal_tip(false, false),
+        "New terminal (Ctrl+Shift+`)"
+    );
+    assert_eq!(
+        new_terminal_tip(true, true),
+        "New terminal: at most 6 terminals"
+    );
+}
+
+#[test]
+fn new_terminal_is_in_workspace_panes_and_off_when_full() {
+    let (tip, enabled) = new_terminal_button(false, false, false).unwrap();
+    assert!(enabled);
+    assert_eq!(tip, "New terminal (Ctrl+Shift+`)");
+    let (tip, enabled) = new_terminal_button(false, true, true).unwrap();
+    assert!(!enabled);
+    assert_eq!(tip, "New terminal: at most 6 terminals");
+    assert_eq!(new_terminal_button(true, true, false), None);
+}

@@ -9,7 +9,7 @@ use gpui::{App, AsyncApp, Entity, WindowHandle};
 use super::dashboard::Dashboard;
 use super::fake_daemon;
 use super::options::Shot;
-use super::view_rules::{DetailsView, WorkspaceTab};
+use super::view_rules::DetailsView;
 use super::window::Root;
 use crate::files::draft_store::DraftStore;
 use crate::files::file_drafts::FileDraft;
@@ -65,9 +65,9 @@ fn enter(shot: Shot, dashboard: &Entity<Dashboard>, cx: &mut App) {
             files_panel(dashboard, REVIEWED, cx);
         }
         Shot::WorkspaceDocs => {
-            panel(dashboard, REVIEWED, DetailsView::Progress, cx);
             dashboard.update(cx, |dashboard, cx| {
-                dashboard.pick_tab(WorkspaceTab::Docs, cx)
+                dashboard.open(REVIEWED, cx);
+                dashboard.show_view(DetailsView::Docs, cx);
             });
         }
         Shot::WorkspaceDocsEdit => {

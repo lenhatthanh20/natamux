@@ -1,5 +1,6 @@
-//! The left column of the Docs tab (`DocsTab.tsx` `nav`): the stage files, then the attachments,
-//! and the image view an attached image opens in place of the file.
+//! The list of Docs (`DocsTab.tsx` `nav`; the left column, or the details panel since T-0183):
+//! the stage files, then the attachments, and the image view an attached image opens in place of
+//! the file.
 
 use std::sync::Arc;
 
@@ -10,8 +11,10 @@ use ui::prelude::*;
 
 use super::docs_rules::{DocDraft, attachment_meta};
 use super::docs_tab::DocsTab;
+use super::docs_view::terminals_to_main;
 use crate::app::clock::now_ms;
 use crate::app::source::reason;
+use crate::app::view_rules::WorkspaceTab;
 use crate::components::colors::signal;
 use crate::components::icons::icon_path;
 use crate::components::text_size::row_text;
@@ -28,6 +31,7 @@ impl DocsTab {
         &self,
         entries: &[StageFile],
         current: &str,
+        fill: bool,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let colors = cx.theme().colors();
@@ -53,7 +57,10 @@ impl DocsTab {
                     .cursor_pointer()
                     .hover(move |row| row.bg(hover))
                     .when(picked, move |row| row.bg(selected))
-                    .on_click(cx.listener(move |this, _, _, cx| this.pick(name.clone(), cx)))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.pick(name.clone(), cx);
+                        this.show_docs(cx);
+                    }))
                     .child(
                         h_flex()
                             .gap_1p5()
@@ -85,13 +92,16 @@ impl DocsTab {
             .collect();
         v_flex()
             .id("docs-list")
-            .w(rems_from_px(208.0_f32))
+            .when(fill, |list| list.w_full())
+            .when(!fill, |list| {
+                list.w(rems_from_px(208.0_f32))
+                    .border_r_1()
+                    .border_color(cx.theme().colors().border)
+            })
             .flex_none()
             .h_full()
             .p_2()
             .gap_0p5()
-            .border_r_1()
-            .border_color(cx.theme().colors().border)
             .overflow_y_scroll()
             .children(rows)
             .child(self.attachment_rows(false, cx))
@@ -164,6 +174,12 @@ impl DocsTab {
             .into_any_element()
     }
 
+    /// A picked row makes main show Docs, also when the list sits in the details panel.
+    fn show_docs(&self, cx: &mut Context<Self>) {
+        self.dashboard
+            .update(cx, |d, cx| d.pick_tab(WorkspaceTab::Docs, cx));
+    }
+
     /// An image opens in the tab; any other file downloads.
     fn open_attachment(&mut self, item: Attachment, all_download: bool, cx: &mut Context<Self>) {
         let Some(kind) = item.kind.clone().filter(|_| !all_download) else {
@@ -173,6 +189,7 @@ impl DocsTab {
         let Some(source) = self.dashboard.read(cx).source().cloned() else {
             return;
         };
+        self.show_docs(cx);
         let name = item.name;
         self.image = Some(ShownAttachment {
             name: name.clone(),
@@ -229,7 +246,9 @@ impl DocsTab {
                             .size(LabelSize::Small)
                             .buffer_font(cx)
                             .color(Color::Muted),
-                    ),
+                    )
+                    .child(div().flex_1())
+                    .child(terminals_to_main(&self.dashboard)),
             )
             .child(
                 div()

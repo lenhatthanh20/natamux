@@ -263,7 +263,6 @@ fn offers_the_workspace_tabs_and_files_only_with_a_workspace_open() {
         "files.show",
         "file.save",
         "tab.close",
-        "tab.reopen",
     ];
     let open = CommandState {
         workspace_open: true,
@@ -432,14 +431,19 @@ fn suggests_the_commands_of_the_web_in_its_order() {
     );
 }
 
-/// T-0158: the tabs close as Zed's pane tabs, and the status bar toggles the Agents grid.
+/// T-0183: no tabs to close, Mod+W closes the open file; the status bar toggles the Agents grid
+/// (T-0158).
 #[test]
-fn closes_and_reopens_tabs_and_toggles_the_agents() {
+fn closes_the_open_file_and_toggles_the_agents() {
     let name = |id: &str| crate::app::shortcuts::action_for(id).map(|action| action.name());
     assert_eq!(shortcut_of("tab.close"), Some("Mod+W"));
-    assert_eq!(shortcut_of("tab.reopen"), None);
+    assert_eq!(
+        command_by_id("tab.close").map(|command| command.title),
+        Some("Close the file")
+    );
+    assert!(command_by_id("tab.reopen").is_none());
     assert_eq!(shortcut_of("agents.toggle"), None);
     assert_eq!(name("tab.close"), Some("natamux::CloseTab"));
-    assert_eq!(name("tab.reopen"), Some("natamux::ReopenTabs"));
+    assert!(name("tab.reopen").is_none());
     assert_eq!(name("agents.toggle"), Some("natamux::ToggleAgents"));
 }

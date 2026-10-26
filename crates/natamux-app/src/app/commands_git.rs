@@ -24,9 +24,9 @@ const fn tab(id: &'static str, title: &'static str, key: &'static [&'static str]
 
 /// Key 4 (Docs) is in `commands_files.rs`.
 pub const GIT_COMMANDS: &[Command] = &[
-    tab("tab.terminal", "Show the Terminal tab", &["1"]),
-    tab("tab.changes", "Show the Changes tab", &["2"]),
-    tab("tab.history", "Show the History tab", &["3"]),
+    tab("tab.terminal", "Show the terminals", &["1"]),
+    tab("tab.changes", "Show Changes", &["2"]),
+    tab("tab.history", "Show History", &["3"]),
     in_workspace(keys(
         group(
             command(

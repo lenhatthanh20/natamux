@@ -6,7 +6,7 @@ use natamux_proto::tasks::task::Task;
 use ui::prelude::*;
 
 use super::Dashboard;
-use crate::app::tab_rules::shown_details_view;
+use crate::app::tab_rules::{RailClick, main_after_view, rail_click, shown_details_view};
 use crate::app::view_rules::{DetailsView, details_view_for};
 
 /// What a key or a command asks the panel to do once it shows the task.
@@ -42,13 +42,21 @@ impl Dashboard {
         self.view().details_open && !self.agents_open
     }
 
-    /// The tab shown. A remembered Files shows Progress for a task with no workspace.
+    /// The view shown. A remembered view the task cannot show shows Progress
+    /// (`shown_details_view`).
     pub fn details_view_now(&self) -> DetailsView {
-        let view = details_view_for(self.view().details_view, self.details_beside_workspace());
+        let beside = self.details_beside_workspace();
+        let view = details_view_for(self.view().details_view, beside);
         let has_workspace = self
             .details_task()
             .is_some_and(|task| task.workspace.is_some());
-        shown_details_view(view, has_workspace)
+        shown_details_view(view, has_workspace, beside)
+    }
+
+    /// The open panel shows `view` beside the open workspace: Changes and Docs then draw their
+    /// list there, and only the picked file over main (T-0183).
+    pub fn panel_shows(&self, view: DetailsView) -> bool {
+        self.details_shown() && self.details_beside_workspace() && self.details_view_now() == view
     }
 
     pub fn set_details_open(&mut self, open: bool, cx: &mut Context<Self>) {
@@ -80,6 +88,25 @@ impl Dashboard {
 
     pub fn set_details_view(&mut self, view: DetailsView, cx: &mut Context<Self>) {
         self.update_view(cx, |state| state.details_view = Some(view));
+    }
+
+    /// Keys 2 to 4 and the commands of a view: the panel opens on `view`; Changes and Docs also
+    /// cover the terminals in main (`main_after_view`).
+    pub fn show_view(&mut self, view: DetailsView, cx: &mut Context<Self>) {
+        self.set_details_view(view, cx);
+        self.set_details_open(true, cx);
+        let main = main_after_view(view, self.workspace_tab);
+        if main != self.workspace_tab {
+            self.pick_tab(main, cx);
+        }
+    }
+
+    /// A click on a rail icon (`rail_click`): the picked view of an open panel closes it.
+    pub fn rail_pick(&mut self, view: DetailsView, cx: &mut Context<Self>) {
+        match rail_click(view, self.details_view_now(), self.details_shown()) {
+            RailClick::Close => self.set_details_open(false, cx),
+            RailClick::Show(view) => self.show_view(view, cx),
+        }
     }
 
     /// Show in progress, Show progress and `progress.show` (`showProgress`). The panel is about

@@ -1,7 +1,8 @@
 //! Parts of the Changes tab's file panel: the narrow layout's picker, the panel's resize
-//! handle, a file row, the `+12 −3` counts, and the buttons with Zed's icons.
+//! handle, a file row, the `+12 −3` counts, and the buttons with Zed's icons. Also the two
+//! screens of the split in the details panel: the panel's part and main's diff-only part.
 
-use gpui::ClickEvent;
+use gpui::{ClickEvent, KeyContext};
 use natamux_proto::workspaces::changes::ChangeStatus;
 use natamux_proto::workspaces::workspace::ChangeEntry;
 use ui::{ContextMenu, Tooltip, prelude::*};
@@ -9,9 +10,11 @@ use ui::{ContextMenu, Tooltip, prelude::*};
 use super::ChangesView;
 use super::files::FILES_LIMITS;
 use crate::components::colors::change_color;
+use crate::components::empty_state::EmptyState;
 use crate::components::menu::MenuLayer;
 use crate::components::resize_handle::ResizeHandle;
 use crate::components::resize_rules::{Edge, Resize};
+use crate::components::skeleton::{Loading, SkeletonList};
 use crate::components::text_size::row_text;
 use crate::files::file_icon_view::file_icon;
 use crate::git::change_rules::{split_path, status_tone};
@@ -19,6 +22,60 @@ use crate::git::change_tree::{FileViewMode, entry_counts};
 use crate::terminals::pane_header::icon_button;
 
 impl ChangesView {
+    /// The file list and the commit box, for the details panel (the diff stays in main).
+    pub fn render_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+        self.take_commit_request(window, cx);
+        let mut context = KeyContext::default();
+        context.add("NatamuxChanges");
+        if !self.editing(window, cx) {
+            context.add("not_editing");
+        }
+        let root = v_flex().key_context(context).size_full();
+        let root = self.with_actions(root, cx);
+        if let Some(error) = self.error.clone().filter(|_| self.list.is_none()) {
+            return root
+                .child(div().p_4().child(Label::new(error).color(Color::Error)))
+                .into_any_element();
+        }
+        let Some(list) = self.list.as_ref() else {
+            return root
+                .child(
+                    Loading::new("changes-panel-loading", true, SkeletonList::new(6, 28.))
+                        .content(div()),
+                )
+                .into_any_element();
+        };
+        if list.is_empty() {
+            return root
+                .child(
+                    v_flex().flex_1().w_full().justify_center().child(
+                        EmptyState::new("changes-panel-empty", "file-diff", "No changes")
+                            .body("The workspace matches its last commit."),
+                    ),
+                )
+                .into_any_element();
+        }
+        let width = self.dashboard.read(cx).view().details_width;
+        root.child(self.render_files(width, window, cx))
+            .child(self.render_commit_box(window, cx))
+            .into_any_element()
+    }
+
+    /// Main's part while the panel has the files: the toolbar, the diff and the comment box.
+    pub(super) fn render_diff_only(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        v_flex()
+            .flex_1()
+            .min_h_0()
+            .child(self.render_toolbar(cx))
+            .child(self.render_body(window, cx))
+            .child(self.render_comment_box(window, cx))
+            .into_any_element()
+    }
+
     pub(super) fn resize_handle(&self, panel: f32) -> impl IntoElement + use<> {
         let dashboard = self.dashboard.clone();
         ResizeHandle::new(

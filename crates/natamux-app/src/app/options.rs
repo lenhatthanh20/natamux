@@ -102,10 +102,12 @@ pub enum Shot {
     SignInError,
     AddMenu,
     DetailsEmpty,
+    RailClosedPanel,
+    ChangesOverMain,
 }
 
 impl Shot {
-    pub const ALL: [Shot; 76] = [
+    pub const ALL: [Shot; 78] = [
         Shot::TasksTable,
         Shot::TasksBoard,
         Shot::BoardHoverCard,
@@ -182,6 +184,8 @@ impl Shot {
         Shot::SignInError,
         Shot::AddMenu,
         Shot::DetailsEmpty,
+        Shot::RailClosedPanel,
+        Shot::ChangesOverMain,
     ];
 
     pub fn name(self) -> &'static str {
@@ -262,6 +266,8 @@ impl Shot {
             Shot::SignInError => "sign-in-error",
             Shot::AddMenu => "add-menu",
             Shot::DetailsEmpty => "details-empty",
+            Shot::RailClosedPanel => "rail-closed-panel",
+            Shot::ChangesOverMain => "changes-over-main",
         }
     }
 

@@ -29,6 +29,17 @@ The details panel is open by default beside a workspace, so the stages stay in s
 
 Under 768 px wide the status bar is hidden and the sidebar becomes a drawer. The status items move to the foot of the drawer.
 
+### In the desktop app
+
+The desktop app lays out an open task in its own way:
+
+- The main area shows the task's terminals. There are no tabs and no **Terminal** label.
+- The details panel's views are icons on a rail at the right edge of the window, top to bottom: **Progress**, **Changes** (with the number of files to commit), **History**, **Docs**, **Files** and **Details**, then **...** (the task's menu). The rail stays when the panel is closed. Click the picked view again to close the panel.
+- **Changes** lists the files and the commit box in the panel, with **Push** and **Create PR** under it, and shows the picked file's diff over the terminals. **Docs** lists the stage files in the panel and shows the picked one over the terminals. A file from **Files** opens over the terminals too.
+- **Terminals**, at the end of the bar of the screen over the terminals, or `Esc`, shows the terminals again. So do `1` and a terminal row in the sidebar. `2`, `3` and `4` open **Changes**, **History** and **Docs**.
+- To add a terminal, click the split button in a terminal's header (or press ``Ctrl+Shift+` ``).
+- Over **All tasks** there is no rail: the panel's header has the views and **...**.
+
 Press `Mod+B` to hide or show the sidebar. Press `Mod+Alt+B` to hide or show the details. `Mod` is ⌘ on macOS and Ctrl elsewhere. Press `F6` to move between the parts. Drag the edge of the sidebar or the details panel to resize it.
 
 ## Files of the worktree
@@ -38,7 +49,7 @@ The **Files** view of the details panel lists the files and folders of the task'
 - Click a folder, or press `Right` and `Left`, to open or close it. A folder is read when you open it.
 - A changed file has the same letter and color as in the [Changes tab](/docs/guides/changes-and-history/#changed-files). A folder with changes below has a dot.
 - Drag a file or folder onto a terminal of the same task to type its path there, such as `src/app.ts `. Natamux pastes it, so the agent gets it as one piece, and does not press Enter. A path with a space is quoted. This works where the details sit beside the terminal, in a wide window.
-- Click a file, or press `Enter`, to open it in a tab of the workspace named after the file. Edit it and press `Mod+S` or **Save**. **Revert** drops your changes and **Close the file** closes the tab.
+- Click a file, or press `Enter`, to open it in a tab of the workspace named after the file (in the desktop app, over the terminals). Edit it and press `Mod+S` or **Save**. **Revert** drops your changes and **Close the file** closes the tab.
 - An edit that is not saved stays when you switch tabs, files or tasks. The file shows **edited** in the list. The browser asks before you close the page.
 - When the agent changes the file after you began to edit it, **This file changed on disk.** asks what to keep: **Reload** shows the new file and drops your changes, **Keep mine** lets the next save replace it.
 - A binary file or a file over 1 MB is not shown. `.git` is never listed. The editor cannot make, rename or delete files.
@@ -70,7 +81,7 @@ In the workspace list:
 When a task is done or cancelled, Natamux says so once with a message. When the tab is in the background, a task that is done also shows a notification.
 
 - A banner under the header says **Task done.** or **Task cancelled.** and what is left, with the next step as its main button: **Commit…** for files that are not committed, **Push** for commits that origin does not have, **Create PR**, or **Open pull request** while it is open. When nothing is left, the main button is **Remove workspace**. The banner shows on every tab.
-- The **Terminal** tab shows the wrap-up instead of the terminals. It lists the changes, the push, the pull request and the branch, each with a mark and a button when there is something to do. Under **Terminals** are the terminals that still run and the terminals the task ended, with their agent and stage, and **Show last screen**. **Reopen agent** starts the task's agent again in Terminal 1, on its last conversation; the task keeps its state. It is not there while an agent runs in Terminal 1.
+- The **Terminal** tab (in the desktop app, the main area) shows the wrap-up instead of the terminals; once you open a terminal there, **Back to wrap-up** in a terminal's header goes back to it. It lists the changes, the push, the pull request and the branch, each with a mark and a button when there is something to do. Under **Terminals** are the terminals that still run and the terminals the task ended, with their agent and stage, and **Show last screen**. **Reopen agent** starts the task's agent again in Terminal 1, on its last conversation; the task keeps its state. It is not there while an agent runs in Terminal 1.
 - **Remove workspace** asks first. The dialog lists what goes and what stays:
   - Files that are not committed stop it. The dialog lists them and offers **View changes** and **Commit…**.
   - It names a program that still runs, such as `node` in Terminal 7, and the button then reads **Stop it and remove**.

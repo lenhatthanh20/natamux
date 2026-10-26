@@ -9,7 +9,7 @@ use ui::prelude::*;
 
 use super::{Shown, WorkspaceView};
 use crate::agents::agent_choices::{DEFAULT_AGENT, is_agent_id};
-use crate::app::view_rules::WorkspaceTab;
+use crate::app::view_rules::{DetailsView, WorkspaceTab};
 use crate::git::history_view::HistoryView;
 use crate::tasks::state_filter::width_probe;
 use crate::tasks::table_rules::waits_for;
@@ -184,8 +184,9 @@ impl WorkspaceView {
         (open(true), open(false))
     }
 
-    /// The git buttons of the tab bar end: Commit… or Push, and Create PR or Open PR.
-    fn git_buttons(
+    /// The git buttons of the panel's Changes view, under the commit box: Push, and Create PR or
+    /// Open pull request.
+    pub(super) fn git_buttons(
         &self,
         task: &Task,
         shown: &Shown,
@@ -210,15 +211,12 @@ impl WorkspaceView {
             this.update(cx, |view, cx| view.git_step(GitStep::PullRequest, cx))
                 .ok();
         })
-        .on_commit({
-            let (dashboard, id) = (self.dashboard.clone(), task.id.clone());
-            move |_, cx| dashboard.update(cx, |dashboard, cx| dashboard.open_changes(&id, true, cx))
-        })
         .render()
     }
 
-    /// The History tab: the graph of the task against its base branch.
-    fn history(&self, task: &Task, shown: &Shown, cx: &mut Context<Self>) -> AnyElement {
+    /// The panel's History view (T-0183): the graph of the task against its base branch, narrow
+    /// as the panel is.
+    pub(super) fn history(&self, task: &Task, shown: &Shown, cx: &mut Context<Self>) -> AnyElement {
         let this = cx.weak_entity();
         let dashboard = self.dashboard.clone();
         HistoryView {
@@ -226,10 +224,10 @@ impl WorkspaceView {
             graph: shown.graph.clone(),
             error: shown.graph_error.clone(),
             uncommitted: shown.changes.as_ref().map(Vec::len).unwrap_or(0),
-            narrow: self.width.read(cx).is_some_and(|width| width < 640.),
+            narrow: true,
             on_show_changes: Rc::new(move |_: &mut Window, cx: &mut App| {
                 dashboard.update(cx, |dashboard, cx| {
-                    dashboard.pick_tab(WorkspaceTab::Changes, cx)
+                    dashboard.show_view(DetailsView::Changes, cx)
                 })
             }),
             on_refresh: Rc::new(move |_: &mut Window, cx: &mut App| {
@@ -239,8 +237,8 @@ impl WorkspaceView {
         .into_any_element()
     }
 
-    /// A task with a workspace: finished banner, tab row, and the body of its tab: the
-    /// panes or the wrap-up, Changes, History, Docs, or the open file.
+    /// A task with a workspace: finished banner, then what main shows: the panes or the wrap-up,
+    /// or Changes, Docs or the open file over them. No tab row (T-0183).
     pub(super) fn render_workspace(
         &mut self,
         task: Task,
@@ -260,8 +258,11 @@ impl WorkspaceView {
             .flatten()
             .map(|change| change.path.clone())
             .collect();
-        let git_buttons = self.git_buttons(&task, shown, facts.uncommitted, cx);
         let (banner_actions, wrap_up_actions) = self.finished_actions(&task, cx);
+        // A finished task's terminals, shown in place of its wrap-up: each header goes back.
+        let back = (finished && shown.shells_wanted).then(|| self.back_to_wrap_up(cx));
+        self.panes
+            .update(cx, |panes, cx| panes.set_back_to_wrap_up(back, cx));
         let banner = finished.then(|| {
             FinishedBanner::new(task.clone(), facts.clone(), shown.pending, banner_actions)
         });
@@ -269,11 +270,8 @@ impl WorkspaceView {
         if !matches!(tab, WorkspaceTab::Docs | WorkspaceTab::Editor) {
             self.file_tab_shown = None;
         }
-        let uncommitted = shown.changes.as_ref().map(Vec::len);
-        let tab_row = self.tab_row(&task, tab, panes_shown, uncommitted, git_buttons, cx);
         let body: AnyElement = match tab {
             WorkspaceTab::Changes => self.changes.clone().into_any_element(),
-            WorkspaceTab::History => self.history(&task, shown, cx),
             WorkspaceTab::Docs => self.docs_body(&task.id, window, cx),
             WorkspaceTab::Editor => self.editor_body(&task.id, window, cx),
             _ if panes_shown => self.panes.clone().into_any_element(),
@@ -302,7 +300,6 @@ impl WorkspaceView {
             .on_action(cx.listener(Self::new_terminal))
             .child(width_probe(&self.width))
             .children(banner)
-            .child(tab_row)
             .child(div().flex_1().min_h_0().child(body))
             .into_any_element()
     }

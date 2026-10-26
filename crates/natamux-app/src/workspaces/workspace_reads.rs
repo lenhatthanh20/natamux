@@ -119,12 +119,18 @@ impl WorkspaceView {
         }
     }
 
-    /// Hands the Changes tab what it shows of the task: its files and the git step that runs.
+    /// Hands the Changes view what it shows of the task: its files and the git step that runs.
+    /// The dashboard gets the count, for the badge of the rail's Changes.
     pub(super) fn sync_changes(&mut self, cx: &mut Context<Self>) {
         let Some(shown) = self.shown.as_ref() else {
             return;
         };
         let (id, list, pending) = (shown.task_id.clone(), shown.changes.clone(), shown.pending);
+        if let Some(count) = list.as_ref().map(Vec::len) {
+            self.dashboard.update(cx, |dashboard, cx| {
+                dashboard.set_open_changes(&id, count, cx)
+            });
+        }
         self.changes
             .update(cx, |changes, cx| changes.set_list(&id, list, pending, cx));
     }

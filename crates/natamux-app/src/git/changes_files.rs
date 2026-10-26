@@ -1,6 +1,7 @@
 //! The file panel of the Changes tab (`ChangedFiles.tsx`, `ChangedRow.tsx`): the header with the
 //! counts and its buttons, the files as a list or a tree, their row menu (Rollback…), the keys
-//! of the tree. The picker of the narrow layout and the rows' parts are in `changes_rows.rs`.
+//! of the tree. It shows in main or in the details panel, so a row also makes main show Changes.
+//! The picker of the narrow layout and the rows' parts are in `changes_rows.rs`.
 
 use std::collections::BTreeSet;
 
@@ -10,6 +11,7 @@ use ui::{ContextMenu, ContextMenuEntry, Disclosure, Tooltip, prelude::*};
 
 use super::ChangesView;
 use super::rows::{counts_label, file_row, zed_button};
+use crate::app::view_rules::WorkspaceTab;
 use crate::components::colors::change_color;
 use crate::components::icons::icon_path;
 use crate::components::menu::MenuLayer;
@@ -114,7 +116,13 @@ impl ChangesView {
     fn activate(&mut self, row: &RowFacts, cx: &mut Context<Self>) {
         self.cursor = Some(row.key.clone());
         match &row.node {
-            TreeNode::File(file) => self.pick(&file.entry.path.clone(), cx),
+            TreeNode::File(file) => {
+                self.pick(&file.entry.path.clone(), cx);
+                // A row in the panel must also cover the terminals in main.
+                self.dashboard.update(cx, |dashboard, cx| {
+                    dashboard.pick_tab(WorkspaceTab::Changes, cx)
+                });
+            }
             TreeNode::Folder(_) => self.toggle_folder(&row.key, cx),
         }
     }

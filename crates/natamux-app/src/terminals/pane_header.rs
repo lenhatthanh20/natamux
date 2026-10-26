@@ -1,6 +1,7 @@
 //! The 32 px header of a terminal pane, for the workspace and the Agents grid
 //! (docs/ui-spec.md 4.23, `features/terminals/TerminalPane.tsx`): the mark, the title, the agent
-//! badge, the state text, the hint, and Maximize, Open workspace and Close.
+//! badge, the state text, the hint, and Back to wrap-up (a finished task's terminals), New
+//! terminal (workspace only), Maximize, Open workspace and Close.
 
 use std::rc::Rc;
 
@@ -50,6 +51,10 @@ pub struct PaneHeader {
     hint: Option<PaneHint>,
     focused: bool,
     maximized: bool,
+    /// The workspace only: the tooltip, whether it can be used, and the click.
+    new_terminal: Option<(String, bool, OnClick)>,
+    /// A finished task's terminals, shown in place of its wrap-up.
+    back_to_wrap_up: Option<OnClick>,
     on_maximize: Option<OnClick>,
     on_open: Option<OnClick>,
     close: Option<(SharedString, OnClick)>,
@@ -68,6 +73,8 @@ impl PaneHeader {
             hint: None,
             focused: false,
             maximized: false,
+            new_terminal: None,
+            back_to_wrap_up: None,
             on_maximize: None,
             on_open: None,
             close: None,
@@ -99,6 +106,21 @@ impl PaneHeader {
 
     pub fn focused(mut self, focused: bool) -> Self {
         self.focused = focused;
+        self
+    }
+
+    pub fn new_terminal(
+        mut self,
+        tip: String,
+        enabled: bool,
+        run: impl Fn(&mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.new_terminal = Some((tip, enabled, Rc::new(run)));
+        self
+    }
+
+    pub fn back_to_wrap_up(mut self, run: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+        self.back_to_wrap_up = Some(Rc::new(run));
         self
     }
 
@@ -203,10 +225,26 @@ fn title(key: &str, title: PaneTitle, color: Color, cx: &App) -> AnyElement {
 }
 
 impl PaneHeader {
-    /// Maximize or Restore, Open workspace, Close.
+    /// Back to wrap-up, New terminal, Maximize or Restore, Open workspace, Close.
     fn buttons(&mut self) -> Vec<AnyElement> {
         let key = self.key.clone();
         let maximized = self.maximized;
+        let new_terminal = self.new_terminal.take().map(|(tip, enabled, run)| {
+            icon_button(
+                SharedString::from(format!("{key}-new-terminal")),
+                "square-split-horizontal",
+            )
+            .disabled(!enabled)
+            .tooltip(Tooltip::text(tip))
+            .on_click(click(run))
+            .into_any_element()
+        });
+        let back = self.back_to_wrap_up.take().map(|run| {
+            icon_button(SharedString::from(format!("{key}-back")), "arrow-left")
+                .tooltip(Tooltip::text("Back to wrap-up"))
+                .on_click(click(run))
+                .into_any_element()
+        });
         let maximize = self.on_maximize.take().map(|run| {
             let (icon, verb) = if maximized {
                 ("minimize-2", "Restore")
@@ -234,7 +272,10 @@ impl PaneHeader {
                 .on_click(click(run))
                 .into_any_element()
         });
-        [maximize, open, close].into_iter().flatten().collect()
+        [back, new_terminal, maximize, open, close]
+            .into_iter()
+            .flatten()
+            .collect()
     }
 }
 
