@@ -1,9 +1,11 @@
 //! Ports `packages/daemon/src/stages/stage-actions.ts` (constants and pure helpers) and
 //! `AGENT_REFUSED_ACTIONS` of `http/routes/stages.ts`.
 
-use natamux_proto::events::task_event::TaskEvent;
+use natamux_core::events::schema::GATE_EVENT_TYPES;
+use natamux_proto::events::task_event::{StoredEvent, TaskEvent};
 use natamux_proto::stages::schema::{Stage, StageKind, Step};
 use natamux_proto::tasks::task::{Task, TaskState};
+use serde_json::Value;
 
 /// Events of an agent that leave it where it was: still at the end of its turn.
 pub const KEEPS_TURN: [&str; 1] = ["agent.active"];
@@ -68,8 +70,41 @@ pub const ENDS_STAGE: [&str; 5] = [
     "stage.skipped",
 ];
 
-/// Rounds of "fix it" an agent may ask for on its own before a person decides.
+/// Rounds of "fix it" an agent may ask for on its own before a person decides. The count starts
+/// again each time a person steps in, see `agent_send_backs`.
 pub const MAX_AGENT_SEND_BACKS: usize = 2;
+
+/// The send backs by an agent (or by CI) from a stage since a person last stepped in, oldest
+/// event first. A person who sends back, approves, passes, skips or sets the state has decided,
+/// so the agents get their tries again; only a person's events count, so an agent cannot reset
+/// its own limit.
+pub fn agent_send_backs(events: &[StoredEvent], from: &str) -> usize {
+    let since = events
+        .iter()
+        .rposition(is_person_decision)
+        .map_or(0, |at| at + 1);
+    events
+        .iter()
+        .skip(since)
+        .filter(|stored| {
+            let payload = &stored.event.payload;
+            stored.event.kind == "stage.reopened"
+                && payload.get("byAgent") == Some(&Value::Bool(true))
+                && payload.get("from").and_then(Value::as_str) == Some(from)
+        })
+        .count()
+}
+
+fn is_person_decision(stored: &StoredEvent) -> bool {
+    let event = &stored.event;
+    let kind = event.kind.as_str();
+    stored.accepted
+        && event.source == "human"
+        && event.payload.get("byAgent") != Some(&Value::Bool(true))
+        && (kind == "stage.reopened"
+            || kind == "review.changes-requested"
+            || GATE_EVENT_TYPES.contains(&kind))
+}
 
 fn state_named(name: &str) -> TaskState {
     [

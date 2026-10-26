@@ -124,8 +124,9 @@ impl StageRun {
         self.fail_checks(task_id, stage_id, &ci.reasons, ci.final_, Some(&logs))
     }
 
-    /// A CI failure goes back to an agent as a send back, at most MAX_AGENT_SEND_BACKS times, so
-    /// the stage starts a new round and its prompt is pasted as a review's would be. An agent
+    /// A CI failure goes back to an agent as a send back, at most MAX_AGENT_SEND_BACKS times
+    /// since a person last stepped in, so the stage starts a new round and its prompt is pasted
+    /// as a review's would be. An agent
     /// stage gets it with the log. A testing stage only runs the code, so its failure goes to the
     /// stage that changes code, without the log.
     fn send_back_for_ci(

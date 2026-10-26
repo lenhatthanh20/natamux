@@ -93,6 +93,8 @@ The Review agent may send the task back to Implement 2 times. The third time Nat
 - **Send back** with your own reason, which has no limit;
 - or **Approve anyway** when the findings do not matter.
 
+After any of these, Review may send the task back 2 more times.
+
 To change who reviews, pick another **Agent** for Review in [project settings](/docs/guides/project-settings/#choose-the-review-agent).
 
 ## Removing a workspace fails
