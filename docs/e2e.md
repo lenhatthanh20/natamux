@@ -21,14 +21,14 @@ The dashboard is on http://localhost:8080 with the token `e2e-token`. Set `NATAM
 
 ## In CI
 
-Rust CI runs these jobs when the daemon, image, or E2E code changes. It builds the production images from the branch, so the tests check the code of the pull request. A failed group keeps its Playwright report and measures. The images stay as the `rust-production-images` artifact for three days.
+Rust CI runs these jobs when the daemon, the CLI, the image, or E2E code changes. It builds the production images from the branch, so the tests check the code of the pull request. A failed group keeps its Playwright report and measures. The images stay as the `rust-production-images` artifact for three days.
 
 The Rust workflow has three E2E jobs:
 
 | Job | Does | Can write packages |
 |---|---|---|
 | `e2e-image` | `scripts/e2e.sh build`, then saves the production Rust images and their ids | no |
-| `e2e` | one job per group: loads the images, starts them, installs Playwright, runs the group | no |
+| `e2e` | one job per group: loads the images, starts them, checks that the agents find the `natamux` CLI, installs Playwright, runs the group. The browser's system packages come from a cache that `main` saves | no |
 | `e2e-publish` | on `main` only: checks the image ids, pushes the images, attests their build provenance | yes |
 
 The tests share one daemon, so in one job they run one at a time. To save time, CI runs them in groups, each in its own `test` job with its own daemon and demo data. `e2e/groups.ts` names the groups, and the job sets `E2E_GROUP`:

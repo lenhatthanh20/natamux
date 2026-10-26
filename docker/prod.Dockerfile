@@ -23,6 +23,8 @@ COPY crates crates
 COPY xtask xtask
 COPY --from=web-build /app/packages/web/dist packages/web/dist
 ENV NATAMUX_REQUIRE_WEB=1
+# As release.yml: the debug info of the release profile only slows the build.
+ENV CARGO_PROFILE_RELEASE_DEBUG=0
 RUN cargo build --release -p natamux-daemon -p natamux-cli --locked
 
 FROM debian:trixie-slim AS daemon
