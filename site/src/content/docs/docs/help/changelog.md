@@ -7,6 +7,14 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v1.0.2 (2026-10-26)
+
+- In **Start a task** in the desktop app, **Branch from** has a folded **Remote branches** group with the branches of `origin` that have no local branch, also ones you never fetched. Pick `origin/<branch>` to start the task from it: Natamux fetches only that branch and makes no local branch for it. See [Base branch](/docs/concepts/workspaces/#base-branch).
+- In the desktop app, the header of a project's Settings page reads "Projects / <name>". **Stages**, **Issues** and **JSON** are tabs under the header that stay on screen while the page scrolls, and the path of `.natamux.json` is in the bottom bar.
+- Fix: in the **Progress** view, a long line under **Show evidence** ran past the right edge of the stage card. Now it wraps inside the card.
+- Fix: when a stage that ends its terminal ran again in the same terminal within 20 minutes, the terminal could show "The terminal ended." while the new agent was working. Now it shows the new terminal.
+- Fix: with git-lfs installed by Homebrew, making a task's worktree could fail with `git-lfs: command not found`. Natamux's own `git` and `gh` commands now use the `PATH` of your login shell.
+
 ## v1.0.1 (2026-10-26)
 
 - In the desktop app, an open task has no tabs. Its terminals fill the main area. **Progress**, **Changes**, **History**, **Docs**, **Files** and **Details** are icons on a rail at the right edge of the window, and the rail stays when the details panel is closed. Click the picked view again to close the panel. See [In the desktop app](/docs/guides/dashboard/#in-the-desktop-app).
