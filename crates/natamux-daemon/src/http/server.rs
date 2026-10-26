@@ -330,6 +330,7 @@ async fn workspace_route(
             projects::list_skills(state, id.to_string()).await
         }
         (&Method::GET, ["git", "branches"]) => projects::branches(state, query).await,
+        (&Method::GET, ["git", "remote-branches"]) => projects::remote_branches(state, query).await,
         (&Method::GET, ["github", "issues"]) => github::list_issues(state, query).await,
         (&Method::POST, ["tasks", id, "issue"]) => {
             github::create_issue(state, id.to_string()).await

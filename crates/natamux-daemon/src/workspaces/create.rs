@@ -2,11 +2,12 @@
 //! (`workspace.preparing`).
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use natamux_git::branches::list_branches;
-use natamux_git::graph::{fetch_upstream, start_ref};
+use natamux_git::graph::{fetch_origin_branch, fetch_upstream, start_ref};
 use natamux_git::worktrees::{add_worktree, remove_worktree};
+use natamux_proto::projects::repo::ORIGIN_PREFIX;
 use natamux_proto::tasks::task::Task;
 
 use crate::shared::event_bus::DaemonMessage;
@@ -28,10 +29,10 @@ struct Made {
 }
 
 impl WorkspaceService {
-    /// Makes the worktree from `base` when given (a local branch), or else from the parent's
-    /// branch for a subtask, or else from the default branch, as its remote has it now. The local
-    /// branch when it has commits that are not pushed, or has no remote. HEAD when the repository
-    /// has no branch to start from.
+    /// Makes the worktree from `base` when given (a local branch, or `origin/<name>` fetched now),
+    /// or else from the parent's branch for a subtask, or else from the default branch, as its
+    /// remote has it now. The local branch when it has commits that are not pushed, or has no
+    /// remote. HEAD when the repository has no branch to start from.
     pub fn create(&self, task_id: &str, base: Option<&str>) -> WorkspaceResult<Task> {
         self.exclusive(task_id, CREATING, || {
             let task = self.begin_create(task_id)?;
@@ -104,13 +105,18 @@ impl WorkspaceService {
         let repo_dir = self.repo_dir_of(task.repo.as_deref())?;
         let listed = list_branches(&repo_dir)?;
         let branches = &listed.branches;
-        if let Some(base) = base
-            && !branches.iter().any(|branch| branch == base)
-        {
-            return Err(WorkspaceError::Conflict(format!(
-                "There is no local branch named {base}"
-            )));
-        }
+        // A base that is not a local branch can be a branch of origin, perhaps never fetched.
+        let remote = match base {
+            Some(base) if !branches.iter().any(|branch| branch == base) => {
+                let Some(name) = base.strip_prefix(ORIGIN_PREFIX) else {
+                    return Err(WorkspaceError::Conflict(format!(
+                        "There is no local branch named {base}"
+                    )));
+                };
+                Some(name)
+            }
+            _ => None,
+        };
         // A workspace removed with its branch kept leaves the task's work there: go on with it.
         let kept = task
             .branch
@@ -129,6 +135,13 @@ impl WorkspaceService {
         if kept.is_some() {
             self.timed(&task.id, "checkout", times, || {
                 add_worktree(&repo_dir, &worktree_path, &branch, None, true)
+            })?;
+            return Ok(made(branch));
+        }
+        if let Some(name) = remote {
+            let start = self.origin_start(&task.id, &repo_dir, name, times)?;
+            self.timed(&task.id, "checkout", times, || {
+                add_worktree(&repo_dir, &worktree_path, &branch, Some(&start), false)
             })?;
             return Ok(made(branch));
         }
@@ -156,6 +169,26 @@ impl WorkspaceService {
             add_worktree(&repo_dir, &worktree_path, &branch, Some(&start), false)
         })?;
         Ok(made(branch))
+    }
+
+    // Fetches branch `name` of origin, and gives where the worktree starts: its remote copy.
+    fn origin_start(
+        &self,
+        task_id: &str,
+        repo_dir: &Path,
+        name: &str,
+        times: &mut StepTimes,
+    ) -> WorkspaceResult<String> {
+        let known = self.timed(task_id, "fetch", times, || {
+            Ok::<_, WorkspaceError>(fetch_origin_branch(repo_dir, name))
+        })?;
+        if !known {
+            return Err(WorkspaceError::Conflict(format!(
+                "There is no branch {name} on origin"
+            )));
+        }
+        // The full name: a tag called `origin/<name>` would win over the short one.
+        Ok(format!("refs/remotes/origin/{name}"))
     }
 
     // Runs one step: tells it, and writes down how long it took, also when it fails.

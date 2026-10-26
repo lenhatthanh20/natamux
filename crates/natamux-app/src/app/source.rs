@@ -12,7 +12,7 @@ use natamux_client::{
 };
 use natamux_proto::agents::start::StartAgentInput;
 use natamux_proto::events::task_event::{StoredEvent, TaskEventInput};
-use natamux_proto::projects::repo::{BranchList, LoadedSettings, SkillList};
+use natamux_proto::projects::repo::{BranchList, LoadedSettings, RemoteBranchList, SkillList};
 use natamux_proto::stages::actions::{StageActionInput, StageFile};
 use natamux_proto::tasks::task::{
     DeleteTaskAnswer, NewTaskInput, Task, TaskChanges, TemplateTaskInput,
@@ -121,6 +121,13 @@ impl Source {
 
     pub fn list_branches(&self, repo: Option<&str>) -> Answer<BranchList> {
         self.ask(|c| c.list_branches(repo), |f| f.list_branches(repo))
+    }
+
+    pub fn list_remote_branches(&self, repo: &str) -> Answer<RemoteBranchList> {
+        self.ask(
+            |c| c.list_remote_branches(repo),
+            |f| f.list_remote_branches(repo),
+        )
     }
 
     pub fn load_settings(&self, repo_id: &str) -> Answer<LoadedSettings> {

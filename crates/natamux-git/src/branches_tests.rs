@@ -1,4 +1,5 @@
 use super::*;
+use crate::graph::fetch_origin_branch;
 use crate::test_support::{bare_origin, run_git, test_repo};
 use crate::worktrees::{add_worktree, remove_worktree};
 use std::path::PathBuf;
@@ -157,4 +158,93 @@ fn falls_back_to_master_then_the_current_branch_then_none() {
 
     run_git(&repo, &["checkout", "--detach"]);
     assert_eq!(list_branches(&repo).unwrap().default_branch, None);
+}
+
+// Pushes `main` to origin as each of `names`, then forgets the copies a push writes to
+// `refs/remotes/origin/` (the Windows runner writes them for a push by folder too): never fetched.
+fn push_unfetched(repo: &Path, origin: &Path, names: &[&str]) {
+    let origin = origin.to_str().unwrap();
+    for name in names {
+        run_git(repo, &["push", origin, &format!("main:refs/heads/{name}")]);
+    }
+    let copies = run_git(
+        repo,
+        &["for-each-ref", "--format=%(refname)", "refs/remotes"],
+    );
+    for copy in copies.lines() {
+        run_git(repo, &["update-ref", "-d", copy]);
+    }
+}
+
+#[test]
+fn lists_the_branches_of_origin_also_the_ones_never_fetched() {
+    let (root, repo) = test_repo();
+    let origin = bare_origin(root.path());
+    push_unfetched(&repo, &origin, &["zeta", "main", "feature/x"]);
+    assert!(run_git(&repo, &["for-each-ref", "refs/remotes"]).is_empty());
+
+    assert_eq!(
+        list_remote_branches(&repo).unwrap(),
+        ["origin/feature/x", "origin/main", "origin/zeta"]
+    );
+}
+
+#[test]
+fn lists_no_remote_branch_without_origin() {
+    let (_root, repo) = test_repo();
+    assert_eq!(list_remote_branches(&repo).unwrap(), Vec::<String>::new());
+}
+
+#[test]
+fn fails_to_list_the_branches_of_an_origin_that_cannot_be_reached() {
+    let (root, repo) = test_repo();
+    let origin = bare_origin(root.path());
+    std::fs::remove_dir_all(origin).unwrap();
+    assert!(list_remote_branches(&repo).is_err());
+}
+
+#[test]
+fn fetches_a_branch_of_origin_that_was_never_fetched() {
+    let (root, repo) = test_repo();
+    let origin = bare_origin(root.path());
+    push_unfetched(&repo, &origin, &["feature/x"]);
+
+    assert!(fetch_origin_branch(&repo, "feature/x"));
+    assert_eq!(
+        run_git(&repo, &["rev-parse", "origin/feature/x"]),
+        run_git(&repo, &["rev-parse", "main"])
+    );
+    // Only that branch, and no local branch for it.
+    assert!(!branch_exists(&repo, "feature/x"));
+    assert_eq!(
+        run_git(
+            &repo,
+            &["for-each-ref", "--format=%(refname)", "refs/remotes"]
+        )
+        .trim(),
+        "refs/remotes/origin/feature/x"
+    );
+}
+
+#[test]
+fn says_no_for_a_branch_origin_does_not_have_or_a_name_that_is_not_a_branch() {
+    let (root, repo) = test_repo();
+    let origin = bare_origin(root.path());
+    push_unfetched(&repo, &origin, &["main"]);
+
+    assert!(!fetch_origin_branch(&repo, "nope"));
+    assert!(!fetch_origin_branch(&repo, "*"));
+    assert!(!fetch_origin_branch(&repo, "main:refs/heads/x"));
+    assert!(run_git(&repo, &["for-each-ref", "refs/remotes"]).is_empty());
+}
+
+#[test]
+fn keeps_a_branch_of_origin_fetched_earlier_when_origin_is_gone() {
+    let (root, repo) = test_repo();
+    let origin = bare_origin(root.path());
+    push_unfetched(&repo, &origin, &["feature/x"]);
+    assert!(fetch_origin_branch(&repo, "feature/x"));
+    std::fs::remove_dir_all(origin).unwrap();
+
+    assert!(fetch_origin_branch(&repo, "feature/x"));
 }

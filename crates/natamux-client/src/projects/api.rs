@@ -2,7 +2,8 @@
 
 use hyper::Method;
 use natamux_proto::projects::repo::{
-    AddRepo, AddedRepo, BranchList, LoadedSettings, Repo, RepoList, SavedSettings, SkillList,
+    AddRepo, AddedRepo, BranchList, LoadedSettings, RemoteBranchList, Repo, RepoList,
+    SavedSettings, SkillList,
 };
 use natamux_proto::terminals::query::encode;
 
@@ -32,6 +33,15 @@ pub async fn list_branches(config: &Config, repo: Option<&str>) -> Result<Branch
         Some(repo) => format!("/git/branches?repo={}", encode(repo)),
         None => "/git/branches".to_string(),
     };
+    call(config, Method::GET, &path).await
+}
+
+/// The branches of origin of a project. The daemon asks origin, so it can take seconds.
+pub async fn list_remote_branches(
+    config: &Config,
+    repo: &str,
+) -> Result<RemoteBranchList, ClientError> {
+    let path = format!("/git/remote-branches?repo={}", encode(repo));
     call(config, Method::GET, &path).await
 }
 

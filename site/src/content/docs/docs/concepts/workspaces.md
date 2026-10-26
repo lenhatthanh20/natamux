@@ -41,7 +41,13 @@ The slug uses lower case letters, digits and `-`. It has at most 40 characters. 
 
 ### Base branch
 
-A new branch starts from the base branch. The base must be a local branch. In the new workspace dialog, pick it from the branch list. The list starts on the default branch.
+A new branch starts from the base branch. The base is a local branch, or a branch of `origin` written as `origin/<branch>`. In the new workspace dialog, pick it from the branch list. The list starts on the default branch. **Remote branches** lists the branches of `origin` that have no local branch of the same name, also ones you never fetched.
+
+A base `origin/<branch>` works without a local copy:
+
+- Natamux fetches only that branch first, into `origin/<branch>`. It makes no local branch for it.
+- Without a network, a copy fetched earlier is used.
+- When `origin` has no such branch, the task is made, but its workspace fails with "There is no branch <branch> on origin". Pick another base and create the workspace again.
 
 Without `--base`, the base is the default branch of the repository, the first of these that is a local branch:
 

@@ -59,6 +59,17 @@ pub struct BranchList {
     pub default_branch: Option<String>,
 }
 
+/// A base that names a branch of origin, such as `origin/dev`, also one never fetched.
+pub const ORIGIN_PREFIX: &str = "origin/";
+
+/// The branches of origin as `origin/<name>`, also the ones never fetched
+/// (`GET /git/remote-branches`).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize)]
+pub struct RemoteBranchList {
+    #[serde(default)]
+    pub branches: Vec<String>,
+}
+
 /// One entry of `context.sources` in `.natamux.json` (`contextSourceSchema`). `kind` is one of
 /// `CONTEXT_SOURCE_TYPES`; `name` and `skill` belong to a skill source, `name` and `prompt` to an
 /// MCP one.

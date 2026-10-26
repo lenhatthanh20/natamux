@@ -196,6 +196,33 @@ fn refuses_a_base_branch_that_does_not_exist_and_makes_no_task() {
     assert!(fx.tasks.list_tasks(None).unwrap().is_empty());
 }
 
+// A branch of origin may not be fetched yet, so only the worktree can tell that it is missing.
+#[test]
+fn makes_the_task_for_a_branch_of_origin_and_fails_its_workspace_when_origin_has_none() {
+    let fx = Fx::new();
+
+    let created = new_workspace(
+        &fx.new_parts(),
+        NewWorkspaceInput {
+            base: Some("origin/nope".to_string()),
+            ..input("X")
+        },
+    )
+    .unwrap();
+    fx.settle();
+
+    assert_eq!(fx.task(&created.id).workspace, None);
+    let events = fx.events(&created.id);
+    let failed = events
+        .iter()
+        .find(|event| event.kind == "workspace.failed")
+        .unwrap();
+    assert_eq!(
+        failed.payload.get("message").and_then(|text| text.as_str()),
+        Some("There is no branch nope on origin")
+    );
+}
+
 // Node makes `create` reject with a spy. Here git really cannot make the branch: a lock file of
 // its ref is there. The text is git's, so the test checks that it names the lock.
 #[test]

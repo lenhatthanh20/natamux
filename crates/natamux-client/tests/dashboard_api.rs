@@ -84,6 +84,15 @@ fn reads_branches_of_a_project_or_of_the_default_one() {
 }
 
 #[test]
+fn reads_the_branches_of_origin() {
+    let body = r#"{"branches":["origin/dev","origin/main"]}"#;
+    let (remote, _) = ok("GET /git/remote-branches?repo=natamux", body, |client| {
+        client.list_remote_branches("natamux")
+    });
+    assert_eq!(remote.branches, ["origin/dev", "origin/main"]);
+}
+
+#[test]
 fn reads_project_settings_and_skills() {
     let body = r#"{"settings":{"context":{"sources":[{"type":"manual"}]}},"found":true,"version":"v1","path":"/r/.natamux.json"}"#;
     let (loaded, _) = ok("GET /repos/natamux/settings", body, |client| {

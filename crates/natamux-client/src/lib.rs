@@ -45,7 +45,9 @@ use futures::channel::mpsc::UnboundedReceiver;
 use natamux_proto::agents::activity::{TaskActivity, TaskUsage};
 use natamux_proto::agents::start::StartAgentInput;
 use natamux_proto::events::task_event::{StoredEvent, TaskEventInput};
-use natamux_proto::projects::repo::{BranchList, LoadedSettings, RepoList, SkillList};
+use natamux_proto::projects::repo::{
+    BranchList, LoadedSettings, RemoteBranchList, RepoList, SkillList,
+};
 use natamux_proto::stages::actions::{StageActionInput, StageFile};
 use natamux_proto::tasks::job::Job;
 use natamux_proto::tasks::task::{
@@ -278,6 +280,13 @@ impl Client {
         let repo = repo.map(str::to_string);
         self.with_config(move |config| async move {
             projects::api::list_branches(&config, repo.as_deref()).await
+        })
+    }
+
+    pub fn list_remote_branches(&self, repo: &str) -> Answer<RemoteBranchList> {
+        let repo = repo.to_string();
+        self.with_config(move |config| async move {
+            projects::api::list_remote_branches(&config, &repo).await
         })
     }
 
