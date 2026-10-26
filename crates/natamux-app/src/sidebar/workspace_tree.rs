@@ -430,6 +430,8 @@ impl Render for WorkspaceTree {
             .on_key_down(cx.listener(Self::type_ahead))
             .size_full()
             .min_h_0()
-            .child(list(self.list.clone(), rows).size_full().px_2().pb_3())
+            // Here, not on the list: a list keeps only its top and bottom padding.
+            .px_2()
+            .child(list(self.list.clone(), rows).size_full().pb_3())
     }
 }
