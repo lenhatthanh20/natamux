@@ -30,7 +30,12 @@ async fn main() -> std::process::ExitCode {
         } else {
             (None, None)
         };
-    wait_for_login_path(&mut env, path_pipe.as_ref(), WAIT);
+    // The daemon's own git and gh calls need it too: git-lfs from Homebrew is a filter of git.
+    if let Some(path) = wait_for_login_path(&mut env, path_pipe.as_ref(), WAIT) {
+        // SAFETY: Rust's own `Command` takes the same lock as `set_var`, and no service has
+        // started yet, so no C code reads the environment now.
+        unsafe { std::env::set_var("PATH", path) };
+    }
     let cwd = std::env::current_dir().unwrap_or_default();
     let config = match load_config(&env, &cwd) {
         Ok(config) => config,
