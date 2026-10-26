@@ -219,6 +219,38 @@ fn c15_removes_a_key_the_person_removed_and_takes_the_value_of_the_draft_on_a_cl
 }
 
 #[test]
+fn reads_the_most_send_backs_of_the_draft() {
+    assert_eq!(max_send_backs_of(&object(json!({}))), None);
+    let three = object(json!({ "agents": { "maxSendBacks": 3 } }));
+    assert_eq!(max_send_backs_of(&three), Some(3));
+    let bad = object(json!({ "agents": { "maxSendBacks": "3" } }));
+    assert_eq!(max_send_backs_of(&bad), None);
+}
+
+#[test]
+fn writes_the_most_send_backs_and_keeps_the_other_keys_in_place() {
+    let start = object(json!({ "agents": { "permissionMode": "ask" }, "team": "web" }));
+    let set = with_max_send_backs(&start, Some(2));
+    assert_eq!(
+        Value::Object(set.clone()),
+        json!({ "agents": { "permissionMode": "ask", "maxSendBacks": 2 }, "team": "web" })
+    );
+    assert_eq!(keys(&set), ["agents", "team"]);
+    assert_eq!(with_max_send_backs(&set, None), start);
+}
+
+#[test]
+fn drops_agents_when_no_limit_leaves_it_empty() {
+    let start = object(json!({ "team": "web" }));
+    let set = with_max_send_backs(&start, Some(0));
+    assert_eq!(
+        Value::Object(set.clone()),
+        json!({ "team": "web", "agents": { "maxSendBacks": 0 } })
+    );
+    assert_eq!(with_max_send_backs(&set, None), start);
+}
+
+#[test]
 fn checks_the_id_rule() {
     for id in ["a", "load-test", "1st-check", "a1-b2"] {
         assert!(fits_id_rule(id), "{id}");

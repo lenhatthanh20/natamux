@@ -29,7 +29,7 @@ To edit the file in the dashboard, open **Settings** in the menu of the project.
 | `stages` | array of stages, groups and branches | The [default pipeline](#default-pipeline) | The steps of every task, in order. At least one. |
 | `context` | object | `{ "sources": [{ "type": "manual" }, { "type": "github-issue" }] }` | Where task context can come from. |
 | `tracker` | object | `{ "type": "github", "createIssue": "manual", "linkInPr": true }` | The issue tracker. |
-| `agents` | object | `{ "permissionMode": "auto" }` | How the agents that Natamux starts ask for permission. |
+| `agents` | object | `{ "permissionMode": "auto" }` | How the agents that Natamux starts ask for permission, and how often they may send a task back. |
 
 ## `stages`
 
@@ -342,6 +342,7 @@ The issue gets the task title. Its body is the spec, or the task notes without o
 | Field | Type | Default | Meaning |
 |---|---|---|---|
 | `permissionMode` | `auto` or `ask` | `auto` | `auto` starts each agent with the flag below, so it asks for permission less often. `ask` adds no flag: each agent follows your own settings. |
+| `maxSendBacks` | whole number, 0 or more | none (no limit) | The most times an agent, or a CI failure, may send the task back from one stage since you last stepped in. Then the stage waits for you. `0`: an agent never sends back by itself. See [The review loop](/docs/concepts/review-loop/#limits). |
 
 The flag of each agent in `auto`:
 
@@ -360,6 +361,12 @@ Only Claude Code has a check on each action in this mode. The other agents run c
 ```
 
 The flag comes before the words of `NATAMUX_<AGENT>_ARGS`. When those words repeat or change the flag, the agent's own rule for flags decides. The setting counts for the next agent Natamux starts, not for one that runs.
+
+To stop two agents that disagree from sending a task back and forth, set a limit. It counts for the next send back, also for a task on its way:
+
+```json
+{ "agents": { "maxSendBacks": 2 } }
+```
 
 ## Examples
 

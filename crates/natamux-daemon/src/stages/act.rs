@@ -7,7 +7,7 @@ use natamux_proto::stages::capabilities::stage_name_of_id;
 use natamux_proto::stages::position::path_of;
 use natamux_proto::stages::schema::{Stage, Step};
 use natamux_proto::tasks::task::{Task, TaskState};
-use natamux_stages::actions::{MAX_AGENT_SEND_BACKS, StageAction, agent_send_backs, lane_state};
+use natamux_stages::actions::{StageAction, agent_send_backs, lane_state, send_back_limit_reached};
 use serde_json::{Map, Value, json};
 
 use crate::stages::errors::{StageError, StageResult, action};
@@ -242,16 +242,16 @@ impl StageRun {
         Ok(())
     }
 
-    /// An agent that reviews sends the task back by itself, at most MAX_AGENT_SEND_BACKS times
-    /// from its stage since a person last stepped in; then the stage waits for you, so two
-    /// agents that disagree do not loop.
+    /// An agent that reviews sends the task back by itself, at most `agents.maxSendBacks` times
+    /// from its stage since a person last stepped in (no limit when it is left out); then the
+    /// stage waits for you, so two agents that disagree do not loop.
     fn agent_sends_back(&self, task: &Task, step: &Step, terminal: &str) -> StageResult<String> {
         let steps = self.steps(task)?;
         let pinned = self.pinned(&task.id);
         let from = stage_of_terminal(&steps, step, terminal, &pinned)
             .map_or_else(|| task.stage.clone(), |stage| stage.id);
         let before = self.send_backs_from(&task.id, &from);
-        if before >= MAX_AGENT_SEND_BACKS {
+        if send_back_limit_reached(self.max_send_backs(task), before) {
             let name = stage_name_of_id(&from);
             let input = EventInput::new(
                 "agent",
@@ -272,6 +272,11 @@ impl StageRun {
 
     pub fn send_backs_from(&self, task_id: &str, from: &str) -> usize {
         agent_send_backs(&self.events(task_id), from)
+    }
+
+    /// Read at each send back, so a change of `.natamux.json` counts for the next one.
+    pub fn max_send_backs(&self, task: &Task) -> Option<usize> {
+        self.settings(task).agents.max_send_backs
     }
 
     fn apply_action(

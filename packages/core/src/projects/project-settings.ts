@@ -37,8 +37,10 @@ export const trackerSettingsSchema = z.object({
 export const PERMISSION_MODES = ['auto', 'ask'] as const
 export type PermissionMode = (typeof PERMISSION_MODES)[number]
 
+// `maxSendBacks` left out: an agent may send a task back any number of times.
 export const agentSettingsSchema = z.object({
   permissionMode: z.enum(PERMISSION_MODES).default('auto'),
+  maxSendBacks: z.number().int().min(0).optional(),
 })
 
 // `.natamux.json` at the root of a repository. Every field may be left out.

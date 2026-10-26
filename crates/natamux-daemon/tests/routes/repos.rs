@@ -348,6 +348,31 @@ async fn saves_the_permission_mode_of_the_agents_and_refuses_an_unknown_one() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn saves_the_most_send_backs_of_the_agents_and_refuses_a_bad_one() {
+    let d = git_daemon("settings-send-backs").await;
+    let body = json!({ "agents": { "maxSendBacks": 3 } });
+    assert_eq!(put_settings(&d, &[], body).await.0, 200);
+    let (_, after) = d.get(SETTINGS).await;
+    assert_eq!(
+        after["settings"]["agents"],
+        json!({ "permissionMode": "auto", "maxSendBacks": 3 })
+    );
+
+    for bad in [json!(-1), json!(1.5), json!("2"), Value::Null] {
+        let body = json!({ "agents": { "maxSendBacks": bad } });
+        let (status, wrong) = put_settings(&d, &[], body).await;
+        assert_eq!(status, 400, "{bad}");
+        assert!(
+            wrong["message"]
+                .as_str()
+                .unwrap()
+                .contains("agents.maxSendBacks"),
+            "{bad}"
+        );
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn refuses_a_save_over_a_file_that_changed_since_the_editor_read_it() {
     let d = git_daemon("settings-stale").await;
     let (_, before) = d.get(SETTINGS).await;

@@ -2,11 +2,11 @@
 
 use natamux_daemon::stages::act::StageActionInput;
 use natamux_proto::tasks::task::{Task, TaskState};
-use natamux_stages::actions::{MAX_AGENT_SEND_BACKS, StageAction};
+use natamux_stages::actions::StageAction;
 use natamux_stages::ci::CiResult;
 use serde_json::{Value, json};
 
-use crate::{Fixture, expect_submitted, term_input, wait_for};
+use crate::{Fixture, SEND_BACK_LIMIT, expect_submitted, term_input, wait_for};
 
 fn fixture() -> Fixture {
     let f = Fixture::new();
@@ -15,6 +15,7 @@ fn fixture() -> Fixture {
         { "id": "testing", "kind": "testing", "gate": "auto", "ci": true },
         { "id": "release", "kind": "release", "gate": "manual" },
     ]));
+    f.set_send_back_limit(Some(SEND_BACK_LIMIT));
     f
 }
 
@@ -118,7 +119,7 @@ fn counts_the_send_backs_of_the_testing_agent_toward_the_most_times() {
 fn waits_for_you_after_it_sent_the_task_back_the_most_times() {
     let f = fixture();
     let task = with_ci(&f);
-    for _ in 0..MAX_AGENT_SEND_BACKS {
+    for _ in 0..SEND_BACK_LIMIT {
         fail_on_ci(&f, &task.id, failure());
         assert_eq!(f.task(&task.id).stage, "implement");
     }
@@ -130,6 +131,18 @@ fn waits_for_you_after_it_sent_the_task_back_the_most_times() {
         Value::Object(f.last_of(&task.id, "stage.check-failed").unwrap().payload),
         json!({ "stage": "testing", "reasons": ["CI E2E failure: u"], "final": true })
     );
+}
+
+#[test]
+fn sends_each_ci_failure_back_when_no_limit_is_set() {
+    let f = fixture();
+    f.set_send_back_limit(None);
+    let task = with_ci(&f);
+    for _ in 0..SEND_BACK_LIMIT + 2 {
+        fail_on_ci(&f, &task.id, failure());
+        assert_eq!(f.task(&task.id).stage, "implement");
+    }
+    assert!(!needs_input_at_testing(&f, &task.id));
 }
 
 #[test]

@@ -113,7 +113,7 @@ const blocks: Block[] = [
     id: 'send-back',
     name: 'Send back',
     short: 'A review returns the work with the reason.',
-    text: 'A review agent that finds a problem runs <code>natamux stage back</code> with the reason. The task goes back to Implement, and its agent gets the reason in its next prompt. An agent can send back at most 2 times from one stage; the third time, the task waits for you. A person can send back from any stage, any time.',
+    text: 'A review agent that finds a problem runs <code>natamux stage back</code> with the reason. The task goes back to Implement, and its agent gets the reason in its next prompt. Set a limit on how often an agent sends back from one stage, and past it the task waits for you. A person can send back from any stage, any time.',
     diagram: 'back',
     figure: 'Review sends the task back to Implement with the reason, and Implement runs a second time.',
     codeTitle: 'The review agent runs',

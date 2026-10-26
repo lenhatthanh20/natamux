@@ -7,16 +7,17 @@ use natamux_daemon::stages::act::StageActionInput;
 use natamux_daemon::stages::shells::LAUNCH_GRACE_MS;
 use natamux_daemon::tasks::records::WorkspaceChange;
 use natamux_proto::tasks::task::{Task, TaskState};
-use natamux_stages::actions::{MAX_AGENT_SEND_BACKS, StageAction};
+use natamux_stages::actions::StageAction;
 use natamux_stages::checks::Ran;
 use natamux_stages::ci::CiResult;
 use serde_json::{Value, json};
 
-use crate::{Fixture, expect_submitted, term_input, wait_for};
+use crate::{Fixture, SEND_BACK_LIMIT, expect_submitted, term_input, wait_for};
 
 fn fixture() -> Fixture {
     let f = Fixture::new();
     f.set_stages(json!([{ "id": "implement", "kind": "agent", "gate": "manual", "ci": true }]));
+    f.set_send_back_limit(Some(SEND_BACK_LIMIT));
     f
 }
 
@@ -264,7 +265,7 @@ fn does_not_count_send_backs_by_a_person_toward_the_most_times() {
     let f = fixture();
     let task = f.implementing("implement");
     f.set_ci(&task.id, "implement", true);
-    for _ in 0..MAX_AGENT_SEND_BACKS {
+    for _ in 0..SEND_BACK_LIMIT {
         let input = StageActionInput {
             to: Some("implement".into()),
             reason: Some("Name it better".into()),
@@ -318,7 +319,7 @@ fn keeps_one_more_try_for_failed_local_checks_then_sends_a_ci_failure_back() {
 fn waits_for_you_after_ci_sent_the_stage_back_the_most_times() {
     let f = fixture();
     let task = reported(&f, true);
-    for _ in 0..MAX_AGENT_SEND_BACKS {
+    for _ in 0..SEND_BACK_LIMIT {
         f.ci.finish(failure());
         f.settle();
         assert_eq!(state_of(&f, &task.id), running_implement());
@@ -336,19 +337,16 @@ fn waits_for_you_after_ci_sent_the_stage_back_the_most_times() {
         Value::Object(payload_of(&f, &task.id, "stage.check-failed")),
         json!({ "stage": "implement", "reasons": ["CI E2E failure: u"], "final": true })
     );
-    assert_eq!(
-        count_of(&f, &task.id, "stage.reopened"),
-        MAX_AGENT_SEND_BACKS
-    );
+    assert_eq!(count_of(&f, &task.id, "stage.reopened"), SEND_BACK_LIMIT);
     // A paste waits for the Enter of the one before it.
-    wait_for(|| prompts(&f) == MAX_AGENT_SEND_BACKS);
+    wait_for(|| prompts(&f) == SEND_BACK_LIMIT);
 }
 
 #[test]
 fn sends_ci_failures_back_again_after_a_person_sent_the_stage_back() {
     let f = fixture();
     let task = reported(&f, true);
-    for _ in 0..MAX_AGENT_SEND_BACKS {
+    for _ in 0..SEND_BACK_LIMIT {
         f.ci.finish(failure());
         f.settle();
         report(&f, &task.id);
@@ -377,7 +375,7 @@ fn sends_ci_failures_back_again_after_a_person_sent_the_stage_back() {
     assert_eq!(payload_of(&f, &task.id, "stage.reopened")["ci"], true);
     assert_eq!(
         count_of(&f, &task.id, "stage.reopened"),
-        MAX_AGENT_SEND_BACKS + 2
+        SEND_BACK_LIMIT + 2
     );
 }
 

@@ -9,6 +9,7 @@ use gpui::{Entity, EventEmitter, FocusHandle, Focusable, ScrollHandle, Subscript
 use natamux_proto::projects::repo::{LoadedSettings, SkillList};
 use ui::{Tooltip, prelude::*};
 
+use super::send_backs_field::SendBacksField;
 use super::settings_tab_rules::{PIPELINE_NOTE, SettingsTab, export_reason, shows_pipeline_note};
 use super::settings_tabs::SettingsTabs;
 use super::settings_text::{Base, base_of, blocked_reason};
@@ -38,6 +39,7 @@ pub(super) struct StagesTab {
     /// The picker showed at the last change, so focus moves only when it opens or closes.
     was_picking: bool,
     pub(super) tabs: SettingsTabs,
+    send_backs: Entity<SendBacksField>,
 }
 
 pub struct ProjectSettingsPage {
@@ -156,12 +158,14 @@ impl ProjectSettingsPage {
             cx.observe_in(&editor, window, Self::follow_picker),
         ];
         let tabs = SettingsTabs::new(&editor, window, cx);
+        let send_backs = cx.new(|cx| SendBacksField::new(editor.clone(), window, cx));
         self.stages = Some(StagesTab {
             editor,
             list,
             details,
             was_picking: false,
             tabs,
+            send_backs,
         });
     }
 
@@ -251,8 +255,8 @@ impl ProjectSettingsPage {
         });
     }
 
-    /// The preview, then the list and the details: two parts of the body, so a shot can scroll
-    /// to the second.
+    /// The preview and the send backs field, then the list and the details: two parts of the
+    /// body, so a shot can scroll to the second.
     pub(super) fn render_stages(
         &self,
         stages: &StagesTab,
@@ -277,10 +281,11 @@ impl ProjectSettingsPage {
                 .child(stages.list.clone())
                 .child(stages.details.clone())
         };
-        [
-            pipeline_preview(&stages.editor, &self.preview_scroll, cx),
-            parts.into_any_element(),
-        ]
+        let top = v_flex()
+            .gap_3()
+            .child(pipeline_preview(&stages.editor, &self.preview_scroll, cx))
+            .child(stages.send_backs.clone());
+        [top.into_any_element(), parts.into_any_element()]
     }
 
     /// The sideways scroll of the pipeline preview; `--smoke` reads its range.
@@ -313,6 +318,7 @@ impl ProjectSettingsPage {
             let shown = self.shown_tab(cx);
             ring.extend(stages.tabs.stops(shown, cx));
             if shown == SettingsTab::Stages {
+                ring.push(stages.send_backs.read(cx).stop(cx));
                 ring.extend(stages.list.read(cx).tab_stops());
                 ring.extend(stages.details.read(cx).tab_stops(cx));
             }

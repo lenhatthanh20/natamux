@@ -115,6 +115,18 @@ fn finds_a_project_by_its_name() {
 }
 
 #[test]
+fn finds_the_projects_for_the_send_back_limit() {
+    for query in ["send back", "limit"] {
+        let found = search(query, &[repo("r1", "natamux")]);
+        assert_eq!(
+            found.map(|found| found.projects),
+            Some(vec![("r1".to_owned(), "natamux".to_owned())]),
+            "{query}"
+        );
+    }
+}
+
+#[test]
 fn a_query_that_matches_nothing_finds_nothing() {
     let found = search("qqzz", &[repo("r1", "natamux")]);
     assert!(found.is_some_and(|found| found.is_empty()));

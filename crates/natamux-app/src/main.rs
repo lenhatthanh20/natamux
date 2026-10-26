@@ -158,6 +158,7 @@ mod projects {
     pub mod project_rules;
     pub mod project_settings_page;
     pub mod projects_dialog;
+    pub mod send_backs_field;
     pub mod settings_header;
     pub mod settings_tab_rules;
     pub mod settings_tabs;

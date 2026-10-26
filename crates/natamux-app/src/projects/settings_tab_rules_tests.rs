@@ -194,3 +194,14 @@ fn lists_a_problem_with_its_stage() {
     );
     assert_eq!(problem_line(None, "no stage is on"), "no stage is on");
 }
+
+#[test]
+fn reads_the_send_backs_field_as_no_limit_or_a_whole_number() {
+    assert_eq!(send_backs_field(""), Ok(None));
+    assert_eq!(send_backs_field("  "), Ok(None));
+    assert_eq!(send_backs_field("0"), Ok(Some(0)));
+    assert_eq!(send_backs_field(" 3 "), Ok(Some(3)));
+    for bad in ["-1", "1.5", "abc", "2 times"] {
+        assert_eq!(send_backs_field(bad), Err(SEND_BACKS_ERROR), "{bad}");
+    }
+}

@@ -364,6 +364,26 @@ fn starts_agents_in_auto_mode_when_the_file_has_a_bad_mode() {
 }
 
 #[test]
+fn reads_the_most_send_backs_and_has_no_limit_without_it() {
+    let setup = setup();
+    assert_eq!(setup.repos.settings_of(None).agents.max_send_backs, None);
+    assert!(setup.load()["settings"]["agents"].get("maxSendBacks").is_none());
+
+    write(setup.file(), r#"{ "agents": { "maxSendBacks": 0 } }"#).unwrap();
+    touch(&setup.file(), 1);
+    setup.later(1000);
+    assert_eq!(setup.repos.settings_of(None).agents.max_send_backs, Some(0));
+    assert_eq!(setup.load()["settings"]["agents"]["maxSendBacks"], 0);
+
+    write(setup.file(), r#"{ "agents": { "maxSendBacks": -1 } }"#).unwrap();
+    touch(&setup.file(), 2);
+    setup.later(1000);
+    let loaded = setup.load();
+    assert!(error_of(&loaded).contains("agents.maxSendBacks"));
+    assert_eq!(setup.repos.settings_of(None).agents.max_send_backs, None);
+}
+
+#[test]
 fn gives_tasks_of_a_removed_repository_the_defaults_but_does_not_load_or_save_it() {
     let setup = setup();
     assert_eq!(setup.repos.settings_of(Some("gone")), default_settings());

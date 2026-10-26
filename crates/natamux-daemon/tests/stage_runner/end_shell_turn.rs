@@ -4,14 +4,14 @@
 use natamux_proto::projects::repo::ProjectSettings;
 use natamux_proto::stages::schema::{Gate, StageKind, Step};
 use natamux_proto::tasks::task::TaskState;
-use natamux_stages::actions::{MAX_AGENT_SEND_BACKS, StageAction};
+use natamux_stages::actions::StageAction;
 use serde_json::json;
 
 use super::{
     act, agent_stage, assert_at, ends_shell, input, killed, launches_of, nothing, report, stage,
     terminals, turn_end, with_stages, writing_docs,
 };
-use crate::{Fixture, wait_for};
+use crate::{Fixture, SEND_BACK_LIMIT, wait_for};
 
 fn closing(f: &Fixture) -> usize {
     f.runner.run.state().closing.len()
@@ -178,8 +178,9 @@ fn a_task_that_ends_while_a_shell_waits_leaves_no_timer() {
 fn a_send_back_refused_after_the_most_times_leaves_its_shell_open() {
     let f = Fixture::new();
     with_stages(&f, ends_shell, vec![], nothing);
+    f.set_send_back_limit(Some(SEND_BACK_LIMIT));
     let task = writing_docs(&f);
-    for _ in 0..MAX_AGENT_SEND_BACKS {
+    for _ in 0..SEND_BACK_LIMIT {
         act(
             &f,
             &task.id,
@@ -209,6 +210,7 @@ fn a_send_back_refused_after_the_most_times_leaves_its_shell_open() {
 fn gives_the_agent_its_send_backs_again_after_a_person_sends_the_task_back() {
     let f = Fixture::new();
     with_stages(&f, nothing, vec![], nothing);
+    f.set_send_back_limit(Some(SEND_BACK_LIMIT));
     let task = writing_docs(&f);
     let agent_back = || {
         f.runner.run.act(
@@ -218,7 +220,7 @@ fn gives_the_agent_its_send_backs_again_after_a_person_sends_the_task_back() {
         )
     };
     let rounds = || {
-        for _ in 0..MAX_AGENT_SEND_BACKS {
+        for _ in 0..SEND_BACK_LIMIT {
             agent_back().unwrap();
             f.settle();
             assert_at(&f, &task.id, "implement", TaskState::Running);
@@ -244,6 +246,77 @@ fn gives_the_agent_its_send_backs_again_after_a_person_sends_the_task_back() {
         .rfind(|(kind, _)| kind == "agent.asked")
         .and_then(|(_, payload)| payload["message"].as_str().map(str::to_string))
         .unwrap_or_default();
-    let times = format!("sent the task back {MAX_AGENT_SEND_BACKS} times.");
+    let times = format!("sent the task back {SEND_BACK_LIMIT} times.");
     assert!(asked.contains(&times), "{asked}");
+}
+
+#[test]
+fn an_agent_sends_back_any_number_of_times_when_no_limit_is_set() {
+    let f = Fixture::new();
+    with_stages(&f, nothing, vec![], nothing);
+    let task = writing_docs(&f);
+    let agent_back = || {
+        f.runner.run.act(
+            &task.id,
+            StageAction::Reopen,
+            &input(Some("7"), Some("implement"), None),
+        )
+    };
+    for _ in 0..SEND_BACK_LIMIT + 3 {
+        agent_back().unwrap();
+        f.settle();
+        assert_at(&f, &task.id, "implement", TaskState::Running);
+        report(&f, &task.id, "1");
+        assert_at(&f, &task.id, "write-docs", TaskState::Running);
+    }
+    let events = f.events(&task.id);
+    assert!(!events.iter().any(|(kind, _)| kind == "agent.asked"));
+}
+
+#[test]
+fn a_limit_of_zero_makes_the_first_agent_send_back_wait_for_a_person() {
+    let f = Fixture::new();
+    with_stages(&f, nothing, vec![], nothing);
+    f.set_send_back_limit(Some(0));
+    let task = writing_docs(&f);
+
+    let refused = f.runner.run.act(
+        &task.id,
+        StageAction::Reopen,
+        &input(Some("7"), Some("implement"), None),
+    );
+    f.settle();
+
+    assert!(refused.is_err());
+    assert_at(&f, &task.id, "write-docs", TaskState::NeedsInput);
+    let asked = f
+        .events(&task.id)
+        .into_iter()
+        .rfind(|(kind, _)| kind == "agent.asked")
+        .and_then(|(_, payload)| payload["message"].as_str().map(str::to_string))
+        .unwrap_or_default();
+    assert!(asked.contains("sent the task back 0 times."), "{asked}");
+}
+
+#[test]
+fn a_new_limit_counts_for_the_next_agent_send_back() {
+    let f = Fixture::new();
+    with_stages(&f, nothing, vec![], nothing);
+    let task = writing_docs(&f);
+    let agent_back = || {
+        let sent = f.runner.run.act(
+            &task.id,
+            StageAction::Reopen,
+            &input(Some("7"), Some("implement"), None),
+        );
+        f.settle();
+        sent
+    };
+    agent_back().unwrap();
+    report(&f, &task.id, "1");
+
+    f.set_send_back_limit(Some(1));
+
+    assert!(agent_back().is_err());
+    assert_at(&f, &task.id, "write-docs", TaskState::NeedsInput);
 }

@@ -8,7 +8,7 @@ use natamux_core::stages::capabilities::code_stage_before;
 use natamux_proto::stages::capabilities::{offers_ci, stage_name, stage_name_of_id};
 use natamux_proto::stages::schema::{Stage, StageKind};
 use natamux_proto::tasks::task::Task;
-use natamux_stages::actions::MAX_AGENT_SEND_BACKS;
+use natamux_stages::actions::send_back_limit_reached;
 use natamux_stages::ci::{CiResult, ci_branch_of, ci_error, ci_reason, stages_waiting_for_ci};
 use serde_json::json;
 
@@ -124,11 +124,11 @@ impl StageRun {
         self.fail_checks(task_id, stage_id, &ci.reasons, ci.final_, Some(&logs))
     }
 
-    /// A CI failure goes back to an agent as a send back, at most MAX_AGENT_SEND_BACKS times
-    /// since a person last stepped in, so the stage starts a new round and its prompt is pasted
-    /// as a review's would be. An agent
-    /// stage gets it with the log. A testing stage only runs the code, so its failure goes to the
-    /// stage that changes code, without the log.
+    /// A CI failure goes back to an agent as a send back, at most `agents.maxSendBacks` times
+    /// since a person last stepped in (no limit when it is left out), so the stage starts a new
+    /// round and its prompt is pasted as a review's would be. An agent stage gets it with the log.
+    /// A testing stage only runs the code, so its failure goes to the stage that changes code,
+    /// without the log.
     fn send_back_for_ci(
         &self,
         task_id: &str,
@@ -140,7 +140,8 @@ impl StageRun {
         let Some((stage, to)) = self.ci_target(&task, stage_id)? else {
             return Ok(false);
         };
-        if self.send_backs_from(task_id, stage_id) >= MAX_AGENT_SEND_BACKS {
+        let done = self.send_backs_from(task_id, stage_id);
+        if send_back_limit_reached(self.max_send_backs(&task), done) {
             self.fail_checks(task_id, stage_id, reasons, true, None)?;
             return Ok(true);
         }
