@@ -7,7 +7,7 @@ use gpui::{
     DismissEvent, Entity, EventEmitter, ExternalPaths, FocusHandle, Focusable, Subscription,
 };
 use natamux_client::Answer;
-use natamux_proto::projects::repo::{BranchList, LoadedSettings, SkillList};
+use natamux_proto::projects::repo::{BranchList, LoadedSettings, RemoteBranchList, SkillList};
 use ui::prelude::*;
 
 use super::new_workspace_rules::{
@@ -87,6 +87,8 @@ pub struct NewWorkspaceDialog {
     refused: Vec<String>,
     next_file: u64,
     branches: Option<BranchList>,
+    /// The branches of origin; None while origin is asked.
+    remote_branches: Option<Vec<String>>,
     settings: Option<LoadedSettings>,
     skills: Option<SkillList>,
     read_for: Option<String>,
@@ -166,6 +168,7 @@ impl NewWorkspaceDialog {
             refused: Vec::new(),
             next_file: 0,
             branches: None,
+            remote_branches: None,
             settings: None,
             skills: None,
             read_for: None,
@@ -202,6 +205,7 @@ impl NewWorkspaceDialog {
         }
         self.read_for = Some(repo.clone());
         self.branches = None;
+        self.remote_branches = None;
         self.settings = None;
         self.skills = None;
         let Some(source) = self.dashboard.read(cx).source().cloned() else {
@@ -211,6 +215,7 @@ impl NewWorkspaceDialog {
             read(source.list_branches(Some(&repo)), cx, |this, list| {
                 this.branches = Some(list)
             }),
+            read_remote(source.list_remote_branches(&repo), cx),
             read(source.load_settings(&repo), cx, |this, settings| {
                 this.settings = Some(settings)
             }),
@@ -331,6 +336,22 @@ fn read<T: 'static>(
             })
             .ok();
         }
+    })
+}
+
+/// Reads the branches of origin. A failed read (no network) offers none, so the menu stops
+/// saying they load.
+fn read_remote(
+    answer: Answer<RemoteBranchList>,
+    cx: &mut Context<NewWorkspaceDialog>,
+) -> gpui::Task<()> {
+    cx.spawn(async move |this, cx| {
+        let branches = answer.await.map(|list| list.branches).unwrap_or_default();
+        this.update(cx, |this, cx| {
+            this.remote_branches = Some(branches);
+            cx.notify();
+        })
+        .ok();
     })
 }
 

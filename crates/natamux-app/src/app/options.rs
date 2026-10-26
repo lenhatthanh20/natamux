@@ -105,10 +105,11 @@ pub enum Shot {
     RailClosedPanel,
     ChangesOverMain,
     StageEvidence,
+    StartTaskBranchMenu,
 }
 
 impl Shot {
-    pub const ALL: [Shot; 79] = [
+    pub const ALL: [Shot; 80] = [
         Shot::TasksTable,
         Shot::TasksBoard,
         Shot::BoardHoverCard,
@@ -188,6 +189,7 @@ impl Shot {
         Shot::RailClosedPanel,
         Shot::ChangesOverMain,
         Shot::StageEvidence,
+        Shot::StartTaskBranchMenu,
     ];
 
     pub fn name(self) -> &'static str {
@@ -271,6 +273,7 @@ impl Shot {
             Shot::RailClosedPanel => "rail-closed-panel",
             Shot::ChangesOverMain => "changes-over-main",
             Shot::StageEvidence => "stage-evidence",
+            Shot::StartTaskBranchMenu => "start-task-branch-menu",
         }
     }
 

@@ -3,6 +3,7 @@
 use std::path::PathBuf;
 
 use hyper::Method;
+use natamux_git::test_support::run_git;
 use serde_json::{Value, json};
 
 use crate::git_repo::git_daemon;
@@ -231,4 +232,24 @@ async fn lists_branches_and_makes_a_workspace_from_one() {
         .post("/tasks/T-0002/workspace", &json!({ "base": "nope" }))
         .await;
     assert_eq!(status, 409);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn lists_the_branches_of_origin() {
+    let d = git_daemon("remote-branches").await;
+
+    let (status, none) = d.get("/git/remote-branches").await;
+    assert_eq!(status, 200, "{none}");
+    assert_eq!(none, json!({ "branches": [] }));
+
+    d.add_origin();
+    run_git(
+        &d.repo(),
+        &["push", "origin", "main", "main:refs/heads/dev"],
+    );
+    let (_, listed) = d.get("/git/remote-branches").await;
+    assert_eq!(listed, json!({ "branches": ["origin/dev", "origin/main"] }));
+
+    let (status, _) = d.get("/git/remote-branches?repo=..").await;
+    assert_eq!(status, 400);
 }

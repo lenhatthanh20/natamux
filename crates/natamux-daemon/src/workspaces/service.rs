@@ -12,7 +12,7 @@ use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 
 use natamux_agents::launch::default_program;
 use natamux_core::js::js_trim;
-use natamux_git::branches::list_branches;
+use natamux_git::branches::{list_branches, list_remote_branches};
 use natamux_git::commit_drafter::AgentRun;
 use natamux_git::gh::{RunGh, default_run_gh};
 use natamux_proto::projects::repo::BranchList;
@@ -237,6 +237,11 @@ impl WorkspaceService {
     /// The branches a workspace in that repository can start from.
     pub fn branches(&self, repo: Option<&str>) -> WorkspaceResult<BranchList> {
         Ok(list_branches(&self.repo_dir_of(repo)?)?)
+    }
+
+    /// The branches of origin, as `origin/<name>`, also the ones never fetched. Asks origin.
+    pub fn remote_branches(&self, repo: Option<&str>) -> WorkspaceResult<Vec<String>> {
+        Ok(list_remote_branches(&self.repo_dir_of(repo)?)?)
     }
 
     /// The folder of the task's workspace. `Conflict` when it has none.

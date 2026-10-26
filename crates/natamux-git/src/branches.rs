@@ -4,11 +4,12 @@
 use std::path::Path;
 
 use natamux_core::js::js_trim;
-use natamux_proto::projects::repo::BranchList;
+use natamux_proto::projects::repo::{BranchList, ORIGIN_PREFIX};
 use serde_json::{Value, json};
 
 use crate::changes::locale_compare;
 use crate::exec::{GitError, current_branch, git};
+use crate::graph::FETCH_TIMEOUT;
 
 /// `GET /git/branches` as Node sends it: `branches`, `current`, `defaultBranch`, in this order.
 pub fn branch_list_json(list: &BranchList) -> Value {
@@ -41,6 +42,28 @@ pub fn list_branches(repo: &Path) -> Result<BranchList, GitError> {
         current,
         default_branch,
     })
+}
+
+/// The branches origin has now, as `origin/<name>`, sorted, also the ones never fetched. Asks
+/// origin over the network. No `origin` remote: none.
+pub fn list_remote_branches(repo: &Path) -> Result<Vec<String>, GitError> {
+    if git(repo, &["remote", "get-url", "origin"], None, &[]).is_err() {
+        return Ok(Vec::new());
+    }
+    let output = git(
+        repo,
+        &["ls-remote", "--heads", "origin"],
+        Some(FETCH_TIMEOUT),
+        &[],
+    )?;
+    let mut branches: Vec<String> = output
+        .lines()
+        .filter_map(|line| line.split('\t').nth(1))
+        .filter_map(|name| js_trim(name).strip_prefix("refs/heads/"))
+        .map(|name| format!("{ORIGIN_PREFIX}{name}"))
+        .collect();
+    branches.sort_by(|a, b| locale_compare(a, b));
+    Ok(branches)
 }
 
 // The default branch of origin, then main, then master, then the checkout's branch. Reads

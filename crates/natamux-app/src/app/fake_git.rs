@@ -6,6 +6,7 @@
 use std::collections::BTreeMap;
 
 use natamux_client::{ClientError, DashboardEvent};
+use natamux_proto::projects::repo::RemoteBranchList;
 use natamux_proto::tasks::task::{Task, TaskState};
 use natamux_proto::workspaces::changes::{
     COMMIT_SUBJECT_MAX, ChangeStatus, CommitAnswer, CommitMessageDraft, DraftSource, FileDiff,
@@ -125,6 +126,20 @@ fn add_commit(graph: &mut GitGraph, subject: String) -> String {
 }
 
 impl FakeDaemon {
+    /// Origin has the seeded local branches and two that were never fetched.
+    pub fn list_remote_branches(&self, _repo: &str) -> Answer<RemoteBranchList> {
+        let names = [
+            "origin/dev",
+            "origin/main",
+            "origin/natamux/t-0146-rust-migration-phase-3",
+            "origin/release/1.0",
+            "origin/spike/gpui-list",
+        ];
+        Ok(RemoteBranchList {
+            branches: names.map(String::from).to_vec(),
+        })
+    }
+
     pub fn file_diff(&self, task_id: &str, path: &str) -> Answer<FileDiff> {
         let data = self.data();
         let entry = data.change(task_id, path)?;

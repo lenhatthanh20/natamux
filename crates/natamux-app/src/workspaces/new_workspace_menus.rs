@@ -1,12 +1,14 @@
 //! The selects of the Start a task dialog: each opens a menu of its options at the button. The
-//! task branches fill the branch list, so they sit in a folded submenu.
+//! task branches and the branches of origin fill the branch list, so they sit in folded submenus.
 
 use std::rc::Rc;
 
 use gpui::{Pixels, Point, WeakEntity};
 use ui::{ContextMenu, prelude::*};
 
-use super::super::branches::{TASK_BRANCH_GROUP, branch_options};
+use super::super::branches::{
+    REMOTE_BRANCH_GROUP, TASK_BRANCH_GROUP, branch_options, remote_loading, remote_options,
+};
 use super::super::new_workspace_rules::{base_after_pick, start_branch};
 use super::NewWorkspaceDialog;
 use crate::agents::agent_choices::AGENT_CHOICES;
@@ -22,6 +24,10 @@ pub(super) enum Pick {
     Agent,
 }
 
+/// The groups of the branch menu that sit in a submenu each.
+const FOLDED: [&str; 2] = [TASK_BRANCH_GROUP, REMOTE_BRANCH_GROUP];
+
+#[derive(Clone)]
 struct MenuOption {
     group: Option<&'static str>,
     label: String,
@@ -80,6 +86,7 @@ impl NewWorkspaceDialog {
                     Some(self.base.clone())
                 };
                 let last = self.last_base(cx);
+                let remote = self.remote_branches.as_deref().unwrap_or_default();
                 branch_options(
                     &list.branches,
                     list.current.as_deref(),
@@ -87,6 +94,7 @@ impl NewWorkspaceDialog {
                     start.as_deref(),
                 )
                 .into_iter()
+                .chain(remote_options(remote, &list.branches))
                 .map(|each| {
                     let checked = Some(&each.value) == shown.as_ref();
                     option(Some(each.group), each.label, each.value, checked)
@@ -110,29 +118,50 @@ impl NewWorkspaceDialog {
         cx: &mut Context<Self>,
     ) {
         let options = self.options(pick, cx);
+        let loading = (pick == Pick::Branch)
+            .then(|| remote_loading(self.remote_branches.as_deref()))
+            .flatten();
         let this = cx.weak_entity();
         let menu = ContextMenu::build(window, cx, move |menu, _, _| {
-            let (task_branches, options): (Vec<_>, Vec<_>) = options
+            let (folded, options): (Vec<_>, Vec<_>) = options
                 .into_iter()
-                .partition(|each| each.group == Some(TASK_BRANCH_GROUP));
+                .partition(|each| each.group.is_some_and(|group| FOLDED.contains(&group)));
             let mut menu = add_options(menu, options, &this, pick);
-            // Task branches fill the list, so they are folded away.
-            if !task_branches.is_empty() {
-                let this = this.clone();
-                let task_branches = Rc::new(task_branches);
-                menu = menu.submenu(TASK_BRANCH_GROUP, move |menu, _, _| {
-                    let shown = task_branches.iter().map(|each| MenuOption {
+            // Task and remote branches fill the list, so they are folded away.
+            for group in FOLDED {
+                let shown: Vec<MenuOption> = folded
+                    .iter()
+                    .filter(|each| each.group == Some(group))
+                    .map(|each| MenuOption {
                         group: None,
-                        label: each.label.clone(),
-                        value: each.value.clone(),
-                        checked: each.checked,
-                    });
-                    add_options(menu, shown.collect(), &this, pick)
+                        ..each.clone()
+                    })
+                    .collect();
+                if shown.is_empty() {
+                    continue;
+                }
+                let this = this.clone();
+                let shown = Rc::new(shown);
+                menu = menu.submenu(group, move |menu, _, _| {
+                    add_options(menu, (*shown).clone(), &this, pick)
                 });
+            }
+            if let Some(loading) = loading {
+                menu = menu.label(loading);
             }
             menu
         });
         MenuLayer::open(menu, position, window, cx);
+    }
+
+    /// The Branch from menu at `position`, for the shot of its submenus.
+    pub fn open_branch_menu(
+        &mut self,
+        position: Point<Pixels>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.open_menu(Pick::Branch, position, window, cx);
     }
 
     fn pick(&mut self, pick: Pick, value: String, window: &mut Window, cx: &mut Context<Self>) {

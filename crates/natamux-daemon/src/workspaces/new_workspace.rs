@@ -3,6 +3,7 @@
 
 use std::sync::Arc;
 
+use natamux_proto::projects::repo::ORIGIN_PREFIX;
 use natamux_proto::tasks::task::{Task, TaskContext};
 use natamux_store::attachments::AttachmentFile;
 use serde_json::{Map, Value, json};
@@ -31,7 +32,7 @@ pub struct NewWorkspaceInput {
     pub title: String,
     /// The repository id; none is the default repository.
     pub repo: Option<String>,
-    /// A local branch to start from; none is the repository's default branch.
+    /// A local branch to start from, or `origin/<name>`; none is the repository's default branch.
     pub base: Option<String>,
     /// The agent that works on the task's stages; none leaves a plain shell.
     pub agent: Option<String>,
@@ -45,11 +46,12 @@ pub struct NewWorkspaceInput {
 }
 
 /// The base branch is checked first, so a typo leaves no task behind. The answer comes once the
-/// task is made: the worktree of a big repository can take minutes, so it is made after.
+/// task is made: the worktree of a big repository can take minutes, so it is made after. A base
+/// `origin/<name>` is checked with the worktree: it needs the network.
 pub fn new_workspace(parts: &NewWorkspaceParts, input: NewWorkspaceInput) -> WorkspaceResult<Task> {
     if let Some(base) = &input.base {
         let listed = parts.workspaces.branches(input.repo.as_deref())?;
-        if !listed.branches.contains(base) {
+        if !listed.branches.contains(base) && !base.starts_with(ORIGIN_PREFIX) {
             return Err(WorkspaceError::Conflict(format!(
                 "There is no local branch named {base}"
             )));

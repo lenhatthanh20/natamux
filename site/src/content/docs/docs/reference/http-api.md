@@ -109,6 +109,7 @@ Files, git, GitHub, terminals and templates.
 | `GET /github/issues?repo=<id>` | The open issues of a project: `{ issues }` |
 | `POST /github/issues/import` | Import issues as draft tasks `{ numbers, repo? }`. Up to 100 numbers |
 | `GET /git/branches?repo=<id>` | The branches of a project, for **Branch from** |
+| `GET /git/remote-branches?repo=<id>` | The branches of `origin` as `{ branches: ["origin/<name>"] }`, also ones never fetched. Asks `origin` over the network; no `origin` remote gives an empty list |
 | `GET /activity` | What the agent of each task does now, from its last hook |
 | `GET /usage` | Tokens and estimated cost of each task: `{ usage: { "<taskId>": { tokens, costUsd, unpricedModels, stages: [{ stage, agent, model, input, cacheRead, cacheWrite, output, costUsd }] } } }`. `costUsd` is an estimate at API list prices, `null` when no row has a price. `stage` is `""` for work on no stage. Answers before the login `PATH` |
 | `GET /jobs` | The background jobs that run now, oldest first: `{ jobs: [{ id, kind, label, taskId, startedAt }] }` |

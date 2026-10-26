@@ -45,6 +45,19 @@ pub async fn branches(state: Arc<AppState>, query: &str) -> Answer {
     .await
 }
 
+/// The branches of origin, also the ones never fetched, for the remote part of **Branch from**.
+pub async fn remote_branches(state: Arc<AppState>, query: &str) -> Answer {
+    let repo = match repo_query(query) {
+        Ok(repo) => repo,
+        Err(error) => return zod_answer(&error),
+    };
+    answer(StatusCode::OK, move || {
+        let branches = state.workspaces.remote_branches(repo.as_deref())?;
+        Ok(json!({ "branches": branches }))
+    })
+    .await
+}
+
 /// `repoParamsSchema`: the id of a project in the address.
 fn repo_param(id: &str) -> Result<String, RepoError> {
     let mut issues = Issues::default();

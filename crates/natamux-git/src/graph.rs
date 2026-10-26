@@ -16,7 +16,7 @@ pub const FIELD: &str = "\u{1f}";
 const LOG_FORMAT: &str = "%H%x1f%P%x1f%an%x1f%aI%x1f%D%x1f%s";
 
 /// A fetch that hangs (no network) must not hold up a new workspace for long.
-const FETCH_TIMEOUT: Duration = Duration::from_secs(20);
+pub(crate) const FETCH_TIMEOUT: Duration = Duration::from_secs(20);
 
 fn run(cwd: &Path, args: &[&str]) -> Result<String, GitError> {
     git(cwd, args, None, &[])
@@ -68,6 +68,25 @@ pub fn fetch_upstream(repo_dir: &Path, branch: &str) {
         Ok(())
     };
     let _ = fetch();
+}
+
+/// Fetches branch `name` of origin into `origin/<name>`, also one never fetched before. True when
+/// `origin/<name>` is known after: without a network, a copy fetched earlier still counts.
+pub fn fetch_origin_branch(repo_dir: &Path, name: &str) -> bool {
+    // A name such as `*` or `a:b` would make another refspec.
+    let local = format!("refs/remotes/origin/{name}");
+    if run(repo_dir, &["check-ref-format", &local]).is_err() {
+        return false;
+    }
+    let refspec = format!("+refs/heads/{name}:{local}");
+    let _ = git(
+        repo_dir,
+        &["fetch", "--quiet", "--no-tags", "origin", &refspec],
+        Some(FETCH_TIMEOUT),
+        &[],
+    );
+    let commit = format!("{local}^{{commit}}");
+    run(repo_dir, &["rev-parse", "--verify", "--quiet", &commit]).is_ok()
 }
 
 /// "HEAD -> natamux/t-0001, tag: v1, main" becomes ["natamux/t-0001", "tag: v1", "main"].

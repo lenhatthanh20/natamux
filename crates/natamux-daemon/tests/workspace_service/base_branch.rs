@@ -149,3 +149,58 @@ fn refuses_a_branch_that_does_not_exist() {
     let task = fx.task("Fix the bug");
     assert!(is_conflict(&fx.ws.create(&task.id, Some("nope"))));
 }
+
+// Origin gets a branch `feature/x` with a commit "on feature", by its folder: this repository
+// has never fetched it.
+fn unfetched_feature(fx: &Fx) {
+    let origin = bare_origin(fx.root.path());
+    run_git(&fx.repo, &["checkout", "-b", "scratch"]);
+    run_git(&fx.repo, &["commit", "--allow-empty", "-m", "on feature"]);
+    run_git(
+        &fx.repo,
+        &["push", path_text(&origin), "scratch:refs/heads/feature/x"],
+    );
+    run_git(&fx.repo, &["checkout", "main"]);
+    run_git(&fx.repo, &["branch", "-D", "scratch"]);
+}
+
+#[test]
+fn lists_the_branches_of_origin_also_the_ones_never_fetched() {
+    let fx = Fx::new();
+    unfetched_feature(&fx);
+
+    assert_eq!(
+        fx.ws.remote_branches(None).unwrap(),
+        strings(&["origin/feature/x"])
+    );
+}
+
+#[test]
+fn starts_from_a_branch_of_origin_that_was_never_fetched() {
+    let fx = Fx::new();
+    unfetched_feature(&fx);
+
+    let created = fx
+        .ws
+        .create(&fx.task("Remote").id, Some("origin/feature/x"))
+        .unwrap();
+
+    assert_eq!(subject(&created), "on feature");
+    assert!(!git_ok(
+        &fx.repo,
+        &["rev-parse", "--verify", "refs/heads/feature/x"]
+    ));
+    let workspace = PathBuf::from(created.workspace.unwrap());
+    assert!(!git_ok(&workspace, &["rev-parse", "@{upstream}"]));
+}
+
+#[test]
+fn refuses_a_branch_that_origin_does_not_have_and_makes_no_worktree() {
+    let fx = Fx::new();
+    unfetched_feature(&fx);
+    let task = fx.task("Typo");
+
+    assert!(is_conflict(&fx.ws.create(&task.id, Some("origin/nope"))));
+    let worktrees = run_git(&fx.repo, &["worktree", "list", "--porcelain"]);
+    assert_eq!(worktrees.matches("worktree ").count(), 1, "{worktrees}");
+}

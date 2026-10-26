@@ -60,7 +60,8 @@ Options:
   --source <name>       event: ${EVENT_SOURCES.join(', ')} (default: human)
   --payload <json>      event: JSON object sent with the event
   --base <branch>       workspace create, agent start: the new workspace starts from this
-                        local branch (default: main, master or the default of origin)
+                        local branch, or origin/<branch> fetched first (default: main, master
+                        or the default of origin)
   --yes                 workspace remove: confirm that the worktree folder is deleted
   --delete-branch       workspace remove: also delete the branch when it is merged
   --json                Print JSON instead of text

@@ -192,6 +192,7 @@ fn enter(shot: Shot, root: &mut Root, window: &mut Window, cx: &mut gpui::Contex
         // The dock open with no task picked: nothing to do, the list starts with none.
         Shot::DetailsEmpty => {}
         Shot::StartTask => new_workspace_dialog::open(&dashboard, None, window, cx),
+        Shot::StartTaskBranchMenu => branch_menu(&dashboard, window, cx),
         Shot::RemoveWorkspace => {
             if let Some(task) = task(REMOVED, cx) {
                 remove_workspace_dialog::open(&dashboard, task, window, cx);
@@ -282,6 +283,47 @@ fn row_menu(root: &mut Root, window: &mut Window, cx: &mut gpui::Context<Root>) 
         tree.update(cx, |tree, cx| tree.focus_task(TASK, window, cx));
         window.on_next_frame(|window, cx| window.dispatch_action(Box::new(OpenRowMenu), cx));
     });
+}
+
+/// The Start a task dialog's Branch from menu with its Remote branches submenu open. Each step
+/// waits a frame: the dialog reads the branches, the menu lists them, then the keys of the menu
+/// pick its last entry (Remote branches) and open it.
+fn branch_menu(dashboard: &gpui::Entity<Dashboard>, window: &mut Window, cx: &mut App) {
+    let dialog = new_workspace_dialog::open_with(dashboard, None, None, window, cx);
+    after_frames(2, window, move |window, cx| {
+        let size = window.viewport_size();
+        let at = point(size.width * 0.5, size.height * 0.5);
+        if let Some(dialog) = dialog {
+            dialog.update(cx, |dialog, cx| dialog.open_branch_menu(at, window, cx));
+        }
+    });
+    after_frames(3, window, |window, cx| {
+        menu_key("menu::SelectLast", window, cx)
+    });
+    after_frames(4, window, |window, cx| {
+        menu_key("menu::SelectChild", window, cx)
+    });
+}
+
+fn after_frames(
+    frames: usize,
+    window: &mut Window,
+    step: impl FnOnce(&mut Window, &mut App) + 'static,
+) {
+    window.on_next_frame(move |window, cx| {
+        if frames <= 1 {
+            step(window, cx);
+        } else {
+            after_frames(frames - 1, window, step);
+        }
+    });
+}
+
+/// What a key does in the open menu: `MenuLayer` dispatches the same actions.
+fn menu_key(name: &str, window: &mut Window, cx: &mut App) {
+    if let Ok(action) = cx.build_action(name, None) {
+        window.dispatch_action(action, cx);
+    }
 }
 
 /// The task's workspace on its Changes tab.
