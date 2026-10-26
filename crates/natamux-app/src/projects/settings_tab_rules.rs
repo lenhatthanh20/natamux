@@ -102,6 +102,23 @@ pub fn reset_ask(draft_ok: bool) -> ResetAsk {
     }
 }
 
+pub const SEND_BACKS_LABEL: &str = "Agent send backs";
+pub const SEND_BACKS_HINT: &str = "The most times an agent may send the task back from one stage \
+                                   before it waits for you. Empty: no limit.";
+pub const SEND_BACKS_ERROR: &str = "Give a whole number of 0 or more, or leave it empty.";
+
+/// The text of the send backs field: empty is no limit. Digits only, as JSON writes the number.
+pub fn send_backs_field(text: &str) -> Result<Option<usize>, &'static str> {
+    let text = text.trim();
+    if text.is_empty() {
+        return Ok(None);
+    }
+    if !text.bytes().all(|byte| byte.is_ascii_digit()) {
+        return Err(SEND_BACKS_ERROR);
+    }
+    text.parse().map(Some).map_err(|_| SEND_BACKS_ERROR)
+}
+
 /// The alert under the JSON editor.
 pub fn json_alert(error: &str) -> String {
     format!("{error} Fix it to use the Stages tab.")

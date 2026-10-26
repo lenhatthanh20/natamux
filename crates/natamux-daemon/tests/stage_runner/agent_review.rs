@@ -6,7 +6,7 @@ use natamux_proto::tasks::task::{Task, TaskState};
 use natamux_stages::actions::StageAction;
 use serde_json::json;
 
-use crate::{Fixture, term_input};
+use crate::{Fixture, SEND_BACK_LIMIT, term_input};
 
 fn fixture() -> Fixture {
     let f = Fixture::new();
@@ -67,6 +67,7 @@ fn starts_its_own_agent_in_shell_5_when_implement_is_done() {
 #[test]
 fn sends_the_task_back_to_implement_with_its_findings_twice_then_waits_for_you() {
     let f = fixture();
+    f.set_send_back_limit(Some(SEND_BACK_LIMIT));
     let task = at_review(&f);
     let run = &f.runner.run;
 

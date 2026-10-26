@@ -70,9 +70,12 @@ pub const ENDS_STAGE: [&str; 5] = [
     "stage.skipped",
 ];
 
-/// Rounds of "fix it" an agent may ask for on its own before a person decides. The count starts
-/// again each time a person steps in, see `agent_send_backs`.
-pub const MAX_AGENT_SEND_BACKS: usize = 2;
+/// An agent asked for `done` rounds of "fix it" on its own; with `limit` (`agents.maxSendBacks`)
+/// the next one waits for a person. No limit: it never does. The count starts again each time a
+/// person steps in, see `agent_send_backs`.
+pub fn send_back_limit_reached(limit: Option<usize>, done: usize) -> bool {
+    limit.is_some_and(|limit| done >= limit)
+}
 
 /// The send backs by an agent (or by CI) from a stage since a person last stepped in, oldest
 /// event first. A person who sends back, approves, passes, skips or sets the state has decided,

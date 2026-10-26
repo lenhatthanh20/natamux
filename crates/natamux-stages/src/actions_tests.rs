@@ -126,6 +126,16 @@ fn agent_send_backs_keep_counting_past_agent_events_and_refused_ones() {
 }
 
 #[test]
+fn send_back_limit_is_reached_only_when_a_limit_is_set() {
+    assert!(!send_back_limit_reached(None, 0));
+    assert!(!send_back_limit_reached(None, 1000));
+    assert!(send_back_limit_reached(Some(0), 0));
+    assert!(!send_back_limit_reached(Some(2), 1));
+    assert!(send_back_limit_reached(Some(2), 2));
+    assert!(send_back_limit_reached(Some(2), 3));
+}
+
+#[test]
 fn agent_send_backs_count_a_ci_send_back_by_the_system() {
     let mut ci = agent_back("implement");
     ci.event.source = "system".into();

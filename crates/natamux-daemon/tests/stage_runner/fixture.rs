@@ -57,6 +57,9 @@ pub struct Fixture {
     pub spawn_gate: SpawnGate,
 }
 
+/// The `agents.maxSendBacks` of the tests that reach the limit.
+pub const SEND_BACK_LIMIT: usize = 2;
+
 fn default_settings() -> ProjectSettings {
     ProjectSettings {
         stages: default_pipeline(),
@@ -201,6 +204,11 @@ impl Fixture {
 
     pub fn set_settings(&self, settings: ProjectSettings) {
         *self.settings.lock().unwrap() = settings;
+    }
+
+    /// `agents.maxSendBacks`, keeping the other settings. Call it after the stages are set.
+    pub fn set_send_back_limit(&self, most: Option<usize>) {
+        self.settings.lock().unwrap().agents.max_send_backs = most;
     }
 
     pub fn set_run_command(&self, run: impl Fn(&str, &Path) -> Ran + Send + Sync + 'static) {

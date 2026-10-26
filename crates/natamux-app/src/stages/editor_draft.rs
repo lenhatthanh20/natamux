@@ -223,6 +223,32 @@ pub fn with_create_issue(raw: &RawSettings, create_issue: &str) -> RawSettings {
     next
 }
 
+/// `agents.maxSendBacks` of the draft; None when it is left out or cannot be read (no limit).
+pub fn max_send_backs_of(raw: &RawSettings) -> Option<usize> {
+    let most = raw.get("agents")?.get("maxSendBacks")?.as_u64()?;
+    usize::try_from(most).ok()
+}
+
+/// The settings with this `agents.maxSendBacks`; None leaves it out, and an `agents` with nothing
+/// left goes too. `agents` keeps its place among the keys.
+pub fn with_max_send_backs(raw: &RawSettings, most: Option<usize>) -> RawSettings {
+    let old = raw
+        .get("agents")
+        .and_then(Value::as_object)
+        .cloned()
+        .unwrap_or_default();
+    let mut agents = without(&old, "maxSendBacks");
+    if let Some(most) = most {
+        agents.insert("maxSendBacks".to_string(), Value::from(most));
+    }
+    if agents.is_empty() {
+        return without(raw, "agents");
+    }
+    let mut next = raw.clone();
+    next.insert("agents".to_string(), Value::Object(agents));
+    next
+}
+
 /// The settings to save over a file that changed on disk: the keys the person changed since
 /// `start` (the file as it was loaded) take the draft's value; every other key keeps the value of
 /// the file now.

@@ -113,12 +113,16 @@ pub struct ProjectSettings {
     pub agents: AgentSettings,
 }
 
-/// `agentSettingsSchema`: `permission_mode` is `auto` or `ask`.
+/// `agentSettingsSchema`: `permission_mode` is `auto` or `ask`. `max_send_backs` is the most
+/// times an agent may send a task back from one stage before it waits for a person; None: no
+/// limit.
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentSettings {
     #[serde(default = "auto")]
     pub permission_mode: String,
+    #[serde(default)]
+    pub max_send_backs: Option<usize>,
 }
 
 fn auto() -> String {
@@ -129,6 +133,7 @@ impl Default for AgentSettings {
     fn default() -> Self {
         AgentSettings {
             permission_mode: auto(),
+            max_send_backs: None,
         }
     }
 }

@@ -17,6 +17,7 @@ Open them from the sidebar: click the gear next to the project. Or right-click t
 ## The Stages tab
 
 - **Pipeline preview.** A flow chart on top shows the stages as you edit them, with side-by-side stages in one column. A person icon marks a stage that waits for your approval. A pencil marks a prompt of your own. A stage on its own agent shows that agent's icon and its model (or the agent's name) under its name. Click a node to select its stage.
+- **Agent send backs.** Under the preview: the most times an agent, or a CI failure, may send the task back from one stage before it waits for you (`agents.maxSendBacks`). Empty means no limit, the default. See [Limit the send backs](#limit-the-send-backs).
 - **Stages in order.** One row per stage, with a checkbox that turns it on or off, and a drag handle. Drag a row, or focus it and press `Alt+ArrowUp` or `Alt+ArrowDown`. The row menu has **Move up**, **Move down**, **Run alongside the stage above**, **Run on its own** and **Remove**. A stage that is off stays in the file with its prompt and approval, but new tasks do not get it.
 - **Add stage** opens the catalog of 28 stages, grouped by phase: Understand, Design, Build, Check and Ship. **Custom stage** makes a stage of your own. The [catalog](/docs/reference/configuration/#stage-catalog) lists every stage.
 - **Details.** Click a stage to edit it.
@@ -42,7 +43,7 @@ Open them from the sidebar: click the gear next to the project. Or right-click t
 - **Footer.** **Reset to default** puts the default pipeline in the editor. **Import…** and **Export** load and save a file; see [Import and export](#import-and-export). **Cancel** closes the screen. **Save** (`Mod+Enter`) writes the file. A line above them, except on the **Issues** tab, says: "New tasks use this pipeline. Tasks on their way keep their stages, but use the new prompts and approvals."
 - **Phone.** Below 640 px the list and the details are one column. A stage opens in place of the list, with **Back**.
 
-**Save** changes only `stages`. Other fields and keys it does not know stay in the file. When the stages equal the default pipeline, Save leaves `stages` out of the file, so the project follows later changes of the default.
+**Save** changes only `stages` and `agents.maxSendBacks`. Other fields and keys it does not know stay in the file. When the stages equal the default pipeline, Save leaves `stages` out of the file, so the project follows later changes of the default.
 
 ## The Issues tab
 
@@ -127,6 +128,19 @@ Pick **Security review**, **Performance check** or **Accessibility check** from 
 ### Run your own test command
 
 Click **Automated tests** and enter a **Command**, such as `pnpm test`. A terminal runs it instead of an agent. Exit code 0 passes the stage.
+
+### Limit the send backs
+
+By default an agent may send a task back as often as it likes. When two agents keep disagreeing, give them a limit:
+
+<Steps>
+
+1. On the **Stages** tab, type a number in **Agent send backs**, for example `2`.
+2. Click **Save**.
+
+</Steps>
+
+The next send back past the limit is refused, and the task waits for you in **Needs input**. Clear the field to remove the limit. See [The review loop](/docs/concepts/review-loop/#limits).
 
 ### Let agents ask before they act
 

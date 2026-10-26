@@ -296,6 +296,18 @@ describe('projectSettingsSchema', () => {
     expect(wrong.error?.issues[0]?.path).toEqual(['agents', 'permissionMode'])
   })
 
+  it('has no send-back limit unless the file sets a whole number of 0 or more', () => {
+    const most = (agents: unknown) => projectSettingsSchema.parse({ agents }).agents.maxSendBacks
+    expect(most({})).toBeUndefined()
+    expect(most({ maxSendBacks: 0 })).toBe(0)
+    expect(most({ maxSendBacks: 3 })).toBe(3)
+    for (const value of [-1, 1.5, '2', null]) {
+      const wrong = projectSettingsSchema.safeParse({ agents: { maxSendBacks: value } })
+      expect(wrong.success).toBe(false)
+      expect(wrong.error?.issues[0]?.path).toEqual(['agents', 'maxSendBacks'])
+    }
+  })
+
   it('reads context sources by type', () => {
     const settings = projectSettingsSchema.parse({
       context: {

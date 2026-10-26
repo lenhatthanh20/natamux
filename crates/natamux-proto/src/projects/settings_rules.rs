@@ -37,8 +37,31 @@ pub fn other_settings_problem(raw: &Map<String, Value>) -> Option<String> {
             &["auto", "ask"],
             &mut found,
         );
+        count(
+            agents.get("maxSendBacks"),
+            "agents.maxSendBacks",
+            &mut found,
+        );
     }
     (!found.is_empty()).then(|| found.join("; "))
+}
+
+/// `z.number().int().min(0).optional()`. shortcut: zod takes `2.0` as an int; this refuses it,
+/// as serde cannot read it into a count.
+fn count(value: Option<&Value>, path: &str, found: &mut Vec<String>) {
+    match value {
+        None => {}
+        Some(Value::Number(number)) if number.is_u64() => {}
+        Some(Value::Number(number)) if number.as_f64().is_some_and(|n| n < 0.0) => {
+            found.push(format!("{path}: Too small: expected number to be >=0"));
+        }
+        Some(Value::Number(_)) => {
+            found.push(format!(
+                "{path}: Invalid input: expected int, received number"
+            ));
+        }
+        Some(other) => found.push(wrong_type(path, "number", other)),
+    }
 }
 
 fn kind_of(value: Option<&Value>) -> &'static str {
@@ -223,6 +246,30 @@ mod tests {
         assert_eq!(
             problem(json!({"agents": {"permissionMode": "yolo"}})).as_deref(),
             Some("agents.permissionMode: Invalid option: expected one of \"auto\"|\"ask\"")
+        );
+    }
+
+    #[test]
+    fn takes_a_whole_number_of_zero_or_more_as_the_most_send_backs() {
+        for good in [json!(0), json!(3)] {
+            assert_eq!(problem(json!({"agents": {"maxSendBacks": good}})), None);
+        }
+        let wrong = |value: Value| problem(json!({"agents": {"maxSendBacks": value}}));
+        assert_eq!(
+            wrong(json!(-1)).as_deref(),
+            Some("agents.maxSendBacks: Too small: expected number to be >=0")
+        );
+        assert_eq!(
+            wrong(json!(1.5)).as_deref(),
+            Some("agents.maxSendBacks: Invalid input: expected int, received number")
+        );
+        assert_eq!(
+            wrong(json!("2")).as_deref(),
+            Some("agents.maxSendBacks: Invalid input: expected number, received string")
+        );
+        assert_eq!(
+            wrong(Value::Null).as_deref(),
+            Some("agents.maxSendBacks: Invalid input: expected number, received null")
         );
     }
 

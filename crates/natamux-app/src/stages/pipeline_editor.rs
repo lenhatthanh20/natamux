@@ -12,7 +12,8 @@ use ui::prelude::*;
 
 use super::editor_catalog::unique_issues;
 use super::editor_draft::{
-    Draft, format_settings, parse_draft, tracker_of, with_create_issue, with_steps,
+    Draft, format_settings, max_send_backs_of, parse_draft, tracker_of, with_create_issue,
+    with_max_send_backs, with_steps,
 };
 use super::editor_find::{find_branch, find_stage};
 
@@ -132,6 +133,20 @@ impl PipelineEditor {
             return;
         }
         let raw = with_create_issue(&self.draft.raw, value);
+        self.changed(&format_settings(&raw), cx);
+    }
+
+    /// `agents.maxSendBacks` of the draft; None (no limit) while the text cannot be read.
+    pub fn max_send_backs(&self) -> Option<usize> {
+        self.raw().and_then(max_send_backs_of)
+    }
+
+    /// `agents.maxSendBacks`, None for no limit. Ignored while the text cannot be read.
+    pub fn set_max_send_backs(&mut self, most: Option<usize>, cx: &mut Context<Self>) {
+        if self.error.is_some() {
+            return;
+        }
+        let raw = with_max_send_backs(&self.draft.raw, most);
         self.changed(&format_settings(&raw), cx);
     }
 

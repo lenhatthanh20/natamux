@@ -114,24 +114,24 @@ and stops, without `natamux done`. Then:
 ## Limits
 
 <Aside type="caution">
-An agent can send a task back from one stage at most 2 times. The third time the task waits for you, in **Needs input**. You can always send it back yourself, and then the agent has 2 times again.
+By default an agent can send a task back any number of times. To stop two agents that disagree from looping, set **Agent send backs** in [project settings](/docs/guides/project-settings/#limit-the-send-backs) (`agents.maxSendBacks`). With a limit of 2, the third time the task waits for you, in **Needs input**. You can always send it back yourself, and then the agent has 2 times again.
 </Aside>
 
-The loop is built to end. These are the real rules:
+These are the real rules:
 
 | Rule | What happens |
 |---|---|
-| **At most 2 send backs by an agent from one stage.** | Natamux counts the times the Review stage sent the task back by itself since you last stepped in: sent the task back, approved, marked as done, skipped or set the state. The third `natamux stage back` is refused. The task goes to **Needs input** with "Review sent the task back 2 times. Decide what to do." |
+| **A send-back limit, when you set one.** | With `agents.maxSendBacks`, Natamux counts the times the Review stage sent the task back by itself since you last stepped in: sent the task back, approved, marked as done, skipped or set the state. A `natamux stage back` past the limit is refused. The task goes to **Needs input** with "Review sent the task back 2 times. Decide what to do." Without a limit, the agent may send back as often as it likes. |
 | **You can always send it back.** | **Send back** in the stage card, or `natamux stage back T-0001 --reason "..."`, has no limit. |
 | **A check that fails twice waits for you.** | When `review.md` is missing, empty or has no **Findings** section, the reasons go to the agent once. The second failure moves the task to **Needs input**. |
 | **Agents do not commit.** | Implement and Automated tests leave their changes for you to read in the **Changes** tab. Commit them before you open the pull request, or let [Generate](/docs/guides/changes-and-history/#commit) draft the message. |
 | **Release waits for you.** | The pipeline never pushes or opens a pull request by itself. **Release** waits until you open the pull request, and the task is done when it is merged. |
 
-When the task waits for you after the second send back, you decide: fix the code yourself and press **Mark as done** on Review, **Send back** with your own reason, or **Approve anyway**. Each of these starts the count again, so the agent may send the task back 2 more times.
+When the task waits for you after the last send back the limit allows, you decide: fix the code yourself and press **Mark as done** on Review, **Send back** with your own reason, or **Approve anyway**. Each of these starts the count again, so the agent may send the task back up to the limit once more.
 
 ## Add CI to the loop
 
-**Implement** and **Automated tests** can also wait for your CI. Tick **Check on CI** on the stage card of a task. When the agent is done, Natamux pushes a snapshot to `natamux-ci/<branch>` and waits for the runs. A failed run on **Automated tests** goes back to Implement, also at most 2 times. See [Check a stage on CI](/docs/concepts/stages/#check-a-stage-on-ci).
+**Implement** and **Automated tests** can also wait for your CI. Tick **Check on CI** on the stage card of a task. When the agent is done, Natamux pushes a snapshot to `natamux-ci/<branch>` and waits for the runs. A failed run on **Automated tests** goes back to Implement, within the same send-back limit. See [Check a stage on CI](/docs/concepts/stages/#check-a-stage-on-ci).
 
 ## Change the loop
 

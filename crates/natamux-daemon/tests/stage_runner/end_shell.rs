@@ -4,9 +4,9 @@ use natamux_daemon::stages::act::StageActionInput;
 use natamux_proto::projects::repo::ProjectSettings;
 use natamux_proto::stages::schema::{Gate, Stage, StageKind, Step};
 use natamux_proto::tasks::task::{Task, TaskState};
-use natamux_stages::actions::{MAX_AGENT_SEND_BACKS, StageAction};
+use natamux_stages::actions::StageAction;
 
-use crate::{Fixture, expect_submitted, expect_written};
+use crate::{Fixture, SEND_BACK_LIMIT, expect_submitted, expect_written};
 
 #[path = "end_shell_more.rs"]
 mod more;
@@ -242,8 +242,9 @@ fn closes_its_shell_when_a_person_sends_the_task_back() {
 fn keeps_its_shell_when_its_agent_sends_the_task_back_the_most_times() {
     let f = Fixture::new();
     with_stages(&f, ends_shell, vec![], nothing);
+    f.set_send_back_limit(Some(SEND_BACK_LIMIT));
     let task = writing_docs(&f);
-    for _ in 0..MAX_AGENT_SEND_BACKS {
+    for _ in 0..SEND_BACK_LIMIT {
         act(
             &f,
             &task.id,

@@ -138,7 +138,7 @@ impl SearchResults {
     }
 }
 
-const PROJECT_KEYWORDS: &str = "project stages issues json pipeline";
+const PROJECT_KEYWORDS: &str = "project stages issues json pipeline send back limit";
 
 /// None for an empty query: the page shows, not the results. Rows keep their page order.
 pub fn search(query: &str, repos: &[Repo]) -> Option<SearchResults> {

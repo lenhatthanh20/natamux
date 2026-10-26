@@ -207,6 +207,15 @@ pub fn settings_json(settings: &ProjectSettings) -> Value {
     let stages =
         serde_json::to_value(&settings.stages).unwrap_or_else(|_| Value::Array(Vec::new()));
     let sources: Vec<Value> = settings.context.sources.iter().map(source_json).collect();
+    let mut agents = Map::new();
+    agents.insert(
+        "permissionMode".into(),
+        json!(settings.agents.permission_mode),
+    );
+    // zod leaves an optional key out when the file does.
+    if let Some(most) = settings.agents.max_send_backs {
+        agents.insert("maxSendBacks".into(), json!(most));
+    }
     json!({
         "stages": stages,
         "context": { "sources": sources },
@@ -215,7 +224,7 @@ pub fn settings_json(settings: &ProjectSettings) -> Value {
             "createIssue": settings.tracker.create_issue,
             "linkInPr": settings.tracker.link_in_pr,
         },
-        "agents": { "permissionMode": settings.agents.permission_mode },
+        "agents": agents,
     })
 }
 
