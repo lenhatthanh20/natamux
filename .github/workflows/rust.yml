@@ -338,7 +338,7 @@ jobs:
             settings settings-general settings-search projects project-settings
             project-settings-tab-issues
             project-settings-tab-json project-settings-json-error import-issues sign-in
-            sign-in-error add-menu details-empty rail-closed-panel changes-over-main
+            sign-in-error add-menu details-empty rail-closed-panel changes-over-main stage-evidence
           DOCKED: >-
             tasks-table workspace-terminal-running terminal-find workspace-terminal-needs-input
             workspace-terminal-review no-workspace workspace-preparing finished-wrap-up agents-grid
@@ -355,7 +355,7 @@ jobs:
             settings settings-general settings-search projects project-settings
             project-settings-tab-issues
             project-settings-tab-json project-settings-json-error import-issues sign-in
-            sign-in-error add-menu details-empty rail-closed-panel changes-over-main
+            sign-in-error add-menu details-empty rail-closed-panel changes-over-main stage-evidence
         run: |
           mkdir -p shots
           only=$ONLY

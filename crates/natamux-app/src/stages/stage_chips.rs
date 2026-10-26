@@ -267,16 +267,33 @@ pub(super) fn evidence(input: &CardInput, on: &OnCommand, _: &App) -> impl IntoE
             ),
         )
         .when(open, |this| {
-            this.children(entry.passes.iter().map(|pass| {
-                h_flex()
-                    .gap_2()
-                    .items_start()
-                    .child(icon("circle-check").color(Color::Success))
-                    .child(
-                        Label::new(pass.clone())
-                            .size(LabelSize::Small)
-                            .color(Color::Muted),
-                    )
-            }))
+            this.children(entry.passes.iter().map(|pass| pass_row(pass)))
         })
+}
+
+/// One passed check: the icon, then the text, which wraps within the card.
+pub(super) fn pass_row(pass: &str) -> impl IntoElement {
+    h_flex()
+        .debug_selector(|| "evidence-row".into())
+        .w_full()
+        .min_w_0()
+        .gap_2()
+        .items_start()
+        .child(
+            div()
+                .flex_none()
+                .child(icon("circle-check").color(Color::Success)),
+        )
+        .child(
+            // A flex item keeps its text width unless it may shrink, so the text would not wrap.
+            div()
+                .debug_selector(|| "evidence-text".into())
+                .flex_1()
+                .min_w_0()
+                .child(
+                    Label::new(pass.to_owned())
+                        .size(LabelSize::Small)
+                        .color(Color::Muted),
+                ),
+        )
 }

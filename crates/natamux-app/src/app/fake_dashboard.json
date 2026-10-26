@@ -98,7 +98,7 @@
     "T-0141": [
       {"seq": 30, "accepted": true, "event": {"taskId": "T-0141", "source": "system", "type": "task.created", "at": "2026-10-21T09:00:00.000Z", "payload": {}}},
       {"seq": 31, "accepted": true, "event": {"taskId": "T-0141", "source": "system", "type": "stage.started", "at": "2026-10-22T08:50:00.000Z", "payload": {"stage": "context"}}},
-      {"seq": 32, "accepted": true, "event": {"taskId": "T-0141", "source": "system", "type": "stage.checked", "at": "2026-10-22T08:55:00.000Z", "payload": {"stage": "context", "passes": ["context.md is written"]}}},
+      {"seq": 32, "accepted": true, "event": {"taskId": "T-0141", "source": "system", "type": "stage.checked", "at": "2026-10-22T08:55:00.000Z", "payload": {"stage": "context", "passes": ["context.md is written", "context.md has the sections Goal, Files to read, Open questions and Links to the issue"]}}},
       {"seq": 33, "accepted": true, "event": {"taskId": "T-0141", "source": "human", "type": "stage.approved", "at": "2026-10-22T08:56:00.000Z", "payload": {"stage": "context"}}},
       {"seq": 34, "accepted": true, "event": {"taskId": "T-0141", "source": "system", "type": "stage.started", "at": "2026-10-22T08:56:00.000Z", "payload": {"stage": "spec"}}},
       {

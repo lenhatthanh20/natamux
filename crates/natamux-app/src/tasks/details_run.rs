@@ -241,6 +241,15 @@ impl DetailsPanel {
         MenuLayer::open(menu, point(width - px(220.), px(76.)), window, cx);
     }
 
+    /// A finished stage's card and its "Show evidence" opened, for `--shot stage-evidence`.
+    pub fn open_evidence(&mut self, stage: &str, cx: &mut Context<Self>) {
+        if let Some(shown) = self.shown.as_mut() {
+            shown.open_cards.insert(stage.to_owned());
+            shown.open_evidence.insert(stage.to_owned());
+        }
+        cx.notify();
+    }
+
     /// Puts a part of the tab in the middle of the panel (`block: 'center'`). It needs the part
     /// drawn once, so it is called on the frame after.
     pub fn center_on(&self, index: usize, cx: &mut Context<Self>) {
