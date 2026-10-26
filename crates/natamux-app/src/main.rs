@@ -165,6 +165,7 @@ mod projects {
     pub mod settings_writes;
 }
 mod sidebar {
+    pub mod blur_bar;
     pub mod comet;
     pub mod project_buttons;
     pub mod project_color;

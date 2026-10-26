@@ -7,6 +7,10 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v1.0.3 (2026-10-26)
+
+- In the desktop app, a project with **Blur names** on shows its names, titles and labels as soft blurred bars, as the web dashboard blurs them, and not as dots. Tooltips still show dots.
+
 ## v1.0.2 (2026-10-26)
 
 - In **Start a task** in the desktop app, **Branch from** has a folded **Remote branches** group with the branches of `origin` that have no local branch, also ones you never fetched. Pick `origin/<branch>` to start the task from it: Natamux fetches only that branch and makes no local branch for it. See [Base branch](/docs/concepts/workspaces/#base-branch).

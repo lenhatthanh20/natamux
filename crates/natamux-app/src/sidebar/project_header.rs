@@ -6,6 +6,7 @@
 use gpui::{AnyElement, ClickEvent, Entity, FontWeight, Hsla, MouseButton, MouseDownEvent};
 use ui::{Tooltip, prelude::*};
 
+use super::blur_bar::{BlurBar, private_text};
 use super::project_buttons::hover_button;
 use super::sidebar::{lucide, private, small, state_dot};
 use super::workspace_tree::{Snapshot, WorkspaceTree};
@@ -165,12 +166,17 @@ impl WorkspaceTree {
                     .size(IconSize::Small)
                     .color(Color::Custom(project_color(index, cx))),
             )
-            .child(
-                Label::new(private(&repo.name, blurred))
-                    .size(row_text())
-                    .weight(FontWeight::SEMIBOLD)
-                    .truncate(),
-            )
+            .child(private_text(
+                blurred,
+                || BlurBar::new(repo.name.clone(), 13.0).weight(FontWeight::SEMIBOLD),
+                || {
+                    Label::new(repo.name.clone())
+                        .size(row_text())
+                        .weight(FontWeight::SEMIBOLD)
+                        .truncate()
+                        .into_any_element()
+                },
+            ))
             .child(
                 div()
                     .id(SharedString::from(format!("count-{}", repo.id)))

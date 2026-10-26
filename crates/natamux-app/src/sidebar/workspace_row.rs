@@ -9,7 +9,8 @@ use natamux_proto::events::task_event::StoredEvent;
 use natamux_proto::tasks::task::{Task, TaskState};
 use ui::{Tooltip, prelude::*};
 
-use super::sidebar::{agent_mark, lucide, mono, private, small};
+use super::blur_bar::{BlurBar, private_text};
+use super::sidebar::{agent_mark, lucide, mono, small};
 use super::workspace_tree::{OFFSET_MINUTES, Snapshot, WorkspaceTree};
 use crate::agents::agent_choices::agent_label;
 use crate::app::dashboard_data::DashboardData;
@@ -213,12 +214,22 @@ impl WorkspaceTree {
             .shell
             .as_ref()
             .and_then(|shell| snap.terminal_activity.get(task_id)?.get(shell))
-            .map(|text| small(private(text, blurred)).truncate());
+            .map(|text| {
+                private_text(
+                    blurred,
+                    || BlurBar::new(text.clone(), 12.0),
+                    || small(text.clone()).truncate().into_any_element(),
+                )
+            });
         let tag = shell_tag(row).map(|tag| {
             div()
                 .id(SharedString::from(format!("{key}-tag")))
                 .flex_none()
-                .child(mono(private(&tag, blurred), cx))
+                .child(private_text(
+                    blurred,
+                    || BlurBar::new(tag.clone(), 11.0).mono(),
+                    || mono(tag.clone(), cx).into_any_element(),
+                ))
                 .tooltip(Tooltip::text(format!(
                     "Terminal {}",
                     row.shell.as_deref().unwrap_or_default()
@@ -228,15 +239,22 @@ impl WorkspaceTree {
             .agent
             .as_deref()
             .map(|agent| agent_mark(SharedString::from(format!("{key}-agent")).into(), agent));
-        let label = Label::new(private(&row.label, blurred))
-            .size(LabelSize::Custom(rems_from_px(12_f32)))
-            .weight(FontWeight::MEDIUM)
-            .color(if row.plain {
-                Color::Muted
-            } else {
-                Color::Default
-            })
-            .single_line();
+        let label = private_text(
+            blurred,
+            || BlurBar::new(row.label.clone(), 12.0).weight(FontWeight::MEDIUM),
+            || {
+                Label::new(row.label.clone())
+                    .size(LabelSize::Custom(rems_from_px(12_f32)))
+                    .weight(FontWeight::MEDIUM)
+                    .color(if row.plain {
+                        Color::Muted
+                    } else {
+                        Color::Default
+                    })
+                    .single_line()
+                    .into_any_element()
+            },
+        );
         let open = key.clone();
         self.row_frame(&key, false, snap, cx)
             .id(SharedString::from(key.clone()))
@@ -288,7 +306,7 @@ impl WorkspaceTree {
 }
 
 /// The title in the look of its tier: bold when unseen or waiting, muted when finished.
-fn title_label(task: &Task, unseen: bool, blurred: bool) -> Label {
+fn title_label(task: &Task, unseen: bool, blurred: bool) -> AnyElement {
     let tier = row_tier(task.state);
     let weight = match tier {
         RowTier::Quiet => FontWeight::NORMAL,
@@ -301,20 +319,27 @@ fn title_label(task: &Task, unseen: bool, blurred: bool) -> Label {
         13_f32
     };
     let finished = matches!(task.state, TaskState::Done | TaskState::Cancelled);
-    let title = Label::new(private(&task.title, blurred))
-        .size(LabelSize::Custom(rems_from_px(size)))
-        .weight(weight)
-        .color(if finished {
-            Color::Muted
+    let plain = || {
+        let title = Label::new(task.title.clone())
+            .size(LabelSize::Custom(rems_from_px(size)))
+            .weight(weight)
+            .color(if finished {
+                Color::Muted
+            } else {
+                Color::Default
+            })
+            .truncate();
+        if task.state == TaskState::Cancelled {
+            title.strikethrough().into_any_element()
         } else {
-            Color::Default
-        })
-        .truncate();
-    if task.state == TaskState::Cancelled {
-        title.strikethrough()
-    } else {
-        title
-    }
+            title.into_any_element()
+        }
+    };
+    private_text(
+        blurred,
+        || BlurBar::new(task.title.clone(), size).weight(weight),
+        plain,
+    )
 }
 
 /// The age of the last change; the menu button takes its place on hover.

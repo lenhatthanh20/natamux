@@ -313,7 +313,8 @@ pub fn card_line(task: &Task, events: Option<&[StoredEvent]>) -> Option<String> 
     }
 }
 
-/// What a blurred project shows in place of private text (names, titles, ids, questions).
+/// What a blurred project shows in place of private text that is a plain string: tooltips and
+/// labels. Rows draw a blurred bar instead (`blur_bar.rs`).
 pub fn masked(text: &str) -> String {
     "•".repeat(text.chars().count().clamp(3, 12))
 }
