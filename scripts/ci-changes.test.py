@@ -64,7 +64,11 @@ class Flags(unittest.TestCase):
         self.assertIn("e2e", true_flags(["docker/prod.Dockerfile"]))
 
     def test_client_and_cli(self):
-        self.assertEqual(true_flags(["crates/natamux-cli/src/main.rs"]), ["client"])
+        self.assertEqual(true_flags(["crates/natamux-cli/src/main.rs"]), ["client", "e2e"])
+
+    def test_client_runs_e2e(self):
+        # The image builds the CLI, and the e2e rest group runs its agent hook specs.
+        self.assertEqual(true_flags(["crates/natamux-client/src/lib.rs"]), ["client", "e2e"])
 
     def test_lock(self):
         self.assertEqual(true_flags(["supply-chain/config.toml"]), ["lock"])

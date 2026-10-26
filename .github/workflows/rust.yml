@@ -28,6 +28,8 @@ env:
   # Debug info of the Zed graph fills the runner's disk.
   CARGO_PROFILE_DEV_DEBUG: "0"
   CARGO_PROFILE_TEST_DEBUG: "0"
+  # As release.yml: the debug info of Cargo.toml's release profile only slows these builds.
+  CARGO_PROFILE_RELEASE_DEBUG: "0"
   SAVE_CACHE: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
 
 jobs:
@@ -619,75 +621,26 @@ jobs:
       - if: always()
         run: scripts/e2e.sh down
 
-  # The Rust CLI from this tree runs against the same Rust daemon image as the E2E jobs. It builds
-  # while e2e-image builds the images, then waits for them.
+  # The static Rust CLI for Linux. The CLI in the production images is checked by the e2e jobs:
+  # the rest group runs the agent hook specs (needs-input, shell-agent, ask-agent).
   cli:
     needs: changes
     if: ${{ !endsWith(github.ref, '-check') && needs.changes.outputs.client == 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
     permissions:
       contents: read
-      actions: read
       id-token: write
       attestations: write
-    env:
-      GH_TOKEN: ${{ github.token }}
-      NATAMUX_URL: http://127.0.0.1:8080/api
-      NATAMUX_TOKEN: e2e-token
-      E2E_LOCAL: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # A static CLI build runs on the runner; the production image also contains the CLI.
       - run: |
           rustup toolchain install
           rustup target add x86_64-unknown-linux-musl
       - id: build
         run: cargo build --release --locked -p natamux-cli --target x86_64-unknown-linux-musl
-      - name: Wait for the images of e2e-image
-        run: scripts/ci-wait-artifact.sh rust-production-images e2e-image
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: rust-production-images
-      - name: Start the Rust daemon and dashboard of this run
-        run: |
-          docker load -i images.tar.zst
-          scripts/e2e.sh up
-      - name: The agents' PATH finds the Rust CLI
-        run: |
-          docker compose -p natamux-e2e -f compose.prod.yaml -f compose.e2e.yaml \
-            exec -T daemon sh -c 'PATH="$NATAMUX_BIN_DIR:$PATH"; command -v natamux; natamux help | head -n 1'
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 22
-      # e2e/ is not part of the pnpm workspace; its only dependency is pinned to an exact version.
-      - name: Install Playwright
-        working-directory: e2e
-        run: |
-          pnpm install --ignore-workspace --no-frozen-lockfile
-          pnpm exec playwright install --with-deps chromium
-      - name: Agent hook specs with the Rust CLI
-        working-directory: e2e
-        run: pnpm e2e needs-input.spec.ts shell-agent.spec.ts ask-agent.spec.ts --project=desktop
-      - name: Report, pictures and traces
-        if: failure()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: cli-e2e-report
-          path: |
-            e2e/playwright-report
-            e2e/test-results
-          retention-days: 7
-          if-no-files-found: ignore
-      - name: Logs on failure
-        if: failure()
-        run: scripts/e2e.sh logs
-      - name: Stop
-        if: always()
-        run: scripts/e2e.sh down
       - run: |
           mkdir -p dist
           tar -czf dist/natamux-cli-linux-x64.tar.gz -C target/x86_64-unknown-linux-musl/release natamux nmx
@@ -701,10 +654,11 @@ jobs:
           compression-level: 0
 
   # Phase 4, part 1: the daemon's terminal crates on macOS and on Windows (ConPTY). Linux runs them
-  # in `check` (docs/rust-phase4.md).
+  # in `check` (docs/rust-phase4.md). A PR or snapshot runs it only when the terminal path changed
+  # (about 10 minutes on Windows, no cache); main and [ci: all] run it for every daemon crate.
   daemon-os:
     needs: changes
-    if: ${{ !endsWith(github.ref, '-check') && needs.changes.outputs.daemon_crates != '' }}
+    if: ${{ !endsWith(github.ref, '-check') && needs.changes.outputs.daemon_crates != '' && needs.changes.outputs.terminal == 'true' }}
     strategy:
       fail-fast: false
       matrix:
@@ -779,12 +733,43 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
+      # The browser's system packages came from the Ubuntu mirror at times at 28 kB/s: up to 16
+      # minutes for 20 MB. apt takes a cached .deb only when it matches the hash in its signed lists.
+      - name: Key of the Playwright packages
+        id: apt-key
+        run: echo "key=playwright-apt-$ImageOS-$ImageVersion-${{ hashFiles('e2e/package.json') }}" >> "$GITHUB_OUTPUT"
+      - id: apt-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/playwright-apt
+          key: ${{ steps.apt-key.outputs.key }}
+      - name: Give apt the cached packages
+        run: |
+          echo 'APT::Keep-Downloaded-Packages "true";' | sudo tee /etc/apt/apt.conf.d/99keep-debs >/dev/null
+          if compgen -G "$HOME/playwright-apt/*.deb" >/dev/null; then
+            sudo cp "$HOME"/playwright-apt/*.deb /var/cache/apt/archives/
+          fi
       # e2e/ is not part of the pnpm workspace; its only dependency is pinned to an exact version.
       - name: Install Playwright
         working-directory: e2e
         run: |
           pnpm install --ignore-workspace --no-frozen-lockfile
           pnpm exec playwright install --with-deps chromium
+      # One group saves, so the four do not race for the same key.
+      - name: Keep the downloaded packages
+        id: apt-keep
+        if: ${{ env.SAVE_CACHE == 'true' && matrix.group == 'rest' && steps.apt-cache.outputs.cache-hit != 'true' }}
+        run: |
+          if compgen -G "/var/cache/apt/archives/*.deb" >/dev/null; then
+            mkdir -p ~/playwright-apt
+            cp /var/cache/apt/archives/*.deb ~/playwright-apt/
+            echo "kept=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.apt-keep.outputs.kept == 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/playwright-apt
+          key: ${{ steps.apt-key.outputs.key }}
       - name: Wait for the images of e2e-image
         run: scripts/ci-wait-artifact.sh rust-production-images e2e-image
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -800,6 +785,10 @@ jobs:
             exec -T daemon cat /proc/1/cmdline | tr '\0' ' ')
           echo "$cmdline"
           echo "$cmdline" | grep -q natamux-daemon
+      - name: The agents' PATH finds the Rust CLI
+        run: |
+          docker compose -p natamux-e2e -f compose.prod.yaml -f compose.e2e.yaml \
+            exec -T daemon sh -c 'PATH="$NATAMUX_BIN_DIR:$PATH"; command -v natamux; natamux help | head -n 1'
       - name: The specs of the group
         working-directory: e2e
         run: E2E_GROUP=${{ matrix.group }} PLAYWRIGHT_JSON_OUTPUT_NAME=results.json pnpm e2e --reporter=list,html,json

@@ -63,10 +63,13 @@ APP_PATHS = [
 ]
 # What the jobs that start the production images read (scripts/e2e.sh up).
 IMAGE_PATHS = ["scripts/e2e.sh", "compose.e2e.yaml", "compose.prod.yaml", "docker/prod.Dockerfile", "e2e/"]
-# E2E runs the daemon binary in the images of main.
+# E2E runs the daemon binary in the images of main. The images also hold the CLI, whose agent
+# hook specs run in the rest group.
 E2E_PATHS = [
     *DAEMON_PATHS,
     *IMAGE_PATHS,
+    "crates/natamux-cli/",
+    "crates/natamux-client/",
 ]
 CLIENT_PATHS = [
     *(f"crates/natamux-{name}/" for name in ("client", "cli", "proto")),
