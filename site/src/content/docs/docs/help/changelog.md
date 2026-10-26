@@ -7,6 +7,16 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v1.0.1 (2026-10-26)
+
+- In the desktop app, an open task has no tabs. Its terminals fill the main area. **Progress**, **Changes**, **History**, **Docs**, **Files** and **Details** are icons on a rail at the right edge of the window, and the rail stays when the details panel is closed. Click the picked view again to close the panel. See [In the desktop app](/docs/guides/dashboard/#in-the-desktop-app).
+- In the desktop app, **Changes** lists the files and the commit box in the panel and shows the picked file's diff over the terminals. **Docs** lists the stage files in the panel and shows the picked one over the terminals. A file from **Files** opens over the terminals too. **Terminals**, or `Esc`, shows the terminals again, and `Mod+W` closes the open file.
+- In the desktop app, to add a terminal, click the split button in a terminal's header. On a finished task, **Back to wrap-up** in a terminal's header goes back to the wrap-up.
+- In **Start a task** in the desktop app, the selects (**Context from**, **Skill**, **Project**, **Branch from** and **Agent**) sit on the row of their label and are as wide as their text. A long name is cut short.
+- In the desktop app, `Enter` starts a new line in **Notes**, in the notes of the edit form, in the send-back reason, in the commit message and in the **Ask agent** comment.
+- Fix: in the sidebar, the buttons of a project's header followed its task count, and the rows under a task were not indented. Now the buttons sit on the right and the rows are indented again.
+- Fix: after a task was finished, **Reopen agent** could show the ended Terminal 1. Now it shows the new terminal of the agent.
+
 ## v1.0.0 (2026-10-26)
 
 - Natamux is now a native app: the desktop app, the daemon and the `natamux` and `nmx` commands are Rust programs. The app draws its own window; the daemon still serves the dashboard to your browser. See [Desktop app](/docs/guides/desktop-app/).
