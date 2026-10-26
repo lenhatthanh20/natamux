@@ -1,7 +1,7 @@
 //! How Root draws the shell: the bars, the docked sidebar or the drawer, main, the details panel
 //! and its rail at the right edge.
 
-use gpui::{KeyContext, MouseButton, StyleRefinement};
+use gpui::{KeyContext, MouseButton, MouseDownEvent, StyleRefinement};
 use ui::prelude::*;
 
 use super::{Root, Tool};
@@ -18,6 +18,46 @@ use crate::perf::{draws, overlay};
 const DRAWER_WIDTH: f32 = 300.;
 /// Dragging the sidebar narrower than this collapses it.
 const SIDEBAR_COLLAPSE_BELOW: f32 = 180.;
+
+/// Under 1024: the sidebar slides over main, above a scrim that closes it.
+fn drawer_layer(
+    panel: impl IntoElement,
+    viewport: f32,
+    close: impl Fn(&MouseDownEvent, &mut Window, &mut App) + 'static,
+    cx: &App,
+) -> Div {
+    let colors = cx.theme().colors();
+    // The dialog layer's scrim (components/dialog.rs).
+    let mut scrim = colors.elevated_surface_background;
+    scrim.fade_out(0.2);
+    div()
+        .absolute()
+        .inset_0()
+        .occlude()
+        .child(
+            div()
+                .id("drawer-scrim")
+                .absolute()
+                .inset_0()
+                .bg(scrim)
+                .on_mouse_down(MouseButton::Left, close),
+        )
+        .child(
+            div()
+                .relative()
+                .h_full()
+                .w(px(DRAWER_WIDTH.min(viewport * 0.85)))
+                .bg(colors.panel_background)
+                .border_r_1()
+                .border_color(colors.border)
+                .elevation_3(cx)
+                // Else a mouse down in the panel also reaches the scrim, which closes the drawer
+                // before the row under it gets its click (T-0198). The dialog panel does the same.
+                .occlude()
+                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                .child(panel),
+        )
+}
 
 impl Root {
     fn render_sidebar(&self, width: f32, cx: &mut Context<Self>) -> impl IntoElement {
@@ -59,38 +99,10 @@ impl Root {
             .child(resize)
     }
 
-    /// Under 1024: the sidebar slides over main, above a scrim that closes it.
     fn render_drawer(&self, viewport: f32, cx: &mut Context<Self>) -> impl IntoElement {
-        let colors = cx.theme().colors();
-        // The dialog layer's scrim (components/dialog.rs).
-        let mut scrim = colors.elevated_surface_background;
-        scrim.fade_out(0.2);
-        div()
-            .absolute()
-            .inset_0()
-            .occlude()
-            .child(
-                div()
-                    .id("drawer-scrim")
-                    .absolute()
-                    .inset_0()
-                    .bg(scrim)
-                    .on_mouse_down(
-                        MouseButton::Left,
-                        cx.listener(|root, _, window, cx| root.set_drawer(false, window, cx)),
-                    ),
-            )
-            .child(
-                div()
-                    .relative()
-                    .h_full()
-                    .w(px(DRAWER_WIDTH.min(viewport * 0.85)))
-                    .bg(colors.panel_background)
-                    .border_r_1()
-                    .border_color(colors.border)
-                    .elevation_3(cx)
-                    .child(self.sidebar.clone()),
-            )
+        let close =
+            cx.listener(|root, _: &MouseDownEvent, window, cx| root.set_drawer(false, window, cx));
+        drawer_layer(self.sidebar.clone(), viewport, close, cx)
     }
 
     /// Main is drawn again only when what it shows changed: output of one terminal, a blink in
@@ -283,3 +295,7 @@ impl Render for Root {
             .into_any_element()
     }
 }
+
+#[cfg(test)]
+#[path = "window_render_tests.rs"]
+mod drawer_tests;
