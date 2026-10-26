@@ -55,3 +55,83 @@ fn send_back_reason_needs_a_reopen_with_a_reason() {
     assert_eq!(send_back_reason(Some(&event)), None);
     assert_eq!(send_back_reason(None), None);
 }
+
+fn stored(accepted: bool, source: &str, kind: &str) -> StoredEvent {
+    serde_json::from_value(json!({
+        "seq": 1, "accepted": accepted,
+        "event": {"taskId": "T-1", "source": source, "type": kind, "at": "x"}
+    }))
+    .unwrap()
+}
+
+fn agent_back(from: &str) -> StoredEvent {
+    let mut back = stored(true, "agent", "stage.reopened");
+    let payload = json!({"to": "implement", "from": from, "byAgent": true});
+    back.event.payload = payload.as_object().cloned().unwrap_or_default();
+    back
+}
+
+#[test]
+fn agent_send_backs_counts_the_agent_send_backs_from_one_stage() {
+    let person = stored(true, "human", "stage.reopened");
+    let events = [
+        agent_back("review"),
+        person,
+        agent_back("review"),
+        agent_back("testing"),
+    ];
+    assert_eq!(agent_send_backs(&events[2..], "review"), 1);
+    assert_eq!(agent_send_backs(&events[2..], "testing"), 1);
+    assert_eq!(agent_send_backs(&[], "review"), 0);
+}
+
+#[test]
+fn agent_send_backs_start_again_after_a_person_steps_in() {
+    let kinds = [
+        "stage.reopened",
+        "review.changes-requested",
+        "stage.approved",
+        "review.approved",
+        "stage.passed",
+        "stage.skipped",
+        "state.overridden",
+    ];
+    for kind in kinds {
+        let events = [
+            agent_back("review"),
+            agent_back("review"),
+            stored(true, "human", kind),
+            agent_back("review"),
+        ];
+        assert_eq!(agent_send_backs(&events, "review"), 1, "{kind}");
+    }
+}
+
+#[test]
+fn agent_send_backs_keep_counting_past_agent_events_and_refused_ones() {
+    let no_reset = [
+        stored(false, "human", "stage.reopened"),
+        stored(false, "human", "stage.approved"),
+        stored(true, "agent", "stage.reopened"),
+        stored(true, "agent", "stage.reported"),
+        stored(true, "system", "stage.checked"),
+        stored(true, "human", "task.edited"),
+        agent_back("testing"),
+    ];
+    for other in no_reset {
+        let kind = other.event.kind.clone();
+        let events = [agent_back("review"), agent_back("review"), other];
+        assert_eq!(agent_send_backs(&events, "review"), 2, "{kind}");
+    }
+}
+
+#[test]
+fn agent_send_backs_count_a_ci_send_back_by_the_system() {
+    let mut ci = agent_back("implement");
+    ci.event.source = "system".into();
+    let person = stored(true, "human", "stage.reopened");
+    let twice = [ci.clone(), ci.clone()];
+    let between = [ci.clone(), person, ci];
+    assert_eq!(agent_send_backs(&twice, "implement"), 2);
+    assert_eq!(agent_send_backs(&between, "implement"), 1);
+}

@@ -204,3 +204,46 @@ fn a_send_back_refused_after_the_most_times_leaves_its_shell_open() {
     assert_eq!(closing(&f), 0);
     assert!(!f.runner.run.take_report(&task.id, "7"));
 }
+
+#[test]
+fn gives_the_agent_its_send_backs_again_after_a_person_sends_the_task_back() {
+    let f = Fixture::new();
+    with_stages(&f, nothing, vec![], nothing);
+    let task = writing_docs(&f);
+    let agent_back = || {
+        f.runner.run.act(
+            &task.id,
+            StageAction::Reopen,
+            &input(Some("7"), Some("implement"), None),
+        )
+    };
+    let rounds = || {
+        for _ in 0..MAX_AGENT_SEND_BACKS {
+            agent_back().unwrap();
+            f.settle();
+            assert_at(&f, &task.id, "implement", TaskState::Running);
+            report(&f, &task.id, "1");
+        }
+        let refused = agent_back();
+        f.settle();
+        assert!(refused.is_err());
+        assert_at(&f, &task.id, "write-docs", TaskState::NeedsInput);
+    };
+    rounds();
+
+    let person = input(None, Some("implement"), Some("Name the dates"));
+    act(&f, &task.id, StageAction::Reopen, &person);
+    assert_at(&f, &task.id, "implement", TaskState::Running);
+    report(&f, &task.id, "1");
+    assert_at(&f, &task.id, "write-docs", TaskState::Running);
+
+    rounds();
+    let asked = f
+        .events(&task.id)
+        .into_iter()
+        .rfind(|(kind, _)| kind == "agent.asked")
+        .and_then(|(_, payload)| payload["message"].as_str().map(str::to_string))
+        .unwrap_or_default();
+    let times = format!("sent the task back {MAX_AGENT_SEND_BACKS} times.");
+    assert!(asked.contains(&times), "{asked}");
+}

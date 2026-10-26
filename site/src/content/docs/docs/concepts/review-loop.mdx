@@ -114,20 +114,20 @@ and stops, without `natamux done`. Then:
 ## Limits
 
 <Aside type="caution">
-An agent can send a task back from one stage at most 2 times. The third time the task waits for you, in **Needs input**. You can always send it back yourself.
+An agent can send a task back from one stage at most 2 times. The third time the task waits for you, in **Needs input**. You can always send it back yourself, and then the agent has 2 times again.
 </Aside>
 
 The loop is built to end. These are the real rules:
 
 | Rule | What happens |
 |---|---|
-| **At most 2 send backs by an agent from one stage.** | Natamux counts the times the Review stage sent the task back by itself, over the life of the task. The third `natamux stage back` is refused. The task goes to **Needs input** with "Review sent the task back 2 times. Decide what to do." |
+| **At most 2 send backs by an agent from one stage.** | Natamux counts the times the Review stage sent the task back by itself since you last stepped in: sent the task back, approved, marked as done, skipped or set the state. The third `natamux stage back` is refused. The task goes to **Needs input** with "Review sent the task back 2 times. Decide what to do." |
 | **You can always send it back.** | **Send back** in the stage card, or `natamux stage back T-0001 --reason "..."`, has no limit. |
 | **A check that fails twice waits for you.** | When `review.md` is missing, empty or has no **Findings** section, the reasons go to the agent once. The second failure moves the task to **Needs input**. |
 | **Agents do not commit.** | Implement and Automated tests leave their changes for you to read in the **Changes** tab. Commit them before you open the pull request, or let [Generate](/docs/guides/changes-and-history/#commit) draft the message. |
 | **Release waits for you.** | The pipeline never pushes or opens a pull request by itself. **Release** waits until you open the pull request, and the task is done when it is merged. |
 
-When the task waits for you after the second send back, you decide: fix the code yourself and press **Mark as done** on Review, **Send back** with your own reason, or **Approve anyway**.
+When the task waits for you after the second send back, you decide: fix the code yourself and press **Mark as done** on Review, **Send back** with your own reason, or **Approve anyway**. Each of these starts the count again, so the agent may send the task back 2 more times.
 
 ## Add CI to the loop
 

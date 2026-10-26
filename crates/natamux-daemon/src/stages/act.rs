@@ -7,7 +7,7 @@ use natamux_proto::stages::capabilities::stage_name_of_id;
 use natamux_proto::stages::position::path_of;
 use natamux_proto::stages::schema::{Stage, Step};
 use natamux_proto::tasks::task::{Task, TaskState};
-use natamux_stages::actions::{MAX_AGENT_SEND_BACKS, StageAction, lane_state};
+use natamux_stages::actions::{MAX_AGENT_SEND_BACKS, StageAction, agent_send_backs, lane_state};
 use serde_json::{Map, Value, json};
 
 use crate::stages::errors::{StageError, StageResult, action};
@@ -243,7 +243,8 @@ impl StageRun {
     }
 
     /// An agent that reviews sends the task back by itself, at most MAX_AGENT_SEND_BACKS times
-    /// from its stage; then the stage waits for you, so two agents that disagree do not loop.
+    /// from its stage since a person last stepped in; then the stage waits for you, so two
+    /// agents that disagree do not loop.
     fn agent_sends_back(&self, task: &Task, step: &Step, terminal: &str) -> StageResult<String> {
         let steps = self.steps(task)?;
         let pinned = self.pinned(&task.id);
@@ -270,15 +271,7 @@ impl StageRun {
     }
 
     pub fn send_backs_from(&self, task_id: &str, from: &str) -> usize {
-        self.events(task_id)
-            .iter()
-            .filter(|stored| {
-                let payload = &stored.event.payload;
-                stored.event.kind == "stage.reopened"
-                    && payload.get("byAgent") == Some(&Value::Bool(true))
-                    && payload.get("from").and_then(Value::as_str) == Some(from)
-            })
-            .count()
+        agent_send_backs(&self.events(task_id), from)
     }
 
     fn apply_action(

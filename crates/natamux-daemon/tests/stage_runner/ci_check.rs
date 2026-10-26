@@ -345,6 +345,43 @@ fn waits_for_you_after_ci_sent_the_stage_back_the_most_times() {
 }
 
 #[test]
+fn sends_ci_failures_back_again_after_a_person_sent_the_stage_back() {
+    let f = fixture();
+    let task = reported(&f, true);
+    for _ in 0..MAX_AGENT_SEND_BACKS {
+        f.ci.finish(failure());
+        f.settle();
+        report(&f, &task.id);
+    }
+    f.ci.finish(failure());
+    f.settle();
+    assert_eq!(
+        state_of(&f, &task.id),
+        ("implement".into(), TaskState::NeedsInput)
+    );
+
+    let person = StageActionInput {
+        to: Some("implement".into()),
+        ..Default::default()
+    };
+    f.runner
+        .run
+        .act(&task.id, StageAction::Reopen, &person)
+        .unwrap();
+    f.settle();
+    report(&f, &task.id);
+    f.ci.finish(failure());
+    f.settle();
+
+    assert_eq!(state_of(&f, &task.id), running_implement());
+    assert_eq!(payload_of(&f, &task.id, "stage.reopened")["ci"], true);
+    assert_eq!(
+        count_of(&f, &task.id, "stage.reopened"),
+        MAX_AGENT_SEND_BACKS + 2
+    );
+}
+
+#[test]
 fn waits_for_you_at_once_when_no_run_started() {
     waits_at_once("No CI run started for natamux-ci/x.");
 }
