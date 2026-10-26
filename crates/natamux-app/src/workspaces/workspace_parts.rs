@@ -2,6 +2,7 @@
 //! workspace itself with the body of its tab, and what the finished banner's and the wrap-up's
 //! buttons do.
 
+use std::collections::BTreeSet;
 use std::rc::Rc;
 
 use natamux_proto::tasks::task::Task;
@@ -13,6 +14,7 @@ use crate::app::view_rules::{DetailsView, WorkspaceTab};
 use crate::git::history_view::HistoryView;
 use crate::tasks::state_filter::width_probe;
 use crate::tasks::table_rules::waits_for;
+use crate::terminals::terminal_cache::{Owner, TerminalCache};
 use crate::workspaces::finished_banner::{FinishedActions, FinishedBanner, OnClick};
 use crate::workspaces::finished_summary::{FinishedSummary, follow_up_title};
 use crate::workspaces::no_workspace::NoWorkspace;
@@ -248,6 +250,11 @@ impl WorkspaceView {
     ) -> AnyElement {
         let finished = is_finished_state(task.state);
         let panes_shown = !finished || shown.shells_wanted;
+        if !panes_shown {
+            // The panes do not draw now, so their claim would keep an ended Terminal 1 cached
+            // and Reopen agent would show it again (T-0185).
+            TerminalCache::claim(Owner::Workspace, BTreeSet::new(), cx);
+        }
         let facts = GitFacts {
             uncommitted: shown.changes.as_ref().map(|changes| changes.len() as u64),
             graph: shown.graph.clone(),

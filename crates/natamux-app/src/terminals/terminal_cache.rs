@@ -249,6 +249,29 @@ mod tests {
         assert_eq!(evictions(&entries, 60), ["T-1/1"]);
     }
 
+    /// T-0185: the wrap-up of a finished task drops the workspace claim, so its ended Terminal 1
+    /// goes and Reopen agent gets a new terminal, not the ended one.
+    #[gpui::test]
+    fn a_dropped_claim_frees_the_terminal_of_a_finished_task(cx: &mut gpui::TestAppContext) {
+        crate::app::test_views::init(cx);
+        let source = Arc::new(Source::FakeDaemon);
+        let window = cx.add_empty_window();
+        let first = window.update(|window, cx| {
+            let terminal = TerminalCache::terminal(&source, "T-1", "1", window, cx);
+            TerminalCache::claim(Owner::Workspace, BTreeSet::from(["T-1/1".to_owned()]), cx);
+            TerminalCache::set_live(BTreeSet::new(), cx);
+            terminal
+        });
+        let kept = window.update(|_, cx| TerminalCache::cached("T-1/1", cx).is_some());
+        assert!(kept, "a claimed terminal stays");
+        window.update(|_, cx| TerminalCache::claim(Owner::Workspace, BTreeSet::new(), cx));
+        let freed = window.update(|_, cx| TerminalCache::cached("T-1/1", cx).is_none());
+        assert!(freed, "the hidden terminal of a finished task goes");
+        let second =
+            window.update(|window, cx| TerminalCache::terminal(&source, "T-1", "1", window, cx));
+        assert_ne!(first.entity_id(), second.entity_id());
+    }
+
     #[test]
     fn keys_name_the_task_and_the_terminal() {
         assert_eq!(terminal_key("T-1", "12"), "T-1/12");
