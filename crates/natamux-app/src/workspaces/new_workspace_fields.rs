@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use gpui::{ClickEvent, FontWeight, PathPromptOptions};
+use gpui::{AnyElement, ClickEvent, FontWeight, PathPromptOptions};
 use ui::prelude::*;
 
 use super::super::new_workspace_rules::{PickedFile, SourceChoice, fit_attachments, format_bytes};
@@ -19,6 +19,23 @@ fn hint(text: impl Into<SharedString>) -> impl IntoElement {
 
 fn section_title(text: &'static str) -> impl IntoElement {
     Label::new(text).weight(FontWeight::SEMIBOLD)
+}
+
+/// A select on the row of its label, as wide as its text (T-0186).
+fn select_row(label: &'static str, select: Button) -> AnyElement {
+    h_flex()
+        .gap_3()
+        .justify_between()
+        .child(
+            div().flex_none().child(
+                Label::new(label)
+                    .size(LabelSize::Small)
+                    .weight(FontWeight::MEDIUM)
+                    .color(Color::Muted),
+            ),
+        )
+        .child(h_flex().min_w_0().justify_end().child(select))
+        .into_any_element()
 }
 
 impl NewWorkspaceDialog {
@@ -40,7 +57,7 @@ impl NewWorkspaceDialog {
         };
         Button::new(id, text)
             .style(ButtonStyle::Outlined)
-            .full_width()
+            .truncate(true)
             .end_icon(Icon::new(IconName::ChevronDown).size(IconSize::Small))
             .track_focus(focus)
             .disabled(disabled)
@@ -58,7 +75,7 @@ impl NewWorkspaceDialog {
         let choices = self.choices();
         let manual = choice.kind() == "manual";
         let source = (choices.len() > 1).then(|| {
-            field(
+            select_row(
                 "Context from",
                 self.select("new-task-source", Pick::Source, choice.label(), false, cx),
             )
@@ -72,7 +89,7 @@ impl NewWorkspaceDialog {
             let button = self
                 .select("new-task-skill", Pick::Skill, text, false, cx)
                 .start_icon(Icon::from_path(icon_path("sparkles")).size(IconSize::Small));
-            field("Skill", button)
+            select_row("Skill", button)
         });
         let text = if manual {
             field("Notes", input_box(&self.notes, cx)).into_any_element()
@@ -104,7 +121,6 @@ impl NewWorkspaceDialog {
             .track_focus(&self.stops.files)
             .on_click(cx.listener(|this, _, _, cx| this.pick_files(cx)));
         let picker = h_flex()
-            .flex_wrap()
             .gap_2()
             .px_2p5()
             .py_2()
@@ -112,11 +128,11 @@ impl NewWorkspaceDialog {
             .border_1()
             .border_dashed()
             .border_color(cx.theme().colors().border)
-            .child(add)
-            .child(hint(
+            .child(div().flex_none().child(add))
+            .child(div().flex_1().min_w_0().child(hint(
                 "Or drop files here, such as screenshots, logs or specs. They are part of the \
                  context.",
-            ));
+            )));
         let rows = self.files.iter().map(|file| {
             let id = file.id;
             h_flex()
@@ -176,9 +192,9 @@ impl NewWorkspaceDialog {
         v_flex()
             .gap_3()
             .child(section_title("Workspace and agent"))
-            .child(field("Project", project))
-            .child(field("Branch from", branch))
-            .child(field("Agent", agent))
+            .child(select_row("Project", project))
+            .child(select_row("Branch from", branch))
+            .child(select_row("Agent", agent))
     }
 
     pub(super) fn pick_files(&mut self, cx: &mut Context<Self>) {

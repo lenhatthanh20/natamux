@@ -265,6 +265,12 @@ pub fn bind(cx: &mut App) {
         KeyBinding::new(&m("mod-v"), editor::actions::Paste, editor),
         KeyBinding::new(&m("mod-z"), editor::actions::Undo, editor),
         KeyBinding::new(&m("mod-shift-z"), editor::actions::Redo, editor),
+        // A box of many lines (notes, a commit message): its form submits on Mod+Enter.
+        KeyBinding::new(
+            "enter",
+            editor::actions::Newline,
+            Some("Editor && mode == auto_height"),
+        ),
         KeyBinding::new(copy, terminal::Copy, Some("Terminal")),
         KeyBinding::new(paste, terminal::Paste, Some("Terminal")),
     ]);
@@ -371,7 +377,52 @@ fn menu_title(command: &Command) -> String {
 
 #[cfg(test)]
 mod tests {
+    use editor::Editor;
+    use gpui::{Context, Focusable as _, TestAppContext, Window};
+
     use super::*;
+
+    /// The keys that run Newline in the editor `make` gives, with the app's bindings.
+    fn newline_keys(
+        cx: &mut TestAppContext,
+        make: impl FnOnce(&mut Window, &mut Context<Editor>) -> Editor + 'static,
+    ) -> Vec<String> {
+        crate::app::test_views::init(cx);
+        cx.update(bind);
+        let (editor, cx) = cx.add_window_view(make);
+        cx.run_until_parked();
+        cx.update(|window, cx| {
+            window
+                .bindings_for_action_in(&editor::actions::Newline, &editor.focus_handle(cx))
+                .iter()
+                .map(|binding| {
+                    binding
+                        .keystrokes()
+                        .iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                })
+                .collect()
+        })
+    }
+
+    /// T-0186: Enter did nothing in the Notes box of Start a task.
+    #[gpui::test]
+    fn enter_starts_a_line_in_a_box_of_many_lines(cx: &mut TestAppContext) {
+        let keys = newline_keys(cx, |window, cx| Editor::auto_height(6, 12, window, cx));
+        // The list can name the same key more than once.
+        assert!(
+            !keys.is_empty() && keys.iter().all(|key| key == "enter"),
+            "{keys:?}"
+        );
+    }
+
+    #[gpui::test]
+    fn enter_is_left_to_the_form_in_a_one_line_box(cx: &mut TestAppContext) {
+        let keys = newline_keys(cx, Editor::single_line);
+        assert!(keys.is_empty(), "{keys:?}");
+    }
 
     #[test]
     fn update_commands_reach_the_app() {
