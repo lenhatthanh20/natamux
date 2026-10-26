@@ -88,6 +88,7 @@ mod components {
     pub mod skeleton;
     pub mod spinner;
     pub mod tab_order;
+    pub mod terminals_button;
     pub mod text_size;
     pub mod theme_contrast;
     pub mod timing_rules;
@@ -225,6 +226,7 @@ mod tasks {
     pub mod delete_finished;
     pub mod details_commands;
     pub mod details_panel;
+    pub mod details_rail;
     pub mod details_rules;
     pub mod edit_form;
     pub mod edit_rules;

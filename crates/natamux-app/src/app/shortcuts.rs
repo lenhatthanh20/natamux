@@ -16,9 +16,7 @@ pub use super::commands_app::{
     RestartToUpdate, ShowShortcuts, ToggleAutomaticUpdates, UseCompactSize, UseDarkTheme,
     UseDefaultSize, UseLargeSize, UseLightTheme, UseSystemTheme,
 };
-pub use super::commands_files::{
-    CloseTab, ReopenTabs, SaveFile, ShowDocsTab, ShowOpenFile, ShowWorktreeFiles,
-};
+pub use super::commands_files::{CloseTab, SaveFile, ShowDocsTab, ShowOpenFile, ShowWorktreeFiles};
 pub use super::commands_stages::{MoveStageDown, MoveStageUp, ShowTasksProgress};
 use crate::ime::ime_check::SubmitWord;
 
@@ -177,7 +175,6 @@ command_actions! {
     "files.show" => ShowWorktreeFiles,
     "file.save" => SaveFile,
     "tab.close" => CloseTab,
-    "tab.reopen" => ReopenTabs,
     "palette.open" => OpenPalette,
     "jump.open" => OpenJump,
     "help.shortcuts" => ShowShortcuts,

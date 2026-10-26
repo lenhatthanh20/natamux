@@ -1,16 +1,20 @@
 //! The shown file of the Docs tab: its header, the stale line, and the body (edit box, source,
-//! Markdown, or the empty state).
+//! Markdown, or the empty state). The header ends with the Terminals button (T-0183).
 
 use editor::Editor;
+use gpui::Entity;
 use language::language_settings::SoftWrap;
 use ui::prelude::*;
 
 use super::docs_rules::{EMPTY_TEXT, STALE_LINE, is_stale};
 use super::docs_tab::DocsTab;
+use crate::app::dashboard::Dashboard;
+use crate::app::view_rules::WorkspaceTab;
 use crate::components::button_style::{action_button, quiet_button};
 use crate::components::colors::signal;
 use crate::components::segmented::Segmented;
 use crate::components::skeleton::{Loading, SkeletonList};
+use crate::components::terminals_button::terminals_button;
 
 impl DocsTab {
     pub(super) fn source_view(
@@ -75,6 +79,7 @@ impl DocsTab {
                         .disabled(busy)
                         .on_click(cx.listener(|this, _, window, cx| this.save(window, cx))),
                 )
+                .child(terminals_to_main(&self.dashboard))
                 .into_any_element();
         }
         let source = self.dashboard.read(cx).view().docs_source;
@@ -101,6 +106,7 @@ impl DocsTab {
                 .disabled(off)
                 .on_click(cx.listener(move |this, _, _, cx| this.start_edit(&own, cx))),
         )
+        .child(terminals_to_main(&self.dashboard))
         .into_any_element()
     }
 
@@ -194,6 +200,14 @@ impl DocsTab {
             .child(self.attachment_rows(true, cx))
             .into_any_element()
     }
+}
+
+/// The Terminals button of the file bars: main shows the terminals again.
+pub(super) fn terminals_to_main(dashboard: &Entity<Dashboard>) -> Button {
+    let dashboard = dashboard.clone();
+    terminals_button("docs-terminals").on_click(move |_, _, cx| {
+        dashboard.update(cx, |d, cx| d.pick_tab(WorkspaceTab::Terminal, cx));
+    })
 }
 
 /// The switches of the editors of this tab: text only, wrapped, no gutter.

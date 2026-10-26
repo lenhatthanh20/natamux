@@ -75,7 +75,7 @@ fn opens_the_terminal_while_the_agent_works_or_waits_whatever_was_used_last() {
         WorkspaceTab::Terminal
     );
     assert_eq!(
-        tab_to_open(TaskState::NeedsInput, Some(WorkspaceTab::History)),
+        tab_to_open(TaskState::NeedsInput, Some(WorkspaceTab::Docs)),
         WorkspaceTab::Terminal
     );
 }
@@ -87,8 +87,8 @@ fn opens_the_last_tab_of_that_workspace_and_the_terminal_for_a_new_one() {
         WorkspaceTab::Changes
     );
     assert_eq!(
-        tab_to_open(TaskState::Ready, Some(WorkspaceTab::History)),
-        WorkspaceTab::History
+        tab_to_open(TaskState::Ready, Some(WorkspaceTab::Docs)),
+        WorkspaceTab::Docs
     );
     assert_eq!(tab_to_open(TaskState::Ready, None), WorkspaceTab::Terminal);
 }

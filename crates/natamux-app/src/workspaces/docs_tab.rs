@@ -1,8 +1,9 @@
 //! The Docs tab of a workspace (`DocsTab.tsx`): the stage files and attachments of the task, the
 //! picked file as Markdown or source, and a plain edit with a draft that outlives the tab.
+//! While the details panel shows Docs, the panel draws the list and main only the picked file.
 
 use editor::{Editor, EditorEvent};
-use gpui::{Entity, FocusHandle, Focusable, KeyContext, Subscription};
+use gpui::{Div, Entity, FocusHandle, Focusable, KeyContext, Subscription};
 use natamux_proto::stages::actions::StageFile;
 use natamux_proto::tasks::attachments::Attachment;
 use ui::prelude::*;
@@ -12,6 +13,7 @@ use super::docs_rules::{DocDraft, current_doc};
 use super::docs_view::plain;
 use crate::app::dashboard::Dashboard;
 use crate::app::source::reason;
+use crate::app::view_rules::DetailsView;
 use crate::files::draft_store::DraftStore;
 
 /// The text of a file as read, with the `modified_at` of the list it was read for.
@@ -305,8 +307,9 @@ impl Focusable for DocsTab {
     }
 }
 
-impl Render for DocsTab {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+impl DocsTab {
+    /// The key context of the Docs screen; the panel and main share it.
+    fn root(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Div {
         self.sync_edit(window, cx);
         let mut context = KeyContext::default();
         context.add("NatamuxDocs");
@@ -317,17 +320,39 @@ impl Render for DocsTab {
         if !typing {
             context.add("not_editing");
         }
-        let root = v_flex()
-            .key_context(context)
-            .track_focus(&self.focus)
-            .size_full()
-            .min_h_0();
+        v_flex().key_context(context).size_full().min_h_0()
+    }
+
+    fn reading_state(&self) -> AnyElement {
+        let text = match &self.list_error {
+            Some(message) => Label::new(message.clone()).color(Color::Error),
+            None => Label::new("Reading the stage files\u{2026}").color(Color::Muted),
+        };
+        div().p_4().child(text).into_any_element()
+    }
+
+    /// The list part, drawn in the details panel. No focus tracking: main owns the focus handle.
+    pub fn render_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+        let root = self.root(window, cx);
         let Some(entries) = self.list.clone() else {
-            let text = match &self.list_error {
-                Some(message) => Label::new(message.clone()).color(Color::Error),
-                None => Label::new("Reading the stage files\u{2026}").color(Color::Muted),
-            };
-            return root.child(div().p_4().child(text)).into_any_element();
+            return root.child(self.reading_state()).into_any_element();
+        };
+        let Some(current) = self.current() else {
+            return root
+                .child(div().p_2().child(self.attachment_rows(true, cx)))
+                .into_any_element();
+        };
+        root.child(self.list_column(&entries, &current, true, cx))
+            .into_any_element()
+    }
+}
+
+impl Render for DocsTab {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let in_panel = self.dashboard.read(cx).panel_shows(DetailsView::Docs);
+        let root = self.root(window, cx).track_focus(&self.focus);
+        let Some(entries) = self.list.clone() else {
+            return root.child(self.reading_state()).into_any_element();
         };
         let Some(current) = self.current() else {
             return root.child(self.empty(cx)).into_any_element();
@@ -336,15 +361,15 @@ impl Render for DocsTab {
             true => self.image_view(cx),
             false => self.section(&current, window, cx),
         };
-        root.child(
-            // Both parts fill the height: the header of the file sits at the top.
-            h_flex()
-                .flex_1()
-                .min_h_0()
-                .items_stretch()
-                .child(self.list_column(&entries, &current, cx))
-                .child(main),
-        )
-        .into_any_element()
+        // Both parts fill the height: the header of the file sits at the top.
+        let row = h_flex().flex_1().min_h_0().items_stretch();
+        let page = match in_panel {
+            true => root.child(row.child(main)),
+            false => root.child(
+                row.child(self.list_column(&entries, &current, false, cx))
+                    .child(main),
+            ),
+        };
+        page.into_any_element()
     }
 }

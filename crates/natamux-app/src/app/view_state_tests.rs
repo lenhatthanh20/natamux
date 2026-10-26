@@ -32,7 +32,7 @@ fn a_saved_view_reads_back_the_same() {
         notify: true,
         tabs: vec![
             ("T-1".into(), WorkspaceTab::Changes),
-            ("T-2".into(), WorkspaceTab::History),
+            ("T-2".into(), WorkspaceTab::Docs),
         ],
         docs_source: true,
         changes_view: FileViewMode::Tree,
@@ -102,7 +102,7 @@ fn the_details_panel_keeps_its_width_tab_and_folded_sections() {
     assert!(!state.section_open("usage", true));
     assert!(state.section_open("x", true));
     assert!(!state.section_open("details", false));
-    let broken = ViewState::parse(r#"{"detailsView": "docs", "notify": "yes"}"#);
+    let broken = ViewState::parse(r#"{"detailsView": "terminal", "notify": "yes"}"#);
     assert_eq!(broken.details_view, None);
     assert!(!broken.notify);
 }
@@ -170,7 +170,7 @@ fn remembers_the_view_the_user_picks_also_on_the_next_visit() {
 fn starts_with_no_picked_view_when_nothing_or_something_unknown_was_stored() {
     assert_eq!(ViewState::parse("{}").details_view, None);
     assert_eq!(
-        ViewState::parse(r#"{"detailsView": "docs"}"#).details_view,
+        ViewState::parse(r#"{"detailsView": "terminal"}"#).details_view,
         None
     );
     assert_eq!(ViewState::parse(r#"{"detailsView": 3}"#).details_view, None);
@@ -313,7 +313,8 @@ fn reads_the_tabs_the_view_and_the_flags_of_the_changes_tab() {
     );
     assert_eq!(state.tab_of("T-1"), Some(WorkspaceTab::Terminal));
     assert_eq!(state.tab_of("T-2"), Some(WorkspaceTab::Changes));
-    assert_eq!(state.tab_of("T-3"), Some(WorkspaceTab::History));
+    // History moved to the details panel (T-0183): a saved one is dropped.
+    assert_eq!(state.tab_of("T-3"), None);
     assert_eq!(state.tab_of("T-4"), None);
     assert_eq!(state.changes_view, FileViewMode::Tree);
     assert_eq!(state.files_width, 330);
@@ -368,10 +369,10 @@ fn keeps_the_newest_200_tabs() {
 fn remembers_the_last_tab_of_each_workspace_in_the_file() {
     let mut state = ViewState::default();
     state.remember_tab("T-1", WorkspaceTab::Changes);
-    state.remember_tab("T-2", WorkspaceTab::History);
+    state.remember_tab("T-2", WorkspaceTab::Docs);
     state.remember_tab("T-1", WorkspaceTab::Terminal);
     assert_eq!(state.tab_of("T-1"), Some(WorkspaceTab::Terminal));
-    assert_eq!(state.tab_of("T-2"), Some(WorkspaceTab::History));
+    assert_eq!(state.tab_of("T-2"), Some(WorkspaceTab::Docs));
     assert_eq!(ViewState::parse(&state.to_json()).tabs, state.tabs);
 }
 
@@ -417,27 +418,20 @@ fn follows_the_tab_that_the_user_picks_in_the_open_workspace_only() {
     use crate::workspaces::workspace_rules::shown_after_remember;
     let mut view = ViewState::default();
     let open = Some("T-0001");
-    let shown = shown_after_remember(
-        open,
-        WorkspaceTab::Terminal,
-        "T-0001",
-        WorkspaceTab::History,
-    );
-    view.remember_tab("T-0001", WorkspaceTab::History);
-    assert_eq!(shown, WorkspaceTab::History);
+    let shown = shown_after_remember(open, WorkspaceTab::Terminal, "T-0001", WorkspaceTab::Docs);
+    view.remember_tab("T-0001", WorkspaceTab::Docs);
+    assert_eq!(shown, WorkspaceTab::Docs);
     let shown = shown_after_remember(open, shown, "T-0002", WorkspaceTab::Changes);
     view.remember_tab("T-0002", WorkspaceTab::Changes);
-    assert_eq!(shown, WorkspaceTab::History);
+    assert_eq!(shown, WorkspaceTab::Docs);
     assert_eq!(view.tab_of("T-0002"), Some(WorkspaceTab::Changes));
 }
 
 #[test]
-fn drops_a_remembered_progress_tab_which_is_gone() {
-    let view = ViewState::parse(r#"{"tabs":{"T-0001":"progress","T-0002":"history"}}"#);
-    assert_eq!(
-        view.tabs,
-        vec![("T-0002".to_string(), WorkspaceTab::History)]
-    );
+fn drops_a_remembered_progress_or_history_tab_which_is_gone() {
+    let view =
+        ViewState::parse(r#"{"tabs":{"T-0001":"progress","T-0002":"history","T-0003":"docs"}}"#);
+    assert_eq!(view.tabs, vec![("T-0003".to_string(), WorkspaceTab::Docs)]);
 }
 
 #[test]

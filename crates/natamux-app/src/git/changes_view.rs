@@ -1,7 +1,9 @@
-//! The Changes tab of a workspace (docs/ui-spec.md 4.24, `ChangesPanel.tsx`, `ChangedFiles.tsx`):
-//! the files not committed at the left (a picker when main is narrow), the picked file's diff,
-//! the commit box under the files, and the comment box under the diff. The workspace view reads
-//! the list and hands it over; this view reads the picked file and its images.
+//! The Changes screen of a workspace (docs/ui-spec.md 4.24, `ChangesPanel.tsx`,
+//! `ChangedFiles.tsx`): the files not committed at the left (a picker when main is narrow), the
+//! picked file's diff, the commit box under the files, and the comment box under the diff. When
+//! the details panel shows Changes, the panel draws the files and the commit box
+//! (`render_panel`) and main draws only the diff, so one view serves both places. The workspace
+//! view reads the list and hands it over; this view reads the picked file and its images.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
@@ -19,6 +21,7 @@ use super::diff_rules::{WIDE_FROM, files_width, side_by_side};
 use super::diff_view::{DiffEvent, DiffOptions, DiffView};
 use crate::app::dashboard::Dashboard;
 use crate::app::source::reason;
+use crate::app::view_rules::DetailsView;
 use crate::components::empty_state::EmptyState;
 use crate::components::skeleton::{Loading, SkeletonList};
 use crate::tasks::state_filter::width_probe;
@@ -292,7 +295,9 @@ impl ChangesView {
         let view = self.dashboard.read(cx).view();
         let flags = view.diff;
         let main = self.width.read(cx).unwrap_or(0.);
-        let diff_width = if main >= WIDE_FROM {
+        // Main holds only the diff while the panel has the file list.
+        let in_panel = self.dashboard.read(cx).panel_shows(DetailsView::Changes);
+        let diff_width = if main >= WIDE_FROM && !in_panel {
             main - files_width(view.files_width, main)
         } else {
             main
@@ -398,8 +403,9 @@ impl Render for ChangesView {
                 )
                 .into_any_element();
         }
-        let wide = self.width.read(cx).is_some_and(|width| width >= WIDE_FROM);
-        let body = if wide {
+        let body = if self.dashboard.read(cx).panel_shows(DetailsView::Changes) {
+            self.render_diff_only(window, cx)
+        } else if self.width.read(cx).is_some_and(|width| width >= WIDE_FROM) {
             self.render_wide(window, cx)
         } else {
             self.render_narrow(window, cx)

@@ -175,6 +175,24 @@ pub fn other_terminal_hint(
     })
 }
 
+/// A pane header's New terminal button: the workspace's panes have it (its tooltip, and whether
+/// it can be used); the Agents grid's do not.
+pub fn new_terminal_button(in_grid: bool, has_agent: bool, full: bool) -> Option<(String, bool)> {
+    (!in_grid).then(|| (new_terminal_tip(has_agent, full), !full))
+}
+
+/// The tooltip of a pane header's New terminal button.
+pub fn new_terminal_tip(has_agent: bool, full: bool) -> String {
+    if full {
+        return format!("New terminal: at most {MAX_PANES} terminals");
+    }
+    let mut tip = "New terminal (Ctrl+Shift+`)".to_owned();
+    if has_agent {
+        tip.push_str(". Terminal 1 runs the agent.");
+    }
+    tip
+}
+
 #[cfg(test)]
 #[path = "pane_rules_tests.rs"]
 mod tests;

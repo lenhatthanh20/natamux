@@ -1,4 +1,5 @@
-//! How Root draws the shell: the bars, the docked sidebar or the drawer, and main.
+//! How Root draws the shell: the bars, the docked sidebar or the drawer, main, the details panel
+//! and its rail at the right edge.
 
 use gpui::{KeyContext, MouseButton, StyleRefinement};
 use ui::prelude::*;
@@ -128,6 +129,7 @@ impl Root {
         let docked = layout.sidebar == SidebarMode::Docked;
         self.sync_details_mode(window, cx);
         let details = self.details_shown(window, cx).then_some(layout.details);
+        let rail = self.rail_shown(cx);
         let view = self.dashboard.read(cx).view();
         let sidebar_open = view.sidebar_open;
         let sidebar_width = effective_sidebar_width(view.sidebar_width, Some(width));
@@ -150,9 +152,10 @@ impl Root {
             .when(details == Some(DetailsMode::Docked), |this| {
                 this.child(self.render_docked_details(cx))
             })
+            .when(rail, |this| this.child(self.rail.clone()))
             .when(
                 details.is_some_and(|mode| mode != DetailsMode::Docked),
-                |this| this.child(self.render_sheet(width, layout.compact, cx)),
+                |this| this.child(self.render_sheet(width, layout.compact, rail, cx)),
             )
             .when(!docked && self.drawer_open, |this| {
                 this.child(self.render_drawer(width, cx))
@@ -179,7 +182,6 @@ impl Root {
             .on_action(cx.listener(Self::show_docs_tab))
             .on_action(cx.listener(Self::show_open_file))
             .on_action(cx.listener(Self::close_tab))
-            .on_action(cx.listener(Self::reopen_tabs))
             .on_action(cx.listener(Self::show_worktree_files))
     }
 

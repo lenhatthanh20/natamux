@@ -171,12 +171,12 @@ mod tests {
     #[test]
     fn with_tab_remembers_the_last_tab_of_each_workspace() {
         let first = with_tab(&[], "T-0001", WorkspaceTab::Changes);
-        let both = with_tab(&first, "T-0002", WorkspaceTab::History);
+        let both = with_tab(&first, "T-0002", WorkspaceTab::Docs);
         assert_eq!(
             both,
             vec![
                 ("T-0001".to_owned(), WorkspaceTab::Changes),
-                ("T-0002".to_owned(), WorkspaceTab::History)
+                ("T-0002".to_owned(), WorkspaceTab::Docs)
             ]
         );
         let again = with_tab(&first, "T-0001", WorkspaceTab::Terminal);

@@ -5,10 +5,8 @@
 use ui::prelude::*;
 
 use super::{Root, Tool};
-use crate::app::shortcuts::{
-    CloseTab, Quit, ReopenTabs, ShowDocsTab, ShowOpenFile, ShowWorktreeFiles,
-};
-use crate::app::view_rules::WorkspaceTab;
+use crate::app::shortcuts::{CloseTab, Quit, ShowDocsTab, ShowOpenFile, ShowWorktreeFiles};
+use crate::app::view_rules::{DetailsView, WorkspaceTab};
 use crate::components::confirm::Confirm;
 use crate::files::draft_store::DraftStore;
 
@@ -19,7 +17,7 @@ impl Root {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.show_tab(WorkspaceTab::Docs, cx);
+        self.show_view(DetailsView::Docs, cx);
     }
 
     /// Does nothing while no file is open (`pick_tab` refuses the editor tab then).
@@ -32,20 +30,11 @@ impl Root {
         self.show_tab(WorkspaceTab::Editor, cx);
     }
 
-    /// Mod+W: closes the active tab of the open workspace. Terminal stays.
+    /// Mod+W: closes the open file of the open workspace. The other screens stay.
     pub(super) fn close_tab(&mut self, _: &CloseTab, _: &mut Window, cx: &mut Context<Self>) {
         if let Some(id) = self.open_workspace_task(cx) {
-            self.dashboard.update(cx, |dashboard, cx| {
-                let tab = dashboard.shown_workspace_tab();
-                dashboard.close_tab(&id, tab, cx)
-            });
-        }
-    }
-
-    pub(super) fn reopen_tabs(&mut self, _: &ReopenTabs, _: &mut Window, cx: &mut Context<Self>) {
-        if let Some(id) = self.open_workspace_task(cx) {
             self.dashboard
-                .update(cx, |dashboard, cx| dashboard.reopen_tabs(&id, cx));
+                .update(cx, |dashboard, cx| dashboard.close_open_file(&id, cx));
         }
     }
 

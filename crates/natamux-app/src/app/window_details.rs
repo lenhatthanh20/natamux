@@ -15,8 +15,11 @@ use crate::app::shortcuts::{
     ApproveStage, Back, EditTask, ReportStage, SendBackStage, ShowProgress, SkipStage,
     ToggleDetails, ToggleSelectedDetails,
 };
+use crate::app::tab_rules::esc_shows_terminals;
+use crate::app::view_rules::WorkspaceTab;
 use crate::app::view_state::{DETAILS_MAX, DETAILS_MIN};
 use crate::components::resize_handle::{Edge, Limits, Resize, ResizeHandle};
+use crate::tasks::details_rail::RAIL_WIDTH;
 
 /// `min(360px, 90vw)`.
 const SHEET_WIDTH: f32 = 360.;
@@ -87,11 +90,22 @@ impl Root {
         )
     }
 
-    /// The sheet: over main at the right; under 1024 above a scrim that closes it.
+    /// The rail of the panel's views shows beside an open task, also when the panel is closed
+    /// (T-0183); not over All tasks, the Agents grid or Settings.
+    pub(super) fn rail_shown(&self, cx: &App) -> bool {
+        let dashboard = self.dashboard.read(cx);
+        dashboard.open_task.is_some()
+            && dashboard.details_task().is_some()
+            && matches!(self.tool, super::Tool::None)
+    }
+
+    /// The sheet: over main at the right, left of the rail; under 1024 above a scrim that closes
+    /// it.
     pub(super) fn render_sheet(
         &self,
         viewport: f32,
         compact: bool,
+        rail: bool,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let colors = cx.theme().colors();
@@ -102,6 +116,7 @@ impl Root {
             .inset_0()
             .flex()
             .justify_end()
+            .when(rail, |this| this.pr(px(RAIL_WIDTH)))
             .when(compact, |this| {
                 this.occlude().child(
                     div()
@@ -145,7 +160,7 @@ impl Root {
     }
 
     /// Esc closes the top layer first: Settings (when focus is outside it), the drawer, a sheet,
-    /// a tool, the open task, then the details dock.
+    /// a tool, a screen over the terminals, the open task, then the details dock.
     pub(super) fn back(&mut self, _: &Back, window: &mut Window, cx: &mut Context<Self>) {
         if self.close_settings(cx) {
             return;
@@ -154,12 +169,18 @@ impl Root {
             self.details_mode(window, cx) != DetailsMode::Docked && self.details_shown(window, cx);
         let dashboard = self.dashboard.read(cx);
         let nothing_open = dashboard.open_task.is_none() && !dashboard.agents_open;
+        let covered = esc_shows_terminals(
+            dashboard.open_task.is_some(),
+            dashboard.shown_workspace_tab(),
+        );
         if self.drawer_open {
             self.set_drawer(false, window, cx);
         } else if sheet {
             self.close_details(cx);
         } else if !matches!(self.tool, super::Tool::None) {
             self.close_tool(cx);
+        } else if covered {
+            self.show_tab(WorkspaceTab::Terminal, cx);
         } else if nothing_open {
             self.close_details(cx);
         } else {

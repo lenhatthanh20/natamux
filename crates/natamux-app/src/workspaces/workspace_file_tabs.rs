@@ -1,15 +1,14 @@
-//! The Docs tab and the editor tab of the open workspace (`DocsTab.tsx`, `FileEditor.tsx`): made
-//! when they first show, kept while the same task (and, for the editor, the same file) is open.
-//! Only the one that shows reads again when the workspace changes (`dirty_reads`); a hidden one
-//! reads again when it shows.
+//! Docs and the open file over the terminals of the open workspace (`DocsTab.tsx`,
+//! `FileEditor.tsx`): made when they first show, kept while the same task (and, for the editor,
+//! the same file) is open. Only the one that shows (in main, or the Docs list in the panel) reads
+//! again when the workspace changes (`dirty_reads`); a hidden one reads again when it shows.
 
 use ui::prelude::*;
 
 use super::WorkspaceView;
-use crate::app::tab_rules::dirty_reads;
+use crate::app::tab_rules::{DirtyReads, dirty_reads};
 use crate::app::view_rules::WorkspaceTab;
 use crate::files::file_editor::FileEditor;
-use crate::workspaces::docs_tab::DocsTab;
 
 impl WorkspaceView {
     pub(super) fn docs_body(
@@ -20,20 +19,14 @@ impl WorkspaceView {
     ) -> AnyElement {
         let shows_again =
             self.file_tab_shown.replace(WorkspaceTab::Docs) != Some(WorkspaceTab::Docs);
-        let docs = match &self.docs {
-            Some(docs) if docs.read(cx).task_id() == task_id => {
-                if shows_again {
-                    docs.update(cx, |docs, cx| docs.refresh(cx));
-                }
-                docs.clone()
-            }
-            _ => {
-                let (dashboard, id) = (self.dashboard.clone(), task_id.to_owned());
-                let docs = cx.new(|cx| DocsTab::new(dashboard, id, window, cx));
-                self.docs = Some(docs.clone());
-                docs
-            }
-        };
+        let made = self
+            .docs
+            .as_ref()
+            .is_some_and(|docs| docs.read(cx).task_id() == task_id);
+        let docs = self.docs_of(task_id, window, cx);
+        if made && shows_again {
+            docs.update(cx, |docs, cx| docs.refresh(cx));
+        }
         let picked = self
             .dashboard
             .update(cx, |dashboard, _| dashboard.take_doc_request(task_id));
@@ -81,8 +74,7 @@ impl WorkspaceView {
 
     /// `workspace.dirty`, the fallback poll: the stage files or the open file, if it shows.
     pub(super) fn refresh_file_tabs(&mut self, cx: &mut Context<Self>) {
-        let tab = self.dashboard.read(cx).shown_workspace_tab();
-        let reads = dirty_reads(Some(tab), None);
+        let reads = self.dirty_reads_now(cx);
         if let Some(docs) = self.docs.as_ref().filter(|_| reads.docs) {
             docs.update(cx, |docs, cx| docs.refresh(cx));
         }
@@ -93,13 +85,18 @@ impl WorkspaceView {
 
     /// A logged change of the task can add a stage file: read while Docs shows.
     pub(super) fn refresh_docs(&mut self, cx: &mut Context<Self>) {
-        let tab = self.dashboard.read(cx).shown_workspace_tab();
-        if let Some(docs) = self
-            .docs
-            .as_ref()
-            .filter(|_| dirty_reads(Some(tab), None).docs)
-        {
+        let docs_shown = self.dirty_reads_now(cx).docs;
+        if let Some(docs) = self.docs.as_ref().filter(|_| docs_shown) {
             docs.update(cx, |docs, cx| docs.refresh(cx));
         }
+    }
+
+    /// What main and the panel show now, for `dirty_reads`.
+    fn dirty_reads_now(&self, cx: &App) -> DirtyReads {
+        let dashboard = self.dashboard.read(cx);
+        let details = dashboard
+            .details_shown()
+            .then(|| dashboard.details_view_now());
+        dirty_reads(Some(dashboard.shown_workspace_tab()), details)
     }
 }

@@ -1,6 +1,7 @@
 //! The editor tab of a workspace (`FileEditor.tsx`): the header, the banner for a file that
 //! changed on disk, and the body. One editor per task and file; the unsaved text is a draft in
-//! the `DraftStore`, so it stays when this view is dropped.
+//! the `DraftStore`, so it stays when this view is dropped. It covers the terminals in main, so
+//! its header ends with the Terminals button.
 
 use gpui::{ClickEvent, Entity, FocusHandle, Focusable, Subscription};
 use natamux_proto::workspaces::files::WorkspaceFile;
@@ -16,10 +17,12 @@ use super::file_icon_view::file_icon;
 use crate::app::dashboard::Dashboard;
 use crate::app::shortcuts::SaveFile;
 use crate::app::source::reason;
+use crate::app::view_rules::WorkspaceTab;
 use crate::components::button_style::{action_button, key_hint, quiet_button};
 use crate::components::colors::signal;
 use crate::components::confirm::Confirm;
 use crate::components::skeleton::SkeletonList;
+use crate::components::terminals_button::terminals_button;
 use crate::git::change_rules::split_path;
 use crate::terminals::pane_header::icon_button;
 
@@ -252,6 +255,7 @@ impl FileEditor {
         let has_draft = draft.is_some();
         let can = can_save(draft.as_ref(), stale, self.saving);
         let colors = cx.theme().colors();
+        let dashboard = self.dashboard.clone();
         h_flex()
             .min_h(rems_from_px(40.0_f32))
             .flex_none()
@@ -297,6 +301,11 @@ impl FileEditor {
                     .on_click(
                         cx.listener(|this, _: &ClickEvent, window, cx| this.close(window, cx)),
                     ),
+            )
+            .child(
+                terminals_button("editor-terminals").on_click(move |_, _, cx| {
+                    dashboard.update(cx, |d, cx| d.pick_tab(WorkspaceTab::Terminal, cx));
+                }),
             )
     }
 

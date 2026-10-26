@@ -38,6 +38,7 @@ use crate::palette::palette_layer::PaletteLayer;
 use crate::sidebar::sidebar::Sidebar;
 use crate::tasks::add_task_dialog;
 use crate::tasks::details_panel::DetailsPanel;
+use crate::tasks::details_rail::DetailsRail;
 use crate::tasks::task_view::TaskView;
 use crate::terminals::agent_panes::AgentPanes;
 use crate::terminals::terminal_cache::{Owner, TerminalCache};
@@ -62,6 +63,8 @@ pub struct Root {
     workspace: Entity<WorkspaceView>,
     agents: Entity<AgentPanes>,
     details: Entity<DetailsPanel>,
+    /// The details panel's views at the right edge (T-0183).
+    rail: Entity<DetailsRail>,
     settings: Entity<SettingsView>,
     tool: Tool,
     /// `--gate2`: a bench whose shells keep printing while main shows All tasks.
@@ -109,7 +112,9 @@ impl Root {
         let source = source.ok();
         let workspace = cx.new(|cx| WorkspaceView::new(dashboard.clone(), cx));
         let agents = cx.new(|cx| AgentPanes::new(dashboard.clone(), cx));
-        let details = cx.new(|cx| DetailsPanel::new(dashboard.clone(), window, cx));
+        let details =
+            cx.new(|cx| DetailsPanel::new(dashboard.clone(), workspace.clone(), window, cx));
+        let rail = cx.new(|cx| DetailsRail::new(dashboard.clone(), details.clone(), cx));
         let settings = cx.new(|cx| SettingsView::new(dashboard.clone(), window, cx));
         cx.subscribe_in(&dashboard, window, Self::on_dashboard)
             .detach();
@@ -131,6 +136,7 @@ impl Root {
             workspace,
             agents,
             details,
+            rail,
             settings,
             tool: Tool::None,
             parked_bench: None,
@@ -271,6 +277,8 @@ impl Root {
         } else {
             0.
         };
+        // The rail's 40 px are not counted: at 1024 wide the panel still docks beside the
+        // sidebar (main 384) instead of covering the diff as a sheet.
         decide_layout(LayoutInput {
             width: Some(width),
             sidebar_width,

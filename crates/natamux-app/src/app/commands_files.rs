@@ -1,6 +1,6 @@
-//! Screen 6's commands: the Docs tab, the open file and the files of the worktree (`view.ts` of
-//! the web), Save in the editor tab, and closing and reopening the tabs. Same registry as `commands.rs`; `all_commands` joins the
-//! lists. The actions are declared here; `shortcuts.rs` maps the ids to them.
+//! Screen 6's commands: Docs, the open file and the files of the worktree (`view.ts` of the web),
+//! Save in the editor, and closing the open file. Same registry as `commands.rs`; `all_commands`
+//! joins the lists. The actions are declared here; `shortcuts.rs` maps the ids to them.
 
 use gpui::actions;
 
@@ -16,8 +16,7 @@ actions!(
         ShowOpenFile,
         ShowWorktreeFiles,
         SaveFile,
-        CloseTab,
-        ReopenTabs
+        CloseTab
     ]
 );
 
@@ -34,7 +33,7 @@ const fn in_workspace(command: Command) -> Command {
 pub const FILE_COMMANDS: &[Command] = &[
     in_workspace(keys(
         group(
-            command("tab.docs", "Show the Docs tab", Category::View),
+            command("tab.docs", "Show Docs", Category::View),
             SheetGroup::SingleKeys,
         ),
         &["4"],
@@ -59,18 +58,13 @@ pub const FILE_COMMANDS: &[Command] = &[
         &["Mod+S"],
         &[FILE_EDITOR],
     )),
-    // T-0158: the workspace tabs close as Zed's pane tabs. Terminal stays.
+    // T-0183: no tabs to close; Mod+W closes the open file.
     in_workspace(keys(
         group(
-            command("tab.close", "Close the tab", Category::View),
+            command("tab.close", "Close the file", Category::View),
             SheetGroup::Global,
         ),
         &["Mod+W"],
         &[],
-    )),
-    in_workspace(command(
-        "tab.reopen",
-        "Reopen the closed tabs",
-        Category::View,
     )),
 ];

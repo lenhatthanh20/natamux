@@ -18,7 +18,7 @@ use super::dashboard_data::{BulkRuns, DashboardData, Link};
 use super::settings_rules::{SettingsFocus, SettingsPage};
 use super::source::{Rows, Source};
 use super::view_rules::{
-    Entries, ShellRequest, WorkspaceTab, request_on_open, seen_after_list, toggle_pin, with_recent,
+    ShellRequest, WorkspaceTab, request_on_open, seen_after_list, toggle_pin, with_recent,
     with_seen,
 };
 use super::view_state::{self, Layout, ViewState};
@@ -90,8 +90,8 @@ pub struct Dashboard {
     pub workspace_tab: WorkspaceTab,
     pub commit_request: Option<String>,
     pub files: tabs::FileViews,
-    /// The tabs the user closed in each task's workspace, this run only (T-0158).
-    pub closed_tabs: Entries<Vec<WorkspaceTab>>,
+    /// The open task and its count of files to commit (`set_open_changes`).
+    pub open_changes: Option<(String, usize)>,
     /// The project last picked in Add task; Import issues starts on it.
     pub last_add_repo: Option<String>,
     pub panel_request: Option<(String, details::PanelRequest)>,
@@ -143,7 +143,7 @@ impl Dashboard {
             workspace_tab: WorkspaceTab::Terminal,
             commit_request: None,
             files: tabs::FileViews::default(),
-            closed_tabs: Vec::new(),
+            open_changes: None,
             last_add_repo: None,
             panel_request: None,
             terminal_readers: RefCell::new(BTreeMap::new()),
@@ -320,9 +320,13 @@ impl Dashboard {
     }
 
     /// Opens the task's workspace on one terminal: a sidebar terminal row and the Answer button
-    /// (`requestShell`). `name` None: the first agent terminal.
+    /// (`requestShell`). `name` None: the first agent terminal. Main shows the terminals, also
+    /// when Changes or Docs covered them.
     pub fn open_shell(&mut self, id: &str, name: Option<String>, cx: &mut Context<Self>) {
         self.open(id, cx);
+        if self.open_task.as_deref() == Some(id) {
+            self.pick_tab(WorkspaceTab::Terminal, cx);
+        }
         if name.is_some() && self.open_task.as_deref() == Some(id) {
             self.shell_request = Some(ShellRequest {
                 task_id: id.to_owned(),

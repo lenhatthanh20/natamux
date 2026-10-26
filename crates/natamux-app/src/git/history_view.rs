@@ -151,9 +151,12 @@ fn ref_chip(
     muted: bool,
     cx: &App,
 ) -> impl IntoElement {
+    // Shrinks with the row: in the narrow details panel (T-0183) a long name would cover the
+    // subject.
     div()
         .id(id)
-        .flex_none()
+        .min_w_0()
+        .flex_shrink(1.)
         .max_w(px(160.))
         .px_1p5()
         .rounded_sm()
@@ -222,6 +225,9 @@ fn commit_row(
     let age = format_age(&commit.date, now, AgeStyle::Short, OFFSET_MINUTES);
     h_flex()
         .id(element_id("history-row", index))
+        .when(narrow, |row| {
+            row.tooltip(Tooltip::text(commit.hash.clone()))
+        })
         .flex_none()
         .h(px(ROW_HEIGHT))
         .items_center()
@@ -242,12 +248,13 @@ fn commit_row(
                 .color(Color::Muted);
             this.child(div().flex_none().max_w(px(160.)).child(author.truncate()))
         })
-        .child(hash_cell(index, commit, cx))
+        // The narrow panel keeps the subject: the hash is in the row's tooltip there.
+        .when(!narrow, |this| this.child(hash_cell(index, commit, cx)))
         .child(
             h_flex()
                 .id(element_id("history-age", index))
                 .flex_none()
-                .w(px(80.))
+                .w(px(if narrow { 40. } else { 80. }))
                 .justify_end()
                 .tooltip(Tooltip::text(format_exact(&commit.date, OFFSET_MINUTES)))
                 .child(Label::new(age).color(Color::Muted).single_line()),
