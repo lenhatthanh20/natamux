@@ -44,6 +44,10 @@ pub struct EntryState {
     pub hidden_at: u64,
     /// Its task is gone, finished or has no workspace: its shell ends once no client is left.
     pub task_ends: bool,
+    /// Shown at the last settle.
+    pub was_shown: bool,
+    /// The daemon closed its shell: it ended with no exit code.
+    pub closed: bool,
 }
 
 /// The hidden entries to free: those of tasks whose shells end, those hidden longer than the
@@ -65,10 +69,22 @@ pub fn evictions(entries: &[EntryState], now: u64) -> Vec<String> {
     out
 }
 
+/// The entries to free as a view shows them again: the daemon closed their shell, so the name
+/// now belongs to a new shell, which a new terminal attaches to (T-0191). A shell that ended with
+/// an exit code keeps its last screen, and one that stayed on screen waits for the list to drop it.
+pub fn reshown_closed(entries: &[EntryState]) -> Vec<String> {
+    entries
+        .iter()
+        .filter(|entry| entry.closed && entry.shown && !entry.was_shown)
+        .map(|entry| entry.key.clone())
+        .collect()
+}
+
 struct Entry {
     terminal: Entity<RemoteTerminal>,
     find: Option<Entity<TerminalFind>>,
     hidden_at: u64,
+    shown: bool,
 }
 
 #[derive(Default)]
@@ -116,6 +132,8 @@ impl TerminalCache {
                 terminal: terminal.clone(),
                 find: None,
                 hidden_at: now_ms(),
+                // Made for a view that shows it.
+                shown: true,
             },
         );
         terminal
@@ -176,6 +194,21 @@ impl TerminalCache {
 
     fn settle(cx: &mut App) {
         let now = now_ms();
+        let terminals: Vec<(String, Entity<RemoteTerminal>)> = Self::global(cx)
+            .entries
+            .iter()
+            .map(|(key, entry)| (key.clone(), entry.terminal.clone()))
+            .collect();
+        let closed: BTreeSet<String> = terminals
+            .iter()
+            .filter(|(_, terminal)| {
+                matches!(
+                    terminal.read(cx).status(),
+                    TerminalStatus::Ended { code: None }
+                )
+            })
+            .map(|(key, _)| key.clone())
+            .collect();
         let cache = Self::global(cx);
         let shown: BTreeSet<String> = cache.claims.values().flatten().cloned().collect();
         // A shown terminal leaves the screen at the last time it was shown.
@@ -192,9 +225,17 @@ impl TerminalCache {
                 shown: shown.contains(key),
                 hidden_at: entry.hidden_at,
                 task_ends: !cache.live.contains(task_of(key)),
+                was_shown: entry.shown,
+                closed: closed.contains(key),
             })
             .collect();
-        for key in evictions(&states, now) {
+        for (key, entry) in &mut cache.entries {
+            entry.shown = shown.contains(key);
+        }
+        for key in reshown_closed(&states)
+            .into_iter()
+            .chain(evictions(&states, now))
+        {
             cache.entries.remove(&key);
         }
         let terminals: Vec<(Entity<RemoteTerminal>, bool)> = cache
@@ -218,7 +259,32 @@ mod tests {
             shown,
             hidden_at,
             task_ends,
+            was_shown: shown,
+            closed: false,
         }
+    }
+
+    fn reshown(key: &str, was_shown: bool, closed: bool) -> EntryState {
+        EntryState {
+            was_shown,
+            closed,
+            ..entry(key, true, 0, false)
+        }
+    }
+
+    /// T-0191: a stage ran again in a terminal the daemon closed while it was off screen.
+    #[test]
+    fn frees_a_closed_terminal_that_comes_back_on_screen() {
+        let entries = [
+            reshown("T-1/10", false, true),
+            reshown("T-1/11", true, true),
+            reshown("T-1/12", false, false),
+            EntryState {
+                shown: false,
+                ..reshown("T-1/13", false, true)
+            },
+        ];
+        assert_eq!(reshown_closed(&entries), ["T-1/10"]);
     }
 
     #[test]
@@ -270,6 +336,59 @@ mod tests {
         let second =
             window.update(|window, cx| TerminalCache::terminal(&source, "T-1", "1", window, cx));
         assert_ne!(first.entity_id(), second.entity_id());
+    }
+
+    /// T-0191: Review closed Terminal 10 at its agent's turn end and ran again in a new
+    /// Terminal 10. The pane showed the old one, ended, while the new agent worked.
+    #[gpui::test]
+    fn a_closed_terminal_that_comes_back_is_a_new_one(cx: &mut gpui::TestAppContext) {
+        crate::app::test_views::init(cx);
+        let source = Arc::new(Source::FakeDaemon);
+        let window = cx.add_empty_window();
+        let ten = || BTreeSet::from(["T-1/10".to_owned()]);
+        let first = window.update(|window, cx| {
+            TerminalCache::set_live(BTreeSet::from(["T-1".to_owned()]), cx);
+            TerminalCache::claim(Owner::Workspace, ten(), cx);
+            TerminalCache::terminal(&source, "T-1", "10", window, cx)
+        });
+        // The list drops the closed shell before its socket says how it ended.
+        window.update(|_, cx| {
+            TerminalCache::claim(Owner::Workspace, BTreeSet::new(), cx);
+            first.update(cx, |terminal, _| {
+                terminal.set_status(TerminalStatus::Ended { code: None });
+            });
+        });
+        let kept = window.update(|_, cx| TerminalCache::cached("T-1/10", cx).is_some());
+        assert!(kept, "a hidden terminal of a live task stays");
+        let second = window.update(|window, cx| {
+            TerminalCache::claim(Owner::Workspace, ten(), cx);
+            TerminalCache::terminal(&source, "T-1", "10", window, cx)
+        });
+        assert_ne!(first.entity_id(), second.entity_id());
+    }
+
+    /// A shell that ended with an exit code keeps its last screen when its pane comes back.
+    #[gpui::test]
+    fn an_exited_terminal_that_comes_back_is_the_same(cx: &mut gpui::TestAppContext) {
+        crate::app::test_views::init(cx);
+        let source = Arc::new(Source::FakeDaemon);
+        let window = cx.add_empty_window();
+        let two = || BTreeSet::from(["T-1/2".to_owned()]);
+        let first = window.update(|window, cx| {
+            TerminalCache::set_live(BTreeSet::from(["T-1".to_owned()]), cx);
+            TerminalCache::claim(Owner::Workspace, two(), cx);
+            let terminal = TerminalCache::terminal(&source, "T-1", "2", window, cx);
+            terminal.update(cx, |terminal, _| {
+                terminal.set_status(TerminalStatus::Ended { code: Some(0) });
+            });
+            TerminalCache::claim(Owner::Workspace, BTreeSet::new(), cx);
+            terminal
+        });
+        let second = window.update(|window, cx| {
+            TerminalCache::claim(Owner::Workspace, two(), cx);
+            TerminalCache::terminal(&source, "T-1", "2", window, cx)
+        });
+        assert_eq!(first.entity_id(), second.entity_id());
     }
 
     #[test]

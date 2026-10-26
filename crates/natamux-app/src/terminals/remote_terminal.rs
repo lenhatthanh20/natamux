@@ -142,6 +142,12 @@ impl RemoteTerminal {
         &self.terminal
     }
 
+    /// For the cache's tests: the fake daemon's terminals never end.
+    #[cfg(test)]
+    pub fn set_status(&mut self, status: TerminalStatus) {
+        self.status = status;
+    }
+
     pub fn replaying(&self) -> bool {
         self.replaying
     }
