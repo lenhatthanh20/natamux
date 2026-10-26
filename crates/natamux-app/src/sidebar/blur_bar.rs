@@ -151,7 +151,6 @@ impl RenderOnce for BlurBar {
             }]);
         div()
             .relative()
-            .flex_shrink()
             .min_w_0()
             .overflow_hidden()
             .w(px(width + 2.0 * edge))
