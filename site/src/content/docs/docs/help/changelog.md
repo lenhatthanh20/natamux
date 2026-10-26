@@ -11,6 +11,7 @@ All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/r
 
 - An agent may now send a task back from one stage any number of times; before, it stopped after 2. To set a limit, type a number in **Agent send backs** on the **Stages** tab of a project's settings, or set `agents.maxSendBacks` in `.natamux.json`. Past the limit the task waits for you, as before. The limit counts CI failures too. See [Limit the send backs](/docs/guides/project-settings/#limit-the-send-backs).
 - In the desktop app, a project with **Blur names** on shows its names, titles and labels as soft blurred bars, as the web dashboard blurs them, and not as dots. Tooltips still show dots.
+- Fix: with a send-back limit, after a person sent a task back or approved it, the next agent send back from that stage could be refused at once. Now the limit counts only the agent send backs since the last action of a person on that stage.
 
 ## v1.0.2 (2026-10-26)
 
