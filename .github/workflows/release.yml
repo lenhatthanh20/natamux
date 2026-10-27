@@ -103,6 +103,17 @@ jobs:
             target
           key: rust-app-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-${{ github.sha }}
           restore-keys: rust-app-${{ runner.os }}-
+      # The apt packages come from this cache: a run downloads only what it has not seen.
+      - name: Make the apt cache writable
+        if: runner.os == 'Linux'
+        run: sudo chown -R "$USER" /var/cache/apt/archives
+      - id: apt
+        if: runner.os == 'Linux'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /var/cache/apt/archives
+          key: apt-${{ runner.os }}-${{ hashFiles('.github/workflows/release.yml') }}-${{ github.sha }}
+          restore-keys: apt-${{ runner.os }}-${{ hashFiles('.github/workflows/release.yml') }}-
       - name: Install Linux build tools
         if: runner.os == 'Linux'
         env:
@@ -126,6 +137,12 @@ jobs:
             [[ $digest =~ ^sha256:[0-9a-f]{64}$ ]]
             echo "${digest#sha256:}  $RUNNER_TEMP/$file" | sha256sum -c
           done
+      - name: Save the apt cache
+        if: ${{ !cancelled() && runner.os == 'Linux' && steps.apt.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /var/cache/apt/archives
+          key: apt-${{ runner.os }}-${{ hashFiles('.github/workflows/release.yml') }}-${{ github.sha }}
           chmod +x "$RUNNER_TEMP/appimagetool-x86_64.AppImage"
       - name: Install Windows installer tool
         if: runner.os == 'Windows'
