@@ -388,6 +388,42 @@ fn reads_the_most_send_backs_and_has_no_limit_without_it() {
 }
 
 #[test]
+fn reads_the_idle_pause_minutes_and_writes_them_only_when_set() {
+    let setup = setup();
+    let agents = || setup.repos.settings_of(None).agents;
+    assert_eq!(agents().pause_idle_minutes(), Some(30));
+    assert!(
+        setup.load()["settings"]["agents"]
+            .get("pauseIdleAfterMinutes")
+            .is_none()
+    );
+
+    write(
+        setup.file(),
+        r#"{ "agents": { "pauseIdleAfterMinutes": 0 } }"#,
+    )
+    .unwrap();
+    touch(&setup.file(), 1);
+    setup.later(1000);
+    assert_eq!(agents().pause_idle_minutes(), None);
+    assert_eq!(
+        setup.load()["settings"]["agents"]["pauseIdleAfterMinutes"],
+        0
+    );
+
+    write(
+        setup.file(),
+        r#"{ "agents": { "pauseIdleAfterMinutes": 3 } }"#,
+    )
+    .unwrap();
+    touch(&setup.file(), 2);
+    setup.later(1000);
+    let loaded = setup.load();
+    assert!(error_of(&loaded).contains("agents.pauseIdleAfterMinutes"));
+    assert_eq!(agents().pause_idle_minutes(), Some(30));
+}
+
+#[test]
 fn gives_tasks_of_a_removed_repository_the_defaults_but_does_not_load_or_save_it() {
     let setup = setup();
     assert_eq!(setup.repos.settings_of(Some("gone")), default_settings());

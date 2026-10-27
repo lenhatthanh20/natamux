@@ -10,6 +10,7 @@ mod input_del;
 mod last_screen;
 mod on_output;
 mod paste;
+mod pausing;
 mod several_terminals;
 mod shells_changed;
 mod size_shared;

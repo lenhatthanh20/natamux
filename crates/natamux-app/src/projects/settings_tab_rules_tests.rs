@@ -205,3 +205,14 @@ fn reads_the_send_backs_field_as_no_limit_or_a_whole_number() {
         assert_eq!(send_backs_field(bad), Err(SEND_BACKS_ERROR), "{bad}");
     }
 }
+
+#[test]
+fn reads_the_idle_pause_field_as_the_default_off_or_5_to_1440_minutes() {
+    assert_eq!(idle_pause_field(""), Ok(None));
+    assert_eq!(idle_pause_field("0"), Ok(Some(0)));
+    assert_eq!(idle_pause_field(" 5 "), Ok(Some(5)));
+    assert_eq!(idle_pause_field("1440"), Ok(Some(1440)));
+    for bad in ["4", "1441", "-1", "30.5", "half"] {
+        assert_eq!(idle_pause_field(bad), Err(IDLE_PAUSE_ERROR), "{bad}");
+    }
+}

@@ -343,6 +343,7 @@ The issue gets the task title. Its body is the spec, or the task notes without o
 |---|---|---|---|
 | `permissionMode` | `auto` or `ask` | `auto` | `auto` starts each agent with the flag below, so it asks for permission less often. `ask` adds no flag: each agent follows your own settings. |
 | `maxSendBacks` | whole number, 0 or more | none (no limit) | The most times an agent, or a CI failure, may send the task back from one stage since you last stepped in. Then the stage waits for you. `0`: an agent never sends back by itself. See [The review loop](/docs/concepts/review-loop/#limits). |
+| `pauseIdleAfterMinutes` | whole number, `0` or 5 to 1440 | `30` | After how many idle minutes Natamux pauses an agent that ended its turn in a terminal nobody looks at. It ends the terminal and keeps the conversation. `0`: never. See [An idle agent pauses](/docs/guides/terminal/#an-idle-agent-pauses). |
 
 The flag of each agent in `auto`:
 
@@ -366,6 +367,12 @@ To stop two agents that disagree from sending a task back and forth, set a limit
 
 ```json
 { "agents": { "maxSendBacks": 2 } }
+```
+
+To keep idle agents running, turn the pause off:
+
+```json
+{ "agents": { "pauseIdleAfterMinutes": 0 } }
 ```
 
 ## Examples

@@ -41,6 +41,7 @@ export function createTerminalSession(options: {
       scrolledUp: false,
       catchingUp: false,
       exitCode: null,
+      pausedMinutes: null,
     },
     theme,
     measuredFont,
@@ -72,7 +73,8 @@ export function createTerminalSession(options: {
       next.error === state.error &&
       next.scrolledUp === state.scrolledUp &&
       next.catchingUp === state.catchingUp &&
-      next.exitCode === state.exitCode
+      next.exitCode === state.exitCode &&
+      next.pausedMinutes === state.pausedMinutes
     ) {
       return
     }
@@ -112,7 +114,7 @@ export function createTerminalSession(options: {
     setOnScreen,
   } = layout
   const catchUps = createCatchUp(s, { ...sender, ...layout })
-  const { open, retry, cancelRetry, onPageVisibility, stopHeartbeat } = createConnection(s, {
+  const { open, retry, cancelRetry, wake, onPageVisibility, stopHeartbeat } = createConnection(s, {
     connect,
     random,
     update,
@@ -121,6 +123,13 @@ export function createTerminalSession(options: {
     ...layout,
     ...catchUps,
   })
+  // Coming on screen wakes a paused terminal.
+  const onScreenNow = (onScreen: boolean) => {
+    setOnScreen(onScreen)
+    if (onScreen) {
+      wake()
+    }
+  }
 
   // A key's data comes inside xterm's keydown listener on the textarea. The capture listener on
   // the element runs before it, and the textarea listener of the code after it (spec 6).
@@ -158,7 +167,11 @@ export function createTerminalSession(options: {
 
     subscriptions.push(
       terminal.onData((data) => {
-        if (s.catchUp === null) {
+        if (s.state.status === 'paused') {
+          // Sent after the catch-up of the socket that brings the agent back.
+          s.typed.push(data)
+          wake()
+        } else if (s.catchUp === null) {
           sendInput(data)
         } else if (fromUser || !isQueryReply(data)) {
           // Sent after the catch-up. A reply to a replayed query is dropped: it is not the user's,
@@ -207,7 +220,7 @@ export function createTerminalSession(options: {
     observer.observe(container)
     // Takes the settings changed while hidden, and fits once. The fit sends a resize only when
     // the pane's size changed.
-    setOnScreen(true)
+    onScreenNow(true)
     if (again) {
       // The element moved; draw it fresh.
       terminal.refresh(0, terminal.rows - 1)
@@ -297,7 +310,7 @@ export function createTerminalSession(options: {
     },
     show,
     hide,
-    setOnScreen,
+    setOnScreen: onScreenNow,
     applySettings,
     dispose,
   }

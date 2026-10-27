@@ -67,6 +67,8 @@ pub struct AgentLaunch {
     pub program: String,
     /// The session the agent went on with.
     pub session: Option<String>,
+    /// It came back in its shell with no prompt, so it waits at its prompt.
+    pub restored: bool,
 }
 
 pub type OnLaunch = Arc<dyn Fn(&AgentLaunch) + Send + Sync>;
@@ -156,8 +158,8 @@ impl AgentRunner {
     }
 
     /// Starts the agent in a terminal of the task: the first by default, another for a stage
-    /// that runs beside the first one. With a session, the agent goes on with it and gets no
-    /// prompt.
+    /// that runs beside the first one. With a session, the agent goes on with it and gets only
+    /// the prompt given, if any.
     pub fn start(
         &self,
         task_id: &str,
@@ -194,6 +196,7 @@ impl AgentRunner {
                 agent: agent.into(),
                 program: program.clone(),
                 session: resumed.map(str::to_string),
+                restored: own.restored,
             });
         }
         let restored_in = own.restored.then_some(shell);
@@ -229,11 +232,12 @@ impl AgentRunner {
         .flatten()
         .filter(|words| !words.is_empty())
         .collect();
-        let text = match session {
-            None => one_line(&plain_text(
+        let text = match (session, prompt) {
+            (None, _) => one_line(&plain_text(
                 &prompt.map_or_else(|| first_prompt(task), str::to_string),
             )),
-            Some(_) => String::new(),
+            (Some(_), Some(prompt)) => one_line(&plain_text(prompt)),
+            (Some(_), None) => String::new(),
         };
         launch_command(
             agent,

@@ -11,12 +11,19 @@ use natamux_proto::terminals::query::is_terminal_name;
 use serde::{Deserialize, Serialize};
 
 /// A shell that was open: the agent that ran in it and the last session that agent reported.
-/// None: a plain shell, or no session yet.
+/// None: a plain shell, or no session yet. `paused`: the daemon ended its idle agent, which
+/// starts again only when the task is opened, not when the daemon starts.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OpenShell {
     pub name: String,
     pub agent: Option<String>,
     pub session: Option<String>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub paused: bool,
+}
+
+fn is_false(value: &bool) -> bool {
+    !value
 }
 
 pub fn tasks_dir(data_dir: &Path) -> PathBuf {

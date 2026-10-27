@@ -38,9 +38,16 @@ export const PERMISSION_MODES = ['auto', 'ask'] as const
 export type PermissionMode = (typeof PERMISSION_MODES)[number]
 
 // `maxSendBacks` left out: an agent may send a task back any number of times.
+// `pauseIdleAfterMinutes` left out: an idle agent that no one looks at pauses after 30 minutes.
 export const agentSettingsSchema = z.object({
   permissionMode: z.enum(PERMISSION_MODES).default('auto'),
   maxSendBacks: z.number().int().min(0).optional(),
+  pauseIdleAfterMinutes: z
+    .number()
+    .int()
+    .min(0)
+    .refine((minutes) => minutes === 0 || (minutes >= 5 && minutes <= 1440), '0 (off) or 5 to 1440')
+    .optional(),
 })
 
 // `.natamux.json` at the root of a repository. Every field may be left out.

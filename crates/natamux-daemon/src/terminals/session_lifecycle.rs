@@ -195,8 +195,8 @@ fn stop_kill_timer(session: &mut Session) {
 }
 
 /// Ends a shell that the service already forgot. `strong` keeps the session alive until the
-/// SIGKILL went out or is not needed.
-pub fn close_session(session: &mut Session, strong: SessionRef) {
+/// SIGKILL went out or is not needed. Each client gets `farewell`: `exit`, or `paused`.
+pub fn close_session(session: &mut Session, strong: SessionRef, farewell: ServerMessage) {
     let scheduler = Arc::clone(&session.scheduler);
     scheduler.clear(&mut session.idle_timer);
     scheduler.clear(&mut session.write_timer);
@@ -204,7 +204,7 @@ pub fn close_session(session: &mut Session, strong: SessionRef) {
     flush_output(session);
     end_snapshots(session);
     for (client, _) in session.clients.drain(..) {
-        client.send(Frame::Message(ServerMessage::Exit { code: None }));
+        client.send(Frame::Message(farewell.clone()));
     }
     // A shell that ignores SIGHUP (or a program in it that does) must not stay alive.
     let killing = Arc::clone(&strong);

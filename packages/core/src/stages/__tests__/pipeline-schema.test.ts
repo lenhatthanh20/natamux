@@ -308,6 +308,20 @@ describe('projectSettingsSchema', () => {
     }
   })
 
+  it('takes 0 or 5 to 1440 minutes before an idle agent pauses', () => {
+    const minutes = (agents: unknown) =>
+      projectSettingsSchema.parse({ agents }).agents.pauseIdleAfterMinutes
+    expect(minutes({})).toBeUndefined()
+    for (const value of [0, 5, 30, 1440]) {
+      expect(minutes({ pauseIdleAfterMinutes: value })).toBe(value)
+    }
+    for (const value of [1, 4, 1441, -1, 2.5, '30']) {
+      const wrong = projectSettingsSchema.safeParse({ agents: { pauseIdleAfterMinutes: value } })
+      expect(wrong.success).toBe(false)
+      expect(wrong.error?.issues[0]?.path).toEqual(['agents', 'pauseIdleAfterMinutes'])
+    }
+  })
+
   it('reads context sources by type', () => {
     const settings = projectSettingsSchema.parse({
       context: {

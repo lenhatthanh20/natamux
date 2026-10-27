@@ -567,6 +567,39 @@ describe('TerminalView read-only after the end', () => {
   })
 })
 
+describe('TerminalView of a paused agent (T-0202)', () => {
+  it('keeps the screen dimmed under a bar, and starts again on a key', async () => {
+    const { made, connect, terminal } = await taskTerminal('running')
+    act(() => made[0]?.bytes('> agent'))
+    act(() => made[0]?.message({ type: 'paused', minutes: 30 }))
+
+    expect(screen.getAllByRole('status')).toHaveLength(1)
+    expect(status()).toBe('Paused after 30 min idle. Starts again when shown.')
+    expect(dimmed()).toBe(true)
+    expect(newShell()).toBeNull()
+    expect(terminal.written).toContain('> agent')
+
+    act(() => terminal.fire('data', 'a'))
+    await flush()
+    expect(connect).toHaveBeenCalledTimes(2)
+    expect(status()).toBe('Connecting.')
+    expect(dimmed()).toBe(false)
+  })
+
+  it('drops the restore spinner, so only the pause shows', async () => {
+    const LINE = 'Restoring GitHub Copilot…'
+    const { made, connect } = sockets(1)
+    render(<TerminalView connect={connect} restoring={LINE} />)
+    await flush()
+    act(() => made[0]?.open())
+
+    act(() => made[0]?.message({ type: 'paused', minutes: 30 }))
+    act(() => vi.advanceTimersByTime(RESTORE_FADE_MS))
+    expect(screen.queryByText(LINE)).toBeNull()
+    expect(status()).toBe('Paused after 30 min idle. Starts again when shown.')
+  })
+})
+
 describe('TerminalView open a new shell', () => {
   it('says what the button does, in a status bar', async () => {
     const { made } = await taskTerminal('done')

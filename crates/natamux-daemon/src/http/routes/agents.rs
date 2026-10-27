@@ -223,13 +223,16 @@ pub async fn message(state: Arc<AppState>, id: String, body: Option<Value>) -> A
     };
     stage_answer(StatusCode::OK, move || {
         state.tasks.get_task(&id)?;
-        // Pasted into a shell, the lines of the comment would run as commands.
-        if !state.stages.run.agent_runs(&id, MAIN_TERMINAL) {
-            return Err(action(format!(
-                "No agent runs in the terminal of {id}. Start the agent first"
-            )));
+        let run = &state.stages.run;
+        if !run.wake_paused(&id, MAIN_TERMINAL, &text)? {
+            // Pasted into a shell, the lines of the comment would run as commands.
+            if !run.agent_runs(&id, MAIN_TERMINAL) {
+                return Err(action(format!(
+                    "No agent runs in the terminal of {id}. Start the agent first"
+                )));
+            }
+            state.terminals.paste(&id, &text, MAIN_TERMINAL)?;
         }
-        state.terminals.paste(&id, &text, MAIN_TERMINAL)?;
         let task = state.tasks.record_review_comment(&id, &text)?;
         Ok(json!({ "task": to_value(&task) }))
     })

@@ -6,5 +6,6 @@
 
 mod basic;
 mod fixture;
+mod paused;
 mod programs;
 mod restarts;

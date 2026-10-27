@@ -140,6 +140,7 @@ fn is_inside(folder: &str, path: &str) -> bool {
 pub type SessionSeen = Arc<dyn Fn(&str, &str, &str, &str) + Send + Sync>;
 pub type UsageSeen = Arc<dyn Fn(&str, Option<&str>, &str, &str) + Send + Sync>;
 pub type WorkspaceChanged = Arc<dyn Fn(&str) + Send + Sync>;
+pub type SignalSeen = Arc<dyn Fn(&str, &str, Signal) + Send + Sync>;
 
 pub struct HookOptions {
     /// Dashboards hear of each change of the activity, and of the state of an agent in a shell.
@@ -149,6 +150,9 @@ pub struct HookOptions {
     /// Called with each session a hook names from a Natamux shell: task, terminal, agent,
     /// session. The shell can then come back on it.
     pub session_seen: Option<SessionSeen>,
+    /// Called with the signal of each hook of a task: task, terminal, signal. A turn end that
+    /// reports a stage counts too.
+    pub signal_seen: Option<SignalSeen>,
     /// Called after a turn with the session's usage file and the stage it counts for (None:
     /// none): task, stage, agent, file.
     pub usage_seen: Option<UsageSeen>,
@@ -316,6 +320,9 @@ impl HookService {
             && let Some(changed) = &self.options.workspace_changed
         {
             changed(&task.id);
+        }
+        if let Some(seen) = &self.options.signal_seen {
+            seen(&task.id, shell, hook.signal);
         }
         self.after_noted(&task, &hook, adapter.id(), terminal, shell)
     }

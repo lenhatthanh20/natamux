@@ -35,6 +35,8 @@ services:
     image: ${NATAMUX_DAEMON_IMAGE:-natamux-daemon:local}
     environment:
       NATAMUX_CLAUDE_COMMAND: /opt/natamux/fake-agent.sh
+      # One idle minute is a second, so an agent nobody looks at pauses after 30 s, not 30 min.
+      NATAMUX_IDLE_MINUTE_MS: "1000"
       GIT_AUTHOR_NAME: Natamux e2e
       GIT_AUTHOR_EMAIL: e2e@example.invalid
       GIT_COMMITTER_NAME: Natamux e2e

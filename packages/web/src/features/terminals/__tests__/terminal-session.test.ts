@@ -1668,6 +1668,68 @@ describe('what a reconnect asks for (AC 43, C45)', () => {
   })
 })
 
+describe('a paused agent (T-0202)', () => {
+  it('keeps its screen, lets the socket go, and neither ends nor tries again', async () => {
+    const { session, socket, connect, onEnd, terminal } = await attached()
+    socket.message({ type: 'paused', minutes: 30 })
+    socket.drop(CLOSE_GONE)
+    await wait(60_000)
+
+    expect(session.state()).toMatchObject({ status: 'paused', pausedMinutes: 30 })
+    expect(socket.closed).toBe(true)
+    expect(socket.pings).toBe(0)
+    expect(connect).toHaveBeenCalledTimes(1)
+    expect(onEnd).not.toHaveBeenCalled()
+    expect(terminal.written.filter(Boolean)).toEqual(['screen'])
+  })
+
+  it('stays paused while hidden, and asks for a new shell when shown again', async () => {
+    const { session, socket, connect, last } = await attached()
+    session.hide(box())
+    socket.message({ type: 'paused', minutes: 30 })
+    setPageHidden(true)
+    setPageHidden(false)
+    await wait(1000)
+    expect(connect).toHaveBeenCalledTimes(1)
+
+    session.show(box())
+    await flush()
+    expect(connect).toHaveBeenCalledTimes(2)
+    expect(connect).toHaveBeenLastCalledWith({ cols: 80, rows: 24, visible: true })
+    expect(session.state()).toMatchObject({ status: 'connecting', pausedMinutes: null })
+    last().open()
+    expect(session.state().status).toBe('open')
+  })
+
+  it('wakes on a key, and sends the key after the catch-up of the new shell', async () => {
+    const { socket, terminal, last } = await attached()
+    socket.message({ type: 'paused', minutes: 5 })
+    terminal.fire('data', 'y')
+    await flush()
+
+    const next = last()
+    expect(next).not.toBe(socket)
+    next.open()
+    snapshotOf(next, { cols: 80, rows: 24 }, ['agent'], 3)
+    terminal.parse()
+    expect(socket.sent).not.toContainEqual({ type: 'input', data: 'y' })
+    expect(next.sent).toContainEqual({ type: 'input', data: 'y' })
+  })
+
+  it('waits for the page to come back before it wakes', async () => {
+    const { session, socket, connect } = await attached()
+    setPageHidden(true)
+    socket.message({ type: 'paused', minutes: 30 })
+    session.show(box())
+    await flush()
+    expect(connect).toHaveBeenCalledTimes(1)
+
+    setPageHidden(false)
+    await flush()
+    expect(connect).toHaveBeenCalledTimes(2)
+  })
+})
+
 describe('when a lost socket does not come back (AC 29, AC 30, C31, C32)', () => {
   it('makes no new socket after the shell exits', async () => {
     const { session, socket, connect } = await attached()

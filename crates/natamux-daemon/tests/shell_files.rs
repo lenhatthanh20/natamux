@@ -195,6 +195,7 @@ mod the_open_shells_file {
             name: "6".into(),
             agent: Some("copilot".into()),
             session: Some("c-1".into()),
+            paused: false,
         }
     }
 
@@ -225,5 +226,24 @@ mod the_open_shells_file {
 
         fs::write(&path, r#"[{"name":"; rm","agent":null,"session":null}]"#).unwrap();
         assert!(read_open_shells(dir.path(), "T-0076").is_empty());
+    }
+
+    #[test]
+    fn writes_paused_only_for_a_paused_shell_and_reads_older_files_as_not_paused() {
+        let dir = TempDir::new("open");
+        let path = open_shells_path(dir.path(), "T-0202");
+        let paused = OpenShell {
+            paused: true,
+            ..copilot()
+        };
+        save_open_shells(dir.path(), "T-0202", &[paused.clone(), copilot()]).unwrap();
+        assert_eq!(
+            fs::read_to_string(&path).unwrap(),
+            r#"[{"name":"6","agent":"copilot","session":"c-1","paused":true},{"name":"6","agent":"copilot","session":"c-1"}]"#
+        );
+        assert_eq!(read_open_shells(dir.path(), "T-0202")[0], paused);
+
+        fs::write(&path, r#"[{"name":"6","agent":"copilot","session":"c-1"}]"#).unwrap();
+        assert_eq!(read_open_shells(dir.path(), "T-0202"), vec![copilot()]);
     }
 }

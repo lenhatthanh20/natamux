@@ -58,13 +58,18 @@ pub fn ended_text(code: Option<i32>, task_finished: bool) -> String {
     }
 }
 
+/// The paused bar's text.
+pub fn paused_text(minutes: u64) -> String {
+    format!("Paused after {minutes} min idle. Starts again when shown.")
+}
+
 /// The strip at the top of the body while the terminal is not open.
 fn strip_text(status: &TerminalStatus) -> Option<&'static str> {
     match status {
         TerminalStatus::Connecting => Some("Connecting\u{2026}"),
         TerminalStatus::Reconnecting => Some("Reconnecting\u{2026}"),
         TerminalStatus::Failed(_) => Some("The terminal could not start."),
-        TerminalStatus::Open | TerminalStatus::Ended { .. } => None,
+        TerminalStatus::Open | TerminalStatus::Ended { .. } | TerminalStatus::Paused { .. } => None,
     }
 }
 
@@ -259,6 +264,29 @@ impl TerminalPane {
             .children(self.new_terminal_button("again", "Open a new terminal"))
     }
 
+    /// The bar of a terminal whose idle agent paused: dimmed screen above.
+    fn paused_bar(&self, minutes: u64, cx: &App) -> Div {
+        let colors = cx.theme().colors();
+        h_flex()
+            .h(px(32.))
+            .flex_none()
+            .px_2p5()
+            .gap_2()
+            .bg(colors.surface_background)
+            .border_t_1()
+            .border_color(colors.border)
+            .child(
+                Icon::from_path(icon_path("square-terminal"))
+                    .size(IconSize::Small)
+                    .color(Color::Muted),
+            )
+            .child(
+                Label::new(paused_text(minutes))
+                    .size(LabelSize::Small)
+                    .color(Color::Muted),
+            )
+    }
+
     /// The terminal and what lies over it: the skeleton while history is written, the restore
     /// cover, Jump to latest and the find bar.
     fn body(&self, ended: bool, cx: &App) -> Div {
@@ -298,15 +326,24 @@ impl TerminalPane {
 }
 
 impl RenderOnce for TerminalPane {
-    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+    fn render(mut self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let status = self.terminal.read(cx).status().clone();
         let ended = match status {
             TerminalStatus::Ended { code } => Some(code),
             _ => None,
         };
+        let paused = match status {
+            TerminalStatus::Paused { minutes } => Some(minutes),
+            _ => None,
+        };
+        // The open-shells list says the agent comes back; it does once the pane is shown.
+        if paused.is_some() {
+            self.restoring = None;
+        }
         let strip = self.strip(&status, window, cx);
-        let body = self.body(ended.is_some(), cx);
+        let body = self.body(ended.is_some() || paused.is_some(), cx);
         let ended_bar = ended.map(|code| self.ended_bar(code, cx));
+        let paused_bar = paused.map(|minutes| self.paused_bar(minutes, cx));
         let colors = cx.theme().colors();
         let border = if self.focused {
             colors.border_focused
@@ -332,7 +369,8 @@ impl RenderOnce for TerminalPane {
             .child(self.header.focused(self.focused))
             .children(strip)
             .child(body)
-            .children(ended_bar);
+            .children(ended_bar)
+            .children(paused_bar);
         with_drop(pane, &self.terminal, cx)
     }
 }
@@ -422,5 +460,14 @@ mod tests {
         assert_eq!(ended_text(Some(0), false), "The terminal ended.");
         assert_eq!(ended_text(Some(2), true), "The terminal ended.");
         assert_eq!(ended_text(None, false), "The terminal ended.");
+    }
+
+    #[test]
+    fn says_after_how_many_idle_minutes_the_terminal_paused_and_shows_no_strip() {
+        assert_eq!(
+            paused_text(30),
+            "Paused after 30 min idle. Starts again when shown."
+        );
+        assert_eq!(strip_text(&TerminalStatus::Paused { minutes: 30 }), None);
     }
 }

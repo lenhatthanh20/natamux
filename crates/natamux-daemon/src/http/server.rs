@@ -24,6 +24,7 @@ use super::routes::{
 use super::web::WebAssets;
 use super::{event_socket, terminal_socket};
 use crate::agents::hook_service::HookService;
+use crate::agents::idle_pause::IdlePause;
 use crate::agents::runner::AgentRunner;
 use crate::agents::usage_service::UsageService;
 use crate::github::issue_importer::IssueImporter;
@@ -69,6 +70,7 @@ pub struct AppState {
     pub pull_requests: Arc<PullRequestWatcher>,
     pub issues: Arc<IssueImporter>,
     pub issue_linker: Arc<IssueLinker>,
+    pub idle_pause: Arc<IdlePause>,
 }
 
 /// Serves until the listener fails. Each connection runs on its own task.

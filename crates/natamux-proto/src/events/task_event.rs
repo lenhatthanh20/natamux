@@ -6,7 +6,7 @@ use serde_json::{Map, Value};
 
 pub const EVENT_SOURCES: [&str; 5] = ["agent", "human", "git", "ci", "system"];
 
-pub const EVENT_TYPES: [&str; 47] = [
+pub const EVENT_TYPES: [&str; 48] = [
     "task.created",
     "task.readied",
     "task.blocked",
@@ -54,10 +54,11 @@ pub const EVENT_TYPES: [&str; 47] = [
     "stage.ci-started",
     "stage.skip-set",
     "workspace.failed",
+    "agent.paused",
 ];
 
 /// Events the daemon records itself, without a change of state: a client cannot send them.
-pub const RECORD_ONLY_EVENT_TYPES: [&str; 22] = [
+pub const RECORD_ONLY_EVENT_TYPES: [&str; 23] = [
     "task.created",
     "workspace.created",
     "workspace.removed",
@@ -80,6 +81,7 @@ pub const RECORD_ONLY_EVENT_TYPES: [&str; 22] = [
     "stage.ci-started",
     "stage.skip-set",
     "workspace.failed",
+    "agent.paused",
 ];
 
 /// The event types a client may send, in `EVENT_TYPES` order.
@@ -228,6 +230,7 @@ mod tests {
         );
         assert_eq!(sendable.first(), Some(&"task.readied"));
         assert!(!sendable.contains(&"task.created"));
+        assert!(!sendable.contains(&"agent.paused"));
         assert!(sendable.contains(&"agent.asked"));
     }
 

@@ -1,5 +1,5 @@
 import { expect, type Page, test } from '@playwright/test'
-import { openTask, signIn } from './helpers'
+import { headers, openTask, signIn, type TaskEvent, taskOf } from './helpers'
 import {
   controlTerminalSockets,
   fillHistory,
@@ -227,4 +227,47 @@ test('drops replies to queries replayed by a resume, and keeps a real Shift+F3',
     .map((frame) => frame.data)
     .join('')
   expect(typed).toBe('\x1b[1;2R')
+})
+
+// T-0202: an agent that ended its turn, in a terminal nobody looks at, pauses after the idle
+// minutes (30 s here, see compose.e2e.yaml). Opening the terminal starts it on its session again.
+test('pauses an idle agent nobody looks at, and starts it again when shown', async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(150_000)
+  const repos = await (await request.get('/api/repos', { headers })).json()
+  // [no-done]: the fake agent ends its turn without `natamux done`, so the stage waits for it.
+  const title = `[no-done] Idle pause ${Date.now()}`
+  const created = await request.post('/api/tasks', {
+    headers,
+    data: { title, repo: repos.repos[0].id },
+  })
+  const { task } = await created.json()
+  made.push(task.id)
+  await expect
+    .poll(async () => (await taskOf(request, task.id)).state, { timeout: 30_000 })
+    .toMatch(/^(ready|review)$/)
+  await request.post(`/api/tasks/${task.id}/events`, {
+    headers,
+    data: { source: 'human', type: 'state.overridden', payload: { to: 'ready', stage: 'spec' } },
+  })
+  await request.post(`/api/tasks/${task.id}/workspace`, { headers })
+
+  const pausedEvent = async () => {
+    const body = await (await request.get(`/api/tasks/${task.id}/events`, { headers })).json()
+    const events: TaskEvent[] = body.events.map((entry: { event: TaskEvent }) => entry.event)
+    return events.find((event) => event.type === 'agent.paused')?.payload ?? null
+  }
+  await expect
+    .poll(pausedEvent, { timeout: 100_000, intervals: [2_000] })
+    .toMatchObject({ terminal: '1', idleMinutes: 30, session: expect.stringMatching(/^fake-/) })
+
+  await signIn(page)
+  const tabs = await openTask(page, title)
+  await tabs.getByRole('tab', { name: 'Terminal' }).click()
+  const shown = page.getByRole('region', { name: 'Terminal screen' }).first()
+  await expect(shown.locator('.xterm-rows')).toContainText('(resumed session fake-', {
+    timeout: 30_000,
+  })
 })

@@ -182,10 +182,10 @@ impl RemoteTerminal {
         self.view.update(cx, |_, cx| cx.notify());
     }
 
-    /// Types into the shell, as keys would; waits until the socket is open.
+    /// Types into the shell, as keys would; waits until the socket is open. A paused one wakes.
     pub fn type_text(&mut self, text: &str) {
         match (&self.handle, &self.status) {
-            (Some(handle), TerminalStatus::Open) => handle.input(text),
+            (Some(h), TerminalStatus::Open | TerminalStatus::Paused { .. }) => h.input(text),
             _ => self.pending.push(text.to_string()),
         }
     }

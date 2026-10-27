@@ -51,6 +51,7 @@ const EVENT_SENTENCE: Record<EventType, string> = {
   'stage.ci-started': 'CI check started',
   'stage.skip-set': 'Skip choice changed',
   'workspace.failed': 'Workspace failed',
+  'agent.paused': 'Agent paused while idle',
 }
 
 // A CI send back can go to the stage it came from, so "an earlier stage" would be wrong for it.
@@ -61,6 +62,10 @@ export function describeEvent(
   payload: TaskEvent['payload'] = {},
   pathNames: Readonly<Record<string, string>> = {},
 ): string {
+  const minutes = payload.idleMinutes
+  if (type === 'agent.paused' && typeof minutes === 'number') {
+    return `Agent paused after ${minutes} min idle`
+  }
   const sentence =
     type === 'stage.reopened' && payload.ci === true ? 'Sent back by CI' : EVENT_SENTENCE[type]
   const path = payload.path

@@ -113,9 +113,14 @@ pub struct ProjectSettings {
     pub agents: AgentSettings,
 }
 
+/// An idle agent that no one looks at pauses after this many minutes when the project sets none.
+pub const DEFAULT_PAUSE_IDLE_MINUTES: u64 = 30;
+/// The minutes `agents.pauseIdleAfterMinutes` may hold besides 0 (off).
+pub const PAUSE_IDLE_MINUTES: std::ops::RangeInclusive<u64> = 5..=1440;
+
 /// `agentSettingsSchema`: `permission_mode` is `auto` or `ask`. `max_send_backs` is the most
 /// times an agent may send a task back from one stage before it waits for a person; None: no
-/// limit.
+/// limit. `pause_idle_after_minutes`: read it with `pause_idle_minutes`.
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentSettings {
@@ -123,6 +128,8 @@ pub struct AgentSettings {
     pub permission_mode: String,
     #[serde(default)]
     pub max_send_backs: Option<usize>,
+    #[serde(default)]
+    pub pause_idle_after_minutes: Option<u64>,
 }
 
 fn auto() -> String {
@@ -134,6 +141,20 @@ impl Default for AgentSettings {
         AgentSettings {
             permission_mode: auto(),
             max_send_backs: None,
+            pause_idle_after_minutes: None,
+        }
+    }
+}
+
+impl AgentSettings {
+    /// The minutes after which an idle agent that no one looks at pauses; None: never.
+    pub fn pause_idle_minutes(&self) -> Option<u64> {
+        match self
+            .pause_idle_after_minutes
+            .unwrap_or(DEFAULT_PAUSE_IDLE_MINUTES)
+        {
+            0 => None,
+            minutes => Some(minutes),
         }
     }
 }
@@ -399,6 +420,20 @@ mod tests {
         assert!(!loaded.found);
         let empty: ProjectSettings = serde_json::from_str("{}").unwrap();
         assert_eq!(empty.context.sources.len(), 2);
+    }
+
+    #[test]
+    fn an_idle_agent_pauses_after_30_minutes_unless_the_project_says_otherwise() {
+        let read = |json: &str| {
+            serde_json::from_str::<AgentSettings>(json)
+                .unwrap()
+                .pause_idle_minutes()
+        };
+        assert_eq!(read("{}"), Some(DEFAULT_PAUSE_IDLE_MINUTES));
+        assert_eq!(DEFAULT_PAUSE_IDLE_MINUTES, 30);
+        assert_eq!(read(r#"{"pauseIdleAfterMinutes":10}"#), Some(10));
+        assert_eq!(read(r#"{"pauseIdleAfterMinutes":0}"#), None);
+        assert_eq!(AgentSettings::default().pause_idle_minutes(), Some(30));
     }
 
     #[test]

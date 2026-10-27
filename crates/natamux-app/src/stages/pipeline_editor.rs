@@ -12,8 +12,8 @@ use ui::prelude::*;
 
 use super::editor_catalog::unique_issues;
 use super::editor_draft::{
-    Draft, format_settings, max_send_backs_of, parse_draft, tracker_of, with_create_issue,
-    with_max_send_backs, with_steps,
+    Draft, format_settings, max_send_backs_of, parse_draft, pause_idle_of, tracker_of,
+    with_create_issue, with_max_send_backs, with_pause_idle, with_steps,
 };
 use super::editor_find::{find_branch, find_stage};
 
@@ -147,6 +147,21 @@ impl PipelineEditor {
             return;
         }
         let raw = with_max_send_backs(&self.draft.raw, most);
+        self.changed(&format_settings(&raw), cx);
+    }
+
+    /// `agents.pauseIdleAfterMinutes` of the draft; None (the default) while the text cannot be
+    /// read.
+    pub fn pause_idle_minutes(&self) -> Option<u64> {
+        self.raw().and_then(pause_idle_of)
+    }
+
+    /// `agents.pauseIdleAfterMinutes`, None for the default. Ignored while the text cannot be read.
+    pub fn set_pause_idle_minutes(&mut self, minutes: Option<u64>, cx: &mut Context<Self>) {
+        if self.error.is_some() {
+            return;
+        }
+        let raw = with_pause_idle(&self.draft.raw, minutes);
         self.changed(&format_settings(&raw), cx);
     }
 

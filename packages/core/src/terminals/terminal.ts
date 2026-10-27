@@ -86,8 +86,9 @@ export const terminalClientMessageSchema = z.discriminatedUnion('type', [
 export type TerminalClientMessage = z.infer<typeof terminalClientMessageSchema>
 
 // From the daemon to the dashboard. `hello` is always first. `snapshot` and `resume` start a
-// catch-up and `replayed` ends it. `pong` answers `ping`. `exit` ends the session; `error` says why
-// it could not start.
+// catch-up and `replayed` ends it. `pong` answers `ping`. `exit` ends the session; `paused` ends
+// an idle agent's shell, which starts again on the next fresh attach; `error` says why it could
+// not start.
 export const terminalServerMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('hello'), shellId: shellIdSchema }),
   z.object({ type: z.literal('snapshot'), cols: sizeSchema, rows: sizeSchema }),
@@ -95,6 +96,7 @@ export const terminalServerMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('replayed'), offset: offsetSchema }),
   z.object({ type: z.literal('pong') }),
   z.object({ type: z.literal('exit'), code: z.number().int().nullable() }),
+  z.object({ type: z.literal('paused'), minutes: z.number().int().min(0) }),
   z.object({ type: z.literal('error'), message: z.string() }),
 ])
 

@@ -132,6 +132,9 @@ export function createConnection(
     } else {
       startHeartbeat()
       retry()
+      if (s.onScreen) {
+        wake()
+      }
     }
   }
 
@@ -177,6 +180,19 @@ export function createConnection(
     open(s.onScreen)
   }
   const cancelRetry = () => clearTimeout(retryTimer)
+  // The paused shell is gone, so a fresh socket asks for a new one, which brings the agent back
+  // on its session.
+  const wake = () => {
+    if (s.disposed || s.state.status !== 'paused' || pageHidden()) {
+      return
+    }
+    shellId = null
+    s.offset = 0
+    s.offsetKnown = false
+    s.acked = 0
+    update({ status: 'connecting', pausedMinutes: null })
+    open(s.onScreen)
+  }
 
   // The socket closed, or went silent, while the shell may still run (spec 5). Typing queued by a
   // catch-up stays queued: the catch-up of the next socket sends it.
@@ -278,6 +294,16 @@ export function createConnection(
         finishCatchUp(null)
         update({ status: 'error', error: message.message })
         end()
+      } else if (message?.type === 'paused') {
+        finishCatchUp(null)
+        // The daemon closes the socket next. The screen stays, and the session waits for a wake,
+        // not for a retry.
+        opened.onclose = null
+        closeSocket(opened)
+        s.socket = null
+        connecting = false
+        stopHeartbeat()
+        update({ status: 'paused', pausedMinutes: message.minutes })
       }
     }
     opened.onclose = (event) => {
@@ -347,5 +373,5 @@ export function createConnection(
       })
   }
 
-  return { open, retry, cancelRetry, onPageVisibility, stopHeartbeat }
+  return { open, retry, cancelRetry, wake, onPageVisibility, stopHeartbeat }
 }

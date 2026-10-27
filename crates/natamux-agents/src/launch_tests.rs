@@ -248,6 +248,26 @@ fn quotes_the_session_of_every_agent_so_it_cannot_run_as_a_command() {
     }
 }
 
+// A paused agent woken by a stage or a review comment goes on with its session and that prompt.
+#[test]
+fn goes_on_with_the_session_and_the_prompt_for_every_agent() {
+    for agent in LAUNCHABLE_AGENTS {
+        let options = LaunchOptions {
+            prompt: "Review it".into(),
+            session: Some("s-1".into()),
+            ..base()
+        };
+        let command = launch(agent, options);
+        let session = command.find(" 's-1'");
+        let prompt = command.find(" 'Review it'");
+        assert!(
+            session.is_some() && prompt.is_some() && session < prompt,
+            "{agent}: {command}"
+        );
+        assert!(command.ends_with(" 'Review it'"), "{agent}: {command}");
+    }
+}
+
 #[test]
 fn quotes_the_prompt_of_each_agent_for_powershell_next_to_its_flag() {
     for (agent, flag) in [

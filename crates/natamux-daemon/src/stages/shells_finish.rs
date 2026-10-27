@@ -201,13 +201,17 @@ impl StageRun {
 
     /// A dashboard attaches to a shell of a task, so the task is open: every agent of it that
     /// waits to come back after a restart goes on with its session, with no prompt, the attached
-    /// shell's first. A plain shell is left to its own attach.
-    pub fn restore_task(&self, task_id: &str, attached: &str) {
+    /// shell's first. A plain shell is left to its own attach. A paused agent comes back only for
+    /// a client that shows a terminal, or one attached to its own shell: a hidden client would
+    /// start it again for no one to look at, and it would pause again.
+    pub fn restore_task(&self, task_id: &str, attached: &str, visible: bool) {
         let Some(open) = &self.options.open_shells else {
             return;
         };
         let waiting = open.waiting(task_id);
-        let others = waiting.iter().filter(|name| name.as_str() != attached);
+        let others = waiting.iter().filter(|name| {
+            name.as_str() != attached && (visible || !open.is_paused(task_id, name))
+        });
         for terminal in std::iter::once(&attached.to_string()).chain(others) {
             self.restore_shell(task_id, terminal, terminal == attached);
         }
@@ -253,6 +257,32 @@ impl StageRun {
                 }
             }
         }
+    }
+
+    /// A prompt for the agent paused in a shell: it comes back on its session with the prompt.
+    /// False when no agent is paused there.
+    pub fn wake_paused(&self, task_id: &str, terminal: &str, prompt: &str) -> StageResult<bool> {
+        let Some(agent) = self
+            .options
+            .open_shells
+            .as_ref()
+            .and_then(|open| open.agent_of(task_id, terminal))
+        else {
+            return Ok(false);
+        };
+        let Some(session) = self.paused_session(task_id, terminal, &agent) else {
+            return Ok(false);
+        };
+        self.options.agents.start(
+            task_id,
+            &agent,
+            Some(prompt),
+            Some(terminal),
+            Some(&session),
+            &OwnAgent::default(),
+        )?;
+        self.note_launch(task_id, terminal, &agent);
+        Ok(true)
     }
 
     /// A person reopens the agent of Terminal 1 of a done or cancelled task, to ask it

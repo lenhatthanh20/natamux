@@ -241,6 +241,14 @@ pub fn open(name: &str, agent: Option<&str>, session: Option<&str>) -> OpenShell
         name: name.into(),
         agent: agent.map(String::from),
         session: session.map(String::from),
+        paused: false,
+    }
+}
+
+pub fn paused(name: &str, agent: &str, session: &str) -> OpenShell {
+    OpenShell {
+        paused: true,
+        ..open(name, Some(agent), Some(session))
     }
 }
 

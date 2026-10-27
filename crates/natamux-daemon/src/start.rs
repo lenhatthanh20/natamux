@@ -7,6 +7,7 @@ use std::sync::{Arc, OnceLock};
 use natamux_agents::hook_files::{
     WorkspaceHooks, gemini_hook_settings, hook_file_text_of, prepare_agent_hooks,
 };
+use natamux_agents::hooks::Signal;
 use natamux_agents::trust::trust_paths;
 use natamux_core::agents::hook_settings::claude_code_hook_settings;
 use natamux_pty::{Env, SpawnOptions};
@@ -15,6 +16,7 @@ use tokio::task::JoinHandle;
 
 use crate::agents::generic_signals::GenericSignals;
 use crate::agents::hook_service::{HookOptions, HookService};
+use crate::agents::idle_pause::IdlePause;
 use crate::agents::runner::{AgentLaunch, AgentRunner, AgentRunnerOptions};
 use crate::agents::usage_service::{UsageOptions, UsageService};
 use crate::config::{Config, shell_env};
@@ -113,20 +115,22 @@ type RunnerCell = Arc<OnceLock<StageRunner>>;
 /// The workspace service is built last (it needs the terminals and the agents), but the terminals
 /// and the hooks tell it of output and file changes.
 type WorkspaceCell = Arc<OnceLock<Arc<WorkspaceService>>>;
+/// The idle pause needs the stage runner, but the hooks and the agent starts tell it of signals.
+type IdleCell = Arc<OnceLock<Arc<IdlePause>>>;
 
 #[derive(Default)]
 struct Cells {
     runner: RunnerCell,
     workspaces: WorkspaceCell,
+    idle: IdleCell,
 }
 
 fn agent_runner(
     config: &Config,
-    tasks: &TaskService,
+    store: &TaskStore,
     terminals: &TerminalService,
-    repos: &Arc<Repos>,
     open_shells: &Arc<OpenShells>,
-    signals: &Arc<GenericSignals>,
+    idle: &IdleCell,
     daemon_url: &str,
 ) -> std::io::Result<AgentRunner> {
     // Shells reach the daemon on loopback, so do the hooks of the agents they start.
@@ -141,11 +145,12 @@ fn agent_runner(
         hook_file_text_of(&gemini_hook_settings()),
     )?;
     let home = home_dir();
-    let settings = Arc::clone(repos);
+    let settings = Arc::clone(&store.repos);
     let open = Arc::clone(open_shells);
-    let signals = Arc::clone(signals);
+    let signals = Arc::clone(&store.signals);
+    let idle = Arc::clone(idle);
     Ok(AgentRunner::new(AgentRunnerOptions {
-        tasks: tasks.clone(),
+        tasks: store.tasks.clone(),
         terminals: terminals.clone(),
         claude_settings_path,
         gemini_settings_path: Some(gemini_settings_path),
@@ -163,6 +168,9 @@ fn agent_runner(
                 &launch.agent,
                 launch.session.as_deref(),
             );
+            if let Some(idle) = idle.get() {
+                idle.note_launch(launch);
+            }
         })),
         trust_paths: trust_paths(|name| std::env::var(name).ok(), &home),
         permission_mode_of: Arc::new(move |repo| settings.settings_of(repo).agents.permission_mode),
@@ -270,7 +278,7 @@ fn hook_services(
     store: &TaskStore,
     stages: &StageRunner,
     open_shells: &Arc<OpenShells>,
-    workspaces: &WorkspaceCell,
+    cells: &Cells,
 ) -> (Arc<HookService>, Arc<UsageService>) {
     let home = home_of(env);
     let usage = Arc::new(UsageService::new(UsageOptions {
@@ -280,7 +288,8 @@ fn hook_services(
     }));
     let noted = Arc::clone(open_shells);
     let seen = Arc::clone(&usage);
-    let changed = Arc::clone(workspaces);
+    let changed = Arc::clone(&cells.workspaces);
+    let idle = Arc::clone(&cells.idle);
     let hooks = Arc::new(HookService::new(
         store.tasks.clone(),
         Arc::new(stages.clone()),
@@ -294,6 +303,13 @@ fn hook_services(
             session_seen: Some(Arc::new(
                 move |task: &str, terminal: &str, agent: &str, session: &str| {
                     noted.note_session(task, terminal, agent, session);
+                },
+            )),
+            signal_seen: Some(Arc::new(
+                move |task: &str, terminal: &str, signal: Signal| {
+                    if let Some(idle) = idle.get() {
+                        idle.note_signal(task, terminal, signal);
+                    }
                 },
             )),
             usage_seen: Some(Arc::new(
@@ -326,11 +342,10 @@ pub async fn start(
     let open_shells = open_shells(config, &store, &terminals, &scheduler, &cells.runner);
     let agents = Arc::new(agent_runner(
         config,
-        &store.tasks,
+        &store,
         &terminals,
-        &store.repos,
         &open_shells,
-        &store.signals,
+        &cells.idle,
         &daemon_url,
     )?);
     let stages = stage_runner(
@@ -351,14 +366,16 @@ pub async fn start(
         &issue_linker,
     );
     let _ = cells.workspaces.set(Arc::clone(&workspaces));
-    let (hooks, usage) = hook_services(
+    let (hooks, usage) = hook_services(config, env, &store, &stages, &open_shells, &cells);
+    let idle_pause = services::idle_pause(
         config,
-        env,
         &store,
-        &stages,
+        &terminals,
         &open_shells,
-        &cells.workspaces,
+        &stages,
+        &scheduler,
     );
+    let _ = cells.idle.set(Arc::clone(&idle_pause));
     // Before the listen, so no dashboard attaches to a shell before it is known to wait.
     open_shells.start();
     stages.run.load_open_shells();
@@ -374,11 +391,13 @@ pub async fn start(
         pull_requests,
         issues,
         issue_linker,
+        idle_pause: Arc::clone(&idle_pause),
     };
     let state = app_state(config, home_of(env), store, &scheduler, built);
     let server = tokio::spawn(serve(listener, Arc::clone(&state)));
     // After the listen, so the hooks of the agents reach the daemon.
     stages.run.background(|run| run.resume_agents());
+    idle_pause.start();
     Ok(Daemon {
         state,
         scheduler,
@@ -399,6 +418,7 @@ struct Built {
     pull_requests: Arc<crate::github::pull_request_watcher::PullRequestWatcher>,
     issues: Arc<crate::github::issue_importer::IssueImporter>,
     issue_linker: Arc<crate::github::issue_linker::IssueLinker>,
+    idle_pause: Arc<IdlePause>,
 }
 
 fn app_state(
@@ -438,6 +458,7 @@ fn app_state(
         pull_requests: built.pull_requests,
         issues: built.issues,
         issue_linker: built.issue_linker,
+        idle_pause: built.idle_pause,
     })
 }
 
@@ -447,6 +468,7 @@ impl Daemon {
     pub fn shut_down(&self) {
         self.state.pull_requests.stop();
         self.state.issue_linker.stop();
+        self.state.idle_pause.stop();
         self.state.open_shells.stop();
         let ended = self.state.terminals.close_all_and_wait();
         self.state.stages.stop();

@@ -358,7 +358,26 @@ impl TerminalService {
     /// Ends one shell of a task. It is forgotten at once, so a new shell with the same name
     /// starts a new process with an empty screen, even when the old one is slow to end.
     pub fn close_one(&self, task_id: &str, terminal: &str) {
-        self.inner.close_one(task_id, terminal);
+        self.inner
+            .close_one(task_id, terminal, ServerMessage::Exit { code: None });
+    }
+
+    /// Ends the shell of an idle agent: as `close_one`, but its clients hear `paused`, so they
+    /// keep the screen and attach afresh when shown. False when it was not open.
+    pub fn pause_one(&self, task_id: &str, terminal: &str, minutes: u64) -> bool {
+        self.inner
+            .close_one(task_id, terminal, ServerMessage::Paused { minutes })
+    }
+
+    /// Whether a client shows the shell on screen now.
+    pub fn watched(&self, task_id: &str, terminal: &str) -> bool {
+        let Some(session) = self.inner.get(task_id, terminal) else {
+            return false;
+        };
+        lock(&session)
+            .clients
+            .iter()
+            .any(|(_, state)| state.visible)
     }
 
     /// Ends every shell of a task, for example before its workspace is removed.

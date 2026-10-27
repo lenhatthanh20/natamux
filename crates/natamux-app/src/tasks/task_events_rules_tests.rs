@@ -83,6 +83,18 @@ fn says_a_send_back_by_ci_came_from_ci_also_when_it_goes_to_the_same_stage() {
 }
 
 #[test]
+fn says_how_long_a_paused_agent_was_idle() {
+    assert_eq!(
+        describe("agent.paused", json!({"terminal": "1", "idleMinutes": 30})),
+        "Agent paused after 30 min idle"
+    );
+    assert_eq!(
+        describe("agent.paused", json!({})),
+        "Agent paused while idle"
+    );
+}
+
+#[test]
 fn ends_with_an_arrow_and_the_name_of_the_path_an_event_chose() {
     let names = PathNames::from([("small".to_string(), "Small change".to_string())]);
     let path = payload(json!({"stage": "plan", "path": "small"}));

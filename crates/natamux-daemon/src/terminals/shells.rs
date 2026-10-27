@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::sync::atomic::AtomicU64;
 use std::sync::{Arc, Mutex, MutexGuard, Weak};
 
+use natamux_proto::terminals::messages::ServerMessage;
 use natamux_pty::{Env, PtyEvents};
 
 use super::limits::{ENDED_IDLE_MS, MAX_SESSIONS, SHELL_PROGRAMS, WORKSPACE_QUIET_MS};
@@ -299,13 +300,16 @@ impl Inner {
         }
     }
 
-    pub(super) fn close_one(&self, task_id: &str, terminal: &str) {
+    /// Forgets the shell at once, then ends it; its clients get `farewell`. False when it was not
+    /// open.
+    pub(super) fn close_one(&self, task_id: &str, terminal: &str, farewell: ServerMessage) -> bool {
         let Some(session) = lock(&self.sessions).remove(&session_key(task_id, terminal)) else {
-            return;
+            return false;
         };
         self.publish_shells_changed(task_id);
         let strong = Arc::clone(&session);
-        close_session(&mut lock(&session), strong);
+        close_session(&mut lock(&session), strong, farewell);
+        true
     }
 
     /// An ended task needs no shell that nobody looks at. One that runs a program, such as a dev
@@ -349,7 +353,7 @@ impl Inner {
             }
             let (task_id, terminal) = (guard.task_id.clone(), guard.terminal.clone());
             drop(guard);
-            inner.close_one(&task_id, &terminal);
+            inner.close_one(&task_id, &terminal, ServerMessage::Exit { code: None });
         }));
     }
 }

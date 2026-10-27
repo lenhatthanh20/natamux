@@ -86,6 +86,10 @@ pub(super) struct State {
     pub(super) poll: Option<TimerId>,
     pub(super) stopped: bool,
     pub(super) subscription: Option<u64>,
+    /// "<task>/<terminal>" of the shells whose idle agent the daemon ended (`open_shells_pause`).
+    pub(super) paused: HashSet<String>,
+    /// Paused shells that are still being closed: no `sync` takes them for a new shell.
+    pub(super) pausing: HashSet<String>,
 }
 
 pub struct OpenShells {
@@ -157,7 +161,8 @@ impl OpenShells {
     }
 
     /// Reads the task's file after a restart. The shells in `skip` (those of stages whose agent
-    /// starts again at once) are held until `release_held`; the rest wait for a dashboard.
+    /// starts again at once) are held until `release_held`; the rest wait for a dashboard, and so
+    /// do paused ones.
     pub fn load(&self, task_id: &str, skip: &[String]) {
         let shells = super::shell_files::read_open_shells(&self.options.data_dir, task_id);
         if shells.is_empty() {
@@ -193,9 +198,18 @@ impl OpenShells {
             .map(|shell| shell.name.clone())
             .filter(|name| !self.options.terminals.is_open(task_id, name))
             .collect();
-        let (held, waiting): (Vec<String>, Vec<String>) =
-            closed.into_iter().partition(|name| skip.contains(name));
+        let paused: Vec<&String> = shells
+            .iter()
+            .filter(|shell| shell.paused)
+            .map(|shell| &shell.name)
+            .collect();
+        let (held, waiting): (Vec<String>, Vec<String>) = closed
+            .into_iter()
+            .partition(|name| skip.contains(name) && !paused.contains(&name));
         let mut state = self.lock();
+        for name in paused {
+            state.paused.insert(key_of(task_id, name));
+        }
         state.entries.insert(task_id.into(), entries);
         if !waiting.is_empty() {
             state.waiting.insert(task_id.into(), waiting);
@@ -325,6 +339,7 @@ impl OpenShells {
             name: terminal.into(),
             agent: resumable(entry).map(String::from),
             session: entry.session.clone(),
+            paused: state.paused.contains(&key_of(task_id, terminal)),
         })
     }
 
@@ -381,7 +396,9 @@ impl OpenShells {
             .starting
             .retain(|(_, starting)| starting.task_id != task_id);
         let prefix = key_of(task_id, "");
-        state.active.retain(|key| !key.starts_with(&prefix));
+        for keys in [&mut state.active, &mut state.paused, &mut state.pausing] {
+            keys.retain(|key| !key.starts_with(&prefix));
+        }
         state.probed.retain(|key, _| !key.starts_with(&prefix));
         let scheduler = &self.options.scheduler;
         for timers in [&mut state.exit_timers, &mut state.closing] {
@@ -456,6 +473,7 @@ impl OpenShells {
                 name: name.clone(),
                 agent: entry.agent.clone(),
                 session: entry.session.clone(),
+                paused: state.paused.contains(&key_of(task_id, name)),
             })
             .collect();
         shells.sort_by_key(|shell| shell.name.parse::<u32>().unwrap_or(u32::MAX));

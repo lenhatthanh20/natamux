@@ -50,6 +50,7 @@ export const EVENT_TYPES = [
   'stage.ci-started',
   'stage.skip-set',
   'workspace.failed',
+  'agent.paused',
 ] as const
 
 export const taskEventSchema = z.object({
@@ -97,4 +98,5 @@ export const RECORD_ONLY_EVENT_TYPES: readonly EventType[] = [
   'stage.ci-started',
   'stage.skip-set',
   'workspace.failed',
+  'agent.paused',
 ]

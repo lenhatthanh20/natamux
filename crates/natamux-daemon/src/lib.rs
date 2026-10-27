@@ -8,6 +8,7 @@ pub mod agents {
     pub mod generic_signals;
     mod hook_activity;
     pub mod hook_service;
+    pub mod idle_pause;
     pub mod runner;
     mod usage_file;
     pub mod usage_service;
@@ -62,6 +63,7 @@ pub mod terminals {
     pub mod limits;
     pub mod login_path;
     pub mod open_shells;
+    mod open_shells_pause;
     mod open_shells_sync;
     pub mod service;
     pub mod session_input;

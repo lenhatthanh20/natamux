@@ -102,11 +102,24 @@ After you quit and open the app again, Natamux starts the agent of each running,
 
 You can send text to the agent without typing in the terminal. In the **Changes** tab, write a comment under the diff and click **Send to agent**. Natamux pastes it into Terminal 1 as the agent's next prompt and presses Enter. See [Changes and history](/docs/guides/changes-and-history/).
 
-This works only while an agent runs in Terminal 1. Otherwise Natamux answers `No agent runs in the terminal of T-0001. Start the agent first`. That check keeps a comment from running as shell commands.
+This works only while an agent runs in Terminal 1, or is [paused](#an-idle-agent-pauses) there. Otherwise Natamux answers `No agent runs in the terminal of T-0001. Start the agent first`. That check keeps a comment from running as shell commands.
 
 ### Needs input or failed
 
 A failed task shows the reason in its current stage card in the details (on a phone, in a banner under the header). Use **Start agent** or **Restart agent** to run the agent again. For the task states, see [Tasks](/docs/concepts/tasks/).
+
+### An idle agent pauses
+
+An agent that ended its turn still uses memory while it waits. When it has waited 30 minutes and no window shows its terminal, Natamux pauses it: it ends the terminal and keeps the agent's conversation.
+
+- The pane keeps the last screen, dimmed, with **Paused after 30 min idle. Starts again when shown.**
+- Open the task, show the pane, or type in it, and the agent starts again on the same conversation. The keys you typed go to it once it runs.
+- A new stage in that terminal, or a comment from **Send to agent**, starts the agent on its conversation with that prompt.
+- An agent that asks something, works, or waits for its background work does not pause. Nor does an agent that never named its conversation.
+- After a daemon restart, a paused agent stays paused until you show it.
+- The task's activity log says **Agent paused after 30 min idle**.
+
+To change the minutes, or to turn the pause off with `0`, use **Pause idle agents after (min)** on the **Stages** tab of the [project settings](/docs/guides/project-settings/#the-stages-tab), or `agents.pauseIdleAfterMinutes` in [`.natamux.json`](/docs/reference/configuration/#agents).
 
 ## The Agents view
 

@@ -65,6 +65,7 @@ const STATUS_TEXT: Record<TerminalStatus, string> = {
   reconnecting: 'Reconnecting.',
   ended: 'The terminal ended.',
   error: 'The terminal could not start.',
+  paused: 'Paused.',
 }
 
 const CONNECTING: TerminalSessionState = {
@@ -73,6 +74,11 @@ const CONNECTING: TerminalSessionState = {
   scrolledUp: false,
   catchingUp: false,
   exitCode: null,
+  pausedMinutes: null,
+}
+
+function pausedText(minutes: number): string {
+  return `Paused after ${minutes} min idle. Starts again when shown.`
 }
 const noSubscribe = () => () => undefined
 
@@ -112,13 +118,15 @@ export default function TerminalView({
   const font = useTerminalFont()
   const subscribe = session?.subscribe ?? noSubscribe
   const snapshot = () => session?.state() ?? CONNECTING
-  const { status, error, scrolledUp, catchingUp, exitCode } = useSyncExternalStore(
+  const { status, error, scrolledUp, catchingUp, exitCode, pausedMinutes } = useSyncExternalStore(
     subscribe,
     snapshot,
   )
   // The spinner covers the shell's prompt and the typed launch line until the agent runs. It stays
-  // drawn while it fades out.
-  const restoringNow = restoring !== undefined && status !== 'error' && status !== 'ended'
+  // drawn while it fades out. A paused agent comes back once shown, so the pause shows instead.
+  const restoringNow =
+    restoring !== undefined && status !== 'error' && status !== 'ended' && status !== 'paused'
+  const dimmed = status === 'ended' || status === 'paused'
   const [restoreLine, setRestoreLine] = useState(restoring)
   useEffect(() => {
     if (restoringNow) {
@@ -251,7 +259,7 @@ export default function TerminalView({
         <section
           aria-label="Terminal screen"
           className={`flex min-h-0 flex-1 flex-col overflow-hidden py-2 pr-0.5 pl-2.5 ${
-            status === 'ended' ? 'opacity-60' : ''
+            dimmed ? 'opacity-60' : ''
           }`}
         >
           {/* The session's own element, which moves between views, goes in here. */}
@@ -284,7 +292,7 @@ export default function TerminalView({
         )}
         {/* Over the screen, not above it: the screen keeps its box when the socket opens, so a new
             shell gets one size. */}
-        {status !== 'open' && status !== 'ended' && (
+        {status !== 'open' && !dimmed && (
           <div className="absolute inset-x-0 top-0 z-10 flex h-7 items-center gap-3 border-b border-line bg-surface px-3">
             {/* Shown late, so a quick connect does not flash it. */}
             {status !== 'error' && (
@@ -331,6 +339,14 @@ export default function TerminalView({
           >
             Open a new terminal
           </Button>
+        </div>
+      )}
+      {status === 'paused' && (
+        <div className="flex h-8 shrink-0 items-center gap-2 border-t border-line bg-surface px-3">
+          <SquareTerminal size={14} aria-hidden className="shrink-0 text-muted" />
+          <p className="flex-1 truncate text-xs text-ink-2" role="status">
+            {pausedText(pausedMinutes ?? 0)}
+          </p>
         </div>
       )}
     </div>

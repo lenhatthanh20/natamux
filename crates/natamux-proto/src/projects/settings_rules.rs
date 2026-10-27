@@ -4,6 +4,8 @@
 
 use serde_json::{Map, Value};
 
+use super::repo::PAUSE_IDLE_MINUTES;
+
 /// The first problem line of the settings in `raw` that is not about `stages`, or None.
 pub fn other_settings_problem(raw: &Map<String, Value>) -> Option<String> {
     let mut found = Vec::new();
@@ -42,6 +44,7 @@ pub fn other_settings_problem(raw: &Map<String, Value>) -> Option<String> {
             "agents.maxSendBacks",
             &mut found,
         );
+        idle_minutes(agents.get("pauseIdleAfterMinutes"), &mut found);
     }
     (!found.is_empty()).then(|| found.join("; "))
 }
@@ -61,6 +64,21 @@ fn count(value: Option<&Value>, path: &str, found: &mut Vec<String>) {
             ));
         }
         Some(other) => found.push(wrong_type(path, "number", other)),
+    }
+}
+
+/// `agents.pauseIdleAfterMinutes`: a count that is 0 (off) or in `PAUSE_IDLE_MINUTES`.
+fn idle_minutes(value: Option<&Value>, found: &mut Vec<String>) {
+    let path = "agents.pauseIdleAfterMinutes";
+    let before = found.len();
+    count(value, path, found);
+    let minutes = value.and_then(Value::as_u64);
+    if found.len() == before
+        && let Some(minutes) = minutes
+        && minutes != 0
+        && !PAUSE_IDLE_MINUTES.contains(&minutes)
+    {
+        found.push(format!("{path}: 0 (off) or 5 to 1440"));
     }
 }
 
@@ -270,6 +288,31 @@ mod tests {
         assert_eq!(
             wrong(Value::Null).as_deref(),
             Some("agents.maxSendBacks: Invalid input: expected number, received null")
+        );
+    }
+
+    #[test]
+    fn takes_zero_or_five_to_1440_minutes_before_an_idle_agent_pauses() {
+        for good in [json!(0), json!(5), json!(30), json!(1440)] {
+            assert_eq!(
+                problem(json!({"agents": {"pauseIdleAfterMinutes": good}})),
+                None
+            );
+        }
+        let wrong = |value: Value| problem(json!({"agents": {"pauseIdleAfterMinutes": value}}));
+        for out in [json!(1), json!(4), json!(1441)] {
+            assert_eq!(
+                wrong(out).as_deref(),
+                Some("agents.pauseIdleAfterMinutes: 0 (off) or 5 to 1440")
+            );
+        }
+        assert_eq!(
+            wrong(json!(-1)).as_deref(),
+            Some("agents.pauseIdleAfterMinutes: Too small: expected number to be >=0")
+        );
+        assert_eq!(
+            wrong(json!("30")).as_deref(),
+            Some("agents.pauseIdleAfterMinutes: Invalid input: expected number, received string")
         );
     }
 
