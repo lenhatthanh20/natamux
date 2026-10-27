@@ -65,7 +65,7 @@ jobs:
       matrix:
         include:
           - { name: mac-arm64, os: macos-26 }
-          - { name: mac-x64, os: macos-26-intel }
+          - { name: mac-x64, os: macos-26-intel, cache: rust-app-mac-intel }
           - { name: linux-x64, os: ubuntu-latest }
           - { name: win-x64, os: windows-latest }
     runs-on: ${{ matrix.os }}
@@ -93,16 +93,15 @@ jobs:
           version=$(sed -n 's/^version = "\([^"]*\)"$/\1/p' crates/natamux-app/Cargo.toml | head -n 1)
           test "$version" = "${TAG#v}"
       - run: rustup toolchain install
-      # The macOS cache is of arm64: of no use to the Intel build.
+      # Each arch has its own cache prefix: Intel reads what app-macos-intel saves on main.
       - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        if: matrix.name != 'mac-x64'
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: rust-app-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-${{ github.sha }}
-          restore-keys: rust-app-${{ runner.os }}-
+          key: ${{ matrix.cache || format('rust-app-{0}', runner.os) }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-${{ github.sha }}
+          restore-keys: ${{ matrix.cache || format('rust-app-{0}', runner.os) }}-
       - name: Install Linux build tools
         if: runner.os == 'Linux'
         env:
