@@ -207,6 +207,20 @@ Natamux does not notify about tasks that already waited when you opened the dash
 
 The button is gone once you decide. If you blocked notifications, the status bar says **Notifications are blocked**. Allow them in the site settings of your browser.
 
+### Notifications in the desktop app
+
+Tick **Notify me** in the account menu, or in **Settings → General**. macOS asks once to allow notifications from Natamux, and a first notification says **Notifications are on**. If you clicked **Don't Allow**, turn Natamux on in **System Settings → Notifications**.
+
+When a task starts to wait for you, or is done, while the app is not in front, macOS shows a notification and plays your alert sound once:
+
+- The title is the task title.
+- The first line says what happened, at which stage: **Needs your input at Spec**, **Spec waits for your approval**, **Failed at Build**, **Blocked at Plan** or **Done**.
+- The second line is the task id and its project, such as `T-0003 · storefront`.
+
+Click it to bring the app forward and open the task. A newer notification of the same task replaces the older one.
+
+The app icon in the Dock shows how many tasks need you, the same count as **(N) Natamux** in the window title, also with **Notify me** off. The count goes away when nothing waits.
+
 ## Repositories
 
 Click **Projects** in the status bar, or **Add a project** in the sidebar, to see the projects (git repositories) the daemon manages. To add one:

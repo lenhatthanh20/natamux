@@ -18,7 +18,7 @@ use super::dashboard::{Dashboard, DashboardChange, TerminalReader};
 use super::layout_mode::{
     LayoutInput, LayoutMode, SidebarMode, decide_layout, effective_sidebar_width,
 };
-use super::notify::Notifier;
+use super::notify::{self, Notifier};
 use super::options::Options;
 use super::settings_view::SettingsView;
 use super::shell_rules::{AgentsToggle, agents_toggle, window_title};
@@ -125,6 +125,7 @@ impl Root {
         })
         .detach();
         Self::watch_window(window, cx);
+        notify::follow_clicks(&dashboard, window.window_handle(), cx);
         let title_bar = cx.new(|cx| TitleBarView::new(dashboard.clone(), cx));
         let weak_root = cx.weak_entity();
         let status_bar = cx.new(|cx| StatusBarView::new(weak_root, dashboard.clone(), cx));
@@ -183,8 +184,7 @@ impl Root {
                     .map(|task| task.id.clone())
                     .collect();
                 TerminalCache::set_live(live, cx);
-                let (main, active) = (window.window_handle(), window.is_window_active());
-                self.notifier.after_tasks(&self.dashboard, main, active, cx);
+                self.notifier.after_tasks(&self.dashboard, window, cx);
             }
             DashboardChange::Opened(_) | DashboardChange::AgentsOpened => {
                 self.close_tool(cx);

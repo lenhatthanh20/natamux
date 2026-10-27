@@ -26,6 +26,10 @@ If the daemon stops unexpectedly, the app shows an error and offers to restart t
 
 The app also has View, Task and Tools menus. Links to release pages open in your browser.
 
+## Notifications and the Dock
+
+The Dock icon shows how many tasks need you. With **Notify me** on, a task that needs you or is done while the app is in the back shows a macOS notification with a sound. See [Notifications in the desktop app](/docs/guides/dashboard/#notifications-in-the-desktop-app).
+
 ## Updates
 
 The app updates itself, the way other desktop apps do. It looks for a new version when you choose **Check for Updates…**. Timed checks are off by default; tick **Check for Updates Automatically** to turn them on.

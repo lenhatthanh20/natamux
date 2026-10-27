@@ -6,6 +6,7 @@ use natamux_proto::tasks::task::Task;
 use ui::prelude::*;
 
 use super::Dashboard;
+use crate::app::notify_rules::turned_on;
 use crate::app::tab_rules::{RailClick, main_after_view, rail_click, shown_details_view};
 use crate::app::view_rules::{DetailsView, details_view_for};
 
@@ -150,5 +151,8 @@ impl Dashboard {
 
     pub fn toggle_notify(&mut self, cx: &mut Context<Self>) {
         self.update_view(cx, |state| state.notify = !state.notify);
+        if self.view().notify {
+            cx.show_system_notification(turned_on());
+        }
     }
 }
