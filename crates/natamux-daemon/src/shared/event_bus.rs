@@ -71,6 +71,10 @@ pub enum DaemonMessage {
         task_id: String,
         usage: Value,
     },
+    /// The plan limits of every agent that told them, as in `GET /limits`.
+    LimitsChanged {
+        limits: Value,
+    },
     /// Sent to one socket only, which missed messages: load everything.
     Resync,
 }
@@ -96,6 +100,7 @@ impl DaemonMessage {
             DaemonMessage::JobsChanged { .. } => "jobs.changed",
             DaemonMessage::WorkspacePreparing { .. } => "workspace.preparing",
             DaemonMessage::UsageChanged { .. } => "usage.changed",
+            DaemonMessage::LimitsChanged { .. } => "limits.changed",
             DaemonMessage::Resync => "resync",
         }
     }
@@ -148,6 +153,7 @@ impl DaemonMessage {
             DaemonMessage::UsageChanged { task_id, usage } => {
                 json!({ "kind": kind, "taskId": task_id, "usage": usage })
             }
+            DaemonMessage::LimitsChanged { limits } => json!({ "kind": kind, "limits": limits }),
         };
         to_js_string(&value)
     }

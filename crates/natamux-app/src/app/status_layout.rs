@@ -88,12 +88,13 @@ pub fn max_condense_level(items: &[StatusItem]) -> usize {
 }
 
 /// What the window width alone decides, before anything is measured (spec section 3.2). Under
-/// 1024 the jobs item is icon-only. The other items are an icon and a count already, and the
+/// 1024 the jobs item is icon-only and the plan limits show only their share. The other items are an icon and a count already, and the
 /// link word shows only while the link is down, so nothing else changes by width.
 pub fn forced_by_width(width: Option<f32>) -> Condensed {
     let mut out = Condensed::default();
     if width.is_some_and(|width| width < 1024.0) {
         out.icon_only.push("jobs");
+        out.icon_only.push("limits");
     }
     out
 }
@@ -200,9 +201,9 @@ mod tests {
     }
 
     #[test]
-    fn shortens_only_jobs_and_folds_nothing_under_1024() {
+    fn shortens_only_jobs_and_limits_and_folds_nothing_under_1024() {
         let out = forced_by_width(Some(800.0));
-        assert_eq!(out.icon_only, ["jobs"]);
+        assert_eq!(out.icon_only, ["jobs", "limits"]);
         assert!(out.folded.is_empty());
     }
 
@@ -211,7 +212,7 @@ mod tests {
         let merged = merge_condensed(&forced_by_width(Some(800.0)), &condense(&items(), 4));
         assert_eq!(
             sorted(&merged.icon_only),
-            ["import", "jobs", "live", "repos"]
+            ["import", "jobs", "limits", "live", "repos"]
         );
         assert_eq!(merged.folded, ["import"]);
     }

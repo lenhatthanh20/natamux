@@ -9,6 +9,7 @@ pub mod format;
 mod hook;
 mod hooks;
 pub mod run;
+mod statusline;
 
 use std::io::{IsTerminal, Read, Write};
 use std::process::ExitCode;
@@ -53,7 +54,10 @@ pub fn main() -> ExitCode {
         Ok(runtime) => runtime,
         Err(error) => {
             // The hook runs inside an agent: it never fails it.
-            if argv.first().map(String::as_str) == Some("hook") {
+            if matches!(
+                argv.first().map(String::as_str),
+                Some("hook" | "statusline")
+            ) {
                 return ExitCode::SUCCESS;
             }
             eprintln!("Error: cannot start: {error}");

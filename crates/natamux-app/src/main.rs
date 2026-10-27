@@ -6,6 +6,7 @@
 
 mod agents {
     pub mod agent_choices;
+    pub mod limits_rules;
 }
 mod app {
     pub mod account_menu;
@@ -54,6 +55,7 @@ mod app {
     pub mod status_bar;
     pub mod status_items;
     pub mod status_layout;
+    pub mod status_limits;
     pub mod tab_rules;
     #[cfg(test)]
     pub mod test_views;

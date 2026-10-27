@@ -15,7 +15,7 @@ struct Envelope {
 }
 
 /// Every `kind` this module knows, to check against the daemon's `DaemonMessage`.
-pub const KNOWN_KINDS: [&str; 13] = [
+pub const KNOWN_KINDS: [&str; 14] = [
     "task.created",
     "task.updated",
     "task.changed",
@@ -24,6 +24,7 @@ pub const KNOWN_KINDS: [&str; 13] = [
     "jobs.changed",
     "activity.changed",
     "usage.changed",
+    "limits.changed",
     "workspace.dirty",
     "shells.changed",
     "workspace.preparing",
@@ -39,6 +40,8 @@ pub enum Resource {
     Jobs,
     Activity,
     Usage,
+    /// The plan limits of the agents (`GET /limits`).
+    Limits,
     /// The diff stats (`GET /diffstats`).
     DiffStats,
     /// The terminals of one task (`GET /tasks/:id/terminals`).
@@ -59,6 +62,7 @@ pub enum EventKind {
     JobsChanged,
     ActivityChanged,
     UsageChanged,
+    LimitsChanged,
     /// `workspace.dirty`: files in a task's workspace may have changed.
     WorkspaceDirty,
     ShellsChanged,
@@ -87,6 +91,7 @@ impl EventKind {
             "jobs.changed" => EventKind::JobsChanged,
             "activity.changed" => EventKind::ActivityChanged,
             "usage.changed" => EventKind::UsageChanged,
+            "limits.changed" => EventKind::LimitsChanged,
             "workspace.dirty" => EventKind::WorkspaceDirty,
             "shells.changed" => EventKind::ShellsChanged,
             "workspace.preparing" => EventKind::WorkspacePreparing,
@@ -104,6 +109,7 @@ impl EventKind {
             EventKind::JobsChanged => Some(Resource::Jobs),
             EventKind::ActivityChanged => Some(Resource::Activity),
             EventKind::UsageChanged => Some(Resource::Usage),
+            EventKind::LimitsChanged => Some(Resource::Limits),
             EventKind::WorkspaceDirty => Some(Resource::DiffStats),
             EventKind::ShellsChanged => Some(Resource::Shells),
             EventKind::WorkspacePreparing => Some(Resource::Preparing),
@@ -232,6 +238,7 @@ mod tests {
                 r#"{"kind":"usage.changed","taskId":"T-1","usage":{}}"#,
                 Resource::Usage,
             ),
+            (r#"{"kind":"limits.changed","limits":[]}"#, Resource::Limits),
             (
                 r#"{"kind":"workspace.dirty","taskId":"T-1"}"#,
                 Resource::DiffStats,

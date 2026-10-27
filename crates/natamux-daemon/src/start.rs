@@ -5,7 +5,8 @@ use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 
 use natamux_agents::hook_files::{
-    WorkspaceHooks, gemini_hook_settings, hook_file_text_of, prepare_agent_hooks,
+    WorkspaceHooks, claude_code_status_line, gemini_hook_settings, hook_file_text_of,
+    prepare_agent_hooks,
 };
 use natamux_agents::hooks::Signal;
 use natamux_agents::trust::trust_paths;
@@ -135,10 +136,11 @@ fn agent_runner(
 ) -> std::io::Result<AgentRunner> {
     // Shells reach the daemon on loopback, so do the hooks of the agents they start.
     let claude_settings_path = config.data_dir.join("claude-code-settings.json");
-    std::fs::write(
-        &claude_settings_path,
-        hook_file_text_of(&claude_code_hook_settings(daemon_url)),
-    )?;
+    let mut claude_settings = claude_code_hook_settings(daemon_url);
+    // Claude Code tells its plan limits only to its status line; `natamux statusline` passes them
+    // on and still runs the user's own status line.
+    claude_settings["statusLine"] = claude_code_status_line(config.agents.bin_dir.as_deref());
+    std::fs::write(&claude_settings_path, hook_file_text_of(&claude_settings))?;
     let gemini_settings_path = config.data_dir.join("gemini-settings.json");
     std::fs::write(
         &gemini_settings_path,

@@ -19,6 +19,7 @@ impl DashboardData {
             DashboardEvent::Jobs(jobs) => self.jobs != *jobs,
             DashboardEvent::Activity(activity) => self.activity != *activity,
             DashboardEvent::Usage(usage) => self.usage != *usage,
+            DashboardEvent::Limits(limits) => self.limits != *limits,
             DashboardEvent::DiffStats(stats) => self.diff_stats != *stats,
             DashboardEvent::Terminals { task_id, terminals } => {
                 self.terminals.get(task_id) != Some(terminals)

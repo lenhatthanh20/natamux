@@ -4,6 +4,11 @@ export type AgentActivity = { text: string; at: string }
 
 export type PreparingStep = 'fetch' | 'checkout'
 
+// One window of an agent's plan and how much of it is used. `resetsAt` is an ISO time.
+export type LimitWindow = { minutes: number; usedPercent: number; resetsAt: string | null }
+
+export type AgentLimits = { agent: string; windows: LimitWindow[]; seenAt: string }
+
 // Work the daemon does in the background that a person waits on, such as a push or a CI round.
 // Here and not in jobs.ts, so the two files do not import each other.
 export type Job = {
@@ -38,6 +43,8 @@ export type DaemonMessage =
   | { kind: 'workspace.preparing'; taskId: string; step: PreparingStep | null; error?: string }
   // The task's whole usage after a read of a session file added to it, as in GET /usage.
   | { kind: 'usage.changed'; taskId: string; usage: TaskUsage }
+  // The plan limits of every agent that told them, as in GET /limits.
+  | { kind: 'limits.changed'; limits: AgentLimits[] }
   // The review comments of a task changed: read them again.
   | { kind: 'review-comments.changed'; taskId: string }
   // Sent to one socket only, which missed messages while it was too far behind: load everything.

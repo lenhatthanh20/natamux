@@ -9,6 +9,7 @@ use crate::execute::{execute, print_json};
 use crate::format::{DEFAULT_URL, usage};
 use crate::hook::run_hook_command;
 use crate::hooks::claude_code_hook_settings;
+use crate::statusline::run_statusline;
 
 pub const EXIT_OK: u8 = 0;
 pub const EXIT_FAILED: u8 = 1;
@@ -93,6 +94,9 @@ pub async fn run_cli<T: Transport>(
     read_stdin: &dyn Fn() -> Vec<u8>,
     connect: &dyn Fn(&str, &str) -> T,
 ) -> u8 {
+    if argv == ["statusline"] {
+        return run_statusline(env, io, read_stdin, connect).await;
+    }
     if argv.first().map(String::as_str) == Some("hook") {
         return run_hook_command(
             argv.get(1..).unwrap_or_default(),

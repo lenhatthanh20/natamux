@@ -115,11 +115,12 @@ impl State {
 }
 
 /// What the dashboard feed reads on every connect, with nothing in it.
-const EMPTY_READS: [(&str, &str); 6] = [
+const EMPTY_READS: [(&str, &str); 7] = [
     ("GET /repos", r#"{"repos":[],"worktreesDir":"/w"}"#),
     ("GET /jobs", r#"{"jobs":[]}"#),
     ("GET /activity", r#"{"activity":{}}"#),
     ("GET /usage", r#"{"usage":{}}"#),
+    ("GET /limits", r#"{"limits":[]}"#),
     ("GET /diffstats", r#"{"stats":{}}"#),
     ("GET /workspaces/preparing", r#"{"preparing":{}}"#),
 ];

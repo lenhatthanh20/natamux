@@ -9,6 +9,8 @@ use ui::prelude::*;
 use super::super::new_workspace_rules::{PickedFile, SourceChoice, fit_attachments, format_bytes};
 use super::{NewWorkspaceDialog, Pick};
 use crate::agents::agent_choices::agent_label;
+use crate::agents::limits_rules::{current, picker_note};
+use crate::app::clock::now_ms;
 use crate::components::button_style::{action_button, button_icon};
 use crate::components::form::{field, input_box};
 use crate::components::icons::icon_path;
@@ -175,10 +177,11 @@ impl NewWorkspaceDialog {
             .iter()
             .find(|each| each.id == repo)
             .map_or_else(|| repo.clone(), |each| each.name.clone());
-        let agent = if self.agent.is_empty() {
-            "No agent, a plain terminal".to_string()
-        } else {
-            agent_label(Some(&self.agent))
+        let limits = current(&self.dashboard.read(cx).data.limits, now_ms());
+        let agent = match (self.agent.is_empty(), picker_note(&self.agent, &limits)) {
+            (true, _) => "No agent, a plain terminal".to_string(),
+            (false, Some(note)) => format!("{} · {note}", agent_label(Some(&self.agent))),
+            (false, None) => agent_label(Some(&self.agent)),
         };
         let project = self.select("new-task-project", Pick::Project, repo_name, false, cx);
         let branch = self.select(

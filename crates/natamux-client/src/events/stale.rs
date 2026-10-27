@@ -6,6 +6,7 @@ use std::time::Duration;
 
 use futures::channel::mpsc::UnboundedSender;
 use natamux_proto::agents::activity::{TaskActivity, TaskUsage};
+use natamux_proto::agents::limits::AgentLimits;
 use natamux_proto::events::kind::{
     EventKind, PreparingMessage, Resource, is_task_updated, task_id_of,
 };
@@ -34,6 +35,8 @@ pub enum DashboardEvent {
     Activity(BTreeMap<String, TaskActivity>),
     /// By task id.
     Usage(BTreeMap<String, TaskUsage>),
+    /// The plan limits of the agents that told them.
+    Limits(Vec<AgentLimits>),
     /// By task id.
     DiffStats(BTreeMap<String, DiffStat>),
     /// The terminal rows of a task the app shows (`TerminalRows::show`).
@@ -82,6 +85,7 @@ pub(crate) struct Stale {
     jobs: bool,
     activity: bool,
     usage: bool,
+    limits: bool,
     diff_stats: bool,
     dirty: bool,
     dirty_read_at: Option<Instant>,
@@ -105,6 +109,7 @@ impl Stale {
     /// What the fallback poll reads: the parts the web polls every minute.
     pub fn poll(&mut self) {
         (self.jobs, self.activity, self.usage, self.diff_stats) = (true, true, true, true);
+        self.limits = true;
     }
 
     fn polled() -> Stale {
@@ -128,6 +133,7 @@ impl Stale {
             Resource::Jobs => self.jobs = true,
             Resource::Activity => self.activity = true,
             Resource::Usage => self.usage = true,
+            Resource::Limits => self.limits = true,
             Resource::DiffStats => {
                 self.dirty = true;
                 if let Some(task_id) = task_id_of(text) {
@@ -220,6 +226,13 @@ impl Stale {
                 agents::api::usage(config).await,
                 events,
                 DashboardEvent::Usage,
+            )?;
+        }
+        if std::mem::take(&mut self.limits) {
+            pass(
+                agents::api::limits(config).await,
+                events,
+                DashboardEvent::Limits,
             )?;
         }
         self.read_diff_stats(config, diff_stats_every, events)

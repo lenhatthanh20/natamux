@@ -1,0 +1,6 @@
+{"type":"session_meta","payload":{"id":"s-2"}}
+{"type":"event_msg","payload":{"type":"token_count","info":null,"rate_limits":{"primary":{"used_percent":10.0,"window_minutes":300,"resets_at":1793088000},"secondary":{"used_percent":3.0,"window_minutes":10080,"resets_at":1793500000}}}}
+{"type":"event_msg","payload":{"type":"agent_message","message":"(removed)"}}
+{"type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":10,"output_tokens":1}},"rate_limits":{"primary":{"used_percent":42.5,"window_minutes":300,"resets_at":1793088000},"secondary":{"used_percent":"lots","window_minutes":10080},"credits":{"has_credits":false},"plan_type":null}}}
+{"type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":20,"output_tokens":2}}}}
+not json

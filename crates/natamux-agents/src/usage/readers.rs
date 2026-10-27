@@ -37,7 +37,7 @@ fn model_of(value: Option<&Value>) -> String {
 
 /// The JSON objects of a file, one per line. A broken line, such as the last one while the agent
 /// still writes it, is skipped.
-fn json_lines(path: &Path) -> Vec<Json> {
+pub(crate) fn json_lines(path: &Path) -> Vec<Json> {
     let Ok(file) = File::open(path) else {
         return Vec::new();
     };

@@ -12,6 +12,8 @@ use super::super::branches::{
 use super::super::new_workspace_rules::{base_after_pick, start_branch};
 use super::NewWorkspaceDialog;
 use crate::agents::agent_choices::AGENT_CHOICES;
+use crate::agents::limits_rules::{current, picker_note};
+use crate::app::clock::now_ms;
 use crate::components::menu::MenuLayer;
 
 /// The selects of the dialog; each opens a menu of its options.
@@ -101,12 +103,18 @@ impl NewWorkspaceDialog {
                 })
                 .collect()
             }
-            Pick::Agent => AGENT_CHOICES
-                .iter()
-                .map(|each| (each.label, each.id))
-                .chain([("No agent, a plain terminal", "")])
-                .map(|(label, id)| option(None, label.into(), id.into(), id == self.agent))
-                .collect(),
+            Pick::Agent => {
+                let limits = current(&self.dashboard.read(cx).data.limits, now_ms());
+                AGENT_CHOICES
+                    .iter()
+                    .map(|each| match picker_note(each.id, &limits) {
+                        Some(note) => (format!("{} · {note}", each.label), each.id),
+                        None => (each.label.to_string(), each.id),
+                    })
+                    .chain([("No agent, a plain terminal".to_string(), "")])
+                    .map(|(label, id)| option(None, label, id.into(), id == self.agent))
+                    .collect()
+            }
         }
     }
 

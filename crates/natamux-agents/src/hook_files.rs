@@ -8,7 +8,9 @@ use std::process::{Command, Stdio};
 
 use natamux_core::js::js_trim;
 use natamux_core::json::{parse_js, to_js_string_pretty};
-use natamux_proto::agents::claude_code::{CLAUDE_CODE_HOOK_EVENTS, TASK_ID_HEADER};
+use natamux_proto::agents::claude_code::{
+    CLAUDE_CODE_HOOK_EVENTS, STATUS_LINE_ARG, TASK_ID_HEADER, is_natamux_status_line,
+};
 use serde_json::{Map, Value, json};
 
 use crate::launch::{HOOK, LAUNCHABLE_AGENTS};
@@ -93,6 +95,31 @@ pub fn claude_code_hook_file() -> Value {
     })
 }
 
+/// The status line of a Claude Code that Natamux starts. By the app's own path when the daemon
+/// knows it (`NATAMUX_BIN_DIR`), so it runs without `natamux` on the PATH.
+pub fn claude_code_status_line(bin_dir: Option<&str>) -> Value {
+    let command = match bin_dir.map(str::trim).filter(|dir| !dir.is_empty()) {
+        Some(dir) => format!(
+            "\"{}\" {STATUS_LINE_ARG}",
+            Path::new(dir).join("natamux").display()
+        ),
+        None => format!("natamux {STATUS_LINE_ARG}"),
+    };
+    json!({ "type": "command", "command": command })
+}
+
+/// `NATAMUX_BIN_DIR` of the daemon, which the app sets.
+fn bin_dir() -> Option<String> {
+    std::env::var("NATAMUX_BIN_DIR").ok()
+}
+
+/// The workspace file of Claude Code: its hooks and Natamux's status line.
+pub fn claude_code_workspace_settings(bin_dir: Option<&str>) -> Value {
+    let mut settings = claude_code_hook_file();
+    settings["statusLine"] = claude_code_status_line(bin_dir);
+    settings
+}
+
 /// Copilot CLI does not tell a hook which event it is, so each event names itself.
 const COPILOT_EVENTS: [&str; 7] = [
     "userPromptSubmitted",
@@ -161,7 +188,7 @@ pub fn workspace_file(agent: &str, hooks: WorkspaceHooks) -> Option<WorkspaceFil
     let (path, content) = match agent {
         "claude-code" if hooks.claude_code => (
             ".claude/settings.local.json",
-            hook_file_text_of(&claude_code_hook_file()),
+            hook_file_text_of(&claude_code_workspace_settings(bin_dir().as_deref())),
         ),
         "gemini" => (
             ".gemini/settings.json",
@@ -242,9 +269,15 @@ pub fn hook_file_text(file: &WorkspaceFile, current: &str) -> Option<String> {
     let Value::Object(new) = parse_js(&file.content).ok()? else {
         return None;
     };
-    // A spread: keys of the file keep their place, the new values win.
+    // A spread: keys of the file keep their place, the new values win. A status line of the
+    // user's own stays: theirs, not Natamux's, is what they see.
+    let users_line = merged
+        .get("statusLine")
+        .is_some_and(|line| !is_natamux_status_line(line));
     for (key, value) in new {
-        merged.insert(key, value);
+        if !(key == "statusLine" && users_line) {
+            merged.insert(key, value);
+        }
     }
     Some(hook_file_text_of(&Value::Object(merged)))
 }

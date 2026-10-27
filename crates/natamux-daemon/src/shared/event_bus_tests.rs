@@ -213,6 +213,12 @@ fn writes_each_kind_as_the_node_daemon() {
             },
             r#"{"kind":"usage.changed","taskId":"T-1","usage":{"total":1.5}}"#,
         ),
+        (
+            DaemonMessage::LimitsChanged {
+                limits: json!([{"agent": "codex"}]),
+            },
+            r#"{"kind":"limits.changed","limits":[{"agent":"codex"}]}"#,
+        ),
     ] {
         assert_eq!(message.to_json(), text);
     }
