@@ -283,6 +283,51 @@ jobs:
           path: dist/natamux-cli-macos-arm64.tar.gz
           compression-level: 0
 
+  # The Intel app that release.yml (mac-x64) builds. Main only: it builds and saves the cache the
+  # release reads. Its prefix differs from app-macos, so the arm64 cleanup does not delete it.
+  app-macos-intel:
+    needs: changes
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.changes.outputs.app == 'true' }}
+    runs-on: macos-26-intel
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: rustup toolchain install
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: rust-app-mac-intel-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-${{ github.sha }}
+          restore-keys: rust-app-mac-intel-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-
+      - run: python3 scripts/ci-changes.py mtimes
+      - id: build
+        run: cargo build --release --locked -p natamux-app -p natamux-daemon -p natamux-cli
+      - name: Stamp the cache
+        if: ${{ !cancelled() && steps.build.outcome != 'skipped' }}
+        run: python3 scripts/ci-changes.py stamp
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: ${{ !cancelled() && steps.build.outcome != 'skipped' }}
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: rust-app-mac-intel-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-${{ github.sha }}
+      - name: Keep only the newest cache of this job
+        if: ${{ !cancelled() && steps.build.outcome != 'skipped' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh cache list --ref refs/heads/main --key "rust-app-mac-intel-" --json id,createdAt \
+            --jq 'sort_by(.createdAt) | reverse | .[1:] | .[].id' |
+            while read -r id; do gh cache delete "$id"; done
+
   # The state shots of app-macos, split over parallel jobs: one after another they took 22 minutes
   # (T-0165). On demand only (the changes job picks the shards): one job for a Shots: line that
   # names a few states, 4 for [ci: shots] or [ci: all], none on main. They took 4 of the 5 macOS
@@ -922,6 +967,7 @@ jobs:
       - changes
       - check
       - app-macos
+      - app-macos-intel
       - app-shots
       - shots
       - app-windows
