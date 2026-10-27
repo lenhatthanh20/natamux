@@ -136,13 +136,13 @@ jobs:
             [[ $digest =~ ^sha256:[0-9a-f]{64}$ ]]
             echo "${digest#sha256:}  $RUNNER_TEMP/$file" | sha256sum -c
           done
+          chmod +x "$RUNNER_TEMP/appimagetool-x86_64.AppImage"
       - name: Save the apt cache
         if: ${{ !cancelled() && runner.os == 'Linux' && steps.apt.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: /var/cache/apt/archives
           key: apt-${{ runner.os }}-${{ hashFiles('.github/workflows/release.yml') }}-${{ github.sha }}
-          chmod +x "$RUNNER_TEMP/appimagetool-x86_64.AppImage"
       - name: Install Windows installer tool
         if: runner.os == 'Windows'
         run: choco install nsis -y --no-progress
