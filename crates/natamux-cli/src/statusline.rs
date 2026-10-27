@@ -1,14 +1,15 @@
 //! `natamux statusline`: the status line command of a Claude Code that Natamux starts. Claude Code
-//! gives it JSON on stdin with the plan's `rate_limits`; it sends them to the daemon, then runs the
-//! user's own status line command with the same input and prints what that prints. Like the hook,
-//! it never fails Claude Code: it always exits 0 and ends silently (NATAMUX_DEBUG shows why).
+//! gives it JSON on stdin with the plan's `rate_limits`; it sends them to the daemon while it runs
+//! the user's own status line command with the same input, and prints what that prints. Like the
+//! hook, it never fails Claude Code: it always exits 0 and ends silently (NATAMUX_DEBUG shows why).
 
 use std::io::Write;
-use std::path::PathBuf;
-use std::process::{Command, Stdio};
+use std::path::{Path, PathBuf};
+use std::process::{Child, Command, Stdio};
 use std::time::Duration;
 
 use natamux_client::Method;
+use natamux_proto::agents::claude_code::is_natamux_status_line;
 use serde_json::Value;
 
 use crate::daemon::Transport;
@@ -16,61 +17,79 @@ use crate::format::DEFAULT_URL;
 use crate::run::{Env, Io};
 
 const REQUEST_TIMEOUT: Duration = Duration::from_millis(800);
-const THIS_COMMAND: &str = "natamux statusline";
+/// Set on the user's command, so a command that runs `natamux statusline` again ends at once.
+const NESTED_ENV: &str = "NATAMUX_STATUSLINE";
 
 /// The `rate_limits` object of the input, when it has one.
-pub fn rate_limits_of(input: &[u8]) -> Option<Value> {
-    let value: Value = serde_json::from_slice(input).ok()?;
-    value
+pub fn rate_limits_of(input: &Value) -> Option<Value> {
+    input
         .get("rate_limits")
         .filter(|limits| limits.is_object())
         .cloned()
 }
 
-/// The user's own status line command in their Claude settings. None when there is none, or it
-/// is this command.
+/// The status line command of one settings file, unless it is Natamux's own.
 pub fn own_command(settings: &str) -> Option<String> {
     let value: Value = serde_json::from_str(settings).ok()?;
     let line = value.get("statusLine")?;
-    if line.get("type").and_then(Value::as_str) != Some("command") {
+    if line.get("type").and_then(Value::as_str) != Some("command") || is_natamux_status_line(line) {
         return None;
     }
     let command = line.get("command")?.as_str()?.trim();
-    (!command.is_empty() && !command.starts_with(THIS_COMMAND)).then(|| command.to_string())
+    (!command.is_empty()).then(|| command.to_string())
 }
 
-// shortcut: only the user's settings file; a project's own `statusLine` is not run. Add the
-// project files when someone asks for them.
-fn user_settings(env: &Env) -> Option<PathBuf> {
-    let dir = match env.trimmed("CLAUDE_CONFIG_DIR") {
-        Some(dir) => PathBuf::from(dir),
-        None => PathBuf::from(env.trimmed("HOME")?).join(".claude"),
+/// The files Claude Code reads a status line from after Natamux's own, in its order: the project's
+/// local and shared settings, then the user's.
+fn settings_files(input: &Value, env: &Env) -> Vec<PathBuf> {
+    let project = input
+        .pointer("/workspace/project_dir")
+        .or_else(|| input.get("cwd"))
+        .and_then(Value::as_str)
+        .map(PathBuf::from);
+    let user = match env.trimmed("CLAUDE_CONFIG_DIR") {
+        Some(dir) => Some(PathBuf::from(dir)),
+        None => env
+            .trimmed("HOME")
+            .map(|home| Path::new(home).join(".claude")),
     };
-    Some(dir.join("settings.json"))
+    let mut files = Vec::new();
+    if let Some(project) = project {
+        files.push(project.join(".claude").join("settings.local.json"));
+        files.push(project.join(".claude").join("settings.json"));
+    }
+    if let Some(user) = user {
+        files.push(user.join("settings.json"));
+    }
+    files
 }
 
-/// Runs the user's command with the input, as Claude Code would: its first line of output is the
-/// status line.
-fn run_own(command: &str, input: &[u8]) -> Option<String> {
-    let mut child = if cfg!(windows) {
-        Command::new("cmd")
-            .args(["/C", command])
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .spawn()
+fn shell(command: &str) -> Command {
+    if cfg!(windows) {
+        let mut shell = Command::new("cmd");
+        shell.arg("/C");
+        #[cfg(windows)]
+        std::os::windows::process::CommandExt::raw_arg(&mut shell, command);
+        shell
     } else {
-        Command::new("sh")
-            .args(["-c", command])
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .spawn()
+        let mut shell = Command::new("sh");
+        shell.args(["-c", command]);
+        shell
     }
-    .ok()?;
+}
+
+/// Starts the user's command with the input on its stdin.
+fn start_own(command: &str, input: &[u8]) -> Option<Child> {
+    let mut child = shell(command)
+        .env(NESTED_ENV, "1")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .ok()?;
     if let Some(mut stdin) = child.stdin.take() {
         let _ = stdin.write_all(input);
     }
-    let output = child.wait_with_output().ok()?;
-    Some(String::from_utf8_lossy(&output.stdout).into_owned())
+    Some(child)
 }
 
 pub async fn run_statusline<T: Transport>(
@@ -79,26 +98,31 @@ pub async fn run_statusline<T: Transport>(
     read_stdin: &dyn Fn() -> Vec<u8>,
     connect: &dyn Fn(&str, &str) -> T,
 ) -> u8 {
+    if env.get(NESTED_ENV).is_some() {
+        return 0;
+    }
     let input = read_stdin();
-    if let Err(reason) = send(env, &input, connect).await
+    let parsed: Value = serde_json::from_slice(&input).unwrap_or(Value::Null);
+    let own = settings_files(&parsed, env)
+        .iter()
+        .find_map(|path| own_command(&std::fs::read_to_string(path).ok()?));
+    let child = own.and_then(|command| start_own(&command, &input));
+    if let Err(reason) = send(env, &parsed, connect).await
         && env
             .get("NATAMUX_DEBUG")
             .is_some_and(|value| !value.is_empty())
     {
         io.stderr(&format!("natamux statusline: {reason}\n"));
     }
-    let own = user_settings(env)
-        .and_then(|path| std::fs::read_to_string(path).ok())
-        .and_then(|text| own_command(&text));
-    if let Some(text) = own.and_then(|command| run_own(&command, &input)) {
-        io.stdout(&text);
+    if let Some(output) = child.and_then(|child| child.wait_with_output().ok()) {
+        io.stdout(&String::from_utf8_lossy(&output.stdout));
     }
     0
 }
 
 async fn send<T: Transport>(
     env: &Env,
-    input: &[u8],
+    input: &Value,
     connect: &dyn Fn(&str, &str) -> T,
 ) -> Result<(), String> {
     let (Some(token), Some(limits)) = (env.trimmed("NATAMUX_TOKEN"), rate_limits_of(input)) else {
@@ -132,25 +156,49 @@ async fn send<T: Transport>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     #[test]
     fn reads_the_rate_limits_of_the_input() {
-        let input = br#"{"model":{"id":"m"},"rate_limits":{"five_hour":{"used_percentage":12}}}"#;
+        let input =
+            json!({"model": {"id": "m"}, "rate_limits": {"five_hour": {"used_percentage": 12}}});
         assert_eq!(
-            rate_limits_of(input),
-            Some(serde_json::json!({"five_hour": {"used_percentage": 12}}))
+            rate_limits_of(&input),
+            Some(json!({"five_hour": {"used_percentage": 12}}))
         );
-        assert_eq!(rate_limits_of(br#"{"model":{}}"#), None);
-        assert_eq!(rate_limits_of(b"not json"), None);
+        assert_eq!(rate_limits_of(&json!({"model": {}})), None);
+        assert_eq!(rate_limits_of(&Value::Null), None);
     }
 
     #[test]
-    fn finds_the_users_own_command_but_not_this_one() {
+    fn finds_the_users_own_command_but_not_natamuxs() {
         let own = r#"{"statusLine":{"type":"command","command":" ~/.claude/line.sh "}}"#;
         assert_eq!(own_command(own).as_deref(), Some("~/.claude/line.sh"));
-        let this = r#"{"statusLine":{"type":"command","command":"natamux statusline"}}"#;
-        assert_eq!(own_command(this), None);
+        for ours in [
+            r#"{"statusLine":{"type":"command","command":"natamux statusline"}}"#,
+            r#"{"statusLine":{"type":"command","command":"\"/Apps/MacOS/natamux\" statusline"}}"#,
+        ] {
+            assert_eq!(own_command(ours), None, "{ours}");
+        }
         assert_eq!(own_command(r#"{"statusLine":{"type":"static"}}"#), None);
         assert_eq!(own_command("{}"), None);
+    }
+
+    #[test]
+    fn looks_in_the_project_then_the_user_settings() {
+        let input = json!({"cwd": "/w/sub", "workspace": {"project_dir": "/w"}});
+        let env = Env::from([("HOME", "/home/me")]);
+        let files: Vec<String> = settings_files(&input, &env)
+            .iter()
+            .map(|path| path.to_string_lossy().replace('\\', "/"))
+            .collect();
+        assert_eq!(
+            files,
+            [
+                "/w/.claude/settings.local.json",
+                "/w/.claude/settings.json",
+                "/home/me/.claude/settings.json",
+            ]
+        );
     }
 }

@@ -9,7 +9,7 @@ use natamux_proto::tasks::task::TaskState;
 use ui::prelude::*;
 
 use super::Root;
-use crate::agents::limits_rules::{agents_in_use, limits_chip, without_limits};
+use crate::agents::limits_rules::{agents_in_use, current, limits_chip, without_limits};
 use crate::app::dashboard::Dashboard;
 use crate::app::shell_rules::{Crumb, crumb, live_item, running_count, window_title};
 use crate::app::shortcuts::{ToggleAgents, ToggleDetails, ToggleSidebar};
@@ -203,10 +203,11 @@ impl Render for StatusBarView {
         }
         let data = &self.dashboard.read(cx).data;
         let (live, jobs) = (live_item(&data.link), data.jobs.clone());
-        let limits = limits_chip(&data.limits).map(|chip| LimitsItem {
+        let shown = current(&data.limits, counts.at_ms);
+        let limits = limits_chip(&shown).map(|chip| LimitsItem {
             chip,
-            limits: data.limits.clone(),
-            no_data: without_limits(&agents_in_use(&data.tasks, counts.at_ms), &data.limits),
+            no_data: without_limits(&agents_in_use(&data.tasks, counts.at_ms), &shown),
+            limits: shown.clone(),
         });
         let width = f32::from(window.viewport_size().width);
         let Toggles {

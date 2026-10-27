@@ -1,6 +1,6 @@
 //! The plan limits the usage service keeps.
 
-use natamux_daemon::agents::usage_service::current_limits;
+use natamux_daemon::agents::usage_service::{current_limits, merge_windows};
 use natamux_proto::agents::limits::{AgentLimits, LimitWindow};
 
 use super::*;
@@ -88,4 +88,30 @@ fn a_window_that_has_reset_is_left_out() {
     assert_eq!(current[0].windows, [window(10_080, 20.0, Some(LATER))]);
     let all_reset = current_limits(&limits, i64::MAX);
     assert!(all_reset.is_empty());
+}
+
+#[test]
+fn a_window_without_a_reset_lasts_its_length_from_when_it_was_told() {
+    let limits = [AgentLimits {
+        agent: "claude-code".into(),
+        windows: vec![window(300, 50.0, None)],
+        seen_at: "2026-10-27T08:00:00.000Z".into(),
+    }];
+    let told = 1_793_088_000_000;
+    assert_eq!(current_limits(&limits, told + 299 * 60_000).len(), 1);
+    assert!(current_limits(&limits, told + 300 * 60_000).is_empty());
+}
+
+#[test]
+fn an_older_window_does_not_replace_a_newer_one() {
+    let known = [window(300, 30.0, Some("2026-10-27T13:00:00.000Z"))];
+    // A session read late tells the window before the reset.
+    let older = vec![window(300, 95.0, Some("2026-10-27T08:00:00.000Z"))];
+    assert_eq!(merge_windows(&known, older), known);
+    // The same window: the higher share.
+    let same = vec![window(300, 20.0, Some("2026-10-27T13:00:00.000Z"))];
+    assert_eq!(merge_windows(&known, same), known);
+    // A later window replaces it.
+    let later = vec![window(300, 5.0, Some("2026-10-27T18:00:00.000Z"))];
+    assert_eq!(merge_windows(&known, later.clone()), later);
 }

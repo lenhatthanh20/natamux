@@ -152,3 +152,28 @@ fn the_agents_in_use_are_those_of_tasks_of_the_last_week() {
     let in_use: Vec<String> = agents_in_use(&tasks, now()).into_iter().collect();
     assert_eq!(in_use, ["codex"]);
 }
+
+#[test]
+fn a_window_that_has_reset_is_not_shown() {
+    let limits = vec![agent(
+        "codex",
+        vec![
+            window(300, 100.0, Some("2026-10-27T07:59:00.000Z")),
+            window(10_080, 30.0, Some("2026-10-30T09:00:00.000Z")),
+        ],
+    )];
+    let shown = current(&limits, now());
+    assert_eq!(shown[0].windows.len(), 1);
+    assert_eq!(limits_chip(&shown).unwrap().text, "Codex 30% · week");
+    let gone = vec![agent(
+        "codex",
+        vec![window(300, 100.0, Some("2026-10-27T07:00:00.000Z"))],
+    )];
+    assert!(current(&gone, now()).is_empty());
+}
+
+#[test]
+fn a_share_over_the_limit_shows_as_100() {
+    let over = vec![agent("codex", vec![window(300, 104.0, None)])];
+    assert_eq!(limits_chip(&over).unwrap().text, "Codex 100% · 5h");
+}

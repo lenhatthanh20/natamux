@@ -7,7 +7,7 @@ use ui::{ButtonLike, ContextMenu, Tooltip, prelude::*};
 
 use super::clock::now_ms;
 use super::status_items::item_label;
-use crate::agents::limits_rules::{Chip, Level, LimitRow, limit_rows};
+use crate::agents::limits_rules::{Chip, Level, LimitRow, current, limit_rows};
 use crate::components::menu::MenuLayer;
 
 /// What the item and its menu show.
@@ -96,7 +96,8 @@ fn row_element(row: &LimitRow, cx: &App) -> AnyElement {
 
 /// The menu, opened upward from the bar: one row per agent, the most used first.
 fn open_limits_menu(item: &LimitsItem, event: &ClickEvent, window: &mut Window, cx: &mut App) {
-    let rows = limit_rows(&item.limits, now_ms());
+    let now = now_ms();
+    let rows = limit_rows(&current(&item.limits, now), now);
     let no_data = item.no_data.clone();
     let menu = ContextMenu::build(window, cx, move |mut menu, _, _| {
         menu = menu.header("Plan usage");

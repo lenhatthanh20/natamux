@@ -133,7 +133,7 @@ The desktop app shows how much of a subscription's limits the agents used, such 
 
 Only two agents tell their limits:
 
-- Claude Code, on a Pro or Max plan: Natamux sets its status line to `natamux statusline`, which passes the limits on and then runs your own status line command from `~/.claude/settings.json`.
+- Claude Code, on a Pro or Max plan: Natamux sets its status line to `natamux statusline`, which passes the limits on and runs your own status line command: the project's `.claude/settings.local.json` or `.claude/settings.json`, else `~/.claude/settings.json`. A status line of your own in the workspace's `.claude/settings.local.json` stays as it is; Claude's limits then do not show for that workspace.
 - Codex, on a ChatGPT plan: Natamux reads them from its session file after each turn.
 
 Gemini CLI, Copilot CLI and Cursor tell no limits on your machine, so Natamux does not show theirs. A window that has reset is left out until the agent tells the new one.

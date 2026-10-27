@@ -30,7 +30,27 @@ pub fn level(used_percent: f64) -> Level {
 }
 
 fn percent(used: f64) -> String {
-    format!("{}%", used.round().clamp(0.0, 999.0) as i64)
+    format!("{}%", used.round().clamp(0.0, 100.0) as i64)
+}
+
+/// The windows that have not reset at `now_ms`: the bar may draw long after the limits came.
+pub fn current(limits: &[AgentLimits], now_ms: i64) -> Vec<AgentLimits> {
+    limits
+        .iter()
+        .map(|each| AgentLimits {
+            windows: each
+                .windows
+                .iter()
+                .filter(|window| {
+                    let reset = window.resets_at.as_deref().and_then(parse_iso_ms);
+                    reset.is_none_or(|reset| reset > now_ms)
+                })
+                .cloned()
+                .collect(),
+            ..each.clone()
+        })
+        .filter(|each| !each.windows.is_empty())
+        .collect()
 }
 
 /// "in 2h 10m", "in 3d 4h", "in 5m". None without a reset time.

@@ -33,23 +33,53 @@ pub fn limits_path(data_dir: &Path) -> PathBuf {
     data_dir.join("limits.json")
 }
 
-/// The windows that have not reset yet, at `now_ms`. A window with no reset time stays.
+/// The windows that have not reset yet, at `now_ms`. A window with no reset time lasts its length
+/// from when it was told.
 pub fn current_limits(limits: &[AgentLimits], now_ms: i64) -> Vec<AgentLimits> {
     limits
         .iter()
-        .map(|each| AgentLimits {
-            windows: each
-                .windows
-                .iter()
-                .filter(|window| {
-                    let reset = window.resets_at.as_deref().and_then(parse_iso_millis);
-                    reset.is_none_or(|reset| reset > now_ms)
-                })
-                .cloned()
-                .collect(),
-            ..each.clone()
+        .map(|each| {
+            let seen = parse_iso_millis(&each.seen_at).unwrap_or(0);
+            AgentLimits {
+                windows: each
+                    .windows
+                    .iter()
+                    .filter(|window| {
+                        let end = window
+                            .resets_at
+                            .as_deref()
+                            .and_then(parse_iso_millis)
+                            .unwrap_or(seen + i64::from(window.minutes) * 60_000);
+                        end > now_ms
+                    })
+                    .cloned()
+                    .collect(),
+                ..each.clone()
+            }
         })
         .filter(|each| !each.windows.is_empty())
+        .collect()
+}
+
+/// The windows an agent told now over the ones known: two sessions read at once may tell them in
+/// either order, so a window that resets later than the told one stays, and of the same window
+/// the higher share wins, as a share only grows until the reset.
+pub fn merge_windows(known: &[LimitWindow], told: Vec<LimitWindow>) -> Vec<LimitWindow> {
+    let reset = |window: &LimitWindow| window.resets_at.as_deref().and_then(parse_iso_millis);
+    told.into_iter()
+        .map(|new| {
+            let Some(old) = known.iter().find(|old| old.minutes == new.minutes) else {
+                return new;
+            };
+            match (reset(old), reset(&new)) {
+                (Some(old_at), Some(new_at)) if old_at > new_at => old.clone(),
+                (Some(old_at), Some(new_at)) if old_at == new_at => LimitWindow {
+                    used_percent: new.used_percent.max(old.used_percent),
+                    ..new
+                },
+                _ => new,
+            }
+        })
         .collect()
 }
 
@@ -278,7 +308,9 @@ impl Inner {
         let list = {
             let mut state = self.state();
             let at = state.limits.iter().position(|each| each.agent == agent);
-            if at.is_some_and(|at| state.limits[at].windows == windows) {
+            let known = at.map_or(&[][..], |at| &state.limits[at].windows[..]);
+            let windows = merge_windows(known, windows);
+            if known == windows.as_slice() {
                 return;
             }
             let told = AgentLimits {

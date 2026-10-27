@@ -188,7 +188,9 @@ fn writes_each_one_with_the_hooks_of_the_launch_out_of_git() {
 
     assert_eq!(
         read(path, ".claude/settings.local.json"),
-        hook_file_text_of(&claude_code_hook_file())
+        hook_file_text_of(&claude_code_workspace_settings(
+            std::env::var("NATAMUX_BIN_DIR").ok().as_deref()
+        ))
     );
     assert_eq!(
         read(path, ".gemini/settings.json"),
@@ -264,9 +266,45 @@ fn writes_the_hooks_of_an_older_natamux_again_and_keeps_what_claude_code_saved()
 
     let written: Value =
         serde_json::from_str(&read(repo.path(), ".claude/settings.local.json")).unwrap();
-    let mut want = claude_code_hook_file();
+    let mut want = claude_code_workspace_settings(std::env::var("NATAMUX_BIN_DIR").ok().as_deref());
     want["permissions"] = json!({ "allow": ["Bash(pnpm test)"] });
     assert_eq!(written, want);
+}
+
+#[test]
+fn keeps_a_status_line_of_the_users_own_in_the_claude_code_file() {
+    let repo = TempDir::new("launch");
+    let mut old = claude_code_hook_file();
+    old["statusLine"] = json!({ "type": "command", "command": "~/.claude/line.sh" });
+    write(
+        repo.path(),
+        ".claude/settings.local.json",
+        &hook_file_text_of(&old),
+    );
+
+    assert!(prepare_workspace("claude-code", repo.path(), claude_on()));
+
+    let written: Value =
+        serde_json::from_str(&read(repo.path(), ".claude/settings.local.json")).unwrap();
+    assert_eq!(written["statusLine"]["command"], "~/.claude/line.sh");
+}
+
+#[test]
+fn the_status_line_runs_the_app_s_own_natamux_when_the_daemon_knows_it() {
+    assert_eq!(
+        claude_code_status_line(Some("/Applications/Natamux.app/Contents/MacOS"))["command"],
+        "\"/Applications/Natamux.app/Contents/MacOS/natamux\" statusline"
+    );
+    assert_eq!(
+        claude_code_status_line(None)["command"],
+        "natamux statusline"
+    );
+    assert!(is_natamux_status_line(&claude_code_status_line(Some(
+        "/a b"
+    ))));
+    assert!(!is_natamux_status_line(
+        &json!({ "command": "~/.claude/line.sh" })
+    ));
 }
 
 #[test]
