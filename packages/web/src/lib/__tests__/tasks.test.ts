@@ -13,6 +13,7 @@ import {
   cancelTaskDescription,
   contextText,
   countByState,
+  DELETE_TASK_DESCRIPTION,
   filterTasks,
   formatAge,
   isQuiet,
@@ -537,5 +538,13 @@ describe('cancelTaskDescription', () => {
     expect(cancelTaskDescription({ workspace: null })).toBe(
       'A cancelled task cannot be started again.',
     )
+  })
+})
+
+describe('DELETE_TASK_DESCRIPTION', () => {
+  it('says the branch goes too, also with commits that are not merged', () => {
+    expect(DELETE_TASK_DESCRIPTION).toContain('The worktree folder and the branch go with it')
+    expect(DELETE_TASK_DESCRIPTION).toContain('not merged')
+    expect(DELETE_TASK_DESCRIPTION.endsWith('This cannot be undone.')).toBe(true)
   })
 })

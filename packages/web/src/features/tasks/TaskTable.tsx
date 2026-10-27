@@ -35,7 +35,7 @@ import {
   actionsFor,
   agentAction,
   cancelTaskDescription,
-  deleteTaskDescription,
+  DELETE_TASK_DESCRIPTION,
   formatAge,
   formatExact,
   isQuiet,
@@ -470,7 +470,7 @@ export function TaskTable({
   const confirmDelete = deleting !== null && onDelete !== undefined && (
     <ConfirmDialog
       title={`Delete ${deleting.id}?`}
-      description={deleteTaskDescription(deleting)}
+      description={DELETE_TASK_DESCRIPTION}
       confirmLabel="Delete task"
       onConfirm={() => onDelete(deleting)}
       onClose={() => setDeleting(null)}

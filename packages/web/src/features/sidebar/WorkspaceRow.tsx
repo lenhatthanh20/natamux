@@ -27,7 +27,7 @@ import { agentLabel } from '../../lib/agents'
 import type { StoredEvent } from '../../lib/api'
 import { CHECKS_COLOR, pullRequestNumber, pullRequestSummary } from '../../lib/pull-request'
 import {
-  deleteTaskDescription,
+  DELETE_TASK_DESCRIPTION,
   formatAge,
   formatExact,
   isQuiet,
@@ -490,7 +490,7 @@ export const WorkspaceRow = memo(function WorkspaceRow({
       {deleting && onDelete !== undefined && (
         <ConfirmDialog
           title={`Delete ${task.id}?`}
-          description={deleteTaskDescription(task)}
+          description={DELETE_TASK_DESCRIPTION}
           confirmLabel="Delete task"
           onConfirm={() => onDelete(task.id)}
           onClose={() => setDeleting(false)}

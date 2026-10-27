@@ -84,8 +84,8 @@ pub async fn get_task(state: Arc<AppState>, id: String) -> Answer {
     .await
 }
 
-/// The task and everything stored with it. A workspace goes too; uncommitted changes refuse the
-/// delete, so the task and the worktree both stay.
+/// The task and everything stored with it. A workspace and its branch go too; uncommitted changes
+/// refuse the delete, so the task, the worktree and the branch all stay.
 pub async fn delete_task(state: Arc<AppState>, id: String) -> Answer {
     let work = move || -> Result<Value, Box<Answer>> {
         let id = task_id_param(&id).map_err(|error| Box::new(zod_answer(&error)))?;
@@ -96,9 +96,13 @@ pub async fn delete_task(state: Arc<AppState>, id: String) -> Answer {
         if current.workspace.is_some() {
             state
                 .workspaces
-                .remove(&id, true)
+                .remove_for_delete(&id)
                 .map_err(|error| Box::new(workspace_error(&error)))?;
         }
+        state
+            .workspaces
+            .delete_branches_of(&current)
+            .map_err(|error| Box::new(workspace_error(&error)))?;
         let tasks = state
             .tasks
             .delete_task(&id)

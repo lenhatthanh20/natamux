@@ -439,3 +439,46 @@ fn goes_on_with_the_branch_that_was_kept_when_the_task_gets_a_new_workspace() {
         "work"
     );
 }
+
+#[test]
+fn deletes_the_branch_of_an_unfinished_ci_task_and_only_logs_a_failed_ci_branch_delete() {
+    let fx = Fx::new();
+    let task = fx.task("Fix the bug");
+    fx.ws.create(&task.id, None).unwrap();
+    let removed = fx.ws.remove(&task.id, false).unwrap().task;
+    assert!(fx.branch_exists(BRANCH));
+    let used_ci = Task {
+        ci_stages: Some(strings(&["implement"])),
+        ..removed
+    };
+
+    fx.ws.delete_branches_of(&used_ci).unwrap();
+
+    assert!(!fx.branch_exists(BRANCH));
+    assert!(
+        fx.log_lines()
+            .iter()
+            .any(|line| line.contains("Could not delete the CI branch"))
+    );
+}
+
+#[test]
+fn goes_on_when_the_project_of_a_branch_only_task_is_gone() {
+    let fx = Fx::new();
+    let task = fx.task("Fix the bug");
+    fx.ws.create(&task.id, None).unwrap();
+    let removed = fx.ws.remove(&task.id, false).unwrap().task;
+    let orphan = Task {
+        repo: Some("removed-project".into()),
+        ..removed
+    };
+
+    fx.ws.delete_branches_of(&orphan).unwrap();
+
+    assert!(fx.branch_exists(BRANCH));
+    assert!(
+        fx.log_lines()
+            .iter()
+            .any(|line| line.contains("Could not delete the branch"))
+    );
+}

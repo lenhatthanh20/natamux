@@ -92,6 +92,15 @@ pub fn delete_merged_branch(repo: &Path, branch: &str) -> bool {
     git(repo, &["branch", "-d", branch], None, &[]).is_ok()
 }
 
+/// Deletes a branch, merged or not. True when it is gone, also when it never existed.
+pub fn delete_branch_force(repo: &Path, branch: &str) -> bool {
+    if git(repo, &["branch", "-D", branch], None, &[]).is_ok() {
+        return true;
+    }
+    let name = format!("refs/heads/{branch}");
+    git(repo, &["rev-parse", "--verify", "--quiet", &name], None, &[]).is_err()
+}
+
 /// Deletes a branch when origin has every commit of it, as last pushed or fetched, merged or not.
 /// For a branch that GitHub merged with a squash or a rebase, which `git branch -d` keeps.
 pub fn delete_pushed_branch(repo: &Path, branch: &str) -> bool {

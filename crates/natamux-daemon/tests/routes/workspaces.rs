@@ -149,11 +149,13 @@ async fn answers_409_for_a_worktree_with_changes_that_are_not_committed() {
 #[tokio::test(flavor = "multi_thread")]
 async fn deletes_a_task_and_its_worktree_and_keeps_both_when_the_worktree_has_changes() {
     let (d, workspace) = with_workspace("ws-delete-task").await;
+    run_git(&workspace, &["commit", "--allow-empty", "-m", "work"]);
     std::fs::write(workspace.join("notes.txt"), "work in progress").unwrap();
 
     let (status, _) = d.delete("/tasks/T-0001").await;
     assert_eq!(status, 409);
     assert!(workspace.join("notes.txt").exists());
+    assert_ne!(run_git(&d.repo(), &["branch", "--list", BRANCH]), "");
     assert_eq!(d.get("/tasks/T-0001").await.0, 200);
 
     std::fs::remove_file(workspace.join("notes.txt")).unwrap();
@@ -322,4 +324,43 @@ async fn refuses_a_picked_skill_that_is_empty_or_too_long_and_stores_nothing() {
         assert_eq!(status, 400, "{answer}");
     }
     assert_eq!(task_count(&d).await, 0);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn deleting_a_task_deletes_its_branch_with_commits_that_are_not_merged() {
+    let (d, workspace) = with_workspace("ws-delete-unmerged").await;
+    std::fs::write(workspace.join("work.txt"), "work").unwrap();
+    run_git(&workspace, &["add", "work.txt"]);
+    run_git(&workspace, &["commit", "-m", "work"]);
+
+    let (status, body) = d.delete("/tasks/T-0001").await;
+
+    assert_eq!(status, 200, "{body}");
+    assert!(!workspace.exists());
+    assert_eq!(run_git(&d.repo(), &["branch", "--list", "natamux/*"]), "");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn deleting_a_task_without_a_workspace_deletes_its_branch() {
+    let (d, _) = with_workspace("ws-delete-branch-only").await;
+    let (status, _) = d.delete("/tasks/T-0001/workspace?deleteBranch=false").await;
+    assert_eq!(status, 200);
+    assert_ne!(run_git(&d.repo(), &["branch", "--list", "natamux/*"]), "");
+
+    let (status, body) = d.delete("/tasks/T-0001").await;
+
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(run_git(&d.repo(), &["branch", "--list", "natamux/*"]), "");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn deleting_a_task_whose_branch_was_deleted_by_hand_works() {
+    let (d, workspace) = with_workspace("ws-delete-branch-gone").await;
+    delete_folder(&workspace);
+    prune(&d);
+    run_git(&d.repo(), &["branch", "-D", BRANCH]);
+
+    let (status, body) = d.delete("/tasks/T-0001").await;
+
+    assert_eq!(status, 200, "{body}");
 }
