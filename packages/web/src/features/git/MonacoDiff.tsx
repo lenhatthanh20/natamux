@@ -1,3 +1,4 @@
+import type { ReviewComment } from '@natamux/core'
 import type { editor as MonacoEditor } from 'monaco-editor'
 import { useEffect, useRef } from 'react'
 import { useAppEvent } from '../../lib/app-events'
@@ -15,6 +16,7 @@ import { useUiSize } from '../../lib/ui-size'
 import { languageForPath } from '../files/language'
 import { attachAskAgent } from '../files/monaco-ask'
 import { DARK_THEME, LIGHT_THEME, monaco } from '../files/monaco-setup'
+import { type RevealLine, showReviewZones, type ZoneActions } from './review-zones'
 
 type MonacoDiffProps = {
   path: string
@@ -36,6 +38,12 @@ type MonacoDiffProps = {
   onChanges?: (info: { index: number; total: number }) => void
   // Lines selected on either side, to quote to the agent.
   onAsk?: (selection: CodeSelection) => void
+  // The comments to show under their lines (this file's, resolved ones already left out).
+  reviewComments?: readonly ReviewComment[]
+  reviewActions?: ZoneActions
+  // Moves the cursor to a line of a side, when a comment in the list was picked. `n` makes the
+  // same line count again.
+  reveal?: RevealLine | null
 }
 
 type Texts = { original: string; modified: string }
@@ -63,6 +71,9 @@ export default function MonacoDiff({
   onLine,
   onChanges,
   onAsk,
+  reviewComments,
+  reviewActions,
+  reveal,
 }: MonacoDiffProps) {
   const container = useRef<HTMLElement>(null)
   const editorRef = useRef<MonacoEditor.IStandaloneDiffEditor | null>(null)
@@ -79,6 +90,8 @@ export default function MonacoDiff({
   onChangesRef.current = onChanges
   const onAskRef = useRef(onAsk)
   onAskRef.current = onAsk
+  const actionsRef = useRef(reviewActions)
+  actionsRef.current = reviewActions
   const wrapRef = useRef(wrap)
   wrapRef.current = wrap
   const sideBySideRef = useRef(sideBySide)
@@ -304,6 +317,32 @@ export default function MonacoDiff({
       quiet.current = false
     }
   }, [original, modified])
+
+  // The zones are added again when the comments change, and with a new editor.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new file or UI size builds a new editor.
+  useEffect(() => {
+    const editor = editorRef.current
+    if (editor === null || reviewComments === undefined || reviewComments.length === 0) {
+      return
+    }
+    const actions: ZoneActions = {
+      onEdit: (id) => actionsRef.current?.onEdit(id),
+      onDelete: (id) => actionsRef.current?.onDelete(id),
+      onResolve: (id) => actionsRef.current?.onResolve(id),
+      onReopen: (id) => actionsRef.current?.onReopen(id),
+    }
+    return showReviewZones(editor, reviewComments, sideBySide, actions)
+  }, [reviewComments, sideBySide, path, uiSize])
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new file builds a new editor.
+  useEffect(() => {
+    const diff = editorRef.current
+    if (diff !== null && reveal) {
+      const inner = reveal.side === 'old' ? diff.getOriginalEditor() : diff.getModifiedEditor()
+      inner.setPosition({ lineNumber: reveal.line, column: 1 })
+      inner.revealLineInCenter(reveal.line)
+    }
+  }, [reveal, path])
 
   useEffect(() => {
     monaco.editor.setTheme(monacoTheme(theme))

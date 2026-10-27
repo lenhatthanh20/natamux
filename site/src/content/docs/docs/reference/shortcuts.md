@@ -117,10 +117,11 @@ These work when a workspace is open.
 | Previous change in the file | `Shift+Alt+F5` |
 | Comment on the file or the selection for the agent | `Mod+Shift+A` |
 | Roll back the shown file | `Mod+Alt+Z` |
+| Send the review comments to the agent | `Mod+Alt+Enter` |
 | Draft the commit message with the agent | `Mod+Shift+G` |
 | Accessible diff view | `F7` or `Shift+F7` |
 
-`Mod+Shift+A` puts the cursor in the comment box. With lines selected in the diff, it also adds them to the comment. In that box, `Mod+Enter` sends the comment. `Mod+Shift+G` works only with the cursor in the commit box. `F7` is handled by the diff editor, so it works while the focus is in the diff. See [Changes and history](/docs/guides/changes-and-history/).
+`Mod+Shift+A` puts the cursor in the comment box. With lines selected in the diff, it also adds them to the comment. In that box, `Mod+Enter` adds the comment as a draft; **Send now** sends it at once. `Mod+Shift+G` works only with the cursor in the commit box. `F7` is handled by the diff editor, so it works while the focus is in the diff. See [Changes and history](/docs/guides/changes-and-history/).
 
 ## Command palette
 

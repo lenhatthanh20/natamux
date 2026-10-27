@@ -66,6 +66,10 @@ export function describeEvent(
   if (type === 'agent.paused' && typeof minutes === 'number') {
     return `Agent paused after ${minutes} min idle`
   }
+  // A batch from the Comments list; a one-off send has `text`.
+  if (type === 'review.commented' && payload.comments !== undefined) {
+    return 'Review comments sent to the agent'
+  }
   const sentence =
     type === 'stage.reopened' && payload.ci === true ? 'Sent back by CI' : EVENT_SENTENCE[type]
   const path = payload.path

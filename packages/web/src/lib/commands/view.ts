@@ -143,6 +143,15 @@ export const diffCommands: Command[] = [
     run: () => fireAppEvent('diff-comment'),
   },
   {
+    id: 'diff.sendComments',
+    title: 'Send the review comments to the agent',
+    category: 'Workspace',
+    shortcuts: ['Mod+Alt+Enter'],
+    group: 'Diff',
+    when: inWorkspace,
+    run: () => fireAppEvent('send-comments'),
+  },
+  {
     id: 'changes.rollback',
     title: 'Roll back the shown file',
     category: 'Workspace',

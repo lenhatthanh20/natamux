@@ -42,6 +42,8 @@ pub enum DashboardChange {
     WorkspaceChanged(String),
     /// A task's terminals started or ended (`shells.changed`).
     ShellsChanged(String),
+    /// A task's review comments changed (`review-comments.changed`).
+    ReviewCommentsChanged(String),
     /// A line was added to a task's log (`task.updated`): its events, stage files and
     /// settings may have changed.
     TaskLogged(String),
@@ -183,6 +185,9 @@ impl Dashboard {
             }
             DashboardEvent::ShellsChanged { task_id } => {
                 cx.emit(DashboardChange::ShellsChanged(task_id.clone()))
+            }
+            DashboardEvent::ReviewCommentsChanged { task_id } => {
+                cx.emit(DashboardChange::ReviewCommentsChanged(task_id.clone()))
             }
             DashboardEvent::TaskLogged { task_id } => {
                 cx.emit(DashboardChange::TaskLogged(task_id.clone()))

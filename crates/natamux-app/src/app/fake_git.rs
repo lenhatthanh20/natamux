@@ -30,6 +30,7 @@ const AUTHOR: &str = "Natamux e2e";
 pub(super) struct GitState {
     files: BTreeMap<String, Vec<FileDiff>>,
     undo: BTreeMap<String, Vec<ChangeEntry>>,
+    reviews: review::ReviewState,
 }
 
 fn status(code: u16, message: String) -> ClientError {
@@ -48,6 +49,7 @@ impl Data {
         let graphs: BTreeMap<String, GitGraph> = part!(seed, "graphs");
         self.graphs.extend(graphs);
         self.git.files = part!(seed, "files");
+        self.add_review_seed(&seed);
     }
 
     fn change(&self, task_id: &str, path: &str) -> Answer<&ChangeEntry> {
@@ -272,6 +274,9 @@ impl FakeDaemon {
         data.touch(task_id, "review.commented", json!({ "text": text }))
     }
 }
+
+#[path = "fake_review.rs"]
+mod review;
 
 #[cfg(test)]
 #[path = "fake_git_tests.rs"]

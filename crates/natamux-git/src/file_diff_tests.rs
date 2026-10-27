@@ -132,6 +132,48 @@ mod diff {
     }
 }
 
+mod side {
+    use super::*;
+
+    #[test]
+    fn reads_the_new_side_from_the_worktree_and_the_old_side_from_the_last_commit() {
+        let (_root, path) = worktree();
+        commit_file(&path, "a.txt", b"one\n", "add a");
+        std::fs::write(path.join("a.txt"), "two\n").unwrap();
+
+        let new = read_side(&path, "a.txt", None, CommentSide::New).unwrap();
+        let old = read_side(&path, "a.txt", None, CommentSide::Old).unwrap();
+
+        assert_eq!(new.as_deref(), Some("two\n"));
+        assert_eq!(old.as_deref(), Some("one\n"));
+    }
+
+    #[test]
+    fn has_no_old_side_for_a_new_file_and_follows_a_rename() {
+        let (_root, path) = worktree();
+        commit_file(&path, "a.txt", b"one\n", "add a");
+        run_git(&path, &["mv", "a.txt", "b.txt"]);
+        std::fs::write(path.join("c.txt"), "new\n").unwrap();
+
+        let renamed = read_side(&path, "b.txt", Some("a.txt"), CommentSide::Old).unwrap();
+        let fresh = read_side(&path, "c.txt", None, CommentSide::Old).unwrap();
+        let gone = read_side(&path, "none.txt", None, CommentSide::New).unwrap();
+
+        assert_eq!(renamed.as_deref(), Some("one\n"));
+        assert_eq!((fresh, gone), (None, None));
+    }
+
+    #[test]
+    fn has_no_text_for_a_binary_file() {
+        let (_root, path) = worktree();
+        std::fs::write(path.join("x.bin"), [1u8, 0, 2]).unwrap();
+
+        let text = read_side(&path, "x.bin", None, CommentSide::New).unwrap();
+
+        assert_eq!(text, None);
+    }
+}
+
 mod image {
     use super::*;
 

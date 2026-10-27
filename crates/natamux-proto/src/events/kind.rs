@@ -15,7 +15,7 @@ struct Envelope {
 }
 
 /// Every `kind` this module knows, to check against the daemon's `DaemonMessage`.
-pub const KNOWN_KINDS: [&str; 13] = [
+pub const KNOWN_KINDS: [&str; 14] = [
     "task.created",
     "task.updated",
     "task.changed",
@@ -28,6 +28,7 @@ pub const KNOWN_KINDS: [&str; 13] = [
     "workspace.dirty",
     "shells.changed",
     "workspace.preparing",
+    "review-comments.changed",
     "resync",
 ];
 
@@ -47,6 +48,8 @@ pub enum Resource {
     Shells,
     /// The step of a new workspace, and its ready or failed toast.
     Preparing,
+    /// The review comments of one task (`GET /tasks/:id/review-comments`).
+    ReviewComments,
     /// The socket was behind and skipped messages: read everything again.
     Resync,
 }
@@ -64,6 +67,7 @@ pub enum EventKind {
     WorkspaceDirty,
     ShellsChanged,
     WorkspacePreparing,
+    ReviewCommentsChanged,
     /// The socket was behind and skipped messages: read everything again.
     Resync,
     /// Any other kind, also ones this build does not know.
@@ -91,6 +95,7 @@ impl EventKind {
             "workspace.dirty" => EventKind::WorkspaceDirty,
             "shells.changed" => EventKind::ShellsChanged,
             "workspace.preparing" => EventKind::WorkspacePreparing,
+            "review-comments.changed" => EventKind::ReviewCommentsChanged,
             "resync" => EventKind::Resync,
             _ => EventKind::Other,
         }
@@ -108,6 +113,7 @@ impl EventKind {
             EventKind::WorkspaceDirty => Some(Resource::DiffStats),
             EventKind::ShellsChanged => Some(Resource::Shells),
             EventKind::WorkspacePreparing => Some(Resource::Preparing),
+            EventKind::ReviewCommentsChanged => Some(Resource::ReviewComments),
             EventKind::Resync => Some(Resource::Resync),
             EventKind::Other => None,
         }
@@ -244,6 +250,10 @@ mod tests {
             (
                 r#"{"kind":"workspace.preparing","taskId":"T-1","step":"fetch"}"#,
                 Resource::Preparing,
+            ),
+            (
+                r#"{"kind":"review-comments.changed","taskId":"T-1"}"#,
+                Resource::ReviewComments,
             ),
             (r#"{"kind":"resync"}"#, Resource::Resync),
         ];

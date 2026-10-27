@@ -30,6 +30,7 @@ import { type GitStep, nextGitStep, pushButton, waitReason } from '../../lib/wor
 import { FileEditor } from '../files/FileEditor'
 import { ChangesPanel } from '../git/ChangesPanel'
 import { GitGraph } from '../git/GitGraph'
+import type { ReviewCommentsApi } from '../git/useReviewComments'
 import { ShellPanes } from '../terminals/ShellPanes'
 import type { TerminalConnectQuery } from '../terminals/terminal'
 import { DocsTab } from './DocsTab'
@@ -69,6 +70,7 @@ type ChangesViewProps = {
   push: () => Promise<Task>
   openPullRequest: () => Promise<Task>
   sendToAgent: (text: string) => Promise<Task>
+  reviewApi?: ReviewCommentsApi
   resume: () => void
   resuming: boolean
   loadStageFiles: () => Promise<StageFile[]>
@@ -138,6 +140,7 @@ export function ChangesView({
   push,
   openPullRequest,
   sendToAgent,
+  reviewApi,
   resume,
   resuming,
   startAgent,
@@ -570,6 +573,7 @@ export function ChangesView({
             loadFile={loadFile}
             loadImage={loadImage}
             sendToAgent={sendToAgent}
+            reviewApi={reviewApi}
             onCommit={commitFiles}
             committing={pending === 'commit'}
             gitBusy={pending !== null}

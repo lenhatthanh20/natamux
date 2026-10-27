@@ -19,7 +19,8 @@ use super::body::{DEFAULT_BODY_LIMIT, read_body};
 use super::errors::{Answer, json_answer, not_found, unauthorized};
 use super::routes::stages::Mark;
 use super::routes::{
-    agents, github, projects, stages, tasks, terminals, workspace_files, workspaces,
+    agents, github, projects, review_comments, stages, tasks, terminals, workspace_files,
+    workspaces,
 };
 use super::web::WebAssets;
 use super::{event_socket, terminal_socket};
@@ -218,7 +219,19 @@ pub async fn handle(request: Request<Incoming>, state: Arc<AppState>) -> Answer 
         (&Method::GET, ["tasks", id, "attachments", name]) => {
             tasks::get_attachment(state, id.to_string(), name.to_string()).await
         }
+        (&Method::GET, ["tasks", id, "review-comments"]) => {
+            let (id, query) = (id.to_string(), query.to_string());
+            review_comments::list(state, id, query, by_agent).await
+        }
+        (&Method::DELETE, ["tasks", id, "review-comments", cid]) => {
+            review_comments::delete(state, id.to_string(), cid.to_string(), by_agent).await
+        }
+        (&Method::POST, ["tasks", id, "review-comments", "send"]) => {
+            review_comments::send(state, id.to_string(), by_agent).await
+        }
         (&Method::POST, ["tasks"])
+        | (&Method::POST, ["tasks", _, "review-comments"])
+        | (&Method::PATCH, ["tasks", _, "review-comments", _])
         | (&Method::POST, ["templates"])
         | (&Method::POST, ["templates", _, "tasks"])
         | (&Method::PATCH, ["tasks", _])
@@ -397,6 +410,13 @@ async fn with_body(
             agents::message(state, id.to_string(), body).await
         }
         (&Method::POST, ["limits", agent]) => agents::post_limits(&state, agent, body),
+        (&Method::POST, ["tasks", id, "review-comments"]) => {
+            review_comments::add(state, id.to_string(), body, by_agent).await
+        }
+        (&Method::PATCH, ["tasks", id, "review-comments", cid]) => {
+            let (id, cid) = (id.to_string(), cid.to_string());
+            review_comments::update(state, id, cid, body, by_agent).await
+        }
         (&Method::POST, ["repos"]) => projects::add_repo(state, body).await,
         (&Method::PUT, ["repos", id, "settings"]) => {
             projects::put_settings(state, id.to_string(), head.headers, body, by_agent).await

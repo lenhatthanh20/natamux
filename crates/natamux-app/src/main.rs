@@ -133,6 +133,8 @@ mod git {
     pub mod history_view;
     pub mod image_rules;
     pub mod languages;
+    pub mod review_blocks;
+    pub mod review_rules;
     pub mod rollback_dialog;
     pub mod rollback_rules;
 }

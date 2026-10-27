@@ -83,6 +83,18 @@ fn says_a_send_back_by_ci_came_from_ci_also_when_it_goes_to_the_same_stage() {
 }
 
 #[test]
+fn says_a_batch_of_review_comments_apart_from_a_one_off_comment() {
+    assert_eq!(
+        describe("review.commented", json!({"comments": ["c1", "c2"]})),
+        "Review comments sent to the agent"
+    );
+    assert_eq!(
+        describe("review.commented", json!({"text": "Fix it"})),
+        "Review comment sent to the agent"
+    );
+}
+
+#[test]
 fn says_how_long_a_paused_agent_was_idle() {
     assert_eq!(
         describe("agent.paused", json!({"terminal": "1", "idleMinutes": 30})),

@@ -4,6 +4,13 @@ import {
   type EndedShell,
   type EventType,
   endedShellSchema,
+  type NewReviewComment,
+  type ReviewComment,
+  type ReviewCommentPatch,
+  reviewCommentAnswerSchema,
+  reviewCommentListSchema,
+  type SendReviewAnswer,
+  sendReviewAnswerSchema,
   type Task,
   type TaskTemplate,
   type TaskUsage,
@@ -118,6 +125,40 @@ export function tasksApi(client: Client) {
         await request('POST', `/tasks/${encodeURIComponent(taskId)}/agent/message`, { text }),
       )
       return taskSchema.parse(body.task)
+    },
+
+    async listReviewComments(taskId: string): Promise<ReviewComment[]> {
+      const body = await request('GET', `/tasks/${encodeURIComponent(taskId)}/review-comments`)
+      return reviewCommentListSchema.parse(body).comments
+    },
+
+    async addReviewComment(taskId: string, input: NewReviewComment): Promise<ReviewComment> {
+      const path = `/tasks/${encodeURIComponent(taskId)}/review-comments`
+      const body = await request('POST', path, input)
+      return reviewCommentAnswerSchema.parse(body).comment
+    },
+
+    async updateReviewComment(
+      taskId: string,
+      commentId: string,
+      patch: ReviewCommentPatch,
+    ): Promise<ReviewComment> {
+      const path = `/tasks/${encodeURIComponent(taskId)}/review-comments/${encodeURIComponent(commentId)}`
+      return reviewCommentAnswerSchema.parse(await request('PATCH', path, patch)).comment
+    },
+
+    async deleteReviewComment(taskId: string, commentId: string): Promise<void> {
+      await request(
+        'DELETE',
+        `/tasks/${encodeURIComponent(taskId)}/review-comments/${encodeURIComponent(commentId)}`,
+      )
+    },
+
+    // Pastes every draft into the agent's terminal as one prompt, and marks them sent.
+    async sendReviewComments(taskId: string): Promise<SendReviewAnswer> {
+      const path = `/tasks/${encodeURIComponent(taskId)}/review-comments/send`
+      const body = await request('POST', path)
+      return sendReviewAnswerSchema.parse(body)
     },
 
     async listJobs(): Promise<Job[]> {

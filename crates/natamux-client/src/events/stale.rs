@@ -57,6 +57,10 @@ pub enum DashboardEvent {
     ShellsChanged {
         task_id: String,
     },
+    /// The review comments of a task changed. No read of its own: the Changes tab reads them.
+    ReviewCommentsChanged {
+        task_id: String,
+    },
     /// A change added a line to the task's log. No read of its own: the app reads the events,
     /// stage files and settings of the task it shows.
     TaskLogged {
@@ -148,6 +152,12 @@ impl Stale {
                 }
             }
             Resource::Preparing => return PreparingMessage::parse(text),
+            Resource::ReviewComments => {
+                if let Some(task_id) = task_id_of(text) {
+                    self.passed
+                        .push(DashboardEvent::ReviewCommentsChanged { task_id });
+                }
+            }
             Resource::Resync => {
                 let dirty_read_at = self.dirty_read_at;
                 *self = Stale::everything(shown);
@@ -307,6 +317,10 @@ mod tests {
             &shown(&["T-1"]),
         );
         stale.note(r#"{"kind":"workspace.dirty","taskId":"T-3"}"#, &shown(&[]));
+        stale.note(
+            r#"{"kind":"review-comments.changed","taskId":"T-4"}"#,
+            &shown(&[]),
+        );
         assert_eq!(
             stale.passed,
             [
@@ -315,6 +329,9 @@ mod tests {
                 },
                 DashboardEvent::WorkspaceChanged {
                     task_id: "T-3".into()
+                },
+                DashboardEvent::ReviewCommentsChanged {
+                    task_id: "T-4".into()
                 },
             ]
         );

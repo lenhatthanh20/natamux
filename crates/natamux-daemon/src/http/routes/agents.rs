@@ -21,7 +21,7 @@ use crate::http::errors::{
 };
 use crate::http::routes::stages::stage_answer;
 use crate::http::server::{AppState, query_value};
-use crate::stages::errors::{StageError, action};
+use crate::stages::errors::{StageError, StageResult, action};
 use crate::terminals::limits::MAIN_TERMINAL;
 use crate::workspaces::errors::WorkspaceError;
 
@@ -230,6 +230,21 @@ pub async fn reopen_agent(state: Arc<AppState>, id: String) -> Answer {
     .await
 }
 
+/// Puts a prompt in front of the agent of Terminal 1: wakes it when paused, else pastes it.
+pub(crate) fn paste_prompt(state: &AppState, id: &str, text: &str) -> StageResult<()> {
+    let run = &state.stages.run;
+    if !run.wake_paused(id, MAIN_TERMINAL, text)? {
+        // Pasted into a shell, the lines of the comment would run as commands.
+        if !run.agent_runs(id, MAIN_TERMINAL) {
+            return Err(action(format!(
+                "No agent runs in the terminal of {id}. Start the agent first"
+            )));
+        }
+        state.terminals.paste(id, text, MAIN_TERMINAL)?;
+    }
+    Ok(())
+}
+
 /// A review comment for the agent: pasted into its terminal as the next prompt.
 pub async fn message(state: Arc<AppState>, id: String, body: Option<Value>) -> Answer {
     let id = match task_id_param(&id) {
@@ -251,16 +266,7 @@ pub async fn message(state: Arc<AppState>, id: String, body: Option<Value>) -> A
     };
     stage_answer(StatusCode::OK, move || {
         state.tasks.get_task(&id)?;
-        let run = &state.stages.run;
-        if !run.wake_paused(&id, MAIN_TERMINAL, &text)? {
-            // Pasted into a shell, the lines of the comment would run as commands.
-            if !run.agent_runs(&id, MAIN_TERMINAL) {
-                return Err(action(format!(
-                    "No agent runs in the terminal of {id}. Start the agent first"
-                )));
-            }
-            state.terminals.paste(&id, &text, MAIN_TERMINAL)?;
-        }
+        paste_prompt(&state, &id, &text)?;
         let task = state.tasks.record_review_comment(&id, &text)?;
         Ok(json!({ "task": to_value(&task) }))
     })

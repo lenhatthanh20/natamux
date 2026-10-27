@@ -1,4 +1,4 @@
-import type { FileDiff, ImageSide } from '@natamux/core'
+import type { FileDiff, ImageSide, ReviewComment } from '@natamux/core'
 import { lazy } from 'react'
 import { Button } from '../../components/ui/Button'
 import { LazyView } from '../../components/ui/LazyView'
@@ -6,6 +6,7 @@ import { SkeletonList } from '../../components/ui/Skeleton'
 import { type CodeSelection, wholeFileKind } from '../../lib/changes'
 import { showsImage, wholeText } from './body-kind'
 import { ImageDiff } from './ImageDiff'
+import type { RevealLine, ZoneActions } from './review-zones'
 
 // Monaco is large. It is loaded the first time a diff is shown, not with the dashboard.
 const MonacoDiff = lazy(() => import('./MonacoDiff'))
@@ -41,6 +42,10 @@ type FileBodyProps = {
   onAsk: (selection: CodeSelection) => void
   onStats: (stats: LineStats) => void
   onChanges: (info: ChangeInfo) => void
+  // The comments to show inside the diff, with the buttons of each.
+  reviewComments?: readonly ReviewComment[]
+  reviewActions?: ZoneActions
+  reveal?: RevealLine | null
 }
 
 export function FileBody({
@@ -60,6 +65,9 @@ export function FileBody({
   onAsk,
   onStats,
   onChanges,
+  reviewComments,
+  reviewActions,
+  reveal,
 }: FileBodyProps) {
   // Keyed by path: the size of the image before must not show while the new one loads.
   if (showsImage(file, svgPreview)) {
@@ -142,6 +150,9 @@ export function FileBody({
           onAsk={onAsk}
           onStats={onStats}
           onChanges={onChanges}
+          reviewComments={reviewComments}
+          reviewActions={reviewActions}
+          reveal={reveal}
         />
       </LazyView>
     </>

@@ -6,6 +6,9 @@ use natamux_proto::tasks::task::Task;
 use natamux_proto::workspaces::changes::{
     CommitAnswer, CommitMessageDraft, DraftSource, RollbackResult,
 };
+use natamux_proto::workspaces::review_comments::{
+    CommentSide, CommentState, ReviewComment, SendReviewAnswer,
+};
 use ui::prelude::*;
 
 use super::writes::Written;
@@ -144,6 +147,73 @@ impl Dashboard {
             true,
             cx,
             |this, task: &Task, _| this.take_task(task),
+        )
+    }
+
+    /// The review comment writes: the Changes tab shows a failure in place, so no toast. The
+    /// daemon's `review-comments.changed` makes the tab read the list again.
+    pub fn add_review_comment(
+        &mut self,
+        task_id: &str,
+        path: &str,
+        side: CommentSide,
+        lines: (u32, u32),
+        body: String,
+        cx: &mut Context<Self>,
+    ) -> Written<ReviewComment> {
+        let Some(source) = self.source.clone() else {
+            return Self::no_daemon();
+        };
+        let answer = source.add_review_comment(task_id, path, side, lines, body);
+        self.write(answer, true, cx, |_, _, _| {})
+    }
+
+    pub fn update_review_comment(
+        &mut self,
+        task_id: &str,
+        id: &str,
+        body: Option<String>,
+        state: Option<CommentState>,
+        cx: &mut Context<Self>,
+    ) -> Written<ReviewComment> {
+        let Some(source) = self.source.clone() else {
+            return Self::no_daemon();
+        };
+        let answer = source.update_review_comment(task_id, id, body, state);
+        self.write(answer, true, cx, |_, _, _| {})
+    }
+
+    pub fn delete_review_comment(
+        &mut self,
+        task_id: &str,
+        id: &str,
+        cx: &mut Context<Self>,
+    ) -> Written<()> {
+        let Some(source) = self.source.clone() else {
+            return Self::no_daemon();
+        };
+        self.write(
+            source.delete_review_comment(task_id, id),
+            true,
+            cx,
+            |_, _, _| {},
+        )
+    }
+
+    /// Send N comments: one prompt to the agent; the task's log gets a line.
+    pub fn send_review_comments(
+        &mut self,
+        task_id: &str,
+        cx: &mut Context<Self>,
+    ) -> Written<SendReviewAnswer> {
+        let Some(source) = self.source.clone() else {
+            return Self::no_daemon();
+        };
+        self.write(
+            source.send_review_comments(task_id),
+            true,
+            cx,
+            |this, answer: &SendReviewAnswer, _| this.take_task(&answer.task),
         )
     }
 }

@@ -45,6 +45,8 @@ export type DaemonMessage =
   | { kind: 'usage.changed'; taskId: string; usage: TaskUsage }
   // The plan limits of every agent that told them, as in GET /limits.
   | { kind: 'limits.changed'; limits: AgentLimits[] }
+  // The review comments of a task changed: read them again.
+  | { kind: 'review-comments.changed'; taskId: string }
   // Sent to one socket only, which missed messages while it was too far behind: load everything.
   | { kind: 'resync' }
 

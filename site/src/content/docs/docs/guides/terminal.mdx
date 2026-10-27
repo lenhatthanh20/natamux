@@ -100,7 +100,7 @@ After you quit and open the app again, Natamux starts the agent of each running,
 
 ### Send a message to the agent
 
-You can send text to the agent without typing in the terminal. In the **Changes** tab, write a comment under the diff and click **Send to agent**. Natamux pastes it into Terminal 1 as the agent's next prompt and presses Enter. See [Changes and history](/docs/guides/changes-and-history/).
+You can send text to the agent without typing in the terminal. In the **Changes** tab, write a comment under the diff and click **Send now**. Natamux pastes it into Terminal 1 as the agent's next prompt and presses Enter. See [Changes and history](/docs/guides/changes-and-history/).
 
 This works only while an agent runs in Terminal 1, or is [paused](#an-idle-agent-pauses) there. Otherwise Natamux answers `No agent runs in the terminal of T-0001. Start the agent first`. That check keeps a comment from running as shell commands.
 
@@ -114,7 +114,7 @@ An agent that ended its turn still uses memory while it waits. When it has waite
 
 - The pane keeps the last screen, dimmed, with **Paused after 30 min idle. Starts again when shown.**
 - Open the task, show the pane, or type in it, and the agent starts again on the same conversation. The keys you typed go to it once it runs.
-- A new stage in that terminal, or a comment from **Send to agent**, starts the agent on its conversation with that prompt.
+- A new stage in that terminal, or a comment from **Send now** or **Send N comments**, starts the agent on its conversation with that prompt.
 - An agent that asks something, works, or waits for its background work does not pause. Nor does an agent that never named its conversation.
 - After a daemon restart, a paused agent stays paused until you show it.
 - The task's activity log says **Agent paused after 30 min idle**.

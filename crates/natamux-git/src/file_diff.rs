@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use natamux_proto::workspaces::changes::{ChangeStatus, FileDiff, ImageSide, image_type_of};
+use natamux_proto::workspaces::review_comments::CommentSide;
 use natamux_proto::workspaces::workspace::ChangeEntry;
 
 use crate::exec::{GitError, OutsideWorkspaceError, git, git_bytes};
@@ -145,6 +146,43 @@ pub fn read_file_diff(worktree: &Path, change: &ChangeEntry) -> Result<FileDiff,
     let text =
         |side: Option<Vec<u8>>| side.map(|bytes| String::from_utf8_lossy(&bytes).into_owned());
     Ok(diff(text(original), text(modified), false, false))
+}
+
+/// The text of one side of a file, for a review comment: the file now (`New`, also when it is not
+/// in the change list) or the last commit (`Old`, from `original_path` for a rename). None when
+/// the side is not there, is binary or is too large.
+pub fn read_side(
+    worktree: &Path,
+    path: &str,
+    original_path: Option<&str>,
+    side: CommentSide,
+) -> Result<Option<String>, FileDiffError> {
+    let bytes = match side {
+        CommentSide::New => {
+            let Some(file) = read_inside(worktree, path)? else {
+                return Ok(None);
+            };
+            if !file.is_file || file.size > MAX_FILE_BYTES {
+                return Ok(None);
+            }
+            read_file(&file)?
+        }
+        CommentSide::Old => {
+            let source = format!("HEAD:{}", original_path.unwrap_or(path));
+            // A path that is not in the last commit has no old side; git fails for it.
+            if git(worktree, &["cat-file", "-e", &source], None, &[]).is_err() {
+                return Ok(None);
+            }
+            if object_size(worktree, &source)? > MAX_FILE_BYTES {
+                return Ok(None);
+            }
+            git_bytes(worktree, &["show", &source])?
+        }
+    };
+    if looks_binary(&bytes) {
+        return Ok(None);
+    }
+    Ok(Some(String::from_utf8_lossy(&bytes).into_owned()))
 }
 
 /// Why one side of an image could not be read. The daemon answers 400 for `NotAnImage`, 404 for

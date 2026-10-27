@@ -1,6 +1,6 @@
 //! The two text boxes of the Changes tab: the commit box under the files (`ChangesPanel.tsx`:
-//! Generate and Commit all) and the comment box under the diff (`AgentComment.tsx`: Send to agent,
-//! with the lines that Ask agent quoted).
+//! Generate and Commit all) and the comment box under the diff (`AgentComment.tsx`: Add comment,
+//! Send now, with the lines that Ask agent quoted).
 
 use editor::Editor;
 use editor::actions::MoveToEnd;
@@ -26,7 +26,7 @@ impl ChangesView {
             .clone()
     }
 
-    fn comment_box(&mut self, window: &mut Window, cx: &mut App) -> Entity<Editor> {
+    pub(super) fn comment_box(&mut self, window: &mut Window, cx: &mut App) -> Entity<Editor> {
         self.comment
             .get_or_insert_with(|| {
                 text_editor("What should change, and why", Some((1, 4)), window, cx)
@@ -124,8 +124,8 @@ impl ChangesView {
         .detach();
     }
 
-    /// Send to agent (Mod+Enter in the box): the comment, with the quoted lines, goes into the
-    /// agent's terminal. A failure keeps the text and the quote.
+    /// Send now (no key): the comment, with the quoted lines, goes into the agent's terminal. A
+    /// failure keeps the text and the quote.
     pub(super) fn send(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let (Some(id), Some(path)) = (self.task_id.clone(), self.shown_path(cx)) else {
             return;
@@ -267,6 +267,10 @@ impl ChangesView {
         })
     }
 
+    fn cancel_clicked(&mut self, _: &ClickEvent, window: &mut Window, cx: &mut Context<Self>) {
+        self.cancel_edit(window, cx);
+    }
+
     pub(super) fn render_comment_box(
         &mut self,
         window: &mut Window,
@@ -279,7 +283,10 @@ impl ChangesView {
         });
         let written = comment.read(cx).text(cx);
         let line = self.diff.update(cx, |diff, cx| diff.cursor_line(cx));
-        let label = comment_label(line, self.quote.as_ref());
+        let label = match &self.review.editing {
+            Some(id) => format!("Edit comment {id}"),
+            None => comment_label(line, self.quote.as_ref()),
+        };
         let status = self.sent.as_ref().map(|sent| match sent {
             Ok(()) => Label::new(SENT_TEXT)
                 .size(LabelSize::XSmall)
@@ -291,15 +298,32 @@ impl ChangesView {
         let chip = self.quote_chip(cx);
         let reason = send_reason(&written);
         let off = reason.is_some() || self.sending;
-        let send = action_button("comment-send", "Send to agent")
+        let editing = self.review.editing.is_some();
+        let add_label = if editing {
+            "Save comment"
+        } else {
+            "Add comment"
+        };
+        let add = action_button("comment-add", add_label)
             .key_binding(key_hint("mod-enter", off))
             .disabled(off)
-            .on_click(cx.listener(|view, _: &ClickEvent, window, cx| view.send(window, cx)));
-        let send = match reason {
-            Some(reason) => send.tooltip(Tooltip::text(reason)).into_any_element(),
-            None => send.into_any_element(),
+            .on_click(cx.listener(|view, _: &ClickEvent, window, cx| view.add_comment(window, cx)));
+        let add = match reason {
+            Some(reason) => add.tooltip(Tooltip::text(reason)).into_any_element(),
+            None => add.into_any_element(),
         };
+        // One-off send, no key: Cancel takes its place while a draft is edited.
+        let second = if editing {
+            quiet_button("comment-cancel", "Cancel").on_click(cx.listener(Self::cancel_clicked))
+        } else {
+            quiet_button("comment-send", "Send now")
+                .disabled(off)
+                .on_click(cx.listener(|view, _: &ClickEvent, window, cx| view.send(window, cx)))
+        };
+        let mut context = KeyContext::default();
+        context.add("NatamuxCommentBox");
         v_flex()
+            .key_context(context)
             .flex_none()
             .px_3()
             .py_2()
@@ -308,7 +332,7 @@ impl ChangesView {
             .border_color(cx.theme().colors().border)
             .on_key_down(cx.listener(|view, event: &gpui::KeyDownEvent, window, cx| {
                 if event.keystroke.key == "enter" && event.keystroke.modifiers.secondary() {
-                    view.send(window, cx);
+                    view.add_comment(window, cx);
                     cx.stop_propagation();
                 }
             }))
@@ -324,7 +348,7 @@ impl ChangesView {
                     .gap_2()
                     .items_end()
                     .child(div().flex_1().min_w_0().child(input_box(&comment, cx)))
-                    .child(send),
+                    .child(v_flex().gap_1().child(add).child(second)),
             )
             .into_any_element()
     }

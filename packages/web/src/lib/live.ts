@@ -33,6 +33,7 @@ export type LiveMessage =
     }
   | { kind: 'shells.changed'; taskId: string }
   | { kind: 'workspace.dirty'; taskId: string }
+  | { kind: 'review-comments.changed'; taskId: string }
   // The background jobs that run now, all of them.
   | { kind: 'jobs.changed'; jobs: Job[] }
   // The step a new workspace is at. Null: it ended, with `error` when it failed.
@@ -71,6 +72,8 @@ export function parseLiveMessage(text: string): LiveMessage | undefined {
       return id === null ? undefined : { kind: 'shells.changed', taskId: id }
     case 'workspace.dirty':
       return id === null ? undefined : { kind: 'workspace.dirty', taskId: id }
+    case 'review-comments.changed':
+      return id === null ? undefined : { kind: 'review-comments.changed', taskId: id }
     case 'jobs.changed':
       try {
         return { kind: 'jobs.changed', jobs: readJobs(jobs) }
@@ -119,7 +122,15 @@ export const PREPARING_KEY = ['workspaces', 'preparing']
 // With busy agents some workspace always changes, so the sizes are read at most once per this time.
 export const DIFFSTATS_EVERY_MS = 15_000
 // The queries of a workspace's files, by task id: the Changes, History and Docs tabs.
-const WORKSPACE_KEYS = ['changes', 'file-diff', 'graph', 'stage-files', 'tree', 'workspace-file']
+const WORKSPACE_KEYS = [
+  'changes',
+  'file-diff',
+  'graph',
+  'stage-files',
+  'tree',
+  'workspace-file',
+  'review-comments',
+]
 // The queries of a task's log, by task id, and the stage files that a logged event may have
 // written. Not keyed on the time of the task: a busy agent moves it every 30 seconds.
 const LOG_KEYS = ['events', 'stage-events', 'stage-files', 'question-events']
@@ -201,6 +212,8 @@ export function applyLiveMessages(client: QueryClient, messages: readonly LiveMe
         add([key, message.taskId])
       }
       sizesChanged = true
+    } else if (message.kind === 'review-comments.changed') {
+      add(['review-comments', message.taskId])
     } else if (message.kind === 'workspace.preparing' && preparing !== undefined) {
       const { [message.taskId]: _step, ...others } = preparing
       preparing = message.step === null ? others : { ...others, [message.taskId]: message.step }

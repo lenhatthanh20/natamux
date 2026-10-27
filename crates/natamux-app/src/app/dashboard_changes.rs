@@ -28,6 +28,7 @@ impl DashboardData {
             DashboardEvent::WorkspaceStep(_) | DashboardEvent::Status(_) => true,
             DashboardEvent::WorkspaceChanged { .. }
             | DashboardEvent::ShellsChanged { .. }
+            | DashboardEvent::ReviewCommentsChanged { .. }
             | DashboardEvent::TaskLogged { .. } => false,
         }
     }
@@ -89,6 +90,9 @@ mod tests {
                 task_id: task_id.clone(),
             },
             DashboardEvent::ShellsChanged {
+                task_id: task_id.clone(),
+            },
+            DashboardEvent::ReviewCommentsChanged {
                 task_id: task_id.clone(),
             },
             DashboardEvent::TaskLogged { task_id },

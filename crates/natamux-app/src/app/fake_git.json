@@ -176,5 +176,44 @@
     "binary": true
    }
   ]
+ },
+ "comments": {
+  "T-0143": [
+   {
+    "id": "c1",
+    "path": "src/checkout.ts",
+    "side": "new",
+    "start": 5,
+    "end": 6,
+    "quote": "  const amount = total(items) - Math.max(0, coupon)\n  return Math.max(0, amount)",
+    "body": "Name this `net`, and say why a coupon never takes it below zero.\nAlso add a test for a negative coupon.",
+    "state": "draft",
+    "createdAt": "2026-10-22T09:30:00.000Z"
+   },
+   {
+    "id": "c2",
+    "path": "src/checkout.ts",
+    "side": "old",
+    "start": 4,
+    "end": 4,
+    "quote": "  return total(items) - coupon",
+    "body": "Was a negative total ever wanted here?",
+    "state": "sent",
+    "createdAt": "2026-10-22T09:26:00.000Z",
+    "sentAt": "2026-10-22T09:28:00.000Z"
+   },
+   {
+    "id": "c3",
+    "path": "test/coupon.test.ts",
+    "side": "new",
+    "start": 3,
+    "end": 5,
+    "quote": "test('a coupon takes the total down', () => {\n  expect(checkout([{ price: 5 }], 2)).toBe(3)\n})",
+    "body": "Also cover a coupon of 0.",
+    "state": "draft",
+    "createdAt": "2026-10-22T09:31:00.000Z",
+    "outdated": true
+   }
+  ]
  }
 }

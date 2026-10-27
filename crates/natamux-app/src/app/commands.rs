@@ -22,6 +22,8 @@ pub const CHANGES: &str = "NatamuxChanges && not_editing";
 pub const CHANGES_ANY: &str = "NatamuxChanges";
 /// The wrapper of the commit box.
 pub const COMMIT_BOX: &str = "NatamuxCommitBox";
+/// The wrapper of the comment box under the diff.
+pub const COMMENT_BOX: &str = "NatamuxCommentBox";
 /// Where single keys work: outside text boxes and terminals.
 pub(super) const SINGLE: &[&str] = &[BODY, LIST, DETAILS];
 
