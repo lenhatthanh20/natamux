@@ -7,6 +7,16 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v1.0.4 (2026-10-27)
+
+- In the **Changes** tab, comment on a line of a task's diff, or on a whole file, in the desktop app and the web dashboard. Comments are saved as drafts and stay on their code when the agent edits the file. **Send N comments** (`Mod+Alt+Enter`) sends every open comment to the agent in one prompt. Click **Resolve** when a comment is fixed. See [Comment for the agent](/docs/guides/changes-and-history/#comment-for-the-agent).
+- An agent that ended its turn and waited 30 minutes, with no window that shows its terminal, pauses: Natamux ends its terminal and keeps its conversation. Show it again and the agent starts again on the same conversation. Change the minutes, or turn it off with `0`, with **Pause idle agents after (min)** on the **Stages** tab of a project's settings, or `agents.pauseIdleAfterMinutes` in `.natamux.json`. See [An idle agent pauses](/docs/guides/terminal/#an-idle-agent-pauses).
+- In the desktop app, the status bar shows the agent nearest its plan limit, such as **Claude 84% · 5h**, and its menu lists each agent's windows. A toast says when a window passes 80%, and **Start a task** shows the share next to each agent. Only Claude Code and Codex tell their limits. See [Plan limits](/docs/guides/dashboard/#plan-limits).
+- The desktop app has nine more theme families: Ayu, Catppuccin, Dracula, GitHub, Gruvbox, Nord, Rosé Pine, Solarized and Tokyo Night. Pick them under **Light theme** and **Dark theme** in **Settings → Appearance**. See [Settings](/docs/guides/dashboard/#settings).
+- Deleting a task now also deletes its branch, also when the branch has commits that are not merged. A task whose worktree has changes that are not committed is still not deleted. For a task that used **Check on CI**, its `natamux-ci/` branch on GitHub goes too; before, only a done or cancelled task lost it. Only the branch of the pull request stays on GitHub, with the pull request.
+- Fix: since v1.0.0 the desktop app showed no macOS notifications, played no sound and showed no count on the Dock icon. Now they work again, and a click on a notification opens the task. See [Notifications and the Dock](/docs/guides/desktop-app/#notifications-and-the-dock).
+- Fix: in a narrow desktop app window, a click on a task in the sidebar drawer only closed the drawer. Now it opens the task.
+
 ## v1.0.3 (2026-10-26)
 
 - An agent may now send a task back from one stage any number of times; before, it stopped after 2. To set a limit, type a number in **Agent send backs** on the **Stages** tab of a project's settings, or set `agents.maxSendBacks` in `.natamux.json`. Past the limit the task waits for you, as before. The limit counts CI failures too. See [Limit the send backs](/docs/guides/project-settings/#limit-the-send-backs).
