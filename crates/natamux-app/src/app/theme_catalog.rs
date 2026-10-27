@@ -99,7 +99,10 @@ impl ThemeNames {
     pub fn with(self, kind: ThemeKind, name: &str) -> Self {
         let name = parse_theme_name(name, kind);
         match kind {
-            ThemeKind::Light => ThemeNames { light: name, ..self },
+            ThemeKind::Light => ThemeNames {
+                light: name,
+                ..self
+            },
             ThemeKind::Dark => ThemeNames { dark: name, ..self },
         }
     }
@@ -147,7 +150,10 @@ mod tests {
             } else {
                 ThemeKind::Dark
             };
-            assert!(kind.themes().contains(&name.as_str()), "{name} is not offered");
+            assert!(
+                kind.themes().contains(&name.as_str()),
+                "{name} is not offered"
+            );
         }
     }
 
@@ -160,9 +166,15 @@ mod tests {
     #[test]
     fn an_unknown_or_wrong_kind_name_falls_back_to_the_default() {
         assert_eq!(parse_theme_name("Dracula", ThemeKind::Dark), "Dracula");
-        assert_eq!(parse_theme_name("Dracula", ThemeKind::Light), "Natamux Light");
+        assert_eq!(
+            parse_theme_name("Dracula", ThemeKind::Light),
+            "Natamux Light"
+        );
         assert_eq!(parse_theme_name("", ThemeKind::Dark), "Natamux Dark");
-        assert_eq!(parse_theme_name("One Dark", ThemeKind::Dark), "Natamux Dark");
+        assert_eq!(
+            parse_theme_name("One Dark", ThemeKind::Dark),
+            "Natamux Dark"
+        );
     }
 
     #[test]

@@ -107,7 +107,11 @@ fn finds_the_theme_rows_by_a_theme_name_or_color_scheme() {
         Some(vec![SettingRow::LightTheme, SettingRow::DarkTheme])
     );
     let theme = rows("theme").unwrap_or_default();
-    for row in [SettingRow::Theme, SettingRow::LightTheme, SettingRow::DarkTheme] {
+    for row in [
+        SettingRow::Theme,
+        SettingRow::LightTheme,
+        SettingRow::DarkTheme,
+    ] {
         assert!(theme.contains(&row), "{row:?}");
     }
 }
