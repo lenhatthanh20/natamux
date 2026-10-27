@@ -146,10 +146,23 @@ jobs:
       - name: Install Windows installer tool
         if: runner.os == 'Windows'
         run: choco install nsis -y --no-progress
+      # The cache comes from app-macos on macos-15, and cargo does not rerun the build script of
+      # a git crate. ui's script reads the SDK to size the traffic light gutter.
+      - name: Rebuild ui for this SDK
+        if: runner.os == 'macOS'
+        run: cargo clean --release -p ui
       - name: Build the app and its daemon
         env:
           NATAMUX_REQUIRE_WEB: "1"
         run: cargo build --release --locked -p natamux-app -p natamux-daemon -p natamux-cli
+      - name: Check the ui build matches the SDK
+        if: runner.os == 'macOS'
+        run: |
+          sdk=$(xcrun --sdk macosx --show-sdk-version)
+          echo "macOS SDK $sdk"
+          if [ "${sdk%%.*}" -ge 26 ]; then
+            grep -q macos_sdk_26_or_later target/release/build/ui-*/output
+          fi
       - name: Start the app and its owned daemon
         timeout-minutes: 5
         run: |

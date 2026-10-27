@@ -486,7 +486,8 @@ pub fn open(
                 title: Some(window_title(0).into()),
                 appears_transparent: mac,
                 // gpui centers the 16 px buttons at y + 8; 9 matches the 34 px bar, as in Zed.
-                traffic_light_position: mac.then(|| point(px(12.), px(9.))),
+                // x 9 as in Zed: ui's TRAFFIC_LIGHT_PADDING assumes it.
+                traffic_light_position: mac.then(|| point(px(9.), px(9.))),
             }),
             app_owns_titlebar_drag: mac,
             ..Default::default()
