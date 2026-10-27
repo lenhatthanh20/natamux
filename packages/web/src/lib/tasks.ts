@@ -61,18 +61,12 @@ export function actionsFor(state: TaskState): TaskAction[] {
   return isFinished ? [] : [...STATE_ACTIONS[state], CANCEL_ACTION]
 }
 
-// What the delete confirmation says. A workspace goes with the task; a branch with unmerged
-// commits stays, the same rule as removing a workspace.
-export function deleteTaskDescription(task: Pick<Task, 'workspace'>): string {
-  const gone = 'This deletes the task, its notes and its history.'
-  if (task.workspace === null) {
-    return `${gone} This cannot be undone.`
-  }
-  return (
-    `${gone} The worktree folder goes with it. ` +
-    'The branch stays when it has commits that are not merged.'
-  )
-}
+// What the delete confirmation says. A task without a workspace may still have a branch, so the
+// text is the same for every task.
+export const DELETE_TASK_DESCRIPTION =
+  'This deletes the task, its notes and its history. ' +
+  'The worktree folder and the branch go with it, also commits that are not merged. ' +
+  'This cannot be undone.'
 
 // What a cancel stops and what it keeps.
 export function cancelTaskDescription(task: Pick<Task, 'workspace'>): string {

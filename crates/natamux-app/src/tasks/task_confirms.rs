@@ -21,7 +21,7 @@ pub fn confirm_delete_task(
     let id = task.id.clone();
     Confirm::new(
         format!("Delete {}?", task.id),
-        delete_task_description(task.workspace.is_some()),
+        delete_task_description(),
         "Delete task",
         move |_, cx| {
             dashboard.update(cx, |dashboard, cx| dashboard.delete_task(&id, cx).detach());

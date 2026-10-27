@@ -167,7 +167,7 @@ pub fn delete_all_title(state: TaskState, count: usize) -> String {
 }
 
 pub const DELETE_ALL_DESCRIPTION: &str = "This deletes these tasks, their notes and their \
-    history. A worktree folder goes with its task. A branch stays when it has commits that are \
+    history. A worktree folder and the branch go with its task, also commits that are \
     not merged. A task whose workspace has changes that are not committed is skipped. This \
     cannot be undone.";
 

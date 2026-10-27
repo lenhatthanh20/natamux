@@ -284,7 +284,7 @@ export function TaskBoard({
       {deleting !== null && onDeleteTasks !== undefined && (
         <ConfirmDialog
           title={`Delete ${deleting.tasks.length} ${STATE_LABEL[deleting.state].toLowerCase()} ${deleting.tasks.length === 1 ? 'task' : 'tasks'}?`}
-          description="This deletes these tasks, their notes and their history. A worktree folder goes with its task. A branch stays when it has commits that are not merged. A task whose workspace has changes that are not committed is skipped. This cannot be undone."
+          description="This deletes these tasks, their notes and their history. A worktree folder and the branch go with its task, also commits that are not merged. A task whose workspace has changes that are not committed is skipped. This cannot be undone."
           confirmLabel="Delete"
           onConfirm={() => onDeleteTasks(deleting.tasks.map((task) => task.id))}
           onClose={() => setDeleting(null)}

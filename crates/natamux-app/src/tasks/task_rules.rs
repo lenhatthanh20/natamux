@@ -91,18 +91,12 @@ pub fn actions_for(state: TaskState) -> Vec<TaskAction> {
     actions
 }
 
-/// What the delete confirmation says. A workspace goes with the task; a branch with unmerged
-/// commits stays.
-pub fn delete_task_description(has_workspace: bool) -> String {
-    let gone = "This deletes the task, its notes and its history.";
-    if has_workspace {
-        format!(
-            "{gone} The worktree folder goes with it. \
-             The branch stays when it has commits that are not merged."
-        )
-    } else {
-        format!("{gone} This cannot be undone.")
-    }
+/// What the delete confirmation says. The worktree folder and the branch go with the task, also
+/// commits that are not merged; a task without them has nothing of that to lose.
+pub fn delete_task_description() -> String {
+    "This deletes the task, its notes and its history. The worktree folder and the branch go \
+     with it, also commits that are not merged. This cannot be undone."
+        .to_string()
 }
 
 /// What a cancel stops and what it keeps.
@@ -407,7 +401,9 @@ mod tests {
 
     #[test]
     fn says_what_a_delete_removes() {
-        assert!(delete_task_description(false).ends_with("This cannot be undone."));
-        assert!(delete_task_description(true).contains("The worktree folder goes with it."));
+        let text = delete_task_description();
+        assert!(text.contains("The worktree folder and the branch go with it"));
+        assert!(text.contains("not merged"));
+        assert!(text.ends_with("This cannot be undone."));
     }
 }

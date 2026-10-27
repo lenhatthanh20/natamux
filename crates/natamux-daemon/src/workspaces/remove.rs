@@ -2,14 +2,25 @@
 
 use std::path::Path;
 
+use natamux_git::branches::delete_branch_force;
 use natamux_git::changes::list_changes;
+use natamux_git::commit_push::delete_remote_ref;
 use natamux_git::worktrees::{WorktreeState, has_submodules, remove_worktree, worktree_state};
+use natamux_proto::tasks::task::Task;
+use natamux_stages::ci::ci_branch_of;
 use natamux_stages::files::archive_stage_files;
 
 use crate::tasks::records::WorkspaceChange;
 use crate::workspaces::branch_name::delete_finished_branch;
 use crate::workspaces::errors::{RemoveWorkspaceResult, WorkspaceError, WorkspaceResult};
 use crate::workspaces::service::WorkspaceService;
+
+#[derive(Clone, Copy)]
+enum BranchRule {
+    Keep,
+    Finished,
+    Force,
+}
 
 impl WorkspaceService {
     /// Removes the worktree folder. The branch goes too when it is fully merged, otherwise it
@@ -19,6 +30,54 @@ impl WorkspaceService {
         &self,
         task_id: &str,
         delete_branch: bool,
+    ) -> WorkspaceResult<RemoveWorkspaceResult> {
+        let rule = if delete_branch {
+            BranchRule::Finished
+        } else {
+            BranchRule::Keep
+        };
+        self.remove_with(task_id, rule)
+    }
+
+    /// Removes the worktree of a task that is being deleted. The branch goes too, merged or not.
+    pub fn remove_for_delete(&self, task_id: &str) -> WorkspaceResult<RemoveWorkspaceResult> {
+        self.remove_with(task_id, BranchRule::Force)
+    }
+
+    /// Deletes the branch of a task that has no workspace any more, and its CI branch on origin.
+    /// A branch that is gone already is fine.
+    /// `task` is as it was before the worktree went, since that clears its branch.
+    pub fn delete_branches_of(&self, task: &Task) -> WorkspaceResult<()> {
+        let task_id = task.id.as_str();
+        let Some(branch) = &task.branch else {
+            return Ok(());
+        };
+        // A removed project must not block the delete of the task.
+        let repo_dir = match self.repo_dir_of(task.repo.as_deref()) {
+            Ok(dir) => dir,
+            Err(error) => {
+                (self.log)(&format!(
+                    "Could not delete the branch of {task_id}: {error}"
+                ));
+                return Ok(());
+            }
+        };
+        delete_branch_force(&repo_dir, branch);
+        if task.ci_stages.as_ref().is_some_and(|s| !s.is_empty()) {
+            let ref_name = ci_branch_of(branch);
+            if let Err(error) = delete_remote_ref(&repo_dir, &ref_name) {
+                (self.log)(&format!(
+                    "Could not delete the CI branch {ref_name} of {task_id}: {error}"
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    fn remove_with(
+        &self,
+        task_id: &str,
+        rule: BranchRule,
     ) -> WorkspaceResult<RemoveWorkspaceResult> {
         self.exclusive(task_id, "Removing worktree", || {
             let task = self.tasks.get_task(task_id)?;
@@ -59,10 +118,11 @@ impl WorkspaceService {
                 }
             }
 
-            let branch_deleted = match (&task.branch, delete_branch) {
-                (Some(branch), true) => {
+            let branch_deleted = match (&task.branch, rule) {
+                (Some(branch), BranchRule::Finished) => {
                     delete_finished_branch(&repo_dir, branch, task.pr_status.as_ref())
                 }
+                (Some(branch), BranchRule::Force) => delete_branch_force(&repo_dir, branch),
                 _ => false,
             };
             self.drop_rollback(task_id);

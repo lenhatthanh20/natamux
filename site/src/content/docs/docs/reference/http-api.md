@@ -46,7 +46,7 @@ To do these from a script, use the daemon's own token, not the one in a task ter
 | `GET /tasks?state=<state>` | List tasks |
 | `POST /tasks` | Create a task (`title` is required) |
 | `GET /tasks/:id` | One task |
-| `DELETE /tasks/:id` | Delete the task, its notes and its history. A workspace is removed too. Answers 409 when that workspace has changes that are not committed, and the task stays |
+| `DELETE /tasks/:id` | Delete the task, its notes and its history. A workspace and its branch are removed too, also when the branch has commits that are not merged. Answers 409 when that workspace has changes that are not committed, and the task, the worktree and the branch stay |
 | `PATCH /tasks/:id` | Change `title`, `description`, `priority`, `labels` or `dependsOn` |
 | `GET /tasks/:id/events` | The event log of a task |
 | `POST /tasks/:id/events` | Send an event `{ source, type, payload? }`. Answers `{ task, accepted }` |

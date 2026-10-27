@@ -248,3 +248,19 @@ fn keeps_a_branch_of_origin_fetched_earlier_when_origin_is_gone() {
 
     assert!(fetch_origin_branch(&repo, "feature/x"));
 }
+
+#[test]
+fn force_deletes_a_branch_that_is_not_merged_and_accepts_a_missing_one() {
+    let (root, repo) = test_repo();
+    let path = worktree_path(root.path());
+    add_worktree(&repo, &path, BRANCH, None, false).unwrap();
+    std::fs::write(path.join("work.txt"), "work").unwrap();
+    run_git(&path, &["add", "work.txt"]);
+    run_git(&path, &["commit", "-m", "work"]);
+    remove_worktree(&repo, &path, false).unwrap();
+    assert!(!delete_merged_branch(&repo, BRANCH));
+
+    assert!(delete_branch_force(&repo, BRANCH));
+    assert!(!branch_exists(&repo, BRANCH));
+    assert!(delete_branch_force(&repo, BRANCH));
+}
