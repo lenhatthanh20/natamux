@@ -7,6 +7,7 @@ use hyper::body::Incoming;
 use hyper::{HeaderMap, Request, StatusCode};
 use natamux_agents::hooks::COPILOT_EVENT_FIELD;
 use natamux_agents::launch::is_launchable;
+use natamux_agents::usage::limits::claude_limits;
 use natamux_core::js::js_trim;
 use natamux_core::tasks::inputs::task_id_param;
 use natamux_core::zod::{Issues, Rule, ZodError, object, string};
@@ -85,6 +86,33 @@ pub fn usage(state: &AppState) -> Answer {
         StatusCode::OK,
         &json!({ "usage": Value::Object(state.usage.all()) }),
     )
+}
+
+/// The plan limits each agent told last, without windows that have reset.
+pub fn limits(state: &AppState) -> Answer {
+    json_answer(
+        StatusCode::OK,
+        &json!({ "limits": to_value(&state.usage.limits()) }),
+    )
+}
+
+/// The `rate_limits` of Claude Code's status line input, sent by `natamux statusline`. Only
+/// Claude Code tells its limits this way; Codex's come from its session file.
+pub fn post_limits(state: &AppState, agent: &str, body: Option<Value>) -> Answer {
+    if agent != "claude-code" {
+        return json_answer(
+            StatusCode::NOT_FOUND,
+            &json!({ "error": format!("{agent} does not send its limits") }),
+        );
+    }
+    let Some(rate_limits) = body.filter(Value::is_object) else {
+        return json_answer(
+            StatusCode::BAD_REQUEST,
+            &json!({ "error": "The body must be the rate_limits object" }),
+        );
+    };
+    state.usage.set_limits(agent, claude_limits(&rate_limits));
+    json_answer(StatusCode::OK, &json!({ "ok": true }))
 }
 
 /// `hookParamsSchema` and `hookQuerySchema`: the agent (1 or more characters) and the event of

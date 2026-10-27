@@ -1,6 +1,9 @@
 //! `usage-service.ts`: reads the token usage of agent sessions after their turns, and keeps it per
 //! task and stage in `<tasks folder>/<TASK>.usage.json`.
 //!
+//! It also keeps the plan limits the agents tell, in `<data>/limits.json`: Codex's from its
+//! session file at each read, Claude Code's from its status line (`set_limits`).
+//!
 //! `seen` returns at once. The session file is read on a thread of its own, one read per file at
 //! a time; a hook that comes during a read makes the file be read again after it.
 
@@ -9,8 +12,11 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError, Weak};
 
+use natamux_agents::usage::limits::read_codex_limits;
 use natamux_agents::usage::{session_file, usage_reader};
+use natamux_core::js::{iso_now, parse_iso_millis};
 use natamux_core::json::to_js_string;
+use natamux_proto::agents::limits::{AgentLimits, LimitWindow};
 use natamux_store::task_files::tasks_dir;
 use serde_json::{Map, Value};
 
@@ -21,6 +27,30 @@ use crate::shared::event_bus::{DaemonMessage, EventBus};
 
 pub fn usage_path(data_dir: &Path, task_id: &str) -> PathBuf {
     tasks_dir(data_dir).join(format!("{task_id}.usage.json"))
+}
+
+pub fn limits_path(data_dir: &Path) -> PathBuf {
+    data_dir.join("limits.json")
+}
+
+/// The windows that have not reset yet, at `now_ms`. A window with no reset time stays.
+pub fn current_limits(limits: &[AgentLimits], now_ms: i64) -> Vec<AgentLimits> {
+    limits
+        .iter()
+        .map(|each| AgentLimits {
+            windows: each
+                .windows
+                .iter()
+                .filter(|window| {
+                    let reset = window.resets_at.as_deref().and_then(parse_iso_millis);
+                    reset.is_none_or(|reset| reset > now_ms)
+                })
+                .cloned()
+                .collect(),
+            ..each.clone()
+        })
+        .filter(|each| !each.windows.is_empty())
+        .collect()
 }
 
 pub struct UsageOptions {
@@ -39,6 +69,8 @@ struct State {
     deleted: HashSet<String>,
     /// How many threads read now.
     running: usize,
+    /// By agent, in the order they first told them.
+    limits: Vec<AgentLimits>,
 }
 
 struct Inner {
@@ -122,6 +154,17 @@ impl UsageService {
             .collect()
     }
 
+    /// The windows an agent told now. No windows change nothing.
+    pub fn set_limits(&self, agent: &str, windows: Vec<LimitWindow>) {
+        self.inner.set_limits(agent, windows);
+    }
+
+    /// Every agent's windows that have not reset yet.
+    pub fn limits(&self) -> Vec<AgentLimits> {
+        let now = parse_iso_millis(&iso_now()).unwrap_or(0);
+        current_limits(&self.inner.state().limits, now)
+    }
+
     /// Waits for the reads that run now. For tests.
     pub fn settle(&self) {
         let mut state = self.inner.state();
@@ -183,6 +226,11 @@ impl Inner {
         let Some(path) = session_file(&seen.transcript, &self.options.home) else {
             return;
         };
+        if seen.agent == "codex"
+            && let Some(windows) = read_codex_limits(&path)
+        {
+            self.set_limits(&seen.agent, windows);
+        }
         let now = reader(&path);
         let usage = {
             let mut state = self.state();
@@ -223,8 +271,42 @@ impl Inner {
         std::fs::rename(&temporary, &path)
     }
 
+    fn set_limits(&self, agent: &str, windows: Vec<LimitWindow>) {
+        if windows.is_empty() {
+            return;
+        }
+        let list = {
+            let mut state = self.state();
+            let at = state.limits.iter().position(|each| each.agent == agent);
+            if at.is_some_and(|at| state.limits[at].windows == windows) {
+                return;
+            }
+            let told = AgentLimits {
+                agent: agent.to_string(),
+                windows,
+                seen_at: iso_now(),
+            };
+            match at {
+                Some(at) => state.limits[at] = told,
+                None => state.limits.push(told),
+            }
+            let value = serde_json::to_value(&state.limits).unwrap_or(Value::Null);
+            if let Err(error) = save_atomic(&limits_path(&self.options.data_dir), &value) {
+                eprintln!("Could not keep the plan limits: {error}");
+            }
+            value
+        };
+        if let Some(bus) = &self.options.bus {
+            bus.publish(DaemonMessage::LimitsChanged { limits: list });
+        }
+    }
+
     /// A missing or broken file reads as no usage.
     fn load(&self) {
+        self.state().limits = std::fs::read_to_string(limits_path(&self.options.data_dir))
+            .ok()
+            .and_then(|text| serde_json::from_str(&text).ok())
+            .unwrap_or_default();
         let dir = tasks_dir(&self.options.data_dir);
         let Ok(entries) = std::fs::read_dir(&dir) else {
             return;
@@ -249,4 +331,13 @@ impl Inner {
             }
         }
     }
+}
+
+fn save_atomic(path: &Path, value: &Value) -> std::io::Result<()> {
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let temporary = path.with_extension("json.tmp");
+    std::fs::write(&temporary, to_js_string(value))?;
+    std::fs::rename(&temporary, path)
 }

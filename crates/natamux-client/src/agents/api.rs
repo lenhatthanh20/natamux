@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 
 use hyper::Method;
 use natamux_proto::agents::activity::{ActivityList, TaskActivity, TaskUsage, UsageList};
+use natamux_proto::agents::limits::{AgentLimits, LimitList};
 use natamux_proto::agents::start::{AgentMessage, StartAgentInput};
 use natamux_proto::tasks::task::{Task, TaskAnswer};
 use natamux_proto::terminals::query::encode;
@@ -22,6 +23,12 @@ pub async fn activity(config: &Config) -> Result<BTreeMap<String, TaskActivity>,
 pub async fn usage(config: &Config) -> Result<BTreeMap<String, TaskUsage>, ClientError> {
     let list: UsageList = call(config, Method::GET, "/usage").await?;
     Ok(list.usage)
+}
+
+/// The plan limits each agent told last.
+pub async fn limits(config: &Config) -> Result<Vec<AgentLimits>, ClientError> {
+    let list: LimitList = call(config, Method::GET, "/limits").await?;
+    Ok(list.limits)
 }
 
 /// Starts an agent in the task's workspace. A task with no workspace gets one first, from

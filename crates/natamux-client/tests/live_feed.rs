@@ -13,13 +13,14 @@ use natamux_client::{DashboardEvent, DashboardFeed, FeedTimes, LinkStatus};
 use natamux_proto::workspaces::workspace::PreparingStep;
 use support::{FakeDaemon, runtime, within};
 
-const BASE_READS: [&str; 7] = [
+const BASE_READS: [&str; 8] = [
     "GET /tasks",
     "GET /repos",
     "GET /workspaces/preparing",
     "GET /jobs",
     "GET /activity",
     "GET /usage",
+    "GET /limits",
     "GET /diffstats",
 ];
 
@@ -32,6 +33,7 @@ fn route_of(event: &DashboardEvent) -> Option<String> {
         DashboardEvent::Jobs(_) => "GET /jobs",
         DashboardEvent::Activity(_) => "GET /activity",
         DashboardEvent::Usage(_) => "GET /usage",
+        DashboardEvent::Limits(_) => "GET /limits",
         DashboardEvent::DiffStats(_) => "GET /diffstats",
         DashboardEvent::Terminals { task_id, .. } => {
             return Some(format!("GET /tasks/{task_id}/terminals"));
@@ -107,6 +109,7 @@ fn each_kind_reads_only_its_own_part() {
                 r#"{"kind":"usage.changed","taskId":"T-1","usage":{}}"#,
                 "GET /usage",
             ),
+            (r#"{"kind":"limits.changed","limits":[]}"#, "GET /limits"),
             (
                 r#"{"kind":"workspace.dirty","taskId":"T-1"}"#,
                 "GET /diffstats",
@@ -399,7 +402,7 @@ fn fallback_polls_read_what_the_socket_may_have_missed() {
         }
         // The first poll, then the terminal rows.
         let mut polled = Vec::new();
-        for _ in 0..5 {
+        for _ in 0..6 {
             polled.push(route_of(&next_data(&mut feed).await).unwrap());
         }
         assert_eq!(
@@ -408,6 +411,7 @@ fn fallback_polls_read_what_the_socket_may_have_missed() {
                 "GET /jobs",
                 "GET /activity",
                 "GET /usage",
+                "GET /limits",
                 "GET /diffstats",
                 "GET /tasks/T-1/terminals"
             ]

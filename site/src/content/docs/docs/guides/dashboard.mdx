@@ -122,6 +122,22 @@ The **Details** tab of a task has a **Usage** section after **Pull request**. It
 
 The cost is an estimate at API list prices. A subscription, such as Claude Max, ChatGPT or a Copilot plan, is billed by its plan, so it does not pay this amount. See [agents](/docs/agents/claude-code/) for how each agent reports.
 
+### Plan limits
+
+The desktop app shows how much of a subscription's limits the agents used, such as Claude's 5-hour window and its week.
+
+- The status bar shows the agent nearest a limit, such as **Claude 84% · 5h**, with a small bar. It turns yellow from 80% and red at 100%. Under 1024 px wide it shows only the share.
+- Click it for every agent that told its limits: each window's share, and when the most used one resets. Agents that your tasks use but that tell no limits are listed under **No limit data**.
+- When a window passes 80%, a toast says so once for that window. When several pass at once, one toast names them all.
+- The agent list of **Start a task** shows the share next to each agent, such as **Claude Code · 84% · 5h**, or **full**.
+
+Only two agents tell their limits:
+
+- Claude Code, on a Pro or Max plan: Natamux sets its status line to `natamux statusline`, which passes the limits on and then runs your own status line command from `~/.claude/settings.json`.
+- Codex, on a ChatGPT plan: Natamux reads them from its session file after each turn.
+
+Gemini CLI, Copilot CLI and Cursor tell no limits on your machine, so Natamux does not show theirs. A window that has reset is left out until the agent tells the new one.
+
 ## Add a task
 
 1. Press `n`, or click the field **Add a task to the backlog (n)**.

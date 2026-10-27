@@ -180,6 +180,7 @@ fn reserved_path(path: &Path) -> bool {
                 | "jobs"
                 | "activity"
                 | "usage"
+                | "limits"
         )
     )
 }

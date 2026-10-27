@@ -9,10 +9,12 @@ use natamux_proto::tasks::task::TaskState;
 use ui::prelude::*;
 
 use super::Root;
+use crate::agents::limits_rules::{agents_in_use, limits_chip, without_limits};
 use crate::app::dashboard::Dashboard;
 use crate::app::shell_rules::{Crumb, crumb, live_item, running_count, window_title};
 use crate::app::shortcuts::{ToggleAgents, ToggleDetails, ToggleSidebar};
 use crate::app::status_bar::{STATUS_BAR_HEIGHT, StatusBar, now_ms};
+use crate::app::status_limits::LimitsItem;
 use crate::app::title_bar::{TitleBar, title_bar_height};
 use crate::components::motion;
 use crate::tasks::task_attention::{needs_me_count, next_quiet_ms};
@@ -201,6 +203,11 @@ impl Render for StatusBarView {
         }
         let data = &self.dashboard.read(cx).data;
         let (live, jobs) = (live_item(&data.link), data.jobs.clone());
+        let limits = limits_chip(&data.limits).map(|chip| LimitsItem {
+            chip,
+            limits: data.limits.clone(),
+            no_data: without_limits(&agents_in_use(&data.tasks, counts.at_ms), &data.limits),
+        });
         let width = f32::from(window.viewport_size().width);
         let Toggles {
             sidebar,
@@ -210,6 +217,7 @@ impl Render for StatusBarView {
         let dashboard = self.dashboard.clone();
         StatusBar::new(live, counts.running, counts.needs_you, jobs, width)
             .toggles(sidebar, details, agents)
+            .limits(limits)
             .on_toggles(
                 on_root(&self.root, |root, window, cx| {
                     root.toggle_sidebar(&ToggleSidebar, window, cx)

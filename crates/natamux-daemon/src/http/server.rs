@@ -203,6 +203,7 @@ pub async fn handle(request: Request<Incoming>, state: Arc<AppState>) -> Answer 
         (&Method::GET, ["jobs"]) => tasks::list_jobs(&state),
         (&Method::GET, ["activity"]) => agents::activity(&state),
         (&Method::GET, ["usage"]) => agents::usage(&state),
+        (&Method::GET, ["limits"]) => agents::limits(&state),
         (&Method::POST, ["hooks", agent]) => {
             agents::post_hook(request, state, agent.to_string(), query.to_string()).await
         }
@@ -228,6 +229,7 @@ pub async fn handle(request: Request<Incoming>, state: Arc<AppState>) -> Answer 
         | (&Method::PUT, ["tasks", _, "files", _])
         | (&Method::POST, ["tasks", _, "agent"])
         | (&Method::POST, ["tasks", _, "agent", "message"])
+        | (&Method::POST, ["limits", _])
         | (&Method::POST, ["tasks", _, "workspace" | "commit" | "rollback" | "fan-out"])
         | (&Method::POST, ["workspaces"])
         | (&Method::POST, ["repos"])
@@ -394,6 +396,7 @@ async fn with_body(
         (&Method::POST, ["tasks", id, "agent", "message"]) => {
             agents::message(state, id.to_string(), body).await
         }
+        (&Method::POST, ["limits", agent]) => agents::post_limits(&state, agent, body),
         (&Method::POST, ["repos"]) => projects::add_repo(state, body).await,
         (&Method::PUT, ["repos", id, "settings"]) => {
             projects::put_settings(state, id.to_string(), head.headers, body, by_agent).await

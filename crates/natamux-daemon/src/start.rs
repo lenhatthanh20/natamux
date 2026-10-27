@@ -135,10 +135,15 @@ fn agent_runner(
 ) -> std::io::Result<AgentRunner> {
     // Shells reach the daemon on loopback, so do the hooks of the agents they start.
     let claude_settings_path = config.data_dir.join("claude-code-settings.json");
-    std::fs::write(
-        &claude_settings_path,
-        hook_file_text_of(&claude_code_hook_settings(daemon_url)),
-    )?;
+    let mut claude_settings = claude_code_hook_settings(daemon_url);
+    // Claude Code tells its plan limits only to its status line; `natamux statusline` passes them
+    // on and still runs the user's own status line.
+    claude_settings["statusLine"] = serde_json::json!({
+        "type": "command",
+        "command": "natamux statusline",
+        "padding": 0,
+    });
+    std::fs::write(&claude_settings_path, hook_file_text_of(&claude_settings))?;
     let gemini_settings_path = config.data_dir.join("gemini-settings.json");
     std::fs::write(
         &gemini_settings_path,

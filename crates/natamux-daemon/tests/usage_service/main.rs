@@ -9,6 +9,7 @@
 // `Fx::new` is `beforeEach`.
 #![allow(clippy::new_without_default)]
 
+mod limits;
 mod session_file;
 mod usage_service;
 

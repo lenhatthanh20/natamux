@@ -1,6 +1,6 @@
 //! The status bar of docs/ui-spec.md 4.28 (`features/app/StatusBar.tsx`), lean as Zed's: at the
 //! left the sidebar and agents toggles. At the right: need you and running as an icon and a count,
-//! the background jobs with their menu, the link dot (its word only while down), then the details
+//! the background jobs with their menu, the plan limits with theirs, the link dot (its word only while down), then the details
 //! toggle, as Zed puts the right dock's toggle at the right. The account is in the title bar and the
 //! notify switch in its menu. Under 1024 jobs lose their label (`status_layout`).
 
@@ -14,6 +14,7 @@ use super::jobs::{job_rows, jobs_label};
 use super::shell_rules::{LiveItem, needs_you_text, running_text};
 use super::status_items::{OnClick, count_item, item_label, toggle_item};
 use super::status_layout::forced_by_width;
+use super::status_limits::{LimitsItem, limits_item};
 use crate::components::colors::signal;
 use crate::components::menu::MenuLayer;
 use crate::components::spinner::Spinner;
@@ -29,6 +30,8 @@ pub struct StatusBar {
     needs_you: usize,
     /// The daemon's background jobs, oldest first.
     jobs: Vec<Job>,
+    /// The plan limits, when an agent told them.
+    limits: Option<LimitsItem>,
     width: f32,
     on_running: OnClick,
     on_needs_you: OnClick,
@@ -55,6 +58,7 @@ impl StatusBar {
             running,
             needs_you,
             jobs,
+            limits: None,
             width,
             on_running: Rc::new(|_, _, _| {}),
             on_needs_you: Rc::new(|_, _, _| {}),
@@ -78,6 +82,11 @@ impl StatusBar {
         self.sidebar = sidebar;
         self.details = details;
         self.agents = agents;
+        self
+    }
+
+    pub fn limits(mut self, limits: Option<LimitsItem>) -> Self {
+        self.limits = limits;
         self
     }
 
@@ -299,6 +308,10 @@ impl RenderOnce for StatusBar {
                 self.on_open_task,
                 condensed.icon_only.contains(&"jobs"),
             ))
+            .children(
+                self.limits
+                    .map(|item| limits_item(item, condensed.icon_only.contains(&"limits"), cx)),
+            )
             .child(live_item(self.live, cx))
             .child(details_toggle(self.details, self.on_toggle_details))
     }

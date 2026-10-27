@@ -5,6 +5,7 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use natamux_client::{ClientError, DashboardEvent, LinkStatus};
 use natamux_proto::agents::activity::{TaskActivity, TaskUsage};
+use natamux_proto::agents::limits::AgentLimits;
 use natamux_proto::events::kind::PreparingMessage;
 use natamux_proto::events::task_event::StoredEvent;
 use natamux_proto::projects::repo::Repo;
@@ -13,6 +14,7 @@ use natamux_proto::tasks::task::Task;
 use natamux_proto::terminals::list::TerminalList;
 use natamux_proto::workspaces::workspace::{DiffStat, PreparingStep};
 
+use crate::agents::limits_rules::{new_warning, warned_already};
 use crate::components::toast_rules::ToastTone;
 use crate::sidebar::sidebar_tree::{RowTier, row_tier};
 use crate::tasks::task_changes::upsert_task;
@@ -89,6 +91,10 @@ pub struct DashboardData {
     pub jobs: Vec<Job>,
     pub activity: BTreeMap<String, TaskActivity>,
     pub usage: BTreeMap<String, TaskUsage>,
+    /// The plan limits of the agents that told them.
+    pub limits: Vec<AgentLimits>,
+    /// The windows the warning toast told already; None until the first limits came.
+    warned: Option<BTreeSet<String>>,
     pub diff_stats: BTreeMap<String, DiffStat>,
     pub terminals: BTreeMap<String, TerminalList>,
     pub preparing: BTreeMap<String, PreparingStep>,
@@ -117,6 +123,8 @@ impl Default for DashboardData {
             jobs: Vec::new(),
             activity: BTreeMap::new(),
             usage: BTreeMap::new(),
+            limits: Vec::new(),
+            warned: None,
             diff_stats: BTreeMap::new(),
             terminals: BTreeMap::new(),
             preparing: BTreeMap::new(),
@@ -154,6 +162,7 @@ impl DashboardData {
             DashboardEvent::Jobs(jobs) => self.jobs = jobs,
             DashboardEvent::Activity(activity) => self.activity = activity,
             DashboardEvent::Usage(usage) => self.usage = usage,
+            DashboardEvent::Limits(limits) => return self.set_limits(limits),
             DashboardEvent::DiffStats(stats) => self.diff_stats = stats,
             DashboardEvent::Terminals { task_id, terminals } => {
                 self.terminals.insert(task_id, terminals);
@@ -188,6 +197,20 @@ impl DashboardData {
                 }
             }
         };
+    }
+
+    /// The warning toast when a window passed the warning share; the limits the app saw first
+    /// are not news.
+    fn set_limits(&mut self, limits: Vec<AgentLimits>) -> Option<Notice> {
+        self.limits = limits;
+        let Some(warned) = &mut self.warned else {
+            self.warned = Some(warned_already(&self.limits));
+            return None;
+        };
+        new_warning(warned, &self.limits).map(|text| Notice {
+            text,
+            tone: ToastTone::Info,
+        })
     }
 
     fn step(&mut self, message: PreparingMessage) -> Option<Notice> {

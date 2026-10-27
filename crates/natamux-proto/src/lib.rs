@@ -4,6 +4,7 @@
 pub mod agents {
     pub mod activity;
     pub mod claude_code;
+    pub mod limits;
     pub mod start;
 }
 pub mod events {
