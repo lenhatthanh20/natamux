@@ -28,6 +28,7 @@ pub mod http {
         pub mod agents;
         pub mod github;
         pub mod projects;
+        pub mod review_comments;
         pub mod stages;
         pub mod tasks;
         pub mod terminals;
@@ -112,6 +113,7 @@ pub mod workspaces {
     pub mod new_workspace;
     pub mod publish;
     pub mod remove;
+    pub mod review_comments;
     pub mod service;
     pub mod setup_script;
 }

@@ -48,6 +48,15 @@ natamux done
 - When a check fails, the failure comes back as a prompt. Fix it and run `natamux done` again.
 - When the checks pass, the stage waits for the user to approve it, or moves on at once when its gate is automatic. The next stage arrives as a new prompt. The user may also send comments back as a prompt.
 
+## Review comments
+
+A prompt may say to read `.natamux-task/review-comments.md`: the user left comments on your diff.
+
+- Fix each item under **New**. Items under **Still open** were sent before; check them too.
+- An item shows its id (`c3`), file and lines, the quoted code and the request. A note "(the code changed; this may be done)" means the code moved; look before you change anything.
+- When you finish, reply with what you changed per id, for example `c3: renamed the helper`.
+- Do not edit `review-comments.md`. Do not change the state of a comment; the user resolves them.
+
 ## File follow-up work
 
 Work that is out of scope becomes a new task, not a bigger change:

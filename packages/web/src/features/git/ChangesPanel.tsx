@@ -20,8 +20,11 @@ import { ChangedFiles } from './ChangedFiles'
 import { fileOrder } from './change-tree'
 import { DiffToolbar } from './DiffToolbar'
 import { type ChangeInfo, FileBody, type LineStats } from './FileBody'
+import { ReviewCommentsSection } from './ReviewComments'
 import { RollbackDialog } from './RollbackDialog'
 import { useFileViewMode } from './useFileViewMode'
+import { type ReviewCommentsApi, useReviewComments } from './useReviewComments'
+import { useReviewView } from './useReviewView'
 
 // The daemon says when the workspace changed (workspace.dirty); this poll only catches what the
 // live feed missed.
@@ -41,6 +44,8 @@ type ChangesPanelProps = {
   loadFile: (path: string) => Promise<FileDiff>
   loadImage: (path: string, side: ImageSide) => Promise<Blob>
   sendToAgent: (text: string) => Promise<unknown>
+  // The review comments of the task. Without it, the panel has only the one-off send.
+  reviewApi?: ReviewCommentsApi
   // Commits and says so. Resolves true when it worked, so the box can empty itself.
   onCommit: (message: string, fileCount: number) => Promise<boolean>
   committing: boolean
@@ -68,6 +73,7 @@ export function ChangesPanel({
   loadFile,
   loadImage,
   sendToAgent,
+  reviewApi,
   onCommit,
   committing,
   gitBusy,
@@ -105,6 +111,7 @@ export function ChangesPanel({
   // The files the rollback dialog offers, while it is open.
   const [rollbackOffer, setRollbackOffer] = useState<ReadonlySet<string> | null>(null)
   const [viewMode, setViewMode] = useFileViewMode()
+  const review = useReviewComments(taskId, reviewApi)
   const [rootRef, rootWidth] = useElementWidth<HTMLDivElement>()
   const files = useStoredWidth('natamux.files-width', 260, 200, 420)
   const queryClient = useQueryClient()
@@ -165,6 +172,7 @@ export function ChangesPanel({
       setQuote(null)
     }
   }
+  const view = useReviewView(review, current?.path ?? null, choose)
   const step = (by: 1 | -1) => choose(stepFile(order, current?.path ?? null, by))
   // Images are under 'file-diff' too, so they are read again as well.
   const refresh = () => {
@@ -305,6 +313,10 @@ export function ChangesPanel({
     </form>
   )
 
+  const reviewList = reviewApi !== undefined && (
+    <ReviewCommentsSection review={review} onOpen={view.open} />
+  )
+
   const toolbar = current !== null && (
     <DiffToolbar
       entry={current}
@@ -361,6 +373,9 @@ export function ChangesPanel({
             onAsk={ask}
             onStats={(next) => setStats({ path: current.path, ...next })}
             onChanges={(next) => setChangeInfo({ path: current.path, ...next })}
+            reviewComments={view.fileComments}
+            reviewActions={view.zoneActions}
+            reveal={view.reveal}
           />
         )}
       </div>
@@ -371,6 +386,7 @@ export function ChangesPanel({
           quote={fileQuote}
           onClearQuote={() => setQuote(null)}
           send={sendToAgent}
+          add={review.add}
         />
       )}
     </div>
@@ -428,6 +444,7 @@ export function ChangesPanel({
               </>
             }
           />
+          {reviewList}
           {commitBox}
         </aside>
       ) : (
@@ -462,6 +479,7 @@ export function ChangesPanel({
         />
       )}
       {diff}
+      {!wide && reviewList}
       {!wide && commitBox}
       {rollbackDialog}
     </div>

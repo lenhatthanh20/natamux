@@ -5,6 +5,9 @@ use natamux_proto::tasks::task::Task;
 use natamux_proto::workspaces::changes::{
     CommitAnswer, CommitMessageDraft, FileDiff, ImageSide, RollbackResult,
 };
+use natamux_proto::workspaces::review_comments::{
+    CommentSide, CommentState, ReviewComment, SendReviewAnswer,
+};
 use natamux_proto::workspaces::workspace::{ChangeEntry, GitGraph};
 
 use super::Source;
@@ -62,6 +65,56 @@ impl Source {
         self.ask(
             |c| c.send_to_agent(task_id, text),
             |f| f.send_to_agent(task_id, fake),
+        )
+    }
+
+    pub fn review_comments(&self, task_id: &str) -> Answer<Vec<ReviewComment>> {
+        self.ask(
+            |c| c.review_comments(task_id),
+            |f| f.review_comments(task_id),
+        )
+    }
+
+    pub fn add_review_comment(
+        &self,
+        task_id: &str,
+        path: &str,
+        side: CommentSide,
+        lines: (u32, u32),
+        body: String,
+    ) -> Answer<ReviewComment> {
+        let fake = body.clone();
+        self.ask(
+            |c| c.add_review_comment(task_id, path, side, lines, body),
+            |f| f.add_review_comment(task_id, path, side, lines, fake),
+        )
+    }
+
+    pub fn update_review_comment(
+        &self,
+        task_id: &str,
+        id: &str,
+        body: Option<String>,
+        state: Option<CommentState>,
+    ) -> Answer<ReviewComment> {
+        let fake = body.clone();
+        self.ask(
+            |c| c.update_review_comment(task_id, id, body, state),
+            |f| f.update_review_comment(task_id, id, fake, state),
+        )
+    }
+
+    pub fn delete_review_comment(&self, task_id: &str, id: &str) -> Answer<()> {
+        self.ask(
+            |c| c.delete_review_comment(task_id, id),
+            |f| f.delete_review_comment(task_id, id),
+        )
+    }
+
+    pub fn send_review_comments(&self, task_id: &str) -> Answer<SendReviewAnswer> {
+        self.ask(
+            |c| c.send_review_comments(task_id),
+            |f| f.send_review_comments(task_id),
         )
     }
 }

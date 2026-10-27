@@ -35,6 +35,7 @@ pub mod terminals {
 }
 pub mod workspaces {
     pub mod api;
+    pub mod review_api;
 }
 
 use std::collections::BTreeMap;

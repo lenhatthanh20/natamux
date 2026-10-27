@@ -70,6 +70,7 @@ pub struct ChangesView {
     pub(super) quote: Option<Quote>,
     pub(super) sending: bool,
     pub(super) sent: Option<Result<(), String>>,
+    review: review::Review,
     pub(super) focus: FocusHandle,
     pub(super) files_focus: FocusHandle,
     pub(super) layout_focus: FocusHandle,
@@ -112,6 +113,7 @@ impl ChangesView {
             quote: None,
             sending: false,
             sent: None,
+            review: review::Review::default(),
             focus: cx.focus_handle(),
             files_focus: cx.focus_handle().tab_stop(true),
             layout_focus: cx.focus_handle().tab_stop(true),
@@ -138,6 +140,7 @@ impl ChangesView {
             self.file = None;
             self.quote = None;
             self.sent = None;
+            self.reset_review();
             self.diff.update(cx, |diff, _| diff.clear());
         }
         self.pending = pending;
@@ -210,6 +213,7 @@ impl ChangesView {
     /// Reads the shown file's texts, then its images when it shows as one. A failed read again
     /// keeps what is shown.
     pub fn read_file(&mut self, cx: &mut Context<Self>) {
+        self.read_comments(cx);
         let (Some(task_id), Some(entry)) = (self.task_id.clone(), self.shown_entry(cx)) else {
             self.file = None;
             return;
@@ -370,6 +374,7 @@ impl Focusable for ChangesView {
 impl Render for ChangesView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.take_commit_request(window, cx);
+        self.take_jump(window, cx);
         let mut context = KeyContext::default();
         context.add("NatamuxChanges");
         if !self.editing(window, cx) {
@@ -477,3 +482,9 @@ mod body;
 
 #[path = "changes_shots.rs"]
 mod shots;
+
+#[path = "review_comments.rs"]
+mod review;
+
+#[path = "review_list.rs"]
+mod review_list;

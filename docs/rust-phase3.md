@@ -155,6 +155,7 @@ The fake daemon's pipeline stands in for the storefront one: Context, Spec, the 
 | `workspace-changes-list` | T-0143 on Changes: the two changed files, `src/checkout.ts` side by side, the commit box and the comment box |
 | `workspace-changes-diff` | The same, the cursor in the second change ("2 of 2") |
 | `workspace-changes-ask` | The same file inline, lines 5 to 6 picked and Ask agent pressed: the "Lines 5–6" chip (T-0117; no reference shot) |
+| `workspace-changes-comments` | The Changes tab with 3 review comments on 2 files (2 drafts, 1 sent, 1 outdated): blocks under their lines and the Comments list (T-0203; no reference shot) |
 | `rollback` | The Roll back changes dialog over T-0143: both files checked, "1 new file will be deleted." |
 | `image-diff` | T-0147 on Changes: the new `public/banner.png`, After only, on the checkerboard, with its size |
 | `workspace-history` | T-0143 with the details panel on History (T-0183; was a main tab): the summary, the lanes, the ref chips with "+1" |

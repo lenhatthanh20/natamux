@@ -210,6 +210,9 @@ function installDaemon(
       tasks = tasks.map((task) => (task.id === updated.id ? updated : task))
       return creating ? json({ task: updated }, 201) : json({ task: updated, branchDeleted: true })
     }
+    if (/^\/api\/tasks\/T-\d+\/review-comments$/.test(path) && method === 'GET') {
+      return json({ comments: [] })
+    }
     if (/^\/api\/tasks\/T-\d+\/changes$/.test(path) && method === 'GET') {
       return json({ changes: changedFiles })
     }
@@ -761,7 +764,7 @@ describe('App', () => {
     expect(await within(view).findByLabelText('New file notes.md')).toBeTruthy()
 
     await user.type(within(view).getByLabelText(/for the agent/), 'Keep the old name')
-    await user.click(within(view).getByRole('button', { name: 'Send to agent' }))
+    await user.click(within(view).getByRole('button', { name: 'Send now' }))
     expect(await within(view).findByText('Sent to the agent.')).toBeTruthy()
     const sent = calls.find((call) => call.path === '/api/tasks/T-0001/agent/message')
     expect(sent).toBeTruthy()

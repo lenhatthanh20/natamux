@@ -165,6 +165,12 @@ fn writes_each_kind_as_the_node_daemon() {
             },
             r#"{"kind":"workspace.dirty","taskId":"T-1"}"#,
         ),
+        (
+            DaemonMessage::ReviewCommentsChanged {
+                task_id: "T-1".into(),
+            },
+            r#"{"kind":"review-comments.changed","taskId":"T-1"}"#,
+        ),
         // The dashboards read it as any `shells.changed`; the names stay in the daemon.
         (
             DaemonMessage::ProgramsChanged {

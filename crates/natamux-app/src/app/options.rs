@@ -65,6 +65,7 @@ pub enum Shot {
     WorkspaceChangesList,
     WorkspaceChangesDiff,
     WorkspaceChangesAsk,
+    WorkspaceChangesComments,
     Rollback,
     ImageDiff,
     WorkspaceHistory,
@@ -110,7 +111,7 @@ pub enum Shot {
 }
 
 impl Shot {
-    pub const ALL: [Shot; 81] = [
+    pub const ALL: [Shot; 82] = [
         Shot::TasksTable,
         Shot::TasksBoard,
         Shot::BoardHoverCard,
@@ -150,6 +151,7 @@ impl Shot {
         Shot::WorkspaceChangesList,
         Shot::WorkspaceChangesDiff,
         Shot::WorkspaceChangesAsk,
+        Shot::WorkspaceChangesComments,
         Shot::Rollback,
         Shot::ImageDiff,
         Shot::WorkspaceHistory,
@@ -235,6 +237,7 @@ impl Shot {
             Shot::WorkspaceChangesList => "workspace-changes-list",
             Shot::WorkspaceChangesDiff => "workspace-changes-diff",
             Shot::WorkspaceChangesAsk => "workspace-changes-ask",
+            Shot::WorkspaceChangesComments => "workspace-changes-comments",
             Shot::Rollback => "rollback",
             Shot::ImageDiff => "image-diff",
             Shot::WorkspaceHistory => "workspace-history",

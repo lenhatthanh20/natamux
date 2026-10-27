@@ -178,6 +178,22 @@ impl Store {
         self.record(updated, event)
     }
 
+    /// Writes down that a batch of review comments was sent to the agent of the task.
+    pub fn record_review_comments(&mut self, task_id: &str, ids: &[String]) -> TaskResult<Task> {
+        let task = self.get_task(task_id)?;
+        let event = self.event(
+            task_id,
+            "human",
+            "review.commented",
+            json!({ "comments": ids }),
+        );
+        let updated = Task {
+            updated_at: event.at.clone(),
+            ..task
+        };
+        self.record(updated, event)
+    }
+
     /// Writes down that an agent was started in the task's terminal, and names it on the task. The
     /// agent of a stage that starts its own, or one restored in its shell, is not the task's.
     pub fn record_agent_launch(

@@ -32,6 +32,12 @@ impl ChangesView {
         self.comment_on_diff(window, cx);
     }
 
+    /// `path` shows with its review comments (the fake has them from the start).
+    pub fn shot_comments(&mut self, path: &str, cx: &mut Context<Self>) {
+        self.pick(path, cx);
+        self.read_comments(cx);
+    }
+
     /// Rollback… of the header: every file.
     pub fn shot_rollback(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let files = self.list.clone().unwrap_or_default();

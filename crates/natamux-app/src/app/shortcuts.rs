@@ -82,6 +82,8 @@ actions!(
         CommentOnDiff,
         RollbackFile,
         DraftCommit,
+        AddReviewComment,
+        SendReviewComments,
         CommitChanges
     ]
 );
@@ -166,6 +168,8 @@ command_actions! {
     "diff.comment" => CommentOnDiff,
     "changes.rollback" => RollbackFile,
     "diff.draft-commit" => DraftCommit,
+    "diff.add-comment" => AddReviewComment,
+    "diff.send-comments" => SendReviewComments,
     "task.commit" => CommitChanges,
     "view.progress" => ShowTasksProgress,
     "stage.move-up" => MoveStageUp,

@@ -2,8 +2,8 @@
 //! registry as `commands.rs`; `all_commands` joins the two lists.
 
 use super::commands::{
-    BODY, CHANGES, CHANGES_ANY, COMMIT_BOX, Category, Command, MenuName, SheetGroup, When, command,
-    group, keys, menu, when,
+    BODY, CHANGES, CHANGES_ANY, COMMENT_BOX, COMMIT_BOX, Category, Command, MenuName, SheetGroup,
+    When, command, group, keys, menu, when,
 };
 use super::commands_files::DOCS;
 
@@ -93,6 +93,30 @@ pub const GIT_COMMANDS: &[Command] = &[
             SheetGroup::Diff,
         ),
         &["Mod+Shift+A"],
+        &[CHANGES_ANY],
+    )),
+    in_workspace(keys(
+        group(
+            command(
+                "diff.add-comment",
+                "Add a review comment",
+                Category::Workspace,
+            ),
+            SheetGroup::Diff,
+        ),
+        &["Mod+Enter"],
+        &[COMMENT_BOX],
+    )),
+    in_workspace(keys(
+        group(
+            command(
+                "diff.send-comments",
+                "Send the review comments to the agent",
+                Category::Workspace,
+            ),
+            SheetGroup::Diff,
+        ),
+        &["Mod+Alt+Enter"],
         &[CHANGES_ANY],
     )),
     in_workspace(keys(

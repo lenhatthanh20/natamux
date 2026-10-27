@@ -88,6 +88,9 @@ pub fn describe_event(kind: &str, payload: &Map<String, Value>, path_names: &Pat
     let ci = payload.get("ci") == Some(&Value::Bool(true));
     let sentence = if kind == "stage.reopened" && ci {
         "Sent back by CI"
+    } else if kind == "review.commented" && payload.contains_key("comments") {
+        // A batch from the Comments list; a one-off send has `text`.
+        "Review comments sent to the agent"
     } else {
         event_sentence(kind).unwrap_or(kind)
     };

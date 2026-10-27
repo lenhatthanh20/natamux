@@ -38,6 +38,8 @@ export type DaemonMessage =
   | { kind: 'workspace.preparing'; taskId: string; step: PreparingStep | null; error?: string }
   // The task's whole usage after a read of a session file added to it, as in GET /usage.
   | { kind: 'usage.changed'; taskId: string; usage: TaskUsage }
+  // The review comments of a task changed: read them again.
+  | { kind: 'review-comments.changed'; taskId: string }
   // Sent to one socket only, which missed messages while it was too far behind: load everything.
   | { kind: 'resync' }
 

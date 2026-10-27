@@ -23,6 +23,7 @@ use super::change_rules::{LineChange, Side};
 use super::diff_editors::{add_spacer, read_only_editor, refit_excerpts, set_excerpts};
 use super::diff_rules::{DiffRefresh, HunkRows, diff_refresh, line_change, spacers};
 use super::languages::language_for;
+use super::review_blocks::ReviewInput;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct DiffOptions {
@@ -45,6 +46,9 @@ pub(super) struct Sides {
     pub(super) left: Option<Entity<Editor>>,
     /// The empty rows of side by side, taken away when a newer read changes the hunks.
     spacer_blocks: Vec<(Entity<Editor>, CustomBlockId)>,
+    /// The review comment blocks and their empty rows, and the file the editors show.
+    pub(super) comment_blocks: Vec<(Entity<Editor>, CustomBlockId)>,
+    pub(super) path: Option<String>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -53,8 +57,10 @@ pub struct DiffView {
     version: u64,
     options: Option<DiffOptions>,
     pub(super) buffer: Option<Entity<Buffer>>,
-    diff: Option<Entity<BufferDiff>>,
-    hunks: Vec<HunkRows>,
+    pub(super) diff: Option<Entity<BufferDiff>>,
+    pub(super) hunks: Vec<HunkRows>,
+    path: Option<String>,
+    pub(super) review: ReviewInput,
     pub(super) sides: Option<Sides>,
     syncing: bool,
     _update: Option<gpui::Task<()>>,
@@ -71,6 +77,8 @@ impl DiffView {
             buffer: None,
             diff: None,
             hunks: Vec::new(),
+            path: None,
+            review: ReviewInput::default(),
             sides: None,
             syncing: false,
             _update: None,
@@ -139,6 +147,7 @@ impl DiffView {
                     .update(cx, |editor, cx| editor.scroll_position(cx))
             });
         self.key = Some(key.to_owned());
+        self.path = Some(path.to_owned());
         self.version = version;
         self.options = Some(options);
         let buffer = cx.new(|cx| {
@@ -305,8 +314,11 @@ impl DiffView {
             right,
             left,
             spacer_blocks,
+            comment_blocks: Vec::new(),
+            path: self.path.clone(),
             _subscriptions: subscriptions,
         });
+        self.place_comments(cx);
         cx.notify();
     }
 
@@ -344,6 +356,7 @@ impl DiffView {
         };
         let new_ranges = self.ranges(|hunk| &hunk.new);
         let old_ranges = self.ranges(|hunk| &hunk.old);
+        self.remove_comment_blocks(cx);
         let Some(sides) = self.sides.as_mut() else {
             return;
         };
@@ -362,6 +375,7 @@ impl DiffView {
         if let Some(sides) = self.sides.as_mut() {
             sides.spacer_blocks = blocks;
         }
+        self.place_comments(cx);
         cx.notify();
     }
 

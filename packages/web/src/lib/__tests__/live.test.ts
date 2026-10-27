@@ -93,6 +93,7 @@ describe('parseLiveMessage', () => {
     { kind: 'resync' },
     { kind: 'shells.changed', taskId: 'T-0001' },
     { kind: 'workspace.dirty', taskId: 'T-0001' },
+    { kind: 'review-comments.changed', taskId: 'T-0001' },
     { kind: 'workspace.preparing', taskId: 'T-0001', step: 'checkout' },
     { kind: 'workspace.preparing', taskId: 'T-0001', step: null, error: 'git worktree failed' },
   ])('reads $kind', (message) => {
@@ -296,6 +297,14 @@ describe('applyLiveMessages', () => {
     expect(queryClient.getQueryData(PREPARING_KEY)).toBeUndefined()
   })
 
+  it('reads the review comments of a task again when they change', () => {
+    const queryClient = client()
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+    applyLiveMessages(queryClient, [{ kind: 'review-comments.changed', taskId: 'T-0001' }])
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['review-comments', 'T-0001'] })
+    expect(invalidate).toHaveBeenCalledTimes(1)
+  })
+
   it('reads the files and the sizes of a changed workspace again, not its shells', () => {
     const queryClient = client()
     const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
@@ -306,7 +315,15 @@ describe('applyLiveMessages', () => {
     ])
 
     const keys = invalidate.mock.calls.map(([filters]) => filters?.queryKey)
-    const workspaceKeys = ['changes', 'file-diff', 'graph', 'stage-files', 'tree', 'workspace-file']
+    const workspaceKeys = [
+      'changes',
+      'file-diff',
+      'graph',
+      'stage-files',
+      'tree',
+      'workspace-file',
+      'review-comments',
+    ]
     for (const id of ['T-0001', 'T-0002']) {
       for (const key of workspaceKeys) {
         expect(keys).toContainEqual([key, id])

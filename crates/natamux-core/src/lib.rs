@@ -7,6 +7,8 @@ pub mod agents {
 pub mod formats;
 pub mod git {
     pub mod commit_message;
+    pub mod review_file;
+    pub mod review_pin;
 }
 pub mod js;
 pub mod json;

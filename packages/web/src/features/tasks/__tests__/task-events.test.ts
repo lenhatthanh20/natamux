@@ -29,6 +29,15 @@ describe('describeEvent', () => {
     expect(describeEvent('stage.started', { ci: true })).toBe('Stage started')
   })
 
+  it('says a batch of review comments apart from a one-off comment', () => {
+    expect(describeEvent('review.commented', { comments: ['c1', 'c2'] })).toBe(
+      'Review comments sent to the agent',
+    )
+    expect(describeEvent('review.commented', { text: 'Fix it' })).toBe(
+      'Review comment sent to the agent',
+    )
+  })
+
   it('says how long a paused agent was idle', () => {
     expect(describeEvent('agent.paused', { terminal: '1', idleMinutes: 30 })).toBe(
       'Agent paused after 30 min idle',

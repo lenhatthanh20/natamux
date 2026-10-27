@@ -715,6 +715,17 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
               mergeTask(updated)
               return updated
             }}
+            reviewApi={{
+              list: () => api.listReviewComments(changesTask.id),
+              add: (input) => api.addReviewComment(changesTask.id, input),
+              update: (id, patch) => api.updateReviewComment(changesTask.id, id, patch),
+              remove: (id) => api.deleteReviewComment(changesTask.id, id),
+              send: async () => {
+                const sent = await api.sendReviewComments(changesTask.id)
+                mergeTask(sent.task)
+                return sent
+              },
+            }}
             openPullRequest={async () => {
               const updated = await api.openPullRequest(changesTask.id)
               mergeTask(updated)

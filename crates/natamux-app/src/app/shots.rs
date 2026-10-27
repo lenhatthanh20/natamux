@@ -83,6 +83,9 @@ pub fn prepare(shot: Shot) {
         _ => (FakeLink::Live, true, true),
     };
     fake_daemon::shared().set_up(link, tasks, repos);
+    if shot == Shot::WorkspaceChangesComments {
+        fake_daemon::shared().show_review_comments(REVIEWED);
+    }
     if shot == Shot::WorkspacePreparing {
         fake_daemon::shared().set_preparing(NO_WORKSPACE, PreparingStep::Fetch);
     }
@@ -134,6 +137,7 @@ pub fn run(handle: WindowHandle<Root>, shot: Shot, cx: &mut App) {
                 | Shot::CompareTries
                 | Shot::WorkspaceChangesDiff
                 | Shot::WorkspaceChangesAsk
+                | Shot::WorkspaceChangesComments
                 | Shot::Rollback
                 | Shot::StageEvidence
         ) {
@@ -269,6 +273,7 @@ fn enter_git(shot: Shot, dashboard: &gpui::Entity<Dashboard>, cx: &mut App) {
         Shot::WorkspaceChangesList
         | Shot::WorkspaceChangesDiff
         | Shot::WorkspaceChangesAsk
+        | Shot::WorkspaceChangesComments
         | Shot::Rollback => changes(dashboard, REVIEWED, cx),
         Shot::ImageDiff => changes(dashboard, IMAGE, cx),
         // T-0183: History is a view of the panel.
@@ -392,13 +397,17 @@ fn panel_step(shot: Shot, root: &mut Root, window: &mut Window, cx: &mut gpui::C
         Shot::StageEvidence => {
             panel.update(cx, |panel, cx| panel.open_evidence(EVIDENCE_STAGE, cx))
         }
-        Shot::WorkspaceChangesDiff | Shot::WorkspaceChangesAsk | Shot::Rollback => {
+        Shot::WorkspaceChangesDiff
+        | Shot::WorkspaceChangesAsk
+        | Shot::WorkspaceChangesComments
+        | Shot::Rollback => {
             let changes = root.workspace_view().read(cx).changes_view().clone();
             changes.update(cx, |changes, cx| match shot {
                 Shot::WorkspaceChangesDiff => changes.shot_change(CHANGED_FILE, 2, window, cx),
                 Shot::WorkspaceChangesAsk => {
                     changes.shot_ask(ASKED_LINES.0, ASKED_LINES.1, window, cx)
                 }
+                Shot::WorkspaceChangesComments => changes.shot_comments(CHANGED_FILE, cx),
                 _ => changes.shot_rollback(window, cx),
             });
         }
