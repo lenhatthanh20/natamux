@@ -7,10 +7,6 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
-## v1.0.4 (2026-10-27)
-
-- Fix: since the move to Rust, the desktop app showed no system notifications, no count on the Dock icon and played no sound. With **Notify me** on, a task that needs you or is done while the app is in the back now shows a macOS notification and plays your alert sound. The notification names the task, what happened at which stage, and the project. The Dock icon shows how many tasks need you. See [Notifications in the desktop app](/docs/guides/dashboard/#notifications-in-the-desktop-app).
-
 ## v1.0.3 (2026-10-26)
 
 - An agent may now send a task back from one stage any number of times; before, it stopped after 2. To set a limit, type a number in **Agent send backs** on the **Stages** tab of a project's settings, or set `agents.maxSendBacks` in `.natamux.json`. Past the limit the task waits for you, as before. The limit counts CI failures too. See [Limit the send backs](/docs/guides/project-settings/#limit-the-send-backs).

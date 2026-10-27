@@ -11,7 +11,9 @@ use ui::prelude::*;
 
 use super::dashboard::Dashboard;
 use super::dock_badge::set_dock_badge;
-use super::notify_rules::{NeedsYouAnnouncer, States, badge_label, plays_sound, rings, states_by_id};
+use super::notify_rules::{
+    NeedsYouAnnouncer, States, badge_label, plays_sound, rings, states_by_id,
+};
 use crate::tasks::task_attention::needs_me_tasks;
 
 #[derive(Default)]
