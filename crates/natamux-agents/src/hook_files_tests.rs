@@ -291,9 +291,11 @@ fn keeps_a_status_line_of_the_users_own_in_the_claude_code_file() {
 
 #[test]
 fn the_status_line_runs_the_app_s_own_natamux_when_the_daemon_knows_it() {
+    // Built with Path::join, as the code does: Windows uses `\`.
+    let bin = Path::new("/Applications/Natamux.app/Contents/MacOS").join("natamux");
     assert_eq!(
         claude_code_status_line(Some("/Applications/Natamux.app/Contents/MacOS"))["command"],
-        "\"/Applications/Natamux.app/Contents/MacOS/natamux\" statusline"
+        format!("\"{}\" statusline", bin.display())
     );
     assert_eq!(
         claude_code_status_line(None)["command"],
