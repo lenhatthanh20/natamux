@@ -260,6 +260,7 @@ impl ChangesView {
         let shown = self.shown_path(cx);
         let focused = self.files_focus.contains_focused(window, cx);
         let counts_shown = panel >= COUNTS_FROM;
+        let comments = self.render_comments(cx);
         let row_elements: Vec<AnyElement> = rows
             .into_iter()
             .enumerate()
@@ -280,6 +281,7 @@ impl ChangesView {
                     .p_1()
                     .children(row_elements),
             )
+            .child(comments)
     }
 
     fn render_header(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {

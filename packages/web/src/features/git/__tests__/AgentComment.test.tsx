@@ -110,15 +110,78 @@ describe('AgentComment', () => {
     )
     const field = screen.getByLabelText('Comment on line 7 for the agent')
     await user.type(field, 'Why?')
-    await user.click(screen.getByRole('button', { name: /Send to agent/ }))
+    await user.click(screen.getByRole('button', { name: /Send now/ }))
     expect(await screen.findByText('No agent runs')).toBeTruthy()
     expect(onClearQuote).not.toHaveBeenCalled()
     expect(send).toHaveBeenLastCalledWith(
       'Review comment on src/a.ts, line 7:\n```\nconst a = 1\nconst b = 2\nconst c = 3\n```\nWhy?',
     )
 
-    await user.click(screen.getByRole('button', { name: /Send to agent/ }))
+    await user.click(screen.getByRole('button', { name: /Send now/ }))
     expect(await screen.findByText('Sent to the agent.')).toBeTruthy()
     expect(onClearQuote).toHaveBeenCalledOnce()
+  })
+
+  it('adds a draft for the quote lines, and clears the box', async () => {
+    const onClearQuote = vi.fn()
+    const add = vi.fn().mockResolvedValue({})
+    const send = vi.fn()
+    const user = userEvent.setup()
+    render(
+      <AgentComment
+        path="src/a.ts"
+        quote={quote({ side: 'old', start: 5, end: 6 })}
+        onClearQuote={onClearQuote}
+        send={send}
+        add={add}
+      />,
+    )
+    await user.type(screen.getByLabelText(/for the agent/), ' Why?  ')
+    await user.click(screen.getByRole('button', { name: /Add comment/ }))
+    expect(add).toHaveBeenCalledWith({
+      path: 'src/a.ts',
+      side: 'old',
+      start: 5,
+      end: 6,
+      body: 'Why?',
+    })
+    expect(send).not.toHaveBeenCalled()
+    expect(await screen.findByText('Comment added.')).toBeTruthy()
+    expect(onClearQuote).toHaveBeenCalledOnce()
+  })
+
+  it('comments on the cursor line of the new text, else the whole file', async () => {
+    const add = vi.fn().mockResolvedValue({})
+    const user = userEvent.setup()
+    const { rerender } = render(<AgentComment path="a.ts" line={9} send={vi.fn()} add={add} />)
+    await user.type(screen.getByLabelText(/for the agent/), 'One{Control>}{Enter}{/Control}')
+    expect(add).toHaveBeenLastCalledWith({
+      path: 'a.ts',
+      side: 'new',
+      start: 9,
+      end: 9,
+      body: 'One',
+    })
+    rerender(<AgentComment path="a.ts" send={vi.fn()} add={add} />)
+    await user.type(screen.getByLabelText(/for the agent/), 'Two')
+    await user.click(screen.getByRole('button', { name: /Add comment/ }))
+    expect(add).toHaveBeenLastCalledWith({
+      path: 'a.ts',
+      side: 'new',
+      start: 0,
+      end: 0,
+      body: 'Two',
+    })
+  })
+
+  it('keeps Send now as the one-off paste', async () => {
+    const send = vi.fn().mockResolvedValue({})
+    const add = vi.fn()
+    const user = userEvent.setup()
+    render(<AgentComment path="a.ts" line={2} send={send} add={add} />)
+    await user.type(screen.getByLabelText(/for the agent/), 'Now')
+    await user.click(screen.getByRole('button', { name: 'Send now' }))
+    expect(send).toHaveBeenCalledWith('Review comment on a.ts, line 2:\nNow')
+    expect(add).not.toHaveBeenCalled()
   })
 })

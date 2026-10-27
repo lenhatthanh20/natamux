@@ -200,6 +200,7 @@ impl Root {
             DashboardChange::SettingsClosed => self.settings_closed(window, cx),
             DashboardChange::WorkspaceChanged(_)
             | DashboardChange::ShellsChanged(_)
+            | DashboardChange::ReviewCommentsChanged(_)
             | DashboardChange::TaskLogged(_)
             | DashboardChange::UndoRollback(_) => {}
         }

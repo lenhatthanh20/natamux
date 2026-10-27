@@ -40,7 +40,8 @@ fn route_of(event: &DashboardEvent) -> Option<String> {
         | DashboardEvent::Status(_)
         | DashboardEvent::WorkspaceChanged { .. }
         | DashboardEvent::ShellsChanged { .. }
-        | DashboardEvent::TaskLogged { .. } => return None,
+        | DashboardEvent::TaskLogged { .. }
+        | DashboardEvent::ReviewCommentsChanged { .. } => return None,
     };
     Some(route.to_string())
 }

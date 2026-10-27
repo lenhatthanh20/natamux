@@ -91,6 +91,11 @@ Files, git, GitHub, terminals and templates.
 | `GET /tasks/:id/file?path=<file>` | One file of the worktree: `{ path, text, binary, tooLarge, version }` |
 | `PUT /tasks/:id/file?path=<file>` | Save a file that exists `{ text }`, with the `version` you read in `If-Match`. Answers 409 when the file changed since |
 | `POST /tasks/:id/agent/message` | Paste a comment into the agent's terminal `{ text }`. Answers 400 when no agent runs there |
+| `GET /tasks/:id/review-comments` | The review comments of the task: `{ comments }`, by file then line. Each has `id` (`c1`, `c2`, …), `path`, `side` (`old` or `new`), `start` and `end` (1-based lines; both 0 for the whole file), `quote`, `body`, `state` (`draft`, `sent` or `resolved`), `createdAt`, `sentAt`, `resolvedAt` and `outdated` (true when the quoted code is gone). Each comment follows its code when the file changes |
+| `POST /tasks/:id/review-comments` | Add a draft `{ path, side, start, end, body }`: `{ comment }`, status 201. `body` is 1 to 5000 characters. Answers 400 for lines outside the file or `end` before `start` |
+| `PATCH /tasks/:id/review-comments/:cid` | Change a comment `{ body?, state? }`: `{ comment }`. `body` only while it is a draft. `state` is `resolved` (from `sent`) or `sent` (from `resolved`). Answers 409 otherwise, 404 for an unknown id |
+| `DELETE /tasks/:id/review-comments/:cid` | Delete a comment in any state. Answers 204 |
+| `POST /tasks/:id/review-comments/send` | Write `.natamux-task/review-comments.md`, paste one prompt into the agent's terminal and mark every draft `sent`: `{ task, comments }`. Answers 409 when there is no draft or no agent runs there |
 | `POST /tasks/:id/commit` | Commit all changes `{ message }` |
 | `POST /tasks/:id/rollback` | Put changed files back as they are in the last commit `{ paths }` (1 to 5000): `{ files }`. A new file is deleted. Answers 404 for a path that is not changed, and 409 for a conflict; then nothing changes |
 | `POST /tasks/:id/rollback/undo` | Bring back the files of the last rollback as they were before it: `{ files }`. Answers 409 when there is nothing to undo |
@@ -125,6 +130,7 @@ A browser cannot set headers on a WebSocket, so:
   - `usage.changed` with `{ taskId, usage }` when a task's usage changes. `usage` is the task's entry, as `GET /usage` gives it.
   - `shells.changed` with `{ taskId }` when a terminal of the task starts or ends, when the program in front of a terminal changes (checked about every 500 ms while it prints, and when its output goes quiet), when an agent that comes back after a restart starts or is up, or when a hook changes the state of an agent that works on no stage, unless the last `GET /tasks/<id>/terminals` found no agent in that terminal.
   - `workspace.dirty` with `{ taskId }` when files in the task's workspace may have changed: after an agent hook for a tool that ran or for the end of a turn, when its terminals go quiet, after a commit or a rollback, or after a save in the editor. Each comes 750 ms after a change. Up to 3 in a row come that soon; while changes go on after that, at most one per task every 10 s, and one more after the last change.
+  - `review-comments.changed` with `{ taskId }` after a review comment is added, changed or deleted, a send, or when a file edit moved a comment. Read `GET /tasks/<id>/review-comments` again.
   - `workspace.preparing` with `{ taskId, step }` while a new workspace is made: `step` is `fetch` or `checkout`, then `null` when it ended. A failure also has `error`.
   - `jobs.changed` with `{ jobs }` when a background job starts or ends. `jobs` is the whole list, as `GET /jobs` gives it.
   - `resync` to one socket that missed messages because it read too slowly. The dashboard loads everything again.

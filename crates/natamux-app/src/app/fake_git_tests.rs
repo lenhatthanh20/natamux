@@ -1,5 +1,7 @@
 use futures::channel::mpsc::UnboundedReceiver;
 
+use natamux_proto::workspaces::review_comments::{CommentSide, CommentState, ReviewComment};
+
 use super::*;
 
 const REVIEWED: &str = "T-0143";
@@ -251,4 +253,158 @@ fn a_comment_needs_an_agent_in_terminal_1() {
         code(fake.send_to_agent("T-9999", "Hi".into()).unwrap_err()).0,
         404
     );
+}
+
+fn add(fake: &FakeDaemon, path: &str, lines: (u32, u32), body: &str) -> ReviewComment {
+    fake.add_review_comment(REVIEWED, path, CommentSide::New, lines, body.into())
+        .unwrap()
+}
+
+#[test]
+fn a_review_comment_is_a_draft_with_its_quote_and_the_next_id() {
+    let fake = FakeDaemon::default();
+    let (mut feed, _sender) = fake.watch();
+    heard(&mut feed);
+    let first = add(&fake, "src/checkout.ts", (5, 6), "  Rename it  ");
+    assert_eq!(
+        (first.id.as_str(), first.state),
+        ("c1", CommentState::Draft)
+    );
+    assert_eq!(first.body, "Rename it");
+    assert_eq!(
+        first.quote,
+        "  const amount = total(items) - Math.max(0, coupon)\n  return Math.max(0, amount)"
+    );
+    let whole = add(&fake, "src/checkout.ts", (0, 0), "Split the file");
+    assert_eq!((whole.id.as_str(), whole.quote.as_str()), ("c2", ""));
+    fake.delete_review_comment(REVIEWED, "c2").unwrap();
+    assert_eq!(add(&fake, "src/checkout.ts", (1, 1), "x").id, "c3");
+    assert!(heard(&mut feed).iter().any(|event| matches!(
+        event,
+        DashboardEvent::ReviewCommentsChanged { task_id } if task_id == REVIEWED
+    )));
+}
+
+#[test]
+fn the_list_is_sorted_by_file_then_line() {
+    let fake = FakeDaemon::default();
+    add(&fake, "test/coupon.test.ts", (2, 2), "b");
+    add(&fake, "src/checkout.ts", (6, 6), "c");
+    add(&fake, "src/checkout.ts", (1, 1), "a");
+    let ids: Vec<String> = fake
+        .review_comments(REVIEWED)
+        .unwrap()
+        .into_iter()
+        .map(|comment| comment.id)
+        .collect();
+    assert_eq!(ids, ["c3", "c2", "c1"]);
+}
+
+#[test]
+fn a_bad_comment_is_400_and_an_unknown_task_or_comment_is_404() {
+    let fake = FakeDaemon::default();
+    let bad = |lines: (u32, u32), body: &str| {
+        let answer = fake.add_review_comment(
+            REVIEWED,
+            "src/checkout.ts",
+            CommentSide::New,
+            lines,
+            body.into(),
+        );
+        code(answer.unwrap_err()).0
+    };
+    assert_eq!(bad((1, 1), "   "), 400);
+    assert_eq!(bad((3, 2), "x"), 400);
+    assert_eq!(bad((0, 2), "x"), 400);
+    assert_eq!(bad((8, 40), "x"), 400);
+    assert_eq!(bad((1, 1), &"x".repeat(5_001)), 400);
+    let none = fake.review_comments("T-9999");
+    assert_eq!(code(none.unwrap_err()).0, 404);
+    assert_eq!(
+        code(fake.delete_review_comment(REVIEWED, "c9").unwrap_err()).0,
+        404
+    );
+    let patch = fake.update_review_comment(REVIEWED, "c9", Some("x".into()), None);
+    assert_eq!(code(patch.unwrap_err()).0, 404);
+}
+
+#[test]
+fn only_a_draft_changes_its_body_and_only_a_sent_one_resolves() {
+    let fake = FakeDaemon::default();
+    add(&fake, "src/checkout.ts", (1, 1), "One");
+    let edited = fake
+        .update_review_comment(REVIEWED, "c1", Some("Two".into()), None)
+        .unwrap();
+    assert_eq!(edited.body, "Two");
+    let early = fake.update_review_comment(REVIEWED, "c1", None, Some(CommentState::Resolved));
+    assert_eq!(code(early.unwrap_err()).0, 409);
+    fake.send_review_comments(REVIEWED).unwrap();
+    let late = fake.update_review_comment(REVIEWED, "c1", Some("Three".into()), None);
+    assert_eq!(code(late.unwrap_err()).0, 409);
+    let resolved = fake
+        .update_review_comment(REVIEWED, "c1", None, Some(CommentState::Resolved))
+        .unwrap();
+    assert_eq!(resolved.resolved_at.as_deref(), Some(NOW));
+    let again = fake
+        .update_review_comment(REVIEWED, "c1", None, Some(CommentState::Sent))
+        .unwrap();
+    assert_eq!((again.state, again.resolved_at), (CommentState::Sent, None));
+}
+
+#[test]
+fn a_send_marks_every_draft_sent_and_records_the_ids() {
+    let fake = FakeDaemon::default();
+    add(&fake, "src/checkout.ts", (1, 1), "One");
+    add(&fake, "src/checkout.ts", (2, 2), "Two");
+    let answer = fake.send_review_comments(REVIEWED).unwrap();
+    assert!(
+        answer
+            .comments
+            .iter()
+            .all(|c| c.state == CommentState::Sent)
+    );
+    assert!(
+        answer
+            .comments
+            .iter()
+            .all(|c| c.sent_at.as_deref() == Some(NOW))
+    );
+    let events = fake.list_events(REVIEWED).unwrap();
+    let last = events.last().unwrap();
+    assert_eq!(last.event.kind, "review.commented");
+    assert_eq!(last.event.payload["comments"], json!(["c1", "c2"]));
+    let again = fake.send_review_comments(REVIEWED).unwrap_err();
+    assert_eq!(code(again).0, 409);
+}
+
+#[test]
+fn a_send_with_no_agent_leaves_the_drafts_as_drafts() {
+    let fake = FakeDaemon::default();
+    let draft = fake
+        .add_review_comment("T-0139", "src/a.ts", CommentSide::New, (0, 0), "Hi".into())
+        .unwrap();
+    let (status, message) = code(fake.send_review_comments("T-0139").unwrap_err());
+    assert_eq!(status, 409);
+    assert!(message.starts_with("No agent runs in the terminal of T-0139"));
+    assert_eq!(fake.review_comments("T-0139").unwrap()[0], draft);
+}
+
+#[test]
+fn the_shot_state_has_3_comments_on_2_files_and_one_is_outdated() {
+    let fake = FakeDaemon::default();
+    assert!(fake.review_comments(REVIEWED).unwrap().is_empty());
+    fake.show_review_comments(REVIEWED);
+    let list = fake.review_comments(REVIEWED).unwrap();
+    assert_eq!(list.len(), 3);
+    assert_eq!(list.iter().filter(|c| c.outdated).count(), 1);
+    assert_eq!(
+        list.iter()
+            .filter(|c| c.state == CommentState::Sent)
+            .count(),
+        1
+    );
+    let mut files: Vec<&str> = list.iter().map(|c| c.path.as_str()).collect();
+    files.dedup();
+    assert_eq!(files.len(), 2);
+    assert_eq!(add(&fake, "src/checkout.ts", (1, 1), "x").id, "c4");
 }

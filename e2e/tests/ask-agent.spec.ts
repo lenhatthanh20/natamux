@@ -38,7 +38,7 @@ test('asks the agent about selected lines', async ({ page, request }) => {
   await expect(page.getByText('Lines 1–2', { exact: true })).toBeVisible()
 
   await comment.fill('Why two?')
-  await page.getByRole('button', { name: /^Send to agent/ }).click()
+  await page.getByRole('button', { name: /^Send now/ }).click()
   await expect(page.getByRole('status').filter({ hasText: /No agent runs/ })).toBeVisible()
   await expect(page.getByText('Lines 1–2', { exact: true })).toBeVisible()
 

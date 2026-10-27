@@ -1,3 +1,4 @@
+import type { NewReviewComment } from '@natamux/core'
 import { X } from 'lucide-react'
 import { type FormEvent, type KeyboardEvent, useLayoutEffect, useRef, useState } from 'react'
 import { Button } from '../../components/ui/Button'
@@ -12,7 +13,10 @@ type AgentCommentProps = {
   // Lines picked in the diff. They replace the cursor line.
   quote?: CodeSelection | null
   onClearQuote?: () => void
+  // One-off prompt, pasted into the agent's terminal now ("Send now").
   send: (text: string) => Promise<unknown>
+  // Keeps the comment as a draft for the next batch ("Add comment"). Without it, only Send now.
+  add?: (input: NewReviewComment) => Promise<unknown>
 }
 
 // The message route takes 20,000 characters. A longer quote would leave no room for the comment.
@@ -62,7 +66,7 @@ const MAX_FIELD_HEIGHT = 96
 
 // A review comment on the file shown, pasted into the agent's terminal as its next prompt. It sits
 // at the bottom of the diff column: one line that grows as the user types.
-export function AgentComment({ path, line, quote, onClearQuote, send }: AgentCommentProps) {
+export function AgentComment({ path, line, quote, onClearQuote, send, add }: AgentCommentProps) {
   const [comment, setComment] = useState('')
   const [status, setStatus] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
@@ -77,34 +81,49 @@ export function AgentComment({ path, line, quote, onClearQuote, send }: AgentCom
     }
   }, [comment])
 
-  const submit = async (event: { preventDefault: () => void }) => {
-    event.preventDefault()
+  // The call, its words on success, and what to do after. A failure keeps the text and the quote.
+  const act = async (call: () => Promise<unknown>, done: string) => {
     if (comment.trim() === '' || sending) {
       return
     }
     setSending(true)
     setStatus(null)
     try {
-      await send(commentForAgent(path, comment, line, quote))
+      await call()
       setComment('')
       onClearQuote?.()
-      setStatus('Sent to the agent.')
+      setStatus(done)
     } catch (error) {
       setStatus(error instanceof Error ? error.message : String(error))
     } finally {
       setSending(false)
     }
   }
+  const sendNow = () =>
+    act(() => send(commentForAgent(path, comment, line, quote)), 'Sent to the agent.')
+  // The quote's lines and side; else the cursor line of the new text; else the whole file.
+  const addDraft = () => {
+    const target = quote
+      ? { side: quote.side, start: quote.start, end: quote.end }
+      : { side: 'new' as const, start: line ?? 0, end: line ?? 0 }
+    const call = () => add?.({ path, ...target, body: comment.trim() }) ?? Promise.resolve()
+    return act(call, 'Comment added.')
+  }
+  const submit = add === undefined ? sendNow : addDraft
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
-      void submit(event)
+    if (event.key === 'Enter' && (event.metaKey || event.ctrlKey) && !event.shiftKey) {
+      event.preventDefault()
+      void submit()
     }
   }
 
   return (
     <form
-      onSubmit={(event: FormEvent) => void submit(event)}
+      onSubmit={(event: FormEvent) => {
+        event.preventDefault()
+        void submit()
+      }}
       className="flex shrink-0 flex-col gap-1 border-t border-line bg-surface px-3 py-2"
     >
       <div className="flex items-baseline gap-2">
@@ -142,13 +161,24 @@ export function AgentComment({ path, line, quote, onClearQuote, send }: AgentCom
           }
           className={`${textarea} min-h-(--control-h) flex-1 resize-none py-1`}
         />
+        {add !== undefined && (
+          <Button
+            variant="ghost"
+            busy={sending}
+            disabledReason={comment.trim() === '' ? 'Write a comment first' : undefined}
+            data-tip="Paste this comment into the agent's terminal now"
+            onClick={() => void sendNow()}
+          >
+            Send now
+          </Button>
+        )}
         <Button
           type="submit"
           busy={sending}
           disabledReason={comment.trim() === '' ? 'Write a comment first' : undefined}
           shortcut="Mod+Enter"
         >
-          Send to agent
+          {add === undefined ? 'Send now' : 'Add comment'}
         </Button>
       </div>
     </form>

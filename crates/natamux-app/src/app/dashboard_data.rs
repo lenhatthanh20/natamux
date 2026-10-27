@@ -164,6 +164,7 @@ impl DashboardData {
             // The open workspace reads what it shows (`app/dashboard.rs`).
             DashboardEvent::WorkspaceChanged { .. }
             | DashboardEvent::ShellsChanged { .. }
+            | DashboardEvent::ReviewCommentsChanged { .. }
             | DashboardEvent::TaskLogged { .. } => {}
         }
         None

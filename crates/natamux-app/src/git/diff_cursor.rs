@@ -10,6 +10,7 @@ use ui::prelude::*;
 use super::change_rules::{Side, Step, change_anchor, change_at, step_change, whole_lines};
 use super::comment_rules::Quote;
 use super::diff_view::DiffView;
+use super::review_rules::inline_old_spot;
 
 impl DiffView {
     /// The line of the working tree under the cursor, 1-based.
@@ -110,6 +111,45 @@ impl DiffView {
             if let (Some(start), Some(end)) = (start, end) {
                 editor.change_selections(SelectionEffects::no_scroll(), window, cx, |selections| {
                     selections.select_anchor_ranges([start..end])
+                });
+            }
+        });
+    }
+
+    /// The cursor goes to `line` (1-based) of a side and the view scrolls to it. An old line of
+    /// an inline diff goes to the place its block has in the working tree.
+    pub fn go_to_line(
+        &mut self,
+        side: Side,
+        line: u32,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let (Some(sides), Some(buffer), Some(diff)) = (&self.sides, &self.buffer, &self.diff)
+        else {
+            return;
+        };
+        let row = line.saturating_sub(1);
+        let (editor, buffer, row) = match (side, &sides.left) {
+            (Side::Old, Some(left)) => {
+                (left.clone(), diff.read(cx).base_text_buffer().clone(), row)
+            }
+            (Side::Old, None) => {
+                let row = inline_old_spot(row, &self.hunks).row();
+                (sides.right.clone(), buffer.clone(), row)
+            }
+            _ => (sides.right.clone(), buffer.clone(), row),
+        };
+        editor.update(cx, |editor, cx| {
+            let anchor =
+                editor
+                    .buffer()
+                    .read(cx)
+                    .buffer_point_to_anchor(&buffer, Point::new(row, 0), cx);
+            if let Some(anchor) = anchor {
+                let effects = SelectionEffects::scroll(Autoscroll::center());
+                editor.change_selections(effects, window, cx, |selections| {
+                    selections.select_anchor_ranges([anchor..anchor])
                 });
             }
         });

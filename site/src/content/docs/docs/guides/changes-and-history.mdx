@@ -82,22 +82,39 @@ Under every diff there is a box to comment on the file. It says **Comment on thi
 
 1. Press `Mod+Shift+A`, or click the box.
 2. Write what should change and why.
-3. Click **Send to agent**, or press `Mod+Enter`.
+3. Click **Add comment**, or press `Mod+Enter`.
 
-Natamux pastes this text into Terminal 1 as the agent's next prompt:
+The comment is saved as a **draft** on that line, or on the whole file. It shows under its line in the diff and in the **Comments** list at the bottom of the file panel. Nothing goes to the agent yet. Add as many as you want, in any files.
+
+When you are done, click **Send N comments** (`Mod+Alt+Enter`). Natamux writes every open comment to `.natamux-task/review-comments.md` in the workspace, pastes one short prompt into Terminal 1, and marks the drafts **Sent**:
+
+```text
+Review comments: 3 new. Read .natamux-task/review-comments.md. Fix each item under New, then reply with what you changed per id (c3: …).
+```
+
+Each item in the file has its id, file and lines, the quoted code and your text. New comments are under **New**. Comments sent before and not resolved are under **Still open**.
+
+- A comment stays on its code when the agent edits the file. If the agent rewrites that code, the comment shows **outdated** with the code it was about, and stays in the list.
+- When a comment is fixed, click **Resolve**. It leaves the diff and the next `review-comments.md`. **Show resolved** in the list brings it back, with **Reopen**.
+- A draft has **Edit** and **Delete**. A sent comment has **Resolve** and **Delete**.
+- Send needs an agent in Terminal 1. Without one you get an error and the drafts stay drafts. A paused agent is woken with the prompt. See [Terminal](/docs/guides/terminal/).
+
+#### Send now
+
+**Send now** (next to **Add comment**) skips the draft. It pastes this text into Terminal 1 as the agent's next prompt at once, and the comment is not saved:
 
 ```text
 Review comment on src/app.ts, line 12:
 Handle the empty list here.
 ```
 
-The box then says **Sent to the agent.** This needs an agent that runs in Terminal 1. Without one you get an error and the comment is not sent. See [Terminal](/docs/guides/terminal/).
+The box then says **Sent to the agent.**
 
 #### Ask about selected lines
 
 1. Select lines in the diff. An **Ask agent** button shows next to them.
 2. Click **Ask agent**, press `Mod+Shift+A`, or pick **Ask agent about the selection** in the right-click menu. The box shows the lines, for example **Lines 12–14**, and the cursor moves into it.
-3. Write your question and click **Send to agent**.
+3. Write your question and click **Add comment** to keep it as a draft, or **Send now** to ask at once.
 
 The agent gets the lines with the comment:
 
@@ -112,6 +129,7 @@ Why return here, and not show a message?
 ````
 
 - The whole lines count, even when only part of them is selected.
+- **Add comment** keeps the lines (and the side) as the place of the comment. **Send now** sends the lines in the prompt, as below.
 - Lines from the left side of a side-by-side diff are marked **(before the change)**. In the inline view, removed lines cannot be selected.
 - Over 10,000 characters, only the line numbers are sent, not the code.
 - Click **×** (**Remove the selected lines**) to comment on the file again. Choosing another file also drops the lines.

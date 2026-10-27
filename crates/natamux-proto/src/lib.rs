@@ -47,5 +47,6 @@ pub mod terminals {
 pub mod workspaces {
     pub mod changes;
     pub mod files;
+    pub mod review_comments;
     pub mod workspace;
 }

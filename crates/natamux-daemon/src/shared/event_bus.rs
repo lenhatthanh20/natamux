@@ -53,6 +53,10 @@ pub enum DaemonMessage {
     WorkspaceDirty {
         task_id: String,
     },
+    /// A review comment of the task was added, changed, sent or deleted, or its lines moved.
+    ReviewCommentsChanged {
+        task_id: String,
+    },
     /// The background jobs that run now.
     JobsChanged {
         jobs: Vec<Job>,
@@ -88,6 +92,7 @@ impl DaemonMessage {
                 "shells.changed"
             }
             DaemonMessage::WorkspaceDirty { .. } => "workspace.dirty",
+            DaemonMessage::ReviewCommentsChanged { .. } => "review-comments.changed",
             DaemonMessage::JobsChanged { .. } => "jobs.changed",
             DaemonMessage::WorkspacePreparing { .. } => "workspace.preparing",
             DaemonMessage::UsageChanged { .. } => "usage.changed",
@@ -120,6 +125,7 @@ impl DaemonMessage {
             DaemonMessage::TaskDeleted { task_id }
             | DaemonMessage::ShellsChanged { task_id }
             | DaemonMessage::ProgramsChanged { task_id, .. }
+            | DaemonMessage::ReviewCommentsChanged { task_id }
             | DaemonMessage::WorkspaceDirty { task_id } => {
                 json!({ "kind": kind, "taskId": task_id })
             }

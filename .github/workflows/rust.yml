@@ -330,7 +330,7 @@ jobs:
             task-details-needs-input answer-banner workspace-terminal-plan-gate workspace-progress
             stage-failed send-back details-details compare-tries details-more-menu fan-out
             workspace-changes-empty workspace-changes-list workspace-changes-diff
-            workspace-changes-ask rollback image-diff workspace-history tasks-progress
+            workspace-changes-ask workspace-changes-comments rollback image-diff workspace-history tasks-progress
             project-settings-tab-stages project-settings-agent-stage project-settings-stage-picker
             project-settings-branch project-settings-problems project-settings-conflict
             details-files workspace-docs workspace-docs-edit workspace-editor
@@ -348,7 +348,7 @@ jobs:
             task-details-review task-details-needs-input answer-banner workspace-terminal-plan-gate
             workspace-progress stage-failed send-back details-details compare-tries
             details-more-menu fan-out workspace-changes-empty workspace-changes-list workspace-changes-diff
-            workspace-changes-ask rollback image-diff workspace-history tasks-progress
+            workspace-changes-ask workspace-changes-comments rollback image-diff workspace-history tasks-progress
             project-settings-tab-stages project-settings-agent-stage project-settings-stage-picker
             project-settings-branch project-settings-problems project-settings-conflict
             details-files workspace-docs workspace-docs-edit workspace-editor

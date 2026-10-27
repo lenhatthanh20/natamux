@@ -249,6 +249,26 @@ fn drafts_the_commit_message_with_mod_shift_g_only_from_the_commit_box() {
 }
 
 #[test]
+fn adds_a_review_comment_with_mod_enter_in_the_box_and_sends_them_with_mod_alt_enter() {
+    assert_eq!(shortcut_of("diff.add-comment"), Some("Mod+Enter"));
+    assert_eq!(
+        command_by_id("diff.add-comment").map(|command| command.contexts),
+        Some(&[COMMENT_BOX][..])
+    );
+    assert_eq!(shortcut_of("diff.send-comments"), Some("Mod+Alt+Enter"));
+    assert_eq!(
+        command_by_id("diff.send-comments").map(|command| command.contexts),
+        Some(&[CHANGES_ANY][..])
+    );
+    let name = |id: &str| crate::app::shortcuts::action_for(id).map(|action| action.name());
+    assert_eq!(name("diff.add-comment"), Some("natamux::AddReviewComment"));
+    assert_eq!(
+        name("diff.send-comments"),
+        Some("natamux::SendReviewComments")
+    );
+}
+
+#[test]
 fn offers_the_workspace_tabs_and_files_only_with_a_workspace_open() {
     let ids = [
         "tab.terminal",

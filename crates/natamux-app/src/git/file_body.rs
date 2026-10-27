@@ -56,7 +56,10 @@ impl ChangesView {
                 let version = file.version;
                 let (original, modified) = texts_of(&read);
                 let (options, _) = self.diff_options(kind == BodyKind::Whole, cx);
+                let comments = self.shown_comments();
+                let owner = cx.weak_entity();
                 self.diff.update(cx, |diff, cx| {
+                    diff.set_comments(comments, owner, cx);
                     diff.show(
                         &key,
                         &file.path,

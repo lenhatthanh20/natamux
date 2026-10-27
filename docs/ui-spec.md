@@ -589,7 +589,13 @@ Shared shell:
 - New or deleted files are not diffs: show a read-only single editor with the whole file decorated as added (or removed), and no phantom empty line (WS-02). An empty one shows "Empty file."
 - Notices instead of an editor: "Renamed without changes.", "The text did not change. Only the file mode may differ.", binary, larger than 1 MB. Above the editor, when the diff finds nothing: "Only whitespace or line endings changed." with [Show whitespace].
 - Images (png, jpg, gif, webp, and svg on demand): Before (last commit) and After (working tree), side by side or stacked, on a checkerboard, with the pixel size and the file size. Read from `GET /tasks/:id/changes/image` (5 MB limit, `nosniff`, sandbox CSP).
-- Comment-for-the-agent box docked at the bottom of the diff column: one line field that grows to 4 lines, label "Comment on line 12 for the agent" (or "on this file"), [Send to agent] with `Mod Enter`. Stepping to a change moves the cursor, so the comment is about that line.
+- Comment box docked at the bottom of the diff column: one line field that grows to 4 lines, label "Comment on line 12 for the agent" (or "on this file"), a ghost [Send now] (no key; pastes the one-off prompt into Terminal 1, as before) and the primary [Add comment] with `Mod Enter`. Add comment keeps the text as a draft (`POST /tasks/:id/review-comments`) on the quote's lines and side; else on the cursor line of the new side; else on the whole file. Success says "Comment added." and clears the box and the chip; a failure keeps both and shows the error. Stepping to a change moves the cursor, so the comment is about that line.
+- Review comments (`ReviewComments.tsx`, `review-zones.ts`, `useReviewComments.ts`): the daemon keeps them and pins each to its code when the agent edits the file.
+  - Inline: a Monaco view zone under the last line of each comment, on its editor (original for the old side, modified for the new side). It shows the id, lines, state and "outdated", up to 4 body lines (then "… more in the list") and the buttons. In the inline layout only new-side comments have a zone. Whole-file and outdated comments have none; they are in the list.
+  - Buttons by state: draft [Edit] [Delete]; sent [Resolve] [Delete]; resolved [Reopen]. Edit opens the text in the list row.
+  - List: a "Comments" section at the bottom of the file panel (under the file list, above the commit box; below the diff on a narrow window). Header: "Comments", "N open" (draft and sent), and a "Show resolved" checkbox (per view, not saved). Rows are grouped by file: id, lines, state, first body line; an outdated row shows the first 3 lines of its quote. A click opens the file and moves the cursor to the comment's line.
+  - [Send N comments] (primary, `Mod Alt Enter`, works anywhere in the Changes tab) pastes all drafts to Terminal 1 in one prompt and marks them sent. It is off with the reason "Add a comment first. Only drafts are sent." when there is no draft. An error (for example no agent) shows under it and the drafts stay drafts.
+  - Read again on `review-comments.changed` and `workspace.dirty`.
 - Ask about a selection (`features/files/monaco-ask.ts`): a non-empty selection in any editor of the diff (or a whole file) shows a secondary xs [Ask agent] button (`shadow-pop`) as a Monaco content widget at the cursor, above the line or below it. Name "Ask the agent about lines 12–14", tooltip `Mod Shift A`. The same action is `Mod+Shift+A` in the editor and "Ask agent about the selection" in its context menu. It adds the whole lines to the comment box: a chip "Lines 12–14" (left side: "(before the change)"; over 10,000 characters: "· too long to quote, only the line numbers are sent") with an xs [×] "Remove the selected lines", and the label "Comment on lines 12–14 for the agent". A successful send or another file drops it; a failed send keeps it.
 
 ### 4.25 Table (`features/tasks/TaskTable.tsx`)
@@ -754,6 +760,8 @@ Rules:
 | | Alt+F5 / Shift+Alt+F5 | Next / previous change in the file |
 | | F7 / Shift+F7 (Monaco built-in) | Accessible diff view |
 | | Mod+Shift+A | Comment on the current line for the agent |
+| | Mod+Enter (in the comment box) | Add comment |
+| | Mod+Alt+Enter (Changes tab) | Send N comments to the agent |
 | | Mod+Alt+Z | Roll back the shown file |
 | Palette | Up/Down, Enter, Shift+Enter, Alt+1..9, Tab, Esc | see 4.17 |
 

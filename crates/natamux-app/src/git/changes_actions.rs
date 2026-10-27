@@ -1,14 +1,15 @@
 //! The keys of the Changes tab (`lib/commands`): Refresh (Shift+R), the previous and next file
 //! (`[`, `]`), the previous and next change (Shift+Alt+F5, Alt+F5), comment or Ask agent
 //! (Mod+Shift+A), roll back the shown file (Mod+Alt+Z) and draft the commit message
-//! (Mod+Shift+G in the commit box).
+//! (Mod+Shift+G in the commit box), add a review comment (Mod+Enter in the comment box) and
+//! send them (Mod+Alt+Enter).
 
 use ui::prelude::*;
 
 use super::ChangesView;
 use crate::app::shortcuts::{
-    CommentOnDiff, DraftCommit, NextChange, NextFile, PrevChange, PrevFile, RefreshChanges,
-    RollbackFile,
+    AddReviewComment, CommentOnDiff, DraftCommit, NextChange, NextFile, PrevChange, PrevFile,
+    RefreshChanges, RollbackFile, SendReviewComments,
 };
 use crate::git::change_rules::{Step, step_file};
 
@@ -54,5 +55,9 @@ impl ChangesView {
                 cx.listener(|view, _: &RollbackFile, window, cx| view.rollback_shown(window, cx)),
             )
             .on_action(cx.listener(|view, _: &DraftCommit, window, cx| view.draft(window, cx)))
+            .on_action(
+                cx.listener(|view, _: &AddReviewComment, window, cx| view.add_comment(window, cx)),
+            )
+            .on_action(cx.listener(|view, _: &SendReviewComments, _, cx| view.send_comments(cx)))
     }
 }

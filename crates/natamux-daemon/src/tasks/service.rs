@@ -174,6 +174,10 @@ impl TaskService {
         self.with(|store| store.record_review_comment(task_id, text))
     }
 
+    pub fn record_review_comments(&self, task_id: &str, ids: &[String]) -> TaskResult<Task> {
+        self.with(|store| store.record_review_comments(task_id, ids))
+    }
+
     pub fn record_agent_launch(
         &self,
         task_id: &str,

@@ -153,7 +153,13 @@ impl WorkspaceView {
         match change {
             DashboardChange::Opened(task) => self.show(&task.id, cx),
             DashboardChange::BackToList | DashboardChange::AgentsOpened => self.hide(cx),
+            DashboardChange::ReviewCommentsChanged(id) if open(id, self) => {
+                self.changes
+                    .update(cx, |changes, cx| changes.read_comments(cx));
+            }
             DashboardChange::WorkspaceChanged(id) if open(id, self) => {
+                self.changes
+                    .update(cx, |changes, cx| changes.read_comments(cx));
                 self.read_git(cx);
                 self.refresh_file_tabs(cx);
             }
