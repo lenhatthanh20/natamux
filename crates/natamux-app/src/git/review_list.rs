@@ -147,6 +147,11 @@ impl ChangesView {
                 .size(LabelSize::XSmall)
                 .color(Color::Error)
         });
-        v_flex().flex_none().p_2().gap_1().child(send).children(error)
+        v_flex()
+            .flex_none()
+            .p_2()
+            .gap_1()
+            .child(send)
+            .children(error)
     }
 }

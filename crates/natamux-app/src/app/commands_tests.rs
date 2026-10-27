@@ -262,7 +262,10 @@ fn adds_a_review_comment_with_mod_enter_in_the_box_and_sends_them_with_mod_alt_e
     );
     let name = |id: &str| crate::app::shortcuts::action_for(id).map(|action| action.name());
     assert_eq!(name("diff.add-comment"), Some("natamux::AddReviewComment"));
-    assert_eq!(name("diff.send-comments"), Some("natamux::SendReviewComments"));
+    assert_eq!(
+        name("diff.send-comments"),
+        Some("natamux::SendReviewComments")
+    );
 }
 
 #[test]

@@ -125,7 +125,8 @@ impl DiffView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let (Some(sides), Some(buffer), Some(diff)) = (&self.sides, &self.buffer, &self.diff) else {
+        let (Some(sides), Some(buffer), Some(diff)) = (&self.sides, &self.buffer, &self.diff)
+        else {
             return;
         };
         let row = line.saturating_sub(1);

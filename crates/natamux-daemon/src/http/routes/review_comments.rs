@@ -13,7 +13,9 @@ use natamux_proto::workspaces::review_comments::{
 };
 use serde_json::{Map, Value, json};
 
-use crate::http::errors::{Answer, forbidden, internal_error, json_answer, stage_error, zod_answer};
+use crate::http::errors::{
+    Answer, forbidden, internal_error, json_answer, stage_error, zod_answer,
+};
 use crate::http::server::{AppState, query_value};
 use crate::shared::event_bus::DaemonMessage;
 use crate::stages::errors::StageResult;
@@ -83,7 +85,12 @@ fn new_comment(value: Option<&Value>) -> Result<NewReviewComment, ZodError> {
             &[Rule::Min(1), Rule::Max(4096)],
             &mut issues,
         );
-        let side = one_of(map.get("side"), &[json!("side")], &["old", "new"], &mut issues);
+        let side = one_of(
+            map.get("side"),
+            &[json!("side")],
+            &["old", "new"],
+            &mut issues,
+        );
         let start = line(map, "start", &mut issues);
         let end = line(map, "end", &mut issues);
         let body = comment_body(map.get("body"), &mut issues);

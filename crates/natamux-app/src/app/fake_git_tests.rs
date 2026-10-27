@@ -266,7 +266,10 @@ fn a_review_comment_is_a_draft_with_its_quote_and_the_next_id() {
     let (mut feed, _sender) = fake.watch();
     heard(&mut feed);
     let first = add(&fake, "src/checkout.ts", (5, 6), "  Rename it  ");
-    assert_eq!((first.id.as_str(), first.state), ("c1", CommentState::Draft));
+    assert_eq!(
+        (first.id.as_str(), first.state),
+        ("c1", CommentState::Draft)
+    );
     assert_eq!(first.body, "Rename it");
     assert_eq!(
         first.quote,
@@ -317,7 +320,10 @@ fn a_bad_comment_is_400_and_an_unknown_task_or_comment_is_404() {
     assert_eq!(bad((1, 1), &"x".repeat(5_001)), 400);
     let none = fake.review_comments("T-9999");
     assert_eq!(code(none.unwrap_err()).0, 404);
-    assert_eq!(code(fake.delete_review_comment(REVIEWED, "c9").unwrap_err()).0, 404);
+    assert_eq!(
+        code(fake.delete_review_comment(REVIEWED, "c9").unwrap_err()).0,
+        404
+    );
     let patch = fake.update_review_comment(REVIEWED, "c9", Some("x".into()), None);
     assert_eq!(code(patch.unwrap_err()).0, 404);
 }
@@ -351,8 +357,18 @@ fn a_send_marks_every_draft_sent_and_records_the_ids() {
     add(&fake, "src/checkout.ts", (1, 1), "One");
     add(&fake, "src/checkout.ts", (2, 2), "Two");
     let answer = fake.send_review_comments(REVIEWED).unwrap();
-    assert!(answer.comments.iter().all(|c| c.state == CommentState::Sent));
-    assert!(answer.comments.iter().all(|c| c.sent_at.as_deref() == Some(NOW)));
+    assert!(
+        answer
+            .comments
+            .iter()
+            .all(|c| c.state == CommentState::Sent)
+    );
+    assert!(
+        answer
+            .comments
+            .iter()
+            .all(|c| c.sent_at.as_deref() == Some(NOW))
+    );
     let events = fake.list_events(REVIEWED).unwrap();
     let last = events.last().unwrap();
     assert_eq!(last.event.kind, "review.commented");
@@ -381,7 +397,12 @@ fn the_shot_state_has_3_comments_on_2_files_and_one_is_outdated() {
     let list = fake.review_comments(REVIEWED).unwrap();
     assert_eq!(list.len(), 3);
     assert_eq!(list.iter().filter(|c| c.outdated).count(), 1);
-    assert_eq!(list.iter().filter(|c| c.state == CommentState::Sent).count(), 1);
+    assert_eq!(
+        list.iter()
+            .filter(|c| c.state == CommentState::Sent)
+            .count(),
+        1
+    );
     let mut files: Vec<&str> = list.iter().map(|c| c.path.as_str()).collect();
     files.dedup();
     assert_eq!(files.len(), 2);

@@ -172,7 +172,10 @@ mod tests {
         assert!(!text.contains("sentAt"), "{text}");
         assert!(text.contains("\"createdAt\""), "{text}");
         assert!(text.contains("\"side\":\"new\""), "{text}");
-        assert_eq!(serde_json::from_str::<ReviewComment>(&text).unwrap(), comment);
+        assert_eq!(
+            serde_json::from_str::<ReviewComment>(&text).unwrap(),
+            comment
+        );
     }
 
     #[test]
@@ -186,7 +189,11 @@ mod tests {
         for side in [CommentSide::Old, CommentSide::New] {
             assert_eq!(CommentSide::parse(side.name()), Some(side));
         }
-        for state in [CommentState::Draft, CommentState::Sent, CommentState::Resolved] {
+        for state in [
+            CommentState::Draft,
+            CommentState::Sent,
+            CommentState::Resolved,
+        ] {
             assert_eq!(CommentState::parse(state.name()), Some(state));
         }
         assert_eq!(CommentState::parse("open"), None);

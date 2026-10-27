@@ -60,7 +60,10 @@ fn the_old_side_says_before_the_change() {
 #[test]
 fn a_whole_file_comment_has_no_quote() {
     let text = review_comments_md(&[comment("c1", CommentState::Draft, 0, 0, "")]);
-    assert!(text.contains("### c1: src/checkout.ts, whole file\nFix c1\n"), "{text}");
+    assert!(
+        text.contains("### c1: src/checkout.ts, whole file\nFix c1\n"),
+        "{text}"
+    );
 }
 
 #[test]
@@ -68,7 +71,10 @@ fn an_outdated_comment_says_so() {
     let mut gone = comment("c1", CommentState::Sent, 1, 1, "a");
     gone.outdated = true;
     let text = review_comments_md(&[gone]);
-    assert!(text.contains(&format!("line 1\n{OUTDATED_NOTE}\n```\na\n```\n")), "{text}");
+    assert!(
+        text.contains(&format!("line 1\n{OUTDATED_NOTE}\n```\na\n```\n")),
+        "{text}"
+    );
 }
 
 #[test]

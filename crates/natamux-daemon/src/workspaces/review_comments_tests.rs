@@ -46,5 +46,10 @@ fn a_missing_file_has_no_comments_and_a_saved_one_reads_back() {
     save(&path, &file).unwrap();
 
     assert_eq!(load(&path).unwrap(), file);
-    assert!(!dir.path().join("task").join("review-comments.json.tmp").exists());
+    assert!(
+        !dir.path()
+            .join("task")
+            .join("review-comments.json.tmp")
+            .exists()
+    );
 }

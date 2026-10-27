@@ -61,10 +61,7 @@ fn the_other_side_gets_its_rows_below_the_matching_line() {
     // The new side has 2 more lines in the hunk at rows 3..4 (old) and 3..6 (new).
     let hunks = [hunk(3..4, 3..6)];
     let before = comment("c1", "a.ts", CommentSide::New, (2, 2));
-    assert_eq!(
-        placement(&before, &hunks, true).other,
-        Some(Spot::Below(1))
-    );
+    assert_eq!(placement(&before, &hunks, true).other, Some(Spot::Below(1)));
     let first = comment("c2", "a.ts", CommentSide::New, (4, 4));
     assert_eq!(placement(&first, &hunks, true).other, Some(Spot::Below(3)));
     // The 2nd and 3rd new lines of the hunk have no old line: below the empty rows.

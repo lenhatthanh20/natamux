@@ -28,9 +28,7 @@ fn number(id: &str) -> u32 {
 /// By file, then first line, then id: the order of the daemon's list.
 fn sorted(list: &[ReviewComment]) -> Vec<ReviewComment> {
     let mut list = list.to_vec();
-    list.sort_by(|a, b| {
-        (&a.path, a.start, number(&a.id)).cmp(&(&b.path, b.start, number(&b.id)))
-    });
+    list.sort_by(|a, b| (&a.path, a.start, number(&a.id)).cmp(&(&b.path, b.start, number(&b.id))));
     list
 }
 
@@ -109,7 +107,10 @@ impl FakeDaemon {
         let reviews = &mut data.git.reviews;
         let list = reviews.comments.entry(task_id.into()).or_default();
         if list.len() >= MAX_COMMENTS {
-            return Err(status(400, format!("A task has at most {MAX_COMMENTS} comments.")));
+            return Err(status(
+                400,
+                format!("A task has at most {MAX_COMMENTS} comments."),
+            ));
         }
         let next = reviews.next.entry(task_id.into()).or_insert(0);
         *next += 1;
@@ -151,9 +152,7 @@ impl FakeDaemon {
             (Some(CommentState::Resolved), CommentState::Sent)
                 | (Some(CommentState::Sent), CommentState::Resolved)
         );
-        if (body.is_some() && comment.state != CommentState::Draft)
-            || (state.is_some() && !moves)
-        {
+        if (body.is_some() && comment.state != CommentState::Draft) || (state.is_some() && !moves) {
             return Err(status(409, format!("{id} is {}.", comment.state.name())));
         }
         if let Some(body) = body {

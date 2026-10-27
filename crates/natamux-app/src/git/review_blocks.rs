@@ -145,10 +145,24 @@ fn place_one(
     let rows = block_rows(&comment.body);
     let render = renderer(comment.clone(), owner.clone());
     let mut placed = Vec::new();
-    placed.extend(insert(&mine.editor, own, rows, BlockStyle::Fixed, render, cx));
+    placed.extend(insert(
+        &mine.editor,
+        own,
+        rows,
+        BlockStyle::Fixed,
+        render,
+        cx,
+    ));
     if let Some((pane, anchor)) = matching {
         let empty: RenderBlock = Arc::new(|_| div().into_any_element());
-        placed.extend(insert(&pane.editor, anchor, rows, BlockStyle::Spacer, empty, cx));
+        placed.extend(insert(
+            &pane.editor,
+            anchor,
+            rows,
+            BlockStyle::Spacer,
+            empty,
+            cx,
+        ));
     }
     placed
 }

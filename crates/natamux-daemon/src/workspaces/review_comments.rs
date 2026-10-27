@@ -13,8 +13,8 @@ use natamux_core::js::iso_now;
 use natamux_git::file_diff::read_side;
 use natamux_proto::tasks::task::Task;
 use natamux_proto::workspaces::review_comments::{
-    CommentSide, CommentState, MAX_COMMENTS, NewReviewComment, REVIEW_COMMENTS_FILE,
-    ReviewComment, ReviewCommentsFile,
+    CommentSide, CommentState, MAX_COMMENTS, NewReviewComment, REVIEW_COMMENTS_FILE, ReviewComment,
+    ReviewCommentsFile,
 };
 use natamux_stages::files::write_stage_file;
 use natamux_store::task_files::{archive_dir, write_atomic};
@@ -69,7 +69,11 @@ fn missing(cid: &str) -> StageError {
 }
 
 fn number(comment: &ReviewComment) -> u32 {
-    comment.id.get(1..).and_then(|n| n.parse().ok()).unwrap_or(0)
+    comment
+        .id
+        .get(1..)
+        .and_then(|n| n.parse().ok())
+        .unwrap_or(0)
 }
 
 fn sorted(mut comments: Vec<ReviewComment>) -> Vec<ReviewComment> {

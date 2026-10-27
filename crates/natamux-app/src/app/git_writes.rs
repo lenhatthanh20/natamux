@@ -192,7 +192,12 @@ impl Dashboard {
         let Some(source) = self.source.clone() else {
             return Self::no_daemon();
         };
-        self.write(source.delete_review_comment(task_id, id), true, cx, |_, _, _| {})
+        self.write(
+            source.delete_review_comment(task_id, id),
+            true,
+            cx,
+            |_, _, _| {},
+        )
     }
 
     /// Send N comments: one prompt to the agent; the task's log gets a line.

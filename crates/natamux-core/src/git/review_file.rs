@@ -14,7 +14,10 @@ pub const OUTDATED_NOTE: &str = "(the code changed; this may be done)";
 /// open". Resolved comments are left out, and so is a section with none.
 pub fn review_comments_md(comments: &[ReviewComment]) -> String {
     let mut text = String::from("# Review comments\n");
-    for (title, state) in [("New", CommentState::Draft), ("Still open", CommentState::Sent)] {
+    for (title, state) in [
+        ("New", CommentState::Draft),
+        ("Still open", CommentState::Sent),
+    ] {
         let items: Vec<&ReviewComment> = comments.iter().filter(|c| c.state == state).collect();
         if items.is_empty() {
             continue;
@@ -42,7 +45,9 @@ fn item(comment: &ReviewComment) -> String {
     if comment.start > 0 {
         if comment.quote.encode_utf16().count() > QUOTE_MAX {
             let source = if old { "the last commit" } else { "the file" };
-            text.push_str(&format!("(Too long to quote. Read these lines in {source}.)\n"));
+            text.push_str(&format!(
+                "(Too long to quote. Read these lines in {source}.)\n"
+            ));
         } else {
             text.push_str(&fenced(&comment.quote));
             text.push('\n');

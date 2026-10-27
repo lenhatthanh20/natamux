@@ -125,7 +125,11 @@ async fn the_agent_token_gets_403_on_every_route() {
         (Method::POST, send.as_str()),
     ] {
         let (status, answer) = d.send(method, path, Some(AGENT_TOKEN), &body).await;
-        assert_eq!((status, &answer["error"]), (403, &json!("forbidden")), "{path}");
+        assert_eq!(
+            (status, &answer["error"]),
+            (403, &json!("forbidden")),
+            "{path}"
+        );
     }
     assert_eq!(comments(&d).await.len(), 1);
 }
@@ -137,17 +141,29 @@ async fn changes_the_text_of_a_draft_and_the_state_of_a_sent_comment_only() {
     assert_eq!(add(&d, "new", 2, 2).await.0, 201);
 
     let (status, edited) = patch(&d, "c1", &json!({ "body": "  Better  " })).await;
-    assert_eq!((status, &edited["comment"]["body"]), (200, &json!("Better")));
-    assert_eq!(patch(&d, "c1", &json!({ "state": "resolved" })).await.0, 409);
+    assert_eq!(
+        (status, &edited["comment"]["body"]),
+        (200, &json!("Better"))
+    );
+    assert_eq!(
+        patch(&d, "c1", &json!({ "state": "resolved" })).await.0,
+        409
+    );
     assert_eq!(patch(&d, "c1", &json!({})).await.0, 400);
     assert_eq!(patch(&d, "c9", &json!({ "body": "x" })).await.0, 404);
     assert_eq!(d.post_empty(&format!("{BASE}/send")).await.0, 200);
 
     assert_eq!(patch(&d, "c1", &json!({ "body": "Late" })).await.0, 409);
     let (status, done) = patch(&d, "c1", &json!({ "state": "resolved" })).await;
-    assert_eq!((status, &done["comment"]["state"]), (200, &json!("resolved")));
+    assert_eq!(
+        (status, &done["comment"]["state"]),
+        (200, &json!("resolved"))
+    );
     assert!(done["comment"]["resolvedAt"].is_string());
-    assert_eq!(patch(&d, "c1", &json!({ "state": "resolved" })).await.0, 409);
+    assert_eq!(
+        patch(&d, "c1", &json!({ "state": "resolved" })).await.0,
+        409
+    );
     let (status, back) = patch(&d, "c1", &json!({ "state": "sent" })).await;
     assert_eq!((status, &back["comment"]["state"]), (200, &json!("sent")));
     assert!(back["comment"]["resolvedAt"].is_null());
@@ -174,10 +190,17 @@ async fn follows_the_code_when_lines_come_in_above_it_and_marks_a_rewrite_outdat
     let bus = std::sync::Arc::clone(&d.daemon.state.bus);
     eventually(|| bus.size() == 1).await;
 
-    std::fs::write(workspace.join("app.ts"), format!("{}{CODE}", "x\n".repeat(10))).unwrap();
+    std::fs::write(
+        workspace.join("app.ts"),
+        format!("{}{CODE}", "x\n".repeat(10)),
+    )
+    .unwrap();
     let moved = comments(&d).await;
 
-    assert_eq!((&moved[0]["start"], &moved[0]["end"]), (&json!(12), &json!(13)));
+    assert_eq!(
+        (&moved[0]["start"], &moved[0]["end"]),
+        (&json!(12), &json!(13))
+    );
     assert!(moved[0]["outdated"].is_null());
     // A pin that moved is told to dashboards, and kept in the file.
     let told = json!({ "kind": "review-comments.changed", "taskId": "T-0001" });
@@ -188,7 +211,10 @@ async fn follows_the_code_when_lines_come_in_above_it_and_marks_a_rewrite_outdat
     let rewritten = comments(&d).await;
     assert_eq!(rewritten.len(), 1);
     assert_eq!(rewritten[0]["outdated"], true);
-    assert_eq!((&rewritten[0]["start"], &rewritten[0]["quote"]), (&json!(12), &json!("b\nc")));
+    assert_eq!(
+        (&rewritten[0]["start"], &rewritten[0]["quote"]),
+        (&json!(12), &json!("b\nc"))
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
