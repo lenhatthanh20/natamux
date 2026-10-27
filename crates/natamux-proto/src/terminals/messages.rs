@@ -91,8 +91,9 @@ impl ClientMessage {
 }
 
 /// From the daemon to the client. `hello` is always first. `snapshot` and `resume` start a
-/// catch-up and `replayed` ends it. `pong` answers `ping`. `exit` ends the session; `error` says
-/// why it could not start.
+/// catch-up and `replayed` ends it. `pong` answers `ping`. `exit` ends the session; `paused` ends
+/// an idle agent's shell, which starts again on the next fresh attach; `error` says why it could
+/// not start.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum ServerMessage {
@@ -113,6 +114,10 @@ pub enum ServerMessage {
     Pong,
     Exit {
         code: Option<i32>,
+    },
+    /// The agent sat idle this many minutes with no one looking.
+    Paused {
+        minutes: u64,
     },
     Error {
         message: String,
@@ -236,6 +241,10 @@ mod tests {
             (
                 r#"{"type":"exit","code":null}"#,
                 ServerMessage::Exit { code: None },
+            ),
+            (
+                r#"{"type":"paused","minutes":30}"#,
+                ServerMessage::Paused { minutes: 30 },
             ),
             (
                 r#"{"type":"error","message":"Too many terminals."}"#,

@@ -4,6 +4,7 @@
 
 use std::sync::atomic::AtomicBool;
 
+use natamux_agents::hooks::Signal;
 use serde_json::Map;
 
 use super::*;
@@ -249,6 +250,39 @@ fn names_the_session_of_the_agent_in_each_natamux_shell() {
             [id, "7", "cursor", "u-1"].map(String::from).to_vec(),
         ]
     );
+}
+
+#[test]
+fn tells_the_signal_of_each_hook_with_its_shell_and_a_reported_turn_end_too() {
+    let p = setup();
+    let signals: Arc<Mutex<Vec<(String, String, Signal)>>> = Arc::default();
+    let record = Arc::clone(&signals);
+    let mut options = p.fx.options(true);
+    options.signal_seen = Some(Arc::new(
+        move |task: &str, terminal: &str, signal: Signal| {
+            let seen = (task.to_string(), terminal.to_string(), signal);
+            record.lock().unwrap().push(seen);
+        },
+    ));
+    let service = p.fx.service_with(mock(own_lane_of, |_, _| true), options);
+    let task = p.fx.make("Fix it");
+    p.fx.workspace(&task.id, Some("/work/T-0001"));
+
+    claude(&service, &task.id, &edit("a.ts"), Some("3"));
+    claude(&service, &task.id, &hook("Stop", json!({})), None);
+
+    let id = task.id.clone();
+    assert_eq!(
+        *signals.lock().unwrap(),
+        [
+            (id.clone(), "3".to_string(), Signal::Activity),
+            (id, "1".to_string(), Signal::TurnEnded),
+        ]
+    );
+}
+
+fn own_lane_of(task: &Task, _: Option<&str>) -> Option<Lane> {
+    own_lane(task)
 }
 
 type UsageCall = (String, Option<String>, String, String);

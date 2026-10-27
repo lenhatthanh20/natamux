@@ -162,6 +162,11 @@ impl StageRun {
 
     fn close_shell_now(&self, task_id: &str, terminal: &str) {
         self.options.terminals.close_one(task_id, terminal);
+        self.forget_shell(task_id, terminal);
+    }
+
+    /// What the runner knows of a shell the daemon ended: the next agent there is a new one.
+    pub fn forget_shell(&self, task_id: &str, terminal: &str) {
         // The killed agent never ends its turn, so its report would swallow the first turn end
         // of the next agent in this shell.
         let shell = key(task_id, terminal);

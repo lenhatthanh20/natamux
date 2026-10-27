@@ -86,7 +86,8 @@ mod tests {
              \"stage.approved\"|\"stage.passed\"|\"stage.failed\"|\"stage.reopened\"|\
              \"stage.skipped\"|\"context.fetched\"|\"issue.linked\"|\"issue.created\"|\
              \"agent.waiting\"|\"agent.stopped\"|\"attachment.added\"|\"stage.workflow-set\"|\
-             \"stage.ci-set\"|\"stage.ci-started\"|\"stage.skip-set\"|\"workspace.failed\"; at: \
+             \"stage.ci-set\"|\"stage.ci-started\"|\"stage.skip-set\"|\"workspace.failed\"|\
+             \"agent.paused\"; at: \
              Invalid input: expected string, received undefined"
         );
     }

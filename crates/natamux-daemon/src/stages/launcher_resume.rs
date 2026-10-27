@@ -131,13 +131,12 @@ impl StageRun {
                 .or_else(|| task.agent.clone())
         };
         // An agent the person quit before the app closed stays quit; the stage can be resumed.
+        // A paused agent waits until someone opens its task.
         let terminal = self.terminal_of(task, &stage.id)?;
-        let quit = self
-            .options
-            .open_shells
-            .as_ref()
-            .is_some_and(|open| !open.was_running(&task.id, &terminal));
-        if working && agent.as_deref().is_some_and(is_launchable) && !quit {
+        let stays = self.options.open_shells.as_ref().is_some_and(|open| {
+            !open.was_running(&task.id, &terminal) || open.is_paused(&task.id, &terminal)
+        });
+        if working && agent.as_deref().is_some_and(is_launchable) && !stays {
             // In a group, the newest session of the folder may be the other stage's.
             self.relaunch(task, step, stage, !step.is_group(), true)?;
         }

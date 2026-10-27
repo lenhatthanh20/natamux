@@ -6,6 +6,7 @@
 
 use std::sync::Arc;
 
+use natamux_core::stages::terminal_lane::StageAgent;
 use natamux_daemon::shared::scheduler::Scheduler;
 use natamux_daemon::tasks::service::is_task_ended;
 use natamux_daemon::terminals::open_shells::{OpenShells, OpenShellsOptions};
@@ -23,6 +24,14 @@ fn shell(name: &str, agent: Option<&str>, session: Option<&str>) -> OpenShell {
         name: name.into(),
         agent: agent.map(String::from),
         session: session.map(String::from),
+        paused: false,
+    }
+}
+
+fn paused_shell(name: &str, agent: &str, session: &str) -> OpenShell {
+    OpenShell {
+        paused: true,
+        ..shell(name, Some(agent), Some(session))
     }
 }
 
@@ -111,8 +120,8 @@ fn brings_an_agent_back_on_its_session_once_and_keeps_the_task_agent() {
     let open = restart(&mut f, &task.id, &shells_of_t0075());
     let before = f.ptys().len();
 
-    f.runner.run.restore_task(&task.id, "6");
-    f.runner.run.restore_task(&task.id, "6");
+    f.runner.run.restore_task(&task.id, "6", true);
+    f.runner.run.restore_task(&task.id, "6", true);
 
     assert_eq!(f.ptys().len(), before + 1);
     let script = f.launch_script(&task.id, "6");
@@ -139,7 +148,7 @@ fn brings_back_every_agent_of_the_task_when_any_shell_of_it_is_attached() {
     let open = restart(&mut f, &task.id, &list);
 
     // The agents grid attaches Shell 1 only.
-    f.runner.run.restore_task(&task.id, "1");
+    f.runner.run.restore_task(&task.id, "1", true);
 
     assert!(script_has(&f, &task.id, "6", "--resume 'c-6'"));
     let codex = f.launch_script(&task.id, "8");
@@ -155,7 +164,7 @@ fn brings_back_an_agent_with_no_session_on_the_newest_session_of_the_folder() {
     let task = spec_running(&f, "claude-code");
     restart(&mut f, &task.id, &[shell("6", Some("copilot"), None)]);
 
-    f.runner.run.restore_task(&task.id, "6");
+    f.runner.run.restore_task(&task.id, "6", true);
 
     let script = f.launch_script(&task.id, "6");
     assert!(script.starts_with("copilot ") && script.contains("--continue"));
@@ -169,7 +178,7 @@ fn leaves_the_shell_to_the_attach_when_its_agent_cannot_start() {
     let open = restart(&mut f, &task.id, &shells_of_t0075());
     f.fail_spawn(|_, _| true);
 
-    f.runner.run.restore_task(&task.id, "6");
+    f.runner.run.restore_task(&task.id, "6", true);
 
     assert_eq!(restoring(&open, &task.id), [pair("7", None)]);
 }
@@ -181,7 +190,7 @@ fn lets_a_shell_that_was_not_attached_wait_again_when_its_agent_cannot_start() {
     let open = restart(&mut f, &task.id, &shells_of_t0075());
     f.fail_spawn(|_, _| true);
 
-    f.runner.run.restore_task(&task.id, "7");
+    f.runner.run.restore_task(&task.id, "7", true);
 
     assert_eq!(
         restoring(&open, &task.id),
@@ -287,4 +296,89 @@ fn lets_the_shell_of_a_stage_wait_when_its_agent_cannot_start_again() {
 
     assert_eq!(sorted(open.waiting(&task.id)), ["1", "6", "7"]);
     assert!(read_open_shells(&f.data_dir, &task.id).contains(&shells_of_t0075()[0]));
+}
+
+#[test]
+fn leaves_a_paused_agent_of_a_working_stage_paused_after_a_restart() {
+    let mut f = Fixture::new();
+    let task = spec_running(&f, "claude-code");
+    let list = [paused_shell("1", "claude-code", "s-1")];
+    let open = restart(&mut f, &task.id, &list);
+    let before = f.ptys().len();
+
+    resume_agents(&f);
+
+    assert_eq!(f.ptys().len(), before);
+    assert_eq!(open.waiting(&task.id), ["1"]);
+    assert!(open.is_paused(&task.id, "1"));
+}
+
+#[test]
+fn brings_a_paused_agent_back_only_for_a_client_that_shows_a_terminal_or_its_own_shell() {
+    let mut f = Fixture::new();
+    let task = spec_running(&f, "claude-code");
+    let list = [
+        paused_shell("6", "copilot", "c-6"),
+        shell("8", Some("codex"), Some("x-8")),
+    ];
+    let open = restart(&mut f, &task.id, &list);
+
+    // A hidden client of shell 1, such as a pane kept in the cache.
+    f.runner.run.restore_task(&task.id, "1", false);
+    assert!(script_has(&f, &task.id, "8", "'x-8'"));
+    assert_eq!(open.waiting(&task.id), ["6"]);
+
+    f.runner.run.restore_task(&task.id, "6", false);
+    assert!(script_has(&f, &task.id, "6", "--resume 'c-6'"));
+    assert!(open.waiting(&task.id).is_empty());
+}
+
+#[test]
+fn starts_a_stage_in_a_paused_shell_on_its_session_with_the_stage_prompt() {
+    let mut f = Fixture::new();
+    let task = spec_running(&f, "claude-code");
+    restart(&mut f, &task.id, &[paused_shell("1", "claude-code", "s-1")]);
+
+    let own = StageAgent::default();
+    let run = &f.runner.run;
+    run.launch(
+        &task.id,
+        "spec",
+        "claude-code",
+        "1",
+        "Write the plan",
+        None,
+        &own,
+    )
+    .unwrap();
+
+    assert!(script_has(&f, &task.id, "1", "--resume 's-1'"));
+    assert!(script_has(&f, &task.id, "1", "Write the plan"));
+}
+
+#[test]
+fn starts_a_paused_agent_with_a_review_comment_as_its_prompt() {
+    let mut f = Fixture::new();
+    let task = spec_running(&f, "claude-code");
+    let list = [
+        paused_shell("1", "claude-code", "s-1"),
+        shell("6", Some("copilot"), Some("c-1")),
+    ];
+    restart(&mut f, &task.id, &list);
+
+    assert!(
+        !f.runner
+            .run
+            .wake_paused(&task.id, "6", "Fix the typo")
+            .unwrap()
+    );
+    assert!(
+        f.runner
+            .run
+            .wake_paused(&task.id, "1", "Fix the typo")
+            .unwrap()
+    );
+
+    assert!(script_has(&f, &task.id, "1", "--resume 's-1'"));
+    assert!(script_has(&f, &task.id, "1", "Fix the typo"));
 }

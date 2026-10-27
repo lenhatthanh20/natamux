@@ -5,7 +5,7 @@ import type { ResolvedTheme } from '../../../lib/theme'
 import type { GpuRenderer } from '../gpu-renderer'
 import type { CachedTerminal } from '../terminal-cache'
 
-export type TerminalStatus = 'connecting' | 'open' | 'reconnecting' | 'ended' | 'error'
+export type TerminalStatus = 'connecting' | 'open' | 'reconnecting' | 'ended' | 'error' | 'paused'
 export type TerminalSessionState = {
   status: TerminalStatus
   error: string | null
@@ -14,6 +14,8 @@ export type TerminalSessionState = {
   catchingUp: boolean
   // From the `exit` frame; null when the shell ended another way or runs.
   exitCode: number | null
+  // From the `paused` frame: after how many idle minutes the daemon ended the agent.
+  pausedMinutes: number | null
 }
 
 // From `snapshot` or `resume` until xterm parsed the last chunk before `replayed` (spec 6).

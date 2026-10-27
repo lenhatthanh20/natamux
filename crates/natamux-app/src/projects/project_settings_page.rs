@@ -9,6 +9,7 @@ use gpui::{Entity, EventEmitter, FocusHandle, Focusable, ScrollHandle, Subscript
 use natamux_proto::projects::repo::{LoadedSettings, SkillList};
 use ui::{Tooltip, prelude::*};
 
+use super::idle_pause_field::IdlePauseField;
 use super::send_backs_field::SendBacksField;
 use super::settings_tab_rules::{PIPELINE_NOTE, SettingsTab, export_reason, shows_pipeline_note};
 use super::settings_tabs::SettingsTabs;
@@ -40,6 +41,7 @@ pub(super) struct StagesTab {
     was_picking: bool,
     pub(super) tabs: SettingsTabs,
     send_backs: Entity<SendBacksField>,
+    idle_pause: Entity<IdlePauseField>,
 }
 
 pub struct ProjectSettingsPage {
@@ -159,6 +161,7 @@ impl ProjectSettingsPage {
         ];
         let tabs = SettingsTabs::new(&editor, window, cx);
         let send_backs = cx.new(|cx| SendBacksField::new(editor.clone(), window, cx));
+        let idle_pause = cx.new(|cx| IdlePauseField::new(editor.clone(), window, cx));
         self.stages = Some(StagesTab {
             editor,
             list,
@@ -166,6 +169,7 @@ impl ProjectSettingsPage {
             was_picking: false,
             tabs,
             send_backs,
+            idle_pause,
         });
     }
 
@@ -255,7 +259,7 @@ impl ProjectSettingsPage {
         });
     }
 
-    /// The preview and the send backs field, then the list and the details: two parts of the
+    /// The preview and the agent fields, then the list and the details: two parts of the
     /// body, so a shot can scroll to the second.
     pub(super) fn render_stages(
         &self,
@@ -284,7 +288,8 @@ impl ProjectSettingsPage {
         let top = v_flex()
             .gap_3()
             .child(pipeline_preview(&stages.editor, &self.preview_scroll, cx))
-            .child(stages.send_backs.clone());
+            .child(stages.send_backs.clone())
+            .child(stages.idle_pause.clone());
         [top.into_any_element(), parts.into_any_element()]
     }
 
@@ -319,6 +324,7 @@ impl ProjectSettingsPage {
             ring.extend(stages.tabs.stops(shown, cx));
             if shown == SettingsTab::Stages {
                 ring.push(stages.send_backs.read(cx).stop(cx));
+                ring.push(stages.idle_pause.read(cx).stop(cx));
                 ring.extend(stages.list.read(cx).tab_stops());
                 ring.extend(stages.details.read(cx).tab_stops(cx));
             }

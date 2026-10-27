@@ -359,11 +359,13 @@ async fn lists_the_shells_that_wait_to_come_back_and_brings_them_back_when_opene
             name: "6".into(),
             agent: Some("claude-code".into()),
             session: Some("a-6".into()),
+            paused: false,
         },
         OpenShell {
             name: "7".into(),
             agent: None,
             session: None,
+            paused: false,
         },
     ];
     save_open_shells(&root.join("data"), "T-0001", &open).unwrap();

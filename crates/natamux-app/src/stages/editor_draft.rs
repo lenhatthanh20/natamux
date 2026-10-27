@@ -229,17 +229,33 @@ pub fn max_send_backs_of(raw: &RawSettings) -> Option<usize> {
     usize::try_from(most).ok()
 }
 
-/// The settings with this `agents.maxSendBacks`; None leaves it out, and an `agents` with nothing
-/// left goes too. `agents` keeps its place among the keys.
+/// The settings with this `agents.maxSendBacks`; None leaves it out.
 pub fn with_max_send_backs(raw: &RawSettings, most: Option<usize>) -> RawSettings {
+    with_agents_key(raw, "maxSendBacks", most.map(Value::from))
+}
+
+/// `agents.pauseIdleAfterMinutes` of the draft; None when it is left out or cannot be read (the
+/// default).
+pub fn pause_idle_of(raw: &RawSettings) -> Option<u64> {
+    raw.get("agents")?.get("pauseIdleAfterMinutes")?.as_u64()
+}
+
+/// The settings with this `agents.pauseIdleAfterMinutes`; None leaves it out.
+pub fn with_pause_idle(raw: &RawSettings, minutes: Option<u64>) -> RawSettings {
+    with_agents_key(raw, "pauseIdleAfterMinutes", minutes.map(Value::from))
+}
+
+/// The settings with this key of `agents`; None leaves it out, and an `agents` with nothing left
+/// goes too. `agents` keeps its place among the keys.
+fn with_agents_key(raw: &RawSettings, key: &str, value: Option<Value>) -> RawSettings {
     let old = raw
         .get("agents")
         .and_then(Value::as_object)
         .cloned()
         .unwrap_or_default();
-    let mut agents = without(&old, "maxSendBacks");
-    if let Some(most) = most {
-        agents.insert("maxSendBacks".to_string(), Value::from(most));
+    let mut agents = without(&old, key);
+    if let Some(value) = value {
+        agents.insert(key.to_string(), value);
     }
     if agents.is_empty() {
         return without(raw, "agents");

@@ -9,6 +9,7 @@ use crate::shared::scheduler::TimerId;
 impl OpenShells {
     /// Keeps the list in step with the open shells: a new shell is added as a plain one, a
     /// closed one goes after EXIT_CONFIRM_MS. Shells that wait to come back, or are held, stay.
+    /// A paused shell that is open again is no longer paused.
     pub(super) fn sync(&self, task_id: &str) {
         if self.lock().stopped {
             return;
@@ -35,6 +36,13 @@ impl OpenShells {
             self.close_later(task_id, &name);
         }
         let mut state = self.lock();
+        let mut unpaused = false;
+        for name in &open {
+            let key = key_of(task_id, name);
+            if !state.pausing.contains(&key) {
+                unpaused |= state.paused.remove(&key);
+            }
+        }
         let closing: Vec<String> = old
             .keys()
             .filter(|name| state.closing.contains_key(&key_of(task_id, name)))
@@ -49,7 +57,7 @@ impl OpenShells {
             };
             next.entry(name.clone()).or_insert(entry.unwrap_or(PLAIN));
         }
-        if next != old {
+        if next != old || unpaused {
             if next.is_empty() {
                 state.entries.remove(task_id);
             } else {
@@ -91,13 +99,17 @@ impl OpenShells {
 
     /// A stage or a person started a shell of a waiting name, or of one that just closed: it is a
     /// new shell, not the old one. The stage of a held shell started its agent again. Gives those
-    /// names, out of the waiting, held and closing lists, with their quit watch stopped.
+    /// names, out of the waiting, held and closing lists, with their quit watch stopped. A shell
+    /// that is being paused is still the old one.
     fn take_replaced(&self, task_id: &str, open: &[String]) -> Vec<String> {
         let mut state = self.lock();
         let scheduler = &self.options.scheduler;
         let mut replaced = Vec::new();
         for name in open {
             let key = key_of(task_id, name);
+            if state.pausing.contains(&key) {
+                continue;
+            }
             let closed = state
                 .closing
                 .remove(&key)
@@ -141,6 +153,7 @@ impl OpenShells {
             let mut state = this.lock();
             state.closing.remove(&timer_key);
             state.active.remove(&timer_key);
+            state.paused.remove(&timer_key);
             state.probed.remove(&timer_key);
             if state.stopped {
                 return;

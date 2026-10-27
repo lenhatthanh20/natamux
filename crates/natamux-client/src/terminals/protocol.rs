@@ -37,6 +37,11 @@ pub enum TerminalStatus {
     Ended {
         code: Option<i32>,
     },
+    /// The daemon ended the idle agent after `minutes` with no one looking. Showing the terminal
+    /// or typing into it starts it again.
+    Paused {
+        minutes: u64,
+    },
     /// It could not start, or the daemon refused it. No reconnect.
     Failed(String),
 }
@@ -52,6 +57,8 @@ pub struct Step {
 #[derive(Debug, PartialEq, Eq)]
 pub enum AfterClose {
     Retry,
+    /// The shell paused: connect again once the terminal is shown or typed into.
+    Sleep,
     Stop(TerminalStatus),
 }
 
@@ -62,6 +69,7 @@ pub struct Protocol {
     connected: bool,
     ever_opened: bool,
     ended: bool,
+    paused: bool,
     /// Bytes of output since the shell started, counted from `replayed`.
     offset: u64,
     offset_known: bool,
@@ -89,6 +97,7 @@ impl Protocol {
             connected: false,
             ever_opened: false,
             ended: false,
+            paused: false,
             offset: 0,
             offset_known: false,
             acked: 0,
@@ -115,6 +124,11 @@ impl Protocol {
 
     pub fn ended(&self) -> bool {
         self.ended
+    }
+
+    /// The shell paused, and the terminal was not shown or typed into since.
+    pub fn paused(&self) -> bool {
+        self.paused
     }
 
     /// The number of the next try, for the backoff. `hello` starts it again from 0.
@@ -180,6 +194,12 @@ impl Protocol {
                 step.emit
                     .push(TerminalEvent::Status(TerminalStatus::Ended { code }));
             }
+            ServerMessage::Paused { minutes } => {
+                self.paused = true;
+                self.catch_up = false;
+                step.emit
+                    .push(TerminalEvent::Status(TerminalStatus::Paused { minutes }));
+            }
             ServerMessage::Error { message } => {
                 self.end();
                 step.emit
@@ -212,6 +232,9 @@ impl Protocol {
         if self.ended {
             return AfterClose::Stop(TerminalStatus::Ended { code: None });
         }
+        if self.paused {
+            return AfterClose::Sleep;
+        }
         let final_code = code.is_some_and(|code| FINAL_CLOSE_CODES.contains(&code));
         if self.ever_opened && !final_code {
             return AfterClose::Retry;
@@ -226,6 +249,12 @@ impl Protocol {
 
     pub fn input(&mut self, data: &str) -> Step {
         let mut step = Step::default();
+        if self.paused {
+            // The keys go to the agent once it runs again.
+            self.typed.push(data.to_string());
+            self.wake();
+            return step;
+        }
         if self.ended || !self.connected {
             return step;
         }
@@ -255,6 +284,9 @@ impl Protocol {
     pub fn set_visible(&mut self, visible: bool) -> Step {
         self.visible = visible;
         let mut step = Step::default();
+        if visible && self.paused {
+            self.wake();
+        }
         if !self.connected || self.ended {
             return step;
         }
@@ -382,6 +414,16 @@ impl Protocol {
         self.ended = true;
         self.catch_up = false;
         self.typed.clear();
+    }
+
+    /// The paused shell is gone, so the next socket asks for a new one, which brings the agent
+    /// back on its session.
+    fn wake(&mut self) {
+        self.paused = false;
+        self.shell_id = None;
+        self.offset = 0;
+        self.offset_known = false;
+        self.acked = 0;
     }
 }
 

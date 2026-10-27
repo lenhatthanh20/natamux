@@ -216,6 +216,9 @@ pub fn settings_json(settings: &ProjectSettings) -> Value {
     if let Some(most) = settings.agents.max_send_backs {
         agents.insert("maxSendBacks".into(), json!(most));
     }
+    if let Some(minutes) = settings.agents.pause_idle_after_minutes {
+        agents.insert("pauseIdleAfterMinutes".into(), json!(minutes));
+    }
     json!({
         "stages": stages,
         "context": { "sources": sources },

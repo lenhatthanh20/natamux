@@ -12,7 +12,7 @@ use http_body_util::{BodyExt, Full};
 use hyper::body::Bytes;
 use hyper::{Method, Request};
 use hyper_util::rt::TokioIo;
-use natamux_daemon::config::{AgentConfig, Config};
+use natamux_daemon::config::{AgentConfig, Config, IDLE_MINUTE_MS};
 use natamux_daemon::shared::scheduler::Scheduler;
 use natamux_daemon::start::{Daemon, start};
 use natamux_daemon::tasks::records::WorkspaceChange;
@@ -254,6 +254,7 @@ pub async fn start_daemon_with(
         agent_token: AGENT_TOKEN.into(),
         silent_close,
         agents,
+        idle_minute_ms: IDLE_MINUTE_MS,
     };
     let ptys: Arc<Mutex<Vec<EchoPty>>> = Arc::default();
     let made = Arc::clone(&ptys);

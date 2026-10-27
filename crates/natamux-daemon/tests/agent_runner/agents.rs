@@ -189,9 +189,36 @@ fn restores_an_agent_on_its_session_in_its_shell_and_keeps_the_task_agent() {
         (
             last.terminal.as_str(),
             last.agent.as_str(),
-            last.session.as_deref()
+            last.session.as_deref(),
+            last.restored
         ),
-        ("6", "copilot", Some("c-1"))
+        ("6", "copilot", Some("c-1"), true)
+    );
+    assert!(!launches.lock().unwrap()[0].restored);
+}
+
+/// A paused agent gets the prompt of the next stage as it comes back on its session.
+#[test]
+fn goes_on_with_a_session_and_the_prompt_given() {
+    let env = Env::new();
+    let agents = AgentRunner::new(env.options());
+    let task = env.task();
+    agents
+        .start(
+            &task.id,
+            "copilot",
+            Some("Review it"),
+            Some("6"),
+            Some("c-1"),
+            &OwnAgent::default(),
+        )
+        .unwrap();
+
+    let script =
+        std::fs::read_to_string(env.data_dir.join(format!("agent-launch-{}-6.sh", task.id)));
+    assert_eq!(
+        script.unwrap(),
+        "copilot --allow-all-tools --resume 'c-1' -i 'Review it'\n"
     );
 }
 

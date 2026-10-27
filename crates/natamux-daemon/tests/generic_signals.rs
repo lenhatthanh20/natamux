@@ -220,6 +220,7 @@ fn launch(f: &Fixture, task_id: &str) {
         agent: "claude-code".to_string(),
         program: "claude".to_string(),
         session: None,
+        restored: false,
     });
 }
 

@@ -19,6 +19,13 @@
 #   none  works, then ends its turn
 set -u
 
+# Natamux tells an agent from a shell by the first word of its command line, and env makes that
+# `bash`. Named after this file, it shows as a running agent, as a real one does.
+if [ "${FAKE_AGENT_NAMED:-}" != 1 ]; then
+  export FAKE_AGENT_NAMED=1
+  exec -a "$0" bash "$0" "$@"
+fi
+
 # A one-shot run, such as the commit message draft: the prompt comes on stdin, one answer goes
 # to stdout. A task title with [no-draft] makes it fail, so the simple draft shows.
 if [ "${1:-}" = -p ]; then
@@ -32,11 +39,17 @@ if [ "${1:-}" = -p ]; then
   exit 0
 fi
 
-# Natamux starts it as: <this file> --settings <file> [--permission-mode <mode>] [prompt]
+# Natamux starts it as:
+#   <this file> --settings <file> [--permission-mode <mode>] [--resume <id>] [prompt]
 prompt=""
+session=""
 while [ "$#" -gt 0 ]; do
   case "$1" in
   --settings | --permission-mode) shift 2 || shift ;;
+  --resume)
+    session="${2:-}"
+    shift 2 || shift
+    ;;
   *)
     prompt="$1"
     shift
@@ -51,6 +64,10 @@ loop:* | ask:* | fail:*)
   prompt="${prompt# }"
   ;;
 esac
+resumed=no
+[ -n "$session" ] && resumed=yes
+# Each hook carries it, as Claude Code's do; Natamux resumes the agent with it after a pause.
+[ -n "$session" ] || session="fake-$(date +%s)-$RANDOM"
 notes="notes/${NATAMUX_TASK_ID:-task}.md"
 
 json() {
@@ -60,7 +77,8 @@ json() {
 
 # Claude Code sets CLAUDECODE; `natamux hook claude-code` drops a hook without it.
 hook() {
-  printf '{"hook_event_name":%s,"cwd":%s%s}' "$(json "$1")" "$(json "$PWD")" "${2:-}" |
+  printf '{"hook_event_name":%s,"cwd":%s,"session_id":%s%s}' \
+    "$(json "$1")" "$(json "$PWD")" "$(json "$session")" "${2:-}" |
     CLAUDECODE=1 natamux hook claude-code >/dev/null 2>&1 || true
 }
 
@@ -224,10 +242,26 @@ do_stage() {
   hook Stop
 }
 
-if [[ $prompt == *"natamux done"* ]]; then
+banner() {
   printf '\e[2m╭──────────────────────────────────────────────╮\e[0m\n'
   printf '\e[2m│\e[0m \e[1mFake agent\e[0m, a stand-in for Claude Code in dev \e[2m│\e[0m\n'
   printf '\e[2m╰──────────────────────────────────────────────╯\e[0m\n\n'
+}
+
+# Resumed with no prompt, as after a pause or a restart: it waits at its prompt.
+if [ "$resumed" = yes ] && [ -z "$prompt" ]; then
+  banner
+  printf '\e[2m(resumed session %s, waiting for the next prompt)\e[0m\n' "$session"
+  trap 'exit 0' HUP TERM
+  while next=$(read_prompt) && [ -n "$next" ]; do
+    do_stage "$next"
+    printf '\e[2m(waiting for the next prompt)\e[0m\n'
+  done
+  exit 0
+fi
+
+if [[ $prompt == *"natamux done"* ]]; then
+  banner
   # The terminal closed: stop, as an agent would.
   trap 'exit 0' HUP TERM
   next=$prompt
@@ -239,9 +273,7 @@ if [[ $prompt == *"natamux done"* ]]; then
   done
 fi
 
-printf '\e[2m╭──────────────────────────────────────────────╮\e[0m\n'
-printf '\e[2m│\e[0m \e[1mFake agent\e[0m, a stand-in for Claude Code in dev \e[2m│\e[0m\n'
-printf '\e[2m╰──────────────────────────────────────────────╯\e[0m\n\n'
+banner
 printf '\e[1m>\e[0m %s\n\n' "$prompt"
 hook UserPromptSubmit
 

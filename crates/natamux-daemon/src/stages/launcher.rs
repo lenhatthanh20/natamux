@@ -239,6 +239,8 @@ impl StageRun {
     ) -> StageResult<()> {
         // The agent of the stage before still ends its turn there; this stage needs a new one.
         self.close_pending_shell(task_id, terminal);
+        let paused = self.paused_session(task_id, terminal, agent);
+        let session = session.or(paused.as_deref());
         let result = if session.is_none() && self.agent_runs(task_id, terminal) {
             self.options
                 .terminals
@@ -271,6 +273,16 @@ impl StageRun {
             Ok(()) => Ok(()),
             Err(reason) => self.fail_stage(task_id, stage_id, &reason),
         }
+    }
+
+    /// The session of the agent paused in the shell, so the next prompt goes on in its
+    /// conversation, as a paste into a running agent would.
+    pub fn paused_session(&self, task_id: &str, terminal: &str, agent: &str) -> Option<String> {
+        let open = self.options.open_shells.as_ref()?;
+        if !open.is_paused(task_id, terminal) {
+            return None;
+        }
+        open.session_of(task_id, terminal, agent)
     }
 
     pub fn note_launch(&self, task_id: &str, terminal: &str, agent: &str) {

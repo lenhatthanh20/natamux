@@ -2,7 +2,7 @@
 //! shows, the footer note, the Issues choice, and the words of the reset and the JSON alert. No
 //! gpui, so it is tested alone.
 
-use natamux_proto::projects::repo::TrackerSettings;
+use natamux_proto::projects::repo::{PAUSE_IDLE_MINUTES, TrackerSettings};
 
 use crate::components::input_rules::segment_step;
 use crate::projects::settings_text::CREATE_ISSUE_OPTIONS;
@@ -117,6 +117,27 @@ pub fn send_backs_field(text: &str) -> Result<Option<usize>, &'static str> {
         return Err(SEND_BACKS_ERROR);
     }
     text.parse().map(Some).map_err(|_| SEND_BACKS_ERROR)
+}
+
+pub const IDLE_PAUSE_LABEL: &str = "Pause idle agents after (min)";
+pub const IDLE_PAUSE_HINT: &str = "An agent that ended its turn and that no one looks at stops \
+                                   after this long, and comes back when shown. 0 = off.";
+pub const IDLE_PAUSE_ERROR: &str = "Give 0 (off) or a whole number from 5 to 1440, or leave it \
+                                    empty.";
+
+/// The text of the idle pause field: empty is the default, 30 minutes.
+pub fn idle_pause_field(text: &str) -> Result<Option<u64>, &'static str> {
+    let text = text.trim();
+    if text.is_empty() {
+        return Ok(None);
+    }
+    if !text.bytes().all(|byte| byte.is_ascii_digit()) {
+        return Err(IDLE_PAUSE_ERROR);
+    }
+    match text.parse::<u64>() {
+        Ok(minutes) if minutes == 0 || PAUSE_IDLE_MINUTES.contains(&minutes) => Ok(Some(minutes)),
+        _ => Err(IDLE_PAUSE_ERROR),
+    }
 }
 
 /// The alert under the JSON editor.

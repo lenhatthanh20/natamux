@@ -24,7 +24,12 @@ pub struct Config {
     pub agent_token: String,
     pub silent_close: std::time::Duration,
     pub agents: AgentConfig,
+    /// `NATAMUX_IDLE_MINUTE_MS`: how long one minute of `agents.pauseIdleAfterMinutes` is. Only the
+    /// end-to-end tests shorten it, as they cannot wait for minutes.
+    pub idle_minute_ms: u64,
 }
+
+pub const IDLE_MINUTE_MS: u64 = 60_000;
 
 /// How agents start: `NATAMUX_<AGENT>_COMMAND` and `_ARGS` (the agent id in capitals, `CLAUDE`
 /// for Claude Code), and `NATAMUX_BIN_DIR`, the folder of the app's `natamux` command.
@@ -92,6 +97,10 @@ pub fn load_config(env: &Env, cwd: &Path) -> Result<Config, String> {
         agent_token: random_id(24),
         silent_close: natamux_proto::terminals::messages::SILENT_CLOSE,
         agents: agent_config(env),
+        idle_minute_ms: value(env, "NATAMUX_IDLE_MINUTE_MS")
+            .and_then(|raw| raw.parse::<u64>().ok())
+            .filter(|ms| *ms > 0)
+            .unwrap_or(IDLE_MINUTE_MS),
     })
 }
 
@@ -174,6 +183,20 @@ mod tests {
         assert_eq!(config.extra_args["codex"], "--model x");
         assert_eq!(config.programs.len() + config.extra_args.len(), 2);
         assert_eq!(config.bin_dir.as_deref(), Some("/app/bin"));
+    }
+
+    #[test]
+    fn a_minute_of_the_idle_pause_is_a_minute_unless_a_test_shortens_it() {
+        let minute = |pairs: &[(&str, &str)]| {
+            load_config(&env(pairs), Path::new("/"))
+                .unwrap()
+                .idle_minute_ms
+        };
+        assert_eq!(minute(&[]), 60_000);
+        assert_eq!(minute(&[("NATAMUX_IDLE_MINUTE_MS", " 200 ")]), 200);
+        for bad in ["0", "-5", "soon"] {
+            assert_eq!(minute(&[("NATAMUX_IDLE_MINUTE_MS", bad)]), 60_000, "{bad}");
+        }
     }
 
     #[test]

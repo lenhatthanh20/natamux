@@ -12,7 +12,7 @@ use serde_json::{Map, Value};
 use super::task_time::parse_iso_ms;
 
 /// One short sentence for every kind of event in `EVENT_TYPES`; a test keeps the two in step.
-const EVENT_SENTENCE: [(&str, &str); 47] = [
+const EVENT_SENTENCE: [(&str, &str); 48] = [
     ("task.created", "Task created"),
     ("task.readied", "Marked ready"),
     ("task.blocked", "Blocked"),
@@ -60,6 +60,7 @@ const EVENT_SENTENCE: [(&str, &str); 47] = [
     ("stage.ci-started", "CI check started"),
     ("stage.skip-set", "Skip choice changed"),
     ("workspace.failed", "Workspace failed"),
+    ("agent.paused", "Agent paused while idle"),
 ];
 
 /// The name of a path of a branch by its id.
@@ -79,6 +80,11 @@ pub fn event_sentence(kind: &str) -> Option<&'static str> {
 /// An event that chose a path of a branch ends with "-> <path name>"; without a name the id is
 /// shown. A kind with no sentence reads as its own name.
 pub fn describe_event(kind: &str, payload: &Map<String, Value>, path_names: &PathNames) -> String {
+    if kind == "agent.paused"
+        && let Some(minutes) = payload.get("idleMinutes").and_then(Value::as_u64)
+    {
+        return format!("Agent paused after {minutes} min idle");
+    }
     let ci = payload.get("ci") == Some(&Value::Bool(true));
     let sentence = if kind == "stage.reopened" && ci {
         "Sent back by CI"

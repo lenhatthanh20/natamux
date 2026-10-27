@@ -261,6 +261,56 @@ fn final_codes_exit_and_error_stop_for_good() {
     );
 }
 
+/// A hidden terminal whose shell "s1" sent 10 bytes, then paused after 30 minutes.
+fn paused(protocol: &mut Protocol) -> Step {
+    open(protocol);
+    hello(protocol);
+    protocol.server(ServerMessage::Replayed { offset: 0 });
+    live(protocol, 10);
+    protocol.server(ServerMessage::Paused { minutes: 30 })
+}
+
+#[test]
+fn a_paused_shell_stops_the_reconnects_until_the_terminal_is_shown() {
+    let mut protocol = Protocol::new("1", 80, 24, false);
+    let step = paused(&mut protocol);
+    assert_eq!(
+        step.emit,
+        [TerminalEvent::Status(TerminalStatus::Paused {
+            minutes: 30
+        })]
+    );
+    assert_eq!(protocol.closed(Some(1000)), AfterClose::Sleep);
+    assert!(protocol.paused() && !protocol.ended());
+
+    protocol.set_visible(true);
+
+    assert!(!protocol.paused());
+    let query = protocol.query("t".into());
+    assert_eq!((query.shell_id, query.offset), (None, None));
+    assert!(query.visible);
+}
+
+#[test]
+fn typing_into_a_paused_terminal_wakes_it_and_sends_the_keys_after_the_catch_up() {
+    let mut protocol = Protocol::new("1", 80, 24, false);
+    paused(&mut protocol);
+    protocol.closed(Some(1000));
+
+    assert!(protocol.input("y").send.is_empty());
+    assert!(!protocol.paused());
+
+    let query = protocol.query("t".into());
+    assert_eq!(query.shell_id, None);
+    protocol.opened();
+    protocol.server(ServerMessage::Snapshot { cols: 80, rows: 24 });
+    let step = protocol.caught_up(0);
+    assert!(
+        step.send
+            .contains(&ClientMessage::Input { data: "y".into() })
+    );
+}
+
 #[test]
 fn hello_starts_the_backoff_again() {
     let mut protocol = Protocol::new("1", 80, 24, true);

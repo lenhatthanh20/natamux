@@ -1,13 +1,16 @@
-//! The workspace service and the GitHub services of the daemon, wired to the terminals and agents.
+//! The workspace service, the GitHub services and the idle pause of the daemon, wired to the
+//! terminals and agents.
 
 use std::sync::Arc;
 
 use natamux_git::gh::default_run_gh;
 use natamux_proto::tasks::task::Task;
 use natamux_store::task_index::TaskIndex;
+use serde_json::Value;
 
 use super::TaskStore;
 use crate::agents::generic_signals::GenericSignals;
+use crate::agents::idle_pause::{IdlePause, IdlePauseOptions, PausableShells};
 use crate::agents::runner::AgentRunner;
 use crate::config::Config;
 use crate::github::issue_importer::{IssueImporter, IssueImporterOptions};
@@ -17,9 +20,11 @@ use crate::projects::repos::{RepoOptions, Repos, TaskRef};
 use crate::shared::event_bus::EventBus;
 use crate::shared::jobs::{Jobs, system_clock};
 use crate::shared::scheduler::Scheduler;
+use crate::stages::runner::StageRunner;
 use crate::tasks::errors::TaskError;
-use crate::tasks::service::{TaskService, TaskServiceOptions};
+use crate::tasks::service::{TaskService, TaskServiceOptions, is_task_ended};
 use crate::terminals::limits::MAIN_TERMINAL;
+use crate::terminals::open_shells::OpenShells;
 use crate::terminals::service::TerminalService;
 use crate::terminals::types::DEFAULT_SIZE;
 use crate::workspaces::agent_once::default_run_agent_once;
@@ -126,6 +131,58 @@ fn link_failure(error: LinkError) -> WorkspaceError {
         LinkError::GitHub(error) => WorkspaceError::GitHub(error.message),
         LinkError::Link(error) => WorkspaceError::Conflict(error.to_string()),
     }
+}
+
+impl PausableShells for TerminalService {
+    fn watched(&self, task_id: &str, terminal: &str) -> bool {
+        TerminalService::watched(self, task_id, terminal)
+    }
+
+    fn pause_one(&self, task_id: &str, terminal: &str, minutes: u64) -> bool {
+        TerminalService::pause_one(self, task_id, terminal, minutes)
+    }
+}
+
+/// The idle pause, which ends the shell of an idle agent that no one looks at.
+pub(super) fn idle_pause(
+    config: &Config,
+    store: &TaskStore,
+    terminals: &TerminalService,
+    open_shells: &Arc<OpenShells>,
+    stages: &StageRunner,
+    scheduler: &Arc<Scheduler>,
+) -> Arc<IdlePause> {
+    let (tasks, recording) = (store.tasks.clone(), store.tasks.clone());
+    let settings = Arc::clone(&store.repos);
+    let (runs, forgetting) = (stages.clone(), stages.clone());
+    IdlePause::new(IdlePauseOptions {
+        scheduler: Arc::clone(scheduler),
+        minute_ms: config.idle_minute_ms,
+        shells: Arc::new(terminals.clone()),
+        open_shells: Arc::clone(open_shells),
+        task_of: Arc::new(move |task_id: &str| {
+            if is_task_ended(&tasks, task_id) {
+                return None;
+            }
+            tasks.get_task(task_id).ok()
+        }),
+        minutes_of: Arc::new(move |task: &Task| {
+            settings
+                .settings_of(task.repo.as_deref())
+                .agents
+                .pause_idle_minutes()
+        }),
+        agent_runs: Arc::new(move |task_id: &str, terminal: &str| {
+            runs.run.agent_runs(task_id, terminal)
+        }),
+        on_paused: Arc::new(move |task_id: &str, terminal: &str, payload: Value| {
+            forgetting.run.forget_shell(task_id, terminal);
+            let logged = recording.record_event(task_id, "agent.paused", payload, "system");
+            if let Err(error) = logged {
+                eprintln!("The pause of terminal {terminal} of {task_id} is not logged: {error}");
+            }
+        }),
+    })
 }
 
 fn io_error(error: TaskError) -> std::io::Error {

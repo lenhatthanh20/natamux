@@ -28,6 +28,13 @@ describe('describeEvent', () => {
     )
     expect(describeEvent('stage.started', { ci: true })).toBe('Stage started')
   })
+
+  it('says how long a paused agent was idle', () => {
+    expect(describeEvent('agent.paused', { terminal: '1', idleMinutes: 30 })).toBe(
+      'Agent paused after 30 min idle',
+    )
+    expect(describeEvent('agent.paused')).toBe('Agent paused while idle')
+  })
 })
 
 describe('describeEvent with a path', () => {

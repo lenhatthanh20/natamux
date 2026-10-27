@@ -114,6 +114,7 @@ impl Fx {
             bus: bus.then(|| Arc::clone(&self.bus)),
             workspace_changed: None,
             session_seen: None,
+            signal_seen: None,
             usage_seen: None,
             home: self.dir.0.join("home"),
         }

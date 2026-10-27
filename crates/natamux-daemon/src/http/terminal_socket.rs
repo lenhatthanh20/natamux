@@ -47,7 +47,10 @@ struct SocketClient {
 
 impl TerminalClient for SocketClient {
     fn send(&self, frame: Frame) {
-        let exit = matches!(frame, Frame::Message(ServerMessage::Exit { .. }));
+        let exit = matches!(
+            frame,
+            Frame::Message(ServerMessage::Exit { .. } | ServerMessage::Paused { .. })
+        );
         let _ = self.out.send(Out::Frame(frame));
         if exit {
             let _ = self.out.send(Out::Close(None));
@@ -148,7 +151,8 @@ async fn open(
         // A client that lost its socket only resumes a shell that runs, never one that waits.
         // Any other attach opens the task: all its agents come back.
         if query.shell_id.is_none() {
-            attach_state.stages.run.restore_task(&task, &query.terminal);
+            let run = &attach_state.stages.run;
+            run.restore_task(&task, &query.terminal, query.visible);
         }
         let options = AttachOptions {
             visible: Some(query.visible),

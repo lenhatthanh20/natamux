@@ -251,6 +251,22 @@ fn drops_agents_when_no_limit_leaves_it_empty() {
 }
 
 #[test]
+fn reads_and_writes_the_idle_pause_minutes_beside_the_send_backs() {
+    let start = object(json!({ "agents": { "maxSendBacks": 2 } }));
+    assert_eq!(pause_idle_of(&start), None);
+
+    let set = with_pause_idle(&start, Some(0));
+    assert_eq!(
+        Value::Object(set.clone()),
+        json!({ "agents": { "maxSendBacks": 2, "pauseIdleAfterMinutes": 0 } })
+    );
+    assert_eq!(pause_idle_of(&set), Some(0));
+    assert_eq!(with_pause_idle(&set, None), start);
+    let bad = object(json!({ "agents": { "pauseIdleAfterMinutes": "30" } }));
+    assert_eq!(pause_idle_of(&bad), None);
+}
+
+#[test]
 fn checks_the_id_rule() {
     for id in ["a", "load-test", "1st-check", "a1-b2"] {
         assert!(fits_id_rule(id), "{id}");

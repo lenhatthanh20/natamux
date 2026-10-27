@@ -78,6 +78,7 @@ fn deletes_a_task_and_the_files_stored_with_it() {
         name: "6".into(),
         agent: Some("copilot".into()),
         session: Some("c-1".into()),
+        paused: false,
     };
     save_open_shells(data, &task.id, &[open]).unwrap();
     let usage = tasks_dir(data).join(format!("{}.usage.json", task.id));

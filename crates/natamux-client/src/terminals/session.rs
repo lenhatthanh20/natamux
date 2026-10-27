@@ -122,6 +122,8 @@ pub fn open(
 enum Outcome {
     /// The socket is gone and the shell may still run: try again.
     Lost,
+    /// The shell paused: connect again once the terminal is shown or typed into.
+    Paused,
     /// The session is over, or the app let go of it.
     Done,
 }
@@ -159,6 +161,13 @@ async fn run(
                 {
                     Outcome::Done => return,
                     Outcome::Lost => {}
+                    Outcome::Paused => {
+                        if !wake(&mut protocol, &mut commands).await {
+                            return;
+                        }
+                        emit(TerminalEvent::Status(TerminalStatus::Connecting));
+                        continue;
+                    }
                 }
             }
             Err(reason) if !protocol.ever_opened() => {
@@ -219,6 +228,20 @@ async fn wait(
     }
 }
 
+/// Waits while the shell is paused. Commands keep coming meanwhile; showing the terminal or
+/// typing into it ends the wait. False when the app let go.
+async fn wake(protocol: &mut Protocol, commands: &mut mpsc::UnboundedReceiver<Command>) -> bool {
+    while protocol.paused() {
+        match commands.recv().await {
+            Some(command) => {
+                apply(protocol, command);
+            }
+            None => return false,
+        }
+    }
+    true
+}
+
 async fn drive(
     socket: WebSocketStream<ConnectStream>,
     first: Step,
@@ -245,6 +268,10 @@ async fn drive(
         if protocol.ended() {
             let _ = sink.close(None).await;
             return Outcome::Done;
+        }
+        if protocol.paused() {
+            let _ = sink.close(None).await;
+            return Outcome::Paused;
         }
         catch_up_deadline = match (protocol.in_catch_up(), catch_up_deadline) {
             (true, None) => Some(Instant::now() + CATCH_UP_TIMEOUT),
@@ -315,6 +342,7 @@ fn lost(
 ) -> Outcome {
     match protocol.closed(code) {
         AfterClose::Retry => Outcome::Lost,
+        AfterClose::Sleep => Outcome::Paused,
         AfterClose::Stop(status) => {
             let _ = events.unbounded_send(TerminalEvent::Status(status));
             Outcome::Done
