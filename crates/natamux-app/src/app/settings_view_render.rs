@@ -8,7 +8,9 @@ use ui::{Indicator, ListItem, ListItemSpacing, Switch, Tab, Tooltip, prelude::*}
 
 use super::super::appearance_rules::{ThemeChoice, UiSize, parse_theme, parse_ui_size};
 use super::super::settings_rules::{SearchResults, SettingRow, SettingsPage, page_title, search};
+use super::super::settings_theme::theme_select;
 use super::super::shortcuts::AddProject;
+use super::super::theme_catalog::ThemeKind;
 use super::super::update;
 use super::{
     APP_ITEMS, NAV_WIDTH, NavItem, PAGE_MAX, SettingsView, heading, nav_items, nav_matches, segment,
@@ -68,6 +70,12 @@ impl SettingsView {
                 .on_click(|_, _, cx| update::check(true, cx))
                 .into_any_element(),
             SettingRow::Theme => self.theme_control(cx),
+            SettingRow::LightTheme => {
+                theme_select(ThemeKind::Light, &self.light_focus, &self.dashboard, cx)
+            }
+            SettingRow::DarkTheme => {
+                theme_select(ThemeKind::Dark, &self.dark_focus, &self.dashboard, cx)
+            }
             SettingRow::UiSize => self.size_control(cx),
             SettingRow::FontFamily => self.font.family_control(cx),
             SettingRow::FontSize => self.font.size_control(cx),
@@ -178,7 +186,13 @@ impl SettingsView {
     }
 
     fn appearance(&mut self, cx: &mut Context<Self>) -> AnyElement {
-        let rows = [SettingRow::Theme, SettingRow::UiSize].map(|row| self.row(row, cx));
+        let rows = [
+            SettingRow::Theme,
+            SettingRow::LightTheme,
+            SettingRow::DarkTheme,
+            SettingRow::UiSize,
+        ]
+        .map(|row| self.row(row, cx));
         let font = [SettingRow::FontFamily, SettingRow::FontSize].map(|row| self.row(row, cx));
         let preview = self.font.preview(cx);
         scroll_body(

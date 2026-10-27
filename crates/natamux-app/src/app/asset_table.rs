@@ -12,6 +12,16 @@ macro_rules! file {
 
 pub const FILES: &[(&str, &[u8])] = &[
     file!("themes/natamux.json"),
+    file!("themes/ayu.json"),
+    file!("themes/catppuccin.json"),
+    file!("themes/dracula.json"),
+    file!("themes/github.json"),
+    file!("themes/gruvbox.json"),
+    file!("themes/nord.json"),
+    file!("themes/rose-pine.json"),
+    file!("themes/solarized.json"),
+    file!("themes/tokyo-night.json"),
+    file!("themes/LICENSES"),
     file!("ime-words.txt"),
     file!("icons/states/blocked-8.svg"),
     file!("icons/states/blocked.svg"),
@@ -80,6 +90,12 @@ pub fn paths_with_prefix(prefix: &str) -> impl Iterator<Item = &'static str> + '
         .filter(move |name| name.starts_with(prefix))
 }
 
+/// Whether a file of Zed's assets is listed. Its themes are not: they skip the contrast check,
+/// and some have the name of one of ours.
+pub fn keeps_zed_path(path: &str) -> bool {
+    !path.starts_with("themes/")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -103,16 +119,25 @@ mod tests {
     fn prefix_lists_icons_and_themes() {
         assert_eq!(paths_with_prefix("fonts/").count(), 0);
         assert!(paths_with_prefix("icons/lucide/").any(|p| p.ends_with("/diamond.svg")));
-        assert_eq!(paths_with_prefix("themes/").count(), 1);
+        assert_eq!(paths_with_prefix("themes/").count(), 11);
         assert_eq!(paths_with_prefix("nothing/").count(), 0);
     }
 
     #[test]
-    fn licences_ship_with_the_icons() {
+    fn zed_themes_are_left_out_and_its_other_files_kept() {
+        assert!(!keeps_zed_path("themes/ayu/ayu.json"));
+        assert!(!keeps_zed_path("themes/one/one.json"));
+        assert!(keeps_zed_path("icons/close.svg"));
+        assert!(keeps_zed_path("fonts/lilex/Lilex-Regular.ttf"));
+    }
+
+    #[test]
+    fn licences_ship_with_the_icons_and_themes() {
         for path in [
             "icons/lucide/LICENSE",
             "icons/agents/LICENSE-lobe-icons",
             "icons/agents/LICENSE-material-icon-theme",
+            "themes/LICENSES",
         ] {
             assert!(find(path).is_some(), "{path} missing");
         }

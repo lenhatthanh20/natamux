@@ -12,11 +12,18 @@ use super::super::appearance;
 use super::super::dashboard_data::{DashboardData, Link};
 use super::super::settings_rules::{SettingsFocus, SettingsPage, page_to_open};
 use super::super::source::{Feed, Source};
+use super::super::theme_catalog::ThemeKind;
 use super::{Dashboard, DashboardChange};
 
 impl Dashboard {
     pub fn set_theme(&mut self, theme: &str, cx: &mut Context<Self>) {
         self.update_view(cx, |view| view.theme = theme.to_owned());
+        appearance::apply(&self.view, cx);
+    }
+
+    /// The theme the light or the dark look shows.
+    pub fn set_theme_of(&mut self, kind: ThemeKind, name: &str, cx: &mut Context<Self>) {
+        self.update_view(cx, |view| view.themes = view.themes.with(kind, name));
         appearance::apply(&self.view, cx);
     }
 

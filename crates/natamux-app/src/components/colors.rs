@@ -1,6 +1,6 @@
 //! Natamux's own colours (task states, signal, project colours) read from the active theme.
 //! Views use these or `cx.theme()`, never colour literals. Which theme colour a state uses is
-//! `theme_contrast::state_status`, and `assets/themes/natamux.json` is checked for contrast.
+//! `theme_contrast::state_status`, and every theme of `assets/themes/` is checked for contrast.
 
 use gpui::{App, Hsla};
 use natamux_proto::tasks::task::TaskState;
