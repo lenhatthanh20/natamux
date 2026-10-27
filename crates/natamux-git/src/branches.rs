@@ -98,7 +98,13 @@ pub fn delete_branch_force(repo: &Path, branch: &str) -> bool {
         return true;
     }
     let name = format!("refs/heads/{branch}");
-    git(repo, &["rev-parse", "--verify", "--quiet", &name], None, &[]).is_err()
+    git(
+        repo,
+        &["rev-parse", "--verify", "--quiet", &name],
+        None,
+        &[],
+    )
+    .is_err()
 }
 
 /// Deletes a branch when origin has every commit of it, as last pushed or fetched, merged or not.

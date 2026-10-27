@@ -56,7 +56,9 @@ impl WorkspaceService {
         let repo_dir = match self.repo_dir_of(task.repo.as_deref()) {
             Ok(dir) => dir,
             Err(error) => {
-                (self.log)(&format!("Could not delete the branch of {task_id}: {error}"));
+                (self.log)(&format!(
+                    "Could not delete the branch of {task_id}: {error}"
+                ));
                 return Ok(());
             }
         };
