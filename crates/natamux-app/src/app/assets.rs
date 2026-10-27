@@ -1,4 +1,5 @@
-//! The app's asset source: its own files first, Zed's for the rest (its icons, themes, fonts).
+//! The app's asset source: its own files first, Zed's for the rest (its icons and fonts). Only
+//! the app's own themes are listed.
 
 use std::borrow::Cow;
 
@@ -21,7 +22,12 @@ impl AssetSource for NatamuxAssets {
         let mut paths: Vec<SharedString> = asset_table::paths_with_prefix(path)
             .map(SharedString::from)
             .collect();
-        paths.extend(Assets.list(path)?);
+        paths.extend(
+            Assets
+                .list(path)?
+                .into_iter()
+                .filter(|each| asset_table::keeps_zed_path(each)),
+        );
         Ok(paths)
     }
 }

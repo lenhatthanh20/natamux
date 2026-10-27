@@ -1,5 +1,6 @@
-//! Colour maths, which theme colour each task state uses, and the contrast check of the Natamux
-//! theme (docs/ui-spec.md section 6 rule 1). Works on the theme's JSON, so it needs no gpui.
+//! Colour maths, which theme colour each task state uses, and the contrast check of every theme
+//! the app ships (docs/ui-spec.md section 6 rule 1). Works on the themes' JSON, so it needs no
+//! gpui.
 
 // The colour maths serve the contrast tests; the app reads only `state_status`.
 #![cfg_attr(not(test), allow(dead_code))]
@@ -254,6 +255,7 @@ pub fn theme_style<'a>(family: &'a Value, name: &str) -> Option<&'a Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::asset_table;
     use serde_json::json;
 
     const FAMILY: &str = include_str!("../../assets/themes/natamux.json");
@@ -264,13 +266,19 @@ mod tests {
     }
 
     #[test]
-    fn natamux_themes_pass_contrast() {
-        let family = family();
-        for name in THEMES {
-            let style = theme_style(&family, name).expect("theme exists");
-            let failures = check_style(style);
-            assert!(failures.is_empty(), "{name}:\n{}", failures.join("\n"));
+    fn every_shipped_theme_passes_contrast() {
+        let mut checked = 0;
+        for path in asset_table::paths_with_prefix("themes/").filter(|p| p.ends_with(".json")) {
+            let bytes = asset_table::find(path).expect("listed file");
+            let family: Value = serde_json::from_slice(bytes).expect("theme file is JSON");
+            for theme in family["themes"].as_array().expect("themes") {
+                let name = theme["name"].as_str().expect("name");
+                let failures = check_style(&theme["style"]);
+                assert!(failures.is_empty(), "{name}:\n{}", failures.join("\n"));
+                checked += 1;
+            }
         }
+        assert!(checked >= 17, "only {checked} themes checked");
     }
 
     #[test]

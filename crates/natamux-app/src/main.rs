@@ -35,6 +35,7 @@ mod app {
     pub mod settings_font;
     pub mod settings_reads;
     pub mod settings_rules;
+    pub mod settings_theme;
     pub mod settings_view;
     pub mod sheet_rules;
     pub mod shell_rules;
@@ -55,6 +56,7 @@ mod app {
     pub mod tab_rules;
     #[cfg(test)]
     pub mod test_views;
+    pub mod theme_catalog;
     pub mod title_bar;
     pub mod update;
     pub mod view_rules;

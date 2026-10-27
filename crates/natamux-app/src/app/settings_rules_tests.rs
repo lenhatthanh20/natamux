@@ -59,6 +59,8 @@ fn rows_sit_on_their_pages() {
     }
     for row in [
         SettingRow::Theme,
+        SettingRow::LightTheme,
+        SettingRow::DarkTheme,
         SettingRow::UiSize,
         SettingRow::FontFamily,
         SettingRow::FontSize,
@@ -89,7 +91,29 @@ fn finds_the_font_rows_by_their_words() {
 #[test]
 fn finds_a_row_by_a_keyword() {
     let found = search("dark", &[]);
-    assert_eq!(found.map(|found| found.rows), Some(vec![SettingRow::Theme]));
+    assert_eq!(
+        found.map(|found| found.rows),
+        Some(vec![SettingRow::Theme, SettingRow::DarkTheme])
+    );
+}
+
+#[test]
+fn finds_the_theme_rows_by_a_theme_name_or_color_scheme() {
+    let rows = |query: &str| search(query, &[]).map(|found| found.rows);
+    assert_eq!(rows("dracula"), Some(vec![SettingRow::DarkTheme]));
+    assert_eq!(rows("latte"), Some(vec![SettingRow::LightTheme]));
+    assert_eq!(
+        rows("color scheme"),
+        Some(vec![SettingRow::LightTheme, SettingRow::DarkTheme])
+    );
+    let theme = rows("theme").unwrap_or_default();
+    for row in [
+        SettingRow::Theme,
+        SettingRow::LightTheme,
+        SettingRow::DarkTheme,
+    ] {
+        assert!(theme.contains(&row), "{row:?}");
+    }
 }
 
 #[test]

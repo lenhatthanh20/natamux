@@ -71,6 +71,8 @@ pub struct SettingsView {
     focus: FocusHandle,
     search: Entity<Editor>,
     theme_focus: FocusHandle,
+    light_focus: FocusHandle,
+    dark_focus: FocusHandle,
     size_focus: FocusHandle,
     notify_focus: FocusHandle,
     update_focus: FocusHandle,
@@ -110,6 +112,8 @@ impl SettingsView {
             focus: cx.focus_handle(),
             search,
             theme_focus: cx.focus_handle().tab_stop(true),
+            light_focus: cx.focus_handle().tab_stop(true),
+            dark_focus: cx.focus_handle().tab_stop(true),
             size_focus: cx.focus_handle().tab_stop(true),
             notify_focus: cx.focus_handle(),
             update_focus: cx.focus_handle(),
@@ -277,7 +281,12 @@ impl SettingsView {
                 self.check_focus.clone(),
             ]),
             SettingsPage::Appearance => {
-                ring.extend([self.theme_focus.clone(), self.size_focus.clone()]);
+                ring.extend([
+                    self.theme_focus.clone(),
+                    self.light_focus.clone(),
+                    self.dark_focus.clone(),
+                    self.size_focus.clone(),
+                ]);
                 ring.extend(self.font.stops(cx));
             }
             SettingsPage::Project(id) => {
@@ -295,6 +304,8 @@ impl SettingsView {
             SettingRow::UpdatesAuto => vec![self.update_focus.clone()],
             SettingRow::UpdatesCheck => vec![self.check_focus.clone()],
             SettingRow::Theme => vec![self.theme_focus.clone()],
+            SettingRow::LightTheme => vec![self.light_focus.clone()],
+            SettingRow::DarkTheme => vec![self.dark_focus.clone()],
             SettingRow::UiSize => vec![self.size_focus.clone()],
             SettingRow::FontFamily => vec![self.font.family.focus_handle(cx)],
             SettingRow::FontSize => self.font.size_stops(cx),

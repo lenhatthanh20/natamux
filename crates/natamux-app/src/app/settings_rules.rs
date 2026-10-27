@@ -64,17 +64,21 @@ pub enum SettingRow {
     UpdatesAuto,
     UpdatesCheck,
     Theme,
+    LightTheme,
+    DarkTheme,
     UiSize,
     FontFamily,
     FontSize,
 }
 
 impl SettingRow {
-    pub const ALL: [SettingRow; 7] = [
+    pub const ALL: [SettingRow; 9] = [
         SettingRow::Notify,
         SettingRow::UpdatesAuto,
         SettingRow::UpdatesCheck,
         SettingRow::Theme,
+        SettingRow::LightTheme,
+        SettingRow::DarkTheme,
         SettingRow::UiSize,
         SettingRow::FontFamily,
         SettingRow::FontSize,
@@ -95,6 +99,8 @@ impl SettingRow {
             SettingRow::UpdatesAuto => "Check for updates automatically",
             SettingRow::UpdatesCheck => "Check for updates",
             SettingRow::Theme => "Theme",
+            SettingRow::LightTheme => "Light theme",
+            SettingRow::DarkTheme => "Dark theme",
             SettingRow::UiSize => "UI size",
             SettingRow::FontFamily => "Font family",
             SettingRow::FontSize => "Font size",
@@ -107,6 +113,8 @@ impl SettingRow {
             SettingRow::UpdatesAuto => "Look up new versions in the background.",
             SettingRow::UpdatesCheck => "Look up a new version now.",
             SettingRow::Theme => "Follow the system, or always light or dark.",
+            SettingRow::LightTheme => "The theme used when the app is light.",
+            SettingRow::DarkTheme => "The theme used when the app is dark.",
             SettingRow::UiSize => "Text and row size of the whole app.",
             SettingRow::FontFamily => "The font of the terminals. Empty uses the built-in Lilex.",
             SettingRow::FontSize => "The size of the terminal font, from 8 to 32.",
@@ -119,6 +127,13 @@ impl SettingRow {
             SettingRow::Notify => "notifications alert",
             SettingRow::UpdatesAuto | SettingRow::UpdatesCheck => "update version release",
             SettingRow::Theme => "dark light system colors",
+            SettingRow::LightTheme => {
+                "color scheme colors ayu catppuccin latte github gruvbox rose pine dawn solarized"
+            }
+            SettingRow::DarkTheme => {
+                "color scheme colors ayu catppuccin mocha dracula github gruvbox nord rose pine \
+                 solarized tokyo night"
+            }
             SettingRow::UiSize => "compact large zoom",
             SettingRow::FontFamily | SettingRow::FontSize => "terminal font",
         }

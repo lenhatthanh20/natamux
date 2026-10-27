@@ -8,6 +8,7 @@ use natamux_proto::tasks::task::TaskState;
 use serde_json::{Map, Value, json};
 
 use crate::app::layout_mode::{PANEL_WIDTH, SIDEBAR_WIDTH};
+use crate::app::theme_catalog::ThemeNames;
 use crate::app::view_rules::{
     DetailsView, Entries, MAX_RECENT, WorkspaceTab, parse_pinned, with_seen, with_tab,
 };
@@ -131,6 +132,8 @@ pub struct ViewState {
     pub diff: DiffFlags,
     /// `natamux.theme`: system, light or dark, read by `app/appearance_rules.rs`.
     pub theme: String,
+    /// The theme of each look (`lightTheme`, `darkTheme`), from `app/theme_catalog.rs`.
+    pub themes: ThemeNames,
     /// `natamux.ui-size`: compact, default or large.
     pub ui_size: String,
     /// `natamux.terminal-font`: `{ family?, size? }` as the user saved it, read by
@@ -165,6 +168,7 @@ impl Default for ViewState {
             files_width: FILES_DEFAULT,
             diff: DiffFlags::default(),
             theme: "system".to_owned(),
+            themes: ThemeNames::default(),
             ui_size: "default".to_owned(),
             terminal_font: None,
             recent: Vec::new(),
@@ -284,6 +288,7 @@ impl ViewState {
             files_width: files_width_of(map.get("filesWidth"), default.files_width),
             diff: DiffFlags::parse(map.get("diff")),
             theme: text_or(map.get("theme"), &default.theme),
+            themes: ThemeNames::parse(map.get("lightTheme"), map.get("darkTheme")),
             ui_size: text_or(map.get("uiSize"), &default.ui_size),
             terminal_font: map
                 .get("terminalFont")
@@ -343,6 +348,8 @@ impl ViewState {
             "filesWidth": self.files_width,
             "diff": self.diff.to_json(),
             "theme": self.theme,
+            "lightTheme": self.themes.light,
+            "darkTheme": self.themes.dark,
             "uiSize": self.ui_size,
             "terminalFont": self.terminal_font,
             "recent": self.recent,

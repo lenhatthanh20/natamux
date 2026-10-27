@@ -59,7 +59,11 @@ fn font(family: &str, size: f32) -> ResolvedFont {
 }
 
 fn settings(mode: &str, zoom: f32, terminal: &ResolvedFont) -> Value {
-    serde_json::from_str(&user_settings(mode, zoom, terminal, false)).unwrap_or(Value::Null)
+    let theme = ThemeSetting {
+        mode,
+        names: ThemeNames::default(),
+    };
+    serde_json::from_str(&user_settings(theme, zoom, terminal, false)).unwrap_or(Value::Null)
 }
 
 #[test]
@@ -74,6 +78,22 @@ fn builds_the_settings_with_the_theme_the_sizes_and_the_terminal_font() {
     assert_eq!(value["buffer_font_size"], 13.0);
     assert_eq!(value["terminal"]["font_family"], "Iosevka");
     assert_eq!(value["terminal"]["font_size"], 14.0);
+}
+
+#[test]
+fn gives_zed_the_picked_theme_of_each_look() {
+    let theme = ThemeSetting {
+        mode: "system",
+        names: ThemeNames {
+            light: "Catppuccin Latte",
+            dark: "Rosé Pine",
+        },
+    };
+    let text = user_settings(theme, 1.0, &font("Lilex", 13.0), false);
+    let value: Value = serde_json::from_str(&text).unwrap_or(Value::Null);
+    assert_eq!(value["theme"]["mode"], "system");
+    assert_eq!(value["theme"]["light"], "Catppuccin Latte");
+    assert_eq!(value["theme"]["dark"], "Rosé Pine");
 }
 
 #[test]
@@ -115,8 +135,12 @@ fn leaves_the_built_in_terminal_font_to_zed() {
 #[test]
 fn hides_the_editor_scrollbars_in_a_shot_only() {
     let font = font("Lilex", 15.0);
+    let theme = ThemeSetting {
+        mode: "dark",
+        names: ThemeNames::default(),
+    };
     let shot: Value =
-        serde_json::from_str(&user_settings("dark", 1.0, &font, true)).unwrap_or(Value::Null);
+        serde_json::from_str(&user_settings(theme, 1.0, &font, true)).unwrap_or(Value::Null);
     assert_eq!(shot["scrollbar"]["show"], "never");
     assert!(settings("dark", 1.0, &font).get("scrollbar").is_none());
 }

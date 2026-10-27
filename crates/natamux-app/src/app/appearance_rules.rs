@@ -3,6 +3,7 @@
 
 use serde_json::json;
 
+use crate::app::theme_catalog::ThemeNames;
 use crate::terminals::terminal_font::{FontSource, ResolvedFont};
 
 // The base the UI size scales. The UI is Zed's default; code (terminal, diff, editors) is 13, not
@@ -114,12 +115,19 @@ fn f64_of(size: f32) -> f64 {
     size.to_string().parse().unwrap_or(f64::from(size))
 }
 
-/// The user settings JSON for Zed: `theme_mode` is `ThemeChoice::name` (a `--theme` flag wins
-/// before this call), `ui_zoom` is `UiSize::zoom`. Zed's own fonts; the terminal gets a font only
-/// when the user picked one, else Zed gives it the buffer font and size. A `--shot` hides the
-/// editors' scrollbars, which Zed shows for a moment after a scroll.
+/// The theme part of Zed's settings: `mode` is `ThemeChoice::name` (a `--theme` flag wins before
+/// this), and the theme Zed shows in each mode.
+#[derive(Clone, Copy, Debug)]
+pub struct ThemeSetting<'a> {
+    pub mode: &'a str,
+    pub names: ThemeNames,
+}
+
+/// The user settings JSON for Zed: `ui_zoom` is `UiSize::zoom`. Zed's own fonts; the terminal
+/// gets a font only when the user picked one, else Zed gives it the buffer font and size. A
+/// `--shot` hides the editors' scrollbars, which Zed shows for a moment after a scroll.
 pub fn user_settings(
-    theme_mode: &str,
+    theme: ThemeSetting<'_>,
     ui_zoom: f32,
     terminal: &ResolvedFont,
     shot: bool,
@@ -130,7 +138,7 @@ pub fn user_settings(
         json!({"font_family": terminal.family, "font_size": f64_of(terminal.size)})
     };
     let mut settings = json!({
-        "theme": {"mode": theme_mode, "light": "Natamux Light", "dark": "Natamux Dark"},
+        "theme": {"mode": theme.mode, "light": theme.names.light, "dark": theme.names.dark},
         "ui_font_family": ".ZedSans",
         "ui_font_size": scaled(BASE_UI_FONT_SIZE, ui_zoom),
         "buffer_font_family": ".ZedMono",

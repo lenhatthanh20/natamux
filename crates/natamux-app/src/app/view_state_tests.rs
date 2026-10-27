@@ -46,6 +46,10 @@ fn a_saved_view_reads_back_the_same() {
             wrap_code: true,
         },
         theme: "dark".into(),
+        themes: ThemeNames {
+            light: "Solarized Light",
+            dark: "Tokyo Night",
+        },
         ui_size: "large".into(),
         terminal_font: Some(serde_json::json!({ "family": "Iosevka", "size": 15 })),
         recent: vec!["T-2".into(), "T-1".into()],
@@ -467,6 +471,19 @@ fn keeps_the_theme_the_text_size_the_terminal_font_and_the_recent_workspaces() {
     assert_eq!(default.theme, "system");
     assert_eq!(default.ui_size, "default");
     assert_eq!(default.terminal_font, None);
+}
+
+#[test]
+fn keeps_the_theme_of_each_look_and_drops_a_name_it_does_not_offer() {
+    let state = ViewState::parse(r#"{"lightTheme":"GitHub Light","darkTheme":"Dracula"}"#);
+    assert_eq!(state.themes.light, "GitHub Light");
+    assert_eq!(state.themes.dark, "Dracula");
+    let text = state.to_json();
+    assert!(text.contains(r#""lightTheme": "GitHub Light""#), "{text}");
+    assert!(text.contains(r#""darkTheme": "Dracula""#), "{text}");
+    let unknown = ViewState::parse(r#"{"lightTheme":"Dracula","darkTheme":"Monokai"}"#);
+    assert_eq!(unknown.themes, ThemeNames::default());
+    assert_eq!(ViewState::parse("{}").themes.dark, "Natamux Dark");
 }
 
 /// T-0158 review 1: the details dock is one saved flag, as a Zed dock, so a tab never closes it.
