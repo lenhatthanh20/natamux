@@ -24,6 +24,7 @@ mod app {
     pub mod dashboard;
     pub mod dashboard_changes;
     pub mod dashboard_data;
+    pub mod dock_badge;
     pub mod fake_daemon;
     pub mod gate2;
     pub mod jobs;
