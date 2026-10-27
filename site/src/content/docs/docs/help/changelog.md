@@ -7,10 +7,6 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
-## v1.0.4 (2026-10-27)
-
-- Fix: deleting a task now deletes its branch too, also when the branch has commits that are not merged, and the `natamux-ci/` branch of a task that used CI. Before, such a branch stayed with no task. A task whose workspace has changes that are not committed is still not deleted.
-
 ## v1.0.3 (2026-10-26)
 
 - An agent may now send a task back from one stage any number of times; before, it stopped after 2. To set a limit, type a number in **Agent send backs** on the **Stages** tab of a project's settings, or set `agents.maxSendBacks` in `.natamux.json`. Past the limit the task waits for you, as before. The limit counts CI failures too. See [Limit the send backs](/docs/guides/project-settings/#limit-the-send-backs).
