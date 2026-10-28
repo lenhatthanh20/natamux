@@ -44,8 +44,7 @@ In the file, the same stage looks like this:
 
 - `agent` is `claude-code`, `codex`, `gemini`, `copilot` or `cursor`.
 - `args` adds words to the command line of that agent, such as a model flag. See [Choose a model](/docs/concepts/stages/#choose-a-model).
-- A catalog stage in Terminal 1, such as Spec or Implement, cannot change them: that would end the session of the stages before it.
-- A stage of your own (made with **Custom stage**) can. It then runs in a terminal of its own, from Terminal 6, as Follow CI does in the Team example.
+- Any `agent` or `testing` stage can have them, from the catalog or your own. A stage that would run in Terminal 1, such as Spec or Implement, then runs in a terminal of its own, from Terminal 6, as Follow CI does in the Team example. Terminal 1 keeps the task's agent and its session.
 - The [configuration reference](/docs/reference/configuration/) lists where `agent` and `args` are allowed.
 
 ## Terminals

@@ -238,10 +238,6 @@ pub fn add_custom_stage(steps: &[Step], input: &CustomStageInput) -> Vec<Step> {
     add_before_release(steps, stage)
 }
 
-pub fn is_catalog_stage(id: &str) -> bool {
-    catalog_entry(id).is_some()
-}
-
 /// The id of the form: it follows the name until the person edits it.
 pub fn form_id(name: &str, own_id: Option<&str>) -> String {
     own_id.map_or_else(|| id_from_name(name), str::to_string)

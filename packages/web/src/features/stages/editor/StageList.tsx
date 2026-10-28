@@ -30,7 +30,6 @@ import {
   dropStage,
   groupName,
   hasCustomPrompt,
-  isCatalogStage,
   joinAbove,
   joinProblem,
   moveStage,
@@ -79,11 +78,8 @@ export function StageList({ steps, issues, selected, onSelect, onChange }: Stage
   }
 
   const remove = (stage: Stage) => {
-    // A stage of your own has no catalog entry to bring its settings back.
-    if (
-      !isCatalogStage(stage.id) &&
-      !window.confirm(`Remove ${stageName(stage)}? Its prompt and settings are lost.`)
-    ) {
+    // The catalog brings back only its defaults, so any stage loses its prompt and settings.
+    if (!window.confirm(`Remove ${stageName(stage)}? Its prompt and settings are lost.`)) {
       return
     }
     onChange(removeStage(steps, stage.id))

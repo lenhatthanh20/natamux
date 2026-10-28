@@ -59,8 +59,8 @@ pub struct StageAgent {
 }
 
 /// `stageAgent`.
-pub fn stage_agent(step: &Step, stage: &Stage) -> StageAgent {
-    let own = (stage.agent.is_some() || stage.args.is_some()) && can_have_own_agent(step, stage);
+pub fn stage_agent(stage: &Stage) -> StageAgent {
+    let own = (stage.agent.is_some() || stage.args.is_some()) && can_have_own_agent(stage);
     if !own {
         return StageAgent::default();
     }

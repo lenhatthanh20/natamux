@@ -423,10 +423,10 @@ fn tells_the_agent_and_model_in_the_tooltip_and_to_a_screen_reader() {
 
 #[test]
 fn shows_no_agent_line_for_a_stage_whose_agent_is_not_used_nor_in_the_default_pipeline() {
-    let mut implement = Stage::new("implement", StageKind::Agent, Gate::Auto);
-    implement.agent = Some("codex".into());
-    let steps = vec![Step::Stage(implement)];
-    assert_eq!(line(&steps, "implement"), None);
+    let mut sign_off = Stage::new("sign-off", StageKind::Manual, Gate::Manual);
+    sign_off.agent = Some("codex".into());
+    let steps = vec![Step::Stage(sign_off)];
+    assert_eq!(line(&steps, "sign-off"), None);
     assert!(!shows_agents(&steps));
     assert!(!shows_agents(&default_pipeline()));
 }

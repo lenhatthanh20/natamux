@@ -207,9 +207,9 @@ mod own_agent {
             with(agent("implement"), implement)]})
     }
 
-    fn message(id: &str) -> String {
+    fn message(id: &str, kind: &str) -> String {
         format!(
-            "Only a stage outside Terminal 1, or a custom stage that an agent works on, can have its own agent or arguments, and \"{id}\" cannot"
+            "Only an agent or testing stage can have its own agent or arguments, and \"{id}\" is a {kind} stage"
         )
     }
 
@@ -225,30 +225,29 @@ mod own_agent {
     }
 
     #[test]
-    fn rejects_them_on_the_stage_in_shell_1_outside_a_group_and_on_a_manual_stage() {
-        assert_eq!(
-            messages(json!([build(json!({}), own())])),
-            [message("implement")]
-        );
+    fn takes_them_on_a_catalog_stage_in_shell_1_and_rejects_them_on_a_manual_stage() {
+        assert!(valid(json!([build(json!({}), own())])));
         let spec = with(
-            json!({"id": "spec", "kind": "agent", "gate": "manual"}),
+            json!({"id": "spec", "kind": "agent", "gate": "manual", "output": "spec.md"}),
             own(),
         );
-        assert_eq!(messages(json!([spec])), [message("spec")]);
+        assert!(valid(json!([spec])));
+        let testing = with(stage("testing", "testing"), own());
+        assert!(valid(json!([testing])));
         let group = json!([{"id": "build", "parallel": [agent("implement"),
             {"id": "sign-off", "kind": "manual", "gate": "manual", "agent": "codex"}]}]);
-        assert_eq!(messages(group), [message("sign-off")]);
+        assert_eq!(messages(group), [message("sign-off", "manual")]);
     }
 
     #[test]
-    fn takes_them_on_a_stage_that_runs_in_its_own_shell_outside_a_group() {
+    fn takes_them_on_a_stage_with_or_without_its_own_shell() {
         let review =
             json!({"id": "agent-review", "kind": "agent", "gate": "auto", "output": "review.md"});
         assert!(valid(json!([with(
             with(review.clone(), json!({"ownShell": true})),
             own()
         )])));
-        assert!(!valid(json!([with(review, own())])));
+        assert!(valid(json!([with(review, own())])));
     }
 
     #[test]
@@ -277,7 +276,11 @@ mod own_agent {
     fn rejects_them_on_a_stage_of_your_own_that_no_agent_works_on() {
         for kind in ["context", "review", "release", "manual"] {
             let stage = with(stage("my-step", kind), own());
-            assert_eq!(messages(json!([stage])), [message("my-step")], "{kind}");
+            assert_eq!(
+                messages(json!([stage])),
+                [message("my-step", kind)],
+                "{kind}"
+            );
         }
     }
 }

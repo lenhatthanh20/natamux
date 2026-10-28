@@ -38,13 +38,13 @@ fn names_the_stage_of_a_rule_that_fails() {
 #[test]
 fn names_the_stage_that_cannot_have_its_own_agent() {
     let found = issues(json!([{"id": "build", "parallel": [
-        {"id": "test-spec", "kind": "agent", "gate": "manual", "output": "test-spec.md"},
-        {"id": "implement", "kind": "agent", "gate": "auto", "agent": "codex"}]}]));
+        {"id": "implement", "kind": "agent", "gate": "auto", "agent": "codex"},
+        {"id": "sign-off", "kind": "manual", "gate": "manual", "agent": "codex"}]}]));
     assert_eq!(
         found,
         [error(
-            "implement",
-            "Only a stage outside Terminal 1, or a custom stage that an agent works on, can have its own agent or arguments, and \"implement\" cannot"
+            "sign-off",
+            "Only an agent or testing stage can have its own agent or arguments, and \"sign-off\" is a manual stage"
         )]
     );
 }

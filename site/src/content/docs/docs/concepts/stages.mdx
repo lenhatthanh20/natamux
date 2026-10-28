@@ -67,11 +67,7 @@ Natamux uses the model each agent picks. Set it in one of these places:
 |---|---|---|
 | The agent's own settings | Every session of that agent | Claude Code: `"model": "opus"` in `~/.claude/settings.json`. Codex: `model = "…"` in `~/.codex/config.toml`. |
 | `NATAMUX_<AGENT>_ARGS` | Every agent Natamux starts | `NATAMUX_CLAUDE_ARGS="--model opus"`. See [Environment variables](/docs/reference/environment-variables/). |
-| The stage's `args` | One stage that runs beside the stage in Terminal 1, or one stage of your own | `{ "id": "test-spec", …, "agent": "codex", "args": "--model gpt-5" }`, or **Agent** and **Arguments** in the stage settings |
-
-A catalog stage in Terminal 1 cannot change the model: that would need a new session and lose the context of the stages before it.
-
-A stage of your own (made with **Custom stage**) that an agent works on can change it too, also where it would run in Terminal 1.
+| The stage's `args` | One `agent` or `testing` stage | `{ "id": "test-spec", …, "agent": "codex", "args": "--model gpt-5" }`, or **Agent** and **Arguments** in the stage settings |
 
 A stage with its own agent or arguments runs in a terminal of its own: Terminal 6 plus the place of the stage among all stages of the task, counted from 0. The first stage would get Terminal 6, the fourth Terminal 9, whether or not the stages before it have an agent of their own. So no two stages share a terminal, and the numbers can have gaps. Natamux closes no agent while the task runs, unless a stage asks for it (see [End a stage's terminal](#end-a-stages-terminal)), so Terminal 1 keeps the task's agent and its session. When such a stage runs again, for example after a send back, its prompt goes into the agent in its terminal, which still has the context of the last round. All terminals of a task close when the task is done or cancelled.
 
@@ -87,7 +83,7 @@ Open the menu of a project and click **Settings**. The **Stages** tab edits the 
 - **Order and switch.** Drag a stage, or use **Move up** and **Move down**. The checkbox of a stage turns it on or off. A stage that is off stays in the file with its prompt and approval, but new tasks do not get it.
 - **Run side by side.** **Run alongside the stage above** puts an `agent` or `manual` stage in a group with the stage above it. **Run on its own** takes it out.
 - **Approval.** **Wait for my approval** sets the gate. Every stage has a default. The screen says **Default** or **Changed**, and **Use default** goes back. A `review` or `manual` stage is always a check by a person, so its box is checked and locked. On the `release` stage the box reads **Open the pull request when I click**.
-- **Agent.** A stage that runs beside the stage in Terminal 1, such as Test spec, or a stage of your own, can start another agent: pick it in **Agent**, and add words such as `--model sonnet` in **Arguments**. See [Choose a model](#choose-a-model).
+- **Agent.** Any `agent` or `testing` stage, from the catalog or your own, can start another agent: pick it in **Agent**, and add words such as `--model sonnet` in **Arguments**. See [Choose a model](#choose-a-model).
 - **Workflow.** On an `agent` stage, **Tasks can run it as a workflow** gives each task a checkbox to run the stage as a workflow. See [Run a stage as a workflow](#run-a-stage-as-a-workflow).
 - **Prompt.** An agent or testing stage shows its default prompt. Edit it to make a prompt of your own. The chips `{title}`, `{description}`, `{dir}` and `{ref}` insert placeholders, and **Insert skill** inserts `{skill:<name>}`. A prompt of your own gets no commit rule: say whether the agent commits.
 - **Preview.** A flow chart on top shows the pipeline as you edit it. A person icon marks a stage that waits for approval. A pencil marks a prompt of your own. A stage on its own agent shows that agent's icon and its model (or the agent's name) under its name. Click a node to select its stage.
@@ -316,7 +312,7 @@ A group holds 2 to 4 stages that are on and work at the same time. Only `agent` 
 
 - The group finishes when every stage in it is done.
 - Each stage works in its own terminal. The stage that changes code (an agent stage without an output file) keeps the first terminal.
-- A stage in another terminal can start another agent, with words of its own: set **Agent** and **Arguments** in its settings (`agent` and `args` in the file).
+- Any stage of the group can start another agent, with words of its own: set **Agent** and **Arguments** in its settings (`agent` and `args` in the file). The stage that changes code then leaves the first terminal to the task's agent and runs in a terminal of its own.
 - The state of the group is the most urgent state of its stages: `needs-input`, `failed`, `blocked`, `review`, `running`, `ready`, `draft`, in that order.
 
 ## Paths with a condition

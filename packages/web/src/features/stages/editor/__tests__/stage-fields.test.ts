@@ -126,11 +126,20 @@ describe('own agent', () => {
     kind: 'agent',
     output: '',
   })
-  it('is offered on a stage of your own in Shell 1, and not on a catalog stage there', () => {
+  it('is offered on every agent or testing stage in Shell 1', () => {
     expect(takesOwnAgent(steps, 'write-docs')).toBe(true)
     expect(runsInShellOne(steps, 'write-docs')).toBe(true)
-    expect(takesOwnAgent(steps, 'spec')).toBe(false)
-    expect(takesOwnAgent(steps, 'implement')).toBe(false)
+    expect(takesOwnAgent(steps, 'spec')).toBe(true)
+    expect(takesOwnAgent(steps, 'implement')).toBe(true)
+    expect(takesOwnAgent(steps, 'testing')).toBe(true)
+    expect(takesOwnAgent(steps, 'context')).toBe(false)
+    expect(takesOwnAgent(steps, 'release')).toBe(false)
+  })
+  it('moves a catalog stage out of Shell 1 with no issue', () => {
+    const withAgent = setText(DEFAULT_PIPELINE, 'spec', 'agent', 'codex')
+    expect(runsInShellOne(withAgent, 'spec')).toBe(false)
+    expect(runsInShellOne(withAgent, 'plan')).toBe(true)
+    expect(pipelineIssues(withAgent)).toEqual([])
   })
   it('moves a stage of your own out of Shell 1 once it has its own agent', () => {
     const withAgent = setText(steps, 'write-docs', 'agent', 'codex')
@@ -174,14 +183,13 @@ describe('own shell', () => {
     expect(runsInShellOne(off, 'spec')).toBe(true)
     expect(runsInOwnShell(off, 'spec')).toBe(false)
   })
-  it('drops the own agent when the stage can no longer have one', () => {
+  it('keeps the own agent of a catalog stage when it is turned off', () => {
     let steps = setText(DEFAULT_PIPELINE, 'agent-review', 'agent', 'cursor')
     steps = setText(steps, 'agent-review', 'args', '--model x')
     const off = setOwnShell(steps, 'agent-review', false)
     const review = findStage(off, 'agent-review')
     expect(review).not.toHaveProperty('ownShell')
-    expect(review).not.toHaveProperty('agent')
-    expect(review).not.toHaveProperty('args')
+    expect(review).toMatchObject({ agent: 'cursor', args: '--model x' })
     expect(pipelineIssues(off).filter((issue) => issue.stage === 'agent-review')).toEqual([])
   })
   it('keeps the agent of a stage of your own', () => {

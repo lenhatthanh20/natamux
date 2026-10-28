@@ -248,7 +248,7 @@ fn every_message_of_the_pipeline_rules_is_in_core() {
         "Only a stage that starts an agent or a command can end its terminal, and",
         "Only a stage that changes code or runs tests can be checked on CI, and",
         "Only an agent stage with an output file can run in its own terminal, and",
-        "Only a stage outside Terminal 1, or a custom stage that an agent works on, can have its own agent or arguments, and",
+        "Only an agent or testing stage can have its own agent or arguments, and",
     ] {
         assert!(PIPELINE_SCHEMA_TS.contains(text), "{text}");
     }

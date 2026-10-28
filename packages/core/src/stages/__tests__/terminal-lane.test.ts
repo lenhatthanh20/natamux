@@ -100,15 +100,22 @@ describe('a stage with its own agent', () => {
       { id: 'build', parallel: [own('implement'), own('notes', { output: 'notes.md' })] },
     ]
     const shells = all.flatMap(stagesOf).map((stage) => terminalOfStage(all, stage.id))
-    expect(shells).toEqual(['6', '7', '1', '9'])
+    expect(shells).toEqual(['6', '7', '8', '9'])
     // A stage turned off in the settings still counts, so the numbers after it stay.
     const off: Step[] = [{ ...(all[0] as Stage), enabled: false }, ...all.slice(1)]
     expect(terminalOfStage(off, 'test-spec')).toBe('7')
   })
 
   it('gives no shell to an agent the stage may not have', () => {
-    const invalid: Step[] = [{ id: 'spec', kind: 'agent', gate: 'manual', agent: 'codex' }]
-    expect(terminalOfStage(invalid, 'spec')).toBe('1')
+    const invalid: Step[] = [{ id: 'human-review', kind: 'review', gate: 'manual', agent: 'codex' }]
+    expect(terminalOfStage(invalid, 'human-review')).toBe('1')
+  })
+
+  it('gives a catalog stage in Shell 1 with its own agent a shell of its own', () => {
+    const withSpec: Step[] = [{ ...(steps[0] as Stage), agent: 'codex' }, ...steps.slice(1)]
+    expect(terminalOfStage(withSpec, 'spec')).toBe('6')
+    expect(terminalOfStage(withSpec, 'implement')).toBe('1')
+    expect(stageAgent(withSpec[0] as Stage)).toEqual({ agent: 'codex' })
   })
 })
 
@@ -131,7 +138,7 @@ describe('a stage in its own shell', () => {
       state: 'running',
     })
     expect(terminalLane(position, [review], '1')).toEqual({ stage: null, state: null })
-    expect(stageAgent(review, { ...review, agent: 'codex' } as Stage)).toEqual({ agent: 'codex' })
+    expect(stageAgent({ ...review, agent: 'codex' } as Stage)).toEqual({ agent: 'codex' })
   })
 
   it('is only for an agent stage that writes a report', () => {

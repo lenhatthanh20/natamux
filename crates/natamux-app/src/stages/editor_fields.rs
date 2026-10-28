@@ -60,17 +60,9 @@ pub fn set_end_shell(steps: &[Step], id: &str, on: bool) -> Vec<Step> {
     update_stage(steps, id, |stage| stage.end_shell = on.then_some(true))
 }
 
-/// Off also drops the stage's own agent when the stage can no longer have one, so the pipeline
-/// stays valid and nothing hidden is left in the file.
+/// Off keeps the stage's own agent: the stage then runs in a terminal of its own from Terminal 6.
 pub fn set_own_shell(steps: &[Step], id: &str, on: bool) -> Vec<Step> {
-    let next = update_stage(steps, id, |stage| stage.own_shell = on.then_some(true));
-    if on || takes_own_agent(&next, id) {
-        return next;
-    }
-    update_stage(&next, id, |stage| {
-        stage.agent = None;
-        stage.args = None;
-    })
+    update_stage(steps, id, |stage| stage.own_shell = on.then_some(true))
 }
 
 /// The catalog runs its checks (Test spec, Review and the like) in a terminal of their own.
@@ -190,16 +182,10 @@ pub fn shell_fields(steps: &[Step]) -> Vec<ShellField> {
     found
 }
 
-/// A stage beside the stage in Terminal 1 starts its own agent, so it may pick another one. So may
-/// a stage of your own, which then runs in a terminal of its own.
+/// Every agent or testing stage may pick another agent. One that would run in Terminal 1 then runs
+/// in a terminal of its own.
 pub fn takes_own_agent(steps: &[Step], id: &str) -> bool {
-    let Some(step) = step_of_stage(steps, id) else {
-        return false;
-    };
-    step.stages()
-        .into_iter()
-        .find(|item| item.id == id)
-        .is_some_and(|stage| can_have_own_agent(step, stage))
+    find_stage(steps, id).is_some_and(can_have_own_agent)
 }
 
 pub fn runs_in_shell_one(steps: &[Step], id: &str) -> bool {

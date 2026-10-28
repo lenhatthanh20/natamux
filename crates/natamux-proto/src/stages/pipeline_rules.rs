@@ -295,15 +295,15 @@ fn stage_rules(step: &Step, stage: &Stage, at: &str, whole: &str) -> Vec<Found> 
         );
     }
     let own_agent = stage.agent.is_some() || stage.args.is_some();
-    if own_agent && !can_have_own_agent(step, stage) {
+    let kind = stage.kind.as_str();
+    if own_agent && !can_have_own_agent(stage) {
         fail(
             at,
             format!(
-                "Only a stage outside Terminal 1, or a custom stage that an agent works on, can have its own agent or arguments, and \"{id}\" cannot"
+                "Only an agent or testing stage can have its own agent or arguments, and \"{id}\" is a {kind} stage"
             ),
         );
     }
-    let kind = stage.kind.as_str();
     if stage.ci == Some(true) && !checks_on_ci(stage) {
         fail(
             whole,

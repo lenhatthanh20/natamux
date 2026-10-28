@@ -12,7 +12,7 @@ use natamux_core::stages::terminal_lane::{
 };
 use natamux_core::tasks::dependencies::{open_subtasks, waiting_on};
 use natamux_proto::events::task_event::TaskEvent;
-use natamux_proto::stages::schema::{Stage, StageKind, Step};
+use natamux_proto::stages::schema::{Stage, StageKind};
 use natamux_proto::tasks::task::{Task, TaskState};
 use natamux_stages::actions::send_back_reason;
 use natamux_stages::checks::current_head;
@@ -135,7 +135,6 @@ impl StageRun {
     pub fn start_agent(
         &self,
         task: &Task,
-        step: &Step,
         stage: &Stage,
         prompt_for: PromptFor,
         resumed: bool,
@@ -166,7 +165,7 @@ impl StageRun {
             self.pull_subtasks(task, workspace, &all)
         };
         let head = current_head(workspace);
-        let own = stage_agent(step, stage);
+        let own = stage_agent(stage);
         let agent = own
             .agent
             .clone()

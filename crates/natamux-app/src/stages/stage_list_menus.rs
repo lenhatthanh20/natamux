@@ -9,7 +9,6 @@ use natamux_proto::stages::position::path_of;
 use natamux_proto::stages::schema::GROUP_KINDS;
 use ui::{ContextMenu, ContextMenuEntry, prelude::*};
 
-use super::editor_catalog::is_catalog_stage;
 use super::editor_find::{find_branch, find_stage, group_of};
 use super::editor_labels::branch_name;
 use super::editor_moves::{can_move, join_above, join_problem, remove_stage, run_alone};
@@ -216,8 +215,8 @@ impl StageList {
         self.show_menu(id, parts, position, window, cx);
     }
 
-    /// Removes a stage or a branch. A stage of your own has no catalog entry to bring its
-    /// settings back, and a branch with stages loses them: those ask first.
+    /// Removes a stage or a branch. A stage loses its prompt and settings (the catalog brings back
+    /// only its defaults), and a branch with stages loses them: those ask first.
     fn remove_ask(&mut self, id: &str, window: &mut Window, cx: &mut Context<Self>) {
         let steps = self.editor.read(cx).steps().to_vec();
         let (name, lost) = if let Some(branch) = find_branch(&steps, id) {
@@ -227,10 +226,7 @@ impl StageList {
                 loses.then_some("Its paths and stages, with their settings, are lost."),
             )
         } else if let Some(stage) = find_stage(&steps, id) {
-            (
-                stage_name(stage),
-                (!is_catalog_stage(id)).then_some("Its prompt and settings are lost."),
-            )
+            (stage_name(stage), Some("Its prompt and settings are lost."))
         } else {
             return;
         };

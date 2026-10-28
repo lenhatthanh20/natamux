@@ -143,7 +143,7 @@ fn never_gives_two_stages_the_same_shell_whatever_the_settings_say() {
         ),
     ];
     let ids = ["spec", "test-spec", "implement", "notes"];
-    assert_eq!(shells(&all, &ids), ["6", "7", "1", "9"]);
+    assert_eq!(shells(&all, &ids), ["6", "7", "8", "9"]);
     // A stage turned off in the settings still counts, so the numbers after it stay.
     let mut off = all.clone();
     off[0] = step(&Stage {
@@ -157,9 +157,25 @@ fn never_gives_two_stages_the_same_shell_whatever_the_settings_say() {
 fn gives_no_shell_to_an_agent_the_stage_may_not_have() {
     let invalid = [step(&Stage {
         agent: Some("codex".into()),
-        ..agent("spec", Gate::Manual)
+        ..Stage::new("human-review", StageKind::Review, Gate::Manual)
     })];
-    assert_eq!(terminal_of_stage(&invalid, "spec"), "1");
+    assert_eq!(terminal_of_stage(&invalid, "human-review"), "1");
+}
+
+#[test]
+fn gives_a_catalog_stage_in_terminal_1_with_its_own_agent_a_terminal_of_its_own() {
+    let mut steps = default_pipeline();
+    let spec = Stage {
+        agent: Some("codex".into()),
+        args: Some("--model x".into()),
+        ..writing("spec", Gate::Manual, "spec.md")
+    };
+    steps[1] = step(&spec);
+    assert_eq!(
+        shells(&steps, &["context", "spec", "plan"]),
+        ["1", "7", "1"]
+    );
+    assert!(pipeline_issues(&steps).is_empty());
 }
 
 #[test]
@@ -214,17 +230,19 @@ fn gives_a_stage_in_a_path_the_shell_of_a_single_stage() {
 }
 
 #[test]
-fn lets_a_stage_of_your_own_that_an_agent_works_on_have_its_own_agent_anywhere() {
-    let docs = agent("write-docs", Gate::Auto);
-    assert!(can_have_own_agent(&step(&docs), &docs));
-    let lint = Stage::new("check-types", StageKind::Testing, Gate::Auto);
-    assert!(can_have_own_agent(&step(&lint), &lint));
-    let manual = Stage::new("my-step", StageKind::Manual, Gate::Manual);
-    assert!(!can_have_own_agent(&step(&manual), &manual));
-    let spec = agent("spec", Gate::Manual);
-    assert!(!can_have_own_agent(&step(&spec), &spec));
-    assert!(can_have_own_agent(
-        &step(&own_shell(spec.clone())),
-        &own_shell(spec)
-    ));
+fn lets_every_agent_or_testing_stage_have_its_own_agent_anywhere() {
+    assert!(can_have_own_agent(&agent("write-docs", Gate::Auto)));
+    assert!(can_have_own_agent(&agent("spec", Gate::Manual)));
+    assert!(can_have_own_agent(&agent("implement", Gate::Auto)));
+    let testing = Stage::new("testing", StageKind::Testing, Gate::Auto);
+    assert!(can_have_own_agent(&testing));
+    for kind in [
+        StageKind::Context,
+        StageKind::Review,
+        StageKind::Manual,
+        StageKind::Release,
+    ] {
+        let stage = Stage::new("my-step", kind, Gate::Manual);
+        assert!(!can_have_own_agent(&stage));
+    }
 }

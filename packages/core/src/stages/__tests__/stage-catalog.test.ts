@@ -118,16 +118,16 @@ describe('pipelineIssues', () => {
       {
         id: 'build',
         parallel: [
-          { id: 'test-spec', kind: 'agent', gate: 'manual', output: 'test-spec.md' },
           { id: 'implement', kind: 'agent', gate: 'auto', agent: 'codex' },
+          { id: 'sign-off', kind: 'manual', gate: 'manual', agent: 'codex' },
         ],
       },
     ]
     expect(pipelineIssues(steps)).toEqual([
       {
-        stage: 'implement',
+        stage: 'sign-off',
         message:
-          'Only a stage outside Terminal 1, or a custom stage that an agent works on, can have its own agent or arguments, and "implement" cannot',
+          'Only an agent or testing stage can have its own agent or arguments, and "sign-off" is a manual stage',
         level: 'error',
       },
     ])
