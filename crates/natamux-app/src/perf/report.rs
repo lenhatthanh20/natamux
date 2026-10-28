@@ -5,16 +5,18 @@ use std::fs::OpenOptions;
 use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock, PoisonError};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde_json::{Value, json};
 
-use super::stats::PerfStats;
+use super::stats::{PerfStats, percentile};
 
 static STARTED: OnceLock<Instant> = OnceLock::new();
 static FIRST_FRAME: OnceLock<Duration> = OnceLock::new();
 static FIRST_DATA: OnceLock<Duration> = OnceLock::new();
+/// Start steps before the first frame (`timed`), by name, in ms.
+static STEPS: Mutex<Vec<(&'static str, f64)>> = Mutex::new(Vec::new());
 
 /// The start of the app: the first thing `main` does.
 pub fn mark_start() {
@@ -37,8 +39,26 @@ fn mark(cell: &OnceLock<Duration>) {
     }
 }
 
+/// Runs one start step and keeps its time as `start.<name>` of the report.
+pub fn timed<R>(name: &'static str, step: impl FnOnce() -> R) -> R {
+    let started = Instant::now();
+    let result = step();
+    mark_step(name, started.elapsed());
+    result
+}
+
+pub fn mark_step(name: &'static str, took: Duration) {
+    let mut steps = STEPS.lock().unwrap_or_else(PoisonError::into_inner);
+    steps.push((name, took.as_secs_f64() * 1000.0));
+}
+
+/// The start steps timed so far, in the order they ran.
+pub fn start_steps() -> Vec<(&'static str, f64)> {
+    STEPS.lock().unwrap_or_else(PoisonError::into_inner).clone()
+}
+
 /// Start to first frame, and start to the list with data, in ms.
-fn start_times() -> (Option<f64>, Option<f64>) {
+pub fn start_times() -> (Option<f64>, Option<f64>) {
     let to_ms = |duration: &Duration| duration.as_secs_f64() * 1000.0;
     (FIRST_FRAME.get().map(to_ms), FIRST_DATA.get().map(to_ms))
 }
@@ -141,7 +161,7 @@ fn report(stats: &PerfStats, now: Instant) -> Value {
         "os": std::env::consts::OS,
         "arch": std::env::consts::ARCH,
         "cpus": std::thread::available_parallelism().map(usize::from).unwrap_or(0),
-        "start": { "first_frame_ms": first_frame, "first_data_ms": first_data },
+        "start": start_json(first_frame, first_data),
         "summary": {
             "frames": summary.frames,
             "p50_ms": to_ms(&summary.p50),
@@ -180,6 +200,7 @@ fn report(stats: &PerfStats, now: Instant) -> Value {
             "cpu_percent_run": run_cpu,
             "rss_bytes": usage.as_ref().map(|usage| usage.rss_bytes),
         },
+        "flows": flows_json(stats),
         "link_reconnects": stats.link_lost,
         "terminal_reconnects": sum(&stats.reconnects),
         "skeletons": sum(&stats.skeletons),
@@ -193,6 +214,34 @@ fn report(stats: &PerfStats, now: Instant) -> Value {
         "key_to_glyph_ms": stats.key_samples().map(to_ms).collect::<Vec<_>>(),
         "key_to_echo_ms": stats.echo_samples().map(to_ms).collect::<Vec<_>>(),
     })
+}
+
+fn start_json(first_frame: Option<f64>, first_data: Option<f64>) -> Value {
+    let mut start = json!({ "first_frame_ms": first_frame, "first_data_ms": first_data });
+    for (name, ms) in start_steps() {
+        start[name] = json!(ms);
+    }
+    start
+}
+
+/// Each `--bench-flows` flow: its runs and their p50 and p95.
+fn flows_json(stats: &PerfStats) -> Value {
+    let to_ms = |duration: &Duration| duration.as_secs_f64() * 1000.0;
+    let mut flows = serde_json::Map::new();
+    for (name, runs) in &stats.flows {
+        let mut sorted = runs.clone();
+        sorted.sort();
+        flows.insert(
+            name.clone(),
+            json!({
+                "count": runs.len(),
+                "p50_ms": to_ms(&percentile(&sorted, 0.5)),
+                "p95_ms": to_ms(&percentile(&sorted, 0.95)),
+                "runs_ms": runs.iter().map(to_ms).collect::<Vec<_>>(),
+            }),
+        );
+    }
+    Value::Object(flows)
 }
 
 /// The OS's folder for app logs.
@@ -304,6 +353,28 @@ mod tests {
         assert_eq!(start_times().0, Some(frame));
         let report = report(&PerfStats::default(), Instant::now());
         assert_eq!(report["start"]["first_frame_ms"], json!(frame));
+    }
+
+    #[test]
+    fn the_report_has_the_start_steps_and_the_flows() {
+        let took = timed("fonts_ms", || {
+            std::thread::sleep(Duration::from_millis(2));
+            7
+        });
+        assert_eq!(took, 7);
+        mark_step("themes_ms", Duration::from_millis(3));
+        let mut stats = PerfStats::default();
+        for run in [10, 30, 20] {
+            stats.flow("diff_click", Duration::from_millis(run));
+        }
+        let report = report(&stats, Instant::now());
+        assert!(report["start"]["fonts_ms"].as_f64().unwrap() >= 2.0);
+        assert_eq!(report["start"]["themes_ms"], 3.0);
+        assert_eq!(report["flows"]["diff_click"]["count"], 3);
+        assert_eq!(report["flows"]["diff_click"]["p50_ms"], 20.0);
+        assert_eq!(report["flows"]["diff_click"]["p95_ms"], 30.0);
+        let runs = json!([10.0, 30.0, 20.0]);
+        assert_eq!(report["flows"]["diff_click"]["runs_ms"], runs);
     }
 
     #[test]

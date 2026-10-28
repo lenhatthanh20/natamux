@@ -3,6 +3,7 @@
 //! (`app/appearance.rs`).
 
 use std::sync::Arc;
+use std::time::Instant;
 
 use futures::StreamExt;
 use serde_json::Value;
@@ -10,6 +11,7 @@ use ui::prelude::*;
 
 use super::super::appearance;
 use super::super::dashboard_data::{DashboardData, Link};
+use super::super::flow_bench;
 use super::super::settings_rules::{SettingsFocus, SettingsPage, page_to_open};
 use super::super::source::{Feed, Source};
 use super::super::theme_catalog::ThemeKind;
@@ -82,8 +84,13 @@ impl Dashboard {
         self.data.link = Link::Loading;
         self._feed = Some(cx.spawn(async move |this, cx| {
             while let Some(event) = events.next().await {
+                // `--bench-flows`: the update's wall time covers the observers it wakes.
+                let timed = crate::perf::stats::timing_events().then(Instant::now);
                 if this.update(cx, |this, cx| this.apply(event, cx)).is_err() {
                     break;
+                }
+                if let Some(started) = timed {
+                    cx.update(|cx| flow_bench::event_applied(started.elapsed(), cx));
                 }
             }
         }));

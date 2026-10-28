@@ -28,6 +28,7 @@ mod app {
     pub mod dashboard_data;
     pub mod dock_badge;
     pub mod fake_daemon;
+    pub mod flow_bench;
     pub mod gate2;
     pub mod jobs;
     pub mod layout_mode;
@@ -331,7 +332,7 @@ use natamux_client::{Client, ClientError, Config};
 
 fn main() -> ExitCode {
     perf::report::mark_start();
-    app::app_log::trim_at_start();
+    perf::report::timed("log_trim_ms", app::app_log::trim_at_start);
     let options = match Options::parse(std::env::args().skip(1)) {
         Ok(options) => options,
         Err(message) => {
@@ -397,7 +398,7 @@ fn start(
     owned: Arc<Mutex<Option<OwnedDaemon>>>,
     cx: &mut App,
 ) -> anyhow::Result<()> {
-    NatamuxAssets.load_fonts(cx)?;
+    perf::report::timed("fonts_ms", || NatamuxAssets.load_fonts(cx))?;
     release_channel::init(
         release_channel::AppVersion::load(env!("CARGO_PKG_VERSION"), None, None),
         cx,
@@ -406,12 +407,14 @@ fn start(
     // The theme, the UI size and the terminal font of view.json apply before the first frame.
     let fake = options.fake_daemon || options.shot.is_some();
     let view = match view_state::folder() {
-        Some(folder) if !fake => view_state::load(&folder),
+        Some(folder) if !fake => perf::report::timed("view_state_ms", || view_state::load(&folder)),
         _ => ViewState::default(),
     };
     app::appearance::init(options.theme, options.shot.is_some(), cx);
     app::appearance::apply(&view, cx);
-    theme_settings::init(theme::LoadThemes::All(Box::new(NatamuxAssets)), cx);
+    perf::report::timed("themes_ms", || {
+        theme_settings::init(theme::LoadThemes::All(Box::new(NatamuxAssets)), cx)
+    });
     editor::init(cx);
     git::languages::init(cx);
     app::shortcuts::bind(cx);
@@ -468,6 +471,9 @@ fn start(
             options.gate2_output,
             cx,
         );
+    }
+    if options.bench_flows {
+        app::flow_bench::run(window, options.bench_tasks, cx);
     }
     if options.count_draws {
         perf::draws::start(window, cx);

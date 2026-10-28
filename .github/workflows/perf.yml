@@ -1,0 +1,126 @@
+name: Perf
+
+# The perf numbers of docs/perf.md: the app's flows, start and idle cost on macOS, the daemon's
+# numbers on Linux, then scripts/perf-check.py against the targets and the baseline.
+# Nightly on main, by hand, and on a push to natamux-ci/perf or natamux-ci/perf-*, so a snapshot
+# can run it before this file is on main. Reads the main-scope caches of rust.yml, saves none.
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+  push:
+    branches: ['natamux-ci/perf', 'natamux-ci/perf-*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: perf-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_INCREMENTAL: "0"
+  CARGO_PROFILE_DEV_DEBUG: "0"
+  CARGO_PROFILE_TEST_DEBUG: "0"
+  CARGO_PROFILE_RELEASE_DEBUG: "0"
+
+jobs:
+  app:
+    runs-on: macos-15
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install
+      # The cache app-macos saves on main (rust.yml).
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: rust-app-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-${{ github.sha }}
+          restore-keys: |
+            rust-app-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-
+            rust-app-${{ runner.os }}-
+      - run: python3 scripts/ci-changes.py mtimes
+      - run: cargo build --release --locked -p natamux-app -p natamux-daemon -p natamux-cli
+      - run: mkdir -p perf
+      # Each run quits by itself; a run that hangs ends at the step's timeout.
+      - name: Flows (5 runs)
+        timeout-minutes: 20
+        run: |
+          for run in 1 2 3 4 5; do
+            target/release/natamux-app --bench-flows --size 1280x800 | tee -a perf/flows.txt
+          done
+      - name: Start times (5 runs)
+        timeout-minutes: 10
+        run: |
+          for run in 1 2 3 4 5; do
+            target/release/natamux-app --smoke | tee -a perf/smoke.txt
+          done
+      - name: Idle cost and a background profile
+        timeout-minutes: 10
+        env:
+          PROFILE: "1"
+          PROFILE_FILE: perf/motion-sample.txt
+        run: scripts/motion-cost.sh | tee perf/motion.txt
+      - name: Keep the perf reports
+        if: always()
+        run: cp ~/Library/Logs/Natamux/perf-*.json perf/ 2>/dev/null || true
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: perf-app
+          path: perf/
+          if-no-files-found: ignore
+
+  daemon:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install
+      - run: cargo test --release --locked -p natamux-daemon --test daemon_bench --no-run
+      - run: mkdir -p perf
+      - name: Daemon bench
+        env:
+          NATAMUX_BENCH: "1"
+          NATAMUX_BENCH_JSON: ${{ github.workspace }}/perf/daemon.json
+        run: cargo test --release --locked -p natamux-daemon --test daemon_bench -- --nocapture
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: perf-daemon
+          path: perf/
+          if-no-files-found: ignore
+
+  check:
+    needs: [app, daemon]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: python3 scripts/perf-check.test.py
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: perf-*
+          path: perf
+      - name: Check the numbers
+        run: |
+          shopt -s nullglob
+          python3 scripts/perf-check.py --medians perf-medians.json \
+            perf/*/flows.txt perf/*/smoke.txt perf/*/motion.txt perf/*/daemon.json |
+            tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: perf-medians
+          path: perf-medians.json
+          if-no-files-found: ignore
