@@ -173,6 +173,8 @@ mod projects {
     pub mod settings_tabs;
     pub mod settings_text;
     pub mod settings_writes;
+    pub mod welcome;
+    pub mod welcome_rules;
 }
 mod sidebar {
     pub mod blur_bar;

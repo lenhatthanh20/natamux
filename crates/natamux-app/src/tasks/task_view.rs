@@ -4,9 +4,11 @@
 //! state. The rows keep one order while the pointer is over
 //! them and 2 s after a key move (`frozen_order`).
 
+use std::rc::Rc;
 use std::time::Duration;
 
-use gpui::{Entity, FocusHandle, Focusable, Subscription};
+use gpui::{Entity, FocusHandle, Focusable, PathPromptOptions, Subscription};
+use natamux_proto::projects::repo::AddRepo;
 use natamux_proto::tasks::task::Task;
 use ui::prelude::*;
 
@@ -23,11 +25,15 @@ use crate::app::commands_stages::ShowTasksProgress;
 use crate::app::dashboard::Dashboard;
 use crate::app::dashboard_data::Link;
 use crate::app::settings_reads;
-use crate::app::shortcuts::{NewTask, NewWorkspace, ShowBoard, ShowTable};
+use crate::app::shortcuts::{AddProject, NewTask, NewWorkspace, ShowBoard, ShowTable};
+use crate::app::source::reason;
 use crate::app::view_state::Layout;
 use crate::components::button_style::{action_button, button_icon, key_hint, quiet_button};
 use crate::components::empty_state::EmptyState;
 use crate::components::skeleton::{Loading, SkeletonList};
+use crate::components::toast_rules::ToastTone;
+use crate::projects::welcome::Welcome;
+use crate::projects::welcome_rules::added_text;
 use crate::stages::progress_board::ProgressBoard;
 
 pub use crate::app::clock::now_ms;
@@ -42,6 +48,8 @@ pub struct TaskView {
     progress: Entity<ProgressBoard>,
     /// The width of the view header: the main width that picks columns and labels.
     main_width: Entity<Option<f32>>,
+    /// A folder picked in the welcome is being added.
+    adding_project: bool,
     pointer_inside: bool,
     held_at: Option<i64>,
     /// The order last shown, and what it was sorted and filtered by.
@@ -84,6 +92,7 @@ impl TaskView {
             board,
             progress,
             main_width,
+            adding_project: false,
             pointer_inside: false,
             held_at: None,
             shown_ids: Vec::new(),
@@ -200,6 +209,98 @@ impl TaskView {
             .key_binding(key_hint(shortcut_of(command).unwrap_or_default(), false))
     }
 
+    fn render_welcome(&self, cx: &mut Context<Self>) -> AnyElement {
+        let dashboard = self.dashboard.clone();
+        let this = cx.entity().downgrade();
+        let settings = dashboard.clone();
+        let actions = h_flex()
+            .gap_2()
+            .child(
+                Self::key_button("tasks-empty-add", "Add task", "plus", "task.new").on_click(
+                    |_, window, cx| {
+                        window.dispatch_action(Box::new(NewTask), cx);
+                    },
+                ),
+            )
+            .child(
+                Self::key_button(
+                    "tasks-empty-start",
+                    "Start a task",
+                    "square-terminal",
+                    "workspace.new",
+                )
+                .on_click(|_, window, cx| {
+                    window.dispatch_action(Box::new(NewWorkspace), cx);
+                }),
+            );
+        Welcome {
+            repos: dashboard.read(cx).data.repos.clone(),
+            dashboard,
+            adding: self.adding_project,
+            on_choose: Rc::new(move |window, cx| {
+                this.update(cx, |this, cx| this.choose_folder(window, cx))
+                    .ok();
+            }),
+            on_type_path: Rc::new(|window, cx| {
+                window.dispatch_action(Box::new(AddProject), cx);
+            }),
+            on_settings: Rc::new(move |id, _, cx| {
+                settings.update(cx, |dashboard, cx| dashboard.open_project_settings(&id, cx));
+            }),
+            actions: actions.into_any_element(),
+        }
+        .into_any_element()
+    }
+
+    /// "Choose folder…": the system picker, then the project is added at once. A cancel does
+    /// nothing; a refusal shows the daemon's reason.
+    fn choose_folder(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.adding_project {
+            return;
+        }
+        let paths = cx.prompt_for_paths(PathPromptOptions {
+            files: false,
+            directories: true,
+            multiple: false,
+            prompt: None,
+        });
+        cx.spawn_in(window, async move |this, cx| {
+            let Ok(Ok(Some(paths))) = paths.await else {
+                return;
+            };
+            let Some(path) = paths.into_iter().next() else {
+                return;
+            };
+            let Ok(Some((source, dashboard))) = this.update(cx, |this, cx| {
+                let source = this.dashboard.read(cx).source().cloned()?;
+                this.adding_project = true;
+                cx.notify();
+                Some((source, this.dashboard.clone()))
+            }) else {
+                return;
+            };
+            let result = source
+                .add_repo(&AddRepo {
+                    path: path.to_string_lossy().into_owned(),
+                    name: None,
+                    worktrees_dir: None,
+                })
+                .await;
+            this.update(cx, |this, cx| {
+                this.adding_project = false;
+                cx.notify();
+                dashboard.update(cx, |dashboard, cx| match result {
+                    Ok(repo) => {
+                        dashboard.toast(&added_text(&repo.name), ToastTone::Success, None, cx)
+                    }
+                    Err(error) => dashboard.toast(&reason(&error), ToastTone::Error, None, cx),
+                });
+            })
+            .ok();
+        })
+        .detach();
+    }
+
     fn render_body(&self, content: MainContent, cx: &mut Context<Self>) -> AnyElement {
         match content {
             MainContent::Loading => div().into_any_element(),
@@ -219,27 +320,7 @@ impl TaskView {
                     )))
                     .into_any_element()
             }
-            MainContent::NoTasks => EmptyState::new("tasks-empty", "list-todo", "No tasks yet")
-                .body("Add a task to the backlog, or start one now in its own workspace.")
-                .action(
-                    Self::key_button("tasks-empty-add", "Add task", "plus", "task.new").on_click(
-                        |_, window, cx| {
-                            window.dispatch_action(Box::new(NewTask), cx);
-                        },
-                    ),
-                )
-                .action(
-                    Self::key_button(
-                        "tasks-empty-start",
-                        "Start a task",
-                        "square-terminal",
-                        "workspace.new",
-                    )
-                    .on_click(|_, window, cx| {
-                        window.dispatch_action(Box::new(NewWorkspace), cx);
-                    }),
-                )
-                .into_any_element(),
+            MainContent::NoTasks => self.render_welcome(cx),
             MainContent::FilterMiss { title, body } => {
                 EmptyState::new("tasks-miss", "search-x", title)
                     .body(body)
