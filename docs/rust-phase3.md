@@ -188,6 +188,7 @@ The fake's T-0143 has a worktree like the reference's storefront (`app/fake_file
 | `workspace-editor-source` | `src/checkout.ts` in the editor tab (TypeScript colours), the details on Details |
 | `workspace-editor-draft` | `src/checkout.ts` with a draft: Modified, Revert and Save on; the details on Files with `edited` on its row |
 | `workspace-editor-conflict` | The draft after the agent wrote the file: the banner with Reload and Keep mine, Save off |
+| `workspace-editor-tabs` | Eleven files open as tabs that wrap to more rows, `src/checkout.ts` active with a draft (its tab has the dot); `README.md` and `.github/README.md` share a name, so the second tab shows its folder `.github` |
 | `terminal-drop-target` | T-0146's terminals, Terminal 1 with the drop outline, the details on Files. CI cannot drag, so the shot sets the pane's drop state |
 
 ### Screen-7 states

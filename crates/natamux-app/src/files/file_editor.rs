@@ -201,26 +201,37 @@ impl FileEditor {
     }
 
     fn close(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.draft(cx).is_none() {
-            self.close_now(cx);
-            return;
-        }
-        let this = cx.entity();
-        Confirm::new(
-            "Close the file",
-            close_question(self.name()),
-            "Discard",
-            move |_, cx| this.update(cx, |this, cx| this.close_now(cx)),
-        )
-        .open(window, cx);
+        let (task, path) = (self.task_id.clone(), self.path.clone());
+        close_file_asking(self.dashboard.clone(), task, path, window, cx);
     }
+}
 
-    fn close_now(&mut self, cx: &mut Context<Self>) {
-        self.set_draft(None, cx);
-        let id = self.task_id.clone();
-        self.dashboard
-            .update(cx, |dashboard, cx| dashboard.close_file(&id, cx));
+/// The x of the header or of a tab: the file's tab closes. With a draft it asks first, and
+/// Discard drops the draft.
+pub fn close_file_asking(
+    dashboard: Entity<Dashboard>,
+    task_id: String,
+    path: String,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    let store = DraftStore::global(cx);
+    let has_draft = store.read(cx).file(&task_id, &path).is_some();
+    let question = close_question(split_path(&path).1);
+    let close = move |cx: &mut App| {
+        store.update(cx, |store, cx| store.set_file(&task_id, &path, None, cx));
+        dashboard.update(cx, |dashboard, cx| {
+            dashboard.close_file(&task_id, &path, cx)
+        });
+    };
+    if !has_draft {
+        close(cx);
+        return;
     }
+    Confirm::new("Close the file", question, "Discard", move |_, cx| {
+        close(cx)
+    })
+    .open(window, cx);
 }
 
 fn notice_of(file: &WorkspaceFile) -> Option<&'static str> {

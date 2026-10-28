@@ -88,6 +88,7 @@ pub enum Shot {
     WorkspaceEditorSource,
     WorkspaceEditorDraft,
     WorkspaceEditorConflict,
+    WorkspaceEditorTabs,
     TerminalDropTarget,
     Palette,
     PaletteQuery,
@@ -121,7 +122,7 @@ pub enum Shot {
 }
 
 impl Shot {
-    pub const ALL: [Shot; 87] = [
+    pub const ALL: [Shot; 88] = [
         Shot::TasksTable,
         Shot::TasksBoard,
         Shot::BoardHoverCard,
@@ -179,6 +180,7 @@ impl Shot {
         Shot::WorkspaceEditorSource,
         Shot::WorkspaceEditorDraft,
         Shot::WorkspaceEditorConflict,
+        Shot::WorkspaceEditorTabs,
         Shot::TerminalDropTarget,
         Shot::Palette,
         Shot::PaletteQuery,
@@ -270,6 +272,7 @@ impl Shot {
             Shot::WorkspaceEditorSource => "workspace-editor-source",
             Shot::WorkspaceEditorDraft => "workspace-editor-draft",
             Shot::WorkspaceEditorConflict => "workspace-editor-conflict",
+            Shot::WorkspaceEditorTabs => "workspace-editor-tabs",
             Shot::TerminalDropTarget => "terminal-drop-target",
             Shot::Palette => "palette",
             Shot::PaletteQuery => "palette-query",

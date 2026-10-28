@@ -204,57 +204,6 @@ impl ShowWatch {
     }
 }
 
-/// The files open in the editor tab and the stage file the Docs tab should pick, while the app
-/// runs (`editorFileByTask`, `openFile`, `closeFile` and the `open-doc` event of the web).
-#[derive(Default)]
-pub struct FileViews {
-    editor: Vec<(String, String)>,
-    doc_request: Option<(String, String)>,
-}
-
-impl FileViews {
-    pub fn editor_file(&self, task_id: &str) -> Option<&str> {
-        self.editor
-            .iter()
-            .find(|(id, _)| id == task_id)
-            .map(|(_, path)| path.as_str())
-    }
-
-    /// `openFile`: the file is the task's open file, and its workspace shows the editor tab.
-    pub fn open(&mut self, task_id: &str, path: &str) -> WorkspaceTab {
-        self.editor.retain(|(id, _)| id != task_id);
-        self.editor.push((task_id.to_owned(), path.to_owned()));
-        WorkspaceTab::Editor
-    }
-
-    /// `closeFile`: `shown` is the tab of the task's open workspace (None: it is not open), and
-    /// `remembered` the tab the user picked last in it. Gives the tab to show instead, if any:
-    /// the picked one, or the terminal.
-    pub fn close(
-        &mut self,
-        task_id: &str,
-        shown: Option<WorkspaceTab>,
-        remembered: Option<WorkspaceTab>,
-    ) -> Option<WorkspaceTab> {
-        self.editor.retain(|(id, _)| id != task_id);
-        (shown == Some(WorkspaceTab::Editor)).then(|| remembered.unwrap_or(WorkspaceTab::Terminal))
-    }
-
-    pub fn request_doc(&mut self, task_id: &str, name: &str) {
-        self.doc_request = Some((task_id.to_owned(), name.to_owned()));
-    }
-
-    /// The Docs tab of the task takes its file once.
-    pub fn take_doc_request(&mut self, task_id: &str) -> Option<String> {
-        let ours = self
-            .doc_request
-            .as_ref()
-            .is_some_and(|(task, _)| task == task_id);
-        ours.then(|| self.doc_request.take().map(|(_, name)| name))
-            .flatten()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -354,47 +303,6 @@ mod tests {
         );
         assert_eq!(shown_tab(WorkspaceTab::Editor, true), WorkspaceTab::Editor);
         assert_eq!(shown_tab(WorkspaceTab::Docs, false), WorkspaceTab::Docs);
-    }
-
-    // The cases of 'the open file' (`view-store.test.ts`).
-    #[test]
-    fn opens_the_workspace_of_the_task_on_the_editor_tab() {
-        let mut files = FileViews::default();
-        assert_eq!(files.open("T-0004", "src/a.ts"), WorkspaceTab::Editor);
-        assert_eq!(files.editor_file("T-0004"), Some("src/a.ts"));
-        files.open("T-0004", "src/b.ts");
-        assert_eq!(files.editor_file("T-0004"), Some("src/b.ts"));
-        assert_eq!(files.editor_file("T-0005"), None);
-    }
-
-    #[test]
-    fn closes_back_to_the_tab_the_user_picked_last_or_the_terminal() {
-        let mut files = FileViews::default();
-        files.open("T-0004", "src/a.ts");
-        let back = files.close(
-            "T-0004",
-            Some(WorkspaceTab::Editor),
-            Some(WorkspaceTab::Docs),
-        );
-        assert_eq!(back, Some(WorkspaceTab::Docs));
-        assert_eq!(files.editor_file("T-0004"), None);
-
-        files.open("T-0005", "b.ts");
-        let back = files.close("T-0005", Some(WorkspaceTab::Editor), None);
-        assert_eq!(back, Some(WorkspaceTab::Terminal));
-        // Another tab shown, or another workspace open: the tab stays.
-        files.open("T-0006", "c.ts");
-        assert_eq!(files.close("T-0006", Some(WorkspaceTab::Docs), None), None);
-        assert_eq!(files.close("T-0006", None, None), None);
-    }
-
-    #[test]
-    fn gives_the_picked_stage_file_to_its_task_once() {
-        let mut files = FileViews::default();
-        files.request_doc("T-0001", "spec.md");
-        assert_eq!(files.take_doc_request("T-0002"), None);
-        assert_eq!(files.take_doc_request("T-0001"), Some("spec.md".into()));
-        assert_eq!(files.take_doc_request("T-0001"), None);
     }
 
     #[test]

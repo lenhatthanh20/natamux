@@ -25,6 +25,20 @@ const DROP_TERMINAL: &str = "1";
 const README: &str = "README.md";
 const SOURCE: &str = "src/checkout.ts";
 const SPEC: &str = "spec.md";
+const TABS: [&str; 11] = [
+    README,
+    ".gitignore",
+    ".natamux.json",
+    "package.json",
+    ".claude/settings.json",
+    ".codex/config.toml",
+    ".github/workflows/ci.yml",
+    // Shares its name with the root README.md, so its tab shows its folder.
+    ".github/README.md",
+    "src/cart.ts",
+    SOURCE,
+    "src/format.ts",
+];
 /// The edits of the draft shots.
 const SOURCE_EDIT: &str = "\n// Keep the total at zero or more, also with two coupons.\n";
 const SPEC_EDIT: &str = "\n- A coupon equal to the cart total makes the total zero.\n";
@@ -41,6 +55,7 @@ pub fn is_files_shot(shot: Shot) -> bool {
             | Shot::WorkspaceEditorSource
             | Shot::WorkspaceEditorDraft
             | Shot::WorkspaceEditorConflict
+            | Shot::WorkspaceEditorTabs
             | Shot::TerminalDropTarget
     )
 }
@@ -89,6 +104,15 @@ fn enter(shot: Shot, dashboard: &Entity<Dashboard>, cx: &mut App) {
             file_draft(REVIEWED, SOURCE, cx);
             keep_open_folders(REVIEWED, &["src".to_owned()].into(), cx);
             files_panel(dashboard, REVIEWED, cx);
+            open_file(dashboard, SOURCE, cx);
+        }
+        // T-0220: more tabs than one row holds, the active one with a draft.
+        Shot::WorkspaceEditorTabs => {
+            file_draft(REVIEWED, SOURCE, cx);
+            panel(dashboard, REVIEWED, DetailsView::Progress, cx);
+            for path in TABS {
+                open_file(dashboard, path, cx);
+            }
             open_file(dashboard, SOURCE, cx);
         }
         Shot::TerminalDropTarget => {
