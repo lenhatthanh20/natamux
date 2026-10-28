@@ -190,7 +190,10 @@ impl Source {
 
     /// `force` discards changes that are not committed; the fake daemon has none.
     pub fn delete_task(&self, task_id: &str, force: bool) -> Answer<DeleteTaskAnswer> {
-        self.ask(|c| c.delete_task(task_id, force), |f| f.delete_task(task_id))
+        self.ask(
+            |c| c.delete_task(task_id, force),
+            |f| f.delete_task(task_id),
+        )
     }
 
     pub fn remove_repo(&self, repo_id: &str) -> Answer<()> {

@@ -211,9 +211,7 @@ pub async fn handle(request: Request<Incoming>, state: Arc<AppState>) -> Answer 
         (&Method::GET, ["tasks"]) => tasks::list_tasks(state, query_value(query, "state")).await,
         (&Method::GET, ["templates"]) => tasks::list_templates(state).await,
         (&Method::GET, ["tasks", id]) => tasks::get_task(state, id.to_string()).await,
-        (&Method::DELETE, ["tasks", id]) => {
-            tasks::delete_task(state, id.to_string(), query).await
-        }
+        (&Method::DELETE, ["tasks", id]) => tasks::delete_task(state, id.to_string(), query).await,
         (&Method::GET, ["tasks", id, "events"]) => tasks::list_events(state, id.to_string()).await,
         (&Method::GET, ["tasks", id, "attachments"]) => {
             tasks::list_task_attachments(state, id.to_string()).await

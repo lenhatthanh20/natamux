@@ -128,9 +128,7 @@ impl WorkspaceService {
                 // After the terminals ended, so the agent writes no stage file after the copy.
                 let removed = archive_stage_files(&self.data_dir, task_id, Some(&workspace))
                     .map_err(|error| WorkspaceError::Io(error.to_string()))
-                    .and_then(|()| {
-                        remove_worktree(&repo_dir, folder, force).map_err(Into::into)
-                    });
+                    .and_then(|()| remove_worktree(&repo_dir, folder, force).map_err(Into::into));
                 if let Err(error) = removed {
                     // The agent ended with its terminal. Left running, the task would wait for it
                     // forever.

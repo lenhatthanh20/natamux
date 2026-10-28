@@ -232,7 +232,10 @@ fn runs_the_reads_and_writes_of_screen_1() {
         client.list_changes(&made.id, false).await.unwrap();
         client.graph(&made.id, false).await.unwrap();
 
-        let removed = client.remove_workspace(&made.id, true, false).await.unwrap();
+        let removed = client
+            .remove_workspace(&made.id, true, false)
+            .await
+            .unwrap();
         assert_eq!(removed.task.workspace, None);
         for id in [&made.id, &subtask.id, &task.id] {
             let deleted = client.delete_task(id, false).await.unwrap();
@@ -304,7 +307,10 @@ async fn screen_2(client: &Client, made: &Made) {
         "{refused:?}"
     );
 
-    client.remove_workspace(&task.id, true, false).await.unwrap();
+    client
+        .remove_workspace(&task.id, true, false)
+        .await
+        .unwrap();
     let deleted = client.delete_task(&task.id, false).await.unwrap();
     assert_eq!(deleted.id, task.id);
 }
@@ -382,7 +388,10 @@ async fn screen_3(client: &Client, made: &Made) {
 
     let try_id = template_and_try(client, made, &task.id).await;
     client.delete_task(&try_id, false).await.unwrap();
-    client.remove_workspace(&task.id, true, false).await.unwrap();
+    client
+        .remove_workspace(&task.id, true, false)
+        .await
+        .unwrap();
     client.delete_task(&task.id, false).await.unwrap();
 }
 

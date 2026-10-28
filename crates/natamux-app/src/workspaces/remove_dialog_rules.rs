@@ -11,7 +11,8 @@ use crate::tasks::task_rules::state_label;
 /// Files listed in the dialog that asks for a commit first.
 pub const SHOWN_FILES: usize = 5;
 
-pub const NOT_COMMITTED: &str = "Commit the changes, or discard them in Changes. Remove anyway deletes them with the folder.";
+pub const NOT_COMMITTED: &str =
+    "Commit the changes, or discard them in Changes. Remove anyway deletes them with the folder.";
 
 pub const KEEPS: &str = "Keeps the task, its notes, docs and history.";
 

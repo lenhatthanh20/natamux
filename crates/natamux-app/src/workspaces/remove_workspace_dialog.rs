@@ -340,7 +340,10 @@ impl RemoveWorkspaceDialog {
     fn render_remove(&self, cx: &mut Context<Self>) -> AnyElement {
         let task = &self.task;
         let gone = shells_gone(self.shells.as_ref());
-        let discarded = self.not_committed().filter(|_| self.discard).map(<[_]>::len);
+        let discarded = self
+            .not_committed()
+            .filter(|_| self.discard)
+            .map(<[_]>::len);
         let label = confirm_label(!gone.busy.is_empty(), self.removing, discarded.is_some());
         let folder = v_flex().child(Label::new("Deletes the folder")).child(
             Label::new(task.workspace.clone().unwrap_or_default())
