@@ -364,7 +364,11 @@ fn menu_of(name: MenuName) -> Vec<MenuItem> {
             action,
             os_action: None,
             checked: command.id == "app.update-auto" && super::update::automatic(),
-            disabled: command.id == "app.update-restart" && !super::update::ready(),
+            disabled: match command.id {
+                "app.update-restart" => !super::update::ready(),
+                "app.update-check" => super::update::busy(),
+                _ => false,
+            },
         });
     }
     items

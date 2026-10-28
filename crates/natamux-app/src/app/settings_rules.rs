@@ -61,6 +61,7 @@ pub fn page_title(page: &SettingsPage, repos: &[Repo]) -> String {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SettingRow {
     Notify,
+    UpdatesVersion,
     UpdatesAuto,
     UpdatesCheck,
     Theme,
@@ -72,8 +73,9 @@ pub enum SettingRow {
 }
 
 impl SettingRow {
-    pub const ALL: [SettingRow; 9] = [
+    pub const ALL: [SettingRow; 10] = [
         SettingRow::Notify,
+        SettingRow::UpdatesVersion,
         SettingRow::UpdatesAuto,
         SettingRow::UpdatesCheck,
         SettingRow::Theme,
@@ -86,9 +88,10 @@ impl SettingRow {
 
     pub fn page(self) -> SettingsPage {
         match self {
-            SettingRow::Notify | SettingRow::UpdatesAuto | SettingRow::UpdatesCheck => {
-                SettingsPage::General
-            }
+            SettingRow::Notify
+            | SettingRow::UpdatesVersion
+            | SettingRow::UpdatesAuto
+            | SettingRow::UpdatesCheck => SettingsPage::General,
             _ => SettingsPage::Appearance,
         }
     }
@@ -96,6 +99,7 @@ impl SettingRow {
     pub fn label(self) -> &'static str {
         match self {
             SettingRow::Notify => "Notify me",
+            SettingRow::UpdatesVersion => "Version",
             SettingRow::UpdatesAuto => "Check for updates automatically",
             SettingRow::UpdatesCheck => "Check for updates",
             SettingRow::Theme => "Theme",
@@ -110,7 +114,10 @@ impl SettingRow {
     pub fn description(self) -> &'static str {
         match self {
             SettingRow::Notify => "Show a system notification when a task starts to need you.",
-            SettingRow::UpdatesAuto => "Look up new versions in the background.",
+            SettingRow::UpdatesVersion => "The running version and the last update check.",
+            SettingRow::UpdatesAuto => {
+                "Look up new versions 30 seconds after start, then every 6 hours."
+            }
             SettingRow::UpdatesCheck => "Look up a new version now.",
             SettingRow::Theme => "Follow the system, or always light or dark.",
             SettingRow::LightTheme => "The theme used when the app is light.",
@@ -125,7 +132,9 @@ impl SettingRow {
     fn keywords(self) -> &'static str {
         match self {
             SettingRow::Notify => "notifications alert",
-            SettingRow::UpdatesAuto | SettingRow::UpdatesCheck => "update version release",
+            SettingRow::UpdatesVersion | SettingRow::UpdatesAuto | SettingRow::UpdatesCheck => {
+                "update version release"
+            }
             SettingRow::Theme => "dark light system colors",
             SettingRow::LightTheme => {
                 "color scheme colors ayu catppuccin latte github gruvbox rose pine dawn solarized"

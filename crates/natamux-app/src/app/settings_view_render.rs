@@ -9,16 +9,17 @@ use ui::{Indicator, ListItem, ListItemSpacing, Switch, Tab, Tooltip, prelude::*}
 use super::super::appearance_rules::{ThemeChoice, UiSize, parse_theme, parse_ui_size};
 use super::super::settings_rules::{SearchResults, SettingRow, SettingsPage, page_title, search};
 use super::super::settings_theme::theme_select;
-use super::super::shortcuts::AddProject;
+use super::super::shortcuts::{AddProject, RestartToUpdate};
 use super::super::theme_catalog::ThemeKind;
 use super::super::update;
+use super::super::update_state::UpdateState;
 use super::{
     APP_ITEMS, NAV_WIDTH, NavItem, PAGE_MAX, SettingsView, heading, nav_items, nav_matches, segment,
 };
 use crate::components::button_style::quiet_button;
 
 /// A row of an app page: the label and its line at the left, the control at the right.
-fn setting_row(row: SettingRow, control: AnyElement, cx: &App) -> AnyElement {
+fn setting_row(row: SettingRow, line: SharedString, control: AnyElement, cx: &App) -> AnyElement {
     h_flex()
         .w_full()
         .min_h(rems_from_px(28.0_f32))
@@ -32,11 +33,7 @@ fn setting_row(row: SettingRow, control: AnyElement, cx: &App) -> AnyElement {
                 .min_w_0()
                 .gap_0p5()
                 .child(Label::new(row.label()))
-                .child(
-                    Label::new(row.description())
-                        .size(LabelSize::Small)
-                        .color(Color::Muted),
-                ),
+                .child(Label::new(line).size(LabelSize::Small).color(Color::Muted)),
         )
         .child(div().flex_none().child(control))
         .into_any_element()
@@ -64,11 +61,12 @@ impl SettingsView {
         match row {
             SettingRow::Notify => self.notify_switch(cx),
             SettingRow::UpdatesAuto => self.updates_switch(cx),
-            SettingRow::UpdatesCheck => Button::new("settings-update-check", "Check now\u{2026}")
-                .style(ButtonStyle::Outlined)
-                .track_focus(&self.check_focus)
-                .on_click(|_, _, cx| update::check(true, cx))
-                .into_any_element(),
+            SettingRow::UpdatesVersion => {
+                Label::new(format!("Natamux {}", update::running_version()))
+                    .color(Color::Muted)
+                    .into_any_element()
+            }
+            SettingRow::UpdatesCheck => self.check_button(),
             SettingRow::Theme => self.theme_control(cx),
             SettingRow::LightTheme => {
                 theme_select(ThemeKind::Light, &self.light_focus, &self.dashboard, cx)
@@ -84,7 +82,34 @@ impl SettingsView {
 
     fn row(&mut self, row: SettingRow, cx: &mut Context<Self>) -> AnyElement {
         let control = self.control(row, cx);
-        setting_row(row, control, cx)
+        // The Version row's line is the updater's state; the others are fixed.
+        let line = match row {
+            SettingRow::UpdatesVersion => {
+                let ago = update::checked_ago();
+                update::state().settings_line(update::bytes(), ago.as_deref())
+            }
+            _ => row.description().to_owned(),
+        };
+        setting_row(row, line.into(), control, cx)
+    }
+
+    /// Check now, or Restart to Update while an update is ready; off while a check runs.
+    fn check_button(&self) -> AnyElement {
+        let state = update::state();
+        let (label, enabled) = state.check_button();
+        let ready = matches!(state, UpdateState::Ready { .. });
+        Button::new("settings-update-check", label)
+            .style(ButtonStyle::Outlined)
+            .disabled(!enabled)
+            .track_focus(&self.check_focus)
+            .on_click(move |_, window, cx| {
+                if ready {
+                    window.dispatch_action(Box::new(RestartToUpdate), cx);
+                } else {
+                    update::check(true, cx);
+                }
+            })
+            .into_any_element()
     }
 
     fn notify_switch(&self, cx: &mut Context<Self>) -> AnyElement {
@@ -174,8 +199,12 @@ impl SettingsView {
 
     fn general(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let notify = self.row(SettingRow::Notify, cx);
-        let updates =
-            [SettingRow::UpdatesAuto, SettingRow::UpdatesCheck].map(|row| self.row(row, cx));
+        let updates = [
+            SettingRow::UpdatesVersion,
+            SettingRow::UpdatesAuto,
+            SettingRow::UpdatesCheck,
+        ]
+        .map(|row| self.row(row, cx));
         scroll_body(
             "settings-general",
             v_flex()

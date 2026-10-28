@@ -35,10 +35,12 @@ The Dock icon shows how many tasks need you. With **Notify me** on, a task that 
 The app updates itself, the way other desktop apps do. It looks for a new version when you choose **Check for Updates…**. Timed checks are off by default; tick **Check for Updates Automatically** to turn them on.
 
 1. You choose **Check for Updates…**, or, with timed checks on, about 30 seconds after the app starts and then every 6 hours, the app asks GitHub for the latest release.
-2. The app checks the signed release and downloads the right file for an install it can update itself. A manual check shows a short status message while it runs.
+2. The app checks the signed release and downloads the right file for an install it can update itself. The status bar shows what it does: **Checking for updates…** (for a check you asked for), then **Downloading 1.0.6 · 42 MB**. **Check for Updates…** is off while a check or download runs.
 3. It checks the signature of `SHA256SUMS.txt` of the release, then the download against `SHA256SUMS.txt`. On macOS it also checks the new app's signature and version. A release without a valid signature is not installed.
-4. A dialog says the update is ready and offers **Restart Now** or **Later**. A separate **What's New** link opens the release page. The menu has **Restart to Update** while the downloaded update is ready.
-5. **Restart Now** asks first if an editor has unsaved drafts. Then the app installs the new version and opens again. Tasks, worktrees and settings stay.
+4. The status bar shows **Restart to update**, and the menu has **Restart to Update to 1.0.6**, while the downloaded update is ready. After **Check for Updates…**, a dialog also offers **Restart Now** or **Later**. A timed check never opens a dialog: it shows one message with **Restart Now** and **What's New** (the release page). A ready update is not checked or downloaded again; **Check for Updates…** shows its dialog again.
+5. **Restart Now**, or a click on **Restart to update**, asks first if an editor has unsaved drafts. Then the app installs the new version and opens again. Tasks, worktrees and settings stay.
+
+**Settings → General → Updates** shows the running version and, under it, what the updater did last: "Up to date · last checked 3m ago", "1.0.6 is ready to install", or the error of the last check. Its **Check now…** button turns into **Restart to Update** while an update is ready.
 
 How the new version goes in depends on how you installed the app:
 
@@ -52,7 +54,7 @@ How the new version goes in depends on how you installed the app:
 
 Releases from 0.1.18 have files for every system again, so an Intel Mac or Linux install of an older version, such as 0.1.2, updates itself again.
 
-When a check fails, the app tries again at the next check. **Check for Updates…** shows the error. Every step is written to `logs/update.log`.
+When a check fails, the app tries again at the next check. After **Check for Updates…** the app shows the error with **Try Again**, and the status bar shows **Update failed** until the next check; a click checks again. A failed timed check shows nothing. Every step is written to `logs/update.log`.
 
 The check sends no data about you or your tasks. See [Security and privacy](/docs/help/security-and-privacy/).
 

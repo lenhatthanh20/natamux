@@ -20,6 +20,7 @@ use super::settings_rules::{
     SearchResults, SettingRow, SettingsFocus, SettingsPage, page_title, search, shown_page,
 };
 use super::shortcut_sheet;
+use super::update::UpdateChanged;
 use crate::components::dialog::DialogLayer;
 use crate::components::form::text_editor;
 use crate::components::input_rules::{DialogKey, dialog_key, ring_step, segment_step};
@@ -107,6 +108,7 @@ impl SettingsView {
         });
         let font = FontRows::new(dashboard.clone(), window, cx);
         let keys = Self::watch_keys(cx);
+        let updates = cx.observe_global::<UpdateChanged>(|_, cx| cx.notify());
         Self {
             dashboard,
             focus: cx.focus_handle(),
@@ -121,7 +123,7 @@ impl SettingsView {
             font,
             nav_stops: Vec::new(),
             projects: BTreeMap::new(),
-            _subscriptions: vec![typing, follow, keys],
+            _subscriptions: vec![typing, follow, keys, updates],
         }
     }
 
@@ -301,6 +303,7 @@ impl SettingsView {
     fn row_stops(&self, row: SettingRow, cx: &App) -> Vec<FocusHandle> {
         match row {
             SettingRow::Notify => vec![self.notify_focus.clone()],
+            SettingRow::UpdatesVersion => Vec::new(),
             SettingRow::UpdatesAuto => vec![self.update_focus.clone()],
             SettingRow::UpdatesCheck => vec![self.check_focus.clone()],
             SettingRow::Theme => vec![self.theme_focus.clone()],

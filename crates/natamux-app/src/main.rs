@@ -63,6 +63,8 @@ mod app {
     pub mod theme_catalog;
     pub mod title_bar;
     pub mod update;
+    pub mod update_install;
+    pub mod update_state;
     pub mod view_rules;
     pub mod view_state;
     pub mod window;
@@ -378,7 +380,7 @@ fn main() -> ExitCode {
                 cx.spawn(async move |cx| cx.update(|cx| cx.quit())).detach();
             }
         });
-    app::update::finish_quit(&owned);
+    app::update_install::finish_quit(&owned);
     if failed.load(std::sync::atomic::Ordering::Relaxed) {
         ExitCode::FAILURE
     } else {
@@ -430,7 +432,7 @@ fn start(
         app::fake_daemon::shared().clear_jobs();
     }
     cx.on_app_quit(move |_| {
-        app::update::finish_quit(&owned);
+        app::update_install::finish_quit(&owned);
         async {}
     })
     .detach();
@@ -507,7 +509,7 @@ fn watch_daemon(child: Arc<std::sync::Mutex<std::process::Child>>, cx: &mut App)
                         ToastTone::Error,
                         Some("Restart the app to reconnect.".into()),
                         vec![ToastAction::new("Restart", |_, cx| {
-                            app::update::request_restart(cx);
+                            app::update_install::request_restart(cx);
                         })],
                         cx,
                     );

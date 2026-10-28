@@ -1,6 +1,6 @@
 //! Screen 7's `--shot` states: the palettes, the shortcut sheet, the account menu, the Settings
-//! page (T-0174) with its app pages, a search and a project's tabs, the Projects dialog, and Sign
-//! in.
+//! page (T-0174) with its app pages, a search and a project's tabs, the Projects dialog, Sign in,
+//! and the app update in the status bar and in Settings (T-0214).
 
 use std::time::Duration;
 
@@ -11,6 +11,8 @@ use super::fake_daemon;
 use super::options::Shot;
 use super::settings_rules::SettingsPage;
 use super::shortcut_sheet;
+use super::update::show_for_shot;
+use super::update_state::UpdateState;
 use super::window::Root;
 use crate::palette::palette_layer::PaletteLayer;
 use crate::palette::palette_rows::{PaletteMode, PaletteScope};
@@ -32,6 +34,9 @@ const READ: Duration = Duration::from_millis(800);
 /// The account menu opens under the title bar's last button.
 const MENU_FROM_RIGHT: f32 = 12.;
 const MENU_FROM_TOP: f32 = 30.;
+/// The update shots: a version after the running one, and a download under way.
+const NEXT_VERSION: &str = "9.9.9";
+const DOWNLOADED: u64 = 42 * 1024 * 1024;
 
 pub fn is_screen7_shot(shot: Shot) -> bool {
     matches!(
@@ -53,6 +58,10 @@ pub fn is_screen7_shot(shot: Shot) -> bool {
             | Shot::ImportIssues
             | Shot::SignIn
             | Shot::SignInError
+            | Shot::UpdateDownloading
+            | Shot::UpdateReady
+            | Shot::UpdateFailed
+            | Shot::SettingsUpdateReady
     )
 }
 
@@ -132,6 +141,19 @@ fn enter(
         Shot::ImportIssues => issue_import::open(&dashboard, Some(PROJECT.to_owned()), window, cx),
         Shot::SignIn => root.show_sign_in(false, window, cx),
         Shot::SignInError => root.show_sign_in(true, window, cx),
+        Shot::UpdateDownloading => show_for_shot(downloading(), DOWNLOADED, cx),
+        Shot::UpdateReady => show_for_shot(ready(), 0, cx),
+        Shot::UpdateFailed => show_for_shot(
+            UpdateState::Failed {
+                message: "The latest release could not be reached".into(),
+            },
+            0,
+            cx,
+        ),
+        Shot::SettingsUpdateReady => {
+            show_for_shot(ready(), 0, cx);
+            root.show_settings(SettingsPage::General, window, cx);
+        }
         _ => {}
     }
     None
@@ -149,4 +171,17 @@ fn pick_tab(
         editor.update(cx, |editor, cx| editor.set_text(BROKEN_JSON, cx));
     }
     page.update(cx, |page, cx| page.pick_tab(tab, cx));
+}
+
+fn downloading() -> UpdateState {
+    UpdateState::Downloading {
+        version: NEXT_VERSION.into(),
+        manual: true,
+    }
+}
+
+fn ready() -> UpdateState {
+    UpdateState::Ready {
+        version: NEXT_VERSION.into(),
+    }
 }

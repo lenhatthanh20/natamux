@@ -1,6 +1,6 @@
 //! HTTPS release downloads through the system curl executable.
 
-use std::io::Read;
+use std::io::{self, Read};
 use std::path::Path;
 use std::process::{Command, Stdio};
 
@@ -50,7 +50,28 @@ impl ReleaseFeed for CurlFeed {
     }
 }
 
-pub fn download_asset(url: &str, target: &Path, sha256: &str) -> Result<u64, String> {
+/// Calls `on_bytes` with the bytes read so far after each read, for download progress.
+pub(super) struct Counting<R, F> {
+    pub inner: R,
+    pub total: u64,
+    pub on_bytes: F,
+}
+
+impl<R: Read, F: FnMut(u64)> Read for Counting<R, F> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let size = self.inner.read(buf)?;
+        self.total = self.total.saturating_add(size as u64);
+        (self.on_bytes)(self.total);
+        Ok(size)
+    }
+}
+
+pub fn download_asset(
+    url: &str,
+    target: &Path,
+    sha256: &str,
+    on_bytes: impl FnMut(u64),
+) -> Result<u64, String> {
     let mut child = curl(url, 30 * 60, false)?
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
@@ -60,7 +81,12 @@ pub fn download_asset(url: &str, target: &Path, sha256: &str) -> Result<u64, Str
         .stdout
         .take()
         .ok_or("The update download has no response")?;
-    let saved = save_verified(stdout, target, sha256, ASSET_LIMIT);
+    let counted = Counting {
+        inner: stdout,
+        total: 0,
+        on_bytes,
+    };
+    let saved = save_verified(counted, target, sha256, ASSET_LIMIT);
     if saved.is_err() {
         let _ = child.kill();
     }

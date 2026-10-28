@@ -1,4 +1,6 @@
-use super::transport::{curl, release_url};
+use std::io::Read;
+
+use super::transport::{Counting, curl, release_url};
 
 #[test]
 fn only_github_https_release_addresses_are_requested() {
@@ -42,4 +44,19 @@ fn curl_options_are_before_the_url_separator() {
     );
     assert_eq!(args.get(args.len() - 2).map(String::as_str), Some("--"));
     assert!(args.iter().position(|arg| arg == "--head") < args.iter().position(|arg| arg == "--"));
+}
+
+#[test]
+fn a_download_reports_the_bytes_read_so_far() {
+    let mut seen = Vec::new();
+    {
+        let mut reader = Counting {
+            inner: &[7_u8; 10][..],
+            total: 0,
+            on_bytes: |total| seen.push(total),
+        };
+        let mut block = [0_u8; 4];
+        while reader.read(&mut block).is_ok_and(|size| size > 0) {}
+    }
+    assert_eq!(seen, vec![4, 8, 10, 10]);
 }
