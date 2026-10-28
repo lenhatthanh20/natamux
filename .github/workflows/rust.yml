@@ -386,7 +386,7 @@ jobs:
             project-settings-tab-issues
             project-settings-tab-json project-settings-json-error import-issues sign-in
             sign-in-error add-menu details-empty rail-closed-panel changes-over-main stage-evidence
-            start-task-branch-menu sidebar-blurred
+            start-task-branch-menu sidebar-blurred remove-workspace-anyway
           DOCKED: >-
             tasks-table workspace-terminal-running terminal-find workspace-terminal-needs-input
             workspace-terminal-review no-workspace workspace-preparing finished-wrap-up agents-grid
@@ -404,7 +404,7 @@ jobs:
             project-settings-tab-issues
             project-settings-tab-json project-settings-json-error import-issues sign-in
             sign-in-error add-menu details-empty rail-closed-panel changes-over-main stage-evidence
-            start-task-branch-menu sidebar-blurred
+            start-task-branch-menu sidebar-blurred remove-workspace-anyway
         run: |
           mkdir -p shots
           only=$ONLY

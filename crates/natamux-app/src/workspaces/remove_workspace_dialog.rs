@@ -1,6 +1,6 @@
 //! The Remove workspace dialog (`RemoveWorkspaceDialog.tsx`, docs/ui-spec.md 4.29). It says what
-//! goes and what stays, refuses a worktree with files that are not committed, and stays open,
-//! busy, until the daemon answers.
+//! goes and what stays, lists the files that are not committed first (Remove anyway discards
+//! them), and stays open, busy, until the daemon answers.
 
 use gpui::{DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, svg};
 use natamux_proto::tasks::task::Task;
@@ -10,8 +10,8 @@ use ui::{ButtonLike, Checkbox, prelude::*};
 
 use super::finished_rules::{FinishedTask, branch_choice};
 use super::remove_dialog_rules::{
-    KEEPS, NOT_COMMITTED, agent_stops, busy_text, confirm_label, not_committed_title, remove_title,
-    shells_gone, shown_files,
+    KEEPS, NOT_COMMITTED, REMOVE_ANYWAY, agent_stops, busy_text, confirm_label, discards_text,
+    not_committed_title, remove_title, shells_gone, shown_files,
 };
 use crate::app::dashboard::Dashboard;
 use crate::app::source::reason;
@@ -25,8 +25,19 @@ use crate::git::change_rules::status_tone;
 
 /// Opens the dialog for the task's workspace, Cancel focused.
 pub fn open(dashboard: &Entity<Dashboard>, task: Task, window: &mut Window, cx: &mut App) {
+    open_with(dashboard, task, false, window, cx);
+}
+
+/// `discard`: as after Remove anyway, for the shots.
+pub fn open_with(
+    dashboard: &Entity<Dashboard>,
+    task: Task,
+    discard: bool,
+    window: &mut Window,
+    cx: &mut App,
+) {
     let dashboard = dashboard.clone();
-    let view = cx.new(|cx| RemoveWorkspaceDialog::new(dashboard, task, cx));
+    let view = cx.new(|cx| RemoveWorkspaceDialog::new(dashboard, task, discard, cx));
     let cancel = view.read(cx).cancel.clone();
     DialogLayer::open(view, window, cx);
     window.focus(&cancel, cx);
@@ -40,18 +51,26 @@ pub struct RemoveWorkspaceDialog {
     graph: Option<GitGraph>,
     shells: Option<TerminalList>,
     keep_branch: bool,
+    /// Remove anyway was picked: the files that are not committed go with the folder.
+    discard: bool,
     removing: bool,
     error: Option<String>,
     focus: FocusHandle,
     cancel: FocusHandle,
     view_changes: FocusHandle,
+    anyway: FocusHandle,
     branch: FocusHandle,
     submit: FocusHandle,
     _reads: Vec<gpui::Task<()>>,
 }
 
 impl RemoveWorkspaceDialog {
-    fn new(dashboard: Entity<Dashboard>, task: Task, cx: &mut Context<Self>) -> Self {
+    fn new(
+        dashboard: Entity<Dashboard>,
+        task: Task,
+        discard: bool,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let mut dialog = RemoveWorkspaceDialog {
             dashboard,
             task,
@@ -59,11 +78,13 @@ impl RemoveWorkspaceDialog {
             graph: None,
             shells: None,
             keep_branch: false,
+            discard,
             removing: false,
             error: None,
             focus: cx.focus_handle(),
             cancel: cx.focus_handle(),
             view_changes: cx.focus_handle(),
+            anyway: cx.focus_handle(),
             branch: cx.focus_handle(),
             submit: cx.focus_handle(),
             _reads: Vec::new(),
@@ -116,6 +137,17 @@ impl RemoveWorkspaceDialog {
         self.changes.as_deref().filter(|files| !files.is_empty())
     }
 
+    /// The list of files that are not committed, until Remove anyway is picked.
+    fn asks_to_commit(&self) -> bool {
+        !self.discard && self.not_committed().is_some()
+    }
+
+    fn remove_anyway(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.discard = true;
+        window.focus(&self.cancel, cx);
+        cx.notify();
+    }
+
     fn delete_branch(&self) -> bool {
         let choice = branch_choice(&FinishedTask::from_task(&self.task), self.graph.as_ref());
         choice.can_delete && !self.keep_branch
@@ -131,15 +163,17 @@ impl RemoveWorkspaceDialog {
     }
 
     fn confirm(&mut self, cx: &mut Context<Self>) {
-        if self.removing || self.changes.is_none() || self.not_committed().is_some() {
+        if self.removing || self.changes.is_none() || self.asks_to_commit() {
             return;
         }
         self.removing = true;
         self.error = None;
         let delete_branch = self.delete_branch();
+        // Only files the person saw listed are discarded; with none, the daemon still checks.
+        let force = self.discard && self.not_committed().is_some();
         let id = self.task.id.clone();
         let written = self.dashboard.update(cx, |dashboard, cx| {
-            dashboard.remove_workspace(&id, delete_branch, cx)
+            dashboard.remove_workspace(&id, delete_branch, force, cx)
         });
         cx.spawn(async move |this, cx| {
             let result = written.await;
@@ -168,10 +202,11 @@ impl Focusable for RemoveWorkspaceDialog {
 
 impl DialogView for RemoveWorkspaceDialog {
     fn tab_ring(&self, _: &App) -> Vec<FocusHandle> {
-        if self.not_committed().is_some() {
+        if self.asks_to_commit() {
             return vec![
                 self.cancel.clone(),
                 self.view_changes.clone(),
+                self.anyway.clone(),
                 self.submit.clone(),
             ];
         }
@@ -188,7 +223,7 @@ impl DialogView for RemoveWorkspaceDialog {
     }
 
     fn submit(&mut self, _: &mut Window, cx: &mut Context<Self>) {
-        if self.not_committed().is_some() {
+        if self.asks_to_commit() {
             self.open_changes(true, cx);
             return;
         }
@@ -249,6 +284,11 @@ impl RemoveWorkspaceDialog {
                     .track_focus(&self.view_changes)
                     .on_click(cx.listener(|this, _, _, cx| this.open_changes(false, cx))),
             )
+            .footer(
+                action_button("remove-anyway", REMOVE_ANYWAY)
+                    .track_focus(&self.anyway)
+                    .on_click(cx.listener(|this, _, window, cx| this.remove_anyway(window, cx))),
+            )
             .footer(primary_button(
                 "Commit\u{2026}",
                 &self.submit,
@@ -300,13 +340,22 @@ impl RemoveWorkspaceDialog {
     fn render_remove(&self, cx: &mut Context<Self>) -> AnyElement {
         let task = &self.task;
         let gone = shells_gone(self.shells.as_ref());
-        let label = confirm_label(!gone.busy.is_empty(), self.removing);
+        let discarded = self
+            .not_committed()
+            .filter(|_| self.discard)
+            .map(<[_]>::len);
+        let label = confirm_label(!gone.busy.is_empty(), self.removing, discarded.is_some());
         let folder = v_flex().child(Label::new("Deletes the folder")).child(
             Label::new(task.workspace.clone().unwrap_or_default())
                 .size(LabelSize::Small)
                 .color(Color::Muted),
         );
-        let mut rows = vec![row("minus", Color::Error, folder, cx).into_any_element()];
+        let mut rows = Vec::new();
+        if let Some(count) = discarded {
+            let text = Label::new(discards_text(count));
+            rows.push(row("triangle-alert", Color::Error, text, cx).into_any_element());
+        }
+        rows.push(row("minus", Color::Error, folder, cx).into_any_element());
         if let Some(text) = agent_stops(task) {
             rows.push(
                 row("triangle-alert", Color::Warning, Label::new(text), cx).into_any_element(),
@@ -355,7 +404,7 @@ impl RemoveWorkspaceDialog {
 
 impl Render for RemoveWorkspaceDialog {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let body = match self.not_committed() {
+        let body = match self.not_committed().filter(|_| !self.discard) {
             Some(files) => {
                 let files = files.to_vec();
                 self.render_changes(&files, cx)

@@ -209,6 +209,12 @@ fn enter(shot: Shot, root: &mut Root, window: &mut Window, cx: &mut gpui::Contex
                 remove_workspace_dialog::open(&dashboard, task, window, cx);
             }
         }
+        // After Remove anyway: the reviewed task has 2 files that are not committed.
+        Shot::RemoveWorkspaceAnyway => {
+            if let Some(task) = task(REVIEWED, cx) {
+                remove_workspace_dialog::open_with(&dashboard, task, true, window, cx);
+            }
+        }
         Shot::ClearFinished => {
             let repo = dashboard
                 .read(cx)

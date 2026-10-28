@@ -30,8 +30,8 @@ impl Made {
 pub async fn finish(client: &Client, made: &Made, result: Result<(), Box<dyn Any + Send>>) {
     let ids = made.0.lock().unwrap().clone();
     for id in ids.iter().rev() {
-        let _ = client.remove_workspace(id, true).await;
-        let _ = client.delete_task(id).await;
+        let _ = client.remove_workspace(id, true, false).await;
+        let _ = client.delete_task(id, false).await;
     }
     if let Err(panic) = result {
         std::panic::resume_unwind(panic);

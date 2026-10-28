@@ -259,11 +259,11 @@ impl Client {
         })
     }
 
-    pub fn delete_task(&self, task_id: &str) -> Answer<DeleteTaskAnswer> {
+    pub fn delete_task(&self, task_id: &str, force: bool) -> Answer<DeleteTaskAnswer> {
         let task_id = task_id.to_string();
-        self.with_config(
-            move |config| async move { tasks::api::delete_task(&config, &task_id).await },
-        )
+        self.with_config(move |config| async move {
+            tasks::api::delete_task(&config, &task_id, force).await
+        })
     }
 
     pub fn list_repos(&self) -> Answer<RepoList> {
@@ -336,10 +336,11 @@ impl Client {
         &self,
         task_id: &str,
         delete_branch: bool,
+        force: bool,
     ) -> Answer<RemoveWorkspaceAnswer> {
         let task_id = task_id.to_string();
         self.with_config(move |config| async move {
-            workspaces::api::remove_workspace(&config, &task_id, delete_branch).await
+            workspaces::api::remove_workspace(&config, &task_id, delete_branch, force).await
         })
     }
 

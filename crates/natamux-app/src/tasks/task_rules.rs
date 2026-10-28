@@ -92,11 +92,25 @@ pub fn actions_for(state: TaskState) -> Vec<TaskAction> {
 }
 
 /// What the delete confirmation says. The worktree folder and the branch go with the task, also
-/// commits that are not merged; a task without them has nothing of that to lose.
-pub fn delete_task_description() -> String {
-    "This deletes the task, its notes and its history. The worktree folder and the branch go \
-     with it, also commits that are not merged. This cannot be undone."
-        .to_string()
+/// commits that are not merged, and the `uncommitted` files of the worktree.
+pub fn delete_task_description(uncommitted: usize) -> String {
+    let files = match uncommitted {
+        0 => String::new(),
+        1 => "1 file in the worktree is not committed. It is lost too. ".into(),
+        n => format!("{n} files in the worktree are not committed. They are lost too. "),
+    };
+    format!(
+        "This deletes the task, its notes and its history. The worktree folder and the branch go \
+         with it, also commits that are not merged. {files}This cannot be undone."
+    )
+}
+
+pub fn delete_task_label(uncommitted: usize) -> &'static str {
+    if uncommitted == 0 {
+        "Delete task"
+    } else {
+        "Delete anyway"
+    }
 }
 
 /// What a cancel stops and what it keeps.
@@ -401,9 +415,22 @@ mod tests {
 
     #[test]
     fn says_what_a_delete_removes() {
-        let text = delete_task_description();
+        let text = delete_task_description(0);
         assert!(text.contains("The worktree folder and the branch go with it"));
-        assert!(text.contains("not merged"));
-        assert!(text.ends_with("This cannot be undone."));
+        assert!(text.contains("not merged. This cannot be undone."));
+        assert!(!text.contains("not committed"));
+        assert_eq!(delete_task_label(0), "Delete task");
+    }
+
+    #[test]
+    fn names_the_files_that_are_not_committed_and_deletes_anyway() {
+        assert!(delete_task_description(1).contains(
+            "not merged. 1 file in the worktree is not committed. It is lost too. This cannot"
+        ));
+        assert!(
+            delete_task_description(3)
+                .contains("3 files in the worktree are not committed. They are lost too.")
+        );
+        assert_eq!(delete_task_label(3), "Delete anyway");
     }
 }

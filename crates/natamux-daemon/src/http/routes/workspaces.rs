@@ -172,14 +172,14 @@ pub async fn create(state: Arc<AppState>, id: String, body: Option<Value>) -> An
     .await
 }
 
-/// `removeWorkspaceQuerySchema`: `deleteBranch` is `true` or `false`.
-fn delete_branch_query(query: &str) -> Result<bool, ZodError> {
+/// `removeWorkspaceQuerySchema`: `deleteBranch` and `force` are `true` or `false`, else false.
+pub fn bool_query(query: &str, name: &str) -> Result<bool, ZodError> {
     let mut issues = Issues::default();
-    let wanted = match query_value(query, "deleteBranch") {
+    let wanted = match query_value(query, name) {
         None => Some(false),
         Some(value) => one_of(
             Some(&value),
-            &[json!("deleteBranch")],
+            &[json!(name)],
             &["true", "false"],
             &mut issues,
         )
@@ -193,12 +193,18 @@ pub async fn remove(state: Arc<AppState>, id: String, query: &str) -> Answer {
         Ok(id) => id,
         Err(answer) => return *answer,
     };
-    let delete_branch = match delete_branch_query(query) {
+    let (delete_branch, force) = match bool_query(query, "deleteBranch")
+        .and_then(|delete_branch| Ok((delete_branch, bool_query(query, "force")?)))
+    {
         Ok(wanted) => wanted,
         Err(error) => return zod_answer(&error),
     };
     answer(StatusCode::OK, move || {
-        let removed = state.workspaces.remove(&id, delete_branch)?;
+        let removed = if force {
+            state.workspaces.remove_anyway(&id, delete_branch)?
+        } else {
+            state.workspaces.remove(&id, delete_branch)?
+        };
         Ok(json!({ "task": to_value(&removed.task), "branchDeleted": removed.branch_deleted }))
     })
     .await

@@ -102,9 +102,15 @@ pub async fn create_issue(config: &Config, task_id: &str) -> Result<Task, Client
     Ok(answer.task)
 }
 
-/// Deletes the task, and its workspace with its branch. Uncommitted changes refuse it.
-pub async fn delete_task(config: &Config, task_id: &str) -> Result<DeleteTaskAnswer, ClientError> {
-    let path = format!("/tasks/{}", encode(task_id));
+/// Deletes the task, and its workspace with its branch. Uncommitted changes refuse it, unless
+/// `force` discards them.
+pub async fn delete_task(
+    config: &Config,
+    task_id: &str,
+    force: bool,
+) -> Result<DeleteTaskAnswer, ClientError> {
+    let force = if force { "?force=true" } else { "" };
+    let path = format!("/tasks/{}{force}", encode(task_id));
     call(config, Method::DELETE, &path).await
 }
 

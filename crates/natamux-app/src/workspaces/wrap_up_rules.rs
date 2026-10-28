@@ -37,8 +37,6 @@ pub struct FinishedBannerText {
     pub text: Option<String>,
     /// The next step. None while git is read; Remove workspace is then a plain button.
     pub primary: Option<FinishedAction>,
-    /// Why Remove workspace does nothing now. None: it works.
-    pub remove_reason: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -100,7 +98,6 @@ fn banner(title: &str, text: impl Into<String>, primary: FinishedAction) -> Fini
         title: title.into(),
         text: Some(text.into()),
         primary: Some(primary),
-        remove_reason: None,
     }
 }
 
@@ -115,18 +112,14 @@ pub fn finished_banner(task: &Task, facts: &GitFacts) -> FinishedBannerText {
             title: title.into(),
             text: None,
             primary: None,
-            remove_reason: None,
         };
     };
     if uncommitted > 0 {
-        return FinishedBannerText {
-            remove_reason: Some("Commit or discard them first".into()),
-            ..banner(
-                title,
-                format!("{} not committed.", files_are(uncommitted)),
-                FinishedAction::Commit,
-            )
-        };
+        return banner(
+            title,
+            format!("{} not committed.", files_are(uncommitted)),
+            FinishedAction::Commit,
+        );
     }
     let nothing = "Nothing is left in the workspace.";
     if task.state == TaskState::Cancelled {

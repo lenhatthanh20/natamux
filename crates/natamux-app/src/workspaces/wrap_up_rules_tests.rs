@@ -69,14 +69,13 @@ fn is_true_for_done_and_cancelled_only() {
 }
 
 #[test]
-fn asks_for_a_commit_first_and_says_why_the_workspace_cannot_go_yet() {
+fn asks_for_a_commit_first_and_leaves_remove_to_its_dialog() {
     assert_eq!(
         finished_banner(&merged(), &facts(3, 0, Some(PUSHED))),
         FinishedBannerText {
             title: "Task done.".into(),
             text: Some("3 files are not committed.".into()),
             primary: Some(FinishedAction::Commit),
-            remove_reason: Some("Commit or discard them first".into()),
         }
     );
     assert_eq!(
@@ -97,7 +96,6 @@ fn asks_for_a_push_of_commits_that_origin_does_not_have() {
             title: "Task done.".into(),
             text: Some("2 commits are not pushed.".into()),
             primary: Some(FinishedAction::Push),
-            remove_reason: None,
         }
     );
 }
@@ -132,7 +130,6 @@ fn offers_to_remove_the_workspace_when_nothing_is_left() {
             title: "Task done.".into(),
             text: Some("Pull request #310 is merged. Nothing is left in the workspace.".into()),
             primary: Some(FinishedAction::Remove),
-            remove_reason: None,
         }
     );
     assert_eq!(
@@ -161,7 +158,6 @@ fn offers_to_remove_the_workspace_of_a_cancelled_task_whatever_git_says() {
             title: "Task cancelled.".into(),
             text: Some("Its commits and branch are kept.".into()),
             primary: Some(FinishedAction::Remove),
-            remove_reason: None,
         }
     );
     assert_eq!(
@@ -178,7 +174,6 @@ fn says_only_the_outcome_while_git_is_read() {
             title: "Task done.".into(),
             text: None,
             primary: None,
-            remove_reason: None,
         }
     );
     let no_graph = GitFacts {

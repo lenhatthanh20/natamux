@@ -1,7 +1,7 @@
 //! The 40 px banner under the header of a done or cancelled task (docs/ui-spec.md 4.29,
 //! `features/workspaces/FinishedBanner.tsx`): "Task done." and the next git step, the first that
-//! matches (`finishedBanner`). Remove workspace is always there; it waits while files are not
-//! committed.
+//! matches (`finishedBanner`). Remove workspace is always there; with files that are not
+//! committed, its dialog lists them first.
 
 use std::rc::Rc;
 
@@ -107,22 +107,17 @@ impl FinishedBanner {
         }
     }
 
-    /// Remove workspace beside the next step, off with its reason while files are not committed.
+    /// Remove workspace beside the next step.
     fn secondary_remove(&self, text: &FinishedBannerText) -> Option<Button> {
         if text.primary == Some(FinishedAction::Remove) {
             return None;
         }
-        let off = text.remove_reason.is_some() || self.pending.is_some();
-        let remove = button(
+        Some(button(
             "finished-remove",
             "Remove workspace",
-            off,
+            self.pending.is_some(),
             self.actions.remove.clone(),
-        );
-        Some(match &text.remove_reason {
-            Some(reason) => remove.tooltip(Tooltip::text(reason.clone())),
-            None => remove,
-        })
+        ))
     }
 }
 
@@ -138,15 +133,6 @@ impl RenderOnce for FinishedBanner {
         };
         let main = self.main_button(text.primary);
         let secondary = self.secondary_remove(&text);
-        let reason = text
-            .remove_reason
-            .clone()
-            .filter(|_| text.primary != Some(FinishedAction::Remove))
-            .map(|reason| {
-                Label::new(reason)
-                    .size(LabelSize::Small)
-                    .color(Color::Muted)
-            });
         let sentence = text.text.map(|sentence| {
             div()
                 .min_w_0()
@@ -173,7 +159,6 @@ impl RenderOnce for FinishedBanner {
             )
             .children(sentence)
             .child(div().flex_1())
-            .children(reason)
             .children(secondary)
             .children(main)
     }

@@ -209,11 +209,20 @@ fn renames_a_task() {
 fn deletes_a_task() {
     let answer = format!(r#"{{"id":"T-0009","tasks":[{TASK}]}}"#);
     let (answer, sent) = ok("DELETE /tasks/T-0009", &answer, |client| {
-        client.delete_task("T-0009")
+        client.delete_task("T-0009", false)
     });
     assert_eq!(answer.id, "T-0009");
     assert_eq!(answer.tasks.len(), 1);
     assert_eq!(sent, Value::Null);
+}
+
+#[test]
+fn deletes_a_task_with_changes_that_are_not_committed_when_forced() {
+    let answer = r#"{"id":"T-0009","tasks":[]}"#;
+    let (answer, _) = ok("DELETE /tasks/T-0009?force=true", answer, |client| {
+        client.delete_task("T-0009", true)
+    });
+    assert_eq!(answer.id, "T-0009");
 }
 
 #[test]
@@ -222,14 +231,20 @@ fn removes_a_workspace_with_or_without_its_branch() {
     let (removed, _) = ok(
         "DELETE /tasks/T-0009/workspace?deleteBranch=true",
         &answer,
-        |client| client.remove_workspace("T-0009", true),
+        |client| client.remove_workspace("T-0009", true, false),
     );
     assert!(removed.branch_deleted);
     let answer = format!(r#"{{"task":{TASK},"branchDeleted":false}}"#);
     let (removed, _) = ok(
         "DELETE /tasks/T-0009/workspace?deleteBranch=false",
         &answer,
-        |client| client.remove_workspace("T-0009", false),
+        |client| client.remove_workspace("T-0009", false, false),
+    );
+    assert!(!removed.branch_deleted);
+    let (removed, _) = ok(
+        "DELETE /tasks/T-0009/workspace?deleteBranch=false&force=true",
+        &answer,
+        |client| client.remove_workspace("T-0009", false, true),
     );
     assert!(!removed.branch_deleted);
 }
@@ -272,7 +287,7 @@ fn a_refused_write_gives_the_daemons_message() {
         "DELETE /tasks/T-0009",
         "409 Conflict",
         r#"{"error":"conflict","message":"T-0009 has uncommitted changes"}"#,
-        |client| client.delete_task("T-0009"),
+        |client| client.delete_task("T-0009", false),
     );
     assert_eq!(
         answer.unwrap_err(),

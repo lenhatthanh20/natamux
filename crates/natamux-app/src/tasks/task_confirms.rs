@@ -5,26 +5,60 @@ use gpui::Entity;
 use natamux_proto::tasks::task::{Task, TaskState};
 use ui::prelude::*;
 
-use super::task_rules::{actions_for, cancel_task_description, delete_task_description};
+use super::task_rules::{
+    actions_for, cancel_task_description, delete_task_description, delete_task_label,
+};
 use super::task_view_rules::{DELETE_ALL_DESCRIPTION, delete_all_title};
 use crate::app::dashboard::Dashboard;
 use crate::components::confirm::Confirm;
 
-/// Asks before the task, its notes, its history and its worktree are deleted.
+/// Asks before the task, its notes, its history and its worktree are deleted. The files that are
+/// not committed are read first: the confirm names them, and only then the delete discards them.
 pub fn confirm_delete_task(
     dashboard: &Entity<Dashboard>,
     task: &Task,
     window: &mut Window,
     cx: &mut App,
 ) {
+    let source = dashboard.read(cx).source().cloned();
+    let (Some(source), Some(_)) = (source, &task.workspace) else {
+        open_delete_task(dashboard, &task.id, 0, window, cx);
+        return;
+    };
+    let changes = source.list_changes(&task.id);
     let dashboard = dashboard.clone();
     let id = task.id.clone();
+    let main = window.window_handle();
+    cx.spawn(async move |cx| {
+        // A failed read counts as none: the daemon then still refuses changes.
+        let count = changes.await.map_or(0, |files| files.len());
+        main.update(cx, |_, window, cx| {
+            open_delete_task(&dashboard, &id, count, window, cx);
+        })
+        .ok();
+    })
+    .detach();
+}
+
+fn open_delete_task(
+    dashboard: &Entity<Dashboard>,
+    id: &str,
+    uncommitted: usize,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    let dashboard = dashboard.clone();
+    let task_id = id.to_string();
     Confirm::new(
-        format!("Delete {}?", task.id),
-        delete_task_description(),
-        "Delete task",
+        format!("Delete {id}?"),
+        delete_task_description(uncommitted),
+        delete_task_label(uncommitted),
         move |_, cx| {
-            dashboard.update(cx, |dashboard, cx| dashboard.delete_task(&id, cx).detach());
+            dashboard.update(cx, |dashboard, cx| {
+                dashboard
+                    .delete_task(&task_id, uncommitted > 0, cx)
+                    .detach()
+            });
         },
     )
     .open(window, cx);

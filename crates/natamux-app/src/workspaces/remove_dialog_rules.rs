@@ -11,15 +11,27 @@ use crate::tasks::task_rules::state_label;
 /// Files listed in the dialog that asks for a commit first.
 pub const SHOWN_FILES: usize = 5;
 
-pub const NOT_COMMITTED: &str = "The workspace cannot be removed while it has changes. Commit them, or discard them in Changes.";
+pub const NOT_COMMITTED: &str =
+    "Commit the changes, or discard them in Changes. Remove anyway deletes them with the folder.";
 
 pub const KEEPS: &str = "Keeps the task, its notes, docs and history.";
+
+pub const REMOVE_ANYWAY: &str = "Remove anyway";
 
 pub fn not_committed_title(count: usize) -> String {
     if count == 1 {
         "1 file is not committed".into()
     } else {
         format!("{count} files are not committed")
+    }
+}
+
+/// The warn row once Remove anyway was picked.
+pub fn discards_text(count: usize) -> String {
+    if count == 1 {
+        "Discards 1 file that is not committed.".into()
+    } else {
+        format!("Discards {count} files that are not committed.")
     }
 }
 
@@ -91,11 +103,13 @@ pub fn remove_title(task_id: &str) -> String {
     format!("Remove the workspace of {task_id}?")
 }
 
-pub fn confirm_label(any_busy: bool, removing: bool) -> &'static str {
-    match (removing, any_busy) {
-        (true, _) => "Removing…",
-        (false, true) => "Stop it and remove",
-        (false, false) => "Remove workspace",
+/// `discard`: Remove anyway was picked, so files that are not committed go too.
+pub fn confirm_label(any_busy: bool, removing: bool, discard: bool) -> &'static str {
+    match (removing, discard, any_busy) {
+        (true, _, _) => "Removing…",
+        (false, true, _) => "Discard and remove",
+        (false, false, true) => "Stop it and remove",
+        (false, false, false) => "Remove workspace",
     }
 }
 
@@ -186,7 +200,7 @@ mod tests {
         assert_eq!(gone.busy, vec![("2".to_string(), "node".to_string())]);
         assert_eq!(gone.plain.as_deref(), Some("Ends 1 other terminal."));
         assert_eq!(busy_text("2", "node"), "Stops node in Terminal 2");
-        assert_eq!(confirm_label(true, false), "Stop it and remove");
+        assert_eq!(confirm_label(true, false, false), "Stop it and remove");
     }
 
     #[test]
@@ -216,9 +230,18 @@ mod tests {
 
     #[test]
     fn shows_removing_while_the_daemon_works() {
-        assert_eq!(confirm_label(false, false), "Remove workspace");
-        assert_eq!(confirm_label(true, true), "Removing…");
+        assert_eq!(confirm_label(false, false, false), "Remove workspace");
+        assert_eq!(confirm_label(true, true, false), "Removing…");
+        assert_eq!(confirm_label(false, true, true), "Removing…");
         assert_eq!(remove_title("T-1"), "Remove the workspace of T-1?");
+    }
+
+    #[test]
+    fn says_what_remove_anyway_discards() {
+        assert_eq!(discards_text(1), "Discards 1 file that is not committed.");
+        assert_eq!(discards_text(3), "Discards 3 files that are not committed.");
+        assert_eq!(confirm_label(false, false, true), "Discard and remove");
+        assert_eq!(confirm_label(true, false, true), "Discard and remove");
     }
 
     #[test]
