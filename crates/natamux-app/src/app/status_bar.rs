@@ -1,5 +1,6 @@
 //! The status bar of docs/ui-spec.md 4.28 (`features/app/StatusBar.tsx`), lean as Zed's: at the
-//! left the sidebar and agents toggles. At the right: need you and running as an icon and a count,
+//! left the sidebar and agents toggles. At the right: the app update (T-0214), need you and
+//! running as an icon and a count,
 //! the background jobs with their menu, the plan limits with theirs, the link dot (its word only while down), then the details
 //! toggle, as Zed puts the right dock's toggle at the right. The account is in the title bar and the
 //! notify switch in its menu. Under 1024 jobs lose their label (`status_layout`).
@@ -15,7 +16,9 @@ use super::shell_rules::{LiveItem, needs_you_text, running_text};
 use super::status_items::{OnClick, count_item, item_label, toggle_item};
 use super::status_layout::forced_by_width;
 use super::status_limits::{LimitsItem, limits_item};
+use super::update_state::{ItemKind, StatusWords};
 use crate::components::colors::signal;
+use crate::components::icons::icon_path;
 use crate::components::menu::MenuLayer;
 use crate::components::spinner::Spinner;
 
@@ -32,6 +35,9 @@ pub struct StatusBar {
     jobs: Vec<Job>,
     /// The plan limits, when an agent told them.
     limits: Option<LimitsItem>,
+    /// What the updater does now; None while it has nothing to say.
+    update: Option<StatusWords>,
+    on_update: OnClick,
     width: f32,
     on_running: OnClick,
     on_needs_you: OnClick,
@@ -59,6 +65,8 @@ impl StatusBar {
             needs_you,
             jobs,
             limits: None,
+            update: None,
+            on_update: Rc::new(|_, _, _| {}),
             width,
             on_running: Rc::new(|_, _, _| {}),
             on_needs_you: Rc::new(|_, _, _| {}),
@@ -87,6 +95,17 @@ impl StatusBar {
 
     pub fn limits(mut self, limits: Option<LimitsItem>) -> Self {
         self.limits = limits;
+        self
+    }
+
+    /// The update item and what its click does (`ItemKind`).
+    pub fn update(
+        mut self,
+        update: Option<StatusWords>,
+        on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.update = update;
+        self.on_update = Rc::new(on_click);
         self
     }
 
@@ -243,6 +262,37 @@ fn live_item(live: LiveItem, cx: &App) -> impl IntoElement {
         })
 }
 
+/// The update: a spinner while it checks or downloads, then what a click does.
+fn update_item(words: StatusWords, on_click: OnClick, icon_only: bool) -> ButtonLike {
+    let (icon, color) = match words.kind {
+        ItemKind::Busy => (None, Color::Muted),
+        ItemKind::Restart => (Some("arrow-up"), Color::Accent),
+        ItemKind::OpenPage => (Some("download"), Color::Muted),
+        ItemKind::Retry => (Some("circle-alert"), Color::Error),
+    };
+    let glyph = match icon {
+        Some(name) => Icon::from_path(icon_path(name))
+            .size(IconSize::Small)
+            .color(color)
+            .into_any_element(),
+        None => Spinner::new(IconSize::Small).into_any_element(),
+    };
+    ButtonLike::new("status-update")
+        .height(rems_from_px(24.0_f32).into())
+        .when_some(words.tooltip, |this, tip| this.tooltip(Tooltip::text(tip)))
+        .when(words.kind != ItemKind::Busy, |this| {
+            this.on_click(move |event, window, cx| on_click(event, window, cx))
+        })
+        .child(
+            h_flex()
+                .gap(rems_from_px(6.0_f32))
+                .child(glyph)
+                .when(!icon_only, |this| {
+                    this.child(item_label(words.label, color))
+                }),
+        )
+}
+
 /// The background jobs with their menu; none while no job runs.
 fn jobs_item(jobs: Vec<Job>, open: OnOpenTask, icon_only: bool) -> Option<ButtonLike> {
     let label = short_jobs_label(&jobs)?;
@@ -284,6 +334,10 @@ impl RenderOnce for StatusBar {
             count_item("status-running", "circle-play", Color::Muted, count, tip)
                 .on_click(move |event, window, cx| (self.on_running)(event, window, cx))
         });
+        let update_icon_only = condensed.icon_only.contains(&"update");
+        let update = self
+            .update
+            .map(|words| update_item(words, self.on_update, update_icon_only));
         h_flex()
             .flex_none()
             .w_full()
@@ -301,6 +355,7 @@ impl RenderOnce for StatusBar {
                 self.on_toggle_agents,
             ))
             .child(div().flex_1())
+            .children(update)
             .children(needs)
             .children(running)
             .children(jobs_item(

@@ -26,6 +26,15 @@ use crate::tasks::task_view_rules::task_repo;
 use crate::terminals::terminal_cache::{Owner, TerminalCache};
 
 impl Root {
+    /// Restart to Update, from the menu, the dialog, the toast or the status bar. Asks first when
+    /// an editor has unsaved drafts.
+    pub(super) fn restart_to_update(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let restart = crate::app::update_install::restart;
+        if !self.ask_before_quit_with(window, cx, move |_, cx| restart(cx)) {
+            restart(cx);
+        }
+    }
+
     /// The actions of this file, on the root element.
     pub(super) fn settings_actions(shell: Div, cx: &mut Context<Self>) -> Div {
         shell
@@ -50,9 +59,7 @@ impl Root {
                 crate::app::update::toggle_automatic(cx)
             }))
             .on_action(cx.listener(|root, _: &RestartToUpdate, window, cx| {
-                if !root.ask_before_quit_with(window, cx, |_, cx| crate::app::update::restart(cx)) {
-                    crate::app::update::restart(cx);
-                }
+                root.restart_to_update(window, cx)
             }))
             .on_action(cx.listener(|root, _: &AddProject, window, cx| {
                 projects_dialog::open(&root.dashboard, window, cx)

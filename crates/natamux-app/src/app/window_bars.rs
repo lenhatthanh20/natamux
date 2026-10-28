@@ -16,6 +16,8 @@ use crate::app::shortcuts::{ToggleAgents, ToggleDetails, ToggleSidebar};
 use crate::app::status_bar::{STATUS_BAR_HEIGHT, StatusBar, now_ms};
 use crate::app::status_limits::LimitsItem;
 use crate::app::title_bar::{TitleBar, title_bar_height};
+use crate::app::update::{self, UpdateChanged};
+use crate::app::update_state::UpdateState;
 use crate::components::motion;
 use crate::tasks::task_attention::{needs_me_count, next_quiet_ms};
 
@@ -96,6 +98,7 @@ pub(super) struct StatusBarView {
     #[cfg(test)]
     draws: usize,
     _observe: Subscription,
+    _observe_update: Subscription,
 }
 
 impl StatusBarView {
@@ -109,6 +112,7 @@ impl StatusBarView {
             bar.clock = None;
             cx.notify();
         });
+        let observe_update = cx.observe_global::<UpdateChanged>(|_, cx| cx.notify());
         Self {
             root,
             dashboard,
@@ -123,6 +127,7 @@ impl StatusBarView {
             #[cfg(test)]
             draws: 0,
             _observe: observe,
+            _observe_update: observe_update,
         }
     }
 
@@ -216,9 +221,21 @@ impl Render for StatusBarView {
             agents,
         } = self.toggles;
         let dashboard = self.dashboard.clone();
+        let state = update::state();
+        let words = state.status_item(update::bytes());
+        let root = self.root.clone();
         StatusBar::new(live, counts.running, counts.needs_you, jobs, width)
             .toggles(sidebar, details, agents)
             .limits(limits)
+            .update(words, move |_, window, cx| match &state {
+                UpdateState::Ready { .. } => {
+                    root.update(cx, |root, cx| root.restart_to_update(window, cx))
+                        .ok();
+                }
+                UpdateState::Manual { page, .. } => cx.open_url(page),
+                UpdateState::Failed { .. } => update::check(true, cx),
+                _ => {}
+            })
             .on_toggles(
                 on_root(&self.root, |root, window, cx| {
                     root.toggle_sidebar(&ToggleSidebar, window, cx)

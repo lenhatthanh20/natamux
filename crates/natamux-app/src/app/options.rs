@@ -114,10 +114,14 @@ pub enum Shot {
     StartTaskBranchMenu,
     SidebarBlurred,
     RemoveWorkspaceAnyway,
+    UpdateDownloading,
+    UpdateReady,
+    UpdateFailed,
+    SettingsUpdateReady,
 }
 
 impl Shot {
-    pub const ALL: [Shot; 83] = [
+    pub const ALL: [Shot; 87] = [
         Shot::TasksTable,
         Shot::TasksBoard,
         Shot::BoardHoverCard,
@@ -201,6 +205,10 @@ impl Shot {
         Shot::StartTaskBranchMenu,
         Shot::SidebarBlurred,
         Shot::RemoveWorkspaceAnyway,
+        Shot::UpdateDownloading,
+        Shot::UpdateReady,
+        Shot::UpdateFailed,
+        Shot::SettingsUpdateReady,
     ];
 
     pub fn name(self) -> &'static str {
@@ -288,6 +296,10 @@ impl Shot {
             Shot::StartTaskBranchMenu => "start-task-branch-menu",
             Shot::SidebarBlurred => "sidebar-blurred",
             Shot::RemoveWorkspaceAnyway => "remove-workspace-anyway",
+            Shot::UpdateDownloading => "update-downloading",
+            Shot::UpdateReady => "update-ready",
+            Shot::UpdateFailed => "update-failed",
+            Shot::SettingsUpdateReady => "settings-update-ready",
         }
     }
 

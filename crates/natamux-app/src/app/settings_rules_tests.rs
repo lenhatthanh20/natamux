@@ -52,6 +52,7 @@ fn a_project_page_is_titled_with_the_project_name() {
 fn rows_sit_on_their_pages() {
     for row in [
         SettingRow::Notify,
+        SettingRow::UpdatesVersion,
         SettingRow::UpdatesAuto,
         SettingRow::UpdatesCheck,
     ] {
@@ -117,11 +118,15 @@ fn finds_the_theme_rows_by_a_theme_name_or_color_scheme() {
 }
 
 #[test]
-fn finds_both_update_rows() {
+fn finds_the_update_rows() {
     let found = search("update", &[]);
     assert_eq!(
         found.map(|found| found.rows),
-        Some(vec![SettingRow::UpdatesAuto, SettingRow::UpdatesCheck])
+        Some(vec![
+            SettingRow::UpdatesVersion,
+            SettingRow::UpdatesAuto,
+            SettingRow::UpdatesCheck,
+        ])
     );
 }
 
