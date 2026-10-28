@@ -119,6 +119,9 @@ async fn sleep(duration: Duration, cx: &mut AsyncApp) {
     cx.background_executor().timer(duration).await;
 }
 
+/// A test of one frame, kept across frames.
+type Check = Rc<dyn Fn(&mut Window, &mut App) -> bool>;
+
 /// The start of the first frame that begins with `ready` true, and the end of its draw.
 async fn drawn_when(
     handle: WindowHandle<Root>,
@@ -126,7 +129,7 @@ async fn drawn_when(
     ready: impl Fn(&mut Window, &mut App) -> bool + 'static,
 ) -> Result<(Instant, Instant)> {
     let (sender, receiver) = oneshot::channel();
-    let ready: Rc<dyn Fn(&mut Window, &mut App) -> bool> = Rc::new(ready);
+    let ready: Check = Rc::new(ready);
     in_window(handle, cx, |window, _| {
         window.refresh();
         watch(window, ready, sender, MAX_FRAMES);
@@ -140,12 +143,7 @@ async fn drawn_when(
 
 /// Looks at each frame's start until `ready`; the window draws again meanwhile, so frames keep
 /// coming while the change is on its way.
-fn watch(
-    window: &mut Window,
-    ready: Rc<dyn Fn(&mut Window, &mut App) -> bool>,
-    done: oneshot::Sender<(Instant, Instant)>,
-    left: u32,
-) {
+fn watch(window: &mut Window, ready: Check, done: oneshot::Sender<(Instant, Instant)>, left: u32) {
     window.on_next_frame(move |window, cx| {
         if ready(window, cx) {
             let start = Instant::now();

@@ -28,8 +28,8 @@ REFRESH_MS = 16.7
 # name: (target, gated). Not gated: shown, never fails; the part of T-0223 that works on it turns
 # its gate on. Targets: T-0221 report "Targets" and docs/plan-rust-migration.md.
 TARGETS = {
-    "first_frame_ms": (300, False),
-    "first_data_ms": (1000, False),
+    "first_frame_ms": (300, True),
+    "first_data_ms": (1000, True),
     "task_switch_seen_p95_ms": (REFRESH_MS, False),
     "task_switch_unseen_p95_ms": (300, False),
     "event_to_row_p95_ms": (50, False),

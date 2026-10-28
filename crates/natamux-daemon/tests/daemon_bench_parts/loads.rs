@@ -145,7 +145,9 @@ pub fn hooks_at_once(agents: usize) -> (f64, f64) {
                     .map(|step| {
                         let raw = agent_hook(step, &cwd);
                         let sent = Instant::now();
-                        service.handle("claude-code", &raw, None, Some("1")).unwrap();
+                        service
+                            .handle("claude-code", &raw, None, Some("1"))
+                            .unwrap();
                         sent.elapsed()
                     })
                     .collect::<Vec<_>>()

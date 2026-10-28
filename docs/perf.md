@@ -52,7 +52,7 @@ The existing targets are in [plan-rust-migration.md, "Target numbers"](plan-rust
 | `diff_click_*` | a file picked in the Changes tab (another file each run) | the next frame drawn |
 | `resize_frame_p50_ms`, `resize_frame_p99_ms` | perf overlay frame times while the window steps 40 times between 1280×800 and 1100×700, 6 panes in the Agents grid | |
 | `palette_key_*` | the jump palette's query grows by one letter, 1,000 tasks | the next frame drawn |
-| `board_frame_*` | the board, 300 Done tasks shown, told to draw again | frame start to the end of its draw (main-thread time) |
+| `board_frame_*` | the board with Show finished, 300 Done tasks and the 200 open tasks of the event flows, told to draw again | frame start to the end of its draw (main-thread time) |
 | `app_rss_mb` | `ps` RSS of the app at the end | |
 
 Known limits of the flow timers:
@@ -82,27 +82,27 @@ CPU and draws a second of the fake's task table with focus and behind Finder; it
 
 ## Before (CI)
 
-From the first green `perf.yml` run of P1. Filled from that run.
+The first green `perf.yml` run of P1 alone on `main` (macOS 15 runner, 60 Hz, 200 fake tasks; daemon numbers on Linux).
 
 | CI name | Before (P1) | Run |
 |---|---|---|
-| `first_frame_ms` | TBD | TBD |
-| `first_data_ms` | TBD | TBD |
-| `log_trim_ms`, `fonts_ms`, `view_state_ms`, `themes_ms` | TBD | TBD |
-| `task_switch_seen_p95_ms` | TBD | TBD |
-| `task_switch_unseen_p95_ms` | TBD | TBD |
-| `event_to_row_p95_ms` | TBD | TBD |
-| `event_ui_p95_ms` | TBD | TBD |
-| `event_draws_per_event` | TBD | TBD |
-| `diff_click_p95_ms` | TBD | TBD |
-| `palette_key_p95_ms` | TBD | TBD |
-| `resize_frame_p99_ms` | TBD | TBD |
-| `board_frame_p95_ms` | TBD | TBD |
-| `app_rss_mb` | TBD | TBD |
-| `table_focus_cpu_pct`, `table_background_cpu_pct` | TBD | TBD |
-| `daemon_busy_rss_mb` | TBD | TBD |
-| `task_init_500_ms`, `task_init_2000_ms` (cold / warm) | TBD | TBD |
-| `hook_p50_ms`, `hook_p95_ms` | TBD | TBD |
+| `first_frame_ms` | 592.4 | [40743258182](https://github.com/lenhatthanh20/natamux/actions/runs/40743258182) |
+| `first_data_ms` | 642.6 | [40743258182](https://github.com/lenhatthanh20/natamux/actions/runs/40743258182) |
+| `log_trim_ms`, `fonts_ms`, `view_state_ms`, `themes_ms` | 0.0, 14.3, 0.0, 6.0 | [40743258182](https://github.com/lenhatthanh20/natamux/actions/runs/40743258182) |
+| `task_switch_seen_p95_ms` | 23.5 | [40743258182](https://github.com/lenhatthanh20/natamux/actions/runs/40743258182) |
+| `task_switch_unseen_p95_ms` | 20.9 | [40743258182](https://github.com/lenhatthanh20/natamux/actions/runs/40743258182) |
+| `event_to_row_p95_ms` | 26.7 | [40743258182](https://github.com/lenhatthanh20/natamux/actions/runs/40743258182) |
+| `event_ui_p95_ms` | 2.50 | [40743258182](https://github.com/lenhatthanh20/natamux/actions/runs/40743258182) |
+| `event_draws_per_event` | 0.9 | [40743258182](https://github.com/lenhatthanh20/natamux/actions/runs/40743258182) |
+| `diff_click_p95_ms` | 28.4 | [40743258182](https://github.com/lenhatthanh20/natamux/actions/runs/40743258182) |
+| `palette_key_p95_ms` | 42.1 | [40743258182](https://github.com/lenhatthanh20/natamux/actions/runs/40743258182) |
+| `resize_frame_p99_ms` | 38.2 (242 frames over 1 refresh) | [40743258182](https://github.com/lenhatthanh20/natamux/actions/runs/40743258182) |
+| `board_frame_p95_ms` | 199.1 (p50 182.9) | [40743258182](https://github.com/lenhatthanh20/natamux/actions/runs/40743258182) |
+| `app_rss_mb` | 282.2 | [40743258182](https://github.com/lenhatthanh20/natamux/actions/runs/40743258182) |
+| `table_focus_cpu_pct`, `table_background_cpu_pct` | 1.8, 0.6 | [40743258182](https://github.com/lenhatthanh20/natamux/actions/runs/40743258182) |
+| `daemon_busy_rss_mb` | 724.9 | [40743258182](https://github.com/lenhatthanh20/natamux/actions/runs/40743258182) |
+| `task_init_500_ms`, `task_init_2000_ms` (cold / warm) | 35.3 / 13.4, 141.2 / 57.6 | [40743258182](https://github.com/lenhatthanh20/natamux/actions/runs/40743258182) |
+| `hook_p50_ms`, `hook_p95_ms` | 0.28, 13.4 | [40743258182](https://github.com/lenhatthanh20/natamux/actions/runs/40743258182) |
 
 ## On the owner's Mac
 
@@ -120,7 +120,22 @@ python3 scripts/perf-check.py flows.txt smoke.txt motion.txt
 - `--bench-flows` uses only the fake daemon; it reads and writes no task of yours.
 - The daemon numbers come from CI only.
 
+## Decisions from the numbers
+
+The spec of T-0223 builds some steps only when a "before" number is over a threshold.
+
+| Step | Threshold | Before | Decision |
+|---|---|---|---|
+| Board cap: Done and Cancelled show the newest 50 cards, "Show N more" | `board_frame_p95_ms` over 1 refresh | 199.1 ms | Built |
+| Theme parse after the first frame | `themes_ms` over 5 ms | 6.0 ms | Not built: the selected theme must apply before the first frame, which needs a split of the theme load. 6 ms is small next to the 300 ms target |
+| Log trim after the first frame | `log_trim_ms` over 5 ms | 0.0 ms | Not built |
+| Daemon binds before the task load | `task_init_2000_ms` over 300 ms | 141.2 ms | Not built |
+| Smaller history for parked terminals | app or daemon RSS over the draft target | daemon 724.9 MB, app 282.2 MB | Not built |
+| Off-screen grid panes resize later | `resize_frame_p99_ms` over 1 refresh | 38.2 ms | Not built: all 6 panes of the measured grid are on screen, so the step would not change this number. The resize cost needs a profile first |
+
 ## Follow-ups
 
 - Reuse of a running daemon (T-0221 finding 1.2): not done. It is a start-error point, not speed. A running daemon may come from another app version, and a reused one would not stop with the app.
 - After P3, a task file edited by hand outside the daemon shows in the app within the 60 s fallback read, not at the next task event.
+- The daemon reads the login-shell PATH before it binds its port (`natamux-daemon/src/main.rs`, `wait_for_login_path`), so `first_data_ms` still includes the user's `$SHELL -ilc`. The window no longer waits for it. A daemon that binds first must set the PATH later, after its threads run, which `std::env::set_var` does not allow safely; that needs its own task.
+- `palette_key_p95_ms` was 42.1 ms with 1,000 tasks, over 1 refresh. T-0221 dropped the palette (finding 6.1) without a number; it needs its own task.

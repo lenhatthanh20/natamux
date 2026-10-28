@@ -1,5 +1,5 @@
 //! The flows of `--bench-flows`, in the order they run. The event flows run with `--bench-tasks`
-//! tasks (200), the palette and the board with 1,000 tasks of which 300 are Done.
+//! tasks (200), the board with 300 Done tasks more, and the palette with 1,000 tasks.
 
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
@@ -54,16 +54,21 @@ pub(super) async fn all(
     note("event UI time", event_ui(handle, extra, cx).await);
     note("diff click", diff_click(handle, cx).await);
     note("resize", resize(handle, extra, cx).await);
-    fake_daemon::shared().grow_tasks(PALETTE_TASKS, BOARD_DONE);
+    // The board first: its open columns keep the tasks of the event flows, as a busy day has.
+    fake_daemon::shared().grow_tasks(tasks + BOARD_DONE, BOARD_DONE);
+    sleep(Duration::from_secs(1), cx).await;
+    note("board", board(handle, cx).await);
+    fake_daemon::shared().grow_tasks(PALETTE_TASKS, 0);
     sleep(Duration::from_secs(1), cx).await;
     note("palette", palette(handle, cx).await);
-    note("board", board(handle, cx).await);
     Ok(())
 }
 
 async fn wait_for_tasks(handle: WindowHandle<Root>, cx: &mut AsyncApp) -> Result<()> {
     let started = Instant::now();
-    while handle.update(cx, |root, _, cx| root.dashboard().read(cx).data.tasks.is_empty())? {
+    while handle.update(cx, |root, _, cx| {
+        root.dashboard().read(cx).data.tasks.is_empty()
+    })? {
         if started.elapsed() > WAIT_FOR_TASKS {
             return Err(anyhow!("the fake daemon's tasks never came"));
         }
@@ -92,10 +97,7 @@ async fn task_switch(handle: WindowHandle<Root>, cx: &mut AsyncApp) -> Result<()
         sleep(SETTLE, cx).await;
     }
     let workspace = handle.update(cx, |root, _, _| root.workspace_view().clone())?;
-    let flows = [
-        ("task_switch_seen", None),
-        ("task_switch_unseen", Some(2)),
-    ];
+    let flows = [("task_switch_seen", None), ("task_switch_unseen", Some(2))];
     for (flow, first) in flows {
         let ids = ids.clone();
         let workspace = workspace.clone();
@@ -252,7 +254,9 @@ async fn resize(
     overlay_on(true, handle, cx)?;
     for step in 0..RESIZES {
         let (width, height) = SIZES[step % SIZES.len()];
-        in_window(handle, cx, |window, _| window.resize(size(px(width), px(height))))?;
+        in_window(handle, cx, |window, _| {
+            window.resize(size(px(width), px(height)))
+        })?;
         sleep(RESIZE_EVERY, cx).await;
     }
     let summary = cx.update(|cx| {
@@ -261,7 +265,9 @@ async fn resize(
     });
     overlay_on(false, handle, cx)?;
     let (width, height) = SIZES[0];
-    in_window(handle, cx, |window, _| window.resize(size(px(width), px(height))))?;
+    in_window(handle, cx, |window, _| {
+        window.resize(size(px(width), px(height)))
+    })?;
     if summary.frames == 0 {
         return Err(anyhow!("no frame was drawn while the window resized"));
     }
