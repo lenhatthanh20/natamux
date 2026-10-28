@@ -47,12 +47,13 @@ fn header_row(
     ring: Hsla,
     fold: AnyElement,
     buttons: Vec<AnyElement>,
+    height: f32,
     cx: &App,
 ) -> AnyElement {
     h_flex()
         .group(group)
         .w_full()
-        .h(rems_from_px(26.0_f32))
+        .h(rems_from_px(height))
         .pr(rems_from_px(2.0_f32))
         .rounded_sm()
         .hover(|style| style.bg(cx.theme().colors().ghost_element_hover))
@@ -61,6 +62,15 @@ fn header_row(
         .child(fold)
         .children(buttons)
         .into_any_element()
+}
+
+/// The focus ring of a header row while keyboard focus is on `key`.
+fn focus_ring(key: &str, snap: &Snapshot, cx: &App) -> Hsla {
+    if snap.focused && snap.stop.as_deref() == Some(key) {
+        cx.theme().colors().border_focused
+    } else {
+        gpui::transparent_black()
+    }
 }
 
 impl WorkspaceTree {
@@ -108,11 +118,7 @@ impl WorkspaceTree {
         };
         let repo = &repo_group.repo;
         let key = format!("repo:{}", repo.id);
-        let ring = if snap.focused && snap.stop.as_deref() == Some(key.as_str()) {
-            cx.theme().colors().border_focused
-        } else {
-            gpui::transparent_black()
-        };
+        let ring = focus_ring(&key, snap, cx);
         let fold = self.header_fold(repo_group, info, snap, cx);
         let buttons = self.header_buttons(repo, info, snap, cx);
         header_row(
@@ -120,6 +126,7 @@ impl WorkspaceTree {
             ring,
             fold,
             buttons,
+            26.0,
             cx,
         )
     }
@@ -229,45 +236,42 @@ impl WorkspaceTree {
             .bulk
             .running(BulkRun::RemoveFinished);
         let dashboard = self.dashboard.clone();
-        h_flex()
-            .group(group_name.clone())
-            .w_full()
-            .pr(rems_from_px(2.0_f32))
+        let ring = focus_ring(&key, snap, cx);
+        let fold = h_flex()
+            .id(SharedString::from(key.clone()))
+            .flex_1()
+            .min_w_0()
+            .h_full()
+            .pl(rems_from_px(22.0_f32))
+            .gap_1()
+            .cursor_pointer()
             .child(
-                self.row_frame(&key, false, snap, cx)
-                    .id(SharedString::from(key.clone()))
-                    .h(rems_from_px(24.0_f32))
-                    .pl(rems_from_px(22.0_f32))
-                    .flex()
-                    .items_center()
-                    .gap_1()
-                    .child(
-                        Icon::new(if shown {
-                            IconName::ChevronDown
-                        } else {
-                            IconName::ChevronRight
-                        })
-                        .size(IconSize::XSmall)
-                        .color(Color::Muted),
-                    )
-                    .child(small(format!("{} finished", repo_group.finished.len())))
-                    .on_click(cx.listener(move |tree, _: &ClickEvent, window, cx| {
-                        tree.set_fold(toggle_key.clone(), !shown, window, cx);
-                    })),
+                Icon::new(if shown {
+                    IconName::ChevronDown
+                } else {
+                    IconName::ChevronRight
+                })
+                .size(IconSize::XSmall)
+                .color(Color::Muted),
             )
-            .child(
-                hover_button(
-                    SharedString::from(format!("remove-finished-{}", repo.id)),
-                    "folder-minus",
-                    format!("Remove finished workspaces in {name}"),
-                    group_name,
-                    move |_, window, cx| {
-                        remove_finished::open(&dashboard, remove_repo.clone(), window, cx);
-                    },
-                )
-                .disabled(removing),
-            )
-            .into_any_element()
+            .child(small(format!("{} finished", repo_group.finished.len())))
+            .on_click(cx.listener(move |tree, _: &ClickEvent, window, cx| {
+                tree.set_fold(toggle_key.clone(), !shown, window, cx);
+            }))
+            .into_any_element();
+        let button = hover_button(
+            SharedString::from(format!("remove-finished-{}", repo.id)),
+            "folder-minus",
+            format!("Remove finished workspaces in {name}"),
+            group_name.clone(),
+            move |_, window, cx| {
+                remove_finished::open(&dashboard, remove_repo.clone(), window, cx);
+            },
+        )
+        .disabled(removing)
+        .into_any_element();
+        // The header's frame, so the hover and the focus ring cover the button too.
+        header_row(group_name, ring, fold, vec![button], 24.0, cx)
     }
 }
 
