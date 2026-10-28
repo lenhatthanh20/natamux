@@ -59,7 +59,7 @@ Do not copy these:
 
 ## Target numbers
 
-The targets are absolute; the Electron app is not measured (owner, 2026-10-22). Every phase must meet them on a 14" MacBook Pro (ProMotion):
+The targets are absolute; the Electron app is not measured (owner, 2026-10-22). Every phase must meet them on a 14" MacBook Pro (ProMotion). [perf.md](perf.md) adds the flow targets of T-0221, how CI measures each number, and the measured numbers:
 
 | Measure | Target |
 |---|---|

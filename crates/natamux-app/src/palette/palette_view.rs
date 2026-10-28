@@ -25,6 +25,7 @@ use crate::app::command_types::palette_title;
 use crate::app::commands::{CommandState, all_commands};
 use crate::app::commands_app::PALETTE;
 use crate::app::dashboard::Dashboard;
+use crate::app::dashboard_data::{Part, Seen};
 use crate::app::shortcuts::is_bound;
 use crate::components::colors::signal;
 use crate::components::form::text_editor;
@@ -151,7 +152,12 @@ impl PaletteView {
         });
         // The terminal lists the layer asked for come after the palette opens.
         let terminals = (mode == PaletteMode::Jump).then(|| {
-            cx.observe(dashboard, |this: &mut Self, dashboard, cx| {
+            let mut seen = Seen::default();
+            cx.observe(dashboard, move |this: &mut Self, dashboard, cx| {
+                let gens = dashboard.read(cx).data.gens;
+                if !seen.changed(&gens, &[Part::Terminals]) {
+                    return;
+                }
                 let terminals = terminal_map(dashboard.read(cx));
                 if terminals != this.snapshot.terminals {
                     this.snapshot.terminals = terminals;

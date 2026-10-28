@@ -3,6 +3,7 @@
 //! app.
 
 use std::collections::BTreeSet;
+use std::sync::Arc;
 
 use gpui::{Entity, Focusable};
 use ui::prelude::*;
@@ -18,6 +19,7 @@ use crate::app::shortcuts::{
     UseDefaultSize, UseLargeSize, UseLightTheme, UseSystemTheme,
 };
 use crate::app::sign_in::{SignIn, SignedIn, access_file};
+use crate::app::source::Source;
 use crate::palette::palette_layer::PaletteLayer;
 use crate::palette::palette_rows::{PaletteMode, PaletteScope};
 use crate::projects::project_settings_page::ProjectSettingsPage;
@@ -225,14 +227,19 @@ impl Root {
     }
 
     fn signed_in(&mut self, signed: &SignedIn, window: &mut Window, cx: &mut Context<Self>) {
-        let source = signed.0.clone();
-        self.source = Some(source.clone());
         self.sign_in = None;
-        self.dashboard
-            .update(cx, |dashboard, cx| dashboard.reconnect(source, cx));
+        self.use_source(signed.0.clone(), cx);
         let focus = self.tasks.focus_handle(cx);
         window.focus(&focus, cx);
         cx.notify();
+    }
+
+    /// The views follow this daemon from now on: after Sign in, or when the app's own daemon
+    /// answered (`daemon/start_async.rs`).
+    pub(crate) fn use_source(&mut self, source: Arc<Source>, cx: &mut Context<Self>) {
+        self.source = Some(source.clone());
+        self.dashboard
+            .update(cx, |dashboard, cx| dashboard.reconnect(source, cx));
     }
 
     /// A 401 from the daemon: the app forgets the token it kept and its terminals, then asks

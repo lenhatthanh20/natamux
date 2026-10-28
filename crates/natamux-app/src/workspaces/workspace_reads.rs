@@ -144,9 +144,11 @@ impl WorkspaceView {
         };
         let answer = source.ended_shells(&task.id);
         cx.spawn(async move |view, cx| {
-            let ended = answer.await.unwrap_or_default();
+            // A failed read keeps the list shown before.
+            let ended = answer.await.ok();
             view.update(cx, |view, cx| {
-                if let Some(shown) = view.shown.as_mut().filter(|s| s.task_id == task.id) {
+                let shown = view.shown.as_mut().filter(|s| s.task_id == task.id);
+                if let Some((shown, ended)) = shown.zip(ended) {
                     shown.ended = ended;
                     cx.notify();
                 }
@@ -167,8 +169,10 @@ impl WorkspaceView {
         cx.spawn(async move |view, cx| {
             let events = answer.await.ok();
             view.update(cx, |view, cx| {
-                if let Some(shown) = view.shown.as_mut().filter(|s| s.task_id == id) {
-                    shown.events = events;
+                // A failed read keeps the events shown before.
+                let shown = view.shown.as_mut().filter(|s| s.task_id == id);
+                if let Some((shown, events)) = shown.zip(events) {
+                    shown.events = Some(events);
                     cx.notify();
                 }
             })
@@ -186,8 +190,10 @@ impl WorkspaceView {
         cx.spawn(async move |view, cx| {
             let branches = answer.await.ok();
             view.update(cx, |view, cx| {
-                if let Some(shown) = view.shown.as_mut().filter(|s| s.task_id == id) {
-                    shown.branches = branches;
+                // A failed read keeps the branches shown before.
+                let shown = view.shown.as_mut().filter(|s| s.task_id == id);
+                if let Some((shown, branches)) = shown.zip(branches) {
+                    shown.branches = Some(branches);
                     cx.notify();
                 }
             })
@@ -233,7 +239,8 @@ impl WorkspaceView {
         Some(cx.spawn(async move |view, cx| {
             let result = answer.await;
             view.update(cx, |view, cx| {
-                if let Some(shown) = view.shown.as_mut() {
+                // Another task may show by now: its marks are not ours.
+                if let Some(shown) = view.shown.as_mut().filter(|s| s.task_id == id) {
                     shown.pending = None;
                 }
                 view.read_git(cx);
@@ -278,6 +285,7 @@ impl WorkspaceView {
         };
         shown.starting = true;
         let (id, base) = (shown.task_id.clone(), shown.base.clone());
+        let done = id.clone();
         let answer = self.dashboard.update(cx, |dashboard, cx| match &agent {
             Some(agent) => dashboard.start_agent_from(&id, agent, base, cx),
             None => dashboard.create_workspace(&id, base, cx),
@@ -285,7 +293,7 @@ impl WorkspaceView {
         cx.spawn(async move |view, cx| {
             answer.await.ok();
             view.update(cx, |view, cx| {
-                if let Some(shown) = view.shown.as_mut() {
+                if let Some(shown) = view.shown.as_mut().filter(|s| s.task_id == done) {
                     shown.starting = false;
                 }
                 cx.notify();
@@ -302,13 +310,14 @@ impl WorkspaceView {
         };
         shown.reopening = true;
         let id = shown.task_id.clone();
+        let done = id.clone();
         let answer = self
             .dashboard
             .update(cx, |dashboard, cx| dashboard.reopen_agent(&id, cx));
         cx.spawn(async move |view, cx| {
             let reopened = answer.await.is_ok();
             view.update(cx, |view, cx| {
-                if let Some(shown) = view.shown.as_mut() {
+                if let Some(shown) = view.shown.as_mut().filter(|s| s.task_id == done) {
                     shown.reopening = false;
                     shown.shells_wanted |= reopened;
                 }

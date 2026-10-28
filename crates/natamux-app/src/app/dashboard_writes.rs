@@ -10,7 +10,7 @@ use natamux_proto::workspaces::workspace::{NewWorkspaceInput, RemoveWorkspaceAns
 use ui::prelude::*;
 
 use super::Dashboard;
-use crate::app::dashboard_data::BulkRun;
+use crate::app::dashboard_data::{BulkRun, Part};
 use crate::app::source::{delete_all, reason, remove_all};
 use crate::components::toast_rules::ToastTone;
 use crate::tasks::delete_finished::{DeleteOutcome, delete_summary};
@@ -38,7 +38,7 @@ impl Dashboard {
                     Err(error) if !quiet => this.toast(&reason(error), ToastTone::Error, None, cx),
                     Err(_) => {}
                 }
-                cx.notify();
+                this.touch_view(cx);
             })
             .ok();
             result
@@ -248,6 +248,7 @@ impl Dashboard {
             cx,
             move |this, _, cx| {
                 this.data.repos.retain(|repo| repo.id != repo_id);
+                this.data.gens.bump(Part::Repos);
                 this.toast(&format!("Removed {name}."), ToastTone::Info, None, cx);
             },
         )
@@ -302,7 +303,7 @@ impl Dashboard {
         if !self.bulk.start(BulkRun::DeleteTasks) {
             return;
         }
-        cx.notify();
+        self.touch_view(cx);
         let outcomes = cx
             .background_executor()
             .spawn(async move { delete_all(&source, &ids, &force) });
@@ -340,7 +341,7 @@ impl Dashboard {
         if !self.bulk.start(BulkRun::RemoveFinished) {
             return;
         }
-        cx.notify();
+        self.touch_view(cx);
         let outcomes = cx
             .background_executor()
             .spawn(async move { remove_all(&source, &ids, &force) });

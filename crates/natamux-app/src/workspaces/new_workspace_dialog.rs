@@ -16,6 +16,7 @@ use super::new_workspace_rules::{
 };
 use crate::agents::agent_choices::DEFAULT_AGENT;
 use crate::app::dashboard::Dashboard;
+use crate::app::dashboard_data::{Part, Seen};
 use crate::app::source::reason;
 use crate::components::dialog::{
     DialogFrame, DialogLayer, DialogView, cancel_button, primary_button,
@@ -146,7 +147,14 @@ impl NewWorkspaceDialog {
         );
         let reference = editor("", false, window, cx);
         let ids = repo_ids(&dashboard, cx);
-        let mut subscriptions = vec![cx.observe(&dashboard, |this, _, cx| this.read_repo(cx))];
+        let mut seen = Seen::default();
+        let follow = cx.observe(&dashboard, move |this, dashboard, cx| {
+            let gens = dashboard.read(cx).data.gens;
+            if seen.changed(&gens, &[Part::Repos]) {
+                this.read_repo(cx);
+            }
+        });
+        let mut subscriptions = vec![follow];
         for field in [&title, &notes, &reference] {
             subscriptions.push(cx.subscribe(field, |_, _, event: &EditorEvent, cx| {
                 if matches!(event, EditorEvent::BufferEdited) {

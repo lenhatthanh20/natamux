@@ -37,6 +37,8 @@ impl Root {
         cx.observe_window_activation(window, |root, window, cx| {
             let active = window.is_window_active();
             motion::set_active(active, cx);
+            root.dashboard
+                .update(cx, |dashboard, _| dashboard.set_feed_active(active));
             if active {
                 root.workspace.update(cx, |view, cx| view.read_missed(cx));
                 root.details.update(cx, |panel, cx| panel.read_missed(cx));

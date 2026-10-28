@@ -1,7 +1,9 @@
 //! The History tab (`GitGraph.tsx`, docs/ui-spec.md 4.19): what the task's branch has that its
 //! base has not, one 28 px row per commit with the lanes drawn at the left.
 
-use gpui::{ClickEvent, FontWeight, PathBuilder, canvas, point};
+use std::sync::Arc;
+
+use gpui::{ClickEvent, FontWeight, ListSizingBehavior, PathBuilder, canvas, point, uniform_list};
 use natamux_proto::workspaces::workspace::{GitGraph, GraphCommit};
 use ui::{Tooltip, prelude::*};
 
@@ -194,7 +196,7 @@ fn commit_row(
     graph: &GitGraph,
     (width, narrow, now): (f32, bool, i64),
     cx: &App,
-) -> impl IntoElement {
+) -> AnyElement {
     let head = is_head(graph, index, commit);
     let color = if commit.on_branch {
         Color::Default
@@ -259,33 +261,73 @@ fn commit_row(
                 .tooltip(Tooltip::text(format_exact(&commit.date, OFFSET_MINUTES)))
                 .child(Label::new(age).color(Color::Muted).single_line()),
         )
+        .into_any_element()
 }
 
-fn commit_list(id: &str, graph: &GitGraph, narrow: bool, cx: &App) -> impl IntoElement {
+/// The graph the rows were laid out from, and its layout. Kept by the list between frames: the
+/// graph is read every few seconds, the frames come much more often.
+#[derive(Clone)]
+struct Layout {
+    graph: Arc<GitGraph>,
+    rows: Arc<Vec<GraphRow>>,
+    width: usize,
+}
+
+fn layout_of(id: &str, graph: &GitGraph, window: &mut Window, cx: &mut App) -> Layout {
+    let key = SharedString::from(format!("{id}-layout"));
+    let state = window.use_keyed_state(key, cx, |_, _| None::<Layout>);
+    if let Some(kept) = state.read(cx).clone().filter(|kept| *kept.graph == *graph) {
+        return kept;
+    }
     let (rows, width) = layout_graph(&graph.commits);
-    let facts = (lanes_width(width), narrow, now_ms());
+    let layout = Layout {
+        graph: Arc::new(graph.clone()),
+        rows: Arc::new(rows),
+        width,
+    };
+    state.update(cx, |state, _| *state = Some(layout.clone()));
+    layout
+}
+
+fn commit_list(
+    id: &str,
+    graph: &GitGraph,
+    narrow: bool,
+    window: &mut Window,
+    cx: &mut App,
+) -> impl IntoElement {
+    let layout = layout_of(id, graph, window, cx);
+    let lanes = lanes_width(layout.width);
+    let count = graph.commits.len();
+    let rows = uniform_list(
+        SharedString::from(format!("{id}-commits")),
+        count,
+        move |range, _, cx| {
+            let facts = (lanes, narrow, now_ms());
+            let graph = &layout.graph;
+            range
+                .map(|index| {
+                    let (commit, lanes) = (&graph.commits[index], &layout.rows[index]);
+                    commit_row(index, commit, lanes, graph, facts, cx)
+                })
+                .collect::<Vec<_>>()
+        },
+    )
+    .with_sizing_behavior(ListSizingBehavior::Infer)
+    .min_h_0();
     v_flex()
-        .id(SharedString::from(format!("{id}-commits")))
         .flex_shrink_1()
         .min_h_0()
-        .overflow_y_scroll()
         .py_1()
         .rounded_md()
         .border_1()
         .border_color(cx.theme().colors().border)
         .bg(cx.theme().colors().surface_background)
-        .children(
-            graph
-                .commits
-                .iter()
-                .zip(&rows)
-                .enumerate()
-                .map(|(index, (commit, lanes))| commit_row(index, commit, lanes, graph, facts, cx)),
-        )
+        .child(rows)
 }
 
 impl RenderOnce for HistoryView {
-    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let frame = v_flex()
             .id(SharedString::from(self.id.clone()))
             .size_full()
@@ -309,7 +351,7 @@ impl RenderOnce for HistoryView {
                 self.on_show_changes,
                 self.on_refresh,
             ))
-            .child(commit_list(&self.id, &graph, self.narrow, cx))
+            .child(commit_list(&self.id, &graph, self.narrow, window, cx))
             .into_any_element()
     }
 }

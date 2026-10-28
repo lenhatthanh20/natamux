@@ -4,7 +4,7 @@
 //! shows them (T-0175), and that the pipeline chart of Project settings scrolls sideways to its
 //! last step (T-0163).
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use editor::Editor;
 use gpui::{
@@ -18,6 +18,7 @@ use super::shots::{self, RUNNING};
 use super::shots_stages::{PROJECT, READ};
 use super::status_bar::STATUS_BAR_HEIGHT;
 use super::window::Root;
+use crate::perf::report::{start_steps, start_times};
 
 const TYPED: &str = "abc";
 /// The fake's terminal list comes at once; the grid is drawn well within this.
@@ -27,6 +28,9 @@ const GRID_POLL: Duration = Duration::from_millis(100);
 const GRID_SETTLE: Duration = Duration::from_millis(500);
 /// A toggle's panel is drawn, or gone, within this.
 const TOGGLE_SETTLE: Duration = Duration::from_millis(300);
+/// The task list of a real daemon may come after the checks passed; the start line waits this
+/// long for it.
+const DATA_WAIT: Duration = Duration::from_secs(5);
 /// From the window's edge to a point inside the first or last toggle of the status bar, in the
 /// px of `rems_from_px`: the bar's 6 px padding, then about half of the 22 px wide toggle.
 const TOGGLE_INSET: f32 = 16.;
@@ -287,12 +291,51 @@ async fn check_chart(handle: WindowHandle<Root>, quit: bool, cx: &mut AsyncApp) 
 
 fn pass(quit: bool, cx: &mut App) {
     println!("smoke: ok");
-    if quit {
-        cx.quit();
+    cx.spawn(async move |cx| {
+        let started = Instant::now();
+        while start_times().1.is_none() && started.elapsed() < DATA_WAIT {
+            cx.background_executor().timer(GRID_POLL).await;
+        }
+        let (frame, data) = start_times();
+        println!("{}", start_line(frame, data, &start_steps()));
+        // Report only: one cold start after a build is slow; perf.yml gates the median of 5.
+        if quit {
+            cx.update(|cx| cx.quit());
+        }
+    })
+    .detach();
+}
+
+/// `smoke: first_frame_ms=… first_data_ms=… fonts_ms=…`, read by `scripts/perf-check.py`.
+fn start_line(frame: Option<f64>, data: Option<f64>, steps: &[(&str, f64)]) -> String {
+    let value = |ms: Option<f64>| ms.map_or("none".to_string(), |ms| format!("{ms:.1}"));
+    let mut line = format!(
+        "smoke: first_frame_ms={} first_data_ms={}",
+        value(frame),
+        value(data)
+    );
+    for (name, ms) in steps {
+        line += &format!(" {name}={ms:.1}");
     }
+    line
 }
 
 fn fail(message: &str) -> ! {
     eprintln!("smoke: {message}");
     std::process::exit(1);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_start_line_has_every_time_and_says_none_for_a_missing_one() {
+        let steps = [("fonts_ms", 3.0), ("themes_ms", 12.5)];
+        let line = start_line(Some(120.04), None, &steps);
+        assert_eq!(
+            line,
+            "smoke: first_frame_ms=120.0 first_data_ms=none fonts_ms=3.0 themes_ms=12.5"
+        );
+    }
 }

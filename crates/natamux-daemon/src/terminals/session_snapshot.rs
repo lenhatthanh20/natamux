@@ -5,6 +5,7 @@
 use std::sync::Arc;
 
 use hyper::body::Bytes;
+use natamux_proto::terminals::history::CATCH_UP_HISTORY_ROWS;
 use natamux_proto::terminals::messages::{ACK_EVERY_BYTES, ServerMessage};
 use natamux_screen::frames::split_frames;
 
@@ -46,9 +47,11 @@ fn send_missed(client: &ClientRef, from: u64, frames: Vec<Bytes>, to: u64) {
 }
 
 /// A snapshot for the client: at once, or with the one that waits for a program's frame to end.
-pub fn request_snapshot(session: &mut Session, client: &ClientRef) {
+/// `full`: the client has no history yet. Otherwise it only needs the last rows.
+pub fn request_snapshot(session: &mut Session, client: &ClientRef, full: bool) {
     if let Some(job) = &mut session.snapshot {
         job.clients.push(Arc::clone(client));
+        job.full |= full;
         return;
     }
     if session.screen.in_sync_frame() {
@@ -61,10 +64,11 @@ pub fn request_snapshot(session: &mut Session, client: &ClientRef) {
         session.snapshot = Some(SnapshotJob {
             clients: vec![Arc::clone(client)],
             timer: Some(timer),
+            full,
         });
         return;
     }
-    run_snapshot(session, &[Arc::clone(client)]);
+    run_snapshot(session, &[Arc::clone(client)], full);
 }
 
 /// Called after each output: a snapshot that waited for a frame goes once the frame ended.
@@ -77,12 +81,12 @@ pub fn frame_parsed(session: &mut Session) {
 fn run_waiting_snapshot(session: &mut Session) {
     if let Some(mut job) = session.snapshot.take() {
         session.scheduler.clear(&mut job.timer);
-        run_snapshot(session, &job.clients);
+        run_snapshot(session, &job.clients, job.full);
     }
 }
 
 /// Cuts the screen at the output so far and sends it to `clients`, then the end of the catch-up.
-fn run_snapshot(session: &mut Session, clients: &[ClientRef]) {
+fn run_snapshot(session: &mut Session, clients: &[ClientRef], full: bool) {
     let attached: Vec<ClientRef> = clients
         .iter()
         .filter(|client| {
@@ -101,7 +105,11 @@ fn run_snapshot(session: &mut Session, clients: &[ClientRef]) {
     let cut = session.offset;
     let size = session.size;
     // One buffer for the whole snapshot: each frame is a range of it, for every client.
-    let snapshot = Bytes::from(session.screen.snapshot());
+    let snapshot = Bytes::from(if full {
+        session.screen.snapshot()
+    } else {
+        session.screen.snapshot_tail(CATCH_UP_HISTORY_ROWS)
+    });
     let frames: Vec<Bytes> = split_frames(&snapshot, OUTPUT_FRAME_BYTES)
         .into_iter()
         .map(|frame| snapshot.slice_ref(frame))
@@ -211,7 +219,7 @@ fn snapshot_catch_up(session: &mut Session, client: &ClientRef, now: u64) {
         state.phase = Phase::Snapshot;
         state.snapshot_at = now;
     }
-    request_snapshot(session, client);
+    request_snapshot(session, client, false);
 }
 
 /// When the shell counts as quiet if it prints nothing more: less than cols * rows / 8 bytes in
@@ -237,8 +245,10 @@ fn quiet_at(session: &mut Session, now: u64) -> u64 {
 /// output comes. Call it after the last flush.
 pub fn catch_up_at_exit(session: &mut Session) {
     let mut snapshot = Vec::new();
+    let mut full = false;
     if let Some(mut job) = session.snapshot.take() {
         session.scheduler.clear(&mut job.timer);
+        full = job.full;
         snapshot = job.clients;
     }
     let behind: Vec<(ClientRef, Option<u64>)> = session
@@ -263,7 +273,7 @@ pub fn catch_up_at_exit(session: &mut Session) {
         }
     }
     // Sent in one go, so the snapshot's frames and its `replayed` come before `exit`.
-    run_snapshot(session, &snapshot);
+    run_snapshot(session, &snapshot, full);
 }
 
 pub fn end_snapshots(session: &mut Session) {

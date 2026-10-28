@@ -4,8 +4,12 @@
 # With a task (for example T-0146, 4 shell panes), the window opens that task with --open-task:
 # motion and the clock run as for a user, and nothing prints. That case also has focus limits:
 # at most 1 draw a second and 2% CPU.
-# Runs in CI only, on macOS (.github/workflows/rust.yml): cargo never runs on the owner's Mac.
-# Usage: scripts/motion-cost.sh [binary] [task]
+# With PROFILE=1, macOS `sample` profiles the app for 10 s after the background phase, still in
+# the background, into PROFILE_FILE (default: a temp file); the path is printed. The numbers do
+# not include the sampling.
+# Runs in CI only, on macOS (.github/workflows/rust.yml, perf.yml): cargo never runs on the
+# owner's Mac.
+# Usage: [PROFILE=1 [PROFILE_FILE=path]] scripts/motion-cost.sh [binary] [task]
 set -euo pipefail
 
 binary=${1:-target/release/natamux-app}
@@ -13,7 +17,10 @@ task=${2:-}
 [ -x "$binary" ] || { echo "motion-cost: build $binary first" >&2; exit 1; }
 out=$(mktemp)
 err=$(mktemp)
-args=(--fake-daemon --size 1280x800 --count-draws --hold 50)
+profile=${PROFILE:-}
+hold=50
+[ "$profile" = 1 ] && hold=65
+args=(--fake-daemon --size 1280x800 --count-draws --hold "$hold")
 [ -n "$task" ] && args+=(--open-task "$task")
 "$binary" "${args[@]}" >"$out" 2>"$err" &
 pid=$!
@@ -36,6 +43,11 @@ back_cpu=$(cpu) back_from=$(lines)
 sleep 15
 alive
 back_cpu_end=$(cpu) back_to=$(lines)
+if [ "$profile" = 1 ]; then
+  profile_file=${PROFILE_FILE:-$(mktemp -t motion-sample)}
+  sample "$pid" 10 -file "$profile_file" >/dev/null 2>&1 || echo "motion-cost: sample failed" >&2
+  echo "motion-cost: profile $profile_file"
+fi
 kill "$pid"
 wait "$pid" || true
 
@@ -51,6 +63,10 @@ table="| phase | CPU % | draws/s | seconds with focus |
 | focused | $focus_pct | $focus_draws | $focus_active of $focus_n |
 | background | $back_pct | $back_draws | $back_active of $back_n |"
 echo "$table"
+# One line of numbers for scripts/perf-check.py.
+case=table
+[ -n "$task" ] && case=task
+echo "motion_cost: ${case}_focus_cpu_pct=$focus_pct ${case}_background_cpu_pct=$back_pct ${case}_focus_draws=$focus_draws ${case}_background_draws=$back_draws"
 title="Motion cost${task:+: $task open}"
 [ -n "${GITHUB_STEP_SUMMARY:-}" ] && printf '### %s\n\n%s\n' "$title" "$table" >>"$GITHUB_STEP_SUMMARY"
 
