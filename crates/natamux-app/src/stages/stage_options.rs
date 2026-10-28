@@ -26,6 +26,9 @@ fn ends_shell_one(steps: &[Step], stage: &Stage) -> bool {
     terminal_of_stage(steps, &stage.id) == "1"
 }
 
+/// The button's 4 px padding, the 20 px box and the 8 px gap: a note starts under the label.
+const NOTE_INDENT: f32 = 32.;
+
 /// One checkbox with its label, mark and note.
 /// What a checkbox row does with its new value.
 type Toggle = Box<dyn Fn(bool, &mut Window, &mut App)>;
@@ -72,12 +75,22 @@ fn render(row: Row, _cx: &App) -> AnyElement {
                                     .disabled(disabled)
                                     .visualization_only(true),
                                 )
-                                .child(Label::new(label).size(LabelSize::Small)),
+                                .child(
+                                    div()
+                                        .debug_selector(|| "option-label".into())
+                                        .child(Label::new(label).size(LabelSize::Small)),
+                                ),
                         ),
                 )
                 .children(mark),
         )
-        .children(note.map(help_line))
+        .children(note.map(|note| {
+            div().pl(px(NOTE_INDENT)).child(
+                div()
+                    .debug_selector(|| "option-note".into())
+                    .child(help_line(note)),
+            )
+        }))
         .into_any_element()
 }
 
@@ -259,3 +272,7 @@ pub fn checkbox_row(
         cx,
     )
 }
+
+#[cfg(test)]
+#[path = "stage_options_tests.rs"]
+mod tests;

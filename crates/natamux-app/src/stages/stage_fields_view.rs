@@ -150,6 +150,34 @@ pub fn labelled(
         .children(help.map(help_line))
 }
 
+/// A label with its mark at the left, the control at the right, and the help line under them.
+/// The label keeps its text width, so on a narrow pane the control wraps under it.
+pub fn inline_field(
+    label: impl Into<SharedString>,
+    mark: Option<AnyElement>,
+    help: Option<SharedString>,
+    control: impl IntoElement,
+) -> impl IntoElement {
+    v_flex()
+        .gap_1()
+        .child(
+            h_flex()
+                .flex_wrap()
+                .gap_2()
+                .child(
+                    h_flex()
+                        .flex_grow(1.)
+                        .min_h(rems_from_px(24.0_f32))
+                        .flex_wrap()
+                        .gap_2()
+                        .child(field_label(label))
+                        .children(mark),
+                )
+                .child(div().flex_none().child(control)),
+        )
+        .children(help.map(help_line))
+}
+
 /// "Default", or "Changed" with a button that puts the default back.
 pub fn default_mark(
     id: impl Into<SharedString>,
@@ -189,6 +217,9 @@ fn pill(text: &'static str, background: Hsla, color: Color) -> AnyElement {
         )
         .into_any_element()
 }
+
+/// The width of a select beside its label: "Task's agent" and "GitHub Copilot" fit.
+pub const SELECT_WIDTH: f32 = 200.;
 
 /// A select: a full width button with the picked option, which opens a menu at the click.
 pub fn select(id: impl Into<ElementId>, text: impl Into<SharedString>) -> Button {
@@ -245,3 +276,7 @@ pub fn open_choices(
     });
     MenuLayer::open(menu, position, window, cx);
 }
+
+#[cfg(test)]
+#[path = "stage_fields_view_tests.rs"]
+mod tests;

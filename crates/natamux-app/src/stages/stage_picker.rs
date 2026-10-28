@@ -16,7 +16,9 @@ use super::editor_catalog::{
 use super::editor_labels::kind_label;
 use super::kind_icon::kind_icon;
 use super::pipeline_editor::PipelineEditor;
-use super::stage_fields_view::{Choice, error_line, field_label, open_choices, select};
+use super::stage_fields_view::{
+    Choice, SELECT_WIDTH, error_line, field_label, inline_field, open_choices, select,
+};
 use crate::components::button_style::{action_button, quiet_button};
 use crate::components::form::{input_box, text_editor};
 use crate::components::tab_order;
@@ -340,7 +342,12 @@ impl StagePicker {
             )
             .child(group("Name", &name, shown.name))
             .child(group("Id", &id, shown.id))
-            .child(v_flex().gap_1p5().child(field_label("Kind")).child(kind))
+            .child(inline_field(
+                "Kind",
+                None,
+                None,
+                div().w(rems_from_px(SELECT_WIDTH)).child(kind),
+            ))
             .when(agent, |this| {
                 this.child(group("Output file", &output, shown.output))
             })
