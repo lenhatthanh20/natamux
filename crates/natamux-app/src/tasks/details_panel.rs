@@ -19,8 +19,10 @@ use ui::prelude::*;
 use super::edit_form::EditForm;
 use crate::app::dashboard::details::PanelRequest;
 use crate::app::dashboard::{Dashboard, DashboardChange};
+use crate::app::dashboard_data::{Part, Seen};
 use crate::app::layout_mode::DetailsMode;
 use crate::app::settings_reads::{SettingsReads, SettingsRefreshed};
+use crate::app::shown_cache::ShownCache;
 use crate::app::tab_rules::ShowWatch;
 use crate::app::view_rules::DetailsView;
 use crate::components::empty_state::EmptyState;
@@ -35,7 +37,7 @@ const POLL: Duration = Duration::from_secs(60);
 /// A read: not yet, done, or the error it gave.
 pub type Read<T> = Option<Result<T, String>>;
 
-/// What the panel keeps of one task; another task starts from nothing.
+/// What the panel keeps of one task. The last tasks' are kept in `DetailsPanel::cache`.
 #[derive(Default)]
 pub struct Shown {
     pub task_id: String,
@@ -72,6 +74,7 @@ pub struct DetailsPanel {
     /// The open workspace: it draws the Changes, History and Docs views.
     workspace: Entity<WorkspaceView>,
     pub(super) shown: Option<Shown>,
+    cache: ShownCache<Shown>,
     pub(super) edit: Option<Entity<EditForm>>,
     /// The Files tab of the task shown, made when it first shows.
     pub(super) files: Option<Entity<FileTree>>,
@@ -106,11 +109,7 @@ impl DetailsPanel {
         let changes = cx.subscribe(&dashboard, |panel, _, change: &DashboardChange, cx| {
             panel.on_change(change, cx)
         });
-        // Root caches the panel: a change of the dashboard draws it again from here.
-        let observe = cx.observe(&dashboard, |panel, _, cx| {
-            panel.sync(cx);
-            cx.notify();
-        });
+        let observe = Self::follow_dashboard(&dashboard, cx);
         // The workspace's views draw here: a new git state or list draws the panel again.
         let follow = cx.observe(&workspace, |_, _, cx| cx.notify());
         let mut subscriptions = vec![changes, observe, follow];
@@ -143,6 +142,7 @@ impl DetailsPanel {
             dashboard,
             workspace,
             shown: None,
+            cache: ShownCache::default(),
             edit: None,
             files: None,
             tree_shown: ShowWatch::default(),
@@ -176,7 +176,34 @@ impl DetailsPanel {
         self.dashboard.read(cx).details_shown()
     }
 
+    /// Root caches the panel: a change of what it reads draws it again from here. The task
+    /// shown follows the open or the selected task (View, Tasks).
+    fn follow_dashboard(dashboard: &Entity<Dashboard>, cx: &mut Context<Self>) -> Subscription {
+        let mut seen = Seen::default();
+        cx.observe(dashboard, move |panel, dashboard, cx| {
+            let gens = dashboard.read(cx).data.gens;
+            let changed = seen.take(&gens);
+            if changed.any(&[Part::Tasks, Part::View]) {
+                panel.sync(cx);
+            }
+            let parts = [
+                Part::Tasks,
+                Part::View,
+                Part::Usage,
+                Part::Activity,
+                Part::DiffStats,
+            ];
+            if changed.any(&parts) {
+                cx.notify();
+            }
+        })
+    }
+
     fn on_change(&mut self, change: &DashboardChange, cx: &mut Context<Self>) {
+        if matches!(change, DashboardChange::Tasks) {
+            let dashboard = self.dashboard.read(cx);
+            self.cache.retain(|id| dashboard.data.task(id).is_some());
+        }
         if !self.is_open(cx) {
             // The next time it shows, the panel reads everything again, the tree too.
             if let Some(shown) = self.shown.as_mut() {
@@ -210,9 +237,13 @@ impl DetailsPanel {
         let same = self.shown.as_ref().map(|shown| &shown.task_id) == id.as_ref();
         if !same {
             self.edit = None;
-            self.shown = id.clone().map(|task_id| Shown {
-                task_id,
-                ..Shown::default()
+            self.keep_shown();
+            self.shown = id.clone().map(|task_id| match self.cache.take(&task_id) {
+                Some(kept) => Self::reopen_kept(kept),
+                None => Shown {
+                    task_id,
+                    ..Shown::default()
+                },
             });
         }
         let Some(id) = id else {
@@ -225,6 +256,29 @@ impl DetailsPanel {
             self.pending = request;
             cx.notify();
         }
+    }
+
+    /// Keeps the shown task for a switch back. The answer of an action that was on its way is
+    /// dropped (it finds another task shown), so its marks are cleared; the label timer would
+    /// draw the wrong task, so it ends. The read data and the user's choices stay.
+    fn keep_shown(&mut self) {
+        let Some(mut shown) = self.shown.take() else {
+            return;
+        };
+        shown.busy = false;
+        shown.resuming = false;
+        shown.toggling.clear();
+        shown.clock = Default::default();
+        shown.scrolled = false;
+        let id = shown.task_id.clone();
+        self.cache.put(id, shown);
+    }
+
+    /// A kept task shows again: the next draw reads everything, past the paces of the old reads.
+    fn reopen_kept(mut shown: Shown) -> Shown {
+        shown.read = false;
+        shown.paces.reset();
+        shown
     }
 
     /// A request opens once the window is there; Send back waits until the stages are read.
@@ -390,3 +444,7 @@ mod files;
 
 #[path = "details_header.rs"]
 mod header;
+
+#[cfg(test)]
+#[path = "details_panel_tests.rs"]
+mod tests;

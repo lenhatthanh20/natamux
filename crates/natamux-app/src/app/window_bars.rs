@@ -11,6 +11,7 @@ use ui::prelude::*;
 use super::Root;
 use crate::agents::limits_rules::{agents_in_use, current, limits_chip, without_limits};
 use crate::app::dashboard::Dashboard;
+use crate::app::dashboard_data::{Part, Seen};
 use crate::app::shell_rules::{Crumb, crumb, live_item, running_count, window_title};
 use crate::app::shortcuts::{ToggleAgents, ToggleDetails, ToggleSidebar};
 use crate::app::status_bar::{STATUS_BAR_HEIGHT, StatusBar, now_ms};
@@ -56,7 +57,9 @@ pub(super) struct TitleBarView {
 
 impl TitleBarView {
     pub(super) fn new(dashboard: Entity<Dashboard>, cx: &mut Context<Self>) -> Self {
-        let observe = cx.observe(&dashboard, |_, _, cx| cx.notify());
+        // The crumb: the open task, its project, Settings or Agents.
+        let parts = &[Part::Tasks, Part::Repos, Part::View];
+        let observe = Dashboard::redraw_on(&dashboard, parts, cx);
         Self {
             dashboard,
             #[cfg(test)]
@@ -107,10 +110,16 @@ impl StatusBarView {
         dashboard: Entity<Dashboard>,
         cx: &mut Context<Self>,
     ) -> Self {
-        let observe = cx.observe(&dashboard, |bar, _, cx| {
-            bar.counts = None;
-            bar.clock = None;
-            cx.notify();
+        // The counts, the link, the jobs and the plan limits.
+        let mut seen = Seen::default();
+        let observe = cx.observe(&dashboard, move |bar, dashboard, cx| {
+            let parts = [Part::Tasks, Part::Link, Part::Jobs, Part::Limits];
+            let gens = dashboard.read(cx).data.gens;
+            if seen.changed(&gens, &parts) {
+                bar.counts = None;
+                bar.clock = None;
+                cx.notify();
+            }
         });
         let observe_update = cx.observe_global::<UpdateChanged>(|_, cx| cx.notify());
         Self {

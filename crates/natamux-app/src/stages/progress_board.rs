@@ -58,10 +58,12 @@ struct SettingsState {
 impl ProgressBoard {
     pub fn new(dashboard: Entity<Dashboard>, cx: &mut Context<Self>) -> Self {
         let reads = SettingsReads::global(cx);
-        let mut subscriptions = vec![cx.observe(&dashboard, |_, _, cx| cx.notify())];
-        if let Some(reads) = &reads {
-            subscriptions.push(cx.observe(reads, |_, _, cx| cx.notify()));
-        }
+        // The rows come through `set_rows`; the task view draws it again when the projects or
+        // the activity of the Next column change (`TaskView::follow`).
+        let subscriptions: Vec<Subscription> = reads
+            .iter()
+            .map(|reads| cx.observe(reads, |_, _, cx| cx.notify()))
+            .collect();
         ProgressBoard {
             dashboard,
             reads,
@@ -73,11 +75,14 @@ impl ProgressBoard {
         }
     }
 
-    pub fn set_rows(&mut self, rows: Vec<Task>, cx: &mut Context<Self>) {
-        if self.rows != rows {
-            self.rows = rows;
-            cx.notify();
+    /// False: the rows are the ones shown, so nothing draws.
+    pub fn set_rows(&mut self, rows: Vec<Task>, cx: &mut Context<Self>) -> bool {
+        if self.rows == rows {
+            return false;
         }
+        self.rows = rows;
+        cx.notify();
+        true
     }
 
     /// Reads the settings of the projects not read yet. The task view calls it while the layout

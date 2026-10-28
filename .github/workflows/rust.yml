@@ -214,6 +214,25 @@ jobs:
             while read -r id; do gh cache delete "$id"; done
       - name: Smoke test
         run: target/release/natamux-app --smoke
+      # The window must not wait for the login shell (T-0223 P4): a $SHELL whose rc takes 3 s.
+      # Right after the build this runner is slow (starts of 200-380 ms), so the limit here only
+      # catches a wait for the shell; perf.yml gates 300 ms on a quiet runner. The median of 3;
+      # the pause outlasts the last start's shell and daemon (a start refuses a running daemon).
+      - name: Smoke test, slow login shell
+        run: |
+          set -o pipefail
+          shell="$RUNNER_TEMP/slow-shell"
+          printf '#!/bin/sh\nsleep 3\nexec /bin/zsh "$@"\n' >"$shell"
+          chmod +x "$shell"
+          for run in 1 2 3; do
+            sleep 6
+            SHELL="$shell" target/release/natamux-app --smoke | tee -a "$RUNNER_TEMP/slow.txt"
+          done
+          median=$(sed -n 's/^smoke: first_frame_ms=\([0-9.]*\).*/\1/p' "$RUNNER_TEMP/slow.txt" | sort -n | sed -n 2p)
+          [ -n "$median" ] || { echo "::error::no first_frame_ms"; exit 1; }
+          echo "first_frame_ms with a 3 s login shell, median of 3: $median"
+          awk -v ms="$median" 'BEGIN { exit !(ms <= 1000) }' ||
+            { echo "::error::first_frame_ms $median is over 1000 ms with a slow login shell"; exit 1; }
       - name: Smoke test, terminal grid and pipeline chart
         run: target/release/natamux-app --smoke --fake-daemon
       # CPU and draws of an idle window, with focus and in the background (docs/rust-phase3.md

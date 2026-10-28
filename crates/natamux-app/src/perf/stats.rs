@@ -1,7 +1,8 @@
 //! The numbers of phase 1's gate 2: frame times, key to glyph, and output per terminal.
 //! Pure: callers pass the time, so tests need no clock.
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 /// The overlay shows this much recent history.
@@ -16,6 +17,18 @@ pub const REFRESH: Duration = Duration::from_nanos(8_333_333);
 pub const ONE_DROPPED: Duration = Duration::from_micros(16_700);
 /// The report keeps at most this many frame samples (about 2 hours at 120 fps).
 const MAX_SAMPLES: usize = 1_000_000;
+
+/// `--bench-flows` times each dashboard event while this is on. A flag, so the feed pays one
+/// load when no bench runs.
+static TIMING_EVENTS: AtomicBool = AtomicBool::new(false);
+
+pub fn time_events(on: bool) {
+    TIMING_EVENTS.store(on, Ordering::Relaxed);
+}
+
+pub fn timing_events() -> bool {
+    TIMING_EVENTS.load(Ordering::Relaxed)
+}
 
 /// What a `--gate2` bench had: the terminals and what they printed.
 #[derive(Clone, Debug, PartialEq)]
@@ -39,6 +52,8 @@ pub struct PerfStats {
     /// Set by `--gate2`; kept by `next_part`.
     pub bench: Option<BenchInfo>,
     pub hidden_phase: Option<HiddenPhase>,
+    /// `--bench-flows`: each run of each flow, by the flow's name. Kept by `next_part`.
+    pub flows: BTreeMap<String, Vec<Duration>>,
     /// The dashboard link went to Reconnecting. Kept by `next_part`.
     pub link_lost: u32,
     /// Socket reconnects of each terminal. Kept by `next_part`.
@@ -131,6 +146,7 @@ impl PerfStats {
     pub fn next_part(&mut self) {
         let kept = Self {
             bench: self.bench.take(),
+            flows: std::mem::take(&mut self.flows),
             link_lost: self.link_lost,
             reconnects: std::mem::take(&mut self.reconnects),
             skeletons: std::mem::take(&mut self.skeletons),
@@ -138,6 +154,11 @@ impl PerfStats {
             ..Self::default()
         };
         *self = kept;
+    }
+
+    /// One run of a `--bench-flows` flow took `took`.
+    pub fn flow(&mut self, name: &str, took: Duration) {
+        self.flows.entry(name.to_string()).or_default().push(took);
     }
 
     pub fn reconnect(&mut self, terminal: &str) {

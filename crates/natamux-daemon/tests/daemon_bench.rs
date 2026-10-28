@@ -1,8 +1,7 @@
-//! The daemon numbers of T-0178, run only with `NATAMUX_BENCH=1` (the daemon-bench CI job, release
-//! build): the memory of 30 idle shells, the echo delay of a quiet shell while 5 others flood or
-//! 29 agents print (T-0210), the snapshot time of a full history, and the time and allocations of
-//! `serialize`. It writes a table to the job summary before it checks the targets, so a number
-//! over its target still shows.
+//! The daemon numbers, run only with `NATAMUX_BENCH=1` (the daemon-bench CI job, release build):
+//! idle and busy memory, echo delays (T-0210), snapshots and `serialize`, the task load and hooks
+//! at once (`daemon_bench_parts/`). The table goes to the job summary before the targets are
+//! checked, and the numbers as JSON to `scripts/perf-check.py`.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
@@ -63,6 +62,11 @@ unsafe impl GlobalAlloc for Counting {
         unsafe { System.realloc(ptr, layout, new_size) }
     }
 }
+
+#[path = "daemon_bench_parts/loads.rs"]
+mod loads;
+#[path = "daemon_bench_parts/snapshots.rs"]
+mod snapshots;
 
 #[global_allocator]
 static ALLOCATOR: Counting = Counting;
@@ -436,6 +440,13 @@ fn daemon_benchmark() {
     let (echo_p50, echo_p95) = echo_while_flooding();
     let (agent_p50, agent_p95) = echo_while_agents_print();
     let snapshot_ms = snapshot_of_full_history();
+    let ((full_kib, full_ms), (tail_kib, tail_ms)) = snapshots::catch_up();
+    let (init_500, init_500_warm) = loads::task_init(500);
+    let (init_2000, init_2000_warm) = loads::task_init(2_000);
+    let (hook_p50, hook_p95) = loads::hooks_at_once(loads::AGENTS_AT_ONCE);
+    // Last: the memory it takes may not go back to the system.
+    let busy_mib = loads::busy_shells();
+    let (busy, agents) = (loads::BUSY_SHELLS, loads::AGENTS_AT_ONCE);
     let table = format!(
         "| measure | value |\n|---|---|\n\
          | RSS with {IDLE_SHELLS} idle shells | {rss_mib} MiB ({per_shell_kib} KiB a shell) |\n\
@@ -444,8 +455,34 @@ fn daemon_benchmark() {
          | echo of a typed shell while {AGENTS} agents print, p50 | {agent_p50} ms |\n\
          | echo of a typed shell while {AGENTS} agents print, p95 (target {AGENT_ECHO_P95_MS}) | {agent_p95} ms |\n\
          | snapshot of a full history at {COLS} cols | {snapshot_ms} ms |\n\
-         | serialize of a full history | {serialize_ms} ms, {allocations} allocations, {allocated} MiB |\n"
+         | serialize of a full history | {serialize_ms} ms, {allocations} allocations, {allocated} MiB |\n\
+         | snapshot at 80 cols, full / catch-up | {full_kib} / {tail_kib} KiB, {full_ms} / {tail_ms} ms |\n\
+         | RSS after {busy} shells printed 20 MB each | {busy_mib} MiB |\n\
+         | `TaskSync::init`, 500 / 2,000 tasks, cold / warm | {init_500} / {init_500_warm}, {init_2000} / {init_2000_warm} ms |\n\
+         | hook with {agents} agents at once, p50 / p95 | {hook_p50} / {hook_p95} ms |\n"
     );
+    let numbers = serde_json::json!({
+        "daemon_idle_rss_mb": rss_mib,
+        "echo_flood_p95_ms": echo_p95,
+        "echo_agents_p95_ms": agent_p95,
+        "snapshot_full_ms": snapshot_ms,
+        "serialize_full_ms": serialize_ms,
+        "snapshot_80_full_kib": full_kib,
+        "snapshot_80_catch_up_kib": tail_kib,
+        "serialize_80_full_ms": full_ms,
+        "serialize_80_catch_up_ms": tail_ms,
+        "daemon_busy_rss_mb": busy_mib,
+        "task_init_500_ms": init_500,
+        "task_init_500_warm_ms": init_500_warm,
+        "task_init_2000_ms": init_2000,
+        "task_init_2000_warm_ms": init_2000_warm,
+        "hook_p50_ms": hook_p50,
+        "hook_p95_ms": hook_p95,
+    });
+    println!("daemon_bench: {numbers}");
+    if let Ok(path) = std::env::var("NATAMUX_BENCH_JSON") {
+        std::fs::write(&path, numbers.to_string()).unwrap();
+    }
     println!("{table}");
     if let Ok(path) = std::env::var("GITHUB_STEP_SUMMARY") {
         let old = std::fs::read_to_string(&path).unwrap_or_default();

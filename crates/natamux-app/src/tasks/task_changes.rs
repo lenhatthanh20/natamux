@@ -1,7 +1,7 @@
 //! Live changes to the task list (`sortByRecent`, `upsertTask`, `applyTaskChanges` in `packages/
 //! web/src/lib/tasks.ts`).
 
-// Ported with their tests (spec D11); the feed replaces the whole list until events carry tasks.
+// Ported with their tests (spec D11). Only the upsert is used: the feed sends one task per event.
 #![cfg_attr(not(test), allow(dead_code))]
 
 use natamux_proto::tasks::task::Task;
@@ -22,19 +22,26 @@ pub fn sort_by_recent(tasks: &[Task]) -> Vec<Task> {
 /// updated last. The same time counts as newer, so the answer of an edit still shows. The list
 /// is newest first, so the task goes into its place without a full sort.
 pub fn upsert_task(tasks: &[Task], task: Task) -> Vec<Task> {
-    if tasks
-        .iter()
-        .any(|known| known.id == task.id && known.updated_at > task.updated_at)
-    {
-        return tasks.to_vec();
+    let mut next = tasks.to_vec();
+    upsert_task_in(&mut next, task);
+    next
+}
+
+/// `upsert_task` in place: the feed applies one task per event, and a copy of the whole list
+/// each time cost more than the rest of the event (T-0223).
+pub fn upsert_task_in(tasks: &mut Vec<Task>, task: Task) {
+    let held = tasks.iter().position(|known| known.id == task.id);
+    if let Some(at) = held {
+        if tasks[at].updated_at > task.updated_at {
+            return;
+        }
+        tasks.remove(at);
     }
-    let mut next: Vec<Task> = tasks.iter().filter(|t| t.id != task.id).cloned().collect();
-    let at = next
+    let at = tasks
         .iter()
         .position(|existing| by_recent(&task, existing).is_lt())
-        .unwrap_or(next.len());
-    next.insert(at, task);
-    next
+        .unwrap_or(tasks.len());
+    tasks.insert(at, task);
 }
 
 /// A change from the live feed: a task that changed, or the id of one that was deleted.

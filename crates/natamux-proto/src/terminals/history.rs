@@ -7,6 +7,11 @@ pub const TERMINAL_HISTORY_BYTES: usize = 10_000_000;
 const BYTES_PER_CELL: usize = 16;
 pub const TERMINAL_SCROLLBACK_MIN_LINES: usize = 1000;
 pub const TERMINAL_SCROLLBACK_MAX_LINES: usize = 10_000;
+/// History rows in a catch-up snapshot (a client that is behind or lost its place). The app swaps
+/// in a new screen built from the snapshot, so a terminal that fell behind keeps only these rows
+/// above its screen: a trade of old scrollback for a 5x smaller, faster catch-up (T-0221 P8). A
+/// first attach has nothing and gets the full history.
+pub const CATCH_UP_HISTORY_ROWS: usize = 1000;
 
 /// The rows a terminal of this width keeps above its screen.
 pub fn scrollback_lines(cols: u16) -> usize {

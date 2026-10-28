@@ -57,7 +57,7 @@ impl Dashboard {
     pub fn set_open_changes(&mut self, id: &str, count: usize, cx: &mut Context<Self>) {
         if self.open_changes_of(id) != Some(count) {
             self.open_changes = Some((id.to_owned(), count));
-            cx.notify();
+            self.touch_view(cx);
         }
     }
 
@@ -73,7 +73,7 @@ impl Dashboard {
         if commit {
             self.commit_request = Some(id.to_owned());
         }
-        cx.notify();
+        self.touch_view(cx);
     }
 
     /// The tab the open workspace shows: the editor tab is nothing without its file.
@@ -94,7 +94,7 @@ impl Dashboard {
             return;
         }
         self.workspace_tab = self.files.open(id, path);
-        cx.notify();
+        self.touch_view(cx);
     }
 
     /// `closeFile`: back to the tab the user picked last in the workspace, or the terminal.
@@ -103,7 +103,7 @@ impl Dashboard {
         if let Some(tab) = self.files.close(id, shown, self.view.tab_of(id)) {
             self.workspace_tab = tab;
         }
-        cx.notify();
+        self.touch_view(cx);
     }
 
     /// The output chip of a stage card (`openStageFile`): the task's workspace with the panel on
@@ -117,7 +117,7 @@ impl Dashboard {
         }
         self.files.request_doc(id, name);
         self.show_view(DetailsView::Docs, cx);
-        cx.notify();
+        self.touch_view(cx);
     }
 
     /// The Docs tab takes the file picked for its task, once.

@@ -491,6 +491,9 @@ mod files;
 #[path = "fake_projects.rs"]
 mod projects;
 
+#[path = "fake_bench.rs"]
+mod bench;
+
 #[cfg(test)]
 #[path = "fake_daemon_tests.rs"]
 mod tests;

@@ -5,7 +5,7 @@ use std::io::{self, Read, Write};
 use std::net::{TcpListener, TcpStream, ToSocketAddrs};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
 use natamux_client::Config;
@@ -14,13 +14,56 @@ use natamux_client::config::save_access;
 use crate::app::view_state;
 
 const START_WAIT: Duration = Duration::from_secs(30);
+const HEALTH_POLL: Duration = Duration::from_millis(20);
+
+/// The daemon's stdin. Closing it stops the daemon; the login PATH thread writes to it too.
+type ParentPipe = Arc<Mutex<Option<std::process::ChildStdin>>>;
 
 pub struct OwnedDaemon {
     child: Arc<Mutex<Child>>,
-    parent_pipe: Option<std::process::ChildStdin>,
+    parent_pipe: ParentPipe,
     config: Config,
     port_file: PathBuf,
     port: u16,
+}
+
+/// Where a started value goes. Once closed (the app quits), a value whose start ends later is
+/// given back to be stopped, not kept.
+pub struct Slot<T> {
+    value: Option<T>,
+    closed: bool,
+}
+
+pub type DaemonSlot = Slot<OwnedDaemon>;
+
+impl<T> Default for Slot<T> {
+    fn default() -> Self {
+        Slot {
+            value: None,
+            closed: false,
+        }
+    }
+}
+
+impl<T> Slot<T> {
+    /// Keeps `value`, or gives it back when the app already quit.
+    pub(super) fn put(&mut self, value: T) -> Option<T> {
+        if self.closed {
+            return Some(value);
+        }
+        self.value = Some(value);
+        None
+    }
+
+    /// The app quits: the caller stops the value it gets, outside the lock.
+    pub fn close(&mut self) -> Option<T> {
+        self.closed = true;
+        self.value.take()
+    }
+
+    pub(super) fn is_closed(&self) -> bool {
+        self.closed
+    }
 }
 
 impl OwnedDaemon {
@@ -77,17 +120,16 @@ impl OwnedDaemon {
             command.env("NATAMUX_REPO_DIR", repo);
         }
         let mut child = command.spawn()?;
-        let mut parent_pipe = child.stdin.take();
+        let parent_pipe: ParentPipe = Arc::new(Mutex::new(child.stdin.take()));
+        // A slow shell rc holds up neither the health polls nor a quit, which closes the pipe.
         #[cfg(unix)]
-        if let Some(input) = parent_pipe.as_mut() {
-            let path =
-                login_shell_path().unwrap_or_else(|| std::env::var("PATH").unwrap_or_default());
-            let message = serde_json::json!({ "path": path }).to_string();
-            let _ = writeln!(input, "{message}");
-        }
+        let _ = send_path_later(Arc::clone(&parent_pipe), || {
+            login_shell_path().unwrap_or_else(|| std::env::var("PATH").unwrap_or_default())
+        });
         wait_for_healthy_child(&mut child, port, &token, &log_path, START_WAIT)?;
         if let Err(error) = save_access(&port_file, &port.to_string()) {
-            stop_child(&mut child, &mut parent_pipe, Duration::from_secs(5));
+            let mut pipe = take_pipe(&parent_pipe);
+            stop_child(&mut child, &mut pipe, Duration::from_secs(5));
             return Err(error);
         }
         Ok(Self {
@@ -117,8 +159,33 @@ impl Drop for OwnedDaemon {
         let Ok(mut child) = self.child.lock() else {
             return;
         };
-        stop_child(&mut child, &mut self.parent_pipe, Duration::from_secs(5));
+        let mut pipe = take_pipe(&self.parent_pipe);
+        stop_child(&mut child, &mut pipe, Duration::from_secs(5));
     }
+}
+
+fn take_pipe<W>(pipe: &Mutex<Option<W>>) -> Option<W> {
+    pipe.lock().unwrap_or_else(PoisonError::into_inner).take()
+}
+
+/// Finds the PATH on its own thread and writes it as one JSON line, unless the pipe was closed
+/// meanwhile (the app quit). The pipe is locked only for the write.
+#[cfg(unix)]
+pub(super) fn send_path_later<W: Write + Send + 'static>(
+    pipe: Arc<Mutex<Option<W>>>,
+    find_path: impl FnOnce() -> String + Send + 'static,
+) -> io::Result<std::thread::JoinHandle<()>> {
+    std::thread::Builder::new()
+        .name("natamux-login-path".into())
+        .spawn(move || {
+            let path = find_path();
+            let message = serde_json::json!({ "path": path }).to_string();
+            let mut pipe = pipe.lock().unwrap_or_else(PoisonError::into_inner);
+            if let Some(input) = pipe.as_mut() {
+                let _ = writeln!(input, "{message}");
+                let _ = input.flush();
+            }
+        })
 }
 
 pub(super) fn stop_child(
@@ -221,7 +288,7 @@ pub(super) fn wait_for_health(
         if probe_daemon(port, token) {
             return Ok(());
         }
-        std::thread::sleep(Duration::from_millis(200));
+        std::thread::sleep(HEALTH_POLL);
     }
     Err(startup_error(
         log,

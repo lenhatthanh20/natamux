@@ -15,6 +15,7 @@ use ui::prelude::*;
 
 use crate::app::clock::follow_labels;
 use crate::app::dashboard::{Dashboard, TerminalReader};
+use crate::app::dashboard_data::{Part, Seen};
 use crate::app::shortcuts::{
     Back, CollapseRow, ExpandRow, OpenRowMenu, OpenSelected, RemoveRow, RenameRow, SelectFirst,
     SelectLast, SelectNext, SelectPrevious,
@@ -68,6 +69,12 @@ pub struct WorkspaceTree {
     pub(super) model: Option<TreeModel>,
     /// The model was built after the dashboard's last change.
     model_fresh: bool,
+    /// The dashboard parts the tree last followed.
+    seen: Seen,
+    #[cfg(test)]
+    pub(super) builds: usize,
+    #[cfg(test)]
+    pub(super) draws: usize,
     _observe: Subscription,
     /// Draws the tree again when the next age label changes; only while the window has focus.
     clock: Option<gpui::Task<()>>,
@@ -75,9 +82,17 @@ pub struct WorkspaceTree {
 
 impl WorkspaceTree {
     pub fn new(dashboard: Entity<Dashboard>, cx: &mut Context<Self>) -> Self {
-        let observe = cx.observe(&dashboard, |tree, _, cx| {
-            tree.model_fresh = false;
-            cx.notify();
+        let observe = cx.observe(&dashboard, |tree, dashboard, cx| {
+            let gens = dashboard.read(cx).data.gens;
+            let changed = tree.seen.take(&gens);
+            if changed.any(MODEL_PARTS) {
+                tree.model_fresh = false;
+            }
+            // The rows also show the agents' activity (the running glyph's line) and the
+            // attention cards.
+            if changed.any(MODEL_PARTS) || changed.any(&[Part::Activity, Part::Events]) {
+                cx.notify();
+            }
         });
         WorkspaceTree {
             dashboard,
@@ -90,6 +105,11 @@ impl WorkspaceTree {
             typed: (String::new(), 0),
             model: None,
             model_fresh: false,
+            seen: Seen::default(),
+            #[cfg(test)]
+            builds: 0,
+            #[cfg(test)]
+            draws: 0,
             _observe: observe,
             clock: None,
         }
@@ -314,6 +334,10 @@ impl WorkspaceTree {
         if self.model_fresh && self.model.is_some() {
             return;
         }
+        #[cfg(test)]
+        {
+            self.builds += 1;
+        }
         let dashboard = self.dashboard.read(cx);
         let data = &dashboard.data;
         let view = dashboard.view();
@@ -330,9 +354,15 @@ impl WorkspaceTree {
             terminals: &data.terminals,
         });
         dashboard.show_terminals(TerminalReader::Sidebar, model.reads_terminals.clone());
-        // A fold or a new task changes the lines: the list keeps the row at its top.
+        let old = self.model.as_ref().map_or(&[][..], |old| &old.lines);
+        // A fold or a new task changes the lines: the list keeps the row at its top. Lines
+        // that stayed keep their measured heights.
         let top = self.list.logical_scroll_top();
-        self.list.reset(model.lines.len());
+        match changed_lines(old, &model.lines) {
+            LinesChange::Same => {}
+            LinesChange::Range(range) => self.list.splice(range.clone(), range.len()),
+            LinesChange::Count => self.list.reset(model.lines.len()),
+        }
         self.list.scroll_to(top);
         self.model = Some(model);
         self.model_fresh = true;
@@ -382,6 +412,30 @@ impl WorkspaceTree {
     }
 }
 
+/// What the tree builds from: the lines and the terminals each row reads.
+const MODEL_PARTS: &[Part] = &[Part::Tasks, Part::Repos, Part::Terminals, Part::View];
+
+#[derive(Debug, PartialEq)]
+pub(super) enum LinesChange {
+    Same,
+    /// The same count, with these lines changed.
+    Range(std::ops::Range<usize>),
+    Count,
+}
+
+/// Which lines of the list to measure again.
+pub(super) fn changed_lines(old: &[Line], new: &[Line]) -> LinesChange {
+    if old.len() != new.len() {
+        return LinesChange::Count;
+    }
+    let differs = |(a, b): (&Line, &Line)| a != b;
+    let Some(first) = old.iter().zip(new).position(differs) else {
+        return LinesChange::Same;
+    };
+    let last = old.iter().zip(new).rposition(differs).unwrap_or(first);
+    LinesChange::Range(first..last + 1)
+}
+
 /// The task id of a task row's key.
 pub(super) fn task_of(key: &str) -> Option<String> {
     key.strip_prefix("task:").map(str::to_owned)
@@ -395,6 +449,10 @@ impl Focusable for WorkspaceTree {
 
 impl Render for WorkspaceTree {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        #[cfg(test)]
+        {
+            self.draws += 1;
+        }
         let mut snapshot = self.snapshot(window, cx);
         snapshot.stop = self.stop(snapshot.current.as_deref());
         self.follow_clock(snapshot.now_ms, cx);
@@ -435,3 +493,7 @@ impl Render for WorkspaceTree {
             .child(list(self.list.clone(), rows).size_full().pb_3())
     }
 }
+
+#[cfg(test)]
+#[path = "workspace_tree_tests.rs"]
+mod tests;

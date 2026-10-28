@@ -11,6 +11,7 @@ use super::project_rules::{
     RepoField, add_args, field_of_error, repo_path_problem, shown_worktree,
 };
 use crate::app::dashboard::Dashboard;
+use crate::app::dashboard_data::{Part, Seen};
 use crate::app::source::reason;
 use crate::components::button_style::quiet_button;
 use crate::components::dialog::{DialogFrame, DialogLayer, DialogView, primary_button};
@@ -62,9 +63,15 @@ impl ProjectsDialog {
             window,
             cx,
         );
-        let mut subscriptions = vec![cx.observe_in(&dashboard, window, |this, _, window, cx| {
-            this.show_default_worktree(window, cx)
-        })];
+        // The projects and the daemon's worktree folder.
+        let mut seen = Seen::default();
+        let follow = cx.observe_in(&dashboard, window, move |this, dashboard, window, cx| {
+            let gens = dashboard.read(cx).data.gens;
+            if seen.changed(&gens, &[Part::Repos]) {
+                this.show_default_worktree(window, cx);
+            }
+        });
+        let mut subscriptions = vec![follow];
         subscriptions.push(cx.subscribe(&folder, |this, _, event: &EditorEvent, cx| {
             if matches!(event, EditorEvent::BufferEdited) {
                 this.folder_error = None;

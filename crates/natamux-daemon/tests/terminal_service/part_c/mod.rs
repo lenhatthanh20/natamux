@@ -2,6 +2,7 @@
 
 mod behind;
 mod bytes_from_pty;
+mod catch_up_history;
 mod catching_up;
 mod comes_back;
 mod flood_screen;

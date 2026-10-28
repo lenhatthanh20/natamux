@@ -28,6 +28,7 @@ mod app {
     pub mod dashboard_data;
     pub mod dock_badge;
     pub mod fake_daemon;
+    pub mod flow_bench;
     pub mod gate2;
     pub mod jobs;
     pub mod layout_mode;
@@ -49,6 +50,7 @@ mod app {
     pub mod shots_files;
     pub mod shots_settings;
     pub mod shots_stages;
+    pub mod shown_cache;
     pub mod sign_in;
     pub mod sign_in_rules;
     pub mod smoke;
@@ -107,6 +109,9 @@ mod daemon {
     pub mod process;
     #[cfg(test)]
     mod process_tests;
+    pub mod start_async;
+    #[cfg(test)]
+    mod start_async_tests;
 }
 mod files {
     pub mod draft_store;
@@ -314,24 +319,26 @@ mod workspaces {
 }
 
 use std::process::ExitCode;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use gpui::App;
+use gpui::{App, WindowHandle};
 
 use app::assets::NatamuxAssets;
+use app::dashboard::SavedView;
 use app::options::{Options, USAGE};
 use app::sign_in::StartProblem;
 use app::source::Source;
 use app::view_state::{self, ViewState};
-use components::toast_rules::ToastTone;
-use components::toasts::{ToastAction, push_toast};
-use daemon::process::OwnedDaemon;
+use app::window::Root;
+use daemon::process::DaemonSlot;
+use daemon::start_async::{self, Started};
 use natamux_client::{Client, ClientError, Config};
 
 fn main() -> ExitCode {
     perf::report::mark_start();
-    app::app_log::trim_at_start();
+    perf::report::timed("log_trim_ms", app::app_log::trim_at_start);
     let options = match Options::parse(std::env::args().skip(1)) {
         Ok(options) => options,
         Err(message) => {
@@ -339,65 +346,41 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    let owned = if options.fake_daemon
-        || options.shot.is_some()
-        || std::env::var_os("NATAMUX_URL").is_some()
-    {
-        None
-    } else {
-        Some(OwnedDaemon::start())
-    };
-    if options.smoke && owned.as_ref().is_some_and(Result::is_err) {
-        if let Some(Err(error)) = owned.as_ref() {
-            eprintln!("smoke: the app could not start its daemon: {error}");
-        }
-        return ExitCode::FAILURE;
-    }
-    let local = owned.as_ref().map(|result| {
-        result
-            .as_ref()
-            .map(OwnedDaemon::config)
-            .map_err(std::string::ToString::to_string)
-    });
-    let child = owned
-        .as_ref()
-        .and_then(|result| result.as_ref().ok().map(OwnedDaemon::child));
-    let owned = Arc::new(Mutex::new(owned.and_then(Result::ok)));
+    let fake = options.fake_daemon || options.shot.is_some();
+    let owns_daemon = !fake && std::env::var_os("NATAMUX_URL").is_none();
+    let owned = Arc::new(Mutex::new(DaemonSlot::default()));
+    // The daemon starts beside the fonts and the window, not before them (T-0221 1.1).
+    let started = owns_daemon.then(|| start_async::begin(Arc::clone(&owned)));
     let run_owned = Arc::clone(&owned);
-    let failed = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let failed = Arc::new(AtomicBool::new(false));
     let start_failed = Arc::clone(&failed);
     gpui_platform::application()
         .with_assets(NatamuxAssets)
         .run(move |cx| {
-            if let Err(error) = start(
-                &options,
-                local.as_ref(),
-                child.clone(),
-                Arc::clone(&run_owned),
-                cx,
-            ) {
+            if let Err(error) = start(&options, started, run_owned, &start_failed, cx) {
                 eprintln!("natamux-app: {error:#}");
-                start_failed.store(true, std::sync::atomic::Ordering::Relaxed);
+                start_failed.store(true, Ordering::Relaxed);
                 // On Linux a quit asked before the event loop runs is lost: ask from a task.
                 cx.spawn(async move |cx| cx.update(|cx| cx.quit())).detach();
             }
         });
     app::update_install::finish_quit(&owned);
-    if failed.load(std::sync::atomic::Ordering::Relaxed) {
+    if failed.load(Ordering::Relaxed) {
         ExitCode::FAILURE
     } else {
         ExitCode::SUCCESS
     }
 }
 
+/// `started`: the app's own daemon, still starting. `failed`: set by a failed `--smoke` start.
 fn start(
     options: &Options,
-    local: Option<&Result<Config, String>>,
-    child: Option<Arc<std::sync::Mutex<std::process::Child>>>,
-    owned: Arc<Mutex<Option<OwnedDaemon>>>,
+    started: Option<Started>,
+    owned: Arc<Mutex<DaemonSlot>>,
+    failed: &Arc<AtomicBool>,
     cx: &mut App,
 ) -> anyhow::Result<()> {
-    NatamuxAssets.load_fonts(cx)?;
+    perf::report::timed("fonts_ms", || NatamuxAssets.load_fonts(cx))?;
     release_channel::init(
         release_channel::AppVersion::load(env!("CARGO_PKG_VERSION"), None, None),
         cx,
@@ -405,13 +388,16 @@ fn start(
     settings::init(cx);
     // The theme, the UI size and the terminal font of view.json apply before the first frame.
     let fake = options.fake_daemon || options.shot.is_some();
-    let view = match view_state::folder() {
-        Some(folder) if !fake => view_state::load(&folder),
-        _ => ViewState::default(),
+    let folder = view_state::folder().filter(|_| !fake);
+    let view = match &folder {
+        Some(folder) => perf::report::timed("view_state_ms", || view_state::load(folder)),
+        None => ViewState::default(),
     };
     app::appearance::init(options.theme, options.shot.is_some(), cx);
     app::appearance::apply(&view, cx);
-    theme_settings::init(theme::LoadThemes::All(Box::new(NatamuxAssets)), cx);
+    perf::report::timed("themes_ms", || {
+        theme_settings::init(theme::LoadThemes::All(Box::new(NatamuxAssets)), cx)
+    });
     editor::init(cx);
     git::languages::init(cx);
     app::shortcuts::bind(cx);
@@ -433,22 +419,32 @@ fn start(
     if options.fake_daemon && options.open_task.is_some() {
         app::fake_daemon::shared().clear_jobs();
     }
+    let quit_owned = Arc::clone(&owned);
     cx.on_app_quit(move |_| {
-        app::update_install::finish_quit(&owned);
+        app::update_install::finish_quit(&quit_owned);
         async {}
     })
     .detach();
-    let window = app::window::open(options, source(options, local), cx)?;
+    let source = source(options, started.is_some());
+    let window = app::window::open(options, source, SavedView { view, folder }, cx)?;
     app::update::set_window(window, cx);
     if !fake && !options.smoke {
         app::update::start_timers(cx);
     }
-    if let Some(child) = child {
-        watch_daemon(child, cx);
+    if let Some(started) = started {
+        let smoke = options.smoke.then(|| Arc::clone(failed));
+        start_async::follow(started, window, owned, smoke, cx);
     }
     window.update(cx, |_, window, _| {
         window.on_next_frame(|_, _| perf::report::mark_first_frame())
     })?;
+    run_modes(options, window, cx);
+    cx.activate(true);
+    Ok(())
+}
+
+/// The CI and bench modes of the flags, on the open window.
+fn run_modes(options: &Options, window: WindowHandle<Root>, cx: &mut App) {
     if let Some(shot) = options.shot {
         app::shots::run(window, shot, cx);
     }
@@ -468,6 +464,9 @@ fn start(
             options.gate2_output,
             cx,
         );
+    }
+    if options.bench_flows {
+        app::flow_bench::run(window, options.bench_tasks, cx);
     }
     if options.count_draws {
         perf::draws::start(window, cx);
@@ -491,57 +490,22 @@ fn start(
         })
         .detach();
     }
-    cx.activate(true);
-    Ok(())
-}
-
-fn watch_daemon(child: Arc<std::sync::Mutex<std::process::Child>>, cx: &mut App) {
-    cx.spawn(async move |cx| {
-        loop {
-            cx.background_executor()
-                .timer(Duration::from_millis(500))
-                .await;
-            let exited = child.lock().map_or(true, |mut process| {
-                process.try_wait().ok().flatten().is_some()
-            });
-            if exited {
-                cx.update(|cx| {
-                    push_toast(
-                        "The Natamux daemon stopped.",
-                        ToastTone::Error,
-                        Some("Restart the app to reconnect.".into()),
-                        vec![ToastAction::new("Restart", |_, cx| {
-                            app::update_install::request_restart(cx);
-                        })],
-                        cx,
-                    );
-                });
-                break;
-            }
-        }
-    })
-    .detach();
 }
 
 /// The daemon, or why the app has none: the window then asks for a token, or says why.
-fn source(
-    options: &Options,
-    local: Option<&Result<Config, String>>,
-) -> Result<Arc<Source>, StartProblem> {
+/// `owns_daemon`: the app's own daemon still starts; `start_async::follow` hands it over.
+fn source(options: &Options, owns_daemon: bool) -> Result<Arc<Source>, StartProblem> {
     // A shot never reads a real daemon.
     if options.fake_daemon || options.shot.is_some() {
         return Ok(Arc::new(Source::FakeDaemon));
     }
-    let client = match local {
-        Some(Err(reason)) => return Err(StartProblem::Down(reason.clone())),
-        Some(Ok(config)) => Client::new(config.clone()),
-        None => {
-            let access = app::sign_in::access_file();
-            match Config::from_env_with(access.as_deref()) {
-                Err(ClientError::NoToken) => return Err(StartProblem::SignIn),
-                config => config.and_then(Client::new),
-            }
-        }
+    if owns_daemon {
+        return Err(StartProblem::Starting);
+    }
+    let access = app::sign_in::access_file();
+    let client = match Config::from_env_with(access.as_deref()) {
+        Err(ClientError::NoToken) => return Err(StartProblem::SignIn),
+        config => config.and_then(Client::new),
     };
     client
         .map(|client| Arc::new(Source::Daemon(Arc::new(client))))
