@@ -7,6 +7,13 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v1.0.6 (2026-10-28)
+
+- The desktop app shows what the updater does in the status bar (**Downloading 1.0.6 · 42 MB**, **Restart to update**, **Update failed**) and in a new **Version** row under **Settings → General → Updates**. A timed check never opens a dialog: a ready update shows one message with **Restart Now** and **What's New**, and a failed timed check shows nothing. See [Updates](/docs/guides/desktop-app/#updates).
+- In the desktop app, **Remove finished workspaces** and **Delete all done tasks** / **Delete all cancelled tasks** no longer skip a workspace with files that are not committed. The confirm names it and reads **Remove anyway** or **Delete anyway**: those files are lost. See [Sidebar](/docs/guides/dashboard/#sidebar).
+- In the desktop app, with no task the main area shows **Welcome to Natamux** with three steps: choose a project, sign in to your agents, set up your workflow. See [Add a project](/docs/getting-started/quick-start/#add-a-project).
+- In the desktop app, the **Agent** and **Kind** selects and the number fields on the **Stages** tab of a project's settings sit on the row of their label, so the page is shorter.
+
 ## v1.0.5 (2026-10-28)
 
 - In the desktop app, a task whose worktree has files that are not committed can now be cleaned up. **Remove workspace** and **Delete task** list those files first and offer **Remove anyway** or **Delete anyway**, which discard them. The finished banner no longer disables **Remove workspace** for them. The web dashboard, the CLI and **Remove finished workspaces** still refuse. For scripts, add `force=true` to `DELETE /tasks/:id` or `DELETE /tasks/:id/workspace`. See [When a task is finished](/docs/guides/dashboard/#when-a-task-is-finished).
