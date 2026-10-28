@@ -41,7 +41,7 @@ fn every_part_of_the_seed_reads() {
     assert_eq!(data.templates.len(), 2);
     assert_eq!(data.branches.default_branch.as_deref(), Some("main"));
     assert_eq!(data.skills.skills.len(), 1);
-    assert_eq!(data.changes.len(), 3);
+    assert_eq!(data.changes.len(), 4);
     assert_eq!(data.graphs.len(), 5);
     assert_eq!(data.ended["T-0139"].len(), 5);
 }

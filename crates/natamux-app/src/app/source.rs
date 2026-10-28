@@ -337,25 +337,63 @@ fn ready<T: Send + 'static>(answer: Result<T, ClientError>) -> Answer<T> {
 // thread, and each call waits for the one before: git work on one repository must not race.
 
 /// Delete all done or cancelled: the outcomes, and the tasks the daemon changed with them.
-pub fn delete_all(source: &Source, ids: &[String]) -> (Vec<DeleteOutcome>, Vec<Task>) {
+/// `force`: the tasks the confirm named for files that are not committed; those files are lost.
+pub fn delete_all(
+    source: &Source,
+    ids: &[String],
+    force: &[String],
+) -> (Vec<DeleteOutcome>, Vec<Task>) {
     let mut related = Vec::new();
     let outcomes = delete_each(
         ids,
-        |id| block_on(source.delete_task(id, false)).map_err(|error| reason(&error)),
+        |id| block_on(source.delete_task(id, forced(force, id))).map_err(|error| reason(&error)),
         |answer| related.extend(answer.tasks),
     );
     (outcomes, related)
 }
 
 /// Remove finished workspaces. A merged branch goes too, as the web's `removeWorkspace(id)`.
-pub fn remove_all(source: &Source, ids: &[String]) -> (Vec<RemoveOutcome>, Vec<Task>) {
+/// `force` as in `delete_all`.
+pub fn remove_all(
+    source: &Source,
+    ids: &[String],
+    force: &[String],
+) -> (Vec<RemoveOutcome>, Vec<Task>) {
     let mut changed = Vec::new();
     let outcomes = remove_each(
         ids,
-        |id| block_on(source.remove_workspace(id, true, false)).map_err(|error| reason(&error)),
+        |id| {
+            block_on(source.remove_workspace(id, true, forced(force, id)))
+                .map_err(|error| reason(&error))
+        },
         |answer| changed.push(answer.task.clone()),
     );
     (outcomes, changed)
+}
+
+/// Whether `id` is one of the `force` ids of `delete_all` and `remove_all`.
+fn forced(force: &[String], id: &str) -> bool {
+    force.iter().any(|f| f == id)
+}
+
+/// The tasks among `ids` with files that are not committed, as (task id, file count). The reads
+/// run at once. A failed read counts as none: the daemon then still refuses that one.
+pub fn read_uncommitted(
+    source: &Source,
+    ids: &[String],
+) -> impl Future<Output = Vec<(String, usize)>> + use<> {
+    let reads: Vec<_> = ids
+        .iter()
+        .map(|id| {
+            let id = id.clone();
+            let changes = source.list_changes(&id);
+            async move { (id, changes.await.map_or(0, |files| files.len())) }
+        })
+        .collect();
+    async move {
+        let counts = futures::future::join_all(reads).await;
+        counts.into_iter().filter(|(_, count)| *count > 0).collect()
+    }
 }
 
 /// The daemon's own message, which starts with the task id, as the web's toasts show it: not
@@ -385,7 +423,7 @@ mod tests {
 
     #[test]
     fn removing_finished_workspaces_deletes_merged_branches() {
-        let (outcomes, changed) = remove_all(&Source::FakeDaemon, &["T-0120".to_string()]);
+        let (outcomes, changed) = remove_all(&Source::FakeDaemon, &["T-0120".to_string()], &[]);
         assert_eq!(
             outcomes,
             [RemoveOutcome::Removed {
@@ -395,6 +433,26 @@ mod tests {
         );
         assert!(changed[0].branch.is_none());
         assert_eq!(remove_summary(&outcomes).text, "Removed 1 workspace.");
+    }
+
+    #[test]
+    fn forces_only_the_ids_the_confirm_named() {
+        let ids = ["T-A", "T-B", "T-C"];
+        let force = ["T-B".to_string()];
+        let mapped: Vec<bool> = ids.iter().map(|id| forced(&force, id)).collect();
+        assert_eq!(mapped, [false, true, false]);
+        assert!(ids.iter().all(|id| !forced(&[], id)));
+    }
+
+    #[test]
+    fn reads_which_tasks_have_files_that_are_not_committed() {
+        let ids = ["T-0143", "T-0146", "T-0999"].map(String::from);
+        // T-0146 and T-0999, which does not exist, have none.
+        assert_eq!(
+            block_on(read_uncommitted(&Source::FakeDaemon, &ids)),
+            [("T-0143".to_string(), 2)]
+        );
+        assert!(block_on(read_uncommitted(&Source::FakeDaemon, &[])).is_empty());
     }
 
     #[test]

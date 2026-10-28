@@ -8,8 +8,9 @@ use ui::prelude::*;
 use super::task_rules::{
     actions_for, cancel_task_description, delete_task_description, delete_task_label,
 };
-use super::task_view_rules::{DELETE_ALL_DESCRIPTION, delete_all_title};
+use super::task_view_rules::{delete_all_description, delete_all_label, delete_all_title};
 use crate::app::dashboard::Dashboard;
+use crate::app::source::read_uncommitted;
 use crate::components::confirm::Confirm;
 
 /// Asks before the task, its notes, its history and its worktree are deleted. The files that are
@@ -93,6 +94,35 @@ pub fn confirm_cancel_task(
     .open(window, cx);
 }
 
+/// Reads the files that are not committed of the `tasks` with a workspace, then calls `open`
+/// with (task id, file count) of those that have any. A bulk confirm names them, and only those
+/// are then forced.
+pub fn with_uncommitted(
+    dashboard: &Entity<Dashboard>,
+    tasks: &[Task],
+    window: &mut Window,
+    cx: &mut App,
+    open: impl FnOnce(Vec<(String, usize)>, &mut Window, &mut App) + 'static,
+) {
+    let Some(source) = dashboard.read(cx).source().cloned() else {
+        open(Vec::new(), window, cx);
+        return;
+    };
+    let ids: Vec<String> = tasks
+        .iter()
+        .filter(|task| task.workspace.is_some())
+        .map(|task| task.id.clone())
+        .collect();
+    let reads = read_uncommitted(&source, &ids);
+    let main = window.window_handle();
+    cx.spawn(async move |cx| {
+        let dirty = reads.await;
+        main.update(cx, |_, window, cx| open(dirty, window, cx))
+            .ok();
+    })
+    .detach();
+}
+
 /// The board's Delete all: the tasks shown in the column when it was clicked, one after the
 /// other, then one summary toast.
 pub fn confirm_delete_all(
@@ -102,23 +132,27 @@ pub fn confirm_delete_all(
     window: &mut Window,
     cx: &mut App,
 ) {
-    let dashboard = dashboard.clone();
+    let board = dashboard.clone();
     let ids: Vec<String> = tasks.iter().map(|task| task.id.clone()).collect();
-    let rows = tasks
+    let rows: Vec<(SharedString, SharedString)> = tasks
         .iter()
         .map(|task| (task.id.clone().into(), task.title.clone().into()))
         .collect();
-    Confirm::new(
-        delete_all_title(state, tasks.len()),
-        DELETE_ALL_DESCRIPTION,
-        "Delete",
-        move |_, cx| {
-            let ids = ids.clone();
-            dashboard.update(cx, |dashboard, cx| dashboard.delete_tasks(ids, cx));
-        },
-    )
-    .rows(rows)
-    .open(window, cx);
+    let title = delete_all_title(state, tasks.len());
+    with_uncommitted(dashboard, tasks, window, cx, move |dirty, window, cx| {
+        let force: Vec<String> = dirty.iter().map(|(id, _)| id.clone()).collect();
+        Confirm::new(
+            title,
+            delete_all_description(&dirty),
+            delete_all_label(!dirty.is_empty()),
+            move |_, cx| {
+                let (ids, force) = (ids.clone(), force.clone());
+                board.update(cx, |board, cx| board.delete_tasks(ids, force, cx));
+            },
+        )
+        .rows(rows)
+        .open(window, cx);
+    });
 }
 
 /// Keep this try (`CompareTries.tsx`): the other tries that are not finished are cancelled.

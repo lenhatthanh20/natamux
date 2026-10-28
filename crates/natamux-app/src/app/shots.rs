@@ -61,7 +61,8 @@ const EVIDENCE_STAGE: &str = "context";
 /// The Tries section is the sixth part of the Details tab of a try with an agent.
 const TRIES_PART: usize = 5;
 /// The projects of the fake data, blurred in the `sidebar-blurred` shot.
-const BLURRED: [&str; 2] = ["natamux", "natamux-site"];
+const BLURRED: [&str; 2] = ["natamux", SITE];
+const SITE: &str = "natamux-site";
 /// Screen 4: a running task with no file to commit, one with a new image; the reviewed task has
 /// two changed files.
 const CLEAN: &str = "T-0144";
@@ -215,17 +216,8 @@ fn enter(shot: Shot, root: &mut Root, window: &mut Window, cx: &mut gpui::Contex
                 remove_workspace_dialog::open_with(&dashboard, task, true, window, cx);
             }
         }
-        Shot::ClearFinished => {
-            let repo = dashboard
-                .read(cx)
-                .data
-                .repos
-                .first()
-                .map(|repo| repo.id.clone());
-            if let Some(repo) = repo {
-                remove_finished::open(&dashboard, repo, window, cx);
-            }
-        }
+        // The site's cancelled task has 2 files that are not committed: Remove anyway.
+        Shot::ClearFinished => remove_finished::open(&dashboard, SITE.into(), window, cx),
         Shot::AddSubtask => {
             if let Some(task) = task(TASK, cx) {
                 add_subtask_dialog::open(task, window, cx);

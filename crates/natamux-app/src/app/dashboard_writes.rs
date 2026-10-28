@@ -293,8 +293,9 @@ impl Dashboard {
         )
     }
 
-    /// Delete all done or cancelled: one task after the other, then one summary toast.
-    pub fn delete_tasks(&mut self, ids: Vec<String>, cx: &mut Context<Self>) {
+    /// Delete all done or cancelled: one task after the other, then one summary toast. `force`:
+    /// the tasks deleted with their files that are not committed.
+    pub fn delete_tasks(&mut self, ids: Vec<String>, force: Vec<String>, cx: &mut Context<Self>) {
         let Some(source) = self.source.clone() else {
             return;
         };
@@ -304,7 +305,7 @@ impl Dashboard {
         cx.notify();
         let outcomes = cx
             .background_executor()
-            .spawn(async move { delete_all(&source, &ids) });
+            .spawn(async move { delete_all(&source, &ids, &force) });
         cx.spawn(async move |this, cx| {
             let (outcomes, related) = outcomes.await;
             this.update(cx, |this, cx| {
@@ -325,8 +326,14 @@ impl Dashboard {
         .detach();
     }
 
-    /// Remove finished workspaces: one after the other, then one summary toast.
-    pub fn remove_workspaces(&mut self, ids: Vec<String>, cx: &mut Context<Self>) {
+    /// Remove finished workspaces: one after the other, then one summary toast. `force`: the
+    /// workspaces removed with their files that are not committed.
+    pub fn remove_workspaces(
+        &mut self,
+        ids: Vec<String>,
+        force: Vec<String>,
+        cx: &mut Context<Self>,
+    ) {
         let Some(source) = self.source.clone() else {
             return;
         };
@@ -336,7 +343,7 @@ impl Dashboard {
         cx.notify();
         let outcomes = cx
             .background_executor()
-            .spawn(async move { remove_all(&source, &ids) });
+            .spawn(async move { remove_all(&source, &ids, &force) });
         cx.spawn(async move |this, cx| {
             let (outcomes, changed) = outcomes.await;
             this.update(cx, |this, cx| {

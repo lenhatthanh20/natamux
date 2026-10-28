@@ -19,6 +19,20 @@
     "path": "public/banner.png",
     "status": "U"
    }
+  ],
+  "T-0120": [
+   {
+    "path": "src/pages/index.astro",
+    "status": "M",
+    "added": 2,
+    "removed": 2
+   },
+   {
+    "path": "notes.txt",
+    "status": "U",
+    "added": 1,
+    "removed": 0
+   }
   ]
  },
  "graphs": {

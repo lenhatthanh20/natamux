@@ -4,7 +4,7 @@
 use natamux_proto::projects::repo::Repo;
 use natamux_proto::tasks::task::TaskState;
 
-use super::task_rules::state_label;
+use super::task_rules::{state_label, uncommitted_sentence};
 use super::task_sort::STATE_ORDER;
 
 /// Under this main width the state chips fold into one State button.
@@ -166,10 +166,18 @@ pub fn delete_all_title(state: TaskState, count: usize) -> String {
     )
 }
 
-pub const DELETE_ALL_DESCRIPTION: &str = "This deletes these tasks, their notes and their \
-    history. A worktree folder and the branch go with its task, also commits that are \
-    not merged. A task whose workspace has changes that are not committed is skipped. This \
-    cannot be undone.";
+/// `dirty`: the tasks whose workspace has files that are not committed, as (task id, file count).
+pub fn delete_all_description(dirty: &[(String, usize)]) -> String {
+    let files = uncommitted_sentence(dirty).map_or_else(String::new, |text| text + " ");
+    format!(
+        "This deletes these tasks, their notes and their history. A worktree folder and the \
+         branch go with its task, also commits that are not merged. {files}This cannot be undone."
+    )
+}
+
+pub fn delete_all_label(any_dirty: bool) -> &'static str {
+    if any_dirty { "Delete anyway" } else { "Delete" }
+}
 
 /// The project a new task goes to: the one picked, while it still exists, else the first.
 pub fn task_repo(repos: &[Repo], picked: Option<&str>) -> Option<String> {
@@ -315,7 +323,21 @@ mod tests {
             "Delete 1 cancelled task?"
         );
         assert_eq!(task_count(1), "1 task");
+        let clean = delete_all_description(&[]);
+        assert!(clean.ends_with("also commits that are not merged. This cannot be undone."));
+        assert!(!clean.contains("skipped"));
+        assert_eq!(delete_all_label(false), "Delete");
         assert_eq!(task_count(4), "4 tasks");
+    }
+
+    #[test]
+    fn names_the_tasks_with_files_that_are_not_committed_and_deletes_anyway() {
+        let text = delete_all_description(&[("T-0002".into(), 3)]);
+        assert!(text.contains(
+            "not merged. 1 of them has files that are not committed: T-0002 (3 files). Those \
+             files are lost too. This cannot be undone."
+        ));
+        assert_eq!(delete_all_label(true), "Delete anyway");
     }
 
     #[test]
