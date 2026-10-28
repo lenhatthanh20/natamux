@@ -13,7 +13,7 @@ use natamux_update::install::mac_install_script;
 use super::update::{READY, Ready, log};
 use crate::components::toast_rules::ToastTone;
 use crate::components::toasts::{push_toast, toast};
-use crate::daemon::process::OwnedDaemon;
+use crate::daemon::process::DaemonSlot;
 
 static NEXT_LAUNCH: Mutex<Option<PathBuf>> = Mutex::new(None);
 
@@ -111,10 +111,11 @@ pub fn finish_on_quit() -> Option<PathBuf> {
     launch
 }
 
-pub fn finish_quit(owned: &Arc<Mutex<Option<OwnedDaemon>>>) {
+/// Stops the app's own daemon, also one whose start ends later (`daemon/start_async.rs`).
+pub fn finish_quit(owned: &Arc<Mutex<DaemonSlot>>) {
     let launch = finish_on_quit();
     if let Ok(mut slot) = owned.lock() {
-        let daemon = slot.take();
+        let daemon = slot.close();
         drop(slot);
         drop(daemon);
     }

@@ -12,6 +12,7 @@ use natamux_client::config::save_access;
 use natamux_client::{Client, ClientError, Config};
 use ui::{Tooltip, prelude::*};
 
+use super::dashboard_data::Link;
 use super::sign_in_rules::{BLANK_REASON, HELP, INTRO, REJECTED, connect_problem, token_to_send};
 use super::source::{Source, reason};
 use super::view_state;
@@ -36,6 +37,24 @@ pub enum StartProblem {
     SignIn,
     /// The window says why instead of the list.
     Down(String),
+    /// The app's own daemon starts on a thread (`daemon/start_async.rs`): the skeletons show
+    /// until it answers.
+    Starting,
+}
+
+impl StartProblem {
+    /// What the dashboard shows while it has no source.
+    pub fn link(&self) -> Link {
+        let reason = match self {
+            StartProblem::Starting => return Link::Loading,
+            StartProblem::SignIn => "No token for the daemon.".to_owned(),
+            StartProblem::Down(reason) => reason.clone(),
+        };
+        Link::Down {
+            reason,
+            retrying: false,
+        }
+    }
 }
 
 /// The token worked: the app follows the daemon with it.

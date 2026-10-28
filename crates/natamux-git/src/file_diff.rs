@@ -8,7 +8,7 @@ use natamux_proto::workspaces::changes::{ChangeStatus, FileDiff, ImageSide, imag
 use natamux_proto::workspaces::review_comments::CommentSide;
 use natamux_proto::workspaces::workspace::ChangeEntry;
 
-use crate::exec::{GitError, OutsideWorkspaceError, git, git_bytes};
+use crate::exec::{BlobRead, GitError, OutsideWorkspaceError, git, git_blob_limited, git_bytes};
 
 /// A file bigger than this is not sent to the dashboard (`MAX_FILE_BYTES`).
 pub use natamux_proto::workspaces::changes::{MAX_FILE_BYTES, MAX_IMAGE_BYTES};
@@ -123,10 +123,10 @@ pub fn read_file_diff(worktree: &Path, change: &ChangeEntry) -> Result<FileDiff,
     if change.status != ChangeStatus::Added && change.status != ChangeStatus::Untracked {
         let from = change.original_path.as_ref().unwrap_or(&change.path);
         let source = format!("HEAD:{from}");
-        if object_size(worktree, &source)? > MAX_FILE_BYTES {
-            return Ok(diff(None, None, false, true));
+        match git_blob_limited(worktree, &source, MAX_FILE_BYTES)? {
+            BlobRead::TooLarge => return Ok(diff(None, None, false, true)),
+            BlobRead::Content(bytes) => original = Some(bytes),
         }
-        original = Some(git_bytes(worktree, &["show", &source])?);
     }
 
     let mut modified: Option<Vec<u8>> = None;

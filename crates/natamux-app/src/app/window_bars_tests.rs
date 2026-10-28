@@ -12,6 +12,7 @@ use ui::prelude::*;
 
 use super::{StatusBarView, TitleBarView};
 use crate::app::dashboard::Dashboard;
+use crate::app::dashboard_data::Part;
 use crate::app::source::Source;
 use crate::app::test_views::{self, Counted, cached_style};
 use crate::components::motion;
@@ -59,7 +60,7 @@ fn draws(host: &Entity<Host>, cx: &mut VisualTestContext) -> (usize, usize, usiz
 fn a_spinner_step_draws_only_the_status_bar(cx: &mut TestAppContext) {
     test_views::init(cx);
     let source = Arc::new(Source::FakeDaemon);
-    let dashboard = cx.new(|cx| Dashboard::new(Ok(source), cx));
+    let dashboard = cx.new(|cx| Dashboard::new(Ok(source), Default::default(), cx));
     let shown = dashboard.clone();
     let (host, cx) = cx.add_window_view(move |_, cx| Host {
         title: cx.new(|cx| TitleBarView::new(shown.clone(), cx)),
@@ -68,6 +69,7 @@ fn a_spinner_step_draws_only_the_status_bar(cx: &mut TestAppContext) {
     });
     dashboard.update(cx, |dashboard, cx| {
         dashboard.data.jobs = vec![job()];
+        dashboard.data.gens.bump(Part::Jobs);
         cx.notify();
     });
     cx.update(|_, cx| motion::set_active(true, cx));

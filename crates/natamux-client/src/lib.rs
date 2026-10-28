@@ -16,6 +16,7 @@ pub mod agents {
 pub mod events {
     pub mod live;
     pub mod stale;
+    pub(crate) mod task_body;
 }
 pub mod projects {
     pub mod api;

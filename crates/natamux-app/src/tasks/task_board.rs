@@ -1,6 +1,7 @@
 //! The task board (`features/tasks/TaskBoard.tsx`, ui-spec 4.26): one column per state, the
 //! states that need the user first. Empty columns fold until opened, done and cancelled show
-//! only with Show finished, and their columns can delete all their tasks.
+//! only with Show finished, and their columns can delete all their tasks. Those two draw their
+//! newest cards first (`task_board_cap.rs`).
 
 use gpui::{ClickEvent, Entity, FocusHandle, Focusable, FontWeight, KeyContext, ScrollHandle};
 use natamux_proto::tasks::task::{Task, TaskState};
@@ -17,21 +18,30 @@ use crate::app::dashboard::Dashboard;
 use crate::app::dashboard_data::BulkRun;
 use crate::app::shortcuts::{OpenSelected, SelectFirst, SelectLast, SelectNext, SelectPrevious};
 use crate::components::agent_badge::agent_name;
+use crate::components::button_style::quiet_button;
 use crate::components::chips::{CountBadge, StateChip};
 use crate::components::colors::state_colors;
 use crate::components::empty_state::EmptyState;
 
 const COLUMN_WIDTH: f32 = 272.;
 
+#[path = "task_board_cap.rs"]
+mod cap;
+use cap::{CardLimits, more_label};
+
 pub struct TaskBoard {
     dashboard: Entity<Dashboard>,
     /// In the order to show, filtered; the task view holds the order still.
     rows: Vec<Task>,
     folds: BoardFolds,
+    /// The cards Done and Cancelled draw.
+    limits: CardLimits,
     focus: FocusHandle,
     scroll: ScrollHandle,
     /// A card drawn with the hover look whatever the pointer does: the `board-hover-card` shot.
     hover_shown: Option<String>,
+    #[cfg(test)]
+    pub draws: usize,
 }
 
 impl Focusable for TaskBoard {
@@ -46,9 +56,12 @@ impl TaskBoard {
             dashboard,
             rows: Vec::new(),
             folds: BoardFolds::default(),
+            limits: CardLimits::default(),
             focus: cx.focus_handle(),
             scroll: ScrollHandle::new(),
             hover_shown: None,
+            #[cfg(test)]
+            draws: 0,
         }
     }
 
@@ -62,11 +75,14 @@ impl TaskBoard {
         cx.notify();
     }
 
-    pub fn set_rows(&mut self, rows: Vec<Task>, cx: &mut Context<Self>) {
-        if self.rows != rows {
-            self.rows = rows;
-            cx.notify();
+    /// False: the rows are the ones shown, so nothing draws.
+    pub fn set_rows(&mut self, rows: Vec<Task>, cx: &mut Context<Self>) -> bool {
+        if self.rows == rows {
+            return false;
         }
+        self.rows = rows;
+        cx.notify();
+        true
     }
 
     fn fold(&mut self, state: TaskState, fold: bool, cx: &mut Context<Self>) {
@@ -74,15 +90,31 @@ impl TaskBoard {
         cx.notify();
     }
 
+    /// "Show N more" under a capped column.
+    fn more(&mut self, state: TaskState, cx: &mut Context<Self>) {
+        self.limits.show_more(state);
+        cx.notify();
+    }
+
     /// The cards in reading order: column by column, top to bottom.
     fn shown(&self, cx: &App) -> Vec<Task> {
         let dashboard = self.dashboard.read(cx);
         let states = board_states(dashboard.state_filter, dashboard.view().show_finished);
-        states
-            .iter()
-            .flat_map(|state| self.rows.iter().filter(move |task| task.state == *state))
-            .cloned()
-            .collect()
+        let mut shown = Vec::new();
+        for state in states {
+            let column: Vec<&Task> = self
+                .rows
+                .iter()
+                .filter(|task| task.state == state)
+                .collect();
+            let drawn = self.limits.drawn(state, &column);
+            for (task, drawn) in column.into_iter().zip(drawn) {
+                if drawn {
+                    shown.push(task.clone());
+                }
+            }
+        }
+        shown
     }
 
     fn move_by(&mut self, to: Step, cx: &mut Context<Self>) {
@@ -230,6 +262,12 @@ impl TaskBoard {
         let deleting = self.dashboard.read(cx).bulk.running(BulkRun::DeleteTasks);
         let dashboard = self.dashboard.clone();
         let empty = cards.is_empty();
+        let hidden = tasks.len() - cards.len();
+        let more = (hidden > 0).then(|| {
+            quiet_button(("board-more", index), more_label(hidden))
+                .label_size(LabelSize::Small)
+                .on_click(cx.listener(move |this, _, _, cx| this.more(state, cx)))
+        });
         v_flex()
             .flex_none()
             .w(px(COLUMN_WIDTH))
@@ -245,7 +283,7 @@ impl TaskBoard {
                     .px_1()
                     .gap_2()
                     .child(StateChip::new(state))
-                    .child(CountBadge::new(cards.len()))
+                    .child(CountBadge::new(tasks.len()))
                     .child(div().flex_1())
                     .when(deletable, |header| {
                         header.child(
@@ -285,8 +323,53 @@ impl TaskBoard {
                                 .color(Color::Muted),
                         )
                     })
-                    .children(cards),
+                    .children(cards)
+                    .children(more),
             )
+    }
+
+    /// One state's column, folded or with its cards.
+    fn render_state(
+        &self,
+        index: usize,
+        state: TaskState,
+        columns_count: usize,
+        selected: Option<&str>,
+        now: i64,
+        cx: &Context<Self>,
+    ) -> AnyElement {
+        let in_column: Vec<(usize, &Task)> = self
+            .rows
+            .iter()
+            .enumerate()
+            .filter(|(_, task)| task.state == state)
+            .collect();
+        if self.folds.is_folded(state, in_column.len(), columns_count) {
+            let folded = self.render_folded(index, state, in_column.len(), cx);
+            return folded.into_any_element();
+        }
+        let tasks: Vec<&Task> = in_column.iter().map(|(_, task)| *task).collect();
+        let drawn = self.limits.drawn(state, &tasks);
+        // Only the cards drawn read the dashboard: a capped column skips the rest.
+        let rows: Vec<(usize, RowData)> = {
+            let data = &self.dashboard.read(cx).data;
+            in_column
+                .iter()
+                .zip(drawn)
+                .filter(|(_, drawn)| *drawn)
+                .map(|((at, task), _)| (*at, RowData::of(task, data, now)))
+                .collect()
+        };
+        let cards: Vec<AnyElement> = rows
+            .iter()
+            .map(|(at, row)| {
+                let picked = selected == Some(row.task.id.as_str());
+                self.render_card(*at, row, picked, cx).into_any_element()
+            })
+            .collect();
+        let tasks: Vec<Task> = tasks.into_iter().cloned().collect();
+        self.render_column(index, state, cards, tasks, cx)
+            .into_any_element()
     }
 }
 
@@ -335,46 +418,24 @@ fn card_meta(row: &RowData) -> Vec<AnyElement> {
 
 impl Render for TaskBoard {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        #[cfg(test)]
+        {
+            self.draws += 1;
+        }
         let now = now_ms();
-        let (states, selected, rows) = {
+        let (states, selected) = {
             let dashboard = self.dashboard.read(cx);
             let states = board_states(dashboard.state_filter, dashboard.view().show_finished);
-            let rows: Vec<RowData> = self
-                .rows
-                .iter()
-                .map(|task| RowData::of(task, &dashboard.data, now))
-                .collect();
-            (states, dashboard.selected.clone(), rows)
+            (states, dashboard.selected.clone())
         };
         let columns_count = states.len();
-        let mut columns: Vec<AnyElement> = Vec::new();
-        for (index, state) in states.into_iter().enumerate() {
-            let in_column: Vec<(usize, &RowData)> = rows
-                .iter()
-                .enumerate()
-                .filter(|(_, row)| row.task.state == state)
-                .collect();
-            if self.folds.is_folded(state, in_column.len(), columns_count) {
-                columns.push(
-                    self.render_folded(index, state, in_column.len(), cx)
-                        .into_any_element(),
-                );
-                continue;
-            }
-            let tasks: Vec<Task> = in_column.iter().map(|(_, row)| row.task.clone()).collect();
-            let cards: Vec<AnyElement> = in_column
-                .iter()
-                .map(|(row_index, row)| {
-                    let picked = selected.as_deref() == Some(row.task.id.as_str());
-                    self.render_card(*row_index, row, picked, cx)
-                        .into_any_element()
-                })
-                .collect();
-            columns.push(
-                self.render_column(index, state, cards, tasks, cx)
-                    .into_any_element(),
-            );
-        }
+        let columns: Vec<AnyElement> = states
+            .into_iter()
+            .enumerate()
+            .map(|(index, state)| {
+                self.render_state(index, state, columns_count, selected.as_deref(), now, cx)
+            })
+            .collect();
         let mut context = KeyContext::default();
         context.add("NatamuxList");
         context.add("not_editing");

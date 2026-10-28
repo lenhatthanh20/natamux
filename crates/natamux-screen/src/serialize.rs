@@ -11,7 +11,8 @@ use alacritty_terminal::term::cell::{Cell, Flags};
 use alacritty_terminal::term::{Term, TermMode};
 use alacritty_terminal::vte::ansi::{Color, NamedColor};
 
-pub fn serialize(term: &mut Term<VoidListener>) -> Vec<u8> {
+/// `max_history` keeps only the newest rows of the history above the screen; `None` keeps all.
+pub fn serialize(term: &mut Term<VoidListener>, max_history: Option<usize>) -> Vec<u8> {
     let mut out = String::new();
     let mode = *term.mode();
     if mode.contains(TermMode::ALT_SCREEN) {
@@ -19,12 +20,12 @@ pub fn serialize(term: &mut Term<VoidListener>) -> Vec<u8> {
         // back and forth shows it; the alternate screen is copied before, as the switch clears it.
         let alternate = term.grid().clone();
         term.swap_alt();
-        write_grid(&mut out, term.grid());
+        write_grid(&mut out, term.grid(), max_history);
         term.swap_alt();
         *term.grid_mut() = alternate;
         out.push_str("\x1b[?1049h\x1b[H");
     }
-    write_grid(&mut out, term.grid());
+    write_grid(&mut out, term.grid(), max_history);
     write_modes(&mut out, mode);
     // The pen a program set last, for the output that comes after the snapshot.
     let pen = Style::of(&term.grid().cursor.template);
@@ -36,9 +37,17 @@ pub fn serialize(term: &mut Term<VoidListener>) -> Vec<u8> {
 
 /// Rows from the top of the history down, then the cursor. With no history, as `SerializeAddon`,
 /// the rows end at the last one with content or the cursor; with history every row is written,
-/// so the screen starts at the same row.
-fn write_grid(out: &mut String, grid: &Grid<Cell>) {
-    let top = grid.topmost_line().0;
+/// so the screen starts at the same row. History lines have negative numbers, so the newest
+/// `max_history` rows start at `-max_history`. A cut that lands inside a wrapped line starts at
+/// its tail: that row is written as it is, and nothing after it depends on the rows before.
+fn write_grid(out: &mut String, grid: &Grid<Cell>, max_history: Option<usize>) {
+    let top = match max_history {
+        Some(max) => grid
+            .topmost_line()
+            .0
+            .max(-i32::try_from(max).unwrap_or(i32::MAX)),
+        None => grid.topmost_line().0,
+    };
     let columns = grid.columns();
     let cursor = grid.cursor.point;
     let last = if grid.history_size() > 0 {
@@ -365,5 +374,59 @@ mod tests {
     fn restores_the_pen_a_program_set_last() {
         let (snapshot, _) = round_trip(20, 4, b"\x1b[32mgreen");
         assert!(text(&snapshot).ends_with("\x1b[0;32m"));
+    }
+
+    fn numbered(count: usize) -> String {
+        (0..count).map(|line| format!("line {line}\r\n")).collect()
+    }
+
+    #[test]
+    fn a_cap_keeps_the_last_history_rows_and_the_screen() {
+        let mut screen = Screen::new(10, 4);
+        screen.write(numbered(30).as_bytes());
+        // 27 history rows (0..=26), then 27, 28, 29 and the cursor row on the screen.
+        let tail = text(&screen.snapshot_tail(5));
+        assert!(tail.starts_with("line 22\r\nline 23\r\n"), "{tail:?}");
+        assert!(!tail.contains("line 21"), "{tail:?}");
+        let mut copy = Screen::new(10, 4);
+        copy.write(tail.as_bytes());
+        let shown = copy.last_lines(usize::MAX);
+        assert_eq!(shown.lines().count(), 8, "{shown:?}");
+        assert!(shown.ends_with("line 29"), "{shown:?}");
+    }
+
+    #[test]
+    fn a_cap_larger_than_the_history_or_no_cap_gives_the_same_snapshot() {
+        let mut screen = Screen::new(10, 4);
+        screen.write(numbered(30).as_bytes());
+        let full = screen.snapshot();
+        assert_eq!(screen.snapshot_tail(27), full);
+        assert_eq!(screen.snapshot_tail(usize::MAX), full);
+    }
+
+    #[test]
+    fn a_cut_inside_a_wrapped_line_starts_at_its_tail() {
+        let mut screen = Screen::new(10, 4);
+        let output = format!("{}\r\n{}", "y".repeat(25), numbered(5));
+        screen.write(output.as_bytes());
+        // History: the 3 rows of the wrapped line, line 0, line 1. The cap starts at its 2nd row.
+        let tail = text(&screen.snapshot_tail(4));
+        assert!(
+            tail.starts_with("yyyyyyyyyyyyyyy\r\nline 0\r\nline 1\r\n"),
+            "{tail:?}"
+        );
+    }
+
+    #[test]
+    fn a_cap_keeps_the_alternate_screen_and_the_modes() {
+        let mut screen = Screen::new(20, 4);
+        screen.write(numbered(12).as_bytes());
+        screen.write(b"\x1b[?1049h\x1b[Hvim screen\x1b[?2004h");
+        let tail = text(&screen.snapshot_tail(2));
+        assert!(tail.contains("\x1b[?1049h\x1b[H"), "{tail:?}");
+        assert!(tail.contains("vim screen"), "{tail:?}");
+        assert!(tail.contains("\x1b[?2004h"), "{tail:?}");
+        assert!(!tail.contains("line 0\r\n"), "{tail:?}");
+        assert!(tail.contains("line 11"), "{tail:?}");
     }
 }

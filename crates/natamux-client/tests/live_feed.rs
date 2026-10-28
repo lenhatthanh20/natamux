@@ -39,6 +39,7 @@ fn route_of(event: &DashboardEvent) -> Option<String> {
             return Some(format!("GET /tasks/{task_id}/terminals"));
         }
         DashboardEvent::WorkspaceStep(_)
+        | DashboardEvent::TaskChanged(_)
         | DashboardEvent::Status(_)
         | DashboardEvent::WorkspaceChanged { .. }
         | DashboardEvent::ShellsChanged { .. }
@@ -403,12 +404,13 @@ fn fallback_polls_read_what_the_socket_may_have_missed() {
         }
         // The first poll, then the terminal rows.
         let mut polled = Vec::new();
-        for _ in 0..6 {
+        for _ in 0..7 {
             polled.push(route_of(&next_data(&mut feed).await).unwrap());
         }
         assert_eq!(
             polled,
             [
+                "GET /tasks",
                 "GET /jobs",
                 "GET /activity",
                 "GET /usage",
@@ -418,9 +420,34 @@ fn fallback_polls_read_what_the_socket_may_have_missed() {
             ]
         );
         daemon.state(|state| {
-            assert_eq!(state.count("GET /tasks"), 1);
+            assert_eq!(state.count("GET /tasks"), 2);
             assert_eq!(state.count("GET /repos"), 1);
         });
+    });
+}
+
+#[test]
+fn task_bodies_pass_on_with_no_list_read() {
+    let rt = runtime();
+    let mut daemon = rt.block_on(FakeDaemon::start());
+    let client = daemon.client();
+    rt.block_on(async {
+        let mut feed = client.watch_dashboard();
+        let mut conn = daemon.next_events().await;
+        base_reads(&mut feed).await;
+        for n in 0..60 {
+            let task = format!(r#"{{"id":"T-1","title":"Step {n}","updatedAt":"{n:04}"}}"#);
+            let message = format!(r#"{{"kind":"task.updated","task":{task},"accepted":true}}"#);
+            conn.text(&message).await;
+            let DashboardEvent::TaskChanged(task) = next_any(&mut feed).await else {
+                panic!("no task for {message}");
+            };
+            assert_eq!(task.title, format!("Step {n}"));
+            // Then the log line, for the task the app holds now.
+            let logged = next_any(&mut feed).await;
+            assert!(matches!(logged, DashboardEvent::TaskLogged { .. }));
+        }
+        daemon.state(|state| assert_eq!(state.count("GET /tasks"), 1));
     });
 }
 

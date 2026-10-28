@@ -130,6 +130,11 @@ impl TaskService {
         self.with(|store| Ok(store.list_tasks(state)))
     }
 
+    /// The task `list_tasks` lists first among those whose workspace `holds` accepts.
+    pub fn task_in_workspace(&self, holds: impl Fn(&str) -> bool) -> TaskResult<Option<Task>> {
+        self.with(|store| Ok(store.task_in_workspace(holds)))
+    }
+
     pub fn workspace_list(&self) -> TaskResult<Vec<crate::tasks::store::WorkspaceRef>> {
         self.with(|store| Ok(store.workspace_list()))
     }
