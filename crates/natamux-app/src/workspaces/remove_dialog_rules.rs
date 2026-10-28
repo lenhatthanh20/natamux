@@ -6,7 +6,7 @@ use natamux_proto::terminals::list::TerminalList;
 use natamux_proto::workspaces::workspace::ChangeEntry;
 
 use super::finished_rules::{busy_shells, is_agent_shell};
-use crate::tasks::task_rules::state_label;
+use crate::tasks::task_rules::{state_label, uncommitted_sentence};
 
 /// Files listed in the dialog that asks for a commit first.
 pub const SHOWN_FILES: usize = 5;
@@ -121,12 +121,17 @@ pub fn remove_finished_title(count: usize) -> String {
     }
 }
 
-pub fn remove_finished_description(repo_name: &str) -> String {
+/// `dirty`: the workspaces with files that are not committed, as (task id, file count).
+pub fn remove_finished_description(repo_name: &str, dirty: &[(String, usize)]) -> String {
+    let files = uncommitted_sentence(dirty).map_or_else(String::new, |text| format!(" {text}"));
     format!(
         "This deletes the worktree folders of these tasks in {repo_name}. A branch stays when it \
-         has commits that are not merged. The tasks stay too. A workspace with changes that are \
-         not committed is skipped."
+         has commits that are not merged. The tasks stay too.{files}"
     )
+}
+
+pub fn remove_finished_label(any_dirty: bool) -> &'static str {
+    if any_dirty { REMOVE_ANYWAY } else { "Remove" }
 }
 
 #[cfg(test)]
@@ -248,6 +253,19 @@ mod tests {
     fn counts_the_finished_workspaces_in_the_title() {
         assert_eq!(remove_finished_title(1), "Remove 1 finished workspace?");
         assert_eq!(remove_finished_title(3), "Remove 3 finished workspaces?");
-        assert!(remove_finished_description("natamux").contains("these tasks in natamux."));
+        let clean = remove_finished_description("natamux", &[]);
+        assert!(clean.contains("these tasks in natamux."));
+        assert!(clean.ends_with("The tasks stay too."));
+        assert_eq!(remove_finished_label(false), "Remove");
+    }
+
+    #[test]
+    fn names_the_workspaces_with_files_that_are_not_committed_and_removes_anyway() {
+        let dirty = [("T-0002".to_string(), 3), ("T-0005".to_string(), 1)];
+        assert!(remove_finished_description("natamux", &dirty).ends_with(
+            "The tasks stay too. 2 of them have files that are not committed: T-0002 (3 \
+                 files), T-0005 (1 file). Those files are lost too."
+        ));
+        assert_eq!(remove_finished_label(true), "Remove anyway");
     }
 }

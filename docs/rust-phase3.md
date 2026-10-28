@@ -104,7 +104,7 @@ Shots run on demand. A line `Shots: <state> <state> …` in the head commit mess
 | `start-task` | The Start a task dialog |
 | `remove-workspace` | The Remove workspace dialog: the terminals that end and the branch choice |
 | `remove-workspace-anyway` | The Remove workspace dialog after Remove anyway: the files that are not committed are discarded |
-| `clear-finished` | The Remove finished workspaces dialog |
+| `clear-finished` | The Remove finished workspaces dialog: the site's cancelled task has files that are not committed, so it reads Remove anyway |
 | `add-subtask` | The Add subtask dialog |
 | `task-context-menu` | A task's row menu |
 | `skeleton` | The sidebar and table skeletons |

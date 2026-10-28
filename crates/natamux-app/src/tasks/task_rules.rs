@@ -105,6 +105,27 @@ pub fn delete_task_description(uncommitted: usize) -> String {
     )
 }
 
+/// The sentence of the bulk confirms on the workspaces with files that are not committed, as
+/// (task id, file count). None when there are none.
+pub fn uncommitted_sentence(dirty: &[(String, usize)]) -> Option<String> {
+    let names: Vec<String> = dirty
+        .iter()
+        .map(|(id, count)| match count {
+            1 => format!("{id} (1 file)"),
+            n => format!("{id} ({n} files)"),
+        })
+        .collect();
+    let have = match dirty.len() {
+        0 => return None,
+        1 => "1 of them has".to_string(),
+        n => format!("{n} of them have"),
+    };
+    Some(format!(
+        "{have} files that are not committed: {}. Those files are lost too.",
+        names.join(", ")
+    ))
+}
+
 pub fn delete_task_label(uncommitted: usize) -> &'static str {
     if uncommitted == 0 {
         "Delete task"
@@ -432,5 +453,24 @@ mod tests {
                 .contains("3 files in the worktree are not committed. They are lost too.")
         );
         assert_eq!(delete_task_label(3), "Delete anyway");
+    }
+
+    #[test]
+    fn names_each_workspace_with_files_that_are_not_committed() {
+        assert_eq!(uncommitted_sentence(&[]), None);
+        assert_eq!(
+            uncommitted_sentence(&[("T-0002".into(), 1)]).as_deref(),
+            Some(
+                "1 of them has files that are not committed: T-0002 (1 file). Those files are \
+                 lost too."
+            )
+        );
+        assert_eq!(
+            uncommitted_sentence(&[("T-0002".into(), 3), ("T-0005".into(), 1)]).as_deref(),
+            Some(
+                "2 of them have files that are not committed: T-0002 (3 files), T-0005 (1 file). \
+                 Those files are lost too."
+            )
+        );
     }
 }
