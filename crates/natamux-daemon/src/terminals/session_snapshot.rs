@@ -122,6 +122,7 @@ fn run_snapshot(session: &mut Session, clients: &[ClientRef]) {
             state.acked = cut;
             state.acked_at = now;
             state.behind_from = None;
+            state.show_now = false;
             state.phase = Phase::Live;
         }
     }
@@ -132,7 +133,8 @@ fn run_snapshot(session: &mut Session, clients: &[ClientRef]) {
 /// are visible, and the shell is quiet or they waited RESYNC_MAX_WAIT_MS. From the ring when it
 /// still has what they missed, else with a snapshot. Otherwise it looks again at the earliest
 /// time one of them could be ready. A snapshot for a shell that still floods comes at most once
-/// per RESYNC_MAX_WAIT_MS, so it cannot loop; a quiet shell gets its snapshot at once.
+/// per RESYNC_MAX_WAIT_MS, so it cannot loop; a quiet shell gets its snapshot at once. A client
+/// shown from parked (`show_now`) does not wait for quiet: that one catch-up goes at once.
 pub fn catch_up_behind(session: &mut Session) {
     session.scheduler.clear(&mut session.resync_timer);
     let now = session.now();
@@ -163,7 +165,11 @@ pub fn catch_up_behind(session: &mut Session) {
             }
             continue;
         }
-        let ready = (state.behind_since + RESYNC_MAX_WAIT_MS).min(quiet_at);
+        let ready = if state.show_now {
+            now
+        } else {
+            (state.behind_since + RESYNC_MAX_WAIT_MS).min(quiet_at)
+        };
         if ready > now {
             next = next.min(ready);
             continue;
@@ -178,9 +184,11 @@ pub fn catch_up_behind(session: &mut Session) {
                 state.acked = end;
                 state.acked_at = now;
                 state.behind_from = None;
+                state.show_now = false;
                 state.phase = Phase::Live;
             }
-        } else if quiet_at <= now || now >= state.snapshot_at + RESYNC_MAX_WAIT_MS {
+        } else if state.show_now || quiet_at <= now || now >= state.snapshot_at + RESYNC_MAX_WAIT_MS
+        {
             snapshot_catch_up(session, &client, now);
         } else {
             next = next
@@ -199,6 +207,7 @@ pub fn catch_up_behind(session: &mut Session) {
 fn snapshot_catch_up(session: &mut Session, client: &ClientRef, now: u64) {
     if let Some(state) = session.client_state(client) {
         state.behind_from = None;
+        state.show_now = false;
         state.phase = Phase::Snapshot;
         state.snapshot_at = now;
     }
@@ -220,6 +229,41 @@ fn quiet_at(session: &mut Session, now: u64) -> u64 {
         at = time + RESYNC_QUIET_WINDOW_MS;
     }
     at
+}
+
+/// The shell ended: every client that is behind, visible or parked, and every one that waits for
+/// a snapshot gets the output it missed now, before `exit`. An ended terminal keeps its last
+/// screen, so that screen must be current. No wait for quiet or for a program's frame: no more
+/// output comes. Call it after the last flush.
+pub fn catch_up_at_exit(session: &mut Session) {
+    let mut snapshot = Vec::new();
+    if let Some(mut job) = session.snapshot.take() {
+        session.scheduler.clear(&mut job.timer);
+        snapshot = job.clients;
+    }
+    let behind: Vec<(ClientRef, Option<u64>)> = session
+        .clients
+        .iter()
+        .filter(|(_, state)| state.phase == Phase::Behind)
+        .map(|(client, state)| (Arc::clone(client), state.behind_from))
+        .collect();
+    for (client, from) in behind {
+        let missed = from.and_then(|from| Some((from, ring_since(session, from)?)));
+        let Some((from, missed)) = missed else {
+            snapshot.push(client);
+            continue;
+        };
+        send_missed(&client, from, missed, session.offset);
+        let end = session.offset;
+        if let Some(state) = session.client_state(&client) {
+            state.sent = end;
+            state.acked = end;
+            state.behind_from = None;
+            state.phase = Phase::Live;
+        }
+    }
+    // Sent in one go, so the snapshot's frames and its `replayed` come before `exit`.
+    run_snapshot(session, &snapshot);
 }
 
 pub fn end_snapshots(session: &mut Session) {

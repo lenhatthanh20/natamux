@@ -9,7 +9,7 @@ description: How Natamux terminals work, end to end (PTY shell, daemon screen, W
 
 ```
 PTY shell (daemon) ───────output──▶ Screen (alacritty_terminal) ──sliced snapshot on attach──▶ client
-        ▲                     └─▶ batch ─▶ binary frames (+ 1 MB ring) ─── live output ────────────▶ client
+        ▲                     └─▶ batch ─▶ binary frames (+ 2 MiB ring) ── live output ────────────▶ client
         └── write() queue ◀── input / run / paste ◀── WebSocket /api/tasks/:id/terminal ◀── TerminalSession (xterm 6)
 ```
 
@@ -44,7 +44,7 @@ The daemon sections below were written for the Node daemon, so they use its name
 - **Order.** `resize` and `snapshot` run in xterm write callbacks, after the output already received. After `dispose()` the callbacks do nothing. Output is flushed before every control message and pty resize.
 - **Size.** See Size claims.
 - **Input goes through `write()`, never `pty.write` directly.** It splits DEL (`\x7f`) runs from other text and keeps `INPUT_GAP_MS` (25 ms) between them. Plain typing, pastes and a held Backspace are not delayed. `paste` sends its Enter as a separate piece, `ENTER_AFTER_PASTE_MS` (100 ms) after the paste, because the Cursor CLI ignores an Enter read together with the paste end.
-- **Limits.** At most `MAX_SESSIONS` = 20 shells. History is limited by memory, not by a fixed row count.
+- **Limits.** At most `MAX_SESSIONS` = 64 shells: 30 agents of the default pipeline plus plain terminals. History is limited by memory, not by a fixed row count.
 - **Ending.**
   - A done or cancelled task ends all its shells (`stage-shells.ts` `finish`). Removing a workspace ends them and waits (`closeAndWait`).
   - The shell of an ended task with no client ends after `ENDED_IDLE_MS` (60 s), unless a non-shell program runs in it. It is checked again later.
@@ -101,7 +101,7 @@ Output is binary. Everything else is one JSON text frame. Schemas: `packages/cor
 | `error` `{message}` | to client | Could not start |
 | `input` `{data}` | to daemon | Typing, up to 64 K chars |
 | `resize` `{cols, rows}` | to daemon | The client's size. Claims the shell's size |
-| `visible` `{visible, cols?, rows?}` | to daemon | On or off screen. Size only when the terminal itself came on screen: that claims |
+| `visible` `{visible, cols?, rows?, park?}` | to daemon | On or off screen. Size only when the terminal itself came on screen: that claims. `park: true` with `visible: false` (native app only, left out when false): no live output until visible again |
 | `ack` `{offset}` | to daemon | Output parsed so far, every `ACK_EVERY_BYTES` and after each catch-up. Drives flow control |
 | `ping` | to daemon | Heartbeat, every `HEARTBEAT_MS` while the page is visible |
 
@@ -114,7 +114,7 @@ Close codes (core): `CLOSE_UNAUTHORIZED` 4401 (bad ticket or query), `CLOSE_REFU
 ## Offsets and the ring
 
 - `session.offset` = bytes of all output frames sent so far. `replayed.offset` and `ack.offset` use it.
-- The ring keeps the last frames sent: `OUTPUT_RING_BYTES` (1 MB), at least one frame. `ringStart` = offset of its first byte.
+- The ring keeps the last frames sent: `OUTPUT_RING_BYTES` (2 MiB, so a terminal hidden for a short task switch resumes from it), at least one frame. `ringStart` = offset of its first byte.
 - `outputSince(taskId, offset)` (private `ringSince`) returns the frames from `offset`, or `undefined` when the offset is too old, in the future, or inside a frame. A behind client is resumed from it.
 
 ## Batching (daemon)
@@ -158,7 +158,8 @@ Two separate limits. Only the daemon's own screen pauses a shell; a slow or hidd
 - **Screen marks.** `ScreenState` counts bytes from `write` to xterm's write callback, the freeze queue of a snapshot included, so a long snapshot pauses the shell by itself. Two marks, so no flapping. Input still goes to a paused pty (Ctrl+C works). `closeOne` resumes before SIGHUP; `onExit` resumes too.
 - **Unacked** = `sent - acked` per client, in stream offsets. An ack above `sent` is clamped, an older one is ignored. Bytes of a catch-up (snapshot, waiting frames, ring frames of a resume) never count: at `replayed`, `sent = acked = offset`.
 - **Behind.** A live frame that would take a client past `CLIENT_HIGH_WATER`, or a hidden client past its window's budget, is dropped, not queued. The client becomes `behind` with `behindFrom` (first missed byte) and `behindSince`. Other clients are not affected.
-- **Hidden budget.** Fixed windows from the moment it went hidden (`visible: false`, or attach with `visible=0`). A status line at 2 KB/s never hits it; a flood does.
+- **Hidden budget.** Fixed windows from the moment it went hidden (`visible: false`, or attach with `visible=0`). A status line at 2 KB/s never hits it; a flood does. The web uses it.
+- **Park** (native app, T-0210). `visible: false` with `park: true` sets `parked`: `admits` takes no frame, so the client goes behind at its first frame, as one over its budget does. `visible: true` sets `show_now` when it was parked and behind: that one catch-up skips rule 3 below (quiet or max wait) and goes at once, from the ring when `behindFrom` is still in it, else a snapshot. A parked client that missed nothing gets an empty catch-up (`resume` and `replayed` at its offset), so every show of a parked terminal ends at `replayed`: the app times the show to it (show latency in the perf report). Later catch-ups keep the flood limit. Without `park` a hidden client keeps the budget. When the shell ends, every behind client (parked or not) and every waiting snapshot is caught up at once (`catch_up_at_exit`), then gets `exit`, so an ended terminal keeps a current last screen.
 - **`waiting` cap.** Output during a snapshot waits up to `CLIENT_HIGH_WATER`. Past it, `waiting` is dropped: the client still gets the snapshot, then `replayed{cut}`, and is behind from the cut.
 - **Catch-up** (`catchUpBehind`, run on `ack`, on `visible: true`, after a snapshot, and on a timer at the earliest time a client could be ready). All of:
   1. Acked everything: `sent - acked < ACK_EVERY_BYTES`. The dashboard acks only every 64 KB, so a smaller rest is all it can have parsed.
@@ -201,10 +202,15 @@ A dropped socket does not end the shell. The dashboard comes back by itself and 
   - A new grid size goes out only once two size checks in a row (100 ms apart) saw it (`size_step`). The first connect does not wait; a grid with 0 columns or rows does nothing.
   - No timer runs while the size stays the same. `terminal_screen.rs` checks the grid after each layout and starts one 100 ms check only while a new size waits.
   - The terminal view is a cached GPUI view: output draws that terminal only. `RemoteTerminal` notifies the view itself when its own state changes. An ended terminal draws uncached, as its opacity is not part of the cache key.
-  - Output is parsed in 4 KiB pieces, with a yield between them.
+  - Output is parsed in 4 KiB pieces, with a yield between them (`terminal_parser.rs`).
+  - Many busy terminals (T-0210). Each terminal has a lane (`terminal_parser.rs` `lane`): focused 4 ms wakeup pace and `Priority::High` parser, shown 16 ms and `Medium`, hidden 250 ms and `Low`. The pace is the Zed fork's `Terminal::set_wakeup_pace` (patch 3); patch 3 also asks for IME coordinates only from the focused view. A new priority hands the parser over (`Job::Handoff`): the old task stops at that job and gives back its writer and queue, so no job changes order.
+  - A hidden terminal sends `visible: false` with `park: true` (also right after a hidden connect): the daemon sends it nothing until it is shown, then catches it up at once. The cache keeps 30 hidden terminals (`KEEP_ALIVE_TERMINALS`).
+  - `natamux-client` `session.rs` joins binary frames that already wait in the socket into one `Output` (at most 256 KiB); a text frame ends the join, so control messages keep their place. The client runtime has 4 worker threads.
+  - The first snapshot shows the skeleton. A later one (a terminal that already showed a screen) is written to a screen and view of its own (`remote_terminal_events.rs` `reset`); the old screen stays until the parser wrote the whole catch-up (`Job::CaughtUp` tells it), then the new one takes its place, its input sink, and the focus when the old view had it. The old view is notified first: it is the one in the drawn tree, so the cached views around the pane draw again.
+  - Logs: a terminal reconnect (with `TerminalHandle::last_loss`) and every change of the dashboard link go to `<data folder>/logs/app.log`, cut to its last 1 MB at start. A slow dashboard read no longer shows "Reconnecting": only a lost `/events` socket, or 3 failed task-list reads in a row, do.
   - The history keeps the daemon's rule, `scrollback_lines(cols)` at the pane's own width (`terminal_size.rs` `history_lines`), so a snapshot loses no row. Zed's terminal has no setter for the limit, so `RemoteTerminal::build_at` builds the terminal and its view again at the first grid size, before connect and before any output. A later resize keeps the limit of that first width. Code that focuses the view later reads `view` then, as the first layout replaces it.
 - Daemon:
-  - Shells parse one at a time (`parsing` in `shells.rs`), in turns of at most `PARSE_TURN_BYTES` (16 KiB), so a flood in one shell does not hold the others for a whole 64 KiB read. A turn is a slice of the read, not a copy.
+  - Shells parse in lanes (`parsing` in `shells.rs`, `Turns::with_lanes(parse_lanes())`): up to half the cores, 2 to 4, at once. Turns go in ticket order, in pieces of at most `PARSE_TURN_BYTES` (16 KiB), so a flood in one shell does not hold the others for a whole 64 KiB read. A turn is a slice of the read, not a copy. Order inside one shell holds: one reader thread per shell, and `take_output` runs under the session lock.
   - Output frames are `Bytes`: a frame and the ring share the batch or the snapshot they were cut from, with no second copy.
   - `ps` never runs on the scheduler thread or under a session lock. `natamux-pty` `process_table.rs` parses one table that all shells share for `PROCESS_TABLE_TTL` (2 s); a kill or a leftover check reads a fresh one. The SIGHUP, the SIGKILL and `find_agent` read it with `Scheduler::off_thread`; `commands` reads it with no lock held.
   - Focus on the terminal view claims (`claim_size`); during a catch-up it claims at its end.

@@ -1,14 +1,15 @@
 //! One terminal socket and its reconnects, on the client's runtime. The rules live in
 //! `protocol.rs`; this file only moves bytes, keeps the timers and tells the app.
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
 use async_tungstenite::WebSocketStream;
 use async_tungstenite::tokio::{ConnectStream, connect_async};
 use async_tungstenite::tungstenite::Message;
-use futures::StreamExt;
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
+use futures::stream::Peekable;
+use futures::{FutureExt, Stream, StreamExt};
 use natamux_proto::terminals::messages::{
     CATCH_UP_TIMEOUT, ClientMessage, HEARTBEAT, ServerMessage,
 };
@@ -20,6 +21,13 @@ use super::backoff::reconnect_delay;
 use super::protocol::{AfterClose, Protocol, Step, TerminalEvent, TerminalStatus};
 use crate::config::Config;
 use crate::terminals::api;
+
+/// The most output joined into one event: frames that already wait in the socket go to the app
+/// together, so a busy shell wakes it once per burst, not once per frame.
+const JOIN_BYTES: usize = 256 * 1024;
+
+/// Why the last socket was lost, for the app's log.
+type Loss = Arc<Mutex<Option<String>>>;
 
 /// What the app asks of a terminal.
 #[derive(Debug)]
@@ -37,6 +45,7 @@ enum Command {
 pub struct TerminalHandle {
     commands: mpsc::UnboundedSender<Command>,
     pub events: UnboundedReceiver<TerminalEvent>,
+    loss: Loss,
 }
 
 impl TerminalHandle {
@@ -72,11 +81,23 @@ impl TerminalHandle {
         self.send(Command::Reconnect);
     }
 
+    /// Why the socket was lost last, once a `Reconnecting` status came.
+    pub fn last_loss(&self) -> Option<String> {
+        self.loss
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+    }
+
     /// A handle with no socket: the app shows `events`, and what it sends goes nowhere. For the
     /// app's screenshots in CI, which run with no daemon.
     pub fn detached(events: UnboundedReceiver<TerminalEvent>) -> TerminalHandle {
         let (commands, _) = mpsc::unbounded_channel();
-        TerminalHandle { commands, events }
+        TerminalHandle {
+            commands,
+            events,
+            loss: Loss::default(),
+        }
     }
 
     fn send(&self, command: Command) {
@@ -115,8 +136,17 @@ pub fn open(
 ) -> TerminalHandle {
     let (commands, command_rx) = mpsc::unbounded_channel();
     let (event_tx, events) = unbounded();
-    runtime.spawn(run(config, options, command_rx, event_tx));
-    TerminalHandle { commands, events }
+    let loss = Loss::default();
+    runtime.spawn(run(config, options, command_rx, event_tx, loss.clone()));
+    TerminalHandle {
+        commands,
+        events,
+        loss,
+    }
+}
+
+fn note_loss(loss: &Loss, reason: impl Into<String>) {
+    *loss.lock().unwrap_or_else(PoisonError::into_inner) = Some(reason.into());
 }
 
 enum Outcome {
@@ -133,6 +163,7 @@ async fn run(
     options: SessionOptions,
     mut commands: mpsc::UnboundedReceiver<Command>,
     events: UnboundedSender<TerminalEvent>,
+    loss: Loss,
 ) {
     let emit = |event: TerminalEvent| {
         let _ = events.unbounded_send(event);
@@ -156,6 +187,7 @@ async fn run(
                     &mut protocol,
                     &mut commands,
                     &events,
+                    &loss,
                 )
                 .await
                 {
@@ -174,7 +206,7 @@ async fn run(
                 emit(TerminalEvent::Status(TerminalStatus::Failed(reason)));
                 return;
             }
-            Err(_) => {}
+            Err(reason) => note_loss(&loss, reason),
         }
         emit(TerminalEvent::Status(TerminalStatus::Reconnecting));
         let delay = reconnect_delay(protocol.next_try(), fastrand::f64());
@@ -249,8 +281,10 @@ async fn drive(
     protocol: &mut Protocol,
     commands: &mut mpsc::UnboundedReceiver<Command>,
     events: &UnboundedSender<TerminalEvent>,
+    loss: &Loss,
 ) -> Outcome {
-    let (mut sink, mut stream) = socket.split();
+    let (mut sink, stream) = socket.split();
+    let mut stream = stream.peekable();
     let mut ping_at = Instant::now() + heartbeat;
     // No pong for two heartbeats: the connection is dead even if the OS has not noticed yet.
     let mut pong_deadline: Option<Instant> = None;
@@ -262,6 +296,7 @@ async fn drive(
         }
         for message in step.send.drain(..) {
             if sink.send(Message::text(message.to_json())).await.is_err() {
+                note_loss(loss, "could not send to the socket");
                 return lost(protocol, None, events);
             }
         }
@@ -282,7 +317,8 @@ async fn drive(
         tokio::select! {
             frame = stream.next() => match frame {
                 Some(Ok(Message::Binary(bytes))) => {
-                    step.emit.push(protocol.output(bytes.to_vec()));
+                    let joined = join_binary(bytes.to_vec(), &mut stream);
+                    step.emit.push(protocol.output(joined));
                 }
                 Some(Ok(Message::Text(text))) => {
                     if let Some(message) = ServerMessage::parse(text.as_str()) {
@@ -293,13 +329,25 @@ async fn drive(
                     }
                 }
                 Some(Ok(Message::Close(frame))) => {
-                    return lost(protocol, frame.map(|frame| u16::from(frame.code)), events);
+                    let code = frame.map(|frame| u16::from(frame.code));
+                    note_loss(loss, format!("the daemon closed the socket (code {code:?})"));
+                    return lost(protocol, code, events);
                 }
                 Some(Ok(_)) => {}
-                Some(Err(_)) | None => return lost(protocol, None, events),
+                Some(Err(error)) => {
+                    note_loss(loss, format!("socket error: {error}"));
+                    return lost(protocol, None, events);
+                }
+                None => {
+                    note_loss(loss, "the socket ended");
+                    return lost(protocol, None, events);
+                }
             },
             command = commands.recv() => match command {
-                Some(Command::Reconnect) => return lost(protocol, None, events),
+                Some(Command::Reconnect) => {
+                    note_loss(loss, "the app asked for a new socket");
+                    return lost(protocol, None, events);
+                }
                 Some(command) => step = apply(protocol, command),
                 None => {
                     let _ = sink.close(None).await;
@@ -312,6 +360,7 @@ async fn drive(
                 step.send.push(ClientMessage::Ping);
             }
             _ = sleep_until(pong_deadline.unwrap_or(far)), if pong_deadline.is_some() => {
+                note_loss(loss, "no pong for two heartbeats");
                 return lost(protocol, None, events);
             }
             _ = sleep_until(catch_up_deadline.unwrap_or(far)), if catch_up_deadline.is_some() => {
@@ -320,6 +369,25 @@ async fn drive(
             }
         }
     }
+}
+
+/// Adds the binary frames that already wait in the stream to `joined`, up to `JOIN_BYTES`. Only
+/// binary frames join: a control message keeps its place between them, for the next select.
+fn join_binary<S, E>(mut joined: Vec<u8>, stream: &mut Peekable<S>) -> Vec<u8>
+where
+    S: Stream<Item = Result<Message, E>> + Unpin,
+{
+    while joined.len() < JOIN_BYTES
+        && matches!(
+            std::pin::Pin::new(&mut *stream).peek().now_or_never(),
+            Some(Some(Ok(Message::Binary(_))))
+        )
+    {
+        if let Some(Some(Ok(Message::Binary(more)))) = stream.next().now_or_never() {
+            joined.extend_from_slice(&more);
+        }
+    }
+    joined
 }
 
 fn apply(protocol: &mut Protocol, command: Command) -> Step {
@@ -347,5 +415,63 @@ fn lost(
             let _ = events.unbounded_send(TerminalEvent::Status(status));
             Outcome::Done
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    type Frames = Peekable<futures::stream::Iter<std::vec::IntoIter<Result<Message, ()>>>>;
+
+    fn frames(items: Vec<Message>) -> Frames {
+        futures::stream::iter(items.into_iter().map(Ok).collect::<Vec<_>>()).peekable()
+    }
+
+    fn next(stream: &mut Frames) -> Option<Message> {
+        match stream.next().now_or_never() {
+            Some(Some(Ok(message))) => Some(message),
+            _ => None,
+        }
+    }
+
+    #[test]
+    fn ready_binary_frames_join_into_one() {
+        let mut stream = frames(vec![
+            Message::binary(b"b".to_vec()),
+            Message::binary(b"c".to_vec()),
+        ]);
+        assert_eq!(join_binary(b"a".to_vec(), &mut stream), b"abc");
+        assert_eq!(next(&mut stream), None);
+    }
+
+    #[test]
+    fn a_text_frame_ends_the_join_and_keeps_its_place() {
+        let mut stream = frames(vec![
+            Message::binary(b"b".to_vec()),
+            Message::text("control"),
+            Message::binary(b"c".to_vec()),
+        ]);
+        assert_eq!(join_binary(b"a".to_vec(), &mut stream), b"ab");
+        assert_eq!(next(&mut stream), Some(Message::text("control")));
+        assert_eq!(next(&mut stream), Some(Message::binary(b"c".to_vec())));
+    }
+
+    #[test]
+    fn the_join_stops_once_it_has_256_kib() {
+        let part = vec![1u8; 100 * 1024];
+        let mut stream = frames(vec![Message::binary(part.clone()); 3]);
+        let joined = join_binary(part.clone(), &mut stream);
+        assert_eq!(joined.len(), 300 * 1024);
+        assert_eq!(next(&mut stream), Some(Message::binary(part)));
+        assert_eq!(next(&mut stream), None);
+    }
+
+    #[test]
+    fn a_single_frame_over_the_cap_passes_whole_and_joins_nothing() {
+        let big = vec![2u8; JOIN_BYTES * 2];
+        let mut stream = frames(vec![Message::binary(b"x".to_vec())]);
+        assert_eq!(join_binary(big.clone(), &mut stream), big);
+        assert_eq!(next(&mut stream), Some(Message::binary(b"x".to_vec())));
     }
 }

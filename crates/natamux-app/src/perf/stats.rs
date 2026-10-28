@@ -1,7 +1,7 @@
 //! The numbers of phase 1's gate 2: frame times, key to glyph, and output per terminal.
 //! Pure: callers pass the time, so tests need no clock.
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::time::{Duration, Instant};
 
 /// The overlay shows this much recent history.
@@ -17,8 +17,40 @@ pub const ONE_DROPPED: Duration = Duration::from_micros(16_700);
 /// The report keeps at most this many frame samples (about 2 hours at 120 fps).
 const MAX_SAMPLES: usize = 1_000_000;
 
+/// What a `--gate2` bench had: the terminals and what they printed.
+#[derive(Clone, Debug, PartialEq)]
+pub struct BenchInfo {
+    pub terminals: usize,
+    pub shown: usize,
+    pub output: &'static str,
+}
+
+/// The hidden phase of `--gate2`: the task table on screen, every bench terminal hidden.
+#[derive(Clone, Debug, PartialEq)]
+pub struct HiddenPhase {
+    pub seconds: f64,
+    pub draws_per_second: f64,
+    /// The app's CPU in the phase, as a percent of one core; None when it could not be read.
+    pub cpu_percent: Option<f64>,
+}
+
 #[derive(Default)]
 pub struct PerfStats {
+    /// Set by `--gate2`; kept by `next_part`.
+    pub bench: Option<BenchInfo>,
+    pub hidden_phase: Option<HiddenPhase>,
+    /// The dashboard link went to Reconnecting. Kept by `next_part`.
+    pub link_lost: u32,
+    /// Socket reconnects of each terminal. Kept by `next_part`.
+    pub reconnects: HashMap<String, u32>,
+    /// Panes that had drawn a screen and showed the skeleton: should stay 0. Kept by `next_part`.
+    pub skeletons: HashMap<String, u32>,
+    /// Terminals that drew a screen: a first attach shows the skeleton too, and is no flash.
+    /// Kept by `next_part`, so a terminal rebuilt later still counts.
+    drew: HashSet<String>,
+    /// (terminal, show to the end of its catch-up, empty when it missed nothing) of each
+    /// terminal that came on screen.
+    shown: Vec<(String, Duration)>,
     last_frame: Option<Instant>,
     /// (when, frame time, refreshes it took) of every frame since the overlay was turned on.
     frames: Vec<(Instant, Duration, u32)>,
@@ -93,6 +125,51 @@ impl PerfStats {
         let count = (total / refresh).round().max(1.0);
         self.carry = (total - count * refresh).clamp(-refresh / 2.0, refresh / 2.0);
         count as u32
+    }
+
+    /// A new part of a run (`--gate2` phases): the samples start again, the run's counts stay.
+    pub fn next_part(&mut self) {
+        let kept = Self {
+            bench: self.bench.take(),
+            link_lost: self.link_lost,
+            reconnects: std::mem::take(&mut self.reconnects),
+            skeletons: std::mem::take(&mut self.skeletons),
+            drew: std::mem::take(&mut self.drew),
+            ..Self::default()
+        };
+        *self = kept;
+    }
+
+    pub fn reconnect(&mut self, terminal: &str) {
+        *self.reconnects.entry(terminal.to_string()).or_default() += 1;
+    }
+
+    pub fn drew(&mut self, terminal: &str) {
+        self.drew.insert(terminal.to_string());
+    }
+
+    /// Counts only for a terminal that drew before.
+    pub fn skeleton(&mut self, terminal: &str) {
+        if self.drew.contains(terminal) {
+            *self.skeletons.entry(terminal.to_string()).or_default() += 1;
+        }
+    }
+
+    /// A terminal came on screen and its catch-up ended after `latency`.
+    pub fn shown(&mut self, terminal: &str, latency: Duration) {
+        self.shown.push((terminal.to_string(), latency));
+    }
+
+    pub fn shown_count(&self) -> usize {
+        self.shown.len()
+    }
+
+    /// (count, p50, p95) of the show latencies.
+    pub fn show_latency(&self) -> (usize, Option<Duration>, Option<Duration>) {
+        let mut times: Vec<Duration> = self.shown.iter().map(|(_, took)| *took).collect();
+        times.sort();
+        let at = |p| (!times.is_empty()).then(|| percentile(&times, p));
+        (times.len(), at(0.5), at(0.95))
     }
 
     /// The overlay was off: the next frame does not count the time in between.
@@ -221,167 +298,5 @@ pub fn percentile(sorted: &[Duration], p: f64) -> Duration {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn ms(n: u64) -> Duration {
-        Duration::from_millis(n)
-    }
-
-    #[test]
-    fn nearest_rank_percentiles() {
-        let values: Vec<Duration> = (1..=100).map(ms).collect();
-        assert_eq!(percentile(&values, 0.5), ms(50));
-        assert_eq!(percentile(&values, 0.99), ms(99));
-        assert_eq!(percentile(&values, 0.999), ms(100));
-        assert_eq!(percentile(&[], 0.5), Duration::ZERO);
-    }
-
-    #[test]
-    fn frame_times_skip_idle_gaps_and_count_slow_frames() {
-        let start = Instant::now();
-        let mut stats = PerfStats::default();
-        let mut at = start;
-        for step in [8, 8, 9, 20, 8, 1000, 8] {
-            at += ms(step);
-            stats.frame(at);
-        }
-        let summary = stats.summary(at, true);
-        // The first frame has no start before it; the 1 s gap is idle.
-        assert_eq!(summary.frames, 5);
-        assert_eq!(summary.over_one_refresh, 1);
-        assert_eq!(summary.missed_refreshes, 1);
-        assert_eq!(summary.over_16ms, 1);
-        assert_eq!(summary.p50, ms(8));
-    }
-
-    // Gate 2 runs of 2026-10-22: a frame that starts late and the short one after it are two
-    // refreshes with two frames, not a slow frame.
-    #[test]
-    fn a_late_start_made_up_by_the_next_frame_is_on_time() {
-        let start = Instant::now();
-        let mut stats = PerfStats::default();
-        let mut at = start;
-        stats.frame(at);
-        for micros in [8_333, 8_338, 12_000, 4_666, 11_500, 5_166, 8_333] {
-            at += Duration::from_micros(micros);
-            stats.frame(at);
-        }
-        let summary = stats.summary(at, true);
-        assert_eq!(summary.frames, 7);
-        assert_eq!(summary.over_one_refresh, 0);
-        assert_eq!(summary.missed_refreshes, 0);
-    }
-
-    #[test]
-    fn a_skipped_refresh_counts_once_even_when_split_over_two_frames() {
-        let start = Instant::now();
-        let mut stats = PerfStats::default();
-        let mut at = start;
-        stats.frame(at);
-        // 16.7 ms is one refresh missed; 14 + 11 ms is three refreshes in two frames.
-        for micros in [8_333, 16_667, 8_333, 14_000, 11_000, 8_333, 25_000] {
-            at += Duration::from_micros(micros);
-            stats.frame(at);
-        }
-        let summary = stats.summary(at, true);
-        assert_eq!(summary.missed_refreshes, 4);
-        assert_eq!(summary.over_one_refresh, 3);
-        assert_eq!(summary.over_two_refreshes, 1);
-    }
-
-    #[test]
-    fn counts_each_terminals_bytes_since_the_overlay_came_on() {
-        let start = Instant::now();
-        let mut stats = PerfStats::default();
-        stats.frame(start);
-        stats.output("b", 10, start + ms(1));
-        stats.output("a", 5, start + ms(2));
-        stats.output("a", 5, start + Duration::from_secs(5));
-        let (span, totals) = stats.output_totals(start + Duration::from_secs(6));
-        assert_eq!(span, Duration::from_secs(6));
-        assert_eq!(totals, [("a".to_string(), 10), ("b".to_string(), 10)]);
-    }
-
-    #[test]
-    fn key_to_echo_ends_when_the_echo_reaches_the_screen() {
-        let start = Instant::now();
-        let mut stats = PerfStats::default();
-        stats.key("T-1/1", start);
-        stats.output("T-1/1", 1, start + ms(5));
-        stats.frame(start + ms(8));
-        stats.frame(start + ms(16));
-        let summary = stats.summary(start + ms(16), false);
-        assert_eq!(summary.key_to_echo_p95, Some(ms(5)));
-        assert_eq!(summary.key_to_glyph_p95, Some(ms(16)));
-        assert_eq!(stats.echo_samples().count(), 1);
-    }
-
-    #[test]
-    fn the_overlay_window_is_the_last_ten_seconds() {
-        let start = Instant::now();
-        let mut stats = PerfStats::default();
-        stats.frame(start);
-        stats.frame(start + ms(30));
-        stats.frame(start + ms(38));
-        let later = start + Duration::from_secs(11);
-        stats.frame(later);
-        stats.frame(later + ms(8));
-        assert_eq!(stats.summary(later + ms(8), false).frames, 1);
-        assert_eq!(stats.summary(later + ms(8), true).frames, 3);
-    }
-
-    #[test]
-    fn key_to_glyph_ends_when_the_frame_with_the_echo_is_done() {
-        let start = Instant::now();
-        let mut stats = PerfStats::default();
-        stats.key("T-1/1", start);
-        stats.frame(start + ms(4));
-        stats.output("T-1/1", 1, start + ms(6));
-        // This frame draws the echo; the next one starts once it is on screen.
-        stats.frame(start + ms(8));
-        assert_eq!(stats.summary(start + ms(8), false).key_to_glyph_p95, None);
-        stats.frame(start + ms(16));
-        assert_eq!(
-            stats.summary(start + ms(16), false).key_to_glyph_p95,
-            Some(ms(16))
-        );
-    }
-
-    #[test]
-    fn only_output_of_the_terminal_that_got_the_key_echoes_it() {
-        let start = Instant::now();
-        let mut stats = PerfStats::default();
-        stats.key("T-1/1", start);
-        // A bench terminal floods meanwhile: that is not the echo.
-        stats.output("T-1/901", 65_536, start + ms(1));
-        stats.frame(start + ms(8));
-        stats.frame(start + ms(16));
-        assert_eq!(stats.summary(start + ms(16), false).key_to_glyph_p95, None);
-        stats.output("T-1/1", 1, start + ms(20));
-        stats.frame(start + ms(24));
-        stats.frame(start + ms(32));
-        assert_eq!(
-            stats.summary(start + ms(32), false).key_to_glyph_p95,
-            Some(ms(32))
-        );
-    }
-
-    #[test]
-    fn output_rate_is_bytes_in_the_last_second() {
-        let start = Instant::now();
-        let mut stats = PerfStats::default();
-        stats.output("a", 500_000, start);
-        stats.output("a", 500_000, start + ms(500));
-        stats.output("b", 10, start + ms(900));
-        let rates = stats.output_rates(start + ms(900));
-        assert_eq!(
-            rates,
-            [("a".to_string(), 1_000_000.0), ("b".to_string(), 10.0)]
-        );
-        assert_eq!(
-            stats.output_rates(start + Duration::from_secs(3)),
-            Vec::<(String, f64)>::new()
-        );
-    }
-}
+#[path = "stats_tests.rs"]
+mod tests;

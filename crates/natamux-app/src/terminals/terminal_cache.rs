@@ -14,8 +14,9 @@ use super::remote_terminal::{RemoteTerminal, Target};
 use super::terminal_find::TerminalFind;
 use crate::app::source::Source;
 
-/// `KEEP_ALIVE_TERMINALS`.
-pub const KEEP_ALIVE_TERMINALS: usize = 8;
+/// `KEEP_ALIVE_TERMINALS` was 8. A hidden terminal is parked by the daemon, so it costs memory,
+/// not parsing or frames: keep as many as 30 agents (T-0210).
+pub const KEEP_ALIVE_TERMINALS: usize = 30;
 /// `HIDDEN_TERMINAL_TTL_MS`: an idle hidden terminal is freed too.
 pub const HIDDEN_TTL_MS: u64 = 20 * 60_000;
 
@@ -245,7 +246,7 @@ impl TerminalCache {
             .map(|(key, entry)| (entry.terminal.clone(), shown.contains(key)))
             .collect();
         for (terminal, visible) in terminals {
-            terminal.update(cx, |terminal, _| terminal.set_visible(visible));
+            terminal.update(cx, |terminal, cx| terminal.set_visible(visible, cx));
         }
     }
 }
@@ -289,8 +290,8 @@ mod tests {
     }
 
     #[test]
-    fn keeps_the_newest_8_hidden_terminals() {
-        let mut entries: Vec<EntryState> = (0..10)
+    fn keeps_the_newest_30_hidden_terminals() {
+        let mut entries: Vec<EntryState> = (0..32)
             .map(|at| entry(&format!("T-{at}/1"), false, at, false))
             .collect();
         entries.push(entry("T-shown/1", true, 0, false));

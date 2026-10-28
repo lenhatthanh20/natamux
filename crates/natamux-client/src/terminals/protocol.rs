@@ -46,6 +46,17 @@ pub enum TerminalStatus {
     Failed(String),
 }
 
+/// Off screen: the app parses nothing it does not show, so the daemon sends no live output until
+/// the terminal is shown again, and then catches it up at once (T-0210).
+fn parked() -> ClientMessage {
+    ClientMessage::Visible {
+        visible: false,
+        cols: None,
+        rows: None,
+        park: true,
+    }
+}
+
 /// What one call wants done: messages for the socket and events for the app.
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct Step {
@@ -164,6 +175,11 @@ impl Protocol {
         step.emit.push(TerminalEvent::Status(TerminalStatus::Open));
         if self.claimed {
             self.send_size(false, &mut step);
+        }
+        if !self.visible {
+            // The query says hidden, which still gets live output up to a budget; parked gets
+            // none until it is shown.
+            step.send.push(parked());
         }
         step
     }
@@ -297,11 +313,7 @@ impl Protocol {
             self.claim(&mut step);
         } else if self.sent_visible {
             self.sent_visible = false;
-            step.send.push(ClientMessage::Visible {
-                visible: false,
-                cols: None,
-                rows: None,
-            });
+            step.send.push(parked());
         }
         step
     }
@@ -386,6 +398,7 @@ impl Protocol {
             visible: true,
             cols: Some(self.size.0),
             rows: Some(self.size.1),
+            park: false,
         });
     }
 

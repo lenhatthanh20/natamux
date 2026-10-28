@@ -55,13 +55,17 @@ pub enum ClientMessage {
         rows: u16,
     },
     /// `cols` and `rows` come only when the terminal itself came on screen; only then it claims
-    /// the shell's size.
+    /// the shell's size. `park` with `visible: false`: the daemon sends this client no live output
+    /// until it is visible again, and then catches it up at once. Left out when false, so the web
+    /// and old clients send the same JSON as before.
     Visible {
         visible: bool,
         #[serde(skip_serializing_if = "Option::is_none")]
         cols: Option<u16>,
         #[serde(skip_serializing_if = "Option::is_none")]
         rows: Option<u16>,
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        park: bool,
     },
     Ack {
         offset: u64,
@@ -183,6 +187,7 @@ mod tests {
                     visible: true,
                     cols: Some(80),
                     rows: Some(24),
+                    park: false,
                 },
                 r#"{"type":"visible","visible":true,"cols":80,"rows":24}"#,
             ),
@@ -191,8 +196,18 @@ mod tests {
                     visible: false,
                     cols: None,
                     rows: None,
+                    park: false,
                 },
                 r#"{"type":"visible","visible":false}"#,
+            ),
+            (
+                ClientMessage::Visible {
+                    visible: false,
+                    cols: None,
+                    rows: None,
+                    park: true,
+                },
+                r#"{"type":"visible","visible":false,"park":true}"#,
             ),
             (
                 ClientMessage::Ack { offset: 65536 },
@@ -207,6 +222,34 @@ mod tests {
                 message
             );
         }
+    }
+
+    // The web never sends `park`: its JSON must not change, and a missing `park` is false.
+    #[test]
+    fn park_is_left_out_when_false_and_read_as_false_when_missing() {
+        let hidden = ClientMessage::Visible {
+            visible: false,
+            cols: None,
+            rows: None,
+            park: false,
+        };
+        assert!(!hidden.to_json().contains("park"));
+        let missing = r#"{"type":"visible","visible":false}"#;
+        assert_eq!(
+            serde_json::from_str::<ClientMessage>(missing).unwrap(),
+            hidden
+        );
+        let parked = ClientMessage::Visible {
+            visible: false,
+            cols: None,
+            rows: None,
+            park: true,
+        };
+        let json = parked.to_json();
+        assert_eq!(
+            serde_json::from_str::<ClientMessage>(&json).unwrap(),
+            parked
+        );
     }
 
     #[test]

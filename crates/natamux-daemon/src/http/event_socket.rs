@@ -57,10 +57,14 @@ impl EventSender {
         if !self.socket.is_open() || skipping {
             return;
         }
-        if self.socket.buffered() <= EVENTS_HIGH_WATER {
+        let queued = self.socket.buffered();
+        if queued <= EVENTS_HIGH_WATER {
             self.socket.send(text);
             return;
         }
+        eprintln!(
+            "events: a dashboard is behind ({queued} bytes queued), skipping until it drains"
+        );
         self.check_later();
     }
 
@@ -77,6 +81,7 @@ impl EventSender {
             self.clear();
         } else if self.socket.buffered() <= EVENTS_HIGH_WATER {
             self.clear();
+            eprintln!("events: the dashboard drained, sending resync");
             self.socket.send(RESYNC);
         } else {
             self.check_later();

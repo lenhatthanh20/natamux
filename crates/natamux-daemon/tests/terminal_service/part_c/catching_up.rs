@@ -187,7 +187,7 @@ fn measures_quiet_against_the_size_the_shell_has_now() {
 
 #[test]
 fn resumes_from_the_ring_while_it_still_has_what_the_client_missed_even_from_its_first_byte() {
-    // The ring holds the last 16 frames, so the client's first missed byte starts it.
+    // The ring holds the last RING_FRAMES frames, so the client's first missed byte starts it.
     let (h, _pty, slow, _) = behind(8 + RING_FRAMES);
 
     quiet(&h, RESYNC_QUIET_WINDOW_MS);
@@ -195,7 +195,9 @@ fn resumes_from_the_ring_while_it_still_has_what_the_client_missed_even_from_its
     assert_eq!(catch_ups(&slow.frames()), resume());
     assert_eq!(
         controls(&slow.frames()).last(),
-        Some(&ServerMessage::Replayed { offset: 24 * FRAME })
+        Some(&ServerMessage::Replayed {
+            offset: (8 + RING_FRAMES) as u64 * FRAME
+        })
     );
     let daemon = daemon_screen(&h, &[]);
     expect_same_screen(&slow.frames(), &daemon);
@@ -213,7 +215,9 @@ fn takes_a_snapshot_once_the_ring_lost_what_the_client_missed() {
     assert_eq!(catch_ups(&slow.frames()), [snapshot_msg()]);
     assert_eq!(
         controls(&slow.frames()).last(),
-        Some(&ServerMessage::Replayed { offset: 25 * FRAME })
+        Some(&ServerMessage::Replayed {
+            offset: (9 + RING_FRAMES) as u64 * FRAME
+        })
     );
     let daemon = daemon_screen(&h, &[]);
     expect_same_screen(&since_snapshot(&slow.frames()), &daemon);

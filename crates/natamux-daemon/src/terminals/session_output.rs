@@ -153,9 +153,9 @@ fn send_frame(session: &mut Session, frame: Bytes) {
 }
 
 /// A live client takes a frame while it is within CLIENT_HIGH_WATER of its acks and, when hidden,
-/// while the frame fits the budget of the current window.
+/// while the frame fits the budget of the current window. A parked client takes none.
 fn admits(state: &mut ClientState, bytes: u64, now: u64) -> bool {
-    if state.sent + bytes - state.acked > CLIENT_HIGH_WATER {
+    if state.parked || state.sent + bytes - state.acked > CLIENT_HIGH_WATER {
         return false;
     }
     if state.visible {

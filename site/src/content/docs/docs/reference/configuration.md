@@ -277,7 +277,7 @@ The stage starts in every case. Each agent page says where it finds skills, for 
 | Wait for a CI run to start | 3 minutes. |
 | Wait for a CI run to finish | 30 minutes. |
 | A `check` command, and a `command` of a condition | 10 minutes each. |
-| Terminals per task | 6. Natamux runs 30 terminals in all. |
+| Terminals per task | 6. Natamux runs 64 terminals in all. |
 | Shell for commands | `sh -c`, or `cmd.exe` on Windows. |
 | Attachments per task | 20 files, 20 MB each, 50 MB in all. |
 

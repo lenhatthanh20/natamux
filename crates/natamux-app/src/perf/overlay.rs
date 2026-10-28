@@ -2,6 +2,7 @@
 //! the window draws every frame, so frame times can be measured; that costs power, so it is off by
 //! default.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use gpui::{App, Global, Window};
@@ -12,7 +13,12 @@ use super::stats::{PerfStats, Summary};
 pub struct Perf {
     pub enabled: bool,
     pub stats: PerfStats,
+    /// `--gate2` measures real draws: no forced frames and no refresh, but the samples go on.
+    pub quiet: bool,
 }
+
+/// A frame watch is waiting for the next frame: two would count every frame twice.
+static WATCHING: AtomicBool = AtomicBool::new(false);
 
 impl Global for Perf {}
 
@@ -21,6 +27,7 @@ pub fn init(cx: &mut App) {
     cx.set_global(Perf {
         enabled,
         stats: PerfStats::default(),
+        quiet: false,
     });
 }
 
@@ -33,8 +40,52 @@ pub fn key(terminal: &str, at: Instant, cx: &mut App) {
     }
 }
 
+/// The overlay forces frames and refreshes. False while `--gate2` measures real draws.
 pub fn enabled(cx: &App) -> bool {
-    cx.global::<Perf>().enabled
+    let perf = cx.global::<Perf>();
+    perf.enabled && !perf.quiet
+}
+
+/// A terminal socket reconnected.
+pub fn reconnect(terminal: &str, cx: &mut App) {
+    let perf = cx.global_mut::<Perf>();
+    if perf.enabled {
+        perf.stats.reconnect(terminal);
+    }
+}
+
+/// The dashboard link went to Reconnecting.
+pub fn link_lost(cx: &mut App) {
+    let perf = cx.global_mut::<Perf>();
+    if perf.enabled {
+        perf.stats.link_lost += 1;
+    }
+}
+
+/// A terminal drew a screen: a skeleton it shows later is a flash.
+pub fn drew(terminal: &str, cx: &mut App) {
+    let perf = cx.global_mut::<Perf>();
+    if perf.enabled {
+        perf.stats.drew(terminal);
+    }
+}
+
+/// A pane showed the skeleton. It counts only after `drew`, as a first attach always shows it;
+/// the count should stay 0.
+pub fn skeleton(terminal: &str, cx: &mut App) {
+    let perf = cx.global_mut::<Perf>();
+    if perf.enabled {
+        perf.stats.skeleton(terminal);
+    }
+}
+
+/// A terminal came on screen and its catch-up ended after `latency` (an empty one when it missed
+/// nothing).
+pub fn shown(terminal: &str, latency: Duration, cx: &mut App) {
+    let perf = cx.global_mut::<Perf>();
+    if perf.enabled {
+        perf.stats.shown(terminal, latency);
+    }
 }
 
 /// A terminal wrote output to its screen.
@@ -56,9 +107,13 @@ pub fn toggle(window: &mut Window, cx: &mut App) {
 
 /// Starts the frame clock, if the overlay is on. Each frame starts the clock of the next one.
 pub fn watch_frames(window: &mut Window) {
+    if WATCHING.swap(true, Ordering::Relaxed) {
+        return;
+    }
     window.on_next_frame(|window, cx| {
+        WATCHING.store(false, Ordering::Relaxed);
         let perf = cx.global_mut::<Perf>();
-        if perf.enabled {
+        if perf.enabled && !perf.quiet {
             perf.stats.frame(Instant::now());
             watch_frames(window);
         }

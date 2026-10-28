@@ -5,6 +5,10 @@
 //! bench's shells as panes, printing, and the first pane scrolls for 20 s: a third report. Last,
 //! the bench closes, 100 keys are typed into a quiet shell of the task, and a fourth report is
 //! saved. Every path is printed.
+//! With `--terminals` and `--output` the bench has up to 60 shells, and two phases follow the
+//! panes: the hidden phase (the table on screen, every bench shell hidden and printing, for the
+//! draws and the CPU of an app that shows nothing) and the show latency (a hidden shell shown in
+//! a pane 20 times).
 //! Keys and scrolls go through the window's own event dispatch, not the keyboard and mouse, so
 //! key to glyph starts where it does for real keys: at the app's key event.
 //! It never opens the task's Terminal 1, where its agent may work.
@@ -13,14 +17,18 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Result, anyhow};
 use gpui::{
-    App, AppContext as _, AsyncApp, Keystroke, ListOffset, Modifiers, Pixels, PlatformInput, Point,
-    ScrollDelta, ScrollWheelEvent, TouchPhase, Window, WindowHandle, point, px,
+    App, AppContext as _, AsyncApp, Context, Entity, Keystroke, ListOffset, Modifiers, Pixels,
+    PlatformInput, Point, ScrollDelta, ScrollWheelEvent, TouchPhase, Window, WindowHandle, point,
+    px,
 };
 
 use super::window::Root;
-use crate::bench::bench_view::{BenchView, FIRST_TERMINAL};
-use crate::perf::overlay;
-use crate::perf::stats::PerfStats;
+use crate::bench::bench_view::{
+    BenchView, FIRST_TERMINAL, Output, TERMINALS, TYPING_TERMINAL, shown_count,
+};
+use crate::perf::report::{cpu_percent, process_usage};
+use crate::perf::stats::{BenchInfo, HiddenPhase};
+use crate::perf::{draws, overlay};
 
 const WAIT_FOR_TASK: Duration = Duration::from_secs(15);
 const BENCH: Duration = Duration::from_secs(60);
@@ -28,6 +36,14 @@ const TABLE: Duration = Duration::from_secs(20);
 const PANES: Duration = Duration::from_secs(20);
 /// The screen-2 target: frames hold with 4 panes of printing shells on screen.
 const PANE_COUNT: u16 = 4;
+/// The hidden phase and the show latency (`--terminals`).
+const HIDDEN: Duration = Duration::from_secs(20);
+const SHOWS: usize = 20;
+/// A terminal is hidden at least this long before it shows.
+const HIDDEN_BEFORE_SHOW: Duration = Duration::from_secs(3);
+/// A show that gives no latency sample in this time is reported and skipped.
+const SHOW_WAIT: Duration = Duration::from_secs(3);
+const SHOW_POLL: Duration = Duration::from_millis(50);
 /// The panes connect and draw their history within this.
 const PANES_OPEN: Duration = Duration::from_secs(3);
 const SCROLL_EVERY: Duration = Duration::from_millis(50);
@@ -42,25 +58,58 @@ const KEY_GAP: Duration = Duration::from_millis(150);
 const CLEAR_EVERY: usize = 20;
 const LETTERS: &[u8] = b"abcdefghijklmnopqrstuvwxyz";
 
-pub fn run(handle: WindowHandle<Root>, task_id: String, cx: &mut App) {
-    cx.spawn(async move |cx| match steps(handle, &task_id, cx).await {
-        Ok(()) => cx.update(|cx| cx.quit()),
-        Err(error) => {
-            eprintln!("gate2: {error:#}");
-            std::process::exit(1);
-        }
-    })
+pub fn run(
+    handle: WindowHandle<Root>,
+    task_id: String,
+    terminals: u16,
+    output: Output,
+    cx: &mut App,
+) {
+    cx.spawn(
+        async move |cx| match steps(handle, &task_id, terminals, output, cx).await {
+            Ok(()) => cx.update(|cx| cx.quit()),
+            Err(error) => {
+                eprintln!("gate2: {error:#}");
+                std::process::exit(1);
+            }
+        },
+    )
     .detach();
 }
 
-async fn steps(handle: WindowHandle<Root>, task_id: &str, cx: &mut AsyncApp) -> Result<()> {
+async fn steps(
+    handle: WindowHandle<Root>,
+    task_id: &str,
+    terminals: u16,
+    output: Output,
+    cx: &mut AsyncApp,
+) -> Result<()> {
     let task = wait_for_task(handle, task_id, cx).await?;
 
-    handle
+    let bench = handle
         .update(cx, |root, window, cx| {
-            root.open_bench(Some(task.clone()), BenchView::new, window, cx)
+            root.open_bench(
+                Some(task.clone()),
+                |source, task, window, cx: &mut Context<BenchView>| {
+                    BenchView::sized(source, task, terminals, output, window, cx)
+                },
+                window,
+                cx,
+            )
         })?
         .ok_or_else(|| anyhow!("{task_id} has no running shells"))?;
+    let shown = shown_count(terminals);
+    cx.update(|cx| {
+        cx.global_mut::<overlay::Perf>().stats.bench = Some(BenchInfo {
+            terminals: usize::from(terminals),
+            shown,
+            output: output.name(),
+        });
+    });
+    println!(
+        "gate2: {terminals} terminals printing {} ({shown} shown)",
+        output.name()
+    );
     // An inactive window draws at most 30 frames a second while frame callbacks wait.
     in_window(handle, cx, |window, _| window.activate_window())?;
     cx.background_executor()
@@ -84,10 +133,24 @@ async fn steps(handle: WindowHandle<Root>, task_id: &str, cx: &mut AsyncApp) -> 
     }
     save(handle, "bench", cx)?;
     scroll_table(handle, cx).await?;
-    scroll_panes(handle, task_id, cx).await?;
+    let pane_names = scroll_panes(handle, task_id, terminals, cx).await?;
+    // The two new phases only run when the bench is not the old default, so old runs repeat.
+    if terminals != TERMINALS || output != Output::Flood {
+        hidden_phase(handle, &bench, terminals, cx).await?;
+        show_latency(handle, task_id, &pane_names, cx).await?;
+    }
     stop_bench(handle, cx).await?;
+    typing_phase(handle, &task, task_id, cx).await
+}
 
-    println!("gate2: typing {KEYS} keys into Terminal 912 of {task_id}");
+/// Types into a quiet shell of the task and saves its report; then the shell ends.
+async fn typing_phase(
+    handle: WindowHandle<Root>,
+    task: &natamux_proto::tasks::task::Task,
+    task_id: &str,
+    cx: &mut AsyncApp,
+) -> Result<()> {
+    println!("gate2: typing {KEYS} keys into Terminal {TYPING_TERMINAL} of {task_id}");
     let typing = handle
         .update(cx, |root, window, cx| {
             root.open_bench(Some(task.clone()), BenchView::typing, window, cx)
@@ -103,10 +166,7 @@ async fn steps(handle: WindowHandle<Root>, task_id: &str, cx: &mut AsyncApp) -> 
     press(handle, "a", cx)?;
     press(handle, "ctrl-u", cx)?;
     cx.background_executor().timer(SHELL_START).await;
-    cx.update(|cx| {
-        let perf = cx.global_mut::<overlay::Perf>();
-        perf.stats = PerfStats::default();
-    });
+    new_part(cx);
     for index in 0..KEYS {
         let letter = LETTERS[index % LETTERS.len()] as char;
         press(handle, &letter.to_string(), cx)?;
@@ -124,10 +184,7 @@ async fn steps(handle: WindowHandle<Root>, task_id: &str, cx: &mut AsyncApp) -> 
 /// Main shows the table while the bench's shells keep printing out of sight: the table scrolls by
 /// itself, then its report is saved.
 async fn scroll_table(handle: WindowHandle<Root>, cx: &mut AsyncApp) -> Result<()> {
-    cx.update(|cx| {
-        let perf = cx.global_mut::<overlay::Perf>();
-        perf.stats = PerfStats::default();
-    });
+    new_part(cx);
     handle.update(cx, |root, _, cx| {
         root.park_bench(cx);
         root.task_view().read(cx).table().read(cx).scroll_to(0);
@@ -149,21 +206,24 @@ async fn scroll_table(handle: WindowHandle<Root>, cx: &mut AsyncApp) -> Result<(
 
 /// Main shows the task's workspace with only the first bench shells as panes: they keep printing
 /// while the first pane scrolls, then the report is saved and All tasks shows again.
-async fn scroll_panes(handle: WindowHandle<Root>, task_id: &str, cx: &mut AsyncApp) -> Result<()> {
-    let names: Vec<String> = (FIRST_TERMINAL..FIRST_TERMINAL + PANE_COUNT)
+async fn scroll_panes(
+    handle: WindowHandle<Root>,
+    task_id: &str,
+    terminals: u16,
+    cx: &mut AsyncApp,
+) -> Result<Vec<String>> {
+    let names: Vec<String> = (FIRST_TERMINAL..FIRST_TERMINAL + PANE_COUNT.min(terminals))
         .map(|name| name.to_string())
         .collect();
+    let shown = names.clone();
     handle.update(cx, |root, _, cx| {
         let panes = root.workspace_view().read(cx).panes().clone();
-        panes.update(cx, |panes, cx| panes.show_only(Some(names), cx));
+        panes.update(cx, |panes, cx| panes.show_only(Some(shown), cx));
         root.dashboard()
             .update(cx, |dashboard, cx| dashboard.open(task_id, cx));
     })?;
     cx.background_executor().timer(PANES_OPEN).await;
-    cx.update(|cx| {
-        let perf = cx.global_mut::<overlay::Perf>();
-        perf.stats = PerfStats::default();
-    });
+    new_part(cx);
     println!(
         "gate2: scrolling a grid of {PANE_COUNT} printing panes for {} s",
         PANES.as_secs()
@@ -187,7 +247,110 @@ async fn scroll_panes(handle: WindowHandle<Root>, task_id: &str, cx: &mut AsyncA
         let panes = root.workspace_view().read(cx).panes().clone();
         panes.update(cx, |panes, cx| panes.show_only(None, cx));
     })?;
-    Ok(())
+    Ok(names)
+}
+
+/// A new part of the run: the samples start again, the run's counts stay.
+fn new_part(cx: &mut AsyncApp) {
+    cx.update(|cx| cx.global_mut::<overlay::Perf>().stats.next_part());
+}
+
+/// The table shows while every bench shell is hidden and printing. The overlay stops forcing
+/// frames, so the draws are the app's own; its CPU and draws per second are in the report.
+async fn hidden_phase(
+    handle: WindowHandle<Root>,
+    bench: &Entity<BenchView>,
+    terminals: u16,
+    cx: &mut AsyncApp,
+) -> Result<()> {
+    cx.update(|cx| {
+        bench.update(cx, |bench, cx| bench.set_panes_visible(false, cx));
+        let perf = cx.global_mut::<overlay::Perf>();
+        perf.stats.next_part();
+        perf.quiet = true;
+    });
+    handle.update(cx, |root, _, cx| root.follow_overlay(cx))?;
+    // A frame or two already started finish before the count starts.
+    cx.background_executor().timer(Duration::from_secs(1)).await;
+    println!(
+        "gate2: table with {} terminals hidden for {} s",
+        terminals,
+        HIDDEN.as_secs()
+    );
+    draws::take();
+    let usage = process_usage();
+    let started = Instant::now();
+    cx.background_executor().timer(HIDDEN).await;
+    let wall = started.elapsed();
+    let drawn = draws::take();
+    let cpu = usage
+        .zip(process_usage())
+        .and_then(|(from, to)| cpu_percent(&from, &to, wall));
+    cx.update(|cx| {
+        let perf = cx.global_mut::<overlay::Perf>();
+        perf.quiet = false;
+        perf.stats.hidden_phase = Some(HiddenPhase {
+            seconds: wall.as_secs_f64(),
+            draws_per_second: drawn as f64 / wall.as_secs_f64(),
+            cpu_percent: cpu,
+        });
+    });
+    handle.update(cx, |root, _, cx| root.follow_overlay(cx))?;
+    in_window(handle, cx, |window, cx| {
+        cx.global_mut::<overlay::Perf>().stats.pause();
+        overlay::watch_frames(window);
+    })?;
+    save(handle, "hidden", cx)
+}
+
+/// Shows a hidden bench shell in a pane `SHOWS` times, each after `HIDDEN_BEFORE_SHOW` hidden.
+/// The panes record show to catch-up (`overlay::shown`); a show with no sample is reported.
+async fn show_latency(
+    handle: WindowHandle<Root>,
+    task_id: &str,
+    names: &[String],
+    cx: &mut AsyncApp,
+) -> Result<()> {
+    new_part(cx);
+    println!("gate2: showing a hidden terminal {SHOWS} times");
+    let mut missed = 0;
+    for index in 0..SHOWS {
+        cx.background_executor().timer(HIDDEN_BEFORE_SHOW).await;
+        let Some(name) = names.get(index % names.len().max(1)) else {
+            break;
+        };
+        let before = shown_samples(cx);
+        let only = vec![name.clone()];
+        handle.update(cx, |root, _, cx| {
+            let panes = root.workspace_view().read(cx).panes().clone();
+            panes.update(cx, |panes, cx| panes.show_only(Some(only), cx));
+            root.dashboard()
+                .update(cx, |dashboard, cx| dashboard.open(task_id, cx));
+        })?;
+        let started = Instant::now();
+        while shown_samples(cx) == before && started.elapsed() < SHOW_WAIT {
+            cx.background_executor().timer(SHOW_POLL).await;
+        }
+        if shown_samples(cx) == before {
+            missed += 1;
+        }
+        handle.update(cx, |root, _, cx| {
+            root.dashboard()
+                .update(cx, |dashboard, cx| dashboard.back(cx));
+        })?;
+    }
+    if missed > 0 {
+        eprintln!("gate2: {missed} of {SHOWS} shows gave no latency sample");
+    }
+    handle.update(cx, |root, _, cx| {
+        let panes = root.workspace_view().read(cx).panes().clone();
+        panes.update(cx, |panes, cx| panes.show_only(None, cx));
+    })?;
+    save(handle, "show-latency", cx)
+}
+
+fn shown_samples(cx: &mut AsyncApp) -> usize {
+    cx.update(|cx| cx.global::<overlay::Perf>().stats.shown_count())
 }
 
 /// Saves the perf report of one part of the run and prints its path.

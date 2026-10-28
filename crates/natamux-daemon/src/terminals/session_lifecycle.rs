@@ -16,7 +16,7 @@ use natamux_screen::frames::whole_chars;
 use super::limits::{EXIT_WAIT_MS, KILL_GRACE_MS, PARSE_TURN_BYTES};
 use super::session_input::set_paused;
 use super::session_output::{flush_output, queue_output};
-use super::session_snapshot::{end_snapshots, frame_parsed};
+use super::session_snapshot::{catch_up_at_exit, end_snapshots, frame_parsed};
 use super::types::{Frame, Session, SessionRef, Size, TerminalError};
 use crate::shared::scheduler::Scheduler;
 use crate::shared::turns::Turns;
@@ -108,9 +108,11 @@ pub fn spawn_session(new: NewSession<'_>) -> Result<SessionRef, TerminalError> {
     }))
 }
 
-/// Shells parse one at a time: a read is parsed in turns of PARSE_TURN_BYTES, ranges of the read
-/// with no copy, and the `parsing` lock is free between them, so another shell's read goes in
-/// between. `parse` runs under the lock, `after` (the output listeners) without it.
+/// Shells parse in lanes, a few at a time: a read is parsed in turns of PARSE_TURN_BYTES, ranges
+/// of the read with no copy, and the turn is given back between them, so another shell's read
+/// goes in between. `parse` runs in the turn, `after` (the output listeners) outside it. The order
+/// inside one shell holds: its reads come from one reader thread, one after the other, and
+/// `parse` takes the output under the session's lock.
 pub fn parse_in_turns<'a, T>(
     parsing: &Turns,
     read: &'a [u8],
@@ -181,7 +183,7 @@ pub fn shell_exited(session: &mut Session, code: Option<i32>, table: Option<&Pro
     scheduler.clear(&mut session.resync_timer);
     // After a close, nothing is pending and no client is left, so nothing goes out twice.
     flush_output(session);
-    end_snapshots(session);
+    catch_up_at_exit(session);
     set_paused(session, false);
     for (client, _) in session.clients.drain(..) {
         client.send(Frame::Message(ServerMessage::Exit { code }));

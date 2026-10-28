@@ -17,7 +17,7 @@ use crate::terminals::terminal_screen::terminal_screen;
 actions!(natamux, [SubmitWord]);
 
 /// Next to the bench's, far from the terminals a task's stages use.
-const TERMINAL: &str = "911";
+const TERMINAL: &str = "991";
 const TYPED_FILE: &str = "/tmp/natamux-ime.txt";
 
 pub struct ImeCheck {

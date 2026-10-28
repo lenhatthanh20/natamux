@@ -33,7 +33,7 @@ fn counts_a_shell_as_watched_only_while_a_client_shows_it() {
     let (_, shown, _) = attach_at(&h, "T-0001", SIZE, "1");
     assert!(h.service.watched("T-0001", "1"));
 
-    h.service.visible("T-0001", "1", &shown, false, None);
+    h.service.visible("T-0001", "1", &shown, false, None, false);
     assert!(!h.service.watched("T-0001", "1"));
 
     let (_, hidden) = client();

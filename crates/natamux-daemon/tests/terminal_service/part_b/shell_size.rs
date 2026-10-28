@@ -74,11 +74,14 @@ fn claim_off_screen(action: &str) {
     h.attach_to("T-0001", &off, SMALL, "1", hidden());
 
     // The page came back: no claim.
-    h.service.visible("T-0001", "1", &off, true, None);
+    h.service.visible("T-0001", "1", &off, true, None, false);
     assert!(h.pty(0).sizes().is_empty());
 
     match action {
-        "visible" => h.service.visible("T-0001", "1", &off, true, Some(SMALL)),
+        "visible" => {
+            h.service
+                .visible("T-0001", "1", &off, true, Some(SMALL), false);
+        }
         "input" => h.service.input("T-0001", "1", Some(&off), "x"),
         _ => h.service.resize("T-0001", "1", Some(&off), SMALL),
     }
@@ -111,7 +114,8 @@ fn lets_a_client_claim_at_the_size_the_shell_has_with_no_resize() {
     let (_, second) = client();
     let detach = h.attach_to("T-0001", &second, LARGE, "1", AttachOptions::default());
 
-    h.service.visible("T-0001", "1", &first, true, Some(LARGE));
+    h.service
+        .visible("T-0001", "1", &first, true, Some(LARGE), false);
     assert_eq!(h.pty(0).sizes(), [pair(LARGE)]);
     // The first client claimed last, at the large size, so the shell keeps it.
     detach.detach();
@@ -126,8 +130,9 @@ fn never_changes_the_size_for_a_client_that_leaves_the_screen() {
     let (_, second) = client();
     visible_at(&h, &second, LARGE);
 
-    h.service.visible("T-0001", "1", &first, false, Some(SMALL));
-    h.service.visible("T-0001", "1", &first, false, None);
+    h.service
+        .visible("T-0001", "1", &first, false, Some(SMALL), false);
+    h.service.visible("T-0001", "1", &first, false, None, false);
 
     assert_eq!(h.pty(0).sizes(), [pair(LARGE)]);
 }

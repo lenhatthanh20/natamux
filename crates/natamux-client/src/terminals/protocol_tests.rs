@@ -177,6 +177,7 @@ fn coming_on_screen_claims_the_size_and_leaving_says_so() {
             visible: true,
             cols: Some(100),
             rows: Some(30),
+            park: false,
         }]
     );
     assert_eq!(
@@ -196,6 +197,7 @@ fn coming_on_screen_claims_the_size_and_leaving_says_so() {
             visible: false,
             cols: None,
             rows: None,
+            park: true,
         }]
     );
 }
@@ -216,6 +218,7 @@ fn a_claim_during_a_catch_up_waits_for_its_end() {
                 visible: true,
                 cols: Some(80),
                 rows: Some(24),
+                park: false,
             },
         ]
     );
@@ -381,6 +384,7 @@ fn focus_during_a_catch_up_claims_at_its_end() {
                 visible: true,
                 cols: Some(80),
                 rows: Some(24),
+                park: false,
             },
         ]
     );
@@ -465,5 +469,19 @@ fn a_hidden_resume_with_no_snapshot_claims_nothing() {
     assert_eq!(
         protocol.caught_up(7).send,
         [ClientMessage::Ack { offset: 7 }]
+    );
+}
+
+#[test]
+fn a_hidden_connect_parks_and_a_hide_parks() {
+    let mut hidden = Protocol::new("1", 80, 24, false);
+    assert_eq!(open(&mut hidden).send, [parked()]);
+
+    let mut shown = Protocol::new("1", 80, 24, true);
+    assert!(open(&mut shown).send.is_empty());
+    assert_eq!(shown.set_visible(false).send, [parked()]);
+    assert!(
+        shown.set_visible(false).send.is_empty(),
+        "parked once until shown again"
     );
 }
