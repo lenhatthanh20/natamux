@@ -15,7 +15,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Result, anyhow};
 use futures::channel::oneshot;
 use futures::future::{Either, select};
-use gpui::{App, AsyncApp, Window, WindowHandle};
+use gpui::{App, AppContext as _, AsyncApp, Window, WindowHandle};
 use serde_json::{Value, json};
 
 use super::window::Root;

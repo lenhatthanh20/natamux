@@ -50,7 +50,7 @@ impl FakeDaemon {
     /// A task changed as a hook changes it: a new title. False when there is no such task.
     pub fn touch_task(&self, task_id: &str, title: &str) -> bool {
         let mut data = self.data();
-        let Some(event) = data.touch(task_id, title) else {
+        let Some(event) = data.retitle(task_id, title) else {
             return false;
         };
         data.send(event);
@@ -104,12 +104,11 @@ impl Data {
         }
     }
 
-    /// The new title, as the task list a daemon sends after the change.
-    fn touch(&mut self, task_id: &str, title: &str) -> Option<DashboardEvent> {
+    /// The new title, as the one-task event the client sends after the change.
+    fn retitle(&mut self, task_id: &str, title: &str) -> Option<DashboardEvent> {
         let task = self.task_mut(task_id).ok()?;
         task.title = title.into();
         task.updated_at = NOW.into();
-        // P3: send DashboardEvent::TaskChanged(task) once the client sends one task.
         Some(DashboardEvent::Tasks(self.tasks.clone()))
     }
 
@@ -162,7 +161,7 @@ impl Data {
                     terminals: list.clone(),
                 }
             }
-            _ => self.touch(&id, &format!("Bench task changed at step {step}"))?,
+            _ => self.retitle(&id, &format!("Bench task changed at step {step}"))?,
         })
     }
 }

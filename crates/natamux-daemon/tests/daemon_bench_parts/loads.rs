@@ -93,6 +93,8 @@ fn bench_task(number: usize) -> Task {
         branch: Some(format!("natamux/t-{number:04}-bench")),
         workspace: Some(format!("/work/T-{number:04}")),
         stage: "implement".into(),
+        // A task file needs at least one stage to load.
+        stages: ["spec", "implement", "review"].map(Value::from).to_vec(),
         created_at: "2026-10-08T09:00:00.000Z".into(),
         updated_at: "2026-10-08T09:30:00.000Z".into(),
         ..Task::default()
