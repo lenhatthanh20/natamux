@@ -10,7 +10,7 @@ use ui::prelude::*;
 use super::settings_tab_rules::{SEND_BACKS_HINT, SEND_BACKS_LABEL, send_backs_field};
 use crate::components::form::{input_box, text_editor};
 use crate::stages::pipeline_editor::PipelineEditor;
-use crate::stages::stage_fields_view::{error_line, labelled};
+use crate::stages::stage_fields_view::{error_line, inline_field};
 
 pub struct SendBacksField {
     pipeline: Entity<PipelineEditor>,
@@ -90,7 +90,7 @@ impl Render for SendBacksField {
         v_flex()
             .id("send-backs-field")
             .gap_1()
-            .child(labelled(
+            .child(inline_field(
                 SEND_BACKS_LABEL,
                 None,
                 Some(SEND_BACKS_HINT.into()),

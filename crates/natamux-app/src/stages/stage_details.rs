@@ -19,7 +19,8 @@ use super::kind_icon::kind_icon;
 use super::pipeline_editor::PipelineEditor;
 use super::stage_details_fields::StageFields;
 use super::stage_fields_view::{
-    Choice, change, default_mark, issue_list, labelled, open_choices, select,
+    Choice, SELECT_WIDTH, change, default_mark, inline_field, issue_list, labelled, open_choices,
+    select,
 };
 use super::stage_options::stage_options;
 use super::stage_picker::StagePicker;
@@ -207,11 +208,15 @@ impl DetailsPane {
         };
         let own_agent = takes_own_agent(steps, &stage.id);
         let mut body = v_flex()
-            .gap_4()
+            .gap_3()
             .child(stage_header(stage, cx))
             .children(issue_list(issues, cx))
             .child(self.name_field(stage, cx))
-            .children(stage_options(stage, steps, &self.editor, cx));
+            .child(
+                v_flex()
+                    .gap_2()
+                    .children(stage_options(stage, steps, &self.editor, cx)),
+            );
         if own_agent {
             body = body.child(self.agent_field(stage, steps, cx));
         }
@@ -289,7 +294,8 @@ impl DetailsPane {
                 open_choices(choices, event.position(), window, cx);
             },
         );
-        labelled("Agent", None, Some(help.into()), button).into_any_element()
+        let control = div().w(rems_from_px(SELECT_WIDTH)).child(button);
+        inline_field("Agent", None, Some(help.into()), control).into_any_element()
     }
 
     /// Command, check, output, sections and finished when.

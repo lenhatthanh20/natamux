@@ -11,7 +11,7 @@ use ui::prelude::*;
 use super::settings_tab_rules::{IDLE_PAUSE_HINT, IDLE_PAUSE_LABEL, idle_pause_field};
 use crate::components::form::{input_box, text_editor};
 use crate::stages::pipeline_editor::PipelineEditor;
-use crate::stages::stage_fields_view::{error_line, labelled};
+use crate::stages::stage_fields_view::{error_line, inline_field};
 
 pub struct IdlePauseField {
     pipeline: Entity<PipelineEditor>,
@@ -94,7 +94,7 @@ impl Render for IdlePauseField {
         v_flex()
             .id("idle-pause-field")
             .gap_1()
-            .child(labelled(
+            .child(inline_field(
                 IDLE_PAUSE_LABEL,
                 None,
                 Some(IDLE_PAUSE_HINT.into()),
