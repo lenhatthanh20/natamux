@@ -172,13 +172,14 @@ impl Dashboard {
     pub fn delete_task(
         &mut self,
         task_id: &str,
+        force: bool,
         cx: &mut Context<Self>,
     ) -> Written<DeleteTaskAnswer> {
         let Some(source) = self.source.clone() else {
             return Self::no_daemon();
         };
         self.write(
-            source.delete_task(task_id),
+            source.delete_task(task_id, force),
             false,
             cx,
             |this, answer, cx| {
@@ -215,13 +216,14 @@ impl Dashboard {
         &mut self,
         task_id: &str,
         delete_branch: bool,
+        force: bool,
         cx: &mut Context<Self>,
     ) -> Written<RemoveWorkspaceAnswer> {
         let Some(source) = self.source.clone() else {
             return Self::no_daemon();
         };
         let branch = self.data.task(task_id).and_then(|task| task.branch.clone());
-        let answer = source.remove_workspace(task_id, delete_branch);
+        let answer = source.remove_workspace(task_id, delete_branch, force);
         self.write(answer, true, cx, move |this, answer, cx| {
             this.take_task(&answer.task);
             let text = removed_text(&answer.task.id, branch.as_deref(), answer.branch_deleted);

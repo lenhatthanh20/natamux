@@ -25,6 +25,7 @@ use crate::http::errors::{
     zod_answer,
 };
 use crate::http::routes::stages::stage_answer;
+use crate::http::routes::workspaces::bool_query;
 use crate::http::server::AppState;
 use crate::stages::run::EventInput;
 use crate::tasks::errors::{TaskError, TaskResult};
@@ -85,8 +86,13 @@ pub async fn get_task(state: Arc<AppState>, id: String) -> Answer {
 }
 
 /// The task and everything stored with it. A workspace and its branch go too; uncommitted changes
-/// refuse the delete, so the task, the worktree and the branch all stay.
-pub async fn delete_task(state: Arc<AppState>, id: String) -> Answer {
+/// refuse the delete, so the task, the worktree and the branch all stay. `force=true` discards
+/// them instead.
+pub async fn delete_task(state: Arc<AppState>, id: String, query: &str) -> Answer {
+    let force = match bool_query(query, "force") {
+        Ok(force) => force,
+        Err(error) => return zod_answer(&error),
+    };
     let work = move || -> Result<Value, Box<Answer>> {
         let id = task_id_param(&id).map_err(|error| Box::new(zod_answer(&error)))?;
         let current = state
@@ -96,7 +102,7 @@ pub async fn delete_task(state: Arc<AppState>, id: String) -> Answer {
         if current.workspace.is_some() {
             state
                 .workspaces
-                .remove_for_delete(&id)
+                .remove_for_delete(&id, force)
                 .map_err(|error| Box::new(workspace_error(&error)))?;
         }
         state

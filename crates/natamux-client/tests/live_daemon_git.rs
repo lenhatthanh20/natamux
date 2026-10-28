@@ -83,6 +83,6 @@ async fn screen_4(client: &Client, made: &Made) {
         Err(other) => panic!("the message failed: {other}"),
     }
 
-    client.remove_workspace(id, true).await.unwrap();
-    client.delete_task(id).await.unwrap();
+    client.remove_workspace(id, true, false).await.unwrap();
+    client.delete_task(id, false).await.unwrap();
 }

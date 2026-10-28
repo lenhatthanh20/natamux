@@ -147,6 +147,61 @@ async fn answers_409_for_a_worktree_with_changes_that_are_not_committed() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn removes_a_worktree_with_changes_that_are_not_committed_when_forced() {
+    let (d, workspace) = with_workspace("ws-dirty-force").await;
+    std::fs::write(workspace.join("notes.txt"), "work in progress").unwrap();
+    std::fs::write(workspace.join("README.md"), "edited").unwrap();
+
+    let (status, removed) = d
+        .delete("/tasks/T-0001/workspace?deleteBranch=true&force=true")
+        .await;
+
+    assert_eq!(status, 200, "{removed}");
+    assert!(removed["task"]["workspace"].is_null());
+    assert!(!workspace.exists());
+    let state = worktree_state(&d.repo(), &workspace).unwrap();
+    assert_eq!(state, WorktreeState::Missing);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn answers_409_with_the_path_for_a_folder_that_is_not_a_git_worktree_also_when_forced() {
+    let (d, workspace) = with_workspace("ws-not-worktree-force").await;
+    delete_folder(&workspace);
+    prune(&d);
+    std::fs::create_dir(&workspace).unwrap();
+    std::fs::write(workspace.join("mine.txt"), "my own file").unwrap();
+
+    let (status, removed) = d.delete("/tasks/T-0001/workspace?force=true").await;
+
+    assert_eq!(status, 409, "{removed}");
+    assert!(workspace.join("mine.txt").exists());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn deletes_a_task_whose_worktree_has_changes_when_forced() {
+    let (d, workspace) = with_workspace("ws-delete-task-force").await;
+    run_git(&workspace, &["commit", "--allow-empty", "-m", "work"]);
+    std::fs::write(workspace.join("notes.txt"), "work in progress").unwrap();
+
+    let (status, body) = d.delete("/tasks/T-0001?force=true").await;
+
+    assert_eq!(status, 200, "{body}");
+    assert!(!workspace.exists());
+    assert_eq!(run_git(&d.repo(), &["branch", "--list", BRANCH]), "");
+    assert_eq!(d.get("/tasks/T-0001").await.0, 404);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn answers_400_for_a_force_value_that_is_not_true_or_false() {
+    let (d, workspace) = with_workspace("ws-bad-force").await;
+
+    assert_eq!(d.delete("/tasks/T-0001/workspace?force=yes").await.0, 400);
+    assert_eq!(d.delete("/tasks/T-0001?force=yes").await.0, 400);
+    assert!(workspace.exists());
+    assert_eq!(d.get("/tasks/T-0001").await.0, 200);
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn deletes_a_task_and_its_worktree_and_keeps_both_when_the_worktree_has_changes() {
     let (d, workspace) = with_workspace("ws-delete-task").await;
     run_git(&workspace, &["commit", "--allow-empty", "-m", "work"]);

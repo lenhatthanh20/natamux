@@ -46,7 +46,7 @@ To do these from a script, use the daemon's own token, not the one in a task ter
 | `GET /tasks?state=<state>` | List tasks |
 | `POST /tasks` | Create a task (`title` is required) |
 | `GET /tasks/:id` | One task |
-| `DELETE /tasks/:id` | Delete the task, its notes and its history. A workspace and its branch are removed too, also when the branch has commits that are not merged. Answers 409 when that workspace has changes that are not committed, and the task, the worktree and the branch stay |
+| `DELETE /tasks/:id` | Delete the task, its notes and its history. A workspace and its branch are removed too, also when the branch has commits that are not merged. Answers 409 when that workspace has changes that are not committed, and the task, the worktree and the branch stay. `?force=true` discards those changes and deletes anyway |
 | `PATCH /tasks/:id` | Change `title`, `description`, `priority`, `labels` or `dependsOn` |
 | `GET /tasks/:id/events` | The event log of a task |
 | `POST /tasks/:id/events` | Send an event `{ source, type, payload? }`. Answers `{ task, accepted }` |
@@ -55,7 +55,7 @@ To do these from a script, use the daemon's own token, not the one in a task ter
 | `PUT /tasks/:id/skip` | Whether a stage not reached yet is skipped when the task reaches it `{ stage, on }`. Answers 400 when marking the current stage or an earlier one or the context stage, and for any change on a task that is over |
 | `PUT /tasks/:id/workflow` | Whether a stage runs as a workflow the next time it starts `{ stage, on }`. Answers 400 when the stage does not offer it or the agent is not Claude Code |
 | `POST /tasks/:id/workspace` | Create the worktree and branch. Body `{ base? }` |
-| `DELETE /tasks/:id/workspace?deleteBranch=true` | Remove the worktree |
+| `DELETE /tasks/:id/workspace?deleteBranch=true` | Remove the worktree. Answers 409 when it has changes that are not committed; `&force=true` discards them and removes anyway |
 | `POST /tasks/:id/agent` | Start an agent `{ agent, prompt?, base? }` |
 | `POST /tasks/:id/agent/reopen` | Start the agent of Terminal 1 of a done or cancelled task again, on its last session: `{ task }`. The task keeps its state. Answers 409 when the task is not finished, has no workspace or no agent, or an agent runs in Terminal 1 |
 | `GET /tasks/:id/changes` | Files changed in the workspace. The answer is kept for 5 seconds; `?fresh=1` reads git now |

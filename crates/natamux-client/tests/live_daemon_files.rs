@@ -106,6 +106,6 @@ async fn screen_6(client: &Client, made: &Made) {
 
     assert!(client.list_attachments(id).await.unwrap().is_empty());
 
-    client.remove_workspace(id, true).await.unwrap();
-    client.delete_task(id).await.unwrap();
+    client.remove_workspace(id, true, false).await.unwrap();
+    client.delete_task(id, false).await.unwrap();
 }

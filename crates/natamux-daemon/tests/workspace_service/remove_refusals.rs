@@ -25,10 +25,12 @@ fn refuses_a_path_that_is_not_a_worktree(make: impl Fn(&Fx, &Path)) {
     let before = contents_of(&path);
 
     let error = fx.ws.remove(&task.id, true).unwrap_err();
+    let forced = fx.ws.remove_anyway(&task.id, true).unwrap_err();
 
     assert!(matches!(error, WorkspaceError::Conflict(_)));
     assert!(error.to_string().contains(path_text(&path)));
     assert!(error.to_string().contains("not a git worktree"));
+    assert_eq!(forced.to_string(), error.to_string());
     assert!(fx.closed_ids().is_empty());
     assert_eq!(contents_of(&path), before);
     assert_eq!(fx.workspace_of(&task.id), created.workspace);
@@ -129,4 +131,49 @@ fn refuses_a_worktree_with_a_tracked_edit_and_a_new_file_delete_branch_true_and_
 #[test]
 fn refuses_a_worktree_with_a_staged_change_only_delete_branch_false_and_leaves_it_as_it_was() {
     refuses_a_worktree_with_changes(false, stage_file);
+}
+
+fn removes_a_worktree_with_changes_anyway(change: fn(&Path)) {
+    let fx = Fx::new();
+    let task = fx.task("Fix the bug");
+    let path = path_of(&fx.ws.create(&task.id, None).unwrap());
+    commit_tracked_file(&path);
+    change(&path);
+
+    let result = fx.ws.remove_anyway(&task.id, true).unwrap();
+
+    assert!(!path.exists());
+    assert_eq!(result.task.workspace, None);
+    assert_eq!(fx.closed_ids(), std::slice::from_ref(&task.id));
+    // The commit is not merged, so the branch stays with it.
+    assert!(!result.branch_deleted);
+    assert_eq!(result.task.branch.as_deref(), Some(BRANCH));
+    assert!(fx.branch_exists(BRANCH));
+}
+
+#[test]
+fn removes_a_worktree_with_a_tracked_edit_and_a_new_file_anyway_and_keeps_the_unmerged_branch() {
+    removes_a_worktree_with_changes_anyway(edit_and_add_file);
+}
+
+#[test]
+fn removes_a_worktree_with_a_staged_change_anyway_and_keeps_the_unmerged_branch() {
+    removes_a_worktree_with_changes_anyway(stage_file);
+}
+
+#[test]
+fn removes_the_worktree_and_the_branch_of_a_deleted_task_with_changes_only_when_discarding() {
+    let fx = Fx::new();
+    let task = fx.task("Fix the bug");
+    let path = path_of(&fx.ws.create(&task.id, None).unwrap());
+    edit_and_add_file(&path);
+
+    assert!(is_conflict(&fx.ws.remove_for_delete(&task.id, false)));
+    assert!(path.join("new.txt").exists());
+
+    let result = fx.ws.remove_for_delete(&task.id, true).unwrap();
+
+    assert!(result.branch_deleted);
+    assert!(!path.exists());
+    assert!(!fx.branch_exists(BRANCH));
 }

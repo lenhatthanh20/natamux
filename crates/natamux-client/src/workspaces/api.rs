@@ -67,9 +67,11 @@ pub async fn remove_workspace(
     config: &Config,
     task_id: &str,
     delete_branch: bool,
+    force: bool,
 ) -> Result<RemoveWorkspaceAnswer, ClientError> {
+    let force = if force { "&force=true" } else { "" };
     let path = format!(
-        "/tasks/{}/workspace?deleteBranch={delete_branch}",
+        "/tasks/{}/workspace?deleteBranch={delete_branch}{force}",
         encode(task_id)
     );
     call(config, Method::DELETE, &path).await

@@ -188,8 +188,9 @@ impl Source {
         )
     }
 
-    pub fn delete_task(&self, task_id: &str) -> Answer<DeleteTaskAnswer> {
-        self.ask(|c| c.delete_task(task_id), |f| f.delete_task(task_id))
+    /// `force` discards changes that are not committed; the fake daemon has none.
+    pub fn delete_task(&self, task_id: &str, force: bool) -> Answer<DeleteTaskAnswer> {
+        self.ask(|c| c.delete_task(task_id, force), |f| f.delete_task(task_id))
     }
 
     pub fn remove_repo(&self, repo_id: &str) -> Answer<()> {
@@ -207,9 +208,10 @@ impl Source {
         &self,
         task_id: &str,
         delete_branch: bool,
+        force: bool,
     ) -> Answer<RemoveWorkspaceAnswer> {
         self.ask(
-            |c| c.remove_workspace(task_id, delete_branch),
+            |c| c.remove_workspace(task_id, delete_branch, force),
             |f| f.remove_workspace(task_id, delete_branch),
         )
     }
@@ -336,7 +338,7 @@ pub fn delete_all(source: &Source, ids: &[String]) -> (Vec<DeleteOutcome>, Vec<T
     let mut related = Vec::new();
     let outcomes = delete_each(
         ids,
-        |id| block_on(source.delete_task(id)).map_err(|error| reason(&error)),
+        |id| block_on(source.delete_task(id, false)).map_err(|error| reason(&error)),
         |answer| related.extend(answer.tasks),
     );
     (outcomes, related)
@@ -347,7 +349,7 @@ pub fn remove_all(source: &Source, ids: &[String]) -> (Vec<RemoveOutcome>, Vec<T
     let mut changed = Vec::new();
     let outcomes = remove_each(
         ids,
-        |id| block_on(source.remove_workspace(id, true)).map_err(|error| reason(&error)),
+        |id| block_on(source.remove_workspace(id, true, false)).map_err(|error| reason(&error)),
         |answer| changed.push(answer.task.clone()),
     );
     (outcomes, changed)

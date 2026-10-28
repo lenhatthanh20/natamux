@@ -22,6 +22,16 @@ enum BranchRule {
     Force,
 }
 
+impl BranchRule {
+    fn finished_or_keep(delete_branch: bool) -> Self {
+        if delete_branch {
+            Self::Finished
+        } else {
+            Self::Keep
+        }
+    }
+}
+
 impl WorkspaceService {
     /// Removes the worktree folder. The branch goes too when it is fully merged, otherwise it
     /// stays (with `delete_branch`). A folder that was already deleted outside Natamux is only
@@ -31,17 +41,26 @@ impl WorkspaceService {
         task_id: &str,
         delete_branch: bool,
     ) -> WorkspaceResult<RemoveWorkspaceResult> {
-        let rule = if delete_branch {
-            BranchRule::Finished
-        } else {
-            BranchRule::Keep
-        };
-        self.remove_with(task_id, rule)
+        self.remove_with(task_id, BranchRule::finished_or_keep(delete_branch), false)
+    }
+
+    /// `remove`, but changes that are not committed are discarded with the folder.
+    pub fn remove_anyway(
+        &self,
+        task_id: &str,
+        delete_branch: bool,
+    ) -> WorkspaceResult<RemoveWorkspaceResult> {
+        self.remove_with(task_id, BranchRule::finished_or_keep(delete_branch), true)
     }
 
     /// Removes the worktree of a task that is being deleted. The branch goes too, merged or not.
-    pub fn remove_for_delete(&self, task_id: &str) -> WorkspaceResult<RemoveWorkspaceResult> {
-        self.remove_with(task_id, BranchRule::Force)
+    /// `discard` also removes a worktree with changes that are not committed.
+    pub fn remove_for_delete(
+        &self,
+        task_id: &str,
+        discard: bool,
+    ) -> WorkspaceResult<RemoveWorkspaceResult> {
+        self.remove_with(task_id, BranchRule::Force, discard)
     }
 
     /// Deletes the branch of a task that has no workspace any more, and its CI branch on origin.
@@ -78,6 +97,7 @@ impl WorkspaceService {
         &self,
         task_id: &str,
         rule: BranchRule,
+        discard: bool,
     ) -> WorkspaceResult<RemoveWorkspaceResult> {
         self.exclusive(task_id, "Removing worktree", || {
             let task = self.tasks.get_task(task_id)?;
@@ -95,10 +115,11 @@ impl WorkspaceService {
                     "{workspace} is not a git worktree of this repository, so it is not removed"
                 )));
             }
-            let submodules = if state == WorktreeState::Present {
-                clean_worktree(task_id, folder)?
-            } else {
-                false
+            // `git worktree remove --force` drops the changes and the submodules alike.
+            let force = match state {
+                WorktreeState::Present if discard => true,
+                WorktreeState::Present => clean_worktree(task_id, folder)?,
+                _ => false,
             };
             // A terminal that runs in the folder would keep files open while git removes it.
             (self.close_terminals)(task_id);
@@ -108,7 +129,7 @@ impl WorkspaceService {
                 let removed = archive_stage_files(&self.data_dir, task_id, Some(&workspace))
                     .map_err(|error| WorkspaceError::Io(error.to_string()))
                     .and_then(|()| {
-                        remove_worktree(&repo_dir, folder, submodules).map_err(Into::into)
+                        remove_worktree(&repo_dir, folder, force).map_err(Into::into)
                     });
                 if let Err(error) = removed {
                     // The agent ended with its terminal. Left running, the task would wait for it
@@ -149,8 +170,9 @@ impl WorkspaceService {
 
 /// Refuses a worktree with changes that are not committed (git would), before the agent and the
 /// terminals of the task are ended for nothing. A status that git cannot read proves nothing, so
-/// its error stops the removal too. True when submodules are checked out: git refuses those too,
-/// and the status counts changes inside them, so forcing loses no work.
+/// its error stops the removal too. `remove_anyway` skips it. True when submodules are checked
+/// out: git refuses those too, and the status counts changes inside them, so forcing loses no
+/// work.
 fn clean_worktree(task_id: &str, folder: &Path) -> WorkspaceResult<bool> {
     let changes = list_changes(folder, false)?.len();
     if changes > 0 {

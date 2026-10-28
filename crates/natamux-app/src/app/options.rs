@@ -108,10 +108,11 @@ pub enum Shot {
     StageEvidence,
     StartTaskBranchMenu,
     SidebarBlurred,
+    RemoveWorkspaceAnyway,
 }
 
 impl Shot {
-    pub const ALL: [Shot; 82] = [
+    pub const ALL: [Shot; 83] = [
         Shot::TasksTable,
         Shot::TasksBoard,
         Shot::BoardHoverCard,
@@ -194,6 +195,7 @@ impl Shot {
         Shot::StageEvidence,
         Shot::StartTaskBranchMenu,
         Shot::SidebarBlurred,
+        Shot::RemoveWorkspaceAnyway,
     ];
 
     pub fn name(self) -> &'static str {
@@ -280,6 +282,7 @@ impl Shot {
             Shot::StageEvidence => "stage-evidence",
             Shot::StartTaskBranchMenu => "start-task-branch-menu",
             Shot::SidebarBlurred => "sidebar-blurred",
+            Shot::RemoveWorkspaceAnyway => "remove-workspace-anyway",
         }
     }
 
