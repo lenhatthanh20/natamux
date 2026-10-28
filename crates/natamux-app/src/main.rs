@@ -268,6 +268,7 @@ mod terminals {
     pub mod find_rules;
     pub mod pane_drop;
     pub mod pane_facts;
+    pub mod pane_grid;
     pub mod pane_header;
     pub mod pane_rules;
     pub mod paste_rules;

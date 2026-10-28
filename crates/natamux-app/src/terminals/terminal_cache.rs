@@ -70,8 +70,9 @@ pub fn evictions(entries: &[EntryState], now: u64) -> Vec<String> {
 }
 
 /// The entries to free as a view shows them again: the daemon closed their shell, so the name
-/// now belongs to a new shell, which a new terminal attaches to (T-0191). A shell that ended with
-/// an exit code keeps its last screen, and one that stayed on screen waits for the list to drop it.
+/// now belongs to a new shell, which a new terminal attaches to (T-0191) once a new list read
+/// still has it (T-0211). A shell that ended with an exit code keeps its last screen, and one that
+/// stayed on screen waits for the list to drop it.
 pub fn reshown_closed(entries: &[EntryState]) -> Vec<String> {
     entries
         .iter()
