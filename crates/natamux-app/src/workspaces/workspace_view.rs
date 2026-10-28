@@ -58,9 +58,12 @@ pub struct WorkspaceView {
     panes: Entity<ShellPanes>,
     changes: Entity<ChangesView>,
     docs: Option<Entity<DocsTab>>,
-    editor: Option<Entity<FileEditor>>,
+    /// One editor per open file of the shown task, so each keeps its cursor, scroll and undo.
+    editors: Vec<Entity<FileEditor>>,
     /// Docs or the editor tab as last drawn: a hidden one reads again when it shows.
     file_tab_shown: Option<WorkspaceTab>,
+    /// The active file as last drawn: a tab picked again reads its file again.
+    editor_shown: Option<String>,
     shown: Option<Shown>,
     width: Entity<Option<f32>>,
     /// A poll came while the window had no focus: it reads once when the focus comes back.
@@ -101,8 +104,9 @@ impl WorkspaceView {
             panes,
             changes: changes_view,
             docs: None,
-            editor: None,
+            editors: Vec::new(),
             file_tab_shown: None,
+            editor_shown: None,
             shown: None,
             width,
             missed_poll: false,
@@ -192,7 +196,7 @@ impl WorkspaceView {
     fn hide(&mut self, cx: &mut Context<Self>) {
         self.shown = None;
         self.docs = None;
-        self.editor = None;
+        self.editors.clear();
         self.panes.update(cx, |panes, cx| panes.set_task(None, cx));
         self.dashboard
             .read(cx)

@@ -8,6 +8,7 @@
     "README.md": "# Storefront\n\nA small shop: catalog, cart and checkout.\n",
     ".claude/settings.json": "{\n  \"permissions\": { \"allow\": [\"Bash(pnpm test)\"] }\n}\n",
     ".codex/config.toml": "model = \"gpt-5\"\napproval_policy = \"on-request\"\n",
+    ".github/README.md": "# Storefront on GitHub\n\nIssues and pull requests are welcome.\n",
     ".github/workflows/ci.yml": "name: ci\non: [push]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - run: pnpm install && pnpm test\n",
     "src/cart.ts": "export type Item = { price: number }\n\nexport const total = (items: Item[]) => items.reduce((sum, item) => sum + item.price, 0)\n",
     "src/format.ts": "export const money = (value: number) => `$${value.toFixed(2)}`\n",

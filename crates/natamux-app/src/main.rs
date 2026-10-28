@@ -117,9 +117,11 @@ mod files {
     pub mod file_icon_view;
     pub mod file_icons;
     pub mod file_reads;
+    pub mod file_tab_strip;
     pub mod file_tree;
     pub mod file_tree_rows;
     pub mod file_writes;
+    pub mod open_files;
 }
 mod git {
     pub mod change_rules;

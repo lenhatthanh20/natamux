@@ -63,7 +63,7 @@ fn a_folder_lists_its_own_rows() {
     let src = fake.list_folder(TASK, "src").unwrap();
     assert_eq!(names(&src), ["cart.ts", "checkout.ts", "format.ts"]);
     let github = fake.list_folder(TASK, ".github").unwrap();
-    assert_eq!(names(&github), ["workflows"]);
+    assert_eq!(names(&github), ["workflows", "README.md"]);
     let docs = fake.list_folder(TASK, ".natamux-task").unwrap();
     assert_eq!(docs.len(), 6);
     let small = fake.list_folder("T-0146", "").unwrap();

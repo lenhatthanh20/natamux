@@ -58,7 +58,7 @@ pub const FILE_COMMANDS: &[Command] = &[
         &["Mod+S"],
         &[FILE_EDITOR],
     )),
-    // T-0183: no tabs to close; Mod+W closes the open file.
+    // Mod+W closes the active file's tab (T-0220).
     in_workspace(keys(
         group(
             command("tab.close", "Close the file", Category::View),

@@ -1,6 +1,6 @@
-//! Docs and the open file over the terminals of the open workspace (`DocsTab.tsx`,
-//! `FileEditor.tsx`): made when they first show, kept while the same task (and, for the editor,
-//! the same file) is open. Only the one that shows (in main, or the Docs list in the panel) reads
+//! Docs and the open files over the terminals of the open workspace (`DocsTab.tsx`,
+//! `FileEditor.tsx`): made when they first show, kept while the same task (and, for an editor,
+//! its file) is open. Only the one that shows (in main, or the Docs list in the panel) reads
 //! again when the workspace changes (`dirty_reads`); a hidden one reads again when it shows.
 
 use ui::prelude::*;
@@ -9,6 +9,7 @@ use super::WorkspaceView;
 use crate::app::tab_rules::{DirtyReads, dirty_reads};
 use crate::app::view_rules::WorkspaceTab;
 use crate::files::file_editor::FileEditor;
+use crate::files::file_tab_strip::file_tab_strip;
 
 impl WorkspaceView {
     pub(super) fn docs_body(
@@ -36,40 +37,50 @@ impl WorkspaceView {
         docs.into_any_element()
     }
 
+    /// The tabs of the open files over the active one's editor (T-0220).
     pub(super) fn editor_body(
         &mut self,
         task_id: &str,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let Some(path) = self
-            .dashboard
-            .read(cx)
-            .files
-            .editor_file(task_id)
-            .map(String::from)
-        else {
+        let files = &self.dashboard.read(cx).files;
+        let paths = files.editor_files(task_id).to_vec();
+        let Some(path) = files.editor_file(task_id).map(String::from) else {
             return div().into_any_element();
         };
-        let shows_again =
+        let tab_shows_again =
             self.file_tab_shown.replace(WorkspaceTab::Editor) != Some(WorkspaceTab::Editor);
-        let editor = match &self.editor {
-            Some(editor)
-                if editor.read(cx).task_id() == task_id && editor.read(cx).path() == path =>
-            {
+        let shows_again =
+            self.editor_shown.replace(path.clone()).as_ref() != Some(&path) || tab_shows_again;
+        self.editors.retain(|editor| {
+            let editor = editor.read(cx);
+            editor.task_id() == task_id && paths.iter().any(|open| open == editor.path())
+        });
+        let made = self
+            .editors
+            .iter()
+            .find(|editor| editor.read(cx).path() == path)
+            .cloned();
+        let editor = match made {
+            Some(editor) => {
                 if shows_again {
                     editor.update(cx, |editor, cx| editor.refresh(cx));
                 }
-                editor.clone()
+                editor
             }
-            _ => {
+            None => {
                 let (dashboard, id) = (self.dashboard.clone(), task_id.to_owned());
                 let editor = cx.new(|cx| FileEditor::new(dashboard, id, path, window, cx));
-                self.editor = Some(editor.clone());
+                self.editors.push(editor.clone());
                 editor
             }
         };
-        editor.into_any_element()
+        v_flex()
+            .size_full()
+            .child(file_tab_strip(&self.dashboard, task_id, cx))
+            .child(v_flex().flex_1().min_h_0().child(editor))
+            .into_any_element()
     }
 
     /// `workspace.dirty`, the fallback poll: the stage files or the open file, if it shows.
@@ -78,8 +89,15 @@ impl WorkspaceView {
         if let Some(docs) = self.docs.as_ref().filter(|_| reads.docs) {
             docs.update(cx, |docs, cx| docs.refresh(cx));
         }
-        if let Some(editor) = self.editor.as_ref().filter(|_| reads.editor) {
-            editor.update(cx, |editor, cx| editor.refresh(cx));
+        if reads.editor {
+            let dashboard = self.dashboard.read(cx);
+            let active = self.editors.iter().find(|editor| {
+                let editor = editor.read(cx);
+                dashboard.files.editor_file(editor.task_id()) == Some(editor.path())
+            });
+            if let Some(editor) = active.cloned() {
+                editor.update(cx, |editor, cx| editor.refresh(cx));
+            }
         }
     }
 

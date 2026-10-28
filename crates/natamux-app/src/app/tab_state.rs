@@ -6,10 +6,10 @@
 use ui::prelude::*;
 
 use super::Dashboard;
-pub use crate::app::tab_rules::FileViews;
 use crate::app::tab_rules::shown_tab;
 use crate::app::view_rules::{DetailsView, WorkspaceTab};
 use crate::app::view_state::DiffFlags;
+pub use crate::files::open_files::FileViews;
 use crate::git::change_tree::FileViewMode;
 use crate::workspaces::workspace_rules::{shown_after_remember, tab_to_open};
 
@@ -22,10 +22,10 @@ impl Dashboard {
         state.map_or(WorkspaceTab::Terminal, |state| tab_to_open(state, saved))
     }
 
-    /// Mod+W and the open file's Close: the file closes. The other screens stay.
+    /// Mod+W: the active file closes, its draft stays. The other screens stay.
     pub fn close_open_file(&mut self, id: &str, cx: &mut Context<Self>) {
-        if self.files.editor_file(id).is_some() {
-            self.close_file(id, cx);
+        if let Some(path) = self.files.editor_file(id).map(String::from) {
+            self.close_file(id, &path, cx);
         }
     }
 
@@ -85,7 +85,8 @@ impl Dashboard {
         shown_tab(self.workspace_tab, file_open)
     }
 
-    /// A file of the Files tab (`openFile`): the task's workspace on the editor tab with it.
+    /// A file of the Files tab or a click on its tab (`openFile`): the task's workspace on the
+    /// editor tab with it.
     pub fn open_file(&mut self, id: &str, path: &str, cx: &mut Context<Self>) {
         if self.open_task.as_deref() != Some(id) {
             self.open(id, cx);
@@ -97,10 +98,11 @@ impl Dashboard {
         cx.notify();
     }
 
-    /// `closeFile`: back to the tab the user picked last in the workspace, or the terminal.
-    pub fn close_file(&mut self, id: &str, cx: &mut Context<Self>) {
+    /// `closeFile`: the file's tab closes. After the last one, back to the tab the user picked
+    /// last in the workspace, or the terminal.
+    pub fn close_file(&mut self, id: &str, path: &str, cx: &mut Context<Self>) {
         let shown = (self.open_task.as_deref() == Some(id)).then_some(self.workspace_tab);
-        if let Some(tab) = self.files.close(id, shown, self.view.tab_of(id)) {
+        if let Some(tab) = self.files.close(id, path, shown, self.view.tab_of(id)) {
             self.workspace_tab = tab;
         }
         cx.notify();
