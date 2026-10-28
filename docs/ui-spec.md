@@ -534,7 +534,12 @@ Shared shell:
 ### 4.19 Empty state (`ui/EmptyState.tsx`)
 - Centered in its container, max width 360, gap 8. Icon 32 muted (stroke 1.5) in a 56px circle bg raised; title 15/600; body 13 muted (1-2 sentences); one primary action (`md`) + optional link; optional Kbd hint.
 - Variants with exact copy:
-  - No tasks: "No tasks yet" / "Add a task to the backlog, or start one now in its own workspace." / [Add task `N`] [Start a task `C`].
+  - Welcome (no tasks, desktop app): shows in the All tasks main area when the daemon is loaded and there are zero tasks. It goes away with the first task and is not saved anywhere.
+    - Centred column, max width 520, scrolls in a short window. Title **Welcome to Natamux**, muted line "Run coding agents side by side. Three steps to start:", then three steps, then [Add task `N`] [Start a task `C`].
+    - A step has a 24px circle with its number (a check in the success colour when done), a medium title, one muted line and its action.
+    - Step 1 **Choose a project**: "Pick the folder of a git repository. Each task works in its own worktree of it." With a project: "<name> is ready." or "<name> and N more are ready." and the check. [Choose folder…] opens the folder picker and adds the pick at once (toast "Added <name>." or the daemon's reason as an error). Disabled while it adds. Link **Type a path…** opens the Projects dialog.
+    - Step 2 **Sign in to your agents**: "Natamux starts agents in its terminals. Sign in to each one once, in any terminal:". One row per agent with its command and a copy button (toast "Copied <label> command."): `claude` (then /login), `codex login`, `gemini` (then pick a sign-in), `copilot` (then /login), `cursor-agent login`. No done state.
+    - Step 3 **Set up your workflow**: "Each task moves through stages, such as Spec, Plan, Implement and Review. Choose the stages and the agent of each one." [Open workflow settings] opens the first project's Stages tab. With no project it is disabled, tooltip "Add a project first".
   - Filter miss: `No tasks match “zzzz”` / "Check the spelling or clear the filter." / [Clear filter]. Sidebar group under a filter: "No matches in natamux (8 hidden)" (fixes NAV-15, WS-24, RA-30).
   - No changes: "No changes" / "The workspace matches its last commit."
   - No agents: "No agent is working" / "Start an agent on a task, or add a pane." / [Add a pane].

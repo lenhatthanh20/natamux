@@ -12,14 +12,17 @@ This walk-through uses the desktop app and one agent. Starting a task and reachi
 
 ## Add a project
 
-Open Natamux. The app starts its daemon and opens the dashboard, already signed in. On the first launch there is no project yet, and the sidebar says **No projects yet**.
+Open Natamux. The app starts its daemon and opens the dashboard, already signed in. On the first launch there is no project and no task yet, so the main area shows **Welcome to Natamux** with three steps, and the sidebar says **No projects yet**.
 
 <Steps>
 
-1. Use **File → Add Project…** (`Cmd+Shift+O` on macOS, `Ctrl+Shift+O` on Linux). You can also click **Add project** in the sidebar and type the folder, or pick it with **Browse…**.
-2. Pick the top folder of the repository, the one that holds `.git`. Natamux warns you if the folder is not a git repository.
+1. Click **Choose folder…** in step 1 and pick the top folder of the repository, the one that holds `.git`. Natamux adds it at once. If the folder is not a git repository, you see the reason in a message.
+2. Sign in to the agents you want. Step 2 lists the command of each agent. Click the copy button, run it once in any terminal and sign in. See [Agents](/docs/agents/).
+3. Click **Open workflow settings** in step 3 to choose the stages of the project and the agent of each one. You can do this later.
 
 </Steps>
+
+You can also click **Type a path…** to open the projects dialog, where you type the folder. **File → Add Project…** (`Cmd+Shift+O` on macOS, `Ctrl+Shift+O` on Linux) opens the same dialog.
 
 Add more projects the same way, at any time.
 
