@@ -101,9 +101,9 @@ fn gives_the_agent_and_model_of_a_stage_that_starts_its_own_agent() {
 #[test]
 fn gives_nothing_for_a_stage_that_keeps_the_task_agent_or_whose_agent_is_not_used() {
     assert_eq!(runner(&own(|_| {}), "my-check"), None);
-    let mut implement = Stage::new("implement", StageKind::Agent, Gate::Auto);
-    implement.agent = Some("codex".into());
-    assert_eq!(runner(&[Step::Stage(implement)], "implement"), None);
+    let mut sign_off = Stage::new("sign-off", StageKind::Manual, Gate::Manual);
+    sign_off.agent = Some("codex".into());
+    assert_eq!(runner(&[Step::Stage(sign_off)], "sign-off"), None);
 }
 
 #[test]

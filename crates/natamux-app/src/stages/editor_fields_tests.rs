@@ -172,12 +172,23 @@ fn lists_each_check_command_and_args_in_groups_and_on_stages_that_are_off() {
 }
 
 #[test]
-fn own_agent_is_offered_on_a_stage_of_your_own_in_terminal_1_and_not_on_a_catalog_stage_there() {
+fn own_agent_is_offered_on_every_agent_or_testing_stage_in_terminal_1() {
     let steps = write_docs("");
     assert!(takes_own_agent(&steps, "write-docs"));
     assert!(runs_in_shell_one(&steps, "write-docs"));
-    assert!(!takes_own_agent(&steps, "spec"));
-    assert!(!takes_own_agent(&steps, "implement"));
+    assert!(takes_own_agent(&steps, "spec"));
+    assert!(takes_own_agent(&steps, "implement"));
+    assert!(takes_own_agent(&steps, "testing"));
+    assert!(!takes_own_agent(&steps, "context"));
+    assert!(!takes_own_agent(&steps, "release"));
+}
+
+#[test]
+fn own_agent_moves_a_catalog_stage_out_of_terminal_1_with_no_issue() {
+    let with_agent = set_text(&default_pipeline(), "spec", TextField::Agent, "codex");
+    assert!(!runs_in_shell_one(&with_agent, "spec"));
+    assert!(runs_in_shell_one(&with_agent, "plan"));
+    assert!(pipeline_issues(&with_agent).is_empty());
 }
 
 #[test]
@@ -236,7 +247,7 @@ fn own_shell_writes_true_and_off_leaves_the_field_out_so_spec_runs_in_terminal_1
 }
 
 #[test]
-fn own_shell_drops_the_own_agent_when_the_stage_can_no_longer_have_one() {
+fn own_shell_off_keeps_the_own_agent_of_a_catalog_stage() {
     let mut steps = set_text(
         &default_pipeline(),
         "agent-review",
@@ -248,7 +259,7 @@ fn own_shell_drops_the_own_agent_when_the_stage_can_no_longer_have_one() {
     let review = field(&off, "agent-review");
     assert_eq!(
         (review.own_shell, review.agent, review.args),
-        (None, None, None)
+        (None, Some("cursor".into()), Some("--model x".into()))
     );
     assert!(
         pipeline_issues(&off)

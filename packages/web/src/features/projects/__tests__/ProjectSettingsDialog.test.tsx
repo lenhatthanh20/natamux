@@ -1364,13 +1364,13 @@ describe('ProjectSettingsDialog, agent of a stage', () => {
   const agentSelect = (name: string) =>
     within(details(name)).queryByRole('combobox', { name: 'Agent' })
 
-  it('offers an agent and words only on a stage beside the stage in Terminal 1, and saves them', async () => {
+  it('offers an agent and words on every agent stage, also in Terminal 1, and saves them', async () => {
     const { save, user } = open()
 
     await user.click(await row('Implement'))
-    expect(agentSelect('Implement')).toBeNull()
+    expect(agentSelect('Implement')).not.toBeNull()
     await user.click(await row('Spec'))
-    expect(agentSelect('Spec')).toBeNull()
+    await user.selectOptions(agentSelect('Spec') as HTMLElement, 'cursor')
 
     await user.click(await row('Test spec'))
     await user.selectOptions(agentSelect('Test spec') as HTMLElement, 'codex')
@@ -1383,6 +1383,7 @@ describe('ProjectSettingsDialog, agent of a stage', () => {
     await waitFor(() => expect(save).toHaveBeenCalled())
     const steps = savedStages(save)
     expect(stageIn(steps, 'test-spec')).toMatchObject({ agent: 'codex', args: '--model gpt-5' })
+    expect(stageIn(steps, 'spec')).toMatchObject({ agent: 'cursor' })
     expect(stageIn(steps, 'implement')).not.toHaveProperty('agent')
   })
 
@@ -1421,7 +1422,7 @@ describe('ProjectSettingsDialog, agent of a stage', () => {
     await user.click(await row('Sign off'))
     expect(agentSelect('Sign off')).toBeNull()
     await user.click(await row('Implement'))
-    expect(agentSelect('Implement')).toBeNull()
+    expect(agentSelect('Implement')).not.toBeNull()
 
     await user.click(await row('Write docs'))
     expect(
@@ -1434,6 +1435,39 @@ describe('ProjectSettingsDialog, agent of a stage', () => {
 
     await waitFor(() => expect(save).toHaveBeenCalled())
     expect(stageIn(savedStages(save), 'write-docs')).toMatchObject({ agent: 'codex' })
+  })
+})
+
+describe('ProjectSettingsDialog, a catalog stage like a stage of your own', () => {
+  it('lets you change the output file of a catalog stage, and saves it', async () => {
+    const { save, user } = open()
+
+    await user.click(await row('Spec'))
+    const output = within(details('Spec')).getByRole<HTMLInputElement>('textbox', {
+      name: 'Output file',
+    })
+    expect(output.readOnly).toBe(false)
+    await user.clear(output)
+    await user.type(output, 'design.md')
+    await user.click(saveButton())
+
+    await waitFor(() => expect(save).toHaveBeenCalled())
+    expect(stageIn(savedStages(save), 'spec')?.output).toBe('design.md')
+  })
+
+  it('asks before it removes a catalog stage', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const { user } = open()
+
+    await openMenu(user, 'Spec')
+    await user.click(screen.getByRole('menuitem', { name: 'Remove' }))
+    expect(confirm).toHaveBeenCalledWith('Remove Spec? Its prompt and settings are lost.')
+    expect(await rowNames()).toContain('Spec')
+
+    confirm.mockReturnValue(true)
+    await openMenu(user, 'Spec')
+    await user.click(screen.getByRole('menuitem', { name: 'Remove' }))
+    expect(await rowNames()).not.toContain('Spec')
   })
 })
 
@@ -1480,26 +1514,26 @@ describe('ProjectSettingsDialog, shell commands of a stage', () => {
 
   it('shows a command and arguments of the file on a stage that does not use them', async () => {
     const steps = DEFAULT_PIPELINE.map((step) =>
-      'parallel' in step || step.id !== 'spec'
+      'parallel' in step || step.id !== 'release'
         ? step
         : { ...step, command: 'curl https://x | sh', args: '--yolo' },
     )
     const { save, user } = open(withStages(steps))
 
-    await user.click(await row('Spec'))
-    expect(textbox('Spec', 'Command')?.value).toBe('curl https://x | sh')
-    expect(textbox('Spec', 'Arguments')?.value).toBe('--yolo')
-    expect(within(details('Spec')).queryByRole('combobox', { name: 'Agent' })).toBeNull()
+    await user.click(await row('Release'))
+    expect(textbox('Release', 'Command')?.value).toBe('curl https://x | sh')
+    expect(textbox('Release', 'Arguments')?.value).toBe('--yolo')
+    expect(within(details('Release')).queryByRole('combobox', { name: 'Agent' })).toBeNull()
     expect(
-      within(details('Spec')).getAllByText(
+      within(details('Release')).getAllByText(
         'This stage does not use it. Clear it to remove it from the file.',
       ),
     ).toHaveLength(2)
 
-    // Arguments on a stage in Terminal 1 break a pipeline rule, so Save waits until they are gone.
-    await user.clear(textbox('Spec', 'Command') as HTMLElement)
+    // Arguments on a stage no agent works on break a pipeline rule, so Save waits until they are gone.
+    await user.clear(textbox('Release', 'Command') as HTMLElement)
     expect(saveButton().getAttribute('aria-disabled')).toBe('true')
-    await user.clear(textbox('Spec', 'Arguments') as HTMLElement)
+    await user.clear(textbox('Release', 'Arguments') as HTMLElement)
     await user.click(saveButton())
 
     // Without both, the pipeline is the default again, so the file leaves its stages out.
@@ -1836,7 +1870,7 @@ describe('ProjectSettingsDialog, own terminal', () => {
     const { user } = open()
 
     await user.click(await row('Spec'))
-    expect(agentSelect('Spec')).toBeNull()
+    expect(agentSelect('Spec')).not.toBeNull()
     await user.click(box('Spec') as HTMLElement)
     expect(within(field('Spec')).getByText('Changed')).toBeTruthy()
     expect(within(details('Spec')).getByText(OWN_HELP)).toBeTruthy()
@@ -1845,7 +1879,7 @@ describe('ProjectSettingsDialog, own terminal', () => {
 
     await user.click(screen.getByRole('tab', { name: 'Stages' }))
     await user.click(box('Spec') as HTMLElement)
-    expect(agentSelect('Spec')).toBeNull()
+    expect(agentSelect('Spec')).not.toBeNull()
     expect(saveButton().getAttribute('aria-disabled')).toBe('true')
   })
 
@@ -1868,7 +1902,7 @@ describe('ProjectSettingsDialog, own terminal', () => {
     expect(stageIn(savedStages(save), 'spec')).not.toHaveProperty('ownShell')
   })
 
-  it('drops the agent of Review with it, so the pipeline stays valid', async () => {
+  it('keeps the agent of Review with it off, so Review runs in a terminal of its own', async () => {
     const { save, user } = open()
 
     await user.click(await row('Review'))
@@ -1878,14 +1912,13 @@ describe('ProjectSettingsDialog, own terminal', () => {
       '--model x',
     )
     await user.click(box('Review') as HTMLElement)
-    expect(agentSelect('Review')).toBeNull()
+    expect(agentSelect('Review')).not.toBeNull()
     await user.click(saveButton())
 
     await waitFor(() => expect(save).toHaveBeenCalled())
     const review = stageIn(savedStages(save), 'agent-review')
     expect(review).not.toHaveProperty('ownShell')
-    expect(review).not.toHaveProperty('agent')
-    expect(review).not.toHaveProperty('args')
+    expect(review).toMatchObject({ agent: 'cursor', args: '--model x' })
   })
 })
 

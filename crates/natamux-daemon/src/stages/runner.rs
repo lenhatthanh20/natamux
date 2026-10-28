@@ -272,7 +272,7 @@ impl StageRun {
         let step = self.step_of(&task)?;
         for stage in step.stages() {
             if states.contains(&lane_state(&task, &step, &stage.id)) {
-                self.start_stage(&task.id, &step, stage, cause)?;
+                self.start_stage(&task.id, stage, cause)?;
             }
         }
         Ok(())
@@ -311,7 +311,6 @@ impl StageRun {
     pub fn start_stage(
         &self,
         task_id: &str,
-        step: &Step,
         stage: &Stage,
         cause: Option<&TaskEvent>,
     ) -> StageResult<()> {
@@ -319,7 +318,7 @@ impl StageRun {
         if !self.state().starting.insert(starting.clone()) {
             return Ok(());
         }
-        let result = self.start_stage_once(task_id, step, stage, cause);
+        let result = self.start_stage_once(task_id, stage, cause);
         self.state().starting.remove(&starting);
         result
     }
@@ -327,22 +326,21 @@ impl StageRun {
     fn start_stage_once(
         &self,
         task_id: &str,
-        step: &Step,
         stage: &Stage,
         cause: Option<&TaskEvent>,
     ) -> StageResult<()> {
         let task = self.task(task_id)?;
         match stage.kind {
-            StageKind::Context => self.start_context(&task, step, stage),
+            StageKind::Context => self.start_context(&task, stage),
             StageKind::Agent => {
                 let resumed = cause.is_some_and(|cause| cause.kind == "agent.resumed");
                 let prompt_for = self.prompt_of(&task, stage, cause);
-                self.start_agent(&task, step, stage, prompt_for, resumed)
+                self.start_agent(&task, stage, prompt_for, resumed)
             }
             StageKind::Testing => match &stage.command {
                 None => {
                     let prompt_for = self.prompt_of(&task, stage, None);
-                    self.start_agent(&task, step, stage, prompt_for, false)
+                    self.start_agent(&task, stage, prompt_for, false)
                 }
                 Some(command) => self.start_command(&task, stage, command),
             },

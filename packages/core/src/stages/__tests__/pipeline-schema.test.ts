@@ -171,8 +171,8 @@ describe('pipelineSchema', () => {
         { id: 'implement', kind: 'agent', gate: 'auto', ...implement },
       ],
     })
-    const message = (id: string) =>
-      `Only a stage outside Terminal 1, or a custom stage that an agent works on, can have its own agent or arguments, and "${id}" cannot`
+    const message = (id: string, kind: string) =>
+      `Only an agent or testing stage can have its own agent or arguments, and "${id}" is a ${kind} stage`
 
     it('takes them on a stage that runs beside the stage in Shell 1', () => {
       const parsed = pipelineSchema.parse([build(own)])
@@ -180,13 +180,14 @@ describe('pipelineSchema', () => {
       expect(pipelineSchema.safeParse([build({ args: '--model x' })]).success).toBe(true)
     })
 
-    it('rejects them on the stage in Shell 1, outside a group, and on a manual stage', () => {
+    it('takes them on a catalog stage in Shell 1, and rejects them on a manual stage', () => {
       const issues = (steps: unknown[]) =>
         pipelineSchema.safeParse(steps).error?.issues.map((issue) => issue.message)
-      expect(issues([build({}, own)])).toEqual([message('implement')])
-      expect(issues([{ id: 'spec', kind: 'agent', gate: 'manual', ...own }])).toEqual([
-        message('spec'),
-      ])
+      expect(issues([build({}, own)])).toBeUndefined()
+      expect(
+        issues([{ id: 'spec', kind: 'agent', gate: 'manual', output: 'spec.md', ...own }]),
+      ).toBeUndefined()
+      expect(issues([{ id: 'testing', kind: 'testing', gate: 'auto', ...own }])).toBeUndefined()
       expect(
         issues([
           {
@@ -197,13 +198,13 @@ describe('pipelineSchema', () => {
             ],
           },
         ]),
-      ).toEqual([message('sign-off')])
+      ).toEqual([message('sign-off', 'manual')])
     })
 
-    it('takes them on a stage that runs in its own shell outside a group', () => {
+    it('takes them on a stage with or without its own shell', () => {
       const review = { id: 'agent-review', kind: 'agent', gate: 'auto', output: 'review.md' }
       expect(pipelineSchema.safeParse([{ ...review, ownShell: true, ...own }]).success).toBe(true)
-      expect(pipelineSchema.safeParse([{ ...review, ...own }]).success).toBe(false)
+      expect(pipelineSchema.safeParse([{ ...review, ...own }]).success).toBe(true)
     })
 
     it('rejects empty words', () => {
@@ -211,11 +212,11 @@ describe('pipelineSchema', () => {
       expect(pipelineSchema.safeParse([build({ agent: '' })]).success).toBe(false)
     })
 
-    it('gives them only to a stage outside Shell 1 when the task runs', () => {
-      const [step] = pipelineSchema.parse([build(own, {})]) as Step[]
+    it('gives them to every lane that has them when the task runs', () => {
+      const [step] = pipelineSchema.parse([build(own, own)]) as Step[]
       const [testSpec, implement] = stagesOf(step as Step)
-      expect(stageAgent(step as Step, testSpec as Stage)).toEqual(own)
-      expect(stageAgent(step as Step, implement as Stage)).toEqual({})
+      expect(stageAgent(testSpec as Stage)).toEqual(own)
+      expect(stageAgent(implement as Stage)).toEqual(own)
     })
 
     it('takes them on a stage of your own that an agent works on, also where Shell 1 is', () => {
@@ -237,16 +238,16 @@ describe('pipelineSchema', () => {
           .safeParse([{ id: 'my-step', kind, gate: 'manual', ...own }])
           .error?.issues.map((issue) => issue.message)
       for (const kind of ['context', 'review', 'release', 'manual']) {
-        expect(messages(kind)).toEqual([message('my-step')])
+        expect(messages(kind)).toEqual([message('my-step', kind)])
       }
     })
 
-    it('gives them to a stage of your own when the task runs', () => {
+    it('gives them to a stage of your own or of the catalog when the task runs', () => {
       const docs = { id: 'write-docs', kind: 'agent', gate: 'auto' } as const
-      expect(stageAgent({ ...docs, ...own }, { ...docs, ...own })).toEqual(own)
-      expect(stageAgent(docs, docs)).toEqual({})
+      expect(stageAgent({ ...docs, ...own })).toEqual(own)
+      expect(stageAgent(docs)).toEqual({})
       const spec = { id: 'spec', kind: 'agent', gate: 'manual', agent: 'codex' } as const
-      expect(stageAgent(spec, spec)).toEqual({})
+      expect(stageAgent(spec)).toEqual({ agent: 'codex' })
     })
   })
 

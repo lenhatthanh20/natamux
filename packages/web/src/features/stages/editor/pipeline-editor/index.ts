@@ -25,7 +25,6 @@ export {
   catalogChoices,
   customStageProblems,
   idFromName,
-  isCatalogStage,
   uniqueIssues,
 } from './catalog'
 export { findBranch, findPlace, findStage, groupOf, usedIds } from './find'

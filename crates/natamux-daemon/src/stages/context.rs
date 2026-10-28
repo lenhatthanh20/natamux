@@ -3,7 +3,7 @@
 
 use natamux_agents::skill_resolve::{SkillResolution, resolve_skill};
 use natamux_proto::projects::repo::ContextSource;
-use natamux_proto::stages::schema::{Stage, Step};
+use natamux_proto::stages::schema::Stage;
 use natamux_proto::tasks::task::{Task, TaskState};
 use natamux_stages::files::{working_dir, write_stage_file};
 use natamux_stages::issue::{GhIssue, issue_context, parse_issue_ref};
@@ -60,10 +60,10 @@ impl StageRun {
         })
     }
 
-    pub fn start_context(&self, task: &Task, step: &Step, stage: &Stage) -> StageResult<()> {
+    pub fn start_context(&self, task: &Task, stage: &Stage) -> StageResult<()> {
         let source = self.source_of(task);
         if is_agent_source(&source) {
-            return self.start_context_agent(task, step, stage, source);
+            return self.start_context_agent(task, stage, source);
         }
         self.fetch_context(task, stage, &source)
     }
@@ -72,7 +72,6 @@ impl StageRun {
     fn start_context_agent(
         &self,
         task: &Task,
-        step: &Step,
         stage: &Stage,
         source: ContextSource,
     ) -> StageResult<()> {
@@ -98,7 +97,7 @@ impl StageRun {
                 workflow: false,
             }
         });
-        self.start_agent(task, step, stage, prompt_for, false)
+        self.start_agent(task, stage, prompt_for, false)
     }
 
     /// The daemon writes the context of the issue, or of the task itself, then checks it.

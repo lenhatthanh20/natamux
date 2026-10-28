@@ -73,6 +73,27 @@ fn starts_its_own_agent_in_shell_7_with_its_words_and_keeps_the_task_agent_in_sh
 }
 
 #[test]
+fn starts_the_own_agent_of_a_catalog_stage_that_would_run_in_shell_1_in_shell_7() {
+    let f = Fixture::new();
+    let spec = Stage {
+        agent: Some("codex".into()),
+        output: Some("spec.md".into()),
+        ..auto("spec")
+    };
+    with_stages(&f, vec![spec]);
+    let task = after_implement(&f);
+
+    assert_eq!(
+        (task.stage.as_str(), task.state),
+        ("spec", TaskState::Running)
+    );
+    assert!(f.launch_script(&task.id, "7").starts_with("codex "));
+    assert_eq!(lane(&f, &task, "7"), running("spec"));
+    assert_eq!(lane(&f, &task, "1"), None);
+    assert_eq!(launches_of(&f, &task.id, "claude-code").len(), 1);
+}
+
+#[test]
 fn gives_the_next_stage_to_the_same_task_agent_in_shell_1_with_no_new_launch() {
     let f = Fixture::new();
     with_stages(&f, vec![docs()]);

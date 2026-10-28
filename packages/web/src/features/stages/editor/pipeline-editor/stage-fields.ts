@@ -72,17 +72,9 @@ export function setEndShell(steps: readonly Step[], id: string, on: boolean): St
   return updateStage(steps, id, (stage) => withField(stage, 'endShell', on ? true : undefined))
 }
 
-// Off also drops the stage's own agent when the stage can no longer have one, so the pipeline
-// stays valid and nothing hidden is left in the file.
+// Off keeps the stage's own agent: the stage then runs in a shell of its own from Shell 6.
 export function setOwnShell(steps: readonly Step[], id: string, on: boolean): Step[] {
-  const next = updateStage(steps, id, (stage) =>
-    withField(stage, 'ownShell', on ? true : undefined),
-  )
-  return on || takesOwnAgent(next, id)
-    ? next
-    : updateStage(next, id, (stage) =>
-        withField(withField(stage, 'agent', undefined), 'args', undefined),
-      )
+  return updateStage(steps, id, (stage) => withField(stage, 'ownShell', on ? true : undefined))
 }
 
 // The catalog runs its checks (Test spec, Review and the like) in a terminal of their own.
@@ -154,12 +146,11 @@ export function shellFields(steps: readonly Step[]): ShellField[] {
   )
 }
 
-// A stage beside the stage in Shell 1 starts its own agent, so it may pick another one. So may a
-// stage of your own, which then runs in a shell of its own.
+// Every agent or testing stage may pick another agent. One that would run in Shell 1 then runs in
+// a shell of its own.
 export function takesOwnAgent(steps: readonly Step[], id: string): boolean {
-  const step = stepOfStage(steps, id)
-  const stage = step === undefined ? undefined : stagesOf(step).find((item) => item.id === id)
-  return step !== undefined && stage !== undefined && canHaveOwnAgent(step, stage)
+  const stage = findStage(steps, id)
+  return stage !== undefined && canHaveOwnAgent(stage)
 }
 
 export function runsInShellOne(steps: readonly Step[], id: string): boolean {

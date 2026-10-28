@@ -43,7 +43,7 @@ impl StageRun {
         };
         let terminal = self.terminal_of(&task, &stage.id)?;
         if !self.agent_runs(&task.id, &terminal) {
-            self.relaunch(&task, &step, &stage, false, false)?;
+            self.relaunch(&task, &stage, false, false)?;
         } else if self.ended_turn(&task.id, &stage.id) {
             self.options
                 .terminals
@@ -118,7 +118,7 @@ impl StageRun {
             && state == TaskState::Running
             && !stages_waiting_for_ci(&self.events(&task.id)).contains(&stage.id)
         {
-            return self.run_command_again(task, step, stage);
+            return self.run_command_again(task, stage);
         }
         let working = RESUMED_STATES.contains(&state);
         // No agent Natamux started for it, or a task left to a person: a person runs their own
@@ -126,9 +126,7 @@ impl StageRun {
         let agent = if task.without_agent == Some(true) {
             None
         } else {
-            stage_agent(step, stage)
-                .agent
-                .or_else(|| task.agent.clone())
+            stage_agent(stage).agent.or_else(|| task.agent.clone())
         };
         // An agent the person quit before the app closed stays quit; the stage can be resumed.
         // A paused agent waits until someone opens its task.
@@ -138,7 +136,7 @@ impl StageRun {
         });
         if working && agent.as_deref().is_some_and(is_launchable) && !stays {
             // In a group, the newest session of the folder may be the other stage's.
-            self.relaunch(task, step, stage, !step.is_group(), true)?;
+            self.relaunch(task, stage, !step.is_group(), true)?;
         }
         Ok(())
     }
@@ -151,12 +149,12 @@ impl StageRun {
         }
     }
 
-    fn run_command_again(&self, task: &Task, step: &Step, stage: &Stage) -> StageResult<()> {
+    fn run_command_again(&self, task: &Task, stage: &Stage) -> StageResult<()> {
         let stopped = self.apply_system(&task.id, "agent.stopped", json!({ "stage": stage.id }))?;
         if stopped.accepted {
-            let (task_id, step, stage) = (task.id.clone(), step.clone(), stage.clone());
+            let (task_id, stage) = (task.id.clone(), stage.clone());
             self.background(move |run| {
-                if let Err(error) = run.start_stage(&task_id, &step, &stage, None) {
+                if let Err(error) = run.start_stage(&task_id, &stage, None) {
                     eprintln!("Could not run the command of {task_id} again: {error}");
                 }
             });
@@ -168,14 +166,7 @@ impl StageRun {
     /// reported in its shell; Claude Code also with its session of the stage, or with `newest`
     /// the newest of the folder. With none, it gets the stage prompt again. At the daemon's start
     /// (`restart`) its pane shows a spinner until the agent runs.
-    fn relaunch(
-        &self,
-        task: &Task,
-        step: &Step,
-        stage: &Stage,
-        newest: bool,
-        restart: bool,
-    ) -> StageResult<()> {
+    fn relaunch(&self, task: &Task, stage: &Stage, newest: bool, restart: bool) -> StageResult<()> {
         if !run_by_agent(stage) || task.workspace.is_none() {
             return Ok(());
         }
@@ -183,7 +174,7 @@ impl StageRun {
         if self.agent_runs(&task.id, &terminal) {
             return Ok(());
         }
-        let own = stage_agent(step, stage);
+        let own = stage_agent(stage);
         let agent = own
             .agent
             .clone()

@@ -5,7 +5,6 @@ use natamux_proto::stages::capabilities::stage_name;
 use natamux_proto::stages::schema::{Stage, Step};
 use ui::prelude::*;
 
-use super::editor_catalog::is_catalog_stage;
 use super::editor_fields::{TextField, set_sections, set_text, shown_default_prompt};
 use super::editor_find::find_stage;
 use super::pipeline_editor::PipelineEditor;
@@ -88,7 +87,7 @@ impl StageFields {
             window,
             cx,
         );
-        let fields = StageFields {
+        StageFields {
             id: id.to_owned(),
             name: text(TextField::Name, "", None, window, cx),
             args: text(TextField::Args, "--model sonnet", None, window, cx),
@@ -98,13 +97,7 @@ impl StageFields {
             output: text(TextField::Output, "notes.md", None, window, cx),
             sections,
             done_when: text(TextField::DoneWhen, "", None, window, cx),
-        };
-        let read_only = is_catalog_stage(id);
-        fields
-            .output
-            .editor
-            .update(cx, |editor, _| editor.set_read_only(read_only));
-        fields
+        }
     }
 
     pub(super) fn sync(&self, steps: &[Step], window: &mut Window, cx: &mut App) {

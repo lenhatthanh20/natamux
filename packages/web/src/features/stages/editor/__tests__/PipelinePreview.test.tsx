@@ -374,7 +374,7 @@ describe('PipelinePreview with stages on their own agent', () => {
   })
 
   it('shows no agent line for a stage whose agent is not used, nor in the default pipeline', () => {
-    const { chart } = preview([{ id: 'implement', kind: 'agent', gate: 'auto', agent: 'codex' }])
+    const { chart } = preview([{ id: 'sign-off', kind: 'manual', gate: 'manual', agent: 'codex' }])
     expect(chart.querySelector('.pipeline-agent')).toBeNull()
     expect(chart.hasAttribute('data-agents')).toBe(false)
     cleanup()

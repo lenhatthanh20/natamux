@@ -69,10 +69,10 @@ function checkStageRules(step: Step, index: number, unique: Unique, context: z.R
       )
     }
     const ownAgent = stage.agent !== undefined || stage.args !== undefined
-    if (ownAgent && !canHaveOwnAgent(step, stage)) {
+    if (ownAgent && !canHaveOwnAgent(stage)) {
       fail(
         context,
-        `Only a stage outside Terminal 1, or a custom stage that an agent works on, can have its own agent or arguments, and "${stage.id}" cannot`,
+        `Only an agent or testing stage can have its own agent or arguments, and "${stage.id}" is a ${stage.kind} stage`,
         at,
       )
     }

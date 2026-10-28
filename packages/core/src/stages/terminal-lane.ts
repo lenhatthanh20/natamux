@@ -6,14 +6,12 @@ import { codeStage, type StagePosition, stepToRun } from './position.js'
 import {
   isBranch,
   isGroup,
-  isOn,
   isStage,
   type Stage,
   type Step,
   stageIdSchema,
   stagesOf,
 } from './schema.js'
-import { catalogEntry } from './stage-catalog.js'
 
 // The shell of a stage that runs on its own apart from Shell 1. Shells 2 to 4 go to the stages of
 // a group, so it does not take over the agent of one.
@@ -81,10 +79,10 @@ function terminalKind(terminal: string): '1' | 'own-shell' | 'lane' | 'own-agent
 }
 
 function settingsTerminal(steps: readonly Step[], stageId: string): string {
-  const all = steps.flatMap((step) => stagesOf(step).map((stage) => ({ step, stage })))
-  const index = all.findIndex(({ stage }) => stage.id === stageId)
+  const all = steps.flatMap(stagesOf)
+  const index = all.findIndex((stage) => stage.id === stageId)
   const found = all[index]
-  if (found !== undefined && runsOwnAgent(found.step, found.stage)) {
+  if (found !== undefined && runsOwnAgent(found)) {
     return String(FIRST_STAGE_SHELL + index)
   }
   const step = stepToRun(steps, stageId)
@@ -102,40 +100,21 @@ function settingsTerminal(steps: readonly Step[], stageId: string): string {
   return String(others.findIndex((stage) => stage.id === stageId) + 2)
 }
 
-// A stage that starts its own agent may use another one: an agent stage of a group that does not
-// keep Shell 1 (that goes to the code stage of the stages that are on), or one in its own shell.
-// A stage of your own that an agent works on may use another one too.
-export function canHaveOwnAgent(
-  step: Step,
-  stage: Pick<Stage, 'id' | 'kind' | 'ownShell'>,
-): boolean {
-  if (isCustomAgentStage(stage)) {
-    return true
-  }
-  if (stage.kind !== 'agent') {
-    return false
-  }
-  if (!isGroup(step)) {
-    return stage.ownShell === true
-  }
-  const on = step.parallel.filter(isOn)
-  return codeStage({ ...step, parallel: on.length > 0 ? on : step.parallel }).id !== stage.id
+// A stage that an agent works on may use another one, wherever it runs. One that would run in
+// Terminal 1 then runs in a terminal of its own, so Terminal 1 keeps the task's agent and its
+// session.
+export function canHaveOwnAgent(stage: Pick<Stage, 'kind'>): boolean {
+  return stage.kind === 'agent' || stage.kind === 'testing'
 }
 
-function isCustomAgentStage(stage: Pick<Stage, 'id' | 'kind'>): boolean {
-  return (
-    catalogEntry(stage.id) === undefined && (stage.kind === 'agent' || stage.kind === 'testing')
-  )
-}
-
-function runsOwnAgent(step: Step, stage: Stage): boolean {
-  return (stage.agent !== undefined || stage.args !== undefined) && canHaveOwnAgent(step, stage)
+function runsOwnAgent(stage: Stage): boolean {
+  return (stage.agent !== undefined || stage.args !== undefined) && canHaveOwnAgent(stage)
 }
 
 // The agent and words of a stage that starts its own agent. A stage without them uses the task's
 // agent.
-export function stageAgent(step: Step, stage: Stage): Pick<Stage, 'agent' | 'args'> {
-  if (!runsOwnAgent(step, stage)) {
+export function stageAgent(stage: Stage): Pick<Stage, 'agent' | 'args'> {
+  if (!runsOwnAgent(stage)) {
     return {}
   }
   return {

@@ -319,13 +319,12 @@ fn runs_in_shell_5_apart_from_the_agent_in_shell_1_and_the_stages_of_a_group() {
         own_shell: Some(true),
         ..agent("agent-review")
     };
-    let step = Step::Stage(review.clone());
     let codex = Stage {
         agent: Some("codex".into()),
         ..review
     };
     assert_eq!(
-        stage_agent(&step, &codex),
+        stage_agent(&codex),
         StageAgent {
             agent: Some("codex".into()),
             args: None
@@ -334,42 +333,31 @@ fn runs_in_shell_5_apart_from_the_agent_in_shell_1_and_the_stages_of_a_group() {
 }
 
 #[test]
-fn gives_them_only_to_a_stage_outside_shell_1_when_the_task_runs() {
-    let group = Step::Group(StageGroup {
-        id: "build".into(),
-        name: None,
-        parallel: vec![
-            with_own(Stage {
-                output: Some("test-spec.md".into()),
-                gate: Gate::Manual,
-                ..agent("test-spec")
-            }),
-            agent("implement"),
-        ],
+fn gives_them_to_every_agent_or_testing_stage_when_the_task_runs() {
+    let test_spec = with_own(Stage {
+        output: Some("test-spec.md".into()),
+        gate: Gate::Manual,
+        ..agent("test-spec")
     });
-    let stages = group.stages();
-    assert_eq!(stage_agent(&group, stages[0]), own_words());
-    assert_eq!(stage_agent(&group, stages[1]), StageAgent::default());
+    assert_eq!(stage_agent(&test_spec), own_words());
+    // Implement and Spec run in Terminal 1 without them, in a terminal of their own with them.
+    assert_eq!(stage_agent(&with_own(agent("implement"))), own_words());
+    let spec = with_own(Stage {
+        gate: Gate::Manual,
+        ..agent("spec")
+    });
+    assert_eq!(stage_agent(&spec), own_words());
+    let testing = Stage::new("testing", StageKind::Testing, Gate::Auto);
+    assert_eq!(stage_agent(&with_own(testing)), own_words());
+    assert_eq!(stage_agent(&agent("write-docs")), StageAgent::default());
 }
 
 #[test]
-fn gives_them_to_a_stage_of_your_own_when_the_task_runs() {
-    let docs = agent("write-docs");
-    let with = with_own(docs.clone());
-    assert_eq!(stage_agent(&Step::Stage(with.clone()), &with), own_words());
-    assert_eq!(
-        stage_agent(&Step::Stage(docs.clone()), &docs),
-        StageAgent::default()
-    );
-    let spec = Stage {
-        agent: Some("codex".into()),
-        gate: Gate::Manual,
-        ..agent("spec")
-    };
-    assert_eq!(
-        stage_agent(&Step::Stage(spec.clone()), &spec),
-        StageAgent::default()
-    );
+fn gives_them_to_no_stage_that_no_agent_works_on() {
+    for kind in [StageKind::Review, StageKind::Manual, StageKind::Release] {
+        let stage = with_own(Stage::new("my-step", kind, Gate::Manual));
+        assert_eq!(stage_agent(&stage), StageAgent::default(), "{kind:?}");
+    }
 }
 
 fn ends(steps: &[Step], id: &str) -> bool {

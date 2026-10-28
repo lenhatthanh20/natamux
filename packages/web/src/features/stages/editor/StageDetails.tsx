@@ -20,7 +20,6 @@ import { finishedWhen } from '../stage-view'
 import { KIND_ICON } from './PipelinePreview'
 import { PromptField } from './PromptField'
 import {
-  isCatalogStage,
   KIND_LABEL,
   offersOwnShell,
   runsInOwnShell,
@@ -242,19 +241,14 @@ export function StageDetails({
         <Field
           label="Output file"
           htmlFor={`${id}-output`}
-          help={
-            isCatalogStage(stage.id)
-              ? 'Set by the stage list. The stage must write this file.'
-              : 'A markdown file the stage must write, such as notes.md. Empty: none.'
-          }
+          help="A markdown file the stage must write, such as notes.md. Empty: none."
         >
           <input
             id={`${id}-output`}
             {...output}
-            readOnly={isCatalogStage(stage.id)}
             placeholder="notes.md"
             spellCheck={false}
-            className={`${inputLg} w-full font-mono text-xs read-only:bg-raised read-only:text-muted`}
+            className={`${inputLg} w-full font-mono text-xs`}
           />
         </Field>
       )}

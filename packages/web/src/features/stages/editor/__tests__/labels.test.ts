@@ -68,7 +68,7 @@ describe('stageRunner', () => {
 
   it('gives nothing for a stage that keeps the task agent, or whose agent is not used', () => {
     expect(runner(own({}))).toBeUndefined()
-    const shellOne: Step[] = [{ id: 'implement', kind: 'agent', gate: 'auto', agent: 'codex' }]
-    expect(runner(shellOne, 'implement')).toBeUndefined()
+    const manual: Step[] = [{ id: 'sign-off', kind: 'manual', gate: 'manual', agent: 'codex' }]
+    expect(runner(manual, 'sign-off')).toBeUndefined()
   })
 })

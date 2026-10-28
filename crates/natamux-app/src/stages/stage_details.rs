@@ -327,11 +327,7 @@ impl DetailsPane {
             .into_any_element(),
         );
         if stage.kind == StageKind::Agent {
-            let help = if catalog.is_some() {
-                "Set by the stage list. The stage must write this file."
-            } else {
-                "A markdown file the stage must write, such as notes.md. Empty: none."
-            };
+            let help = "A markdown file the stage must write, such as notes.md. Empty: none.";
             rows.push(
                 labelled(
                     "Output file",

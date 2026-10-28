@@ -135,7 +135,3 @@ export function addCustomStage(steps: readonly Step[], input: CustomStageInput):
   }
   return addBeforeRelease(steps, stage)
 }
-
-export function isCatalogStage(id: string): boolean {
-  return catalogEntry(id) !== undefined
-}
