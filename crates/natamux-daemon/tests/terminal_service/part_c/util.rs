@@ -7,6 +7,7 @@ use natamux_daemon::terminals::limits::OUTPUT_FRAME_BYTES;
 use natamux_daemon::terminals::service::AttachOptions;
 use natamux_daemon::terminals::shells::Detach;
 use natamux_daemon::terminals::types::{ClientRef, Frame, TerminalClient};
+use natamux_proto::terminals::history::CATCH_UP_HISTORY_ROWS;
 use natamux_proto::terminals::messages::{ACK_EVERY_BYTES, ServerMessage};
 
 use crate::support::{FakePty, Harness, SIZE, Size, bytes_of, controls, screen_of};
@@ -71,12 +72,20 @@ pub fn since_snapshot(frames: &[Frame]) -> Vec<Frame> {
     frames[at.unwrap_or(0)..].to_vec()
 }
 
-/// The client's screen equals the daemon's, as deep as the history the daemon keeps.
+/// The client's screen equals the daemon's, as deep as the history a catch-up sends: a client
+/// that was caught up holds only the last `CATCH_UP_HISTORY_ROWS` of it (T-0223 P8).
 pub fn expect_same_screen(frames: &[Frame], daemon: &[Frame]) {
     let expected = screen_of(daemon, SIZE);
     let got = screen_of(frames, SIZE);
-    assert!(got.len() >= expected.len(), "the screen is shorter");
-    assert_eq!(got[got.len() - expected.len()..], expected[..]);
+    let floor = expected.len().min(CATCH_UP_HISTORY_ROWS);
+    assert!(
+        got.len() >= floor,
+        "the screen is shorter: {} lines, {} at least",
+        got.len(),
+        floor
+    );
+    let deep = expected.len().min(got.len());
+    assert_eq!(got[got.len() - deep..], expected[expected.len() - deep..]);
 }
 
 /// What a client attached now gets, with its snapshot.

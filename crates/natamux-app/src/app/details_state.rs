@@ -128,7 +128,7 @@ impl Dashboard {
         }
         self.set_details_open(true, cx);
         self.panel_request = Some((id.to_owned(), request));
-        cx.notify();
+        self.touch_view(cx);
     }
 
     /// The panel takes the request meant for its task, once.

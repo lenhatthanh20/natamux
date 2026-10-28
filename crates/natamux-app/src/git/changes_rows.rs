@@ -9,6 +9,7 @@ use ui::{ContextMenu, Tooltip, prelude::*};
 
 use super::ChangesView;
 use super::files::FILES_LIMITS;
+use crate::app::dashboard_data::Part;
 use crate::components::colors::change_color;
 use crate::components::empty_state::EmptyState;
 use crate::components::menu::MenuLayer;
@@ -20,6 +21,10 @@ use crate::files::file_icon_view::file_icon;
 use crate::git::change_rules::{split_path, status_tone};
 use crate::git::change_tree::{FileViewMode, entry_counts};
 use crate::terminals::pane_header::icon_button;
+
+/// What the view draws from the dashboard: the commit request, the diff options, the widths
+/// and the panel's view (View), and the task's agent (Tasks).
+pub(super) const DASHBOARD_PARTS: &[Part] = &[Part::Tasks, Part::View];
 
 impl ChangesView {
     /// The file list and the commit box, for the details panel (the diff stays in main).

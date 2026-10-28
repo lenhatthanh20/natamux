@@ -178,8 +178,9 @@ pub struct HookService {
     tasks: TaskService,
     stages: Arc<dyn StageLookup>,
     options: HookOptions,
-    /// One hook at a time, so two hooks of a task never interleave.
-    serial: Mutex<()>,
+    /// One hook at a time for each task, so two hooks of a task never interleave while hooks of
+    /// other tasks run on. All the state a hook writes is kept by task id.
+    serial: Mutex<HashMap<String, Arc<Mutex<()>>>>,
     state: Mutex<State>,
 }
 
@@ -189,13 +190,21 @@ impl HookService {
             tasks,
             stages,
             options,
-            serial: Mutex::new(()),
+            serial: Mutex::new(HashMap::new()),
             state: Mutex::new(State::default()),
         }
     }
 
     fn state(&self) -> MutexGuard<'_, State> {
         self.state.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// The lock of a task. A lock that no hook holds or waits for is dropped from the map here, so
+    /// deleted tasks leave nothing behind.
+    fn task_lock(&self, task_id: &str) -> Arc<Mutex<()>> {
+        let mut locks = self.serial.lock().unwrap_or_else(PoisonError::into_inner);
+        locks.retain(|_, lock| Arc::strong_count(lock) > 1);
+        Arc::clone(locks.entry(task_id.to_string()).or_default())
     }
 
     fn publish(&self, message: DaemonMessage) {
@@ -232,11 +241,8 @@ impl HookService {
         let Some(cwd) = cwd else {
             return Ok(None);
         };
-        Ok(self.tasks.list_tasks(None)?.into_iter().find(|task| {
-            task.workspace
-                .as_deref()
-                .is_some_and(|workspace| is_inside(workspace, cwd))
-        }))
+        self.tasks
+            .task_in_workspace(|workspace| is_inside(workspace, cwd))
     }
 
     /// What the agent of each task does now, from its last hook: `{ task: { terminal: line } }`.
@@ -295,9 +301,16 @@ impl HookService {
         else {
             return Ok(HookResult::none());
         };
-        let _one_at_a_time = self.serial.lock().unwrap_or_else(PoisonError::into_inner);
-        let Some(task) = self.find_task(hook.cwd.as_deref(), task_id_header)? else {
+        let Some(found) = self.find_task(hook.cwd.as_deref(), task_id_header)? else {
             return Ok(HookResult::none());
+        };
+        let lock = self.task_lock(&found.id);
+        let _one_at_a_time = lock.lock().unwrap_or_else(PoisonError::into_inner);
+        // The hook before this one may have changed the task while this one waited.
+        let task = match self.tasks.get_task(&found.id) {
+            Ok(task) => task,
+            Err(TaskError::NotFound(_)) => return Ok(HookResult::none()),
+            Err(error) => return Err(error.into()),
         };
         // Natamux terminals run in the task's workspace only. Without one, the hook comes from an
         // agent that the removal of the workspace ended.
@@ -446,3 +459,7 @@ impl HookService {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "hook_service_tests.rs"]
+mod tests;

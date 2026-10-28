@@ -18,6 +18,19 @@ fn no_flags_follow_the_system() {
     assert_eq!(options.shot, None);
     assert!(!options.count_draws);
     assert_eq!(options.open_task, None);
+    assert!(!options.bench_flows);
+    assert_eq!(options.bench_tasks, 200);
+}
+
+#[test]
+fn bench_flows_run_on_the_fake_daemon() {
+    let options = parse(&["--bench-flows", "--bench-tasks", "50"]).unwrap();
+    assert!(options.bench_flows);
+    assert!(options.fake_daemon);
+    assert_eq!(options.bench_tasks, 50);
+    assert!(parse(&["--bench-tasks", "0"]).is_err());
+    assert!(parse(&["--bench-tasks", "many"]).is_err());
+    assert!(parse(&["--bench-tasks"]).is_err());
 }
 
 #[test]

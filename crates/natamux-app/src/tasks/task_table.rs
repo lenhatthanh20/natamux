@@ -39,6 +39,8 @@ pub struct TaskTable {
     /// In the order to show: sorted, filtered and held still by the task view.
     rows: Vec<Task>,
     main_width: Option<f32>,
+    /// The optional columns with a value in some row, found once per change, not per draw.
+    has: HasValue,
     focus: FocusHandle,
     scroll: UniformListScrollHandle,
     typed: String,
@@ -59,6 +61,11 @@ impl TaskTable {
             dashboard,
             rows: Vec::new(),
             main_width: None,
+            has: HasValue {
+                changes: false,
+                pr: false,
+                cost: false,
+            },
             focus: cx.focus_handle(),
             scroll: UniformListScrollHandle::new(),
             typed: String::new(),
@@ -66,12 +73,38 @@ impl TaskTable {
         }
     }
 
-    pub fn set_rows(&mut self, rows: Vec<Task>, main_width: Option<f32>, cx: &mut Context<Self>) {
-        if self.rows != rows || self.main_width != main_width {
-            self.rows = rows;
-            self.main_width = main_width;
-            cx.notify();
+    /// False: the rows and the width are the ones shown, so nothing draws.
+    pub fn set_rows(
+        &mut self,
+        rows: Vec<Task>,
+        main_width: Option<f32>,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if self.rows == rows && self.main_width == main_width {
+            return false;
         }
+        self.rows = rows;
+        self.main_width = main_width;
+        self.data_changed(cx);
+        true
+    }
+
+    /// The diff stats, usage or activity the rows show changed: the columns are found again.
+    pub fn data_changed(&mut self, cx: &mut Context<Self>) {
+        let data = &self.dashboard.read(cx).data;
+        self.has = HasValue {
+            changes: self.rows.iter().any(|task| {
+                data.diff_stats
+                    .get(&task.id)
+                    .is_some_and(|stat| stat.files > 0)
+            }),
+            pr: self.rows.iter().any(|task| task.pr.is_some()),
+            cost: self
+                .rows
+                .iter()
+                .any(|task| data.usage.contains_key(&task.id)),
+        };
+        cx.notify();
     }
 
     /// For `--gate2`: scroll to a row.
@@ -124,7 +157,7 @@ impl TaskTable {
         };
         let height = px(if self.is_cards() { CARD_ROW } else { ROW });
         let y = bounds.origin.y + offset.y + height * (index + 1) as f32;
-        let x = bounds.origin.x + offset.x + px(self.layout(cx).task_column_x());
+        let x = bounds.origin.x + offset.x + px(self.layout().task_column_x());
         self.open_menu(index, point(x, y), window, cx);
     }
 
@@ -201,21 +234,8 @@ impl TaskTable {
         self.main_width.is_some_and(|width| width < 560.)
     }
 
-    fn layout(&self, cx: &App) -> TableLayout {
-        let data = &self.dashboard.read(cx).data;
-        let has = HasValue {
-            changes: self.rows.iter().any(|task| {
-                data.diff_stats
-                    .get(&task.id)
-                    .is_some_and(|stat| stat.files > 0)
-            }),
-            pr: self.rows.iter().any(|task| task.pr.is_some()),
-            cost: self
-                .rows
-                .iter()
-                .any(|task| data.usage.contains_key(&task.id)),
-        };
-        table_layout(self.main_width, has)
+    fn layout(&self) -> TableLayout {
+        table_layout(self.main_width, self.has)
     }
 
     fn render_header(&self, columns: &[(ColumnKey, Option<f32>)], cx: &Context<Self>) -> Div {
@@ -332,7 +352,7 @@ impl TaskTable {
         let focused = self.focus.contains_focused(window, cx);
         let selected = self.selected_index(cx);
         let now = now_ms();
-        let layout = self.layout(cx);
+        let layout = self.layout();
         let rows: Vec<(usize, RowData)> = {
             let dashboard = self.dashboard.read(cx);
             range
@@ -433,7 +453,7 @@ fn card(row: &RowData, cx: &App) -> impl IntoElement {
 
 impl Render for TaskTable {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let layout = self.layout(cx);
+        let layout = self.layout();
         let mut context = KeyContext::default();
         context.add("NatamuxList");
         context.add("not_editing");

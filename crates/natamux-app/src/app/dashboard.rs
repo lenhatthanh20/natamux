@@ -14,8 +14,9 @@ use natamux_client::DashboardEvent;
 use natamux_proto::tasks::task::{Task, TaskState};
 use ui::prelude::*;
 
-use super::dashboard_data::{BulkRuns, DashboardData, Link};
+use super::dashboard_data::{BulkRuns, DashboardData, Part};
 use super::settings_rules::{SettingsFocus, SettingsPage};
+use super::sign_in::StartProblem;
 use super::source::{Rows, Source};
 use super::view_rules::{
     ShellRequest, WorkspaceTab, request_on_open, seen_after_list, toggle_pin, with_recent,
@@ -30,7 +31,7 @@ use crate::terminals::pane_rules::PaneLayout;
 /// What views and Root follow besides `cx.notify()`.
 #[derive(Clone, Debug)]
 pub enum DashboardChange {
-    /// The daemon sent a new task list.
+    /// The daemon sent a new task list, or one task of it.
     Tasks,
     /// The user opened a task in main.
     Opened(Box<Task>),
@@ -108,30 +109,24 @@ pub struct Dashboard {
 impl EventEmitter<DashboardChange> for Dashboard {}
 
 impl Dashboard {
-    /// `source`: the daemon or the fake, or why the app has none.
-    pub fn new(source: Result<Arc<Source>, String>, cx: &mut Context<Self>) -> Self {
-        // The fake data reuses real ids (T-0146, natamux): its seen states, pins and folds must
-        // not reach the user's file.
-        let fake = matches!(source.as_deref(), Ok(Source::FakeDaemon));
-        let view_folder = if fake { None } else { view_state::folder() };
-        let view = view_folder
-            .as_deref()
-            .map(view_state::load)
-            .unwrap_or_default();
+    /// `source`: the daemon or the fake, or why the app has none yet. `saved`: the view state
+    /// `start` read (main.rs).
+    pub fn new(
+        source: Result<Arc<Source>, StartProblem>,
+        saved: SavedView,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let mut data = DashboardData::default();
-        if let Err(reason) = &source {
-            data.link = Link::Down {
-                reason: reason.clone(),
-                retrying: false,
-            };
+        if let Err(problem) = &source {
+            data.link = problem.link();
         }
         let mut dashboard = Dashboard {
             source: source.ok(),
             data,
             rows: None,
             _feed: None,
-            view,
-            view_folder,
+            view: saved.view,
+            view_folder: saved.folder,
             view_dirty: false,
             saving: None,
             events_reading: BTreeSet::new(),
@@ -171,15 +166,15 @@ impl Dashboard {
     pub fn use_view(&mut self, view: ViewState, cx: &mut Context<Self>) {
         self.view = view;
         self.view_folder = None;
-        cx.notify();
+        self.touch_view(cx);
     }
 
-    /// Every view that shows the dashboard draws again on its notify, so an event that changes
-    /// nothing notifies nobody. The three workspace events only go to their subscribers.
+    /// `data.apply` bumps the parts the event changed; an event that changes nothing notifies
+    /// nobody. The three workspace events only go to their subscribers.
     fn apply(&mut self, event: DashboardEvent, cx: &mut Context<Self>) {
         super::app_log::log_status(&event, &mut self.data.link_down, &self.source, cx);
-        let changed = self.data.changes(&event);
-        let tasks_changed = changed && matches!(event, DashboardEvent::Tasks(_));
+        let before = self.data.gens;
+        let brings_tasks = DashboardData::brings_tasks(&event);
         match &event {
             DashboardEvent::WorkspaceChanged { task_id } => {
                 cx.emit(DashboardChange::WorkspaceChanged(task_id.clone()))
@@ -198,11 +193,10 @@ impl Dashboard {
         if let Some(notice) = self.data.apply(event) {
             self.toast(&notice.text, notice.tone, None, cx);
         }
-        if tasks_changed {
-            crate::perf::report::mark_first_data();
+        if brings_tasks && self.data.gens.get(Part::Tasks) != before.get(Part::Tasks) {
             self.after_tasks(cx);
         }
-        if changed {
+        if self.data.gens != before {
             cx.notify();
         }
     }
@@ -288,6 +282,7 @@ impl Dashboard {
             })
             .detach();
         }
+        // Only Root reads the toasts, by their ids: no part of the views changed.
         cx.notify();
     }
 
@@ -300,7 +295,7 @@ impl Dashboard {
 
     pub fn select(&mut self, id: Option<String>, cx: &mut Context<Self>) {
         self.selected = id;
-        cx.notify();
+        self.touch_view(cx);
     }
 
     /// Opens the task in main and records the state the user now saw.
@@ -322,7 +317,7 @@ impl Dashboard {
         self.view.recent = with_recent(&self.view.recent, &task.id);
         self.save_view(cx);
         cx.emit(DashboardChange::Opened(Box::new(task)));
-        cx.notify();
+        self.touch_view(cx);
     }
 
     /// Opens the task's workspace on one terminal: a sidebar terminal row and the Answer button
@@ -362,7 +357,7 @@ impl Dashboard {
             self.agents_open = true;
             cx.emit(DashboardChange::AgentsOpened);
         }
-        cx.notify();
+        self.touch_view(cx);
     }
 
     pub fn back(&mut self, cx: &mut Context<Self>) {
@@ -370,29 +365,29 @@ impl Dashboard {
         if self.open_task.take().is_some() || agents {
             self.shell_request = None;
             cx.emit(DashboardChange::BackToList);
-            cx.notify();
+            self.touch_view(cx);
         }
     }
 
     pub fn set_filter(&mut self, text: String, cx: &mut Context<Self>) {
         self.filter = text;
-        cx.notify();
+        self.touch_view(cx);
     }
 
     /// A chip filters to its state; the same chip again shows all.
     pub fn toggle_state_filter(&mut self, state: TaskState, cx: &mut Context<Self>) {
         self.state_filter = (self.state_filter != Some(state)).then_some(state);
-        cx.notify();
+        self.touch_view(cx);
     }
 
     pub fn set_state_filter(&mut self, state: Option<TaskState>, cx: &mut Context<Self>) {
         self.state_filter = state;
-        cx.notify();
+        self.touch_view(cx);
     }
 
     pub fn sort_by(&mut self, key: SortKey, cx: &mut Context<Self>) {
         self.sort = next_sort(self.sort, key);
-        cx.notify();
+        self.touch_view(cx);
     }
 
     // The saved view
@@ -441,7 +436,7 @@ impl Dashboard {
     fn update_view(&mut self, cx: &mut Context<Self>, change: impl FnOnce(&mut ViewState)) {
         change(&mut self.view);
         self.save_view(cx);
-        cx.notify();
+        self.touch_view(cx);
     }
 
     /// Writes the newest view state after a short wait, one write at a time.
@@ -498,3 +493,4 @@ pub mod tabs;
 
 #[path = "dashboard_session.rs"]
 mod session;
+pub use session::SavedView;

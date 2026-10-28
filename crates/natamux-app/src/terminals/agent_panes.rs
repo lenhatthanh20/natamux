@@ -22,6 +22,7 @@ use super::terminal_cache::{Owner, TerminalCache, terminal_key};
 use super::terminal_find::open_find;
 use super::terminal_pane::TerminalPane;
 use crate::app::dashboard::{Dashboard, TerminalReader};
+use crate::app::dashboard_data::Part;
 use crate::components::agent_badge::narrow_pane;
 use crate::components::button_style::{action_button, button_icon};
 use crate::components::chips::CountBadge;
@@ -83,8 +84,10 @@ impl AgentPanes {
     pub fn new(dashboard: Entity<Dashboard>, cx: &mut Context<Self>) -> Self {
         let width = cx.new(|_| None);
         let observe = cx.observe(&width, |_, _, cx| cx.notify());
-        // Root caches the grid: its tasks and their terminals come from the dashboard.
-        let follow = cx.observe(&dashboard, |_, _, cx| cx.notify());
+        // Root caches the grid: its tasks, their terminals and the agents' lines come from the
+        // dashboard.
+        let parts = &[Part::Tasks, Part::Terminals, Part::Activity, Part::View];
+        let follow = Dashboard::redraw_on(&dashboard, parts, cx);
         AgentPanes {
             dashboard,
             maximized: None,

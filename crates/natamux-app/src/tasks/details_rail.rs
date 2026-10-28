@@ -9,6 +9,7 @@ use ui::{FixedWidth, IconButtonShape, Tooltip, prelude::*};
 
 use crate::app::commands::shortcut_of;
 use crate::app::dashboard::Dashboard;
+use crate::app::dashboard_data::Part;
 use crate::app::tab_rules::details_tabs;
 use crate::app::view_rules::DetailsView;
 use crate::components::chips::tip_with_keys;
@@ -82,7 +83,8 @@ impl DetailsRail {
         details: Entity<DetailsPanel>,
         cx: &mut Context<Self>,
     ) -> Self {
-        let observe = cx.observe(&dashboard, |_, _, cx| cx.notify());
+        // The task beside the workspace, the panel's view, and the "..." menu of its task.
+        let observe = Dashboard::redraw_on(&dashboard, &[Part::Tasks, Part::View], cx);
         DetailsRail {
             dashboard,
             details,

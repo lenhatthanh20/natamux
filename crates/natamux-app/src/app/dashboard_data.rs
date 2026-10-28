@@ -18,7 +18,11 @@ use natamux_proto::workspaces::workspace::{DiffStat, PreparingStep};
 use crate::agents::limits_rules::{new_warning, warned_already};
 use crate::components::toast_rules::ToastTone;
 use crate::sidebar::sidebar_tree::{RowTier, row_tier};
-use crate::tasks::task_changes::upsert_task;
+use crate::tasks::task_changes::upsert_task_in;
+
+#[path = "dashboard_parts.rs"]
+mod parts;
+pub use parts::{Generations, Part, Seen};
 
 /// What the app knows of the daemon.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -109,6 +113,8 @@ pub struct DashboardData {
     /// Workspaces that ended before the app announced them, with their error, newest last. Most
     /// were made elsewhere (web, CLI) and are never announced, so only the last few are kept.
     ended_early: VecDeque<(String, Option<String>)>,
+    /// What changed: views that follow the dashboard skip a notify of parts they do not read.
+    pub gens: Generations,
 }
 
 /// A POST /workspaces answer comes within a few workspaces' ends, so this many is plenty.
@@ -135,6 +141,7 @@ impl Default for DashboardData {
             events: BTreeMap::new(),
             announced: BTreeSet::new(),
             ended_early: VecDeque::new(),
+            gens: Generations::default(),
         }
     }
 }
@@ -146,6 +153,9 @@ impl DashboardData {
 
     /// Takes one event of the feed. Gives a toast when a new workspace of this app ended.
     pub fn apply(&mut self, event: DashboardEvent) -> Option<Notice> {
+        if self.changes(&event) {
+            self.bump_parts(&event);
+        }
         match event {
             DashboardEvent::Tasks(tasks) => {
                 self.tasks = tasks;
@@ -155,7 +165,10 @@ impl DashboardData {
                     self.tasks.iter().map(|task| task.id.as_str()).collect();
                 self.events.retain(|id, _| known.contains(id.as_str()));
                 self.terminals.retain(|id, _| known.contains(id.as_str()));
+                crate::perf::report::mark_first_data();
             }
+            // No task goes, so nothing tied to one is dropped; one task is not the loaded list.
+            DashboardEvent::TaskChanged(task) => self.merge_task(*task),
             DashboardEvent::Repos {
                 repos,
                 worktrees_dir,
@@ -283,197 +296,28 @@ impl DashboardData {
     pub fn set_events(&mut self, id: &str, updated_at: &str, events: Vec<StoredEvent>) {
         self.events
             .insert(id.to_owned(), (updated_at.to_owned(), events));
+        self.gens.bump(Part::Events);
     }
 
     /// A task an answer of the daemon changed, before the feed brings the list. A late answer
     /// keeps what the feed brought since (`upsertTask`).
     pub fn merge_task(&mut self, task: Task) {
-        self.tasks = upsert_task(&self.tasks, task);
+        if self.task_changes(&task) {
+            self.gens.bump(Part::Tasks);
+        }
+        upsert_task_in(&mut self.tasks, task);
     }
 
     pub fn forget_task(&mut self, id: &str) {
         self.tasks.retain(|task| task.id != id);
         self.events.remove(id);
         self.terminals.remove(id);
+        for part in [Part::Tasks, Part::Events, Part::Terminals] {
+            self.gens.bump(part);
+        }
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use natamux_proto::tasks::task::TaskState;
-
-    use super::*;
-
-    #[test]
-    fn a_bulk_run_does_not_start_twice_while_it_runs() {
-        let mut runs = BulkRuns::default();
-        assert!(runs.start(BulkRun::RemoveFinished));
-        assert!(runs.running(BulkRun::RemoveFinished));
-        assert!(!runs.start(BulkRun::RemoveFinished));
-        // The other kind is its own run.
-        assert!(!runs.running(BulkRun::DeleteTasks));
-        assert!(runs.start(BulkRun::DeleteTasks));
-        runs.finish(BulkRun::RemoveFinished);
-        assert!(!runs.running(BulkRun::RemoveFinished));
-        assert!(runs.start(BulkRun::RemoveFinished));
-    }
-
-    fn task(id: &str, state: TaskState, updated_at: &str) -> Task {
-        Task {
-            id: id.into(),
-            state,
-            branch: Some(format!("natamux/{id}")),
-            updated_at: updated_at.into(),
-            ..Task::default()
-        }
-    }
-
-    fn step(id: &str, step: Option<PreparingStep>, error: Option<&str>) -> DashboardEvent {
-        DashboardEvent::WorkspaceStep(PreparingMessage {
-            task_id: id.into(),
-            step,
-            error: error.map(String::from),
-        })
-    }
-
-    #[test]
-    fn the_task_list_makes_the_link_live_and_drops_what_belongs_to_gone_tasks() {
-        let mut data = DashboardData::default();
-        data.apply(DashboardEvent::Terminals {
-            task_id: "T-2".into(),
-            terminals: TerminalList::default(),
-        });
-        data.set_events("T-2", "a", Vec::new());
-        assert!(!data.loaded);
-        data.apply(DashboardEvent::Tasks(vec![task(
-            "T-1",
-            TaskState::Running,
-            "a",
-        )]));
-        assert!(data.loaded);
-        assert_eq!(data.link, Link::Live);
-        assert!(data.terminals.is_empty());
-        assert!(data.events.is_empty());
-    }
-
-    #[test]
-    fn says_why_the_daemon_is_down_and_whether_it_tries_again() {
-        let mut data = DashboardData::default();
-        data.apply(DashboardEvent::Status(LinkStatus::Connecting));
-        assert_eq!(data.link, Link::Loading);
-        data.apply(DashboardEvent::Status(LinkStatus::Refused));
-        assert!(matches!(
-            data.link,
-            Link::Down {
-                retrying: false,
-                ..
-            }
-        ));
-        data.apply(DashboardEvent::Status(LinkStatus::Reconnecting(
-            ClientError::NoToken,
-        )));
-        assert!(matches!(data.link, Link::Down { retrying: true, .. }));
-    }
-
-    #[test]
-    fn toasts_the_end_of_an_announced_workspace_only() {
-        let mut data = DashboardData::default();
-        data.apply(DashboardEvent::Tasks(vec![task(
-            "T-1",
-            TaskState::Running,
-            "a",
-        )]));
-        assert_eq!(data.announce("T-1"), None);
-        assert_eq!(
-            data.apply(step("T-1", Some(PreparingStep::Fetch), None)),
-            None
-        );
-        assert_eq!(data.preparing.get("T-1"), Some(&PreparingStep::Fetch));
-        let ready = data.apply(step("T-1", None, None));
-        assert_eq!(
-            ready.map(|notice| notice.text),
-            Some("T-1 is ready in natamux/T-1.".into())
-        );
-        assert!(data.preparing.is_empty());
-        assert_eq!(data.apply(step("T-9", None, None)), None);
-    }
-
-    #[test]
-    fn toasts_a_workspace_that_ended_before_it_was_announced() {
-        let mut data = DashboardData::default();
-        data.apply(step("T-3", None, Some("fetch failed")));
-        let failed = data.announce("T-3");
-        assert_eq!(
-            failed,
-            Some(Notice {
-                text: "T-3: workspace failed. fetch failed".into(),
-                tone: ToastTone::Error,
-            })
-        );
-        assert_eq!(data.announce("T-3"), None);
-    }
-
-    #[test]
-    fn keeps_only_the_last_workspaces_that_ended_unannounced() {
-        let mut data = DashboardData::default();
-        for n in 0..ENDED_KEPT + 8 {
-            data.apply(step(&format!("T-{n}"), None, None));
-        }
-        assert_eq!(data.ended_early.len(), ENDED_KEPT);
-        assert_eq!(data.announce("T-0"), None);
-        let newest = format!("T-{}", ENDED_KEPT + 7);
-        assert!(data.announce(&newest).is_some());
-    }
-
-    #[test]
-    fn reads_the_events_of_attention_cards_again_when_the_task_changed() {
-        let mut data = DashboardData::default();
-        data.apply(DashboardEvent::Tasks(vec![
-            task("T-1", TaskState::NeedsInput, "a"),
-            task("T-2", TaskState::Running, "a"),
-            task("T-3", TaskState::Failed, "a"),
-        ]));
-        assert_eq!(
-            data.events_to_read(),
-            [("T-1".into(), "a".into()), ("T-3".into(), "a".into())]
-        );
-        data.set_events("T-1", "a", Vec::new());
-        data.set_events("T-3", "old", Vec::new());
-        assert_eq!(data.events_to_read(), [("T-3".into(), "a".into())]);
-    }
-
-    #[test]
-    fn merges_an_answer_and_forgets_a_deleted_task() {
-        let mut data = DashboardData::default();
-        data.apply(DashboardEvent::Tasks(vec![task(
-            "T-1",
-            TaskState::Draft,
-            "a",
-        )]));
-        data.merge_task(task("T-1", TaskState::Ready, "b"));
-        data.merge_task(task("T-2", TaskState::Draft, "c"));
-        assert_eq!(data.tasks.len(), 2);
-        assert_eq!(data.tasks[0].id, "T-2");
-        assert_eq!(
-            data.task("T-1").map(|task| task.state),
-            Some(TaskState::Ready)
-        );
-        data.forget_task("T-1");
-        assert!(data.task("T-1").is_none());
-    }
-
-    #[test]
-    fn a_late_answer_keeps_the_task_the_feed_brought_since() {
-        let mut data = DashboardData::default();
-        data.apply(DashboardEvent::Tasks(vec![task(
-            "T-1",
-            TaskState::Running,
-            "2026-10-08T10:00:00.000Z",
-        )]));
-        data.merge_task(task("T-1", TaskState::Draft, "2026-10-08T09:00:00.000Z"));
-        assert_eq!(
-            data.task("T-1").map(|task| task.state),
-            Some(TaskState::Running)
-        );
-    }
-}
+#[path = "dashboard_data_tests.rs"]
+mod tests;

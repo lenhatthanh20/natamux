@@ -167,8 +167,52 @@ fn reuses_the_kept_list_of_changes_for_the_diff_of_a_file() {
     let before = spawn_count();
     let diff = fx.ws.file_diff(&task.id, "tracked.txt").unwrap();
     assert_eq!(diff.modified.as_deref(), Some("two\n"));
-    // `cat-file -s` and `show` only, no git status.
-    assert_eq!(spawn_count() - before, 2);
+    // One `cat-file --batch` only, no git status.
+    assert_eq!(spawn_count() - before, 1);
+}
+
+fn tracked_file_changed(fx: &Fx) -> (Task, PathBuf) {
+    let (task, workspace) = task_with_workspace(fx);
+    fs::write(workspace.join("tracked.txt"), "one\n").unwrap();
+    run_git(&workspace, &["add", "tracked.txt"]);
+    run_git(&workspace, &["commit", "-m", "add tracked"]);
+    fs::write(workspace.join("tracked.txt"), "two\n").unwrap();
+    (task, workspace)
+}
+
+#[test]
+fn keeps_the_diff_of_a_file_until_the_file_or_the_list_changes() {
+    let fx = Fx::exclusive();
+    let (task, workspace) = tracked_file_changed(&fx);
+    let first = fx.ws.file_diff(&task.id, "tracked.txt").unwrap();
+
+    let before = spawn_count();
+    assert_eq!(fx.ws.file_diff(&task.id, "tracked.txt").unwrap(), first);
+    assert_eq!(spawn_count() - before, 0);
+
+    // A new size: the kept diff is not used. The list is the kept one, so no git status runs.
+    fs::write(workspace.join("tracked.txt"), "three more\n").unwrap();
+    let before = spawn_count();
+    let edited = fx.ws.file_diff(&task.id, "tracked.txt").unwrap();
+    assert_eq!(edited.modified.as_deref(), Some("three more\n"));
+    assert_eq!(spawn_count() - before, 1);
+}
+
+#[test]
+fn clears_the_kept_diffs_when_the_list_is_read_again() {
+    let fx = Fx::exclusive();
+    let (task, _workspace) = tracked_file_changed(&fx);
+    fx.ws.file_diff(&task.id, "tracked.txt").unwrap();
+
+    fx.move_clock(GIT_READ_MS);
+    let before = spawn_count();
+    fx.ws.file_diff(&task.id, "tracked.txt").unwrap();
+    // The list read (git status and more) plus the diff read again.
+    assert!(spawn_count() - before >= 2);
+
+    let before = spawn_count();
+    fx.ws.file_diff(&task.id, "tracked.txt").unwrap();
+    assert_eq!(spawn_count() - before, 0);
 }
 
 #[test]

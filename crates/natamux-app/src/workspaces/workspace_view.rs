@@ -17,7 +17,9 @@ use ui::prelude::*;
 use super::workspace_rules::GitStep;
 use super::wrap_up_rules::{finished_text, is_finished_state};
 use crate::app::dashboard::{Dashboard, DashboardChange, TerminalReader};
+use crate::app::dashboard_data::Part;
 use crate::app::read_pace::ReadPace;
+use crate::app::shown_cache::ShownCache;
 use crate::app::view_rules::WorkspaceTab;
 use crate::components::motion;
 use crate::components::toast_rules::ToastTone;
@@ -30,7 +32,7 @@ use crate::workspaces::docs_tab::DocsTab;
 /// `FALLBACK_POLL_MS`: the daemon says when a workspace changed; this covers a lost event.
 const POLL: Duration = Duration::from_secs(60);
 
-/// What the view keeps of one task; another task starts from nothing.
+/// What the view keeps of one task. The last tasks' are kept in `WorkspaceView::cache`.
 #[derive(Default)]
 struct Shown {
     task_id: String,
@@ -65,6 +67,7 @@ pub struct WorkspaceView {
     /// The active file as last drawn: a tab picked again reads its file again.
     editor_shown: Option<String>,
     shown: Option<Shown>,
+    cache: ShownCache<Shown>,
     width: Entity<Option<f32>>,
     /// A poll came while the window had no focus: it reads once when the focus comes back.
     missed_poll: bool,
@@ -83,7 +86,15 @@ impl WorkspaceView {
         });
         let observe = cx.observe(&width, |_, _, cx| cx.notify());
         // Root caches this view: the task, its terminals and their lines come from the dashboard.
-        let follow = cx.observe(&dashboard, |_, _, cx| cx.notify());
+        // The terminal panes and the docs tab inside it have no observer of their own.
+        let parts = &[
+            Part::Tasks,
+            Part::Terminals,
+            Part::Activity,
+            Part::Preparing,
+            Part::View,
+        ];
+        let follow = Dashboard::redraw_on(&dashboard, parts, cx);
         let poll = cx.spawn(async move |view, cx| {
             loop {
                 cx.background_executor().timer(POLL).await;
@@ -108,6 +119,7 @@ impl WorkspaceView {
             file_tab_shown: None,
             editor_shown: None,
             shown: None,
+            cache: ShownCache::default(),
             width,
             missed_poll: false,
             _poll: poll,
@@ -169,6 +181,9 @@ impl WorkspaceView {
             }
             DashboardChange::TaskLogged(id) if open(id, self) => self.refresh_docs(cx),
             DashboardChange::ShellsChanged(id) if open(id, self) => self.read_ended(cx),
+            DashboardChange::WorkspaceChanged(id) | DashboardChange::TaskLogged(id) => {
+                self.cache.mark_stale(id)
+            }
             DashboardChange::Tasks => self.after_tasks(cx),
             DashboardChange::UndoRollback(id) => self.undo_rollback(id, cx),
             _ => {}
@@ -179,22 +194,47 @@ impl WorkspaceView {
         if self.shown.as_ref().is_some_and(|s| s.task_id == task_id) {
             return;
         }
-        self.shown = Some(Shown {
+        self.keep_shown();
+        let stale = self.cache.is_stale(task_id);
+        let mut shown = self.cache.take(task_id).unwrap_or_else(|| Shown {
             task_id: task_id.to_owned(),
             ..Shown::default()
         });
+        // Drawn from what was kept; `after_tasks` reads again (a read that ran when the task
+        // left was dropped, so its pace must not wait for it).
+        shown.git_reads.reset();
+        shown.seen = None;
+        self.shown = Some(shown);
         self.panes
             .update(cx, |panes, cx| panes.set_task(Some(task_id.to_owned()), cx));
         self.sync_changes(cx);
         self.dashboard
             .read(cx)
             .show_terminals(TerminalReader::Workspace, [task_id.to_owned()]);
+        if stale {
+            // Asked first, so the one read of `after_tasks` waits for this one.
+            self.read_git_fresh(cx);
+        }
         self.after_tasks(cx);
         cx.notify();
     }
 
+    /// Keeps the shown task for a switch back. The answer of a git step or a start that was on
+    /// its way is dropped (it finds another task shown), so its mark would stay for ever: it is
+    /// cleared here. The read data and the user's choices (base, tab screen) stay.
+    fn keep_shown(&mut self) {
+        let Some(mut shown) = self.shown.take() else {
+            return;
+        };
+        shown.pending = None;
+        shown.starting = false;
+        shown.reopening = false;
+        let id = shown.task_id.clone();
+        self.cache.put(id, shown);
+    }
+
     fn hide(&mut self, cx: &mut Context<Self>) {
-        self.shown = None;
+        self.keep_shown();
         self.docs = None;
         self.editors.clear();
         self.panes.update(cx, |panes, cx| panes.set_task(None, cx));
@@ -206,6 +246,8 @@ impl WorkspaceView {
 
     /// A new list: read again what the task's new state needs; say once that it finished.
     fn after_tasks(&mut self, cx: &mut Context<Self>) {
+        let dashboard = self.dashboard.read(cx);
+        self.cache.retain(|id| dashboard.data.task(id).is_some());
         let Some(task) = self.task(cx) else {
             return;
         };
@@ -265,3 +307,7 @@ mod tabs;
 
 #[path = "workspace_file_tabs.rs"]
 mod file_tabs;
+
+#[cfg(test)]
+#[path = "workspace_view_tests.rs"]
+mod tests;

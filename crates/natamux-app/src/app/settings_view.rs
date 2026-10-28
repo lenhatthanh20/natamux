@@ -15,6 +15,7 @@ use natamux_proto::projects::repo::Repo;
 use ui::{ToggleButtonGroup, ToggleButtonGroupStyle, ToggleButtonSimple, prelude::*};
 
 use super::dashboard::Dashboard;
+use super::dashboard_data::{Part, Seen};
 use super::settings_font::FontRows;
 use super::settings_rules::{
     SearchResults, SettingRow, SettingsFocus, SettingsPage, page_title, search, shown_page,
@@ -94,8 +95,15 @@ impl SettingsView {
                 cx.notify();
             }
         });
-        // A project that is gone takes its page and draft with it.
-        let follow = cx.observe(&dashboard, |view, dashboard, cx| {
+        // A project that is gone takes its page and draft with it. The pages show the projects
+        // and the app settings of the view state.
+        let mut seen = Seen::default();
+        let follow = cx.observe(&dashboard, move |view, dashboard, cx| {
+            let gens = dashboard.read(cx).data.gens;
+            let changed = seen.take(&gens);
+            if !changed.any(&[Part::Repos, Part::View]) {
+                return;
+            }
             let ids: BTreeSet<String> = dashboard
                 .read(cx)
                 .data

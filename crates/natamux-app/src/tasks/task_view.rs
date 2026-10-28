@@ -7,7 +7,7 @@
 use std::rc::Rc;
 use std::time::Duration;
 
-use gpui::{Entity, FocusHandle, Focusable, PathPromptOptions, Subscription};
+use gpui::{Entity, FocusHandle, Focusable, PathPromptOptions, StyleRefinement, Subscription};
 use natamux_proto::projects::repo::AddRepo;
 use natamux_proto::tasks::task::Task;
 use ui::prelude::*;
@@ -16,14 +16,14 @@ use super::add_subtask_dialog;
 use super::frozen_order::{HOLD_MS, freeze_order, is_frozen};
 use super::task_attention::{filter_tasks, next_row_change_ms};
 use super::task_board::TaskBoard;
-use super::task_sort::sort_tasks;
+use super::task_sort::{SortKey, TaskSort, sort_tasks};
 use super::task_table::{KeyMoved, TaskTable};
 use super::task_view_rules::{MainContent, main_content};
 use crate::app::clock::follow_labels;
 use crate::app::commands::shortcut_of;
 use crate::app::commands_stages::ShowTasksProgress;
 use crate::app::dashboard::Dashboard;
-use crate::app::dashboard_data::Link;
+use crate::app::dashboard_data::{Link, Part, Seen};
 use crate::app::settings_reads;
 use crate::app::shortcuts::{AddProject, NewTask, NewWorkspace, ShowBoard, ShowTable};
 use crate::app::source::reason;
@@ -40,6 +40,10 @@ pub use crate::app::clock::now_ms;
 
 #[path = "task_view_header.rs"]
 mod header;
+
+#[cfg(test)]
+#[path = "task_view_tests.rs"]
+mod tests;
 
 pub struct TaskView {
     dashboard: Entity<Dashboard>,
@@ -58,6 +62,10 @@ pub struct TaskView {
     /// When a row shown next changes a time label, in Unix ms, and the timer that draws it.
     next_change: Option<i64>,
     clock: Option<gpui::Task<()>>,
+    /// The dashboard parts this view last followed.
+    seen: Seen,
+    #[cfg(test)]
+    refreshes: usize,
     _hold: Option<gpui::Task<()>>,
     _subscriptions: Vec<Subscription>,
 }
@@ -82,7 +90,7 @@ impl TaskView {
         let progress = cx.new(|cx| ProgressBoard::new(dashboard.clone(), cx));
         let main_width = cx.new(|_| None);
         let subscriptions = vec![
-            cx.observe(&dashboard, |this, _, cx| this.refresh(cx)),
+            cx.observe(&dashboard, |this, _, cx| this.follow(cx)),
             cx.observe(&main_width, |this, _, cx| this.refresh(cx)),
             cx.subscribe(&table, |this, _, _: &KeyMoved, cx| this.hold(cx)),
         ];
@@ -99,9 +107,15 @@ impl TaskView {
             shown_key: String::new(),
             next_change: None,
             clock: None,
+            seen: Seen::default(),
+            #[cfg(test)]
+            refreshes: 0,
             _hold: None,
             _subscriptions: subscriptions,
         };
+        // The refresh below reads all of it: only later changes need another one.
+        let gens = view.dashboard.read(cx).data.gens;
+        view.seen.take(&gens);
         view.refresh(cx);
         view
     }
@@ -116,7 +130,38 @@ impl TaskView {
         &self.board
     }
 
+    /// A dashboard notify: sorts again only when what the order reads changed, and draws only
+    /// what reads the parts that changed. The board and the progress are cached, so each is
+    /// told on its own.
+    fn follow(&mut self, cx: &mut Context<Self>) {
+        let (changed, layout, sort) = {
+            let dashboard = self.dashboard.read(cx);
+            let changed = self.seen.take(&dashboard.data.gens);
+            (changed, dashboard.view().layout, dashboard.sort)
+        };
+        if changed.any(&order_parts(sort)) {
+            // Counted here, not in `refresh`: the label clock and the width refresh too.
+            #[cfg(test)]
+            {
+                self.refreshes += 1;
+            }
+            self.refresh(cx);
+        }
+        // The header, the empty states and the table under this view.
+        if changed.any(&[Part::Tasks, Part::View, Part::Link, Part::Repos]) {
+            cx.notify();
+        }
+        if changed.any(row_parts(layout)) {
+            match layout {
+                Layout::Table => self.table.update(cx, |table, cx| table.data_changed(cx)),
+                Layout::Board => self.board.update(cx, |_, cx| cx.notify()),
+                Layout::Progress => self.progress.update(cx, |_, cx| cx.notify()),
+            }
+        }
+    }
+
     /// Sorts, filters and holds the rows still, then hands them to the table and the board.
+    /// Draws again only when the rows or the next label change moved.
     fn refresh(&mut self, cx: &mut Context<Self>) {
         let (sorted, key) = {
             let dashboard = self.dashboard.read(cx);
@@ -143,12 +188,11 @@ impl TaskView {
         };
         self.shown_ids = ordered.iter().map(|task| task.id.clone()).collect();
         self.shown_key = key;
-        self.next_change = next_row_change_ms(&ordered, now).map(|wait| now + wait);
-        self.clock = None;
+        let next_change = next_row_change_ms(&ordered, now).map(|wait| now + wait);
         let width = *self.main_width.read(cx);
         // Only the layout on screen gets the rows. A switch of layout changes the dashboard,
         // which refreshes again for the new one.
-        match self.dashboard.read(cx).view().layout {
+        let changed = match self.dashboard.read(cx).view().layout {
             Layout::Table => self
                 .table
                 .update(cx, |table, cx| table.set_rows(ordered, width, cx)),
@@ -156,11 +200,16 @@ impl TaskView {
                 .board
                 .update(cx, |board, cx| board.set_rows(ordered, cx)),
             Layout::Progress => self.progress.update(cx, |board, cx| {
-                board.set_rows(ordered, cx);
                 board.read_settings(cx);
+                board.set_rows(ordered, cx)
             }),
+        };
+        // The clock's timer stays while the soonest label change is the same.
+        if changed || next_change != self.next_change {
+            self.next_change = next_change;
+            self.clock = None;
+            cx.notify();
         }
-        cx.notify();
     }
 
     /// A time label of the layout on screen changed by the clock alone: it draws again, and the
@@ -336,12 +385,43 @@ impl TaskView {
                     )
                     .into_any_element()
             }
+            // Drawn again only when their rows or what they read changed (`follow`).
             MainContent::Tasks => match self.dashboard.read(cx).view().layout {
                 Layout::Table => self.table.clone().into_any_element(),
-                Layout::Board => self.board.clone().into_any_element(),
-                Layout::Progress => self.progress.clone().into_any_element(),
+                Layout::Board => self
+                    .board
+                    .clone()
+                    .cached(StyleRefinement::default().size_full())
+                    .into_any_element(),
+                Layout::Progress => self
+                    .progress
+                    .clone()
+                    .cached(StyleRefinement::default().size_full())
+                    .into_any_element(),
             },
         }
+    }
+}
+
+/// What the order of the rows reads: the filter and the sort are in View; Repos for the
+/// progress, which reads the settings of each project.
+fn order_parts(sort: TaskSort) -> Vec<Part> {
+    let mut parts = vec![Part::Tasks, Part::View, Part::Repos];
+    match sort.map(|sort| sort.key) {
+        Some(SortKey::Changes) => parts.push(Part::DiffStats),
+        Some(SortKey::Cost) => parts.push(Part::Usage),
+        _ => {}
+    }
+    parts
+}
+
+/// What the rows of each layout show beside the task (`RowData::of`, the progress Next
+/// column). The board is cached, so it also follows the selection and the filter in View.
+fn row_parts(layout: Layout) -> &'static [Part] {
+    match layout {
+        Layout::Table => &[Part::Activity, Part::DiffStats, Part::Usage, Part::Repos],
+        Layout::Board => &[Part::Tasks, Part::View, Part::DiffStats],
+        Layout::Progress => &[Part::Repos, Part::Activity],
     }
 }
 

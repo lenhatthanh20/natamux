@@ -7,12 +7,13 @@
 
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, MutexGuard};
+use std::time::SystemTime;
 
 use futures::executor::block_on;
 use natamux_git::changes::list_changes;
 use natamux_git::commit_push::snapshot_commit;
 use natamux_git::exec::{GitError, current_branch};
-use natamux_git::file_diff::{read_file_diff, read_file_image};
+use natamux_git::file_diff::{read_file_diff, read_file_image, read_inside};
 use natamux_git::graph::{DEFAULT_LIMIT, read_git_graph};
 use natamux_git::rollback::{has_commit, restore_from_snapshot, rollback_files, rollback_paths};
 use natamux_proto::workspaces::changes::{ChangeStatus, FileDiff, ImageSide};
@@ -36,8 +37,21 @@ struct LastRollback {
     files: usize,
 }
 
+/// A kept diff and what it was made from: the change entry, and the size and mtime of the file
+/// in the worktree (None for a deleted file).
+struct KeptDiff {
+    change: ChangeEntry,
+    stat: Option<(u64, Option<SystemTime>)>,
+    diff: FileDiff,
+}
+
+/// Per task, by path. Cleared when the task reads its change list again, so a diff is never
+/// older than the list.
+type DiffCache = Arc<Mutex<HashMap<String, HashMap<String, KeptDiff>>>>;
+
 pub struct WorkspaceChanges {
     changes: TtlCache<Vec<ChangeEntry>, GitError>,
+    diffs: DiffCache,
     graphs: TtlCache<GitGraph, GitError>,
     /// Only the last rollback of each task can be undone. A daemon restart forgets it.
     rollbacks: Mutex<HashMap<String, LastRollback>>,
@@ -47,6 +61,7 @@ impl WorkspaceChanges {
     pub fn new(now: Clock) -> WorkspaceChanges {
         WorkspaceChanges {
             changes: TtlCache::new(GIT_READ_MS, Arc::clone(&now)),
+            diffs: DiffCache::default(),
             graphs: TtlCache::new(GIT_READ_MS, now),
             rollbacks: Mutex::default(),
         }
@@ -56,6 +71,7 @@ impl WorkspaceChanges {
     pub fn forget(&self, task_id: &str) {
         self.changes.forget(Some(task_id));
         self.graphs.forget(Some(task_id));
+        lock(&self.diffs).remove(task_id);
     }
 
     pub fn drop_rollback(&self, task_id: &str) {
@@ -77,11 +93,14 @@ impl WorkspaceService {
         if fresh {
             self.reads.changes.forget(Some(task_id));
         }
-        let read =
-            self.reads.changes.get(
-                task_id,
-                move || async move { list_changes(&workspace, true) },
-            );
+        let diffs = Arc::clone(&self.reads.diffs);
+        let key = task_id.to_string();
+        let read = self.reads.changes.get(task_id, move || async move {
+            let list = list_changes(&workspace, true);
+            // After the read, so a diff kept from before it is never shown beside this list.
+            lock(&diffs).remove(&key);
+            list
+        });
         Ok(block_on(read)?)
     }
 
@@ -90,7 +109,39 @@ impl WorkspaceService {
     pub fn file_diff(&self, task_id: &str, path: &str) -> WorkspaceResult<FileDiff> {
         let workspace = self.workspace_of(task_id)?;
         let change = self.changed_file(task_id, path)?;
-        Ok(read_file_diff(&workspace, &change)?)
+        // A file that cannot be found (or a link out) is not kept: the read below answers it.
+        let stat = if change.status == ChangeStatus::Deleted {
+            Some(None)
+        } else {
+            match read_inside(&workspace, &change.path) {
+                Ok(Some(file)) => Some(Some((file.size, file.mtime))),
+                _ => None,
+            }
+        };
+        if let Some(stat) = stat {
+            let kept = lock(&self.reads.diffs);
+            if let Some(kept) = kept.get(task_id).and_then(|files| files.get(path))
+                && kept.change == change
+                && kept.stat == stat
+            {
+                return Ok(kept.diff.clone());
+            }
+        }
+        let diff = read_file_diff(&workspace, &change)?;
+        if let Some(stat) = stat {
+            lock(&self.reads.diffs)
+                .entry(task_id.to_string())
+                .or_default()
+                .insert(
+                    path.to_string(),
+                    KeptDiff {
+                        change,
+                        stat,
+                        diff: diff.clone(),
+                    },
+                );
+        }
+        Ok(diff)
     }
 
     /// One side of a changed image, with the same guard as `file_diff`: the MIME type and the
@@ -204,6 +255,12 @@ impl WorkspaceService {
         find(self.changes(task_id, true)?)
             .ok_or_else(|| WorkspaceError::NotChanged(path.to_string()))
     }
+}
+
+fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    mutex
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 // The entries to roll back, each path once, in the order given.

@@ -2,8 +2,8 @@
 //! `ChangedFiles.tsx`): the files not committed at the left (a picker when main is narrow), the
 //! picked file's diff, the commit box under the files, and the comment box under the diff. When
 //! the details panel shows Changes, the panel draws the files and the commit box
-//! (`render_panel`) and main draws only the diff, so one view serves both places. The workspace
-//! view reads the list and hands it over; this view reads the picked file and its images.
+//! (`render_panel`) and main draws only the diff. The workspace view reads the list and hands it
+//! over; this view reads the picked file and its images.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
@@ -62,6 +62,7 @@ pub struct ChangesView {
     pub(super) cursor: Option<String>,
     pub(super) file: Option<FileRead>,
     pub(super) reads: u64,
+    prefetch: Option<prefetch::Prefetched>,
     pub(super) diff: Entity<DiffView>,
     pub(super) svg_preview: bool,
     pub(super) message: Option<Entity<Editor>>,
@@ -77,6 +78,7 @@ pub struct ChangesView {
     pub(super) resize_focus: FocusHandle,
     pub(super) width: Entity<Option<f32>>,
     _read: Option<gpui::Task<()>>,
+    _prefetch: Option<gpui::Task<()>>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -91,7 +93,7 @@ impl ChangesView {
         let subscriptions = vec![
             cx.subscribe(&diff, |_, _, _: &DiffEvent, cx| cx.notify()),
             cx.observe(&width, |_, _, cx| cx.notify()),
-            cx.observe(&dashboard, |_, _, cx| cx.notify()),
+            Dashboard::redraw_on(&dashboard, rows::DASHBOARD_PARTS, cx),
         ];
         ChangesView {
             dashboard,
@@ -105,6 +107,7 @@ impl ChangesView {
             cursor: None,
             file: None,
             reads: 0,
+            prefetch: None,
             diff,
             svg_preview: false,
             message: None,
@@ -120,6 +123,7 @@ impl ChangesView {
             resize_focus: cx.focus_handle().tab_stop(true),
             width,
             _read: None,
+            _prefetch: None,
             _subscriptions: subscriptions,
         }
     }
@@ -155,6 +159,7 @@ impl ChangesView {
             self.picked = None;
         }
         let changed = self.list != list;
+        self.prefetch = self.prefetch.take().filter(|_| !changed);
         self.list = list;
         if changed || self.file.is_none() {
             self.read_file(cx);
@@ -206,6 +211,7 @@ impl ChangesView {
         // Another file drops the quote and the result of the last send.
         self.quote = None;
         self.sent = None;
+        self.show_prefetched(path);
         self.read_file(cx);
         cx.notify();
     }
@@ -273,6 +279,7 @@ impl ChangesView {
                     Err(error) if file.diff.is_none() => file.diff = Some(Err(reason(&error))),
                     Err(_) => {}
                 }
+                this.prefetch_next(cx);
                 cx.notify();
             })
             .ok();
@@ -461,6 +468,9 @@ impl ChangesView {
             .into_any_element()
     }
 }
+
+#[path = "changes_prefetch.rs"]
+mod prefetch;
 
 #[path = "changes_files.rs"]
 mod files;

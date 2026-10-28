@@ -14,7 +14,7 @@ use super::workspace_tree::WorkspaceTree;
 use crate::agents::agent_choices::agent_label;
 use crate::app::commands::shortcut_of;
 use crate::app::dashboard::Dashboard;
-use crate::app::dashboard_data::Link;
+use crate::app::dashboard_data::{Link, Part, Seen};
 use crate::app::shortcuts::{AddProject, Back};
 use crate::components::agent_badge::AgentIcon;
 use crate::components::button_style::quiet_button;
@@ -31,6 +31,8 @@ pub struct Sidebar {
     dashboard: Entity<Dashboard>,
     filter: Entity<Editor>,
     tree: Entity<WorkspaceTree>,
+    /// The dashboard parts the sidebar last followed; the tree follows its own.
+    seen: Seen,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -51,6 +53,11 @@ impl Sidebar {
         });
         // Clear filter in main's empty state changes the dashboard's filter: the field follows.
         let observe = cx.observe_in(&dashboard, window, |sidebar, dashboard, window, cx| {
+            let parts = [Part::Tasks, Part::Repos, Part::Link, Part::View];
+            let gens = dashboard.read(cx).data.gens;
+            if !sidebar.seen.changed(&gens, &parts) {
+                return;
+            }
             let wanted = dashboard.read(cx).filter.clone();
             if sidebar.filter.read(cx).text(cx) != wanted {
                 sidebar
@@ -64,6 +71,7 @@ impl Sidebar {
             dashboard,
             filter,
             tree,
+            seen: Seen::default(),
             _subscriptions: vec![edits, observe],
         }
     }

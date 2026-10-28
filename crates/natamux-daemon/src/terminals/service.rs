@@ -184,7 +184,9 @@ impl TerminalService {
             shell_id: guard.shell_id.clone(),
         }));
         if resumed.is_none() || !resume(&mut guard, &client, options.offset) {
-            request_snapshot(&mut guard, &client);
+            // Without an offset the client holds nothing yet: it needs the full history.
+            let full = resumed.is_none() || options.offset.is_none();
+            request_snapshot(&mut guard, &client, full);
         }
         drop(guard);
         Ok(Detach {
