@@ -1,5 +1,7 @@
 //! Port of `packages/web/src/features/terminals/terminal-tabs.ts`.
 
+use natamux_proto::terminals::list::TerminalList;
+
 // A name that is no number sorts last, by its text.
 fn number_order(name: &str) -> (u64, &str) {
     (name.parse().unwrap_or(u64::MAX), name)
@@ -32,6 +34,27 @@ pub fn unlisted_shells(open: &[String], agent_shells: &[String]) -> Vec<String> 
     agent_shells
         .iter()
         .filter(|name| !open.contains(name))
+        .cloned()
+        .collect()
+}
+
+/// The shown shells that only the list says are open: not Terminal 1, which starts on attach,
+/// not one coming back (`restoring`), which starts on attach too, and with no cached terminal.
+/// The list may be older than a close by the daemon, and a new terminal for such a name would
+/// start a new shell under it (T-0211).
+pub fn unconfirmed_shells(
+    list: &TerminalList,
+    visible: &[String],
+    cached: impl Fn(&str) -> bool,
+) -> Vec<String> {
+    visible
+        .iter()
+        .filter(|name| {
+            name.as_str() != "1"
+                && list.terminals.contains(name)
+                && !list.restoring.contains_key(name.as_str())
+                && !cached(name)
+        })
         .cloned()
         .collect()
 }
@@ -72,5 +95,20 @@ mod tests {
         assert_eq!(unlisted_shells(&names(&["1"]), &names(&["1", "2"])), ["2"]);
         assert!(unlisted_shells(&names(&["1", "2"]), &names(&["2"])).is_empty());
         assert!(unlisted_shells(&names(&["1"]), &[]).is_empty());
+    }
+
+    #[test]
+    fn a_listed_shell_with_no_cached_terminal_is_unconfirmed() {
+        // T-0211: the daemon closed Shell 8 after the list was read. Shell 2 comes back after a
+        // restart and Shell 3 was added by hand: both start on attach.
+        let list = TerminalList {
+            terminals: names(&["1", "2", "8"]),
+            restoring: [("2".to_string(), None)].into_iter().collect(),
+            ..TerminalList::default()
+        };
+        let visible = names(&["1", "2", "3", "8"]);
+        assert_eq!(unconfirmed_shells(&list, &visible, |_| false), ["8"]);
+        assert!(unconfirmed_shells(&list, &visible, |name| name == "8").is_empty());
+        assert!(unconfirmed_shells(&list, &names(&["1", "2"]), |_| false).is_empty());
     }
 }

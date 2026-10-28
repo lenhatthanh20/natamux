@@ -12,12 +12,12 @@ use natamux_proto::terminals::list::TerminalList;
 use ui::{ButtonLike, ContextMenu, Tooltip, prelude::*};
 
 use super::pane_facts::{agent_lanes, restoring_label};
+use super::pane_grid::grid_rows;
 use super::pane_header::{PaneHeader, PaneTitle};
 use super::pane_rules::{
     MAX_PANES, PANE_LAYOUTS, PaneLayout, agent_pane_tasks, columns_for, max_columns,
     other_terminal_hint, pane_state_text,
 };
-use super::shell_panes::grid_rows;
 use super::terminal_cache::{Owner, TerminalCache, terminal_key};
 use super::terminal_find::open_find;
 use super::terminal_pane::TerminalPane;

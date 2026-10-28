@@ -12,9 +12,11 @@ use natamux_client::TerminalStatus;
 use natamux_proto::terminals::list::TerminalList;
 use ui::prelude::*;
 
+use self::list_read::ListRead;
 use super::pane_facts::{PaneFacts, agent_lanes, focus_after_close, pane_facts, restoring_label};
+use super::pane_grid::{GAP, grid_rows, skeleton};
 use super::pane_header::{PaneHeader, PaneTitle};
-use super::pane_rules::{MAX_PANES, PaneLayout, columns_for, new_terminal_button, pane_span};
+use super::pane_rules::{MAX_PANES, PaneLayout, columns_for, new_terminal_button};
 use super::remote_terminal::RemoteTerminal;
 use super::terminal_cache::{Owner, TerminalCache, terminal_key};
 use super::terminal_find::open_find;
@@ -23,14 +25,8 @@ use super::terminal_tabs::{next_terminal_name, terminal_names, unlisted_shells};
 use crate::app::dashboard::Dashboard;
 use crate::app::source::Source;
 use crate::components::agent_badge::narrow_pane;
-use crate::components::skeleton::SkeletonList;
 use crate::tasks::state_filter::width_probe;
 use crate::workspaces::wrap_up_rules::is_finished_state;
-
-/// The pane gap and padding of 3.1.
-const GAP: f32 = 8.;
-/// `minmax(12rem, 1fr)`: a row is at least this high.
-const MIN_ROW: f32 = 192.;
 
 /// What one pane shows, read from the dashboard before the pane is drawn.
 struct Pane {
@@ -51,6 +47,8 @@ pub struct ShellPanes {
     exited: BTreeSet<String>,
     /// Closed here and not out of the daemon's list yet.
     closing: BTreeSet<String>,
+    /// The list read that confirms a listed shell with no cached terminal.
+    list_read: ListRead,
     maximized: Option<String>,
     /// The terminal to focus once it is on screen.
     focus_next: Option<String>,
@@ -76,6 +74,7 @@ impl ShellPanes {
             added: Vec::new(),
             exited: BTreeSet::new(),
             closing: BTreeSet::new(),
+            list_read: ListRead::default(),
             maximized: None,
             focus_next: None,
             narrow: false,
@@ -105,6 +104,7 @@ impl ShellPanes {
         self.added.clear();
         self.exited.clear();
         self.closing.clear();
+        self.list_read.reset();
         self.maximized = None;
         self.focus_next = None;
         cx.notify();
@@ -387,35 +387,6 @@ impl ShellPanes {
     }
 }
 
-/// Puts panes in rows of `columns`; the last pane of the last row takes the rest of it
-/// (`paneSpan`, as grid spans in flex rows).
-pub fn grid_rows(panes: Vec<AnyElement>, columns: usize) -> Vec<AnyElement> {
-    let count = panes.len();
-    let columns = columns.max(1);
-    let mut rows = Vec::new();
-    let mut row = Vec::new();
-    for (index, pane) in panes.into_iter().enumerate() {
-        let mut cell = div()
-            .min_w_0()
-            .h_full()
-            .flex_basis(relative(0.))
-            .child(pane);
-        cell.style().flex_grow = Some(pane_span(index, count, columns) as f32);
-        row.push(cell);
-        if (index + 1) % columns == 0 || index + 1 == count {
-            rows.push(
-                h_flex()
-                    .flex_1()
-                    .min_h(px(MIN_ROW))
-                    .gap(px(GAP))
-                    .children(std::mem::take(&mut row))
-                    .into_any_element(),
-            );
-        }
-    }
-    rows
-}
-
 impl Render for ShellPanes {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let Some(task_id) = self.task_id.clone() else {
@@ -428,11 +399,7 @@ impl Render for ShellPanes {
         // The grid waits for the first list, so no pane starts a shell the daemon already has.
         let Some((names, first_agent, source)) = read else {
             TerminalCache::claim(Owner::Workspace, BTreeSet::new(), cx);
-            return div()
-                .size_full()
-                .p(px(GAP))
-                .child(SkeletonList::new(6, 28.))
-                .into_any_element();
+            return skeleton();
         };
         self.take_request(&task_id, &names, first_agent, cx);
         let visible: Vec<String> = match (&self.maximized, &self.only) {
@@ -451,6 +418,10 @@ impl Render for ShellPanes {
             .map(|name| terminal_key(&task_id, name))
             .collect();
         TerminalCache::claim(Owner::Workspace, keys, cx);
+        // After the claim: it frees a closed terminal that comes back on screen.
+        if self.waits_for_list(&task_id, &visible, cx) {
+            return skeleton();
+        }
         let columns = self.columns(facts.len(), cx);
         let mut panes = Vec::new();
         for (fact, restoring) in facts.into_iter().zip(restoring) {
@@ -491,3 +462,10 @@ impl Render for ShellPanes {
             .into_any_element()
     }
 }
+
+#[path = "shell_panes_list.rs"]
+mod list_read;
+
+#[cfg(test)]
+#[path = "shell_panes_tests.rs"]
+mod tests;
