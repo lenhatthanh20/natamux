@@ -6,6 +6,7 @@ pub const USAGE: &str =
     "usage: natamux-app [--smoke] [--theme light|dark] [--size WxH] [--hold SECONDS] [--fake-daemon]
                    [--gate2 TASK [--terminals N] [--output flood|agent]]
                    [--shot STATE] [--count-draws] [--open-task TASK]
+                   [--bench-flows [--bench-tasks N]]
   --smoke   draw a frame, type into the text box, check it, then quit (exit 1 on failure)
             with --fake-daemon, also check that a workspace's terminal grid does not scroll
             and that the pipeline chart scrolls to its last step
@@ -19,8 +20,15 @@ pub const USAGE: &str =
   --shot    open the window in one screen-1 or screen-2 state, for the CI screenshots (docs/rust-phase3.md)
   --count-draws  print the window's draws once a second, to measure the cost of motion
   --open-task    open TASK once the dashboard has it, as a click on its row does
+  --bench-flows  time the user flows on the fake daemon 5 times each, save the perf report,
+                 print a `flow_bench: {...}` line of numbers, then quit (docs/perf.md)
+  --bench-tasks  with --bench-flows: the fake's task count for the event flows (default 200)
 
 The daemon: NATAMUX_URL and NATAMUX_TOKEN, else http://127.0.0.1:4317 and the Natamux app's token.";
+
+/// `--bench-tasks`: the default is the report's "200 tasks, 30 agents" case.
+const BENCH_TASKS: usize = 200;
+const MAX_BENCH_TASKS: usize = 10_000;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ThemeMode {
@@ -324,6 +332,8 @@ pub struct Options {
     pub shot: Option<Shot>,
     pub count_draws: bool,
     pub open_task: Option<String>,
+    pub bench_flows: bool,
+    pub bench_tasks: usize,
 }
 
 impl Options {
@@ -340,6 +350,8 @@ impl Options {
             shot: None,
             count_draws: false,
             open_task: None,
+            bench_flows: false,
+            bench_tasks: BENCH_TASKS,
         };
         let mut args = args.into_iter();
         while let Some(arg) = args.next() {
@@ -347,6 +359,12 @@ impl Options {
                 "--smoke" => options.smoke = true,
                 "--fake-daemon" => options.fake_daemon = true,
                 "--count-draws" => options.count_draws = true,
+                // The flows run on the fake's data only.
+                "--bench-flows" => {
+                    options.bench_flows = true;
+                    options.fake_daemon = true;
+                }
+                "--bench-tasks" => options.bench_tasks = parse_tasks(&value(&mut args, &arg)?)?,
                 "--theme" => options.theme = Some(parse_theme(&value(&mut args, &arg)?)?),
                 "--size" => options.size = Some(parse_size(&value(&mut args, &arg)?)?),
                 "--gate2" => options.gate2 = Some(value(&mut args, &arg)?),
@@ -387,6 +405,15 @@ fn parse_terminals(text: &str) -> Result<u16, String> {
         Ok(count) if (1..=MAX_TERMINALS).contains(&count) => Ok(count),
         _ => Err(format!(
             "--terminals is a number from 1 to {MAX_TERMINALS}, not {text:?}"
+        )),
+    }
+}
+
+fn parse_tasks(text: &str) -> Result<usize, String> {
+    match text.parse::<usize>() {
+        Ok(count) if (1..=MAX_BENCH_TASKS).contains(&count) => Ok(count),
+        _ => Err(format!(
+            "--bench-tasks is a number from 1 to {MAX_BENCH_TASKS}, not {text:?}"
         )),
     }
 }

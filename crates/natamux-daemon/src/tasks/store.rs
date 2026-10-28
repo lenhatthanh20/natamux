@@ -150,6 +150,21 @@ impl Store {
         tasks
     }
 
+    /// The first task of `list_tasks` whose workspace `holds` accepts, with one clone: a hook
+    /// looks for its task by folder on every call.
+    pub fn task_in_workspace(&mut self, holds: impl Fn(&str) -> bool) -> Option<Task> {
+        self.sync.check_folder();
+        self.sync
+            .tasks
+            .values()
+            .filter(|task| task.workspace.as_deref().is_some_and(&holds))
+            .min_by(|a, b| {
+                compare_text(&b.updated_at, &a.updated_at)
+                    .then_with(|| compare_text(&a.id, &b.id))
+            })
+            .cloned()
+    }
+
     /// The tasks that have a workspace, in the order of `list_tasks`, without copying whole
     /// tasks: diff stats read this on every refresh, and notes can be large.
     pub fn workspace_list(&mut self) -> Vec<WorkspaceRef> {

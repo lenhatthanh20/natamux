@@ -321,3 +321,77 @@ fn set_up_can_leave_out_the_tasks_and_the_projects() {
             .any(|event| matches!(event, DashboardEvent::Repos { repos, .. } if repos.is_empty()))
     );
 }
+
+#[test]
+fn grows_the_task_list_with_done_and_open_copies() {
+    let fake = FakeDaemon::default();
+    let seed = fake.data().tasks.clone();
+    let seed_done = seed.iter().filter(|t| t.state == TaskState::Done).count();
+    let (mut events, _feed) = fake.watch();
+    drain(&mut events);
+    fake.grow_tasks(seed.len() + 40, 15);
+    let tasks = tasks_of(&drain(&mut events)).cloned().unwrap();
+    assert_eq!(tasks.len(), seed.len() + 40);
+    let ids: BTreeSet<&str> = tasks.iter().map(|task| task.id.as_str()).collect();
+    assert_eq!(ids.len(), tasks.len());
+    let done = tasks.iter().filter(|t| t.state == TaskState::Done).count();
+    assert_eq!(done, seed_done + 15);
+    let copies = &tasks[seed.len()..];
+    assert!(copies.iter().all(|task| task.parent_id.is_none()));
+    assert!(copies[15..].iter().all(|task| task.state != TaskState::Done));
+    // A smaller total adds nothing.
+    fake.grow_tasks(10, 0);
+    assert_eq!(fake.data().tasks.len(), seed.len() + 40);
+}
+
+#[test]
+fn fake_agents_send_every_kind_of_event_and_task_changes() {
+    let fake = FakeDaemon::default();
+    let (mut events, _feed) = fake.watch();
+    drain(&mut events);
+    for step in 0..20 {
+        fake.agent_step(step, 30);
+    }
+    let sent = drain(&mut events);
+    assert_eq!(sent.len(), 20);
+    let count = |kind: fn(&DashboardEvent) -> bool| sent.iter().filter(|e| kind(e)).count();
+    assert_eq!(count(|e| matches!(e, DashboardEvent::Activity(_))), 6);
+    assert_eq!(count(|e| matches!(e, DashboardEvent::Usage(_))), 6);
+    assert_eq!(count(|e| matches!(e, DashboardEvent::DiffStats(_))), 4);
+    assert_eq!(count(|e| matches!(e, DashboardEvent::Terminals { .. })), 2);
+    assert_eq!(count(|e| matches!(e, DashboardEvent::TaskChanged(_))), 2);
+    assert!(sent.iter().any(|event| matches!(
+        event,
+        DashboardEvent::TaskChanged(task) if task.title == "Bench task changed at step 19"
+    )));
+}
+
+#[test]
+fn touch_task_sends_the_new_title_and_misses_an_unknown_task() {
+    let fake = FakeDaemon::default();
+    let (mut events, _feed) = fake.watch();
+    drain(&mut events);
+    assert!(fake.touch_task("T-0131", "Renamed by an agent"));
+    let sent = drain(&mut events);
+    let [DashboardEvent::TaskChanged(task)] = sent.as_slice() else {
+        panic!("one task change, got {sent:?}");
+    };
+    assert_eq!((task.id.as_str(), task.title.as_str()), ("T-0131", "Renamed by an agent"));
+    assert!(!fake.touch_task("T-9999", "x"));
+    assert!(drain(&mut events).is_empty());
+}
+
+#[test]
+fn started_agents_send_until_dropped() {
+    let fake: &'static FakeDaemon = Box::leak(Box::default());
+    let (mut events, _feed) = fake.watch();
+    drain(&mut events);
+    let agents = fake.start_agents(5, 500);
+    std::thread::sleep(std::time::Duration::from_millis(200));
+    drop(agents);
+    std::thread::sleep(std::time::Duration::from_millis(50));
+    assert!(!drain(&mut events).is_empty());
+    std::thread::sleep(std::time::Duration::from_millis(50));
+    assert!(drain(&mut events).is_empty());
+    assert!(!fake.tasks_with_terminals().is_empty());
+}

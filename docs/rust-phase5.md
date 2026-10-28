@@ -39,7 +39,7 @@ The app and the daemon with many shells open: fewer draws, reads and copies. Bef
 | Motion, task table (`scripts/motion-cost.sh`) | Draws/s with focus, behind Finder | 8.3, 0.07 | CI | CI |
 | Motion, open task T-0146 (`--open-task`, 4 quiet panes) | Draws/s and CPU % with focus; draws/s behind Finder | Not measured | CI (limits 1, 2%, 0.2) | CI |
 | Gate 2 (`--gate2`, owner's Mac) | Frames over 1 refresh, `panes` report | Pass, no numbers recorded | CI | Owner |
-| Daemon bench (`NATAMUX_BENCH=1`, `tests/daemon_bench.rs`) | RSS with 30 idle shells | Not measured | CI | CI |
+| Daemon bench (`NATAMUX_BENCH=1`, `tests/daemon_bench.rs`) | RSS with 30 idle shells | See [perf.md](perf.md) | CI | CI |
 | Daemon bench | Echo p50 / p95 of a quiet shell while 5 flood | Not measured | CI (limit p95 10 ms) | CI |
 | Daemon bench | Snapshot of a full history at 120 cols: ms, allocations, MiB | Not measured | CI | CI |
 | Daemon bench | Attach of a shell with a full history | Not measured | CI | CI |

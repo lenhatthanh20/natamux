@@ -191,3 +191,48 @@ fn clears_only_the_port_owned_by_this_app() {
     assert!(!file.exists());
     std::fs::remove_dir(root).expect("remove temp folder");
 }
+
+#[cfg(unix)]
+#[test]
+fn the_path_line_comes_later_without_holding_up_the_start() {
+    use super::process::send_path_later;
+    use std::sync::{Arc, Mutex, mpsc};
+
+    let pipe = Arc::new(Mutex::new(Some(Vec::<u8>::new())));
+    let (release, gate) = mpsc::channel::<()>();
+    let writer = send_path_later(Arc::clone(&pipe), move || {
+        gate.recv().expect("released");
+        "/opt/homebrew/bin:/usr/bin".to_owned()
+    })
+    .expect("thread");
+    // The shell has not answered: the start goes on to its health polls meanwhile.
+    assert_eq!(pipe.lock().expect("pipe").as_ref().map(Vec::len), Some(0));
+    release.send(()).expect("release");
+    writer.join().expect("writer");
+    let written = pipe.lock().expect("pipe").take().expect("open pipe");
+    assert_eq!(
+        String::from_utf8(written).expect("text"),
+        "{\"path\":\"/opt/homebrew/bin:/usr/bin\"}\n"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn a_pipe_closed_before_the_shell_answers_gets_no_path_line() {
+    use super::process::send_path_later;
+    use std::sync::{Arc, Mutex, mpsc};
+
+    let pipe = Arc::new(Mutex::new(Some(Vec::<u8>::new())));
+    let (release, gate) = mpsc::channel::<()>();
+    let writer = send_path_later(Arc::clone(&pipe), move || {
+        gate.recv().expect("released");
+        "/usr/bin".to_owned()
+    })
+    .expect("thread");
+    // The app quit while the shell still ran.
+    let closed = pipe.lock().expect("pipe").take();
+    release.send(()).expect("release");
+    writer.join().expect("writer");
+    assert_eq!(closed, Some(Vec::new()));
+    assert!(pipe.lock().expect("pipe").is_none());
+}

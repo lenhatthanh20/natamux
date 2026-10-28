@@ -28,6 +28,14 @@ pub struct ReadPaces {
     settings: ReadPace,
 }
 
+impl ReadPaces {
+    pub fn reset(&mut self) {
+        self.events.reset();
+        self.files.reset();
+        self.settings.reset();
+    }
+}
+
 impl Kind {
     fn of(self, shown: &mut Shown) -> &mut ReadPace {
         match self {

@@ -1,8 +1,9 @@
 //! Whether an event of the feed changes the data: an equal part draws nothing.
 
 use natamux_client::DashboardEvent;
+use natamux_proto::tasks::task::Task;
 
-use super::dashboard_data::{DashboardData, Link};
+use super::dashboard_data::{DashboardData, Link, Part};
 
 impl DashboardData {
     /// Whether `apply` of this event changes what the views show. The feed sends a part again
@@ -12,6 +13,7 @@ impl DashboardData {
             DashboardEvent::Tasks(tasks) => {
                 !self.loaded || self.link != Link::Live || self.tasks != *tasks
             }
+            DashboardEvent::TaskChanged(task) => self.task_changes(task),
             DashboardEvent::Repos {
                 repos,
                 worktrees_dir,
@@ -31,6 +33,51 @@ impl DashboardData {
             | DashboardEvent::ReviewCommentsChanged { .. }
             | DashboardEvent::TaskLogged { .. } => false,
         }
+    }
+
+    /// Bumps the parts `apply` of this event changes; called only when `changes` says it does.
+    /// One task bumps Tasks in `merge_task`.
+    pub(super) fn bump_parts(&mut self, event: &DashboardEvent) {
+        let parts: &[Part] = match event {
+            // A task that is gone takes its terminals and attention card with it.
+            DashboardEvent::Tasks(_) => {
+                if self.link != Link::Live {
+                    self.gens.bump(Part::Link);
+                }
+                &[Part::Tasks, Part::Terminals, Part::Events]
+            }
+            DashboardEvent::Repos { .. } => &[Part::Repos],
+            DashboardEvent::Jobs(_) => &[Part::Jobs],
+            DashboardEvent::Activity(_) => &[Part::Activity],
+            DashboardEvent::Usage(_) => &[Part::Usage],
+            DashboardEvent::Limits(_) => &[Part::Limits],
+            DashboardEvent::DiffStats(_) => &[Part::DiffStats],
+            DashboardEvent::Terminals { .. } => &[Part::Terminals],
+            DashboardEvent::Preparing(_) | DashboardEvent::WorkspaceStep(_) => &[Part::Preparing],
+            DashboardEvent::Status(_) => &[Part::Link],
+            DashboardEvent::TaskChanged(_)
+            | DashboardEvent::WorkspaceChanged { .. }
+            | DashboardEvent::ShellsChanged { .. }
+            | DashboardEvent::ReviewCommentsChanged { .. }
+            | DashboardEvent::TaskLogged { .. } => &[],
+        };
+        for &part in parts {
+            self.gens.bump(part);
+        }
+    }
+
+    /// `merge_task` keeps a held task that is newer. Unlike a list, one task changes neither
+    /// `loaded` nor the link, so those do not count.
+    pub(super) fn task_changes(&self, task: &Task) -> bool {
+        match self.task(&task.id) {
+            Some(held) => held != task && held.updated_at <= task.updated_at,
+            None => true,
+        }
+    }
+
+    /// The events after which `Dashboard::after_tasks` runs: the whole list, or one task.
+    pub fn brings_tasks(event: &DashboardEvent) -> bool {
+        matches!(event, DashboardEvent::Tasks(_) | DashboardEvent::TaskChanged(_))
     }
 }
 
@@ -79,6 +126,63 @@ mod tests {
         assert!(data.changes(&terminals));
         data.apply(terminals.clone());
         assert!(!data.changes(&terminals));
+    }
+
+    #[test]
+    fn one_task_changes_the_data_when_it_differs_and_is_not_older() {
+        let mut data = DashboardData::default();
+        let one = |state, updated_at| {
+            DashboardEvent::TaskChanged(Box::new(task("T-1", state, updated_at)))
+        };
+        assert!(data.changes(&one(TaskState::Running, "b")));
+        let list = DashboardEvent::Tasks(vec![task("T-1", TaskState::Running, "b")]);
+        data.apply(list);
+        assert!(!data.changes(&one(TaskState::Running, "b")));
+        // The same time counts as newer, as in `merge_task`.
+        assert!(data.changes(&one(TaskState::Review, "b")));
+        assert!(data.changes(&one(TaskState::Review, "c")));
+        assert!(!data.changes(&one(TaskState::Review, "a")));
+        let other = DashboardEvent::TaskChanged(Box::new(task("T-2", TaskState::Draft, "a")));
+        assert!(data.changes(&other));
+        assert!(DashboardData::brings_tasks(&other));
+    }
+
+    #[test]
+    fn one_task_of_the_feed_takes_its_place_in_the_list_order() {
+        let mut data = DashboardData::default();
+        let one = |task: Task| DashboardEvent::TaskChanged(Box::new(task));
+        data.apply(one(task("T-9", TaskState::Running, "b")));
+        assert!(!data.loaded);
+        assert_eq!(data.link, Link::Loading);
+        data.apply(DashboardEvent::Tasks(vec![
+            task("T-2", TaskState::Draft, "c"),
+            task("T-1", TaskState::Running, "a"),
+            task("T-3", TaskState::Ready, "a"),
+        ]));
+        data.apply(one(task("T-1", TaskState::Review, "d")));
+        data.apply(one(task("T-0", TaskState::Draft, "a")));
+        // Older than the one held: a list read since is newer.
+        data.apply(one(task("T-2", TaskState::Running, "b")));
+        let ids: Vec<&str> = data.tasks.iter().map(|task| task.id.as_str()).collect();
+        assert_eq!(ids, ["T-1", "T-2", "T-0", "T-3"]);
+        assert_eq!(
+            data.task("T-2").map(|task| task.state),
+            Some(TaskState::Draft)
+        );
+    }
+
+    #[test]
+    fn one_task_that_needs_input_reads_its_events_again() {
+        let mut data = DashboardData::default();
+        data.apply(DashboardEvent::Tasks(vec![task(
+            "T-1",
+            TaskState::Running,
+            "a",
+        )]));
+        data.set_events("T-1", "a", Vec::new());
+        let asks = task("T-1", TaskState::NeedsInput, "b");
+        data.apply(DashboardEvent::TaskChanged(Box::new(asks)));
+        assert_eq!(data.events_to_read(), [("T-1".into(), "b".into())]);
     }
 
     #[test]

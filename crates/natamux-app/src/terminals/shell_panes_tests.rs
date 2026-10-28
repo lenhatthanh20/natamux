@@ -32,7 +32,8 @@ fn open_task<'a>(
     cx: &'a mut TestAppContext,
 ) -> (Entity<Dashboard>, &'a mut VisualTestContext) {
     test_views::init(cx);
-    let dashboard = cx.new(|cx| Dashboard::new(Ok(Arc::new(Source::FakeDaemon)), cx));
+    let source = Arc::new(Source::FakeDaemon);
+    let dashboard = cx.new(|cx| Dashboard::new(Ok(source), Default::default(), cx));
     cx.run_until_parked();
     dashboard.update(cx, |dashboard, _| {
         dashboard.data.terminals.insert(task_id.to_owned(), held);
@@ -102,7 +103,8 @@ impl Render for Host {
 /// T-0141. The window draws at the end of each update; reads answer only when the executor runs.
 fn hosted(cx: &mut TestAppContext) -> (Entity<Dashboard>, Entity<Host>, &mut VisualTestContext) {
     test_views::init(cx);
-    let dashboard = cx.new(|cx| Dashboard::new(Ok(Arc::new(Source::FakeDaemon)), cx));
+    let source = Arc::new(Source::FakeDaemon);
+    let dashboard = cx.new(|cx| Dashboard::new(Ok(source), Default::default(), cx));
     cx.run_until_parked();
     let shown = dashboard.clone();
     let (host, cx) = cx.add_window_view(move |_, cx| Host {

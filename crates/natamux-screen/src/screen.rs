@@ -69,7 +69,12 @@ impl Screen {
 
     /// The screen and the lines above it, as escape sequences for a terminal that was just reset.
     pub fn snapshot(&mut self) -> Vec<u8> {
-        serialize(&mut self.term)
+        serialize(&mut self.term, None)
+    }
+
+    /// Like `snapshot`, with only the newest `max_history` rows above the screen.
+    pub fn snapshot_tail(&mut self, max_history: usize) -> Vec<u8> {
+        serialize(&mut self.term, Some(max_history))
     }
 
     /// The last lines of the screen and the history above it, as plain text, without the empty

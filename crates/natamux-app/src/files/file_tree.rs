@@ -16,6 +16,7 @@ use super::file_reads::{FileReads, keep_open_folders, open_folders};
 use super::file_tree_rows::{RowLook, tree_row};
 use crate::app::clock::now_ms;
 use crate::app::dashboard::Dashboard;
+use crate::app::dashboard_data::{Part, Seen};
 use crate::components::skeleton::SkeletonList;
 use crate::sidebar::sidebar_text::{type_ahead_target, typed_word};
 
@@ -44,9 +45,16 @@ impl FileTree {
         cx: &mut Context<Self>,
     ) -> Self {
         let drafts = DraftStore::global(cx);
+        // The file open in the editor is View state.
+        let mut seen = Seen::default();
         let subscriptions = vec![
             cx.observe(&drafts, |_, _, cx| cx.notify()),
-            cx.observe(&dashboard, |tree, _, cx| tree.sync_editor_file(cx)),
+            cx.observe(&dashboard, move |tree, dashboard, cx| {
+                let gens = dashboard.read(cx).data.gens;
+                if seen.changed(&gens, &[Part::View]) {
+                    tree.sync_editor_file(cx);
+                }
+            }),
         ];
         let mut tree = FileTree {
             expanded: open_folders(&task_id, cx),

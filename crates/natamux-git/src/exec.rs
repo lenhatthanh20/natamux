@@ -1,8 +1,9 @@
 //! Ports `packages/daemon/src/git/exec.ts`: the `git` helper, `GitError`, `withGitConfig`,
 //! and the error text of a git that is missing.
 
+use std::io::{BufRead, BufReader, Read, Write};
 use std::path::Path;
-use std::process::Command;
+use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
@@ -156,6 +157,78 @@ pub fn git(
 /// `gitBuffer`: the stdout of git as bytes, for a file that may not be text.
 pub fn git_bytes(cwd: &Path, args: &[&str]) -> Result<Vec<u8>, GitError> {
     run(cwd, args, None, &[])
+}
+
+/// An object of git read with its size known first.
+#[derive(Debug, PartialEq, Eq)]
+pub enum BlobRead {
+    Content(Vec<u8>),
+    /// Bigger than the limit: the content was not read.
+    TooLarge,
+}
+
+/// The object `spec` (for example `HEAD:src/a.rs`) with one `git cat-file --batch` process: it
+/// reads the header first and kills git when the size is over `max`, so a large file is never
+/// piped. A missing object fails as `cat-file -s` did.
+pub fn git_blob_limited(worktree: &Path, spec: &str, max: u64) -> Result<BlobRead, GitError> {
+    let fail = |detail: String| GitError(format!("git cat-file failed: {detail}"));
+    // The batch input is one spec per line.
+    if spec.contains('\n') {
+        return Err(fail(format!("Not a valid object name {spec}")));
+    }
+    let mut command = Command::new("git");
+    command
+        .args(["cat-file", "--batch"])
+        .current_dir(worktree)
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+    note_spawn();
+    let mut child = command.spawn().map_err(|error| {
+        if error.kind() == std::io::ErrorKind::NotFound {
+            GitError("git cat-file failed: git is not installed or not on the PATH".into())
+        } else {
+            fail(error.to_string())
+        }
+    })?;
+    let read = read_blob(&mut child, spec, max).map_err(|error| fail(error.to_string()));
+    // The child may still run when the blob is too large or on an error.
+    let _ = child.kill();
+    let _ = child.wait();
+    match read? {
+        Some(read) => Ok(read),
+        None => Err(fail(format!("Not a valid object name {spec}"))),
+    }
+}
+
+// None: git says the object is missing.
+fn read_blob(child: &mut Child, spec: &str, max: u64) -> std::io::Result<Option<BlobRead>> {
+    let (Some(mut stdin), Some(stdout)) = (child.stdin.take(), child.stdout.take()) else {
+        return Err(std::io::Error::other("no pipe to git"));
+    };
+    stdin.write_all(spec.as_bytes())?;
+    stdin.write_all(b"\n")?;
+    stdin.flush()?;
+    let mut stdout = BufReader::new(stdout);
+    let mut header = String::new();
+    stdout.read_line(&mut header)?;
+    let header = header.trim_end();
+    if header.is_empty() || header.ends_with(" missing") || header.ends_with(" ambiguous") {
+        return Ok(None);
+    }
+    // `<oid> <type> <size>`; a size that is not a number is never "too large", as before.
+    let size: u64 = header
+        .rsplit(' ')
+        .next()
+        .and_then(|size| size.parse().ok())
+        .unwrap_or(0);
+    if size > max {
+        return Ok(Some(BlobRead::TooLarge));
+    }
+    let mut content = Vec::new();
+    stdout.take(size).read_to_end(&mut content)?;
+    Ok(Some(BlobRead::Content(content)))
 }
 
 /// The branch a checkout is on, or None when HEAD is detached.

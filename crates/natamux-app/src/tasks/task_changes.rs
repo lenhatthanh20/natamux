@@ -1,7 +1,7 @@
 //! Live changes to the task list (`sortByRecent`, `upsertTask`, `applyTaskChanges` in `packages/
 //! web/src/lib/tasks.ts`).
 
-// Ported with their tests (spec D11); the feed replaces the whole list until events carry tasks.
+// Ported with their tests (spec D11). Only `upsert_task` is used: the feed sends one task per event.
 #![cfg_attr(not(test), allow(dead_code))]
 
 use natamux_proto::tasks::task::Task;

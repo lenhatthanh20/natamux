@@ -120,6 +120,8 @@ pub struct ClientState {
 pub struct SnapshotJob {
     pub clients: Vec<ClientRef>,
     pub timer: Option<TimerId>,
+    /// A client in the job has no history yet (a first attach): the snapshot is the full one.
+    pub full: bool,
 }
 
 /// Input that waits for its turn, see `session_input::write`.

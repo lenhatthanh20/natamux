@@ -219,3 +219,14 @@ fn output_rate_is_bytes_in_the_last_second() {
         Vec::<(String, f64)>::new()
     );
 }
+
+#[test]
+fn flow_runs_are_kept_by_name_across_parts() {
+    let mut stats = PerfStats::default();
+    stats.flow("diff_click", ms(12));
+    stats.flow("diff_click", ms(20));
+    stats.flow("palette_key", ms(5));
+    stats.next_part();
+    assert_eq!(stats.flows["diff_click"], [ms(12), ms(20)]);
+    assert_eq!(stats.flows["palette_key"], [ms(5)]);
+}

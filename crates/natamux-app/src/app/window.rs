@@ -14,7 +14,7 @@ use gpui::{
 use natamux_proto::tasks::task::{Task, TaskState};
 use ui::prelude::*;
 
-use super::dashboard::{Dashboard, DashboardChange, TerminalReader};
+use super::dashboard::{Dashboard, DashboardChange, SavedView, TerminalReader};
 use super::layout_mode::{
     LayoutInput, LayoutMode, SidebarMode, decide_layout, effective_sidebar_width,
 };
@@ -32,7 +32,7 @@ use super::view_state::Layout;
 use crate::bench::bench_view::BenchView;
 use crate::components::dialog::DialogLayer;
 use crate::components::menu::MenuLayer;
-use crate::components::toasts::{Toaster, push_toast};
+use crate::components::toasts::Toaster;
 use crate::ime::ime_check::ImeCheck;
 use crate::palette::palette_layer::PaletteLayer;
 use crate::sidebar::sidebar::Sidebar;
@@ -83,8 +83,8 @@ pub struct Root {
     drawer_open: bool,
     /// The task open before the agents toggle showed the Agents grid; None: All tasks.
     agents_back: Option<String>,
-    /// The id of the last dashboard toast shown, so each one shows once.
-    toasts_shown: u64,
+    /// The toasts and the refused token Root took from the dashboard.
+    followed: follow::Followed,
     title_bar: Entity<TitleBarView>,
     status_bar: Entity<StatusBarView>,
     /// Draws the perf overlay's numbers again, only while it is on.
@@ -94,19 +94,16 @@ pub struct Root {
 impl Root {
     fn new(
         source: Result<Arc<Source>, StartProblem>,
+        saved: SavedView,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
         let wants_sign_in = matches!(source, Err(StartProblem::SignIn));
-        let source = source.map_err(|problem| match problem {
-            StartProblem::SignIn => "No token for the daemon.".to_owned(),
-            StartProblem::Down(reason) => reason,
-        });
         let menus = MenuLayer::init(cx);
         let dialogs = DialogLayer::init(cx);
         let palette = PaletteLayer::init(cx);
         let toaster = Toaster::init(cx);
-        let dashboard = cx.new(|cx| Dashboard::new(source.clone(), cx));
+        let dashboard = cx.new(|cx| Dashboard::new(source.clone(), saved, cx));
         let sidebar = cx.new(|cx| Sidebar::new(dashboard.clone(), window, cx));
         let tasks = cx.new(|cx| TaskView::new(dashboard.clone(), window, cx));
         let source = source.ok();
@@ -118,12 +115,8 @@ impl Root {
         let settings = cx.new(|cx| SettingsView::new(dashboard.clone(), window, cx));
         cx.subscribe_in(&dashboard, window, Self::on_dashboard)
             .detach();
-        cx.observe_in(&dashboard, window, |root, _, window, cx| {
-            root.show_new_toasts(cx);
-            root.after_refused(window, cx);
-            cx.notify();
-        })
-        .detach();
+        cx.observe_in(&dashboard, window, Self::follow_dashboard)
+            .detach();
         Self::watch_window(window, cx);
         notify::follow_clicks(&dashboard, window.window_handle(), cx);
         let title_bar = cx.new(|cx| TitleBarView::new(dashboard.clone(), cx));
@@ -152,7 +145,7 @@ impl Root {
             notifier: Notifier::default(),
             drawer_open: false,
             agents_back: None,
-            toasts_shown: 0,
+            followed: Default::default(),
             title_bar,
             status_bar,
             overlay_refresh: None,
@@ -203,23 +196,6 @@ impl Root {
             | DashboardChange::ReviewCommentsChanged(_)
             | DashboardChange::TaskLogged(_)
             | DashboardChange::UndoRollback(_) => {}
-        }
-    }
-
-    /// The dashboard keeps its own toast queue; each new one shows once in the window's stack.
-    fn show_new_toasts(&mut self, cx: &mut Context<Self>) {
-        let fresh: Vec<_> = self
-            .dashboard
-            .read(cx)
-            .toasts
-            .toasts
-            .iter()
-            .filter(|toast| toast.id > self.toasts_shown)
-            .cloned()
-            .collect();
-        for shown in fresh {
-            self.toasts_shown = shown.id;
-            push_toast(&shown.text, shown.tone, shown.detail, Vec::new(), cx);
         }
     }
 
@@ -461,9 +437,13 @@ mod settings_commands;
 #[path = "window_watch.rs"]
 mod watch;
 
+#[path = "window_follow.rs"]
+mod follow;
+
 pub fn open(
     options: &Options,
     source: Result<Arc<Source>, StartProblem>,
+    saved: SavedView,
     cx: &mut App,
 ) -> anyhow::Result<gpui::WindowHandle<Root>> {
     let (width, height) = options.size.unwrap_or(DEFAULT_SIZE);
@@ -493,7 +473,7 @@ pub fn open(
             ..Default::default()
         },
         |window, cx| {
-            let root = cx.new(|cx| Root::new(source, window, cx));
+            let root = cx.new(|cx| Root::new(source, saved, window, cx));
             // The smoke test types into the first text box; a user starts on the list, or on
             // Sign in when the app has no token.
             let signing_in = root.read(cx).sign_in.is_some();

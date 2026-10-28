@@ -4,7 +4,7 @@
 //! shows them (T-0175), and that the pipeline chart of Project settings scrolls sideways to its
 //! last step (T-0163).
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use editor::Editor;
 use gpui::{
@@ -18,6 +18,7 @@ use super::shots::{self, RUNNING};
 use super::shots_stages::{PROJECT, READ};
 use super::status_bar::STATUS_BAR_HEIGHT;
 use super::window::Root;
+use crate::perf::report::{start_steps, start_times};
 
 const TYPED: &str = "abc";
 /// The fake's terminal list comes at once; the grid is drawn well within this.
@@ -27,6 +28,11 @@ const GRID_POLL: Duration = Duration::from_millis(100);
 const GRID_SETTLE: Duration = Duration::from_millis(500);
 /// A toggle's panel is drawn, or gone, within this.
 const TOGGLE_SETTLE: Duration = Duration::from_millis(300);
+/// The task list of a real daemon may come after the checks passed; the start line waits this
+/// long for it.
+const DATA_WAIT: Duration = Duration::from_secs(5);
+const FIRST_FRAME_LIMIT_MS: f64 = 300.;
+const FIRST_DATA_LIMIT_MS: f64 = 1000.;
 /// From the window's edge to a point inside the first or last toggle of the status bar, in the
 /// px of `rems_from_px`: the bar's 6 px padding, then about half of the 22 px wide toggle.
 const TOGGLE_INSET: f32 = 16.;
@@ -287,12 +293,80 @@ async fn check_chart(handle: WindowHandle<Root>, quit: bool, cx: &mut AsyncApp) 
 
 fn pass(quit: bool, cx: &mut App) {
     println!("smoke: ok");
-    if quit {
-        cx.quit();
+    cx.spawn(async move |cx| {
+        let started = Instant::now();
+        while start_times().1.is_none() && started.elapsed() < DATA_WAIT {
+            cx.background_executor().timer(GRID_POLL).await;
+        }
+        let (frame, data) = start_times();
+        println!("{}", start_line(frame, data, &start_steps()));
+        // The macOS CI run only: the release smoke (`--hold`) and the other OSes report.
+        if quit
+            && cfg!(target_os = "macos")
+            && let Some(problem) = slow_start(frame, data)
+        {
+            fail(&problem);
+        }
+        if quit {
+            cx.update(|cx| cx.quit());
+        }
+    })
+    .detach();
+}
+
+/// The start gate (T-0223 P4): None when the first frame and the first data came in time. A
+/// time that was never taken is over its limit: the data did not come within `DATA_WAIT`.
+fn slow_start(frame: Option<f64>, data: Option<f64>) -> Option<String> {
+    let over = |name: &str, ms: Option<f64>, limit: f64| match ms {
+        Some(ms) if ms <= limit => None,
+        Some(ms) => Some(format!("{name} is {ms:.1}, over the {limit} ms limit")),
+        None => Some(format!("{name} was not taken")),
+    };
+    over("first_frame_ms", frame, FIRST_FRAME_LIMIT_MS)
+        .or_else(|| over("first_data_ms", data, FIRST_DATA_LIMIT_MS))
+}
+
+/// `smoke: first_frame_ms=… first_data_ms=… fonts_ms=…`, read by `scripts/perf-check.py`.
+fn start_line(frame: Option<f64>, data: Option<f64>, steps: &[(&str, f64)]) -> String {
+    let value = |ms: Option<f64>| ms.map_or("none".to_string(), |ms| format!("{ms:.1}"));
+    let mut line = format!(
+        "smoke: first_frame_ms={} first_data_ms={}",
+        value(frame),
+        value(data)
+    );
+    for (name, ms) in steps {
+        line += &format!(" {name}={ms:.1}");
     }
+    line
 }
 
 fn fail(message: &str) -> ! {
     eprintln!("smoke: {message}");
     std::process::exit(1);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_start_line_has_every_time_and_says_none_for_a_missing_one() {
+        let steps = [("fonts_ms", 3.0), ("themes_ms", 12.5)];
+        let line = start_line(Some(120.04), None, &steps);
+        assert_eq!(
+            line,
+            "smoke: first_frame_ms=120.0 first_data_ms=none fonts_ms=3.0 themes_ms=12.5"
+        );
+    }
+
+    #[test]
+    fn the_start_gate_fails_a_slow_or_missing_time_only() {
+        assert_eq!(slow_start(Some(300.), Some(1000.)), None);
+        let slow_frame = slow_start(Some(300.5), Some(10.)).expect("slow frame");
+        assert!(slow_frame.starts_with("first_frame_ms is 300.5"), "{slow_frame}");
+        let slow_data = slow_start(Some(10.), Some(1200.)).expect("slow data");
+        assert!(slow_data.starts_with("first_data_ms is 1200.0"), "{slow_data}");
+        let no_data = slow_start(Some(10.), None).expect("no data");
+        assert_eq!(no_data, "first_data_ms was not taken");
+    }
 }

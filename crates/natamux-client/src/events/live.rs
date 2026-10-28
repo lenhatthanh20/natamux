@@ -19,6 +19,7 @@ use tokio::time::Instant;
 use crate::config::Config;
 use crate::error::ClientError;
 use crate::events::stale::{DashboardEvent, Halt, Stale, send};
+use crate::events::task_body::merge_task;
 use crate::terminals::backoff::reconnect_delay;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -42,7 +43,8 @@ pub enum LinkStatus {
 pub struct FeedTimes {
     /// At most one diff stats read per this time for `workspace.dirty` (`DIFFSTATS_EVERY_MS`).
     pub diff_stats_every: Duration,
-    /// Jobs, activity, diff stats and usage, for what the socket missed (`FALLBACK_POLL_MS`).
+    /// Jobs, activity, diff stats, usage and the task list, for what the socket missed
+    /// (`FALLBACK_POLL_MS`).
     pub fallback_every: Duration,
     /// The terminal rows of the tasks the app shows.
     pub terminals_every: Duration,
@@ -66,12 +68,25 @@ pub struct DashboardFeed {
 
 /// The tasks whose terminals the app shows. The feed reads a task's terminals when it is added
 /// here, on its `shells.changed`, and every `terminals_every`.
-pub struct TerminalRows(watch::Sender<BTreeSet<String>>);
+pub struct TerminalRows {
+    shown: watch::Sender<BTreeSet<String>>,
+    active: watch::Sender<bool>,
+}
 
 impl TerminalRows {
+    /// Whether an app window is active. Inactive, the fallback poll waits; it reads once at
+    /// once when the app turns active again. Active is the start value.
+    pub fn set_active(&self, active: bool) {
+        self.active.send_if_modified(|now| {
+            let changed = *now != active;
+            *now = active;
+            changed
+        });
+    }
+
     pub fn show(&self, task_ids: impl IntoIterator<Item = String>) {
         let ids: BTreeSet<String> = task_ids.into_iter().collect();
-        self.0.send_if_modified(|shown| {
+        self.shown.send_if_modified(|shown| {
             let changed = *shown != ids;
             *shown = ids;
             changed
@@ -86,10 +101,14 @@ pub fn watch_dashboard(
 ) -> DashboardFeed {
     let (events, receiver) = unbounded();
     let (rows, shown) = watch::channel(BTreeSet::new());
-    runtime.spawn(run(config, times, events, shown));
+    let (active_tx, active) = watch::channel(true);
+    runtime.spawn(run(config, times, events, shown, active));
     DashboardFeed {
         events: receiver,
-        terminals: TerminalRows(rows),
+        terminals: TerminalRows {
+            shown: rows,
+            active: active_tx,
+        },
     }
 }
 
@@ -101,9 +120,22 @@ pub fn watch(
     let (events, receiver) = unbounded();
     let mut feed = watch_dashboard(runtime, config, FeedTimes::default());
     runtime.spawn(async move {
+        // The last list, so one task from the feed still gives a whole list.
+        let mut list: Option<Vec<Task>> = None;
         while let Some(event) = feed.events.next().await {
             let event = match event {
-                DashboardEvent::Tasks(tasks) => TaskListEvent::Tasks(tasks),
+                DashboardEvent::Tasks(tasks) => {
+                    list = Some(tasks.clone());
+                    TaskListEvent::Tasks(tasks)
+                }
+                DashboardEvent::TaskChanged(task) => match &mut list {
+                    Some(tasks) => {
+                        merge_task(tasks, *task);
+                        TaskListEvent::Tasks(tasks.clone())
+                    }
+                    // The first list read brings it.
+                    None => continue,
+                },
                 DashboardEvent::Status(status) => TaskListEvent::Status(status),
                 _ if events.is_closed() => return,
                 _ => continue,
@@ -121,13 +153,14 @@ async fn run(
     times: FeedTimes,
     events: UnboundedSender<DashboardEvent>,
     mut shown: watch::Receiver<BTreeSet<String>>,
+    mut active: watch::Receiver<bool>,
 ) {
     if send(&events, DashboardEvent::Status(LinkStatus::Connecting)).is_err() {
         return;
     }
     let mut tries: u32 = 0;
     loop {
-        let halt = match follow(&config, times, &events, &mut shown, &mut tries).await {
+        let halt = match follow(&config, times, &events, &mut shown, &mut active, &mut tries).await {
             Ok(never) => match never {},
             Err(halt) => halt,
         };
@@ -155,6 +188,7 @@ async fn follow(
     times: FeedTimes,
     events: &UnboundedSender<DashboardEvent>,
     shown: &mut watch::Receiver<BTreeSet<String>>,
+    active: &mut watch::Receiver<bool>,
     tries: &mut u32,
 ) -> Result<Infallible, Halt> {
     let mut socket = connect(config).await?;
@@ -165,6 +199,10 @@ async fn follow(
     let mut next_poll = Instant::now() + times.fallback_every;
     let mut next_rows = Instant::now() + times.terminals_every;
     let mut rows_open = true;
+    let mut active_open = true;
+    // A poll that came due while the app was inactive; it runs when the app turns active.
+    let mut poll_skipped = false;
+    active.borrow_and_update();
     let gone = || {
         Halt::Lost(ClientError::Unreachable {
             url: config.base_url.clone(),
@@ -198,7 +236,11 @@ async fn follow(
             () = tokio::time::sleep_until(wake) => {
                 let now = Instant::now();
                 if now >= next_poll {
-                    stale.poll();
+                    if *active.borrow() {
+                        stale.poll();
+                    } else {
+                        poll_skipped = true;
+                    }
                     next_poll = now + times.fallback_every;
                 }
                 if now >= next_rows {
@@ -206,6 +248,17 @@ async fn follow(
                     next_rows = now + times.terminals_every;
                 }
             }
+            changed = active.changed(), if active_open => match changed {
+                Ok(()) => {
+                    if *active.borrow_and_update() && poll_skipped {
+                        stale.poll();
+                        poll_skipped = false;
+                        next_poll = Instant::now() + times.fallback_every;
+                    }
+                }
+                // The app let go of its TerminalRows: it stays as it was.
+                Err(_) => active_open = false,
+            },
             changed = shown.changed(), if rows_open => match changed {
                 Ok(()) => {
                     let now_shown = shown.borrow_and_update().clone();

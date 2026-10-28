@@ -20,6 +20,7 @@ use tokio::time::Instant;
 use crate::config::Config;
 use crate::error::ClientError;
 use crate::events::live::LinkStatus;
+use crate::events::task_body::{has_moved, task_of};
 use crate::terminals::backoff::reconnect_delay;
 use crate::{agents, projects, tasks, terminals, workspaces};
 
@@ -30,6 +31,8 @@ const TASK_LIST_TRIES: u32 = 3;
 #[derive(Clone, Debug, PartialEq)]
 pub enum DashboardEvent {
     Tasks(Vec<Task>),
+    /// One task, from the body of its message: no read of the list.
+    TaskChanged(Box<Task>),
     Repos {
         repos: Vec<Repo>,
         worktrees_dir: Option<String>,
@@ -93,7 +96,7 @@ pub(crate) struct Stale {
     diff_stats: bool,
     dirty: bool,
     dirty_read_at: Option<Instant>,
-    /// Task ids that go out as they are, with no read.
+    /// Events that go out as they are, with no read: task ids, and tasks from message bodies.
     passed: Vec<DashboardEvent>,
     pub terminals: BTreeSet<String>,
     /// Parts whose last read failed to connect or timed out: they stay stale and wait here.
@@ -122,10 +125,11 @@ impl Stale {
         }
     }
 
-    /// What the fallback poll reads: the parts the web polls every minute.
+    /// What the fallback poll reads: the parts the web polls every minute, and the task list,
+    /// which the task bodies keep up to date otherwise (a task file edited by hand shows here).
     pub fn poll(&mut self) {
         (self.jobs, self.activity, self.usage, self.diff_stats) = (true, true, true, true);
-        self.limits = true;
+        (self.limits, self.tasks) = (true, true);
     }
 
     fn polled() -> Stale {
@@ -138,7 +142,13 @@ impl Stale {
     pub fn note(&mut self, text: &str, shown: &BTreeSet<String>) -> Option<PreparingMessage> {
         match EventKind::parse(text).and_then(EventKind::resource)? {
             Resource::Tasks => {
-                self.tasks = true;
+                // A move to another step is rare, so the whole list is read then too: a check
+                // that the merged list still matches. `task.deleted` has no task.
+                match task_of(text).filter(|_| !has_moved(text)).map(Box::new) {
+                    Some(task) => self.passed.push(DashboardEvent::TaskChanged(task)),
+                    None => self.tasks = true,
+                }
+                // After the task: the app reads the log of the task it holds now.
                 if is_task_updated(text)
                     && let Some(task_id) = task_id_of(text)
                 {
@@ -248,7 +258,8 @@ impl Stale {
 
     /// One read of each part that is out of date, task list first. A read that gets no answer
     /// leaves its part stale for a later read: only the socket decides that the link is lost,
-    /// with the task list as the one exception.
+    /// with the task list as the one exception. The passed events go out before the reads: a
+    /// list read now is newer than every task body noted before it, so it must come last.
     pub async fn read(
         &mut self,
         config: &Config,

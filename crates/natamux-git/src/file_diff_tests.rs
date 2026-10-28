@@ -117,6 +117,45 @@ mod diff {
         assert_eq!((diff.original, diff.modified), (None, None));
     }
 
+    #[test]
+    fn reads_the_last_commit_with_one_git_process() {
+        let (_root, path) = prepared();
+        std::fs::write(path.join("tracked.txt"), "two\n").unwrap();
+        let entry = change("tracked.txt", ChangeStatus::Modified, None);
+
+        let before = crate::exec::thread_spawn_count();
+        let diff = read_file_diff(&path, &entry).unwrap();
+
+        assert_eq!(crate::exec::thread_spawn_count() - before, 1);
+        assert_eq!(diff.original.as_deref(), Some("one\n"));
+        assert_eq!(diff.modified.as_deref(), Some("two\n"));
+    }
+
+    #[test]
+    fn does_not_send_a_committed_file_that_is_too_large() {
+        let (_root, path) = prepared();
+        commit_file(&path, "big.txt", "a".repeat(1_000_001).as_bytes(), "add big");
+        let entry = change("big.txt", ChangeStatus::Modified, None);
+
+        let before = crate::exec::thread_spawn_count();
+        let diff = read_file_diff(&path, &entry).unwrap();
+
+        assert_eq!(crate::exec::thread_spawn_count() - before, 1);
+        assert!(diff.too_large);
+        assert_eq!((diff.original, diff.modified), (None, None));
+    }
+
+    #[test]
+    fn fails_for_a_file_that_is_not_in_the_last_commit() {
+        let (_root, path) = prepared();
+        let entry = change("nothing.txt", ChangeStatus::Modified, None);
+
+        assert!(matches!(
+            read_file_diff(&path, &entry),
+            Err(FileDiffError::Git(_))
+        ));
+    }
+
     // Unix only: a symlink to a file needs a privilege on Windows.
     #[cfg(unix)]
     #[test]

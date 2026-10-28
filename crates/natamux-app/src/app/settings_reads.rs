@@ -10,6 +10,7 @@ use natamux_proto::projects::repo::{LoadedSettings, Repo};
 use ui::prelude::*;
 
 use super::dashboard::Dashboard;
+use super::dashboard_data::{Part, Seen};
 use super::source::reason;
 
 /// What is known of one project's settings. A failed read keeps the data of an earlier one.
@@ -64,7 +65,12 @@ impl SettingsReads {
                 this.refresh_known(cx);
             }
         });
-        let repos = cx.observe(&dashboard, |this, dashboard, cx| {
+        let mut seen = Seen::default();
+        let repos = cx.observe(&dashboard, move |this, dashboard, cx| {
+            let gens = dashboard.read(cx).data.gens;
+            if !seen.changed(&gens, &[Part::Repos]) {
+                return;
+            }
             let repos = dashboard.read(cx).data.repos.clone();
             if repos != this.repos_seen {
                 this.repos_seen = repos;

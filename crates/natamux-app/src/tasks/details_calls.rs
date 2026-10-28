@@ -107,7 +107,7 @@ impl DetailsPanel {
             written.await.ok();
             panel
                 .update(cx, |panel, cx| {
-                    if let Some(shown) = panel.shown.as_mut() {
+                    if let Some(shown) = panel.shown.as_mut().filter(|s| s.task_id == id) {
                         shown.toggling.remove(&key);
                         cx.notify();
                     }
@@ -130,7 +130,7 @@ impl DetailsPanel {
             written.await.ok();
             panel
                 .update(cx, |panel, cx| {
-                    if let Some(shown) = panel.shown.as_mut() {
+                    if let Some(shown) = panel.shown.as_mut().filter(|s| s.task_id == id) {
                         shown.resuming = false;
                         cx.notify();
                     }

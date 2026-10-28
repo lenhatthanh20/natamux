@@ -71,6 +71,12 @@ impl ReadPace {
         self.again.take()
     }
 
+    /// Back to "nothing read": a task shown again reads at once, and a read that was running
+    /// when the task left (its answer was dropped) no longer blocks the next one.
+    pub fn reset(&mut self) {
+        *self = ReadPace::default();
+    }
+
     /// The timer of `Pace::After` fired: ask again with this freshness.
     pub fn timer_fired(&mut self) -> Option<bool> {
         self.timer = false;
@@ -145,5 +151,14 @@ mod tests {
         assert_eq!(pace.ask(false, 1100), Pace::Wait);
         assert_eq!(pace.ended(), Some(false));
         assert_eq!(pace.ask(false, 1200), Pace::After(800));
+    }
+
+    #[test]
+    fn a_reset_reads_at_once_also_inside_the_gap_or_while_a_read_ran() {
+        let mut pace = ReadPace::default();
+        assert_eq!(pace.ask(false, 0), Pace::Now);
+        assert_eq!(pace.ask(false, 10), Pace::Wait);
+        pace.reset();
+        assert_eq!(pace.ask(false, 20), Pace::Now);
     }
 }
