@@ -7,6 +7,12 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v1.0.5 (2026-10-28)
+
+- In the desktop app, a task whose worktree has files that are not committed can now be cleaned up. **Remove workspace** and **Delete task** list those files first and offer **Remove anyway** or **Delete anyway**, which discard them. The finished banner no longer disables **Remove workspace** for them. The web dashboard, the CLI and **Remove finished workspaces** still refuse. For scripts, add `force=true` to `DELETE /tasks/:id` or `DELETE /tasks/:id/workspace`. See [When a task is finished](/docs/guides/dashboard/#when-a-task-is-finished).
+- Fix: in the v1.0.4 desktop app for Apple silicon on macOS 26, the green traffic light touched the first letter of the title bar. Now there is a gap.
+- Fix: in the desktop app sidebar, the hover of the "N finished" row stopped before its **Remove finished workspaces** button. Now it covers the whole row.
+
 ## v1.0.4 (2026-10-27)
 
 - In the **Changes** tab, comment on a line of a task's diff, or on a whole file, in the desktop app and the web dashboard. Comments are saved as drafts and stay on their code when the agent edits the file. **Send N comments** (`Mod+Alt+Enter`) sends every open comment to the agent in one prompt. Click **Resolve** when a comment is fixed. See [Comment for the agent](/docs/guides/changes-and-history/#comment-for-the-agent).
