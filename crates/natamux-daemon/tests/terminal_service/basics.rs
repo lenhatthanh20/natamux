@@ -196,6 +196,8 @@ fn refuses_a_task_without_a_workspace() {
 
 #[test]
 fn refuses_a_new_shell_above_the_limit() {
+    // T-0210: 30 agents of the default pipeline plus plain terminals.
+    assert_eq!(MAX_SESSIONS, 64);
     let h = setup();
     // From T-0101 on, away from T-0009, which has no workspace here.
     for number in 1..=MAX_SESSIONS {

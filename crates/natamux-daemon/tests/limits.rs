@@ -23,13 +23,12 @@ fn number(source: &str, name: &str) -> u64 {
 
 #[test]
 fn terminal_limits_match_the_node_daemon() {
-    let pairs: [(&str, u64); 21] = [
-        ("MAX_SESSIONS", MAX_SESSIONS as u64),
+    // MAX_SESSIONS and OUTPUT_RING_BYTES moved on from the Node values in T-0210.
+    let pairs: [(&str, u64); 19] = [
         ("TICKET_TTL_MS", TICKET_TTL_MS),
         ("OUTPUT_COALESCE_MS", OUTPUT_COALESCE_MS),
         ("OUTPUT_IDLE_BYTES", OUTPUT_IDLE_BYTES as u64),
         ("OUTPUT_FRAME_BYTES", OUTPUT_FRAME_BYTES as u64),
-        ("OUTPUT_RING_BYTES", OUTPUT_RING_BYTES as u64),
         ("SNAPSHOT_SYNC_WAIT_MS", SNAPSHOT_SYNC_WAIT_MS),
         ("CLIENT_HIGH_WATER", CLIENT_HIGH_WATER),
         ("HIDDEN_BUDGET_BYTES", HIDDEN_BUDGET_BYTES),

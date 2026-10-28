@@ -20,7 +20,11 @@ use tokio::time::Instant;
 use crate::config::Config;
 use crate::error::ClientError;
 use crate::events::live::LinkStatus;
+use crate::terminals::backoff::reconnect_delay;
 use crate::{agents, projects, tasks, terminals, workspaces};
+
+/// Task list reads in a row that fail before the daemon is taken for gone.
+const TASK_LIST_TRIES: u32 = 3;
 
 /// The dashboard data, whole each time one part of it is read again.
 #[derive(Clone, Debug, PartialEq)]
@@ -92,6 +96,18 @@ pub(crate) struct Stale {
     /// Task ids that go out as they are, with no read.
     passed: Vec<DashboardEvent>,
     pub terminals: BTreeSet<String>,
+    /// Parts whose last read failed to connect or timed out: they stay stale and wait here.
+    /// The key is the part's name, or `terminals:<task id>`.
+    retries: BTreeMap<String, Retry>,
+    /// Task list reads that failed in a row.
+    task_failures: u32,
+}
+
+/// The wait before a part is read again after a read that did not get an answer.
+#[derive(Clone, Copy)]
+struct Retry {
+    tries: u32,
+    not_before: Instant,
 }
 
 impl Stale {
@@ -160,22 +176,79 @@ impl Stale {
             }
             Resource::Resync => {
                 let dirty_read_at = self.dirty_read_at;
+                let retries = std::mem::take(&mut self.retries);
+                let task_failures = self.task_failures;
                 *self = Stale::everything(shown);
                 self.dirty_read_at = dirty_read_at;
+                // Kept: a daemon that is not answering must not be asked at once again.
+                (self.retries, self.task_failures) = (retries, task_failures);
             }
         }
         None
     }
 
-    /// When the diff stats that wait for their time are due.
+    /// When the next read that waits for its time is due: the diff stats, or a part read again
+    /// after a failure.
     pub fn due(&self, every: Duration) -> Option<Instant> {
-        if !self.dirty {
-            return None;
-        }
-        self.dirty_read_at.map(|at| at + every)
+        // Left out while its retry waits: the retry time is the next wake-up, and the old read
+        // time is already past, so it would wake the feed in a busy loop.
+        let diff_stats = self
+            .dirty
+            .then_some(self.dirty_read_at)
+            .flatten()
+            .filter(|_| self.ready("diff_stats"))
+            .map(|at| at + every);
+        let retries = self.retries.values().map(|retry| retry.not_before);
+        diff_stats.into_iter().chain(retries).min()
     }
 
-    /// One read of each part that is out of date, task list first.
+    /// False while the part waits after a failed read.
+    fn ready(&self, key: &str) -> bool {
+        self.retries
+            .get(key)
+            .is_none_or(|retry| Instant::now() >= retry.not_before)
+    }
+
+    fn back_off(&mut self, key: &str) {
+        let tries = self.retries.get(key).map_or(0, |retry| retry.tries);
+        let wait = reconnect_delay(tries, fastrand::f64());
+        let retry = Retry {
+            tries: tries.saturating_add(1),
+            not_before: Instant::now() + wait,
+        };
+        self.retries.insert(key.to_string(), retry);
+    }
+
+    /// Sends what a read gave. True: the read got no answer, so the part stays stale. A read that
+    /// fails on its own, such as the terminals of a task just deleted, is left out: the rest of
+    /// the data still comes.
+    fn pass<T>(
+        &mut self,
+        key: &str,
+        read: Result<T, ClientError>,
+        events: &UnboundedSender<DashboardEvent>,
+        event: impl FnOnce(T) -> DashboardEvent,
+    ) -> Result<bool, Halt> {
+        let retry = match read {
+            Ok(value) => {
+                send(events, event(value))?;
+                false
+            }
+            Err(ClientError::Unauthorized) => return Err(Halt::Refused),
+            Err(ClientError::Unreachable { .. }) => true,
+            Err(_) => false,
+        };
+        if retry {
+            self.back_off(key);
+        } else {
+            self.retries.remove(key);
+        }
+        Ok(retry)
+    }
+
+    /// One read of each part that is out of date, task list first. A read that gets no answer
+    /// leaves its part stale for a later read: only the socket decides that the link is lost,
+    /// with the task list as the one exception.
     pub async fn read(
         &mut self,
         config: &Config,
@@ -186,65 +259,98 @@ impl Stale {
         for event in std::mem::take(&mut self.passed) {
             send(events, event)?;
         }
-        if std::mem::take(&mut self.tasks) {
-            match tasks::api::list_tasks(config).await {
-                Ok(list) => {
-                    if !*live {
-                        *live = true;
-                        send(events, DashboardEvent::Status(LinkStatus::Live))?;
-                    }
-                    send(events, DashboardEvent::Tasks(list))?;
-                }
-                Err(ClientError::Unauthorized) => return Err(Halt::Refused),
-                Err(error) => return Err(Halt::Lost(error)),
-            }
+        if self.tasks && self.ready("tasks") {
+            self.tasks = false;
+            self.read_tasks(config, live, events).await?;
         }
-        if std::mem::take(&mut self.repos) {
+        if self.repos && self.ready("repos") {
             let read = projects::api::list_repos(config).await;
-            pass(read, events, |list| DashboardEvent::Repos {
+            self.repos = self.pass("repos", read, events, |list| DashboardEvent::Repos {
                 repos: list.repos,
                 worktrees_dir: list.worktrees_dir,
             })?;
         }
-        if std::mem::take(&mut self.preparing) {
+        if self.preparing && self.ready("preparing") {
             let read = workspaces::api::list_preparing(config).await;
-            pass(read, events, DashboardEvent::Preparing)?;
+            self.preparing = self.pass("preparing", read, events, DashboardEvent::Preparing)?;
         }
-        if std::mem::take(&mut self.jobs) {
-            pass(
-                tasks::api::list_jobs(config).await,
-                events,
-                DashboardEvent::Jobs,
-            )?;
+        if self.jobs && self.ready("jobs") {
+            let read = tasks::api::list_jobs(config).await;
+            self.jobs = self.pass("jobs", read, events, DashboardEvent::Jobs)?;
         }
-        if std::mem::take(&mut self.activity) {
+        if self.activity && self.ready("activity") {
             let read = agents::api::activity(config).await;
-            pass(read, events, DashboardEvent::Activity)?;
+            self.activity = self.pass("activity", read, events, DashboardEvent::Activity)?;
         }
-        if std::mem::take(&mut self.usage) {
-            pass(
-                agents::api::usage(config).await,
-                events,
-                DashboardEvent::Usage,
-            )?;
+        if self.usage && self.ready("usage") {
+            let read = agents::api::usage(config).await;
+            self.usage = self.pass("usage", read, events, DashboardEvent::Usage)?;
         }
-        if std::mem::take(&mut self.limits) {
-            pass(
-                agents::api::limits(config).await,
-                events,
-                DashboardEvent::Limits,
-            )?;
+        if self.limits && self.ready("limits") {
+            let read = agents::api::limits(config).await;
+            self.limits = self.pass("limits", read, events, DashboardEvent::Limits)?;
         }
         self.read_diff_stats(config, diff_stats_every, events)
             .await?;
         for task_id in std::mem::take(&mut self.terminals) {
+            let key = format!("terminals:{task_id}");
+            if !self.ready(&key) {
+                self.terminals.insert(task_id);
+                continue;
+            }
             let read = terminals::api::list_terminals(config, &task_id).await;
-            pass(read, events, |terminals| DashboardEvent::Terminals {
-                task_id,
+            let id = task_id.clone();
+            let again = self.pass(&key, read, events, |terminals| DashboardEvent::Terminals {
+                task_id: id,
                 terminals,
             })?;
+            if again {
+                self.terminals.insert(task_id);
+            }
         }
+        // A task that is no longer shown must not keep the feed waking up for it.
+        let shown = &self.terminals;
+        self.retries.retain(|key, _| {
+            key.strip_prefix("terminals:")
+                .is_none_or(|id| shown.contains(id))
+        });
         Ok(())
+    }
+
+    /// The daemon is likely gone after `TASK_LIST_TRIES` failed reads in a row: the socket alone
+    /// can take long to notice it.
+    async fn read_tasks(
+        &mut self,
+        config: &Config,
+        live: &mut bool,
+        events: &UnboundedSender<DashboardEvent>,
+    ) -> Result<(), Halt> {
+        match tasks::api::list_tasks(config).await {
+            Ok(list) => {
+                self.task_failures = 0;
+                self.retries.remove("tasks");
+                if !*live {
+                    *live = true;
+                    send(events, DashboardEvent::Status(LinkStatus::Live))?;
+                }
+                send(events, DashboardEvent::Tasks(list))
+            }
+            Err(ClientError::Unauthorized) => Err(Halt::Refused),
+            Err(ClientError::Unreachable { url, reason }) => {
+                self.task_failures += 1;
+                if self.task_failures >= TASK_LIST_TRIES {
+                    let reason = format!(
+                        "the task list could not be read {TASK_LIST_TRIES} times: {reason}"
+                    );
+                    return Err(Halt::Lost(ClientError::Unreachable { url, reason }));
+                }
+                self.tasks = true;
+                self.back_off("tasks");
+                Ok(())
+            }
+            // An answer that is not 2xx: the daemon is there, but the list is not.
+            Err(error) => Err(Halt::Lost(error)),
+        }
     }
 
     /// The daemon runs git for each workspace that changed, and with busy agents one always has:
@@ -257,7 +363,7 @@ impl Stale {
     ) -> Result<(), Halt> {
         let now = Instant::now();
         let open = self.dirty_read_at.is_none_or(|at| now >= at + every);
-        if !self.diff_stats && !(self.dirty && open) {
+        if (!self.diff_stats && !(self.dirty && open)) || !self.ready("diff_stats") {
             return Ok(());
         }
         if self.dirty && open {
@@ -265,7 +371,8 @@ impl Stale {
         }
         (self.diff_stats, self.dirty) = (false, false);
         let read = workspaces::api::diff_stats(config).await;
-        pass(read, events, DashboardEvent::DiffStats)
+        self.diff_stats = self.pass("diff_stats", read, events, DashboardEvent::DiffStats)?;
+        Ok(())
     }
 }
 
@@ -276,103 +383,6 @@ pub(crate) fn send(
     events.unbounded_send(event).map_err(|_| Halt::AppGone)
 }
 
-/// A read other than the task list that fails on its own, such as the terminals of a task just
-/// deleted, is left out: the rest of the data still comes.
-fn pass<T>(
-    read: Result<T, ClientError>,
-    events: &UnboundedSender<DashboardEvent>,
-    event: impl FnOnce(T) -> DashboardEvent,
-) -> Result<(), Halt> {
-    match read {
-        Ok(value) => send(events, event(value)),
-        Err(ClientError::Unauthorized) => Err(Halt::Refused),
-        Err(error @ ClientError::Unreachable { .. }) => Err(Halt::Lost(error)),
-        Err(_) => Ok(()),
-    }
-}
-
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn shown(ids: &[&str]) -> BTreeSet<String> {
-        ids.iter().map(|id| id.to_string()).collect()
-    }
-
-    #[test]
-    fn shells_of_a_task_not_shown_are_not_read() {
-        let mut stale = Stale::default();
-        let shown = shown(&["T-1"]);
-        stale.note(r#"{"kind":"shells.changed","taskId":"T-2"}"#, &shown);
-        assert!(stale.terminals.is_empty());
-        stale.note(r#"{"kind":"shells.changed","taskId":"T-1"}"#, &shown);
-        assert_eq!(stale.terminals, shown);
-    }
-
-    #[test]
-    fn shells_and_workspace_changes_pass_every_task_id_on() {
-        let mut stale = Stale::default();
-        stale.note(
-            r#"{"kind":"shells.changed","taskId":"T-2"}"#,
-            &shown(&["T-1"]),
-        );
-        stale.note(r#"{"kind":"workspace.dirty","taskId":"T-3"}"#, &shown(&[]));
-        stale.note(
-            r#"{"kind":"review-comments.changed","taskId":"T-4"}"#,
-            &shown(&[]),
-        );
-        assert_eq!(
-            stale.passed,
-            [
-                DashboardEvent::ShellsChanged {
-                    task_id: "T-2".into()
-                },
-                DashboardEvent::WorkspaceChanged {
-                    task_id: "T-3".into()
-                },
-                DashboardEvent::ReviewCommentsChanged {
-                    task_id: "T-4".into()
-                },
-            ]
-        );
-    }
-
-    #[test]
-    fn a_workspace_step_is_passed_on_and_marks_nothing() {
-        let mut stale = Stale::default();
-        let step = stale.note(
-            r#"{"kind":"workspace.preparing","taskId":"T-1","step":"fetch"}"#,
-            &BTreeSet::new(),
-        );
-        assert_eq!(step.map(|step| step.task_id).as_deref(), Some("T-1"));
-        assert!(!stale.preparing && !stale.tasks);
-    }
-
-    #[test]
-    fn resync_marks_everything_but_keeps_the_diff_stats_time() {
-        let at = Instant::now();
-        let mut stale = Stale {
-            dirty_read_at: Some(at),
-            ..Stale::default()
-        };
-        stale.note(r#"{"kind":"resync"}"#, &shown(&["T-1"]));
-        assert!(stale.tasks && stale.repos && stale.preparing && stale.diff_stats);
-        assert!(stale.jobs && stale.activity && stale.usage);
-        assert_eq!(stale.terminals, shown(&["T-1"]));
-        assert_eq!(stale.dirty_read_at, Some(at));
-    }
-
-    #[test]
-    fn diff_stats_wait_only_after_a_read_for_a_change() {
-        let every = Duration::from_secs(15);
-        let mut stale = Stale::default();
-        stale.note(
-            r#"{"kind":"workspace.dirty","taskId":"T-1"}"#,
-            &BTreeSet::new(),
-        );
-        assert_eq!(stale.due(every), None);
-        let at = Instant::now();
-        stale.dirty_read_at = Some(at);
-        assert_eq!(stale.due(every), Some(at + every));
-    }
-}
+#[path = "stale_tests.rs"]
+mod tests;

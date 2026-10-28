@@ -56,7 +56,7 @@ impl Root {
     }
 
     /// The overlay shows new numbers while it is on; off, nothing wakes for it.
-    pub(super) fn follow_overlay(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn follow_overlay(&mut self, cx: &mut Context<Self>) {
         self.overlay_refresh = overlay::enabled(cx).then(|| {
             cx.spawn(async move |root, cx| {
                 loop {

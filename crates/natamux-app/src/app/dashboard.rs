@@ -177,6 +177,7 @@ impl Dashboard {
     /// Every view that shows the dashboard draws again on its notify, so an event that changes
     /// nothing notifies nobody. The three workspace events only go to their subscribers.
     fn apply(&mut self, event: DashboardEvent, cx: &mut Context<Self>) {
+        super::app_log::log_status(&event, &mut self.data.link_down, &self.source, cx);
         let changed = self.data.changes(&event);
         let tasks_changed = changed && matches!(event, DashboardEvent::Tasks(_));
         match &event {

@@ -5,20 +5,21 @@ pub use natamux_proto::terminals::list::SHELL_PROGRAMS;
 pub use natamux_proto::terminals::messages::MAIN_TERMINAL;
 pub use natamux_pty::input_gap::{ENTER_AFTER_PASTE_MS, INPUT_GAP_MS};
 
-/// A task of the default pipeline keeps three agent shells (1, 2 and 5), so ten tasks fit.
-pub const MAX_SESSIONS: usize = 30;
+/// 30 agents of the default pipeline (three agent shells a task) plus plain terminals.
+pub const MAX_SESSIONS: usize = 64;
 pub const TICKET_TTL_MS: u64 = 30_000;
 /// Output is sent in batches. A chunk that comes after a quiet moment and is small (typing echo)
 /// goes out at once; anything else waits this long for more.
 pub const OUTPUT_COALESCE_MS: u64 = 4;
 pub const OUTPUT_IDLE_BYTES: usize = 1024;
-/// Shells parse one at a time. A read is parsed in turns of at most this much, so a flood in one
-/// shell does not hold the others for a whole 64 KiB read.
+/// Shells parse in `parse_lanes` lanes. A read is parsed in turns of at most this much, so a
+/// flood in one shell does not hold the others for a whole 64 KiB read.
 pub const PARSE_TURN_BYTES: usize = 16 * 1024;
 /// No frame is larger, so a big snapshot or a flood never makes one huge message.
 pub const OUTPUT_FRAME_BYTES: usize = 64 * 1024;
-/// The last output sent, kept for a client that comes back and only needs what it missed.
-pub const OUTPUT_RING_BYTES: usize = 1024 * 1024;
+/// The last output sent, kept for a client that comes back and only needs what it missed. 2 MiB,
+/// so a terminal hidden for a short task switch resumes from the ring and draws in place.
+pub const OUTPUT_RING_BYTES: usize = 2 * 1024 * 1024;
 /// A snapshot waits at most this long for a program to finish drawing a frame (mode 2026).
 pub const SNAPSHOT_SYNC_WAIT_MS: u64 = 150;
 /// A client with more output not acked than this is behind: its live output is dropped.
@@ -45,3 +46,26 @@ pub const ENDED_IDLE_MS: u64 = 60_000;
 pub const WORKSPACE_QUIET_MS: u64 = 500;
 /// `ENDED_SHELL_LINES`: the last lines of each shell that a finished task keeps.
 pub const ENDED_SHELL_LINES: usize = 200;
+
+/// How many shells parse at the same time: half the cores, 2 to 4. Floods in many shells take at
+/// most 4 cores. On 1 or 2 cores the 2 lanes can take every core: one lane makes a typed shell wait
+/// behind every flooding one again, and a turn is short (PARSE_TURN_BYTES), so the OS still runs
+/// the dashboards between turns.
+pub fn parse_lanes() -> usize {
+    lanes_for(std::thread::available_parallelism().map_or(1, usize::from))
+}
+
+fn lanes_for(cores: usize) -> usize {
+    (cores / 2).clamp(2, 4)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::lanes_for;
+
+    #[test]
+    fn parse_lanes_are_2_to_4_for_any_core_count() {
+        let lanes: Vec<usize> = [1, 2, 4, 6, 8, 10, 16, 64].map(lanes_for).to_vec();
+        assert_eq!(lanes, [2, 2, 2, 3, 4, 4, 4, 4]);
+    }
+}

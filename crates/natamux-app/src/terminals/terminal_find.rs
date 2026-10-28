@@ -30,8 +30,7 @@ pub fn open_find<V: 'static>(
     let find = match TerminalCache::find(&key, cx) {
         Some(find) => find,
         None => {
-            let zed = terminal.read(cx).terminal().clone();
-            let find = cx.new(|cx| TerminalFind::new(zed, window, cx));
+            let find = cx.new(|cx| TerminalFind::new(terminal.clone(), window, cx));
             let back = terminal.clone();
             let closed = key.clone();
             cx.subscribe_in(&find, window, move |_, _, _: &FindClosed, window, cx| {
@@ -50,7 +49,8 @@ pub fn open_find<V: 'static>(
 }
 
 pub struct TerminalFind {
-    terminal: Entity<Terminal>,
+    /// Not Zed's terminal: a snapshot can swap the shown screen (T-0210).
+    terminal: Entity<RemoteTerminal>,
     field: Entity<Editor>,
     match_case: bool,
     regex: bool,
@@ -63,7 +63,11 @@ pub struct TerminalFind {
 impl EventEmitter<FindClosed> for TerminalFind {}
 
 impl TerminalFind {
-    pub fn new(terminal: Entity<Terminal>, window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub fn new(
+        terminal: Entity<RemoteTerminal>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let field = cx.new(|cx| {
             let mut editor = Editor::single_line(window, cx);
             editor.set_placeholder_text("Find", window, cx);
@@ -104,6 +108,10 @@ impl TerminalFind {
         self.field.read(cx).text(cx)
     }
 
+    fn screen(&self, cx: &App) -> Entity<Terminal> {
+        self.terminal.read(cx).terminal().clone()
+    }
+
     fn run(&mut self, cx: &mut Context<Self>) {
         self.search += 1;
         let search = self.search;
@@ -113,7 +121,7 @@ impl TerminalFind {
             .flatten();
         let Some(searcher) = searcher else {
             // No term, or a regex that does not parse: nothing matches.
-            self.terminal.update(cx, |terminal, cx| {
+            self.screen(cx).update(cx, |terminal, cx| {
                 terminal.matches.clear();
                 cx.notify();
             });
@@ -122,7 +130,7 @@ impl TerminalFind {
             return;
         };
         let found = self
-            .terminal
+            .screen(cx)
             .update(cx, |terminal, cx| terminal.find_matches(searcher, cx));
         cx.spawn(async move |find, cx| {
             let matches = found.await;
@@ -131,7 +139,7 @@ impl TerminalFind {
                     return;
                 }
                 let count = matches.len();
-                find.terminal.update(cx, |terminal, cx| {
+                find.screen(cx).update(cx, |terminal, cx| {
                     terminal.matches = matches;
                     if count > 0 {
                         terminal.activate_match(0);
@@ -159,7 +167,7 @@ impl TerminalFind {
             (Some(index), true) => (index + 1) % count,
             (Some(index), false) => (index + count - 1) % count,
         };
-        self.terminal.update(cx, |terminal, cx| {
+        self.screen(cx).update(cx, |terminal, cx| {
             terminal.activate_match(next);
             cx.notify();
         });
@@ -181,7 +189,7 @@ impl TerminalFind {
 
     fn shut(&mut self, cx: &mut Context<Self>) {
         self.search += 1;
-        self.terminal.update(cx, |terminal, cx| {
+        self.screen(cx).update(cx, |terminal, cx| {
             terminal.matches.clear();
             cx.notify();
         });
@@ -278,3 +286,7 @@ impl Render for TerminalFind {
             )
     }
 }
+
+#[cfg(test)]
+#[path = "terminal_find_tests.rs"]
+mod tests;

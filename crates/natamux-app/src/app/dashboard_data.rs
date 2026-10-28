@@ -2,6 +2,7 @@
 //! entity that holds it is `app/dashboard.rs`.
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::time::Instant;
 
 use natamux_client::{ClientError, DashboardEvent, LinkStatus};
 use natamux_proto::agents::activity::{TaskActivity, TaskUsage};
@@ -81,6 +82,8 @@ pub struct Notice {
 #[derive(Debug)]
 pub struct DashboardData {
     pub link: Link,
+    /// When the link went down, for the `app.log` line once it is back.
+    pub link_down: Option<Instant>,
     /// The daemon refused the token: the window asks for one (Sign in).
     pub refused: bool,
     /// The task list came at least once: before that the views show skeletons.
@@ -115,6 +118,7 @@ impl Default for DashboardData {
     fn default() -> Self {
         DashboardData {
             link: Link::Loading,
+            link_down: None,
             refused: false,
             loaded: false,
             tasks: Vec::new(),

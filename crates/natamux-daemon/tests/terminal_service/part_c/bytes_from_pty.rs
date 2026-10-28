@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex};
 use natamux_daemon::terminals::limits::{
     HIDDEN_BUDGET_BYTES, OUTPUT_FRAME_BYTES, RESYNC_MAX_WAIT_MS,
 };
+use natamux_daemon::terminals::service::AttachOptions;
 use natamux_proto::terminals::messages::ServerMessage;
 
 use super::util::{MAIN, TASK, Watcher, adv, catch_ups, frame_of};
@@ -73,7 +74,8 @@ fn keeps_every_line_of_a_flood_while_hidden_through_a_ring_resume_when_shown() {
         printed.push_str(&frame_of(index));
     }
     adv(&h, &[&watching], RESYNC_MAX_WAIT_MS);
-    h.service.visible(TASK, MAIN, &watching.client, true, None);
+    h.service
+        .visible(TASK, MAIN, &watching.client, true, None, false);
     adv(&h, &[&watching], 0);
 
     let frames = watching.frames();
@@ -100,4 +102,51 @@ fn keeps_every_line_of_a_flood_while_hidden_through_a_ring_resume_when_shown() {
         .unwrap();
     let rest = String::from_utf8_lossy(&bytes_of(&frames[attached + 1..])).into_owned();
     assert_eq!(rest, printed);
+}
+
+// Test spec 8.5: shells parse in several lanes at once (`parse_lanes`, at least 2); one shell's
+// bytes still keep their order.
+#[test]
+fn a_flood_keeps_its_order_while_other_shells_parse_beside_it() {
+    let h = setup();
+    let terminals = ["1", "2", "3", "4"];
+    let watching: Vec<_> = terminals
+        .iter()
+        .map(|terminal| {
+            let (recorder, client) = client();
+            h.attach_to(TASK, &client, SIZE, terminal, AttachOptions::default());
+            recorder
+        })
+        .collect();
+    for terminal in terminals {
+        h.settled(TASK, terminal);
+    }
+    watching.iter().for_each(|recorder| recorder.clear());
+    // About 320 KiB a shell: under the high water of a client that never acks.
+    let printed: Vec<String> = terminals
+        .iter()
+        .map(|terminal| {
+            (0..25_000)
+                .map(|line| format!("{terminal}:{line:>8}\r\n"))
+                .collect()
+        })
+        .collect();
+
+    // Reads larger than a turn, so each read takes several turns and the shells' turns mix.
+    std::thread::scope(|scope| {
+        for (pty, text) in h.ptys().into_iter().zip(&printed) {
+            scope.spawn(move || {
+                for read in text.as_bytes().chunks(20 * 1024) {
+                    pty.emit(read);
+                }
+            });
+        }
+    });
+    for terminal in terminals {
+        h.settled(TASK, terminal);
+    }
+
+    for (recorder, text) in watching.iter().zip(&printed) {
+        assert!(recorder.output() == *text, "a shell's output changed order");
+    }
 }

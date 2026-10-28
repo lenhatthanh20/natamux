@@ -46,7 +46,9 @@ So with the Electron app open, the native app shows the same tasks. If 4317 was 
 | `--size WxH` | Window size, at the top left of the screen |
 | `--hold SECONDS` | Quits after that long |
 | `--fake-daemon` | A fixed task list and terminal, no daemon (CI screenshots) |
-| `--gate2 TASK` | Runs gate 2 without a person. A 60 s bench on TASK's shells 901–910, with scrolling, then a report. Then 100 keys typed into its shell 912, then a second report. Prints both paths, then quits. Keys and scrolls go through the window's own event dispatch |
+| `--gate2 TASK` | Runs gate 2 without a person. A 60 s bench on TASK's shells 901–910, with scrolling, then a report. Then 100 keys typed into its shell 990, then a second report. Prints the paths, then quits. Keys and scrolls go through the window's own event dispatch. Takes `--terminals` and `--output` (below) |
+| `--terminals N` | With `--gate2`: bench N shells (901 to 900+N), 1 to 60, default 10. Up to 10 all show, as the old bench did; more show 6 and the rest stay connected and hidden |
+| `--output flood\|agent` | With `--gate2`: what the shells print. `flood` (default) is about 1 MB/s of coloured text. `agent` looks like an agent's TUI: every 0.1 s one synchronized frame of 20 coloured rows drawn over the last, and every 2 s 200 scrolling lines |
 
 ## What CI checks
 
@@ -68,9 +70,10 @@ At Zed v1.24.2, a display-only `terminal::Terminal` (`TerminalBuilder::new_displ
 
 So the app uses a fork of Zed with one patch for input (owner's choice, 2026-10-22). A second patch, for gate 2, parses output off the main thread ("Gate 2, first run"):
 
-- Fork: `github.com/lenhatthanh20/zed`, branch `natamux/display-only-input-v1.24.2`, two commits on the v1.24.2 release (34c3a6b, then 4c9b8fe).
+- Fork: `github.com/lenhatthanh20/zed`, branch `natamux/display-only-input-v1.24.2`, four commits on the v1.24.2 release (34c3a6b, 4c9b8fe, 7ff4dc0, then c503ad0 with the tests of patch 3).
 - Patch 1: `Terminal::set_display_only_input(sink)`. A display-only terminal sends to `sink` what a PTY terminal writes to its PTY. 19 lines and a test, in `crates/terminal/src/terminal.rs`.
 - Patch 2, for gate 2: `Terminal::display_only_writer()`, a `DisplayOnlyWriter` that parses output on any thread. About 50 lines and a test, in the same file.
+- Patch 3, for many busy terminals (T-0210): `Terminal::set_wakeup_pace(duration)`, how long the event loop gathers output before a display-only terminal wakes (4 ms by default). And `TerminalView` asks for new IME coordinates on a wakeup only while it is focused: each call asked the window for a frame and AppKit for new coordinates, for every busy terminal, hidden ones too. About 60 lines and a test, in `crates/terminal/src/terminal.rs` and `crates/terminal_view/src/terminal_view.rs`.
 - The app (`terminals/remote_terminal.rs`) puts socket output into the terminal and sends the sink's bytes to the socket as `input`.
 - No upstream PR (owner, 2026-10-22). Each monthly Zed upgrade moves the commits onto the new release.
 
@@ -138,6 +141,12 @@ Pass: 100 of 100 in both halves with each input source.
 5. **Tools → Save Perf Report** (cmd-alt-s). The path shows at the bottom left (`~/Library/Logs/Natamux Native/perf-<time>.json`).
 
 Or run all of it with `--gate2 <task>` from a shell, and keep the window in front while it runs.
+
+`--gate2 <task> --terminals 30 --output agent` benches 30 agent-like shells (6 shown, 24 hidden). After the panes phase it adds two phases (not run for the default 10 floods, so old runs repeat):
+- **Hidden.** The task table shows for 20 s while every bench shell is hidden and printing. The overlay stops forcing frames, so the draws are the app's own. Report `hidden`: `hidden_phase.draws_per_second` and `hidden_phase.cpu_percent`.
+- **Show latency.** A hidden bench shell shows in a pane 20 times, each after at least 3 s hidden. Report `show-latency`: `show_latency.count`, `p50_ms`, `p95_ms` (show to the end of its catch-up, at `replayed`; the daemon sends an empty catch-up when nothing was missed).
+
+New report fields (old ones stay): `bench` (`terminals`, `shown`, `hidden`, `output`), `hidden_phase`, `process.cpu_percent_run` (the app's CPU since start, one core is 100) and `process.rss_bytes` (now, not the peak; both read with `ps`), `link_reconnects`, `terminal_reconnects`, `skeletons` (skeletons of a terminal that had drawn a screen; a first attach does not count; should stay 0; the bench's own terminals are named `bench:<task>/<terminal>`, apart from the panes' terminals of the same shells), `show_latency`. Terminals 901 to 960 are the bench's, 990 is the typing shell, 991 the IME check's.
 
 **How frames are counted.**
 - The overlay keeps a callback on every display refresh, so a frame time is the time between two frame starts. Gaps over 250 ms are idle and are not counted.

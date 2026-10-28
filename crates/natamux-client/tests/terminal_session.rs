@@ -140,14 +140,60 @@ fn pings_and_drops_a_socket_that_never_answers() {
     rt.block_on(async {
         let mut options = options();
         options.heartbeat = Duration::from_millis(200);
-        let _handle = client.open_terminal(options);
+        let handle = client.open_terminal(options);
         let mut conn = daemon.next_terminal().await;
         conn.text(r#"{"type":"hello","shellId":"s1"}"#).await;
         assert_eq!(conn.recv(true).await, ClientMessage::Ping);
         // No pong: after two heartbeats the client gives up on this socket and comes back.
         let again = daemon.next_terminal().await;
         assert!(again.target.contains("shellId=s1"));
+        assert_eq!(
+            handle.last_loss().as_deref(),
+            Some("no pong for two heartbeats")
+        );
         drop(conn);
+    });
+}
+
+#[test]
+fn frames_that_wait_in_the_socket_reach_the_app_in_order_before_a_control_message() {
+    let rt = runtime();
+    let mut daemon = rt.block_on(FakeDaemon::start());
+    let client = daemon.client();
+    rt.block_on(async {
+        let mut handle = client.open_terminal(options());
+        let mut conn = daemon.next_terminal().await;
+        conn.text(r#"{"type":"hello","shellId":"s1"}"#).await;
+        conn.text(r#"{"type":"replayed","offset":0}"#).await;
+        assert_eq!(
+            next_non_link_event(&mut handle).await,
+            TerminalEvent::CaughtUp { offset: 0 }
+        );
+        conn.binary(b"one ").await;
+        conn.binary(b"two ").await;
+        conn.binary(b"three").await;
+        conn.text(r#"{"type":"exit","code":0}"#).await;
+        // Frames already in the socket join into fewer events; bytes, offsets and the place of
+        // the exit stay the same.
+        let mut bytes = Vec::new();
+        let mut events = 0;
+        let last_end = loop {
+            match next_non_link_event(&mut handle).await {
+                TerminalEvent::Output { bytes: more, end } => {
+                    bytes.extend(more);
+                    events += 1;
+                    assert_eq!(end, Some(bytes.len() as u64));
+                }
+                TerminalEvent::Status(TerminalStatus::Ended { code }) => {
+                    assert_eq!(code, Some(0));
+                    break bytes.len();
+                }
+                other => panic!("unexpected {other:?}"),
+            }
+        };
+        assert_eq!(bytes, b"one two three");
+        assert_eq!(last_end, 13);
+        assert!((1..=3).contains(&events));
     });
 }
 

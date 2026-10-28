@@ -81,8 +81,10 @@ pub struct Client {
 
 impl Client {
     pub fn new(config: Config) -> Result<Client, ClientError> {
+        // Up to 30 terminal sockets, the event feed and its reads share these: a slow read must
+        // not hold the sockets' reads and pongs (T-0210).
         let runtime = tokio::runtime::Builder::new_multi_thread()
-            .worker_threads(2)
+            .worker_threads(4)
             .thread_name("natamux-client")
             .enable_all()
             .build()

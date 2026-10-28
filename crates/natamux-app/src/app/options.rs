@@ -1,8 +1,11 @@
 //! Command line flags. CI uses them to check the app and take screenshots.
 
+use crate::bench::bench_view::{MAX_TERMINALS, Output, TERMINALS};
+
 pub const USAGE: &str =
     "usage: natamux-app [--smoke] [--theme light|dark] [--size WxH] [--hold SECONDS] [--fake-daemon]
-                   [--gate2 TASK] [--shot STATE] [--count-draws] [--open-task TASK]
+                   [--gate2 TASK [--terminals N] [--output flood|agent]]
+                   [--shot STATE] [--count-draws] [--open-task TASK]
   --smoke   draw a frame, type into the text box, check it, then quit (exit 1 on failure)
             with --fake-daemon, also check that a workspace's terminal grid does not scroll
             and that the pipeline chart scrolls to its last step
@@ -10,7 +13,9 @@ pub const USAGE: &str =
   --size    window size in points, placed at the top left of the screen
   --hold    quit after this many seconds (for screenshots)
   --fake-daemon  show fixed tasks and a fixed terminal instead of the daemon's (for screenshots)
-  --gate2   run gate 2 on TASK's shells 901-912, save the perf report, print its path, then quit
+  --gate2   run gate 2 on TASK's shells 901-960 and 990, save the perf reports, print their paths, then quit
+  --terminals  with --gate2: how many shells to bench, 1 to 60 (default 10)
+  --output     with --gate2: what they print, flood (1 MB/s of text, the default) or agent (a TUI)
   --shot    open the window in one screen-1 or screen-2 state, for the CI screenshots (docs/rust-phase3.md)
   --count-draws  print the window's draws once a second, to measure the cost of motion
   --open-task    open TASK once the dashboard has it, as a click on its row does
@@ -302,6 +307,8 @@ pub struct Options {
     pub hold_seconds: Option<u64>,
     pub fake_daemon: bool,
     pub gate2: Option<String>,
+    pub gate2_terminals: u16,
+    pub gate2_output: Output,
     pub shot: Option<Shot>,
     pub count_draws: bool,
     pub open_task: Option<String>,
@@ -316,6 +323,8 @@ impl Options {
             hold_seconds: None,
             fake_daemon: false,
             gate2: None,
+            gate2_terminals: TERMINALS,
+            gate2_output: Output::Flood,
             shot: None,
             count_draws: false,
             open_task: None,
@@ -329,6 +338,10 @@ impl Options {
                 "--theme" => options.theme = Some(parse_theme(&value(&mut args, &arg)?)?),
                 "--size" => options.size = Some(parse_size(&value(&mut args, &arg)?)?),
                 "--gate2" => options.gate2 = Some(value(&mut args, &arg)?),
+                "--terminals" => {
+                    options.gate2_terminals = parse_terminals(&value(&mut args, &arg)?)?;
+                }
+                "--output" => options.gate2_output = parse_output(&value(&mut args, &arg)?)?,
                 "--open-task" => options.open_task = Some(value(&mut args, &arg)?),
                 "--shot" => options.shot = Some(Shot::parse(&value(&mut args, &arg)?)?),
                 "--hold" => {
@@ -357,6 +370,19 @@ fn parse_theme(text: &str) -> Result<ThemeMode, String> {
     }
 }
 
+fn parse_terminals(text: &str) -> Result<u16, String> {
+    match text.parse::<u16>() {
+        Ok(count) if (1..=MAX_TERMINALS).contains(&count) => Ok(count),
+        _ => Err(format!(
+            "--terminals is a number from 1 to {MAX_TERMINALS}, not {text:?}"
+        )),
+    }
+}
+
+fn parse_output(text: &str) -> Result<Output, String> {
+    Output::parse(text).ok_or_else(|| format!("--output is flood or agent, not {text:?}"))
+}
+
 fn parse_size(text: &str) -> Result<(u32, u32), String> {
     let bad = || format!("--size looks like 1280x800, not {text:?}");
     let (width, height) = text.split_once('x').ok_or_else(bad)?;
@@ -369,108 +395,5 @@ fn parse_size(text: &str) -> Result<(u32, u32), String> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn parse(args: &[&str]) -> Result<Options, String> {
-        Options::parse(args.iter().map(|arg| arg.to_string()))
-    }
-
-    #[test]
-    fn no_flags_follow_the_system() {
-        let options = parse(&[]).unwrap();
-        assert!(!options.smoke);
-        assert_eq!(options.theme, None);
-        assert_eq!(options.size, None);
-        assert_eq!(options.hold_seconds, None);
-        assert!(!options.fake_daemon);
-        assert_eq!(options.gate2, None);
-        assert_eq!(options.shot, None);
-        assert!(!options.count_draws);
-        assert_eq!(options.open_task, None);
-    }
-
-    #[test]
-    fn reads_every_flag() {
-        let options = parse(&[
-            "--fake-daemon",
-            "--smoke",
-            "--theme",
-            "light",
-            "--size",
-            "1600x1000",
-            "--hold",
-            "12",
-            "--gate2",
-            "T-0145",
-            "--shot",
-            "task-context-menu",
-            "--count-draws",
-            "--open-task",
-            "T-0146",
-        ])
-        .unwrap();
-        assert!(options.count_draws);
-        assert_eq!(options.open_task.as_deref(), Some("T-0146"));
-        assert_eq!(options.shot, Some(Shot::TaskContextMenu));
-        assert_eq!(options.gate2.as_deref(), Some("T-0145"));
-        assert!(options.smoke);
-        assert_eq!(options.theme, Some(ThemeMode::Light));
-        assert_eq!(options.size, Some((1600, 1000)));
-        assert_eq!(options.hold_seconds, Some(12));
-        assert!(options.fake_daemon);
-    }
-
-    #[test]
-    fn refuses_bad_values() {
-        assert!(parse(&["--theme", "blue"]).is_err());
-        assert!(parse(&["--size", "1280"]).is_err());
-        assert!(parse(&["--size", "10x10"]).is_err());
-        assert!(parse(&["--hold", "soon"]).is_err());
-        assert!(parse(&["--hold"]).is_err());
-        assert!(parse(&["--gate2"]).is_err());
-        assert!(parse(&["--fast"]).is_err());
-        assert!(parse(&["--shot", "tasks"]).is_err());
-        assert!(parse(&["--shot"]).is_err());
-        assert_eq!(
-            parse(&["--open-task"]),
-            Err("--open-task needs a value".to_string())
-        );
-    }
-
-    #[test]
-    fn opens_a_task_with_the_fake_daemon_or_with_gate_2() {
-        let options = parse(&["--fake-daemon", "--open-task", "T-0001"]).unwrap();
-        assert!(options.fake_daemon);
-        assert_eq!(options.open_task.as_deref(), Some("T-0001"));
-        let options = parse(&["--open-task", "T-0001", "--gate2", "T-0002"]).unwrap();
-        assert_eq!(options.open_task.as_deref(), Some("T-0001"));
-        assert_eq!(options.gate2.as_deref(), Some("T-0002"));
-    }
-
-    #[test]
-    fn every_shot_name_parses_back() {
-        for shot in Shot::ALL {
-            assert_eq!(parse(&["--shot", shot.name()]).unwrap().shot, Some(shot));
-        }
-    }
-
-    /// CI shoots the states its workflow lists: the same names, in the same order.
-    #[test]
-    fn the_ci_workflow_shoots_every_state() {
-        let workflow = include_str!("../../../../.github/workflows/rust.yml");
-        let part = |start: &str, end: &str| -> Vec<&str> {
-            let text = workflow
-                .split(start)
-                .nth(1)
-                .and_then(|rest| rest.split(end).next());
-            text.unwrap().split_whitespace().collect()
-        };
-        let names: Vec<&str> = Shot::ALL.iter().map(|shot| shot.name()).collect();
-        assert_eq!(part("STATES: >-", "DOCKED:"), names);
-        // The docked size: the table, and every state of screens 2 to 5.
-        let docked = part("DOCKED: >-", "run:");
-        assert_eq!(docked.first(), Some(&"tasks-table"));
-        assert_eq!(docked[1..], names[16..]);
-    }
-}
+#[path = "options_tests.rs"]
+mod tests;

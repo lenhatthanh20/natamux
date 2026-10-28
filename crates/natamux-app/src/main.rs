@@ -10,6 +10,7 @@ mod agents {
 }
 mod app {
     pub mod account_menu;
+    pub mod app_log;
     pub mod appearance;
     pub mod appearance_rules;
     pub mod asset_table;
@@ -278,6 +279,7 @@ mod terminals {
     pub mod terminal_find;
     pub mod terminal_font;
     pub mod terminal_pane;
+    pub mod terminal_parser;
     pub mod terminal_screen;
     pub mod terminal_size;
     pub mod terminal_tabs;
@@ -325,6 +327,7 @@ use natamux_client::{Client, ClientError, Config};
 
 fn main() -> ExitCode {
     perf::report::mark_start();
+    app::app_log::trim_at_start();
     let options = match Options::parse(std::env::args().skip(1)) {
         Ok(options) => options,
         Err(message) => {
@@ -454,7 +457,13 @@ fn start(
         );
     }
     if let Some(task) = &options.gate2 {
-        app::gate2::run(window, task.clone(), cx);
+        app::gate2::run(
+            window,
+            task.clone(),
+            options.gate2_terminals,
+            options.gate2_output,
+            cx,
+        );
     }
     if options.count_draws {
         perf::draws::start(window, cx);

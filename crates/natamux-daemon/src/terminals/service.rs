@@ -17,6 +17,7 @@ use natamux_proto::terminals::text::plain_text;
 use natamux_pty::Env;
 
 use super::input_trace::{Step, trace};
+use super::limits::parse_lanes;
 use super::session_input::{set_size, submit, touch, write};
 use super::session_lifecycle::{EndWait, SpawnPty, session_key};
 use super::session_output::{flush_output, ring_since};
@@ -77,7 +78,7 @@ impl TerminalService {
                 output_seen: Mutex::new(HashMap::new()),
                 next_attach: AtomicU64::new(1),
                 starting: Mutex::new(()),
-                parsing: Turns::default(),
+                parsing: Turns::with_lanes(parse_lanes()),
                 this: this.clone(),
             }),
         }
@@ -163,6 +164,8 @@ impl TerminalService {
             snapshot_at: now,
             budget_from: now,
             budget_bytes: 0,
+            parked: false,
+            show_now: false,
         };
         if claims {
             guard.clients.push((Arc::clone(&client), state));
@@ -193,7 +196,8 @@ impl TerminalService {
     }
 
     /// A client came on screen or left it. Only a terminal that came on screen in the page sends
-    /// its size, and only that claims the shell's size.
+    /// its size, and only that claims the shell's size. `park` with `visible` false: no live
+    /// output until it is visible again; then a behind client is caught up at once.
     pub fn visible(
         &self,
         task_id: &str,
@@ -201,6 +205,7 @@ impl TerminalService {
         client: &ClientRef,
         visible: bool,
         size: Option<Size>,
+        park: bool,
     ) {
         self.inner
             .with_client(task_id, terminal, client, |session| {
@@ -214,6 +219,20 @@ impl TerminalService {
                 }
                 state.visible = visible;
                 let behind = state.phase == Phase::Behind;
+                if visible && state.parked && behind {
+                    state.show_now = true;
+                }
+                if !visible {
+                    state.show_now = false;
+                }
+                // A show of a parked client always ends with a catch-up, empty when it missed
+                // nothing, so the app can time the show to its end (T-0210 review 3).
+                if visible && state.parked && state.phase == Phase::Live {
+                    let at = state.sent;
+                    client.send(Frame::Message(ServerMessage::Resume { offset: at }));
+                    client.send(Frame::Message(ServerMessage::Replayed { offset: at }));
+                }
+                state.parked = !visible && park;
                 if let (true, Some(size)) = (visible, size) {
                     touch(session, client);
                     if let Some((_, state)) = session.clients.last_mut() {
@@ -389,9 +408,7 @@ impl TerminalService {
 
     /// Ends every shell of a task; the wait ends a moment after a stubborn shell is killed.
     pub fn close_and_wait(&self, task_id: &str) -> EndWait {
-        let sessions = self
-            .inner
-            .sessions_where(|session| session.task_id == task_id);
+        let sessions = self.inner.sessions_of_task(task_id);
         self.close(task_id);
         EndWait::new(sessions, &self.inner.options.scheduler)
     }
@@ -419,3 +436,7 @@ impl TerminalService {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "service_tests.rs"]
+mod tests;

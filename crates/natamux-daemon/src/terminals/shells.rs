@@ -30,9 +30,10 @@ pub(super) struct Inner {
     pub(super) next_attach: AtomicU64,
     /// Held while a shell starts, so two attaches at once start one shell, and the limit holds.
     pub(super) starting: Mutex<()>,
-    /// Held while one shell's output is parsed: shells parse one at a time, as on Node's one
-    /// loop, so floods in several shells take one core, not every core the dashboards need too.
-    /// Turns go in order, so a flood never keeps a quiet shell waiting more than a turn.
+    /// Held while one shell's output is parsed: up to `parse_lanes` shells parse at once, so
+    /// floods in many shells take at most 4 cores (on 1 or 2 cores, every core: see
+    /// `parse_lanes`). Turns go in order, so a flood never keeps a quiet shell waiting more than
+    /// a turn of each lane.
     pub(super) parsing: Turns,
     pub(super) this: Weak<Inner>,
 }
@@ -98,6 +99,17 @@ impl Inner {
         lock(&self.sessions)
             .get(key)
             .is_some_and(|known| Arc::ptr_eq(known, session))
+    }
+
+    /// The shells of one task, found by key: no other session is locked, so a parser that holds
+    /// one of another task never makes this wait. Task ids never hold the `/` of the key.
+    pub(super) fn sessions_of_task(&self, task_id: &str) -> Vec<SessionRef> {
+        let prefix = session_key(task_id, "");
+        lock(&self.sessions)
+            .iter()
+            .filter(|(key, _)| key.starts_with(&prefix))
+            .map(|(_, session)| Arc::clone(session))
+            .collect()
     }
 
     pub(super) fn sessions_where(&self, wanted: impl Fn(&Session) -> bool) -> Vec<SessionRef> {
@@ -280,7 +292,7 @@ impl Inner {
     /// spinner keeps the output from going quiet for its whole turn.
     pub(super) fn note_foreground(&self, task_id: &str) {
         let mut changed = Vec::new();
-        for session in self.sessions_where(|session| session.task_id == task_id) {
+        for session in self.sessions_of_task(task_id) {
             let mut guard = lock(&session);
             let program = guard.pty.foreground();
             if program != guard.program {

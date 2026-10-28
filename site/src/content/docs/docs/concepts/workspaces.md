@@ -126,7 +126,7 @@ Each task has its own terminals, started in the worktree. The first terminal is 
 
 - A terminal keeps running when you close the dashboard.
 - Stages that run side by side use more terminals, one each. A testing stage with a command runs it in a terminal of its own.
-- Natamux allows at most 30 terminals at once, across all tasks.
+- Natamux allows at most 64 terminals at once, across all tasks.
 - When a task is `done` or `cancelled`, Natamux closes its terminals.
 
 See [Terminal](/docs/guides/terminal/).

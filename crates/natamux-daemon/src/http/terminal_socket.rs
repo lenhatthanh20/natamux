@@ -201,6 +201,8 @@ async fn read_messages(
     loop {
         match tokio::time::timeout_at(deadline, stream.next()).await {
             Err(_) => {
+                let silent = state.silent_close.as_secs_f64();
+                eprintln!("terminal socket {id}/{terminal} dropped: silent for {silent} s");
                 let _ = out.send(Out::Terminate);
                 return;
             }
@@ -235,9 +237,10 @@ fn handle_message(state: &AppState, id: &str, terminal: &str, client: &ClientRef
             visible,
             cols,
             rows,
+            park,
         } => {
             let size = cols.zip(rows).map(|(cols, rows)| Size { cols, rows });
-            terminals.visible(id, terminal, client, visible, size);
+            terminals.visible(id, terminal, client, visible, size, park);
         }
         ClientMessage::Ack { offset } => terminals.ack(id, terminal, client, offset),
         ClientMessage::Ping => client.send(Frame::Message(ServerMessage::Pong)),

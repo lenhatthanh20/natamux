@@ -109,6 +109,11 @@ pub struct ClientState {
     /// The window of the hidden budget it is in, and the live output it got in it.
     pub budget_from: u64,
     pub budget_bytes: u64,
+    /// Hidden and asked for no live output at all (`park`), unlike the hidden budget.
+    pub parked: bool,
+    /// It came back on screen from parked while behind: its next catch-up does not wait for the
+    /// shell to be quiet. A show is one catch-up, not a loop.
+    pub show_now: bool,
 }
 
 /// A snapshot that waits for a program to finish a synchronized frame.
