@@ -7,6 +7,16 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v1.0.7 (2026-10-29)
+
+- A project's commands (a stage `check` or `command`, a path `when.command`, stage `args` and the setup script) run only after you approve them, and again after each change. The desktop app asks after you add a project and in **Start a task**, and the project settings show **Review commands** until you approve; without the app, use `natamux repo trust`. Projects added before were approved at the first start. See [Approve the project's commands](/docs/guides/project-settings/#approve-the-projects-commands).
+- Each task's terminals get their own `NATAMUX_TOKEN`, which works only for that task. Agent commands such as `natamux done` work as before; a gate command such as `stage approve` typed in a task terminal is refused. The daemon also checks the `Host` and `Origin` of requests, and terminal links open only `http`, `https` and `mailto`. See [Security and privacy](/docs/help/security-and-privacy/).
+- In the desktop app, each file you open gets its own tab above the editor. Tabs wrap, a dot marks an edit that is not saved, and `Mod+W` closes the shown file. See [Files of the worktree](/docs/guides/dashboard/#files-of-the-worktree).
+- In the desktop app, the Projects dialog has **Browse…** buttons next to **Folder** and **Worktree folder**. See [Add a project](/docs/getting-started/quick-start/#add-a-project).
+- On macOS, the Dock icon shows how many tasks need you once **Notify me** is on and notifications are allowed. See [Notifications and the Dock](/docs/guides/desktop-app/#notifications-and-the-dock).
+- The desktop app starts, switches tasks and opens diffs faster. The Done and Cancelled columns show their 50 newest cards with **Show 50 more**, and a terminal that fell far behind comes back with its last 1,000 lines of history.
+- Token usage counts the turn that runs `natamux done` or sends a stage back for that stage, and no longer loses the last model call of a turn or the usage of a terminal that ends.
+
 ## v1.0.6 (2026-10-28)
 
 - The desktop app shows what the updater does in the status bar (**Downloading 1.0.6 · 42 MB**, **Restart to update**, **Update failed**) and in a new **Version** row under **Settings → General → Updates**. A timed check never opens a dialog: a ready update shows one message with **Restart Now** and **What's New**, and a failed timed check shows nothing. See [Updates](/docs/guides/desktop-app/#updates).
