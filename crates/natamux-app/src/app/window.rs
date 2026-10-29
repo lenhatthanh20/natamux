@@ -15,6 +15,7 @@ use natamux_proto::tasks::task::{Task, TaskState};
 use ui::prelude::*;
 
 use super::dashboard::{Dashboard, DashboardChange, SavedView, TerminalReader};
+use super::dock_badge::ask_for_badges;
 use super::layout_mode::{
     LayoutInput, LayoutMode, SidebarMode, decide_layout, effective_sidebar_width,
 };
@@ -119,6 +120,10 @@ impl Root {
             .detach();
         Self::watch_window(window, cx);
         notify::follow_clicks(&dashboard, window.window_handle(), cx);
+        // Adds the badge for users who allowed notes before the app asked for it; no prompt then.
+        if dashboard.read(cx).view().notify {
+            ask_for_badges();
+        }
         let title_bar = cx.new(|cx| TitleBarView::new(dashboard.clone(), cx));
         let weak_root = cx.weak_entity();
         let status_bar = cx.new(|cx| StatusBarView::new(weak_root, dashboard.clone(), cx));
