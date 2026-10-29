@@ -2,8 +2,13 @@
 //! and a form to add one by its folder on the daemon's machine. The list follows the feed's
 //! `repos.changed`, so the dialog stays open after an add.
 
+use std::path::PathBuf;
+
 use editor::{Editor, EditorEvent};
-use gpui::{DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, FontWeight, Subscription};
+use gpui::{
+    DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, FontWeight, PathPromptOptions,
+    Subscription,
+};
 use natamux_proto::projects::repo::{AddRepo, Repo};
 use ui::{Tooltip, prelude::*};
 
@@ -13,7 +18,7 @@ use super::project_rules::{
 use crate::app::dashboard::Dashboard;
 use crate::app::dashboard_data::{Part, Seen};
 use crate::app::source::reason;
-use crate::components::button_style::quiet_button;
+use crate::components::button_style::{action_button, quiet_button};
 use crate::components::dialog::{DialogFrame, DialogLayer, DialogView, primary_button};
 use crate::components::form::{field, text_editor};
 use crate::components::icons::icon_path;
@@ -29,6 +34,13 @@ pub fn open(dashboard: &Entity<Dashboard>, window: &mut Window, cx: &mut App) {
     window.focus(&first, cx);
 }
 
+/// The field a Browse… picker fills.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Pick {
+    Folder,
+    Worktree,
+}
+
 pub struct ProjectsDialog {
     dashboard: Entity<Dashboard>,
     folder: Entity<Editor>,
@@ -42,8 +54,12 @@ pub struct ProjectsDialog {
     folder_error: Option<String>,
     worktree_error: Option<String>,
     busy: bool,
+    /// A Browse… picker is open: a second click does not open another.
+    picking: Option<Pick>,
     focus: FocusHandle,
     submit_focus: FocusHandle,
+    folder_browse: FocusHandle,
+    worktree_browse: FocusHandle,
     settings_stops: Vec<FocusHandle>,
     _subscriptions: Vec<Subscription>,
 }
@@ -118,8 +134,11 @@ impl ProjectsDialog {
             folder_error: None,
             worktree_error: None,
             busy: false,
+            picking: None,
             focus: cx.focus_handle(),
             submit_focus: cx.focus_handle(),
+            folder_browse: cx.focus_handle(),
+            worktree_browse: cx.focus_handle(),
             settings_stops: Vec::new(),
             _subscriptions: subscriptions,
         };
@@ -223,6 +242,84 @@ impl ProjectsDialog {
         self.show_default_worktree(window, cx);
     }
 
+    /// Browse…: the system folder picker for one field. A cancel does nothing.
+    fn browse(&mut self, pick: Pick, window: &mut Window, cx: &mut Context<Self>) {
+        if self.picking.is_some() || self.busy {
+            return;
+        }
+        self.picking = Some(pick);
+        let paths = cx.prompt_for_paths(PathPromptOptions {
+            files: false,
+            directories: true,
+            multiple: false,
+            prompt: None,
+        });
+        cx.spawn_in(window, async move |this, cx| {
+            let picked = match paths.await {
+                Ok(Ok(Some(paths))) => paths.into_iter().next(),
+                _ => None,
+            };
+            this.update_in(cx, |this, window, cx| {
+                this.took_folder(pick, picked, window, cx)
+            })
+            .ok();
+        })
+        .detach();
+        cx.notify();
+    }
+
+    /// The picker's answer: the folder goes in its field, as if typed and left.
+    fn took_folder(
+        &mut self,
+        pick: Pick,
+        path: Option<PathBuf>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.picking = None;
+        cx.notify();
+        let Some(path) = path else {
+            return;
+        };
+        let path = path.to_string_lossy().into_owned();
+        let editor = match pick {
+            Pick::Folder => {
+                self.folder_error = None;
+                self.folder_touched = true;
+                self.folder.clone()
+            }
+            Pick::Worktree => {
+                // A pick is the user's own value: a new daemon default does not replace it.
+                self.typed_worktree = Some(path.clone());
+                self.worktree_error = None;
+                self.worktree_touched = true;
+                self.worktree.clone()
+            }
+        };
+        editor.update(cx, |editor, cx| editor.set_text(path, window, cx));
+        window.focus(&editor.focus_handle(cx), cx);
+    }
+
+    fn browse_button(&self, pick: Pick, cx: &mut Context<Self>) -> Button {
+        let (id, tip, focus) = match pick {
+            Pick::Folder => (
+                "projects-browse-folder",
+                "Choose the folder of a git repository",
+                &self.folder_browse,
+            ),
+            Pick::Worktree => (
+                "projects-browse-worktree",
+                "Choose the folder for the worktrees",
+                &self.worktree_browse,
+            ),
+        };
+        action_button(id, "Browse\u{2026}")
+            .track_focus(focus)
+            .disabled(self.busy || self.picking.is_some())
+            .tooltip(Tooltip::text(tip))
+            .on_click(cx.listener(move |this, _, window, cx| this.browse(pick, window, cx)))
+    }
+
     fn refused(&mut self, message: String) {
         match field_of_error(&message) {
             RepoField::Worktree => self.worktree_error = Some(message),
@@ -317,17 +414,29 @@ fn field_box(editor: &Entity<Editor>, invalid: bool, cx: &App) -> impl IntoEleme
         .child(editor.clone())
 }
 
+/// A folder field: the box with Browse… after it, and the problem under them.
 fn problem_field(
     label: &'static str,
     editor: &Entity<Editor>,
     problem: Option<String>,
+    browse: Button,
     cx: &App,
 ) -> impl IntoElement {
     field(
         label,
         v_flex()
             .gap_1()
-            .child(field_box(editor, problem.is_some(), cx))
+            .child(
+                h_flex()
+                    .gap_2()
+                    .child(
+                        div()
+                            .min_w_0()
+                            .flex_1()
+                            .child(field_box(editor, problem.is_some(), cx)),
+                    )
+                    .child(browse),
+            )
             .children(problem.map(alert_line)),
     )
 }
@@ -346,8 +455,10 @@ impl DialogView for ProjectsDialog {
         let mut ring: Vec<FocusHandle> = self.settings_stops[..repos].to_vec();
         ring.extend([
             self.folder.focus_handle(cx),
+            self.folder_browse.clone(),
             self.name.focus_handle(cx),
             self.worktree.focus_handle(cx),
+            self.worktree_browse.clone(),
             self.submit_focus.clone(),
         ]);
         ring
@@ -389,17 +500,20 @@ impl Render for ProjectsDialog {
         }
         let list = v_flex().children(rows);
         let line = cx.theme().colors().border_variant;
+        let browse_folder = self.browse_button(Pick::Folder, cx);
+        let browse_worktree = self.browse_button(Pick::Worktree, cx);
         let form = v_flex()
             .gap_2()
             .pt_4()
             .border_t_1()
             .border_color(line)
-            .child(problem_field("Folder", &self.folder, folder_problem, cx))
+            .child(problem_field("Folder", &self.folder, folder_problem, browse_folder, cx))
             .child(field("Name", field_box(&self.name, false, cx)))
             .child(problem_field(
                 "Worktree folder",
                 &self.worktree,
                 worktree_problem,
+                browse_worktree,
                 cx,
             ));
         div().track_focus(&self.focus).child(
@@ -410,3 +524,7 @@ impl Render for ProjectsDialog {
         )
     }
 }
+
+#[cfg(test)]
+#[path = "projects_dialog_tests.rs"]
+mod tests;
