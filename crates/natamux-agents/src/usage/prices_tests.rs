@@ -54,6 +54,16 @@ fn cost_of_prices_each_kind_of_token_the_long_cache_writes_at_their_own_price() 
 }
 
 #[test]
+fn cost_of_knows_gpt_6_1_terra() {
+    let million = UsageCounts {
+        cache_write_1h: 400_000,
+        ..counts(1_000_000, 1_000_000, 1_000_000, 1_000_000)
+    };
+    // 1 input + 0.05 cache read + 0.6 x 1.25 short writes + 0.4 x 2.5 long writes + 5 output.
+    close(cost_of(&million, "gpt-6.1-terra"), 7.8);
+}
+
+#[test]
 fn cost_of_bills_cache_writes_as_input_for_a_model_without_a_write_price() {
     close(cost_of(&counts(0, 0, 1_000_000, 0), "gemini-2.5-pro"), 1.25);
 }

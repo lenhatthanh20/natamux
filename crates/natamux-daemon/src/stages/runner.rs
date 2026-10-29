@@ -445,6 +445,12 @@ impl StageRun {
         taken
     }
 
+    /// The stage reported from this terminal whose turn end has not come yet. Its usage, up to
+    /// that turn end, counts for that stage.
+    pub fn report_of(&self, task_id: &str, terminal: &str) -> Option<String> {
+        self.state().reported.get(&key(task_id, terminal)).cloned()
+    }
+
     /// A task made with no agent: its stages that need one stay ready, and no agent starts in its
     /// shell until a person starts one.
     pub fn leave_to_person(&self, task_id: &str) -> StageResult<()> {

@@ -16,6 +16,7 @@ mod usage_service;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use natamux_daemon::agents::usage_service::{UsageOptions, UsageService};
 use natamux_daemon::shared::event_bus::{DaemonMessage, EventBus};
@@ -56,6 +57,7 @@ impl Fx {
             data_dir: data.clone(),
             bus: Some(Arc::clone(&bus)),
             home: home.clone(),
+            read_delay: Duration::ZERO,
         });
         let session = home.join(".claude").join("session.jsonl");
         Fx {
@@ -75,6 +77,7 @@ impl Fx {
             data_dir: self.data.clone(),
             bus: bus.then(|| Arc::clone(&self.bus)),
             home: self.home.clone(),
+            read_delay: Duration::ZERO,
         })
     }
 

@@ -33,6 +33,7 @@ pub type WorkspaceOf = dyn Fn(&str) -> Result<PathBuf, TerminalError> + Send + S
 pub type OutputListener = dyn Fn(&str, &str, &[u8]) + Send + Sync;
 pub type TaskCheck = dyn Fn(&str) -> bool + Send + Sync;
 pub type TaskListener = dyn Fn(&str) + Send + Sync;
+pub type ShellListener = dyn Fn(&str, &str) + Send + Sync;
 
 pub struct TerminalOptions {
     pub spawn: Arc<SpawnPty>,
@@ -48,6 +49,8 @@ pub struct TerminalOptions {
     pub bus: Option<Arc<EventBus>>,
     /// Called once the shells of a task went quiet after output: files may have changed.
     pub on_output_idle: Option<Arc<TaskListener>>,
+    /// Called with task and terminal when the process of a shell ended, for any reason.
+    pub on_exit: Option<Arc<ShellListener>>,
     /// `NATAMUX_INPUT_TRACE=1`: log the input of every shell, see `input_trace`.
     pub trace_input: bool,
 }

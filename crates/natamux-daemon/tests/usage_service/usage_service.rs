@@ -95,6 +95,27 @@ fn reads_a_file_again_after_a_read_that_ran_when_its_hook_came() {
 }
 
 #[test]
+fn waits_for_what_the_agent_writes_just_after_the_hook_of_its_turn_end() {
+    let fx = Fx::new();
+    let service = UsageService::new(UsageOptions {
+        data_dir: fx.data.clone(),
+        bus: None,
+        home: fx.home.clone(),
+        read_delay: Duration::from_millis(500),
+    });
+    std::fs::write(&fx.session, opus_line("m1", 100, 10)).unwrap();
+    let file = fx.session.to_string_lossy().into_owned();
+
+    service.seen("T-0001", Some("spec"), "claude-code", &file);
+    // The last model call of the turn lands after the hook.
+    append(&fx.session, &opus_line("m2", 50, 5));
+    service.settle();
+
+    let usage = service.usage_of("T-0001").unwrap();
+    assert_eq!(stage_inputs(&usage), [("spec".to_string(), 150)]);
+}
+
+#[test]
 fn lists_a_model_with_no_price_and_leaves_the_cost_of_its_rows_null() {
     let fx = Fx::new();
     std::fs::write(&fx.session, claude_line("m1", 100, 10, "mystery-model")).unwrap();
@@ -147,6 +168,7 @@ fn reads_a_broken_usage_file_as_no_usage() {
         data_dir: fx.data.clone(),
         bus: None,
         home: fx.home.clone(),
+        read_delay: Duration::ZERO,
     });
 
     assert!(service.usage_of("T-0002").is_none());

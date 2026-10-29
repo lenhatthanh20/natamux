@@ -13,6 +13,7 @@ mod basics;
 mod failed_group;
 mod pushed;
 mod sign_of_life;
+mod usage_stage;
 mod workspace_removed;
 
 use std::path::PathBuf;

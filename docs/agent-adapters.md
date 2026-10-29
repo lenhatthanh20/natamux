@@ -155,7 +155,12 @@ Tokens and cost per task, read from the files the agents write. Checked on 2026-
 - **One shape.** Per model: `input` (fresh, no cache), `cacheRead`, `cacheWrite`, `output` (includes reasoning or thinking). Each reader converts its own fields.
 - **When.** After a hook with signal `turn-ended`, `turn-paused`, `failed` or `asking`. The read is async and never delays the hook answer.
 - **Path check.** The path must be absolute, inside the user's home folder (after links are resolved), end in `.jsonl` or `.json`, be a regular file, and be at most 200 MB. Otherwise no usage is read and the hook works as before. A bad line is skipped.
-- **Per stage.** The daemon keeps the last totals of each file. A read adds only what is new to the stage of the hook's terminal, so a resumed session, or one that goes on into the next stage, is not counted twice. No stage is `""`, shown as "No stage". A turn that ends right after `natamux done` counts for the stage before the report.
+- **Per stage.** The daemon keeps the last totals of each file. A read adds only what is new to the stage of the hook's terminal, so a resumed session, or one that goes on into the next stage, is not counted twice. A stage that is sent back and runs again adds to its own row. The stage of a hook:
+  1. the stage reported from its terminal (`natamux done` or a send back), until the turn end that follows: the report moves the task on before the turn ends;
+  2. else the stage of the terminal now;
+  3. else the last stage of the terminal, such as an agent that background work woke after its stage passed;
+  4. else none: `""`, shown as "No stage", for an agent that never ran a stage there, such as one started by hand. The daemon keeps 3 in memory, so after a restart such a turn has no stage.
+- **When.** A file is read 2 s after the hook of a turn end, as the agent writes the last model call of the turn just after that hook. When the process of a shell ends (closed by a stage, the task finished, closed by hand, the agent quit), the last file named there is read once more, for the stage of rule 3, so a turn cut off adds its usage too. Usage files of tasks before T-0226 keep their numbers: their "No stage" rows hold turns that reported a stage.
 - **Stored** in `<data dir>/tasks/<id>.usage.json`. Deleting the task deletes it; removing the workspace keeps it.
 - **USD** is an estimate at API list prices, from a built-in table (`model-prices.ts`, read 2026-10-21; Claude, OpenAI and Gemini models). A model id is matched in lower case, `.` as `-`, without a date suffix. A model with no price shows tokens, no cost, and is listed in `unpricedModels`. The cost is computed when sent, never stored. A subscription (Claude Max, ChatGPT, Copilot plan) does not pay this.
 

@@ -99,6 +99,7 @@ fn terminals_with(
         is_ended: None,
         bus: Some(EventBus::new()),
         on_output_idle: None,
+        on_exit: None,
         trace_input: false,
     })
 }

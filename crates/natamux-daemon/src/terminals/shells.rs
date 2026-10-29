@@ -223,10 +223,10 @@ impl Inner {
                     return;
                 };
                 let table = table_at_exit(&session);
-                let task_id = {
+                let (task_id, terminal) = {
                     let mut guard = lock(&session);
                     shell_exited(&mut guard, code, table.as_deref());
-                    guard.task_id.clone()
+                    (guard.task_id.clone(), guard.terminal.clone())
                 };
                 let removed = {
                     let mut sessions = lock(&inner.sessions);
@@ -237,6 +237,10 @@ impl Inner {
                 };
                 if removed {
                     inner.publish_shells_changed(&task_id);
+                }
+                // Also for a shell that `close_one` forgot already: its agent ended all the same.
+                if let Some(listener) = &inner.options.on_exit {
+                    listener(&task_id, &terminal);
                 }
             }),
         }
