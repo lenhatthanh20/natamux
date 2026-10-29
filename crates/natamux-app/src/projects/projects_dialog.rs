@@ -7,6 +7,8 @@ use gpui::{DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, FontWeigh
 use natamux_proto::projects::repo::{AddRepo, Repo};
 use ui::{Tooltip, prelude::*};
 
+use browse::Pick;
+
 use super::project_rules::{
     RepoField, add_args, field_of_error, repo_path_problem, shown_worktree,
 };
@@ -42,8 +44,12 @@ pub struct ProjectsDialog {
     folder_error: Option<String>,
     worktree_error: Option<String>,
     busy: bool,
+    /// A Browse… picker is open: a second click does not open another.
+    picking: Option<Pick>,
     focus: FocusHandle,
     submit_focus: FocusHandle,
+    folder_browse: FocusHandle,
+    worktree_browse: FocusHandle,
     settings_stops: Vec<FocusHandle>,
     _subscriptions: Vec<Subscription>,
 }
@@ -118,8 +124,11 @@ impl ProjectsDialog {
             folder_error: None,
             worktree_error: None,
             busy: false,
+            picking: None,
             focus: cx.focus_handle(),
             submit_focus: cx.focus_handle(),
+            folder_browse: cx.focus_handle(),
+            worktree_browse: cx.focus_handle(),
             settings_stops: Vec::new(),
             _subscriptions: subscriptions,
         };
@@ -317,17 +326,29 @@ fn field_box(editor: &Entity<Editor>, invalid: bool, cx: &App) -> impl IntoEleme
         .child(editor.clone())
 }
 
+/// A folder field: the box with Browse… after it, and the problem under them.
 fn problem_field(
     label: &'static str,
     editor: &Entity<Editor>,
     problem: Option<String>,
+    browse: Button,
     cx: &App,
 ) -> impl IntoElement {
     field(
         label,
         v_flex()
             .gap_1()
-            .child(field_box(editor, problem.is_some(), cx))
+            .child(
+                h_flex()
+                    .gap_2()
+                    .child(
+                        div()
+                            .min_w_0()
+                            .flex_1()
+                            .child(field_box(editor, problem.is_some(), cx)),
+                    )
+                    .child(browse),
+            )
             .children(problem.map(alert_line)),
     )
 }
@@ -346,8 +367,10 @@ impl DialogView for ProjectsDialog {
         let mut ring: Vec<FocusHandle> = self.settings_stops[..repos].to_vec();
         ring.extend([
             self.folder.focus_handle(cx),
+            self.folder_browse.clone(),
             self.name.focus_handle(cx),
             self.worktree.focus_handle(cx),
+            self.worktree_browse.clone(),
             self.submit_focus.clone(),
         ]);
         ring
@@ -389,17 +412,26 @@ impl Render for ProjectsDialog {
         }
         let list = v_flex().children(rows);
         let line = cx.theme().colors().border_variant;
+        let browse_folder = self.browse_button(Pick::Folder, cx);
+        let browse_worktree = self.browse_button(Pick::Worktree, cx);
         let form = v_flex()
             .gap_2()
             .pt_4()
             .border_t_1()
             .border_color(line)
-            .child(problem_field("Folder", &self.folder, folder_problem, cx))
+            .child(problem_field(
+                "Folder",
+                &self.folder,
+                folder_problem,
+                browse_folder,
+                cx,
+            ))
             .child(field("Name", field_box(&self.name, false, cx)))
             .child(problem_field(
                 "Worktree folder",
                 &self.worktree,
                 worktree_problem,
+                browse_worktree,
                 cx,
             ));
         div().track_focus(&self.focus).child(
@@ -410,3 +442,10 @@ impl Render for ProjectsDialog {
         )
     }
 }
+
+#[path = "projects_browse.rs"]
+mod browse;
+
+#[cfg(test)]
+#[path = "projects_dialog_tests.rs"]
+mod tests;
