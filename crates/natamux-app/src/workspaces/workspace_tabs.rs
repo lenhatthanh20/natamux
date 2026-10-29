@@ -48,7 +48,7 @@ impl WorkspaceView {
         let Some(shown) = self.shown.as_ref() else {
             return div().into_any_element();
         };
-        self.history(&task, shown, cx)
+        self.history(&task, shown, false, cx)
     }
 
     /// The panel's Docs view: the stage files and attachments; the picked one covers main.
