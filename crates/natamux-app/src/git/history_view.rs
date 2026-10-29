@@ -1,5 +1,6 @@
 //! The History tab (`GitGraph.tsx`, docs/ui-spec.md 4.19): what the task's branch has that its
-//! base has not, one 28 px row per commit with the lanes drawn at the left.
+//! base has not, one 28 px row per commit with the lanes drawn at the left. The panel shows it
+//! narrow; its expand button shows it over main at full width (T-0231).
 
 use std::sync::Arc;
 
@@ -17,6 +18,7 @@ use crate::components::button_style::quiet_button;
 use crate::components::colors::lane_color;
 use crate::components::icons::icon_path;
 use crate::components::skeleton::{Loading, SkeletonList};
+use crate::components::terminals_button::terminals_button;
 use crate::components::text_size::row_text;
 use crate::tasks::task_time::{AgeStyle, format_age, format_exact};
 use crate::workspaces::finished_banner::OnClick;
@@ -32,10 +34,15 @@ pub struct HistoryView {
     pub error: Option<String>,
     /// Files that are not committed, which no commit below shows yet.
     pub uncommitted: usize,
-    /// Hides the author column.
-    pub narrow: bool,
+    /// Over main at full width; else the narrow panel's copy, with no author or hash column.
+    pub in_main: bool,
+    /// Main shows History: the panel's expand button is pressed.
+    pub main_shows: bool,
     pub on_show_changes: OnClick,
     pub on_refresh: OnClick,
+    /// The panel's expand button and main's Terminals button: main shows History, or the
+    /// terminals again.
+    pub on_toggle_main: OnClick,
 }
 
 fn element_id(prefix: &str, index: usize) -> SharedString {
@@ -60,7 +67,33 @@ fn alert(message: String, cx: &App) -> impl IntoElement {
         .child(Label::new(message).color(Color::Error))
 }
 
-fn summary(graph: &GitGraph, uncommitted: usize, on_show: OnClick, on_refresh: OnClick) -> Div {
+/// The panel's expand button, pressed while main shows History; main's copy has Terminals.
+fn toggle_main(in_main: bool, main_shows: bool, on_toggle: OnClick) -> AnyElement {
+    let click = move |_: &ClickEvent, window: &mut Window, cx: &mut App| on_toggle(window, cx);
+    if in_main {
+        return terminals_button("history-terminals")
+            .on_click(click)
+            .into_any_element();
+    }
+    let (icon, tip) = if main_shows {
+        (IconName::Minimize, "Show terminals")
+    } else {
+        (IconName::Maximize, "Show in main")
+    };
+    IconButton::new("history-expand", icon)
+        .icon_size(IconSize::Small)
+        .toggle_state(main_shows)
+        .tooltip(Tooltip::text(tip))
+        .on_click(click)
+        .into_any_element()
+}
+
+fn summary(
+    graph: &GitGraph,
+    uncommitted: usize,
+    (on_show, on_refresh): (OnClick, OnClick),
+    toggle: AnyElement,
+) -> Div {
     let link = (uncommitted > 0).then(|| {
         quiet_button("history-uncommitted", uncommitted_label(uncommitted))
             .label_size(LabelSize::Small)
@@ -88,6 +121,7 @@ fn summary(graph: &GitGraph, uncommitted: usize, on_show: OnClick, on_refresh: O
                 .tooltip(Tooltip::text("Refresh (Shift+R)"))
                 .on_click(move |_: &ClickEvent, window, cx| on_refresh(window, cx)),
         )
+        .child(toggle)
 }
 
 /// The lines are drawn on a canvas, the dot is a round div over them.
@@ -225,12 +259,23 @@ fn commit_row(
         })
         .truncate();
     let age = format_age(&commit.date, now, AgeStyle::Short, OFFSET_MINUTES);
+    // The subject cell has the full text: a cut subject is read on hover.
+    let subject = div()
+        .id(element_id("history-subject", index))
+        .debug_selector(|| format!("history-subject-{index}"))
+        .min_w_0()
+        .when(!narrow, |cell| {
+            cell.tooltip(Tooltip::text(commit.subject.clone()))
+        })
+        .child(subject);
     h_flex()
         .id(element_id("history-row", index))
         .when(narrow, |row| {
-            row.tooltip(Tooltip::text(commit.hash.clone()))
+            row.tooltip(Tooltip::text(format!("{}\n\n{}", commit.subject, commit.hash)))
         })
         .flex_none()
+        // uniform_list lays a row out on its own: with no width it takes its content's width, so
+        // nothing truncates and the list cuts the end off (T-0231).
         .h(px(ROW_HEIGHT))
         .items_center()
         .gap_3()
@@ -242,7 +287,7 @@ fn commit_row(
                 .flex_1()
                 .gap_2()
                 .children(chips)
-                .child(div().min_w_0().child(subject)),
+                .child(subject),
         )
         .when(!narrow, |this| {
             let author = Label::new(commit.author.clone())
@@ -255,6 +300,7 @@ fn commit_row(
         .child(
             h_flex()
                 .id(element_id("history-age", index))
+                .debug_selector(|| format!("history-age-{index}"))
                 .flex_none()
                 .w(px(if narrow { 40. } else { 80. }))
                 .justify_end()
@@ -344,14 +390,19 @@ impl RenderOnce for HistoryView {
             );
             return frame.child(loading).into_any_element();
         };
+        let toggle = toggle_main(self.in_main, self.main_shows, self.on_toggle_main);
         frame
             .child(summary(
                 &graph,
                 self.uncommitted,
-                self.on_show_changes,
-                self.on_refresh,
+                (self.on_show_changes, self.on_refresh),
+                toggle,
             ))
-            .child(commit_list(&self.id, &graph, self.narrow, window, cx))
+            .child(commit_list(&self.id, &graph, !self.in_main, window, cx))
             .into_any_element()
     }
 }
+
+#[cfg(test)]
+#[path = "history_view_tests.rs"]
+mod tests;

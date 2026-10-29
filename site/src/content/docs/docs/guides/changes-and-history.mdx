@@ -13,7 +13,7 @@ Each workspace has a **Changes** tab and a **History** tab. Use them to review t
 
 Open them from a workspace, or press `2` for **Changes** and `3` for **History**. The **Docs** tab (`4`) shows the stage files; see [Stages](/docs/concepts/stages/#the-docs-tab).
 
-In the desktop app the workspace has no tabs: its terminals fill the main area, and **Changes**, **History** and **Docs** are icons on the rail at the right edge of the window, with **Progress**, **Files** and **Details**. **Changes** lists the files and the commit box in the side panel and shows the picked file's diff over the terminals; **Docs** lists the stage files there and shows the picked one over the terminals. **Terminals** (or `Esc`) shows the terminals again. To add a terminal, click the split button in a terminal's header.
+In the desktop app the workspace has no tabs: its terminals fill the main area, and **Changes**, **History** and **Docs** are icons on the rail at the right edge of the window, with **Progress**, **Files** and **Details**. **Changes** lists the files and the commit box in the side panel and shows the picked file's diff over the terminals; **Docs** lists the stage files there and shows the picked one over the terminals. **History** shows the graph in the side panel; its **Show in main** button shows it over the terminals at full width. **Terminals** (or `Esc`) shows the terminals again. To add a terminal, click the split button in a terminal's header.
 
 ## Changes tab
 
@@ -204,7 +204,8 @@ The **History** tab draws the git graph of the task branch and of the branch of 
 - The base is the branch that the main checkout of the repository is on. When that checkout is not on a branch, or is on the task's own branch, the line says **No base branch to compare with.**
 - Commits that are on the task branch and not on the base are drawn as filled dots. Commits of the base are muted.
 - The current commit (HEAD) is in bold.
-- Each row shows branch and tag names, the commit message, the author, the short hash and the age. Hover the age for the exact date.
+- Each row shows branch and tag names, the commit message, the author, the short hash and the age. Hover the age for the exact date, and the message for all of it.
+- In the desktop app's side panel a row shows only the names, the message and the age. Hover the row for the whole message and the full hash, or click **Show in main** (next to **Refresh**) for the full graph over the terminals. Click it again, or **Terminals**, to go back.
 - The graph shows the newest 200 commits. When there are more, it says **Only the newest 200 commits are shown.**
 
 Click **Refresh**, or press `Shift+R`, to read the history again at once. The graph also refreshes soon after an agent, a terminal or Natamux commits, and once a minute; commits made outside Natamux can take up to a minute to show.

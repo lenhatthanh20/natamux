@@ -1,13 +1,15 @@
 //! What main shows for the open workspace and which view the details panel shows
 //! (`WorkspaceTab` and `DetailsView` of `lib/view-store/helpers.ts`), as pure rules. Since T-0183
-//! main has no tab bar: it shows the terminals, or Changes, Docs or the open file over them; the
-//! panel's views stand on a rail at the right edge.
+//! main has no tab bar: it shows the terminals, or Changes, History, Docs or the open file over
+//! them; the panel's views stand on a rail at the right edge.
 
-/// What main shows. `editor` only while a file of the worktree is open.
+/// What main shows. `editor` only while a file of the worktree is open; `history` only when the
+/// panel's History asks for the full width (T-0231).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WorkspaceTab {
     Changes,
     Terminal,
+    History,
     Docs,
     Editor,
 }
@@ -17,17 +19,18 @@ impl WorkspaceTab {
         match self {
             WorkspaceTab::Changes => "changes",
             WorkspaceTab::Terminal => "terminal",
+            WorkspaceTab::History => "history",
             WorkspaceTab::Docs => "docs",
             WorkspaceTab::Editor => "editor",
         }
     }
 
-    /// Only the screens the app remembers read back: Editor needs an open file, and a saved
-    /// "history" (before T-0183) gives None, so the workspace opens on its terminals.
+    /// Only the screens the app remembers read back: Editor needs an open file.
     pub fn parse(text: &str) -> Option<WorkspaceTab> {
         [
             WorkspaceTab::Terminal,
             WorkspaceTab::Changes,
+            WorkspaceTab::History,
             WorkspaceTab::Docs,
         ]
         .into_iter()
@@ -144,8 +147,8 @@ pub fn rail_click(view: DetailsView, picked: DetailsView, open: bool) -> RailCli
     }
 }
 
-/// Esc over the open workspace: while Changes, Docs or the open file covers the terminals, it
-/// shows them again, before it would close the task (`Root::back`).
+/// Esc over the open workspace: while Changes, History, Docs or the open file covers the
+/// terminals, it shows them again, before it would close the task (`Root::back`).
 pub fn esc_shows_terminals(task_open: bool, shown: WorkspaceTab) -> bool {
     task_open && shown != WorkspaceTab::Terminal
 }
@@ -209,17 +212,16 @@ mod tests {
     use super::*;
 
     #[test]
-    fn reads_back_every_screen_but_the_editor_and_a_saved_history() {
+    fn reads_back_every_screen_but_the_editor() {
         for tab in [
             WorkspaceTab::Terminal,
             WorkspaceTab::Changes,
+            WorkspaceTab::History,
             WorkspaceTab::Docs,
         ] {
             assert_eq!(WorkspaceTab::parse(tab.name()), Some(tab));
         }
         assert_eq!(WorkspaceTab::parse("editor"), None);
-        // History moved to the panel (T-0183): a saved one opens on the terminals.
-        assert_eq!(WorkspaceTab::parse("history"), None);
         assert_eq!(WorkspaceTab::parse("progress"), None);
     }
 
@@ -275,7 +277,7 @@ mod tests {
     #[test]
     fn esc_shows_the_terminals_while_a_screen_covers_them() {
         use WorkspaceTab::*;
-        for covered in [Changes, Docs, Editor] {
+        for covered in [Changes, History, Docs, Editor] {
             assert!(esc_shows_terminals(true, covered));
         }
         // The terminals already show: Esc goes on to close the task.

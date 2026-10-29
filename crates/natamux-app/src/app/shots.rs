@@ -16,7 +16,7 @@ use super::shots_files;
 use super::shots_settings;
 use super::shots_stages;
 use super::title_bar::open_add_menu;
-use super::view_rules::DetailsView;
+use super::view_rules::{DetailsView, WorkspaceTab};
 use super::view_state::{Layout, ViewState};
 use super::window::Root;
 use crate::tasks::task_time::parse_iso_ms;
@@ -278,6 +278,12 @@ fn enter_git(shot: Shot, dashboard: &gpui::Entity<Dashboard>, cx: &mut App) {
         Shot::WorkspaceHistory => dashboard.update(cx, |dashboard, cx| {
             dashboard.open(REVIEWED, cx);
             dashboard.show_view(DetailsView::History, cx);
+        }),
+        // T-0231: the panel's expand button put History over the terminals at full width.
+        Shot::HistoryOverMain => dashboard.update(cx, |dashboard, cx| {
+            dashboard.open(REVIEWED, cx);
+            dashboard.show_view(DetailsView::History, cx);
+            dashboard.pick_tab(WorkspaceTab::History, cx);
         }),
         // T-0183: the panel closed, its rail still at the right edge.
         Shot::RailClosedPanel => dashboard.update(cx, |dashboard, cx| {

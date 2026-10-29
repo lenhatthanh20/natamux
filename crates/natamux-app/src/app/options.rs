@@ -82,6 +82,7 @@ pub enum Shot {
     Rollback,
     ImageDiff,
     WorkspaceHistory,
+    HistoryOverMain,
     TasksProgress,
     ProjectSettingsTabStages,
     ProjectSettingsAgentStage,
@@ -131,7 +132,7 @@ pub enum Shot {
 }
 
 impl Shot {
-    pub const ALL: [Shot; 89] = [
+    pub const ALL: [Shot; 90] = [
         Shot::TasksTable,
         Shot::TasksBoard,
         Shot::BoardHoverCard,
@@ -175,6 +176,7 @@ impl Shot {
         Shot::Rollback,
         Shot::ImageDiff,
         Shot::WorkspaceHistory,
+        Shot::HistoryOverMain,
         Shot::TasksProgress,
         Shot::ProjectSettingsTabStages,
         Shot::ProjectSettingsAgentStage,
@@ -268,6 +270,7 @@ impl Shot {
             Shot::Rollback => "rollback",
             Shot::ImageDiff => "image-diff",
             Shot::WorkspaceHistory => "workspace-history",
+            Shot::HistoryOverMain => "history-over-main",
             Shot::TasksProgress => "tasks-progress",
             Shot::ProjectSettingsTabStages => "project-settings-tab-stages",
             Shot::ProjectSettingsAgentStage => "project-settings-agent-stage",

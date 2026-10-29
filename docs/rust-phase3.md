@@ -160,6 +160,7 @@ The fake daemon's pipeline stands in for the storefront one: Context, Spec, the 
 | `rollback` | The Roll back changes dialog over T-0143: both files checked, "1 new file will be deleted." |
 | `image-diff` | T-0147 on Changes: the new `public/banner.png`, After only, on the checkerboard, with its size |
 | `workspace-history` | T-0143 with the details panel on History (T-0183; was a main tab): the summary, the lanes, the ref chips with "+1" |
+| `history-over-main` | T-0143's History over the terminals at full width, from the panel's expand button (T-0231): author, hash and age columns, the Terminals button, the expand button pressed |
 
 ### Screen-5 states
 

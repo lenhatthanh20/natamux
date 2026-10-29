@@ -317,8 +317,8 @@ fn reads_the_tabs_the_view_and_the_flags_of_the_changes_tab() {
     );
     assert_eq!(state.tab_of("T-1"), Some(WorkspaceTab::Terminal));
     assert_eq!(state.tab_of("T-2"), Some(WorkspaceTab::Changes));
-    // History moved to the details panel (T-0183): a saved one is dropped.
-    assert_eq!(state.tab_of("T-3"), None);
+    // History over main (T-0231) is remembered as Changes is.
+    assert_eq!(state.tab_of("T-3"), Some(WorkspaceTab::History));
     assert_eq!(state.tab_of("T-4"), None);
     assert_eq!(state.changes_view, FileViewMode::Tree);
     assert_eq!(state.files_width, 330);
@@ -432,9 +432,9 @@ fn follows_the_tab_that_the_user_picks_in_the_open_workspace_only() {
 }
 
 #[test]
-fn drops_a_remembered_progress_or_history_tab_which_is_gone() {
+fn drops_a_remembered_progress_or_editor_tab_which_is_gone() {
     let view =
-        ViewState::parse(r#"{"tabs":{"T-0001":"progress","T-0002":"history","T-0003":"docs"}}"#);
+        ViewState::parse(r#"{"tabs":{"T-0001":"progress","T-0002":"editor","T-0003":"docs"}}"#);
     assert_eq!(view.tabs, vec![("T-0003".to_string(), WorkspaceTab::Docs)]);
 }
 
