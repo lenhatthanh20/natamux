@@ -31,6 +31,7 @@ Commands:
   events <id>                Show the event log of a task
   workspace create <id>      Create a git worktree and a branch for a task
   workspace remove <id>      Remove the worktree of a task (needs --yes)
+  repo trust <repo>          Show the commands a project runs; approve them with --approve
   hooks claude-code          Print Claude Code settings that report a task's progress
   hook <agent>               For an agent's hook: send the JSON on stdin to the daemon (silent)
   help                       Show this help
@@ -64,6 +65,7 @@ Options:
                         or the default of origin)
   --yes                 workspace remove: confirm that the worktree folder is deleted
   --delete-branch       workspace remove: also delete the branch when it is merged
+  --approve <hash>      repo trust: approve the commands with this hash (from the list)
   --json                Print JSON instead of text
   -h, --help            Show this help
 

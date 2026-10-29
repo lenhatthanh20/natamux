@@ -8,11 +8,13 @@ use std::time::Duration;
 
 use async_tungstenite::WebSocketStream;
 use async_tungstenite::tokio::{ConnectStream, connect_async};
+use async_tungstenite::tungstenite::client::IntoClientRequest;
+use async_tungstenite::tungstenite::http::HeaderValue;
+use async_tungstenite::tungstenite::http::header::AUTHORIZATION;
 use async_tungstenite::tungstenite::{self, Message};
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
 use futures::{FutureExt, StreamExt};
 use natamux_proto::tasks::task::Task;
-use natamux_proto::terminals::query::encode;
 use tokio::sync::watch;
 use tokio::time::Instant;
 
@@ -277,10 +279,22 @@ async fn follow(
 }
 
 async fn connect(config: &Config) -> Result<WebSocketStream<ConnectStream>, Halt> {
-    let url = config
-        .ws_url(&format!("/events?token={}", encode(&config.token)))
-        .map_err(Halt::Lost)?;
-    match connect_async(url.as_str()).await {
+    // The header, never `?token=`: a URL ends up in logs and proxies (S-15).
+    let url = config.ws_url("/events").map_err(Halt::Lost)?;
+    let lost = |reason: String| {
+        Halt::Lost(ClientError::Unreachable {
+            url: config.base_url.clone(),
+            reason,
+        })
+    };
+    let mut request = url
+        .as_str()
+        .into_client_request()
+        .map_err(|e| lost(e.to_string()))?;
+    let bearer = HeaderValue::from_str(&format!("Bearer {}", config.token))
+        .map_err(|e| lost(e.to_string()))?;
+    request.headers_mut().insert(AUTHORIZATION, bearer);
+    match connect_async(request).await {
         Ok((socket, _)) => Ok(socket),
         Err(tungstenite::Error::Http(response)) if response.status().as_u16() == 401 => {
             Err(Halt::Refused)

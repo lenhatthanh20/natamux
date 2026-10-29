@@ -224,6 +224,7 @@ The fake's `natamux` project has three open GitHub issues (one imported already)
 | `update-ready` | The status bar's update item when an update is ready: "Restart to update" (T-0214) |
 | `update-failed` | The status bar's update item after a manual check failed: "Update failed" (T-0214) |
 | `settings-update-ready` | Settings on General with an update ready: the Version row's line and **Restart to Update** (T-0214) |
+| `repo-trust-dialog` | The repo trust dialog of `natamux`: its commands with where each comes from, the setup script, the note, **Not now** and **Approve** (T-0224) |
 
 ## Where it differs from the React screens
 

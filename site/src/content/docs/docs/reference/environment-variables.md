@@ -13,6 +13,7 @@ Set these in the environment where the daemon starts.
 |---|---|---|
 | `NATAMUX_PORT` | `4317` | Port. Must be 0 to 65535 |
 | `NATAMUX_HOST` | `127.0.0.1` | Address to bind. Only a container sets it, with its port published to loopback |
+| `NATAMUX_ALLOWED_HOSTS` | none | Comma list of host names a request may use in its `Host` header, besides `127.0.0.1`, `localhost`, `::1` and `NATAMUX_HOST`. Names only, no ports. Other hosts get 403. A WebSocket `Origin` must use an allowed name too |
 | `NATAMUX_TOKEN` | A random token for each run, printed at start | The token every request needs |
 | `NATAMUX_DATA_DIR` | `<current folder>/.natamux` | Task files and the SQLite index |
 | `NATAMUX_REPO_DIR` | none | A git repository to add once as the first project, with the id `default`. Without it the daemon starts with no project. A project removed later does not come back |
@@ -44,7 +45,7 @@ Every terminal of a task gets the daemon's environment plus:
 
 | Variable | Value |
 |---|---|
-| `NATAMUX_TOKEN` | The agent token. It may not approve, skip or pass a stage, or change settings. See [The agent token](/docs/reference/http-api/#the-agent-token) |
+| `NATAMUX_TOKEN` | The task's own agent token. It reaches only this task, and may not approve, skip or pass a stage, or change settings. See [The agent token](/docs/reference/http-api/#the-agent-token) |
 | `NATAMUX_URL` | `http://127.0.0.1:<daemon port>` |
 | `NATAMUX_TASK_ID` | The task id, such as `T-42` |
 | `NATAMUX_TERMINAL` | The terminal's name (`1`, `2`, ...). The agent runs in `1` |
@@ -76,6 +77,7 @@ The Rust app uses `--smoke` and `--shot` for CI checks. `NATAMUX_UPDATE_AS_VERSI
 | `NATAMUX_REPO` | `compose.prod.yaml` | Required. The git repository to mount at `/repo` |
 | `NATAMUX_BIND` | `compose.prod.yaml` | Address the dashboard port is published on. Default `127.0.0.1` |
 | `NATAMUX_PORT` | `compose.prod.yaml` | Published dashboard port. Default `8080` |
+| `NATAMUX_ALLOWED_HOSTS` | `compose.prod.yaml` | Host names the daemon accepts. Default `daemon,web`. Add the name you open the dashboard with when it is not `localhost` or `127.0.0.1` |
 
 The production image sets `NATAMUX_HOST=0.0.0.0`, `NATAMUX_DATA_DIR=/data`, `NATAMUX_REPO_DIR=/repo` and `NATAMUX_WORKTREES_DIR=/data/worktrees` inside the container. See [Self-host with Docker](/docs/guides/self-host-docker/).
 

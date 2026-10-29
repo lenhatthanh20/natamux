@@ -13,18 +13,21 @@ use natamux_core::stages::terminal_lane::{PinnedTerminals, pinned_terminals_of};
 use natamux_git::gh::{RunGh, run_gh};
 use natamux_proto::events::task_event::StoredEvent;
 use natamux_proto::projects::repo::ProjectSettings;
+use natamux_proto::projects::repo_trust::UNTRUSTED_REASON;
 use natamux_proto::stages::position::step_to_run;
-use natamux_proto::stages::schema::Step;
+use natamux_proto::stages::schema::{Condition, StageBranch, Step};
 use natamux_proto::tasks::task::Task;
 use natamux_stages::checks::{RunCommand, run_shell_command};
 use natamux_stages::ci::{CiCheck, NoCi};
 use serde_json::{Map, Value, json};
 
 use crate::agents::runner::AgentRunner;
+use crate::projects::repo_trust::TrustedOf;
 use crate::shared::event_bus::EventBus;
 use crate::shared::jobs::{Clock, Jobs, system_clock};
 use crate::shared::scheduler::TimerId;
 use crate::stages::errors::{StageResult, action};
+use crate::stages::stage_tickets::StageTickets;
 use crate::tasks::errors::TaskError;
 use crate::tasks::service::TaskService;
 use crate::tasks::store::Applied;
@@ -62,6 +65,10 @@ pub struct StageRunOptions {
     pub jobs: Arc<Jobs>,
     /// `END_SHELL_GRACE_MS`; tests set a short one.
     pub end_shell_grace_ms: u64,
+    /// Whether the project's commands are approved (repo trust). The daemon's start sets it.
+    pub trusted_of: TrustedOf,
+    /// The one-time result tickets of command stages.
+    pub stage_tickets: Arc<StageTickets>,
 }
 
 impl StageRunOptions {
@@ -95,6 +102,8 @@ impl StageRunOptions {
             home,
             open_shells: None,
             end_shell_grace_ms: END_SHELL_GRACE_MS,
+            trusted_of: Arc::new(|_| true),
+            stage_tickets: Arc::default(),
         }
     }
 }
@@ -330,6 +339,21 @@ impl StageRun {
 
     pub fn settings(&self, task: &Task) -> ProjectSettings {
         (self.options.settings_of)(task.repo.as_deref())
+    }
+
+    /// Whether the commands of the task's project may run.
+    pub fn repo_trusted(&self, task: &Task) -> bool {
+        (self.options.trusted_of)(task.repo.as_deref())
+    }
+
+    /// A path condition that runs a command of a project that is not approved fails the move:
+    /// taking another path would be a silent wrong path.
+    pub fn check_path_trust(&self, task: &Task, branch: &StageBranch) -> StageResult<()> {
+        let runs = |when: &Option<Condition>| matches!(when, Some(Condition::Command { .. }));
+        if branch.paths.iter().any(|path| runs(&path.when)) && !self.repo_trusted(task) {
+            return Err(action(UNTRUSTED_REASON));
+        }
+        Ok(())
     }
 
     pub fn repo_path(&self, task: &Task) -> PathBuf {

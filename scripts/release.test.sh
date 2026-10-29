@@ -131,6 +131,10 @@ done
 check "the macOS bundle is $version" '[ "$(bundle_version)" = "$version" ]'
 check "the root package.json pins pnpm" 'grep -qE "^  \"packageManager\": \"pnpm@[0-9]+\.[0-9]+\.[0-9]+\",$" package.json'
 check "the root package.json has no version" '! grep -q "^  \"version\":" package.json'
+check "the package job of release.yml caches no target folder" \
+  '! sed -n "/^  package:/,/^  release:/p" .github/workflows/release.yml | grep -qE "^ +target$"'
+check "the package job of release.yml restores a cargo cache" \
+  'sed -n "/^  package:/,/^  release:/p" .github/workflows/release.yml | grep -q "~/.cargo/registry"'
 check "packages depend on each other with workspace:*" \
   '! grep -hE "\"@natamux/[a-z]+\": \"" packages/*/package.json | grep -v "\"workspace:\*\""'
 

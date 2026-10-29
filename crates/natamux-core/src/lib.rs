@@ -28,6 +28,10 @@ pub mod stages {
     pub mod position;
     pub mod terminal_lane;
 }
+pub mod workspaces {
+    pub mod private_dir;
+    pub mod safe_write;
+}
 pub mod tasks {
     pub mod attachments;
     pub mod dependencies;

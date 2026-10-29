@@ -26,7 +26,9 @@ fn serves_embedded_files_and_html_deep_links_without_a_token() {
         .answer(&Method::GET, "/", "*/*")
         .expect("dashboard page");
     assert_eq!(home.headers()[CONTENT_TYPE], "text/html; charset=utf-8");
-    assert!(home.headers().contains_key("content-security-policy"));
+    let csp = home.headers()["content-security-policy"].to_str().unwrap();
+    assert!(csp.contains("connect-src 'self';"), "{csp}");
+    assert!(!csp.contains("ws:"), "{csp}");
     assert_eq!(
         file.headers()[CONTENT_TYPE],
         "text/javascript; charset=utf-8"

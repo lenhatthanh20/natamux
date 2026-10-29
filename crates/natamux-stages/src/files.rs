@@ -5,6 +5,7 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 use natamux_core::js::iso_string;
+use natamux_core::workspaces::safe_write::{copy_inside, write_inside};
 use natamux_store::task_files::{STAGE_DIR, archive_dir};
 
 use crate::git::common_dir;
@@ -117,23 +118,31 @@ pub fn write_stage_file(
     if text.len() > MAX_STAGE_FILE_BYTES {
         return Err(StageFileError(format!("{name} is larger than 1 MB")));
     }
-    let dir = working_dir(data_dir, task_id, workspace);
-    fs::create_dir_all(&dir).map_err(io_error)?;
-    let path = dir.join(check_file_name(name)?);
-    let temp = dir.join(format!("{name}.tmp"));
-    let mut file = fs::File::create(&temp).map_err(io_error)?;
-    file.write_all(text.as_bytes()).map_err(io_error)?;
-    fs::rename(&temp, &path).map_err(io_error)
+    check_file_name(name)?;
+    // The archive folder is ours (the data folder); only a worktree can hold a link of a repo.
+    let relative = match workspace {
+        Some(_) => Path::new(STAGE_DIR).join(name),
+        None => Path::new(name).to_path_buf(),
+    };
+    let root = match workspace {
+        Some(workspace) => PathBuf::from(workspace),
+        None => {
+            let archive = archive_dir(data_dir, task_id);
+            fs::create_dir_all(&archive).map_err(io_error)?;
+            archive
+        }
+    };
+    write_inside(&root, &relative, text.as_bytes()).map_err(io_error)
 }
 
-/// Copies the stage files of one folder into another; nothing when `from` is not there.
-pub fn copy_stage_files(from: &Path, to: &Path) -> io::Result<()> {
+/// Copies the stage files of one folder into `relative` below `root`; nothing when `from` is not
+/// there. A link in `root` or `relative` is refused.
+pub fn copy_stage_files(from: &Path, root: &Path, relative: &Path) -> io::Result<()> {
     if !from.exists() {
         return Ok(());
     }
-    fs::create_dir_all(to)?;
     for name in stage_names(from) {
-        fs::copy(from.join(&name), to.join(&name))?;
+        copy_inside(root, &relative.join(&name), &from.join(&name))?;
     }
     Ok(())
 }
@@ -145,10 +154,18 @@ pub fn archive_stage_files(
     workspace: Option<&str>,
 ) -> io::Result<()> {
     match workspace {
-        Some(workspace) => copy_stage_files(
-            &Path::new(workspace).join(STAGE_DIR),
-            &archive_dir(data_dir, task_id),
-        ),
+        // The archive folder is ours, so its root is the folder itself.
+        Some(workspace) => {
+            let archive = archive_dir(data_dir, task_id);
+            if Path::new(workspace).join(STAGE_DIR).exists() {
+                fs::create_dir_all(&archive)?;
+            }
+            copy_stage_files(
+                &Path::new(workspace).join(STAGE_DIR),
+                &archive,
+                Path::new(""),
+            )
+        }
         None => Ok(()),
     }
 }
@@ -162,7 +179,8 @@ pub fn restore_stage_files(
     match workspace {
         Some(workspace) => copy_stage_files(
             &archive_dir(data_dir, task_id),
-            &Path::new(workspace).join(STAGE_DIR),
+            Path::new(workspace),
+            Path::new(STAGE_DIR),
         ),
         None => Ok(()),
     }

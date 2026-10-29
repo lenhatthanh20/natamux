@@ -6,6 +6,9 @@ use std::path::Path;
 
 pub const SETUP_SCRIPT: &str = ".natamux-setup";
 pub const SETUP_SCRIPT_WINDOWS: &str = ".natamux-setup.ps1";
+/// The task event of a setup script that did not run: the project's commands are not approved.
+pub const WORKSPACE_WARNING_EVENT: &str = "workspace.warning";
+pub const SETUP_SKIPPED: &str = "Setup script skipped: repo commands are not approved";
 
 /// The command line that runs the setup script of a worktree, or None when it has none.
 pub fn setup_command(worktree: &Path, windows: bool) -> Option<String> {

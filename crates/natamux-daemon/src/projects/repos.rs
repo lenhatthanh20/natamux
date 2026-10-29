@@ -9,6 +9,7 @@ use natamux_proto::projects::repo::Repo;
 use natamux_proto::stages::schema::Step;
 
 use crate::projects::errors::RepoError;
+use crate::projects::repo_trust::TrustFile;
 use crate::projects::settings::Cached;
 use crate::shared::jobs::Clock;
 use crate::tasks::errors::TaskError;
@@ -50,6 +51,7 @@ pub struct Repos {
     pub(crate) tasks: OnceLock<TasksOf>,
     pub(crate) settings: Mutex<std::collections::HashMap<PathBuf, Cached>>,
     pub(crate) now: Clock,
+    pub(crate) trust: TrustFile,
 }
 
 impl Repos {
@@ -70,6 +72,7 @@ impl Repos {
         if let Some(path) = &options.default_path {
             repos.add_default_once(&path.to_string_lossy())?;
         }
+        repos.trust_first_start()?;
         Ok(repos)
     }
 
@@ -88,6 +91,7 @@ impl Repos {
             tasks,
             settings: Mutex::default(),
             now: Arc::clone(&options.now),
+            trust: TrustFile::new(&options.data_dir),
         })
     }
 

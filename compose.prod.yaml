@@ -24,6 +24,8 @@ services:
     image: natamux-daemon:local
     environment:
       NATAMUX_TOKEN: ${NATAMUX_TOKEN:?Set NATAMUX_TOKEN to a long random value}
+      # nginx passes the browser's host name; add the name you open when it is not localhost.
+      NATAMUX_ALLOWED_HOSTS: ${NATAMUX_ALLOWED_HOSTS:-daemon,web}
       # git refuses a folder that another user owns, unless it is listed.
       GIT_CONFIG_COUNT: "1"
       GIT_CONFIG_KEY_0: safe.directory

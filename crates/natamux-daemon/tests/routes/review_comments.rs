@@ -8,7 +8,7 @@ use natamux_git::test_support::run_git;
 use serde_json::{Value, json};
 
 use crate::git_repo::git_daemon;
-use crate::server::{AGENT_TOKEN, TOKEN, TestDaemon, eventually};
+use crate::server::{TOKEN, TestDaemon, eventually};
 use crate::socket::Socket;
 
 const BASE: &str = "/tasks/T-0001/review-comments";
@@ -124,7 +124,8 @@ async fn the_agent_token_gets_403_on_every_route() {
         (Method::DELETE, one.as_str()),
         (Method::POST, send.as_str()),
     ] {
-        let (status, answer) = d.send(method, path, Some(AGENT_TOKEN), &body).await;
+        let agent = d.agent_token("T-0001");
+        let (status, answer) = d.send(method, path, Some(&agent), &body).await;
         assert_eq!(
             (status, &answer["error"]),
             (403, &json!("forbidden")),

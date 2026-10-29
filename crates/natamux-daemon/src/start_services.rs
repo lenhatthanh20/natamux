@@ -1,12 +1,13 @@
 //! The workspace service, the GitHub services and the idle pause of the daemon, wired to the
 //! terminals and agents.
 
+use std::path::Path;
 use std::sync::Arc;
 
 use natamux_git::gh::default_run_gh;
 use natamux_proto::tasks::task::Task;
 use natamux_store::task_index::TaskIndex;
-use serde_json::Value;
+use serde_json::{Value, json};
 
 use super::TaskStore;
 use crate::agents::generic_signals::GenericSignals;
@@ -16,6 +17,7 @@ use crate::config::Config;
 use crate::github::issue_importer::{IssueImporter, IssueImporterOptions};
 use crate::github::issue_linker::{IssueLinker, IssueLinkerOptions, LinkError};
 use crate::github::pull_request_watcher::{PullRequestWatcher, PullRequestWatcherOptions};
+use crate::projects::repo_trust::TrustedOf;
 use crate::projects::repos::{RepoOptions, Repos, TaskRef};
 use crate::shared::event_bus::EventBus;
 use crate::shared::jobs::{Jobs, system_clock};
@@ -30,7 +32,7 @@ use crate::terminals::types::DEFAULT_SIZE;
 use crate::workspaces::agent_once::default_run_agent_once;
 use crate::workspaces::errors::WorkspaceError;
 use crate::workspaces::service::{WorkspaceOptions, WorkspaceService};
-use crate::workspaces::setup_script::setup_command;
+use crate::workspaces::setup_script::{SETUP_SKIPPED, WORKSPACE_WARNING_EVENT, setup_command};
 
 /// The issue importer, the issue linker (listening) and the pull request watcher (running).
 pub(super) fn github_services(
@@ -105,15 +107,9 @@ pub(super) fn workspace_service(
     let closing = terminals.clone();
     options.close_terminals = Arc::new(move |task_id: &str| closing.close_and_wait(task_id).wait());
     let typing = terminals.clone();
+    let (trust, logging) = (Arc::clone(&store.repos), store.tasks.clone());
     options.on_created = Some(Arc::new(move |task: &Task| {
-        let command = task
-            .workspace
-            .as_deref()
-            .and_then(|workspace| setup_command(std::path::Path::new(workspace), cfg!(windows)));
-        if let Some(command) = command {
-            // A failed setup run is not a failed workspace.
-            let _ = typing.run(&task.id, &command, MAIN_TERMINAL, DEFAULT_SIZE);
-        }
+        run_setup(task, &typing, &trust, &logging);
     }));
     let programs = Arc::clone(agents);
     options.program_of = Arc::new(move |agent: &str| programs.program_of(agent));
@@ -121,7 +117,36 @@ pub(super) fn workspace_service(
     options.pull_request_body =
         Arc::new(move |task: &Task| linking.pull_request_body(task).map_err(link_failure));
     options.run_agent_once = default_run_agent_once();
+    options.trust_paths = Some(agents.trust_paths().clone());
     WorkspaceService::new(options)
+}
+
+/// Types the setup script of a new worktree into its first terminal. A project whose commands
+/// are not approved gets a line in the task's log instead.
+fn run_setup(task: &Task, terminals: &TerminalService, repos: &Repos, tasks: &TaskService) {
+    let Some(workspace) = task.workspace.as_deref().map(Path::new) else {
+        return;
+    };
+    let Some(command) = setup_command(workspace, cfg!(windows)) else {
+        return;
+    };
+    if !repos.is_trusted_in(task.repo.as_deref(), workspace) {
+        let payload = json!({ "message": SETUP_SKIPPED });
+        let logged = tasks.record_event(&task.id, WORKSPACE_WARNING_EVENT, payload, "system");
+        if let Err(error) = logged {
+            let id = &task.id;
+            eprintln!("The skipped setup script of {id} is not logged: {error}");
+        }
+        return;
+    }
+    // A failed setup run is not a failed workspace.
+    let _ = terminals.run(&task.id, &command, MAIN_TERMINAL, DEFAULT_SIZE);
+}
+
+/// Whether a project's commands are approved, asked at each use.
+pub(super) fn trusted_of(repos: &Arc<Repos>) -> TrustedOf {
+    let repos = Arc::clone(repos);
+    Arc::new(move |repo| repos.is_trusted(repo))
 }
 
 /// An issue that could not be opened for a pull request: 409 as Node, or the task's own error.
@@ -204,6 +229,7 @@ pub(super) fn task_store(config: &Config) -> std::io::Result<TaskStore> {
         now: system_clock(),
     })
     .map_err(std::io::Error::other)?;
+    repos.set_trust_bus(Arc::clone(&bus));
     let settings = Arc::clone(&repos);
     let tasks = TaskService::new(TaskServiceOptions {
         data_dir: config.data_dir.clone(),

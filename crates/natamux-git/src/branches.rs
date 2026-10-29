@@ -8,7 +8,7 @@ use natamux_proto::projects::repo::{BranchList, ORIGIN_PREFIX};
 use serde_json::{Value, json};
 
 use crate::changes::locale_compare;
-use crate::exec::{GitError, current_branch, git};
+use crate::exec::{GitError, checked_ref, current_branch, git};
 use crate::graph::FETCH_TIMEOUT;
 
 /// `GET /git/branches` as Node sends it: `branches`, `current`, `defaultBranch`, in this order.
@@ -89,11 +89,14 @@ fn default_branch(repo: &Path, branches: &[String], current: Option<&str>) -> Op
 
 /// Deletes the branch only when it is fully merged. Returns false when git keeps it.
 pub fn delete_merged_branch(repo: &Path, branch: &str) -> bool {
-    git(repo, &["branch", "-d", branch], None, &[]).is_ok()
+    checked_ref(branch).is_ok() && git(repo, &["branch", "-d", branch], None, &[]).is_ok()
 }
 
 /// Deletes a branch, merged or not. True when it is gone, also when it never existed.
 pub fn delete_branch_force(repo: &Path, branch: &str) -> bool {
+    if checked_ref(branch).is_err() {
+        return false;
+    }
     if git(repo, &["branch", "-D", branch], None, &[]).is_ok() {
         return true;
     }

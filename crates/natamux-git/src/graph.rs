@@ -9,7 +9,7 @@ use natamux_core::js::js_trim;
 use natamux_proto::workspaces::changes::MAX_GRAPH_COMMITS;
 use natamux_proto::workspaces::workspace::{GitGraph, GraphCommit, PushStatus};
 
-use crate::exec::{GitError, current_branch, git};
+use crate::exec::{GitError, checked_ref, current_branch, git};
 
 /// `FIELD`: the separator of the fields of one log record.
 pub const FIELD: &str = "\u{1f}";
@@ -38,6 +38,7 @@ fn upstream_of(repo_dir: &Path, branch: &str) -> Option<String> {
 /// a branch that was not pulled does not start tasks from old code. Local commits that are not
 /// pushed win. None: the local branch.
 pub fn start_ref(repo_dir: &Path, branch: &str) -> Option<String> {
+    checked_ref(branch).ok()?;
     let upstream = upstream_of(repo_dir, branch)?;
     run(
         repo_dir,

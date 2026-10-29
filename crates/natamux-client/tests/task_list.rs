@@ -7,7 +7,7 @@ mod support;
 
 use futures::StreamExt;
 use natamux_client::{Client, Config, LinkStatus, TaskListEvent};
-use support::{FakeDaemon, TOKEN, runtime, tasks_json, within};
+use support::{FakeDaemon, runtime, tasks_json, within};
 
 #[test]
 fn the_task_list_follows_the_event_socket() {
@@ -17,7 +17,7 @@ fn the_task_list_follows_the_event_socket() {
     rt.block_on(async {
         let mut events = client.watch_tasks();
         let mut conn = daemon.next_events().await;
-        assert_eq!(conn.target, format!("/events?token={TOKEN}"));
+        assert_eq!(conn.target, "/events");
         let mut ids = Vec::new();
         while ids.is_empty() {
             match within(events.next()).await.unwrap() {

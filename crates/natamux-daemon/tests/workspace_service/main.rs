@@ -21,6 +21,7 @@ mod publish;
 mod remove;
 mod remove_refusals;
 mod remove_stage_files;
+mod remove_trust;
 mod rollback;
 mod support;
 mod touch;

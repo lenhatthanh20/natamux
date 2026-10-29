@@ -8,7 +8,7 @@ use markdown::{
 };
 use ui::prelude::*;
 
-use super::docs_rules::is_safe_link;
+use crate::app::links::open_link;
 
 /// One `Markdown` entity per shown file; a new text goes in with `replace`.
 pub struct MarkdownDoc {
@@ -47,9 +47,7 @@ impl MarkdownDoc {
                 border: true,
             })
             .on_url_click(|url, _, cx| {
-                if is_safe_link(&url) {
-                    cx.open_url(&url);
-                }
+                open_link(&url, cx);
             });
         div()
             .id("docs-markdown")

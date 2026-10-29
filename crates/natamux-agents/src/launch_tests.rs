@@ -14,6 +14,7 @@ fn base() -> LaunchOptions {
         gemini_settings_path: "/data/gemini.json".into(),
         auto: false,
         workspace: None,
+        trust: true,
         workspace_hooks: false,
     }
 }

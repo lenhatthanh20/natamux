@@ -30,6 +30,8 @@ const START_HINT: &str = "A new task with its own workspace: a git worktree on a
 mod fields;
 #[path = "new_workspace_menus.rs"]
 mod menus;
+#[path = "new_workspace_trust.rs"]
+mod trust;
 
 use menus::Pick;
 
@@ -402,8 +404,8 @@ impl DialogView for NewWorkspaceDialog {
         self.busy
     }
 
-    fn submit(&mut self, _: &mut Window, cx: &mut Context<Self>) {
-        self.start(cx);
+    fn submit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.start_checked(window, cx);
     }
 }
 
@@ -414,7 +416,7 @@ impl Render for NewWorkspaceDialog {
         let missing = blocked_reason(&form, &choice);
         let close = cx.listener(|_, _, _, cx| cx.emit(DismissEvent));
         let cancel = cx.listener(|_, _, _, cx| cx.emit(DismissEvent));
-        let submit = cx.listener(|this, _, _, cx| this.start(cx));
+        let submit = cx.listener(|this, _, window, cx| this.start_checked(window, cx));
         let stops = &self.stops;
         let start = primary_button(
             start_label(self.busy),

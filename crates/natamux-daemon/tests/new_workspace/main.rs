@@ -328,6 +328,7 @@ fn agent_runner(
         on_launch: None,
         trust_paths: trust_paths(|_| None, home),
         permission_mode_of: Arc::new(|_| "auto".into()),
+        trusted_of: Arc::new(|_| true),
     }))
 }
 

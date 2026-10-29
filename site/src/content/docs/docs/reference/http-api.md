@@ -25,7 +25,18 @@ The daemon owns all task state. The dashboard, the `natamux` command and the age
 
 ### The agent token
 
-Task terminals get a second token, the agent token, in `NATAMUX_TOKEN`. The daemon makes a new one at each start and never prints it or writes it to disk. Agents and the `natamux` command in a task terminal use it, so the history shows what an agent did.
+The terminals of each task get that task's own token, the agent token, in `NATAMUX_TOKEN`. It looks like `T-42.<secret>`. The daemon keeps it in memory only, so after a daemon start new shells get new tokens, and deleting the task ends its token. Agents and the `natamux` command in a task terminal use it, so the history shows what an agent did.
+
+The agent token of a task may call only:
+
+- every route under `/tasks/<its id>`, except `DELETE`;
+- `GET` routes under `/tasks/<id>` of its direct subtasks;
+- `GET /tasks`, `/jobs`, `/templates`, `/activity`, `/usage`, `/limits`, `/diffstats`, `/workspaces/preparing`, `/repos`, `/repos/:id/settings`, `/repos/:id/skills`, `/git/branches`, `/git/remote-branches` and `/events`;
+- `POST /tasks` with `parentId` set to its own task;
+- `POST /hooks/:agent`. The hook is for the token's task; the `X-Natamux-Task` header and the folder are not used;
+- `POST /limits/:agent`, which `natamux statusline` sends for Claude Code.
+
+Everything else answers 403 `forbidden`. At most two requests with a large body (`POST /tasks`, `POST /workspaces`, `PUT /tasks/:id/file`) are read at once; others wait.
 
 With the agent token:
 
@@ -33,9 +44,10 @@ With the agent token:
 - Stage actions record `source: agent`.
 - These answer 403 `forbidden` and change nothing:
   - `POST /tasks/:id/events` with `review.approved`, `stage.approved`, `stage.passed`, `stage.skipped` or `state.overridden`
-  - `POST /tasks/:id/stage` with `approve`, `skip` or `pass`
+  - `POST /tasks/:id/stage` with `approve`, `skip` or `pass`. The one exception: the script of a command stage passes it with a one-time ticket in the `X-Natamux-Stage-Ticket` header
   - `PUT /tasks/:id/ci`, `PUT /tasks/:id/skip`, `PUT /tasks/:id/workflow`
   - `PUT /repos/:id/settings`
+  - `GET /repos/:id/trust`, `POST /repos/:id/trust`
 
 To do these from a script, use the daemon's own token, not the one in a task terminal.
 
@@ -64,11 +76,13 @@ To do these from a script, use the daemon's own token, not the one in a task ter
 | `POST /workspaces` | Make a task with a worktree and optionally start an agent. Answers 202 with the task as soon as it is made; the worktree and the agent come after (see `workspace.preparing`) |
 | `GET /workspaces/preparing` | The workspaces being made, and the step of each: `{ preparing: { "T-0001": "checkout" } }` |
 | `POST /hooks/:agent` | Where an agent's hook posts. Always answers `200 {}` for a known agent |
-| `GET /repos` | Projects Natamux manages, and the daemon's worktree folder: `{ repos, worktreesDir }`. A project with its own worktree folder has `worktreesDir` |
+| `GET /repos` | Projects Natamux manages, and the daemon's worktree folder: `{ repos, worktreesDir }`. A project with its own worktree folder has `worktreesDir`. Each project has `trusted`: whether its commands are approved |
 | `POST /repos` | Add a project `{ path, name?, worktreesDir? }`. `worktreesDir` is an absolute folder for the project's worktrees; it is made when missing. Answers 400 when it is not absolute or cannot be made |
 | `DELETE /repos/:id` | Forget a project. Any project can be removed. Answers 409 while it has workspaces |
 | `GET /repos/:id/settings` | The settings of a project: `settings`, `error`, `path`, `text` (the text of `.natamux.json`, or `null` without a file) and `version` (`none` without a file) |
-| `PUT /repos/:id/settings` | Save the settings to `.natamux.json`. Send the version you read in the header `If-Match: <version>`. Answers `{ settings, version }`. Answers 409 `conflict` when the file changed since that version. Keys of the file that Natamux does not know are kept |
+| `PUT /repos/:id/settings` | Save the settings to `.natamux.json`. Send the version you read in the header `If-Match: <version>`. Answers `{ settings, version }`. Answers 409 `conflict` when the file changed since that version. Keys of the file that Natamux does not know are kept. The saved commands count as approved, unless the setup script changed since the last approval |
+| `GET /repos/:id/trust` | The commands of a project that run on this machine: `{ trusted, hash, commands, setup }`. A command is `{ where, text }`; a setup script is `{ file, text }`. A project with no commands is `trusted` |
+| `POST /repos/:id/trust` | Approve the commands `{ hash }`, with the hash `GET` gave. Answers the new view. Answers 409 `conflict` when the commands changed since |
 | `GET /repos/:id/skills` | The skills of every agent for the project: `{ skills, notices }`. A skill is `{ name, description, origin, agents, path }`, and `origin` is `project`, `plugin` or `user`. A notice says, for example, that a plugin is on but not installed |
 
 The task is named in a hook by the `X-Natamux-Task` header. The `X-Natamux-Terminal` header names the terminal.
@@ -125,7 +139,7 @@ Files, git, GitHub, terminals and templates.
 A browser cannot set headers on a WebSocket, so:
 
 - `GET /events` (WebSocket) streams live task changes, including `task.deleted` when a task is deleted. Pass the token as `?token=<token>`. Each message is JSON with a `kind`. Besides the task messages it sends:
-  - `repos.changed` when a project is added or removed, so a dashboard can read `GET /repos` again.
+  - `repos.changed` when a project is added or removed, or the approval of its commands changes, so a dashboard can read `GET /repos` again.
   - `activity.changed` with `{ taskId, activity }` when what an agent does changes. `activity` is the task's whole activity by terminal, as `GET /activity` gives it; `{}` means none.
   - `usage.changed` with `{ taskId, usage }` when a task's usage changes. `usage` is the task's entry, as `GET /usage` gives it.
   - `shells.changed` with `{ taskId }` when a terminal of the task starts or ends, when the program in front of a terminal changes (checked about every 500 ms while it prints, and when its output goes quiet), when an agent that comes back after a restart starts or is up, or when a hook changes the state of an agent that works on no stage, unless the last `GET /tasks/<id>/terminals` found no agent in that terminal.

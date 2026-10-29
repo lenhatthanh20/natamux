@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use natamux_core::js::{js_trim, utf16_len};
 
-use crate::exec::{GITHUB_CREDENTIALS, GitError, git, with_git_config};
+use crate::exec::{GITHUB_CREDENTIALS, GitError, checked_ref, git, with_git_config};
 use crate::graph::FIELD;
 
 /// The text of `NothingToCommitError`.
@@ -79,6 +79,7 @@ fn remote(worktree: &Path, args: &[&str]) -> Result<(), GitError> {
 }
 
 pub fn push_branch(worktree: &Path, branch: &str) -> Result<(), GitError> {
+    let branch = checked_ref(branch)?;
     remote(worktree, &["push", "--set-upstream", "origin", branch])
 }
 
@@ -94,11 +95,13 @@ pub fn pull_fast_forward(worktree: &Path) -> Result<bool, GitError> {
 
 static INDEX_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
-/// A throwaway index file in the temp folder, removed when this goes out of scope, on every path.
+/// A throwaway index file in the worktree's git dir, removed when this goes out of scope, on
+/// every path. Not in the shared temp folder: another user could plant a file at a guessed name.
 struct TempIndex(PathBuf);
 
 impl TempIndex {
-    fn new() -> TempIndex {
+    fn new(worktree: &Path) -> Result<TempIndex, GitError> {
+        let git_dir = run(worktree, &["rev-parse", "--absolute-git-dir"])?;
         let nanos = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |since| since.as_nanos());
@@ -107,7 +110,7 @@ impl TempIndex {
             std::process::id(),
             INDEX_COUNTER.fetch_add(1, Ordering::SeqCst)
         );
-        TempIndex(std::env::temp_dir().join(name))
+        Ok(TempIndex(PathBuf::from(js_trim(&git_dir)).join(name)))
     }
 
     fn env(&self) -> (String, String) {
@@ -128,7 +131,7 @@ impl Drop for TempIndex {
 /// touching its branch, its index or its files. Ignored files stay out. With no change it is HEAD
 /// itself, so a CI check finds the runs that HEAD has already, for example as a PR's head.
 pub fn snapshot_commit(worktree: &Path, message: &str) -> Result<String, GitError> {
-    let index = TempIndex::new();
+    let index = TempIndex::new(worktree)?;
     let env = [index.env()];
     git(worktree, &["read-tree", "HEAD"], None, &env)?;
     git(worktree, &["add", "--all"], None, &env)?;
@@ -174,7 +177,7 @@ pub(crate) fn utf16_prefix(text: &str, units: usize) -> (&str, usize) {
 /// `max_chars`. Uses its own index, so the branch, the index and the files of the worktree stay
 /// as they are.
 pub fn read_commit_diff(worktree: &Path, max_chars: usize) -> Result<String, CommitError> {
-    let index = TempIndex::new();
+    let index = TempIndex::new(worktree)?;
     // Paths as they are, not in octal escapes, so the agent can read them.
     let mut env = with_git_config(
         std::env::var("GIT_CONFIG_COUNT").ok().as_deref(),

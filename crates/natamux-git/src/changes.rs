@@ -13,7 +13,7 @@ use natamux_proto::workspaces::changes::ChangeStatus;
 use natamux_proto::workspaces::workspace::{ChangeEntry, DiffStat};
 use serde_json::{Value, json};
 
-use crate::exec::{GitError, git, with_git_config};
+use crate::exec::{GitError, checked_ref, git, with_git_config};
 use crate::file_diff::{MAX_FILE_BYTES, looks_binary, read_inside};
 
 /// Added and removed lines of one file. None for a file that is binary or not known.
@@ -358,6 +358,7 @@ pub fn parse_numstat(output: &str) -> DiffStat {
 pub fn read_diff_stat(worktree: &Path, base: Option<&str>) -> Result<DiffStat, GitError> {
     // Node runs `merge-base HEAD <base>`, then `diff --numstat <that> --`; `--merge-base` is the
     // same diff in one git process (diff stats are read often).
+    let base = base.map(checked_ref).transpose()?;
     let args: Vec<&str> = match base {
         None => vec!["diff", "--numstat", "HEAD", "--"],
         Some(base) => vec!["diff", "--numstat", "--merge-base", base, "--"],

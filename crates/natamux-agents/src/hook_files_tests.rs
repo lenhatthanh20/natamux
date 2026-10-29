@@ -348,3 +348,42 @@ fn adds_a_line_to_the_exclude_file_once_with_a_line_break_before_it_when_needed(
     add_exclude_line(missing.path(), common, "/a").unwrap();
     assert_eq!(read(missing.path(), ".git/info/exclude"), "/a\n");
 }
+
+#[cfg(unix)]
+#[test]
+fn writes_no_hook_file_through_a_link_in_the_worktree() {
+    use std::os::unix::fs::symlink;
+    let targets = [
+        ("claude-code", ".claude/settings.local.json"),
+        ("gemini", ".gemini/settings.json"),
+        ("codex", ".codex/config.toml"),
+        ("copilot", ".github/hooks/natamux.json"),
+        ("cursor", ".cursor/hooks.json"),
+    ];
+    let outside = TempDir::new("outside");
+    for (agent, file) in targets {
+        let top = file.split('/').next().unwrap();
+        // A link as the top folder.
+        let folder = TempDir::new("launch");
+        symlink(outside.path(), folder.path().join(top)).unwrap();
+        assert!(
+            !prepare_workspace(agent, folder.path(), claude_on()),
+            "{agent}"
+        );
+        // A link as the file, to a file that is there and to nothing.
+        for goal in ["secret", "missing"] {
+            let repo = TempDir::new("launch");
+            let target = repo.path().join(file);
+            fs::create_dir_all(target.parent().unwrap()).unwrap();
+            fs::write(outside.path().join("secret"), "keep").unwrap();
+            symlink(outside.path().join(goal), &target).unwrap();
+            assert!(
+                !prepare_workspace(agent, repo.path(), claude_on()),
+                "{agent}"
+            );
+        }
+    }
+    assert_eq!(read(outside.path(), "secret"), "keep");
+    assert!(!outside.path().join("missing").exists());
+    assert_eq!(fs::read_dir(outside.path()).unwrap().count(), 1);
+}

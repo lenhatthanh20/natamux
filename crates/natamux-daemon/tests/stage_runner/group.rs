@@ -72,7 +72,8 @@ fn starts_the_agent_and_the_words_of_a_stage_in_a_shell_of_its_own_and_keeps_the
 
     assert!(f.launch_script(&task.id, "1").starts_with("claude "));
     assert!(f.launch_script(&task.id, "9").starts_with("codex "));
-    assert!(f.launch_script(&task.id, "9").contains("--model gpt-5"));
+    let nine = f.launch_script(&task.id, "9");
+    assert!(nine.contains("'--model' 'gpt-5'"));
     assert_eq!(
         f.runner.run.lane_for(&task, Some("9")).unwrap(),
         running("test-spec")

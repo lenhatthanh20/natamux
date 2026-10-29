@@ -1,12 +1,16 @@
 //! The fake's projects and GitHub issues of screen 7: Add project with the daemon's path rules,
-//! three open issues of `natamux`, and the `gh_missing` switch of the reference state.
+//! three open issues of `natamux`, and the `gh_missing` switch of the reference state. Repo trust:
+//! the seeded projects are approved, an added one waits for approval of the same sample commands.
+
+use std::collections::BTreeSet;
 
 use natamux_client::ClientError;
 use natamux_proto::projects::issues::GitHubIssue;
 use natamux_proto::projects::repo::{AddRepo, Repo};
+use natamux_proto::projects::repo_trust::{RepoCommand, RepoTrustView, SetupScript};
 use natamux_proto::tasks::task::Task;
 
-use super::{Answer, Data, FakeDaemon};
+use super::{Answer, Data, FakeDaemon, not_found};
 
 const GH_MISSING: &str = "GitHub CLI failed: gh is not installed or not on the PATH";
 const TITLE_LIMIT: usize = 200;
@@ -15,6 +19,8 @@ const TITLE_LIMIT: usize = 200;
 pub(super) struct ProjectsState {
     issues: Vec<GitHubIssue>,
     gh_missing: bool,
+    /// The projects whose commands wait for approval.
+    untrusted: BTreeSet<String>,
 }
 
 fn issue(number: u64, title: &str, labels: &[&str], task_id: Option<&str>) -> GitHubIssue {
@@ -37,6 +43,7 @@ impl ProjectsState {
                 issue(18, "Speed up the catalog search", &[], None),
             ],
             gh_missing: false,
+            untrusted: BTreeSet::new(),
         }
     }
 }
@@ -114,9 +121,49 @@ impl Data {
             worktrees_dir: worktrees_dir.map(Into::into),
         };
         self.repos.push(repo.clone());
+        self.projects.untrusted.insert(repo.id.clone());
         let event = self.repos_event();
         self.send(event);
         Ok(repo)
+    }
+
+    /// Every project has the same sample commands, so the hash is the id's.
+    fn repo_trust(&self, repo_id: &str) -> Answer<RepoTrustView> {
+        if !self.repos.iter().any(|repo| repo.id == repo_id) {
+            return Err(not_found("Project", repo_id));
+        }
+        let command = |place: &str, text: &str| RepoCommand {
+            place: place.into(),
+            text: text.into(),
+        };
+        Ok(RepoTrustView {
+            trusted: !self.projects.untrusted.contains(repo_id),
+            hash: format!("fake-{repo_id}"),
+            commands: vec![
+                command("Stage implement: check", "cargo xtask ci"),
+                command("Stage review: command", "scripts/review.sh --strict"),
+                command("Stage review: args", "--model opus"),
+            ],
+            setup: vec![SetupScript {
+                file: ".natamux-setup".into(),
+                text: "pnpm install --frozen-lockfile\ncp .env.example .env\n".into(),
+            }],
+        })
+    }
+
+    /// The daemon's 409 when the hash is not the one of the commands now.
+    fn approve_repo(&mut self, repo_id: &str, hash: &str) -> Answer<RepoTrustView> {
+        if self.repo_trust(repo_id)?.hash != hash {
+            return Err(ClientError::Status {
+                status: 409,
+                message: format!("The commands of {repo_id} changed. Review them again."),
+            });
+        }
+        if self.projects.untrusted.remove(repo_id) {
+            let event = self.repos_event();
+            self.send(event);
+        }
+        self.repo_trust(repo_id)
     }
 
     fn gh(&self) -> Answer<()> {
@@ -193,6 +240,19 @@ impl FakeDaemon {
 
     pub fn import_issues(&self, numbers: &[u64], repo: Option<&str>) -> Answer<Vec<Task>> {
         self.data().import_issues(numbers, repo)
+    }
+
+    pub fn repo_trust(&self, repo_id: &str) -> Answer<RepoTrustView> {
+        self.data().repo_trust(repo_id)
+    }
+
+    pub fn approve_repo(&self, repo_id: &str, hash: &str) -> Answer<RepoTrustView> {
+        self.data().approve_repo(repo_id, hash)
+    }
+
+    /// For the `repo-trust-dialog` shot: the project's commands wait for approval.
+    pub fn distrust_repo(&self, repo_id: &str) {
+        self.data().projects.untrusted.insert(repo_id.into());
     }
 
     /// For the reference shot: the GitHub CLI is not installed.

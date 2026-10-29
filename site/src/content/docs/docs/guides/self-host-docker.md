@@ -41,6 +41,7 @@ The script pulls `ghcr.io/lenhatthanh20/natamux-daemon` and `natamux-web`, check
 | `NATAMUX_REPO` | Required. The git repository that tasks get worktrees from. Mounted at `/repo` |
 | `NATAMUX_BIND` | Where the dashboard listens. Default `127.0.0.1`. Change it only for a reverse proxy that adds TLS |
 | `NATAMUX_PORT` | Dashboard port. Default `8080` |
+| `NATAMUX_ALLOWED_HOSTS` | Host names the daemon accepts. Default `daemon,web`, plus `localhost` and `127.0.0.1`. Add your own name when you open the dashboard by another one, behind a reverse proxy. A request with another `Host` gets 403 |
 
 Compose refuses to start when `NATAMUX_TOKEN` or `NATAMUX_REPO` is missing.
 

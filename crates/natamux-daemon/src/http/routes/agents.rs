@@ -15,6 +15,7 @@ use natamux_proto::agents::claude_code::{TASK_ID_HEADER, TERMINAL_HEADER};
 use serde_json::{Value, json};
 
 use crate::agents::errors::AgentError;
+use crate::http::agent_rules::Caller;
 use crate::http::body::{DEFAULT_BODY_LIMIT, read_body};
 use crate::http::errors::{
     Answer, hook_error, internal_error, json_answer, stage_error, zod_answer,
@@ -152,6 +153,7 @@ fn header_text(headers: &HeaderMap, name: &str) -> Option<String> {
 pub async fn post_hook(
     request: Request<Incoming>,
     state: Arc<AppState>,
+    who: Caller,
     agent: String,
     query: String,
 ) -> Answer {
@@ -174,10 +176,14 @@ pub async fn post_hook(
         }
         (_, body) => body.unwrap_or(Value::Null),
     };
+    let hooks = Arc::clone(&state.hooks);
     let handled = tokio::task::spawn_blocking(move || {
-        state
-            .hooks
-            .handle(&agent, &body, task.as_deref(), terminal.as_deref())
+        let terminal = terminal.as_deref();
+        match &who {
+            // The agent token names its task; the header and the folder count for the user only.
+            Caller::Agent(own) => hooks.handle_own(&agent, &body, own, terminal),
+            _ => hooks.handle(&agent, &body, task.as_deref(), terminal),
+        }
     })
     .await;
     match handled {

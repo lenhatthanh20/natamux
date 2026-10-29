@@ -1,6 +1,6 @@
 //! The Natamux daemon used by the app, CLI, and browser dashboard.
 
-use std::io::Read;
+use std::io::{IsTerminal, Read};
 use std::sync::Arc;
 
 use natamux_daemon::config::load_config;
@@ -58,7 +58,12 @@ async fn main() -> std::process::ExitCode {
     );
     println!("Data directory: {}", config.data_dir.display());
     if config.token_was_generated {
-        println!("Token for this run: {}", config.token);
+        // A log or a pipe must not keep the token: only a person at a terminal sees it.
+        if std::io::stdout().is_terminal() {
+            println!("Token for this run: {}", config.token);
+        } else {
+            println!("The token was not printed. Set NATAMUX_TOKEN to choose one.");
+        }
     }
     stopped(parent_end).await;
     // A second signal must not exit before the shells have ended: it is not listened to.

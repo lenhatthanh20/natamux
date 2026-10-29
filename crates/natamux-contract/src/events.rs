@@ -5,6 +5,9 @@ use std::time::{Duration, Instant};
 use async_tungstenite::WebSocketStream;
 use async_tungstenite::tokio::{ConnectStream, connect_async};
 use async_tungstenite::tungstenite::Message;
+use async_tungstenite::tungstenite::client::IntoClientRequest;
+use async_tungstenite::tungstenite::http::HeaderValue;
+use async_tungstenite::tungstenite::http::header::AUTHORIZATION;
 use futures::StreamExt;
 use serde_json::Value;
 
@@ -19,22 +22,31 @@ pub struct Events {
 
 impl Events {
     pub async fn open(daemon: &Daemon, token: Option<&str>) -> Events {
-        match connect_async(daemon.events_url(token).as_str()).await {
+        let Ok(mut request) = daemon.events_url().as_str().into_client_request() else {
+            return Events::refused_with(0);
+        };
+        let bearer = token.and_then(|token| HeaderValue::from_str(&format!("Bearer {token}")).ok());
+        if let Some(bearer) = bearer {
+            request.headers_mut().insert(AUTHORIZATION, bearer);
+        }
+        match connect_async(request).await {
             Ok((socket, _)) => Events {
                 socket: Some(socket),
                 messages: Vec::new(),
                 refused: None,
             },
-            Err(async_tungstenite::tungstenite::Error::Http(answer)) => Events {
-                socket: None,
-                messages: Vec::new(),
-                refused: Some(answer.status().as_u16()),
-            },
-            Err(_) => Events {
-                socket: None,
-                messages: Vec::new(),
-                refused: Some(0),
-            },
+            Err(async_tungstenite::tungstenite::Error::Http(answer)) => {
+                Events::refused_with(answer.status().as_u16())
+            }
+            Err(_) => Events::refused_with(0),
+        }
+    }
+
+    fn refused_with(status: u16) -> Events {
+        Events {
+            socket: None,
+            messages: Vec::new(),
+            refused: Some(status),
         }
     }
 

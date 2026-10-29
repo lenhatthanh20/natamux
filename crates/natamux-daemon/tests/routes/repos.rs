@@ -39,7 +39,7 @@ async fn lists_the_default_repository_adds_another_and_makes_its_tasks_work_ther
     let (_, listed) = d.get("/repos").await;
     assert_eq!(
         listed["repos"],
-        json!([{ "id": "default", "name": "default", "path": path_text(&d.repo()) }])
+        json!([{ "id": "default", "name": "default", "path": path_text(&d.repo()), "trusted": true }])
     );
     assert_eq!(
         listed["worktreesDir"],

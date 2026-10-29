@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 
 use natamux_pty::Env;
 
+use crate::http::edge_rules::DEFAULT_ALLOWED_HOSTS;
 use crate::terminals::session_lifecycle::random_id;
 
 pub const DEFAULT_PORT: u16 = 4317;
@@ -20,8 +21,9 @@ pub struct Config {
     pub web_dir: Option<PathBuf>,
     pub token: String,
     pub token_was_generated: bool,
-    /// The token of the task shells. Only made here, so an agent cannot set it.
-    pub agent_token: String,
+    /// Host names a request may name: the loopback names, `NATAMUX_HOST` and
+    /// `NATAMUX_ALLOWED_HOSTS`.
+    pub allowed_hosts: Vec<String>,
     pub silent_close: std::time::Duration,
     pub agents: AgentConfig,
     /// `NATAMUX_IDLE_MINUTE_MS`: how long one minute of `agents.pauseIdleAfterMinutes` is. Only the
@@ -61,6 +63,21 @@ fn agent_config(env: &Env) -> AgentConfig {
     config
 }
 
+/// A container sets `NATAMUX_ALLOWED_HOSTS` to the service names its clients use.
+fn allowed_hosts(env: &Env, host: &str) -> Vec<String> {
+    let mut hosts: Vec<String> = DEFAULT_ALLOWED_HOSTS.map(String::from).to_vec();
+    let extra = value(env, "NATAMUX_ALLOWED_HOSTS").unwrap_or("");
+    // A wildcard bind address is no name a client sends.
+    let bound = (!matches!(host, "0.0.0.0" | "::")).then_some(host);
+    for name in extra.split(',').chain(bound) {
+        let name = name.trim().to_ascii_lowercase();
+        if !name.is_empty() && !hosts.contains(&name) {
+            hosts.push(name);
+        }
+    }
+    hosts
+}
+
 fn value<'a>(env: &'a Env, name: &str) -> Option<&'a str> {
     env.get(name)
         .map(|value| value.trim())
@@ -82,11 +99,13 @@ pub fn load_config(env: &Env, cwd: &Path) -> Result<Config, String> {
     let worktrees_dir = value(env, "NATAMUX_WORKTREES_DIR")
         .map_or_else(|| data_dir.join("worktrees"), PathBuf::from);
     let configured = value(env, "NATAMUX_TOKEN");
+    let host = value(env, "NATAMUX_HOST")
+        .unwrap_or(LOOPBACK_HOST)
+        .to_string();
     Ok(Config {
+        allowed_hosts: allowed_hosts(env, &host),
         // Only a container sets NATAMUX_HOST, and only with its port published to loopback.
-        host: value(env, "NATAMUX_HOST")
-            .unwrap_or(LOOPBACK_HOST)
-            .to_string(),
+        host,
         port,
         data_dir,
         worktrees_dir,
@@ -94,7 +113,6 @@ pub fn load_config(env: &Env, cwd: &Path) -> Result<Config, String> {
         web_dir: value(env, "NATAMUX_WEB_DIR").map(PathBuf::from),
         token: configured.map_or_else(|| random_id(24), String::from),
         token_was_generated: configured.is_none(),
-        agent_token: random_id(24),
         silent_close: natamux_proto::terminals::messages::SILENT_CLOSE,
         agents: agent_config(env),
         idle_minute_ms: value(env, "NATAMUX_IDLE_MINUTE_MS")
@@ -104,10 +122,11 @@ pub fn load_config(env: &Env, cwd: &Path) -> Result<Config, String> {
     })
 }
 
-/// The environment of task shells: the agent token, never the daemon's own, so an agent cannot
-/// pass a gate. With no locale (the Docker image, an app started from the Dock) a shell reads
-/// non-ASCII input, such as Vietnamese, as Meta keys and garbles it.
-pub fn shell_env(env: &Env, agent_token: &str, daemon_url: &str) -> Env {
+/// The environment of task shells, never with the daemon's token: each shell gets its own
+/// task's token when it starts, so an agent cannot pass a gate. With no locale (the Docker image,
+/// an app started from the Dock) a shell reads non-ASCII input, such as Vietnamese, as Meta keys
+/// and garbles it.
+pub fn shell_env(env: &Env, daemon_url: &str) -> Env {
     let mut out = env.clone();
     let no_locale = ["LC_ALL", "LC_CTYPE", "LANG"]
         .iter()
@@ -115,7 +134,7 @@ pub fn shell_env(env: &Env, agent_token: &str, daemon_url: &str) -> Env {
     if no_locale {
         out.insert("LANG".into(), "C.UTF-8".into());
     }
-    out.insert("NATAMUX_TOKEN".into(), agent_token.into());
+    out.remove("NATAMUX_TOKEN");
     out.insert("NATAMUX_URL".into(), daemon_url.into());
     if let Some(bin_dir) = value(env, "NATAMUX_BIN_DIR") {
         let path = env.get("PATH").map(String::as_str).unwrap_or("");
@@ -143,7 +162,6 @@ mod tests {
         assert_eq!(config.data_dir, Path::new("/work/.natamux"));
         assert_eq!(config.worktrees_dir, Path::new("/work/.natamux/worktrees"));
         assert!(config.token_was_generated && config.token.len() == 32);
-        assert_ne!(config.token, config.agent_token);
 
         let set = env(&[
             ("NATAMUX_PORT", " 8080 "),
@@ -157,6 +175,27 @@ mod tests {
         assert_eq!(
             (config.token.as_str(), config.token_was_generated),
             ("secret", false)
+        );
+    }
+
+    #[test]
+    fn allows_the_loopback_names_the_bound_host_and_the_listed_names() {
+        let hosts = |pairs: &[(&str, &str)]| {
+            load_config(&env(pairs), Path::new("/"))
+                .unwrap()
+                .allowed_hosts
+        };
+        assert_eq!(hosts(&[]), ["127.0.0.1", "localhost", "::1"]);
+        assert_eq!(
+            hosts(&[
+                ("NATAMUX_HOST", "0.0.0.0"),
+                ("NATAMUX_ALLOWED_HOSTS", " Daemon, web ,,localhost"),
+            ]),
+            ["127.0.0.1", "localhost", "::1", "daemon", "web"]
+        );
+        assert_eq!(
+            hosts(&[("NATAMUX_HOST", "10.0.0.5")]),
+            ["127.0.0.1", "localhost", "::1", "10.0.0.5"]
         );
     }
 
@@ -211,23 +250,22 @@ mod tests {
     }
 
     #[test]
-    fn shells_get_the_agent_token_the_address_and_a_locale() {
+    fn shells_get_the_address_and_a_locale_but_never_the_daemon_token() {
         let out = shell_env(
             &env(&[("NATAMUX_TOKEN", "daemon")]),
-            "agent",
             "http://127.0.0.1:4317",
         );
-        assert_eq!(out["NATAMUX_TOKEN"], "agent");
+        assert!(!out.contains_key("NATAMUX_TOKEN"));
         assert_eq!(out["NATAMUX_URL"], "http://127.0.0.1:4317");
         assert_eq!(out["LANG"], "C.UTF-8");
-        let set = shell_env(&env(&[("LC_ALL", "vi_VN.UTF-8")]), "agent", "u");
+        let set = shell_env(&env(&[("LC_ALL", "vi_VN.UTF-8")]), "u");
         assert!(!set.contains_key("LANG"));
     }
 
     #[test]
     fn task_shells_find_the_sibling_rust_cli_first() {
         let set = env(&[("NATAMUX_BIN_DIR", "/app/bin"), ("PATH", "/usr/bin")]);
-        let out = shell_env(&set, "agent", "http://127.0.0.1:4317");
+        let out = shell_env(&set, "http://127.0.0.1:4317");
         let separator = if cfg!(windows) { ';' } else { ':' };
         assert_eq!(out["PATH"], format!("/app/bin{separator}/usr/bin"));
     }

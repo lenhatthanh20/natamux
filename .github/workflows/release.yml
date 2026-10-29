@@ -44,6 +44,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || '' }}
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -80,6 +81,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || '' }}
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -99,7 +101,6 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            target
           key: ${{ matrix.cache || format('rust-app-{0}', runner.os) }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-${{ github.sha }}
           restore-keys: ${{ matrix.cache || format('rust-app-{0}', runner.os) }}-
       # The apt packages come from this cache: a run downloads only what it has not seen.
@@ -128,14 +129,8 @@ jobs:
             -p appimagetool-x86_64.AppImage -D "$RUNNER_TEMP"
           gh release download 20251108 -R AppImage/type2-runtime \
             -p runtime-x86_64 -D "$RUNNER_TEMP"
-          for item in 'AppImage/appimagetool 1.9.1 appimagetool-x86_64.AppImage' \
-            'AppImage/type2-runtime 20251108 runtime-x86_64'; do
-            read -r repo tag file <<< "$item"
-            digest=$(gh api "repos/$repo/releases/tags/$tag" \
-              --jq ".assets[] | select(.name == \"$file\") | .digest")
-            [[ $digest =~ ^sha256:[0-9a-f]{64}$ ]]
-            echo "${digest#sha256:}  $RUNNER_TEMP/$file" | sha256sum -c
-          done
+          echo "ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0  $RUNNER_TEMP/appimagetool-x86_64.AppImage" | sha256sum -c
+          echo "2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d  $RUNNER_TEMP/runtime-x86_64" | sha256sum -c
           chmod +x "$RUNNER_TEMP/appimagetool-x86_64.AppImage"
       - name: Save the apt cache
         if: ${{ !cancelled() && runner.os == 'Linux' && steps.apt.outputs.cache-hit != 'true' }}
@@ -145,7 +140,12 @@ jobs:
           key: apt-${{ runner.os }}-${{ hashFiles('.github/workflows/release.yml') }}-${{ github.sha }}
       - name: Install Windows installer tool
         if: runner.os == 'Windows'
-        run: choco install nsis -y --no-progress
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/nsis-setup.exe" \
+            "https://downloads.sourceforge.net/project/nsis/NSIS%203/3.13/nsis-3.13-setup.exe"
+          echo "db9a1038bbc0e53fef24f423fd609979bd578e942f1be1198db186d1c42652a3  $RUNNER_TEMP/nsis-setup.exe" | sha256sum -c
+          powershell -NoProfile -Command "Start-Process -Wait -FilePath '$(cygpath -w "$RUNNER_TEMP/nsis-setup.exe")' -ArgumentList '/S'"
+          test -f "C:/Program Files (x86)/NSIS/makensis.exe"
       # The cache comes from app-macos on macos-15, and cargo does not rerun the build script of
       # a git crate. ui's script reads the SDK to size the traffic light gutter.
       - name: Rebuild ui for this SDK
@@ -255,6 +255,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || '' }}
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:

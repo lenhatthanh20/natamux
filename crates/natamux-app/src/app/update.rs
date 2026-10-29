@@ -15,6 +15,7 @@ use natamux_update::signature::RELEASE_SIGNER;
 use natamux_update::transport::{CurlFeed, download_asset};
 use natamux_update::updater::{CheckOutcome, check_now};
 
+use super::links::open_link;
 use super::update_state::{CheckStart, UpdateState, ago};
 use super::view_state;
 use crate::components::confirm::Confirm;
@@ -63,7 +64,7 @@ fn store(state: UpdateState) {
 }
 
 /// Stores the state, then draws the menus and the views that show it.
-fn set_state(state: UpdateState, cx: &mut App) {
+pub(super) fn set_state(state: UpdateState, cx: &mut App) {
     store(state);
     changed(cx);
 }
@@ -90,6 +91,8 @@ pub(super) struct Ready {
     pub(super) downloaded: PathBuf,
     pub(super) current: PathBuf,
     pub(super) folder: PathBuf,
+    /// From the signed SHA256SUMS; the root install script checks it again.
+    pub(super) sha256: String,
 }
 
 fn settings_file() -> Option<PathBuf> {
@@ -293,6 +296,7 @@ fn fetch() -> Result<(CheckOutcome, Option<Ready>), String> {
             downloaded,
             current: replace,
             folder,
+            sha256: sha256.clone(),
         })
     } else {
         None
@@ -341,7 +345,7 @@ fn show_result(result: Result<(CheckOutcome, Option<Ready>), String>, cx: &mut A
                     format!("Natamux {} is available", release.version),
                     "Open the signed release page to install this version.",
                     "Open the Release Page",
-                    move |_, cx| cx.open_url(&page),
+                    move |_, cx| open_link(&page, cx),
                 )
                 .cancel_label("Later");
                 offer(dialog, cx);
@@ -371,7 +375,7 @@ fn show_result(result: Result<(CheckOutcome, Option<Ready>), String>, cx: &mut A
                     ToastAction::new("Restart Now", |window, cx| {
                         window.dispatch_action(Box::new(super::shortcuts::RestartToUpdate), cx)
                     }),
-                    ToastAction::new("What's New", move |_, cx| cx.open_url(&page)),
+                    ToastAction::new("What's New", move |_, cx| open_link(&page, cx)),
                 ],
                 cx,
             );

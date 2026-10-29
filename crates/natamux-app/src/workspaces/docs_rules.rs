@@ -81,17 +81,6 @@ impl ViewMode {
     }
 }
 
-/// Only web and mail addresses open, so a file cannot start a program through another scheme.
-pub fn is_safe_link(href: &str) -> bool {
-    let Some((scheme, _)) = href.split_once(':') else {
-        return false;
-    };
-    let mut chars = scheme.chars();
-    let valid = chars.next().is_some_and(|c| c.is_ascii_alphabetic())
-        && chars.all(|c| c.is_ascii_alphanumeric() || "+.-".contains(c));
-    valid && ["http", "https", "mailto"].contains(&scheme.to_ascii_lowercase().as_str())
-}
-
 /// The line under an attachment's name. A file that is not an image only downloads.
 pub fn attachment_meta(size: u64, download: bool) -> String {
     let size = format_bytes(size);

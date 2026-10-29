@@ -53,6 +53,7 @@ Do not re-run the Release workflow once signing has started. A re-run replaces t
   ```
   RWSgtwsXHppEP5n4kgg1Q3yNIYODQNGsMQBKF93tjSRwzL1BrjeGoBpo
   ```
+- If the key leaks, follow "If the release key leaks" in [`SECURITY.md`](../SECURITY.md): advisory, new key pair, release with the new public key, manual reinstall for users. A second public key kept offline is planned so that a leak needs no reinstall.
 
 ## The tag key
 

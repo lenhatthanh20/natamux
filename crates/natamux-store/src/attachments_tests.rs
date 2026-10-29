@@ -193,3 +193,36 @@ fn leaves_a_context_with_its_own_attachments_heading_as_it_is() {
 fn leaves_the_context_of_a_task_without_attachments_as_it_is() {
     assert_eq!(with_attachment_section("# Fix it\n", &[]), "# Fix it\n");
 }
+
+#[cfg(unix)]
+#[test]
+fn does_not_restore_through_a_link_in_the_worktree() {
+    use std::os::unix::fs::symlink;
+    let data = TempDir::new();
+    let outside = TempDir::new();
+    save_attachments(&data.0, "T-0001", &[file("a.png", "image")]).unwrap();
+    let outside_count = || fs::read_dir(&outside.0).unwrap().count();
+
+    // A link as the stage folder.
+    let first = TempDir::new();
+    symlink(&outside.0, first.0.join(".natamux-task")).unwrap();
+    let error = restore_attachments(&data.0, "T-0001", Some(&first.0)).unwrap_err();
+    assert_eq!(error.kind(), ErrorKind::InvalidInput);
+
+    // A link as the attachments folder.
+    let second = TempDir::new();
+    fs::create_dir(second.0.join(".natamux-task")).unwrap();
+    symlink(&outside.0, second.0.join(".natamux-task/attachments")).unwrap();
+    assert!(restore_attachments(&data.0, "T-0001", Some(&second.0)).is_err());
+
+    // A dangling link as the file.
+    let third = TempDir::new();
+    fs::create_dir_all(third.0.join(".natamux-task/attachments")).unwrap();
+    symlink(
+        outside.0.join("target"),
+        third.0.join(".natamux-task/attachments/a.png"),
+    )
+    .unwrap();
+    assert!(restore_attachments(&data.0, "T-0001", Some(&third.0)).is_err());
+    assert_eq!(outside_count(), 0);
+}

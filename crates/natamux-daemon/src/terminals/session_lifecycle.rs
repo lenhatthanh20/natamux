@@ -41,6 +41,8 @@ pub fn random_id(bytes: usize) -> String {
 pub struct NewSession<'a> {
     pub spawn: &'a SpawnPty,
     pub env: &'a Env,
+    /// The task's own token: an agent in the shell reaches this task only.
+    pub agent_token: String,
     pub cwd: &'a Path,
     pub task_id: &'a str,
     pub terminal: &'a str,
@@ -57,6 +59,7 @@ pub fn spawn_session(new: NewSession<'_>) -> Result<SessionRef, TerminalError> {
     // the task's own block, for a dev server.
     env.insert("TERM".into(), "xterm-256color".into());
     env.insert("NATAMUX_TASK_ID".into(), new.task_id.into());
+    env.insert("NATAMUX_TOKEN".into(), new.agent_token);
     env.insert("NATAMUX_TERMINAL".into(), new.terminal.into());
     env.insert("NATAMUX_PORT".into(), port.clone());
     env.insert("PORT".into(), port);

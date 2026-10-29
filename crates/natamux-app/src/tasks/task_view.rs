@@ -32,6 +32,7 @@ use crate::components::button_style::{action_button, button_icon, key_hint, quie
 use crate::components::empty_state::EmptyState;
 use crate::components::skeleton::{Loading, SkeletonList};
 use crate::components::toast_rules::ToastTone;
+use crate::projects::repo_trust_dialog::review;
 use crate::projects::welcome::Welcome;
 use crate::projects::welcome_rules::added_text;
 use crate::stages::progress_board::ProgressBoard;
@@ -335,9 +336,12 @@ impl TaskView {
                     worktrees_dir: None,
                 })
                 .await;
-            this.update(cx, |this, cx| {
+            this.update_in(cx, |this, window, cx| {
                 this.adding_project = false;
                 cx.notify();
+                if let Ok(repo) = &result {
+                    review(&source, &repo.id, &repo.name, None, window, cx);
+                }
                 dashboard.update(cx, |dashboard, cx| match result {
                     Ok(repo) => {
                         dashboard.toast(&added_text(&repo.name), ToastTone::Success, None, cx)

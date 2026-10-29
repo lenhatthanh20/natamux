@@ -152,18 +152,35 @@ fn runs_a_stage_command_as_one_unit_in_the_same_terminal_each_time() {
 
     assert_eq!(f.terminals.list(&task.id), ["2"]);
     assert_eq!(f.pty(0).written(), [format!("sh '{}'\r", script.display())]);
+    let text = std::fs::read_to_string(&script).unwrap();
+    let ticket = text
+        .split("NATAMUX_STAGE_TICKET=")
+        .nth(1)
+        .and_then(|rest| rest.split(' ').next())
+        .unwrap()
+        .to_string();
     let expected = [
         "if (",
         "make test; make lint",
         "); then",
-        &format!("  natamux stage pass {} --stage testing", task.id),
+        &format!(
+            "  NATAMUX_STAGE_TICKET={ticket} natamux stage pass {} --stage testing",
+            task.id
+        ),
         "else",
-        &format!("  natamux stage fail {} --stage testing", task.id),
+        &format!(
+            "  NATAMUX_STAGE_TICKET={ticket} natamux stage fail {} --stage testing",
+            task.id
+        ),
         "fi",
         "",
     ]
     .join("\n");
-    assert_eq!(std::fs::read_to_string(&script).unwrap(), expected);
+    assert_eq!(text, expected);
+    // Security T-0224 (S-01): the script's one-time ticket lets this stage's pass through once.
+    let tickets = &f.runner.run.options.stage_tickets;
+    assert!(tickets.redeem(&task.id, "testing", &ticket));
+    assert!(!tickets.redeem(&task.id, "testing", &ticket));
 
     act_to(&f, &task.id, StageAction::Reopen, Some("testing"), None);
 

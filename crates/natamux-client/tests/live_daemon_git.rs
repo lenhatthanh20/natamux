@@ -53,7 +53,8 @@ async fn screen_4(client: &Client, made: &Made) {
     client.create_workspace(&task.id, None).await.unwrap();
     let id = task.id.as_str();
 
-    assert!(client.list_changes(id, false).await.unwrap().is_empty());
+    let changes = client.list_changes(id, false).await.unwrap();
+    assert!(changes.is_empty(), "{changes:?}");
     let graph = client.graph(id, true).await.unwrap();
     assert!(!graph.head.is_empty());
     assert!(!graph.commits.is_empty());

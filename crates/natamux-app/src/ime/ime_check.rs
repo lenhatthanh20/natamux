@@ -8,8 +8,9 @@ use gpui::{App, Entity, FocusHandle, Focusable, actions};
 use natamux_proto::tasks::task::Task;
 use ui::prelude::*;
 
-use super::word_check::{WordCheck, terminal_check_command, words};
+use super::word_check::{WordCheck, shell_quote, terminal_check_command, words};
 use crate::app::source::Source;
+use crate::app::view_state;
 use crate::components::button_style::quiet_button;
 use crate::terminals::remote_terminal::{RemoteTerminal, Target};
 use crate::terminals::terminal_screen::terminal_screen;
@@ -18,7 +19,14 @@ actions!(natamux, [SubmitWord]);
 
 /// Next to the bench's, far from the terminals a task's stages use.
 const TERMINAL: &str = "991";
-const TYPED_FILE: &str = "/tmp/natamux-ime.txt";
+
+/// In the private app folder, not in /tmp where another user could read or replace it. The
+/// path is quoted: the macOS folder has a space.
+fn typed_file() -> String {
+    let name = std::path::Path::new("natamux-ime.txt");
+    let path = view_state::folder().map_or_else(|| name.to_path_buf(), |folder| folder.join(name));
+    shell_quote(&path.to_string_lossy())
+}
 
 pub struct ImeCheck {
     check: WordCheck,
@@ -90,7 +98,8 @@ impl ImeCheck {
                     .gap_2()
                     .child(quiet_button("ime-start", "1. Start").on_click(cx.listener(
                         |check, _, _, cx| {
-                            check.type_in_terminal(&format!("clear; cat > {TYPED_FILE}\r"), cx);
+                            let start = format!("clear; cat > {}\r", typed_file());
+                            check.type_in_terminal(&start, cx);
                         },
                     )))
                     .child(
@@ -101,7 +110,7 @@ impl ImeCheck {
                             // Ctrl+D ends `cat`, then the shell compares the files.
                             check.type_in_terminal("\x04", cx);
                             check.type_in_terminal(
-                                &terminal_check_command(&words(), TYPED_FILE),
+                                &terminal_check_command(&words(), &typed_file()),
                                 cx,
                             );
                         },

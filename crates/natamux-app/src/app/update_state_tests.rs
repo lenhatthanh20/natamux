@@ -182,3 +182,26 @@ fn sizes_and_ages_read_short() {
     assert_eq!(ago(3 * 3600), "3h ago");
     assert_eq!(ago(2 * 86_400), "2d ago");
 }
+
+fn stale() -> UpdateState {
+    UpdateState::Failed {
+        message: "An old update backup is in the way: /Applications/Natamux.app.old. Remove it, then try again."
+            .into(),
+    }
+}
+
+#[test]
+fn a_stale_backup_shows_update_failed_with_its_path() {
+    let item = stale().status_item(0).expect("item");
+    assert_eq!(item.kind, ItemKind::Retry);
+    assert_eq!(item.label, "Update failed");
+    let tooltip = item.tooltip.expect("tooltip");
+    assert!(tooltip.contains("/Applications/Natamux.app.old"));
+    assert!(tooltip.ends_with("then try again. Click to try again."));
+    assert!(!tooltip.contains(".."));
+    assert!(
+        stale()
+            .settings_line(0, None)
+            .contains("/Applications/Natamux.app.old")
+    );
+}

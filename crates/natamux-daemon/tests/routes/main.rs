@@ -5,8 +5,10 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
+mod agent_routes;
 mod agents;
 mod changes;
+mod edge_hosts;
 #[cfg(unix)]
 mod fake_tools;
 mod git;
@@ -15,6 +17,7 @@ mod github;
 mod hook_client;
 mod hooks;
 mod raw_client;
+mod repo_trust;
 mod repos;
 mod review_comments;
 mod server;
@@ -68,8 +71,9 @@ async fn takes_the_api_at_api_too_and_answers_404_for_an_unknown_route() {
             .0,
         200
     );
+    let agent = d.agent_token("T-0001");
     assert_eq!(
-        d.call(Method::GET, "/tasks/T-0001/terminals", Some("agent-token"))
+        d.call(Method::GET, "/tasks/T-0001/terminals", Some(&agent))
             .await
             .0,
         200

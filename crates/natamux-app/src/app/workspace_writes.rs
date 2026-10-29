@@ -11,6 +11,7 @@ use ui::prelude::*;
 
 use super::Dashboard;
 use super::writes::Written;
+use crate::app::links::open_link;
 use crate::app::source::reason;
 use crate::components::toast_rules::ToastTone;
 use crate::components::toasts::{ToastAction, push_toast};
@@ -123,7 +124,7 @@ impl Dashboard {
             |this, task, cx| {
                 this.take_task(task);
                 let actions = task.pr.clone().map_or_else(Vec::new, |url| {
-                    vec![ToastAction::new("Open", move |_, cx| cx.open_url(&url))]
+                    vec![ToastAction::new("Open", move |_, cx| open_link(&url, cx))]
                 });
                 push_toast(
                     "Pull request opened.",

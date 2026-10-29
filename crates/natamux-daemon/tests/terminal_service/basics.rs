@@ -23,9 +23,11 @@ fn starts_one_shell_in_the_workspace_with_the_task_id_and_the_size() {
         assert_eq!(state.options.cwd.to_str(), Some("/work/T-0001"));
         assert_eq!((state.options.cols, state.options.rows), (80, 24));
     }
+    // Security T-0224 (S-01): the task's own token, never the one of the daemon's environment.
+    let own = h.service.agent_tokens().token_for("T-0001");
+    assert_eq!(pty.env("NATAMUX_TOKEN"), Some(own));
     for (name, value) in [
         ("PATH", "/bin"),
-        ("NATAMUX_TOKEN", "secret"),
         ("NATAMUX_TASK_ID", "T-0001"),
         ("NATAMUX_PORT", "20010"),
         ("PORT", "20010"),

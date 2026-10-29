@@ -19,6 +19,7 @@ use hyper::{Request, Response, StatusCode};
 use hyper_util::rt::TokioIo;
 use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 
+use super::edge_rules;
 use super::errors::{Answer, not_found};
 use super::server::AppState;
 use crate::shared::scheduler::{Scheduler, TimerId};
@@ -130,6 +131,9 @@ impl EventSocket for QueuedSocket {
 }
 
 pub fn upgrade(request: Request<Incoming>, state: Arc<AppState>) -> Answer {
+    if let Some(refused) = edge_rules::check_origin(request.headers(), &state.allowed_hosts) {
+        return refused;
+    }
     let key = request.headers().get(SEC_WEBSOCKET_KEY).cloned();
     let wants_socket = request
         .headers()

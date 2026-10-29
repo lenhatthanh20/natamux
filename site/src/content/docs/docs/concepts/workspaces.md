@@ -75,7 +75,7 @@ A project can also have its own worktree folder. Set it in **Worktree folder** w
 
 ## Setup script
 
-A new worktree has only the files that git tracks. To install packages or prepare files, add a setup script to your repository.
+A new worktree has only the files that git tracks. To install packages or prepare files, add a setup script to your repository. It runs only once you approved the project's commands, and only when the worktree's script is the one you approved (see [Approve the project's commands](/docs/guides/project-settings/#approve-the-projects-commands)).
 
 | Platform | File | Command Natamux runs |
 |---|---|---|

@@ -1,6 +1,6 @@
 # Production images: a Rust daemon with the dashboard embedded, and nginx for port 8080.
 
-FROM node:22-bookworm-slim AS web-build
+FROM node:22-bookworm-slim@sha256:4b150b48b4116e2a22f2c39cc27025fbf4f153e2078fd3b14d159fdb5c7279da AS web-build
 ENV COREPACK_HOME=/opt/corepack
 RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
 WORKDIR /app
@@ -27,7 +27,7 @@ ENV NATAMUX_REQUIRE_WEB=1
 ENV CARGO_PROFILE_RELEASE_DEBUG=0
 RUN cargo build --release -p natamux-daemon -p natamux-cli --locked
 
-FROM debian:trixie-slim AS daemon
+FROM debian:trixie-slim@sha256:f6b08b09a05725f9431502d3b5714f5c4576e82c1a84fa1debe0c24a7e0c3ec4 AS daemon
 LABEL org.opencontainers.image.source="https://github.com/lenhatthanh20/natamux"
 RUN apt-get update \
   && apt-get install -y --no-install-recommends bash ca-certificates curl git \
@@ -51,7 +51,7 @@ EXPOSE 4317
 # The full path: e2e/tests/daemon-rss.ts finds the daemon by a command that ends in /natamux-daemon.
 CMD ["/usr/local/bin/natamux-daemon"]
 
-FROM nginxinc/nginx-unprivileged:stable-alpine AS web
+FROM nginxinc/nginx-unprivileged:stable-alpine@sha256:f5116ed4606f3eb015dd4a8e28cb9b351476dc0ad4bc6e9f93b19cec130cdf03 AS web
 LABEL org.opencontainers.image.source="https://github.com/lenhatthanh20/natamux"
 COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=web-build /app/packages/web/dist /usr/share/nginx/html

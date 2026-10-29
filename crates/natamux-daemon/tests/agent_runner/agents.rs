@@ -133,7 +133,9 @@ fn starts_a_stages_own_agent_with_its_words_after_the_configured_ones_and_keeps_
 
     let script =
         std::fs::read_to_string(env.data_dir.join(format!("agent-launch-{}-2.sh", task.id)));
-    assert!(script.unwrap().contains("--foo --model gpt-5 'Only this'"));
+    // Stage words are quoted one by one (S-11).
+    let script = script.unwrap();
+    assert!(script.contains("--foo '--model' 'gpt-5' 'Only this'"));
     assert_eq!(updated.agent.as_deref(), Some("claude-code"));
     let event = last_event(&env.tasks, &task.id);
     assert_eq!(event.kind, "agent.launched");

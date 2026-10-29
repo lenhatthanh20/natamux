@@ -61,6 +61,11 @@ impl WordCheck {
     }
 }
 
+/// One shell word for `text`: single quotes, so a space or a quote in a path cannot split it.
+pub fn shell_quote(text: &str) -> String {
+    format!("'{}'", text.replace('\'', "'\\''"))
+}
+
 /// The terminal half: writes the list to a file and compares the typed file with it, in the
 /// shell, so no new daemon route is needed.
 pub fn terminal_check_command(words: &[&str], typed_file: &str) -> String {
@@ -97,6 +102,16 @@ mod tests {
         assert!(!check.submit("more"));
         assert_eq!(check.progress(), "3 of 3 typed, 2 right, 1 wrong");
         assert_eq!(check.failed(), [("khuỷu", "khuyủ".to_string())]);
+    }
+
+    #[test]
+    fn a_path_with_a_space_or_a_quote_is_one_shell_word() {
+        assert_eq!(shell_quote("/a b/x.txt"), "'/a b/x.txt'");
+        assert_eq!(shell_quote("/it's/x"), "'/it'\\''s/x'");
+        // `.expected` joins the quoted word, so the compare command keeps working.
+        let command = terminal_check_command(&["a"], &shell_quote("/a b/x.txt"));
+        assert!(command.contains("> '/a b/x.txt'.expected;"));
+        assert!(command.contains("diff '/a b/x.txt'.expected '/a b/x.txt';"));
     }
 
     #[test]

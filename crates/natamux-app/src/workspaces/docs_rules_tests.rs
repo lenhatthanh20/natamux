@@ -13,39 +13,6 @@ fn draft(text: &str, original: &str, base: Option<&str>) -> DocDraft {
 }
 
 #[test]
-fn opens_a_web_link_outside_the_app() {
-    for href in [
-        "https://example.com",
-        "http://example.com",
-        "mailto:a@b.c",
-        "HTTPS://example.com",
-        "MailTo:a@b.c",
-    ] {
-        assert!(is_safe_link(href), "{href}");
-    }
-}
-
-#[test]
-fn shows_any_other_link_target_as_plain_text() {
-    for href in [
-        "javascript:alert(1)",
-        "JavaScript:alert(1)",
-        " javascript:alert(1)",
-        "java\tscript:alert(1)",
-        "data:text/html,hi",
-        "vbscript:msgbox",
-        "file:///etc/passwd",
-        "plan.md",
-        "#sec",
-        "",
-        "//example.com",
-        "1http://x",
-    ] {
-        assert!(!is_safe_link(href), "{href}");
-    }
-}
-
-#[test]
 fn starts_in_rendered_mode_when_the_stored_value_is_not_one_it_knows() {
     assert_eq!(ViewMode::parse("foo"), ViewMode::Rendered);
     assert_eq!(ViewMode::parse(""), ViewMode::Rendered);
