@@ -21,7 +21,7 @@ use ui::prelude::*;
 
 use super::change_rules::{LineChange, Side};
 use super::diff_editors::{add_spacer, read_only_editor, refit_excerpts, set_excerpts};
-use super::diff_rules::{DiffRefresh, HunkRows, diff_refresh, line_change, spacers};
+use super::diff_rules::{DiffRefresh, HunkRows, diff_refresh, end_spacer, line_change, spacers};
 use super::languages::language_for;
 use super::review_blocks::ReviewInput;
 
@@ -322,7 +322,8 @@ impl DiffView {
         cx.notify();
     }
 
-    /// The empty rows that keep the two sides level; none when inline.
+    /// The empty rows that keep the two sides level; none when inline. `add_spacer` places every
+    /// one, so the filter drops none.
     fn add_spacers(
         &self,
         right: &Entity<Editor>,
@@ -333,8 +334,11 @@ impl DiffView {
             return Vec::new();
         };
         let base = diff.read(cx).base_text_buffer().clone();
+        let old_rows = base.read(cx).max_point().row + 1;
+        let new_rows = buffer.read(cx).max_point().row + 1;
         spacers(&self.hunks)
             .into_iter()
+            .chain(end_spacer(&self.hunks, old_rows, new_rows))
             .filter_map(|spacer| {
                 let (editor, side_buffer) = match spacer.side {
                     Side::Old => (left, &base),
@@ -450,3 +454,7 @@ impl Render for DiffView {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "diff_view_tests.rs"]
+mod tests;
