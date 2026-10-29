@@ -41,7 +41,12 @@ pub fn review<V: 'static>(
     let (source, repo_id, name) = (source.clone(), repo_id.to_owned(), name.to_owned());
     cx.spawn_in(window, async move |this, cx| {
         let view = answer.await.ok().filter(needs_review);
-        this.update_in(cx, |_, window, cx| match view {
+        if this.upgrade().is_none() {
+            return;
+        }
+        // Not inside an update of `this`: `then` may update it (Start a task does), and a second
+        // update of an entity that is being updated panics.
+        cx.update(|window, cx| match view {
             Some(view) => open(source, repo_id, name, view, then, window, cx),
             None => go_on(then, window, cx),
         })

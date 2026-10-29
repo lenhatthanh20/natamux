@@ -67,6 +67,28 @@ fn not_now_runs_what_waits_once(cx: &mut TestAppContext) {
     assert_eq!(ran.get(), 1);
 }
 
+// Start a task: with nothing to approve, `then` updates the view that called `review` (v1.0.7
+// panicked there with a double lease).
+#[gpui::test]
+fn what_waits_may_update_the_view_that_asked(cx: &mut TestAppContext) {
+    test_views::init(cx);
+    let ran = Rc::new(Cell::new(0));
+    let (host, cx) = cx.add_window_view(|_, _| test_views::Counted { draws: 0 });
+
+    let count = ran.clone();
+    host.update_in(cx, |_, window, cx| {
+        let this = cx.weak_entity();
+        let then: Then = Rc::new(move |_: &mut Window, cx: &mut App| {
+            this.update(cx, |_, _| count.set(count.get() + 1)).ok();
+        });
+        let source = Arc::new(Source::FakeDaemon);
+        review(&source, "no-such-project", "Shop", Some(then), window, cx);
+    });
+    cx.run_until_parked();
+
+    assert_eq!(ran.get(), 1);
+}
+
 #[gpui::test]
 fn a_refused_approval_shows_the_reason_and_stays(cx: &mut TestAppContext) {
     let ran = Rc::new(Cell::new(0));
