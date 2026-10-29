@@ -28,7 +28,7 @@ The app also has View, Task and Tools menus. Links to release pages open in your
 
 ## Notifications and the Dock
 
-The Dock icon shows how many tasks need you. With **Notify me** on, a task that needs you or is done while the app is in the back shows a macOS notification with a sound. See [Notifications in the desktop app](/docs/guides/dashboard/#notifications-in-the-desktop-app).
+The Dock icon shows how many tasks need you. Turn on **Notify me** and allow notifications to see the count. If it still does not show, turn on **Badge application icon** in System Settings → Notifications → Natamux. With **Notify me** on, a task that needs you or is done while the app is in the back shows a macOS notification with a sound. See [Notifications in the desktop app](/docs/guides/dashboard/#notifications-in-the-desktop-app).
 
 ## Updates
 
