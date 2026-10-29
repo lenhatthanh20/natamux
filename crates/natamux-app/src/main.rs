@@ -63,6 +63,7 @@ mod app {
     pub mod tab_rules;
     #[cfg(test)]
     pub mod test_views;
+    pub mod text_boxes;
     pub mod theme_catalog;
     pub mod title_bar;
     pub mod update;

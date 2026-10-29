@@ -1,13 +1,8 @@
 //! Key bindings and menus, built from the command registry (`app/commands.rs`). Zed's default
 //! keymap names actions of crates the app does not have, so the app binds only what its screens
-//! use: the registry's commands, and the editor and terminal keys below.
+//! use: the registry's commands, the text box keys (`text_boxes.rs`) and the terminal keys below.
 
-use std::rc::Rc;
-
-use gpui::{
-    Action, App, DummyKeyboardMapper, KeyBinding, KeyBindingContextPredicate, Menu, MenuItem,
-    NoAction, actions,
-};
+use gpui::{Action, App, KeyBinding, Menu, MenuItem, NoAction, actions};
 
 use super::commands::{Command, is_single_key, reaches_app_from_terminal};
 use super::commands::{MenuName, all_commands, command_by_id, keystroke, menu_items};
@@ -230,20 +225,12 @@ fn terminal_keeps(mac: bool) -> Vec<KeyBinding> {
         .collect()
 }
 
-/// cmd on macOS, ctrl elsewhere.
-const MOD: &str = if cfg!(target_os = "macos") {
-    "cmd"
-} else {
-    "ctrl"
-};
-
 pub fn bind(cx: &mut App) {
     cx.on_action(|_: &Quit, cx| cx.quit());
     let mac = cfg!(target_os = "macos");
     cx.bind_keys(command_bindings(mac));
     cx.bind_keys(terminal_keeps(mac));
-    let m = |keys: &str| keys.replace("mod", MOD);
-    let editor = Some("Editor");
+    super::text_boxes::bind(cx, mac);
     // A terminal sends ctrl-c and the like to the shell; only copy and paste are the app's.
     let (copy, paste) = if mac {
         ("cmd-c", "cmd-v")
@@ -251,95 +238,9 @@ pub fn bind(cx: &mut App) {
         ("ctrl-shift-c", "ctrl-shift-v")
     };
     cx.bind_keys([
-        KeyBinding::new("backspace", editor::actions::Backspace, editor),
-        KeyBinding::new("delete", editor::actions::Delete, editor),
-        KeyBinding::new("left", editor::actions::MoveLeft, editor),
-        KeyBinding::new("right", editor::actions::MoveRight, editor),
-        KeyBinding::new("shift-left", editor::actions::SelectLeft, editor),
-        KeyBinding::new("shift-right", editor::actions::SelectRight, editor),
-        KeyBinding::new(
-            "home",
-            editor::actions::MoveToBeginningOfLine::default(),
-            editor,
-        ),
-        KeyBinding::new("end", editor::actions::MoveToEndOfLine::default(), editor),
-        KeyBinding::new(&m("mod-a"), editor::actions::SelectAll, editor),
-        KeyBinding::new(&m("mod-c"), editor::actions::Copy, editor),
-        KeyBinding::new(&m("mod-x"), editor::actions::Cut, editor),
-        KeyBinding::new(&m("mod-v"), editor::actions::Paste, editor),
-        KeyBinding::new(&m("mod-z"), editor::actions::Undo, editor),
-        KeyBinding::new(&m("mod-shift-z"), editor::actions::Redo, editor),
-        // A box of many lines (notes, a commit message): its form submits on Mod+Enter.
-        KeyBinding::new(
-            "enter",
-            editor::actions::Newline,
-            Some("Editor && mode == auto_height"),
-        ),
         KeyBinding::new(copy, terminal::Copy, Some("Terminal")),
         KeyBinding::new(paste, terminal::Paste, Some("Terminal")),
     ]);
-    bind_full_editor(cx, mac);
-    if mac {
-        cx.bind_keys([
-            KeyBinding::new(
-                "cmd-left",
-                editor::actions::MoveToBeginningOfLine::default(),
-                editor,
-            ),
-            KeyBinding::new(
-                "cmd-right",
-                editor::actions::MoveToEndOfLine::default(),
-                editor,
-            ),
-            KeyBinding::new("alt-left", editor::actions::MoveToPreviousWordStart, editor),
-            KeyBinding::new("alt-right", editor::actions::MoveToNextWordEnd, editor),
-        ]);
-    }
-}
-
-/// A full editor (the editor tab, the Docs edit) edits many lines. Single-line boxes leave the
-/// arrows and Enter to the lists and forms around them.
-fn bind_full_editor(cx: &mut App, mac: bool) {
-    let full = "Editor && mode == full";
-    let context = Some(full);
-    let (start, end) = if mac {
-        ("cmd-up", "cmd-down")
-    } else {
-        ("ctrl-home", "ctrl-end")
-    };
-    cx.bind_keys([
-        KeyBinding::new("enter", editor::actions::Newline, context),
-        KeyBinding::new("tab", editor::actions::Tab, context),
-        KeyBinding::new("shift-tab", editor::actions::Backtab, context),
-        KeyBinding::new("shift-up", editor::actions::SelectUp, context),
-        KeyBinding::new("shift-down", editor::actions::SelectDown, context),
-        KeyBinding::new("pageup", editor::actions::MovePageUp::default(), context),
-        KeyBinding::new(
-            "pagedown",
-            editor::actions::MovePageDown::default(),
-            context,
-        ),
-        KeyBinding::new(start, editor::actions::MoveToBeginning, context),
-        KeyBinding::new(end, editor::actions::MoveToEnd, context),
-    ]);
-    // Zed's MoveUp and MoveDown live in a crate the app does not take: they bind by name.
-    let by_name = [("up", "editor::MoveUp"), ("down", "editor::MoveDown")]
-        .into_iter()
-        .filter_map(|(keys, name)| {
-            let action = cx.build_action(name, None).ok()?;
-            let predicate = KeyBindingContextPredicate::parse(full).ok()?;
-            KeyBinding::load(
-                keys,
-                action,
-                Some(Rc::new(predicate)),
-                false,
-                None,
-                &DummyKeyboardMapper,
-            )
-            .ok()
-        })
-        .collect::<Vec<_>>();
-    cx.bind_keys(by_name);
 }
 
 /// The menu bar (macOS): the registry's commands that have a menu, a separator between
@@ -385,52 +286,7 @@ fn menu_title(command: &Command) -> String {
 
 #[cfg(test)]
 mod tests {
-    use editor::Editor;
-    use gpui::{Context, Focusable as _, TestAppContext, Window};
-
     use super::*;
-
-    /// The keys that run Newline in the editor `make` gives, with the app's bindings.
-    fn newline_keys(
-        cx: &mut TestAppContext,
-        make: impl FnOnce(&mut Window, &mut Context<Editor>) -> Editor + 'static,
-    ) -> Vec<String> {
-        crate::app::test_views::init(cx);
-        cx.update(bind);
-        let (editor, cx) = cx.add_window_view(make);
-        cx.run_until_parked();
-        cx.update(|window, cx| {
-            window
-                .bindings_for_action_in(&editor::actions::Newline, &editor.focus_handle(cx))
-                .iter()
-                .map(|binding| {
-                    binding
-                        .keystrokes()
-                        .iter()
-                        .map(ToString::to_string)
-                        .collect::<Vec<_>>()
-                        .join(" ")
-                })
-                .collect()
-        })
-    }
-
-    /// T-0186: Enter did nothing in the Notes box of Start a task.
-    #[gpui::test]
-    fn enter_starts_a_line_in_a_box_of_many_lines(cx: &mut TestAppContext) {
-        let keys = newline_keys(cx, |window, cx| Editor::auto_height(6, 12, window, cx));
-        // The list can name the same key more than once.
-        assert!(
-            !keys.is_empty() && keys.iter().all(|key| key == "enter"),
-            "{keys:?}"
-        );
-    }
-
-    #[gpui::test]
-    fn enter_is_left_to_the_form_in_a_one_line_box(cx: &mut TestAppContext) {
-        let keys = newline_keys(cx, Editor::single_line);
-        assert!(keys.is_empty(), "{keys:?}");
-    }
 
     #[test]
     fn update_commands_reach_the_app() {
