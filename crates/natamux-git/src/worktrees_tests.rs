@@ -41,6 +41,18 @@ fn fails_with_a_git_error_when_the_branch_already_exists() {
     assert!(error.0.starts_with("git worktree failed: "), "{error}");
 }
 
+#[test]
+fn refuses_a_branch_or_base_that_starts_with_a_dash() {
+    let (root, repo) = test_repo();
+    let path = worktree_path(root.path());
+    let error = add_worktree(&repo, &path, "--detach", None, false).unwrap_err();
+    assert!(error.0.starts_with("git ref refused: "), "{error}");
+    let error = add_worktree(&repo, &path, BRANCH, Some("--orphan"), false).unwrap_err();
+    assert!(error.0.starts_with("git ref refused: "), "{error}");
+    assert!(!path.exists());
+    assert!(!branch_exists(&repo, BRANCH));
+}
+
 // Node read the env of its mocked `git`; the env of the call is this function's answer.
 #[test]
 fn checks_out_with_one_worker_per_cpu() {
@@ -286,4 +298,19 @@ fn is_not_a_worktree_for_a_folder_git_does_not_know() {
         WorktreeState::NotAWorktree
     );
     assert_eq!(WorktreeState::NotAWorktree.as_str(), "not-a-worktree");
+}
+
+#[test]
+fn tracks_a_path_only_when_git_lists_a_file_there() {
+    let (_root, repo) = test_repo();
+    std::fs::create_dir_all(repo.join(".natamux-task")).unwrap();
+    std::fs::write(repo.join(".natamux-task/spec.md"), "from the repo").unwrap();
+    std::fs::write(repo.join("other.txt"), "x").unwrap();
+    assert!(!tracks_path(&repo, ".natamux-task"));
+    run_git(&repo, &["add", ".natamux-task/spec.md"]);
+    assert!(tracks_path(&repo, ".natamux-task"));
+    assert!(!tracks_path(&repo, "other.txt"));
+    // Not a repository: false, no panic.
+    let bare = crate::test_support::TempDir::new("plain");
+    assert!(!tracks_path(bare.path(), ".natamux-task"));
 }

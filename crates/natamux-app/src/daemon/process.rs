@@ -1,8 +1,10 @@
 //! Starts the daemon beside the packaged app and keeps it alive until the app quits.
 
 use std::fs::{self, OpenOptions};
-use std::io::{self, Read, Write};
-use std::net::{TcpListener, TcpStream, ToSocketAddrs};
+use std::io;
+#[cfg(unix)]
+use std::io::{Read, Write};
+use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex, PoisonError};
@@ -12,6 +14,7 @@ use natamux_client::Config;
 use natamux_client::config::save_access;
 
 use crate::app::view_state;
+use crate::daemon::health_proof::daemon_proves_itself;
 
 const START_WAIT: Duration = Duration::from_secs(30);
 const HEALTH_POLL: Duration = Duration::from_millis(20);
@@ -63,6 +66,13 @@ impl<T> Slot<T> {
 
     pub(super) fn is_closed(&self) -> bool {
         self.closed
+    }
+}
+
+/// Makes the app folder readable by this user only. A failure is not fatal: the app still runs.
+pub fn make_folder_private() {
+    if let Some(folder) = view_state::folder() {
+        let _ = natamux_core::workspaces::private_dir::private_dir(&folder);
     }
 }
 
@@ -234,8 +244,23 @@ pub(super) fn pick_port(preferred: u16) -> io::Result<u16> {
     Ok(listener.local_addr()?.port())
 }
 
+// An old token file may be wider than 0600, for example from an older version.
+fn tighten(file: &Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let wide = fs::metadata(file).is_ok_and(|meta| meta.permissions().mode() & 0o077 != 0);
+        if wide {
+            let _ = fs::set_permissions(file, fs::Permissions::from_mode(0o600));
+        }
+    }
+    #[cfg(not(unix))]
+    let _ = file;
+}
+
 pub(super) fn token_at(file: &Path) -> io::Result<String> {
     if let Ok(token) = fs::read_to_string(file) {
+        tighten(file);
         let token = token.trim();
         if token.len() >= 32
             && token
@@ -301,28 +326,9 @@ pub(super) fn probe_daemon(port: u16, token: &str) -> bool {
 }
 
 // Tests pass a longer timeout: a loaded CI runner can start the test server after 200 ms.
+// The token goes to no port before the daemon proves itself (S-07).
 pub(super) fn probe_daemon_within(port: u16, token: &str, timeout: Duration) -> bool {
-    let Some(address) = ("127.0.0.1", port)
-        .to_socket_addrs()
-        .ok()
-        .and_then(|mut addresses| addresses.next())
-    else {
-        return false;
-    };
-    let Ok(mut stream) = TcpStream::connect_timeout(&address, timeout) else {
-        return false;
-    };
-    if stream.set_read_timeout(Some(timeout)).is_err() {
-        return false;
-    }
-    let request = format!(
-        "GET /api/tasks HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer {token}\r\nConnection: close\r\n\r\n"
-    );
-    if stream.write_all(request.as_bytes()).is_err() {
-        return false;
-    }
-    let mut response = [0_u8; 12];
-    stream.read_exact(&mut response).is_ok() && response == *b"HTTP/1.1 200"
+    daemon_proves_itself(port, token, timeout)
 }
 
 pub(super) fn startup_error(log: &Path, reason: &str) -> io::Error {

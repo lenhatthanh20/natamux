@@ -11,6 +11,7 @@ use ui::{Tooltip, prelude::*};
 
 use super::workspace_rules::{GitStep, push_button};
 use super::wrap_up_rules::{FinishedAction, FinishedBannerText, GitFacts, finished_banner};
+use crate::app::links::open_link;
 use crate::components::button_style::action_button;
 use crate::components::colors::state_colors;
 use crate::components::icons::icon_path;
@@ -89,7 +90,8 @@ impl FinishedBanner {
                 Some(button("finished-create-pr", "Create PR", busy, run).into_any_element())
             }
             FinishedAction::OpenPullRequest => self.task.pr.clone().map(|url| {
-                let open: OnClick = Rc::new(move |_: &mut Window, cx: &mut App| cx.open_url(&url));
+                let open: OnClick =
+                    Rc::new(move |_: &mut Window, cx: &mut App| open_link(&url, cx));
                 button("finished-open-pr", "Open pull request", false, open).into_any_element()
             }),
             FinishedAction::Remove => {

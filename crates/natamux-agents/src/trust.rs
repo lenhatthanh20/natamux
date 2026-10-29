@@ -114,6 +114,52 @@ fn trust_in_copilot(workspace: &str, config_path: &Path) -> std::io::Result<()> 
     fs::write(config_path, out)
 }
 
+/// Takes a removed worktree out of Cursor's and Copilot's trusted folders: a later folder at the
+/// same path may hold another project. Best effort, as the trust itself.
+pub fn untrust_workspace(workspace: &str, paths: &TrustPaths) {
+    let _ = untrust_in_cursor(workspace, &paths.cursor_projects);
+    let _ = untrust_in_copilot(workspace, &paths.copilot_config);
+}
+
+/// Two paths can give one folder name, so only a marker for this path goes.
+fn untrust_in_cursor(workspace: &str, projects: &Path) -> std::io::Result<()> {
+    let marker = projects
+        .join(cursor_slug(workspace))
+        .join(".workspace-trusted");
+    let text = fs::read_to_string(&marker)?;
+    let named = parse_js(&text)
+        .ok()
+        .and_then(|value| value.get("workspacePath").cloned());
+    if named == Some(Value::String(workspace.to_string())) {
+        fs::remove_file(&marker)?;
+    }
+    Ok(())
+}
+
+/// Only the entry of this exact path goes; a folder above it stays as the user listed it.
+fn untrust_in_copilot(workspace: &str, config_path: &Path) -> std::io::Result<()> {
+    let bytes = fs::read(config_path)?;
+    let text = String::from_utf8_lossy(&bytes);
+    let header = comment_header(&text);
+    let Ok(Value::Object(mut config)) = parse_js(&text[header.len()..]) else {
+        return Ok(());
+    };
+    let Some(Value::Array(folders)) = config.get("trustedFolders") else {
+        return Ok(());
+    };
+    let kept: Vec<Value> = folders
+        .iter()
+        .filter(|folder| folder.as_str() != Some(workspace))
+        .cloned()
+        .collect();
+    if kept.len() == folders.len() {
+        return Ok(());
+    }
+    config.insert("trustedFolders".into(), Value::Array(kept));
+    let out = format!("{header}{}\n", to_js_string_pretty(&Value::Object(config)));
+    fs::write(config_path, out)
+}
+
 #[cfg(test)]
 #[path = "trust_tests.rs"]
 mod tests;

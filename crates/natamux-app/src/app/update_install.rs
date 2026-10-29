@@ -1,16 +1,19 @@
 //! Installing a ready update: on Restart to Update, or when the app quits (macOS).
 
-use std::fs;
-use std::io;
-use std::path::PathBuf;
+use std::fs::{self, OpenOptions};
+use std::io::{self, Write};
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
 
 use gpui::App;
 use natamux_update::check::InstallKind;
-use natamux_update::install::mac_install_script;
+use natamux_update::install::{
+    HASH_MISMATCH_EXIT, deb_install_script, mac_install_script, stale_backup,
+};
 
-use super::update::{READY, Ready, log};
+use super::update::{READY, Ready, log, set_state};
+use super::update_state::UpdateState;
 use crate::components::toast_rules::ToastTone;
 use crate::components::toasts::{push_toast, toast};
 use crate::daemon::process::DaemonSlot;
@@ -28,9 +31,10 @@ pub fn restart(cx: &mut App) {
         let job = cx.background_executor().spawn(async move {
             log(&ready.folder, &format!("installing {}", ready.release.tag));
             let status = Command::new("pkexec")
-                .arg("dpkg")
-                .arg("-i")
+                .args(["sh", "-c", deb_install_script(), "sh"])
                 .arg(&ready.downloaded)
+                .arg(&ready.sha256)
+                .arg("dpkg")
                 .status();
             (ready, status)
         });
@@ -41,6 +45,14 @@ pub fn restart(cx: &mut App) {
                     log(&ready.folder, "installed update");
                     queue_launch(ready.current);
                     cx.quit();
+                }
+                Ok(status) if status.code() == Some(HASH_MISMATCH_EXIT) => {
+                    log(&ready.folder, "the deb package does not match its hash");
+                    fail_install(
+                        "The downloaded package does not match its signed hash. Check for updates again."
+                            .into(),
+                        cx,
+                    );
                 }
                 _ => {
                     log(&ready.folder, "failed to install the deb package");
@@ -60,6 +72,10 @@ pub fn restart(cx: &mut App) {
         .detach();
         return;
     }
+    if let Some(message) = stale_message(&ready) {
+        log(&ready.folder, &message);
+        return fail_install(message, cx);
+    }
     match install_ready(&ready, true) {
         Ok(()) => {
             if let Ok(mut slot) = READY.lock() {
@@ -76,6 +92,28 @@ pub fn restart(cx: &mut App) {
             cx,
         ),
     }
+}
+
+fn stale_message(ready: &Ready) -> Option<String> {
+    if !matches!(ready.kind, InstallKind::Mac | InstallKind::AppImage) {
+        return None;
+    }
+    stale_backup(&ready.current).map(|path| {
+        format!(
+            "An old update backup is in the way: {}. Remove it, then try again.",
+            path.display()
+        )
+    })
+}
+
+fn fail_install(message: String, cx: &mut App) {
+    set_state(
+        UpdateState::Failed {
+            message: message.clone(),
+        },
+        cx,
+    );
+    toast(&message, ToastTone::Error, cx);
 }
 
 fn queue_launch(binary: PathBuf) {
@@ -127,6 +165,9 @@ pub fn finish_quit(owned: &Arc<Mutex<DaemonSlot>>) {
 }
 
 fn install_ready(ready: &Ready, relaunch: bool) -> io::Result<()> {
+    if let Some(message) = stale_message(ready) {
+        return Err(io::Error::new(io::ErrorKind::AlreadyExists, message));
+    }
     log(&ready.folder, &format!("installing {}", ready.release.tag));
     match ready.kind {
         InstallKind::Mac => {
@@ -136,9 +177,9 @@ fn install_ready(ready: &Ready, relaunch: bool) -> io::Result<()> {
                 .join(&ready.release.version)
                 .join("install.sh");
             let log_file = ready.folder.join("logs/update.log");
-            fs::write(
+            write_script(
                 &script,
-                mac_install_script(
+                &mac_install_script(
                     &ready.current.to_string_lossy(),
                     &ready.downloaded.to_string_lossy(),
                     &log_file.to_string_lossy(),
@@ -168,9 +209,25 @@ fn install_ready(ready: &Ready, relaunch: bool) -> io::Result<()> {
     Ok(())
 }
 
+/// A fresh file, owner only: a file another user planted at this path is never reused.
+fn write_script(path: &Path, text: &str) -> io::Result<()> {
+    match fs::remove_file(path) {
+        Err(error) if error.kind() != io::ErrorKind::NotFound => return Err(error),
+        _ => {}
+    }
+    let mut options = OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o700);
+    }
+    options.open(path)?.write_all(text.as_bytes())
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{finish_on_quit, queue_launch, take_restart};
+    use super::{finish_on_quit, queue_launch, take_restart, write_script};
 
     #[test]
     fn a_relaunch_is_taken_once_after_the_app_stops() {
@@ -178,5 +235,21 @@ mod tests {
         queue_launch(binary.clone());
         assert_eq!(finish_on_quit(), Some(binary));
         assert_eq!(take_restart(), None);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_install_script_is_a_fresh_owner_only_file() {
+        use std::os::unix::fs::PermissionsExt;
+        let folder = std::env::temp_dir().join(format!("natamux-script-{}", std::process::id()));
+        std::fs::create_dir_all(&folder).expect("folder");
+        let path = folder.join("install.sh");
+        std::fs::write(&path, "planted").expect("old file");
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o666)).expect("mode");
+        write_script(&path, "new").expect("write");
+        assert_eq!(std::fs::read_to_string(&path).expect("read"), "new");
+        let mode = std::fs::metadata(&path).expect("meta").permissions().mode();
+        assert_eq!(mode & 0o777, 0o700);
+        std::fs::remove_dir_all(folder).expect("cleanup");
     }
 }

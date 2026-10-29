@@ -62,7 +62,8 @@ fn starts_its_own_agent_in_shell_7_with_its_words_and_keeps_the_task_agent_in_sh
     assert!(!any_killed(&f));
     assert!(f.launch_script(&task.id, "1").starts_with("claude "));
     assert!(f.launch_script(&task.id, "7").starts_with("codex "));
-    assert!(f.launch_script(&task.id, "7").contains("--model gpt-5"));
+    let seven = f.launch_script(&task.id, "7");
+    assert!(seven.contains("'--model' 'gpt-5'"));
     let last = launches(&f, &task.id).pop().unwrap();
     assert_eq!(
         (&last["agent"], &last["stage"]),

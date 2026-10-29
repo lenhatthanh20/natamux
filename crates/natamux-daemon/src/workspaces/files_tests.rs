@@ -324,3 +324,35 @@ fn refuses_a_missing_file_a_folder_git_and_paths_outside() {
     assert!(outside(put("../secret.txt", &sha(b"secret"))));
     assert_eq!(read_to_string(&secret).unwrap(), "secret");
 }
+
+#[cfg(unix)]
+#[test]
+fn a_save_never_writes_through_a_hard_link_to_a_file_outside() {
+    let s = setup();
+    let secret = s.base.path().join("secret.txt");
+    write(&secret, "keep").unwrap();
+    std::fs::hard_link(&secret, s.root.join("a.ts")).unwrap();
+
+    write_workspace_file(&s.root, "a.ts", "mine", &sha(b"keep")).unwrap();
+
+    assert_eq!(read_to_string(&secret).unwrap(), "keep");
+    assert_eq!(read_to_string(s.root.join("a.ts")).unwrap(), "mine");
+}
+
+#[cfg(unix)]
+#[test]
+fn a_save_through_a_link_inside_the_worktree_changes_the_file_it_points_to() {
+    let s = setup();
+    write(s.root.join("real.ts"), "one").unwrap();
+    link(&s.root.join("real.ts"), &s.root.join("alias.ts"));
+
+    write_workspace_file(&s.root, "alias.ts", "two", &sha(b"one")).unwrap();
+
+    assert_eq!(read_to_string(s.root.join("real.ts")).unwrap(), "two");
+    assert!(
+        std::fs::symlink_metadata(s.root.join("alias.ts"))
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+}

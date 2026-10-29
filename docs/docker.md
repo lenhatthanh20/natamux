@@ -20,6 +20,7 @@ Open http://localhost:8080 and enter the token. The daemon listens on port 4317 
 | `NATAMUX_REPO` | Required git repository, mounted at `/repo` |
 | `NATAMUX_BIND` | Dashboard bind address; default `127.0.0.1` |
 | `NATAMUX_PORT` | Dashboard port; default `8080` |
+| `NATAMUX_ALLOWED_HOSTS` | Host names the daemon accepts (comma list, no ports); default `daemon,web` plus the loopback names. Add the name of a reverse proxy; other `Host` values get 403 |
 
 The daemon image contains the Rust daemon, Rust CLI, git and curl. Both containers run without root, with read-only root filesystems and no Linux capabilities. The repository must be writable by user 1000 inside the daemon container for worktree commands.
 

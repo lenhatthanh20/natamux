@@ -11,6 +11,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 
 use natamux_agents::launch::default_program;
+use natamux_agents::trust::TrustPaths;
 use natamux_core::js::js_trim;
 use natamux_git::branches::{list_branches, list_remote_branches};
 use natamux_git::commit_drafter::AgentRun;
@@ -67,6 +68,9 @@ pub struct WorkspaceOptions {
     pub run_gh: RunGh,
     pub run_agent_once: RunAgentOnce,
     pub log: LogFn,
+    /// Where the agents keep their trusted folders; a removed worktree leaves them. None: no
+    /// agent config is touched (tests).
+    pub trust_paths: Option<TrustPaths>,
 }
 
 impl WorkspaceOptions {
@@ -104,6 +108,7 @@ impl WorkspaceOptions {
             run_gh: default_run_gh(),
             run_agent_once: Arc::new(|_| Err("No agent runner is set".to_string())),
             log: Arc::new(|message| eprintln!("{message}")),
+            trust_paths: None,
         }
     }
 }
@@ -173,6 +178,7 @@ pub struct WorkspaceService {
     pub(crate) run_gh: RunGh,
     pub(crate) run_agent_once: RunAgentOnce,
     pub(crate) log: LogFn,
+    pub(crate) trust_paths: Option<TrustPaths>,
     /// The tasks with a change that runs now.
     pub(crate) busy: Mutex<HashSet<String>>,
     /// The tasks whose workspace is being made, and the step each one is at, oldest first.
@@ -214,6 +220,7 @@ impl WorkspaceService {
             run_gh: options.run_gh,
             run_agent_once: options.run_agent_once,
             log: options.log,
+            trust_paths: options.trust_paths,
             busy: Mutex::default(),
             steps: Mutex::default(),
             drafts: Mutex::default(),

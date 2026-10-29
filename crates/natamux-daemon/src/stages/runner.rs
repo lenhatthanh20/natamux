@@ -13,6 +13,7 @@ use natamux_core::stages::lanes::terminal_lane;
 use natamux_core::stages::terminal_lane::stage_of_terminal;
 use natamux_core::tasks::dependencies::{open_subtasks, waiting_on};
 use natamux_git::commit_push::delete_remote_ref;
+use natamux_git::worktrees::tracks_path;
 use natamux_proto::events::task_event::{RECORD_ONLY_EVENT_TYPES, TaskEvent};
 use natamux_proto::stages::schema::{Stage, StageKind, Step};
 use natamux_proto::tasks::task::{Task, TaskState};
@@ -24,6 +25,7 @@ use natamux_stages::files::{
 };
 use natamux_stages::paths::{PathInput, pick_path};
 use natamux_store::attachments::restore_attachments;
+use natamux_store::task_files::STAGE_DIR;
 use serde_json::{Value, json};
 
 use crate::shared::event_bus::DaemonMessage;
@@ -33,6 +35,10 @@ use crate::tasks::errors::TaskError;
 use crate::tasks::helpers::position_of;
 use crate::tasks::store::Applied;
 use crate::terminals::limits::MAIN_TERMINAL;
+
+// Logged as a workspace.warning event, which shows its message.
+const TRACKED_STAGE_DIR: &str =
+    "This repo tracks .natamux-task; stage files there may be pre-filled by the repo.";
 
 /// The runner's handle: the daemon and the routes call it.
 #[derive(Clone)]
@@ -187,9 +193,13 @@ impl StageRun {
             eprintln!("Could not restore the attachments of {}: {error}", task.id);
         }
         let (task_id, folder) = (task.id.clone(), PathBuf::from(workspace));
-        self.background(move |_| {
+        self.background(move |run| {
             if let Err(error) = exclude_stage_dir(&folder) {
                 eprintln!("Could not ignore the stage folder of {task_id}: {error}");
+            }
+            if tracks_path(&folder, STAGE_DIR) {
+                let payload = json!({ "message": TRACKED_STAGE_DIR });
+                let _ = run.record(&task_id, "workspace.warning", payload);
             }
         });
         if self.state().waiting_for_workspace.remove(&task.id) {
@@ -379,6 +389,7 @@ impl StageRun {
             Some(Step::Branch(current)) => current,
             _ => branch.clone(),
         };
+        self.check_path_trust(&task, &checked)?;
         let folder = working_dir(self.data_dir(), &task.id, task.workspace.as_deref());
         let cwd = task
             .workspace

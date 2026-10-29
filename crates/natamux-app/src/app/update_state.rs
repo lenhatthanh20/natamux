@@ -140,7 +140,10 @@ impl UpdateState {
             UpdateState::Failed { message } => words(
                 ItemKind::Retry,
                 "Update failed".into(),
-                Some(format!("{message}. Click to try again.")),
+                Some(format!(
+                    "{}. Click to try again.",
+                    message.trim_end_matches('.')
+                )),
             ),
             UpdateState::Checking { manual: false } | UpdateState::Idle | UpdateState::UpToDate => {
                 None

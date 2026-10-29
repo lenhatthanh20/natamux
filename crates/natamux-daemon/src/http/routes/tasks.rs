@@ -20,6 +20,7 @@ use natamux_proto::tasks::task::TaskState;
 use natamux_store::attachments::{list_attachments, read_attachment};
 use serde_json::{Value, json};
 
+use crate::http::agent_rules::Caller;
 use crate::http::errors::{
     Answer, error_answer, forbidden, internal_error, json_answer, task_error, workspace_error,
     zod_answer,
@@ -64,7 +65,17 @@ pub async fn list_tasks(state: Arc<AppState>, state_query: Option<Value>) -> Ans
     .await
 }
 
-pub async fn create_task(state: Arc<AppState>, body: Option<Value>) -> Answer {
+pub async fn create_task(state: Arc<AppState>, body: Option<Value>, who: &Caller) -> Answer {
+    // An agent makes subtasks of its own task only (`natamux task create --parent`).
+    let parent = body
+        .as_ref()
+        .and_then(|body| body.get("parentId"))
+        .and_then(Value::as_str);
+    if let Caller::Agent(own) = who
+        && parent != Some(own.as_str())
+    {
+        return forbidden("make a task that is not a subtask of this one");
+    }
     answer(StatusCode::CREATED, move || {
         let object = body.clone().unwrap_or_else(|| json!({}));
         let repo = task_repo_body(&object)?;
@@ -113,6 +124,7 @@ pub async fn delete_task(state: Arc<AppState>, id: String, query: &str) -> Answe
             .tasks
             .delete_task(&id)
             .map_err(|error| Box::new(task_error(&error)))?;
+        state.terminals.agent_tokens().forget(&id);
         Ok(json!({ "id": id, "tasks": to_value(&tasks) }))
     };
     match tokio::task::spawn_blocking(work).await {

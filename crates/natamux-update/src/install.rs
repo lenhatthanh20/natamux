@@ -80,6 +80,34 @@ pub fn replace_appimage(verified: &Path, current: &Path) -> io::Result<()> {
     result
 }
 
+pub const HASH_MISMATCH_EXIT: i32 = 3;
+
+/// An old-update backup beside `current` (macOS bundle or AppImage). It may be the only copy of
+/// the old app, so the caller shows it and never removes it.
+pub fn stale_backup(current: &Path) -> Option<PathBuf> {
+    let backup = if current.extension().is_some_and(|ext| ext == "app") {
+        let mut name = current.as_os_str().to_os_string();
+        name.push(".old");
+        PathBuf::from(name)
+    } else {
+        sibling(current, ".natamux-old").ok()?
+    };
+    backup.exists().then_some(backup)
+}
+
+/// Run as root: `sh -c <this> sh <file> <sha256> <installer>`. The copy in a root-owned folder
+/// is the one that gets checked and installed, so the user cannot swap the file in between.
+/// A hash mismatch exits with `HASH_MISMATCH_EXIT`, before the installer runs.
+pub fn deb_install_script() -> &'static str {
+    "set -eu\n\
+     dir=$(mktemp -d)\n\
+     trap 'rm -rf \"$dir\"' EXIT\n\
+     cp \"$1\" \"$dir/pkg\"\n\
+     if command -v sha256sum >/dev/null 2>&1; then sum=sha256sum; else sum='shasum -a 256'; fi\n\
+     printf '%s  %s\\n' \"$2\" \"$dir/pkg\" | $sum -c - >/dev/null || exit 3\n\
+     \"$3\" -i \"$dir/pkg\"\n"
+}
+
 fn sibling(path: &Path, suffix: &str) -> io::Result<PathBuf> {
     let name = path
         .file_name()

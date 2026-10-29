@@ -35,6 +35,7 @@ mod issue_pipeline;
 mod own_agent;
 mod own_pipeline;
 mod reopen;
+mod repo_trust;
 mod report_other_step;
 mod resume_command_ran;
 mod resume_daemon_start;

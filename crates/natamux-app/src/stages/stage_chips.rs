@@ -7,6 +7,7 @@ use natamux_proto::tasks::task::TaskState;
 use ui::prelude::*;
 
 use super::{CardInput, FileChip, icon, kilobytes, small_chip};
+use crate::app::links::open_link;
 use crate::components::button_style::{button_icon, quiet_button};
 use crate::components::colors::{signal, state_colors};
 use crate::sidebar::sidebar_text::banner_text;
@@ -137,7 +138,7 @@ fn pr_chip(input: &CardInput) -> Option<AnyElement> {
                     .label_size(LabelSize::Small)
                     .start_icon(button_icon("external-link"))
                     .truncate(true)
-                    .on_click(move |_, _, cx| cx.open_url(&link)),
+                    .on_click(move |_, _, cx| open_link(&link, cx)),
             )
             .when(*merged, |this| {
                 this.child(
@@ -234,7 +235,7 @@ fn reason_text(text: &str, _: &App) -> AnyElement {
                     quiet_button(SharedString::from(format!("reason-link-{at}-{url}")), shown)
                         .label_size(LabelSize::Small)
                         .tooltip(ui::Tooltip::text(url.clone()))
-                        .on_click(move |_, _, cx| cx.open_url(&url))
+                        .on_click(move |_, _, cx| open_link(&url, cx))
                         .into_any_element()
                 }
             }

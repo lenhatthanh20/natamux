@@ -12,6 +12,7 @@ use natamux_agents::hook_files::{
 use natamux_agents::hooks::Signal;
 use natamux_agents::trust::trust_paths;
 use natamux_core::agents::hook_settings::claude_code_hook_settings;
+use natamux_core::workspaces::private_dir::private_dir;
 use natamux_pty::{Env, SpawnOptions};
 use natamux_stages::ci_check::GhCi;
 use tokio::task::JoinHandle;
@@ -43,7 +44,7 @@ use crate::workspaces::service::WorkspaceService;
 #[path = "start_services.rs"]
 mod services;
 
-use services::{github_services, task_store, workspace_service};
+use services::{github_services, task_store, trusted_of, workspace_service};
 
 pub struct Daemon {
     pub state: Arc<AppState>,
@@ -180,6 +181,7 @@ fn agent_runner(
         })),
         trust_paths: trust_paths(|name| std::env::var(name).ok(), &home),
         permission_mode_of: Arc::new(move |repo| settings.settings_of(repo).agents.permission_mode),
+        trusted_of: trusted_of(&store.repos),
     }))
 }
 
@@ -204,12 +206,12 @@ fn stage_runner(
     options.open_shells = Some(Arc::clone(open_shells));
     options.jobs = Arc::clone(&store.jobs);
     options.ci = Arc::new(GhCi::default());
+    options.trusted_of = trusted_of(&store.repos);
     StageRunner::new(options)
 }
 
 /// The terminals, which tell the stage runner of their output.
 fn terminal_service(
-    config: &Config,
     env: &Env,
     spawn: Arc<SpawnPty>,
     scheduler: &Arc<Scheduler>,
@@ -225,7 +227,7 @@ fn terminal_service(
     TerminalService::new(TerminalOptions {
         spawn,
         workspace_of: Arc::new(workspace_of(store.tasks.clone())),
-        env: shell_env(env, &config.agent_token, daemon_url),
+        env: shell_env(env, daemon_url),
         scheduler: Arc::clone(scheduler),
         on_output: Some(Arc::new(
             move |task_id: &str, terminal: &str, data: &[u8]| {
@@ -347,7 +349,7 @@ pub async fn start(
     spawn: Arc<SpawnPty>,
     scheduler: Arc<Scheduler>,
 ) -> std::io::Result<Daemon> {
-    std::fs::create_dir_all(&config.data_dir)?;
+    private_dir(&config.data_dir)?;
     let store = task_store(config)?;
     let listener = bind(&config.host, config.port).await?;
     let address = listener.local_addr()?;
@@ -355,7 +357,7 @@ pub async fn start(
     let daemon_url = format!("http://127.0.0.1:{}", address.port());
     let cells = Cells::default();
     let spawn = with_hook_files(spawn);
-    let terminals = terminal_service(config, env, spawn, &scheduler, &store, &daemon_url, &cells);
+    let terminals = terminal_service(env, spawn, &scheduler, &store, &daemon_url, &cells);
     let open_shells = open_shells(config, &store, &terminals, &scheduler, &cells.runner);
     let agents = Arc::new(agent_runner(
         config,
@@ -459,13 +461,14 @@ fn app_state(
         hooks: built.hooks,
         usage: built.usage,
         token: config.token.clone(),
-        agent_token: config.agent_token.clone(),
+        big_bodies: Arc::new(tokio::sync::Semaphore::new(2)),
         data_dir: config.data_dir.clone(),
         home,
         web: WebAssets::new(config.web_dir.clone()),
         terminals: built.terminals,
         open_shells: built.open_shells,
         silent_close: config.silent_close,
+        allowed_hosts: config.allowed_hosts.clone(),
         templates: TemplateService::new(&config.data_dir, tasks.clone()),
         tasks,
         repos,

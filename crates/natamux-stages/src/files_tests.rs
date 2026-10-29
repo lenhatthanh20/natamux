@@ -111,3 +111,79 @@ fn starts_a_new_line_when_the_ignore_list_has_no_line_end() {
         "*.log\n/.natamux-task/\n"
     );
 }
+
+#[cfg(unix)]
+mod links {
+    use super::*;
+    use std::os::unix::fs::symlink;
+
+    fn outside_is_empty(outside: &TempDir) -> bool {
+        std::fs::read_dir(outside.path()).unwrap().next().is_none()
+    }
+
+    #[test]
+    fn write_stage_file_refuses_a_link_as_the_folder_the_file_or_a_dangling_one() {
+        let data = TempDir::new("data");
+        let outside = TempDir::new("outside");
+        let folder_link = TempDir::new("work");
+        symlink(outside.path(), folder_link.path().join(".natamux-task")).unwrap();
+        let workspace = folder_link.path().to_str().unwrap();
+        let error = write_stage_file(data.path(), "T-1", Some(workspace), "spec.md", "x");
+        assert!(error.unwrap_err().0.contains(".natamux-task"));
+
+        let file_link = TempDir::new("work");
+        std::fs::create_dir(file_link.path().join(".natamux-task")).unwrap();
+        std::fs::write(outside.path().join("secret"), "keep").unwrap();
+        symlink(
+            outside.path().join("secret"),
+            file_link.path().join(".natamux-task/spec.md"),
+        )
+        .unwrap();
+        let workspace = file_link.path().to_str().unwrap();
+        assert!(write_stage_file(data.path(), "T-1", Some(workspace), "spec.md", "x").is_err());
+        assert_eq!(
+            std::fs::read_to_string(outside.path().join("secret")).unwrap(),
+            "keep"
+        );
+
+        let dangling = TempDir::new("work");
+        std::fs::create_dir(dangling.path().join(".natamux-task")).unwrap();
+        symlink(
+            outside.path().join("new"),
+            dangling.path().join(".natamux-task/plan.md"),
+        )
+        .unwrap();
+        let workspace = dangling.path().to_str().unwrap();
+        assert!(write_stage_file(data.path(), "T-1", Some(workspace), "plan.md", "x").is_err());
+        assert!(!outside.path().join("new").exists());
+    }
+
+    #[test]
+    fn copy_and_restore_refuse_a_link_in_the_worktree() {
+        let data = TempDir::new("data");
+        let outside = TempDir::new("outside");
+        let source = TempDir::new("source");
+        let source_workspace = source.path().to_str().unwrap();
+        write_stage_file(data.path(), "T-1", Some(source_workspace), "spec.md", "s").unwrap();
+        archive_stage_files(data.path(), "T-1", Some(source_workspace)).unwrap();
+
+        let work = TempDir::new("work");
+        symlink(outside.path(), work.path().join(".natamux-task")).unwrap();
+        let workspace = work.path().to_str().unwrap();
+        assert!(restore_stage_files(data.path(), "T-1", Some(workspace)).is_err());
+
+        // Copy out of a worktree whose archive folder is a link is not a risk (the archive is
+        // ours), but a link as the target file in a worktree is.
+        let target = TempDir::new("target");
+        std::fs::create_dir(target.path().join(".natamux-task")).unwrap();
+        symlink(
+            outside.path().join("spec.md"),
+            target.path().join(".natamux-task/spec.md"),
+        )
+        .unwrap();
+        let from = archive_dir(data.path(), "T-1");
+        let copied = copy_stage_files(&from, target.path(), Path::new(STAGE_DIR));
+        assert!(copied.is_err());
+        assert!(outside_is_empty(&outside));
+    }
+}

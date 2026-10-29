@@ -5,6 +5,7 @@ use natamux_proto::projects::repo::{
     AddRepo, AddedRepo, BranchList, LoadedSettings, RemoteBranchList, Repo, RepoList,
     SavedSettings, SkillList,
 };
+use natamux_proto::projects::repo_trust::{ApproveRepo, RepoTrustView};
 use natamux_proto::terminals::query::encode;
 
 use crate::config::Config;
@@ -73,4 +74,21 @@ pub async fn save_settings(
 pub async fn list_skills(config: &Config, repo_id: &str) -> Result<SkillList, ClientError> {
     let path = format!("/repos/{}/skills", encode(repo_id));
     call(config, Method::GET, &path).await
+}
+
+/// The commands of a project that run on this machine, and whether the user approved them.
+pub async fn repo_trust(config: &Config, repo_id: &str) -> Result<RepoTrustView, ClientError> {
+    let path = format!("/repos/{}/trust", encode(repo_id));
+    call(config, Method::GET, &path).await
+}
+
+/// Approves the commands the user saw. The daemon answers 409 when they changed since.
+pub async fn approve_repo(
+    config: &Config,
+    repo_id: &str,
+    hash: &str,
+) -> Result<RepoTrustView, ClientError> {
+    let path = format!("/repos/{}/trust", encode(repo_id));
+    let body = ApproveRepo { hash: hash.into() };
+    call_with(config, Method::POST, &path, &body).await
 }

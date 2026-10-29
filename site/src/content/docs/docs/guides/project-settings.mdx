@@ -153,6 +153,27 @@ On the **JSON** tab, add:
 
 Each agent then follows its own permission settings. See [`agents`](/docs/reference/configuration/#agents).
 
+## Approve the project's commands
+
+A project can run commands on your machine: a stage `check`, a stage `command`, a path condition `when.command`, the words of a stage `args`, and the setup script (`.natamux-setup`, `.natamux-setup.ps1`). Natamux runs them only after you approve them, and again after each change. A project with none of them needs no approval.
+
+- After you add a project, a dialog lists every command word for word, with where it comes from, and the setup script. Choose **Approve** or **Not now**.
+- **Start a task** in a project that is not approved shows the same dialog. The task starts after either button.
+- Until you approve, the project settings show a **Review commands** row that opens the dialog.
+- Approval also lets the agents trust the worktree and run in auto mode. So the repository's own agent config (`.codex`, `.cursor`, `.claude`, MCP servers) runs too.
+- A save of the settings in this screen approves the commands you saved. A changed setup script still needs the dialog.
+- Projects added before this check came in were approved as they were at the first start.
+
+While a project is not approved:
+
+- A stage with a `check` or a `command` fails with **Repo commands are not approved. Review them in the project settings, then retry.** A branch whose path runs a command fails the stage before it the same way.
+- The setup script does not run. The task's log says **Setup script skipped**.
+- Agents start without auto mode and without their trust of the folder, and stage `args` are left out.
+
+Stage `args` are split at spaces, and each word is quoted, so no shell sign in them runs. A quoted value with spaces becomes several words.
+
+Without the app, use [`natamux repo trust`](/docs/reference/cli/#repo-trust).
+
 ## What a change does to tasks
 
 - New tasks use the new pipeline.

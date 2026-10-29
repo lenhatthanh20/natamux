@@ -104,7 +104,7 @@ fn issue_of(item: &Value) -> Option<GitHubIssue> {
 }
 
 /// The address in the last line of a task's notes, `/Imported from (\S+)\s*$/`.
-fn imported_url(description: &str) -> Option<&str> {
+pub(crate) fn imported_url(description: &str) -> Option<&str> {
     let end = description.trim_end_matches(is_js_space);
     let start = end.rfind(is_js_space).map_or(0, |at| {
         at + end[at..].chars().next().map_or(1, char::len_utf8)

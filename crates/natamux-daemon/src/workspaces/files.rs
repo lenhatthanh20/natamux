@@ -4,6 +4,7 @@
 use std::cmp::Ordering;
 use std::path::{Component, Path, PathBuf};
 
+use natamux_core::workspaces::safe_write::write_inside;
 use natamux_git::changes::locale_compare;
 use natamux_git::exec::OutsideWorkspaceError;
 use natamux_git::file_diff::{FileInWorktree, MAX_FILE_BYTES, looks_binary, read_inside};
@@ -158,8 +159,8 @@ pub fn read_workspace_file(root: &Path, path: &str) -> WorkspaceResult<Workspace
     })
 }
 
-/// Only a file that is there and still has the bytes the editor read. Written in place, so the
-/// mode stays.
+/// Only a file that is there and still has the bytes the editor read. Written to a new file and
+/// renamed over it (the mode is copied), so a link or a hard link is never written through.
 pub fn write_workspace_file(
     root: &Path,
     path: &str,
@@ -180,8 +181,13 @@ pub fn write_workspace_file(
     if version_of(&bytes) != version {
         return Err(WorkspaceError::ChangedOnDisk(path.to_string()));
     }
-    // `fs::write` opens the file with truncate, which keeps its mode.
-    std::fs::write(&file.real, text).map_err(|error| read_error(&error))?;
+    // The real path: a link inside the worktree is saved at the file it points to.
+    let real_root = root.canonicalize().map_err(|error| read_error(&error))?;
+    let inside = file
+        .real
+        .strip_prefix(&real_root)
+        .map_err(|_| OutsideWorkspaceError(path.to_string()))?;
+    write_inside(&real_root, inside, text.as_bytes()).map_err(|error| read_error(&error))?;
     Ok(SavedFile {
         path: path.to_string(),
         version: version_of(text.as_bytes()),

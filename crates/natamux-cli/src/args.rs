@@ -58,6 +58,7 @@ const OPTIONS: &[Spec] = &[
     spec("repo", Kind::Text),
     spec("parent", Kind::Text),
     spec("attach", Kind::Texts),
+    spec("approve", Kind::Text),
 ];
 
 #[derive(Debug, Default, PartialEq, Eq)]

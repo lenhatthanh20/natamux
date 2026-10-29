@@ -113,6 +113,7 @@ impl Fixture {
             permission_mode_of: Arc::new(move |_| {
                 modes.lock().unwrap().agents.permission_mode.clone()
             }),
+            trusted_of: Arc::new(|_| true),
         }));
         let run_command: Arc<Mutex<RunCommand>> =
             Arc::new(Mutex::new(Arc::new(|_: &str, _: &Path| Ran {
@@ -156,6 +157,15 @@ impl Fixture {
         self.runner.stop();
         let mut options = self.runner_options(None);
         options.end_shell_grace_ms = ms;
+        self.runner = StageRunner::new(options);
+        self.runner.start();
+    }
+
+    /// A new runner for a project whose commands are not approved.
+    pub fn untrusted(&mut self) {
+        self.runner.stop();
+        let mut options = self.runner_options(None);
+        options.trusted_of = Arc::new(|_| false);
         self.runner = StageRunner::new(options);
         self.runner.start();
     }

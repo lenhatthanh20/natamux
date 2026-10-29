@@ -302,6 +302,28 @@ impl HookService {
         task_id_header: Option<&str>,
         terminal: Option<&str>,
     ) -> Result<HookResult, HookError> {
+        self.handle_in(agent_id, raw, task_id_header, terminal, true)
+    }
+
+    /// A hook sent with a task's agent token: for that task only, never one its folder names.
+    pub fn handle_own(
+        &self,
+        agent_id: &str,
+        raw: &Value,
+        own: &str,
+        terminal: Option<&str>,
+    ) -> Result<HookResult, HookError> {
+        self.handle_in(agent_id, raw, Some(own), terminal, false)
+    }
+
+    fn handle_in(
+        &self,
+        agent_id: &str,
+        raw: &Value,
+        task_id_header: Option<&str>,
+        terminal: Option<&str>,
+        by_cwd: bool,
+    ) -> Result<HookResult, HookError> {
         let adapter =
             find_adapter(agent_id).ok_or_else(|| HookError::UnknownAgent(agent_id.to_string()))?;
         let Some(hook) = adapter
@@ -310,7 +332,8 @@ impl HookService {
         else {
             return Ok(HookResult::none());
         };
-        let Some(found) = self.find_task(hook.cwd.as_deref(), task_id_header)? else {
+        let cwd = hook.cwd.as_deref().filter(|_| by_cwd);
+        let Some(found) = self.find_task(cwd, task_id_header)? else {
             return Ok(HookResult::none());
         };
         let lock = self.task_lock(&found.id);

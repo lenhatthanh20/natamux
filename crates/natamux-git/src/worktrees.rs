@@ -3,7 +3,7 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use crate::exec::{GitError, git, with_git_config};
+use crate::exec::{GitError, checked_ref, git, with_git_config};
 
 // One checkout worker per CPU: a big repository checks out much faster. Git before 2.32 ignores it.
 // A worktree call that hangs must end, not wait a year.
@@ -27,6 +27,8 @@ pub fn add_worktree(
     base_ref: Option<&str>,
     existing: bool,
 ) -> Result<(), GitError> {
+    let branch = checked_ref(branch)?;
+    let base_ref = base_ref.map(checked_ref).transpose()?;
     let path = worktree.to_string_lossy();
     let mut args = vec!["worktree", "add"];
     if existing {
@@ -62,6 +64,17 @@ pub fn has_submodules(worktree: &Path) -> Result<bool, GitError> {
     Ok(output
         .split('\n')
         .any(|line| !line.is_empty() && !line.starts_with('-')))
+}
+
+/// Whether git tracks a file at or below `path` in the worktree. False when git fails.
+pub fn tracks_path(worktree: &Path, path: &str) -> bool {
+    git(
+        worktree,
+        &["ls-files", "-z", "--", path],
+        Some(WORKTREE_TIMEOUT),
+        &[],
+    )
+    .is_ok_and(|output| !output.is_empty())
 }
 
 /// Reads the output of `git worktree list --porcelain`: the path of each worktree, main first.

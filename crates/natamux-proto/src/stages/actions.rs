@@ -13,6 +13,11 @@ pub const MAX_STAGE_ID_LENGTH: usize = 40;
 /// Longest `reason` of a stage action, after trimming.
 pub const MAX_REASON_LENGTH: usize = 20_000;
 
+/// The one-time result ticket of a command stage: the stage script sets the variable, and
+/// `natamux stage pass|fail` sends it in the header. Without it an agent token may not pass.
+pub const STAGE_TICKET_ENV: &str = "NATAMUX_STAGE_TICKET";
+pub const STAGE_TICKET_HEADER: &str = "X-Natamux-Stage-Ticket";
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum StageAction {

@@ -132,6 +132,7 @@ pub enum Command {
         delete_branch: bool,
         json: bool,
     },
+    RepoTrust(crate::repo_trust::RepoTrustCommand),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -298,6 +299,9 @@ pub fn parse_command(argv: &[String]) -> Result<Command, UsageError> {
             Ok(Command::HooksClaudeCode)
         }
         "workspace" => workspace_command(&line),
+        "repo" => crate::repo_trust::parse(line.second, line.rest, line.values, line.json)
+            .map(Command::RepoTrust)
+            .map_err(UsageError),
         _ => usage(format!("Unknown command \"{group}\"")),
     }
 }

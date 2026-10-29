@@ -91,7 +91,7 @@ pub(crate) fn check_repos(repos: &mut [Repo]) -> Result<(), ZodError> {
 }
 
 /// `<file>.tmp` then a rename, so a crash leaves the old file whole.
-fn write_whole(file: &Path, text: &str) -> Result<(), RepoError> {
+pub(crate) fn write_whole(file: &Path, text: &str) -> Result<(), RepoError> {
     if let Some(folder) = file.parent() {
         std::fs::create_dir_all(folder)?;
     }

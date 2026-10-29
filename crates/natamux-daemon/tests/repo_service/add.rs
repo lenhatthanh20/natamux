@@ -243,7 +243,8 @@ fn keeps_the_empty_list_of_a_missing_repos_json_and_makes_the_file_on_save() {
     let file = data.join("repos.json");
     let empty = open(&data, None, None, None);
     assert_eq!(empty.list().unwrap(), vec![]);
-    fs::create_dir(&data).unwrap();
+    // The first start wrote `repo-trust.json` into the folder already.
+    fs::create_dir_all(&data).unwrap();
     fs::write(
         &file,
         json!([{ "id": "other", "name": "other", "path": text(&fx.dir) }]).to_string(),

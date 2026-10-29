@@ -218,6 +218,7 @@ impl Repos {
             .filter(|repo| repo.id != id)
             .cloned()
             .collect();
-        self.save_repos(&kept)
+        self.save_repos(&kept)?;
+        self.forget_trust(id)
     }
 }

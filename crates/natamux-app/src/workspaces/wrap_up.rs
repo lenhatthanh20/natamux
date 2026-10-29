@@ -13,6 +13,7 @@ use ui::{Tooltip, prelude::*};
 use super::workspace_rules::{GitStep, push_button};
 use super::wrap_up_rules::{FinishedAction, GitFacts, RowTone, wrap_up_rows};
 use crate::agents::agent_choices::agent_label;
+use crate::app::links::open_link;
 use crate::components::button_style::{action_button, quiet_button};
 use crate::components::icons::icon_path;
 use crate::sidebar::sidebar_tree::stage_name;
@@ -158,7 +159,7 @@ impl WrapUp {
                 small_button(
                     id,
                     "Open",
-                    Rc::new(move |_: &mut Window, cx: &mut App| cx.open_url(&url)),
+                    Rc::new(move |_: &mut Window, cx: &mut App| open_link(&url, cx)),
                 )
                 .into_any_element()
             }),

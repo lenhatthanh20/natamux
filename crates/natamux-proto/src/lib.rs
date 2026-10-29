@@ -14,6 +14,7 @@ pub mod events {
 pub mod projects {
     pub mod issues;
     pub mod repo;
+    pub mod repo_trust;
     pub mod settings_rules;
 }
 pub mod stages {

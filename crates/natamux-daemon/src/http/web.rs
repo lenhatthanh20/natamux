@@ -12,7 +12,7 @@ use super::errors::Answer;
 
 include!(concat!(env!("OUT_DIR"), "/web_assets.rs"));
 
-const PAGE_CSP: &str = "default-src 'self'; connect-src 'self' ws: wss:; img-src 'self' data: blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'";
+const PAGE_CSP: &str = "default-src 'self'; connect-src 'self'; img-src 'self' data: blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'";
 
 pub struct WebAssets {
     dir: Option<PathBuf>,

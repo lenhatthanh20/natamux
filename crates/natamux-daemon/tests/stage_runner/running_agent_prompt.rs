@@ -99,6 +99,7 @@ fn windows_runner(f: &mut Fixture) {
         on_launch: None,
         trust_paths: trust_paths(|_| None, &home),
         permission_mode_of: Arc::new(move |_| modes.lock().unwrap().agents.permission_mode.clone()),
+        trusted_of: Arc::new(|_| true),
     }));
     let repo = f.repo.to_string_lossy().into_owned();
     let settings = Arc::clone(&f.settings);

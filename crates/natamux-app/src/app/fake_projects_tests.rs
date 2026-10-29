@@ -129,3 +129,40 @@ fn import_makes_a_draft_task_and_skips_imported_issues() {
     let issues = fake.list_issues(Some("natamux")).unwrap();
     assert_eq!(issues[0].task_id.as_deref(), Some(tasks[0].id.as_str()));
 }
+
+#[test]
+fn seeded_projects_are_approved_and_an_added_one_waits() {
+    let fake = FakeDaemon::default();
+    assert!(fake.repo_trust("natamux").unwrap().trusted);
+    let repo = fake.add_repo(&add("/srv/app", None, None)).unwrap();
+    let view = fake.repo_trust(&repo.id).unwrap();
+    assert!(!view.trusted);
+    assert_eq!(view.hash, "fake-app");
+    assert!(!view.commands.is_empty());
+    assert_eq!(view.setup[0].file, ".natamux-setup");
+}
+
+#[test]
+fn approving_the_shown_hash_trusts_and_sends_repos_changed() {
+    let fake = FakeDaemon::default();
+    let repo = fake.add_repo(&add("/srv/app", None, None)).unwrap();
+    let mut feed = watch(&fake);
+    let hash = fake.repo_trust(&repo.id).unwrap().hash;
+    assert!(fake.approve_repo(&repo.id, &hash).unwrap().trusted);
+    assert!(fake.repo_trust(&repo.id).unwrap().trusted);
+    assert!(matches!(
+        feed.try_recv().unwrap(),
+        natamux_client::DashboardEvent::Repos { .. }
+    ));
+}
+
+#[test]
+fn an_old_hash_answers_409_and_an_unknown_project_404() {
+    let fake = FakeDaemon::default();
+    fake.distrust_repo("natamux");
+    let error = fake.approve_repo("natamux", "old").unwrap_err();
+    assert_eq!(code(error).0, 409);
+    assert!(!fake.repo_trust("natamux").unwrap().trusted);
+    let error = fake.repo_trust("nope").unwrap_err();
+    assert_eq!(code(error), (404, "Project nope not found".into()));
+}

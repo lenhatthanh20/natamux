@@ -17,6 +17,7 @@ use super::session_lifecycle::{
 };
 use super::tickets::Tickets;
 use super::types::{ClientRef, Session, SessionRef, Size, TerminalError, same_client};
+use crate::agents::task_access::AgentTokens;
 use crate::shared::event_bus::DaemonMessage;
 use crate::shared::turns::Turns;
 
@@ -25,6 +26,8 @@ pub(super) struct Inner {
     pub(super) env: Env,
     pub(super) sessions: Mutex<HashMap<String, SessionRef>>,
     pub(super) tickets: Mutex<Tickets>,
+    /// The token each task's shells get as `NATAMUX_TOKEN`.
+    pub(super) agent_tokens: Arc<AgentTokens>,
     /// By task: whether output came since the quiet timer was set.
     pub(super) output_seen: Mutex<HashMap<String, bool>>,
     pub(super) next_attach: AtomicU64,
@@ -179,6 +182,7 @@ impl Inner {
         let session = spawn_session(NewSession {
             spawn: self.options.spawn.as_ref(),
             env: &self.env,
+            agent_token: self.agent_tokens.token_for(task_id),
             cwd: &cwd,
             task_id,
             terminal,
