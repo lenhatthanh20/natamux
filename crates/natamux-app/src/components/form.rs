@@ -4,6 +4,7 @@
 use editor::Editor;
 use gpui::Focusable;
 use gpui::{Entity, FontWeight};
+use language::language_settings::SoftWrap;
 use ui::prelude::*;
 
 use super::tab_order;
@@ -42,7 +43,12 @@ pub fn text_editor(
 ) -> Entity<Editor> {
     cx.new(|cx| {
         let mut editor = match lines {
-            Some((min, max)) => Editor::auto_height(min, max, window, cx),
+            Some((min, max)) => {
+                let mut editor = Editor::auto_height(min, max, window, cx);
+                // A textarea wraps long lines; Zed's default setting does not.
+                editor.set_soft_wrap_mode(SoftWrap::EditorWidth, cx);
+                editor
+            }
             None => Editor::single_line(window, cx),
         };
         editor.set_placeholder_text(placeholder, window, cx);
