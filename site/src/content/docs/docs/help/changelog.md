@@ -7,6 +7,10 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v1.0.8 (2026-10-29)
+
+- Fix: in the v1.0.7 desktop app, **Start** in **Start a task** closed the app at once when the project's commands needed no approval. Now the task starts.
+
 ## v1.0.7 (2026-10-29)
 
 - A project's commands (a stage `check` or `command`, a path `when.command`, stage `args` and the setup script) run only after you approve them, and again after each change. The desktop app asks after you add a project and in **Start a task**, and the project settings show **Review commands** until you approve; without the app, use `natamux repo trust`. Projects added before were approved at the first start. See [Approve the project's commands](/docs/guides/project-settings/#approve-the-projects-commands).
