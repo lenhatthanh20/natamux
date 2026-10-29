@@ -5,8 +5,10 @@
 use std::ops::Range;
 use std::sync::Arc;
 
-use editor::display_map::{BlockPlacement, BlockProperties, BlockStyle, CustomBlockId};
-use editor::{Editor, HiddenDiffHunkRenderer, MultiBuffer};
+use editor::display_map::{
+    BlockContext, BlockPlacement, BlockProperties, BlockStyle, CustomBlockId, RenderBlock,
+};
+use editor::{Anchor, Editor, HiddenDiffHunkRenderer, MultiBuffer};
 use gpui::Entity;
 use language::Buffer;
 use language::language_settings::SoftWrap;
@@ -94,8 +96,8 @@ pub fn plain_switches(
     );
 }
 
-/// Empty rows above `before_row` of one side, or below its last row at the end of the file. The
-/// id lets a newer read of the file take the rows away again.
+/// Empty rows above `before_row` of one side, or below its last row at the end of the file (or
+/// when no excerpt holds the row). The id lets a newer read of the file take the rows away again.
 pub fn add_spacer(
     editor: &Entity<Editor>,
     buffer: &Entity<Buffer>,
@@ -110,11 +112,11 @@ pub fn add_spacer(
                 .buffer()
                 .read(cx)
                 .buffer_point_to_anchor(buffer, Point::new(row, 0), cx);
-        let anchor = anchor?;
-        let placement = if spacer.before_row > last_row {
-            BlockPlacement::Below(anchor)
-        } else {
-            BlockPlacement::Above(anchor)
+        // No excerpt holds the row: below the end still keeps the two sides level.
+        let placement = match anchor {
+            Some(anchor) if spacer.before_row <= last_row => BlockPlacement::Above(anchor),
+            Some(anchor) => BlockPlacement::Below(anchor),
+            None => BlockPlacement::Below(Anchor::Max),
         };
         editor
             .insert_blocks(
@@ -122,12 +124,22 @@ pub fn add_spacer(
                     placement,
                     height: Some(spacer.rows),
                     style: BlockStyle::Spacer,
-                    render: Arc::new(|_| div().into_any_element()),
+                    render: empty_rows(),
                     priority: 0,
                 }],
                 None,
                 cx,
             )
             .pop()
+    })
+}
+
+/// Empty rows as tall as their block. The editor resizes a block to what it draws once it shows,
+/// so an empty element would shrink the block to one row (T-0230).
+pub fn empty_rows() -> RenderBlock {
+    Arc::new(|cx: &mut BlockContext| {
+        div()
+            .h(cx.line_height * cx.height as f32)
+            .into_any_element()
     })
 }

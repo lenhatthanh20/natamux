@@ -2,6 +2,7 @@
 //! `LineChange`, the empty rows that keep the two sides of a side by side diff level, and the
 //! width rules of the Changes tab (`ChangesPanel.tsx`).
 
+use std::cmp::Ordering;
 use std::ops::Range;
 
 use super::change_rules::{LineChange, Side};
@@ -77,6 +78,30 @@ pub fn spacers(hunks: &[HunkRows]) -> Vec<Spacer> {
             }
         })
         .collect()
+}
+
+/// Empty rows at the end of the side whose rows after the last hunk are fewer: a text with a final
+/// line break has one more (empty) last row than a text without. `old_rows` and `new_rows` count
+/// all rows of each side.
+pub fn end_spacer(hunks: &[HunkRows], old_rows: u32, new_rows: u32) -> Option<Spacer> {
+    let (old_end, new_end) = hunks
+        .last()
+        .map_or((0, 0), |hunk| (hunk.old.end, hunk.new.end));
+    let old_tail = old_rows.saturating_sub(old_end);
+    let new_tail = new_rows.saturating_sub(new_end);
+    match old_tail.cmp(&new_tail) {
+        Ordering::Less => Some(Spacer {
+            side: Side::Old,
+            before_row: old_rows,
+            rows: new_tail - old_tail,
+        }),
+        Ordering::Greater => Some(Spacer {
+            side: Side::New,
+            before_row: new_rows,
+            rows: old_tail - new_tail,
+        }),
+        Ordering::Equal => None,
+    }
 }
 
 /// Side by side is on when the user wants it and the diff column has room; the stored choice
@@ -178,6 +203,63 @@ mod tests {
                 },
             ]
         );
+    }
+
+    #[test]
+    fn an_end_of_file_hunk_gets_its_empty_rows_on_the_shorter_side() {
+        // T-0230: lines deleted at the end, lines added at the end, and the last line changed
+        // when the final line break was dropped.
+        let deleted = spacers(&[hunk(280..427, 280..280)]);
+        let added = spacers(&[hunk(280..280, 280..427)]);
+        let last_changed = spacers(&[hunk(279..427, 279..280)]);
+        assert_eq!(
+            deleted,
+            [Spacer {
+                side: Side::New,
+                before_row: 280,
+                rows: 147,
+            }]
+        );
+        assert_eq!(
+            added,
+            [Spacer {
+                side: Side::Old,
+                before_row: 280,
+                rows: 147,
+            }]
+        );
+        assert_eq!(
+            last_changed,
+            [Spacer {
+                side: Side::New,
+                before_row: 280,
+                rows: 147,
+            }]
+        );
+    }
+
+    #[test]
+    fn the_side_with_fewer_rows_after_the_last_hunk_gets_one_at_the_end() {
+        // Only the old text has a final line break, so only it has an empty last row.
+        let hunks = [hunk(277..427, 277..280)];
+        assert_eq!(
+            end_spacer(&hunks, 428, 280),
+            Some(Spacer {
+                side: Side::New,
+                before_row: 280,
+                rows: 1,
+            })
+        );
+        assert_eq!(
+            end_spacer(&hunks, 427, 281),
+            Some(Spacer {
+                side: Side::Old,
+                before_row: 427,
+                rows: 1,
+            })
+        );
+        assert_eq!(end_spacer(&hunks, 428, 281), None);
+        assert_eq!(end_spacer(&[], 100, 100), None);
     }
 
     #[test]

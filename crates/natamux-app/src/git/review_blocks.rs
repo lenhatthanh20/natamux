@@ -16,6 +16,7 @@ use text::Point;
 use ui::prelude::*;
 
 use super::changes_view::ChangesView;
+use super::diff_editors::empty_rows;
 use super::diff_rules::HunkRows;
 use super::diff_view::DiffView;
 use super::review_rules::{
@@ -154,13 +155,12 @@ fn place_one(
         cx,
     ));
     if let Some((pane, anchor)) = matching {
-        let empty: RenderBlock = Arc::new(|_| div().into_any_element());
         placed.extend(insert(
             &pane.editor,
             anchor,
             rows,
             BlockStyle::Spacer,
-            empty,
+            empty_rows(),
             cx,
         ));
     }
