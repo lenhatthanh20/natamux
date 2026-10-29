@@ -49,6 +49,29 @@ fn sends_shells_changed_when_a_shell_starts_is_closed_or_ends() {
 }
 
 #[test]
+fn tells_the_task_and_terminal_of_each_shell_whose_process_ended() {
+    let ended = Arc::new(Mutex::new(Vec::<(String, String)>::new()));
+    let sink = Arc::clone(&ended);
+    let h = setup_with(SetupOptions {
+        on_exit: Some(Arc::new(move |task: &str, terminal: &str| {
+            sink.lock().unwrap().push((task.into(), terminal.into()))
+        })),
+        ..SetupOptions::default()
+    });
+    attach_at(&h, "T-0001", SIZE, "1");
+    attach_at(&h, "T-0001", SIZE, "2");
+
+    // Closed by the daemon: the shell is forgotten before its process ends.
+    h.service.close_one("T-0001", "2");
+    h.pump();
+    // Ended on its own.
+    h.pty(0).exit(Some(0));
+
+    let pair = |terminal: &str| ("T-0001".to_string(), terminal.to_string());
+    assert_eq!(*ended.lock().unwrap(), [pair("2"), pair("1")]);
+}
+
+#[test]
 fn tells_once_when_the_output_of_a_task_stopped_for_a_moment() {
     let (h, quiet) = watched();
     attach_at(&h, "T-0001", SIZE, "1");

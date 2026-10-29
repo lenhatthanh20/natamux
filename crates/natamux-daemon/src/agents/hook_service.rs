@@ -13,6 +13,7 @@ use serde_json::{Map, Value, json};
 
 use super::errors::HookError;
 use super::hook_activity::Activities;
+use super::hook_usage::{TurnStage, UsageStages};
 use crate::shared::event_bus::{DaemonMessage, EventBus};
 use crate::stages::runner::StageRunner;
 use crate::tasks::errors::TaskError;
@@ -43,6 +44,10 @@ pub type Lane = (String, TaskState);
 pub trait StageLookup: Send + Sync {
     fn lane_for(&self, task: &Task, terminal: Option<&str>) -> Result<Option<Lane>, String>;
     fn take_report(&self, task_id: &str, terminal: &str) -> bool;
+    /// The stage reported from this terminal whose turn end has not come yet, without taking it.
+    fn report_of(&self, _task_id: &str, _terminal: &str) -> Option<String> {
+        None
+    }
 }
 
 impl StageLookup for StageRunner {
@@ -54,6 +59,10 @@ impl StageLookup for StageRunner {
 
     fn take_report(&self, task_id: &str, terminal: &str) -> bool {
         self.run.take_report(task_id, terminal)
+    }
+
+    fn report_of(&self, task_id: &str, terminal: &str) -> Option<String> {
+        self.run.report_of(task_id, terminal)
     }
 }
 
@@ -170,8 +179,8 @@ struct State {
     /// state, so a hook there sends no shells.changed: each one would only read the shells, and
     /// drop it, again.
     hidden_shells: HashSet<String>,
-    /// The stage of the last hook from each "<task>/<terminal>", or None for none.
-    last_stages: HashMap<String, Option<String>>,
+    /// The stage and session file of each shell's last hook, for its usage.
+    usage: UsageStages,
 }
 
 pub struct HookService {
@@ -359,11 +368,17 @@ impl HookService {
                 .lane_for(task, terminal)
                 .map_err(HookError::Failed)?
         };
+        let pending = self.stages.report_of(&task.id, shell);
         // The turn in which the agent ran `natamux done`, or sent the task back, ends as planned,
         // not "stopped early", even when background work is still running.
         let reported = matches!(hook.signal, Signal::TurnEnded | Signal::TurnPaused)
             && self.stages.take_report(&task.id, shell);
-        self.note_usage(&task.id, shell, agent, hook, lane.as_ref(), reported);
+        let usage = TurnStage {
+            lane: lane.as_ref(),
+            pending,
+            reported,
+        };
+        self.note_usage(&task.id, shell, agent, hook, usage);
         let done = |applied| HookResult {
             task_id: Some(task.id.clone()),
             applied,
@@ -427,35 +442,31 @@ impl HookService {
         }
     }
 
-    /// The report moved the task on before its turn ended, so that turn counts for the stage of
-    /// the hooks before it.
     fn note_usage(
         &self,
         task_id: &str,
         terminal: &str,
         agent: &str,
         hook: &NormalizedHook,
-        lane: Option<&Lane>,
-        reported: bool,
+        turn: TurnStage<'_>,
     ) {
-        let key = format!("{task_id}/{terminal}");
-        let now = lane.map(|(stage, _)| stage.clone());
-        let stage = {
-            let mut state = self.state();
-            let before = state.last_stages.get(&key).cloned();
-            let stage = match before {
-                Some(before) if reported => before,
-                _ => now.clone(),
-            };
-            if !reported {
-                state.last_stages.insert(key, now);
-            }
-            stage
-        };
+        let shell = format!("{task_id}/{terminal}");
+        let file = hook.transcript.as_deref().map(|file| (agent, file));
+        let stage = self.state().usage.note(&shell, turn, file);
         if let (Some(transcript), Some(seen)) = (&hook.transcript, &self.options.usage_seen)
             && reads_usage(hook.signal)
         {
             seen(task_id, stage.as_deref(), agent, transcript);
+        }
+    }
+
+    /// The process of a shell ended. No hook may follow what its agent wrote after the last
+    /// read, such as a turn cut off when the task finished, so its file is read once more. The
+    /// next agent in this shell starts with no stage and no file.
+    pub fn shell_ended(&self, task_id: &str, terminal: &str) {
+        let (stage, file) = self.state().usage.take(&format!("{task_id}/{terminal}"));
+        if let (Some((agent, transcript)), Some(seen)) = (file, &self.options.usage_seen) {
+            seen(task_id, stage.as_deref(), &agent, &transcript);
         }
     }
 }

@@ -15,7 +15,8 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use natamux_daemon::shared::event_bus::{DaemonMessage, EventBus};
 use natamux_daemon::shared::scheduler::Scheduler;
 use natamux_daemon::terminals::service::{
-    AttachOptions, OutputListener, TaskCheck, TaskListener, TerminalOptions, TerminalService,
+    AttachOptions, OutputListener, ShellListener, TaskCheck, TaskListener, TerminalOptions,
+    TerminalService,
 };
 use natamux_daemon::terminals::session_lifecycle::SpawnPty;
 use natamux_daemon::terminals::shells::Detach;
@@ -303,6 +304,7 @@ pub struct SetupOptions {
     pub is_ended: Option<Arc<TaskCheck>>,
     pub on_output: Option<Arc<OutputListener>>,
     pub on_output_idle: Option<Arc<TaskListener>>,
+    pub on_exit: Option<Arc<ShellListener>>,
     pub env: Option<Env>,
 }
 
@@ -349,6 +351,7 @@ pub fn setup_with(options: SetupOptions) -> Harness {
         is_ended: options.is_ended,
         bus: Some(Arc::clone(&bus)),
         on_output_idle: options.on_output_idle,
+        on_exit: options.on_exit,
         trace_input: false,
     });
     Harness {
