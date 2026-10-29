@@ -2,8 +2,8 @@
 //! starts to need the user, or becomes done, while the app window is not active, a system
 //! notification names it and the alert sound plays. A click brings the app forward and opens the
 //! task. macOS shows none when the app does not run from its bundle, as in a dev run. The Dock
-//! icon shows the needs-you count. The screen-reader announcement text is kept too; GPUI has no
-//! live region to speak it yet (`docs/rust-phase3.md`).
+//! icon shows the needs-you count once macOS allows badges (`dock_badge.rs`). The screen-reader
+//! announcement text is kept too; GPUI has no live region to speak it yet (`docs/rust-phase3.md`).
 
 use gpui::{AnyWindowHandle, Entity, SystemNotification};
 use natamux_proto::tasks::task::Task;
