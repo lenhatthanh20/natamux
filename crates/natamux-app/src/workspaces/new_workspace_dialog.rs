@@ -21,6 +21,7 @@ use crate::app::source::reason;
 use crate::components::dialog::{
     DialogFrame, DialogLayer, DialogView, cancel_button, primary_button,
 };
+use crate::components::form::text_editor;
 use crate::components::toast_rules::ToastTone;
 
 /// What Start a task does, in its tooltip.
@@ -115,23 +116,6 @@ struct Stops {
     submit: FocusHandle,
 }
 
-fn editor(
-    placeholder: &str,
-    multi_line: bool,
-    window: &mut Window,
-    cx: &mut App,
-) -> Entity<Editor> {
-    cx.new(|cx| {
-        let mut editor = if multi_line {
-            Editor::auto_height(6, 12, window, cx)
-        } else {
-            Editor::single_line(window, cx)
-        };
-        editor.set_placeholder_text(placeholder, window, cx);
-        editor
-    })
-}
-
 impl NewWorkspaceDialog {
     fn new(
         dashboard: Entity<Dashboard>,
@@ -139,15 +123,15 @@ impl NewWorkspaceDialog {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let title = editor("Fix the login redirect", false, window, cx);
-        let notes = editor(
+        let title = text_editor("Fix the login redirect", None, window, cx);
+        let notes = text_editor(
             "Optional. What to change and why, where to look (files, screens), and how to tell \
              it is done.",
-            true,
+            Some((6, 12)),
             window,
             cx,
         );
-        let reference = editor("", false, window, cx);
+        let reference = text_editor("", None, window, cx);
         let ids = repo_ids(&dashboard, cx);
         let mut seen = Seen::default();
         let follow = cx.observe(&dashboard, move |this, dashboard, cx| {

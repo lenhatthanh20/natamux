@@ -66,6 +66,23 @@ The dashboard shows shortcuts in tooltips and menus with the keys of your platfo
 
 `n` closes the open workspace and puts the cursor in the **Add a task to the backlog (n)** field.
 
+## Text boxes
+
+Text boxes take the keys of a text field in a web page. Add `Shift` to a move to select instead.
+
+| Action | macOS | Windows and Linux |
+|---|---|---|
+| Move by word | `⌥←`, `⌥→` | `Ctrl+←`, `Ctrl+→` |
+| Move to the start or end of the line | `Home`, `End`, `⌘←`, `⌘→` | `Home`, `End` |
+| Delete the word before or after | `⌥Backspace`, `⌥Delete` | `Ctrl+Backspace`, `Ctrl+Delete` |
+| Delete to the start of the line | `⌘Backspace` | — |
+| Move up or down a line | `↑`, `↓` | `↑`, `↓` |
+| Move up or down a page | `Page Up`, `Page Down` | `Page Up`, `Page Down` |
+| Move to the start or end of the text | `⌘↑`, `⌘↓` | `Ctrl+Home`, `Ctrl+End` |
+| Start a new line | `Enter` | `Enter` |
+
+The last four rows work in boxes of many lines, such as **Notes**, the commit box and the comment box. In a box of one line, `↑` and `↓` go to the list around it, such as the palette results. Long lines wrap at the edge of the box. `Tab` moves to the next field.
+
 ## Lists and trees
 
 These keys work in the sidebar tree, the task table and the changed files list.
