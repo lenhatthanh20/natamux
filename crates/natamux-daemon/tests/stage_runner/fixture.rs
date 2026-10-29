@@ -450,6 +450,7 @@ fn fake_terminals(
         is_ended: None,
         bus: Some(Arc::clone(bus)),
         on_output_idle: None,
+        on_exit: None,
         trace_input: false,
     })
 }

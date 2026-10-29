@@ -46,6 +46,7 @@ fn slow_service() -> (TerminalService, Arc<AtomicUsize>, Sink) {
         is_ended: None,
         bus: None,
         on_output_idle: None,
+        on_exit: None,
         trace_input: false,
     });
     (service, spawned, sink)

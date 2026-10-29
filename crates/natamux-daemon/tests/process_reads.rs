@@ -90,6 +90,7 @@ fn setup(log: &Log) -> TerminalService {
         is_ended: None,
         bus: None,
         on_output_idle: None,
+        on_exit: None,
         trace_input: false,
     });
     shared.set(service.clone()).ok();

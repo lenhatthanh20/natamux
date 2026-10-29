@@ -35,7 +35,7 @@ const fn no_write(input: f64, cache_read: f64, output: f64) -> Price {
 }
 
 // Keys are model ids in the form of `normalize_model`.
-const PRICES: [(&str, Price); 41] = [
+const PRICES: [(&str, Price); 42] = [
     ("claude-fable-5-1", price(10.0, 0.25, 12.5, 20.0, 50.0)),
     ("claude-mythos-5-1", price(10.0, 0.25, 12.5, 20.0, 50.0)),
     ("claude-fable-5", price(10.0, 1.0, 12.5, 20.0, 50.0)),
@@ -53,6 +53,8 @@ const PRICES: [(&str, Price); 41] = [
     ("claude-haiku-4-5", price(1.0, 0.1, 1.25, 2.0, 5.0)),
     ("gpt-6-astra", price(10.0, 1.0, 12.5, 25.0, 50.0)),
     ("gpt-6-1-sol", price(2.0, 0.1, 2.5, 5.0, 10.0)),
+    // Read 2026-10-29.
+    ("gpt-6-1-terra", price(1.0, 0.05, 1.25, 2.5, 5.0)),
     ("gpt-6-sol", price(2.0, 0.2, 2.5, 5.0, 10.0)),
     ("gpt-6-luna", price(0.1, 0.01, 0.125, 0.25, 0.5)),
     ("gpt-5-6-sol", price(4.0, 0.4, 5.0, 10.0, 20.0)),

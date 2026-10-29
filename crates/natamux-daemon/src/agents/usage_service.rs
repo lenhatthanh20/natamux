@@ -5,12 +5,14 @@
 //! session file at each read, Claude Code's from its status line (`set_limits`).
 //!
 //! `seen` returns at once. The session file is read on a thread of its own, one read per file at
-//! a time; a hook that comes during a read makes the file be read again after it.
+//! a time, `read_delay` after the hook; a hook that comes during the wait or the read makes the
+//! file be read again after it.
 
 use std::collections::{HashMap, HashSet};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError, Weak};
+use std::time::Duration;
 
 use natamux_agents::usage::limits::read_codex_limits;
 use natamux_agents::usage::{session_file, usage_reader};
@@ -88,6 +90,9 @@ pub struct UsageOptions {
     pub bus: Option<Arc<EventBus>>,
     /// The folder that session files must be in. The user's home folder in the daemon.
     pub home: PathBuf,
+    /// The wait before each read. An agent writes the last model call of a turn to its file just
+    /// after the hook of the turn end.
+    pub read_delay: Duration,
 }
 
 #[derive(Default)]
@@ -231,6 +236,9 @@ impl Inner {
         let transcript = first.transcript.clone();
         let mut current = first;
         loop {
+            if !self.options.read_delay.is_zero() {
+                std::thread::sleep(self.options.read_delay);
+            }
             let read = catch_unwind(AssertUnwindSafe(|| self.read(&current)));
             if read.is_err() {
                 eprintln!("Could not read the usage of {}", current.task_id);

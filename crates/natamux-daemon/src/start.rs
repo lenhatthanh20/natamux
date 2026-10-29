@@ -3,6 +3,7 @@
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
+use std::time::Duration;
 
 use natamux_agents::hook_files::{
     WorkspaceHooks, claude_code_status_line, gemini_hook_settings, hook_file_text_of,
@@ -118,12 +119,15 @@ type RunnerCell = Arc<OnceLock<StageRunner>>;
 type WorkspaceCell = Arc<OnceLock<Arc<WorkspaceService>>>;
 /// The idle pause needs the stage runner, but the hooks and the agent starts tell it of signals.
 type IdleCell = Arc<OnceLock<Arc<IdlePause>>>;
+/// The hooks need the stage runner, but the terminals tell them of a shell that ended.
+type HookCell = Arc<OnceLock<Arc<HookService>>>;
 
 #[derive(Default)]
 struct Cells {
     runner: RunnerCell,
     workspaces: WorkspaceCell,
     idle: IdleCell,
+    hooks: HookCell,
 }
 
 fn agent_runner(
@@ -215,6 +219,7 @@ fn terminal_service(
 ) -> TerminalService {
     let output = Arc::clone(&cells.runner);
     let idle = Arc::clone(&cells.workspaces);
+    let exited = Arc::clone(&cells.hooks);
     let signalled = Arc::clone(&store.signals);
     let ended = store.tasks.clone();
     TerminalService::new(TerminalOptions {
@@ -238,6 +243,11 @@ fn terminal_service(
         on_output_idle: Some(Arc::new(move |task_id: &str| {
             if let Some(workspaces) = idle.get() {
                 workspaces.touch(task_id);
+            }
+        })),
+        on_exit: Some(Arc::new(move |task_id: &str, terminal: &str| {
+            if let Some(hooks) = exited.get() {
+                hooks.shell_ended(task_id, terminal);
             }
         })),
         trace_input: trace_input_on(env.get("NATAMUX_INPUT_TRACE").map(String::as_str)),
@@ -273,6 +283,10 @@ fn open_shells(
     })
 }
 
+/// Agents write the last model call of a turn to their file just after its hook: seen up to 1 s
+/// later on real Claude Code and Copilot files.
+const USAGE_READ_DELAY: Duration = Duration::from_secs(2);
+
 /// The hook service and the usage service it tells of each turn.
 fn hook_services(
     config: &Config,
@@ -287,6 +301,7 @@ fn hook_services(
         data_dir: config.data_dir.clone(),
         bus: Some(Arc::clone(&store.bus)),
         home: home.clone(),
+        read_delay: USAGE_READ_DELAY,
     }));
     let noted = Arc::clone(open_shells);
     let seen = Arc::clone(&usage);
@@ -369,6 +384,7 @@ pub async fn start(
     );
     let _ = cells.workspaces.set(Arc::clone(&workspaces));
     let (hooks, usage) = hook_services(config, env, &store, &stages, &open_shells, &cells);
+    let _ = cells.hooks.set(Arc::clone(&hooks));
     let idle_pause = services::idle_pause(
         config,
         &store,

@@ -8,6 +8,7 @@ pub mod agents {
     pub mod generic_signals;
     mod hook_activity;
     pub mod hook_service;
+    mod hook_usage;
     pub mod idle_pause;
     pub mod runner;
     mod usage_file;
