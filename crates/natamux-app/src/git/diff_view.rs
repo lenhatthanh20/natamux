@@ -450,3 +450,7 @@ impl Render for DiffView {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "diff_view_tests.rs"]
+mod tests;
