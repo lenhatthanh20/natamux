@@ -216,17 +216,43 @@ impl WorkspaceView {
         .render()
     }
 
-    /// The panel's History view (T-0183): the graph of the task against its base branch, narrow
-    /// as the panel is.
-    pub(super) fn history(&self, task: &Task, shown: &Shown, cx: &mut Context<Self>) -> AnyElement {
+    /// The graph of the task against its base branch: narrow in the panel (T-0183), or over main
+    /// at full width (T-0231).
+    pub(super) fn history(
+        &self,
+        task: &Task,
+        shown: &Shown,
+        in_main: bool,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let this = cx.weak_entity();
         let dashboard = self.dashboard.clone();
+        let main_shows = dashboard.read(cx).shown_workspace_tab() == WorkspaceTab::History;
+        let toggle = dashboard.clone();
         HistoryView {
-            id: task.id.clone(),
+            // Both copies draw in the same frame: their lists and layouts need their own ids.
+            id: if in_main {
+                format!("{}-main", task.id)
+            } else {
+                task.id.clone()
+            },
             graph: shown.graph.clone(),
             error: shown.graph_error.clone(),
             uncommitted: shown.changes.as_ref().map(Vec::len).unwrap_or(0),
-            narrow: true,
+            in_main,
+            main_shows,
+            on_toggle_main: Rc::new(move |_: &mut Window, cx: &mut App| {
+                toggle.update(cx, |dashboard, cx| {
+                    if dashboard.shown_workspace_tab() == WorkspaceTab::History {
+                        dashboard.pick_tab(WorkspaceTab::Terminal, cx);
+                    } else {
+                        dashboard.pick_tab(WorkspaceTab::History, cx);
+                        // The docked panel leaves main 384 px at 1024: too narrow for the
+                        // author and hash columns. The rail opens it again.
+                        dashboard.set_details_open(false, cx);
+                    }
+                })
+            }),
             on_show_changes: Rc::new(move |_: &mut Window, cx: &mut App| {
                 dashboard.update(cx, |dashboard, cx| {
                     dashboard.show_view(DetailsView::Changes, cx)
@@ -279,6 +305,7 @@ impl WorkspaceView {
         }
         let body: AnyElement = match tab {
             WorkspaceTab::Changes => self.changes.clone().into_any_element(),
+            WorkspaceTab::History => self.history(&task, shown, true, cx),
             WorkspaceTab::Docs => self.docs_body(&task.id, window, cx),
             WorkspaceTab::Editor => self.editor_body(&task.id, window, cx),
             _ if panes_shown => self.panes.clone().into_any_element(),
