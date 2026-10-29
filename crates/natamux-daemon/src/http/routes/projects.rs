@@ -90,7 +90,17 @@ async fn run(
 
 pub async fn list_repos(state: Arc<AppState>) -> Answer {
     run(StatusCode::OK, move || {
-        let mut body = json!({ "repos": state.repos.list()? });
+        let repos: Vec<Value> = state
+            .repos
+            .list()?
+            .into_iter()
+            .map(|repo| {
+                let mut entry = json!(repo);
+                entry["trusted"] = json!(state.repos.is_trusted(Some(&repo.id)));
+                entry
+            })
+            .collect();
+        let mut body = json!({ "repos": repos });
         // `JSON.stringify` leaves out `undefined`.
         if let Some(dir) = state.repos.worktrees_dir() {
             body["worktreesDir"] = json!(dir.display().to_string());
@@ -151,11 +161,53 @@ pub async fn put_settings(
     let version = if_match(&headers);
     run(StatusCode::OK, move || {
         let id = repo_param(&id)?;
-        let (settings, version) =
-            state
-                .repos
-                .save(&id, &body.unwrap_or(Value::Null), version.as_deref())?;
+        let body = body.unwrap_or(Value::Null);
+        let (settings, version) = state.repos.save(&id, &body, version.as_deref())?;
+        // The user wrote these commands, so they need no second approval.
+        if let Err(error) = state.repos.approve_saved(&id, &body) {
+            eprintln!("The saved commands of {id} are not approved: {error}");
+        }
         Ok(Some(json!({ "settings": settings, "version": version })))
+    })
+    .await
+}
+
+/// `GET /repos/:id/trust`: the commands of a project, for the user to review.
+pub async fn get_trust(state: Arc<AppState>, id: String, by_agent: bool) -> Answer {
+    if by_agent {
+        return forbidden("review project commands");
+    }
+    run(StatusCode::OK, move || {
+        let view = state.repos.trust_view(&repo_param(&id)?)?;
+        Ok(Some(json!(view)))
+    })
+    .await
+}
+
+/// `POST /repos/:id/trust` with `{hash}`: approves the commands the user saw. 409 when they
+/// changed since.
+pub async fn post_trust(
+    state: Arc<AppState>,
+    id: String,
+    body: Option<Value>,
+    by_agent: bool,
+) -> Answer {
+    if by_agent {
+        return forbidden("approve project commands");
+    }
+    let hash = body
+        .as_ref()
+        .and_then(|body| body.get("hash"))
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    let Some(hash) = hash else {
+        return repo_error_answer(&RepoError::Input(
+            "Give the hash of the commands you approve".into(),
+        ));
+    };
+    run(StatusCode::OK, move || {
+        let view = state.repos.approve(&repo_param(&id)?, &hash)?;
+        Ok(Some(json!(view)))
     })
     .await
 }

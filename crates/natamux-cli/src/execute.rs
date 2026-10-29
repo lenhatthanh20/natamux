@@ -4,6 +4,7 @@ use std::path::Path;
 
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
+use natamux_proto::stages::actions::STAGE_TICKET_ENV;
 use natamux_proto::tasks::attachments::attachment_limit_error;
 use serde::Serialize;
 
@@ -154,6 +155,11 @@ pub async fn execute<T: Transport>(
             delete_branch,
             json,
         } => remove_workspace(id, *delete_branch, *json, cx).await,
+        Command::RepoTrust(trust) => {
+            let text = crate::repo_trust::run(trust, cx.client).await?;
+            cx.io.stdout(&text);
+            Ok(())
+        }
         _ => agent_or_stage(command, cx).await,
     }
 }
@@ -340,7 +346,7 @@ async fn report_done<T: Transport>(
         terminal: terminal_of(cx.env, id),
         ..StageActionRequest::default()
     };
-    let task = cx.client.stage_action(id, &request).await?;
+    let task = cx.client.stage_action(id, &request, None).await?;
     output(cx.io, json, &task, || {
         format!(
             "Reported done; the checks run now.\n{}\n",
@@ -356,7 +362,8 @@ async fn act_on_stage<T: Transport>(
     json: bool,
     cx: &mut Ctx<'_, T>,
 ) -> Result<(), String> {
-    let task = cx.client.stage_action(id, request).await?;
+    let ticket = cx.env.trimmed(STAGE_TICKET_ENV);
+    let task = cx.client.stage_action(id, request, ticket).await?;
     output(cx.io, json, &task, || format!("{}\n", format_task(&task)));
     Ok(())
 }

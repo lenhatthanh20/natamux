@@ -21,6 +21,7 @@ use natamux_proto::terminals::messages::{
 use natamux_proto::terminals::query::TerminalQuery;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 
+use super::edge_rules;
 use super::errors::{Answer, not_found};
 use super::routes::terminals::task_id_issues;
 use super::server::AppState;
@@ -64,6 +65,9 @@ pub fn upgrade(
     id: String,
     query: String,
 ) -> Answer {
+    if let Some(refused) = edge_rules::check_origin(request.headers(), &state.allowed_hosts) {
+        return refused;
+    }
     let key = request.headers().get(SEC_WEBSOCKET_KEY).cloned();
     let wants_socket = request
         .headers()

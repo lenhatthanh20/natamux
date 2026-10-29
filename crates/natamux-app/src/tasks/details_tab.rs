@@ -8,6 +8,7 @@ use ui::{Tooltip, prelude::*};
 
 use super::DetailsPanel;
 use crate::app::clock::now_ms;
+use crate::app::links::open_link;
 use crate::components::button_style::{action_button, button_icon, key_hint, quiet_button};
 use crate::components::chips::{StateChip, label_chip, tip_with_keys};
 use crate::components::colors::signal;
@@ -315,7 +316,7 @@ impl DetailsPanel {
                 .label_size(LabelSize::Small)
                 .start_icon(button_icon("external-link"))
                 .truncate(true)
-                .on_click(move |_, _, cx| cx.open_url(&link)),
+                .on_click(move |_, _, cx| open_link(&link, cx)),
         )
         .children(pull_request_summary(task).map(|summary| {
             Label::new(summary)

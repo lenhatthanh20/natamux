@@ -32,6 +32,15 @@ impl std::fmt::Display for GitError {
 
 impl std::error::Error for GitError {}
 
+/// A branch or ref name that is safe as a git argument: git reads a name that starts with `-`
+/// as an option (`--upload-pack=...` runs a command), so it is refused, as is an empty name.
+pub fn checked_ref(name: &str) -> Result<&str, GitError> {
+    if name.is_empty() || name.starts_with('-') {
+        return Err(GitError(format!("git ref refused: {name:?}")));
+    }
+    Ok(name)
+}
+
 /// `withGitConfig`: the `GIT_CONFIG_*` variables that add `entries` after the ones the
 /// environment has (`current_count` is its `GIT_CONFIG_COUNT`).
 pub fn with_git_config(

@@ -11,12 +11,14 @@ use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper::{Method, Request, StatusCode};
 use hyper_util::rt::TokioIo;
-use serde_json::{Value, json};
+use serde_json::Value;
 use tokio::net::TcpListener;
 
-use super::auth::{bearer_token, is_authorized};
+use super::agent_rules::{Caller, caller, refusal};
 use super::body::{DEFAULT_BODY_LIMIT, read_body};
+use super::edge_rules;
 use super::errors::{Answer, json_answer, not_found, unauthorized};
+use super::health::health_body;
 use super::routes::stages::Mark;
 use super::routes::{
     agents, github, projects, review_comments, stages, tasks, terminals, workspace_files,
@@ -51,8 +53,8 @@ pub struct AppState {
     pub hooks: Arc<HookService>,
     pub usage: Arc<UsageService>,
     pub token: String,
-    /// The token of the task shells.
-    pub agent_token: String,
+    /// S-21: requests with a body limit above the default, read at most 2 at once.
+    pub big_bodies: Arc<tokio::sync::Semaphore>,
     pub data_dir: PathBuf,
     /// The home folder of the daemon's environment: where the skills of the agents are read.
     pub home: PathBuf,
@@ -61,6 +63,8 @@ pub struct AppState {
     pub open_shells: Arc<OpenShells>,
     /// A socket that sent nothing for this long is dropped (`SILENT_CLOSE`; shorter in tests).
     pub silent_close: std::time::Duration,
+    /// Host names a request may name (`NATAMUX_ALLOWED_HOSTS`).
+    pub allowed_hosts: Vec<String>,
     pub tasks: TaskService,
     pub templates: TemplateService,
     pub repos: Arc<Repos>,
@@ -136,27 +140,15 @@ fn decode(text: &str) -> String {
     natamux_proto::terminals::query::decode(text)
 }
 
-/// The token of the request: the bearer header, or `?token=` on `/events` only (browsers cannot
-/// set headers on a WebSocket).
-fn provided_token(request: &Request<Incoming>, events: bool, query: &str) -> Option<String> {
-    let header = request
-        .headers()
-        .get(hyper::header::AUTHORIZATION)
-        .and_then(|value| value.to_str().ok());
-    bearer_token(header).map(str::to_string).or_else(|| {
-        if events {
-            query_value(query, "token").and_then(|v| v.as_str().map(str::to_string))
-        } else {
-            None
-        }
-    })
-}
-
 pub async fn handle(request: Request<Incoming>, state: Arc<AppState>) -> Answer {
     let raw = request
         .uri()
         .path_and_query()
         .map_or("/", |path| path.as_str());
+    // Before static files: a rebinding page must not read the dashboard either.
+    if let Some(refused) = edge_rules::check_host(request.headers(), &state.allowed_hosts) {
+        return refused;
+    }
     let url = strip_api_prefix(raw);
     let accept = request
         .headers()
@@ -170,9 +162,15 @@ pub async fn handle(request: Request<Incoming>, state: Arc<AppState>) -> Answer 
     let segments: Vec<String> = path.split('/').skip(1).map(segment).collect();
     let parts: Vec<&str> = segments.iter().map(String::as_str).collect();
     let method = request.method().clone();
-    let Some(by_agent) = caller(&request, &state, &method, &parts, query) else {
+    let Some(who) = caller(&request, &state, &method, &parts, query) else {
         return unauthorized();
     };
+    if let Caller::Agent(own) = &who
+        && let Some(refused) = refusal(&state, &method, &parts, own).await
+    {
+        return refused;
+    }
+    let by_agent = who.is_agent();
     let route = (
         method.clone(),
         parts
@@ -187,13 +185,18 @@ pub async fn handle(request: Request<Incoming>, state: Arc<AppState>) -> Answer 
         return answer;
     }
     match (&method, parts.as_slice()) {
-        (&Method::GET, ["health"]) => json_answer(StatusCode::OK, &json!({ "status": "ok" })),
+        (&Method::GET, ["health"]) => {
+            json_answer(StatusCode::OK, &health_body(query, &state.token))
+        }
         (&Method::GET, ["events"]) => event_socket::upgrade(request, state),
         (&Method::GET, ["tasks", id, "terminal"]) => {
             let id = id.to_string();
             terminal_socket::upgrade(request, state, id, query.to_string())
         }
         (&Method::GET, ["tasks", id, "ended-shells"]) => terminals::ended_shells(&state, id),
+        (&Method::GET, ["repos", id, "trust"]) => {
+            projects::get_trust(state, id.to_string(), by_agent).await
+        }
         (&Method::GET, ["tasks", id, "terminals"]) => {
             terminals::list_terminals(state, id.to_string()).await
         }
@@ -206,7 +209,7 @@ pub async fn handle(request: Request<Incoming>, state: Arc<AppState>) -> Answer 
         (&Method::GET, ["usage"]) => agents::usage(&state),
         (&Method::GET, ["limits"]) => agents::limits(&state),
         (&Method::POST, ["hooks", agent]) => {
-            agents::post_hook(request, state, agent.to_string(), query.to_string()).await
+            agents::post_hook(request, state, who, agent.to_string(), query.to_string()).await
         }
         (&Method::GET, ["tasks"]) => tasks::list_tasks(state, query_value(query, "state")).await,
         (&Method::GET, ["templates"]) => tasks::list_templates(state).await,
@@ -247,37 +250,13 @@ pub async fn handle(request: Request<Incoming>, state: Arc<AppState>) -> Answer 
         | (&Method::POST, ["workspaces"])
         | (&Method::POST, ["repos"])
         | (&Method::PUT, ["repos", _, "settings"])
+        | (&Method::POST, ["repos", _, "trust"])
         | (&Method::POST, ["github", "issues", "import"])
         | (&Method::PUT, ["tasks", _, "file"]) => {
-            with_body(request, state, route, query.to_string(), by_agent).await
+            with_body(request, state, route, query.to_string(), who).await
         }
         _ => not_found(method.as_str(), &url),
     }
-}
-
-/// Who calls: `Some(true)` for the agent token, `Some(false)` for the daemon token, a terminal
-/// ticket or the health check, `None` for no one the daemon knows.
-fn caller(
-    request: &Request<Incoming>,
-    state: &AppState,
-    method: &Method,
-    parts: &[&str],
-    query: &str,
-) -> Option<bool> {
-    if *method == Method::GET && parts == ["health"] {
-        return Some(false);
-    }
-    let socket = *method == Method::GET && matches!(parts, ["tasks", _, "terminal"]);
-    let events = *method == Method::GET && parts == ["events"];
-    // The terminal socket checks its one-time ticket itself instead.
-    let has_ticket = query
-        .split('&')
-        .any(|pair| pair.split('=').next() == Some("ticket"));
-    let provided = provided_token(request, events, query);
-    let by_agent = is_authorized(provided.as_deref(), &state.agent_token);
-    let allowed =
-        (socket && has_ticket) || is_authorized(provided.as_deref(), &state.token) || by_agent;
-    allowed.then_some(by_agent)
 }
 
 /// The stage routes that read no body (part 3).
@@ -362,8 +341,9 @@ async fn with_body(
     state: Arc<AppState>,
     route: (Method, Vec<String>),
     query: String,
-    by_agent: bool,
+    who: Caller,
 ) -> Answer {
+    let by_agent = who.is_agent();
     let (method, parts) = route;
     let parts: Vec<&str> = parts.iter().map(String::as_str).collect();
     let limit = match (&method, parts.as_slice()) {
@@ -371,13 +351,19 @@ async fn with_body(
         (&Method::PUT, ["tasks", _, "file"]) => WORKSPACE_FILE_BODY_LIMIT,
         _ => DEFAULT_BODY_LIMIT,
     };
+    // Held to the end of the request: its body stays in memory until then.
+    let _big = if limit > DEFAULT_BODY_LIMIT {
+        Arc::clone(&state.big_bodies).acquire_owned().await.ok()
+    } else {
+        None
+    };
     let (head, body) = request.into_parts();
     let body = match read_body(&head.headers, body, limit).await {
         Ok(body) => body,
         Err(error) => return error.answer(),
     };
     match (&method, parts.as_slice()) {
-        (&Method::POST, ["tasks"]) => tasks::create_task(state, body).await,
+        (&Method::POST, ["tasks"]) => tasks::create_task(state, body, &who).await,
         (&Method::POST, ["templates"]) => tasks::save_template(state, body).await,
         (&Method::POST, ["templates", id, "tasks"]) => {
             tasks::task_from_template(state, id.to_string(), body).await
@@ -390,7 +376,8 @@ async fn with_body(
             tasks::link_issue(state, id.to_string(), body).await
         }
         (&Method::POST, ["tasks", id, "stage"]) => {
-            stages::act(state, id.to_string(), body, by_agent).await
+            let ticket = stages::ticket_of(&head.headers);
+            stages::act(state, id.to_string(), body, &who, ticket).await
         }
         (&Method::PUT, ["tasks", id, mark @ ("workflow" | "ci" | "skip")]) => {
             let mark = match *mark {
@@ -420,6 +407,9 @@ async fn with_body(
         (&Method::POST, ["repos"]) => projects::add_repo(state, body).await,
         (&Method::PUT, ["repos", id, "settings"]) => {
             projects::put_settings(state, id.to_string(), head.headers, body, by_agent).await
+        }
+        (&Method::POST, ["repos", id, "trust"]) => {
+            projects::post_trust(state, id.to_string(), body, by_agent).await
         }
         _ => workspace_body_route(&method, &parts, state, query, head.headers, body).await,
     }

@@ -23,7 +23,6 @@ use serde_json::{Value, json};
 use tokio::net::TcpStream;
 
 pub const TOKEN: &str = "test-token";
-pub const AGENT_TOKEN: &str = "agent-token";
 
 enum Event {
     Data(Vec<u8>),
@@ -251,7 +250,9 @@ pub async fn start_daemon_with(
         web_dir: None,
         token: TOKEN.into(),
         token_was_generated: false,
-        agent_token: AGENT_TOKEN.into(),
+        allowed_hosts: natamux_daemon::http::edge_rules::DEFAULT_ALLOWED_HOSTS
+            .map(String::from)
+            .to_vec(),
         silent_close,
         agents,
         idle_minute_ms: IDLE_MINUTE_MS,
@@ -355,6 +356,11 @@ impl TestDaemon {
             .record_workspace(id, change)
             .unwrap();
         folder
+    }
+
+    /// The token the shells of task `id` get: what its agent sends.
+    pub fn agent_token(&self, id: &str) -> String {
+        self.daemon.state.terminals.agent_tokens().token_for(id)
     }
 
     pub fn ptys(&self) -> Vec<EchoPty> {

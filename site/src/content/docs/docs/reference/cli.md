@@ -14,7 +14,7 @@ nmx <command> [options]
 
 Run `natamux help`, `natamux --help` or `natamux -h` to print the usage text.
 
-Task ids look like `T-42`. Inside a Natamux terminal, the token, the daemon address and the task are already set. Outside one, the Rust CLI reads the running desktop app's saved token and port when available. Set `NATAMUX_TOKEN` and `NATAMUX_URL` for a different daemon (see [Environment](#environment)).
+Task ids look like `T-42`. Inside a Natamux terminal, the token, the daemon address and the task are already set. There the token is the task's own: it reaches only that task, so the gate commands (`stage approve`, `stage skip`, `stage pass`) and commands on another task get 403. Run them in the app, or in a terminal outside a task. Outside one, the Rust CLI reads the running desktop app's saved token and port when available. Set `NATAMUX_TOKEN` and `NATAMUX_URL` for a different daemon (see [Environment](#environment)).
 
 ## Commands
 
@@ -35,6 +35,7 @@ Task ids look like `T-42`. Inside a Natamux terminal, the token, the daemon addr
 | `events <id>` | Show the event log of a task |
 | `workspace create <id>` | Create a git worktree and a branch for a task |
 | `workspace remove <id>` | Remove the worktree of a task (needs `--yes`) |
+| `repo trust <repo>` | Show the commands a project runs, or approve them (`--approve`) |
 | `hooks claude-code` | Print Claude Code settings that report a task's progress |
 | `hook <agent> [event]` | For an agent's hook: send the JSON on stdin to the daemon |
 | `help` | Show the help |
@@ -67,6 +68,7 @@ Task ids look like `T-42`. Inside a Natamux terminal, the token, the daemon addr
 | `--base <branch>` | `workspace create`, `agent start` | Start the new workspace from this local branch. Default: the default branch of the repository, such as `main`. Natamux fetches the base first (see [Base branch](/docs/concepts/workspaces/#base-branch)) |
 | `--yes` | `workspace remove` | Confirm that the worktree folder is deleted |
 | `--delete-branch` | `workspace remove` | Also delete the branch, when it is merged |
+| `--approve <hash>` | `repo trust` | Approve the commands with this hash, as the list printed it |
 | `--json` | most commands | Print JSON instead of text |
 | `-h`, `--help` | all | Show the help |
 
@@ -161,6 +163,19 @@ natamux workspace remove T-42 --yes --delete-branch
 
 `workspace remove` deletes the worktree folder, so it needs `--yes`. Git refuses when the worktree has uncommitted files.
 
+## repo trust
+
+```sh
+natamux repo trust my-app
+natamux repo trust my-app --approve 3f1c…
+```
+
+A project's commands (stage checks, command stages, path conditions, stage `args` and the setup script) run only after you approve them. See [Approve the project's commands](/docs/guides/project-settings/#approve-the-projects-commands).
+
+- Without `--approve`, it prints each command with where it comes from, the setup scripts, and the hash.
+- With `--approve <hash>`, it approves them. The daemon refuses a hash that is no longer current: the commands changed since you read them, so read them again.
+- It needs the daemon's own token. The token of a task terminal gets 403.
+
 ## hooks and hook
 
 ```sh
@@ -192,10 +207,11 @@ natamux task list --json
 
 | Variable | Meaning |
 |---|---|
-| `NATAMUX_TOKEN` | The daemon's token. The CLI reads the app's saved token when it is available. Required for a separate daemon, except for `hooks claude-code` |
+| `NATAMUX_TOKEN` | The daemon's token. The CLI reads the app's saved token when it is available. Required for a separate daemon, except for `hooks claude-code`. In a task terminal it is the task's own token, and the saved token is never read there |
 | `NATAMUX_URL` | The daemon's address. The CLI reads the app's saved `daemon-port` when it is available, then falls back to `http://127.0.0.1:4317` |
 | `NATAMUX_TASK_ID` | The task of this terminal. Used by `ask`, `done`, `task show`, `task create` (for its project) and hooks. Natamux terminals set it |
 | `NATAMUX_TERMINAL` | The terminal of the task. Tells the daemon which stage `done` is about. Natamux terminals set it |
+| `NATAMUX_STAGE_TICKET` | Set by the script of a command stage, so its `stage pass` gets through once. `stage pass` and `stage fail` send it in the `X-Natamux-Stage-Ticket` header |
 | `NATAMUX_DEBUG` | `natamux hook` only. Any value prints problems to stderr |
 
 See [Environment variables](/docs/reference/environment-variables/) for the daemon's variables.

@@ -10,6 +10,7 @@ pub mod agents {
     pub mod hook_service;
     pub mod idle_pause;
     pub mod runner;
+    pub mod task_access;
     mod usage_file;
     pub mod usage_service;
 }
@@ -20,10 +21,13 @@ pub mod github {
     pub mod pull_request_watcher;
 }
 pub mod http {
+    pub mod agent_rules;
     pub mod auth;
     pub mod body;
+    pub mod edge_rules;
     pub mod errors;
     pub mod event_socket;
+    pub mod health;
     pub mod routes {
         pub mod agents;
         pub mod github;
@@ -45,6 +49,7 @@ pub mod projects {
     pub mod errors;
     pub mod repo_add;
     pub mod repo_store;
+    pub mod repo_trust;
     pub mod repos;
     pub mod settings;
     pub mod settings_parse;
@@ -88,6 +93,7 @@ pub mod stages {
     pub mod runner;
     pub mod shells;
     mod shells_finish;
+    pub mod stage_tickets;
 }
 pub mod start;
 pub mod tasks {

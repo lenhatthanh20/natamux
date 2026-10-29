@@ -32,6 +32,7 @@ mod app {
     pub mod gate2;
     pub mod jobs;
     pub mod layout_mode;
+    pub mod links;
     pub mod notify;
     pub mod notify_rules;
     pub mod options;
@@ -106,6 +107,7 @@ mod components {
     pub mod toasts;
 }
 mod daemon {
+    pub mod health_proof;
     pub mod process;
     #[cfg(test)]
     mod process_tests;
@@ -176,6 +178,7 @@ mod projects {
     pub mod project_rules;
     pub mod project_settings_page;
     pub mod projects_dialog;
+    pub mod repo_trust_dialog;
     pub mod send_backs_field;
     pub mod settings_header;
     pub mod settings_tab_rules;
@@ -340,6 +343,7 @@ use natamux_client::{Client, ClientError, Config};
 
 fn main() -> ExitCode {
     perf::report::mark_start();
+    daemon::process::make_folder_private();
     perf::report::timed("log_trim_ms", app::app_log::trim_at_start);
     let options = match Options::parse(std::env::args().skip(1)) {
         Ok(options) => options,

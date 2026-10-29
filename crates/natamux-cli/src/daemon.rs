@@ -6,6 +6,7 @@ use std::future::Future;
 use natamux_client::{Config, Method};
 use natamux_proto::events::task_event::StoredEvent;
 use natamux_proto::projects::repo::{Repo, RepoList};
+use natamux_proto::stages::actions::STAGE_TICKET_HEADER;
 use natamux_proto::tasks::task::Task;
 use natamux_proto::terminals::query::encode;
 use serde::Serialize;
@@ -312,13 +313,21 @@ impl<T: Transport> DaemonClient<T> {
         field(body, "task", "started agent")
     }
 
+    /// `ticket`: the one-time result ticket of a command stage, which lets its script pass.
     pub async fn stage_action(
         &self,
         id: &str,
         request: &StageActionRequest,
+        ticket: Option<&str>,
     ) -> Result<Task, String> {
         let path = format!("{}/stage", task_path(id));
-        let body = self.call(Method::POST, &path, Some(request)).await?;
+        let extra: Vec<_> = ticket
+            .map(|ticket| (STAGE_TICKET_HEADER, ticket))
+            .into_iter()
+            .collect();
+        let body = self
+            .call_with(Method::POST, &path, &extra, Some(request))
+            .await?;
         field(body, "task", "task")
     }
 
@@ -379,25 +388,34 @@ impl<T: Transport> DaemonClient<T> {
     }
 
     /// The answer as JSON, None for an empty or unreadable body; Err with the daemon's words.
-    async fn call<B: Serialize>(
+    pub(crate) async fn call<B: Serialize>(
         &self,
         method: Method,
         path: &str,
+        body: Option<&B>,
+    ) -> Result<Option<Value>, String> {
+        self.call_with(method, path, &[], body).await
+    }
+
+    async fn call_with<B: Serialize>(
+        &self,
+        method: Method,
+        path: &str,
+        extra: &[(&str, &str)],
         body: Option<&B>,
     ) -> Result<Option<Value>, String> {
         let body = body
             .map(serde_json::to_vec)
             .transpose()
             .map_err(|error| error.to_string())?;
+        let mut headers = extra.to_vec();
         // The daemon refuses a request that says it is JSON but has no body.
-        let headers: &[(&str, &str)] = if body.is_some() {
-            &[("content-type", "application/json")]
-        } else {
-            &[]
-        };
+        if body.is_some() {
+            headers.push(("content-type", "application/json"));
+        }
         let (status, answer) = self
             .transport
-            .request(method, path, headers, body)
+            .request(method, path, &headers, body)
             .await
             .map_err(|_| {
                 format!(

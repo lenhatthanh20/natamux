@@ -9,6 +9,7 @@ use natamux_proto::tasks::task::{Task, TaskState};
 use ui::prelude::*;
 
 use super::wrap_up_rules::finished_at;
+use crate::app::links::open_link;
 use crate::components::button_style::{action_button, quiet_button};
 use crate::components::glyph::StateGlyph;
 use crate::components::shape::ShapeSize;
@@ -88,7 +89,7 @@ impl RenderOnce for FinishedSummary {
             .map_or_else(|| "\u{2014}".into(), |at| exact_time(&at));
         let open_pr = task.pr.clone().map(|url| {
             action_button("summary-open-pr", "Open pull request")
-                .on_click(move |_: &ClickEvent, _, cx| cx.open_url(&url))
+                .on_click(move |_: &ClickEvent, _, cx| open_link(&url, cx))
         });
         let follow_up = button(
             "summary-follow-up",

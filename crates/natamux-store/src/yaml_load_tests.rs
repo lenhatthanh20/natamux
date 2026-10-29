@@ -150,3 +150,27 @@ fn fails_on_yaml_that_does_not_parse() {
     assert!(load("a: [1").is_err());
     assert!(load("a: 'open").is_err());
 }
+
+#[test]
+fn fails_on_nested_aliases_that_copy_past_the_node_cap() {
+    let ten = |name: &str| vec![format!("*{name}"); 10].join(",");
+    let text = format!(
+        "a: &a [x,x,x,x,x,x,x,x,x,x]\nb: &b [{}]\nc: &c [{}]\nd: &d [{}]\n\
+         e: &e [{}]\nf: [{}]\n",
+        ten("a"),
+        ten("b"),
+        ten("c"),
+        ten("d"),
+        ten("e"),
+    );
+    let error = load(&text).unwrap_err();
+    assert!(error.contains("more than 100000 nodes"), "{error}");
+}
+
+#[test]
+fn loads_a_document_with_aliases_under_the_node_cap() {
+    let list = vec!["x"; 1000].join(",");
+    let text = format!("a: &a [{list}]\nb: *a\nc: *a\n");
+    let value = load(&text).unwrap();
+    assert_eq!(field(&value, "c").as_array().map(Vec::len), Some(1000));
+}

@@ -8,6 +8,7 @@ use ui::{ContextMenu, ContextMenuEntry, IconPosition, prelude::*};
 use super::appearance_rules::{ThemeChoice, UiSize, parse_theme, parse_ui_size};
 use super::commands::shortcut_of;
 use super::dashboard::Dashboard;
+use super::links::open_link;
 use super::settings_rules::{SettingsFocus, SettingsPage};
 use super::shortcut_text::keystroke;
 use super::shortcuts::{OpenSettings, ShowShortcuts};
@@ -121,7 +122,7 @@ pub fn open_account_menu(
             ContextMenuEntry::new("Report an issue")
                 .icon(IconName::Debug)
                 .icon_color(Color::Muted)
-                .handler(|_, cx| cx.open_url(ISSUES_URL)),
+                .handler(|_, cx| open_link(ISSUES_URL, cx)),
         )
     });
     MenuLayer::open(menu, position, window, cx);

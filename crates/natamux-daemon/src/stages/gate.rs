@@ -4,6 +4,7 @@
 use std::path::PathBuf;
 
 use natamux_core::stages::terminal_lane::terminal_of_stage_pinned;
+use natamux_proto::projects::repo_trust::UNTRUSTED_REASON;
 use natamux_proto::stages::capabilities::stage_name;
 use natamux_proto::stages::schema::{Stage, StageKind};
 use natamux_proto::tasks::task::Task;
@@ -12,7 +13,7 @@ use natamux_stages::files::{read_stage_file, working_dir, write_stage_file};
 use natamux_store::attachments::{list_attachments, with_attachment_section};
 use serde_json::{Value, json};
 
-use crate::stages::errors::{StageResult, action};
+use crate::stages::errors::{StageError, StageResult, action};
 use crate::stages::run::{StageRun, key};
 
 /// The last start of a stage: its place in the log, its time, the commit HEAD was on, and how
@@ -132,6 +133,10 @@ impl StageRun {
         if stage.kind == StageKind::Context {
             self.add_attachment_section(&task, stage.output.as_deref().unwrap_or("context.md"));
         }
+        // Nothing an agent can fix: the user approves the commands first.
+        if stage.check.is_some() && !self.repo_trusted(&task) {
+            return self.fail_checks(task_id, stage_id, &[UNTRUSTED_REASON.into()], true, None);
+        }
         let start = self.last_start(task_id, stage_id);
         let label = format!("Checking {}", stage_name(&stage));
         let result = self
@@ -190,7 +195,13 @@ impl StageRun {
             "stage.checked",
             json!({ "stage": stage_id, "passes": passes }),
         );
-        let event = self.with_path(task_id, input)?;
+        let event = match self.with_path(task_id, input) {
+            Ok(event) => event,
+            Err(StageError::Action(reason)) if reason == UNTRUSTED_REASON => {
+                return self.fail_checks(task_id, stage_id, &[reason], true, None);
+            }
+            Err(error) => return Err(error),
+        };
         if self.last_start(task_id, stage_id).seq == seq {
             self.apply(task_id, &event)?;
         }

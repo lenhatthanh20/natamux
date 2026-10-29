@@ -10,6 +10,7 @@ use natamux_proto::projects::repo::{LoadedSettings, SkillList};
 use ui::{Tooltip, prelude::*};
 
 use super::idle_pause_field::IdlePauseField;
+use super::repo_trust_dialog::row::RepoTrustRow;
 use super::send_backs_field::SendBacksField;
 use super::settings_tab_rules::{PIPELINE_NOTE, SettingsTab, export_reason, shows_pipeline_note};
 use super::settings_tabs::SettingsTabs;
@@ -57,6 +58,7 @@ pub struct ProjectSettingsPage {
     pub(super) saving: bool,
     pub(super) conflict: bool,
     pub(super) problem: Option<String>,
+    pub(super) trust: Entity<RepoTrustRow>,
     body_scroll: ScrollHandle,
     preview_scroll: ScrollHandle,
     focus: FocusHandle,
@@ -75,6 +77,8 @@ impl ProjectSettingsPage {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
+        let trust = cx.new(|cx| RepoTrustRow::new(&dashboard, &repo_id, &repo_name, cx));
+        cx.observe(&trust, |_, _, cx| cx.notify()).detach();
         let mut page = ProjectSettingsPage {
             dashboard,
             repo_id,
@@ -86,6 +90,7 @@ impl ProjectSettingsPage {
             saving: false,
             conflict: false,
             problem: None,
+            trust,
             body_scroll: ScrollHandle::new(),
             preview_scroll: ScrollHandle::new(),
             focus: cx.focus_handle(),

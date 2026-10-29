@@ -52,6 +52,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           fetch-depth: 0
       - run: git rev-parse --verify -q origin/main || git fetch origin main
       - id: flags
@@ -68,6 +69,8 @@ jobs:
       actions: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       # In the background: it takes 1 to 2 minutes, and the next steps need no room yet. The
       # runner keeps the process across steps; "Wait for the room" waits for it before cargo.
       - name: Make room on the disk
@@ -177,6 +180,8 @@ jobs:
       attestations: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - run: rustup toolchain install
       - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -314,6 +319,8 @@ jobs:
       actions: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - run: rustup toolchain install
       - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -367,6 +374,8 @@ jobs:
       REPORT_ONLY: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: app-binary
@@ -408,6 +417,7 @@ jobs:
             sign-in-error add-menu details-empty rail-closed-panel changes-over-main stage-evidence
             start-task-branch-menu sidebar-blurred remove-workspace-anyway
             update-downloading update-ready update-failed settings-update-ready
+            repo-trust-dialog
           DOCKED: >-
             tasks-table workspace-terminal-running terminal-find workspace-terminal-needs-input
             workspace-terminal-review no-workspace workspace-preparing finished-wrap-up agents-grid
@@ -428,6 +438,7 @@ jobs:
             sign-in-error add-menu details-empty rail-closed-panel changes-over-main stage-evidence
             start-task-branch-menu sidebar-blurred remove-workspace-anyway
             update-downloading update-ready update-failed settings-update-ready
+            repo-trust-dialog
         run: |
           mkdir -p shots
           only=$ONLY
@@ -545,6 +556,8 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - run: rustup toolchain install
       - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -649,6 +662,8 @@ jobs:
       E2E_LOCAL: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - run: rustup toolchain install
       - id: build
         run: cargo test --locked -p natamux-client --test live_daemon --test live_daemon_git --test live_daemon_settings --test live_daemon_files --test live_daemon_projects --no-run
@@ -742,6 +757,8 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - run: rustup toolchain install
       - id: build
         run: cargo test --locked ${{ needs.changes.outputs.daemon_crates }} --no-run
@@ -758,6 +775,8 @@ jobs:
       web: ${{ steps.save.outputs.web }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Build the production images
         run: scripts/e2e.sh build
       - id: save
@@ -821,7 +840,7 @@ jobs:
       - name: Install Playwright
         working-directory: e2e
         run: |
-          pnpm install --ignore-workspace --no-frozen-lockfile
+          pnpm install --ignore-workspace --frozen-lockfile
           pnpm exec playwright install --with-deps chromium
       # One group saves, so the four do not race for the same key.
       - name: Keep the downloaded packages
@@ -975,10 +994,14 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - run: rustup toolchain install
       - uses: taiki-e/install-action@a4d3f3f761dcd95cce1b72cb61cb6d1963438177 # v2.87.30
         with:
           tool: cargo-deny@0.20.2,cargo-audit@0.22.2,cargo-vet@0.10.0
+      - run: python3 scripts/advisory-dates.test.py
+      - run: python3 scripts/advisory-dates.py
       - run: cargo deny --locked check
       - run: cargo audit
       - run: cargo vet --locked

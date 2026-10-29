@@ -4,7 +4,7 @@
 use hyper::Method;
 use serde_json::{Value, json};
 
-use crate::server::{AGENT_TOKEN, TOKEN, TestDaemon, bare};
+use crate::server::{TOKEN, TestDaemon, bare};
 
 async fn task() -> TestDaemon {
     let d = bare("stages").await;
@@ -147,9 +147,10 @@ async fn marks_a_later_stage_to_skip_and_refuses_the_current_one() {
 async fn may_not_approve_skip_or_pass_a_stage() {
     for action in ["approve", "skip", "pass"] {
         let d = task().await;
+        let agent_token: &str = &d.agent_token("T-0001");
         let before = d.events_of("T-0001").await;
 
-        let (status, body) = stage(&d, AGENT_TOKEN, json!({ "action": action })).await;
+        let (status, body) = stage(&d, agent_token, json!({ "action": action })).await;
 
         assert_eq!(status, 403, "{action}");
         assert!(
@@ -163,10 +164,11 @@ async fn may_not_approve_skip_or_pass_a_stage() {
 #[tokio::test(flavor = "multi_thread")]
 async fn records_a_stage_action_it_may_take_as_the_agent() {
     let d = running().await;
+    let agent_token: &str = &d.agent_token("T-0001");
 
     let (status, _) = stage(
         &d,
-        AGENT_TOKEN,
+        agent_token,
         json!({ "action": "fail", "reason": "Stuck" }),
     )
     .await;
@@ -181,6 +183,7 @@ async fn records_a_stage_action_it_may_take_as_the_agent() {
 #[tokio::test(flavor = "multi_thread")]
 async fn records_a_question_it_sends_as_a_person_as_the_agent() {
     let d = running().await;
+    let agent_token: &str = &d.agent_token("T-0001");
     let body = json!({
         "source": "human", "type": "agent.asked", "payload": { "question": "Which file?" },
     });
@@ -189,7 +192,7 @@ async fn records_a_question_it_sends_as_a_person_as_the_agent() {
         .send(
             Method::POST,
             "/tasks/T-0001/events",
-            Some(AGENT_TOKEN),
+            Some(agent_token),
             &body,
         )
         .await;
@@ -205,7 +208,8 @@ async fn records_a_question_it_sends_as_a_person_as_the_agent() {
 #[tokio::test(flavor = "multi_thread")]
 async fn records_a_report_and_a_send_back_as_the_agent_and_a_start_never_as_a_person() {
     let d = running().await;
-    stage(&d, AGENT_TOKEN, json!({ "action": "report" })).await;
+    let agent_token: &str = &d.agent_token("T-0001");
+    stage(&d, agent_token, json!({ "action": "report" })).await;
     let reported: Vec<_> = d
         .events_of("T-0001")
         .await
@@ -216,9 +220,9 @@ async fn records_a_report_and_a_send_back_as_the_agent_and_a_start_never_as_a_pe
 
     let before = d.events_of("T-0001").await.len();
     let reopen = json!({ "action": "reopen", "to": "implement" });
-    assert_eq!(stage(&d, AGENT_TOKEN, reopen).await.0, 200);
+    assert_eq!(stage(&d, agent_token, reopen).await.0, 200);
     assert_eq!(
-        stage(&d, AGENT_TOKEN, json!({ "action": "start" })).await.0,
+        stage(&d, agent_token, json!({ "action": "start" })).await.0,
         200
     );
     let after = d.events_of("T-0001").await.split_off(before);
@@ -241,9 +245,10 @@ async fn may_not_change_the_marks_of_a_stage() {
     ];
     for (path, body) in rows {
         let d = task().await;
+        let agent_token: &str = &d.agent_token("T-0001");
         let tasks = d.call(Method::GET, "/tasks", Some(TOKEN)).await;
 
-        let (status, _) = put(&d, AGENT_TOKEN, path, body).await;
+        let (status, _) = put(&d, agent_token, path, body).await;
 
         assert_eq!(status, 403, "{path}");
         assert_eq!(
@@ -255,6 +260,7 @@ async fn may_not_change_the_marks_of_a_stage() {
 
     // The fourth row of 'may not change $url': the settings of a project.
     let d = task().await;
+    let agent_token: &str = &d.agent_token("T-0001");
     let tasks = d.call(Method::GET, "/tasks", Some(TOKEN)).await;
     let settings = d
         .call(Method::GET, "/repos/default/settings", Some(TOKEN))
@@ -265,7 +271,7 @@ async fn may_not_change_the_marks_of_a_stage() {
         .send(
             Method::PUT,
             "/repos/default/settings",
-            Some(AGENT_TOKEN),
+            Some(agent_token),
             &body,
         )
         .await;
@@ -277,4 +283,36 @@ async fn may_not_change_the_marks_of_a_stage() {
             .await,
         settings
     );
+}
+
+/// `natamux stage pass` as a command stage's script sends it, with its one-time ticket.
+async fn pass_with(d: &TestDaemon, token: &str, ticket: &str) -> u16 {
+    let body = json!({ "action": "pass", "stage": "implement" });
+    let headers = [("x-natamux-stage-ticket", ticket)];
+    let path = "/tasks/T-0001/stage";
+    d.exchange_with(Method::POST, path, Some(token), &headers, Some(&body))
+        .await
+        .0
+}
+
+// Security T-0224 (S-01): the agent token passes a stage only with the stage's ticket, once.
+#[tokio::test(flavor = "multi_thread")]
+async fn passes_a_stage_only_with_its_one_time_ticket() {
+    let d = running().await;
+    let agent_token: &str = &d.agent_token("T-0001");
+    let pass = json!({ "action": "pass", "stage": "implement" });
+    assert_eq!(stage(&d, agent_token, pass).await.0, 403);
+    assert_eq!(pass_with(&d, agent_token, "wrong").await, 403);
+    let tickets = &d.daemon.state.stages.run.options.stage_tickets;
+    let other_stage = tickets.issue("T-0001", "review");
+    assert_eq!(pass_with(&d, agent_token, &other_stage).await, 403);
+
+    let ticket = tickets.issue("T-0001", "implement");
+    assert_eq!(pass_with(&d, agent_token, &ticket).await, 200);
+    let events = d.events_of("T-0001").await;
+    assert!(
+        events.contains(&entry("stage.passed", "agent")),
+        "{events:?}"
+    );
+    assert_eq!(pass_with(&d, agent_token, &ticket).await, 403);
 }

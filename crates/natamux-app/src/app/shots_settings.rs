@@ -1,6 +1,6 @@
 //! Screen 7's `--shot` states: the palettes, the shortcut sheet, the account menu, the Settings
 //! page (T-0174) with its app pages, a search and a project's tabs, the Projects dialog, Sign in,
-//! and the app update in the status bar and in Settings (T-0214).
+//! the app update in the status bar and in Settings (T-0214), and the repo trust dialog.
 
 use std::time::Duration;
 
@@ -17,6 +17,7 @@ use super::window::Root;
 use crate::palette::palette_layer::PaletteLayer;
 use crate::palette::palette_rows::{PaletteMode, PaletteScope};
 use crate::projects::project_settings_page::ProjectSettingsPage;
+use crate::projects::repo_trust_dialog::{review, rules::repo_name};
 use crate::projects::settings_tab_rules::SettingsTab;
 use crate::projects::{issue_import, projects_dialog};
 
@@ -62,12 +63,16 @@ pub fn is_screen7_shot(shot: Shot) -> bool {
             | Shot::UpdateReady
             | Shot::UpdateFailed
             | Shot::SettingsUpdateReady
+            | Shot::RepoTrustDialog
     )
 }
 
 /// The fake's data of the shot, before the window watches it.
 pub fn prepare(shot: Shot) {
     fake_daemon::shared().set_gh_missing(shot == Shot::ImportIssues);
+    if shot == Shot::RepoTrustDialog {
+        fake_daemon::shared().distrust_repo(PROJECT);
+    }
 }
 
 pub async fn run(handle: WindowHandle<Root>, shot: Shot, cx: &mut AsyncApp) {
@@ -153,6 +158,12 @@ fn enter(
         Shot::SettingsUpdateReady => {
             show_for_shot(ready(), 0, cx);
             root.show_settings(SettingsPage::General, window, cx);
+        }
+        Shot::RepoTrustDialog => {
+            let name = repo_name(&dashboard.read(cx).data.repos, PROJECT);
+            if let Some(source) = dashboard.read(cx).source().cloned() {
+                review(&source, PROJECT, &name, None, window, cx);
+            }
         }
         _ => {}
     }

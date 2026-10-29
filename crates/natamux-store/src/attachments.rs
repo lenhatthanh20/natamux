@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use natamux_core::tasks::attachments::{
     ATTACHMENTS_DIR, format_bytes, preview_type_of, safe_attachment_name,
 };
+use natamux_core::workspaces::safe_write::copy_inside;
 use natamux_proto::tasks::attachments::Attachment;
 
 use crate::task_files::{STAGE_DIR, archive_dir};
@@ -131,10 +132,13 @@ pub fn restore_attachments(
         return Ok(());
     }
     let from = attachments_dir(data_dir, task_id);
-    let to = workspace.join(STAGE_DIR).join(ATTACHMENTS_DIR);
-    fs::create_dir_all(&to)?;
+    let to = Path::new(STAGE_DIR).join(ATTACHMENTS_DIR);
     for attachment in attachments {
-        fs::copy(from.join(&attachment.name), to.join(&attachment.name))?;
+        copy_inside(
+            workspace,
+            &to.join(&attachment.name),
+            &from.join(&attachment.name),
+        )?;
     }
     Ok(())
 }

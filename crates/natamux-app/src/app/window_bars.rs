@@ -12,6 +12,7 @@ use super::Root;
 use crate::agents::limits_rules::{agents_in_use, current, limits_chip, without_limits};
 use crate::app::dashboard::Dashboard;
 use crate::app::dashboard_data::{Part, Seen};
+use crate::app::links::open_link;
 use crate::app::shell_rules::{Crumb, crumb, live_item, running_count, window_title};
 use crate::app::shortcuts::{ToggleAgents, ToggleDetails, ToggleSidebar};
 use crate::app::status_bar::{STATUS_BAR_HEIGHT, StatusBar, now_ms};
@@ -241,7 +242,7 @@ impl Render for StatusBarView {
                     root.update(cx, |root, cx| root.restart_to_update(window, cx))
                         .ok();
                 }
-                UpdateState::Manual { page, .. } => cx.open_url(page),
+                UpdateState::Manual { page, .. } => open_link(page, cx),
                 UpdateState::Failed { .. } => update::check(true, cx),
                 _ => {}
             })

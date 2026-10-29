@@ -12,6 +12,8 @@ use natamux_core::stages::terminal_lane::{
 };
 use natamux_core::tasks::dependencies::{open_subtasks, waiting_on};
 use natamux_proto::events::task_event::TaskEvent;
+use natamux_proto::projects::repo_trust::UNTRUSTED_REASON;
+use natamux_proto::stages::actions::STAGE_TICKET_ENV;
 use natamux_proto::stages::schema::{Stage, StageKind};
 use natamux_proto::tasks::task::{Task, TaskState};
 use natamux_stages::actions::send_back_reason;
@@ -303,6 +305,9 @@ impl StageRun {
         if !self.mark_started(task, stage, Map::new())? {
             return Ok(());
         }
+        if !self.repo_trusted(task) {
+            return self.fail_stage(&task.id, &stage.id, UNTRUSTED_REASON);
+        }
         // The command runs in the same terminal each time, so testing again adds no shell.
         let previous = self.state().command_terminals.get(&task.id).cloned();
         if let Some(previous) = &previous {
@@ -346,10 +351,15 @@ impl StageRun {
         stage_id: &str,
         command: &str,
     ) -> std::io::Result<String> {
+        // Only the `natamux` reports get the ticket, never the command (repo code) itself.
+        let ticket = self.options.stage_tickets.issue(task_id, stage_id);
         let pass = format!("natamux stage pass {task_id} --stage {stage_id}");
         let fail = format!("natamux stage fail {task_id} --stage {stage_id}");
         if self.options.windows {
-            return Ok(format!("{command}; if ($?) {{ {pass} }} else {{ {fail} }}"));
+            let set = format!("$env:{STAGE_TICKET_ENV}='{ticket}';");
+            return Ok(format!(
+                "{command}; if ($?) {{ {set} {pass} }} else {{ {set} {fail} }}"
+            ));
         }
         std::fs::create_dir_all(self.data_dir())?;
         let script = self.data_dir().join(format!("stage-command-{task_id}.sh"));
@@ -357,9 +367,9 @@ impl StageRun {
             "if (",
             command,
             "); then",
-            &format!("  {pass}"),
+            &format!("  {STAGE_TICKET_ENV}={ticket} {pass}"),
             "else",
-            &format!("  {fail}"),
+            &format!("  {STAGE_TICKET_ENV}={ticket} {fail}"),
             "fi",
             "",
         ]
@@ -381,14 +391,50 @@ impl StageRun {
     }
 }
 
-/// Writes a file only the user can read, as Node's `mode: 0o600` (a new file only).
+/// Writes a file only the user can read. An old file is removed first: `mode` applies to a new
+/// file only, and a file or link that is already there could be wider or point elsewhere.
 pub fn write_private(path: &Path, text: &str) -> std::io::Result<()> {
+    match std::fs::remove_file(path) {
+        Err(error) if error.kind() != std::io::ErrorKind::NotFound => return Err(error),
+        _ => {}
+    }
     let mut options = std::fs::OpenOptions::new();
-    options.write(true).create(true).truncate(true);
+    options.write(true).create_new(true);
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt;
         options.mode(0o600);
     }
     options.open(path)?.write_all(text.as_bytes())
+}
+
+#[cfg(test)]
+mod write_private_tests {
+    use super::write_private;
+
+    fn temp(name: &str) -> std::path::PathBuf {
+        std::env::temp_dir().join(format!("natamux-wp-{}-{name}", std::process::id()))
+    }
+
+    #[test]
+    fn writes_a_new_file() {
+        let path = temp("new");
+        let _ = std::fs::remove_file(&path);
+        write_private(&path, "one").unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "one");
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_old_wide_file_becomes_0600() {
+        use std::os::unix::fs::PermissionsExt;
+        let path = temp("old");
+        std::fs::write(&path, "old text that is longer").unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+        write_private(&path, "new").unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "new");
+        assert_eq!(path.metadata().unwrap().permissions().mode() & 0o777, 0o600);
+        let _ = std::fs::remove_file(&path);
+    }
 }

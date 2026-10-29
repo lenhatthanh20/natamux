@@ -1,3 +1,4 @@
+use super::health_proof::proof_of;
 use super::process::{
     clear_port_file, pick_port, probe_daemon_within, sibling_daemon, startup_error, stop_child,
     token_at, wait_for_health, wait_for_healthy_child,
@@ -144,13 +145,17 @@ fn closing_the_parent_pipe_lets_the_child_exit_cleanly() {
     );
 }
 
-#[test]
-fn another_listener_cannot_pass_the_owned_daemon_probe() {
+/// A fake listener for two probes. `reply` builds the answer from the request text. Returns the
+/// requests it saw.
+fn fake_daemon(
+    reply: impl Fn(&str) -> String + Send + 'static,
+) -> (u16, std::thread::JoinHandle<Vec<String>>) {
     use std::io::{Read, Write};
 
     let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).expect("listener");
     let port = listener.local_addr().expect("address").port();
     let server = std::thread::spawn(move || {
+        let mut seen = Vec::new();
         for _ in 0..2 {
             let (mut stream, _) = listener.accept().expect("connection");
             let mut request = Vec::new();
@@ -160,23 +165,86 @@ fn another_listener_cannot_pass_the_owned_daemon_probe() {
                 assert!(size > 0 && request.len() < 1024);
                 request.extend_from_slice(&chunk[..size]);
             }
-            let request = String::from_utf8_lossy(&request);
-            let status = if request.starts_with("GET /api/tasks ")
-                && request.contains("Authorization: Bearer owned-token\r\n")
-            {
-                "200 OK"
-            } else {
-                "401 Unauthorized"
-            };
+            let request = String::from_utf8_lossy(&request).into_owned();
             // The probe may give up on a slow runner and close first; its answer is still false.
-            let _ = write!(stream, "HTTP/1.1 {status}\r\nContent-Length: 0\r\n\r\n");
+            let _ = stream.write_all(reply(&request).as_bytes());
+            seen.push(request);
         }
+        seen
     });
+    (port, server)
+}
+
+fn nonce_of(request: &str) -> String {
+    let start = request.find("nonce=").expect("nonce") + "nonce=".len();
+    request[start..start + 32].to_string()
+}
+
+fn ok_with(body: &str) -> String {
+    format!(
+        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+    )
+}
+
+#[test]
+fn a_listener_that_cannot_prove_itself_never_sees_the_token() {
     // Not the 200 ms of the app: a loaded runner can start the server thread later than that.
     let wait = Duration::from_secs(5);
-    assert!(!probe_daemon_within(port, "other-token", wait));
+    // One that says 200 to anything, and one that proves itself with another token.
+    let calls = std::sync::atomic::AtomicUsize::new(0);
+    let (port, server) = fake_daemon(move |request| {
+        if calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0 {
+            ok_with(r#"{"status":"ok"}"#)
+        } else {
+            let proof = proof_of("other-token", &nonce_of(request));
+            ok_with(&format!(r#"{{"status":"ok","proof":"{proof}"}}"#))
+        }
+    });
+    assert!(!probe_daemon_within(port, "owned-token", wait));
+    assert!(!probe_daemon_within(port, "owned-token", wait));
+    for request in server.join().expect("server") {
+        assert!(request.starts_with("GET /health?nonce="), "{request}");
+        assert!(
+            !request.to_lowercase().contains("authorization"),
+            "{request}"
+        );
+        assert!(!request.contains("owned-token"), "{request}");
+    }
+}
+
+#[test]
+fn the_owned_daemon_passes_the_probe_without_the_token_on_the_wire() {
+    let wait = Duration::from_secs(5);
+    let (port, server) = fake_daemon(|request| {
+        let proof = proof_of("owned-token", &nonce_of(request));
+        ok_with(&format!(r#"{{"status":"ok","proof":"{proof}"}}"#))
+    });
     assert!(probe_daemon_within(port, "owned-token", wait));
-    server.join().expect("server");
+    assert!(!probe_daemon_within(port, "other-token", wait));
+    for request in server.join().expect("server") {
+        assert!(
+            !request.to_lowercase().contains("authorization"),
+            "{request}"
+        );
+        assert!(!request.contains("owned-token"), "{request}");
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn a_wide_token_file_becomes_0600() {
+    use std::os::unix::fs::PermissionsExt;
+    let root = std::env::temp_dir().join(format!("natamux-app-token-mode-{}", std::process::id()));
+    std::fs::create_dir_all(&root).expect("temp folder");
+    let path = root.join("daemon-token");
+    std::fs::write(&path, "a".repeat(40)).expect("old token");
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).expect("mode");
+    assert_eq!(token_at(&path).expect("saved token"), "a".repeat(40));
+    let mode = std::fs::metadata(&path).expect("meta").permissions().mode();
+    assert_eq!(mode & 0o777, 0o600);
+    std::fs::remove_file(path).expect("remove token");
+    std::fs::remove_dir(root).expect("remove temp folder");
 }
 
 #[test]

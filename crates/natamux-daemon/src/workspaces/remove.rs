@@ -2,6 +2,7 @@
 
 use std::path::Path;
 
+use natamux_agents::trust::untrust_workspace;
 use natamux_git::branches::delete_branch_force;
 use natamux_git::changes::list_changes;
 use natamux_git::commit_push::delete_remote_ref;
@@ -135,6 +136,9 @@ impl WorkspaceService {
                     let _ = self.tasks.stop_agents(task_id);
                     return Err(error);
                 }
+            }
+            if let Some(paths) = &self.trust_paths {
+                untrust_workspace(&workspace, paths);
             }
 
             let branch_deleted = match (&task.branch, rule) {

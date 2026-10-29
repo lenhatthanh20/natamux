@@ -297,3 +297,53 @@ fn writes_nothing_for_claude_code_codex_and_gemini() {
         );
     }
 }
+
+#[test]
+fn takes_a_removed_worktree_out_of_cursors_trusted_folders() {
+    let setup = Setup::new();
+    trust_workspace("cursor", WORKSPACE, &setup.paths());
+    assert!(setup.marker(MARKER).exists());
+
+    untrust_workspace(WORKSPACE, &setup.paths());
+
+    assert!(!setup.marker(MARKER).exists());
+}
+
+#[test]
+fn keeps_a_cursor_marker_of_another_path_with_the_same_folder_name() {
+    let setup = Setup::new();
+    let file = setup.marker(MARKER);
+    fs::create_dir_all(file.parent().unwrap()).unwrap();
+    fs::write(&file, r#"{"workspacePath":"/Users/me/other"}"#).unwrap();
+
+    untrust_workspace(WORKSPACE, &setup.paths());
+
+    assert!(file.exists());
+}
+
+#[test]
+fn takes_a_removed_worktree_out_of_copilots_trusted_folders_and_keeps_the_rest() {
+    let setup = Setup::new();
+    setup.write_copilot(&format!(
+        "{HEADER}{{\n  \"model\": \"x\",\n  \"trustedFolders\": [\"/elsewhere\"]\n}}\n"
+    ));
+    trust_workspace("copilot", WORKSPACE, &setup.paths());
+
+    untrust_workspace(WORKSPACE, &setup.paths());
+
+    let text = setup.copilot();
+    assert!(text.starts_with(HEADER));
+    assert_eq!(
+        json_of(&text[HEADER.len()..]),
+        serde_json::json!({ "model": "x", "trustedFolders": ["/elsewhere"] })
+    );
+}
+
+#[test]
+fn leaves_a_copilot_config_without_the_worktree_as_it_is() {
+    let setup = Setup::new();
+    let text = r#"{"trustedFolders": ["/Users/me/"]}"#;
+    setup.write_copilot(text);
+    untrust_workspace(WORKSPACE, &setup.paths());
+    assert_eq!(setup.copilot(), text);
+}

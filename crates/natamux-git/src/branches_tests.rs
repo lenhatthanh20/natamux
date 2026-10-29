@@ -264,3 +264,10 @@ fn force_deletes_a_branch_that_is_not_merged_and_accepts_a_missing_one() {
     assert!(!branch_exists(&repo, BRANCH));
     assert!(delete_branch_force(&repo, BRANCH));
 }
+
+#[test]
+fn refuses_a_branch_name_that_starts_with_a_dash() {
+    let (_root, repo) = test_repo();
+    assert!(!delete_merged_branch(&repo, "-D"));
+    assert!(!delete_branch_force(&repo, "--help"));
+}

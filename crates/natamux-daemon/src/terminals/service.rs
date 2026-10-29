@@ -25,6 +25,7 @@ use super::session_snapshot::{catch_up_behind, request_snapshot, resume};
 use super::shells::{Detach, Inner, lock};
 use super::tickets::Tickets;
 use super::types::{ClientRef, ClientState, Frame, Phase, Size, TerminalError};
+use crate::agents::task_access::AgentTokens;
 use crate::shared::event_bus::EventBus;
 use crate::shared::scheduler::Scheduler;
 use crate::shared::turns::Turns;
@@ -75,6 +76,7 @@ impl TerminalService {
                 env,
                 sessions: Mutex::new(HashMap::new()),
                 tickets: Mutex::new(Tickets::default()),
+                agent_tokens: Arc::default(),
                 output_seen: Mutex::new(HashMap::new()),
                 next_attach: AtomicU64::new(1),
                 starting: Mutex::new(()),
@@ -82,6 +84,11 @@ impl TerminalService {
                 this: this.clone(),
             }),
         }
+    }
+
+    /// The tokens of the task shells, which the server checks.
+    pub fn agent_tokens(&self) -> &Arc<AgentTokens> {
+        &self.inner.agent_tokens
     }
 
     pub fn issue_ticket(&self, task_id: &str) -> Result<String, TerminalError> {

@@ -16,6 +16,7 @@ use super::task_attention::is_quiet;
 use super::task_rules::{lane_summary, stage_state_label};
 use super::task_time::{AgeStyle, format_age, format_exact};
 use crate::app::dashboard_data::DashboardData;
+use crate::app::links::open_link;
 use crate::components::agent_badge::agent_name;
 use crate::components::button_style::{button_icon, quiet_button};
 use crate::components::chips::{StateChip, label_chip};
@@ -157,7 +158,7 @@ fn pr_cell(row: &RowData) -> AnyElement {
         // The link opens in the browser and does not pick the row.
         .on_click(move |_, _, cx| {
             cx.stop_propagation();
-            cx.open_url(&url);
+            open_link(&url, cx);
         });
     let checks = pull_request_cell(&row.task).map(|(text, tone)| {
         let color = match tone {

@@ -215,6 +215,27 @@ fn commits_the_worktree_as_it_is_without_touching_its_branch_index_or_files() {
 }
 
 #[test]
+fn the_temp_index_lives_in_the_git_dir_and_is_removed() {
+    let f = fixture();
+    add_worktree(&f);
+    let git_dir = PathBuf::from(run_git(&f.worktree, &["rev-parse", "--absolute-git-dir"]).trim());
+    let index = TempIndex::new(&f.worktree).unwrap();
+    assert_eq!(index.0.parent(), Some(git_dir.as_path()));
+    drop(index);
+    write(&f.worktree, "a.ts", "export {}\n");
+    snapshot_commit(&f.worktree, "x").unwrap();
+    read_commit_diff(&f.worktree, 10_000).unwrap();
+    let left = std::fs::read_dir(&git_dir)
+        .unwrap()
+        .filter(|entry| {
+            let name = entry.as_ref().unwrap().file_name();
+            name.to_string_lossy().starts_with("natamux-index-")
+        })
+        .count();
+    assert_eq!(left, 0);
+}
+
+#[test]
 fn gives_head_itself_when_the_worktree_has_no_change_ignored_files_aside() {
     let f = fixture();
     ignoring_worktree(&f, "secret.txt");

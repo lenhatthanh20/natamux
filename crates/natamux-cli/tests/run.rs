@@ -804,6 +804,23 @@ fn approves_a_stage_and_sends_a_task_back_with_a_reason() {
     );
 }
 
+// Security T-0224 (S-01): the script of a command stage passes it with its one-time ticket.
+#[test]
+fn sends_the_stage_ticket_of_a_command_stage_script() {
+    let env = Env::from([
+        ("NATAMUX_TOKEN", "secret"),
+        ("NATAMUX_STAGE_TICKET", "T-8.ticket"),
+    ]);
+    let argv = ["stage", "pass", "T-8", "--stage", "test"];
+    let pass = run_with(&argv, env, b"", |_| task_reply(&task_t("T-8")));
+    assert_eq!(pass.code, EXIT_OK);
+    let call = &pass.calls[0];
+    assert_eq!(call.header("X-Natamux-Stage-Ticket"), Some("T-8.ticket"));
+    assert_has(&body_of(call), &json!({"action": "pass", "stage": "test"}));
+    let plain = run(&argv, |_| task_reply(&task_t("T-8")));
+    assert_eq!(plain.calls[0].header("X-Natamux-Stage-Ticket"), None);
+}
+
 #[test]
 fn turns_the_workflow_of_a_stage_on_and_off() {
     let handler = |_: &Call| task_reply(&task_t("T-8"));

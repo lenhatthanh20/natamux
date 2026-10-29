@@ -8,7 +8,7 @@ use natamux_daemon::shared::event_bus::DaemonMessage;
 use serde_json::{Value, json};
 
 use crate::git_repo::git_daemon;
-use crate::server::{AGENT_TOKEN, TOKEN, TestDaemon, bare, eventually};
+use crate::server::{TOKEN, TestDaemon, bare, eventually};
 
 const PNG: [u8; 9] = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0];
 
@@ -238,7 +238,8 @@ async fn sends_each_message_to_every_dashboard() {
 #[tokio::test(flavor = "multi_thread")]
 async fn sends_the_messages_to_the_agent_token_of_a_task_terminal_too() {
     let d = bare("dash-agent").await;
-    let mut dashboard = d.dashboard(AGENT_TOKEN).await;
+    let agent_token: &str = &d.agent_token("T-0001");
+    let mut dashboard = d.dashboard(agent_token).await;
     let bus = std::sync::Arc::clone(&d.daemon.state.bus);
     eventually(|| bus.size() == 1).await;
     let (message, text) = shells_changed();

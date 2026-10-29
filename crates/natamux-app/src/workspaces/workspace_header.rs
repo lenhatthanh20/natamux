@@ -13,6 +13,7 @@ use ui::{ButtonLike, Tooltip, prelude::*};
 
 use super::workspace_rules::{GitButton, GitStep, needs_commit, pull_request_button, push_button};
 use super::wrap_up_rules::is_finished_state;
+use crate::app::links::open_link;
 use crate::components::icons::icon_path;
 use crate::components::spinner::Spinner;
 
@@ -95,7 +96,7 @@ fn open_pull_request(url: String) -> AnyElement {
     ButtonLike::new("workspace-open-pr")
         .style(ButtonStyle::Outlined)
         .size(ButtonSize::Default)
-        .on_click(move |_, _, cx| cx.open_url(&url))
+        .on_click(move |_, _, cx| open_link(&url, cx))
         .child(
             h_flex()
                 .px_1p5()

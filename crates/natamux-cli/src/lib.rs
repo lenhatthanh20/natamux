@@ -8,6 +8,7 @@ mod execute;
 pub mod format;
 mod hook;
 mod hooks;
+pub mod repo_trust;
 pub mod run;
 mod statusline;
 

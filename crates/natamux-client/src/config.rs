@@ -20,9 +20,9 @@ pub struct Config {
 impl Config {
     /// `NATAMUX_URL` and `NATAMUX_TOKEN`. Without them: the default address and the token of the
     /// Natamux app on this machine, so the CLI finds the daemon that the app started.
-    /// In a task's terminal (`NATAMUX_TASK_ID` set), `NATAMUX_TOKEN` is that daemon run's agent
-    /// token: it may not pass gates and is new after each daemon restart. There the saved token
-    /// wins when there is one.
+    /// In a task's terminal (`NATAMUX_TASK_ID` set), only `NATAMUX_TOKEN` counts: it is that task's
+    /// agent token. The saved file is never read there, so an agent cannot pass a gate with the
+    /// user's token; a person runs gate commands from the app or a terminal outside a task.
     pub fn from_env() -> Result<Config, ClientError> {
         Config::from_env_with(None)
     }
@@ -128,7 +128,7 @@ fn resolve(
         })
     };
     let token = if set("NATAMUX_TASK_ID").is_some() {
-        saved().or_else(|| set("NATAMUX_TOKEN"))
+        set("NATAMUX_TOKEN")
     } else {
         set("NATAMUX_TOKEN").or_else(saved)
     }
@@ -226,10 +226,13 @@ mod tests {
         assert_eq!(config.token, "from-the-file");
     }
 
-    // Gate 3 run of 2026-10-22: the app started from a task's terminal took the agent token, and
-    // the daemon refused it after the Electron app restarted.
+    // Security T-0224 (S-01): a task terminal read the saved daemon token, so an agent passed
+    // gates with the user's token.
     #[test]
-    fn in_a_task_terminal_the_saved_token_wins_over_the_agent_token() {
+    fn in_a_task_terminal_only_the_agent_token_counts_and_no_file_is_read() {
+        fn never(path: &Path) -> Option<String> {
+            panic!("read {}", path.display())
+        }
         let config = resolve(
             env(&[
                 ("NATAMUX_TASK_ID", "T-0145"),
@@ -237,19 +240,15 @@ mod tests {
                 ("NATAMUX_TOKEN", "agent-token"),
             ]),
             &[Path::new(FILE)],
-            saved_token,
-        )
-        .unwrap();
-        assert_eq!(config.token, "from-the-file");
-        assert_eq!(config.base_url, "http://127.0.0.1:4317");
-        // No saved token, as against the Docker daemon: the env's token is all there is.
-        let config = resolve(
-            env(&[("NATAMUX_TASK_ID", "T-1"), ("NATAMUX_TOKEN", "agent-token")]),
-            &[],
-            |_| None,
+            never,
         )
         .unwrap();
         assert_eq!(config.token, "agent-token");
+        assert_eq!(config.base_url, "http://127.0.0.1:4317");
+        assert_eq!(
+            resolve(env(&[("NATAMUX_TASK_ID", "T-1")]), &files(), never),
+            Err(ClientError::NoToken)
+        );
     }
 
     #[test]
@@ -287,24 +286,6 @@ mod tests {
         // Outside a task terminal the env still wins.
         let config = resolve(env(&[("NATAMUX_TOKEN", "e")]), &files(), both).unwrap();
         assert_eq!(config.token, "e");
-    }
-
-    #[test]
-    fn in_a_task_terminal_the_files_win_in_order_then_the_env() {
-        let task = [("NATAMUX_TASK_ID", "T-1"), ("NATAMUX_TOKEN", "agent")];
-        assert_eq!(
-            resolve(env(&task), &files(), both).unwrap().token,
-            "from-the-app"
-        );
-        let only_electron = |path: &Path| both(path).filter(|_| path == Path::new(FILE));
-        assert_eq!(
-            resolve(env(&task), &files(), only_electron).unwrap().token,
-            "from-the-file"
-        );
-        assert_eq!(
-            resolve(env(&task), &files(), |_| None).unwrap().token,
-            "agent"
-        );
     }
 
     #[test]

@@ -4,7 +4,7 @@ use hyper::Method;
 use natamux_core::events::schema::GATE_EVENT_TYPES;
 use serde_json::{Value, json};
 
-use crate::server::{AGENT_TOKEN, TOKEN, TestDaemon, bare, eventually};
+use crate::server::{TOKEN, TestDaemon, bare, eventually};
 
 async fn task() -> TestDaemon {
     let d = bare("events").await;
@@ -104,8 +104,18 @@ async fn checks_the_conditions_of_a_branch_before_any_event_of_a_person_or_an_ag
             { "id": "feature", "stages": [{ "id": "plan", "kind": "agent", "gate": "auto" }] },
         ] },
     ] });
-    std::fs::write(d.root.join("repo/.natamux.json"), pipeline.to_string()).unwrap();
-    for (n, (token, source)) in [(TOKEN, "human"), (AGENT_TOKEN, "agent")]
+    // A save by the user approves the path's command (repo trust).
+    let (saved, body) = d
+        .send(
+            Method::PUT,
+            "/repos/default/settings",
+            Some(TOKEN),
+            &pipeline,
+        )
+        .await;
+    assert_eq!(saved, 200, "{body}");
+    let agent = d.agent_token("T-0002");
+    for (n, (token, source)) in [(TOKEN, "human"), (agent.as_str(), "agent")]
         .into_iter()
         .enumerate()
     {
@@ -228,9 +238,8 @@ async fn does_not_let_a_client_send_an_event_only_the_daemon_makes() {
 #[tokio::test(flavor = "multi_thread")]
 async fn accepts_the_agent_token_for_what_an_agent_does() {
     let d = task().await;
-    let (status, body) = d
-        .call(Method::GET, "/tasks/T-0001", Some(AGENT_TOKEN))
-        .await;
+    let agent = d.agent_token("T-0001");
+    let (status, body) = d.call(Method::GET, "/tasks/T-0001", Some(&agent)).await;
     assert_eq!(status, 200);
     assert_eq!(body["task"]["id"], "T-0001");
 }
@@ -240,7 +249,7 @@ async fn records_what_the_agent_token_sends_as_the_agent_whatever_source_it_name
     let d = task().await;
     let (status, applied) = post(
         &d,
-        AGENT_TOKEN,
+        &d.agent_token("T-0001"),
         "T-0001",
         json!({ "source": "human", "type": "task.readied" }),
     )
@@ -261,7 +270,7 @@ async fn the_agent_token_may_not_send_a_gate_event() {
         let before = logged(&d).await;
         let (status, body) = post(
             &d,
-            AGENT_TOKEN,
+            &d.agent_token("T-0001"),
             "T-0001",
             json!({ "source": "human", "type": kind, "payload": { "to": "done" } }),
         )

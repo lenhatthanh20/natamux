@@ -6,10 +6,12 @@ use std::sync::Arc;
 use hyper::StatusCode;
 use natamux_core::tasks::inputs::task_id_param;
 use natamux_core::zod::{Issues, Pattern, Rule, ZodError, invalid_type, object, one_of, string};
+use natamux_proto::stages::actions::STAGE_TICKET_HEADER;
 use natamux_stages::actions::{AGENT_REFUSED_ACTIONS, STAGE_ACTIONS, StageAction};
 use natamux_stages::files::{list_stage_files, read_stage_file, write_stage_file};
 use serde_json::{Value, json};
 
+use crate::http::agent_rules::Caller;
 use crate::http::errors::{
     Answer, error_answer, forbidden, internal_error, json_answer, stage_error, zod_answer,
 };
@@ -119,8 +121,23 @@ fn file_params(id: &str, name: &str) -> Result<(String, String), ZodError> {
     issues.into_result(name).map(|name| (id, name))
 }
 
+/// The one-time result ticket of a command stage, sent by its script's `natamux stage`.
+pub fn ticket_of(headers: &hyper::HeaderMap) -> Option<String> {
+    headers
+        .get(STAGE_TICKET_HEADER)
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_string)
+}
+
 /// Moves a task through its stages: approve, send back, skip, pass, fail, report done, start.
-pub async fn act(state: Arc<AppState>, id: String, body: Option<Value>, by_agent: bool) -> Answer {
+/// The agent token reaches its own task only (`agent_rules`), so `id` is its task.
+pub async fn act(
+    state: Arc<AppState>,
+    id: String,
+    body: Option<Value>,
+    who: &Caller,
+    ticket: Option<String>,
+) -> Answer {
     let id = match task_id_param(&id) {
         Ok(id) => id,
         Err(error) => return zod_answer(&error),
@@ -129,8 +146,17 @@ pub async fn act(state: Arc<AppState>, id: String, body: Option<Value>, by_agent
         Ok(parsed) => parsed,
         Err(error) => return zod_answer(&error),
     };
-    // What only a person may do, so an agent cannot pass a manual gate by itself.
-    if by_agent && AGENT_REFUSED_ACTIONS.contains(&what) {
+    let by_agent = who.is_agent();
+    let tickets = &state.stages.run.options.stage_tickets;
+    // Any report of the stage's script spends its ticket, so one left after a fail cannot pass.
+    let redeemed = match (by_agent, ticket, input.stage.as_deref()) {
+        (true, Some(ticket), Some(stage)) => tickets.redeem(&id, stage, &ticket),
+        _ => false,
+    };
+    // What only a person may do, so an agent cannot pass a manual gate by itself. The script of
+    // a command stage passes with its ticket.
+    let ticketed_pass = what == StageAction::Pass && redeemed;
+    if by_agent && AGENT_REFUSED_ACTIONS.contains(&what) && !ticketed_pass {
         return forbidden(&format!("{} a stage", what.as_str()));
     }
     input.by_agent = by_agent;

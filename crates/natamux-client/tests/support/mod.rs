@@ -199,7 +199,9 @@ pub async fn serve(
     let lower = head.to_lowercase();
     if lower.contains("upgrade: websocket") {
         if target.starts_with("/events") {
-            if !target.contains(&format!("token={TOKEN}")) {
+            // The header only: a `?token=` URL is refused (S-15).
+            let header = lower.contains(&format!("authorization: bearer {TOKEN}"));
+            if !header || target.contains("token=") {
                 let _ = stream
                     .write_all(b"HTTP/1.1 401 Unauthorized\r\ncontent-length: 0\r\n\r\n")
                     .await;

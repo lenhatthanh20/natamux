@@ -191,6 +191,10 @@ pub struct LaunchOptions {
     pub auto: bool,
     /// The task's worktree, which the agent is told to trust. None: no trust is added.
     pub workspace: Option<String>,
+    /// Whether the agent is told to trust the folder (Codex's `trust_level`, Gemini's trust
+    /// variable). Off for a project whose commands are not approved: its own agent config
+    /// (hooks, MCP servers) would run.
+    pub trust: bool,
     /// The agent's hook file is in the worktree, so the launch need not pass them.
     pub workspace_hooks: bool,
 }
@@ -283,7 +287,7 @@ fn codex_words(
     }
     words.push("--dangerously-bypass-hook-trust".into());
     words.extend(mode);
-    if let Some(workspace) = &options.workspace {
+    if let (true, Some(workspace)) = (options.trust, &options.workspace) {
         words.push("-c".into());
         words.push(quote(&codex_trust_arg(workspace)));
     }
@@ -297,7 +301,7 @@ fn codex_words(
     if !options
         .extra_args
         .split(is_js_space)
-        .any(|word| word == "--no-alt-screen")
+        .any(|word| word.trim_matches('\'') == "--no-alt-screen")
     {
         words.push("--no-alt-screen".into());
     }
@@ -332,21 +336,24 @@ fn gemini_line(
     // Folder trust is off by default; when the user turned it on, this skips its question. With
     // the hooks in the workspace's settings, the system settings would run each hook twice.
     let system = !options.workspace_hooks;
-    let command = command.join(" ");
-    if options.platform == Platform::Windows {
-        let env = if system {
-            format!(" $env:GEMINI_CLI_SYSTEM_SETTINGS_PATH={settings};")
+    let windows = options.platform == Platform::Windows;
+    let mut words = Vec::new();
+    if options.trust {
+        words.push(if windows {
+            "$env:GEMINI_CLI_TRUST_WORKSPACE='true';".to_string()
         } else {
-            String::new()
-        };
-        return format!("$env:GEMINI_CLI_TRUST_WORKSPACE='true';{env} {command}");
+            "GEMINI_CLI_TRUST_WORKSPACE=true".to_string()
+        });
     }
-    let env = if system {
-        format!(" GEMINI_CLI_SYSTEM_SETTINGS_PATH={settings}")
-    } else {
-        String::new()
-    };
-    format!("GEMINI_CLI_TRUST_WORKSPACE=true{env} {command}")
+    if system {
+        words.push(if windows {
+            format!("$env:GEMINI_CLI_SYSTEM_SETTINGS_PATH={settings};")
+        } else {
+            format!("GEMINI_CLI_SYSTEM_SETTINGS_PATH={settings}")
+        });
+    }
+    words.push(command.join(" "));
+    words.join(" ")
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -386,3 +393,7 @@ mod tests;
 #[cfg(test)]
 #[path = "command_line_tests.rs"]
 mod command_line_tests;
+
+#[cfg(test)]
+#[path = "launch_trust_tests.rs"]
+mod trust_tests;

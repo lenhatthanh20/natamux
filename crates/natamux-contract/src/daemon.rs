@@ -307,13 +307,10 @@ impl Daemon {
         })
     }
 
-    /// The `/events` URL with the token in the query.
-    pub fn events_url(&self, token: Option<&str>) -> String {
-        let base = self.base.replacen("http://", "ws://", 1);
-        match token {
-            Some(token) => format!("{base}/events?token={token}"),
-            None => format!("{base}/events"),
-        }
+    /// The `/events` URL. The token goes in the `Authorization` header, as the native client
+    /// sends it.
+    pub fn events_url(&self) -> String {
+        format!("{}/events", self.base.replacen("http://", "ws://", 1))
     }
 
     pub async fn ticket(&self) -> String {

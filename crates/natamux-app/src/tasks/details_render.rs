@@ -15,6 +15,7 @@ use super::DetailsPanel;
 use super::run::agent_of;
 use crate::agents::agent_choices::agent_label;
 use crate::app::clock::now_ms;
+use crate::app::links::open_link;
 use crate::components::button_style::{action_button, quiet_button};
 use crate::components::detail_section::{DetailSection, field};
 use crate::stages::overview_rules::{NO_STAGE_STARTED, overview_figures, time_bars};
@@ -222,7 +223,7 @@ impl DetailsPanel {
                 quiet_button("issue-link", issue.key.clone())
                     .label_size(LabelSize::Small)
                     .truncate(true)
-                    .on_click(move |_, _, cx| cx.open_url(&url))
+                    .on_click(move |_, _, cx| open_link(&url, cx))
                     .into_any_element()
             }
             None if can_create => {
@@ -244,7 +245,7 @@ impl DetailsPanel {
                 )
                 .label_size(LabelSize::Small)
                 .truncate(true)
-                .on_click(move |_, _, cx| cx.open_url(&link))
+                .on_click(move |_, _, cx| open_link(&link, cx))
                 .into_any_element()
             }
             None => Label::new("Opens in Release")

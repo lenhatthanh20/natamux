@@ -159,6 +159,7 @@ impl ProjectSettingsPage {
                     }),
             )
             .when(self.conflict, |this| this.child(self.conflict_box(cx)))
+            .children(self.trust.read(cx).untrusted().then(|| self.trust.clone()))
             .children(self.problem.clone().map(line))
     }
 

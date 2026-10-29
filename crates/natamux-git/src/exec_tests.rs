@@ -61,3 +61,16 @@ fn counts_each_git_and_gh_process_also_the_ones_that_fail() {
     assert_eq!(thread_spawn_count() - mine, 5);
     assert!(spawn_count() - global >= 5);
 }
+
+#[test]
+fn checked_ref_refuses_empty_names_and_names_that_look_like_options() {
+    assert_eq!(checked_ref("main").unwrap(), "main");
+    assert_eq!(
+        checked_ref("origin/natamux/t-1").unwrap(),
+        "origin/natamux/t-1"
+    );
+    for bad in ["", "-b", "--upload-pack=touch x"] {
+        let error = checked_ref(bad).unwrap_err();
+        assert!(error.0.starts_with("git ref refused: "), "{error}");
+    }
+}

@@ -8,6 +8,7 @@ use std::process::{Command, Stdio};
 
 use natamux_core::js::js_trim;
 use natamux_core::json::{parse_js, to_js_string_pretty};
+use natamux_core::workspaces::safe_write::write_inside;
 use natamux_proto::agents::claude_code::{
     CLAUDE_CODE_HOOK_EVENTS, STATUS_LINE_ARG, TASK_ID_HEADER, is_natamux_status_line,
 };
@@ -290,23 +291,21 @@ pub fn prepare_workspace(agent: &str, workspace: &Path, hooks: WorkspaceHooks) -
         return false;
     };
     let target = workspace.join(file.path);
-    let text = if target.exists() {
-        match fs::read(&target) {
+    // A link at the target is never read or written: the repo may point it outside.
+    let text = match fs::symlink_metadata(&target) {
+        Ok(meta) if meta.file_type().is_symlink() => return false,
+        Ok(_) => match fs::read(&target) {
             Ok(bytes) => hook_file_text(&file, &String::from_utf8_lossy(&bytes)),
             Err(_) => return false,
-        }
-    } else {
-        Some(file.content.clone())
+        },
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Some(file.content.clone()),
+        Err(_) => return false,
     };
     let Some(text) = text else {
         return false;
     };
     // A folder that cannot be written: the agent still starts, followed by its terminal only.
-    let written = target
-        .parent()
-        .map_or(Ok(()), fs::create_dir_all)
-        .and_then(|()| fs::write(&target, text));
-    if written.is_err() {
+    if write_inside(workspace, Path::new(file.path), text.as_bytes()).is_err() {
         return false;
     }
     exclude_from_git(workspace, &format!("/{}", file.path));

@@ -156,6 +156,7 @@ impl Env {
             on_launch: None,
             trust_paths: trust_paths(|_| None, &self.data_dir),
             permission_mode_of: Arc::new(|_| "auto".into()),
+            trusted_of: Arc::new(|_| true),
         }
     }
 
@@ -249,6 +250,7 @@ fn dummy_runner() -> AgentRunner {
         on_launch: None,
         trust_paths: trust_paths(|_| None, &dir.0),
         permission_mode_of: Arc::new(|_| "auto".into()),
+        trusted_of: Arc::new(|_| true),
     })
 }
 
@@ -276,3 +278,4 @@ const PROMPT_ONLY: &str =
 
 mod agents;
 mod launch;
+mod trust;

@@ -52,10 +52,15 @@ enum Frame {
     },
 }
 
+/// S-22: a few lines of nested aliases can copy a node billions of times. Far above any task file.
+const MAX_NODES: usize = 100_000;
+
 #[derive(Default)]
 struct Composer {
     stack: Vec<Frame>,
-    anchors: HashMap<usize, Value>,
+    /// Each anchored value with its node count, so an alias is refused before it is copied.
+    anchors: HashMap<usize, (Value, usize)>,
+    nodes: usize,
     document: Option<Value>,
     error: Option<String>,
 }
@@ -71,27 +76,23 @@ impl EventReceiver for Composer {
                 style,
                 tag.map(|tag| format!("{}{}", tag.handle, tag.suffix)),
             )
-            .map(|value| self.node(value, anchor)),
-            Event::Alias(id) => match self.anchors.get(&id).cloned() {
-                Some(value) => {
-                    self.node(value, 0);
-                    Ok(())
-                }
-                None => Err("unidentified alias".into()),
-            },
-            Event::SequenceStart(anchor, _) => {
-                self.stack.push(Frame::Seq(Vec::new(), anchor));
+            .and_then(|value| {
+                self.add_nodes(1)?;
+                self.node(value, anchor);
                 Ok(())
-            }
-            Event::MappingStart(anchor, _) => {
+            }),
+            Event::Alias(id) => self.alias(id),
+            Event::SequenceStart(anchor, _) => self.add_nodes(1).map(|()| {
+                self.stack.push(Frame::Seq(Vec::new(), anchor));
+            }),
+            Event::MappingStart(anchor, _) => self.add_nodes(1).map(|()| {
                 self.stack.push(Frame::Map {
                     map: Map::new(),
                     key: None,
                     anchor,
                     merged: Vec::new(),
                 });
-                Ok(())
-            }
+            }),
             Event::SequenceEnd => match self.stack.pop() {
                 Some(Frame::Seq(items, anchor)) => {
                     self.node(Value::Array(items), anchor);
@@ -157,11 +158,50 @@ fn as_text(value: Value) -> Value {
     }
 }
 
+/// The nodes of a value, counted without recursion.
+fn count_nodes(value: &Value) -> usize {
+    let mut count = 0;
+    let mut todo = vec![value];
+    while let Some(next) = todo.pop() {
+        count += 1;
+        match next {
+            Value::Array(items) => todo.extend(items),
+            Value::Object(map) => todo.extend(map.values()),
+            _ => {}
+        }
+    }
+    count
+}
+
 impl Composer {
+    fn add_nodes(&mut self, count: usize) -> Result<(), String> {
+        self.nodes = self.nodes.saturating_add(count);
+        if self.nodes > MAX_NODES {
+            return Err(format!("the document has more than {MAX_NODES} nodes"));
+        }
+        Ok(())
+    }
+
+    /// The copy counts as its nodes, and is refused before it is made.
+    fn alias(&mut self, id: usize) -> Result<(), String> {
+        let size = self
+            .anchors
+            .get(&id)
+            .map(|(_, size)| *size)
+            .ok_or("unidentified alias")?;
+        self.add_nodes(size)?;
+        if let Some((value, _)) = self.anchors.get(&id) {
+            let value = value.clone();
+            self.node(value, 0);
+        }
+        Ok(())
+    }
+
     /// A finished node goes into its parent, or is the document.
     fn node(&mut self, value: Value, anchor: usize) {
         if anchor > 0 {
-            self.anchors.insert(anchor, value.clone());
+            let size = count_nodes(&value);
+            self.anchors.insert(anchor, (value.clone(), size));
         }
         match self.stack.last_mut() {
             None => {

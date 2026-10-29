@@ -10,6 +10,7 @@ use ui::{Tooltip, prelude::*};
 use super::project_rules::{
     RepoField, add_args, field_of_error, repo_path_problem, shown_worktree,
 };
+use super::repo_trust_dialog::review;
 use crate::app::dashboard::Dashboard;
 use crate::app::dashboard_data::{Part, Seen};
 use crate::app::source::reason;
@@ -201,7 +202,11 @@ impl ProjectsDialog {
             this.update_in(cx, |this, window, cx| {
                 this.busy = false;
                 match result {
-                    Ok(_) => this.reset(window, cx),
+                    Ok(repo) => {
+                        this.reset(window, cx);
+                        // Over this dialog, which stays for the next add.
+                        review(&source, &repo.id, &repo.name, None, window, cx);
+                    }
                     Err(error) => this.refused(reason(&error)),
                 }
                 cx.notify();
