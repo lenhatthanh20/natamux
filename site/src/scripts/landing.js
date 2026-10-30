@@ -136,8 +136,10 @@ for (const list of document.querySelectorAll('[role="tablist"]')) {
   })
 }
 
-// Download: pick the file for this system. Safari and Firefox do not tell
-// the Mac's chip, so a Mac gets Apple silicon with Intel right beside it.
+// Download: the hero button only scrolls to #download, so people see the
+// install command first. This picks its label and the open tab. Safari and
+// Firefox do not tell the Mac's chip, so a Mac gets Apple silicon with Intel
+// right beside it.
 async function detect() {
   const ua = navigator.userAgent
   const data = navigator.userAgentData
@@ -160,14 +162,12 @@ async function detect() {
 
 const names = { mac: 'macOS', win: 'Windows', linux: 'Linux' }
 detect().then(({ os, arch, known }) => {
-  const hero = document.querySelector('[data-hero-download]')
   const label = document.querySelector('[data-hero-label]')
   const note = document.querySelector('[data-hero-note]')
   const detectNote = document.querySelector('[data-dl-detect]')
   const version = note.dataset.version
 
   if (os === 'phone' || os === 'other') {
-    hero.href = '#download'
     label.textContent = 'Get it for your computer'
     note.textContent = `Version ${version} for macOS, Windows and Linux.`
     if (os === 'phone') {
@@ -177,16 +177,12 @@ detect().then(({ os, arch, known }) => {
     return
   }
 
-  const panel = document.getElementById(`panel-${os}`)
-  let main = panel.querySelector('.btn.primary')
   if (os === 'mac' && arch === 'x64') {
-    const [silicon, intel] = panel.querySelectorAll('[data-arch]')
+    const [silicon, intel] = document.getElementById('panel-mac').querySelectorAll('[data-arch]')
     silicon.classList.remove('primary')
     intel.classList.add('primary')
     intel.after(silicon)
-    main = intel
   }
-  hero.href = main.href
   label.textContent = `Download for ${names[os]}`
   const what = { mac: arch === 'x64' ? 'Intel Macs' : 'Apple silicon', win: 'Windows 10 and 11', linux: 'Linux (AppImage)' }[os]
   note.textContent = `Version ${version} for ${what}.`

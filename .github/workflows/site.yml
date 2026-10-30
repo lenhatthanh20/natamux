@@ -36,6 +36,11 @@ jobs:
         working-directory: site
       - run: pnpm build
         working-directory: site
+      # The hero button scrolls to the install command; it never downloads a file.
+      - run: |
+          grep -Eq '<a [^>]*href="#download"[^>]*data-hero-download' dist/index.html
+          ! grep -q 'hero.href' src/scripts/landing.js
+        working-directory: site
       # The deploy job pushes this; on a pull request it is there to look at before it merges.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
