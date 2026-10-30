@@ -10,6 +10,7 @@ use ui::{ContextMenu, Tooltip, prelude::*};
 use super::ChangesView;
 use super::files::FILES_LIMITS;
 use crate::app::dashboard_data::Part;
+use crate::app::layout_mode::{docked_panel_width, effective_sidebar_width};
 use crate::components::colors::change_color;
 use crate::components::empty_state::EmptyState;
 use crate::components::menu::MenuLayer;
@@ -60,7 +61,10 @@ impl ChangesView {
                 )
                 .into_any_element();
         }
-        let width = self.dashboard.read(cx).view().details_width;
+        // Changes in the panel always comes with the rail.
+        let viewport = f32::from(window.viewport_size().width);
+        let stored = self.dashboard.read(cx).view().sidebar_width;
+        let width = docked_panel_width(effective_sidebar_width(stored, Some(viewport)), true);
         root.child(self.render_files(width, window, cx))
             .child(self.render_commit_box(window, cx))
             .into_any_element()
