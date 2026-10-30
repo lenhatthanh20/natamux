@@ -77,14 +77,11 @@ impl Root {
             },
         );
         h_flex().h_full().flex_none().child(resize).child(
-            div()
-                .w(px(docked_panel_width(side, rail)))
-                .h_full()
-                .child(
-                    self.details
-                        .clone()
-                        .cached(StyleRefinement::default().size_full()),
-                ),
+            div().w(px(docked_panel_width(side, rail))).h_full().child(
+                self.details
+                    .clone()
+                    .cached(StyleRefinement::default().size_full()),
+            ),
         )
     }
 

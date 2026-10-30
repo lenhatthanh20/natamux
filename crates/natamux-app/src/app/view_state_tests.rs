@@ -97,9 +97,8 @@ fn a_part_of_the_wrong_kind_falls_back_to_its_default() {
 
 #[test]
 fn the_details_panel_keeps_its_tab_and_folded_sections() {
-    let state = ViewState::parse(
-        r#"{"detailsView": "progress", "sections": {"usage": false, "x": 1}}"#,
-    );
+    let state =
+        ViewState::parse(r#"{"detailsView": "progress", "sections": {"usage": false, "x": 1}}"#);
     assert_eq!(state.details_view, Some(DetailsView::Progress));
     assert!(!state.section_open("usage", true));
     assert!(state.section_open("x", true));
@@ -141,8 +140,14 @@ fn the_sidebar_and_details_share_one_width() {
     assert_eq!(old.sidebar_width, 300.0);
     assert!(!old.to_json().contains("detailsWidth"));
     assert_eq!(ViewState::default().sidebar_width, 320.0);
-    assert_eq!(ViewState::parse(r#"{"sidebarWidth": 100}"#).sidebar_width, 280.0);
-    assert_eq!(ViewState::parse(r#"{"sidebarWidth": 900}"#).sidebar_width, 480.0);
+    assert_eq!(
+        ViewState::parse(r#"{"sidebarWidth": 100}"#).sidebar_width,
+        280.0
+    );
+    assert_eq!(
+        ViewState::parse(r#"{"sidebarWidth": 900}"#).sidebar_width,
+        480.0
+    );
 }
 
 #[test]
