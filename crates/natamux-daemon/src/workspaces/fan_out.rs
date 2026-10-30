@@ -100,7 +100,7 @@ pub fn fan_out(
             false,
         )?;
         if start {
-            parts.workspaces.create(&task.id, None)?;
+            parts.workspaces.create(&task.id, None, None)?;
             task = (parts.start_by_hand)(&task.id, "claude-code").map_err(stage_failure)?;
         }
         created.push(task);

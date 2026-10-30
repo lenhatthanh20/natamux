@@ -147,9 +147,12 @@ pub async fn execute<T: Transport>(
             url,
             json,
         } => link_issue(id, [provider, key, url], *json, cx).await,
-        Command::WorkspaceCreate { id, base, json } => {
-            create_workspace(id, base.as_deref(), *json, cx).await
-        }
+        Command::WorkspaceCreate {
+            id,
+            base,
+            branch,
+            json,
+        } => create_workspace(id, base.as_deref(), branch.as_deref(), *json, cx).await,
         Command::WorkspaceRemove {
             id,
             delete_branch,
@@ -175,8 +178,12 @@ async fn agent_or_stage<T: Transport>(
             agent,
             prompt,
             base,
+            branch,
             json,
-        } => start_agent(id, agent, prompt.as_deref(), base.as_deref(), *json, cx).await,
+        } => {
+            let (prompt, base, branch) = (prompt.as_deref(), base.as_deref(), branch.as_deref());
+            start_agent(id, agent, prompt, [base, branch], *json, cx).await
+        }
         Command::AgentDone { id, stage, json } => {
             report_done(id.as_deref().unwrap_or_default(), stage, *json, cx).await
         }
@@ -323,11 +330,14 @@ async fn start_agent<T: Transport>(
     id: &str,
     agent: &str,
     prompt: Option<&str>,
-    base: Option<&str>,
+    [base, branch]: [Option<&str>; 2],
     json: bool,
     cx: &mut Ctx<'_, T>,
 ) -> Result<(), String> {
-    let task = cx.client.start_agent(id, agent, prompt, base).await?;
+    let task = cx
+        .client
+        .start_agent(id, agent, prompt, base, branch)
+        .await?;
     output(cx.io, json, &task, || {
         format!("Started {agent} in the terminal of {}\n", task.id)
     });
@@ -443,10 +453,11 @@ async fn ask_question<T: Transport>(
 async fn create_workspace<T: Transport>(
     id: &str,
     base: Option<&str>,
+    branch: Option<&str>,
     json: bool,
     cx: &mut Ctx<'_, T>,
 ) -> Result<(), String> {
-    let task = cx.client.create_workspace(id, base).await?;
+    let task = cx.client.create_workspace(id, base, branch).await?;
     output(cx.io, json, &task, || {
         format!("{}\n", format_workspace_created(&task))
     });

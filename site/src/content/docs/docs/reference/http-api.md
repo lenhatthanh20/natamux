@@ -66,14 +66,14 @@ To do these from a script, use the daemon's own token, not the one in a task ter
 | `PUT /tasks/:id/ci` | Whether a stage waits for CI before it passes `{ stage, on }`. Answers 400 when the stage does not offer it |
 | `PUT /tasks/:id/skip` | Whether a stage not reached yet is skipped when the task reaches it `{ stage, on }`. Answers 400 when marking the current stage or an earlier one or the context stage, and for any change on a task that is over |
 | `PUT /tasks/:id/workflow` | Whether a stage runs as a workflow the next time it starts `{ stage, on }`. Answers 400 when the stage does not offer it or the agent is not Claude Code |
-| `POST /tasks/:id/workspace` | Create the worktree and branch. Body `{ base? }` |
+| `POST /tasks/:id/workspace` | Create the worktree and branch. Body `{ base?, branch? }`. `branch` is 1 to 255 characters and a valid branch name, else 400. Answers 409 when a local branch of that name is checked out in another worktree |
 | `DELETE /tasks/:id/workspace?deleteBranch=true` | Remove the worktree. Answers 409 when it has changes that are not committed; `&force=true` discards them and removes anyway |
-| `POST /tasks/:id/agent` | Start an agent `{ agent, prompt?, base? }` |
+| `POST /tasks/:id/agent` | Start an agent `{ agent, prompt?, base?, branch? }`. `branch` works as on `POST /tasks/:id/workspace`, for a task without a workspace |
 | `POST /tasks/:id/agent/reopen` | Start the agent of Terminal 1 of a done or cancelled task again, on its last session: `{ task }`. The task keeps its state. Answers 409 when the task is not finished, has no workspace or no agent, or an agent runs in Terminal 1 |
 | `GET /tasks/:id/changes` | Files changed in the workspace. The answer is kept for 5 seconds; `?fresh=1` reads git now |
 | `GET /tasks/:id/graph` | The history of the task branch next to the base branch. Kept and `?fresh=1` as for changes |
 | `POST /tasks/:id/commit-message` | A commit message for the changes, by the task's agent: `{ message, source, agent, reason? }`. `source` is `draft` when the agent failed and the message is a simple one; `reason` says why. Answers 409 when nothing changed |
-| `POST /workspaces` | Make a task with a worktree and optionally start an agent. Answers 202 with the task as soon as it is made; the worktree and the agent come after (see `workspace.preparing`) |
+| `POST /workspaces` | Make a task with a worktree and optionally start an agent. The body can have `base` and `branch`; an invalid `branch` answers 400 and no task is made. Answers 202 with the task as soon as it is made; the worktree and the agent come after (see `workspace.preparing`) |
 | `GET /workspaces/preparing` | The workspaces being made, and the step of each: `{ preparing: { "T-0001": "checkout" } }` |
 | `POST /hooks/:agent` | Where an agent's hook posts. Always answers `200 {}` for a known agent |
 | `GET /repos` | Projects Natamux manages, and the daemon's worktree folder: `{ repos, worktreesDir }`. A project with its own worktree folder has `worktreesDir`. Each project has `trusted`: whether its commands are approved |

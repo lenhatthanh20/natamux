@@ -106,10 +106,11 @@ pub async fn delete_task(state: Arc<AppState>, id: String, query: &str) -> Answe
     };
     let work = move || -> Result<Value, Box<Answer>> {
         let id = task_id_param(&id).map_err(|error| Box::new(zod_answer(&error)))?;
+        // The branch the agent switched to goes, not the one the worktree was made with.
         let current = state
-            .tasks
-            .get_task(&id)
-            .map_err(|error| Box::new(task_error(&error)))?;
+            .workspaces
+            .sync_branch(&id)
+            .map_err(|error| Box::new(workspace_error(&error)))?;
         if current.workspace.is_some() {
             state
                 .workspaces

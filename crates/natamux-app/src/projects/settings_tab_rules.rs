@@ -3,6 +3,7 @@
 //! gpui, so it is tested alone.
 
 use natamux_proto::projects::repo::{PAUSE_IDLE_MINUTES, TrackerSettings};
+use natamux_proto::projects::settings_rules::branch_name_problem;
 
 use crate::components::input_rules::segment_step;
 use crate::projects::settings_text::CREATE_ISSUE_OPTIONS;
@@ -117,6 +118,24 @@ pub fn send_backs_field(text: &str) -> Result<Option<usize>, &'static str> {
         return Err(SEND_BACKS_ERROR);
     }
     text.parse().map(Some).map_err(|_| SEND_BACKS_ERROR)
+}
+
+pub const BRANCH_NAME_LABEL: &str = "Branch name";
+pub const BRANCH_NAME_PLACEHOLDER: &str = "natamux/{id}-{slug}";
+pub const BRANCH_NAME_HINT: &str = "The name of the branch of a new task. {id} is the task id, \
+                                    {slug} the title as a slug. Empty: natamux/{id}-{slug}.";
+
+/// The text of the branch name field: empty is None (the key is left out), else the trimmed text
+/// or the problem of `git.branchName`.
+pub fn branch_name_field(text: &str) -> Result<Option<String>, String> {
+    let text = text.trim();
+    if text.is_empty() {
+        return Ok(None);
+    }
+    match branch_name_problem(text) {
+        Some(problem) => Err(problem),
+        None => Ok(Some(text.to_string())),
+    }
 }
 
 pub const IDLE_PAUSE_LABEL: &str = "Pause idle agents after (min)";

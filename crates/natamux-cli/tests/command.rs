@@ -343,6 +343,20 @@ fn creates_a_workspace() {
         Command::WorkspaceCreate {
             id: "T-1".into(),
             base: None,
+            branch: None,
+            json: false,
+        }
+    );
+}
+
+#[test]
+fn creates_a_workspace_on_a_named_branch() {
+    assert_eq!(
+        ok(&["workspace", "create", "T-1", "--branch", "ABC-12"]),
+        Command::WorkspaceCreate {
+            id: "T-1".into(),
+            base: None,
+            branch: text("ABC-12"),
             json: false,
         }
     );
@@ -355,6 +369,7 @@ fn creates_a_workspace_from_a_branch() {
         Command::WorkspaceCreate {
             id: "T-1".into(),
             base: text("release"),
+            branch: None,
             json: false,
         }
     );
@@ -460,6 +475,7 @@ fn reads_agent_start_with_claude_code_as_the_default_agent() {
             agent: "claude-code".into(),
             prompt: text("Go"),
             base: None,
+            branch: None,
             json: false,
         }
     );
@@ -468,6 +484,11 @@ fn reads_agent_start_with_claude_code_as_the_default_agent() {
         panic!("not agent.start");
     };
     assert_eq!(base, text("develop"));
+    let Command::AgentStart { branch, .. } = ok(&["agent", "start", "T-2", "--branch", "ABC-12"])
+    else {
+        panic!("not agent.start");
+    };
+    assert_eq!(branch, text("ABC-12"));
     assert!(parse(&["agent", "stop", "T-2"]).is_err());
 }
 

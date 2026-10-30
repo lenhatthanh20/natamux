@@ -17,25 +17,39 @@ pub fn add_worktree_env() -> Vec<(String, String)> {
     with_git_config(count.as_deref(), &PARALLEL_CHECKOUT)
 }
 
-/// Makes a new branch for the worktree, from `base_ref` or HEAD. With `existing`, checks out the
-/// branch that is there instead, with the work it has. A new branch follows no branch: started
-/// from `origin/main`, it must not push to main.
+/// Which branch a new worktree checks out.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WorktreeBranch<'a> {
+    /// A new branch from this ref, or from HEAD. It follows no branch: started from
+    /// `origin/main`, it must not push to main.
+    New(Option<&'a str>),
+    /// The branch that is there, with the work it has.
+    Existing,
+    /// A new branch from this remote ref, which it follows (`--track`).
+    Track(&'a str),
+}
+
+/// Makes the worktree on `branch`, as `how` says.
 pub fn add_worktree(
     repo: &Path,
     worktree: &Path,
     branch: &str,
-    base_ref: Option<&str>,
-    existing: bool,
+    how: WorktreeBranch<'_>,
 ) -> Result<(), GitError> {
     let branch = checked_ref(branch)?;
-    let base_ref = base_ref.map(checked_ref).transpose()?;
     let path = worktree.to_string_lossy();
     let mut args = vec!["worktree", "add"];
-    if existing {
-        args.extend([&*path, branch]);
-    } else {
-        args.extend(["--no-track", "-b", branch, &*path]);
-        args.extend(base_ref);
+    match how {
+        WorktreeBranch::Existing => args.extend([&*path, branch]),
+        WorktreeBranch::New(base_ref) => {
+            let base_ref = base_ref.map(checked_ref).transpose()?;
+            args.extend(["--no-track", "-b", branch, &*path]);
+            args.extend(base_ref);
+        }
+        WorktreeBranch::Track(remote_ref) => {
+            let remote_ref = checked_ref(remote_ref)?;
+            args.extend(["--track", "-b", branch, &*path, remote_ref]);
+        }
     }
     git(repo, &args, Some(WORKTREE_TIMEOUT), &add_worktree_env()).map(|_| ())
 }
@@ -84,6 +98,32 @@ pub fn parse_worktree_list(output: &str) -> Vec<String> {
         .filter_map(|line| line.strip_prefix("worktree "))
         .map(str::to_string)
         .collect()
+}
+
+/// Reads the output of `git worktree list --porcelain`: the path of the worktree that has branch
+/// `branch` checked out, if one has.
+pub fn parse_worktree_of_branch(output: &str, branch: &str) -> Option<String> {
+    let wanted = format!("refs/heads/{branch}");
+    let mut path = None;
+    for line in output.split('\n') {
+        if let Some(listed) = line.strip_prefix("worktree ") {
+            path = Some(listed);
+        } else if line.strip_prefix("branch ") == Some(wanted.as_str()) {
+            return path.map(str::to_string);
+        }
+    }
+    None
+}
+
+/// The worktree, the main one too, that has `branch` checked out.
+pub fn worktree_of_branch(repo: &Path, branch: &str) -> Result<Option<String>, GitError> {
+    let output = git(
+        repo,
+        &["worktree", "list", "--porcelain"],
+        Some(WORKTREE_TIMEOUT),
+        &[],
+    )?;
+    Ok(parse_worktree_of_branch(&output, branch))
 }
 
 pub fn list_worktree_paths(repo: &Path) -> Result<Vec<String>, GitError> {

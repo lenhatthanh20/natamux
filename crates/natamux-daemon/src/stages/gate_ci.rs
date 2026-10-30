@@ -15,6 +15,7 @@ use serde_json::json;
 use crate::stages::errors::StageResult;
 use crate::stages::run::{EventInput, StageRun, key};
 use crate::tasks::helpers::position_of;
+use crate::workspaces::branch_sync::sync_branch;
 
 impl StageRun {
     /// A CI check that ran when the daemon stopped goes on: it pushes the work again and waits.
@@ -51,6 +52,7 @@ impl StageRun {
         if self.state().ci_rounds.contains(&key(&task.id, stage_id)) {
             return Ok(());
         }
+        let task = self.synced_task(&task.id)?;
         let branch = ci_branch_of(task.branch.as_deref().unwrap_or(""));
         self.record(
             &task.id,
@@ -94,6 +96,13 @@ impl StageRun {
         });
     }
 
+    /// The task, after its branch follows the one its agent switched the worktree to: CI checks
+    /// the branch the work is on.
+    fn synced_task(&self, task_id: &str) -> StageResult<Task> {
+        let task = sync_branch(&self.options.tasks, &*self.options.repo_path, task_id)?;
+        Ok(task)
+    }
+
     /// CI takes minutes, so it runs after the report has its answer. Its result counts only for
     /// the round of the stage that asked for it.
     fn ci_round(
@@ -103,7 +112,7 @@ impl StageRun {
         seq: i64,
         passes: Vec<String>,
     ) -> StageResult<()> {
-        let task = self.task(task_id)?;
+        let task = self.synced_task(task_id)?;
         // The workspace can be removed while CI waits, then the daemon restarts. An empty
         // worktree would run git in the daemon's own folder and push that checkout.
         let ci: CiResult = match (&task.workspace, &task.branch) {
