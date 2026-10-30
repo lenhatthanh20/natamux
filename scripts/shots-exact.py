@@ -10,7 +10,8 @@ The window-* shots (drawn by the OS, with the menu bar clock) are skipped. --onl
 shots whose name starts with one of the prefixes. --out writes diff-<name>.png for each failed
 shot: the differing pixels in red over a dimmed copy of the new shot.
 
-Exit 0 only when every shot matches. A shot with no base or another size fails.
+Exit 0 only when every shot matches. A shot with no base, a base shot with no new shot (a
+partial run) or another size fails.
 """
 
 import argparse
@@ -202,12 +203,20 @@ def main(argv):
             return 2
         args.out.mkdir(parents=True, exist_ok=True)
 
+    def wanted(name):
+        return not name.startswith("window-") and (
+            not args.only or name.startswith(tuple(args.only))
+        )
+
     checked = failed = 0
+    for shot in sorted(args.base_dir.glob("*.png")):
+        if wanted(shot.stem) and not (args.new_dir / shot.name).is_file():
+            print(f"NO NEW   {shot.stem}")
+            checked += 1
+            failed += 1
     for shot in sorted(args.new_dir.glob("*.png")):
         name = shot.stem
-        if name.startswith("window-"):
-            continue
-        if args.only and not name.startswith(tuple(args.only)):
+        if not wanted(name):
             continue
         checked += 1
         base_file = args.base_dir / shot.name

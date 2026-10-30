@@ -908,7 +908,7 @@ If D1 says no new crates: the kit and theme become modules `components/kit/` and
   - `shots-exact.py <base_dir> <new_dir> [--control <dir>] [--out <diff_dir>] [--only <prefix>...]`.
   - It reads PNG (8-bit RGB/RGBA, not interlaced) with the stdlib (`zlib`, `struct`) and compares every pixel, alpha ignored.
   - With `--control` (a second run of the base code), pixels that differ between base and control are moving and may differ.
-  - It skips `window-*` (the OS-drawn window shots). It never skips by any other name prefix: state names may start with anything. `NO BASE` fails. A size change fails.
+  - It skips `window-*` (the OS-drawn window shots). It never skips by any other name prefix: state names may start with anything. `NO BASE` fails. `NO NEW` (a base shot missing from the new run, as after a shard that stopped early) fails. A size change fails.
   - `--out` writes `diff-<name>.png` (differing pixels in red over a dimmed copy). The `--out` dir must not be inside `base_dir`, `new_dir` or the control dir (the tool exits with an error if it is), so its own output is never read as a shot.
   - Test case: a state named `diff-x` in both dirs is compared, not skipped.
   - Exit 0 only when all match.
@@ -1003,7 +1003,7 @@ If D1 says no new crates: the kit and theme become modules `components/kit/` and
 
 ### 7.4 Text input tests (S3.2 on the old code, through `TextBox`)
 
-- T-KEY-1..n: each binding of 6.3.5 (word moves over `foo_bar  baz.qux`, Home/End on a wrapped row, Cmd+Backspace, PageUp/Down, Mod+A then type), plus the 6 tests in `app/text_boxes.rs:179-233`. Each runs twice, after `text_boxes::bind(cx, true)` and after `bind(cx, false)` (`app/text_boxes.rs:16`), so the macOS bindings are tested on Linux too; and the whole set also runs on `app-macos` (7.6).
+- T-KEY-1..n: each binding of 6.3.5 (word moves over `foo_bar  baz.qux`, Home/End on a wrapped row, Cmd+Backspace, PageUp/Down, Mod+A then type), plus the 6 tests in `app/text_boxes.rs:179-233`. Each runs twice, after `text_boxes::bind(cx, true)` and after `bind(cx, false)` (`app/text_boxes.rs:16`), so the macOS bindings are tested on Linux too; and the whole set also runs on `app-macos-tests` (7.6).
 - T-BIND-1: every `by_name` binding of `app/text_boxes.rs` builds, for `mac` true and false (6.3.1).
 - T-MOUSE-1 (gpui, on the old code; for the inputs, the code view and the diff): press inside a selection then release with no move; move before 300 ms; move after 300 ms and release outside the selection (move; Alt on macOS / Ctrl elsewhere copies) on an editable box and on a read-only view; a press on the gutter (line select); a press on a diff line number (no caret move, propagation stopped); a double click in the diff (word); a mouse down after a listener called `prevent_default` (nothing happens).
 - T-KEY-P: Enter, Up, Down, Tab, Esc and Mod+Enter propagate from a one-line box to the parent `on_key_down` and the dialog layer.
@@ -1091,7 +1091,7 @@ If D1 says no new crates: the kit and theme become modules `components/kit/` and
 - Both OSes:
   - `cargo xtask ci` runs only in `check` (ubuntu). `app-macos` builds and smokes but runs no `cargo test` (`.github/workflows/rust.yml:169-312`). So `cfg(target_os = "macos")` code (key encoding, Cmd-hover links, the macOS text-box bindings) and the macOS rows of T-K1/T-K2 would never run.
   - `Tool: golden` runs on `ubuntu-latest` and on `macos-15` (8.4). Golden files live per OS: `tests/golden/<set>/linux/` and `tests/golden/<set>/macos/`. A test reads the file of the OS it runs on.
-  - For the length of this PR, `app-macos` gets a step `cargo test -p natamux-app --locked` (S0.2). At least the terminal, input and workflow tests must run there; running the whole crate is simpler. The step is removed in S12 with the owner's confirm (D33), or kept if the owner wants it.
+  - For the length of this PR, a job `app-macos-tests` (macOS, needs only `changes`) runs `cargo test -p natamux-app --locked` (S0.2). At least the terminal, input and workflow tests must run there; running the whole crate is simpler. It is its own job so the shots do not wait for it (a cold test build takes about 8.5 min) and a failed test does not skip them. The job is removed in S12 with the owner's confirm (D33), or kept if the owner wants it.
 - Sets:
   - terminal: T-K1, T-P1, T-C1, T-C2, T-M1 (S2.1);
   - highlight captures T-HL-1: `(byte range, theme key, resolved style)` per fixture file per language, where the style is colour, font weight and font style (6.4), plus the shot files `src/checkout.ts`, `.natamux.json`, `README.md` (S4.1);
@@ -1128,8 +1128,8 @@ If D1 says no new crates: the kit and theme become modules `components/kit/` and
 4. Push the same commit to `feat/mit-license` at milestones (end of each step), with the tag the step names. Do not push again until that run ends.
 - `gh` needs `-R lenhatthanh20/natamux` (the shell folder resets). Wait with the Monitor tool or a background loop; plain `sleep` is blocked.
 - Never `gh run rerun` a run that uploaded artifacts; make a new commit instead.
-- At most one full run at a time: the account has 5 macOS runners, and a full run uses up to 6 macOS jobs.
-- Code under `cfg(target_os)` is compiled only by `app-macos`/`app-windows`, not by `check` (Linux). Keep it small and read it twice. From S0.2 `app-macos` also runs `cargo test -p natamux-app` (7.6), so the macOS branches are tested there; a check-only push to `natamux-ci/mit-check` does not run it.
+- At most one full run at a time: the account has 5 macOS runners, and a full run uses up to 6 macOS jobs (`app-macos`, `app-macos-tests`, 4 shot shards).
+- Code under `cfg(target_os)` is compiled only by `app-macos`/`app-windows`, not by `check` (Linux). Keep it small and read it twice. From S0.2 `app-macos-tests` runs `cargo test -p natamux-app` (7.6), so the macOS branches are tested there; a check-only push to `natamux-ci/mit-check` does not run it.
 
 ### 8.3 Formatting
 
@@ -1177,10 +1177,10 @@ S0.2 Exact compare script and control run
 - Files:
   - `scripts/shots-exact.py`, `scripts/shots-exact.test.py`;
   - `scripts/zed-lock-check.py`, `scripts/zed-lock-check.test.py`, `scripts/zed-lock-crates.txt` (today's 106 names; 3.4);
-  - `.github/workflows/rust.yml`: next to line 157, run both tests and `python3 scripts/zed-lock-check.py`; in `app-macos`, a `cargo test -p natamux-app --locked` step (7.6).
+  - `.github/workflows/rust.yml`: next to line 157, run both tests and `python3 scripts/zed-lock-check.py`; a job `app-macos-tests` with `cargo test -p natamux-app --locked` (7.6).
 - Tests first: `shots-exact.test.py`, `zed-lock-check.test.py` (a lock with an extra Zed package fails, a missing one fails, an exact one passes).
-- Tag: `[ci: all]` (the `app-macos` test step must run).
-- Proof: `check` and `app-macos` green; C0 downloaded and compared with B0. Report each moving shot and box to the orchestrator.
+- Tag: `[ci: all]` (the `app-macos-tests` job must run).
+- Proof: `check`, `app-macos` and `app-macos-tests` green; C0 downloaded and compared with B0. Report each moving shot and box to the orchestrator.
 - Risks:
   - The traffic lights or the caret move (B0 has a red light in 510 of 510 shots; the old baselines had grey ones).
   - Slow states get shot early (`sleep 3` per shot, `.github/workflows/rust.yml:479`).
@@ -1239,7 +1239,7 @@ S2.1 Seams and terminal tests on the old code
   - fixtures `crates/natamux-app/tests/golden/terminal/{linux,macos}/*.json` (from `Tool: golden` on both OSes).
 - Tests first: T-K1, T-K2, T-I1, T-P1, T-C1, T-C2, T-G1, T-M1, T-W1, T-S1, T-V1, T-L1, T-F1, T-Q1, T-B1, T-R1, T-R2, T-E1.
 - Tag: `[ci: all]`.
-- Proof: `check` and `app-macos` (its test step) green; all shots exact (no visible change).
+- Proof: `check` and `app-macos-tests` green; all shots exact (no visible change).
 - Risks:
   - `send_input` must keep every path's behaviour: same text, same order, same `from_utf8_lossy` in the input task only.
   - The test platform's key path differs from macOS (`prefer_character_input`). The table records the test platform; the manual IME gate covers macOS.
@@ -1270,7 +1270,7 @@ S2.4 View, element, scrollbar, IME, menu
 - The view observes the `Appearance` global (6.1). Its menu uses the terminal focus handle as context and handles Zed's `terminal::Copy`/`terminal::Paste` until S2.5 (6.2.6).
 - Tests: the whole matrix under the feature, plus T-I2 and the scrollbar thumb-colour test.
 - Tag: `[ci: all]`.
-- Proof: `check` both ways; `app-macos` tests both ways.
+- Proof: `check` both ways; `app-macos-tests` both ways.
 - Risks: pixel details (selection curves, rect rounding, row snapping, the 14 px strip, theme fallbacks).
 
 S2.5 Flip
@@ -1313,14 +1313,14 @@ S3.1 `TextBox` facade
 S3.2 Input tests on the old code (7.4)
 - Files: `text_view/text_box_tests.rs`, `text_view/ime_tests.rs`, `text_view/mouse_tests.rs` (T-MOUSE-1 for the boxes), T-BIND-1 in `app/text_boxes.rs`.
 - Tag: none.
-- Proof: green on `Editor` (Linux and `app-macos`).
+- Proof: green on `Editor` (Linux and `app-macos-tests`).
 
 S3.3 Own input behind `own-input`
 - Files: `text/` (model), `text_view/{text_input,element,ime,blink}.rs`, the feature, the 8.5 step; `app/text_boxes.rs` (own typed actions in their own namespace, bound next to Zed's in the same context, 6.3.1; its 6 tests move to `TextBox`).
 - The input observes the `Appearance` global (6.1).
 - Tests: the whole 7.4 set and 7.5 set with the feature, including T-BIND-1 and T-MOUSE-1.
 - Tag: `[ci: all]`.
-- Proof: `check` and `app-macos` tests both ways.
+- Proof: `check` and `app-macos-tests` both ways.
 - Risks:
   - IME (Zed issue #64707 was this class).
   - Typing latency: shape only changed or visible lines; notify only the input.
@@ -1491,7 +1491,7 @@ S9.2 `natamux-theme`
 ### S12. Final gate
 
 - 7.7. The PR description lists the steps, the gate results, the owner's sign-offs and the B1/B2 run ids. No release notes.
-- Ask the owner whether the `app-macos` test step (S0.2) stays. If not, remove it after the final gate runs (D33 confirm).
+- Ask the owner whether the `app-macos-tests` job (S0.2) stays. If not, remove it after the final gate runs (D33 confirm).
 
 ## 10. Final switch checklist (S11)
 
@@ -1557,7 +1557,7 @@ Each point was checked against the code. Where it went:
 | 2 | Event loop repeat | Accepted: steps 1-4 in 6.2.4; "quiet" defined in T-E1. Added: T-E1 needs a non-default pace, because Zed's test build uses a random delay at 4 ms (`zed:crates/terminal/src/terminal.rs:1470-1479`) |
 | 3 | Keys read the last frame's mode | Accepted: 6.2.4, 6.2.5; T-K1 row "mode set, no frame" |
 | 4 | Seam misses two input paths | Accepted: D35 now one `send_input` for all three paths; T-V1 covers the pending flush |
-| 5 | Tests only on Linux | Accepted: `Tool: golden` on both OSes with per-OS files (7.6, 8.4); `app-macos` runs `cargo test -p natamux-app` from S0.2; T-KEY runs `bind(cx, true)` and `bind(cx, false)` |
+| 5 | Tests only on Linux | Accepted: `Tool: golden` on both OSes with per-OS files (7.6, 8.4); `app-macos-tests` runs `cargo test -p natamux-app` from S0.2; T-KEY runs `bind(cx, true)` and `bind(cx, false)` |
 | 6 | License gate blind to Zed crates | Accepted: `[licenses.private] ignore = false` in S11; `scripts/zed-lock-check.py` from S0.2 (S0.2 instead of S2.6, so a new edge in S2.2 that pulls a Zed crate is caught too) |
 | 7 | npm code in the daemon | Accepted: 3.5 row, `Tool: npm-licenses`, notices in section 10 step 6 |
 | 8 | Exact compare skips `diff-*` | Accepted: states renamed `changes-diff-*`; the tool skips only `window-*` and refuses an `--out` dir inside the input dirs |

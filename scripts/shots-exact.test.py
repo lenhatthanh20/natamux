@@ -156,6 +156,17 @@ class MainTest(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("NO BASE  tasks-dark-800x560", output)
 
+    def test_a_base_shot_with_no_new_shot_fails(self):
+        for name in ("a", "b", "window-dark-800x560"):
+            self.put(self.base, name, png())
+        self.put(self.new, "a", png())
+        code, output = self.run_main()
+        self.assertEqual(code, 1)
+        self.assertIn("NO NEW   b", output)
+        self.assertNotIn("window", output)
+        self.assertEqual(output.splitlines()[-1], "2 shots, 1 failed")
+        self.assertEqual(self.run_main("--only", "a")[0], 0)
+
     def test_a_state_named_diff_is_compared(self):
         self.put(self.base, "diff-x", png())
         self.put(self.new, "diff-x", png(change={(1, 1): (0, 0, 0)}))

@@ -244,9 +244,6 @@ jobs:
             { echo "::error::first_frame_ms $median is over 1000 ms with a slow login shell"; exit 1; }
       - name: Smoke test, terminal grid and pipeline chart
         run: target/release/natamux-app --smoke --fake-daemon
-      # The check job tests on Linux only; this runs the app's macOS code paths too (MIT move).
-      - name: App tests on macOS
-        run: cargo test -p natamux-app --locked
       # CPU and draws of an idle window, with focus and in the background (docs/rust-phase3.md
       # "Motion"): the task table, then a task open with its terminals. Only a snapshot push
       # whose commit message has a line "Measure: motion".
@@ -316,6 +313,33 @@ jobs:
 
   # The Intel app that release.yml (mac-x64) builds. Main only: it builds and saves the cache the
   # release reads. Its prefix differs from app-macos, so the arm64 cleanup does not delete it.
+  # The check job tests on Linux only; this runs the app's macOS code paths too (MIT move). Its
+  # own job, so the shots do not wait for it and a failed test does not skip them.
+  app-macos-tests:
+    needs: changes
+    if: ${{ !endsWith(github.ref, '-check') && needs.changes.outputs.app == 'true' }}
+    runs-on: macos-15
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: rust-app-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-${{ github.sha }}
+          restore-keys: |
+            rust-app-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-
+            rust-app-${{ runner.os }}-
+      - run: python3 scripts/ci-changes.py mtimes
+      - run: cargo test -p natamux-app --locked
+
   app-macos-intel:
     needs: changes
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.changes.outputs.app == 'true' }}
@@ -1022,6 +1046,7 @@ jobs:
       - changes
       - check
       - app-macos
+      - app-macos-tests
       - app-macos-intel
       - app-shots
       - shots
