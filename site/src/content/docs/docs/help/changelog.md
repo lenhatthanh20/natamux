@@ -7,6 +7,13 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v1.0.9 (2026-10-30)
+
+- In the desktop app, text boxes take the keys of a text field in a web page, such as moving by word, and `Page Up` and `Page Down` in boxes of many lines. Long lines wrap, also in **Notes** of **Start a task**. See [Text boxes](/docs/reference/shortcuts/#text-boxes).
+- In the desktop app, the rows of **History** fit the side panel, and **Show in main** shows the graph over the terminals at full width with author, hash and age. See [History tab](/docs/guides/changes-and-history/#history-tab).
+- Fix: in the desktop app, the side-by-side diff could not scroll to the end of a file when one side had many changed lines at the end. Now it does.
+- Fix: in the desktop app details panel, the **Create issue** button stretched over the whole row. Now it is compact.
+
 ## v1.0.8 (2026-10-29)
 
 - Fix: in the v1.0.7 desktop app, **Start** in **Start a task** closed the app at once when the project's commands needed no approval. Now the task starts.
