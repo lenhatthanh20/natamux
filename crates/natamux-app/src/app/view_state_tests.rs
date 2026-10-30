@@ -25,7 +25,6 @@ fn a_saved_view_reads_back_the_same() {
         last_base: Vec::new(),
         agent_panes: Some(vec!["T-2".into(), "T-1".into()]),
         pane_layout: PaneLayout::Two,
-        details_width: 400.0,
         details_view: Some(DetailsView::Details),
         sections: vec![("notes".into(), false), ("details".into(), true)],
         details_open: false,
@@ -97,11 +96,9 @@ fn a_part_of_the_wrong_kind_falls_back_to_its_default() {
 }
 
 #[test]
-fn the_details_panel_keeps_its_width_tab_and_folded_sections() {
-    let state = ViewState::parse(
-        r#"{"detailsWidth": 900, "detailsView": "progress", "sections": {"usage": false, "x": 1}}"#,
-    );
-    assert_eq!(state.details_width, DETAILS_MAX);
+fn the_details_panel_keeps_its_tab_and_folded_sections() {
+    let state =
+        ViewState::parse(r#"{"detailsView": "progress", "sections": {"usage": false, "x": 1}}"#);
     assert_eq!(state.details_view, Some(DetailsView::Progress));
     assert!(!state.section_open("usage", true));
     assert!(state.section_open("x", true));
@@ -134,8 +131,23 @@ fn an_old_file_with_per_task_flags_still_loads() {
         r#"{"detailOpen": {"T-1": false}, "detailsOpen": {"T-2": true}, "detailsWidth": 400}"#,
     );
     assert!(old.details_open);
-    assert_eq!(old.details_width, 400.0);
     assert!(!old.to_json().contains("T-1"));
+}
+
+#[test]
+fn the_sidebar_and_details_share_one_width() {
+    let old = ViewState::parse(r#"{"sidebarWidth": 300, "detailsWidth": 400}"#);
+    assert_eq!(old.sidebar_width, 300.0);
+    assert!(!old.to_json().contains("detailsWidth"));
+    assert_eq!(ViewState::default().sidebar_width, 320.0);
+    assert_eq!(
+        ViewState::parse(r#"{"sidebarWidth": 100}"#).sidebar_width,
+        280.0
+    );
+    assert_eq!(
+        ViewState::parse(r#"{"sidebarWidth": 900}"#).sidebar_width,
+        480.0
+    );
 }
 
 #[test]

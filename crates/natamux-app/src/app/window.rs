@@ -254,17 +254,14 @@ impl Root {
     fn layout(&self, window: &Window, cx: &App) -> LayoutMode {
         let width = f32::from(window.viewport_size().width);
         let view = self.dashboard.read(cx).view();
-        let sidebar_width = if view.sidebar_open {
-            effective_sidebar_width(view.sidebar_width, Some(width))
-        } else {
-            0.
-        };
-        // The rail's 40 px are not counted: at 1024 wide the panel still docks beside the
-        // sidebar (main 384) instead of covering the diff as a sheet.
+        let side = effective_sidebar_width(view.sidebar_width, Some(width));
+        let sidebar_width = if view.sidebar_open { side } else { 0. };
+        // The panel shares the sidebar's width and the rail is not counted: at 1024 wide the
+        // panel still docks beside the sidebar (main 410) instead of covering the diff as a sheet.
         decide_layout(LayoutInput {
             width: Some(width),
             sidebar_width,
-            details_width: view.details_width,
+            details_width: side,
             coarse: false,
         })
     }
