@@ -7,6 +7,8 @@ platform=${2:?missing platform}
 mkdir -p "$out"
 out=$(cd "$out" && pwd)
 binary=target/release
+# SHA-1 (lower case) of the macOS code signing certificate, from scripts/make-mac-sign-cert.sh.
+mac_sign_sha1=""
 for name in natamux-app natamux-daemon natamux nmx; do
   test -x "$binary/$name" || { echo "missing $binary/$name" >&2; exit 1; }
 done
@@ -14,7 +16,7 @@ done
 case "$platform" in
   mac-arm64|mac-x64)
     scripts/bundle-rust-app.sh "$out"
-    codesign --force --deep --sign - "$out/Natamux.app"
+    scripts/sign-mac-app.sh "$out/Natamux.app" "${NATAMUX_MAC_SIGN_IDENTITY:-}" "$mac_sign_sha1"
     hdiutil create -volname Natamux -srcfolder "$out/Natamux.app" \
       -ov -format UDZO "$out/Natamux-$platform.dmg"
     ;;

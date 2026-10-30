@@ -55,6 +55,15 @@ Do not re-run the Release workflow once signing has started. A re-run replaces t
   ```
 - If the key leaks, follow "If the release key leaks" in [`SECURITY.md`](../SECURITY.md): advisory, new key pair, release with the new public key, manual reinstall for users. A second public key kept offline is planned so that a leak needs no reinstall.
 
+## The macOS signing certificate
+
+Release runs sign `Natamux.app` with a fixed self-signed certificate (`scripts/sign-mac-app.sh`). macOS ties Full Disk Access and other privacy grants to the app's designated requirement. An ad hoc signature names the hash of one build, so every update lost the grants; with the certificate the requirement is `identifier "dev.natamux.app" and certificate leaf = H"<SHA-1>"`, which every later release meets. It is not an Apple Developer ID: Gatekeeper still blocks the first open, and the Developer ID will replace it.
+
+- Make it once on the owner's Mac: `scripts/make-mac-sign-cert.sh`. It writes `natamux-codesign.p12` and its password into a new `mktemp -d` folder and prints the next steps: pin the SHA-1 in `mac_sign_sha1` of `scripts/package-rust-desktop.sh`, store the repository secrets `MACOS_SIGN_P12` (base64) and `MACOS_SIGN_P12_PASSWORD`, keep both files in 1Password, then delete the folder.
+- A tag run (or a `publish` run) imports the certificate into a job keychain (`scripts/import-mac-sign-cert.sh`) and fails when a secret is missing or the certificate is not the pinned one. Pull request dry runs sign ad hoc. `scripts/mac-sign.test.sh` checks the scripts with a throwaway certificate on every run.
+- The certificate is valid for 20 years. A new certificate, also after a leak, means every user grants Full Disk Access once more.
+- Risk: whoever has the `.p12` can sign an app that macOS takes as Natamux and that gets its grants. It still has to reach the user's Mac some other way, and updates still need the minisign signature. Make a new certificate if the secret leaks.
+
 ## The tag key
 
 Release tags are signed with the owner's SSH key. Set it up once:

@@ -11,6 +11,10 @@ on:
     paths:
       - .github/workflows/release.yml
       - scripts/package-rust-desktop.sh
+      - scripts/sign-mac-app.sh
+      - scripts/make-mac-sign-cert.sh
+      - scripts/import-mac-sign-cert.sh
+      - scripts/mac-sign.test.sh
       - scripts/natamux-windows.nsi
       - scripts/bundle-rust-app.sh
       - scripts/release-smoke.sh
@@ -173,6 +177,26 @@ jobs:
           else
             scripts/release-smoke.sh target/release/natamux-app "$HOME/Library/Application Support/Natamux"
           fi
+      - name: Check the macOS signing scripts
+        if: runner.os == 'macOS'
+        run: bash scripts/mac-sign.test.sh
+      # A release signs with the fixed certificate so macOS keeps privacy grants after an update.
+      # Dry runs sign ad hoc.
+      - name: Import the macOS signing certificate
+        if: runner.os == 'macOS' && (github.event_name == 'push' || inputs.publish)
+        env:
+          MACOS_SIGN_P12: ${{ secrets.MACOS_SIGN_P12 }}
+          MACOS_SIGN_P12_PASSWORD: ${{ secrets.MACOS_SIGN_P12_PASSWORD }}
+        run: |
+          test -n "$MACOS_SIGN_P12" || { echo "::error::MACOS_SIGN_P12 is not set"; exit 1; }
+          test -n "$MACOS_SIGN_P12_PASSWORD" || { echo "::error::MACOS_SIGN_P12_PASSWORD is not set"; exit 1; }
+          umask 077
+          base64 --decode <<<"$MACOS_SIGN_P12" > "$RUNNER_TEMP/natamux-codesign.p12"
+          printf '%s' "$MACOS_SIGN_P12_PASSWORD" > "$RUNNER_TEMP/p12-password.txt"
+          identity=$(scripts/import-mac-sign-cert.sh "$RUNNER_TEMP/natamux-codesign.p12" \
+            "$RUNNER_TEMP/p12-password.txt" "$RUNNER_TEMP/natamux-sign.keychain-db")
+          test -n "$identity" || { echo "::error::no Natamux Code Signing certificate in MACOS_SIGN_P12"; exit 1; }
+          echo "NATAMUX_MAC_SIGN_IDENTITY=$identity" >> "$GITHUB_ENV"
       - name: Package macOS
         if: runner.os == 'macOS'
         run: |
@@ -201,6 +225,11 @@ jobs:
           version=$(plutil -extract CFBundleShortVersionString raw -o - \
             "$RUNNER_TEMP/old-updater/Natamux.app/Contents/Info.plist")
           test "$version" = "$(sed -n 's/^version = "\([^"]*\)"$/\1/p' crates/natamux-app/Cargo.toml | head -n 1)"
+      - name: Check the macOS signing scripts with shellcheck
+        if: runner.os == 'Linux'
+        run: |
+          shellcheck scripts/make-mac-sign-cert.sh scripts/import-mac-sign-cert.sh \
+            scripts/sign-mac-app.sh scripts/mac-sign.test.sh
       - name: Package Linux
         if: runner.os == 'Linux'
         env:
