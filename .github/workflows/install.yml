@@ -1,0 +1,84 @@
+name: Install scripts
+
+# Checks site/public/install.sh and install.ps1, then runs them for real on each system.
+# They install the latest published release, not a build of this branch.
+on:
+  push:
+    branches: [main]
+    paths:
+      - site/public/install.sh
+      - site/public/install.ps1
+      - scripts/install.test.sh
+      - .github/workflows/install.yml
+  pull_request:
+    paths:
+      - site/public/install.sh
+      - site/public/install.ps1
+      - scripts/install.test.sh
+      - .github/workflows/install.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: install-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: bash scripts/install.test.sh
+      - run: shellcheck -s sh site/public/install.sh
+
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # With minisign the script also checks the signature; the macOS job runs without it.
+      - run: sudo apt-get update && sudo apt-get install -y minisign
+      - run: sh site/public/install.sh
+      - name: Check the install
+        run: |
+          tag=$(curl -fsSLI -o /dev/null -w '%{url_effective}' https://github.com/lenhatthanh20/natamux/releases/latest)
+          tag=${tag##*/}
+          test -x /opt/Natamux/natamux-app
+          command -v natamux
+          test "$(dpkg-query -W -f='${Version}' natamux)" = "${tag#v}"
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: sh site/public/install.sh
+      - name: Check the install
+        run: |
+          tag=$(curl -fsSLI -o /dev/null -w '%{url_effective}' https://github.com/lenhatthanh20/natamux/releases/latest)
+          tag=${tag##*/}
+          app=/Applications/Natamux.app
+          test "$(defaults read "$app/Contents/Info.plist" CFBundleShortVersionString)" = "${tag#v}"
+          if xattr -p com.apple.quarantine "$app" 2>/dev/null; then exit 1; fi
+          test ! -e "$app.new"
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Windows PowerShell 5.1, the way users run it: irm ... | iex.
+      - shell: powershell
+        run: Get-Content -Raw site/public/install.ps1 | Invoke-Expression
+      - name: Check the install
+        shell: powershell
+        run: |
+          $app = Join-Path $env:LOCALAPPDATA 'Programs\Natamux\natamux-app.exe'
+          if (-not (Test-Path $app)) { throw "$app is missing" }

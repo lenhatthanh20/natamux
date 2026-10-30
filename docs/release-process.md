@@ -41,6 +41,8 @@ It does steps 2 to 5: it asks before it makes and pushes the signed tag, waits f
 5. Check the published release: `scripts/release.test.sh --published` (needs `minisign`).
 6. The first Rust release only: on a Mac that runs the last Electron app (v0.1.43), choose **Check for Updates…**. It must find the new release, install the Rust app over `Natamux.app`, and restart into it with the same tasks and sign-in. CI checks the DMG name and the bundle the Electron updater expects, but only a signed release shows the whole update.
 
+The install scripts `site/public/install.sh` and `install.ps1` download the release files by name, with `SHA256SUMS.txt` and `SHA256SUMS.txt.minisig`. Renaming a file means changing the scripts; `scripts/install.test.sh` checks the names against `release.yml`.
+
 Never publish the draft by hand: a release without `SHA256SUMS.txt.minisig` updates no app, and timed checks keep failing until it is signed.
 
 Do not re-run the Release workflow once signing has started. A re-run replaces the files and `SHA256SUMS.txt` of the draft (`--clobber`), so a signature made before it no longer matches and apps refuse the release. That fails closed: sign again.
