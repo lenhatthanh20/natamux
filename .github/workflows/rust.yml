@@ -412,6 +412,29 @@ jobs:
           name: app-binary
           path: target/release
       - run: chmod +x target/release/natamux-app
+      # macOS keeps a window above the Dock, and the Dock's height is not the same in every run:
+      # the 1024x720 shots came out 1024x684 and once 1024x682. A hidden Dock leaves room for 720.
+      - name: Hide the Dock
+        run: |
+          defaults write com.apple.dock autohide -bool true
+          killall Dock
+          for i in $(seq 120); do
+            height=$(osascript -l JavaScript -e "ObjC.import('AppKit');
+              \$.NSScreen.mainScreen.visibleFrame.size.height")
+            [ "${height%.*}" -ge 720 ] 2>/dev/null && break
+            # On some runners the restarted Dock kept its place for 45 s: restart it again.
+            if [ $((i % 20)) = 0 ]; then
+              echo "Free screen height after ${i} tries: $height; restarting the Dock again"
+              killall Dock || true
+            fi
+            sleep 1
+          done
+          echo "Free screen height: $height"
+          if ! [ "${height%.*}" -ge 720 ] 2>/dev/null; then
+            echo "Dock autohide: $(defaults read com.apple.dock autohide); Dock: $(pgrep -x Dock)"
+            echo "::error::the screen has no room for a 720 px window with the Dock hidden"
+            exit 1
+          fi
       # Screens 1 to 7 of phase 3: every state in both themes at two sizes, and the DOCKED ones at
       # 1024x720 too, where the sidebar docks; the runner's screen is 1024x768, so the details panel,
       # which docks from 1280, is shot as a sheet (docs/rust-phase3.md).
@@ -524,6 +547,12 @@ jobs:
                   exit 1
                 fi
                 screencapture -x -o -l "$id" "shots/$name.png"
+                got=$(sips -g pixelWidth -g pixelHeight "shots/$name.png" |
+                  awk '/pixelWidth/ { w = $2 } /pixelHeight/ { h = $2 } END { print w "x" h }')
+                if [ "$got" != "$size" ]; then
+                  echo "::error::$name came out $got"
+                  exit 1
+                fi
                 # Done with this state: no need to sit out --hold.
                 kill "$pid"
                 wait "$pid" || true
