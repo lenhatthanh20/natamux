@@ -65,6 +65,8 @@ mod app {
     pub mod status_limits;
     pub mod tab_rules;
     #[cfg(test)]
+    pub mod test_driver;
+    #[cfg(test)]
     pub mod test_views;
     pub mod text_boxes;
     pub mod theme_catalog;
