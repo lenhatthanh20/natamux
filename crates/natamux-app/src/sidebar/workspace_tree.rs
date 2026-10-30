@@ -39,6 +39,8 @@ pub(super) use crate::app::clock::now_ms;
 pub(super) struct Snapshot {
     pub(super) current: Option<String>,
     pub(super) blurred: Vec<String>,
+    /// Rows show the task id before the title (`sidebarIds`).
+    pub(super) show_ids: bool,
     pub(super) seen: Vec<(String, TaskState)>,
     /// The tooltip of each task's title, already masked for a blurred project.
     pub(super) tips: BTreeMap<String, String>,
@@ -390,6 +392,7 @@ impl WorkspaceTree {
         let mut snapshot = Snapshot {
             current,
             blurred: view.blurred.clone(),
+            show_ids: view.sidebar_ids,
             seen: view.seen.clone(),
             tips: BTreeMap::new(),
             labels: BTreeMap::new(),

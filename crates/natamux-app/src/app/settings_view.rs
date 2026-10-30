@@ -77,6 +77,7 @@ pub struct SettingsView {
     dark_focus: FocusHandle,
     size_focus: FocusHandle,
     notify_focus: FocusHandle,
+    sidebar_ids_focus: FocusHandle,
     update_focus: FocusHandle,
     check_focus: FocusHandle,
     pub(super) font: FontRows,
@@ -126,6 +127,7 @@ impl SettingsView {
             dark_focus: cx.focus_handle().tab_stop(true),
             size_focus: cx.focus_handle().tab_stop(true),
             notify_focus: cx.focus_handle(),
+            sidebar_ids_focus: cx.focus_handle(),
             update_focus: cx.focus_handle(),
             check_focus: cx.focus_handle(),
             font,
@@ -296,6 +298,7 @@ impl SettingsView {
                     self.light_focus.clone(),
                     self.dark_focus.clone(),
                     self.size_focus.clone(),
+                    self.sidebar_ids_focus.clone(),
                 ]);
                 ring.extend(self.font.stops(cx));
             }
@@ -318,6 +321,7 @@ impl SettingsView {
             SettingRow::LightTheme => vec![self.light_focus.clone()],
             SettingRow::DarkTheme => vec![self.dark_focus.clone()],
             SettingRow::UiSize => vec![self.size_focus.clone()],
+            SettingRow::SidebarIds => vec![self.sidebar_ids_focus.clone()],
             SettingRow::FontFamily => vec![self.font.family.focus_handle(cx)],
             SettingRow::FontSize => self.font.size_stops(cx),
         }

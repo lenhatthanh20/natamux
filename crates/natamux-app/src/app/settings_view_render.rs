@@ -3,10 +3,11 @@
 
 use std::rc::Rc;
 
-use gpui::{ClickEvent, FontWeight, KeyDownEvent};
+use gpui::{ClickEvent, FocusHandle, FontWeight, KeyDownEvent};
 use ui::{Indicator, ListItem, ListItemSpacing, Switch, Tab, Tooltip, prelude::*};
 
 use super::super::appearance_rules::{ThemeChoice, UiSize, parse_theme, parse_ui_size};
+use super::super::dashboard::Dashboard;
 use super::super::settings_rules::{SearchResults, SettingRow, SettingsPage, page_title, search};
 use super::super::settings_theme::theme_select;
 use super::super::shortcuts::{AddProject, RestartToUpdate};
@@ -60,6 +61,7 @@ impl SettingsView {
     fn control(&mut self, row: SettingRow, cx: &mut Context<Self>) -> AnyElement {
         match row {
             SettingRow::Notify => self.notify_switch(cx),
+            SettingRow::SidebarIds => self.sidebar_ids_switch(cx),
             SettingRow::UpdatesAuto => self.updates_switch(cx),
             SettingRow::UpdatesVersion => {
                 Label::new(format!("Natamux {}", update::running_version()))
@@ -114,14 +116,38 @@ impl SettingsView {
 
     fn notify_switch(&self, cx: &mut Context<Self>) -> AnyElement {
         let on = self.dashboard.read(cx).view().notify;
+        self.view_switch(
+            "settings-notify",
+            &self.notify_focus,
+            on,
+            Dashboard::toggle_notify,
+        )
+    }
+
+    fn sidebar_ids_switch(&self, cx: &mut Context<Self>) -> AnyElement {
+        let on = self.dashboard.read(cx).view().sidebar_ids;
+        self.view_switch(
+            "settings-sidebar-ids",
+            &self.sidebar_ids_focus,
+            on,
+            Dashboard::toggle_sidebar_ids,
+        )
+    }
+
+    /// A switch of a `view.json` flag: a click, or Space or Enter on its stop, flips it.
+    fn view_switch(
+        &self,
+        id: &'static str,
+        focus: &FocusHandle,
+        on: bool,
+        toggle: fn(&mut Dashboard, &mut Context<Dashboard>),
+    ) -> AnyElement {
         let dashboard = self.dashboard.clone();
-        let flip = Rc::new(move |cx: &mut App| {
-            dashboard.update(cx, |dashboard, cx| dashboard.toggle_notify(cx))
-        });
+        let flip = Rc::new(move |cx: &mut App| dashboard.update(cx, toggle));
         let by_key = flip.clone();
         div()
-            .id("settings-notify-stop")
-            .track_focus(&self.notify_focus)
+            .id(SharedString::from(format!("{id}-stop")))
+            .track_focus(focus)
             .on_key_down(move |event: &KeyDownEvent, _, cx| {
                 let keys = &event.keystroke;
                 if matches!(keys.key.as_str(), "space" | "enter") && !keys.modifiers.modified() {
@@ -129,7 +155,7 @@ impl SettingsView {
                     by_key(cx);
                 }
             })
-            .child(Switch::new("settings-notify", on.into()).on_click(move |_, _, cx| flip(cx)))
+            .child(Switch::new(id, on.into()).on_click(move |_, _, cx| flip(cx)))
             .into_any_element()
     }
 
@@ -222,6 +248,7 @@ impl SettingsView {
             SettingRow::UiSize,
         ]
         .map(|row| self.row(row, cx));
+        let sidebar_ids = self.row(SettingRow::SidebarIds, cx);
         let font = [SettingRow::FontFamily, SettingRow::FontSize].map(|row| self.row(row, cx));
         let preview = self.font.preview(cx);
         scroll_body(
@@ -229,6 +256,8 @@ impl SettingsView {
             v_flex()
                 .child(section("Theme"))
                 .children(rows)
+                .child(section("Sidebar"))
+                .child(sidebar_ids)
                 .child(section("Terminal font"))
                 .children(font)
                 .child(preview),
