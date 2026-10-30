@@ -144,7 +144,6 @@ impl WorkspaceView {
         &self.panes
     }
 
-    /// The Changes tab, for the `--shot` states.
     /// The editor of an open file of the shown task, for the `--shot` states.
     pub fn file_editor(&self, path: &str, cx: &App) -> Option<Entity<FileEditor>> {
         self.editors
@@ -158,6 +157,7 @@ impl WorkspaceView {
         self.docs.as_ref()
     }
 
+    /// The Changes tab, for the `--shot` states.
     pub fn changes_view(&self) -> &Entity<ChangesView> {
         &self.changes
     }
