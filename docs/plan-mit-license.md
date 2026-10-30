@@ -905,21 +905,22 @@ If D1 says no new crates: the kit and theme become modules `components/kit/` and
 ### 7.1 Pixel gate
 
 - Tool: `scripts/shots-exact.py` (S0.2), stdlib only. Write it from this spec:
-  - `shots-exact.py <base_dir> <new_dir> [--control <dir>] [--out <diff_dir>] [--only <prefix>...]`.
+  - `shots-exact.py <base_dir> <new_dir> [--control <dir>] [--out <diff_dir>] [--only <prefix>...] [--strict]`.
   - It reads PNG (8-bit RGB/RGBA, not interlaced) with the stdlib (`zlib`, `struct`) and compares every pixel, alpha ignored.
-  - With `--control` (a second run of the base code), pixels that differ between base and control are moving and may differ.
+  - Noise rule (orchestrator decision of 2026-10-30, from B0, C0, C0p and C0b): a pixel whose largest channel difference is 1 (`max(|dr|,|dg|,|db|) <= 1`) counts as equal. Unchanged code gives such isolated pixels from run to run; a lost line, a moved glyph or a colour change differs by far more. The output counts them (`n px within 1`), so they are not hidden. `--strict` turns the rule off: any difference fails. The rule does not cover carets or late highlights; S0.3 fixes those.
+  - With `--control` (a second run of the base code), pixels that differ by more than 1 between base and control are moving and may differ.
   - It skips `window-*` (the OS-drawn window shots). It never skips by any other name prefix: state names may start with anything. `NO BASE` fails. `NO NEW` (a base shot missing from the new run, as after a shard that stopped early) fails. A size change fails.
   - `--out` writes `diff-<name>.png` (differing pixels in red over a dimmed copy). The `--out` dir must not be inside `base_dir`, `new_dir` or the control dir (the tool exits with an error if it is), so its own output is never read as a shot.
   - Test case: a state named `diff-x` in both dirs is compared, not skipped.
   - Exit 0 only when all match.
-  - `scripts/shots-exact.test.py`: equal images pass; one changed pixel fails; a size change fails; the mask allows a moving pixel. CI runs it next to `compare-shots.test.py` (`.github/workflows/rust.yml:157`).
+  - `scripts/shots-exact.test.py`: equal images pass; one changed pixel fails; a size change fails; the mask allows a moving pixel; a difference of 1 passes, a difference of 2 fails, and `--strict` makes a difference of 1 fail. CI runs it next to `compare-shots.test.py` (`.github/workflows/rust.yml:157`).
 - Baselines:
   - B0 = run 40985373281, already downloaded to the session scratchpad `mit-shots/base-40985373281` (510 states + 4 `window-*`).
   - C0 = the control run of S0.2.
   - C1 = a control run of the S0.3 commit, only if S0.3 ran (its shot-only `cursor_blink: false` changes carets, so C0 no longer fits).
   - B1 and B1m = two runs of the S0.4 harness commit. B1 is the base of every later compare; B1 vs B1m is the moving mask.
   - B2 = the run of S10 after the owner signs the icon change; it is the base for S11-S12.
-- Rule per UI step: download `shots-macos` into a new empty folder, then run `python3 -I scripts/shots-exact.py <B1> <run> --control <B1m> --out <diffs>`. The step is done only with 0 differing pixels outside the mask, on every shot.
+- Rule per UI step: download `shots-macos` into a new empty folder, then run `python3 -I scripts/shots-exact.py <B1> <run> --control <B1m> --out <diffs>`. The step is done only with 0 differing pixels outside the mask and the noise rule, on every shot.
   - Any difference: look at the diff images with the Read tool, fix, and push again.
   - Never accept a difference without the owner's sign-off.
 - Merge-ref trap:

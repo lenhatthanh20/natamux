@@ -2,10 +2,14 @@
 """Exact pixel compare of two folders of CI shots (PNG, 8-bit RGB or RGBA, not interlaced).
 
 Usage: shots-exact.py <base_dir> <new_dir> [--control <dir>] [--out <diff_dir>] [--only <prefix>...]
+                      [--strict]
 
 Every shot of new_dir is compared with the shot of the same name in base_dir. A shot passes
-when every pixel is equal (alpha ignored). With --control (a second run of the same code as
-base), a pixel that differs between base and control is moving: it may differ in new too.
+when every pixel is equal (alpha ignored). A pixel whose largest channel difference is 1
+counts as equal: unchanged code gives such noise from run to run. Those pixels are counted
+in the output ("n px within 1"). --strict turns this off, so any difference counts. With
+--control (a second run of the same code as base), a pixel that differs by more than 1
+between base and control is moving: it may differ in new too.
 The window-* shots (drawn by the OS, with the menu bar clock) are skipped. --only keeps the
 shots whose name starts with one of the prefixes. --out writes diff-<name>.png for each failed
 shot: the differing pixels in red over a dimmed copy of the new shot.
@@ -23,6 +27,8 @@ from pathlib import Path
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 # Differing pixels this close to each other are reported as one box.
 BOX_GAP = 8
+# Largest channel difference that counts as run-to-run noise (plan 7.1).
+NOISE = 1
 
 
 def decode_png(data):
@@ -108,16 +114,18 @@ def encode_png(width, rows):
     )
 
 
-def differing(a_rows, b_rows):
-    """The set of (x, y) where two images of the same size differ."""
-    out = set()
+def differing(a_rows, b_rows, noise=NOISE):
+    """Two sets of (x, y) where two images of the same size differ: pixels with a channel
+    difference above `noise`, and pixels that differ by `noise` or less."""
+    over, within = set(), set()
     for y, (a, b) in enumerate(zip(a_rows, b_rows)):
         if a == b:
             continue
         for i in range(0, len(a), 3):
             if a[i : i + 3] != b[i : i + 3]:
-                out.add((i // 3, y))
-    return out
+                delta = max(abs(a[i + c] - b[i + c]) for c in range(3))
+                (over if delta > noise else within).add((i // 3, y))
+    return over, within
 
 
 def boxes(pixels, gap=BOX_GAP):
@@ -149,20 +157,21 @@ def boxes(pixels, gap=BOX_GAP):
     return [tuple(box) for box in sorted(found, key=lambda b: (b[1], b[0]))]
 
 
-def compare(base, new, control=None):
-    """Returns (problem or None, bad pixels, moving pixels). Bad pixels differ outside the
-    moving ones; moving pixels differ between base and control."""
+def compare(base, new, control=None, noise=NOISE):
+    """Returns (problem or None, bad pixels, moving pixels, noise pixels). Bad pixels differ
+    by more than `noise` outside the moving ones; moving pixels differ by more than `noise`
+    between base and control; noise pixels differ by `noise` or less."""
     (bw, bh, brows), (nw, nh, nrows) = base, new
     if (bw, bh) != (nw, nh):
-        return f"size {nw}x{nh}, base {bw}x{bh}", set(), set()
-    diff = differing(brows, nrows)
+        return f"size {nw}x{nh}, base {bw}x{bh}", set(), set(), set()
+    diff, within = differing(brows, nrows, noise)
     moving = set()
     if control is not None and diff:
         cw, ch, crows = control
         if (cw, ch) == (bw, bh):
-            moving = differing(brows, crows)
+            moving = differing(brows, crows, noise)[0]
     bad = diff - moving
-    return ("differs" if bad else None), bad, moving
+    return ("differs" if bad else None), bad, moving, within
 
 
 def diff_image(new, bad):
@@ -190,6 +199,7 @@ def main(argv):
     parser.add_argument("--control", type=Path)
     parser.add_argument("--out", type=Path)
     parser.add_argument("--only", nargs="+", default=[])
+    parser.add_argument("--strict", action="store_true", help="count a difference of 1 too")
     args = parser.parse_args(argv)
 
     inputs = [args.base_dir, args.new_dir] + ([args.control] if args.control else [])
@@ -231,8 +241,10 @@ def main(argv):
         control = None
         if args.control and (args.control / shot.name).is_file():
             control = read_png(args.control / shot.name)
-        problem, bad, moving = compare(base, new, control)
+        noise = 0 if args.strict else NOISE
+        problem, bad, moving, within = compare(base, new, control, noise)
         note = f" ({len(moving)} moving px)" if moving else ""
+        note += f" ({len(within)} px within {noise})" if within else ""
         if problem is None:
             print(f"ok       {name}{note}")
             continue

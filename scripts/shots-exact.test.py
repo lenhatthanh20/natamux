@@ -70,6 +70,16 @@ def png(width=W, height=H, change=None, filters=(0,)):
     return rgba_png(pixels(width, height, change), width, filters)
 
 
+def plain(x, y):
+    """The RGB of (x, y) in `pixels`."""
+    return ((x * 13) & 255, (y * 29) & 255, (x * y) & 255)
+
+
+def shifted(x, y, deltas):
+    """The RGB of (x, y) plus `deltas` per channel."""
+    return tuple(c + d for c, d in zip(plain(x, y), deltas))
+
+
 class DecodeTest(unittest.TestCase):
     def test_every_filter_decodes_to_the_same_pixels(self):
         plain = shots_exact.decode_png(png())
@@ -102,11 +112,32 @@ class CompareTest(unittest.TestCase):
         self.assertEqual(shots_exact.compare(self.decoded(), self.decoded(filters=(4,)))[0], None)
 
     def test_one_changed_pixel_fails(self):
-        problem, bad, _ = shots_exact.compare(self.decoded(), self.decoded(change={(3, 4): (1, 2, 3)}))
+        changed = self.decoded(change={(3, 4): (1, 2, 3)})
+        problem, bad = shots_exact.compare(self.decoded(), changed)[:2]
         self.assertEqual((problem, bad), ("differs", {(3, 4)}))
 
+    def test_a_difference_of_1_is_noise_and_2_is_not(self):
+        base = self.decoded()
+        one = self.decoded(
+            change={(3, 4): shifted(3, 4, (1, -1, 1)), (5, 5): shifted(5, 5, (0, 0, -1))}
+        )
+        self.assertEqual(shots_exact.compare(base, one), (None, set(), set(), {(3, 4), (5, 5)}))
+        two = self.decoded(
+            change={(3, 4): shifted(3, 4, (0, 2, 0)), (5, 5): shifted(5, 5, (-1, 0, 0))}
+        )
+        self.assertEqual(shots_exact.compare(base, two), ("differs", {(3, 4)}, set(), {(5, 5)}))
+        strict = shots_exact.compare(base, one, noise=0)
+        self.assertEqual(strict, ("differs", {(3, 4), (5, 5)}, set(), set()))
+
+    def test_noise_in_the_control_does_not_mask_a_pixel(self):
+        base = self.decoded()
+        control = self.decoded(change={(3, 4): shifted(3, 4, (1, 0, 0))})
+        moved = self.decoded(change={(3, 4): (7, 7, 7)})
+        result = shots_exact.compare(base, moved, control)[:3]
+        self.assertEqual(result, ("differs", {(3, 4)}, set()))
+
     def test_a_size_change_fails(self):
-        problem, _, _ = shots_exact.compare(self.decoded(), self.decoded(width=W + 1))
+        problem = shots_exact.compare(self.decoded(), self.decoded(width=W + 1))[0]
         self.assertEqual(problem, f"size {W + 1}x{H}, base {W}x{H}")
 
     def test_the_control_mask_allows_a_moving_pixel_only(self):
@@ -166,6 +197,23 @@ class MainTest(unittest.TestCase):
         self.assertNotIn("window", output)
         self.assertEqual(output.splitlines()[-1], "2 shots, 1 failed")
         self.assertEqual(self.run_main("--only", "a")[0], 0)
+
+    def test_a_difference_of_1_passes_unless_strict(self):
+        self.put(self.base, "tasks", png())
+        self.put(self.new, "tasks", png(change={(2, 2): shifted(2, 2, (1, 1, -1))}))
+        code, output = self.run_main()
+        self.assertEqual(code, 0)
+        self.assertIn("ok       tasks (1 px within 1)", output)
+        code, output = self.run_main("--strict")
+        self.assertEqual(code, 1)
+        self.assertIn("DIFFERS  tasks: 1 px, boxes (2,2)-(2,2)", output)
+
+    def test_a_difference_of_2_fails(self):
+        self.put(self.base, "tasks", png())
+        self.put(self.new, "tasks", png(change={(2, 2): shifted(2, 2, (0, 0, 2))}))
+        code, output = self.run_main()
+        self.assertEqual(code, 1)
+        self.assertIn("DIFFERS  tasks: 1 px, boxes (2,2)-(2,2)", output)
 
     def test_a_state_named_diff_is_compared(self):
         self.put(self.base, "diff-x", png())
