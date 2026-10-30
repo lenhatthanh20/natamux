@@ -8,7 +8,7 @@ mkdir -p "$out"
 out=$(cd "$out" && pwd)
 binary=target/release
 # SHA-1 (lower case) of the macOS code signing certificate, from scripts/make-mac-sign-cert.sh.
-mac_sign_sha1=""
+mac_sign_sha1="d8e5a1c084b961b8e2ddaebe92db58c9bee6481c"
 for name in natamux-app natamux-daemon natamux nmx; do
   test -x "$binary/$name" || { echo "missing $binary/$name" >&2; exit 1; }
 done
