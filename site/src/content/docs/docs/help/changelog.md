@@ -7,6 +7,14 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v1.0.10 (2026-10-30)
+
+- Name the branch of a task: the **Branch** field in **Start a task**, the project pattern `git.branchName` with `{id}` and `{slug}`, `--branch` in the CLI and `branch` in the API. See [Branch name](/docs/concepts/workspaces/#branch-name).
+- Natamux follows the branch the task really uses. When an agent switches the worktree to another branch, the pull request lookup, the CI check, push and the branch delete use it.
+- In the desktop app, each row of the sidebar shows the task id before the title.
+- In the desktop app, the sidebar and the docked details share one width, so dragging either edge resizes both. See [In the desktop app](/docs/guides/dashboard/#in-the-desktop-app).
+- Fix: in the desktop app, the line between the terminals and the docked details panel was 2 px wide. Now it is 1 px.
+
 ## v1.0.9 (2026-10-30)
 
 - In the desktop app, text boxes take the keys of a text field in a web page, such as moving by word, and `Page Up` and `Page Down` in boxes of many lines. Long lines wrap, also in **Notes** of **Start a task**. See [Text boxes](/docs/reference/shortcuts/#text-boxes).
