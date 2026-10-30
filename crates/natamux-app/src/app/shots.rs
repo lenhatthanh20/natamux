@@ -75,6 +75,15 @@ const ASKED_LINES: (u32, u32) = (5, 6);
 /// checked this often, for at most `PARSE_TRIES` times.
 const PARSE_POLL: Duration = Duration::from_millis(50);
 const PARSE_TRIES: usize = 100;
+/// The app prints this line once the state is in place, and CI shoots the window then
+/// (`app-shots` in `.github/workflows/rust.yml`). A fixed wait from the start of the process
+/// shot a slow start too early (run 41018471510: no tasks yet, or a step not done).
+const READY_LINE: &str = "shot: ready";
+/// The line comes no earlier than this after the window opens, near where the fixed wait of 3 s
+/// shot a state with no steps.
+const READY_AFTER: Duration = Duration::from_millis(2500);
+/// After the last step: what it reads comes in and the window draws it.
+const LAST_DRAWN: Duration = Duration::from_millis(500);
 
 /// Sets the fake's data before the window watches it. Call it before `window::open`.
 pub fn prepare(shot: Shot) {
@@ -116,53 +125,66 @@ pub fn run(handle: WindowHandle<Root>, shot: Shot, cx: &mut App) {
     })
     .detach();
     cx.spawn(async move |cx| {
-        cx.background_executor().timer(SETTLE).await;
-        if shots_stages::is_settings_shot(shot) {
-            shots_stages::run(handle, shot, cx).await;
+        let earliest = cx.background_executor().timer(READY_AFTER);
+        if !steps(handle, shot, cx).await {
             return;
         }
-        if shots_files::is_files_shot(shot) {
-            shots_files::run(handle, shot, cx).await;
-            return;
-        }
-        if shots_settings::is_screen7_shot(shot) {
-            shots_settings::run(handle, shot, cx).await;
-            return;
-        }
-        if let Err(error) = handle.update(cx, |root, window, cx| enter(shot, root, window, cx)) {
-            eprintln!("shot: the window is gone: {error}");
-            return;
-        }
-        if shot == Shot::Toast {
-            keep_toast(handle, cx).await;
-        }
-        if matches!(
-            shot,
-            Shot::SendBack
-                | Shot::DetailsMoreMenu
-                | Shot::CompareTries
-                | Shot::WorkspaceChangesDiff
-                | Shot::WorkspaceChangesAsk
-                | Shot::WorkspaceChangesComments
-                | Shot::Rollback
-                | Shot::StageEvidence
-        ) {
-            cx.background_executor().timer(SETTLE).await;
-            if shot == Shot::WorkspaceChangesDiff {
-                wait_for_parse(handle, cx).await;
-            }
-            handle
-                .update(cx, |root, window, cx| panel_step(shot, root, window, cx))
-                .ok();
-        }
-        if shot == Shot::TerminalFind {
-            cx.background_executor().timer(PANES_DRAWN).await;
-            handle
-                .update(cx, |_, window, cx| find_in_pane(REVIEWED, window, cx))
-                .ok();
-        }
+        cx.background_executor().timer(LAST_DRAWN).await;
+        earliest.await;
+        println!("{READY_LINE}");
     })
     .detach();
+}
+
+/// Puts the window in the state, step by step. False when the window is gone.
+async fn steps(handle: WindowHandle<Root>, shot: Shot, cx: &mut AsyncApp) -> bool {
+    cx.background_executor().timer(SETTLE).await;
+    if shots_stages::is_settings_shot(shot) {
+        shots_stages::run(handle, shot, cx).await;
+        return true;
+    }
+    if shots_files::is_files_shot(shot) {
+        shots_files::run(handle, shot, cx).await;
+        return true;
+    }
+    if shots_settings::is_screen7_shot(shot) {
+        shots_settings::run(handle, shot, cx).await;
+        return true;
+    }
+    if let Err(error) = handle.update(cx, |root, window, cx| enter(shot, root, window, cx)) {
+        eprintln!("shot: the window is gone: {error}");
+        return false;
+    }
+    if shot == Shot::Toast {
+        cx.spawn(async move |cx| keep_toast(handle, cx).await)
+            .detach();
+    }
+    if matches!(
+        shot,
+        Shot::SendBack
+            | Shot::DetailsMoreMenu
+            | Shot::CompareTries
+            | Shot::WorkspaceChangesDiff
+            | Shot::WorkspaceChangesAsk
+            | Shot::WorkspaceChangesComments
+            | Shot::Rollback
+            | Shot::StageEvidence
+    ) {
+        cx.background_executor().timer(SETTLE).await;
+        if shot == Shot::WorkspaceChangesDiff {
+            wait_for_parse(handle, cx).await;
+        }
+        handle
+            .update(cx, |root, window, cx| panel_step(shot, root, window, cx))
+            .ok();
+    }
+    if shot == Shot::TerminalFind {
+        cx.background_executor().timer(PANES_DRAWN).await;
+        handle
+            .update(cx, |_, window, cx| find_in_pane(REVIEWED, window, cx))
+            .ok();
+    }
+    true
 }
 
 fn view_of(shot: Shot) -> ViewState {

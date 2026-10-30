@@ -505,9 +505,19 @@ jobs:
             for size in $sizes; do
               for theme in light dark; do
                 name="$state-$theme-$size"
-                target/release/natamux-app --shot "$state" --fake-daemon --theme "$theme" --size "$size" --hold 30 &
+                out="$RUNNER_TEMP/shot.out"
+                target/release/natamux-app --shot "$state" --fake-daemon --theme "$theme" --size "$size" --hold 30 > "$out" &
                 pid=$!
-                sleep 3
+                # The app prints "shot: ready" once the state is in place (app/shots.rs). A fixed
+                # sleep shot a slow start too early.
+                for _ in $(seq 200); do
+                  grep -qx 'shot: ready' "$out" && break
+                  sleep 0.1
+                done
+                if ! grep -qx 'shot: ready' "$out"; then
+                  echo "::error::the app did not get $name ready within 20 s"
+                  exit 1
+                fi
                 id=$(window_of "$pid")
                 if [ -z "$id" ]; then
                   echo "::error::no window of the app for $name"
