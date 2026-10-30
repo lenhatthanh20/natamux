@@ -125,7 +125,8 @@ pub struct ThemeSetting<'a> {
 
 /// The user settings JSON for Zed: `ui_zoom` is `UiSize::zoom`. Zed's own fonts; the terminal
 /// gets a font only when the user picked one, else Zed gives it the buffer font and size. A
-/// `--shot` hides the editors' scrollbars, which Zed shows for a moment after a scroll.
+/// `--shot` hides the editors' scrollbars, which Zed shows for a moment after a scroll, and holds
+/// the editors' caret solid, so a shot never catches it in the off half of a blink.
 pub fn user_settings(
     theme: ThemeSetting<'_>,
     ui_zoom: f32,
@@ -147,6 +148,7 @@ pub fn user_settings(
     });
     if shot {
         settings["scrollbar"] = json!({"show": "never"});
+        settings["cursor_blink"] = json!(false);
     }
     settings.to_string()
 }

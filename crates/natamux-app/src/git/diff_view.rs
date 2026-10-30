@@ -15,7 +15,7 @@ use buffer_diff::BufferDiff;
 use editor::display_map::CustomBlockId;
 use editor::{Editor, EditorEvent, MultiBuffer};
 use gpui::{Entity, EventEmitter, Subscription};
-use language::{Buffer, Capability};
+use language::{Buffer, Capability, ParseStatus};
 use text::Point;
 use ui::prelude::*;
 
@@ -268,6 +268,20 @@ impl DiffView {
     /// The diff of the shown texts is worked out and drawn.
     pub fn ready(&self) -> bool {
         self.sides.is_some()
+    }
+
+    /// `path` is drawn, and its language is loaded and parsed. Zed looks for the brackets around
+    /// the cursor only when the cursor moves, so a `--shot` moves it after this.
+    pub fn parsed(&self, path: &str, cx: &App) -> bool {
+        let Some(buffer) = &self.buffer else {
+            return false;
+        };
+        let buffer = buffer.read(cx);
+        let mut status = buffer.parse_status();
+        self.path.as_deref() == Some(path)
+            && self.ready()
+            && buffer.language().is_some()
+            && *status.borrow() == ParseStatus::Idle
     }
 
     /// The changes in Monaco's shape, for the counts and the navigator.

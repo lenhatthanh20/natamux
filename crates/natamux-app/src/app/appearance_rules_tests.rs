@@ -144,3 +144,18 @@ fn hides_the_editor_scrollbars_in_a_shot_only() {
     assert_eq!(shot["scrollbar"]["show"], "never");
     assert!(settings("dark", 1.0, &font).get("scrollbar").is_none());
 }
+
+// The caret of a focused box blinks every 500 ms, so a shot had it in one run and not in the
+// next (the search box of the Settings shots, runs 40985373281 and 41004951875).
+#[test]
+fn holds_the_caret_solid_in_a_shot_only() {
+    let font = font("Lilex", 15.0);
+    let theme = ThemeSetting {
+        mode: "dark",
+        names: ThemeNames::default(),
+    };
+    let shot: Value =
+        serde_json::from_str(&user_settings(theme, 1.0, &font, true)).unwrap_or(Value::Null);
+    assert_eq!(shot["cursor_blink"], false);
+    assert!(settings("dark", 1.0, &font).get("cursor_blink").is_none());
+}

@@ -70,6 +70,11 @@ const IMAGE: &str = "T-0147";
 const CHANGED_FILE: &str = "src/checkout.ts";
 /// The lines Ask agent quotes: the new body of the function.
 const ASKED_LINES: (u32, u32) = (5, 6);
+/// The diff's language loads and parses in the background. A step to the change before the parse
+/// ended drew no box behind the `}` of line 7 (run 41010846280), so the step waits for the parse,
+/// checked this often, for at most `PARSE_TRIES` times.
+const PARSE_POLL: Duration = Duration::from_millis(50);
+const PARSE_TRIES: usize = 100;
 
 /// Sets the fake's data before the window watches it. Call it before `window::open`.
 pub fn prepare(shot: Shot) {
@@ -143,6 +148,9 @@ pub fn run(handle: WindowHandle<Root>, shot: Shot, cx: &mut App) {
                 | Shot::StageEvidence
         ) {
             cx.background_executor().timer(SETTLE).await;
+            if shot == Shot::WorkspaceChangesDiff {
+                wait_for_parse(handle, cx).await;
+            }
             handle
                 .update(cx, |root, window, cx| panel_step(shot, root, window, cx))
                 .ok();
@@ -418,6 +426,21 @@ fn panel_step(shot: Shot, root: &mut Root, window: &mut Window, cx: &mut gpui::C
         }
         _ => {}
     }
+}
+
+/// Waits until the Changes tab draws `CHANGED_FILE` with its language parsed.
+async fn wait_for_parse(handle: WindowHandle<Root>, cx: &mut AsyncApp) {
+    for _ in 0..PARSE_TRIES {
+        let parsed = handle.update(cx, |root, _, cx| {
+            let changes = root.workspace_view().read(cx).changes_view().clone();
+            changes.read(cx).shot_parsed(CHANGED_FILE, cx)
+        });
+        if !matches!(parsed, Ok(false)) {
+            return;
+        }
+        cx.background_executor().timer(PARSE_POLL).await;
+    }
+    eprintln!("shot: {CHANGED_FILE} was not parsed in time");
 }
 
 /// Mod+F in Terminal 1 of the task, and the term typed.

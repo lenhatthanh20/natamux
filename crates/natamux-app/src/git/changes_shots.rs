@@ -23,6 +23,11 @@ impl ChangesView {
         self.diff.update(cx, |diff, cx| diff.focus(window, cx));
     }
 
+    /// `path` shows with its language parsed (`DiffView::parsed`).
+    pub fn shot_parsed(&self, path: &str, cx: &App) -> bool {
+        self.diff.read(cx).parsed(path, cx)
+    }
+
     /// Lines `first` to `last` of the working tree picked, then Ask agent.
     pub fn shot_ask(&mut self, first: u32, last: u32, window: &mut Window, cx: &mut Context<Self>) {
         self.diff.update(cx, |diff, cx| {

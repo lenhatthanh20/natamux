@@ -1191,6 +1191,7 @@ S0.3 Harness fixes (only if C0 shows moving pixels; D14)
 - Files:
   - `app/appearance_rules.rs:148-150` (shot-only `"cursor_blink": false` next to the scrollbar line) and its tests;
   - `app/shots.rs` (a longer settle for slow states: `SETTLE` 800 ms at `app/shots.rs:28`, `PANES_DRAWN` 1200 ms at `:53`).
+  - Done in S0.3: the controls showed one late state, not a slow one. `workspace-changes-diff` lost the bracket box behind the `}` of line 7 in one run (C0b), because Zed looks for brackets only when the cursor moves and the step to the change came before the TypeScript parse ended. `app/shots.rs` now waits until `DiffView::parsed` (`git/diff_view.rs`, through `ChangesView::shot_parsed`) says the file is drawn with its language parsed, checked every 50 ms for at most 5 s, before the step. `SETTLE` and `PANES_DRAWN` stay.
 - Tag: `[ci: shots]`.
 - Proof: two runs differ only by the OS-drawn traffic lights, or not at all. One of them is C1, the new control for S0.4.
 - Risk: a fix changes product behaviour outside `--shot`. Gate every change on `shot`.
