@@ -30,6 +30,7 @@ use crate::terminals::open_shells::OpenShells;
 use crate::terminals::service::TerminalService;
 use crate::terminals::types::DEFAULT_SIZE;
 use crate::workspaces::agent_once::default_run_agent_once;
+use crate::workspaces::branch_sync::sync_branch;
 use crate::workspaces::errors::WorkspaceError;
 use crate::workspaces::service::{WorkspaceOptions, WorkspaceService};
 use crate::workspaces::setup_script::{SETUP_SKIPPED, WORKSPACE_WARNING_EVENT, setup_command};
@@ -79,6 +80,10 @@ pub(super) fn github_services(
         Arc::clone(scheduler),
     );
     watching.bus = Some(Arc::clone(&store.bus));
+    let (syncing, repo_dirs) = (store.tasks.clone(), Arc::clone(&store.repos));
+    watching.sync_branch = Arc::new(move |task_id: &str| {
+        sync_branch(&syncing, &|repo| repo_dirs.path_of(repo), task_id)
+    });
     let pull_requests = Arc::new(PullRequestWatcher::new(watching));
     // The Rust daemon has no login-PATH gate before phase 5, so it starts at once.
     pull_requests.start();

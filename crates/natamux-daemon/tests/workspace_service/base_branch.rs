@@ -67,7 +67,10 @@ fn starts_a_picked_branch_from_its_newest_remote_commit() {
     let newer = run_git(&other, &["rev-parse", "HEAD"]);
     let local = run_git(&fx.repo, &["rev-parse", "release"]);
 
-    let created = fx.ws.create(&fx.task("Fresh").id, Some("release")).unwrap();
+    let created = fx
+        .ws
+        .create(&fx.task("Fresh").id, Some("release"), None)
+        .unwrap();
 
     assert_eq!(head(&created), newer.trim());
     assert_eq!(
@@ -88,13 +91,16 @@ fn starts_a_picked_branch_from_its_local_commits_that_are_not_pushed_even_offlin
     run_git(&fx.repo, &["checkout", "main"]);
     let local = run_git(&fx.repo, &["rev-parse", "release"]);
 
-    let first = fx.ws.create(&fx.task("Ahead").id, Some("release")).unwrap();
+    let first = fx
+        .ws
+        .create(&fx.task("Ahead").id, Some("release"), None)
+        .unwrap();
     assert_eq!(head(&first), local.trim());
 
     fs::remove_dir_all(&origin).unwrap();
     let second = fx
         .ws
-        .create(&fx.task("Offline").id, Some("release"))
+        .create(&fx.task("Offline").id, Some("release"), None)
         .unwrap();
     assert_eq!(head(&second), local.trim());
 }
@@ -107,7 +113,7 @@ fn starts_a_workspace_from_the_branch_it_is_given() {
     run_git(&fx.repo, &["checkout", "main"]);
     let task = fx.task("Fix the bug");
 
-    let created = fx.ws.create(&task.id, Some("release")).unwrap();
+    let created = fx.ws.create(&task.id, Some("release"), None).unwrap();
 
     assert_eq!(subject(&created), "on release");
 }
@@ -124,9 +130,9 @@ fn starts_a_subtask_from_its_parent_branch_unless_a_base_is_given() {
     run_git(&fx.repo, &["branch", "release"]);
 
     let part_a = fx.task_with(json!({ "title": "Part A", "parentId": parent.id }));
-    let child = fx.ws.create(&part_a.id, None).unwrap();
+    let child = fx.ws.create(&part_a.id, None, None).unwrap();
     let part_b = fx.task_with(json!({ "title": "Part B", "parentId": parent.id }));
-    let picked = fx.ws.create(&part_b.id, Some("release")).unwrap();
+    let picked = fx.ws.create(&part_b.id, Some("release"), None).unwrap();
 
     assert_eq!(subject(&child), "on parent");
     assert_eq!(subject(&picked), "init");
@@ -138,7 +144,7 @@ fn starts_a_subtask_from_the_default_branch_when_its_parent_has_no_branch() {
     let parent = fx.task("Parent");
     let part = fx.task_with(json!({ "title": "Part A", "parentId": parent.id }));
 
-    let child = fx.ws.create(&part.id, None).unwrap();
+    let child = fx.ws.create(&part.id, None, None).unwrap();
 
     assert_eq!(subject(&child), "init");
 }
@@ -147,7 +153,7 @@ fn starts_a_subtask_from_the_default_branch_when_its_parent_has_no_branch() {
 fn refuses_a_branch_that_does_not_exist() {
     let fx = Fx::new();
     let task = fx.task("Fix the bug");
-    assert!(is_conflict(&fx.ws.create(&task.id, Some("nope"))));
+    assert!(is_conflict(&fx.ws.create(&task.id, Some("nope"), None)));
 }
 
 // Origin gets a branch `feature/x` with a commit "on feature", by its folder: this repository
@@ -182,7 +188,7 @@ fn starts_from_a_branch_of_origin_that_was_never_fetched() {
 
     let created = fx
         .ws
-        .create(&fx.task("Remote").id, Some("origin/feature/x"))
+        .create(&fx.task("Remote").id, Some("origin/feature/x"), None)
         .unwrap();
 
     assert_eq!(subject(&created), "on feature");
@@ -200,7 +206,8 @@ fn refuses_a_branch_that_origin_does_not_have_and_makes_no_worktree() {
     unfetched_feature(&fx);
     let task = fx.task("Typo");
 
-    assert!(is_conflict(&fx.ws.create(&task.id, Some("origin/nope"))));
+    let made = fx.ws.create(&task.id, Some("origin/nope"), None);
+    assert!(is_conflict(&made));
     let worktrees = run_git(&fx.repo, &["worktree", "list", "--porcelain"]);
     assert_eq!(worktrees.matches("worktree ").count(), 1, "{worktrees}");
 }

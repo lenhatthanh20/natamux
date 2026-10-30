@@ -214,7 +214,8 @@ impl WorkspaceService {
 
     fn push_now(&self, task_id: &str) -> WorkspaceResult<Task> {
         let workspace = self.workspace_of(task_id)?;
-        let Some(branch) = self.tasks.get_task(task_id)?.branch else {
+        // The agent may have switched the worktree to another branch: push that one.
+        let Some(branch) = self.sync_branch(task_id)?.branch else {
             return Err(WorkspaceError::Conflict(format!("{task_id} has no branch")));
         };
         push_branch(&workspace, &branch)?;

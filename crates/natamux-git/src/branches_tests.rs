@@ -1,7 +1,7 @@
 use super::*;
 use crate::graph::fetch_origin_branch;
 use crate::test_support::{bare_origin, run_git, test_repo};
-use crate::worktrees::{add_worktree, remove_worktree};
+use crate::worktrees::{WorktreeBranch, add_worktree, remove_worktree};
 use std::path::PathBuf;
 
 const BRANCH: &str = "natamux/t-0001-example";
@@ -20,7 +20,7 @@ fn branch_exists(repo: &Path, branch: &str) -> bool {
 fn deletes_a_branch_that_is_merged() {
     let (root, repo) = test_repo();
     let path = worktree_path(root.path());
-    add_worktree(&repo, &path, BRANCH, None, false).unwrap();
+    add_worktree(&repo, &path, BRANCH, WorktreeBranch::New(None)).unwrap();
     remove_worktree(&repo, &path, false).unwrap();
 
     assert!(delete_merged_branch(&repo, BRANCH));
@@ -31,7 +31,7 @@ fn deletes_a_branch_that_is_merged() {
 fn keeps_a_branch_that_has_commits_that_are_not_merged() {
     let (root, repo) = test_repo();
     let path = worktree_path(root.path());
-    add_worktree(&repo, &path, BRANCH, None, false).unwrap();
+    add_worktree(&repo, &path, BRANCH, WorktreeBranch::New(None)).unwrap();
     run_git(&path, &["commit", "--allow-empty", "-m", "work"]);
     remove_worktree(&repo, &path, false).unwrap();
 
@@ -49,7 +49,7 @@ fn returns_false_for_a_branch_that_does_not_exist() {
 fn branch_with_work(root: &Path, repo: &Path) -> PathBuf {
     bare_origin(root);
     let path = worktree_path(root);
-    add_worktree(repo, &path, BRANCH, None, false).unwrap();
+    add_worktree(repo, &path, BRANCH, WorktreeBranch::New(None)).unwrap();
     run_git(&path, &["commit", "--allow-empty", "-m", "work"]);
     path
 }
@@ -253,7 +253,7 @@ fn keeps_a_branch_of_origin_fetched_earlier_when_origin_is_gone() {
 fn force_deletes_a_branch_that_is_not_merged_and_accepts_a_missing_one() {
     let (root, repo) = test_repo();
     let path = worktree_path(root.path());
-    add_worktree(&repo, &path, BRANCH, None, false).unwrap();
+    add_worktree(&repo, &path, BRANCH, WorktreeBranch::New(None)).unwrap();
     std::fs::write(path.join("work.txt"), "work").unwrap();
     run_git(&path, &["add", "work.txt"]);
     run_git(&path, &["commit", "-m", "work"]);

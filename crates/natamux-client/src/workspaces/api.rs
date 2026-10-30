@@ -40,6 +40,7 @@ pub async fn create_workspace(
         Some(base) => {
             let input = CreateWorkspaceInput {
                 base: Some(base.to_string()),
+                branch: None,
             };
             call_with(config, Method::POST, &path, &input).await?
         }

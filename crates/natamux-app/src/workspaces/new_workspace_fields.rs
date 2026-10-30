@@ -197,6 +197,7 @@ impl NewWorkspaceDialog {
             .child(section_title("Workspace and agent"))
             .child(select_row("Project", project))
             .child(select_row("Branch from", branch))
+            .child(field("Branch", input_box(&self.branch_name, cx)))
             .child(select_row("Agent", agent))
     }
 

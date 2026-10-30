@@ -51,7 +51,7 @@ impl Drafts {
     // A task with a workspace and a new file.
     fn task_with_work(&self, fx: &Fx) -> Task {
         let task = fx.task("Fix the bug");
-        let created = self.ws.create(&task.id, None).unwrap();
+        let created = self.ws.create(&task.id, None, None).unwrap();
         fs::write(
             PathBuf::from(created.workspace.clone().unwrap()).join("fix.txt"),
             "fixed\n",
@@ -206,7 +206,7 @@ fn starts_a_new_run_after_a_failed_one_and_runs_once_per_task() {
     assert_eq!(drafts.run_count(), 2);
 
     let other = fx.task("Other");
-    let created = drafts.ws.create(&other.id, None).unwrap();
+    let created = drafts.ws.create(&other.id, None, None).unwrap();
     let other_dir = PathBuf::from(created.workspace.clone().unwrap());
     fs::write(other_dir.join("other.txt"), "x\n").unwrap();
     let asks = [
@@ -233,7 +233,7 @@ fn does_not_wait_for_a_push_and_does_not_hold_a_commit_back() {
     });
     bare_origin(fx.root.path());
     let task = fx.task("Fix the bug");
-    let created = service.create(&task.id, None).unwrap();
+    let created = service.create(&task.id, None, None).unwrap();
     let workspace = PathBuf::from(created.workspace.clone().unwrap());
     fs::write(workspace.join("fix.txt"), "fixed\n").unwrap();
     service.commit(&task.id, "First").unwrap();
@@ -265,7 +265,7 @@ fn refuses_when_nothing_changed_or_there_is_no_workspace() {
     let drafts = Drafts::new(&fx);
     let task = fx.task("Fix the bug");
     assert!(is_conflict(&drafts.ws.draft_commit_message(&task.id)));
-    drafts.ws.create(&task.id, None).unwrap();
+    drafts.ws.create(&task.id, None, None).unwrap();
     let result = drafts.ws.draft_commit_message(&task.id);
     assert!(matches!(result, Err(WorkspaceError::NothingToCommit)));
     assert_eq!(drafts.run_count(), 0);

@@ -12,7 +12,7 @@ use serde_json::{Map, Value};
 use super::task_time::parse_iso_ms;
 
 /// One short sentence for every kind of event in `EVENT_TYPES`; a test keeps the two in step.
-const EVENT_SENTENCE: [(&str, &str); 49] = [
+const EVENT_SENTENCE: [(&str, &str); 50] = [
     ("task.created", "Task created"),
     ("task.readied", "Marked ready"),
     ("task.blocked", "Blocked"),
@@ -62,6 +62,7 @@ const EVENT_SENTENCE: [(&str, &str); 49] = [
     ("workspace.failed", "Workspace failed"),
     ("agent.paused", "Agent paused while idle"),
     ("workspace.warning", "Workspace warning"),
+    ("workspace.branch-changed", "Branch changed"),
 ];
 
 /// The name of a path of a branch by its id.
@@ -150,6 +151,13 @@ fn detail_of(event: &TaskEvent) -> Option<String> {
     if event.kind == "workspace.failed" || event.kind == "workspace.warning" {
         let message = event.payload.get("message")?.as_str()?;
         return (!message.is_empty()).then(|| message.to_string());
+    }
+    if event.kind == "workspace.branch-changed" {
+        let to = event.payload.get("to")?.as_str()?;
+        return Some(match event.payload.get("from").and_then(Value::as_str) {
+            Some(from) => format!("{from} → {to}"),
+            None => to.to_string(),
+        });
     }
     if event.kind != "agent.waiting" {
         return None;

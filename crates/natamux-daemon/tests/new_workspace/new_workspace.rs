@@ -196,6 +196,42 @@ fn refuses_a_base_branch_that_does_not_exist_and_makes_no_task() {
     assert!(fx.tasks.list_tasks(None).unwrap().is_empty());
 }
 
+#[test]
+fn refuses_a_branch_name_git_does_not_take_and_makes_no_task() {
+    let fx = Fx::new();
+
+    let refused = new_workspace(
+        &fx.new_parts(),
+        NewWorkspaceInput {
+            branch: Some("bad..name".to_string()),
+            ..input("X")
+        },
+    );
+
+    assert!(
+        matches!(refused, Err(WorkspaceError::BadRequest(_))),
+        "{refused:?}"
+    );
+    assert!(fx.tasks.list_tasks(None).unwrap().is_empty());
+}
+
+#[test]
+fn makes_the_worktree_on_the_named_branch() {
+    let fx = Fx::new();
+
+    let created = new_workspace(
+        &fx.new_parts(),
+        NewWorkspaceInput {
+            branch: Some("feature-x".to_string()),
+            ..input("X")
+        },
+    )
+    .unwrap();
+    fx.settle();
+
+    assert_eq!(fx.task(&created.id).branch.as_deref(), Some("feature-x"));
+}
+
 // A branch of origin may not be fetched yet, so only the worktree can tell that it is missing.
 #[test]
 fn makes_the_task_for_a_branch_of_origin_and_fails_its_workspace_when_origin_has_none() {

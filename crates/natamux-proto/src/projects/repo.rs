@@ -100,7 +100,7 @@ impl ContextSource {
 }
 
 /// The part of a project's settings the app and the daemon read: context sources, stages, the
-/// tracker and the agents. The daemon fills the default pipeline in `stages`.
+/// tracker, the agents and git. The daemon fills the default pipeline in `stages`.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize)]
 pub struct ProjectSettings {
     #[serde(default)]
@@ -111,6 +111,17 @@ pub struct ProjectSettings {
     pub tracker: TrackerSettings,
     #[serde(default)]
     pub agents: AgentSettings,
+    #[serde(default)]
+    pub git: GitSettings,
+}
+
+/// `git.branchName`: the name of a new task branch, with `{id}` and `{slug}`
+/// (`natamux_core::workspaces::branch_name`). None: `natamux/<id>-<slug>`.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitSettings {
+    #[serde(default)]
+    pub branch_name: Option<String>,
 }
 
 /// An idle agent that no one looks at pauses after this many minutes when the project sets none.

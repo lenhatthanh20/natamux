@@ -85,6 +85,7 @@ impl Dashboard {
             agent: agent.into(),
             prompt: None,
             base,
+            branch: None,
         };
         self.write(
             source.start_agent(task_id, input),

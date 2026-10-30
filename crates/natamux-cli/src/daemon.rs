@@ -287,13 +287,14 @@ impl<T: Transport> DaemonClient<T> {
         field(body, "task", "edited task")
     }
 
-    /// A task with no workspace gets one first, from `base` when it is given.
+    /// A task with no workspace gets one first, from `base` and `branch` when they are given.
     pub async fn start_agent(
         &self,
         id: &str,
         agent: &str,
         prompt: Option<&str>,
         base: Option<&str>,
+        branch: Option<&str>,
     ) -> Result<Task, String> {
         #[derive(Serialize)]
         struct Start<'a> {
@@ -302,12 +303,15 @@ impl<T: Transport> DaemonClient<T> {
             prompt: Option<&'a str>,
             #[serde(skip_serializing_if = "Option::is_none")]
             base: Option<&'a str>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            branch: Option<&'a str>,
         }
         let path = format!("{}/agent", task_path(id));
         let start = Start {
             agent,
             prompt,
             base,
+            branch,
         };
         let body = self.call(Method::POST, &path, Some(&start)).await?;
         field(body, "task", "started agent")
@@ -365,10 +369,25 @@ impl<T: Transport> DaemonClient<T> {
         field(body, "task", "task")
     }
 
-    pub async fn create_workspace(&self, id: &str, base: Option<&str>) -> Result<Task, String> {
+    pub async fn create_workspace(
+        &self,
+        id: &str,
+        base: Option<&str>,
+        branch: Option<&str>,
+    ) -> Result<Task, String> {
         let path = format!("{}/workspace", task_path(id));
-        let base = base.map(|base| serde_json::json!({ "base": base }));
-        let body = self.call(Method::POST, &path, base.as_ref()).await?;
+        // The daemon refuses an empty JSON body, so no body when both are unset.
+        let input = (base.is_some() || branch.is_some()).then(|| {
+            let mut input = serde_json::Map::new();
+            if let Some(base) = base {
+                input.insert("base".into(), base.into());
+            }
+            if let Some(branch) = branch {
+                input.insert("branch".into(), branch.into());
+            }
+            serde_json::Value::Object(input)
+        });
+        let body = self.call(Method::POST, &path, input.as_ref()).await?;
         field(body, "task", "created workspace")
     }
 

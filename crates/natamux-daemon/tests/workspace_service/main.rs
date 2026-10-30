@@ -10,12 +10,14 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 mod base_branch;
+mod branch_sync;
 mod changes;
 mod create;
 mod diff_stats;
 mod draft;
 mod graph;
 mod jobs;
+mod named_branch;
 mod on_created;
 mod publish;
 mod remove;
@@ -245,7 +247,7 @@ impl Base {
 
     /// A task with its workspace, made by `service`.
     pub fn made_by(&self, service: &WorkspaceService, title: &str) -> Task {
-        service.create(&self.task(title).id, None).unwrap()
+        service.create(&self.task(title).id, None, None).unwrap()
     }
 
     pub fn event(&self, task_id: &str, source: &str, kind: &str) {

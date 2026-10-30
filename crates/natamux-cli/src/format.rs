@@ -61,6 +61,8 @@ Options:
   --base <branch>       workspace create, agent start: the new workspace starts from this
                         local branch, or origin/<branch> fetched first (default: main, master
                         or the default of origin)
+  --branch <name>       workspace create, agent start: the new workspace uses this branch:
+                        local, or origin/<name> tracked, or new from the base
   --yes                 workspace remove: confirm that the worktree folder is deleted
   --delete-branch       workspace remove: also delete the branch when it is merged
   --approve <hash>      repo trust: approve the commands with this hash (from the list)

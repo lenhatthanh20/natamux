@@ -268,10 +268,14 @@ fn starts_an_agent() {
                 agent: "codex".into(),
                 prompt: Some("Go".into()),
                 base: None,
+                branch: Some("ABC-12".into()),
             },
         )
     });
-    assert_eq!(sent, json!({"agent": "codex", "prompt": "Go"}));
+    assert_eq!(
+        sent,
+        json!({"agent": "codex", "prompt": "Go", "branch": "ABC-12"})
+    );
 }
 
 #[test]

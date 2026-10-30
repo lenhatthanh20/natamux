@@ -225,6 +225,19 @@ fn says_why_a_workspace_could_not_be_made() {
 }
 
 #[test]
+fn shows_the_old_and_the_new_branch_of_a_branch_change() {
+    let changed = |from: Value| {
+        let value = json!({"from": from, "to": "feature-x"});
+        stored(1, "workspace.branch-changed", "system", true, value)
+    };
+    let line = &group(&[changed(json!("natamux/t-1-fix"))])[0];
+    assert_eq!(line.sentence, "Branch changed");
+    assert_eq!(line.detail.as_deref(), Some("natamux/t-1-fix → feature-x"));
+    let first = &group(&[changed(Value::Null)])[0];
+    assert_eq!(first.detail.as_deref(), Some("feature-x"));
+}
+
+#[test]
 fn has_no_lines_without_events() {
     assert!(group(&[]).is_empty());
 }
