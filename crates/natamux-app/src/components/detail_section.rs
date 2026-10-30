@@ -1,6 +1,7 @@
 //! A section of the details panel that folds (`components/DetailSection.tsx`): a 32 px header with
 //! the chevron, the caps title, an optional count and aside, then its body while open. The open
-//! state is kept per section id in `view.json`. `field` is one label and value row.
+//! state is kept per section id in `view.json`. `field` is one label and value row; `field_fit`
+//! keeps the value (a button) as wide as its content.
 
 use std::rc::Rc;
 
@@ -106,6 +107,15 @@ impl RenderOnce for DetailSection {
 
 /// A label of 6rem and its value (`Field`).
 pub fn field(label: &'static str, value: impl IntoElement) -> impl IntoElement {
+    field_row(label, div().flex_1().min_w_0().child(value))
+}
+
+/// A `field` whose value keeps its own width: a block div stretches a button over the column.
+pub fn field_fit(label: &'static str, value: impl IntoElement) -> impl IntoElement {
+    field_row(label, h_flex().flex_1().min_w_0().child(value))
+}
+
+fn field_row(label: &'static str, value: impl IntoElement) -> impl IntoElement {
     h_flex()
         .items_start()
         .gap_2()
@@ -115,5 +125,9 @@ pub fn field(label: &'static str, value: impl IntoElement) -> impl IntoElement {
                 .flex_none()
                 .child(Label::new(label).size(LabelSize::Small).color(Color::Muted)),
         )
-        .child(div().flex_1().min_w_0().child(value))
+        .child(value)
 }
+
+#[cfg(test)]
+#[path = "detail_section_tests.rs"]
+mod tests;
