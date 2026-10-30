@@ -17,7 +17,7 @@ use crate::agents::agent_choices::agent_label;
 use crate::app::clock::now_ms;
 use crate::app::links::open_link;
 use crate::components::button_style::{action_button, quiet_button};
-use crate::components::detail_section::{DetailSection, field};
+use crate::components::detail_section::{DetailSection, field, field_fit};
 use crate::stages::overview_rules::{NO_STAGE_STARTED, overview_figures, time_bars};
 use crate::stages::progress_tab::{ProgressInput, counts, current_step, timeline};
 use crate::stages::stage_view_rules::{path_label, sent_back_count};
@@ -217,6 +217,7 @@ impl DetailsPanel {
                 let tracker = &loaded.settings.tracker;
                 tracker.kind == "github" && tracker.create_issue != "never"
             });
+        let creates = task.issue.is_none() && can_create;
         let issue: AnyElement = match &task.issue {
             Some(issue) => {
                 let url = issue.url.clone();
@@ -229,6 +230,7 @@ impl DetailsPanel {
             None if can_create => {
                 let on = self.on_command(cx);
                 action_button("create-issue", "Create issue")
+                    .size(ButtonSize::Compact)
                     .label_size(LabelSize::Small)
                     .disabled(self.shown.as_ref().is_some_and(|shown| shown.busy))
                     .on_click(move |_, window, cx| on(PanelCommand::CreateIssue, window, cx))
@@ -259,7 +261,11 @@ impl DetailsPanel {
             self.fold("context", cx),
         )
         .child(field("Context", Label::new(context).size(LabelSize::Small)))
-        .child(field("Issue", issue))
+        .child(if creates {
+            field_fit("Issue", issue).into_any_element()
+        } else {
+            field("Issue", issue).into_any_element()
+        })
         .child(field("Pull request", pr))
     }
 
