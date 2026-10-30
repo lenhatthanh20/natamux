@@ -219,7 +219,7 @@ pub fn settings_json(settings: &ProjectSettings) -> Value {
     if let Some(minutes) = settings.agents.pause_idle_after_minutes {
         agents.insert("pauseIdleAfterMinutes".into(), json!(minutes));
     }
-    json!({
+    let mut json = json!({
         "stages": stages,
         "context": { "sources": sources },
         "tracker": {
@@ -228,7 +228,11 @@ pub fn settings_json(settings: &ProjectSettings) -> Value {
             "linkInPr": settings.tracker.link_in_pr,
         },
         "agents": agents,
-    })
+    });
+    if let (Some(name), Some(map)) = (&settings.git.branch_name, json.as_object_mut()) {
+        map.insert("git".into(), json!({ "branchName": name }));
+    }
+    json
 }
 
 /// The settings of a missing or broken file: `DEFAULT_PROJECT_SETTINGS`.

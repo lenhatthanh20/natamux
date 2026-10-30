@@ -122,6 +122,33 @@ impl Store {
         self.record(updated, event)
     }
 
+    /// Records the branch the agent switched the task's worktree to. Called by the workspace
+    /// service.
+    pub fn record_branch(
+        &mut self,
+        task_id: &str,
+        from: Option<String>,
+        to: String,
+    ) -> TaskResult<Task> {
+        let task = self.get_task(task_id)?;
+        // Two callers may see the same switch; the second one logs nothing.
+        if task.branch.as_deref() == Some(to.as_str()) {
+            return Ok(task);
+        }
+        let event = self.event(
+            task_id,
+            "system",
+            "workspace.branch-changed",
+            json!({ "from": from, "to": to }),
+        );
+        let updated = Task {
+            branch: Some(to),
+            updated_at: event.at.clone(),
+            ..task
+        };
+        self.record(updated, event)
+    }
+
     /// Natamux ended the agents of the task. A stage whose agent ran or waited for you would stay
     /// so with no agent, and would show up in Needs you later.
     pub fn stop_agents(&mut self, task_id: &str) -> TaskResult<Task> {

@@ -41,7 +41,7 @@ impl Inner {
     /// Links the pull request from the task branch, when there is one. Asks GitHub only once
     /// origin has the branch.
     pub(super) fn find_one(&self, task_id: &str) -> Result<(), WatchError> {
-        let task = self.options.tasks.get_task(task_id)?;
+        let task = (self.options.sync_branch)(task_id)?;
         let Some((workspace, branch)) = candidate(&task) else {
             return Ok(());
         };
@@ -75,13 +75,20 @@ impl Inner {
             Err(error) => return self.fail(failed, &error.into()),
         };
         let mut by_repo: Vec<Candidates> = Vec::new();
-        for task in &tasks {
-            let Some((workspace, branch)) = candidate(task) else {
-                continue;
-            };
-            if locked(&self.state).finding.contains(&task.id) {
+        for listed in &tasks {
+            if candidate(listed).is_none() || locked(&self.state).finding.contains(&listed.id) {
                 continue;
             }
+            let task = match (self.options.sync_branch)(&listed.id) {
+                Ok(task) => task,
+                Err(error) => {
+                    self.fail(failed, &error.into());
+                    continue;
+                }
+            };
+            let Some((workspace, branch)) = candidate(&task) else {
+                continue;
+            };
             match (self.has_remote_branch)(Path::new(workspace), branch) {
                 Err(error) => self.fail(failed, &WatchError::Git(error)),
                 Ok(false) => {

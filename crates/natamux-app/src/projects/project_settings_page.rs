@@ -9,6 +9,7 @@ use gpui::{Entity, EventEmitter, FocusHandle, Focusable, ScrollHandle, Subscript
 use natamux_proto::projects::repo::{LoadedSettings, SkillList};
 use ui::{Tooltip, prelude::*};
 
+use super::branch_name_field::BranchNameField;
 use super::idle_pause_field::IdlePauseField;
 use super::repo_trust_dialog::row::RepoTrustRow;
 use super::send_backs_field::SendBacksField;
@@ -42,6 +43,7 @@ pub(super) struct StagesTab {
     was_picking: bool,
     pub(super) tabs: SettingsTabs,
     send_backs: Entity<SendBacksField>,
+    branch_name: Entity<BranchNameField>,
     idle_pause: Entity<IdlePauseField>,
 }
 
@@ -166,6 +168,7 @@ impl ProjectSettingsPage {
         ];
         let tabs = SettingsTabs::new(&editor, window, cx);
         let send_backs = cx.new(|cx| SendBacksField::new(editor.clone(), window, cx));
+        let branch_name = cx.new(|cx| BranchNameField::new(editor.clone(), window, cx));
         let idle_pause = cx.new(|cx| IdlePauseField::new(editor.clone(), window, cx));
         self.stages = Some(StagesTab {
             editor,
@@ -174,6 +177,7 @@ impl ProjectSettingsPage {
             was_picking: false,
             tabs,
             send_backs,
+            branch_name,
             idle_pause,
         });
     }
@@ -294,7 +298,8 @@ impl ProjectSettingsPage {
             .gap_3()
             .child(pipeline_preview(&stages.editor, &self.preview_scroll, cx))
             .child(stages.send_backs.clone())
-            .child(stages.idle_pause.clone());
+            .child(stages.idle_pause.clone())
+            .child(stages.branch_name.clone());
         [top.into_any_element(), parts.into_any_element()]
     }
 
@@ -330,6 +335,7 @@ impl ProjectSettingsPage {
             if shown == SettingsTab::Stages {
                 ring.push(stages.send_backs.read(cx).stop(cx));
                 ring.push(stages.idle_pause.read(cx).stop(cx));
+                ring.push(stages.branch_name.read(cx).stop(cx));
                 ring.extend(stages.list.read(cx).tab_stops());
                 ring.extend(stages.details.read(cx).tab_stops(cx));
             }

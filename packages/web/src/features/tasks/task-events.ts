@@ -53,6 +53,7 @@ const EVENT_SENTENCE: Record<EventType, string> = {
   'workspace.failed': 'Workspace failed',
   'agent.paused': 'Agent paused while idle',
   'workspace.warning': 'Workspace warning',
+  'workspace.branch-changed': 'Branch changed',
 }
 
 // A CI send back can go to the stage it came from, so "an earlier stage" would be wrong for it.

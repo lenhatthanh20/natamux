@@ -207,6 +207,23 @@ fn reads_the_send_backs_field_as_no_limit_or_a_whole_number() {
 }
 
 #[test]
+fn reads_the_branch_name_field_as_empty_or_a_pattern_without_unknown_placeholders() {
+    assert_eq!(branch_name_field("  "), Ok(None));
+    assert_eq!(
+        branch_name_field(" {id}-{slug} "),
+        Ok(Some("{id}-{slug}".to_string()))
+    );
+    assert_eq!(
+        branch_name_field("a/{title}"),
+        Err("Unknown placeholder {title}".to_string())
+    );
+    assert_eq!(
+        branch_name_field(&"a".repeat(256)),
+        Err("Too long".to_string())
+    );
+}
+
+#[test]
 fn reads_the_idle_pause_field_as_the_default_off_or_5_to_1440_minutes() {
     assert_eq!(idle_pause_field(""), Ok(None));
     assert_eq!(idle_pause_field("0"), Ok(Some(0)));

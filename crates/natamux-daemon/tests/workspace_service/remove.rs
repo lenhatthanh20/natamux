@@ -25,7 +25,7 @@ fn merged() -> PullRequestStatus {
 fn removes_the_worktree_and_the_branch_when_it_is_merged() {
     let fx = Fx::new();
     let task = fx.task("Fix the bug");
-    let created = fx.ws.create(&task.id, None).unwrap();
+    let created = fx.ws.create(&task.id, None, None).unwrap();
 
     let result = fx.ws.remove(&task.id, true).unwrap();
 
@@ -44,7 +44,7 @@ fn removes_the_worktree_and_the_branch_when_it_is_merged() {
 fn keeps_the_branch_when_asked_to() {
     let fx = Fx::new();
     let task = fx.task("Fix the bug");
-    fx.ws.create(&task.id, None).unwrap();
+    fx.ws.create(&task.id, None, None).unwrap();
 
     let result = fx.ws.remove(&task.id, false).unwrap();
 
@@ -57,7 +57,7 @@ fn keeps_the_branch_when_asked_to() {
 fn keeps_a_branch_that_has_commits_that_are_not_merged() {
     let fx = Fx::new();
     let task = fx.task("Fix the bug");
-    let created = fx.ws.create(&task.id, None).unwrap();
+    let created = fx.ws.create(&task.id, None, None).unwrap();
     run_git(
         &path_of(&created),
         &["commit", "--allow-empty", "-m", "work"],
@@ -76,7 +76,7 @@ fn deletes_the_branch_of_a_merged_pull_request_once_origin_has_all_of_it() {
     let fx = Fx::new();
     bare_origin(fx.root.path());
     let task = fx.task("Fix the bug");
-    let created = fx.ws.create(&task.id, None).unwrap();
+    let created = fx.ws.create(&task.id, None, None).unwrap();
     let workspace = path_of(&created);
     run_git(&workspace, &["commit", "--allow-empty", "-m", "work"]);
     run_git(&workspace, &["push", "origin", BRANCH]);
@@ -95,7 +95,7 @@ fn keeps_the_branch_of_a_merged_pull_request_that_has_a_commit_origin_lacks() {
     let fx = Fx::new();
     bare_origin(fx.root.path());
     let task = fx.task("Fix the bug");
-    let created = fx.ws.create(&task.id, None).unwrap();
+    let created = fx.ws.create(&task.id, None, None).unwrap();
     let workspace = path_of(&created);
     run_git(&workspace, &["commit", "--allow-empty", "-m", "work"]);
     run_git(&workspace, &["push", "origin", BRANCH]);
@@ -117,7 +117,7 @@ fn keeps_the_branch_of_a_merged_pull_request_that_has_a_commit_origin_lacks() {
 fn refuses_a_worktree_with_changes_not_committed_before_ending_its_shells() {
     let fx = Fx::new();
     let task = fx.task("Fix the bug");
-    let created = fx.ws.create(&task.id, None).unwrap();
+    let created = fx.ws.create(&task.id, None, None).unwrap();
     let workspace = path_of(&created);
     fs::write(workspace.join("notes.txt"), "work in progress").unwrap();
 
@@ -148,7 +148,7 @@ fn refuses_a_worktree_with_changes_not_committed_before_ending_its_shells() {
 fn makes_the_stage_of_the_agent_it_ends_wait_to_start_again() {
     let fx = Fx::new();
     let task = fx.task("Fix the bug");
-    fx.ws.create(&task.id, None).unwrap();
+    fx.ws.create(&task.id, None, None).unwrap();
     fx.start_agent(&task.id);
 
     let result = fx.ws.remove(&task.id, false).unwrap();
@@ -166,7 +166,7 @@ fn makes_the_stage_of_the_agent_it_ends_wait_to_start_again() {
 fn also_stops_an_agent_that_ended_its_turn_while_the_worktree_was_removed() {
     let fx = Fx::new();
     let task = fx.task("Fix the bug");
-    fx.ws.create(&task.id, None).unwrap();
+    fx.ws.create(&task.id, None, None).unwrap();
     fx.start_agent(&task.id);
     let tasks = fx.tasks.clone();
     // The agent's Stop hook as its shell ends.
@@ -186,7 +186,7 @@ fn also_stops_an_agent_that_ended_its_turn_while_the_worktree_was_removed() {
 fn makes_a_stage_whose_agent_waited_for_you_wait_to_start_again() {
     let fx = Fx::new();
     let task = fx.task("Fix the bug");
-    fx.ws.create(&task.id, None).unwrap();
+    fx.ws.create(&task.id, None, None).unwrap();
     fx.start_agent(&task.id);
     fx.event(&task.id, "agent", "agent.asked");
 
@@ -199,7 +199,7 @@ fn makes_a_stage_whose_agent_waited_for_you_wait_to_start_again() {
 fn keeps_a_task_that_is(to: &str, state: TaskState) {
     let fx = Fx::new();
     let task = fx.task("Fix the bug");
-    fx.ws.create(&task.id, None).unwrap();
+    fx.ws.create(&task.id, None, None).unwrap();
     fx.override_state(&task.id, to);
 
     let result = fx.ws.remove(&task.id, false).unwrap();
@@ -230,7 +230,7 @@ fn keeps_a_task_that_is_done() {
 fn keeps_the_state_of_a_running_task_when_the_removal_is_refused() {
     let fx = Fx::new();
     let task = fx.task("Fix the bug");
-    let created = fx.ws.create(&task.id, None).unwrap();
+    let created = fx.ws.create(&task.id, None, None).unwrap();
     fx.start_agent(&task.id);
     fs::write(path_of(&created).join("notes.txt"), "work in progress").unwrap();
 
@@ -245,7 +245,7 @@ fn keeps_the_state_of_a_running_task_when_the_removal_is_refused() {
 fn refuses_a_worktree_whose_status_git_cannot_read_before_ending_its_shells() {
     let fx = Fx::new();
     let task = fx.task("Fix the bug");
-    let created = fx.ws.create(&task.id, None).unwrap();
+    let created = fx.ws.create(&task.id, None, None).unwrap();
     let workspace = path_of(&created);
     // Windows marks .git hidden, and a hidden file cannot be opened for writing.
     fs::remove_file(workspace.join(".git")).unwrap();
@@ -264,7 +264,7 @@ fn refuses_a_worktree_whose_status_git_cannot_read_before_ending_its_shells() {
 fn stops_the_agent_when_git_refuses_the_worktree_after_its_shells_ended() {
     let fx = Fx::new();
     let task = fx.task("Fix the bug");
-    let created = fx.ws.create(&task.id, None).unwrap();
+    let created = fx.ws.create(&task.id, None, None).unwrap();
     fx.start_agent(&task.id);
     run_git(
         &fx.repo,
@@ -287,7 +287,7 @@ fn removes_a_clean_worktree_with_a_submodule_checked_out() {
     run_git(&lib, &["init", "-b", "main"]);
     run_git(&lib, &["commit", "--allow-empty", "-m", "lib"]);
     let task = fx.task("Fix the bug");
-    let path = path_of(&fx.ws.create(&task.id, None).unwrap());
+    let path = path_of(&fx.ws.create(&task.id, None, None).unwrap());
     let add = [
         "-c",
         "protocol.file.allow=always",
@@ -309,11 +309,11 @@ fn removes_a_clean_worktree_with_a_submodule_checked_out() {
 fn removes_a_workspace_made_again_the_same_way() {
     let fx = Fx::new();
     let task = fx.task("Fix the bug");
-    fx.ws.create(&task.id, None).unwrap();
+    fx.ws.create(&task.id, None, None).unwrap();
     fx.start_agent(&task.id);
     fx.ws.remove(&task.id, false).unwrap();
 
-    let again = fx.ws.create(&task.id, None).unwrap();
+    let again = fx.ws.create(&task.id, None, None).unwrap();
     assert_eq!(again.state, TaskState::Ready);
     assert_eq!(
         again.workspace,
@@ -337,7 +337,7 @@ fn removes_a_workspace_made_again_the_same_way() {
 fn keeps_a_stage_that_waits_for_approval() {
     let fx = Fx::new();
     let task = fx.task("Fix the bug");
-    fx.ws.create(&task.id, None).unwrap();
+    fx.ws.create(&task.id, None, None).unwrap();
     fx.override_state(&task.id, "review");
 
     let result = fx.ws.remove(&task.id, false).unwrap();
@@ -353,7 +353,7 @@ fn keeps_a_stage_that_waits_for_approval() {
 fn ends_the_shells_once_and_drops_the_git_entry_of_a_worktree_that_is_there() {
     let fx = Fx::new();
     let task = fx.task("Fix the bug");
-    let path = path_of(&fx.ws.create(&task.id, None).unwrap());
+    let path = path_of(&fx.ws.create(&task.id, None, None).unwrap());
 
     let result = fx.ws.remove(&task.id, false).unwrap();
 
@@ -374,7 +374,7 @@ fn ends_the_shells_once_and_drops_the_git_entry_of_a_worktree_that_is_there() {
 fn removes_a_worktree_that_has_ignored_files_only() {
     let fx = Fx::new();
     let task = fx.task("Fix the bug");
-    let path = path_of(&fx.ws.create(&task.id, None).unwrap());
+    let path = path_of(&fx.ws.create(&task.id, None, None).unwrap());
     fs::write(path.join(".gitignore"), "*.log\n").unwrap();
     run_git(&path, &["add", ".gitignore"]);
     run_git(&path, &["commit", "-m", "ignore logs"]);
@@ -390,7 +390,7 @@ fn removes_a_worktree_that_has_ignored_files_only() {
 fn passes_on_a_git_failure_for_a_locked_worktree_and_leaves_the_task_as_it_was() {
     let fx = Fx::new();
     let task = fx.task("Fix the bug");
-    let path = path_of(&fx.ws.create(&task.id, None).unwrap());
+    let path = path_of(&fx.ws.create(&task.id, None, None).unwrap());
     run_git(&fx.repo, &["worktree", "lock", path_text(&path)]);
 
     let text = error_text(fx.ws.remove(&task.id, false));
@@ -412,10 +412,10 @@ fn passes_on_a_git_failure_for_a_locked_worktree_and_leaves_the_task_as_it_was()
 fn lets_the_task_get_a_new_workspace_after_the_old_one_is_removed() {
     let fx = Fx::new();
     let task = fx.task("Fix the bug");
-    fx.ws.create(&task.id, None).unwrap();
+    fx.ws.create(&task.id, None, None).unwrap();
     fx.ws.remove(&task.id, true).unwrap();
 
-    let again = fx.ws.create(&task.id, None).unwrap();
+    let again = fx.ws.create(&task.id, None, None).unwrap();
 
     assert!(again.workspace.is_some());
 }
@@ -424,14 +424,14 @@ fn lets_the_task_get_a_new_workspace_after_the_old_one_is_removed() {
 fn goes_on_with_the_branch_that_was_kept_when_the_task_gets_a_new_workspace() {
     let fx = Fx::new();
     let task = fx.task("Fix the bug");
-    let created = fx.ws.create(&task.id, None).unwrap();
+    let created = fx.ws.create(&task.id, None, None).unwrap();
     run_git(
         &path_of(&created),
         &["commit", "--allow-empty", "-m", "work"],
     );
     fx.ws.remove(&task.id, true).unwrap();
 
-    let again = fx.ws.create(&task.id, None).unwrap();
+    let again = fx.ws.create(&task.id, None, None).unwrap();
 
     assert_eq!(again.branch.as_deref(), Some(BRANCH));
     assert_eq!(
@@ -444,7 +444,7 @@ fn goes_on_with_the_branch_that_was_kept_when_the_task_gets_a_new_workspace() {
 fn deletes_the_branch_of_an_unfinished_ci_task_and_only_logs_a_failed_ci_branch_delete() {
     let fx = Fx::new();
     let task = fx.task("Fix the bug");
-    fx.ws.create(&task.id, None).unwrap();
+    fx.ws.create(&task.id, None, None).unwrap();
     let removed = fx.ws.remove(&task.id, false).unwrap().task;
     assert!(fx.branch_exists(BRANCH));
     let used_ci = Task {
@@ -466,7 +466,7 @@ fn deletes_the_branch_of_an_unfinished_ci_task_and_only_logs_a_failed_ci_branch_
 fn goes_on_when_the_project_of_a_branch_only_task_is_gone() {
     let fx = Fx::new();
     let task = fx.task("Fix the bug");
-    fx.ws.create(&task.id, None).unwrap();
+    fx.ws.create(&task.id, None, None).unwrap();
     let removed = fx.ws.remove(&task.id, false).unwrap().task;
     let orphan = Task {
         repo: Some("removed-project".into()),

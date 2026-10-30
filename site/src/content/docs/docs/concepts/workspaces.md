@@ -67,6 +67,33 @@ The new branch starts from the base as its remote has it now:
 
 If a task already has a branch from an earlier workspace, and the branch still exists, Natamux uses that branch again. The work of the task carries on.
 
+### Branch name
+
+By default, the branch is `natamux/<id>-<slug>`, such as `natamux/abc-12-fix-login`. You can change it in three ways. The first that applies wins:
+
+1. A branch the task kept from an earlier workspace, as above.
+2. The name you give for this task.
+3. The project pattern.
+
+The project pattern is `git.branchName` in `.natamux.json`. It can use `{id}` and `{slug}`. For example, `{id}` gives `ABC-12`. See [Configuration](/docs/reference/configuration/#git).
+
+To name the branch of one task:
+
+- In **Start a task**, fill **Branch**. While you do not edit it, it follows the project pattern and the key at the start of the title (`ABC-12: Fix it`). A title without a key leaves it empty, and the placeholder shows the pattern. Natamux fills the name after the task is made.
+- With the CLI, use `--branch <name>`. With the API, send `branch`.
+
+A name you give, or the pattern, can point to a branch that exists:
+
+| Where the branch is | What happens |
+|---|---|
+| Local | The workspace checks it out as it is. The base is ignored. |
+| Only on `origin` | Natamux makes a local branch that tracks `origin/<name>` and checks it out. The base is ignored. |
+| Nowhere | A new branch starts from the base. |
+
+When a local branch is checked out in another worktree, the workspace fails with "Branch <name> is checked out in <path>". Pick another name, or free the branch first.
+
+Natamux follows the branch the task really uses. When an agent switches the worktree to another branch, the task takes that branch. The pull request lookup, the CI check and the branch delete use it. Natamux never takes the default branch this way. The first branch is not deleted.
+
 ### Worktrees folder
 
 By default, worktrees go in `worktrees/` inside the data folder (`.natamux/worktrees`). To use another folder, set `NATAMUX_WORKTREES_DIR` when you start the daemon. There is one subfolder per task id. See [Environment variables](/docs/reference/environment-variables/).

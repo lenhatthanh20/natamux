@@ -125,7 +125,7 @@ fn says_nothing_about_a_task_deleted_while_it_waited_for_the_next_interval() {
 fn follows_each_change_made_here_such_as_a_commit() {
     let fx = Fx::new();
     let task = fx.task("Fix the bug");
-    let created = fx.ws.create(&task.id, None).unwrap();
+    let created = fx.ws.create(&task.id, None, None).unwrap();
     fs::write(
         PathBuf::from(created.workspace.unwrap()).join("notes.txt"),
         "a\n",

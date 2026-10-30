@@ -40,6 +40,8 @@ pub type CwdOf = Arc<dyn Fn(Option<&str>) -> String + Send + Sync>;
 /// Whether origin has the branch of a worktree: no network.
 pub type HasRemoteBranch = Arc<dyn Fn(&Path, &str) -> Result<bool, String> + Send + Sync>;
 pub type Log = Arc<dyn Fn(&str) + Send + Sync>;
+/// The task, after its branch follows the one checked out in its worktree.
+pub type SyncBranch = Arc<dyn Fn(&str) -> Result<Task, TaskError> + Send + Sync>;
 
 #[derive(Debug)]
 pub enum WatchError {
@@ -119,6 +121,8 @@ pub struct PullRequestWatcherOptions {
     pub bus: Option<Arc<EventBus>>,
     /// Default: the remote-tracking ref of `natamux_git::graph::has_remote_branch`.
     pub has_remote_branch: Option<HasRemoteBranch>,
+    /// Asked before a task's pull request is looked for. Default: the task as stored.
+    pub sync_branch: SyncBranch,
 }
 
 impl PullRequestWatcherOptions {
@@ -128,6 +132,7 @@ impl PullRequestWatcherOptions {
         gh: RunGh,
         scheduler: Arc<Scheduler>,
     ) -> PullRequestWatcherOptions {
+        let reading = tasks.clone();
         PullRequestWatcherOptions {
             tasks,
             cwd_of,
@@ -137,6 +142,7 @@ impl PullRequestWatcherOptions {
             log: None,
             bus: None,
             has_remote_branch: None,
+            sync_branch: Arc::new(move |task_id| reading.get_task(task_id)),
         }
     }
 }

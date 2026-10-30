@@ -162,7 +162,7 @@ impl Root {
                     .child(self.render_main(cx)),
             )
             .when(details == Some(DetailsMode::Docked), |this| {
-                this.child(self.render_docked_details(cx))
+                this.child(self.render_docked_details(sidebar_width, rail))
             })
             .when(rail, |this| this.child(self.rail.clone()))
             .when(

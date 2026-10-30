@@ -62,6 +62,7 @@ pub enum Command {
         agent: String,
         prompt: Option<String>,
         base: Option<String>,
+        branch: Option<String>,
         json: bool,
     },
     /// For an agent without hooks: it waits for the user. Without --task, NATAMUX_TASK_ID.
@@ -125,6 +126,7 @@ pub enum Command {
     WorkspaceCreate {
         id: String,
         base: Option<String>,
+        branch: Option<String>,
         json: bool,
     },
     WorkspaceRemove {
@@ -346,6 +348,7 @@ fn agent_command(line: &Line) -> Result<Command, UsageError> {
             .to_string(),
         prompt: line.text("prompt"),
         base: line.text("base"),
+        branch: line.text("branch"),
         json: line.json,
     })
 }
@@ -376,6 +379,7 @@ fn workspace_command(line: &Line) -> Result<Command, UsageError> {
         return Ok(Command::WorkspaceCreate {
             id,
             base: line.text("base"),
+            branch: line.text("branch"),
             json: line.json,
         });
     }

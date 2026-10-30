@@ -25,7 +25,7 @@ fn archived(fx: &Fx, task_id: &str) -> String {
 // A task with a workspace, an archived `spec.md` (v1), and a `spec.md` in the stage folder.
 fn with_spec(fx: &Fx, service: &WorkspaceService, text: &str) -> (Task, PathBuf) {
     let task = fx.task("Fix the bug");
-    let workspace = path_of(&service.create(&task.id, None).unwrap());
+    let workspace = path_of(&service.create(&task.id, None, None).unwrap());
     exclude_stage_dir(&workspace).unwrap();
     fs::create_dir_all(archive_dir(&fx.data, &task.id)).unwrap();
     fs::write(archive_dir(&fx.data, &task.id).join("spec.md"), "spec v1\n").unwrap();
@@ -96,7 +96,7 @@ fn stage_files_keeps_the_worktree_and_stops_the_agent_when_the_archive_cannot_be
 fn clears_a_workspace_whose_folder_was_deleted_and_pruned() {
     let fx = Fx::new();
     let task = fx.task("Fix the bug");
-    let created = fx.ws.create(&task.id, None).unwrap();
+    let created = fx.ws.create(&task.id, None, None).unwrap();
     delete_folder(&fx, &path_of(&created), true);
 
     let result = fx.ws.remove(&task.id, false).unwrap();
@@ -115,7 +115,7 @@ fn clears_a_workspace_whose_folder_was_deleted_and_pruned() {
 fn clears_a_deleted_workspace_when_its_parent_folder_is_gone_too() {
     let fx = Fx::new();
     let task = fx.task("Fix the bug");
-    fx.ws.create(&task.id, None).unwrap();
+    fx.ws.create(&task.id, None, None).unwrap();
     fs::remove_dir_all(&fx.worktrees).unwrap();
     run_git(&fx.repo, &["worktree", "prune"]);
 
@@ -132,7 +132,7 @@ fn clears_a_deleted_workspace_when_its_parent_folder_is_gone_too() {
 fn refuses_a_second_remove_after_a_deleted_folder_was_cleared() {
     let fx = Fx::new();
     let task = fx.task("Fix the bug");
-    let created = fx.ws.create(&task.id, None).unwrap();
+    let created = fx.ws.create(&task.id, None, None).unwrap();
     delete_folder(&fx, &path_of(&created), true);
     fx.ws.remove(&task.id, false).unwrap();
 
@@ -148,7 +148,7 @@ fn refuses_a_second_remove_after_a_deleted_folder_was_cleared() {
 fn clears_a_deleted_folder_whose_branch_was_deleted_by_hand_too(delete_branch: bool) {
     let fx = Fx::new();
     let task = fx.task("Fix the bug");
-    let created = fx.ws.create(&task.id, None).unwrap();
+    let created = fx.ws.create(&task.id, None, None).unwrap();
     delete_folder(&fx, &path_of(&created), true);
     run_git(&fx.repo, &["branch", "-D", BRANCH]);
 
@@ -176,7 +176,7 @@ fn clears_a_deleted_folder_whose_branch_was_deleted_by_hand_too_delete_branch_tr
 fn clears_the_git_entry_of_a_workspace_whose_folder_was_deleted() {
     let fx = Fx::new();
     let task = fx.task("Fix the bug");
-    let path = path_of(&fx.ws.create(&task.id, None).unwrap());
+    let path = path_of(&fx.ws.create(&task.id, None, None).unwrap());
     delete_folder(&fx, &path, false);
     assert_eq!(
         worktree_state(&fx.repo, &path).unwrap(),
@@ -203,7 +203,7 @@ fn clears_the_git_entry_of_a_deleted_folder_whose_path_has_a_space() {
     let trees = fx.root.path().join("Application Support").join("worktrees");
     let service = fx.build(|options| options.worktrees_dir = trees);
     let task = fx.task("Fix the bug");
-    let path = path_of(&service.create(&task.id, None).unwrap());
+    let path = path_of(&service.create(&task.id, None, None).unwrap());
     delete_folder(&fx, &path, false);
     assert_eq!(
         worktree_state(&fx.repo, &path).unwrap(),
@@ -223,8 +223,8 @@ fn leaves_the_worktree_of_another_task_alone_after_a_deleted_folder(pruned: bool
     let fx = Fx::new();
     let task = fx.task("Fix the bug");
     let other = fx.task("Other work");
-    let created = fx.ws.create(&task.id, None).unwrap();
-    let other_path = path_of(&fx.ws.create(&other.id, None).unwrap());
+    let created = fx.ws.create(&task.id, None, None).unwrap();
+    let other_path = path_of(&fx.ws.create(&other.id, None, None).unwrap());
     fs::write(other_path.join("notes.txt"), "work in progress").unwrap();
     delete_folder(&fx, &path_of(&created), pruned);
 
@@ -255,7 +255,7 @@ fn leaves_the_worktree_of_another_task_alone_after_a_deleted_folder_still_listed
 fn refuses_a_locked_entry_of_a_deleted_folder_and_leaves_the_task_as_it_was() {
     let fx = Fx::new();
     let task = fx.task("Fix the bug");
-    let path = path_of(&fx.ws.create(&task.id, None).unwrap());
+    let path = path_of(&fx.ws.create(&task.id, None, None).unwrap());
     run_git(&fx.repo, &["worktree", "lock", path_text(&path)]);
     delete_folder(&fx, &path, false);
 
@@ -276,7 +276,7 @@ fn refuses_a_locked_entry_of_a_deleted_folder_and_leaves_the_task_as_it_was() {
 fn deletes_a_merged_branch_of_a_deleted_folder(pruned: bool) {
     let fx = Fx::new();
     let task = fx.task("Fix the bug");
-    let created = fx.ws.create(&task.id, None).unwrap();
+    let created = fx.ws.create(&task.id, None, None).unwrap();
     delete_folder(&fx, &path_of(&created), pruned);
 
     let result = fx.ws.remove(&task.id, true).unwrap();
@@ -304,7 +304,7 @@ fn deletes_a_merged_branch_of_a_deleted_folder_still_listed_by_git() {
 fn keeps_the_branch_of_a_deleted_folder_that_has_commits_not_merged(pruned: bool) {
     let fx = Fx::new();
     let task = fx.task("Fix the bug");
-    let created = fx.ws.create(&task.id, None).unwrap();
+    let created = fx.ws.create(&task.id, None, None).unwrap();
     run_git(
         &path_of(&created),
         &["commit", "--allow-empty", "-m", "work"],
@@ -339,8 +339,8 @@ fn ends_the_shells_of_a_deleted_folder_once_before_the_task_is_cleared(pruned: b
     let fx = Fx::new();
     let task = fx.task("Fix the bug");
     let other = fx.task("Other work");
-    let created = fx.ws.create(&task.id, None).unwrap();
-    fx.ws.create(&other.id, None).unwrap();
+    let created = fx.ws.create(&task.id, None, None).unwrap();
+    fx.ws.create(&other.id, None, None).unwrap();
     delete_folder(&fx, &path_of(&created), pruned);
 
     fx.ws.remove(&task.id, false).unwrap();
@@ -362,7 +362,7 @@ fn ends_the_shells_of_a_deleted_folder_once_before_the_task_is_cleared_still_lis
 fn makes_a_new_workspace_at_the_same_path_after_a_deleted_folder(pruned: bool) {
     let fx = Fx::new();
     let task = fx.task("Fix the bug");
-    let created = fx.ws.create(&task.id, None).unwrap();
+    let created = fx.ws.create(&task.id, None, None).unwrap();
     run_git(
         &path_of(&created),
         &["commit", "--allow-empty", "-m", "work"],
@@ -370,7 +370,7 @@ fn makes_a_new_workspace_at_the_same_path_after_a_deleted_folder(pruned: bool) {
     delete_folder(&fx, &path_of(&created), pruned);
     fx.ws.remove(&task.id, true).unwrap();
 
-    let again = fx.ws.create(&task.id, None).unwrap();
+    let again = fx.ws.create(&task.id, None, None).unwrap();
 
     assert_eq!(again.workspace, created.workspace);
     assert_eq!(again.branch.as_deref(), Some(BRANCH));
@@ -395,11 +395,11 @@ fn makes_a_new_workspace_at_the_same_path_after_a_deleted_folder_still_listed_by
 fn goes_on_with_the_kept_branch_when_a_deleted_folder_is_cleared_without_its_branch(pruned: bool) {
     let fx = Fx::new();
     let task = fx.task("Fix the bug");
-    let created = fx.ws.create(&task.id, None).unwrap();
+    let created = fx.ws.create(&task.id, None, None).unwrap();
     delete_folder(&fx, &path_of(&created), pruned);
     fx.ws.remove(&task.id, false).unwrap();
 
-    let again = fx.ws.create(&task.id, None).unwrap();
+    let again = fx.ws.create(&task.id, None, None).unwrap();
 
     assert_eq!(again.workspace, created.workspace);
     assert_eq!(again.branch.as_deref(), Some(BRANCH));
@@ -422,11 +422,11 @@ fn goes_on_with_the_kept_branch_when_a_deleted_folder_is_cleared_without_its_bra
 fn makes_a_new_branch_after_a_deleted_folder_whose_merged_branch_was_deleted(pruned: bool) {
     let fx = Fx::new();
     let task = fx.task("Fix the bug");
-    let created = fx.ws.create(&task.id, None).unwrap();
+    let created = fx.ws.create(&task.id, None, None).unwrap();
     delete_folder(&fx, &path_of(&created), pruned);
     fx.ws.remove(&task.id, true).unwrap();
 
-    let again = fx.ws.create(&task.id, None).unwrap();
+    let again = fx.ws.create(&task.id, None, None).unwrap();
 
     assert_eq!(again.workspace, created.workspace);
     assert_eq!(again.branch.as_deref(), Some(BRANCH));

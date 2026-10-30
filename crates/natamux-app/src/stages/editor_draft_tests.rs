@@ -251,6 +251,24 @@ fn drops_agents_when_no_limit_leaves_it_empty() {
 }
 
 #[test]
+fn reads_and_writes_the_branch_name_and_drops_an_empty_git() {
+    let start = object(json!({ "git": { "other": 1 }, "team": "web" }));
+    assert_eq!(branch_name_of(&start), None);
+    let set = with_branch_name(&start, Some("{id}"));
+    assert_eq!(branch_name_of(&set).as_deref(), Some("{id}"));
+    assert_eq!(
+        Value::Object(set.clone()),
+        json!({ "git": { "other": 1, "branchName": "{id}" }, "team": "web" })
+    );
+    assert_eq!(with_branch_name(&set, None), start);
+    let bare = object(json!({ "team": "web" }));
+    let only = with_branch_name(&bare, Some("{id}"));
+    assert_eq!(with_branch_name(&only, None), bare);
+    let bad = object(json!({ "git": { "branchName": 3 } }));
+    assert_eq!(branch_name_of(&bad), None);
+}
+
+#[test]
 fn reads_and_writes_the_idle_pause_minutes_beside_the_send_backs() {
     let start = object(json!({ "agents": { "maxSendBacks": 2 } }));
     assert_eq!(pause_idle_of(&start), None);

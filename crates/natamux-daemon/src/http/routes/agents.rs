@@ -21,6 +21,7 @@ use crate::http::errors::{
     Answer, hook_error, internal_error, json_answer, stage_error, zod_answer,
 };
 use crate::http::routes::stages::stage_answer;
+use crate::http::routes::workspaces::branch_field;
 use crate::http::server::{AppState, query_value};
 use crate::stages::errors::{StageError, StageResult, action};
 use crate::terminals::limits::MAIN_TERMINAL;
@@ -38,9 +39,9 @@ fn to_value<T: serde::Serialize>(value: &T) -> Value {
     serde_json::to_value(value).unwrap_or(Value::Null)
 }
 
-type StartBody = (String, Option<String>, Option<String>);
+type StartBody = (String, Option<String>, Option<String>, Option<String>);
 
-/// `startAgentBodySchema`: the agent, and a prompt and a base branch, both optional.
+/// `startAgentBodySchema`: the agent, and a prompt, a base and a branch, all optional.
 fn start_body(value: Option<&Value>) -> Result<StartBody, ZodError> {
     let mut issues = Issues::default();
     let mut parsed = None;
@@ -59,7 +60,7 @@ fn start_body(value: Option<&Value>) -> Result<StartBody, ZodError> {
                 &mut issues,
             )
         });
-        // The base branch of a new workspace, for a task that has none.
+        // The base and the branch of a new workspace, for a task that has none.
         let base = map.get("base").and_then(|base| {
             string(
                 Some(base),
@@ -68,7 +69,8 @@ fn start_body(value: Option<&Value>) -> Result<StartBody, ZodError> {
                 &mut issues,
             )
         });
-        parsed = agent.map(|agent| (agent, prompt.flatten(), base));
+        let branch = branch_field(map, &mut issues);
+        parsed = agent.map(|agent| (agent, prompt.flatten(), base, branch));
     }
     issues.into_result(parsed)
 }
@@ -198,7 +200,7 @@ pub async fn start_agent(state: Arc<AppState>, id: String, body: Option<Value>) 
         Ok(id) => id,
         Err(error) => return zod_answer(&error),
     };
-    let (agent, prompt, base) = match start_body(body.as_ref()) {
+    let (agent, prompt, base, branch) = match start_body(body.as_ref()) {
         Ok(parsed) => parsed,
         Err(error) => return zod_answer(&error),
     };
@@ -210,7 +212,7 @@ pub async fn start_agent(state: Arc<AppState>, id: String, body: Option<Value>) 
         let workspaces = Arc::clone(&state.workspaces);
         let make = || {
             workspaces
-                .create(&id, base.as_deref())
+                .create(&id, base.as_deref(), branch.as_deref())
                 .map(|_| ())
                 .map_err(workspace_failure)
         };

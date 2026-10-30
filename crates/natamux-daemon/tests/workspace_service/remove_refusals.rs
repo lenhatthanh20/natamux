@@ -18,7 +18,7 @@ fn refuses_a_task_that_has_no_workspace() {
 fn refuses_a_path_that_is_not_a_worktree(make: impl Fn(&Fx, &Path)) {
     let fx = Fx::new();
     let task = fx.task("Fix the bug");
-    let created = fx.ws.create(&task.id, None).unwrap();
+    let created = fx.ws.create(&task.id, None, None).unwrap();
     let path = path_of(&created);
     delete_folder(&fx, &path, true);
     make(&fx, &path);
@@ -97,7 +97,7 @@ fn stage_file(path: &Path) {
 fn refuses_a_worktree_with_changes(delete_branch: bool, change: fn(&Path)) {
     let fx = Fx::new();
     let task = fx.task("Fix the bug");
-    let path = path_of(&fx.ws.create(&task.id, None).unwrap());
+    let path = path_of(&fx.ws.create(&task.id, None, None).unwrap());
     commit_tracked_file(&path);
     change(&path);
     let status = run_git(&path, &["status", "--porcelain"]);
@@ -136,7 +136,7 @@ fn refuses_a_worktree_with_a_staged_change_only_delete_branch_false_and_leaves_i
 fn removes_a_worktree_with_changes_anyway(change: fn(&Path)) {
     let fx = Fx::new();
     let task = fx.task("Fix the bug");
-    let path = path_of(&fx.ws.create(&task.id, None).unwrap());
+    let path = path_of(&fx.ws.create(&task.id, None, None).unwrap());
     commit_tracked_file(&path);
     change(&path);
 
@@ -165,7 +165,7 @@ fn removes_a_worktree_with_a_staged_change_anyway_and_keeps_the_unmerged_branch(
 fn removes_the_worktree_and_the_branch_of_a_deleted_task_with_changes_only_when_discarding() {
     let fx = Fx::new();
     let task = fx.task("Fix the bug");
-    let path = path_of(&fx.ws.create(&task.id, None).unwrap());
+    let path = path_of(&fx.ws.create(&task.id, None, None).unwrap());
     edit_and_add_file(&path);
 
     assert!(is_conflict(&fx.ws.remove_for_delete(&task.id, false)));

@@ -8,7 +8,7 @@ use super::*;
 fn shows_the_task_branch_next_to_the_branch_of_the_main_checkout() {
     let fx = Fx::new();
     let task = fx.task("Fix the bug");
-    let created = fx.ws.create(&task.id, None).unwrap();
+    let created = fx.ws.create(&task.id, None, None).unwrap();
     let workspace = PathBuf::from(created.workspace.clone().unwrap());
     run_git(&workspace, &["commit", "--allow-empty", "-m", "work"]);
 
@@ -30,7 +30,7 @@ fn shows_the_task_branch_next_to_the_branch_of_the_main_checkout() {
 fn keeps_the_graph_for_a_moment_and_reads_it_again_after_a_commit_made_here() {
     let fx = Fx::new();
     let task = fx.task("Fix the bug");
-    let created = fx.ws.create(&task.id, None).unwrap();
+    let created = fx.ws.create(&task.id, None, None).unwrap();
     let workspace = PathBuf::from(created.workspace.unwrap());
     let first = fx.ws.graph(&task.id, false).unwrap();
     run_git(&workspace, &["commit", "--allow-empty", "-m", "outside"]);
@@ -47,7 +47,7 @@ fn keeps_the_graph_for_a_moment_and_reads_it_again_after_a_commit_made_here() {
 fn reads_git_now_when_asked_for_a_fresh_graph_and_keeps_that_one() {
     let fx = Fx::new();
     let task = fx.task("Fix the bug");
-    let created = fx.ws.create(&task.id, None).unwrap();
+    let created = fx.ws.create(&task.id, None, None).unwrap();
     let workspace = PathBuf::from(created.workspace.unwrap());
     fx.ws.graph(&task.id, false).unwrap();
     run_git(&workspace, &["commit", "--allow-empty", "-m", "outside"]);

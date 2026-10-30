@@ -10,6 +10,7 @@ use serde_json::{Map, Value, json};
 
 use crate::stages::errors::StageResult;
 use crate::tasks::service::TaskService;
+use crate::workspaces::branch_name::is_branch_name;
 use crate::workspaces::create::CREATING;
 use crate::workspaces::errors::{WorkspaceError, WorkspaceResult};
 use crate::workspaces::fan_out::stage_failure;
@@ -34,6 +35,8 @@ pub struct NewWorkspaceInput {
     pub repo: Option<String>,
     /// A local branch to start from, or `origin/<name>`; none is the repository's default branch.
     pub base: Option<String>,
+    /// The branch to work on; none is the project's `git.branchName`, or `natamux/<id>-<slug>`.
+    pub branch: Option<String>,
     /// The agent that works on the task's stages; none leaves a plain shell.
     pub agent: Option<String>,
     /// The task's notes. With a manual context source they are its context.
@@ -45,10 +48,17 @@ pub struct NewWorkspaceInput {
     pub attachments: Vec<AttachmentFile>,
 }
 
-/// The base branch is checked first, so a typo leaves no task behind. The answer comes once the
-/// task is made: the worktree of a big repository can take minutes, so it is made after. A base
-/// `origin/<name>` is checked with the worktree: it needs the network.
+/// The branch name and the base branch are checked first, so a typo leaves no task behind. The
+/// answer comes once the task is made: the worktree of a big repository can take minutes, so it is
+/// made after. A base `origin/<name>` is checked with the worktree: it needs the network.
 pub fn new_workspace(parts: &NewWorkspaceParts, input: NewWorkspaceInput) -> WorkspaceResult<Task> {
+    if let Some(branch) = &input.branch
+        && !is_branch_name(branch)
+    {
+        return Err(WorkspaceError::BadRequest(format!(
+            "Branch name {branch} is not valid"
+        )));
+    }
     if let Some(base) = &input.base {
         let listed = parts.workspaces.branches(input.repo.as_deref())?;
         if !listed.branches.contains(base) && !base.starts_with(ORIGIN_PREFIX) {
@@ -109,6 +119,7 @@ pub fn new_workspace(parts: &NewWorkspaceParts, input: NewWorkspaceInput) -> Wor
         start_stage: Arc::clone(&parts.start_stage),
         task,
         base: input.base,
+        branch: input.branch,
         agent: input.agent,
         claim,
     };
@@ -122,6 +133,7 @@ struct Prepare {
     start_stage: StartStage,
     task: Task,
     base: Option<String>,
+    branch: Option<String>,
     agent: Option<String>,
     claim: Claim,
 }
@@ -130,9 +142,9 @@ impl Prepare {
     // A failure stays on the task, so the person can try again from it: the dialog is gone by now.
     fn run(self) {
         let task_id = self.task.id.clone();
-        let made = self
-            .workspaces
-            .finish_create(&self.task, self.base.as_deref());
+        let made =
+            self.workspaces
+                .finish_create(&self.task, self.base.as_deref(), self.branch.as_deref());
         // Freed before the stage starts, as Node's `create` ends before `act(start)`.
         drop(self.claim);
         if let Err(error) = made {

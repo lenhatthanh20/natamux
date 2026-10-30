@@ -110,6 +110,7 @@ pub mod tasks {
 pub mod workspaces {
     pub mod agent_once;
     pub mod branch_name;
+    pub mod branch_sync;
     pub mod changes;
     pub mod create;
     pub mod diff_stats;
