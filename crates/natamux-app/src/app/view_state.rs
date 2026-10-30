@@ -106,6 +106,8 @@ pub struct ViewState {
     pub sidebar_open: bool,
     pub sidebar_width: f32,
     pub show_finished: bool,
+    /// The sidebar shows each task's id before its title (off until switched on, T-0240).
+    pub sidebar_ids: bool,
     pub seen: Entries<TaskState>,
     /// Repo id to the branch its last workspace started from.
     pub last_base: Vec<(String, String)>,
@@ -150,6 +152,7 @@ impl Default for ViewState {
             sidebar_open: true,
             sidebar_width: SIDEBAR_WIDTH,
             show_finished: false,
+            sidebar_ids: false,
             seen: Vec::new(),
             last_base: Vec::new(),
             agent_panes: None,
@@ -247,6 +250,7 @@ impl ViewState {
                 SIDEBAR_MAX,
             ),
             show_finished: flag(map.get("showFinished"), default.show_finished),
+            sidebar_ids: flag(map.get("sidebarIds"), default.sidebar_ids),
             seen: seen_of(pairs("seen")),
             last_base: pairs("lastBase")
                 .into_iter()
@@ -315,6 +319,7 @@ impl ViewState {
             "sidebarOpen": self.sidebar_open,
             "sidebarWidth": self.sidebar_width,
             "showFinished": self.show_finished,
+            "sidebarIds": self.sidebar_ids,
             "seen": seen,
             "lastBase": last_base,
             "agentPanes": self.agent_panes,
