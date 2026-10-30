@@ -27,8 +27,8 @@ pub const BREAKPOINT_MD: f32 = 768.0;
 pub const BREAKPOINT_LG: f32 = 1024.0;
 pub const BREAKPOINT_XL: f32 = 1280.0;
 pub const MIN_MAIN_WIDTH_FOR_DOCKED_DETAILS: f32 = 400.0;
-/// The default width of both sides (T-0237): the sidebar, and the docked details with its rail.
-/// One width keeps them equal, also after a drag.
+/// The default width of both sides: the sidebar, and the docked details without its rail
+/// (T-0239). Each side is resized on its own.
 pub const SIDEBAR_WIDTH: f32 = 320.0;
 /// The details rail; Root keeps it out of main.
 pub const RAIL_WIDTH: f32 = 40.;
@@ -86,7 +86,7 @@ pub fn decide_layout(input: LayoutInput) -> LayoutMode {
     }
 }
 
-/// In 1024-1279 the sidebar may take at most 30% of the window.
+/// In 1024-1279 the sidebar, and the docked details, may take at most 30% of the window.
 pub fn effective_sidebar_width(stored: f32, width: Option<f32>) -> f32 {
     match width {
         Some(width) if (BREAKPOINT_LG..BREAKPOINT_XL).contains(&width) => {
@@ -94,11 +94,6 @@ pub fn effective_sidebar_width(stored: f32, width: Option<f32>) -> f32 {
         }
         _ => stored,
     }
-}
-
-/// The docked details panel: the side width less the rail beside it, so both sides match.
-pub fn docked_panel_width(side: f32, rail: bool) -> f32 {
-    if rail { side - RAIL_WIDTH } else { side }
 }
 
 #[cfg(test)]
@@ -146,7 +141,7 @@ mod tests {
         let mode = |width| {
             decide_layout(LayoutInput {
                 width: Some(width),
-                // Both sides take the shared width; at 1024 it is capped to 307, main keeps 410.
+                // Both sides start at the same width; at 1024 both are capped to 307, main keeps 410.
                 sidebar_width: effective_sidebar_width(SIDEBAR_WIDTH, Some(width)),
                 details_width: effective_sidebar_width(SIDEBAR_WIDTH, Some(width)),
                 coarse: false,
@@ -195,12 +190,6 @@ mod tests {
     fn limits_the_sidebar_to_30_percent_of_the_window_from_1024_to_1279() {
         assert_eq!(effective_sidebar_width(272.0, Some(1024.0)), 272.0);
         assert_eq!(effective_sidebar_width(440.0, Some(1100.0)), 330.0);
-    }
-
-    #[test]
-    fn makes_the_docked_panel_and_its_rail_as_wide_as_the_sidebar() {
-        assert_eq!(docked_panel_width(320.0, true) + RAIL_WIDTH, 320.0);
-        assert_eq!(docked_panel_width(320.0, false), 320.0);
     }
 
     #[test]

@@ -142,6 +142,10 @@ impl Dashboard {
             .flatten()
     }
 
+    pub fn set_details_width(&mut self, width: f32, cx: &mut Context<Self>) {
+        self.update_view(cx, |state| state.set_details_width(width));
+    }
+
     pub fn set_section(&mut self, id: &str, open: bool, cx: &mut Context<Self>) {
         self.update_view(cx, |state| state.set_section(id, open));
     }
