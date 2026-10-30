@@ -29,6 +29,9 @@ fn keeps_its_shell_after_natamux_done_until_its_agent_ends_the_turn() {
     assert!(!killed(&f, 1));
     assert_eq!(terminals(&f, &task.id), ["1", "7"]);
     assert_eq!(closing(&f), 1);
+    // T-0234: the terminal list tells the panes, so a new stage terminal does not take its place.
+    assert_eq!(f.runner.run.closing_shells(&task.id), ["7"]);
+    assert!(f.runner.run.closing_shells("T-9999").is_empty());
 
     assert!(turn_end(&f, &task.id, "7"));
 
@@ -36,6 +39,7 @@ fn keeps_its_shell_after_natamux_done_until_its_agent_ends_the_turn() {
     assert!(!killed(&f, 0));
     assert_eq!(terminals(&f, &task.id), ["1"]);
     assert_eq!(closing(&f), 0);
+    assert!(f.runner.run.closing_shells(&task.id).is_empty());
 }
 
 #[test]

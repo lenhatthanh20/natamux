@@ -61,6 +61,9 @@ pub struct TerminalList {
     pub programs: BTreeMap<String, Option<String>>,
     #[serde(default)]
     pub restoring: BTreeMap<String, Option<String>>,
+    /// The shells that close at the turn end of their agent: their stage is over.
+    #[serde(default)]
+    pub closing: Vec<String>,
 }
 
 #[cfg(test)]
@@ -75,7 +78,7 @@ mod tests {
             "5": {"stage":"spec","state":"done"}
         },
         "programs": {"1": null, "2": "node", "5": "zsh"},
-        "restoring": {"2": "claude-code", "5": null}, "later": 1
+        "restoring": {"2": "claude-code", "5": null}, "closing": ["5"], "later": 1
     }"#;
 
     #[test]
@@ -87,6 +90,7 @@ mod tests {
         assert_eq!(list.programs["1"], None);
         assert_eq!(list.restoring["2"].as_deref(), Some("claude-code"));
         assert_eq!(list.restoring["5"], None);
+        assert_eq!(list.closing, ["5"]);
     }
 
     #[test]
@@ -101,5 +105,6 @@ mod tests {
     fn missing_parts_default_to_empty() {
         let list: TerminalList = serde_json::from_str(r#"{"terminals":["1"]}"#).unwrap();
         assert!(list.lanes.is_empty() && list.programs.is_empty() && list.restoring.is_empty());
+        assert!(list.closing.is_empty());
     }
 }

@@ -21,7 +21,7 @@ use super::remote_terminal::RemoteTerminal;
 use super::terminal_cache::{Owner, TerminalCache, terminal_key};
 use super::terminal_find::open_find;
 use super::terminal_pane::{TerminalPane, first_agent_terminal};
-use super::terminal_tabs::{next_terminal_name, terminal_names, unlisted_shells};
+use super::terminal_tabs::{next_terminal_name, terminal_names, unlisted_shells, without_closing};
 use crate::app::dashboard::Dashboard;
 use crate::app::source::Source;
 use crate::components::agent_badge::narrow_pane;
@@ -128,7 +128,8 @@ impl ShellPanes {
             open.extend(unlisted_shells(&list.terminals, &list.agents));
         }
         open.extend(self.exited.iter().cloned());
-        terminal_names(&open, &self.added)
+        let closing = list.map(|list| list.closing.as_slice()).unwrap_or_default();
+        without_closing(terminal_names(&open, &self.added), closing)
             .into_iter()
             .filter(|name| !self.closing.contains(name))
             .collect()

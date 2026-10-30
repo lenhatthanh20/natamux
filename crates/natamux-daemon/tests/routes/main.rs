@@ -307,8 +307,9 @@ async fn answers_an_error_and_closes_when_the_shell_cannot_start_without_hello()
 #[tokio::test(flavor = "multi_thread")]
 async fn lists_no_terminals_for_a_task_that_has_none() {
     let d = daemon("none", true).await;
-    let empty =
-        json!({ "terminals": [], "agents": [], "lanes": {}, "programs": {}, "restoring": {} });
+    let empty = json!({
+        "terminals": [], "agents": [], "lanes": {}, "programs": {}, "restoring": {}, "closing": [],
+    });
     assert_eq!(
         d.call(Method::GET, "/tasks/T-0001/terminals", Some(TOKEN))
             .await,
@@ -330,7 +331,7 @@ async fn opens_a_second_terminal_lists_the_terminals_and_closes_one() {
         .await;
     let both = json!({
         "terminals": ["1", "2"], "agents": [], "lanes": {},
-        "programs": { "1": "bash", "2": "bash" }, "restoring": {},
+        "programs": { "1": "bash", "2": "bash" }, "restoring": {}, "closing": [],
     });
     assert_eq!(listed, (200, both));
 
