@@ -160,6 +160,18 @@ impl StageRun {
         }
     }
 
+    /// The task's shells that wait for the turn end of their agent to close. A pane grid leaves
+    /// them out, so a new stage terminal is not drawn in their place first and then resized.
+    pub fn closing_shells(&self, task_id: &str) -> Vec<String> {
+        let prefix = key(task_id, "");
+        self.state()
+            .closing
+            .keys()
+            .filter_map(|shell| shell.strip_prefix(&prefix))
+            .map(str::to_string)
+            .collect()
+    }
+
     fn close_shell_now(&self, task_id: &str, terminal: &str) {
         self.options.terminals.close_one(task_id, terminal);
         self.forget_shell(task_id, terminal);

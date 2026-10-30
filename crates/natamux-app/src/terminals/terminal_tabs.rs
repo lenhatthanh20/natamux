@@ -38,6 +38,16 @@ pub fn unlisted_shells(open: &[String], agent_shells: &[String]) -> Vec<String> 
         .collect()
 }
 
+/// The panes of the grid without the shells the daemon closes at their agent's turn end (T-0234).
+/// Kept, such a shell put a new stage terminal in its place first, and Claude Code printed its
+/// prompt again when the shell closed and the new pane changed width. Terminal 1 always stays.
+pub fn without_closing(names: Vec<String>, closing: &[String]) -> Vec<String> {
+    names
+        .into_iter()
+        .filter(|name| name == "1" || !closing.contains(name))
+        .collect()
+}
+
 /// The shown shells that only the list says are open: not Terminal 1, which starts on attach,
 /// not one coming back (`restoring`), which starts on attach too, and with no cached terminal.
 /// The list may be older than a close by the daemon, and a new terminal for such a name would
@@ -95,6 +105,15 @@ mod tests {
         assert_eq!(unlisted_shells(&names(&["1"]), &names(&["1", "2"])), ["2"]);
         assert!(unlisted_shells(&names(&["1", "2"]), &names(&["2"])).is_empty());
         assert!(unlisted_shells(&names(&["1"]), &[]).is_empty());
+    }
+
+    #[test]
+    fn leaves_out_the_shells_that_close_at_the_turn_end_but_never_the_first() {
+        // T-0233: Cursor in Terminal 10 ended its stage, Claude Code started in Terminal 11.
+        let all = names(&["1", "10", "11"]);
+        assert_eq!(without_closing(all.clone(), &names(&["10"])), ["1", "11"]);
+        assert_eq!(without_closing(all.clone(), &names(&["1"])), all);
+        assert_eq!(without_closing(all.clone(), &[]), all);
     }
 
     #[test]

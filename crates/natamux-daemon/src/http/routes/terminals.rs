@@ -142,12 +142,15 @@ fn terminals_of(state: &AppState, id: &str) -> Answer {
     for (name, agent) in state.open_shells.restoring(id) {
         restoring.insert(name, json!(agent));
     }
+    let mut closing = run.closing_shells(id);
+    closing.sort_by_key(|name| name.parse::<u32>().unwrap_or(u32::MAX));
     ok(json!({
         "terminals": terminals,
         "agents": agents,
         "lanes": lanes,
         "programs": programs,
         "restoring": restoring,
+        "closing": closing,
     }))
 }
 
