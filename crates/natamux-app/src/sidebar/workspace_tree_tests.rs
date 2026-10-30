@@ -124,6 +124,20 @@ fn a_pin_still_builds_the_tree_again(cx: &mut TestAppContext) {
     assert!(counts(&tree, cx).0 > builds);
 }
 
+#[gpui::test]
+fn the_task_ids_switch_shows_the_ids_at_once(cx: &mut TestAppContext) {
+    let (dashboard, tree, cx) = sidebar_tree(cx);
+    let shown = |tree: &Entity<WorkspaceTree>, cx: &mut VisualTestContext| {
+        tree.update_in(cx, |tree, window, cx| tree.snapshot(window, cx).show_ids)
+    };
+    assert!(!shown(&tree, cx));
+    let (_, draws) = counts(&tree, cx);
+    dashboard.update(cx, |dashboard, cx| dashboard.toggle_sidebar_ids(cx));
+    cx.run_until_parked();
+    assert!(counts(&tree, cx).1 > draws);
+    assert!(shown(&tree, cx));
+}
+
 #[test]
 fn only_the_changed_lines_are_measured_again() {
     let header = |group| Line::GroupHeader { group };
