@@ -17,13 +17,23 @@ use crate::terminals::terminal_cache::{TerminalCache, terminal_key};
 
 /// The terminal of the asking task: one pane, the most room.
 const ONE: &str = "1";
-/// The side by side group of the running task, and its plain terminal.
-const GROUP: [(&str, &str); 4] = [
-    ("1", "block"),
-    ("10", "underline"),
-    ("12", "bar"),
-    ("2", "block, never focused"),
-];
+/// The panes of the running task, with the cursor shape of each. The group shows them from the
+/// top as 1, 2, 10, 12, and only 1 and 2 are fully on screen at every size. So Terminal 1 takes
+/// the shape of the state and the focus; Terminal 2 stays the unfocused hollow block.
+fn group(shot: Shot) -> [(&'static str, &'static str); 4] {
+    let focused = match shot {
+        Shot::TerminalCursorsUnderline => "underline",
+        Shot::TerminalCursorsBar => "bar",
+        _ => "block",
+    };
+    [
+        ("1", focused),
+        ("10", "underline"),
+        ("12", "bar"),
+        ("2", "block, never focused"),
+    ]
+}
+
 /// The find runs on a background task; its matches are in well within this.
 const FOUND: Duration = Duration::from_millis(600);
 /// The focus is in place for the drag within this.
@@ -59,7 +69,7 @@ pub fn prepare(shot: Shot) {
         Shot::TerminalAltScreen => fake.set_screen(ASKING, ONE, alt_screen()),
         Shot::TerminalScrolled | Shot::TerminalScrollbar => fake.set_screen(ASKING, ONE, history()),
         Shot::TerminalCursors | Shot::TerminalCursorsUnderline | Shot::TerminalCursorsBar => {
-            for (terminal, shape) in GROUP {
+            for (terminal, shape) in group(shot) {
                 fake.set_screen(RUNNING, terminal, cursor_screen(shape));
             }
         }
@@ -75,12 +85,12 @@ pub async fn run(handle: WindowHandle<Root>, shot: Shot, cx: &mut AsyncApp) {
     }
     wait(PANES_DRAWN, cx).await;
     if task == RUNNING {
-        shape_cursors(handle, cx);
+        shape_cursors(handle, shot, cx);
     }
     match shot {
-        Shot::TerminalCursors => focus(handle, RUNNING, "1", cx),
-        Shot::TerminalCursorsUnderline => focus(handle, RUNNING, "10", cx),
-        Shot::TerminalCursorsBar => focus(handle, RUNNING, "12", cx),
+        Shot::TerminalCursors | Shot::TerminalCursorsUnderline | Shot::TerminalCursorsBar => {
+            focus(handle, RUNNING, "1", cx)
+        }
         Shot::TerminalSelection => {
             handle
                 .update(cx, |_, window, cx| {
@@ -309,9 +319,9 @@ fn cursor_bytes(shape: &str) -> String {
     format!("\x1b[{code} q\r\x1b[2C")
 }
 
-fn shape_cursors(handle: WindowHandle<Root>, cx: &mut AsyncApp) {
+fn shape_cursors(handle: WindowHandle<Root>, shot: Shot, cx: &mut AsyncApp) {
     let written = handle.update(cx, |_, _, cx| {
-        for (terminal, shape) in GROUP {
+        for (terminal, shape) in group(shot) {
             let Some(remote) = TerminalCache::cached(&terminal_key(RUNNING, terminal), cx) else {
                 eprintln!("shot: Terminal {terminal} of {RUNNING} is not on screen");
                 continue;

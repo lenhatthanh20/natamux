@@ -235,8 +235,8 @@ The move off Zed's GPL crates (`docs/plan-mit-license.md`) redraws the terminal,
 |---|---|
 | `terminal-look` | T-0141's terminal with every kind of cell: the 16 colours as text and background, a sample of the 256, a truecolour row, bold, dim, italic, the underline kinds, strike, inverse, hidden, wide CJK, emoji with VS16, Vietnamese with combining marks, box lines, blocks, quadrants, sextants, shades, Powerline, low-contrast pairs, an OSC 8 link |
 | `terminal-cursors` | T-0146's terminals with a steady block, underline and bar cursor (`ESC [2 q`, `4 q`, `6 q`) on a wide character, written once the panes laid out; Terminal 1 (block) focused, the others hollow |
-| `terminal-cursors-underline` | The same, Terminal 10 (underline) focused |
-| `terminal-cursors-bar` | The same, Terminal 12 (bar) focused |
+| `terminal-cursors-underline` | The same, Terminal 1 with the underline, focused (only Terminals 1 and 2 are fully on screen at every size) |
+| `terminal-cursors-bar` | The same, Terminal 1 with the bar, focused |
 | `terminal-selection` | T-0143's Terminal 1 with the find bar on "src" and a drag that selects over two lines |
 | `terminal-alt-screen` | A full-screen program on the alternate screen: coloured rows, a title and a status line, the cursor hidden |
 | `terminal-scrolled` | 300 lines of history, a wheel turn of 12 lines up: Jump to latest |
