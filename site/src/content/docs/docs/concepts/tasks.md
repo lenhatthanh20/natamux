@@ -203,7 +203,7 @@ natamux events T-0001
 natamux events T-0001 --json
 ```
 
-Some events only record a fact and change no state, such as `git.committed` and `workspace.created`.
+Some events only record a fact and change no state, such as `git.committed` and `workspace.created`. `workspace.branch-changed` is one of them: it records that the task now uses another branch, with `{ from, to }`.
 
 You can send an event yourself. This is useful for tools that Natamux does not know.
 

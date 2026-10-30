@@ -46,7 +46,53 @@ pub fn other_settings_problem(raw: &Map<String, Value>) -> Option<String> {
         );
         idle_minutes(agents.get("pauseIdleAfterMinutes"), &mut found);
     }
+    if let Some(git) = object(raw.get("git"), "git", &mut found) {
+        branch_name(git.get("branchName"), &mut found);
+    }
     (!found.is_empty()).then(|| found.join("; "))
+}
+
+/// The most characters of `git.branchName` and of a branch name: git has 255 bytes for a ref name
+/// on most file systems.
+pub const MAX_BRANCH_LENGTH: usize = 255;
+
+/// The problem of a `git.branchName` text, worded without its path, or None.
+pub fn branch_name_problem(pattern: &str) -> Option<String> {
+    let length = pattern.trim().encode_utf16().count();
+    if length == 0 {
+        return Some("Too small: expected string to have >=1 characters".into());
+    }
+    if let Some(unknown) = unknown_placeholder(pattern) {
+        return Some(format!("Unknown placeholder {unknown}"));
+    }
+    (length > MAX_BRANCH_LENGTH).then(|| "Too long".into())
+}
+
+/// The first `{...}` in `pattern` that is not `{id}` or `{slug}`.
+pub fn unknown_placeholder(pattern: &str) -> Option<&str> {
+    let mut rest = pattern;
+    while let Some(start) = rest.find('{') {
+        let len = rest[start..].find('}')?;
+        let found = &rest[start..start + len + 1];
+        if found != "{id}" && found != "{slug}" {
+            return Some(found);
+        }
+        rest = &rest[start + len + 1..];
+    }
+    None
+}
+
+fn branch_name(value: Option<&Value>, found: &mut Vec<String>) {
+    let path = "git.branchName";
+    match value {
+        None => {}
+        Some(Value::String(pattern)) => {
+            if let Some(problem) = branch_name_problem(pattern) {
+                found.push(format!("{path}: {problem}"));
+            }
+        }
+        other => found.push(wrong_type_of(path, "string", other)),
+    }
 }
 
 /// `z.number().int().min(0).optional()`. shortcut: zod takes `2.0` as an int; this refuses it,
@@ -341,6 +387,33 @@ mod tests {
             Some(
                 "context.sources.0.type: Invalid input; tracker.type: Invalid option: expected one of \"github\"|\"none\"; tracker.linkInPr: Invalid input: expected boolean, received string"
             )
+        );
+    }
+
+    #[test]
+    fn takes_a_branch_name_with_id_and_slug_only() {
+        let wrong = |value: Value| problem(json!({"git": {"branchName": value}}));
+        assert_eq!(problem(json!({"git": {}})), None);
+        assert_eq!(wrong(json!("{id}-{slug}")), None);
+        assert_eq!(
+            wrong(json!("a/{title}")).as_deref(),
+            Some("git.branchName: Unknown placeholder {title}")
+        );
+        assert_eq!(
+            wrong(json!("a".repeat(256))).as_deref(),
+            Some("git.branchName: Too long")
+        );
+        assert_eq!(
+            wrong(json!("  ")).as_deref(),
+            Some("git.branchName: Too small: expected string to have >=1 characters")
+        );
+        assert_eq!(
+            wrong(json!(3)).as_deref(),
+            Some("git.branchName: Invalid input: expected string, received number")
+        );
+        assert_eq!(
+            problem(json!({"git": "x"})).as_deref(),
+            Some("git: Invalid input: expected object, received string")
         );
     }
 }

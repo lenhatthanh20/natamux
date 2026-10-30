@@ -167,6 +167,15 @@ impl TaskService {
         self.with(|store| store.record_workspace_failure(task_id, message))
     }
 
+    pub fn record_branch(
+        &self,
+        task_id: &str,
+        from: Option<String>,
+        to: String,
+    ) -> TaskResult<Task> {
+        self.with(|store| store.record_branch(task_id, from, to))
+    }
+
     pub fn stop_agents(&self, task_id: &str) -> TaskResult<Task> {
         self.with(|store| store.stop_agents(task_id))
     }

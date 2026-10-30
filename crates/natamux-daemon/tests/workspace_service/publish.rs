@@ -7,7 +7,7 @@ use super::*;
 
 fn task_with_work(fx: &Fx) -> Task {
     let task = fx.task_with(json!({ "title": "Fix the bug", "description": "The details." }));
-    let created = fx.ws.create(&task.id, None).unwrap();
+    let created = fx.ws.create(&task.id, None, None).unwrap();
     fs::write(
         PathBuf::from(created.workspace.clone().unwrap()).join("fix.txt"),
         "fixed\n",
@@ -63,6 +63,23 @@ fn pushes_the_task_branch_to_origin() {
 }
 
 #[test]
+fn pushes_the_branch_the_agent_switched_to() {
+    let fx = Fx::new();
+    let remote = bare_origin(fx.root.path());
+    let task = task_with_work(&fx);
+    let workspace = PathBuf::from(task.workspace.clone().unwrap());
+    run_git(&workspace, &["switch", "-c", "feature-x"]);
+    fx.ws.commit(&task.id, "Fix the bug").unwrap();
+
+    let pushed = fx.ws.push(&task.id).unwrap();
+
+    assert_eq!(pushed.branch.as_deref(), Some("feature-x"));
+    assert!(has_branch(&remote, "feature-x"));
+    assert!(!has_branch(&remote, task.branch.as_deref().unwrap()));
+    assert_eq!(last_event(&fx, &task.id).payload["branch"], json!("feature-x"));
+}
+
+#[test]
 fn pushes_then_opens_a_pull_request_and_keeps_its_address() {
     let fx = Fx::new();
     bare_origin(fx.root.path());
@@ -95,7 +112,7 @@ fn pushes_the_parent_branch_and_opens_the_pull_request_of_a_subtask_into_it() {
     let remote = bare_origin(fx.root.path());
     let parent = fx.with_workspace("Parent");
     let child = fx.task_with(json!({ "title": "Part A", "parentId": parent.id }));
-    let created = fx.ws.create(&child.id, None).unwrap();
+    let created = fx.ws.create(&child.id, None, None).unwrap();
     fs::write(
         PathBuf::from(created.workspace.clone().unwrap()).join("part.txt"),
         "part\n",
@@ -143,7 +160,7 @@ fn opens_a_later_subtask_pull_request_when_origin_has_the_parent_branch_ahead() 
     run_git(&other, &["push", "origin", &base]);
     let merged = run_git(&other, &["rev-parse", "HEAD"]);
     let child = fx.task_with(json!({ "title": "Part B", "parentId": parent.id }));
-    let created = fx.ws.create(&child.id, None).unwrap();
+    let created = fx.ws.create(&child.id, None, None).unwrap();
     fs::write(
         PathBuf::from(created.workspace.clone().unwrap()).join("part.txt"),
         "part\n",

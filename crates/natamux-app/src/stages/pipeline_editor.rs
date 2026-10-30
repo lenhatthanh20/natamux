@@ -12,8 +12,9 @@ use ui::prelude::*;
 
 use super::editor_catalog::unique_issues;
 use super::editor_draft::{
-    Draft, format_settings, max_send_backs_of, parse_draft, pause_idle_of, tracker_of,
-    with_create_issue, with_max_send_backs, with_pause_idle, with_steps,
+    Draft, branch_name_of, format_settings, max_send_backs_of, parse_draft, pause_idle_of,
+    tracker_of, with_branch_name, with_create_issue, with_max_send_backs, with_pause_idle,
+    with_steps,
 };
 use super::editor_find::{find_branch, find_stage};
 
@@ -162,6 +163,20 @@ impl PipelineEditor {
             return;
         }
         let raw = with_pause_idle(&self.draft.raw, minutes);
+        self.changed(&format_settings(&raw), cx);
+    }
+
+    /// `git.branchName` of the draft; None while it is left out or the text cannot be read.
+    pub fn branch_name(&self) -> Option<String> {
+        self.raw().and_then(branch_name_of)
+    }
+
+    /// `git.branchName`, None to leave it out. Ignored while the text cannot be read.
+    pub fn set_branch_name(&mut self, name: Option<&str>, cx: &mut Context<Self>) {
+        if self.error.is_some() {
+            return;
+        }
+        let raw = with_branch_name(&self.draft.raw, name);
         self.changed(&format_settings(&raw), cx);
     }
 

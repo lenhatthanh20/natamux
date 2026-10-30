@@ -12,7 +12,8 @@ use ui::prelude::*;
 
 use super::new_workspace_rules::{
     PickedFile, SourceChoice, StartForm, blocked_reason, branch_text, initial_repo,
-    new_workspace_input, pick_source, read_uploads, shown_repo, source_choices, start_label,
+    new_workspace_input, pick_source, prefill_branch, read_uploads, shown_repo, source_choices,
+    start_label,
 };
 use crate::agents::agent_choices::DEFAULT_AGENT;
 use crate::app::dashboard::Dashboard;
@@ -26,6 +27,9 @@ use crate::components::toast_rules::ToastTone;
 
 /// What Start a task does, in its tooltip.
 const START_HINT: &str = "A new task with its own workspace: a git worktree on a new branch.";
+
+/// The Branch field's placeholder when the project sets no `git.branchName`.
+const DEFAULT_BRANCH_HINT: &str = "natamux/{id}-{slug}";
 
 #[path = "new_workspace_fields.rs"]
 mod fields;
@@ -81,6 +85,12 @@ pub struct NewWorkspaceDialog {
     dashboard: Entity<Dashboard>,
     title: Entity<Editor>,
     notes: Entity<Editor>,
+    branch_name: Entity<Editor>,
+    /// What the field holds from a refill: a text equal to it is not an edit by the user.
+    filled: String,
+    /// The user typed a branch: the title and project no longer refill it.
+    branch_edited: bool,
+    branch_hint: String,
     reference: Entity<Editor>,
     picked_repo: String,
     base: String,
@@ -132,6 +142,7 @@ impl NewWorkspaceDialog {
             cx,
         );
         let reference = text_editor("", None, window, cx);
+        let branch_name = text_editor(DEFAULT_BRANCH_HINT, None, window, cx);
         let ids = repo_ids(&dashboard, cx);
         let mut seen = Seen::default();
         let follow = cx.observe(&dashboard, move |this, dashboard, cx| {
@@ -148,10 +159,27 @@ impl NewWorkspaceDialog {
                 }
             }));
         }
+        subscriptions.push(cx.subscribe(
+            &branch_name,
+            |this, editor, event: &EditorEvent, cx| {
+                if matches!(event, EditorEvent::BufferEdited) {
+                    let text = editor.read(cx).text(cx);
+                    // A refill sets the text too; only another text is the user's.
+                    if text != this.filled {
+                        this.branch_edited = !text.is_empty();
+                    }
+                    cx.notify();
+                }
+            },
+        ));
         let mut dialog = NewWorkspaceDialog {
             dashboard,
             title,
             notes,
+            branch_name,
+            filled: String::new(),
+            branch_edited: false,
+            branch_hint: DEFAULT_BRANCH_HINT.into(),
             reference,
             picked_repo: initial_repo(repo.as_deref(), &ids),
             base: String::new(),
@@ -242,10 +270,43 @@ impl NewWorkspaceDialog {
             title: self.title.read(cx).text(cx),
             repo: self.repo(cx),
             base: self.base.clone(),
+            branch: self.branch_name.read(cx).text(cx),
             agent: self.agent.clone(),
             notes: self.notes.read(cx).text(cx),
             reference: self.reference.read(cx).text(cx),
             skill: self.skill.clone(),
+        }
+    }
+
+    /// The project's `git.branchName`, once its settings are loaded.
+    fn branch_pattern(&self) -> Option<String> {
+        self.settings
+            .as_ref()
+            .and_then(|loaded| loaded.settings.git.branch_name.clone())
+    }
+
+    /// Runs on each render, so a title, project or settings change refills the branch with no
+    /// event wiring. Once the user edited the field, it stays as typed.
+    fn sync_branch(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let pattern = self.branch_pattern();
+        let hint = pattern
+            .clone()
+            .unwrap_or_else(|| DEFAULT_BRANCH_HINT.into());
+        if hint != self.branch_hint {
+            self.branch_hint = hint.clone();
+            self.branch_name.update(cx, |editor, cx| {
+                editor.set_placeholder_text(hint.as_str(), window, cx)
+            });
+        }
+        if self.branch_edited {
+            return;
+        }
+        let title = self.title.read(cx).text(cx);
+        let value = prefill_branch(pattern.as_deref(), &title).unwrap_or_default();
+        if self.branch_name.read(cx).text(cx) != value {
+            self.filled = value.clone();
+            self.branch_name
+                .update(cx, |editor, cx| editor.set_text(value, window, cx));
         }
     }
 
@@ -380,6 +441,7 @@ impl DialogView for NewWorkspaceDialog {
         if self.branches.is_some() {
             ring.insert(ring.len() - 1, stops.branch.clone());
         }
+        ring.insert(ring.len() - 1, self.branch_name.focus_handle(cx));
         ring.extend([stops.cancel.clone(), stops.submit.clone()]);
         ring
     }
@@ -394,7 +456,8 @@ impl DialogView for NewWorkspaceDialog {
 }
 
 impl Render for NewWorkspaceDialog {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.sync_branch(window, cx);
         let form = self.form(cx);
         let choice = self.choice();
         let missing = blocked_reason(&form, &choice);

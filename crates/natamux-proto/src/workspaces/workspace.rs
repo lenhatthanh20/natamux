@@ -27,6 +27,9 @@ pub struct NewWorkspaceInput {
     pub repo: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub base: Option<String>,
+    /// The branch of the new worktree; None: the project's pattern or the default name.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub branch: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub agent: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -37,11 +40,13 @@ pub struct NewWorkspaceInput {
     pub attachments: Vec<AttachmentUpload>,
 }
 
-/// The body of `POST /tasks/:id/workspace`. The body may be left out when `base` is None.
+/// The body of `POST /tasks/:id/workspace`. The body may be left out when both fields are None.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
 pub struct CreateWorkspaceInput {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub base: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub branch: Option<String>,
 }
 
 /// `MAX_TRIES`: the most copies one fan out makes.
@@ -202,8 +207,15 @@ mod tests {
         assert_eq!(none, "{}");
         let some = CreateWorkspaceInput {
             base: Some("dev".into()),
+            ..Default::default()
         };
         assert_eq!(serde_json::to_string(&some).unwrap(), r#"{"base":"dev"}"#);
+        let both = CreateWorkspaceInput {
+            base: Some("dev".into()),
+            branch: Some("feature-x".into()),
+        };
+        let text = serde_json::to_string(&both).unwrap();
+        assert_eq!(text, r#"{"base":"dev","branch":"feature-x"}"#);
     }
 
     #[test]
@@ -239,6 +251,7 @@ mod tests {
             title: "Fix".into(),
             repo: Some("natamux".into()),
             base: Some("dev".into()),
+            branch: Some("ABC-12".into()),
             agent: Some("claude-code".into()),
             prompt: Some("Do it".into()),
             context: Some(TaskContext {
@@ -254,7 +267,8 @@ mod tests {
         assert_eq!(
             serde_json::to_string(&input).unwrap(),
             concat!(
-                r#"{"title":"Fix","repo":"natamux","base":"dev","agent":"claude-code","#,
+                r#"{"title":"Fix","repo":"natamux","base":"dev","branch":"ABC-12","#,
+                r#""agent":"claude-code","#,
                 r#""prompt":"Do it","context":{"source":"github-issue","ref":"42"},"#,
                 r#""attachments":[{"name":"a.png","data":"AAAA"}]}"#
             )

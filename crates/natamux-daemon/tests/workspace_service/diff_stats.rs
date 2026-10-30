@@ -34,7 +34,7 @@ fn gives_the_size_of_the_work_of_each_task_with_a_workspace() {
     let fx = Fx::new();
     let task = fx.task("Fix the bug");
     fx.task("No workspace");
-    let created = fx.ws.create(&task.id, None).unwrap();
+    let created = fx.ws.create(&task.id, None, None).unwrap();
     add_file(&created, "a\nb\n");
 
     assert_eq!(stat_map(&fx.ws), expect(&[(&task.id, stat(1, 2, 0))]));
@@ -158,7 +158,7 @@ fn reads_again_at_once_after_a_workspace_is_made_or_removed_here() {
     let task = fx.task("Fix the bug");
     assert!(stat_map(&fx.ws).is_empty());
 
-    fx.ws.create(&task.id, None).unwrap();
+    fx.ws.create(&task.id, None, None).unwrap();
     assert_eq!(stat_map(&fx.ws), expect(&[(&task.id, stat(0, 0, 0))]));
 
     fx.ws.remove(&task.id, true).unwrap();

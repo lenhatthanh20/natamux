@@ -18,6 +18,8 @@ pub struct StartAgentInput {
     pub prompt: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub base: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub branch: Option<String>,
 }
 
 /// The body of `POST /tasks/:id/agent/message`: text for the running agent, trimmed, 1 to

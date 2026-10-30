@@ -65,8 +65,9 @@ impl WorkspaceService {
     }
 
     /// Deletes the branch of a task that has no workspace any more, and its CI branch on origin.
-    /// A branch that is gone already is fine.
-    /// `task` is as it was before the worktree went, since that clears its branch.
+    /// A branch that is gone already is fine. The default branch and the main checkout's one stay.
+    /// `task` is as it was before the worktree went (after `sync_branch`), since that clears its
+    /// branch.
     pub fn delete_branches_of(&self, task: &Task) -> WorkspaceResult<()> {
         let task_id = task.id.as_str();
         let Some(branch) = &task.branch else {
@@ -82,6 +83,10 @@ impl WorkspaceService {
                 return Ok(());
             }
         };
+        // An old record may hold a main branch.
+        if self.is_main_branch(task, branch) {
+            return Ok(());
+        }
         delete_branch_force(&repo_dir, branch);
         if task.ci_stages.as_ref().is_some_and(|s| !s.is_empty()) {
             let ref_name = ci_branch_of(branch);
@@ -101,7 +106,8 @@ impl WorkspaceService {
         discard: bool,
     ) -> WorkspaceResult<RemoveWorkspaceResult> {
         self.exclusive(task_id, "Removing worktree", || {
-            let task = self.tasks.get_task(task_id)?;
+            // Before the folder goes: the branch the agent switched to is the one to delete.
+            let task = self.sync_branch(task_id)?;
             let Some(workspace) = task.workspace.clone() else {
                 return Err(WorkspaceError::Conflict(format!(
                     "{task_id} has no workspace"
@@ -142,6 +148,8 @@ impl WorkspaceService {
             }
 
             let branch_deleted = match (&task.branch, rule) {
+                // An old record may hold a main branch.
+                (Some(branch), _) if self.is_main_branch(&task, branch) => false,
                 (Some(branch), BranchRule::Finished) => {
                     delete_finished_branch(&repo_dir, branch, task.pr_status.as_ref())
                 }

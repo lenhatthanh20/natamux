@@ -402,3 +402,16 @@ fn started_agents_send_until_dropped() {
     assert!(drain(&mut events).is_empty());
     assert!(!fake.tasks_with_terminals().is_empty());
 }
+
+#[test]
+fn takes_the_branch_of_the_input() {
+    let fake = FakeDaemon::default();
+    let task = fake
+        .new_workspace(NewWorkspaceInput {
+            title: "Try it".into(),
+            branch: Some("ABC-12".into()),
+            ..NewWorkspaceInput::default()
+        })
+        .unwrap();
+    assert_eq!(task.branch.as_deref(), Some("ABC-12"));
+}

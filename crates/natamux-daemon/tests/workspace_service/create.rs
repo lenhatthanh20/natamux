@@ -13,7 +13,7 @@ fn adds_a_worktree_and_records_it_on_the_task() {
     let fx = Fx::new();
     let task = fx.task("Fix the bug");
 
-    let updated = fx.ws.create(&task.id, None).unwrap();
+    let updated = fx.ws.create(&task.id, None, None).unwrap();
 
     let expected = fx.worktrees.join("T-0001");
     assert_eq!(updated.workspace, Some(path_text(&expected).to_string()));
@@ -43,8 +43,8 @@ fn adds_the_worktree_in_the_projects_own_worktree_folder() {
     let there = fx.task_with(json!({ "title": "Fix it there", "repo": "other" }));
     let here = fx.task("Fix it here");
 
-    let there_made = with_repos.create(&there.id, None).unwrap();
-    let here_made = with_repos.create(&here.id, None).unwrap();
+    let there_made = with_repos.create(&there.id, None, None).unwrap();
+    let here_made = with_repos.create(&here.id, None, None).unwrap();
 
     assert_eq!(
         there_made.workspace,
@@ -59,7 +59,7 @@ fn logs_a_workspace_created_event_and_publishes_the_change() {
     let fx = Fx::new();
     let task = fx.task("Fix the bug");
 
-    fx.ws.create(&task.id, None).unwrap();
+    fx.ws.create(&task.id, None, None).unwrap();
 
     assert_eq!(
         fx.event_kinds(&task.id),
@@ -76,7 +76,7 @@ fn logs_a_workspace_created_event_and_publishes_the_change() {
 fn does_not_change_the_state_of_the_task() {
     let fx = Fx::new();
     let task = fx.task("Fix the bug");
-    let updated = fx.ws.create(&task.id, None).unwrap();
+    let updated = fx.ws.create(&task.id, None, None).unwrap();
     assert_eq!(updated.state, TaskState::Draft);
 }
 
@@ -84,9 +84,9 @@ fn does_not_change_the_state_of_the_task() {
 fn refuses_a_second_workspace_for_the_same_task() {
     let fx = Fx::new();
     let task = fx.task("Fix the bug");
-    fx.ws.create(&task.id, None).unwrap();
+    fx.ws.create(&task.id, None, None).unwrap();
 
-    assert!(is_conflict(&fx.ws.create(&task.id, None)));
+    assert!(is_conflict(&fx.ws.create(&task.id, None, None)));
 }
 
 #[test]
@@ -95,13 +95,13 @@ fn refuses_a_task_that_is_done_or_cancelled() {
     let task = fx.task("Fix the bug");
     fx.event(&task.id, "human", "task.cancelled");
 
-    assert!(error_text(fx.ws.create(&task.id, None)).contains("cancelled"));
+    assert!(error_text(fx.ws.create(&task.id, None, None)).contains("cancelled"));
 }
 
 #[test]
 fn throws_task_not_found_error_for_an_unknown_task() {
     let fx = Fx::new();
-    let result = fx.ws.create("T-0099", None);
+    let result = fx.ws.create("T-0099", None, None);
     assert!(matches!(
         result,
         Err(WorkspaceError::Task(TaskError::NotFound(_)))
@@ -118,7 +118,7 @@ fn lets_only_one_of_two_requests_at_the_same_time_through() {
             let (ws, id, barrier) = (Arc::clone(&fx.ws), task.id.clone(), Arc::clone(&barrier));
             std::thread::spawn(move || {
                 barrier.wait();
-                ws.create(&id, None)
+                ws.create(&id, None, None)
             })
         })
         .collect();
@@ -203,7 +203,7 @@ fn leaves_the_task_as_it_was_when_git_fails() {
     let task = fx.task("Fix the bug");
     run_git(&fx.repo, &["branch", BRANCH]);
 
-    assert!(is_git(&fx.ws.create(&task.id, None)));
+    assert!(is_git(&fx.ws.create(&task.id, None, None)));
 
     assert_eq!(fx.workspace_of(&task.id), None);
 }
@@ -253,7 +253,7 @@ fn steps_tells_each_step_of_a_new_workspace_then_that_it_ended_and_logs_the_time
     let (watched, steps) = watched(&fx);
     let task = fx.task("Fix the bug");
 
-    watched.create(&task.id, None).unwrap();
+    watched.create(&task.id, None, None).unwrap();
 
     assert_eq!(
         *steps.lock().unwrap(),
@@ -276,7 +276,7 @@ fn steps_tells_the_error_when_git_fails() {
     let task = fx.task("Fix the bug");
     run_git(&fx.repo, &["branch", BRANCH]);
 
-    assert!(is_git(&watched.create(&task.id, None)));
+    assert!(is_git(&watched.create(&task.id, None, None)));
 
     let (name, error, preparing) = steps.lock().unwrap().last().cloned().unwrap();
     assert_eq!(name, None);
@@ -297,7 +297,7 @@ fn steps_is_preparing_before_it_reads_the_branches_and_tells_a_failure_there_too
     let task = fx.task("Fix the bug");
 
     assert!(is_conflict(
-        &watched.create(&task.id, Some("no-such-branch"))
+        &watched.create(&task.id, Some("no-such-branch"), None)
     ));
 
     assert_eq!(
@@ -324,7 +324,7 @@ fn steps_tells_nothing_for_a_task_that_cannot_get_a_workspace_at_all() {
     let task = fx.task("Fix the bug");
     fx.event(&task.id, "human", "task.cancelled");
 
-    assert!(is_conflict(&watched.create(&task.id, None)));
+    assert!(is_conflict(&watched.create(&task.id, None, None)));
 
     assert!(steps.lock().unwrap().is_empty());
     assert!(fx.log_lines().is_empty());

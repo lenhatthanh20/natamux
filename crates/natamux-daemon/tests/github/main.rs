@@ -6,6 +6,7 @@
 
 mod issue_importer;
 mod issue_linker;
+mod pull_request_branch_sync;
 mod pull_request_finding;
 mod pull_request_watcher;
 

@@ -70,6 +70,7 @@ pub fn trim_settings(settings: &mut ProjectSettings) {
         trim_some(&mut source.skill);
         trim_some(&mut source.prompt);
     }
+    trim_some(&mut settings.git.branch_name);
 }
 
 #[cfg(test)]

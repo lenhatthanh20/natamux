@@ -1,6 +1,6 @@
 use super::*;
 use crate::test_support::{TempDir, run_git, test_repo};
-use crate::worktrees::add_worktree;
+use crate::worktrees::{WorktreeBranch, add_worktree};
 
 const BRANCH: &str = "natamux/t-0001-example";
 
@@ -18,7 +18,7 @@ fn change(path: &str, status: ChangeStatus, original_path: Option<&str>) -> Chan
 fn worktree() -> (TempDir, PathBuf) {
     let (root, repo) = test_repo();
     let path = root.path().join("worktrees").join("T-0001");
-    add_worktree(&repo, &path, BRANCH, None, false).unwrap();
+    add_worktree(&repo, &path, BRANCH, WorktreeBranch::New(None)).unwrap();
     (root, path)
 }
 

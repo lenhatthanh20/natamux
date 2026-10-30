@@ -692,6 +692,26 @@ fn sends_the_base_branch_for_a_new_workspace_with_agent_start() {
 }
 
 #[test]
+fn sends_the_branch_for_a_new_workspace_with_agent_start() {
+    let result = run(&["agent", "start", "T-1", "--branch", "ABC-12"], |_| {
+        task_reply(&task_t("T-1"))
+    });
+    assert_has(
+        &body_of(&result.calls[0]),
+        &json!({"agent": "claude-code", "branch": "ABC-12"}),
+    );
+}
+
+#[test]
+fn sends_the_branch_with_workspace_create() {
+    let result = run(
+        &["workspace", "create", "T-0001", "--branch", "ABC-12"],
+        |_| task_created(&with_workspace()),
+    );
+    assert_eq!(body_of(&result.calls[0]), json!({"branch": "ABC-12"}));
+}
+
+#[test]
 fn asks_for_the_task_of_the_terminal_from_natamux_task_id() {
     let result = run_with(
         &["ask", "Which database?"],

@@ -4,6 +4,8 @@
 
 use std::path::PathBuf;
 
+use natamux_core::tasks::task::split_task_id;
+use natamux_core::workspaces::branch_name::branch_name_from;
 use natamux_proto::projects::repo::{BranchList, ContextSource};
 use natamux_proto::tasks::attachments::{AttachmentUpload, attachment_limit_error};
 use natamux_proto::tasks::task::TaskContext;
@@ -240,6 +242,8 @@ pub struct StartForm {
     pub repo: String,
     /// Empty: the start branch.
     pub base: String,
+    /// Empty: the daemon picks the name.
+    pub branch: String,
     /// Empty: no agent, a plain terminal.
     pub agent: String,
     pub notes: String,
@@ -260,6 +264,13 @@ pub fn blocked_reason(form: &StartForm, choice: &SourceChoice) -> Option<&'stati
     )
 }
 
+/// The branch the field shows while the user has not edited it: the pattern applied to the key
+/// at the start of the title. None without a key, as the task id is not known yet.
+pub fn prefill_branch(pattern: Option<&str>, title: &str) -> Option<String> {
+    let (id, rest) = split_task_id(title);
+    id.map(|id| branch_name_from(pattern, &id, &rest))
+}
+
 fn filled(text: &str) -> Option<String> {
     (!text.is_empty()).then(|| text.to_string())
 }
@@ -276,6 +287,7 @@ pub fn new_workspace_input(
         title: form.title.trim().into(),
         repo: Some(form.repo.clone()),
         base: filled(&form.base),
+        branch: filled(form.branch.trim()),
         agent: filled(&form.agent),
         prompt: if manual {
             filled(form.notes.trim())

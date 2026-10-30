@@ -29,8 +29,10 @@ pub mod stages {
     pub mod terminal_lane;
 }
 pub mod workspaces {
+    pub mod branch_name;
     pub mod private_dir;
     pub mod safe_write;
+    pub mod slug;
 }
 pub mod tasks {
     pub mod attachments;

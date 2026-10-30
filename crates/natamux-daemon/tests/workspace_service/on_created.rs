@@ -17,7 +17,7 @@ fn is_told_about_a_new_workspace_and_its_failure_does_not_undo_the_workspace() {
     });
     let task = fx.task("Fix the bug");
 
-    let created = watched.create(&task.id, None).unwrap();
+    let created = watched.create(&task.id, None, None).unwrap();
 
     let workspace = created.workspace.clone().unwrap();
     assert_eq!(*seen.lock().unwrap(), std::slice::from_ref(&workspace));

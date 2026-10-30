@@ -330,3 +330,32 @@ fn formats_sizes_as_core_does() {
     assert_eq!(format_bytes(1500), "1.5 KB");
     assert_eq!(format_bytes(2_500_000), "2.5 MB");
 }
+
+#[test]
+fn prefills_the_branch_from_the_key_in_the_title() {
+    assert_eq!(
+        prefill_branch(Some("{id}"), "ABC-12: Fix it").as_deref(),
+        Some("ABC-12")
+    );
+    assert_eq!(
+        prefill_branch(None, "ABC-12: Fix it").as_deref(),
+        Some("natamux/abc-12-fix-it")
+    );
+    assert_eq!(prefill_branch(None, "Fix it"), None);
+}
+
+#[test]
+fn sends_the_trimmed_branch_or_none() {
+    let typed = StartForm {
+        branch: "  ABC-12-e2e ".into(),
+        ..form("Fix it")
+    };
+    assert_eq!(
+        new_workspace_input(&typed, &manual(), Vec::new()).branch.as_deref(),
+        Some("ABC-12-e2e")
+    );
+    assert_eq!(
+        new_workspace_input(&form("Fix it"), &manual(), Vec::new()).branch,
+        None
+    );
+}

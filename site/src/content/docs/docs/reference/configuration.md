@@ -30,6 +30,7 @@ To edit the file in the dashboard, open **Settings** in the menu of the project.
 | `context` | object | `{ "sources": [{ "type": "manual" }, { "type": "github-issue" }] }` | Where task context can come from. |
 | `tracker` | object | `{ "type": "github", "createIssue": "manual", "linkInPr": true }` | The issue tracker. |
 | `agents` | object | `{ "permissionMode": "auto" }` | How the agents that Natamux starts ask for permission, and how often they may send a task back. |
+| `git` | object | `{}` | How Natamux names the branch of a new workspace. |
 
 ## `stages`
 
@@ -373,6 +374,32 @@ To keep idle agents running, turn the pause off:
 ```json
 { "agents": { "pauseIdleAfterMinutes": 0 } }
 ```
+
+## `git`
+
+| Field | Type | Default | Meaning |
+|---|---|---|---|
+| `branchName` | string | `natamux/{id}-{slug}` | The name of the branch of a new workspace. See [Branch name](/docs/concepts/workspaces/#branch-name). |
+
+Placeholders:
+
+| Placeholder | Value |
+|---|---|
+| `{id}` | The task id as it is, such as `ABC-12` or `T-0042` |
+| `{slug}` | The slug of the title, such as `fix-login` |
+
+Rules:
+
+- Any other `{...}` is a problem: `git.branchName: Unknown placeholder {x}`.
+- At most 255 characters.
+- Not empty.
+- The filled name must be a valid branch name. If not, the workspace fails with `Branch name <name> is not valid`.
+
+```json
+{ "git": { "branchName": "{id}" } }
+```
+
+Without `branchName`, the name is `natamux/` + the id in lower case + the slug.
 
 ## Examples
 

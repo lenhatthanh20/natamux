@@ -1,4 +1,4 @@
-//! The groups 'recordWorkspaceFailure' and 'recordGit'.
+//! The groups 'recordWorkspaceFailure' and 'recordGit', and `record_branch`.
 
 use natamux_proto::tasks::task::TaskState;
 
@@ -89,6 +89,45 @@ fn keeps_the_address_of_a_new_pull_request_on_the_task_and_in_its_file() {
     assert_eq!(file_task(&fx, &task.id).unwrap().pr.as_deref(), Some(url));
     match last_message(&fx) {
         DaemonMessage::TaskUpdated { task, .. } => assert_eq!(task.pr.as_deref(), Some(url)),
+        other => panic!("not task.updated: {other:?}"),
+    }
+}
+
+#[test]
+fn records_a_branch_change_once_and_tells_the_dashboards() {
+    let fx = Fixture::new();
+    let task = create(&fx.service, "Fix it");
+    let old = Some("natamux/t-0001-fix-it".to_string());
+
+    let updated = fx
+        .service
+        .record_branch(&task.id, old.clone(), "feature-x".into())
+        .unwrap();
+    let again = fx
+        .service
+        .record_branch(&task.id, old, "feature-x".into())
+        .unwrap();
+
+    assert_eq!(updated.branch.as_deref(), Some("feature-x"));
+    assert_eq!(again.branch.as_deref(), Some("feature-x"));
+    assert_eq!(
+        file_task(&fx, &task.id).unwrap().branch.as_deref(),
+        Some("feature-x")
+    );
+    let event = last_event(&fx.service, &task.id).event;
+    assert_eq!(
+        (event.kind.as_str(), event.source.as_str()),
+        ("workspace.branch-changed", "system")
+    );
+    assert_eq!(
+        event.payload,
+        obj(json!({ "from": "natamux/t-0001-fix-it", "to": "feature-x" }))
+    );
+    assert_eq!(fx.service.list_events(&task.id).unwrap().len(), 2);
+    match last_message(&fx) {
+        DaemonMessage::TaskUpdated { task, .. } => {
+            assert_eq!(task.branch.as_deref(), Some("feature-x"));
+        }
         other => panic!("not task.updated: {other:?}"),
     }
 }

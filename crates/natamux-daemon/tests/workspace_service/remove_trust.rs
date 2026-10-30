@@ -17,7 +17,7 @@ fn takes_the_removed_worktree_out_of_the_agents_trusted_folders() {
     let kept = paths.clone();
     let trusting = fx.build(move |options| options.trust_paths = Some(kept));
     let task = fx.task("Fix the bug");
-    let created = trusting.create(&task.id, None).unwrap();
+    let created = trusting.create(&task.id, None, None).unwrap();
     let workspace = created.workspace.unwrap();
     for agent in ["cursor", "copilot"] {
         trust_workspace(agent, &workspace, &paths);

@@ -388,6 +388,30 @@ fn reads_the_most_send_backs_and_has_no_limit_without_it() {
 }
 
 #[test]
+fn reads_the_branch_name_trimmed_and_writes_it_only_when_set() {
+    let setup = setup();
+    let branch = || setup.repos.settings_of(None).git.branch_name;
+    assert_eq!(branch(), None);
+    assert!(setup.load()["settings"].get("git").is_none());
+
+    write(setup.file(), r#"{ "git": { "branchName": " {id} " } }"#).unwrap();
+    touch(&setup.file(), 1);
+    setup.later(1000);
+    assert_eq!(branch().as_deref(), Some("{id}"));
+    let loaded = setup.load();
+    assert_eq!(loaded["settings"]["git"], json!({ "branchName": "{id}" }));
+    let keys: Vec<&String> = loaded["settings"].as_object().unwrap().keys().collect();
+    assert_eq!(keys, ["stages", "context", "tracker", "agents", "git"]);
+
+    write(setup.file(), r#"{ "git": { "branchName": "a/{title}" } }"#).unwrap();
+    touch(&setup.file(), 2);
+    setup.later(1000);
+    let loaded = setup.load();
+    assert!(error_of(&loaded).contains("git.branchName: Unknown placeholder {title}"));
+    assert_eq!(branch(), None);
+}
+
+#[test]
 fn reads_the_idle_pause_minutes_and_writes_them_only_when_set() {
     let setup = setup();
     let agents = || setup.repos.settings_of(None).agents;

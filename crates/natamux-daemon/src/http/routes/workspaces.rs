@@ -21,6 +21,7 @@ use crate::http::errors::{
 use crate::http::server::{AppState, query_value};
 use crate::stages::act::StageActionInput;
 use crate::tasks::upload::decode_attachments;
+use crate::workspaces::branch_name::is_branch_name;
 use crate::workspaces::errors::WorkspaceResult;
 use crate::workspaces::fan_out::{FanOutParts, MAX_TRIES, fan_out};
 use crate::workspaces::new_workspace::{NewWorkspaceInput, NewWorkspaceParts, new_workspace};
@@ -148,12 +149,28 @@ fn base_field(map: &serde_json::Map<String, Value>, issues: &mut Issues) -> Opti
     })
 }
 
-/// `createWorkspaceBodySchema`: an optional body with an optional base branch.
-fn create_body(body: Option<&Value>) -> Result<Option<String>, ZodError> {
-    let Some(body) = body else { return Ok(None) };
+/// `branch: z.string().min(1).max(255).refine(isBranchName).optional()`: a name git takes.
+pub fn branch_field(map: &serde_json::Map<String, Value>, issues: &mut Issues) -> Option<String> {
+    let path = [json!("branch")];
+    let rules = [Rule::Min(1), Rule::Max(255)];
+    let branch = string(Some(map.get("branch")?), &path, &rules, issues)?;
+    if !is_branch_name(&branch) {
+        issues.push(Issue::custom(&path, "Invalid branch name"));
+        return None;
+    }
+    Some(branch)
+}
+
+/// `createWorkspaceBodySchema`: an optional body with an optional base and branch.
+fn create_body(body: Option<&Value>) -> Result<(Option<String>, Option<String>), ZodError> {
+    let Some(body) = body else {
+        return Ok((None, None));
+    };
     let mut issues = Issues::default();
-    let base = object(Some(body), &[], &mut issues).and_then(|map| base_field(map, &mut issues));
-    issues.into_result(Some(base))
+    let map = object(Some(body), &[], &mut issues);
+    let base = map.and_then(|map| base_field(map, &mut issues));
+    let branch = map.and_then(|map| branch_field(map, &mut issues));
+    issues.into_result(Some((base, branch)))
 }
 
 pub async fn create(state: Arc<AppState>, id: String, body: Option<Value>) -> Answer {
@@ -161,12 +178,12 @@ pub async fn create(state: Arc<AppState>, id: String, body: Option<Value>) -> An
         Ok(id) => id,
         Err(answer) => return *answer,
     };
-    let base = match create_body(body.as_ref()) {
-        Ok(base) => base,
+    let (base, branch) = match create_body(body.as_ref()) {
+        Ok(fields) => fields,
         Err(error) => return zod_answer(&error),
     };
     answer(StatusCode::CREATED, move || {
-        let task = state.workspaces.create(&id, base.as_deref())?;
+        let task = state.workspaces.create(&id, base.as_deref(), branch.as_deref())?;
         Ok(json!({ "task": to_value(&task) }))
     })
     .await
@@ -281,6 +298,7 @@ fn new_workspace_fields(body: Option<&Value>, issues: &mut Issues) -> Option<New
         ),
     };
     let base = base_field(map, issues);
+    let branch = branch_field(map, issues);
     // The first stage starts at once, so it must be an agent the daemon can start.
     let agent = map
         .get("agent")
@@ -304,6 +322,7 @@ fn new_workspace_fields(body: Option<&Value>, issues: &mut Issues) -> Option<New
             title,
             repo,
             base,
+            branch,
             agent,
             prompt,
             context,

@@ -66,6 +66,7 @@ Task ids look like `T-42`. Inside a Natamux terminal, the token, the daemon addr
 | `--source <name>` | `event` | `agent`, `human`, `git`, `ci` or `system`. Default: `human`. In a task terminal the daemon records `agent`, whatever you pass |
 | `--payload <json>` | `event` | A JSON object sent with the event |
 | `--base <branch>` | `workspace create`, `agent start` | Start the new workspace from this local branch. Default: the default branch of the repository, such as `main`. Natamux fetches the base first (see [Base branch](/docs/concepts/workspaces/#base-branch)) |
+| `--branch <name>` | `workspace create`, `agent start` | Name the branch of the new workspace. A local branch of that name is checked out, `--base` is ignored. A branch only on `origin` becomes a local branch that tracks it. See [Branch name](/docs/concepts/workspaces/#branch-name) |
 | `--yes` | `workspace remove` | Confirm that the worktree folder is deleted |
 | `--delete-branch` | `workspace remove` | Also delete the branch, when it is merged |
 | `--approve <hash>` | `repo trust` | Approve the commands with this hash, as the list printed it |

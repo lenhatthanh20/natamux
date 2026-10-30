@@ -7,6 +7,7 @@
 
 mod agent_routes;
 mod agents;
+mod branch_names;
 mod changes;
 mod edge_hosts;
 #[cfg(unix)]

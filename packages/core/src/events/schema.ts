@@ -52,6 +52,7 @@ export const EVENT_TYPES = [
   'workspace.failed',
   'agent.paused',
   'workspace.warning',
+  'workspace.branch-changed',
 ] as const
 
 export const taskEventSchema = z.object({
@@ -101,4 +102,5 @@ export const RECORD_ONLY_EVENT_TYPES: readonly EventType[] = [
   'workspace.failed',
   'agent.paused',
   'workspace.warning',
+  'workspace.branch-changed',
 ]

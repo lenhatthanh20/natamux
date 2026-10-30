@@ -48,6 +48,7 @@ const OPTIONS: &[Spec] = &[
     spec("prompt", Kind::Text),
     spec("task", Kind::Text),
     spec("base", Kind::Text),
+    spec("branch", Kind::Text),
     spec("context", Kind::Text),
     spec("stage", Kind::Text),
     spec("to", Kind::Text),

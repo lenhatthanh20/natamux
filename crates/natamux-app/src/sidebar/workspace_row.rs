@@ -158,7 +158,7 @@ impl WorkspaceTree {
                     .id(SharedString::from(format!("title-{}", task.id)))
                     .min_w_0()
                     .flex_1()
-                    .child(title_label(task, unseen, blurred))
+                    .child(title_label(task, unseen, blurred, cx))
                     .tooltip(Tooltip::text(tip))
                     // A double click on the title is a shortcut for F2.
                     .on_click(cx.listener(move |tree, event: &ClickEvent, window, cx| {
@@ -305,8 +305,9 @@ impl WorkspaceTree {
     }
 }
 
-/// The title in the look of its tier: bold when unseen or waiting, muted when finished.
-fn title_label(task: &Task, unseen: bool, blurred: bool) -> AnyElement {
+/// The id, then the title in the look of its tier: bold when unseen or waiting, muted when
+/// finished. The id never shrinks; only the title truncates.
+fn title_label(task: &Task, unseen: bool, blurred: bool, cx: &App) -> AnyElement {
     let tier = row_tier(task.state);
     let weight = match tier {
         RowTier::Quiet => FontWeight::NORMAL,
@@ -335,11 +336,25 @@ fn title_label(task: &Task, unseen: bool, blurred: bool) -> AnyElement {
             title.into_any_element()
         }
     };
-    private_text(
+    let title = private_text(
         blurred,
         || BlurBar::new(task.title.clone(), size).weight(weight),
         plain,
-    )
+    );
+    h_flex()
+        .min_w_0()
+        .gap_1p5()
+        .child(
+            div().flex_none().child(
+                Label::new(task.id.clone())
+                    .size(LabelSize::Custom(rems_from_px(size)))
+                    .color(Color::Muted)
+                    .buffer_font(cx)
+                    .single_line(),
+            ),
+        )
+        .child(div().min_w_0().child(title))
+        .into_any_element()
 }
 
 /// The age of the last change; the menu button takes its place on hover.

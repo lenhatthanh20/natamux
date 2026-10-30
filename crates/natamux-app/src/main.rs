@@ -171,6 +171,7 @@ mod perf {
     pub mod stats;
 }
 mod projects {
+    pub mod branch_name_field;
     pub mod idle_pause_field;
     pub mod issue_import;
     pub mod issue_rules;

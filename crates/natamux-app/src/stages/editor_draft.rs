@@ -245,6 +245,31 @@ pub fn with_pause_idle(raw: &RawSettings, minutes: Option<u64>) -> RawSettings {
     with_agents_key(raw, "pauseIdleAfterMinutes", minutes.map(Value::from))
 }
 
+/// `git.branchName` of the draft; None when it is left out or is not a string.
+pub fn branch_name_of(raw: &RawSettings) -> Option<String> {
+    raw.get("git")?.get("branchName")?.as_str().map(str::to_string)
+}
+
+/// The settings with this `git.branchName`; None leaves it out, and a `git` with nothing left
+/// goes too. `git` keeps its place among the keys.
+pub fn with_branch_name(raw: &RawSettings, name: Option<&str>) -> RawSettings {
+    let old = raw
+        .get("git")
+        .and_then(Value::as_object)
+        .cloned()
+        .unwrap_or_default();
+    let mut git = without(&old, "branchName");
+    if let Some(name) = name {
+        git.insert("branchName".to_string(), Value::String(name.to_string()));
+    }
+    if git.is_empty() {
+        return without(raw, "git");
+    }
+    let mut next = raw.clone();
+    next.insert("git".to_string(), Value::Object(git));
+    next
+}
+
 /// The settings with this key of `agents`; None leaves it out, and an `agents` with nothing left
 /// goes too. `agents` keeps its place among the keys.
 fn with_agents_key(raw: &RawSettings, key: &str, value: Option<Value>) -> RawSettings {
