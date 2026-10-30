@@ -1,7 +1,7 @@
 //! The rows of the sidebar tree (docs/ui-spec.md 4.9, `WorkspaceRow.tsx`): a one-line task row
-//! (state glyph, title, right slot), a terminal row under the open task, and the inline rename
-//! field. Everything else a row used to show is in the title's tooltip. The tree draws the rows
-//! as a flat list, so each row can be scrolled to.
+//! (state glyph, the id with Task ids in the sidebar, title, right slot), a terminal row under the
+//! open task, and the inline rename field. Everything else a row used to show is in the title's
+//! tooltip. The tree draws the rows as a flat list, so each row can be scrolled to.
 
 use gpui::{AnyElement, ClickEvent, FontWeight, MouseButton, MouseDownEvent, Stateful};
 use natamux_proto::agents::activity::latest_line;
@@ -158,7 +158,7 @@ impl WorkspaceTree {
                     .id(SharedString::from(format!("title-{}", task.id)))
                     .min_w_0()
                     .flex_1()
-                    .child(title_label(task, unseen, blurred, cx))
+                    .child(title_label(task, unseen, blurred, snap.show_ids, cx))
                     .tooltip(Tooltip::text(tip))
                     // A double click on the title is a shortcut for F2.
                     .on_click(cx.listener(move |tree, event: &ClickEvent, window, cx| {
@@ -305,9 +305,10 @@ impl WorkspaceTree {
     }
 }
 
-/// The id, then the title in the look of its tier: bold when unseen or waiting, muted when
-/// finished. The id never shrinks; only the title truncates.
-fn title_label(task: &Task, unseen: bool, blurred: bool, cx: &App) -> AnyElement {
+/// The id (only with Task ids in the sidebar, T-0240), then the title in the look of its tier:
+/// bold when unseen or waiting, muted when finished. The id never shrinks; only the title
+/// truncates.
+fn title_label(task: &Task, unseen: bool, blurred: bool, show_id: bool, cx: &App) -> AnyElement {
     let tier = row_tier(task.state);
     let weight = match tier {
         RowTier::Quiet => FontWeight::NORMAL,
@@ -344,15 +345,17 @@ fn title_label(task: &Task, unseen: bool, blurred: bool, cx: &App) -> AnyElement
     h_flex()
         .min_w_0()
         .gap_1p5()
-        .child(
-            div().flex_none().child(
-                Label::new(task.id.clone())
-                    .size(LabelSize::Custom(rems_from_px(size)))
-                    .color(Color::Muted)
-                    .buffer_font(cx)
-                    .single_line(),
-            ),
-        )
+        .when(show_id, |line| {
+            line.child(
+                div().flex_none().child(
+                    Label::new(task.id.clone())
+                        .size(LabelSize::Custom(rems_from_px(size)))
+                        .color(Color::Muted)
+                        .buffer_font(cx)
+                        .single_line(),
+                ),
+            )
+        })
         .child(div().min_w_0().child(title))
         .into_any_element()
 }

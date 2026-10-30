@@ -30,6 +30,10 @@ The app also has View, Task and Tools menus. Links to release pages open in your
 
 The Dock icon shows how many tasks need you. Turn on **Notify me** and allow notifications to see the count. If it still does not show, turn on **Badge application icon** in System Settings → Notifications → Natamux. With **Notify me** on, a task that needs you or is done while the app is in the back shows a macOS notification with a sound. See [Notifications in the desktop app](/docs/guides/dashboard/#notifications-in-the-desktop-app).
 
+## Task ids in the sidebar
+
+A sidebar row shows the task's title, so long titles have room. To see each task's id before its title, turn on **Settings → Appearance → Task ids in the sidebar**. With it off, the id is still in the row's tooltip, the title bar and the details panel, and the sidebar filter still finds a task by its id.
+
 ## Updates
 
 The app updates itself, the way other desktop apps do. It looks for a new version when you choose **Check for Updates…**. Timed checks are off by default; tick **Check for Updates Automatically** to turn them on.

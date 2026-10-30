@@ -68,12 +68,13 @@ pub enum SettingRow {
     LightTheme,
     DarkTheme,
     UiSize,
+    SidebarIds,
     FontFamily,
     FontSize,
 }
 
 impl SettingRow {
-    pub const ALL: [SettingRow; 10] = [
+    pub const ALL: [SettingRow; 11] = [
         SettingRow::Notify,
         SettingRow::UpdatesVersion,
         SettingRow::UpdatesAuto,
@@ -82,6 +83,7 @@ impl SettingRow {
         SettingRow::LightTheme,
         SettingRow::DarkTheme,
         SettingRow::UiSize,
+        SettingRow::SidebarIds,
         SettingRow::FontFamily,
         SettingRow::FontSize,
     ];
@@ -106,6 +108,7 @@ impl SettingRow {
             SettingRow::LightTheme => "Light theme",
             SettingRow::DarkTheme => "Dark theme",
             SettingRow::UiSize => "UI size",
+            SettingRow::SidebarIds => "Task ids in the sidebar",
             SettingRow::FontFamily => "Font family",
             SettingRow::FontSize => "Font size",
         }
@@ -123,6 +126,7 @@ impl SettingRow {
             SettingRow::LightTheme => "The theme used when the app is light.",
             SettingRow::DarkTheme => "The theme used when the app is dark.",
             SettingRow::UiSize => "Text and row size of the whole app.",
+            SettingRow::SidebarIds => "Show each task's id ahead of its title in the sidebar.",
             SettingRow::FontFamily => "The font of the terminals. Empty uses the built-in Lilex.",
             SettingRow::FontSize => "The size of the terminal font, from 8 to 32.",
         }
@@ -144,6 +148,7 @@ impl SettingRow {
                  solarized tokyo night"
             }
             SettingRow::UiSize => "compact large zoom",
+            SettingRow::SidebarIds => "task id key",
             SettingRow::FontFamily | SettingRow::FontSize => "terminal font",
         }
     }
