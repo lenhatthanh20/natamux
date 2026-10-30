@@ -143,35 +143,10 @@ impl WorkspaceService {
         };
         // A named branch that exists, here or on origin, is checked out with its work; the base
         // does not count then. The default name holds the task id, so it is never there.
-        if let Some(name) = &named {
-            if !is_branch_name(name) {
-                return Err(WorkspaceError::Conflict(format!(
-                    "Branch name {name} is not valid"
-                )));
-            }
-            if branches.contains(name) {
-                if let Some(path) = worktree_of_branch(&repo_dir, name)? {
-                    return Err(WorkspaceError::Conflict(format!(
-                        "Branch {name} is checked out in {path}"
-                    )));
-                }
-                self.timed(&task.id, "checkout", times, || {
-                    add_worktree(&repo_dir, &worktree_path, name, WorktreeBranch::Existing)
-                })?;
-                return Ok(made(name.clone()));
-            }
-            let on_origin = self.timed(&task.id, "fetch", times, || {
-                Ok::<_, WorkspaceError>(fetch_origin_branch(&repo_dir, name))
-            })?;
-            if on_origin {
-                // The full name: a tag called `origin/<name>` would win over the short one.
-                let remote_ref = format!("refs/remotes/origin/{name}");
-                let how = WorktreeBranch::Track(&remote_ref);
-                self.timed(&task.id, "checkout", times, || {
-                    add_worktree(&repo_dir, &worktree_path, name, how)
-                })?;
-                return Ok(made(name.clone()));
-            }
+        if let Some(name) = &named
+            && self.add_named_worktree(task, &repo_dir, &worktree_path, branches, name, times)?
+        {
+            return Ok(made(name.clone()));
         }
         let branch = named.unwrap_or_else(|| branch_name_for(&task.id, &task.title));
         // A base that is not a local branch can be a branch of origin, perhaps never fetched.
@@ -199,7 +174,12 @@ impl WorkspaceService {
             .or(listed.default_branch.clone());
         let Some(from) = from else {
             self.timed(&task.id, "checkout", times, || {
-                add_worktree(&repo_dir, &worktree_path, &branch, WorktreeBranch::New(None))
+                add_worktree(
+                    &repo_dir,
+                    &worktree_path,
+                    &branch,
+                    WorktreeBranch::New(None),
+                )
             })?;
             return Ok(made(branch));
         };
@@ -209,9 +189,59 @@ impl WorkspaceService {
         })?;
         let start = start_ref(&repo_dir, &from).unwrap_or(from);
         self.timed(&task.id, "checkout", times, || {
-            add_worktree(&repo_dir, &worktree_path, &branch, WorktreeBranch::New(Some(&start)))
+            add_worktree(
+                &repo_dir,
+                &worktree_path,
+                &branch,
+                WorktreeBranch::New(Some(&start)),
+            )
         })?;
         Ok(made(branch))
+    }
+
+    // Checks out `name` when it is a local branch or one of origin, and says whether it did.
+    fn add_named_worktree(
+        &self,
+        task: &Task,
+        repo_dir: &Path,
+        worktree_path: &Path,
+        branches: &[String],
+        name: &str,
+        times: &mut StepTimes,
+    ) -> WorkspaceResult<bool> {
+        if !is_branch_name(name) {
+            return Err(WorkspaceError::Conflict(format!(
+                "Branch name {name} is not valid"
+            )));
+        }
+        if branches.iter().any(|known| known == name) {
+            if let Some(path) = worktree_of_branch(repo_dir, name)? {
+                return Err(WorkspaceError::Conflict(format!(
+                    "Branch {name} is checked out in {path}"
+                )));
+            }
+            self.timed(&task.id, "checkout", times, || {
+                add_worktree(repo_dir, worktree_path, name, WorktreeBranch::Existing)
+            })?;
+            return Ok(true);
+        }
+        let on_origin = self.timed(&task.id, "fetch", times, || {
+            Ok::<_, WorkspaceError>(fetch_origin_branch(repo_dir, name))
+        })?;
+        if !on_origin {
+            return Ok(false);
+        }
+        // The full name: a tag called `origin/<name>` would win over the short one.
+        let remote_ref = format!("refs/remotes/origin/{name}");
+        self.timed(&task.id, "checkout", times, || {
+            add_worktree(
+                repo_dir,
+                worktree_path,
+                name,
+                WorktreeBranch::Track(&remote_ref),
+            )
+        })?;
+        Ok(true)
     }
 
     // Fetches branch `name` of origin, and gives where the worktree starts: its remote copy.

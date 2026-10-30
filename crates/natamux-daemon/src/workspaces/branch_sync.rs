@@ -56,8 +56,7 @@ pub fn is_main_branch<F>(repo_dir: &F, task: &Task, branch: &str) -> bool
 where
     F: Fn(Option<&str>) -> Result<String, TaskError> + ?Sized,
 {
-    branch_list(repo_dir(task.repo.as_deref()))
-        .is_none_or(|list| is_main(&list, branch))
+    branch_list(repo_dir(task.repo.as_deref())).is_none_or(|list| is_main(&list, branch))
 }
 
 fn branch_list(dir: Result<String, TaskError>) -> Option<BranchList> {

@@ -296,9 +296,11 @@ fn steps_is_preparing_before_it_reads_the_branches_and_tells_a_failure_there_too
     let (watched, steps) = watched(&fx);
     let task = fx.task("Fix the bug");
 
-    assert!(is_conflict(
-        &watched.create(&task.id, Some("no-such-branch"), None)
-    ));
+    assert!(is_conflict(&watched.create(
+        &task.id,
+        Some("no-such-branch"),
+        None
+    )));
 
     assert_eq!(
         *steps.lock().unwrap(),

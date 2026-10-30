@@ -5,7 +5,9 @@ use std::path::Path;
 use natamux_git::branches::{delete_merged_branch, delete_pushed_branch};
 use natamux_proto::tasks::task::PullRequestStatus;
 
-pub use natamux_core::workspaces::branch_name::{branch_name_for, branch_name_from, is_branch_name};
+pub use natamux_core::workspaces::branch_name::{
+    branch_name_for, branch_name_from, is_branch_name,
+};
 
 /// `git branch -d` keeps a branch that GitHub merged with a squash or a rebase. A pull request that
 /// says it is merged lets it go too, once origin has all of its commits, so no work is lost.

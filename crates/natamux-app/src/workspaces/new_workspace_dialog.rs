@@ -159,9 +159,8 @@ impl NewWorkspaceDialog {
                 }
             }));
         }
-        subscriptions.push(cx.subscribe(
-            &branch_name,
-            |this, editor, event: &EditorEvent, cx| {
+        subscriptions.push(
+            cx.subscribe(&branch_name, |this, editor, event: &EditorEvent, cx| {
                 if matches!(event, EditorEvent::BufferEdited) {
                     let text = editor.read(cx).text(cx);
                     // A refill sets the text too; only another text is the user's.
@@ -170,8 +169,8 @@ impl NewWorkspaceDialog {
                     }
                     cx.notify();
                 }
-            },
-        ));
+            }),
+        );
         let mut dialog = NewWorkspaceDialog {
             dashboard,
             title,

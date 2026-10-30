@@ -76,7 +76,10 @@ fn pushes_the_branch_the_agent_switched_to() {
     assert_eq!(pushed.branch.as_deref(), Some("feature-x"));
     assert!(has_branch(&remote, "feature-x"));
     assert!(!has_branch(&remote, task.branch.as_deref().unwrap()));
-    assert_eq!(last_event(&fx, &task.id).payload["branch"], json!("feature-x"));
+    assert_eq!(
+        last_event(&fx, &task.id).payload["branch"],
+        json!("feature-x")
+    );
 }
 
 #[test]

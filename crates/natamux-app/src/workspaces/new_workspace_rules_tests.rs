@@ -351,7 +351,9 @@ fn sends_the_trimmed_branch_or_none() {
         ..form("Fix it")
     };
     assert_eq!(
-        new_workspace_input(&typed, &manual(), Vec::new()).branch.as_deref(),
+        new_workspace_input(&typed, &manual(), Vec::new())
+            .branch
+            .as_deref(),
         Some("ABC-12-e2e")
     );
     assert_eq!(

@@ -34,7 +34,13 @@ fn creates_the_folder_and_the_branch() {
 #[test]
 fn fails_with_a_git_error_when_the_branch_already_exists() {
     let (root, repo) = test_repo();
-    add_worktree(&repo, &worktree_path(root.path()), BRANCH, WorktreeBranch::New(None)).unwrap();
+    add_worktree(
+        &repo,
+        &worktree_path(root.path()),
+        BRANCH,
+        WorktreeBranch::New(None),
+    )
+    .unwrap();
 
     let other = root.path().join("worktrees").join("T-0002");
     let error = add_worktree(&repo, &other, BRANCH, WorktreeBranch::New(None)).unwrap_err();
@@ -69,7 +75,13 @@ fn checks_out_with_one_worker_per_cpu() {
 
     // And a worktree is made with it.
     let (root, repo) = test_repo();
-    add_worktree(&repo, &worktree_path(root.path()), BRANCH, WorktreeBranch::New(None)).unwrap();
+    add_worktree(
+        &repo,
+        &worktree_path(root.path()),
+        BRANCH,
+        WorktreeBranch::New(None),
+    )
+    .unwrap();
 }
 
 #[test]
@@ -120,7 +132,13 @@ fn leaves_another_worktree_and_its_folder_alone_when_it_clears_a_stale_entry() {
     let path = worktree_path(root.path());
     let other = root.path().join("worktrees").join("T-0002");
     add_worktree(&repo, &path, BRANCH, WorktreeBranch::New(None)).unwrap();
-    add_worktree(&repo, &other, "natamux/t-0002-example", WorktreeBranch::New(None)).unwrap();
+    add_worktree(
+        &repo,
+        &other,
+        "natamux/t-0002-example",
+        WorktreeBranch::New(None),
+    )
+    .unwrap();
     std::fs::write(other.join("notes.txt"), "work in progress").unwrap();
     std::fs::remove_dir_all(&path).unwrap();
 

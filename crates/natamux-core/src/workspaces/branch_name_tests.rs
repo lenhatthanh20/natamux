@@ -17,13 +17,23 @@ fn fills_a_pattern_or_falls_back_to_the_default() {
         (Some("fixed"), "fixed"),
         (None, "natamux/abc-12-fix-it"),
     ] {
-        assert_eq!(branch_name_from(pattern, "ABC-12", "Fix it"), name, "{pattern:?}");
+        assert_eq!(
+            branch_name_from(pattern, "ABC-12", "Fix it"),
+            name,
+            "{pattern:?}"
+        );
     }
 }
 
 #[test]
 fn accepts_only_names_git_takes_for_a_branch() {
-    for name in ["ABC-12", "feature/x", "a.b", "ABC-1-with-e2e", "natamux/t-0001-fix"] {
+    for name in [
+        "ABC-12",
+        "feature/x",
+        "a.b",
+        "ABC-1-with-e2e",
+        "natamux/t-0001-fix",
+    ] {
         assert!(is_branch_name(name), "{name}");
     }
     let long = "a".repeat(MAX_BRANCH_LENGTH + 1);

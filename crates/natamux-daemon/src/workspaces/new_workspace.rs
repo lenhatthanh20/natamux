@@ -142,11 +142,9 @@ impl Prepare {
     // A failure stays on the task, so the person can try again from it: the dialog is gone by now.
     fn run(self) {
         let task_id = self.task.id.clone();
-        let made = self.workspaces.finish_create(
-            &self.task,
-            self.base.as_deref(),
-            self.branch.as_deref(),
-        );
+        let made =
+            self.workspaces
+                .finish_create(&self.task, self.base.as_deref(), self.branch.as_deref());
         // Freed before the stage starts, as Node's `create` ends before `act(start)`.
         drop(self.claim);
         if let Err(error) = made {

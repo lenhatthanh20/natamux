@@ -247,7 +247,10 @@ pub fn with_pause_idle(raw: &RawSettings, minutes: Option<u64>) -> RawSettings {
 
 /// `git.branchName` of the draft; None when it is left out or is not a string.
 pub fn branch_name_of(raw: &RawSettings) -> Option<String> {
-    raw.get("git")?.get("branchName")?.as_str().map(str::to_string)
+    raw.get("git")?
+        .get("branchName")?
+        .as_str()
+        .map(str::to_string)
 }
 
 /// The settings with this `git.branchName`; None leaves it out, and a `git` with nothing left

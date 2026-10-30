@@ -272,7 +272,10 @@ fn starts_an_agent() {
             },
         )
     });
-    assert_eq!(sent, json!({"agent": "codex", "prompt": "Go", "branch": "ABC-12"}));
+    assert_eq!(
+        sent,
+        json!({"agent": "codex", "prompt": "Go", "branch": "ABC-12"})
+    );
 }
 
 #[test]

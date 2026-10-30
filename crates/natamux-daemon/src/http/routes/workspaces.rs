@@ -183,7 +183,9 @@ pub async fn create(state: Arc<AppState>, id: String, body: Option<Value>) -> An
         Err(error) => return zod_answer(&error),
     };
     answer(StatusCode::CREATED, move || {
-        let task = state.workspaces.create(&id, base.as_deref(), branch.as_deref())?;
+        let task = state
+            .workspaces
+            .create(&id, base.as_deref(), branch.as_deref())?;
         Ok(json!({ "task": to_value(&task) }))
     })
     .await
