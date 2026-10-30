@@ -7,6 +7,11 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v1.0.11 (2026-10-30)
+
+- In the desktop app, the sidebar hides the task id by default, so the title gets the whole row. **Settings > Appearance > Task ids in the sidebar** shows it again. See [Task ids in the sidebar](/docs/guides/desktop-app/#task-ids-in-the-sidebar).
+- In the desktop app, the docked details panel has its own width again, from 280 to 560 px, 320 by default. Dragging its edge resizes only the panel. See [In the desktop app](/docs/guides/dashboard/#in-the-desktop-app).
+
 ## v1.0.10 (2026-10-30)
 
 - Name the branch of a task: the **Branch** field in **Start a task**, the project pattern `git.branchName` with `{id}` and `{slug}`, `--branch` in the CLI and `branch` in the API. See [Branch name](/docs/concepts/workspaces/#branch-name).
