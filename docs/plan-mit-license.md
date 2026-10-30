@@ -40,7 +40,7 @@ Paths are relative to the repo root. `zed:` paths are in the Zed fork at rev 69c
   - Never copy GPL code, comments, query files, icons or structure line by line.
   - For the terminal and the text input, write from this plan, the gpui API, alacritty and public specs, with the Zed files closed. The tests and golden tables prove equality.
   - Apache-2.0 or MIT code (gpui, alacritty, tree-sitter queries) may be used as a dependency or copied with its license notice kept.
-- Comments: simple English, in the style of the code around them. Commit messages: simple English, and they end with the attribution line the session gives.
+- Comments: simple English, in the style of the code around them. Commit messages and the PR text: simple English, with no AI attribution line (owner rule for Natamux).
 - Never use the two product names the owner banned for this work (the orchestrator's brief names them). `docs/plan-features.md:186-188` holds one of them: do not copy wording from there.
 - File names: the local path rule blocks any path with "key" or "token" in it. Never create such a file (use names like `input_bytes.rs`, `press_table.json`, `shortcut_hint.rs`), and never read one. Zed's `zed:crates/terminal/src/mappings/keys.rs` and `zed:crates/ui/src/components/keybinding*.rs` stay unread. The golden tables cover their behaviour.
 - Do not change other crates (`natamux-proto`, `-core`, `-stages`, `-daemon`, `-client`, `-store`, `-screen`, `-pty`, `-agents`, `-git`, `-contract`, `-cli`, `-update`). Do not change the workflow rules files listed in section 6.3.9. Check before each push: `git diff --name-only origin/main...HEAD -- crates/ ':!crates/natamux-app' ':!crates/natamux-ui' ':!crates/natamux-theme'` must print nothing. Section 6.3.9 names the exceptions.
@@ -184,7 +184,7 @@ Decided on 2026-10-30 (the former open decisions of section 12). Each row: the o
 | D23 | Options: keep Zed's accessibility roles in the own widgets / drop them. **Chosen: keep** (6.7.1) | No pixel cost and no accessibility loss |
 | D24 | Options: extend the colour-literal scan to the new crates with an allow list / leave it on natamux-app only. **Chosen: extend** `xtask colours` to `crates/natamux-ui/src` and `crates/natamux-theme/src`. Allow-list only files that must hold literals: the elevation shadows file in natamux-ui, the theme loader file (it calls `hsla(`), and `terminals/term/colors.rs` and `contrast.rs` in natamux-app (cube and gray math, the black/white fallback) | Keeps the rule that colours come from the theme (`xtask/src/main.rs:155-162`). The scan flags any `hsla(` call, so the new files need explicit entries |
 | D25 | Options: let the local Docker format step download the rustfmt component once / no. **Chosen: no;** use the `fmt-patch` artifact (8.2 step 2) | The owner's rule for this work: locally only format code in a container, no package installs and no builds. A rustup component download is an install |
-| D26 | Options: agents push `natamux-ci/mit`, `mit-check`, `mit-tools`, `perf-before`, `perf-after` / every loop runs on the PR branch. **Chosen: use the five refs.** The first push still needs the owner's explicit OK in chat (memory: a wip push needs an explicit OK); this row is not that OK | Shots of the exact commit (7.1 merge-ref trap), no cancelled PR runs, and a check-only loop of about 5 min |
+| D26 | Options: agents push `natamux-ci/mit`, `mit-check`, `mit-tools`, `perf-mit-before`, `perf-mit-after` / every loop runs on the PR branch. **Chosen: use the five refs.** The first push still needs the owner's explicit OK in chat (memory: a wip push needs an explicit OK); this row is not that OK | Shots of the exact commit (7.1 merge-ref trap), no cancelled PR runs, and a check-only loop of about 5 min |
 | D27 | Options: merge `main` into `feat/mit-license` now (S0.1) / later. **Chosen: now, before the control run:** fetch, then merge `origin/main` with a merge commit. Today the branch lacks 2 commits of `main` (`545937ad` Release v1.0.9, `bb723790`). Later merges only at planned points, each with a new control run | The Settings shots print the version (`app/settings_view_render.rs:65`); C0, B1 and B1m must be built on the same `main` |
 | D28 | Options: also run the exact compare inside CI as a temporary `rust.yml` step / only outside CI. **Chosen: only outside CI** | The outside compare is the step gate (7.1). A CI step needs B1 inside CI (artifact download across runs) and more workflow code to remove later |
 | D29 | Options: add F1-F4 whole-app flows to `app-macos` / not. **Chosen: add them** (`--smoke --fake-daemon`) | Smoke sends `PlatformInput` through the real macOS window (`app/smoke.rs:47-60`): the only cover of the workflow glue on the real platform (priority 2). It adds seconds to a job that runs anyway |
@@ -195,6 +195,14 @@ Decided on 2026-10-30 (the former open decisions of section 12). Each row: the o
 | D34 | Options: record Tab inside the inline Edit form (T19) and keep it / change it. **Chosen: keep what T19 records** | DT14; the Edit form is workflow (priority 2) |
 | D35 | Options: the terminal test seam inside natamux-app / a test-only helper in `natamux-client`. **Chosen: inside natamux-app:** one free function `send_input(handle: &TerminalHandle, text: String)` in `terminals/remote_terminal.rs` that holds the `#[cfg(test)]` recorder and then calls `TerminalHandle::input`. All three paths that reach the shell call it: the input task (`terminals/remote_terminal.rs:436-440`, after `from_utf8_lossy`), `type_text` (`:258-263`; `paste_text` and the Files drop go through it) and the pending flush on Open (`terminals/remote_terminal_events.rs:54-56`). No other code calls `TerminalHandle::input` (a grep test checks it) | These are the only points where text leaves the app. A recorder in the input task alone misses `type_text`, the path drop of T-V1 and the pending text. No frozen crate changes. `TerminalHandle::detached` (`crates/natamux-client/src/terminals/session.rs:92-101`) already gives a handle with no socket |
 | D36 | Options: keep Zed's drag-move of selected text in every text box (press in a selection, wait 300 ms, drag; Alt copies on macOS) / drop it. **Chosen: keep** (6.3.3); the owner may drop it in a follow-up | DT14 and priority 2: it is today's behaviour in every workflow box. T-MOUSE-1 records it on the old code |
+
+Owner answers of 2026-10-30. The orchestrator listed every removal of this plan and the five CI refs in chat; the owner replied "ok đồng ý hết tất cả" (yes to all):
+
+- D26: yes. Agents may push the five `natamux-ci/*` refs. The perf refs are `natamux-ci/perf-mit-before` and `natamux-ci/perf-mit-after`, because other tasks share `natamux-ci/perf-before`/`perf-after`.
+- D33: yes to every removal this plan lists, for content in commits of this PR (Zed dependencies and lock entries, old code paths, the temporary features and CI steps, `deny.toml` and `.cargo/audit.toml` entries, unused `[patch.crates-io]` entries, Zed icons, the GPL license text and GPL mentions). Anything else (branches, worktrees, files outside the repo) still needs the owner's yes. A local file removal uses `trash`, never `rm`.
+- D2, D3: the icon change goes ahead with the chosen sources.
+- Owner sign-offs and manual gates (S0.4 new states, the IME and perf gates of 7.3 and 7.4, S10 icons, D18 exceptions): agents do not wait. They record each one in the progress file and the PR description; the owner does them on the final artifact, before the merge.
+- A test that finds a real bug in today's code: record it, keep today's behaviour (DT14), list it for the owner.
 
 ## 5. Target shape
 
@@ -988,7 +996,7 @@ If D1 says no new crates: the kit and theme become modules `components/kit/` and
   - Gate 2 run 4 times within its targets: frames over 1 refresh ≤ 1%, over 2 ≤ 0.1%, key to glyph p95 ≤ 20 ms (`docs/rust-phase1.md:135`).
   - Gate 3 hand checks: history, typing, paste, Ctrl+C, Vietnamese, resize, daemon restart with no repeated or lost line (`docs/rust-phase1.md:185`).
 - Perf (the rule for every perf proof in this plan):
-  - Push the old tip to `natamux-ci/perf-before` and the new one to `natamux-ci/perf-after` (`perf.yml`; each run already runs the flows 5 times, `.github/workflows/perf.yml:56-61`). Run each side 3 times (3 workflow runs, a new empty commit each time, never `gh run rerun`).
+  - Push the old tip to `natamux-ci/perf-mit-before` and the new one to `natamux-ci/perf-mit-after` (`perf.yml`; each run already runs the flows 5 times, `.github/workflows/perf.yml:56-61`). Run each side 3 times (3 workflow runs, a new empty commit each time, never `gh run rerun`).
   - Compare per metric the median of the 3 run values. Pass: after ≤ before × 1.10 + 1 ms (CPU %, RSS and draw counts: after ≤ before × 1.10). The frame targets of the manual gates hold in every run.
   - Many metrics have no baseline value (`null` in `scripts/perf-baseline.json`, for example `diff_click_p95_ms` and `palette_key_p95_ms`), so the before runs are the only reference. `scripts/perf-check.py` still runs for the metrics it knows.
   - A failure needs a fix, or the owner's sign-off with the numbers.
@@ -1217,7 +1225,7 @@ S1.3 Whole-app flows F1-F4 (D29)
 S1.4 Perf flows for the big views (old code)
 - Goal: a "before" number for the speed claims of S4.3 and S6.2.
 - Files: `app/flow_bench.rs` (two flows in the existing `--bench-flows` set): `editor_type_5000` (type 20 chars into a 5,000-line file in the editor tab; time per key to the drawn frame) and `diff_open_10000` (open a 10,000-line diff; time from the texts arriving to the first drawn frame), with the fake data they need.
-- Tag: none; then `natamux-ci/perf-before` 3 times (7.3 rule).
+- Tag: none; then `natamux-ci/perf-mit-before` 3 times (7.3 rule).
 - Proof: both metrics appear in `perf/flows.txt`.
 
 ### S2. Terminal (priority 1)
@@ -1268,7 +1276,7 @@ S2.4 View, element, scrollbar, IME, menu
 S2.5 Flip
 - Goal: the own terminal is the default.
 - Files: `crates/natamux-app/Cargo.toml` (`default = ["own-terminal"]`), `app/shortcuts.rs:241-242` (own actions `TerminalCopy`/`TerminalPaste`), and the own menu's Copy/Paste rows switched to them in the same commit.
-- Tag: `[ci: all]`. Also `natamux-ci/perf-before` (S2.4 tip) and `natamux-ci/perf-after` (S2.5 tip), 3 runs each (7.3 rule).
+- Tag: `[ci: all]`. Also `natamux-ci/perf-mit-before` (S2.4 tip) and `natamux-ci/perf-mit-after` (S2.5 tip), 3 runs each (7.3 rule).
 - Proof:
   - all shots exact, with the `terminal-*` states (including `terminal-context-menu` with its ⌘C/⌘V hints and `terminal-scrollbar`) and every existing terminal state;
   - `--smoke --fake-daemon`; `app-windows` smoke;
@@ -1353,7 +1361,7 @@ S4.3 Code view and its users
 - Files: `text_view/code_view.rs`, `files/file_editor_body.rs`, `projects/json_tab.rs`, `workspaces/docs_tab.rs`, `workspaces/docs_view.rs`, `git/diff_editors.rs` (`plain_switches` goes once unused).
 - Tests: T-MIN-1, T14, T-LOOK gutter, T-CODE-1, T-MOUSE-1 (gutter), T-SB-1.
 - The code view observes the `Appearance` global (6.1).
-- Tag: `[ci: shots]`, then `natamux-ci/perf-after` 3 times.
+- Tag: `[ci: shots]`, then `natamux-ci/perf-mit-after` 3 times.
 - Proof:
   - all shots exact, including `workspace-editor*` (with `workspace-editor-scrollbar`), `workspace-docs-edit`, `workspace-docs-source`, `workspace-docs-source-focused`, `project-settings-tab-json`, `project-settings-json-error`, `details-files` and `code-<lang>`;
   - T14 and T-CODE-1 green;
@@ -1379,7 +1387,7 @@ S6.1 T-DIFF-1 golden and diff tests on the old code
 S6.2 Own diff model and view
 - Files: `git/diff_model.rs`, `git/diff_view.rs`, `git/diff_editors.rs`, `git/diff_cursor.rs`, `git/review_blocks.rs`, `git/changes_view.rs`, `git/changes_boxes.rs`; port `git/diff_view_tests.rs` (7 tests); the `imara-diff` edge.
 - Tests: T-DIFF-1, T-MOUSE-1 (diff), T-SB-1 (diff case).
-- Tag: `[ci: shots]`, then `natamux-ci/perf-after` 3 times.
+- Tag: `[ci: shots]`, then `natamux-ci/perf-mit-after` 3 times.
 - Proof:
   - exact shots: `workspace-changes-*`, `changes-over-main`, `image-diff`, `rollback`, `workspace-history`, `history-over-main`, `changes-diff-*`;
   - `diff_open_10000` and `diff_click_p95_ms` within the 7.3 rule against the before runs (S1.4).
