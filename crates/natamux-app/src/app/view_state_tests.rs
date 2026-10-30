@@ -18,6 +18,7 @@ fn a_saved_view_reads_back_the_same() {
         sidebar_open: false,
         sidebar_width: 300.0,
         show_finished: true,
+        sidebar_ids: true,
         seen: vec![
             ("T-1".into(), TaskState::Running),
             ("T-2".into(), TaskState::NeedsInput),
@@ -65,6 +66,12 @@ fn a_saved_view_reads_back_the_same() {
 #[test]
 fn a_missing_file_is_the_default_view() {
     assert_eq!(load(&temp_folder("missing")), ViewState::default());
+}
+
+#[test]
+fn the_sidebar_hides_task_ids_until_switched_on() {
+    assert!(!ViewState::parse("{}").sidebar_ids);
+    assert!(ViewState::parse(r#"{"sidebarIds": true}"#).sidebar_ids);
 }
 
 #[test]

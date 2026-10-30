@@ -63,6 +63,7 @@ fn rows_sit_on_their_pages() {
         SettingRow::LightTheme,
         SettingRow::DarkTheme,
         SettingRow::UiSize,
+        SettingRow::SidebarIds,
         SettingRow::FontFamily,
         SettingRow::FontSize,
     ] {
@@ -96,6 +97,14 @@ fn finds_a_row_by_a_keyword() {
         found.map(|found| found.rows),
         Some(vec![SettingRow::Theme, SettingRow::DarkTheme])
     );
+}
+
+#[test]
+fn finds_the_task_ids_switch_by_id_key_or_sidebar() {
+    for query in ["id", "key", "sidebar"] {
+        let found = search(query, &[]).unwrap_or_default();
+        assert!(found.rows.contains(&SettingRow::SidebarIds), "{query}");
+    }
 }
 
 #[test]

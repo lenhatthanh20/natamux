@@ -150,6 +150,10 @@ impl Dashboard {
         self.update_view(cx, |state| state.set_section(id, open));
     }
 
+    pub fn toggle_sidebar_ids(&mut self, cx: &mut Context<Self>) {
+        self.update_view(cx, |state| state.sidebar_ids = !state.sidebar_ids);
+    }
+
     pub fn toggle_notify(&mut self, cx: &mut Context<Self>) {
         self.update_view(cx, |state| state.notify = !state.notify);
         if self.view().notify {
