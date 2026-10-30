@@ -9,7 +9,7 @@ use ui::prelude::*;
 use super::Root;
 use crate::app::command_when::{CommandState, When};
 use crate::app::dashboard::details::PanelRequest;
-use crate::app::layout_mode::{DetailsMode, PANEL_WIDTH};
+use crate::app::layout_mode::{DetailsMode, RAIL_WIDTH, SIDEBAR_WIDTH, docked_panel_width};
 use crate::app::shell_rules::details_toggle;
 use crate::app::shortcuts::{
     ApproveStage, Back, EditTask, ReportStage, SendBackStage, ShowProgress, SkipStage,
@@ -17,9 +17,8 @@ use crate::app::shortcuts::{
 };
 use crate::app::tab_rules::esc_shows_terminals;
 use crate::app::view_rules::WorkspaceTab;
-use crate::app::view_state::{DETAILS_MAX, DETAILS_MIN};
+use crate::app::view_state::{SIDEBAR_MAX, SIDEBAR_MIN};
 use crate::components::resize_handle::{Edge, Limits, Resize, ResizeHandle};
-use crate::tasks::details_rail::RAIL_WIDTH;
 
 /// `min(360px, 90vw)`.
 const SHEET_WIDTH: f32 = 360.;
@@ -54,14 +53,15 @@ impl Root {
         )
     }
 
-    /// The docked column: the resize line at its left edge, then the panel.
-    pub(super) fn render_docked_details(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let width = self.dashboard.read(cx).view().details_width;
+    /// The docked column: the resize line at its left edge, then the panel. It shares the
+    /// sidebar's width (T-0237): with the rail beside it, this side is as wide as the sidebar, and
+    /// a drag of either line moves both. The resize line is its only border, as the sidebar's.
+    pub(super) fn render_docked_details(&self, side: f32, rail: bool) -> impl IntoElement {
         let dashboard = self.dashboard.clone();
         let limits = Limits {
-            min: DETAILS_MIN,
-            max: DETAILS_MAX,
-            default: PANEL_WIDTH,
+            min: SIDEBAR_MIN,
+            max: SIDEBAR_MAX,
+            default: SIDEBAR_WIDTH,
             collapse_below: None,
         };
         let resize = ResizeHandle::new(
@@ -69,24 +69,19 @@ impl Root {
             &self.details_resize,
             Edge::Left,
             limits,
-            width,
+            side,
             move |resize, _, cx| {
                 if let Resize::Width(width) = resize {
-                    dashboard.update(cx, |dashboard, cx| dashboard.set_details_width(width, cx));
+                    dashboard.update(cx, |dashboard, cx| dashboard.set_sidebar_width(width, cx));
                 }
             },
         );
         h_flex().h_full().flex_none().child(resize).child(
-            div()
-                .w(px(width))
-                .h_full()
-                .border_l_1()
-                .border_color(cx.theme().colors().border)
-                .child(
-                    self.details
-                        .clone()
-                        .cached(StyleRefinement::default().size_full()),
-                ),
+            div().w(px(docked_panel_width(side, rail))).h_full().child(
+                self.details
+                    .clone()
+                    .cached(StyleRefinement::default().size_full()),
+            ),
         )
     }
 

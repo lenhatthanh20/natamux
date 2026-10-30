@@ -10,14 +10,13 @@ use ui::{FixedWidth, IconButtonShape, Tooltip, prelude::*};
 use crate::app::commands::shortcut_of;
 use crate::app::dashboard::Dashboard;
 use crate::app::dashboard_data::Part;
+use crate::app::layout_mode::RAIL_WIDTH;
 use crate::app::tab_rules::details_tabs;
 use crate::app::view_rules::DetailsView;
 use crate::components::chips::tip_with_keys;
 use crate::git::commit_rules::tab_count_label;
 use crate::tasks::details_panel::DetailsPanel;
 
-/// The rail's width; Root keeps it out of main.
-pub const RAIL_WIDTH: f32 = 40.;
 const RAIL_ICON: f32 = 18.;
 /// A square of `ButtonSize::Large`'s 32 px: Zed's square shape sizes the button from a custom
 /// icon size and outgrew the rail, so its hover spilled into the panel.
