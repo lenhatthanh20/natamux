@@ -145,6 +145,7 @@ impl Root {
         let view = self.dashboard.read(cx).view();
         let sidebar_open = view.sidebar_open;
         let sidebar_width = effective_sidebar_width(view.sidebar_width, Some(width));
+        let details_width = effective_sidebar_width(view.details_width, Some(width));
         h_flex()
             .relative()
             .flex_1()
@@ -162,7 +163,7 @@ impl Root {
                     .child(self.render_main(cx)),
             )
             .when(details == Some(DetailsMode::Docked), |this| {
-                this.child(self.render_docked_details(sidebar_width, rail))
+                this.child(self.render_docked_details(details_width))
             })
             .when(rail, |this| this.child(self.rail.clone()))
             .when(

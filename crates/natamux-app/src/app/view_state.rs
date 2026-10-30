@@ -17,10 +17,13 @@ use crate::sidebar::sidebar_tree::{Folds, with_fold};
 use crate::terminals::pane_rules::{PaneLayout, parse_pane_layout};
 
 pub const FILE_NAME: &str = "view.json";
-/// The width both sides share (`sidebarWidth`); the default is `SIDEBAR_WIDTH`. At 280 the
-/// details panel beside its rail is 240, where the Changes list still shows its counts.
+/// The sidebar (`sidebarWidth`); the default is `SIDEBAR_WIDTH`.
 pub const SIDEBAR_MIN: f32 = 280.0;
 pub const SIDEBAR_MAX: f32 = 480.0;
+/// The docked details panel without its rail (`detailsWidth`), resized on its own (T-0239); the
+/// default is `SIDEBAR_WIDTH` too.
+pub const DETAILS_MIN: f32 = 280.0;
+pub const DETAILS_MAX: f32 = 560.0;
 /// The file list of the Changes tab: `useStoredWidth('natamux.files-width', 260, 200, 420)`.
 pub const FILES_DEFAULT: u32 = 260;
 pub const FILES_MIN: u32 = 200;
@@ -112,6 +115,7 @@ pub struct ViewState {
     /// The tasks of the Agents grid, in order. None: the default list (`agentPanes`).
     pub agent_panes: Option<Vec<String>>,
     pub pane_layout: PaneLayout,
+    pub details_width: f32,
     /// The tab the user last picked in the details panel. None: the default of the place.
     pub details_view: Option<DetailsView>,
     /// Sections of the details panel by id, open or folded; a missing one has its default.
@@ -154,6 +158,7 @@ impl Default for ViewState {
             last_base: Vec::new(),
             agent_panes: None,
             pane_layout: PaneLayout::default(),
+            details_width: SIDEBAR_WIDTH,
             details_view: None,
             sections: Vec::new(),
             details_open: true,
@@ -257,6 +262,12 @@ impl ViewState {
                 _ => None,
             },
             pane_layout: parse_pane_layout(map.get("paneLayout").and_then(Value::as_str)),
+            details_width: panel_width_of(
+                map.get("detailsWidth"),
+                default.details_width,
+                DETAILS_MIN,
+                DETAILS_MAX,
+            ),
             details_view: map
                 .get("detailsView")
                 .and_then(Value::as_str)
@@ -319,6 +330,7 @@ impl ViewState {
             "lastBase": last_base,
             "agentPanes": self.agent_panes,
             "paneLayout": self.pane_layout.as_str(),
+            "detailsWidth": self.details_width,
             "detailsView": self.details_view.map(DetailsView::name),
             "sections": self
                 .sections
@@ -370,6 +382,10 @@ impl ViewState {
 
     pub fn set_sidebar_width(&mut self, width: f32) {
         self.sidebar_width = width.clamp(SIDEBAR_MIN, SIDEBAR_MAX);
+    }
+
+    pub fn set_details_width(&mut self, width: f32) {
+        self.details_width = width.clamp(DETAILS_MIN, DETAILS_MAX);
     }
 
     /// `showProgress`: the details dock open on Progress.

@@ -25,6 +25,7 @@ fn a_saved_view_reads_back_the_same() {
         last_base: Vec::new(),
         agent_panes: Some(vec!["T-2".into(), "T-1".into()]),
         pane_layout: PaneLayout::Two,
+        details_width: 400.0,
         details_view: Some(DetailsView::Details),
         sections: vec![("notes".into(), false), ("details".into(), true)],
         details_open: false,
@@ -96,9 +97,11 @@ fn a_part_of_the_wrong_kind_falls_back_to_its_default() {
 }
 
 #[test]
-fn the_details_panel_keeps_its_tab_and_folded_sections() {
-    let state =
-        ViewState::parse(r#"{"detailsView": "progress", "sections": {"usage": false, "x": 1}}"#);
+fn the_details_panel_keeps_its_width_tab_and_folded_sections() {
+    let state = ViewState::parse(
+        r#"{"detailsWidth": 900, "detailsView": "progress", "sections": {"usage": false, "x": 1}}"#,
+    );
+    assert_eq!(state.details_width, DETAILS_MAX);
     assert_eq!(state.details_view, Some(DetailsView::Progress));
     assert!(!state.section_open("usage", true));
     assert!(state.section_open("x", true));
@@ -131,15 +134,31 @@ fn an_old_file_with_per_task_flags_still_loads() {
         r#"{"detailOpen": {"T-1": false}, "detailsOpen": {"T-2": true}, "detailsWidth": 400}"#,
     );
     assert!(old.details_open);
+    assert_eq!(old.details_width, 400.0);
     assert!(!old.to_json().contains("T-1"));
 }
 
 #[test]
-fn the_sidebar_and_details_share_one_width() {
+fn the_sidebar_and_details_keep_their_own_widths() {
     let old = ViewState::parse(r#"{"sidebarWidth": 300, "detailsWidth": 400}"#);
-    assert_eq!(old.sidebar_width, 300.0);
-    assert!(!old.to_json().contains("detailsWidth"));
+    assert_eq!((old.sidebar_width, old.details_width), (300.0, 400.0));
+    let mut state = ViewState::parse(r#"{"sidebarWidth": 300}"#);
+    assert_eq!(state.details_width, 320.0);
+    state.set_details_width(450.0);
+    assert_eq!((state.sidebar_width, state.details_width), (300.0, 450.0));
+    state.set_sidebar_width(350.0);
+    assert_eq!((state.sidebar_width, state.details_width), (350.0, 450.0));
+    assert_eq!(ViewState::parse(&state.to_json()).details_width, 450.0);
     assert_eq!(ViewState::default().sidebar_width, 320.0);
+    assert_eq!(ViewState::default().details_width, 320.0);
+    assert_eq!(
+        ViewState::parse(r#"{"detailsWidth": 100}"#).details_width,
+        DETAILS_MIN
+    );
+    assert_eq!(
+        ViewState::parse(r#"{"detailsWidth": "wide"}"#).details_width,
+        320.0
+    );
     assert_eq!(
         ViewState::parse(r#"{"sidebarWidth": 100}"#).sidebar_width,
         280.0
@@ -257,6 +276,8 @@ fn remembers_one_base_per_project_and_blurs_by_toggle() {
     assert_eq!(state.blurred, ["r2"]);
     state.set_sidebar_width(100.0);
     assert_eq!(state.sidebar_width, SIDEBAR_MIN);
+    state.set_details_width(900.0);
+    assert_eq!(state.details_width, DETAILS_MAX);
 }
 
 #[test]
