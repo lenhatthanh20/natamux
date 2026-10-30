@@ -58,7 +58,7 @@ The flags of `rust-phase1.md` stay. New:
 
 | Flag | Does |
 |---|---|
-| `--shot STATE` | Opens the window in one named state of the fake daemon (it implies `--fake-daemon`). Use it with `--theme` and `--size`. The clock stops at the fake's time and the view state is fixed and never saved, so each run looks the same. The states are below |
+| `--shot STATE` | Opens the window in one named state of the fake daemon (it implies `--fake-daemon`). Use it with `--theme` (or `--theme-name`) and `--size`. The clock stops at the fake's time and the view state is fixed and never saved, so each run looks the same. The states are below |
 | `--open-task TASK` | Opens TASK once the dashboard lists it, as a click on its row does. A task it never lists prints `open-task: ...` on stderr and the app goes on. With `--fake-daemon`, no background job runs. `scripts/motion-cost.sh` uses it (see "Motion") |
 | `--count-draws` | Prints `draws <n> active <true\|false>` once a second: the window's draws in that second and whether it has focus. It forces no frame (the perf overlay draws every frame). `scripts/motion-cost.sh` uses it (see "Motion") |
 
@@ -226,6 +226,47 @@ The fake's `natamux` project has three open GitHub issues (one imported already)
 | `update-failed` | The status bar's update item after a manual check failed: "Update failed" (T-0214) |
 | `settings-update-ready` | Settings on General with an update ready: the Version row's line and **Restart to Update** (T-0214) |
 | `repo-trust-dialog` | The repo trust dialog of `natamux`: its commands with where each comes from, the setup script, the note, **Not now** and **Approve** (T-0224) |
+
+### States of the MIT move
+
+The move off Zed's GPL crates (`docs/plan-mit-license.md`) redraws the terminal, the text boxes, the code, diff and Markdown views and the UI kit, and must keep every pixel. These states pin what those parts draw today (plan 7.2). Their screens and files go into the fake only for their own state (`app/shots_terminal.rs`, `app/shots_text.rs`), so the other states do not change. The steps act as a user would, through the window's own dispatch (`app/shots_input.rs`): keys, a pointer move, a click, a drag, a wheel turn.
+
+| State | Shows |
+|---|---|
+| `terminal-look` | T-0141's terminal with every kind of cell: the 16 colours as text and background, a sample of the 256, a truecolour row, bold, dim, italic, the underline kinds, strike, inverse, hidden, wide CJK, emoji with VS16, Vietnamese with combining marks, box lines, blocks, quadrants, sextants, shades, Powerline, low-contrast pairs, an OSC 8 link |
+| `terminal-cursors` | T-0146's terminals with a steady block, underline and bar cursor (`ESC [2 q`, `4 q`, `6 q`) on a wide character, written once the panes laid out; Terminal 1 (block) focused, the others hollow |
+| `terminal-cursors-underline` | The same, Terminal 10 (underline) focused |
+| `terminal-cursors-bar` | The same, Terminal 12 (bar) focused |
+| `terminal-selection` | T-0143's Terminal 1 with the find bar on "src" and a drag that selects over two lines |
+| `terminal-alt-screen` | A full-screen program on the alternate screen: coloured rows, a title and a status line, the cursor hidden |
+| `terminal-scrolled` | 300 lines of history, a wheel turn of 12 lines up: Jump to latest |
+| `terminal-context-menu` | A right click on "Claude": the word selected and the terminal's menu with the Copy and Paste keys |
+| `terminal-scrollbar` | 300 lines of history with the scrollbars shown |
+| `text-box-selection` | The Add a task dialog with its title typed and the last two words selected |
+| `text-box-selection-unfocused` | The same after Tab: the selection in a box without focus |
+| `workspace-editor-scrollbar` | A 1,200-line TypeScript file paged down, four lines selected, the scrollbars shown, long lines that do not wrap |
+| `edit-form` | T-0143's details with the edit form open |
+| `tree-rename` | The sidebar rename of T-0146 in progress (F2) |
+| `settings-font-error` | The Settings search "font" with a size of 40: the error under the size field |
+| `send-back-long` | The Send back dialog with a reason of 15 lines, the box grown to its most and scrolled to the end |
+| `workspace-docs-source` | T-0143 on Docs with the Source view |
+| `workspace-docs-source-focused` | The same with the source box focused: its caret |
+| `workspace-docs-rich` | A doc with six heading levels, lists, a task list, a table, code, a quote, a link, a rule, straight quotes, `--` and `---`, a bare URL, a footnote, a GFM alert, superscript and subscript |
+| `workspace-editor-long` | The 1,200-line file at its end: a 4-digit gutter |
+| `workspace-editor-wrapped` | A Markdown file whose long lines wrap |
+| `code-<lang>` | One sample file per language of `git/languages.rs` (22) in the editor tab, the details panel closed; shot at 1024x720 only. JSDoc and regex show inside JavaScript files, Markdown inline in a paragraph file. The samples are `assets/fake/code/` |
+| `changes-diff-side-by-side` | T-0143's Changes with the sidebar and the panel closed, so the diff column has room for both sides |
+| `changes-diff-collapsed` | A 120-line file with lines added far apart: the folded lines between them. The diff states other than `changes-diff-focused` add lines only: the colours of a deleted line came late in some runs |
+| `changes-diff-wrapped` | A file with long lines, wrap on |
+| `changes-diff-deleted-only` | A deleted text file: only the old side |
+| `changes-diff-focused` | The diff focused, the cursor in the first change and lines 5 to 6 selected |
+| `changes-diff-scrollbar` | The 120-line file at its second change, the scrollbars shown |
+| `menu-keyboard` | The row menu of T-0146 with Down pressed twice |
+| `button-focus` | The Add a task dialog after Shift+Tab: the Add button focused |
+| `button-disabled-tooltip` | The Agents grid with the pointer on the status bar's details toggle, which is off: its tooltip |
+| `checkbox-states` | Roll back with one file checked, one unchecked and a conflict whose box is off and disabled |
+
+`--theme-name NAME` shows one theme of the app in its own look; the name is the theme's in lower case with a dash for a space (`rose-pine-dawn`). A run of every state shoots `tasks-table`, `workspace-changes-diff` and `workspace-terminal-running` in each theme but Natamux Light and Natamux Dark, at 1000x680 only, named `<state>-<theme>-1000x680.png` (D19 of the plan). A state whose name ends in `-scrollbar` shows the scrollbars, which every other shot hides.
 
 ## Where it differs from the React screens
 

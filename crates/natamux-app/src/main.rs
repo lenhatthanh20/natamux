@@ -49,8 +49,11 @@ mod app {
     pub mod shortcuts;
     pub mod shots;
     pub mod shots_files;
+    pub mod shots_input;
     pub mod shots_settings;
     pub mod shots_stages;
+    pub mod shots_terminal;
+    pub mod shots_text;
     pub mod shown_cache;
     pub mod sign_in;
     pub mod sign_in_rules;
@@ -401,7 +404,12 @@ fn start(
         Some(folder) => perf::report::timed("view_state_ms", || view_state::load(folder)),
         None => ViewState::default(),
     };
-    app::appearance::init(options.theme, options.shot.is_some(), cx);
+    let inputs = app::appearance::Inputs {
+        flag: options.theme,
+        theme_name: options.theme_name,
+        shot: options.shot.map(app::options::Shot::name),
+    };
+    app::appearance::init(inputs, cx);
     app::appearance::apply(&view, cx);
     perf::report::timed("themes_ms", || {
         theme_settings::init(theme::LoadThemes::All(Box::new(NatamuxAssets)), cx)

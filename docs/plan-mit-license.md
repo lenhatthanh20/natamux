@@ -1205,6 +1205,7 @@ S0.4 New shot states and theme option (7.2)
   - The owner looks at the new states.
   - B1 vs B1m gives the mask.
 - Risk: hooks that need GPL internals (terminal marked text): leave them out (T-I2 covers them).
+- Done in S0.4: `main` (#546, #547, both UI) was merged first and shot alone, so C1 for the old states is that run. The states are in `app/shots_terminal.rs` (terminal) and `app/shots_text.rs` (text, code, diff, kit), with the input helpers in `app/shots_input.rs`; each state's screen or files go into the fake only for that state, so the old states do not change. Steps act through the window's own dispatch: keys, a pointer move, clicks, a drag, a wheel turn. Three more terminal states than 7.2 names: `terminal-cursors-underline` and `terminal-cursors-bar` focus the underline and bar panes (one focus per window), and `terminal-cursors` focuses the block. The `code-<lang>` samples are `crates/natamux-app/assets/fake/code/` (`.env` is kept as `sample.env`, as git ignores `.env*`), shot at 1024x720 only; jsdoc, regex and markdown-inline show inside a JavaScript file and a Markdown file, as in real use. `--theme-name <slug>` (`theme_catalog::theme_slug`) shows one theme in its own look; the theme shots are `<state>-<slug>-1000x680.png`, 45 per run, only on a run of every state. `user_settings` takes the shot's state name: `-scrollbar` states get `show: always`. Tests check that `rust.yml` lists every state and the 15 theme slugs.
 
 ### S1. Workflow safety net (tests only, old code)
 

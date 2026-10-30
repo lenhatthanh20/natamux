@@ -75,6 +75,11 @@ impl FileEditor {
         &self.path
     }
 
+    /// The text box, once the first text came, for the `--shot` states.
+    pub fn body(&self) -> Option<&Entity<FileEditorBody>> {
+        self.body.as_ref()
+    }
+
     fn name(&self) -> &str {
         split_path(&self.path).1
     }

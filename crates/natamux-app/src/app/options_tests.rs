@@ -1,4 +1,5 @@
 use super::*;
+use crate::app::theme_catalog::theme_slug;
 
 fn parse(args: &[&str]) -> Result<Options, String> {
     Options::parse(args.iter().map(|arg| arg.to_string()))
@@ -9,6 +10,7 @@ fn no_flags_follow_the_system() {
     let options = parse(&[]).unwrap();
     assert!(!options.smoke);
     assert_eq!(options.theme, None);
+    assert_eq!(options.theme_name, None);
     assert_eq!(options.size, None);
     assert_eq!(options.hold_seconds, None);
     assert!(!options.fake_daemon);
@@ -129,4 +131,67 @@ fn the_ci_workflow_shoots_every_state() {
     let docked = part("DOCKED: >-", "run:");
     assert_eq!(docked.first(), Some(&"tasks-table"));
     assert_eq!(docked[1..], names[16..]);
+}
+
+#[test]
+fn takes_a_theme_by_its_flag_name() {
+    let options = parse(&["--theme-name", "rose-pine-dawn", "--theme", "dark"]).unwrap();
+    assert_eq!(
+        options.theme_name,
+        Some(("Rosé Pine Dawn", ThemeKind::Light))
+    );
+    assert_eq!(options.theme, Some(ThemeMode::Dark));
+    let options = parse(&["--theme-name", "tokyo-night"]).unwrap();
+    assert_eq!(options.theme_name, Some(("Tokyo Night", ThemeKind::Dark)));
+    assert!(parse(&["--theme-name", "Tokyo Night"]).is_err());
+    assert!(parse(&["--theme-name", "solarized"]).is_err());
+    assert!(parse(&["--theme-name"]).is_err());
+}
+
+/// D19 of the MIT plan: three states in each theme but the two defaults, at one size.
+#[test]
+fn the_ci_workflow_shoots_three_states_in_every_other_theme() {
+    let workflow = include_str!("../../../../.github/workflows/rust.yml");
+    let line = |key: &str| -> Vec<&str> {
+        let found = workflow
+            .lines()
+            .find_map(|line| line.trim().strip_prefix(key));
+        found.unwrap().split_whitespace().collect()
+    };
+    assert_eq!(
+        line("THEMED: "),
+        [
+            "tasks-table",
+            "workspace-changes-diff",
+            "workspace-terminal-running"
+        ]
+    );
+    let mut want: Vec<String> = Vec::new();
+    for kind in [ThemeKind::Light, ThemeKind::Dark] {
+        for name in &kind.themes()[1..] {
+            want.push(theme_slug(name));
+        }
+    }
+    assert_eq!(line("THEMES: "), want);
+    for slug in &want {
+        assert!(theme_of_slug(slug).is_some(), "{slug}");
+    }
+    for state in line("THEMED: ") {
+        assert!(parse(&["--shot", state]).is_ok(), "{state}");
+    }
+}
+
+#[test]
+fn names_a_code_state_after_each_language() {
+    let names: Vec<&str> = Shot::ALL
+        .iter()
+        .filter_map(|shot| match shot {
+            Shot::Code(lang) => Some(lang.state()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(names.len(), 22);
+    assert!(names.iter().all(|name| name.starts_with("code-")));
+    assert!(names.contains(&"code-markdown-inline"));
+    assert!(names.contains(&"code-typescript"));
 }

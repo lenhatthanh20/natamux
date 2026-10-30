@@ -4,7 +4,7 @@
 
 use editor::{CurrentLineHighlight, Editor, EditorEvent, MultiBuffer};
 use gpui::{Entity, EventEmitter, Subscription};
-use language::Buffer;
+use language::{Buffer, ParseStatus};
 use ui::prelude::*;
 
 use crate::git::change_rules::wraps_by_default;
@@ -50,6 +50,17 @@ impl FileEditorBody {
             _subscription: subscription,
             _set: None,
         }
+    }
+
+    pub fn editor(&self) -> &Entity<Editor> {
+        &self.editor
+    }
+
+    /// The file's language is loaded and parsed, so its colours show; a `--shot` waits for it.
+    pub fn parsed(&self, cx: &App) -> bool {
+        let buffer = self.buffer.read(cx);
+        let mut status = buffer.parse_status();
+        buffer.language().is_some() && *status.borrow() == ParseStatus::Idle
     }
 
     pub fn text(&self, cx: &App) -> String {

@@ -63,7 +63,7 @@ fn settings(mode: &str, zoom: f32, terminal: &ResolvedFont) -> Value {
         mode,
         names: ThemeNames::default(),
     };
-    serde_json::from_str(&user_settings(theme, zoom, terminal, false)).unwrap_or(Value::Null)
+    serde_json::from_str(&user_settings(theme, zoom, terminal, None)).unwrap_or(Value::Null)
 }
 
 #[test]
@@ -89,7 +89,7 @@ fn gives_zed_the_picked_theme_of_each_look() {
             dark: "Rosé Pine",
         },
     };
-    let text = user_settings(theme, 1.0, &font("Lilex", 13.0), false);
+    let text = user_settings(theme, 1.0, &font("Lilex", 13.0), None);
     let value: Value = serde_json::from_str(&text).unwrap_or(Value::Null);
     assert_eq!(value["theme"]["mode"], "system");
     assert_eq!(value["theme"]["light"], "Catppuccin Latte");
@@ -139,8 +139,8 @@ fn hides_the_editor_scrollbars_in_a_shot_only() {
         mode: "dark",
         names: ThemeNames::default(),
     };
-    let shot: Value =
-        serde_json::from_str(&user_settings(theme, 1.0, &font, true)).unwrap_or(Value::Null);
+    let shot: Value = serde_json::from_str(&user_settings(theme, 1.0, &font, Some("settings")))
+        .unwrap_or(Value::Null);
     assert_eq!(shot["scrollbar"]["show"], "never");
     assert!(settings("dark", 1.0, &font).get("scrollbar").is_none());
 }
@@ -154,8 +154,38 @@ fn holds_the_caret_solid_in_a_shot_only() {
         mode: "dark",
         names: ThemeNames::default(),
     };
-    let shot: Value =
-        serde_json::from_str(&user_settings(theme, 1.0, &font, true)).unwrap_or(Value::Null);
+    let shot: Value = serde_json::from_str(&user_settings(theme, 1.0, &font, Some("settings")))
+        .unwrap_or(Value::Null);
     assert_eq!(shot["cursor_blink"], false);
     assert!(settings("dark", 1.0, &font).get("cursor_blink").is_none());
+}
+
+// Every shot hides the scrollbars, so the states whose name ends in `-scrollbar` show them, to
+// pin their look (docs/plan-mit-license.md 7.2). Never in real use.
+#[test]
+fn shows_the_scrollbars_in_the_scrollbar_shots_only() {
+    let font = font("Lilex", 15.0);
+    let theme = ThemeSetting {
+        mode: "light",
+        names: ThemeNames::default(),
+    };
+    let shown = |state: &str| -> Value {
+        let text = user_settings(theme, 1.0, &font, Some(state));
+        let value: Value = serde_json::from_str(&text).unwrap_or(Value::Null);
+        value["scrollbar"]["show"].clone()
+    };
+    assert_eq!(shown("terminal-scrollbar"), "always");
+    assert_eq!(shown("changes-diff-scrollbar"), "always");
+    assert_eq!(shown("workspace-editor-scrollbar"), "always");
+    assert_eq!(shown("workspace-changes-diff"), "never");
+    assert_eq!(shown("scrollbar-later"), "never");
+    let shot: Value = serde_json::from_str(&user_settings(
+        theme,
+        1.0,
+        &font,
+        Some("terminal-scrollbar"),
+    ))
+    .unwrap_or(Value::Null);
+    assert_eq!(shot["cursor_blink"], false);
+    assert!(settings("light", 1.0, &font).get("scrollbar").is_none());
 }

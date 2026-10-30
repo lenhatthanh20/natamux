@@ -15,6 +15,8 @@ use super::shortcuts::{FindInTerminal, OpenRowMenu};
 use super::shots_files;
 use super::shots_settings;
 use super::shots_stages;
+use super::shots_terminal;
+use super::shots_text;
 use super::title_bar::open_add_menu;
 use super::view_rules::{DetailsView, WorkspaceTab};
 use super::view_state::{Layout, ViewState};
@@ -25,7 +27,7 @@ use crate::terminals::terminal_cache::{TerminalCache, terminal_key};
 use crate::workspaces::{new_workspace_dialog, remove_finished, remove_workspace_dialog};
 
 /// The feed and the first frames come well within this.
-const SETTLE: Duration = Duration::from_millis(800);
+pub(super) const SETTLE: Duration = Duration::from_millis(800);
 /// Zed's terminal anchors its text to the bottom by the screen it read at its last draw, so a
 /// screen that comes in after the last draw sat half a line higher in some runs (run
 /// 40022329180). The window draws again this often, for as long as CI takes to shoot it.
@@ -34,28 +36,28 @@ const REDRAWS: usize = 20;
 /// A toast lasts 5 s; it is shown again before it goes, so the shot always has it.
 const TOAST_AGAIN: Duration = Duration::from_secs(3);
 /// The task of the row menu, Remove workspace and Add subtask shots.
-const TASK: &str = "T-0146";
+pub(super) const TASK: &str = "T-0146";
 /// The task whose new workspace is ready in the toast shot.
 const READY: &str = "T-0144";
 /// A task with a live terminal and no files to commit, for Remove workspace.
 const REMOVED: &str = "T-0139";
-const TYPED: &str = "Show the PR checks on the board cards";
+pub(super) const TYPED: &str = "Show the PR checks on the board cards";
 /// Screen 2: a side by side group at work, an agent that asks, a task after review, a task with
 /// no workspace, and a done one.
 pub(crate) const RUNNING: &str = "T-0146";
-const ASKING: &str = "T-0141";
-const REVIEWED: &str = "T-0143";
+pub(super) const ASKING: &str = "T-0141";
+pub(super) const REVIEWED: &str = "T-0143";
 const NO_WORKSPACE: &str = "T-0135";
 const FINISHED: &str = "T-0139";
 /// The find shot's term: Terminal 1 of the reviewed task shows it five times.
 const FOUND: &str = "src";
 /// The terminals draw their first screen within this.
-const PANES_DRAWN: Duration = Duration::from_millis(1200);
+pub(super) const PANES_DRAWN: Duration = Duration::from_millis(1200);
 /// Screen 3: a plan that waits for approval, a failed plan, and the second of three tries.
 const PLAN_GATE: &str = "T-0150";
 const PLAN_FAILED: &str = "T-0151";
 const A_TRY: &str = "T-0152";
-const SEND_BACK_REASON: &str = "Add the error cases for an empty list.";
+pub(super) const SEND_BACK_REASON: &str = "Add the error cases for an empty list.";
 /// The finished stage of the asking task whose evidence has a pass longer than the panel.
 const EVIDENCE_STAGE: &str = "context";
 /// The Tries section is the sixth part of the Details tab of a try with an agent.
@@ -67,14 +69,14 @@ const SITE: &str = "natamux-site";
 /// two changed files.
 const CLEAN: &str = "T-0144";
 const IMAGE: &str = "T-0147";
-const CHANGED_FILE: &str = "src/checkout.ts";
+pub(super) const CHANGED_FILE: &str = "src/checkout.ts";
 /// The lines Ask agent quotes: the new body of the function.
 const ASKED_LINES: (u32, u32) = (5, 6);
 /// The diff's language loads and parses in the background. A step to the change before the parse
 /// ended drew no box behind the `}` of line 7 (run 41010846280), so the step waits for the parse,
 /// checked this often, for at most `PARSE_TRIES` times.
-const PARSE_POLL: Duration = Duration::from_millis(50);
-const PARSE_TRIES: usize = 100;
+pub(super) const PARSE_POLL: Duration = Duration::from_millis(50);
+pub(super) const PARSE_TRIES: usize = 100;
 /// The app prints this line once the state is in place, and CI shoots the window then
 /// (`app-shots` in `.github/workflows/rust.yml`). A fixed wait from the start of the process
 /// shot a slow start too early (run 41018471510: no tasks yet, or a step not done).
@@ -105,6 +107,8 @@ pub fn prepare(shot: Shot) {
         fake_daemon::shared().set_preparing(NO_WORKSPACE, PreparingStep::Fetch);
     }
     shots_settings::prepare(shot);
+    shots_terminal::prepare(shot);
+    shots_text::prepare(shot);
 }
 
 pub fn run(handle: WindowHandle<Root>, shot: Shot, cx: &mut App) {
@@ -151,6 +155,14 @@ async fn steps(handle: WindowHandle<Root>, shot: Shot, cx: &mut AsyncApp) -> boo
         shots_settings::run(handle, shot, cx).await;
         return true;
     }
+    if shots_terminal::is_terminal_shot(shot) {
+        shots_terminal::run(handle, shot, cx).await;
+        return true;
+    }
+    if shots_text::is_text_shot(shot) {
+        shots_text::run(handle, shot, cx).await;
+        return true;
+    }
     if let Err(error) = handle.update(cx, |root, window, cx| enter(shot, root, window, cx)) {
         eprintln!("shot: the window is gone: {error}");
         return false;
@@ -172,7 +184,7 @@ async fn steps(handle: WindowHandle<Root>, shot: Shot, cx: &mut AsyncApp) -> boo
     ) {
         cx.background_executor().timer(SETTLE).await;
         if shot == Shot::WorkspaceChangesDiff {
-            wait_for_parse(handle, cx).await;
+            wait_for_parse(handle, CHANGED_FILE, false, cx).await;
         }
         handle
             .update(cx, |root, window, cx| panel_step(shot, root, window, cx))
@@ -209,6 +221,7 @@ fn view_of(shot: Shot) -> ViewState {
     view.recent = vec![RUNNING.to_string(), REVIEWED.to_string()];
     // The Ask agent shot shows the inline diff; the others keep side by side.
     view.diff.side_by_side = shot != Shot::WorkspaceChangesAsk;
+    shots_text::adjust_view(shot, &mut view);
     view
 }
 
@@ -331,7 +344,7 @@ fn enter_git(shot: Shot, dashboard: &gpui::Entity<Dashboard>, cx: &mut App) {
 }
 
 /// The drawer, then the task's row focused, then its menu, each a frame after the other.
-fn row_menu(root: &mut Root, window: &mut Window, cx: &mut gpui::Context<Root>) {
+pub(super) fn row_menu(root: &mut Root, window: &mut Window, cx: &mut gpui::Context<Root>) {
     root.set_drawer(true, window, cx);
     let tree = root.sidebar().read(cx).tree().clone();
     window.on_next_frame(move |window, cx| {
@@ -375,14 +388,14 @@ fn after_frames(
 }
 
 /// What a key does in the open menu: `MenuLayer` dispatches the same actions.
-fn menu_key(name: &str, window: &mut Window, cx: &mut App) {
+pub(super) fn menu_key(name: &str, window: &mut Window, cx: &mut App) {
     if let Ok(action) = cx.build_action(name, None) {
         window.dispatch_action(action, cx);
     }
 }
 
 /// The task's workspace on its Changes tab.
-fn changes(dashboard: &gpui::Entity<Dashboard>, id: &str, cx: &mut App) {
+pub(super) fn changes(dashboard: &gpui::Entity<Dashboard>, id: &str, cx: &mut App) {
     dashboard.update(cx, |dashboard, cx| dashboard.open_changes(id, false, cx));
 }
 
@@ -391,7 +404,7 @@ pub(crate) fn open(dashboard: &gpui::Entity<Dashboard>, id: &str, cx: &mut App) 
 }
 
 /// The task's workspace with its panel on Progress.
-fn progress(dashboard: &gpui::Entity<Dashboard>, id: &str, cx: &mut App) {
+pub(super) fn progress(dashboard: &gpui::Entity<Dashboard>, id: &str, cx: &mut App) {
     dashboard.update(cx, |dashboard, cx| {
         dashboard.open(id, cx);
         dashboard.show_progress(id, cx);
@@ -399,7 +412,7 @@ fn progress(dashboard: &gpui::Entity<Dashboard>, id: &str, cx: &mut App) {
 }
 
 /// The task's workspace with its panel on Details.
-fn details(dashboard: &gpui::Entity<Dashboard>, id: &str, cx: &mut App) {
+pub(super) fn details(dashboard: &gpui::Entity<Dashboard>, id: &str, cx: &mut App) {
     dashboard.update(cx, |dashboard, cx| {
         dashboard.open(id, cx);
         dashboard.set_details_view(DetailsView::Details, cx);
@@ -450,23 +463,34 @@ fn panel_step(shot: Shot, root: &mut Root, window: &mut Window, cx: &mut gpui::C
     }
 }
 
-/// Waits until the Changes tab draws `CHANGED_FILE` with its language parsed.
-async fn wait_for_parse(handle: WindowHandle<Root>, cx: &mut AsyncApp) {
+/// Waits until the Changes tab draws `path` with its language parsed. `with_base`: the last
+/// commit's side of the diff too.
+pub(super) async fn wait_for_parse(
+    handle: WindowHandle<Root>,
+    path: &str,
+    with_base: bool,
+    cx: &mut AsyncApp,
+) {
     for _ in 0..PARSE_TRIES {
         let parsed = handle.update(cx, |root, _, cx| {
             let changes = root.workspace_view().read(cx).changes_view().clone();
-            changes.read(cx).shot_parsed(CHANGED_FILE, cx)
+            let changes = changes.read(cx);
+            if with_base {
+                changes.shot_base_parsed(path, cx)
+            } else {
+                changes.shot_parsed(path, cx)
+            }
         });
         if !matches!(parsed, Ok(false)) {
             return;
         }
         cx.background_executor().timer(PARSE_POLL).await;
     }
-    eprintln!("shot: {CHANGED_FILE} was not parsed in time");
+    eprintln!("shot: {path} was not parsed in time");
 }
 
 /// Mod+F in Terminal 1 of the task, and the term typed.
-fn find_in_pane(task_id: &str, window: &mut Window, cx: &mut App) {
+pub(super) fn find_in_pane(task_id: &str, window: &mut Window, cx: &mut App) {
     let key = terminal_key(task_id, "1");
     let Some(terminal) = TerminalCache::cached(&key, cx) else {
         eprintln!("shot: Terminal 1 of {task_id} is not on screen");

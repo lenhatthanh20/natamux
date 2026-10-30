@@ -1,0 +1,14 @@
+// Editor settings of the shop's repo. Comments and trailing commas are fine here.
+{
+  /* Format on save, with the project's tools. */
+  "editor.formatOnSave": true,
+  "editor.tabSize": 2,
+  "files.exclude": {
+    "**/dist": true, // built files
+    "**/.natamux-task": false,
+  },
+  "search.useIgnoreFiles": true,
+  "typescript.preferences.quoteStyle": "single",
+  "rulers": [80, 100,],
+  "theme": null,
+}

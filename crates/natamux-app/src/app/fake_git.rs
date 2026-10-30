@@ -142,6 +142,20 @@ impl FakeDaemon {
         })
     }
 
+    /// A changed file of a `--shot` state that only that state shows, with its two texts.
+    pub fn put_change(&self, task_id: &str, diff: FileDiff) {
+        let entry = ChangeEntry {
+            path: diff.path.clone(),
+            status: diff.status,
+            original_path: None,
+            added: None,
+            removed: None,
+        };
+        let mut data = self.data();
+        data.changes.entry(task_id.into()).or_default().push(entry);
+        data.git.files.entry(task_id.into()).or_default().push(diff);
+    }
+
     pub fn file_diff(&self, task_id: &str, path: &str) -> Answer<FileDiff> {
         let data = self.data();
         let entry = data.change(task_id, path)?;

@@ -48,6 +48,8 @@ struct Data {
     changes: BTreeMap<String, Vec<ChangeEntry>>,
     graphs: BTreeMap<String, GitGraph>,
     preparing: BTreeMap<String, PreparingStep>,
+    /// The screens of the terminal `--shot` states, by task and terminal, in place of the script.
+    screens: BTreeMap<(String, String), String>,
     ended: BTreeMap<String, Vec<EndedShell>>,
     git: git::GitState,
     settings: settings::SettingsFiles,
@@ -97,6 +99,7 @@ impl Data {
             changes: part!(seed, "changes"),
             graphs: part!(seed, "graphs"),
             preparing: BTreeMap::new(),
+            screens: BTreeMap::new(),
             ended: part!(seed, "endedShells"),
             git: git::GitState::default(),
             settings: settings::SettingsFiles::default(),

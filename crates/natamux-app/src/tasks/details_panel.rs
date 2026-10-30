@@ -300,7 +300,7 @@ impl DetailsPanel {
     }
 
     /// The pencil and `e`: the form opens on the next draw, which has the window.
-    pub(super) fn start_edit(&mut self, cx: &mut Context<Self>) {
+    pub fn start_edit(&mut self, cx: &mut Context<Self>) {
         self.pending = Some(PanelRequest::Edit);
         cx.notify();
     }

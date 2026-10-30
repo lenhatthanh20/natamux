@@ -448,6 +448,10 @@ jobs:
           ONLY: ${{ needs.changes.outputs.shots }}
           SHARD: ${{ matrix.shard }}
           SHARD_COUNT: ${{ strategy.job-total }}
+          # The MIT move (docs/plan-mit-license.md 7.2, D19): these states in each other theme of
+          # the app, at 1000x680 only, on a run of every state.
+          THEMED: tasks-table workspace-changes-diff workspace-terminal-running
+          THEMES: ayu-light catppuccin-latte github-light gruvbox-light rose-pine-dawn solarized-light ayu-dark catppuccin-mocha dracula github-dark gruvbox-dark nord rose-pine solarized-dark tokyo-night
           STATES: >-
             tasks-table tasks-board board-hover-card add-task-dialog start-task remove-workspace
             clear-finished add-subtask task-context-menu skeleton toast empty filter-miss
@@ -473,6 +477,19 @@ jobs:
             start-task-branch-menu sidebar-blurred remove-workspace-anyway
             update-downloading update-ready update-failed settings-update-ready
             repo-trust-dialog
+            terminal-look terminal-cursors terminal-cursors-underline terminal-cursors-bar
+            terminal-selection terminal-alt-screen terminal-scrolled terminal-context-menu
+            terminal-scrollbar text-box-selection text-box-selection-unfocused
+            workspace-editor-scrollbar edit-form tree-rename settings-font-error send-back-long
+            workspace-docs-source workspace-docs-source-focused workspace-docs-rich
+            workspace-editor-long workspace-editor-wrapped changes-diff-side-by-side
+            changes-diff-collapsed changes-diff-wrapped changes-diff-deleted-only
+            changes-diff-focused changes-diff-scrollbar menu-keyboard button-focus
+            button-disabled-tooltip checkbox-states
+            code-bash code-c code-cpp code-css code-diff code-env code-gitcommit code-go
+            code-gomod code-gowork code-javascript code-jsdoc code-json code-jsonc code-markdown
+            code-markdown-inline code-python code-regex code-rust code-tsx code-typescript
+            code-yaml
           DOCKED: >-
             tasks-table workspace-terminal-running terminal-find workspace-terminal-needs-input
             workspace-terminal-review no-workspace workspace-preparing finished-wrap-up agents-grid
@@ -495,6 +512,19 @@ jobs:
             start-task-branch-menu sidebar-blurred remove-workspace-anyway
             update-downloading update-ready update-failed settings-update-ready
             repo-trust-dialog
+            terminal-look terminal-cursors terminal-cursors-underline terminal-cursors-bar
+            terminal-selection terminal-alt-screen terminal-scrolled terminal-context-menu
+            terminal-scrollbar text-box-selection text-box-selection-unfocused
+            workspace-editor-scrollbar edit-form tree-rename settings-font-error send-back-long
+            workspace-docs-source workspace-docs-source-focused workspace-docs-rich
+            workspace-editor-long workspace-editor-wrapped changes-diff-side-by-side
+            changes-diff-collapsed changes-diff-wrapped changes-diff-deleted-only
+            changes-diff-focused changes-diff-scrollbar menu-keyboard button-focus
+            button-disabled-tooltip checkbox-states
+            code-bash code-c code-cpp code-css code-diff code-env code-gitcommit code-go
+            code-gomod code-gowork code-javascript code-jsdoc code-json code-jsonc code-markdown
+            code-markdown-inline code-python code-regex code-rust code-tsx code-typescript
+            code-yaml
         run: |
           mkdir -p shots
           only=$ONLY
@@ -522,43 +552,63 @@ jobs:
             i=$((i + 1))
           done
           STATES=$mine
+          # One shot: the app in the state, then its window once the app says it is ready.
+          shoot() {
+            name=$1
+            size=$2
+            shift 2
+            out="$RUNNER_TEMP/shot.out"
+            target/release/natamux-app --shot "$@" --fake-daemon --size "$size" --hold 30 > "$out" &
+            pid=$!
+            # The app prints "shot: ready" once the state is in place (app/shots.rs). A fixed
+            # sleep shot a slow start too early.
+            for _ in $(seq 200); do
+              grep -qx 'shot: ready' "$out" && break
+              sleep 0.1
+            done
+            if ! grep -qx 'shot: ready' "$out"; then
+              echo "::error::the app did not get $name ready within 20 s"
+              exit 1
+            fi
+            id=$(window_of "$pid")
+            if [ -z "$id" ]; then
+              echo "::error::no window of the app for $name"
+              exit 1
+            fi
+            screencapture -x -o -l "$id" "shots/$name.png"
+            got=$(sips -g pixelWidth -g pixelHeight "shots/$name.png" |
+              awk '/pixelWidth/ { w = $2 } /pixelHeight/ { h = $2 } END { print w "x" h }')
+            if [ "$got" != "$size" ]; then
+              echo "::error::$name came out $got"
+              exit 1
+            fi
+            # Done with this state: no need to sit out --hold.
+            kill "$pid"
+            wait "$pid" || true
+          }
           for state in $STATES; do
             sizes="1000x680 800x560"
             case " $DOCKED " in *" $state "*) sizes="$sizes 1024x720" ;; esac
+            # A code sample is shot docked only, where the editor has the most room.
+            case "$state" in code-*) sizes="1024x720" ;; esac
             for size in $sizes; do
               for theme in light dark; do
-                name="$state-$theme-$size"
-                out="$RUNNER_TEMP/shot.out"
-                target/release/natamux-app --shot "$state" --fake-daemon --theme "$theme" --size "$size" --hold 30 > "$out" &
-                pid=$!
-                # The app prints "shot: ready" once the state is in place (app/shots.rs). A fixed
-                # sleep shot a slow start too early.
-                for _ in $(seq 200); do
-                  grep -qx 'shot: ready' "$out" && break
-                  sleep 0.1
-                done
-                if ! grep -qx 'shot: ready' "$out"; then
-                  echo "::error::the app did not get $name ready within 20 s"
-                  exit 1
-                fi
-                id=$(window_of "$pid")
-                if [ -z "$id" ]; then
-                  echo "::error::no window of the app for $name"
-                  exit 1
-                fi
-                screencapture -x -o -l "$id" "shots/$name.png"
-                got=$(sips -g pixelWidth -g pixelHeight "shots/$name.png" |
-                  awk '/pixelWidth/ { w = $2 } /pixelHeight/ { h = $2 } END { print w "x" h }')
-                if [ "$got" != "$size" ]; then
-                  echo "::error::$name came out $got"
-                  exit 1
-                fi
-                # Done with this state: no need to sit out --hold.
-                kill "$pid"
-                wait "$pid" || true
+                shoot "$state-$theme-$size" "$size" "$state" --theme "$theme"
               done
             done
           done
+          # The other themes: each pair of a theme and a state counts on from the states, so the
+          # shards share them.
+          if [ -z "$only" ]; then
+            for theme in $THEMES; do
+              for state in $THEMED; do
+                if [ $((i % SHARD_COUNT + 1)) = "$SHARD" ]; then
+                  shoot "$state-$theme-1000x680" 1000x680 "$state" --theme-name "$theme"
+                fi
+                i=$((i + 1))
+              done
+            done
+          fi
       - name: Compare shots with the baselines
         if: env.REPORT_ONLY == ''
         run: |
