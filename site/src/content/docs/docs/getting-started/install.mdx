@@ -16,6 +16,56 @@ Natamux is a desktop app for macOS (Apple silicon and Intel), Windows and Linux,
 - **At least one coding agent**, installed and logged in: `claude`, `codex`, `gemini`, `copilot` or `cursor-agent`. See [Agents](/docs/agents/claude-code/).
 - **`gh` (GitHub CLI)**, optional. Needed for opening pull requests, importing issues and CI status. Run `gh auth login` once.
 
+## Install with one command
+
+The fastest way to install or update. Quit Natamux first.
+
+<Tabs syncKey="os">
+<TabItem label="macOS">
+
+In Terminal:
+
+```sh frame="terminal"
+curl -fsSL https://natamux.github.io/install.sh | sh
+```
+
+It needs macOS 11 or later. It installs `Natamux.app` in `/Applications`, or in `~/Applications` when you cannot write to `/Applications`, and removes the quarantine flag, so macOS does not block the first start.
+
+</TabItem>
+<TabItem label="Windows">
+
+In PowerShell:
+
+```powershell
+irm https://natamux.github.io/install.ps1 | iex
+```
+
+It needs Windows 10 version 1809 or later. It runs the installer without questions, for your user only, with no administrator rights.
+
+</TabItem>
+<TabItem label="Linux">
+
+On Debian, Ubuntu and their derivatives, on x86_64:
+
+```sh frame="terminal"
+curl -fsSL https://natamux.github.io/install.sh | sh
+```
+
+It installs the `.deb` with `apt-get` and asks for your `sudo` password. It stops with a message when the system's glibc is older than the package needs. On other distributions, use the AppImage below.
+
+</TabItem>
+</Tabs>
+
+The script:
+
+1. Checks your system and picks the file for it.
+2. Downloads the file and `SHA256SUMS.txt` from the latest release.
+3. If [minisign](https://jedisct1.github.io/minisign/) is installed, checks that the release key signed `SHA256SUMS.txt` for this version. Without minisign it prints a warning and skips this step.
+4. Checks the file against `SHA256SUMS.txt`. On any failed check it stops and installs nothing.
+5. Installs the app and tells you where it is.
+
+Read the scripts before you run them: [`install.sh`](https://github.com/lenhatthanh20/natamux/blob/main/site/public/install.sh) and [`install.ps1`](https://github.com/lenhatthanh20/natamux/blob/main/site/public/install.ps1).
+
 ## Download
 
 Get the file for your system from the [latest release](https://github.com/lenhatthanh20/natamux/releases/latest).

@@ -132,7 +132,12 @@ See [Mix agents in one task](https://natamux.github.io/docs/guides/mix-agents/) 
 
 ## Install
 
-Download the file for your system from the [latest release](https://github.com/lenhatthanh20/natamux/releases/latest):
+Install or update with one command. It checks the system, downloads the latest release, checks it against `SHA256SUMS.txt`, and installs it:
+
+- macOS, Debian and Ubuntu: `curl -fsSL https://natamux.github.io/install.sh | sh`
+- Windows, in PowerShell: `irm https://natamux.github.io/install.ps1 | iex`
+
+Or download the file for your system from the [latest release](https://github.com/lenhatthanh20/natamux/releases/latest):
 
 | System | Download |
 |---|---|

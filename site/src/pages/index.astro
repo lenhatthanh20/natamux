@@ -15,6 +15,8 @@ const site = 'https://natamux.github.io'
 // File names carry no version, so these links always get the newest release.
 const latest = (file: string) => `${repo}/releases/latest/download/${file}`
 const mac = latest('Natamux-mac-arm64.dmg')
+const installSh = `curl -fsSL ${site}/install.sh | sh`
+const installPs1 = `irm ${site}/install.ps1 | iex`
 const v2 = 'media/v2/'
 const note = 'Recorded on the real Natamux dashboard. The agents in it are stand-in scripts, so their terminal text is short.'
 const shortNote = 'Real dashboard, stand-in agents.'
@@ -824,6 +826,9 @@ pnpm db:seed</pre>
             <p class="dl-detect" data-dl-detect hidden></p>
             <div class="stack">
               <div class="dl-panel" role="tabpanel" id="panel-mac" aria-labelledby="tab-mac" data-active="true">
+                <p class="dl-label">Install with one command, in Terminal</p>
+                <div class="cmd"><code>{installSh}</code><button type="button" data-copy>Copy</button></div>
+                <p class="dl-label">Or download the file</p>
                 <div class="dl-buttons">
                   <a class="btn primary big" href={mac} data-arch="arm64">Download for Apple silicon</a>
                   <a class="btn big" href={latest('Natamux-mac-x64.dmg')} data-arch="x64">Download for Intel</a>
@@ -835,12 +840,15 @@ pnpm db:seed</pre>
                   <svg class="first-start-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v5c0 4.4 3 8.4 7 10 4-1.6 7-5.6 7-10V6z"/><path d="M12 8v5M12 16.5v.5"/></svg>
                   <div>
                     <p class="first-start-title">macOS blocks the first start</p>
-                    <p>The app is not signed with an Apple certificate yet. Open <b>System Settings → Privacy &amp; Security</b> and click <b>Open Anyway</b>. Or run:</p>
+                    <p>The app is not signed with an Apple certificate yet. The one-line command handles this for you. After a manual download, open <b>System Settings → Privacy &amp; Security</b> and click <b>Open Anyway</b>. Or run:</p>
                     <div class="cmd"><code>xattr -dr com.apple.quarantine /Applications/Natamux.app</code><button type="button" data-copy>Copy</button></div>
                   </div>
                 </div>
               </div>
               <div class="dl-panel" role="tabpanel" id="panel-win" aria-labelledby="tab-win" data-active="false" inert>
+                <p class="dl-label">Install with one command, in PowerShell</p>
+                <div class="cmd"><code>{installPs1}</code><button type="button" data-copy>Copy</button></div>
+                <p class="dl-label">Or download the installer</p>
                 <div class="dl-buttons">
                   <a class="btn primary big" href={latest('Natamux-win-x64.exe')}>Download for Windows</a>
                 </div>
@@ -852,11 +860,14 @@ pnpm db:seed</pre>
                   <svg class="first-start-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v5c0 4.4 3 8.4 7 10 4-1.6 7-5.6 7-10V6z"/><path d="M12 8v5M12 16.5v.5"/></svg>
                   <div>
                     <p class="first-start-title">SmartScreen stops the first start</p>
-                    <p>The installer is not signed with a Windows certificate yet. If you see <b>Windows protected your PC</b>, click <b>More info</b>, then <b>Run anyway</b>.</p>
+                    <p>The installer is not signed with a Windows certificate yet. The one-line command handles this for you. After a manual download, if you see <b>Windows protected your PC</b>, click <b>More info</b>, then <b>Run anyway</b>.</p>
                   </div>
                 </div>
               </div>
               <div class="dl-panel" role="tabpanel" id="panel-linux" aria-labelledby="tab-linux" data-active="false" inert>
+                <p class="dl-label">Debian and Ubuntu: install with one command</p>
+                <div class="cmd"><code>{installSh}</code><button type="button" data-copy>Copy</button></div>
+                <p class="dl-label">Or download the file</p>
                 <div class="dl-buttons">
                   <a class="btn primary big" href={latest('Natamux-linux-x86_64.AppImage')}>Download AppImage</a>
                   <a class="btn big" href={latest('Natamux-linux-amd64.deb')}>Download .deb</a>
