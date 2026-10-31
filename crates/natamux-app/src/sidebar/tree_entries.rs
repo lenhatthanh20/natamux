@@ -14,7 +14,7 @@ use crate::sidebar::workspace_groups::RepoGroup;
 pub enum EntryAction {
     /// Make the task the open workspace.
     OpenTask(String),
-    /// Open or close a group, a finished list or a task row.
+    /// Open or close a group, a finished list or a task card.
     SetFold { key: String, open: bool },
 }
 
@@ -37,7 +37,6 @@ pub struct TreeSource<'a> {
     pub repo_open: &'a dyn Fn(&str) -> bool,
     pub finished_shown: &'a dyn Fn(&str) -> bool,
     pub task_open: &'a dyn Fn(&Task) -> bool,
-    pub can_fold: &'a dyn Fn(&Task) -> bool,
     pub rows_of: &'a dyn Fn(&Task) -> Vec<ShellRow>,
     pub waiting_children: &'a dyn Fn(&Task) -> Vec<Task>,
 }
@@ -53,16 +52,28 @@ fn entry(key: String, parent: Option<&str>, label: &str) -> Entry {
     }
 }
 
-fn push_task(source: &TreeSource, entries: &mut Vec<Entry>, task: &Task, parent: Option<&str>) {
+/// A card (pinned or open row) always folds; a row of "N finished" is one plain line.
+fn push_task(
+    source: &TreeSource,
+    entries: &mut Vec<Entry>,
+    task: &Task,
+    parent: Option<&str>,
+    card: bool,
+) {
     let key = format!("task:{}", task.id);
-    let open = (source.task_open)(task);
+    let open = card && (source.task_open)(task);
     entries.push(Entry {
-        expandable: (source.can_fold)(task),
-        open: Some(open),
-        // A folded task opens when it becomes the open workspace; the open one does not fold.
-        toggle: (!open).then(|| EntryAction::OpenTask(task.id.clone())),
+        expandable: card,
+        open: card.then_some(open),
+        toggle: card.then(|| EntryAction::SetFold {
+            key: key.clone(),
+            open: !open,
+        }),
         ..entry(key.clone(), parent, &task.title)
     });
+    if !card {
+        return;
+    }
     if open {
         for shell in (source.rows_of)(task) {
             let shell_key = format!("agent:{}:{}", task.id, shell.key);
@@ -89,7 +100,7 @@ fn push_task(source: &TreeSource, entries: &mut Vec<Entry>, task: &Task, parent:
 pub fn tree_entries(source: &TreeSource) -> Vec<Entry> {
     let mut entries = Vec::new();
     for task in source.pinned {
-        push_task(source, &mut entries, task, None);
+        push_task(source, &mut entries, task, None, true);
     }
     for RepoGroup {
         repo,
@@ -113,7 +124,7 @@ pub fn tree_entries(source: &TreeSource) -> Vec<Entry> {
             continue;
         }
         for task in open {
-            push_task(source, &mut entries, task, Some(&repo_key));
+            push_task(source, &mut entries, task, Some(&repo_key), true);
         }
         if !finished.is_empty() {
             let finished_key = format!("finished:{}", repo.id);
@@ -129,7 +140,7 @@ pub fn tree_entries(source: &TreeSource) -> Vec<Entry> {
             });
             if finished_open {
                 for task in finished {
-                    push_task(source, &mut entries, task, Some(&finished_key));
+                    push_task(source, &mut entries, task, Some(&finished_key), false);
                 }
             }
         }
