@@ -14,7 +14,7 @@ use terminal_view::TerminalView;
 use ui::prelude::*;
 use util::paths::PathStyle;
 
-use super::RemoteTerminal;
+use super::{RemoteTerminal, send_input};
 use crate::app::app_log;
 use crate::terminals::terminal_parser::{Job, lane};
 
@@ -52,7 +52,7 @@ impl RemoteTerminal {
                 TerminalEvent::Status(status) => {
                     if status == TerminalStatus::Open {
                         for text in self.pending.drain(..) {
-                            handle.input(text);
+                            send_input(&handle, text);
                         }
                     }
                     if status == TerminalStatus::Reconnecting
