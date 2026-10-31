@@ -271,7 +271,7 @@ pub(super) fn is_blurred(task: &Task, snap: &Snapshot) -> bool {
     snap.blurred.iter().any(|id| id == repo)
 }
 
-/// A small rounded chip on the meta row.
+/// A small rounded chip on the meta row: no background of its own, so the card's fill stays even.
 fn chip(child: AnyElement, cx: &App) -> AnyElement {
     let colors = cx.theme().colors();
     h_flex()
@@ -281,7 +281,6 @@ fn chip(child: AnyElement, cx: &App) -> AnyElement {
         .rounded(px(5.))
         .border_1()
         .border_color(colors.border_variant)
-        .bg(colors.element_background)
         .child(child)
         .into_any_element()
 }
