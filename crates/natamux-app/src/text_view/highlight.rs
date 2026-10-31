@@ -41,12 +41,13 @@ pub struct Highlights {
 }
 
 impl Highlights {
-    /// The compiled queries of `lang`. An error names the language and the query problem.
+    /// The compiled queries of `lang`, which must be an item of `LANGS` (the cache is per item).
+    /// An error names the language and the query problem.
     pub fn of(lang: &'static Lang) -> Result<&'static Highlights, &'static str> {
         let index = LANGS
             .iter()
             .position(|other| std::ptr::eq(other, lang))
-            .unwrap_or_default();
+            .ok_or("the language is not in LANGS")?;
         COMPILED[index]
             .get_or_init(|| compile(lang))
             .as_ref()

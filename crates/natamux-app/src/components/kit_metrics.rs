@@ -471,6 +471,34 @@ fn samples() -> Vec<Sample> {
                 .child(Label::new("Like"))
                 .into_any_element()
         }),
+        // Hidden at rest, shown while the pointer is over the group (the sidebar rows).
+        el("icon-button-visible-on-hover", POINTER, |_, _| {
+            h_flex()
+                .group("g")
+                .gap_1()
+                .child(Label::new("Row name"))
+                .child(
+                    IconButton::new("i", IconName::Ellipsis)
+                        .icon_size(IconSize::Small)
+                        .visible_on_hover("g")
+                        .on_click(|_, _, _| {}),
+                )
+                .into_any_element()
+        }),
+        el("button-like-visible-on-hover", POINTER, |_, _| {
+            h_flex()
+                .group("g")
+                .gap_1()
+                .child(Label::new("Row name"))
+                .child(
+                    ButtonLike::new("l")
+                        .style(ButtonStyle::Subtle)
+                        .child(Icon::new(IconName::Plus).color(Color::Muted))
+                        .visible_on_hover("g")
+                        .on_click(|_, _, _| {}),
+                )
+                .into_any_element()
+        }),
         el("toggle-group", POINTER, |_, _| {
             ToggleButtonGroup::single_row(
                 "g",
@@ -651,6 +679,15 @@ fn samples() -> Vec<Sample> {
             tip_with_keys("Approve the stage", "a")(window, cx)
         }),
         view("menu", MENU, |window, cx| menu(window, cx).into()),
+        // Three rows, so the middle one is both under the pointer and the one the keys pick.
+        view("menu-custom-entry", MENU, |window, cx| {
+            ContextMenu::build(window, cx, |menu, _, _| {
+                menu.custom_entry(|_, _| Label::new("First").into_any_element(), |_, _| {})
+                    .custom_entry(|_, _| Label::new("Second").into_any_element(), |_, _| {})
+                    .custom_entry(|_, _| Label::new("Third").into_any_element(), |_, _| {})
+            })
+            .into()
+        }),
         view("menu-fixed-width", STILL, |window, cx| {
             ContextMenu::build(window, cx, |menu, _, _| {
                 menu.fixed_width(px(120.).into())
