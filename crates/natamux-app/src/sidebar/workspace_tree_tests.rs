@@ -175,6 +175,44 @@ fn the_card_head_centers_the_glyph_on_the_title(cx: &mut TestAppContext) {
     );
 }
 
+#[gpui::test]
+fn the_open_card_lines_share_one_left_edge(cx: &mut TestAppContext) {
+    // The chips and the branch started under the glyph, the agent icon 6 px right of the title
+    // (T-0253).
+    let (dashboard, _, cx) = sidebar_tree(cx);
+    dashboard.update(cx, |dashboard, cx| dashboard.set_fold("task:T-0141", true, cx));
+    cx.run_until_parked();
+    let bounds = |name: &str, cx: &mut VisualTestContext| {
+        cx.debug_bounds(name)
+            .unwrap_or_else(|| panic!("{name} was not drawn"))
+    };
+    let edge = bounds("title-T-0141", cx).left();
+    let row = "agent:T-0141:shell:1";
+    let content = format!("{row}-content");
+    for name in [
+        "chips-T-0141",
+        "branch-T-0141",
+        "waiting-T-0141",
+        content.as_str(),
+    ] {
+        let left = bounds(name, cx).left();
+        assert!(
+            (left - edge).abs() <= px(1.0),
+            "{name} starts at {}, the title at {}",
+            left.0,
+            edge.0
+        );
+    }
+    let glyph = bounds("glyph-T-0141", cx).center().x;
+    let dot = bounds(&format!("{row}-glyph"), cx).center().x;
+    assert!(
+        (dot - glyph).abs() <= px(1.0),
+        "the terminal dot at {} is off the task glyph at {}",
+        dot.0,
+        glyph.0
+    );
+}
+
 #[test]
 fn only_the_changed_lines_are_measured_again() {
     let header = |group| Line::GroupHeader { group };

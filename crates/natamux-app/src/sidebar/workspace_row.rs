@@ -9,6 +9,7 @@ use ui::{Tooltip, prelude::*};
 
 use super::blur_bar::{BlurBar, private_text};
 use super::sidebar::{agent_mark, lucide, mono, small};
+use super::task_card::{GLYPH_COLUMN, HEAD_GAP};
 use super::workspace_tree::{OFFSET_MINUTES, Snapshot, WorkspaceTree};
 use crate::agents::agent_choices::agent_label;
 use crate::app::dashboard_data::DashboardData;
@@ -119,6 +120,30 @@ impl WorkspaceTree {
                     .into_any_element()
             },
         );
+        // The dot sits in the task glyph's column, so the agent icon starts at the title's edge.
+        let glyph = div()
+            .flex_none()
+            .w(rems_from_px(GLYPH_COLUMN))
+            .flex()
+            .items_center()
+            .justify_center()
+            .debug_selector({
+                let key = key.clone();
+                move || format!("{key}-glyph")
+            })
+            .child(glyph);
+        let content = h_flex()
+            .debug_selector({
+                let key = key.clone();
+                move || format!("{key}-content")
+            })
+            .min_w_0()
+            .flex_1()
+            .gap_2()
+            .children(agent)
+            .child(label)
+            .child(div().min_w_0().flex_1().children(activity))
+            .children(tag);
         let open = key.clone();
         self.row_frame(&key, false, snap, cx)
             .id(SharedString::from(key.clone()))
@@ -126,12 +151,9 @@ impl WorkspaceTree {
             .px_2()
             .flex()
             .items_center()
-            .gap_2()
+            .gap(rems_from_px(HEAD_GAP))
             .child(glyph)
-            .children(agent)
-            .child(label)
-            .child(div().min_w_0().flex_1().children(activity))
-            .children(tag)
+            .child(content)
             .tooltip(Tooltip::text(shell_row_name(row)))
             .on_click(cx.listener(move |tree, _: &ClickEvent, window, cx| {
                 tree.focus_key(open.clone(), window, cx);

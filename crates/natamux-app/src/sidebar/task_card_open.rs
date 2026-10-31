@@ -9,6 +9,7 @@ use ui::{Tooltip, prelude::*};
 
 use super::blur_bar::{BlurBar, private_text};
 use super::sidebar::{lucide, mono, small};
+use super::task_card::inset;
 use super::workspace_tree::{Snapshot, WorkspaceTree};
 use crate::components::button_style::action_button;
 use crate::components::colors::{project_color, state_colors};
@@ -43,7 +44,9 @@ impl WorkspaceTree {
                 .iter()
                 .map(|row| self.terminal_row(&task.id, row, snap, cx))
                 .collect();
-            // A click on a terminal row must not also open the task behind it.
+            // A click on a terminal row must not also open the task behind it. The rows reach
+            // left by their border and padding (1 + 8 px), so their dot column lines up with the
+            // task glyph while the divider stays put.
             div()
                 .id(SharedString::from(format!("terminals-{}", task.id)))
                 .w_full()
@@ -52,7 +55,13 @@ impl WorkspaceTree {
                 .border_t_1()
                 .border_color(divider)
                 .pt_1()
-                .children(list)
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .ml(rems_from_px(-9.0_f32))
+                        .children(list),
+                )
                 .on_click(|_, _, cx| cx.stop_propagation())
                 .into_any_element()
         });
@@ -141,12 +150,15 @@ impl WorkspaceTree {
                 cx,
             ));
         }
-        h_flex()
-            .w_full()
-            .flex_wrap()
-            .gap(rems_from_px(5.0_f32))
-            .children(chips)
-            .into_any_element()
+        inset(
+            h_flex()
+                .debug_selector(|| format!("chips-{}", task.id))
+                .w_full()
+                .flex_wrap()
+                .gap(rems_from_px(5.0_f32))
+                .children(chips),
+        )
+        .into_any_element()
     }
 
     /// Branch name, diff, and a copy button on hover.
@@ -179,14 +191,17 @@ impl WorkspaceTree {
             }))
         });
         Some(
-            h_flex()
-                .w_full()
-                .gap(rems_from_px(5.0_f32))
-                .child(lucide("git-branch").color(Color::Muted))
-                .child(div().min_w_0().flex_1().child(name))
-                .children(diff_label(snap.diff_stats.get(&task.id)))
-                .children(copy)
-                .into_any_element(),
+            inset(
+                h_flex()
+                    .debug_selector(|| format!("branch-{}", task.id))
+                    .w_full()
+                    .gap(rems_from_px(5.0_f32))
+                    .child(lucide("git-branch").color(Color::Muted))
+                    .child(div().min_w_0().flex_1().child(name))
+                    .children(diff_label(snap.diff_stats.get(&task.id)))
+                    .children(copy),
+            )
+            .into_any_element(),
         )
     }
 
@@ -215,17 +230,20 @@ impl WorkspaceTree {
             },
         );
         Some(
-            h_flex()
-                .w_full()
-                .gap(rems_from_px(6.0_f32))
-                .px(rems_from_px(7.0_f32))
-                .rounded(px(5.))
-                .bg(tint.bg)
-                .when(!open, |strip| strip.h(rems_from_px(22.0_f32)))
-                .when(open, |strip| strip.py(rems_from_px(5.0_f32)).items_start())
-                .child(div().min_w_0().flex_1().child(text))
-                .child(self.wait_button(task, waiting, cx))
-                .into_any_element(),
+            inset(
+                h_flex()
+                    .debug_selector(|| format!("waiting-{}", task.id))
+                    .w_full()
+                    .gap(rems_from_px(6.0_f32))
+                    .px(rems_from_px(7.0_f32))
+                    .rounded(px(5.))
+                    .bg(tint.bg)
+                    .when(!open, |strip| strip.h(rems_from_px(22.0_f32)))
+                    .when(open, |strip| strip.py(rems_from_px(5.0_f32)).items_start())
+                    .child(div().min_w_0().flex_1().child(text))
+                    .child(self.wait_button(task, waiting, cx)),
+            )
+            .into_any_element(),
         )
     }
 

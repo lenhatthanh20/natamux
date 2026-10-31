@@ -35,6 +35,17 @@ pub(super) enum CardBorder {
     Plain,
 }
 
+/// The task glyph's column and the gap after it. Every other line of a card starts at their sum,
+/// so only the glyph sits out to the left (T-0253).
+pub(super) const GLYPH_COLUMN: f32 = 14.0;
+pub(super) const HEAD_GAP: f32 = 7.0;
+pub(super) const CONTENT_INSET: f32 = GLYPH_COLUMN + HEAD_GAP;
+
+/// A full-width line that starts at the card's content edge.
+pub(super) fn inset(child: impl IntoElement) -> Div {
+    div().w_full().pl(rems_from_px(CONTENT_INSET)).child(child)
+}
+
 pub(super) fn card_border(current: bool, focused: bool, attention: bool) -> CardBorder {
     if current || focused {
         CardBorder::Accent
@@ -206,9 +217,11 @@ impl WorkspaceTree {
         // box; closed, the row centers the same box.
         let glyph = div()
             .flex_none()
+            .w(rems_from_px(GLYPH_COLUMN))
             .h(rems_from_px(20.0_f32))
             .flex()
             .items_center()
+            .justify_center()
             .debug_selector(|| format!("glyph-{}", task.id))
             .child(glyph)
             .into_any_element();
@@ -238,7 +251,7 @@ impl WorkspaceTree {
         let menu = self.menu_button(&task.id, group, cx);
         h_flex()
             .w_full()
-            .gap(rems_from_px(7.0_f32))
+            .gap(rems_from_px(HEAD_GAP))
             .when(!open, |line| line.h(rems_from_px(20.0_f32)).items_center())
             .when(open, |line| {
                 line.min_h(rems_from_px(20.0_f32)).items_start()
@@ -380,7 +393,7 @@ impl WorkspaceTree {
         h_flex()
             .w_full()
             .h(rems_from_px(18.0_f32))
-            .pl(rems_from_px(21.0_f32))
+            .pl(rems_from_px(CONTENT_INSET))
             .gap(rems_from_px(5.0_f32))
             .children(strip)
             .children(project)
