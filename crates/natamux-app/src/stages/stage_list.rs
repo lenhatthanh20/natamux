@@ -249,3 +249,7 @@ impl Render for DragGhost {
             .child(Label::new(self.0.clone()).size(LabelSize::Small))
     }
 }
+
+#[cfg(test)]
+#[path = "stage_list_tests.rs"]
+mod tests;

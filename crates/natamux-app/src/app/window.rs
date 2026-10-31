@@ -447,7 +447,11 @@ mod follow;
 
 #[cfg(test)]
 #[path = "window_flow_tests.rs"]
-mod flow_tests;
+pub(crate) mod flow_tests;
+
+#[cfg(test)]
+#[path = "window_menu_tests.rs"]
+mod menu_tests;
 
 pub fn open(
     options: &Options,

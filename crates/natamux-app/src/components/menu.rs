@@ -71,6 +71,13 @@ impl MenuLayer {
         layer.open.as_ref()?.opener.clone()
     }
 
+    /// The open menu, for the flow tests.
+    #[cfg(test)]
+    pub fn open_menu(cx: &App) -> Option<Entity<ContextMenu>> {
+        let layer = cx.try_global::<GlobalMenuLayer>()?.0.read(cx);
+        layer.open.as_ref().map(|open| open.menu.clone())
+    }
+
     fn show(
         &mut self,
         menu: Entity<ContextMenu>,
