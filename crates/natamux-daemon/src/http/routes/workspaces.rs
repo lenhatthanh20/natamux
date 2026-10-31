@@ -5,12 +5,12 @@
 use std::sync::Arc;
 
 use hyper::StatusCode;
+use natamux_agents::custom::known_agents;
 use natamux_core::tasks::inputs::{Upload, attachments_body, task_id_param};
 use natamux_core::tasks::task::{task_context, title};
 use natamux_core::zod::{
     Issue, Issues, Length, Rule, ZodError, array, invalid_type, object, one_of, string,
 };
-use natamux_proto::agents::start::LAUNCHABLE_AGENTS;
 use natamux_proto::tasks::task::TaskContext;
 use natamux_stages::actions::StageAction;
 use serde_json::{Value, json};
@@ -302,9 +302,11 @@ fn new_workspace_fields(body: Option<&Value>, issues: &mut Issues) -> Option<New
     let base = base_field(map, issues);
     let branch = branch_field(map, issues);
     // The first stage starts at once, so it must be an agent the daemon can start.
+    let known = known_agents();
+    let known: Vec<&str> = known.iter().map(String::as_str).collect();
     let agent = map
         .get("agent")
-        .and_then(|agent| one_of(Some(agent), &[json!("agent")], &LAUNCHABLE_AGENTS, issues));
+        .and_then(|agent| one_of(Some(agent), &[json!("agent")], &known, issues));
     let prompt = map.get("prompt").and_then(|prompt| {
         string(
             Some(prompt),

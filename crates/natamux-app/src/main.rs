@@ -37,6 +37,7 @@ mod app {
     pub mod notify_rules;
     pub mod options;
     pub mod read_pace;
+    pub mod settings_agents;
     pub mod settings_font;
     pub mod settings_reads;
     pub mod settings_rules;

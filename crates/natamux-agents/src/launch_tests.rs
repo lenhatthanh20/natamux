@@ -517,3 +517,25 @@ fn keeps_codexs_hooks_on_the_launch_line() {
     };
     assert!(launch("codex", own).contains("hooks.Stop="));
 }
+
+#[test]
+fn starts_another_cli_with_its_words_and_the_prompt_last() {
+    let other = LaunchOptions {
+        extra_args: "'--model' 'x'".into(),
+        ..with(auto(), "my-agent")
+    };
+    assert_eq!(launch("my-agent", other), "my-agent '--model' 'x' 'Fix it'");
+    let bare = LaunchOptions {
+        prompt: String::new(),
+        ..with(base(), "my-agent")
+    };
+    assert_eq!(launch("my-agent", bare), "my-agent");
+}
+
+#[test]
+fn starts_a_claude_code_variant_with_its_own_program() {
+    assert_eq!(
+        launch("claude-code", with(auto(), "cq")),
+        "cq --settings '/data/claude.json' --permission-mode auto 'Fix it'"
+    );
+}

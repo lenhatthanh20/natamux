@@ -22,6 +22,7 @@ use super::stage_view_rules::{
     branch_status, find_stage, link_kind, missing_skills, ran_with_workflow, stage_count,
     waiting_for_ci,
 };
+use crate::agents::agent_choices::{custom_agents, workflow_agent};
 use crate::tasks::details_commands::{OnCommand, StageToggle};
 use crate::tasks::usage_rules::{stage_usage, usage_line};
 use natamux_proto::stages::capabilities::{can_run_workflow, offers_ci, offers_workflow};
@@ -104,7 +105,11 @@ impl Ctx<'_> {
                     on: task.workflow_stages.iter().any(|each| each == id),
                     busy: toggling(StageToggle::Workflow),
                     // A stage that starts its own agent runs the workflow with that agent.
-                    allowed: can_run_workflow(stage.agent.as_deref().or(task.agent.as_deref())),
+                    allowed: {
+                        let custom = custom_agents();
+                        let agent = stage.agent.as_deref().or(task.agent.as_deref());
+                        can_run_workflow(agent.map(|id| workflow_agent(id, &custom)))
+                    },
                     started,
                 });
             }

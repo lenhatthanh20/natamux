@@ -11,7 +11,7 @@ use natamux_proto::tasks::task::{NewTaskInput, Task};
 use ui::{ContextMenu, ContextMenuEntry, prelude::*};
 
 use super::DetailsPanel;
-use crate::agents::agent_choices::{DEFAULT_AGENT, is_agent_id};
+use crate::agents::agent_choices::{DEFAULT_AGENT, is_startable};
 use crate::app::dashboard::Dashboard;
 use crate::app::layout_mode::DetailsMode;
 use crate::app::shortcuts::EditTask;
@@ -49,7 +49,7 @@ pub(super) fn failure_of(action: StageAction) -> &'static str {
 pub fn agent_of(task: &Task) -> String {
     task.agent
         .clone()
-        .filter(|agent| is_agent_id(Some(agent)))
+        .filter(|agent| is_startable(Some(agent)))
         .unwrap_or_else(|| DEFAULT_AGENT.to_owned())
 }
 

@@ -24,7 +24,7 @@ use super::stage_fields_view::{
 };
 use super::stage_options::stage_options;
 use super::stage_picker::StagePicker;
-use crate::agents::agent_choices::{AGENT_CHOICES, agent_label};
+use crate::agents::agent_choices::{agent_label, custom_agents, pick_list};
 use crate::components::form::input_box;
 use crate::components::tab_order;
 
@@ -276,20 +276,20 @@ impl DetailsPane {
         let (pipeline, id) = (self.editor.clone(), stage.id.clone());
         let button = select(SharedString::from(format!("agent-{id}")), text).on_click(
             move |event: &ClickEvent, window, cx| {
-                let pick = |value: &'static str, label: &'static str| {
+                let pick = |value: String, label: String| {
                     let (pipeline, id) = (pipeline.clone(), id.clone());
                     let checked = picked.as_deref().unwrap_or("") == value;
                     Choice::new(label, Some(checked), move |_, cx| {
                         change(&pipeline, cx, |steps| {
-                            set_text(steps, &id, TextField::Agent, value)
+                            set_text(steps, &id, TextField::Agent, &value)
                         })
                     })
                 };
-                let mut choices = vec![pick("", "Task's agent")];
+                let mut choices = vec![pick(String::new(), "Task's agent".to_owned())];
                 choices.extend(
-                    AGENT_CHOICES
-                        .iter()
-                        .map(|choice| pick(choice.id, choice.label)),
+                    pick_list(&custom_agents())
+                        .into_iter()
+                        .map(|(value, label)| pick(value, label)),
                 );
                 open_choices(choices, event.position(), window, cx);
             },

@@ -133,6 +133,8 @@ Files, git, GitHub, terminals and templates.
 | `GET /usage` | Tokens and estimated cost of each task: `{ usage: { "<taskId>": { tokens, costUsd, unpricedModels, stages: [{ stage, agent, model, input, cacheRead, cacheWrite, output, costUsd }] } } }`. `costUsd` is an estimate at API list prices, `null` when no row has a price. `stage` is `""` for work on no stage. Answers before the login `PATH` |
 | `GET /jobs` | The background jobs that run now, oldest first: `{ jobs: [{ id, kind, label, taskId, startedAt }] }` |
 | `GET /diffstats` | The size of the changes of every workspace |
+| `GET /custom-agents` | Your custom agents: `{ agents: [{ id, base, command }] }`. See [Custom agents](/docs/agents/other-agents/#custom-agents-a-built-in-agent-with-your-own-command) |
+| `PUT /custom-agents` | Replace the whole list `{ agents }`: the saved list. Answers 400 for a bad or taken `id`, an unknown `base`, an empty or multi-line `command`, or more than 20 agents. The agent token may not call it |
 
 ## Live updates and terminals
 

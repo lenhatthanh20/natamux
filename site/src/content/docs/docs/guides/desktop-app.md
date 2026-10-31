@@ -42,6 +42,10 @@ The grant stays after updates. The first update to a version signed with the Nat
 
 You can also add Natamux under **Developer Tools**, so programs built in Natamux skip the Gatekeeper scan. Other permissions, such as the microphone, the camera, AppleScript or the local network, macOS asks for the first time a program needs them.
 
+## Custom agents
+
+**Settings → Agents** lists the built-in agents and your custom agents. A custom agent runs a built-in agent with your own command, such as a shell function that points Claude Code at another model, or runs any other agent CLI. Click **Add agent**, fill in **Id**, **Based on** and **Command**, then click **Save**. The new agent shows in every agent picker at once. See [Custom agents](/docs/agents/other-agents/#custom-agents-a-built-in-agent-with-your-own-command).
+
 ## Task ids in the sidebar
 
 A sidebar row shows the task's title, so long titles have room. To see each task's id before its title, turn on **Settings → Appearance → Task ids in the sidebar**. With it off, the id is still in the row's tooltip, the title bar and the details panel, and the sidebar filter still finds a task by its id.

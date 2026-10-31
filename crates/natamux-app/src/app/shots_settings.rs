@@ -5,6 +5,7 @@
 use std::time::Duration;
 
 use gpui::{AsyncApp, Entity, WindowHandle, point, px};
+use natamux_proto::agents::custom::CustomAgent;
 
 use super::account_menu::open_account_menu;
 use super::fake_daemon;
@@ -50,6 +51,7 @@ pub fn is_screen7_shot(shot: Shot) -> bool {
             | Shot::AccountMenu
             | Shot::Settings
             | Shot::SettingsGeneral
+            | Shot::SettingsAgents
             | Shot::SettingsSearch
             | Shot::Projects
             | Shot::ProjectSettings
@@ -129,6 +131,18 @@ fn enter(
         }
         Shot::SettingsGeneral => {
             root.show_settings(SettingsPage::General, window, cx);
+        }
+        Shot::SettingsAgents => {
+            // The fake has none, so other shots' agent menus stay as they were.
+            let sample = CustomAgent {
+                id: "claude-qwen".into(),
+                base: "claude-code".into(),
+                command: "cq".into(),
+            };
+            dashboard.update(cx, |dashboard, cx| {
+                dashboard.use_custom_agents(vec![sample], cx)
+            });
+            root.show_settings(SettingsPage::Agents, window, cx);
         }
         Shot::SettingsSearch => {
             root.show_settings(SettingsPage::Appearance, window, cx);

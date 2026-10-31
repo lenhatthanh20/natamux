@@ -8,6 +8,7 @@ use std::sync::{Mutex, MutexGuard, OnceLock, PoisonError};
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
 use natamux_client::{ClientError, DashboardEvent, LinkStatus, SendEventAnswer};
 use natamux_proto::agents::activity::{TaskActivity, TaskUsage};
+use natamux_proto::agents::custom::CustomAgent;
 use natamux_proto::agents::start::StartAgentInput;
 use natamux_proto::events::kind::PreparingMessage;
 use natamux_proto::events::task_event::{StoredEvent, TaskEventInput};
@@ -53,6 +54,7 @@ struct Data {
     settings: settings::SettingsFiles,
     files: files::FilesState,
     projects: projects::ProjectsState,
+    custom_agents: Vec<CustomAgent>,
     next_number: u32,
     feeds: Vec<UnboundedSender<DashboardEvent>>,
     link: FakeLink,
@@ -102,6 +104,7 @@ impl Data {
             settings: settings::SettingsFiles::default(),
             files: files::FilesState::default(),
             projects: projects::ProjectsState::seeded(),
+            custom_agents: Vec::new(),
             next_number: 200,
             feeds: Vec::new(),
             link: FakeLink::Live,
@@ -492,6 +495,9 @@ mod files;
 
 #[path = "fake_projects.rs"]
 mod projects;
+
+#[path = "fake_custom_agents.rs"]
+mod custom_agents;
 
 #[path = "fake_bench.rs"]
 mod bench;

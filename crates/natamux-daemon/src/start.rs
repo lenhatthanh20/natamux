@@ -350,6 +350,7 @@ pub async fn start(
     scheduler: Arc<Scheduler>,
 ) -> std::io::Result<Daemon> {
     private_dir(&config.data_dir)?;
+    crate::agents::custom_agents::load_custom_agents(&config.data_dir);
     let store = task_store(config)?;
     let listener = bind(&config.host, config.port).await?;
     let address = listener.local_addr()?;

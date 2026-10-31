@@ -8,7 +8,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, Weak};
 
-use natamux_proto::agents::start::LAUNCHABLE_AGENTS;
+use natamux_agents::custom::{agent_kind, has_adapter};
 
 use super::limits::SHELL_PROGRAMS;
 use super::shell_files::{OpenShell, delete_open_shells, note_ended_session, save_open_shells};
@@ -107,7 +107,7 @@ pub(super) fn resumable(entry: &Entry) -> Option<&str> {
     entry
         .agent
         .as_deref()
-        .filter(|agent| LAUNCHABLE_AGENTS.contains(agent))
+        .filter(|agent| has_adapter(agent))
 }
 
 pub(super) fn is_shell(program: &str) -> bool {
@@ -355,9 +355,18 @@ impl OpenShells {
         );
     }
 
-    /// A hook named the session of the agent in a shell.
+    /// A hook named the session of the agent in a shell. Hooks name the base of a custom agent
+    /// (`claude-code` for `claude-qwen`); the shell keeps the custom one, so it comes back as it.
     pub fn note_session(&self, task_id: &str, terminal: &str, agent: &str, session: &str) {
-        self.note_launch(task_id, terminal, agent, Some(session));
+        let current = self
+            .lock()
+            .entries
+            .get(task_id)
+            .and_then(|shells| shells.get(terminal))
+            .and_then(|entry| entry.agent.clone())
+            .filter(|current| agent_kind(current) == agent);
+        let agent = current.unwrap_or_else(|| agent.to_string());
+        self.note_launch(task_id, terminal, &agent, Some(session));
     }
 
     /// The agent of a shell is starting again: its pane shows a spinner until it runs.

@@ -4,7 +4,7 @@
 use gpui::{Pixels, Point};
 use ui::{ButtonLike, Checkbox, ContextMenu, Tooltip, prelude::*};
 
-use crate::agents::agent_choices::AGENT_CHOICES;
+use crate::agents::agent_choices::{custom_agents, pick_list};
 use crate::components::menu::MenuLayer;
 use crate::tasks::details_commands::{OnCommand, PanelCommand, StageToggle};
 
@@ -81,11 +81,11 @@ pub fn choice_box(choice: &ChoiceBox, on: &OnCommand, _: &App) -> impl IntoEleme
 
 /// The agents a card can start, in the pickers' order.
 pub fn open_agent_menu(position: Point<Pixels>, on: OnCommand, window: &mut Window, cx: &mut App) {
+    let agents = pick_list(&custom_agents());
     let menu = ContextMenu::build(window, cx, move |menu, _, _| {
-        AGENT_CHOICES.iter().fold(menu, |menu, choice| {
+        agents.into_iter().fold(menu, |menu, (id, label)| {
             let on = on.clone();
-            let id = choice.id.to_owned();
-            menu.entry(choice.label, None, move |window, cx| {
+            menu.entry(label, None, move |window, cx| {
                 on(PanelCommand::PickAgent(id.clone()), window, cx)
             })
         })
