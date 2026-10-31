@@ -1247,6 +1247,12 @@ S2.1 Seams and terminal tests on the old code
   - `send_input` must keep every path's behaviour: same text, same order, same `from_utf8_lossy` in the input task only.
   - The test platform's key path differs from macOS (`prefer_character_input`). The table records the test platform; the manual IME gate covers macOS.
   - The seam must not change runtime behaviour: it is `cfg(test)` only.
+- Done in S2.1: `send_input` and its `#[cfg(test)]` recorder (`remote_terminal::sent`) are in `terminals/remote_terminal.rs`; a test reads every `.input(` call of the app's files. `TerminalFind` calls `RemoteTerminal::find`, `set_matches`, `activate_match` and `clear_matches` (`match_count` for tests). The tests open a terminal of the fake with an empty screen in a pane of 640x340 px (80x20 cells of the test font, 7.8x16.9 px); a read of the screen draws the cached view first, as typing tells it nothing until the shell echoes. Golden files `tests/golden/terminal/<os>/`: `press_table` (T-K1), `mouse_reports` (T-M1), `draw_list` (T-P1, from `TerminalElement::layout_grid`; a rect's fields are private, so its debug text is kept with colours as RGBA8), `contrast` (T-C1), `colours` (T-C2), and the tables of the gpui tests `grid_size` (T-G1), `wheel` (T-W1), `selection` (T-S1), `paste` (T-V1), `links` (T-L1), `focus` (T-F1), `answers` (T-Q1), `blink` (T-B1). T-K2, T-I1, T-R1, T-R2 and T-E1 are plain gpui tests. The Linux and macOS files differ only in `press_table` (Alt keys and the Cmd rows). What the old code does where this plan said otherwise, pinned as it is (DT14):
+  - A mode set with no frame drawn before the next key: the key uses the new mode (Up gives `ESC O A` right after `CSI ? 1 h` through the writer), not the mode of the last frame (6.2.4, 6.2.5).
+  - A scroll, a resize and Select All queued before one frame do not give what they give one frame each: in the frame of the resize Select All leaves out the lines the resize took from the screen.
+  - Focus into the context menu sends no `CSI O` with mode 1004; the model's cursor shape stays Block (the element draws Hollow from the exact focus).
+  - A plain click on an OSC 8 link opens the link of the line below when the click is in the lower half of the cell (`round`); see the progress log, "Bugs found".
+  - The test platform has no keypad keys: a keypad key comes as its character, so the digit and operator rows stand for it.
 
 S2.2 Feature, Appearance global, pure modules
 - Goal: own colours, contrast, input bytes, mouse reports, grid math and the link regex pass the goldens.

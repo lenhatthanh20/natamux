@@ -11,7 +11,7 @@ use futures::StreamExt;
 use futures::channel::mpsc::{UnboundedSender, unbounded};
 use gpui::{AnyWindowHandle, App, Entity, Focusable, Priority, Subscription, Task};
 use natamux_client::{SessionOptions, TerminalHandle, TerminalStatus};
-use terminal::{Modes, Terminal};
+use terminal::{Modes, Range, Search, Terminal};
 use terminal_view::TerminalView;
 use ui::prelude::*;
 
@@ -167,9 +167,51 @@ impl RemoteTerminal {
         &self.status
     }
 
-    /// Zed's terminal, for the find bar.
+    /// Zed's terminal, for the shots and the tests.
     pub fn terminal(&self) -> &Entity<Terminal> {
         &self.terminal
+    }
+
+    /// Searches the shown screen for `pattern`, on a background task. None when the pattern is
+    /// not a valid search.
+    pub fn find(&self, pattern: &str, cx: &mut App) -> Option<Task<Vec<Range>>> {
+        let search = Search::new(pattern)?;
+        Some(
+            self.terminal
+                .update(cx, |terminal, cx| terminal.find_matches(search, cx)),
+        )
+    }
+
+    /// Shows the matches of a find, the first one active.
+    pub fn set_matches(&self, matches: Vec<Range>, cx: &mut App) {
+        self.terminal.update(cx, |terminal, cx| {
+            let found = !matches.is_empty();
+            terminal.matches = matches;
+            if found {
+                terminal.activate_match(0);
+            }
+            cx.notify();
+        });
+    }
+
+    /// Selects match `index` and scrolls it into view.
+    pub fn activate_match(&self, index: usize, cx: &mut App) {
+        self.terminal.update(cx, |terminal, cx| {
+            terminal.activate_match(index);
+            cx.notify();
+        });
+    }
+
+    pub fn clear_matches(&self, cx: &mut App) {
+        self.terminal.update(cx, |terminal, cx| {
+            terminal.matches.clear();
+            cx.notify();
+        });
+    }
+
+    #[cfg(test)]
+    pub fn match_count(&self, cx: &App) -> usize {
+        self.terminal.read(cx).matches.len()
     }
 
     /// For the cache's tests: the fake daemon's terminals never end.
@@ -257,7 +299,9 @@ impl RemoteTerminal {
     /// Types into the shell, as keys would; waits until the socket is open. A paused one wakes.
     pub fn type_text(&mut self, text: &str) {
         match (&self.handle, &self.status) {
-            (Some(h), TerminalStatus::Open | TerminalStatus::Paused { .. }) => h.input(text),
+            (Some(h), TerminalStatus::Open | TerminalStatus::Paused { .. }) => {
+                send_input(h, text.to_string())
+            }
             _ => self.pending.push(text.to_string()),
         }
     }
@@ -436,7 +480,7 @@ impl RemoteTerminal {
         let typed = handle.clone();
         self._tasks.push(cx.spawn(async move |this, cx| {
             while let Some(bytes) = input.next().await {
-                typed.input(String::from_utf8_lossy(&bytes).into_owned());
+                send_input(&typed, String::from_utf8_lossy(&bytes).into_owned());
                 // Only a key that sent input here counts for key to glyph.
                 let counted = this.update(cx, |this, cx| {
                     if let Some(at) = this.last_key.take() {
@@ -468,8 +512,41 @@ impl RemoteTerminal {
     }
 }
 
+/// Every text that goes to a shell passes here (plan D35): the screen's keys, pastes and
+/// answers, `type_text`, and the text typed before the socket opened. Tests read it back.
+pub fn send_input(handle: &TerminalHandle, text: String) {
+    #[cfg(test)]
+    sent::record(&text);
+    handle.input(text);
+}
+
+/// What `send_input` sent on this test's thread, in order.
+#[cfg(test)]
+pub mod sent {
+    use std::cell::RefCell;
+
+    thread_local! {
+        static SENT: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+    }
+
+    pub fn record(text: &str) {
+        SENT.with(|sent| sent.borrow_mut().push(text.to_owned()));
+    }
+
+    /// What was sent since the last take.
+    pub fn take() -> Vec<String> {
+        SENT.with(|sent| std::mem::take(&mut *sent.borrow_mut()))
+    }
+}
+
+#[cfg(test)]
+#[path = "term_behaviour_tests.rs"]
+mod behaviour_tests;
 #[path = "remote_terminal_events.rs"]
 mod events;
+#[cfg(test)]
+#[path = "term_golden_tests.rs"]
+mod golden_tests;
 #[cfg(test)]
 #[path = "remote_terminal_tests.rs"]
 mod tests;
