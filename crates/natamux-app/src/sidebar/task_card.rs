@@ -21,7 +21,6 @@ use crate::sidebar::card_rules::{
 };
 use crate::sidebar::shell_rows::task_glyph_state;
 use crate::sidebar::sidebar_tree::{RowTier, row_tier};
-use crate::sidebar::tree_entries::EntryAction;
 use crate::sidebar::tree_model::{Line, TaskLook, TreeModel};
 use crate::sidebar::workspace_groups::is_quiet;
 use crate::tasks::task_rules::lane_summary;
@@ -68,7 +67,6 @@ impl WorkspaceTree {
     ) -> AnyElement {
         let Line::Task {
             task,
-            nested,
             pinned_row,
             look,
             ..
@@ -77,7 +75,7 @@ impl WorkspaceTree {
             return div().into_any_element();
         };
         let card = match look {
-            TaskLook::Closed => self.closed_card(task, model, snap, *pinned_row, *nested, cx),
+            TaskLook::Closed => self.closed_card(task, model, snap, *pinned_row, cx),
             TaskLook::Open { rows, children } => {
                 self.open_card(task, rows, children, model, snap, *pinned_row, cx)
             }
@@ -96,11 +94,10 @@ impl WorkspaceTree {
         model: &TreeModel,
         snap: &Snapshot,
         pinned_row: bool,
-        nested: bool,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let blurred = is_blurred(task, snap);
-        let head = self.card_head(task, model, snap, false, nested, cx);
+        let head = self.card_head(task, model, snap, false, cx);
         let meta = self.closed_meta(task, model, snap, pinned_row, blurred, cx);
         let waiting = self.waiting_box(task, snap, blurred, false, cx);
         self.card_frame(task, snap, [7.0, 8.0, 8.0, 9.0], 4.0, false, cx)
@@ -152,6 +149,7 @@ impl WorkspaceTree {
         let menu_id = task.id.clone();
         div()
             .id(SharedString::from(key))
+            .debug_selector(|| format!("card-{}", task.id))
             .group(SharedString::from(format!("row-{}", task.id)))
             .w_full()
             .flex()
@@ -184,15 +182,13 @@ impl WorkspaceTree {
             )
     }
 
-    /// Line 1: glyph, title, unseen dot, reason or age, and the hover buttons. The rename field
-    /// replaces only this line.
+    /// Line 1: glyph, title, unseen dot, reason or age. The rename field replaces only this line.
     pub(super) fn card_head(
         &self,
         task: &Task,
         model: &TreeModel,
         snap: &Snapshot,
         open: bool,
-        nested: bool,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let renaming = self
@@ -246,9 +242,6 @@ impl WorkspaceTree {
                     cx.stop_propagation();
                 }
             }));
-        let group = SharedString::from(format!("row-{}", task.id));
-        let fold = (open || !nested).then(|| self.fold_button(&task.id, open, group.clone(), cx));
-        let menu = self.menu_button(&task.id, group, cx);
         h_flex()
             .w_full()
             .gap(rems_from_px(HEAD_GAP))
@@ -273,56 +266,12 @@ impl WorkspaceTree {
                         ),
                 )
             })
-            .child(right_slot(task, snap, cx))
-            .child(menu)
-            .children(fold)
-            .into_any_element()
-    }
-
-    /// Chevron down on a closed card (on hover), chevron up on an open one (always).
-    fn fold_button(
-        &self,
-        id: &str,
-        open: bool,
-        group: SharedString,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let key = card_fold_key(id);
-        let icon = if open {
-            IconName::ChevronUp
-        } else {
-            IconName::ChevronDown
-        };
-        let button = IconButton::new(SharedString::from(format!("fold-{id}")), icon)
-            .icon_size(IconSize::Small)
-            .tooltip(Tooltip::text(if open { "Fold" } else { "Unfold" }))
-            .on_click(cx.listener(move |tree, _: &ClickEvent, _window, cx| {
-                tree.run_entry(
-                    EntryAction::SetFold {
-                        key: key.clone(),
-                        open: !open,
-                    },
-                    cx,
-                );
-                cx.stop_propagation();
-            }));
-        if open {
-            button.into_any_element()
-        } else {
-            button.visible_on_hover(group).into_any_element()
-        }
-    }
-
-    fn menu_button(&self, id: &str, group: SharedString, cx: &mut Context<Self>) -> AnyElement {
-        let task_id = id.to_owned();
-        IconButton::new(SharedString::from(format!("menu-{id}")), IconName::Ellipsis)
-            .icon_size(IconSize::Small)
-            .visible_on_hover(group)
-            .tooltip(Tooltip::text(format!("Actions for {id}")))
-            .on_click(cx.listener(move |tree, event: &ClickEvent, window, cx| {
-                tree.open_row_menu(&task_id, event.position(), window, cx);
-                cx.stop_propagation();
-            }))
+            .child(
+                div()
+                    .flex_none()
+                    .debug_selector(|| format!("right-{}", task.id))
+                    .child(right_slot(task, snap, cx)),
+            )
             .into_any_element()
     }
 
@@ -421,13 +370,10 @@ impl WorkspaceTree {
             SharedString::from(format!("glyph-{}", task.id)),
             Some(task_glyph_state(task, model.rows_of(&task.id))),
         );
-        let group = SharedString::from(format!("row-{}", task.id));
-        let menu = self.menu_button(&task.id, group.clone(), cx);
         let open_key = key.clone();
         let menu_id = task.id.clone();
         self.row_frame(&key, current, snap, cx)
             .id(SharedString::from(key))
-            .group(group)
             .h(rems_from_px(24.0_f32))
             .px_2()
             .flex()
@@ -442,7 +388,6 @@ impl WorkspaceTree {
                 cx,
             )))
             .child(age_label(task, snap))
-            .child(menu)
             .on_click(cx.listener(move |tree, _: &ClickEvent, window, cx| {
                 tree.focus_key(open_key.clone(), window, cx);
                 tree.activate(&open_key, cx);

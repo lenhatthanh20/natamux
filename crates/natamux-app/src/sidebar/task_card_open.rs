@@ -35,7 +35,7 @@ impl WorkspaceTree {
     ) -> AnyElement {
         let blurred = is_blurred(task, snap);
         let divider = cx.theme().colors().border_variant;
-        let head = self.card_head(task, model, snap, true, false, cx);
+        let head = self.card_head(task, model, snap, true, cx);
         let chips = self.meta_chips(task, snap, pinned_row, blurred, cx);
         let waiting = self.waiting_box(task, snap, blurred, true, cx);
         let branch = self.branch_line(task, snap, blurred, cx);
@@ -68,7 +68,7 @@ impl WorkspaceTree {
         let subtasks = (!children.is_empty()).then(|| {
             let cards: Vec<AnyElement> = children
                 .iter()
-                .map(|child| self.closed_card(child, model, snap, false, true, cx))
+                .map(|child| self.closed_card(child, model, snap, false, cx))
                 .collect();
             div()
                 .w_full()
