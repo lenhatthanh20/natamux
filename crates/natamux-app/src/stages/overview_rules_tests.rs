@@ -222,3 +222,39 @@ fn the_progress_tab_follows_the_stage_that_runs_and_the_figures_of_an_open_task(
         Some(30_000)
     );
 }
+
+#[test]
+fn the_strip_of_a_done_task_says_when_it_finished_and_adds_the_cost() {
+    let done = task(TaskState::Done);
+    let head = strip_head(&done, &[], ms(NOW));
+    assert_eq!(head.as_deref(), Some("Done \u{b7} Finished 10m ago"));
+    let figures = strip_figures(&done, 3, 3, 1, Some(0.61), ms(NOW));
+    assert_eq!(labels(&figures), ["Stages", "Total", "Cost est."]);
+    assert_eq!(value(&figures, "Cost est."), "$0.61");
+    let free = strip_figures(&done, 3, 3, 0, None, ms(NOW));
+    assert_eq!(labels(&free), ["Stages", "Total"]);
+}
+
+#[test]
+fn the_strip_of_a_cancelled_task_names_the_stage_it_stopped_at() {
+    let cancelled = task(TaskState::Cancelled);
+    let entry = bar_entry("spec", StageStatus::Current, None, None);
+    assert_eq!(
+        strip_head(&cancelled, &[entry], ms(NOW)).as_deref(),
+        Some("Cancelled at SPEC")
+    );
+    assert_eq!(
+        strip_head(&cancelled, &[], ms(NOW)).as_deref(),
+        Some("Cancelled at spec")
+    );
+    let figures = strip_figures(&cancelled, 1, 3, 0, Some(1.0), ms(NOW));
+    assert_eq!(labels(&figures), ["Stages", "Total"]);
+}
+
+#[test]
+fn the_strip_of_an_open_task_has_no_head_and_the_usual_figures() {
+    let open = task(TaskState::Running);
+    assert_eq!(strip_head(&open, &[], ms(NOW)), None);
+    let figures = strip_figures(&open, 1, 3, 0, Some(1.0), ms(NOW));
+    assert_eq!(labels(&figures), ["Stages", "Total", "This stage"]);
+}

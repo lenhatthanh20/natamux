@@ -3,6 +3,9 @@
 //! not reached yet an empty dashed ring. A branch is a diamond. A running stage's glyph blinks
 //! (`StateGlyph`); the line into it is still (owner, T-0164), and nothing else moves.
 
+// `RailLine` is not used since Progress became a node flow (T-0246); it stays until asked.
+#![allow(dead_code)]
+
 use gpui::svg;
 use natamux_proto::stages::progress::StageStatus;
 use natamux_proto::tasks::task::TaskState;

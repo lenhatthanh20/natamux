@@ -221,6 +221,8 @@ mod stages {
     pub mod editor_fixtures;
     pub mod editor_labels;
     pub mod editor_moves;
+    pub mod flow_lines;
+    pub mod flow_rules;
     pub mod kind_icon;
     pub mod overview_rules;
     pub mod pipeline_editor;
