@@ -144,6 +144,39 @@ fn the_task_ids_switch_shows_the_ids_at_once(cx: &mut TestAppContext) {
     assert!(shown(&tree, cx));
 }
 
+#[gpui::test]
+fn the_card_head_centers_the_glyph_on_the_title(cx: &mut TestAppContext) {
+    // Top-aligned, the 14 px glyph sat ~3 px above the 13 px title (T-0251).
+    let (dashboard, _, cx) = sidebar_tree(cx);
+    let centres = |cx: &mut VisualTestContext| {
+        let glyph = cx
+            .debug_bounds("glyph-T-0141")
+            .expect("the card glyph was not drawn");
+        let title = cx
+            .debug_bounds("title-T-0141")
+            .expect("the card title was not drawn");
+        (glyph.center().y, title.center().y)
+    };
+    let (glyph, title) = centres(cx);
+    assert!(
+        (glyph - title).abs() <= px(1.0),
+        "closed: the glyph at {} is off the title at {}",
+        glyph.0,
+        title.0
+    );
+
+    // Open, the glyph must stay on the title's first line.
+    dashboard.update(cx, |dashboard, cx| dashboard.set_fold("task:T-0141", true, cx));
+    cx.run_until_parked();
+    let (glyph, title) = centres(cx);
+    assert!(
+        (glyph - title).abs() <= px(1.5),
+        "open: the glyph at {} is off the title at {}",
+        glyph.0,
+        title.0
+    );
+}
+
 #[test]
 fn only_the_changed_lines_are_measured_again() {
     let header = |group| Line::GroupHeader { group };

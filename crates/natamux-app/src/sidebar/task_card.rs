@@ -202,6 +202,16 @@ impl WorkspaceTree {
             Some(tip) => glyph.tip(tip),
             None => glyph,
         };
+        // The title can wrap to two lines, so the glyph centers on its first line in a 20 px
+        // box; closed, the row centers the same box.
+        let glyph = div()
+            .flex_none()
+            .h(rems_from_px(20.0_f32))
+            .flex()
+            .items_center()
+            .debug_selector(|| format!("glyph-{}", task.id))
+            .child(glyph)
+            .into_any_element();
         let title = if open {
             open_title(task, blurred)
         } else {
@@ -211,6 +221,7 @@ impl WorkspaceTree {
         let tip = snap.tips.get(&task.id).cloned().unwrap_or_default();
         let title = div()
             .id(SharedString::from(format!("title-{}", task.id)))
+            .debug_selector(|| format!("title-{}", task.id))
             .min_w_0()
             .flex_1()
             .child(title)
@@ -228,7 +239,7 @@ impl WorkspaceTree {
         h_flex()
             .w_full()
             .gap(rems_from_px(7.0_f32))
-            .when(!open, |line| line.h(rems_from_px(20.0_f32)))
+            .when(!open, |line| line.h(rems_from_px(20.0_f32)).items_center())
             .when(open, |line| {
                 line.min_h(rems_from_px(20.0_f32)).items_start()
             })
@@ -238,9 +249,15 @@ impl WorkspaceTree {
                 line.child(
                     div()
                         .flex_none()
-                        .size(rems_from_px(6.0_f32))
-                        .rounded_full()
-                        .bg(cx.theme().colors().text_accent),
+                        .h(rems_from_px(20.0_f32))
+                        .flex()
+                        .items_center()
+                        .child(
+                            div()
+                                .size(rems_from_px(6.0_f32))
+                                .rounded_full()
+                                .bg(cx.theme().colors().text_accent),
+                        ),
                 )
             })
             .child(right_slot(task, snap, cx))
