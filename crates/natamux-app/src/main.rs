@@ -30,6 +30,8 @@ mod app {
     pub mod fake_daemon;
     pub mod flow_bench;
     pub mod gate2;
+    #[cfg(test)]
+    pub mod golden_files;
     pub mod jobs;
     pub mod layout_mode;
     pub mod links;
@@ -308,6 +310,13 @@ mod terminals {
     pub mod terminal_screen;
     pub mod terminal_size;
     pub mod terminal_tabs;
+}
+/// The goldens of the code view (plan S4.1), recorded on the editor it replaces.
+mod text_view {
+    #[cfg(test)]
+    mod code_mouse_tests;
+    #[cfg(test)]
+    mod code_typing_tests;
 }
 mod workspaces {
     pub mod branches;

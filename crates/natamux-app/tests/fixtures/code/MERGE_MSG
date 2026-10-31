@@ -1,0 +1,17 @@
+Merge branch 'feature/coupons' into main
+
+Bring the coupon rules in, with their tests.
+
+Reviewed-by: A Person <person@example.com>
+Fixes: #123
+# Please enter a commit message to explain why this merge is necessary.
+# Lines starting with '#' will be ignored.
+#
+# On branch main
+# Changes to be committed:
+#	modified:   src/coupon.ts
+#	new file:   test/coupon.test.ts
+#
+# ------------------------ >8 ------------------------
+# Do not modify or remove the line above.
+diff --git a/src/coupon.ts b/src/coupon.ts
