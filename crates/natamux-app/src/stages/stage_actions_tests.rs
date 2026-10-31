@@ -1,8 +1,8 @@
 //! Workflow test T24 (plan 7.5), in the app's root view on the fake daemon: what each button of
 //! the current stage card sends, that every button is off while a request is on its way (a
 //! double click sends one), the agent picker, and what `a` sends next to the Approve button.
-//! The card's buttons have no focus stop and no selector, so the tests call what their click
-//! calls: the panel's `on_command` with the command `stage_actions.rs` gives each button.
+//! The tests call the panel's `on_command` with the command of each button;
+//! `stage_actions_row_tests.rs` clicks the drawn buttons and checks the command each one sends.
 //! (A child of the details panel, so it reaches the panel's state.)
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
@@ -252,7 +252,9 @@ fn t24_the_agent_picker_picks_the_agent_that_starts(cx: &mut TestAppContext) {
 }
 
 /// `a` with the focus on the panel, next to a click on Approve (`t24_approve_...`): the key sends
-/// the task's `review.approved` event, the button the stage's approve.
+/// the task's `review.approved` event, the button the stage's approve. "Done" comes from the
+/// fake (`state_after`); the daemon gives an event with no stage to the one stage it fits, which
+/// then moves on as after the button (natamux-daemon `apply_group.rs`).
 #[gpui::test]
 fn t24_a_on_the_panel_sends_the_review_approved_event(cx: &mut TestAppContext) {
     let (root, dashboard, cx) = root(cx);
