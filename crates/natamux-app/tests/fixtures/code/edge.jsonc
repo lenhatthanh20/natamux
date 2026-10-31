@@ -1,0 +1,11 @@
+// Edge cases of JSONC colours.
+{
+  /* A block comment. */
+  "editor": {
+    "tabSize": 2, // a trailing comment
+    "rulers": [80, 100,],
+    "unicode": "é\t\"quoted\"",
+    "empty": {},
+    "none": null,
+  },
+}

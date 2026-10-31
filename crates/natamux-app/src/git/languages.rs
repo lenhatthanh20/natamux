@@ -90,3 +90,7 @@ pub fn language_for(
         .to_owned();
     Some(async move { registry.language_for_name_or_extension(&key).await.ok() })
 }
+
+#[cfg(test)]
+#[path = "languages_golden_tests.rs"]
+mod golden_tests;
