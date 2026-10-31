@@ -9,7 +9,7 @@ use ui::{Tooltip, prelude::*};
 
 use super::blur_bar::{BlurBar, private_text};
 use super::sidebar::{lucide, mono, small};
-use super::task_card::inset;
+use super::task_card::{CONTENT_INSET, inset};
 use super::workspace_tree::{Snapshot, WorkspaceTree};
 use crate::components::button_style::action_button;
 use crate::components::colors::{project_color, state_colors};
@@ -44,9 +44,9 @@ impl WorkspaceTree {
                 .iter()
                 .map(|row| self.terminal_row(&task.id, row, snap, cx))
                 .collect();
-            // A click on a terminal row must not also open the task behind it. The rows reach
-            // left by their border and padding (1 + 8 px), so their dot column lines up with the
-            // task glyph while the divider stays put.
+            // A click on a terminal row must not also open the task behind it. The rows are the
+            // task's children, so their dot column starts at the title edge: the inset less the
+            // row's border and padding (1 + 8 px). The divider stays full width (T-0255).
             div()
                 .id(SharedString::from(format!("terminals-{}", task.id)))
                 .w_full()
@@ -59,7 +59,7 @@ impl WorkspaceTree {
                     div()
                         .flex()
                         .flex_col()
-                        .ml(rems_from_px(-9.0_f32))
+                        .ml(rems_from_px(CONTENT_INSET - 9.0))
                         .children(list),
                 )
                 .on_click(|_, _, cx| cx.stop_propagation())

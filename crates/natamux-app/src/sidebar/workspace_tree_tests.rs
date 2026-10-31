@@ -15,6 +15,7 @@ use super::WorkspaceTree;
 use crate::app::dashboard::Dashboard;
 use crate::app::source::Source;
 use crate::app::test_views;
+use crate::sidebar::task_card::{GLYPH_COLUMN, HEAD_GAP};
 use crate::sidebar::tree_lines::{LinesChange, changed_lines};
 use crate::sidebar::tree_model::Line;
 
@@ -178,7 +179,8 @@ fn the_card_head_centers_the_glyph_on_the_title(cx: &mut TestAppContext) {
 #[gpui::test]
 fn the_open_card_lines_share_one_left_edge(cx: &mut TestAppContext) {
     // The chips and the branch started under the glyph, the agent icon 6 px right of the title
-    // (T-0253).
+    // (T-0253). Terminal rows are the task's children, so their dot column starts at the title
+    // edge and their content one glyph column further (T-0255).
     let (dashboard, _, cx) = sidebar_tree(cx);
     dashboard.update(cx, |dashboard, cx| dashboard.set_fold("task:T-0141", true, cx));
     cx.run_until_parked();
@@ -188,12 +190,12 @@ fn the_open_card_lines_share_one_left_edge(cx: &mut TestAppContext) {
     };
     let edge = bounds("title-T-0141", cx).left();
     let row = "agent:T-0141:shell:1";
-    let content = format!("{row}-content");
+    let dot_column = format!("{row}-glyph");
     for name in [
         "chips-T-0141",
         "branch-T-0141",
         "waiting-T-0141",
-        content.as_str(),
+        dot_column.as_str(),
     ] {
         let left = bounds(name, cx).left();
         assert!(
@@ -203,13 +205,15 @@ fn the_open_card_lines_share_one_left_edge(cx: &mut TestAppContext) {
             edge.0
         );
     }
-    let glyph = bounds("glyph-T-0141", cx).center().x;
-    let dot = bounds(&format!("{row}-glyph"), cx).center().x;
+    let content = bounds(&format!("{row}-content"), cx).left();
+    let indent = px(GLYPH_COLUMN + HEAD_GAP);
     assert!(
-        (dot - glyph).abs() <= px(1.0),
-        "the terminal dot at {} is off the task glyph at {}",
-        dot.0,
-        glyph.0
+        (content - edge - indent).abs() <= px(1.0),
+        "the terminal row content starts at {}, want {} (title {} + {})",
+        content.0,
+        (edge + indent).0,
+        edge.0,
+        indent.0
     );
 }
 

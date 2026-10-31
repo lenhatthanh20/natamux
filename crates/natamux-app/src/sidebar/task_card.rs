@@ -35,7 +35,7 @@ pub(super) enum CardBorder {
 }
 
 /// The task glyph's column and the gap after it. Every other line of a card starts at their sum,
-/// so only the glyph sits out to the left (T-0253).
+/// so only the glyph sits out to the left (T-0253). Terminal rows start there too (T-0255).
 pub(super) const GLYPH_COLUMN: f32 = 14.0;
 pub(super) const HEAD_GAP: f32 = 7.0;
 pub(super) const CONTENT_INSET: f32 = GLYPH_COLUMN + HEAD_GAP;
