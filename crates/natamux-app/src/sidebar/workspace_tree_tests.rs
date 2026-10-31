@@ -5,7 +5,7 @@
 
 use std::sync::Arc;
 
-use gpui::{Entity, StyleRefinement, TestAppContext, VisualTestContext};
+use gpui::{Entity, Modifiers, StyleRefinement, TestAppContext, VisualTestContext};
 use natamux_client::DashboardEvent;
 use natamux_proto::agents::activity::{TaskActivity, TaskUsage};
 use natamux_proto::workspaces::workspace::DiffStat;
@@ -175,6 +175,38 @@ fn the_card_head_centers_the_glyph_on_the_title(cx: &mut TestAppContext) {
         glyph.0,
         title.0
     );
+}
+
+#[gpui::test]
+fn the_card_head_ends_with_the_age_and_no_buttons(cx: &mut TestAppContext) {
+    // The hover "..." and fold buttons kept their room even when hidden (T-0254).
+    let (dashboard, _, cx) = sidebar_tree(cx);
+    let gap = |cx: &mut VisualTestContext| {
+        let card = cx
+            .debug_bounds("card-T-0141")
+            .expect("the card was not drawn");
+        let right = cx
+            .debug_bounds("right-T-0141")
+            .expect("the age label was not drawn");
+        card.right() - right.right()
+    };
+    // Only the right padding (8 or 9 px) and the 1 px border; one button alone is 16 px or more.
+    let closed = gap(cx);
+    assert!(closed <= px(14.0), "closed: {} px after the age", closed.0);
+    dashboard.update(cx, |dashboard, cx| dashboard.set_fold("task:T-0141", true, cx));
+    cx.run_until_parked();
+    let open = gap(cx);
+    assert!(open <= px(14.0), "open: {} px after the age", open.0);
+
+    // A hover once hid the age for the buttons; with no buttons it must stay painted.
+    // T-0146 is running, so it shows its age, not a reason.
+    assert!(cx.debug_bounds("age-T-0146").is_some(), "no age before hover");
+    let title = cx
+        .debug_bounds("title-T-0146")
+        .expect("the T-0146 title was not drawn");
+    cx.simulate_mouse_move(title.center(), None, Modifiers::none());
+    cx.run_until_parked();
+    assert!(cx.debug_bounds("age-T-0146").is_some(), "hover hid the age");
 }
 
 #[test]

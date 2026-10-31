@@ -230,7 +230,7 @@ pub(super) fn title_label(
         .into_any_element()
 }
 
-/// The age of the last change; the menu button takes its place on hover.
+/// The age of the last change.
 pub(super) fn age_label(task: &Task, snap: &Snapshot) -> Stateful<Div> {
     let age = format_age(
         &task.updated_at,
@@ -241,10 +241,11 @@ pub(super) fn age_label(task: &Task, snap: &Snapshot) -> Stateful<Div> {
     div()
         .id(SharedString::from(format!("age-{}", task.id)))
         .flex_none()
-        .group_hover(SharedString::from(format!("row-{}", task.id)), |style| {
-            style.invisible()
-        })
-        .child(small(age))
+        .child(
+            div()
+                .debug_selector(|| format!("age-{}", task.id))
+                .child(small(age)),
+        )
         .tooltip(Tooltip::text(format_exact(
             &task.updated_at,
             OFFSET_MINUTES,
@@ -252,7 +253,7 @@ pub(super) fn age_label(task: &Task, snap: &Snapshot) -> Stateful<Div> {
 }
 
 /// The right slot of a card: the short reason in the state colour on an attention card (always
-/// shown), else the age, which the buttons replace on hover.
+/// shown), else the age.
 pub(super) fn right_slot(task: &Task, snap: &Snapshot, cx: &App) -> AnyElement {
     let Some(label) = snap.labels.get(&task.id) else {
         return age_label(task, snap).into_any_element();
