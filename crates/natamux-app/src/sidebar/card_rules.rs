@@ -23,9 +23,14 @@ pub fn is_card_open(folds: &[(String, bool)], task_id: &str, holds_current: bool
     is_fold_open(folds, &card_fold_key(task_id), holds_current)
 }
 
-/// Opening a task unfolds its card, and the card of its parent when it is a subtask.
-pub fn opened_folds(folds: &[(String, bool)], task: &Task) -> Folds {
-    let next = with_fold(folds, &card_fold_key(&task.id), true);
+/// Opening a task unfolds its card, and the card of its parent when it is a subtask; the card of
+/// the task it replaces in main folds: one open card at a time.
+pub fn opened_folds(folds: &[(String, bool)], prev: Option<&str>, task: &Task) -> Folds {
+    let folded = match prev.filter(|prev| *prev != task.id) {
+        Some(prev) => with_fold(folds, &card_fold_key(prev), false),
+        None => folds.to_vec(),
+    };
+    let next = with_fold(&folded, &card_fold_key(&task.id), true);
     match task.parent_id.as_deref() {
         Some(parent) => with_fold(&next, &card_fold_key(parent), true),
         None => next,

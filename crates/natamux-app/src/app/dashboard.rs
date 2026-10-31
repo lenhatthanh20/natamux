@@ -313,10 +313,11 @@ impl Dashboard {
         self.agents_open = false;
         self.settings = None;
         self.workspace_tab = self.tab_on_open(&task.id);
+        // The task it replaces in main folds its card: one open card at a time.
+        self.view.folds = opened_folds(&self.view.folds, self.open_task.as_deref(), &task);
         self.open_task = Some(task.id.clone());
         self.view.seen = with_seen(&self.view.seen, &[(&task.id, task.state)], true);
         self.view.recent = with_recent(&self.view.recent, &task.id);
-        self.view.folds = opened_folds(&self.view.folds, &task);
         self.save_view(cx);
         cx.emit(DashboardChange::Opened(Box::new(task)));
         self.touch_view(cx);

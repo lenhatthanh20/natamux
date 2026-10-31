@@ -62,10 +62,31 @@ fn a_card_follows_the_open_workspace_unless_a_fold_is_saved() {
 fn opening_a_task_unfolds_it_and_its_parent() {
     let mut child = task(TaskState::Running);
     child.parent_id = Some("T-0009".into());
-    let folds = opened_folds(&[("task:T-0001".to_owned(), false)], &child);
+    let folds = opened_folds(&[("task:T-0001".to_owned(), false)], None, &child);
     assert!(is_card_open(&folds, "T-0001", false));
     assert!(is_card_open(&folds, "T-0009", false));
-    let folds = opened_folds(&[], &task(TaskState::Running));
+    let folds = opened_folds(&[], None, &task(TaskState::Running));
+    assert_eq!(folds, [("task:T-0001".to_owned(), true)]);
+}
+
+#[test]
+fn opening_another_task_folds_the_card_left_behind() {
+    let mut other = task(TaskState::Running);
+    other.id = "T-0002".into();
+    // The task left behind in main folds its card; the new one unfolds it.
+    let folds = opened_folds(&[], Some("T-0001"), &other);
+    assert!(!is_card_open(&folds, "T-0001", false));
+    assert!(is_card_open(&folds, "T-0002", false));
+    // A saved open fold of the task left behind is dropped too.
+    let saved = [("task:T-0001".to_owned(), true)];
+    let folds = opened_folds(&saved, Some("T-0001"), &other);
+    assert!(!is_card_open(&folds, "T-0001", false));
+    assert!(is_card_open(&folds, "T-0002", false));
+    // Opening the open task again keeps its card unfolded.
+    let folds = opened_folds(&folds, Some("T-0002"), &other);
+    assert!(is_card_open(&folds, "T-0002", false));
+    // With no task open before, nothing is folded.
+    let folds = opened_folds(&[], None, &task(TaskState::Running));
     assert_eq!(folds, [("task:T-0001".to_owned(), true)]);
 }
 
