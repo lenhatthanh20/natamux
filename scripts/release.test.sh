@@ -129,6 +129,16 @@ for manifest in crates/*/Cargo.toml; do
   check "$manifest is $version" '[ "$(rust_version_of "$manifest")" = "$version" ]'
 done
 check "the macOS bundle is $version" '[ "$(bundle_version)" = "$version" ]'
+# Without these keys macOS denies a program in a Natamux terminal with no prompt. Same set as Ghostty.
+usage_keys="AppleEvents BluetoothAlways Calendars Camera Contacts LocalNetwork Location Microphone Motion
+  PhotoLibrary Reminders SpeechRecognition SystemAdministration"
+for name in $usage_keys; do
+  check "the macOS bundle has NS${name}UsageDescription" \
+    'sed -n "/<key>NS${name}UsageDescription<\/key>/{n;p;}" crates/natamux-app/resources/Info.plist \
+      | grep -qE "<string>[^<]+</string>"'
+done
+check "the macOS bundle has 13 usage descriptions" \
+  '[ "$(grep -c "UsageDescription</key>" crates/natamux-app/resources/Info.plist)" = 13 ]'
 check "the root package.json pins pnpm" 'grep -qE "^  \"packageManager\": \"pnpm@[0-9]+\.[0-9]+\.[0-9]+\",$" package.json'
 check "the root package.json has no version" '! grep -q "^  \"version\":" package.json'
 check "the package job of release.yml caches no target folder" \
