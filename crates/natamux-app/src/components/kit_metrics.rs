@@ -45,13 +45,13 @@ const PAD: f32 = 16.;
 const WINDOW_WIDTH: f32 = 480.;
 const WINDOW_HEIGHT: f32 = 400.;
 
-struct Config {
-    name: &'static str,
+pub(crate) struct Config {
+    pub(crate) name: &'static str,
     mode: ThemeMode,
     ui_size: &'static str,
 }
 
-const CONFIGS: [Config; 4] = [
+pub(crate) const CONFIGS: [Config; 4] = [
     Config {
         name: "dark-default",
         mode: ThemeMode::Dark,
@@ -742,8 +742,10 @@ impl Render for Stage {
 /// A text system with no fonts: every glyph is 1 px wide and as many px high as the number of
 /// its font, so a painted glyph tells its font. Layout is gpui's no-op one (fixed advances).
 #[derive(Default)]
-struct GlyphBoxes {
+pub(crate) struct GlyphBoxes {
     fonts: Mutex<Vec<Font>>,
+    /// Each line laid out, once: `[text, font size, [[length, font]...]]`.
+    pub(crate) lines: Mutex<Vec<Value>>,
 }
 
 impl GlyphBoxes {
@@ -815,6 +817,16 @@ impl PlatformTextSystem for GlyphBoxes {
     }
 
     fn layout_line(&self, text: &str, font_size: Pixels, runs: &[FontRun]) -> LineLayout {
+        let fonts: Vec<Value> = runs
+            .iter()
+            .map(|run| json!([run.len, self.font_name(run.font_id.0)]))
+            .collect();
+        let line = json!([text, round(f32::from(font_size), 1.), fonts]);
+        let mut lines = self.lines.lock().unwrap();
+        if !lines.contains(&line) {
+            lines.push(line);
+        }
+        drop(lines);
         let layout = NoopTextSystem.layout_line(text, font_size, runs);
         // The no-op layout puts every glyph in one run of font 0; give each its own font.
         let mut shaped: Vec<ShapedRun> = Vec::new();
@@ -851,10 +863,10 @@ impl PlatformTextSystem for GlyphBoxes {
 
 /// Where the widget is, and what the last captured frame painted.
 #[derive(Default)]
-struct Capture {
-    origin: (f32, f32),
-    scale: f32,
-    painted: Option<Value>,
+pub(crate) struct Capture {
+    pub(crate) origin: (f32, f32),
+    pub(crate) scale: f32,
+    pub(crate) painted: Option<Value>,
 }
 
 /// A renderer that draws nothing: on a capture it writes the frame's scene down as JSON.
@@ -885,7 +897,7 @@ impl PlatformHeadlessRenderer for Recorder {
 }
 
 /// A length in px, to 2 decimals.
-fn round(device: f32, scale: f32) -> f64 {
+pub(crate) fn round(device: f32, scale: f32) -> f64 {
     (f64::from(device / scale) * 100.).round() / 100.
 }
 
@@ -1040,12 +1052,16 @@ fn painted(scene: &Scene, origin: (f32, f32), scale: f32, text: &GlyphBoxes) -> 
 }
 
 /// A context with the app's globals under one config, whose windows paint into `Capture`.
-fn context(config: &Config) -> (HeadlessAppContext, Rc<RefCell<Capture>>) {
+/// The text system comes back too, for the lines it laid out.
+pub(crate) fn context(
+    config: &Config,
+) -> (HeadlessAppContext, Rc<RefCell<Capture>>, Arc<GlyphBoxes>) {
     let text = Arc::new(GlyphBoxes::default());
     let capture = Rc::new(RefCell::new(Capture::default()));
     let atlas = Arc::new(HeadlessAtlas::default());
     let (into, names) = (capture.clone(), text.clone());
-    let mut cx = HeadlessAppContext::with_platform(text, Arc::new(NatamuxAssets), move || {
+    let platform_text = text.clone();
+    let mut cx = HeadlessAppContext::with_platform(platform_text, Arc::new(NatamuxAssets), move || {
         let recorder = Recorder {
             atlas: atlas.clone(),
             capture: into.clone(),
@@ -1062,7 +1078,7 @@ fn context(config: &Config) -> (HeadlessAppContext, Rc<RefCell<Capture>>) {
         cx.bind_keys([gpui::KeyBinding::new("secondary-k", Pick, None)]);
     });
     cx.run_until_parked();
-    (cx, capture)
+    (cx, capture, text)
 }
 
 fn key_down(window: &mut Window, cx: &mut App) {
@@ -1115,7 +1131,7 @@ fn act(state: State, root: AnyView, shown: Bounds<Pixels>, window: &mut Window, 
     window.refresh();
 }
 
-fn redraw(cx: &mut HeadlessAppContext, window: AnyWindowHandle) {
+pub(crate) fn redraw(cx: &mut HeadlessAppContext, window: AnyWindowHandle) {
     cx.update_window(window, |_, window, _| window.refresh())
         .expect("the window is open");
     cx.run_until_parked();
@@ -1195,7 +1211,7 @@ fn row(
 fn metrics_json() -> String {
     let mut rows = Vec::new();
     for config in &CONFIGS {
-        let (mut cx, capture) = context(config);
+        let (mut cx, capture, _) = context(config);
         for sample in samples() {
             for &state in sample.states {
                 rows.push(row(&mut cx, &capture, config, &sample, state));

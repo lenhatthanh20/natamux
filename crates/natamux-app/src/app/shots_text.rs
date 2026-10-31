@@ -552,7 +552,7 @@ const WRAPPED_AFTER: &str = "export const messages = {\n  empty: 'The cart is em
 const LEGACY: &str = "Notes on the old checkout, before the coupon rules.\n\nThe total was the sum of the items minus the coupon,\nwith no floor at zero.\n\nThis file goes with the old checkout.\n";
 
 /// A doc with every block and inline kind the Docs view draws.
-const RICH_TEXT: &str = r#"# Notes on the checkout
+pub(crate) const RICH_TEXT: &str = r#"# Notes on the checkout
 
 ## Second level
 ### Third level
