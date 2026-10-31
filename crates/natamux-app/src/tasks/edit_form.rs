@@ -81,6 +81,17 @@ impl EditForm {
         });
     }
 
+    /// Title, notes, labels and the tasks it waits for, for the flow tests.
+    #[cfg(test)]
+    pub fn boxes(&self) -> Vec<Entity<Editor>> {
+        vec![
+            self.title.clone(),
+            self.notes.clone(),
+            self.labels.clone(),
+            self.depends_on.clone(),
+        ]
+    }
+
     fn text(editor: &Entity<Editor>, cx: &App) -> String {
         editor.read(cx).text(cx)
     }

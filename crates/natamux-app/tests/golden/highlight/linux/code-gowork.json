@@ -1,0 +1,10 @@
+[
+{"path":"fixtures/go.work","language":"Go Work","parsed":true},
+[0,2,"keyword","#b87fd1ff",null,null],
+[3,7,"string","#a1c181ff",null,null],
+[19,21,"keyword","#b87fd1ff",null,null],
+[21,27,"string","#a1c181ff",null,null],
+[29,32,"keyword","#b87fd1ff",null,null],
+[71,78,"keyword","#b87fd1ff",null,null],
+[97,99,"operator","#6eb4bfff",null,null]
+]

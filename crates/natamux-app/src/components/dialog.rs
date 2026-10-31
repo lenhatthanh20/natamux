@@ -154,6 +154,19 @@ impl DialogLayer {
             .is_some_and(|g| !g.0.read(cx).open.is_empty())
     }
 
+    /// The Tab ring of the top dialog, for the flow tests.
+    #[cfg(test)]
+    pub fn top_ring(cx: &App) -> Vec<FocusHandle> {
+        cx.try_global::<GlobalDialogLayer>()
+            .and_then(|g| {
+                g.0.read(cx)
+                    .open
+                    .last()
+                    .map(|open| open.handle.tab_ring(cx))
+            })
+            .unwrap_or_default()
+    }
+
     fn show<V: DialogView>(
         &mut self,
         view: Entity<V>,

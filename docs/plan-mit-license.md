@@ -1347,6 +1347,7 @@ S3.5 Remove the old input path
 S4.1 Goldens on the old code
 - Files: `git/languages_golden_tests.rs` (T-HL-1 generator, with resolved styles), `text_view/code_typing_tests.rs` (T-CODE-1), `text_view/code_mouse_tests.rs` (T-MOUSE-1 gutter cases), fixtures under `crates/natamux-app/tests/golden/highlight/{linux,macos}/` and `golden/code_typing/{linux,macos}/`, the fixture source files under `crates/natamux-app/tests/fixtures/code/`.
 - Tag: none. Run `Tool: golden`.
+- Done in S4.1: `app/golden_files.rs` holds the shared `write` (to `$NATAMUX_GOLDEN_OUT/<set>/`) and `check` (against `tests/golden/<set>/<os>/`, names the first row that differs); later golden sets can use it. T-HL-1 colours each file through the editor tab itself (`FileEditorBody`, so the language comes as the app loads it), for the 22 `code-<lang>` shot samples, `src/checkout.ts`, `.natamux.json` and `README.md` of the reviewed task, and the extra fixtures in `tests/fixtures/code/`. Facts the goldens show for S4.2: the buffers get no language registry, so no injection is coloured (no fenced code in Markdown, no JSDoc or regex layer in JavaScript); a `.c` file gets the C++ language. T-CODE-1 runs per language in the editor tab, plus the JSON tab (`json-tab.json`); the gutter cases of T-MOUSE-1 are `code_typing/<os>/gutter-mouse.json`. The Linux and macOS files of the first golden run (41151185019) are equal, byte for byte.
 
 S4.2 Own highlighter
 - Files:

@@ -3,7 +3,7 @@
 //! menus can be shot and tested. The data is `fake_dashboard.json`.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::sync::{Mutex, MutexGuard, OnceLock, PoisonError};
+use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
 use natamux_client::{ClientError, DashboardEvent, LinkStatus, SendEventAnswer};
@@ -58,6 +58,9 @@ struct Data {
     next_number: u32,
     feeds: Vec<UnboundedSender<DashboardEvent>>,
     link: FakeLink,
+    /// The (task, kind) of each `send_event`, for the flow tests.
+    #[cfg(test)]
+    sent: Vec<(String, String)>,
 }
 
 /// How the fake's feed behaves: the `skeleton` and `load-error` shots need one that never loads.
@@ -108,6 +111,8 @@ impl Data {
             next_number: 200,
             feeds: Vec::new(),
             link: FakeLink::Live,
+            #[cfg(test)]
+            sent: Vec::new(),
         };
         data.add_stage_seed();
         data.add_git_seed();
@@ -211,9 +216,19 @@ impl Default for FakeDaemon {
 }
 
 /// The one fake of the app, shared by every `Source::FakeDaemon`.
+#[cfg(not(test))]
 pub fn shared() -> &'static FakeDaemon {
-    static FAKE: OnceLock<FakeDaemon> = OnceLock::new();
+    static FAKE: std::sync::OnceLock<FakeDaemon> = std::sync::OnceLock::new();
     FAKE.get_or_init(FakeDaemon::default)
+}
+
+/// In tests each test thread has its own fake, so the writes of one test never reach another.
+#[cfg(test)]
+pub fn shared() -> &'static FakeDaemon {
+    thread_local! {
+        static FAKE: &'static FakeDaemon = Box::leak(Box::default());
+    }
+    FAKE.with(|fake| *fake)
 }
 
 type Answer<T> = Result<T, ClientError>;
@@ -222,6 +237,12 @@ impl FakeDaemon {
     fn data(&self) -> MutexGuard<'_, Data> {
         // The data stays whole after a panic in a test: each write is one assignment.
         self.data.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// The (task, kind) of every `send_event` so far.
+    #[cfg(test)]
+    pub fn sent(&self) -> Vec<(String, String)> {
+        self.data().sent.clone()
     }
 
     /// The dashboard feed: everything now, then each change.
@@ -342,6 +363,8 @@ impl FakeDaemon {
 
     pub fn send_event(&self, task_id: &str, input: TaskEventInput) -> Answer<SendEventAnswer> {
         let mut data = self.data();
+        #[cfg(test)]
+        data.sent.push((task_id.to_owned(), input.kind.clone()));
         let next = state_after(&input.kind);
         let task = data.task_mut(task_id)?;
         if let Some(state) = next {

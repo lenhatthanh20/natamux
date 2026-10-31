@@ -447,7 +447,7 @@ fn focus_file(handle: WindowHandle<Root>, path: &str, cx: &mut AsyncApp) {
 }
 
 /// The fixture of a `code-<lang>` state: its path in the reviewed task's worktree and its text.
-fn code_sample(lang: CodeLang) -> (&'static str, &'static str) {
+pub fn code_sample(lang: CodeLang) -> (&'static str, &'static str) {
     macro_rules! sample {
         ($name:literal) => {
             sample!($name, $name)
