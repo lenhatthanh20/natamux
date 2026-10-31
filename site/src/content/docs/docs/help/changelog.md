@@ -7,6 +7,13 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v1.0.12 (2026-10-31)
+
+- Install or update the desktop app with one command: `curl -fsSL https://natamux.github.io/install.sh | sh` on macOS, Debian and Ubuntu, or `irm https://natamux.github.io/install.ps1 | iex` on Windows. The script checks the checksum, and the signature when minisign is installed. See [Install with one command](/docs/getting-started/install/#install-with-one-command).
+- The homepage download button goes to the install command instead of downloading a file.
+- The macOS app is signed with a Natamux certificate, so Full Disk Access stays after an update. The first update to v1.0.12 needs the grant once more. See [Full Disk Access on macOS](/docs/guides/desktop-app/#full-disk-access-on-macos).
+- Programs in a Natamux terminal get a macOS prompt for privacy permissions instead of being denied.
+
 ## v1.0.11 (2026-10-30)
 
 - In the desktop app, the sidebar hides the task id by default, so the title gets the whole row. **Settings > Appearance > Task ids in the sidebar** shows it again. See [Task ids in the sidebar](/docs/guides/desktop-app/#task-ids-in-the-sidebar).
