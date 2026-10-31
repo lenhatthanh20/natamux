@@ -37,6 +37,14 @@ pub fn write(set: &str, name: &str, rows: &[Value]) {
 /// Fails unless `rows` equal the committed `<set>/<os>/<name>.json`, and names the first row
 /// that differs.
 pub fn check(set: &str, name: &str, rows: &[Value]) {
+    if let Some(problem) = differs(set, name, rows) {
+        panic!("{problem}");
+    }
+}
+
+/// What differs between `rows` and the committed `<set>/<os>/<name>.json`: the first row that
+/// differs, or the number of rows. None when they are equal.
+pub fn differs(set: &str, name: &str, rows: &[Value]) -> Option<String> {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("tests/golden")
         .join(set)
@@ -45,21 +53,22 @@ pub fn check(set: &str, name: &str, rows: &[Value]) {
     let text = std::fs::read_to_string(&path)
         .unwrap_or_else(|error| panic!("{}: {error}", path.display()));
     let golden: Vec<Value> = serde_json::from_str(&text).unwrap();
-    let first = golden.iter().zip(rows).position(|(old, new)| old != new);
-    if let Some(i) = first {
-        panic!(
+    if let Some(i) = golden.iter().zip(rows).position(|(old, new)| old != new) {
+        return Some(format!(
             "{}: row {i} differs\n golden: {}\n now:    {}",
             path.display(),
             golden[i],
             rows[i]
-        );
+        ));
     }
-    assert_eq!(
-        golden.len(),
-        rows.len(),
-        "{}: the number of rows differs",
-        path.display()
-    );
+    (golden.len() != rows.len()).then(|| {
+        format!(
+            "{}: the number of rows differs, golden {} now {}",
+            path.display(),
+            golden.len(),
+            rows.len()
+        )
+    })
 }
 
 mod tests {

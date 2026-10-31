@@ -30,6 +30,24 @@ text.workspace = true
 terminal_view.workspace = true
 theme.workspace = true
 theme_settings.workspace = true
+tree-sitter.workspace = true
+tree-sitter-bash.workspace = true
+tree-sitter-c.workspace = true
+tree-sitter-cpp.workspace = true
+tree-sitter-css.workspace = true
+tree-sitter-diff.workspace = true
+tree-sitter-gitcommit.workspace = true
+tree-sitter-go.workspace = true
+tree-sitter-gomod.workspace = true
+tree-sitter-gowork.workspace = true
+tree-sitter-jsdoc.workspace = true
+tree-sitter-json.workspace = true
+tree-sitter-md.workspace = true
+tree-sitter-python.workspace = true
+tree-sitter-regex.workspace = true
+tree-sitter-rust.workspace = true
+tree-sitter-typescript.workspace = true
+tree-sitter-yaml.workspace = true
 ui = { package = "natamux-ui", path = "../natamux-ui" }
 util.workspace = true
 
