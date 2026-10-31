@@ -8,7 +8,7 @@ use natamux_proto::agents::activity::latest_line;
 use natamux_proto::events::task_event::{TaskEvent, wait_reason};
 use natamux_proto::stages::progress::StageStatus;
 use natamux_proto::stages::schema::Step;
-use natamux_proto::tasks::task::Task;
+use natamux_proto::tasks::task::{Task, TaskState};
 use ui::prelude::*;
 
 use super::DetailsPanel;
@@ -18,7 +18,7 @@ use crate::app::clock::now_ms;
 use crate::app::links::open_link;
 use crate::components::button_style::{action_button, quiet_button};
 use crate::components::detail_section::{DetailSection, field, field_fit};
-use crate::stages::overview_rules::{NO_STAGE_STARTED, overview_figures, time_bars};
+use crate::stages::overview_rules::{NO_STAGE_STARTED, strip_figures, strip_head, time_bars};
 use crate::stages::progress_tab::{ProgressInput, counts, current_step, timeline};
 use crate::stages::stage_view_rules::{path_label, sent_back_count};
 use crate::tasks::details_commands::{OnCommand, PanelCommand};
@@ -42,7 +42,8 @@ impl DetailsPanel {
         )
     }
 
-    /// A focus handle for the fold row of each finished card, kept while the task shows.
+    /// A focus handle for the fold row of each finished or upcoming node, kept while the task
+    /// shows. The current node is always open and a not-taken one does not fold.
     fn make_card_focus(&mut self, task: &Task, cx: &mut Context<Self>) {
         let Some((_, progress)) = self.progress(task) else {
             return;
@@ -50,10 +51,10 @@ impl DetailsPanel {
         let Some(shown) = self.shown.as_mut() else {
             return;
         };
-        let finished = progress
+        let foldable = progress
             .iter()
-            .filter(|entry| matches!(entry.status, StageStatus::Done | StageStatus::Skipped));
-        for entry in finished {
+            .filter(|entry| !matches!(entry.status, StageStatus::Current | StageStatus::NotTaken));
+        for entry in foldable {
             shown
                 .card_focus
                 .entry(entry.stage.clone())
@@ -158,45 +159,66 @@ impl DetailsPanel {
         parts
     }
 
+    /// The stat strip on top: the figures in one row, and above them how an ended task ended.
     fn overview(&self, input: &ProgressInput, cx: &App) -> AnyElement {
         let (done, total) = counts(&input.progress);
-        let figures = overview_figures(
+        let figures = strip_figures(
             &input.task,
             done,
             total,
             sent_back_count(&input.events),
+            input.usage.as_ref().and_then(|usage| usage.cost_usd),
             input.now_ms,
         );
+        let head = strip_head(&input.task, &input.progress, input.now_ms);
+        let color = if input.task.state == TaskState::Done {
+            Color::Success
+        } else {
+            Color::Muted
+        };
         let colors = cx.theme().colors();
+        let head_row = head.map(|text| {
+            div()
+                .px_3()
+                .py_1()
+                .border_b_1()
+                .border_color(colors.border_variant)
+                .child(
+                    Label::new(text)
+                        .size(LabelSize::Small)
+                        .weight(FontWeight::SEMIBOLD)
+                        .color(color),
+                )
+        });
+        let cells = figures.into_iter().enumerate().map(|(index, figure)| {
+            v_flex()
+                .id(SharedString::from(format!("figure-{index}")))
+                .flex_1()
+                .px_3()
+                .py_1()
+                .when(index > 0, |this| {
+                    this.border_l_1().border_color(colors.border_variant)
+                })
+                .tooltip(ui::Tooltip::text(figure.tip))
+                .child(Label::new(figure.value).weight(FontWeight::SEMIBOLD))
+                .child(
+                    Label::new(figure.label)
+                        .size(LabelSize::XSmall)
+                        .color(Color::Muted),
+                )
+        });
         div()
-            .p_3()
+            .px_3()
+            .pt_3()
+            .pb_1()
             .child(
-                h_flex()
+                v_flex()
                     .rounded_md()
                     .border_1()
                     .border_color(colors.border_variant)
                     .bg(colors.elevated_surface_background)
-                    .children(figures.into_iter().enumerate().map(|(index, figure)| {
-                        v_flex()
-                            .id(SharedString::from(format!("figure-{index}")))
-                            .flex_1()
-                            .px_3()
-                            .py_2()
-                            .when(index > 0, |this| {
-                                this.border_l_1().border_color(colors.border_variant)
-                            })
-                            .tooltip(ui::Tooltip::text(figure.tip))
-                            .child(
-                                Label::new(figure.label)
-                                    .size(LabelSize::XSmall)
-                                    .color(Color::Muted),
-                            )
-                            .child(
-                                Label::new(figure.value)
-                                    .size(LabelSize::Large)
-                                    .weight(FontWeight::SEMIBOLD),
-                            )
-                    })),
+                    .children(head_row)
+                    .child(h_flex().children(cells)),
             )
             .into_any_element()
     }

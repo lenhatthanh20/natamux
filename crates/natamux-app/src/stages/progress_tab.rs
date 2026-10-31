@@ -1,11 +1,11 @@
 //! The Progress tab (docs/design-task-stages.md 7.5, `ProgressTab.tsx`, `Overview.tsx`,
-//! `BranchLane.tsx`): the overview figures, the timeline of steps (a stage, a group side by side,
-//! or a branch with its paths), and the sections below it: Context and issue, Time per stage and
-//! Latest events.
+//! `BranchLane.tsx`): the stat strip, the timeline of steps as a node flow (a stage, a group side
+//! by side, or a branch with its paths, joined by connectors; T-0246), and the sections below
+//! it: Context and issue, Time per stage and Latest events.
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use gpui::{AnyElement, FontWeight};
+use gpui::AnyElement;
 use natamux_proto::agents::activity::TaskUsage;
 use natamux_proto::events::task_event::{TaskEvent, WaitReason};
 use natamux_proto::stages::actions::StageFile;
@@ -15,12 +15,11 @@ use natamux_proto::tasks::task::Task;
 use ui::prelude::*;
 
 use super::card_rules::card_facts;
+use super::flow_lines::dot_grid;
 use super::stage_card::{ActionsInput, CardInput, FileChip, stage_card};
 use super::stage_choices::ChoiceBox;
-use super::stage_marker::{RailLine, marker};
 use super::stage_view_rules::{
-    branch_status, find_stage, link_kind, missing_skills, ran_with_workflow, stage_count,
-    waiting_for_ci,
+    find_stage, missing_skills, ran_with_workflow, stage_count, waiting_for_ci,
 };
 use crate::tasks::details_commands::{OnCommand, StageToggle};
 use crate::tasks::usage_rules::{stage_usage, usage_line};
@@ -44,7 +43,7 @@ pub struct ProgressInput {
     pub open_cards: BTreeSet<String>,
     pub open_lanes: BTreeSet<String>,
     pub open_evidence: BTreeSet<String>,
-    /// The focus of each finished card's fold row.
+    /// The focus of each finished or upcoming node's header.
     pub card_focus: BTreeMap<String, gpui::FocusHandle>,
     pub agent_label: String,
     /// The task's workspace is open in main beside the panel: Answer in terminal can focus it.
@@ -125,7 +124,8 @@ impl Ctx<'_> {
         boxes
     }
 
-    fn card(&self, id: &str, cx: &App) -> Option<AnyElement> {
+    /// `compact`: a node of a side-by-side pair, half the panel wide.
+    fn card(&self, id: &str, compact: bool, cx: &App) -> Option<AnyElement> {
         let entry = (*self.by_id.get(id)?).clone();
         let stage = find_stage(&self.input.steps, id)?.clone();
         let input = self.input;
@@ -157,6 +157,7 @@ impl Ctx<'_> {
         );
         let done = task.state == natamux_proto::tasks::task::TaskState::Done;
         let card = CardInput {
+            compact,
             usage: stage_usage(input.usage.as_ref(), id)
                 .map(|usage| usage_line(usage.tokens, usage.cost_usd)),
             activity: (current
@@ -204,27 +205,6 @@ impl Ctx<'_> {
     }
 }
 
-pub(super) fn heading(text: String) -> impl IntoElement {
-    Label::new(text).weight(FontWeight::SEMIBOLD)
-}
-
-/// One row of the timeline: the rail with its marker and the line to the next step, then the step.
-fn row(marker_el: AnyElement, line: Option<AnyElement>, content: AnyElement) -> impl IntoElement {
-    h_flex()
-        .items_stretch()
-        .gap_2()
-        .child(
-            v_flex()
-                .w(rems_from_px(20.0_f32))
-                .flex_none()
-                .items_center()
-                .gap_1()
-                .child(marker_el)
-                .children(line),
-        )
-        .child(div().flex_1().min_w_0().pb_3().child(content))
-}
-
 impl Ctx<'_> {
     /// The progress of the stages a step holds.
     fn entries(&self, step: &Step) -> Vec<&StageProgress> {
@@ -233,48 +213,13 @@ impl Ctx<'_> {
             .filter_map(|stage| self.by_id.get(stage.id.as_str()).copied())
             .collect()
     }
-
-    fn step(&self, index: usize, step: &Step, cx: &App) -> AnyElement {
-        let steps = &self.input.steps;
-        let own = self.entries(step);
-        let status = match step {
-            Step::Branch(branch) => {
-                branch_status(branch, &|id: &str| self.by_id.get(id).map(|e| e.status))
-            }
-            _ if own.iter().any(|entry| entry.status == StageStatus::Current) => {
-                StageStatus::Current
-            }
-            _ => own
-                .first()
-                .map_or(StageStatus::Upcoming, |entry| entry.status),
-        };
-        let state = own
-            .iter()
-            .find(|entry| entry.status == StageStatus::Current)
-            .and_then(|entry| entry.state);
-        let last = own.last().copied();
-        let next = steps
-            .get(index + 1)
-            .and_then(|next| self.entries(next).first().copied());
-        let line = steps
-            .get(index + 1)
-            .map(|_| RailLine::new(link_kind(last, next)).into_any_element());
-        let is_branch = matches!(step, Step::Branch(_));
-        let content = match step {
-            Step::Stage(stage) => self
-                .card(&stage.id, cx)
-                .unwrap_or_else(|| div().into_any_element()),
-            Step::Group(group) => self.group(group, cx),
-            Step::Branch(branch) => self.branch(branch, cx),
-        };
-        row(
-            marker(step.id(), status, state, is_branch, cx),
-            line,
-            content,
-        )
-        .into_any_element()
-    }
 }
+
+#[path = "progress_flow.rs"]
+mod flow;
+
+#[path = "progress_branch.rs"]
+mod branches;
 
 #[path = "progress_steps.rs"]
 mod steps;
@@ -293,14 +238,18 @@ pub fn timeline(input: &ProgressInput, on: &OnCommand, cx: &App) -> Vec<AnyEleme
         missing: missing_skills(&input.events),
         on,
     };
-    input
-        .steps
-        .iter()
+    let last = input.steps.len().saturating_sub(1);
+    ctx.column(&input.steps, cx)
+        .into_iter()
         .enumerate()
         .map(|(index, step)| {
+            // One element per step so the panel can scroll to one; each has its own dot grid.
             div()
+                .relative()
                 .px_3()
-                .child(ctx.step(index, step, cx))
+                .when(index == last, |this| this.pb_3())
+                .child(dot_grid(cx))
+                .child(step)
                 .into_any_element()
         })
         .collect()

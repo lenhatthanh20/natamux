@@ -7,7 +7,8 @@ use natamux_proto::stages::progress::{StageProgress, StageStatus};
 use natamux_proto::tasks::task::{Task, TaskState};
 
 use super::stage_view_rules::{format_duration, format_duration_to, stage_time};
-use crate::tasks::task_time::parse_iso_ms;
+use crate::tasks::task_time::{AgeStyle, format_age, parse_iso_ms};
+use crate::tasks::usage_rules::format_usd;
 
 pub const NO_STAGE_STARTED: &str = "No stage has started yet.";
 
@@ -62,6 +63,57 @@ pub fn overview_figures(
             "Sent back",
             sent_back.to_string(),
             "Times the task was sent back",
+        ));
+    }
+    figures
+}
+
+/// The words before the figures of the stat strip when the task has ended: "Done · Finished 2h
+/// ago", "Cancelled at Review". An open task has none.
+pub fn strip_head(task: &Task, progress: &[StageProgress], now_ms: i64) -> Option<String> {
+    match task.state {
+        TaskState::Done => Some(format!(
+            "Done \u{b7} Finished {}",
+            format_age(&task.updated_at, now_ms, AgeStyle::Long, 0)
+        )),
+        TaskState::Cancelled => {
+            let at = progress
+                .iter()
+                .find(|entry| entry.stage == task.stage)
+                .map(|entry| entry.name.as_str())
+                .or_else(|| (!task.stage.is_empty()).then_some(task.stage.as_str()));
+            Some(match at {
+                Some(name) => format!("Cancelled at {name}"),
+                None => "Cancelled".to_owned(),
+            })
+        }
+        _ => None,
+    }
+}
+
+/// The figures of the stat strip: those of `overview_figures`; an ended task keeps Stages and
+/// Total, and a done one adds its estimated cost when the usage has a price.
+pub fn strip_figures(
+    task: &Task,
+    done: usize,
+    total: usize,
+    sent_back: usize,
+    cost_usd: Option<f64>,
+    now_ms: i64,
+) -> Vec<Figure> {
+    let mut figures = overview_figures(task, done, total, sent_back, now_ms);
+    if !task.state.is_finished() {
+        return figures;
+    }
+    figures.truncate(2);
+    if let Some(total) = figures.get_mut(1) {
+        total.label = "Total";
+    }
+    if task.state == TaskState::Done && cost_usd.is_some() {
+        figures.push(figure(
+            "Cost est.",
+            format_usd(cost_usd),
+            "Estimated cost at the API list price",
         ));
     }
     figures

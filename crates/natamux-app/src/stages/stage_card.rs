@@ -1,20 +1,18 @@
-//! One stage card of the Progress tab (docs/design-task-stages.md 7.5, `StageCard.tsx`): the title
-//! with its chip, the facts line, the chips (output file, checks, send backs, the PR), the
-//! reasons and wait boxes, the evidence, the workflow and CI boxes, and the actions of the
-//! current stage. A finished card is one line until opened; an upcoming one is dashed.
+//! One stage of the Progress tab as a node of the flow (docs/design-task-stages.md 7.5,
+//! `StageCard.tsx`): the kind tile and the node itself are in `flow_node.rs`; this file holds what
+//! a card shows when open: the chips (output file, checks, send backs, the PR), the reasons and
+//! wait boxes, the evidence, the workflow and CI boxes, and the actions of the current stage.
 
-use gpui::{AnyElement, Div, FocusHandle, FontWeight, KeyDownEvent, Stateful};
+use gpui::{AnyElement, Div, FocusHandle, FontWeight, Stateful};
 use natamux_proto::stages::actions::StageFile;
 use natamux_proto::stages::progress::{StageProgress, StageStatus};
 use natamux_proto::stages::schema::{Gate, Stage, StageKind};
-use natamux_proto::tasks::task::TaskState;
 use ui::prelude::*;
 
-use super::card_rules::{CardChip, CardFacts};
+use super::card_rules::CardFacts;
 use super::stage_choices::{ChoiceBox, choice_box};
 use super::stage_view_rules::{finished_when, stage_time};
 use crate::components::button_style::quiet_button;
-use crate::components::chips::StateChip;
 use crate::tasks::details_commands::{OnCommand, PanelCommand};
 
 /// The stage's output file as the card shows it.
@@ -44,12 +42,14 @@ pub struct CardInput {
     pub facts: CardFacts,
     /// "Show evidence" is open.
     pub evidence_open: bool,
-    /// A finished card's fold row takes the focus, so Enter and Space open it.
+    /// A finished or upcoming node's header takes the focus, so Enter and Space open it.
     pub fold_focus: Option<FocusHandle>,
     pub boxes: Vec<ChoiceBox>,
     /// The Skip / Don't skip of a stage not reached yet: (marked, busy).
     pub skip: Option<(bool, bool)>,
     pub actions: Option<ActionsInput>,
+    /// A node of a side-by-side pair: smaller tile and name, the agent as its icon only.
+    pub compact: bool,
 }
 
 /// The actions row of the current stage, while the task is open.
@@ -99,48 +99,9 @@ fn badge(text: String, cx: &App) -> impl IntoElement {
         )
 }
 
-/// The name, the chip and the badges; `lead` (a finished card's chevron) goes first, so the row
-/// centres it on the name.
-fn title_row(input: &CardInput, lead: Option<AnyElement>, cx: &App) -> impl IntoElement {
-    let entry = &input.entry;
-    let upcoming = entry.status == StageStatus::Upcoming;
-    let marked = input.facts.chip == CardChip::WillBeSkipped;
-    let chip = match input.facts.chip {
-        CardChip::State(state) => StateChip::new(state).into_any_element(),
-        CardChip::Done => text_chip("Done", TaskState::Done, cx).into_any_element(),
-        CardChip::Skipped => text_chip("Skipped", TaskState::Draft, cx).into_any_element(),
-        CardChip::WillBeSkipped => {
-            text_chip("Will be skipped", TaskState::Draft, cx).into_any_element()
-        }
-        CardChip::NotStarted => text_chip("Not started", TaskState::Draft, cx).into_any_element(),
-        CardChip::NotTaken => text_chip("Not taken", TaskState::Draft, cx).into_any_element(),
-    };
-    let name_color = if marked { Color::Muted } else { Color::Default };
-    h_flex()
-        .flex_wrap()
-        .gap_x_2()
-        .gap_y_1()
-        .children(lead)
-        .child(
-            Label::new(entry.name.clone())
-                .weight(FontWeight::SEMIBOLD)
-                .color(name_color),
-        )
-        .child(chip)
-        .when(entry.rounds > 1, |this| {
-            this.child(badge(format!("\u{d7}{}", entry.rounds), cx))
-        })
-        .when(input.ran_workflow && !upcoming, |this| {
-            this.child(badge("Workflow".into(), cx))
-        })
-}
-
-/// The state chip of `state` with a text of its own ("Done", "Not started").
-pub fn text_chip(text: &'static str, state: TaskState, _: &App) -> impl IntoElement {
-    StateChip::new(state).text(text)
-}
-
-fn fact_line(input: &CardInput) -> Option<impl IntoElement> {
+/// The facts of the node's meta line, in order: time, "you approve", who approved, cost and
+/// tokens. The tooltip lists the same parts.
+fn fact_parts(input: &CardInput) -> Vec<String> {
     let entry = &input.entry;
     let finished = matches!(entry.status, StageStatus::Done | StageStatus::Skipped);
     let manual = input.stage.gate == Gate::Manual && input.stage.kind != StageKind::Release;
@@ -151,7 +112,7 @@ fn fact_line(input: &CardInput) -> Option<impl IntoElement> {
         )),
         _ => None,
     };
-    let facts: Vec<String> = [
+    [
         stage_time(entry, input.now_ms),
         (manual && !finished).then(|| "you approve".to_owned()),
         approved,
@@ -159,12 +120,7 @@ fn fact_line(input: &CardInput) -> Option<impl IntoElement> {
     ]
     .into_iter()
     .flatten()
-    .collect();
-    (!facts.is_empty()).then(|| {
-        Label::new(facts.join(" \u{b7} "))
-            .size(LabelSize::XSmall)
-            .color(Color::Muted)
-    })
+    .collect()
 }
 
 /// Facts line, chips, notices, evidence and the boxes of an open card.
@@ -208,102 +164,13 @@ mod actions;
 use crate::components::icons::icon_path;
 use actions::actions_row;
 
-/// The whole card.
+/// The whole card: one node of the flow.
 pub fn stage_card(input: CardInput, on: &OnCommand, cx: &App) -> AnyElement {
-    let colors = cx.theme().colors();
-    let entry = &input.entry;
-    if entry.status == StageStatus::NotTaken {
-        return h_flex()
-            .gap_2()
-            .px_3()
-            .py_2p5()
-            .rounded_md()
-            .border_1()
-            .border_dashed()
-            .border_color(colors.border)
-            .child(
-                Label::new(entry.name.clone())
-                    .weight(FontWeight::SEMIBOLD)
-                    .color(Color::Muted),
-            )
-            .child(text_chip("Not taken", TaskState::Draft, cx))
-            .into_any_element();
-    }
-    let current = entry.status == StageStatus::Current;
-    let upcoming = entry.status == StageStatus::Upcoming;
-    let card = v_flex()
-        .id(SharedString::from(format!("card-{}", entry.stage)))
-        .gap_2p5()
-        .px_3()
-        .py_2p5()
-        .rounded_md()
-        .border_1()
-        .when(upcoming, |this| {
-            this.border_dashed().border_color(colors.border)
-        })
-        .when(!upcoming, |this| {
-            this.bg(colors.elevated_surface_background)
-                .border_color(if current {
-                    colors.border_focused
-                } else {
-                    colors.border_variant
-                })
-        });
-    if matches!(entry.status, StageStatus::Done | StageStatus::Skipped) {
-        return finished_card(card, &input, on, cx);
-    }
-    let head = v_flex()
-        .gap_0p5()
-        .child(title_row(&input, None, cx))
-        .children(fact_line(&input));
-    let parts = if upcoming {
-        upcoming_parts(&input, on, cx)
-    } else {
-        body(&input, on, cx)
-    };
-    card.child(head).children(parts).into_any_element()
+    node::node(input, on, cx)
 }
 
-/// A finished card: one line that opens, with the chevron.
-fn finished_card(card: Stateful<Div>, input: &CardInput, on: &OnCommand, cx: &App) -> AnyElement {
-    let on_fold = on.clone();
-    let fold = PanelCommand::FoldCard(input.entry.stage.clone());
-    let (on_key, fold_key) = (on_fold.clone(), fold.clone());
-    let chevron = Icon::new(if input.opened {
-        IconName::ChevronDown
-    } else {
-        IconName::ChevronRight
-    })
-    .size(IconSize::XSmall)
-    .color(Color::Muted)
-    .into_any_element();
-    let line = v_flex()
-        .id(SharedString::from(format!("fold-{}", input.entry.stage)))
-        .gap_0p5()
-        .rounded_sm()
-        .cursor_pointer()
-        .hover(|style| style.bg(cx.theme().colors().ghost_element_hover))
-        .when_some(input.fold_focus.as_ref(), |this, focus| {
-            this.track_focus(focus)
-        })
-        .on_click(move |_, window, cx| on_fold(fold.clone(), window, cx))
-        // A button of the web: Enter and Space open and fold it too.
-        .on_key_down(move |event: &KeyDownEvent, window, cx| {
-            if matches!(event.keystroke.key.as_str(), "enter" | "space") {
-                cx.stop_propagation();
-                on_key(fold_key.clone(), window, cx);
-            }
-        })
-        .child(title_row(input, Some(chevron), cx))
-        // Under the name: the chevron (12) and the title row's gap (8).
-        .children(fact_line(input).map(|facts| div().pl(rems_from_px(20.0_f32)).child(facts)));
-    let parts = if input.opened {
-        body(input, on, cx)
-    } else {
-        Vec::new()
-    };
-    card.child(line).children(parts).into_any_element()
-}
+#[path = "flow_node.rs"]
+mod node;
 
 /// A stage not reached yet: what finishes it, its boxes, and Skip / Don't skip.
 fn upcoming_parts(input: &CardInput, on: &OnCommand, cx: &App) -> Vec<AnyElement> {

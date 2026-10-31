@@ -390,7 +390,7 @@ Stage ids are unique in the whole pipeline, so each stage is on exactly one path
 
 ### In the Progress view
 
-The branch says **Took Small change** and the reason, such as `plan.md "Size" contains "small"`. Each other path is one folded row marked **Not taken**. Click it to see its stages. They do not count in "3 of 7". The timeline adds the path name to the event that chose it.
+The branch says which path it took (**Took Small change** in the dashboard, **Taken: Small change** in the desktop app) and the reason, such as `plan.md "Size" contains "small"`. In the desktop app the Progress view is a flow chart: each stage is a node, a group forks into its stages and joins again, and a branch is an **If** box with one lane per path (**if**, **else if**, **unless**, **otherwise**). Each other path is one folded row marked **Not taken**. Click it to see its stages. They do not count in "3 of 7". The timeline adds the path name to the event that chose it.
 
 <Figure src="/screens/v2/progress-took-develop" alt="The Progress tab of a task. The branch header Bug or feature says Took Bug fix with the command that exited 0, the Bug fix path is marked Taken, and the Feature path is folded as Not taken." caption="The branch header says which path the task took, and why." />
 
