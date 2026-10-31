@@ -30,6 +30,18 @@ The app also has View, Task and Tools menus. Links to release pages open in your
 
 The Dock icon shows how many tasks need you. Turn on **Notify me** and allow notifications to see the count. If it still does not show, turn on **Badge application icon** in System Settings → Notifications → Natamux. With **Notify me** on, a task that needs you or is done while the app is in the back shows a macOS notification with a sound. See [Notifications in the desktop app](/docs/guides/dashboard/#notifications-in-the-desktop-app).
 
+## Full Disk Access on macOS
+
+Programs in a Natamux terminal, agents too, get the permissions you give Natamux, as programs in Terminal do.
+
+1. Open **System Settings → Privacy & Security → Full Disk Access**.
+2. Click **+** and add `Natamux.app` from Applications. Turn it on.
+3. Quit Natamux and open it again.
+
+The grant stays after updates. The first update to a version signed with the Natamux certificate needs it once more: select the old Natamux entry, remove it with **−**, then add Natamux again.
+
+You can also add Natamux under **Developer Tools**, so programs built in Natamux skip the Gatekeeper scan. Other permissions, such as the microphone, the camera, AppleScript or the local network, macOS asks for the first time a program needs them.
+
 ## Task ids in the sidebar
 
 A sidebar row shows the task's title, so long titles have room. To see each task's id before its title, turn on **Settings → Appearance → Task ids in the sidebar**. With it off, the id is still in the row's tooltip, the title bar and the details panel, and the sidebar filter still finds a task by its id.
@@ -103,5 +115,5 @@ Open `logs/daemon.log` to read the daemon's output. If it stops, the app shows a
 
 ## Limits
 
-- The apps are not signed or notarized yet. See [Install Natamux](/docs/getting-started/install/).
+- The apps are not signed with an Apple or Windows certificate, and not notarized. The macOS app is signed with a Natamux certificate, which keeps your privacy grants after an update. See [Install Natamux](/docs/getting-started/install/).
 - The update check reads only the latest release. Pre-release versions are never offered.

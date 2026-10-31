@@ -105,6 +105,7 @@ A manual check shows a small frameless window over the main window (on the scree
 - The signature closes that gap: the minisign secret key is offline with the owner, never on GitHub, and the app trusts only the public key built into it. The comment `natamux <tag>` plus the version check stop an old signed release from coming back under a new tag (a downgrade, or an endless re-download on Linux).
 - Versions up to v0.1.23 have no signature check.
 - After signing (step 11): the Mac copy must also be signed by the same Team ID before the app installs it.
+- Until then, releases sign the Mac app with a fixed self-signed certificate, so Full Disk Access and other macOS privacy grants survive an update (see `docs/release-process.md`). `Info.plist` has the same privacy usage descriptions as Ghostty, so macOS asks before a program in a Natamux terminal uses the camera, AppleScript and the like.
 
 ## Privacy
 
