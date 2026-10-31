@@ -100,6 +100,8 @@ mod components {
     pub mod glyph;
     pub mod icons;
     pub mod input_rules;
+    #[cfg(test)]
+    mod kit_metrics;
     pub mod menu;
     pub mod motion;
     pub mod motion_rules;

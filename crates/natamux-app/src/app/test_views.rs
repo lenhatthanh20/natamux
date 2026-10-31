@@ -21,24 +21,27 @@ use crate::components::menu::MenuLayer;
 /// The globals of `start`, with the app's own themes. Natamux Dark is set through the same
 /// settings JSON the app writes, as `--theme dark` does.
 pub fn init(cx: &mut TestAppContext) {
-    cx.update(|cx| {
-        release_channel::init(
-            release_channel::AppVersion::load(env!("CARGO_PKG_VERSION"), None, None),
-            cx,
-        );
-        settings::init(cx);
-        let inputs = Inputs {
-            flag: Some(ThemeMode::Dark),
-            theme_name: None,
-            shot: None,
-        };
-        appearance::init(inputs, cx);
-        appearance::apply(&ViewState::default(), cx);
-        theme_settings::init(theme::LoadThemes::All(Box::new(NatamuxAssets)), cx);
-        editor::init(cx);
-        crate::components::motion::init(false, cx);
-        crate::perf::overlay::init(cx);
-    });
+    cx.update(|cx| init_with(ThemeMode::Dark, &ViewState::default(), cx));
+}
+
+/// `init` with another theme mode, or a view state with another UI size.
+pub fn init_with(mode: ThemeMode, view: &ViewState, cx: &mut App) {
+    release_channel::init(
+        release_channel::AppVersion::load(env!("CARGO_PKG_VERSION"), None, None),
+        cx,
+    );
+    settings::init(cx);
+    let inputs = Inputs {
+        flag: Some(mode),
+        theme_name: None,
+        shot: None,
+    };
+    appearance::init(inputs, cx);
+    appearance::apply(view, cx);
+    theme_settings::init(theme::LoadThemes::All(Box::new(NatamuxAssets)), cx);
+    editor::init(cx);
+    crate::components::motion::init(false, cx);
+    crate::perf::overlay::init(cx);
 }
 
 /// The window of a flow test: the view under test, with the menu and the dialog layers over it,

@@ -53,6 +53,7 @@ TERMINAL_PATHS = [
 ]
 APP_PATHS = [
     "crates/natamux-app/",
+    "crates/natamux-ui/",
     "crates/natamux-update/",
     "crates/natamux-daemon/src/main.rs",
     "crates/natamux-daemon/src/config.rs",
@@ -126,8 +127,10 @@ def workspace_graph(root="."):
             for kind in ("dependencies", "dev-dependencies", "build-dependencies"):
                 for name, spec in table.get(kind, {}).items():
                     local = isinstance(spec, dict) and ("path" in spec or spec.get("workspace"))
-                    if name.startswith("natamux-") and local:
-                        deps.add(name)
+                    # `ui = { package = "natamux-ui", ... }` names the crate under another key.
+                    crate = spec.get("package", name) if isinstance(spec, dict) else name
+                    if crate.startswith("natamux-") and local:
+                        deps.add(crate)
         graph[data["package"]["name"]] = deps
     return graph
 
