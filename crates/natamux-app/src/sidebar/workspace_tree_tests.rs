@@ -11,10 +11,11 @@ use natamux_proto::agents::activity::{TaskActivity, TaskUsage};
 use natamux_proto::workspaces::workspace::DiffStat;
 use ui::prelude::*;
 
-use super::{LinesChange, WorkspaceTree, changed_lines};
+use super::WorkspaceTree;
 use crate::app::dashboard::Dashboard;
 use crate::app::source::Source;
 use crate::app::test_views;
+use crate::sidebar::tree_lines::{LinesChange, changed_lines};
 use crate::sidebar::tree_model::Line;
 
 /// The sidebar caches the tree as Root caches the sidebar.
@@ -63,7 +64,7 @@ fn counts(tree: &Entity<WorkspaceTree>, cx: &mut VisualTestContext) -> (usize, u
 }
 
 #[gpui::test]
-fn usage_and_diff_stats_build_and_draw_nothing(cx: &mut TestAppContext) {
+fn usage_builds_and_draws_nothing_but_diff_stats_draw_without_a_build(cx: &mut TestAppContext) {
     let (dashboard, tree, cx) = sidebar_tree(cx);
     let before = counts(&tree, cx);
     assert!(before.0 > 0 && before.1 > 0, "the tree never drew");
@@ -76,6 +77,7 @@ fn usage_and_diff_stats_build_and_draw_nothing(cx: &mut TestAppContext) {
         DashboardEvent::Usage([("T-0146".to_string(), usage)].into()),
         cx,
     );
+    assert_eq!(counts(&tree, cx), before);
     let stat = DiffStat {
         files: 3,
         added: 40,
@@ -86,7 +88,11 @@ fn usage_and_diff_stats_build_and_draw_nothing(cx: &mut TestAppContext) {
         DashboardEvent::DiffStats([("T-0146".to_string(), stat)].into()),
         cx,
     );
-    assert_eq!(counts(&tree, cx), before);
+    let (builds, draws) = counts(&tree, cx);
+    assert_eq!(builds, before.0);
+    assert!(draws > before.1);
+    let shown = tree.update_in(cx, |tree, window, cx| tree.snapshot(window, cx).diff_stats);
+    assert_eq!(shown.get("T-0146"), Some(&stat));
 }
 
 #[gpui::test]

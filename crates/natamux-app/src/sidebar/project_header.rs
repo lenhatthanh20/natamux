@@ -73,6 +73,15 @@ fn focus_ring(key: &str, snap: &Snapshot, cx: &App) -> Hsla {
     }
 }
 
+/// The border of the "N finished" pill, which carries the focus ring of its line.
+fn pill_border(key: &str, snap: &Snapshot, cx: &App) -> Hsla {
+    if snap.focused && snap.stop.as_deref() == Some(key) {
+        cx.theme().colors().border_focused
+    } else {
+        cx.theme().colors().border_variant
+    }
+}
+
 impl WorkspaceTree {
     /// Line `index` of the tree, drawn when the list shows it.
     pub(super) fn render_line(&self, index: usize, cx: &mut Context<Self>) -> AnyElement {
@@ -85,13 +94,9 @@ impl WorkspaceTree {
         match line {
             Line::PinnedHeader { count } => pinned_header(*count),
             Line::GroupHeader { group } => self.group_header(*group, model, snap, cx),
-            Line::Task { task, nested, .. } => {
-                let row = self.task_row(task, model, snap, cx);
-                if *nested { under_guide(row, cx) } else { row }
-            }
-            Line::Terminal { task_id, row, .. } => {
-                let row = self.terminal_row(task_id, row, snap, cx);
-                under_guide(row, cx)
+            line @ Line::Task { nested, .. } => {
+                let card = self.task_line(line, model, snap, cx);
+                if *nested { under_guide(card, cx) } else { card }
             }
             Line::NoWorkspaces { group } => no_workspaces(*group, model, &self.dashboard),
             Line::NoMatches { group } => no_matches(*group, model, snap),
@@ -121,14 +126,19 @@ impl WorkspaceTree {
         let ring = focus_ring(&key, snap, cx);
         let fold = self.header_fold(repo_group, info, snap, cx);
         let buttons = self.header_buttons(repo, info, snap, cx);
-        header_row(
-            SharedString::from(format!("header-{}", repo.id)),
-            ring,
-            fold,
-            buttons,
-            26.0,
-            cx,
-        )
+        // Padding, not margin: a list line is a root.
+        div()
+            .w_full()
+            .pt(rems_from_px(6.0_f32))
+            .child(header_row(
+                SharedString::from(format!("header-{}", repo.id)),
+                ring,
+                fold,
+                buttons,
+                26.0,
+                cx,
+            ))
+            .into_any_element()
     }
 
     /// Chevron, project icon, name, count and the dot of a folded group. A click folds; a right
@@ -175,9 +185,9 @@ impl WorkspaceTree {
             )
             .child(private_text(
                 blurred,
-                || BlurBar::new(repo.name.clone(), 13.0).weight(FontWeight::SEMIBOLD),
+                || BlurBar::new(repo.name.to_uppercase(), 13.0).weight(FontWeight::SEMIBOLD),
                 || {
-                    Label::new(repo.name.clone())
+                    Label::new(repo.name.to_uppercase())
                         .size(row_text())
                         .weight(FontWeight::SEMIBOLD)
                         .truncate()
@@ -236,14 +246,17 @@ impl WorkspaceTree {
             .bulk
             .running(BulkRun::RemoveFinished);
         let dashboard = self.dashboard.clone();
-        let ring = focus_ring(&key, snap, cx);
-        let fold = h_flex()
+        // The pill carries the focus ring, so the frame's own ring stays off.
+        let border = pill_border(&key, snap, cx);
+        let pill = h_flex()
             .id(SharedString::from(key.clone()))
-            .flex_1()
-            .min_w_0()
-            .h_full()
-            .pl(rems_from_px(22.0_f32))
+            .h(rems_from_px(22.0_f32))
+            .px(rems_from_px(8.0_f32))
             .gap_1()
+            .rounded_full()
+            .border_1()
+            .border_dashed()
+            .border_color(border)
             .cursor_pointer()
             .child(
                 Icon::new(if shown {
@@ -257,7 +270,12 @@ impl WorkspaceTree {
             .child(small(format!("{} finished", repo_group.finished.len())))
             .on_click(cx.listener(move |tree, _: &ClickEvent, window, cx| {
                 tree.set_fold(toggle_key.clone(), !shown, window, cx);
-            }))
+            }));
+        let fold = h_flex()
+            .flex_1()
+            .min_w_0()
+            .h_full()
+            .child(pill)
             .into_any_element();
         let button = hover_button(
             SharedString::from(format!("remove-finished-{}", repo.id)),
@@ -270,25 +288,37 @@ impl WorkspaceTree {
         )
         .disabled(removing)
         .into_any_element();
-        // The header's frame, so the hover and the focus ring cover the button too.
-        header_row(group_name, ring, fold, vec![button], 24.0, cx)
+        // The header's frame, so the hover covers the button too.
+        header_row(
+            group_name,
+            gpui::transparent_black(),
+            fold,
+            vec![button],
+            24.0,
+            cx,
+        )
     }
 }
 
 /// "Pinned" and its count, over the pinned rows.
 fn pinned_header(count: usize) -> AnyElement {
-    h_flex()
-        .h(rems_from_px(26.0_f32))
-        .px_2()
-        .gap(rems_from_px(6.0_f32))
-        .child(lucide("pin").color(Color::Muted))
+    div()
+        .w_full()
+        .pt(rems_from_px(6.0_f32))
         .child(
-            Label::new("PINNED")
-                .size(LabelSize::Custom(rems_from_px(11_f32)))
-                .weight(FontWeight::SEMIBOLD)
-                .color(Color::Muted),
+            h_flex()
+                .h(rems_from_px(26.0_f32))
+                .px_2()
+                .gap(rems_from_px(6.0_f32))
+                .child(lucide("pin").color(Color::Muted))
+                .child(
+                    Label::new("PINNED")
+                        .size(LabelSize::Custom(rems_from_px(11_f32)))
+                        .weight(FontWeight::SEMIBOLD)
+                        .color(Color::Muted),
+                )
+                .child(CountBadge::new(count)),
         )
-        .child(CountBadge::new(count))
         .into_any_element()
 }
 

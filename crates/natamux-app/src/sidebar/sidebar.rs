@@ -205,7 +205,8 @@ impl Render for Sidebar {
         let no_projects = data.loaded
             && data.repos.is_empty()
             && !data.tasks.iter().any(|task| task.workspace.is_some());
-        let tree = Loading::new("sidebar-loading", loading, SkeletonList::new(8, 26.))
+        // Card blocks: 50 px card plus the 8 px gap.
+        let tree = Loading::new("sidebar-loading", loading, SkeletonList::new(4, 58.))
             .content(self.tree.clone());
         let none = no_projects.then(|| {
             h_flex()

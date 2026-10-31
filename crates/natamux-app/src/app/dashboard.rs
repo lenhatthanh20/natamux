@@ -24,6 +24,7 @@ use super::view_rules::{
 };
 use super::view_state::{self, Layout, ViewState};
 use crate::components::toast_rules::{ToastTone, Toasts, toast_duration};
+use crate::sidebar::card_rules::opened_folds;
 use crate::sidebar::sidebar_tree::with_fold;
 use crate::tasks::task_sort::{SortKey, TaskSort, next_sort};
 use crate::terminals::pane_rules::PaneLayout;
@@ -315,6 +316,7 @@ impl Dashboard {
         self.open_task = Some(task.id.clone());
         self.view.seen = with_seen(&self.view.seen, &[(&task.id, task.state)], true);
         self.view.recent = with_recent(&self.view.recent, &task.id);
+        self.view.folds = opened_folds(&self.view.folds, &task);
         self.save_view(cx);
         cx.emit(DashboardChange::Opened(Box::new(task)));
         self.touch_view(cx);

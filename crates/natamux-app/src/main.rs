@@ -192,6 +192,7 @@ mod projects {
 }
 mod sidebar {
     pub mod blur_bar;
+    pub mod card_rules;
     pub mod comet;
     pub mod project_buttons;
     pub mod project_color;
@@ -201,7 +202,10 @@ mod sidebar {
     pub mod sidebar;
     pub mod sidebar_text;
     pub mod sidebar_tree;
+    pub mod task_card;
+    pub mod task_card_open;
     pub mod tree_entries;
+    pub mod tree_lines;
     pub mod tree_model;
     pub mod tree_rename;
     pub mod workspace_groups;
