@@ -167,6 +167,32 @@ impl DetailsPane {
     pub fn picker(&self) -> Option<Entity<StagePicker>> {
         self.picker.clone()
     }
+
+    /// The text fields of the picked stage or branch by name, for the flow tests.
+    #[cfg(test)]
+    pub fn field_focuses(&self, cx: &App) -> Vec<(&'static str, FocusHandle)> {
+        use gpui::Focusable as _;
+        let mut fields = Vec::new();
+        if let Some(stage) = &self.stage_fields {
+            fields.extend([
+                ("name", &stage.name),
+                ("args", &stage.args),
+                ("prompt", &stage.prompt),
+                ("command", &stage.command),
+                ("check", &stage.check),
+                ("output", &stage.output),
+                ("sections", &stage.sections),
+                ("done when", &stage.done_when),
+            ]);
+        }
+        if let Some(branch) = &self.branch_fields {
+            fields.push(("branch name", &branch.name));
+        }
+        fields
+            .into_iter()
+            .map(|(name, field)| (name, field.editor.focus_handle(cx)))
+            .collect()
+    }
 }
 
 impl Render for DetailsPane {

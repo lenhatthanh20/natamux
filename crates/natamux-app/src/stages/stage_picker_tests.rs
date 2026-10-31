@@ -78,16 +78,24 @@ fn t11_add_stage_opens_the_picker_with_the_focus_in_its_search(cx: &mut TestAppC
         .picker
         .read_with(cx, |picker, _| picker.search.clone());
     assert!(is_focused(&search, cx));
-    type_text(cx, "lint");
-    assert_eq!(text_of(&search, cx), "lint");
-    let shown: Vec<String> = picking.pipeline.read_with(cx, |pipeline, _| {
-        picker_groups(pipeline.steps(), "lint")
+    // With no search, the picker draws every stage of the catalog not yet in the pipeline.
+    let all: Vec<String> = picking.pipeline.read_with(cx, |pipeline, _| {
+        picker_groups(pipeline.steps(), "")
             .into_iter()
             .flat_map(|(_, entries)| entries)
             .map(|entry| entry.stage.id.clone())
             .collect()
     });
-    assert_eq!(shown, ["lint"]);
+    let drawn = |cx: &mut VisualTestContext| {
+        picking
+            .picker
+            .read_with(cx, |picker, _| picker.drawn_rows())
+    };
+    assert!(all.len() > 1, "{all:?}");
+    assert_eq!(drawn(cx), all);
+    type_text(cx, "lint");
+    assert_eq!(text_of(&search, cx), "lint");
+    assert_eq!(drawn(cx), ["lint"]);
 }
 
 #[gpui::test]
