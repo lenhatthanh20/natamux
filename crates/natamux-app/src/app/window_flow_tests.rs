@@ -1,6 +1,7 @@
 //! Workflow tests T3 and the focus part of T6 (plan 7.5), in the app's root view on the fake
-//! daemon: the single keys type into the text boxes of the details panel and the sidebar tree and
-//! call no daemon; outside a box `a` approves the selected task once; a focus moved with
+//! daemon: the single keys type into the text boxes of the details panel (its own, and the commit
+//! box and doc edit box of the docked Changes and Docs views) and the sidebar tree and call no
+//! daemon; outside a box `a` approves the selected task once; a focus moved with
 //! `window.focus` turns `not_editing` of the cached details panel off and on.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
@@ -15,6 +16,7 @@ use super::Root;
 use crate::app::dashboard::{Dashboard, SavedView};
 use crate::app::fake_daemon;
 use crate::app::shortcuts;
+use crate::app::shots_files::doc_draft;
 use crate::app::source::Source;
 use crate::app::test_driver::{press, text_of, type_text};
 use crate::app::test_views;
@@ -116,6 +118,91 @@ fn t3_single_keys_type_into_the_boxes_of_the_details_panel(cx: &mut TestAppConte
         if let Some(text) = typed_into(&text_box, cx) {
             wrong.push(format!("{name}: has {text:?}"));
         }
+    }
+    wrong.extend(side_effects(&dashboard, cx));
+    assert!(wrong.is_empty(), "\n{}", wrong.join("\n"));
+}
+
+/// Opens the reviewed task's workspace with `view` in the docked details panel.
+fn dock(dashboard: &Entity<Dashboard>, view: DetailsView, cx: &mut VisualTestContext) {
+    dashboard.update(cx, |dashboard, cx| {
+        dashboard.open(REVIEWED, cx);
+        dashboard.set_details_view(view, cx);
+        dashboard.set_details_open(true, cx);
+    });
+    cx.run_until_parked();
+}
+
+/// Today the single keys do not reach the docked commit box (see "Bugs found" of the MIT move):
+/// the box sits under the panel's NatamuxDetails, whose context keeps not_editing because
+/// `DetailsPanel::editing` knows only its own boxes. So `a` approves the task (`r` then has no
+/// review to answer) and `e` opens the edit form, which takes the focus. The test records that;
+/// S3 keeps it until the owner decides.
+#[gpui::test]
+fn t3_single_keys_are_taken_in_the_commit_box_of_the_docked_changes(cx: &mut TestAppContext) {
+    let (root, dashboard, cx) = root(cx);
+    dock(&dashboard, DetailsView::Changes, cx);
+    let (details, changes) = root.read_with(cx, |root, cx| {
+        let changes = root.workspace_view().read(cx).changes_view().clone();
+        (root.details.clone(), changes)
+    });
+    let commit = changes.read_with(cx, |changes, _| changes.commit_box());
+    let commit = commit.expect("the docked Changes view drew no commit box");
+    let handle = handle_of(&commit, cx);
+    focus(&handle, cx);
+    press(cx, "mod-a backspace");
+    let mut seen = vec![format!("not_editing {:?}", not_editing(cx))];
+    let mut calls = 0;
+    for keys in ["a", &SINGLE_KEYS[1..]] {
+        type_text(cx, keys);
+        let sent = fake_daemon::shared().sent();
+        let new: Vec<_> = sent[calls..]
+            .iter()
+            .map(|(_, event)| event.clone())
+            .collect();
+        calls = sent.len();
+        let form = details.read_with(cx, |details, cx| details.boxes(cx).1.len());
+        let dialog = cx.update(|_, cx| DialogLayer::is_open(cx));
+        let in_box = cx.update(|window, cx| handle.contains_focused(window, cx));
+        seen.push(format!(
+            "{keys}: box {:?}, sent {new:?}, form {form}, dialog {dialog}, in box {in_box}",
+            text_of(&commit, cx)
+        ));
+    }
+    assert_eq!(
+        seen,
+        [
+            "not_editing Some(true)",
+            "a: box \"\", sent [\"review.approved\"], form 0, dialog false, in box true",
+            "reicnjk/?: box \"\", sent [], form 4, dialog false, in box false",
+        ]
+    );
+}
+
+#[gpui::test]
+fn t3_single_keys_type_into_the_doc_edit_box_of_the_docked_docs(cx: &mut TestAppContext) {
+    let (root, dashboard, cx) = root(cx);
+    let spec = "spec.md";
+    cx.update(|_, cx| doc_draft(REVIEWED, spec, cx));
+    dock(&dashboard, DetailsView::Progress, cx);
+    dashboard.update(cx, |dashboard, cx| {
+        dashboard.open_stage_file(REVIEWED, spec, cx)
+    });
+    cx.run_until_parked();
+    let docs = root.read_with(cx, |root, cx| {
+        root.workspace_view().read(cx).docs().cloned()
+    });
+    let edit = docs.and_then(|docs| docs.read_with(cx, |docs, _| docs.edit_box()));
+    let edit = edit.expect("the Docs view drew no edit box");
+    let mut wrong = Vec::new();
+    if let Some(text) = typed_into(&edit, cx) {
+        wrong.push(format!("doc edit box: has {text:?}"));
+    }
+    // The panel shows only the list; the picked file and its edit box are drawn in main, outside
+    // the panel's NatamuxDetails context.
+    let context = not_editing(cx);
+    if context.is_some() {
+        wrong.push(format!("not_editing of the panel: {context:?}"));
     }
     wrong.extend(side_effects(&dashboard, cx));
     assert!(wrong.is_empty(), "\n{}", wrong.join("\n"));
