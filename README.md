@@ -211,6 +211,7 @@ Read [Privacy](PRIVACY.md) for what stays on your machine and what leaves it, an
 | [`crates/natamux-daemon`](crates/natamux-daemon/) | Tasks, stages, git worktrees, terminals, and the HTTP/WebSocket API |
 | [`packages/web`](packages/web/) | React dashboard |
 | [`crates/natamux-app`](crates/natamux-app/) | Native desktop app |
+| [`crates/natamux-ui`](crates/natamux-ui/) | UI kit of the desktop app |
 | [`crates/natamux-update`](crates/natamux-update/) | Signed desktop updates |
 | [`crates/natamux-cli`](crates/natamux-cli/) | `natamux` / `nmx` command line |
 | [`plugins/natamux`](plugins/natamux/) | Claude Code plugin |

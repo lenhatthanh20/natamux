@@ -66,9 +66,10 @@ terminal = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", re
 terminal_view = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "69c81337967403672ef5891e20851299cdba6c5b" }
 theme = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "69c81337967403672ef5891e20851299cdba6c5b" }
 theme_settings = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "69c81337967403672ef5891e20851299cdba6c5b" }
-ui = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "69c81337967403672ef5891e20851299cdba6c5b" }
 # debug-embed: without it, debug builds look for the grammar queries in a Zed checkout.
 util = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "69c81337967403672ef5891e20851299cdba6c5b", features = ["debug-embed"] }
+# natamux-ui re-exports it (docs/plan-mit-license.md, S8).
+zed_ui = { package = "ui", version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "69c81337967403672ef5891e20851299cdba6c5b" }
 
 [workspace.lints.clippy]
 unwrap_used = "deny"
