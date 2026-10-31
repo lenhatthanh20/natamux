@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 
 use hyper::Method;
 use natamux_proto::agents::activity::{ActivityList, TaskActivity, TaskUsage, UsageList};
+use natamux_proto::agents::custom::{CustomAgent, CustomAgentList};
 use natamux_proto::agents::limits::{AgentLimits, LimitList};
 use natamux_proto::agents::start::{AgentMessage, StartAgentInput};
 use natamux_proto::tasks::task::{Task, TaskAnswer};
@@ -59,4 +60,20 @@ pub async fn send_to_agent(
     let path = format!("/tasks/{}/agent/message", encode(task_id));
     let answer: TaskAnswer = call_with(config, Method::POST, &path, message).await?;
     Ok(answer.task)
+}
+
+/// The user's custom agents (Settings > Agents).
+pub async fn custom_agents(config: &Config) -> Result<Vec<CustomAgent>, ClientError> {
+    let list: CustomAgentList = call(config, Method::GET, "/custom-agents").await?;
+    Ok(list.agents)
+}
+
+/// Replaces the whole list; the answer is the saved one.
+pub async fn save_custom_agents(
+    config: &Config,
+    agents: Vec<CustomAgent>,
+) -> Result<Vec<CustomAgent>, ClientError> {
+    let body = CustomAgentList { agents };
+    let list: CustomAgentList = call_with(config, Method::PUT, "/custom-agents", &body).await?;
+    Ok(list.agents)
 }

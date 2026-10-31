@@ -31,6 +31,8 @@ The default program for each agent:
 
 Set these variables when you start the daemon. See [Environment variables](/docs/reference/environment-variables/). For any other agent, see [Other agents](/docs/agents/other-agents/).
 
+To run one of these agents with another command for some stages only, for example Claude Code against another model, add a [custom agent](/docs/agents/other-agents/#custom-agents-a-built-in-agent-with-your-own-command) in **Settings → Agents**.
+
 By default each agent starts with a flag that makes it ask for permission less often, for example `--permission-mode auto` for Claude Code. See [`agents`](/docs/reference/configuration/#agents) for the flag of each agent and how to turn it off.
 
 The agent that starts is, in this order: the one you choose when you start it, the `agent` of the task, or `claude-code`.

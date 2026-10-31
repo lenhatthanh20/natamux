@@ -11,7 +11,7 @@ use super::add_subtask_dialog;
 use super::table_rules::{RowItem, row_menu};
 use super::task_confirms::{confirm_cancel_task, confirm_delete_task};
 use super::task_rules::TaskAction;
-use crate::agents::agent_choices::{DEFAULT_AGENT, is_agent_id};
+use crate::agents::agent_choices::{DEFAULT_AGENT, is_startable};
 use crate::app::commands::{shortcut_of, title_of};
 use crate::app::dashboard::Dashboard;
 use crate::app::shortcuts::action_for;
@@ -71,7 +71,7 @@ fn state_action(
 fn start_agent(task: &Task, dashboard: &Entity<Dashboard>, cx: &mut App) {
     let id = task.id.clone();
     let agent = match task.agent.as_deref() {
-        Some(agent) if is_agent_id(Some(agent)) => agent.to_string(),
+        Some(agent) if is_startable(Some(agent)) => agent.to_string(),
         _ => DEFAULT_AGENT.to_string(),
     };
     let written = dashboard.update(cx, |dashboard, cx| dashboard.start_agent(&id, &agent, cx));

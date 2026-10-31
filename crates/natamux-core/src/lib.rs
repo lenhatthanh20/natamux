@@ -2,6 +2,7 @@
 //! `packages/core` that `natamux-proto` does not have. Types come from `natamux-proto`.
 
 pub mod agents {
+    pub mod custom_agents;
     pub mod hook_settings;
 }
 pub mod formats;

@@ -181,6 +181,7 @@ fn reserved_path(path: &Path) -> bool {
                 | "activity"
                 | "usage"
                 | "limits"
+                | "custom-agents"
         )
     )
 }

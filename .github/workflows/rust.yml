@@ -412,7 +412,7 @@ jobs:
             workspace-editor-tabs
             terminal-drop-target
             palette palette-query palette-no-match palette-jump shortcuts account-menu
-            settings settings-general settings-search projects project-settings
+            settings settings-general settings-agents settings-search projects project-settings
             project-settings-tab-issues
             project-settings-tab-json project-settings-json-error import-issues sign-in
             sign-in-error add-menu details-empty rail-closed-panel changes-over-main stage-evidence
@@ -434,7 +434,7 @@ jobs:
             workspace-editor-tabs
             terminal-drop-target
             palette palette-query palette-no-match palette-jump shortcuts account-menu
-            settings settings-general settings-search projects project-settings
+            settings settings-general settings-agents settings-search projects project-settings
             project-settings-tab-issues
             project-settings-tab-json project-settings-json-error import-issues sign-in
             sign-in-error add-menu details-empty rail-closed-panel changes-over-main stage-evidence

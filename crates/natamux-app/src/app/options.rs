@@ -107,6 +107,7 @@ pub enum Shot {
     AccountMenu,
     Settings,
     SettingsGeneral,
+    SettingsAgents,
     SettingsSearch,
     Projects,
     ProjectSettings,
@@ -132,7 +133,7 @@ pub enum Shot {
 }
 
 impl Shot {
-    pub const ALL: [Shot; 90] = [
+    pub const ALL: [Shot; 91] = [
         Shot::TasksTable,
         Shot::TasksBoard,
         Shot::BoardHoverCard,
@@ -201,6 +202,7 @@ impl Shot {
         Shot::AccountMenu,
         Shot::Settings,
         Shot::SettingsGeneral,
+        Shot::SettingsAgents,
         Shot::SettingsSearch,
         Shot::Projects,
         Shot::ProjectSettings,
@@ -295,6 +297,7 @@ impl Shot {
             Shot::AccountMenu => "account-menu",
             Shot::Settings => "settings",
             Shot::SettingsGeneral => "settings-general",
+            Shot::SettingsAgents => "settings-agents",
             Shot::SettingsSearch => "settings-search",
             Shot::Projects => "projects",
             Shot::ProjectSettings => "project-settings",

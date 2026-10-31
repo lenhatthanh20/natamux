@@ -8,12 +8,15 @@ use hyper::{HeaderMap, Request, StatusCode};
 use natamux_agents::hooks::COPILOT_EVENT_FIELD;
 use natamux_agents::launch::is_launchable;
 use natamux_agents::usage::limits::claude_limits;
+use natamux_core::agents::custom_agents::parse_custom_agents;
 use natamux_core::js::js_trim;
 use natamux_core::tasks::inputs::task_id_param;
 use natamux_core::zod::{Issues, Rule, ZodError, object, string};
 use natamux_proto::agents::claude_code::{TASK_ID_HEADER, TERMINAL_HEADER};
+use natamux_proto::agents::custom::CustomAgentList;
 use serde_json::{Value, json};
 
+use crate::agents::custom_agents::save_custom_agents;
 use crate::agents::errors::AgentError;
 use crate::http::agent_rules::Caller;
 use crate::http::body::{DEFAULT_BODY_LIMIT, read_body};
@@ -73,6 +76,34 @@ fn start_body(value: Option<&Value>) -> Result<StartBody, ZodError> {
         parsed = agent.map(|agent| (agent, prompt.flatten(), base, branch));
     }
     issues.into_result(parsed)
+}
+
+/// The user's custom agents (Settings > Agents).
+pub fn custom_agents() -> Answer {
+    let list = CustomAgentList {
+        agents: natamux_agents::custom::custom_agents(),
+    };
+    json_answer(StatusCode::OK, &to_value(&list))
+}
+
+/// Replaces the whole list of custom agents. An agent token never gets here (`agent_may`).
+pub async fn put_custom_agents(state: Arc<AppState>, body: Option<Value>) -> Answer {
+    let agents = match parse_custom_agents(body.as_ref()) {
+        Ok(agents) => agents,
+        Err(error) => return zod_answer(&error),
+    };
+    let data_dir = state.data_dir.clone();
+    let saved = tokio::task::spawn_blocking(move || {
+        save_custom_agents(&data_dir, agents)?;
+        Ok::<_, std::io::Error>(CustomAgentList {
+            agents: natamux_agents::custom::custom_agents(),
+        })
+    })
+    .await;
+    match saved {
+        Ok(Ok(list)) => json_answer(StatusCode::OK, &to_value(&list)),
+        _ => internal_error(),
+    }
 }
 
 /// What the agent of each task does now, from its last hook.

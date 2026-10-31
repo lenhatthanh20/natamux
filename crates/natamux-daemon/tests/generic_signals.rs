@@ -267,3 +267,50 @@ fn pays_no_heed_to_other_words_to_other_programs_or_after_the_first_seconds() {
 
     assert_eq!(f.task(&task.id).state, TaskState::Running);
 }
+
+// The only test of this binary that sets the custom agents (they are the process's).
+#[test]
+fn reads_a_custom_agent_as_its_base_and_names_settings_when_its_command_is_missing() {
+    use natamux_agents::custom::set_custom_agents;
+    use natamux_proto::agents::custom::CustomAgent;
+    let agent = |id: &str, base: &str, command: &str| CustomAgent {
+        id: id.into(),
+        base: base.into(),
+        command: command.into(),
+    };
+    set_custom_agents(vec![
+        agent("claude-qwen", "claude-code", "cq"),
+        agent("my-agent", "other", "my-agent"),
+    ]);
+    let f = Fixture::new();
+
+    // A Claude Code variant has Claude Code's hooks: the bell is not a question.
+    let qwen = f.running_task(Some("claude-qwen"));
+    f.output(&qwen.id, "1", "\x07");
+    assert_eq!(f.task(&qwen.id).state, TaskState::Running);
+    // Another CLI has none: it is.
+    let other = f.running_task(Some("my-agent"));
+    f.output(&other.id, "1", "\x07");
+    assert_eq!(f.task(&other.id).state, TaskState::NeedsInput);
+
+    let task = f.running_task(Some("claude-qwen"));
+    f.signals.watch_launch(&AgentLaunch {
+        task_id: task.id.clone(),
+        terminal: "1".to_string(),
+        agent: "claude-qwen".to_string(),
+        program: "cq".to_string(),
+        session: None,
+        restored: false,
+    });
+    f.output(
+        &task.id,
+        "1",
+        "$ . '/data/agent-launch.sh'\r\nzsh: command not found: cq\r\n$ ",
+    );
+    let failed = f.tasks.list_events(&task.id).unwrap().pop().unwrap().event;
+    let reason = failed.payload["reason"].as_str().unwrap();
+    assert!(
+        reason.contains("Install cq, or change its command in Settings > Agents"),
+        "{reason}"
+    );
+}

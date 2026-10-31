@@ -72,6 +72,16 @@ fn rows_sit_on_their_pages() {
 }
 
 #[test]
+fn the_agents_page_is_found_by_its_words() {
+    assert_eq!(SettingRow::CustomAgents.page(), SettingsPage::Agents);
+    assert_eq!(page_title(&SettingsPage::Agents, &[]), "Agents");
+    for query in ["agent", "custom agent", "command", "model"] {
+        let found = search(query, &[]).unwrap_or_default();
+        assert!(found.rows.contains(&SettingRow::CustomAgents), "{query}");
+    }
+}
+
+#[test]
 fn an_empty_query_shows_the_page() {
     assert_eq!(search("", &[]), None);
     assert_eq!(search("   ", &[]), None);
