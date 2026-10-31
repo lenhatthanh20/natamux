@@ -5540,11 +5540,13 @@ dependencies = [
  "gpui",
  "gpui_platform",
  "grammars",
+ "image",
  "language",
  "markdown",
  "natamux-client",
  "natamux-core",
  "natamux-proto",
+ "natamux-ui",
  "natamux-update",
  "nix",
  "objc2 0.6.3",
@@ -5578,7 +5580,6 @@ dependencies = [
  "tree-sitter-rust",
  "tree-sitter-typescript",
  "tree-sitter-yaml",
- "ui",
  "util",
 ]
 
@@ -5717,6 +5718,13 @@ dependencies = [
  "rusqlite",
  "serde_json",
  "yaml-rust2",
+]
+
+[[package]]
+name = "natamux-ui"
+version = "1.0.12"
+dependencies = [
+ "ui",
 ]
 
 [[package]]

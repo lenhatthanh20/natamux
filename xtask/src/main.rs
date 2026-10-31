@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Output};
 
 /// The L4 crates of docs/plan-rust-migration.md. Only they may use the UI framework.
-const UI_CRATES: &[&str] = &["natamux-app", "natamux-cli", "natamux-update"];
+const UI_CRATES: &[&str] = &["natamux-app", "natamux-cli", "natamux-ui", "natamux-update"];
 
 const USAGE: &str = "usage: cargo xtask <task>
   ci      fmt, clippy, tests, layers, colour literals

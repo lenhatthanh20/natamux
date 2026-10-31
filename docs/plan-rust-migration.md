@@ -111,6 +111,7 @@ natamux-app (GPUI, desktop)   web dashboard (React, browser and phone)   natamux
 | L3 | `natamux-client` | Typed API client with reconnect and a live cache from `/events` | `reqwest`, `async-tungstenite` |
 | L4 | `natamux-app` | The desktop app | `gpui`, Zed's `ui`, `theme`, `workspace`, `terminal_view`, `editor`, `buffer_diff`, `git_ui`, `markdown`, `picker` |
 | L4 | `natamux-cli` | `natamux` and `nmx`, including the fast hook forwarder | `clap`, `ureq` |
+| L4 | `natamux-ui` | The app's UI kit, used as `ui`; Zed's `ui` re-exported until the MIT move replaces it (`docs/plan-mit-license.md`, S8) | `gpui` |
 | L4 | `natamux-update` | Self-update with the pinned minisign key | `minisign-verify` |
 
 - `cargo xtask layers` fails if a crate below L4 uses `gpui`.

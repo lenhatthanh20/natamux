@@ -48,11 +48,13 @@ tree-sitter-regex.workspace = true
 tree-sitter-rust.workspace = true
 tree-sitter-typescript.workspace = true
 tree-sitter-yaml.workspace = true
-ui.workspace = true
+ui = { package = "natamux-ui", path = "../natamux-ui" }
 util.workspace = true
 
 [dev-dependencies]
 gpui = { workspace = true, features = ["test-support"] }
+# The type a test renderer returns (components/kit_metrics.rs); the version gpui uses.
+image = { version = "0.25", default-features = false }
 
 [lints]
 workspace = true
