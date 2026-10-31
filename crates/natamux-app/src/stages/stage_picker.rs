@@ -360,3 +360,7 @@ impl StagePicker {
             .into_any_element()
     }
 }
+
+#[cfg(test)]
+#[path = "stage_picker_tests.rs"]
+mod tests;

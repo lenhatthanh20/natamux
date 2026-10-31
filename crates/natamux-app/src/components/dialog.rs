@@ -174,6 +174,13 @@ impl DialogLayer {
         layer.0.read(cx).open.last().map(|open| open.id)
     }
 
+    /// The top dialog itself, for the flow tests.
+    #[cfg(test)]
+    pub fn top_view(cx: &App) -> Option<AnyView> {
+        let layer = cx.try_global::<GlobalDialogLayer>()?;
+        layer.0.read(cx).open.last().map(|open| open.handle.view())
+    }
+
     fn show<V: DialogView>(
         &mut self,
         view: Entity<V>,

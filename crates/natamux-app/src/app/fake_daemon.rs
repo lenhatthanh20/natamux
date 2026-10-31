@@ -61,6 +61,31 @@ struct Data {
     /// The (task, kind) of each `send_event`, for the flow tests.
     #[cfg(test)]
     sent: Vec<(String, String)>,
+    #[cfg(test)]
+    hooks: TestHooks,
+}
+
+/// What a flow test asks of the fake: a write that fails once, a file the daemon cannot read.
+#[cfg(test)]
+#[derive(Default)]
+struct TestHooks {
+    /// The writes whose next call fails, by method name.
+    fail: BTreeSet<&'static str>,
+    /// The projects whose settings file cannot be read, with the reason.
+    broken_settings: BTreeMap<String, String>,
+}
+
+#[cfg(test)]
+impl TestHooks {
+    fn failure(&mut self, route: &'static str) -> Result<(), ClientError> {
+        if !self.fail.remove(route) {
+            return Ok(());
+        }
+        Err(ClientError::Status {
+            status: 500,
+            message: format!("The test made {route} fail."),
+        })
+    }
 }
 
 /// How the fake's feed behaves: the `skeleton` and `load-error` shots need one that never loads.
@@ -113,6 +138,8 @@ impl Data {
             link: FakeLink::Live,
             #[cfg(test)]
             sent: Vec::new(),
+            #[cfg(test)]
+            hooks: TestHooks::default(),
         };
         data.add_stage_seed();
         data.add_git_seed();
@@ -245,6 +272,21 @@ impl FakeDaemon {
         self.data().sent.clone()
     }
 
+    /// The next call of the write `route` (a method name such as "create_task") fails.
+    #[cfg(test)]
+    pub fn fail_next(&self, route: &'static str) {
+        self.data().hooks.fail.insert(route);
+    }
+
+    /// The settings file of `repo_id` cannot be read from now on, for `reason`.
+    #[cfg(test)]
+    pub fn break_settings(&self, repo_id: &str, reason: &str) {
+        let mut data = self.data();
+        data.hooks
+            .broken_settings
+            .insert(repo_id.into(), reason.into());
+    }
+
     /// The dashboard feed: everything now, then each change.
     pub fn watch(
         &self,
@@ -333,6 +375,8 @@ impl FakeDaemon {
 
     pub fn create_task(&self, input: NewTaskInput) -> Answer<Task> {
         let mut data = self.data();
+        #[cfg(test)]
+        data.hooks.failure("create_task")?;
         let mut task = data.new_task(&input.title, input.repo);
         task.parent_id = input.parent_id;
         data.tasks.insert(0, task.clone());

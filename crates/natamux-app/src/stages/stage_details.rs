@@ -161,6 +161,12 @@ impl DetailsPane {
     pub(super) fn branch_fields(&self) -> Option<&BranchFields> {
         self.branch_fields.as_ref()
     }
+
+    /// The stage picker while it is open, for the flow tests.
+    #[cfg(test)]
+    pub fn picker(&self) -> Option<Entity<StagePicker>> {
+        self.picker.clone()
+    }
 }
 
 impl Render for DetailsPane {

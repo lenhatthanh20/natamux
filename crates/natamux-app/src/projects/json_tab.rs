@@ -175,3 +175,7 @@ impl Render for JsonTab {
             )
     }
 }
+
+#[cfg(test)]
+#[path = "json_tab_tests.rs"]
+mod tests;

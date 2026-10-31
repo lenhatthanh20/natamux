@@ -201,3 +201,7 @@ impl Render for SendBackDialog {
             .child(frame)
     }
 }
+
+#[cfg(test)]
+#[path = "send_back_dialog_tests.rs"]
+mod tests;
