@@ -160,20 +160,18 @@ fn the_card_head_centers_the_glyph_on_the_title(cx: &mut TestAppContext) {
     let (glyph, title) = centres(cx);
     assert!(
         (glyph - title).abs() <= px(1.0),
-        "closed: the glyph at {} is off the title at {}",
-        glyph.0,
-        title.0
+        "closed: the glyph at {glyph:?} is off the title at {title:?}"
     );
 
     // Open, the glyph must stay on the title's first line.
-    dashboard.update(cx, |dashboard, cx| dashboard.set_fold("task:T-0141", true, cx));
+    dashboard.update(cx, |dashboard, cx| {
+        dashboard.set_fold("task:T-0141", true, cx)
+    });
     cx.run_until_parked();
     let (glyph, title) = centres(cx);
     assert!(
         (glyph - title).abs() <= px(1.5),
-        "open: the glyph at {} is off the title at {}",
-        glyph.0,
-        title.0
+        "open: the glyph at {glyph:?} is off the title at {title:?}"
     );
 }
 

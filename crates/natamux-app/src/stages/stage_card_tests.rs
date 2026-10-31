@@ -1,17 +1,20 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
+use std::rc::Rc;
+
 use gpui::TestAppContext;
-use natamux_proto::stages::actions::StageFile;
 use natamux_proto::stages::progress::{StageProgress, StageStatus};
 use natamux_proto::stages::schema::{Gate, Stage, StageKind};
 use natamux_proto::tasks::task::TaskState;
 use ui::prelude::*;
 
+use super::CardInput;
 use super::chips::pass_row;
-use super::node::{chip_word, menu_commands, tooltip_text};
-use super::{CardInput, FileChip};
+use super::node::{INSET, chip_word, node, tooltip_text};
 use crate::app::test_views;
 use crate::stages::card_rules::{CardButton, CardChip, CardFacts};
+use crate::stages::stage_choices::{ChoiceBox, choice_box};
+use crate::tasks::details_commands::{OnCommand, StageToggle};
 
 const WIDTH: f32 = 240.;
 const LONG: &str = "Sections Goal, Scope, Out of scope, Acceptance criteria and Code map";
@@ -75,6 +78,23 @@ fn a_node_root_does_not_clip_the_ports_of_the_flow() {
 }
 
 #[test]
+fn a_node_has_no_more_button() {
+    // The "..." menu took the name's room; every entry is a button or chip of the card (T-0252).
+    let source = include_str!("flow_node.rs");
+    assert!(!source.contains("IconName::Ellipsis"));
+    assert!(!source.contains("ContextMenu"));
+}
+
+#[test]
+fn a_node_header_has_even_padding() {
+    // The head had 10 px left and right but 8 px top and bottom (T-0252).
+    let source = node_source("fn header(");
+    assert!(source.contains(".p(rems_from_px(INSET - FOCUS))"));
+    assert!(!source.contains(".px("));
+    assert!(!source.contains(".py("));
+}
+
+#[test]
 fn a_foldable_node_opens_with_enter_and_space() {
     let source = node_source("fn header(");
     assert!(source.contains("\"enter\" | \"space\""));
@@ -130,48 +150,6 @@ fn input(status: StageStatus, buttons: Vec<CardButton>) -> CardInput {
     }
 }
 
-fn labels(input: &CardInput) -> Vec<&'static str> {
-    menu_commands(input)
-        .0
-        .iter()
-        .map(|(label, _)| *label)
-        .collect()
-}
-
-#[test]
-fn the_menu_offers_what_the_buttons_allow() {
-    let mut current = input(
-        StageStatus::Current,
-        vec![
-            CardButton::PickAgent,
-            CardButton::Skip,
-            CardButton::SendBack,
-        ],
-    );
-    assert_eq!(labels(&current), ["Skip", "Send back"]);
-    assert!(menu_commands(&current).1);
-    // The output is offered once it is written.
-    current.file = Some(FileChip::Missing);
-    assert_eq!(labels(&current), ["Skip", "Send back"]);
-    current.file = Some(FileChip::Written(StageFile {
-        name: "plan.md".into(),
-        size: 10,
-        modified_at: "2026-10-31T00:00:00Z".into(),
-    }));
-    assert_eq!(labels(&current), ["Open output", "Skip", "Send back"]);
-}
-
-#[test]
-fn the_menu_of_an_upcoming_node_toggles_skip() {
-    let mut upcoming = input(StageStatus::Upcoming, Vec::new());
-    assert!(labels(&upcoming).is_empty());
-    upcoming.skip = Some((false, false));
-    assert_eq!(labels(&upcoming), ["Skip"]);
-    upcoming.skip = Some((true, false));
-    assert_eq!(labels(&upcoming), ["Don't skip"]);
-    assert!(!menu_commands(&upcoming).1);
-}
-
 #[test]
 fn the_meta_line_and_the_tooltip_say_the_same_facts() {
     assert_eq!(chip_word(CardChip::Done), None);
@@ -186,4 +164,104 @@ fn the_meta_line_and_the_tooltip_say_the_same_facts() {
         "Plan\nRunning\n2m\n$0.61 est."
     );
     assert_eq!(tooltip_text("Plan", None, &[]), "Plan");
+}
+
+fn noop() -> OnCommand {
+    Rc::new(|_, _, _| {})
+}
+
+/// One choice box in a box of a fixed width.
+struct Choice {
+    width: f32,
+}
+
+impl Render for Choice {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let choice = ChoiceBox {
+            kind: StageToggle::Workflow,
+            stage: "plan".into(),
+            on: false,
+            busy: false,
+            allowed: true,
+            // The hint goes into a tooltip, so the row is the label alone.
+            started: true,
+        };
+        v_flex()
+            .w(px(self.width))
+            .child(choice_box(&choice, &noop(), cx))
+    }
+}
+
+fn drawn_choice(width: f32, cx: &mut TestAppContext) -> [gpui::Bounds<Pixels>; 2] {
+    let (_view, cx) = cx.add_window_view(|_, _| Choice { width });
+    cx.run_until_parked();
+    ["choice-row", "choice-label"].map(|selector| {
+        cx.debug_bounds(selector)
+            .unwrap_or_else(|| panic!("{selector} was not drawn"))
+    })
+}
+
+#[gpui::test]
+fn a_long_choice_wraps_inside_the_card(cx: &mut TestAppContext) {
+    // "Run with a workflow" ran past the right edge of a narrow card (T-0252).
+    const NARROW: f32 = 90.;
+    test_views::init(cx);
+    let [_, wide] = drawn_choice(400., cx);
+    let [row, narrow] = drawn_choice(NARROW, cx);
+    assert!(row.right() <= px(NARROW));
+    assert!(narrow.right() <= row.right());
+    assert!(narrow.size.height > wide.size.height * 1.5);
+}
+
+/// One node in a box of the rail's width.
+struct Node {
+    status: StageStatus,
+}
+
+impl Render for Node {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let mut card = input(self.status, Vec::new());
+        card.facts.chip = match self.status {
+            StageStatus::Current => CardChip::State(TaskState::Running),
+            _ => CardChip::Done,
+        };
+        card.usage = Some("$0.11".into());
+        v_flex().w(px(300.)).child(node(card, &noop(), cx))
+    }
+}
+
+fn drawn_node(status: StageStatus, cx: &mut TestAppContext) -> [gpui::Bounds<Pixels>; 5] {
+    let (_view, cx) = cx.add_window_view(|_, _| Node { status });
+    cx.run_until_parked();
+    [
+        "node-card",
+        "node-tile",
+        "node-texts",
+        "node-name",
+        "node-meta",
+    ]
+    .map(|selector| {
+        cx.debug_bounds(selector)
+            .unwrap_or_else(|| panic!("{selector} was not drawn"))
+    })
+}
+
+#[gpui::test]
+fn a_folded_node_centres_its_header(cx: &mut TestAppContext) {
+    test_views::init(cx);
+    let [card, tile, texts, name, meta] = drawn_node(StageStatus::Done, cx);
+    let left = tile.left() - card.left();
+    let right = card.right() - texts.right();
+    assert!((left - right).abs() <= px(1.), "{left:?} vs {right:?}");
+    // The group moves to the centre; its lines stay in line with each other.
+    assert_eq!(name.left(), meta.left());
+}
+
+#[gpui::test]
+fn an_open_node_keeps_its_header_left(cx: &mut TestAppContext) {
+    test_views::init(cx);
+    let [card, tile, ..] = drawn_node(StageStatus::Current, cx);
+    // The node's 1 px border, then the inset.
+    let left = tile.left() - card.left();
+    assert!((left - px(INSET + 1.)).abs() <= px(0.5), "{left:?}");
 }

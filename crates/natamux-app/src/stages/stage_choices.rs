@@ -2,7 +2,7 @@
 //! and "Check on CI" with their hints, and the menu of agents to start.
 
 use gpui::{Pixels, Point};
-use ui::{ButtonLike, Checkbox, ContextMenu, Tooltip, prelude::*};
+use ui::{Checkbox, ContextMenu, Tooltip, prelude::*};
 
 use crate::agents::agent_choices::{custom_agents, pick_list};
 use crate::components::menu::MenuLayer;
@@ -37,7 +37,9 @@ fn hint_of(choice: &ChoiceBox) -> &'static str {
     }
 }
 
-pub fn choice_box(choice: &ChoiceBox, on: &OnCommand, _: &App) -> impl IntoElement {
+/// One checkbox with its label. Not a `ButtonLike`: its fixed height would not let a long label
+/// wrap inside a narrow card (T-0252).
+pub fn choice_box(choice: &ChoiceBox, on: &OnCommand, cx: &App) -> impl IntoElement {
     let label = match choice.kind {
         StageToggle::Workflow => "Run with a workflow",
         _ => "Check on CI",
@@ -53,25 +55,46 @@ pub fn choice_box(choice: &ChoiceBox, on: &OnCommand, _: &App) -> impl IntoEleme
     };
     let on = on.clone();
     let id = SharedString::from(format!("{}-{}", choice.kind.name(), choice.stage));
+    let hover = cx.theme().colors().ghost_element_hover;
     v_flex()
+        .w_full()
+        .min_w_0()
         .gap_0p5()
         .child(
-            ButtonLike::new(id.clone())
-                .disabled(disabled)
+            h_flex()
+                .id(id.clone())
+                .debug_selector(|| "choice-row".into())
+                .w_full()
+                .min_w_0()
+                .items_start()
+                .gap_2()
+                .px_1()
+                .py_0p5()
+                .rounded_sm()
                 .when(!inline, |this| this.tooltip(Tooltip::text(hint)))
-                .on_click(move |_, window, cx| on(command.clone(), window, cx))
+                .when(!disabled, |this| {
+                    this.cursor_pointer()
+                        .hover(move |style| style.bg(hover))
+                        .on_click(move |_, window, cx| on(command.clone(), window, cx))
+                })
                 .child(
-                    h_flex()
-                        .gap_2()
-                        .child(
-                            Checkbox::new(
-                                SharedString::from(format!("{id}-box")),
-                                choice.on.into(),
-                            )
+                    div().flex_none().child(
+                        Checkbox::new(SharedString::from(format!("{id}-box")), choice.on.into())
                             .disabled(disabled)
                             .visualization_only(true),
-                        )
-                        .child(Label::new(label).size(LabelSize::Small)),
+                    ),
+                )
+                .child(
+                    // A flex item keeps its text width unless it may shrink, so it would not wrap.
+                    div()
+                        .debug_selector(|| "choice-label".into())
+                        .flex_1()
+                        .min_w_0()
+                        .child(
+                            Label::new(label)
+                                .size(LabelSize::Small)
+                                .when(disabled, |this| this.color(Color::Disabled)),
+                        ),
                 ),
         )
         .when(inline, |this| {

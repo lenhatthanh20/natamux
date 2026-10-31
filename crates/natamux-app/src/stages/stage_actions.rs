@@ -35,7 +35,7 @@ pub(super) fn actions_row(
     v_flex()
         .gap_2()
         .children(approve)
-        .child(h_flex().flex_wrap().gap_1p5().children(row))
+        .child(h_flex().flex_wrap().gap_2().children(row))
 }
 
 fn approve_button(input: &CardInput, anyway: bool, busy: bool, on: &OnCommand) -> Button {
