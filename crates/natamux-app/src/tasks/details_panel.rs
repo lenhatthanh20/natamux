@@ -455,3 +455,7 @@ mod header;
 #[cfg(test)]
 #[path = "details_panel_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "../stages/stage_actions_tests.rs"]
+mod stage_actions_tests;

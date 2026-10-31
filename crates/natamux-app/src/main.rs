@@ -103,6 +103,8 @@ mod components {
     #[cfg(test)]
     mod kit_metrics;
     pub mod menu;
+    #[cfg(test)]
+    mod menu_tests;
     pub mod motion;
     pub mod motion_rules;
     pub mod resize_handle;

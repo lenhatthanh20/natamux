@@ -219,3 +219,7 @@ impl Render for EditForm {
             )
     }
 }
+
+#[cfg(test)]
+#[path = "edit_form_tests.rs"]
+mod tests;

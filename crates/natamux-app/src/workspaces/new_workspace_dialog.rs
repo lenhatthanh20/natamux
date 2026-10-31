@@ -501,3 +501,7 @@ impl Render for NewWorkspaceDialog {
         )
     }
 }
+
+#[cfg(test)]
+#[path = "new_workspace_dialog_tests.rs"]
+mod tests;

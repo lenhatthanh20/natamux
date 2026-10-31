@@ -73,6 +73,8 @@ struct TestHooks {
     fail: BTreeSet<&'static str>,
     /// The projects whose settings file cannot be read, with the reason.
     broken_settings: BTreeMap<String, String>,
+    /// The (task, title) of each `rename_task`.
+    renamed: Vec<(String, String)>,
 }
 
 #[cfg(test)]
@@ -278,6 +280,12 @@ impl FakeDaemon {
         self.data().hooks.fail.insert(route);
     }
 
+    /// The (task, title) of every `rename_task` so far.
+    #[cfg(test)]
+    pub fn renamed(&self) -> Vec<(String, String)> {
+        self.data().hooks.renamed.clone()
+    }
+
     /// The settings file of `repo_id` cannot be read from now on, for `reason`.
     #[cfg(test)]
     pub fn break_settings(&self, repo_id: &str, reason: &str) {
@@ -425,6 +433,10 @@ impl FakeDaemon {
 
     pub fn rename_task(&self, task_id: &str, title: &str) -> Answer<Task> {
         let mut data = self.data();
+        #[cfg(test)]
+        data.hooks
+            .renamed
+            .push((task_id.to_owned(), title.to_owned()));
         let task = data.task_mut(task_id)?;
         task.title = title.into();
         task.updated_at = NOW.into();
