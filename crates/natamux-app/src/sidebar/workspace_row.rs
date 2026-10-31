@@ -120,7 +120,7 @@ impl WorkspaceTree {
                     .into_any_element()
             },
         );
-        // The dot sits in the task glyph's column, so the agent icon starts at the title's edge.
+        // The open card shifts the row so this column starts at the title's edge (T-0255).
         let glyph = div()
             .flex_none()
             .w(rems_from_px(GLYPH_COLUMN))
