@@ -216,6 +216,13 @@ impl ProjectSettingsPage {
         self.stages.as_ref().map(|stages| stages.editor.clone())
     }
 
+    /// The details pane and the stage list of the Stages tab, for the flow tests.
+    #[cfg(test)]
+    pub fn stage_parts(&self) -> Option<(Entity<DetailsPane>, Entity<StageList>)> {
+        let stages = self.stages.as_ref()?;
+        Some((stages.details.clone(), stages.list.clone()))
+    }
+
     /// The draft differs from the file as read.
     pub fn dirty(&self, cx: &App) -> bool {
         match (&self.base, &self.stages) {
@@ -317,6 +324,10 @@ impl ProjectSettingsPage {
 }
 
 impl EventEmitter<Discarded> for ProjectSettingsPage {}
+
+#[cfg(test)]
+#[path = "project_settings_page_tests.rs"]
+mod tests;
 
 impl Focusable for ProjectSettingsPage {
     fn focus_handle(&self, _: &App) -> FocusHandle {

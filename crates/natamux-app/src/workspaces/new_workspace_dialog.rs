@@ -409,6 +409,14 @@ fn read_remote(
     })
 }
 
+impl NewWorkspaceDialog {
+    /// The title box, for the flow tests.
+    #[cfg(test)]
+    pub fn title_box(&self) -> &Entity<Editor> {
+        &self.title
+    }
+}
+
 impl EventEmitter<DismissEvent> for NewWorkspaceDialog {}
 
 impl EventEmitter<Created> for NewWorkspaceDialog {}
