@@ -29,7 +29,7 @@ const SHOT_FILES: [(&str, &str); 3] = [
 ];
 
 /// Each fixture: its golden name, its path (which picks the language) and its text.
-fn fixtures() -> Vec<(String, String, String)> {
+pub(crate) fn fixtures() -> Vec<(String, String, String)> {
     let mut out = Vec::new();
     for shot in Shot::ALL {
         if let Shot::Code(lang) = shot {
@@ -56,7 +56,7 @@ fn fixtures() -> Vec<(String, String, String)> {
     out
 }
 
-fn hex(color: Hsla) -> String {
+pub(crate) fn hex(color: Hsla) -> String {
     let Rgba { r, g, b, a } = Rgba::from(color);
     let byte = |value: f32| (value * 255.).round() as u8;
     format!(

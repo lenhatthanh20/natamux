@@ -37,6 +37,26 @@ serde_json = "1.0.144"
 sha2 = "0.10.9"
 subtle = "2.6.1"
 tokio = { version = "1.53.3", features = ["macros", "net", "rt-multi-thread", "sync", "time"] }
+# The own highlighter (crates/natamux-app/src/text_view/highlight.rs): the versions and forks Zed
+# locks at the rev below, so Cargo.lock keeps one copy of each.
+tree-sitter = { git = "https://github.com/lenhatthanh20/tree-sitter", rev = "43623ec9bf0eaaf7113285c46e8a09018f181b18" }
+tree-sitter-bash = "0.25.1"
+tree-sitter-c = "0.24.2"
+tree-sitter-cpp = { git = "https://github.com/lenhatthanh20/tree-sitter-cpp", rev = "5cb9b693cfd7bfacab1d9ff4acac1a4150700609" }
+tree-sitter-css = "0.23.2"
+tree-sitter-diff = "0.1.0"
+tree-sitter-gitcommit = { git = "https://github.com/lenhatthanh20/tree-sitter-git-commit", rev = "88309716a69dd13ab83443721ba6e0b491d37ee9" }
+tree-sitter-go = "0.25.0"
+tree-sitter-gomod = { git = "https://github.com/lenhatthanh20/tree-sitter-go-mod", rev = "2e886870578eeba1927a2dc4bd2e2b3f598c5f9a" }
+tree-sitter-gowork = { git = "https://github.com/lenhatthanh20/tree-sitter-go-work", rev = "acb0617bf7f4fda02c6217676cc64acb89536dc7" }
+tree-sitter-jsdoc = "0.23.2"
+tree-sitter-json = "0.24.8"
+tree-sitter-md = { git = "https://github.com/lenhatthanh20/tree-sitter-markdown", rev = "b596e737286780d7bfa9fcddceaeeb754574b352" }
+tree-sitter-python = "0.25.0"
+tree-sitter-regex = "0.24.3"
+tree-sitter-rust = "0.24.2"
+tree-sitter-typescript = { git = "https://github.com/lenhatthanh20/tree-sitter-typescript", rev = "e2c53597d6a5d9cf7bbe8dccde576fe1e46c5899" }
+tree-sitter-yaml = { git = "https://github.com/lenhatthanh20/tree-sitter-yaml", rev = "dcb586e3ffe00a42b0f2d03a67ea153acb31ff09" }
 url = "2.5.7"
 yaml-rust2 = "0.13.0"
 

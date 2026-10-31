@@ -311,12 +311,15 @@ mod terminals {
     pub mod terminal_size;
     pub mod terminal_tabs;
 }
-/// The goldens of the code view (plan S4.1), recorded on the editor it replaces.
+/// The own code view (plan S4) and its goldens, recorded on the editor it replaces.
 mod text_view {
     #[cfg(test)]
     mod code_mouse_tests;
     #[cfg(test)]
     mod code_typing_tests;
+    // The code view uses it from S4.3; until then only its tests do.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub mod highlight;
 }
 mod workspaces {
     pub mod branches;
