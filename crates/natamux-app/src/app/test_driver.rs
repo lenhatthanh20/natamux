@@ -10,14 +10,14 @@ pub fn type_text(cx: &mut VisualTestContext, text: &str) {
 }
 
 /// Presses keys in gpui's form, `"left shift-right"`. `mod` is Cmd on macOS and Ctrl elsewhere,
-/// as the app binds it.
+/// and `word` is Alt on macOS and Ctrl elsewhere, as the app binds them.
 pub fn press(cx: &mut VisualTestContext, keys: &str) {
-    let held = if cfg!(target_os = "macos") {
-        "cmd-"
+    let (held, word) = if cfg!(target_os = "macos") {
+        ("cmd-", "alt-")
     } else {
-        "ctrl-"
+        ("ctrl-", "ctrl-")
     };
-    cx.simulate_keystrokes(&keys.replace("mod-", held));
+    cx.simulate_keystrokes(&keys.replace("mod-", held).replace("word-", word));
 }
 
 /// Puts `text` on the clipboard and presses the paste key.

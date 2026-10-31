@@ -89,8 +89,12 @@ mod components {
     pub mod confirm;
     pub mod detail_section;
     pub mod dialog;
+    #[cfg(test)]
+    mod dialog_tests;
     pub mod empty_state;
     pub mod form;
+    #[cfg(test)]
+    mod form_tests;
     pub mod glyph;
     pub mod icons;
     pub mod input_rules;

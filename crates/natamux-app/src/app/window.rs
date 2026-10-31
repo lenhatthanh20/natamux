@@ -445,6 +445,10 @@ mod watch;
 #[path = "window_follow.rs"]
 mod follow;
 
+#[cfg(test)]
+#[path = "window_flow_tests.rs"]
+mod flow_tests;
+
 pub fn open(
     options: &Options,
     source: Result<Arc<Source>, StartProblem>,

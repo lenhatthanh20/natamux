@@ -334,6 +334,13 @@ impl DetailsPanel {
             .into_any_element()
     }
 
+    /// The Add a subtask box and the open edit form, for the flow tests.
+    #[cfg(test)]
+    pub fn boxes(&self, cx: &App) -> (Entity<Editor>, Vec<Entity<Editor>>) {
+        let form = self.edit.as_ref().map(|edit| edit.read(cx).boxes());
+        (self.subtask.clone(), form.unwrap_or_default())
+    }
+
     /// The panel's text boxes keep the single keys.
     fn editing(&self, window: &Window, cx: &App) -> bool {
         self.edit.is_some() || self.subtask.focus_handle(cx).is_focused(window)

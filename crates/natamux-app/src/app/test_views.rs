@@ -62,8 +62,8 @@ impl Render for TestRoot {
     }
 }
 
-/// `init`, the app's key bindings, a dashboard on the fake daemon, and a window that shows the
-/// view `build` makes under the menu and dialog layers. Every flow test runs here, in a
+/// `init`, the app's key bindings, a dashboard on the fake daemon, and an active window that
+/// shows the view `build` makes under the menu and dialog layers. Every flow test runs here, in a
 /// `TestAppContext`, so an entity leased twice fails the test.
 pub fn init_app<V: Render>(
     cx: &mut TestAppContext,
@@ -80,6 +80,8 @@ pub fn init_app<V: Render>(
         dialogs: DialogLayer::init(cx),
         view: build(shown, window, cx).into(),
     });
+    // The window is the active one, as the app's is: focus leaving a view tells it then.
+    cx.update(|window, _| window.activate_window());
     cx.run_until_parked();
     let view = root.read_with(cx, |root, _| root.view.clone().downcast::<V>());
     let Ok(view) = view else {
