@@ -104,10 +104,7 @@ pub(super) fn key_of(task_id: &str, terminal: &str) -> String {
 
 /// An agent comes back on the session it reported, or with none on the newest of the folder.
 pub(super) fn resumable(entry: &Entry) -> Option<&str> {
-    entry
-        .agent
-        .as_deref()
-        .filter(|agent| has_adapter(agent))
+    entry.agent.as_deref().filter(|agent| has_adapter(agent))
 }
 
 pub(super) fn is_shell(program: &str) -> bool {

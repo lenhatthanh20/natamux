@@ -226,9 +226,9 @@ impl AgentRows {
             .collect();
         let add = action_button("agents-add", "Add agent")
             .track_focus(&self.add)
-            .on_click(cx.listener(|view, _: &ClickEvent, window, cx| {
-                view.agents.add_row(window, cx)
-            }));
+            .on_click(
+                cx.listener(|view, _: &ClickEvent, window, cx| view.agents.add_row(window, cx)),
+            );
         let known = custom_agents_known();
         let save = action_button("agents-save", "Save")
             .track_focus(&self.save)
@@ -289,12 +289,14 @@ fn row_view(
         .icon_size(IconSize::Small)
         .tooltip(Tooltip::text("Remove agent"))
         .on_click(cx.listener(move |view, _: &ClickEvent, _, cx| view.agents.remove(index, cx)));
-    let id_field = div()
-        .w(rems_from_px(160.0_f32))
-        .child(labelled("Id", None, None, input_box(&row.id, cx)));
-    let base_field = div()
-        .w(rems_from_px(SELECT_WIDTH))
-        .child(labelled("Based on", None, None, base_select));
+    let id_field =
+        div()
+            .w(rems_from_px(160.0_f32))
+            .child(labelled("Id", None, None, input_box(&row.id, cx)));
+    let base_field =
+        div()
+            .w(rems_from_px(SELECT_WIDTH))
+            .child(labelled("Based on", None, None, base_select));
     let help = Some(COMMAND_HELP.into());
     let command_field = div()
         .flex_1()
@@ -317,7 +319,9 @@ fn row_view(
                 .child(command_field)
                 .child(remove_slot),
         )
-        .when(row.base == OTHER_BASE, |this| this.child(help_line(OTHER_NOTE)))
+        .when(row.base == OTHER_BASE, |this| {
+            this.child(help_line(OTHER_NOTE))
+        })
         .into_any_element()
 }
 

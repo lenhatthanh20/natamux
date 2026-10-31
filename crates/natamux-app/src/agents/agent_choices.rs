@@ -129,7 +129,9 @@ pub fn pick_list(custom: &[CustomAgent]) -> Vec<(String, String)> {
     let built_in = AGENT_CHOICES
         .iter()
         .map(|choice| (choice.id.to_owned(), choice.label.to_owned()));
-    let own = custom.iter().map(|agent| (agent.id.clone(), agent.id.clone()));
+    let own = custom
+        .iter()
+        .map(|agent| (agent.id.clone(), agent.id.clone()));
     built_in.chain(own).collect()
 }
 
@@ -250,7 +252,10 @@ mod tests {
 
     #[test]
     fn a_custom_agent_follows_its_base() {
-        let list = [custom("claude-qwen", "claude-code"), custom("mine", OTHER_BASE)];
+        let list = [
+            custom("claude-qwen", "claude-code"),
+            custom("mine", OTHER_BASE),
+        ];
         assert_eq!(base_in("claude-qwen", &list), "claude-code");
         assert_eq!(base_in("codex", &list), "codex");
         assert_eq!(workflow_agent("claude-qwen", &list), "claude-code");
@@ -267,8 +272,14 @@ mod tests {
         let list = [custom("claude-qwen", "claude-code")];
         let picks = pick_list(&list);
         assert_eq!(picks.len(), AGENT_CHOICES.len() + 1);
-        assert_eq!(picks[0], ("claude-code".to_owned(), "Claude Code".to_owned()));
-        assert_eq!(picks[5], ("claude-qwen".to_owned(), "claude-qwen".to_owned()));
+        assert_eq!(
+            picks[0],
+            ("claude-code".to_owned(), "Claude Code".to_owned())
+        );
+        assert_eq!(
+            picks[5],
+            ("claude-qwen".to_owned(), "claude-qwen".to_owned())
+        );
         assert!(can_start_in(Some("claude-qwen"), &list));
         assert!(!can_start_in(Some("claude-qwen"), &[]));
         assert!(can_start_in(Some("codex"), &[]));
