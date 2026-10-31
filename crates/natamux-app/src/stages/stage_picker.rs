@@ -42,6 +42,9 @@ pub struct StagePicker {
     /// The fields drawn last, in order, for the Tab ring of the dialog.
     stops: Vec<FocusHandle>,
     _search_edits: Subscription,
+    /// The ids of the rows drawn last, for the flow tests.
+    #[cfg(test)]
+    drawn: std::cell::RefCell<Vec<String>>,
 }
 
 impl StagePicker {
@@ -62,6 +65,8 @@ impl StagePicker {
             custom: None,
             stops: Vec::new(),
             _search_edits: edits,
+            #[cfg(test)]
+            drawn: Default::default(),
         }
     }
 
@@ -71,6 +76,12 @@ impl StagePicker {
 
     pub fn search_focus(&self, cx: &App) -> FocusHandle {
         self.search.focus_handle(cx)
+    }
+
+    /// The ids of the rows drawn last, for the flow tests.
+    #[cfg(test)]
+    pub fn drawn_rows(&self) -> Vec<String> {
+        self.drawn.borrow().clone()
     }
 
     fn open_custom(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -162,6 +173,8 @@ impl StagePicker {
     fn render_row(&self, entry: &'static CatalogStage, cx: &App) -> impl IntoElement {
         let hover = cx.theme().colors().ghost_element_hover;
         let (pipeline, id) = (self.pipeline.clone(), entry.stage.id.clone());
+        #[cfg(test)]
+        self.drawn.borrow_mut().push(id.clone());
         h_flex()
             .id(SharedString::from(format!("pick-{id}")))
             .w_full()
@@ -199,6 +212,8 @@ impl StagePicker {
     }
 
     fn render_phases(&self, query: &str, cx: &App) -> Vec<AnyElement> {
+        #[cfg(test)]
+        self.drawn.borrow_mut().clear();
         let steps = self.pipeline.read(cx).steps();
         let mut rows: Vec<AnyElement> = picker_groups(steps, query)
             .into_iter()
@@ -360,3 +375,7 @@ impl StagePicker {
             .into_any_element()
     }
 }
+
+#[cfg(test)]
+#[path = "stage_picker_tests.rs"]
+mod tests;

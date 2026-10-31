@@ -93,6 +93,17 @@ impl DocsTab {
         &self.task_id
     }
 
+    /// The box of the Source view, once it showed, for the `--shot` states.
+    pub fn source_editor(&self) -> Option<Entity<Editor>> {
+        self.source.as_ref().map(|(editor, _)| editor.clone())
+    }
+
+    /// The edit box of the shown draft, for the flow tests.
+    #[cfg(test)]
+    pub fn edit_box(&self) -> Option<Entity<Editor>> {
+        self.edit.as_ref().map(|edit| edit.editor.clone())
+    }
+
     /// A stage card chip or the list picks a file; an attachment view gives way to it.
     pub fn pick(&mut self, name: String, cx: &mut Context<Self>) {
         self.picked = Some(name);

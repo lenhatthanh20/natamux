@@ -1,9 +1,11 @@
 //! Command line flags. CI uses them to check the app and take screenshots.
 
+use super::theme_catalog::{ThemeKind, theme_of_slug};
 use crate::bench::bench_view::{MAX_TERMINALS, Output, TERMINALS};
 
 pub const USAGE: &str =
-    "usage: natamux-app [--smoke] [--theme light|dark] [--size WxH] [--hold SECONDS] [--fake-daemon]
+    "usage: natamux-app [--smoke] [--theme light|dark] [--theme-name NAME] [--size WxH] [--hold SECONDS]
+                   [--fake-daemon]
                    [--gate2 TASK [--terminals N] [--output flood|agent]]
                    [--shot STATE] [--count-draws] [--open-task TASK]
                    [--bench-flows [--bench-tasks N]]
@@ -11,6 +13,7 @@ pub const USAGE: &str =
             with --fake-daemon, also check that a workspace's terminal grid does not scroll
             and that the pipeline chart scrolls to its last step
   --theme   use this theme instead of following the system
+  --theme-name  show this theme of the app, in its own look, such as ayu-light or nord (for screenshots)
   --size    window size in points, placed at the top left of the screen
   --hold    quit after this many seconds (for screenshots)
   --fake-daemon  show fixed tasks and a fixed terminal instead of the daemon's (for screenshots)
@@ -129,10 +132,44 @@ pub enum Shot {
     UpdateFailed,
     SettingsUpdateReady,
     RepoTrustDialog,
+    // The states of the MIT move (docs/plan-mit-license.md 7.2): what the later steps redraw.
+    TerminalLook,
+    TerminalCursors,
+    TerminalCursorsUnderline,
+    TerminalCursorsBar,
+    TerminalSelection,
+    TerminalAltScreen,
+    TerminalScrolled,
+    TerminalContextMenu,
+    TerminalScrollbar,
+    TextBoxSelection,
+    TextBoxSelectionUnfocused,
+    WorkspaceEditorScrollbar,
+    EditForm,
+    TreeRename,
+    SettingsFontError,
+    SendBackLong,
+    WorkspaceDocsSource,
+    WorkspaceDocsSourceFocused,
+    WorkspaceDocsRich,
+    WorkspaceEditorLong,
+    WorkspaceEditorWrapped,
+    ChangesDiffSideBySide,
+    ChangesDiffCollapsed,
+    ChangesDiffWrapped,
+    ChangesDiffDeletedOnly,
+    ChangesDiffFocused,
+    ChangesDiffScrollbar,
+    MenuKeyboard,
+    ButtonFocus,
+    ButtonDisabledTooltip,
+    CheckboxStates,
+    /// One code sample in the editor tab, per language of `git/languages.rs`.
+    Code(CodeLang),
 }
 
 impl Shot {
-    pub const ALL: [Shot; 90] = [
+    pub const ALL: [Shot; 143] = [
         Shot::TasksTable,
         Shot::TasksBoard,
         Shot::BoardHoverCard,
@@ -223,6 +260,59 @@ impl Shot {
         Shot::UpdateFailed,
         Shot::SettingsUpdateReady,
         Shot::RepoTrustDialog,
+        Shot::TerminalLook,
+        Shot::TerminalCursors,
+        Shot::TerminalCursorsUnderline,
+        Shot::TerminalCursorsBar,
+        Shot::TerminalSelection,
+        Shot::TerminalAltScreen,
+        Shot::TerminalScrolled,
+        Shot::TerminalContextMenu,
+        Shot::TerminalScrollbar,
+        Shot::TextBoxSelection,
+        Shot::TextBoxSelectionUnfocused,
+        Shot::WorkspaceEditorScrollbar,
+        Shot::EditForm,
+        Shot::TreeRename,
+        Shot::SettingsFontError,
+        Shot::SendBackLong,
+        Shot::WorkspaceDocsSource,
+        Shot::WorkspaceDocsSourceFocused,
+        Shot::WorkspaceDocsRich,
+        Shot::WorkspaceEditorLong,
+        Shot::WorkspaceEditorWrapped,
+        Shot::ChangesDiffSideBySide,
+        Shot::ChangesDiffCollapsed,
+        Shot::ChangesDiffWrapped,
+        Shot::ChangesDiffDeletedOnly,
+        Shot::ChangesDiffFocused,
+        Shot::ChangesDiffScrollbar,
+        Shot::MenuKeyboard,
+        Shot::ButtonFocus,
+        Shot::ButtonDisabledTooltip,
+        Shot::CheckboxStates,
+        Shot::Code(CodeLang::Bash),
+        Shot::Code(CodeLang::C),
+        Shot::Code(CodeLang::Cpp),
+        Shot::Code(CodeLang::Css),
+        Shot::Code(CodeLang::Diff),
+        Shot::Code(CodeLang::Env),
+        Shot::Code(CodeLang::GitCommit),
+        Shot::Code(CodeLang::Go),
+        Shot::Code(CodeLang::GoMod),
+        Shot::Code(CodeLang::GoWork),
+        Shot::Code(CodeLang::JavaScript),
+        Shot::Code(CodeLang::JsDoc),
+        Shot::Code(CodeLang::Json),
+        Shot::Code(CodeLang::Jsonc),
+        Shot::Code(CodeLang::Markdown),
+        Shot::Code(CodeLang::MarkdownInline),
+        Shot::Code(CodeLang::Python),
+        Shot::Code(CodeLang::Regex),
+        Shot::Code(CodeLang::Rust),
+        Shot::Code(CodeLang::Tsx),
+        Shot::Code(CodeLang::TypeScript),
+        Shot::Code(CodeLang::Yaml),
     ];
 
     pub fn name(self) -> &'static str {
@@ -317,6 +407,38 @@ impl Shot {
             Shot::UpdateFailed => "update-failed",
             Shot::SettingsUpdateReady => "settings-update-ready",
             Shot::RepoTrustDialog => "repo-trust-dialog",
+            Shot::TerminalLook => "terminal-look",
+            Shot::TerminalCursors => "terminal-cursors",
+            Shot::TerminalCursorsUnderline => "terminal-cursors-underline",
+            Shot::TerminalCursorsBar => "terminal-cursors-bar",
+            Shot::TerminalSelection => "terminal-selection",
+            Shot::TerminalAltScreen => "terminal-alt-screen",
+            Shot::TerminalScrolled => "terminal-scrolled",
+            Shot::TerminalContextMenu => "terminal-context-menu",
+            Shot::TerminalScrollbar => "terminal-scrollbar",
+            Shot::TextBoxSelection => "text-box-selection",
+            Shot::TextBoxSelectionUnfocused => "text-box-selection-unfocused",
+            Shot::WorkspaceEditorScrollbar => "workspace-editor-scrollbar",
+            Shot::EditForm => "edit-form",
+            Shot::TreeRename => "tree-rename",
+            Shot::SettingsFontError => "settings-font-error",
+            Shot::SendBackLong => "send-back-long",
+            Shot::WorkspaceDocsSource => "workspace-docs-source",
+            Shot::WorkspaceDocsSourceFocused => "workspace-docs-source-focused",
+            Shot::WorkspaceDocsRich => "workspace-docs-rich",
+            Shot::WorkspaceEditorLong => "workspace-editor-long",
+            Shot::WorkspaceEditorWrapped => "workspace-editor-wrapped",
+            Shot::ChangesDiffSideBySide => "changes-diff-side-by-side",
+            Shot::ChangesDiffCollapsed => "changes-diff-collapsed",
+            Shot::ChangesDiffWrapped => "changes-diff-wrapped",
+            Shot::ChangesDiffDeletedOnly => "changes-diff-deleted-only",
+            Shot::ChangesDiffFocused => "changes-diff-focused",
+            Shot::ChangesDiffScrollbar => "changes-diff-scrollbar",
+            Shot::MenuKeyboard => "menu-keyboard",
+            Shot::ButtonFocus => "button-focus",
+            Shot::ButtonDisabledTooltip => "button-disabled-tooltip",
+            Shot::CheckboxStates => "checkbox-states",
+            Shot::Code(lang) => lang.state(),
         }
     }
 
@@ -328,10 +450,69 @@ impl Shot {
     }
 }
 
+/// The languages of the `code-<lang>` shots: each language of `git/languages.rs`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CodeLang {
+    Bash,
+    C,
+    Cpp,
+    Css,
+    Diff,
+    Env,
+    GitCommit,
+    Go,
+    GoMod,
+    GoWork,
+    JavaScript,
+    JsDoc,
+    Json,
+    Jsonc,
+    Markdown,
+    MarkdownInline,
+    Python,
+    Regex,
+    Rust,
+    Tsx,
+    TypeScript,
+    Yaml,
+}
+
+impl CodeLang {
+    /// The name of its `--shot` state.
+    pub fn state(self) -> &'static str {
+        match self {
+            CodeLang::Bash => "code-bash",
+            CodeLang::C => "code-c",
+            CodeLang::Cpp => "code-cpp",
+            CodeLang::Css => "code-css",
+            CodeLang::Diff => "code-diff",
+            CodeLang::Env => "code-env",
+            CodeLang::GitCommit => "code-gitcommit",
+            CodeLang::Go => "code-go",
+            CodeLang::GoMod => "code-gomod",
+            CodeLang::GoWork => "code-gowork",
+            CodeLang::JavaScript => "code-javascript",
+            CodeLang::JsDoc => "code-jsdoc",
+            CodeLang::Json => "code-json",
+            CodeLang::Jsonc => "code-jsonc",
+            CodeLang::Markdown => "code-markdown",
+            CodeLang::MarkdownInline => "code-markdown-inline",
+            CodeLang::Python => "code-python",
+            CodeLang::Regex => "code-regex",
+            CodeLang::Rust => "code-rust",
+            CodeLang::Tsx => "code-tsx",
+            CodeLang::TypeScript => "code-typescript",
+            CodeLang::Yaml => "code-yaml",
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Options {
     pub smoke: bool,
     pub theme: Option<ThemeMode>,
+    /// `--theme-name`: the theme and its look; it wins over `--theme`.
+    pub theme_name: Option<(&'static str, ThemeKind)>,
     pub size: Option<(u32, u32)>,
     pub hold_seconds: Option<u64>,
     pub fake_daemon: bool,
@@ -350,6 +531,7 @@ impl Options {
         let mut options = Options {
             smoke: false,
             theme: None,
+            theme_name: None,
             size: None,
             hold_seconds: None,
             fake_daemon: false,
@@ -375,6 +557,9 @@ impl Options {
                 }
                 "--bench-tasks" => options.bench_tasks = parse_tasks(&value(&mut args, &arg)?)?,
                 "--theme" => options.theme = Some(parse_theme(&value(&mut args, &arg)?)?),
+                "--theme-name" => {
+                    options.theme_name = Some(parse_theme_name(&value(&mut args, &arg)?)?);
+                }
                 "--size" => options.size = Some(parse_size(&value(&mut args, &arg)?)?),
                 "--gate2" => options.gate2 = Some(value(&mut args, &arg)?),
                 "--terminals" => {
@@ -407,6 +592,10 @@ fn parse_theme(text: &str) -> Result<ThemeMode, String> {
         "dark" => Ok(ThemeMode::Dark),
         _ => Err(format!("--theme is light or dark, not {text:?}")),
     }
+}
+
+fn parse_theme_name(text: &str) -> Result<(&'static str, ThemeKind), String> {
+    theme_of_slug(text).ok_or_else(|| format!("--theme-name does not know the theme {text:?}"))
 }
 
 fn parse_terminals(text: &str) -> Result<u16, String> {

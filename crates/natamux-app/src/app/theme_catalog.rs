@@ -59,6 +59,22 @@ pub fn parse_theme_name(raw: &str, kind: ThemeKind) -> &'static str {
         .unwrap_or(kind.default_theme())
 }
 
+/// The name of a theme in the `--theme-name` flag: lower case, a dash for a space, `e` for `é`
+/// ("Rosé Pine Dawn" is `rose-pine-dawn`).
+pub fn theme_slug(name: &str) -> String {
+    name.to_lowercase().replace(' ', "-").replace('é', "e")
+}
+
+/// The theme whose `theme_slug` is `slug`, and its look.
+pub fn theme_of_slug(slug: &str) -> Option<(&'static str, ThemeKind)> {
+    [ThemeKind::Light, ThemeKind::Dark]
+        .into_iter()
+        .find_map(|kind| {
+            let name = kind.themes().iter().find(|name| theme_slug(name) == slug)?;
+            Some((*name, kind))
+        })
+}
+
 /// The theme of the light look and of the dark look (`lightTheme`, `darkTheme` of `view.json`).
 /// The mode (`theme`) picks which one shows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

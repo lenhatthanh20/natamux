@@ -115,6 +115,9 @@ fn f64_of(size: f32) -> f64 {
     size.to_string().parse().unwrap_or(f64::from(size))
 }
 
+/// The end of the name of the `--shot` states that show the scrollbars.
+const SCROLLBAR_STATES: &str = "-scrollbar";
+
 /// The theme part of Zed's settings: `mode` is `ThemeChoice::name` (a `--theme` flag wins before
 /// this), and the theme Zed shows in each mode.
 #[derive(Clone, Copy, Debug)]
@@ -124,13 +127,15 @@ pub struct ThemeSetting<'a> {
 }
 
 /// The user settings JSON for Zed: `ui_zoom` is `UiSize::zoom`. Zed's own fonts; the terminal
-/// gets a font only when the user picked one, else Zed gives it the buffer font and size. A
-/// `--shot` hides the editors' scrollbars, which Zed shows for a moment after a scroll.
+/// gets a font only when the user picked one, else Zed gives it the buffer font and size. `shot`
+/// is the state of a `--shot`: it hides the scrollbars, which Zed shows for a moment after a
+/// scroll, and holds the editors' caret solid, so a shot never catches it in the off half of a
+/// blink. A state whose name ends in `-scrollbar` shows the scrollbars instead, always.
 pub fn user_settings(
     theme: ThemeSetting<'_>,
     ui_zoom: f32,
     terminal: &ResolvedFont,
-    shot: bool,
+    shot: Option<&str>,
 ) -> String {
     let terminal = if terminal.source == FontSource::Default {
         json!({})
@@ -145,8 +150,14 @@ pub fn user_settings(
         "buffer_font_size": scaled(BASE_BUFFER_FONT_SIZE, ui_zoom),
         "terminal": terminal,
     });
-    if shot {
-        settings["scrollbar"] = json!({"show": "never"});
+    if let Some(state) = shot {
+        let show = if state.ends_with(SCROLLBAR_STATES) {
+            "always"
+        } else {
+            "never"
+        };
+        settings["scrollbar"] = json!({"show": show});
+        settings["cursor_blink"] = json!(false);
     }
     settings.to_string()
 }

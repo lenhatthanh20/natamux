@@ -194,3 +194,7 @@ impl Render for AddSubtaskDialog {
             .child(frame)
     }
 }
+
+#[cfg(test)]
+#[path = "add_subtask_dialog_tests.rs"]
+mod tests;

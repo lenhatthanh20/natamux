@@ -1,0 +1,11 @@
+go 1.23
+
+toolchain go1.23.4
+
+use (
+	./shop
+	./money
+	./tools/report
+)
+
+replace golang.org/x/sync => ../forks/sync
