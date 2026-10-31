@@ -1,17 +1,14 @@
-//! The marker of a step on the timeline and the line to the next one (`StageMarker.tsx`): a done
+//! The marker of a step (`StageMarker.tsx`), used by the Progress board: a done
 //! stage has the check, the current one the shape of its state, a skipped one the dash, and one
 //! not reached yet an empty dashed ring. A branch is a diamond. A running stage's glyph blinks
-//! (`StateGlyph`); the line into it is still (owner, T-0164), and nothing else moves.
-
-// `RailLine` is not used since Progress became a node flow (T-0246); it stays until asked.
-#![allow(dead_code)]
+//! (`StateGlyph`); nothing else moves.
 
 use gpui::svg;
 use natamux_proto::stages::progress::StageStatus;
 use natamux_proto::tasks::task::TaskState;
 use ui::{Tooltip, prelude::*};
 
-use super::stage_view_rules::{LinkKind, marker_label};
+use super::stage_view_rules::marker_label;
 use crate::components::colors::state_colors;
 use crate::components::glyph::StateGlyph;
 use crate::components::icons::icon_path;
@@ -79,35 +76,5 @@ pub fn marker(
             .border_color(cx.theme().colors().border)
             .tooltip(Tooltip::text(label))
             .into_any_element(),
-    }
-}
-
-/// Green behind the work and into a running stage, dashed ahead, nothing at the end.
-#[derive(IntoElement)]
-pub struct RailLine {
-    kind: LinkKind,
-}
-
-impl RailLine {
-    pub fn new(kind: LinkKind) -> Self {
-        Self { kind }
-    }
-}
-
-impl RenderOnce for RailLine {
-    fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
-        let done = state_colors(TaskState::Done, cx).fg;
-        let line = div()
-            .flex_1()
-            .min_h(rems_from_px(12.0_f32))
-            .w(rems_from_px(0.0_f32));
-        match self.kind {
-            LinkKind::Hidden => line,
-            LinkKind::Done | LinkKind::Flow => line.border_l_2().border_color(done),
-            LinkKind::Upcoming => line
-                .border_l_2()
-                .border_dashed()
-                .border_color(cx.theme().colors().border),
-        }
     }
 }
