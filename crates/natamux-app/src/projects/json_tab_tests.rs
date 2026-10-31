@@ -64,6 +64,9 @@ fn t14_a_text_from_outside_keeps_the_caret_and_the_undo(cx: &mut TestAppContext)
     let (pipeline, editor, cx) = start(cx);
     type_text(cx, " ");
     assert_eq!(selection_of(&editor, cx), 1..1);
+    // The buffer joins edits less than 300 ms apart (real time) into one undo step. An outside
+    // change comes well after a typed key in the app, so wait longer than that here too.
+    std::thread::sleep(std::time::Duration::from_millis(400));
     let outside = format!(" {CHANGED}");
     pipeline.update(cx, |pipeline, cx| pipeline.set_text(&outside, cx));
     cx.run_until_parked();
@@ -71,16 +74,16 @@ fn t14_a_text_from_outside_keeps_the_caret_and_the_undo(cx: &mut TestAppContext)
     assert_eq!(selection_of(&editor, cx), 1..1);
     assert_eq!(draft(&pipeline, cx), (outside.clone(), false));
 
-    // The typed space and the outside text are one undo step: the buffer groups edits by real
-    // time, and none passes in the test window (`advance_clock` does not split them either).
-    // So one undo takes back both, and a second has nothing left.
+    // The first undo takes back the outside text, the second the typed space.
     press(cx, "mod-z");
     let once = text_of(&editor, cx);
+    let once_draft = draft(&pipeline, cx).0;
     press(cx, "mod-z");
     let twice = text_of(&editor, cx);
+    let before = format!(" {DRAFT}");
     assert_eq!(
-        (once.as_str(), twice.as_str()),
-        (DRAFT, DRAFT),
+        (once.as_str(), once_draft.as_str(), twice.as_str()),
+        (before.as_str(), before.as_str(), DRAFT),
         "undo after a text from outside"
     );
     assert_eq!(draft(&pipeline, cx), (DRAFT.to_string(), false));

@@ -56,6 +56,15 @@ impl StageList {
         self.add_stage.clone()
     }
 
+    /// The focus of each row by stage id, for the flow tests.
+    #[cfg(test)]
+    pub fn row_focuses(&self) -> Vec<(String, FocusHandle)> {
+        self.focuses
+            .iter()
+            .map(|(id, handle)| (id.clone(), handle.clone()))
+            .collect()
+    }
+
     pub(super) fn focus_of(&mut self, id: &str, cx: &mut Context<Self>) -> FocusHandle {
         self.focuses
             .entry(id.to_owned())

@@ -294,7 +294,63 @@ fn t15_esc_closes_the_stage_picker_before_settings(cx: &mut TestAppContext) {
 fn t15_tab_walks_the_stops_of_the_page_and_wraps(cx: &mut TestAppContext) {
     let (open, cx) = open_settings(cx);
     let ring = open.page.read_with(cx, |page, cx| page.tab_ring(cx));
-    assert!(ring.len() > 4, "{} stops", ring.len());
+    // Today's ring, each stop named by the part it belongs to.
+    let parts = open.page.read_with(cx, |page, cx| {
+        let stages = page.stages.as_ref().expect("read");
+        let mut parts: Vec<(String, FocusHandle)> = vec![
+            ("tab bar".into(), stages.tabs.focus.clone()),
+            ("send backs".into(), stages.send_backs.read(cx).stop(cx)),
+            ("idle pause".into(), stages.idle_pause.read(cx).stop(cx)),
+            ("branch names".into(), stages.branch_name.read(cx).stop(cx)),
+            ("Add stage".into(), stages.list.read(cx).add_stage_focus()),
+            ("Discard".into(), page.discard.clone()),
+            ("Save".into(), page.submit.clone()),
+        ];
+        let rows = stages.list.read(cx).row_focuses();
+        parts.extend(
+            rows.into_iter()
+                .map(|(id, handle)| (format!("row {id}"), handle)),
+        );
+        let fields = stages.details.read(cx).field_focuses(cx);
+        parts.extend(
+            fields
+                .into_iter()
+                .map(|(name, handle)| (format!("field {name}"), handle)),
+        );
+        parts
+    });
+    let named: Vec<String> = ring
+        .iter()
+        .map(|stop| {
+            let part = parts.iter().find(|(_, handle)| handle == stop);
+            part.map_or("unnamed", |(name, _)| name.as_str())
+                .to_string()
+        })
+        .collect();
+    let today = [
+        "tab bar",
+        "send backs",
+        "idle pause",
+        "branch names",
+        "Add stage",
+        "row context",
+        "row spec",
+        "row kind",
+        "row reproduce",
+        "row plan",
+        "row test-spec",
+        "row implement",
+        "row agent-review",
+        "row security",
+        "row review",
+        "row release",
+        "field name",
+        "field check",
+        "field done when",
+        "Discard",
+        "Save",
+    ];
+    assert_eq!(named, today, "\nthe ring now: {named:#?}");
     cx.update(|window, cx| window.focus(&ring[0], cx));
     cx.run_until_parked();
     let mut wrong = Vec::new();
