@@ -182,7 +182,9 @@ fn the_open_card_lines_share_one_left_edge(cx: &mut TestAppContext) {
     // (T-0253). Terminal rows are the task's children, so their dot column starts at the title
     // edge and their content one glyph column further (T-0255).
     let (dashboard, _, cx) = sidebar_tree(cx);
-    dashboard.update(cx, |dashboard, cx| dashboard.set_fold("task:T-0141", true, cx));
+    dashboard.update(cx, |dashboard, cx| {
+        dashboard.set_fold("task:T-0141", true, cx)
+    });
     cx.run_until_parked();
     let bounds = |name: &str, cx: &mut VisualTestContext| {
         cx.debug_bounds(name)
@@ -233,14 +235,19 @@ fn the_card_head_ends_with_the_age_and_no_buttons(cx: &mut TestAppContext) {
     // Only the right padding (8 or 9 px) and the 1 px border; one button alone is 16 px or more.
     let closed = gap(cx);
     assert!(closed <= px(14.0), "closed: {} px after the age", closed.0);
-    dashboard.update(cx, |dashboard, cx| dashboard.set_fold("task:T-0141", true, cx));
+    dashboard.update(cx, |dashboard, cx| {
+        dashboard.set_fold("task:T-0141", true, cx)
+    });
     cx.run_until_parked();
     let open = gap(cx);
     assert!(open <= px(14.0), "open: {} px after the age", open.0);
 
     // A hover once hid the age for the buttons; with no buttons it must stay painted.
     // T-0146 is running, so it shows its age, not a reason.
-    assert!(cx.debug_bounds("age-T-0146").is_some(), "no age before hover");
+    assert!(
+        cx.debug_bounds("age-T-0146").is_some(),
+        "no age before hover"
+    );
     let title = cx
         .debug_bounds("title-T-0146")
         .expect("the T-0146 title was not drawn");
