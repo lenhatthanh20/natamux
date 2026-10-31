@@ -182,38 +182,39 @@ fn the_open_card_lines_share_one_left_edge(cx: &mut TestAppContext) {
     // (T-0253). Terminal rows are the task's children, so their dot column starts at the title
     // edge and their content one glyph column further (T-0255).
     let (dashboard, _, cx) = sidebar_tree(cx);
-    dashboard.update(cx, |dashboard, cx| dashboard.set_fold("task:T-0141", true, cx));
+    dashboard.update(cx, |dashboard, cx| {
+        dashboard.set_fold("task:T-0141", true, cx)
+    });
     cx.run_until_parked();
-    let bounds = |name: &str, cx: &mut VisualTestContext| {
+    // `debug_bounds` takes only a `&'static str`, so the selectors are literals.
+    let bounds = |name: &'static str, cx: &mut VisualTestContext| {
         cx.debug_bounds(name)
             .unwrap_or_else(|| panic!("{name} was not drawn"))
     };
     let edge = bounds("title-T-0141", cx).left();
-    let row = "agent:T-0141:shell:1";
-    let dot_column = format!("{row}-glyph");
     for name in [
         "chips-T-0141",
         "branch-T-0141",
         "waiting-T-0141",
-        dot_column.as_str(),
+        "agent:T-0141:shell:1-glyph",
     ] {
         let left = bounds(name, cx).left();
         assert!(
             (left - edge).abs() <= px(1.0),
             "{name} starts at {}, the title at {}",
-            left.0,
-            edge.0
+            f32::from(left),
+            f32::from(edge)
         );
     }
-    let content = bounds(&format!("{row}-content"), cx).left();
+    let content = bounds("agent:T-0141:shell:1-content", cx).left();
     let indent = px(GLYPH_COLUMN + HEAD_GAP);
     assert!(
         (content - edge - indent).abs() <= px(1.0),
         "the terminal row content starts at {}, want {} (title {} + {})",
-        content.0,
-        (edge + indent).0,
-        edge.0,
-        indent.0
+        f32::from(content),
+        f32::from(edge + indent),
+        f32::from(edge),
+        f32::from(indent)
     );
 }
 
@@ -232,15 +233,28 @@ fn the_card_head_ends_with_the_age_and_no_buttons(cx: &mut TestAppContext) {
     };
     // Only the right padding (8 or 9 px) and the 1 px border; one button alone is 16 px or more.
     let closed = gap(cx);
-    assert!(closed <= px(14.0), "closed: {} px after the age", closed.0);
-    dashboard.update(cx, |dashboard, cx| dashboard.set_fold("task:T-0141", true, cx));
+    assert!(
+        closed <= px(14.0),
+        "closed: {} px after the age",
+        f32::from(closed)
+    );
+    dashboard.update(cx, |dashboard, cx| {
+        dashboard.set_fold("task:T-0141", true, cx)
+    });
     cx.run_until_parked();
     let open = gap(cx);
-    assert!(open <= px(14.0), "open: {} px after the age", open.0);
+    assert!(
+        open <= px(14.0),
+        "open: {} px after the age",
+        f32::from(open)
+    );
 
     // A hover once hid the age for the buttons; with no buttons it must stay painted.
     // T-0146 is running, so it shows its age, not a reason.
-    assert!(cx.debug_bounds("age-T-0146").is_some(), "no age before hover");
+    assert!(
+        cx.debug_bounds("age-T-0146").is_some(),
+        "no age before hover"
+    );
     let title = cx
         .debug_bounds("title-T-0146")
         .expect("the T-0146 title was not drawn");
