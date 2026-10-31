@@ -1,20 +1,20 @@
 //! One stage as a node of the Progress flow (design E): a kind tile with the state glyph at its
-//! corner, the name with its marks, a meta line, and the "..." menu. The body of a finished or
-//! upcoming node opens and folds; the current node is always open. The node draws no ports or
-//! lines: the flow draws them on its edges, so nothing here may clip (no `overflow_hidden` on
-//! the root) and the glow ring is absolute, so it takes no room. Only the running glyph moves.
+//! corner, the name with its marks, and a meta line. The body of a finished or upcoming node
+//! opens and folds; the current node is always open. A folded node centres its header. The node
+//! draws no ports or lines: the flow draws them on its edges, so nothing here may clip (no
+//! `overflow_hidden` on the root) and the glow ring is absolute, so it takes no room. Only the
+//! running glyph moves.
 
-use gpui::{AnyElement, ClickEvent, Div, FontWeight, Hsla, KeyDownEvent, Pixels, Point, Stateful};
+use gpui::{AnyElement, Div, FontWeight, Hsla, KeyDownEvent, Stateful};
 use natamux_proto::stages::progress::StageStatus;
 use natamux_proto::stages::schema::{Gate, Stage, StageKind};
-use ui::{ContextMenu, Tooltip, prelude::*};
+use ui::{Tooltip, prelude::*};
 
-use super::{CardInput, FileChip, badge, body, fact_parts, upcoming_parts};
-use crate::agents::agent_choices::{AGENT_CHOICES, agent_label};
+use super::{CardInput, badge, body, fact_parts, upcoming_parts};
+use crate::agents::agent_choices::agent_label;
 use crate::components::agent_badge::AgentIcon;
 use crate::components::colors::state_colors;
 use crate::components::glyph::StateGlyph;
-use crate::components::menu::MenuLayer;
 use crate::components::shape::ShapeSize;
 use crate::stages::card_rules::CardChip;
 use crate::stages::editor_labels::{StageRunner, model_of};
@@ -29,8 +29,12 @@ const TILE: f32 = 32.;
 const TILE_COMPACT: f32 = 24.;
 const TILE_RADIUS: f32 = 8.;
 const NODE_RADIUS: f32 = 9.;
-/// Tile, then the gap and the node's padding: where the text starts.
+/// The gap between the tile and the text.
 const PAD: f32 = 10.;
+/// The space between the node's border and its content, the same on every side.
+pub(super) const INSET: f32 = 12.;
+/// The head's clear border, which holds the keyboard focus ring.
+const FOCUS: f32 = 2.;
 /// The glow ring is 3 px wide, outside the border.
 const RING: f32 = 3.;
 
@@ -53,70 +57,6 @@ pub(super) fn tooltip_text(name: &str, word: Option<&str>, facts: &[String]) -> 
         .chain(facts.iter().cloned())
         .collect::<Vec<_>>()
         .join("\n")
-}
-
-/// The entries of the "..." menu, in order, and whether the agents to pick from follow them.
-pub(super) fn menu_commands(input: &CardInput) -> (Vec<(&'static str, PanelCommand)>, bool) {
-    use crate::stages::card_rules::CardButton;
-    use crate::tasks::details_commands::StageToggle;
-    let stage = &input.entry.stage;
-    let mut items = Vec::new();
-    if let (Some(output), Some(FileChip::Written(_))) = (&input.stage.output, &input.file) {
-        items.push(("Open output", PanelCommand::OpenStageFile(output.clone())));
-    }
-    if let Some((marked, _)) = input.skip {
-        let label = if marked { "Don't skip" } else { "Skip" };
-        items.push((
-            label,
-            PanelCommand::Toggle {
-                kind: StageToggle::Skip,
-                stage: stage.clone(),
-                on: !marked,
-            },
-        ));
-    }
-    let buttons = &input.facts.buttons;
-    if buttons.contains(&CardButton::Skip) {
-        items.push(("Skip", PanelCommand::Skip(stage.clone())));
-    }
-    if buttons.contains(&CardButton::SendBack) {
-        items.push(("Send back", PanelCommand::SendBack(stage.clone())));
-    }
-    (items, buttons.contains(&CardButton::PickAgent))
-}
-
-fn open_more_menu(
-    items: Vec<(&'static str, PanelCommand)>,
-    pick_agent: bool,
-    on: OnCommand,
-    position: Point<Pixels>,
-    window: &mut Window,
-    cx: &mut App,
-) {
-    let menu = ContextMenu::build(window, cx, move |menu, _, _| {
-        let has_items = !items.is_empty();
-        let on_items = on.clone();
-        let menu = items.into_iter().fold(menu, |menu, (label, command)| {
-            let on = on_items.clone();
-            menu.entry(label, None, move |window, cx| {
-                on(command.clone(), window, cx)
-            })
-        });
-        if !pick_agent {
-            return menu;
-        }
-        let menu = if has_items { menu.separator() } else { menu };
-        AGENT_CHOICES
-            .iter()
-            .fold(menu.header("Pick agent"), |menu, choice| {
-                let on = on.clone();
-                let id = choice.id.to_owned();
-                menu.entry(choice.label, None, move |window, cx| {
-                    on(PanelCommand::PickAgent(id.clone()), window, cx)
-                })
-            })
-    });
-    MenuLayer::open(menu, position, window, cx);
 }
 
 /// The agent of a stage with an agent of its own, with its model when the args name one.
@@ -190,6 +130,7 @@ fn tile(input: &CardInput, tone: NodeTone, accent: Hsla, cx: &App) -> Div {
     let colors = cx.theme().colors();
     let muted = tone.muted();
     div()
+        .debug_selector(|| "node-tile".into())
         .relative()
         .flex_none()
         .size(rems_from_px(if input.compact {
@@ -220,8 +161,9 @@ fn tile(input: &CardInput, tone: NodeTone, accent: Hsla, cx: &App) -> Div {
 }
 
 /// The name with its marks: agent, the person mark of a manual gate, rounds and the workflow.
-/// The row clips instead of wrapping, so a narrow node keeps its height.
-fn name_row(input: &CardInput, tone: NodeTone, cx: &App) -> Div {
+/// The row clips instead of wrapping, so a narrow node keeps its height. `fill`: the row has the
+/// node's width (an open node); a folded node's row is as wide as its content.
+fn name_row(input: &CardInput, tone: NodeTone, fill: bool, cx: &App) -> Div {
     let entry = &input.entry;
     let manual = input.stage.gate == Gate::Manual && input.stage.kind != StageKind::Release;
     let name = Label::new(entry.name.clone())
@@ -235,15 +177,19 @@ fn name_row(input: &CardInput, tone: NodeTone, cx: &App) -> Div {
         .when(tone.struck(), |label| label.strikethrough())
         .truncate();
     h_flex()
+        .debug_selector(|| "node-name".into())
         .min_w_0()
         .gap_1p5()
         .overflow_hidden()
-        // The name keeps its width up to 70%, so the agent chip gives way first.
+        // The name keeps its width up to 70%, so the agent chip gives way first. A row as wide as
+        // its content would cut the name at 70% of itself, so there the name shrinks too.
         .child(
             div()
                 .min_w_0()
-                .flex_shrink_0()
-                .max_w(relative(if input.compact { 1. } else { 0.7 }))
+                .when(fill, |this| {
+                    this.flex_shrink_0()
+                        .max_w(relative(if input.compact { 1. } else { 0.7 }))
+                })
                 .child(name),
         )
         .children(agent_chip(&input.stage, input.compact))
@@ -284,6 +230,7 @@ fn meta_line(word: Option<&str>, facts: &[String], tone: NodeTone, accent: Hsla)
     };
     Some(
         h_flex()
+            .debug_selector(|| "node-meta".into())
             .min_w_0()
             .gap_1()
             .overflow_hidden()
@@ -304,81 +251,54 @@ fn meta_line(word: Option<&str>, facts: &[String], tone: NodeTone, accent: Hsla)
     )
 }
 
-/// The "..." button: always there on the current node, on hover for the others.
-fn more_button(
-    input: &CardInput,
-    current: bool,
-    group: SharedString,
-    on: &OnCommand,
-) -> Option<IconButton> {
-    let (items, pick_agent) = menu_commands(input);
-    if items.is_empty() && !pick_agent {
-        return None;
-    }
-    let on = on.clone();
-    Some(
-        IconButton::new(
-            SharedString::from(format!("more-{}", input.entry.stage)),
-            IconName::Ellipsis,
-        )
-        .icon_size(IconSize::Small)
-        .tooltip(Tooltip::text("More"))
-        .when(!current, |button| button.visible_on_hover(group))
-        .on_click(move |event: &ClickEvent, window, cx| {
-            // The header folds on a click; this one only opens the menu.
-            cx.stop_propagation();
-            open_more_menu(
-                items.clone(),
-                pick_agent,
-                on.clone(),
-                event.position(),
-                window,
-                cx,
-            );
-        }),
-    )
-}
-
-/// The header row: tile, text, "..." . A finished or upcoming node folds on a click, Enter and
+/// The header row: tile and text. A folded node centres them as one group; an open node keeps
+/// them left, in line with its body. A finished or upcoming node folds on a click, Enter and
 /// Space, as the finished card did.
 fn header(
     input: &CardInput,
     tone: NodeTone,
     accent: Hsla,
     foldable: bool,
+    open: bool,
     on: &OnCommand,
     cx: &App,
 ) -> Stateful<Div> {
     let colors = cx.theme().colors();
     let entry = &input.entry;
-    let current = entry.status == StageStatus::Current;
-    let group = SharedString::from(format!("node-{}", entry.stage));
     let word = chip_word(input.facts.chip);
     let facts = fact_parts(input);
     let tip = tooltip_text(&entry.name, word, &facts);
     let hover_bg = colors.ghost_element_hover;
     let ring = colors.border_focused;
+    // The lines of the text stay left of one another; only the group moves to the centre.
     let texts = v_flex()
-        .flex_1()
+        .debug_selector(|| "node-texts".into())
+        .when(open, |this| this.flex_1())
         .min_w_0()
         .gap(rems_from_px(1.0_f32))
-        .child(name_row(input, tone, cx))
+        .child(name_row(input, tone, open, cx))
         .children(meta_line(word, &facts, tone, accent));
+    // Inside the node's 1 px border, so the hover fill meets it with the inner radius.
+    let radius = rems_from_px(NODE_RADIUS - 1.);
     let head = h_flex()
         .id(SharedString::from(format!("fold-{}", entry.stage)))
-        .group(group.clone())
         .w_full()
         .items_center()
+        .when(!open, |this| this.justify_center())
         .gap(rems_from_px(PAD))
-        // A clear 2 px border holds the keyboard focus ring without moving the content.
-        .px(rems_from_px(PAD - 2.))
-        .py(rems_from_px(6.0_f32))
+        // A clear border holds the keyboard focus ring without moving the content.
+        .p(rems_from_px(INSET - FOCUS))
         .border_2()
         .border_color(gpui::transparent_black())
-        .rounded(rems_from_px(NODE_RADIUS))
+        .map(|this| {
+            if open {
+                this.rounded_t(radius)
+            } else {
+                this.rounded(radius)
+            }
+        })
         .child(tile(input, tone, accent, cx))
         .child(texts)
-        .children(more_button(input, current, group, on))
         .tooltip(Tooltip::text(tip));
     if !foldable {
         return head;
@@ -446,10 +366,11 @@ pub(super) fn node(input: CardInput, on: &OnCommand, cx: &App) -> AnyElement {
         NodeTone::NotTaken => 0.55,
         _ => 1.,
     };
-    let head = header(&input, tone, accent, foldable, on, cx);
+    let head = header(&input, tone, accent, foldable, open, on, cx);
     // gpui has no dotted border: a not-taken node is dashed and faint.
     v_flex()
         .id(SharedString::from(format!("card-{}", entry.stage)))
+        .debug_selector(|| "node-card".into())
         .relative()
         .w_full()
         .min_w_0()
@@ -471,8 +392,8 @@ pub(super) fn node(input: CardInput, on: &OnCommand, cx: &App) -> AnyElement {
             this.child(
                 v_flex()
                     .gap_2()
-                    .px(rems_from_px(PAD))
-                    .pb(rems_from_px(PAD))
+                    .px(rems_from_px(INSET))
+                    .pb(rems_from_px(INSET))
                     .children(parts),
             )
         })
