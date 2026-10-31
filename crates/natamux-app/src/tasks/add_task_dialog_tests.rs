@@ -60,7 +60,8 @@ fn open_dialog(dashboard: &Entity<Dashboard>, cx: &mut VisualTestContext) -> Ent
     cx.update(|window, cx| super::open(dashboard, None, window, cx));
     cx.run_until_parked();
     let view = cx.update(|_, cx| DialogLayer::top_view(cx)).expect("open");
-    view.downcast::<AddTaskDialog>().ok().expect("the add task dialog")
+    view.downcast::<AddTaskDialog>()
+        .expect("the add task dialog")
 }
 
 fn titled(dashboard: &Entity<Dashboard>, title: &str, cx: &mut VisualTestContext) -> Vec<Task> {
@@ -124,7 +125,9 @@ fn t17_the_project_and_template_menus_pick_what_enter_adds(cx: &mut TestAppConte
     press(cx, "tab");
     activate(cx);
     click_on(cx, "MENU_ITEM-Bug report");
-    let picked = dialog.read_with(cx, |dialog, _| (dialog.repo.clone(), dialog.template.clone()));
+    let picked = dialog.read_with(cx, |dialog, _| {
+        (dialog.repo.clone(), dialog.template.clone())
+    });
     assert_eq!(
         picked,
         (Some("natamux-site".to_string()), Some("bug".to_string()))

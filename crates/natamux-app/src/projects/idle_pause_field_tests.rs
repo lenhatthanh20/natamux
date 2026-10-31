@@ -6,8 +6,8 @@
 
 use gpui::{AppContext as _, Entity, Focusable, TestAppContext, VisualTestContext};
 
-use super::IdlePauseField;
 use super::super::settings_tab_rules::IDLE_PAUSE_ERROR;
+use super::IdlePauseField;
 use crate::app::test_driver::{press, text_of, type_text};
 use crate::app::test_views;
 use crate::stages::pipeline_editor::PipelineEditor;
@@ -25,7 +25,10 @@ fn start(cx: &mut TestAppContext) -> (Entity<IdlePauseField>, &mut VisualTestCon
     (field, cx)
 }
 
-fn state(field: &Entity<IdlePauseField>, cx: &mut VisualTestContext) -> (String, Option<u64>, Option<&'static str>) {
+fn state(
+    field: &Entity<IdlePauseField>,
+    cx: &mut VisualTestContext,
+) -> (String, Option<u64>, Option<&'static str>) {
     let (editor, minutes, error) = field.read_with(cx, |field, cx| {
         let minutes = field.pipeline.read(cx).pause_idle_minutes();
         (field.editor.clone(), minutes, field.error)
@@ -57,7 +60,9 @@ fn t13_idle_pause_good_values_write_the_draft_and_bad_ones_do_not(cx: &mut TestA
         }
         let got = state(&field, cx);
         if got != (typed.to_string(), minutes, error) {
-            wrong.push(format!("{typed:?}: got {got:?}, want {minutes:?} {error:?}"));
+            wrong.push(format!(
+                "{typed:?}: got {got:?}, want {minutes:?} {error:?}"
+            ));
         }
     }
     assert!(wrong.is_empty(), "\n{}", wrong.join("\n"));
@@ -69,14 +74,21 @@ fn t13_idle_pause_shows_a_change_from_elsewhere_only_without_the_focus(cx: &mut 
     let pipeline = field.read_with(cx, |field, _| field.pipeline.clone());
     press(cx, "mod-a");
     type_text(cx, "2");
-    pipeline.update(cx, |pipeline, cx| pipeline.set_pause_idle_minutes(Some(90), cx));
+    pipeline.update(cx, |pipeline, cx| {
+        pipeline.set_pause_idle_minutes(Some(90), cx)
+    });
     cx.run_until_parked();
-    assert_eq!(state(&field, cx), ("2".to_string(), Some(90), Some(IDLE_PAUSE_ERROR)));
+    assert_eq!(
+        state(&field, cx),
+        ("2".to_string(), Some(90), Some(IDLE_PAUSE_ERROR))
+    );
 
     cx.update(|window, cx| window.blur(cx));
     cx.run_until_parked();
     assert_eq!(state(&field, cx).0, "2");
-    pipeline.update(cx, |pipeline, cx| pipeline.set_pause_idle_minutes(Some(15), cx));
+    pipeline.update(cx, |pipeline, cx| {
+        pipeline.set_pause_idle_minutes(Some(15), cx)
+    });
     cx.run_until_parked();
     assert_eq!(state(&field, cx), ("15".to_string(), Some(15), None));
 }

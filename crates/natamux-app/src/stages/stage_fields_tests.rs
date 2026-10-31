@@ -11,12 +11,12 @@ use gpui::{Entity, Focusable, TestAppContext, VisualTestContext, point, px};
 use natamux_proto::stages::prompt::{PROMPT_PLACEHOLDERS, skill_placeholder};
 use natamux_proto::stages::schema::Stage;
 
-use super::insert_at_cursor;
 use super::super::editor_fields::{TextField, set_text};
 use super::super::editor_find::find_stage;
 use super::super::pipeline_editor::PipelineEditor;
 use super::super::stage_details::DetailsPane;
 use super::super::stage_fields_view::change;
+use super::insert_at_cursor;
 use crate::app::test_driver::{is_focused, press, text_of, type_text};
 use crate::app::test_views;
 use crate::projects::project_settings_page::ProjectSettingsPage;
@@ -59,7 +59,9 @@ fn field(fields: &Fields, which: TextField, cx: &mut VisualTestContext) -> Entit
 
 fn stage_of(fields: &Fields, id: &str, cx: &mut VisualTestContext) -> Stage {
     fields.pipeline.read_with(cx, |pipeline, _| {
-        find_stage(pipeline.steps(), id).cloned().expect("in the draft")
+        find_stage(pipeline.steps(), id)
+            .cloned()
+            .expect("in the draft")
     })
 }
 
@@ -109,7 +111,10 @@ fn t12_use_default_puts_the_default_back(cx: &mut TestAppContext) {
     focus(&name, cx);
     press(cx, "end");
     type_text(cx, " it");
-    assert_eq!(stage_of(&fields, STAGE, cx).name.as_deref(), Some("Implement it"));
+    assert_eq!(
+        stage_of(&fields, STAGE, cx).name.as_deref(),
+        Some("Implement it")
+    );
 
     // A click on Use default leaves the focus in the field, which keeps what it shows.
     use_default(&fields, TextField::Name, cx);
@@ -133,7 +138,10 @@ fn t12_use_default_puts_the_default_back(cx: &mut TestAppContext) {
     focus(&prompt, cx);
     press(cx, "mod-a");
     type_text(cx, "Write it.");
-    assert_eq!(stage_of(&fields, STAGE, cx).prompt.as_deref(), Some("Write it."));
+    assert_eq!(
+        stage_of(&fields, STAGE, cx).prompt.as_deref(),
+        Some("Write it.")
+    );
     focus(&page, cx);
     use_default(&fields, TextField::Prompt, cx);
     assert_eq!(stage_of(&fields, STAGE, cx).prompt, None);
@@ -148,7 +156,11 @@ fn t12_a_switch_to_another_stage_closes_the_skills_menu(cx: &mut TestAppContext)
         details.toggle_skills(point(px(10.), px(10.)), window, cx)
     });
     cx.run_until_parked();
-    assert!(fields.details.read_with(cx, |details, _| details.skill_menu.is_some()));
+    assert!(
+        fields
+            .details
+            .read_with(cx, |details, _| details.skill_menu.is_some())
+    );
     fields
         .pipeline
         .update(cx, |pipeline, cx| pipeline.select(OTHER, cx));
@@ -198,5 +210,9 @@ fn t12_insert_skill_puts_the_skill_at_the_cursor(cx: &mut TestAppContext) {
     assert_eq!(after, format!("{}{before}", skill_placeholder(SKILL)));
     assert_eq!(stage_of(&fields, STAGE, cx).prompt, Some(after));
     assert!(is_focused(&prompt, cx));
-    assert!(fields.details.read_with(cx, |details, _| details.skill_menu.is_none()));
+    assert!(
+        fields
+            .details
+            .read_with(cx, |details, _| details.skill_menu.is_none())
+    );
 }

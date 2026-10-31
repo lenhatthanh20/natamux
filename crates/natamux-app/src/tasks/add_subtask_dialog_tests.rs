@@ -17,16 +17,27 @@ const PARENT: &str = "T-0146";
 /// Chosen before the dialog opens.
 const CHOSEN: &str = "T-0143";
 
-fn open_dialog(dashboard: &Entity<Dashboard>, cx: &mut VisualTestContext) -> Entity<AddSubtaskDialog> {
-    dashboard.update(cx, |dashboard, cx| dashboard.select(Some(CHOSEN.into()), cx));
+fn open_dialog(
+    dashboard: &Entity<Dashboard>,
+    cx: &mut VisualTestContext,
+) -> Entity<AddSubtaskDialog> {
+    dashboard.update(cx, |dashboard, cx| {
+        dashboard.select(Some(CHOSEN.into()), cx)
+    });
     cx.update(|window, cx| {
         init(dashboard, cx);
-        let parent = dashboard.read(cx).data.task(PARENT).cloned().expect("a task");
+        let parent = dashboard
+            .read(cx)
+            .data
+            .task(PARENT)
+            .cloned()
+            .expect("a task");
         open(parent, window, cx);
     });
     cx.run_until_parked();
     let view = cx.update(|_, cx| DialogLayer::top_view(cx)).expect("open");
-    view.downcast::<AddSubtaskDialog>().ok().expect("the add subtask dialog")
+    view.downcast::<AddSubtaskDialog>()
+        .expect("the add subtask dialog")
 }
 
 fn children(dashboard: &Entity<Dashboard>, cx: &mut VisualTestContext) -> Vec<Task> {

@@ -43,7 +43,9 @@ fn open_settings(cx: &mut TestAppContext) -> (Open, &mut VisualTestContext) {
         settings.show(SettingsFocus::Page, window, cx)
     });
     cx.run_until_parked();
-    let page = settings.read_with(cx, |settings, _| settings.project_page(PROJECT).expect("made"));
+    let page = settings.read_with(cx, |settings, _| {
+        settings.project_page(PROJECT).expect("made")
+    });
     let pipeline = page.read_with(cx, |page, _| page.pipeline().expect("read"));
     let open = Open {
         settings,
@@ -67,8 +69,9 @@ fn send_backs_of(raw: &Map<String, Value>) -> Option<u64> {
 }
 
 fn edit(open: &Open, most: usize, cx: &mut VisualTestContext) {
-    open.pipeline
-        .update(cx, |pipeline, cx| pipeline.set_max_send_backs(Some(most), cx));
+    open.pipeline.update(cx, |pipeline, cx| {
+        pipeline.set_max_send_backs(Some(most), cx)
+    });
     cx.run_until_parked();
 }
 
@@ -111,7 +114,10 @@ fn t15_mod_enter_is_ignored_while_saving(cx: &mut TestAppContext) {
     cx.run_until_parked();
     assert_eq!(file().0.as_deref(), Some("v2"));
     assert!(!open.page.read_with(cx, |page, _| page.conflict));
-    assert!(open.dashboard.read_with(cx, |dashboard, _| dashboard.settings.is_some()));
+    assert!(
+        open.dashboard
+            .read_with(cx, |dashboard, _| dashboard.settings.is_some())
+    );
 }
 
 #[gpui::test]
@@ -187,9 +193,9 @@ fn t15_discard_asks_then_drops_the_draft(cx: &mut TestAppContext) {
     assert!(dialog_open(cx));
     press(cx, "mod-enter");
     assert!(!dialog_open(cx));
-    let page = open
-        .settings
-        .read_with(cx, |settings, _| settings.project_page(PROJECT).expect("made again"));
+    let page = open.settings.read_with(cx, |settings, _| {
+        settings.project_page(PROJECT).expect("made again")
+    });
     assert_ne!(page.entity_id(), open.page.entity_id());
     assert!(!page.read_with(cx, |page, cx| page.dirty(cx)));
     assert_eq!(file().0.as_deref(), Some("v1"));
@@ -229,7 +235,10 @@ fn t15_import_over_changes_asks_then_takes_the_file(cx: &mut TestAppContext) {
     let picked = path.clone();
     cx.simulate_path_prompt_response(move |_| Some(vec![picked]));
     cx.run_until_parked();
-    assert!(dialog_open(cx), "no question before the changes are replaced");
+    assert!(
+        dialog_open(cx),
+        "no question before the changes are replaced"
+    );
     press(cx, "mod-enter");
     let (draft, most) = open.pipeline.read_with(cx, |pipeline, _| {
         (pipeline.text().to_owned(), pipeline.max_send_backs())
@@ -270,9 +279,15 @@ fn t15_esc_closes_the_stage_picker_before_settings(cx: &mut TestAppContext) {
     cx.run_until_parked();
     press(cx, "escape");
     assert!(!open.pipeline.read_with(cx, |pipeline, _| pipeline.picking));
-    assert!(open.dashboard.read_with(cx, |dashboard, _| dashboard.settings.is_some()));
+    assert!(
+        open.dashboard
+            .read_with(cx, |dashboard, _| dashboard.settings.is_some())
+    );
     press(cx, "escape");
-    assert!(open.dashboard.read_with(cx, |dashboard, _| dashboard.settings.is_none()));
+    assert!(
+        open.dashboard
+            .read_with(cx, |dashboard, _| dashboard.settings.is_none())
+    );
 }
 
 #[gpui::test]

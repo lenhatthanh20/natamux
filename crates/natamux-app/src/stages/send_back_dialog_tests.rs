@@ -55,7 +55,11 @@ fn progress() -> Vec<StageProgress> {
 
 fn task_of(dashboard: &Entity<Dashboard>, id: &str, cx: &mut VisualTestContext) -> Task {
     dashboard.read_with(cx, |dashboard, _| {
-        dashboard.data.task(id).cloned().expect("a task of the fake")
+        dashboard
+            .data
+            .task(id)
+            .cloned()
+            .expect("a task of the fake")
     })
 }
 
@@ -71,12 +75,14 @@ fn open_for(
     dialog
 }
 
-/// The payloads of the `stage.reopened` events of the task so far.
+/// The payloads of the `stage.reopened` events a person sent. The fake's own send back of the
+/// task, by an agent, has no `from`.
 fn reopened(task: &str) -> Vec<Map<String, Value>> {
     let events = fake_daemon::shared().list_events(task).unwrap_or_default();
     events
         .into_iter()
         .filter(|stored| stored.event.kind == "stage.reopened")
+        .filter(|stored| stored.event.payload.contains_key("from"))
         .map(|stored| stored.event.payload)
         .collect()
 }

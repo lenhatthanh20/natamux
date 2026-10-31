@@ -34,7 +34,7 @@ fn open(dashboard: &Entity<Dashboard>, cx: &mut VisualTestContext) -> Entity<Fan
     });
     cx.run_until_parked();
     let view = cx.update(|_, cx| DialogLayer::top_view(cx)).expect("open");
-    view.downcast::<FanOutDialog>().ok().expect("the fan out dialog")
+    view.downcast::<FanOutDialog>().expect("the fan out dialog")
 }
 
 fn is_open(cx: &mut VisualTestContext) -> bool {

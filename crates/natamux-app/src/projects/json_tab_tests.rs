@@ -19,7 +19,11 @@ const CHANGED: &str = "{\n  \"agents\": {\n    \"maxSendBacks\": 3\n  }\n}\n";
 
 fn start(
     cx: &mut TestAppContext,
-) -> (Entity<PipelineEditor>, Entity<Editor>, &mut VisualTestContext) {
+) -> (
+    Entity<PipelineEditor>,
+    Entity<Editor>,
+    &mut VisualTestContext,
+) {
     let (tab, _, cx) = test_views::init_app(cx, |_, window, cx| {
         let pipeline = cx.new(|_| PipelineEditor::new(DRAFT));
         cx.new(|cx| JsonTab::new(pipeline, window, cx))
@@ -67,17 +71,19 @@ fn t14_a_text_from_outside_keeps_the_caret_and_the_undo(cx: &mut TestAppContext)
     assert_eq!(selection_of(&editor, cx), 1..1);
     assert_eq!(draft(&pipeline, cx), (outside.clone(), false));
 
-    // Undo takes back the outside text first, then the space typed before it.
+    // The typed space and the outside text are one undo step: the buffer groups edits by real
+    // time, and none passes in the test window (`advance_clock` does not split them either).
+    // So one undo takes back both, and a second has nothing left.
     press(cx, "mod-z");
     let once = text_of(&editor, cx);
     press(cx, "mod-z");
     let twice = text_of(&editor, cx);
     assert_eq!(
         (once.as_str(), twice.as_str()),
-        (format!(" {DRAFT}").as_str(), DRAFT),
+        (DRAFT, DRAFT),
         "undo after a text from outside"
     );
-    assert_eq!(draft(&pipeline, cx).0, twice);
+    assert_eq!(draft(&pipeline, cx), (DRAFT.to_string(), false));
 }
 
 #[gpui::test]
@@ -121,7 +127,10 @@ fn t14_a_language_that_loads_after_typing_keeps_the_text(cx: &mut TestAppContext
     cx.run_until_parked();
     let language = editor.read_with(cx, |editor, cx| {
         let buffer = editor.buffer().read(cx).as_singleton().expect("one buffer");
-        buffer.read(cx).language().map(|language| language.name().to_string())
+        buffer
+            .read(cx)
+            .language()
+            .map(|language| language.name().to_string())
     });
     assert_eq!(language.as_deref(), Some("JSON"));
     let shown = text_of(&editor, cx);

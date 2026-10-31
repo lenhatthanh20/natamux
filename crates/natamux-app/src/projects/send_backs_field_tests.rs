@@ -6,8 +6,8 @@
 
 use gpui::{AppContext as _, Entity, Focusable, TestAppContext, VisualTestContext};
 
-use super::SendBacksField;
 use super::super::settings_tab_rules::SEND_BACKS_ERROR;
+use super::SendBacksField;
 use crate::app::test_driver::{press, text_of, type_text};
 use crate::app::test_views;
 use crate::stages::pipeline_editor::PipelineEditor;
@@ -26,7 +26,10 @@ fn start(cx: &mut TestAppContext) -> (Entity<SendBacksField>, &mut VisualTestCon
 }
 
 /// The text, the draft's value and the error after the field shows `typed`.
-fn state(field: &Entity<SendBacksField>, cx: &mut VisualTestContext) -> (String, Option<usize>, Option<&'static str>) {
+fn state(
+    field: &Entity<SendBacksField>,
+    cx: &mut VisualTestContext,
+) -> (String, Option<usize>, Option<&'static str>) {
     let (editor, most, error) = field.read_with(cx, |field, cx| {
         let most = field.pipeline.read(cx).max_send_backs();
         (field.editor.clone(), most, field.error)
@@ -71,7 +74,10 @@ fn t13_send_backs_show_a_change_from_elsewhere_only_without_the_focus(cx: &mut T
     type_text(cx, "x");
     pipeline.update(cx, |pipeline, cx| pipeline.set_max_send_backs(Some(9), cx));
     cx.run_until_parked();
-    assert_eq!(state(&field, cx), ("x".to_string(), Some(9), Some(SEND_BACKS_ERROR)));
+    assert_eq!(
+        state(&field, cx),
+        ("x".to_string(), Some(9), Some(SEND_BACKS_ERROR))
+    );
 
     cx.update(|window, cx| window.blur(cx));
     cx.run_until_parked();

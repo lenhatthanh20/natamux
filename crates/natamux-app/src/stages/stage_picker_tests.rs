@@ -9,10 +9,10 @@
 
 use gpui::{Entity, FocusHandle, Focusable, TestAppContext, VisualTestContext};
 
-use super::StagePicker;
 use super::super::editor_catalog::{custom_stage_problems, picker_groups, visible_problems};
 use super::super::editor_find::find_stage;
 use super::super::pipeline_editor::PipelineEditor;
+use super::StagePicker;
 use crate::app::test_driver::{activate, is_focused, press, text_of, type_text};
 use crate::app::test_views;
 use crate::projects::project_settings_page::ProjectSettingsPage;
@@ -74,7 +74,9 @@ fn open_form(picking: &Picking, cx: &mut VisualTestContext) {
 fn t11_add_stage_opens_the_picker_with_the_focus_in_its_search(cx: &mut TestAppContext) {
     let (page, _, cx) = test_views::init_project_page(cx);
     let picking = open_picker(&page, cx);
-    let search = picking.picker.read_with(cx, |picker, _| picker.search.clone());
+    let search = picking
+        .picker
+        .read_with(cx, |picker, _| picker.search.clone());
     assert!(is_focused(&search, cx));
     type_text(cx, "lint");
     assert_eq!(text_of(&search, cx), "lint");
@@ -112,13 +114,19 @@ fn t11_the_id_follows_the_name_until_it_is_typed(cx: &mut TestAppContext) {
     focus(&id, cx);
     press(cx, "end");
     type_text(cx, "-2");
-    assert_eq!(own_id(&picking.picker, cx).as_deref(), Some("read-the-plan-2"));
+    assert_eq!(
+        own_id(&picking.picker, cx).as_deref(),
+        Some("read-the-plan-2")
+    );
     focus(&name, cx);
     press(cx, "end");
     type_text(cx, " again");
     assert_eq!(
         form_texts(&picking.picker, cx),
-        ("Read the plan again".to_string(), "read-the-plan-2".to_string())
+        (
+            "Read the plan again".to_string(),
+            "read-the-plan-2".to_string()
+        )
     );
 }
 
@@ -166,7 +174,8 @@ fn t11_problems_show_after_the_first_try_and_adding_selects_the_stage(cx: &mut T
     });
     assert_eq!(picked.as_deref(), Some("smoke-test"));
     assert!(!picking_now);
-    assert_eq!(added, Some(Some("Smoke test".to_string())));
+    // A name the id gives back ("smoke-test" reads "Smoke test") is left out of the stage.
+    assert_eq!(added, Some(None));
     // The picker closed, so the focus is back on Add stage.
     assert!(focused(&picking.add_stage, cx));
 }
