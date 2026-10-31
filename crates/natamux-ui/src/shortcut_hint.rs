@@ -6,7 +6,7 @@ use std::rc::Rc;
 
 use gpui::{
     AbsoluteLength, AnyElement, App, IntoElement, KeybindingKeystroke, Modifiers, ParentElement,
-    RenderOnce, SharedString, Styled, Window, px, relative,
+    RenderOnce, SharedString, Styled, Window, prelude::FluentBuilder, px, relative,
 };
 use zed_ui::{Color, IconName};
 
@@ -117,13 +117,18 @@ fn key_icon(key: &str) -> Option<IconName> {
     })
 }
 
-/// Text of a hint: 2 px of room on each side, one line exactly as high as the text, and at least
-/// as wide as an icon key, with the text in the middle.
+/// Text of a hint, one line exactly as high as the text. One character sits in the middle of a
+/// square as wide as an icon key, even when it is wider; longer text has 2 px on each side.
 fn text_part(text: String, size: AbsoluteLength) -> AnyElement {
+    let one_char = text.chars().count() == 1;
     h_flex()
-        .justify_center()
-        .min_w(size)
-        .px(px(2.))
+        .map(|this| {
+            if one_char {
+                this.w(size).justify_center()
+            } else {
+                this.px(px(2.))
+            }
+        })
         .text_size(size)
         .line_height(relative(1.))
         .child(text)
