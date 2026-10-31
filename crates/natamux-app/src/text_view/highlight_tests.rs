@@ -64,6 +64,19 @@ fn every_query_compiles() {
 }
 
 #[test]
+fn a_language_outside_the_table_is_refused() {
+    let lang: &'static Lang = Box::leak(Box::new(Lang {
+        name: "test",
+        suffixes: &[],
+        grammar: || tree_sitter_json::LANGUAGE.into(),
+        queries: &[],
+        renames: &[],
+    }));
+    assert!(Highlights::of(lang).is_err());
+    assert!(Highlights::of(&LANGS[0]).is_ok());
+}
+
+#[test]
 fn a_path_finds_its_language_as_the_old_registry_did() {
     let name = |path| lang_for(path).map(|lang| lang.name);
     assert_eq!(name("src/main.rs"), Some("Rust"));
