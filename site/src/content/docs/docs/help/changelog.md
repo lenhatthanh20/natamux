@@ -7,6 +7,13 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v1.0.13 (2026-10-31)
+
+- Add a custom agent in **Settings → Agents**: a built-in agent with your own command, or any other agent CLI. It shows in every agent picker. See [Custom agents](/docs/guides/desktop-app/#custom-agents).
+- The desktop app sidebar shows each task as a card with its state, agents, stage, branch and diff, and the question of a task that waits for you. Click to open or fold a card; right click opens the menu.
+- The **Progress** view shows the stages as a node flow, with an **If** box per branch. The "..." menu on stage nodes is gone; its actions stay on the node. See [Progress](/docs/concepts/stages/#progress).
+- The terminal right-click menu no longer shows New Terminal, New Center Terminal and Close Terminal Tab, which did nothing.
+
 ## v1.0.12 (2026-10-31)
 
 - Install or update the desktop app with one command: `curl -fsSL https://natamux.github.io/install.sh | sh` on macOS, Debian and Ubuntu, or `irm https://natamux.github.io/install.ps1 | iex` on Windows. The script checks the checksum, and the signature when minisign is installed. See [Install with one command](/docs/getting-started/install/#install-with-one-command).
