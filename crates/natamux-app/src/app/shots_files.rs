@@ -157,7 +157,7 @@ fn file_draft(task: &str, path: &str, cx: &mut App) {
 }
 
 /// An edit of the stage file that began on its time now, so no stale line shows.
-fn doc_draft(task: &str, name: &str, cx: &mut App) {
+pub(super) fn doc_draft(task: &str, name: &str, cx: &mut App) {
     let fake = fake_daemon::shared();
     let (Ok(file), Ok(list)) = (
         fake.read_stage_file(task, name),

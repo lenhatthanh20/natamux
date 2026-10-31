@@ -337,6 +337,12 @@ impl ChangesView {
         self.pending.is_some()
     }
 
+    /// The commit message box, once it was drawn, for the flow tests.
+    #[cfg(test)]
+    pub fn commit_box(&self) -> Option<Entity<Editor>> {
+        self.message.clone()
+    }
+
     pub(super) fn editing(&self, window: &Window, cx: &App) -> bool {
         let focused = |editor: &Option<Entity<Editor>>| {
             editor
