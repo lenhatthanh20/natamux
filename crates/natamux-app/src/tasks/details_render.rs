@@ -15,7 +15,6 @@ use super::run::agent_of;
 use crate::agents::agent_choices::agent_label;
 use crate::app::clock::now_ms;
 use crate::components::detail_section::DetailSection;
-use crate::stages::card_rules::selected_stage;
 use crate::stages::progress_tab::{ProgressInput, current_step, timeline};
 use crate::stages::stage_view_rules::path_label;
 use crate::tasks::details_commands::{OnCommand, PanelCommand};
@@ -65,7 +64,6 @@ impl DetailsPanel {
             .collect();
         let dashboard = self.dashboard.read(cx);
         let beside = dashboard.open_task.as_deref() == Some(task.id.as_str());
-        let selected = selected_stage(shown.picked.as_deref(), &progress);
         Some(ProgressInput {
             steps,
             progress,
@@ -81,7 +79,7 @@ impl DetailsPanel {
             busy: shown.busy,
             resuming: shown.resuming,
             toggling: shown.toggling.clone(),
-            selected,
+            selected: shown.picked.clone(),
             task_agent: agent_of(task),
             open_lanes: shown.open_lanes.clone(),
             open_evidence: shown.open_evidence.clone(),
