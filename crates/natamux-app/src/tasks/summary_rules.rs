@@ -4,6 +4,7 @@
 use natamux_proto::agents::activity::TaskUsage;
 use natamux_proto::tasks::task::Task;
 
+use super::details_rules::pull_request_label;
 use super::table_rules::{
     ChecksTone, format_tokens, format_usd, pull_request_cell, pull_request_number,
 };
@@ -14,7 +15,7 @@ pub const NO_PR: &str = "No PR yet";
 #[derive(Clone, Debug, PartialEq)]
 pub struct PrFacts {
     pub url: String,
-    /// "#569", or "Pull request" when the address has no number.
+    /// "#569", or the address without "https://github.com/" when it has no number.
     pub label: String,
     /// "open · checks pass" and its tone; None until GitHub answered.
     pub status: Option<(String, ChecksTone)>,
@@ -33,7 +34,10 @@ pub struct SummaryFacts {
 pub fn summary_facts(task: &Task, usage: Option<&TaskUsage>) -> SummaryFacts {
     let pr = task.pr.as_ref().map(|url| PrFacts {
         url: url.clone(),
-        label: pull_request_number(url),
+        label: match pull_request_number(url) {
+            number if number.starts_with('#') => number,
+            _ => pull_request_label(url).to_string(),
+        },
         status: pull_request_cell(task).map(|(text, tone)| (text.replace(", ", " · "), tone)),
     });
     SummaryFacts {

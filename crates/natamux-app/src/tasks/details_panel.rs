@@ -413,26 +413,30 @@ impl Render for DetailsPanel {
             .children(summary)
             .map(|this| match tree {
                 Some(tree) => this.child(v_flex().flex_1().min_h_0().child(tree)),
-                // The dot grid fills the whole body, also below the last step, and the flow
-                // scrolls over it.
-                None => this.child(
-                    v_flex()
-                        .relative()
-                        .flex_1()
-                        .min_h_0()
-                        .when(progress, |this| this.child(dot_grid(cx)))
-                        .child(
-                            v_flex()
-                                .id("details-body")
-                                .flex_1()
-                                .min_h_0()
-                                .overflow_y_scroll()
-                                .track_scroll(&self.scroll)
-                                .children(body),
-                        ),
-                ),
+                None => this.child(self.scroll_body(progress, body, cx)),
             })
             .into_any_element()
+    }
+}
+
+impl DetailsPanel {
+    /// The scrolling body. On Progress the dot grid fills all of it, also below the last step,
+    /// and the flow scrolls over it.
+    fn scroll_body(&self, progress: bool, body: Vec<AnyElement>, cx: &App) -> impl IntoElement {
+        v_flex()
+            .relative()
+            .flex_1()
+            .min_h_0()
+            .when(progress, |this| this.child(dot_grid(cx)))
+            .child(
+                v_flex()
+                    .id("details-body")
+                    .flex_1()
+                    .min_h_0()
+                    .overflow_y_scroll()
+                    .track_scroll(&self.scroll)
+                    .children(body),
+            )
     }
 }
 
