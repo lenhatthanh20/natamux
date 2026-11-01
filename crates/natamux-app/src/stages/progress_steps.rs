@@ -9,7 +9,7 @@ use ui::prelude::*;
 
 use super::Ctx;
 use super::flow::{Around, Edge, link_after, ported};
-use crate::stages::flow_lines::{FlowLink, JoinDot, PairCurves, Port};
+use crate::stages::flow_lines::{FlowLink, JoinDot, PairCurves};
 use crate::stages::flow_rules::{
     CaretAt, GroupLayout, LinkStyle, PAIR_GAP, group_layout, join_style, link_style,
 };
@@ -84,15 +84,13 @@ impl Ctx<'_> {
         let details = self
             .details_of([first], CaretAt::Left, cx)
             .or_else(|| self.details_of([second], CaretAt::Right, cx));
-        let open = details.is_some();
         let side = |stage: &Stage| {
             let edge = self.stage_edge(&stage.id);
             let into = link_style(prev, edge.status, edge.state);
             let card = self
                 .card(&stage.id, true, cx)
                 .unwrap_or_else(|| div().into_any_element());
-            let out = (!open).then_some(join_style(edge.status));
-            let node = ported(card, Some(into), out).flex_1().min_w_0();
+            let node = ported(card).flex_1().min_w_0();
             (edge, into, node)
         };
         let (left, left_into, left_node) = side(first);
@@ -136,9 +134,7 @@ impl Ctx<'_> {
                     .parallel
                     .iter()
                     .filter_map(|stage| self.card(&stage.id, false, cx)),
-            )
-            .child(Port::top(into))
-            .when(!open, |this| this.child(Port::bottom(out)));
+            );
         v_flex()
             .w_full()
             .child(FlowLink::new(into).at_top())

@@ -2,14 +2,14 @@
 //! the ports a node gets, and one column of steps joined by connectors. A path of a branch uses
 //! the same column, so a path that holds a group or a branch needs no new code.
 
-use gpui::{AnyElement, Div, px};
+use gpui::{AnyElement, Div};
 use natamux_proto::stages::progress::StageStatus;
 use natamux_proto::stages::schema::Step;
 use natamux_proto::tasks::task::TaskState;
 use ui::prelude::*;
 
 use super::Ctx;
-use crate::stages::flow_lines::{FlowLink, Port};
+use crate::stages::flow_lines::FlowLink;
 use crate::stages::flow_rules::{CaretAt, LinkStyle, group_status, link_style};
 use crate::stages::stage_view_rules::branch_status;
 
@@ -28,12 +28,6 @@ pub(super) struct Around {
 }
 
 impl Around {
-    /// The connector into a step; none for the first one.
-    pub fn into_style(self, own: Edge) -> Option<LinkStyle> {
-        self.prev
-            .map(|prev| link_style(prev, own.status, own.state))
-    }
-
     /// The connector out of a step; none for the last one.
     pub fn out_style(self, own: Edge) -> Option<LinkStyle> {
         self.next
@@ -41,17 +35,10 @@ impl Around {
     }
 }
 
-/// A node with its ports. The node draws none (contract with `stage_card`), so the box here has
-/// the 1 px border the ports are placed against, and the node sits over that border. The inner
-/// box grows, so a node stretched by a pair row fills it and its bottom port stays on its edge.
-pub(super) fn ported(node: AnyElement, top: Option<LinkStyle>, bottom: Option<LinkStyle>) -> Div {
-    v_flex()
-        .relative()
-        .border_1()
-        .border_color(gpui::transparent_black())
-        .child(v_flex().flex_grow_1().m(px(-1.)).child(node))
-        .children(top.map(Port::top))
-        .children(bottom.map(Port::bottom))
+/// The box of a node in the flow. It grows, so a node stretched by a pair row fills it. The
+/// lines meet the node's box with no port ring (owner, T-0257).
+pub(super) fn ported(node: AnyElement) -> Div {
+    v_flex().child(v_flex().flex_grow_1().child(node))
 }
 
 /// The connector under a step: from its port, or from the top of the box when a details card
@@ -104,7 +91,7 @@ impl Ctx<'_> {
                 let open = details.is_some();
                 v_flex()
                     .w_full()
-                    .child(ported(card, around.into_style(own), out.filter(|_| !open)))
+                    .child(ported(card))
                     .children(details)
                     .children(out.map(|style| link_after(style, open)))
                     .into_any_element()

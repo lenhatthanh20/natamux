@@ -17,9 +17,9 @@ pub const PORT: f32 = 6.;
 /// the middle of the border.
 pub const PORT_OUT: f32 = PORT / 2. - 0.5;
 /// The height of a straight connector between two steps.
-pub const LINK_H: f32 = 16.;
+pub const LINK_H: f32 = 24.;
 /// The height of the fork and the join curves of a pair.
-pub const CURVE_H: f32 = 20.;
+pub const CURVE_H: f32 = 30.;
 /// The gap between the two nodes of a pair.
 pub const PAIR_GAP: f32 = 8.;
 pub const JOIN_DOT: f32 = 8.;

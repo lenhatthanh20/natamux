@@ -5,7 +5,7 @@
 //! edges, so nothing here may clip (no `overflow_hidden` on the root) and the ring is absolute,
 //! so it takes no room. Only the running glyph moves.
 
-use gpui::{AnyElement, Div, FontWeight, Hsla, KeyDownEvent, Stateful};
+use gpui::{AnyElement, BoxShadow, Div, FontWeight, Hsla, KeyDownEvent, Stateful, point, px};
 use natamux_proto::stages::progress::StageStatus;
 use natamux_proto::stages::schema::{Gate, StageKind};
 use ui::{Tooltip, prelude::*};
@@ -25,13 +25,16 @@ use crate::stages::preview_rules::agent_line_text;
 use crate::tasks::details_commands::{OnCommand, PanelCommand};
 use crate::tasks::task_rules::state_label;
 
-const TILE: f32 = 32.;
-/// The tile of a node in a side-by-side pair, so its name has room.
-const TILE_COMPACT: f32 = 24.;
-const TILE_RADIUS: f32 = 8.;
+const TILE: f32 = 36.;
+const TILE_RADIUS: f32 = 10.;
+/// The agent badge on the tile's corner, and how far it pokes out past the tile.
+const BADGE: f32 = 18.;
+const BADGE_OUT: f32 = 6.;
 const NODE_RADIUS: f32 = 9.;
 /// The gap between the tile and the text.
-const PAD: f32 = 10.;
+const PAD: f32 = 12.;
+/// The gap in a node of a side-by-side pair, so its name has room.
+const PAD_COMPACT: f32 = 8.;
 /// The space between the node's edge and its content, the same on every side.
 pub(super) const INSET: f32 = 12.;
 /// The head's clear border, which holds the keyboard focus ring.
@@ -60,9 +63,9 @@ pub(super) fn tooltip_text(name: &str, word: Option<&str>, facts: &[String]) -> 
         .join("\n")
 }
 
-/// The agent of the node as its icon; with `label`, its name too: the stage's own agent with
-/// its model, or "Task's agent · <name>".
-fn agent_chip(input: &CardInput, label: bool) -> Option<AnyElement> {
+/// The node's agent and what its tooltip or label says: the stage's own agent with its model,
+/// or "Task's agent · <name>".
+fn agent_text(input: &CardInput) -> Option<(String, String)> {
     let (agent, tasks) = input.node_agent.clone()?;
     let text = if tasks {
         format!("Task's agent \u{b7} {}", agent_label(Some(&agent)))
@@ -73,101 +76,178 @@ fn agent_chip(input: &CardInput, label: bool) -> Option<AnyElement> {
         };
         agent_line_text(&runner, |agent| agent_label(Some(agent)))
     };
+    Some((agent, text))
+}
+
+/// The agent with its name, on the details card.
+fn agent_chip(input: &CardInput) -> Option<AnyElement> {
+    let (agent, text) = agent_text(input)?;
     Some(
         // Shrinks before the name: in a narrow row the label goes first, the icon stays.
         h_flex()
-            .id(SharedString::from(format!("agent-{}", input.entry.stage)))
             .min_w_0()
             .flex_shrink_1()
             .overflow_hidden()
             .gap_1()
             .child(div().flex_none().child(AgentIcon::new(Some(agent))))
-            .when(label, |this| {
-                this.child(
-                    Label::new(text.clone())
-                        .size(LabelSize::XSmall)
-                        .color(Color::Muted)
-                        .truncate(),
-                )
-            })
-            .when(!label, |this| this.tooltip(Tooltip::text(text)))
+            .child(
+                Label::new(text)
+                    .size(LabelSize::XSmall)
+                    .color(Color::Muted)
+                    .truncate(),
+            )
             .into_any_element(),
     )
 }
 
-/// The state glyph on the tile's corner; a node that checks on CI shows the CI mark instead.
-fn overlay(input: &CardInput, tone: NodeTone, accent: Hsla, cx: &App) -> Option<AnyElement> {
-    let state = tone.glyph_state()?;
+/// The agent's icon in a round badge on the tile's corner; its name is in the tooltip.
+fn agent_badge(input: &CardInput, cx: &App) -> Option<AnyElement> {
+    let (agent, text) = agent_text(input)?;
     let colors = cx.theme().colors();
-    let mark = if input.ci_branch.is_some() {
-        Icon::new(IconName::GitBranch)
-            .size(IconSize::XSmall)
-            .color(Color::Custom(accent))
-            .into_any_element()
-    } else {
-        StateGlyph::new(
-            SharedString::from(format!("glyph-{}", input.entry.stage)),
-            Some(state),
-        )
-        .size(ShapeSize::Terminal)
-        .into_any_element()
-    };
     Some(
         div()
+            .id(SharedString::from(format!("agent-{}", input.entry.stage)))
+            .debug_selector(|| "node-agent".into())
             .absolute()
-            .right(rems_from_px(-5.0_f32))
-            .bottom(rems_from_px(-5.0_f32))
-            .size(rems_from_px(14.0_f32))
+            .right(rems_from_px(-BADGE_OUT))
+            .bottom(rems_from_px(-BADGE_OUT))
+            .size(rems_from_px(BADGE))
             .flex()
             .items_center()
             .justify_center()
             .rounded_full()
             .border_1()
             .border_color(colors.border_variant)
-            .bg(colors.elevated_surface_background)
-            .child(mark)
+            .bg(colors.panel_background)
+            .child(AgentIcon::new(Some(agent)))
+            .tooltip(Tooltip::text(text))
             .into_any_element(),
     )
 }
 
-fn tile(input: &CardInput, tone: NodeTone, accent: Hsla, cx: &App) -> Div {
+/// A soft glow in `color` around a lit tile or chip.
+fn glow(color: Hsla, blur: f32) -> Vec<BoxShadow> {
+    vec![BoxShadow {
+        color,
+        offset: point(px(0.), px(0.)),
+        blur_radius: px(blur),
+        spread_radius: px(0.),
+        inset: false,
+    }]
+}
+
+/// The kind tile: lit and glowing in the state's colour once the stage ran or runs, dashed and
+/// dark while it has not run, with the agent badge on its corner.
+fn tile(input: &CardInput, tone: NodeTone, accent: Hsla, cx: &App) -> Stateful<Div> {
     let colors = cx.theme().colors();
-    let muted = tone.muted();
+    let lit = tone.color_state().is_some();
     div()
+        .id(SharedString::from(format!("tile-{}", input.entry.stage)))
         .debug_selector(|| "node-tile".into())
         .relative()
         .flex_none()
-        .size(rems_from_px(if input.compact {
-            TILE_COMPACT
-        } else {
-            TILE
-        }))
+        .size(rems_from_px(TILE))
         .flex()
         .items_center()
         .justify_center()
         .rounded(rems_from_px(TILE_RADIUS))
         .border_1()
-        .border_color(if muted {
-            colors.border_variant
-        } else {
-            accent.opacity(0.42)
+        .map(|this| {
+            if lit {
+                this.border_color(accent.opacity(0.55))
+                    .bg(accent.opacity(0.14))
+                    .shadow(glow(accent.opacity(0.35), 14.))
+            } else {
+                this.border_color(colors.border)
+            }
         })
-        .when(!muted, |this| this.bg(accent.opacity(0.14)))
         .when(matches!(tone.border(), Stroke::Dashed), |this| {
             this.border_dashed()
         })
         .child(
             kind_icon(input.stage.kind)
-                .size(IconSize::Small)
-                .color(Color::Custom(accent)),
+                .size(IconSize::Medium)
+                .color(if lit {
+                    Color::Custom(accent)
+                } else {
+                    Color::Muted
+                }),
         )
-        .children(overlay(input, tone, accent, cx))
+        .children(agent_badge(input, cx))
+}
+
+/// The word of the state chip under a node's name.
+pub(super) fn node_chip_word(chip: CardChip) -> &'static str {
+    match chip {
+        CardChip::State(state) => state_label(state),
+        CardChip::Done => "Done",
+        CardChip::Skipped => "Skipped",
+        CardChip::WillBeSkipped => "Will be skipped",
+        CardChip::NotStarted => "Not yet",
+        CardChip::NotTaken => "Not taken",
+    }
+}
+
+/// The state chip under a node's name: a lit pill with a check (done) or the state glyph
+/// (current), or a dashed pill with an empty dashed ring (not run yet).
+fn state_chip(input: &CardInput, tone: NodeTone, accent: Hsla, cx: &App) -> Div {
+    let colors = cx.theme().colors();
+    let lit = tone.color_state().is_some();
+    let mark: AnyElement = match (input.facts.chip, &input.ci_branch) {
+        (CardChip::Done, _) => Icon::new(IconName::Check)
+            .size(IconSize::XSmall)
+            .color(Color::Custom(accent))
+            .into_any_element(),
+        (CardChip::State(_), Some(_)) => Icon::new(IconName::GitBranch)
+            .size(IconSize::XSmall)
+            .color(Color::Custom(accent))
+            .into_any_element(),
+        (CardChip::State(state), None) => StateGlyph::new(
+            SharedString::from(format!("glyph-{}", input.entry.stage)),
+            Some(state),
+        )
+        .size(ShapeSize::Terminal)
+        .into_any_element(),
+        _ => div()
+            .flex_none()
+            .size(rems_from_px(10.0_f32))
+            .rounded_full()
+            .border_1()
+            .border_dashed()
+            .border_color(colors.text_muted)
+            .into_any_element(),
+    };
+    h_flex()
+        .debug_selector(|| "node-chip".into())
+        .flex_none()
+        .gap_1()
+        .px_2()
+        .h(rems_from_px(20.0_f32))
+        .rounded_full()
+        .border_1()
+        .map(|this| {
+            if lit {
+                this.border_color(accent.opacity(0.4))
+                    .bg(accent.opacity(0.12))
+                    .shadow(glow(accent.opacity(0.18), 8.))
+            } else {
+                this.border_color(colors.border).border_dashed()
+            }
+        })
+        .child(mark)
+        .child(
+            Label::new(node_chip_word(input.facts.chip))
+                .size(LabelSize::Small)
+                .color(if lit {
+                    Color::Custom(accent)
+                } else {
+                    Color::Muted
+                }),
+        )
 }
 
 fn name_label(input: &CardInput, tone: NodeTone) -> Label {
     Label::new(input.entry.name.clone())
-        .weight(FontWeight::SEMIBOLD)
-        .when(input.compact, |label| label.size(LabelSize::Small))
         .color(if tone.muted() {
             Color::Muted
         } else {
@@ -177,16 +257,13 @@ fn name_label(input: &CardInput, tone: NodeTone) -> Label {
         .truncate()
 }
 
-/// The name and the agent icon of a bare node. The row clips instead of wrapping, so a narrow
-/// node keeps its height.
+/// The name of a bare node. It clips instead of wrapping, so a narrow node keeps its height.
 fn name_row(input: &CardInput, tone: NodeTone) -> Div {
     h_flex()
         .debug_selector(|| "node-name".into())
         .min_w_0()
-        .gap_1p5()
         .overflow_hidden()
         .child(div().min_w_0().child(name_label(input, tone)))
-        .children(agent_chip(input, false))
 }
 
 /// The name with its marks, on the details card: agent with its name, the person mark of a
@@ -204,9 +281,9 @@ fn details_name_row(input: &CardInput, tone: NodeTone, cx: &App) -> Div {
                 .min_w_0()
                 .flex_shrink_0()
                 .max_w(relative(0.7))
-                .child(name_label(input, tone)),
+                .child(name_label(input, tone).weight(FontWeight::SEMIBOLD)),
         )
-        .children(agent_chip(input, true))
+        .children(agent_chip(input))
         .when(manual, |this| {
             this.child(
                 div()
@@ -284,7 +361,10 @@ fn header(
     let texts = v_flex()
         .debug_selector(|| "node-texts".into())
         .min_w_0()
-        .child(name_row(input, tone));
+        .items_start()
+        .gap_1()
+        .child(name_row(input, tone))
+        .child(state_chip(input, tone, accent, cx));
     let on_click = on.clone();
     let select = PanelCommand::SelectStage(entry.stage.clone());
     let (on_key, select_key) = (on_click.clone(), select.clone());
@@ -293,7 +373,7 @@ fn header(
         .w_full()
         .items_center()
         .justify_center()
-        .gap(rems_from_px(PAD))
+        .gap(rems_from_px(if input.compact { PAD_COMPACT } else { PAD }))
         // A clear border holds the keyboard focus ring without moving the content.
         .p(rems_from_px(INSET - FOCUS))
         .border_2()

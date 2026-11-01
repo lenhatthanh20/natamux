@@ -10,7 +10,7 @@ use ui::prelude::*;
 
 use super::CardInput;
 use super::chips::pass_row;
-use super::node::{INSET, chip_word, details, node, tooltip_text};
+use super::node::{INSET, chip_word, details, node, node_chip_word, tooltip_text};
 use crate::app::test_views;
 use crate::stages::card_rules::{CardButton, CardChip, CardFacts};
 use crate::stages::flow_rules::CaretAt;
@@ -293,4 +293,34 @@ fn the_details_card_of_a_pair_node_takes_the_whole_width(cx: &mut TestAppContext
         (meta.left() - card.left() - px(INSET + 1.)).abs() <= px(0.5),
         "{meta:?}"
     );
+}
+
+#[test]
+fn the_state_chip_says_done_the_state_or_not_yet() {
+    assert_eq!(node_chip_word(CardChip::Done), "Done");
+    assert_eq!(node_chip_word(CardChip::NotStarted), "Not yet");
+    assert_eq!(node_chip_word(CardChip::State(TaskState::Running)), "Running");
+    assert_eq!(node_chip_word(CardChip::WillBeSkipped), "Will be skipped");
+}
+
+#[test]
+fn a_lit_tile_and_its_chip_glow_and_a_tile_not_run_is_dashed() {
+    let tile = node_source("fn tile(");
+    assert!(tile.contains(".shadow(glow("));
+    assert!(tile.contains("border_dashed"));
+    assert!(tile.contains("agent_badge(input, cx)"));
+    assert!(node_source("fn state_chip(").contains(".shadow(glow("));
+    // The name is not bold on the node.
+    assert!(!node_source("fn name_label(").contains("SEMIBOLD"));
+}
+
+#[gpui::test]
+fn the_agent_badge_sits_on_the_tiles_corner(cx: &mut TestAppContext) {
+    test_views::init(cx);
+    let cx = drawn_node(StageStatus::Done, false, cx);
+    let [tile, badge, chip] = ["node-tile", "node-agent", "node-chip"].map(|s| bounds(cx, s));
+    assert!(badge.right() > tile.right() && badge.bottom() > tile.bottom());
+    assert!(badge.left() < tile.right() && badge.top() < tile.bottom());
+    // The chip sits beside the tile, under the name.
+    assert!(chip.left() > tile.right());
 }

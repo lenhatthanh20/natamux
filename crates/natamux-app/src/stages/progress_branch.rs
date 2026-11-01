@@ -13,7 +13,6 @@ use super::Ctx;
 use super::flow::{Around, Edge, link_after};
 use crate::components::chips::StateChip;
 use crate::components::icons::icon_path;
-use crate::stages::flow_lines::Port;
 use crate::stages::flow_rules::{
     CaretAt, LaneState, branch_line, lane_keyword, lane_state, stage_count_label,
 };
@@ -51,9 +50,7 @@ impl Ctx<'_> {
             .border_1()
             .border_color(cx.theme().colors().border_variant)
             .child(branch_head(branch, &lookup, cx))
-            .children(lanes)
-            .children(around.into_style(own).map(Port::top))
-            .children(out.filter(|_| !open).map(Port::bottom));
+            .children(lanes);
         v_flex()
             .w_full()
             .child(frame)

@@ -28,7 +28,7 @@ fn a_stage_puts_its_card_right_under_the_node_with_no_port_between() {
     in_order(
         step,
         &[
-            "out.filter(|_| !open)",
+            "ported(card)",
             ".children(details)",
             "link_after(style, open)",
         ],
@@ -38,7 +38,6 @@ fn a_stage_puts_its_card_right_under_the_node_with_no_port_between() {
 #[test]
 fn a_pair_puts_its_card_between_the_nodes_and_the_join_curves() {
     let pair = source_of(include_str!("progress_steps.rs"), "fn pair(");
-    assert!(pair.contains("(!open).then_some"));
     assert!(pair.contains("CaretAt::Left") && pair.contains("CaretAt::Right"));
     in_order(
         pair,
@@ -74,4 +73,16 @@ fn a_node_of_a_path_leaves_its_card_to_the_branch() {
     assert!(step.contains("(!in_path)"));
     let lane = source_of(include_str!("progress_branch.rs"), "fn lane(");
     assert!(lane.contains("self.column(&steps, true, cx)"));
+}
+
+#[test]
+fn the_lines_meet_the_nodes_with_no_port_rings() {
+    // The owner's node design: the lines run straight into the nodes, no ring at their ends.
+    for source in [
+        include_str!("progress_flow.rs"),
+        include_str!("progress_steps.rs"),
+        include_str!("progress_branch.rs"),
+    ] {
+        assert!(!source.contains("Port::"));
+    }
 }
