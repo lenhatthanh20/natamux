@@ -51,7 +51,7 @@ pub struct Shown {
     pub resuming: bool,
     /// The stage settings being saved, as "<kind>:<stage>".
     pub toggling: BTreeSet<String>,
-    /// The node the user picked in the Progress flow; None: the current stage is selected.
+    /// The node the user opened in the Progress flow; None: no details card shows.
     pub picked: Option<String>,
     /// Paths not taken the user opened.
     pub open_lanes: BTreeSet<String>,

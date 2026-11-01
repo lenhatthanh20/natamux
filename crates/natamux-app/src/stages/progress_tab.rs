@@ -40,7 +40,8 @@ pub struct ProgressInput {
     pub busy: bool,
     pub resuming: bool,
     pub toggling: BTreeSet<String>,
-    /// The selected node (`card_rules::selected_stage`): its details card shows under its step.
+    /// The node the user opened (`card_rules::pick_after_click`): its details card shows under
+    /// its step. None until a click, the running stage too.
     pub selected: Option<String>,
     /// The task's agent (`agent_of`), the icon of a node that runs it.
     pub task_agent: String,

@@ -270,62 +270,12 @@ fn a_node_shows_its_own_agent_else_the_tasks_agent_on_a_stage_that_runs_one() {
     }
 }
 
-fn named(stage: &str, status: StageStatus) -> StageProgress {
-    StageProgress {
-        stage: stage.into(),
-        ..entry(status, None)
-    }
-}
-
 #[test]
-fn the_selection_is_the_pick_else_the_current_stage() {
-    let progress = [
-        named("spec", StageStatus::Done),
-        named("implement", StageStatus::Current),
-        named("review", StageStatus::Upcoming),
-    ];
+fn a_click_opens_a_node_and_a_click_on_the_open_node_closes_it() {
+    assert_eq!(pick_after_click(None, "spec").as_deref(), Some("spec"));
+    assert_eq!(pick_after_click(Some("spec"), "spec"), None);
     assert_eq!(
-        selected_stage(None, &progress).as_deref(),
-        Some("implement")
-    );
-    assert_eq!(
-        selected_stage(Some("spec"), &progress).as_deref(),
-        Some("spec")
-    );
-    // A finished task has no current stage: nothing is selected until a click.
-    let done = [named("spec", StageStatus::Done)];
-    assert_eq!(selected_stage(None, &done), None);
-}
-
-#[test]
-fn the_selection_follows_the_current_stage_while_nothing_is_picked() {
-    let before = [
-        named("spec", StageStatus::Current),
-        named("implement", StageStatus::Upcoming),
-    ];
-    let after = [
-        named("spec", StageStatus::Done),
-        named("implement", StageStatus::Current),
-    ];
-    assert_eq!(selected_stage(None, &before).as_deref(), Some("spec"));
-    assert_eq!(selected_stage(None, &after).as_deref(), Some("implement"));
-}
-
-#[test]
-fn a_click_picks_a_node_and_a_click_on_the_selected_node_clears_the_pick() {
-    let progress = [
-        named("spec", StageStatus::Done),
-        named("implement", StageStatus::Current),
-    ];
-    assert_eq!(
-        pick_after_click(None, &progress, "spec").as_deref(),
-        Some("spec")
-    );
-    assert_eq!(pick_after_click(Some("spec"), &progress, "spec"), None);
-    // The current stage is the selection already: the click keeps it so.
-    assert_eq!(pick_after_click(None, &progress, "implement"), None);
-    assert_eq!(
-        pick_after_click(Some("spec"), &progress, "implement").as_deref(),
+        pick_after_click(Some("spec"), "implement").as_deref(),
         Some("implement")
     );
 }
