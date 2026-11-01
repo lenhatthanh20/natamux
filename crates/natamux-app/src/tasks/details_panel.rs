@@ -27,8 +27,8 @@ use crate::app::tab_rules::ShowWatch;
 use crate::app::view_rules::DetailsView;
 use crate::components::empty_state::EmptyState;
 use crate::components::motion;
-use crate::stages::flow_lines::dot_grid;
 use crate::files::file_tree::FileTree;
+use crate::stages::flow_lines::dot_grid;
 use crate::workspaces::workspace_view::WorkspaceView;
 use reads::ReadPaces;
 

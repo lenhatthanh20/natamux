@@ -53,23 +53,43 @@ fn shows_only_the_number_before_github_answers() {
 }
 
 fn label(url: &str) -> Option<String> {
-    summary_facts(&task(Some(url), None), None).pr.map(|pr| pr.label)
+    summary_facts(&task(Some(url), None), None)
+        .pr
+        .map(|pr| pr.label)
 }
 
 #[test]
 fn falls_back_to_the_address_without_a_number() {
-    assert_eq!(label("https://example.com/x"), Some("https://example.com/x".into()));
+    assert_eq!(
+        label("https://example.com/x"),
+        Some("https://example.com/x".into())
+    );
     assert_eq!(label("https://github.com/o/r"), Some("o/r".into()));
-    assert_eq!(label("https://github.com/o/r/pull/abc"), Some("o/r/pull/abc".into()));
-    assert_eq!(label("https://github.com/o/r/pull/"), Some("o/r/pull/".into()));
-    assert_eq!(label("https://github.com/o/r/issues/5"), Some("o/r/issues/5".into()));
+    assert_eq!(
+        label("https://github.com/o/r/pull/abc"),
+        Some("o/r/pull/abc".into())
+    );
+    assert_eq!(
+        label("https://github.com/o/r/pull/"),
+        Some("o/r/pull/".into())
+    );
+    assert_eq!(
+        label("https://github.com/o/r/issues/5"),
+        Some("o/r/issues/5".into())
+    );
     assert_eq!(label(""), Some(String::new()));
 }
 
 #[test]
 fn reads_the_number_before_a_suffix() {
-    assert_eq!(label("https://github.com/o/r/pull/569/files"), Some("#569".into()));
-    assert_eq!(label("https://github.com/o/r/pull/569?x=1"), Some("#569".into()));
+    assert_eq!(
+        label("https://github.com/o/r/pull/569/files"),
+        Some("#569".into())
+    );
+    assert_eq!(
+        label("https://github.com/o/r/pull/569?x=1"),
+        Some("#569".into())
+    );
     assert_eq!(
         label("https://github.com/o/r/pull/98765432101234"),
         Some("#98765432101234".into())
