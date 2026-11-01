@@ -80,8 +80,6 @@ pub struct FlowLink {
     style: LinkStyle,
     grow: bool,
     min: f32,
-    /// How far the line goes past its box's top and bottom.
-    reach: (f32, f32),
 }
 
 impl FlowLink {
@@ -90,18 +88,15 @@ impl FlowLink {
             style,
             grow: false,
             min: LINK_H,
-            reach: (0., 0.),
         }
     }
 
-    /// The line inside a node, above or below its tile: it grows with the node, at least `STUB`,
-    /// and reaches `up` and `down` px past its box, over the node's clear focus border.
-    pub fn stub(style: LinkStyle, up: f32, down: f32) -> Self {
+    /// The line inside a node, above or below its tile: it grows with the node, at least `STUB`.
+    pub fn stub(style: LinkStyle) -> Self {
         Self {
             style,
             grow: true,
             min: STUB,
-            reach: (up, down),
         }
     }
 
@@ -115,16 +110,14 @@ impl FlowLink {
 impl RenderOnce for FlowLink {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let pen = pen(self.style, cx);
-        let (up, down) = self.reach;
         let line = canvas(
             |_, _, _| {},
             move |bounds, _, window, _| {
                 let scale = scale(window);
                 let x = f32::from(bounds.origin.x) + f32::from(bounds.size.width) / 2.;
                 let top = f32::from(bounds.origin.y);
-                let bottom = top + f32::from(bounds.size.height);
-                let from = point(px(x), px(top - up * scale));
-                let to = point(px(x), px(bottom + down * scale));
+                let from = point(px(x), px(top));
+                let to = point(px(x), px(top + f32::from(bounds.size.height)));
                 draw(window, pen, scale, from, to, None);
             },
         )

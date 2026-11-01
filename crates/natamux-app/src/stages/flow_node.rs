@@ -37,8 +37,6 @@ const BADGE_OUT: f32 = 6.;
 const NODE_RADIUS: f32 = 9.;
 /// The gap between the tile column and the texts.
 const PAD: f32 = 12.;
-/// The head's clear border, which holds the keyboard focus ring.
-const FOCUS: f32 = 2.;
 /// The selection ring is 2 px wide, outside the node.
 const RING: f32 = 2.;
 
@@ -246,9 +244,9 @@ fn name_row(input: &CardInput, tone: NodeTone) -> Div {
 }
 
 /// A line inside the node, `None` an empty spacer of the same size.
-fn stub(style: Option<LinkStyle>, up: f32, down: f32) -> AnyElement {
+fn stub(style: Option<LinkStyle>) -> AnyElement {
     match style {
-        Some(style) => FlowLink::stub(style, up, down).into_any_element(),
+        Some(style) => FlowLink::stub(style).into_any_element(),
         None => div().flex_1().min_h(rems_from_px(STUB)).into_any_element(),
     }
 }
@@ -287,8 +285,8 @@ impl RenderOnce for RunningRing {
 }
 
 /// The tile on the flow's line: the stub into it, the tile (in its ring while running), the stub
-/// out of it. As wide as the ring on every node, so a pair's tiles keep their x. The stubs reach
-/// over the head's clear border, so they meet the flow's lines.
+/// out of it. As wide as the ring on every node, so a pair's tiles keep their x. The head has no
+/// border or padding above and below, so the stubs meet the flow's lines at the node's edges.
 fn tile_column(input: &CardInput, tone: NodeTone, accent: Hsla, cx: &App) -> Div {
     let tile = tile(input, tone, accent, cx);
     let running = matches!(
@@ -308,9 +306,9 @@ fn tile_column(input: &CardInput, tone: NodeTone, accent: Hsla, cx: &App) -> Div
         .flex_none()
         .w(rems_from_px(TILE_BOX))
         .items_center()
-        .child(stub(input.links.into, FOCUS, 0.))
+        .child(stub(input.links.into))
         .child(middle)
-        .child(stub(input.links.out, 0., FOCUS))
+        .child(stub(input.links.out))
 }
 
 /// The name over the chip, at one side of the tile in a pair.
@@ -340,23 +338,19 @@ fn header(
     let facts = fact_parts(input);
     let tip = tooltip_text(&entry.name, word, &facts);
     let hover_bg = colors.ghost_element_hover;
-    let ring = colors.border_focused;
     let column = tile_column(input, tone, accent, cx);
     let on_click = on.clone();
     let select = PanelCommand::SelectStage(entry.stage.clone());
-    let (on_key, select_key) = (on_click.clone(), select.clone());
     let row = h_flex()
         .id(SharedString::from(format!("fold-{}", entry.stage)))
+        .relative()
         .w_full()
         // Fills a node that a pair row stretches, so the stubs reach its edges.
         .flex_grow_1()
         .items_stretch()
         .gap(rems_from_px(PAD))
-        // Side padding only: the stubs run to the top and the bottom. A clear border holds the
-        // keyboard focus ring without moving the content.
-        .px(rems_from_px(INSET - FOCUS))
-        .border_2()
-        .border_color(gpui::transparent_black())
+        // Side padding only and no border: the stubs run to the top and the bottom.
+        .px(rems_from_px(INSET))
         .rounded(rems_from_px(NODE_RADIUS));
     let row = match input.side {
         // Equal `flex_1` sides keep the tile on the row's middle, whatever the name's length.
@@ -386,19 +380,34 @@ fn header(
             .child(column)
             .child(texts(input, tone, accent, cx).items_start()),
     };
-    row.tooltip(Tooltip::text(tip))
+    row.child(focus_ring(input, on, colors.border_focused))
+        .tooltip(Tooltip::text(tip))
         .cursor_pointer()
         .hover(move |style| style.bg(hover_bg))
-        .focus_visible(move |style| style.border_color(ring))
+        .on_click(move |_, window, cx| on_click(select.clone(), window, cx))
+}
+
+/// The keyboard focus ring: absolute over the head, so it takes no room. It holds the node's
+/// focus, so Enter and Space select the node, as a button of the web.
+fn focus_ring(input: &CardInput, on: &OnCommand, color: Hsla) -> Stateful<Div> {
+    let on_key = on.clone();
+    let select = PanelCommand::SelectStage(input.entry.stage.clone());
+    div()
+        .id(SharedString::from(format!("focus-{}", input.entry.stage)))
+        .debug_selector(|| "node-focus".into())
+        .absolute()
+        .inset_0()
+        .rounded(rems_from_px(NODE_RADIUS))
+        .border_2()
+        .border_color(gpui::transparent_black())
+        .focus_visible(move |style| style.border_color(color))
         .when_some(input.fold_focus.as_ref(), |this, focus| {
             this.track_focus(focus)
         })
-        .on_click(move |_, window, cx| on_click(select.clone(), window, cx))
-        // A button of the web: Enter and Space select it too.
         .on_key_down(move |event: &KeyDownEvent, window, cx| {
             if matches!(event.keystroke.key.as_str(), "enter" | "space") {
                 cx.stop_propagation();
-                on_key(select_key.clone(), window, cx);
+                on_key(select.clone(), window, cx);
             }
         })
 }

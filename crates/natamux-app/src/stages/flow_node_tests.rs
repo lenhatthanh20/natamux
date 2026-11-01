@@ -20,7 +20,6 @@ const SHORT: &str = "Spec";
 const LONG: &str = "Watch CI/CD and merge the pull requests of every repository";
 /// `flow_node.rs`: the gap between the tile column and the texts, and the head's clear border.
 const PAD: f32 = 12.;
-const FOCUS: f32 = 2.;
 
 /// One node in the rail, alone (`Middle`) or in its half of a pair row.
 #[derive(Clone, Copy)]
@@ -136,23 +135,21 @@ fn the_stubs_run_from_the_nodes_edges_to_its_tile(cx: &mut TestAppContext) {
     // A wrapped name makes the node taller than its tile: the stubs grow with it.
     for name in [SHORT, LONG] {
         let cx = drawn(middle(StageStatus::Done, name, links), cx);
-        let [card, column, tile] =
-            ["node-card", "node-tile-column", "node-tile"].map(|s| bounds(cx, s));
-        // The stubs reach over the clear border, so they meet the flow's lines.
-        assert!(
-            near(column.top(), card.top() + px(FOCUS)),
-            "{name}: {column:?}"
-        );
-        assert!(
-            near(column.bottom(), card.bottom() - px(FOCUS)),
-            "{name}: {column:?}"
-        );
+        let [card, column, tile, focus] =
+            ["node-card", "node-tile-column", "node-tile", "node-focus"].map(|s| bounds(cx, s));
+        // The focus ring lies over the node and takes no room.
+        assert!(near(focus.top(), card.top()) && near(focus.bottom(), card.bottom()));
+        // No border box: the stubs start at the node's top and end at its bottom.
+        assert!(near(column.top(), card.top()), "{name}: {column:?}");
+        assert!(near(column.bottom(), card.bottom()), "{name}: {column:?}");
         assert!(tile.top() - column.top() >= px(STUB - 0.5));
         assert!(column.bottom() - tile.bottom() >= px(STUB - 0.5));
     }
     let source = include_str!("flow_node.rs");
-    assert!(source.contains("stub(input.links.into, FOCUS, 0.)"));
-    assert!(source.contains("stub(input.links.out, 0., FOCUS)"));
+    assert!(source.contains("stub(input.links.into)"));
+    assert!(source.contains("stub(input.links.out)"));
+    // Every line starts at its box's top: none reaches past it.
+    assert!(!include_str!("flow_lines.rs").contains("reach"));
 }
 
 #[gpui::test]

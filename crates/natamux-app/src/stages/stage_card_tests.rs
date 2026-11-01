@@ -82,7 +82,9 @@ fn a_node_has_no_more_button() {
 fn a_node_header_has_side_padding_only() {
     // The stubs above and below the tile run to the node's edges, so the lines touch it (T-0259).
     let source = node_source("fn header(");
-    assert!(source.contains(".px(rems_from_px(INSET - FOCUS))"));
+    assert!(source.contains(".px(rems_from_px(INSET))"));
+    // No border box: the focus ring is an absolute overlay that takes no room (review rev 1).
+    assert!(!source.contains("border_2"));
     assert!(!source.contains(".p(rems"));
     assert!(!source.contains(".py("));
     assert!(!source.contains(".pt("));
@@ -92,8 +94,13 @@ fn a_node_header_has_side_padding_only() {
 #[test]
 fn a_node_is_selected_with_a_click_enter_and_space() {
     let source = node_source("fn header(");
-    assert!(source.contains("\"enter\" | \"space\""));
     assert!(source.contains("PanelCommand::SelectStage"));
+    assert!(source.contains(".on_click("));
+    // The focus ring holds the focus, so it takes the keys.
+    let ring = node_source("fn focus_ring(");
+    assert!(ring.contains("\"enter\" | \"space\""));
+    assert!(ring.contains("PanelCommand::SelectStage"));
+    assert!(ring.contains("track_focus"));
     // Every status selects, the current stage too: no early return for some nodes (T-0257).
     assert!(!source.contains("return head"));
 }
