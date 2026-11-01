@@ -176,9 +176,15 @@ fn a_struck_name_strikes_only_its_words(cx: &mut TestAppContext) {
             let cx = drawn(flow, cx);
             let [tile, struck] = ["node-tile", "node-name"].map(|s| bounds(cx, s));
             // Same rows, same box: the lines take no room.
-            assert!(near(struck.size.height, plain.size.height), "{name}: {struck:?}");
-            assert!(near(struck.size.width, plain.size.width), "{name}: {struck:?}");
-            assert!(near(centre_x(struck), centre_x(tile)), "{name}: {struck:?}");
+            assert!(
+                near(struck.size.height, plain.size.height),
+                "{name}: {struck:?}"
+            );
+            assert!(
+                near(struck.size.width, plain.size.width),
+                "{name}: {struck:?}"
+            );
+            assert!(near(centre_x(struck), centre_x(tile)), "{struck:?}");
         }
     }
 }

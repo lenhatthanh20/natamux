@@ -254,12 +254,15 @@ fn paint_strikes(layout: &TextLayout, color: Hsla, window: &mut Window) {
         let mut glyphs = Vec::new();
         for run in &unwrapped.runs {
             run_starts.push(glyphs.len());
-            glyphs.extend(run.glyphs.iter().map(|glyph| NameGlyph {
-                x: f32::from(glyph.position.x),
-                space: line_text
+            for glyph in &run.glyphs {
+                let space = line_text
                     .get(glyph.index..)
-                    .is_some_and(|rest| rest.starts_with(char::is_whitespace)),
-            }));
+                    .is_some_and(|rest| rest.starts_with(char::is_whitespace));
+                glyphs.push(NameGlyph {
+                    x: f32::from(glyph.position.x),
+                    space,
+                });
+            }
         }
         let breaks: Vec<usize> = line
             .wrap_boundaries
