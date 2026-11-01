@@ -7,6 +7,10 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v1.0.14 (2026-11-01)
+
+- In the desktop app, the docked details panel starts at 280 px, so the panel plus the rail of view icons matches the sidebar. A width you already set stays. See [In the desktop app](/docs/guides/dashboard/#in-the-desktop-app).
+
 ## v1.0.13 (2026-10-31)
 
 - Add a custom agent in **Settings → Agents**: a built-in agent with your own command, or any other agent CLI. It shows in every agent picker. See [Custom agents](/docs/guides/desktop-app/#custom-agents).

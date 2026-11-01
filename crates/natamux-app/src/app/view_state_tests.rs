@@ -150,21 +150,21 @@ fn the_sidebar_and_details_keep_their_own_widths() {
     let old = ViewState::parse(r#"{"sidebarWidth": 300, "detailsWidth": 400}"#);
     assert_eq!((old.sidebar_width, old.details_width), (300.0, 400.0));
     let mut state = ViewState::parse(r#"{"sidebarWidth": 300}"#);
-    assert_eq!(state.details_width, 320.0);
+    assert_eq!(state.details_width, 280.0);
     state.set_details_width(450.0);
     assert_eq!((state.sidebar_width, state.details_width), (300.0, 450.0));
     state.set_sidebar_width(350.0);
     assert_eq!((state.sidebar_width, state.details_width), (350.0, 450.0));
     assert_eq!(ViewState::parse(&state.to_json()).details_width, 450.0);
     assert_eq!(ViewState::default().sidebar_width, 320.0);
-    assert_eq!(ViewState::default().details_width, 320.0);
+    assert_eq!(ViewState::default().details_width, 280.0);
     assert_eq!(
         ViewState::parse(r#"{"detailsWidth": 100}"#).details_width,
         DETAILS_MIN
     );
     assert_eq!(
         ViewState::parse(r#"{"detailsWidth": "wide"}"#).details_width,
-        320.0
+        280.0
     );
     assert_eq!(
         ViewState::parse(r#"{"sidebarWidth": 100}"#).sidebar_width,
