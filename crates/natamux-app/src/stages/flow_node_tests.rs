@@ -16,8 +16,6 @@ use crate::stages::flow_rules::{LinkStyle, NodeLinks, PAIR_GAP, RUN_RING_OUT, ST
 const RAIL: f32 = 300.;
 const SHORT: &str = "Spec";
 const LONG: &str = "Watch CI/CD and merge the pull requests of every repository";
-/// `flow_node.rs`: the gap between the tile and the name.
-const NAME_GAP: f32 = 6.;
 
 /// Where the node is drawn: alone in the rail, or in one half of a pair row.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -55,11 +53,13 @@ impl Render for Flow {
             .w(px(RAIL))
             .items_stretch()
             .gap(rems_from_px(PAIR_GAP));
-        match self.place {
+        let row = match self.place {
             Place::Alone => row.child(slot().child(drawn)),
             Place::Left => row.child(slot().child(drawn)).child(slot()),
             Place::Right => row.child(slot()).child(slot().child(drawn)),
-        }
+        };
+        // A block around the row, so the window does not stretch it.
+        div().child(row)
     }
 }
 
@@ -105,8 +105,8 @@ fn the_tile_and_the_name_sit_on_the_middle_line(cx: &mut TestAppContext) {
             let [row, tile, label] = ["flow-row", "node-tile", "node-name"].map(|s| bounds(cx, s));
             assert!(near(centre_x(tile), centre_x(row)), "{name}: {tile:?}");
             assert!(near(centre_x(label), centre_x(row)), "{name}: {label:?}");
-            // The name is under the tile.
-            assert!(label.top() >= tile.bottom() + px(NAME_GAP - 0.5), "{name}");
+            // The name is under the tile; its box holds the gap above the text.
+            assert!(label.top() >= tile.bottom() - px(0.5), "{name}: {label:?}");
         }
     }
 }
@@ -148,14 +148,25 @@ fn the_lines_touch_the_tile_and_start_under_the_name(cx: &mut TestAppContext) {
     let [card, tile, label, focus] =
         ["node-card", "node-tile", "node-name", "node-focus"].map(|s| bounds(cx, s));
     // The line in runs from the node's top to the tile; the line out from the name to the bottom.
-    assert!(near(tile.top() - card.top(), px(STUB + RUN_RING_OUT)), "{tile:?}");
-    assert!(near(card.bottom() - label.bottom(), px(STUB)), "{label:?}");
+    assert!(
+        near(tile.top() - card.top(), px(STUB + RUN_RING_OUT)),
+        "{tile:?}"
+    );
+    assert!(
+        near(card.bottom() - label.bottom(), px(STUB)),
+        "{card:?} {label:?}"
+    );
     // The focus ring lies over the node and takes no room.
     assert!(near(focus.top(), card.top()) && near(focus.bottom(), card.bottom()));
     let source = include_str!("flow_node.rs");
     let header = &source[source.find("fn header(").unwrap()..];
-    let order = ["stub_in(input.links.into, lift)", ".child(middle)", "name_row(", "stub_out("]
-        .map(|part| header.find(part).unwrap_or_else(|| panic!("{part}")));
+    let order = [
+        "stub_in(input.links.into, lift)",
+        ".child(middle)",
+        "name_row(",
+        "stub_out(",
+    ]
+    .map(|part| header.find(part).unwrap_or_else(|| panic!("{part}")));
     assert!(order.windows(2).all(|pair| pair[0] < pair[1]));
 }
 

@@ -133,9 +133,12 @@ impl Ctx<'_> {
             .border_1()
             .border_dashed()
             .border_color(cx.theme().colors().border)
-            .children(group.parallel.iter().filter_map(|stage| {
-                self.card(&stage.id, NodeLinks::default(), cx)
-            }));
+            .children(
+                group
+                    .parallel
+                    .iter()
+                    .filter_map(|stage| self.card(&stage.id, NodeLinks::default(), cx)),
+            );
         v_flex()
             .w_full()
             .child(FlowLink::new(into))

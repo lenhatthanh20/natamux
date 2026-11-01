@@ -176,24 +176,22 @@ fn state_mark(input: &CardInput, accent: Hsla, cx: &App) -> Div {
                 .size(IconSize::XSmall)
                 .color(Color::Custom(colors.panel_background)),
         ),
-        (CardChip::State(_), Some(_)) => mark
-            .border_color(accent)
-            .bg(colors.panel_background)
-            .child(
+        (CardChip::State(_), Some(_)) => {
+            mark.border_color(accent).bg(colors.panel_background).child(
                 Icon::new(IconName::GitBranch)
                     .size(IconSize::XSmall)
                     .color(Color::Custom(accent)),
-            ),
-        (CardChip::State(state), None) => mark
-            .border_color(accent)
-            .bg(colors.panel_background)
-            .child(
+            )
+        }
+        (CardChip::State(state), None) => {
+            mark.border_color(accent).bg(colors.panel_background).child(
                 StateGlyph::new(
                     SharedString::from(format!("glyph-{}", input.entry.stage)),
                     Some(state),
                 )
                 .size(ShapeSize::Terminal),
-            ),
+            )
+        }
         _ => mark
             .border_dashed()
             .border_color(colors.text_muted)

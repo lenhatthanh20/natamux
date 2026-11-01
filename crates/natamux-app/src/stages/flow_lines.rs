@@ -301,6 +301,7 @@ impl RenderOnce for JoinDot {
             cx.theme().colors().panel_background
         };
         let dot = div()
+            .debug_selector(|| "join-dot".into())
             .flex_none()
             .w(rems_from_px(JOIN_DOT))
             .h(rems_from_px(JOIN_DOT))
@@ -317,15 +318,17 @@ impl RenderOnce for JoinDot {
                 this.min_h(rems_from_px(JOIN_DOT + LINK_H))
                     .child(FlowLink::new(below).grow())
             });
-        // Equal flex_1 sides keep the dot on the middle line whatever the note's length.
-        let note = div()
-            .flex_1()
-            .min_w_0()
-            .pl(rems_from_px(6.0_f32))
-            .mt(rems_from_px(-4.0_f32))
-            .when_some(self.note, |this, note| {
-                this.child(Label::new(note).size(LabelSize::XSmall).color(Color::Muted))
-            });
+        // Equal flex_1 sides keep the dot on the middle line whatever the note's length. The
+        // note's padding sits inside its side: on the side itself it made that side 6 px wider
+        // and moved the dot 3 px off the join curves (T-0259).
+        let note = div().flex_1().min_w_0().when_some(self.note, |this, note| {
+            this.child(
+                div()
+                    .pl(rems_from_px(6.0_f32))
+                    .mt(rems_from_px(-4.0_f32))
+                    .child(Label::new(note).size(LabelSize::XSmall).color(Color::Muted)),
+            )
+        });
         div()
             .flex()
             .w_full()
@@ -374,3 +377,7 @@ pub fn dot_grid(cx: &App) -> impl IntoElement {
     .absolute()
     .inset_0()
 }
+
+#[cfg(test)]
+#[path = "flow_lines_tests.rs"]
+mod tests;
