@@ -83,12 +83,12 @@ fn falls_back_to_the_address_without_a_number() {
 #[test]
 fn reads_the_number_before_a_suffix() {
     assert_eq!(
-        label("https://github.com/o/r/pull/569/files"),
-        Some("#569".into())
+        label("https://github.com/o/r/pull/12345/files"),
+        Some("#12345".into())
     );
     assert_eq!(
-        label("https://github.com/o/r/pull/569?x=1"),
-        Some("#569".into())
+        label("https://github.com/o/r/pull/12345?x=1"),
+        Some("#12345".into())
     );
     assert_eq!(
         label("https://github.com/o/r/pull/98765432101234"),
