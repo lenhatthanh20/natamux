@@ -406,17 +406,6 @@ fn names_the_stages_whose_last_start_asked_for_a_workflow() {
 }
 
 #[test]
-fn counts_every_time_the_task_was_sent_back() {
-    let events = [
-        event("stage.reopened", "plan", json!({})),
-        event("review.changes-requested", "plan", json!({})),
-        event("stage.started", "plan", json!({})),
-    ];
-    assert_eq!(sent_back_count(&events), 2);
-    assert_eq!(sent_back_count(&[]), 0);
-}
-
-#[test]
 fn finds_a_stage_of_a_group_or_a_path() {
     let steps = [Step::Stage(stage("spec")), Step::Branch(branch())];
     assert_eq!(

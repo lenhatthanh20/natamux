@@ -51,8 +51,9 @@ pub struct Shown {
     pub resuming: bool,
     /// The stage settings being saved, as "<kind>:<stage>".
     pub toggling: BTreeSet<String>,
-    /// Finished cards and paths not taken the user opened.
-    pub open_cards: BTreeSet<String>,
+    /// The node the user picked in the Progress flow; None: the current stage is selected.
+    pub picked: Option<String>,
+    /// Paths not taken the user opened.
     pub open_lanes: BTreeSet<String>,
     /// The agent picked on a card; None: the task's agent.
     pub agent: Option<String>,

@@ -95,6 +95,18 @@ fn gives_each_tone_its_border_glow_and_overlay() {
     assert_eq!(NodeTone::Upcoming.glyph_state(), None);
 }
 
+#[test]
+fn a_stage_marked_to_skip_fades_as_a_skipped_one_and_not_as_one_that_will_run() {
+    assert!(NodeTone::WillSkip.struck());
+    assert_eq!(NodeTone::WillSkip.fade(), NodeTone::Skipped.fade());
+    assert!(NodeTone::WillSkip.fade() < 1.);
+    assert!(!NodeTone::Upcoming.struck());
+    assert_eq!(NodeTone::Upcoming.fade(), 1.);
+    // It has not run: no skipped glyph, the dashed tile of a stage to come.
+    assert_eq!(NodeTone::WillSkip.glyph_state(), None);
+    assert_eq!(NodeTone::NotTaken.fade(), 0.55);
+}
+
 fn stage(id: &str) -> Stage {
     Stage::new(id, StageKind::Agent, Gate::Auto)
 }
