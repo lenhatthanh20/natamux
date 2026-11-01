@@ -128,8 +128,14 @@ fn a_long_name_wraps_under_the_tile(cx: &mut TestAppContext) {
             long.size.height > short.size.height * 1.5,
             "{name}: {long:?}"
         );
-        assert!(long.size.width <= px(NAME_MAX) + px(0.5), "{name}: {long:?}");
-        assert!(long.size.width + px(1.) < row.size.width, "{name}: {long:?}");
+        assert!(
+            long.size.width <= px(NAME_MAX) + px(0.5),
+            "{name}: {long:?}"
+        );
+        assert!(
+            long.size.width + px(1.) < row.size.width,
+            "{name}: {long:?}"
+        );
         assert!(long.left() >= row.left() && long.right() <= row.right());
         assert!(near(centre_x(long), centre_x(tile)), "{name}: {long:?}");
     }
