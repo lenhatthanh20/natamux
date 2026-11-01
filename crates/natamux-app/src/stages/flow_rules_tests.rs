@@ -206,3 +206,11 @@ fn puts_the_ports_of_a_pair_at_the_middle_of_each_node() {
     assert_eq!(pair_centres(320., 8.), (78., 242.));
     assert_eq!(pair_centres(0., 8.), (0., 0.));
 }
+
+#[test]
+fn the_caret_points_at_the_middle_of_the_selected_node() {
+    assert_eq!(caret_x(CaretAt::Middle, 320., 8.), 160.);
+    // The same x as the pair's ports, so it sits under the left or right node's middle.
+    assert_eq!(caret_x(CaretAt::Left, 320., 8.), 78.);
+    assert_eq!(caret_x(CaretAt::Right, 320., 8.), 242.);
+}
