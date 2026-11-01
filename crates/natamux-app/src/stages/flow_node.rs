@@ -361,10 +361,10 @@ fn header(
     let texts = v_flex()
         .debug_selector(|| "node-texts".into())
         .min_w_0()
-        .items_start()
         .gap_1()
         .child(name_row(input, tone))
-        .child(state_chip(input, tone, accent, cx));
+        // In a row of its own, so the chip keeps its width and does not stretch.
+        .child(h_flex().child(state_chip(input, tone, accent, cx)));
     let on_click = on.clone();
     let select = PanelCommand::SelectStage(entry.stage.clone());
     let (on_key, select_key) = (on_click.clone(), select.clone());

@@ -1,5 +1,4 @@
-//! The connectors of the Progress node flow (T-0246): port rings on the node edges, the straight
-//! link between two steps, the fork and join curves of a pair, the join dot and the dot grid of
+//! The connectors of the Progress node flow (T-0246): the straight link between two steps, the fork and join curves of a pair, the join dot and the dot grid of
 //! the canvas. Lines are painted on a `canvas` with `PathBuilder`, as the git graph does. Nothing
 //! here moves (owner, T-0164): only the running stage's `StateGlyph` blinks.
 
@@ -11,7 +10,7 @@ use natamux_proto::tasks::task::TaskState;
 use ui::prelude::*;
 
 use super::flow_rules::{
-    CARET, CURVE_H, CaretAt, GRID, JOIN_DOT, LINK_H, LinkStyle, PAIR_GAP, PORT, PORT_OUT, STROKE,
+    CARET, CURVE_H, CaretAt, GRID, JOIN_DOT, LINK_H, LinkStyle, PAIR_GAP, PORT_OUT, STROKE,
     Stroke, caret_x, pair_centres,
 };
 use crate::components::colors::state_colors;
@@ -71,59 +70,6 @@ fn draw(
     }
     if let Ok(path) = path.build() {
         window.paint_path(path, pen.color);
-    }
-}
-
-/// A 6 px ring on the top or bottom edge of a node, centred on its border. The node must be
-/// `relative()` and must not clip (`overflow_hidden`), or the ring is cut in half.
-#[derive(IntoElement)]
-pub struct Port {
-    style: LinkStyle,
-    bottom: bool,
-}
-
-impl Port {
-    /// The input port, on the top edge.
-    pub fn top(style: LinkStyle) -> Self {
-        Self {
-            style,
-            bottom: false,
-        }
-    }
-
-    /// The output port, on the bottom edge.
-    pub fn bottom(style: LinkStyle) -> Self {
-        Self {
-            style,
-            bottom: true,
-        }
-    }
-}
-
-impl RenderOnce for Port {
-    fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
-        // Insets count from inside the 1 px border, so half a pixel more puts the centre on it.
-        let offset = rems_from_px(-(PORT / 2. + 0.5));
-        let ring = div()
-            .w(rems_from_px(PORT))
-            .h(rems_from_px(PORT))
-            .rounded_full()
-            .border_1()
-            .border_color(link_color(self.style, cx))
-            .bg(cx.theme().colors().panel_background);
-        let holder = div()
-            .absolute()
-            .left_0()
-            .right_0()
-            .h(rems_from_px(PORT))
-            .flex()
-            .justify_center()
-            .child(ring);
-        if self.bottom {
-            holder.bottom(offset)
-        } else {
-            holder.top(offset)
-        }
     }
 }
 

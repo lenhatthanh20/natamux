@@ -299,7 +299,10 @@ fn the_details_card_of_a_pair_node_takes_the_whole_width(cx: &mut TestAppContext
 fn the_state_chip_says_done_the_state_or_not_yet() {
     assert_eq!(node_chip_word(CardChip::Done), "Done");
     assert_eq!(node_chip_word(CardChip::NotStarted), "Not yet");
-    assert_eq!(node_chip_word(CardChip::State(TaskState::Running)), "Running");
+    assert_eq!(
+        node_chip_word(CardChip::State(TaskState::Running)),
+        "Running"
+    );
     assert_eq!(node_chip_word(CardChip::WillBeSkipped), "Will be skipped");
 }
 
