@@ -51,8 +51,8 @@ pub enum PanelCommand {
         stage: String,
         on: bool,
     },
-    /// Folds or opens a finished stage card, or a path not taken.
-    FoldCard(String),
+    /// Selects a node of the Progress flow; on the selected node, goes back to the current stage.
+    SelectStage(String),
     /// Opens or folds "Show evidence" of a card.
     FoldEvidence(String),
     FoldLane(String),

@@ -1,13 +1,13 @@
-//! One stage as a node of the Progress flow (design E): a kind tile with the state glyph at its
-//! corner, the name with its marks, and a meta line. The body of a finished or upcoming node
-//! opens and folds; the current node is always open. A folded node centres its header. The node
-//! draws no ports or lines: the flow draws them on its edges, so nothing here may clip (no
-//! `overflow_hidden` on the root) and the glow ring is absolute, so it takes no room. Only the
-//! running glyph moves.
+//! One stage as a node of the Progress flow (T-0257): a bare node (the kind tile with the state
+//! glyph at its corner, the name, the agent icon) with no border or background, and the
+//! full-width details card of the selected node. A click, Enter or Space selects a node; the
+//! selected node gets a bright ring. The node draws no ports or lines: the flow draws them on its
+//! edges, so nothing here may clip (no `overflow_hidden` on the root) and the ring is absolute,
+//! so it takes no room. Only the running glyph moves.
 
 use gpui::{AnyElement, Div, FontWeight, Hsla, KeyDownEvent, Stateful};
 use natamux_proto::stages::progress::StageStatus;
-use natamux_proto::stages::schema::{Gate, Stage, StageKind};
+use natamux_proto::stages::schema::{Gate, StageKind};
 use ui::{Tooltip, prelude::*};
 
 use super::{CardInput, badge, body, fact_parts, upcoming_parts};
@@ -31,12 +31,12 @@ const TILE_RADIUS: f32 = 8.;
 const NODE_RADIUS: f32 = 9.;
 /// The gap between the tile and the text.
 const PAD: f32 = 10.;
-/// The space between the node's border and its content, the same on every side.
+/// The space between the node's edge and its content, the same on every side.
 pub(super) const INSET: f32 = 12.;
 /// The head's clear border, which holds the keyboard focus ring.
 const FOCUS: f32 = 2.;
-/// The glow ring is 3 px wide, outside the border.
-const RING: f32 = 3.;
+/// The selection ring is 2 px wide, outside the node.
+const RING: f32 = 2.;
 
 /// The word of the meta line: the state of the current node, or what the node is.
 pub(super) fn chip_word(chip: CardChip) -> Option<&'static str> {
@@ -59,34 +59,37 @@ pub(super) fn tooltip_text(name: &str, word: Option<&str>, facts: &[String]) -> 
         .join("\n")
 }
 
-/// The agent of a stage with an agent of its own, with its model when the args name one.
-/// A compact node shows the icon alone.
-fn agent_chip(stage: &Stage, compact: bool) -> Option<AnyElement> {
-    let agent = stage.agent.clone()?;
-    let runner = StageRunner {
-        agent: Some(agent),
-        model: model_of(stage.args.as_deref()),
+/// The agent of the node as its icon; with `label`, its name too: the stage's own agent with
+/// its model, or "Task's agent · <name>".
+fn agent_chip(input: &CardInput, label: bool) -> Option<AnyElement> {
+    let (agent, tasks) = input.node_agent.clone()?;
+    let text = if tasks {
+        format!("Task's agent \u{b7} {}", agent_label(Some(&agent)))
+    } else {
+        let runner = StageRunner {
+            agent: Some(agent.clone()),
+            model: model_of(input.stage.args.as_deref()),
+        };
+        agent_line_text(&runner, |agent| agent_label(Some(agent)))
     };
     Some(
-        // Shrinks before the name: in a narrow node the label goes first, the icon stays.
+        // Shrinks before the name: in a narrow row the label goes first, the icon stays.
         h_flex()
+            .id(SharedString::from(format!("agent-{}", input.entry.stage)))
             .min_w_0()
             .flex_shrink_1()
             .overflow_hidden()
             .gap_1()
-            .child(
-                div()
-                    .flex_none()
-                    .child(AgentIcon::new(runner.agent.clone())),
-            )
-            .when(!compact, |this| {
+            .child(div().flex_none().child(AgentIcon::new(Some(agent))))
+            .when(label, |this| {
                 this.child(
-                    Label::new(agent_line_text(&runner, |agent| agent_label(Some(agent))))
+                    Label::new(text.clone())
                         .size(LabelSize::XSmall)
                         .color(Color::Muted)
                         .truncate(),
                 )
             })
+            .when(!label, |this| this.tooltip(Tooltip::text(text)))
             .into_any_element(),
     )
 }
@@ -160,13 +163,8 @@ fn tile(input: &CardInput, tone: NodeTone, accent: Hsla, cx: &App) -> Div {
         .children(overlay(input, tone, accent, cx))
 }
 
-/// The name with its marks: agent, the person mark of a manual gate, rounds and the workflow.
-/// The row clips instead of wrapping, so a narrow node keeps its height. `fill`: the row has the
-/// node's width (an open node); a folded node's row is as wide as its content.
-fn name_row(input: &CardInput, tone: NodeTone, fill: bool, cx: &App) -> Div {
-    let entry = &input.entry;
-    let manual = input.stage.gate == Gate::Manual && input.stage.kind != StageKind::Release;
-    let name = Label::new(entry.name.clone())
+fn name_label(input: &CardInput, tone: NodeTone) -> Label {
+    Label::new(input.entry.name.clone())
         .weight(FontWeight::SEMIBOLD)
         .when(input.compact, |label| label.size(LabelSize::Small))
         .color(if tone.muted() {
@@ -175,24 +173,39 @@ fn name_row(input: &CardInput, tone: NodeTone, fill: bool, cx: &App) -> Div {
             Color::Default
         })
         .when(tone.struck(), |label| label.strikethrough())
-        .truncate();
+        .truncate()
+}
+
+/// The name and the agent icon of a bare node. The row clips instead of wrapping, so a narrow
+/// node keeps its height.
+fn name_row(input: &CardInput, tone: NodeTone) -> Div {
     h_flex()
         .debug_selector(|| "node-name".into())
         .min_w_0()
         .gap_1p5()
         .overflow_hidden()
-        // The name keeps its width up to 70%, so the agent chip gives way first. A row as wide as
-        // its content would cut the name at 70% of itself, so there the name shrinks too.
+        .child(div().min_w_0().child(name_label(input, tone)))
+        .children(agent_chip(input, false))
+}
+
+/// The name with its marks, on the details card: agent with its name, the person mark of a
+/// manual gate, rounds and the workflow.
+fn details_name_row(input: &CardInput, tone: NodeTone, cx: &App) -> Div {
+    let entry = &input.entry;
+    let manual = input.stage.gate == Gate::Manual && input.stage.kind != StageKind::Release;
+    h_flex()
+        .min_w_0()
+        .gap_1p5()
+        .overflow_hidden()
+        // The name keeps its width up to 70%, so the agent chip gives way first.
         .child(
             div()
                 .min_w_0()
-                .when(fill, |this| {
-                    this.flex_shrink_0()
-                        .max_w(relative(if input.compact { 1. } else { 0.7 }))
-                })
-                .child(name),
+                .flex_shrink_0()
+                .max_w(relative(0.7))
+                .child(name_label(input, tone)),
         )
-        .children(agent_chip(&input.stage, input.compact))
+        .children(agent_chip(input, true))
         .when(manual, |this| {
             this.child(
                 div()
@@ -251,15 +264,12 @@ fn meta_line(word: Option<&str>, facts: &[String], tone: NodeTone, accent: Hsla)
     )
 }
 
-/// The header row: tile and text. A folded node centres them as one group; an open node keeps
-/// them left, in line with its body. A finished or upcoming node folds on a click, Enter and
-/// Space, as the finished card did.
+/// The node: tile and name, centred as one group. A click, Enter and Space select it; on the
+/// selected node they go back to the current stage.
 fn header(
     input: &CardInput,
     tone: NodeTone,
     accent: Hsla,
-    foldable: bool,
-    open: bool,
     on: &OnCommand,
     cx: &App,
 ) -> Stateful<Div> {
@@ -270,61 +280,46 @@ fn header(
     let tip = tooltip_text(&entry.name, word, &facts);
     let hover_bg = colors.ghost_element_hover;
     let ring = colors.border_focused;
-    // The lines of the text stay left of one another; only the group moves to the centre.
     let texts = v_flex()
         .debug_selector(|| "node-texts".into())
-        .when(open, |this| this.flex_1())
         .min_w_0()
-        .gap(rems_from_px(1.0_f32))
-        .child(name_row(input, tone, open, cx))
-        .children(meta_line(word, &facts, tone, accent));
-    // Inside the node's 1 px border, so the hover fill meets it with the inner radius.
-    let radius = rems_from_px(NODE_RADIUS - 1.);
-    let head = h_flex()
+        .child(name_row(input, tone));
+    let on_click = on.clone();
+    let select = PanelCommand::SelectStage(entry.stage.clone());
+    let (on_key, select_key) = (on_click.clone(), select.clone());
+    h_flex()
         .id(SharedString::from(format!("fold-{}", entry.stage)))
         .w_full()
         .items_center()
-        .when(!open, |this| this.justify_center())
+        .justify_center()
         .gap(rems_from_px(PAD))
         // A clear border holds the keyboard focus ring without moving the content.
         .p(rems_from_px(INSET - FOCUS))
         .border_2()
         .border_color(gpui::transparent_black())
-        .map(|this| {
-            if open {
-                this.rounded_t(radius)
-            } else {
-                this.rounded(radius)
-            }
-        })
+        .rounded(rems_from_px(NODE_RADIUS))
         .child(tile(input, tone, accent, cx))
         .child(texts)
-        .tooltip(Tooltip::text(tip));
-    if !foldable {
-        return head;
-    }
-    let on_fold = on.clone();
-    let fold = PanelCommand::FoldCard(entry.stage.clone());
-    let (on_key, fold_key) = (on_fold.clone(), fold.clone());
-    head.cursor_pointer()
+        .tooltip(Tooltip::text(tip))
+        .cursor_pointer()
         .hover(move |style| style.bg(hover_bg))
         .focus_visible(move |style| style.border_color(ring))
         .when_some(input.fold_focus.as_ref(), |this, focus| {
             this.track_focus(focus)
         })
-        .on_click(move |_, window, cx| on_fold(fold.clone(), window, cx))
-        // A button of the web: Enter and Space open and fold it too.
+        .on_click(move |_, window, cx| on_click(select.clone(), window, cx))
+        // A button of the web: Enter and Space select it too.
         .on_key_down(move |event: &KeyDownEvent, window, cx| {
             if matches!(event.keystroke.key.as_str(), "enter" | "space") {
                 cx.stop_propagation();
-                on_key(fold_key.clone(), window, cx);
+                on_key(select_key.clone(), window, cx);
             }
         })
 }
 
-/// The still ring of the current node: absolute and outside the border, so it takes no room.
-fn glow_ring(accent: Hsla) -> Div {
-    let reach = rems_from_px(-(RING + 1.0));
+/// The bright ring of the selected node: absolute and outside the node, so it takes no room.
+fn selection_ring(color: Hsla) -> Div {
+    let reach = rems_from_px(-RING);
     div()
         .absolute()
         .top(reach)
@@ -332,70 +327,85 @@ fn glow_ring(accent: Hsla) -> Div {
         .right(reach)
         .bottom(reach)
         .rounded(rems_from_px(NODE_RADIUS + RING))
-        .border_3()
-        .border_color(accent.opacity(0.18))
+        .border_2()
+        .border_color(color)
 }
 
-/// One node. Width is the parent's. `opened` of the input folds a finished or upcoming node.
-pub(super) fn node(input: CardInput, on: &OnCommand, cx: &App) -> AnyElement {
-    let colors = cx.theme().colors();
+/// The tone and the accent colour of a node.
+fn tone_of(input: &CardInput, cx: &App) -> (NodeTone, Hsla) {
     let entry = &input.entry;
     let marked = input.facts.chip == CardChip::WillBeSkipped;
     let tone = node_tone(entry.status, entry.state, marked, input.ci_branch.is_some());
     let accent = tone
         .color_state()
-        .map_or(colors.text_muted, |state| state_colors(state, cx).fg);
-    let current = entry.status == StageStatus::Current;
-    let foldable = matches!(
-        entry.status,
-        StageStatus::Done | StageStatus::Skipped | StageStatus::Upcoming
-    );
-    let open = current || (foldable && input.opened);
-    let parts = match (open, entry.status) {
-        (false, _) => Vec::new(),
-        (true, StageStatus::Upcoming) => upcoming_parts(&input, on, cx),
-        (true, _) => body(&input, on, cx),
-    };
-    let border = match tone {
-        NodeTone::Current { .. } => accent.opacity(0.7),
-        NodeTone::Upcoming | NodeTone::WillSkip => colors.border,
-        _ => colors.border_variant,
-    };
-    let fade = match tone {
-        NodeTone::Skipped => 0.7,
-        NodeTone::NotTaken => 0.55,
-        _ => 1.,
-    };
-    let head = header(&input, tone, accent, foldable, open, on, cx);
-    // gpui has no dotted border: a not-taken node is dashed and faint.
+        .map_or(cx.theme().colors().text_muted, |state| {
+            state_colors(state, cx).fg
+        });
+    (tone, accent)
+}
+
+/// One bare node: no border, no background. Width is the parent's.
+pub(super) fn node(input: CardInput, on: &OnCommand, cx: &App) -> AnyElement {
+    let colors = cx.theme().colors();
+    let (tone, accent) = tone_of(&input, cx);
+    let fade = tone.fade();
+    let head = header(&input, tone, accent, on, cx);
     v_flex()
-        .id(SharedString::from(format!("card-{}", entry.stage)))
+        .id(SharedString::from(format!("card-{}", input.entry.stage)))
         .debug_selector(|| "node-card".into())
         .relative()
         .w_full()
         .min_w_0()
         // A pair row stretches both nodes to one height, so their bottom ports line up.
         .flex_grow_1()
+        .justify_center()
         .rounded(rems_from_px(NODE_RADIUS))
-        .border_1()
-        .border_color(border)
-        .when(!tone.muted(), |this| {
-            this.bg(colors.elevated_surface_background)
-        })
-        .when(!matches!(tone.border(), Stroke::Solid), |this| {
-            this.border_dashed()
+        .when(input.selected, |this| {
+            this.bg(colors.ghost_element_selected)
+                .child(selection_ring(colors.border_focused))
         })
         .when(fade < 1., |this| this.opacity(fade))
-        .when(tone.glow(), |this| this.child(glow_ring(accent)))
         .child(head)
-        .when(!parts.is_empty(), |this| {
-            this.child(
-                v_flex()
-                    .gap_2()
-                    .px(rems_from_px(INSET))
-                    .pb(rems_from_px(INSET))
-                    .children(parts),
-            )
-        })
+        .into_any_element()
+}
+
+/// The details card of the selected node, at the full width of the flow: the tile, the name
+/// with its marks, the state and facts, then the body of the stage (its actions while current).
+pub(super) fn details(input: CardInput, on: &OnCommand, cx: &App) -> AnyElement {
+    let colors = cx.theme().colors();
+    let (tone, accent) = tone_of(&input, cx);
+    let word = chip_word(input.facts.chip);
+    let facts = fact_parts(&input);
+    let parts = if input.entry.status == StageStatus::Upcoming {
+        upcoming_parts(&input, on, cx)
+    } else {
+        body(&input, on, cx)
+    };
+    let head = h_flex()
+        .w_full()
+        .items_center()
+        .gap(rems_from_px(PAD))
+        .child(tile(&input, tone, accent, cx))
+        .child(
+            v_flex()
+                .flex_1()
+                .min_w_0()
+                .gap(rems_from_px(1.0_f32))
+                .child(details_name_row(&input, tone, cx))
+                .children(meta_line(word, &facts, tone, accent)),
+        );
+    v_flex()
+        .id(SharedString::from(format!("details-{}", input.entry.stage)))
+        .debug_selector(|| "node-details".into())
+        .w_full()
+        .min_w_0()
+        .gap_2()
+        .p(rems_from_px(INSET))
+        .rounded(rems_from_px(NODE_RADIUS))
+        .border_1()
+        .border_color(colors.border_variant)
+        .bg(colors.elevated_surface_background)
+        .child(head)
+        .children(parts)
         .into_any_element()
 }

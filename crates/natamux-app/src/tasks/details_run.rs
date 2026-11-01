@@ -20,7 +20,7 @@ use crate::components::menu::MenuLayer;
 use crate::components::scroll_rules::centred_offset;
 use crate::components::toast_rules::ToastTone;
 use crate::sidebar::sidebar_tree::steps_of;
-use crate::stages::card_rules::end_with_the_task;
+use crate::stages::card_rules::{end_with_the_task, pick_after_click};
 use crate::stages::send_back_dialog::{self, SendBackDialog};
 use crate::stages::send_back_rules::send_back_target;
 use crate::tasks::details_commands::{OnCommand, PanelCommand};
@@ -99,8 +99,15 @@ impl DetailsPanel {
                 self.start_agent(&task, agent, cx);
             }
             PanelCommand::Toggle { kind, stage, on } => self.toggle(&task, kind, stage, on, cx),
-            PanelCommand::FoldCard(stage) => {
-                fold(self.shown.as_mut().map(|s| &mut s.open_cards), stage)
+            PanelCommand::SelectStage(stage) => {
+                let progress = self.progress(&task).map(|(_, progress)| progress);
+                if let Some(shown) = self.shown.as_mut() {
+                    shown.picked = pick_after_click(
+                        shown.picked.as_deref(),
+                        progress.as_deref().unwrap_or_default(),
+                        &stage,
+                    );
+                }
             }
             PanelCommand::FoldLane(path) => {
                 fold(self.shown.as_mut().map(|s| &mut s.open_lanes), path)
@@ -244,7 +251,7 @@ impl DetailsPanel {
     /// A finished stage's card and its "Show evidence" opened, for `--shot stage-evidence`.
     pub fn open_evidence(&mut self, stage: &str, cx: &mut Context<Self>) {
         if let Some(shown) = self.shown.as_mut() {
-            shown.open_cards.insert(stage.to_owned());
+            shown.picked = Some(stage.to_owned());
             shown.open_evidence.insert(stage.to_owned());
         }
         cx.notify();

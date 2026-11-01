@@ -1,7 +1,8 @@
 //! One stage of the Progress tab as a node of the flow (docs/design-task-stages.md 7.5,
-//! `StageCard.tsx`): the kind tile and the node itself are in `flow_node.rs`; this file holds what
-//! a card shows when open: the chips (output file, checks, send backs, the PR), the reasons and
-//! wait boxes, the evidence, the workflow and CI boxes, and the actions of the current stage.
+//! `StageCard.tsx`): the bare node and the details card are in `flow_node.rs`; this file holds
+//! what the details card of the selected node shows: the chips (output file, checks, send
+//! backs, the PR), the reasons and wait boxes, the evidence, the workflow and CI boxes, and the
+//! actions of the current stage.
 
 use gpui::{AnyElement, Div, FocusHandle, FontWeight, Stateful};
 use natamux_proto::stages::actions::StageFile;
@@ -29,7 +30,11 @@ pub struct CardInput {
     pub entry: StageProgress,
     pub stage: Stage,
     pub now_ms: i64,
-    pub opened: bool,
+    /// The selected node: a ring on the node, and its details card under the step.
+    pub selected: bool,
+    /// The agent icon of the node (`card_rules::node_agent`): the id, and true for the task's
+    /// agent.
+    pub node_agent: Option<(String, bool)>,
     pub file: Option<FileChip>,
     pub pr: Option<(String, bool)>,
     pub usage: Option<String>,
@@ -42,7 +47,7 @@ pub struct CardInput {
     pub facts: CardFacts,
     /// "Show evidence" is open.
     pub evidence_open: bool,
-    /// A finished or upcoming node's header takes the focus, so Enter and Space open it.
+    /// The node takes the focus, so Enter and Space select it.
     pub fold_focus: Option<FocusHandle>,
     pub boxes: Vec<ChoiceBox>,
     /// The Skip / Don't skip of a stage not reached yet: (marked, busy).
@@ -164,9 +169,14 @@ mod actions;
 use crate::components::icons::icon_path;
 use actions::actions_row;
 
-/// The whole card: one node of the flow.
+/// One bare node of the flow.
 pub fn stage_card(input: CardInput, on: &OnCommand, cx: &App) -> AnyElement {
     node::node(input, on, cx)
+}
+
+/// The full-width details card of the selected node.
+pub fn details_card(input: CardInput, on: &OnCommand, cx: &App) -> AnyElement {
+    node::details(input, on, cx)
 }
 
 #[path = "flow_node.rs"]

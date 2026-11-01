@@ -10,7 +10,7 @@ use ui::prelude::*;
 
 use super::CardInput;
 use super::chips::pass_row;
-use super::node::{INSET, chip_word, node, tooltip_text};
+use super::node::{INSET, chip_word, details, node, tooltip_text};
 use crate::app::test_views;
 use crate::stages::card_rules::{CardButton, CardChip, CardFacts};
 use crate::stages::stage_choices::{ChoiceBox, choice_box};
@@ -95,10 +95,21 @@ fn a_node_header_has_even_padding() {
 }
 
 #[test]
-fn a_foldable_node_opens_with_enter_and_space() {
+fn a_node_is_selected_with_a_click_enter_and_space() {
     let source = node_source("fn header(");
     assert!(source.contains("\"enter\" | \"space\""));
-    assert!(source.contains("PanelCommand::FoldCard"));
+    assert!(source.contains("PanelCommand::SelectStage"));
+    // Every status selects, the current stage too: no early return for some nodes (T-0257).
+    assert!(!source.contains("return head"));
+}
+
+#[test]
+fn a_bare_node_has_no_border_and_no_background() {
+    // Only the selected node gets a ring and a fill (T-0257).
+    let source = node_source("pub(super) fn node(");
+    assert!(!source.contains(".border_1()"));
+    assert!(!source.contains("elevated_surface_background"));
+    assert!(source.contains("when(input.selected"));
 }
 
 fn input(status: StageStatus, buttons: Vec<CardButton>) -> CardInput {
@@ -128,7 +139,8 @@ fn input(status: StageStatus, buttons: Vec<CardButton>) -> CardInput {
         },
         stage,
         now_ms: 0,
-        opened: false,
+        selected: false,
+        node_agent: Some(("claude-code".into(), true)),
         file: None,
         pr: None,
         usage: None,
@@ -213,10 +225,13 @@ fn a_long_choice_wraps_inside_the_card(cx: &mut TestAppContext) {
     assert!(narrow.size.height > wide.size.height * 1.5);
 }
 
-/// One node in a box of the rail's width.
+/// One node, or the details card of the selected node, in a box of the rail's width.
 struct Node {
     status: StageStatus,
+    details: bool,
 }
+
+const RAIL: f32 = 300.;
 
 impl Render for Node {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -226,42 +241,52 @@ impl Render for Node {
             _ => CardChip::Done,
         };
         card.usage = Some("$0.11".into());
-        v_flex().w(px(300.)).child(node(card, &noop(), cx))
+        // A node of a pair: the details card still takes the whole width.
+        card.compact = true;
+        let drawn = if self.details {
+            details(card, &noop(), cx)
+        } else {
+            node(card, &noop(), cx)
+        };
+        v_flex().w(px(RAIL)).child(drawn)
     }
 }
 
-fn drawn_node(status: StageStatus, cx: &mut TestAppContext) -> [gpui::Bounds<Pixels>; 5] {
-    let (_view, cx) = cx.add_window_view(|_, _| Node { status });
+fn drawn_node(
+    status: StageStatus,
+    details: bool,
+    cx: &mut TestAppContext,
+) -> &mut gpui::VisualTestContext {
+    let (_view, cx) = cx.add_window_view(|_, _| Node { status, details });
     cx.run_until_parked();
-    [
-        "node-card",
-        "node-tile",
-        "node-texts",
-        "node-name",
-        "node-meta",
-    ]
-    .map(|selector| {
-        cx.debug_bounds(selector)
-            .unwrap_or_else(|| panic!("{selector} was not drawn"))
-    })
+    cx
+}
+
+fn bounds(cx: &mut gpui::VisualTestContext, selector: &'static str) -> gpui::Bounds<Pixels> {
+    cx.debug_bounds(selector)
+        .unwrap_or_else(|| panic!("{selector} was not drawn"))
 }
 
 #[gpui::test]
-fn a_folded_node_centres_its_header(cx: &mut TestAppContext) {
+fn a_bare_node_centres_its_tile_and_name_and_shows_no_facts(cx: &mut TestAppContext) {
     test_views::init(cx);
-    let [card, tile, texts, name, meta] = drawn_node(StageStatus::Done, cx);
+    let cx = drawn_node(StageStatus::Done, false, cx);
+    let [card, tile, texts] = ["node-card", "node-tile", "node-texts"].map(|s| bounds(cx, s));
     let left = tile.left() - card.left();
     let right = card.right() - texts.right();
     assert!((left - right).abs() <= px(1.), "{left:?} vs {right:?}");
-    // The group moves to the centre; its lines stay in line with each other.
-    assert_eq!(name.left(), meta.left());
+    // Time, cost and the state word are on the details card only (T-0257).
+    assert!(cx.debug_bounds("node-meta").is_none());
 }
 
 #[gpui::test]
-fn an_open_node_keeps_its_header_left(cx: &mut TestAppContext) {
+fn the_details_card_of_a_pair_node_takes_the_whole_width(cx: &mut TestAppContext) {
     test_views::init(cx);
-    let [card, tile, ..] = drawn_node(StageStatus::Current, cx);
-    // The node's 1 px border, then the inset.
+    let cx = drawn_node(StageStatus::Current, true, cx);
+    let [card, tile] = ["node-details", "node-tile"].map(|s| bounds(cx, s));
+    assert!((card.size.width - px(RAIL)).abs() <= px(0.5), "{card:?}");
+    // The card's 1 px border, then the inset.
     let left = tile.left() - card.left();
     assert!((left - px(INSET + 1.)).abs() <= px(0.5), "{left:?}");
+    bounds(cx, "node-meta");
 }
