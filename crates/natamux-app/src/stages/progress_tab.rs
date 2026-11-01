@@ -15,7 +15,6 @@ use natamux_proto::tasks::task::Task;
 use ui::prelude::*;
 
 use super::card_rules::{card_facts, node_agent};
-use super::flow_lines::dot_grid;
 use super::flow_rules::CaretAt;
 use super::stage_card::{ActionsInput, CardInput, FileChip, details_card, stage_card};
 use super::stage_choices::ChoiceBox;
@@ -271,12 +270,10 @@ pub fn timeline(input: &ProgressInput, on: &OnCommand, cx: &App) -> Vec<AnyEleme
         .into_iter()
         .enumerate()
         .map(|(index, step)| {
-            // One element per step so the panel can scroll to one; each has its own dot grid.
+            // One element per step so the panel can scroll to one; the panel draws the dot grid.
             div()
-                .relative()
                 .px_3()
                 .when(index == last, |this| this.pb_3())
-                .child(dot_grid(cx))
                 .child(step)
                 .into_any_element()
         })
