@@ -7,6 +7,10 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v1.0.14 (2026-11-01)
+
+- Fix: the name under a Progress node stayed one long line. It now wraps under the tile.
+
 ## v1.0.13 (2026-10-31)
 
 - Add a custom agent in **Settings → Agents**: a built-in agent with your own command, or any other agent CLI. It shows in every agent picker. See [Custom agents](/docs/guides/desktop-app/#custom-agents).
