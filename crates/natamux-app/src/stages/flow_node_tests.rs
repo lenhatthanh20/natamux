@@ -7,7 +7,7 @@ use natamux_proto::stages::progress::StageStatus;
 use natamux_proto::tasks::task::TaskState;
 use ui::prelude::*;
 
-use super::node::node;
+use super::node::{NAME_MAX, node};
 use super::tests::{input, noop};
 use crate::app::test_views;
 use crate::stages::card_rules::CardChip;
@@ -15,6 +15,7 @@ use crate::stages::flow_rules::{LinkStyle, NodeLinks, PAIR_GAP, RUN_RING_OUT, ST
 
 const RAIL: f32 = 300.;
 const SHORT: &str = "Spec";
+const PICTURE: &str = "Watch CI/CD and merge PRs";
 const LONG: &str = "Watch CI/CD and merge the pull requests of every repository";
 
 /// Where the node is drawn: alone in the rail, or in one half of a pair row.
@@ -118,10 +119,26 @@ fn a_long_name_wraps_under_the_tile(cx: &mut TestAppContext) {
         drawn(alone(StageStatus::Done, SHORT, NodeLinks::default()), cx),
         "node-name",
     );
-    let cx = drawn(alone(StageStatus::Done, LONG, NodeLinks::default()), cx);
-    let [row, long] = ["flow-row", "node-name"].map(|s| bounds(cx, s));
-    assert!(long.size.height > short.size.height * 1.5, "{long:?}");
-    assert!(long.left() >= row.left() && long.right() <= row.right());
+    // The rail is wider than one line of the picture's name, so only the cap wraps it.
+    assert!(short.size.width < px(NAME_MAX), "{short:?}");
+    for name in [PICTURE, LONG] {
+        let cx = drawn(alone(StageStatus::Done, name, NodeLinks::default()), cx);
+        let [row, tile, long] = ["flow-row", "node-tile", "node-name"].map(|s| bounds(cx, s));
+        assert!(
+            long.size.height > short.size.height * 1.5,
+            "{name}: {long:?}"
+        );
+        assert!(
+            long.size.width <= px(NAME_MAX) + px(0.5),
+            "{name}: {long:?}"
+        );
+        assert!(
+            long.size.width + px(1.) < row.size.width,
+            "{name}: {long:?}"
+        );
+        assert!(long.left() >= row.left() && long.right() <= row.right());
+        assert!(near(centre_x(long), centre_x(tile)), "{name}: {long:?}");
+    }
 }
 
 #[gpui::test]
@@ -192,23 +209,25 @@ fn the_running_node_has_a_ring_around_its_tile(cx: &mut TestAppContext) {
 fn the_tiles_of_a_pair_sit_in_the_middle_of_each_node(cx: &mut TestAppContext) {
     test_views::init(cx);
     let (left_x, right_x) = pair_tiles(RAIL, 1.);
-    for (place, x) in [(Place::Left, left_x), (Place::Right, right_x)] {
-        let flow = Flow {
-            status: StageStatus::Done,
-            name: "Implement",
-            place,
-            links: NodeLinks::default(),
-        };
-        let cx = drawn(flow, cx);
-        let [row, tile, label] = ["flow-row", "node-tile", "node-name"].map(|s| bounds(cx, s));
-        assert!(
-            near(centre_x(tile) - row.left(), px(x)),
-            "{place:?}: {tile:?}"
-        );
-        assert!(
-            near(centre_x(label) - row.left(), px(x)),
-            "{place:?}: {label:?}"
-        );
+    for name in ["Implement", PICTURE] {
+        for (place, x) in [(Place::Left, left_x), (Place::Right, right_x)] {
+            let flow = Flow {
+                status: StageStatus::Done,
+                name,
+                place,
+                links: NodeLinks::default(),
+            };
+            let cx = drawn(flow, cx);
+            let [row, tile, label] = ["flow-row", "node-tile", "node-name"].map(|s| bounds(cx, s));
+            assert!(
+                near(centre_x(tile) - row.left(), px(x)),
+                "{name} {place:?}: {tile:?}"
+            );
+            assert!(
+                near(centre_x(label) - row.left(), px(x)),
+                "{name} {place:?}: {label:?}"
+            );
+        }
     }
 }
 
