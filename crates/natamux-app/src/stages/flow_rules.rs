@@ -34,10 +34,15 @@ pub const JOIN_DOT: f32 = 8.;
 pub const STROKE: f32 = 1.5;
 /// Distance between the dots of the canvas grid.
 pub const GRID: f32 = 16.;
-/// The height of the caret on top of a details card; its base is twice as wide.
-pub const CARET: f32 = 8.;
-/// The space between a selected node and its details card, which the caret spans.
-pub const CARET_GAP: f32 = 11.;
+/// The height of the caret on top of a details card, and half its base: wide and low.
+pub const CARET: f32 = 7.;
+pub const CARET_HALF: f32 = 10.;
+/// The round of the caret's tip.
+pub const CARET_ROUND: f32 = 2.;
+/// The space between a selected node and its details card, which the caret spans. It leaves
+/// 6 px between the tip and the node's selection ring (2 px outside the node), so they do not
+/// touch.
+pub const CARET_GAP: f32 = 15.;
 
 /// How a connector is drawn.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

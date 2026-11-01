@@ -224,3 +224,11 @@ fn keeps_the_tiles_of_a_column_24_apart() {
     // 12 px between two nodes, plus the 6 px stub inside each (T-0259).
     assert_eq!(LINK_H + 2. * STUB, 24.);
 }
+
+#[test]
+fn the_caret_is_wide_and_low_and_keeps_clear_of_the_selection_ring() {
+    // Owner, T-0259: the thin caret touching the node's ring looked cheap.
+    const { assert!(CARET_HALF > CARET) };
+    // The node's ring stands 2 px outside it; 6 px stay between it and the tip.
+    assert_eq!(CARET_GAP - CARET - 2., 6.);
+}
