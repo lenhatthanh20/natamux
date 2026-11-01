@@ -2,7 +2,7 @@ use natamux_proto::tasks::task::PullRequestStatus;
 
 use super::*;
 
-const URL: &str = "https://github.com/o/r/pull/569";
+const URL: &str = "https://github.com/o/r/pull/12345";
 
 fn task(pr: Option<&str>, status: Option<(&str, &str)>) -> Task {
     Task {
@@ -31,7 +31,7 @@ fn shows_the_pull_request_and_its_checks() {
         facts.pr,
         Some(PrFacts {
             url: URL.into(),
-            label: "#569".into(),
+            label: "#12345".into(),
             status: Some(("open · checks pass".into(), ChecksTone::Passing)),
         })
     );
@@ -48,7 +48,7 @@ fn shows_the_state_alone_without_checks() {
 fn shows_only_the_number_before_github_answers() {
     let facts = summary_facts(&task(Some(URL), None), None);
     let pr = facts.pr.expect("a pull request");
-    assert_eq!(pr.label, "#569");
+    assert_eq!(pr.label, "#12345");
     assert_eq!(pr.status, None);
 }
 
