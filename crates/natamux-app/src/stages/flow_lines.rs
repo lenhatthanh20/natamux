@@ -135,7 +135,9 @@ impl RenderOnce for FlowLink {
             .w_full()
             .min_h(rems_from_px(self.min))
             .when(self.grow, |this| this.flex_1())
-            .when(!self.grow, |this| this.flex_none().h(rems_from_px(self.min)))
+            .when(!self.grow, |this| {
+                this.flex_none().h(rems_from_px(self.min))
+            })
             .child(line)
     }
 }

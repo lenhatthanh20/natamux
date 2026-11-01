@@ -95,7 +95,10 @@ fn a_tile_sits_on_the_middle_line_whatever_the_name(cx: &mut TestAppContext) {
         for name in ["P", SHORT, LONG] {
             let cx = drawn(middle(status, name, NodeLinks::default()), cx);
             let [row, tile] = ["flow-row", "node-tile"].map(|s| bounds(cx, s));
-            assert!(near(centre_x(tile), centre_x(row)), "{name}: {tile:?} {row:?}");
+            assert!(
+                near(centre_x(tile), centre_x(row)),
+                "{name}: {tile:?} {row:?}"
+            );
         }
     }
 }
@@ -136,8 +139,14 @@ fn the_stubs_run_from_the_nodes_edges_to_its_tile(cx: &mut TestAppContext) {
         let [card, column, tile] =
             ["node-card", "node-tile-column", "node-tile"].map(|s| bounds(cx, s));
         // The stubs reach over the clear border, so they meet the flow's lines.
-        assert!(near(column.top(), card.top() + px(FOCUS)), "{name}: {column:?}");
-        assert!(near(column.bottom(), card.bottom() - px(FOCUS)), "{name}: {column:?}");
+        assert!(
+            near(column.top(), card.top() + px(FOCUS)),
+            "{name}: {column:?}"
+        );
+        assert!(
+            near(column.bottom(), card.bottom() - px(FOCUS)),
+            "{name}: {column:?}"
+        );
         assert!(tile.top() - column.top() >= px(STUB - 0.5));
         assert!(column.bottom() - tile.bottom() >= px(STUB - 0.5));
     }
@@ -151,7 +160,10 @@ fn the_running_node_has_a_ring_around_its_tile(cx: &mut TestAppContext) {
     test_views::init(cx);
     let done = drawn(middle(StageStatus::Done, SHORT, NodeLinks::default()), cx);
     assert!(done.debug_bounds("node-run-ring").is_none());
-    let cx = drawn(middle(StageStatus::Current, SHORT, NodeLinks::default()), cx);
+    let cx = drawn(
+        middle(StageStatus::Current, SHORT, NodeLinks::default()),
+        cx,
+    );
     let [ring, tile] = ["node-run-ring", "node-tile"].map(|s| bounds(cx, s));
     let out = px(RUN_RING_OUT);
     assert!(near(ring.left(), tile.left() - out) && near(ring.right(), tile.right() + out));
@@ -176,7 +188,10 @@ fn the_tiles_of_a_pair_sit_near_the_middle_with_the_texts_outside(cx: &mut TestA
         let cx = drawn(flow, cx);
         let [row, column, tile, texts] =
             ["flow-row", "node-tile-column", "node-tile", "node-texts"].map(|s| bounds(cx, s));
-        assert!(near(centre_x(tile) - row.left(), px(x)), "{side:?}: {tile:?}");
+        assert!(
+            near(centre_x(tile) - row.left(), px(x)),
+            "{side:?}: {tile:?}"
+        );
         if side == NodeSide::Left {
             assert!(texts.right() <= column.left() - px(PAD) + px(0.5));
         } else {

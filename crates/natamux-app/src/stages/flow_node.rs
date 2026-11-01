@@ -380,11 +380,7 @@ fn header(
                     .child(state_chip(input, tone, accent, cx)),
             ),
         NodeSide::Left => row
-            .child(
-                texts(input, tone, accent, cx)
-                    .items_end()
-                    .text_right(),
-            )
+            .child(texts(input, tone, accent, cx).items_end().text_right())
             .child(column),
         NodeSide::Right => row
             .child(column)

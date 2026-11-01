@@ -50,11 +50,7 @@ fn a_stack_and_a_branch_put_their_card_under_the_whole_frame() {
     let stack = source_of(include_str!("progress_steps.rs"), "fn stack(");
     in_order(
         stack,
-        &[
-            ".child(frame)",
-            ".children(details)",
-            "FlowLink::new(out)",
-        ],
+        &[".child(frame)", ".children(details)", "FlowLink::new(out)"],
     );
     let branch = source_of(include_str!("progress_branch.rs"), "pub(super) fn branch(");
     in_order(

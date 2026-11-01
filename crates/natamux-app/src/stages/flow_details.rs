@@ -47,15 +47,11 @@ fn details_name_row(input: &CardInput, tone: NodeTone, cx: &App) -> Div {
         .overflow_hidden()
         // The name keeps its width up to 70%, so the agent chip gives way first.
         .child(
-            div()
-                .min_w_0()
-                .flex_shrink_0()
-                .max_w(relative(0.7))
-                .child(
-                    name_label(input, tone)
-                        .weight(FontWeight::SEMIBOLD)
-                        .truncate(),
-                ),
+            div().min_w_0().flex_shrink_0().max_w(relative(0.7)).child(
+                name_label(input, tone)
+                    .weight(FontWeight::SEMIBOLD)
+                    .truncate(),
+            ),
         )
         .children(agent_chip(input))
         .when(manual, |this| {
