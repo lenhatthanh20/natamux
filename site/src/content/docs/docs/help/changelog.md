@@ -10,6 +10,7 @@ All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/r
 ## v1.0.14 (2026-11-01)
 
 - In the desktop app, the docked details panel starts at 280 px, so the panel plus the rail of view icons matches the sidebar. A width you already set stays. See [In the desktop app](/docs/guides/dashboard/#in-the-desktop-app).
+- Fix: the name under a Progress node stayed one long line. It now wraps under the tile.
 
 ## v1.0.13 (2026-10-31)
 

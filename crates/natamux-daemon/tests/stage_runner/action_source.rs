@@ -48,6 +48,8 @@ fn reopen_and_fail(flag: bool, source: &str) {
 #[test]
 fn records_a_report_with_by_agent_and_no_terminal_as_the_agent() {
     let f = Fixture::new();
+    // The default pipeline runs test-spec beside implement, so a report with no name cannot pick one.
+    f.set_stages(json!([{ "id": "implement", "kind": "agent", "gate": "manual" }]));
     let task = f.implementing("implement");
     f.runner
         .run
@@ -60,6 +62,8 @@ fn records_a_report_with_by_agent_and_no_terminal_as_the_agent() {
 #[test]
 fn records_a_report_with_no_terminal_and_no_by_agent_as_a_person() {
     let f = Fixture::new();
+    // The default pipeline runs test-spec beside implement, so a report with no name cannot pick one.
+    f.set_stages(json!([{ "id": "implement", "kind": "agent", "gate": "manual" }]));
     let task = f.implementing("implement");
     f.runner
         .run
