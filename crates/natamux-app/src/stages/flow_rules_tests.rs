@@ -201,16 +201,25 @@ fn puts_two_stages_side_by_side_and_stacks_three_or_four() {
 }
 
 #[test]
-fn puts_the_ports_of_a_pair_at_the_middle_of_each_node() {
-    // 320 wide, 8 apart: nodes are 156 wide, at 0..156 and 164..320.
-    assert_eq!(pair_centres(320., 8.), (78., 242.));
-    assert_eq!(pair_centres(0., 8.), (0., 0.));
+fn puts_the_tiles_of_a_pair_near_the_middle() {
+    // The owner's picture (T-0259): texts outside, tiles 40 px left and right of the middle.
+    assert_eq!(PAIR_TILE_OFF, 40.);
+    assert_eq!(pair_tiles(300., 1.), (110., 190.));
+    // The UI size scales the offset, not the middle.
+    assert_eq!(pair_tiles(300., 1.5), (90., 210.));
+    assert_eq!(pair_tiles(400., 1.), (160., 240.));
 }
 
 #[test]
-fn the_caret_points_at_the_middle_of_the_selected_node() {
-    assert_eq!(caret_x(CaretAt::Middle, 320., 8.), 160.);
-    // The same x as the pair's ports, so it sits under the left or right node's middle.
-    assert_eq!(caret_x(CaretAt::Left, 320., 8.), 78.);
-    assert_eq!(caret_x(CaretAt::Right, 320., 8.), 242.);
+fn the_caret_points_at_the_tile_of_the_selected_node() {
+    assert_eq!(caret_x(CaretAt::Middle, 300., 1.), 150.);
+    // The same x as the pair's tiles.
+    assert_eq!(caret_x(CaretAt::Left, 300., 1.), 110.);
+    assert_eq!(caret_x(CaretAt::Right, 300., 1.), 190.);
+}
+
+#[test]
+fn keeps_the_tiles_of_a_column_24_apart() {
+    // 12 px between two nodes, plus the 6 px stub inside each (T-0259).
+    assert_eq!(LINK_H + 2. * STUB, 24.);
 }

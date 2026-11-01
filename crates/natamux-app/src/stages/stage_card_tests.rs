@@ -10,10 +10,10 @@ use ui::prelude::*;
 
 use super::CardInput;
 use super::chips::pass_row;
-use super::node::{INSET, chip_word, details, node, node_chip_word, tooltip_text};
+use super::node::{chip_word, details, node, node_chip_word, tooltip_text};
 use crate::app::test_views;
 use crate::stages::card_rules::{CardButton, CardChip, CardFacts};
-use crate::stages::flow_rules::CaretAt;
+use crate::stages::flow_rules::{CaretAt, INSET, NodeLinks, NodeSide};
 use crate::stages::stage_choices::{ChoiceBox, choice_box};
 use crate::tasks::details_commands::{OnCommand, StageToggle};
 
@@ -63,14 +63,6 @@ fn node_source(name: &str) -> &'static str {
 }
 
 #[test]
-fn a_node_header_centres_the_tile_and_the_text() {
-    // Beside a top-aligned head the mark sat above the stage name (T-0169).
-    let source = node_source("fn header(");
-    assert!(source.contains("items_center"));
-    assert!(!source.contains("items_start"));
-}
-
-#[test]
 fn a_node_root_does_not_clip_the_ports_of_the_flow() {
     // The flow draws its ports over the node's border; a clipped root would cut them.
     let source = node_source("pub(super) fn node(");
@@ -87,12 +79,14 @@ fn a_node_has_no_more_button() {
 }
 
 #[test]
-fn a_node_header_has_even_padding() {
-    // The head had 10 px left and right but 8 px top and bottom (T-0252).
+fn a_node_header_has_side_padding_only() {
+    // The stubs above and below the tile run to the node's edges, so the lines touch it (T-0259).
     let source = node_source("fn header(");
-    assert!(source.contains(".p(rems_from_px(INSET - FOCUS))"));
-    assert!(!source.contains(".px("));
+    assert!(source.contains(".px(rems_from_px(INSET - FOCUS))"));
+    assert!(!source.contains(".p(rems"));
     assert!(!source.contains(".py("));
+    assert!(!source.contains(".pt("));
+    assert!(!source.contains(".pb("));
 }
 
 #[test]
@@ -113,11 +107,12 @@ fn a_bare_node_has_no_border_and_no_background() {
     assert!(source.contains("when(input.selected"));
 }
 
-fn input(status: StageStatus, buttons: Vec<CardButton>) -> CardInput {
+pub(super) fn input(status: StageStatus, buttons: Vec<CardButton>) -> CardInput {
     let mut stage = Stage::new("plan", StageKind::Agent, Gate::Auto);
     stage.output = Some("plan.md".into());
     CardInput {
-        compact: false,
+        side: NodeSide::Middle,
+        links: NodeLinks::default(),
         entry: StageProgress {
             stage: "plan".into(),
             name: "Plan".into(),
@@ -179,7 +174,7 @@ fn the_meta_line_and_the_tooltip_say_the_same_facts() {
     assert_eq!(tooltip_text("Plan", None, &[]), "Plan");
 }
 
-fn noop() -> OnCommand {
+pub(super) fn noop() -> OnCommand {
     Rc::new(|_, _, _| {})
 }
 
@@ -242,9 +237,9 @@ impl Render for Node {
             _ => CardChip::Done,
         };
         card.usage = Some("$0.11".into());
-        // A node of a pair: the details card still takes the whole width.
-        card.compact = true;
         let drawn = if self.details {
+            // A node of a pair: the details card still takes the whole width.
+            card.side = NodeSide::Left;
             details(card, CaretAt::Middle, &noop(), cx)
         } else {
             node(card, &noop(), cx)
@@ -269,13 +264,9 @@ fn bounds(cx: &mut gpui::VisualTestContext, selector: &'static str) -> gpui::Bou
 }
 
 #[gpui::test]
-fn a_bare_node_centres_its_tile_and_name_and_shows_no_facts(cx: &mut TestAppContext) {
+fn a_bare_node_shows_no_facts(cx: &mut TestAppContext) {
     test_views::init(cx);
     let cx = drawn_node(StageStatus::Done, false, cx);
-    let [card, tile, texts] = ["node-card", "node-tile", "node-texts"].map(|s| bounds(cx, s));
-    let left = tile.left() - card.left();
-    let right = card.right() - texts.right();
-    assert!((left - right).abs() <= px(1.), "{left:?} vs {right:?}");
     // Time, cost and the state word are on the details card only (T-0257).
     assert!(cx.debug_bounds("node-meta").is_none());
 }

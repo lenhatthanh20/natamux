@@ -12,12 +12,19 @@ use natamux_proto::tasks::task::TaskState;
 use super::stage_view_rules::{ProgressLookup, branch_status, path_label, taken_path};
 
 /// Sizes in px at the base rem size (16 px); views turn them into rems.
-pub const PORT: f32 = 6.;
-/// How far a port pokes out past the outer edge of a node with a 1 px border: its centre sits on
-/// the middle of the border.
-pub const PORT_OUT: f32 = PORT / 2. - 0.5;
-/// The height of a straight connector between two steps.
-pub const LINK_H: f32 = 24.;
+/// The height of a straight connector between two steps; with the stubs inside the two nodes the
+/// tiles stay 24 apart.
+pub const LINK_H: f32 = 12.;
+/// The least line inside a node, above and below its tile.
+pub const STUB: f32 = 6.;
+/// The kind tile of a node.
+pub const TILE: f32 = 36.;
+/// The space between a node's side edges and its content.
+pub const INSET: f32 = 12.;
+/// How far the running ring stands out of the tile on each side.
+pub const RUN_RING_OUT: f32 = 6.;
+/// The tile column of every node: as wide as the running ring, so a pair's tiles keep their x.
+pub const TILE_BOX: f32 = TILE + 2. * RUN_RING_OUT;
 /// The height of the fork and the join curves of a pair.
 pub const CURVE_H: f32 = 30.;
 /// The gap between the two nodes of a pair.
@@ -274,11 +281,35 @@ pub fn group_layout(count: usize) -> GroupLayout {
     }
 }
 
-/// The x of the two ports of a pair, from the left of a row `width` wide whose two `flex_1` nodes
-/// sit `gap` apart. Each node is `(width - gap) / 2` wide.
-pub fn pair_centres(width: f32, gap: f32) -> (f32, f32) {
-    let half = (width - gap).max(0.) / 4.;
-    (half, width - half)
+/// Where a node's texts sit around its tile, which is always on a line of the flow.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum NodeSide {
+    /// The tile in the middle of the row: the name at its left, the chip at its right.
+    #[default]
+    Middle,
+    /// The left node of a pair: name over chip at the left of the tile.
+    Left,
+    /// The right node of a pair: name over chip at the right of the tile.
+    Right,
+}
+
+/// The lines inside a node, into its tile from the top and out of it to the bottom; `None` draws
+/// none (the first step, a node of a stack frame, a node with its details card open under it).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct NodeLinks {
+    pub into: Option<LinkStyle>,
+    pub out: Option<LinkStyle>,
+}
+
+/// How far each tile of a pair is from the row's middle: the two `flex_1` nodes sit `PAIR_GAP`
+/// apart and each has its tile column at its inner edge, inside `INSET`.
+pub const PAIR_TILE_OFF: f32 = PAIR_GAP / 2. + INSET + TILE_BOX / 2.;
+
+/// The x of the two tiles of a pair, from the left of a row `width` wide, at UI size `scale`.
+pub fn pair_tiles(width: f32, scale: f32) -> (f32, f32) {
+    let middle = width / 2.;
+    let off = PAIR_TILE_OFF * scale;
+    (middle - off, middle + off)
 }
 
 /// The node a details card's caret points at: one in the middle (a stage, a stack, a branch), or
@@ -291,9 +322,9 @@ pub enum CaretAt {
 }
 
 /// The x of the caret's tip, from the left of a card `width` wide: the card is as wide as the
-/// pair row, so the tip sits under the node's middle.
-pub fn caret_x(at: CaretAt, width: f32, gap: f32) -> f32 {
-    let (left, right) = pair_centres(width, gap);
+/// pair row, so the tip sits under the node's tile.
+pub fn caret_x(at: CaretAt, width: f32, scale: f32) -> f32 {
+    let (left, right) = pair_tiles(width, scale);
     match at {
         CaretAt::Middle => width / 2.,
         CaretAt::Left => left,

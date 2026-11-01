@@ -30,7 +30,7 @@ fn a_stage_puts_its_card_right_under_the_node_with_no_port_between() {
         &[
             "ported(card)",
             ".children(details)",
-            "link_after(style, open)",
+            "out.map(FlowLink::new)",
         ],
     );
 }
@@ -53,7 +53,7 @@ fn a_stack_and_a_branch_put_their_card_under_the_whole_frame() {
         &[
             ".child(frame)",
             ".children(details)",
-            "link_after(out, open)",
+            "FlowLink::new(out)",
         ],
     );
     let branch = source_of(include_str!("progress_branch.rs"), "pub(super) fn branch(");
@@ -62,7 +62,7 @@ fn a_stack_and_a_branch_put_their_card_under_the_whole_frame() {
         &[
             ".child(frame)",
             ".children(details)",
-            "link_after(style, open)",
+            "out.map(FlowLink::new)",
         ],
     );
 }
@@ -85,4 +85,23 @@ fn the_lines_meet_the_nodes_with_no_port_rings() {
     ] {
         assert!(!source.contains("Port::"));
     }
+}
+
+#[test]
+fn a_pair_puts_its_texts_outside_and_says_side_by_side() {
+    // The owner's picture (T-0259).
+    let pair = source_of(include_str!("progress_steps.rs"), "fn pair(");
+    in_order(pair, &["NodeSide::Left", "NodeSide::Right"]);
+    assert_eq!(super::steps::SIDE_BY_SIDE, "SIDE BY SIDE");
+    let note = source_of(include_str!("progress_steps.rs"), "fn group_note(");
+    assert!(note.contains("\"{name} waits for both\""));
+}
+
+#[test]
+fn a_stage_draws_its_stubs_but_none_under_an_open_card() {
+    let step = source_of(include_str!("progress_flow.rs"), "fn flow_step(");
+    assert!(step.contains("into: around.in_style(own)"));
+    assert!(step.contains("out: out.filter(|_| !open)"));
+    let pair = source_of(include_str!("progress_steps.rs"), "fn pair(");
+    assert!(pair.contains("out: (!open).then(|| join_style(edge.status))"));
 }

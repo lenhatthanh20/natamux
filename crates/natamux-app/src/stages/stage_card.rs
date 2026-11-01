@@ -11,6 +11,7 @@ use natamux_proto::stages::schema::{Gate, Stage, StageKind};
 use ui::prelude::*;
 
 use super::card_rules::CardFacts;
+use super::flow_rules::{NodeLinks, NodeSide};
 use super::stage_choices::{ChoiceBox, choice_box};
 use super::stage_view_rules::{finished_when, stage_time};
 use crate::components::button_style::quiet_button;
@@ -53,8 +54,10 @@ pub struct CardInput {
     /// The Skip / Don't skip of a stage not reached yet: (marked, busy).
     pub skip: Option<(bool, bool)>,
     pub actions: Option<ActionsInput>,
-    /// A node of a side-by-side pair: smaller tile and name, the agent as its icon only.
-    pub compact: bool,
+    /// Where the texts sit around the tile.
+    pub side: NodeSide,
+    /// The lines inside the node, above and below its tile.
+    pub links: NodeLinks,
 }
 
 /// The actions row of the current stage, while the task is open.
@@ -221,3 +224,7 @@ fn upcoming_parts(input: &CardInput, on: &OnCommand, cx: &App) -> Vec<AnyElement
 #[cfg(test)]
 #[path = "stage_card_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "flow_node_tests.rs"]
+mod node_tests;

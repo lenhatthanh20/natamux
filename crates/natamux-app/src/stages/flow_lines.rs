@@ -10,8 +10,8 @@ use natamux_proto::tasks::task::TaskState;
 use ui::prelude::*;
 
 use super::flow_rules::{
-    CARET, CURVE_H, CaretAt, GRID, JOIN_DOT, LINK_H, LinkStyle, PAIR_GAP, PORT_OUT, STROKE,
-    Stroke, caret_x, pair_centres,
+    CARET, CURVE_H, CaretAt, GRID, JOIN_DOT, LINK_H, LinkStyle, STROKE, STUB, Stroke, caret_x,
+    pair_tiles,
 };
 use crate::components::colors::state_colors;
 
@@ -73,13 +73,15 @@ fn draw(
     }
 }
 
-/// The straight connector between two steps, down the middle of the column. By default it starts
-/// below the output port of the step above, so it does not draw over the ring.
+/// The straight connector between two steps, down the middle of its box, from its top to its
+/// bottom: the lines meet the nodes with no ports (T-0259).
 #[derive(IntoElement)]
 pub struct FlowLink {
     style: LinkStyle,
     grow: bool,
-    from_top: bool,
+    min: f32,
+    /// How far the line goes past its box's top and bottom.
+    reach: (f32, f32),
 }
 
 impl FlowLink {
@@ -87,7 +89,19 @@ impl FlowLink {
         Self {
             style,
             grow: false,
-            from_top: false,
+            min: LINK_H,
+            reach: (0., 0.),
+        }
+    }
+
+    /// The line inside a node, above or below its tile: it grows with the node, at least `STUB`,
+    /// and reaches `up` and `down` px past its box, over the node's clear focus border.
+    pub fn stub(style: LinkStyle, up: f32, down: f32) -> Self {
+        Self {
+            style,
+            grow: true,
+            min: STUB,
+            reach: (up, down),
         }
     }
 
@@ -96,26 +110,21 @@ impl FlowLink {
         self.grow = true;
         self
     }
-
-    /// Starts at the very top: no port above it (a join dot, a group pill).
-    pub fn at_top(mut self) -> Self {
-        self.from_top = true;
-        self
-    }
 }
 
 impl RenderOnce for FlowLink {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let pen = pen(self.style, cx);
-        let start = if self.from_top { 0. } else { PORT_OUT };
+        let (up, down) = self.reach;
         let line = canvas(
             |_, _, _| {},
             move |bounds, _, window, _| {
                 let scale = scale(window);
                 let x = f32::from(bounds.origin.x) + f32::from(bounds.size.width) / 2.;
                 let top = f32::from(bounds.origin.y);
-                let from = point(px(x), px(top + start * scale));
-                let to = point(px(x), px(top + f32::from(bounds.size.height)));
+                let bottom = top + f32::from(bounds.size.height);
+                let from = point(px(x), px(top - up * scale));
+                let to = point(px(x), px(bottom + down * scale));
                 draw(window, pen, scale, from, to, None);
             },
         )
@@ -124,9 +133,9 @@ impl RenderOnce for FlowLink {
         div()
             .relative()
             .w_full()
-            .min_h(rems_from_px(LINK_H))
+            .min_h(rems_from_px(self.min))
             .when(self.grow, |this| this.flex_1())
-            .when(!self.grow, |this| this.flex_none().h(rems_from_px(LINK_H)))
+            .when(!self.grow, |this| this.flex_none().h(rems_from_px(self.min)))
             .child(line)
     }
 }
@@ -155,7 +164,7 @@ impl RenderOnce for Caret {
             move |bounds, _, window, _| {
                 let scale = scale(window);
                 let width = f32::from(bounds.size.width);
-                let x = f32::from(bounds.origin.x) + caret_x(at, width, PAIR_GAP * scale);
+                let x = f32::from(bounds.origin.x) + caret_x(at, width, scale);
                 // The base is 1 px into the card, over its top border.
                 let base = f32::from(bounds.origin.y) + f32::from(bounds.size.height);
                 let half = CARET * scale;
@@ -190,9 +199,9 @@ impl RenderOnce for Caret {
     }
 }
 
-/// The two curves of a pair: a fork from the middle down to the two nodes, or a join from their
-/// output ports back to the middle. Its width must be the pair row's width (same parent, same
-/// side insets), and the row must space its two `flex_1` nodes `PAIR_GAP` apart.
+/// The two curves of a pair: a fork from the middle down to the two tiles, or a join from them
+/// back to the middle. Its width must be the pair row's width (same parent, same side insets),
+/// and the row must space its two `flex_1` nodes `PAIR_GAP` apart (`pair_tiles`).
 #[derive(IntoElement)]
 pub struct PairCurves {
     left: LinkStyle,
@@ -232,13 +241,12 @@ impl RenderOnce for PairCurves {
                 let top = f32::from(bounds.origin.y);
                 let width = f32::from(bounds.size.width);
                 let height = f32::from(bounds.size.height);
-                let (first, second) = pair_centres(width, PAIR_GAP * scale);
+                let (first, second) = pair_tiles(width, scale);
                 let middle = width / 2.;
                 let at = |x: f32, y: f32| point(px(left + x), px(top + y));
                 for (pen, x) in pens.into_iter().zip([first, second]) {
-                    // A join starts below the output port, so it does not draw over the ring.
                     let ((x0, y0), (x1, y1)) = if join {
-                        ((x, PORT_OUT * scale), (middle, height))
+                        ((x, 0.), (middle, height))
                     } else {
                         ((middle, 0.), (x, height))
                     };
@@ -313,7 +321,7 @@ impl RenderOnce for JoinDot {
             .child(dot)
             .when_some(self.below, |this, below| {
                 this.min_h(rems_from_px(JOIN_DOT + LINK_H))
-                    .child(FlowLink::new(below).at_top().grow())
+                    .child(FlowLink::new(below).grow())
             });
         // Equal flex_1 sides keep the dot on the middle line whatever the note's length.
         let note = div()
