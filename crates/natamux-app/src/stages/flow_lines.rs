@@ -10,7 +10,8 @@ use natamux_proto::tasks::task::TaskState;
 use ui::prelude::*;
 
 use super::flow_rules::{
-    CARET, CURVE_H, CaretAt, GRID, JOIN_DOT, LINK_H, LinkStyle, STROKE, Stroke, caret_x, pair_tiles,
+    CARET, CARET_HALF, CARET_ROUND, CURVE_H, CaretAt, GRID, JOIN_DOT, LINK_H, LinkStyle, STROKE,
+    Stroke, caret_x, pair_tiles,
 };
 use crate::components::colors::state_colors;
 
@@ -136,7 +137,8 @@ impl RenderOnce for FlowLink {
 
 /// The caret on top of a details card, pointing up at the selected node (mockup A of T-0257). Put
 /// it as a child of the `relative()` card: it stands on the card's top border and covers the
-/// border under its base, in the card's colours.
+/// border under its base, in the card's colours, so card and caret read as one shape. Wide and
+/// low with a round tip (owner, T-0259: the thin sharp one looked cheap).
 #[derive(IntoElement)]
 pub struct Caret {
     at: CaretAt,
@@ -159,23 +161,32 @@ impl RenderOnce for Caret {
                 let scale = scale(window);
                 let width = f32::from(bounds.size.width);
                 let x = f32::from(bounds.origin.x) + caret_x(at, width, scale);
-                // The base is 1 px into the card, over its top border.
-                let base = f32::from(bounds.origin.y) + f32::from(bounds.size.height);
-                let half = CARET * scale;
-                let tip = point(px(x), px(base - 1. - half));
-                let (left, right) = (point(px(x - half), px(base)), point(px(x + half), px(base)));
+                // The base runs along the middle of the card's 1 px top border.
+                let base = f32::from(bounds.origin.y) + f32::from(bounds.size.height) - 0.5;
+                let (half, high, round) = (CARET_HALF * scale, CARET * scale, CARET_ROUND * scale);
+                let top = base - high;
+                let pt = |dx: f32, y: f32| point(px(x + dx), px(y));
+                // Each side stops short of the tip; a curve through the tip rounds it.
+                let lean = round * half / high;
+                let (into_tip, out_of_tip) = (pt(-lean, top + round), pt(lean, top + round));
+                let tip = pt(0., top);
                 let mut body = PathBuilder::fill();
-                body.move_to(left);
-                body.line_to(tip);
-                body.line_to(right);
+                // The fill reaches 1 px under the base, so no border line shows through it.
+                body.move_to(pt(-half, base + 1.));
+                body.line_to(pt(-half, base));
+                body.line_to(into_tip);
+                body.cubic_bezier_to(out_of_tip, tip, tip);
+                body.line_to(pt(half, base));
+                body.line_to(pt(half, base + 1.));
                 body.close();
                 if let Ok(path) = body.build() {
                     window.paint_path(path, fill);
                 }
                 let mut edge = PathBuilder::stroke(px(1.));
-                edge.move_to(left);
-                edge.line_to(tip);
-                edge.line_to(right);
+                edge.move_to(pt(-half, base));
+                edge.line_to(into_tip);
+                edge.cubic_bezier_to(out_of_tip, tip, tip);
+                edge.line_to(pt(half, base));
                 if let Ok(path) = edge.build() {
                     window.paint_path(path, rim);
                 }
