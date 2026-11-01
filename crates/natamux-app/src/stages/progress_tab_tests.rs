@@ -84,10 +84,10 @@ fn the_lines_meet_the_nodes_with_no_port_rings() {
 }
 
 #[test]
-fn a_pair_puts_its_texts_outside_and_says_side_by_side() {
+fn a_pair_says_side_by_side_and_waits_for_both() {
     // The owner's picture (T-0259).
     let pair = source_of(include_str!("progress_steps.rs"), "fn pair(");
-    in_order(pair, &["NodeSide::Left", "NodeSide::Right"]);
+    assert!(pair.contains("side(first)") && pair.contains("side(second)"));
     assert_eq!(super::steps::SIDE_BY_SIDE, "SIDE BY SIDE");
     let note = source_of(include_str!("progress_steps.rs"), "fn group_note(");
     assert!(note.contains("\"{name} waits for both\""));

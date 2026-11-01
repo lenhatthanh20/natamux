@@ -11,7 +11,7 @@ use ui::prelude::*;
 use super::Ctx;
 use crate::stages::flow_lines::FlowLink;
 use crate::stages::flow_rules::{
-    CaretAt, LinkStyle, NodeLinks, NodeSide, group_status, link_style,
+    CaretAt, LinkStyle, NodeLinks, group_status, link_style,
 };
 use crate::stages::stage_view_rules::branch_status;
 
@@ -92,7 +92,7 @@ impl Ctx<'_> {
                     out: out.filter(|_| !open),
                 };
                 let card = self
-                    .card(&stage.id, NodeSide::Middle, links, cx)
+                    .card(&stage.id, links, cx)
                     .unwrap_or_else(|| div().into_any_element());
                 v_flex()
                     .w_full()

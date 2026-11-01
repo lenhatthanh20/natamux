@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
-//! A node on the flow's line, as the owner's picture draws it (T-0259): the tile on the line, the
-//! texts around it, the lines touching it, the running ring.
+//! A node on the flow's line, as the owner's picture draws it (T-0259): the tile in the middle,
+//! the name under it, the lines touching the tile and the name, the running ring.
 
 use gpui::{Bounds, TestAppContext, VisualTestContext};
 use natamux_proto::stages::progress::StageStatus;
@@ -11,22 +11,28 @@ use super::node::node;
 use super::tests::{input, noop};
 use crate::app::test_views;
 use crate::stages::card_rules::CardChip;
-use crate::stages::flow_rules::{
-    LinkStyle, NodeLinks, NodeSide, PAIR_GAP, RUN_RING_OUT, STUB, pair_tiles,
-};
+use crate::stages::flow_rules::{LinkStyle, NodeLinks, PAIR_GAP, RUN_RING_OUT, STUB, pair_tiles};
 
 const RAIL: f32 = 300.;
 const SHORT: &str = "Spec";
 const LONG: &str = "Watch CI/CD and merge the pull requests of every repository";
-/// `flow_node.rs`: the gap between the tile column and the texts, and the head's clear border.
-const PAD: f32 = 12.;
+/// `flow_node.rs`: the gap between the tile and the name.
+const NAME_GAP: f32 = 6.;
 
-/// One node in the rail, alone (`Middle`) or in its half of a pair row.
+/// Where the node is drawn: alone in the rail, or in one half of a pair row.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Place {
+    Alone,
+    Left,
+    Right,
+}
+
+/// One node in the rail.
 #[derive(Clone, Copy)]
 struct Flow {
     status: StageStatus,
     name: &'static str,
-    side: NodeSide,
+    place: Place,
     links: NodeLinks,
 }
 
@@ -34,7 +40,6 @@ impl Render for Flow {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let mut card = input(self.status, Vec::new());
         card.entry.name = self.name.into();
-        card.side = self.side;
         card.links = self.links;
         card.facts.chip = if self.status == StageStatus::Current {
             card.entry.state = Some(TaskState::Running);
@@ -50,10 +55,10 @@ impl Render for Flow {
             .w(px(RAIL))
             .items_stretch()
             .gap(rems_from_px(PAIR_GAP));
-        match self.side {
-            NodeSide::Middle => row.child(slot().child(drawn)),
-            NodeSide::Left => row.child(slot().child(drawn)).child(slot()),
-            NodeSide::Right => row.child(slot()).child(slot().child(drawn)),
+        match self.place {
+            Place::Alone => row.child(slot().child(drawn)),
+            Place::Left => row.child(slot().child(drawn)).child(slot()),
+            Place::Right => row.child(slot()).child(slot().child(drawn)),
         }
     }
 }
@@ -64,11 +69,11 @@ fn drawn(flow: Flow, cx: &mut TestAppContext) -> &mut VisualTestContext {
     cx
 }
 
-fn middle(status: StageStatus, name: &'static str, links: NodeLinks) -> Flow {
+fn alone(status: StageStatus, name: &'static str, links: NodeLinks) -> Flow {
     Flow {
         status,
         name,
-        side: NodeSide::Middle,
+        place: Place::Alone,
         links,
     }
 }
@@ -86,85 +91,86 @@ fn near(a: Pixels, b: Pixels) -> bool {
     (a - b).abs() <= px(0.5)
 }
 
+const LINKS: NodeLinks = NodeLinks {
+    into: Some(LinkStyle::Done),
+    out: Some(LinkStyle::Done),
+};
+
 #[gpui::test]
-fn a_tile_sits_on_the_middle_line_whatever_the_name(cx: &mut TestAppContext) {
+fn the_tile_and_the_name_sit_on_the_middle_line(cx: &mut TestAppContext) {
     test_views::init(cx);
-    // A running node's ring box keeps its tile on the same line.
     for status in [StageStatus::Done, StageStatus::Current] {
         for name in ["P", SHORT, LONG] {
-            let cx = drawn(middle(status, name, NodeLinks::default()), cx);
-            let [row, tile] = ["flow-row", "node-tile"].map(|s| bounds(cx, s));
-            assert!(
-                near(centre_x(tile), centre_x(row)),
-                "{name}: {tile:?} {row:?}"
-            );
+            let cx = drawn(alone(status, name, NodeLinks::default()), cx);
+            let [row, tile, label] = ["flow-row", "node-tile", "node-name"].map(|s| bounds(cx, s));
+            assert!(near(centre_x(tile), centre_x(row)), "{name}: {tile:?}");
+            assert!(near(centre_x(label), centre_x(row)), "{name}: {label:?}");
+            // The name is under the tile.
+            assert!(label.top() >= tile.bottom() + px(NAME_GAP - 0.5), "{name}");
         }
     }
 }
 
 #[gpui::test]
-fn the_name_is_at_the_tiles_left_and_the_chip_at_its_right(cx: &mut TestAppContext) {
-    test_views::init(cx);
-    let cx = drawn(middle(StageStatus::Done, SHORT, NodeLinks::default()), cx);
-    let [column, name, chip] =
-        ["node-tile-column", "node-name", "node-chip"].map(|s| bounds(cx, s));
-    assert!(near(name.right(), column.left() - px(PAD)), "{name:?}");
-    assert!(near(chip.left(), column.right() + px(PAD)), "{chip:?}");
-}
-
-#[gpui::test]
-fn a_long_name_wraps_beside_the_tile(cx: &mut TestAppContext) {
+fn a_long_name_wraps_under_the_tile(cx: &mut TestAppContext) {
     test_views::init(cx);
     let short = bounds(
-        drawn(middle(StageStatus::Done, SHORT, NodeLinks::default()), cx),
+        drawn(alone(StageStatus::Done, SHORT, NodeLinks::default()), cx),
         "node-name",
     );
-    let cx = drawn(middle(StageStatus::Done, LONG, NodeLinks::default()), cx);
-    let [column, long] = ["node-tile-column", "node-name"].map(|s| bounds(cx, s));
+    let cx = drawn(alone(StageStatus::Done, LONG, NodeLinks::default()), cx);
+    let [row, long] = ["flow-row", "node-name"].map(|s| bounds(cx, s));
     assert!(long.size.height > short.size.height * 1.5, "{long:?}");
-    assert!(long.right() <= column.left() - px(PAD) + px(0.5));
+    assert!(long.left() >= row.left() && long.right() <= row.right());
 }
 
 #[gpui::test]
-fn the_stubs_run_from_the_nodes_edges_to_its_tile(cx: &mut TestAppContext) {
+fn every_tile_and_name_sit_at_one_height_whatever_the_state(cx: &mut TestAppContext) {
+    // A pair of a running and a done stage keeps its tiles and names on one row.
     test_views::init(cx);
-    let links = NodeLinks {
-        into: Some(LinkStyle::Done),
-        out: Some(LinkStyle::Done),
+    let mut at = |status| {
+        let cx = drawn(alone(status, SHORT, LINKS), cx);
+        let [card, tile, label] = ["node-card", "node-tile", "node-name"].map(|s| bounds(cx, s));
+        (tile.top() - card.top(), label.bottom() - card.top())
     };
-    // A wrapped name makes the node taller than its tile: the stubs grow with it.
-    for name in [SHORT, LONG] {
-        let cx = drawn(middle(StageStatus::Done, name, links), cx);
-        let [card, column, tile, focus] =
-            ["node-card", "node-tile-column", "node-tile", "node-focus"].map(|s| bounds(cx, s));
-        // The focus ring lies over the node and takes no room.
-        assert!(near(focus.top(), card.top()) && near(focus.bottom(), card.bottom()));
-        // No border box: the stubs start at the node's top and end at its bottom.
-        assert!(near(column.top(), card.top()), "{name}: {column:?}");
-        assert!(near(column.bottom(), card.bottom()), "{name}: {column:?}");
-        assert!(tile.top() - column.top() >= px(STUB - 0.5));
-        assert!(column.bottom() - tile.bottom() >= px(STUB - 0.5));
-    }
+    let done = at(StageStatus::Done);
+    let running = at(StageStatus::Current);
+    assert!(
+        near(done.0, running.0) && near(done.1, running.1),
+        "{done:?} {running:?}"
+    );
+}
+
+#[gpui::test]
+fn the_lines_touch_the_tile_and_start_under_the_name(cx: &mut TestAppContext) {
+    test_views::init(cx);
+    let cx = drawn(alone(StageStatus::Done, LONG, LINKS), cx);
+    let [card, tile, label, focus] =
+        ["node-card", "node-tile", "node-name", "node-focus"].map(|s| bounds(cx, s));
+    // The line in runs from the node's top to the tile; the line out from the name to the bottom.
+    assert!(near(tile.top() - card.top(), px(STUB + RUN_RING_OUT)), "{tile:?}");
+    assert!(near(card.bottom() - label.bottom(), px(STUB)), "{label:?}");
+    // The focus ring lies over the node and takes no room.
+    assert!(near(focus.top(), card.top()) && near(focus.bottom(), card.bottom()));
     let source = include_str!("flow_node.rs");
-    assert!(source.contains("stub(input.links.into)"));
-    assert!(source.contains("stub(input.links.out)"));
-    // Every line starts at its box's top: none reaches past it.
-    assert!(!include_str!("flow_lines.rs").contains("reach"));
+    let header = &source[source.find("fn header(").unwrap()..];
+    let order = ["stub_in(input.links.into, lift)", ".child(middle)", "name_row(", "stub_out("]
+        .map(|part| header.find(part).unwrap_or_else(|| panic!("{part}")));
+    assert!(order.windows(2).all(|pair| pair[0] < pair[1]));
 }
 
 #[gpui::test]
 fn the_running_node_has_a_ring_around_its_tile(cx: &mut TestAppContext) {
     test_views::init(cx);
-    let done = drawn(middle(StageStatus::Done, SHORT, NodeLinks::default()), cx);
+    let done = drawn(alone(StageStatus::Done, SHORT, NodeLinks::default()), cx);
     assert!(done.debug_bounds("node-run-ring").is_none());
-    let cx = drawn(
-        middle(StageStatus::Current, SHORT, NodeLinks::default()),
-        cx,
-    );
-    let [ring, tile] = ["node-run-ring", "node-tile"].map(|s| bounds(cx, s));
+    let cx = drawn(alone(StageStatus::Current, SHORT, LINKS), cx);
+    let [card, ring, tile] = ["node-card", "node-run-ring", "node-tile"].map(|s| bounds(cx, s));
     let out = px(RUN_RING_OUT);
     assert!(near(ring.left(), tile.left() - out) && near(ring.right(), tile.right() + out));
     assert!(near(ring.top(), tile.top() - out) && near(ring.bottom(), tile.bottom() + out));
+    // The line in touches the ring.
+    assert!(near(ring.top() - card.top(), px(STUB)), "{ring:?}");
     // It pulses on the shared clock, still when the window has no focus.
     assert!(
         include_str!("flow_node.rs").contains("pulse(motion::frame(Moving::Pulse, window, cx))")
@@ -172,28 +178,26 @@ fn the_running_node_has_a_ring_around_its_tile(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn the_tiles_of_a_pair_sit_near_the_middle_with_the_texts_outside(cx: &mut TestAppContext) {
+fn the_tiles_of_a_pair_sit_in_the_middle_of_each_node(cx: &mut TestAppContext) {
     test_views::init(cx);
     let (left_x, right_x) = pair_tiles(RAIL, 1.);
-    for (side, x) in [(NodeSide::Left, left_x), (NodeSide::Right, right_x)] {
+    for (place, x) in [(Place::Left, left_x), (Place::Right, right_x)] {
         let flow = Flow {
             status: StageStatus::Done,
             name: "Implement",
-            side,
+            place,
             links: NodeLinks::default(),
         };
         let cx = drawn(flow, cx);
-        let [row, column, tile, texts] =
-            ["flow-row", "node-tile-column", "node-tile", "node-texts"].map(|s| bounds(cx, s));
+        let [row, tile, label] = ["flow-row", "node-tile", "node-name"].map(|s| bounds(cx, s));
         assert!(
             near(centre_x(tile) - row.left(), px(x)),
-            "{side:?}: {tile:?}"
+            "{place:?}: {tile:?}"
         );
-        if side == NodeSide::Left {
-            assert!(texts.right() <= column.left() - px(PAD) + px(0.5));
-        } else {
-            assert!(texts.left() >= column.right() + px(PAD) - px(0.5));
-        }
+        assert!(
+            near(centre_x(label) - row.left(), px(x)),
+            "{place:?}: {label:?}"
+        );
     }
 }
 
@@ -202,5 +206,6 @@ fn the_lines_have_no_ports() {
     let lines = include_str!("flow_lines.rs");
     assert!(!lines.contains("PORT_OUT"));
     assert!(!lines.contains("fn at_top"));
+    assert!(!lines.contains("reach"));
     assert!(!include_str!("flow_rules.rs").contains("pub const PORT"));
 }

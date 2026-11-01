@@ -201,21 +201,22 @@ fn puts_two_stages_side_by_side_and_stacks_three_or_four() {
 }
 
 #[test]
-fn puts_the_tiles_of_a_pair_near_the_middle() {
-    // The owner's picture (T-0259): texts outside, tiles 40 px left and right of the middle.
-    assert_eq!(PAIR_TILE_OFF, 40.);
-    assert_eq!(pair_tiles(300., 1.), (110., 190.));
-    // The UI size scales the offset, not the middle.
-    assert_eq!(pair_tiles(300., 1.5), (90., 210.));
-    assert_eq!(pair_tiles(400., 1.), (160., 240.));
+fn puts_the_tiles_of_a_pair_in_the_middle_of_each_node() {
+    // The owner's picture (T-0259): each tile in the middle of its node. 300 wide, 8 apart:
+    // nodes are 146 wide, at 0..146 and 154..300.
+    assert_eq!(pair_tiles(300., 1.), (73., 227.));
+    assert_eq!(pair_tiles(400., 1.), (98., 302.));
+    // The UI size scales the gap.
+    assert_eq!(pair_tiles(300., 1.5), (72., 228.));
+    assert_eq!(pair_tiles(0., 1.), (0., 0.));
 }
 
 #[test]
 fn the_caret_points_at_the_tile_of_the_selected_node() {
     assert_eq!(caret_x(CaretAt::Middle, 300., 1.), 150.);
     // The same x as the pair's tiles.
-    assert_eq!(caret_x(CaretAt::Left, 300., 1.), 110.);
-    assert_eq!(caret_x(CaretAt::Right, 300., 1.), 190.);
+    assert_eq!(caret_x(CaretAt::Left, 300., 1.), 73.);
+    assert_eq!(caret_x(CaretAt::Right, 300., 1.), 227.);
 }
 
 #[test]

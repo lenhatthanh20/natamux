@@ -281,35 +281,20 @@ pub fn group_layout(count: usize) -> GroupLayout {
     }
 }
 
-/// Where a node's texts sit around its tile, which is always on a line of the flow.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum NodeSide {
-    /// The tile in the middle of the row: the name at its left, the chip at its right.
-    #[default]
-    Middle,
-    /// The left node of a pair: name over chip at the left of the tile.
-    Left,
-    /// The right node of a pair: name over chip at the right of the tile.
-    Right,
-}
-
-/// The lines inside a node, into its tile from the top and out of it to the bottom; `None` draws
-/// none (the first step, a node of a stack frame, a node with its details card open under it).
+/// The lines inside a node, into its tile from the top and out from under its name to the
+/// bottom; `None` draws none (the first step, a node of a stack frame, a node with its details
+/// card open under it).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct NodeLinks {
     pub into: Option<LinkStyle>,
     pub out: Option<LinkStyle>,
 }
 
-/// How far each tile of a pair is from the row's middle: the two `flex_1` nodes sit `PAIR_GAP`
-/// apart and each has its tile column at its inner edge, inside `INSET`.
-pub const PAIR_TILE_OFF: f32 = PAIR_GAP / 2. + INSET + TILE_BOX / 2.;
-
-/// The x of the two tiles of a pair, from the left of a row `width` wide, at UI size `scale`.
+/// The x of the two tiles of a pair, from the left of a row `width` wide, at UI size `scale`:
+/// each tile is in the middle of its node, and the two `flex_1` nodes sit `PAIR_GAP` apart.
 pub fn pair_tiles(width: f32, scale: f32) -> (f32, f32) {
-    let middle = width / 2.;
-    let off = PAIR_TILE_OFF * scale;
-    (middle - off, middle + off)
+    let half = (width - PAIR_GAP * scale).max(0.) / 4.;
+    (half, width - half)
 }
 
 /// The node a details card's caret points at: one in the middle (a stage, a stack, a branch), or

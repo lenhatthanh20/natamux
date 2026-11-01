@@ -1,9 +1,8 @@
 //! One stage as a node of the Progress flow (T-0257, T-0259): a bare node (the kind tile with the
-//! agent badge at its corner, the name, the state chip) with no border or background, and the
-//! full-width details card of the selected node, with a caret pointing up at it. The tile sits on
-//! the flow's line: in the middle of the row with the name at its left and the chip at its right,
-//! or near the middle of a pair with the texts outside. The node draws the line's stubs above and
-//! below its tile, so the lines touch it whatever the name's height; nothing here may clip (no
+//! state mark and the agent badge on its corners, the name under it) with no border or
+//! background, and the full-width details card of the selected node, with a caret pointing up at
+//! it. The tile and the name sit on the node's middle line. The node draws the line into its tile
+//! and the line out from under its name, so the lines touch it; nothing here may clip (no
 //! `overflow_hidden` on the root). A click, Enter or Space selects a node; the selected node gets
 //! a bright ring, absolute, so it takes no room. Only the running glyph and the running ring move.
 
@@ -23,7 +22,7 @@ use crate::stages::card_rules::CardChip;
 use crate::stages::editor_labels::{StageRunner, model_of};
 use crate::stages::flow_lines::FlowLink;
 use crate::stages::flow_rules::{
-    INSET, LinkStyle, NodeSide, NodeTone, RUN_RING_OUT, STUB, Stroke, TILE, TILE_BOX, node_tone,
+    INSET, LinkStyle, NodeTone, RUN_RING_OUT, STUB, Stroke, TILE, TILE_BOX, node_tone,
 };
 use crate::stages::kind_icon::kind_icon;
 use crate::stages::preview_rules::agent_line_text;
@@ -35,8 +34,8 @@ const TILE_RADIUS: f32 = 10.;
 const BADGE: f32 = 18.;
 const BADGE_OUT: f32 = 6.;
 const NODE_RADIUS: f32 = 9.;
-/// The gap between the tile column and the texts.
-const PAD: f32 = 12.;
+/// The gap between the tile and the name under it.
+const NAME_GAP: f32 = 6.;
 /// The selection ring is 2 px wide, outside the node.
 const RING: f32 = 2.;
 
@@ -114,7 +113,8 @@ fn glow(color: Hsla, blur: f32) -> Vec<BoxShadow> {
 }
 
 /// The kind tile: lit and glowing in the state's colour once the stage ran or runs, dashed and
-/// dark while it has not run, with the agent badge on its corner.
+/// dark while it has not run, with the state mark on its top corner and the agent badge on its
+/// bottom corner.
 fn tile(input: &CardInput, tone: NodeTone, accent: Hsla, cx: &App) -> Stateful<Div> {
     let colors = cx.theme().colors();
     let lit = tone.color_state().is_some();
@@ -150,77 +150,55 @@ fn tile(input: &CardInput, tone: NodeTone, accent: Hsla, cx: &App) -> Stateful<D
                     Color::Muted
                 }),
         )
+        .child(state_mark(input, accent, cx))
         .children(agent_badge(input, cx))
 }
 
-/// The word of the state chip under a node's name.
-pub(super) fn node_chip_word(chip: CardChip) -> &'static str {
-    match chip {
-        CardChip::State(state) => state_label(state),
-        CardChip::Done => "Done",
-        CardChip::Skipped => "Skipped",
-        CardChip::WillBeSkipped => "Will be skipped",
-        CardChip::NotStarted => "Not yet",
-        CardChip::NotTaken => "Not taken",
-    }
-}
-
-/// The state chip under a node's name: a lit pill with a check (done) or the state glyph
-/// (current), or a dashed pill with an empty dashed ring (not run yet).
-fn state_chip(input: &CardInput, tone: NodeTone, accent: Hsla, cx: &App) -> Div {
+/// The state mark on the tile's top corner (owner's picture, T-0259): a filled check once done,
+/// the state's glyph while current (it blinks while running), the CI mark while its CI runs, and
+/// a dashed ring before it runs. The state's word is in the node's tooltip.
+fn state_mark(input: &CardInput, accent: Hsla, cx: &App) -> Div {
     let colors = cx.theme().colors();
-    let lit = tone.color_state().is_some();
-    let mark: AnyElement = match (input.facts.chip, &input.ci_branch) {
-        (CardChip::Done, _) => Icon::new(IconName::Check)
-            .size(IconSize::XSmall)
-            .color(Color::Custom(accent))
-            .into_any_element(),
-        (CardChip::State(_), Some(_)) => Icon::new(IconName::GitBranch)
-            .size(IconSize::XSmall)
-            .color(Color::Custom(accent))
-            .into_any_element(),
-        (CardChip::State(state), None) => StateGlyph::new(
-            SharedString::from(format!("glyph-{}", input.entry.stage)),
-            Some(state),
-        )
-        .size(ShapeSize::Terminal)
-        .into_any_element(),
-        _ => div()
-            .flex_none()
-            .size(rems_from_px(10.0_f32))
-            .rounded_full()
-            .border_1()
+    let mark = div()
+        .debug_selector(|| "node-mark".into())
+        .absolute()
+        .right(rems_from_px(-BADGE_OUT))
+        .top(rems_from_px(-BADGE_OUT))
+        .size(rems_from_px(BADGE))
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded_full()
+        .border_1();
+    match (input.facts.chip, &input.ci_branch) {
+        (CardChip::Done, _) => mark.border_color(accent).bg(accent).child(
+            Icon::new(IconName::Check)
+                .size(IconSize::XSmall)
+                .color(Color::Custom(colors.panel_background)),
+        ),
+        (CardChip::State(_), Some(_)) => mark
+            .border_color(accent)
+            .bg(colors.panel_background)
+            .child(
+                Icon::new(IconName::GitBranch)
+                    .size(IconSize::XSmall)
+                    .color(Color::Custom(accent)),
+            ),
+        (CardChip::State(state), None) => mark
+            .border_color(accent)
+            .bg(colors.panel_background)
+            .child(
+                StateGlyph::new(
+                    SharedString::from(format!("glyph-{}", input.entry.stage)),
+                    Some(state),
+                )
+                .size(ShapeSize::Terminal),
+            ),
+        _ => mark
             .border_dashed()
             .border_color(colors.text_muted)
-            .into_any_element(),
-    };
-    h_flex()
-        .debug_selector(|| "node-chip".into())
-        .flex_none()
-        .gap_1()
-        .px_2()
-        .h(rems_from_px(20.0_f32))
-        .rounded_full()
-        .border_1()
-        .map(|this| {
-            if lit {
-                this.border_color(accent.opacity(0.4))
-                    .bg(accent.opacity(0.12))
-                    .shadow(glow(accent.opacity(0.18), 8.))
-            } else {
-                this.border_color(colors.border).border_dashed()
-            }
-        })
-        .child(mark)
-        .child(
-            Label::new(node_chip_word(input.facts.chip))
-                .size(LabelSize::Small)
-                .color(if lit {
-                    Color::Custom(accent)
-                } else {
-                    Color::Muted
-                }),
-        )
+            .bg(colors.panel_background),
+    }
 }
 
 fn name_label(input: &CardInput, tone: NodeTone) -> Label {
@@ -233,20 +211,32 @@ fn name_label(input: &CardInput, tone: NodeTone) -> Label {
         .when(tone.struck(), |label| label.strikethrough())
 }
 
-/// The name of a bare node. A long name wraps onto more lines (owner's picture, T-0259); the
-/// tile's stubs grow with it.
-fn name_row(input: &CardInput, tone: NodeTone) -> Div {
+/// The name of a bare node, centred under its tile. A long name wraps onto more lines (owner's
+/// picture, T-0259); the line out starts right under it.
+fn name_row(input: &CardInput, tone: NodeTone, lift: f32) -> Div {
     div()
         .debug_selector(|| "node-name".into())
         .min_w_0()
         .max_w_full()
+        .pt(rems_from_px(NAME_GAP + lift))
+        .text_center()
         .child(name_label(input, tone))
 }
 
-/// A line inside the node, `None` an empty spacer of the same size.
-fn stub(style: Option<LinkStyle>) -> AnyElement {
+/// The line into the tile, `STUB` and `lift` high; the first step gets an empty spacer as high.
+fn stub_in(style: Option<LinkStyle>, lift: f32) -> AnyElement {
+    let high = STUB + lift;
     match style {
-        Some(style) => FlowLink::stub(style).into_any_element(),
+        Some(style) => FlowLink::stub(style, high).into_any_element(),
+        None => div().flex_none().h(rems_from_px(high)).into_any_element(),
+    }
+}
+
+/// The line out of the node, from under the name to the node's bottom. It grows, so the two
+/// nodes of a pair, stretched to one height, end their lines on one row.
+fn stub_out(style: Option<LinkStyle>) -> AnyElement {
+    match style {
+        Some(style) => FlowLink::stub(style, STUB).grow().into_any_element(),
         None => div().flex_1().min_h(rems_from_px(STUB)).into_any_element(),
     }
 }
@@ -284,47 +274,9 @@ impl RenderOnce for RunningRing {
     }
 }
 
-/// The tile on the flow's line: the stub into it, the tile (in its ring while running), the stub
-/// out of it. As wide as the ring on every node, so a pair's tiles keep their x. The head has no
-/// border or padding above and below, so the stubs meet the flow's lines at the node's edges.
-fn tile_column(input: &CardInput, tone: NodeTone, accent: Hsla, cx: &App) -> Div {
-    let tile = tile(input, tone, accent, cx);
-    let running = matches!(
-        tone,
-        NodeTone::Current {
-            state: TaskState::Running,
-            ..
-        }
-    );
-    let middle = if running {
-        RunningRing { accent, tile }.into_any_element()
-    } else {
-        tile.into_any_element()
-    };
-    v_flex()
-        .debug_selector(|| "node-tile-column".into())
-        .flex_none()
-        .w(rems_from_px(TILE_BOX))
-        .items_center()
-        .child(stub(input.links.into))
-        .child(middle)
-        .child(stub(input.links.out))
-}
-
-/// The name over the chip, at one side of the tile in a pair.
-fn texts(input: &CardInput, tone: NodeTone, accent: Hsla, cx: &App) -> Div {
-    v_flex()
-        .debug_selector(|| "node-texts".into())
-        .flex_1()
-        .min_w_0()
-        .justify_center()
-        .gap_1()
-        .child(name_row(input, tone))
-        .child(state_chip(input, tone, accent, cx))
-}
-
-/// The node: the tile column on the flow's line, the texts around it (`NodeSide`). A click,
-/// Enter and Space select it; on the selected node they go back to the current stage.
+/// The node, as the owner's picture (T-0259): the line in, the tile (in its ring while running),
+/// the name under it, the line out, all on the node's middle line. A click, Enter and Space
+/// select it; on the selected node they go back to the current stage.
 fn header(
     input: &CardInput,
     tone: NodeTone,
@@ -338,49 +290,38 @@ fn header(
     let facts = fact_parts(input);
     let tip = tooltip_text(&entry.name, word, &facts);
     let hover_bg = colors.ghost_element_hover;
-    let column = tile_column(input, tone, accent, cx);
+    let tile = tile(input, tone, accent, cx);
+    let running = matches!(
+        tone,
+        NodeTone::Current {
+            state: TaskState::Running,
+            ..
+        }
+    );
+    // A tile with no ring is lifted by the ring's width above and below, so every tile and name
+    // sits at the same height whatever the state (a pair of a running and a done stage).
+    let (middle, lift) = if running {
+        (RunningRing { accent, tile }.into_any_element(), 0.)
+    } else {
+        (tile.into_any_element(), RUN_RING_OUT)
+    };
     let on_click = on.clone();
     let select = PanelCommand::SelectStage(entry.stage.clone());
-    let row = h_flex()
+    v_flex()
         .id(SharedString::from(format!("fold-{}", entry.stage)))
         .relative()
         .w_full()
-        // Fills a node that a pair row stretches, so the stubs reach its edges.
+        // Fills a node that a pair row stretches, so the line out reaches its bottom.
         .flex_grow_1()
-        .items_stretch()
-        .gap(rems_from_px(PAD))
-        // Side padding only and no border: the stubs run to the top and the bottom.
+        .items_center()
+        // Side padding only and no border: the lines run to the top and the bottom.
         .px(rems_from_px(INSET))
-        .rounded(rems_from_px(NODE_RADIUS));
-    let row = match input.side {
-        // Equal `flex_1` sides keep the tile on the row's middle, whatever the name's length.
-        NodeSide::Middle => row
-            .child(
-                v_flex()
-                    .flex_1()
-                    .min_w_0()
-                    .justify_center()
-                    .items_end()
-                    .text_right()
-                    .child(name_row(input, tone)),
-            )
-            .child(column)
-            .child(
-                v_flex()
-                    .flex_1()
-                    .min_w_0()
-                    .justify_center()
-                    .items_start()
-                    .child(state_chip(input, tone, accent, cx)),
-            ),
-        NodeSide::Left => row
-            .child(texts(input, tone, accent, cx).items_end().text_right())
-            .child(column),
-        NodeSide::Right => row
-            .child(column)
-            .child(texts(input, tone, accent, cx).items_start()),
-    };
-    row.child(focus_ring(input, on, colors.border_focused))
+        .rounded(rems_from_px(NODE_RADIUS))
+        .child(stub_in(input.links.into, lift))
+        .child(middle)
+        .child(name_row(input, tone, lift))
+        .child(stub_out(input.links.out))
+        .child(focus_ring(input, on, colors.border_focused))
         .tooltip(Tooltip::text(tip))
         .cursor_pointer()
         .hover(move |style| style.bg(hover_bg))
