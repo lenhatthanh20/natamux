@@ -10,12 +10,12 @@ use natamux_proto::tasks::task::TaskState;
 use ui::{Tooltip, prelude::*};
 
 use super::Ctx;
-use super::flow::{Around, Edge};
+use super::flow::{Around, Edge, link_after};
 use crate::components::chips::StateChip;
 use crate::components::icons::icon_path;
-use crate::stages::flow_lines::{FlowLink, Port};
+use crate::stages::flow_lines::Port;
 use crate::stages::flow_rules::{
-    LaneState, branch_line, lane_keyword, lane_state, stage_count_label,
+    CaretAt, LaneState, branch_line, lane_keyword, lane_state, stage_count_label,
 };
 use crate::stages::stage_view_rules::{ProgressLookup, path_label};
 use crate::tasks::details_commands::PanelCommand;
@@ -35,6 +35,13 @@ impl Ctx<'_> {
             self.lane(branch, index, path, state, cx)
         });
         let out = around.out_style(own);
+        // The card of a selected node of a path sits right under the whole frame (mockup A).
+        let details = self.details_of(
+            branch.paths.iter().flat_map(|path| &path.stages),
+            CaretAt::Middle,
+            cx,
+        );
+        let open = details.is_some();
         let frame = v_flex()
             .relative()
             .w_full()
@@ -46,11 +53,12 @@ impl Ctx<'_> {
             .child(branch_head(branch, &lookup, cx))
             .children(lanes)
             .children(around.into_style(own).map(Port::top))
-            .children(out.map(Port::bottom));
+            .children(out.filter(|_| !open).map(Port::bottom));
         v_flex()
             .w_full()
             .child(frame)
-            .children(out.map(FlowLink::new))
+            .children(details)
+            .children(out.map(|style| link_after(style, open)))
             .into_any_element()
     }
 
@@ -88,7 +96,7 @@ impl Ctx<'_> {
             Vec::new()
         } else {
             let steps: Vec<Step> = path.stages.iter().cloned().map(Step::Stage).collect();
-            self.column(&steps, cx)
+            self.column(&steps, true, cx)
         };
         v_flex()
             .w_full()

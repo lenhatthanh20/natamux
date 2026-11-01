@@ -1,7 +1,7 @@
 //! The Progress tab (docs/design-task-stages.md 7.5, `ProgressTab.tsx`, `BranchLane.tsx`): the
 //! timeline of steps as a node flow (a stage, a group side by side, or a branch with its paths,
-//! joined by connectors; T-0246), with the details card of the selected node under its step
-//! (T-0257), and Latest events below.
+//! joined by connectors; T-0246), with the details card of the selected node right under its
+//! row (T-0257), and Latest events below.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -16,6 +16,7 @@ use ui::prelude::*;
 
 use super::card_rules::{card_facts, node_agent};
 use super::flow_lines::dot_grid;
+use super::flow_rules::CaretAt;
 use super::stage_card::{ActionsInput, CardInput, FileChip, details_card, stage_card};
 use super::stage_choices::ChoiceBox;
 use super::stage_view_rules::{find_stage, missing_skills, ran_with_workflow, waiting_for_ci};
@@ -136,10 +137,18 @@ impl Ctx<'_> {
         Some(stage_card(input, self.on, cx))
     }
 
-    /// The full-width details card of a stage.
-    fn details(&self, id: &str, cx: &App) -> Option<AnyElement> {
-        let input = self.card_input(id, false)?;
-        Some(details_card(input, self.on, cx))
+    /// The full-width details card of the selected stage when `stages` hold it, its caret
+    /// pointing `at` the node.
+    fn details_of<'s>(
+        &self,
+        stages: impl IntoIterator<Item = &'s natamux_proto::stages::schema::Stage>,
+        at: CaretAt,
+        cx: &App,
+    ) -> Option<AnyElement> {
+        let selected = self.input.selected.as_deref()?;
+        let stage = stages.into_iter().find(|stage| stage.id == selected)?;
+        let input = self.card_input(&stage.id, false)?;
+        Some(details_card(input, at, self.on, cx))
     }
 
     fn card_input(&self, id: &str, compact: bool) -> Option<CardInput> {
@@ -257,19 +266,17 @@ pub fn timeline(input: &ProgressInput, on: &OnCommand, cx: &App) -> Vec<AnyEleme
         on,
     };
     let last = input.steps.len().saturating_sub(1);
-    ctx.column(&input.steps, cx)
+    ctx.column(&input.steps, false, cx)
         .into_iter()
         .enumerate()
         .map(|(index, step)| {
             // One element per step so the panel can scroll to one; each has its own dot grid.
-            // The selected node's details go under the whole step: a pair, a branch frame.
             div()
                 .relative()
                 .px_3()
                 .when(index == last, |this| this.pb_3())
                 .child(dot_grid(cx))
                 .child(step)
-                .children(ctx.details_below(&input.steps, index, cx))
                 .into_any_element()
         })
         .collect()

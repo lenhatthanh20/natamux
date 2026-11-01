@@ -11,8 +11,8 @@ use natamux_proto::tasks::task::TaskState;
 use ui::prelude::*;
 
 use super::flow_rules::{
-    CURVE_H, GRID, JOIN_DOT, LINK_H, LinkStyle, PAIR_GAP, PORT, PORT_OUT, STROKE, Stroke,
-    pair_centres,
+    CARET, CURVE_H, CaretAt, GRID, JOIN_DOT, LINK_H, LinkStyle, PAIR_GAP, PORT, PORT_OUT, STROKE,
+    Stroke, caret_x, pair_centres,
 };
 use crate::components::colors::state_colors;
 
@@ -182,6 +182,65 @@ impl RenderOnce for FlowLink {
             .when(self.grow, |this| this.flex_1())
             .when(!self.grow, |this| this.flex_none().h(rems_from_px(LINK_H)))
             .child(line)
+    }
+}
+
+/// The caret on top of a details card, pointing up at the selected node (mockup A of T-0257). Put
+/// it as a child of the `relative()` card: it stands on the card's top border and covers the
+/// border under its base, in the card's colours.
+#[derive(IntoElement)]
+pub struct Caret {
+    at: CaretAt,
+}
+
+impl Caret {
+    pub fn new(at: CaretAt) -> Self {
+        Self { at }
+    }
+}
+
+impl RenderOnce for Caret {
+    fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let colors = cx.theme().colors();
+        let (fill, rim) = (colors.elevated_surface_background, colors.border);
+        let at = self.at;
+        let shape = canvas(
+            |_, _, _| {},
+            move |bounds, _, window, _| {
+                let scale = scale(window);
+                let width = f32::from(bounds.size.width);
+                let x = f32::from(bounds.origin.x) + caret_x(at, width, PAIR_GAP * scale);
+                // The base is 1 px into the card, over its top border.
+                let base = f32::from(bounds.origin.y) + f32::from(bounds.size.height);
+                let half = CARET * scale;
+                let tip = point(px(x), px(base - 1. - half));
+                let (left, right) = (point(px(x - half), px(base)), point(px(x + half), px(base)));
+                let mut body = PathBuilder::fill();
+                body.move_to(left);
+                body.line_to(tip);
+                body.line_to(right);
+                body.close();
+                if let Ok(path) = body.build() {
+                    window.paint_path(path, fill);
+                }
+                let mut edge = PathBuilder::stroke(px(1.));
+                edge.move_to(left);
+                edge.line_to(tip);
+                edge.line_to(right);
+                if let Ok(path) = edge.build() {
+                    window.paint_path(path, rim);
+                }
+            },
+        )
+        .absolute()
+        .size_full();
+        div()
+            .absolute()
+            .left_0()
+            .right_0()
+            .top(rems_from_px(-CARET))
+            .h(rems_from_px(CARET + 1.))
+            .child(shape)
     }
 }
 

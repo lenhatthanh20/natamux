@@ -1,6 +1,6 @@
 //! One stage as a node of the Progress flow (T-0257): a bare node (the kind tile with the state
 //! glyph at its corner, the name, the agent icon) with no border or background, and the
-//! full-width details card of the selected node. A click, Enter or Space selects a node; the
+//! full-width details card of the selected node, with a caret pointing up at it. A click, Enter or Space selects a node; the
 //! selected node gets a bright ring. The node draws no ports or lines: the flow draws them on its
 //! edges, so nothing here may clip (no `overflow_hidden` on the root) and the ring is absolute,
 //! so it takes no room. Only the running glyph moves.
@@ -18,7 +18,8 @@ use crate::components::glyph::StateGlyph;
 use crate::components::shape::ShapeSize;
 use crate::stages::card_rules::CardChip;
 use crate::stages::editor_labels::{StageRunner, model_of};
-use crate::stages::flow_rules::{NodeTone, Stroke, node_tone};
+use crate::stages::flow_lines::Caret;
+use crate::stages::flow_rules::{CARET_GAP, CaretAt, NodeTone, Stroke, node_tone};
 use crate::stages::kind_icon::{kind_icon, waits_icon};
 use crate::stages::preview_rules::agent_line_text;
 use crate::tasks::details_commands::{OnCommand, PanelCommand};
@@ -369,9 +370,11 @@ pub(super) fn node(input: CardInput, on: &OnCommand, cx: &App) -> AnyElement {
         .into_any_element()
 }
 
-/// The details card of the selected node, at the full width of the flow: the tile, the name
-/// with its marks, the state and facts, then the body of the stage (its actions while current).
-pub(super) fn details(input: CardInput, on: &OnCommand, cx: &App) -> AnyElement {
+/// The details card of the selected node, at the full width of the flow, right under the node's
+/// row with a caret pointing up at the node (mockup A): the name with its marks, the state and
+/// facts, then the body of the stage (its actions while current). No connector runs between the
+/// node and the card; the flow's line goes on from the card's bottom.
+pub(super) fn details(input: CardInput, at: CaretAt, on: &OnCommand, cx: &App) -> AnyElement {
     let colors = cx.theme().colors();
     let (tone, accent) = tone_of(&input, cx);
     let word = chip_word(input.facts.chip);
@@ -381,31 +384,31 @@ pub(super) fn details(input: CardInput, on: &OnCommand, cx: &App) -> AnyElement 
     } else {
         body(&input, on, cx)
     };
-    let head = h_flex()
+    let head = v_flex()
         .w_full()
-        .items_center()
-        .gap(rems_from_px(PAD))
-        .child(tile(&input, tone, accent, cx))
-        .child(
-            v_flex()
-                .flex_1()
-                .min_w_0()
-                .gap(rems_from_px(1.0_f32))
-                .child(details_name_row(&input, tone, cx))
-                .children(meta_line(word, &facts, tone, accent)),
-        );
-    v_flex()
+        .min_w_0()
+        .gap(rems_from_px(1.0_f32))
+        .child(details_name_row(&input, tone, cx))
+        .children(meta_line(word, &facts, tone, accent));
+    let card = v_flex()
         .id(SharedString::from(format!("details-{}", input.entry.stage)))
         .debug_selector(|| "node-details".into())
+        .relative()
         .w_full()
         .min_w_0()
         .gap_2()
         .p(rems_from_px(INSET))
         .rounded(rems_from_px(NODE_RADIUS))
         .border_1()
-        .border_color(colors.border_variant)
+        // The stronger border, so the card and its caret stand out on the canvas as in mockup A.
+        .border_color(colors.border)
         .bg(colors.elevated_surface_background)
+        .child(Caret::new(at))
         .child(head)
-        .children(parts)
+        .children(parts);
+    div()
+        .w_full()
+        .pt(rems_from_px(CARET_GAP))
+        .child(card)
         .into_any_element()
 }

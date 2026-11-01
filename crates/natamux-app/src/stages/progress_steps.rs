@@ -8,10 +8,10 @@ use natamux_proto::stages::schema::{Stage, StageGroup, Step};
 use ui::prelude::*;
 
 use super::Ctx;
-use super::flow::{Around, Edge, ported};
+use super::flow::{Around, Edge, link_after, ported};
 use crate::stages::flow_lines::{FlowLink, JoinDot, PairCurves, Port};
 use crate::stages::flow_rules::{
-    GroupLayout, LinkStyle, PAIR_GAP, group_layout, join_style, link_style,
+    CaretAt, GroupLayout, LinkStyle, PAIR_GAP, group_layout, join_style, link_style,
 };
 
 impl Ctx<'_> {
@@ -57,31 +57,14 @@ impl Ctx<'_> {
         });
         let prev = around.prev.unwrap_or(StageStatus::Upcoming);
         let into = link_style(prev, own.status, own.state);
-        let (body, paired) = match (
+        let body = match (
             group_layout(group.parallel.len()),
             group.parallel.as_slice(),
         ) {
-            (GroupLayout::Pair, [first, second]) => (self.pair(first, second, prev, cx), true),
-            _ => (self.stack(group, own, into, cx), false),
+            (GroupLayout::Pair, [first, second]) => self.pair(first, second, prev, cx),
+            _ => self.stack(group, own, into, cx),
         };
-        let out = join_style(own.status);
-        // The selected node's details go between the nodes and the join dot, so the line from
-        // this step to the next is one piece (T-0257).
-        let details = self
-            .input
-            .selected
-            .as_deref()
-            .filter(|id| group.parallel.iter().any(|stage| stage.id == *id))
-            .and_then(|id| self.details(id, cx))
-            .map(|card| {
-                v_flex()
-                    .w_full()
-                    // The join curves meet at the middle with no port; a stack ends with a link.
-                    .when(paired, |this| this.child(FlowLink::new(out).at_top()))
-                    .child(ported(card, Some(out), Some(out)))
-                    .child(FlowLink::new(out))
-            });
-        let dot = JoinDot::new(out).note(self.group_note(group));
+        let dot = JoinDot::new(join_style(own.status)).note(self.group_note(group));
         let dot = match around.out_style(own) {
             Some(below) => dot.below(below),
             None => dot,
@@ -90,22 +73,26 @@ impl Ctx<'_> {
             .w_full()
             .child(pill(&name, cx))
             .child(body)
-            .children(details)
             .child(dot)
             .into_any_element()
     }
 
-    /// Two nodes side by side, between the fork and the join curves.
+    /// Two nodes side by side, between the fork and the join curves. The selected node's card
+    /// sits right under the pair, its caret at that node, and the join curves start from the
+    /// card (mockup A of T-0257).
     fn pair(&self, first: &Stage, second: &Stage, prev: StageStatus, cx: &App) -> AnyElement {
+        let details = self
+            .details_of([first], CaretAt::Left, cx)
+            .or_else(|| self.details_of([second], CaretAt::Right, cx));
+        let open = details.is_some();
         let side = |stage: &Stage| {
             let edge = self.stage_edge(&stage.id);
             let into = link_style(prev, edge.status, edge.state);
             let card = self
                 .card(&stage.id, true, cx)
                 .unwrap_or_else(|| div().into_any_element());
-            let node = ported(card, Some(into), Some(join_style(edge.status)))
-                .flex_1()
-                .min_w_0();
+            let out = (!open).then_some(join_style(edge.status));
+            let node = ported(card, Some(into), out).flex_1().min_w_0();
             (edge, into, node)
         };
         let (left, left_into, left_node) = side(first);
@@ -124,13 +111,17 @@ impl Ctx<'_> {
                     .child(left_node)
                     .child(right_node),
             )
+            .children(details)
             .child(join)
             .into_any_element()
     }
 
-    /// Three or four nodes, one under the other, in a dashed frame that carries the ports.
+    /// Three or four nodes, one under the other, in a dashed frame that carries the ports. The
+    /// selected node's card sits right under the frame.
     fn stack(&self, group: &StageGroup, own: Edge, into: LinkStyle, cx: &App) -> AnyElement {
         let out = join_style(own.status);
+        let details = self.details_of(&group.parallel, CaretAt::Middle, cx);
+        let open = details.is_some();
         let frame = v_flex()
             .relative()
             .w_full()
@@ -147,12 +138,13 @@ impl Ctx<'_> {
                     .filter_map(|stage| self.card(&stage.id, false, cx)),
             )
             .child(Port::top(into))
-            .child(Port::bottom(out));
+            .when(!open, |this| this.child(Port::bottom(out)));
         v_flex()
             .w_full()
             .child(FlowLink::new(into).at_top())
             .child(frame)
-            .child(FlowLink::new(out))
+            .children(details)
+            .child(link_after(out, open))
             .into_any_element()
     }
 }

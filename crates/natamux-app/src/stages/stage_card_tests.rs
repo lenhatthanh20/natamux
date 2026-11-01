@@ -13,6 +13,7 @@ use super::chips::pass_row;
 use super::node::{INSET, chip_word, details, node, tooltip_text};
 use crate::app::test_views;
 use crate::stages::card_rules::{CardButton, CardChip, CardFacts};
+use crate::stages::flow_rules::CaretAt;
 use crate::stages::stage_choices::{ChoiceBox, choice_box};
 use crate::tasks::details_commands::{OnCommand, StageToggle};
 
@@ -244,7 +245,7 @@ impl Render for Node {
         // A node of a pair: the details card still takes the whole width.
         card.compact = true;
         let drawn = if self.details {
-            details(card, &noop(), cx)
+            details(card, CaretAt::Middle, &noop(), cx)
         } else {
             node(card, &noop(), cx)
         };
@@ -283,10 +284,13 @@ fn a_bare_node_centres_its_tile_and_name_and_shows_no_facts(cx: &mut TestAppCont
 fn the_details_card_of_a_pair_node_takes_the_whole_width(cx: &mut TestAppContext) {
     test_views::init(cx);
     let cx = drawn_node(StageStatus::Current, true, cx);
-    let [card, tile] = ["node-details", "node-tile"].map(|s| bounds(cx, s));
+    let card = bounds(cx, "node-details");
     assert!((card.size.width - px(RAIL)).abs() <= px(0.5), "{card:?}");
-    // The card's 1 px border, then the inset.
-    let left = tile.left() - card.left();
-    assert!((left - px(INSET + 1.)).abs() <= px(0.5), "{left:?}");
-    bounds(cx, "node-meta");
+    // The name and facts head the card as in mockup A: no kind tile, the caret points at it.
+    assert!(cx.debug_bounds("node-tile").is_none());
+    let meta = bounds(cx, "node-meta");
+    assert!(
+        (meta.left() - card.left() - px(INSET + 1.)).abs() <= px(0.5),
+        "{meta:?}"
+    );
 }

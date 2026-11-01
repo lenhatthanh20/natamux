@@ -174,9 +174,14 @@ pub fn stage_card(input: CardInput, on: &OnCommand, cx: &App) -> AnyElement {
     node::node(input, on, cx)
 }
 
-/// The full-width details card of the selected node.
-pub fn details_card(input: CardInput, on: &OnCommand, cx: &App) -> AnyElement {
-    node::details(input, on, cx)
+/// The full-width details card of the selected node; its caret points `at` the node.
+pub fn details_card(
+    input: CardInput,
+    at: super::flow_rules::CaretAt,
+    on: &OnCommand,
+    cx: &App,
+) -> AnyElement {
+    node::details(input, at, on, cx)
 }
 
 #[path = "flow_node.rs"]

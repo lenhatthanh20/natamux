@@ -10,7 +10,7 @@ use ui::prelude::*;
 
 use super::Ctx;
 use crate::stages::flow_lines::{FlowLink, Port};
-use crate::stages::flow_rules::{LinkStyle, group_status, link_style};
+use crate::stages::flow_rules::{CaretAt, LinkStyle, group_status, link_style};
 use crate::stages::stage_view_rules::branch_status;
 
 /// The status of a step, and the state of its current stage.
@@ -54,6 +54,13 @@ pub(super) fn ported(node: AnyElement, top: Option<LinkStyle>, bottom: Option<Li
         .children(bottom.map(Port::bottom))
 }
 
+/// The connector under a step: from its port, or from the top of the box when a details card
+/// ends the step (the card has no port).
+pub(super) fn link_after(style: LinkStyle, after_card: bool) -> FlowLink {
+    let link = FlowLink::new(style);
+    if after_card { link.at_top() } else { link }
+}
+
 impl Ctx<'_> {
     pub(super) fn stage_edge(&self, id: &str) -> Edge {
         let entry = self.by_id.get(id);
@@ -81,7 +88,8 @@ impl Ctx<'_> {
     }
 
     /// One step with the connector under it; the elements of a column are one per step.
-    fn flow_step(&self, step: &Step, around: Around, cx: &App) -> AnyElement {
+    /// `in_path`: a step of a branch's path, whose details card goes under the whole branch.
+    fn flow_step(&self, step: &Step, around: Around, in_path: bool, cx: &App) -> AnyElement {
         let own = self.edge(step);
         match step {
             Step::Stage(stage) => {
@@ -89,10 +97,16 @@ impl Ctx<'_> {
                 let card = self
                     .card(&stage.id, false, cx)
                     .unwrap_or_else(|| div().into_any_element());
+                // The selected node's card sits right under it; the line goes on from the card.
+                let details = (!in_path)
+                    .then(|| self.details_of([stage], CaretAt::Middle, cx))
+                    .flatten();
+                let open = details.is_some();
                 v_flex()
                     .w_full()
-                    .child(ported(card, around.into_style(own), out))
-                    .children(out.map(FlowLink::new))
+                    .child(ported(card, around.into_style(own), out.filter(|_| !open)))
+                    .children(details)
+                    .children(out.map(|style| link_after(style, open)))
                     .into_any_element()
             }
             Step::Group(group) => self.group(group, own, around, cx),
@@ -100,42 +114,9 @@ impl Ctx<'_> {
         }
     }
 
-    /// The details card of the selected node when stage or branch step `index` holds it (T-0257).
-    /// The step's out connector leads into the card, and a connector of the same style leads on
-    /// to the next step, so the line is not broken. A path's column does not call it: the card
-    /// goes under the whole branch frame.
-    pub(super) fn details_below(
-        &self,
-        steps: &[Step],
-        index: usize,
-        cx: &App,
-    ) -> Option<AnyElement> {
-        let selected = self.input.selected.as_deref()?;
-        let step = steps.get(index)?;
-        // A group puts the card between its nodes and its join dot itself.
-        if matches!(step, Step::Group(_)) || !step.stages().iter().any(|stage| stage.id == selected)
-        {
-            return None;
-        }
-        let card = self.details(selected, cx)?;
-        let own = self.edge(step);
-        let out = steps.get(index + 1).map(|next| {
-            let next = self.edge(next);
-            link_style(own.status, next.status, next.state)
-        });
-        Some(match out {
-            Some(style) => v_flex()
-                .w_full()
-                .child(ported(card, Some(style), Some(style)))
-                .child(FlowLink::new(style))
-                .into_any_element(),
-            None => v_flex().w_full().pt_2().child(card).into_any_element(),
-        })
-    }
-
     /// The steps top to bottom, joined by connectors. The first has no port above and the last
     /// none below.
-    pub(super) fn column(&self, steps: &[Step], cx: &App) -> Vec<AnyElement> {
+    pub(super) fn column(&self, steps: &[Step], in_path: bool, cx: &App) -> Vec<AnyElement> {
         let edges: Vec<Edge> = steps.iter().map(|step| self.edge(step)).collect();
         steps
             .iter()
@@ -148,7 +129,7 @@ impl Ctx<'_> {
                         .map(|edge| edge.status),
                     next: edges.get(index + 1).copied(),
                 };
-                self.flow_step(step, around, cx)
+                self.flow_step(step, around, in_path, cx)
             })
             .collect()
     }

@@ -27,6 +27,10 @@ pub const JOIN_DOT: f32 = 8.;
 pub const STROKE: f32 = 1.5;
 /// Distance between the dots of the canvas grid.
 pub const GRID: f32 = 16.;
+/// The height of the caret on top of a details card; its base is twice as wide.
+pub const CARET: f32 = 8.;
+/// The space between a selected node and its details card, which the caret spans.
+pub const CARET_GAP: f32 = 11.;
 
 /// How a connector is drawn.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -275,6 +279,26 @@ pub fn group_layout(count: usize) -> GroupLayout {
 pub fn pair_centres(width: f32, gap: f32) -> (f32, f32) {
     let half = (width - gap).max(0.) / 4.;
     (half, width - half)
+}
+
+/// The node a details card's caret points at: one in the middle (a stage, a stack, a branch), or
+/// the left or right node of a pair.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CaretAt {
+    Middle,
+    Left,
+    Right,
+}
+
+/// The x of the caret's tip, from the left of a card `width` wide: the card is as wide as the
+/// pair row, so the tip sits under the node's middle.
+pub fn caret_x(at: CaretAt, width: f32, gap: f32) -> f32 {
+    let (left, right) = pair_centres(width, gap);
+    match at {
+        CaretAt::Middle => width / 2.,
+        CaretAt::Left => left,
+        CaretAt::Right => right,
+    }
 }
 
 #[cfg(test)]
