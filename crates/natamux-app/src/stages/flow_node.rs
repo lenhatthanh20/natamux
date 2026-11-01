@@ -1,44 +1,41 @@
-//! One stage as a node of the Progress flow (T-0257): a bare node (the kind tile with the state
-//! glyph at its corner, the name, the agent icon) with no border or background, and the
-//! full-width details card of the selected node, with a caret pointing up at it. A click, Enter or Space selects a node; the
-//! selected node gets a bright ring. The node draws no ports or lines: the flow draws them on its
-//! edges, so nothing here may clip (no `overflow_hidden` on the root) and the ring is absolute,
-//! so it takes no room. Only the running glyph moves.
+//! One stage as a node of the Progress flow (T-0257, T-0259): a bare node (the kind tile with the
+//! state mark and the agent badge on its corners, the name under it) with no border or
+//! background, and the full-width details card of the selected node, with a caret pointing up at
+//! it. The tile and the name sit on the node's middle line. The node draws the line into its tile
+//! and the line out from under its name, so the lines touch it; nothing here may clip (no
+//! `overflow_hidden` on the root). A click, Enter or Space selects a node; the selected node gets
+//! a bright ring, absolute, so it takes no room. Only the running glyph and the running ring move.
 
-use gpui::{AnyElement, BoxShadow, Div, FontWeight, Hsla, KeyDownEvent, Stateful, point, px};
-use natamux_proto::stages::progress::StageStatus;
-use natamux_proto::stages::schema::{Gate, StageKind};
+use gpui::{AnyElement, BoxShadow, Div, Hsla, KeyDownEvent, Stateful, point, px};
+use natamux_proto::tasks::task::TaskState;
 use ui::{Tooltip, prelude::*};
 
-use super::{CardInput, badge, body, fact_parts, upcoming_parts};
+use super::{CardInput, fact_parts};
 use crate::agents::agent_choices::agent_label;
 use crate::components::agent_badge::AgentIcon;
 use crate::components::colors::state_colors;
 use crate::components::glyph::StateGlyph;
+use crate::components::motion;
+use crate::components::motion_rules::{Moving, pulse};
 use crate::components::shape::ShapeSize;
 use crate::stages::card_rules::CardChip;
 use crate::stages::editor_labels::{StageRunner, model_of};
-use crate::stages::flow_lines::Caret;
-use crate::stages::flow_rules::{CARET_GAP, CaretAt, NodeTone, Stroke, node_tone};
-use crate::stages::kind_icon::{kind_icon, waits_icon};
+use crate::stages::flow_lines::FlowLink;
+use crate::stages::flow_rules::{
+    INSET, LinkStyle, NodeTone, RUN_RING_OUT, STUB, Stroke, TILE, TILE_BOX, node_tone,
+};
+use crate::stages::kind_icon::kind_icon;
 use crate::stages::preview_rules::agent_line_text;
 use crate::tasks::details_commands::{OnCommand, PanelCommand};
 use crate::tasks::task_rules::state_label;
 
-const TILE: f32 = 36.;
 const TILE_RADIUS: f32 = 10.;
 /// The agent badge on the tile's corner, and how far it pokes out past the tile.
 const BADGE: f32 = 18.;
 const BADGE_OUT: f32 = 6.;
 const NODE_RADIUS: f32 = 9.;
-/// The gap between the tile and the text.
-const PAD: f32 = 12.;
-/// The gap in a node of a side-by-side pair, so its name has room.
-const PAD_COMPACT: f32 = 8.;
-/// The space between the node's edge and its content, the same on every side.
-pub(super) const INSET: f32 = 12.;
-/// The head's clear border, which holds the keyboard focus ring.
-const FOCUS: f32 = 2.;
+/// The gap between the tile and the name under it.
+const NAME_GAP: f32 = 6.;
 /// The selection ring is 2 px wide, outside the node.
 const RING: f32 = 2.;
 
@@ -79,27 +76,6 @@ fn agent_text(input: &CardInput) -> Option<(String, String)> {
     Some((agent, text))
 }
 
-/// The agent with its name, on the details card.
-fn agent_chip(input: &CardInput) -> Option<AnyElement> {
-    let (agent, text) = agent_text(input)?;
-    Some(
-        // Shrinks before the name: in a narrow row the label goes first, the icon stays.
-        h_flex()
-            .min_w_0()
-            .flex_shrink_1()
-            .overflow_hidden()
-            .gap_1()
-            .child(div().flex_none().child(AgentIcon::new(Some(agent))))
-            .child(
-                Label::new(text)
-                    .size(LabelSize::XSmall)
-                    .color(Color::Muted)
-                    .truncate(),
-            )
-            .into_any_element(),
-    )
-}
-
 /// The agent's icon in a round badge on the tile's corner; its name is in the tooltip.
 fn agent_badge(input: &CardInput, cx: &App) -> Option<AnyElement> {
     let (agent, text) = agent_text(input)?;
@@ -137,7 +113,8 @@ fn glow(color: Hsla, blur: f32) -> Vec<BoxShadow> {
 }
 
 /// The kind tile: lit and glowing in the state's colour once the stage ran or runs, dashed and
-/// dark while it has not run, with the agent badge on its corner.
+/// dark while it has not run, with the state mark on its top corner and the agent badge on its
+/// bottom corner.
 fn tile(input: &CardInput, tone: NodeTone, accent: Hsla, cx: &App) -> Stateful<Div> {
     let colors = cx.theme().colors();
     let lit = tone.color_state().is_some();
@@ -173,77 +150,53 @@ fn tile(input: &CardInput, tone: NodeTone, accent: Hsla, cx: &App) -> Stateful<D
                     Color::Muted
                 }),
         )
+        .child(state_mark(input, accent, cx))
         .children(agent_badge(input, cx))
 }
 
-/// The word of the state chip under a node's name.
-pub(super) fn node_chip_word(chip: CardChip) -> &'static str {
-    match chip {
-        CardChip::State(state) => state_label(state),
-        CardChip::Done => "Done",
-        CardChip::Skipped => "Skipped",
-        CardChip::WillBeSkipped => "Will be skipped",
-        CardChip::NotStarted => "Not yet",
-        CardChip::NotTaken => "Not taken",
-    }
-}
-
-/// The state chip under a node's name: a lit pill with a check (done) or the state glyph
-/// (current), or a dashed pill with an empty dashed ring (not run yet).
-fn state_chip(input: &CardInput, tone: NodeTone, accent: Hsla, cx: &App) -> Div {
+/// The state mark on the tile's top corner (owner's picture, T-0259): a filled check once done,
+/// the state's glyph while current (it blinks while running), the CI mark while its CI runs, and
+/// a dashed ring before it runs. The state's word is in the node's tooltip.
+fn state_mark(input: &CardInput, accent: Hsla, cx: &App) -> Div {
     let colors = cx.theme().colors();
-    let lit = tone.color_state().is_some();
-    let mark: AnyElement = match (input.facts.chip, &input.ci_branch) {
-        (CardChip::Done, _) => Icon::new(IconName::Check)
-            .size(IconSize::XSmall)
-            .color(Color::Custom(accent))
-            .into_any_element(),
-        (CardChip::State(_), Some(_)) => Icon::new(IconName::GitBranch)
-            .size(IconSize::XSmall)
-            .color(Color::Custom(accent))
-            .into_any_element(),
-        (CardChip::State(state), None) => StateGlyph::new(
-            SharedString::from(format!("glyph-{}", input.entry.stage)),
-            Some(state),
-        )
-        .size(ShapeSize::Terminal)
-        .into_any_element(),
-        _ => div()
-            .flex_none()
-            .size(rems_from_px(10.0_f32))
-            .rounded_full()
-            .border_1()
+    let mark = div()
+        .debug_selector(|| "node-mark".into())
+        .absolute()
+        .right(rems_from_px(-BADGE_OUT))
+        .top(rems_from_px(-BADGE_OUT))
+        .size(rems_from_px(BADGE))
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded_full()
+        .border_1();
+    match (input.facts.chip, &input.ci_branch) {
+        (CardChip::Done, _) => mark.border_color(accent).bg(accent).child(
+            Icon::new(IconName::Check)
+                .size(IconSize::XSmall)
+                .color(Color::Custom(colors.panel_background)),
+        ),
+        (CardChip::State(_), Some(_)) => {
+            mark.border_color(accent).bg(colors.panel_background).child(
+                Icon::new(IconName::GitBranch)
+                    .size(IconSize::XSmall)
+                    .color(Color::Custom(accent)),
+            )
+        }
+        (CardChip::State(state), None) => {
+            mark.border_color(accent).bg(colors.panel_background).child(
+                StateGlyph::new(
+                    SharedString::from(format!("glyph-{}", input.entry.stage)),
+                    Some(state),
+                )
+                .size(ShapeSize::Terminal),
+            )
+        }
+        _ => mark
             .border_dashed()
             .border_color(colors.text_muted)
-            .into_any_element(),
-    };
-    h_flex()
-        .debug_selector(|| "node-chip".into())
-        .flex_none()
-        .gap_1()
-        .px_2()
-        .h(rems_from_px(20.0_f32))
-        .rounded_full()
-        .border_1()
-        .map(|this| {
-            if lit {
-                this.border_color(accent.opacity(0.4))
-                    .bg(accent.opacity(0.12))
-                    .shadow(glow(accent.opacity(0.18), 8.))
-            } else {
-                this.border_color(colors.border).border_dashed()
-            }
-        })
-        .child(mark)
-        .child(
-            Label::new(node_chip_word(input.facts.chip))
-                .size(LabelSize::Small)
-                .color(if lit {
-                    Color::Custom(accent)
-                } else {
-                    Color::Muted
-                }),
-        )
+            .bg(colors.panel_background),
+    }
 }
 
 fn name_label(input: &CardInput, tone: NodeTone) -> Label {
@@ -254,96 +207,74 @@ fn name_label(input: &CardInput, tone: NodeTone) -> Label {
             Color::Default
         })
         .when(tone.struck(), |label| label.strikethrough())
-        .truncate()
 }
 
-/// The name of a bare node. It clips instead of wrapping, so a narrow node keeps its height.
-fn name_row(input: &CardInput, tone: NodeTone) -> Div {
-    h_flex()
+/// The name of a bare node, centred under its tile. A long name wraps onto more lines (owner's
+/// picture, T-0259); the line out starts right under it.
+fn name_row(input: &CardInput, tone: NodeTone, lift: f32) -> Div {
+    div()
         .debug_selector(|| "node-name".into())
         .min_w_0()
-        .overflow_hidden()
-        .child(div().min_w_0().child(name_label(input, tone)))
+        .max_w_full()
+        .pt(rems_from_px(NAME_GAP + lift))
+        .text_center()
+        .child(name_label(input, tone))
 }
 
-/// The name with its marks, on the details card: agent with its name, the person mark of a
-/// manual gate, rounds and the workflow.
-fn details_name_row(input: &CardInput, tone: NodeTone, cx: &App) -> Div {
-    let entry = &input.entry;
-    let manual = input.stage.gate == Gate::Manual && input.stage.kind != StageKind::Release;
-    h_flex()
-        .min_w_0()
-        .gap_1p5()
-        .overflow_hidden()
-        // The name keeps its width up to 70%, so the agent chip gives way first.
-        .child(
-            div()
-                .min_w_0()
-                .flex_shrink_0()
-                .max_w(relative(0.7))
-                .child(name_label(input, tone).weight(FontWeight::SEMIBOLD)),
-        )
-        .children(agent_chip(input))
-        .when(manual, |this| {
-            this.child(
-                div()
-                    .id(SharedString::from(format!("gate-{}", entry.stage)))
-                    .flex_none()
-                    .child(waits_icon().size(IconSize::XSmall).color(Color::Muted))
-                    .tooltip(Tooltip::text("You approve")),
-            )
-        })
-        .when(entry.rounds > 1, |this| {
-            let rounds = badge(format!("\u{d7}{}", entry.rounds), cx);
-            this.child(div().flex_none().child(rounds))
-        })
-        .when(
-            input.ran_workflow && entry.status != StageStatus::Upcoming,
-            |this| this.child(div().flex_none().child(badge("Workflow".into(), cx))),
-        )
-}
-
-/// The state word (in the state's colour on the current node), then the facts.
-fn meta_line(word: Option<&str>, facts: &[String], tone: NodeTone, accent: Hsla) -> Option<Div> {
-    if word.is_none() && facts.is_empty() {
-        return None;
+/// The line into the tile, `STUB` and `lift` high; the first step gets an empty spacer as high.
+fn stub_in(style: Option<LinkStyle>, lift: f32) -> AnyElement {
+    let high = STUB + lift;
+    match style {
+        Some(style) => FlowLink::stub(style, high).into_any_element(),
+        None => div().flex_none().h(rems_from_px(high)).into_any_element(),
     }
-    let colour = if tone.glow() {
-        Color::Custom(accent)
-    } else {
-        Color::Muted
-    };
-    let joined = facts.join(" \u{b7} ");
-    let facts_text = match (word.is_some(), joined.is_empty()) {
-        (_, true) => None,
-        (true, false) => Some(format!("\u{b7} {joined}")),
-        (false, false) => Some(joined),
-    };
-    Some(
-        h_flex()
-            .debug_selector(|| "node-meta".into())
-            .min_w_0()
-            .gap_1()
-            .overflow_hidden()
-            .children(word.map(|word| {
-                let label = Label::new(word.to_owned())
-                    .size(LabelSize::XSmall)
-                    .color(colour);
-                div().flex_none().child(label)
-            }))
-            .children(facts_text.map(|text| {
-                div().min_w_0().flex_shrink_1().child(
-                    Label::new(text)
-                        .size(LabelSize::XSmall)
-                        .color(Color::Muted)
-                        .truncate(),
-                )
-            })),
-    )
 }
 
-/// The node: tile and name, centred as one group. A click, Enter and Space select it; on the
-/// selected node they go back to the current stage.
+/// The line out of the node, from under the name to the node's bottom. It grows, so the two
+/// nodes of a pair, stretched to one height, end their lines on one row.
+fn stub_out(style: Option<LinkStyle>) -> AnyElement {
+    match style {
+        Some(style) => FlowLink::stub(style, STUB).grow().into_any_element(),
+        None => div().flex_1().min_h(rems_from_px(STUB)).into_any_element(),
+    }
+}
+
+/// The running ring around the tile: the Running colour, pulsing on the shared motion clock
+/// (still when the window has no focus and in shots).
+#[derive(IntoElement)]
+struct RunningRing {
+    accent: Hsla,
+    tile: Stateful<Div>,
+}
+
+impl RenderOnce for RunningRing {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let opacity = pulse(motion::frame(Moving::Pulse, window, cx));
+        let ring = div()
+            .debug_selector(|| "node-run-ring".into())
+            .absolute()
+            .inset_0()
+            .rounded(rems_from_px(TILE_RADIUS + RUN_RING_OUT))
+            .border_2()
+            .border_color(self.accent)
+            .shadow(glow(self.accent.opacity(0.35), 14.))
+            .opacity(opacity);
+        // The ring first, so the tile and its agent badge draw over it.
+        div()
+            .relative()
+            .flex_none()
+            .size(rems_from_px(TILE_BOX))
+            .flex()
+            .items_center()
+            .justify_center()
+            .child(ring)
+            .child(self.tile)
+    }
+}
+
+/// The node, as the owner's picture (T-0259): the line in, the tile (in its ring while running),
+/// the name under it, the line out, all on the node's middle line. A click, Enter and Space
+/// select it; on the selected node they go back to the current stage.
 fn header(
     input: &CardInput,
     tone: NodeTone,
@@ -357,43 +288,65 @@ fn header(
     let facts = fact_parts(input);
     let tip = tooltip_text(&entry.name, word, &facts);
     let hover_bg = colors.ghost_element_hover;
-    let ring = colors.border_focused;
-    let texts = v_flex()
-        .debug_selector(|| "node-texts".into())
-        .min_w_0()
-        .gap_1()
-        .child(name_row(input, tone))
-        // In a row of its own, so the chip keeps its width and does not stretch.
-        .child(h_flex().child(state_chip(input, tone, accent, cx)));
+    let tile = tile(input, tone, accent, cx);
+    let running = matches!(
+        tone,
+        NodeTone::Current {
+            state: TaskState::Running,
+            ..
+        }
+    );
+    // A tile with no ring is lifted by the ring's width above and below, so every tile and name
+    // sits at the same height whatever the state (a pair of a running and a done stage).
+    let (middle, lift) = if running {
+        (RunningRing { accent, tile }.into_any_element(), 0.)
+    } else {
+        (tile.into_any_element(), RUN_RING_OUT)
+    };
     let on_click = on.clone();
     let select = PanelCommand::SelectStage(entry.stage.clone());
-    let (on_key, select_key) = (on_click.clone(), select.clone());
-    h_flex()
+    v_flex()
         .id(SharedString::from(format!("fold-{}", entry.stage)))
+        .relative()
         .w_full()
+        // Fills a node that a pair row stretches, so the line out reaches its bottom.
+        .flex_grow_1()
         .items_center()
-        .justify_center()
-        .gap(rems_from_px(if input.compact { PAD_COMPACT } else { PAD }))
-        // A clear border holds the keyboard focus ring without moving the content.
-        .p(rems_from_px(INSET - FOCUS))
-        .border_2()
-        .border_color(gpui::transparent_black())
+        // Side padding only and no border: the lines run to the top and the bottom.
+        .px(rems_from_px(INSET))
         .rounded(rems_from_px(NODE_RADIUS))
-        .child(tile(input, tone, accent, cx))
-        .child(texts)
+        .child(stub_in(input.links.into, lift))
+        .child(middle)
+        .child(name_row(input, tone, lift))
+        .child(stub_out(input.links.out))
+        .child(focus_ring(input, on, colors.border_focused))
         .tooltip(Tooltip::text(tip))
         .cursor_pointer()
         .hover(move |style| style.bg(hover_bg))
-        .focus_visible(move |style| style.border_color(ring))
+        .on_click(move |_, window, cx| on_click(select.clone(), window, cx))
+}
+
+/// The keyboard focus ring: absolute over the head, so it takes no room. It holds the node's
+/// focus, so Enter and Space select the node, as a button of the web.
+fn focus_ring(input: &CardInput, on: &OnCommand, color: Hsla) -> Stateful<Div> {
+    let on_key = on.clone();
+    let select = PanelCommand::SelectStage(input.entry.stage.clone());
+    div()
+        .id(SharedString::from(format!("focus-{}", input.entry.stage)))
+        .debug_selector(|| "node-focus".into())
+        .absolute()
+        .inset_0()
+        .rounded(rems_from_px(NODE_RADIUS))
+        .border_2()
+        .border_color(gpui::transparent_black())
+        .focus_visible(move |style| style.border_color(color))
         .when_some(input.fold_focus.as_ref(), |this, focus| {
             this.track_focus(focus)
         })
-        .on_click(move |_, window, cx| on_click(select.clone(), window, cx))
-        // A button of the web: Enter and Space select it too.
         .on_key_down(move |event: &KeyDownEvent, window, cx| {
             if matches!(event.keystroke.key.as_str(), "enter" | "space") {
                 cx.stop_propagation();
-                on_key(select_key.clone(), window, cx);
+                on_key(select.clone(), window, cx);
             }
         })
 }
@@ -437,7 +390,7 @@ pub(super) fn node(input: CardInput, on: &OnCommand, cx: &App) -> AnyElement {
         .relative()
         .w_full()
         .min_w_0()
-        // A pair row stretches both nodes to one height, so their bottom ports line up.
+        // A pair row stretches both nodes to one height, so their stubs end on one line.
         .flex_grow_1()
         .justify_center()
         .rounded(rems_from_px(NODE_RADIUS))
@@ -450,45 +403,6 @@ pub(super) fn node(input: CardInput, on: &OnCommand, cx: &App) -> AnyElement {
         .into_any_element()
 }
 
-/// The details card of the selected node, at the full width of the flow, right under the node's
-/// row with a caret pointing up at the node (mockup A): the name with its marks, the state and
-/// facts, then the body of the stage (its actions while current). No connector runs between the
-/// node and the card; the flow's line goes on from the card's bottom.
-pub(super) fn details(input: CardInput, at: CaretAt, on: &OnCommand, cx: &App) -> AnyElement {
-    let colors = cx.theme().colors();
-    let (tone, accent) = tone_of(&input, cx);
-    let word = chip_word(input.facts.chip);
-    let facts = fact_parts(&input);
-    let parts = if input.entry.status == StageStatus::Upcoming {
-        upcoming_parts(&input, on, cx)
-    } else {
-        body(&input, on, cx)
-    };
-    let head = v_flex()
-        .w_full()
-        .min_w_0()
-        .gap(rems_from_px(1.0_f32))
-        .child(details_name_row(&input, tone, cx))
-        .children(meta_line(word, &facts, tone, accent));
-    let card = v_flex()
-        .id(SharedString::from(format!("details-{}", input.entry.stage)))
-        .debug_selector(|| "node-details".into())
-        .relative()
-        .w_full()
-        .min_w_0()
-        .gap_2()
-        .p(rems_from_px(INSET))
-        .rounded(rems_from_px(NODE_RADIUS))
-        .border_1()
-        // The stronger border, so the card and its caret stand out on the canvas as in mockup A.
-        .border_color(colors.border)
-        .bg(colors.elevated_surface_background)
-        .child(Caret::new(at))
-        .child(head)
-        .children(parts);
-    div()
-        .w_full()
-        .pt(rems_from_px(CARET_GAP))
-        .child(card)
-        .into_any_element()
-}
+#[path = "flow_details.rs"]
+mod card;
+pub(super) use card::details;

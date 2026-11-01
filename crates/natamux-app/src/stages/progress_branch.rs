@@ -10,9 +10,10 @@ use natamux_proto::tasks::task::TaskState;
 use ui::{Tooltip, prelude::*};
 
 use super::Ctx;
-use super::flow::{Around, Edge, link_after};
+use super::flow::{Around, Edge};
 use crate::components::chips::StateChip;
 use crate::components::icons::icon_path;
+use crate::stages::flow_lines::FlowLink;
 use crate::stages::flow_rules::{
     CaretAt, LaneState, branch_line, lane_keyword, lane_state, stage_count_label,
 };
@@ -40,7 +41,6 @@ impl Ctx<'_> {
             CaretAt::Middle,
             cx,
         );
-        let open = details.is_some();
         let frame = v_flex()
             .relative()
             .w_full()
@@ -55,7 +55,7 @@ impl Ctx<'_> {
             .w_full()
             .child(frame)
             .children(details)
-            .children(out.map(|style| link_after(style, open)))
+            .children(out.map(FlowLink::new))
             .into_any_element()
     }
 
