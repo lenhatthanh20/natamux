@@ -100,6 +100,39 @@ impl Ctx<'_> {
         }
     }
 
+    /// The details card of the selected node when stage or branch step `index` holds it (T-0257).
+    /// The step's out connector leads into the card, and a connector of the same style leads on
+    /// to the next step, so the line is not broken. A path's column does not call it: the card
+    /// goes under the whole branch frame.
+    pub(super) fn details_below(
+        &self,
+        steps: &[Step],
+        index: usize,
+        cx: &App,
+    ) -> Option<AnyElement> {
+        let selected = self.input.selected.as_deref()?;
+        let step = steps.get(index)?;
+        // A group puts the card between its nodes and its join dot itself.
+        if matches!(step, Step::Group(_)) || !step.stages().iter().any(|stage| stage.id == selected)
+        {
+            return None;
+        }
+        let card = self.details(selected, cx)?;
+        let own = self.edge(step);
+        let out = steps.get(index + 1).map(|next| {
+            let next = self.edge(next);
+            link_style(own.status, next.status, next.state)
+        });
+        Some(match out {
+            Some(style) => v_flex()
+                .w_full()
+                .child(ported(card, Some(style), Some(style)))
+                .child(FlowLink::new(style))
+                .into_any_element(),
+            None => v_flex().w_full().pt_2().child(card).into_any_element(),
+        })
+    }
+
     /// The steps top to bottom, joined by connectors. The first has no port above and the last
     /// none below.
     pub(super) fn column(&self, steps: &[Step], cx: &App) -> Vec<AnyElement> {

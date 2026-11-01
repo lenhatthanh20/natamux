@@ -18,96 +18,7 @@ fn task(state: TaskState) -> Task {
     }
 }
 
-fn labels(figures: &[Figure]) -> Vec<&str> {
-    figures.iter().map(|figure| figure.label).collect()
-}
-
-fn value<'a>(figures: &'a [Figure], label: &str) -> &'a str {
-    figures
-        .iter()
-        .find(|figure| figure.label == label)
-        .map_or("", |figure| figure.value.as_str())
-}
-
 const NOW: &str = "2026-10-10T08:30:00.000Z";
-
-#[test]
-fn shows_the_figures_in_one_row_split_by_lines_with_a_tip_each_and_no_step_names() {
-    let figures = overview_figures(&task(TaskState::Review), 2, 6, 1, ms(NOW));
-    assert_eq!(
-        labels(&figures),
-        ["Stages", "Total", "This stage", "Sent back"]
-    );
-    let tips: Vec<&str> = figures.iter().map(|figure| figure.tip).collect();
-    assert_eq!(
-        tips,
-        [
-            "Stages done out of all",
-            "Time since the task started",
-            "Time in this stage",
-            "Times the task was sent back"
-        ]
-    );
-    assert_eq!(value(&figures, "Stages"), "2/6");
-    assert_eq!(value(&figures, "Sent back"), "1");
-}
-
-#[test]
-fn shows_the_time_from_start_to_finish_of_a_finished_task_and_no_time_in_this_stage() {
-    let figures = overview_figures(&task(TaskState::Done), 3, 3, 0, ms(NOW));
-    let finish = figures
-        .iter()
-        .find(|figure| figure.label == "Start to finish");
-    assert_eq!(
-        finish.map(|figure| figure.tip),
-        Some("Time from start to finish")
-    );
-    assert!(!labels(&figures).contains(&"This stage"));
-    assert!(figures.iter().all(|figure| !figure.value.contains("NaN")));
-}
-
-#[test]
-fn moves_the_open_figures_with_the_clock_and_adds_nothing_else_to_the_card() {
-    let one = task(TaskState::Running);
-    let early = overview_figures(&one, 1, 3, 0, ms(NOW));
-    assert_eq!(value(&early, "Total"), "30m");
-    assert_eq!(value(&early, "This stage"), "19m");
-    let late = overview_figures(&one, 1, 3, 0, ms("2026-10-10T09:00:00.000Z"));
-    assert_eq!(value(&late, "Total"), "1h");
-    assert_eq!(value(&late, "This stage"), "49m");
-    assert_eq!(labels(&late), labels(&early));
-}
-
-#[test]
-fn keeps_the_time_from_start_to_finish_of_a_finished_task_still_as_the_clock_moves() {
-    for state in [TaskState::Done, TaskState::Cancelled] {
-        let one = task(state);
-        for now in [NOW, "2026-10-10T09:00:00.000Z"] {
-            let figures = overview_figures(&one, 1, 3, 0, ms(now));
-            assert_eq!(value(&figures, "Start to finish"), "20m", "{state:?}");
-            assert!(!labels(&figures).contains(&"This stage"));
-        }
-    }
-}
-
-#[test]
-fn shows_no_time_in_this_stage_for_a_task_whose_stage_has_not_started() {
-    let one = Task {
-        stage_since: None,
-        state: TaskState::Ready,
-        ..task(TaskState::Ready)
-    };
-    let figures = overview_figures(&one, 0, 3, 0, ms(NOW));
-    assert!(!labels(&figures).contains(&"This stage"));
-    assert!(labels(&figures).contains(&"Total"));
-}
-
-#[test]
-fn leaves_out_the_sent_back_figure_while_the_task_was_never_sent_back() {
-    let figures = overview_figures(&task(TaskState::Review), 1, 3, 0, ms(NOW));
-    assert!(labels(&figures).contains(&"Stages"));
-    assert!(!labels(&figures).contains(&"Sent back"));
-}
 
 fn bar_entry(
     id: &str,
@@ -135,53 +46,6 @@ fn bar_entry(
         sent_back_for: None,
         sent_back_by_ci: false,
     }
-}
-
-#[test]
-fn sizes_each_bar_by_its_share_of_the_longest_stage_with_a_sliver_for_a_short_one() {
-    let progress = [
-        bar_entry(
-            "a",
-            StageStatus::Done,
-            Some("2026-10-10T08:00:00.000Z"),
-            Some("2026-10-10T08:10:00.000Z"),
-        ),
-        bar_entry(
-            "b",
-            StageStatus::Done,
-            Some("2026-10-10T08:10:00.000Z"),
-            Some("2026-10-10T08:15:00.000Z"),
-        ),
-        bar_entry(
-            "c",
-            StageStatus::Done,
-            Some("2026-10-10T08:15:00.000Z"),
-            Some("2026-10-10T08:15:10.000Z"),
-        ),
-        bar_entry("d", StageStatus::Upcoming, None, None),
-    ];
-    let bars = time_bars(&progress, ms(NOW));
-    assert_eq!(bars.len(), 3);
-    assert_eq!(bars[0].width_percent, 100.0);
-    assert_eq!(bars[1].width_percent, 50.0);
-    assert_eq!(bars[2].width_percent, 4.0);
-    assert_eq!(bars[0].time, "10m");
-    assert_eq!(bars[0].state, TaskState::Done);
-}
-
-#[test]
-fn counts_a_current_stage_up_to_now_without_so_far() {
-    let mut running = bar_entry(
-        "a",
-        StageStatus::Current,
-        Some("2026-10-10T08:00:00.000Z"),
-        None,
-    );
-    running.state = Some(TaskState::Review);
-    let bars = time_bars(&[running], ms(NOW));
-    assert_eq!(bars[0].time, "30m");
-    assert_eq!(bars[0].state, TaskState::Review);
-    assert!(time_bars(&[], ms(NOW)).is_empty());
 }
 
 #[test]
@@ -221,40 +85,4 @@ fn the_progress_tab_follows_the_stage_that_runs_and_the_figures_of_an_open_task(
         next_progress_change_ms(&task(TaskState::Running), &[], now),
         Some(30_000)
     );
-}
-
-#[test]
-fn the_strip_of_a_done_task_says_when_it_finished_and_adds_the_cost() {
-    let done = task(TaskState::Done);
-    let head = strip_head(&done, &[], ms(NOW));
-    assert_eq!(head.as_deref(), Some("Done \u{b7} Finished 10m ago"));
-    let figures = strip_figures(&done, 3, 3, 1, Some(0.61), ms(NOW));
-    assert_eq!(labels(&figures), ["Stages", "Total", "Cost est."]);
-    assert_eq!(value(&figures, "Cost est."), "$0.61");
-    let free = strip_figures(&done, 3, 3, 0, None, ms(NOW));
-    assert_eq!(labels(&free), ["Stages", "Total"]);
-}
-
-#[test]
-fn the_strip_of_a_cancelled_task_names_the_stage_it_stopped_at() {
-    let cancelled = task(TaskState::Cancelled);
-    let entry = bar_entry("spec", StageStatus::Current, None, None);
-    assert_eq!(
-        strip_head(&cancelled, &[entry], ms(NOW)).as_deref(),
-        Some("Cancelled at SPEC")
-    );
-    assert_eq!(
-        strip_head(&cancelled, &[], ms(NOW)).as_deref(),
-        Some("Cancelled at spec")
-    );
-    let figures = strip_figures(&cancelled, 1, 3, 0, Some(1.0), ms(NOW));
-    assert_eq!(labels(&figures), ["Stages", "Total"]);
-}
-
-#[test]
-fn the_strip_of_an_open_task_has_no_head_and_the_usual_figures() {
-    let open = task(TaskState::Running);
-    assert_eq!(strip_head(&open, &[], ms(NOW)), None);
-    let figures = strip_figures(&open, 1, 3, 0, Some(1.0), ms(NOW));
-    assert_eq!(labels(&figures), ["Stages", "Total", "This stage"]);
 }

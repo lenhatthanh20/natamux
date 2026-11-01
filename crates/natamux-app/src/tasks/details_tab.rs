@@ -1,6 +1,6 @@
 //! The Details tab (`TaskDetail.tsx`): the title block with its chips, the quiet and waiting
-//! banners, the action row, then the sections Notes, Workspace, Pull request, Usage, Subtasks,
-//! Tries, Details and Activity (the last four are in `details_lists.rs`).
+//! banners, the action row, then the sections Notes, Context and issue, Workspace, Pull request,
+//! Usage, Subtasks, Tries, Details and Activity (the last four are in `details_lists.rs`).
 
 use gpui::{AnyElement, FontWeight};
 use natamux_proto::tasks::task::Task;
@@ -12,7 +12,7 @@ use crate::app::links::open_link;
 use crate::components::button_style::{action_button, button_icon, key_hint, quiet_button};
 use crate::components::chips::{StateChip, label_chip, tip_with_keys};
 use crate::components::colors::signal;
-use crate::components::detail_section::{DetailSection, field};
+use crate::components::detail_section::{DetailSection, field, field_fit};
 use crate::components::icons::icon_path;
 use crate::tasks::details_commands::{OnCommand, PanelCommand};
 use crate::tasks::details_rules::{
@@ -22,7 +22,7 @@ use crate::tasks::details_rules::{
 use crate::tasks::edit_rules::label_text;
 use crate::tasks::table_rules::waits_for;
 use crate::tasks::task_attention::is_quiet;
-use crate::tasks::task_rules::{actions_for, agent_action};
+use crate::tasks::task_rules::{actions_for, agent_action, context_text};
 use crate::workspaces::wrap_up_rules::is_finished_state;
 
 fn capitalized(text: &str) -> String {
@@ -65,6 +65,7 @@ impl DetailsPanel {
         let mut parts = vec![
             self.title_block(task, &waiting, &on, cx).into_any_element(),
             self.notes(task, cx).into_any_element(),
+            self.context_section(task, cx).into_any_element(),
             self.workspace(task, &on, cx).into_any_element(),
         ];
         if task.pr.is_some() {
@@ -157,6 +158,58 @@ impl DetailsPanel {
             .gap_1p5()
             .children(buttons)
             .children(agent)
+    }
+
+    /// Where the task's context comes from, and its issue (moved from Progress, T-0257). The pull
+    /// request has its own section.
+    fn context_section(&self, task: &Task, cx: &mut Context<Self>) -> impl IntoElement {
+        let context = task
+            .context
+            .as_ref()
+            .map_or_else(|| "The task notes".to_owned(), context_text);
+        let settings = self
+            .shown
+            .as_ref()
+            .and_then(|shown| shown.settings.as_ref())
+            .and_then(|settings| settings.as_ref().ok());
+        let can_create = !is_finished_state(task.state)
+            && settings.is_some_and(|loaded| {
+                let tracker = &loaded.settings.tracker;
+                tracker.kind == "github" && tracker.create_issue != "never"
+            });
+        let creates = task.issue.is_none() && can_create;
+        let issue: AnyElement = match &task.issue {
+            Some(issue) => {
+                let url = issue.url.clone();
+                quiet_button("issue-link", issue.key.clone())
+                    .label_size(LabelSize::Small)
+                    .truncate(true)
+                    .on_click(move |_, _, cx| open_link(&url, cx))
+                    .into_any_element()
+            }
+            None if can_create => {
+                let on = self.on_command(cx);
+                action_button("create-issue", "Create issue")
+                    .size(ButtonSize::Compact)
+                    .label_size(LabelSize::Small)
+                    .disabled(self.shown.as_ref().is_some_and(|shown| shown.busy))
+                    .on_click(move |_, window, cx| on(PanelCommand::CreateIssue, window, cx))
+                    .into_any_element()
+            }
+            None => Label::new("None").size(LabelSize::Small).into_any_element(),
+        };
+        DetailSection::new(
+            "context",
+            "Context and issue",
+            self.open_of("context", true, cx),
+            self.fold("context", cx),
+        )
+        .child(field("Context", Label::new(context).size(LabelSize::Small)))
+        .child(if creates {
+            field_fit("Issue", issue).into_any_element()
+        } else {
+            field("Issue", issue).into_any_element()
+        })
     }
 
     fn notes(&self, task: &Task, cx: &mut Context<Self>) -> impl IntoElement {

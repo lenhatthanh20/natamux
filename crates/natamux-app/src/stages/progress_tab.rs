@@ -1,7 +1,7 @@
-//! The Progress tab (docs/design-task-stages.md 7.5, `ProgressTab.tsx`, `Overview.tsx`,
-//! `BranchLane.tsx`): the stat strip, the timeline of steps as a node flow (a stage, a group side
-//! by side, or a branch with its paths, joined by connectors; T-0246), and the sections below
-//! it: Context and issue, Time per stage and Latest events.
+//! The Progress tab (docs/design-task-stages.md 7.5, `ProgressTab.tsx`, `BranchLane.tsx`): the
+//! timeline of steps as a node flow (a stage, a group side by side, or a branch with its paths,
+//! joined by connectors; T-0246), with the details card of the selected node under its step
+//! (T-0257), and Latest events below.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -14,13 +14,11 @@ use natamux_proto::stages::schema::Step;
 use natamux_proto::tasks::task::Task;
 use ui::prelude::*;
 
-use super::card_rules::card_facts;
+use super::card_rules::{card_facts, node_agent};
 use super::flow_lines::dot_grid;
-use super::stage_card::{ActionsInput, CardInput, FileChip, stage_card};
+use super::stage_card::{ActionsInput, CardInput, FileChip, details_card, stage_card};
 use super::stage_choices::ChoiceBox;
-use super::stage_view_rules::{
-    find_stage, missing_skills, ran_with_workflow, stage_count, waiting_for_ci,
-};
+use super::stage_view_rules::{find_stage, missing_skills, ran_with_workflow, waiting_for_ci};
 use crate::agents::agent_choices::{custom_agents, workflow_agent};
 use crate::tasks::details_commands::{OnCommand, StageToggle};
 use crate::tasks::usage_rules::{stage_usage, usage_line};
@@ -41,10 +39,13 @@ pub struct ProgressInput {
     pub busy: bool,
     pub resuming: bool,
     pub toggling: BTreeSet<String>,
-    pub open_cards: BTreeSet<String>,
+    /// The selected node (`card_rules::selected_stage`): its details card shows under its step.
+    pub selected: Option<String>,
+    /// The task's agent (`agent_of`), the icon of a node that runs it.
+    pub task_agent: String,
     pub open_lanes: BTreeSet<String>,
     pub open_evidence: BTreeSet<String>,
-    /// The focus of each finished or upcoming node's header.
+    /// The focus of each node.
     pub card_focus: BTreeMap<String, gpui::FocusHandle>,
     pub agent_label: String,
     /// The task's workspace is open in main beside the panel: Answer in terminal can focus it.
@@ -131,6 +132,17 @@ impl Ctx<'_> {
 
     /// `compact`: a node of a side-by-side pair, half the panel wide.
     fn card(&self, id: &str, compact: bool, cx: &App) -> Option<AnyElement> {
+        let input = self.card_input(id, compact)?;
+        Some(stage_card(input, self.on, cx))
+    }
+
+    /// The full-width details card of a stage.
+    fn details(&self, id: &str, cx: &App) -> Option<AnyElement> {
+        let input = self.card_input(id, false)?;
+        Some(details_card(input, self.on, cx))
+    }
+
+    fn card_input(&self, id: &str, compact: bool) -> Option<CardInput> {
         let entry = (*self.by_id.get(id)?).clone();
         let stage = find_stage(&self.input.steps, id)?.clone();
         let input = self.input;
@@ -200,13 +212,14 @@ impl Ctx<'_> {
             }),
             // A done task's pull request was merged: Release finishes when it is.
             pr: (release && task.pr.is_some()).then(|| (task.pr.clone().unwrap_or_default(), done)),
-            opened: input.open_cards.contains(id),
+            selected: input.selected.as_deref() == Some(id),
+            node_agent: node_agent(&stage, &input.task_agent),
             now_ms: input.now_ms,
             file,
             entry,
             stage,
         };
-        Some(stage_card(card, self.on, cx))
+        Some(card)
     }
 }
 
@@ -249,12 +262,14 @@ pub fn timeline(input: &ProgressInput, on: &OnCommand, cx: &App) -> Vec<AnyEleme
         .enumerate()
         .map(|(index, step)| {
             // One element per step so the panel can scroll to one; each has its own dot grid.
+            // The selected node's details go under the whole step: a pair, a branch frame.
             div()
                 .relative()
                 .px_3()
                 .when(index == last, |this| this.pb_3())
                 .child(dot_grid(cx))
                 .child(step)
+                .children(ctx.details_below(&input.steps, index, cx))
                 .into_any_element()
         })
         .collect()
@@ -272,7 +287,6 @@ pub fn current_step(input: &ProgressInput) -> Option<usize> {
     })
 }
 
-/// Stages done of all, for the overview.
-pub fn counts(progress: &[StageProgress]) -> (usize, usize) {
-    stage_count(progress)
-}
+#[cfg(test)]
+#[path = "progress_tab_tests.rs"]
+mod tests;

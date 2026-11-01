@@ -57,14 +57,31 @@ impl Ctx<'_> {
         });
         let prev = around.prev.unwrap_or(StageStatus::Upcoming);
         let into = link_style(prev, own.status, own.state);
-        let body = match (
+        let (body, paired) = match (
             group_layout(group.parallel.len()),
             group.parallel.as_slice(),
         ) {
-            (GroupLayout::Pair, [first, second]) => self.pair(first, second, prev, cx),
-            _ => self.stack(group, own, into, cx),
+            (GroupLayout::Pair, [first, second]) => (self.pair(first, second, prev, cx), true),
+            _ => (self.stack(group, own, into, cx), false),
         };
-        let dot = JoinDot::new(join_style(own.status)).note(self.group_note(group));
+        let out = join_style(own.status);
+        // The selected node's details go between the nodes and the join dot, so the line from
+        // this step to the next is one piece (T-0257).
+        let details = self
+            .input
+            .selected
+            .as_deref()
+            .filter(|id| group.parallel.iter().any(|stage| stage.id == *id))
+            .and_then(|id| self.details(id, cx))
+            .map(|card| {
+                v_flex()
+                    .w_full()
+                    // The join curves meet at the middle with no port; a stack ends with a link.
+                    .when(paired, |this| this.child(FlowLink::new(out).at_top()))
+                    .child(ported(card, Some(out), Some(out)))
+                    .child(FlowLink::new(out))
+            });
+        let dot = JoinDot::new(out).note(self.group_note(group));
         let dot = match around.out_style(own) {
             Some(below) => dot.below(below),
             None => dot,
@@ -73,6 +90,7 @@ impl Ctx<'_> {
             .w_full()
             .child(pill(&name, cx))
             .child(body)
+            .children(details)
             .child(dot)
             .into_any_element()
     }

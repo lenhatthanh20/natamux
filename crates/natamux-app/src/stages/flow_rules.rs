@@ -166,9 +166,19 @@ impl NodeTone {
         matches!(self, NodeTone::Current { .. })
     }
 
-    /// The name is struck through.
+    /// The name is struck through: skipped, or marked to skip before it runs (T-0257).
     pub fn struck(self) -> bool {
-        self == NodeTone::Skipped
+        matches!(self, NodeTone::Skipped | NodeTone::WillSkip)
+    }
+
+    /// The node's opacity. A stage marked to skip fades as a skipped one, so it stands apart
+    /// from a stage that will run; its dashed tile with no glyph says it has not run yet.
+    pub fn fade(self) -> f32 {
+        match self {
+            NodeTone::Skipped | NodeTone::WillSkip => 0.7,
+            NodeTone::NotTaken => 0.55,
+            _ => 1.,
+        }
     }
 
     /// The state whose colour the tile and the border take; None is muted.
