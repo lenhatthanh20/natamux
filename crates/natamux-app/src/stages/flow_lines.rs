@@ -10,8 +10,8 @@ use natamux_proto::tasks::task::TaskState;
 use ui::prelude::*;
 
 use super::flow_rules::{
-    CARET, CURVE_H, CaretAt, GRID, JOIN_DOT, LINK_H, LinkStyle, PAIR_GAP, PORT_OUT, STROKE,
-    Stroke, caret_x, pair_centres,
+    CARET, CURVE_H, CaretAt, GRID, JOIN_DOT, LINK_H, LinkStyle, PAIR_GAP, PORT_OUT, STROKE, Stroke,
+    caret_x, pair_centres,
 };
 use crate::components::colors::state_colors;
 

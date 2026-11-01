@@ -269,6 +269,7 @@ mod tasks {
     pub mod frozen_order;
     pub mod state_filter;
     pub mod state_filter_rules;
+    pub mod summary_rules;
     pub mod table_columns;
     pub mod table_menu;
     pub mod table_rules;
@@ -285,7 +286,6 @@ mod tasks {
     pub mod task_view;
     pub mod task_view_rules;
     pub mod tries_rules;
-    pub mod summary_rules;
     pub mod usage_rules;
 }
 mod terminals {
