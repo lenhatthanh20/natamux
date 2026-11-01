@@ -27,11 +27,12 @@ pub const BREAKPOINT_MD: f32 = 768.0;
 pub const BREAKPOINT_LG: f32 = 1024.0;
 pub const BREAKPOINT_XL: f32 = 1280.0;
 pub const MIN_MAIN_WIDTH_FOR_DOCKED_DETAILS: f32 = 400.0;
-/// The default width of both sides: the sidebar, and the docked details without its rail
-/// (T-0239). Each side is resized on its own.
+/// The default width of the left sidebar. Each side is resized on its own (T-0239).
 pub const SIDEBAR_WIDTH: f32 = 320.0;
 /// The details rail; Root keeps it out of main.
 pub const RAIL_WIDTH: f32 = 40.;
+/// The docked details without the rail (T-0260). The panel plus the rail equals the sidebar.
+pub const DETAILS_WIDTH: f32 = SIDEBAR_WIDTH - RAIL_WIDTH;
 
 /// Without a measured width the window gets the desktop layout.
 pub const DESKTOP_LAYOUT: LayoutMode = LayoutMode {
@@ -137,13 +138,20 @@ mod tests {
     }
 
     #[test]
+    fn the_details_default_plus_the_rail_equals_the_sidebar() {
+        assert_eq!(DETAILS_WIDTH, 280.0);
+        assert_eq!(DETAILS_WIDTH + RAIL_WIDTH, SIDEBAR_WIDTH);
+    }
+
+    #[test]
     fn docks_the_details_at_the_shot_sizes() {
         let mode = |width| {
             decide_layout(LayoutInput {
                 width: Some(width),
-                // Both sides start at the same width; at 1024 both are capped to 307, main keeps 410.
+                // The sidebar starts at 320 and the details at 280. At 1024 the sidebar is
+                // capped to 307; the details stay 280, and main keeps 437.
                 sidebar_width: effective_sidebar_width(SIDEBAR_WIDTH, Some(width)),
-                details_width: effective_sidebar_width(SIDEBAR_WIDTH, Some(width)),
+                details_width: effective_sidebar_width(DETAILS_WIDTH, Some(width)),
                 coarse: false,
             })
         };
