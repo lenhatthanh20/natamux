@@ -248,28 +248,11 @@ pub fn node_agent(stage: &Stage, task_agent: &str) -> Option<(String, bool)> {
     }
 }
 
-/// The selected node of the Progress flow: the one the user picked, else the current stage.
-pub fn selected_stage(picked: Option<&str>, progress: &[StageProgress]) -> Option<String> {
-    picked.map(str::to_owned).or_else(|| {
-        progress
-            .iter()
-            .find(|entry| entry.status == StageStatus::Current)
-            .map(|entry| entry.stage.clone())
-    })
-}
-
-/// The pick after a click on `clicked`: a click on the selected node clears the pick, so the
-/// selection goes back to the current stage; any other node becomes the pick.
-pub fn pick_after_click(
-    picked: Option<&str>,
-    progress: &[StageProgress],
-    clicked: &str,
-) -> Option<String> {
-    if selected_stage(picked, progress).as_deref() == Some(clicked) {
-        None
-    } else {
-        Some(clicked.to_owned())
-    }
+/// The pick after a click on `clicked`: a click on the selected node closes it, any other node
+/// becomes the pick. Nothing is selected until a click, the running stage too (owner,
+/// 2026-11-01).
+pub fn pick_after_click(picked: Option<&str>, clicked: &str) -> Option<String> {
+    (picked != Some(clicked)).then(|| clicked.to_owned())
 }
 
 #[cfg(test)]

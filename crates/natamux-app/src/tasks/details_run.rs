@@ -100,13 +100,8 @@ impl DetailsPanel {
             }
             PanelCommand::Toggle { kind, stage, on } => self.toggle(&task, kind, stage, on, cx),
             PanelCommand::SelectStage(stage) => {
-                let progress = self.progress(&task).map(|(_, progress)| progress);
                 if let Some(shown) = self.shown.as_mut() {
-                    shown.picked = pick_after_click(
-                        shown.picked.as_deref(),
-                        progress.as_deref().unwrap_or_default(),
-                        &stage,
-                    );
+                    shown.picked = pick_after_click(shown.picked.as_deref(), &stage);
                 }
             }
             PanelCommand::FoldLane(path) => {
