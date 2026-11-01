@@ -10,8 +10,7 @@ use natamux_proto::tasks::task::TaskState;
 use ui::prelude::*;
 
 use super::flow_rules::{
-    CARET, CURVE_H, CaretAt, GRID, JOIN_DOT, LINK_H, LinkStyle, STROKE, STUB, Stroke, caret_x,
-    pair_tiles,
+    CARET, CURVE_H, CaretAt, GRID, JOIN_DOT, LINK_H, LinkStyle, STROKE, Stroke, caret_x, pair_tiles,
 };
 use crate::components::colors::state_colors;
 
@@ -91,12 +90,12 @@ impl FlowLink {
         }
     }
 
-    /// The line inside a node, above or below its tile: it grows with the node, at least `STUB`.
-    pub fn stub(style: LinkStyle) -> Self {
+    /// A line inside a node, `high` px high (at least, with `grow`).
+    pub fn stub(style: LinkStyle, high: f32) -> Self {
         Self {
             style,
-            grow: true,
-            min: STUB,
+            grow: false,
+            min: high,
         }
     }
 

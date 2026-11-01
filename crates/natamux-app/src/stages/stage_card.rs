@@ -11,7 +11,7 @@ use natamux_proto::stages::schema::{Gate, Stage, StageKind};
 use ui::prelude::*;
 
 use super::card_rules::CardFacts;
-use super::flow_rules::{NodeLinks, NodeSide};
+use super::flow_rules::NodeLinks;
 use super::stage_choices::{ChoiceBox, choice_box};
 use super::stage_view_rules::{finished_when, stage_time};
 use crate::components::button_style::quiet_button;
@@ -54,8 +54,6 @@ pub struct CardInput {
     /// The Skip / Don't skip of a stage not reached yet: (marked, busy).
     pub skip: Option<(bool, bool)>,
     pub actions: Option<ActionsInput>,
-    /// Where the texts sit around the tile.
-    pub side: NodeSide,
     /// The lines inside the node, above and below its tile.
     pub links: NodeLinks,
 }

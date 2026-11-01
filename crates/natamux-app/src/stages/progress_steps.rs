@@ -11,8 +11,7 @@ use super::Ctx;
 use super::flow::{Around, Edge, ported};
 use crate::stages::flow_lines::{FlowLink, JoinDot, PairCurves};
 use crate::stages::flow_rules::{
-    CaretAt, GroupLayout, LinkStyle, NodeLinks, NodeSide, PAIR_GAP, group_layout, join_style,
-    link_style,
+    CaretAt, GroupLayout, LinkStyle, NodeLinks, PAIR_GAP, group_layout, join_style, link_style,
 };
 
 impl Ctx<'_> {
@@ -78,15 +77,15 @@ impl Ctx<'_> {
             .into_any_element()
     }
 
-    /// Two nodes side by side, between the fork and the join curves, their tiles near the middle
-    /// and their texts outside (T-0259). The selected node's card sits right under the pair, its
-    /// caret at that node, and the join curves start from the card (mockup A of T-0257).
+    /// Two nodes side by side, between the fork and the join curves, each tile in the middle of
+    /// its node with the name under it (T-0259). The selected node's card sits right under the
+    /// pair, its caret at that node, and the join curves start from the card (mockup A of T-0257).
     fn pair(&self, first: &Stage, second: &Stage, prev: StageStatus, cx: &App) -> AnyElement {
         let details = self
             .details_of([first], CaretAt::Left, cx)
             .or_else(|| self.details_of([second], CaretAt::Right, cx));
         let open = details.is_some();
-        let side = |stage: &Stage, at: NodeSide| {
+        let side = |stage: &Stage| {
             let edge = self.stage_edge(&stage.id);
             let into = link_style(prev, edge.status, edge.state);
             let links = NodeLinks {
@@ -94,13 +93,13 @@ impl Ctx<'_> {
                 out: (!open).then(|| join_style(edge.status)),
             };
             let card = self
-                .card(&stage.id, at, links, cx)
+                .card(&stage.id, links, cx)
                 .unwrap_or_else(|| div().into_any_element());
             let node = ported(card).flex_1().min_w_0();
             (edge, into, node)
         };
-        let (left, left_into, left_node) = side(first, NodeSide::Left);
-        let (right, right_into, right_node) = side(second, NodeSide::Right);
+        let (left, left_into, left_node) = side(first);
+        let (right, right_into, right_node) = side(second);
         let join = PairCurves::join(join_style(left.status), join_style(right.status));
         v_flex()
             .w_full()
@@ -134,9 +133,12 @@ impl Ctx<'_> {
             .border_1()
             .border_dashed()
             .border_color(cx.theme().colors().border)
-            .children(group.parallel.iter().filter_map(|stage| {
-                self.card(&stage.id, NodeSide::Middle, NodeLinks::default(), cx)
-            }));
+            .children(
+                group
+                    .parallel
+                    .iter()
+                    .filter_map(|stage| self.card(&stage.id, NodeLinks::default(), cx)),
+            );
         v_flex()
             .w_full()
             .child(FlowLink::new(into))
