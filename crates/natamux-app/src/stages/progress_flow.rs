@@ -10,7 +10,7 @@ use ui::prelude::*;
 
 use super::Ctx;
 use crate::stages::flow_lines::FlowLink;
-use crate::stages::flow_rules::{CaretAt, LinkStyle, group_status, link_style};
+use crate::stages::flow_rules::{CaretAt, LinkStyle, NodeLinks, group_status, link_style};
 use crate::stages::stage_view_rules::branch_status;
 
 /// The status of a step, and the state of its current stage.
@@ -33,19 +33,18 @@ impl Around {
         self.next
             .map(|next| link_style(own.status, next.status, next.state))
     }
+
+    /// The connector into a step; none for the first one.
+    pub fn in_style(self, own: Edge) -> Option<LinkStyle> {
+        self.prev
+            .map(|prev| link_style(prev, own.status, own.state))
+    }
 }
 
 /// The box of a node in the flow. It grows, so a node stretched by a pair row fills it. The
 /// lines meet the node's box with no port ring (owner, T-0257).
 pub(super) fn ported(node: AnyElement) -> Div {
     v_flex().child(v_flex().flex_grow_1().child(node))
-}
-
-/// The connector under a step: from its port, or from the top of the box when a details card
-/// ends the step (the card has no port).
-pub(super) fn link_after(style: LinkStyle, after_card: bool) -> FlowLink {
-    let link = FlowLink::new(style);
-    if after_card { link.at_top() } else { link }
 }
 
 impl Ctx<'_> {
@@ -81,19 +80,23 @@ impl Ctx<'_> {
         match step {
             Step::Stage(stage) => {
                 let out = around.out_style(own);
-                let card = self
-                    .card(&stage.id, false, cx)
-                    .unwrap_or_else(|| div().into_any_element());
                 // The selected node's card sits right under it; the line goes on from the card.
                 let details = (!in_path)
                     .then(|| self.details_of([stage], CaretAt::Middle, cx))
                     .flatten();
                 let open = details.is_some();
+                let links = NodeLinks {
+                    into: around.in_style(own),
+                    out: out.filter(|_| !open),
+                };
+                let card = self
+                    .card(&stage.id, links, cx)
+                    .unwrap_or_else(|| div().into_any_element());
                 v_flex()
                     .w_full()
                     .child(ported(card))
                     .children(details)
-                    .children(out.map(|style| link_after(style, open)))
+                    .children(out.map(FlowLink::new))
                     .into_any_element()
             }
             Step::Group(group) => self.group(group, own, around, cx),

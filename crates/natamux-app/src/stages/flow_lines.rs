@@ -10,8 +10,8 @@ use natamux_proto::tasks::task::TaskState;
 use ui::prelude::*;
 
 use super::flow_rules::{
-    CARET, CURVE_H, CaretAt, GRID, JOIN_DOT, LINK_H, LinkStyle, PAIR_GAP, PORT_OUT, STROKE, Stroke,
-    caret_x, pair_centres,
+    CARET, CARET_HALF, CARET_ROUND, CURVE_H, CaretAt, GRID, JOIN_DOT, LINK_H, LinkStyle, STROKE,
+    Stroke, caret_x, pair_tiles,
 };
 use crate::components::colors::state_colors;
 
@@ -73,13 +73,13 @@ fn draw(
     }
 }
 
-/// The straight connector between two steps, down the middle of the column. By default it starts
-/// below the output port of the step above, so it does not draw over the ring.
+/// The straight connector between two steps, down the middle of its box, from its top to its
+/// bottom: the lines meet the nodes with no ports (T-0259).
 #[derive(IntoElement)]
 pub struct FlowLink {
     style: LinkStyle,
     grow: bool,
-    from_top: bool,
+    min: f32,
 }
 
 impl FlowLink {
@@ -87,7 +87,16 @@ impl FlowLink {
         Self {
             style,
             grow: false,
-            from_top: false,
+            min: LINK_H,
+        }
+    }
+
+    /// A line inside a node, `high` px high (at least, with `grow`).
+    pub fn stub(style: LinkStyle, high: f32) -> Self {
+        Self {
+            style,
+            grow: false,
+            min: high,
         }
     }
 
@@ -96,25 +105,18 @@ impl FlowLink {
         self.grow = true;
         self
     }
-
-    /// Starts at the very top: no port above it (a join dot, a group pill).
-    pub fn at_top(mut self) -> Self {
-        self.from_top = true;
-        self
-    }
 }
 
 impl RenderOnce for FlowLink {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let pen = pen(self.style, cx);
-        let start = if self.from_top { 0. } else { PORT_OUT };
         let line = canvas(
             |_, _, _| {},
             move |bounds, _, window, _| {
                 let scale = scale(window);
                 let x = f32::from(bounds.origin.x) + f32::from(bounds.size.width) / 2.;
                 let top = f32::from(bounds.origin.y);
-                let from = point(px(x), px(top + start * scale));
+                let from = point(px(x), px(top));
                 let to = point(px(x), px(top + f32::from(bounds.size.height)));
                 draw(window, pen, scale, from, to, None);
             },
@@ -124,16 +126,19 @@ impl RenderOnce for FlowLink {
         div()
             .relative()
             .w_full()
-            .min_h(rems_from_px(LINK_H))
+            .min_h(rems_from_px(self.min))
             .when(self.grow, |this| this.flex_1())
-            .when(!self.grow, |this| this.flex_none().h(rems_from_px(LINK_H)))
+            .when(!self.grow, |this| {
+                this.flex_none().h(rems_from_px(self.min))
+            })
             .child(line)
     }
 }
 
 /// The caret on top of a details card, pointing up at the selected node (mockup A of T-0257). Put
 /// it as a child of the `relative()` card: it stands on the card's top border and covers the
-/// border under its base, in the card's colours.
+/// border under its base, in the card's colours, so card and caret read as one shape. Wide and
+/// low with a round tip (owner, T-0259: the thin sharp one looked cheap).
 #[derive(IntoElement)]
 pub struct Caret {
     at: CaretAt,
@@ -155,24 +160,33 @@ impl RenderOnce for Caret {
             move |bounds, _, window, _| {
                 let scale = scale(window);
                 let width = f32::from(bounds.size.width);
-                let x = f32::from(bounds.origin.x) + caret_x(at, width, PAIR_GAP * scale);
-                // The base is 1 px into the card, over its top border.
-                let base = f32::from(bounds.origin.y) + f32::from(bounds.size.height);
-                let half = CARET * scale;
-                let tip = point(px(x), px(base - 1. - half));
-                let (left, right) = (point(px(x - half), px(base)), point(px(x + half), px(base)));
+                let x = f32::from(bounds.origin.x) + caret_x(at, width, scale);
+                // The base runs along the middle of the card's 1 px top border.
+                let base = f32::from(bounds.origin.y) + f32::from(bounds.size.height) - 0.5;
+                let (half, high, round) = (CARET_HALF * scale, CARET * scale, CARET_ROUND * scale);
+                let top = base - high;
+                let pt = |dx: f32, y: f32| point(px(x + dx), px(y));
+                // Each side stops short of the tip; a curve through the tip rounds it.
+                let lean = round * half / high;
+                let (into_tip, out_of_tip) = (pt(-lean, top + round), pt(lean, top + round));
+                let tip = pt(0., top);
                 let mut body = PathBuilder::fill();
-                body.move_to(left);
-                body.line_to(tip);
-                body.line_to(right);
+                // The fill goes 1 px under the base, so no border line shows through it.
+                body.move_to(pt(-half, base + 1.));
+                body.line_to(pt(-half, base));
+                body.line_to(into_tip);
+                body.cubic_bezier_to(out_of_tip, tip, tip);
+                body.line_to(pt(half, base));
+                body.line_to(pt(half, base + 1.));
                 body.close();
                 if let Ok(path) = body.build() {
                     window.paint_path(path, fill);
                 }
                 let mut edge = PathBuilder::stroke(px(1.));
-                edge.move_to(left);
-                edge.line_to(tip);
-                edge.line_to(right);
+                edge.move_to(pt(-half, base));
+                edge.line_to(into_tip);
+                edge.cubic_bezier_to(out_of_tip, tip, tip);
+                edge.line_to(pt(half, base));
                 if let Ok(path) = edge.build() {
                     window.paint_path(path, rim);
                 }
@@ -190,9 +204,9 @@ impl RenderOnce for Caret {
     }
 }
 
-/// The two curves of a pair: a fork from the middle down to the two nodes, or a join from their
-/// output ports back to the middle. Its width must be the pair row's width (same parent, same
-/// side insets), and the row must space its two `flex_1` nodes `PAIR_GAP` apart.
+/// The two curves of a pair: a fork from the middle down to the two tiles, or a join from them
+/// back to the middle. Its width must be the pair row's width (same parent, same side insets),
+/// and the row must space its two `flex_1` nodes `PAIR_GAP` apart (`pair_tiles`).
 #[derive(IntoElement)]
 pub struct PairCurves {
     left: LinkStyle,
@@ -232,13 +246,12 @@ impl RenderOnce for PairCurves {
                 let top = f32::from(bounds.origin.y);
                 let width = f32::from(bounds.size.width);
                 let height = f32::from(bounds.size.height);
-                let (first, second) = pair_centres(width, PAIR_GAP * scale);
+                let (first, second) = pair_tiles(width, scale);
                 let middle = width / 2.;
                 let at = |x: f32, y: f32| point(px(left + x), px(top + y));
                 for (pen, x) in pens.into_iter().zip([first, second]) {
-                    // A join starts below the output port, so it does not draw over the ring.
                     let ((x0, y0), (x1, y1)) = if join {
-                        ((x, PORT_OUT * scale), (middle, height))
+                        ((x, 0.), (middle, height))
                     } else {
                         ((middle, 0.), (x, height))
                     };
@@ -299,6 +312,7 @@ impl RenderOnce for JoinDot {
             cx.theme().colors().panel_background
         };
         let dot = div()
+            .debug_selector(|| "join-dot".into())
             .flex_none()
             .w(rems_from_px(JOIN_DOT))
             .h(rems_from_px(JOIN_DOT))
@@ -313,17 +327,19 @@ impl RenderOnce for JoinDot {
             .child(dot)
             .when_some(self.below, |this, below| {
                 this.min_h(rems_from_px(JOIN_DOT + LINK_H))
-                    .child(FlowLink::new(below).at_top().grow())
+                    .child(FlowLink::new(below).grow())
             });
-        // Equal flex_1 sides keep the dot on the middle line whatever the note's length.
-        let note = div()
-            .flex_1()
-            .min_w_0()
-            .pl(rems_from_px(6.0_f32))
-            .mt(rems_from_px(-4.0_f32))
-            .when_some(self.note, |this, note| {
-                this.child(Label::new(note).size(LabelSize::XSmall).color(Color::Muted))
-            });
+        // Equal flex_1 sides keep the dot on the middle line whatever the note's length. The
+        // note's padding sits inside its side: on the side itself it made that side 6 px wider
+        // and moved the dot 3 px off the join curves (T-0259).
+        let note = div().flex_1().min_w_0().when_some(self.note, |this, note| {
+            this.child(
+                div()
+                    .pl(rems_from_px(6.0_f32))
+                    .mt(rems_from_px(-4.0_f32))
+                    .child(Label::new(note).size(LabelSize::XSmall).color(Color::Muted)),
+            )
+        });
         div()
             .flex()
             .w_full()
@@ -372,3 +388,7 @@ pub fn dot_grid(cx: &App) -> impl IntoElement {
     .absolute()
     .inset_0()
 }
+
+#[cfg(test)]
+#[path = "flow_lines_tests.rs"]
+mod tests;

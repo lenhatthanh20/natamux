@@ -15,7 +15,7 @@ use natamux_proto::tasks::task::Task;
 use ui::prelude::*;
 
 use super::card_rules::{card_facts, node_agent};
-use super::flow_rules::CaretAt;
+use super::flow_rules::{CaretAt, NodeLinks};
 use super::stage_card::{ActionsInput, CardInput, FileChip, details_card, stage_card};
 use super::stage_choices::ChoiceBox;
 use super::stage_view_rules::{find_stage, missing_skills, ran_with_workflow, waiting_for_ci};
@@ -131,9 +131,9 @@ impl Ctx<'_> {
         boxes
     }
 
-    /// `compact`: a node of a side-by-side pair, half the panel wide.
-    fn card(&self, id: &str, compact: bool, cx: &App) -> Option<AnyElement> {
-        let input = self.card_input(id, compact)?;
+    /// `links`: the lines inside the node.
+    fn card(&self, id: &str, links: NodeLinks, cx: &App) -> Option<AnyElement> {
+        let input = self.card_input(id, links)?;
         Some(stage_card(input, self.on, cx))
     }
 
@@ -147,11 +147,11 @@ impl Ctx<'_> {
     ) -> Option<AnyElement> {
         let selected = self.input.selected.as_deref()?;
         let stage = stages.into_iter().find(|stage| stage.id == selected)?;
-        let input = self.card_input(&stage.id, false)?;
+        let input = self.card_input(&stage.id, NodeLinks::default())?;
         Some(details_card(input, at, self.on, cx))
     }
 
-    fn card_input(&self, id: &str, compact: bool) -> Option<CardInput> {
+    fn card_input(&self, id: &str, links: NodeLinks) -> Option<CardInput> {
         let entry = (*self.by_id.get(id)?).clone();
         let stage = find_stage(&self.input.steps, id)?.clone();
         let input = self.input;
@@ -183,7 +183,7 @@ impl Ctx<'_> {
         );
         let done = task.state == natamux_proto::tasks::task::TaskState::Done;
         let card = CardInput {
-            compact,
+            links,
             usage: stage_usage(input.usage.as_ref(), id)
                 .map(|usage| usage_line(usage.tokens, usage.cost_usd)),
             activity: (current

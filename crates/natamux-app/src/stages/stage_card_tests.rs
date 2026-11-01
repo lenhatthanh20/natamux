@@ -10,10 +10,10 @@ use ui::prelude::*;
 
 use super::CardInput;
 use super::chips::pass_row;
-use super::node::{INSET, chip_word, details, node, node_chip_word, tooltip_text};
+use super::node::{chip_word, details, node, tooltip_text};
 use crate::app::test_views;
 use crate::stages::card_rules::{CardButton, CardChip, CardFacts};
-use crate::stages::flow_rules::CaretAt;
+use crate::stages::flow_rules::{CaretAt, INSET, NodeLinks};
 use crate::stages::stage_choices::{ChoiceBox, choice_box};
 use crate::tasks::details_commands::{OnCommand, StageToggle};
 
@@ -63,14 +63,6 @@ fn node_source(name: &str) -> &'static str {
 }
 
 #[test]
-fn a_node_header_centres_the_tile_and_the_text() {
-    // Beside a top-aligned head the mark sat above the stage name (T-0169).
-    let source = node_source("fn header(");
-    assert!(source.contains("items_center"));
-    assert!(!source.contains("items_start"));
-}
-
-#[test]
 fn a_node_root_does_not_clip_the_ports_of_the_flow() {
     // The flow draws its ports over the node's border; a clipped root would cut them.
     let source = node_source("pub(super) fn node(");
@@ -87,19 +79,28 @@ fn a_node_has_no_more_button() {
 }
 
 #[test]
-fn a_node_header_has_even_padding() {
-    // The head had 10 px left and right but 8 px top and bottom (T-0252).
+fn a_node_header_has_side_padding_only() {
+    // The stubs above and below the tile run to the node's edges, so the lines touch it (T-0259).
     let source = node_source("fn header(");
-    assert!(source.contains(".p(rems_from_px(INSET - FOCUS))"));
-    assert!(!source.contains(".px("));
+    assert!(source.contains(".px(rems_from_px(INSET))"));
+    // No border box: the focus ring is an absolute overlay that takes no room (review rev 1).
+    assert!(!source.contains("border_2"));
+    assert!(!source.contains(".p(rems"));
     assert!(!source.contains(".py("));
+    assert!(!source.contains(".pt("));
+    assert!(!source.contains(".pb("));
 }
 
 #[test]
 fn a_node_is_selected_with_a_click_enter_and_space() {
     let source = node_source("fn header(");
-    assert!(source.contains("\"enter\" | \"space\""));
     assert!(source.contains("PanelCommand::SelectStage"));
+    assert!(source.contains(".on_click("));
+    // The focus ring holds the focus, so it takes the keys.
+    let ring = node_source("fn focus_ring(");
+    assert!(ring.contains("\"enter\" | \"space\""));
+    assert!(ring.contains("PanelCommand::SelectStage"));
+    assert!(ring.contains("track_focus"));
     // Every status selects, the current stage too: no early return for some nodes (T-0257).
     assert!(!source.contains("return head"));
 }
@@ -113,11 +114,11 @@ fn a_bare_node_has_no_border_and_no_background() {
     assert!(source.contains("when(input.selected"));
 }
 
-fn input(status: StageStatus, buttons: Vec<CardButton>) -> CardInput {
+pub(super) fn input(status: StageStatus, buttons: Vec<CardButton>) -> CardInput {
     let mut stage = Stage::new("plan", StageKind::Agent, Gate::Auto);
     stage.output = Some("plan.md".into());
     CardInput {
-        compact: false,
+        links: NodeLinks::default(),
         entry: StageProgress {
             stage: "plan".into(),
             name: "Plan".into(),
@@ -179,7 +180,7 @@ fn the_meta_line_and_the_tooltip_say_the_same_facts() {
     assert_eq!(tooltip_text("Plan", None, &[]), "Plan");
 }
 
-fn noop() -> OnCommand {
+pub(super) fn noop() -> OnCommand {
     Rc::new(|_, _, _| {})
 }
 
@@ -242,8 +243,6 @@ impl Render for Node {
             _ => CardChip::Done,
         };
         card.usage = Some("$0.11".into());
-        // A node of a pair: the details card still takes the whole width.
-        card.compact = true;
         let drawn = if self.details {
             details(card, CaretAt::Middle, &noop(), cx)
         } else {
@@ -269,13 +268,9 @@ fn bounds(cx: &mut gpui::VisualTestContext, selector: &'static str) -> gpui::Bou
 }
 
 #[gpui::test]
-fn a_bare_node_centres_its_tile_and_name_and_shows_no_facts(cx: &mut TestAppContext) {
+fn a_bare_node_shows_no_facts(cx: &mut TestAppContext) {
     test_views::init(cx);
     let cx = drawn_node(StageStatus::Done, false, cx);
-    let [card, tile, texts] = ["node-card", "node-tile", "node-texts"].map(|s| bounds(cx, s));
-    let left = tile.left() - card.left();
-    let right = card.right() - texts.right();
-    assert!((left - right).abs() <= px(1.), "{left:?} vs {right:?}");
     // Time, cost and the state word are on the details card only (T-0257).
     assert!(cx.debug_bounds("node-meta").is_none());
 }
@@ -296,34 +291,50 @@ fn the_details_card_of_a_pair_node_takes_the_whole_width(cx: &mut TestAppContext
 }
 
 #[test]
-fn the_state_chip_says_done_the_state_or_not_yet() {
-    assert_eq!(node_chip_word(CardChip::Done), "Done");
-    assert_eq!(node_chip_word(CardChip::NotStarted), "Not yet");
-    assert_eq!(
-        node_chip_word(CardChip::State(TaskState::Running)),
-        "Running"
+fn the_state_mark_is_a_check_the_state_glyph_or_a_dashed_ring() {
+    // No state chip any more: an icon on the tile's corner (owner's picture, T-0259).
+    let mark = node_source("fn state_mark(");
+    in_order(
+        mark,
+        &[
+            "CardChip::Done",
+            "IconName::Check",
+            "CardChip::State(state), None",
+            "StateGlyph::new(",
+            "border_dashed",
+        ],
     );
-    assert_eq!(node_chip_word(CardChip::WillBeSkipped), "Will be skipped");
+    assert!(!include_str!("flow_node.rs").contains("fn state_chip("));
+}
+
+/// `parts` come in this order in `source`.
+fn in_order(source: &str, parts: &[&str]) {
+    let at: Vec<usize> = parts
+        .iter()
+        .map(|part| source.find(part).unwrap_or_else(|| panic!("{part}")))
+        .collect();
+    assert!(at.windows(2).all(|pair| pair[0] < pair[1]), "{parts:?}");
 }
 
 #[test]
-fn a_lit_tile_and_its_chip_glow_and_a_tile_not_run_is_dashed() {
+fn a_lit_tile_glows_and_a_tile_not_run_is_dashed() {
     let tile = node_source("fn tile(");
     assert!(tile.contains(".shadow(glow("));
     assert!(tile.contains("border_dashed"));
     assert!(tile.contains("agent_badge(input, cx)"));
-    assert!(node_source("fn state_chip(").contains(".shadow(glow("));
+    assert!(tile.contains("state_mark(input, accent, cx)"));
     // The name is not bold on the node.
     assert!(!node_source("fn name_label(").contains("SEMIBOLD"));
 }
 
 #[gpui::test]
-fn the_agent_badge_sits_on_the_tiles_corner(cx: &mut TestAppContext) {
+fn the_agent_badge_and_the_state_mark_sit_on_the_tiles_corners(cx: &mut TestAppContext) {
     test_views::init(cx);
     let cx = drawn_node(StageStatus::Done, false, cx);
-    let [tile, badge, chip] = ["node-tile", "node-agent", "node-chip"].map(|s| bounds(cx, s));
+    let [tile, badge, mark] = ["node-tile", "node-agent", "node-mark"].map(|s| bounds(cx, s));
     assert!(badge.right() > tile.right() && badge.bottom() > tile.bottom());
     assert!(badge.left() < tile.right() && badge.top() < tile.bottom());
-    // The chip sits beside the tile, under the name.
-    assert!(chip.left() > tile.right());
+    // The state mark on the top corner (T-0259).
+    assert!(mark.right() > tile.right() && mark.top() < tile.top());
+    assert!(mark.left() < tile.right() && mark.bottom() > tile.top());
 }

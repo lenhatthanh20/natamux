@@ -1,17 +1,17 @@
-//! The group row of the Progress tab: a pill with the group's name on the line, then its stages
-//! side by side (two: fork and join curves; three or four: a dashed frame) and the join dot with
-//! the note ("Review starts when both are finished"). The branch is in `progress_branch.rs`.
+//! The group row of the Progress tab: "SIDE BY SIDE" on the line, then its stages side by side
+//! (two: fork and join curves; three or four: a dashed frame) and the join dot with the note
+//! ("Review waits for both"). The branch is in `progress_branch.rs`.
 
-use gpui::AnyElement;
+use gpui::{AnyElement, FontWeight};
 use natamux_proto::stages::progress::StageStatus;
 use natamux_proto::stages::schema::{Stage, StageGroup, Step};
-use ui::prelude::*;
+use ui::{Tooltip, prelude::*};
 
 use super::Ctx;
-use super::flow::{Around, Edge, link_after, ported};
+use super::flow::{Around, Edge, ported};
 use crate::stages::flow_lines::{FlowLink, JoinDot, PairCurves};
 use crate::stages::flow_rules::{
-    CaretAt, GroupLayout, LinkStyle, PAIR_GAP, group_layout, join_style, link_style,
+    CaretAt, GroupLayout, LinkStyle, NodeLinks, PAIR_GAP, group_layout, join_style, link_style,
 };
 
 impl Ctx<'_> {
@@ -35,7 +35,7 @@ impl Ctx<'_> {
                     .by_id
                     .get(first.as_str())
                     .map_or(first.clone(), |entry| entry.name.clone());
-                format!("{name} starts when both are finished")
+                format!("{name} waits for both")
             }
         }
     }
@@ -71,24 +71,29 @@ impl Ctx<'_> {
         };
         v_flex()
             .w_full()
-            .child(pill(&name, cx))
+            .child(side_label(&group.id, &name))
             .child(body)
             .child(dot)
             .into_any_element()
     }
 
-    /// Two nodes side by side, between the fork and the join curves. The selected node's card
-    /// sits right under the pair, its caret at that node, and the join curves start from the
-    /// card (mockup A of T-0257).
+    /// Two nodes side by side, between the fork and the join curves, each tile in the middle of
+    /// its node with the name under it (T-0259). The selected node's card sits right under the
+    /// pair, its caret at that node, and the join curves start from the card (mockup A of T-0257).
     fn pair(&self, first: &Stage, second: &Stage, prev: StageStatus, cx: &App) -> AnyElement {
         let details = self
             .details_of([first], CaretAt::Left, cx)
             .or_else(|| self.details_of([second], CaretAt::Right, cx));
+        let open = details.is_some();
         let side = |stage: &Stage| {
             let edge = self.stage_edge(&stage.id);
             let into = link_style(prev, edge.status, edge.state);
+            let links = NodeLinks {
+                into: Some(into),
+                out: (!open).then(|| join_style(edge.status)),
+            };
             let card = self
-                .card(&stage.id, true, cx)
+                .card(&stage.id, links, cx)
                 .unwrap_or_else(|| div().into_any_element());
             let node = ported(card).flex_1().min_w_0();
             (edge, into, node)
@@ -101,7 +106,7 @@ impl Ctx<'_> {
             .child(PairCurves::fork(left_into, right_into))
             .child(
                 // Stretched: both nodes take the taller one's height, so the join curves start
-                // at the same bottom ports.
+                // at the same bottom line.
                 h_flex()
                     .w_full()
                     .items_stretch()
@@ -119,7 +124,6 @@ impl Ctx<'_> {
     fn stack(&self, group: &StageGroup, own: Edge, into: LinkStyle, cx: &App) -> AnyElement {
         let out = join_style(own.status);
         let details = self.details_of(&group.parallel, CaretAt::Middle, cx);
-        let open = details.is_some();
         let frame = v_flex()
             .relative()
             .w_full()
@@ -133,34 +137,34 @@ impl Ctx<'_> {
                 group
                     .parallel
                     .iter()
-                    .filter_map(|stage| self.card(&stage.id, false, cx)),
+                    .filter_map(|stage| self.card(&stage.id, NodeLinks::default(), cx)),
             );
         v_flex()
             .w_full()
-            .child(FlowLink::new(into).at_top())
+            .child(FlowLink::new(into))
             .child(frame)
             .children(details)
-            .child(link_after(out, open))
+            .child(FlowLink::new(out))
             .into_any_element()
     }
 }
 
-/// The group's name on the line, as a pill.
-fn pill(name: &str, cx: &App) -> impl IntoElement {
-    let colors = cx.theme().colors();
+/// "SIDE BY SIDE" on the line, as the owner's picture draws it; the group's name is its tooltip.
+fn side_label(id: &str, name: &str) -> impl IntoElement {
     h_flex().w_full().justify_center().child(
         div()
+            .id(SharedString::from(format!("side-by-side-{id}")))
+            .debug_selector(|| "side-by-side".into())
             .flex_none()
-            .px_2()
             .py_0p5()
-            .rounded_full()
-            .border_1()
-            .border_color(colors.border_variant)
-            .bg(colors.panel_background)
+            .tooltip(Tooltip::text(name.to_owned()))
             .child(
-                Label::new(format!("{name} \u{b7} side by side"))
+                Label::new(SIDE_BY_SIDE)
                     .size(LabelSize::XSmall)
+                    .weight(FontWeight::SEMIBOLD)
                     .color(Color::Muted),
             ),
     )
 }
+
+pub(super) const SIDE_BY_SIDE: &str = "SIDE BY SIDE";
