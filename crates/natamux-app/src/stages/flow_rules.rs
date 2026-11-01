@@ -218,6 +218,52 @@ impl NodeTone {
     }
 }
 
+/// One glyph of a laid out name: its x in the unwrapped line, and whether it is a space.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct NameGlyph {
+    pub x: f32,
+    pub space: bool,
+}
+
+/// The line through one row of a struck name, as x offsets from the left of its text box.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct StrikeSpan {
+    pub row: usize,
+    pub left: f32,
+    pub right: f32,
+}
+
+/// The line through each row of a centred name, from its first glyph to the end of its last
+/// glyph that is not a space. `breaks` are the glyphs that start a row after the first, `width`
+/// is the unwrapped line's width and `box_width` the width the rows are centred in. A row is
+/// centred with its trailing space, as GPUI paints it, so the line lines up with the glyphs.
+pub fn strike_spans(
+    glyphs: &[NameGlyph],
+    breaks: &[usize],
+    width: f32,
+    box_width: f32,
+) -> Vec<StrikeSpan> {
+    let x_at = |at: usize| glyphs.get(at).map_or(width, |glyph| glyph.x);
+    let starts = std::iter::once(0).chain(breaks.iter().copied());
+    let ends = breaks.iter().copied().chain(std::iter::once(glyphs.len()));
+    starts
+        .zip(ends)
+        .enumerate()
+        .filter_map(|(row, (start, end))| {
+            let words = glyphs.get(start..end)?;
+            let first = start + words.iter().position(|glyph| !glyph.space)?;
+            let last = start + words.iter().rposition(|glyph| !glyph.space)?;
+            let row_start = if start == 0 { 0. } else { x_at(start) };
+            let offset = (box_width - (x_at(end) - row_start)) / 2.;
+            Some(StrikeSpan {
+                row,
+                left: offset + x_at(first) - row_start,
+                right: offset + x_at(last + 1) - row_start,
+            })
+        })
+        .collect()
+}
+
 /// The word before a lane's name. `not` reads "unless" at any place, as the design draws it; a
 /// path with no condition is the Otherwise path.
 pub fn lane_keyword(index: usize, path: &BranchPath) -> &'static str {

@@ -7,6 +7,10 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v1.0.15 (2026-11-02)
+
+- Fix: the line through a skipped Progress node's name ran past the words. It now covers only the words.
+
 ## v1.0.14 (2026-11-01)
 
 - In the desktop app, the docked details panel starts at 280 px, so the panel plus the rail of view icons matches the sidebar. A width you already set stays. See [In the desktop app](/docs/guides/dashboard/#in-the-desktop-app).

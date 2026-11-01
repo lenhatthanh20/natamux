@@ -107,6 +107,57 @@ fn a_stage_marked_to_skip_fades_as_a_skipped_one_and_not_as_one_that_will_run() 
     assert_eq!(NodeTone::NotTaken.fade(), 0.55);
 }
 
+/// `text` laid out at 8 px a character, as a text system gives it.
+fn glyphs(text: &str) -> Vec<NameGlyph> {
+    text.chars()
+        .enumerate()
+        .map(|(at, c)| NameGlyph {
+            x: at as f32 * 8.,
+            space: c == ' ',
+        })
+        .collect()
+}
+
+#[test]
+fn strikes_each_row_of_a_wrapped_name_over_its_words_only() {
+    // The owner's picture (T-0263): the line of the second row started at the box's left edge
+    // and the first row's line ran over the space after "and".
+    let name = glyphs("Watch CI/CD and merge PRs");
+    let spans = strike_spans(&name, &[16], 200., 144.);
+    // Row 1 is 128 wide with its space and starts at 8; the line stops before the space.
+    // Row 2 "merge PRs" is 72 wide and starts at 36.
+    assert_eq!(
+        spans,
+        [
+            StrikeSpan {
+                row: 0,
+                left: 8.,
+                right: 128.,
+            },
+            StrikeSpan {
+                row: 1,
+                left: 36.,
+                right: 108.,
+            },
+        ]
+    );
+    assert!(spans[1].right - spans[1].left < spans[0].right - spans[0].left);
+}
+
+#[test]
+fn strikes_a_name_on_one_row_as_wide_as_its_word() {
+    let spans = strike_spans(&glyphs("Spec"), &[], 32., 60.);
+    assert_eq!(
+        spans,
+        [StrikeSpan {
+            row: 0,
+            left: 14.,
+            right: 46.,
+        }]
+    );
+    assert!(strike_spans(&[], &[], 0., 60.).is_empty());
+}
+
 fn stage(id: &str) -> Stage {
     Stage::new(id, StageKind::Agent, Gate::Auto)
 }

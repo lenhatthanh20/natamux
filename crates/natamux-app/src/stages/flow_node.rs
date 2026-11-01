@@ -6,7 +6,10 @@
 //! `overflow_hidden` on the root). A click, Enter or Space selects a node; the selected node gets
 //! a bright ring, absolute, so it takes no room. Only the running glyph and the running ring move.
 
-use gpui::{AnyElement, BoxShadow, Div, Hsla, KeyDownEvent, Stateful, point, px};
+use gpui::{
+    AnyElement, BoxShadow, Div, Hsla, KeyDownEvent, Stateful, StyledText, TextLayout, canvas,
+    point, px,
+};
 use natamux_proto::tasks::task::TaskState;
 use ui::{Tooltip, prelude::*};
 
@@ -22,7 +25,8 @@ use crate::stages::card_rules::CardChip;
 use crate::stages::editor_labels::{StageRunner, model_of};
 use crate::stages::flow_lines::FlowLink;
 use crate::stages::flow_rules::{
-    INSET, LinkStyle, NodeTone, RUN_RING_OUT, STUB, Stroke, TILE, TILE_BOX, node_tone,
+    INSET, LinkStyle, NameGlyph, NodeTone, RUN_RING_OUT, STUB, Stroke, TILE, TILE_BOX, node_tone,
+    strike_spans,
 };
 use crate::stages::kind_icon::kind_icon;
 use crate::stages::preview_rules::agent_line_text;
@@ -201,26 +205,103 @@ fn state_mark(input: &CardInput, accent: Hsla, cx: &App) -> Div {
     }
 }
 
+fn name_color(tone: NodeTone) -> Color {
+    if tone.muted() {
+        Color::Muted
+    } else {
+        Color::Default
+    }
+}
+
 fn name_label(input: &CardInput, tone: NodeTone) -> Label {
     Label::new(input.entry.name.clone())
-        .color(if tone.muted() {
-            Color::Muted
-        } else {
-            Color::Default
-        })
+        .color(name_color(tone))
         .when(tone.struck(), |label| label.strikethrough())
+}
+
+/// A struck name as a label draws it, with the line painted over it. GPUI strikes a wrapped,
+/// centred label from the box's left edge on each row after the first, so the line ran past the
+/// words (T-0263); this paints one line per row, over its words only.
+fn struck_name(input: &CardInput, tone: NodeTone, cx: &App) -> Div {
+    let color = name_color(tone).color(cx);
+    let text = StyledText::new(SharedString::from(input.entry.name.clone()));
+    let layout = text.layout().clone();
+    div()
+        .relative()
+        .text_ui(cx)
+        .font_weight(theme::theme_settings(cx).ui_font(cx).weight)
+        .text_color(color)
+        .child(text)
+        .child(
+            canvas(
+                |_, _, _| {},
+                move |_, _, window, _| paint_strikes(&layout, color, window),
+            )
+            .absolute()
+            .inset_0(),
+        )
+}
+
+/// One 1 px line per row of `layout`, at the height GPUI strikes text.
+fn paint_strikes(layout: &TextLayout, color: Hsla, window: &mut Window) {
+    let bounds = layout.bounds();
+    let line_height = layout.line_height();
+    let text = layout.text();
+    let mut top = bounds.top();
+    for (line, line_text) in layout.line_layouts().iter().zip(text.split('\n')) {
+        let unwrapped = &line.unwrapped_layout;
+        let mut run_starts = Vec::with_capacity(unwrapped.runs.len());
+        let mut glyphs = Vec::new();
+        for run in &unwrapped.runs {
+            run_starts.push(glyphs.len());
+            glyphs.extend(run.glyphs.iter().map(|glyph| NameGlyph {
+                x: f32::from(glyph.position.x),
+                space: line_text
+                    .get(glyph.index..)
+                    .is_some_and(|rest| rest.starts_with(char::is_whitespace)),
+            }));
+        }
+        let breaks: Vec<usize> = line
+            .wrap_boundaries
+            .iter()
+            .filter_map(|wrap| run_starts.get(wrap.run_ix).map(|at| at + wrap.glyph_ix))
+            .collect();
+        let spans = strike_spans(
+            &glyphs,
+            &breaks,
+            f32::from(unwrapped.width),
+            f32::from(bounds.size.width),
+        );
+        let padding = (line_height - unwrapped.ascent - unwrapped.descent) / 2.;
+        let middle = (unwrapped.ascent * 0.5 + padding + unwrapped.ascent) * 0.5;
+        for span in spans {
+            let origin = point(
+                bounds.left() + px(span.left),
+                top + line_height * span.row as f32 + middle,
+            );
+            let size = gpui::size(px(span.right - span.left), px(1.));
+            window.paint_quad(gpui::fill(gpui::Bounds { origin, size }, color));
+        }
+        top += line_height * (line.wrap_boundaries.len() + 1) as f32;
+    }
 }
 
 /// The name of a bare node, centred under its tile. Wider than `NAME_MAX`, it wraps, so a name
 /// that fits the panel still stays under the tile. The line out starts right under it.
-fn name_row(input: &CardInput, tone: NodeTone, lift: f32) -> Div {
+fn name_row(input: &CardInput, tone: NodeTone, lift: f32, cx: &App) -> Div {
     div()
         .debug_selector(|| "node-name".into())
         .min_w_0()
         .max_w(rems_from_px(NAME_MAX))
         .pt(rems_from_px(NAME_GAP + lift))
         .text_center()
-        .child(name_label(input, tone).text_center())
+        .map(|row| {
+            if tone.struck() {
+                row.child(struck_name(input, tone, cx))
+            } else {
+                row.child(name_label(input, tone).text_center())
+            }
+        })
 }
 
 /// The line into the tile, `STUB` and `lift` high; the first step gets an empty spacer as high.
@@ -319,7 +400,7 @@ fn header(
         .rounded(rems_from_px(NODE_RADIUS))
         .child(stub_in(input.links.into, lift))
         .child(middle)
-        .child(name_row(input, tone, lift))
+        .child(name_row(input, tone, lift, cx))
         .child(stub_out(input.links.out))
         .child(focus_ring(input, on, colors.border_focused))
         .tooltip(Tooltip::text(tip))
