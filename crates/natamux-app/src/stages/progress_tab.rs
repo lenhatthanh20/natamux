@@ -1,7 +1,7 @@
 //! The Progress tab (docs/design-task-stages.md 7.5, `ProgressTab.tsx`, `BranchLane.tsx`): the
 //! timeline of steps as a node flow (a stage, a group side by side, or a branch with its paths,
 //! joined by connectors; T-0246), with the details card of the selected node right under its
-//! row (T-0257), and Latest events below.
+//! row (T-0257).
 
 use std::collections::{BTreeMap, BTreeSet};
 

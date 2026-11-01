@@ -396,6 +396,9 @@ impl Render for DetailsPanel {
             (None, DetailsView::Progress) => self.render_progress(&task, cx),
             (None, _) => Vec::new(),
         };
+        // Outside the scroll box, so it stays while the flow scrolls.
+        let summary = (self.edit.is_none() && view == DetailsView::Progress)
+            .then(|| self.summary_strip(&task, cx));
         if let Some(index) = self.center.take() {
             cx.on_next_frame(window, move |panel, _, cx| panel.center_on(index, cx));
         }
@@ -406,6 +409,7 @@ impl Render for DetailsPanel {
             .track_focus(&self.focus)
             .bg(cx.theme().colors().panel_background)
             .child(self.render_tabs(&task, view, cx))
+            .children(summary)
             .map(|this| match tree {
                 Some(tree) => this.child(v_flex().flex_1().min_h_0().child(tree)),
                 None => this.child(
@@ -445,6 +449,9 @@ mod files;
 
 #[path = "details_header.rs"]
 mod header;
+
+#[path = "details_summary.rs"]
+mod summary;
 
 #[cfg(test)]
 #[path = "details_panel_tests.rs"]

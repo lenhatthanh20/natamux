@@ -1,12 +1,11 @@
 //! The Progress tab of the panel: it gathers what the tab shows (`stages/progress_tab.rs` draws
-//! the steps and the details card of the selected node), then Latest events below the stages.
+//! the steps and the details card of the selected node).
 
 use std::rc::Rc;
 
 use gpui::AnyElement;
 use natamux_proto::agents::activity::latest_line;
 use natamux_proto::events::task_event::{TaskEvent, wait_reason};
-use natamux_proto::stages::schema::Step;
 use natamux_proto::tasks::task::Task;
 use ui::prelude::*;
 
@@ -14,17 +13,10 @@ use super::DetailsPanel;
 use super::run::agent_of;
 use crate::agents::agent_choices::agent_label;
 use crate::app::clock::now_ms;
-use crate::components::detail_section::DetailSection;
 use crate::stages::card_rules::selected_stage;
 use crate::stages::progress_tab::{ProgressInput, current_step, timeline};
-use crate::stages::stage_view_rules::path_label;
 use crate::tasks::details_commands::{OnCommand, PanelCommand};
-use crate::tasks::task_events_rules::{PathNames, describe_event};
-use crate::tasks::task_time::{AgeStyle, format_age};
 use crate::workspaces::wrap_up_rules::is_finished_state;
-
-/// `latest`: the newest 8 accepted events.
-const LATEST_EVENTS: usize = 8;
 
 impl DetailsPanel {
     pub(super) fn on_command(&self, cx: &mut Context<Self>) -> OnCommand {
@@ -136,7 +128,6 @@ impl DetailsPanel {
             return reading("Reading the stages\u{2026}".into());
         };
         let on = self.on_command(cx);
-        let mut parts = Vec::new();
         if let Some(index) = current_step(&input)
             && self.shown.as_ref().is_some_and(|shown| !shown.scrolled)
         {
@@ -146,69 +137,6 @@ impl DetailsPanel {
                 shown.scrolled = true;
             }
         }
-        parts.extend(timeline(&input, &on, cx));
-        parts.push(self.events_section(&input, cx).into_any_element());
-        parts
-    }
-
-    fn events_section(&self, input: &ProgressInput, cx: &mut Context<Self>) -> impl IntoElement {
-        // The names of the paths, so "Took Bug fix" names its path (`pathNames`).
-        let names: PathNames = input
-            .steps
-            .iter()
-            .filter_map(|step| match step {
-                Step::Branch(branch) => Some(branch),
-                _ => None,
-            })
-            .flat_map(|branch| &branch.paths)
-            .map(|path| (path.id.clone(), path_label(path).to_owned()))
-            .collect();
-        let section = DetailSection::new(
-            "latest",
-            "Latest events",
-            self.open_of("latest", false, cx),
-            self.fold("latest", cx),
-        );
-        let latest: Vec<&TaskEvent> = input
-            .events
-            .iter()
-            .rev()
-            .filter(|event| event.kind != "agent.active")
-            .take(LATEST_EVENTS)
-            .collect();
-        if latest.is_empty() {
-            return section.child(
-                Label::new("No events yet.")
-                    .size(LabelSize::Small)
-                    .color(Color::Muted),
-            );
-        }
-        section.children(latest.into_iter().map(|event| {
-            let stage = event
-                .payload
-                .get("stage")
-                .and_then(|value| value.as_str())
-                .map(|id| {
-                    let entry = input.progress.iter().find(|entry| entry.stage == id);
-                    // A stage gone from the settings shows by its id.
-                    let name = entry.map_or(id, |entry| entry.name.as_str());
-                    format!(" \u{b7} {name}")
-                })
-                .unwrap_or_default();
-            h_flex()
-                .gap_2()
-                .child(
-                    Label::new(format_age(&event.at, input.now_ms, AgeStyle::Short, 0))
-                        .size(LabelSize::XSmall)
-                        .color(Color::Muted),
-                )
-                .child(
-                    Label::new(format!(
-                        "{}{stage}",
-                        describe_event(&event.kind, &event.payload, &names)
-                    ))
-                    .size(LabelSize::Small),
-                )
-        }))
+        timeline(&input, &on, cx)
     }
 }

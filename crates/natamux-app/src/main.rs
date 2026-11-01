@@ -285,6 +285,7 @@ mod tasks {
     pub mod task_view;
     pub mod task_view_rules;
     pub mod tries_rules;
+    pub mod summary_rules;
     pub mod usage_rules;
 }
 mod terminals {
