@@ -28,6 +28,7 @@ use crate::app::view_rules::DetailsView;
 use crate::components::empty_state::EmptyState;
 use crate::components::motion;
 use crate::files::file_tree::FileTree;
+use crate::stages::flow_lines::dot_grid;
 use crate::workspaces::workspace_view::WorkspaceView;
 use reads::ReadPaces;
 
@@ -396,6 +397,9 @@ impl Render for DetailsPanel {
             (None, DetailsView::Progress) => self.render_progress(&task, cx),
             (None, _) => Vec::new(),
         };
+        let progress = self.edit.is_none() && view == DetailsView::Progress;
+        // Outside the scroll box, so it stays while the flow scrolls.
+        let summary = progress.then(|| self.summary_strip(&task, cx));
         if let Some(index) = self.center.take() {
             cx.on_next_frame(window, move |panel, _, cx| panel.center_on(index, cx));
         }
@@ -406,19 +410,33 @@ impl Render for DetailsPanel {
             .track_focus(&self.focus)
             .bg(cx.theme().colors().panel_background)
             .child(self.render_tabs(&task, view, cx))
+            .children(summary)
             .map(|this| match tree {
                 Some(tree) => this.child(v_flex().flex_1().min_h_0().child(tree)),
-                None => this.child(
-                    v_flex()
-                        .id("details-body")
-                        .flex_1()
-                        .min_h_0()
-                        .overflow_y_scroll()
-                        .track_scroll(&self.scroll)
-                        .children(body),
-                ),
+                None => this.child(self.scroll_body(progress, body, cx)),
             })
             .into_any_element()
+    }
+}
+
+impl DetailsPanel {
+    /// The scrolling body. On Progress the dot grid fills all of it, also below the last step,
+    /// and the flow scrolls over it.
+    fn scroll_body(&self, progress: bool, body: Vec<AnyElement>, cx: &App) -> impl IntoElement {
+        v_flex()
+            .relative()
+            .flex_1()
+            .min_h_0()
+            .when(progress, |this| this.child(dot_grid(cx)))
+            .child(
+                v_flex()
+                    .id("details-body")
+                    .flex_1()
+                    .min_h_0()
+                    .overflow_y_scroll()
+                    .track_scroll(&self.scroll)
+                    .children(body),
+            )
     }
 }
 
@@ -445,6 +463,9 @@ mod files;
 
 #[path = "details_header.rs"]
 mod header;
+
+#[path = "details_summary.rs"]
+mod summary;
 
 #[cfg(test)]
 #[path = "details_panel_tests.rs"]

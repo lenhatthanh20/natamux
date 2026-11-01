@@ -367,8 +367,8 @@ pub fn dot_grid(cx: &App) -> impl IntoElement {
             let (x0, y0) = (f32::from(seen.origin.x), f32::from(seen.origin.y));
             let x1 = x0 + f32::from(seen.size.width);
             let y1 = y0 + f32::from(seen.size.height);
-            // Rows line up with the window, not this step: each step paints its own grid, and
-            // steps of any height then meet without a seam. Columns start half a step in.
+            // Rows line up with the window, not these bounds, so they stay put while the flow
+            // scrolls over them. Columns start half a step in.
             let first = |start: f32, edge: f32| {
                 edge + step / 2. + ((start - edge - step / 2.) / step).ceil().max(0.) * step
             };
