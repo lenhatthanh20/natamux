@@ -41,8 +41,7 @@ const GEMINI_ENV: &str =
     "GEMINI_CLI_TRUST_WORKSPACE=true GEMINI_CLI_SYSTEM_SETTINGS_PATH='/data/gemini.json'";
 const CODEX_STOP: &str =
     r#"'hooks.Stop=[{hooks=[{type="command",command="natamux hook codex",timeout=5}]}]'"#;
-const CODEX_AUTO: &str =
-    "--sandbox workspace-write --ask-for-approval never -c sandbox_workspace_write.network_access=true";
+const CODEX_AUTO: &str = "--sandbox workspace-write --ask-for-approval never -c sandbox_workspace_write.network_access=true";
 const CODEX_NETWORK: &str = "sandbox_workspace_write.network_access=true";
 
 #[test]
@@ -68,7 +67,9 @@ fn starts_each_agent_in_its_auto_mode_before_the_extra_words_and_the_prompt() {
         format!("{GEMINI_ENV} gemini --approval-mode yolo --x -i 'Fix it'")
     );
     let codex = launch("codex", with_x("codex"));
-    assert!(codex.starts_with(&format!("codex --dangerously-bypass-hook-trust {CODEX_AUTO} -c ")));
+    assert!(codex.starts_with(&format!(
+        "codex --dangerously-bypass-hook-trust {CODEX_AUTO} -c "
+    )));
     assert!(!codex.contains("--full-auto"));
     assert!(codex.ends_with(" --x 'Fix it'"));
 }
