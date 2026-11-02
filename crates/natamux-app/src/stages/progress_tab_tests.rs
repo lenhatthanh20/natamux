@@ -51,7 +51,7 @@ impl Render for FirstStageView {
         v_flex().w(px(self.width)).child(div().h(px(28.))).children(
             steps.into_iter().enumerate().map(|(index, step)| {
                 div()
-                    .debug_selector(move || format!("step-{index}").into())
+                    .debug_selector(move || format!("step-{index}"))
                     .child(step)
             }),
         )
