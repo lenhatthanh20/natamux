@@ -199,7 +199,7 @@ See the [CLI reference](https://natamux.github.io/docs/reference/cli/) and [Rust
 - **Checked updates.** The update check is off by default. Before it installs an update, the app checks the minisign signature of the release's `SHA256SUMS.txt` and the SHA-256 of the download.
 
 > [!IMPORTANT]
-> Natamux does not sandbox agents: an agent has your user's rights. By default Natamux starts each agent with its flag for fewer prompts: Claude Code in auto mode, which checks each action, and the other agents with prompts off (Codex stays in its workspace-write sandbox). Set `"agents": { "permissionMode": "ask" }` in `.natamux.json` to turn the flags off.
+> Natamux does not sandbox agents: an agent has your user's rights. By default Natamux starts each agent with its flag for fewer prompts: Claude Code in auto mode, which checks each action, and the other agents with prompts off (Codex stays in its workspace-write sandbox, with network access so it can reach the daemon). Set `"agents": { "permissionMode": "ask" }` in `.natamux.json` to turn the flags off.
 
 Read [Privacy](PRIVACY.md) for what stays on your machine and what leaves it, and [Security](SECURITY.md) for protection details and private vulnerability reporting.
 

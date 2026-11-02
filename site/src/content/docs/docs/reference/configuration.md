@@ -350,7 +350,7 @@ The flag of each agent in `auto`:
 | Agent | Flag | What it allows |
 |---|---|---|
 | Claude Code | `--permission-mode auto` | Claude Code checks each action and asks only when one looks risky. |
-| Codex | `--sandbox workspace-write --ask-for-approval never` | Edits and commands inside its sandbox of the worktree, without asking. |
+| Codex | `--sandbox workspace-write --ask-for-approval never -c sandbox_workspace_write.network_access=true` | Edits and commands inside its sandbox of the worktree, without asking. The sandbox allows the network, so `natamux` commands reach the daemon. |
 | Gemini CLI | `--approval-mode yolo` | Every tool call, without asking. |
 | Copilot CLI | `--allow-all-tools` | Every tool, without asking. It still checks paths and URLs. |
 | Cursor CLI | `--force` | Every command that is not denied in its settings, without asking. |
