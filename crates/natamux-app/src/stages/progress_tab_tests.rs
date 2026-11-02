@@ -21,6 +21,44 @@ struct BranchView {
     width: f32,
 }
 
+struct FirstStageView {
+    input: ProgressInput,
+    width: f32,
+    with_timeline: bool,
+}
+
+impl Render for FirstStageView {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let on: OnCommand = Rc::new(|_, _, _| {});
+        let steps = if self.with_timeline {
+            timeline(&self.input, &on, cx)
+        } else {
+            let input = &self.input;
+            let ctx = super::Ctx {
+                input,
+                by_id: input
+                    .progress
+                    .iter()
+                    .map(|entry| (entry.stage.as_str(), entry))
+                    .collect(),
+                workflow_ran: Vec::new(),
+                ci: Vec::new(),
+                missing: Vec::new(),
+                on: &on,
+            };
+            ctx.column(&input.steps, cx)
+        };
+        v_flex()
+            .w(px(self.width))
+            .child(div().h(px(28.)))
+            .children(steps.into_iter().enumerate().map(|(index, step)| {
+                div()
+                    .debug_selector(move || format!("step-{index}").into())
+                    .child(step)
+            }))
+    }
+}
+
 impl Render for BranchView {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let on: OnCommand = Rc::new(|_, _, _| {});
@@ -155,6 +193,51 @@ fn drawn(input: ProgressInput, width: f32, cx: &mut TestAppContext) -> &mut Visu
 fn bounds(cx: &mut VisualTestContext, selector: &'static str) -> Bounds<Pixels> {
     cx.debug_bounds(selector)
         .unwrap_or_else(|| panic!("{selector} was not drawn"))
+}
+
+fn first_step_layout(
+    with_timeline: bool,
+    width: f32,
+    cx: &mut TestAppContext,
+) -> (Pixels, Pixels) {
+    let mut input = branch_input(true, false);
+    input.steps = vec![
+        Step::Stage(Stage::new("context", StageKind::Context, Gate::Auto)),
+        Step::Stage(Stage::new("next", StageKind::Agent, Gate::Auto)),
+        Step::Stage(Stage::new("last", StageKind::Agent, Gate::Auto)),
+    ];
+    let mut entry = progress("context", StageStatus::Done);
+    entry.kind = StageKind::Context;
+    entry.name = "Context".into();
+    entry.path = None;
+    input.progress = vec![
+        entry,
+        progress("next", StageStatus::Upcoming),
+        progress("last", StageStatus::Upcoming),
+    ];
+    let (_view, cx) = cx.add_window_view(|_, _| FirstStageView {
+        input,
+        width,
+        with_timeline,
+    });
+    cx.run_until_parked();
+    let first_step = bounds(cx, "step-0");
+    let later_step = bounds(cx, "step-1");
+    (
+        bounds(cx, "node-tile").top() - first_step.top(),
+        later_step.bottom() - later_step.top(),
+    )
+}
+
+#[gpui::test]
+fn first_context_node_moves_down_without_changing_later_step_spacing(cx: &mut TestAppContext) {
+    test_views::init(cx);
+    for width in [320., 560.] {
+        let (bare_tile, bare_later) = first_step_layout(false, width, cx);
+        let (timeline_tile, timeline_later) = first_step_layout(true, width, cx);
+        assert_eq!(timeline_tile - bare_tile, px(8.), "{width}");
+        assert_eq!(timeline_later, bare_later, "{width}");
+    }
 }
 
 #[gpui::test]
