@@ -178,7 +178,10 @@ fn a_regular_name_has_the_small_label_size(cx: &mut TestAppContext) {
     let cx = drawn(alone(StageStatus::Done, SHORT, NodeLinks::default()), cx);
     let [name, reference] = ["node-name-text", "small-name-reference"].map(|s| bounds(cx, s));
     // The reference is a block, so only its height shows the label size.
-    assert!(near(name.size.height, reference.size.height), "{name:?} {reference:?}");
+    assert!(
+        near(name.size.height, reference.size.height),
+        "{name:?} {reference:?}"
+    );
 }
 
 #[gpui::test]
@@ -211,7 +214,10 @@ fn a_struck_name_strikes_only_its_words(cx: &mut TestAppContext) {
             if name == SHORT {
                 let [text, reference] =
                     ["node-name-text", "small-name-reference"].map(|s| bounds(cx, s));
-                assert!(near(text.size.height, reference.size.height), "{text:?} {reference:?}");
+                assert!(
+                    near(text.size.height, reference.size.height),
+                    "{text:?} {reference:?}"
+                );
             }
             // Same rows, same box: the lines take no room.
             assert!(
