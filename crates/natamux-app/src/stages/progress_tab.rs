@@ -273,7 +273,7 @@ pub fn timeline(input: &ProgressInput, on: &OnCommand, cx: &App) -> Vec<AnyEleme
             // One element per step so the panel can scroll to one; the panel draws the dot grid.
             div()
                 .px_3()
-                .when(index == 0, |this| this.pt(rems_from_px(8.0_f32)))
+                .when(index == 0, |this| this.pt(rems_from_px(8_f32)))
                 .when(index == last, |this| this.pb_3())
                 .child(step)
                 .into_any_element()
