@@ -30,7 +30,10 @@ fn one_agent_flow_requires_an_agent_and_sends_its_mode() {
     let short = new_workspace_input(&form, &manual(), Vec::new());
     assert_eq!(short.mode.as_deref(), Some("single-agent"));
     form.agent.clear();
-    assert_eq!(blocked_reason(&form, &manual()), Some("Choose an agent for this task flow"));
+    assert_eq!(
+        blocked_reason(&form, &manual()),
+        Some("Choose an agent for this task flow")
+    );
 }
 
 fn file(id: u64, name: &str, size: u64) -> PickedFile {

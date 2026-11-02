@@ -47,9 +47,10 @@ describe('resolveSteps', () => {
   })
 
   it('keeps the one-agent task promptless after project settings change', () => {
-    const steps = resolveSteps(['context', 'agent'], [
-      { id: 'agent', kind: 'agent', gate: 'manual', prompt: 'Project prompt' },
-    ])
+    const steps = resolveSteps(
+      ['context', 'agent'],
+      [{ id: 'agent', kind: 'agent', gate: 'manual', prompt: 'Project prompt' }],
+    )
     expect(steps[1]).toEqual({ id: 'agent', kind: 'agent', gate: 'auto' })
   })
 

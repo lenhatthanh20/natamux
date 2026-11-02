@@ -124,9 +124,7 @@ impl NewWorkspaceDialog {
                 ("One agent", "single-agent", self.single_agent),
             ]
             .into_iter()
-            .map(|(label, value, checked)| {
-                option(None, label.into(), value.into(), checked)
-            })
+            .map(|(label, value, checked)| option(None, label.into(), value.into(), checked))
             .collect(),
         }
     }

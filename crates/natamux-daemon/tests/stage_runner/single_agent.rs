@@ -2,8 +2,8 @@ use natamux_proto::tasks::task::TaskState;
 use natamux_stages::actions::StageAction;
 use serde_json::json;
 
-use crate::context::{act_to, make_skill, report, write_working};
 use crate::Fixture;
+use crate::context::{act_to, make_skill, report, write_working};
 
 #[test]
 fn manual_context_starts_one_agent_without_a_prompt_and_its_report_finishes_the_task() {
@@ -13,7 +13,10 @@ fn manual_context_starts_one_agent_without_a_prompt_and_its_report_finishes_the_
     }));
     assert_eq!(made.stages, [json!("context"), json!("agent")]);
     let task = f.with_workspace(&made.id);
-    assert_eq!((task.stage.as_str(), task.state), ("agent", TaskState::Running));
+    assert_eq!(
+        (task.stage.as_str(), task.state),
+        ("agent", TaskState::Running)
+    );
     assert_eq!(f.ptys().len(), 1);
     let script = f.launch_script(&task.id, "1");
     assert!(!script.contains("Task: Fix login"));
@@ -38,7 +41,10 @@ fn skill_context_keeps_its_agent_and_sends_no_message_on_the_handoff() {
     report(&f, &context.id, "1");
     assert_eq!(f.task(&context.id).state, TaskState::Review);
     let task = act_to(&f, &context.id, StageAction::Approve, None, None);
-    assert_eq!((task.stage.as_str(), task.state), ("agent", TaskState::Running));
+    assert_eq!(
+        (task.stage.as_str(), task.state),
+        ("agent", TaskState::Running)
+    );
     assert_eq!(f.ptys().len(), 1);
     assert_eq!(f.pty(0).written().concat(), before);
 }

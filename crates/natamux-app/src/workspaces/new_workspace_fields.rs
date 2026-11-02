@@ -196,7 +196,11 @@ impl NewWorkspaceDialog {
         let flow = self.select(
             "new-task-flow",
             Pick::Flow,
-            if self.single_agent { "One agent" } else { "Full flow" },
+            if self.single_agent {
+                "One agent"
+            } else {
+                "Full flow"
+            },
             false,
             cx,
         );

@@ -194,7 +194,10 @@ mod tests {
 
     #[test]
     fn one_agent_task_keeps_the_promptless_catalog_stage_after_settings_change() {
-        let refs = [StepRef::Stage("context".into()), StepRef::Stage("agent".into())];
+        let refs = [
+            StepRef::Stage("context".into()),
+            StepRef::Stage("agent".into()),
+        ];
         let mut configured = Stage::new("agent", StageKind::Agent, Gate::Manual);
         configured.prompt = Some("Project prompt".into());
         let steps = resolve_steps(&refs, &[Step::Stage(configured)]);
