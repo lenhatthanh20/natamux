@@ -177,10 +177,11 @@ describe('the Start a task dialog', () => {
       'Project',
       'Branch from',
       'Agent',
+      'Task flow',
     ])
     expect(fieldLabels(contextGroup())).toEqual(['Title', 'Notes', 'Attachments'])
     const setup = screen.getByRole('group', { name: 'Workspace and agent' })
-    expect(fieldLabels(setup)).toEqual(['Project', 'Branch from', 'Agent'])
+    expect(fieldLabels(setup)).toEqual(['Project', 'Branch from', 'Agent', 'Task flow'])
     expect(screen.getByLabelText('Project')).toBeTruthy()
     expect(screen.getByLabelText('Task title')).toBeTruthy()
     expect(screen.queryByText(/Repository|Workspace name/)).toBeNull()
@@ -238,7 +239,33 @@ describe('the Start a task dialog', () => {
       'Project',
       'Branch from',
       'Agent',
+      'Task flow',
     ])
+  })
+
+  it('starts with the full flow and sends no mode for old clients', async () => {
+    const { create } = dialog()
+    const user = userEvent.setup()
+    expect((screen.getByRole('combobox', { name: 'Task flow' }) as HTMLSelectElement).value).toBe(
+      'full',
+    )
+    await user.type(screen.getByLabelText('Task title'), 'Fix the login')
+    await user.click(startButton())
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
+    expect(create.mock.calls[0]?.[0]).not.toHaveProperty('mode')
+  })
+
+  it('sends the one-agent mode and requires an agent', async () => {
+    const { create } = dialog()
+    const user = userEvent.setup()
+    await user.type(screen.getByLabelText('Task title'), 'Fix the login')
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Task flow' }), 'single-agent')
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Agent' }), '')
+    expect(startButton().getAttribute('aria-disabled')).toBe('true')
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Agent' }), 'claude-code')
+    await user.click(startButton())
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
+    expect(create.mock.calls[0]?.[0]).toMatchObject({ mode: 'single-agent', agent: 'claude-code' })
   })
 
   it('says under the reference what to enter for each source', async () => {
@@ -901,7 +928,7 @@ describe('the context area of the Start a task dialog', () => {
   it('keeps the setup fields in their own group with one project or none', () => {
     for (const repos of [[{ id: 'web', name: 'Web app' }], []]) {
       dialog({ repos })
-      expect(fieldLabels(setupGroup())).toEqual(['Project', 'Branch from', 'Agent'])
+      expect(fieldLabels(setupGroup())).toEqual(['Project', 'Branch from', 'Agent', 'Task flow'])
       cleanup()
     }
   })
@@ -920,7 +947,7 @@ describe('the context area of the Start a task dialog', () => {
       expect(context.getByLabelText(name)).toBeTruthy()
       expect(setup.queryByLabelText(name)).toBeNull()
     }
-    for (const name of ['Project', 'Agent']) {
+    for (const name of ['Project', 'Agent', 'Task flow']) {
       expect(setup.getByLabelText(name)).toBeTruthy()
       expect(context.queryByLabelText(name)).toBeNull()
     }
@@ -963,6 +990,7 @@ describe('the context area of the Start a task dialog', () => {
       screen.getByLabelText('Project'),
       branch(),
       screen.getByLabelText('Agent'),
+      screen.getByLabelText('Task flow'),
       screen.getByRole('button', { name: 'Cancel' }),
       startButton(),
     ]

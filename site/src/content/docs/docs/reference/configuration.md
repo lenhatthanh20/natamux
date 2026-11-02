@@ -64,7 +64,7 @@ Details:
 
 - `kind` and `gate` are explained in [Stages](/docs/concepts/stages/).
 - `output` is a file name in `.natamux-task/`. It has letters, digits, `_`, `-` and `.`, and ends in `.md`. It has no folder.
-- `prompt` can use `{title}`, `{description}`, `{dir}`, `{ref}` and `{skill:<name>}`. `{dir}` is the stage file folder (`.natamux-task`). `{ref}` is the context reference of the task. Natamux adds the line `When you are done, run natamux done, unless the steps above say not to.` after your text, so your prompt can say when the agent must not run it, for example after it sends the task back.
+- `prompt` can use `{title}`, `{description}`, `{dir}`, `{ref}` and `{skill:<name>}`. `{dir}` is the stage file folder (`.natamux-task`). `{ref}` is the context reference of the task. Natamux adds the line `When you are done, run natamux done, unless the steps above say not to.` after your text, so your prompt can say when the agent must not run it, for example after it sends the task back. The catalog's Agent stage has no default prompt and sends no text.
 - `{skill:<name>}` names a skill. A plugin skill is `<plugin>:<skill>`. Natamux fills it when the stage starts, for the agent of the task. See [Skill placeholder](#skill-placeholder).
 - A stage with `"enabled": false` keeps its settings in the file. The pipeline rules below count only stages that are on.
 - `check` runs in the root of the worktree. It gets 10 minutes. It runs with `sh -c`, or `cmd.exe` on Windows.
@@ -191,6 +191,7 @@ The stage starts in every case. Each agent page says where it finds skills, for 
 | Design | `plan` | Plan | `agent` | manual | `plan.md` | Default. Steps, files and tests. Offers a workflow. |
 | Build | `test-spec` | Test spec | `agent` | manual | `test-spec.md` | Default. Test cases from the spec, without reading the code. |
 | Build | `implement` | Implement | `agent` | auto | none | Default. Tests first, then the code. Offers a workflow. |
+| Build | `agent` | Agent | `agent` | auto | none | Opens the task's agent without a prompt. Used by the **One agent** task flow. |
 | Build | `migration` | Data migration | `agent` | manual | none | A data or schema migration, with a way to roll it back. |
 | Build | `refactor` | Refactor | `agent` | auto | none | Cleans up the changed code without changing what it does. |
 | Build | `docs` | Documentation | `agent` | auto | none | Updates the user and developer docs. |

@@ -46,6 +46,13 @@ describe('resolveSteps', () => {
     })
   })
 
+  it('keeps the one-agent task promptless after project settings change', () => {
+    const steps = resolveSteps(['context', 'agent'], [
+      { id: 'agent', kind: 'agent', gate: 'manual', prompt: 'Project prompt' },
+    ])
+    expect(steps[1]).toEqual({ id: 'agent', kind: 'agent', gate: 'auto' })
+  })
+
   it('makes a stage of its own that is gone from the settings a manual one', () => {
     expect(resolveSteps(['sign-off'], DEFAULT_PIPELINE)).toEqual([
       { id: 'sign-off', kind: 'manual', gate: 'manual' },

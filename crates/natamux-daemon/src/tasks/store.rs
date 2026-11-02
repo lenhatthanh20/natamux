@@ -258,7 +258,19 @@ impl Store {
             .get("repo")
             .and_then(Value::as_str)
             .map(str::to_string);
-        let steps = active_steps(&(self.settings_of)(repo.as_deref()));
+        let settings = (self.settings_of)(repo.as_deref());
+        let mode = input.remove("mode");
+        let steps = if mode.as_ref().and_then(Value::as_str) == Some("single-agent") {
+            resolve_steps(
+                &[
+                    StepRef::Stage("context".into()),
+                    StepRef::Stage("agent".into()),
+                ],
+                &settings,
+            )
+        } else {
+            active_steps(&settings)
+        };
         let start = first_position(&steps);
         let lanes: Map<String, Value> = start
             .lanes

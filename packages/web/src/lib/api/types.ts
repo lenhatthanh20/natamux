@@ -12,6 +12,7 @@ export type NewWorkspaceInput = {
   repo?: string
   base?: string
   agent?: string
+  mode?: 'single-agent'
   prompt?: string
   context?: { source: ContextSourceType; name?: string; skill?: string; ref: string }
   attachments?: AttachmentUpload[]

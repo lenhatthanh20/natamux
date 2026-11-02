@@ -44,6 +44,7 @@ mod resume_helpers;
 mod resume_restart;
 mod running_agent_prompt;
 mod send_back;
+mod single_agent;
 mod settings_screen;
 mod shells_come_back;
 mod skills;

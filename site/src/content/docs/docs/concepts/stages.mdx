@@ -41,6 +41,12 @@ The group in the middle holds two stages:
 
 To change the pipeline, use [Project settings](/docs/guides/project-settings/) or see the [configuration reference](/docs/reference/configuration/). The catalog also has **Manual review**, where you read the diff and approve it, and **Manual testing**, where a person tries the change. They are not in the default pipeline, so no person has to act between Plan and Release.
 
+### One agent for a task
+
+In **Start a task**, set **Task flow** to **One agent** when this task does not need the full pipeline. Choose an agent too. This task has only Context and Agent in **Progress**. Other tasks in the project keep their own pipeline.
+
+Context works as usual. Once it passes, the agent opens in Terminal 1 without an automatic prompt. Type what you want the agent to do. If an agent read the Context source, the Agent stage keeps that session and sends no new message. When the work is done, run `natamux done` in the agent terminal. The task then finishes without Review, Automated tests or Release stages.
+
 ### Terminals and agents
 
 The default pipeline runs three agents. All are the task's agent unless a stage names its own.

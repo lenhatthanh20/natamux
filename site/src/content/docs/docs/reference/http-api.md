@@ -73,7 +73,7 @@ To do these from a script, use the daemon's own token, not the one in a task ter
 | `GET /tasks/:id/changes` | Files changed in the workspace. The answer is kept for 5 seconds; `?fresh=1` reads git now |
 | `GET /tasks/:id/graph` | The history of the task branch next to the base branch. Kept and `?fresh=1` as for changes |
 | `POST /tasks/:id/commit-message` | A commit message for the changes, by the task's agent: `{ message, source, agent, reason? }`. `source` is `draft` when the agent failed and the message is a simple one; `reason` says why. Answers 409 when nothing changed |
-| `POST /workspaces` | Make a task with a worktree and optionally start an agent. The body can have `base` and `branch`; an invalid `branch` answers 400 and no task is made. Answers 202 with the task as soon as it is made; the worktree and the agent come after (see `workspace.preparing`) |
+| `POST /workspaces` | Make a task with a worktree and optionally start an agent. The body can have `base` and `branch`. Set `mode` to `single-agent` with a known `agent` for only Context and Agent; omit it for the project's full pipeline. An invalid branch or mode answers 400 and no task is made. Answers 202 with the task as soon as it is made; the worktree and agent come after (see `workspace.preparing`) |
 | `GET /workspaces/preparing` | The workspaces being made, and the step of each: `{ preparing: { "T-0001": "checkout" } }` |
 | `POST /hooks/:agent` | Where an agent's hook posts. Always answers `200 {}` for a known agent |
 | `GET /repos` | Projects Natamux manages, and the daemon's worktree folder: `{ repos, worktreesDir }`. A project with its own worktree folder has `worktreesDir`. Each project has `trusted`: whether its commands are approved |

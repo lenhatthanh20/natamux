@@ -6,7 +6,7 @@ import { GROUP_KINDS, type Stage, type Step, stageSchema } from '../schema.js'
 import { catalogEntry, STAGE_CATALOG, STAGE_PHASES } from '../stage-catalog.js'
 
 describe('STAGE_CATALOG', () => {
-  it('holds the 28 stages of the spec, by phase', () => {
+  it('holds the 29 stages of the spec, by phase', () => {
     const byPhase = Object.fromEntries(
       STAGE_PHASES.map((phase) => [
         phase,
@@ -16,7 +16,7 @@ describe('STAGE_CATALOG', () => {
     expect(byPhase).toEqual({
       understand: ['context', 'research', 'clarify'],
       design: ['spec', 'ux-design', 'architecture', 'threat-model', 'plan'],
-      build: ['test-spec', 'implement', 'migration', 'refactor', 'docs', 'i18n'],
+      build: ['test-spec', 'implement', 'agent', 'migration', 'refactor', 'docs', 'i18n'],
       check: [
         'lint',
         'self-review',
@@ -44,6 +44,7 @@ describe('STAGE_CATALOG', () => {
     expect(shape('ux-design')).toEqual(['agent', 'manual', 'ux.md'])
     expect(shape('migration')).toEqual(['agent', 'manual', undefined])
     expect(shape('refactor')).toEqual(['agent', 'auto', undefined])
+    expect(shape('agent')).toEqual(['agent', 'auto', undefined])
     expect(shape('lint')).toEqual(['testing', 'auto', undefined])
     expect(shape('self-review')).toEqual(['agent', 'auto', 'self-review.md'])
     expect(shape('qa')).toEqual(['manual', 'manual', undefined])
@@ -54,7 +55,7 @@ describe('STAGE_CATALOG', () => {
 
   it('gives every agent and testing stage a prompt', () => {
     for (const { stage } of STAGE_CATALOG) {
-      if (stage.kind === 'agent' || stage.kind === 'testing') {
+      if ((stage.kind === 'agent' || stage.kind === 'testing') && stage.id !== 'agent') {
         expect(defaultPrompt(stage), stage.id).toMatch(/^Task: \{title\}\n/)
       }
     }
@@ -77,7 +78,12 @@ describe('STAGE_CATALOG', () => {
       if (stage.output !== undefined && stage.kind !== 'context') {
         expect(prompt ?? '', stage.id).toContain(`{dir}/${stage.output}`)
       }
-      if (prompt !== undefined && stage.output === undefined && stage.kind !== 'context') {
+      if (
+        prompt !== undefined &&
+        stage.output === undefined &&
+        stage.kind !== 'context' &&
+        stage.id !== 'agent'
+      ) {
         // A stage that changes code must say whether to commit.
         expect(prompt, stage.id).toContain('{commit}')
       }

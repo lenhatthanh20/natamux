@@ -245,6 +245,9 @@ impl StageRun {
         self.close_pending_shell(task_id, terminal);
         let paused = self.paused_session(task_id, terminal, agent);
         let session = session.or(paused.as_deref());
+        if text.is_empty() && session.is_none() && self.agent_runs(task_id, terminal) {
+            return Ok(());
+        }
         let result = if session.is_none() && self.agent_runs(task_id, terminal) {
             self.options
                 .terminals

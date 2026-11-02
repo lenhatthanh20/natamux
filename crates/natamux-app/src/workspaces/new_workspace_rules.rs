@@ -246,6 +246,8 @@ pub struct StartForm {
     pub branch: String,
     /// Empty: no agent, a plain terminal.
     pub agent: String,
+    /// A two-node task with Context and Agent instead of the project's full pipeline.
+    pub single_agent: bool,
     pub notes: String,
     pub reference: String,
     /// The skill picked for An agent skill; empty until one is picked.
@@ -254,6 +256,9 @@ pub struct StartForm {
 
 /// Why Start task is off, if it is.
 pub fn blocked_reason(form: &StartForm, choice: &SourceChoice) -> Option<&'static str> {
+    if form.single_agent && form.agent.is_empty() {
+        return Some("Choose an agent for this task flow");
+    }
     let skill = (*choice == SourceChoice::AgentSkill).then_some(form.skill.as_str());
     create_blocked_reason(
         &form.title,
@@ -289,6 +294,7 @@ pub fn new_workspace_input(
         base: filled(&form.base),
         branch: filled(form.branch.trim()),
         agent: filled(&form.agent),
+        mode: form.single_agent.then(|| "single-agent".into()),
         prompt: if manual {
             filled(form.notes.trim())
         } else {
