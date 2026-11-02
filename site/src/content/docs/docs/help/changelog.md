@@ -10,6 +10,7 @@ All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/r
 ## v1.0.15 (2026-11-02)
 
 - Fix: the line through a skipped Progress node's name ran past the words. It now covers only the words.
+- Fix: the name under a Progress node sat too far below its tile. It now sits closer.
 
 ## v1.0.14 (2026-11-01)
 

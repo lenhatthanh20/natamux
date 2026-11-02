@@ -38,8 +38,8 @@ const TILE_RADIUS: f32 = 10.;
 const BADGE: f32 = 18.;
 const BADGE_OUT: f32 = 6.;
 const NODE_RADIUS: f32 = 9.;
-/// The gap between the tile and the name under it.
-const NAME_GAP: f32 = 6.;
+/// The gap between the tile and the name under it, past the running ring and the agent badge.
+pub(super) const NAME_GAP: f32 = 2.;
 /// A long name wraps at this width, so it stays under the tile instead of spanning the panel.
 pub(super) const NAME_MAX: f32 = 144.;
 /// The selection ring is 2 px wide, outside the node.
