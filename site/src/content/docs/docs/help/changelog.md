@@ -12,6 +12,8 @@ All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/r
 - Fix: a stage in an **If** branch opened its details below the whole branch. Its details now open directly below the stage node.
 - Fix: the line through a skipped Progress node's name ran past the words. It now covers only the words.
 - Fix: hovering a Progress node showed a tooltip that covered the stages around it. A node has no tooltip now; click it to see its state, time, cost and agent.
+- Fix: a Progress node's name sat too far from its tile. It now sits closer to the tile.
+- Fix: a stage run by Codex in the auto mode could not report done, because the Codex sandbox blocked the network. Codex can now reach the daemon from its sandbox.
 
 ## v1.0.14 (2026-11-01)
 
