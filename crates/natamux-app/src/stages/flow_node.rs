@@ -425,6 +425,7 @@ fn focus_ring(input: &CardInput, on: &OnCommand, color: Hsla) -> Stateful<Div> {
 fn selection_ring(color: Hsla) -> Div {
     let reach = rems_from_px(-RING);
     div()
+        .debug_selector(|| "selected-node-ring".into())
         .absolute()
         .top(reach)
         .left(reach)

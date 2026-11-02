@@ -266,7 +266,7 @@ pub fn timeline(input: &ProgressInput, on: &OnCommand, cx: &App) -> Vec<AnyEleme
         on,
     };
     let last = input.steps.len().saturating_sub(1);
-    ctx.column(&input.steps, false, cx)
+    ctx.column(&input.steps, cx)
         .into_iter()
         .enumerate()
         .map(|(index, step)| {
