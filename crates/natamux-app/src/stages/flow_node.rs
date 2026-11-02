@@ -138,7 +138,7 @@ fn tile(input: &CardInput, tone: NodeTone, accent: Hsla, cx: &App) -> Stateful<D
         })
         .child(
             kind_icon(input.stage.kind)
-                .size(IconSize::Medium)
+                .size(IconSize::Custom(rems_from_px(18_f32)))
                 .color(if lit {
                     Color::Custom(accent)
                 } else {
@@ -217,7 +217,7 @@ fn struck_name(input: &CardInput, tone: NodeTone, cx: &App) -> Div {
     let layout = text.layout().clone();
     div()
         .relative()
-        .text_ui(cx)
+        .text_ui_sm(cx)
         .font_weight(theme::theme_settings(cx).ui_font(cx).weight)
         .text_color(color)
         .child(text)
@@ -284,7 +284,10 @@ fn name_row(input: &CardInput, tone: NodeTone, lift: f32, cx: &App) -> Div {
     let text = if tone.struck() {
         struck_name(input, tone, cx).into_any_element()
     } else {
-        name_label(input, tone).text_center().into_any_element()
+        name_label(input, tone)
+            .size(LabelSize::Small)
+            .text_center()
+            .into_any_element()
     };
     div()
         .debug_selector(|| "node-name".into())
