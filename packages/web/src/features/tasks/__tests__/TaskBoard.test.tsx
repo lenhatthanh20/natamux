@@ -76,6 +76,13 @@ function board(tasks: readonly Task[] = TASKS) {
 const column = (name: string) => screen.getByRole('region', { name })
 
 describe('TaskBoard', () => {
+  it('shows task titles at regular weight in the board', () => {
+    board()
+
+    expect(screen.getByText('Fix flaky login test').className).toContain('font-normal')
+    expect(screen.getByText('Write release notes').className).toContain('font-normal')
+  })
+
   it('folds empty columns into rails, so the columns with tasks fit in view', () => {
     board()
 

@@ -172,6 +172,20 @@ const removeButton = (repo: string) =>
   screen.queryByRole('button', { name: `Remove finished workspaces in ${repo}` })
 
 describe('when it is offered', () => {
+  it('uses regular task titles for attention, live, and unseen rows', () => {
+    list({
+      tasks: [
+        makeTask({ id: 'T-0001', title: 'Needs answer', state: 'needs-input' }),
+        makeTask({ id: 'T-0002', title: 'Running spec', state: 'running' }),
+      ],
+      seenState: { 'T-0002': 'ready' },
+    })
+
+    expect(screen.getByText('Needs answer').className).toContain('font-normal')
+    expect(screen.getByText('Running spec').className).toContain('font-normal')
+    expect(rowOf('Running spec').querySelector('[data-unseen]')).toBeTruthy()
+  })
+
   it('shows the button and the menu item only in a group that has finished workspaces', async () => {
     const user = userEvent.setup()
     list({ tasks: TASKS.filter((task) => task.repo !== 'web') })

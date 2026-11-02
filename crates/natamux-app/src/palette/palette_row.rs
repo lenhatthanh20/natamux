@@ -21,11 +21,11 @@ pub fn row_height(row: &PaletteRow) -> f32 {
     }
 }
 
-/// `text` on one line, the matched letters semibold in the ink colour.
-fn highlighted(text: &str, ranges: &[Range], ink: Hsla) -> impl IntoElement {
+/// `text` on one line, with matched letters in the ink colour.
+fn highlighted(text: &str, ranges: &[Range], ink: Hsla, bold_matches: bool) -> impl IntoElement {
     let style = HighlightStyle {
         color: Some(ink),
-        font_weight: Some(FontWeight::SEMIBOLD),
+        font_weight: bold_matches.then_some(FontWeight::SEMIBOLD),
         ..Default::default()
     };
     let marks: Vec<_> = ranges
@@ -75,7 +75,7 @@ pub fn row_body(row: &PaletteRow, index: usize, now_ms: i64, cx: &App) -> AnyEle
                 div()
                     .flex_1()
                     .min_w_0()
-                    .child(highlighted(&command.title, ranges, ink)),
+                    .child(highlighted(&command.title, ranges, ink, true)),
             )
             .when_some(command.key, |this, key| this.child(Kbd::new(key)))
             .into_any_element(),
@@ -90,7 +90,7 @@ pub fn row_body(row: &PaletteRow, index: usize, now_ms: i64, cx: &App) -> AnyEle
                     .font_family(theme::theme_settings(cx).buffer_font(cx).family.clone())
                     .text_xs()
                     .text_color(cx.theme().colors().text_muted)
-                    .child(highlighted(&task.id, id_ranges, ink))
+                    .child(highlighted(&task.id, id_ranges, ink, true))
                     .into_any_element(),
             ];
             if let Some(branch) = &task.branch {
@@ -104,7 +104,7 @@ pub fn row_body(row: &PaletteRow, index: usize, now_ms: i64, cx: &App) -> AnyEle
                     v_flex()
                         .flex_1()
                         .min_w_0()
-                        .child(highlighted(&task.title, title_ranges, ink))
+                        .child(highlighted(&task.title, title_ranges, ink, false))
                         .child(second_line(line)),
                 )
                 .child(
@@ -147,7 +147,7 @@ pub fn row_body(row: &PaletteRow, index: usize, now_ms: i64, cx: &App) -> AnyEle
                 div()
                     .flex_1()
                     .min_w_0()
-                    .child(highlighted(&repo.name, ranges, ink)),
+                    .child(highlighted(&repo.name, ranges, ink, true)),
             )
             .child(
                 div()
@@ -175,3 +175,7 @@ pub fn digit_hint(digit: usize) -> impl IntoElement {
         .color(Color::Disabled)
         .single_line()
 }
+
+#[cfg(test)]
+#[path = "palette_row_tests.rs"]
+mod tests;

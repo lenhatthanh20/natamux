@@ -224,7 +224,7 @@ impl WorkspaceTree {
         let title = if open {
             open_title(task, blurred)
         } else {
-            title_label(task, unseen, blurred, false, cx)
+            title_label(task, blurred, false, cx)
         };
         let rename_id = task.id.clone();
         let tip = snap.tips.get(&task.id).cloned().unwrap_or_default();
@@ -380,13 +380,12 @@ impl WorkspaceTree {
             .items_center()
             .gap_2()
             .child(glyph)
-            .child(div().min_w_0().flex_1().child(title_label(
-                task,
-                false,
-                blurred,
-                snap.show_ids,
-                cx,
-            )))
+            .child(
+                div()
+                    .min_w_0()
+                    .flex_1()
+                    .child(title_label(task, blurred, snap.show_ids, cx)),
+            )
             .child(age_label(task, snap))
             .on_click(cx.listener(move |tree, _: &ClickEvent, window, cx| {
                 tree.focus_key(open_key.clone(), window, cx);

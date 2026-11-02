@@ -264,7 +264,7 @@ export function TaskDetail({
           className="flex min-h-0 flex-1 flex-col overflow-y-auto"
         >
           <div className="flex flex-col gap-2 p-4">
-            <h2 className="text-lg font-semibold tracking-tight break-words">{task.title}</h2>
+            <h2 className="text-lg font-normal tracking-tight break-words">{task.title}</h2>
             <div className="flex flex-wrap items-center gap-1.5">
               <StateBadge state={task.state} />
               {task.priority !== 'normal' && (

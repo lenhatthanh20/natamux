@@ -192,21 +192,10 @@ impl WorkspaceTree {
 }
 
 /// The id (only with Task ids in the sidebar, T-0240), then the title in the look of its tier:
-/// bold when unseen or waiting, muted when finished. The id never shrinks; only the title
-/// truncates.
-pub(super) fn title_label(
-    task: &Task,
-    unseen: bool,
-    blurred: bool,
-    show_id: bool,
-    cx: &App,
-) -> AnyElement {
+/// muted when finished. The id never shrinks; only the title truncates.
+pub(super) fn title_label(task: &Task, blurred: bool, show_id: bool, cx: &App) -> AnyElement {
     let tier = row_tier(task.state);
-    let weight = match tier {
-        RowTier::Quiet => FontWeight::NORMAL,
-        _ if unseen || tier == RowTier::Attention => FontWeight::SEMIBOLD,
-        _ => FontWeight::MEDIUM,
-    };
+    let weight = FontWeight::NORMAL;
     let size = if tier == RowTier::Quiet {
         12_f32
     } else {

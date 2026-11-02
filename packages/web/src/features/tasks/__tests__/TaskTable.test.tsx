@@ -91,6 +91,13 @@ const rowOf = (title: string) =>
   screen.getByRole('button', { name: new RegExp(title) }).closest('tr') as HTMLElement
 
 describe('TaskTable', () => {
+  it('shows task titles at regular weight in the table', () => {
+    table()
+
+    const title = screen.getByRole('button', { name: /Fix flaky login test/ })
+    expect(title.className).toContain('font-normal')
+  })
+
   it('shows the estimated cost of each task, with the tokens in its tip', () => {
     const usage = {
       'T-0001': { tokens: 2_400_000, costUsd: 1.84, unpricedModels: [], stages: [] },

@@ -303,15 +303,15 @@ fn chip(child: AnyElement, cx: &App) -> AnyElement {
         .into_any_element()
 }
 
-/// The title of an open card: 13.5 semibold, up to two lines, never truncated to one.
+/// The title of an open card: 13.5 regular, up to two lines, never truncated to one.
 pub(super) fn open_title(task: &Task, blurred: bool) -> AnyElement {
     private_text(
         blurred,
-        || BlurBar::new(task.title.clone(), 13.5).weight(gpui::FontWeight::SEMIBOLD),
+        || BlurBar::new(task.title.clone(), 13.5).weight(gpui::FontWeight::NORMAL),
         || {
             Label::new(task.title.clone())
                 .size(LabelSize::Custom(rems_from_px(13.5_f32)))
-                .weight(gpui::FontWeight::SEMIBOLD)
+                .weight(gpui::FontWeight::NORMAL)
                 .line_clamp(2)
                 .into_any_element()
         },
