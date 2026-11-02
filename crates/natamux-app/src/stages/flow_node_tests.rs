@@ -128,7 +128,10 @@ fn the_name_sits_close_under_the_tile(cx: &mut TestAppContext) {
         let cx = drawn(alone(status, SHORT, LINKS), cx);
         let [tile, label] = ["node-tile", "node-name"].map(|s| bounds(cx, s));
         let gap = label.top() - tile.bottom();
-        assert!(near(gap, px(RUN_RING_OUT + NAME_GAP)), "{status:?}: {gap:?}");
+        assert!(
+            near(gap, px(RUN_RING_OUT + NAME_GAP)),
+            "{status:?}: {gap:?}"
+        );
         assert!(gap < px(12.) - px(0.5), "{status:?}: {gap:?}");
     }
 }
