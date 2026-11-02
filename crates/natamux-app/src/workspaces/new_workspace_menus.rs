@@ -24,6 +24,7 @@ pub(super) enum Pick {
     Project,
     Branch,
     Agent,
+    Flow,
 }
 
 /// The groups of the branch menu that sit in a submenu each.
@@ -118,6 +119,13 @@ impl NewWorkspaceDialog {
                     })
                     .collect()
             }
+            Pick::Flow => [
+                ("Full flow", "full", !self.single_agent),
+                ("One agent", "single-agent", self.single_agent),
+            ]
+            .into_iter()
+            .map(|(label, value, checked)| option(None, label.into(), value.into(), checked))
+            .collect(),
         }
     }
 
@@ -197,6 +205,7 @@ impl NewWorkspaceDialog {
                 self.base = base_after_pick(&value, start.as_deref());
             }
             Pick::Agent => self.agent = value,
+            Pick::Flow => self.single_agent = value == "single-agent",
         }
         cx.notify();
     }

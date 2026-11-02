@@ -105,8 +105,17 @@ fn active_of(step: &Step) -> Vec<Step> {
 /// gone becomes a manual stage, so the task can go on. A stage that is off still runs.
 pub fn resolve_steps(refs: &[StepRef], pipeline: &[Step]) -> Vec<Step> {
     let mut known: HashMap<String, Stage> = HashMap::new();
+    let one_agent = matches!(refs, [StepRef::Stage(context), StepRef::Stage(agent)]
+        if context.as_str() == "context" && agent.as_str() == "agent");
     let from_settings = pipeline.iter().flat_map(Step::stages).cloned();
-    for stage in catalog().iter().cloned().chain(from_settings) {
+    for stage in catalog().iter().cloned() {
+        known.insert(stage.id.clone(), stage);
+    }
+    for stage in from_settings {
+        // The two-node task keeps its promptless Agent stage even if project settings change.
+        if one_agent && stage.id == "agent" {
+            continue;
+        }
         known.insert(stage.id.clone(), stage);
     }
     let stage = |id: &str| {
@@ -181,6 +190,21 @@ mod tests {
         implement.workflow = Some(true);
         implement.ci = Some(true);
         assert_eq!(steps, [Step::Stage(implement)]);
+    }
+
+    #[test]
+    fn one_agent_task_keeps_the_promptless_catalog_stage_after_settings_change() {
+        let refs = [
+            StepRef::Stage("context".into()),
+            StepRef::Stage("agent".into()),
+        ];
+        let mut configured = Stage::new("agent", StageKind::Agent, Gate::Manual);
+        configured.prompt = Some("Project prompt".into());
+        let steps = resolve_steps(&refs, &[Step::Stage(configured)]);
+        assert_eq!(
+            steps[1],
+            Step::Stage(Stage::new("agent", StageKind::Agent, Gate::Auto))
+        );
     }
 
     #[test]

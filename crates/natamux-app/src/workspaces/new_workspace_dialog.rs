@@ -95,6 +95,7 @@ pub struct NewWorkspaceDialog {
     picked_repo: String,
     base: String,
     agent: String,
+    single_agent: bool,
     picked_source: String,
     skill: String,
     files: Vec<PickedFile>,
@@ -122,6 +123,7 @@ struct Stops {
     project: FocusHandle,
     branch: FocusHandle,
     agent: FocusHandle,
+    flow: FocusHandle,
     cancel: FocusHandle,
     submit: FocusHandle,
 }
@@ -183,6 +185,7 @@ impl NewWorkspaceDialog {
             picked_repo: initial_repo(repo.as_deref(), &ids),
             base: String::new(),
             agent: DEFAULT_AGENT.into(),
+            single_agent: false,
             picked_source: "manual".into(),
             skill: String::new(),
             files: Vec::new(),
@@ -203,6 +206,7 @@ impl NewWorkspaceDialog {
                 project: cx.focus_handle(),
                 branch: cx.focus_handle(),
                 agent: cx.focus_handle(),
+                flow: cx.focus_handle(),
                 cancel: cx.focus_handle(),
                 submit: cx.focus_handle(),
             },
@@ -271,6 +275,7 @@ impl NewWorkspaceDialog {
             base: self.base.clone(),
             branch: self.branch_name.read(cx).text(cx),
             agent: self.agent.clone(),
+            single_agent: self.single_agent,
             notes: self.notes.read(cx).text(cx),
             reference: self.reference.read(cx).text(cx),
             skill: self.skill.clone(),
@@ -436,11 +441,13 @@ impl DialogView for NewWorkspaceDialog {
         };
         ring.push(text.focus_handle(cx));
         let stops = &self.stops;
-        ring.extend([&stops.files, &stops.project, &stops.agent].map(FocusHandle::clone));
+        ring.extend(
+            [&stops.files, &stops.project, &stops.agent, &stops.flow].map(FocusHandle::clone),
+        );
         if self.branches.is_some() {
-            ring.insert(ring.len() - 1, stops.branch.clone());
+            ring.insert(ring.len() - 2, stops.branch.clone());
         }
-        ring.insert(ring.len() - 1, self.branch_name.focus_handle(cx));
+        ring.insert(ring.len() - 2, self.branch_name.focus_handle(cx));
         ring.extend([stops.cancel.clone(), stops.submit.clone()]);
         ring
     }

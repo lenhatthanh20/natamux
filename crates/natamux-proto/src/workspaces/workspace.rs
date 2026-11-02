@@ -33,6 +33,8 @@ pub struct NewWorkspaceInput {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub agent: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub mode: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub prompt: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub context: Option<TaskContext>,
@@ -246,6 +248,19 @@ mod tests {
     }
 
     #[test]
+    fn a_new_workspace_sends_the_one_agent_mode_when_chosen() {
+        let input = NewWorkspaceInput {
+            title: "Fix login".into(),
+            mode: Some("single-agent".into()),
+            ..Default::default()
+        };
+        assert_eq!(
+            serde_json::to_string(&input).unwrap(),
+            r#"{"title":"Fix login","mode":"single-agent"}"#
+        );
+    }
+
+    #[test]
     fn a_full_new_workspace_keeps_the_field_order_and_the_ref_name() {
         let input = NewWorkspaceInput {
             title: "Fix".into(),
@@ -253,6 +268,7 @@ mod tests {
             base: Some("dev".into()),
             branch: Some("ABC-12".into()),
             agent: Some("claude-code".into()),
+            mode: None,
             prompt: Some("Do it".into()),
             context: Some(TaskContext {
                 source: "github-issue".into(),
