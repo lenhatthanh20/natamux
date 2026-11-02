@@ -48,14 +48,13 @@ impl Render for FirstStageView {
             };
             ctx.column(&input.steps, cx)
         };
-        v_flex()
-            .w(px(self.width))
-            .child(div().h(px(28.)))
-            .children(steps.into_iter().enumerate().map(|(index, step)| {
+        v_flex().w(px(self.width)).child(div().h(px(28.))).children(
+            steps.into_iter().enumerate().map(|(index, step)| {
                 div()
                     .debug_selector(move || format!("step-{index}").into())
                     .child(step)
-            }))
+            }),
+        )
     }
 }
 
@@ -195,11 +194,7 @@ fn bounds(cx: &mut VisualTestContext, selector: &'static str) -> Bounds<Pixels> 
         .unwrap_or_else(|| panic!("{selector} was not drawn"))
 }
 
-fn first_step_layout(
-    with_timeline: bool,
-    width: f32,
-    cx: &mut TestAppContext,
-) -> (Pixels, Pixels) {
+fn first_step_layout(with_timeline: bool, width: f32, cx: &mut TestAppContext) -> (Pixels, Pixels) {
     let mut input = branch_input(true, false);
     input.steps = vec![
         Step::Stage(Stage::new("context", StageKind::Context, Gate::Auto)),
