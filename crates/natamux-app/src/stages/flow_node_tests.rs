@@ -33,6 +33,8 @@ struct Flow {
     name: &'static str,
     place: Place,
     links: NodeLinks,
+    /// An upcoming stage marked to skip.
+    marked: bool,
 }
 
 impl Render for Flow {
@@ -40,11 +42,15 @@ impl Render for Flow {
         let mut card = input(self.status, Vec::new());
         card.entry.name = self.name.into();
         card.links = self.links;
-        card.facts.chip = if self.status == StageStatus::Current {
-            card.entry.state = Some(TaskState::Running);
-            CardChip::State(TaskState::Running)
-        } else {
-            CardChip::Done
+        card.facts.chip = match self.status {
+            StageStatus::Current => {
+                card.entry.state = Some(TaskState::Running);
+                CardChip::State(TaskState::Running)
+            }
+            StageStatus::Skipped => CardChip::Skipped,
+            StageStatus::Upcoming if self.marked => CardChip::WillBeSkipped,
+            StageStatus::Upcoming => CardChip::NotStarted,
+            _ => CardChip::Done,
         };
         let drawn = node(card, &noop(), cx);
         // As `progress_steps.rs` lays out a pair: two `flex_1` boxes `PAIR_GAP` apart.
@@ -76,6 +82,7 @@ fn alone(status: StageStatus, name: &'static str, links: NodeLinks) -> Flow {
         name,
         place: Place::Alone,
         links,
+        marked: false,
     }
 }
 
@@ -138,6 +145,47 @@ fn a_long_name_wraps_under_the_tile(cx: &mut TestAppContext) {
         );
         assert!(long.left() >= row.left() && long.right() <= row.right());
         assert!(near(centre_x(long), centre_x(tile)), "{name}: {long:?}");
+    }
+}
+
+#[gpui::test]
+fn a_struck_name_strikes_only_its_words(cx: &mut TestAppContext) {
+    // GPUI struck a wrapped, centred label from the box's left edge on the second row, so the
+    // line ran past "merge PRs" (T-0263). The node paints one line per row over its words.
+    test_views::init(cx);
+    let source = include_str!("flow_node.rs");
+    let row = &source[source.find("fn name_row(").unwrap()..];
+    let row = &row[..row.find("\n}\n").unwrap()];
+    assert!(row.contains("struck_name("));
+    assert!(!row.contains("strikethrough"));
+    for name in [SHORT, PICTURE] {
+        let plain = bounds(
+            drawn(alone(StageStatus::Done, name, NodeLinks::default()), cx),
+            "node-name",
+        );
+        let skipped = Flow {
+            status: StageStatus::Skipped,
+            ..alone(StageStatus::Done, name, NodeLinks::default())
+        };
+        let marked = Flow {
+            status: StageStatus::Upcoming,
+            marked: true,
+            ..skipped
+        };
+        for flow in [skipped, marked] {
+            let cx = drawn(flow, cx);
+            let [tile, struck] = ["node-tile", "node-name"].map(|s| bounds(cx, s));
+            // Same rows, same box: the lines take no room.
+            assert!(
+                near(struck.size.height, plain.size.height),
+                "{name}: {struck:?}"
+            );
+            assert!(
+                near(struck.size.width, plain.size.width),
+                "{name}: {struck:?}"
+            );
+            assert!(near(centre_x(struck), centre_x(tile)), "{struck:?}");
+        }
     }
 }
 
@@ -216,6 +264,7 @@ fn the_tiles_of_a_pair_sit_in_the_middle_of_each_node(cx: &mut TestAppContext) {
                 name,
                 place,
                 links: NodeLinks::default(),
+                marked: false,
             };
             let cx = drawn(flow, cx);
             let [row, tile, label] = ["flow-row", "node-tile", "node-name"].map(|s| bounds(cx, s));
