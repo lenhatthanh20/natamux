@@ -243,7 +243,11 @@ fn a_node_of_a_path_places_its_card_inside_the_branch() {
     let step = source_of(include_str!("progress_flow.rs"), "fn flow_step(");
     in_order(
         step,
-        &["ported(card)", ".children(details)", "out.map(FlowLink::new)"],
+        &[
+            "ported(card)",
+            ".children(details)",
+            "out.map(FlowLink::new)",
+        ],
     );
     let lane = source_of(include_str!("progress_branch.rs"), "fn lane(");
     assert!(lane.contains("self.column(&steps, cx)"));
