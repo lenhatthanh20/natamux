@@ -16,13 +16,12 @@ use super::shell_rules::{LiveItem, needs_you_text, running_text};
 use super::status_items::{OnClick, count_item, item_label, toggle_item};
 use super::status_layout::forced_by_width;
 use super::status_limits::{LimitsItem, limits_item};
+use super::title_bar::title_bar_height;
 use super::update_state::{ItemKind, StatusWords};
 use crate::components::colors::signal;
 use crate::components::icons::icon_path;
 use crate::components::menu::MenuLayer;
 use crate::components::spinner::Spinner;
-
-pub const STATUS_BAR_HEIGHT: f32 = 28.;
 
 type OnOpenTask = Rc<dyn Fn(&str, &mut Window, &mut App)>;
 
@@ -315,7 +314,7 @@ fn jobs_item(jobs: Vec<Job>, open: OnOpenTask, icon_only: bool) -> Option<Button
 }
 
 impl RenderOnce for StatusBar {
-    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let colors = cx.theme().colors();
         let condensed = forced_by_width(Some(self.width));
         let signal_fg = Color::Custom(signal(cx).fg);
@@ -341,7 +340,7 @@ impl RenderOnce for StatusBar {
         h_flex()
             .flex_none()
             .w_full()
-            .h(rems_from_px(STATUS_BAR_HEIGHT))
+            .h(title_bar_height(window))
             .px(rems_from_px(6.0_f32))
             .gap(rems_from_px(2.0_f32))
             .overflow_hidden()

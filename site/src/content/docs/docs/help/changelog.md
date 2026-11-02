@@ -9,6 +9,7 @@ All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/r
 
 ## v1.0.16 (2026-11-02)
 
+- Fix: the desktop app's bottom status bar was thinner than its title bar. Both bars now have the same height.
 - **Start a task** can use **Task flow → One agent**. The task has Context and Agent only, and the agent opens without a prompt. See [One agent for a task](/docs/concepts/stages/#one-agent-for-a-task).
 - Task titles now use regular weight across the desktop app and web dashboard, including tasks that need attention.
 
