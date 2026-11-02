@@ -101,7 +101,9 @@ pub fn agent_of_command(line: &str, program_of: impl Fn(&str) -> String) -> Opti
 /// the others have no such check, so their closest flag lets them run (almost) anything.
 pub const AUTO_FLAGS: [(&str, &[&str]); 5] = [
     ("claude-code", &["--permission-mode", "auto"]),
-    // Codex dropped `--full-auto`. These two flags mean the same and exist in old and new versions.
+    // Codex dropped `--full-auto`. The first two flags mean the same and exist in old and new
+    // versions. Its `workspace-write` sandbox blocks the network, and with it the daemon on
+    // loopback, so the `natamux` commands of a stage could not report.
     (
         "codex",
         &[
@@ -109,6 +111,8 @@ pub const AUTO_FLAGS: [(&str, &[&str]); 5] = [
             "workspace-write",
             "--ask-for-approval",
             "never",
+            "-c",
+            "sandbox_workspace_write.network_access=true",
         ],
     ),
     ("gemini", &["--approval-mode", "yolo"]),
