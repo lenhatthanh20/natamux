@@ -11,9 +11,9 @@ use gpui::{
     point, px,
 };
 use natamux_proto::tasks::task::TaskState;
-use ui::{Tooltip, prelude::*};
+use ui::prelude::*;
 
-use super::{CardInput, fact_parts};
+use super::CardInput;
 use crate::agents::agent_choices::agent_label;
 use crate::components::agent_badge::AgentIcon;
 use crate::components::colors::state_colors;
@@ -57,16 +57,7 @@ pub(super) fn chip_word(chip: CardChip) -> Option<&'static str> {
     }
 }
 
-/// The tooltip of a node: its name, then the word and every fact on a line of their own.
-pub(super) fn tooltip_text(name: &str, word: Option<&str>, facts: &[String]) -> String {
-    std::iter::once(name.to_owned())
-        .chain(word.map(str::to_owned))
-        .chain(facts.iter().cloned())
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
-/// The node's agent and what its tooltip or label says: the stage's own agent with its model,
+/// The node's agent and the label of the details card: the stage's own agent with its model,
 /// or "Task's agent · <name>".
 fn agent_text(input: &CardInput) -> Option<(String, String)> {
     let (agent, tasks) = input.node_agent.clone()?;
@@ -82,13 +73,12 @@ fn agent_text(input: &CardInput) -> Option<(String, String)> {
     Some((agent, text))
 }
 
-/// The agent's icon in a round badge on the tile's corner; its name is in the tooltip.
+/// The agent's icon in a round badge on the tile's corner; its name is on the details card.
 fn agent_badge(input: &CardInput, cx: &App) -> Option<AnyElement> {
-    let (agent, text) = agent_text(input)?;
+    let (agent, _) = input.node_agent.clone()?;
     let colors = cx.theme().colors();
     Some(
         div()
-            .id(SharedString::from(format!("agent-{}", input.entry.stage)))
             .debug_selector(|| "node-agent".into())
             .absolute()
             .right(rems_from_px(-BADGE_OUT))
@@ -102,7 +92,6 @@ fn agent_badge(input: &CardInput, cx: &App) -> Option<AnyElement> {
             .border_color(colors.border_variant)
             .bg(colors.panel_background)
             .child(AgentIcon::new(Some(agent)))
-            .tooltip(Tooltip::text(text))
             .into_any_element(),
     )
 }
@@ -162,7 +151,7 @@ fn tile(input: &CardInput, tone: NodeTone, accent: Hsla, cx: &App) -> Stateful<D
 
 /// The state mark on the tile's top corner (owner's picture, T-0259): a filled check once done,
 /// the state's glyph while current (it blinks while running), the CI mark while its CI runs, and
-/// a dashed ring before it runs. The state's word is in the node's tooltip.
+/// a dashed ring before it runs. The state's word is on the details card.
 fn state_mark(input: &CardInput, accent: Hsla, cx: &App) -> Div {
     let colors = cx.theme().colors();
     let mark = div()
@@ -370,9 +359,6 @@ fn header(
 ) -> Stateful<Div> {
     let colors = cx.theme().colors();
     let entry = &input.entry;
-    let word = chip_word(input.facts.chip);
-    let facts = fact_parts(input);
-    let tip = tooltip_text(&entry.name, word, &facts);
     let hover_bg = colors.ghost_element_hover;
     let tile = tile(input, tone, accent, cx);
     let running = matches!(
@@ -406,7 +392,6 @@ fn header(
         .child(name_row(input, tone, lift, cx))
         .child(stub_out(input.links.out))
         .child(focus_ring(input, on, colors.border_focused))
-        .tooltip(Tooltip::text(tip))
         .cursor_pointer()
         .hover(move |style| style.bg(hover_bg))
         .on_click(move |_, window, cx| on_click(select.clone(), window, cx))
