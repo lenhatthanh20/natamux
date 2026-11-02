@@ -106,7 +106,7 @@ fn badge(text: String, cx: &App) -> impl IntoElement {
 }
 
 /// The facts of the node's meta line, in order: time, "you approve", who approved, cost and
-/// tokens. The tooltip lists the same parts.
+/// tokens.
 fn fact_parts(input: &CardInput) -> Vec<String> {
     let entry = &input.entry;
     let finished = matches!(entry.status, StageStatus::Done | StageStatus::Skipped);

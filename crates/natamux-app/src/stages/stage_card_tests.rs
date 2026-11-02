@@ -10,7 +10,7 @@ use ui::prelude::*;
 
 use super::CardInput;
 use super::chips::pass_row;
-use super::node::{chip_word, details, node, tooltip_text};
+use super::node::{chip_word, details, node};
 use crate::app::test_views;
 use crate::stages::card_rules::{CardButton, CardChip, CardFacts};
 use crate::stages::flow_rules::{CaretAt, INSET, NodeLinks};
@@ -165,19 +165,22 @@ pub(super) fn input(status: StageStatus, buttons: Vec<CardButton>) -> CardInput 
 }
 
 #[test]
-fn the_meta_line_and_the_tooltip_say_the_same_facts() {
+fn the_meta_line_says_the_state_word() {
     assert_eq!(chip_word(CardChip::Done), None);
     assert_eq!(chip_word(CardChip::WillBeSkipped), Some("Will be skipped"));
     assert_eq!(
         chip_word(CardChip::State(TaskState::Review)),
         Some("In review")
     );
-    let facts = ["2m".to_owned(), "$0.61 est.".to_owned()];
-    assert_eq!(
-        tooltip_text("Plan", Some("Running"), &facts),
-        "Plan\nRunning\n2m\n$0.61 est."
-    );
-    assert_eq!(tooltip_text("Plan", None, &[]), "Plan");
+}
+
+#[test]
+fn a_node_has_no_tooltip() {
+    // The node's tooltip covered the nodes and lines around it; the details card has the facts
+    // (T-0264).
+    let source = include_str!("flow_node.rs");
+    assert!(!source.contains(".tooltip("));
+    assert!(!source.contains("Tooltip"));
 }
 
 pub(super) fn noop() -> OnCommand {
