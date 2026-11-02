@@ -158,7 +158,7 @@ const ProgressRow = memo(function ProgressRow({
         <button
           type="button"
           onClick={() => onOpenTask(task.id)}
-          className="focus-inset truncate text-left font-medium text-ink hover:underline"
+          className="focus-inset truncate text-left font-normal text-ink hover:underline"
         >
           {task.title}
         </button>

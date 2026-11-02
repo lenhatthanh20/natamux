@@ -5519,7 +5519,7 @@ dependencies = [
 
 [[package]]
 name = "natamux-agents"
-version = "1.0.15"
+version = "1.0.16"
 dependencies = [
  "natamux-core",
  "natamux-proto",
@@ -5528,7 +5528,7 @@ dependencies = [
 
 [[package]]
 name = "natamux-app"
-version = "1.0.15"
+version = "1.0.16"
 dependencies = [
  "anyhow",
  "assets",
@@ -5566,7 +5566,7 @@ dependencies = [
 
 [[package]]
 name = "natamux-cli"
-version = "1.0.15"
+version = "1.0.16"
 dependencies = [
  "base64",
  "natamux-client",
@@ -5578,7 +5578,7 @@ dependencies = [
 
 [[package]]
 name = "natamux-client"
-version = "1.0.15"
+version = "1.0.16"
 dependencies = [
  "async-tungstenite",
  "fastrand",
@@ -5594,7 +5594,7 @@ dependencies = [
 
 [[package]]
 name = "natamux-contract"
-version = "1.0.15"
+version = "1.0.16"
 dependencies = [
  "async-tungstenite",
  "futures",
@@ -5609,7 +5609,7 @@ dependencies = [
 
 [[package]]
 name = "natamux-core"
-version = "1.0.15"
+version = "1.0.16"
 dependencies = [
  "natamux-proto",
  "serde",
@@ -5619,7 +5619,7 @@ dependencies = [
 
 [[package]]
 name = "natamux-daemon"
-version = "1.0.15"
+version = "1.0.16"
 dependencies = [
  "async-tungstenite",
  "base64",
@@ -5645,7 +5645,7 @@ dependencies = [
 
 [[package]]
 name = "natamux-git"
-version = "1.0.15"
+version = "1.0.16"
 dependencies = [
  "natamux-core",
  "natamux-proto",
@@ -5654,7 +5654,7 @@ dependencies = [
 
 [[package]]
 name = "natamux-proto"
-version = "1.0.15"
+version = "1.0.16"
 dependencies = [
  "serde",
  "serde_json",
@@ -5662,7 +5662,7 @@ dependencies = [
 
 [[package]]
 name = "natamux-pty"
-version = "1.0.15"
+version = "1.0.16"
 dependencies = [
  "alacritty_terminal",
  "nix",
@@ -5670,7 +5670,7 @@ dependencies = [
 
 [[package]]
 name = "natamux-screen"
-version = "1.0.15"
+version = "1.0.16"
 dependencies = [
  "alacritty_terminal",
  "memchr",
@@ -5679,7 +5679,7 @@ dependencies = [
 
 [[package]]
 name = "natamux-stages"
-version = "1.0.15"
+version = "1.0.16"
 dependencies = [
  "natamux-agents",
  "natamux-core",
@@ -5691,7 +5691,7 @@ dependencies = [
 
 [[package]]
 name = "natamux-store"
-version = "1.0.15"
+version = "1.0.16"
 dependencies = [
  "natamux-core",
  "natamux-proto",
@@ -5703,7 +5703,7 @@ dependencies = [
 
 [[package]]
 name = "natamux-update"
-version = "1.0.15"
+version = "1.0.16"
 dependencies = [
  "base64",
  "ring",
@@ -7190,9 +7190,9 @@ dependencies = [
 
 [[package]]
 name = "pulldown-cmark"
-version = "0.13.5"
+version = "0.13.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "278e9268c93b9e498a2da46c34d90ba93a3255eb99009646398f34bc73ab36eb"
+checksum = "3db2be46835f013dd3f4fa7f5f7402c537787b54ebb6fe2b94bbdd7e2669bb7b"
 dependencies = [
  "bitflags 2.13.1",
  "memchr",

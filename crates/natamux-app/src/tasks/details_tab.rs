@@ -112,7 +112,7 @@ impl DetailsPanel {
             .child(
                 Label::new(task.title.clone())
                     .size(LabelSize::Large)
-                    .weight(FontWeight::SEMIBOLD),
+                    .weight(FontWeight::NORMAL),
             )
             .child(chips)
             .when(is_quiet(task, now), |this| {

@@ -102,7 +102,7 @@ export function WorkspaceHeader({
       <span className="shrink-0 font-mono text-xs text-muted">{task.id}</span>
       <h2
         data-tip-overflow
-        className={`min-w-0 text-lg font-semibold tracking-tight ${phone ? 'line-clamp-2' : 'truncate'}`}
+        className={`min-w-0 text-lg font-normal tracking-tight ${phone ? 'line-clamp-2' : 'truncate'}`}
       >
         {task.title}
       </h2>
