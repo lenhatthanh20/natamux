@@ -341,6 +341,8 @@ Only part 4 scrolls (fixes NAV-16).
 
 **Status bar** (`features/app/StatusBar.tsx`), 28px, `bg-shell`, top border `--line`, items 24px (see 4.27).
 
+In the native app, the title bar and status bar use the same height: at least 34px for the macOS window controls, growing with the UI font size. The web dashboard keeps the heights above.
+
 **Panes** (terminal grid, agents grid): gap 8, outer padding 8, pane radius 8, 1px `--line-strong`, header 32, min pane 320 x 200. Grid uses `repeat(auto-fill, minmax(320px, 1fr))` unless the user picked a layout.
 
 **Fixed heights**: title bar 36, view header 44, workspace header 44, tab row 36, section header 28, pane header 32, status bar 28, control 28 (dialog 32), list row 28, workspace row 44 (+16 for activity), table row 40.
