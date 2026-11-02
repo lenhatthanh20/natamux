@@ -74,16 +74,13 @@ impl Ctx<'_> {
     }
 
     /// One step with the connector under it; the elements of a column are one per step.
-    /// `in_path`: a step of a branch's path, whose details card goes under the whole branch.
-    fn flow_step(&self, step: &Step, around: Around, in_path: bool, cx: &App) -> AnyElement {
+    fn flow_step(&self, step: &Step, around: Around, cx: &App) -> AnyElement {
         let own = self.edge(step);
         match step {
             Step::Stage(stage) => {
                 let out = around.out_style(own);
                 // The selected node's card sits right under it; the line goes on from the card.
-                let details = (!in_path)
-                    .then(|| self.details_of([stage], CaretAt::Middle, cx))
-                    .flatten();
+                let details = self.details_of([stage], CaretAt::Middle, cx);
                 let open = details.is_some();
                 let links = NodeLinks {
                     into: around.in_style(own),
@@ -106,7 +103,7 @@ impl Ctx<'_> {
 
     /// The steps top to bottom, joined by connectors. The first has no port above and the last
     /// none below.
-    pub(super) fn column(&self, steps: &[Step], in_path: bool, cx: &App) -> Vec<AnyElement> {
+    pub(super) fn column(&self, steps: &[Step], cx: &App) -> Vec<AnyElement> {
         let edges: Vec<Edge> = steps.iter().map(|step| self.edge(step)).collect();
         steps
             .iter()
@@ -119,7 +116,7 @@ impl Ctx<'_> {
                         .map(|edge| edge.status),
                     next: edges.get(index + 1).copied(),
                 };
-                self.flow_step(step, around, in_path, cx)
+                self.flow_step(step, around, cx)
             })
             .collect()
     }
