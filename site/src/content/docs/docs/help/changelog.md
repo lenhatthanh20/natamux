@@ -13,6 +13,7 @@ All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/r
 
 ## v1.0.15 (2026-11-02)
 
+- **Start a task** can use **Task flow → One agent**. The task has Context and Agent only, and the agent opens without a prompt. See [One agent for a task](/docs/concepts/stages/#one-agent-for-a-task).
 - Fix: the first Context node in **Progress** sat close to the summary strip. It now has more space above it.
 - Fix: a stage in an **If** branch opened its details below the whole branch. Its details now open directly below the stage node.
 - Fix: the line through a skipped Progress node's name ran past the words. It now covers only the words.

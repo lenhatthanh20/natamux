@@ -321,6 +321,20 @@ async fn refuses_a_new_workspace_for_an_agent_the_daemon_cannot_start() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn one_agent_mode_requires_a_known_agent_and_refuses_other_modes() {
+    let d = git_daemon("new-ws-one-agent-validation").await;
+    for body in [
+        json!({"title": "Example", "mode": "single-agent"}),
+        json!({"title": "Example", "mode": "single-agent", "agent": "foo"}),
+        json!({"title": "Example", "mode": "other", "agent": "claude-code"}),
+    ] {
+        let (status, _) = new_workspace(&d, &body).await;
+        assert_eq!(status, 400);
+    }
+    assert_eq!(task_count(&d).await, 0);
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn takes_a_workspace_title_of_up_to_400_characters_and_names_the_field() {
     let d = git_daemon("new-ws-title").await;
 

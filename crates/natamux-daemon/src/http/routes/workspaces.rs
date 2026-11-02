@@ -307,6 +307,15 @@ fn new_workspace_fields(body: Option<&Value>, issues: &mut Issues) -> Option<New
     let agent = map
         .get("agent")
         .and_then(|agent| one_of(Some(agent), &[json!("agent")], &known, issues));
+    let mode = map
+        .get("mode")
+        .and_then(|mode| one_of(Some(mode), &[json!("mode")], &["single-agent"], issues));
+    if mode.as_deref() == Some("single-agent") && agent.is_none() {
+        issues.push(Issue::custom(
+            &[json!("agent")],
+            "Choose an agent for this task flow",
+        ));
+    }
     let prompt = map.get("prompt").and_then(|prompt| {
         string(
             Some(prompt),
@@ -328,6 +337,7 @@ fn new_workspace_fields(body: Option<&Value>, issues: &mut Issues) -> Option<New
             base,
             branch,
             agent,
+            mode,
             prompt,
             context,
             attachments: Vec::new(),

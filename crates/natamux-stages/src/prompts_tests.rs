@@ -20,6 +20,12 @@ fn task() -> Task {
     task_of(json!({}))
 }
 
+#[test]
+fn leaves_the_one_agent_stage_without_any_prompt() {
+    let stage = default_stage("agent");
+    assert_eq!(stage_prompt(&stage, &task(), false), "");
+}
+
 fn default_stage(id: &str) -> Stage {
     default_pipeline()
         .iter()

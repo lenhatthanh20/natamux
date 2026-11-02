@@ -13,7 +13,7 @@ pub(crate) struct Text {
     pub needs_command: bool,
 }
 
-pub(crate) const TEXTS: [Text; 28] = [
+pub(crate) const TEXTS: [Text; 29] = [
     Text {
         #[cfg(test)]
         id: "context",
@@ -135,6 +135,14 @@ pub(crate) const TEXTS: [Text; 28] = [
             "Read {dir}/spec.md and {dir}/plan.md when they are there.\n",
             "Write the tests first, then the code that makes them pass. {commit}",
         )),
+        needs_command: false,
+    },
+    Text {
+        #[cfg(test)]
+        id: "agent",
+        phase: StagePhase::Build,
+        description: "Opens one agent without a prompt after the task context is ready.",
+        prompt: Some(""),
         needs_command: false,
     },
     Text {
