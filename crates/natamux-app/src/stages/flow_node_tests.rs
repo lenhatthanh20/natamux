@@ -212,8 +212,8 @@ fn a_struck_name_strikes_only_its_words(cx: &mut TestAppContext) {
             let cx = drawn(flow, cx);
             let [tile, struck] = ["node-tile", "node-name"].map(|s| bounds(cx, s));
             if name == SHORT {
-                let [text, reference] = ["node-name-text", "small-name-reference"]
-                    .map(|s| bounds(cx, s));
+                let [text, reference] =
+                    ["node-name-text", "small-name-reference"].map(|s| bounds(cx, s));
                 assert!(
                     near(text.size.width, reference.size.width)
                         && near(text.size.height, reference.size.height),
