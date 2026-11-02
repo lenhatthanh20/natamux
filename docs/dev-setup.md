@@ -31,7 +31,7 @@ pnpm --filter @natamux/core --filter @natamux/web typecheck
 pnpm --filter @natamux/core --filter @natamux/web test
 ```
 
-`.github/workflows/rust.yml` checks Rust, operating systems, the release image and E2E. `.github/workflows/ci.yml` checks web and core. Both use changed files on pull requests and pushes to `main`; an unknown diff or `[ci: all]` runs all applicable checks. The required `rust-ok` and `web-core` checks still report a result when their work is skipped. A new release note on `main` builds the Intel macOS app to warm its release cache. `.github/workflows/release.yml` builds six native release assets, and runs a dry run on pull requests that change packaging and on release pull requests. Rust pull requests target `main`. Only a push to `main` saves Cargo caches.
+`.github/workflows/rust.yml` checks Rust, operating systems, the release image and E2E. `.github/workflows/ci.yml` checks web and core. Both use changed files on pull requests and pushes to `main`; an unknown diff or `[ci: all]` runs all applicable checks. Changes to the Rust workflow or CI classifier run focused checks on a pull request and full checks on `main`. The required `rust-ok` and `web-core` checks still report a result when their work is skipped. A new release note on `main` builds the Intel macOS app to warm its release cache. `.github/workflows/release.yml` builds six native release assets on a `v*` tag or in a manual run from `main`. It does not run on pull requests. Rust pull requests target `main`. Only a push to `main` saves Cargo caches.
 
 Every action in `.github/workflows/` is pinned to a full commit SHA. When adding an action, pin it the same way.
 
