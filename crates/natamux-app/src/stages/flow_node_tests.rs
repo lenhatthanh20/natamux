@@ -122,12 +122,13 @@ fn the_tile_and_the_name_sit_on_the_middle_line(cx: &mut TestAppContext) {
 #[gpui::test]
 fn the_name_sits_close_under_the_tile(cx: &mut TestAppContext) {
     // The name sat 12 px under the tile, too far to read as part of the node (T-0265). It still
-    // clears the running ring and the agent badge, both `RUN_RING_OUT` below the tile.
+    // clears the running ring and the agent badge, both `RUN_RING_OUT` below the tile. The name's
+    // box holds the gap, so the gap is measured to its text.
     test_views::init(cx);
     for status in [StageStatus::Done, StageStatus::Current] {
         let cx = drawn(alone(status, SHORT, LINKS), cx);
-        let [tile, label] = ["node-tile", "node-name"].map(|s| bounds(cx, s));
-        let gap = label.top() - tile.bottom();
+        let [tile, text] = ["node-tile", "node-name-text"].map(|s| bounds(cx, s));
+        let gap = text.top() - tile.bottom();
         assert!(
             near(gap, px(RUN_RING_OUT + NAME_GAP)),
             "{status:?}: {gap:?}"
