@@ -1,4 +1,4 @@
-//! The group row of the Progress tab: "SIDE BY SIDE" on the line, then its stages side by side
+//! The group row of the Progress tab: "side by side" on the line, then its stages side by side
 //! (two: fork and join curves; three or four: a dashed frame) and the join dot with the note
 //! ("Review waits for both"). The branch is in `progress_branch.rs`.
 
@@ -149,7 +149,7 @@ impl Ctx<'_> {
     }
 }
 
-/// "SIDE BY SIDE" on the line, as the owner's picture draws it; the group's name is its tooltip.
+/// "side by side" on the line, as the owner's picture draws it; the group's name is its tooltip.
 fn side_label(id: &str, name: &str) -> impl IntoElement {
     h_flex().w_full().justify_center().child(
         div()
@@ -167,4 +167,4 @@ fn side_label(id: &str, name: &str) -> impl IntoElement {
     )
 }
 
-pub(super) const SIDE_BY_SIDE: &str = "SIDE BY SIDE";
+pub(super) const SIDE_BY_SIDE: &str = "side by side";

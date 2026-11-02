@@ -66,7 +66,11 @@ impl Render for Flow {
             Place::Right => row.child(slot()).child(slot().child(drawn)),
         };
         // A block around the row, so the window does not stretch it.
-        div().child(row)
+        div().child(row).child(
+            div()
+                .debug_selector(|| "small-name-reference".into())
+                .child(Label::new(self.name).size(LabelSize::Small)),
+        )
     }
 }
 
@@ -149,10 +153,12 @@ fn a_long_name_wraps_under_the_tile(cx: &mut TestAppContext) {
     for name in [PICTURE, LONG] {
         let cx = drawn(alone(StageStatus::Done, name, NodeLinks::default()), cx);
         let [row, tile, long] = ["flow-row", "node-tile", "node-name"].map(|s| bounds(cx, s));
-        assert!(
-            long.size.height > short.size.height * 1.5,
-            "{name}: {long:?}"
-        );
+        if name == LONG {
+            assert!(
+                long.size.height > short.size.height * 1.5,
+                "{name}: {long:?}"
+            );
+        }
         assert!(
             long.size.width <= px(NAME_MAX) + px(0.5),
             "{name}: {long:?}"
@@ -164,6 +170,18 @@ fn a_long_name_wraps_under_the_tile(cx: &mut TestAppContext) {
         assert!(long.left() >= row.left() && long.right() <= row.right());
         assert!(near(centre_x(long), centre_x(tile)), "{name}: {long:?}");
     }
+}
+
+#[gpui::test]
+fn a_regular_name_has_the_small_label_size(cx: &mut TestAppContext) {
+    test_views::init(cx);
+    let cx = drawn(alone(StageStatus::Done, SHORT, NodeLinks::default()), cx);
+    let [name, reference] = ["node-name-text", "small-name-reference"].map(|s| bounds(cx, s));
+    assert!(
+        near(name.size.width, reference.size.width)
+            && near(name.size.height, reference.size.height),
+        "{name:?} {reference:?}"
+    );
 }
 
 #[gpui::test]
@@ -193,6 +211,15 @@ fn a_struck_name_strikes_only_its_words(cx: &mut TestAppContext) {
         for flow in [skipped, marked] {
             let cx = drawn(flow, cx);
             let [tile, struck] = ["node-tile", "node-name"].map(|s| bounds(cx, s));
+            if name == SHORT {
+                let [text, reference] = ["node-name-text", "small-name-reference"]
+                    .map(|s| bounds(cx, s));
+                assert!(
+                    near(text.size.width, reference.size.width)
+                        && near(text.size.height, reference.size.height),
+                    "{text:?} {reference:?}"
+                );
+            }
             // Same rows, same box: the lines take no room.
             assert!(
                 near(struck.size.height, plain.size.height),
