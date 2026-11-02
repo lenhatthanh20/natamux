@@ -38,8 +38,8 @@ const TILE_RADIUS: f32 = 10.;
 const BADGE: f32 = 18.;
 const BADGE_OUT: f32 = 6.;
 const NODE_RADIUS: f32 = 9.;
-/// The gap between the tile and the name under it.
-const NAME_GAP: f32 = 6.;
+/// The gap between the tile and the name under it, past the running ring and the agent badge.
+pub(super) const NAME_GAP: f32 = 2.;
 /// A long name wraps at this width, so it stays under the tile instead of spanning the panel.
 pub(super) const NAME_MAX: f32 = 144.;
 /// The selection ring is 2 px wide, outside the node.
@@ -281,19 +281,18 @@ fn paint_strikes(layout: &TextLayout, color: Hsla, window: &mut Window) {
 /// The name of a bare node, centred under its tile. Wider than `NAME_MAX`, it wraps, so a name
 /// that fits the panel still stays under the tile. The line out starts right under it.
 fn name_row(input: &CardInput, tone: NodeTone, lift: f32, cx: &App) -> Div {
+    let text = if tone.struck() {
+        struck_name(input, tone, cx).into_any_element()
+    } else {
+        name_label(input, tone).text_center().into_any_element()
+    };
     div()
         .debug_selector(|| "node-name".into())
         .min_w_0()
         .max_w(rems_from_px(NAME_MAX))
         .pt(rems_from_px(NAME_GAP + lift))
         .text_center()
-        .map(|row| {
-            if tone.struck() {
-                row.child(struck_name(input, tone, cx))
-            } else {
-                row.child(name_label(input, tone).text_center())
-            }
-        })
+        .child(div().debug_selector(|| "node-name-text".into()).child(text))
 }
 
 /// The line into the tile, `STUB` and `lift` high; the first step gets an empty spacer as high.

@@ -7,7 +7,7 @@ use natamux_proto::stages::progress::StageStatus;
 use natamux_proto::tasks::task::TaskState;
 use ui::prelude::*;
 
-use super::node::{NAME_MAX, node};
+use super::node::{NAME_GAP, NAME_MAX, node};
 use super::tests::{input, noop};
 use crate::app::test_views;
 use crate::stages::card_rules::CardChip;
@@ -116,6 +116,24 @@ fn the_tile_and_the_name_sit_on_the_middle_line(cx: &mut TestAppContext) {
             // The name is under the tile; its box holds the gap above the text.
             assert!(label.top() >= tile.bottom() - px(0.5), "{name}: {label:?}");
         }
+    }
+}
+
+#[gpui::test]
+fn the_name_sits_close_under_the_tile(cx: &mut TestAppContext) {
+    // The name sat 12 px under the tile, too far to read as part of the node (T-0265). It still
+    // clears the running ring and the agent badge, both `RUN_RING_OUT` below the tile. The name's
+    // box holds the gap, so the gap is measured to its text.
+    test_views::init(cx);
+    for status in [StageStatus::Done, StageStatus::Current] {
+        let cx = drawn(alone(status, SHORT, LINKS), cx);
+        let [tile, text] = ["node-tile", "node-name-text"].map(|s| bounds(cx, s));
+        let gap = text.top() - tile.bottom();
+        assert!(
+            near(gap, px(RUN_RING_OUT + NAME_GAP)),
+            "{status:?}: {gap:?}"
+        );
+        assert!(gap < px(12.) - px(0.5), "{status:?}: {gap:?}");
     }
 }
 
