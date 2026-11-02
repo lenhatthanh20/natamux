@@ -11,7 +11,6 @@ All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/r
 
 - Fix: the line through a skipped Progress node's name ran past the words. It now covers only the words.
 - Fix: hovering a Progress node showed a tooltip that covered the stages around it. A node has no tooltip now; click it to see its state, time, cost and agent.
-- Fix: the name under a Progress node sat too far below its tile. It now sits closer.
 
 ## v1.0.14 (2026-11-01)
 
