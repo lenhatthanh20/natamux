@@ -69,10 +69,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { name: mac-arm64, os: macos-26 }
-          - { name: mac-x64, os: macos-26-intel, cache: rust-app-mac-intel }
-          - { name: linux-x64, os: ubuntu-latest }
-          - { name: win-x64, os: windows-latest }
+          - { name: mac-arm64, os: macos-26, py: python3 }
+          - { name: mac-x64, os: macos-26-intel, cache: rust-app-mac-intel, py: python3 }
+          - { name: linux-x64, os: ubuntu-latest, py: python3 }
+          - { name: win-x64, os: windows-latest, py: python }
     runs-on: ${{ matrix.os }}
     timeout-minutes: 120
     permissions:
@@ -99,14 +99,19 @@ jobs:
           version=$(sed -n 's/^version = "\([^"]*\)"$/\1/p' crates/natamux-app/Cargo.toml | head -n 1)
           test "$version" = "${TAG#v}"
       - run: rustup toolchain install
-      # Each arch has its own cache prefix: Intel reads what app-macos-intel saves on main.
+      # Intel and Windows reuse compiled output from main on the same runner type. Other release
+      # runners keep only downloads because their SDK or build profile differs from main.
       - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
+            ${{ (matrix.name == 'mac-x64' || matrix.name == 'win-x64') && 'target' || '' }}
           key: ${{ matrix.cache || format('rust-app-{0}', runner.os) }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-${{ github.sha }}
-          restore-keys: ${{ matrix.cache || format('rust-app-{0}', runner.os) }}-
+          restore-keys: ${{ matrix.cache || format('rust-app-{0}', runner.os) }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-
+      - name: Restore file times for cached Rust builds
+        if: matrix.name == 'mac-x64' || matrix.name == 'win-x64'
+        run: ${{ matrix.py }} scripts/ci-changes.py mtimes
       # The apt packages come from this cache: a run downloads only what it has not seen.
       - name: Make the apt cache writable
         if: runner.os == 'Linux'

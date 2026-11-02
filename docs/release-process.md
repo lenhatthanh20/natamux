@@ -16,6 +16,7 @@ It does steps 2 to 5: it asks before it makes and pushes the signed tag, waits f
 ## Steps
 
 1. On a branch: set the version in every `crates/*/Cargo.toml`, `Cargo.lock`, `packages/{core,web}/package.json`, the macOS app bundle, and the homepage. Write `docs/releases/vX.Y.Z.md` and the changelog section (the docs skill says how). `scripts/release.test.sh` and a Release dry run with `publish=false` must pass in CI. Merge to `main`.
+   The `main` push with the new release note warms the Intel macOS build cache. The Release workflow reuses compiled output from that cache and the Windows cache when available. A cache miss builds from scratch; the release build still embeds its own web output and runs every platform check.
 2. Tag the merge commit with a tag signed by your SSH key (see [The tag key](#the-tag-key)) and push it:
 
    ```sh
