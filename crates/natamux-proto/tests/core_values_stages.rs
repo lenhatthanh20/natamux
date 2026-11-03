@@ -85,9 +85,13 @@ fn written_catalog() -> Vec<Written> {
             let id = quoted(&block[block.find("id: ").unwrap() + 4..]).0;
             let description = block.find("description:").unwrap() + "description:".len();
             let description = quoted(&block[description..]).0;
-            let prompt = block.find("prompt: prompt(").map(|at| {
-                prompt_lines(&block[at + "prompt: prompt(".len()..], &read_only).join("\n")
-            });
+            let prompt = if let Some(at) = block.find("prompt: prompt(") {
+                Some(prompt_lines(&block[at + "prompt: prompt(".len()..], &read_only).join("\n"))
+            } else {
+                block
+                    .find("    prompt: '")
+                    .map(|at| quoted(&block[at + "    prompt: ".len()..]).0)
+            };
             let needs_command = block.contains("needsCommand: true");
             Written {
                 id,

@@ -2,6 +2,7 @@
 //! its start writes, workspace trust, and the skills an agent finds (`agent-skills.ts`). Part 4
 //! adds the adapters that read the hooks, and usage.
 
+pub mod custom;
 pub mod git_files;
 pub mod hook_files;
 pub mod hooks;

@@ -4,7 +4,7 @@ How a version gets from `main` to users. The desktop app installs an update only
 
 ## One command
 
-Once per Mac, run `scripts/setup-release-signing.sh` (see [The tag key](#the-tag-key)). Then, after the release pull request (step 1) is merged:
+Once per Mac, run `scripts/setup-release-signing.sh` (see [The tag key](#the-tag-key)). Then, after the release pull request is merged and the `main` dry run in step 1 passes:
 
 ```sh
 git fetch --no-tags origin main && git switch --detach origin/main
@@ -15,7 +15,8 @@ It does steps 2 to 5: it asks before it makes and pushes the signed tag, waits f
 
 ## Steps
 
-1. On a branch: set the version in every `crates/*/Cargo.toml`, `Cargo.lock`, `packages/{core,web}/package.json`, the macOS app bundle, and the homepage. Write `docs/releases/vX.Y.Z.md` and the changelog section (the docs skill says how). `scripts/release.test.sh` and a Release dry run with `publish=false` must pass in CI. Merge to `main`.
+1. On a branch: set the version in every `crates/*/Cargo.toml`, `Cargo.lock`, `packages/{core,web}/package.json`, the macOS app bundle, and the homepage. Write `docs/releases/vX.Y.Z.md` and the changelog section (the docs skill says how). `scripts/release.test.sh` and the required Rust and web checks must pass on the pull request. Merge to `main`.
+   The `main` push with the new release note warms the Intel macOS build cache. Run `gh workflow run release.yml --ref main -f tag=main -f publish=false`, then wait for that Release run to pass before tagging. The workflow reuses compiled output from the Intel and Windows caches when available. A cache miss builds from scratch; the release build still embeds its own web output and runs every platform check.
 2. Tag the merge commit with a tag signed by your SSH key (see [The tag key](#the-tag-key)) and push it:
 
    ```sh
@@ -62,7 +63,7 @@ Do not re-run the Release workflow once signing has started. A re-run replaces t
 Release runs sign `Natamux.app` with a fixed self-signed certificate (`scripts/sign-mac-app.sh`). macOS ties Full Disk Access and other privacy grants to the app's designated requirement. An ad hoc signature names the hash of one build, so every update lost the grants; with the certificate the requirement is `identifier "dev.natamux.app" and certificate leaf = H"<SHA-1>"`, which every later release meets. It is not an Apple Developer ID: Gatekeeper still blocks the first open, and the Developer ID will replace it.
 
 - Make it once on the owner's Mac: `scripts/make-mac-sign-cert.sh`. It writes `natamux-codesign.p12` and its password into a new `mktemp -d` folder and prints the next steps: pin the SHA-1 in `mac_sign_sha1` of `scripts/package-rust-desktop.sh`, store the repository secrets `MACOS_SIGN_P12` (base64) and `MACOS_SIGN_P12_PASSWORD`, keep both files in 1Password, then delete the folder.
-- A tag run (or a `publish` run) imports the certificate into a job keychain (`scripts/import-mac-sign-cert.sh`) and fails when a secret is missing or the certificate is not the pinned one. Pull request dry runs sign ad hoc. `scripts/mac-sign.test.sh` checks the scripts with a throwaway certificate on every run.
+- A tag run (or a `publish` run) imports the certificate into a job keychain (`scripts/import-mac-sign-cert.sh`) and fails when a secret is missing or the certificate is not the pinned one. Main dry runs sign ad hoc. `scripts/mac-sign.test.sh` checks the scripts with a throwaway certificate on every run.
 - The certificate is valid for 20 years. A new certificate, also after a leak, means every user grants Full Disk Access once more.
 - Risk: whoever has the `.p12` can sign an app that macOS takes as Natamux and that gets its grants. It still has to reach the user's Mac some other way, and updates still need the minisign signature. Make a new certificate if the secret leaks.
 

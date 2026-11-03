@@ -1,4 +1,4 @@
-use natamux_proto::stages::schema::Gate;
+use natamux_proto::stages::schema::{Gate, Stage};
 
 use super::*;
 
@@ -239,5 +239,43 @@ fn lists_the_failed_runs_with_short_links_when_the_stage_waits_for_you() {
                 shown: "view run".into(),
             },
         ]
+    );
+}
+
+#[test]
+fn a_node_shows_its_own_agent_else_the_tasks_agent_on_a_stage_that_runs_one() {
+    let mut own = Stage::new("review", StageKind::Review, Gate::Auto);
+    own.agent = Some("cursor".into());
+    assert_eq!(
+        node_agent(&own, "claude-code"),
+        Some(("cursor".into(), false))
+    );
+    for kind in [StageKind::Agent, StageKind::Testing] {
+        let stage = Stage::new("implement", kind, Gate::Auto);
+        assert_eq!(
+            node_agent(&stage, "claude-code"),
+            Some(("claude-code".into(), true))
+        );
+    }
+    for kind in [
+        StageKind::Context,
+        StageKind::Review,
+        StageKind::Manual,
+        StageKind::Release,
+    ] {
+        assert_eq!(
+            node_agent(&Stage::new("x", kind, Gate::Auto), "claude-code"),
+            None
+        );
+    }
+}
+
+#[test]
+fn a_click_opens_a_node_and_a_click_on_the_open_node_closes_it() {
+    assert_eq!(pick_after_click(None, "spec").as_deref(), Some("spec"));
+    assert_eq!(pick_after_click(Some("spec"), "spec"), None);
+    assert_eq!(
+        pick_after_click(Some("spec"), "implement").as_deref(),
+        Some("implement")
     );
 }

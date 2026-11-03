@@ -3,9 +3,9 @@
 
 use std::fmt;
 
+use natamux_agents::custom::known_agents;
 use natamux_agents::hooks::known_agent_ids;
 use natamux_core::zod::ZodError;
-use natamux_proto::agents::start::LAUNCHABLE_AGENTS;
 
 use crate::tasks::errors::TaskError;
 use crate::terminals::types::TerminalError;
@@ -29,7 +29,7 @@ impl fmt::Display for AgentError {
             AgentError::Unknown(agent) => write!(
                 f,
                 "Unknown agent \"{agent}\". Known agents: {}",
-                LAUNCHABLE_AGENTS.join(", ")
+                known_agents().join(", ")
             ),
             AgentError::Waiting { task_id, waiting } => {
                 write!(f, "{task_id} waits for {} to be done", waiting.join(", "))

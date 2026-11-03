@@ -1,34 +1,28 @@
-//! The group and branch rows of the Progress tab: a group's name and note with its cards side by
-//! side, and a branch with one lane per path (`BranchLane.tsx`); a path not taken folds to one row.
+//! The group row of the Progress tab: "side by side" on the line, then its stages side by side
+//! (two: fork and join curves; three or four: a dashed frame) and the join dot with the note
+//! ("Review waits for both"). The branch is in `progress_branch.rs`.
 
 use gpui::{AnyElement, FontWeight};
-use natamux_proto::stages::position::describe_condition;
 use natamux_proto::stages::progress::StageStatus;
-use natamux_proto::stages::schema::{BranchPath, StageBranch, StageGroup, Step};
-use natamux_proto::tasks::task::TaskState;
-use ui::prelude::*;
+use natamux_proto::stages::schema::{Stage, StageGroup, Step};
+use ui::{Tooltip, prelude::*};
 
-use super::{Ctx, heading};
-use crate::stages::stage_card::text_chip;
-use crate::stages::stage_view_rules::{branch_status, path_label, taken_path};
-use crate::tasks::details_commands::PanelCommand;
+use super::Ctx;
+use super::flow::{Around, Edge, ported};
+use crate::stages::flow_lines::{FlowLink, JoinDot, PairCurves};
+use crate::stages::flow_rules::{
+    CaretAt, GroupLayout, LinkStyle, NodeLinks, PAIR_GAP, group_layout, join_style, link_style,
+};
 
 impl Ctx<'_> {
-    pub(super) fn group(&self, group: &StageGroup, cx: &App) -> AnyElement {
-        let name = group.name.clone().unwrap_or_else(|| {
-            group
-                .parallel
-                .iter()
-                .map(|stage| stage.id.as_str())
-                .collect::<Vec<_>>()
-                .join(" and ")
-        });
+    /// What the join dot says: which step starts when the group is finished.
+    fn group_note(&self, group: &StageGroup) -> String {
         let steps = &self.input.steps;
         let index = steps
             .iter()
             .position(|step| step.id() == group.id)
             .unwrap_or(0);
-        let note = match steps.get(index + 1) {
+        match steps.get(index + 1) {
             None => "The task is done when both are finished".to_owned(),
             Some(Step::Branch(_)) => "A path is chosen when both are finished".to_owned(),
             Some(next) => {
@@ -41,177 +35,136 @@ impl Ctx<'_> {
                     .by_id
                     .get(first.as_str())
                     .map_or(first.clone(), |entry| entry.name.clone());
-                format!("{name} starts when both are finished")
+                format!("{name} waits for both")
             }
+        }
+    }
+
+    pub(super) fn group(
+        &self,
+        group: &StageGroup,
+        own: Edge,
+        around: Around,
+        cx: &App,
+    ) -> AnyElement {
+        let name = group.name.clone().unwrap_or_else(|| {
+            group
+                .parallel
+                .iter()
+                .map(|stage| stage.id.as_str())
+                .collect::<Vec<_>>()
+                .join(" and ")
+        });
+        let prev = around.prev.unwrap_or(StageStatus::Upcoming);
+        let into = link_style(prev, own.status, own.state);
+        let body = match (
+            group_layout(group.parallel.len()),
+            group.parallel.as_slice(),
+        ) {
+            (GroupLayout::Pair, [first, second]) => self.pair(first, second, prev, cx),
+            _ => self.stack(group, own, into, cx),
+        };
+        let dot = JoinDot::new(join_style(own.status)).note(self.group_note(group));
+        let dot = match around.out_style(own) {
+            Some(below) => dot.below(below),
+            None => dot,
         };
         v_flex()
-            .gap_2()
+            .w_full()
+            .child(side_label(&group.id, &name))
+            .child(body)
+            .child(dot)
+            .into_any_element()
+    }
+
+    /// Two nodes side by side, between the fork and the join curves, each tile in the middle of
+    /// its node with the name under it (T-0259). The selected node's card sits right under the
+    /// pair, its caret at that node, and the join curves start from the card (mockup A of T-0257).
+    fn pair(&self, first: &Stage, second: &Stage, prev: StageStatus, cx: &App) -> AnyElement {
+        let details = self
+            .details_of([first], CaretAt::Left, cx)
+            .or_else(|| self.details_of([second], CaretAt::Right, cx));
+        let open = details.is_some();
+        let side = |stage: &Stage| {
+            let edge = self.stage_edge(&stage.id);
+            let into = link_style(prev, edge.status, edge.state);
+            let links = NodeLinks {
+                into: Some(into),
+                out: (!open).then(|| join_style(edge.status)),
+            };
+            let card = self
+                .card(&stage.id, links, cx)
+                .unwrap_or_else(|| div().into_any_element());
+            let node = ported(card).flex_1().min_w_0();
+            (edge, into, node)
+        };
+        let (left, left_into, left_node) = side(first);
+        let (right, right_into, right_node) = side(second);
+        let join = PairCurves::join(join_style(left.status), join_style(right.status));
+        v_flex()
+            .w_full()
+            .child(PairCurves::fork(left_into, right_into))
             .child(
-                v_flex()
-                    .child(heading(name))
-                    .child(
-                        Label::new("side by side")
-                            .size(LabelSize::XSmall)
-                            .color(Color::Muted),
-                    )
-                    .child(Label::new(note).size(LabelSize::XSmall).color(Color::Muted)),
+                // Stretched: both nodes take the taller one's height, so the join curves start
+                // at the same bottom line.
+                h_flex()
+                    .w_full()
+                    .items_stretch()
+                    .gap(rems_from_px(PAIR_GAP))
+                    .child(left_node)
+                    .child(right_node),
             )
+            .children(details)
+            .child(join)
+            .into_any_element()
+    }
+
+    /// Three or four nodes, one under the other, in a dashed frame that carries the ports. The
+    /// selected node's card sits right under the frame.
+    fn stack(&self, group: &StageGroup, own: Edge, into: LinkStyle, cx: &App) -> AnyElement {
+        let out = join_style(own.status);
+        let details = self.details_of(&group.parallel, CaretAt::Middle, cx);
+        let frame = v_flex()
+            .relative()
+            .w_full()
+            .p_1()
+            .gap_1()
+            .rounded_md()
+            .border_1()
+            .border_dashed()
+            .border_color(cx.theme().colors().border)
             .children(
                 group
                     .parallel
                     .iter()
-                    .filter_map(|stage| self.card(&stage.id, cx)),
-            )
-            .into_any_element()
-    }
-
-    pub(super) fn branch(&self, branch: &StageBranch, cx: &App) -> AnyElement {
-        let lookup = |id: &str| self.by_id.get(id).map(|entry| entry.status);
-        let taken = taken_path(branch, &lookup);
-        let reached = branch_status(branch, &lookup) != StageStatus::Upcoming;
-        let name = branch.name.clone().unwrap_or_else(|| {
-            branch
-                .paths
-                .iter()
-                .map(path_label)
-                .collect::<Vec<_>>()
-                .join(" or ")
-        });
-        let because = taken.and_then(|path| {
-            path.stages
-                .first()
-                .and_then(|stage| self.by_id.get(stage.id.as_str()))
-                .and_then(|entry| entry.because.clone())
-        });
-        let line = match (taken, reached) {
-            (Some(path), _) => match because {
-                Some(because) => format!("Took {}: {because}", path_label(path)),
-                None => format!("Took {}", path_label(path)),
-            },
-            (None, true) => "No path was taken".to_owned(),
-            (None, false) => "Picks a path when it gets here".to_owned(),
-        };
-        let lanes = branch.paths.iter().map(|path| {
-            let state = match taken {
-                Some(taken) if taken.id == path.id => Some(true),
-                Some(_) => Some(false),
-                None if reached => Some(false),
-                None => None,
-            };
-            self.lane(branch, path, state, cx)
-        });
-        v_flex()
-            .gap_2()
-            .child(
-                v_flex()
-                    .child(heading(name))
-                    .child(Label::new(line).size(LabelSize::XSmall).color(Color::Muted)),
-            )
-            .children(lanes)
-            .into_any_element()
-    }
-
-    /// One path: folded to one row when not taken, else its header and its cards.
-    fn lane(
-        &self,
-        branch: &StageBranch,
-        path: &BranchPath,
-        taken: Option<bool>,
-        cx: &App,
-    ) -> AnyElement {
-        let key = format!("{}/{}", branch.id, path.id);
-        if taken == Some(false) {
-            return self.not_taken(&key, path, cx);
-        }
-        let colors = cx.theme().colors();
-        let taken = taken == Some(true);
-        let title_color = if taken { Color::Default } else { Color::Muted };
-        v_flex()
-            .gap_2()
-            .pl_2()
-            .border_l_2()
-            .border_color(if taken {
-                colors.border_focused
-            } else {
-                colors.border_variant
-            })
-            .child(
-                h_flex()
-                    .gap_2()
-                    .child(caps(path_label(path), title_color))
-                    .child(small(describe_condition(path)))
-                    .when(taken, |this| this.child(small("Taken".into()))),
-            )
-            .children(
-                path.stages
-                    .iter()
-                    .filter_map(|stage| self.card(&stage.id, cx)),
-            )
-            .into_any_element()
-    }
-
-    /// A path the task did not take: one row that opens to its Not taken stages.
-    fn not_taken(&self, key: &str, path: &BranchPath, cx: &App) -> AnyElement {
-        let opened = self.input.open_lanes.contains(key);
-        let on = self.on.clone();
-        let count = path.stages.len();
-        let stages = if count == 1 {
-            "1 stage".to_owned()
-        } else {
-            format!("{count} stages")
-        };
-        let fold = PanelCommand::FoldLane(key.to_owned());
-        let chevron = if opened {
-            IconName::ChevronDown
-        } else {
-            IconName::ChevronRight
-        };
-        let row = v_flex()
-            .id(SharedString::from(format!("lane-{key}")))
-            .rounded_sm()
-            .cursor_pointer()
-            .hover(|style| style.bg(cx.theme().colors().ghost_element_hover))
-            .on_click(move |_, window, cx| on(fold.clone(), window, cx))
-            .child(
-                h_flex()
-                    .gap_1()
-                    .child(
-                        Icon::new(chevron)
-                            .size(IconSize::XSmall)
-                            .color(Color::Muted),
-                    )
-                    .child(caps(path_label(path), Color::Muted)),
-            )
-            .child(small(describe_condition(path)))
-            .child(
-                h_flex()
-                    .gap_2()
-                    .child(text_chip("Not taken", TaskState::Draft, cx))
-                    .child(small(stages)),
+                    .filter_map(|stage| self.card(&stage.id, NodeLinks::default(), cx)),
             );
         v_flex()
-            .pl_2()
-            .border_l_1()
-            .border_color(cx.theme().colors().border_variant)
-            .child(row)
-            .when(opened, |this| {
-                this.children(
-                    path.stages
-                        .iter()
-                        .filter_map(|stage| self.card(&stage.id, cx)),
-                )
-            })
+            .w_full()
+            .child(FlowLink::new(into))
+            .child(frame)
+            .children(details)
+            .child(FlowLink::new(out))
             .into_any_element()
     }
 }
 
-fn caps(name: &str, color: Color) -> Label {
-    Label::new(name.to_uppercase())
-        .size(LabelSize::XSmall)
-        .weight(FontWeight::SEMIBOLD)
-        .color(color)
+/// "side by side" on the line, as the owner's picture draws it; the group's name is its tooltip.
+fn side_label(id: &str, name: &str) -> impl IntoElement {
+    h_flex().w_full().justify_center().child(
+        div()
+            .id(SharedString::from(format!("side-by-side-{id}")))
+            .debug_selector(|| "side-by-side".into())
+            .flex_none()
+            .py_0p5()
+            .tooltip(Tooltip::text(name.to_owned()))
+            .child(
+                Label::new(SIDE_BY_SIDE)
+                    .size(LabelSize::XSmall)
+                    .weight(FontWeight::SEMIBOLD)
+                    .color(Color::Muted),
+            ),
+    )
 }
 
-fn small(text: String) -> Label {
-    Label::new(text).size(LabelSize::XSmall).color(Color::Muted)
-}
+pub(super) const SIDE_BY_SIDE: &str = "side by side";

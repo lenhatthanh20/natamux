@@ -60,7 +60,6 @@ fn lists_pinned_rows_then_each_group_with_its_open_task_shells_and_children() {
         repo_open: &|_| true,
         finished_shown: &|_| false,
         task_open: &|task| task.id == "T-0001",
-        can_fold: &|task| task.id == "T-0001",
         rows_of: &|_| vec![shell("shell:1", "Implement")],
         waiting_children: &|_| Vec::new(),
     };
@@ -90,13 +89,19 @@ fn lists_pinned_rows_then_each_group_with_its_open_task_shells_and_children() {
             Some("repo:a")
         ]
     );
-    // The pinned row is folded: Enter opens it. The open one does not fold.
-    assert_eq!(
-        entries[0].toggle,
-        Some(EntryAction::OpenTask("T-0009".into()))
-    );
-    assert_eq!(entries[2].toggle, None);
-    assert!(entries[2].expandable);
+    // Every card folds: the pinned one is closed, the open one folds.
+    let fold = |id: &str, open: bool| {
+        Some(EntryAction::SetFold {
+            key: format!("task:{id}"),
+            open,
+        })
+    };
+    assert_eq!(entries[0].toggle, fold("T-0009", true));
+    assert_eq!(entries[2].toggle, fold("T-0001", false));
+    assert!(entries[0].expandable && entries[2].expandable);
+    // Children inside the card are plain entries.
+    assert!(!entries[4].expandable);
+    assert_eq!(entries[4].toggle, None);
     assert_eq!(
         entries[1].toggle,
         Some(EntryAction::SetFold {
@@ -119,7 +124,6 @@ fn lists_only_the_waiting_children_under_a_folded_task() {
         repo_open: &|_| true,
         finished_shown: &|_| false,
         task_open: &|_| false,
-        can_fold: &|_| true,
         rows_of: &|_| vec![shell("shell:1", "Implement")],
         waiting_children: &|_| vec![waiting.clone()],
     };
@@ -149,7 +153,6 @@ fn hides_the_tasks_of_a_folded_group_and_lists_finished_ones_only_when_shown() {
             repo_open,
             finished_shown,
             task_open: &|_| true,
-            can_fold: &|_| false,
             rows_of: &|_| Vec::new(),
             waiting_children: &|_| Vec::new(),
         };
@@ -320,4 +323,64 @@ fn an_empty_list_and_other_keys_do_not_move() {
     assert_eq!(move_target("Home", 0, 0, false), None);
     assert_eq!(move_target("End", 0, 0, false), None);
     assert_eq!(move_target("x", 1, 5, true), None);
+}
+
+fn card_entries(open: bool) -> Vec<Entry> {
+    let one = task("T-0001", "One");
+    let groups = [group("a", vec![one], vec![task("T-0002", "Done")])];
+    let children = BTreeMap::from([("T-0001".to_owned(), vec![task("T-0003", "Child")])]);
+    let source = TreeSource {
+        pinned: &[],
+        groups: &groups,
+        children: &children,
+        repo_open: &|_| true,
+        finished_shown: &|_| true,
+        task_open: &|_| open,
+        rows_of: &|_| vec![shell("shell:1", "Implement")],
+        waiting_children: &|_| Vec::new(),
+    };
+    tree_entries(&source)
+}
+
+#[test]
+fn right_unfolds_a_closed_card() {
+    assert_eq!(
+        tree_key("ArrowRight", "task:T-0001", &card_entries(false)),
+        TreeKey::Toggle(EntryAction::SetFold {
+            key: "task:T-0001".into(),
+            open: true
+        })
+    );
+}
+
+#[test]
+fn left_folds_an_open_card() {
+    assert_eq!(
+        tree_key("ArrowLeft", "task:T-0001", &card_entries(true)),
+        TreeKey::Toggle(EntryAction::SetFold {
+            key: "task:T-0001".into(),
+            open: false
+        })
+    );
+}
+
+#[test]
+fn right_on_an_open_card_goes_to_its_first_terminal_row() {
+    assert_eq!(
+        tree_key("ArrowRight", "task:T-0001", &card_entries(true)),
+        TreeKey::Focus("agent:T-0001:shell:1".into())
+    );
+}
+
+#[test]
+fn a_finished_row_is_one_plain_line() {
+    let entries = card_entries(true);
+    let finished = entries.iter().find(|each| each.key == "task:T-0002");
+    let finished = finished.unwrap();
+    assert!(!finished.expandable);
+    assert_eq!(finished.toggle, None);
+    assert_eq!(
+        tree_key("ArrowRight", "task:T-0002", &entries),
+        TreeKey::Ignored
+    );
 }

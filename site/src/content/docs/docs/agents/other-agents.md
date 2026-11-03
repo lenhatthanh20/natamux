@@ -5,7 +5,43 @@ sidebar:
   order: 6
 ---
 
-Natamux has hook support for five agents: Claude Code, Codex, Gemini CLI, GitHub Copilot CLI and Cursor. Any other command line agent still works. Start it in the task's first terminal.
+Natamux has hook support for five agents: Claude Code, Codex, Gemini CLI, GitHub Copilot CLI and Cursor. Any other command line agent still works. Add it as a [custom agent](#custom-agents-a-built-in-agent-with-your-own-command), or start it in the task's first terminal.
+
+## Custom agents (a built-in agent with your own command)
+
+A custom agent is an agent you add once in **Settings → Agents** of the desktop app. It then shows in every agent picker: the **Agent** field of a stage in the project settings, the agent menu of a stage card, and **Start a task**.
+
+| Field | Meaning |
+|---|---|
+| **Id** | The name the pickers, the task and `.natamux.json` use, such as `claude-qwen`. Lower case words joined by `-`, up to 32 characters, not the id of a built-in agent |
+| **Based on** | A built-in agent, or **Other CLI** |
+| **Command** | The program in place of the built-in one, as your shell runs it. It can be a function or alias of your shell, or carry variables and words, such as `ANTHROPIC_MODEL=x claude` |
+
+### Based on a built-in agent
+
+The custom agent works exactly as its base: the same hooks, states, resume after a restart, permission flags, workflows and skills. Only the program differs. For example, with this function in `~/.zshrc`:
+
+```zsh
+cq() {
+  ANTHROPIC_BASE_URL=https://llm.example.com \
+  ANTHROPIC_MODEL=qwen3-27b \
+  claude "$@"
+}
+```
+
+add `claude-qwen`, based on **Claude Code**, with the command `cq`. A stage with the agent `claude-qwen` then starts `cq` where Claude Code starts `claude`. Other stages of the same task can still use Claude Code.
+
+Natamux runs the start line in the task terminal's own shell, so the functions and aliases of your shell start file work. Commit message drafts do not load your shell start file, so they use the base's own program.
+
+To pick a model, put its words in the stage's **Arguments** field, such as `--model x`, as for a built-in agent.
+
+### Other CLI
+
+An agent based on **Other CLI** starts as `<command> <stage arguments> '<prompt>'`: the prompt is the last word. Natamux has no hooks for it, so it sees only what [it sees without hooks](#what-natamux-sees-without-hooks): output, the bell, `natamux ask` and `natamux done`. A stage ends only when the agent or you run `natamux done`. It does not come back after a restart.
+
+### Where the list is kept
+
+The list is in `custom-agents.json` in the data folder, readable only by you. A project's `.natamux.json` names a custom agent by its id but never holds its command, so a cloned repository cannot choose a program to run. A stage that names a custom agent you do not have fails to start with "Unknown agent".
 
 ## What Natamux sees without hooks
 

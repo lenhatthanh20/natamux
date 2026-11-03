@@ -173,7 +173,7 @@ const CardRow = memo(function CardRow({
       >
         <StatusGlyph state={task.state} quiet={quiet} tip={laneSummary(task)} />
         <span className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate font-medium">{task.title}</span>
+          <span className="truncate font-normal">{task.title}</span>
           <span className="flex items-center gap-1.5 text-xs text-muted">
             <span className="font-mono">{task.id}</span>
             <span aria-hidden="true">·</span>
@@ -225,7 +225,7 @@ const TableRow = memo(function TableRow({
               aria-current={selected ? 'true' : undefined}
               data-tip-overflow
               data-tip={task.title}
-              className="min-w-0 truncate text-left font-medium focus-visible:outline-none"
+              className="min-w-0 truncate text-left font-normal focus-visible:outline-none"
             >
               {task.title}
             </button>

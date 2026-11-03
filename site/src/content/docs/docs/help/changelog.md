@@ -7,6 +7,43 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v1.0.18 (2026-11-03)
+
+- The homepage and documentation share navigation, theme controls and a footer. The documentation overview follows the Signal flow layout with numbered guides. Its compact sidebar groups related pages, and a page contents menu replaces the vertical rail.
+- The homepage and documentation use a new layout with clearer task, workflow and getting-started sections.
+- Fix: opening a task card in the desktop sidebar slightly changed its title size and header position. The title, state icon and age now stay steady.
+
+## v1.0.17 (2026-11-03)
+
+- Fix: the desktop app's bottom status bar was thinner than its title bar. Both bars now have the same height.
+- The desktop **Progress** flow uses smaller stage names, slightly larger node icons, and a lowercase `side by side` label.
+
+## v1.0.16 (2026-11-02)
+
+- **Start a task** can use **Task flow → One agent**. The task has Context and Agent only, and the agent opens without a prompt. See [One agent for a task](/docs/concepts/stages/#one-agent-for-a-task).
+- Task titles now use regular weight across the desktop app and web dashboard, including tasks that need attention.
+
+## v1.0.15 (2026-11-02)
+
+- Fix: the first Context node in **Progress** sat close to the summary strip. It now has more space above it.
+- Fix: a stage in an **If** branch opened its details below the whole branch. Its details now open directly below the stage node.
+- Fix: the line through a skipped Progress node's name ran past the words. It now covers only the words.
+- Fix: hovering a Progress node showed a tooltip that covered the stages around it. A node has no tooltip now; click it to see its state, time, cost and agent.
+- Fix: a Progress node's name sat too far from its tile. It now sits closer to the tile.
+- Fix: a stage run by Codex in the auto mode could not report done, because the Codex sandbox blocked the network. Codex can now reach the daemon from its sandbox.
+
+## v1.0.14 (2026-11-01)
+
+- In the desktop app, the docked details panel starts at 280 px, so the panel plus the rail of view icons matches the sidebar. A width you already set stays. See [In the desktop app](/docs/guides/dashboard/#in-the-desktop-app).
+- Fix: the name under a Progress node stayed one long line. It now wraps under the tile.
+
+## v1.0.13 (2026-10-31)
+
+- Add a custom agent in **Settings → Agents**: a built-in agent with your own command, or any other agent CLI. It shows in every agent picker. See [Custom agents](/docs/guides/desktop-app/#custom-agents).
+- The desktop app sidebar shows each task as a card with its state, agents, stage, branch and diff, and the question of a task that waits for you. Click to open or fold a card; right click opens the menu.
+- The **Progress** view shows the stages as a node flow, with an **If** box per branch. The "..." menu on stage nodes is gone; its actions stay on the node. See [Progress](/docs/concepts/stages/#progress).
+- The terminal right-click menu no longer shows New Terminal, New Center Terminal and Close Terminal Tab, which did nothing.
+
 ## v1.0.12 (2026-10-31)
 
 - Install or update the desktop app with one command: `curl -fsSL https://natamux.github.io/install.sh | sh` on macOS, Debian and Ubuntu, or `irm https://natamux.github.io/install.ps1 | iex` on Windows. The script checks the checksum, and the signature when minisign is installed. See [Install with one command](/docs/getting-started/install/#install-with-one-command).

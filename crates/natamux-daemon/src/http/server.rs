@@ -208,6 +208,7 @@ pub async fn handle(request: Request<Incoming>, state: Arc<AppState>) -> Answer 
         (&Method::GET, ["activity"]) => agents::activity(&state),
         (&Method::GET, ["usage"]) => agents::usage(&state),
         (&Method::GET, ["limits"]) => agents::limits(&state),
+        (&Method::GET, ["custom-agents"]) => agents::custom_agents(),
         (&Method::POST, ["hooks", agent]) => {
             agents::post_hook(request, state, who, agent.to_string(), query.to_string()).await
         }
@@ -246,6 +247,7 @@ pub async fn handle(request: Request<Incoming>, state: Arc<AppState>) -> Answer 
         | (&Method::POST, ["tasks", _, "agent"])
         | (&Method::POST, ["tasks", _, "agent", "message"])
         | (&Method::POST, ["limits", _])
+        | (&Method::PUT, ["custom-agents"])
         | (&Method::POST, ["tasks", _, "workspace" | "commit" | "rollback" | "fan-out"])
         | (&Method::POST, ["workspaces"])
         | (&Method::POST, ["repos"])
@@ -397,6 +399,7 @@ async fn with_body(
             agents::message(state, id.to_string(), body).await
         }
         (&Method::POST, ["limits", agent]) => agents::post_limits(&state, agent, body),
+        (&Method::PUT, ["custom-agents"]) => agents::put_custom_agents(state, body).await,
         (&Method::POST, ["tasks", id, "review-comments"]) => {
             review_comments::add(state, id.to_string(), body, by_agent).await
         }

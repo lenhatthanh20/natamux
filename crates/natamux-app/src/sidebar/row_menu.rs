@@ -192,7 +192,7 @@ impl WorkspaceTree {
         }
     }
 
-    fn copy(&mut self, text: String, what: &str, cx: &mut Context<Self>) {
+    pub(super) fn copy(&mut self, text: String, what: &str, cx: &mut Context<Self>) {
         cx.write_to_clipboard(ClipboardItem::new_string(text));
         let said = format!("Copied the {what}.");
         self.dashboard.update(cx, |dashboard, cx| {

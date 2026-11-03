@@ -149,8 +149,19 @@ fn reads_the_terminals_of_working_waiting_and_open_tasks_only() {
     assert_eq!(model.reads_terminals, ["T-0001", "T-0002", "T-0004"]);
 }
 
+fn look_of<'a>(model: &'a TreeModel, id: &str) -> &'a TaskLook {
+    model
+        .lines
+        .iter()
+        .find_map(|line| match line {
+            Line::Task { task, look, .. } if task.id == id => Some(look),
+            _ => None,
+        })
+        .unwrap()
+}
+
 #[test]
-fn only_the_open_workspace_shows_its_terminal_rows() {
+fn only_the_open_card_carries_its_terminal_rows() {
     let mut fixture = Fixture::new(vec![
         task("T-0001", TaskState::Running),
         task("T-0002", TaskState::Running),
@@ -163,11 +174,114 @@ fn only_the_open_workspace_shows_its_terminal_rows() {
     let model = fixture.model();
     assert!(model.is_open("T-0001"));
     assert!(!model.is_open("T-0002"));
-    assert!(model.can_fold("T-0002"));
-    let shown: Vec<String> = keys(&model);
-    assert!(shown.contains(&"agent:T-0001:shell:1".to_owned()));
-    assert!(shown.contains(&"agent:T-0001:shell:2".to_owned()));
-    assert!(!shown.iter().any(|key| key.starts_with("agent:T-0002")));
+    let TaskLook::Open { rows, children } = look_of(&model, "T-0001") else {
+        panic!("the current card is open");
+    };
+    let row_keys: Vec<&str> = rows.iter().map(|row| row.key.as_str()).collect();
+    assert_eq!(row_keys, ["shell:1", "shell:2"]);
+    assert!(children.is_empty());
+    assert_eq!(look_of(&model, "T-0002"), &TaskLook::Closed);
+    // The rows are entries for the keyboard, not lines. Same creation time: the higher id first.
+    assert_eq!(keys(&model), ["repo:a", "task:T-0002", "task:T-0001"]);
+    assert!(
+        model
+            .entries
+            .iter()
+            .any(|e| e.key == "agent:T-0001:shell:2")
+    );
+}
+
+#[test]
+fn every_entry_has_a_line_and_every_line_key_is_an_entry() {
+    let mut child = task("T-0002", TaskState::Ready);
+    child.parent_id = Some("T-0001".into());
+    let mut fixture = Fixture::new(vec![task("T-0001", TaskState::Running), child]);
+    fixture.current = Some("T-0001".into());
+    fixture.terminals.insert("T-0001".into(), terminals(&["1"]));
+    let model = fixture.model();
+    let entry_keys: Vec<&str> = model.entries.iter().map(|e| e.key.as_str()).collect();
+    assert!(
+        keys(&model)
+            .iter()
+            .all(|key| entry_keys.contains(&key.as_str()))
+    );
+    for entry in &model.entries {
+        assert!(model.line_of(&entry.key).is_some(), "{}", entry.key);
+    }
+    let card = model.line_of("task:T-0001");
+    assert_eq!(model.line_of("agent:T-0001:shell:1"), card);
+    assert_eq!(model.line_of("task:T-0002"), card);
+    assert_eq!(model.line_of("task:nothing"), None);
+}
+
+#[test]
+fn a_saved_fold_opens_a_card_that_is_not_the_open_workspace() {
+    let mut fixture = Fixture::new(vec![task("T-0001", TaskState::Review)]);
+    fixture.terminals.insert("T-0001".into(), terminals(&["1"]));
+    assert!(!fixture.model().is_open("T-0001"));
+    assert!(fixture.model().reads_terminals.is_empty());
+    fixture.folds = vec![("task:T-0001".into(), true)];
+    let model = fixture.model();
+    assert!(model.is_open("T-0001"));
+    assert_eq!(model.reads_terminals, ["T-0001"]);
+    let TaskLook::Open { rows, .. } = look_of(&model, "T-0001") else {
+        panic!("the card is open");
+    };
+    assert_eq!(rows.len(), 1);
+}
+
+#[test]
+fn the_open_workspace_opens_without_a_saved_fold_and_a_saved_false_folds_it() {
+    let mut waiting = task("T-0002", TaskState::NeedsInput);
+    waiting.parent_id = Some("T-0001".into());
+    let mut fixture = Fixture::new(vec![task("T-0001", TaskState::Review), waiting]);
+    fixture.current = Some("T-0001".into());
+    fixture.terminals.insert("T-0001".into(), terminals(&["1"]));
+    assert!(fixture.model().is_open("T-0001"));
+    fixture.folds = vec![("task:T-0001".into(), false)];
+    let model = fixture.model();
+    assert!(!model.is_open("T-0001"));
+    assert_eq!(look_of(&model, "T-0001"), &TaskLook::Closed);
+    // The waiting subtask stays a nested line under the folded card.
+    let nested = model
+        .lines
+        .iter()
+        .any(|line| matches!(line, Line::Task { task, nested: true, .. } if task.id == "T-0002"));
+    assert!(nested);
+}
+
+#[test]
+fn an_open_card_carries_its_subtasks_and_a_finished_row_is_finished() {
+    let mut child = task("T-0002", TaskState::Ready);
+    child.parent_id = Some("T-0001".into());
+    let mut fixture = Fixture::new(vec![
+        task("T-0001", TaskState::Running),
+        child,
+        task("T-0003", TaskState::Done),
+    ]);
+    fixture.current = Some("T-0001".into());
+    fixture.folds = vec![("finished:a".into(), true)];
+    let model = fixture.model();
+    let TaskLook::Open { children, .. } = look_of(&model, "T-0001") else {
+        panic!("the current card is open");
+    };
+    assert_eq!(children.len(), 1);
+    assert_eq!(children[0].id, "T-0002");
+    assert_eq!(look_of(&model, "T-0003"), &TaskLook::Finished);
+    assert!(!model.is_open("T-0003"));
+}
+
+#[test]
+fn the_clock_also_follows_the_subtasks_inside_an_open_card() {
+    let now = parse_iso_ms("2026-10-22T09:05:00.000Z").unwrap_or_default();
+    let mut child = task("T-0002", TaskState::Running);
+    child.parent_id = Some("T-0001".into());
+    let mut parent = task("T-0001", TaskState::Review);
+    parent.updated_at = "2026-08-01T09:00:00.000Z".into();
+    let mut fixture = Fixture::new(vec![parent, child]);
+    fixture.folds = vec![("task:T-0001".into(), true)];
+    let model = fixture.model();
+    assert_eq!(model.next_label_change_ms(now), Some(60_000));
 }
 
 #[test]
@@ -243,7 +357,8 @@ fn a_filter_that_matches_a_subtask_keeps_its_parent_open() {
     fixture.filter = "needle".into();
     let model = fixture.model();
     assert!(model.is_open("T-0001"));
-    assert_eq!(keys(&model), ["repo:a", "task:T-0001", "task:T-0002"]);
+    assert_eq!(keys(&model), ["repo:a", "task:T-0001"]);
+    assert!(model.line_of("task:T-0002").is_some());
 }
 
 #[test]

@@ -49,7 +49,15 @@ type CommandPaletteProps = {
   onNewWorkspace: (options: { title?: string; repo?: string }) => void
 }
 
-function Highlighted({ text, ranges }: { text: string; ranges: readonly Range[] }) {
+function Highlighted({
+  text,
+  ranges,
+  regular = false,
+}: {
+  text: string
+  ranges: readonly Range[]
+  regular?: boolean
+}) {
   const pieces: Piece[] = splitByRanges(text, ranges)
   return (
     <>
@@ -57,9 +65,9 @@ function Highlighted({ text, ranges }: { text: string; ranges: readonly Range[] 
         piece.match ? (
           // The pieces of one text never reorder, so the position is the key.
           // biome-ignore lint/suspicious/noArrayIndexKey: see above.
-          <b key={index} className="font-semibold text-ink">
+          <span key={index} className={`${regular ? 'font-normal' : 'font-semibold'} text-ink`}>
             {piece.text}
-          </b>
+          </span>
         ) : (
           // biome-ignore lint/suspicious/noArrayIndexKey: see above.
           <span key={index}>{piece.text}</span>
@@ -93,7 +101,7 @@ function RowBody({ row, now }: { row: PaletteRow; now: Date }) {
           <StatusGlyph state={task.state} />
           <span className="flex min-w-0 flex-1 flex-col">
             <span className="truncate text-ink">
-              <Highlighted text={task.title} ranges={row.titleRanges} />
+              <Highlighted text={task.title} ranges={row.titleRanges} regular />
             </span>
             <span className="flex min-w-0 items-center gap-2 text-xs text-muted">
               <span className="shrink-0 font-mono">

@@ -56,6 +56,7 @@ impl NewWorkspaceDialog {
             Pick::Project => &self.stops.project,
             Pick::Branch => &self.stops.branch,
             Pick::Agent => &self.stops.agent,
+            Pick::Flow => &self.stops.flow,
         };
         Button::new(id, text)
             .style(ButtonStyle::Outlined)
@@ -192,6 +193,17 @@ impl NewWorkspaceDialog {
             cx,
         );
         let agent = self.select("new-task-agent", Pick::Agent, agent, false, cx);
+        let flow = self.select(
+            "new-task-flow",
+            Pick::Flow,
+            if self.single_agent {
+                "One agent"
+            } else {
+                "Full flow"
+            },
+            false,
+            cx,
+        );
         v_flex()
             .gap_3()
             .child(section_title("Workspace and agent"))
@@ -199,6 +211,7 @@ impl NewWorkspaceDialog {
             .child(select_row("Branch from", branch))
             .child(field("Branch", input_box(&self.branch_name, cx)))
             .child(select_row("Agent", agent))
+            .child(select_row("Task flow", flow))
     }
 
     pub(super) fn pick_files(&mut self, cx: &mut Context<Self>) {

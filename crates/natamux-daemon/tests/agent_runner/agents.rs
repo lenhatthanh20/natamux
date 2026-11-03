@@ -8,7 +8,8 @@ fn starts_codex_in_its_sandbox_without_asking_when_the_project_sets_no_mode() {
     let task = env.task();
     env.start(&task, "codex", "Only this");
     assert!(env.script_text(&task.id).starts_with(
-        "codex --dangerously-bypass-hook-trust --sandbox workspace-write --ask-for-approval never -c "
+        "codex --dangerously-bypass-hook-trust --sandbox workspace-write --ask-for-approval never \
+         -c sandbox_workspace_write.network_access=true -c "
     ));
 }
 

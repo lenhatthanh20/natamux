@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use natamux_agents::custom::{agent_kind, custom_agent};
 use natamux_agents::hook_files::{WorkspaceHooks, prepare_workspace};
 use natamux_agents::launch::{
     LAST_SESSION, LaunchOptions, Platform, default_program, is_launchable, launch_command,
@@ -182,8 +183,11 @@ impl AgentRunner {
         &self.options.trust_paths
     }
 
-    /// The program that starts an agent, as the shell looks it up.
+    /// The program that starts an agent, as the shell looks it up. A custom agent's is its command.
     pub fn program_of(&self, agent: &str) -> String {
+        if let Some(custom) = custom_agent(agent) {
+            return custom.command;
+        }
         self.programs
             .get(agent)
             .cloned()
@@ -252,12 +256,14 @@ impl AgentRunner {
         own: &OwnAgent,
     ) -> String {
         let trusted = (self.options.trusted_of)(task.repo.as_deref());
+        // A custom agent starts as its base, with its own program.
+        let kind = agent_kind(agent);
         let mut workspace_hooks = false;
         if let Some(workspace) = &task.workspace {
             workspace_hooks =
-                prepare_workspace(agent, Path::new(workspace), self.options.workspace_hooks);
+                prepare_workspace(&kind, Path::new(workspace), self.options.workspace_hooks);
             if trusted {
-                trust_workspace(agent, workspace, &self.options.trust_paths);
+                trust_workspace(&kind, workspace, &self.options.trust_paths);
             }
         }
         let stage_words = own
@@ -266,7 +272,7 @@ impl AgentRunner {
             .filter(|_| trusted)
             .map(|args| quoted_words(args, self.platform()));
         let extra: Vec<&str> = [
-            self.extra_args.get(agent).map(String::as_str),
+            self.extra_args.get(&kind).map(String::as_str),
             stage_words.as_deref(),
         ]
         .into_iter()
@@ -281,7 +287,7 @@ impl AgentRunner {
             (Some(_), None) => String::new(),
         };
         launch_command(
-            agent,
+            &kind,
             &LaunchOptions {
                 program: self.program_of(agent),
                 extra_args: extra.join(" "),

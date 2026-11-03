@@ -218,19 +218,6 @@ pub fn same_lane(before: Option<&StageProgress>, after: Option<&StageProgress>) 
     }
 }
 
-/// How many times the task was sent back.
-pub fn sent_back_count(events: &[TaskEvent]) -> usize {
-    events
-        .iter()
-        .filter(|event| {
-            matches!(
-                event.kind.as_str(),
-                "stage.reopened" | "review.changes-requested"
-            )
-        })
-        .count()
-}
-
 fn stage_of(event: &TaskEvent) -> Option<&str> {
     event.payload.get("stage")?.as_str()
 }

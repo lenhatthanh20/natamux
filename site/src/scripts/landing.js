@@ -1,5 +1,5 @@
 // The landing page: theme, recordings, tabs, download for this system, film chapters and the
-// living workflow of the hero.
+// living workflow below the examples.
 const root = document.documentElement
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches
 

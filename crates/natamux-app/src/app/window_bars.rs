@@ -15,7 +15,7 @@ use crate::app::dashboard_data::{Part, Seen};
 use crate::app::links::open_link;
 use crate::app::shell_rules::{Crumb, crumb, live_item, running_count, window_title};
 use crate::app::shortcuts::{ToggleAgents, ToggleDetails, ToggleSidebar};
-use crate::app::status_bar::{STATUS_BAR_HEIGHT, StatusBar, now_ms};
+use crate::app::status_bar::{StatusBar, now_ms};
 use crate::app::status_limits::LimitsItem;
 use crate::app::title_bar::{TitleBar, title_bar_height};
 use crate::app::update::{self, UpdateChanged};
@@ -300,7 +300,7 @@ impl Root {
         let status_style = StyleRefinement::default()
             .w_full()
             .flex_none()
-            .h(rems_from_px(STATUS_BAR_HEIGHT));
+            .h(title_bar_height(window));
         let title_bar = self.title_bar.clone().cached(title_style);
         let status_bar = self.status_bar.clone().cached(status_style);
         (title_bar.into_any_element(), status_bar.into_any_element())

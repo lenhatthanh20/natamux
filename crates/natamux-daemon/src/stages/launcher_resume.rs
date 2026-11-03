@@ -1,7 +1,8 @@
 //! `stage-launcher.ts`, the starts that are not a stage's first: a resume, the agents that come
 //! back when the daemon starts, and an agent started by a person.
 
-use natamux_agents::launch::{LAST_SESSION, is_launchable};
+use natamux_agents::custom::{agent_kind, has_adapter};
+use natamux_agents::launch::LAST_SESSION;
 use natamux_core::stages::terminal_lane::{stage_agent, terminal_of_stage_pinned};
 use natamux_core::tasks::dependencies::waiting_on;
 use natamux_proto::events::task_event::TaskEvent;
@@ -134,7 +135,8 @@ impl StageRun {
         let stays = self.options.open_shells.as_ref().is_some_and(|open| {
             !open.was_running(&task.id, &terminal) || open.is_paused(&task.id, &terminal)
         });
-        if working && agent.as_deref().is_some_and(is_launchable) && !stays {
+        // Another CLI (no hooks, no sessions) is not started again.
+        if working && agent.as_deref().is_some_and(has_adapter) && !stays {
             // In a group, the newest session of the folder may be the other stage's.
             self.relaunch(task, stage, !step.is_group(), true)?;
         }
@@ -180,13 +182,14 @@ impl StageRun {
             .clone()
             .or_else(|| task.agent.clone())
             .unwrap_or_else(|| "claude-code".into());
+        let claude = agent_kind(&agent) == "claude-code";
         let session = self
             .options
             .open_shells
             .as_ref()
             .and_then(|open| open.session_of(&task.id, &terminal, &agent))
             .or_else(|| self.last_session(task, &stage.id, &agent, &terminal))
-            .or_else(|| (newest && agent == "claude-code").then(|| LAST_SESSION.to_string()));
+            .or_else(|| (newest && claude).then(|| LAST_SESSION.to_string()));
         let text = match session {
             None => (self.prompt_of(task, stage, None))(&agent).text,
             Some(_) => String::new(),
@@ -214,7 +217,7 @@ impl StageRun {
         agent: &str,
         terminal: &str,
     ) -> Option<String> {
-        if agent != "claude-code" {
+        if agent_kind(agent) != "claude-code" {
             return None;
         }
         let steps = self.steps(task).ok()?;

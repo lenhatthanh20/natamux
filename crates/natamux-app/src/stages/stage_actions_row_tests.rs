@@ -20,6 +20,7 @@ use super::actions_row;
 use crate::app::test_views::init_app;
 use crate::components::menu::MenuLayer;
 use crate::stages::card_rules::{CardButton, CardChip, CardFacts};
+use crate::stages::flow_rules::NodeLinks;
 use crate::tasks::details_commands::{OnCommand, PanelCommand};
 
 const STAGE: &str = "review";
@@ -81,7 +82,8 @@ fn input() -> CardInput {
             ..Default::default()
         },
         now_ms: 0,
-        opened: false,
+        selected: false,
+        node_agent: None,
         file: None,
         pr: None,
         usage: None,
@@ -100,6 +102,7 @@ fn input() -> CardInput {
         boxes: Vec::new(),
         skip: None,
         actions: None,
+        links: NodeLinks::default(),
     }
 }
 

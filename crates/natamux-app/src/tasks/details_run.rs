@@ -11,7 +11,7 @@ use natamux_proto::tasks::task::{NewTaskInput, Task};
 use ui::{ContextMenu, ContextMenuEntry, prelude::*};
 
 use super::DetailsPanel;
-use crate::agents::agent_choices::{DEFAULT_AGENT, is_agent_id};
+use crate::agents::agent_choices::{DEFAULT_AGENT, is_startable};
 use crate::app::dashboard::Dashboard;
 use crate::app::layout_mode::DetailsMode;
 use crate::app::shortcuts::EditTask;
@@ -20,7 +20,7 @@ use crate::components::menu::MenuLayer;
 use crate::components::scroll_rules::centred_offset;
 use crate::components::toast_rules::ToastTone;
 use crate::sidebar::sidebar_tree::steps_of;
-use crate::stages::card_rules::end_with_the_task;
+use crate::stages::card_rules::{end_with_the_task, pick_after_click};
 use crate::stages::send_back_dialog::{self, SendBackDialog};
 use crate::stages::send_back_rules::send_back_target;
 use crate::tasks::details_commands::{OnCommand, PanelCommand};
@@ -49,7 +49,7 @@ pub(super) fn failure_of(action: StageAction) -> &'static str {
 pub fn agent_of(task: &Task) -> String {
     task.agent
         .clone()
-        .filter(|agent| is_agent_id(Some(agent)))
+        .filter(|agent| is_startable(Some(agent)))
         .unwrap_or_else(|| DEFAULT_AGENT.to_owned())
 }
 
@@ -99,8 +99,10 @@ impl DetailsPanel {
                 self.start_agent(&task, agent, cx);
             }
             PanelCommand::Toggle { kind, stage, on } => self.toggle(&task, kind, stage, on, cx),
-            PanelCommand::FoldCard(stage) => {
-                fold(self.shown.as_mut().map(|s| &mut s.open_cards), stage)
+            PanelCommand::SelectStage(stage) => {
+                if let Some(shown) = self.shown.as_mut() {
+                    shown.picked = pick_after_click(shown.picked.as_deref(), &stage);
+                }
             }
             PanelCommand::FoldLane(path) => {
                 fold(self.shown.as_mut().map(|s| &mut s.open_lanes), path)
@@ -244,7 +246,7 @@ impl DetailsPanel {
     /// A finished stage's card and its "Show evidence" opened, for `--shot stage-evidence`.
     pub fn open_evidence(&mut self, stage: &str, cx: &mut Context<Self>) {
         if let Some(shown) = self.shown.as_mut() {
-            shown.open_cards.insert(stage.to_owned());
+            shown.picked = Some(stage.to_owned());
             shown.open_evidence.insert(stage.to_owned());
         }
         cx.notify();
