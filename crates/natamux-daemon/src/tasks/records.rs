@@ -349,7 +349,11 @@ impl Store {
                 stage_name(&stage)
             )));
         }
-        if on && !can_run_workflow(task.agent.as_deref()) {
+        let kind = task
+            .agent
+            .as_deref()
+            .map(natamux_agents::custom::agent_kind);
+        if on && !can_run_workflow(kind.as_deref()) {
             return Err(TaskError::Edit(format!(
                 "Only Claude Code can run a workflow; {task_id} uses {}",
                 task.agent.as_deref().unwrap_or("null")

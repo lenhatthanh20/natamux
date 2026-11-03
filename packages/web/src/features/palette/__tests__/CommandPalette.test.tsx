@@ -107,6 +107,17 @@ afterEach(() => {
 })
 
 describe('the command palette', () => {
+  it('keeps matched task title text at regular weight', async () => {
+    palette()
+    await userEvent.setup().type(screen.getByRole('combobox'), 'Title')
+
+    const title = screen
+      .getAllByRole('option')
+      .find((option) => option.textContent?.includes('Title of'))
+    expect(title?.querySelector('b')).toBeNull()
+    expect(title?.querySelector('.font-normal.text-ink')?.textContent).toBe('Title')
+  })
+
   it('opens on what needs you, longest wait first, then recent and suggested commands', () => {
     palette()
     const text = optionText()
@@ -165,7 +176,7 @@ describe('the command palette', () => {
     await user.type(screen.getByRole('combobox'), 'title of T-0002')
     const options = screen.getAllByRole('option')
     expect(options[0]?.textContent).toContain('T-0002')
-    expect(options[0]?.querySelector('b')).not.toBeNull()
+    expect(options[0]?.querySelector('.font-normal.text-ink')?.textContent).toBe('Title')
   })
 
   it('runs a command after >', async () => {

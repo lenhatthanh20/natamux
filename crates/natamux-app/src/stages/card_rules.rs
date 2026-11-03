@@ -3,7 +3,8 @@
 
 use natamux_proto::events::task_event::WaitReason;
 use natamux_proto::stages::progress::{StageProgress, StageStatus};
-use natamux_proto::stages::schema::StageKind;
+use natamux_proto::stages::schema::{Stage, StageKind};
+use natamux_proto::stages::terminal_lane::can_have_own_agent;
 use natamux_proto::tasks::task::{Task, TaskState};
 
 /// The chip after a card's name.
@@ -236,6 +237,22 @@ pub fn reason_parts(text: &str) -> Vec<ReasonPart> {
         parts.push(ReasonPart::Text(rest.to_owned()));
     }
     parts
+}
+
+/// The agent icon of a node: the stage's own agent, else the task's agent on a stage that runs
+/// one (agent and testing stages). `true`: it is the task's agent.
+pub fn node_agent(stage: &Stage, task_agent: &str) -> Option<(String, bool)> {
+    match &stage.agent {
+        Some(agent) => Some((agent.clone(), false)),
+        None => can_have_own_agent(stage).then(|| (task_agent.to_owned(), true)),
+    }
+}
+
+/// The pick after a click on `clicked`: a click on the selected node closes it, any other node
+/// becomes the pick. Nothing is selected until a click, the running stage too (owner,
+/// 2026-11-01).
+pub fn pick_after_click(picked: Option<&str>, clicked: &str) -> Option<String> {
+    (picked != Some(clicked)).then(|| clicked.to_owned())
 }
 
 #[cfg(test)]

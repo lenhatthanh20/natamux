@@ -19,7 +19,7 @@ use super::shots::{
     self, CHANGED_FILE, PARSE_POLL, PARSE_TRIES, REVIEWED, SEND_BACK_REASON, SETTLE, TASK, TYPED,
 };
 use super::shots_input::{TEXT_END, pointer_to, press, send, wait};
-use super::status_bar::STATUS_BAR_HEIGHT;
+use super::title_bar::title_bar_height;
 use super::view_rules::DetailsView;
 use super::view_state::ViewState;
 use super::window::Root;
@@ -262,7 +262,7 @@ pub async fn run(handle: WindowHandle<Root>, shot: Shot, cx: &mut AsyncApp) {
                 let size = window.viewport_size();
                 point(
                     size.width - px(TOGGLE_INSET * unit),
-                    size.height - px(STATUS_BAR_HEIGHT / 2. * unit),
+                    size.height - title_bar_height(window) / 2.,
                 )
             });
             if let Ok(at) = at {

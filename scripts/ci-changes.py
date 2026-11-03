@@ -8,8 +8,8 @@ flags   writes key=value lines to $GITHUB_OUTPUT (stdout when unset): the job fl
         says whether the Rust daemon needs E2E at all), `all` and the shot shards (`Shots:`
         line, `[ci: shots]` or `[ci: all]`; none on main) and `shots`, the states of the
         `Shots:` line.
-        A push to main, or a head commit message with `[ci: all]`, runs everything; a pull request
-        and a snapshot run what their diff against origin/main needs.
+        A head commit message with `[ci: all]` runs everything. A push to main reads the push
+        event's before commit; a pull request and snapshot compare against origin/main.
 crates  prints the same crate list, one per line.
 mtimes  sets file mtimes so cargo rebuilds only what changed since the cache was saved.
 stamp   records HEAD in target/.ci-commit; run it before the cache is saved.
@@ -62,8 +62,13 @@ APP_PATHS = [
     "scripts/bundle-rust-app.sh",
     "scripts/motion-cost.sh",
 ]
-# What the jobs that start the production images read (scripts/e2e.sh up).
-IMAGE_PATHS = ["scripts/e2e.sh", "compose.e2e.yaml", "compose.prod.yaml", "docker/prod.Dockerfile", "e2e/"]
+# Runtime inputs also affect the live client tests. Build inputs affect the images and E2E.
+IMAGE_RUNTIME_PATHS = ["scripts/e2e.sh", "compose.e2e.yaml", "compose.prod.yaml", "docker/prod.Dockerfile", "e2e/"]
+IMAGE_PATHS = [
+    *IMAGE_RUNTIME_PATHS,
+    "packages/core/", "packages/web/", "package.json", "pnpm-lock.yaml",
+    "pnpm-workspace.yaml", "tsconfig.base.json", "docker/nginx.conf",
+]
 # E2E runs the daemon binary in the images of main. The images also hold the CLI, whose agent
 # hook specs run in the rest group.
 E2E_PATHS = [
@@ -74,19 +79,36 @@ E2E_PATHS = [
 ]
 CLIENT_PATHS = [
     *(f"crates/natamux-{name}/" for name in ("client", "cli", "proto")),
-    *IMAGE_PATHS,
+    *IMAGE_RUNTIME_PATHS,
 ]
 LOCK_PATHS = ["Cargo.lock", "deny.toml", "supply-chain/", ".cargo/audit.toml"]
+CHECK_PATHS = [
+    "crates/", "xtask/", "scripts/", "Cargo.toml", "Cargo.lock", "rust-toolchain.toml",
+    ".cargo/", "deny.toml", "supply-chain/", ".github/workflows/rust.yml",
+    ".github/workflows/release.yml", "docs/releases/", "clippy.toml", "package.json",
+    "packages/web/package.json", "packages/core/package.json", "site/src/pages/index.astro",
+    "site/src/content/docs/docs/",
+]
+WEB_PATHS = [
+    "packages/core/", "packages/web/", "package.json", "pnpm-lock.yaml",
+    "pnpm-workspace.yaml", "tsconfig.base.json", "biome.json", ".github/workflows/ci.yml",
+]
+RELEASE_NOTE = "docs/releases/v*.md"
 # Cargo.lock: a new version of a dependency can break any build.
 ALL_PATHS = [
-    ".github/workflows/rust.yml",
     "rust-toolchain.toml",
     "Cargo.toml",
     "Cargo.lock",
     ".cargo/",
     "xtask/",
-    "scripts/ci-changes.py",
     "scripts/ci-wait-artifact.sh",
+]
+MAIN_FULL_PATHS = [".github/workflows/rust.yml", "scripts/ci-changes.py"]
+NO_CI_PATHS = ["docs/", "site/", ".claude/", "README.md"]
+ROUTED_PATHS = [
+    *DAEMON_PATHS, *TERMINAL_PATHS, *APP_PATHS, *IMAGE_PATHS, *E2E_PATHS,
+    *CLIENT_PATHS, *LOCK_PATHS, *CHECK_PATHS, *WEB_PATHS, *ALL_PATHS, *MAIN_FULL_PATHS,
+    *NO_CI_PATHS,
 ]
 SHARDS = [1, 2, 3, 4]
 
@@ -98,10 +120,21 @@ def matches(path, patterns):
     )
 
 
-def path_flags(files):
+def full_run(files, ref=""):
+    """Run all jobs for missing or unknown inputs; defer CI config coverage to main for PRs."""
+    full_paths = ALL_PATHS if ref.startswith("refs/pull/") else [*ALL_PATHS, *MAIN_FULL_PATHS]
+    return files is None or any(
+        matches(path, full_paths) or not matches(path, ROUTED_PATHS) for path in files
+    )
+
+
+def path_flags(files, ref=""):
     """The job flags for a list of changed paths; None means the diff failed."""
-    if files is None or any(matches(f, ALL_PATHS) for f in files):
-        return dict.fromkeys(["daemon", "terminal", "app", "client", "lock", "e2e"], True)
+    if full_run(files, ref):
+        return dict.fromkeys(
+            ["daemon", "terminal", "app", "client", "lock", "e2e", "check", "web", "release_prep"],
+            True,
+        )
     daemon = any(matches(f, DAEMON_PATHS) for f in files)
     return {
         "daemon": daemon,
@@ -110,6 +143,9 @@ def path_flags(files):
         "client": any(matches(f, CLIENT_PATHS) for f in files),
         "lock": any(matches(f, LOCK_PATHS) for f in files),
         "e2e": any(matches(f, E2E_PATHS) for f in files),
+        "check": any(matches(f, CHECK_PATHS) for f in files),
+        "web": any(matches(f, WEB_PATHS) for f in files),
+        "release_prep": any(matches(f, [RELEASE_NOTE]) for f in files),
     }
 
 
@@ -173,9 +209,8 @@ def parse_all(message):
 
 
 def wants_all(ref, message):
-    """Every job runs on a push to main and for `[ci: all]` in the head commit message (of a push,
-    or of a pull request's head); else the jobs read the diff."""
-    return ref == "refs/heads/main" or parse_all(message)
+    """The head commit message can request every job on a push or pull request."""
+    return parse_all(message)
 
 
 def shot_shards(message, ref):
@@ -195,13 +230,13 @@ def compute(files, message, run_all, graph, ref=""):
     """All outputs of `flags`. run_all: from wants_all."""
     if run_all:
         files = None
-    flags = path_flags(files)
-    everything = files is None or any(matches(f, ALL_PATHS) for f in files)
+    flags = path_flags(files, ref)
+    everything = full_run(files, ref)
     if everything:
         crates = sorted(graph)
     else:
         crates = changed_crates(files, graph)
-    groups = list(E2E_GROUPS) if run_all else parse_e2e_groups(message)
+    groups = list(E2E_GROUPS) if run_all or ref == "refs/heads/main" else parse_e2e_groups(message)
     daemon = [c for c in DAEMON_CRATES if c in crates]
     out = {k: str(v).lower() for k, v in flags.items()}
     out["crates"] = " ".join(crates)
@@ -231,11 +266,34 @@ def git(*args, check=True):
     return subprocess.run(["git", *args], capture_output=True, text=True, check=check)
 
 
-def changed_files(base):
+def changed_files(base, three_dot=True):
     try:
-        return git("diff", "--name-only", f"{base}...HEAD").stdout.split()
+        dots = "..." if three_dot else ".."
+        return git("diff", "--name-only", f"{base}{dots}HEAD").stdout.split()
     except (subprocess.CalledProcessError, OSError):
         return None
+
+
+def push_base():
+    """The commit before this checkout's push; None makes an unknown range run all jobs."""
+    try:
+        event = json.loads(pathlib.Path(os.environ["GITHUB_EVENT_PATH"]).read_text())
+    except (KeyError, OSError, ValueError):
+        return None
+    if not isinstance(event, dict):
+        return None
+    before = event.get("before")
+    if not isinstance(before, str) or not re.fullmatch(r"[0-9a-f]{40}", before) or before == "0" * 40:
+        return None
+    after = event.get("after")
+    if not isinstance(after, str) or not re.fullmatch(r"[0-9a-f]{40}", after):
+        return None
+    try:
+        if git("rev-parse", "HEAD").stdout.strip() != after:
+            return None
+    except (subprocess.CalledProcessError, OSError):
+        return None
+    return before
 
 
 def head_message():
@@ -252,9 +310,15 @@ def outputs():
     event = os.environ.get("GITHUB_EVENT_NAME", "")
     # The head of a pull request is a merge commit: only [ci: all] is read, from the PR's own head.
     pull_request = event == "pull_request"
-    message = "" if ref == "refs/heads/main" or pull_request else head_message()
+    message = "" if pull_request else head_message()
     run_all = wants_all(ref, pr_head_message() if pull_request else message)
-    files = None if run_all else changed_files(parse_base(message))
+    if run_all:
+        files = None
+    elif event == "push" and ref == "refs/heads/main":
+        base = push_base()
+        files = changed_files(base, three_dot=False) if base else None
+    else:
+        files = changed_files(parse_base(message))
     out = compute(files, message, run_all, workspace_graph(), ref)
     if pull_request:
         # As [ci: all], a PR reads its shot tags from its own head commit.

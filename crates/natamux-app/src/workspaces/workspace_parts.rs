@@ -9,7 +9,7 @@ use natamux_proto::tasks::task::Task;
 use ui::prelude::*;
 
 use super::{Shown, WorkspaceView};
-use crate::agents::agent_choices::{DEFAULT_AGENT, is_agent_id};
+use crate::agents::agent_choices::{DEFAULT_AGENT, is_startable};
 use crate::app::view_rules::{DetailsView, WorkspaceTab};
 use crate::git::history_view::HistoryView;
 use crate::tasks::state_filter::width_probe;
@@ -64,7 +64,7 @@ impl WorkspaceView {
         let agent = task
             .agent
             .clone()
-            .filter(|agent| is_agent_id(Some(agent)))
+            .filter(|agent| is_startable(Some(agent)))
             .unwrap_or_else(|| DEFAULT_AGENT.to_owned());
         let this = cx.weak_entity();
         NoWorkspace {

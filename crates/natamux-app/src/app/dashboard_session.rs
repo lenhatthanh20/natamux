@@ -8,6 +8,7 @@ use std::time::Instant;
 
 use futures::StreamExt;
 use gpui::{Entity, Subscription};
+use natamux_proto::agents::custom::CustomAgent;
 use serde_json::Value;
 use ui::prelude::*;
 
@@ -19,6 +20,7 @@ use super::super::source::{Feed, Rows, Source};
 use super::super::theme_catalog::ThemeKind;
 use super::super::view_state::ViewState;
 use super::{Dashboard, DashboardChange};
+use crate::agents::agent_choices::{custom_agents_set_count, set_custom_agents};
 
 /// Events that came together apply in one update, at most this many.
 const BATCH_MAX: usize = 64;
@@ -93,6 +95,7 @@ impl Dashboard {
         let Some(source) = self.source.clone() else {
             return;
         };
+        self.read_custom_agents(&source, cx);
         let Feed { mut events, rows } = source.watch_dashboard();
         self.rows = Some(rows);
         self.data.link = Link::Loading;
@@ -123,6 +126,31 @@ impl Dashboard {
                 }
             }
         }));
+        self.touch_view(cx);
+    }
+
+    /// The custom agents of Settings > Agents. A failed read leaves the list unknown, so the page
+    /// cannot save over the daemon's file; a read older than a save is dropped.
+    fn read_custom_agents(&mut self, source: &Source, cx: &mut Context<Self>) {
+        let answer = source.custom_agents();
+        let asked = custom_agents_set_count();
+        cx.spawn(async move |this, cx| {
+            let Ok(list) = answer.await else {
+                return;
+            };
+            this.update(cx, |this, cx| {
+                if custom_agents_set_count() == asked {
+                    this.use_custom_agents(list, cx);
+                }
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    /// The pickers show this list from now on (after a read, and after a save).
+    pub fn use_custom_agents(&mut self, list: Vec<CustomAgent>, cx: &mut Context<Self>) {
+        set_custom_agents(list);
         self.touch_view(cx);
     }
 

@@ -262,3 +262,23 @@ fn drops_the_workflow_when_the_settings_no_longer_offer_it_for_the_stage() {
     assert!(script.contains("Write the tests first"));
     assert!(!script.contains(WORKFLOW_LINE));
 }
+
+// The only test of this binary that sets the custom agents (they are the process's).
+#[test]
+fn asks_a_claude_code_variant_for_a_workflow_as_claude_code() {
+    let qwen = natamux_proto::agents::custom::CustomAgent {
+        id: "claude-qwen".into(),
+        base: "claude-code".into(),
+        command: "cq".into(),
+    };
+    natamux_agents::custom::set_custom_agents(vec![qwen]);
+    let f = Fixture::new();
+    let task = at_plan_review(&f, "claude-qwen");
+    f.tasks.set_workflow(&task.id, "implement", true).unwrap();
+
+    approve(&f, &task.id);
+
+    let script = f.launch_script(&task.id, "1");
+    assert_eq!(count_line(&script), 1, "{script}");
+    assert_eq!(workflow_of(&f, &task.id, "implement"), Some(json!(true)));
+}

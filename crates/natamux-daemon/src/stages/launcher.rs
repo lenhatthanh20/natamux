@@ -85,7 +85,8 @@ impl StageRun {
     pub fn skill_context(&self, task: &Task, agent: &str) -> SkillContext {
         let repo = self.repo_path(task);
         SkillContext {
-            agent: agent.into(),
+            // A custom agent finds the skills of its base.
+            agent: natamux_agents::custom::agent_kind(agent),
             workspace: task
                 .workspace
                 .as_ref()
@@ -119,7 +120,9 @@ impl StageRun {
             let Some(run) = run.upgrade() else {
                 return Prompt::default();
             };
-            let workflow = runs_workflow(&stage, &task.workflow_stages, Some(agent));
+            // A custom agent runs a workflow when its base can.
+            let kind = natamux_agents::custom::agent_kind(agent);
+            let workflow = runs_workflow(&stage, &task.workflow_stages, Some(&kind));
             let context = run.skill_context(&task, agent);
             let filled = fill_skills(&stage_prompt(&stage, &task, workflow), &context);
             let text = match &reason {
@@ -242,6 +245,9 @@ impl StageRun {
         self.close_pending_shell(task_id, terminal);
         let paused = self.paused_session(task_id, terminal, agent);
         let session = session.or(paused.as_deref());
+        if text.is_empty() && session.is_none() && self.agent_runs(task_id, terminal) {
+            return Ok(());
+        }
         let result = if session.is_none() && self.agent_runs(task_id, terminal) {
             self.options
                 .terminals

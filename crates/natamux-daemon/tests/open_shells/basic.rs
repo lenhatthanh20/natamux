@@ -49,6 +49,29 @@ fn writes_down_the_agent_of_a_launch_and_the_session_of_a_hook() {
     assert_eq!(s.read(T), vec![copilot()]);
 }
 
+// The only test of this binary that sets the custom agents (they are the process's).
+#[test]
+fn keeps_a_custom_agent_when_its_bases_hook_names_the_session() {
+    use natamux_proto::agents::custom::CustomAgent;
+    natamux_agents::custom::set_custom_agents(vec![CustomAgent {
+        id: "claude-qwen".into(),
+        base: "claude-code".into(),
+        command: "cq".into(),
+    }]);
+    let dir = TempDir::new();
+    let s = setup(dir.path());
+    s.terminals.start_shell(T, "6");
+    s.shells.note_launch(T, "6", "claude-qwen", None);
+
+    s.shells.note_session(T, "6", "claude-code", "q-1");
+
+    assert_eq!(s.read(T), vec![open("6", Some("claude-qwen"), Some("q-1"))]);
+    assert_eq!(
+        s.shells.session_of(T, "6", "claude-qwen").as_deref(),
+        Some("q-1")
+    );
+}
+
 #[test]
 fn writes_only_when_a_shell_changes_not_on_every_hook() {
     let dir = TempDir::new();

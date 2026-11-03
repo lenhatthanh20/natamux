@@ -68,6 +68,9 @@ pub fn stage_prompt(stage: &Stage, task: &Task, workflow: bool) -> String {
         .prompt
         .clone()
         .unwrap_or_else(|| default_prompt(stage));
+    if template.is_empty() {
+        return String::new();
+    }
     let mut all = values(task).to_vec();
     // Only the default prompts get {commit}, so a prompt of your own is never changed.
     if stage.prompt.is_none() {

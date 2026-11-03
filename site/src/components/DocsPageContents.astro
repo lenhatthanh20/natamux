@@ -1,0 +1,40 @@
+---
+const { entry, toc } = Astro.locals.starlightRoute
+const overview = entry.id.replace(/\/$/, '') === 'docs'
+type Heading = { slug: string; text: string; children: Heading[] }
+function flatten(headings: Heading[], depth = 0): { slug: string; text: string; depth: number }[] {
+  return headings.flatMap((heading) => [
+    { slug: heading.slug, text: heading.text, depth }, ...flatten(heading.children, depth + 1),
+  ])
+}
+const headings = overview ? [
+  { slug: 'find-title', text: 'Find your way', depth: 0 },
+  { slug: 'first-task-title', text: 'First task', depth: 0 },
+  { slug: 'next-title', text: 'Go further', depth: 0 },
+  { slug: 'reference-title', text: 'Reference', depth: 0 },
+] : flatten(toc?.items ?? [])
+---
+
+{headings.length > 0 && (
+  <details class="doc-page-contents">
+    <summary>On this page <span aria-hidden="true">⌄</span></summary>
+    <nav aria-label="On this page">
+      {headings.map((heading) => <a href={`#${heading.slug}`} style={`--heading-depth: ${heading.depth}`}>{heading.text}</a>)}
+    </nav>
+  </details>
+)}
+
+<script>
+  document.querySelectorAll<HTMLDetailsElement>('details.doc-page-contents').forEach((menu) => {
+    const close = () => menu.removeAttribute('open')
+    menu.querySelectorAll('a').forEach((link) => link.addEventListener('click', close))
+    menu.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape') return
+      close()
+      menu.querySelector('summary')?.focus()
+    })
+    document.addEventListener('click', (event) => {
+      if (event.target instanceof Node && !menu.contains(event.target)) close()
+    })
+  })
+</script>

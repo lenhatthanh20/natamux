@@ -259,8 +259,8 @@ impl Root {
         } else {
             0.
         };
-        // The panel gets the same 30% cap and the rail is not counted: at 1024 wide the panel
-        // still docks beside the sidebar (main 410) instead of covering the diff as a sheet.
+        // The panel gets the same 30% cap and the rail is not counted. At 1024 wide the sidebar
+        // caps to 307 and a fresh panel stays 280, so main keeps 437 and the panel still docks.
         decide_layout(LayoutInput {
             width: Some(width),
             sidebar_width,

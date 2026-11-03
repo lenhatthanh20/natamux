@@ -9,7 +9,7 @@ use ui::prelude::*;
 use super::Root;
 use crate::app::command_when::{CommandState, When};
 use crate::app::dashboard::details::PanelRequest;
-use crate::app::layout_mode::{DetailsMode, RAIL_WIDTH, SIDEBAR_WIDTH};
+use crate::app::layout_mode::{DETAILS_WIDTH, DetailsMode, RAIL_WIDTH};
 use crate::app::shell_rules::details_toggle;
 use crate::app::shortcuts::{
     ApproveStage, Back, EditTask, ReportStage, SendBackStage, ShowProgress, SkipStage,
@@ -54,14 +54,14 @@ impl Root {
     }
 
     /// The docked column: the resize line at its left edge, then the panel. The panel without
-    /// the rail starts as wide as the sidebar and is resized on its own (T-0239). The resize line
-    /// is its only border, as the sidebar's.
+    /// the rail starts at `DETAILS_WIDTH`, so the panel plus the rail equals the sidebar, and is
+    /// resized on its own (T-0239). The resize line is its only border, as the sidebar's.
     pub(super) fn render_docked_details(&self, width: f32) -> impl IntoElement {
         let dashboard = self.dashboard.clone();
         let limits = Limits {
             min: DETAILS_MIN,
             max: DETAILS_MAX,
-            default: SIDEBAR_WIDTH,
+            default: DETAILS_WIDTH,
             collapse_below: None,
         };
         let resize = ResizeHandle::new(

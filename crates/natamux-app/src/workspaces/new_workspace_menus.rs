@@ -11,7 +11,7 @@ use super::super::branches::{
 };
 use super::super::new_workspace_rules::{base_after_pick, start_branch};
 use super::NewWorkspaceDialog;
-use crate::agents::agent_choices::AGENT_CHOICES;
+use crate::agents::agent_choices::{custom_agents, pick_list};
 use crate::agents::limits_rules::{current, picker_note};
 use crate::app::clock::now_ms;
 use crate::components::menu::MenuLayer;
@@ -24,6 +24,7 @@ pub(super) enum Pick {
     Project,
     Branch,
     Agent,
+    Flow,
 }
 
 /// The groups of the branch menu that sit in a submenu each.
@@ -105,16 +106,26 @@ impl NewWorkspaceDialog {
             }
             Pick::Agent => {
                 let limits = current(&self.dashboard.read(cx).data.limits, now_ms());
-                AGENT_CHOICES
-                    .iter()
-                    .map(|each| match picker_note(each.id, &limits) {
-                        Some(note) => (format!("{} · {note}", each.label), each.id),
-                        None => (each.label.to_string(), each.id),
+                pick_list(&custom_agents())
+                    .into_iter()
+                    .map(|(id, label)| match picker_note(&id, &limits) {
+                        Some(note) => (format!("{label} · {note}"), id),
+                        None => (label, id),
                     })
-                    .chain([("No agent, a plain terminal".to_string(), "")])
-                    .map(|(label, id)| option(None, label, id.into(), id == self.agent))
+                    .chain([("No agent, a plain terminal".to_string(), String::new())])
+                    .map(|(label, id)| {
+                        let checked = id == self.agent;
+                        option(None, label, id, checked)
+                    })
                     .collect()
             }
+            Pick::Flow => [
+                ("Full flow", "full", !self.single_agent),
+                ("One agent", "single-agent", self.single_agent),
+            ]
+            .into_iter()
+            .map(|(label, value, checked)| option(None, label.into(), value.into(), checked))
+            .collect(),
         }
     }
 
@@ -194,6 +205,7 @@ impl NewWorkspaceDialog {
                 self.base = base_after_pick(&value, start.as_deref());
             }
             Pick::Agent => self.agent = value,
+            Pick::Flow => self.single_agent = value == "single-agent",
         }
         cx.notify();
     }

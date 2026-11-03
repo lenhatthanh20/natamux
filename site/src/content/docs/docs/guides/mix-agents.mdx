@@ -7,6 +7,7 @@ sidebar:
 
 import { Steps } from '@astrojs/starlight/components'
 import Figure from '../../../../components/Figure.astro'
+import NativeClip from '../../../../components/NativeClip.astro'
 
 One task can use several agents. Claude Code writes the code, Cursor reviews it, Copilot watches CI. Each stage picks its agent and model in `.natamux.json`.
 
@@ -16,7 +17,7 @@ One task can use several agents. Claude Code writes the code, Cursor reviews it,
 - A new agent reviews with fresh eyes. It did not write the code, so it does not defend it.
 - Several providers share the cost and the rate limits.
 
-<Figure src="/media/v2/clip-agents" video alt="Screen recording of the Agents view: panes of five different agents work at the same time." caption="Five providers working at once in the Agents view. Recorded on the real dashboard; the agents are stand-in scripts." />
+<NativeClip name="agents" description="Three scripted task agents in the native Agents view, with its terminal grid switching between column layouts." caption="Keep three task agents in view while changing the native terminal grid layout." />
 
 ## How
 
@@ -33,9 +34,9 @@ Set `agent` and `args` on a stage. In **Project settings → Stages**, they are 
 
 The flow chart on top then shows the agent's icon and the model (from `--model` or `-m`) under the stage's name.
 
-<Figure src="/screens/v2/stage-agent-picker" alt="Project settings of storefront, Stages tab, with the Review stage selected. The Agent field is set to Codex, and the Arguments field below it holds --model gpt-5-codex. The Save button is not yet pressed." caption="Each stage can use its own agent and arguments. Review runs Codex here." />
+<Figure src="/screens/native/stage-agent-picker" width={1600} height={900} alt="The Agent menu for Review in native Project settings, listing Claude Code, Codex, Gemini CLI, GitHub Copilot, Cursor and the scripted demo agents. demo-reviewer is selected, and Arguments is empty." caption="Choose a stage agent from the menu. The scripted demo-reviewer agent is selected here." />
 
-In the file, the same stage looks like this:
+For example, a stage configured for Cursor can look like this:
 
 ```json title=".natamux.json"
 { "id": "agent-review", "kind": "agent", "gate": "auto", "output": "review.md",

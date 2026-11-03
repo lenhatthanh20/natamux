@@ -157,6 +157,7 @@ fn ring_names(dialog: &Entity<NewWorkspaceDialog>, cx: &mut VisualTestContext) -
             ("branch", stops.branch.clone()),
             ("branch name", dialog.branch_name.focus_handle(cx)),
             ("agent", stops.agent.clone()),
+            ("flow", stops.flow.clone()),
             ("cancel", stops.cancel.clone()),
             ("submit", stops.submit.clone()),
         ];
@@ -191,11 +192,12 @@ fn t20_the_tab_ring_follows_what_the_dialog_shows(cx: &mut TestAppContext) {
         seen,
         [
             "opened: [\"title\", \"notes\", \"files\", \"project\", \"branch name\", \"agent\", \
-             \"cancel\", \"submit\"]",
+             \"flow\", \"cancel\", \"submit\"]",
             "read: [\"title\", \"source\", \"notes\", \"files\", \"project\", \"branch\", \
-             \"branch name\", \"agent\", \"cancel\", \"submit\"]",
+             \"branch name\", \"agent\", \"flow\", \"cancel\", \"submit\"]",
             "agent skill: [\"title\", \"source\", \"skill\", \"reference\", \"files\", \
-             \"project\", \"branch\", \"branch name\", \"agent\", \"cancel\", \"submit\"]",
+             \"project\", \"branch\", \"branch name\", \"agent\", \"flow\", \"cancel\", \
+             \"submit\"]",
         ]
     );
     // Tab follows the ring as it is now.
@@ -220,6 +222,12 @@ fn picked(dialog: &Entity<NewWorkspaceDialog>, pick: Pick, cx: &mut VisualTestCo
         Pick::Project => dialog.picked_repo.clone(),
         Pick::Branch => dialog.base.clone(),
         Pick::Agent => dialog.agent.clone(),
+        Pick::Flow => if dialog.single_agent {
+            "single-agent"
+        } else {
+            "full"
+        }
+        .into(),
     })
 }
 
@@ -237,6 +245,7 @@ fn stop_of(
             Pick::Project => stops.project.clone(),
             Pick::Branch => stops.branch.clone(),
             Pick::Agent => stops.agent.clone(),
+            Pick::Flow => stops.flow.clone(),
         }
     })
 }
@@ -269,6 +278,7 @@ fn t20_the_selects_open_their_menus_over_the_dialog(cx: &mut TestAppContext) {
         Pick::Project,
         Pick::Branch,
         Pick::Agent,
+        Pick::Flow,
     ] {
         open_menu(&dialog, pick, cx);
         let opened = cx.update(|_, cx| MenuLayer::open_menu(cx)).is_some();
@@ -305,6 +315,8 @@ fn t20_the_selects_open_their_menus_over_the_dialog(cx: &mut TestAppContext) {
              \"dev\"",
             "Agent: opened true, esc closed true, dialog true, focus back true; down enter \
              \"codex\"",
+            "Flow: opened true, esc closed true, dialog true, focus back true; down enter \
+             \"single-agent\"",
         ]
     );
 }

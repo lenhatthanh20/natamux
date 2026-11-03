@@ -8,6 +8,7 @@ use natamux_proto::projects::repo::Repo;
 use natamux_proto::tasks::task::{Task, TaskState};
 use natamux_proto::terminals::list::TerminalList;
 
+use crate::sidebar::card_rules::is_card_open;
 use crate::sidebar::shell_rows::{ShellRow, shell_rows};
 use crate::sidebar::sidebar_tree::{RowTier, is_fold_open, row_tier, with_parents};
 use crate::sidebar::tree_entries::{Entry, TreeSource, tree_entries};
@@ -48,6 +49,20 @@ pub struct GroupInfo {
     pub finished_shown: bool,
 }
 
+/// How a task line is drawn.
+#[derive(Clone, Debug, PartialEq)]
+pub enum TaskLook {
+    /// A closed card (also a nested waiting subtask card under a closed parent).
+    Closed,
+    /// An open card: its terminal rows and its subtasks, drawn inside it.
+    Open {
+        rows: Vec<ShellRow>,
+        children: Vec<Task>,
+    },
+    /// A one-line row under "N finished".
+    Finished,
+}
+
 /// One line of the tree, in the order they are shown. `group` is the index of the project card
 /// the line sits in; pinned lines sit in none.
 #[derive(Clone, Debug, PartialEq)]
@@ -65,11 +80,7 @@ pub enum Line {
         nested: bool,
         /// A pinned row names its project.
         pinned_row: bool,
-    },
-    Terminal {
-        task_id: String,
-        row: ShellRow,
-        group: Option<usize>,
+        look: TaskLook,
     },
     /// "No workspaces. Start a task"
     NoWorkspaces {
@@ -92,7 +103,6 @@ impl Line {
         match self {
             Line::GroupHeader { group } => repo(group).map(|id| format!("repo:{id}")),
             Line::Task { task, .. } => Some(format!("task:{}", task.id)),
-            Line::Terminal { task_id, row, .. } => Some(format!("agent:{task_id}:{}", row.key)),
             Line::Finished { group } => repo(group).map(|id| format!("finished:{id}")),
             _ => None,
         }
@@ -107,7 +117,7 @@ impl Line {
             | Line::NoWorkspaces { group }
             | Line::NoMatches { group }
             | Line::Finished { group } => Some(*group),
-            Line::Task { group, .. } | Line::Terminal { group, .. } => *group,
+            Line::Task { group, .. } => *group,
         }
     }
 }
@@ -122,7 +132,7 @@ pub struct TreeModel {
     open: BTreeSet<String>,
     pub entries: Vec<Entry>,
     pub lines: Vec<Line>,
-    /// The tasks whose terminals are read: their agents work or wait, or they are open.
+    /// The tasks whose terminals are read: their agents work or wait, or their card is open.
     pub reads_terminals: Vec<String>,
 }
 
@@ -168,33 +178,26 @@ impl TreeModel {
                         .any(|child| filtered || Some(child.id.as_str()) == input.current_id)
                 })
         };
-        let shown = shown_rows(&groups, &repo_open, &finished_shown);
+        let cards = card_tasks(&groups, &repo_open);
+        let open: BTreeSet<String> = cards
+            .iter()
+            .filter(|task| is_card_open(input.folds, &task.id, holds_current(task)))
+            .map(|task| task.id.clone())
+            .collect();
         // A finished task, or one without a workspace, has no terminals left.
         let reads = |task: &Task| {
             !is_finished(task)
                 && task.workspace.is_some()
-                && (holds_current(task)
+                && (open.contains(&task.id)
                     || matches!(task.state, TaskState::Running | TaskState::NeedsInput))
         };
         let mut reads_terminals: Vec<String> = Vec::new();
-        for task in shown.iter().filter(|task| reads(task)) {
+        for task in cards.iter().filter(|task| reads(task)) {
             if !reads_terminals.contains(&task.id) {
                 reads_terminals.push(task.id.clone());
             }
         }
         let rows = rows_under(&groups, &reads_terminals, input.terminals);
-        let can_fold = |task: &Task| {
-            groups
-                .children
-                .get(&task.id)
-                .is_some_and(|children| !children.is_empty())
-                || rows.get(&task.id).is_some_and(|rows| !rows.is_empty())
-        };
-        let open: BTreeSet<String> = shown
-            .iter()
-            .filter(|task| can_fold(task) && holds_current(task))
-            .map(|task| task.id.clone())
-            .collect();
         let infos = groups
             .groups
             .iter()
@@ -219,17 +222,24 @@ impl TreeModel {
         self.rows.get(task_id).map_or(&[], Vec::as_slice)
     }
 
-    /// The task shows the rows under it. The user cannot fold the open one.
+    /// The card is unfolded and shows the rows and subtasks under it.
     pub fn is_open(&self, task_id: &str) -> bool {
         self.open.contains(task_id)
     }
 
-    pub fn can_fold(&self, task_id: &str) -> bool {
-        self.groups
-            .children
-            .get(task_id)
-            .is_some_and(|children| !children.is_empty())
-            || !self.rows_of(task_id).is_empty()
+    /// The line that shows `key`: its own line, or the card line of its parent entry (a terminal
+    /// row or a subtask inside an open card).
+    pub fn line_of(&self, key: &str) -> Option<usize> {
+        let groups = &self.groups.groups;
+        let find = |wanted: &str| {
+            self.lines
+                .iter()
+                .position(|line| line.key(groups).as_deref() == Some(wanted))
+        };
+        find(key).or_else(|| {
+            let entry = self.entries.iter().find(|entry| entry.key == key)?;
+            find(entry.parent.as_deref()?)
+        })
     }
 
     /// A folded row still shows the subtasks that wait on the user: no other part of the sidebar
@@ -251,9 +261,17 @@ impl TreeModel {
     /// The wait until a label of the tree changes by the clock alone: the age or the quiet mark of
     /// a task row, or the hint of a folded group. None with nothing to follow.
     pub fn next_label_change_ms(&self, now_ms: i64) -> Option<i64> {
-        let rows = self.lines.iter().filter_map(|line| match line {
-            Line::Task { task, .. } => Some(&**task),
-            _ => None,
+        let rows = self.lines.iter().flat_map(|line| match line {
+            Line::Task { task, look, .. } => {
+                let inside: &[Task] = match look {
+                    TaskLook::Open { children, .. } => children,
+                    _ => &[],
+                };
+                std::iter::once(&**task)
+                    .chain(inside)
+                    .collect::<Vec<&Task>>()
+            }
+            _ => Vec::<&Task>::new(),
         });
         let folded = self
             .groups
@@ -280,37 +298,39 @@ impl TreeModel {
             repo_open,
             finished_shown,
             task_open: &|task: &Task| self.is_open(&task.id),
-            can_fold: &|task: &Task| self.can_fold(&task.id),
             rows_of: &|task: &Task| self.rows_of(&task.id).to_vec(),
             waiting_children: &|task: &Task| self.waiting_children(&task.id),
         })
     }
 
     fn push_task(&self, lines: &mut Vec<Line>, task: &Task, group: Option<usize>, pinned: bool) {
+        let open = self.is_open(&task.id);
+        let look = if open {
+            let children = self.groups.children.get(&task.id);
+            TaskLook::Open {
+                rows: self.rows_of(&task.id).to_vec(),
+                children: children.cloned().unwrap_or_default(),
+            }
+        } else {
+            TaskLook::Closed
+        };
         lines.push(Line::Task {
             task: Box::new(task.clone()),
             group,
             nested: false,
             pinned_row: pinned,
+            look,
         });
-        let nested = |child: &Task| Line::Task {
-            task: Box::new(child.clone()),
-            group,
-            nested: true,
-            pinned_row: false,
-        };
-        if self.is_open(&task.id) {
-            for row in self.rows_of(&task.id) {
-                lines.push(Line::Terminal {
-                    task_id: task.id.clone(),
-                    row: row.clone(),
-                    group,
-                });
-            }
-            let children = self.groups.children.get(&task.id);
-            lines.extend(children.into_iter().flatten().map(nested));
-        } else {
-            lines.extend(self.waiting_children(&task.id).iter().map(nested));
+        if !open {
+            // A closed card still shows the subtasks that wait on the user.
+            let waiting = self.waiting_children(&task.id);
+            lines.extend(waiting.into_iter().map(|child| Line::Task {
+                task: Box::new(child),
+                group,
+                nested: true,
+                pinned_row: false,
+                look: TaskLook::Closed,
+            }));
         }
     }
 
@@ -342,7 +362,13 @@ impl TreeModel {
                 lines.push(Line::Finished { group: index });
                 if info.finished_shown {
                     for task in &group.finished {
-                        self.push_task(&mut lines, task, Some(index), false);
+                        lines.push(Line::Task {
+                            task: Box::new(task.clone()),
+                            group: Some(index),
+                            nested: false,
+                            pinned_row: false,
+                            look: TaskLook::Finished,
+                        });
                     }
                 }
             }
@@ -351,12 +377,8 @@ impl TreeModel {
     }
 }
 
-/// The rows in sight: the pinned ones, then the open and shown finished rows of each open group.
-fn shown_rows<'a>(
-    groups: &'a WorkspaceGroups,
-    repo_open: &dyn Fn(&str) -> bool,
-    finished_shown: &dyn Fn(&str) -> bool,
-) -> Vec<&'a Task> {
+/// The cards in sight: the pinned ones, then the open rows of each open group.
+fn card_tasks<'a>(groups: &'a WorkspaceGroups, repo_open: &dyn Fn(&str) -> bool) -> Vec<&'a Task> {
     let mut shown: Vec<&Task> = groups.pinned.iter().collect();
     for group in groups
         .groups
@@ -364,9 +386,6 @@ fn shown_rows<'a>(
         .filter(|group| repo_open(&group.repo.id))
     {
         shown.extend(&group.open);
-        if finished_shown(&group.repo.id) {
-            shown.extend(&group.finished);
-        }
     }
     shown
 }

@@ -1,0 +1,46 @@
+{
+  "appVersion": "1.0.17",
+  "capturedAt": "2026-11-03",
+  "recordings": [
+    {
+      "name": "hero",
+      "width": 1920,
+      "height": 1080
+    },
+    {
+      "name": "status",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "progress",
+      "width": 800,
+      "height": 1600
+    },
+    {
+      "name": "review",
+      "width": 1600,
+      "height": 1000
+    },
+    {
+      "name": "settings",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "name": "editor",
+      "width": 1600,
+      "height": 1000
+    },
+    {
+      "name": "agents",
+      "width": 1600,
+      "height": 1000
+    },
+    {
+      "name": "progress-wide",
+      "width": 1600,
+      "height": 900
+    }
+  ]
+}

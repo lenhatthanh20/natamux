@@ -99,6 +99,27 @@ fn starts_the_first_stage_with_an_agent_and_the_prompt_becomes_the_notes() {
 }
 
 #[test]
+fn one_agent_mode_keeps_only_context_and_agent_from_the_full_project_pipeline() {
+    let mut fx = Fx::new();
+    fx.restart(Some(default_settings()));
+    let task = new_workspace(
+        &fx.new_parts(),
+        NewWorkspaceInput {
+            agent: Some("claude-code".into()),
+            mode: Some("single-agent".into()),
+            ..input("Fix login")
+        },
+    )
+    .unwrap();
+    assert_eq!(task.stages, [json!("context"), json!("agent")]);
+    fx.settle();
+    let running = fx.task(&task.id);
+    assert_eq!(running.stage, "agent");
+    assert_eq!(running.state, TaskState::Running);
+    assert_eq!(fx.pty_count(), 1);
+}
+
+#[test]
 fn starts_no_agent_with_the_default_pipeline_until_a_person_starts_one() {
     let mut fx = Fx::new();
     fx.restart(Some(default_settings()));

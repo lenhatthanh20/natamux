@@ -5,16 +5,18 @@
 
 use std::sync::Arc;
 
-use gpui::{Entity, StyleRefinement, TestAppContext, VisualTestContext};
+use gpui::{Entity, Modifiers, StyleRefinement, TestAppContext, VisualTestContext};
 use natamux_client::DashboardEvent;
 use natamux_proto::agents::activity::{TaskActivity, TaskUsage};
 use natamux_proto::workspaces::workspace::DiffStat;
 use ui::prelude::*;
 
-use super::{LinesChange, WorkspaceTree, changed_lines};
+use super::WorkspaceTree;
 use crate::app::dashboard::Dashboard;
 use crate::app::source::Source;
 use crate::app::test_views;
+use crate::sidebar::task_card::{GLYPH_COLUMN, HEAD_GAP};
+use crate::sidebar::tree_lines::{LinesChange, changed_lines};
 use crate::sidebar::tree_model::Line;
 
 /// The sidebar caches the tree as Root caches the sidebar.
@@ -63,7 +65,7 @@ fn counts(tree: &Entity<WorkspaceTree>, cx: &mut VisualTestContext) -> (usize, u
 }
 
 #[gpui::test]
-fn usage_and_diff_stats_build_and_draw_nothing(cx: &mut TestAppContext) {
+fn usage_builds_and_draws_nothing_but_diff_stats_draw_without_a_build(cx: &mut TestAppContext) {
     let (dashboard, tree, cx) = sidebar_tree(cx);
     let before = counts(&tree, cx);
     assert!(before.0 > 0 && before.1 > 0, "the tree never drew");
@@ -76,6 +78,7 @@ fn usage_and_diff_stats_build_and_draw_nothing(cx: &mut TestAppContext) {
         DashboardEvent::Usage([("T-0146".to_string(), usage)].into()),
         cx,
     );
+    assert_eq!(counts(&tree, cx), before);
     let stat = DiffStat {
         files: 3,
         added: 40,
@@ -86,7 +89,11 @@ fn usage_and_diff_stats_build_and_draw_nothing(cx: &mut TestAppContext) {
         DashboardEvent::DiffStats([("T-0146".to_string(), stat)].into()),
         cx,
     );
-    assert_eq!(counts(&tree, cx), before);
+    let (builds, draws) = counts(&tree, cx);
+    assert_eq!(builds, before.0);
+    assert!(draws > before.1);
+    let shown = tree.update_in(cx, |tree, window, cx| tree.snapshot(window, cx).diff_stats);
+    assert_eq!(shown.get("T-0146"), Some(&stat));
 }
 
 #[gpui::test]
@@ -136,6 +143,162 @@ fn the_task_ids_switch_shows_the_ids_at_once(cx: &mut TestAppContext) {
     cx.run_until_parked();
     assert!(counts(&tree, cx).1 > draws);
     assert!(shown(&tree, cx));
+}
+
+#[gpui::test]
+fn the_card_head_centers_the_glyph_on_the_title(cx: &mut TestAppContext) {
+    // Top-aligned, the 14 px glyph sat ~3 px above the 13 px title (T-0251).
+    let (dashboard, _, cx) = sidebar_tree(cx);
+    let centres = |cx: &mut VisualTestContext| {
+        let glyph = cx
+            .debug_bounds("glyph-T-0141")
+            .expect("the card glyph was not drawn");
+        let title = cx
+            .debug_bounds("title-T-0141")
+            .expect("the card title was not drawn");
+        (glyph.center().y, title.center().y)
+    };
+    let (glyph, title) = centres(cx);
+    assert!(
+        (glyph - title).abs() <= px(1.0),
+        "closed: the glyph at {glyph:?} is off the title at {title:?}"
+    );
+
+    // Open, the glyph must stay on the title's first line.
+    dashboard.update(cx, |dashboard, cx| {
+        dashboard.set_fold("task:T-0141", true, cx)
+    });
+    cx.run_until_parked();
+    let (glyph, title) = centres(cx);
+    assert!(
+        (glyph - title).abs() <= px(1.5),
+        "open: the glyph at {glyph:?} is off the title at {title:?}"
+    );
+}
+
+#[gpui::test]
+fn opening_a_card_keeps_its_header_bounds(cx: &mut TestAppContext) {
+    let (dashboard, _, cx) = sidebar_tree(cx);
+    let offsets = |cx: &mut VisualTestContext| {
+        let card = cx.debug_bounds("card-T-0141").expect("card was not drawn");
+        let glyph = cx
+            .debug_bounds("glyph-T-0141")
+            .expect("glyph was not drawn");
+        let title = cx
+            .debug_bounds("title-T-0141")
+            .expect("title was not drawn");
+        let right = cx
+            .debug_bounds("right-T-0141")
+            .expect("right slot was not drawn");
+        [
+            f32::from(glyph.left() - card.left()),
+            f32::from(glyph.top() - card.top()),
+            f32::from(glyph.right() - glyph.left()),
+            f32::from(title.left() - card.left()),
+            f32::from(title.top() - card.top()),
+            f32::from(card.right() - right.right()),
+            f32::from(right.top() - card.top()),
+        ]
+    };
+    let closed = offsets(cx);
+    dashboard.update(cx, |dashboard, cx| {
+        dashboard.set_fold("task:T-0141", true, cx)
+    });
+    cx.run_until_parked();
+    let open = offsets(cx);
+    for (index, (before, after)) in closed.into_iter().zip(open).enumerate() {
+        assert!(
+            (before - after).abs() <= 1.0,
+            "header bound {index} moved from {before} to {after}"
+        );
+    }
+}
+
+#[gpui::test]
+fn the_open_card_lines_share_one_left_edge(cx: &mut TestAppContext) {
+    // The chips and the branch started under the glyph, the agent icon 6 px right of the title
+    // (T-0253). Terminal rows are the task's children, so their dot column starts at the title
+    // edge and their content one glyph column further (T-0255).
+    let (dashboard, _, cx) = sidebar_tree(cx);
+    dashboard.update(cx, |dashboard, cx| {
+        dashboard.set_fold("task:T-0141", true, cx)
+    });
+    cx.run_until_parked();
+    // `debug_bounds` takes only a `&'static str`, so the selectors are literals.
+    let bounds = |name: &'static str, cx: &mut VisualTestContext| {
+        cx.debug_bounds(name)
+            .unwrap_or_else(|| panic!("{name} was not drawn"))
+    };
+    let edge = bounds("title-T-0141", cx).left();
+    for name in [
+        "chips-T-0141",
+        "branch-T-0141",
+        "waiting-T-0141",
+        "agent:T-0141:shell:1-glyph",
+    ] {
+        let left = bounds(name, cx).left();
+        assert!(
+            (left - edge).abs() <= px(1.0),
+            "{name} starts at {}, the title at {}",
+            f32::from(left),
+            f32::from(edge)
+        );
+    }
+    let content = bounds("agent:T-0141:shell:1-content", cx).left();
+    let indent = px(GLYPH_COLUMN + HEAD_GAP);
+    assert!(
+        (content - edge - indent).abs() <= px(1.0),
+        "the terminal row content starts at {}, want {} (title {} + {})",
+        f32::from(content),
+        f32::from(edge + indent),
+        f32::from(edge),
+        f32::from(indent)
+    );
+}
+
+#[gpui::test]
+fn the_card_head_ends_with_the_age_and_no_buttons(cx: &mut TestAppContext) {
+    // The hover "..." and fold buttons kept their room even when hidden (T-0254).
+    let (dashboard, _, cx) = sidebar_tree(cx);
+    let gap = |cx: &mut VisualTestContext| {
+        let card = cx
+            .debug_bounds("card-T-0141")
+            .expect("the card was not drawn");
+        let right = cx
+            .debug_bounds("right-T-0141")
+            .expect("the age label was not drawn");
+        card.right() - right.right()
+    };
+    // Only the right padding (8 or 9 px) and the 1 px border; one button alone is 16 px or more.
+    let closed = gap(cx);
+    assert!(
+        closed <= px(14.0),
+        "closed: {} px after the age",
+        f32::from(closed)
+    );
+    dashboard.update(cx, |dashboard, cx| {
+        dashboard.set_fold("task:T-0141", true, cx)
+    });
+    cx.run_until_parked();
+    let open = gap(cx);
+    assert!(
+        open <= px(14.0),
+        "open: {} px after the age",
+        f32::from(open)
+    );
+
+    // A hover once hid the age for the buttons; with no buttons it must stay painted.
+    // T-0146 is running, so it shows its age, not a reason.
+    assert!(
+        cx.debug_bounds("age-T-0146").is_some(),
+        "no age before hover"
+    );
+    let title = cx
+        .debug_bounds("title-T-0146")
+        .expect("the T-0146 title was not drawn");
+    cx.simulate_mouse_move(title.center(), None, Modifiers::none());
+    cx.run_until_parked();
+    assert!(cx.debug_bounds("age-T-0146").is_some(), "hover hid the age");
 }
 
 #[test]
