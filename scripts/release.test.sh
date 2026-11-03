@@ -141,6 +141,10 @@ check "the macOS bundle has 13 usage descriptions" \
   '[ "$(grep -c "UsageDescription</key>" crates/natamux-app/resources/Info.plist)" = 13 ]'
 check "the root package.json pins pnpm" 'grep -qE "^  \"packageManager\": \"pnpm@[0-9]+\.[0-9]+\.[0-9]+\",$" package.json'
 check "the root package.json has no version" '! grep -q "^  \"version\":" package.json'
+check "Release does not build on a pull request" \
+  '! sed -n "/^on:/,/^permissions:/p" .github/workflows/release.yml | grep -q "^  pull_request:"'
+check "manual Release validates its branch before checkout" \
+  'sed -n "/^  web:/,/^  package:/p" .github/workflows/release.yml | grep -q "Validate release ref"'
 check "the package job of release.yml does not restore target on every runner" \
   '! sed -n "/^  package:/,/^  release:/p" .github/workflows/release.yml | grep -qE "^ +target$"'
 check "the package job of release.yml restores target only on Intel and Windows" \

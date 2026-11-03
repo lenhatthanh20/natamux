@@ -95,19 +95,18 @@ WEB_PATHS = [
 RELEASE_NOTE = "docs/releases/v*.md"
 # Cargo.lock: a new version of a dependency can break any build.
 ALL_PATHS = [
-    ".github/workflows/rust.yml",
     "rust-toolchain.toml",
     "Cargo.toml",
     "Cargo.lock",
     ".cargo/",
     "xtask/",
-    "scripts/ci-changes.py",
     "scripts/ci-wait-artifact.sh",
 ]
-NO_CI_PATHS = ["docs/", "site/", "README.md"]
+MAIN_FULL_PATHS = [".github/workflows/rust.yml", "scripts/ci-changes.py"]
+NO_CI_PATHS = ["docs/", "site/", ".claude/", "README.md"]
 ROUTED_PATHS = [
     *DAEMON_PATHS, *TERMINAL_PATHS, *APP_PATHS, *IMAGE_PATHS, *E2E_PATHS,
-    *CLIENT_PATHS, *LOCK_PATHS, *CHECK_PATHS, *WEB_PATHS, *ALL_PATHS,
+    *CLIENT_PATHS, *LOCK_PATHS, *CHECK_PATHS, *WEB_PATHS, *ALL_PATHS, *MAIN_FULL_PATHS,
     *NO_CI_PATHS,
 ]
 SHARDS = [1, 2, 3, 4]
@@ -120,16 +119,17 @@ def matches(path, patterns):
     )
 
 
-def full_run(files):
-    """Run all jobs when the diff is missing or a path has no known owner."""
+def full_run(files, ref=""):
+    """Run all jobs for missing or unknown inputs; defer CI config coverage to main for PRs."""
+    full_paths = ALL_PATHS if ref.startswith("refs/pull/") else [*ALL_PATHS, *MAIN_FULL_PATHS]
     return files is None or any(
-        matches(path, ALL_PATHS) or not matches(path, ROUTED_PATHS) for path in files
+        matches(path, full_paths) or not matches(path, ROUTED_PATHS) for path in files
     )
 
 
-def path_flags(files):
+def path_flags(files, ref=""):
     """The job flags for a list of changed paths; None means the diff failed."""
-    if full_run(files):
+    if full_run(files, ref):
         return dict.fromkeys(
             ["daemon", "terminal", "app", "client", "lock", "e2e", "check", "web", "release_prep"],
             True,
@@ -227,8 +227,8 @@ def compute(files, message, run_all, graph, ref=""):
     """All outputs of `flags`. run_all: from wants_all."""
     if run_all:
         files = None
-    flags = path_flags(files)
-    everything = full_run(files)
+    flags = path_flags(files, ref)
+    everything = full_run(files, ref)
     if everything:
         crates = sorted(graph)
     else:

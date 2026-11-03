@@ -301,6 +301,27 @@ class Base(unittest.TestCase):
 
 
 class Compute(unittest.TestCase):
+    def test_ci_config_pr_runs_check_without_every_rust_job(self):
+        for path in [".github/workflows/rust.yml", "scripts/ci-changes.py"]:
+            out = ci.compute([path], "", False, GRAPH, "refs/pull/589/merge")
+            self.assertEqual(out["check"], "true", path)
+            self.assertEqual(out["app"], "false", path)
+            self.assertEqual(out["e2e"], "false", path)
+            self.assertEqual(out["crates"], "", path)
+
+    def test_release_skill_text_does_not_force_full_pr(self):
+        out = ci.compute([".claude/skills/natamux-release/SKILL.md"], "", False, GRAPH,
+                         "refs/pull/589/merge")
+        self.assertEqual(out["app"], "false")
+        self.assertEqual(out["e2e"], "false")
+
+    def test_ci_config_main_push_runs_all(self):
+        for path in [".github/workflows/rust.yml", "scripts/ci-changes.py"]:
+            out = ci.compute([path], "", False, GRAPH, "refs/heads/main")
+            self.assertEqual(out["app"], "true", path)
+            self.assertEqual(out["e2e"], "true", path)
+            self.assertEqual(out["crates"].split(), sorted(GRAPH), path)
+
     def test_release_note_selects_intel_prebuild_without_every_job(self):
         out = ci.compute(["docs/releases/v1.0.17.md"], "", False, GRAPH,
                          "refs/heads/main")
