@@ -1,0 +1,11 @@
+[
+["default",[true,true,true,true,true,true,true,true]],
+["blinking block",[true,true,false,false,false,false,true,true]],
+["after a key",[true,true,true,true,false,false,false,false]],
+["steady block",[true,true,true,true,true,true,true,true]],
+["mode 12",[true,true,false,false,false,false,true,true]],
+["alt screen, blinking bar",[true,true,true,true,true,true,true,true]],
+["main screen, blinking bar",[false,true,true,true,true,false,false,false]],
+["unfocused, blinking bar",[true,true,true,true,true,true,true,true]],
+["focused again, blinking bar",[true,true,false,false,false,false,true,true]]
+]

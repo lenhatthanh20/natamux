@@ -5,7 +5,6 @@
 
 use editor::{Editor, EditorEvent};
 use gpui::{ClickEvent, Entity, EventEmitter, FocusHandle, Focusable, KeyContext, Subscription};
-use terminal::{Search, Terminal};
 use ui::{Tooltip, prelude::*};
 
 use super::find_rules::{FindResults, find_count_label, find_pattern};
@@ -108,30 +107,24 @@ impl TerminalFind {
         self.field.read(cx).text(cx)
     }
 
-    fn screen(&self, cx: &App) -> Entity<Terminal> {
-        self.terminal.read(cx).terminal().clone()
-    }
-
     fn run(&mut self, cx: &mut Context<Self>) {
         self.search += 1;
         let search = self.search;
         let pattern = find_pattern(&self.term(cx), self.match_case, self.regex);
-        let searcher = (!pattern.is_empty())
-            .then(|| Search::new(&pattern))
+        let found = (!pattern.is_empty())
+            .then(|| {
+                self.terminal
+                    .update(cx, |terminal, cx| terminal.find(&pattern, cx))
+            })
             .flatten();
-        let Some(searcher) = searcher else {
+        let Some(found) = found else {
             // No term, or a regex that does not parse: nothing matches.
-            self.screen(cx).update(cx, |terminal, cx| {
-                terminal.matches.clear();
-                cx.notify();
-            });
+            self.terminal
+                .update(cx, |terminal, cx| terminal.clear_matches(cx));
             self.results = (!pattern.is_empty()).then_some((None, 0));
             cx.notify();
             return;
         };
-        let found = self
-            .screen(cx)
-            .update(cx, |terminal, cx| terminal.find_matches(searcher, cx));
         cx.spawn(async move |find, cx| {
             let matches = found.await;
             find.update(cx, |find, cx| {
@@ -139,13 +132,8 @@ impl TerminalFind {
                     return;
                 }
                 let count = matches.len();
-                find.screen(cx).update(cx, |terminal, cx| {
-                    terminal.matches = matches;
-                    if count > 0 {
-                        terminal.activate_match(0);
-                    }
-                    cx.notify();
-                });
+                find.terminal
+                    .update(cx, |terminal, cx| terminal.set_matches(matches, cx));
                 find.results = Some(((count > 0).then_some(0), count));
                 cx.notify();
             })
@@ -167,10 +155,8 @@ impl TerminalFind {
             (Some(index), true) => (index + 1) % count,
             (Some(index), false) => (index + count - 1) % count,
         };
-        self.screen(cx).update(cx, |terminal, cx| {
-            terminal.activate_match(next);
-            cx.notify();
-        });
+        self.terminal
+            .update(cx, |terminal, cx| terminal.activate_match(next, cx));
         self.results = Some((Some(next), count));
         cx.notify();
     }
@@ -189,10 +175,8 @@ impl TerminalFind {
 
     fn shut(&mut self, cx: &mut Context<Self>) {
         self.search += 1;
-        self.screen(cx).update(cx, |terminal, cx| {
-            terminal.matches.clear();
-            cx.notify();
-        });
+        self.terminal
+            .update(cx, |terminal, cx| terminal.clear_matches(cx));
         cx.emit(FindClosed);
     }
 
