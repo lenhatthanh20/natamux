@@ -5,6 +5,7 @@ import Clip from '../components/Clip.astro'
 import LivingWorkflow from '../components/LivingWorkflow.astro'
 import BlockDiagram from '../components/BlockDiagram.astro'
 import film from '../data/film.json'
+import { workflowExamples } from '../data/homepage-workflows.mjs'
 import '../styles/landing.css'
 
 const base = import.meta.env.BASE_URL.replace(/\/?$/, '/')
@@ -21,9 +22,9 @@ const v2 = 'media/v2/'
 const note = 'Recorded on the real Natamux dashboard. The agents in it are stand-in scripts, so their terminal text is short.'
 const shortNote = 'Real dashboard, stand-in agents.'
 
-const title = 'Natamux: write your workflow once, run it with parallel agents'
+const title = 'Natamux: shape the workflow around your work'
 const description =
-  "Natamux runs your team's workflow with parallel coding agents. Stages, approvals, branches and send backs live in one committed file, and each stage can use Claude Code, Codex, Gemini CLI, Copilot or Cursor. A free desktop app for macOS, Windows and Linux."
+  'Build a task workflow from stages, branches, agents, checks and approvals. Start solo, then share the same workflow file with a team. Natamux is a free desktop app for macOS, Windows and Linux.'
 
 const files = [
   { os: 'mac', label: 'macOS, Apple silicon (M1 and later)', file: 'Natamux-mac-arm64.dmg' },
@@ -209,70 +210,6 @@ const agents = [
 
 const pv = { claude: 'Claude Code', copilot: 'Copilot', cursor: 'Cursor' } as const
 
-// A row is one step, a group that runs side by side (par), or a branch with paths.
-type Row = {
-  n?: string
-  a?: keyof typeof pv
-  you?: string
-  back?: string
-  par?: Row[]
-  branch?: string
-  paths?: { name: string; other?: boolean; rows: Row[] }[]
-}
-const workflows: { id: string; name: string; text: string; anchor: string; rows: Row[] }[] = [
-  {
-    id: 'solo',
-    name: 'Solo',
-    text: 'One developer, one repo. You approve the spec. The rest runs without you.',
-    anchor: 'the-solo-file',
-    rows: [
-      { n: 'Context' },
-      { n: 'Spec', you: 'You approve' },
-      { par: [{ n: 'Test spec', a: 'copilot' }, { n: 'Implement', a: 'claude' }] },
-      { n: 'Review', a: 'cursor', back: 'Sends back to Implement' },
-      { n: 'Watch CI and merge', a: 'copilot', back: 'Sends back on red CI' },
-    ],
-  },
-  {
-    id: 'team',
-    name: 'Team',
-    text: 'One committed file. Each task takes the path that fits where it is.',
-    anchor: 'the-team-file',
-    rows: [
-      { n: 'Context' },
-      { n: 'Triage' },
-      {
-        branch: 'Where is the task',
-        paths: [
-          {
-            name: "Review a teammate's PR",
-            rows: [
-              { n: 'Review PR', a: 'claude' },
-              { n: 'Follow PR CI' },
-              { n: 'Wait for fix' },
-              { n: 'QA build' },
-            ],
-          },
-          {
-            name: 'Develop',
-            other: true,
-            rows: [
-              { n: 'Spec', you: 'You approve' },
-              { n: 'Plan' },
-              { n: 'Implement' },
-              { n: 'Review', a: 'claude', back: 'Sends back to Implement' },
-              { n: 'Open PR' },
-              { n: 'Follow CI', a: 'cursor', back: 'Sends back on red CI' },
-              { n: 'Definition of done', a: 'copilot' },
-            ],
-          },
-        ],
-      },
-      { n: 'Final check', you: 'You check' },
-    ],
-  },
-]
-
 // One task, one agent per stage. Shell numbers follow concepts/stages.mdx: a stage with its own agent
 // gets its own shell, from Shell 6.
 const shells = [
@@ -334,7 +271,8 @@ const works = ['Claude Code', 'Codex', 'Gemini CLI', 'Copilot CLI', 'Cursor CLI'
           <span>Natamux</span>
         </a>
         <nav aria-label="Main">
-          <a href="#workflows">Workflows</a>
+          <a href="#recipes">Examples</a>
+          <a href="#workflows">Building blocks</a>
           <a href="#agents">Agents</a>
           <a href="#views">Dashboard</a>
           <a href={docs}>Docs</a>
@@ -354,30 +292,139 @@ const works = ['Claude Code', 'Codex', 'Gemini CLI', 'Copilot CLI', 'Cursor CLI'
 
     <main id="main">
       <section class="hero" aria-labelledby="hero-title">
-        <div class="wrap">
-          <a class="news" href={`${docs}guides/dashboard/#sidebar`}>New in {version}: task card titles stay steady</a>
-          <h1 id="hero-title">
-            <span class="line">Write your workflow once.</span>
-            <span class="line">Every task runs it, with the agents you pick.</span>
-          </h1>
-          <p class="lede">
-            Stages, approvals, branches and send backs live in one committed file, <code>.natamux.json</code>.
-            Each task gets its own worktree and terminals, and each stage can use a different agent: Claude Code,
-            Codex, Gemini CLI, Copilot or Cursor. You step in only where the workflow asks for you.
-          </p>
-          <div class="ctas">
-            <a class="btn primary big" href="#download" data-hero-download>
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 20h16" /></svg>
-              <span data-hero-label>Download for macOS</span>
-            </a>
-            <a class="btn big" href={`${docs}guides/workflows/`}>Build a workflow</a>
+        <div class="wrap hero-lead">
+          <div class="hero-copy">
+            <p class="eyebrow"><span class="eyebrow-mark" aria-hidden="true"></span>One place for your task workflow</p>
+            <h1 id="hero-title">Shape the workflow <em>around your work.</em></h1>
+            <p class="lede">
+              Choose the stages, agents, checks and approvals for each project. Start with a short solo flow or
+              add the review rules your team needs. Every task follows the same file, <code>.natamux.json</code>.
+            </p>
+            <div class="ctas">
+              <a class="btn primary big" href="#download" data-hero-download>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 20h16" /></svg>
+                <span data-hero-label>Download for macOS</span>
+              </a>
+              <a class="btn big" href={`${docs}guides/workflows/`}>Build a workflow</a>
+            </div>
+            <p class="fine">
+              <span data-hero-note data-version={version}>Version {version} for Apple silicon.</span>{' '}
+              <a href="#download">Other systems</a>. GPL-3.0 licensed, no account.
+            </p>
           </div>
-          <p class="fine">
-            <span data-hero-note data-version={version}>Version {version} for Apple silicon.</span>{' '}
-            <a href="#download">Other systems</a>. GPL-3.0 licensed, no account.
-          </p>
+
+          <figure class="workflow-editor" aria-labelledby="editor-caption">
+            <div class="editor-top"><span class="editor-dots" aria-hidden="true"><i></i><i></i><i></i></span><b>Project settings</b><span>Stages</span></div>
+            <div class="editor-main">
+              <div class="editor-heading"><span>WORKFLOW</span><code>.natamux.json</code></div>
+              <ol class="editor-steps">
+                <li><span class="editor-number">01</span><span class="editor-step"><b>Spec</b><small>Define the change</small></span><span class="editor-tag human">Your approval</span></li>
+                <li><span class="editor-number">02</span><span class="editor-step"><b>Build</b><small>Test spec + Implement</small></span><span class="editor-tag agent">Side by side</span></li>
+                <li><span class="editor-number">03</span><span class="editor-step"><b>If: task type</b><small>Bug fix or feature path</small></span><span class="editor-tag path">Branch</span></li>
+                <li><span class="editor-number">04</span><span class="editor-step"><b>Review</b><small>Send findings back</small></span><span class="editor-tag agent">Codex</span></li>
+              </ol>
+              <div class="editor-bottom"><span>+ Add stage</span><span>Move · Edit · Disable</span></div>
+            </div>
+            <figcaption id="editor-caption">Example settings. Add or move stages in the app, then commit the file to share the workflow.</figcaption>
+          </figure>
         </div>
 
+      </section>
+
+      <section class="section" id="recipes" aria-labelledby="recipes-title">
+        <div class="wrap">
+          <div class="head">
+            <p class="section-kicker">01 / MAKE IT YOURS</p>
+            <h2 id="recipes-title">Start solo. Add the steps your team needs.</h2>
+            <p>
+              These are two ways to arrange the same building blocks. Add, move or remove stages in{' '}
+              <b>Project settings → Stages</b>, then commit <code>.natamux.json</code> to share it.
+            </p>
+          </div>
+          <div class="wf-cards">
+            {
+              workflowExamples.map((w) => (
+                <article class="wf-card" aria-labelledby={`wf-${w.id}`}>
+                  <p class="wf-audience">{w.audience}</p>
+                  <h3 id={`wf-${w.id}`}>{w.name}</h3>
+                  <p class="wf-text">{w.text}</p>
+                  <ol class="wf">
+                    {w.rows.map((r) =>
+                      r.par ? (
+                        <li class="par">
+                          <span class="sr-only">At the same time:</span>
+                          <ul>
+                            {r.par.map((p) => (
+                              <li class="st">
+                                <span class="st-n">{p.n}</span>
+                                {p.a && <span class="chip">{pv[p.a]}</span>}
+                              </li>
+                            ))}
+                          </ul>
+                        </li>
+                      ) : r.paths ? (
+                        <li class="br">
+                          <p class="if">
+                            <i aria-hidden="true" />
+                            <span>
+                              If <b>{r.branch}</b>
+                            </span>
+                          </p>
+                          <ul class="paths">
+                            {r.paths.map((path) => (
+                              <li class="path">
+                                <p class="path-name">
+                                  {path.other ? 'Otherwise' : 'When'}: <b>{path.name}</b>
+                                </p>
+                                <ol class="wf">
+                                  {path.rows.map((q) => (
+                                    <li class="st">
+                                      <span class="st-n">{q.n}</span>
+                                      {q.a && <span class="chip">{pv[q.a]}</span>}
+                                      {q.you && <span class="chip you">{q.you}</span>}
+                                      {q.back && (
+                                        <span class="back">
+                                          <svg viewBox="0 0 28 14" aria-hidden="true">
+                                            <path d="M26 12 H6 Q2 12 2 8 V3 M2 3 l-3 4 M2 3 l3 4" />
+                                          </svg>
+                                          {q.back}
+                                        </span>
+                                      )}
+                                    </li>
+                                  ))}
+                                </ol>
+                              </li>
+                            ))}
+                          </ul>
+                        </li>
+                      ) : (
+                        <li class="st">
+                          <span class="st-n">{r.n}</span>
+                          {r.a && <span class="chip">{pv[r.a]}</span>}
+                          {r.you && <span class="chip you">{r.you}</span>}
+                          {r.back && (
+                            <span class="back">
+                              <svg viewBox="0 0 28 14" aria-hidden="true">
+                                <path d="M26 12 H6 Q2 12 2 8 V3 M2 3 l-3 4 M2 3 l3 4" />
+                              </svg>
+                              {r.back}
+                            </span>
+                          )}
+                        </li>
+                      ),
+                    )}
+                  </ol>
+                  <p class="more">
+                    <a href={`${docs}guides/workflows/#${w.anchor}`}>Explore the full recipe <span aria-hidden="true">↗</span></a>
+                  </p>
+                </article>
+              ))
+            }
+          </div>
+        </div>
+      </section>
+
+      <section class="section flow-demo" aria-label="Workflow in action">
         <div class="stage">
           <LivingWorkflow />
         </div>
@@ -512,97 +559,6 @@ const works = ['Claude Code', 'Codex', 'Gemini CLI', 'Copilot CLI', 'Cursor CLI'
                 ))
               }
             </div>
-          </div>
-        </div>
-      </section>
-
-      <section class="section" id="recipes" aria-labelledby="recipes-title">
-        <div class="wrap">
-          <div class="head">
-            <h2 id="recipes-title">Start from a recipe</h2>
-            <p>
-              Two workflows from the guide, each a full file you can copy. They use your own stages, such as Watch
-              CI and merge, next to the ones Natamux has.
-            </p>
-          </div>
-          <div class="wf-cards">
-            {
-              workflows.map((w) => (
-                <article class="wf-card" aria-labelledby={`wf-${w.id}`}>
-                  <h3 id={`wf-${w.id}`}>{w.name}</h3>
-                  <p class="wf-text">{w.text}</p>
-                  <ol class="wf">
-                    {w.rows.map((r) =>
-                      r.par ? (
-                        <li class="par">
-                          <span class="sr-only">At the same time:</span>
-                          <ul>
-                            {r.par.map((p) => (
-                              <li class="st">
-                                <span class="st-n">{p.n}</span>
-                                {p.a && <span class="chip">{pv[p.a]}</span>}
-                              </li>
-                            ))}
-                          </ul>
-                        </li>
-                      ) : r.paths ? (
-                        <li class="br">
-                          <p class="if">
-                            <i aria-hidden="true" />
-                            <span>
-                              If <b>{r.branch}</b>
-                            </span>
-                          </p>
-                          <ul class="paths">
-                            {r.paths.map((path) => (
-                              <li class="path">
-                                <p class="path-name">
-                                  {path.other ? 'Otherwise' : 'When'}: <b>{path.name}</b>
-                                </p>
-                                <ol class="wf">
-                                  {path.rows.map((q) => (
-                                    <li class="st">
-                                      <span class="st-n">{q.n}</span>
-                                      {q.a && <span class="chip">{pv[q.a]}</span>}
-                                      {q.you && <span class="chip you">{q.you}</span>}
-                                      {q.back && (
-                                        <span class="back">
-                                          <svg viewBox="0 0 28 14" aria-hidden="true">
-                                            <path d="M26 12 H6 Q2 12 2 8 V3 M2 3 l-3 4 M2 3 l3 4" />
-                                          </svg>
-                                          {q.back}
-                                        </span>
-                                      )}
-                                    </li>
-                                  ))}
-                                </ol>
-                              </li>
-                            ))}
-                          </ul>
-                        </li>
-                      ) : (
-                        <li class="st">
-                          <span class="st-n">{r.n}</span>
-                          {r.a && <span class="chip">{pv[r.a]}</span>}
-                          {r.you && <span class="chip you">{r.you}</span>}
-                          {r.back && (
-                            <span class="back">
-                              <svg viewBox="0 0 28 14" aria-hidden="true">
-                                <path d="M26 12 H6 Q2 12 2 8 V3 M2 3 l-3 4 M2 3 l3 4" />
-                              </svg>
-                              {r.back}
-                            </span>
-                          )}
-                        </li>
-                      ),
-                    )}
-                  </ol>
-                  <p class="more">
-                    <a href={`${docs}guides/workflows/#${w.anchor}`}>See the file</a>
-                  </p>
-                </article>
-              ))
-            }
           </div>
         </div>
       </section>

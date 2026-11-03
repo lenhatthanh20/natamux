@@ -159,27 +159,62 @@ h2 {
 h3 { font-size: 1.25rem; font-stretch: 86%; line-height: 1.2; letter-spacing: -0.01em; }
 
 /* Hero */
-.hero { padding: clamp(28px, 3.4vw, 48px) 0 clamp(24px, 3vw, 40px); }
-.news {
-  display: inline-flex; align-items: center; gap: 10px; margin-bottom: 20px;
-  padding: 6px 14px 6px 10px; border-radius: 999px; border: 1px solid var(--line-2);
-  color: var(--text); font-size: 0.875rem; text-decoration: none; background: var(--panel);
+.hero {
+  padding: clamp(48px, 6vw, 90px) 0 clamp(36px, 4vw, 58px);
+  background:
+    radial-gradient(ellipse 56% 38% at 88% 7%, color-mix(in srgb, var(--sky) 13%, transparent), transparent 80%),
+    radial-gradient(ellipse 42% 30% at 0 40%, color-mix(in srgb, var(--mint) 7%, transparent), transparent 80%);
 }
-/* The three marks of a branch: the taken path, the If, the path not taken. */
-.news::before {
-  content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--mint);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mint) 24%, transparent);
-}
-.news:hover { border-color: var(--muted); }
-.lede { max-width: 56ch; margin-top: 20px; font-size: clamp(1.0625rem, 1.4vw, 1.125rem); color: var(--muted); }
+.hero-lead { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: clamp(30px, 4vw, 64px); }
+.hero-copy { min-width: 0; }
+.eyebrow, .section-kicker { color: var(--sky); font: 600 0.75rem/1.4 var(--mono); letter-spacing: 0.11em; text-transform: uppercase; }
+.eyebrow { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+.eyebrow-mark { width: 9px; height: 9px; border-radius: 2px; background: var(--mint); box-shadow: 0 0 0 5px color-mix(in srgb, var(--mint) 13%, transparent); }
+.hero h1 { max-width: 12ch; font-size: clamp(3.1rem, 5.1vw, 5.2rem); line-height: 0.99; letter-spacing: -0.045em; }
+.hero h1 em { color: var(--sky); font-style: normal; }
+.lede { max-width: 54ch; margin-top: 24px; font-size: clamp(1.05rem, 1.35vw, 1.18rem); color: var(--muted); }
 .lede code { color: var(--text); }
-.ctas { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 24px; }
-.fine { margin-top: 12px; font-size: 0.875rem; color: var(--muted); }
+.ctas { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; }
+.fine { margin-top: 14px; font-size: 0.875rem; color: var(--muted); }
 .fine a { color: var(--text); }
-@media (max-width: 420px) {
-  .ctas .btn { width: 100%; }
+.flow-demo .stage { margin-top: 0; }
+.workflow-editor {
+  min-width: 0; overflow: hidden; border: 1px solid var(--line-2); border-radius: 20px;
+  background: var(--panel); box-shadow: var(--shadow);
 }
-.hero .stage { margin-top: clamp(28px, 3vw, 40px); }
+.editor-top { display: flex; align-items: center; gap: 13px; min-height: 45px; padding: 0 18px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 0.76rem; }
+.editor-top b { margin-left: auto; font-size: 0.8rem; }
+.editor-top > span:last-child { color: var(--sky); }
+.editor-dots { display: flex; gap: 5px; }
+.editor-dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--line-2); }
+.editor-main { padding: clamp(18px, 2vw, 28px); }
+.editor-heading { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 14px; color: var(--muted); font: 600 0.7rem/1.4 var(--mono); letter-spacing: 0.1em; }
+.editor-heading code { color: var(--sky); letter-spacing: 0; }
+.editor-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.editor-steps li { display: flex; align-items: center; gap: 14px; min-width: 0; padding: 11px 13px; border: 1px solid var(--line); border-radius: 11px; background: var(--bg-2); }
+.editor-number { color: var(--muted); font: 500 0.72rem var(--mono); }
+.editor-step { display: grid; min-width: 0; margin-right: auto; line-height: 1.35; }
+.editor-step b { font-size: 0.9rem; }
+.editor-step small { color: var(--muted); font-size: 0.75rem; }
+.editor-tag { flex: none; padding: 3px 8px; border-radius: 5px; font: 500 0.69rem/1.4 var(--mono); }
+.editor-tag.human { color: var(--amber); background: color-mix(in srgb, var(--amber) 12%, transparent); }
+.editor-tag.agent { color: var(--sky); background: color-mix(in srgb, var(--sky) 12%, transparent); }
+.editor-tag.path { color: var(--mint); background: color-mix(in srgb, var(--mint) 12%, transparent); }
+.editor-bottom { display: flex; justify-content: space-between; gap: 12px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--muted); font: 500 0.72rem var(--mono); }
+.editor-bottom span:first-child { color: var(--sky); }
+.workflow-editor figcaption { margin: 0; padding: 11px 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.75rem; }
+@media (max-width: 960px) {
+  .hero-lead { grid-template-columns: minmax(0, 1fr); }
+  .hero h1 { max-width: 15ch; }
+  .workflow-editor { max-width: 660px; }
+}
+@media (max-width: 420px) {
+  .hero { padding-top: 36px; }
+  .hero h1 { font-size: clamp(2.8rem, 12vw, 3.3rem); }
+  .ctas .btn { width: 100%; }
+  .editor-steps li { gap: 9px; padding: 10px; }
+  .editor-tag { font-size: 0.61rem; padding: 3px 5px; }
+}
 
 .works { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 24px; margin-top: 24px; font-size: 0.9375rem; }
 .works p { color: var(--muted); }
@@ -356,6 +391,7 @@ h3 { font-size: 1.25rem; font-stretch: 86%; line-height: 1.2; letter-spacing: -0
 .section { padding: clamp(52px, 5.2vw, 76px) 0 0; }
 .head { max-width: 760px; margin-bottom: clamp(24px, 3vw, 36px); }
 .head p { margin-top: 14px; color: var(--muted); max-width: 64ch; }
+.head .section-kicker { margin: 0 0 12px; color: var(--sky); }
 .head p b, .head p code { color: var(--text); }
 .more { margin-top: 18px; font-size: 0.9375rem; color: var(--muted); }
 .more a { color: var(--sky); font-weight: 500; }
@@ -488,9 +524,17 @@ figcaption b { color: var(--text); font-weight: 600; }
 .md .dim { opacity: 0.45; }
 
 /* Recipes */
-.wf-cards { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.75fr); gap: 20px; align-items: start; }
-.wf-card { border: 1px solid var(--line); border-radius: 18px; background: var(--panel); padding: clamp(16px, 2.4vw, 26px); }
-.wf-text { margin: 6px 0 18px; font-size: 0.9375rem; color: var(--muted); }
+#recipes { padding-top: clamp(50px, 5vw, 76px); border-top: 1px solid var(--line); background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 28%, transparent), transparent 70%); }
+#recipes .head { max-width: 850px; }
+.wf-cards { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.55fr); gap: 20px; align-items: start; }
+.wf-card { position: relative; overflow: hidden; border: 1px solid var(--line-2); border-radius: 18px; background: var(--panel); padding: clamp(18px, 2.5vw, 30px); box-shadow: 0 20px 60px -50px rgba(0, 0, 0, 0.7); }
+.wf-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--mint); }
+.wf-card:nth-child(2)::before { background: var(--sky); }
+.wf-card h3 { font-size: clamp(1.55rem, 2vw, 2rem); }
+.wf-audience { margin-bottom: 10px; color: var(--mint); font: 600 0.72rem/1.4 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; }
+.wf-card:nth-child(2) .wf-audience { color: var(--sky); }
+.wf-text { max-width: 52ch; margin: 10px 0 22px; font-size: 0.9375rem; color: var(--muted); }
+.wf-card .more { padding-top: 16px; border-top: 1px solid var(--line); }
 .wf, .wf ul, .wf ol { list-style: none; margin: 0; padding: 0; }
 .wf { display: grid; gap: 12px; }
 .wf > li { position: relative; min-width: 0; }
@@ -524,6 +568,7 @@ figcaption b { color: var(--text); font-weight: 600; }
 .path-name { margin-bottom: 10px; font-size: 0.8125rem; color: var(--muted); }
 .path .st { background: var(--panel); }
 @media (max-width: 960px) { .wf-cards { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 480px) { .paths { grid-template-columns: minmax(0, 1fr); } }
 
 /* Agents: the recording takes most of the row, the agent list runs beside it. */
 .agents-row { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 2fr); gap: clamp(24px, 3vw, 40px); align-items: start; }
@@ -663,7 +708,7 @@ figcaption b { color: var(--text); font-weight: 600; }
 .foot nav a { color: var(--muted); text-decoration: none; }
 .foot nav a:hover { color: var(--strong); }
 
-/* Motion. The hero runs from landing.js. The rest plays only on a visitor's action: a block diagram
+/* Motion. The workflow runs from landing.js. The rest plays only on a visitor's action: a block diagram
    when its tab opens, and one quiet rise of a recording frame as it scrolls into view. */
 @media (prefers-reduced-motion: no-preference) {
   .stack.swap > [data-active='true'] { animation: md-in 0.3s ease; }
