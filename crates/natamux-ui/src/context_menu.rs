@@ -33,6 +33,7 @@ use crate::shortcut_hint::KeyBinding;
 use crate::spacing::{h_flex, rems_from_px, v_flex};
 use crate::with_rem_size::WithRemSize;
 
+type RowRender = Box<dyn Fn(&mut Window, &mut App) -> AnyElement>;
 type Handler = Rc<dyn Fn(Option<&FocusHandle>, &mut Window, &mut App)>;
 type SubmenuBuilder = Rc<dyn Fn(ContextMenu, &mut Window, &mut Context<ContextMenu>) -> ContextMenu>;
 
@@ -75,7 +76,7 @@ pub enum ContextMenuItem {
     Label(SharedString),
     Entry(ContextMenuEntry),
     CustomEntry {
-        render: Box<dyn Fn(&mut Window, &mut App) -> AnyElement>,
+        render: RowRender,
         handler: Handler,
         selectable: bool,
     },
