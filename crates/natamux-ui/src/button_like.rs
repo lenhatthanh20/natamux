@@ -318,7 +318,7 @@ impl RenderOnce for ButtonLike {
                     Toggled::False
                 })
             })
-            // A focused button stays a tab stop while it is disabled, so the focus stays here.
+            // A disabled button is not a tab stop, so Tab skips it.
             .when_some(self.tab_index, |this, index| {
                 this.tab_index(index).tab_stop(!disabled)
             })
