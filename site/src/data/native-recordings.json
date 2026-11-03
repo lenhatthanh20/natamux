@@ -36,6 +36,11 @@
       "name": "agents",
       "width": 1600,
       "height": 1000
+    },
+    {
+      "name": "progress-wide",
+      "width": 1600,
+      "height": 900
     }
   ]
 }

@@ -663,6 +663,122 @@
         "width": 1600,
         "height": 1000
       }
+    },
+    {
+      "name": "progress-wide-dark",
+      "raw": {
+        "filename": "workflow-dark.mov",
+        "sha256": "74f6d4d9a262fea66cbf951e305305477fbc75ce370381173cee4b966d4e9845",
+        "width": 3840,
+        "height": 2160
+      },
+      "cuts": [
+        [
+          2,
+          5
+        ],
+        [
+          14,
+          20
+        ],
+        [
+          30,
+          34
+        ],
+        [
+          38,
+          43
+        ],
+        [
+          63,
+          67
+        ]
+      ],
+      "crop": [
+        0,
+        0,
+        3840,
+        2160
+      ],
+      "posterAt": 18,
+      "video": {
+        "filename": "progress-wide-dark.mp4",
+        "sha256": "4109da4afac5504ad6ecafe1eb9ac47265c0486077d8039625fbc49bc2fb3e70",
+        "bytes": 975622,
+        "width": 1600,
+        "height": 900,
+        "codec": "h264",
+        "pixelFormat": "yuv420p",
+        "frameRate": "30/1",
+        "frames": 660,
+        "duration": 22.0,
+        "audio": false
+      },
+      "poster": {
+        "filename": "progress-wide-dark.webp",
+        "sha256": "d030c839843b267c9d88bbf272ac153496a72c0bbb276afe9dac5a1f925d56a1",
+        "bytes": 71670,
+        "width": 1600,
+        "height": 900
+      }
+    },
+    {
+      "name": "progress-wide-light",
+      "raw": {
+        "filename": "workflow-light.mov",
+        "sha256": "d9714dadee715599a5e7c38ea6cecd518e804ae3e9ba69e19b75d13379e0b617",
+        "width": 3840,
+        "height": 2160
+      },
+      "cuts": [
+        [
+          2,
+          5
+        ],
+        [
+          14,
+          20
+        ],
+        [
+          30,
+          34
+        ],
+        [
+          38,
+          43
+        ],
+        [
+          63,
+          67
+        ]
+      ],
+      "crop": [
+        0,
+        0,
+        3840,
+        2160
+      ],
+      "posterAt": 18,
+      "video": {
+        "filename": "progress-wide-light.mp4",
+        "sha256": "e509126c9a0623bd6ae44ce8f1ce754bd21879ce6850ca7267d9d86d8f527a19",
+        "bytes": 945218,
+        "width": 1600,
+        "height": 900,
+        "codec": "h264",
+        "pixelFormat": "yuv420p",
+        "frameRate": "30/1",
+        "frames": 660,
+        "duration": 22.0,
+        "audio": false
+      },
+      "poster": {
+        "filename": "progress-wide-light.webp",
+        "sha256": "55580c4b87599537bb2c932f7bbcecda17ab73c357b1815d5402ff2ef840bc73",
+        "bytes": 71084,
+        "width": 1600,
+        "height": 900
+      }
     }
   ],
   "captureComplete": true,
