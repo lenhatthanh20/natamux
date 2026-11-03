@@ -102,7 +102,7 @@ mod components {
     pub mod icons;
     pub mod input_rules;
     #[cfg(test)]
-    mod kit_metrics;
+    pub mod kit_metrics;
     pub mod menu;
     #[cfg(test)]
     mod menu_tests;
@@ -337,6 +337,8 @@ mod workspaces {
     pub mod branches;
     pub mod docs_list;
     pub mod docs_markdown;
+    #[cfg(test)]
+    mod docs_markdown_golden_tests;
     pub mod docs_rules;
     pub mod docs_tab;
     pub mod docs_view;
