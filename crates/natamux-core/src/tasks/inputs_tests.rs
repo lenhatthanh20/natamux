@@ -36,6 +36,17 @@ fn a_new_task_keeps_a_context_and_trims_its_ref() {
 }
 
 #[test]
+fn a_new_task_accepts_only_the_one_agent_mode() {
+    let input =
+        create_task_input(Some(&json!({"title": "Fix it", "mode": "single-agent"}))).unwrap();
+    assert_eq!(input["mode"], "single-agent");
+    let error = failed(create_task_input(Some(
+        &json!({"title": "Fix it", "mode": "other"}),
+    )));
+    assert!(error.describe().contains("mode:"));
+}
+
+#[test]
 fn a_new_task_names_each_field_that_is_wrong() {
     let error = failed(create_task_input(Some(&json!({
         "title": "  ", "priority": "asap", "labels": [""], "dependsOn": ["x"]

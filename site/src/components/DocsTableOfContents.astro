@@ -1,0 +1,21 @@
+---
+import Default from '@astrojs/starlight/components/TableOfContents.astro'
+const overview = Astro.locals.starlightRoute.entry.id.replace(/\/$/, '') === 'docs'
+const sections = [
+  ['find-title', 'Find your way'], ['first-task-title', 'First task'],
+  ['next-title', 'Go further'], ['reference-title', 'Reference'],
+]
+---
+
+{overview ? (
+  <nav aria-labelledby="docs-on-this-page">
+    <h2 id="docs-on-this-page">On this page</h2>
+    <ul>{sections.map(([id, label]) => <li><a href={`#${id}`} title={label}>{label}</a></li>)}</ul>
+  </nav>
+) : <Default />}
+
+<script>
+  for (const link of document.querySelectorAll('.right-sidebar a')) {
+    link.setAttribute('title', link.textContent.trim())
+  }
+</script>

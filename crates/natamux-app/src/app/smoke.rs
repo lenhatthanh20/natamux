@@ -16,7 +16,7 @@ use gpui::{
 use super::settings_rules::SettingsPage;
 use super::shots::{self, RUNNING};
 use super::shots_stages::{PROJECT, READ};
-use super::status_bar::STATUS_BAR_HEIGHT;
+use super::title_bar::title_bar_height;
 use super::window::Root;
 use crate::perf::report::{start_steps, start_times};
 
@@ -217,7 +217,7 @@ fn click_toggle(handle: WindowHandle<Root>, side: Side, cx: &mut AsyncApp) {
             Side::Left => inset,
             Side::Right => size.width - inset,
         };
-        let position = point(x, size.height - px(STATUS_BAR_HEIGHT / 2. * unit));
+        let position = point(x, size.height - title_bar_height(window) / 2.);
         let modifiers = Modifiers::default();
         let (button, click_count) = (MouseButton::Left, 1);
         let events = [

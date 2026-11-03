@@ -154,7 +154,7 @@ export function AgentPanes({
                       type="button"
                       onClick={() => onOpenTask(task.id)}
                       data-tip={`Open workspace ${task.id}`}
-                      className="min-w-0 cursor-pointer truncate text-left hover:underline"
+                      className="min-w-0 cursor-pointer truncate text-left font-normal hover:underline"
                     >
                       {task.title}
                     </button>

@@ -13,8 +13,11 @@ use ui::prelude::*;
 use super::{StatusBarView, TitleBarView};
 use crate::app::dashboard::Dashboard;
 use crate::app::dashboard_data::Part;
+use crate::app::shell_rules::{Crumb, LiveItem};
 use crate::app::source::Source;
+use crate::app::status_bar::StatusBar;
 use crate::app::test_views::{self, Counted, cached_style};
+use crate::app::title_bar::TitleBar;
 use crate::components::motion;
 
 /// The window as Root lays it out: the two bars cached (`render_bars`), and the rest of the
@@ -54,6 +57,70 @@ fn draws(host: &Entity<Host>, cx: &mut VisualTestContext) -> (usize, usize, usiz
             host.status.read(cx).draws,
         )
     })
+}
+
+/// Draws the real bar elements, so their measured heights include their borders.
+struct BarHeightHost {
+    dashboard: Entity<Dashboard>,
+}
+
+impl Render for BarHeightHost {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        v_flex()
+            .size_full()
+            .child(
+                div()
+                    .w_full()
+                    .flex_none()
+                    .debug_selector(|| "measured-title-bar".into())
+                    .child(TitleBar::new(
+                        Crumb::View("All tasks"),
+                        self.dashboard.clone(),
+                    )),
+            )
+            .child(div().flex_1())
+            .child(
+                div()
+                    .w_full()
+                    .flex_none()
+                    .debug_selector(|| "measured-status-bar".into())
+                    .child(StatusBar::new(
+                        LiveItem {
+                            label: "Live",
+                            tip: "Changes appear as they happen".into(),
+                            ok: true,
+                        },
+                        0,
+                        0,
+                        Vec::new(),
+                        800.,
+                    )),
+            )
+    }
+}
+
+#[gpui::test]
+fn title_and_status_bars_have_the_same_height(cx: &mut TestAppContext) {
+    test_views::init(cx);
+    for (rem_size, bar_height) in [(16., 34.), (24., 42.)] {
+        let source = Arc::new(Source::FakeDaemon);
+        let dashboard = cx.new(|cx| Dashboard::new(Ok(source), Default::default(), cx));
+        let (_, window_cx) = cx.add_window_view(move |window, _| {
+            window.set_rem_size(px(rem_size));
+            BarHeightHost { dashboard }
+        });
+        window_cx.run_until_parked();
+
+        let title = window_cx
+            .debug_bounds("measured-title-bar")
+            .expect("the title bar was not drawn");
+        let status = window_cx
+            .debug_bounds("measured-status-bar")
+            .expect("the status bar was not drawn");
+        assert_eq!(title.size.height, px(bar_height));
+        assert_eq!(title.size.height, status.size.height);
+        assert_eq!(title.size.width, status.size.width);
+    }
 }
 
 #[gpui::test]

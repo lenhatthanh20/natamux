@@ -419,7 +419,7 @@ fn card(row: &RowData, cx: &App) -> impl IntoElement {
                 .flex_1()
                 .child(
                     Label::new(task.title.clone())
-                        .weight(FontWeight::MEDIUM)
+                        .weight(FontWeight::NORMAL)
                         .truncate(),
                 )
                 .child(

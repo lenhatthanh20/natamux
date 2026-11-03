@@ -252,8 +252,7 @@ export const WorkspaceRow = memo(function WorkspaceRow({
         ]),
   ]
 
-  const weight = unseen || tier === 'attention' ? 'font-semibold' : 'font-medium'
-  const size = tier === 'quiet' ? 'text-xs font-normal' : `text-sm ${weight}`
+  const size = tier === 'quiet' ? 'text-xs font-normal' : 'text-sm font-normal'
   const tone = finished ? 'text-muted' : tier === 'quiet' ? 'text-ink-2' : 'text-ink'
   const titleClass = `min-w-0 flex-1 truncate ${size} ${tone} ${task.state === 'cancelled' ? 'line-through' : ''}`
   const metaColor = 'text-muted'

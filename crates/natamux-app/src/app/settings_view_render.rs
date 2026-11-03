@@ -79,6 +79,12 @@ impl SettingsView {
             SettingRow::UiSize => self.size_control(cx),
             SettingRow::FontFamily => self.font.family_control(cx),
             SettingRow::FontSize => self.font.size_control(cx),
+            SettingRow::CustomAgents => Button::new("settings-open-agents", "Open")
+                .style(ButtonStyle::Outlined)
+                .on_click(cx.listener(|view, _: &ClickEvent, window, cx| {
+                    view.open_page(SettingsPage::Agents, window, cx)
+                }))
+                .into_any_element(),
         }
     }
 
@@ -264,6 +270,11 @@ impl SettingsView {
         )
     }
 
+    fn agents_page(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+        self.agents.sync(window, cx);
+        scroll_body("settings-agents", self.agents.content(cx))
+    }
+
     /// The rows a search found, under their page, then the projects it found as links.
     fn results(
         &mut self,
@@ -286,6 +297,7 @@ impl SettingsView {
         for (page, title) in [
             (SettingsPage::General, "General"),
             (SettingsPage::Appearance, "Appearance"),
+            (SettingsPage::Agents, "Agents"),
         ] {
             let rows: Vec<SettingRow> = found
                 .rows
@@ -498,6 +510,7 @@ impl Render for SettingsView {
             (Some(found), _, None) => self.results(found, query.trim(), cx),
             (None, SettingsPage::General, None) => self.general(cx),
             (None, SettingsPage::Appearance, None) => self.appearance(cx),
+            (None, SettingsPage::Agents, None) => self.agents_page(window, cx),
             (None, SettingsPage::Project(_), None) => div().into_any_element(),
         };
         let nav = self.nav(&page, found.as_ref(), window, cx);

@@ -8,6 +8,7 @@ use std::sync::{Mutex, MutexGuard, PoisonError};
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
 use natamux_client::{ClientError, DashboardEvent, LinkStatus, SendEventAnswer};
 use natamux_proto::agents::activity::{TaskActivity, TaskUsage};
+use natamux_proto::agents::custom::CustomAgent;
 use natamux_proto::agents::start::StartAgentInput;
 use natamux_proto::events::kind::PreparingMessage;
 use natamux_proto::events::task_event::{StoredEvent, TaskEventInput};
@@ -55,12 +56,40 @@ struct Data {
     settings: settings::SettingsFiles,
     files: files::FilesState,
     projects: projects::ProjectsState,
+    custom_agents: Vec<CustomAgent>,
     next_number: u32,
     feeds: Vec<UnboundedSender<DashboardEvent>>,
     link: FakeLink,
     /// The (task, kind) of each `send_event`, for the flow tests.
     #[cfg(test)]
     sent: Vec<(String, String)>,
+    #[cfg(test)]
+    hooks: TestHooks,
+}
+
+/// What a flow test asks of the fake: a write that fails once, a file the daemon cannot read.
+#[cfg(test)]
+#[derive(Default)]
+struct TestHooks {
+    /// The writes whose next call fails, by method name.
+    fail: BTreeSet<&'static str>,
+    /// The projects whose settings file cannot be read, with the reason.
+    broken_settings: BTreeMap<String, String>,
+    /// The (task, title) of each `rename_task`.
+    renamed: Vec<(String, String)>,
+}
+
+#[cfg(test)]
+impl TestHooks {
+    fn failure(&mut self, route: &'static str) -> Result<(), ClientError> {
+        if !self.fail.remove(route) {
+            return Ok(());
+        }
+        Err(ClientError::Status {
+            status: 500,
+            message: format!("The test made {route} fail."),
+        })
+    }
 }
 
 /// How the fake's feed behaves: the `skeleton` and `load-error` shots need one that never loads.
@@ -108,11 +137,14 @@ impl Data {
             settings: settings::SettingsFiles::default(),
             files: files::FilesState::default(),
             projects: projects::ProjectsState::seeded(),
+            custom_agents: Vec::new(),
             next_number: 200,
             feeds: Vec::new(),
             link: FakeLink::Live,
             #[cfg(test)]
             sent: Vec::new(),
+            #[cfg(test)]
+            hooks: TestHooks::default(),
         };
         data.add_stage_seed();
         data.add_git_seed();
@@ -245,6 +277,27 @@ impl FakeDaemon {
         self.data().sent.clone()
     }
 
+    /// The next call of the write `route` (a method name such as "create_task") fails.
+    #[cfg(test)]
+    pub fn fail_next(&self, route: &'static str) {
+        self.data().hooks.fail.insert(route);
+    }
+
+    /// The (task, title) of every `rename_task` so far.
+    #[cfg(test)]
+    pub fn renamed(&self) -> Vec<(String, String)> {
+        self.data().hooks.renamed.clone()
+    }
+
+    /// The settings file of `repo_id` cannot be read from now on, for `reason`.
+    #[cfg(test)]
+    pub fn break_settings(&self, repo_id: &str, reason: &str) {
+        let mut data = self.data();
+        data.hooks
+            .broken_settings
+            .insert(repo_id.into(), reason.into());
+    }
+
     /// The dashboard feed: everything now, then each change.
     pub fn watch(
         &self,
@@ -333,6 +386,8 @@ impl FakeDaemon {
 
     pub fn create_task(&self, input: NewTaskInput) -> Answer<Task> {
         let mut data = self.data();
+        #[cfg(test)]
+        data.hooks.failure("create_task")?;
         let mut task = data.new_task(&input.title, input.repo);
         task.parent_id = input.parent_id;
         data.tasks.insert(0, task.clone());
@@ -381,6 +436,10 @@ impl FakeDaemon {
 
     pub fn rename_task(&self, task_id: &str, title: &str) -> Answer<Task> {
         let mut data = self.data();
+        #[cfg(test)]
+        data.hooks
+            .renamed
+            .push((task_id.to_owned(), title.to_owned()));
         let task = data.task_mut(task_id)?;
         task.title = title.into();
         task.updated_at = NOW.into();
@@ -518,6 +577,9 @@ mod files;
 
 #[path = "fake_projects.rs"]
 mod projects;
+
+#[path = "fake_custom_agents.rs"]
+mod custom_agents;
 
 #[path = "fake_bench.rs"]
 mod bench;

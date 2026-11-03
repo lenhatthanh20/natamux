@@ -39,6 +39,7 @@ mod app {
     pub mod notify_rules;
     pub mod options;
     pub mod read_pace;
+    pub mod settings_agents;
     pub mod settings_font;
     pub mod settings_reads;
     pub mod settings_rules;
@@ -103,6 +104,8 @@ mod components {
     #[cfg(test)]
     mod kit_metrics;
     pub mod menu;
+    #[cfg(test)]
+    mod menu_tests;
     pub mod motion;
     pub mod motion_rules;
     pub mod resize_handle;
@@ -205,6 +208,7 @@ mod projects {
 }
 mod sidebar {
     pub mod blur_bar;
+    pub mod card_rules;
     pub mod comet;
     pub mod project_buttons;
     pub mod project_color;
@@ -214,7 +218,10 @@ mod sidebar {
     pub mod sidebar;
     pub mod sidebar_text;
     pub mod sidebar_tree;
+    pub mod task_card;
+    pub mod task_card_open;
     pub mod tree_entries;
+    pub mod tree_lines;
     pub mod tree_model;
     pub mod tree_rename;
     pub mod workspace_groups;
@@ -234,6 +241,8 @@ mod stages {
     pub mod editor_fixtures;
     pub mod editor_labels;
     pub mod editor_moves;
+    pub mod flow_lines;
+    pub mod flow_rules;
     pub mod kind_icon;
     pub mod overview_rules;
     pub mod pipeline_editor;
@@ -275,6 +284,7 @@ mod tasks {
     pub mod frozen_order;
     pub mod state_filter;
     pub mod state_filter_rules;
+    pub mod summary_rules;
     pub mod table_columns;
     pub mod table_menu;
     pub mod table_rules;

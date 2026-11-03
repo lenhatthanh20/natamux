@@ -16,9 +16,10 @@ Install Codex and log in. Follow the [Codex project page](https://github.com/ope
 | | |
 |---|---|
 | Program | `codex` |
-| Command line | `codex --dangerously-bypass-hook-trust --sandbox workspace-write --ask-for-approval never -c 'projects={…}' -c 'hooks.<Event>=[…]' --no-alt-screen [extra args] '<prompt>'` |
+| Command line | `codex --dangerously-bypass-hook-trust --sandbox workspace-write --ask-for-approval never -c sandbox_workspace_write.network_access=true -c 'projects={…}' -c 'hooks.<Event>=[…]' --no-alt-screen [extra args] '<prompt>'` |
 | Full screen | Off: `--no-alt-screen` runs Codex inline, so its output goes into the terminal history. `NATAMUX_CODEX_ARGS` cannot turn it back on: the flag wins over `tui.alternate_screen` |
-| Permission flag | `--sandbox workspace-write --ask-for-approval never`, left out with `"agents": { "permissionMode": "ask" }` in [`.natamux.json`](/docs/reference/configuration/#agents) |
+| Permission flag | `--sandbox workspace-write --ask-for-approval never -c sandbox_workspace_write.network_access=true`, left out with `"agents": { "permissionMode": "ask" }` in [`.natamux.json`](/docs/reference/configuration/#agents) |
+| Network | On in the sandbox. Without it, the `natamux` commands Codex runs cannot reach the daemon on `127.0.0.1`, and a stage cannot report done. To turn it off, add `-c sandbox_workspace_write.network_access=false` to `NATAMUX_CODEX_ARGS` |
 | Change the program | `NATAMUX_CODEX_COMMAND` |
 | Add arguments | `NATAMUX_CODEX_ARGS` |
 

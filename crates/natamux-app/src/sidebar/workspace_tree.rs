@@ -22,7 +22,8 @@ use crate::app::shortcuts::{
 };
 use crate::sidebar::sidebar_text::{type_ahead_target, typed_word};
 use crate::sidebar::tree_entries::{EntryAction, TreeKey, move_target, tree_key};
-use crate::sidebar::tree_model::{Line, TreeInput, TreeModel};
+use crate::sidebar::tree_lines::{LinesChange, changed_lines};
+use crate::sidebar::tree_model::{Line, TaskLook, TreeInput, TreeModel};
 use crate::sidebar::tree_rename::Rename;
 use crate::sidebar::workspace_groups::{Hold, held_id, next_hold};
 
@@ -48,6 +49,10 @@ pub(super) struct Snapshot {
     pub(super) labels: BTreeMap<String, String>,
     /// What each terminal's agent does: task id, then terminal name.
     pub(super) terminal_activity: BTreeMap<String, BTreeMap<String, String>>,
+    pub(super) diff_stats: BTreeMap<String, natamux_proto::workspaces::workspace::DiffStat>,
+    pub(super) waiting: BTreeMap<String, crate::sidebar::card_rules::Waiting>,
+    /// "1/2": subtasks done, of all, by parent id.
+    pub(super) subtasks: BTreeMap<String, String>,
     pub(super) now_ms: i64,
     /// The tree has focus, so the row with the tab stop shows the focus ring.
     pub(super) focused: bool,
@@ -90,10 +95,15 @@ impl WorkspaceTree {
             if changed.any(MODEL_PARTS) {
                 tree.model_fresh = false;
             }
-            // The rows also show the agents' activity (the running glyph's line) and the
-            // attention cards.
-            if changed.any(MODEL_PARTS) || changed.any(&[Part::Activity, Part::Events]) {
+            // Cards also show the activity, the waiting boxes and the diff stat.
+            if changed.any(MODEL_PARTS)
+                || changed.any(&[Part::Activity, Part::Events, Part::DiffStats])
+            {
                 cx.notify();
+            }
+            // The waiting box and the blur change a card's height, not the lines.
+            if changed.any(&[Part::Events, Part::View]) {
+                tree.list.remeasure_items(0..tree.list.item_count());
             }
         });
         WorkspaceTree {
@@ -148,12 +158,7 @@ impl WorkspaceTree {
     }
 
     fn line_index(&self, key: &str) -> Option<usize> {
-        let model = self.model.as_ref()?;
-        let groups = &model.groups.groups;
-        model
-            .lines
-            .iter()
-            .position(|line| line.key(groups).as_deref() == Some(key))
+        self.model.as_ref()?.line_of(key)
     }
 
     /// Where a menu opened by the keyboard goes: under the row.
@@ -397,6 +402,9 @@ impl WorkspaceTree {
             tips: BTreeMap::new(),
             labels: BTreeMap::new(),
             terminal_activity: BTreeMap::new(),
+            diff_stats: data.diff_stats.clone(),
+            waiting: BTreeMap::new(),
+            subtasks: BTreeMap::new(),
             now_ms: now_ms(),
             focused: self.focus.contains_focused(window, cx),
             stop: None,
@@ -404,12 +412,20 @@ impl WorkspaceTree {
         let lines = self.model.as_ref().map_or(&[][..], |model| &model.lines);
         for line in lines {
             let Line::Task {
-                task, pinned_row, ..
+                task,
+                pinned_row,
+                look,
+                ..
             } = line
             else {
                 continue;
             };
             snapshot.add_task(data, task, *pinned_row, &view.blurred);
+            if let TaskLook::Open { children, .. } = look {
+                for child in children {
+                    snapshot.add_task(data, child, false, &view.blurred);
+                }
+            }
         }
         snapshot
     }
@@ -417,27 +433,6 @@ impl WorkspaceTree {
 
 /// What the tree builds from: the lines and the terminals each row reads.
 const MODEL_PARTS: &[Part] = &[Part::Tasks, Part::Repos, Part::Terminals, Part::View];
-
-#[derive(Debug, PartialEq)]
-pub(super) enum LinesChange {
-    Same,
-    /// The same count, with these lines changed.
-    Range(std::ops::Range<usize>),
-    Count,
-}
-
-/// Which lines of the list to measure again.
-pub(super) fn changed_lines(old: &[Line], new: &[Line]) -> LinesChange {
-    if old.len() != new.len() {
-        return LinesChange::Count;
-    }
-    let differs = |(a, b): (&Line, &Line)| a != b;
-    let Some(first) = old.iter().zip(new).position(differs) else {
-        return LinesChange::Same;
-    };
-    let last = old.iter().zip(new).rposition(differs).unwrap_or(first);
-    LinesChange::Range(first..last + 1)
-}
 
 /// The task id of a task row's key.
 pub(super) fn task_of(key: &str) -> Option<String> {
@@ -492,7 +487,7 @@ impl Render for WorkspaceTree {
             .size_full()
             .min_h_0()
             // Here, not on the list: a list keeps only its top and bottom padding.
-            .px_2()
+            .px(rems_from_px(10.0_f32))
             .child(list(self.list.clone(), rows).size_full().pb_3())
     }
 }

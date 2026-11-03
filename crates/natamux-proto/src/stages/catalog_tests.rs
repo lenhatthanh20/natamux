@@ -15,7 +15,7 @@ fn ids_of(phase: StagePhase) -> Vec<&'static str> {
 #[test]
 fn has_every_stage_once() {
     let ids: Vec<String> = catalog().iter().map(|stage| stage.id.clone()).collect();
-    assert_eq!(ids.len(), 28);
+    assert_eq!(ids.len(), 29);
     let mut sorted = ids.clone();
     sorted.sort();
     sorted.dedup();
@@ -35,7 +35,7 @@ fn finds_a_stage_by_id() {
 }
 
 #[test]
-fn holds_the_28_stages_of_the_spec_by_phase() {
+fn holds_the_29_stages_of_the_spec_by_phase() {
     assert_eq!(
         ids_of(StagePhase::Understand),
         ["context", "research", "clarify"]
@@ -49,6 +49,7 @@ fn holds_the_28_stages_of_the_spec_by_phase() {
         [
             "test-spec",
             "implement",
+            "agent",
             "migration",
             "refactor",
             "docs",
@@ -93,6 +94,7 @@ fn gives_each_stage_the_kind_gate_and_output_of_the_spec() {
     assert_eq!(shape("ux-design"), (Agent, Manual, md("ux.md")));
     assert_eq!(shape("migration"), (Agent, Manual, None));
     assert_eq!(shape("refactor"), (Agent, Auto, None));
+    assert_eq!(shape("agent"), (Agent, Auto, None));
     assert_eq!(shape("lint"), (Testing, Auto, None));
     assert_eq!(shape("self-review"), (Agent, Auto, md("self-review.md")));
     assert_eq!(shape("qa"), (StageKind::Manual, Manual, None));
@@ -104,7 +106,7 @@ fn gives_each_stage_the_kind_gate_and_output_of_the_spec() {
 #[test]
 fn gives_every_agent_and_testing_stage_a_prompt() {
     for stage in catalog() {
-        if matches!(stage.kind, StageKind::Agent | StageKind::Testing) {
+        if matches!(stage.kind, StageKind::Agent | StageKind::Testing) && stage.id != "agent" {
             assert!(
                 default_prompt(stage).starts_with("Task: {title}\n"),
                 "{}",
@@ -142,6 +144,7 @@ fn has_a_prompt_for_each_agent_stage_and_a_check_for_each_output() {
         if let Some(text) = prompt
             && stage.output.is_none()
             && stage.kind != StageKind::Context
+            && stage.id != "agent"
         {
             // A stage that changes code must say whether to commit.
             assert!(text.contains("{commit}"), "{}", stage.id);

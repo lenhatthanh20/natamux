@@ -213,7 +213,7 @@ fn title(key: &str, title: PaneTitle, color: Color, cx: &App) -> AnyElement {
                     .child(
                         Label::new(title)
                             .size(LabelSize::Small)
-                            .weight(FontWeight::MEDIUM)
+                            .weight(FontWeight::NORMAL)
                             .color(color)
                             .truncate(),
                     )

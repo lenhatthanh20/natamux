@@ -1,6 +1,11 @@
 //! Port of `packages/web/src/lib/agents.ts`: the agents Natamux can start, in the order the
 //! pickers show them. The ids are the daemon's.
 
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{PoisonError, RwLock};
+
+use natamux_proto::agents::custom::{CustomAgent, OTHER_BASE};
+
 pub struct AgentChoice {
     pub id: &'static str,
     pub label: &'static str,
@@ -65,12 +70,87 @@ pub fn agent_icon(id: Option<&str>) -> Option<&'static str> {
 /// The asset of an agent's icon. Some icons are dark on dark; the theme has a lighter one, made
 /// for light editors, used in the light theme (`iconUrl`).
 pub fn agent_icon_path(id: Option<&str>, light: bool) -> Option<String> {
+    icon_path_in(id, light, &custom_agents())
+}
+
+/// As `agent_icon_path`; a custom agent has the icon of its base, and "Other CLI" none.
+pub fn icon_path_in(id: Option<&str>, light: bool, custom: &[CustomAgent]) -> Option<String> {
+    let id = id.map(|id| base_in(id, custom));
     let icon = agent_icon(id)?;
     let light_one = format!("icons/agents/{icon}_light.svg");
     if light && crate::app::asset_table::find(&light_one).is_some() {
         return Some(light_one);
     }
     Some(format!("icons/agents/{icon}.svg"))
+}
+
+/// The custom agents the daemon holds, read when the dashboard starts and after a save. A static,
+/// since the badges and menus that need it have no handle on the dashboard.
+static CUSTOM: RwLock<Vec<CustomAgent>> = RwLock::new(Vec::new());
+
+pub fn custom_agents() -> Vec<CustomAgent> {
+    CUSTOM
+        .read()
+        .unwrap_or_else(PoisonError::into_inner)
+        .clone()
+}
+
+/// How many times the list was set: 0 until the daemon's list came, once read or saved.
+static SET_COUNT: AtomicU64 = AtomicU64::new(0);
+
+/// Sets the list the daemon answered (a read or a save).
+pub fn set_custom_agents(list: Vec<CustomAgent>) {
+    *CUSTOM.write().unwrap_or_else(PoisonError::into_inner) = list;
+    SET_COUNT.fetch_add(1, Ordering::SeqCst);
+}
+
+/// Taken before a read: the read applies only if the list was not set since, so an old read
+/// never comes back over a newer save.
+pub fn custom_agents_set_count() -> u64 {
+    SET_COUNT.load(Ordering::SeqCst)
+}
+
+/// Whether the list came from the daemon. Until then a save would write an empty list over the
+/// saved one.
+pub fn custom_agents_known() -> bool {
+    custom_agents_set_count() > 0
+}
+
+/// What an agent id behaves as: itself, or for a custom agent its base ("other" for any CLI).
+pub fn base_in<'a>(id: &'a str, custom: &'a [CustomAgent]) -> &'a str {
+    match custom.iter().find(|agent| agent.id == id) {
+        Some(agent) if find(Some(id)).is_none() => &agent.base,
+        _ => id,
+    }
+}
+
+/// (id, label) of the built-in agents, then the custom ones, labelled by their id.
+pub fn pick_list(custom: &[CustomAgent]) -> Vec<(String, String)> {
+    let built_in = AGENT_CHOICES
+        .iter()
+        .map(|choice| (choice.id.to_owned(), choice.label.to_owned()));
+    let own = custom
+        .iter()
+        .map(|agent| (agent.id.clone(), agent.id.clone()));
+    built_in.chain(own).collect()
+}
+
+/// A task or stage with this agent can start: a built-in agent, or a custom one.
+pub fn can_start_in(id: Option<&str>, custom: &[CustomAgent]) -> bool {
+    is_agent_id(id) || custom.iter().any(|agent| Some(agent.id.as_str()) == id)
+}
+
+pub fn is_startable(id: Option<&str>) -> bool {
+    can_start_in(id, &custom_agents())
+}
+
+/// The id `can_run_workflow` takes: a custom agent on a built-in base counts as the base; one on
+/// "Other CLI" as itself, so it is refused.
+pub fn workflow_agent<'a>(id: &'a str, custom: &'a [CustomAgent]) -> &'a str {
+    match base_in(id, custom) {
+        OTHER_BASE => id,
+        base => base,
+    }
 }
 
 #[cfg_attr(not(test), allow(dead_code))]
@@ -160,6 +240,60 @@ mod tests {
     fn treats_an_id_in_another_case_as_unknown() {
         assert_eq!(agent_label(Some("Claude-Code")), "Claude-Code");
         assert_eq!(agent_icon(Some("Claude-Code")), None);
+    }
+
+    fn custom(id: &str, base: &str) -> CustomAgent {
+        CustomAgent {
+            id: id.into(),
+            base: base.into(),
+            command: id.into(),
+        }
+    }
+
+    #[test]
+    fn a_custom_agent_follows_its_base() {
+        let list = [
+            custom("claude-qwen", "claude-code"),
+            custom("mine", OTHER_BASE),
+        ];
+        assert_eq!(base_in("claude-qwen", &list), "claude-code");
+        assert_eq!(base_in("codex", &list), "codex");
+        assert_eq!(workflow_agent("claude-qwen", &list), "claude-code");
+        assert_eq!(workflow_agent("mine", &list), "mine");
+        assert_eq!(
+            icon_path_in(Some("claude-qwen"), false, &list).as_deref(),
+            Some("icons/agents/claude.svg")
+        );
+        assert_eq!(icon_path_in(Some("mine"), false, &list), None);
+    }
+
+    #[test]
+    fn custom_agents_come_after_the_built_in_ones_and_can_start() {
+        let list = [custom("claude-qwen", "claude-code")];
+        let picks = pick_list(&list);
+        assert_eq!(picks.len(), AGENT_CHOICES.len() + 1);
+        assert_eq!(
+            picks[0],
+            ("claude-code".to_owned(), "Claude Code".to_owned())
+        );
+        assert_eq!(
+            picks[5],
+            ("claude-qwen".to_owned(), "claude-qwen".to_owned())
+        );
+        assert!(can_start_in(Some("claude-qwen"), &list));
+        assert!(!can_start_in(Some("claude-qwen"), &[]));
+        assert!(can_start_in(Some("codex"), &[]));
+        assert!(!can_start_in(None, &list));
+    }
+
+    // The only test that sets the list (it is the process's).
+    #[test]
+    fn knows_the_list_once_set_and_counts_each_set() {
+        let before = custom_agents_set_count();
+        set_custom_agents(vec![custom("claude-qwen", "claude-code")]);
+        assert!(custom_agents_known());
+        assert_eq!(custom_agents_set_count(), before + 1);
+        assert!(is_startable(Some("claude-qwen")));
     }
 
     #[test]

@@ -45,26 +45,21 @@ Codespace gotchas:
    gh run view <run-id> --log-failed | tail -80
    ```
 
-Jobs. Rust PRs target `main`. The Rust workflow runs on `main`, PRs into `main`, and snapshots. The slim `CI` workflow checks web and core; `Site` checks site changes.
+Jobs. Rust PRs target `main`. The Rust workflow runs on `main`, PRs into `main`, and snapshots. `Site` checks site changes. The web and core build, typecheck and tests can be run in a codespace.
 
 | Workflow | Job | Checks |
 |---|---|---|
-| CI | `build` | build, `pnpm lint` (biome on `packages` and `e2e`, typecheck), `scripts/*.test.sh` |
-| CI | `test (1..3)` | unit tests, split by file (`vitest --shard=<n>/3`), with `NATAMUX_BENCH=1` |
-| CI | `docker` | both compose files are valid; development starts and answers |
-| CI | `audit` | `pnpm audit --audit-level=high` |
-| CI | `os (<os>, 1..3, desktop)`, `node-24` | macOS and Windows tests in 3 parts plus the desktop start, Node 24. Only on pushes to `main`, not `natamux-ci/*` |
-| E2E | `build`, `test (<group>)`, `publish` | production images and Playwright, see the `e2e` skill |
 | Site | `build` | only when `site/**` changes |
 | Rust | `check` | `cargo xtask ci`: fmt, clippy, tests, layers. Always runs |
 | Rust | `app-macos`, `app-windows`, daemon and client jobs | only when the change can break them (`scripts/ci-changes.py`); `main` runs all |
 | Rust | `app-shots (1..4)` | on demand only: a `Shots:` line (1 job) or `[ci: shots]` / `[ci: all]` (4 jobs) in the head commit message; never on `main` |
-| Rust | `rust-ok` | red when any Rust job failed or was cancelled. Required, with `web-core` of `ci.yml`, to merge into `main` |
+| Rust | `e2e-image`, `e2e`, `e2e-publish` | build, test and publish the production daemon and web images; see the `e2e` skill |
+| Rust | `rust-ok` | red when any Rust job failed or was cancelled. Required to merge into `main` |
 | Rust | `supply-chain` | `cargo deny --locked check`, `cargo audit`, `cargo vet --locked` |
+| Release | `web`, `package` | build the dashboard and package the native app for release |
 
 - Rust snapshots: every task pushes to the shared `natamux-ci/rust` (the jobs the change needs) and `natamux-ci/rust-check` (only `check`, for the compile loop). Keep both branches at cleanup. Only a push to `main` saves Cargo caches (`check`, `app-macos`, `app-windows`); every other run restores them.
 - `[ci: all]` in the head commit message of a snapshot or a PR runs every job, `app-windows` too.
-- A test that fails in one shard: the log names the file. `--shard` splits files the same way each run, so a rerun hits the same shard.
 
 ## Fixing without running anything
 

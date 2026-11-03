@@ -5,7 +5,9 @@
 
 use std::sync::Arc;
 
-use gpui::{AnyView, Entity, StyleRefinement, TestAppContext, VisualTestContext};
+use gpui::{
+    AnyView, Entity, FocusHandle, Focusable, StyleRefinement, TestAppContext, VisualTestContext,
+};
 use ui::prelude::*;
 
 use super::appearance::{self, Inputs};
@@ -17,6 +19,7 @@ use super::source::Source;
 use super::view_state::ViewState;
 use crate::components::dialog::DialogLayer;
 use crate::components::menu::MenuLayer;
+use crate::projects::project_settings_page::ProjectSettingsPage;
 
 /// The globals of `start`, with the app's own themes. Natamux Dark is set through the same
 /// settings JSON the app writes, as `--theme dark` does.
@@ -91,6 +94,62 @@ pub fn init_app<V: Render>(
         unreachable!("the root shows the view `build` made");
     };
     (view, dashboard, cx)
+}
+
+/// Stands for the list or the panel a dialog opens from: it holds the focus until then.
+pub struct Opener {
+    pub focus: FocusHandle,
+}
+
+impl Opener {
+    pub fn new(cx: &mut Context<Self>) -> Self {
+        Opener {
+            focus: cx.focus_handle(),
+        }
+    }
+}
+
+impl Focusable for Opener {
+    fn focus_handle(&self, _: &App) -> FocusHandle {
+        self.focus.clone()
+    }
+}
+
+impl Render for Opener {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        div().size_full().track_focus(&self.focus)
+    }
+}
+
+/// `init_app` on an `Opener` that has the focus, as a dialog's opener has.
+pub fn init_opener(
+    cx: &mut TestAppContext,
+) -> (Entity<Opener>, Entity<Dashboard>, &mut VisualTestContext) {
+    let (opener, dashboard, cx) = init_app(cx, |_, _, cx| cx.new(Opener::new));
+    cx.update(|window, cx| window.focus(&opener.focus_handle(cx), cx));
+    cx.run_until_parked();
+    (opener, dashboard, cx)
+}
+
+/// The project of the fake that has a `.natamux.json`.
+pub const PROJECT: &str = "natamux";
+
+/// `init_app` on the Project settings page of `PROJECT`, once its file is read.
+pub fn init_project_page(
+    cx: &mut TestAppContext,
+) -> (
+    Entity<ProjectSettingsPage>,
+    Entity<Dashboard>,
+    &mut VisualTestContext,
+) {
+    let (page, dashboard, cx) = init_app(cx, |dashboard, window, cx| {
+        cx.new(|cx| {
+            let (id, name) = (PROJECT.to_owned(), PROJECT.to_owned());
+            ProjectSettingsPage::new(dashboard, id, name, window, cx)
+        })
+    });
+    cx.run_until_parked();
+    (page, dashboard, cx)
 }
 
 /// Stands for the sidebar, the task list and the details panel: a cached view that shows none

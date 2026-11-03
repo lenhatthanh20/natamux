@@ -155,7 +155,7 @@ export function NoWorkspace({
   const header = (
     <header className="flex min-h-11 shrink-0 items-center gap-3 border-b border-line px-4 py-1.5">
       <span className="shrink-0 font-mono text-xs text-muted">{task.id}</span>
-      <h2 data-tip-overflow className="min-w-0 truncate text-lg font-semibold tracking-tight">
+      <h2 data-tip-overflow className="min-w-0 truncate text-lg font-normal tracking-tight">
         {task.title}
       </h2>
       <StateBadge state={task.state} />

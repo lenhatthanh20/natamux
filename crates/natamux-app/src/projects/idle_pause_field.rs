@@ -103,3 +103,7 @@ impl Render for IdlePauseField {
             .children(self.error.map(error_line))
     }
 }
+
+#[cfg(test)]
+#[path = "idle_pause_field_tests.rs"]
+mod tests;

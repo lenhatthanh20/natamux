@@ -170,6 +170,7 @@ fn early_stages() -> Vec<Stage> {
             &["Cases"],
         )),
         with_ci(with_workflow(stage("implement", Agent, Auto))),
+        stage("agent", Agent, Auto),
     ]
 }
 

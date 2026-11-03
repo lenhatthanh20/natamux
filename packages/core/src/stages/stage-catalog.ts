@@ -184,6 +184,12 @@ export const STAGE_CATALOG: readonly CatalogStage[] = [
   },
   {
     phase: 'build',
+    stage: { id: 'agent', kind: 'agent', gate: 'auto' },
+    description: 'Opens one agent without a prompt after the task context is ready.',
+    prompt: '',
+  },
+  {
+    phase: 'build',
     stage: { id: 'migration', name: 'Data migration', kind: 'agent', gate: 'manual' },
     description: 'Writes the data or schema migration, and how to roll it back.',
     prompt: prompt(

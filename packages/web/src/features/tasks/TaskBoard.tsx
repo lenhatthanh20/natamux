@@ -91,7 +91,7 @@ const Card = memo(function Card({
           {formatAge(task.updatedAt, now)}
         </span>
       </span>
-      <span className="line-clamp-2 font-medium break-words">{task.title}</span>
+      <span className="line-clamp-2 font-normal break-words">{task.title}</span>
       <span className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted empty:hidden">
         {stageLabel(task) !== null && <span>{stageLabel(task)}</span>}
         {task.agent !== null && <AgentName agent={task.agent} />}

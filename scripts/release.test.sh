@@ -141,8 +141,20 @@ check "the macOS bundle has 13 usage descriptions" \
   '[ "$(grep -c "UsageDescription</key>" crates/natamux-app/resources/Info.plist)" = 13 ]'
 check "the root package.json pins pnpm" 'grep -qE "^  \"packageManager\": \"pnpm@[0-9]+\.[0-9]+\.[0-9]+\",$" package.json'
 check "the root package.json has no version" '! grep -q "^  \"version\":" package.json'
-check "the package job of release.yml caches no target folder" \
+check "Release does not build on a pull request" \
+  '! sed -n "/^on:/,/^permissions:/p" .github/workflows/release.yml | grep -q "^  pull_request:"'
+check "manual Release validates its branch before checkout" \
+  'sed -n "/^  web:/,/^  package:/p" .github/workflows/release.yml | grep -q "Validate release ref"'
+check "the package job of release.yml does not restore target on every runner" \
   '! sed -n "/^  package:/,/^  release:/p" .github/workflows/release.yml | grep -qE "^ +target$"'
+check "the package job of release.yml restores target only on Intel and Windows" \
+  'sed -n "/^  package:/,/^  release:/p" .github/workflows/release.yml | grep -q "matrix.name.*mac-x64.*win-x64.*target"'
+check "the package job of release.yml restores cached file times" \
+  'sed -n "/^  package:/,/^  release:/p" .github/workflows/release.yml | grep -q "matrix.py.*scripts/ci-changes.py mtimes"'
+check "the Windows release job uses python" \
+  'grep -q "win-x64, os: windows-latest, py: python" .github/workflows/release.yml'
+check "the Intel macOS release job uses python3" \
+  'grep -q "mac-x64, os: macos-26-intel, cache: rust-app-mac-intel, py: python3" .github/workflows/release.yml'
 check "the package job of release.yml restores a cargo cache" \
   'sed -n "/^  package:/,/^  release:/p" .github/workflows/release.yml | grep -q "~/.cargo/registry"'
 check "packages depend on each other with workspace:*" \

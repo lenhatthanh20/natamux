@@ -154,6 +154,14 @@ impl RepoTrustDialog {
     }
 }
 
+impl RepoTrustDialog {
+    /// The commands shown and the error line, for the flow tests.
+    #[cfg(test)]
+    pub fn shown(&self) -> (&RepoTrustView, Option<&str>) {
+        (&self.view, self.error.as_deref())
+    }
+}
+
 impl EventEmitter<DismissEvent> for RepoTrustDialog {}
 
 impl Focusable for RepoTrustDialog {

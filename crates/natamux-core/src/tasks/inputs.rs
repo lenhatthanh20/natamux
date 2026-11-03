@@ -54,6 +54,13 @@ pub fn create_task_input(value: Option<&Value>) -> Result<Map<String, Value>, Zo
             string(Some(v), &path("agent"), &[Rule::Min(1)], issues).map(Value::from)
         });
         put(out, "agent", agent);
+        if let Some(mode) = map.get("mode") {
+            put(
+                out,
+                "mode",
+                one_of(Some(mode), &path("mode"), &["single-agent"], issues).map(Value::from),
+            );
+        }
         let depends_on = defaulted(map.get("dependsOn"), json!([]), |v| {
             task_ids(v, &path("dependsOn"), issues)
         });

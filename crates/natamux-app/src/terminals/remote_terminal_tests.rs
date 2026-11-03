@@ -20,6 +20,8 @@ use crate::app::test_views;
 use crate::perf::overlay::Perf;
 use crate::terminals::terminal_parser::{PACE_FOCUSED, PACE_HIDDEN, PACE_SHOWN};
 use crate::terminals::terminal_screen::terminal_screen;
+#[path = "remote_terminal_menu_tests.rs"]
+mod context_menu;
 
 struct Host {
     terminal: Entity<RemoteTerminal>,
