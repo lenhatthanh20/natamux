@@ -193,3 +193,11 @@ main h1.docs-overview-title { max-width: 14ch; font-size: clamp(2.875rem, 5vw, 4
   .docs-mobile-toc a { display: block; padding: 8px 24px; color: var(--text); text-decoration: none; }
   .docs-mobile-toc a:hover { background: var(--raise); }
 }
+main h1 { color: var(--strong); }
+.docs-actions .button { gap: 8px; }
+.sidebar-pane { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+.sidebar-content .sl-badge { border-color: var(--line-2); background: var(--panel); color: var(--accent); border-radius: 2px; font-family: var(--mono); font-size: 0.5625rem; }
+.sl-menu-button { width: 38px; height: 38px; top: calc((var(--sl-nav-height) - 38px) / 2); border: 1px solid var(--line); border-radius: 2px; background: var(--bg); color: var(--strong); box-shadow: none; }
+:root[data-theme='light'] .sl-menu-button { background: var(--bg); color: var(--strong); }
+.sl-menu-button:hover, .sl-menu-button:has(~ :popover-open) { background: var(--raise); }
+mobile-starlight-toc .toggle { border-radius: 2px; }

@@ -70,3 +70,8 @@
   .site-docs-label { display: none; }
   .site-download { font-size: 0.75rem; padding-inline: 10px; }
 }
+@media (max-width: 799px) {
+  .site-header .site-links { display: flex; }
+  .site-header .site-links a:not(:last-child) { display: none; }
+  .site-header .site-actions { margin-inline-start: 0; }
+}

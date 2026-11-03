@@ -44,7 +44,7 @@ export default defineConfig({
           ],
         },
         {
-          label: 'Workflows',
+          label: 'Build a workflow',
           items: [
             { slug: 'docs/guides/workflows', badge: { text: 'New', variant: 'tip' } },
             { slug: 'docs/concepts/stages' },

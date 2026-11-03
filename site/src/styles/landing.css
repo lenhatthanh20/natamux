@@ -30,20 +30,6 @@ code { padding: 0.12em 0.35em; border-radius: 2px; background: var(--raise); col
 .btn.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
 .btn.big { min-height: 48px; padding-inline: 20px; }
 .btn.small { min-height: 38px; padding: 7px 13px; }
-.icon-btn { display: grid; place-items: center; width: 38px; height: 38px; padding: 9px; border: 0; border-radius: 2px; background: transparent; color: var(--muted); cursor: pointer; }
-.icon-btn:hover { background: var(--raise); color: var(--strong); }
-.icon-btn svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
-:root[data-theme='light'] .icon-btn .sun,
-:root:not([data-theme='light']) .icon-btn .moon { display: none; }
-
-.nav { position: sticky; top: 0; z-index: 40; background: var(--bg); border-bottom: 1px solid var(--line-2); }
-.nav-row { min-height: 72px; display: flex; align-items: center; gap: 40px; }
-.brand { display: inline-flex; gap: 10px; align-items: center; color: var(--strong); text-decoration: none; font-size: 1.125rem; font-weight: 720; letter-spacing: -0.035em; }
-.brand img { width: 26px; height: 26px; }
-.nav nav { display: flex; gap: 28px; margin-left: auto; }
-.nav nav a, .github-link { color: var(--muted); text-decoration: none; font-size: 0.8125rem; font-weight: 550; }
-.nav nav a:hover, .github-link:hover { color: var(--strong); }
-.nav-end { display: flex; align-items: center; gap: 12px; }
 
 .hero { padding-block: clamp(76px, 8vw, 112px) 92px; }
 .hero-grid { display: grid; grid-template-columns: minmax(0, 0.86fr) minmax(0, 1.14fr); align-items: center; gap: 54px; }
@@ -156,15 +142,8 @@ code { padding: 0.12em 0.35em; border-radius: 2px; background: var(--raise); col
 .dl-all td a { color: var(--accent); font: 400 0.6875rem/1.5 var(--mono); overflow-wrap: anywhere; }
 .dl-links { display: grid; gap: 16px; padding: 0; margin: 0; list-style: none; color: var(--muted); font-size: 0.875rem; }
 .dl-links a { color: var(--strong); }
-.foot { padding-block: 34px; }
-.foot-row { display: flex; flex-wrap: wrap; align-items: center; gap: 18px 24px; color: var(--muted); font-size: 0.75rem; }
-.foot nav { display: flex; flex-wrap: wrap; gap: 10px 20px; margin-left: auto; }
-.foot nav a { text-decoration: none; }
-.foot nav a:hover { color: var(--strong); }
 
 @media (max-width: 1050px) {
-  .nav-row { gap: 24px; }
-  .nav nav { gap: 20px; }
   .github-link { display: none; }
   .hero-grid { gap: 32px; }
   .hero-copy { padding-left: 22px; }
@@ -193,11 +172,6 @@ code { padding: 0.12em 0.35em; border-radius: 2px; background: var(--raise); col
 }
 @media (max-width: 700px) {
   .wrap { width: calc(100% - 32px); }
-  .nav-row { min-height: 64px; gap: 14px; }
-  .nav nav { margin-left: auto; }
-  .nav nav a:not(:last-child) { display: none; }
-  .nav-end { gap: 5px; }
-  .nav-end .btn { padding-inline: 10px; }
   .hero { padding-block: 60px; }
   .hero-copy { padding-left: 20px; }
   .hero h1 { max-width: 13ch; font-size: clamp(2.65rem, 8.2vw, 4rem); }
@@ -214,13 +188,8 @@ code { padding: 0.12em 0.35em; border-radius: 2px; background: var(--raise); col
   .first-start { padding: 14px; gap: 10px; }
   .dl-tabs { width: 100%; }
   .dl-tabs button { flex: 1; padding-inline: 10px; }
-  .foot nav { margin-left: 0; width: 100%; }
 }
 @media (max-width: 440px) {
-  .brand { gap: 7px; font-size: 1rem; }
-  .brand img { width: 23px; height: 23px; }
-  .nav-row { gap: 12px; }
-  .nav-end .btn { font-size: 0.75rem; }
   .ctas .btn { width: 100%; }
   .workflow, .agents-list { grid-template-columns: minmax(0, 1fr); }
   .workflow li { min-height: 0; }
