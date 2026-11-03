@@ -5725,6 +5725,7 @@ name = "natamux-ui"
 version = "1.0.18"
 dependencies = [
  "gpui",
+ "menu",
  "theme",
  "ui",
 ]

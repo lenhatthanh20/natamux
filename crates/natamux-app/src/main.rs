@@ -105,6 +105,8 @@ mod components {
     pub mod kit_metrics;
     pub mod menu;
     #[cfg(test)]
+    mod context_menu_tests;
+    #[cfg(test)]
     mod menu_tests;
     pub mod motion;
     pub mod motion_rules;
