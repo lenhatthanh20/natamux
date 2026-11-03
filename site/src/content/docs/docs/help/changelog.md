@@ -9,7 +9,7 @@ All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/r
 
 ## v1.0.18 (2026-11-03)
 
-- The homepage shows how one project workflow can fit solo work or a larger team's review steps.
+- The homepage and documentation use a new layout with clearer task, workflow and getting-started sections.
 - Fix: opening a task card in the desktop sidebar slightly changed its title size and header position. The title, state icon and age now stay steady.
 
 ## v1.0.17 (2026-11-03)

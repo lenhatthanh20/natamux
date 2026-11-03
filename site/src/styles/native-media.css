@@ -1,0 +1,29 @@
+.native-clip {
+  --media-bg: var(--panel, var(--sl-color-gray-6));
+  --media-raised: var(--raise, var(--sl-color-gray-5));
+  --media-text: var(--strong, var(--sl-color-white));
+  --media-muted: var(--muted, var(--sl-color-gray-3));
+  --media-line: var(--line, var(--sl-color-gray-5));
+  --media-accent: var(--accent, var(--sl-color-accent));
+  --media-mono: var(--mono, var(--sl-font-mono));
+  min-width: 0;
+  margin: 0;
+  background: var(--media-bg);
+  color: var(--media-text);
+}
+.native-player { position: relative; min-width: 0; }
+.native-clip .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.native-player video { display: block; width: 100%; height: auto; background: var(--media-bg); }
+.native-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 9px 14px; border-top: 1px solid var(--media-line); color: var(--media-muted); font: 500 0.625rem/1.5 var(--media-mono); }
+.native-controls[hidden] { display: none; }
+.clip-toggle { min-width: 64px; min-height: 36px; margin: 0; padding: 6px 12px; border: 1px solid var(--media-line); border-radius: 2px; background: var(--media-bg); color: var(--media-text); font: 600 0.75rem/1.4 var(--media-mono); cursor: pointer; }
+.clip-toggle:hover { border-color: var(--media-accent); background: var(--media-raised); }
+.clip-toggle:focus-visible { outline: 2px solid var(--media-accent); outline-offset: 3px; }
+.native-placeholder { display: grid; justify-items: start; align-content: center; gap: 14px; min-height: 210px; aspect-ratio: 1.6; padding: 32px; border-bottom: 1px solid var(--media-line); }
+.native-placeholder svg { width: 32px; height: 32px; stroke: var(--media-accent); stroke-width: 1.2; }
+.native-placeholder strong { max-width: 28ch; color: var(--media-text); font: 600 0.8125rem/1.5 var(--media-mono); }
+.native-placeholder > span { max-width: 44ch; color: var(--media-muted); font-size: 0.8125rem; line-height: 1.6; }
+.native-clip > figcaption { margin: 0; padding: 12px 16px; color: var(--media-muted); font-size: 0.6875rem; line-height: 1.6; }
+.native-fallback { margin: 0; padding: 12px 16px; font-size: 0.8125rem; }
+:root[data-theme='light'] .native-clip .for-dark,
+:root:not([data-theme='light']) .native-clip .for-light { display: none; }

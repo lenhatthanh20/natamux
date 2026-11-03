@@ -1,161 +1,108 @@
-/* Starlight theme in the Natamux colors: navy, with the three lane colors of the icon. */
-@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400..700&family=Geist+Mono:wght@400..600&display=swap');
+/* Signal flow carries the homepage's copper wayfinding into Starlight. */
+@import './native-media.css';
 
 :root {
-  --sl-font: 'Geist', system-ui, sans-serif;
-  --sl-font-mono: 'Geist Mono', ui-monospace, monospace;
-  --sl-color-accent-low: #16264a;
-  --sl-color-accent: #7fa8ff;
-  --sl-color-accent-high: #d6e3ff;
-  --sl-color-white: #f4f7fb;
-  --sl-color-gray-1: #e3e8f1;
-  --sl-color-gray-2: #b9c3d6;
-  --sl-color-gray-3: #8a97ae;
-  --sl-color-gray-4: #4f5d78;
-  --sl-color-gray-5: #2a3856;
-  --sl-color-gray-6: #18233b;
-  --sl-color-black: #0d1526;
+  --sl-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --sl-font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --sl-color-accent-low: #392a1d;
+  --sl-color-accent: #e5ae70;
+  --sl-color-accent-high: #f5d6b2;
+  --sl-color-white: #fffefa;
+  --sl-color-gray-1: #e4e6e8;
+  --sl-color-gray-2: #c4cbd3;
+  --sl-color-gray-3: #a4acb7;
+  --sl-color-gray-4: #586473;
+  --sl-color-gray-5: #323b46;
+  --sl-color-gray-6: #1a2028;
+  --sl-color-black: #11151b;
+  --sl-color-bg-nav: #11151b;
+  --sl-color-bg-sidebar: #11151b;
+  --sl-color-hairline-light: #323b46;
+  --sl-color-hairline-shade: #323b46;
+  --sl-content-width: 49rem;
+  --sl-text-h1: clamp(2.5rem, 4.4vw, 4rem);
+  --sl-text-h2: 1.875rem;
 }
-
 :root[data-theme='light'] {
-  --sl-color-accent-low: #dfe8ff;
-  --sl-color-accent: #2f5fd0;
-  --sl-color-accent-high: #16264a;
-  --sl-color-white: #0d1526;
-  --sl-color-gray-1: #18233b;
-  --sl-color-gray-2: #2a3856;
-  --sl-color-gray-3: #4f5d78;
-  --sl-color-gray-4: #8a97ae;
-  --sl-color-gray-5: #c9d1df;
-  --sl-color-gray-6: #e8ecf3;
-  --sl-color-gray-7: #f3f5f9;
-  --sl-color-black: #ffffff;
+  --sl-color-accent-low: #f0e4d3;
+  --sl-color-accent: #92571f;
+  --sl-color-accent-high: #5e3513;
+  --sl-color-white: #191e26;
+  --sl-color-gray-1: #262d36;
+  --sl-color-gray-2: #414a55;
+  --sl-color-gray-3: #59636f;
+  --sl-color-gray-4: #86909b;
+  --sl-color-gray-5: #d8d4cb;
+  --sl-color-gray-6: #efede7;
+  --sl-color-gray-7: #f7f5f0;
+  --sl-color-black: #fffefa;
+  --sl-color-bg: #f7f5f0;
+  --sl-color-bg-nav: #f7f5f0;
+  --sl-color-bg-sidebar: #f7f5f0;
+  --sl-color-hairline-light: #d8d4cb;
+  --sl-color-hairline-shade: #d8d4cb;
 }
 
-.sl-markdown-content code:not(:where(.not-content *)) {
-  font-size: 0.86em;
-}
+header.header { border-bottom: 1px solid var(--sl-color-gray-4); box-shadow: none; }
+.site-title { color: var(--sl-color-white); font-weight: 720; letter-spacing: -0.035em; }
+.site-title img { width: 1.625rem; height: 1.625rem; }
+.sidebar-pane { border-inline-end: 1px solid var(--sl-color-gray-5); }
+.sidebar-content a { border-radius: 2px; }
+.sidebar-content a[aria-current='page'] { border-inline-start: 2px solid var(--sl-color-accent); background: var(--sl-color-accent-low); color: var(--sl-color-white); font-weight: 600; }
+.sidebar-content .top-level > li > details > summary .large { color: var(--sl-color-gray-3); font: 650 0.6875rem/1.5 var(--sl-font-mono); letter-spacing: 0.08em; text-transform: uppercase; }
+.sidebar-content .top-level > li { margin-block: 1.25rem; }
+.right-sidebar { border-inline-start: 1px solid var(--sl-color-gray-5); }
+.right-sidebar h2 { color: var(--sl-color-gray-3); font: 600 0.6875rem/1.5 var(--sl-font-mono); letter-spacing: 0.08em; text-transform: uppercase; }
+.right-sidebar a { border-radius: 2px; }
+.right-sidebar a[aria-current='true'] { color: var(--sl-color-accent); }
+main h1 { max-width: 17ch; border-inline-start: 2px solid var(--sl-color-accent); padding-inline-start: 1.5rem; font-weight: 680; letter-spacing: -0.045em; line-height: 1.06; text-wrap: balance; }
+.sl-markdown-content { line-height: 1.75; }
+.sl-markdown-content h2 { margin-top: 3.5rem; font-weight: 650; letter-spacing: -0.035em; line-height: 1.15; }
+.sl-markdown-content h3 { font-weight: 620; letter-spacing: -0.025em; }
+.sl-markdown-content code:not(:where(.not-content *)) { border-radius: 2px; font-size: 0.84em; }
+.sl-markdown-content hr { margin-block: 3rem; border-color: var(--sl-color-gray-5); }
+.sl-markdown-content kbd { display: inline-block; padding: 0.05em 0.45em; border: 1px solid var(--sl-color-gray-5); border-bottom-width: 2px; border-radius: 2px; background: var(--sl-color-gray-6); color: var(--sl-color-white); font-family: var(--sl-font-mono); font-size: 0.82em; line-height: 1.5; }
+.sl-markdown-content table { font-size: 0.9375rem; }
+.sl-markdown-content th { color: var(--sl-color-gray-3); font-family: var(--sl-font-mono); font-size: 0.75rem; font-weight: 600; }
+.sl-markdown-content :is(th, td) { border-color: var(--sl-color-gray-5); }
 
-/* The three lanes as a thin rule under the header. */
-header.header {
-  border-bottom: 0;
-  box-shadow: 0 1px 0 var(--sl-color-hairline);
-}
-header.header::after {
-  content: '';
-  position: absolute;
-  inset: auto 0 -2px 0;
-  height: 2px;
-  background: linear-gradient(90deg, #f2b544 0 33.3%, #58d3a6 33.3% 66.6%, #7fa8ff 66.6% 100%);
-  opacity: 0.85;
-}
+/* Keep Starlight's content and keyboard navigation while changing its surfaces. */
+.card, .sl-link-card { border-color: var(--sl-color-gray-5); border-radius: 2px; background: var(--sl-color-gray-6); box-shadow: none; }
+.sl-link-card:hover { border-color: var(--sl-color-accent); background: var(--sl-color-accent-low); }
+.sl-link-card .title { font-weight: 620; letter-spacing: -0.02em; }
+.card .title { font-size: 1.125rem; }
+.sl-markdown-content .card-grid { gap: 0.75rem; margin-block: 1.75rem; }
+.pagination-links a { border-color: var(--sl-color-gray-5); border-radius: 2px; box-shadow: none; }
+.pagination-links a:hover { border-color: var(--sl-color-accent); }
+.pagination-links .link-title { font-size: 1.125rem; }
+.expressive-code .frame { border-radius: 2px; }
+.starlight-aside { border-radius: 2px; }
 
-/* Screenshots: a dark and a light picture, shown for the current theme. */
-.sl-markdown-content figure.shot {
-  margin-block: 1.75rem;
-}
-.shot img,
-.shot video {
-  display: block;
-  width: 100%;
-  height: auto;
-  border: 1px solid var(--sl-color-gray-5);
-  border-radius: 12px;
-  background: var(--sl-color-gray-6);
-  box-shadow:
-    0 1px 2px rgb(0 0 0 / 0.25),
-    0 18px 40px -24px rgb(0 0 0 / 0.55);
-}
-:root[data-theme='light'] .shot img,
-:root[data-theme='light'] .shot video {
-  box-shadow:
-    0 1px 2px rgb(13 21 38 / 0.08),
-    0 18px 40px -26px rgb(13 21 38 / 0.35);
-}
-.shot figcaption {
-  margin-top: 0.6rem;
-  font-size: var(--sl-text-sm);
-  line-height: 1.5;
-  color: var(--sl-color-gray-3);
-}
+/* Existing guide illustrations retain their captions and theme pairing. */
+.sl-markdown-content figure.shot { margin-block: 1.75rem; }
+.shot img, .shot video { display: block; width: 100%; height: auto; border: 1px solid var(--sl-color-gray-5); border-radius: 2px; background: var(--sl-color-gray-6); }
+.shot figcaption { margin-top: 0.6rem; font-size: var(--sl-text-sm); line-height: 1.5; color: var(--sl-color-gray-3); }
 :root[data-theme='light'] .shot .shot-dark,
-:root:not([data-theme='light']) .shot .shot-light {
-  display: none;
-}
+:root:not([data-theme='light']) .shot .shot-light { display: none; }
+.sl-markdown-content figure.native-clip { margin-block: 1.75rem; border: 1px solid var(--sl-color-gray-5); }
+.sl-markdown-content .native-clip > figcaption { margin: 0; padding: 12px 16px; font-size: 0.75rem; }
+.sl-markdown-content .native-placeholder > strong,
+.sl-markdown-content .native-placeholder > span { margin: 0; }
+.sl-markdown-content .native-controls { margin: 0; }
+.sl-markdown-content .native-controls .clip-toggle { margin: 0; }
 
-/* A short rise as a screenshot scrolls into view, where the browser can tie it to scrolling. */
-@media (prefers-reduced-motion: no-preference) {
-  @supports (animation-timeline: view()) {
-    .sl-markdown-content .shot {
-      animation: shot-rise linear both;
-      animation-timeline: view();
-      animation-range: entry 0% entry 35%;
-    }
-  }
-}
-@keyframes shot-rise {
-  from {
-    opacity: 0.2;
-    transform: translateY(18px) scale(0.985);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
+.downloads { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 0.75rem; }
+.sl-markdown-content .downloads > a { display: grid; gap: 0.15rem; margin: 0; padding: 1rem; border: 1px solid var(--sl-color-gray-5); border-radius: 2px; background: var(--sl-color-gray-6); color: var(--sl-color-white); text-decoration: none; }
+.sl-markdown-content .downloads > a:hover { border-color: var(--sl-color-accent); background: var(--sl-color-accent-low); }
+.downloads strong { font-size: var(--sl-text-base); }
+.downloads span { color: var(--sl-color-gray-3); font-size: var(--sl-text-sm); }
+.downloads .file { font-family: var(--sl-font-mono); font-size: var(--sl-text-xs); }
 
-/* Download links as a grid of cards. */
-.downloads {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
-  gap: 0.75rem;
+@media (max-width: 700px) {
+  main h1 { padding-inline-start: 1rem; font-size: clamp(2.25rem, 8vw, 3rem); }
+  .sl-markdown-content h2 { margin-top: 2.75rem; }
+  .sl-markdown-content .native-placeholder { padding: 24px; }
 }
-.sl-markdown-content .downloads > a {
-  display: grid;
-  gap: 0.15rem;
-  margin: 0;
-  padding: 0.85rem 1rem;
-  border: 1px solid var(--sl-color-gray-5);
-  border-radius: 12px;
-  color: var(--sl-color-white);
-  text-decoration: none;
-  transition:
-    border-color 0.15s,
-    background-color 0.15s,
-    transform 0.15s;
+@media (prefers-reduced-motion: reduce) {
+  .sl-link-card, .pagination-links a { transition: none; }
 }
-.sl-markdown-content .downloads > a:hover {
-  border-color: var(--sl-color-accent);
-  background: var(--sl-color-accent-low);
-}
-@media (prefers-reduced-motion: no-preference) {
-  .sl-markdown-content .downloads > a:hover {
-    transform: translateY(-2px);
-  }
-}
-.downloads strong {
-  font-size: var(--sl-text-base);
-}
-.downloads span {
-  font-size: var(--sl-text-sm);
-  color: var(--sl-color-gray-3);
-}
-.downloads .file {
-  font-family: var(--sl-font-mono);
-  font-size: var(--sl-text-xs);
-}
-
-/* Keys in text: kbd. */
-.sl-markdown-content kbd {
-  display: inline-block;
-  padding: 0.05em 0.45em;
-  border: 1px solid var(--sl-color-gray-5);
-  border-bottom-width: 2px;
-  border-radius: 6px;
-  background: var(--sl-color-gray-6);
-  color: var(--sl-color-white);
-  font-family: var(--sl-font-mono);
-  font-size: 0.82em;
-  line-height: 1.5;
-}
-
