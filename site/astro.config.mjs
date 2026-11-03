@@ -36,7 +36,7 @@ export default defineConfig({
       ],
       sidebar: [
         {
-          label: 'Start',
+          label: 'Getting started', collapsed: true,
           items: [
             { label: 'Overview', slug: 'docs' },
             { slug: 'docs/getting-started/install' },
@@ -44,20 +44,23 @@ export default defineConfig({
           ],
         },
         {
-          label: 'Build a workflow',
+          label: 'Workflows', collapsed: true,
           items: [
-            { slug: 'docs/guides/workflows', badge: { text: 'New', variant: 'tip' } },
+            { slug: 'docs/guides/workflows' },
             { slug: 'docs/concepts/stages' },
             { slug: 'docs/concepts/review-loop' },
-            { slug: 'docs/guides/mix-agents', badge: { text: 'New', variant: 'tip' } },
+            { slug: 'docs/guides/mix-agents' },
             { slug: 'docs/guides/fan-out' },
             { slug: 'docs/guides/project-settings' },
+            { slug: 'docs/concepts/agents-and-hooks' },
           ],
         },
         {
-          label: 'Use the app',
+          label: 'Use the app', collapsed: true,
           items: [
             { slug: 'docs/guides/dashboard' },
+            { slug: 'docs/concepts/tasks' },
+            { slug: 'docs/concepts/workspaces' },
             { slug: 'docs/guides/terminal' },
             { slug: 'docs/guides/changes-and-history' },
             { slug: 'docs/guides/github' },
@@ -67,15 +70,7 @@ export default defineConfig({
           ],
         },
         {
-          label: 'Concepts',
-          items: [
-            { slug: 'docs/concepts/tasks' },
-            { slug: 'docs/concepts/workspaces' },
-            { slug: 'docs/concepts/agents-and-hooks' },
-          ],
-        },
-        {
-          label: 'Agents',
+          label: 'Agents', collapsed: true,
           items: [
             { slug: 'docs/agents' },
             { slug: 'docs/agents/claude-code' },
@@ -86,17 +81,14 @@ export default defineConfig({
             { slug: 'docs/agents/other-agents' },
           ],
         },
-        {
-          label: 'Self-host',
-          items: [{ slug: 'docs/guides/self-host-docker' }, { slug: 'docs/help/security-and-privacy' }],
-        },
         { label: 'Reference', collapsed: true, items: [{ autogenerate: { directory: 'docs/reference' } }] },
         {
-          label: 'Help',
-          collapsed: true,
+          label: 'Help and hosting', collapsed: true,
           items: [
             { slug: 'docs/help/troubleshooting' },
             { slug: 'docs/help/faq' },
+            { slug: 'docs/guides/self-host-docker' },
+            { slug: 'docs/help/security-and-privacy' },
             { slug: 'docs/help/changelog' },
           ],
         },

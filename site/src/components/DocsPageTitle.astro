@@ -1,7 +1,11 @@
 ---
+import DocsPageContents from './DocsPageContents.astro'
 const { entry } = Astro.locals.starlightRoute
 const overview = entry.id.replace(/\/$/, '') === 'docs'
 ---
 
-<p class="doc-kicker">Documentation / {overview ? 'Overview' : entry.data.title}</p>
+<div class="doc-heading-row">
+  <p class="doc-kicker">Documentation / {overview ? 'Overview' : entry.data.title}</p>
+  <DocsPageContents />
+</div>
 <h1 id="_top" class:list={{ 'docs-overview-title': overview }}>{entry.data.title}</h1>

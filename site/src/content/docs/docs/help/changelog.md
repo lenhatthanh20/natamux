@@ -9,7 +9,7 @@ All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/r
 
 ## v1.0.18 (2026-11-03)
 
-- The homepage and documentation share navigation, theme controls and a footer. The documentation overview follows the Signal flow layout with a left page rail and numbered guides.
+- The homepage and documentation share navigation, theme controls and a footer. The documentation overview follows the Signal flow layout with numbered guides. Its compact sidebar groups related pages, and a page contents menu replaces the vertical rail.
 - The homepage and documentation use a new layout with clearer task, workflow and getting-started sections.
 - Fix: opening a task card in the desktop sidebar slightly changed its title size and header position. The title, state icon and age now stay steady.
 
