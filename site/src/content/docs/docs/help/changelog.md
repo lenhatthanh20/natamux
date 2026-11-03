@@ -7,6 +7,10 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v1.0.18 (2026-11-03)
+
+- Fix: opening a task card in the desktop sidebar slightly changed its title size and header position. The title, state icon and age now stay steady.
+
 ## v1.0.17 (2026-11-03)
 
 - Fix: the desktop app's bottom status bar was thinner than its title bar. Both bars now have the same height.

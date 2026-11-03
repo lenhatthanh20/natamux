@@ -191,16 +191,20 @@ impl WorkspaceTree {
     }
 }
 
+/// Keep the title's font size fixed when its card opens or closes.
+pub(super) fn task_title_size(state: TaskState) -> f32 {
+    if row_tier(state) == RowTier::Quiet {
+        12.0
+    } else {
+        13.0
+    }
+}
+
 /// The id (only with Task ids in the sidebar, T-0240), then the title in the look of its tier:
 /// muted when finished. The id never shrinks; only the title truncates.
 pub(super) fn title_label(task: &Task, blurred: bool, show_id: bool, cx: &App) -> AnyElement {
-    let tier = row_tier(task.state);
     let weight = FontWeight::NORMAL;
-    let size = if tier == RowTier::Quiet {
-        12_f32
-    } else {
-        13_f32
-    };
+    let size = task_title_size(task.state);
     let finished = matches!(task.state, TaskState::Done | TaskState::Cancelled);
     let plain = || {
         let title = Label::new(task.title.clone())

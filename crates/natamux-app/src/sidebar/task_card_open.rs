@@ -4,12 +4,13 @@
 //! the blur check.
 
 use gpui::{AnyElement, ClickEvent, Hsla};
-use natamux_proto::tasks::task::Task;
+use natamux_proto::tasks::task::{Task, TaskState};
 use ui::{Tooltip, prelude::*};
 
 use super::blur_bar::{BlurBar, private_text};
 use super::sidebar::{lucide, mono, small};
 use super::task_card::{CONTENT_INSET, inset};
+use super::workspace_row::task_title_size;
 use super::workspace_tree::{Snapshot, WorkspaceTree};
 use crate::components::button_style::action_button;
 use crate::components::colors::{project_color, state_colors};
@@ -81,7 +82,7 @@ impl WorkspaceTree {
                 .children(cards)
                 .into_any_element()
         });
-        self.card_frame(task, snap, [9.0, 9.0, 10.0, 10.0], 7.0, true, cx)
+        self.card_frame(task, snap, [7.0, 8.0, 10.0, 9.0], 7.0, true, cx)
             .child(head)
             .child(chips)
             .children(waiting)
@@ -303,17 +304,27 @@ fn chip(child: AnyElement, cx: &App) -> AnyElement {
         .into_any_element()
 }
 
-/// The title of an open card: 13.5 regular, up to two lines, never truncated to one.
+/// The title of an open card keeps the closed card's size and can use two lines.
 pub(super) fn open_title(task: &Task, blurred: bool) -> AnyElement {
+    let size = task_title_size(task.state);
+    let finished = matches!(task.state, TaskState::Done | TaskState::Cancelled);
     private_text(
         blurred,
-        || BlurBar::new(task.title.clone(), 13.5).weight(gpui::FontWeight::NORMAL),
+        || BlurBar::new(task.title.clone(), size).weight(gpui::FontWeight::NORMAL),
         || {
-            Label::new(task.title.clone())
-                .size(LabelSize::Custom(rems_from_px(13.5_f32)))
+            let title = Label::new(task.title.clone())
+                .size(LabelSize::Custom(rems_from_px(size)))
                 .weight(gpui::FontWeight::NORMAL)
-                .line_clamp(2)
-                .into_any_element()
+                .color(if finished {
+                    Color::Muted
+                } else {
+                    Color::Default
+                });
+            if task.state == TaskState::Cancelled {
+                title.strikethrough().line_clamp(2).into_any_element()
+            } else {
+                title.line_clamp(2).into_any_element()
+            }
         },
     )
 }

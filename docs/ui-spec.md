@@ -443,6 +443,7 @@ quiet (done, cancelled, draft), min 24px:
 - Age moves to line 1 and swaps with the "..." button on hover/focus, so the slug gets the full line 2 (fixes NAV-27 truncation) and nothing overlaps.
 - States: hover bg-hover; current (open in main) bg-selected + a 2px `--accent` bar at the left (`.sb-row`); keyboard focus ring inset; selected + focused list bg-selection-active.
 - Finished rows: title and meta use `--muted` (no opacity, fixes RA-10/11); cancelled title `line-through` in the finished group only.
+- Native sidebar cards keep the same task glyph, title, and age or short reason size and header position when they open. Titles use 13px in live and attention tiers, 12px in the quiet tier; an open title can wrap to two lines. The state glyph stays in its 14px box, and agent icons stay at 12px.
 - Unseen change (agent finished or asked since the user last opened it): title weight 600 and a 6px accent dot before the age; the row name ends with ", unseen" (P2).
 - Rename: F2 or double-click title or menu "Rename". Field replaces the title line only (the row keeps its height and other lines), height 24, all text selected in both paths, Enter saves, Esc cancels, focus returns to the row (fixes NAV-23).
 - Row menu (right-click, Shift+F10, ContextMenu): View changes, Rename, Add subtask… (`ListPlus`; only for a task with no parent, in every state; opens the Add subtask dialog), Pin to the top, Copy branch name, Copy folder path, Remove workspace, Delete task.

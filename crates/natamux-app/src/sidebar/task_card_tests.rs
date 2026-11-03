@@ -1,4 +1,7 @@
 use super::*;
+use natamux_proto::tasks::task::TaskState;
+
+use crate::sidebar::workspace_row::task_title_size;
 
 #[test]
 fn the_open_or_focused_card_has_the_accent_border() {
@@ -47,4 +50,21 @@ fn open_task_titles_and_blurred_placeholders_use_regular_weight() {
     assert!(!title.contains("FontWeight::SEMIBOLD"));
     assert!(!title.contains("FontWeight::MEDIUM"));
     assert!(title.contains(".line_clamp(2)"));
+}
+
+#[test]
+fn task_title_size_follows_the_task_tier() {
+    for state in [
+        TaskState::Running,
+        TaskState::Ready,
+        TaskState::NeedsInput,
+        TaskState::Failed,
+        TaskState::Blocked,
+        TaskState::Review,
+    ] {
+        assert_eq!(task_title_size(state), 13.0);
+    }
+    for state in [TaskState::Done, TaskState::Cancelled, TaskState::Draft] {
+        assert_eq!(task_title_size(state), 12.0);
+    }
 }
