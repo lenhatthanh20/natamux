@@ -4,25 +4,10 @@ name: Release
 on:
   push:
     tags: ['v*']
-  # A dry run when packaging changes, and on a release PR (it adds docs/releases/vX.Y.Z.md).
-  # app-macos and app-windows of rust.yml build the app on every app PR.
-  pull_request:
-    branches: [main]
-    paths:
-      - .github/workflows/release.yml
-      - scripts/package-rust-desktop.sh
-      - scripts/sign-mac-app.sh
-      - scripts/make-mac-sign-cert.sh
-      - scripts/import-mac-sign-cert.sh
-      - scripts/mac-sign.test.sh
-      - scripts/natamux-windows.nsi
-      - scripts/bundle-rust-app.sh
-      - scripts/release-smoke.sh
-      - docs/releases/**
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing tag to publish, or a branch for a dry run
+        description: Existing v* tag to publish, or main for a dry run
         required: true
       publish:
         description: Draft a release after the build
@@ -34,10 +19,10 @@ permissions:
 
 concurrency:
   group: release-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   TAG: ${{ inputs.tag || github.ref_name }}
+  CHECKOUT_REF: ${{ github.event_name == 'workflow_dispatch' && (inputs.tag == 'main' && 'refs/heads/main' || format('refs/tags/{0}', inputs.tag)) || '' }}
   CARGO_INCREMENTAL: "0"
   CARGO_PROFILE_RELEASE_DEBUG: "0"
 
@@ -46,10 +31,33 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
+      - name: Validate release ref
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          TARGET_REF: ${{ inputs.tag }}
+          PUBLISH_RELEASE: ${{ inputs.publish }}
+        run: |
+          if [ "$GITHUB_REF" != refs/heads/main ]; then
+            echo "::error::Run Release from main."
+            exit 1
+          fi
+          case "$TARGET_REF" in
+            main)
+              if [ "$PUBLISH_RELEASE" = true ]; then
+                echo "::error::A dry run of main cannot publish a release."
+                exit 1
+              fi
+              ;;
+            v*) ;;
+            *)
+              echo "::error::Use main or an existing v* tag."
+              exit 1
+              ;;
+          esac
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || '' }}
+          ref: ${{ env.CHECKOUT_REF }}
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -69,10 +77,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { name: mac-arm64, os: macos-26 }
-          - { name: mac-x64, os: macos-26-intel, cache: rust-app-mac-intel }
-          - { name: linux-x64, os: ubuntu-latest }
-          - { name: win-x64, os: windows-latest }
+          - { name: mac-arm64, os: macos-26, py: python3 }
+          - { name: mac-x64, os: macos-26-intel, cache: rust-app-mac-intel, py: python3 }
+          - { name: linux-x64, os: ubuntu-latest, py: python3 }
+          - { name: win-x64, os: windows-latest, py: python }
     runs-on: ${{ matrix.os }}
     timeout-minutes: 120
     permissions:
@@ -86,7 +94,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || '' }}
+          ref: ${{ env.CHECKOUT_REF }}
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: release-web
@@ -99,14 +107,19 @@ jobs:
           version=$(sed -n 's/^version = "\([^"]*\)"$/\1/p' crates/natamux-app/Cargo.toml | head -n 1)
           test "$version" = "${TAG#v}"
       - run: rustup toolchain install
-      # Each arch has its own cache prefix: Intel reads what app-macos-intel saves on main.
+      # Intel and Windows reuse compiled output from main on the same runner type. Other release
+      # runners keep only downloads because their SDK or build profile differs from main.
       - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
+            ${{ (matrix.name == 'mac-x64' || matrix.name == 'win-x64') && 'target' || '' }}
           key: ${{ matrix.cache || format('rust-app-{0}', runner.os) }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-${{ github.sha }}
-          restore-keys: ${{ matrix.cache || format('rust-app-{0}', runner.os) }}-
+          restore-keys: ${{ matrix.cache || format('rust-app-{0}', runner.os) }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-
+      - name: Restore file times for cached Rust builds
+        if: matrix.name == 'mac-x64' || matrix.name == 'win-x64'
+        run: ${{ matrix.py }} scripts/ci-changes.py mtimes
       # The apt packages come from this cache: a run downloads only what it has not seen.
       - name: Make the apt cache writable
         if: runner.os == 'Linux'
@@ -285,7 +298,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || '' }}
+          ref: ${{ env.CHECKOUT_REF }}
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: artifacts

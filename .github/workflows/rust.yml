@@ -7,8 +7,8 @@ on:
     # natamux-ci/* holds snapshots that tasks push for a CI check (Check on CI). Rust tasks share
     # natamux-ci/rust (every job) and natamux-ci/rust-check (check only); daemon tasks share
     # natamux-ci/daemon and natamux-ci/daemon-check.
-    # A snapshot or a PR runs only the jobs its files need (the changes job). main, and a push or PR whose head
-    # commit message has [ci: all], run all.
+    # A snapshot, PR or main push runs only the jobs its files need (the changes job). A push or
+    # PR whose head commit message has [ci: all] runs all.
     # Only a main push saves caches (check, app-macos, app-windows), in the scope of main, which
     # every branch reads. Caches of each branch did not fit in the 10 GB of the repo.
     branches: [main, 'natamux-ci/**']
@@ -46,6 +46,8 @@ jobs:
       e2e_groups: ${{ steps.flags.outputs.e2e_groups }}
       crates: ${{ steps.flags.outputs.crates }}
       daemon_crates: ${{ steps.flags.outputs.daemon_crates }}
+      check: ${{ steps.flags.outputs.check }}
+      release_prep: ${{ steps.flags.outputs.release_prep }}
       all: ${{ steps.flags.outputs.all }}
       shards: ${{ steps.flags.outputs.shards }}
       shots: ${{ steps.flags.outputs.shots }}
@@ -62,6 +64,8 @@ jobs:
 
   # fmt, clippy, tests, the layer rule and the colour-literal rule.
   check:
+    needs: changes
+    if: ${{ needs.changes.outputs.check == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     permissions:
@@ -307,11 +311,11 @@ jobs:
           path: dist/natamux-cli-macos-arm64.tar.gz
           compression-level: 0
 
-  # The Intel app that release.yml (mac-x64) builds. Main only: it builds and saves the cache the
-  # release reads. Its prefix differs from app-macos, so the arm64 cleanup does not delete it.
+  # The Intel app that release.yml (mac-x64) builds. A main push with release notes builds and
+  # saves its cache. Its prefix differs from app-macos, so the arm64 cleanup does not delete it.
   app-macos-intel:
     needs: changes
-    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.changes.outputs.app == 'true' }}
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.changes.outputs.release_prep == 'true' }}
     runs-on: macos-26-intel
     timeout-minutes: 120
     permissions:
@@ -740,7 +744,7 @@ jobs:
 
   # Phase 4, part 1: the daemon's terminal crates on macOS and on Windows (ConPTY). Linux runs them
   # in `check` (docs/rust-phase4.md). A PR or snapshot runs it only when the terminal path changed
-  # (about 10 minutes on Windows, no cache); main and [ci: all] run it for every daemon crate.
+  # (about 10 minutes on Windows, no cache); [ci: all] runs it for every daemon crate.
   daemon-os:
     needs: changes
     if: ${{ !endsWith(github.ref, '-check') && needs.changes.outputs.daemon_crates != '' && needs.changes.outputs.terminal == 'true' }}
