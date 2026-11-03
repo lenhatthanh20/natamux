@@ -16,11 +16,13 @@ gpui.workspace = true
 grammars.workspace = true
 gpui_platform.workspace = true
 language.workspace = true
+linkify.workspace = true
 markdown.workspace = true
 natamux-client.workspace = true
 natamux-core.workspace = true
 natamux-proto.workspace = true
 natamux-update = { path = "../natamux-update" }
+pulldown-cmark.workspace = true
 release_channel.workspace = true
 serde_json.workspace = true
 settings.workspace = true
