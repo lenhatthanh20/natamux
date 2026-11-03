@@ -90,6 +90,8 @@ mod components {
     pub mod chips;
     pub mod colors;
     pub mod confirm;
+    #[cfg(test)]
+    mod context_menu_tests;
     pub mod detail_section;
     pub mod dialog;
     #[cfg(test)]
@@ -104,8 +106,6 @@ mod components {
     #[cfg(test)]
     pub mod kit_metrics;
     pub mod menu;
-    #[cfg(test)]
-    mod context_menu_tests;
     #[cfg(test)]
     mod menu_tests;
     pub mod motion;
