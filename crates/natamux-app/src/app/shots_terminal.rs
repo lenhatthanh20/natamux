@@ -178,7 +178,7 @@ fn grid_point(key: &str, line: usize, column: usize, cx: &App) -> Option<Point<P
 /// Every kind of cell the terminal draws: the 16 colours as text and as background, a sample of
 /// the 256, a truecolour row, the attributes, wide and joined characters, the drawn blocks and
 /// lines, Powerline, pairs of low contrast and an OSC 8 link.
-fn look() -> String {
+pub(crate) fn look() -> String {
     let mut out = String::new();
     let mut row = |title: &str, cells: String| {
         let _ = write!(out, "\x1b[2m{title:<8}\x1b[0m {cells}\x1b[0m\r\n");
