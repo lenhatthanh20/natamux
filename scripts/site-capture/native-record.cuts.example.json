@@ -6,6 +6,7 @@
     {"name": "progress-dark", "start": 31, "end": 43, "crop": [0, 0, 3840, 2160], "width": 1920},
     {"name": "review-dark", "start": 47, "end": 59, "crop": [0, 0, 3840, 2160], "width": 1920},
     {"name": "settings-dark", "start": 63, "end": 75, "crop": [0, 0, 3840, 2160], "width": 1920},
-    {"name": "editor-dark", "start": 79, "end": 89, "crop": [0, 0, 3840, 2160], "width": 1920}
+    {"name": "editor-dark", "start": 79, "end": 89, "crop": [0, 0, 3840, 2160], "width": 1920},
+    {"name": "agents-dark", "start": 93, "end": 103, "crop": [0, 0, 3840, 2160], "width": 1920}
   ]
 }
