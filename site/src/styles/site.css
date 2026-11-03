@@ -39,7 +39,6 @@
 .site-nav { min-height: 72px; display: flex; align-items: center; gap: 40px; font-family: var(--sans); }
 .site-brand { display: inline-flex; gap: 10px; align-items: center; color: var(--strong); text-decoration: none; font-size: 1.125rem; font-weight: 720; letter-spacing: -0.035em; white-space: nowrap; }
 .site-brand img { display: block; width: 26px; height: 26px; }
-.site-docs-label { color: var(--muted); font-weight: 450; }
 .site-links { display: flex; gap: 28px; margin-inline-start: auto; }
 .site-links a, .site-github { color: var(--muted); text-decoration: none; font-size: 0.8125rem; font-weight: 550; }
 .site-links a:hover, .site-github:hover, .site-links a[aria-current] { color: var(--strong); }
@@ -67,7 +66,6 @@
 @media (max-width: 440px) {
   .site-brand { gap: 7px; font-size: 1rem; }
   .site-brand img { width: 23px; height: 23px; }
-  .site-docs-label { display: none; }
   .site-download { font-size: 0.75rem; padding-inline: 10px; }
 }
 @media (max-width: 799px) {
