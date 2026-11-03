@@ -25,16 +25,16 @@ const headings = overview ? [
 )}
 
 <script>
-  document.querySelectorAll('details.doc-page-contents').forEach((menu) => {
+  document.querySelectorAll<HTMLDetailsElement>('details.doc-page-contents').forEach((menu) => {
     const close = () => menu.removeAttribute('open')
     menu.querySelectorAll('a').forEach((link) => link.addEventListener('click', close))
     menu.addEventListener('keydown', (event) => {
       if (event.key !== 'Escape') return
       close()
-      menu.querySelector('summary').focus()
+      menu.querySelector('summary')?.focus()
     })
     document.addEventListener('click', (event) => {
-      if (!menu.contains(event.target)) close()
+      if (event.target instanceof Node && !menu.contains(event.target)) close()
     })
   })
 </script>
