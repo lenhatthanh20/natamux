@@ -177,6 +177,44 @@ fn the_card_head_centers_the_glyph_on_the_title(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
+fn opening_a_card_keeps_its_header_bounds(cx: &mut TestAppContext) {
+    let (dashboard, _, cx) = sidebar_tree(cx);
+    let offsets = |cx: &mut VisualTestContext| {
+        let card = cx.debug_bounds("card-T-0141").expect("card was not drawn");
+        let glyph = cx
+            .debug_bounds("glyph-T-0141")
+            .expect("glyph was not drawn");
+        let title = cx
+            .debug_bounds("title-T-0141")
+            .expect("title was not drawn");
+        let right = cx
+            .debug_bounds("right-T-0141")
+            .expect("right slot was not drawn");
+        [
+            f32::from(glyph.left() - card.left()),
+            f32::from(glyph.top() - card.top()),
+            f32::from(glyph.right() - glyph.left()),
+            f32::from(title.left() - card.left()),
+            f32::from(title.top() - card.top()),
+            f32::from(card.right() - right.right()),
+            f32::from(right.top() - card.top()),
+        ]
+    };
+    let closed = offsets(cx);
+    dashboard.update(cx, |dashboard, cx| {
+        dashboard.set_fold("task:T-0141", true, cx)
+    });
+    cx.run_until_parked();
+    let open = offsets(cx);
+    for (index, (before, after)) in closed.into_iter().zip(open).enumerate() {
+        assert!(
+            (before - after).abs() <= 1.0,
+            "header bound {index} moved from {before} to {after}"
+        );
+    }
+}
+
+#[gpui::test]
 fn the_open_card_lines_share_one_left_edge(cx: &mut TestAppContext) {
     // The chips and the branch started under the glyph, the agent icon 6 px right of the title
     // (T-0253). Terminal rows are the task's children, so their dot column starts at the title

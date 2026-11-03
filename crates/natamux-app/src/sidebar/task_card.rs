@@ -209,8 +209,7 @@ impl WorkspaceTree {
             Some(tip) => glyph.tip(tip),
             None => glyph,
         };
-        // The title can wrap to two lines, so the glyph centers on its first line in a 20 px
-        // box; closed, the row centers the same box.
+        // The first line keeps its 20 px box when the title wraps, so the glyph stays beside it.
         let glyph = div()
             .flex_none()
             .w(rems_from_px(GLYPH_COLUMN))
@@ -232,6 +231,7 @@ impl WorkspaceTree {
             .id(SharedString::from(format!("title-{}", task.id)))
             .debug_selector(|| format!("title-{}", task.id))
             .min_w_0()
+            .min_h(rems_from_px(20.0_f32))
             .flex_1()
             .child(title)
             .tooltip(Tooltip::text(tip))
@@ -245,10 +245,8 @@ impl WorkspaceTree {
         h_flex()
             .w_full()
             .gap(rems_from_px(HEAD_GAP))
-            .when(!open, |line| line.h(rems_from_px(20.0_f32)).items_center())
-            .when(open, |line| {
-                line.min_h(rems_from_px(20.0_f32)).items_start()
-            })
+            .min_h(rems_from_px(20.0_f32))
+            .items_start()
             .child(glyph)
             .child(title)
             .when(unseen, |line| {
@@ -269,6 +267,9 @@ impl WorkspaceTree {
             .child(
                 div()
                     .flex_none()
+                    .h(rems_from_px(20.0_f32))
+                    .flex()
+                    .items_center()
                     .debug_selector(|| format!("right-{}", task.id))
                     .child(right_slot(task, snap, cx)),
             )
