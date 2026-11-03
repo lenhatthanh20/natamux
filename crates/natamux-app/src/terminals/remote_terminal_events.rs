@@ -237,6 +237,8 @@ pub(super) fn watch_focus(
 ) -> [Subscription; 2] {
     let focus_in = cx.on_focus_in(focus, window, |this, _, cx| {
         if let Some(handle) = &this.handle {
+            #[cfg(test)]
+            super::sent::claimed();
             handle.claim();
         }
         this.set_focused(true, cx);

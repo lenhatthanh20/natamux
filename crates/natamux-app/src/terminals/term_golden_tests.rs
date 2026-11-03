@@ -7,10 +7,11 @@
 
 use gpui::{App, Hsla, Keystroke, MouseButton, Rgba, TestAppContext, VisualTestContext, px, size};
 use serde_json::{Value, json};
+use terminal::{Content, Modes};
 
 use super::behaviour_tests::{
-    PANE, SET, cell, feed, focus, mods, mouse_down, mouse_move, mouse_up, open, sent_text, settle,
-    zed,
+    PANE, SET, cell, content, feed, focus, last_drawn, mods, mouse_down, mouse_move, mouse_up,
+    open, sent_text, settle, zed,
 };
 use crate::app::golden_files;
 
@@ -125,21 +126,33 @@ fn press_rows(cx: &mut TestAppContext) -> Vec<Value> {
         }
     }
     // A program turns APP_CURSOR on and no frame is drawn before the next key (6.2.5): the
-    // output comes through the screen's writer, as the parser writes it, and nothing draws.
+    // output comes through the screen's writer, as the parser writes it. The test window draws
+    // a dirty window whenever its effects run out, and the screen's wake makes it dirty, so
+    // nothing may run between the write and the key.
     feed(&terminal, MODES_OFF, cx);
+    sent_text();
     let screen = zed(&terminal, cx);
     let mut writer = screen.read_with(cx, |screen, _| screen.display_only_writer().unwrap());
+    let app_cursor = |content: &Content| content.mode.contains(Modes::APP_CURSOR);
     writer.write(b"\x1b[?1h");
-    cx.run_until_parked();
-    sent_text();
+    assert!(
+        !last_drawn(&terminal, cx, app_cursor),
+        "a frame copied the mode before the key"
+    );
+    let before = host.read_with(cx, |host, _| host.passed);
     press("up", "none", cx);
+    let passed = host.read_with(cx, |host, _| host.passed) > before;
     let no_frame = sent_text();
+    assert!(
+        content(&terminal, cx, app_cursor),
+        "the writer did not turn the mode on"
+    );
     rows.push(json!([
         "app-cursor, no frame",
         "none",
         "up",
         no_frame,
-        false
+        passed
     ]));
     rows
 }
