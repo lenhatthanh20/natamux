@@ -181,8 +181,12 @@ fn opening_a_card_keeps_its_header_bounds(cx: &mut TestAppContext) {
     let (dashboard, _, cx) = sidebar_tree(cx);
     let offsets = |cx: &mut VisualTestContext| {
         let card = cx.debug_bounds("card-T-0141").expect("card was not drawn");
-        let glyph = cx.debug_bounds("glyph-T-0141").expect("glyph was not drawn");
-        let title = cx.debug_bounds("title-T-0141").expect("title was not drawn");
+        let glyph = cx
+            .debug_bounds("glyph-T-0141")
+            .expect("glyph was not drawn");
+        let title = cx
+            .debug_bounds("title-T-0141")
+            .expect("title was not drawn");
         let right = cx
             .debug_bounds("right-T-0141")
             .expect("right slot was not drawn");
