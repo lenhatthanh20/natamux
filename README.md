@@ -24,7 +24,10 @@
 </p>
 
 <p align="center">
-  <img src="site/public/screens/readme-workflow.png" width="100%" alt="Natamux dashboard showing a task moving through its workflow">
+  <picture>
+    <source media="(prefers-color-scheme: light)" srcset="site/public/media/native/hero-light.webp">
+    <img src="site/public/media/native/hero-dark.webp" width="100%" alt="A live Natamux task with two agent terminals and its workflow progress panel">
+  </picture>
 </p>
 
 ## What it does
@@ -36,6 +39,29 @@ Natamux gives each task its own git worktree, branch, and terminal. A shared wor
 - **Make progress visible.** Track stages and terminals, and see what needs your attention.
 - **Review before shipping.** Inspect diffs, send feedback, commit, push, and open a pull request from the task.
 - **Share the process.** Commit `.natamux.json` so the team uses the same workflow.
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <picture><source media="(prefers-color-scheme: light)" srcset="site/public/media/native/settings-light.webp"><img src="site/public/media/native/settings-dark.webp" alt="Visual workflow editor with stages, conditions, and approval settings"></picture>
+      <b>Design the workflow.</b> Arrange stages, branches, and approvals.
+    </td>
+    <td width="50%" valign="top">
+      <picture><source media="(prefers-color-scheme: light)" srcset="site/public/media/native/review-light.webp"><img src="site/public/media/native/review-dark.webp" alt="Side-by-side code diff with changed files and review actions"></picture>
+      <b>Review changes.</b> Inspect the diff and respond before shipping.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <picture><source media="(prefers-color-scheme: light)" srcset="site/public/media/native/editor-light.webp"><img src="site/public/media/native/editor-dark.webp" alt="Code editor open alongside the task file tree"></picture>
+      <b>Work in context.</b> Edit project files beside the task and its terminals.
+    </td>
+    <td width="50%" valign="top">
+      <picture><source media="(prefers-color-scheme: light)" srcset="site/public/media/native/agents-light.webp"><img src="site/public/media/native/agents-dark.webp" alt="Three live agent terminal panes running separate task stages"></picture>
+      <b>Follow every agent.</b> See each terminal and stage in one view.
+    </td>
+  </tr>
+</table>
 
 ## Get started
 
