@@ -1,0 +1,82 @@
+---
+import manifest from '../data/native-recordings.json'
+
+interface Props {
+  name: string
+  description: string
+  caption: string
+}
+
+const { name, description, caption } = Astro.props
+const base = import.meta.env.BASE_URL.replace(/\/?$/, '/')
+const recordings: { name: string; width: number; height: number }[] = manifest.recordings
+// Only verified recordings enter the manifest. A missing capture stays visible as pending.
+const recording = recordings.find((entry) => entry.name === name)
+const path = `${base}media/native/${name}`
+const captionId = `native-${name}-caption`
+---
+
+<figure class:list={['native-clip', 'native-recording', { 'capture-pending': !recording }]}>
+  {
+    recording ? (
+      <div class="native-player" data-native-player>
+        {['dark', 'light'].map((theme) => (
+          <video
+            id={`native-${name}-${theme}`}
+            class={`for-${theme}`}
+            controls
+            muted
+            loop
+            playsinline
+            preload="none"
+            data-poster={`${path}-${theme}.webp`}
+            width={recording.width}
+            height={recording.height}
+            aria-label={description}
+            aria-describedby={captionId}
+          >
+            <source data-src={`${path}-${theme}.mp4`} type="video/mp4" />
+            <a href={`${path}-${theme}.mp4`}>Open the recording</a>
+          </video>
+        ))}
+        <div class="native-controls" data-native-controls hidden>
+          <span>Native app · No audio</span>
+          {['dark', 'light'].map((theme) => (
+            <a class={`native-open for-${theme}`} href={`${path}-${theme}.mp4`} target="_blank" rel="noopener">
+              Open recording <span class="sr-only">: {description} (opens a new tab)</span><span aria-hidden="true"> ↗</span>
+            </a>
+          ))}
+          <button
+            class="clip-toggle"
+            type="button"
+            data-native-toggle
+            aria-controls={`native-${name}-dark native-${name}-light`}
+          >
+            <span data-native-label>Play</span>
+            <span class="sr-only">: {description}</span>
+          </button>
+        </div>
+        <noscript><p class="native-fallback">JavaScript is off. <a href={`${path}-dark.mp4`}>Open the dark recording</a> or <a href={`${path}-light.mp4`}>the light recording</a>.</p></noscript>
+      </div>
+    ) : (
+      <div class="native-placeholder" role="note" aria-label={`${description}. Recording pending.`}>
+        <svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
+          <rect x="3" y="5" width="26" height="19" rx="1" />
+          <path d="M11 29h10M16 24v5M13 10l8 4.5-8 4.5z" />
+        </svg>
+        <strong>Native app recording pending</strong>
+        <span>{description}</span>
+      </div>
+    )
+  }
+  <figcaption id={captionId}>
+    {recording ? caption : 'This space is reserved for a new recording of the native app.'}
+    {recording && <span> Real native app and workflow. Scripted demo agents.</span>}
+    {recording && manifest.appVersion && <span> Natamux {manifest.appVersion}.</span>}
+    {recording && manifest.capturedAt && <span> Recorded {manifest.capturedAt}.</span>}
+  </figcaption>
+</figure>
+
+<script>
+  import '../scripts/native-player.js'
+</script>

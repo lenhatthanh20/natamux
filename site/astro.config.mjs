@@ -19,38 +19,48 @@ export default defineConfig({
         baseUrl: 'https://github.com/lenhatthanh20/natamux/edit/main/site/',
       },
       customCss: ['./src/styles/docs.css'],
+      components: {
+        Header: './src/components/DocsHeader.astro',
+        PageTitle: './src/components/DocsPageTitle.astro',
+        PageFrame: './src/components/DocsPageFrame.astro',
+        TableOfContents: './src/components/DocsTableOfContents.astro',
+        MobileTableOfContents: './src/components/DocsMobileTableOfContents.astro',
+      },
       lastUpdated: true,
       head: [
-        { tag: 'meta', attrs: { property: 'og:image', content: 'https://natamux.github.io/media/v2/og.jpg' } },
+        { tag: 'meta', attrs: { property: 'og:image', content: 'https://natamux.github.io/media/native/og.jpg' } },
         { tag: 'meta', attrs: { property: 'og:image:width', content: '1200' } },
         { tag: 'meta', attrs: { property: 'og:image:height', content: '630' } },
         { tag: 'meta', attrs: { name: 'twitter:card', content: 'summary_large_image' } },
-        { tag: 'meta', attrs: { name: 'twitter:image', content: 'https://natamux.github.io/media/v2/og.jpg' } },
+        { tag: 'meta', attrs: { name: 'twitter:image', content: 'https://natamux.github.io/media/native/og.jpg' } },
       ],
       sidebar: [
         {
-          label: 'Start',
+          label: 'Getting started', collapsed: true,
           items: [
-            { label: 'What is Natamux', slug: 'docs' },
+            { label: 'Overview', slug: 'docs' },
             { slug: 'docs/getting-started/install' },
             { slug: 'docs/getting-started/quick-start' },
           ],
         },
         {
-          label: 'Workflows',
+          label: 'Workflows', collapsed: true,
           items: [
-            { slug: 'docs/guides/workflows', badge: { text: 'New', variant: 'tip' } },
+            { slug: 'docs/guides/workflows' },
             { slug: 'docs/concepts/stages' },
             { slug: 'docs/concepts/review-loop' },
-            { slug: 'docs/guides/mix-agents', badge: { text: 'New', variant: 'tip' } },
+            { slug: 'docs/guides/mix-agents' },
             { slug: 'docs/guides/fan-out' },
             { slug: 'docs/guides/project-settings' },
+            { slug: 'docs/concepts/agents-and-hooks' },
           ],
         },
         {
-          label: 'Use the app',
+          label: 'Use the app', collapsed: true,
           items: [
             { slug: 'docs/guides/dashboard' },
+            { slug: 'docs/concepts/tasks' },
+            { slug: 'docs/concepts/workspaces' },
             { slug: 'docs/guides/terminal' },
             { slug: 'docs/guides/changes-and-history' },
             { slug: 'docs/guides/github' },
@@ -60,15 +70,7 @@ export default defineConfig({
           ],
         },
         {
-          label: 'Concepts',
-          items: [
-            { slug: 'docs/concepts/tasks' },
-            { slug: 'docs/concepts/workspaces' },
-            { slug: 'docs/concepts/agents-and-hooks' },
-          ],
-        },
-        {
-          label: 'Agents',
+          label: 'Agents', collapsed: true,
           items: [
             { slug: 'docs/agents' },
             { slug: 'docs/agents/claude-code' },
@@ -79,17 +81,14 @@ export default defineConfig({
             { slug: 'docs/agents/other-agents' },
           ],
         },
-        {
-          label: 'Self-host',
-          items: [{ slug: 'docs/guides/self-host-docker' }, { slug: 'docs/help/security-and-privacy' }],
-        },
         { label: 'Reference', collapsed: true, items: [{ autogenerate: { directory: 'docs/reference' } }] },
         {
-          label: 'Help',
-          collapsed: true,
+          label: 'Help and hosting', collapsed: true,
           items: [
             { slug: 'docs/help/troubleshooting' },
             { slug: 'docs/help/faq' },
+            { slug: 'docs/guides/self-host-docker' },
+            { slug: 'docs/help/security-and-privacy' },
             { slug: 'docs/help/changelog' },
           ],
         },

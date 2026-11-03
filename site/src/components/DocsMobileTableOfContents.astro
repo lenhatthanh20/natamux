@@ -1,0 +1,22 @@
+---
+import Default from '@astrojs/starlight/components/MobileTableOfContents.astro'
+const overview = Astro.locals.starlightRoute.entry.id.replace(/\/$/, '') === 'docs'
+---
+
+{overview ? (
+  <nav class="docs-mobile-toc" aria-label="On this page">
+    <details>
+      <summary>On this page <span aria-hidden="true">↓</span></summary>
+      <a href="#find-title">Find your way</a>
+      <a href="#first-task-title">First task</a>
+      <a href="#next-title">Go further</a>
+      <a href="#reference-title">Reference</a>
+    </details>
+  </nav>
+) : <Default />}
+
+<script>
+  document.querySelectorAll('.docs-mobile-toc a').forEach((link) => {
+    link.addEventListener('click', () => link.closest('details').removeAttribute('open'))
+  })
+</script>

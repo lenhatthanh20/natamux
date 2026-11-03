@@ -38,15 +38,22 @@ const themes = ['dark', 'light'] as const
           <source src={`${path}-${theme}.mp4`} type="video/mp4" />
         </video>
       ) : (
-        <img
+        <a
           class={`shot-${theme}`}
-          src={`${path}-${theme}.webp`}
-          alt={alt}
-          width={width}
-          height={height}
-          loading="lazy"
-          decoding="async"
-        />
+          href={`${path}-${theme}.webp`}
+          target="_blank"
+          rel="noopener"
+          aria-label={`Open full-size image: ${alt} (opens a new tab)`}
+        >
+          <img
+            src={`${path}-${theme}.webp`}
+            alt={alt}
+            width={width}
+            height={height}
+            loading="lazy"
+            decoding="async"
+          />
+        </a>
       )
     )
   }
