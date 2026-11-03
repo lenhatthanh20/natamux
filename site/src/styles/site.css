@@ -1,0 +1,72 @@
+/* Shared surfaces and navigation for the homepage and documentation. */
+:root {
+  --bg: #11151b;
+  --bg-2: #151b23;
+  --panel: #1a2028;
+  --raise: #222a35;
+  --line: #323b46;
+  --line-2: #586473;
+  --text: #d5d8dc;
+  --strong: #fffefa;
+  --muted: #a4acb7;
+  --accent: #e5ae70;
+  --accent-hover: #ffd19b;
+  --on-accent: #191712;
+  --shadow: 0 40px 100px -45px rgb(0 0 0 / 0.7);
+  --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+:root[data-theme='light'] {
+  --bg: #f7f5f0;
+  --bg-2: #efede7;
+  --panel: #fffefa;
+  --raise: #eae6de;
+  --line: #d8d4cb;
+  --line-2: #aaa69d;
+  --text: #343a43;
+  --strong: #191e26;
+  --muted: #5c6570;
+  --accent: #92571f;
+  --accent-hover: #7b4616;
+  --on-accent: #fffefa;
+  --shadow: 0 40px 90px -50px rgb(54 44 27 / 0.28);
+  color-scheme: light;
+}
+
+.site-header { position: sticky; top: 0; z-index: 40; background: var(--bg); border-bottom: 1px solid var(--line-2); }
+.site-nav, .site-footer-row { box-sizing: border-box; width: min(1200px, calc(100% - 48px)); margin-inline: auto; }
+.site-nav { min-height: 72px; display: flex; align-items: center; gap: 40px; font-family: var(--sans); }
+.site-brand { display: inline-flex; gap: 10px; align-items: center; color: var(--strong); text-decoration: none; font-size: 1.125rem; font-weight: 720; letter-spacing: -0.035em; white-space: nowrap; }
+.site-brand img { display: block; width: 26px; height: 26px; }
+.site-docs-label { color: var(--muted); font-weight: 450; }
+.site-links { display: flex; gap: 28px; margin-inline-start: auto; }
+.site-links a, .site-github { color: var(--muted); text-decoration: none; font-size: 0.8125rem; font-weight: 550; }
+.site-links a:hover, .site-github:hover, .site-links a[aria-current] { color: var(--strong); }
+.site-actions { display: flex; align-items: center; gap: 12px; }
+.site-theme { display: grid; place-items: center; width: 38px; height: 38px; padding: 9px; border: 0; border-radius: 2px; background: transparent; color: var(--muted); cursor: pointer; }
+.site-theme:hover { background: var(--raise); color: var(--strong); }
+.site-theme svg { display: block; width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+:root[data-theme='light'] .site-theme .sun, :root:not([data-theme='light']) .site-theme .moon { display: none; }
+.site-download { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 38px; box-sizing: border-box; padding: 7px 13px; border: 1px solid var(--line-2); border-radius: 2px; color: var(--strong); font: 620 0.8125rem/1.6 var(--sans); text-decoration: none; }
+.site-download:hover { background: var(--raise); }
+:is(.site-nav, .site-footer) :focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.site-footer { border-top: 1px solid var(--line); background: var(--bg); padding-block: 28px; font-family: var(--sans); }
+.site-footer-row { display: flex; align-items: center; flex-wrap: wrap; gap: 16px 24px; }
+.site-footer p { margin: 0; color: var(--muted); font-size: 0.6875rem; }
+.site-footer nav { display: flex; flex-wrap: wrap; gap: 16px; margin-inline-start: auto; }
+.site-footer nav a { color: var(--muted); font-size: 0.6875rem; text-decoration: none; }
+.site-footer nav a:hover { color: var(--strong); }
+@media (max-width: 900px) { .site-links { gap: 18px; } .site-nav { gap: 24px; } }
+@media (max-width: 799px) {
+  .site-nav { min-height: 64px; gap: 12px; }
+  .site-links, .site-github { display: none; }
+  .site-actions { margin-inline-start: auto; gap: 4px; }
+  .site-footer nav { margin-inline-start: 0; width: 100%; }
+}
+@media (max-width: 440px) {
+  .site-brand { gap: 7px; font-size: 1rem; }
+  .site-brand img { width: 23px; height: 23px; }
+  .site-docs-label { display: none; }
+  .site-download { font-size: 0.75rem; padding-inline: 10px; }
+}

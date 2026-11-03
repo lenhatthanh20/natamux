@@ -1,79 +1,99 @@
 ---
-title: What is Natamux
-description: Start one task, follow its agents and shape the stages of your project.
+title: Build your first task, then shape the workflow.
+description: Start a coding task, follow its agents and change the workflow to fit your project.
 sidebar:
+  label: Overview
   order: 1
 ---
 
-import { CardGrid, LinkCard } from '@astrojs/starlight/components'
 import NativeClip from '../../../components/NativeClip.astro'
 
-Natamux is an open-source Agent Development Environment. Each coding task gets a git worktree, terminals and a workflow. You can see what the agents are doing and step in when a task needs a decision.
+<div class="docs-overview">
+  <p class="docs-lead">Natamux gives every coding task a workspace, a terminal and a path through review. These guides show how to start and how to change that path for your project.</p>
+  <div class="docs-actions">
+    <a class="button primary" href="/docs/getting-started/quick-start/">Start with one task <span aria-hidden="true">↗</span></a>
+    <a class="button" href="/docs/guides/workflows/">Explore workflows</a>
+  </div>
 
-Start with one task. Then change the stages, checks and approvals to fit your project.
+  <hr class="docs-rule" />
 
-<CardGrid>
-  <LinkCard title="Install Natamux" description="Requirements and the desktop app for macOS, Windows or Linux." href="/docs/getting-started/install/" />
-  <LinkCard title="Start your first task" description="Add a project, start an agent and review its work." href="/docs/getting-started/quick-start/" />
-  <LinkCard title="Build a workflow" description="Choose stages, run work side by side and add review gates." href="/docs/guides/workflows/" />
-  <LinkCard title="Read the dashboard" description="Find the task that needs you and follow every stage." href="/docs/guides/dashboard/" />
-</CardGrid>
+  <section id="find" aria-labelledby="find-title">
+    <p class="doc-kicker">01 / Find your way</p>
+    <h2 id="find-title">Choose where to begin.</h2>
+    <p>Follow the short guide for your first task, or go straight to the part of the app you want to understand.</p>
+    <div class="doc-card-grid">
+      <a class="doc-card" href="/docs/getting-started/install/">
+        <strong>Install Natamux ↗</strong>
+        <span>Desktop app, requirements and first launch.</span>
+      </a>
+      <a class="doc-card" href="/docs/getting-started/quick-start/">
+        <strong>Quick start ↗</strong>
+        <span>From an empty dashboard to a pull request.</span>
+      </a>
+      <a class="doc-card" href="/docs/guides/workflows/">
+        <strong>Build a workflow ↗</strong>
+        <span>Stages, approvals, branches and send backs.</span>
+      </a>
+      <a class="doc-card" href="/docs/guides/dashboard/">
+        <strong>Read the dashboard ↗</strong>
+        <span>Find the task that needs you and follow progress.</span>
+      </a>
+    </div>
+  </section>
 
-## Your first task
+  <hr class="docs-rule" />
 
-1. **Add a project.** Choose the folder of a git repository. Sign in to the agent you want to use.
-2. **Start a task.** Enter a title and context, then choose a project and an agent. Natamux creates the worktree and opens its terminal.
-3. **Follow the work.** The sidebar shows task state. **Progress** shows the stages, results and approval gates.
-4. **Review the change.** Read the diff, commit, push and open a pull request.
+  <section id="first-task" aria-labelledby="first-task-title">
+    <p class="doc-kicker">02 / First task</p>
+    <h2 id="first-task-title">The short path through the app.</h2>
+    <p>The full <a href="/docs/getting-started/quick-start/">quick start</a> explains each step and what you should see.</p>
+    <ol class="doc-steps">
+      <li>
+        <b aria-hidden="true">01</b>
+        <div><strong>Add a project</strong><span>Choose the folder of a git repository.</span></div>
+      </li>
+      <li>
+        <b aria-hidden="true">02</b>
+        <div><strong>Start a task</strong><span>Enter a title, choose an agent and let Natamux make its worktree.</span></div>
+      </li>
+      <li>
+        <b aria-hidden="true">03</b>
+        <div><strong>Watch and review</strong><span>Follow Progress, answer questions and approve a stage when it waits.</span></div>
+      </li>
+      <li>
+        <b aria-hidden="true">04</b>
+        <div><strong>Ship the change</strong><span>Read the diff, commit, push and open a pull request.</span></div>
+      </li>
+    </ol>
+    <NativeClip name="hero" description="A native task moving from Spec approval through parallel agent terminals, review and a retry to its manual review gate." caption="The task keeps its terminals, stages and next decision together in the native app." />
+  </section>
 
-The [quick start](/docs/getting-started/quick-start/) explains each step and what you should see.
+  <hr class="docs-rule" />
 
-<NativeClip name="hero" description="A task in the native app, with its terminals and workflow progress." caption="The app and stage transitions are real. The agents use scripted demo output." />
+  <section id="next" aria-labelledby="next-title">
+    <p class="doc-kicker">03 / Go further</p>
+    <h2 id="next-title">Make the process yours.</h2>
+    <p>Change the stages in <strong>Project settings</strong>, commit <code>.natamux.json</code>, and let every task follow the same workflow.</p>
+    <p>Read <a href="/docs/concepts/stages/">Stages and gates</a> for what each step runs and when a person decides. <a href="/docs/guides/workflows/">Build a workflow</a> shows complete examples for solo work and a team.</p>
+    <NativeClip name="progress" description="The native Progress panel following approval, parallel stages, review and a retry, then waiting at Manual review." caption="Follow every stage and the next decision in the native Progress view." />
+  </section>
 
-## How the parts fit
+  <hr class="docs-rule" />
 
-| Part | What it holds |
-| --- | --- |
-| [Project](/docs/guides/project-settings/) | A git repository and its shared settings. |
-| [Task](/docs/concepts/tasks/) | The change, context, state and agent runs. |
-| [Workspace](/docs/concepts/workspaces/) | The task's worktree, branch and terminals. |
-| [Workflow](/docs/guides/workflows/) | The stages, checks and approvals a task follows. |
-
-The workflow is saved in `.natamux.json`. Commit it to share the same process with other people working on the project.
-
-## Shape the workflow
-
-A stage is one step of the work. It can start an agent, run a command or wait for you. Stages can run side by side. A condition can send a task down a different path.
-
-Use **Project settings → Stages** to change the process. A review stage can send a task back with findings, so the implementation agent gets a concrete next step.
-
-- [Build a workflow](/docs/guides/workflows/) for complete examples.
-- [Stages and gates](/docs/concepts/stages/) for checks, conditions and approvals.
-- [The review loop](/docs/concepts/review-loop/) for agents that check each other's work.
-- [Mix agents](/docs/guides/mix-agents/) to choose an agent and model for each stage.
-
-<NativeClip name="progress" description="A native workflow moving through stages, review and a send back." caption="A scripted demo agent drives the real workflow and reports its results through the CLI." />
-
-## Keep the change in view
-
-The task keeps its terminal, files, diff and branch together. Open a file in the editor, inspect changes side by side, or send a line comment back to the agent.
-
-See [Terminal](/docs/guides/terminal/), [Changes and history](/docs/guides/changes-and-history/) and [GitHub](/docs/guides/github/).
-
-## Bring your agents
-
-Use Claude Code, Codex, Gemini CLI, GitHub Copilot CLI or Cursor. Natamux adds hooks to their sessions so state comes from agent events. Other terminal agents work through the terminal bell and `natamux ask` / `natamux done`.
-
-See [Agents](/docs/agents/) and [Agents and hooks](/docs/concepts/agents-and-hooks/).
-
-## Local data, familiar tools
-
-Natamux keeps task data on your machine. Tasks are Markdown files; a SQLite index is a cache. The local daemon owns task state and the desktop app connects to it. You can also use the daemon through the CLI or a browser dashboard.
-
-Your agents keep their own service logins. Git and GitHub operations use your own `git` and `gh`. See [Security and privacy](/docs/help/security-and-privacy/).
-
-## Find a specific answer
-
-- [CLI reference](/docs/reference/cli/), [Configuration](/docs/reference/configuration/) and [Shortcuts](/docs/reference/shortcuts/).
-- [Troubleshooting](/docs/help/troubleshooting/) and [FAQ](/docs/help/faq/).
-- [Desktop app](/docs/guides/desktop-app/) and [Self-host with Docker](/docs/guides/self-host-docker/).
+  <section id="reference" aria-labelledby="reference-title">
+    <p class="doc-kicker">04 / Reference</p>
+    <h2 id="reference-title">Find an exact field or command.</h2>
+    <p>Use the reference when you need a workflow field, a command or a keyboard shortcut.</p>
+    <div class="doc-card-grid">
+      <a class="doc-card" href="/docs/reference/configuration/">
+        <strong>Configuration reference ↗</strong>
+        <span>Fields for the workflow and project settings.</span>
+      </a>
+      <a class="doc-card" href="/docs/reference/cli/">
+        <strong>CLI reference ↗</strong>
+        <span>Commands for you and your agents.</span>
+      </a>
+    </div>
+    <p class="docs-more"><a href="/docs/reference/shortcuts/">Keyboard shortcuts</a> · <a href="/docs/help/troubleshooting/">Troubleshooting</a></p>
+  </section>
+</div>

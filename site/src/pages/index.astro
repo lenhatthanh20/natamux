@@ -1,4 +1,6 @@
 ---
+import SiteFooter from '../components/SiteFooter.astro'
+import SiteHeader from '../components/SiteHeader.astro'
 import NativeClip from '../components/NativeClip.astro'
 import '../styles/landing.css'
 
@@ -107,24 +109,7 @@ const agents = [
   </head>
   <body>
     <a class="skip" href="#main">Skip to content</a>
-    <header class="nav">
-      <div class="wrap nav-row">
-        <a class="brand" href={base} aria-label="Natamux home">
-          <img src={`${base}icon.svg`} alt="" width="28" height="28" /><span>Natamux</span>
-        </a>
-        <nav aria-label="Main">
-          <a href="#workflow">How it works</a><a href="#features">Product</a><a href={docs}>Docs</a>
-        </nav>
-        <div class="nav-end">
-          <a class="github-link" href={repo}>GitHub <span aria-hidden="true">↗</span></a>
-          <button class="icon-btn" type="button" data-theme-toggle aria-label="Switch to light theme">
-            <svg class="sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2" /><path d="M12 2.5v2.2M12 19.3v2.2M4.6 4.6l1.6 1.6M17.8 17.8l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.6 19.4l1.6-1.6M17.8 6.2l1.6-1.6" /></svg>
-            <svg class="moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.6A8.2 8.2 0 0 1 9.4 4a8.2 8.2 0 1 0 10.6 10.6Z" /></svg>
-          </button>
-          <a class="btn small" href="#download">Download <span aria-hidden="true">↗</span></a>
-        </div>
-      </div>
-    </header>
+    <header class="site-header"><SiteHeader /></header>
 
     <main id="main">
       <section class="hero" aria-labelledby="hero-title">
@@ -330,20 +315,7 @@ natamux stage back $NATAMUX_TASK_ID \
       </section>
     </main>
 
-    <footer class="foot">
-      <div class="wrap foot-row">
-        <a class="brand" href={base} aria-label="Natamux home"><img src={`${base}icon.svg`} alt="" width="22" height="22" /><span>Natamux</span></a>
-        <p>GPL-3.0 licensed. Made for people who run more than one agent.</p>
-        <nav aria-label="Footer">
-          <a href={docs}>Docs</a>
-          <a href={`${docs}help/changelog/`}>Changelog</a>
-          <a href={`${repo}/releases`}>Releases</a>
-          <a href={`${repo}/blob/main/SECURITY.md`}>Security</a>
-          <a href={`${repo}/blob/main/PRIVACY.md`}>Privacy</a>
-          <a href={repo}>GitHub</a>
-        </nav>
-      </div>
-    </footer>
+    <SiteFooter />
 
     <script>
       import '../scripts/signal-flow.js'

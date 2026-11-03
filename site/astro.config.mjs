@@ -19,6 +19,13 @@ export default defineConfig({
         baseUrl: 'https://github.com/lenhatthanh20/natamux/edit/main/site/',
       },
       customCss: ['./src/styles/docs.css'],
+      components: {
+        Header: './src/components/DocsHeader.astro',
+        PageTitle: './src/components/DocsPageTitle.astro',
+        PageFrame: './src/components/DocsPageFrame.astro',
+        TableOfContents: './src/components/DocsTableOfContents.astro',
+        MobileTableOfContents: './src/components/DocsMobileTableOfContents.astro',
+      },
       lastUpdated: true,
       head: [
         { tag: 'meta', attrs: { property: 'og:image', content: 'https://natamux.github.io/media/native/og.jpg' } },
@@ -31,7 +38,7 @@ export default defineConfig({
         {
           label: 'Start',
           items: [
-            { label: 'What is Natamux', slug: 'docs' },
+            { label: 'Overview', slug: 'docs' },
             { slug: 'docs/getting-started/install' },
             { slug: 'docs/getting-started/quick-start' },
           ],

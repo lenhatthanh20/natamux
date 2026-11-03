@@ -1,0 +1,19 @@
+---
+const base = import.meta.env.BASE_URL.replace(/\/?$/, '/')
+const repo = 'https://github.com/lenhatthanh20/natamux'
+---
+
+<footer class="site-footer">
+  <div class="site-footer-row">
+    <a class="site-brand" href={base}><img src={`${base}icon.svg`} alt="" width="22" height="22" />Natamux</a>
+    <p>GPL-3.0 licensed. Made for people who run more than one agent.</p>
+    <nav aria-label="Footer">
+      <a href={`${base}docs/`}>Docs</a>
+      <a href={`${base}docs/help/changelog/`}>Changelog</a>
+      <a href={`${repo}/releases`}>Releases</a>
+      <a href={`${repo}/blob/main/SECURITY.md`}>Security</a>
+      <a href={`${repo}/blob/main/PRIVACY.md`}>Privacy</a>
+      <a href={repo}>GitHub</a>
+    </nav>
+  </div>
+</footer>

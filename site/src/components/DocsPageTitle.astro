@@ -1,0 +1,7 @@
+---
+const { entry } = Astro.locals.starlightRoute
+const overview = entry.id.replace(/\/$/, '') === 'docs'
+---
+
+<p class="doc-kicker">Documentation / {overview ? 'Overview' : entry.data.title}</p>
+<h1 id="_top" class:list={{ 'docs-overview-title': overview }}>{entry.data.title}</h1>
