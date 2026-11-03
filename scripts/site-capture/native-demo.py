@@ -146,6 +146,24 @@ if __name__ == "__main__":
     unittest.main()
 '''
 
+CHECKOUT_SKILL = '''---
+name: checkout-context
+description: Public context for the fictional Storefront checkout demo.
+---
+
+# Checkout context
+
+Storefront is a fictional shop with mugs and T-shirts. Its demo uses Python's
+Decimal type for prices. checkout.py calculates the cart subtotal and applies
+a coupon. test_checkout.py contains the regression cases.
+
+The final amount must be at least zero. A negative coupon is invalid and raises
+ValueError. Coupons do not change tax, shipping or payment-provider behavior.
+
+Run the real fixture checks with `python3 -m unittest -v` from the worktree.
+Keep the changed checkout code and tests uncommitted while reviewing their diff.
+'''
+
 
 def prepare(args):
     root = args.root.expanduser().resolve()
@@ -171,6 +189,7 @@ def prepare(args):
     write(repo / ".gitignore", "__pycache__/\n.natamux-task/\n")
     write(repo / "checkout.py", CHECKOUT)
     write(repo / "test_checkout.py", TESTS)
+    write(repo / ".claude/skills/checkout-context/SKILL.md", CHECKOUT_SKILL)
     write(repo / "catalog.py", 'PRODUCTS = [\n    {"sku": "mug", "name": "Studio mug", "price": 12},\n    {"sku": "tee", "name": "Cotton T-shirt", "price": 24},\n]\n')
     write(repo / ".natamux.json", json.dumps(pipeline(), indent=2) + "\n")
     env = clean_env(manifest)
@@ -227,6 +246,38 @@ def stage(manifest, task_id, action):
     return api(manifest, "POST", f"/tasks/{task_id}/stage", {"action": action})
 
 
+def history_fixture(manifest, task_id):
+    root = Path(manifest["root"])
+    repo = root / "storefront"
+    worktree = root / "worktrees" / task_id
+    current = task(manifest, task_id)
+    if Path(current.get("workspace", "")).resolve() != worktree.resolve():
+        raise RuntimeError("History fixture needs this capture's existing task worktree")
+    env = clean_env(manifest)
+    for folder in (repo, worktree):
+        staged = subprocess.check_output(["/usr/bin/git", "-C", str(folder), "diff", "--cached", "--name-only"], env=env, text=True)
+        if staged.strip():
+            raise RuntimeError("History fixture refuses a repository with staged changes")
+    branch = subprocess.check_output(["/usr/bin/git", "-C", str(repo), "branch", "--show-current"], env=env, text=True).strip()
+    if branch != "main":
+        raise RuntimeError("The capture storefront must remain on main")
+    note = worktree / "demo-review.md"
+    write(note, "# Checkout review\n\nA coupon cannot make the final amount negative.\nThe subtotal calculation keeps Decimal values throughout.\n")
+    git(worktree, env, "add", "--", "demo-review.md")
+    git(worktree, env, "commit", "-q", "-m", "Document checkout review assumptions")
+    with note.open("a", encoding="utf-8") as output:
+        output.write("\nReject negative coupons with ValueError.\nCover empty carts, equal coupons and coupons above the total.\n")
+    git(worktree, env, "add", "--", "demo-review.md")
+    git(worktree, env, "commit", "-q", "-m", "Record checkout coupon edge cases")
+    skill = repo / ".claude/skills/checkout-context/SKILL.md"
+    if not skill.exists():
+        write(skill, CHECKOUT_SKILL)
+    write(repo / "catalog-notes.md", "# Storefront catalog\n\nThe demo catalog contains a Studio mug and a Cotton T-shirt.\nPrices and names are fictional. Checkout changes are reviewed in their own task branch.\n")
+    git(repo, env, "add", "--", "catalog-notes.md")
+    git(repo, env, "add", "-f", "--", ".claude/skills/checkout-context/SKILL.md")
+    git(repo, env, "commit", "-q", "-m", "Document the fictional storefront catalog")
+
+
 def seed(manifest):
     root = Path(manifest["root"])
     if manifest["tasks"] or api(manifest, "GET", "/tasks")["tasks"]:
@@ -254,7 +305,7 @@ def seed(manifest):
                    "repo": repo_id, "priority": priority, "labels": [label, "demo"], "agent": "demo-agent"})["task"]
         manifest["tasks"][key] = item["id"]
         save(root / "capture.json", manifest)
-        write(root / "controls" / (item["id"] + ".json"), json.dumps({"mode": key, "delay": 1.2}))
+        write(root / "controls" / (item["id"] + ".json"), json.dumps({"mode": key, "delay": 0.8, "title": title}))
         if key == "ready":
             continue
         api(manifest, "POST", f"/tasks/{item['id']}/agent", {"agent": "demo-agent"})
@@ -271,6 +322,11 @@ def seed(manifest):
             wait_for(manifest, item["id"], "running", "build")
         else:
             wait_for(manifest, item["id"], "review", "review")
+            history_fixture(manifest, item["id"])
+    control_path = root / "controls" / (manifest["tasks"]["gate"] + ".json")
+    control = json.loads(control_path.read_text())
+    control["delay"] = 4
+    save(control_path, control)
     print(json.dumps(manifest["tasks"], indent=2))
 
 
@@ -306,6 +362,14 @@ def run(manifest, command, args):
             result = stage(manifest, task_id, args.action)
         elif args.action == "answer":
             result = api(manifest, "POST", f"/tasks/{task_id}/agent/message", {"text": args.text})
+        elif args.action == "pace":
+            if not 0.1 <= args.delay <= 30:
+                raise RuntimeError("Choose a delay from 0.1 to 30 seconds")
+            control_path = root / "controls" / (task_id + ".json")
+            control = json.loads(control_path.read_text())
+            control["delay"] = args.delay
+            save(control_path, control)
+            result = {"id": task_id, "delay": args.delay}
         else:
             write(root / "controls" / (task_id + ".continue"), "continue\n")
             result = {"continued": task_id}
@@ -329,8 +393,9 @@ def main():
             sub.add_argument("--size", default="1920x1080", help="logical points; verify recorded pixels separately")
         if command == "action":
             sub.add_argument("task", help="gate, review, ask, running, ready or a captured task id")
-            sub.add_argument("action", choices=("approve", "skip", "reopen", "answer", "continue"))
+            sub.add_argument("action", choices=("approve", "skip", "reopen", "answer", "continue", "pace"))
             sub.add_argument("--text", default="Reject negative coupons with ValueError.")
+            sub.add_argument("--delay", type=float, default=4)
     args = parser.parse_args()
     if args.command == "prepare":
         prepare(args)

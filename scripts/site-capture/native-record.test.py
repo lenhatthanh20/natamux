@@ -54,6 +54,15 @@ class CutValidationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             CAPTURE.validate_clips(manifest, 20)
 
+    def test_montage_preserves_source_order_and_uses_a_visible_poster(self):
+        manifest = self.manifest(ranges=[[2, 5], [12, 18]], posterAt=14)
+        self.assertEqual(CAPTURE.validate_clips(manifest, 20), manifest["clips"])
+        for ranges in [[], [[12, 18], [2, 5]], [[2, 5], [4, 8]], [[2, 21]]]:
+            with self.subTest(ranges=ranges), self.assertRaises(ValueError):
+                CAPTURE.validate_clips(self.manifest(ranges=ranges), 20)
+        with self.assertRaises(ValueError):
+            CAPTURE.validate_clips(self.manifest(ranges=[[2, 5], [12, 18]], posterAt=9), 20)
+
 
 if __name__ == "__main__":
     unittest.main()

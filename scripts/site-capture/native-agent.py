@@ -41,6 +41,25 @@ def pause(control, count=1):
     time.sleep(float(control.get("delay", 1.2)) * count)
 
 
+def stage_banner(stage, control):
+    print("\033[2J\033[H\033[1;36mNatamux scripted demo agent\033[0m", flush=True)
+    print(f"\033[1m{stage.replace('-', ' ').title()}\033[0m · {TASK} · Shell {TERMINAL}")
+    print(control.get("title", "Storefront checkout"))
+    print("\033[2mActual files, tests and stage reports. No model calls.\033[0m\n", flush=True)
+
+
+def file_excerpt(name, limit=10):
+    tool("Read", name)
+    text = Path(name).read_text(encoding="utf-8")
+    lines = text.splitlines()
+    for number, line in enumerate(lines[:limit], start=1):
+        print(f"\033[2m{number:2} │\033[0m {line}", flush=True)
+    if len(lines) > limit:
+        print(f"\033[2m   … {len(lines) - limit} more lines\033[0m", flush=True)
+    print(flush=True)
+    hook("PostToolUse", tool_name="Read", tool_input={"file_path": name})
+
+
 def read_prompt():
     chunk = os.read(sys.stdin.fileno(), 65536)
     if not chunk:
@@ -109,12 +128,22 @@ def negative_coupon_case():
         tool("Edit", str(target))
 
 
-def await_continue(control):
+def await_continue(control, stage):
     marker = ROOT / "controls" / (TASK + ".continue")
-    while not marker.exists():
-        tool("Read", "checkout.py")
-        print("This build lane is paused for the recording. Waiting for Continue.", flush=True)
-        pause(control, 8)
+    name = ".natamux-task/spec.md" if stage == "test-spec" else "checkout.py"
+    file_excerpt(name)
+    tests()
+    print("\nThis prepared build lane waits for the recording cue.", flush=True)
+    started = time.monotonic()
+    print("\033[?25l", end="", flush=True)
+    try:
+        while not marker.exists():
+            elapsed = int(time.monotonic() - started)
+            print(f"\r\033[2K⏸ Waiting for Continue · {elapsed // 60:02}:{elapsed % 60:02} elapsed", end="", flush=True)
+            time.sleep(2)
+        print("\r\033[2KRecording cue received. Continuing the real stage.\n", flush=True)
+    finally:
+        print("\033[?25h", end="", flush=True)
 
 
 def run_stage(prompt, control):
@@ -123,7 +152,8 @@ def run_stage(prompt, control):
         print("Scripted demo accepts only the prepared stage prompts.", flush=True)
         return
     stage = match.group(1)
-    print(f"\n\033[1m{stage.replace('-', ' ').title()}\033[0m\n", flush=True)
+    control.update(json.loads((ROOT / "controls" / (TASK + ".json")).read_text()))
+    stage_banner(stage, control)
     hook("UserPromptSubmit")
     tool("Read", ".natamux-task/context.md")
     pause(control)
@@ -148,11 +178,11 @@ def run_stage(prompt, control):
         document("repro.md", "# Reproduction\n\n## Steps\nApply a 30 dollar coupon to a 24 dollar cart.\n\n## Failing test\nThe expected total is 0. The original implementation returns -6. The actual regression run failed before the fix.\n")
     elif stage == "test-spec":
         if control["mode"] == "running":
-            await_continue(control)
+            await_continue(control, stage)
         document("test-spec.md", "# Test spec\n\n## Cases\n- Empty cart: total 0.\n- Two 12 dollar mugs: subtotal 24.\n- Coupon 5: total 19.\n- Coupon 24: total 0.\n- Coupon 30: total 0.\n- Empty cart with coupon 5: total 0.\n")
     elif stage == "implement":
         if control["mode"] == "running":
-            await_continue(control)
+            await_continue(control, stage)
         tool("Read", "checkout.py")
         pause(control)
         add_regression()

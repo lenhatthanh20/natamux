@@ -105,6 +105,10 @@ def finite_number(value):
     return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
+def clip_ranges(clip):
+    return clip.get("ranges", [[clip.get("start"), clip.get("end")]])
+
+
 def validate_clips(manifest, duration):
     if not isinstance(manifest, dict) or manifest.get("version") != 1:
         raise ValueError("Cut manifest must have version 1.")
@@ -119,9 +123,20 @@ def validate_clips(manifest, duration):
         if not isinstance(name, str) or not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", name) or name in names:
             raise ValueError("Clip names must be unique lowercase filenames, without an extension.")
         names.add(name)
-        start, end = clip.get("start"), clip.get("end")
-        if not finite_number(start) or not finite_number(end) or not 0 <= start < end <= duration:
-            raise ValueError(f"{name}: range must fall inside the original recording.")
+        ranges = clip_ranges(clip)
+        if not isinstance(ranges, list) or not ranges:
+            raise ValueError(f"{name}: ranges must be a nonempty list of [start, end] pairs.")
+        previous_end = 0
+        for item in ranges:
+            if not isinstance(item, list) or len(item) != 2:
+                raise ValueError(f"{name}: each range must be [start, end].")
+            start, end = item
+            if not finite_number(start) or not finite_number(end) or not previous_end <= start < end <= duration:
+                raise ValueError(f"{name}: ranges must follow the recording's order and stay inside it.")
+            previous_end = end
+        poster_at = clip.get("posterAt", ranges[0][0])
+        if not finite_number(poster_at) or not any(start <= poster_at < end for start, end in ranges):
+            raise ValueError(f"{name}: poster time must fall inside the clip.")
         crop = clip.get("crop", [0, 0, *SOURCE_SIZE])
         if not isinstance(crop, list) or len(crop) != 4 or any(type(v) is not int for v in crop):
             raise ValueError(f"{name}: crop must be four whole pixels: x, y, width, height.")
@@ -139,13 +154,33 @@ def validate_clips(manifest, duration):
 def encoder(source, output, options):
     binary = os.environ.get("NATAMUX_CAPTURE_FFMPEG") or shutil.which("ffmpeg")
     if binary:
-        run([binary, "-hide_banner", "-loglevel", "error", "-n", "-i", source, *options, output])
+        run([binary, "-hide_banner", "-loglevel", "error", "-n", "-threads", "2",
+             "-filter_threads", "2", "-i", source, *options, output])
         return
     if not shutil.which("docker"):
         raise ValueError("Encoding needs existing ffmpeg or Docker. No packages are installed by this kit.")
     image = "linuxserver/ffmpeg:latest"
     subprocess.run(["docker", "image", "inspect", image], check=True, stdout=subprocess.DEVNULL)
     run(["bash", HERE / "ffm.sh", source, output, *options])
+
+
+def movie_options(clip, video_filter):
+    ranges = clip_ranges(clip)
+    if len(ranges) == 1:
+        start, end = ranges[0]
+        return ["-ss", str(start), "-t", str(end - start), "-vf",
+                f"{video_filter},fps=30,tpad=stop_mode=clone:stop_duration=2,format=yuv420p"]
+    labels = "".join(f"[take{index}]" for index in range(len(ranges)))
+    filters = [f"[0:v]split={len(ranges)}{labels}"]
+    for index, (start, end) in enumerate(ranges):
+        frames = round((end - start) * 30)
+        filters.append(
+            f"[take{index}]trim=start={start}:end={end},setpts=PTS-STARTPTS,fps=30,"
+            f"tpad=stop_mode=clone:stop_duration={end - start},trim=end_frame={frames}[part{index}]"
+        )
+    parts = "".join(f"[part{index}]" for index in range(len(ranges)))
+    filters.append(f"{parts}concat=n={len(ranges)}:v=1:a=0,{video_filter},format=yuv420p[movie]")
+    return ["-filter_complex", ";".join(filters), "-map", "[movie]"]
 
 
 def encode(args):
@@ -167,13 +202,13 @@ def encode(args):
         output_width = clip.get("width", 1920)
         video_filter = f"crop={width}:{height}:{x}:{y},scale={output_width}:-2:flags=lanczos,setsar=1"
         encoder(source, destination / f"{name}.mp4", [
-            "-ss", str(clip["start"]), "-t", str(clip["end"] - clip["start"]),
-            "-vf", f"{video_filter},fps=30,format=yuv420p", "-an", "-c:v", "libx264",
+            # A screen capture can hold its last sample without another timestamped frame.
+            *movie_options(clip, video_filter), "-an", "-c:v", "libx264",
             "-preset", "slow", "-crf", str(args.crf), "-profile:v", "high", "-pix_fmt", "yuv420p",
-            "-movflags", "+faststart",
+            "-threads", "4", "-movflags", "+faststart",
         ])
         encoder(source, destination / f"{name}.webp", [
-            "-ss", str(clip["start"]), "-frames:v", "1", "-vf", video_filter,
+            "-ss", str(clip.get("posterAt", clip_ranges(clip)[0][0])), "-frames:v", "1", "-vf", video_filter,
             "-an", "-c:v", "libwebp", "-quality", "82",
         ])
         print(f"Created {name}.mp4 and {name}.webp", flush=True)

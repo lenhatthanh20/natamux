@@ -41,6 +41,11 @@ const captionId = `native-${name}-caption`
         ))}
         <div class="native-controls" data-native-controls hidden>
           <span>Native app · No audio</span>
+          {['dark', 'light'].map((theme) => (
+            <a class={`native-open for-${theme}`} href={`${path}-${theme}.mp4`} target="_blank" rel="noopener">
+              Open recording <span class="sr-only">: {description} (opens a new tab)</span><span aria-hidden="true"> ↗</span>
+            </a>
+          ))}
           <button
             class="clip-toggle"
             type="button"

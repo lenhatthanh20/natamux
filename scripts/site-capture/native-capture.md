@@ -70,6 +70,8 @@ cp scripts/site-capture/native-record.cuts.example.json "$capture_dir/cuts-dark.
 
 Every `crop` is `[x, y, width, height]` in pixels of the original 3840×2160 recording. `[0, 0, 3840, 2160]` keeps the whole Dell. Use an even, in-bounds rectangle to remove desktop margins when the app did not fill the display. Do not stretch or upscale a smaller source. `width: 1920` yields a 1920×1080 clip from the full 4K source; other crops keep their own aspect ratio.
 
+For a montage, replace `start` and `end` with chronological ranges such as `"ranges": [[2, 5], [14, 20], [30, 34]]`. Each range is a cut from the real recording; the output joins them at 30 fps. `posterAt` can name an original timestamp inside one of the ranges. Without it, the poster uses the first frame. The ranges and source SHA-256 remain in the provenance report.
+
 ```sh
 bash scripts/site-capture/native-record.sh encode "$capture_dir/native-dark.mov" "$capture_dir/cuts-dark.json" "$capture_dir/encoded-dark"
 ```
@@ -80,7 +82,7 @@ Create `cuts-light.json` from the same example, rename each entry from `-dark` t
 bash scripts/site-capture/native-record.sh encode "$capture_dir/native-light.mov" "$capture_dir/cuts-light.json" "$capture_dir/encoded-light"
 ```
 
-Encoding uses an existing `ffmpeg`, an explicit binary set through `NATAMUX_CAPTURE_FFMPEG`, or the existing Docker `linuxserver/ffmpeg:latest` image through `ffm.sh`. It does not pull an image or install software. Each output is H.264 High, 30 fps, yuv420p, CRF 22, no audio, with fast start. Each clip has a WebP poster from its first frame. Each output folder has `capture-provenance.json` linking its cuts and encoded dimensions to the original's SHA-256. Existing output files cause a stop.
+Encoding uses an existing `ffmpeg`, an explicit binary set through `NATAMUX_CAPTURE_FFMPEG`, or the existing Docker `linuxserver/ffmpeg:latest` image through `ffm.sh`. It does not pull an image or install software. Each output is H.264 High, 30 fps, yuv420p, CRF 22, no audio, with fast start. A variable-frame-rate screen recording can hold its last real sample through the declared cut endpoint. Each clip has a WebP poster. Each output folder has `capture-provenance.json` linking its cuts and encoded dimensions to the original's SHA-256. Existing output files cause a stop.
 
 Inspect any original or clip:
 

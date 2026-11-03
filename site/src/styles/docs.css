@@ -90,6 +90,7 @@ main h1 { max-width: 17ch; border-inline-start: 2px solid var(--sl-color-accent)
 .sl-markdown-content .native-placeholder > span { margin: 0; }
 .sl-markdown-content .native-controls { margin: 0; }
 .sl-markdown-content .native-controls .clip-toggle { margin: 0; }
+.sl-markdown-content .native-player video { max-height: 640px; object-fit: contain; }
 
 .downloads { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 0.75rem; }
 .sl-markdown-content .downloads > a { display: grid; gap: 0.15rem; margin: 0; padding: 1rem; border: 1px solid var(--sl-color-gray-5); border-radius: 2px; background: var(--sl-color-gray-6); color: var(--sl-color-white); text-decoration: none; }

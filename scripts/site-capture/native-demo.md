@@ -40,14 +40,20 @@ Point `--bin-dir` at the downloaded release's `Natamux.app/Contents/MacOS` after
 | Manifest name | Prepared state | Recording use |
 | --- | --- | --- |
 | `gate` | Spec awaits approval | Approve on camera; follow Bug fix → Reproduce → parallel build → review finding → correction → Manual review |
-| `review` | Manual review awaits approval | Real checkout code, seven real passing tests, uncommitted diff and editable files |
+| `review` | Manual review awaits approval | Seven real passing tests, uncommitted checkout diff, editable files and two real task commits |
 | `ask` | Spec needs input | Answer the question in the native terminal; observe its state change |
 | `running` | Build lanes remain running | Both terminals stay open until explicitly continued; use the Agents grid or task workspace |
 | `ready` | Ready, no workspace | Task list and Start a task reference |
 
 `seed` finishes the `review` task through one real send-back. The first implementation clamps the total but misses negative coupons. The reviewer adds a regression that fails, writes its finding, and calls `natamux stage back --to implement`. The second implementation rejects the input. The reviewer runs seven passing tests and leaves the task at Manual review.
 
-The `running` task pauses both build lanes using a capture control file. Its terminal explains the pause. It does not pretend to do ongoing model inference or performance work.
+That task also has two commits to `demo-review.md`. A separate commit to `catalog-notes.md` on `main` gives the History view a real divergence: two task commits ahead and one main commit behind. The checkout code and tests stay uncommitted at +18/−1.
+
+The isolated project's `.claude/skills/checkout-context/SKILL.md` contains public context about the fictional checkout. In **Start a task**, choose **An agent skill** and select **checkout-context**. The picker reads the real repository-local skill; no provider runs for this capture.
+
+The `running` task pauses both build lanes using a capture control file. Each terminal shows its stage, an actual file excerpt and the real baseline test results. One waiting line updates in place every two seconds.
+
+Seeding uses short pauses. The `gate` task then uses four-second pauses between its actions, so its approval and review loop gives time to follow the native UI. Controls are reread at the start of each stage.
 
 ## Actions
 
@@ -58,6 +64,7 @@ python3 -B scripts/site-capture/native-demo.py action --root "$capture_root" gat
 python3 -B scripts/site-capture/native-demo.py action --root "$capture_root" ask answer \
   --text "Reject negative coupons with ValueError."
 python3 -B scripts/site-capture/native-demo.py action --root "$capture_root" running continue
+python3 -B scripts/site-capture/native-demo.py action --root "$capture_root" gate pace --delay 4
 python3 -B scripts/site-capture/native-demo.py status --root "$capture_root"
 ```
 
@@ -74,6 +81,8 @@ Use the same framing, cursor speed and task choices in both themes. Keep the tit
 | Approval and feedback | Open `gate`, read Spec, approve, then open Progress and the two build terminals | Real failing regression, stage reports, automatic send-back and manual approval gate |
 | Question | Open `ask`, read the question and type the answer in its terminal | Hook moves to needs-input; prompt hook resumes the real task |
 | Diff and editor | Open `review` → Changes; choose `checkout.py`, then `test_checkout.py`; open `checkout.py` from Files in an editor tab | Real git diff and real file contents; the files remain uncommitted |
+| History | Open `review` → History | Two note commits on the task branch and a separate catalog note commit on main |
+| Task context | Open **Start a task**, choose **An agent skill**, then **checkout-context** | The public fixture skill comes from the isolated project |
 | Multiple agents | Open Agents or `running`; show both lanes, then continue between takes | Real native PTYs; banner identifies the scripted demo |
 
 Keep the original 4K recording. Cut and encode only verified native captures. The old browser capture scripts, `--shot` and `--fake-daemon` are separate workflows and are not used here.

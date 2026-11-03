@@ -12,7 +12,7 @@ Each project has its own settings: the [stages](/docs/concepts/stages/) every ta
 
 Open them from the sidebar: click the gear next to the project. Or right-click the project, or click **...** next to it, and choose **Settings**. The screen is called **Project settings of &lt;repo&gt;** and has three tabs: **Stages** (the default), **Issues** and **JSON**.
 
-<Figure src="/screens/v2/settings-stages" alt="Project settings of storefront, Stages tab, with Context selected. On top, a flow chart of the pipeline with the If node. Under it, a summary of the branch, the list of stages in order with checkboxes, and the details of Context." caption="The Stages tab: the pipeline preview, the stages in order, and the details of one stage." />
+<Figure src="/screens/native/settings-stages" width={1600} height={900} alt="Native Project settings for storefront, with Spec selected and Wait for my approval checked. The workflow chart includes the Bug or feature branch and the parallel Test spec and Implement stages." caption="Spec selected in native Project settings, with its approval gate and workflow chart." />
 
 ## The Stages tab
 
@@ -92,7 +92,7 @@ To use an exported file in another project, import it there, or copy it into the
 
 </Steps>
 
-<Figure src="/screens/v2/stage-agent-picker" alt="Project settings of storefront, Stages tab, with the Review stage selected. The Agent field is set to Codex, and the Arguments field below it holds --model gpt-5-codex." caption="Review selected, with its Agent and Arguments." />
+<Figure src="/screens/native/stage-agent-picker" width={1600} height={900} alt="The Agent menu for Review in native Project settings, listing Claude Code, Codex, Gemini CLI, GitHub Copilot, Cursor and the scripted demo agents. demo-reviewer is selected, and Arguments is empty." caption="Choose a stage agent from the menu. The scripted demo-reviewer agent is selected here." />
 
 Review runs in its own terminal, Terminal 5, so it can use another agent than the task's without touching the session in Terminal 1. **Test spec** works the same way, in Terminal 2. See [The review loop](/docs/concepts/review-loop/#choose-the-review-agent).
 
@@ -106,7 +106,7 @@ Review runs in its own terminal, Terminal 5, so it can use another agent than th
 
 </Steps>
 
-<Figure src="/screens/v2/stages-branch" alt="Project settings of storefront, Stages tab, with the branch Bug or feature selected. The chart shows an If node and two lanes: Bug fix, with its condition, holds Reproduce the bug, and Feature, marked Otherwise, holds Plan. The details show Branch name and Path 1." caption="The chart shows the branch as an If node with one lane per path." />
+<Figure src="/screens/native/stages-branch" width={1600} height={900} alt="Native Project settings for storefront, with the Bug or feature branch selected. The chart shows an If node, the Bug fix path with a context.md text condition, and the Feature path marked Otherwise. The branch details show Branch name and Path 1." caption="A branch in native Project settings: an If node with one lane per path." />
 
 See [Paths with a condition](/docs/concepts/stages/#paths-with-a-condition) and [Build a workflow](/docs/guides/workflows/).
 

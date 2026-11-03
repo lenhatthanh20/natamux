@@ -116,6 +116,7 @@ code { padding: 0.12em 0.35em; border-radius: 2px; background: var(--raise); col
 .feature-copy h3 { margin-top: 12px; margin-bottom: 14px; }
 .feature-copy > p:last-child { color: var(--muted); font-size: 0.875rem; }
 .feature-card .native-clip { margin-top: auto; border-top: 1px solid var(--line); }
+.feature-card .native-player video { height: 260px; object-fit: contain; }
 .feature-card .native-placeholder { padding: 24px; }
 .feature-link { display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 16px 24px; border-top: 1px solid var(--line); color: var(--strong); text-decoration: none; font-size: 0.8125rem; }
 .feature-link:hover { color: var(--accent); background: var(--raise); }
@@ -217,6 +218,7 @@ code { padding: 0.12em 0.35em; border-radius: 2px; background: var(--raise); col
   .feature-grid { grid-template-columns: minmax(0, 1fr); }
   .feature-copy { padding: 28px; }
   .feature-card .native-placeholder { min-height: 0; aspect-ratio: 2.5; }
+  .feature-card .native-player video { height: clamp(260px, 55vw, 420px); }
   .workflow-detail, .agents-row, .project-row { grid-template-columns: minmax(0, 1fr); gap: 36px; }
   .workflow-detail > .native-clip { max-width: 720px; width: 100%; }
   .agents-copy h2, .project-row h2 { max-width: 19ch; }

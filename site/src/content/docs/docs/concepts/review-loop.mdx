@@ -11,6 +11,7 @@ sidebar:
 import { Steps, Aside } from '@astrojs/starlight/components'
 import StageFlow from '../../../../components/StageFlow.astro'
 import Figure from '../../../../components/Figure.astro'
+import NativeClip from '../../../../components/NativeClip.astro'
 
 The default pipeline is built so that agents check each other. After you approve the plan, two agents work at the same time: one writes the test cases from the spec, the other writes the code. When both are done, the tests run. Then a third agent, in a terminal and session of its own, reviews the changes. If it finds problems, it sends the task back to Implement by itself, with the reasons, and the loop runs again until the review passes.
 
@@ -43,7 +44,7 @@ When the task reaches the group, Natamux starts both stages at the same moment.
 - **Test spec** gets **Terminal 2** and a new session. Its prompt tells it not to read the code. The test cases come from the spec alone, so they test what was asked, not what was built.
 - Each terminal shows the state of its own stage in its pane header. The sidebar shows both stages under the task while it is open.
 
-<Figure src="/screens/v2/task-side-by-side" alt="An open task with two agent terminals side by side. Shell 1 runs Claude Code on Implement and Shell 7 runs Gemini CLI on Test spec, and both say Running. The Progress tab shows the Test spec and Implement group with both stages Running." caption="Both stages of the group run at once, each agent in its own shell. Here each stage has its own agent, so Test spec is in Shell 7. The group ends when both are done." />
+<Figure src="/screens/native/task-side-by-side" width={1600} height={900} alt="A native task workspace with Implement in Terminal 1 and Test spec in Terminal 10 running side by side. The Progress chart shows both stages running in the parallel group." caption="Test spec and Implement run side by side in separate native terminals. Terminal output is scripted." />
 
 Test spec waits for your approval because the test cases decide what **Automated tests** checks. Read them in the **Docs** tab (key `4`) and fix them by hand before you approve, if you like.
 
@@ -56,7 +57,7 @@ Test spec waits for your approval because the test cases decide what **Automated
 - It writes `review.md` with a **Findings** section: each problem that must be fixed, with its file and why, or "None".
 - Its gate is `auto`. With no findings it runs `natamux done`, its checks pass, and the task goes on to **Release** without waiting for you.
 
-<Figure src="/screens/v2/task-review-shell5" alt="An open task with four agent shells: Shell 1, Shell 6, Shell 7 and Shell 8. The Review agent runs in Shell 8 and shows git diff, and the Progress tab shows Review Running." caption="The Review agent starts in a shell of its own with a new session, so it reads the work with fresh eyes. Here each stage has its own agent, so Review is in Shell 8." />
+<Figure src="/screens/native/task-review-shell5" width={1600} height={900} alt="A native task workspace with three terminal panes: Terminal 1, Test spec in Terminal 10, and Review running in Terminal 12. The Progress panel shows Test spec and Implement completed before Review." caption="Three native task terminals beside the workflow. Review runs in its own terminal. Terminal output is scripted." />
 
 ### Choose the review agent
 
@@ -72,7 +73,7 @@ The review agent is the task's agent unless you pick another one. A second agent
 
 </Steps>
 
-<Figure src="/screens/v2/settings-review-agent" alt="Project settings of storefront, Stages tab, with the Review stage selected. The Agent field is set to Codex, and the Arguments field is empty and shows the hint --model sonnet." caption="Review selected in Project settings, with Codex as its agent." />
+<Figure src="/screens/native/settings-review-agent" width={1600} height={900} alt="The Review stage in native Project settings, with Agent set to demo-reviewer. Arguments is empty and shows --model sonnet as a placeholder." caption="Review selected in native Project settings. This demo uses the scripted demo-reviewer agent and no extra arguments." />
 
 In the file, these are the `agent` and `args` fields of the Review stage:
 
@@ -107,9 +108,9 @@ and stops, without `natamux done`. Then:
 3. **Automated tests** and **Review** run again after it. The review agent gets its prompt in the same Terminal 5 session, so it knows what it asked for.
 4. The Implement card in **Progress** shows **Sent back 1×**, and the panel counts the times the task was sent back.
 
-<Figure src="/screens/v2/task-sent-back" alt="An open task after the review agent sent it back. Shell 8 shows a review with 1 problem to fix, the natamux stage back command, and the line Sent back to Implement with 1 finding. In Progress, the Implement card is Running with x2 and Sent back 1x." caption="Implement runs a second time (x2) with the review's reasons in its prompt." />
+<Figure src="/screens/native/task-sent-back" width={1600} height={900} alt="A native task workspace with its terminals and Progress panel. Review has a second-run count and the task waits at Manual review." caption="Review has run twice and the task waits at Manual review. The native workspace keeps its terminals and stage progress together. Terminal output is scripted." />
 
-<Figure src="/media/v2/clip-send-back" video alt="Screen recording of the Progress tab: the Review card fails, Sent back appears, and Implement runs again with x2." caption="The loop in the Progress tab: the review sends the task back and Implement runs again. Recorded on the real dashboard; the agents are stand-in scripts." />
+<NativeClip name="progress" description="The native Progress panel as a task passes approval, parallel work, review and a retry, then reaches Manual review." caption="Follow the real workflow through review and a retry, then the Manual review gate." />
 
 ## Limits
 

@@ -19,7 +19,10 @@ themeToggle?.addEventListener('click', () => {
   labelTheme()
 })
 colorScheme.addEventListener('change', () => {
-  if (followsSystem) root.dataset.theme = colorScheme.matches ? 'light' : 'dark'
+  if (followsSystem) {
+    root.dataset.theme = colorScheme.matches ? 'light' : 'dark'
+    labelTheme()
+  }
 })
 labelTheme()
 
