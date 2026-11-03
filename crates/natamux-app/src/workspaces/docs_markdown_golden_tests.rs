@@ -64,7 +64,8 @@ fn rows() -> Vec<Value> {
             capture.origin = (0., 0.);
             capture.scale = scale;
         }
-        cx.capture_screenshot(window).expect("the recorder captures");
+        cx.capture_screenshot(window)
+            .expect("the recorder captures");
         let painted = capture.borrow_mut().painted.take().expect("a frame");
         let lines = std::mem::take(&mut *text.lines.lock().unwrap());
         for line in lines {

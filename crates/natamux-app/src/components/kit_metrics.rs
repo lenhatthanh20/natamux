@@ -1098,14 +1098,15 @@ pub(crate) fn context(
     let atlas = Arc::new(HeadlessAtlas::default());
     let (into, names) = (capture.clone(), text.clone());
     let platform_text = text.clone();
-    let mut cx = HeadlessAppContext::with_platform(platform_text, Arc::new(NatamuxAssets), move || {
-        let recorder = Recorder {
-            atlas: atlas.clone(),
-            capture: into.clone(),
-            text: names.clone(),
-        };
-        Ok(Some(Box::new(recorder) as Box<dyn PlatformHeadlessRenderer>))
-    });
+    let mut cx =
+        HeadlessAppContext::with_platform(platform_text, Arc::new(NatamuxAssets), move || {
+            let recorder = Recorder {
+                atlas: atlas.clone(),
+                capture: into.clone(),
+                text: names.clone(),
+            };
+            Ok(Some(Box::new(recorder) as Box<dyn PlatformHeadlessRenderer>))
+        });
     let view = ViewState {
         ui_size: config.ui_size.to_string(),
         ..ViewState::default()
