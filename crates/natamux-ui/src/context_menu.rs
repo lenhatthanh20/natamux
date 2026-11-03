@@ -10,7 +10,7 @@ use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use gpui::{
-    Action, Anchor, AnyElement, App, Bounds, Context, DefiniteLength, DismissEvent, Entity,
+    Action, Anchor, AnyElement, App, AppContext, Bounds, Context, DefiniteLength, DismissEvent, Entity,
     EventEmitter, FocusHandle, Focusable, InteractiveElement, IntoElement, Length, MouseButton,
     MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement, Pixels, Point, Render, Role,
     SharedString, Size, StatefulInteractiveElement, Styled, Subscription, Window, anchored,
@@ -22,7 +22,7 @@ use zed_menu::{
     SelectPrevious,
 };
 use zed_ui::{
-    Clickable, Color, Disableable, IconName, IconPosition, IconSize, ListItem, ListItemSpacing,
+    Color, Disableable, IconName, IconPosition, IconSize, ListItem, ListItemSpacing,
     StyledExt, Toggleable,
 };
 
