@@ -73,8 +73,13 @@ export const LEGACY_STEP_REFS: StepRef[] = stepRefsOf(LEGACY_PIPELINE)
 // that is off still runs for a task that has it.
 export function resolveSteps(refs: readonly StepRef[], pipeline: readonly Step[]): Step[] {
   const known = new Map<string, Stage>()
-  const stages = [...STAGE_CATALOG.map((entry) => entry.stage), ...pipeline.flatMap(stagesOf)]
-  for (const stage of stages) {
+  const oneAgent = refs.length === 2 && refs[0] === 'context' && refs[1] === 'agent'
+  for (const { stage } of STAGE_CATALOG) {
+    known.set(stage.id, stage)
+  }
+  for (const stage of pipeline.flatMap(stagesOf)) {
+    // The two-node task keeps its promptless Agent stage even if project settings change.
+    if (oneAgent && stage.id === 'agent') continue
     known.set(stage.id, stage)
   }
   const stage = (id: string): Stage => known.get(id) ?? { id, kind: 'manual', gate: 'manual' }

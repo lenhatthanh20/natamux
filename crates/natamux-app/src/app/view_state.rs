@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use natamux_proto::tasks::task::TaskState;
 use serde_json::{Map, Value, json};
 
-use crate::app::layout_mode::SIDEBAR_WIDTH;
+use crate::app::layout_mode::{DETAILS_WIDTH, SIDEBAR_WIDTH};
 use crate::app::theme_catalog::ThemeNames;
 use crate::app::view_rules::{
     DetailsView, Entries, MAX_RECENT, WorkspaceTab, parse_pinned, with_seen, with_tab,
@@ -20,8 +20,8 @@ pub const FILE_NAME: &str = "view.json";
 /// The sidebar (`sidebarWidth`); the default is `SIDEBAR_WIDTH`.
 pub const SIDEBAR_MIN: f32 = 280.0;
 pub const SIDEBAR_MAX: f32 = 480.0;
-/// The docked details panel without its rail (`detailsWidth`), resized on its own (T-0239); the
-/// default is `SIDEBAR_WIDTH` too.
+/// The docked details panel without its rail (`detailsWidth`), resized on its own (T-0239).
+/// The default is `DETAILS_WIDTH`: the sidebar minus the rail.
 pub const DETAILS_MIN: f32 = 280.0;
 pub const DETAILS_MAX: f32 = 560.0;
 /// The file list of the Changes tab: `useStoredWidth('natamux.files-width', 260, 200, 420)`.
@@ -161,7 +161,7 @@ impl Default for ViewState {
             last_base: Vec::new(),
             agent_panes: None,
             pane_layout: PaneLayout::default(),
-            details_width: SIDEBAR_WIDTH,
+            details_width: DETAILS_WIDTH,
             details_view: None,
             sections: Vec::new(),
             details_open: true,

@@ -205,7 +205,7 @@ impl TaskBoard {
             .child(card_top(row, cx))
             .child(
                 Label::new(task.title.clone())
-                    .weight(FontWeight::MEDIUM)
+                    .weight(FontWeight::NORMAL)
                     .line_clamp(2),
             )
             .when(!meta.is_empty(), |card| {

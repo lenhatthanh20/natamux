@@ -9,7 +9,7 @@ import Figure from '../../../../components/Figure.astro'
 
 Every task with a workspace has a **Terminal** tab. It holds real terminals that run in the task's worktree folder. The task's agent runs in Terminal 1 for the whole task; stages that run beside it start their own agents in Terminal 2 and Terminal 5. A stage with its own agent or arguments runs it in a terminal of its own, from Terminal 6. See [Choose a model](/docs/concepts/stages/#choose-a-model). The **Agents** view puts the agents of many tasks in one grid.
 
-<Figure src="/screens/v2/task-sent-back" alt="An open task on the Terminal tab with four panes: Shell 1 and Shell 6 on top, Shell 7 and Shell 8 below. Shell 8 holds the Review agent, which wrote one problem to fix and ran natamux stage back; it ends with Sent back to Implement with 1 finding. The sidebar lists the shells under the task, and the Progress panel shows Implement running with x2 and Sent back 1x." caption="Four shells of one task. Each stage here has its own agent, so Reproduce, Test spec and Review start from Shell 6. The sidebar lists them under the task." />
+<Figure src="/screens/native/task-sent-back" width={1600} height={900} alt="A native task workspace with its terminals and Progress panel. Review has a second-run count and the task waits at Manual review." caption="Review has run twice and the task waits at Manual review. The native workspace keeps its terminals and stage progress together. Terminal output is scripted." />
 
 ## Open the terminal
 
@@ -125,7 +125,7 @@ To change the minutes, or to turn the pause off with `0`, use **Pause idle agent
 
 Click **Agents** in the sidebar to watch the agents of many tasks at once. Each pane is Terminal 1 of a task, live, and you can type in it as in the workspace.
 
-<Figure src="/screens/v2/agents" alt="The Agents view: four agent terminals in a two by two grid, each with the task id, title, agent and state in its header. The pane at the top left is GitHub Copilot with a diamond marker and the state Needs input, and it shows the question Should a coupon apply before or after tax?" caption="Four agents in one grid. The one at the top left waits for an answer." />
+<Figure src="/screens/native/agents" width={1600} height={900} alt="The native Agents view with three scripted task agents in three terminal columns, each showing file excerpts and test output. Add a pane and the 1, 2, 4 and Auto layout controls are above the grid." caption="Three task agents in the native Agents view. Terminal output is scripted." />
 
 - Until you pick panes yourself, the grid shows the tasks that are running or need your input, in the order of their ids.
 - **Add a pane** adds a task. The grid holds up to 6 panes. `Shift+Enter` in the command palette also adds the selected task.

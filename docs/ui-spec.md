@@ -45,10 +45,10 @@ Defined in `@theme` so Tailwind classes map 1:1. Each size has exactly one line 
 | Role | Class | Size / line height | Weight | Tracking | Where |
 |---|---|---|---|---|---|
 | display | `text-xl` | 20 / 28 | 600 | -0.01em | sign-in title, empty-state hero title |
-| title-lg | `text-lg` | 16 / 24 | 600 | -0.01em | workspace title, details title |
+| title-lg | `text-lg` | 16 / 24 | 600 | -0.01em | non-task large headings |
 | title | `text-md` (new) | 15 / 22 | 600 | -0.005em | view titles ("All tasks"), dialog title, palette input text |
 | body | `text-sm` (= body default) | 13 / 20 | 400 | 0 | default text |
-| body-strong | `text-sm font-medium` | 13 / 20 | 500 | 0 | row titles, buttons, tabs, menu items |
+| body-strong | `text-sm font-medium` | 13 / 20 | 500 | 0 | buttons, tabs, menu items |
 | label | `text-xs font-medium` | 12 / 16 | 500 | 0 | field labels, table headers, chip text |
 | meta | `text-xs text-muted` | 12 / 16 | 400 | 0 | second lines, times, helper text |
 | caps | `text-2xs font-semibold uppercase tracking-[0.06em]` | 11 / 14 | 600 | +0.06em | section headers (sidebar, details, palette groups) |
@@ -56,6 +56,8 @@ Defined in `@theme` so Tailwind classes map 1:1. Each size has exactly one line 
 | mono-meta | `font-mono text-xs` | 12 / 16 | 400 | 0 | ids, branches, paths |
 | code | Monaco | 12 / 18 | 400 | 0 | diff |
 | terminal | xterm | 13, lineHeight 1.3 | 400 | 0 | terminal |
+
+Task titles use weight 400 at every size and in every state, including search matches. State glyphs and the unseen dot still show which tasks need attention.
 
 `@theme` values: `--text-2xs: 0.6875rem; --text-2xs--line-height: 0.875rem; --text-xs: 0.75rem; --text-xs--line-height: 1rem; --text-sm: 0.8125rem; --text-sm--line-height: 1.25rem; --text-md: 0.9375rem; --text-md--line-height: 1.375rem; --text-lg: 1rem; --text-lg--line-height: 1.5rem; --text-xl: 1.25rem; --text-xl--line-height: 1.75rem`. `body { font-size: var(--text-sm); line-height: var(--text-sm--line-height) }`.
 
@@ -339,6 +341,8 @@ Only part 4 scrolls (fixes NAV-16).
 
 **Status bar** (`features/app/StatusBar.tsx`), 28px, `bg-shell`, top border `--line`, items 24px (see 4.27).
 
+In the native app, the title bar and status bar use the same height: at least 34px for the macOS window controls, growing with the UI font size. The web dashboard keeps the heights above.
+
 **Panes** (terminal grid, agents grid): gap 8, outer padding 8, pane radius 8, 1px `--line-strong`, header 32, min pane 320 x 200. Grid uses `repeat(auto-fill, minmax(320px, 1fr))` unless the user picked a layout.
 
 **Fixed heights**: title bar 36, view header 44, workspace header 44, tab row 36, section header 28, pane header 32, status bar 28, control 28 (dialog 32), list row 28, workspace row 44 (+16 for activity), table row 40.
@@ -416,11 +420,11 @@ Each lives in `packages/web/src/components/ui/` unless noted. "Keys" lists keybo
 The height follows what the row needs (`rowTier` in `features/sidebar/sidebar-tree.ts`). Pad 10 left and right, radius 6 (8 for a card), no chevron:
 ```
 attention (needs-input, failed, blocked), min 68px, card tinted with the state color (.row-attn):
-[glyph10] Title (13/600, ink, truncate)                [unseen dot] [age 12 muted | ... on hover]
+[glyph10] Title (13/400, ink, truncate)                [unseen dot] [age 12 muted | ... on hover]
          Which test runner should I use? (12 ink, up to 2 lines)
          [Answer] T-0018 3/5 Review                                [agent]
 live (running, review, ready), min 40px:
-[glyph10] Title (13/500, ink, truncate)                [unseen dot] [age 12 muted | ... on hover]
+[glyph10] Title (13/400, ink, truncate)                [unseen dot] [age 12 muted | ... on hover]
          T-0018 3/5 Review [subtasks 1/3] Edit a.ts (ink-2, truncate)  [PR #12] [agent]
 quiet (done, cancelled, draft), min 24px:
 [glyph10] Title (12/400, ink-2; muted when finished, cancelled line-through)   [age 12 muted]
@@ -439,6 +443,7 @@ quiet (done, cancelled, draft), min 24px:
 - Age moves to line 1 and swaps with the "..." button on hover/focus, so the slug gets the full line 2 (fixes NAV-27 truncation) and nothing overlaps.
 - States: hover bg-hover; current (open in main) bg-selected + a 2px `--accent` bar at the left (`.sb-row`); keyboard focus ring inset; selected + focused list bg-selection-active.
 - Finished rows: title and meta use `--muted` (no opacity, fixes RA-10/11); cancelled title `line-through` in the finished group only.
+- Native sidebar cards keep the same task glyph, title, and age or short reason size and header position when they open. Titles use 13px in live and attention tiers, 12px in the quiet tier; an open title can wrap to two lines. The state glyph stays in its 14px box, and agent icons stay at 12px.
 - Unseen change (agent finished or asked since the user last opened it): title weight 600 and a 6px accent dot before the age; the row name ends with ", unseen" (P2).
 - Rename: F2 or double-click title or menu "Rename". Field replaces the title line only (the row keeps its height and other lines), height 24, all text selected in both paths, Enter saves, Esc cancels, focus returns to the row (fixes NAV-23).
 - Row menu (right-click, Shift+F10, ContextMenu): View changes, Rename, Add subtask… (`ListPlus`; only for a task with no parent, in every state; opens the Add subtask dialog), Pin to the top, Copy branch name, Copy folder path, Remove workspace, Delete task.
@@ -565,7 +570,7 @@ Shared shell:
 
 ### 4.23 Terminal pane header (`features/terminals/TerminalPane.tsx`)
 - Height 32 fixed (fixes the 29/30px mismatch, WS-12), pad 0 4 0 10, bg surface, border-bottom line.
-- Left: status glyph 16 (agent panes) or `SquareTerminal` 14 (terminals); title 12/500 ink ("Terminal 2", or in Agents: `T-0018` mono muted + task title as a link-style button with pointer cursor, underline on hover, tooltip "Open workspace T-0018", WS-20); agent badge only when an agent runs in it, naming the agent the daemon found there, not the task's (WS-13); state text 12 muted truncate; an agent on no stage (started by hand in an extra terminal) shows the state its own hooks gave, or none ("Running · Edit notes/T-0018.md", WS-21).
+- Left: status glyph 16 (agent panes) or `SquareTerminal` 14 (terminals); terminal name 12/500 ink, or in Agents: `T-0018` mono muted + task title 12/400 as a link-style button with pointer cursor, underline on hover, tooltip "Open workspace T-0018" (WS-20); agent badge only when an agent runs in it, naming the agent the daemon found there, not the task's (WS-13); state text 12 muted truncate; an agent on no stage (started by hand in an extra terminal) shows the state its own hooks gave, or none ("Running · Edit notes/T-0018.md", WS-21).
 - Right: icon buttons 24: Maximize/Restore (`Mod+Shift+Enter`), Open workspace (agents grid only), Close. Close tooltip: "Close terminal (ends the process)" and confirms when a foreground process other than the shell is running.
 - Focus: the focused pane gets `outline: 1px solid var(--focus); outline-offset: -1px` on the pane frame; header title ink, other headers muted.
 - Opening another task's workspace on its Terminal tab puts the keyboard in its first agent terminal (the lowest-numbered terminal that runs an agent, else Terminal 1), once the terminals are read. Not on a phone, not when opened from an address, and a terminal picked in the jump palette wins.
@@ -612,11 +617,11 @@ Shared shell:
 | >= 1160 | Id 72 (mono 12 muted) · Task (flex, min 240) · State 128 · Agent 120 · Branch 200 (mono 12) · Changes 88 (right) · PR 120 · Cost 88 (right, only when some task has usage) · Last activity 104 (right) |
 | 760-1159 | Id · Task · State · Changes · Last activity |
 | 560-759 | Id · Task · State · Last activity |
-| < 560 | card list: 56px rows: glyph + title (13/500) / id mono · state text · age (12 muted) |
+| < 560 | card list: 56px rows: glyph + title (13/400) / id mono · state text · age (12 muted) |
 
 - Cost column: sortable, tasks without a price last. Only in the full set (main width >= 1160), and hidden when no task has usage. Text 13: `$0.84`, `<$0.01`, or `-` for a task without usage. Tooltip: "<tokens> tokens, estimated at API list prices".
 - Age column removed; created time goes in the Last activity tooltip (NAV-08). Changes and PR columns are hidden when no visible row has a value (NAV-08). Last activity cell is `white-space: nowrap`, min 72 (NAV-07).
-- Task cell: title 13/500 truncate + label chips after it (relation "part of T-0014" / "waits for T-0009", repo when several repos), never wrapping. Running activity shows in the Agent column as 12 muted text instead of a second line.
+- Task cell: title 13/400 truncate + label chips after it (relation "part of T-0014" / "waits for T-0009", repo when several repos), never wrapping. Running activity shows in the Agent column as 12 muted text instead of a second line.
 - Whole row is the click target (stretched button over the row, `cursor: pointer`), hover bg-hover, selected bg-selected (bg-selection-active when the table has focus) (RA-26, RA-28).
 - Sorting: headers are buttons with `aria-sort` and a 12px arrow; click cycles asc/desc. Default sort is stable: state group (needs-input, review, failed, blocked, running, ready, draft, done, cancelled), then id descending. Live updates never reorder rows while the pointer is over the table or within 2s after a keyboard move; they apply on the next pause (fixes NAV-05).
 - Keys: the table is one tab stop (roving on rows); Up/Down/j/k, Home/End, Enter opens the workspace, `i` toggles details, Shift+F10 row menu: Open workspace, Show details, Add subtask… (`ListPlus`, after Show details; only for a task with no parent), the actions for its state, copy items, Cancel task, Delete task.
@@ -624,7 +629,7 @@ Shared shell:
 
 ### 4.26 Board card (`features/tasks/TaskBoard.tsx`)
 - Column 272 wide, full available height (`flex-1`, own scroll, NAV-21), gap 12, bg `color-mix(in srgb, var(--surface) 60%, transparent)`, radius 8, pad 8. Header 36: state chip + count badge + collapse chevron.
-- Card: pad 10 12, radius 8, bg surface, 1px line, gap 6. Line 1: id mono 12 muted, quiet chip, age 12 muted right. Line 2: title 13/500, max 2 lines. Line 3: meta 12 muted (agent, `+12 −3`, PR #, waits for).
+- Card: pad 10 12, radius 8, bg surface, 1px line, gap 6. Line 1: id mono 12 muted, quiet chip, age 12 muted right. Line 2: title 13/400, max 2 lines. Line 3: meta 12 muted (agent, `+12 −3`, PR #, waits for).
 - Needs-you cards (needs-input, review, failed, blocked): 2px left border in the state color ("tint means look here"). Others neutral.
 - Hover border line-strong; selected border accent + 1px accent ring; focus ring 2px.
 - The state filter controls which columns show. Done and Cancelled are hidden behind a "Show finished" toggle in the view header. Empty non-finished columns show "Nothing here" 12 muted. Edge fades on horizontal overflow.
@@ -637,7 +642,7 @@ Shared shell:
 - Progress, the current stage card while the stage needs the user (T-0115): needs-input or failed, and no check or agent reason in the reasons box: a box with the reason (amber `bg-signal-soft` for needs-input, red state tone for failed; "The agent asks: <question>", "The agent is waiting for your answer in its terminal.", "The agent ended its turn. Reply in the terminal, or resume it.", or the failure reason, else "The agent failed."). Actions: wide primary [Approve] (tooltip with the `a` key) or [Approve anyway] first, then a row: [Answer in terminal] (secondary xs; needs-input with a question, and only for the task of the open workspace: shows its Terminal tab and focuses the waiting terminal; a sheet over the workspace closes first), [Resume] (ghost xs, busy while it runs), Start agent (needs-input and failed), [Mark as done], [Skip], [Send back]. Not on a phone this is the one place with the reason and these actions; the details are their own column, so a state change never resizes the terminals.
 - Progress, a stage card with usage: under the card, a 12px muted line `$0.42 est. · 610K tokens` (tokens alone when no price).
 - Progress, a stage card not reached yet: a ghost `xs` button **Skip** under its finish rule marks it to skip (`design-task-stages.md` 3.9). A marked card says **Will be skipped** in its chip, has a muted title, and the button reads **Don't skip**. No button on a task that is done or cancelled, or on the context stage.
-- Title block pad 16: title 16/600 (wraps), chips row (state, priority, labels) gap 6.
+- Title block pad 16: task title 16/400 (wraps), chips row (state, priority, labels) gap 6.
 - Action row: primary state action (`button primary`), secondary actions, agent action (Start agent / Restart agent / hidden while running, WS-17). Label above in caps "Actions" only in the narrow page mode.
 - Banners (when relevant), pad 10 12, radius 6: quiet ("No sign of life for 12m. The agent may be stuck.") and waiting ("Waits for T-0009 to be done"), bg signal-soft, 1px signal-line.
 - Sections, each a disclosure with a 28px header button (chevron 12, caps label, optional count badge, optional right action); open state remembered in localStorage per section: Notes (description; empty state "No notes. Add some with Edit.", NAV-11), Workspace (Branch with copy, Folder with copy, "Dev ports 20190-20199 (first is $PORT)", [View changes] [Remove workspace]) , Pull request, Usage (T-0141: hidden when the task never had an agent; head line `$1.84 est. · 2.4M tokens`, tokens alone when no model has a price; table Stage · Agent / model · Input · Cache (read + write) · Output · Cost, cost `$0.84`, `<$0.01`, or `—` with the tooltip "No price for <model>"; foot note "Estimated at API list prices. A subscription is billed by its plan." and "Cursor does not report usage." when the task's agent is Cursor; "No usage yet." when empty), Subtasks, Tries (only when > 1), Details (repo, depends on, created, updated), Activity.
@@ -656,7 +661,7 @@ Shared shell:
 
 ### 4.29 View header and workspace header
 - View header 44, pad x 16, border-bottom line: title 15/600 + count badge (NAV-31), then the state filter (4.30), then right: Show finished (board only), Segmented Table/Board (`aria-label="Layout"`, options "Table", "Board", NAV-22).
-- Workspace header 44, pad x 16: id mono 12 muted · title 16/600 truncate (wraps to 2 lines < 768) · state chip (needs-input, failed and review: a button, tooltip "Show in progress", that opens the details on Progress with the current stage in view, T-0115) · branch chip (mono 12, middle-truncated, copy on click, tooltip full name, WS-27) · right: [Push ↑2] secondary (label shows the commits that `origin/<branch>` does not have, and `↓N` when origin has commits the branch lacks; "Publish branch" when origin has no branch of this name; `aria-disabled` + tooltip with the reason when nothing to push, origin is ahead, no `origin` remote or no branch, WS-05), [Create PR] primary (`aria-disabled` + tooltip "Push first" when nothing is pushed/no commits; nowrap, RA-07), details toggle. Below 768 Push/PR move into a "..." menu.
+- Workspace header 44, pad x 16: id mono 12 muted · task title 16/400 truncate (wraps to 2 lines < 768) · state chip (needs-input, failed and review: a button, tooltip "Show in progress", that opens the details on Progress with the current stage in view, T-0115) · branch chip (mono 12, middle-truncated, copy on click, tooltip full name, WS-27) · right: [Push ↑2] secondary (label shows the commits that `origin/<branch>` does not have, and `↓N` when origin has commits the branch lacks; "Publish branch" when origin has no branch of this name; `aria-disabled` + tooltip with the reason when nothing to push, origin is ahead, no `origin` remote or no branch, WS-05), [Create PR] primary (`aria-disabled` + tooltip "Push first" when nothing is pushed/no commits; nowrap, RA-07), details toggle. Below 768 Push/PR move into a "..." menu.
 - Git action results go to toasts, never a status line inside the header (fixes WS-09 layout shift). A done or cancelled task shows no Commit…, Push or Create PR: its finished banner offers the next git step. [Open pull request] stays.
 - Needs-input banner (`features/workspaces/NeedsInputBanner.tsx`) when the task is needs-input or failed, on a phone only. Wider screens have the reason and its actions in the current stage card of the details (4.27, T-0115), and the header has no notice, so its height and the terminals never change with the state. The review banner (`features/workspaces/ReviewBanner.tsx`, "Ready for review: <stages>", [Approve] [Send back]) is the same. On a phone both are a row under the header (the details are a page there and would hide the terminal): 40px, bg signal-soft, top+bottom 1px signal-line, `CircleQuestionMark` 16 signal, text "The agent asks: <question>" (from the latest needs-input event payload; fallback "The agent is waiting for your answer in its terminal."; an agent that ended its turn without `natamux done`: "The agent ended its turn. Reply in the terminal, or resume it."), right: [Answer in terminal] (focuses Terminal 1) [Resume] (WS-08). On a phone it is the one place in the workspace with the reason, on every tab.
 - Finished banner (`features/workspaces/FinishedBanner.tsx`) under the header of a done or cancelled task (40px; 200ms fade, none with reduced motion). The terminals of a finished task end and the wrap-up takes their place, so this row does not resize a live terminal. Tone of the state (`data-state` done or cancelled), `CircleCheck` or `Ban` 16. Text: **Task done.** / **Task cancelled.** and the next step, the first that matches (`lib/finished.ts`): files not committed → [Commit…]; commits not pushed → [Push ↑N]; commits and no pull request → [Create PR]; pull request open → [Open pull request]; else "Nothing is left in the workspace." → [Remove workspace]. [Remove workspace] is always there; with files not committed it is `aria-disabled` and "Commit or discard them first" shows beside it (web). In the app it stays enabled and its dialog lists the files first. While git is read: only the title and [Remove workspace] as a secondary button.
@@ -958,7 +963,7 @@ No new npm package is needed for PR 1-5. Two optional items need the owner's OK 
 | L-14 | P1 | NAV-31 | `Dashboard.tsx` (view header), `AgentPanes.tsx` | View titles 15/600 + count badge; view header 44 per 4.29. |
 | L-15 | P2 | NAV-25, NAV-26 | `WorkspaceList.tsx`, `lib/workspace-groups.ts` | Pinned header count; repo prefix on pinned rows; collapsed group shows a state dot when it hides the current or a needs-you workspace. |
 | L-16 | P2 | NAV-27 (handle) | `ui/ResizeHandle.tsx` | Double-click and Enter reset to default; Home/End = min/max; Shift+arrow 64px; `aria-valuetext`; drag below 180 collapses the sidebar. |
-| L-17 | P2 | — | `WorkspaceRow.tsx`, `lib/view-store/` | Unseen marker: title 600 weight when the task changed state since it was last opened (`lastSeen` map). |
+| L-17 | P2 | — | `WorkspaceRow.tsx`, `lib/view-store/` | Unseen marker: a dot when the task changed state since it was last opened (`lastSeen` map); title stays 400 weight. |
 
 ### PR 5 — Keyboard, palettes, deep links, dialogs, polish
 
@@ -969,7 +974,7 @@ No new npm package is needed for PR 1-5. Two optional items need the owner's OK 
 | K-03 | P1 | NAV-19 | new `features/app/ShortcutSheet.tsx` | `?` sheet per 4.18, generated from `lib/commands/`. |
 | K-04 | P1 | WS-22 | new `lib/route.ts`, `lib/view-store/`, `main.tsx`, `packages/daemon/src/http/server.ts` (SPA fallback) | Routes per 5.5 with history API; store <-> URL sync; back/forward; daemon serves `index.html` for unknown GET paths that accept HTML. |
 | K-05 | P1 | NAV-18 | `features/projects/IssueImport.tsx` | Error state per 4.19 (danger icon, friendly sentence "GitHub CLI is not signed in. Run `gh auth login` in a terminal, then try again.", [Retry], "Show details" with the raw text); button label "Import" disabled with reason until something is picked, then "Import 3 issues". |
-| K-06 | P1 | NAV-28, WS-28 | new `ui/Combobox.tsx`, `features/workspaces/NewWorkspaceDialog.tsx`, `TaskDetail.tsx` | Branch picker Combobox: groups "Recent" (default, labelled "(default)", then current + last used; the picker starts on the default branch), "Branches", "Task branches" (natamux/* collapsed by default), "Remote branches" (`origin/<name>` with no local branch of that name, also never fetched; collapsed; the native menu shows "Loading remote branches…" while origin is asked; T-0188); type to filter. Start task button `aria-disabled` with reason "Enter a title". Dialog "Start a task", two `<fieldset>` groups, each named by a `sectionTitle` heading: "Context" (Title, Context from when the project offers more than one source, Notes 6 rows for "My notes" or Reference for any other source, Attachments; "An agent skill" in Context from when the agents have a skill, with a Skill field before Reference: a button "Pick a skill" (then the skill name) that opens the SkillPicker; Start reasons "Pick a skill" and "Pick an agent to run the skill") under a 12 muted line that says what the agent reads for the picked source; then "Workspace and agent" (Project, Branch from, Agent). Title gets focus; Mod+Enter. |
+| K-06 | P1 | NAV-28, WS-28 | new `ui/Combobox.tsx`, `features/workspaces/NewWorkspaceDialog.tsx`, `TaskDetail.tsx` | Branch picker Combobox: groups "Recent" (default, labelled "(default)", then current + last used; the picker starts on the default branch), "Branches", "Task branches" (natamux/* collapsed by default), "Remote branches" (`origin/<name>` with no local branch of that name, also never fetched; collapsed; the native menu shows "Loading remote branches…" while origin is asked; T-0188); type to filter. Start task button `aria-disabled` with reason "Enter a title". Dialog "Start a task", two `<fieldset>` groups, each named by a `sectionTitle` heading: "Context" (Title, Context from when the project offers more than one source, Notes 6 rows for "My notes" or Reference for any other source, Attachments; "An agent skill" in Context from when the agents have a skill, with a Skill field before Reference: a button "Pick a skill" (then the skill name) that opens the SkillPicker; Start reasons "Pick a skill" and "Pick an agent to run the skill") under a 12 muted line that says what the agent reads for the picked source; then "Workspace and agent" (Project, Branch from, Agent, Task flow: Full flow by default or One agent, which needs an agent). Title gets focus; Mod+Enter. |
 | K-07 | P2 | NAV-29 (part) | `features/projects/RepoPanel.tsx` | Folder field with validation message; in the desktop app a **Browse…** button opens the native folder dialog (`window.natamux.pickFolder`); dialog fixes come from F-05. Project remove is in the sidebar group menu (`DELETE /repos/:id`); rename and Projects panel actions come later. |
 | K-08 | P2 | NAV-33 | `features/app/SignIn.tsx` | Show/hide token toggle (`Eye`/`EyeOff` icon button), helper "It is `NATAMUX_TOKEN` of the daemon. Without it, the daemon makes one and prints it when it starts.", busy state on Connect, inline error with `aria-describedby`. No logo work (no brand asset yet). |
 | K-09 | P2 | RA-29, NAV-32 | `index.html`, `public/favicon.svg` (new), `TerminalView.tsx`, `Dashboard.tsx` | Favicon (simple SVG, theme-safe); skeletons on first load (table, sidebar); guard xterm dispose before `open` finished (`dimensions` error); close WebSocket only after it opened (no "closed before established" warning). |

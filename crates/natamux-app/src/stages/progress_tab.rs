@@ -1,11 +1,11 @@
-//! The Progress tab (docs/design-task-stages.md 7.5, `ProgressTab.tsx`, `Overview.tsx`,
-//! `BranchLane.tsx`): the overview figures, the timeline of steps (a stage, a group side by side,
-//! or a branch with its paths), and the sections below it: Context and issue, Time per stage and
-//! Latest events.
+//! The Progress tab (docs/design-task-stages.md 7.5, `ProgressTab.tsx`, `BranchLane.tsx`): the
+//! timeline of steps as a node flow (a stage, a group side by side, or a branch with its paths,
+//! joined by connectors; T-0246), with the details card of the selected node right under its
+//! row (T-0257).
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use gpui::{AnyElement, FontWeight};
+use gpui::AnyElement;
 use natamux_proto::agents::activity::TaskUsage;
 use natamux_proto::events::task_event::{TaskEvent, WaitReason};
 use natamux_proto::stages::actions::StageFile;
@@ -14,14 +14,12 @@ use natamux_proto::stages::schema::Step;
 use natamux_proto::tasks::task::Task;
 use ui::prelude::*;
 
-use super::card_rules::card_facts;
-use super::stage_card::{ActionsInput, CardInput, FileChip, stage_card};
+use super::card_rules::{card_facts, node_agent};
+use super::flow_rules::{CaretAt, NodeLinks};
+use super::stage_card::{ActionsInput, CardInput, FileChip, details_card, stage_card};
 use super::stage_choices::ChoiceBox;
-use super::stage_marker::{RailLine, marker};
-use super::stage_view_rules::{
-    branch_status, find_stage, link_kind, missing_skills, ran_with_workflow, stage_count,
-    waiting_for_ci,
-};
+use super::stage_view_rules::{find_stage, missing_skills, ran_with_workflow, waiting_for_ci};
+use crate::agents::agent_choices::{custom_agents, workflow_agent};
 use crate::tasks::details_commands::{OnCommand, StageToggle};
 use crate::tasks::usage_rules::{stage_usage, usage_line};
 use natamux_proto::stages::capabilities::{can_run_workflow, offers_ci, offers_workflow};
@@ -41,10 +39,14 @@ pub struct ProgressInput {
     pub busy: bool,
     pub resuming: bool,
     pub toggling: BTreeSet<String>,
-    pub open_cards: BTreeSet<String>,
+    /// The node the user opened (`card_rules::pick_after_click`): its details card shows under
+    /// its step. None until a click, the running stage too.
+    pub selected: Option<String>,
+    /// The task's agent (`agent_of`), the icon of a node that runs it.
+    pub task_agent: String,
     pub open_lanes: BTreeSet<String>,
     pub open_evidence: BTreeSet<String>,
-    /// The focus of each finished card's fold row.
+    /// The focus of each node.
     pub card_focus: BTreeMap<String, gpui::FocusHandle>,
     pub agent_label: String,
     /// The task's workspace is open in main beside the panel: Answer in terminal can focus it.
@@ -104,7 +106,11 @@ impl Ctx<'_> {
                     on: task.workflow_stages.iter().any(|each| each == id),
                     busy: toggling(StageToggle::Workflow),
                     // A stage that starts its own agent runs the workflow with that agent.
-                    allowed: can_run_workflow(stage.agent.as_deref().or(task.agent.as_deref())),
+                    allowed: {
+                        let custom = custom_agents();
+                        let agent = stage.agent.as_deref().or(task.agent.as_deref());
+                        can_run_workflow(agent.map(|id| workflow_agent(id, &custom)))
+                    },
                     started,
                 });
             }
@@ -125,7 +131,27 @@ impl Ctx<'_> {
         boxes
     }
 
-    fn card(&self, id: &str, cx: &App) -> Option<AnyElement> {
+    /// `links`: the lines inside the node.
+    fn card(&self, id: &str, links: NodeLinks, cx: &App) -> Option<AnyElement> {
+        let input = self.card_input(id, links)?;
+        Some(stage_card(input, self.on, cx))
+    }
+
+    /// The full-width details card of the selected stage when `stages` hold it, its caret
+    /// pointing `at` the node.
+    fn details_of<'s>(
+        &self,
+        stages: impl IntoIterator<Item = &'s natamux_proto::stages::schema::Stage>,
+        at: CaretAt,
+        cx: &App,
+    ) -> Option<AnyElement> {
+        let selected = self.input.selected.as_deref()?;
+        let stage = stages.into_iter().find(|stage| stage.id == selected)?;
+        let input = self.card_input(&stage.id, NodeLinks::default())?;
+        Some(details_card(input, at, self.on, cx))
+    }
+
+    fn card_input(&self, id: &str, links: NodeLinks) -> Option<CardInput> {
         let entry = (*self.by_id.get(id)?).clone();
         let stage = find_stage(&self.input.steps, id)?.clone();
         let input = self.input;
@@ -157,6 +183,7 @@ impl Ctx<'_> {
         );
         let done = task.state == natamux_proto::tasks::task::TaskState::Done;
         let card = CardInput {
+            links,
             usage: stage_usage(input.usage.as_ref(), id)
                 .map(|usage| usage_line(usage.tokens, usage.cost_usd)),
             activity: (current
@@ -194,35 +221,15 @@ impl Ctx<'_> {
             }),
             // A done task's pull request was merged: Release finishes when it is.
             pr: (release && task.pr.is_some()).then(|| (task.pr.clone().unwrap_or_default(), done)),
-            opened: input.open_cards.contains(id),
+            selected: input.selected.as_deref() == Some(id),
+            node_agent: node_agent(&stage, &input.task_agent),
             now_ms: input.now_ms,
             file,
             entry,
             stage,
         };
-        Some(stage_card(card, self.on, cx))
+        Some(card)
     }
-}
-
-pub(super) fn heading(text: String) -> impl IntoElement {
-    Label::new(text).weight(FontWeight::SEMIBOLD)
-}
-
-/// One row of the timeline: the rail with its marker and the line to the next step, then the step.
-fn row(marker_el: AnyElement, line: Option<AnyElement>, content: AnyElement) -> impl IntoElement {
-    h_flex()
-        .items_stretch()
-        .gap_2()
-        .child(
-            v_flex()
-                .w(rems_from_px(20.0_f32))
-                .flex_none()
-                .items_center()
-                .gap_1()
-                .child(marker_el)
-                .children(line),
-        )
-        .child(div().flex_1().min_w_0().pb_3().child(content))
 }
 
 impl Ctx<'_> {
@@ -233,48 +240,13 @@ impl Ctx<'_> {
             .filter_map(|stage| self.by_id.get(stage.id.as_str()).copied())
             .collect()
     }
-
-    fn step(&self, index: usize, step: &Step, cx: &App) -> AnyElement {
-        let steps = &self.input.steps;
-        let own = self.entries(step);
-        let status = match step {
-            Step::Branch(branch) => {
-                branch_status(branch, &|id: &str| self.by_id.get(id).map(|e| e.status))
-            }
-            _ if own.iter().any(|entry| entry.status == StageStatus::Current) => {
-                StageStatus::Current
-            }
-            _ => own
-                .first()
-                .map_or(StageStatus::Upcoming, |entry| entry.status),
-        };
-        let state = own
-            .iter()
-            .find(|entry| entry.status == StageStatus::Current)
-            .and_then(|entry| entry.state);
-        let last = own.last().copied();
-        let next = steps
-            .get(index + 1)
-            .and_then(|next| self.entries(next).first().copied());
-        let line = steps
-            .get(index + 1)
-            .map(|_| RailLine::new(link_kind(last, next)).into_any_element());
-        let is_branch = matches!(step, Step::Branch(_));
-        let content = match step {
-            Step::Stage(stage) => self
-                .card(&stage.id, cx)
-                .unwrap_or_else(|| div().into_any_element()),
-            Step::Group(group) => self.group(group, cx),
-            Step::Branch(branch) => self.branch(branch, cx),
-        };
-        row(
-            marker(step.id(), status, state, is_branch, cx),
-            line,
-            content,
-        )
-        .into_any_element()
-    }
 }
+
+#[path = "progress_flow.rs"]
+mod flow;
+
+#[path = "progress_branch.rs"]
+mod branches;
 
 #[path = "progress_steps.rs"]
 mod steps;
@@ -293,14 +265,17 @@ pub fn timeline(input: &ProgressInput, on: &OnCommand, cx: &App) -> Vec<AnyEleme
         missing: missing_skills(&input.events),
         on,
     };
-    input
-        .steps
-        .iter()
+    let last = input.steps.len().saturating_sub(1);
+    ctx.column(&input.steps, cx)
+        .into_iter()
         .enumerate()
         .map(|(index, step)| {
+            // One element per step so the panel can scroll to one; the panel draws the dot grid.
             div()
                 .px_3()
-                .child(ctx.step(index, step, cx))
+                .when(index == 0, |this| this.pt(rems_from_px(8_f32)))
+                .when(index == last, |this| this.pb_3())
+                .child(step)
                 .into_any_element()
         })
         .collect()
@@ -318,7 +293,6 @@ pub fn current_step(input: &ProgressInput) -> Option<usize> {
     })
 }
 
-/// Stages done of all, for the overview.
-pub fn counts(progress: &[StageProgress]) -> (usize, usize) {
-    stage_count(progress)
-}
+#[cfg(test)]
+#[path = "progress_tab_tests.rs"]
+mod tests;

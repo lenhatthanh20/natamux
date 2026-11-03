@@ -24,7 +24,7 @@ use super::stage_fields_view::{
 };
 use super::stage_options::stage_options;
 use super::stage_picker::StagePicker;
-use crate::agents::agent_choices::{AGENT_CHOICES, agent_label};
+use crate::agents::agent_choices::{agent_label, custom_agents, pick_list};
 use crate::components::form::input_box;
 use crate::components::tab_order;
 
@@ -161,6 +161,38 @@ impl DetailsPane {
     pub(super) fn branch_fields(&self) -> Option<&BranchFields> {
         self.branch_fields.as_ref()
     }
+
+    /// The stage picker while it is open, for the flow tests.
+    #[cfg(test)]
+    pub fn picker(&self) -> Option<Entity<StagePicker>> {
+        self.picker.clone()
+    }
+
+    /// The text fields of the picked stage or branch by name, for the flow tests.
+    #[cfg(test)]
+    pub fn field_focuses(&self, cx: &App) -> Vec<(&'static str, FocusHandle)> {
+        use gpui::Focusable as _;
+        let mut fields = Vec::new();
+        if let Some(stage) = &self.stage_fields {
+            fields.extend([
+                ("name", &stage.name),
+                ("args", &stage.args),
+                ("prompt", &stage.prompt),
+                ("command", &stage.command),
+                ("check", &stage.check),
+                ("output", &stage.output),
+                ("sections", &stage.sections),
+                ("done when", &stage.done_when),
+            ]);
+        }
+        if let Some(branch) = &self.branch_fields {
+            fields.push(("branch name", &branch.name));
+        }
+        fields
+            .into_iter()
+            .map(|(name, field)| (name, field.editor.focus_handle(cx)))
+            .collect()
+    }
 }
 
 impl Render for DetailsPane {
@@ -276,20 +308,20 @@ impl DetailsPane {
         let (pipeline, id) = (self.editor.clone(), stage.id.clone());
         let button = select(SharedString::from(format!("agent-{id}")), text).on_click(
             move |event: &ClickEvent, window, cx| {
-                let pick = |value: &'static str, label: &'static str| {
+                let pick = |value: String, label: String| {
                     let (pipeline, id) = (pipeline.clone(), id.clone());
                     let checked = picked.as_deref().unwrap_or("") == value;
                     Choice::new(label, Some(checked), move |_, cx| {
                         change(&pipeline, cx, |steps| {
-                            set_text(steps, &id, TextField::Agent, value)
+                            set_text(steps, &id, TextField::Agent, &value)
                         })
                     })
                 };
-                let mut choices = vec![pick("", "Task's agent")];
+                let mut choices = vec![pick(String::new(), "Task's agent".to_owned())];
                 choices.extend(
-                    AGENT_CHOICES
-                        .iter()
-                        .map(|choice| pick(choice.id, choice.label)),
+                    pick_list(&custom_agents())
+                        .into_iter()
+                        .map(|(value, label)| pick(value, label)),
                 );
                 open_choices(choices, event.position(), window, cx);
             },

@@ -2,11 +2,13 @@
 """Tests of ci-changes.py. Run: python3 scripts/ci-changes.test.py"""
 
 import importlib.util
+import json
 import os
 import pathlib
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 
 spec = importlib.util.spec_from_file_location(
     "ci_changes", pathlib.Path(__file__).with_name("ci-changes.py")
@@ -34,7 +36,8 @@ GRAPH = {
 
 
 def true_flags(paths):
-    return sorted(k for k, v in ci.path_flags(paths).items() if v)
+    return sorted(k for k, v in ci.path_flags(paths).items()
+                  if v and k in {"daemon", "terminal", "app", "client", "lock", "e2e"})
 
 
 class Flags(unittest.TestCase):
@@ -63,6 +66,14 @@ class Flags(unittest.TestCase):
 
     def test_production_image_change_runs_e2e(self):
         self.assertIn("e2e", true_flags(["docker/prod.Dockerfile"]))
+
+    def test_all_production_image_inputs_run_e2e_without_client_jobs(self):
+        for path in ["packages/core/src/index.ts", "packages/web/src/main.tsx",
+                     "package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml",
+                     "tsconfig.base.json", "docker/nginx.conf"]:
+            flags = ci.path_flags([path])
+            self.assertTrue(flags["e2e"], path)
+            self.assertFalse(flags["client"], path)
 
     def test_client_and_cli(self):
         self.assertEqual(true_flags(["crates/natamux-cli/src/main.rs"]), ["client", "e2e"])
@@ -108,6 +119,31 @@ class Flags(unittest.TestCase):
     def test_docs_only_is_all_false(self):
         self.assertEqual(true_flags(["docs/rust-phase4.md"]), [])
         self.assertEqual(true_flags([]), [])
+
+    def test_web_inputs_and_rust_inputs(self):
+        for path in ["packages/core/src/index.ts", "packages/web/src/main.tsx",
+                     "package.json", "pnpm-lock.yaml", "biome.json", ".github/workflows/ci.yml"]:
+            self.assertTrue(ci.path_flags([path])["web"], path)
+        for path in ["crates/natamux-app/src/main.rs", "xtask/src/main.rs",
+                     "scripts/release.test.sh", ".github/workflows/rust.yml"]:
+            self.assertTrue(ci.path_flags([path])["check"], path)
+        self.assertFalse(ci.path_flags(["packages/web/src/main.tsx"])["check"])
+        self.assertFalse(ci.path_flags(["crates/natamux-app/src/main.rs"])["web"])
+
+    def test_check_reads_clippy_release_and_site_inputs(self):
+        for path in ["clippy.toml", "package.json", "site/src/content/docs/docs/guides/terminal.mdx"]:
+            self.assertTrue(ci.path_flags([path])["check"], path)
+
+    def test_unknown_root_path_runs_every_job(self):
+        for path in [".gitattributes", ".dockerignore"]:
+            flags = ci.path_flags([path])
+            self.assertTrue(all(flags.values()), path)
+            out = ci.compute([path], "", False, GRAPH)
+            self.assertEqual(out["crates"].split(), sorted(GRAPH), path)
+
+    def test_release_note_prepares_intel_cache(self):
+        self.assertTrue(ci.path_flags(["docs/releases/v1.0.17.md"])["release_prep"])
+        self.assertFalse(ci.path_flags(["docs/release-process.md"])["release_prep"])
 
     def test_all_true_paths(self):
         for path in [".github/workflows/rust.yml", "rust-toolchain.toml", "Cargo.toml",
@@ -184,6 +220,13 @@ class E2eGroups(unittest.TestCase):
         self.assertEqual(out["e2e_groups"], '["timing", "cache", "terminal", "rest"]')
         self.assertEqual(out["e2e"], "true")
 
+    def test_main_ignores_narrow_and_invalid_e2e_tags(self):
+        for tag in ["[e2e: rest]", "[e2e: no-such-group]"]:
+            out = ci.compute(["packages/web/src/main.tsx"], tag, False, GRAPH,
+                             "refs/heads/main")
+            self.assertEqual(json.loads(out["e2e_groups"]), ci.E2E_GROUPS)
+            self.assertEqual(out["e2e"], "true")
+
 
 class RunAll(unittest.TestCase):
     def test_tag(self):
@@ -196,7 +239,8 @@ class RunAll(unittest.TestCase):
         return ci.wants_all(ref, message)
 
     def test_main_push_runs_all(self):
-        self.assertTrue(self.run_all("refs/heads/main", "Fix"))
+        self.assertFalse(self.run_all("refs/heads/main", "Fix"))
+        self.assertTrue(self.run_all("refs/heads/main", "Fix [ci: all]"))
 
     def test_pull_request_reads_the_diff(self):
         self.assertFalse(self.run_all("refs/pull/7/merge", ""))
@@ -260,6 +304,39 @@ class Base(unittest.TestCase):
 
 
 class Compute(unittest.TestCase):
+    def test_ci_config_pr_runs_check_without_every_rust_job(self):
+        for path in [".github/workflows/rust.yml", "scripts/ci-changes.py"]:
+            out = ci.compute([path], "", False, GRAPH, "refs/pull/589/merge")
+            self.assertEqual(out["check"], "true", path)
+            self.assertEqual(out["app"], "false", path)
+            self.assertEqual(out["e2e"], "false", path)
+            self.assertEqual(out["crates"], "", path)
+
+    def test_release_skill_text_does_not_force_full_pr(self):
+        out = ci.compute([".claude/skills/natamux-release/SKILL.md"], "", False, GRAPH,
+                         "refs/pull/589/merge")
+        self.assertEqual(out["app"], "false")
+        self.assertEqual(out["e2e"], "false")
+
+    def test_ci_config_main_push_runs_all(self):
+        for path in [".github/workflows/rust.yml", "scripts/ci-changes.py"]:
+            out = ci.compute([path], "", False, GRAPH, "refs/heads/main")
+            self.assertEqual(out["app"], "true", path)
+            self.assertEqual(out["e2e"], "true", path)
+            self.assertEqual(out["crates"].split(), sorted(GRAPH), path)
+
+    def test_release_note_selects_intel_prebuild_without_every_job(self):
+        out = ci.compute(["docs/releases/v1.0.17.md"], "", False, GRAPH,
+                         "refs/heads/main")
+        self.assertEqual(out["release_prep"], "true")
+        self.assertEqual(out["check"], "true")
+        self.assertEqual(out["app"], "false")
+
+    def test_unknown_diff_selects_web_and_check(self):
+        out = ci.compute(None, "", False, GRAPH)
+        self.assertEqual(out["check"], "true")
+        self.assertEqual(out["web"], "true")
+
     def test_daemon_only_change(self):
         out = ci.compute(["crates/natamux-pty/src/lib.rs"], "", False, GRAPH)
         self.assertEqual(out["daemon_crates"], "-p natamux-pty -p natamux-daemon")
@@ -307,6 +384,84 @@ class Compute(unittest.TestCase):
         out = ci.compute(["docs/x.md"], "", False, GRAPH)
         self.assertEqual({out[k] for k in ["daemon", "terminal", "app", "client", "lock", "e2e"]}, {"false"})
         self.assertEqual(out["crates"], "")
+
+
+class PushRange(unittest.TestCase):
+    def test_main_push_uses_before_commit_with_two_dot_diff(self):
+        before = "a" * 40
+        after = "b" * 40
+        with tempfile.TemporaryDirectory() as tmp:
+            event_path = pathlib.Path(tmp) / "event.json"
+            event_path.write_text(json.dumps({"before": before, "after": after}))
+            with mock.patch.dict(os.environ, {"GITHUB_EVENT_PATH": str(event_path),
+                                              "GITHUB_EVENT_NAME": "push",
+                                              "GITHUB_REF": "refs/heads/main"}):
+                with mock.patch.object(ci, "git", return_value=mock.Mock(stdout=after + "\n")):
+                    self.assertEqual(ci.push_base(), before)
+                with mock.patch.object(ci, "git", return_value=mock.Mock(stdout="docs/x.md\n")) as git:
+                    self.assertEqual(ci.changed_files(before, three_dot=False), ["docs/x.md"])
+                    git.assert_called_once_with("diff", "--name-only", f"{before}..HEAD")
+
+    def test_missing_or_new_branch_base_runs_everything(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            event_path = pathlib.Path(tmp) / "event.json"
+            for event in [{"before": "0" * 40}, {"before": "bad"},
+                          {"before": "a" * 40, "after": "bad"}, {}, []]:
+                event_path.write_text(json.dumps(event))
+                with mock.patch.dict(os.environ, {"GITHUB_EVENT_PATH": str(event_path)}):
+                    self.assertIsNone(ci.push_base())
+            event_path.write_text(json.dumps({"before": "a" * 40, "after": "b" * 40}))
+            with mock.patch.dict(os.environ, {"GITHUB_EVENT_PATH": str(event_path)}):
+                with mock.patch.object(ci, "git", return_value=mock.Mock(stdout="c" * 40)):
+                    self.assertIsNone(ci.push_base())
+        with mock.patch.dict(os.environ, {"GITHUB_EVENT_PATH": "/missing/event.json"}):
+            self.assertIsNone(ci.push_base())
+
+    def test_pr_reads_merge_head_and_uses_merge_base_diff(self):
+        with mock.patch.dict(os.environ, {"GITHUB_EVENT_NAME": "pull_request",
+                                          "GITHUB_REF": "refs/pull/42/merge"}):
+            with mock.patch.object(ci, "pr_head_message", return_value="Fix [ci: all]"):
+                with mock.patch.object(ci, "changed_files") as changed:
+                    with mock.patch.object(ci, "workspace_graph", return_value=GRAPH):
+                        out = ci.outputs()
+        self.assertEqual(out["all"], "true")
+        changed.assert_not_called()
+
+    def test_pr_without_override_uses_origin_main(self):
+        with mock.patch.dict(os.environ, {"GITHUB_EVENT_NAME": "pull_request",
+                                          "GITHUB_REF": "refs/pull/42/merge"}):
+            with mock.patch.object(ci, "pr_head_message", return_value="Fix app"):
+                with mock.patch.object(ci, "changed_files", return_value=["crates/natamux-app/src/main.rs"]) as changed:
+                    with mock.patch.object(ci, "workspace_graph", return_value=GRAPH):
+                        out = ci.outputs()
+        changed.assert_called_once_with("origin/main")
+        self.assertEqual(out["app"], "true")
+        self.assertEqual(out["all"], "false")
+
+    def test_main_missing_diff_runs_everything(self):
+        with mock.patch.dict(os.environ, {"GITHUB_EVENT_NAME": "push",
+                                          "GITHUB_REF": "refs/heads/main",
+                                          "HEAD_MESSAGE": "Fix app"}):
+            with mock.patch.object(ci, "push_base", return_value=None):
+                with mock.patch.object(ci, "workspace_graph", return_value=GRAPH):
+                    out = ci.outputs()
+        self.assertEqual(out["check"], "true")
+        self.assertEqual(out["web"], "true")
+        self.assertEqual(out["release_prep"], "true")
+
+    def test_main_push_classifies_its_own_diff(self):
+        with mock.patch.dict(os.environ, {"GITHUB_EVENT_NAME": "push",
+                                          "GITHUB_REF": "refs/heads/main",
+                                          "HEAD_MESSAGE": "Fix app [e2e: no-such-group]"}):
+            with mock.patch.object(ci, "push_base", return_value="a" * 40):
+                with mock.patch.object(ci, "changed_files", return_value=["crates/natamux-app/src/main.rs"]) as changed:
+                    with mock.patch.object(ci, "workspace_graph", return_value=GRAPH):
+                        out = ci.outputs()
+        changed.assert_called_once_with("a" * 40, three_dot=False)
+        self.assertEqual(out["app"], "true")
+        self.assertEqual(out["all"], "false")
+        self.assertEqual(out["release_prep"], "false")
+        self.assertEqual(json.loads(out["e2e_groups"]), ci.E2E_GROUPS)
 
 
 def git(root, *args):

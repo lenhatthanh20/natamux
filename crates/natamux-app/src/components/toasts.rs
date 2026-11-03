@@ -11,10 +11,15 @@ use ui::prelude::*;
 
 use super::timing_rules::ToastClock;
 use super::toast_rules::{Toast, ToastTone, Toasts, toast_duration};
+use crate::app::title_bar::title_bar_height;
 use crate::components::button_style::quiet_button;
 use crate::components::icons::icon_path;
 
 type Run = Rc<dyn Fn(&mut Window, &mut App)>;
+
+fn toast_bottom_offset(bar_height: Pixels) -> Pixels {
+    bar_height + px(12.)
+}
 
 /// A link-style button under the toast text ("Open", "Undo"). It runs, then the toast goes.
 pub struct ToastAction {
@@ -241,11 +246,14 @@ impl Render for Toaster {
             .iter()
             .map(|toast| self.render_toast(toast, cx).into_any_element())
             .collect();
-        // 16 px from the right edge, 12 px above the 28 px status bar.
+        // Keep 12 px above the status bar as its height changes with the UI size.
         deferred(
             anchored()
                 .anchor(Anchor::BottomRight)
-                .position(point(viewport.width - px(16.), viewport.height - px(40.)))
+                .position(point(
+                    viewport.width - px(16.),
+                    viewport.height - toast_bottom_offset(title_bar_height(window)),
+                ))
                 .child(
                     v_flex()
                         .w(rems_from_px(360.0_f32))
@@ -256,5 +264,16 @@ impl Render for Toaster {
         )
         .with_priority(4)
         .into_any_element()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn toast_stays_twelve_pixels_above_the_status_bar_at_both_sizes() {
+        assert_eq!(toast_bottom_offset(px(34.)), px(46.));
+        assert_eq!(toast_bottom_offset(px(42.)), px(54.));
     }
 }

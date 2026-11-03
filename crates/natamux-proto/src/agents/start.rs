@@ -6,6 +6,15 @@ use serde::Serialize;
 /// start.
 pub const LAUNCHABLE_AGENTS: [&str; 5] = ["claude-code", "codex", "gemini", "copilot", "cursor"];
 
+/// The command each agent is started with when no other is configured. The app shows it too.
+pub const DEFAULT_PROGRAMS: [(&str, &str); 5] = [
+    ("claude-code", "claude"),
+    ("codex", "codex"),
+    ("gemini", "gemini"),
+    ("copilot", "copilot"),
+    ("cursor", "cursor-agent"),
+];
+
 /// `prompt` of a start: at most this many characters.
 pub const MAX_START_PROMPT_LENGTH: usize = 20_000;
 

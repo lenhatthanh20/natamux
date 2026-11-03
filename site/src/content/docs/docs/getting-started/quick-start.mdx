@@ -7,6 +7,7 @@ sidebar:
 
 import { Steps, Aside, CardGrid, LinkCard } from '@astrojs/starlight/components'
 import Figure from '../../../../components/Figure.astro'
+import NativeClip from '../../../../components/NativeClip.astro'
 
 This walk-through uses the desktop app and one agent. Starting a task and reaching the first approval takes about ten minutes, and most of that is the agent working. The rest depends on your task and your agent: the default pipeline waits for you three times, then an agent reviews the work. You need the [requirements](/docs/getting-started/install/#requirements) and a git repository you can experiment in.
 
@@ -48,7 +49,7 @@ For this guide, use **Start a task**.
 
 </Steps>
 
-<Figure src="/screens/v2/start-task" alt="The Start a task dialog over an open task, scrolled so the Title field is out of view. Context from is My notes, with a notes box and an Attachments drop area. Under Workspace and agent, Project is storefront, Branch from is main and Agent is Claude Code. Cancel and Start task are at the bottom." caption="The Start a task dialog: what the agent reads, and where and how the task runs." />
+<Figure src="/screens/native/start-task" width={1600} height={900} alt="The native Start a task dialog with the visible title Clamp checkout totals after discounts. Context from is My notes, Project is storefront, Branch from is main, Agent is Claude Code and Task flow is Full flow." caption="The native Start a task dialog keeps the title, context, project, branch, agent and task flow together." />
 
 The dialog has two groups. **Context** is what the agent reads as the task's context. The line under the heading says what that is for the source you pick. **Workspace and agent** is where and how the task runs.
 
@@ -74,31 +75,31 @@ If you added a task to the backlog first, open it and click **Start agent** (or 
 
 Open the task. The **Terminal** tab shows the agent running in the task's worktree.
 
-<Figure src="/screens/v2/task-review-shell5" alt="An open task on the Terminal tab with four agent shells in a grid: Shell 1, Shell 6, Shell 7 and Shell 8. The Review agent runs in Shell 8 and shows git diff. In the Progress tab, Review is Running after Test spec and Implement are done." caption="An open task: its shells in the middle, its stages on the right." />
+<Figure src="/screens/native/task-review-shell5" width={1600} height={900} alt="A native task workspace with three terminal panes: Terminal 1, Test spec in Terminal 10, and Review running in Terminal 12. The Progress panel shows Test spec and Implement completed before Review." caption="Three native task terminals beside the workflow. Review runs in its own terminal. Terminal output is scripted." />
 
 On the dashboard, the state of the task updates by itself, because Natamux's hooks tell it when the agent works, asks or finishes. You can close the dashboard and the agent keeps running.
 
 ## Answer when it needs you
 
-When an agent asks a question or waits for a permission, the task moves to **Needs input**. Its row in the sidebar becomes a card with the agent's question, and the title bar shows a count such as "1 needs you".
+When an agent asks a question or waits for a permission, the task moves to **Needs input**. Its row in the sidebar becomes a card with the agent's question. In the native app the question stays in the terminal and **Progress** marks the waiting stage. The browser dashboard also shows a count such as "1 needs you" in its title bar.
 
 <Steps>
 
 1. Click the task in the sidebar.
-2. Click **Answer in terminal** on the banner.
+2. Click **Answer** on its card in the sidebar.
 3. Type your answer in the terminal.
 
 </Steps>
 
 The task goes back to running. See [Dashboard](/docs/guides/dashboard/).
 
-<Figure src="/media/v2/clip-needs-you" video alt="Screen recording: a question arrives, the title bar count and the sidebar card appear, the cursor clicks Answer, a short reply is typed and the agent goes on." caption="A question arrives, you answer it, and the agent goes on. Recorded on the real dashboard; the agents are stand-in scripts." />
+<NativeClip name="status" description="A native task asks about a negative coupon. Answer opens its terminal, a reply is entered, and the task reaches the Spec review gate." caption="Answer the task in its native terminal. The workflow then waits for Spec approval." />
 
 ## Review the stage
 
 Each task moves through stages. The **Progress** tab of the details panel shows them and the evidence of each one, beside the terminal.
 
-<Figure src="/screens/v2/task-spec-approve" alt="An open task at the Spec stage. The workspace header says In review. In the Progress tab, the Spec card says In review and has Approve and Send back buttons, and the Bug or feature branch waits below it." caption="Spec is ready for review. Approve it from the stage card." />
+<Figure src="/screens/native/task-spec-approve" width={1600} height={900} alt="A native task waiting at Spec. The stage card says In review, shows two checks passed, and offers Show evidence, Approve, Skip and Send back. The terminal shows the scripted demo agent report." caption="Spec waits for review in the native app. Approve it from the stage card. Terminal output is scripted." />
 
 When a stage waits for you, the task is in review. Read what the agent produced, then:
 
@@ -118,7 +119,7 @@ See [The review loop](/docs/concepts/review-loop/) and [Stages](/docs/concepts/s
 
 Open the **Changes** tab. It lists the changed files and shows a diff for each one, side by side or inline. The **History** tab shows the task's branch as a graph.
 
-<Figure src="/screens/v2/changes-generate" alt="The Changes tab: two changed files on the left, a side by side diff of checkout.ts on the right, and under the list a commit message box with a title and a body, a Generate button and a Commit all button." caption="The Changes tab. Write the commit message, or click Generate to ask the agent for one." />
+<Figure src="/screens/native/changes-generate" width={1600} height={900} alt="The native Changes view with a side-by-side diff of checkout.py, two changed files on the right, an empty commit-message field, and Generate, Commit all, Push and Create PR controls." caption="The native Changes view, with a side-by-side diff and an empty commit-message field." />
 
 ## Commit, push and open a pull request
 

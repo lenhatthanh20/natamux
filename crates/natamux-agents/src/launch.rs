@@ -7,7 +7,7 @@ use natamux_proto::terminals::list::SHELL_PROGRAMS;
 
 use crate::hook_files::{CODEX_EVENTS, codex_hook_value};
 
-pub use natamux_proto::agents::start::LAUNCHABLE_AGENTS;
+pub use natamux_proto::agents::start::{DEFAULT_PROGRAMS, LAUNCHABLE_AGENTS};
 
 /// What the hooks run. `natamux hook` does nothing outside a Natamux terminal (no token).
 pub const HOOK: &str = "natamux hook";
@@ -29,18 +29,10 @@ impl Platform {
     }
 }
 
+/// A built-in agent or one of the user's custom agents.
 pub fn is_launchable(agent: &str) -> bool {
-    LAUNCHABLE_AGENTS.contains(&agent)
+    LAUNCHABLE_AGENTS.contains(&agent) || crate::custom::custom_agent(agent).is_some()
 }
-
-/// The command each agent is started with when no other is configured.
-pub const DEFAULT_PROGRAMS: [(&str, &str); 5] = [
-    ("claude-code", "claude"),
-    ("codex", "codex"),
-    ("gemini", "gemini"),
-    ("copilot", "copilot"),
-    ("cursor", "cursor-agent"),
-];
 
 /// The default program of an agent; empty for a name that is not launchable.
 pub fn default_program(agent: &str) -> &'static str {
@@ -109,7 +101,9 @@ pub fn agent_of_command(line: &str, program_of: impl Fn(&str) -> String) -> Opti
 /// the others have no such check, so their closest flag lets them run (almost) anything.
 pub const AUTO_FLAGS: [(&str, &[&str]); 5] = [
     ("claude-code", &["--permission-mode", "auto"]),
-    // Codex dropped `--full-auto`. These two flags mean the same and exist in old and new versions.
+    // Codex dropped `--full-auto`. The first two flags mean the same and exist in old and new
+    // versions. Its `workspace-write` sandbox blocks the network, and with it the daemon on
+    // loopback, so the `natamux` commands of a stage could not report.
     (
         "codex",
         &[
@@ -117,6 +111,8 @@ pub const AUTO_FLAGS: [(&str, &[&str]); 5] = [
             "workspace-write",
             "--ask-for-approval",
             "never",
+            "-c",
+            "sandbox_workspace_write.network_access=true",
         ],
     ),
     ("gemini", &["--approval-mode", "yolo"]),
@@ -267,7 +263,13 @@ pub fn launch_command(agent: &str, options: &LaunchOptions) -> String {
             words.extend(prompt);
             words
         }
-        _ => vec![program],
+        // Any other CLI (a custom agent on base "other"): the prompt is its last word.
+        _ => {
+            let mut words = vec![program];
+            words.extend(extra);
+            words.extend(prompt);
+            words
+        }
     };
     words.join(" ")
 }

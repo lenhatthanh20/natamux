@@ -131,7 +131,7 @@ fn task_cell(row: &RowData, cx: &App) -> AnyElement {
             div().min_w_0().child(
                 Label::new(task.title.clone())
                     .size(row_text())
-                    .weight(FontWeight::MEDIUM)
+                    .weight(FontWeight::NORMAL)
                     .truncate(),
             ),
         )

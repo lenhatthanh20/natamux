@@ -46,6 +46,7 @@ mod running_agent_prompt;
 mod send_back;
 mod settings_screen;
 mod shells_come_back;
+mod single_agent;
 mod skills;
 mod skip_marked;
 mod stage_files_removed;

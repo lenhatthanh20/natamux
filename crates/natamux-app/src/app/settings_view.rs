@@ -1,8 +1,8 @@
 //! The Settings page (T-0174; docs/rust-phase3.md "Lean layout"): a nav with a search, the app's
-//! pages (General, Appearance) and a page per project (`ProjectSettingsPage`). It fills the window
-//! body over main. App settings apply at once; a project page keeps its draft until Save or
-//! Discard, also while other pages show. The page owns its keys as a dialog does: Esc, Mod+Enter
-//! and a Tab ring.
+//! pages (General, Appearance, Agents) and a page per project (`ProjectSettingsPage`). It fills
+//! the window body over main. App settings apply at once; a project page keeps its draft until Save
+//! or Discard, also while other pages show. The page owns its keys as a dialog does: Esc,
+//! Mod+Enter and a Tab ring.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
@@ -16,6 +16,7 @@ use ui::{ToggleButtonGroup, ToggleButtonGroupStyle, ToggleButtonSimple, prelude:
 
 use super::dashboard::Dashboard;
 use super::dashboard_data::{Part, Seen};
+use super::settings_agents::AgentRows;
 use super::settings_font::FontRows;
 use super::settings_rules::{
     SearchResults, SettingRow, SettingsFocus, SettingsPage, page_title, search, shown_page,
@@ -31,8 +32,8 @@ use crate::projects::project_settings_page::{Discarded, ProjectSettingsPage};
 const NAV_WIDTH: f32 = 220.;
 /// The rows of the app's pages stay this wide on a wide window.
 const PAGE_MAX: f32 = 760.;
-/// General, Appearance and Keyboard shortcuts come before the projects in the nav.
-const APP_ITEMS: usize = 3;
+/// General, Appearance, Agents and Keyboard shortcuts come before the projects in the nav.
+const APP_ITEMS: usize = 4;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum NavItem {
@@ -48,6 +49,7 @@ fn nav_items(repos: &[Repo]) -> Vec<(NavItem, String)> {
             NavItem::Page(SettingsPage::Appearance),
             "Appearance".to_owned(),
         ),
+        (NavItem::Page(SettingsPage::Agents), "Agents".to_owned()),
         (NavItem::Shortcuts, "Keyboard shortcuts".to_owned()),
     ];
     items.extend(repos.iter().map(|repo| {
@@ -81,6 +83,7 @@ pub struct SettingsView {
     update_focus: FocusHandle,
     check_focus: FocusHandle,
     pub(super) font: FontRows,
+    pub(super) agents: AgentRows,
     /// One stop per nav row. Grown while drawing.
     nav_stops: Vec<FocusHandle>,
     /// The project pages made so far, with their Discard subscription. They keep their drafts.
@@ -116,6 +119,7 @@ impl SettingsView {
             cx.notify();
         });
         let font = FontRows::new(dashboard.clone(), window, cx);
+        let agents = AgentRows::new(dashboard.clone(), cx);
         let keys = Self::watch_keys(cx);
         let updates = cx.observe_global::<UpdateChanged>(|_, cx| cx.notify());
         Self {
@@ -131,6 +135,7 @@ impl SettingsView {
             update_focus: cx.focus_handle(),
             check_focus: cx.focus_handle(),
             font,
+            agents,
             nav_stops: Vec::new(),
             projects: BTreeMap::new(),
             _subscriptions: vec![typing, follow, keys, updates],
@@ -302,6 +307,7 @@ impl SettingsView {
                 ]);
                 ring.extend(self.font.stops(cx));
             }
+            SettingsPage::Agents => ring.extend(self.agents.stops(cx)),
             SettingsPage::Project(id) => {
                 if let Some(page) = self.project_page(&id) {
                     ring.extend(page.read(cx).tab_ring(cx));
@@ -324,6 +330,7 @@ impl SettingsView {
             SettingRow::SidebarIds => vec![self.sidebar_ids_focus.clone()],
             SettingRow::FontFamily => vec![self.font.family.focus_handle(cx)],
             SettingRow::FontSize => self.font.size_stops(cx),
+            SettingRow::CustomAgents => Vec::new(),
         }
     }
 

@@ -11,6 +11,7 @@ use std::collections::HashMap;
 use std::sync::mpsc::{Sender, channel};
 use std::sync::{Mutex, PoisonError};
 
+use natamux_agents::custom::{agent_kind, custom_agent};
 use natamux_core::js::{js_trim, parse_iso_millis, utf16_len};
 use serde_json::{Value, json};
 
@@ -43,14 +44,18 @@ const NOT_FOUND: [&str; 4] = [
     "is not recognized",
 ];
 
-/// The variable that sets an agent's command, as the daemon reads it.
-fn command_variable(agent: &str) -> String {
+/// Where the user changes an agent's command: the variable the daemon reads, or Settings > Agents
+/// for a custom agent.
+fn command_hint(agent: &str) -> String {
+    if custom_agent(agent).is_some() {
+        return "change its command in Settings > Agents".into();
+    }
     let name = if agent == "claude-code" {
         "CLAUDE".to_string()
     } else {
         agent.to_uppercase()
     };
-    format!("NATAMUX_{name}_COMMAND")
+    format!("set NATAMUX_{name}_COMMAND to its command")
 }
 
 /// The text without colors and cursor moves, which would split the words of a line:
@@ -314,10 +319,10 @@ impl Worker {
                 line,
             } => {
                 let reason = format!(
-                    "The agent did not start: \"{line}\". Install {}, or set {} to its command, \
-                     then start the agent again.",
+                    "The agent did not start: \"{line}\". Install {}, or {}, then start the agent \
+                     again.",
                     launch.program,
-                    command_variable(&launch.agent)
+                    command_hint(&launch.agent)
                 );
                 self.apply(
                     &task_id,
@@ -350,7 +355,7 @@ impl Worker {
         let has_hooks = task
             .agent
             .as_deref()
-            .is_some_and(|agent| AGENTS_WITH_HOOKS.contains(&agent));
+            .is_some_and(|agent| AGENTS_WITH_HOOKS.contains(&agent_kind(agent).as_str()));
         if !has_hooks && bell {
             let launched = self.tasks.list_events(task_id).ok().and_then(|events| {
                 events

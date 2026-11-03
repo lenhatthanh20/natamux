@@ -194,3 +194,7 @@ impl DetailsPane {
         true
     }
 }
+
+#[cfg(test)]
+#[path = "stage_fields_tests.rs"]
+mod tests;

@@ -22,14 +22,20 @@ use crate::app::test_driver::{press, text_of, type_text};
 use crate::app::test_views;
 use crate::app::view_rules::DetailsView;
 use crate::components::dialog::DialogLayer;
+use crate::sidebar::workspace_tree::WorkspaceTree;
+use crate::tasks::details_panel::DetailsPanel;
+use crate::tasks::task_view::TaskView;
 
 /// The single keys of the lists and the details panel (`a r e i c n j k / ?`).
 const SINGLE_KEYS: &str = "areicnjk/?";
 /// In review in the fake, so `a` approves it.
-const REVIEWED: &str = "T-0143";
+pub(crate) const REVIEWED: &str = "T-0143";
 
 /// The root view as `window::open` makes it, with the reviewed task chosen and its details shown.
-fn root(cx: &mut TestAppContext) -> (Entity<Root>, Entity<Dashboard>, &mut VisualTestContext) {
+/// Other flow tests that need Root's key handlers start here too.
+pub(crate) fn root(
+    cx: &mut TestAppContext,
+) -> (Entity<Root>, Entity<Dashboard>, &mut VisualTestContext) {
     test_views::init(cx);
     cx.update(|cx| {
         shortcuts::bind(cx);
@@ -50,6 +56,21 @@ fn root(cx: &mut TestAppContext) -> (Entity<Root>, Entity<Dashboard>, &mut Visua
     (root, dashboard, cx)
 }
 
+/// The views of the root that the flow tests drive.
+pub(crate) struct Parts {
+    pub details: Entity<DetailsPanel>,
+    pub tasks: Entity<TaskView>,
+    pub tree: Entity<WorkspaceTree>,
+}
+
+pub(crate) fn parts(root: &Entity<Root>, cx: &mut VisualTestContext) -> Parts {
+    root.read_with(cx, |root, cx| Parts {
+        details: root.details.clone(),
+        tasks: root.tasks.clone(),
+        tree: root.sidebar.read(cx).tree().clone(),
+    })
+}
+
 fn handle_of(view: &Entity<impl Focusable>, cx: &mut VisualTestContext) -> FocusHandle {
     cx.update(|_, cx| view.focus_handle(cx))
 }
@@ -60,7 +81,7 @@ fn focus(handle: &FocusHandle, cx: &mut VisualTestContext) {
 }
 
 /// Whether the details panel's key context has `not_editing`; None when the focus is not in it.
-fn not_editing(cx: &mut VisualTestContext) -> Option<bool> {
+pub(crate) fn not_editing(cx: &mut VisualTestContext) -> Option<bool> {
     cx.update(|window, _| {
         let stack = window.context_stack();
         let details = stack

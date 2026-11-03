@@ -4,6 +4,7 @@
 //! and GitHub (part 5). It answers as the Node daemon in `packages/daemon` does.
 
 pub mod agents {
+    pub mod custom_agents;
     pub mod errors;
     pub mod generic_signals;
     mod hook_activity;

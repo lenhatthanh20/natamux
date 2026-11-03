@@ -1,9 +1,7 @@
-//! The rows of the sidebar tree (docs/ui-spec.md 4.9, `WorkspaceRow.tsx`): a one-line task row
-//! (state glyph, the id with Task ids in the sidebar, title, right slot), a terminal row under the
-//! open task, and the inline rename field. Everything else a row used to show is in the title's
-//! tooltip. The tree draws the rows as a flat list, so each row can be scrolled to.
+//! The small pieces of the sidebar rows: the terminal row inside an open card, the inline rename
+//! field, the title, the age and the reason of a card (drawn in `task_card.rs`), and the tooltips.
 
-use gpui::{AnyElement, ClickEvent, FontWeight, MouseButton, MouseDownEvent, Stateful};
+use gpui::{AnyElement, ClickEvent, FontWeight, Stateful};
 use natamux_proto::agents::activity::latest_line;
 use natamux_proto::events::task_event::StoredEvent;
 use natamux_proto::tasks::task::{Task, TaskState};
@@ -11,22 +9,21 @@ use ui::{Tooltip, prelude::*};
 
 use super::blur_bar::{BlurBar, private_text};
 use super::sidebar::{agent_mark, lucide, mono, small};
+use super::task_card::{GLYPH_COLUMN, HEAD_GAP};
 use super::workspace_tree::{OFFSET_MINUTES, Snapshot, WorkspaceTree};
 use crate::agents::agent_choices::agent_label;
 use crate::app::dashboard_data::DashboardData;
-use crate::app::view_rules::is_unseen;
 use crate::components::colors::state_colors;
 use crate::components::glyph::StateGlyph;
 use crate::components::shape::ShapeSize;
+use crate::sidebar::card_rules::waiting_of;
 use crate::sidebar::comet::comet_of;
-use crate::sidebar::shell_rows::{ShellRow, shell_row_name, shell_tag, task_glyph_state};
+use crate::sidebar::shell_rows::{ShellRow, shell_row_name, shell_tag};
 use crate::sidebar::sidebar_text::{
     RowTip, card_line, pull_request_summary, row_tooltip, short_reason, step_text,
 };
 use crate::sidebar::sidebar_tree::{RowTier, row_tier, subtask_count};
-use crate::sidebar::tree_model::TreeModel;
-use crate::sidebar::workspace_groups::{DEFAULT_REPO_ID, is_quiet};
-use crate::tasks::task_rules::lane_summary;
+use crate::sidebar::workspace_groups::DEFAULT_REPO_ID;
 use crate::tasks::task_time::{AgeStyle, format_age, format_exact};
 
 impl WorkspaceTree {
@@ -47,138 +44,6 @@ impl WorkspaceTree {
             } else {
                 gpui::transparent_black()
             })
-    }
-
-    pub(super) fn task_row(
-        &self,
-        task: &Task,
-        model: &TreeModel,
-        snap: &Snapshot,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let key = format!("task:{}", task.id);
-        let current = snap.current.as_deref() == Some(task.id.as_str());
-        let repo = task.repo.as_deref().unwrap_or(DEFAULT_REPO_ID);
-        let blurred = snap.blurred.iter().any(|id| id == repo);
-        let renaming = self
-            .rename
-            .as_ref()
-            .filter(|rename| rename.task_id == task.id);
-        let is_renaming = renaming.is_some();
-        let title_line = self.title_line(task, model, snap, is_renaming, blurred, cx);
-        let title: AnyElement = match renaming {
-            Some(rename) => self.rename_field(rename.editor.clone(), cx),
-            None => title_line,
-        };
-        let colors = state_colors(task.state, cx);
-        let group_name = SharedString::from(format!("row-{}", task.id));
-        let open_id = task.id.clone();
-        let menu_id = task.id.clone();
-        // A bar on the left, not a tint, marks the rows that need the user.
-        let bar = matches!(task.state, TaskState::Failed | TaskState::NeedsInput).then(|| {
-            div()
-                .absolute()
-                .left_0()
-                .top_0()
-                .bottom_0()
-                .w(px(2.))
-                .bg(colors.fg)
-        });
-        let row = self
-            .row_frame(&key, current, snap, cx)
-            .id(SharedString::from(key.clone()))
-            .group(group_name.clone())
-            .relative()
-            .flex()
-            .items_center()
-            .h(rems_from_px(26.0_f32))
-            .px(rems_from_px(10.0_f32))
-            .child(title)
-            .children(bar)
-            .on_click(cx.listener(move |tree, _: &ClickEvent, window, cx| {
-                tree.focus_key(format!("task:{open_id}"), window, cx);
-                tree.activate(&format!("task:{open_id}"), cx);
-            }))
-            .on_mouse_down(
-                MouseButton::Right,
-                cx.listener(move |tree, event: &MouseDownEvent, window, cx| {
-                    tree.open_row_menu(&menu_id, event.position, window, cx);
-                    cx.stop_propagation();
-                }),
-            );
-        let menu_button = (!is_renaming).then(|| {
-            let id = task.id.clone();
-            div().absolute().top(px(1.)).right(px(4.)).child(
-                IconButton::new(
-                    SharedString::from(format!("menu-{}", task.id)),
-                    IconName::Ellipsis,
-                )
-                .icon_size(IconSize::Small)
-                .visible_on_hover(group_name.clone())
-                .tooltip(Tooltip::text(format!("Actions for {}", task.id)))
-                .on_click(cx.listener(
-                    move |tree, event: &ClickEvent, window, cx| {
-                        tree.open_row_menu(&id, event.position(), window, cx);
-                        cx.stop_propagation();
-                    },
-                )),
-            )
-        });
-        row.children(menu_button).into_any_element()
-    }
-
-    fn title_line(
-        &self,
-        task: &Task,
-        model: &TreeModel,
-        snap: &Snapshot,
-        renaming: bool,
-        blurred: bool,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let unseen = is_unseen(&snap.seen, &task.id, task.state);
-        let glyph = StateGlyph::new(
-            SharedString::from(format!("glyph-{}", task.id)),
-            Some(task_glyph_state(task, model.rows_of(&task.id))),
-        )
-        .quiet(is_quiet(task, snap.now_ms));
-        let glyph = match lane_summary(task) {
-            Some(tip) => glyph.tip(tip),
-            None => glyph,
-        };
-        let rename_id = task.id.clone();
-        let tip = snap.tips.get(&task.id).cloned().unwrap_or_default();
-        h_flex()
-            .w_full()
-            .h(rems_from_px(16.0_f32))
-            .gap_2()
-            .child(glyph)
-            .child(
-                div()
-                    .id(SharedString::from(format!("title-{}", task.id)))
-                    .min_w_0()
-                    .flex_1()
-                    .child(title_label(task, unseen, blurred, snap.show_ids, cx))
-                    .tooltip(Tooltip::text(tip))
-                    // A double click on the title is a shortcut for F2.
-                    .on_click(cx.listener(move |tree, event: &ClickEvent, window, cx| {
-                        if event.click_count() == 2 {
-                            tree.start_rename(&rename_id, window, cx);
-                            cx.stop_propagation();
-                        }
-                    })),
-            )
-            .when(unseen, |line| {
-                line.child(
-                    div()
-                        .flex_none()
-                        .size(rems_from_px(6.0_f32))
-                        .rounded_full()
-                        .bg(cx.theme().colors().text_accent),
-                )
-            })
-            .when(!renaming, |line| line.child(right_slot(task, snap, cx)))
-            .into_any_element()
     }
 
     pub(super) fn terminal_row(
@@ -255,19 +120,40 @@ impl WorkspaceTree {
                     .into_any_element()
             },
         );
-        let open = key.clone();
-        self.row_frame(&key, false, snap, cx)
-            .id(SharedString::from(key.clone()))
-            .h(rems_from_px(24.0_f32))
-            .px_2()
+        // The open card shifts the row so this column starts at the title's edge (T-0255).
+        let glyph = div()
+            .flex_none()
+            .w(rems_from_px(GLYPH_COLUMN))
             .flex()
             .items_center()
+            .justify_center()
+            .debug_selector({
+                let key = key.clone();
+                move || format!("{key}-glyph")
+            })
+            .child(glyph);
+        let content = h_flex()
+            .debug_selector({
+                let key = key.clone();
+                move || format!("{key}-content")
+            })
+            .min_w_0()
+            .flex_1()
             .gap_2()
-            .child(glyph)
             .children(agent)
             .child(label)
             .child(div().min_w_0().flex_1().children(activity))
-            .children(tag)
+            .children(tag);
+        let open = key.clone();
+        self.row_frame(&key, false, snap, cx)
+            .id(SharedString::from(key.clone()))
+            .h(rems_from_px(22.0_f32))
+            .px_2()
+            .flex()
+            .items_center()
+            .gap(rems_from_px(HEAD_GAP))
+            .child(glyph)
+            .child(content)
             .tooltip(Tooltip::text(shell_row_name(row)))
             .on_click(cx.listener(move |tree, _: &ClickEvent, window, cx| {
                 tree.focus_key(open.clone(), window, cx);
@@ -278,7 +164,7 @@ impl WorkspaceTree {
 
     /// The field that takes the title's place while renaming: Enter saves, Esc cancels (the tree
     /// handles `Back`), and leaving it saves.
-    fn rename_field(
+    pub(super) fn rename_field(
         &self,
         editor: gpui::Entity<editor::Editor>,
         cx: &mut Context<Self>,
@@ -305,21 +191,20 @@ impl WorkspaceTree {
     }
 }
 
-/// The id (only with Task ids in the sidebar, T-0240), then the title in the look of its tier:
-/// bold when unseen or waiting, muted when finished. The id never shrinks; only the title
-/// truncates.
-fn title_label(task: &Task, unseen: bool, blurred: bool, show_id: bool, cx: &App) -> AnyElement {
-    let tier = row_tier(task.state);
-    let weight = match tier {
-        RowTier::Quiet => FontWeight::NORMAL,
-        _ if unseen || tier == RowTier::Attention => FontWeight::SEMIBOLD,
-        _ => FontWeight::MEDIUM,
-    };
-    let size = if tier == RowTier::Quiet {
-        12_f32
+/// Keep the title's font size fixed when its card opens or closes.
+pub(super) fn task_title_size(state: TaskState) -> f32 {
+    if row_tier(state) == RowTier::Quiet {
+        12.0
     } else {
-        13_f32
-    };
+        13.0
+    }
+}
+
+/// The id (only with Task ids in the sidebar, T-0240), then the title in the look of its tier:
+/// muted when finished. The id never shrinks; only the title truncates.
+pub(super) fn title_label(task: &Task, blurred: bool, show_id: bool, cx: &App) -> AnyElement {
+    let weight = FontWeight::NORMAL;
+    let size = task_title_size(task.state);
     let finished = matches!(task.state, TaskState::Done | TaskState::Cancelled);
     let plain = || {
         let title = Label::new(task.title.clone())
@@ -360,8 +245,8 @@ fn title_label(task: &Task, unseen: bool, blurred: bool, show_id: bool, cx: &App
         .into_any_element()
 }
 
-/// The age of the last change; the menu button takes its place on hover.
-fn age_label(task: &Task, snap: &Snapshot) -> Stateful<Div> {
+/// The age of the last change.
+pub(super) fn age_label(task: &Task, snap: &Snapshot) -> Stateful<Div> {
     let age = format_age(
         &task.updated_at,
         snap.now_ms,
@@ -371,27 +256,25 @@ fn age_label(task: &Task, snap: &Snapshot) -> Stateful<Div> {
     div()
         .id(SharedString::from(format!("age-{}", task.id)))
         .flex_none()
-        .group_hover(SharedString::from(format!("row-{}", task.id)), |style| {
-            style.invisible()
-        })
-        .child(small(age))
+        .child(
+            div()
+                .debug_selector(|| format!("age-{}", task.id))
+                .child(small(age)),
+        )
         .tooltip(Tooltip::text(format_exact(
             &task.updated_at,
             OFFSET_MINUTES,
         )))
 }
 
-/// The right slot of a task row: the short reason in the state colour on an attention row, else
-/// the age. The menu button takes its place on hover.
-fn right_slot(task: &Task, snap: &Snapshot, cx: &App) -> AnyElement {
+/// The right slot of a card: the short reason in the state colour on an attention card (always
+/// shown), else the age.
+pub(super) fn right_slot(task: &Task, snap: &Snapshot, cx: &App) -> AnyElement {
     let Some(label) = snap.labels.get(&task.id) else {
         return age_label(task, snap).into_any_element();
     };
     div()
         .flex_none()
-        .group_hover(SharedString::from(format!("row-{}", task.id)), |style| {
-            style.invisible()
-        })
         .child(
             Label::new(label.clone())
                 .size(LabelSize::Custom(rems_from_px(12_f32)))
@@ -402,8 +285,8 @@ fn right_slot(task: &Task, snap: &Snapshot, cx: &App) -> AnyElement {
 }
 
 impl Snapshot {
-    /// Fills what the row of `task` says outside its line: the tooltip, the short reason and what
-    /// each terminal's agent does.
+    /// Fills what the card of `task` says outside its line: the tooltip, the short reason, the
+    /// subtask count, the waiting box and what each terminal's agent does.
     pub(super) fn add_task(
         &mut self,
         data: &DashboardData,
@@ -430,6 +313,12 @@ impl Snapshot {
             blurred.iter().any(|hidden| hidden == repo),
         );
         self.tips.insert(id.clone(), texts.tip);
+        if let Some(subtasks) = subtasks {
+            self.subtasks.insert(id.clone(), subtasks);
+        }
+        if let Some(waiting) = waiting_of(task, events) {
+            self.waiting.insert(id.clone(), waiting);
+        }
         if let Some(label) = texts.label {
             self.labels.insert(id.clone(), label);
         }

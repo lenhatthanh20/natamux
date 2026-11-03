@@ -41,6 +41,8 @@ const GEMINI_ENV: &str =
     "GEMINI_CLI_TRUST_WORKSPACE=true GEMINI_CLI_SYSTEM_SETTINGS_PATH='/data/gemini.json'";
 const CODEX_STOP: &str =
     r#"'hooks.Stop=[{hooks=[{type="command",command="natamux hook codex",timeout=5}]}]'"#;
+const CODEX_AUTO: &str = "--sandbox workspace-write --ask-for-approval never -c sandbox_workspace_write.network_access=true";
+const CODEX_NETWORK: &str = "sandbox_workspace_write.network_access=true";
 
 #[test]
 fn starts_each_agent_in_its_auto_mode_before_the_extra_words_and_the_prompt() {
@@ -65,9 +67,9 @@ fn starts_each_agent_in_its_auto_mode_before_the_extra_words_and_the_prompt() {
         format!("{GEMINI_ENV} gemini --approval-mode yolo --x -i 'Fix it'")
     );
     let codex = launch("codex", with_x("codex"));
-    assert!(codex.starts_with(
-        "codex --dangerously-bypass-hook-trust --sandbox workspace-write --ask-for-approval never -c "
-    ));
+    assert!(codex.starts_with(&format!(
+        "codex --dangerously-bypass-hook-trust {CODEX_AUTO} -c "
+    )));
     assert!(!codex.contains("--full-auto"));
     assert!(codex.ends_with(" --x 'Fix it'"));
 }
@@ -210,9 +212,9 @@ fn goes_on_with_a_session_of_each_other_agent_with_its_mode_and_extra_words() {
         format!("{GEMINI_ENV} gemini --approval-mode yolo --x --resume 's-1'")
     );
     let codex = launch("codex", resume("codex"));
-    assert!(codex.starts_with(
-        "codex resume --dangerously-bypass-hook-trust --sandbox workspace-write --ask-for-approval never -c "
-    ));
+    assert!(codex.starts_with(&format!(
+        "codex resume --dangerously-bypass-hook-trust {CODEX_AUTO} -c "
+    )));
     assert!(codex.contains(CODEX_STOP));
     assert!(codex.ends_with(" --no-alt-screen --x 's-1'"));
 }
@@ -273,10 +275,7 @@ fn goes_on_with_the_session_and_the_prompt_for_every_agent() {
 fn quotes_the_prompt_of_each_agent_for_powershell_next_to_its_flag() {
     for (agent, flag) in [
         ("claude-code", "--permission-mode auto"),
-        (
-            "codex",
-            "--sandbox workspace-write --ask-for-approval never",
-        ),
+        ("codex", CODEX_AUTO),
         ("gemini", "--approval-mode yolo"),
         ("copilot", "--allow-all-tools"),
         ("cursor", "--force"),
@@ -343,13 +342,32 @@ fn adds_the_codex_sandbox_flags_once_each_in_order_and_keeps_its_hooks() {
         codex,
         asking.replacen(
             "--dangerously-bypass-hook-trust ",
-            "--dangerously-bypass-hook-trust --sandbox workspace-write --ask-for-approval never ",
+            &format!("--dangerously-bypass-hook-trust {CODEX_AUTO} "),
             1
         )
     );
     assert_eq!(codex.split(" --sandbox ").count(), 2);
     assert_eq!(codex.split(" --ask-for-approval ").count(), 2);
     assert!(codex.ends_with(&format!(" {}", quote_argument(prompt, POSIX))));
+}
+
+// Regression: the `workspace-write` sandbox blocks the network, so `natamux done` run by Codex
+// could not reach the daemon on loopback.
+#[test]
+fn lets_codex_reach_the_daemon_from_its_sandbox_in_the_auto_mode() {
+    for (session, platform) in [(None, POSIX), (Some("s-1".into()), POSIX), (None, WIN)] {
+        let options = LaunchOptions {
+            extra_args: "--x".into(),
+            session,
+            platform,
+            ..with(auto(), "codex")
+        };
+        let codex = launch("codex", options);
+        assert_eq!(codex.split(CODEX_NETWORK).count(), 2, "{codex}");
+        assert!(codex.contains(&format!(" {CODEX_AUTO} ")), "{codex}");
+        assert!(codex.find(CODEX_NETWORK) < codex.find(" --x "), "{codex}");
+    }
+    assert!(!launch("codex", with(base(), "codex")).contains(CODEX_NETWORK));
 }
 
 #[test]
@@ -394,11 +412,7 @@ fn puts_the_words_of_natamux_codex_args_after_the_codex_mode_flags() {
         },
     );
     let at = codex.find(extra).unwrap();
-    assert!(
-        at > codex
-            .find("--sandbox workspace-write --ask-for-approval never")
-            .unwrap()
-    );
+    assert!(at > codex.find(CODEX_AUTO).unwrap());
     assert!(at > codex.rfind(" -c ").unwrap());
     assert!(codex.ends_with(&format!(" {extra} 'Fix it'")));
 }
@@ -440,7 +454,7 @@ fn trusts_the_workspace_for_this_codex_run_before_its_hooks() {
         },
     );
     assert!(codex.contains(&format!(
-        "--ask-for-approval never -c 'projects={{\"{workspace}\"={{trust_level=\"trusted\"}}}}' -c 'hooks."
+        "{CODEX_NETWORK} -c 'projects={{\"{workspace}\"={{trust_level=\"trusted\"}}}}' -c 'hooks."
     )));
     assert!(!launch("codex", with(base(), "codex")).contains("projects="));
 }
@@ -516,4 +530,26 @@ fn keeps_codexs_hooks_on_the_launch_line() {
         ..base()
     };
     assert!(launch("codex", own).contains("hooks.Stop="));
+}
+
+#[test]
+fn starts_another_cli_with_its_words_and_the_prompt_last() {
+    let other = LaunchOptions {
+        extra_args: "'--model' 'x'".into(),
+        ..with(auto(), "my-agent")
+    };
+    assert_eq!(launch("my-agent", other), "my-agent '--model' 'x' 'Fix it'");
+    let bare = LaunchOptions {
+        prompt: String::new(),
+        ..with(base(), "my-agent")
+    };
+    assert_eq!(launch("my-agent", bare), "my-agent");
+}
+
+#[test]
+fn starts_a_claude_code_variant_with_its_own_program() {
+    assert_eq!(
+        launch("claude-code", with(auto(), "cq")),
+        "cq --settings '/data/claude.json' --permission-mode auto 'Fix it'"
+    );
 }

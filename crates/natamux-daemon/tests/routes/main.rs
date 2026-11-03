@@ -9,6 +9,8 @@ mod agent_routes;
 mod agents;
 mod branch_names;
 mod changes;
+#[cfg(unix)]
+mod custom_agents;
 mod edge_hosts;
 #[cfg(unix)]
 mod fake_tools;

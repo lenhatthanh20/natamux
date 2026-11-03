@@ -21,6 +21,9 @@ pub(super) struct ProjectsState {
     gh_missing: bool,
     /// The projects whose commands wait for approval.
     untrusted: BTreeSet<String>,
+    /// The projects whose commands a flow test changed after the dialog read them.
+    #[cfg(test)]
+    changed: BTreeSet<String>,
 }
 
 fn issue(number: u64, title: &str, labels: &[&str], task_id: Option<&str>) -> GitHubIssue {
@@ -44,6 +47,8 @@ impl ProjectsState {
             ],
             gh_missing: false,
             untrusted: BTreeSet::new(),
+            #[cfg(test)]
+            changed: BTreeSet::new(),
         }
     }
 }
@@ -136,7 +141,8 @@ impl Data {
             place: place.into(),
             text: text.into(),
         };
-        Ok(RepoTrustView {
+        #[cfg_attr(not(test), allow(unused_mut))]
+        let mut view = RepoTrustView {
             trusted: !self.projects.untrusted.contains(repo_id),
             hash: format!("fake-{repo_id}"),
             commands: vec![
@@ -148,7 +154,14 @@ impl Data {
                 file: ".natamux-setup".into(),
                 text: "pnpm install --frozen-lockfile\ncp .env.example .env\n".into(),
             }],
-        })
+        };
+        #[cfg(test)]
+        if self.projects.changed.contains(repo_id) {
+            view.hash = format!("fake-{repo_id}-changed");
+            view.commands
+                .push(command("Stage test: check", "cargo test --locked"));
+        }
+        Ok(view)
     }
 
     /// The daemon's 409 when the hash is not the one of the commands now.
@@ -253,6 +266,12 @@ impl FakeDaemon {
     /// For the `repo-trust-dialog` shot: the project's commands wait for approval.
     pub fn distrust_repo(&self, repo_id: &str) {
         self.data().projects.untrusted.insert(repo_id.into());
+    }
+
+    /// The project's commands change: a dialog that read the old ones gets a 409 on Approve.
+    #[cfg(test)]
+    pub fn change_repo_commands(&self, repo_id: &str) {
+        self.data().projects.changed.insert(repo_id.into());
     }
 
     /// For the reference shot: the GitHub CLI is not installed.

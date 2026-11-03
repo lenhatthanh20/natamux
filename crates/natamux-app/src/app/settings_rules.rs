@@ -10,6 +10,8 @@ use crate::terminals::terminal_font::{BUILT_IN_SIZE, MAX_SIZE, MIN_SIZE, size_ok
 pub enum SettingsPage {
     General,
     Appearance,
+    /// The built-in agents and the custom ones (`custom-agents.json`).
+    Agents,
     /// The settings of the project with this id (`.natamux.json`).
     Project(String),
 }
@@ -50,6 +52,7 @@ pub fn page_title(page: &SettingsPage, repos: &[Repo]) -> String {
     match page {
         SettingsPage::General => "General".to_owned(),
         SettingsPage::Appearance => "Appearance".to_owned(),
+        SettingsPage::Agents => "Agents".to_owned(),
         SettingsPage::Project(id) => repos
             .iter()
             .find(|repo| &repo.id == id)
@@ -71,10 +74,11 @@ pub enum SettingRow {
     SidebarIds,
     FontFamily,
     FontSize,
+    CustomAgents,
 }
 
 impl SettingRow {
-    pub const ALL: [SettingRow; 11] = [
+    pub const ALL: [SettingRow; 12] = [
         SettingRow::Notify,
         SettingRow::UpdatesVersion,
         SettingRow::UpdatesAuto,
@@ -86,6 +90,7 @@ impl SettingRow {
         SettingRow::SidebarIds,
         SettingRow::FontFamily,
         SettingRow::FontSize,
+        SettingRow::CustomAgents,
     ];
 
     pub fn page(self) -> SettingsPage {
@@ -94,6 +99,7 @@ impl SettingRow {
             | SettingRow::UpdatesVersion
             | SettingRow::UpdatesAuto
             | SettingRow::UpdatesCheck => SettingsPage::General,
+            SettingRow::CustomAgents => SettingsPage::Agents,
             _ => SettingsPage::Appearance,
         }
     }
@@ -111,6 +117,7 @@ impl SettingRow {
             SettingRow::SidebarIds => "Task ids in the sidebar",
             SettingRow::FontFamily => "Font family",
             SettingRow::FontSize => "Font size",
+            SettingRow::CustomAgents => "Custom agents",
         }
     }
 
@@ -129,6 +136,7 @@ impl SettingRow {
             SettingRow::SidebarIds => "Show each task's id ahead of its title in the sidebar.",
             SettingRow::FontFamily => "The font of the terminals. Empty uses the built-in Lilex.",
             SettingRow::FontSize => "The size of the terminal font, from 8 to 32.",
+            SettingRow::CustomAgents => "Run an agent with your own command.",
         }
     }
 
@@ -150,6 +158,7 @@ impl SettingRow {
             SettingRow::UiSize => "compact large zoom",
             SettingRow::SidebarIds => "task id key",
             SettingRow::FontFamily | SettingRow::FontSize => "terminal font",
+            SettingRow::CustomAgents => "agent cli program model",
         }
     }
 }

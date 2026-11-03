@@ -146,6 +146,7 @@ export function NewWorkspaceDialog({
   const repo = repos.find((item) => item.id === pickedRepo)?.id ?? repos[0]?.id ?? pickedRepo
   const [base, setBase] = useState('')
   const [agent, setAgent] = useState('claude-code')
+  const [mode, setMode] = useState<'full' | 'single-agent'>('full')
   const [notes, setNotes] = useState('')
   const [pickedSource, setSource] = useState('manual')
   const [ref, setRef] = useState('')
@@ -184,6 +185,7 @@ export function NewWorkspaceDialog({
         repo,
         ...(base === '' ? {} : { base }),
         ...(agent === '' ? {} : { agent }),
+        ...(mode === 'full' ? {} : { mode }),
         // Only notes typed by hand are the task's context; another source brings its own.
         ...(source !== 'manual' || notes.trim() === '' ? {} : { prompt: notes.trim() }),
         ...(source === 'manual' ? {} : { context: contextOf(picked, ref, skill) }),
@@ -204,13 +206,10 @@ export function NewWorkspaceDialog({
   const start = branches.data?.defaultBranch ?? current
   const options = branchOptions(branches.data?.branches ?? [], current, lastBase(repo), start)
 
-  const missing = createBlockedReason(
-    title,
-    source,
-    ref,
-    picked === AGENT_SKILL ? skill : undefined,
-    agent,
-  )
+  const missing =
+    mode === 'single-agent' && agent === ''
+      ? 'Choose an agent for this task flow'
+      : createBlockedReason(title, source, ref, picked === AGENT_SKILL ? skill : undefined, agent)
 
   const submit = (event: FormEvent) => {
     event.preventDefault()
@@ -408,6 +407,19 @@ export function NewWorkspaceDialog({
                 </option>
               ))}
               <option value="">No agent, a plain terminal</option>
+            </Select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className={FIELD_LABEL}>Task flow</span>
+            <Select
+              value={mode}
+              onChange={(event) => setMode(event.target.value as 'full' | 'single-agent')}
+              aria-label="Task flow"
+              fieldSize="md"
+              className="w-full"
+            >
+              <option value="full">Full flow</option>
+              <option value="single-agent">One agent</option>
             </Select>
           </div>
         </fieldset>

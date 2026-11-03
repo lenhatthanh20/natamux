@@ -207,14 +207,18 @@ pub(super) fn build_screen(
         .subscribe(cx)
     });
     let view = cx.new(|cx| {
-        TerminalView::new(
+        let mut view = TerminalView::new(
             terminal.clone(),
             WeakEntity::new_invalid(),
             None,
             WeakEntity::new_invalid(),
             window,
             cx,
-        )
+        );
+        // No Zed workspace here to handle New Terminal, New Center Terminal or Close Terminal Tab
+        // from the right-click menu (T-0247).
+        view.set_show_workspace_actions(false, cx);
+        view
     });
     let focus = view.focus_handle(cx);
     Screen {
