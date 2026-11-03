@@ -2351,5 +2351,5 @@
 ["alt-screen","ctrl-shift","f20","\u001b[34;6~",false],
 ["alt-screen","ctrl-alt","f20","\u001b[34;7~",false],
 ["alt-screen","shift-alt","f20","\u001b[34;4~",false],
-["app-cursor, no frame","none","up","\u001bOA",false]
+["app-cursor, no frame","none","up","\u001b[A",false]
 ]
