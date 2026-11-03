@@ -21,7 +21,7 @@
   --sl-color-hairline-light: #323b46;
   --sl-color-hairline-shade: #323b46;
   --sl-content-width: 55rem;
-  --sl-nav-height: 4.5rem;
+  --sl-nav-height: var(--site-header-height);
   --sl-text-h1: clamp(2.5rem, 4.4vw, 4rem);
   --sl-text-h2: 1.875rem;
 }
@@ -111,7 +111,7 @@ main h1 { max-width: 20ch; margin-top: 20px; padding: 0; font-weight: 680; lette
 }
 
 /* Keep chapter navigation compact and the reading column centered. */
-header.header { padding: 0; height: var(--sl-nav-height); background: var(--bg); border-bottom-color: var(--line-2); }
+header.header { padding: 0; height: var(--site-header-height); box-sizing: border-box; background: var(--bg); border-bottom-color: var(--line-2); }
 [data-has-sidebar] header.header { padding-inline: 0; }
 .site-actions site-search { width: 38px; }
 .site-actions site-search > button { display: grid; place-items: center; width: 38px; height: 38px; min-width: 0; margin: 0; padding: 9px; border: 0; background: transparent; color: var(--muted); }
@@ -167,7 +167,7 @@ main h1.docs-overview-title { max-width: 14ch; font-size: clamp(2.875rem, 5vw, 4
   mobile-starlight-toc { display: none; }
 }
 @media (max-width: 799px) {
-  :root { --sl-nav-height: 4rem; --sl-mobile-toc-height: 0px; }
+  :root { --site-header-height: 65px; --site-nav-height: 64px; --sl-nav-height: var(--site-header-height); --sl-mobile-toc-height: 0px; }
   header.header .site-nav { width: calc(100% - 84px); margin-inline-start: 24px; }
   .site-actions .site-download { display: none; }
   .main-frame { padding-inline-start: 0; }

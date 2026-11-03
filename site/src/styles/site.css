@@ -1,5 +1,7 @@
 /* Shared surfaces and navigation for the homepage and documentation. */
 :root {
+  --site-header-height: 73px;
+  --site-nav-height: 72px;
   --bg: #11151b;
   --bg-2: #151b23;
   --panel: #1a2028;
@@ -34,9 +36,9 @@
   color-scheme: light;
 }
 
-.site-header { position: sticky; top: 0; z-index: 40; background: var(--bg); border-bottom: 1px solid var(--line-2); }
+.site-header { position: sticky; top: 0; z-index: 40; height: var(--site-header-height); box-sizing: border-box; background: var(--bg); border-bottom: 1px solid var(--line-2); }
 .site-nav, .site-footer-row { box-sizing: border-box; width: min(1200px, calc(100% - 48px)); margin-inline: auto; }
-.site-nav { min-height: 72px; display: flex; align-items: center; gap: 40px; font-family: var(--sans); }
+.site-nav { height: var(--site-nav-height); display: flex; align-items: center; gap: 40px; font-family: var(--sans); }
 .site-brand { display: inline-flex; gap: 10px; align-items: center; color: var(--strong); text-decoration: none; font-size: 1.125rem; font-weight: 720; letter-spacing: -0.035em; white-space: nowrap; }
 .site-brand img { display: block; width: 26px; height: 26px; }
 .site-links { display: flex; gap: 28px; margin-inline-start: auto; }
@@ -58,7 +60,8 @@
 .site-footer nav a:hover { color: var(--strong); }
 @media (max-width: 900px) { .site-links { gap: 18px; } .site-nav { gap: 24px; } }
 @media (max-width: 799px) {
-  .site-nav { min-height: 64px; gap: 12px; }
+  :root { --site-header-height: 65px; --site-nav-height: 64px; }
+  .site-nav { gap: 12px; }
   .site-links, .site-github { display: none; }
   .site-actions { margin-inline-start: auto; gap: 4px; }
   .site-footer nav { margin-inline-start: 0; width: 100%; }
