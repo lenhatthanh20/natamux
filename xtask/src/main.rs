@@ -12,7 +12,7 @@ const USAGE: &str = "usage: cargo xtask <task>
           --no-app: natamux-app left out of clippy and tests
           --all-errors: every step runs after a failure, for CI snapshots
   layers  fail when a crate below L4 uses gpui
-  colours fail on a colour literal in crates/natamux-app/src outside the theme files";
+  colours fail on a colour literal in the app or the UI kit outside the theme files";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -113,12 +113,23 @@ fn ci_cargo_args(options: CiOptions) -> Vec<Vec<&'static str>> {
     ]
 }
 
-/// Views read colours from the theme, never as literals (docs/ui-spec.md, 2.3).
-const COLOUR_ROOT: &str = "crates/natamux-app/src";
+/// Views read colours from the theme, never as literals (docs/ui-spec.md, 2.3). The folders
+/// checked, each with the only files in it that may hold colour literals: in the app the colour
+/// module and the contrast test's hex data (the theme itself is JSON in `assets/`); in the UI kit
+/// none yet (plan D24).
+const COLOUR_ROOTS: &[(&str, &[&str])] = &[
+    (
+        "crates/natamux-app/src",
+        &["components/colors.rs", "components/theme_contrast.rs"],
+    ),
+    ("crates/natamux-ui/src", &[]),
+];
 
 fn colours() -> Result<(), String> {
     let mut files = Vec::new();
-    rust_files(Path::new(COLOUR_ROOT), &mut files)?;
+    for (root, _) in COLOUR_ROOTS {
+        rust_files(Path::new(root), &mut files)?;
+    }
     let mut bad = Vec::new();
     for file in files.iter().filter(|file| !colour_literals_allowed(file)) {
         let source = std::fs::read_to_string(file)
@@ -132,7 +143,7 @@ fn colours() -> Result<(), String> {
         return Ok(());
     }
     Err(format!(
-        "colour literals outside components/colors.rs and the contrast test data (read the theme instead):\n  {}",
+        "colour literals outside the theme files (read the theme instead):\n  {}",
         bad.join("\n  ")
     ))
 }
@@ -152,13 +163,11 @@ fn rust_files(folder: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
     Ok(())
 }
 
-/// The only files of `COLOUR_ROOT` that may hold colour literals: the colour module, and the
-/// contrast test's hex data. The theme itself is JSON in `assets/`.
-const COLOUR_FILES: &[&str] = &["components/colors.rs", "components/theme_contrast.rs"];
-
 fn colour_literals_allowed(path: &Path) -> bool {
-    path.strip_prefix(COLOUR_ROOT)
-        .is_ok_and(|inner| COLOUR_FILES.iter().any(|file| inner == Path::new(file)))
+    COLOUR_ROOTS.iter().any(|(root, allowed)| {
+        path.strip_prefix(root)
+            .is_ok_and(|inner| allowed.iter().any(|file| inner == Path::new(file)))
+    })
 }
 
 /// 1-based numbers of the lines with `rgb(`, `rgba(`, `hsla(`, a hex integer of 6 or 8 digits
@@ -404,7 +413,8 @@ let f = hsla(0.1, 0.2, 0.3, 1.0);
 
     #[test]
     fn allows_literals_only_in_colors_rs_and_the_contrast_test() {
-        let allowed = |file: &str| colour_literals_allowed(&Path::new(COLOUR_ROOT).join(file));
+        let allowed =
+            |file: &str| colour_literals_allowed(&Path::new(COLOUR_ROOTS[0].0).join(file));
         assert!(allowed("components/colors.rs"));
         assert!(allowed("components/theme_contrast.rs"));
         // A view named after the theme gets no pass.
@@ -413,6 +423,21 @@ let f = hsla(0.1, 0.2, 0.3, 1.0);
         assert!(!allowed("components/theme_card.rs"));
         assert!(!allowed("components/chips.rs"));
         assert!(!allowed("sidebar/colors.rs"));
+    }
+
+    #[test]
+    fn checks_the_ui_kit_with_no_file_allowed() {
+        assert!(
+            COLOUR_ROOTS
+                .iter()
+                .any(|(root, allowed)| *root == "crates/natamux-ui/src" && allowed.is_empty())
+        );
+        assert!(!colour_literals_allowed(Path::new(
+            "crates/natamux-ui/src/button_like.rs"
+        )));
+        assert!(!colour_literals_allowed(Path::new(
+            "crates/natamux-ui/src/components/colors.rs"
+        )));
     }
 
     #[test]
