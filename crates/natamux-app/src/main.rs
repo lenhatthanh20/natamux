@@ -29,6 +29,7 @@ mod app {
     pub mod dock_badge;
     pub mod fake_daemon;
     pub mod flow_bench;
+    pub mod flow_smoke;
     pub mod gate2;
     #[cfg(test)]
     pub mod golden_files;

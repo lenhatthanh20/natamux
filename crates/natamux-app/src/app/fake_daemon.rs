@@ -434,6 +434,17 @@ impl FakeDaemon {
         })
     }
 
+    /// For the whole-app flows: a task that was sent back waits in review again.
+    pub fn back_to_review(&self, task_id: &str) -> Answer<Task> {
+        let mut data = self.data();
+        let task = data.task_mut(task_id)?;
+        task.stage = "review".into();
+        task.state = TaskState::Review;
+        let task = task.clone();
+        data.tasks_changed();
+        Ok(task)
+    }
+
     pub fn rename_task(&self, task_id: &str, title: &str) -> Answer<Task> {
         let mut data = self.data();
         #[cfg(test)]
