@@ -109,7 +109,7 @@ impl Acks for TerminalHandle {
 }
 
 /// Pending once, so other work of the thread pool runs between two pieces of a flood.
-struct YieldNow(bool);
+pub(crate) struct YieldNow(pub(crate) bool);
 
 impl Future for YieldNow {
     type Output = ();

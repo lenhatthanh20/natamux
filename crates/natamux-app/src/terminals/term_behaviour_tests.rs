@@ -1019,23 +1019,29 @@ fn links_match_the_golden(cx: &mut TestAppContext) {
     golden_files::check(SET, "links", &link_rows(cx));
 }
 
-/// T-L1 on the own link rules: the link shown under the pointer with the secondary key, and what
-/// a click with the key opens. An OSC 8 link's target comes from its cells (the model, S2.3), so
-/// here from the line; a plain click is the view's (S2.4, D5). As in `link_rows`, a click that
-/// opens the URL opened last counts as nothing, since the test platform keeps only the last URL.
+/// T-L1 on the own link rules: the link the own model finds under the pointer (an OSC 8 link
+/// from its cells, else a URL of the line), shown with the secondary key, and what a click with
+/// the key opens. A plain click is the view's (S2.4, D5). As in `link_rows`, a click that opens
+/// the URL opened last counts as nothing, since the test platform keeps only the last URL.
 #[cfg(feature = "own-terminal")]
-#[test]
-fn the_own_links_match_the_golden() {
-    use crate::terminals::term::links::{may_open, shown, url_at};
+#[gpui::test]
+fn the_own_links_match_the_golden(cx: &mut TestAppContext) {
+    use alacritty_terminal::index::{Column, Line, Point};
+
+    use crate::terminals::term::links::{may_open, shown};
+    use crate::terminals::term::model::tests::{feed, screen};
 
     let golden = golden_files::read(SET, "links");
+    let mut own = screen(cx, (128, 20));
+    feed(&mut own, &LINK_LINES.join("\r\n"), cx);
     let mut last_opened: Option<String> = None;
     let mut rows = Vec::new();
-    for (((case, (_, column)), text), old) in LINK_CASES.iter().zip(LINK_LINES).zip(&golden) {
-        let target = match text.strip_prefix("\x1b]8;;") {
-            Some(rest) => rest.split('\x1b').next().map(str::to_owned),
-            None => url_at(text, *column).map(|(_, url)| url),
-        };
+    for ((case, (line, column)), old) in LINK_CASES.iter().zip(&golden) {
+        let at = Point::new(Line(*line as i32), Column(*column));
+        let target = own
+            .model
+            .read_with(cx, |model, _| model.link_at(at))
+            .map(|link| link.word);
         let opened = target.clone().filter(|url| may_open(url));
         let with_key = opened
             .clone()
@@ -1116,27 +1122,29 @@ fn golden_terminal_focus(cx: &mut TestAppContext) {
 }
 
 // T-Q1: the screen answers the program's queries through the shell's input, in order.
+const ANSWER_CASES: [(&str, &str); 13] = [
+    ("DA", "\x1b[c"),
+    ("DA2", "\x1b[>c"),
+    ("DSR 5", "\x1b[5n"),
+    ("DSR 6", "\x1b[3;5H\x1b[6n"),
+    ("OSC 10", "\x1b]10;?\x1b\\"),
+    ("OSC 11", "\x1b]11;?\x07"),
+    ("OSC 12", "\x1b]12;?\x07"),
+    ("OSC 4 1", "\x1b]4;1;?\x07"),
+    ("OSC 4 200", "\x1b]4;200;?\x07"),
+    (
+        "OSC 4 set then ask",
+        "\x1b]4;3;rgb:12/34/56\x07\x1b]4;3;?\x07",
+    ),
+    ("pixels", "\x1b[14t"),
+    ("cells", "\x1b[18t"),
+    ("in order", "\x1b[c\x1b]11;?\x07\x1b[6n\x1b]10;?\x07"),
+];
+
 fn answer_rows(cx: &mut TestAppContext) -> Vec<Value> {
     let (_, terminal, cx) = open(cx, PANE, false);
     let mut rows = Vec::new();
-    for (case, query) in [
-        ("DA", "\x1b[c"),
-        ("DA2", "\x1b[>c"),
-        ("DSR 5", "\x1b[5n"),
-        ("DSR 6", "\x1b[3;5H\x1b[6n"),
-        ("OSC 10", "\x1b]10;?\x1b\\"),
-        ("OSC 11", "\x1b]11;?\x07"),
-        ("OSC 12", "\x1b]12;?\x07"),
-        ("OSC 4 1", "\x1b]4;1;?\x07"),
-        ("OSC 4 200", "\x1b]4;200;?\x07"),
-        (
-            "OSC 4 set then ask",
-            "\x1b]4;3;rgb:12/34/56\x07\x1b]4;3;?\x07",
-        ),
-        ("pixels", "\x1b[14t"),
-        ("cells", "\x1b[18t"),
-        ("in order", "\x1b[c\x1b]11;?\x07\x1b[6n\x1b]10;?\x07"),
-    ] {
+    for (case, query) in ANSWER_CASES {
         feed(&terminal, query, cx);
         rows.push(json!([case, sent_text()]));
     }
@@ -1416,4 +1424,246 @@ fn queued_changes_run_in_their_order_within_one_frame(cx: &mut TestAppContext) {
     let lines = |from: usize| -> String { (from..=120).map(|n| format!("line {n}\n")).collect() };
     assert_eq!(apart, json!([14, 48, 11, lines(1)]));
     assert_eq!(together, json!([14, 48, 11, lines(10)]));
+}
+
+/// The rows of the matrix the own model answers alone (S2.3): T-Q1, T-F1, T-R1 and T-E1, on the
+/// same goldens and facts as the old rows above. What the view adds (the size claims of focus,
+/// focus into its menu counting as no focus out, the grid of a pane) waits for the own view
+/// (S2.4).
+#[cfg(feature = "own-terminal")]
+mod own {
+    use std::cell::Cell;
+    use std::rc::Rc;
+    use std::time::Duration;
+
+    use gpui::{TestAppContext, px};
+    use serde_json::{Value, json};
+
+    use super::{ANSWER_CASES, SET, history};
+    use crate::app::golden_files;
+    use crate::terminals::term::model::TermEvent;
+    use crate::terminals::term::model::tests::{Screen, bounds, feed, screen, sent, settle};
+
+    // T-Q1: the answers go out through the shell's input in the order of the queries.
+    #[gpui::test]
+    fn the_own_answers_match_the_golden(cx: &mut TestAppContext) {
+        let mut own = screen(cx, (79, 20));
+        let mut rows = Vec::new();
+        for (case, query) in ANSWER_CASES {
+            feed(&mut own, query, cx);
+            rows.push(json!([case, sent(&mut own)]));
+        }
+        golden_files::check(SET, "answers", &rows);
+    }
+
+    fn focus(own: &Screen, focused: bool, cx: &mut TestAppContext) {
+        own.model.update(cx, |model, _| {
+            if focused {
+                model.focus_in()
+            } else {
+                model.focus_out()
+            }
+        });
+        settle(&own.model, cx);
+    }
+
+    // T-F1: focus reports only with mode 1004, and the cursor of an unfocused screen. The view
+    // tells the model only of focus on the view itself: the menu taking the focus and giving it
+    // back is no change, as the old rows show.
+    #[gpui::test]
+    fn the_own_focus_reports_match_the_golden(cx: &mut TestAppContext) {
+        let mut own = screen(cx, (79, 20));
+        focus(&own, true, cx);
+        feed(&mut own, "prompt$ ", cx);
+        sent(&mut own);
+        // The case, the program's output, then the focus the view tells.
+        let steps = [
+            ("focused", "", None),
+            ("blurred, no mode", "", Some(false)),
+            ("focused, no mode", "", Some(true)),
+            ("mode 1004 on", "\x1b[?1004h", None),
+            ("blurred, mode 1004", "", Some(false)),
+            ("focused, mode 1004", "", Some(true)),
+            ("context menu open", "", None),
+            ("focused after the menu", "", None),
+            ("blurred, mode 1004 off", "\x1b[?1004l", Some(false)),
+        ];
+        let mut rows = Vec::new();
+        for (case, output, focused) in steps {
+            if !output.is_empty() {
+                feed(&mut own, output, cx);
+            }
+            if let Some(focused) = focused {
+                focus(&own, focused, cx);
+            }
+            let shape = own.model.read_with(cx, |model, _| {
+                format!("{:?}", model.last_content().cursor.shape)
+            });
+            rows.push(json!([case, sent(&mut own), shape]));
+        }
+        let golden: Vec<Value> = golden_files::read(SET, "focus")
+            .iter()
+            .map(|row| json!([row[0], row[1], row[3]]))
+            .collect();
+        assert_eq!(rows, golden);
+    }
+
+    // T-R1: a resize reflows and keeps the text; the history limit stays; a change of a few
+    // pixels is no new grid.
+    #[gpui::test]
+    fn the_own_screen_keeps_the_text_and_the_history_limit_on_a_resize(cx: &mut TestAppContext) {
+        let mut own = screen(cx, (79, 20));
+        let long: String = (0..120)
+            .map(|i| char::from(b'a' + (i % 26) as u8))
+            .collect();
+        feed(&mut own, &format!("{long}\r\nshort\r\n"), cx);
+        let history = own.model.read_with(cx, |model, _| model.history());
+        let resize = |own: &Screen, columns: usize, cx: &mut TestAppContext| {
+            own.model
+                .update(cx, |model, _| model.set_size(bounds(columns, 20)));
+            settle(&own.model, cx);
+            own.model.read_with(cx, |model, _| {
+                (model.last_content().columns, model.get_content())
+            })
+        };
+        let (columns, text) = resize(&own, 40, cx);
+        assert_eq!(columns, 40, "the grid did not shrink");
+        assert!(
+            text.replace('\n', "").contains(&long),
+            "the long line was lost: {text}"
+        );
+        let (columns, text) = resize(&own, 79, cx);
+        assert_eq!(columns, 79);
+        assert!(text.contains(&long[..79]), "{text}");
+        assert_eq!(own.model.read_with(cx, |model, _| model.history()), history);
+
+        let before = own
+            .model
+            .read_with(cx, |model, _| model.last_content().terminal_bounds);
+        let mut wider = before;
+        wider.bounds.size.width += px(3.);
+        own.model.update(cx, |model, _| model.set_size(wider));
+        settle(&own.model, cx);
+        let after = own
+            .model
+            .read_with(cx, |model, _| model.last_content().terminal_bounds);
+        assert_eq!(after, before, "a few pixels changed the grid");
+        assert_eq!(sent(&mut own), "");
+    }
+
+    // T-E1: the first event after a quiet pace window wakes at once, a burst within the pace
+    // wakes once after it, a steady stream once per pace window, and a writer of a replaced
+    // screen wakes nothing. The pace is not the default, as in the old row.
+    #[gpui::test]
+    fn the_own_event_loop_wakes_once_per_pace_and_drops_a_replaced_screen(cx: &mut TestAppContext) {
+        let mut own = screen(cx, (79, 20));
+        let model = own.model.clone();
+        let pace = Duration::from_millis(40);
+        model.update(cx, |model, _| model.set_wakeup_pace(pace));
+        assert_eq!(model.read_with(cx, |model, _| model.wakeup_pace()), pace);
+        let wakes = Rc::new(Cell::new(0));
+        let counted = wakes.clone();
+        cx.update(|cx| {
+            cx.subscribe(&model, move |_, event: &TermEvent, _| {
+                if *event == TermEvent::Wakeup {
+                    counted.set(counted.get() + 1);
+                }
+            })
+            .detach();
+        });
+        let step = |ms: u64, cx: &mut TestAppContext| {
+            cx.executor().advance_clock(Duration::from_millis(ms));
+            cx.run_until_parked();
+        };
+        step(200, cx);
+        wakes.set(0);
+
+        own.writer.write(b"a");
+        cx.run_until_parked();
+        assert_eq!(wakes.get(), 1, "the first event after quiet waited");
+        own.writer.write(b"b");
+        step(5, cx);
+        own.writer.write(b"c");
+        step(5, cx);
+        assert_eq!(wakes.get(), 1, "a burst woke before the pace ended");
+        step(40, cx);
+        assert_eq!(wakes.get(), 2, "a burst woke more than once");
+
+        step(200, cx);
+        wakes.set(0);
+        // 20 writes, 10 ms apart: one at once, then one per 40 ms window up to 200 ms.
+        for _ in 0..20 {
+            own.writer.write(b"x");
+            step(10, cx);
+        }
+        step(200, cx);
+        assert_eq!(wakes.get(), 6, "a steady stream woke {} times", wakes.get());
+
+        model
+            .update(cx, |model, cx| model.replace_display_output(&[], cx))
+            .unwrap();
+        step(200, cx);
+        wakes.set(0);
+        own.writer.write(b"old");
+        step(100, cx);
+        assert_eq!(
+            wakes.get(),
+            0,
+            "a replaced screen's writer woke the new screen"
+        );
+        own.renew_writer(cx);
+        own.writer.write(b"new");
+        step(100, cx);
+        assert_eq!(wakes.get(), 1);
+    }
+
+    // T-E1: a scroll, a resize and a select queued before one sync run in that order, and give
+    // what the old rows pinned: Select All, asked before the resize, leaves out the 9 lines the
+    // resize took from the screen.
+    #[gpui::test]
+    fn the_own_queued_changes_run_in_their_order_within_one_sync(cx: &mut TestAppContext) {
+        let mut own = screen(cx, (79, 20));
+        let model = own.model.clone();
+        let state = |cx: &mut TestAppContext| {
+            model.read_with(cx, |model, _| {
+                let content = model.last_content();
+                json!([
+                    content.display_offset,
+                    content.columns,
+                    content.screen_lines,
+                    content.selection_text
+                ])
+            })
+        };
+
+        // One sync each.
+        feed(&mut own, &history(120), cx);
+        model.update(cx, |model, _| model.scroll_up_by(5));
+        settle(&model, cx);
+        model.update(cx, |model, _| model.set_size(bounds(48, 11)));
+        settle(&model, cx);
+        model.update(cx, |model, _| model.select_all());
+        settle(&model, cx);
+        let apart = state(cx);
+
+        // The same on a new screen, all before one sync.
+        model.update(cx, |model, _| model.set_size(bounds(79, 20)));
+        settle(&model, cx);
+        model
+            .update(cx, |model, cx| model.replace_display_output(&[], cx))
+            .unwrap();
+        own.renew_writer(cx);
+        feed(&mut own, &history(120), cx);
+        model.update(cx, |model, _| {
+            model.scroll_up_by(5);
+            model.set_size(bounds(48, 11));
+            model.select_all();
+        });
+        settle(&model, cx);
+        let together = state(cx);
+        let lines =
+            |from: usize| -> String { (from..=120).map(|n| format!("line {n}\n")).collect() };
+        assert_eq!(apart, json!([14, 48, 11, lines(1)]));
+        assert_eq!(together, json!([14, 48, 11, lines(10)]));
+    }
 }

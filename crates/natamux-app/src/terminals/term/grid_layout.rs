@@ -53,7 +53,7 @@ pub fn grid(
 }
 
 /// The whole cells in a fraction, one float step up, so 3.9999999 counts as 4.
-fn whole(fraction: f32) -> usize {
+pub fn whole(fraction: f32) -> usize {
     fraction.next_up().floor().max(1.) as usize
 }
 

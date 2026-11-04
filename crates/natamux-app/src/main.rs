@@ -324,10 +324,13 @@ mod terminals {
     pub mod term {
         pub mod colors;
         pub mod contrast;
+        pub mod event_loop;
         pub mod grid_layout;
         pub mod input_bytes;
         pub mod links;
+        pub mod model;
         pub mod mouse_report;
+        pub mod writer;
     }
     pub mod terminal_cache;
     pub mod terminal_find;
