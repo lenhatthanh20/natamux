@@ -431,12 +431,18 @@ impl TermView {
     pub(super) fn mouse_down(
         &mut self,
         event: &MouseDownEvent,
+        over: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.bar_press(event.position) {
+        if event.button == MouseButton::Left && self.bar_press(event.position, cx) {
             cx.stop_propagation();
             cx.notify();
+            return;
+        }
+        // The rest of the scrollbar's track takes the press and does nothing, not even focus.
+        if !over {
+            cx.stop_propagation();
             return;
         }
         let mouse_mode = self.mouse_mode(event.modifiers.shift, cx);
@@ -657,7 +663,7 @@ impl TermView {
         cx.notify();
     }
 
-    /// A release: `over` when the pointer is over the element.
+    /// A release: `over` when the pointer is over the screen (the element less the track).
     pub(super) fn mouse_up(
         &mut self,
         event: &MouseUpEvent,
@@ -672,6 +678,10 @@ impl TermView {
         // The next move is reported, even in the same cell.
         self.reported = None;
         let press = self.press.take();
+        // Off the screen a release opens no link and sends no report.
+        if !over {
+            return;
+        }
         if let Some(link) = press.as_ref().and_then(|press| press.link.as_ref()) {
             if self.link_under(event.position, cx).as_ref() == Some(link)
                 && links::may_open(&link.word)
@@ -681,7 +691,7 @@ impl TermView {
             return;
         }
         if let Some(mode) = self.mouse_mode(event.modifiers.shift, cx) {
-            if over && self.focus.is_focused(window) {
+            if self.focus.is_focused(window) {
                 let action = MouseAction::Release(event.button);
                 self.send_report(action, event.position, &event.modifiers, mode, cx);
             }
@@ -773,15 +783,23 @@ impl TermView {
         .detach();
     }
 
-    /// A press on the thumb starts its drag.
-    fn bar_press(&mut self, position: Point<Pixels>) -> bool {
-        let Some(thumb) = self.laid.and_then(|laid| laid.thumb) else {
+    /// A left press on the thumb starts its drag; one elsewhere in the track moves the thumb's
+    /// middle to the pointer, with no drag.
+    fn bar_press(&mut self, position: Point<Pixels>, cx: &mut Context<Self>) -> bool {
+        let Some(laid) = self.laid else {
             return false;
         };
-        if !self.bar_visible() || !thumb.contains(&position) {
+        let Some(thumb) = laid.thumb else {
+            return false;
+        };
+        if self.bar_visible() && thumb.contains(&position) {
+            self.bar.grab = Some(position.y - thumb.top());
+            return true;
+        }
+        if Self::show_scrollbar(cx) == Show::Never || !laid.track.contains(&position) {
             return false;
         }
-        self.bar.grab = Some(position.y - thumb.top());
+        self.scroll_bar_to(laid, thumb, position.y - thumb.size.height / 2., cx);
         true
     }
 
@@ -799,19 +817,25 @@ impl TermView {
         let (Some(grab), Some(thumb)) = (self.bar.grab, laid.thumb) else {
             return false;
         };
+        self.scroll_bar_to(laid, thumb, position.y - grab, cx);
+        true
+    }
+
+    /// Scrolls so the thumb's top is at `top`.
+    fn scroll_bar_to(
+        &mut self,
+        laid: Laid,
+        thumb: Bounds<Pixels>,
+        top: Pixels,
+        cx: &mut Context<Self>,
+    ) {
         let content = self.model.read(cx).last_content();
         let (total, screen, now) = (
             content.total_lines,
             content.screen_lines,
             content.display_offset,
         );
-        let wanted = scrollbar::offset_at(
-            laid.track,
-            thumb.size.height,
-            position.y - grab,
-            total,
-            screen,
-        );
+        let wanted = scrollbar::offset_at(laid.track, thumb.size.height, top, total, screen);
         self.model.update(cx, |model, _| {
             if wanted > now {
                 model.scroll_up_by(wanted - now);
@@ -821,7 +845,6 @@ impl TermView {
         });
         self.show_bar(cx);
         cx.notify();
-        true
     }
 
     /// How much of the scrollbar shows now.

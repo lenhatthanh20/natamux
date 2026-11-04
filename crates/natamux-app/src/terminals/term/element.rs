@@ -578,13 +578,13 @@ impl Element for TermElement {
 
 impl TermElement {
     /// The mouse goes to the view: presses and the wheel over the element, moves and releases
-    /// anywhere, so a drag can leave it. For moves and releases, the scrollbar's track is not
-    /// over the screen.
+    /// anywhere, so a drag can leave it. The scrollbar's track is not over the screen.
     fn listen(&self, hitbox: &Hitbox, track: Bounds<Pixels>, window: &mut Window) {
         let (view, area) = (self.view.clone(), hitbox.clone());
         window.on_mouse_event(move |event: &MouseDownEvent, phase, window, cx| {
             if phase == DispatchPhase::Bubble && area.is_hovered(window) {
-                view.update(cx, |view, cx| view.mouse_down(event, window, cx));
+                let over = !track.contains(&event.position);
+                view.update(cx, |view, cx| view.mouse_down(event, over, window, cx));
             }
         });
         let (view, area) = (self.view.clone(), hitbox.clone());
