@@ -1252,6 +1252,7 @@ S2.1 Seams and terminal tests on the old code
   - Focus into the context menu sends no `CSI O` with mode 1004; the model's cursor shape stays Block (the element draws Hollow from the exact focus).
   - A plain click on an OSC 8 link opens the link of the line below when the click is in the lower half of the cell (`round`); see the progress log, "Bugs found".
   - The test platform has no keypad keys: a keypad key comes as its character, so the digit and operator rows stand for it.
+  - A shown scrollbar takes no room from the grid: in `grid_size` the rows with the scrollbar always shown (state `grid-scrollbar`, a screen with history) have the same grid, origin and cell size as the rows with it hidden (state `grid`), at every pane size, scale and font size. So 6.2.6's 14 px track does not shrink the grid of the old code; S2.4 checks where the track is drawn with the `terminal-scrollbar` shot.
 
 S2.2 Feature, Appearance global, pure modules
 - Goal: own colours, contrast, input bytes, mouse reports, grid math and the link regex pass the goldens.
