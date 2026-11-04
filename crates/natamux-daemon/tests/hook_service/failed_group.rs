@@ -4,7 +4,7 @@
 use std::collections::HashSet;
 
 use natamux_core::stages::terminal_lane::stage_of_terminal;
-use natamux_proto::stages::catalog::default_pipeline;
+use natamux_proto::stages::catalog::full_pipeline;
 use natamux_proto::stages::position::find_step;
 use natamux_proto::stages::schema::{Gate, Stage, StageKind, Step};
 use natamux_stages::actions::lane_state;
@@ -12,7 +12,7 @@ use natamux_stages::actions::lane_state;
 use super::*;
 
 fn pipeline() -> Vec<Step> {
-    default_pipeline()
+    full_pipeline()
         .into_iter()
         .flat_map(|step| -> Vec<Step> {
             match step.id() {

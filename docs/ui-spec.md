@@ -809,6 +809,7 @@ Rules:
 | PR link | New browser tab (`ExternalLink` icon 12 after the text). |
 | System notification click | Focuses the window and opens that workspace. |
 | Destructive actions (remove workspace, remove finished workspaces, cancel task, delete task, close a busy terminal, keep one try, sign out) | Confirm dialog that says what is deleted and what is kept; Cancel focused. |
+| Quit in the native app (Mod+Q, the Quit menu item, `app.quit`, the window's close button) | Confirm dialog, Cancel focused (T-0284). No unsaved drafts: "Quit Natamux?" / "Every agent and terminal stops. They come back the next time you open Natamux." Unsaved drafts: "Quit and drop your changes?" / "These edits are not saved. Quitting drops them." and the drafts as rows. Main button "Quit". Restart to Update and a bench or IME check run ask only for drafts; a quit with no window open quits at once. |
 
 ### 5.5 Deep links (WS-22)
 Routes (history API, no router package, `lib/route.ts`): `/` all tasks, `/board`, `/agents`, `/t/T-0018` (details open), `/w/T-0018/terminal|changes|history`, `/w/T-0018/changes?file=src/a.ts`. Back/forward work; reload restores the view; the daemon serves `index.html` for these paths.

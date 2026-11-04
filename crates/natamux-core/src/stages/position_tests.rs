@@ -1,7 +1,7 @@
 //! Ports the cases of `packages/core/src/stages/__tests__/position.test.ts` for the functions that
 //! are in this crate. The others are tested in `natamux-proto`.
 
-use natamux_proto::stages::catalog::default_pipeline;
+use natamux_proto::stages::catalog::full_pipeline;
 use natamux_proto::stages::schema::{Gate, Stage, StageKind, Step};
 use natamux_proto::tasks::task::TaskState::{Done, Draft, NeedsInput, Ready, Review, Running};
 
@@ -14,12 +14,12 @@ fn review_stage() -> Step {
 
 #[test]
 fn starts_a_task_in_draft_at_its_first_step() {
-    assert_eq!(first_position(&default_pipeline()), at("context", Draft));
+    assert_eq!(first_position(&full_pipeline()), at("context", Draft));
 }
 
 #[test]
 fn starts_a_review_stage_waiting_for_you_and_a_group_with_a_state_per_stage() {
-    let build = default_pipeline().remove(3);
+    let build = full_pipeline().remove(3);
     assert_eq!(
         enter_step(&review_stage(), None, None),
         at("review", Review)

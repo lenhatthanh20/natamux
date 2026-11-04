@@ -79,13 +79,19 @@ fn step_ref(value: &Value) -> Option<Value> {
                 max: None,
             };
             // A path holds stage ids and groups (a group runs side by side inside the path).
-            let stages = array(path.get("stages"), &[], one, quiet, |item, at_path, quiet| {
-                let parsed = stage_or_group(item);
-                if parsed.is_none() {
-                    quiet.push(Issue::new(Vec::new(), at_path, "Invalid input".into()));
-                }
-                parsed
-            });
+            let stages = array(
+                path.get("stages"),
+                &[],
+                one,
+                quiet,
+                |item, at_path, quiet| {
+                    let parsed = stage_or_group(item);
+                    if parsed.is_none() {
+                        quiet.push(Issue::new(Vec::new(), at_path, "Invalid input".into()));
+                    }
+                    parsed
+                },
+            );
             Some(json!({ "id": id?, "stages": stages? }))
         });
         Some(json!({ "id": id?, "paths": paths? }))

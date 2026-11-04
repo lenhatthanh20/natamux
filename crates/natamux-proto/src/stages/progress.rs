@@ -348,9 +348,8 @@ fn entered_into<'a>(
         (Some(path), Some(place)) if place > 0 => path.stages.get(place - 1),
         _ => None,
     };
-    let ids = |step: &Step| -> Vec<String> {
-        step.stages().iter().map(|each| each.id.clone()).collect()
-    };
+    let ids =
+        |step: &Step| -> Vec<String> { step.stages().iter().map(|each| each.id.clone()).collect() };
     // A stage is entered with the stages of its group, if it has one.
     let into: Vec<String> = match (path, place) {
         (Some(path), Some(place)) => path

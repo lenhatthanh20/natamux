@@ -22,7 +22,7 @@ use natamux_daemon::tasks::service::{TaskService, TaskServiceOptions};
 use natamux_daemon::tasks::store::SettingsOf as StagesOf;
 use natamux_git::gh::{GitHubError, RunGh};
 use natamux_proto::projects::repo::ProjectSettings;
-use natamux_proto::stages::catalog::default_pipeline;
+use natamux_proto::stages::catalog::full_pipeline;
 use natamux_store::task_index::TaskIndex;
 
 /// A fresh folder for one test, removed when the test ends.
@@ -101,7 +101,7 @@ impl Fx {
             std::env::temp_dir().join(format!("natamux-github-{}-{count}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let settings = Arc::new(Mutex::new(ProjectSettings {
-            stages: default_pipeline(),
+            stages: full_pipeline(),
             ..ProjectSettings::default()
         }));
         let read = Arc::clone(&settings);

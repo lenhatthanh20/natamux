@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_PIPELINE } from '../../stages/default-pipeline.js'
+import { FULL_PIPELINE } from '../../stages/default-pipeline.js'
 import type { Step } from '../../stages/schema.js'
 import type { Task } from '../../tasks/task.js'
 import { stageProgress } from '../progress.js'
@@ -34,7 +34,7 @@ describe('stageProgress', () => {
     const progress = stageProgress(
       { stage: 'spec', state: 'running', lanes: {} },
       events,
-      DEFAULT_PIPELINE,
+      FULL_PIPELINE,
     )
 
     expect(progress.map((stage) => [stage.stage, stage.status])).toEqual([
@@ -68,7 +68,7 @@ describe('stageProgress', () => {
     const progress = stageProgress(
       { stage: 'build', state: 'review', lanes: { 'test-spec': 'review', implement: 'done' } },
       events,
-      DEFAULT_PIPELINE,
+      FULL_PIPELINE,
     )
     const testSpec = progress.find((stage) => stage.stage === 'test-spec')
     const implement = progress.find((stage) => stage.stage === 'implement')
@@ -93,7 +93,7 @@ describe('stageProgress', () => {
     const progress = stageProgress(
       { stage: 'build', state: 'running', lanes: { 'test-spec': 'review', implement: 'running' } },
       events,
-      DEFAULT_PIPELINE,
+      FULL_PIPELINE,
     )
     const plan = progress.find((stage) => stage.stage === 'plan')
     const testSpec = progress.find((stage) => stage.stage === 'test-spec')
@@ -125,7 +125,7 @@ describe('stageProgress', () => {
       event('stage.started', { stage: 'implement' }),
     ]
     const implementOf = (events: TaskEvent[]) =>
-      stageProgress(task, events, DEFAULT_PIPELINE).find((stage) => stage.stage === 'implement')
+      stageProgress(task, events, FULL_PIPELINE).find((stage) => stage.stage === 'implement')
 
     expect(implementOf(byCi)).toMatchObject({ rounds: 2, sentBackByCi: true })
 
@@ -158,11 +158,11 @@ describe('stageProgress', () => {
     const progress = stageProgress(
       { stage: 'spec', state: 'ready', lanes: {} },
       events,
-      DEFAULT_PIPELINE,
+      FULL_PIPELINE,
     )
     expect(progress[0]?.status).toBe('skipped')
 
-    const done = stageProgress({ stage: 'release', state: 'done', lanes: {} }, [], DEFAULT_PIPELINE)
+    const done = stageProgress({ stage: 'release', state: 'done', lanes: {} }, [], FULL_PIPELINE)
     expect(done.every((stage) => stage.status === 'done')).toBe(true)
   })
 

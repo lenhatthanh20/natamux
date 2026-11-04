@@ -109,16 +109,17 @@ pub fn stage_chip(task: &Task) -> Option<StageChip> {
         .checked_sub(1)
         .and_then(|at| steps_of(task).into_iter().nth(at));
     // A group inside a path, while the task is in it, shows its lanes as a group does.
-    let in_path = match &current {
-        Some(StepRef::Branch { paths, .. }) => paths
-            .iter()
-            .flat_map(|path| &path.stages)
-            .find_map(|item| match item {
-                StepRef::Group { id, parallel } if *id == task.stage => Some(parallel.clone()),
-                _ => None,
-            }),
-        _ => None,
-    };
+    let in_path =
+        match &current {
+            Some(StepRef::Branch { paths, .. }) => paths
+                .iter()
+                .flat_map(|path| &path.stages)
+                .find_map(|item| match item {
+                    StepRef::Group { id, parallel } if *id == task.stage => Some(parallel.clone()),
+                    _ => None,
+                }),
+            _ => None,
+        };
     let lanes = match current {
         Some(StepRef::Group { parallel, .. }) => Some(parallel),
         _ => in_path,

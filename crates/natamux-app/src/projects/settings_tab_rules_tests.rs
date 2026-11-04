@@ -1,4 +1,4 @@
-use natamux_proto::stages::catalog::default_pipeline;
+use natamux_proto::stages::catalog::full_pipeline;
 use natamux_proto::stages::schema::Step;
 use serde_json::{Value, json};
 
@@ -22,7 +22,7 @@ fn tracker(raw: &Value) -> TrackerSettings {
 #[test]
 fn shares_one_draft_between_the_tabs_and_keeps_invalid_json_on_the_json_tab() {
     // A Stages edit shows in the text of the JSON tab.
-    let mut steps = default_pipeline();
+    let mut steps = full_pipeline();
     if let Some(Step::Stage(stage)) = steps.first_mut() {
         stage.enabled = Some(false);
     }

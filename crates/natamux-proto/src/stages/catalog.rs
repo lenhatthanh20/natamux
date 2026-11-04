@@ -226,8 +226,22 @@ pub fn catalog_stage(id: &str) -> Option<Stage> {
     catalog().iter().find(|stage| stage.id == id).cloned()
 }
 
-/// `DEFAULT_PIPELINE`: what Reset to default puts in the editor.
+/// `DEFAULT_PIPELINE`: what a project without its own stages uses, and what Reset to default
+/// puts in the editor. Kept small so a new project starts simple.
 pub fn default_pipeline() -> Vec<Step> {
+    let one = |id: &str| Step::Stage(catalog_stage(id).unwrap_or_default());
+    vec![
+        one("context"),
+        one("spec"),
+        one("implement"),
+        one("agent-review"),
+        one("release"),
+    ]
+}
+
+/// The default pipeline before the simple one. Tests use it for a group, Plan, Test spec and
+/// Automated tests.
+pub fn full_pipeline() -> Vec<Step> {
     use crate::stages::schema::StageGroup;
     let one = |id: &str| catalog_stage(id).unwrap_or_default();
     vec![

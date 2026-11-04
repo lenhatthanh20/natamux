@@ -14,6 +14,7 @@ const REOPEN: &str = "/tasks/T-0001/agent/reopen";
 #[tokio::test(flavor = "multi_thread")]
 async fn shows_the_shell_of_an_earlier_stage_as_done_until_its_agent_gets_a_new_prompt() {
     let d = bare("lane").await;
+    d.set_full_pipeline();
     d.make_task("Fix the bug").await;
     d.give_workspace("T-0001");
     let to_implement = json!({
@@ -37,7 +38,7 @@ async fn shows_the_shell_of_an_earlier_stage_as_done_until_its_agent_gets_a_new_
         "/home/me/.local/bin/agent --use-system-ca /home/me/.local/share/cursor-agent/1/index.js",
     ]);
 
-    // Node mocks the lane. Here the task is at Implement of the default pipeline, whose group
+    // Node mocks the lane. Here the task is at Implement of the full pipeline, whose group
     // gives Terminal 2 to Test spec: a lane no hook has set is done.
     let (_, listed) = d
         .call(Method::GET, "/tasks/T-0001/terminals", Some(TOKEN))

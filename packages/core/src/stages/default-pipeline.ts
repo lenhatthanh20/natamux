@@ -11,18 +11,12 @@ function catalogStage(id: string): Stage {
   return entry.stage
 }
 
+// Kept small so a new project starts simple: an agent reviews the work and sends the task back
+// to Implement on its own. Plan, Test spec and Automated tests are in the catalog.
 export const DEFAULT_PIPELINE: Step[] = [
   catalogStage('context'),
   catalogStage('spec'),
-  catalogStage('plan'),
-  {
-    id: 'build',
-    name: 'Test spec and Implement',
-    parallel: [catalogStage('test-spec'), catalogStage('implement')],
-  },
-  // Tests run before the review, and an agent reviews; it sends the task back to Implement on its
-  // own. Manual review, by a person, is in the catalog.
-  catalogStage('testing'),
+  catalogStage('implement'),
   catalogStage('agent-review'),
   catalogStage('release'),
 ]
@@ -32,6 +26,22 @@ export const LEGACY_PIPELINE: Step[] = [
   { id: 'implement', kind: 'agent', gate: 'auto' },
   { id: 'review', kind: 'review', gate: 'manual' },
   { id: 'release', kind: 'release', gate: 'manual' },
+]
+
+// The default pipeline before the simple one. Tests use it for a group, Plan, Test spec and
+// Automated tests. It stays after LEGACY_PIPELINE: a Rust test reads DEFAULT_PIPELINE up to there.
+export const FULL_PIPELINE: Step[] = [
+  catalogStage('context'),
+  catalogStage('spec'),
+  catalogStage('plan'),
+  {
+    id: 'build',
+    name: 'Test spec and Implement',
+    parallel: [catalogStage('test-spec'), catalogStage('implement')],
+  },
+  catalogStage('testing'),
+  catalogStage('agent-review'),
+  catalogStage('release'),
 ]
 
 // What a task keeps of its pipeline: the ids, in order. Names, gates and checks are read from the

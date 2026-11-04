@@ -2,8 +2,7 @@
 
 use natamux_proto::stages::resolve::step_refs_of;
 use natamux_proto::stages::schema::{
-    BranchPath, Condition, Gate, PathRef, Stage, StageBranch, StageGroup, StageKind, Step,
-    StepRef,
+    BranchPath, Condition, Gate, PathRef, Stage, StageBranch, StageGroup, StageKind, Step, StepRef,
 };
 
 pub fn ids(steps: &[Step]) -> Vec<StepRef> {

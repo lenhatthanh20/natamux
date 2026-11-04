@@ -1,11 +1,11 @@
 //! The group 'applyEvent inside a group'.
 
-use natamux_proto::stages::catalog::default_pipeline;
+use natamux_proto::stages::catalog::full_pipeline;
 
 use super::*;
 
 fn staged(fx: &Fixture) -> TaskService {
-    fx.make(Some(settings(default_pipeline())))
+    fx.make(Some(settings(full_pipeline())))
 }
 
 fn at_build(service: &TaskService) -> String {
@@ -70,7 +70,7 @@ fn refuses_an_event_that_fits_two_stages_unless_its_terminal_names_one() {
 #[test]
 fn takes_the_stage_pinned_to_the_terminal_of_a_bell_after_a_settings_change() {
     let fx = Fixture::new();
-    let (shared, settings_of) = live_settings(default_pipeline());
+    let (shared, settings_of) = live_settings(full_pipeline());
     let service = fx.make(Some(settings_of));
     let id = create(&service, "Export").id;
     override_to(&service, &id, "ready", Some("build"));
@@ -85,7 +85,7 @@ fn takes_the_stage_pinned_to_the_terminal_of_a_bell_after_a_settings_change() {
         lanes(&service.get_task(&id).unwrap()),
         obj(json!({ "test-spec": "running", "implement": "running" }))
     );
-    *shared.lock().unwrap() = default_pipeline()
+    *shared.lock().unwrap() = full_pipeline()
         .into_iter()
         .map(|step| match step {
             Step::Group(mut group) => {

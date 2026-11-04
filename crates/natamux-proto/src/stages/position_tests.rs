@@ -133,9 +133,7 @@ fn with_path_group() -> Vec<Step> {
     let bug = BranchPath {
         id: "bug".into(),
         name: None,
-        when: Some(Condition::Command {
-            run: "true".into(),
-        }),
+        when: Some(Condition::Command { run: "true".into() }),
         not: None,
         stages: vec![triage, one("fix", StageKind::Agent, Gate::Auto)],
     };
