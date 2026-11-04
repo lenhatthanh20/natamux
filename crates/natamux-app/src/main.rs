@@ -317,6 +317,18 @@ mod terminals {
     pub mod paste_rules;
     pub mod remote_terminal;
     pub mod shell_panes;
+    /// The own terminal (docs/plan-mit-license.md S2), behind its feature until it replaces
+    /// Zed's. Only its tests use it until the own view does (S2.4).
+    #[cfg(feature = "own-terminal")]
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub mod term {
+        pub mod colors;
+        pub mod contrast;
+        pub mod grid_layout;
+        pub mod input_bytes;
+        pub mod links;
+        pub mod mouse_report;
+    }
     pub mod terminal_cache;
     pub mod terminal_find;
     pub mod terminal_font;

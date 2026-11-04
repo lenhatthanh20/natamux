@@ -34,6 +34,22 @@ pub fn write(set: &str, name: &str, rows: &[Value]) {
     std::fs::write(dir.join(format!("{name}.json")), lines(rows)).unwrap();
 }
 
+fn path(set: &str, name: &str) -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/golden")
+        .join(set)
+        .join(os())
+        .join(format!("{name}.json"))
+}
+
+/// The rows of the committed `<set>/<os>/<name>.json`, for a test that takes its inputs from it.
+pub fn read(set: &str, name: &str) -> Vec<Value> {
+    let path = path(set, name);
+    let text = std::fs::read_to_string(&path)
+        .unwrap_or_else(|error| panic!("{}: {error}", path.display()));
+    serde_json::from_str(&text).unwrap()
+}
+
 /// Fails unless `rows` equal the committed `<set>/<os>/<name>.json`, and names the first row
 /// that differs.
 pub fn check(set: &str, name: &str, rows: &[Value]) {
@@ -45,14 +61,8 @@ pub fn check(set: &str, name: &str, rows: &[Value]) {
 /// What differs between `rows` and the committed `<set>/<os>/<name>.json`: the first row that
 /// differs, or the number of rows. None when they are equal.
 pub fn differs(set: &str, name: &str, rows: &[Value]) -> Option<String> {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/golden")
-        .join(set)
-        .join(os())
-        .join(format!("{name}.json"));
-    let text = std::fs::read_to_string(&path)
-        .unwrap_or_else(|error| panic!("{}: {error}", path.display()));
-    let golden: Vec<Value> = serde_json::from_str(&text).unwrap();
+    let path = path(set, name);
+    let golden = read(set, name);
     if let Some(i) = golden.iter().zip(rows).position(|(old, new)| old != new) {
         return Some(format!(
             "{}: row {i} differs\n golden: {}\n now:    {}",

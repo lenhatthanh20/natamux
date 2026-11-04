@@ -122,6 +122,13 @@ jobs:
           path: ${{ runner.temp }}/fmt.patch
       - id: build
         run: cargo xtask ci${{ startsWith(github.ref, 'refs/heads/natamux-ci/daemon') && ' --no-app' || '' }}${{ startsWith(github.ref, 'refs/heads/natamux-ci/') && ' --all-errors' || '' }}
+      # The MIT move (docs/plan-mit-license.md 8.5): the own terminal grows behind its feature,
+      # so clippy and the app's tests run with it on too. Removed when the swap is done (S2.6).
+      - name: The app with the own terminal
+        if: ${{ !cancelled() && steps.build.outcome != 'skipped' && !startsWith(github.ref, 'refs/heads/natamux-ci/daemon') }}
+        run: |
+          cargo clippy -p natamux-app --all-targets --locked --features own-terminal -- -D warnings
+          cargo test -p natamux-app --locked --features own-terminal
       # A main push saves the cache; a red lint or test still leaves the build in it.
       - name: Stamp the cache
         if: ${{ !cancelled() && env.SAVE_CACHE == 'true' && steps.build.outcome != 'skipped' }}
