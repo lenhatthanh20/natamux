@@ -1,5 +1,5 @@
 use super::*;
-use crate::stages::catalog::default_pipeline;
+use crate::stages::catalog::full_pipeline;
 use crate::stages::pipeline_rules::pipeline_issues;
 use crate::stages::schema::{BranchPath, Condition, Gate, StageBranch, StageGroup};
 
@@ -46,7 +46,7 @@ fn own_shell(stage: Stage) -> Stage {
 
 #[test]
 fn gives_the_code_stage_the_first_terminal_and_the_others_the_next_ones() {
-    let build = default_pipeline().remove(3);
+    let build = full_pipeline().remove(3);
     let steps = [build];
     assert_eq!(terminal_of_stage(&steps, "implement"), "1");
     assert_eq!(terminal_of_stage(&steps, "test-spec"), "2");
@@ -164,7 +164,7 @@ fn gives_no_shell_to_an_agent_the_stage_may_not_have() {
 
 #[test]
 fn gives_a_catalog_stage_in_terminal_1_with_its_own_agent_a_terminal_of_its_own() {
-    let mut steps = default_pipeline();
+    let mut steps = full_pipeline();
     let spec = Stage {
         agent: Some("codex".into()),
         args: Some("--model x".into()),

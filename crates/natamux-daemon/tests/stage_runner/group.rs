@@ -54,7 +54,7 @@ fn starts_the_agent_and_the_words_of_a_stage_in_a_shell_of_its_own_and_keeps_the
     let f = Fixture::new();
     // Test spec starts Codex with its own words, beside Claude Code in Shell 1.
     let mut settings = natamux_proto::projects::repo::ProjectSettings {
-        stages: natamux_proto::stages::catalog::default_pipeline(),
+        stages: natamux_proto::stages::catalog::full_pipeline(),
         ..Default::default()
     };
     for step in &mut settings.stages {

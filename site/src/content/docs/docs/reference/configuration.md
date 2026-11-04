@@ -188,8 +188,8 @@ The stage starts in every case. Each agent page says where it finds skills, for 
 | Design | `ux-design` | UX design | `agent` | manual | `ux.md` | Screens, states, flows, accessibility. |
 | Design | `architecture` | Architecture | `agent` | manual | `architecture.md` | Components, data flow, interfaces, trade-offs. |
 | Design | `threat-model` | Threat model | `agent` | manual | `threat-model.md` | What an attacker could reach, and how each threat is handled. |
-| Design | `plan` | Plan | `agent` | manual | `plan.md` | Default. Steps, files and tests. Offers a workflow. |
-| Build | `test-spec` | Test spec | `agent` | manual | `test-spec.md` | Default. Test cases from the spec, without reading the code. |
+| Design | `plan` | Plan | `agent` | manual | `plan.md` | Steps, files and tests. Offers a workflow. |
+| Build | `test-spec` | Test spec | `agent` | manual | `test-spec.md` | Test cases from the spec, without reading the code. |
 | Build | `implement` | Implement | `agent` | auto | none | Default. Tests first, then the code. Offers a workflow. |
 | Build | `agent` | Agent | `agent` | auto | none | Opens the task's agent without a prompt. Used by the **One agent** task flow. |
 | Build | `migration` | Data migration | `agent` | manual | none | A data or schema migration, with a way to roll it back. |
@@ -203,7 +203,7 @@ The stage starts in every case. Each agent page says where it finds skills, for 
 | Check | `accessibility` | Accessibility check | `agent` | manual | `accessibility.md` | Checks UI changes for keyboard, screen reader and contrast problems. |
 | Check | `agent-review` | Review | `agent` | auto | `review.md` | Default. An agent reviews the changes against the spec in its own terminal, and sends the task back to Implement when they need fixes. |
 | Check | `review` | Manual review | `review` | manual | none | A person reads the diff and approves it or sends it back. |
-| Check | `testing` | Automated tests | `testing` | auto | none | Default. An agent adds a test for each case of the test spec and runs all tests, or a `command` runs them. |
+| Check | `testing` | Automated tests | `testing` | auto | none | An agent adds a test for each case of the test spec and runs all tests, or a `command` runs them. |
 | Check | `e2e` | End-to-end tests | `testing` | auto | none | Adds end-to-end tests, then runs them. Needs a `command`. |
 | Check | `qa` | Manual testing | `manual` | manual | none | A person tries the change by hand. |
 | Check | `design-review` | Design review | `manual` | manual | none | A designer checks the UI. |
@@ -217,6 +217,8 @@ The stage starts in every case. Each agent page says where it finds skills, for 
 
 ### Default pipeline
 
+A new project, or one without `stages` in the file, uses these five stages. Add Plan, Test spec or Automated tests from the catalog when a project needs them.
+
 ```json
 {
   "stages": [
@@ -228,30 +230,7 @@ The stage starts in every case. Each agent page says where it finds skills, for 
       "output": "spec.md",
       "sections": ["Goal", "Scope", "Out of scope", "Acceptance criteria", "Code map"]
     },
-    {
-      "id": "plan",
-      "kind": "agent",
-      "gate": "manual",
-      "output": "plan.md",
-      "sections": ["Steps", "Files", "Tests"],
-      "workflow": true
-    },
-    {
-      "id": "build",
-      "name": "Test spec and Implement",
-      "parallel": [
-        {
-          "id": "test-spec",
-          "kind": "agent",
-          "gate": "manual",
-          "output": "test-spec.md",
-          "sections": ["Cases"],
-          "ownShell": true
-        },
-        { "id": "implement", "kind": "agent", "gate": "auto", "workflow": true, "ci": true }
-      ]
-    },
-    { "id": "testing", "name": "Automated tests", "kind": "testing", "gate": "auto", "ci": true },
+    { "id": "implement", "kind": "agent", "gate": "auto", "workflow": true, "ci": true },
     {
       "id": "agent-review",
       "name": "Review",

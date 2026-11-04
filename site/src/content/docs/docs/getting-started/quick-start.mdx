@@ -9,7 +9,7 @@ import { Steps, Aside, CardGrid, LinkCard } from '@astrojs/starlight/components'
 import Figure from '../../../../components/Figure.astro'
 import NativeClip from '../../../../components/NativeClip.astro'
 
-This walk-through uses the desktop app and one agent. Starting a task and reaching the first approval takes about ten minutes, and most of that is the agent working. The rest depends on your task and your agent: the default pipeline waits for you three times, then an agent reviews the work. You need the [requirements](/docs/getting-started/install/#requirements) and a git repository you can experiment in.
+This walk-through uses the desktop app and one agent. Starting a task and reaching the first approval takes about ten minutes, and most of that is the agent working. The rest depends on your task and your agent: the default pipeline waits for you once, at the spec, then an agent implements and another agent reviews the work. You need the [requirements](/docs/getting-started/install/#requirements) and a git repository you can experiment in.
 
 ## Add a project
 
@@ -107,10 +107,10 @@ When a stage waits for you, the task is in review. Read what the agent produced,
 - **Send back** returns the task to an earlier stage, with a note about what should change.
 - **Skip** leaves the stage out.
 
-With the default pipeline you approve three times: the spec, the plan and the test spec.
+With the default pipeline you approve once: the spec.
 
-- After you approve the plan, two agents work at once: the task's agent implements in Terminal 1, and a second agent writes the test spec in Terminal 2.
-- When both are done, the tests run, then a review agent reads the changes in Terminal 5.
+- After you approve the spec, the task's agent implements it in Terminal 1.
+- When it is done, a review agent reads the changes in Terminal 5.
 - If the review finds problems, it sends the task back to Implement by itself, at most two times.
 
 See [The review loop](/docs/concepts/review-loop/) and [Stages](/docs/concepts/stages/).

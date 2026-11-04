@@ -7,7 +7,7 @@ import {
   runsWorkflow,
   stageName,
 } from '../capabilities.js'
-import { DEFAULT_PIPELINE } from '../default-pipeline.js'
+import { FULL_PIPELINE } from '../default-pipeline.js'
 import { pipelineSchema } from '../pipeline-schema.js'
 import { type BranchPath, type Stage, type StageBranch, type Step, stagesOf } from '../schema.js'
 
@@ -33,8 +33,8 @@ describe('stageName', () => {
 })
 
 describe('a check on CI', () => {
-  it('is offered on Implement and Automated tests of the default pipeline', () => {
-    const offered = DEFAULT_PIPELINE.flatMap(stagesOf).filter(offersCi)
+  it('is offered on Implement and Automated tests of the full pipeline', () => {
+    const offered = FULL_PIPELINE.flatMap(stagesOf).filter(offersCi)
     expect(offered.map((stage) => stage.id)).toEqual(['implement', 'testing'])
   })
 
@@ -57,8 +57,8 @@ describe('a check on CI', () => {
 
   it('finds the last stage that changes code before a stage', () => {
     const target = (steps: Step[], id: string) => codeStageBefore(steps, id)?.id
-    expect(target(DEFAULT_PIPELINE, 'testing')).toBe('implement')
-    expect(target(DEFAULT_PIPELINE, 'implement')).toBeUndefined()
+    expect(target(FULL_PIPELINE, 'testing')).toBe('implement')
+    expect(target(FULL_PIPELINE, 'implement')).toBeUndefined()
     const steps: Step[] = [
       { id: 'spec', kind: 'agent', gate: 'manual', output: 'spec.md' },
       {
@@ -86,10 +86,10 @@ describe('a check on CI', () => {
 })
 
 describe('workflows', () => {
-  const stage = (id: string) => DEFAULT_PIPELINE.flatMap(stagesOf).find((each) => each.id === id)
+  const stage = (id: string) => FULL_PIPELINE.flatMap(stagesOf).find((each) => each.id === id)
 
-  it('offers a workflow on plan and implement of the default pipeline only', () => {
-    const offered = DEFAULT_PIPELINE.flatMap(stagesOf)
+  it('offers a workflow on plan and implement of the full pipeline only', () => {
+    const offered = FULL_PIPELINE.flatMap(stagesOf)
       .filter(offersWorkflow)
       .map((each) => each.id)
     expect(offered).toEqual(['plan', 'implement'])
@@ -113,7 +113,7 @@ describe('workflows', () => {
   it('runs a workflow when the stage offers it, the task chose it and the agent can', () => {
     const implement = stage('implement')
     if (implement === undefined) {
-      throw new Error('The default pipeline has no implement stage')
+      throw new Error('The full pipeline has no implement stage')
     }
     expect(runsWorkflow(implement, ['implement'], 'claude-code')).toBe(true)
     expect(runsWorkflow(implement, [], 'claude-code')).toBe(false)

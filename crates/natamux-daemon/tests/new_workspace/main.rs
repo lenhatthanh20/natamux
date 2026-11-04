@@ -40,16 +40,16 @@ use natamux_daemon::workspaces::service::{WorkspaceOptions, WorkspaceService};
 use natamux_git::test_support::{TempDir, test_repo};
 use natamux_proto::events::task_event::TaskEvent;
 use natamux_proto::projects::repo::ProjectSettings;
-use natamux_proto::stages::catalog::default_pipeline;
+use natamux_proto::stages::catalog::full_pipeline;
 use natamux_proto::tasks::task::Task;
 use natamux_store::task_index::TaskIndex;
 use serde_json::json;
 use support::{FakePty, fake_spawner};
 
-/// `DEFAULT_PROJECT_SETTINGS`: the default pipeline.
+/// Project settings with the full pipeline: the cases need its group and checks.
 pub fn default_settings() -> ProjectSettings {
     ProjectSettings {
-        stages: default_pipeline(),
+        stages: full_pipeline(),
         ..ProjectSettings::default()
     }
 }

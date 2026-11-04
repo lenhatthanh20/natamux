@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { TaskState } from '../../tasks/task-state.js'
-import { DEFAULT_PIPELINE } from '../default-pipeline.js'
+import { FULL_PIPELINE } from '../default-pipeline.js'
 import { pipelineSchema } from '../pipeline-schema.js'
 import { combinedState } from '../position.js'
 import { type BranchPath, type Stage, type Step, stagesOf } from '../schema.js'
@@ -15,9 +15,9 @@ import {
 
 describe('terminals of a group', () => {
   it('gives the code stage the first terminal and the others the next ones', () => {
-    const build = DEFAULT_PIPELINE[3]
+    const build = FULL_PIPELINE[3]
     if (build === undefined) {
-      throw new Error('The default pipeline changed')
+      throw new Error('The full pipeline changed')
     }
     expect(terminalOfStage([build], 'implement')).toBe('1')
     expect(terminalOfStage([build], 'test-spec')).toBe('2')
@@ -161,9 +161,9 @@ describe('a stage that ends its shell', () => {
     return endsShell1(steps, stage)
   }
 
-  it('would end Shell 1 for the stages of the default pipeline that run there', () => {
+  it('would end Shell 1 for the stages of the full pipeline that run there', () => {
     const ids = ['context', 'spec', 'plan', 'implement', 'test-spec', 'testing', 'agent-review']
-    expect(ids.map((id) => ends(DEFAULT_PIPELINE, id))).toEqual([
+    expect(ids.map((id) => ends(FULL_PIPELINE, id))).toEqual([
       true,
       true,
       true,
@@ -200,10 +200,10 @@ describe('a stage that ends its shell', () => {
 })
 
 describe('terminalLane', () => {
-  const build = DEFAULT_PIPELINE[3]
-  const spec = DEFAULT_PIPELINE[1]
+  const build = FULL_PIPELINE[3]
+  const spec = FULL_PIPELINE[1]
   if (build === undefined || spec === undefined) {
-    throw new Error('The default pipeline changed')
+    throw new Error('The full pipeline changed')
   }
   const inBuild = (lanes: Record<string, TaskState>) => ({
     stage: build.id,
@@ -253,12 +253,12 @@ describe('terminalLane', () => {
 
   it('shows the shell of a group stage as done once the task is past the group', () => {
     const position = { stage: 'testing', state: 'running' as const, lanes: {} }
-    expect(terminalLane(position, DEFAULT_PIPELINE, '2')).toEqual({
+    expect(terminalLane(position, FULL_PIPELINE, '2')).toEqual({
       stage: 'test-spec',
       state: 'done',
     })
     // Shell 1 is the shell of the current stage too.
-    expect(terminalLane(position, DEFAULT_PIPELINE, '1')).toEqual({
+    expect(terminalLane(position, FULL_PIPELINE, '1')).toEqual({
       stage: 'testing',
       state: 'running',
     })

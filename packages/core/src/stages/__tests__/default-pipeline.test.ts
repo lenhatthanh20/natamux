@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_PIPELINE,
+  FULL_PIPELINE,
   LEGACY_STEP_REFS,
   resolveSteps,
   stepRefSchema,
@@ -9,13 +10,11 @@ import {
 import { activeSteps, type BranchPath, type Stage, type StageBranch, type Step } from '../schema.js'
 
 describe('the default pipeline', () => {
-  it('runs the automated tests, then an agent review, and waits for no person', () => {
+  it('runs Spec and Implement, then an agent review, and waits only for the spec', () => {
     expect(stepRefsOf(DEFAULT_PIPELINE)).toEqual([
       'context',
       'spec',
-      'plan',
-      { id: 'build', parallel: ['test-spec', 'implement'] },
-      'testing',
+      'implement',
       'agent-review',
       'release',
     ])
@@ -32,11 +31,13 @@ describe('the default pipeline', () => {
 
 describe('resolveSteps', () => {
   it('turns the step ids of a task back into steps with their settings', () => {
-    expect(resolveSteps(stepRefsOf(DEFAULT_PIPELINE), DEFAULT_PIPELINE)).toEqual(DEFAULT_PIPELINE)
+    for (const pipeline of [DEFAULT_PIPELINE, FULL_PIPELINE]) {
+      expect(resolveSteps(stepRefsOf(pipeline), pipeline)).toEqual(pipeline)
+    }
   })
 
   it('finds a stage of a group for a task that has it on its own', () => {
-    const [implement] = resolveSteps(LEGACY_STEP_REFS, DEFAULT_PIPELINE)
+    const [implement] = resolveSteps(LEGACY_STEP_REFS, FULL_PIPELINE)
     expect(implement).toEqual({
       id: 'implement',
       kind: 'agent',

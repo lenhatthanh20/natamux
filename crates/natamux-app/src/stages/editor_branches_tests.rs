@@ -1,4 +1,4 @@
-use natamux_proto::stages::catalog::default_pipeline;
+use natamux_proto::stages::catalog::full_pipeline;
 use natamux_proto::stages::pipeline_rules::{IssueLevel, pipeline_issues};
 use natamux_proto::stages::schema::{Gate, PathRef, StageKind, Step, StepRef};
 
@@ -35,7 +35,7 @@ fn output_when(contains: &str) -> Condition {
 
 #[test]
 fn adds_a_branch_after_the_step_of_the_id_with_a_path_with_a_condition_and_an_otherwise_path() {
-    let steps = add_branch(&default_pipeline(), Some("plan"));
+    let steps = add_branch(&full_pipeline(), Some("plan"));
     assert_eq!(
         ids(&steps)[2..5].to_vec(),
         vec![

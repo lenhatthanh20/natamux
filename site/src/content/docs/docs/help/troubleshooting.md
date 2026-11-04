@@ -83,7 +83,7 @@ Agents without hooks are followed by their output and bell. They can report with
 
 ## Automated tests does not start
 
-**Automated tests** starts when the whole group before it is done. In the default pipeline that group is **Test spec and Implement**, and Test spec waits for your approval. Open the task, read `test-spec.md` in the **Docs** tab, and click **Approve** on the **Ready for review: Test spec** banner. See [The review loop](/docs/concepts/review-loop/).
+**Automated tests** is not in the default pipeline; you add it from the catalog. It starts when the whole group before it is done. If that group is **Test spec and Implement**, Test spec waits for your approval. Open the task, read `test-spec.md` in the **Docs** tab, and click **Approve** on the **Ready for review: Test spec** banner. See [The review loop](/docs/concepts/review-loop/).
 
 ## The review keeps sending the task back
 
