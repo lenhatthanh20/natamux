@@ -489,3 +489,11 @@ impl Render for DiffView {
 #[cfg(test)]
 #[path = "diff_view_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "diff_golden_tests.rs"]
+mod golden_tests;
+
+#[cfg(test)]
+#[path = "diff_mouse_tests.rs"]
+mod mouse_tests;
