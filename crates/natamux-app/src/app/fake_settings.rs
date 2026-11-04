@@ -135,7 +135,17 @@ impl Data {
 
 impl FakeDaemon {
     pub fn load_settings(&self, repo_id: &str) -> Answer<LoadedSettings> {
-        Ok(self.data().settings.load(repo_id))
+        let data = self.data();
+        let loaded = data.settings.load(repo_id);
+        #[cfg(test)]
+        if let Some(reason) = data.hooks.broken_settings.get(repo_id) {
+            return Ok(LoadedSettings {
+                error: Some(reason.clone()),
+                text: None,
+                ..loaded
+            });
+        }
+        Ok(loaded)
     }
 
     pub fn save_settings(

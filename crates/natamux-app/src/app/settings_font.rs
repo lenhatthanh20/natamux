@@ -65,6 +65,12 @@ impl FontRows {
         }
     }
 
+    /// Types `text` into the size field, for `--shot settings-font-error`.
+    pub fn set_size_text(&self, text: &str, window: &mut Window, cx: &mut Context<SettingsView>) {
+        self.size
+            .update(cx, |editor, cx| editor.set_text(text, window, cx));
+    }
+
     fn size_text(&self, cx: &App) -> String {
         self.size.read(cx).text(cx)
     }

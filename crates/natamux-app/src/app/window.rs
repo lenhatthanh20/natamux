@@ -445,6 +445,14 @@ mod watch;
 #[path = "window_follow.rs"]
 mod follow;
 
+#[cfg(test)]
+#[path = "window_flow_tests.rs"]
+pub(crate) mod flow_tests;
+
+#[cfg(test)]
+#[path = "window_menu_tests.rs"]
+mod menu_tests;
+
 pub fn open(
     options: &Options,
     source: Result<Arc<Source>, StartProblem>,

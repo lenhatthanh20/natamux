@@ -40,7 +40,7 @@ The move to Rust: `docs/plan-rust-migration.md`. Rules from phase 0 on:
 - Before a PR, `cargo xtask ci` must pass: fmt, clippy, tests, layers. CI runs it (`.github/workflows/rust.yml`).
 - No `unwrap`, `expect` or `panic` outside tests. Clippy denies them.
 - Every bug fix gets a regression test.
-- Layers: only L4 crates (`natamux-app`, `natamux-cli`, `natamux-update`) may use `gpui`. `cargo xtask layers` checks it.
+- Layers: only L4 crates (`natamux-app`, `natamux-cli`, `natamux-ui`, `natamux-update`) may use `gpui`. `cargo xtask layers` checks it.
 - UI code reads theme tokens, never hard-coded colours.
 - A UI change: check screenshots in the light and the dark theme, at more than one window size.
 - Dependencies: ask first, as for npm packages. Commit `Cargo.lock`; build with `--locked`. A new source (registry or git) must be allowed in `deny.toml`.

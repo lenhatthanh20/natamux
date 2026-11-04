@@ -1,0 +1,17 @@
+[
+["url","https://example.com/a","https://example.com/a",null,""],
+["mailto","mailto:me@example.com","mailto:me@example.com",null,""],
+["ftp","ftp://files.example.com/x",null,null,""],
+["file","/etc/hosts",null,null,""],
+["paren","http://example.com/(p)","http://example.com/(p)",null,""],
+["path",null,null,null,""],
+["osc web","https://example.com/osc","https://example.com/osc","file:///etc/passwd",""],
+["osc file","/etc/passwd",null,"ssh://host",""],
+["osc ssh","ssh://host",null,"HTTPS://EXAMPLE.COM/UP",""],
+["osc upper","HTTPS://EXAMPLE.COM/UP",null,null,""],
+["json quotes","https://example.com/j","https://example.com/j",null,""],
+["angle brackets","https://example.com/b","https://example.com/b",null,""],
+["backticks","https://example.com/t","https://example.com/t",null,""],
+["single quotes","https://example.com/q","https://example.com/q",null,""],
+["braces","https://example.com/c","https://example.com/c",null,""]
+]

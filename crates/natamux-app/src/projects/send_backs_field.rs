@@ -99,3 +99,7 @@ impl Render for SendBacksField {
             .children(self.error.map(error_line))
     }
 }
+
+#[cfg(test)]
+#[path = "send_backs_field_tests.rs"]
+mod tests;

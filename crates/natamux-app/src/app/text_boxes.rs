@@ -151,10 +151,11 @@ mod tests {
                 .bindings_for_action_in(action.as_ref(), &editor.focus_handle(cx))
                 .iter()
                 .map(|binding| {
+                    // `unparse`, not `to_string`: on macOS the display form is glyphs (⌥⇧←).
                     binding
                         .keystrokes()
                         .iter()
-                        .map(ToString::to_string)
+                        .map(|keystroke| keystroke.unparse())
                         .collect::<Vec<_>>()
                         .join(" ")
                 })

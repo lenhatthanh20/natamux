@@ -1,0 +1,20 @@
+[
+{"path":"fixtures/edge.mod","language":"Go Mod","parsed":true},
+[0,32,"comment","#8f95a1ff",null,null],
+[33,39,"keyword","#b87fd1ff",null,null],
+[61,63,"keyword","#b87fd1ff",null,null],
+[64,68,"string","#a1c181ff",null,null],
+[70,79,"keyword","#b87fd1ff",null,null],
+[90,97,"keyword","#b87fd1ff",null,null],
+[119,126,"string","#a1c181ff",null,null],
+[144,150,"string","#a1c181ff",null,null],
+[151,162,"comment","#8f95a1ff",null,null],
+[166,173,"keyword","#b87fd1ff",null,null],
+[190,192,"operator","#6eb4bfff",null,null],
+[201,208,"keyword","#b87fd1ff",null,null],
+[225,231,"string","#a1c181ff",null,null],
+[233,240,"keyword","#b87fd1ff",null,null],
+[242,248,"string","#a1c181ff",null,null],
+[250,256,"string","#a1c181ff",null,null],
+[258,274,"comment","#8f95a1ff",null,null]
+]

@@ -2,6 +2,7 @@
 //! while adding, else the branch details, else the settings of the picked stage. The text fields
 //! are editors made when the pick changes and kept otherwise.
 
+use editor::Editor;
 use gpui::{AnyElement, ClickEvent, Entity, FocusHandle, Subscription, rems};
 use natamux_proto::projects::repo::SkillList;
 use natamux_proto::stages::capabilities::stage_name;
@@ -45,6 +46,12 @@ pub struct DetailsPane {
 }
 
 impl DetailsPane {
+    /// The prompt box of the stage that is picked, for the whole-app flows.
+    pub fn prompt_box(&self) -> Option<Entity<Editor>> {
+        let fields = self.stage_fields.as_ref()?;
+        Some(fields.prompt.editor.clone())
+    }
+
     pub fn new(
         editor: Entity<PipelineEditor>,
         window: &mut Window,
@@ -160,6 +167,38 @@ impl DetailsPane {
 
     pub(super) fn branch_fields(&self) -> Option<&BranchFields> {
         self.branch_fields.as_ref()
+    }
+
+    /// The stage picker while it is open, for the flow tests.
+    #[cfg(test)]
+    pub fn picker(&self) -> Option<Entity<StagePicker>> {
+        self.picker.clone()
+    }
+
+    /// The text fields of the picked stage or branch by name, for the flow tests.
+    #[cfg(test)]
+    pub fn field_focuses(&self, cx: &App) -> Vec<(&'static str, FocusHandle)> {
+        use gpui::Focusable as _;
+        let mut fields = Vec::new();
+        if let Some(stage) = &self.stage_fields {
+            fields.extend([
+                ("name", &stage.name),
+                ("args", &stage.args),
+                ("prompt", &stage.prompt),
+                ("command", &stage.command),
+                ("check", &stage.check),
+                ("output", &stage.output),
+                ("sections", &stage.sections),
+                ("done when", &stage.done_when),
+            ]);
+        }
+        if let Some(branch) = &self.branch_fields {
+            fields.push(("branch name", &branch.name));
+        }
+        fields
+            .into_iter()
+            .map(|(name, field)| (name, field.editor.focus_handle(cx)))
+            .collect()
     }
 }
 

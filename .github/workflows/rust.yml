@@ -122,6 +122,13 @@ jobs:
           path: ${{ runner.temp }}/fmt.patch
       - id: build
         run: cargo xtask ci${{ startsWith(github.ref, 'refs/heads/natamux-ci/daemon') && ' --no-app' || '' }}${{ startsWith(github.ref, 'refs/heads/natamux-ci/') && ' --all-errors' || '' }}
+      # The MIT move (docs/plan-mit-license.md 8.5): the own terminal grows behind its feature,
+      # so clippy and the app's tests run with it on too. Removed when the swap is done (S2.6).
+      - name: The app with the own terminal
+        if: ${{ !cancelled() && steps.build.outcome != 'skipped' && !startsWith(github.ref, 'refs/heads/natamux-ci/daemon') }}
+        run: |
+          cargo clippy -p natamux-app --all-targets --locked --features own-terminal -- -D warnings
+          cargo test -p natamux-app --locked --features own-terminal
       # A main push saves the cache; a red lint or test still leaves the build in it.
       - name: Stamp the cache
         if: ${{ !cancelled() && env.SAVE_CACHE == 'true' && steps.build.outcome != 'skipped' }}
@@ -159,6 +166,10 @@ jobs:
       - run: bash scripts/fake-gh.test.sh
       - run: python3 scripts/check-shots.test.py
       - run: python3 scripts/compare-shots.test.py
+      - run: python3 scripts/shots-exact.test.py
+      - run: python3 scripts/zed-lock-check.test.py
+      # For the MIT move: no Zed crate may come back into Cargo.lock unlisted.
+      - run: python3 scripts/zed-lock-check.py
       - run: bash scripts/sign-release.test.sh
       - run: bash scripts/release.test.sh
       - run: bash scripts/e2e.test.sh
@@ -242,8 +253,13 @@ jobs:
           echo "first_frame_ms with a 3 s login shell, median of 3: $median"
           awk -v ms="$median" 'BEGIN { exit !(ms <= 1000) }' ||
             { echo "::error::first_frame_ms $median is over 1000 ms with a slow login shell"; exit 1; }
-      - name: Smoke test, terminal grid and pipeline chart
-        run: target/release/natamux-app --smoke --fake-daemon
+      - name: Smoke test, terminal grid, pipeline chart and flows F1-F4
+        run: |
+          set -o pipefail
+          target/release/natamux-app --smoke --fake-daemon | tee "$RUNNER_TEMP/flows.txt"
+          for flow in F1 F2 F3 F4; do
+            grep -q "^smoke: $flow " "$RUNNER_TEMP/flows.txt" || { echo "::error::flow $flow did not pass"; exit 1; }
+          done
       # CPU and draws of an idle window, with focus and in the background (docs/rust-phase3.md
       # "Motion"): the task table, then a task open with its terminals. Only a snapshot push
       # whose commit message has a line "Measure: motion".
@@ -310,6 +326,37 @@ jobs:
           name: natamux-cli-macos-arm64
           path: dist/natamux-cli-macos-arm64.tar.gz
           compression-level: 0
+
+  # The check job tests on Linux only; this runs the app's macOS code paths too (MIT move). Its
+  # own job, so the shots do not wait for it and a failed test does not skip them.
+  app-macos-tests:
+    needs: changes
+    if: ${{ !endsWith(github.ref, '-check') && needs.changes.outputs.app == 'true' }}
+    runs-on: macos-15
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: rust-app-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-${{ github.sha }}
+          restore-keys: |
+            rust-app-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-
+            rust-app-${{ runner.os }}-
+      - run: python3 scripts/ci-changes.py mtimes
+      - run: cargo test -p natamux-app --locked
+      # The MIT move (docs/plan-mit-license.md 8.5): the own terminal's tests on macOS too, since
+      # its keys differ there. Removed when the swap is done (S2.6).
+      - name: The app tests with the own terminal
+        run: cargo test -p natamux-app --locked --features own-terminal
 
   # The Intel app that release.yml (mac-x64) builds. A main push with release notes builds and
   # saves its cache. Its prefix differs from app-macos, so the arm64 cleanup does not delete it.
@@ -385,6 +432,29 @@ jobs:
           name: app-binary
           path: target/release
       - run: chmod +x target/release/natamux-app
+      # macOS keeps a window above the Dock, and the Dock's height is not the same in every run:
+      # the 1024x720 shots came out 1024x684 and once 1024x682. A hidden Dock leaves room for 720.
+      - name: Hide the Dock
+        run: |
+          defaults write com.apple.dock autohide -bool true
+          killall Dock
+          for i in $(seq 120); do
+            height=$(osascript -l JavaScript -e "ObjC.import('AppKit');
+              \$.NSScreen.mainScreen.visibleFrame.size.height")
+            [ "${height%.*}" -ge 720 ] 2>/dev/null && break
+            # On some runners the restarted Dock kept its place for 45 s: restart it again.
+            if [ $((i % 20)) = 0 ]; then
+              echo "Free screen height after ${i} tries: $height; restarting the Dock again"
+              killall Dock || true
+            fi
+            sleep 1
+          done
+          echo "Free screen height: $height"
+          if ! [ "${height%.*}" -ge 720 ] 2>/dev/null; then
+            echo "Dock autohide: $(defaults read com.apple.dock autohide); Dock: $(pgrep -x Dock)"
+            echo "::error::the screen has no room for a 720 px window with the Dock hidden"
+            exit 1
+          fi
       # Screens 1 to 7 of phase 3: every state in both themes at two sizes, and the DOCKED ones at
       # 1024x720 too, where the sidebar docks; the runner's screen is 1024x768, so the details panel,
       # which docks from 1280, is shot as a sheet (docs/rust-phase3.md).
@@ -398,6 +468,10 @@ jobs:
           ONLY: ${{ needs.changes.outputs.shots }}
           SHARD: ${{ matrix.shard }}
           SHARD_COUNT: ${{ strategy.job-total }}
+          # The MIT move (docs/plan-mit-license.md 7.2, D19): these states in each other theme of
+          # the app, at 1000x680 only, on a run of every state.
+          THEMED: tasks-table workspace-changes-diff workspace-terminal-running
+          THEMES: ayu-light catppuccin-latte github-light gruvbox-light rose-pine-dawn solarized-light ayu-dark catppuccin-mocha dracula github-dark gruvbox-dark nord rose-pine solarized-dark tokyo-night
           STATES: >-
             tasks-table tasks-board board-hover-card add-task-dialog start-task remove-workspace
             clear-finished add-subtask task-context-menu skeleton toast empty filter-miss
@@ -423,6 +497,19 @@ jobs:
             start-task-branch-menu sidebar-blurred remove-workspace-anyway
             update-downloading update-ready update-failed settings-update-ready
             repo-trust-dialog
+            terminal-look terminal-cursors terminal-cursors-underline terminal-cursors-bar
+            terminal-selection terminal-alt-screen terminal-scrolled terminal-context-menu
+            terminal-scrollbar text-box-selection text-box-selection-unfocused
+            workspace-editor-scrollbar edit-form tree-rename settings-font-error send-back-long
+            workspace-docs-source workspace-docs-source-focused workspace-docs-rich
+            workspace-editor-long workspace-editor-wrapped changes-diff-side-by-side
+            changes-diff-collapsed changes-diff-wrapped changes-diff-deleted-only
+            changes-diff-focused changes-diff-scrollbar menu-keyboard button-focus
+            button-disabled-tooltip checkbox-states
+            code-bash code-c code-cpp code-css code-diff code-env code-gitcommit code-go
+            code-gomod code-gowork code-javascript code-jsdoc code-json code-jsonc code-markdown
+            code-markdown-inline code-python code-regex code-rust code-tsx code-typescript
+            code-yaml
           DOCKED: >-
             tasks-table workspace-terminal-running terminal-find workspace-terminal-needs-input
             workspace-terminal-review no-workspace workspace-preparing finished-wrap-up agents-grid
@@ -445,6 +532,19 @@ jobs:
             start-task-branch-menu sidebar-blurred remove-workspace-anyway
             update-downloading update-ready update-failed settings-update-ready
             repo-trust-dialog
+            terminal-look terminal-cursors terminal-cursors-underline terminal-cursors-bar
+            terminal-selection terminal-alt-screen terminal-scrolled terminal-context-menu
+            terminal-scrollbar text-box-selection text-box-selection-unfocused
+            workspace-editor-scrollbar edit-form tree-rename settings-font-error send-back-long
+            workspace-docs-source workspace-docs-source-focused workspace-docs-rich
+            workspace-editor-long workspace-editor-wrapped changes-diff-side-by-side
+            changes-diff-collapsed changes-diff-wrapped changes-diff-deleted-only
+            changes-diff-focused changes-diff-scrollbar menu-keyboard button-focus
+            button-disabled-tooltip checkbox-states
+            code-bash code-c code-cpp code-css code-diff code-env code-gitcommit code-go
+            code-gomod code-gowork code-javascript code-jsdoc code-json code-jsonc code-markdown
+            code-markdown-inline code-python code-regex code-rust code-tsx code-typescript
+            code-yaml
         run: |
           mkdir -p shots
           only=$ONLY
@@ -472,27 +572,63 @@ jobs:
             i=$((i + 1))
           done
           STATES=$mine
+          # One shot: the app in the state, then its window once the app says it is ready.
+          shoot() {
+            name=$1
+            size=$2
+            shift 2
+            out="$RUNNER_TEMP/shot.out"
+            target/release/natamux-app --shot "$@" --fake-daemon --size "$size" --hold 30 > "$out" &
+            pid=$!
+            # The app prints "shot: ready" once the state is in place (app/shots.rs). A fixed
+            # sleep shot a slow start too early.
+            for _ in $(seq 200); do
+              grep -qx 'shot: ready' "$out" && break
+              sleep 0.1
+            done
+            if ! grep -qx 'shot: ready' "$out"; then
+              echo "::error::the app did not get $name ready within 20 s"
+              exit 1
+            fi
+            id=$(window_of "$pid")
+            if [ -z "$id" ]; then
+              echo "::error::no window of the app for $name"
+              exit 1
+            fi
+            screencapture -x -o -l "$id" "shots/$name.png"
+            got=$(sips -g pixelWidth -g pixelHeight "shots/$name.png" |
+              awk '/pixelWidth/ { w = $2 } /pixelHeight/ { h = $2 } END { print w "x" h }')
+            if [ "$got" != "$size" ]; then
+              echo "::error::$name came out $got"
+              exit 1
+            fi
+            # Done with this state: no need to sit out --hold.
+            kill "$pid"
+            wait "$pid" || true
+          }
           for state in $STATES; do
             sizes="1000x680 800x560"
             case " $DOCKED " in *" $state "*) sizes="$sizes 1024x720" ;; esac
+            # A code sample is shot docked only, where the editor has the most room.
+            case "$state" in code-*) sizes="1024x720" ;; esac
             for size in $sizes; do
               for theme in light dark; do
-                name="$state-$theme-$size"
-                target/release/natamux-app --shot "$state" --fake-daemon --theme "$theme" --size "$size" --hold 30 &
-                pid=$!
-                sleep 3
-                id=$(window_of "$pid")
-                if [ -z "$id" ]; then
-                  echo "::error::no window of the app for $name"
-                  exit 1
-                fi
-                screencapture -x -o -l "$id" "shots/$name.png"
-                # Done with this state: no need to sit out --hold.
-                kill "$pid"
-                wait "$pid" || true
+                shoot "$state-$theme-$size" "$size" "$state" --theme "$theme"
               done
             done
           done
+          # The other themes: each pair of a theme and a state counts on from the states, so the
+          # shards share them.
+          if [ -z "$only" ]; then
+            for theme in $THEMES; do
+              for state in $THEMED; do
+                if [ $((i % SHARD_COUNT + 1)) = "$SHARD" ]; then
+                  shoot "$state-$theme-1000x680" 1000x680 "$state" --theme-name "$theme"
+                fi
+                i=$((i + 1))
+              done
+            done
+          fi
       - name: Compare shots with the baselines
         if: env.REPORT_ONLY == ''
         run: |
@@ -1019,6 +1155,7 @@ jobs:
       - changes
       - check
       - app-macos
+      - app-macos-tests
       - app-macos-intel
       - app-shots
       - shots

@@ -14,7 +14,7 @@ use terminal_view::TerminalView;
 use ui::prelude::*;
 use util::paths::PathStyle;
 
-use super::RemoteTerminal;
+use super::{RemoteTerminal, send_input};
 use crate::app::app_log;
 use crate::terminals::terminal_parser::{Job, lane};
 
@@ -52,7 +52,7 @@ impl RemoteTerminal {
                 TerminalEvent::Status(status) => {
                     if status == TerminalStatus::Open {
                         for text in self.pending.drain(..) {
-                            handle.input(text);
+                            send_input(&handle, text);
                         }
                     }
                     if status == TerminalStatus::Reconnecting
@@ -237,6 +237,8 @@ pub(super) fn watch_focus(
 ) -> [Subscription; 2] {
     let focus_in = cx.on_focus_in(focus, window, |this, _, cx| {
         if let Some(handle) = &this.handle {
+            #[cfg(test)]
+            super::sent::claimed();
             handle.claim();
         }
         this.set_focused(true, cx);

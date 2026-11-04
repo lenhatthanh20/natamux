@@ -1,0 +1,30 @@
+@import url("base.css") screen;
+@charset "utf-8";
+
+:root {
+  --accent: #3b82f6;
+  --gap: calc(1rem + 2px);
+}
+
+@media (min-width: 720px) and (prefers-color-scheme: dark) {
+  .cart > li:not(.empty):is(:hover, :focus-visible)::before {
+    content: "\2022";
+    color: var(--accent, red) !important;
+  }
+}
+
+@keyframes pulse {
+  from { opacity: 0.4; }
+  50% { opacity: 1; }
+  to { transform: translate(-50%, 0) rotate(45deg); }
+}
+
+input[type="number" i], a[href^='https'] {
+  font: italic 600 14px/1.5 "Inter", sans-serif;
+  margin: 0 auto -1px;
+}
+
+.card {
+  & .title { font-weight: bold; }
+  &:hover { background: rgb(0 0 0 / 10%); }
+}
