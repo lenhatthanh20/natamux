@@ -172,7 +172,7 @@ pub fn taken_path<'a>(
     status_of: &ProgressLookup,
 ) -> Option<&'a BranchPath> {
     branch.paths.iter().find(|path| {
-        path.stages.iter().any(|stage| {
+        path.all_stages().into_iter().any(|stage| {
             status_of(&stage.id).is_some_and(|status| {
                 status != StageStatus::Upcoming && status != StageStatus::NotTaken
             })
@@ -186,7 +186,7 @@ pub fn branch_status(branch: &StageBranch, status_of: &ProgressLookup) -> StageS
         let all_not_taken = branch
             .paths
             .iter()
-            .flat_map(|path| &path.stages)
+            .flat_map(BranchPath::all_stages)
             .all(|stage| status_of(&stage.id) == Some(StageStatus::NotTaken));
         return if all_not_taken {
             StageStatus::NotTaken
@@ -194,7 +194,7 @@ pub fn branch_status(branch: &StageBranch, status_of: &ProgressLookup) -> StageS
             StageStatus::Upcoming
         };
     };
-    let finished = taken.stages.iter().all(|stage| {
+    let finished = taken.all_stages().into_iter().all(|stage| {
         matches!(
             status_of(&stage.id),
             Some(StageStatus::Done | StageStatus::Skipped)

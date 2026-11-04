@@ -1,6 +1,7 @@
 //! Moving stages in the pipeline editor (`pipeline-editor/move.ts`): up and down, drag and drop,
 //! running side by side, and removing. Each edit takes the steps and gives new ones; when nothing
-//! can change, the steps come back equal.
+//! can change, the steps come back equal. A path holds steps too (stages and groups): an edit
+//! inside one path runs the same rules on the items of that path.
 
 use natamux_proto::stages::capabilities::stage_name;
 use natamux_proto::stages::schema::{Stage, StageBranch, StageGroup, Step};
@@ -8,16 +9,43 @@ use natamux_proto::stages::schema::{Stage, StageBranch, StageGroup, Step};
 use crate::stages::editor_draft::MAX_GROUP;
 use crate::stages::editor_find::{
     PathAt, Place, find_path, find_place, fits_in_path, insert_at, new_group_id, replace_at,
-    runs_in_group, stage_fits_in_path,
+    runs_in_group,
 };
 use crate::stages::editor_labels::branch_name;
 
-fn with_path_stages(branch: &StageBranch, path: usize, stages: Vec<Stage>) -> Step {
+fn with_path_stages(branch: &StageBranch, path: usize, stages: Vec<Step>) -> Step {
     let mut next = branch.clone();
     if let Some(item) = next.paths.get_mut(path) {
         item.stages = stages;
     }
     Step::Branch(next)
+}
+
+/// The items of the path that holds the place, when it is in one.
+fn path_items(steps: &[Step], place: Place) -> Option<&[Step]> {
+    let Some(Step::Branch(branch)) = steps.get(place.index) else {
+        return None;
+    };
+    Some(branch.paths.get(place.path?)?.stages.as_slice())
+}
+
+/// The steps with the items of the path that holds the place swapped for `items`.
+fn with_items(steps: &[Step], place: Place, items: Vec<Step>) -> Option<Vec<Step>> {
+    let (Some(path), Some(Step::Branch(branch))) = (place.path, steps.get(place.index)) else {
+        return None;
+    };
+    let changed = with_path_stages(branch, path, items);
+    Some(replace_at(steps, place.index, Some(changed)))
+}
+
+/// Runs `edit` on the items of the path that holds the place, or gives `None` when it is in none.
+fn in_path(
+    steps: &[Step],
+    place: Place,
+    edit: impl FnOnce(&[Step]) -> Vec<Step>,
+) -> Option<Vec<Step>> {
+    let items = edit(path_items(steps, place)?);
+    with_items(steps, place, items)
 }
 
 /// A group of one stage is no group: the stage runs on its own.
@@ -42,16 +70,10 @@ fn take_out(steps: &[Step], id: &str) -> Option<TakenOut> {
     let place = find_place(steps, id)?;
     let step = steps.get(place.index)?;
     let at = place.index;
-    if let (Some(path), Some(slot), Step::Branch(branch)) = (place.path, place.slot, step) {
-        let stages = &branch.paths.get(path)?.stages;
-        let taken = Step::Stage(stages.get(slot)?.clone());
-        let left = stages
-            .iter()
-            .enumerate()
-            .filter(|(each, _)| *each != slot)
-            .map(|(_, stage)| stage.clone())
-            .collect();
-        let rest = replace_at(steps, at, Some(with_path_stages(branch, path, left)));
+    if place.path.is_some() {
+        let inner = take_out(path_items(steps, place)?, id)?;
+        let rest = with_items(steps, place, inner.rest)?;
+        let taken = inner.taken;
         return Some(TakenOut { rest, taken, at });
     }
     if let (Some(lane), Step::Group(group)) = (place.lane, step) {
@@ -88,6 +110,11 @@ pub fn move_stage(steps: &[Step], id: &str, direction: i32) -> Vec<Step> {
     let Some(step) = steps.get(place.index) else {
         return same();
     };
+    // A lane of a group in a path moves as a lane does at the top, and leaves into the path.
+    if place.lane.is_some() && place.path.is_some() {
+        return in_path(steps, place, |items| move_stage(items, id, direction))
+            .unwrap_or_else(same);
+    }
     if let (Some(path), Some(slot), Step::Branch(branch)) = (place.path, place.slot, step) {
         return move_path_stage(steps, id, place.index, branch, (path, slot), direction);
     }
@@ -97,8 +124,8 @@ pub fn move_stage(steps: &[Step], id: &str, direction: i32) -> Vec<Step> {
     let Some(other) = shift(place.index, direction).and_then(|target| steps.get(target)) else {
         return same();
     };
-    // A stage next to a branch goes into its nearest path; it leaves by the same controls.
-    if let (Step::Branch(next_branch), Step::Stage(stage)) = (other, step)
+    // A stage or a group next to a branch goes into its nearest path; it leaves the same way.
+    if let Step::Branch(next_branch) = other
         && fits_in_path(step)
     {
         let Some(out) = take_out(steps, id) else {
@@ -121,9 +148,9 @@ pub fn move_stage(steps: &[Step], id: &str, direction: i32) -> Vec<Step> {
             .map(|item| item.stages.clone())
             .unwrap_or_default();
         let stages = if direction > 0 {
-            [vec![stage.clone()], held].concat()
+            [vec![out.taken], held].concat()
         } else {
-            [held, vec![stage.clone()]].concat()
+            [held, vec![out.taken]].concat()
         };
         return replace_at(&out.rest, at, Some(with_path_stages(branch, path, stages)));
     }
@@ -159,8 +186,8 @@ fn move_lane(
     insert_at(&out.rest, at, out.taken)
 }
 
-/// A stage of a path moves among the stages of its path, then into the next path, and out of the
-/// branch at the last one.
+/// A stage or a group of a path moves among the items of its path, then into the next path, and
+/// out of the branch at the last one.
 fn move_path_stage(
     steps: &[Step],
     id: &str,
@@ -181,17 +208,15 @@ fn move_path_stage(
     let Some(out) = take_out(steps, id) else {
         return steps.to_vec();
     };
-    let Step::Stage(stage) = out.taken.clone() else {
-        return steps.to_vec();
-    };
+    let item = out.taken;
     if let Some(Step::Branch(left)) = out.rest.get(out.at)
         && let Some(next) = shift(path, direction).filter(|next| *next < left.paths.len())
     {
         let held = left.paths[next].stages.clone();
         let joined = if direction < 0 {
-            [held, vec![stage]].concat()
+            [held, vec![item]].concat()
         } else {
-            [vec![stage], held].concat()
+            [vec![item], held].concat()
         };
         return replace_at(
             &out.rest,
@@ -200,7 +225,7 @@ fn move_path_stage(
         );
     }
     let at = if direction < 0 { out.at } else { out.at + 1 };
-    insert_at(&out.rest, at, Step::Stage(stage))
+    insert_at(&out.rest, at, item)
 }
 
 pub fn can_move(steps: &[Step], id: &str, direction: i32) -> bool {
@@ -215,7 +240,8 @@ pub enum Side {
 }
 
 /// Drag and drop: puts a stage or a group before or after another. Dropped on a stage of a group,
-/// a stage that may run side by side joins that group when it has room.
+/// a stage that may run side by side joins that group when it has room. A path takes stages and
+/// groups.
 pub fn drop_stage(steps: &[Step], id: &str, target_id: &str, side: Side) -> Vec<Step> {
     let same = || steps.to_vec();
     if id == target_id {
@@ -231,6 +257,11 @@ pub fn drop_stage(steps: &[Step], id: &str, target_id: &str, side: Side) -> Vec<
     let (Some(from), Some(to)) = (from, find_place(steps, target_id)) else {
         return same();
     };
+    // Within one path: the same rules on its items, so a group there keeps its lanes.
+    if from.path.is_some() && (from.index, from.path) == (to.index, to.path) {
+        return in_path(steps, from, |items| drop_stage(items, id, target_id, side))
+            .unwrap_or_else(same);
+    }
     // Within one group: only the lanes change.
     if let (Some(from_lane), Some(_), Some(Step::Group(group))) =
         (from.lane, to.lane, steps.get(from.index))
@@ -258,34 +289,22 @@ pub fn drop_stage(steps: &[Step], id: &str, target_id: &str, side: Side) -> Vec<
     let Some(out) = take_out(steps, id) else {
         return same();
     };
-    let Some(place) = find_place(&out.rest, target_id) else {
-        return same();
-    };
-    let Some(host) = out.rest.get(place.index) else {
-        return same();
-    };
-    drop_beside(&out, host, place, side).unwrap_or_else(same)
+    drop_beside(&out.rest, &out.taken, target_id, side).unwrap_or_else(same)
 }
 
-/// The steps with the taken stage next to the target, or `None` to leave the steps as they were.
-fn drop_beside(out: &TakenOut, host: &Step, place: Place, side: Side) -> Option<Vec<Step>> {
-    let before = side == Side::Before;
-    if let (Some(path), Some(slot), Step::Branch(branch)) = (place.path, place.slot, host) {
-        let Step::Stage(stage) = &out.taken else {
-            return None;
-        };
-        if !stage_fits_in_path(stage) {
+/// The rest with the taken step next to the target, or `None` to leave the steps as they were.
+fn drop_beside(rest: &[Step], taken: &Step, target_id: &str, side: Side) -> Option<Vec<Step>> {
+    let place = find_place(rest, target_id)?;
+    if place.path.is_some() {
+        if !fits_in_path(taken) {
             return None;
         }
-        let mut stages = branch.paths.get(path)?.stages.clone();
-        stages.insert(if before { slot } else { slot + 1 }, stage.clone());
-        return Some(replace_at(
-            &out.rest,
-            place.index,
-            Some(with_path_stages(branch, path, stages)),
-        ));
+        let items = drop_beside(path_items(rest, place)?, taken, target_id, side)?;
+        return with_items(rest, place, items);
     }
-    if let (Some(lane), Step::Group(group), Step::Stage(stage)) = (place.lane, host, &out.taken)
+    let host = rest.get(place.index)?;
+    let before = side == Side::Before;
+    if let (Some(lane), Step::Group(group), Step::Stage(stage)) = (place.lane, host, taken)
         && runs_in_group(stage.kind)
         && group.parallel.len() < MAX_GROUP
     {
@@ -295,12 +314,12 @@ fn drop_beside(out: &TakenOut, host: &Step, place: Place, side: Side) -> Option<
             parallel,
             ..group.clone()
         });
-        return Some(replace_at(&out.rest, place.index, Some(joined)));
+        return Some(replace_at(rest, place.index, Some(joined)));
     }
     Some(insert_at(
-        &out.rest,
+        rest,
         if before { place.index } else { place.index + 1 },
-        out.taken.clone(),
+        taken.clone(),
     ))
 }
 
@@ -309,10 +328,7 @@ fn drop_into_path(steps: &[Step], id: &str, into: PathAt) -> Vec<Step> {
     let (Some(target), Some(out)) = (steps.get(into.index), take_out(steps, id)) else {
         return same();
     };
-    let Step::Stage(stage) = &out.taken else {
-        return same();
-    };
-    if !stage_fits_in_path(stage) {
+    if !fits_in_path(&out.taken) {
         return same();
     }
     let Some(at) = out.rest.iter().position(|step| step.id() == target.id()) else {
@@ -326,7 +342,7 @@ fn drop_into_path(steps: &[Step], id: &str, into: PathAt) -> Vec<Step> {
         .get(into.path)
         .map(|path| path.stages.clone())
         .unwrap_or_default();
-    stages.push(stage.clone());
+    stages.push(out.taken);
     replace_at(
         &out.rest,
         at,
@@ -334,14 +350,15 @@ fn drop_into_path(steps: &[Step], id: &str, into: PathAt) -> Vec<Step> {
     )
 }
 
-/// Why a stage cannot run alongside the stage above, or `None` when it can.
+/// Why a stage cannot run alongside the stage above, or `None` when it can. In a path, the stage
+/// above is the item above it in that path.
 pub fn join_problem(steps: &[Step], id: &str) -> Option<String> {
     let place = find_place(steps, id);
+    if let Some(items) = place.and_then(|place| path_items(steps, place)) {
+        return join_problem(items, id);
+    }
     if place.is_some_and(|place| place.lane.is_some()) {
         return Some("It runs alongside other stages already".to_string());
-    }
-    if place.is_some_and(|place| place.path.is_some()) {
-        return Some("A path holds single stages only".to_string());
     }
     let (Some(place), Some(Step::Stage(stage))) = (place, place.and_then(|p| steps.get(p.index)))
     else {
@@ -370,8 +387,16 @@ pub fn join_problem(steps: &[Step], id: &str) -> Option<String> {
 }
 
 /// Makes a stage run alongside the stage above: it joins the group above, or makes a new group of
-/// the two.
+/// the two. In a path, the stage above is the item above it in that path.
 pub fn join_above(steps: &[Step], id: &str) -> Vec<Step> {
+    find_place(steps, id)
+        .and_then(|place| in_path(steps, place, |items| join_in(items, id, steps)))
+        .unwrap_or_else(|| join_in(steps, id, steps))
+}
+
+/// `join_above` in one list: the pipeline or the items of a path. A new group's id is one that no
+/// step of `all` (the whole pipeline) uses.
+fn join_in(steps: &[Step], id: &str, all: &[Step]) -> Vec<Step> {
     let same = || steps.to_vec();
     let Some(place) = find_place(steps, id) else {
         return same();
@@ -392,7 +417,7 @@ pub fn join_above(steps: &[Step], id: &str) -> Vec<Step> {
             ..group.clone()
         }),
         Step::Stage(first) => Step::Group(StageGroup {
-            id: new_group_id(steps, &first.id),
+            id: new_group_id(all, &first.id),
             name: None,
             parallel: vec![first.clone(), stage.clone()],
         }),
@@ -401,13 +426,16 @@ pub fn join_above(steps: &[Step], id: &str) -> Vec<Step> {
     replace_at(&rest, place.index - 1, Some(joined))
 }
 
-/// Takes a stage out of its group; it runs right after the group.
+/// Takes a stage out of its group; it runs right after the group, also inside a path.
 pub fn run_alone(steps: &[Step], id: &str) -> Vec<Step> {
     let Some(place) = find_place(steps, id) else {
         return steps.to_vec();
     };
     if place.lane.is_none() {
         return steps.to_vec();
+    }
+    if let Some(alone) = in_path(steps, place, |items| run_alone(items, id)) {
+        return alone;
     }
     match take_out(steps, id) {
         Some(out) => insert_at(&out.rest, out.at + 1, out.taken),
@@ -422,3 +450,7 @@ pub fn remove_stage(steps: &[Step], id: &str) -> Vec<Step> {
 #[cfg(test)]
 #[path = "editor_moves_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "editor_moves_path_tests.rs"]
+mod path_tests;

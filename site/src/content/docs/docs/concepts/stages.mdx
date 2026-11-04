@@ -359,6 +359,27 @@ For example, after Plan: a small change goes the Implement way, and a change tha
 
 If `plan.md` has "small" under `## Size`, the task goes Implement, Testing, and then on. Review never starts. If not, and `.no-review` does not exist, it goes the Review PR way and never starts Implement or Testing.
 
+A path can also run a group side by side, as a step of its own. Here the bug path reproduces and investigates at the same time, then fixes when both are finished:
+
+```json
+{
+  "id": "bug",
+  "when": { "type": "output", "file": "context.md", "contains": "bug" },
+  "stages": [
+    {
+      "id": "triage",
+      "parallel": [
+        { "id": "reproduce", "kind": "agent", "gate": "auto", "output": "repro.md" },
+        { "id": "investigate", "kind": "agent", "gate": "auto", "output": "investigate.md" }
+      ]
+    },
+    { "id": "fix", "kind": "agent", "gate": "auto" }
+  ]
+}
+```
+
+The group follows the rules of any group: 2 to 4 stages, agent and manual stages only. A branch inside a path is not supported. The web dashboard does not show a group inside a path yet; use the desktop app.
+
 ### Conditions
 
 | Type | Holds when |
@@ -378,7 +399,7 @@ If `plan.md` has "small" under `## Size`, the task goes Implement, Testing, and 
 
 1. Open **Project settings → Stages** and pick the step the branch comes after.
 2. Click **Add branch**. Give it a **Branch name**.
-3. In each path card, set the **Path name**, the condition (**File has text** or **Command succeeds**, **holds** or **does not hold**), and add stages from the list.
+3. In each path card, set the **Path name**, the condition (**File has text** or **Command succeeds**, **holds** or **does not hold**), and add stages from the list. **Run alongside the stage above** on a stage of a path makes a group in the path.
 4. **Add path** adds a path (up to 4). **Make this the Otherwise path** is on the last path.
 
 </Steps>
@@ -388,7 +409,7 @@ The chart shows the branch as an **If** node with one lane per path, each with i
 Natamux shows an error on the branch and keeps **Save** off when:
 
 - a path has no stage, or a path that is not the last has no condition;
-- a path holds a group, another branch, a context stage or a release stage;
+- a path holds another branch, a context stage or a release stage, or a group that breaks the group rules;
 - the branch is the first step, or comes right after another branch (put a stage between them);
 - a file name is not a markdown file, or a text or command is empty;
 - a branch has only one path left with a condition: turn on a stage in another path, or remove the branch.

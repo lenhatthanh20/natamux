@@ -177,6 +177,18 @@ mod of_a_branch {
     }
 
     #[test]
+    fn warns_about_two_code_changing_stages_of_a_group_in_a_path() {
+        let agent = |id: &str| json!({"id": id, "kind": "agent", "gate": "auto"});
+        let triage = json!({"id": "triage", "parallel": [agent("repro"), agent("look")]});
+        let found = issues(branch(
+            json!({"id": "bug", "when": when(), "stages": [triage]}),
+            other(),
+        ));
+        assert_eq!(stages_of(&found), [Some("triage")]);
+        assert_eq!(found[0].level, IssueLevel::Warning);
+    }
+
+    #[test]
     fn names_the_branch_of_a_rule_about_its_paths_or_conditions() {
         let first = json!({"id": "small", "stages": [{"id": "implement", "kind": "agent", "gate": "auto"}]});
         let second = json!({"id": "other", "when": when(), "stages": [manual("qa")]});

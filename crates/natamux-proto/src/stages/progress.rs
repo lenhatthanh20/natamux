@@ -5,7 +5,7 @@ use serde_json::{Map, Value};
 use crate::events::task_event::TaskEvent;
 use crate::stages::capabilities::stage_name;
 use crate::stages::position::step_index;
-use crate::stages::schema::{BranchPath, Gate, Stage, StageKind, Step};
+use crate::stages::schema::{BranchPath, Gate, Stage, StageGroup, StageKind, Step};
 use crate::tasks::task::{Task, TaskState};
 
 /// `not-taken`: a stage of a branch where the task took another path, or none.
@@ -147,7 +147,11 @@ pub fn stage_progress(task: &Task, events: &[TaskEvent], steps: &[Step]) -> Vec<
                     path.stages
                         .iter()
                         .enumerate()
-                        .map(move |(place, stage)| (stage, Some((path, place))))
+                        .flat_map(move |(place, item)| {
+                            item.stages()
+                                .into_iter()
+                                .map(move |stage| (stage, Some((path, place))))
+                        })
                 })
                 .collect(),
             other => other
@@ -180,6 +184,21 @@ struct Where<'a> {
     current: Option<usize>,
 }
 
+/// The group a stage runs in: its step, or the group of the path that holds it.
+fn group_of<'a>(
+    step: &'a Step,
+    on_path: Option<(&'a BranchPath, usize)>,
+) -> Option<&'a StageGroup> {
+    let item = match on_path {
+        Some((path, place)) => path.stages.get(place)?,
+        None => step,
+    };
+    match item {
+        Step::Group(group) => Some(group),
+        _ => None,
+    }
+}
+
 fn status_of(
     ctx: &Where,
     stage: &Stage,
@@ -187,7 +206,7 @@ fn status_of(
     skipped: bool,
 ) -> (StageStatus, Option<TaskState>) {
     let task = ctx.task;
-    let lane = if matches!(ctx.step, Step::Group(_)) {
+    let lane = if group_of(ctx.step, on_path).is_some() {
         task.lanes
             .get(&stage.id)
             .and_then(|value| serde_json::from_value::<TaskState>(value.clone()).ok())
@@ -195,7 +214,7 @@ fn status_of(
         Some(task.state)
     };
     let here =
-        on_path.and_then(|(path, _)| path.stages.iter().position(|each| each.id == task.stage));
+        on_path.and_then(|(path, _)| path.stages.iter().position(|item| item.holds(&task.stage)));
     let place = on_path.map(|(_, place)| place);
     let before = ctx.current.is_some_and(|current| ctx.index < current);
     let after = ctx.current.is_none_or(|current| ctx.index > current);
@@ -265,10 +284,7 @@ fn progress_of(ctx: &Where, stage: &Stage, on_path: Option<(&BranchPath, usize)>
         kind: stage.kind,
         gate: stage.gate,
         output: stage.output.clone(),
-        group: match step {
-            Step::Group(group) => Some(group.id.clone()),
-            _ => None,
-        },
+        group: group_of(step, on_path).map(|group| group.id.clone()),
         path: path.map(|path| path.id.clone()),
         because: chosen
             .and_then(|event| payload_str(event, "because"))
@@ -332,13 +348,19 @@ fn entered_into<'a>(
         (Some(path), Some(place)) if place > 0 => path.stages.get(place - 1),
         _ => None,
     };
-    let into: Vec<String> = if path.is_none() {
+    let ids = |step: &Step| -> Vec<String> {
         step.stages().iter().map(|each| each.id.clone()).collect()
-    } else {
-        vec![stage.id.clone()]
+    };
+    // A stage is entered with the stages of its group, if it has one.
+    let into: Vec<String> = match (path, place) {
+        (Some(path), Some(place)) => path
+            .stages
+            .get(place)
+            .map_or_else(|| vec![stage.id.clone()], ids),
+        _ => ids(step),
     };
     let from = match previous {
-        Some(previous) => vec![previous.id.clone()],
+        Some(previous) => ids(previous),
         None => enders_of(steps, ctx.index, &task.paths),
     };
     entered_at(events, &into, &from)

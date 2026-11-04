@@ -4,7 +4,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use natamux_proto::stages::schema::{Condition, Gate, Stage, StageKind};
+use natamux_proto::stages::schema::{Condition, Gate, Stage, StageKind, Step};
 
 use super::*;
 use crate::checks::Ran;
@@ -72,7 +72,7 @@ fn path(id: &str, when: Option<Condition>, not: bool) -> BranchPath {
         name: None,
         when,
         not: not.then_some(true),
-        stages: vec![Stage::new(id, StageKind::Agent, Gate::Auto)],
+        stages: vec![Step::Stage(Stage::new(id, StageKind::Agent, Gate::Auto))],
     }
 }
 

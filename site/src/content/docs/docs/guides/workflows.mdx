@@ -336,7 +336,7 @@ The review of the teammate's pull request and the development of your own change
 The branch rules from [Paths with a condition](/docs/concepts/stages/#paths-with-a-condition) hold:
 
 - The branch has 2 paths. The last one has no `when`, so it is the **Otherwise** path.
-- The branch is not the first step and does not follow another branch. A path holds no group, branch, context or release stage.
+- The branch is not the first step and does not follow another branch. A path holds no branch, context or release stage. It may hold a group of stages that run side by side.
 - Every stage id is unique in the whole file, so each stage is on exactly one path.
 - The condition reads only the lines under `## Stage`. A marker the agent quotes under `## Evidence` does not count.
 

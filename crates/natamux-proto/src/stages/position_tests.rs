@@ -6,6 +6,10 @@ fn stage(id: &str, kind: StageKind, gate: Gate) -> Stage {
     Stage::new(id, kind, gate)
 }
 
+fn one(id: &str, kind: StageKind, gate: Gate) -> Step {
+    Step::Stage(stage(id, kind, gate))
+}
+
 fn small() -> BranchPath {
     BranchPath {
         id: "small".into(),
@@ -17,8 +21,8 @@ fn small() -> BranchPath {
         }),
         not: None,
         stages: vec![
-            stage("implement", StageKind::Agent, Gate::Auto),
-            stage("testing", StageKind::Testing, Gate::Auto),
+            one("implement", StageKind::Agent, Gate::Auto),
+            one("testing", StageKind::Testing, Gate::Auto),
         ],
     }
 }
@@ -31,7 +35,7 @@ fn pr_review() -> BranchPath {
             run: "test -f .no-review".into(),
         }),
         not: Some(true),
-        stages: vec![stage("review", StageKind::Review, Gate::Manual)],
+        stages: vec![one("review", StageKind::Review, Gate::Manual)],
     }
 }
 
@@ -99,7 +103,8 @@ fn finds_the_stages_of_its_paths_and_the_path_of_a_stage() {
         Some(PathPlace {
             branch: &branch,
             path: &small,
-            index: 1
+            index: 1,
+            item: &small.stages[1],
         })
     );
     assert_eq!(
@@ -107,11 +112,71 @@ fn finds_the_stages_of_its_paths_and_the_path_of_a_stage() {
         Some(PathPlace {
             branch: &branch,
             path: &pr_review,
-            index: 0
+            index: 0,
+            item: &pr_review.stages[0],
         })
     );
     assert_eq!(path_of(&steps, "plan"), None);
     assert_eq!(path_of(&steps, "nope"), None);
+}
+
+/// A branch whose bug path runs Reproduce and Investigate side by side, then Fix.
+fn with_path_group() -> Vec<Step> {
+    let triage = Step::Group(StageGroup {
+        id: "triage".into(),
+        name: None,
+        parallel: vec![
+            stage("repro", StageKind::Agent, Gate::Auto),
+            stage("look", StageKind::Agent, Gate::Manual),
+        ],
+    });
+    let bug = BranchPath {
+        id: "bug".into(),
+        name: None,
+        when: Some(Condition::Command {
+            run: "true".into(),
+        }),
+        not: None,
+        stages: vec![triage, one("fix", StageKind::Agent, Gate::Auto)],
+    };
+    let other = BranchPath {
+        id: "other".into(),
+        name: None,
+        when: None,
+        not: None,
+        stages: vec![one("plan", StageKind::Agent, Gate::Manual)],
+    };
+    vec![
+        one("spec", StageKind::Agent, Gate::Manual),
+        Step::Branch(StageBranch {
+            id: "kind".into(),
+            name: None,
+            paths: vec![bug, other],
+        }),
+    ]
+}
+
+#[test]
+fn finds_a_group_inside_a_path_and_runs_it_as_a_whole() {
+    let steps = with_path_group();
+    assert_eq!(step_index(&steps, "triage"), Some(1));
+    assert_eq!(step_index(&steps, "look"), Some(1));
+    for id in ["triage", "repro", "look"] {
+        assert!(
+            matches!(step_to_run(&steps, id), Some(Step::Group(group)) if group.id == "triage")
+        );
+    }
+    assert!(matches!(step_to_run(&steps, "fix"), Some(Step::Stage(stage)) if stage.id == "fix"));
+    assert!(matches!(step_to_run(&steps, "kind"), Some(Step::Branch(_))));
+    let repro = path_of(&steps, "repro").unwrap();
+    let look = path_of(&steps, "look").unwrap();
+    assert_eq!((repro.path.id.as_str(), repro.index), ("bug", 0));
+    assert_eq!(look.index, 0);
+    assert_eq!(path_of(&steps, "triage").unwrap().index, 0);
+    assert_eq!(path_of(&steps, "fix").unwrap().index, 1);
+    let taken = paths(json!({"kind": "other"}));
+    assert!(is_not_taken(&steps, &taken, "look"));
+    assert!(!is_not_taken(&steps, &taken, "plan"));
 }
 
 #[test]

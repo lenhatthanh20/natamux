@@ -17,7 +17,8 @@ pub fn stages_before(steps: &[Step], id: &str, paths: Option<&Paths>) -> Vec<Sta
         .flat_map(|step| taken_stages(step, paths))
         .collect();
     if let Some(place) = path_of(steps, id) {
-        before.extend(place.path.stages.iter().take(place.index).cloned());
+        let items = place.path.stages.iter().take(place.index);
+        before.extend(items.flat_map(Step::stages).cloned());
     }
     before
 }

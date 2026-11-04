@@ -81,10 +81,21 @@ fn stages_fit(value: Option<&Value>) -> bool {
         .is_some_and(|stages| stages.iter().all(is_stage_shape))
 }
 
-fn is_path_shape(value: &Value) -> bool {
-    value.as_object().is_some_and(|path| {
-        path.get("id").is_some_and(Value::is_string) && stages_fit(path.get("stages"))
+fn is_group_shape(value: &Value) -> bool {
+    value.as_object().is_some_and(|group| {
+        group.get("id").is_some_and(Value::is_string) && stages_fit(group.get("parallel"))
     })
+}
+
+/// A path holds stages and side-by-side groups; a branch in a path is refused here.
+fn is_item_shape(value: &Value) -> bool {
+    is_stage_shape(value) || is_group_shape(value)
+}
+
+fn is_path_shape(value: &Value) -> bool {
+    let items = value.get("stages").and_then(Value::as_array);
+    value.get("id").is_some_and(Value::is_string)
+        && items.is_some_and(|items| items.iter().all(is_item_shape))
 }
 
 fn kinds_text() -> String {
@@ -102,15 +113,13 @@ fn read_step(index: usize, value: &Value) -> Result<Step, String> {
                 && paths.is_some_and(|paths| paths.iter().all(is_path_shape));
             if !fits {
                 return Err(format!(
-                    "stages, item {number}: a branch needs an id and paths, each with an id and a list of stages. A stage needs an id, a kind ({}) and a gate (manual or auto).",
+                    "stages, item {number}: a branch needs an id and paths, each with an id and a list of stages or side-by-side groups. A stage needs an id, a kind ({}) and a gate (manual or auto).",
                     kinds_text()
                 ));
             }
             true
         }
-        Some(step) if step.contains_key("parallel") => {
-            step.get("id").is_some_and(Value::is_string) && stages_fit(step.get("parallel"))
-        }
+        Some(step) if step.contains_key("parallel") => is_group_shape(value),
         _ => is_stage_shape(value),
     };
     if !fits {

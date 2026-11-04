@@ -312,11 +312,11 @@ fn draws_four_paths_as_four_lanes() {
                 run: format!("test {at}"),
             }),
             not: None,
-            stages: vec![Stage::new(
+            stages: vec![Step::Stage(Stage::new(
                 &format!("stage-{id}"),
                 StageKind::Agent,
                 Gate::Auto,
-            )],
+            ))],
         });
     }
     let branch = natamux_proto::stages::schema::StageBranch {

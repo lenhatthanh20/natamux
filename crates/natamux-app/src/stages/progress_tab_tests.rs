@@ -97,14 +97,17 @@ fn branch_steps(taken: bool) -> Vec<Step> {
         name: Some("First".into()),
         when: Some(Condition::Command { run: "true".into() }),
         not: None,
-        stages: ["one", "two", "three"].into_iter().map(stage).collect(),
+        stages: ["one", "two", "three"]
+            .into_iter()
+            .map(|id| Step::Stage(stage(id)))
+            .collect(),
     };
     let other = BranchPath {
         id: "other".into(),
         name: None,
         when: Some(Condition::Command { run: "true".into() }),
         not: None,
-        stages: vec![stage("other")],
+        stages: vec![Step::Stage(stage("other"))],
     };
     let paths = if taken {
         vec![first, other]

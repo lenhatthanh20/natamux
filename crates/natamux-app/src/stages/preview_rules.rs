@@ -252,7 +252,20 @@ pub fn branch_note_head(branch: &StageBranch) -> String {
 /// One path in the words under the chart: "Small change · plan.md "Size" contains "small" →
 /// Implement, Automated tests".
 pub fn path_note(path: &BranchPath) -> String {
-    let stages: Vec<String> = path.stages.iter().map(stage_name).collect();
+    // A group in the path reads as its stages joined, as the stage chip of a card does.
+    let stages: Vec<String> = path
+        .stages
+        .iter()
+        .map(|item| match item {
+            Step::Stage(stage) => stage_name(stage),
+            other => other
+                .stages()
+                .into_iter()
+                .map(stage_name)
+                .collect::<Vec<_>>()
+                .join(" \u{2225} "),
+        })
+        .collect();
     format!(
         "{} \u{b7} {} \u{2192} {}",
         path_name(path),

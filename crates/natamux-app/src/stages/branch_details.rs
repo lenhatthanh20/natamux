@@ -385,7 +385,12 @@ fn stages_of_path(
     cx: &App,
 ) -> impl IntoElement {
     let hover = cx.theme().colors().ghost_element_hover;
-    let rows = card.path.stages.iter().map(|stage| {
+    // A group's stages are listed one by one, each marked as running side by side.
+    let stages = card.path.stages.iter().flat_map(|item| {
+        let lane = item.is_group();
+        item.stages().into_iter().map(move |stage| (stage, lane))
+    });
+    let rows = stages.map(|(stage, lane)| {
         let (pipeline, id) = (pipeline.clone(), stage.id.clone());
         h_flex()
             .id(SharedString::from(format!("path-stage-{}", stage.id)))
@@ -402,6 +407,13 @@ fn stages_of_path(
                     .color(Color::Muted),
             )
             .child(Label::new(stage_name(stage)).truncate())
+            .when(lane, |this| {
+                this.child(
+                    Label::new("side by side")
+                        .size(LabelSize::XSmall)
+                        .color(Color::Muted),
+                )
+            })
     });
     let (add_pipeline, path_id) = (pipeline.clone(), card.path.id.clone());
     let choices: Vec<String> = catalog_choices(steps)

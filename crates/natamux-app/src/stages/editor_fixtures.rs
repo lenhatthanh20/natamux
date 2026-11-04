@@ -2,7 +2,8 @@
 
 use natamux_proto::stages::resolve::step_refs_of;
 use natamux_proto::stages::schema::{
-    BranchPath, Condition, Gate, PathRef, Stage, StageBranch, StageKind, Step, StepRef,
+    BranchPath, Condition, Gate, PathRef, Stage, StageBranch, StageGroup, StageKind, Step,
+    StepRef,
 };
 
 pub fn ids(steps: &[Step]) -> Vec<StepRef> {
@@ -37,8 +38,8 @@ pub fn branched() -> Vec<Step> {
         }),
         not: None,
         stages: vec![
-            Stage::new("implement", StageKind::Agent, Gate::Auto),
-            Stage::new("testing", StageKind::Testing, Gate::Auto),
+            stage_step("implement", StageKind::Agent, Gate::Auto),
+            stage_step("testing", StageKind::Testing, Gate::Auto),
         ],
     };
     let review = BranchPath {
@@ -48,7 +49,7 @@ pub fn branched() -> Vec<Step> {
             run: "test -f .no-review".into(),
         }),
         not: Some(true),
-        stages: vec![Stage::new("review", StageKind::Review, Gate::Manual)],
+        stages: vec![stage_step("review", StageKind::Review, Gate::Manual)],
     };
     vec![
         stage_step("context", StageKind::Context, Gate::Manual),
@@ -64,12 +65,38 @@ pub fn branched() -> Vec<Step> {
 
 /// The branch of `branched` as a task keeps it, with these stages in its two paths.
 pub fn branch_ref(small: &[&str], review: &[&str]) -> StepRef {
-    let path = |id: &str, stages: &[&str]| PathRef {
+    branch_refs(stage_refs(small), stage_refs(review))
+}
+
+fn stage_refs(ids: &[&str]) -> Vec<StepRef> {
+    ids.iter().map(|id| sid(id)).collect()
+}
+
+/// `branch_ref` with stages and groups in its paths.
+pub fn branch_refs(small: Vec<StepRef>, review: Vec<StepRef>) -> StepRef {
+    let path = |id: &str, stages: Vec<StepRef>| PathRef {
         id: id.to_string(),
-        stages: stages.iter().map(|stage| stage.to_string()).collect(),
+        stages,
     };
     StepRef::Branch {
         id: "after-plan".into(),
         paths: vec![path("small", small), path("pr-review", review)],
     }
+}
+
+/// `branched` with Implement and Docs side by side (group "build") at the start of the Small
+/// change path, then Testing.
+pub fn path_grouped() -> Vec<Step> {
+    let mut steps = branched();
+    if let Some(Step::Branch(branch)) = steps.get_mut(2) {
+        branch.paths[0].stages[0] = Step::Group(StageGroup {
+            id: "build".into(),
+            name: None,
+            parallel: vec![
+                Stage::new("implement", StageKind::Agent, Gate::Auto),
+                Stage::new("docs", StageKind::Agent, Gate::Auto),
+            ],
+        });
+    }
+    steps
 }

@@ -3,7 +3,8 @@
 use natamux_proto::tasks::task::{Task, TaskState};
 
 use crate::sidebar::sidebar_tree::{
-    PathRef, StepRef, lane_state, stage_name, state_label, step_holds, steps_of, urgent_state,
+    PathRef, StepRef, lane_state, stage_name, stages_of_ref, state_label, step_holds, steps_of,
+    urgent_state,
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -39,6 +40,15 @@ pub fn comet_of(task: &Task) -> Comet {
     let current = usize::try_from(index).ok().and_then(|at| steps.get(at));
     let lanes: &[String] = match current {
         Some(StepRef::Group { parallel, .. }) => parallel,
+        // A group inside a path, while the task is in it.
+        Some(StepRef::Branch { paths, .. }) => paths
+            .iter()
+            .flat_map(|path| &path.stages)
+            .find_map(|item| match item {
+                StepRef::Group { id, parallel } if *id == task.stage => Some(parallel.as_slice()),
+                _ => None,
+            })
+            .unwrap_or(&[]),
         _ => &[],
     };
     let open: Vec<&String> = lanes
@@ -101,13 +111,21 @@ fn path_marks(task: &Task, index: isize, id: &str, paths: &[PathRef], at: usize)
         .filter(|path| chosen.is_none_or(|chosen| path.id == chosen));
     taken
         .flat_map(|path| {
-            let here = path.stages.iter().position(|each| *each == task.stage);
+            let here = path
+                .stages
+                .iter()
+                .position(|item| step_holds(item, &task.stage));
             path.stages
                 .iter()
                 .enumerate()
-                .map(move |(place, stage)| (here, place, stage))
+                .flat_map(move |(place, item)| {
+                    let lane = matches!(item, StepRef::Group { .. });
+                    stages_of_ref(item)
+                        .into_iter()
+                        .map(move |stage| (here, place, stage, lane))
+                })
         })
-        .map(|(here, place, stage)| {
+        .map(|(here, place, stage, lane)| {
             let state = match here {
                 Some(here) if at as isize == index && place != here => {
                     if place < here {
@@ -116,7 +134,7 @@ fn path_marks(task: &Task, index: isize, id: &str, paths: &[PathRef], at: usize)
                         "not started".to_owned()
                     }
                 }
-                _ => mark(task, index, at, None),
+                _ => mark(task, index, at, lane.then_some(stage)),
             };
             format!("{} {state}", stage_name(stage))
         })
@@ -208,6 +226,25 @@ mod tests {
         assert_eq!(
             comet.summary,
             "Plan done, Implement done, Automated tests running, Release not started"
+        );
+    }
+
+    #[test]
+    fn speaks_for_a_group_inside_the_path_by_its_most_urgent_lane() {
+        let stages = json!(["plan", {"id": "kind", "paths": [
+            {"id": "bug", "stages": [{"id": "triage", "parallel": ["repro", "look"]}, "fix-it"]},
+            {"id": "other", "stages": ["notes"]}
+        ]}, "release"]);
+        let comet = comet_of(&make_task(json!({
+            "stages": stages, "stage": "triage", "paths": {"kind": "bug"},
+            "lanes": {"repro": "running", "look": "failed"}
+        })));
+        assert_eq!((comet.at, comet.of), (2, 3));
+        assert_eq!(comet.stage.as_deref(), Some("Look"));
+        assert_eq!(comet.state, TaskState::Failed);
+        assert_eq!(
+            comet.summary,
+            "Plan done, Repro running, Look failed, Fix it not started, Release not started"
         );
     }
 
