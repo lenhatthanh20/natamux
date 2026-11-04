@@ -77,11 +77,7 @@ fn rows_of(editor: &Entity<Editor>, cx: &mut VisualTestContext) -> String {
         let count = snapshot.max_point().row().0 as usize + 1;
         // (letter, first line, last line, rows)
         let mut runs: Vec<(char, Option<u32>, Option<u32>, u32)> = Vec::new();
-        for (row, info) in snapshot
-            .row_infos(DisplayRow(0))
-            .take(count)
-            .enumerate()
-        {
+        for (row, info) in snapshot.row_infos(DisplayRow(0)).take(count).enumerate() {
             let letter = if snapshot.is_block_line(DisplayRow(row as u32)) {
                 'B'
             } else {
@@ -219,7 +215,14 @@ fn record(
     cx: &mut VisualTestContext,
 ) {
     for (i, (mode, side_by_side, collapse)) in modes.iter().enumerate() {
-        show(view, &format!("{name} {mode}"), path, texts, (*side_by_side, *collapse), cx);
+        show(
+            view,
+            &format!("{name} {mode}"),
+            path,
+            texts,
+            (*side_by_side, *collapse),
+            cx,
+        );
         if i == 0 {
             rows.push(json!([name, "hunks", hunks(view, cx)]));
             rows.push(json!([name, "words", app_words(view, cx)]));
@@ -403,7 +406,15 @@ fn run(cx: &mut TestAppContext) -> Vec<Value> {
         rows.push(json!([name, "words, language first", first]));
     }
     for (name, path, texts) in random_cases() {
-        record(&mut rows, &view, &name, path, &texts, &[MODES[1], MODES[2]], cx);
+        record(
+            &mut rows,
+            &view,
+            &name,
+            path,
+            &texts,
+            &[MODES[1], MODES[2]],
+            cx,
+        );
         let first = words_language_first(path, &texts, cx);
         rows.push(json!([name, "words, language first", first]));
     }

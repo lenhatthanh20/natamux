@@ -127,7 +127,10 @@ fn selections(editor: &Entity<Editor>, cx: &mut VisualTestContext) -> Value {
 
 fn select(editor: &Entity<Editor>, from: (u32, u32), to: (u32, u32), cx: &mut VisualTestContext) {
     editor.update_in(cx, |editor, window, cx| {
-        let (from, to) = (text::Point::new(from.0, from.1), text::Point::new(to.0, to.1));
+        let (from, to) = (
+            text::Point::new(from.0, from.1),
+            text::Point::new(to.0, to.1),
+        );
         editor.change_selections(Default::default(), window, cx, |selections| {
             selections.select_ranges([from..to])
         });
@@ -177,10 +180,7 @@ fn show(view: &Entity<DiffView>, side_by_side: bool, cx: &mut VisualTestContext)
         row,
     };
     match left {
-        Some(left) => vec![
-            target("left", left, 1, cx),
-            target("right", right, 1, cx),
-        ],
+        Some(left) => vec![target("left", left, 1, cx), target("right", right, 1, cx)],
         None => vec![target("inline", right, 2, cx)],
     }
 }
@@ -289,10 +289,7 @@ fn cases(
     }
 
     select(editor, (4, 0), (4, 0), cx);
-    let (from, to) = (
-        at(target, row, 1, cx),
-        at(target, row + 1, 3, cx),
-    );
+    let (from, to) = (at(target, row, 1, cx), at(target, row + 1, 3, cx));
     down(from, none, 1, cx);
     record(rows, "drag", 1, target, cx);
     cx.simulate_mouse_move(to, MouseButton::Left, none);
