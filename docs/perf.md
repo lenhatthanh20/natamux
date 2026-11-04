@@ -51,6 +51,8 @@ The existing targets are in [plan-rust-migration.md, "Target numbers"](plan-rust
 | `event_ui_*` | each `Dashboard::apply` in `Dashboard::watch`, while 30 fake agents send 60 Activity, Usage, DiffStats, Terminals and task-list events a second for 10 s | the end of that update, so the observers it wakes are in it |
 | `event_draws_per_event` | the window's draws in the agents' 10 s, less the draws of 2 quiet seconds before | divided by the events |
 | `diff_click_*` | a file picked in the Changes tab (another file each run) | the next frame drawn |
+| `editor_type_5000_*` | each of 20 keys typed in a 5,000-line TypeScript file in the editor tab (cursor at its start) | the first frame drawn after the key |
+| `diff_open_10000_*` | a 10,000-line diff (about 140 hunks) picked in the Changes tab, after another file (the fake answers at once) | the first frame that draws it |
 | `resize_frame_p50_ms`, `resize_frame_p99_ms` | perf overlay frame times while the window steps 40 times between 1280×800 and 1100×700, 6 panes in the Agents grid | |
 | `palette_key_*` | the jump palette's query grows by one letter, 1,000 tasks | the next frame drawn |
 | `board_frame_*` | the board with Show finished, 300 Done tasks and the 200 open tasks of the event flows, told to draw again | frame start to the end of its draw (main-thread time) |

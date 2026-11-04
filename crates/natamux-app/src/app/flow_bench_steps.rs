@@ -1,5 +1,6 @@
 //! The flows of `--bench-flows`, in the order they run. The event flows run with `--bench-tasks`
-//! tasks (200), the board with 300 Done tasks more, and the palette with 1,000 tasks.
+//! tasks (200), the board with 300 Done tasks more, and the palette with 1,000 tasks. The big
+//! views (`flow_bench_big.rs`) run last.
 
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
@@ -66,6 +67,9 @@ pub(super) async fn all(
     fake_daemon::shared().grow_tasks(PALETTE_TASKS, 0);
     sleep(Duration::from_secs(1), cx).await;
     note("palette", palette(handle, cx).await);
+    // Last: they add a file and a change to the fake's reviewed task.
+    note("editor typing", super::big::editor_type(handle, cx).await);
+    note("diff open", super::big::diff_open(handle, cx).await);
     Ok(())
 }
 
