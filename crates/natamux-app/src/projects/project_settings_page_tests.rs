@@ -337,6 +337,7 @@ fn t15_tab_walks_the_stops_of_the_page_and_wraps(cx: &mut TestAppContext) {
         "row spec",
         "row kind",
         "row reproduce",
+        "row investigate",
         "row plan",
         "row test-spec",
         "row implement",

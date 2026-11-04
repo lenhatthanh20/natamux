@@ -84,8 +84,8 @@ fn focus_row(list: &Entity<StageList>, id: &str, cx: &mut VisualTestContext) {
     cx.run_until_parked();
 }
 
-const START: &str = "context spec kind[reproduce plan] build[test-spec implement] agent-review \
-                     security review release";
+const START: &str = "context spec kind[reproduce investigate plan] build[test-spec implement] \
+                     agent-review security review release";
 
 #[gpui::test]
 fn t26_the_fake_project_has_the_reference_pipeline(cx: &mut TestAppContext) {
@@ -110,13 +110,13 @@ fn t26_alt_up_and_alt_down_move_the_focused_row_and_keep_the_focus(cx: &mut Test
     assert_eq!(
         seen,
         [
-            "alt-up: context spec kind[reproduce plan] build[test-spec implement] security \
-             agent-review review release | focus Some(\"security\")",
-            "alt-up: context spec kind[reproduce plan] security build[test-spec implement] \
-             agent-review review release | focus Some(\"security\")",
-            "alt-down: context spec kind[reproduce plan] build[test-spec implement] security \
-             agent-review review release | focus Some(\"security\")",
-            "alt-down: context spec kind[reproduce plan] build[test-spec implement] \
+            "alt-up: context spec kind[reproduce investigate plan] build[test-spec implement] \
+             security agent-review review release | focus Some(\"security\")",
+            "alt-up: context spec kind[reproduce investigate plan] security build[test-spec \
+             implement] agent-review review release | focus Some(\"security\")",
+            "alt-down: context spec kind[reproduce investigate plan] build[test-spec implement] \
+             security agent-review review release | focus Some(\"security\")",
+            "alt-down: context spec kind[reproduce investigate plan] build[test-spec implement] \
              agent-review security review release | focus Some(\"security\")",
         ]
     );
@@ -151,9 +151,10 @@ fn t26_a_drop_puts_the_row_where_the_line_shows(cx: &mut TestAppContext) {
     assert_eq!(
         seen,
         [
-            "release context spec kind[reproduce plan] build[test-spec implement] agent-review \
-             security review | focus Some(\"release\")",
-            "release spec kind[reproduce plan] build[test-spec implement] agent-review security \
+            "release context spec kind[reproduce investigate plan] build[test-spec implement] \
+             agent-review security review | focus Some(\"release\")",
+            "release spec kind[reproduce investigate plan] build[test-spec implement] \
+             agent-review security \
              context review | writes 2",
         ]
     );
@@ -203,19 +204,22 @@ fn t26_the_stage_menu_moves_splits_joins_and_removes(cx: &mut TestAppContext) {
         seen,
         [
             format!("context up: {START}"),
-            "security up: context spec kind[reproduce plan] build[test-spec implement] security \
+            "security up: context spec kind[reproduce investigate plan] build[test-spec \
+             implement] security \
              agent-review review release"
                 .to_string(),
-            "test-spec alone: context spec kind[reproduce plan] implement test-spec security \
-             agent-review review release"
-                .to_string(),
-            "test-spec alongside: context spec kind[reproduce plan] \
-             implement-group[implement test-spec] security agent-review review release"
-                .to_string(),
-            "remove asks: true, context spec kind[reproduce plan] implement-group[implement test-spec] \
+            "test-spec alone: context spec kind[reproduce investigate plan] implement test-spec \
              security agent-review review release"
                 .to_string(),
-            "removed: context spec kind[reproduce plan] implement-group[implement test-spec] security \
+            "test-spec alongside: context spec kind[reproduce investigate plan] \
+             implement-group[implement test-spec] security agent-review review release"
+                .to_string(),
+            "remove asks: true, context spec kind[reproduce investigate plan] \
+             implement-group[implement test-spec] \
+             security agent-review review release"
+                .to_string(),
+            "removed: context spec kind[reproduce investigate plan] implement-group[implement \
+             test-spec] security \
              review release"
                 .to_string(),
         ]
