@@ -13,7 +13,7 @@ fn plain_branch(id: &str, paths: &[(&str, &[&str])]) -> StepRef {
             .iter()
             .map(|(path, stages)| PathRef {
                 id: path.to_string(),
-                stages: stages.iter().map(|stage| stage.to_string()).collect(),
+                stages: stages.iter().map(|stage| sid(stage)).collect(),
             })
             .collect(),
     }

@@ -256,7 +256,7 @@ fn path(id: &str, when: Option<Condition>, stages: Vec<Stage>) -> BranchPath {
         name: None,
         when,
         not: None,
-        stages,
+        stages: stages.into_iter().map(Step::Stage).collect(),
     }
 }
 

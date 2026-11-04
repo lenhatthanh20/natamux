@@ -2,12 +2,12 @@
 
 use natamux_proto::events::task_event::TaskEvent;
 use natamux_proto::stages::position::{path_of, step_to_run};
-use natamux_proto::stages::schema::{Stage, StageKind, Step};
+use natamux_proto::stages::schema::{Stage, StageGroup, StageKind, Step};
 use natamux_proto::tasks::task::TaskState;
 
 use crate::events::moves::{lane_state_of, payload_string, with_paths};
 use crate::stages::position::{
-    Lanes, StagePosition, combined_state, entry_state, get, is_not_taken, step_index, taken_stages,
+    Lanes, StagePosition, combined_state, entry_state, get, is_not_taken, step_index, taken_steps,
     with,
 };
 
@@ -67,17 +67,13 @@ pub fn reopen_target(
     }
     let mut earlier: Vec<(i64, Step)> = Vec::new();
     for (index, each) in steps.iter().take(current.max(0) as usize).enumerate() {
-        if each.is_branch() {
-            for unit in taken_stages(each, position.paths.as_ref()) {
-                earlier.push((index as i64, Step::Stage(unit)));
-            }
-        } else {
-            earlier.push((index as i64, each.clone()));
+        for unit in taken_steps(each, position.paths.as_ref()) {
+            earlier.push((index as i64, unit));
         }
     }
     if let Some(here) = &here {
         for unit in &here.path.stages[..here.index] {
-            earlier.push((current, Step::Stage(unit.clone())));
+            earlier.push((current, unit.clone()));
         }
     }
     earlier
@@ -121,7 +117,6 @@ pub fn reopen(
     match step {
         Step::Branch(branch) => {
             let place = path_of(steps, stage)?;
-            let target = place.path.stages.get(place.index)?;
             if is_not_taken(steps, position.paths.as_ref(), stage) {
                 return None;
             }
@@ -130,10 +125,18 @@ pub fn reopen(
                 &branch.id,
                 place.path.id.clone(),
             );
+            let (stage, state, lanes) = match place.item {
+                Step::Group(group) => {
+                    let lanes = group_lanes(group, stage, position, &state_of);
+                    (group.id.clone(), combined_state(&lanes), lanes)
+                }
+                Step::Stage(target) => (stage.to_string(), state_of(target), Vec::new()),
+                Step::Branch(_) => return None,
+            };
             Some(StagePosition {
-                stage: stage.to_string(),
-                state: state_of(target),
-                lanes: Vec::new(),
+                stage,
+                state,
+                lanes,
                 paths: Some(taken),
             })
         }
@@ -142,23 +145,7 @@ pub fn reopen(
             paths,
         )),
         Step::Group(group) => {
-            let here = group.id == position.stage;
-            let lanes: Lanes = group
-                .parallel
-                .iter()
-                .map(|lane| {
-                    let lane_state = if lane.id == stage || group.id == stage {
-                        state_of(lane)
-                    } else if here {
-                        get(&position.lanes, &lane.id)
-                            .copied()
-                            .unwrap_or(TaskState::Done)
-                    } else {
-                        TaskState::Done
-                    };
-                    (lane.id.clone(), lane_state)
-                })
-                .collect();
+            let lanes = group_lanes(group, stage, position, &state_of);
             let state = combined_state(&lanes);
             Some(with_paths(
                 StagePosition {
@@ -171,6 +158,34 @@ pub fn reopen(
             ))
         }
     }
+}
+
+/// The lanes of a group that a send back reopens: the target lane (or every lane, for the group
+/// itself) starts again; the others keep their state while the task is in the group, else count
+/// as done.
+fn group_lanes(
+    group: &StageGroup,
+    stage: &str,
+    position: &StagePosition,
+    state_of: &dyn Fn(&Stage) -> TaskState,
+) -> Lanes {
+    let here = group.id == position.stage;
+    group
+        .parallel
+        .iter()
+        .map(|lane| {
+            let lane_state = if lane.id == stage || group.id == stage {
+                state_of(lane)
+            } else if here {
+                get(&position.lanes, &lane.id)
+                    .copied()
+                    .unwrap_or(TaskState::Done)
+            } else {
+                TaskState::Done
+            };
+            (lane.id.clone(), lane_state)
+        })
+        .collect()
 }
 
 #[cfg(test)]

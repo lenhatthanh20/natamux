@@ -7,7 +7,7 @@ use super::*;
 use crate::stages::editor_branches::set_path_condition;
 use crate::stages::editor_catalog::{CustomKind, CustomStageInput, add_custom_stage};
 use crate::stages::editor_find::find_stage;
-use crate::stages::editor_fixtures::branched;
+use crate::stages::editor_fixtures::{branched, path_grouped};
 use crate::stages::editor_labels::{approval_label, pipeline_label};
 
 fn field(steps: &[Step], id: &str) -> Stage {
@@ -303,6 +303,16 @@ fn edits_a_stage_of_a_path() {
         field(&set_gate(&branched(), "testing", Gate::Manual), "testing").gate,
         Gate::Manual
     );
+}
+
+#[test]
+fn edits_a_lane_of_a_group_in_a_path() {
+    let steps = set_text(&path_grouped(), "docs", TextField::Check, "make docs");
+    assert_eq!(field(&steps, "docs").check.as_deref(), Some("make docs"));
+    let off = set_enabled(&steps, "docs", false);
+    assert_eq!(field(&off, "docs").enabled, Some(false));
+    assert!(shell_list(&steps).iter().any(|(id, _, _)| id == "docs"));
+    assert!(!runs_in_own_shell(&steps, "docs"));
 }
 
 #[test]

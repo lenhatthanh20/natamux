@@ -207,7 +207,7 @@ fn gives_a_stage_in_a_path_the_shell_of_a_single_stage() {
         name: None,
         when,
         not: None,
-        stages,
+        stages: stages.into_iter().map(Step::Stage).collect(),
     };
     let steps = [
         step(&plan),
@@ -245,4 +245,42 @@ fn lets_every_agent_or_testing_stage_have_its_own_agent_anywhere() {
         let stage = Stage::new("my-step", kind, Gate::Manual);
         assert!(!can_have_own_agent(&stage));
     }
+}
+
+#[test]
+fn gives_the_lanes_of_a_group_in_a_path_the_terminals_of_a_group() {
+    let triage = Step::Group(StageGroup {
+        id: "triage".into(),
+        name: None,
+        parallel: vec![
+            writing("look", Gate::Manual, "look.md"),
+            agent("repro", Gate::Auto),
+        ],
+    });
+    let steps = [
+        step(&agent("spec", Gate::Manual)),
+        Step::Branch(StageBranch {
+            id: "kind".into(),
+            name: None,
+            paths: vec![
+                BranchPath {
+                    id: "bug".into(),
+                    name: None,
+                    when: Some(Condition::Command { run: "true".into() }),
+                    not: None,
+                    stages: vec![triage, step(&agent("fix", Gate::Auto))],
+                },
+                BranchPath {
+                    id: "other".into(),
+                    name: None,
+                    when: None,
+                    not: None,
+                    stages: vec![step(&agent("plan", Gate::Manual))],
+                },
+            ],
+        }),
+    ];
+    // The stage that changes code keeps Terminal 1; the other lane gets Terminal 2.
+    let ids = ["repro", "look", "fix", "plan"];
+    assert_eq!(shells(&steps, &ids), ["1", "2", "1", "1"]);
 }

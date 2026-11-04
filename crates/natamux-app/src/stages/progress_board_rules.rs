@@ -6,7 +6,7 @@
 use std::collections::BTreeMap;
 
 use natamux_proto::stages::capabilities::stage_name;
-use natamux_proto::stages::position::step_index;
+use natamux_proto::stages::position::{step_index, step_to_run};
 use natamux_proto::stages::progress::StageProgress;
 use natamux_proto::stages::resolve::{active_steps, resolve_steps, step_refs_of};
 use natamux_proto::stages::schema::Step;
@@ -141,13 +141,15 @@ pub fn stage_columns(steps: &[Step], open: &[Task]) -> Vec<StageColumn> {
     steps
         .iter()
         .flat_map(|step| {
-            let in_group = matches!(step, Step::Group(_));
             let in_path = matches!(step, Step::Branch(_));
-            step.stages()
-                .into_iter()
-                .map(move |stage| (stage, in_group, in_path))
+            step.stages().into_iter().map(move |stage| (stage, in_path))
         })
-        .map(|(stage, in_group, in_path)| {
+        .map(|(stage, in_path)| {
+            // The group the stage runs in: its step, or a group inside a path.
+            let group = step_to_run(steps, &stage.id)
+                .filter(Step::is_group)
+                .map(|group| group.id().to_string());
+            let in_group = group.is_some();
             let here: Vec<&Task> = open
                 .iter()
                 .filter(|task| {
@@ -157,7 +159,7 @@ pub fn stage_columns(steps: &[Step], open: &[Task]) -> Vec<StageColumn> {
                     };
                     // A task is in one path of a branch only, the one of its stage.
                     let holds = if in_path {
-                        task.stage == stage.id
+                        task.stage == stage.id || group.as_deref() == Some(task.stage.as_str())
                     } else {
                         step.stages()
                             .iter()

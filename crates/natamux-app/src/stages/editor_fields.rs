@@ -12,27 +12,31 @@ use crate::stages::editor_find::{find_stage, group_of, step_of_stage};
 fn update_stage(steps: &[Step], id: &str, change: impl Fn(&mut Stage)) -> Vec<Step> {
     let mut next = steps.to_vec();
     for step in &mut next {
-        match step {
-            Step::Branch(branch) => {
-                for stage in branch.paths.iter_mut().flat_map(|path| &mut path.stages) {
-                    if stage.id == id {
-                        change(stage);
-                    }
-                }
+        update_in(step, id, &change);
+    }
+    next
+}
+
+/// Changes stage `id` where it is in the step: the stage itself, a lane, or in a path (also a lane
+/// of a group in a path).
+fn update_in(step: &mut Step, id: &str, change: &impl Fn(&mut Stage)) {
+    match step {
+        Step::Branch(branch) => {
+            for item in branch.paths.iter_mut().flat_map(|path| &mut path.stages) {
+                update_in(item, id, change);
             }
-            Step::Group(group) => {
-                for stage in group.parallel.iter_mut().filter(|stage| stage.id == id) {
-                    change(stage);
-                }
+        }
+        Step::Group(group) => {
+            for stage in group.parallel.iter_mut().filter(|stage| stage.id == id) {
+                change(stage);
             }
-            Step::Stage(stage) => {
-                if stage.id == id {
-                    change(stage);
-                }
+        }
+        Step::Stage(stage) => {
+            if stage.id == id {
+                change(stage);
             }
         }
     }
-    next
 }
 
 /// A stage that is off stays in the file with its settings; new tasks do not get it.
@@ -173,7 +177,7 @@ pub fn shell_fields(steps: &[Step]) -> Vec<ShellField> {
                         value: run.clone(),
                     });
                 }
-                found.extend(path.stages.iter().flat_map(stage_fields));
+                found.extend(path.all_stages().into_iter().flat_map(stage_fields));
             }
         } else {
             found.extend(step.stages().into_iter().flat_map(stage_fields));

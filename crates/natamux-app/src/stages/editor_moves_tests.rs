@@ -6,7 +6,9 @@ use super::*;
 use crate::stages::editor_catalog::add_catalog_stage;
 use crate::stages::editor_fields::set_enabled;
 use crate::stages::editor_find::{find_stage, group_of, used_ids};
-use crate::stages::editor_fixtures::{branch_ref, branched, group_ref, ids, sid, stage_step};
+use crate::stages::editor_fixtures::{
+    branch_ref, branch_refs, branched, group_ref, ids, sid, stage_step,
+};
 
 fn span(refs: Vec<StepRef>, from: usize, to: usize) -> Vec<StepRef> {
     refs[from..to].to_vec()
@@ -414,13 +416,15 @@ fn drops_a_stage_of_a_path_out_of_the_branch_next_to_a_step() {
 }
 
 #[test]
-fn does_not_drop_a_group_a_context_stage_or_a_release_stage_into_a_path() {
+fn drops_a_group_into_a_path_but_not_a_context_stage_a_release_stage_or_a_branch() {
     let mut grouped = branched()[..3].to_vec();
     grouped.push(lanes("build", &["docs", "i18n"]));
     grouped.extend(branched()[3..].iter().cloned());
+    let into = drop_stage(&grouped, "build", "review", Side::Before);
+    let review = vec![group_ref("build", &["docs", "i18n"]), sid("review")];
     assert_eq!(
-        drop_stage(&grouped, "build", "review", Side::Before),
-        grouped
+        ids(&into)[2],
+        branch_refs(vec![sid("implement"), sid("testing")], review)
     );
     let steps = branched();
     assert_eq!(drop_stage(&steps, "context", "review", Side::After), steps);
@@ -452,11 +456,15 @@ fn removes_a_stage_of_a_path_and_leaves_the_path_with_none() {
 }
 
 #[test]
-fn does_not_run_a_stage_of_a_path_alongside_another() {
+fn runs_a_stage_of_a_path_alongside_only_the_stage_above_in_its_path() {
     let steps = branched();
     assert_eq!(
         join_problem(&steps, "testing").as_deref(),
-        Some("A path holds single stages only")
+        Some("Only agent and manual stages run side by side")
+    );
+    assert_eq!(
+        join_problem(&steps, "implement").as_deref(),
+        Some("There is no stage above")
     );
     assert_eq!(join_above(&steps, "testing"), steps);
     let mut after = steps[..3].to_vec();

@@ -97,14 +97,17 @@ fn branch_steps(taken: bool) -> Vec<Step> {
         name: Some("First".into()),
         when: Some(Condition::Command { run: "true".into() }),
         not: None,
-        stages: ["one", "two", "three"].into_iter().map(stage).collect(),
+        stages: ["one", "two", "three"]
+            .into_iter()
+            .map(|id| Step::Stage(stage(id)))
+            .collect(),
     };
     let other = BranchPath {
         id: "other".into(),
         name: None,
         when: Some(Condition::Command { run: "true".into() }),
         not: None,
-        stages: vec![stage("other")],
+        stages: vec![Step::Stage(stage("other"))],
     };
     let paths = if taken {
         vec![first, other]
@@ -328,7 +331,7 @@ fn a_node_of_a_path_places_its_card_inside_the_branch() {
         ],
     );
     let lane = source_of(include_str!("progress_branch.rs"), "fn lane(");
-    assert!(lane.contains("self.column(&steps, cx)"));
+    assert!(lane.contains("self.column(&path.stages, cx)"));
     let branch = source_of(include_str!("progress_branch.rs"), "pub(super) fn branch(");
     assert!(!branch.contains(".children(details)"));
 }

@@ -204,7 +204,7 @@ fn branch() -> StageBranch {
         name: name.map(String::from),
         when: None,
         not: None,
-        stages,
+        stages: stages.into_iter().map(Step::Stage).collect(),
     };
     StageBranch {
         id: "after-plan".into(),
@@ -256,6 +256,26 @@ fn gives_the_status_of_the_diamond() {
     assert_eq!(status([Done, Current, NotTaken]), Current);
     assert_eq!(status([Done, Done, NotTaken]), Done);
     assert_eq!(status([NotTaken, NotTaken, NotTaken]), NotTaken);
+}
+
+#[test]
+fn reads_the_lanes_of_a_group_inside_a_path() {
+    use StageStatus::*;
+    use natamux_proto::stages::schema::StageGroup;
+    let mut branch = branch();
+    // Small change runs Implement and Automated tests side by side.
+    let lanes: Vec<Stage> = branch.paths[0].all_stages().into_iter().cloned().collect();
+    let group = Step::Group(StageGroup {
+        id: "build".into(),
+        name: None,
+        parallel: lanes,
+    });
+    branch.paths[0].stages = vec![group];
+    let status = |list| branch_status(&branch, &statuses(list));
+    assert_eq!(status([Done, Current, NotTaken]), Current);
+    assert_eq!(status([Done, Done, NotTaken]), Done);
+    let taken = taken_path(&branch, &statuses([Upcoming, Current, NotTaken]));
+    assert_eq!(taken.map(|path| path.id.as_str()), Some("small"));
 }
 
 #[test]

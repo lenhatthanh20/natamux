@@ -1,5 +1,5 @@
 use natamux_proto::stages::progress::StageStatus::{Current, Done, NotTaken, Skipped, Upcoming};
-use natamux_proto::stages::schema::{Condition, Gate, Stage, StageKind};
+use natamux_proto::stages::schema::{Condition, Gate, Stage, StageKind, Step};
 
 use super::*;
 
@@ -170,7 +170,7 @@ fn path(id: &str, when: bool, not: bool, stages: Vec<Stage>) -> BranchPath {
             run: "test -f x".into(),
         }),
         not: not.then_some(true),
-        stages,
+        stages: stages.into_iter().map(Step::Stage).collect(),
     }
 }
 

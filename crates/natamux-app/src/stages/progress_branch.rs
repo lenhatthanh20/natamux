@@ -1,11 +1,11 @@
 //! The branch of the Progress tab: a frame with the If header and one lane per path, stacked. A
 //! lane shows its keyword, name, condition and tags, and its nodes; a path not taken folds to
-//! that one row and opens on click. A lane renders its nodes with the column of steps, so a path
-//! that holds a group or a branch (not in the schema yet) needs no new code.
+//! that one row and opens on click. A lane renders its nodes with the column of steps, so a group
+//! inside a path draws as it does at the top.
 
 use gpui::{AnyElement, FontWeight};
 use natamux_proto::stages::position::describe_condition;
-use natamux_proto::stages::schema::{BranchPath, StageBranch, Step};
+use natamux_proto::stages::schema::{BranchPath, StageBranch};
 use natamux_proto::tasks::task::TaskState;
 use ui::{Tooltip, prelude::*};
 
@@ -75,7 +75,7 @@ impl Ctx<'_> {
         let when = path.when.is_some().then(|| describe_condition(&positive));
         let because = taken
             .then(|| {
-                path.stages
+                path.all_stages()
                     .first()
                     .and_then(|stage| self.by_id.get(stage.id.as_str()))
                     .and_then(|entry| entry.because.clone())
@@ -85,8 +85,7 @@ impl Ctx<'_> {
         let nodes = if folded {
             Vec::new()
         } else {
-            let steps: Vec<Step> = path.stages.iter().cloned().map(Step::Stage).collect();
-            self.column(&steps, cx)
+            self.column(&path.stages, cx)
         };
         v_flex()
             .w_full()
@@ -188,7 +187,7 @@ impl Ctx<'_> {
                     .gap_1()
                     .children(chip.map(|(text, state)| StateChip::new(state).text(text)))
                     .child(
-                        Label::new(stage_count_label(path.stages.len()))
+                        Label::new(stage_count_label(path.all_stages().len()))
                             .size(LabelSize::XSmall)
                             .color(Color::Muted),
                     ),

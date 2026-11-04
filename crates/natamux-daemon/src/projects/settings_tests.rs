@@ -466,3 +466,41 @@ fn the_version_is_the_first_16_hex_digits_of_the_sha_256() {
     assert_eq!(version_of(None), "none");
     assert_eq!(version_of(Some("")), "e3b0c44298fc1c14");
 }
+
+#[test]
+fn names_a_lane_of_a_group_inside_a_path_and_trims_its_fields() {
+    use crate::projects::settings_parse::parse_settings;
+    use natamux_proto::stages::schema::Step;
+    let with_lane = |lane: Value| {
+        json!({ "stages": [
+            { "id": "spec", "kind": "agent", "gate": "manual" },
+            { "id": "kind", "paths": [
+                { "id": "bug", "when": { "type": "command", "run": "true" }, "stages": [
+                    { "id": "triage", "parallel": [
+                        { "id": "repro", "kind": "agent", "gate": "auto" },
+                        lane,
+                    ] },
+                    { "id": "fix", "kind": "agent", "gate": "auto" },
+                ] },
+                { "id": "other", "stages": [{ "id": "plan", "kind": "agent", "gate": "manual" }] },
+            ] },
+        ] })
+    };
+    let wrong = json!({ "id": "Look Here", "kind": "agent", "gate": "auto" });
+    let Err(message) = parse_settings(&with_lane(wrong)) else {
+        panic!("a wrong id is refused");
+    };
+    assert!(
+        message.starts_with("stages.1.paths.0.stages.0.parallel.1.id: "),
+        "{message}"
+    );
+    let lane = json!({ "id": "look", "kind": "agent", "gate": "manual", "name": " Look " });
+    let parsed = parse_settings(&with_lane(lane)).unwrap();
+    let Step::Branch(branch) = &parsed.settings.stages[1] else {
+        panic!("not a branch");
+    };
+    let Step::Group(triage) = &branch.paths[0].stages[0] else {
+        panic!("not a group");
+    };
+    assert_eq!(triage.parallel[1].name.as_deref(), Some("Look"));
+}

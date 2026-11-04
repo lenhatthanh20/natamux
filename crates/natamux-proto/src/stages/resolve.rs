@@ -8,27 +8,28 @@ use crate::stages::schema::{BranchPath, PathRef, Stage, StageBranch, StageGroup,
 
 /// `stepRefsOf`: what a task keeps of its pipeline, the ids in order.
 pub fn step_refs_of(steps: &[Step]) -> Vec<StepRef> {
-    steps
-        .iter()
-        .map(|step| match step {
-            Step::Stage(stage) => StepRef::Stage(stage.id.clone()),
-            Step::Group(group) => StepRef::Group {
-                id: group.id.clone(),
-                parallel: group.parallel.iter().map(|each| each.id.clone()).collect(),
-            },
-            Step::Branch(branch) => StepRef::Branch {
-                id: branch.id.clone(),
-                paths: branch
-                    .paths
-                    .iter()
-                    .map(|path| PathRef {
-                        id: path.id.clone(),
-                        stages: path.stages.iter().map(|each| each.id.clone()).collect(),
-                    })
-                    .collect(),
-            },
-        })
-        .collect()
+    steps.iter().map(ref_of).collect()
+}
+
+fn ref_of(step: &Step) -> StepRef {
+    match step {
+        Step::Stage(stage) => StepRef::Stage(stage.id.clone()),
+        Step::Group(group) => StepRef::Group {
+            id: group.id.clone(),
+            parallel: group.parallel.iter().map(|each| each.id.clone()).collect(),
+        },
+        Step::Branch(branch) => StepRef::Branch {
+            id: branch.id.clone(),
+            paths: branch
+                .paths
+                .iter()
+                .map(|path| PathRef {
+                    id: path.id.clone(),
+                    stages: step_refs_of(&path.stages),
+                })
+                .collect(),
+        },
+    }
 }
 
 /// `activeSteps`: the steps that new tasks get. Stages that are off are left out, and so is a
@@ -69,12 +70,7 @@ fn active_of(step: &Step) -> Vec<Step> {
                 .paths
                 .iter()
                 .filter_map(|path| {
-                    let on: Vec<Stage> = path
-                        .stages
-                        .iter()
-                        .filter(|each| each.is_on())
-                        .cloned()
-                        .collect();
+                    let on = active_steps(&path.stages);
                     (!on.is_empty()).then(|| BranchPath {
                         stages: on,
                         ..path.clone()
@@ -82,12 +78,7 @@ fn active_of(step: &Step) -> Vec<Step> {
                 })
                 .collect();
             if paths.len() == 1 && paths[0].when.is_none() {
-                return paths
-                    .remove(0)
-                    .stages
-                    .into_iter()
-                    .map(Step::Stage)
-                    .collect();
+                return paths.remove(0).stages;
             }
             if paths.is_empty() {
                 return Vec::new();
@@ -125,49 +116,61 @@ pub fn resolve_steps(refs: &[StepRef], pipeline: &[Step]) -> Vec<Step> {
             .unwrap_or_else(|| Stage::new(id, Default::default(), Default::default()))
     };
     refs.iter()
-        .map(|reference| match reference {
-            StepRef::Stage(id) => Step::Stage(stage(id)),
-            StepRef::Group { id, parallel } => Step::Group(StageGroup {
-                id: id.clone(),
-                name: name_of(pipeline, id),
-                parallel: parallel.iter().map(|each| stage(each)).collect(),
-            }),
-            StepRef::Branch { id, paths } => {
-                let now = pipeline.iter().find_map(|step| match step {
-                    Step::Branch(branch) if branch.id == *id => Some(branch),
-                    _ => None,
-                });
-                Step::Branch(StageBranch {
-                    id: id.clone(),
-                    name: name_of(pipeline, id),
-                    paths: paths
-                        .iter()
-                        .map(|path| {
-                            // Conditions come from the settings; a path that is gone from them
-                            // keeps its stages and has no condition.
-                            let kept = now.and_then(|branch| {
-                                branch.paths.iter().find(|each| each.id == path.id)
-                            });
-                            BranchPath {
-                                id: path.id.clone(),
-                                name: kept.and_then(|each| each.name.clone()),
-                                when: kept.and_then(|each| each.when.clone()),
-                                not: kept.and_then(|each| each.not),
-                                stages: path.stages.iter().map(|each| stage(each)).collect(),
-                            }
-                        })
-                        .collect(),
-                })
-            }
-        })
+        .map(|reference| resolve_ref(reference, pipeline, &stage))
         .collect()
 }
 
+fn resolve_ref(reference: &StepRef, pipeline: &[Step], stage: &dyn Fn(&str) -> Stage) -> Step {
+    match reference {
+        StepRef::Stage(id) => Step::Stage(stage(id)),
+        StepRef::Group { id, parallel } => Step::Group(StageGroup {
+            id: id.clone(),
+            name: name_of(pipeline, id),
+            parallel: parallel.iter().map(|each| stage(each)).collect(),
+        }),
+        StepRef::Branch { id, paths } => {
+            let now = pipeline.iter().find_map(|step| match step {
+                Step::Branch(branch) if branch.id == *id => Some(branch),
+                _ => None,
+            });
+            Step::Branch(StageBranch {
+                id: id.clone(),
+                name: name_of(pipeline, id),
+                paths: paths
+                    .iter()
+                    .map(|path| {
+                        // Conditions come from the settings; a path that is gone from them keeps
+                        // its stages and has no condition.
+                        let kept = now
+                            .and_then(|branch| branch.paths.iter().find(|each| each.id == path.id));
+                        BranchPath {
+                            id: path.id.clone(),
+                            name: kept.and_then(|each| each.name.clone()),
+                            when: kept.and_then(|each| each.when.clone()),
+                            not: kept.and_then(|each| each.not),
+                            stages: path
+                                .stages
+                                .iter()
+                                .map(|each| resolve_ref(each, pipeline, stage))
+                                .collect(),
+                        }
+                    })
+                    .collect(),
+            })
+        }
+    }
+}
+
+/// The name of a step in the settings, also of a group inside a path.
 fn name_of(pipeline: &[Step], id: &str) -> Option<String> {
-    pipeline
-        .iter()
-        .find(|step| step.id() == id)
-        .and_then(|step| step.name().map(str::to_owned))
+    pipeline.iter().find_map(|step| match step {
+        _ if step.id() == id => step.name().map(str::to_owned),
+        Step::Branch(branch) => {
+            let mut items = branch.paths.iter().map(|path| path.stages.as_slice());
+            items.find_map(|items| name_of(items, id))
+        }
+        _ => None,
+    })
 }
 
 #[cfg(test)]
@@ -181,6 +184,65 @@ mod tests {
         for pipeline in [default_pipeline(), full_pipeline()] {
             assert_eq!(resolve_steps(&step_refs_of(&pipeline), &pipeline), pipeline);
         }
+    }
+
+    fn group(id: &str, lanes: Vec<Stage>) -> Step {
+        Step::Group(StageGroup {
+            id: id.into(),
+            name: Some(format!("{id} name")),
+            parallel: lanes,
+        })
+    }
+
+    #[test]
+    fn keeps_a_group_inside_a_path_and_folds_it_when_stages_are_off() {
+        let repro = stage("repro", StageKind::Agent, Gate::Auto);
+        let look = stage("look", StageKind::Agent, Gate::Manual);
+        let fix = Step::Stage(stage("fix", StageKind::Agent, Gate::Auto));
+        let branch = |lanes: Vec<Stage>| {
+            Step::Branch(StageBranch {
+                id: "kind".into(),
+                name: None,
+                paths: vec![
+                    BranchPath {
+                        id: "bug".into(),
+                        name: None,
+                        when: small().when,
+                        not: None,
+                        stages: vec![group("triage", lanes), fix.clone()],
+                    },
+                    BranchPath {
+                        id: "other".into(),
+                        name: None,
+                        when: None,
+                        not: None,
+                        stages: vec![Step::Stage(stage("plan", StageKind::Agent, Gate::Auto))],
+                    },
+                ],
+            })
+        };
+        let steps = vec![branch(vec![repro.clone(), look.clone()])];
+        let refs = step_refs_of(&steps);
+        let StepRef::Branch { paths, .. } = &refs[0] else {
+            panic!("not a branch ref")
+        };
+        assert_eq!(
+            paths[0].stages[0],
+            StepRef::Group {
+                id: "triage".into(),
+                parallel: vec!["repro".into(), "look".into()],
+            }
+        );
+        assert_eq!(resolve_steps(&refs, &steps), steps);
+        assert_eq!(active_steps(&steps), steps);
+
+        let mut off = look.clone();
+        off.enabled = Some(false);
+        let folded = active_steps(&[branch(vec![repro.clone(), off])]);
+        let Step::Branch(folded) = &folded[0] else {
+            panic!("not a branch")
+        };
+        assert_eq!(folded.paths[0].stages, [Step::Stage(repro), fix]);
     }
 
     #[test]
@@ -271,8 +333,8 @@ mod tests {
             }),
             not: None,
             stages: vec![
-                stage("implement", StageKind::Agent, Gate::Auto),
-                stage("testing", StageKind::Testing, Gate::Auto),
+                Step::Stage(stage("implement", StageKind::Agent, Gate::Auto)),
+                Step::Stage(stage("testing", StageKind::Testing, Gate::Auto)),
             ],
         }
     }
@@ -285,7 +347,11 @@ mod tests {
                 run: "test -f .no-review".into(),
             }),
             not: Some(true),
-            stages: vec![stage("review", StageKind::Review, Gate::Manual)],
+            stages: vec![Step::Stage(stage(
+                "review",
+                StageKind::Review,
+                Gate::Manual,
+            ))],
         }
     }
 
@@ -305,7 +371,7 @@ mod tests {
         ];
         let refs = step_refs_of(&steps);
         assert!(
-            matches!(&refs[1], StepRef::Branch { paths, .. } if paths[0].stages == ["implement", "testing"])
+            matches!(&refs[1], StepRef::Branch { paths, .. } if paths[0].stages == [StepRef::Stage("implement".into()), StepRef::Stage("testing".into())])
         );
         assert_eq!(resolve_steps(&refs, &steps), steps);
 
@@ -325,7 +391,11 @@ mod tests {
                         name: None,
                         when: None,
                         not: None,
-                        stages: vec![stage("testing", StageKind::Testing, Gate::Auto)],
+                        stages: vec![Step::Stage(stage(
+                            "testing",
+                            StageKind::Testing,
+                            Gate::Auto,
+                        ))],
                     },
                 ],
             }),
@@ -345,7 +415,7 @@ mod tests {
                         name: None,
                         when: None,
                         not: None,
-                        stages: vec![review],
+                        stages: vec![Step::Stage(review)],
                     },
                 ],
             })
@@ -446,7 +516,7 @@ mod tests {
             name: None,
             when: when.clone(),
             not: None,
-            stages,
+            stages: stages.into_iter().map(Step::Stage).collect(),
         };
         let docs = stage("write-docs", StageKind::Agent, Gate::Auto);
         let three = Step::Branch(StageBranch {
