@@ -7,7 +7,7 @@ publish.workspace = true
 
 [features]
 # The own terminal (docs/plan-mit-license.md, S2), until it replaces Zed's.
-own-terminal = ["dep:alacritty_terminal", "dep:regex"]
+own-terminal = ["dep:alacritty_terminal", "dep:regex", "dep:shlex"]
 
 [dependencies]
 alacritty_terminal = { workspace = true, optional = true }
@@ -33,6 +33,7 @@ release_channel.workspace = true
 serde_json.workspace = true
 settings.workspace = true
 sha2.workspace = true
+shlex = { workspace = true, optional = true }
 terminal.workspace = true
 text.workspace = true
 terminal_view.workspace = true

@@ -29,7 +29,8 @@ impl Global for Inputs {}
 
 /// The fonts and sizes of the own terminal and text views (docs/plan-mit-license.md 6.1), from
 /// the same inputs as the settings JSON, so they equal what Zed makes of it.
-// Only the parity test reads it until the own terminal view does (S2.4).
+// The own terminal view reads the terminal and buffer fonts (S2.4, behind its feature); the
+// rest waits for the own text views (S3, S9), so only the parity test reads it until then.
 #[cfg_attr(not(test), allow(dead_code))]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Appearance {

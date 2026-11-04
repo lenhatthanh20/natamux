@@ -5561,6 +5561,7 @@ dependencies = [
  "serde_json",
  "settings",
  "sha2",
+ "shlex",
  "terminal",
  "terminal_view",
  "text",

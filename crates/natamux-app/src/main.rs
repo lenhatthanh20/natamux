@@ -318,18 +318,23 @@ mod terminals {
     pub mod remote_terminal;
     pub mod shell_panes;
     /// The own terminal (docs/plan-mit-license.md S2), behind its feature until it replaces
-    /// Zed's. Only its tests use it until the own view does (S2.4).
+    /// Zed's: `remote_terminal::screen` picks it. Some helpers are for its tests only.
     #[cfg(feature = "own-terminal")]
     #[cfg_attr(not(test), allow(dead_code))]
     pub mod term {
+        pub mod cell_layout;
         pub mod colors;
         pub mod contrast;
+        pub mod element;
         pub mod event_loop;
         pub mod grid_layout;
+        pub mod ime;
         pub mod input_bytes;
         pub mod links;
         pub mod model;
         pub mod mouse_report;
+        pub mod scrollbar;
+        pub mod view;
         pub mod writer;
     }
     pub mod terminal_cache;

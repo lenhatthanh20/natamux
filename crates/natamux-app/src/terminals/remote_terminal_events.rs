@@ -5,15 +5,11 @@
 use std::time::Instant;
 
 use futures::channel::oneshot;
-use gpui::{Entity, FocusHandle, Focusable, Subscription, WeakEntity};
+use gpui::{Entity, FocusHandle, Focusable, Subscription};
 use natamux_client::{TerminalEvent, TerminalStatus};
-use settings::Settings;
-use terminal::terminal_settings::TerminalSettings;
-use terminal::{Terminal, TerminalBounds, TerminalBuilder};
-use terminal_view::TerminalView;
 use ui::prelude::*;
-use util::paths::PathStyle;
 
+use super::screen::{DisplayOnlyWriter, Terminal, TerminalBounds, TerminalView};
 use super::{RemoteTerminal, send_input};
 use crate::app::app_log;
 use crate::terminals::terminal_parser::{Job, lane};
@@ -113,7 +109,7 @@ impl RemoteTerminal {
 
     fn writer_job(
         &mut self,
-        writer: anyhow::Result<terminal::DisplayOnlyWriter>,
+        writer: anyhow::Result<DisplayOnlyWriter>,
         cx: &mut Context<Self>,
     ) -> Option<Job> {
         match writer {
@@ -179,7 +175,7 @@ impl RemoteTerminal {
     }
 }
 
-/// Zed's terminal, its view, and the view's focus listeners.
+/// The terminal, its view, and the view's focus listeners.
 pub(super) struct Screen {
     pub(super) terminal: Entity<Terminal>,
     pub(super) view: Entity<TerminalView>,
@@ -187,12 +183,19 @@ pub(super) struct Screen {
 }
 
 /// `bounds`: the grid the last screen laid out, so the new one starts at it.
+#[cfg(not(feature = "own-terminal"))]
 pub(super) fn build_screen(
     history: Option<usize>,
     bounds: Option<TerminalBounds>,
     window: &mut Window,
     cx: &mut Context<RemoteTerminal>,
 ) -> Screen {
+    use gpui::WeakEntity;
+    use settings::Settings;
+    use terminal::TerminalBuilder;
+    use terminal::terminal_settings::TerminalSettings;
+    use util::paths::PathStyle;
+
     let settings = TerminalSettings::get_global(cx).clone();
     let terminal = cx.new(|cx| {
         TerminalBuilder::new_display_only_with_bounds(
@@ -220,6 +223,25 @@ pub(super) fn build_screen(
         view.set_show_workspace_actions(false, cx);
         view
     });
+    let focus = view.focus_handle(cx);
+    Screen {
+        terminal,
+        view,
+        _focus: watch_focus(&focus, window, cx),
+    }
+}
+
+/// The own terminal: its cursor starts as a block and alternate scroll is on (6.2.2); its menu
+/// has only what works without a Zed workspace.
+#[cfg(feature = "own-terminal")]
+pub(super) fn build_screen(
+    history: Option<usize>,
+    bounds: Option<TerminalBounds>,
+    window: &mut Window,
+    cx: &mut Context<RemoteTerminal>,
+) -> Screen {
+    let terminal = cx.new(|cx| Terminal::new(history, bounds, cx));
+    let view = cx.new(|cx| TerminalView::new(terminal.clone(), window, cx));
     let focus = view.focus_handle(cx);
     Screen {
         terminal,

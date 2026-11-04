@@ -59,6 +59,32 @@ pub fn report(
     Some(bytes)
 }
 
+/// The report of one wheel step `up` or down at `line` and `column`, in the same forms: button
+/// 64 up and 65 down, with the modifiers. None as for `report`.
+pub fn wheel_report(
+    up: bool,
+    line: i32,
+    column: usize,
+    mods: &Modifiers,
+    mode: TermMode,
+) -> Option<Vec<u8>> {
+    if !mode.intersects(TermMode::MOUSE_MODE) || mods.shift {
+        return None;
+    }
+    let line = usize::try_from(line).ok()?;
+    let held = 8 * u8::from(mods.alt) + 16 * u8::from(mods.control);
+    let code = held + if up { 64 } else { 65 };
+    if mode.contains(TermMode::SGR_MOUSE) {
+        return Some(format!("\x1b[<{code};{};{}M", column + 1, line + 1).into_bytes());
+    }
+    let utf8 = mode.contains(TermMode::UTF8_MOUSE);
+    let mut bytes = b"\x1b[M".to_vec();
+    bytes.push(32 + code);
+    push_coordinate(&mut bytes, column, utf8)?;
+    push_coordinate(&mut bytes, line, utf8)?;
+    Some(bytes)
+}
+
 fn button_code(button: MouseButton) -> Option<u8> {
     match button {
         MouseButton::Left => Some(0),
@@ -96,5 +122,38 @@ mod tests {
         assert!(report(press, 0, 2014, &none, utf8).is_some());
         assert_eq!(report(press, 0, 2015, &none, utf8), None);
         assert_eq!(report(press, -1, 0, &none, mode), None);
+    }
+
+    #[test]
+    fn a_wheel_step_reports_button_64_or_65_with_the_modifiers() {
+        let sgr = TermMode::MOUSE_REPORT_CLICK | TermMode::SGR_MOUSE;
+        let ctrl = Modifiers {
+            control: true,
+            ..Modifiers::default()
+        };
+        let alt = Modifiers {
+            alt: true,
+            ..Modifiers::default()
+        };
+        let none = Modifiers::default();
+        assert_eq!(
+            wheel_report(true, 5, 10, &ctrl, sgr),
+            Some(b"\x1b[<80;11;6M".to_vec())
+        );
+        assert_eq!(
+            wheel_report(false, 5, 10, &alt, sgr),
+            Some(b"\x1b[<73;11;6M".to_vec())
+        );
+        let x10 = TermMode::MOUSE_REPORT_CLICK;
+        assert_eq!(
+            wheel_report(true, 5, 10, &none, x10),
+            Some(b"\x1b[M`+&".to_vec())
+        );
+        let shift = Modifiers {
+            shift: true,
+            ..Modifiers::default()
+        };
+        assert_eq!(wheel_report(true, 5, 10, &shift, sgr), None);
+        assert_eq!(wheel_report(true, 5, 10, &none, TermMode::empty()), None);
     }
 }

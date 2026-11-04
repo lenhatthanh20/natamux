@@ -3,6 +3,8 @@
 //! would write to a PTY (keys, pastes, IME text, answers to queries) goes to the socket. Our Zed
 //! fork adds three hooks for it: `Terminal::set_display_only_input` (the input),
 //! `display_only_writer` (parsing off the main thread) and `set_wakeup_pace` (how often it wakes).
+//! With the `own-terminal` feature the own terminal takes Zed's place, with the same names
+//! (`screen`, docs/plan-mit-license.md S2.4).
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -11,9 +13,9 @@ use futures::StreamExt;
 use futures::channel::mpsc::{UnboundedSender, unbounded};
 use gpui::{AnyWindowHandle, App, Entity, Focusable, Priority, Subscription, Task};
 use natamux_client::{SessionOptions, TerminalHandle, TerminalStatus};
-use terminal::{Modes, Range, Search, Terminal};
-use terminal_view::TerminalView;
 use ui::prelude::*;
+
+use self::screen::{Modes, Range, Search, Terminal, TerminalView};
 
 use self::events::{Screen, build_screen};
 use super::paste_rules::bracketed;
@@ -510,6 +512,31 @@ impl RemoteTerminal {
         }));
         self.handle = Some(handle);
     }
+}
+
+/// The terminal a remote terminal shows its shell in: Zed's.
+#[cfg(not(feature = "own-terminal"))]
+pub(crate) mod screen {
+    #[cfg(test)]
+    pub use terminal::{Content, Event};
+    pub use terminal::{DisplayOnlyWriter, Modes, Range, Search, Terminal, TerminalBounds};
+    pub use terminal_view::TerminalView;
+}
+
+/// The terminal a remote terminal shows its shell in: the own one, under Zed's names.
+#[cfg(feature = "own-terminal")]
+pub(crate) mod screen {
+    #[cfg(test)]
+    pub use crate::terminals::term::model::{Content, TermEvent as Event};
+    pub use crate::terminals::term::model::{
+        Search, TermBounds as TerminalBounds, TermModel as Terminal,
+    };
+    pub use crate::terminals::term::view::TermView as TerminalView;
+    pub use crate::terminals::term::writer::TermWriter as DisplayOnlyWriter;
+    pub use alacritty_terminal::term::TermMode as Modes;
+
+    /// A find match: the cells from its first to its last.
+    pub type Range = std::ops::RangeInclusive<alacritty_terminal::index::Point>;
 }
 
 /// Every text that goes to a shell passes here (plan D35): the screen's keys, pastes and

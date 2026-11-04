@@ -98,7 +98,7 @@ impl TermBounds {
 
     /// The cell under `position` (window pixels) on the shown rows, clamped to a grid of
     /// `columns` x `lines`, and the side of the cell it is on.
-    fn shown_cell(
+    pub fn shown_cell(
         &self,
         position: gpui::Point<Pixels>,
         columns: usize,
@@ -110,7 +110,9 @@ impl TermBounds {
         let (width, height) = (f32::from(self.cell_width), f32::from(self.line_height));
         let column = ((x / width) as usize).min(columns.saturating_sub(1));
         let line = ((y / height) as usize).min(lines.saturating_sub(1));
-        let side = if x - column as f32 * width > width / 2. {
+        // The rest of a division, as the old view took it: a press in the very middle of a cell
+        // falls on either side by the last bit of the float (T-S1).
+        let side = if x % width > width / 2. {
             Side::Right
         } else {
             Side::Left
@@ -204,6 +206,8 @@ enum Change {
     Scroll(Scroll),
     ScrollToPoint(Point),
     SetSelection(Option<Selection>),
+    /// A new selection from the cell under the pixel position.
+    StartSelection(SelectionType, gpui::Point<Pixels>),
     /// The pixel positions are turned into cells when the change runs, with the display
     /// offset of that moment, so a scroll queued before them counts.
     UpdateSelection(gpui::Point<Pixels>),
@@ -258,7 +262,9 @@ impl TermModel {
         let (events, queued) = unbounded();
         let generation = Arc::new(AtomicU64::new(0));
         let term = Term::new(config.clone(), &bounds, Listener::new(events.clone(), 0));
-        let last_content = copy_content(&term, bounds, None);
+        let mut last_content = copy_content(&term, bounds, None);
+        // No cells until the first sync: an empty copy means the screen was never drawn.
+        last_content.cells.clear();
         let pace = Arc::new(AtomicU64::new(nanos(DEFAULT_PACE)));
         let executor = cx.background_executor().clone();
         let loop_pace = pace.clone();
@@ -489,6 +495,11 @@ impl TermModel {
         self.queue.push_back(Change::SetSelection(selection));
     }
 
+    /// A new selection of `kind` from the cell under `position` (window pixels).
+    pub fn start_selection(&mut self, kind: SelectionType, position: gpui::Point<Pixels>) {
+        self.queue.push_back(Change::StartSelection(kind, position));
+    }
+
     /// Moves the end of the selection to the cell under `position` (window pixels).
     pub fn update_selection(&mut self, position: gpui::Point<Pixels>) {
         self.queue.push_back(Change::UpdateSelection(position));
@@ -527,6 +538,19 @@ impl TermModel {
     /// The link at `point` on the screen as it is now.
     pub fn link_at(&self, point: Point) -> Option<HoveredWord> {
         link_at(&self.term.lock_unfair(), point)
+    }
+
+    /// The OSC 8 target of the cell at `point`, if it has one.
+    pub fn hyperlink_at(&self, point: Point) -> Option<String> {
+        let term = self.term.lock_unfair();
+        if point.line < term.topmost_line()
+            || point.line > term.bottommost_line()
+            || point.column.0 >= term.columns()
+        {
+            return None;
+        }
+        let link = term.grid()[point].hyperlink()?;
+        Some(link.uri().to_owned())
     }
 
     /// Every match of `search` in the history and the screen, found on the background pool.
@@ -600,6 +624,11 @@ impl TermModel {
                 term.selection = selection;
                 write_primary(term, cx);
             }
+            Change::StartSelection(kind, position) => {
+                let (point, side) = self.cell_at(term, position);
+                term.selection = Some(Selection::new(kind, point, side));
+                write_primary(term, cx);
+            }
             Change::UpdateSelection(position) => {
                 let (point, side) = self.cell_at(term, position);
                 if let Some(selection) = term.selection.as_mut() {
@@ -614,7 +643,12 @@ impl TermModel {
             }
             Change::FindLink(position) => {
                 self.hovered = Some(position);
-                self.hovered_word = link_at(term, self.cell_at(term, position).0);
+                // A `file://` link shows its path.
+                self.hovered_word =
+                    link_at(term, self.cell_at(term, position).0).map(|mut link| {
+                        link.word = links::shown(&link.word).to_owned();
+                        link
+                    });
             }
             Change::OpenLink(position) => {
                 if let Some(link) = link_at(term, self.cell_at(term, position).0)

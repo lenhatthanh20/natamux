@@ -37,6 +37,9 @@ pulldown-cmark = { version = "0.13.6", default-features = false }
 # The link regex of the own terminal (crates/natamux-app/src/terminals/term/links.rs): the version
 # in Cargo.lock.
 regex = "1.12.3"
+# The quoted paths a paste of files types in the own terminal (terminals/term/view.rs): the version
+# in Cargo.lock.
+shlex = "2.0.1"
 rusqlite = { version = "0.32.1", features = ["bundled"] }
 ring = "0.17.14"
 serde = { version = "1.0", features = ["derive"] }

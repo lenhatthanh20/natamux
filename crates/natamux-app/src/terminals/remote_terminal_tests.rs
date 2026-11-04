@@ -445,7 +445,10 @@ fn an_unfocused_swap_gives_the_new_screen_the_input_and_no_focus(cx: &mut TestAp
     // The input loop takes the key's time only for input that came through the sink.
     terminal.update(cx, |terminal, _| terminal.last_key = Some(Instant::now()));
     let zed = terminal.read_with(cx, |terminal, _| terminal.terminal().clone());
+    #[cfg(not(feature = "own-terminal"))]
     zed.update(cx, |zed, _| zed.input(b"x".to_vec()));
+    #[cfg(feature = "own-terminal")]
+    zed.update(cx, |zed, _| zed.type_bytes(b"x".to_vec()));
     cx.run_until_parked();
     let sent = terminal.read_with(cx, |terminal, _| terminal.last_key.is_none());
     assert!(sent, "input on the new screen did not reach the socket");

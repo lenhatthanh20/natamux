@@ -19,9 +19,9 @@ use gpui::{
 };
 use natamux_proto::workspaces::files::EntryKind;
 use serde_json::{Value, json};
-use terminal::{Content, Terminal};
 use ui::prelude::*;
 
+use super::screen::{Content, Event, Terminal};
 use super::{RemoteTerminal, Target, sent};
 use crate::app::appearance;
 use crate::app::golden_files;
@@ -1016,7 +1016,28 @@ fn link_rows(cx: &mut TestAppContext) -> Vec<Value> {
 
 #[gpui::test]
 fn links_match_the_golden(cx: &mut TestAppContext) {
-    golden_files::check(SET, "links", &link_rows(cx));
+    let rows = link_rows(cx);
+    #[cfg(not(feature = "own-terminal"))]
+    golden_files::check(SET, "links", &rows);
+    #[cfg(feature = "own-terminal")]
+    assert_eq!(rows, safe_plain_clicks(golden_files::read(SET, "links")));
+}
+
+/// The old rows as the own terminal gives them (D5): a plain click on an OSC 8 cell opens only a
+/// web or mail link, so the other targets of the old plain clicks open nothing.
+#[cfg(feature = "own-terminal")]
+fn safe_plain_clicks(golden: Vec<Value>) -> Vec<Value> {
+    use crate::terminals::term::links::may_open;
+
+    golden
+        .into_iter()
+        .map(|mut row| {
+            if row[3].as_str().is_some_and(|url| !may_open(url)) {
+                row[3] = Value::Null;
+            }
+            row
+        })
+        .collect()
 }
 
 /// T-L1 on the own link rules: the link the own model finds under the pointer (an OSC 8 link
@@ -1278,7 +1299,11 @@ fn clear_keeps_the_line_of_the_cursor(cx: &mut TestAppContext) {
     let cursor = content(&terminal, cx, |content| content.cursor.point);
     let text = zed(&terminal, cx).read_with(cx, |screen, _| screen.get_content());
     assert_eq!(text.trim_end(), "prompt$ ab");
-    assert_eq!((cursor.line, cursor.column), (0, 10));
+    #[cfg(feature = "own-terminal")]
+    let cursor = (cursor.line.0, cursor.column.0);
+    #[cfg(not(feature = "own-terminal"))]
+    let cursor = (cursor.line, cursor.column);
+    assert_eq!(cursor, (0, 10));
     assert_eq!(sent_text(), "");
 }
 
@@ -1329,8 +1354,8 @@ fn the_event_loop_wakes_once_per_pace_and_drops_a_replaced_screen(cx: &mut TestA
     let wakes = Rc::new(Cell::new(0));
     let counted = wakes.clone();
     cx.update(|_, cx| {
-        cx.subscribe(&screen, move |_, event: &terminal::Event, _| {
-            if matches!(event, terminal::Event::Wakeup) {
+        cx.subscribe(&screen, move |_, event: &Event, _| {
+            if matches!(event, Event::Wakeup) {
                 counted.set(counted.get() + 1);
             }
         })
@@ -1634,6 +1659,77 @@ mod own {
         own.writer.write(b"new");
         step(100, cx);
         assert_eq!(wakes.get(), 1);
+    }
+
+    // T-I2: text the input method composes sends nothing and shows at the cursor; a commit sends
+    // it once; an unmark drops it. The handler offers no text: its selection is empty at 0, and
+    // the rect of a range is the cursor's cell moved right a cell per character before it.
+    #[gpui::test]
+    fn the_input_method_composes_at_the_cursor_and_sends_only_a_commit(cx: &mut TestAppContext) {
+        use gpui::InputHandler as _;
+
+        use crate::terminals::term::ime::TermInput;
+
+        let (_, terminal, cx) = super::open(cx, super::PANE, false);
+        super::feed(&terminal, "prompt$ ", cx);
+        let view = terminal.read_with(cx, |terminal, _| terminal.view.clone());
+        let (cursor, cell_width) = super::content(&terminal, cx, |content| {
+            let grid = content.terminal_bounds;
+            let at = gpui::point(
+                grid.bounds.origin.x
+                    + (grid.cell_width * content.cursor.point.column.0 as f32).floor(),
+                grid.bounds.origin.y
+                    + (grid.line_height * content.cursor.point.line.0 as f32).floor(),
+            );
+            (at, grid.cell_width)
+        });
+        let mut input = TermInput::new(view.clone());
+        cx.update(|window, cx| {
+            input.replace_and_mark_text_in_range(None, "vie\u{302}", None, window, cx);
+            assert_eq!(input.marked_text_range(window, cx), Some(0..4));
+            let selected = input.selected_text_range(false, window, cx).unwrap();
+            assert_eq!(selected.range, 0..0);
+            assert_eq!(input.text_for_range(0..1, &mut None, window, cx), None);
+            let first = input.bounds_for_range(0..0, window, cx).unwrap();
+            assert_eq!(first.origin, cursor);
+            let third = input.bounds_for_range(2..3, window, cx).unwrap();
+            assert_eq!(third.origin.x, cursor.x + cell_width * 2.);
+            assert_eq!(third.size, first.size);
+        });
+        super::settle(cx);
+        assert_eq!(super::sent_text(), "", "marked text reached the shell");
+        cx.update(|window, cx| {
+            input.unmark_text(window, cx);
+            assert_eq!(input.marked_text_range(window, cx), None);
+            input.replace_and_mark_text_in_range(None, "vi", None, window, cx);
+            input.replace_text_in_range(None, "việt", window, cx);
+            assert_eq!(input.marked_text_range(window, cx), None);
+        });
+        super::settle(cx);
+        assert_eq!(super::sent::take(), ["việt"]);
+    }
+
+    // The scrollbar is drawn only in the states that show it; its thumb sits at the bottom of
+    // the track when the screen shows the newest lines, and goes up as the screen scrolls up.
+    #[gpui::test]
+    fn the_thumb_follows_the_scroll(cx: &mut TestAppContext) {
+        let (_, terminal, cx) = super::open(cx, super::PANE, false);
+        super::feed(&terminal, &super::history(200), cx);
+        let view = terminal.read_with(cx, |terminal, _| terminal.view.clone());
+        let thumb = |cx: &mut gpui::VisualTestContext| {
+            super::content(&terminal, cx, |_| ());
+            view.read_with(cx, |view, _| view.laid.and_then(|laid| laid.thumb))
+        };
+        let bottom = thumb(cx).expect("no thumb over 200 lines of history");
+        terminal.update(cx, |terminal, cx| {
+            terminal
+                .terminal()
+                .update(cx, |model, _| model.scroll_up_by(100))
+        });
+        super::settle(cx);
+        let up = thumb(cx).unwrap();
+        assert!(up.origin.y < bottom.origin.y, "{up:?} {bottom:?}");
+        assert_eq!(up.size, bottom.size);
     }
 
     // T-E1: a scroll, a resize and a select queued before one sync run in that order, and give

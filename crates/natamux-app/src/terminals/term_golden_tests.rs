@@ -7,7 +7,9 @@
 
 use gpui::{App, Hsla, Keystroke, MouseButton, Rgba, TestAppContext, VisualTestContext, px, size};
 use serde_json::{Value, json};
-use terminal::{Color, Content, Modes, NamedColor, Rgb};
+use terminal::{Color, NamedColor, Rgb};
+
+use super::screen::{Content, Modes};
 
 use super::behaviour_tests::{
     PANE, SET, cell, content, feed, focus, last_drawn, mods, mouse_down, mouse_move, mouse_up,
@@ -473,6 +475,7 @@ fn the_seeded_pairs_are_fixed() {
 }
 
 /// The text style the terminal draws with at 13 px: Zed's mono font, ligatures off.
+#[cfg(not(feature = "own-terminal"))]
 fn text_style(cx: &App) -> gpui::TextStyle {
     use ui::ActiveTheme;
     gpui::TextStyle {
@@ -486,6 +489,7 @@ fn text_style(cx: &App) -> gpui::TextStyle {
 
 /// A rect's fields are private, so its debug text is kept, with each `Hsla { .. }` written as
 /// 8-bit RGBA like every other colour of the tables.
+#[cfg(not(feature = "own-terminal"))]
 fn hex_colours(text: &str) -> String {
     const START: &str = "Hsla { h: ";
     let mut out = String::new();
@@ -507,6 +511,7 @@ fn hex_colours(text: &str) -> String {
     out
 }
 
+#[cfg(not(feature = "own-terminal"))]
 #[test]
 fn writes_the_colours_of_a_rect_as_hex() {
     assert_eq!(
@@ -517,6 +522,7 @@ fn writes_the_colours_of_a_rect_as_hex() {
 
 /// T-P1: the draw list of the `terminal-look` screen: text runs, background rects and block
 /// rects, from the screen's cells as the last frame copied them.
+#[cfg(not(feature = "own-terminal"))]
 fn draw_rows(cx: &mut TestAppContext) -> Vec<Value> {
     let (_, terminal, cx) = open(cx, size(px(1000.), px(500.)), false);
     feed(&terminal, &crate::app::shots_terminal::look(), cx);
@@ -560,6 +566,68 @@ fn draw_rows(cx: &mut TestAppContext) -> Vec<Value> {
         }
         for block in &blocks {
             rows.push(json!(["block", hex_colours(&format!("{block:?}"))]));
+        }
+    });
+    rows
+}
+
+/// T-P1 on the own layout of the cells, written in the old rows' form (the old element's debug
+/// text of its rects, with the colours as 8-bit RGBA).
+#[cfg(feature = "own-terminal")]
+fn draw_rows(cx: &mut TestAppContext) -> Vec<Value> {
+    use theme::ActiveTheme;
+
+    use crate::terminals::term::cell_layout::{MINIMUM_CONTRAST, layout};
+
+    let (_, terminal, cx) = open(cx, size(px(1000.), px(500.)), false);
+    feed(&terminal, &crate::app::shots_terminal::look(), cx);
+    let screen = zed(&terminal, cx);
+    let cells = screen.read_with(cx, |screen, _| screen.last_content().cells.clone());
+    let at =
+        |line: usize, column: usize| format!("LayoutPoint {{ line: {line}, column: {column} }}");
+    let mut rows = Vec::new();
+    cx.update(|_, cx| {
+        let drawn = layout(&cells, 0, cx.theme(), None, MINIMUM_CONTRAST);
+        for run in &drawn.runs {
+            let style = &run.style;
+            rows.push(json!([
+                "run",
+                at(run.line, run.column),
+                run.text,
+                run.cells,
+                hex(style.color),
+                style.weight.0,
+                if style.italic { "Italic" } else { "Normal" },
+                Value::Null,
+                style.underline.map(|line| (
+                    f32::from(line.thickness),
+                    line.color.map(hex),
+                    line.wavy
+                )),
+                style
+                    .strikethrough
+                    .map(|line| (f32::from(line.thickness), line.color.map(hex))),
+                "13px"
+            ]));
+        }
+        for rect in &drawn.rects {
+            let text = format!(
+                "LayoutRect {{ point: {}, num_of_cells: {}, color: {} }}",
+                at(rect.line, rect.column),
+                rect.cells,
+                hex(rect.color)
+            );
+            rows.push(json!(["rect", text]));
+        }
+        for block in &drawn.blocks {
+            let text = format!(
+                "BlockElementLayoutRect {{ point: {}, num_of_columns: {}, num_of_lines: {}, color: {} }}",
+                at(block.line, block.column),
+                block.columns,
+                block.lines,
+                hex(block.color)
+            );
+            rows.push(json!(["block", text]));
         }
     });
     rows
