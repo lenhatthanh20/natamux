@@ -132,9 +132,13 @@ pub(super) async fn diff_open(handle: WindowHandle<Root>, cx: &mut AsyncApp) -> 
         root.workspace_view().read(cx).changes_view().clone()
     })?;
     // The view already read its list; hand it the one that has the big change.
-    let list = fake.list_changes(&id, false).map_err(|error| anyhow!("{error:?}"))?;
+    let list = fake
+        .list_changes(&id, false)
+        .map_err(|error| anyhow!("{error:?}"))?;
     handle.update(cx, |_, _, cx| {
-        changes.update(cx, |changes, cx| changes.set_list(&id, Some(list), None, cx))
+        changes.update(cx, |changes, cx| {
+            changes.set_list(&id, Some(list), None, cx)
+        })
     })?;
     sleep(SETTLE, cx).await;
     for _ in 0..RUNS {
