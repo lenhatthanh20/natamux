@@ -2,6 +2,7 @@
 //! while adding, else the branch details, else the settings of the picked stage. The text fields
 //! are editors made when the pick changes and kept otherwise.
 
+use editor::Editor;
 use gpui::{AnyElement, ClickEvent, Entity, FocusHandle, Subscription, rems};
 use natamux_proto::projects::repo::SkillList;
 use natamux_proto::stages::capabilities::stage_name;
@@ -45,6 +46,12 @@ pub struct DetailsPane {
 }
 
 impl DetailsPane {
+    /// The prompt box of the stage that is picked, for the whole-app flows.
+    pub fn prompt_box(&self) -> Option<Entity<Editor>> {
+        let fields = self.stage_fields.as_ref()?;
+        Some(fields.prompt.editor.clone())
+    }
+
     pub fn new(
         editor: Entity<PipelineEditor>,
         window: &mut Window,

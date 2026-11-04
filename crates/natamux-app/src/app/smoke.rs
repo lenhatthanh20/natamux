@@ -2,7 +2,7 @@
 //! `--fake-daemon` it also checks that the terminal grid of a workspace does not scroll when its
 //! panes fit (T-0162), that a click on the status bar's sidebar and details toggles hides and
 //! shows them (T-0175), and that the pipeline chart of Project settings scrolls sideways to its
-//! last step (T-0163).
+//! last step (T-0163), then the whole-app flows F1 to F4 (`flow_smoke`).
 
 use std::time::{Duration, Instant};
 
@@ -13,6 +13,7 @@ use gpui::{
     point, px,
 };
 
+use super::flow_smoke;
 use super::settings_rules::SettingsPage;
 use super::shots::{self, RUNNING};
 use super::shots_stages::{PROJECT, READ};
@@ -282,11 +283,12 @@ async fn check_chart(handle: WindowHandle<Root>, quit: bool, cx: &mut AsyncApp) 
             ));
         }
         println!("smoke: the pipeline chart scrolls to its last step");
-        pass(quit, cx);
     });
     if let Err(error) = result {
         fail(&format!("the window is gone: {error}"));
     }
+    flow_smoke::run(handle, dialog, cx).await;
+    cx.update(|cx| pass(quit, cx));
 }
 
 fn pass(quit: bool, cx: &mut App) {
@@ -320,7 +322,7 @@ fn start_line(frame: Option<f64>, data: Option<f64>, steps: &[(&str, f64)]) -> S
     line
 }
 
-fn fail(message: &str) -> ! {
+pub(crate) fn fail(message: &str) -> ! {
     eprintln!("smoke: {message}");
     std::process::exit(1);
 }
