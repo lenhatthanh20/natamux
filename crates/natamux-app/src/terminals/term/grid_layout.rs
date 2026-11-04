@@ -56,3 +56,23 @@ pub fn grid(
 fn whole(fraction: f32) -> usize {
     fraction.next_up().floor().max(1.) as usize
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use gpui::{point, size};
+
+    #[test]
+    fn puts_the_spare_pixels_on_top_or_below_the_rows() {
+        let bounds = Bounds::new(point(px(10.3), px(20.7)), size(px(300.), px(200.)));
+        // 2 device pixels per pixel: 34 per line, 400 free, so 11 rows of 187 px and 13 spare.
+        let at = |y: f32| Grid {
+            origin: point(px(18.), px(y)),
+            columns: 36,
+            lines: 11,
+            height: px(187.),
+        };
+        assert_eq!(grid(bounds, px(8.), px(17.), 2., false), at(20.5));
+        assert_eq!(grid(bounds, px(8.), px(17.), 2., true), at(33.5));
+    }
+}

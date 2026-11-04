@@ -353,6 +353,10 @@ jobs:
             rust-app-${{ runner.os }}-
       - run: python3 scripts/ci-changes.py mtimes
       - run: cargo test -p natamux-app --locked
+      # The MIT move (docs/plan-mit-license.md 8.5): the own terminal's tests on macOS too, since
+      # its keys differ there. Removed when the swap is done (S2.6).
+      - name: The app tests with the own terminal
+        run: cargo test -p natamux-app --locked --features own-terminal
 
   # The Intel app that release.yml (mac-x64) builds. A main push with release notes builds and
   # saves its cache. Its prefix differs from app-macos, so the arm64 cleanup does not delete it.
