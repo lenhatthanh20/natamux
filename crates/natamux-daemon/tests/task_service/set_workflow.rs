@@ -1,7 +1,7 @@
 //! The group 'setWorkflow': the choices of a stage (workflow, CI, skip) and their logs.
 
 use natamux_daemon::tasks::errors::TaskError;
-use natamux_proto::stages::catalog::default_pipeline;
+use natamux_proto::stages::catalog::full_pipeline;
 use natamux_proto::stages::schema::{Gate, StageKind};
 
 use super::*;
@@ -15,7 +15,7 @@ struct Setup {
 impl Setup {
     fn new() -> Setup {
         let fx = Fixture::new();
-        let (shared, settings_of) = live_settings(default_pipeline());
+        let (shared, settings_of) = live_settings(full_pipeline());
         let service = fx.make(Some(settings_of));
         Setup {
             fx,
@@ -389,7 +389,7 @@ fn rebuilds_the_index_when_the_log_has_a_choice_for_a_stage_the_task_does_not_ha
         .unwrap();
 
     let fresh =
-        s.fx.started_on(s.fx.memory_index(), Some(settings(default_pipeline())));
+        s.fx.started_on(s.fx.memory_index(), Some(settings(full_pipeline())));
 
     assert_eq!(
         fresh.get_task(&task.id).unwrap().workflow_stages,
@@ -405,7 +405,7 @@ fn keeps_the_choice_when_the_index_is_built_again_from_the_files() {
     s.service.set_workflow(&task.id, "implement", true).unwrap();
 
     let fresh =
-        s.fx.started_on(s.fx.memory_index(), Some(settings(default_pipeline())));
+        s.fx.started_on(s.fx.memory_index(), Some(settings(full_pipeline())));
 
     assert_eq!(
         fresh.get_task(&task.id).unwrap().workflow_stages,

@@ -1,4 +1,4 @@
-use natamux_proto::stages::catalog::default_pipeline;
+use natamux_proto::stages::catalog::full_pipeline;
 use natamux_proto::stages::pipeline_rules::pipeline_issues;
 use natamux_proto::stages::prompt::default_prompt;
 use natamux_proto::stages::schema::{Condition, Gate, StageKind, Step};
@@ -23,7 +23,7 @@ fn shell_list(steps: &[Step]) -> Vec<(String, ShellKind, String)> {
 
 fn write_docs(output: &str) -> Vec<Step> {
     add_custom_stage(
-        &default_pipeline(),
+        &full_pipeline(),
         &CustomStageInput {
             name: "Write docs".into(),
             id: "write-docs".into(),
@@ -35,9 +35,9 @@ fn write_docs(output: &str) -> Vec<Step> {
 
 #[test]
 fn offers_a_workflow_with_true_and_leaves_the_field_out_when_it_is_off() {
-    let on = set_workflow(&default_pipeline(), "spec", true);
+    let on = set_workflow(&full_pipeline(), "spec", true);
     assert_eq!(field(&on, "spec").workflow, Some(true));
-    let off = set_workflow(&default_pipeline(), "implement", false);
+    let off = set_workflow(&full_pipeline(), "implement", false);
     assert_eq!(field(&off, "implement").workflow, None);
     assert_eq!(field(&off, "plan").workflow, Some(true));
 }
@@ -53,23 +53,23 @@ fn takes_the_workflow_of_the_catalog_as_the_default_and_none_for_a_stage_of_your
 
 #[test]
 fn ends_the_shell_with_true_and_leaves_the_field_out_when_it_is_off() {
-    let on = set_end_shell(&default_pipeline(), "spec", true);
+    let on = set_end_shell(&full_pipeline(), "spec", true);
     assert_eq!(field(&on, "spec").end_shell, Some(true));
     let off = set_end_shell(&on, "spec", false);
-    assert_eq!(field(&off, "spec"), field(&default_pipeline(), "spec"));
+    assert_eq!(field(&off, "spec"), field(&full_pipeline(), "spec"));
 }
 
 #[test]
 fn turns_a_stage_off_with_enabled_false_and_on_by_removing_it() {
-    let off = set_enabled(&default_pipeline(), "plan", false);
+    let off = set_enabled(&full_pipeline(), "plan", false);
     assert_eq!(field(&off, "plan").enabled, Some(false));
     let on = set_enabled(&off, "plan", true);
-    assert_eq!(field(&on, "plan"), field(&default_pipeline(), "plan"));
+    assert_eq!(field(&on, "plan"), field(&full_pipeline(), "plan"));
 }
 
 #[test]
 fn removes_a_field_set_to_an_empty_value_or_to_its_default() {
-    let mut steps = set_text(&default_pipeline(), "spec", TextField::Name, "Product spec");
+    let mut steps = set_text(&full_pipeline(), "spec", TextField::Name, "Product spec");
     assert_eq!(field(&steps, "spec").name.as_deref(), Some("Product spec"));
     steps = set_text(&steps, "spec", TextField::Name, "Spec");
     assert_eq!(field(&steps, "spec").name, None);
@@ -98,9 +98,9 @@ fn removes_a_field_set_to_an_empty_value_or_to_its_default() {
 
 #[test]
 fn keeps_a_custom_prompt_and_drops_one_equal_to_the_default() {
-    let plan = field(&default_pipeline(), "plan");
+    let plan = field(&full_pipeline(), "plan");
     let mut steps = set_text(
-        &default_pipeline(),
+        &full_pipeline(),
         "plan",
         TextField::Prompt,
         "Use {skill:planner} for {title}.",
@@ -115,8 +115,8 @@ fn keeps_a_custom_prompt_and_drops_one_equal_to_the_default() {
 
 #[test]
 fn knows_the_default_approval_of_each_stage() {
-    assert!(is_default_gate(&field(&default_pipeline(), "spec")));
-    let auto = set_gate(&default_pipeline(), "spec", Gate::Auto);
+    assert!(is_default_gate(&field(&full_pipeline(), "spec")));
+    let auto = set_gate(&full_pipeline(), "spec", Gate::Auto);
     assert!(!is_default_gate(&field(&auto, "spec")));
     assert_eq!(default_gate("implement", StageKind::Agent), Gate::Auto);
     assert_eq!(default_gate("my-stage", StageKind::Agent), Gate::Manual);
@@ -129,8 +129,8 @@ fn knows_the_default_approval_of_each_stage() {
 }
 
 #[test]
-fn finds_nothing_in_the_default_pipeline() {
-    assert_eq!(shell_list(&default_pipeline()), []);
+fn finds_nothing_in_the_full_pipeline() {
+    assert_eq!(shell_list(&full_pipeline()), []);
 }
 
 #[test]
@@ -185,7 +185,7 @@ fn own_agent_is_offered_on_every_agent_or_testing_stage_in_terminal_1() {
 
 #[test]
 fn own_agent_moves_a_catalog_stage_out_of_terminal_1_with_no_issue() {
-    let with_agent = set_text(&default_pipeline(), "spec", TextField::Agent, "codex");
+    let with_agent = set_text(&full_pipeline(), "spec", TextField::Agent, "codex");
     assert!(!runs_in_shell_one(&with_agent, "spec"));
     assert!(runs_in_shell_one(&with_agent, "plan"));
     assert!(pipeline_issues(&with_agent).is_empty());
@@ -209,7 +209,7 @@ fn own_agent_is_offered_as_before_on_stages_outside_terminal_1() {
 
 #[test]
 fn own_shell_is_offered_on_an_agent_stage_with_an_output_outside_a_group() {
-    let steps = default_pipeline();
+    let steps = full_pipeline();
     assert!(offers_own_shell(&steps, "spec"));
     assert!(offers_own_shell(&steps, "agent-review"));
     // Implement has no output; Testing is not an agent stage; a group ignores it.
@@ -222,9 +222,9 @@ fn own_shell_is_offered_on_an_agent_stage_with_an_output_outside_a_group() {
 #[test]
 fn own_shell_is_shown_on_any_stage_that_has_it_so_it_can_be_cleared() {
     // Test spec in the default group has it from the catalog.
-    assert!(offers_own_shell(&default_pipeline(), "test-spec"));
+    assert!(offers_own_shell(&full_pipeline(), "test-spec"));
     let wrong = set_own_shell(
-        &set_own_shell(&default_pipeline(), "testing", true),
+        &set_own_shell(&full_pipeline(), "testing", true),
         "implement",
         true,
     );
@@ -236,12 +236,12 @@ fn own_shell_is_shown_on_any_stage_that_has_it_so_it_can_be_cleared() {
 
 #[test]
 fn own_shell_writes_true_and_off_leaves_the_field_out_so_spec_runs_in_terminal_1() {
-    let on = set_own_shell(&default_pipeline(), "spec", true);
+    let on = set_own_shell(&full_pipeline(), "spec", true);
     assert_eq!(field(&on, "spec").own_shell, Some(true));
     assert!(!runs_in_shell_one(&on, "spec"));
     assert!(runs_in_own_shell(&on, "spec"));
     let off = set_own_shell(&on, "spec", false);
-    assert_eq!(field(&off, "spec"), field(&default_pipeline(), "spec"));
+    assert_eq!(field(&off, "spec"), field(&full_pipeline(), "spec"));
     assert!(runs_in_shell_one(&off, "spec"));
     assert!(!runs_in_own_shell(&off, "spec"));
 }
@@ -249,7 +249,7 @@ fn own_shell_writes_true_and_off_leaves_the_field_out_so_spec_runs_in_terminal_1
 #[test]
 fn own_shell_off_keeps_the_own_agent_of_a_catalog_stage() {
     let mut steps = set_text(
-        &default_pipeline(),
+        &full_pipeline(),
         "agent-review",
         TextField::Agent,
         "cursor",
@@ -287,11 +287,11 @@ fn own_shell_takes_the_catalog_as_the_default_and_off_for_a_stage_of_your_own() 
 
 #[test]
 fn writes_the_commit_rule_into_the_default_prompt_as_the_agent_gets_it() {
-    let implement = field(&default_pipeline(), "implement");
+    let implement = field(&full_pipeline(), "implement");
     let text = shown_default_prompt(&implement);
     assert!(text.contains("Do not commit. Leave the changes for review."));
     assert!(!text.contains("{commit}"));
-    let steps = set_text(&default_pipeline(), "implement", TextField::Prompt, &text);
+    let steps = set_text(&full_pipeline(), "implement", TextField::Prompt, &text);
     assert_eq!(field(&steps, "implement").prompt, None);
 }
 

@@ -13,7 +13,7 @@ use natamux_daemon::agents::runner::AgentLaunch;
 use natamux_daemon::shared::event_bus::EventBus;
 use natamux_daemon::shared::jobs::Clock;
 use natamux_daemon::tasks::service::{TaskService, TaskServiceOptions};
-use natamux_proto::stages::catalog::default_pipeline;
+use natamux_proto::stages::catalog::full_pipeline;
 use natamux_proto::tasks::task::{Task, TaskState};
 use natamux_store::task_index::TaskIndex;
 use serde_json::{Value, json};
@@ -191,7 +191,7 @@ fn leaves_agents_with_hooks_other_terminals_and_tasks_that_do_not_run_alone() {
 #[test]
 fn asks_for_the_stage_of_the_first_terminal_inside_a_group() {
     let f = Fixture::new();
-    let pipeline = default_pipeline();
+    let pipeline = full_pipeline();
     let settings: natamux_daemon::tasks::store::SettingsOf = Arc::new(move |_| pipeline.clone());
     let staged = Fixture::service(&f.dir, &f.time, Some(settings));
     let input = json!({ "title": "Export", "agent": "cursor" });

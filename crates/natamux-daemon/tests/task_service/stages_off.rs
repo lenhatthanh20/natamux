@@ -1,13 +1,13 @@
 //! The group 'createTask with stages that are off'.
 
-use natamux_proto::stages::catalog::default_pipeline;
+use natamux_proto::stages::catalog::full_pipeline;
 
 use super::*;
 
 #[test]
 fn gives_a_new_task_only_the_stages_that_are_on() {
     let fx = Fixture::new();
-    let stages: Vec<Step> = default_pipeline()
+    let stages: Vec<Step> = full_pipeline()
         .into_iter()
         .map(|step| match step {
             Step::Stage(stage) if stage.id == "context" || stage.id == "plan" => {

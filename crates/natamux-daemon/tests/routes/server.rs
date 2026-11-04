@@ -308,6 +308,15 @@ impl TestDaemon {
         std::fs::write(file, json!({ "stages": stages }).to_string()).unwrap();
     }
 
+    /// The pipeline before the simple default, with its Test spec and Implement group. Write it
+    /// before the first task is made.
+    #[allow(dead_code)]
+    pub fn set_full_pipeline(&self) {
+        let stages = natamux_proto::stages::catalog::full_pipeline();
+        let file = self.root.join("repo/.natamux.json");
+        std::fs::write(file, json!({ "stages": stages }).to_string()).unwrap();
+    }
+
     /// `POST /tasks` with a title; gives the id.
     pub async fn make_task(&self, title: &str) -> String {
         let (status, body) = self

@@ -1,7 +1,7 @@
 //! Helpers of the event tests (`packages/core/src/events/__tests__/events.fixture.ts`).
 
 use natamux_proto::events::task_event::TaskEvent;
-use natamux_proto::stages::catalog::default_pipeline;
+use natamux_proto::stages::catalog::full_pipeline;
 use natamux_proto::stages::schema::{Gate, Stage, StageBranch, StageKind, Step};
 use natamux_proto::tasks::task::TaskState;
 use serde_json::{Map, Value, json};
@@ -9,10 +9,10 @@ use serde_json::{Map, Value, json};
 use crate::events::apply::{AppliedEvent, apply_task_event};
 use crate::stages::position::{Lanes, Paths, StagePosition};
 
-/// The pipeline the cases were written for: a person reviews, then the tests run. The default
+/// The pipeline the cases were written for: a person reviews, then the tests run. The full
 /// pipeline has an agent review after the tests instead.
 pub fn pipeline() -> Vec<Step> {
-    default_pipeline()
+    full_pipeline()
         .into_iter()
         .flat_map(|step| match step.id() {
             "agent-review" => vec![],

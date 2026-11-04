@@ -1,4 +1,4 @@
-use natamux_proto::stages::catalog::{STAGE_PHASES, catalog_entries, default_pipeline};
+use natamux_proto::stages::catalog::{STAGE_PHASES, catalog_entries, full_pipeline};
 use natamux_proto::stages::pipeline_rules::{IssueLevel, PipelineIssue, pipeline_issues};
 use natamux_proto::stages::schema::{Gate, Stage, StageKind};
 
@@ -34,7 +34,7 @@ fn offered(steps: &[Step]) -> Vec<&'static str> {
 
 #[test]
 fn adds_a_catalog_stage_before_the_release_with_its_output_and_sections() {
-    let steps = add_catalog_stage(&default_pipeline(), "security", None);
+    let steps = add_catalog_stage(&full_pipeline(), "security", None);
     assert_eq!(last_two(&steps), ["security", "release"]);
     let mut want = Stage::new("security", StageKind::Agent, Gate::Manual);
     want.name = Some("Security review".into());
@@ -42,7 +42,7 @@ fn adds_a_catalog_stage_before_the_release_with_its_output_and_sections() {
     want.sections = Some(vec!["Findings".into()]);
     want.own_shell = Some(true);
     assert_eq!(find_stage(&steps, "security"), Some(&want));
-    let no_release = remove_stage(&default_pipeline(), "release");
+    let no_release = remove_stage(&full_pipeline(), "release");
     assert_eq!(
         add_catalog_stage(&no_release, "qa", None)
             .last()
@@ -53,7 +53,7 @@ fn adds_a_catalog_stage_before_the_release_with_its_output_and_sections() {
 
 #[test]
 fn offers_only_the_catalog_stages_that_are_not_in_the_pipeline() {
-    let steps = default_pipeline();
+    let steps = full_pipeline();
     assert!(offered(&steps).contains(&"security"));
     assert!(!offered(&steps).contains(&"spec"));
     let without_spec = remove_stage(&steps, "spec");
@@ -63,14 +63,14 @@ fn offers_only_the_catalog_stages_that_are_not_in_the_pipeline() {
 #[test]
 fn adds_a_stage_of_your_own_that_waits_for_approval() {
     let steps = add_custom_stage(
-        &default_pipeline(),
+        &full_pipeline(),
         &input("Load test", "load-test", CustomKind::Agent, "load.md"),
     );
     let mut want = Stage::new("load-test", StageKind::Agent, Gate::Manual);
     want.output = Some("load.md".into());
     assert_eq!(find_stage(&steps, "load-test"), Some(&want));
     let named = add_custom_stage(
-        &default_pipeline(),
+        &full_pipeline(),
         &input("Ask legal", "legal", CustomKind::Manual, "ignored.md"),
     );
     let mut want = Stage::new("legal", StageKind::Manual, Gate::Manual);
@@ -80,7 +80,7 @@ fn adds_a_stage_of_your_own_that_waits_for_approval() {
 
 #[test]
 fn refuses_a_custom_stage_with_a_used_wrong_or_catalog_id() {
-    let steps = default_pipeline();
+    let steps = full_pipeline();
     let base = input("Spec", "spec", CustomKind::Agent, "");
     assert_eq!(
         custom_stage_problems(&steps, &base).id.as_deref(),
@@ -135,20 +135,20 @@ fn makes_an_id_from_a_name() {
 
 #[test]
 fn c2_adds_a_stage_before_release_also_when_release_is_off() {
-    let off = set_enabled(&default_pipeline(), "release", false);
+    let off = set_enabled(&full_pipeline(), "release", false);
     let steps = add_catalog_stage(&off, "research", None);
     assert_eq!(last_two(&steps), ["research", "release"]);
 }
 
 #[test]
 fn c2_does_not_offer_a_stage_that_is_in_the_file_but_off() {
-    let off = set_enabled(&default_pipeline(), "spec", false);
+    let off = set_enabled(&full_pipeline(), "spec", false);
     assert!(!offered(&off).contains(&"spec"));
 }
 
 #[test]
 fn c3_refuses_the_id_of_a_stage_that_is_off_since_ids_are_unique_in_the_file() {
-    let off = set_enabled(&default_pipeline(), "plan", false);
+    let off = set_enabled(&full_pipeline(), "plan", false);
     let problems = custom_stage_problems(&off, &input("Plan", "plan", CustomKind::Agent, ""));
     assert_eq!(problems.id.as_deref(), Some("Another stage uses this id"));
 }
@@ -156,7 +156,7 @@ fn c3_refuses_the_id_of_a_stage_that_is_off_since_ids_are_unique_in_the_file() {
 #[test]
 fn c3_follows_the_stage_id_rule_of_core_where_a_leading_digit_is_allowed() {
     let problem = |id: &str| {
-        custom_stage_problems(&default_pipeline(), &input("X", id, CustomKind::Agent, "")).id
+        custom_stage_problems(&full_pipeline(), &input("X", id, CustomKind::Agent, "")).id
     };
     let rule = Some("A stage id is lower case words joined by \"-\"".to_string());
     for id in ["-load", "load_test", "load!", "load test"] {
@@ -176,7 +176,7 @@ fn c3_makes_a_valid_id_from_non_ascii_names_or_none() {
     assert_eq!(id_from_name("\u{65e5}\u{672c}\u{8a9e}"), "");
     let name = "\u{65e5}\u{672c}\u{8a9e}";
     let problems = custom_stage_problems(
-        &default_pipeline(),
+        &full_pipeline(),
         &input(name, &id_from_name(name), CustomKind::Agent, ""),
     );
     assert_eq!(problems.id.as_deref(), Some("Give the stage an id"));
@@ -186,7 +186,7 @@ fn c3_makes_a_valid_id_from_non_ascii_names_or_none() {
 fn c3_takes_only_a_markdown_file_name_as_output_never_a_path() {
     let problem = |output: &str| {
         custom_stage_problems(
-            &default_pipeline(),
+            &full_pipeline(),
             &input("X", "x", CustomKind::Agent, output),
         )
         .output
@@ -200,7 +200,7 @@ fn c3_takes_only_a_markdown_file_name_as_output_never_a_path() {
 
 #[test]
 fn c12_treats_a_command_of_spaces_as_empty() {
-    let steps = add_catalog_stage(&default_pipeline(), "lint", None);
+    let steps = add_catalog_stage(&full_pipeline(), "lint", None);
     let steps = set_text(&steps, "lint", TextField::Command, "   ");
     assert_eq!(find_stage(&steps, "lint").unwrap().command, None);
     let kept = set_text(
@@ -283,7 +283,7 @@ fn keeps_the_same_message_on_another_stage() {
 
 #[test]
 fn picker_lists_every_catalog_stage_that_is_not_in_the_pipeline_by_phase() {
-    let groups = picker_groups(&default_pipeline(), "");
+    let groups = picker_groups(&full_pipeline(), "");
     let names: Vec<&str> = groups.iter().map(|(phase, _)| phase.name()).collect();
     assert_eq!(names, ["Understand", "Design", "Build", "Check", "Ship"]);
     let total: usize = groups.iter().map(|(_, entries)| entries.len()).sum();
@@ -314,7 +314,7 @@ fn picker_lists_every_catalog_stage_that_is_not_in_the_pipeline_by_phase() {
 
 #[test]
 fn picker_filters_the_stages_by_name() {
-    let groups = picker_groups(&default_pipeline(), "secur");
+    let groups = picker_groups(&full_pipeline(), "secur");
     let found: Vec<&str> = groups
         .iter()
         .flat_map(|(_, e)| e)
@@ -323,14 +323,14 @@ fn picker_filters_the_stages_by_name() {
     assert!(found.contains(&"security"));
     assert!(!found.contains(&"research"));
     assert_eq!(
-        picker_empty_text(&default_pipeline(), "securxyz").as_deref(),
+        picker_empty_text(&full_pipeline(), "securxyz").as_deref(),
         Some("No stage of the list matches \u{201c}securxyz\u{201d}.")
     );
 }
 
 #[test]
 fn picker_c2_shows_the_phases_in_order_and_hides_a_phase_with_nothing_left() {
-    let groups = picker_groups(&default_pipeline(), "  SEC ");
+    let groups = picker_groups(&full_pipeline(), "  SEC ");
     assert_eq!(
         groups
             .iter()
@@ -340,7 +340,7 @@ fn picker_c2_shows_the_phases_in_order_and_hides_a_phase_with_nothing_left() {
     );
     assert_eq!(groups[0].1[0].stage.id, "security");
     assert!(groups.iter().all(|(phase, _)| phase.name() != "Understand"));
-    let order: Vec<_> = picker_groups(&default_pipeline(), "")
+    let order: Vec<_> = picker_groups(&full_pipeline(), "")
         .iter()
         .map(|(p, _)| *p)
         .collect();
@@ -350,10 +350,10 @@ fn picker_c2_shows_the_phases_in_order_and_hides_a_phase_with_nothing_left() {
 #[test]
 fn picker_c2_keeps_custom_stage_when_nothing_matches() {
     assert_eq!(
-        picker_empty_text(&default_pipeline(), "nothing like this").as_deref(),
+        picker_empty_text(&full_pipeline(), "nothing like this").as_deref(),
         Some("No stage of the list matches \u{201c}nothing like this\u{201d}.")
     );
-    assert!(picker_empty_text(&default_pipeline(), "").is_none());
+    assert!(picker_empty_text(&full_pipeline(), "").is_none());
 }
 
 #[test]
@@ -371,7 +371,7 @@ fn picker_c2_says_so_when_every_catalog_stage_is_in_the_pipeline() {
 
 #[test]
 fn picker_c2_does_not_offer_a_stage_that_is_in_the_pipeline_but_off() {
-    let off = set_enabled(&default_pipeline(), "spec", false);
+    let off = set_enabled(&full_pipeline(), "spec", false);
     let groups = picker_groups(&off, "");
     assert!(
         groups
@@ -383,7 +383,7 @@ fn picker_c2_does_not_offer_a_stage_that_is_in_the_pipeline_but_off() {
 #[test]
 fn picker_adds_a_custom_stage_with_an_id_from_its_name() {
     assert_eq!(form_id("Load test", None), "load-test");
-    let steps = default_pipeline();
+    let steps = full_pipeline();
     let form = input(
         "Load test",
         &form_id("Load test", None),
@@ -396,7 +396,7 @@ fn picker_adds_a_custom_stage_with_an_id_from_its_name() {
 
 #[test]
 fn picker_refuses_an_id_that_is_used_or_breaks_the_id_rule() {
-    let steps = default_pipeline();
+    let steps = full_pipeline();
     let used = input("Plan", &form_id("Plan", None), CustomKind::Agent, "");
     assert_eq!(
         visible_problems(&custom_stage_problems(&steps, &used), &used, false)
@@ -418,7 +418,7 @@ fn picker_refuses_an_id_that_is_used_or_breaks_the_id_rule() {
 
 #[test]
 fn picker_asks_for_a_name_before_it_adds_a_stage() {
-    let steps = default_pipeline();
+    let steps = full_pipeline();
     let blank = input("", "", CustomKind::Agent, "");
     let problems = custom_stage_problems(&steps, &blank);
     assert_eq!(visible_problems(&problems, &blank, false).name, None);
@@ -430,7 +430,7 @@ fn picker_asks_for_a_name_before_it_adds_a_stage() {
 
 #[test]
 fn picker_c3_refuses_a_name_of_spaces() {
-    let steps = default_pipeline();
+    let steps = full_pipeline();
     let spaces = input("   ", &form_id("   ", None), CustomKind::Agent, "");
     let problems = custom_stage_problems(&steps, &spaces);
     assert_eq!(
@@ -447,7 +447,7 @@ fn picker_c3_keeps_an_id_edited_by_hand_when_the_name_changes() {
 
 #[test]
 fn picker_c3_refuses_the_id_of_a_catalog_stage_which_belongs_to_the_list() {
-    let steps = default_pipeline();
+    let steps = full_pipeline();
     let research = input(
         "Research",
         &form_id("Research", None),
@@ -468,7 +468,7 @@ fn picker_c3_makes_a_valid_id_from_a_vietnamese_name() {
 
 #[test]
 fn picker_c3_shows_the_output_file_for_agent_stages_only() {
-    let steps = default_pipeline();
+    let steps = full_pipeline();
     let manual = input("X", "x", CustomKind::Manual, "x.txt");
     assert_eq!(custom_stage_problems(&steps, &manual).output, None);
     let agent = input("X", "x", CustomKind::Agent, "x.txt");
@@ -477,7 +477,7 @@ fn picker_c3_shows_the_output_file_for_agent_stages_only() {
 
 #[test]
 fn picker_hides_an_output_problem_until_something_is_typed() {
-    let steps = default_pipeline();
+    let steps = full_pipeline();
     let form = input("X", "x", CustomKind::Agent, "");
     let problems = CustomStageProblems {
         output: Some("wrong".into()),

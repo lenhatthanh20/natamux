@@ -1,4 +1,4 @@
-use natamux_proto::stages::catalog::default_pipeline;
+use natamux_proto::stages::catalog::full_pipeline;
 use natamux_proto::stages::pipeline_rules::{IssueLevel, PipelineIssue};
 use natamux_proto::stages::schema::{BranchPath, Gate, Stage, StageGroup, StageKind, Step};
 
@@ -63,7 +63,7 @@ fn lane<'a>(steps: &'a [Step], id: &str) -> &'a BranchPath {
 
 #[test]
 fn names_the_stages_in_order_with_the_group_side_by_side() {
-    let steps = default_pipeline();
+    let steps = full_pipeline();
     assert_eq!(
         pipeline_label(&steps),
         "Pipeline: Context, then Spec, then Plan, then Test spec and Implement side by side, then Automated tests, then Review, then Release"
@@ -82,7 +82,7 @@ fn names_the_stages_in_order_with_the_group_side_by_side() {
 #[test]
 fn marks_the_stages_that_wait_for_approval_and_the_ones_with_a_prompt_of_their_own() {
     let steps = set_text(
-        &default_pipeline(),
+        &full_pipeline(),
         "plan",
         TextField::Prompt,
         "Plan {title}.",
@@ -99,13 +99,13 @@ fn marks_the_stages_that_wait_for_approval_and_the_ones_with_a_prompt_of_their_o
 
 #[test]
 fn leaves_out_the_stages_that_are_off() {
-    let steps = set_enabled(&default_pipeline(), "plan", false);
+    let steps = set_enabled(&full_pipeline(), "plan", false);
     assert!(!pipeline_label(&steps).contains("Plan"));
 }
 
 #[test]
 fn says_so_when_no_stage_is_on() {
-    let off = all_off(&default_pipeline());
+    let off = all_off(&full_pipeline());
     assert!(active_steps(&off).is_empty());
     assert_eq!(NO_STAGE_ON, "No stage is on. Turn on at least one.");
 }
@@ -119,7 +119,7 @@ fn marks_a_selected_stage_and_a_wrong_one() {
     }];
     assert!(error_ids(&issues).contains("agent-review"));
     assert_eq!(
-        tip(&default_pipeline(), "agent-review"),
+        tip(&full_pipeline(), "agent-review"),
         "Agent \u{b7} Moves on by itself \u{b7} Output: review.md"
     );
 }
@@ -164,7 +164,7 @@ fn c19_tells_the_output_file_and_the_command_in_the_tooltip() {
 #[test]
 fn c5_draws_no_fork_when_every_stage_of_a_group_is_off() {
     let off = set_enabled(
-        &set_enabled(&default_pipeline(), "test-spec", false),
+        &set_enabled(&full_pipeline(), "test-spec", false),
         "implement",
         false,
     );
@@ -428,5 +428,5 @@ fn shows_no_agent_line_for_a_stage_whose_agent_is_not_used_nor_in_the_default_pi
     let steps = vec![Step::Stage(sign_off)];
     assert_eq!(line(&steps, "sign-off"), None);
     assert!(!shows_agents(&steps));
-    assert!(!shows_agents(&default_pipeline()));
+    assert!(!shows_agents(&full_pipeline()));
 }

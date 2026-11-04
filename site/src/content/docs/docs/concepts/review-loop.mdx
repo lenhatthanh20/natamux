@@ -1,6 +1,6 @@
 ---
 title: The review loop
-description: How the default pipeline runs two agents side by side, starts a third agent to review the work, and sends the task back to Implement until the review passes.
+description: How a review agent checks the work and sends the task back to Implement until the review passes, in the default pipeline and with Plan, Test spec and Automated tests added.
 sidebar:
   order: 4
   badge:
@@ -13,11 +13,13 @@ import StageFlow from '../../../../components/StageFlow.astro'
 import Figure from '../../../../components/Figure.astro'
 import NativeClip from '../../../../components/NativeClip.astro'
 
-The default pipeline is built so that agents check each other. After you approve the plan, two agents work at the same time: one writes the test cases from the spec, the other writes the code. When both are done, the tests run. Then a third agent, in a terminal and session of its own, reviews the changes. If it finds problems, it sends the task back to Implement by itself, with the reasons, and the loop runs again until the review passes.
+Agents check each other. In the [default pipeline](/docs/concepts/stages/#the-default-pipeline) (Context, Spec, Implement, Review, Release) you approve the spec, the task's agent implements it, and a second agent reviews the changes and sends the task back to Implement until the review passes.
+
+This page shows the loop with more stages from the catalog: **Plan**, **Test spec** next to Implement, and **Automated tests**. After you approve the plan, two agents work at the same time: one writes the test cases from the spec, the other writes the code. When both are done, the tests run. Then a third agent, in a terminal and session of its own, reviews the changes. If it finds problems, it sends the task back to Implement by itself, with the reasons, and the loop runs again until the review passes.
 
 <StageFlow />
 
-You approve three things: the spec, the plan and the test spec. Everything after that runs on its own, unless an agent asks you something, a check fails twice, or the loop reaches its limit.
+With these stages you approve three things: the spec, the plan and the test spec. Everything after that runs on its own, unless an agent asks you something, a check fails twice, or the loop reaches its limit.
 
 ## Step by step
 
@@ -136,7 +138,7 @@ When the task waits for you after the last send back the limit allows, you decid
 
 ## Change the loop
 
-Everything here is the default pipeline. In [project settings](/docs/guides/project-settings/) you can:
+In [project settings](/docs/guides/project-settings/) you can:
 
 - turn **Test spec** or **Review** off, or turn **Wait for my approval** on for Review;
 - add **Manual review** after Review, so a person reads the diff before release;

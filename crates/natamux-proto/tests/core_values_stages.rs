@@ -312,11 +312,7 @@ fn the_default_pipeline_has_the_ids_and_order_of_core() {
         .map(|stage| stage.id.as_str())
         .collect();
     assert_eq!(rust, ids);
-    let Step::Group(group) = &steps[3] else {
-        panic!("not a group")
-    };
-    assert!(written.contains(&format!("id: '{}'", group.id)));
-    assert!(written.contains(&format!("name: '{}'", group.name.as_deref().unwrap())));
+    assert!(!steps.iter().any(Step::is_group));
     assert!(
         steps
             .iter()

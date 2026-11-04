@@ -20,7 +20,7 @@ use natamux_daemon::terminals::service::{TerminalOptions, TerminalService};
 use natamux_daemon::terminals::types::TerminalError;
 use natamux_proto::events::task_event::TaskEvent;
 use natamux_proto::projects::repo::ProjectSettings;
-use natamux_proto::stages::catalog::default_pipeline;
+use natamux_proto::stages::catalog::full_pipeline;
 use natamux_proto::tasks::job::Job;
 use natamux_proto::tasks::task::Task;
 use natamux_stages::checks::{Ran, RunCommand};
@@ -62,7 +62,7 @@ pub const SEND_BACK_LIMIT: usize = 2;
 
 fn default_settings() -> ProjectSettings {
     ProjectSettings {
-        stages: default_pipeline(),
+        stages: full_pipeline(),
         ..ProjectSettings::default()
     }
 }
