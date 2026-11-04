@@ -4,7 +4,7 @@
 use std::fmt::Write as _;
 use std::time::{Duration, Instant};
 
-use anyhow::{Result, anyhow};
+use anyhow::{Context as _, Result, anyhow};
 use gpui::{AsyncApp, Focusable as _, Keystroke, WindowHandle};
 use natamux_proto::workspaces::changes::{ChangeStatus, FileDiff};
 
@@ -102,9 +102,15 @@ pub(super) async fn diff_open(handle: WindowHandle<Root>, cx: &mut AsyncApp) -> 
         .into_iter()
         .find_map(|id| {
             let list = fake.list_changes(&id, false).ok()?;
-            (list.len() >= 2).then(|| (id, list[0].path.clone()))
+            // A text diff that shows as one: no image, no binary file.
+            let text = list.iter().find_map(|entry| {
+                let diff = fake.file_diff(&id, &entry.path).ok()?;
+                let both = diff.original.is_some() && diff.modified.is_some();
+                (both && !diff.binary && diff.original != diff.modified).then(|| entry.path.clone())
+            })?;
+            Some((id, text))
         })
-        .ok_or_else(|| anyhow!("no fake task has two changed files"))?;
+        .ok_or_else(|| anyhow!("no fake task has a changed text file"))?;
     let (original, modified) = big_diff();
     fake.put_change(
         &id,
@@ -131,7 +137,9 @@ pub(super) async fn diff_open(handle: WindowHandle<Root>, cx: &mut AsyncApp) -> 
             view.update(cx, |c, cx| c.shot_pick(&path, cx))
         })?;
         let (view, path) = (changes.clone(), other.clone());
-        drawn_when(handle, cx, move |_, cx| view.read(cx).shot_shown(&path, cx)).await?;
+        drawn_when(handle, cx, move |_, cx| view.read(cx).shot_shown(&path, cx))
+            .await
+            .context("the other file was not shown")?;
         sleep(SETTLE, cx).await;
         let started = Instant::now();
         handle.update(cx, |_, _, cx| {
@@ -141,7 +149,8 @@ pub(super) async fn diff_open(handle: WindowHandle<Root>, cx: &mut AsyncApp) -> 
         let (_, drawn) = drawn_when(handle, cx, move |_, cx| {
             view.read(cx).shot_shown(DIFF_FILE, cx)
         })
-        .await?;
+        .await
+        .context("the big diff was not shown")?;
         record(
             "diff_open_10000",
             drawn.saturating_duration_since(started),
