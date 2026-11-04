@@ -1,5 +1,13 @@
-import { expect, test } from '@playwright/test'
-import { signIn, taskNamed, taskTable } from './helpers'
+import { expect, type Page, test } from '@playwright/test'
+import {
+  firstRepo,
+  type Repo,
+  restoreSettings,
+  signIn,
+  taskNamed,
+  taskTable,
+  useFullPipeline,
+} from './helpers'
 
 test.beforeEach(async ({ page }) => {
   await signIn(page)
@@ -33,7 +41,18 @@ test('ticks Run with a workflow on a stage of a new task', async ({ page }) => {
   await expect(box).not.toBeChecked()
 })
 
-test('offers a workflow on Plan in the project settings', async ({ page }) => {
+test('offers a workflow on Plan in the project settings', async ({ page, request }) => {
+  // Plan is not in the default pipeline since T-0282.
+  const repo: Repo = await firstRepo(request)
+  const before = await useFullPipeline(request, repo)
+  try {
+    await planOffersWorkflow(page)
+  } finally {
+    await restoreSettings(request, repo, before)
+  }
+})
+
+async function planOffersWorkflow(page: Page) {
   const sidebar = page.getByRole('navigation', { name: 'Workspaces' })
   await sidebar.getByRole('button', { name: 'Add a project' }).click()
   const projects = page.getByRole('dialog', { name: 'Projects' })
@@ -53,4 +72,4 @@ test('offers a workflow on Plan in the project settings', async ({ page }) => {
   await expect(settings.getByRole('textbox', { name: '.natamux.json' })).toHaveValue(
     /"id": "spec",[^}]*"workflow": true/,
   )
-})
+}

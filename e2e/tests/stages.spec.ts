@@ -8,6 +8,7 @@ import {
   type Repo,
   signIn,
   type TaskEvent,
+  useFullPipeline,
   taskNamed,
   taskOf,
   taskTable,
@@ -26,14 +27,16 @@ let repo: Repo
 let before: { text: string | null }
 const made: string[] = []
 
+// The cases were written for the pipeline with Plan, a group and Automated tests, which is no
+// longer the default (T-0282), so each test starts from it.
 test.beforeEach(async ({ page, request }) => {
   repo = await firstRepo(request)
-  before = await (await request.get(`/api/repos/${repo.id}/settings`, { headers })).json()
+  before = await useFullPipeline(request, repo)
   await signIn(page)
 })
 
-// The tests share one daemon: the settings of the project go back to what they were, which is
-// the default pipeline, and the tasks a test made are removed, also when the test fails.
+// The tests share one daemon: the settings of the project go back to what they were, and the
+// tasks a test made are removed, also when the test fails.
 test.afterEach(async ({ request }) => {
   for (const id of made.splice(0)) {
     await request.delete(`/api/tasks/${id}`, { headers })
