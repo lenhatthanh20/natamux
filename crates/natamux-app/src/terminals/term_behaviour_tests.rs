@@ -113,6 +113,7 @@ pub(super) fn start(terminal: &Entity<RemoteTerminal>, cx: &mut VisualTestContex
     settle(cx);
     focus(terminal, cx);
     sent::take();
+    sent::claims();
 }
 
 pub(super) fn open(
@@ -187,7 +188,7 @@ pub(super) fn content<R>(
 }
 
 /// The screen as the last frame copied it, with no new frame.
-fn last_drawn<R>(
+pub(super) fn last_drawn<R>(
     terminal: &Entity<RemoteTerminal>,
     cx: &mut VisualTestContext,
     read: impl FnOnce(&Content) -> R,
@@ -968,8 +969,8 @@ fn golden_terminal_links(cx: &mut TestAppContext) {
     golden_files::write(SET, "links", &link_rows(cx));
 }
 
-// T-F1: focus reports only with mode 1004; the cursor of an unfocused view, and of a view whose
-// context menu has the focus.
+// T-F1: focus reports only with mode 1004; the size claims of focus; the cursor of an unfocused
+// view, and of a view whose context menu has the focus.
 fn focus_rows(cx: &mut TestAppContext) -> Vec<Value> {
     let (host, terminal, cx) = open(cx, PANE, false);
     let mut rows = Vec::new();
@@ -983,7 +984,7 @@ fn focus_rows(cx: &mut TestAppContext) -> Vec<Value> {
         let exact = terminal.update_in(cx, |terminal, window, cx| {
             terminal.view.focus_handle(cx).is_focused(window)
         });
-        json!([case, sent_text(), shape, focused, exact])
+        json!([case, sent_text(), sent::claims(), shape, focused, exact])
     };
     rows.push(row("focused", &terminal, cx));
     blur(&host, cx);
