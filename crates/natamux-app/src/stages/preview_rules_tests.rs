@@ -81,12 +81,7 @@ fn names_the_stages_in_order_with_the_group_side_by_side() {
 
 #[test]
 fn marks_the_stages_that_wait_for_approval_and_the_ones_with_a_prompt_of_their_own() {
-    let steps = set_text(
-        &full_pipeline(),
-        "plan",
-        TextField::Prompt,
-        "Plan {title}.",
-    );
+    let steps = set_text(&full_pipeline(), "plan", TextField::Prompt, "Plan {title}.");
     assert!(waits_for_person(stage(&steps, "plan")));
     assert!(has_custom_prompt(stage(&steps, "plan")));
     assert_eq!(

@@ -248,12 +248,7 @@ fn own_shell_writes_true_and_off_leaves_the_field_out_so_spec_runs_in_terminal_1
 
 #[test]
 fn own_shell_off_keeps_the_own_agent_of_a_catalog_stage() {
-    let mut steps = set_text(
-        &full_pipeline(),
-        "agent-review",
-        TextField::Agent,
-        "cursor",
-    );
+    let mut steps = set_text(&full_pipeline(), "agent-review", TextField::Agent, "cursor");
     steps = set_text(&steps, "agent-review", TextField::Args, "--model x");
     let off = set_own_shell(&steps, "agent-review", false);
     let review = field(&off, "agent-review");
