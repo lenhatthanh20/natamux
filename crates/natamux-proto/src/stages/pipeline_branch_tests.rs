@@ -137,13 +137,61 @@ fn needs_a_stage_in_each_path_and_single_stages_only() {
         ])),
         ["A path has at least one stage"]
     );
-    // A group or a branch inside a path cannot be read.
-    let group = json!({"id": "build", "parallel": [agent("implement"), agent("docs")]});
+    // A branch inside a path is refused; a group is a step of the path (below).
     let nested = json!({"id": "inner", "paths": [path("x", vec![agent("implement")])]});
-    for inner in [group, nested] {
-        let value = with_paths(vec![path("a", vec![inner]), path("b", vec![review()])]);
-        assert!(serde_json::from_value::<Vec<Step>>(value).is_err());
-    }
+    let value = with_paths(vec![path("a", vec![nested]), path("b", vec![review()])]);
+    assert!(serde_json::from_value::<Vec<Step>>(value.clone()).is_ok());
+    assert_eq!(
+        messages(value),
+        ["A path holds stages and side-by-side groups, not a branch"]
+    );
+}
+
+fn triage(parallel: Vec<Value>) -> Value {
+    json!({"id": "triage", "parallel": parallel})
+}
+
+#[test]
+fn takes_a_side_by_side_group_in_a_path() {
+    let bug = |parallel: Vec<Value>| {
+        with_paths(vec![
+            path("bug", vec![triage(parallel), agent("fix")]),
+            otherwise("other", vec![review()]),
+        ])
+    };
+    assert!(valid(bug(vec![agent("repro"), stage("look", "manual")])));
+    let parsed = steps(bug(vec![agent("repro"), agent("look")]));
+    assert_eq!(
+        serde_json::to_value(&parsed).unwrap(),
+        bug(vec![agent("repro"), agent("look")])
+    );
+
+    // The group rules hold inside a path too.
+    let size = "A group holds 2 to 4 stages";
+    assert!(messages(bug(vec![agent("repro")])).contains(&size.to_string()));
+    let five = ["a", "b", "c", "d", "e"].map(agent).to_vec();
+    assert_eq!(messages(bug(five)), [size]);
+    assert_eq!(
+        messages(bug(vec![agent("repro"), stage("look", "review")])),
+        ["Only agent and manual stages can run side by side"]
+    );
+    assert!(!valid(bug(vec![agent("repro"), release()])));
+    assert_eq!(
+        messages(bug(vec![agent("repro"), agent("fix")])),
+        ["The stage id \"fix\" is used twice"]
+    );
+    assert_eq!(
+        messages(bug(vec![agent("repro"), off(agent("look"))])),
+        ["A group needs 2 stages that are on. Turn on another, or run it on its own"]
+    );
+    let named_twice = with_paths(vec![
+        path("bug", vec![triage(vec![agent("repro"), agent("look")])]),
+        otherwise("other", vec![triage(vec![agent("a"), agent("b")])]),
+    ]);
+    assert_eq!(
+        messages(named_twice),
+        ["The stage id \"triage\" is used twice"]
+    );
 }
 
 #[test]

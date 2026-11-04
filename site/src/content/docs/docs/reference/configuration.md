@@ -100,7 +100,7 @@ A branch splits the pipeline into 2 to 4 paths. A task takes the first path whos
 | `name` | string | no | Display name, 1 to 60 characters. |
 | `when` | condition | no | What must hold to take the path. Leave it out for the **Otherwise** path. |
 | `not` | boolean | no | `true` takes the path when the condition does not hold. |
-| `stages` | array of stages | yes | At least one. The stages run one after another. A path holds stages only: no group and no branch. |
+| `stages` | array of stages and groups | yes | At least one. The steps run one after another. A step is a stage or a group (`parallel`), as at the top; no branch. |
 
 ### Condition
 

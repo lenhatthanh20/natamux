@@ -3,6 +3,7 @@
 //! ("Review waits for both"). The branch is in `progress_branch.rs`.
 
 use gpui::{AnyElement, FontWeight};
+use natamux_proto::stages::position::path_of;
 use natamux_proto::stages::progress::StageStatus;
 use natamux_proto::stages::schema::{Stage, StageGroup, Step};
 use ui::{Tooltip, prelude::*};
@@ -17,12 +18,7 @@ use crate::stages::flow_rules::{
 impl Ctx<'_> {
     /// What the join dot says: which step starts when the group is finished.
     fn group_note(&self, group: &StageGroup) -> String {
-        let steps = &self.input.steps;
-        let index = steps
-            .iter()
-            .position(|step| step.id() == group.id)
-            .unwrap_or(0);
-        match steps.get(index + 1) {
+        match following(&self.input.steps, &group.id) {
             None => "The task is done when both are finished".to_owned(),
             Some(Step::Branch(_)) => "A path is chosen when both are finished".to_owned(),
             Some(next) => {
@@ -168,3 +164,11 @@ fn side_label(id: &str, name: &str) -> impl IntoElement {
 }
 
 pub(super) const SIDE_BY_SIDE: &str = "side by side";
+
+/// The step after step `id`: the next one of its path, else the one after its step.
+fn following<'a>(steps: &'a [Step], id: &str) -> Option<&'a Step> {
+    let index = steps.iter().position(|step| step.holds(id))?;
+    path_of(steps, id)
+        .and_then(|place| place.path.stages.get(place.index + 1))
+        .or_else(|| steps.get(index + 1))
+}

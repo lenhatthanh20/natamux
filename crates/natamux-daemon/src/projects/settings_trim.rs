@@ -57,7 +57,7 @@ fn trim_step(step: &mut Step) {
                     Some(Condition::Command { run }) => trim(run),
                     None => {}
                 }
-                path.stages.iter_mut().for_each(trim_stage);
+                path.stages.iter_mut().for_each(trim_step);
             }
         }
     }

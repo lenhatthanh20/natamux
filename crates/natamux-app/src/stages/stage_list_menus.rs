@@ -5,7 +5,6 @@ use std::rc::Rc;
 
 use gpui::{Action, Pixels, Point};
 use natamux_proto::stages::capabilities::stage_name;
-use natamux_proto::stages::position::path_of;
 use natamux_proto::stages::schema::GROUP_KINDS;
 use ui::{ContextMenu, ContextMenuEntry, prelude::*};
 
@@ -161,7 +160,7 @@ impl StageList {
                     );
                 }),
             ));
-        } else if GROUP_KINDS.contains(&stage.kind) && path_of(&steps, id).is_none() {
+        } else if GROUP_KINDS.contains(&stage.kind) {
             let problem = join_problem(&steps, id);
             let join_id = id.to_owned();
             parts.push(Part::Item {

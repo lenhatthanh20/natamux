@@ -42,13 +42,27 @@ pub(super) fn reference_pipeline() -> Vec<Step> {
         ),
         ..Stage::new("reproduce", StageKind::Agent, Gate::Auto)
     };
-    let path = |id: &str, name: &str, when: Option<Condition>, stage: Stage| BranchPath {
+    let investigate = Stage {
+        name: Some("Investigate".into()),
+        output: Some("investigate.md".into()),
+        prompt: Some(
+            "Find where the bug comes from. Write what you found to investigate.md.".into(),
+        ),
+        ..Stage::new("investigate", StageKind::Agent, Gate::Auto)
+    };
+    let path = |id: &str, name: &str, when: Option<Condition>, stage: Step| BranchPath {
         id: id.into(),
         name: Some(name.into()),
         when,
         not: None,
         stages: vec![stage],
     };
+    // The bug path reproduces and investigates side by side.
+    let triage = Step::Group(StageGroup {
+        id: "triage".into(),
+        name: Some("Reproduce and investigate".into()),
+        parallel: vec![reproduce, investigate],
+    });
     let bug = Condition::Command {
         run: "grep -qi bug .natamux-task/context.md".into(),
     };
@@ -69,8 +83,8 @@ pub(super) fn reference_pipeline() -> Vec<Step> {
             id: "kind".into(),
             name: Some("Bug or feature".into()),
             paths: vec![
-                path("bug", "Bug fix", Some(bug), reproduce),
-                path("feature", "Feature", None, one("plan")),
+                path("bug", "Bug fix", Some(bug), triage),
+                path("feature", "Feature", None, Step::Stage(one("plan"))),
             ],
         }),
         Step::Group(StageGroup {
@@ -101,7 +115,7 @@ fn run_order(task: &Task) -> Vec<String> {
                     .or(branch.paths.first());
                 order.extend(
                     path.iter()
-                        .flat_map(|path| &path.stages)
+                        .flat_map(|path| path.all_stages())
                         .map(|s| s.id.clone()),
                 );
             }

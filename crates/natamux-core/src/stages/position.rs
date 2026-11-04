@@ -27,7 +27,7 @@ pub fn with<T: Clone>(entries: &[(String, T)], key: &str, value: T) -> Vec<(Stri
 }
 
 /// Where a task is: its step, the state of that step, and for a group the state of each stage.
-/// Inside a branch the step is the current stage of the path.
+/// Inside a branch the step is the current stage of the path, or its group.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StagePosition {
     pub stage: String,
@@ -85,7 +85,7 @@ pub fn enter_step(step: &Step, state: Option<TaskState>, path: Option<&str>) -> 
                 .find(|each| Some(each.id.as_str()) == path)
                 .and_then(|each| each.stages.first());
             match first {
-                Some(first) => enter_step(&Step::Stage(first.clone()), state, None),
+                Some(first) => enter_step(first, state, None),
                 None => StagePosition::new(&branch.id, state.unwrap_or(TaskState::Ready)),
             }
         }
@@ -123,18 +123,26 @@ pub fn first_position(steps: &[Step]) -> StagePosition {
 
 /// `takenStages`: the stages of a step on the way the task went.
 pub fn taken_stages(step: &Step, paths: Option<&Paths>) -> Vec<Stage> {
-    match (step, paths) {
-        (Step::Branch(branch), Some(paths)) => {
-            let taken = get(paths, &branch.id);
-            branch
-                .paths
-                .iter()
-                .find(|path| Some(&path.id) == taken)
-                .map(|path| path.stages.clone())
-                .unwrap_or_default()
-        }
-        _ => step.stages().into_iter().cloned().collect(),
-    }
+    taken_steps(step, paths)
+        .iter()
+        .flat_map(Step::stages)
+        .cloned()
+        .collect()
+}
+
+/// The steps of a step on the way the task went: of a branch, the steps of the path it took (of
+/// every path while no record is given); else the step itself.
+pub fn taken_steps(step: &Step, paths: Option<&Paths>) -> Vec<Step> {
+    let Step::Branch(branch) = step else {
+        return vec![step.clone()];
+    };
+    let taken = paths.map(|paths| get(paths, &branch.id));
+    branch
+        .paths
+        .iter()
+        .filter(|path| taken.is_none_or(|taken| Some(&path.id) == taken))
+        .flat_map(|path| path.stages.iter().cloned())
+        .collect()
 }
 
 /// `isNotTaken` with typed paths.

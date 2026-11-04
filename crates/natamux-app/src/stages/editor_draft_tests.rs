@@ -3,7 +3,7 @@ use natamux_proto::stages::schema::{Gate, StageKind};
 use serde_json::{Value, json};
 
 use super::*;
-use crate::stages::editor_fixtures::stage_step;
+use crate::stages::editor_fixtures::{path_grouped, stage_step};
 
 fn object(value: Value) -> RawSettings {
     let Value::Object(map) = value else {
@@ -37,6 +37,20 @@ fn refuses_stages_the_list_cannot_draw() {
     let error = parse_draft(r#"{ "stages": [{ "id": "spec", "kind": "robot", "gate": "auto" }] }"#)
         .unwrap_err();
     assert!(error.starts_with("stages, item 1: each stage needs"));
+}
+
+#[test]
+fn reads_and_writes_a_group_inside_a_path() {
+    let raw = with_steps(&RawSettings::new(), &path_grouped());
+    let lanes = &raw["stages"][2]["paths"][0]["stages"][0]["parallel"];
+    assert_eq!(lanes[1]["id"], "docs");
+    let draft = parse_draft(&format_settings(&raw)).unwrap();
+    assert_eq!(draft.steps, path_grouped());
+    let bad_lane = json!({ "stages": [{ "id": "b", "paths": [{ "id": "p", "stages": [
+        { "id": "g", "parallel": [{ "id": "x", "kind": "robot", "gate": "auto" }] }
+    ] }] }] });
+    let error = parse_draft(&bad_lane.to_string()).unwrap_err();
+    assert!(error.starts_with("stages, item 1: a branch needs an id and paths"));
 }
 
 #[test]

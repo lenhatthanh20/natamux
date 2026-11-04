@@ -17,7 +17,8 @@ pub fn used_ids(steps: &[Step]) -> HashSet<String> {
             Step::Branch(branch) => {
                 for path in &branch.paths {
                     used.insert(path.id.clone());
-                    used.extend(path.stages.iter().map(|stage| stage.id.clone()));
+                    used.extend(path.stages.iter().map(|item| item.id().to_string()));
+                    used.extend(path.all_stages().iter().map(|stage| stage.id.clone()));
                 }
             }
             Step::Stage(_) => {}
@@ -27,7 +28,8 @@ pub fn used_ids(steps: &[Step]) -> HashSet<String> {
 }
 
 /// Where a stage is: its step; its lane when it runs in a group; its path and its place in the
-/// path when it is in a branch. A group's or a branch's own id has none of these.
+/// path (`slot`) when it is in a branch. A lane of a group in a path has all three; the group's
+/// own id has its path and slot. A top-level group's or a branch's own id has none of these.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Place {
     pub index: usize,
@@ -55,8 +57,15 @@ pub fn find_place(steps: &[Step], id: &str) -> Option<Place> {
             }
             Step::Branch(branch) => {
                 for (path, item) in branch.paths.iter().enumerate() {
-                    if let Some(slot) = item.stages.iter().position(|stage| stage.id == id) {
-                        return Some(place(None, Some(path), Some(slot)));
+                    for (slot, held) in item.stages.iter().enumerate() {
+                        if held.id() == id {
+                            return Some(place(None, Some(path), Some(slot)));
+                        }
+                        if let Step::Group(group) = held
+                            && let Some(lane) = group.parallel.iter().position(|s| s.id == id)
+                        {
+                            return Some(place(Some(lane), Some(path), Some(slot)));
+                        }
                     }
                 }
             }
@@ -99,13 +108,18 @@ pub fn runs_in_group(kind: StageKind) -> bool {
     GROUP_KINDS.contains(&kind)
 }
 
-/// A path holds single stages; a context or release stage has its fixed place and cannot be in one.
+/// A context or release stage has its fixed place and cannot be in a path.
 pub fn stage_fits_in_path(stage: &Stage) -> bool {
     stage.kind != StageKind::Context && stage.kind != StageKind::Release
 }
 
+/// A path holds stages and groups, not a branch.
 pub fn fits_in_path(step: &Step) -> bool {
-    matches!(step, Step::Stage(stage) if stage_fits_in_path(stage))
+    match step {
+        Step::Stage(stage) => stage_fits_in_path(stage),
+        Step::Group(group) => group.parallel.iter().all(stage_fits_in_path),
+        Step::Branch(_) => false,
+    }
 }
 
 pub fn find_stage<'a>(steps: &'a [Step], id: &str) -> Option<&'a Stage> {
@@ -115,11 +129,20 @@ pub fn find_stage<'a>(steps: &'a [Step], id: &str) -> Option<&'a Stage> {
         .find(|stage| stage.id == id)
 }
 
-/// The group a stage runs in, if any.
+/// The step at the place: the item of its path when it is in one.
+pub fn item_at(steps: &[Step], place: Place) -> Option<&Step> {
+    let step = steps.get(place.index)?;
+    match (place.path, place.slot, step) {
+        (Some(path), Some(slot), Step::Branch(branch)) => branch.paths.get(path)?.stages.get(slot),
+        _ => Some(step),
+    }
+}
+
+/// The group a stage runs in, if any, also inside a path.
 pub fn group_of<'a>(steps: &'a [Step], id: &str) -> Option<&'a StageGroup> {
     let place = find_place(steps, id)?;
     place.lane?;
-    match steps.get(place.index) {
+    match item_at(steps, place) {
         Some(Step::Group(group)) => Some(group),
         _ => None,
     }

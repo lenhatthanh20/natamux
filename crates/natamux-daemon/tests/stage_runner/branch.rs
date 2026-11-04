@@ -379,3 +379,67 @@ fn goes_from_stage_to_stage_in_the_path_then_to_the_step_after_the_branch() {
 
 #[path = "branch_later.rs"]
 mod later;
+
+// The bug path runs Reproduce and Investigate side by side, then Fix.
+fn bug_pipeline(f: &Fixture) {
+    f.set_stages(json!([
+        { "id": "context", "kind": "context", "gate": "manual", "output": "context.md" },
+        plan(),
+        { "id": "kind", "paths": [
+            {
+                "id": "bug",
+                "when": { "type": "output", "file": "context.md", "contains": "[bug]" },
+                "stages": [
+                    { "id": "triage", "parallel": [
+                        { "id": "repro", "kind": "agent", "gate": "auto" },
+                        { "id": "look", "kind": "agent", "gate": "auto", "output": "look.md" },
+                    ] },
+                    { "id": "fix", "kind": "agent", "gate": "auto" },
+                ],
+            },
+            { "id": "other", "stages": [{ "id": "notes", "kind": "agent", "gate": "auto" }] },
+        ] },
+        { "id": "release", "kind": "release", "gate": "manual" },
+    ]));
+}
+
+fn passed(f: &Fixture, id: &str, stage: &str) {
+    f.apply(
+        id,
+        json!({ "source": "system", "type": "stage.passed", "payload": { "stage": stage } }),
+    );
+}
+
+#[test]
+fn runs_a_group_that_starts_the_path_taken_then_the_next_stage_of_the_path() {
+    let f = Fixture::new();
+    bug_pipeline(&f);
+    let task = at_plan_review(&f, "Crash on save [bug]");
+
+    let moved = act(&f, &task.id, StageAction::Approve);
+    f.settle();
+
+    assert_eq!(moved.stage, "triage");
+    assert_eq!(paths(&moved), json!({ "kind": "bug" }));
+    let task = f.task(&task.id);
+    assert_eq!(
+        Value::Object(task.lanes.clone()),
+        json!({ "repro": "running", "look": "running" })
+    );
+    let started = started_stages(&f, &task.id);
+    assert!(started.contains(&json!("repro")) && started.contains(&json!("look")));
+    // Reproduce changes code, so it keeps Terminal 1; Investigate gets Terminal 2.
+    let run = &f.runner.run;
+    let lane = |terminal: &str| run.lane_for(&task, Some(terminal)).unwrap();
+    assert_eq!(lane("1"), Some(("repro".to_string(), TaskState::Running)));
+    assert_eq!(lane("2"), Some(("look".to_string(), TaskState::Running)));
+    assert!(f.launch_script(&task.id, "2").contains("look.md"));
+
+    passed(&f, &task.id, "repro");
+    assert_eq!(f.task(&task.id).stage, "triage");
+    passed(&f, &task.id, "look");
+    let at_fix = f.task(&task.id);
+    assert_eq!(at_fix.stage, "fix");
+    assert_eq!(paths(&at_fix), json!({ "kind": "bug" }));
+    assert!(started_stages(&f, &task.id).contains(&json!("fix")));
+}

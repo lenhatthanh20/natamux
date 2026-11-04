@@ -7,7 +7,9 @@ use natamux_proto::stages::schema::{BranchPath, Condition, StageBranch, Step};
 use ui::{Tooltip, prelude::*};
 
 use super::editor_labels::{branch_label, branch_name, path_name};
-use super::pipeline_preview::{Chart, bold, link, node_box, select_on_click, stage_node};
+use super::pipeline_preview::{
+    Chart, bold, group_box, link, node_box, select_on_click, stage_node,
+};
 use super::preview_rules::{branch_note_head, fork_label, path_note, skip_text, when_tip};
 use crate::components::icons::icon_path;
 
@@ -107,11 +109,21 @@ pub(super) fn branch_chart(
 
 fn lane(chart: &Chart, branch: &StageBranch, path: &BranchPath, cx: &App) -> AnyElement {
     let mut stages = h_flex().items_start();
-    for (index, stage) in path.stages.iter().filter(|stage| stage.is_on()).enumerate() {
+    let on = path
+        .stages
+        .iter()
+        .filter(|item| item.stages().iter().any(|stage| stage.is_on()));
+    for (index, item) in on.enumerate() {
+        let node = match item {
+            Step::Group(group) => group_box(chart, group, cx),
+            Step::Stage(stage) => stage_node(chart, stage, cx),
+            // The rules keep a branch out of a path.
+            Step::Branch(_) => continue,
+        };
         if index > 0 {
             stages = stages.child(link(18., cx));
         }
-        stages = stages.child(stage_node(chart, stage, cx));
+        stages = stages.child(node);
     }
     v_flex()
         .flex_none()

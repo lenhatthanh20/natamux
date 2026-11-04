@@ -412,7 +412,7 @@ fn would_end_shell_1_for_a_stage_in_a_path_of_a_branch() {
         name: None,
         when,
         not: None,
-        stages: vec![stage],
+        stages: vec![Step::Stage(stage)],
     };
     let steps = vec![Step::Branch(StageBranch {
         id: "after-plan".into(),

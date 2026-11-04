@@ -1,5 +1,5 @@
 //! The parts of the stage list (`StageList.tsx`): a stage row, a group block, a branch block with
-//! a list of stages for each path, and the problem lines under them.
+//! a list of stages and groups for each path, and the problem lines under them.
 
 use gpui::{ClickEvent, DragMoveEvent, FontWeight, KeyDownEvent};
 use natamux_proto::stages::pipeline_rules::{IssueLevel, PipelineIssue};
@@ -364,7 +364,7 @@ impl StageList {
         self.drop_zone(block, &id, cx).into_any_element()
     }
 
-    /// One path of a branch: its name and condition, then its stages.
+    /// One path of a branch: its name and condition, then its stages and groups.
     fn path_block(
         &mut self,
         path: &BranchPath,
@@ -375,7 +375,12 @@ impl StageList {
         let stages: Vec<AnyElement> = path
             .stages
             .iter()
-            .map(|stage| self.stage_row(stage, ctx, window, cx))
+            .filter_map(|item| match item {
+                Step::Stage(stage) => Some(self.stage_row(stage, ctx, window, cx)),
+                Step::Group(group) => Some(self.group_block(group, ctx, window, cx)),
+                // The rules refuse a branch in a path, and the draft never reads one.
+                Step::Branch(_) => None,
+            })
             .collect();
         let condition = if path.when.is_none() {
             "Otherwise".to_owned()

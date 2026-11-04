@@ -125,7 +125,8 @@ pub enum Condition {
 }
 
 /// One way through a branch. No `when`: the Otherwise path. `not` takes it when the condition
-/// does not hold.
+/// does not hold. `stages` runs one after another: single stages and side-by-side groups (the
+/// rules refuse a branch here).
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub struct BranchPath {
     pub id: String,
@@ -135,7 +136,14 @@ pub struct BranchPath {
     pub when: Option<Condition>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub not: Option<bool>,
-    pub stages: Vec<Stage>,
+    pub stages: Vec<Step>,
+}
+
+impl BranchPath {
+    /// Every stage of the path, also the stages of its groups, in order.
+    pub fn all_stages(&self) -> Vec<&Stage> {
+        self.stages.iter().flat_map(Step::stages).collect()
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
@@ -187,21 +195,41 @@ impl Step {
         }
     }
 
-    /// `stagesOf`: the stage itself, the stages of a group, or the stages of every path.
+    /// `stagesOf`: the stage itself, the stages of a group, or the stages of every path (also
+    /// those of a group in a path).
     pub fn stages(&self) -> Vec<&Stage> {
         match self {
             Step::Group(group) => group.parallel.iter().collect(),
-            Step::Branch(branch) => branch.paths.iter().flat_map(|path| &path.stages).collect(),
+            Step::Branch(branch) => branch
+                .paths
+                .iter()
+                .flat_map(BranchPath::all_stages)
+                .collect(),
             Step::Stage(stage) => vec![stage],
+        }
+    }
+
+    /// The step is `id`, or holds a stage or a group of that id. Path ids do not count.
+    pub fn holds(&self, id: &str) -> bool {
+        match self {
+            Step::Stage(stage) => stage.id == id,
+            Step::Group(group) => group.id == id || group.parallel.iter().any(|lane| lane.id == id),
+            Step::Branch(branch) => {
+                branch.id == id
+                    || branch
+                        .paths
+                        .iter()
+                        .any(|path| path.stages.iter().any(|item| item.holds(id)))
+            }
         }
     }
 }
 
-/// A path of a branch as a task keeps it: its id and stage ids.
+/// A path of a branch as a task keeps it: its id and its steps (stage ids and groups).
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub struct PathRef {
     pub id: String,
-    pub stages: Vec<String>,
+    pub stages: Vec<StepRef>,
 }
 
 /// A step of a task's pipeline as the task keeps it (`StepRef` in core): a stage id, a group, or
@@ -280,6 +308,42 @@ mod tests {
         .unwrap();
         assert_eq!(refs[0], StepRef::Stage("context".into()));
         assert!(matches!(&refs[1], StepRef::Group { parallel, .. } if parallel.len() == 2));
-        assert!(matches!(&refs[2], StepRef::Branch { paths, .. } if paths[0].stages == ["repro"]));
+        assert!(matches!(&refs[2], StepRef::Branch { paths, .. }
+            if paths[0].stages == [StepRef::Stage("repro".into())]));
+    }
+
+    #[test]
+    fn reads_a_group_inside_a_path() {
+        let steps: Vec<Step> = serde_json::from_str(
+            r#"[{"id":"kind","paths":[
+                {"id":"bug","when":{"type":"command","run":"true"},"stages":[
+                  {"id":"triage","parallel":[
+                    {"id":"repro","kind":"agent","gate":"auto"},
+                    {"id":"look","kind":"agent","gate":"manual"}]},
+                  {"id":"fix","kind":"agent","gate":"auto"}]},
+                {"id":"feature","stages":[{"id":"plan","kind":"agent","gate":"manual"}]}]}]"#,
+        )
+        .unwrap();
+        let Step::Branch(branch) = &steps[0] else {
+            panic!("not a branch")
+        };
+        assert!(branch.paths[0].stages[0].is_group());
+        let ids: Vec<&str> = steps[0].stages().iter().map(|s| s.id.as_str()).collect();
+        assert_eq!(ids, ["repro", "look", "fix", "plan"]);
+        assert!(steps[0].holds("triage") && steps[0].holds("look") && !steps[0].holds("bug"));
+        let again: Vec<Step> =
+            serde_json::from_value(serde_json::to_value(&steps).unwrap()).unwrap();
+        assert_eq!(again, steps);
+
+        let refs: Vec<StepRef> = serde_json::from_str(
+            r#"[{"id":"kind","paths":[{"id":"bug","stages":[
+                {"id":"triage","parallel":["repro","look"]},"fix"]}]}]"#,
+        )
+        .unwrap();
+        let StepRef::Branch { paths, .. } = &refs[0] else {
+            panic!("not a branch ref")
+        };
+        assert!(matches!(&paths[0].stages[0], StepRef::Group { id, .. } if id == "triage"));
+        assert_eq!(paths[0].stages[1], StepRef::Stage("fix".into()));
     }
 }

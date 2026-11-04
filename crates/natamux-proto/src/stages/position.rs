@@ -5,11 +5,10 @@ use serde_json::{Map, Value};
 
 use crate::stages::schema::{BranchPath, Condition, Stage, StageBranch, StageKind, Step};
 
-/// The index of the step that holds stage or step `id` (`stepIndex`, which gives -1 for none).
+/// The index of the step that holds stage or step `id` (`stepIndex`, which gives -1 for none). A
+/// group inside a path finds its branch.
 pub fn step_index(steps: &[Step], id: &str) -> Option<usize> {
-    steps
-        .iter()
-        .position(|step| step.id() == id || step.stages().iter().any(|stage| stage.id == id))
+    steps.iter().position(|step| step.holds(id))
 }
 
 /// `findStep`: the step that holds stage or step `id`.
@@ -18,12 +17,12 @@ pub fn find_step<'a>(steps: &'a [Step], id: &str) -> Option<&'a Step> {
 }
 
 /// `stepToRun`: the step that runs for stage or step `id`: its group, or the stage itself, also
-/// inside a path.
+/// inside a path (where a group runs as a whole too).
 pub fn step_to_run(steps: &[Step], id: &str) -> Option<Step> {
     let step = find_step(steps, id)?;
     if step.is_branch() {
-        let found = step.stages().into_iter().find(|stage| stage.id == id);
-        return Some(found.map_or_else(|| step.clone(), |stage| Step::Stage(stage.clone())));
+        let found = path_of(steps, id).map(|place| place.item.clone());
+        return Some(found.unwrap_or_else(|| step.clone()));
     }
     Some(step.clone())
 }
@@ -45,25 +44,29 @@ pub fn code_stage(step: &Step) -> Option<&Stage> {
         .or_else(|| stages.first().copied())
 }
 
-/// The branch and path of a stage in a path, and where the stage is in the path.
+/// The branch and path of a stage in a path, and the step of the path that holds it (`item`, at
+/// `index`): the stage itself, or its group. The lanes of one group share an index.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PathPlace<'a> {
     pub branch: &'a StageBranch,
     pub path: &'a BranchPath,
     pub index: usize,
+    pub item: &'a Step,
 }
 
-pub fn path_of<'a>(steps: &'a [Step], stage_id: &str) -> Option<PathPlace<'a>> {
+/// The place of a stage, or of a group, inside a path.
+pub fn path_of<'a>(steps: &'a [Step], id: &str) -> Option<PathPlace<'a>> {
     steps.iter().find_map(|step| {
         let Step::Branch(branch) = step else {
             return None;
         };
         branch.paths.iter().find_map(|path| {
-            let index = path.stages.iter().position(|stage| stage.id == stage_id)?;
+            let index = path.stages.iter().position(|item| item.holds(id))?;
             Some(PathPlace {
                 branch,
                 path,
                 index,
+                item: &path.stages[index],
             })
         })
     })
