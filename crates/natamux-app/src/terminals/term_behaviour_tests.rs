@@ -1416,6 +1416,124 @@ fn pointer_rows(cx: &mut TestAppContext) -> Vec<Value> {
         sent_text(),
         opened(cx)
     ]));
+
+    // Presses in the scrollbar's track, away from its thumb (at the bottom: the newest lines
+    // show), outside mouse mode and in mode 1000. Then releases off the screen after a press
+    // on a link of the last column.
+    // Each link ends in the last column.
+    feed(
+        &terminal,
+        concat!(
+            "\x1b[H\x1b[2J\x1b[1;999H\x1b[20Dhttps://example.com/e",
+            "\x1b[2;999H\x1b[9D\x1b]8;;https://example.com/o\x1b\\osc edge 1\x1b]8;;\x1b\\",
+            "\x1b[3;1Habc def ghi",
+        ),
+        cx,
+    );
+    let last = grid(&terminal, cx).0 - 1;
+    let in_track = |line: usize, cx: &mut VisualTestContext| {
+        point(PANE.width - px(5.), cell(&terminal, (line, 0), cx).y)
+    };
+    let track_row = |case: &str, terminal: &Entity<RemoteTerminal>, cx: &mut VisualTestContext| {
+        let text = selection(terminal, cx);
+        let offset = display_offset(terminal, cx);
+        let focused = view_focused(terminal, cx);
+        json!([case, sent_text(), text, offset, focused])
+    };
+    let select_abc = |cx: &mut VisualTestContext| {
+        let (from, to) = (cell(&terminal, (2, 0), cx), cell(&terminal, (2, 2), cx));
+        mouse_move(from, None, none, cx);
+        mouse_down(from, MouseButton::Left, none, 1, cx);
+        mouse_move(to, left, none, cx);
+        mouse_up(to, MouseButton::Left, none, 1, cx);
+        settle(cx);
+    };
+    select_abc(cx);
+    rows.push(track_row("select abc", &terminal, cx));
+    blur(&host, cx);
+    click(in_track(4, cx), MouseButton::Left, none, 1, cx);
+    rows.push(track_row("click in the track", &terminal, cx));
+    focus(&terminal, cx);
+    click(in_track(4, cx), MouseButton::Left, shift, 1, cx);
+    rows.push(track_row("shift click in the track", &terminal, cx));
+    click(in_track(4, cx), MouseButton::Left, none, 2, cx);
+    rows.push(track_row("double click in the track", &terminal, cx));
+    let at = in_track(4, cx);
+    mouse_move(at, None, none, cx);
+    mouse_down(at, MouseButton::Left, none, 1, cx);
+    mouse_move(cell(&terminal, (5, 4), cx), left, none, cx);
+    mouse_move(cell(&terminal, (6, 8), cx), left, none, cx);
+    mouse_up(cell(&terminal, (6, 8), cx), MouseButton::Left, none, 1, cx);
+    settle(cx);
+    rows.push(track_row(
+        "press in the track, drag over the screen",
+        &terminal,
+        cx,
+    ));
+    select_abc(cx);
+    blur(&host, cx);
+    click(in_track(4, cx), MouseButton::Middle, none, 1, cx);
+    rows.push(track_row("middle click in the track", &terminal, cx));
+    focus(&terminal, cx);
+    feed(&terminal, &sgr("1000"), cx);
+    sent_text();
+    blur(&host, cx);
+    click(in_track(4, cx), MouseButton::Left, none, 1, cx);
+    rows.push(track_row(
+        "click in the track in mouse mode",
+        &terminal,
+        cx,
+    ));
+    focus(&terminal, cx);
+    let at = in_track(4, cx);
+    mouse_move(at, None, none, cx);
+    mouse_down(at, MouseButton::Left, none, 1, cx);
+    mouse_move(cell(&terminal, (5, 4), cx), left, none, cx);
+    mouse_up(cell(&terminal, (5, 4), cx), MouseButton::Left, none, 1, cx);
+    settle(cx);
+    rows.push(track_row(
+        "press in the track in mouse mode, release over the screen",
+        &terminal,
+        cx,
+    ));
+    feed(&terminal, off, cx);
+    sent_text();
+
+    let outside = |line: usize, cx: &mut VisualTestContext| {
+        point(PANE.width + px(10.), cell(&terminal, (line, 0), cx).y)
+    };
+    let upper = |line: usize, column: usize, cx: &mut VisualTestContext| {
+        let at = cell(&terminal, (line, column), cx);
+        point(at.x, at.y - lh * 0.25)
+    };
+    for (case, to) in [
+        ("key press on an edge url, release in the track", in_track(0, cx)),
+        ("key press on an edge url, release outside", outside(0, cx)),
+    ] {
+        let at = cell(&terminal, (0, last - 3), cx);
+        cx.simulate_modifiers_change(key);
+        mouse_move(at, None, key, cx);
+        settle(cx);
+        mouse_down(at, MouseButton::Left, key, 1, cx);
+        mouse_move(to, left, key, cx);
+        mouse_up(to, MouseButton::Left, key, 1, cx);
+        settle(cx);
+        cx.simulate_modifiers_change(none);
+        rows.push(json!([case, sent_text(), opened(cx)]));
+    }
+    for (case, to) in [
+        ("plain press on an edge osc link, release in the track", in_track(1, cx)),
+        ("plain press on an edge osc link, release outside", outside(1, cx)),
+    ] {
+        let at = upper(1, last - 3, cx);
+        mouse_move(at, None, none, cx);
+        mouse_down(at, MouseButton::Left, none, 1, cx);
+        let to = point(to.x, at.y);
+        mouse_move(to, left, none, cx);
+        mouse_up(to, MouseButton::Left, none, 1, cx);
+        settle(cx);
+        rows.push(json!([case, sent_text(), opened(cx)]));
+    }
     rows
 }
 

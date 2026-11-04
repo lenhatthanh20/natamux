@@ -31,5 +31,17 @@
 ["middle click in mouse mode","\u001b[<1;4;13M\u001b[<1;4;13m",true],
 ["second click on an osc link","","https://example.com/m7"],
 ["shift click on an osc link","","https://example.com/m8"],
-["plain click on an osc link","","https://example.com/m9"]
+["plain click on an osc link","","https://example.com/m9"],
+["select abc","","ab",0,true],
+["click in the track","","ab",53,false],
+["shift click in the track","","ab",53,true],
+["double click in the track","","ab",53,true],
+["press in the track, drag over the screen","","ab",45,true],
+["middle click in the track","","li",45,false],
+["click in the track in mouse mode","","li",45,false],
+["press in the track in mouse mode, release over the screen","","li",41,true],
+["key press on an edge url, release in the track","",null],
+["key press on an edge url, release outside","",null],
+["plain press on an edge osc link, release in the track","",null],
+["plain press on an edge osc link, release outside","",null]
 ]
