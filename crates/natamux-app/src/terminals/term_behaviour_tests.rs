@@ -461,13 +461,15 @@ fn committed_text_is_sent_once(cx: &mut TestAppContext) {
 }
 
 // T-G1: the grid of a pane, for sizes, scales, font sizes and the scrollbar track, and where the
-// spare pixels go (`origin y`) on the main and the alternate screen.
+// spare pixels go (`origin y`) on the main and the alternate screen. The screen has history, so
+// a scrollbar exists: a state ending in `-scrollbar` shows it always, any other hides it.
 fn grid_rows(cx: &mut TestAppContext) -> Vec<Value> {
     let (host, terminal, cx) = open(cx, PANE, false);
     let mut rows = Vec::new();
     let panes = [(300., 200.), (641., 333.), (1000., 701.), (1234.5, 987.3)];
+    feed(&terminal, &history(200), cx);
     for scrollbar in [false, true] {
-        let shot = (!scrollbar).then_some("grid");
+        let shot = Some(if scrollbar { "grid-scrollbar" } else { "grid" });
         cx.update(|_, cx| {
             appearance::init(
                 appearance::Inputs {
