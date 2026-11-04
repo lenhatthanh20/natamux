@@ -1,4 +1,4 @@
-import { DEFAULT_PIPELINE } from '../../stages/default-pipeline.js'
+import { FULL_PIPELINE } from '../../stages/default-pipeline.js'
 import type { StagePosition } from '../../stages/position.js'
 import type { Stage, StageBranch, Step } from '../../stages/schema.js'
 import { applyTaskEvent } from '../apply.js'
@@ -6,7 +6,7 @@ import type { EventType, TaskEvent } from '../schema.js'
 
 // The pipeline these cases were written for: a person reviews, then the tests run. The default
 // pipeline has an agent review after the tests instead.
-export const PIPELINE: Step[] = DEFAULT_PIPELINE.flatMap((step): Step[] => {
+export const PIPELINE: Step[] = FULL_PIPELINE.flatMap((step): Step[] => {
   if (step.id === 'agent-review') {
     return []
   }

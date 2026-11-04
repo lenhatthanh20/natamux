@@ -15,7 +15,7 @@ const OVERLAY_REFRESH: Duration = Duration::from_millis(500);
 impl Root {
     /// The bench's quit handling and the system look.
     pub(super) fn watch_window(window: &mut Window, cx: &mut Context<Self>) {
-        // Unsaved edits ask first; a running bench quits the app (`window_files.rs`).
+        // Quitting asks first; a running bench quits the app (`window_files.rs`).
         let weak_root = cx.weak_entity();
         window.on_window_should_close(cx, move |window, cx| {
             weak_root

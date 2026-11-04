@@ -107,7 +107,7 @@ Open `logs/daemon.log` to read the daemon's output. If it stops, the app shows a
 
 ## Quit and close
 
-- **Quit** stops the daemon, and with it every agent and terminal. The app asks before dropping unsaved editor drafts. Tasks, worktrees and their changes stay.
+- **Quit** stops the daemon, and with it every agent and terminal. The app asks first, and names unsaved editor drafts it would drop. Tasks, worktrees and their changes stay.
 - **Closing the window** quits the app on macOS, Windows and Linux.
 
 ## Environment variables you may need

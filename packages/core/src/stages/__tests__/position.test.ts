@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_PIPELINE } from '../default-pipeline.js'
+import { FULL_PIPELINE } from '../default-pipeline.js'
 import {
   combinedState,
   describeCondition,
@@ -14,14 +14,14 @@ import { type BranchPath, type Stage, type StageBranch, type Step, stagesOf } fr
 
 describe('positions', () => {
   it('starts a task in draft at its first step', () => {
-    expect(firstPosition(DEFAULT_PIPELINE)).toEqual({ stage: 'context', state: 'draft', lanes: {} })
+    expect(firstPosition(FULL_PIPELINE)).toEqual({ stage: 'context', state: 'draft', lanes: {} })
   })
 
   it('starts a review stage waiting for you, and a group with a state per stage', () => {
     const review: Step = { id: 'review', kind: 'review', gate: 'manual' }
-    const build = DEFAULT_PIPELINE[3]
+    const build = FULL_PIPELINE[3]
     if (build === undefined) {
-      throw new Error('The default pipeline changed')
+      throw new Error('The full pipeline changed')
     }
     expect(enterStep(review)).toEqual({ stage: 'review', state: 'review', lanes: {} })
     expect(enterStep(build)).toEqual({
@@ -39,9 +39,9 @@ describe('positions', () => {
   })
 
   it('finds the step of a stage inside a group', () => {
-    expect(stepIndex(DEFAULT_PIPELINE, 'implement')).toBe(3)
-    expect(stepIndex(DEFAULT_PIPELINE, 'build')).toBe(3)
-    expect(stepIndex(DEFAULT_PIPELINE, 'nope')).toBe(-1)
+    expect(stepIndex(FULL_PIPELINE, 'implement')).toBe(3)
+    expect(stepIndex(FULL_PIPELINE, 'build')).toBe(3)
+    expect(stepIndex(FULL_PIPELINE, 'nope')).toBe(-1)
   })
 })
 

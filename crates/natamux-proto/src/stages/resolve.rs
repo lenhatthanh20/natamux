@@ -176,13 +176,14 @@ fn name_of(pipeline: &[Step], id: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::stages::catalog::default_pipeline;
+    use crate::stages::catalog::{default_pipeline, full_pipeline};
     use crate::stages::schema::{Condition, Gate, StageKind};
 
     #[test]
     fn turns_the_step_ids_of_a_task_back_into_steps_with_their_settings() {
-        let pipeline = default_pipeline();
-        assert_eq!(resolve_steps(&step_refs_of(&pipeline), &pipeline), pipeline);
+        for pipeline in [default_pipeline(), full_pipeline()] {
+            assert_eq!(resolve_steps(&step_refs_of(&pipeline), &pipeline), pipeline);
+        }
     }
 
     fn group(id: &str, lanes: Vec<Stage>) -> Step {
@@ -247,7 +248,7 @@ mod tests {
     #[test]
     fn finds_a_stage_of_a_group_for_a_task_that_has_it_on_its_own() {
         let refs = [StepRef::Stage("implement".into())];
-        let steps = resolve_steps(&refs, &default_pipeline());
+        let steps = resolve_steps(&refs, &full_pipeline());
         let mut implement = Stage::new("implement", StageKind::Agent, Gate::Auto);
         implement.workflow = Some(true);
         implement.ci = Some(true);
@@ -422,19 +423,14 @@ mod tests {
     }
 
     #[test]
-    fn runs_the_automated_tests_then_an_agent_review_and_waits_for_no_person() {
+    fn runs_spec_implement_then_an_agent_review_and_waits_only_for_the_spec() {
         let pipeline = default_pipeline();
         assert_eq!(
             step_refs_of(&pipeline),
             [
                 StepRef::Stage("context".into()),
                 StepRef::Stage("spec".into()),
-                StepRef::Stage("plan".into()),
-                StepRef::Group {
-                    id: "build".into(),
-                    parallel: vec!["test-spec".into(), "implement".into()]
-                },
-                StepRef::Stage("testing".into()),
+                StepRef::Stage("implement".into()),
                 StepRef::Stage("agent-review".into()),
                 StepRef::Stage("release".into()),
             ]

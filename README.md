@@ -84,7 +84,7 @@ Then add a git project, create a task, and choose an agent. Natamux creates its 
 Start with the default stages or define your own in `.natamux.json`. A workflow can run stages side by side, route tasks by conditions, and send changes back for another review.
 
 ```text
-Context → Spec → Plan → Test spec ‖ Implement → Tests → Review → Release
+Context → Spec → Implement → Review → Release
 ```
 
 Learn how to [build a workflow](https://natamux.github.io/docs/guides/workflows/) or [start a task](https://natamux.github.io/docs/getting-started/quick-start/).

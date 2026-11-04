@@ -1,4 +1,4 @@
-use natamux_proto::stages::catalog::default_pipeline;
+use natamux_proto::stages::catalog::full_pipeline;
 use natamux_proto::stages::schema::{Gate, Stage, StageKind, Step};
 
 use super::*;
@@ -10,10 +10,10 @@ use crate::stages::editor_fixtures::{branched, stage_step};
 #[test]
 fn names_the_stages_that_are_on_in_order_with_groups_side_by_side() {
     assert_eq!(
-        pipeline_label(&default_pipeline()),
+        pipeline_label(&full_pipeline()),
         "Pipeline: Context, then Spec, then Plan, then Test spec and Implement side by side, then Automated tests, then Review, then Release"
     );
-    assert!(!pipeline_label(&set_enabled(&default_pipeline(), "plan", false)).contains("Plan"));
+    assert!(!pipeline_label(&set_enabled(&full_pipeline(), "plan", false)).contains("Plan"));
 }
 
 #[test]

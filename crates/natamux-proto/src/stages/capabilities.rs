@@ -102,7 +102,7 @@ mod tests {
     }
 
     #[test]
-    fn is_offered_on_implement_and_automated_tests_of_the_default_pipeline() {
+    fn is_offered_on_implement_and_automated_tests_of_the_full_pipeline() {
         let default = [
             "context",
             "spec",
@@ -121,7 +121,25 @@ mod tests {
     }
 
     #[test]
-    fn offers_a_workflow_on_plan_and_implement_of_the_default_pipeline_only() {
+    fn offers_a_workflow_and_a_ci_check_on_implement_only_in_the_default_pipeline() {
+        let steps = crate::stages::catalog::default_pipeline();
+        let stages: Vec<&Stage> = steps.iter().flat_map(|step| step.stages()).collect();
+        let workflow: Vec<&str> = stages
+            .iter()
+            .filter(|stage| offers_workflow(stage))
+            .map(|stage| stage.id.as_str())
+            .collect();
+        let ci: Vec<&str> = stages
+            .iter()
+            .filter(|stage| offers_ci(stage))
+            .map(|stage| stage.id.as_str())
+            .collect();
+        assert_eq!(workflow, ["implement"]);
+        assert_eq!(ci, ["implement"]);
+    }
+
+    #[test]
+    fn offers_a_workflow_on_plan_and_implement_of_the_catalog_only() {
         let offered: Vec<String> = crate::stages::catalog::catalog()
             .iter()
             .filter(|stage| offers_workflow(stage))

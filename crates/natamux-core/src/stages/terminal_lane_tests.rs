@@ -3,7 +3,7 @@
 //! `lanes_tests.rs`.
 
 use super::*;
-use natamux_proto::stages::catalog::default_pipeline;
+use natamux_proto::stages::catalog::full_pipeline;
 use natamux_proto::stages::schema::{
     BranchPath, Condition, Gate, StageBranch, StageGroup, StageKind,
 };
@@ -24,7 +24,7 @@ fn id_at(steps: &[Step], step: &Step, terminal: &str, pinned: &PinnedTerminals) 
 
 #[test]
 fn gives_the_stage_of_a_group_by_its_terminal() {
-    let build = default_pipeline().remove(3);
+    let build = full_pipeline().remove(3);
     let steps = [build.clone()];
     assert_eq!(
         id_at(&steps, &build, "2", &Vec::new()).as_deref(),
@@ -370,8 +370,8 @@ fn ends(steps: &[Step], id: &str) -> bool {
 }
 
 #[test]
-fn would_end_shell_1_for_the_stages_of_the_default_pipeline_that_run_there() {
-    let steps = default_pipeline();
+fn would_end_shell_1_for_the_stages_of_the_full_pipeline_that_run_there() {
+    let steps = full_pipeline();
     let ids = [
         "context",
         "spec",
