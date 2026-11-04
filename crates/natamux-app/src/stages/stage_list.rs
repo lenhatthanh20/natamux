@@ -6,17 +6,17 @@
 use std::collections::HashMap;
 
 use gpui::{DragMoveEvent, Entity, FocusHandle, Subscription};
+use natamux_proto::stages::pipeline_rules::{IssueLevel, PipelineIssue};
 use natamux_proto::stages::schema::Step;
-use ui::{Button, prelude::*};
+use ui::prelude::*;
 
-use super::editor_branches::add_branch;
-use super::editor_find::used_ids;
+use super::add_menu::add_button;
 use super::editor_moves::{Side, drop_stage, move_stage};
-use super::kind_icon::branch_icon;
+use super::kind_icon::problem_icon;
 use super::pipeline_editor::PipelineEditor;
-use super::stage_rows::{DragGhost, DraggedStage, issue_lines};
+use super::stage_rows::{DragGhost, DraggedStage};
 use crate::app::shortcuts::{MoveStageDown, MoveStageUp};
-use crate::components::icons::icon_path;
+use crate::components::colors::signal;
 use crate::components::tab_order;
 
 pub struct StageList {
@@ -47,13 +47,9 @@ impl StageList {
         }
     }
 
-    /// The dialog gives focus back here when the stage picker closes.
+    /// The focus stops of the list, in drawn order, for the Tab ring of the page.
     pub fn tab_stops(&self) -> Vec<FocusHandle> {
         self.stops.clone()
-    }
-
-    pub fn add_stage_focus(&self) -> FocusHandle {
-        self.add_stage.clone()
     }
 
     pub(super) fn focus_of(&mut self, id: &str, cx: &mut Context<Self>) -> FocusHandle {
@@ -97,52 +93,12 @@ impl StageList {
         }
     }
 
-    fn add_branch(&mut self, cx: &mut Context<Self>) {
-        let (before, after_id) = {
-            let editor = self.editor.read(cx);
-            (used_ids(editor.steps()), editor.selected_id())
-        };
-        self.apply(|steps| add_branch(steps, after_id.as_deref()), None, cx);
-        let added = self
-            .editor
-            .read(cx)
-            .steps()
-            .iter()
-            .find(|step| step.is_branch() && !before.contains(step.id()))
-            .map(|step| step.id().to_owned());
-        if let Some(id) = added {
-            self.editor.update(cx, |editor, cx| editor.select(&id, cx));
-        }
-    }
-
-    fn header(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        let picking = self.editor.read(cx).picking;
-        let toggle = self.editor.clone();
+    fn header(&self) -> impl IntoElement + use<> {
         h_flex()
             .gap_2()
-            .child(Label::new("Stages in order").weight(gpui::FontWeight::SEMIBOLD))
+            .child(Label::new("Stages").weight(gpui::FontWeight::SEMIBOLD))
             .child(div().flex_1())
-            .child(
-                Button::new("add-branch", "Add branch")
-                    .start_icon(branch_icon().size(IconSize::Small))
-                    .style(ButtonStyle::Outlined)
-                    .label_size(LabelSize::Small)
-                    .on_click(cx.listener(|this, _, _, cx| this.add_branch(cx))),
-            )
-            .child(
-                Button::new("add-stage", "Add stage")
-                    .start_icon(Icon::from_path(icon_path("plus")).size(IconSize::Small))
-                    .style(ButtonStyle::Outlined)
-                    .label_size(LabelSize::Small)
-                    .toggle_state(picking)
-                    .track_focus(&self.add_stage)
-                    .on_click(move |_, _, cx| {
-                        toggle.update(cx, |editor, cx| {
-                            let picking = editor.picking;
-                            editor.set_picking(!picking, cx);
-                        });
-                    }),
-            )
+            .child(add_button(&self.editor, &self.add_stage))
     }
 
     /// Looks at where a dragged row is, to show the drop line and work out its side.
@@ -199,7 +155,7 @@ impl Render for StageList {
         let general = self.editor.read(cx).issues_of(None);
         tab_order::begin();
         tab_order::push(&self.add_stage);
-        let header = self.header(cx);
+        let header = self.header();
         let rows = self.steps(&steps, window, cx);
         self.stops = tab_order::end();
         if let Some(handle) = self
@@ -239,4 +195,30 @@ impl Render for DragGhost {
             .bg(colors.elevated_surface_background)
             .child(Label::new(self.0.clone()).size(LabelSize::Small))
     }
+}
+
+/// The problems of a row, 12 px with the alert icon.
+pub(super) fn issue_lines(issues: &[PipelineIssue], cx: &App) -> impl IntoElement + use<> {
+    let warning = signal(cx).fg;
+    v_flex().gap_0p5().children(issues.iter().map(move |issue| {
+        let (icon_color, label_color) = match issue.level {
+            IssueLevel::Error => (Color::Error, Color::Error),
+            IssueLevel::Warning => (Color::Custom(warning), Color::Custom(warning)),
+        };
+        h_flex()
+            .items_start()
+            .gap_1p5()
+            .child(
+                div()
+                    .mt_0p5()
+                    .child(problem_icon().size(IconSize::XSmall).color(icon_color)),
+            )
+            .child(
+                div().min_w_0().child(
+                    Label::new(issue.message.clone())
+                        .size(LabelSize::XSmall)
+                        .color(label_color),
+                ),
+            )
+    }))
 }

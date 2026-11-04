@@ -55,7 +55,7 @@ pub fn is_screen7_shot(shot: Shot) -> bool {
             | Shot::SettingsSearch
             | Shot::Projects
             | Shot::ProjectSettings
-            | Shot::ProjectSettingsTabIssues
+            | Shot::ProjectSettingsTabGeneral
             | Shot::ProjectSettingsTabJson
             | Shot::ProjectSettingsJsonError
             | Shot::ImportIssues
@@ -82,7 +82,7 @@ pub async fn run(handle: WindowHandle<Root>, shot: Shot, cx: &mut AsyncApp) {
         return;
     };
     let tab = match shot {
-        Shot::ProjectSettingsTabIssues => Some(SettingsTab::Issues),
+        Shot::ProjectSettingsTabGeneral => Some(SettingsTab::General),
         Shot::ProjectSettingsTabJson | Shot::ProjectSettingsJsonError => Some(SettingsTab::Json),
         _ => None,
     };
@@ -152,7 +152,7 @@ fn enter(
         }
         Shot::Projects => projects_dialog::open(&dashboard, window, cx),
         Shot::ProjectSettings
-        | Shot::ProjectSettingsTabIssues
+        | Shot::ProjectSettingsTabGeneral
         | Shot::ProjectSettingsTabJson
         | Shot::ProjectSettingsJsonError => {
             return root.show_settings(SettingsPage::Project(PROJECT.to_owned()), window, cx);

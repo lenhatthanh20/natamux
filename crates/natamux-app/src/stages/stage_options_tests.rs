@@ -27,14 +27,13 @@ impl Render for OptionRow {
 }
 
 #[gpui::test]
-fn a_note_starts_under_its_checkbox_label(cx: &mut TestAppContext) {
-    // The note started under the box, left of the label (T-0215).
+fn a_note_is_an_info_icon_at_the_end_of_a_one_line_row(cx: &mut TestAppContext) {
     test_views::init(cx);
     let (_view, cx) = cx.add_window_view(|_, _| OptionRow);
     cx.run_until_parked();
-    let [label, note] = ["option-label", "option-note"].map(|selector| {
-        cx.debug_bounds(selector)
-            .unwrap_or_else(|| panic!("{selector} was not drawn"))
-    });
-    assert_eq!(note.left(), label.left());
+    let info = cx
+        .debug_bounds("option-info")
+        .expect("option-info was not drawn");
+    assert_eq!(info.right(), px(400.));
+    assert!(info.bottom() <= px(28.));
 }

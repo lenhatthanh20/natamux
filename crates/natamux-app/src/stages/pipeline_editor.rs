@@ -30,8 +30,6 @@ pub struct PipelineEditor {
     issues: Vec<PipelineIssue>,
     /// The stage or branch the user picked; None until then.
     picked: Option<String>,
-    /// The stage picker takes the place of the details (Add stage).
-    pub picking: bool,
 }
 
 impl EventEmitter<DraftEdited> for PipelineEditor {}
@@ -45,7 +43,6 @@ impl PipelineEditor {
             error: None,
             issues: Vec::new(),
             picked: None,
-            picking: false,
         };
         editor.take_text(text);
         editor
@@ -225,12 +222,6 @@ impl PipelineEditor {
 
     pub fn select(&mut self, id: &str, cx: &mut Context<Self>) {
         self.picked = Some(id.to_owned());
-        self.picking = false;
-        cx.notify();
-    }
-
-    pub fn set_picking(&mut self, picking: bool, cx: &mut Context<Self>) {
-        self.picking = picking;
         cx.notify();
     }
 }

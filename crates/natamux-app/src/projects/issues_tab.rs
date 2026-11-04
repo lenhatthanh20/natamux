@@ -1,4 +1,4 @@
-//! The Issues tab of Project settings (`IssuesTab.tsx`): when a task opens a GitHub issue, as four
+//! The GitHub issues section of the General tab (`IssuesTab.tsx`): when a task opens a GitHub issue, as four
 //! radio rows over `tracker.createIssue` of the draft. The group is one tab stop; the arrows move
 //! the choice. It is off (but still shows the value) while `tracker.type` is `none`.
 

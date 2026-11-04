@@ -1,5 +1,5 @@
-//! The parts of the stage list (`StageList.tsx`): a stage row, a group block, a branch block with
-//! a list of stages and groups for each path, and the problem lines under them.
+//! The parts of the stage list (`StageList.tsx`): a stage row, a group block, and a branch block
+//! with a list of stages and groups for each path.
 
 use gpui::{ClickEvent, DragMoveEvent, FontWeight, KeyDownEvent};
 use natamux_proto::stages::pipeline_rules::{IssueLevel, PipelineIssue};
@@ -7,12 +7,13 @@ use natamux_proto::stages::position::describe_condition;
 use natamux_proto::stages::schema::{BranchPath, Stage, StageBranch, StageGroup, Step};
 use ui::{Checkbox, ToggleState, Tooltip, prelude::*};
 
+use super::editor_catalog::is_custom;
 use super::editor_fields::{has_custom_prompt, set_enabled};
 use super::editor_labels::{branch_name, group_name, path_name};
-use super::kind_icon::{branch_icon, grip_icon, kind_icon, problem_icon, prompt_icon, waits_icon};
+use super::kind_icon::{branch_icon, grip_icon, kind_icon, prompt_icon, waits_icon};
 use super::preview_rules::waits_for_person;
-use super::stage_list::StageList;
-use crate::components::colors::signal;
+use super::source_tag::source_tag;
+use super::stage_list::{StageList, issue_lines};
 use crate::components::tab_order;
 use natamux_proto::stages::capabilities::stage_name;
 
@@ -39,32 +40,6 @@ impl Ctx<'_> {
             .cloned()
             .collect()
     }
-}
-
-/// The problems of a row, 12 px with the alert icon.
-pub(super) fn issue_lines(issues: &[PipelineIssue], cx: &App) -> impl IntoElement + use<> {
-    let warning = signal(cx).fg;
-    v_flex().gap_0p5().children(issues.iter().map(move |issue| {
-        let (icon_color, label_color) = match issue.level {
-            IssueLevel::Error => (Color::Error, Color::Error),
-            IssueLevel::Warning => (Color::Custom(warning), Color::Custom(warning)),
-        };
-        h_flex()
-            .items_start()
-            .gap_1p5()
-            .child(
-                div()
-                    .mt_0p5()
-                    .child(problem_icon().size(IconSize::XSmall).color(icon_color)),
-            )
-            .child(
-                div().min_w_0().child(
-                    Label::new(issue.message.clone())
-                        .size(LabelSize::XSmall)
-                        .color(label_color),
-                ),
-            )
-    }))
 }
 
 fn caps(text: &str) -> Label {
@@ -163,6 +138,7 @@ impl StageList {
         let label = Label::new(stage_name(stage)).color(color).truncate();
         let label = if on { label } else { label.strikethrough() };
         let key_id = id.clone();
+        let custom = is_custom(stage);
         h_flex()
             .id(SharedString::from(format!("stage-row-{id}")))
             .track_focus(&handle)
@@ -182,12 +158,15 @@ impl StageList {
                     this.select(&key_id, cx);
                 }
             }))
-            .child(kind_icon(stage.kind).size(IconSize::Small).color(if on {
-                Color::Default
-            } else {
+            .child(kind_icon(stage.kind).size(IconSize::Small).color(if !on {
                 Color::Disabled
+            } else if custom {
+                Color::Accent
+            } else {
+                Color::Default
             }))
             .child(label)
+            .when(custom, |this| this.child(source_tag(true, cx)))
             .when(waits_for_person(stage), |this| {
                 this.child(
                     div()
@@ -287,18 +266,31 @@ impl StageList {
     ) -> AnyElement {
         let id = group.id.clone();
         let mine = ctx.of(&id);
+        let hover_group = SharedString::from(format!("group-row-{id}"));
+        let (name, menu_id) = (group_name(group), id.clone());
         let head = h_flex()
             .id(SharedString::from(format!("group-head-{id}")))
+            .group(hover_group.clone())
             .h(rems_from_px(24.0_f32))
             .gap_1p5()
             .px_1()
             .cursor_grab()
             .child(grip_icon().size(IconSize::XSmall).color(Color::Disabled))
-            .child(caps(&group_name(group)))
+            .child(caps(&name))
             .child(
                 Label::new("side by side")
                     .size(LabelSize::XSmall)
                     .color(Color::Muted),
+            )
+            .child(div().flex_1())
+            .child(
+                IconButton::new(SharedString::from(format!("more-{id}")), IconName::Ellipsis)
+                    .icon_size(IconSize::Small)
+                    .visible_on_hover(hover_group)
+                    .tooltip(Tooltip::text(format!("Actions for {name}")))
+                    .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
+                        this.open_group_menu(&menu_id, event.position(), window, cx);
+                    })),
             );
         let head = Self::drag_source(head, &id, group_name(group));
         let rows: Vec<AnyElement> = group

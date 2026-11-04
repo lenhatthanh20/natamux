@@ -20,6 +20,11 @@ use crate::stages::editor_find::{
 };
 use crate::stages::editor_labels::{approval_label, kind_label};
 
+/// A stage is custom when its id is not in the catalog; a custom stage cannot take a catalog id.
+pub fn is_custom(stage: &Stage) -> bool {
+    catalog_entry(&stage.id).is_none()
+}
+
 /// Two paths of a branch can break the same rule, and the message does not tell them apart: show
 /// it once.
 pub fn unique_issues(issues: &[PipelineIssue]) -> Vec<PipelineIssue> {

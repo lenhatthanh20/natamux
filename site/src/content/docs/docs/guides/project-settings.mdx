@@ -10,23 +10,40 @@ import Figure from '../../../../components/Figure.astro'
 
 Each project has its own settings: the [stages](/docs/concepts/stages/) every task goes through, where task context comes from, the issue tracker and how agents ask for permission. Natamux keeps them in `.natamux.json` at the root of the repository, so you can commit the file and share it with your team.
 
-Open them from the sidebar: click the gear next to the project. Or right-click the project, or click **...** next to it, and choose **Settings**. The screen is called **Project settings of &lt;repo&gt;** and has three tabs: **Stages** (the default), **Issues** and **JSON**.
+Open them from the sidebar: click the gear next to the project. Or right-click the project, or click **...** next to it, and choose **Settings**. The screen is called **Project settings of &lt;repo&gt;** and has three tabs: **General**, **Stages** (the default) and **JSON**. The arrow keys move between the tabs.
 
 <Figure src="/screens/native/settings-stages" width={1600} height={900} alt="Native Project settings for storefront, with Spec selected and Wait for my approval checked. The workflow chart includes the Bug or feature branch and the parallel Test spec and Implement stages." caption="Spec selected in native Project settings, with its approval gate and workflow chart." />
 
+## The General tab
+
+**Project** holds three fields. Each one shows a dot (outline: the default, filled: changed) and, when changed, a reset icon that clears it.
+
+- **Agent send backs.** The most times an agent, or a CI failure, may send the task back from one stage before it waits for you (`agents.maxSendBacks`). Empty means no limit, the default. See [Limit the send backs](#limit-the-send-backs).
+- **Pause idle agents after (min).** After how many minutes an agent that ended its turn, in a terminal nobody looks at, is paused (`agents.pauseIdleAfterMinutes`). Empty means 30. `0` turns the pause off. See [An idle agent pauses](/docs/guides/terminal/#an-idle-agent-pauses).
+- **Branch name.** The name of the branch of a new task (`git.branchName`). Empty means `natamux/{id}-{slug}`.
+
+### GitHub issues
+
+**GitHub issues** sets when Natamux opens a GitHub issue for a task (`tracker.createIssue`). By default it opens none: **Only when you click Create issue in the task's Progress view**. The other choices open the issue when you approve the Spec stage, or just before the pull request opens. **Never** also hides the **Create issue** button.
+
+Under the choices, the tab says what the issue is made of. With `tracker.type` set to `none`, the choices are turned off. See [Open an issue for a task](/docs/guides/github/#open-an-issue-for-a-task).
+
 ## The Stages tab
 
-- **Pipeline preview.** A flow chart on top shows the stages as you edit them, with side-by-side stages in one column. A person icon marks a stage that waits for your approval. A pencil marks a prompt of your own. A stage on its own agent shows that agent's icon and its model (or the agent's name) under its name. Click a node to select its stage.
-- **Agent send backs.** Under the preview: the most times an agent, or a CI failure, may send the task back from one stage before it waits for you (`agents.maxSendBacks`). Empty means no limit, the default. See [Limit the send backs](#limit-the-send-backs).
-- **Pause idle agents after (min).** Under **Agent send backs**: after how many minutes an agent that ended its turn, in a terminal nobody looks at, is paused (`agents.pauseIdleAfterMinutes`). Empty means 30. `0` turns the pause off. See [An idle agent pauses](/docs/guides/terminal/#an-idle-agent-pauses).
+- **Pipeline preview.** A flow chart on top (it scrolls sideways) shows the stages as you edit them, with side-by-side stages in one column. A person icon marks a stage that waits for your approval. A pencil marks a prompt of your own. A stage on its own agent shows that agent's icon and its model (or the agent's name) under its name. Click a node to select its stage.
 - **Stages in order.** One row per stage, with a checkbox that turns it on or off, and a drag handle. Drag a row, or focus it and press `Alt+ArrowUp` or `Alt+ArrowDown`. The row menu has **Move up**, **Move down**, **Run alongside the stage above**, **Run on its own** and **Remove**. A stage that is off stays in the file with its prompt and approval, but new tasks do not get it.
-- **Add stage** opens the catalog of 28 stages, grouped by phase: Understand, Design, Build, Check and Ship. **Custom stage** makes a stage of your own. The [catalog](/docs/reference/configuration/#stage-catalog) lists every stage.
-- **Details.** Click a stage to edit it.
+- **+ Add.** One button in the list header opens a menu: **Built-in stage…**, **Custom stage…**, **Branch…** and **Side by side…**. Each opens a dialog. A new stage goes before Release; a new branch goes after the selected step.
+  - **Built-in stage…** shows the catalog of 28 stages, grouped by phase: Understand, Design, Build, Check and Ship. Type to search, move with `ArrowUp` and `ArrowDown`, and press `Enter` or click a stage to add it. The dialog closes and the new stage is selected. The [catalog](/docs/reference/configuration/#stage-catalog) lists every stage.
+  - **Custom stage…** makes a stage of your own: **Name**, **Id** (made from the name until you type one), **Kind** and, for an agent stage, **Output file**.
+  - **Side by side…** ("Run stages side by side") picks 2 to 4 agent or manual stages that are not in a group yet, with an optional **Group name**. Stages of one group must share a place: the top level, or one path of a branch. They move next to the first of them and start together.
+- **Edit a group.** Hover a group's header and open its **...** menu: **Edit group…**, **Move up** and **Move down**. **Edit group…** opens the same dialog with the group's stages checked. **Split group** runs each of them on its own, in order.
+- **Built-in or custom.** A stage of your own has a **Custom** tag in the list, a solid ring in the flow chart and a **Custom** tag in its details. A catalog stage shows **Built-in** in its details.
+- **Details.** Click a stage to edit it. **Basic** holds the name, approval, ending the terminal, the agent and the prompt. **Advanced** is folded: arguments, command, check command, output file, required sections, finished when, workflow, CI and a terminal of its own. Its row says "N changed" or "all default", and it opens by itself when one of its fields has a problem.
 
 | Field | Shown for | Meaning |
 |---|---|---|
 | **Name** | Every stage | The name in the dashboard. |
-| **Wait for my approval** | Every stage | Shows **Default** or **Changed**. **Use default** goes back. A `review` or `manual` stage is always checked, with "This stage is a check by a person." For `release` the label is **Open the pull request when I click**. |
+| **Wait for my approval** | Every stage | A dot shows whether it is the default (outline) or changed (filled). When changed, the reset icon (**Use default**) goes back. A `review` or `manual` stage is always checked, with "This stage is a check by a person." For `release` the label is **Open the pull request when I click**. |
 | **Tasks can run it as a workflow** | Agent stages | Gives each task a **Run with a workflow** checkbox on this stage. On by default for Plan and Implement. See [Run a stage as a workflow](/docs/concepts/stages/#run-a-stage-as-a-workflow). |
 | **Tasks can check it on CI** | Testing stages and agent stages without an output file | Gives each task a **Check on CI** checkbox on this stage. On by default for Implement and Automated tests. See [Check a stage on CI](/docs/concepts/stages/#check-a-stage-on-ci). |
 | **End the agent and close its terminal when the stage is done** | Context, agent and testing stages outside Terminal 1 | Off by default. When the stage is done, Natamux ends its agent or command and closes its terminal. A stage in Terminal 1 shows "This stage runs in Terminal 1, which cannot be closed." instead. See [End a stage's terminal](/docs/concepts/stages/#end-a-stages-terminal). |
@@ -41,20 +58,14 @@ Open them from the sidebar: click the gear next to the project. Or right-click t
 | **Finished when** | Every stage | The sentence the progress view shows before the stage starts. |
 
 - **Problems.** Each problem shows next to its stage, and **Save** is off until they are fixed. The rules are in [Rules for the pipeline](/docs/reference/configuration/#rules-for-the-pipeline).
-- **Footer.** **Reset to default** puts the default pipeline in the editor: Context, Spec, Implement, Review and Release. **Import…** and **Export** load and save a file; see [Import and export](#import-and-export). **Cancel** closes the screen. **Save** (`Mod+Enter`) writes the file. A line above them, except on the **Issues** tab, says: "New tasks use this pipeline. Tasks on their way keep their stages, but use the new prompts and approvals."
+- **Bottom bar.** One line: the path of the file, an info icon (hover it for "New tasks use this pipeline. Tasks on their way keep their stages, but use the new prompts and approvals."; not on the **General** tab), the problem and warning counts, a **...** menu with **Reset to default**, **Import…** and **Export**, **Discard** and **Save** (`Mod+Enter`). **Reset to default** puts the default pipeline in the editor: Context, Spec, Implement, Review and Release. See [Import and export](#import-and-export).
 - **Phone.** Below 640 px the list and the details are one column. A stage opens in place of the list, with **Back**.
 
 **Save** changes only `stages` and `agents.maxSendBacks`. Other fields and keys it does not know stay in the file. When the stages equal the default pipeline, Save leaves `stages` out of the file, so the project follows later changes of the default.
 
-## The Issues tab
-
-The **Issues** tab sets when Natamux opens a GitHub issue for a task (`tracker.createIssue`). By default it opens none: **Only when you click Create issue in the task's Progress view**. The other choices open the issue when you approve the Spec stage, or just before the pull request opens. **Never** also hides the **Create issue** button.
-
-Under the choices, the tab says what the issue is made of. With `tracker.type` set to `none`, the choices are turned off. See [Open an issue for a task](/docs/guides/github/#open-an-issue-for-a-task).
-
 ## The JSON tab
 
-The **JSON** tab edits the whole file as text. Edits move between the tabs. JSON that is not valid keeps you on this tab with the error shown, until you fix it. Use it for fields the **Stages** tab does not show:
+The **JSON** tab edits the whole file as text. Edits move between the tabs. JSON that is not valid keeps you on this tab with the error shown, until you fix it. Use it for fields the **General** and **Stages** tabs do not show:
 
 - `requireCommit`, `requireClean` and `check` on a stage;
 - `context.sources`, such as a skill or MCP source with a name of its own;
@@ -100,13 +111,17 @@ Review runs in its own terminal, Terminal 5, so it can use another agent than th
 
 <Steps>
 
-1. Click **Add branch** and give it a **Branch name**.
-2. Give each path a **Path name** and a condition, such as **File has text** (a section of `plan.md`) or **Command succeeds**.
-3. Click **Save**.
+1. Click **+ Add**, then **Branch…**, and give it a **Branch name**.
+2. Give each path a **Path name** and a condition, such as **File has text** (a section of `plan.md`) or **Command succeeds**. **Add path** adds one, up to 4.
+3. Click **Add branch**. Nothing changes in the pipeline until then; **Cancel** drops the branch.
+4. Select the branch and use **Add a stage…** under each path to give it stages.
+5. Click **Save**.
 
 </Steps>
 
 <Figure src="/screens/native/stages-branch" width={1600} height={900} alt="Native Project settings for storefront, with the Bug or feature branch selected. The chart shows an If node, the Bug fix path with a context.md text condition, and the Feature path marked Otherwise. The branch details show Branch name and Path 1." caption="A branch in native Project settings: an If node with one lane per path." />
+
+To change a branch later, select it and click **Edit branch…**, or open its row's **...** menu. **Save branch** writes the changes; **Cancel** leaves the branch as it was.
 
 See [Paths with a condition](/docs/concepts/stages/#paths-with-a-condition) and [Build a workflow](/docs/guides/workflows/).
 
@@ -116,7 +131,7 @@ Click the stage and set **Agent** and **Arguments**. The stage then runs in its 
 
 ### Have a person read the diff
 
-Click **Add stage**, pick **Manual review** in the Check phase, and drag it after **Review**. The task then waits for your **Approve** before **Release**. To make the agent review wait for you as well, tick **Wait for my approval** on **Review**.
+Click **+ Add**, choose **Built-in stage…**, pick **Manual review** in the Check phase, and drag it after **Review**. The task then waits for your **Approve** before **Release**. To make the agent review wait for you as well, tick **Wait for my approval** on **Review**.
 
 ### Skip the planning
 
@@ -136,7 +151,7 @@ By default an agent may send a task back as often as it likes. When two agents k
 
 <Steps>
 
-1. On the **Stages** tab, type a number in **Agent send backs**, for example `2`.
+1. On the **General** tab, type a number in **Agent send backs**, for example `2`.
 2. Click **Save**.
 
 </Steps>

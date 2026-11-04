@@ -1,5 +1,5 @@
 //! The tabs of Project settings as rules (`ProjectSettingsDialog.tsx`, `IssuesTab.tsx`): which tab
-//! shows, the footer note, the Issues choice, and the words of the reset and the JSON alert. No
+//! shows, the footer note, the GitHub issues choice, and the words of the reset and the JSON alert. No
 //! gpui, so it is tested alone.
 
 use natamux_proto::projects::repo::{PAUSE_IDLE_MINUTES, TrackerSettings};
@@ -10,19 +10,20 @@ use crate::projects::settings_text::CREATE_ISSUE_OPTIONS;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SettingsTab {
+    General,
     Stages,
-    Issues,
     Json,
 }
 
 impl SettingsTab {
     /// In the order they are drawn.
-    pub const ALL: [SettingsTab; 3] = [SettingsTab::Stages, SettingsTab::Issues, SettingsTab::Json];
+    pub const ALL: [SettingsTab; 3] =
+        [SettingsTab::General, SettingsTab::Stages, SettingsTab::Json];
 
     pub fn label(self) -> &'static str {
         match self {
+            SettingsTab::General => "General",
             SettingsTab::Stages => "Stages",
-            SettingsTab::Issues => "Issues",
             SettingsTab::Json => "JSON",
         }
     }
@@ -37,9 +38,9 @@ pub fn shown_tab(draft_ok: bool, picked: SettingsTab) -> SettingsTab {
     if draft_ok { picked } else { SettingsTab::Json }
 }
 
-/// The footer note is about the pipeline, so Issues has none.
+/// The footer note is about the pipeline, so General has none.
 pub fn shows_pipeline_note(tab: SettingsTab) -> bool {
-    tab != SettingsTab::Issues
+    tab != SettingsTab::General
 }
 
 pub const PIPELINE_NOTE: &str = "New tasks use this pipeline. Tasks on their way keep their stages, \

@@ -1,19 +1,20 @@
-//! The tabs of Project settings (`ProjectSettingsDialog.tsx`): Stages, Issues and JSON over one
+//! The tabs of Project settings (`ProjectSettingsDialog.tsx`): General, Stages and JSON over one
 //! draft, the tab bar, the body of each tab, and the alerts and the problem count around them.
 
 use gpui::{Entity, FocusHandle, KeyDownEvent};
 use ui::prelude::*;
 
+use super::general_tab::render_general;
 use super::issues_tab::IssuesTab;
 use super::json_tab::JsonTab;
 use super::project_settings_page::{ProjectSettingsPage, StagesTab};
 use super::settings_tab_rules::{SettingsTab, error_count, shown_tab, step_tab};
 use super::settings_text::count_label;
-use crate::components::button_style::{action_button, quiet_button};
+use crate::components::button_style::action_button;
 use crate::stages::kind_icon::problem_icon;
 use crate::stages::pipeline_editor::PipelineEditor;
 
-/// The tab the person picked, and the two tabs that are not Stages.
+/// The tab the person picked, and the two tabs that are not Stages (General holds the issues).
 pub(super) struct SettingsTabs {
     pub(super) picked: SettingsTab,
     /// The tab bar is one tab stop; the arrows move over the tabs.
@@ -37,12 +38,11 @@ impl SettingsTabs {
         }
     }
 
-    /// The Tab stops of the tab bar and of the tab shown, other than Stages (which has its own).
+    /// The Tab stops of the tab bar and of the JSON tab; General and Stages have their own.
     pub(super) fn stops(&self, shown: SettingsTab, cx: &App) -> Vec<FocusHandle> {
         let mut stops = vec![self.focus.clone()];
         match shown {
-            SettingsTab::Stages => {}
-            SettingsTab::Issues => stops.push(self.issues.read(cx).stop()),
+            SettingsTab::General | SettingsTab::Stages => {}
             SettingsTab::Json => stops.push(self.json.read(cx).stop(cx)),
         }
         stops
@@ -66,9 +66,6 @@ impl ProjectSettingsPage {
             return;
         };
         stages.tabs.picked = tab;
-        stages
-            .editor
-            .update(cx, |editor, cx| editor.set_picking(false, cx));
         cx.notify();
     }
 
@@ -123,12 +120,12 @@ impl ProjectSettingsPage {
         &self,
         stages: &StagesTab,
         shown: SettingsTab,
-        window: &Window,
+        window: &mut Window,
         cx: &mut App,
     ) -> Vec<AnyElement> {
         match shown {
+            SettingsTab::General => vec![render_general(stages)],
             SettingsTab::Stages => self.render_stages(stages, window, cx).into(),
-            SettingsTab::Issues => vec![stages.tabs.issues.clone().into_any_element()],
             SettingsTab::Json => vec![stages.tabs.json.clone().into_any_element()],
         }
     }
@@ -222,17 +219,5 @@ impl ProjectSettingsPage {
                         .color(Color::Warning),
                 )
             })
-    }
-
-    pub(super) fn ghost(
-        &self,
-        id: &'static str,
-        label: &'static str,
-        on_click: impl Fn(&mut Self, &mut Window, &mut Context<Self>) + 'static,
-        cx: &mut Context<Self>,
-    ) -> Button {
-        quiet_button(id, label)
-            .disabled(self.base.is_none())
-            .on_click(cx.listener(move |this, _, window, cx| on_click(this, window, cx)))
     }
 }

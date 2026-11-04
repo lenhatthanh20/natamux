@@ -107,11 +107,11 @@ fn shows_the_value_of_a_project_without_a_tracker_and_turns_on_with_one() {
 }
 
 #[test]
-fn puts_issues_between_stages_and_json_and_drops_the_pipeline_note_there() {
+fn puts_general_first_and_drops_the_pipeline_note_there() {
     let labels: Vec<&str> = SettingsTab::ALL.iter().map(|tab| tab.label()).collect();
-    assert_eq!(labels, ["Stages", "Issues", "JSON"]);
+    assert_eq!(labels, ["General", "Stages", "JSON"]);
     assert!(shows_pipeline_note(SettingsTab::Stages));
-    assert!(!shows_pipeline_note(SettingsTab::Issues));
+    assert!(!shows_pipeline_note(SettingsTab::General));
     assert!(shows_pipeline_note(SettingsTab::Json));
     assert!(PIPELINE_NOTE.starts_with("New tasks use this pipeline."));
 }
@@ -131,17 +131,17 @@ fn moves_the_choice_with_the_arrow_keys() {
     assert_eq!(step_choice(0, "x"), None);
     assert_eq!(
         step_tab(SettingsTab::Stages, "right"),
-        Some(SettingsTab::Issues)
+        Some(SettingsTab::Json)
     );
     assert_eq!(
         step_tab(SettingsTab::Json, "right"),
-        Some(SettingsTab::Stages)
+        Some(SettingsTab::General)
     );
 }
 
 #[test]
 fn keeps_the_json_tab_while_the_json_is_broken() {
-    assert_eq!(shown_tab(false, SettingsTab::Issues), SettingsTab::Json);
+    assert_eq!(shown_tab(false, SettingsTab::General), SettingsTab::Json);
 }
 
 #[test]

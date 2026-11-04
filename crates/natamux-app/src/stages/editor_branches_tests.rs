@@ -322,3 +322,35 @@ fn adds_a_branch_before_a_missing_release() {
     let steps = vec![stage_step("docs", StageKind::Agent, Gate::Auto)];
     assert_eq!(add_branch(&steps, None).len(), 2);
 }
+
+#[test]
+fn adds_a_branch_made_elsewhere_after_the_id_or_before_the_release() {
+    let made = add_branch(&full_pipeline(), Some("plan"));
+    let branch = made
+        .iter()
+        .find_map(|step| match step {
+            Step::Branch(branch) => Some(branch.clone()),
+            _ => None,
+        })
+        .unwrap();
+    assert_eq!(
+        add_branch_with(&full_pipeline(), branch.clone(), Some("plan")),
+        made
+    );
+    let at_end = add_branch_with(&branched(), branch.clone(), None);
+    assert_eq!(at_end.len(), branched().len() + 1);
+    assert!(matches!(&at_end[at_end.len() - 2], Step::Branch(added) if added.id == branch.id));
+    assert_eq!(add_branch_with(&made, branch, None), made);
+}
+
+#[test]
+fn replaces_a_branch_by_its_id_and_leaves_the_rest() {
+    let mut edited = find_branch(&branched(), "after-plan").unwrap().clone();
+    edited.name = Some("Size".into());
+    edited.paths.truncate(1);
+    let steps = replace_branch(&branched(), &edited);
+    assert_eq!(find_branch(&steps, "after-plan"), Some(&edited));
+    assert_eq!(steps.len(), branched().len());
+    edited.id = "nope".into();
+    assert_eq!(replace_branch(&branched(), &edited), branched());
+}

@@ -12,7 +12,7 @@ use super::settings_tab_rules::{
 };
 use crate::components::form::{input_box, text_editor};
 use crate::stages::pipeline_editor::PipelineEditor;
-use crate::stages::stage_fields_view::{error_line, inline_field};
+use crate::stages::stage_fields_view::{default_mark, error_line, inline_field};
 
 pub struct BranchNameField {
     pipeline: Entity<PipelineEditor>,
@@ -70,6 +70,12 @@ impl BranchNameField {
         cx.notify();
     }
 
+    /// Reset icon: an empty field is the default; the edit event writes the draft.
+    fn reset(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.editor
+            .update(cx, |editor, cx| editor.set_text("", window, cx));
+    }
+
     fn sync(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.editor.focus_handle(cx).is_focused(window) {
             return;
@@ -86,13 +92,22 @@ impl BranchNameField {
 
 impl Render for BranchNameField {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let this = cx.weak_entity();
+        let mark = default_mark(
+            "branch-name-reset",
+            self.editor.read(cx).text(cx).trim().is_empty(),
+            move |window, cx| {
+                this.update(cx, |this, cx| this.reset(window, cx)).ok();
+            },
+            cx,
+        );
         let control = div().w_full().child(input_box(&self.editor, cx));
         v_flex()
             .id("branch-name-field")
             .gap_1()
             .child(inline_field(
                 BRANCH_NAME_LABEL,
-                None,
+                Some(mark),
                 Some(BRANCH_NAME_HINT.into()),
                 control,
             ))
