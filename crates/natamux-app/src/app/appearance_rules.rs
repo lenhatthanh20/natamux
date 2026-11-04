@@ -106,7 +106,8 @@ pub fn parse_ui_size(raw: &str) -> UiSize {
     }
 }
 
-fn scaled(base: f64, zoom: f32) -> f64 {
+/// A base size times the zoom, rounded to 0.1 as the settings JSON holds it.
+pub fn scaled(base: f64, zoom: f32) -> f64 {
     (base * f64::from(zoom) * 10.0).round() / 10.0
 }
 
@@ -117,6 +118,11 @@ fn f64_of(size: f32) -> f64 {
 
 /// The end of the name of the `--shot` states that show the scrollbars.
 const SCROLLBAR_STATES: &str = "-scrollbar";
+
+/// Whether a `--shot` state shows the scrollbars; every other shot hides them.
+pub fn shows_scrollbars(state: &str) -> bool {
+    state.ends_with(SCROLLBAR_STATES)
+}
 
 /// The theme part of Zed's settings: `mode` is `ThemeChoice::name` (a `--theme` flag wins before
 /// this), and the theme Zed shows in each mode.
@@ -151,7 +157,7 @@ pub fn user_settings(
         "terminal": terminal,
     });
     if let Some(state) = shot {
-        let show = if state.ends_with(SCROLLBAR_STATES) {
+        let show = if shows_scrollbars(state) {
             "always"
         } else {
             "never"

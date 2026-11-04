@@ -7,7 +7,7 @@
 
 use gpui::{App, Hsla, Keystroke, MouseButton, Rgba, TestAppContext, VisualTestContext, px, size};
 use serde_json::{Value, json};
-use terminal::{Content, Modes};
+use terminal::{Color, Content, Modes, NamedColor, Rgb};
 
 use super::behaviour_tests::{
     PANE, SET, cell, content, feed, focus, last_drawn, mods, mouse_down, mouse_move, mouse_up,
@@ -162,6 +162,61 @@ fn every_key_sends_what_the_golden_holds(cx: &mut TestAppContext) {
     golden_files::check(SET, "press_table", &press_rows(cx));
 }
 
+/// What the test window types for a key the terminal let go on: the key's own character (a
+/// capital letter with Shift) or a space, and nothing with Ctrl, Alt or Cmd, as the old code's
+/// table shows. The own view gets that text through its input handler (S2.4).
+#[cfg(feature = "own-terminal")]
+fn typed(keystroke: &Keystroke) -> String {
+    let mods = &keystroke.modifiers;
+    if mods.control || mods.alt || mods.platform {
+        return String::new();
+    }
+    match keystroke.key.as_str() {
+        "space" => " ".into(),
+        key if key.chars().count() == 1 && mods.shift => key.to_uppercase(),
+        key if key.chars().count() == 1 => key.into(),
+        _ => String::new(),
+    }
+}
+
+/// T-K1 on the own encoder: its bytes, or the key's text when it lets the key go on.
+#[cfg(feature = "own-terminal")]
+#[test]
+fn the_own_encoder_sends_what_the_golden_holds() {
+    use alacritty_terminal::term::TermMode;
+
+    use crate::terminals::term::input_bytes::encode;
+
+    let row = |mode: &str, modifiers: &str, key: &str, term_mode: TermMode| {
+        let keystroke = Keystroke {
+            modifiers: mods(modifiers),
+            key: key.into(),
+            key_char: None,
+        };
+        match encode(&keystroke, term_mode) {
+            Some(bytes) => json!([mode, modifiers, key, String::from_utf8_lossy(&bytes), false]),
+            None => json!([mode, modifiers, key, typed(&keystroke), true]),
+        }
+    };
+    let mut rows = Vec::new();
+    for (mode, _) in MODES {
+        let term_mode = match mode {
+            "app-cursor" => TermMode::APP_CURSOR,
+            "app-keypad" => TermMode::APP_KEYPAD,
+            "alt-screen" => TermMode::ALT_SCREEN,
+            _ => TermMode::empty(),
+        };
+        for key in press_keys() {
+            for modifiers in press_modifiers() {
+                rows.push(row(mode, modifiers, &key, term_mode));
+            }
+        }
+    }
+    // The mode the last frame copied is still the normal one (6.2.5).
+    rows.push(row("app-cursor, no frame", "none", "up", TermMode::empty()));
+    golden_files::check(SET, "press_table", &rows);
+}
+
 #[gpui::test]
 #[ignore]
 fn golden_terminal_press_table(cx: &mut TestAppContext) {
@@ -241,6 +296,55 @@ fn mouse_reports_match_the_golden(cx: &mut TestAppContext) {
     golden_files::check(SET, "mouse_reports", &mouse_rows(cx));
 }
 
+/// T-M1 on the own reports: the same steps at the same cells as `mouse_rows`.
+#[cfg(feature = "own-terminal")]
+#[test]
+fn the_own_mouse_reports_match_the_golden() {
+    use alacritty_terminal::term::TermMode;
+
+    use crate::terminals::term::mouse_report::{MouseAction, report};
+
+    let mut rows = Vec::new();
+    for (mode, _) in MOUSE_MODES {
+        for (format, _) in MOUSE_FORMATS {
+            let mut term_mode = match mode {
+                "1000" => TermMode::MOUSE_REPORT_CLICK,
+                "1002" => TermMode::MOUSE_DRAG,
+                _ => TermMode::MOUSE_MOTION,
+            };
+            match format {
+                "utf8" => term_mode |= TermMode::UTF8_MOUSE,
+                "sgr" => term_mode |= TermMode::SGR_MOUSE,
+                _ => {}
+            }
+            for (name, button) in [
+                ("left", MouseButton::Left),
+                ("middle", MouseButton::Middle),
+                ("right", MouseButton::Right),
+            ] {
+                for modifiers in ["none", "shift", "alt", "ctrl"] {
+                    for column in [5, 100, 230] {
+                        let held = mods(modifiers);
+                        let steps = [
+                            ("press", MouseAction::Press(button), 2, column),
+                            ("drag", MouseAction::Move(Some(button)), 3, column + 2),
+                            ("release", MouseAction::Release(button), 3, column + 2),
+                            ("move", MouseAction::Move(None), 4, column + 4),
+                        ];
+                        for (event, action, line, at) in steps {
+                            let sent = report(action, line, at, &held, term_mode)
+                                .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
+                                .unwrap_or_default();
+                            rows.push(json!([mode, format, name, modifiers, column, event, sent]));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    golden_files::check(SET, "mouse_reports", &rows);
+}
+
 #[gpui::test]
 #[ignore]
 fn golden_terminal_mouse_reports(cx: &mut TestAppContext) {
@@ -303,8 +407,8 @@ impl Seeded {
 }
 
 /// T-C1: the APCA 45 fix of a foreground on a background: the 16 named colours of each theme
-/// on its terminal background, then 20,000 random pairs.
-fn contrast_rows(cx: &mut TestAppContext) -> Vec<Value> {
+/// on its terminal background, then 20,000 random pairs. `fix` is Zed's or the own one.
+fn contrast_rows(cx: &mut TestAppContext, fix: fn(Hsla, Hsla, f32) -> Hsla) -> Vec<Value> {
     crate::app::test_views::init(cx);
     let mut rows = Vec::new();
     cx.update(|cx| {
@@ -312,7 +416,7 @@ fn contrast_rows(cx: &mut TestAppContext) -> Vec<Value> {
             let theme = theme(name, cx);
             let background = theme.colors().terminal_background;
             for (colour, foreground) in ansi(&theme) {
-                let fixed = ui::utils::ensure_minimum_contrast(foreground, background, 45.);
+                let fixed = fix(foreground, background, 45.);
                 rows.push(json!([
                     name,
                     colour,
@@ -327,7 +431,7 @@ fn contrast_rows(cx: &mut TestAppContext) -> Vec<Value> {
     for i in 0..20_000 {
         let foreground = seeded.colour(i % 10 == 0);
         let background = seeded.colour(false);
-        let fixed = ui::utils::ensure_minimum_contrast(foreground, background, 45.);
+        let fixed = fix(foreground, background, 45.);
         rows.push(json!([
             "random",
             i,
@@ -341,13 +445,22 @@ fn contrast_rows(cx: &mut TestAppContext) -> Vec<Value> {
 
 #[gpui::test]
 fn the_contrast_fix_matches_the_golden(cx: &mut TestAppContext) {
-    golden_files::check(SET, "contrast", &contrast_rows(cx));
+    let rows = contrast_rows(cx, ui::utils::ensure_minimum_contrast);
+    golden_files::check(SET, "contrast", &rows);
+}
+
+#[cfg(feature = "own-terminal")]
+#[gpui::test]
+fn the_own_contrast_fix_matches_the_golden(cx: &mut TestAppContext) {
+    use crate::terminals::term::contrast::with_minimum_contrast;
+    golden_files::check(SET, "contrast", &contrast_rows(cx, with_minimum_contrast));
 }
 
 #[gpui::test]
 #[ignore]
 fn golden_terminal_contrast(cx: &mut TestAppContext) {
-    golden_files::write(SET, "contrast", &contrast_rows(cx));
+    let rows = contrast_rows(cx, ui::utils::ensure_minimum_contrast);
+    golden_files::write(SET, "contrast", &rows);
 }
 
 #[test]
@@ -464,9 +577,8 @@ fn golden_terminal_draw_list(cx: &mut TestAppContext) {
 }
 
 /// T-C2: the colour of every named colour, all 256 indexed ones and a sample of exact ones, in
-/// each theme.
-fn colour_rows(cx: &mut TestAppContext) -> Vec<Value> {
-    use terminal::{Color, NamedColor};
+/// each theme. `convert` is Zed's or the own one.
+fn colour_rows(cx: &mut TestAppContext, convert: fn(&Color, &theme::Theme) -> Hsla) -> Vec<Value> {
     crate::app::test_views::init(cx);
     let named = [
         NamedColor::Black,
@@ -502,14 +614,14 @@ fn colour_rows(cx: &mut TestAppContext) -> Vec<Value> {
     let mut colours: Vec<Color> = named.into_iter().map(Color::Named).collect();
     colours.extend((0..=255).map(Color::Indexed));
     for (r, g, b) in [(0, 0, 0), (255, 255, 255), (18, 52, 86), (250, 128, 3)] {
-        colours.push(Color::Spec(terminal::Rgb { r, g, b }));
+        colours.push(Color::Spec(Rgb { r, g, b }));
     }
     let mut rows = Vec::new();
     cx.update(|cx| {
         for name in themes() {
             let theme = theme(name, cx);
             for colour in &colours {
-                let drawn = terminal_view::terminal_element::convert_color(colour, &theme);
+                let drawn = convert(colour, &theme);
                 rows.push(json!([name, format!("{colour:?}"), hex(drawn)]));
             }
         }
@@ -519,11 +631,20 @@ fn colour_rows(cx: &mut TestAppContext) -> Vec<Value> {
 
 #[gpui::test]
 fn the_colours_match_the_golden(cx: &mut TestAppContext) {
-    golden_files::check(SET, "colours", &colour_rows(cx));
+    let rows = colour_rows(cx, terminal_view::terminal_element::convert_color);
+    golden_files::check(SET, "colours", &rows);
+}
+
+#[cfg(feature = "own-terminal")]
+#[gpui::test]
+fn the_own_colours_match_the_golden(cx: &mut TestAppContext) {
+    use crate::terminals::term::colors::convert;
+    golden_files::check(SET, "colours", &colour_rows(cx, convert));
 }
 
 #[gpui::test]
 #[ignore]
 fn golden_terminal_colours(cx: &mut TestAppContext) {
-    golden_files::write(SET, "colours", &colour_rows(cx));
+    let rows = colour_rows(cx, terminal_view::terminal_element::convert_color);
+    golden_files::write(SET, "colours", &rows);
 }

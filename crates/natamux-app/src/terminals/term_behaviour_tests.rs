@@ -530,6 +530,47 @@ fn the_grid_of_a_pane_matches_the_golden(cx: &mut TestAppContext) {
     golden_files::check(SET, "grid_size", &grid_rows(cx));
 }
 
+/// T-G1 on the own grid math. The cell size comes from the font, which the own view measures
+/// (S2.4), so here it comes from the table. The bounds are what the old view gave its grid: the
+/// pane less the 14 px scrollbar track it always keeps, in whole device pixels as gpui lays out.
+#[cfg(feature = "own-terminal")]
+#[test]
+fn the_own_grid_matches_the_golden() {
+    use crate::terminals::term::grid_layout::grid;
+
+    let rows: Vec<Value> = golden_files::read(SET, "grid_size")
+        .iter()
+        .map(|row| {
+            let number = |i: usize| row[i].as_f64().unwrap() as f32;
+            let (width, height, scale) = (number(0), number(1), number(2));
+            let (cell_width, line_height) = (number(10), number(11));
+            let device = |value: f32| px((value * scale).round() / scale);
+            let bounds = gpui::Bounds {
+                origin: point(px(0.), px(0.)),
+                size: size(device(width - 14.), device(height)),
+            };
+            // History fills the main screen to its last row, so both screens have the spare
+            // pixels on top.
+            let laid = grid(bounds, px(cell_width), px(line_height), scale, true);
+            json!([
+                row[0],
+                row[1],
+                row[2],
+                row[3],
+                row[4],
+                row[5],
+                laid.columns,
+                laid.lines,
+                f32::from(laid.origin.x),
+                f32::from(laid.origin.y),
+                cell_width,
+                line_height
+            ])
+        })
+        .collect();
+    golden_files::check(SET, "grid_size", &rows);
+}
+
 #[gpui::test]
 #[ignore]
 fn golden_terminal_grid_size(cx: &mut TestAppContext) {
@@ -895,37 +936,40 @@ fn text_typed_before_the_socket_opens_is_sent_once_on_open(cx: &mut TestAppConte
 
 // T-L1: links. The secondary key shows a link under the pointer; a click with it opens only
 // web and mail links; a plain click on an OSC 8 link records today's behaviour (D5).
+const LINK_LINES: [&str; 10] = [
+    "see https://example.com/a). and more",
+    "mail mailto:me@example.com, ok",
+    "ftp ftp://files.example.com/x;",
+    "file file:///etc/hosts done",
+    "paren http://example.com/(p) end",
+    "path src/main.rs:12 no link",
+    "\x1b]8;;https://example.com/osc\x1b\\osc web\x1b]8;;\x1b\\ tail",
+    "\x1b]8;;file:///etc/passwd\x1b\\osc file\x1b]8;;\x1b\\ tail",
+    "\x1b]8;;ssh://host\x1b\\osc ssh\x1b]8;;\x1b\\ tail",
+    "\x1b]8;;HTTPS://EXAMPLE.COM/UP\x1b\\osc upper\x1b]8;;\x1b\\ tail",
+];
+
+/// Each case of T-L1: the cell (line, column) the pointer is on.
+const LINK_CASES: [(&str, (usize, usize)); 10] = [
+    ("url", (0, 8)),
+    ("mailto", (1, 8)),
+    ("ftp", (2, 8)),
+    ("file", (3, 8)),
+    ("paren", (4, 10)),
+    ("path", (5, 6)),
+    ("osc web", (6, 2)),
+    ("osc file", (7, 2)),
+    ("osc ssh", (8, 2)),
+    ("osc upper", (9, 2)),
+];
+
 fn link_rows(cx: &mut TestAppContext) -> Vec<Value> {
     let (_, terminal, cx) = open(cx, size(px(1000.), px(340.)), false);
     let mut rows = Vec::new();
-    let lines = [
-        "see https://example.com/a). and more",
-        "mail mailto:me@example.com, ok",
-        "ftp ftp://files.example.com/x;",
-        "file file:///etc/hosts done",
-        "paren http://example.com/(p) end",
-        "path src/main.rs:12 no link",
-        "\x1b]8;;https://example.com/osc\x1b\\osc web\x1b]8;;\x1b\\ tail",
-        "\x1b]8;;file:///etc/passwd\x1b\\osc file\x1b]8;;\x1b\\ tail",
-        "\x1b]8;;ssh://host\x1b\\osc ssh\x1b]8;;\x1b\\ tail",
-        "\x1b]8;;HTTPS://EXAMPLE.COM/UP\x1b\\osc upper\x1b]8;;\x1b\\ tail",
-    ];
-    feed(&terminal, &lines.join("\r\n"), cx);
+    feed(&terminal, &LINK_LINES.join("\r\n"), cx);
     let modifier = mods(secondary());
     let opened = |cx: &mut VisualTestContext| cx.opened_url();
-    let cases = [
-        ("url", (0, 8)),
-        ("mailto", (1, 8)),
-        ("ftp", (2, 8)),
-        ("file", (3, 8)),
-        ("paren", (4, 10)),
-        ("path", (5, 6)),
-        ("osc web", (6, 2)),
-        ("osc file", (7, 2)),
-        ("osc ssh", (8, 2)),
-        ("osc upper", (9, 2)),
-    ];
-    for (case, at) in cases {
+    for (case, at) in LINK_CASES {
         let at = cell(&terminal, at, cx);
         // Hover with the key down: the link under the pointer, if any.
         cx.simulate_modifiers_change(modifier);
@@ -963,6 +1007,41 @@ fn link_rows(cx: &mut TestAppContext) -> Vec<Value> {
 #[gpui::test]
 fn links_match_the_golden(cx: &mut TestAppContext) {
     golden_files::check(SET, "links", &link_rows(cx));
+}
+
+/// T-L1 on the own link rules: the link shown under the pointer with the secondary key, and what
+/// a click with the key opens. An OSC 8 link's target comes from its cells (the model, S2.3), so
+/// here from the line; a plain click is the view's (S2.4, D5). As in `link_rows`, a click that
+/// opens the URL opened last counts as nothing, since the test platform keeps only the last URL.
+#[cfg(feature = "own-terminal")]
+#[test]
+fn the_own_links_match_the_golden() {
+    use crate::terminals::term::links::{may_open, shown, url_at};
+
+    let golden = golden_files::read(SET, "links");
+    let mut last_opened: Option<String> = None;
+    let mut rows = Vec::new();
+    for (((case, (_, column)), text), old) in LINK_CASES.iter().zip(LINK_LINES).zip(&golden) {
+        let target = match text.strip_prefix("\x1b]8;;") {
+            Some(rest) => rest.split('\x1b').next().map(str::to_owned),
+            None => url_at(text, *column).map(|(_, url)| url),
+        };
+        let opened = target.clone().filter(|url| may_open(url));
+        let with_key = opened
+            .clone()
+            .filter(|url| last_opened.as_ref() != Some(url));
+        last_opened = opened.or(last_opened);
+        // The old plain click opened what the golden says; it is the URL opened last after it.
+        if let Some(url) = old[3].as_str() {
+            last_opened = Some(url.to_owned());
+        }
+        rows.push(json!([case, target.as_deref().map(shown), with_key]));
+    }
+    let golden: Vec<Value> = golden
+        .iter()
+        .map(|row| json!(row.as_array().unwrap()[..3]))
+        .collect();
+    assert_eq!(rows, golden);
 }
 
 #[gpui::test]
