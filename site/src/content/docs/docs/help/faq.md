@@ -77,7 +77,7 @@ No. Each task works in its own git worktree and branch. Natamux never pushes, me
 
 ## What happens when I quit the app?
 
-Quitting stops the daemon and every agent and terminal. The app asks first when agents are working. Tasks, worktrees and changes stay, and the agents of running, waiting and in-review tasks start again when you open the app. The other terminals of a task come back when you open the task, and each agent in them goes on with its last conversation. See [A terminal after a daemon restart](/docs/guides/terminal/#a-terminal-after-a-daemon-restart). On macOS, closing the window keeps everything running. See [Desktop app](/docs/guides/desktop-app/).
+Quitting stops the daemon and every agent and terminal. The app asks first. Tasks, worktrees and changes stay, and the agents of running, waiting and in-review tasks start again when you open the app. The other terminals of a task come back when you open the task, and each agent in them goes on with its last conversation. See [A terminal after a daemon restart](/docs/guides/terminal/#a-terminal-after-a-daemon-restart). On macOS, closing the window keeps everything running. See [Desktop app](/docs/guides/desktop-app/).
 
 ## Can I use it in a browser instead of the desktop app?
 

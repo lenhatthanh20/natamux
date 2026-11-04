@@ -32,7 +32,7 @@ impl Root {
     /// an editor has unsaved drafts.
     pub(super) fn restart_to_update(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let restart = crate::app::update_install::restart;
-        if !self.ask_before_quit_with(window, cx, move |_, cx| restart(cx)) {
+        if !self.ask_before_quit_with(false, window, cx, move |_, cx| restart(cx)) {
             restart(cx);
         }
     }
