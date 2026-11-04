@@ -1,18 +1,18 @@
 //! The checkboxes of a stage (`StageOptions.tsx`): approval, workflow, CI, end the terminal, and
-//! a terminal of its own. Each has a Default / Changed mark and a note.
+//! a terminal of its own. Each has a default dot and Reset icon, and a note in a tooltip.
 
 use gpui::{AnyElement, Entity};
 use natamux_proto::stages::capabilities::{can_end_shell, checks_on_ci};
 use natamux_proto::stages::schema::{Gate, Stage, StageKind, Step};
 use natamux_proto::stages::terminal_lane::terminal_of_stage;
-use ui::{ButtonLike, Checkbox, prelude::*};
+use ui::{ButtonLike, Checkbox, Tooltip, prelude::*};
 
 use super::editor_fields::{
     always_waits, default_ci, default_gate, default_own_shell, default_workflow, is_default_gate,
     offers_own_shell, set_ci, set_end_shell, set_gate, set_own_shell, set_workflow,
 };
 use super::pipeline_editor::PipelineEditor;
-use super::stage_fields_view::{change, default_mark, help_line};
+use super::stage_fields_view::{Mark, change, default_mark, help_line};
 
 const IN_SHELL_ONE: &str = "This stage runs in Terminal 1, which cannot be closed. Terminal 1 \
                             keeps the task's agent and its session.";
@@ -26,10 +26,6 @@ fn ends_shell_one(steps: &[Step], stage: &Stage) -> bool {
     terminal_of_stage(steps, &stage.id) == "1"
 }
 
-/// The button's 4 px padding, the 20 px box and the 8 px gap: a note starts under the label.
-const NOTE_INDENT: f32 = 32.;
-
-/// One checkbox with its label, mark and note.
 /// What a checkbox row does with its new value.
 type Toggle = Box<dyn Fn(bool, &mut Window, &mut App)>;
 
@@ -39,10 +35,12 @@ struct Row {
     note: Option<&'static str>,
     on: bool,
     disabled: bool,
-    mark: Option<AnyElement>,
+    mark: Option<Mark>,
     toggle: Toggle,
 }
 
+/// One line: the checkbox with its label, the mark, and the note as a tooltip of an info icon at
+/// the end.
 fn render(row: Row, _cx: &App) -> AnyElement {
     let Row {
         id,
@@ -53,68 +51,78 @@ fn render(row: Row, _cx: &App) -> AnyElement {
         mark,
         toggle,
     } = row;
-    v_flex()
-        .gap_1()
+    let (dot, reset) = match mark {
+        Some(mark) => (Some(mark.dot), mark.reset),
+        None => (None, None),
+    };
+    h_flex()
+        .w_full()
+        .min_h(rems_from_px(28.0_f32))
+        .gap_2()
+        .children(dot)
         .child(
-            h_flex()
-                .min_h(rems_from_px(28.0_f32))
-                .flex_wrap()
-                .gap_2()
+            ButtonLike::new(SharedString::from(id.clone()))
+                .disabled(disabled)
+                .on_click(move |_, window, cx| toggle(!on, window, cx))
                 .child(
-                    ButtonLike::new(SharedString::from(id.clone()))
-                        .disabled(disabled)
-                        .on_click(move |_, window, cx| toggle(!on, window, cx))
+                    h_flex()
+                        .gap_2()
                         .child(
-                            h_flex()
-                                .gap_2()
-                                .child(
-                                    Checkbox::new(
-                                        SharedString::from(format!("{id}-box")),
-                                        on.into(),
-                                    )
-                                    .disabled(disabled)
-                                    .visualization_only(true),
-                                )
-                                .child(
-                                    div()
-                                        .debug_selector(|| "option-label".into())
-                                        .child(Label::new(label).size(LabelSize::Small)),
-                                ),
-                        ),
-                )
-                .children(mark),
+                            Checkbox::new(SharedString::from(format!("{id}-box")), on.into())
+                                .disabled(disabled)
+                                .visualization_only(true),
+                        )
+                        .child(Label::new(label).size(LabelSize::Small)),
+                ),
         )
+        .child(div().flex_1())
+        .children(reset)
         .children(note.map(|note| {
-            div().pl(px(NOTE_INDENT)).child(
-                div()
-                    .debug_selector(|| "option-note".into())
-                    .child(help_line(note)),
-            )
+            div()
+                .id(SharedString::from(format!("{id}-info")))
+                .debug_selector(|| "option-info".into())
+                .child(
+                    Icon::new(IconName::Info)
+                        .size(IconSize::XSmall)
+                        .color(Color::Muted),
+                )
+                .tooltip(Tooltip::text(note))
         }))
         .into_any_element()
 }
 
-/// The checkboxes of `stage`, in the order of the details. `Some` of a note for a stage that
-/// runs in Terminal 1 replaces the end-the-terminal box.
-pub fn stage_options(
+/// The Basic checkboxes of `stage`: approval, and end the terminal, or the Terminal 1 line when
+/// the stage runs there.
+pub fn basic_options(
     stage: &Stage,
     steps: &[Step],
     pipeline: &Entity<PipelineEditor>,
     cx: &App,
 ) -> Vec<AnyElement> {
     let mut rows = vec![approval(stage, pipeline, cx)];
-    if stage.kind == StageKind::Agent {
-        rows.push(workflow(stage, pipeline, cx));
-    }
-    if checks_on_ci(stage) {
-        rows.push(ci(stage, pipeline, cx));
-    }
     if can_end_shell(stage) {
         if ends_shell_one(steps, stage) {
             rows.push(help_line(IN_SHELL_ONE).into_any_element());
         } else {
             rows.push(end_shell(stage, pipeline, cx));
         }
+    }
+    rows
+}
+
+/// The Advanced checkboxes: workflow, CI and a terminal of its own.
+pub fn advanced_options(
+    stage: &Stage,
+    steps: &[Step],
+    pipeline: &Entity<PipelineEditor>,
+    cx: &App,
+) -> Vec<AnyElement> {
+    let mut rows = Vec::new();
+    if stage.kind == StageKind::Agent {
+        rows.push(workflow(stage, pipeline, cx));
+    }
+    if checks_on_ci(stage) {
+        rows.push(ci(stage, pipeline, cx));
     }
     if offers_own_shell(steps, &stage.id) {
         rows.push(own_shell(stage, pipeline, cx));

@@ -8,8 +8,9 @@ use gpui::{AnyElement, Div, Entity, FontWeight, ScrollHandle, Stateful};
 use natamux_proto::stages::capabilities::stage_name;
 use natamux_proto::stages::resolve::active_steps;
 use natamux_proto::stages::schema::{Stage, Step};
-use ui::{Tooltip, prelude::*};
+use ui::{ScrollAxes, Tooltip, WithScrollbar, prelude::*};
 
+use super::editor_catalog::is_custom;
 use super::editor_labels::{StageRunner, stage_runner};
 use super::kind_icon::{kind_icon, prompt_icon, waits_icon};
 use super::pipeline_editor::PipelineEditor;
@@ -19,6 +20,7 @@ use super::preview_rules::{
 };
 use crate::agents::agent_choices::agent_label;
 use crate::components::agent_badge::AgentIcon;
+use crate::components::scrollbars::scrollbars;
 use crate::stages::editor_fields::has_custom_prompt;
 
 /// A node is 104 wide; its ring is 24.
@@ -78,8 +80,11 @@ pub(super) fn node_box(id: SharedString, selected: bool, cx: &App) -> Stateful<D
 
 fn ring(stage: &Stage, error: bool, cx: &App) -> impl IntoElement + use<> {
     let colors = cx.theme().colors();
+    let custom = is_custom(stage);
     let (border, icon_color) = if error {
         (cx.theme().status().error, Color::Error)
+    } else if custom {
+        (colors.text_accent, Color::Accent)
     } else {
         (colors.border, Color::Muted)
     };
@@ -107,7 +112,8 @@ fn ring(stage: &Stage, error: bool, cx: &App) -> impl IntoElement + use<> {
         .justify_center()
         .rounded_full()
         .border_1()
-        .border_dashed()
+        // A solid ring marks a stage of your own; the catalog's keep the dashed one.
+        .when(!custom, |this| this.border_dashed())
         .border_color(border)
         .child(
             kind_icon(stage.kind)
@@ -120,6 +126,53 @@ fn ring(stage: &Stage, error: bool, cx: &App) -> impl IntoElement + use<> {
         .when(has_custom_prompt(stage), |this| {
             this.child(mark(prompt_icon(), 15.))
         })
+        .when(custom, |this| {
+            this.child(
+                div()
+                    .absolute()
+                    .bottom(px(-3.))
+                    .left(px(-3.))
+                    .size(rems_from_px(8.0_f32))
+                    .rounded_full()
+                    .border_1()
+                    .border_color(colors.elevated_surface_background)
+                    .bg(colors.text_accent),
+            )
+        })
+}
+
+/// The "Pipeline" title and the legend of the marks, above the chart.
+fn title_row(cx: &App) -> impl IntoElement + use<> {
+    let colors = cx.theme().colors();
+    let item = |ring: Div, text: &'static str| {
+        h_flex()
+            .gap_1()
+            .child(ring)
+            .child(Label::new(text).size(LabelSize::XSmall).color(Color::Muted))
+    };
+    let swatch = || div().flex_none().size(rems_from_px(8.0_f32)).rounded_full();
+    h_flex()
+        .px_4()
+        .pt_2()
+        .gap_3()
+        .child(
+            Label::new("Pipeline")
+                .size(LabelSize::Small)
+                .weight(FontWeight::SEMIBOLD),
+        )
+        .child(div().flex_1())
+        .child(item(
+            swatch()
+                .border_1()
+                .border_dashed()
+                .border_color(colors.border),
+            "Built-in",
+        ))
+        .child(item(
+            swatch().border_1().border_color(colors.text_accent),
+            "Custom",
+        ))
+        .child(item(swatch().bg(colors.text_muted), "Waits for you"))
 }
 
 fn agent_line(runner: &StageRunner) -> impl IntoElement + use<> {
@@ -196,6 +249,7 @@ pub(super) fn group_box(
 pub fn pipeline_preview(
     editor: &Entity<PipelineEditor>,
     scroll: &ScrollHandle,
+    window: &mut Window,
     cx: &mut App,
 ) -> AnyElement {
     let colors = cx.theme().colors();
@@ -236,6 +290,30 @@ pub fn pipeline_preview(
         })
         .collect();
     let top = if branches.is_empty() { 12. } else { 40. };
+    let row = chart_row(&chart, &shown, top, scroll, cx).custom_scrollbars(
+        scrollbars(ScrollAxes::Horizontal, scroll),
+        window,
+        cx,
+    );
+    frame
+        .child(title_row(cx))
+        .child(row)
+        .children(
+            branches
+                .into_iter()
+                .map(|(branch, next)| branch_notes(branch, next, cx)),
+        )
+        .into_any_element()
+}
+
+/// The nodes and links in a row that scrolls sideways, `top` px under the box's top.
+fn chart_row(
+    chart: &Chart,
+    shown: &[Step],
+    top: f32,
+    scroll: &ScrollHandle,
+    cx: &App,
+) -> Stateful<Div> {
     // The steps are the scroll box's own children: gpui takes the scroll range from them, so a
     // row inside the box would be as wide as the box and nothing would scroll.
     let mut row = h_flex()
@@ -260,21 +338,14 @@ pub fn pipeline_preview(
             row = row.child(link(LINE_Y, cx));
         }
         row = match step {
-            Step::Stage(stage) => row.child(stage_node(&chart, stage, cx)),
-            Step::Group(group) => row.child(group_box(&chart, group, cx)),
+            Step::Stage(stage) => row.child(stage_node(chart, stage, cx)),
+            Step::Group(group) => row.child(group_box(chart, group, cx)),
             Step::Branch(branch) => {
-                row.child(branch_chart(&chart, branch, shown.get(index + 1), cx))
+                row.child(branch_chart(chart, branch, shown.get(index + 1), cx))
             }
         };
     }
-    frame
-        .child(row)
-        .children(
-            branches
-                .into_iter()
-                .map(|(branch, next)| branch_notes(branch, next, cx)),
-        )
-        .into_any_element()
+    row
 }
 
 pub(super) fn bold(text: impl Into<SharedString>) -> Label {

@@ -10,7 +10,7 @@ use ui::prelude::*;
 use super::settings_tab_rules::{SEND_BACKS_HINT, SEND_BACKS_LABEL, send_backs_field};
 use crate::components::form::{input_box, text_editor};
 use crate::stages::pipeline_editor::PipelineEditor;
-use crate::stages::stage_fields_view::{error_line, inline_field};
+use crate::stages::stage_fields_view::{default_mark, error_line, inline_field};
 
 pub struct SendBacksField {
     pipeline: Entity<PipelineEditor>,
@@ -68,6 +68,12 @@ impl SendBacksField {
         cx.notify();
     }
 
+    /// Reset icon: an empty field is the default; the edit event writes the draft.
+    fn reset(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.editor
+            .update(cx, |editor, cx| editor.set_text("", window, cx));
+    }
+
     fn sync(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.editor.focus_handle(cx).is_focused(window) {
             return;
@@ -84,6 +90,15 @@ impl SendBacksField {
 
 impl Render for SendBacksField {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let this = cx.weak_entity();
+        let mark = default_mark(
+            "send-backs-reset",
+            self.editor.read(cx).text(cx).trim().is_empty(),
+            move |window, cx| {
+                this.update(cx, |this, cx| this.reset(window, cx)).ok();
+            },
+            cx,
+        );
         let control = div()
             .w(rems_from_px(120.0_f32))
             .child(input_box(&self.editor, cx));
@@ -92,7 +107,7 @@ impl Render for SendBacksField {
             .gap_1()
             .child(inline_field(
                 SEND_BACKS_LABEL,
-                None,
+                Some(mark),
                 Some(SEND_BACKS_HINT.into()),
                 control,
             ))

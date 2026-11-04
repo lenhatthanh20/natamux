@@ -1,5 +1,6 @@
 //! The "..." menus of the stage list and the asks before a remove (`StageList.tsx`): a stage menu
-//! (move, run alongside or on its own, remove) and a branch menu (move, remove).
+//! (move, run alongside or on its own, remove), a branch menu (edit, move, remove) and a group
+//! menu (edit, move).
 
 use std::rc::Rc;
 
@@ -12,6 +13,7 @@ use super::editor_find::{find_branch, find_stage, group_of};
 use super::editor_labels::branch_name;
 use super::editor_moves::{can_move, join_above, join_problem, remove_stage, run_alone};
 use super::stage_list::StageList;
+use super::{branch_dialog, group_dialog};
 use crate::app::shortcuts::{MoveStageDown, MoveStageUp};
 use crate::components::confirm::Confirm;
 use crate::components::icons::icon_path;
@@ -197,7 +199,17 @@ impl StageList {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let mut parts = self.move_parts(id, cx);
+        let (pipeline, edit_id) = (self.editor.clone(), id.to_owned());
+        let mut parts = vec![
+            item(
+                "Edit branch\u{2026}",
+                Rc::new(move |window, cx| {
+                    branch_dialog::open_edit(&pipeline, &edit_id, window, cx)
+                }),
+            ),
+            Part::Separator,
+        ];
+        parts.extend(self.move_parts(id, cx));
         let own = id.to_owned();
         parts.push(Part::Separator);
         parts.push(Part::Item {
@@ -211,6 +223,26 @@ impl StageList {
                 this.remove_ask(&own, window, cx);
             }),
         });
+        self.show_menu(id, parts, position, window, cx);
+    }
+
+    /// The menu of a group header: edit it in the Side by side dialog, or move it.
+    pub(super) fn open_group_menu(
+        &mut self,
+        id: &str,
+        position: Point<Pixels>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let (pipeline, edit_id) = (self.editor.clone(), id.to_owned());
+        let mut parts = vec![
+            item(
+                "Edit group\u{2026}",
+                Rc::new(move |window, cx| group_dialog::open_edit(&pipeline, &edit_id, window, cx)),
+            ),
+            Part::Separator,
+        ];
+        parts.extend(self.move_parts(id, cx));
         self.show_menu(id, parts, position, window, cx);
     }
 

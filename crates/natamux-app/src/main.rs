@@ -96,6 +96,7 @@ mod components {
     pub mod resize_handle;
     pub mod resize_rules;
     pub mod scroll_rules;
+    pub mod scrollbars;
     pub mod segmented;
     pub mod shape;
     pub mod skeleton;
@@ -173,6 +174,7 @@ mod perf {
 }
 mod projects {
     pub mod branch_name_field;
+    pub mod general_tab;
     pub mod idle_pause_field;
     pub mod issue_import;
     pub mod issue_rules;
@@ -214,9 +216,15 @@ mod sidebar {
     pub mod workspace_tree;
 }
 mod stages {
+    pub mod add_menu;
+    pub mod add_stage_dialog;
+    pub mod advanced_rules;
     pub mod branch_details;
-    pub mod branch_details_fields;
+    pub mod branch_dialog;
+    pub mod branch_dialog_fields;
+    pub mod branch_dialog_paths;
     pub mod card_rules;
+    pub mod custom_stage_dialog;
     pub mod editor_branches;
     pub mod editor_catalog;
     pub mod editor_draft;
@@ -228,6 +236,8 @@ mod stages {
     pub mod editor_moves;
     pub mod flow_lines;
     pub mod flow_rules;
+    pub mod group_dialog;
+    pub mod group_rules;
     pub mod kind_icon;
     pub mod overview_rules;
     pub mod pipeline_editor;
@@ -241,6 +251,7 @@ mod stages {
     pub mod send_back_dialog;
     pub mod send_back_rules;
     pub mod skill_rules;
+    pub mod source_tag;
     pub mod stage_card;
     pub mod stage_choices;
     pub mod stage_details;

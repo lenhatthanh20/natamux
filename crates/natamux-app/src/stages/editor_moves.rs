@@ -39,7 +39,7 @@ fn with_items(steps: &[Step], place: Place, items: Vec<Step>) -> Option<Vec<Step
 }
 
 /// Runs `edit` on the items of the path that holds the place, or gives `None` when it is in none.
-fn in_path(
+pub(super) fn in_path(
     steps: &[Step],
     place: Place,
     edit: impl FnOnce(&[Step]) -> Vec<Step>,

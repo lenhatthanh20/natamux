@@ -12,6 +12,7 @@ use super::settings_rules::SettingsPage;
 use super::window::Root;
 use crate::stages::editor_catalog::add_catalog_stage;
 use crate::stages::editor_fields::set_enabled;
+use crate::stages::{add_stage_dialog, branch_dialog};
 
 /// The project of the shots: it has a `.natamux.json`.
 pub(crate) const PROJECT: &str = "natamux";
@@ -32,7 +33,7 @@ pub fn is_settings_shot(shot: Shot) -> bool {
         shot,
         Shot::ProjectSettingsTabStages
             | Shot::ProjectSettingsAgentStage
-            | Shot::ProjectSettingsStagePicker
+            | Shot::ProjectSettingsAddStage
             | Shot::ProjectSettingsBranch
             | Shot::ProjectSettingsProblems
             | Shot::ProjectSettingsConflict
@@ -57,9 +58,6 @@ pub async fn run(handle: WindowHandle<Root>, shot: Shot, cx: &mut AsyncApp) {
             match shot {
                 Shot::ProjectSettingsAgentStage => {
                     editor.update(cx, |editor, cx| editor.select(AGENT_STAGE, cx));
-                }
-                Shot::ProjectSettingsStagePicker => {
-                    editor.update(cx, |editor, cx| editor.set_picking(true, cx));
                 }
                 Shot::ProjectSettingsBranch => {
                     editor.update(cx, |editor, cx| editor.select(BRANCH, cx));
@@ -94,4 +92,19 @@ pub async fn run(handle: WindowHandle<Root>, shot: Shot, cx: &mut AsyncApp) {
             })
             .ok();
     }
+    // The dialogs open over the page, once it shows the list and the details.
+    handle
+        .update(cx, |_, window, cx| {
+            let Some(editor) = dialog.read(cx).pipeline() else {
+                return;
+            };
+            match shot {
+                Shot::ProjectSettingsAddStage => add_stage_dialog::open(&editor, window, cx),
+                Shot::ProjectSettingsBranch => {
+                    branch_dialog::open_edit(&editor, BRANCH, window, cx)
+                }
+                _ => {}
+            }
+        })
+        .ok();
 }

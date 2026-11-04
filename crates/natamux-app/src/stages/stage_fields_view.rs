@@ -1,18 +1,17 @@
 //! Parts the stage details, the branch details and the stage picker share (`StageField.tsx`):
-//! a text field that writes the draft on each key, a labelled field with its Default / Changed
-//! mark, the problems list, and the plain pick menus.
+//! a text field that writes the draft on each key, a labelled field with its default dot and Reset
+//! icon, the problems list, and the plain pick menus.
 
 use std::rc::Rc;
 
 use editor::{Editor, EditorEvent};
-use gpui::{AnyElement, Entity, Focusable, FontWeight, Hsla, Pixels, Point, Subscription};
+use gpui::{AnyElement, Div, Entity, Focusable, FontWeight, Pixels, Point, Subscription};
 use natamux_proto::stages::pipeline_rules::{IssueLevel, PipelineIssue};
 use natamux_proto::stages::schema::Step;
-use ui::{ContextMenu, prelude::*};
+use ui::{ContextMenu, Tooltip, prelude::*};
 
 use super::kind_icon::problem_icon;
 use super::pipeline_editor::PipelineEditor;
-use crate::components::button_style::quiet_button;
 use crate::components::colors::signal;
 use crate::components::form::text_editor;
 use crate::components::menu::MenuLayer;
@@ -129,23 +128,31 @@ pub fn field_label(text: impl Into<SharedString>) -> Label {
         .color(Color::Muted)
 }
 
-/// A label with its mark beside it, the control, and the help line under it.
+/// The dot before the label, the label, and the Reset button at the end of the row.
+fn label_row(label: impl Into<SharedString>, mark: Option<Mark>) -> (Div, Option<AnyElement>) {
+    let (dot, reset) = match mark {
+        Some(mark) => (Some(mark.dot), mark.reset),
+        None => (None, None),
+    };
+    let row = h_flex()
+        .min_h(rems_from_px(24.0_f32))
+        .gap_1p5()
+        .children(dot)
+        .child(field_label(label));
+    (row, reset)
+}
+
+/// A label with its mark, the control, and the help line under it.
 pub fn labelled(
     label: impl Into<SharedString>,
-    mark: Option<AnyElement>,
+    mark: Option<Mark>,
     help: Option<SharedString>,
     control: impl IntoElement,
 ) -> impl IntoElement {
+    let (row, reset) = label_row(label, mark);
     v_flex()
         .gap_1p5()
-        .child(
-            h_flex()
-                .min_h(rems_from_px(24.0_f32))
-                .flex_wrap()
-                .gap_2()
-                .child(field_label(label))
-                .children(mark),
-        )
+        .child(row.w_full().child(div().flex_1()).children(reset))
         .child(control)
         .children(help.map(help_line))
 }
@@ -154,68 +161,58 @@ pub fn labelled(
 /// The label keeps its text width, so on a narrow pane the control wraps under it.
 pub fn inline_field(
     label: impl Into<SharedString>,
-    mark: Option<AnyElement>,
+    mark: Option<Mark>,
     help: Option<SharedString>,
     control: impl IntoElement,
 ) -> impl IntoElement {
+    let (row, reset) = label_row(label, mark);
     v_flex()
         .gap_1()
         .child(
             h_flex()
                 .flex_wrap()
                 .gap_2()
-                .child(
-                    h_flex()
-                        .flex_grow(1.)
-                        .min_h(rems_from_px(24.0_f32))
-                        .flex_wrap()
-                        .gap_2()
-                        .child(field_label(label))
-                        .children(mark),
-                )
-                .child(div().flex_none().child(control)),
+                .child(row.flex_grow(1.))
+                .child(h_flex().flex_none().gap_1().child(control).children(reset)),
         )
         .children(help.map(help_line))
 }
 
-/// "Default", or "Changed" with a button that puts the default back.
+/// Whether a value is the default: the dot goes before the label, the Reset button (only when
+/// changed) at the end of the row.
+pub struct Mark {
+    pub dot: AnyElement,
+    pub reset: Option<AnyElement>,
+}
+
+/// A 6 px dot: an outline when the value is the default, the warning colour when it is changed,
+/// with a Reset icon button that puts the default back.
 pub fn default_mark(
     id: impl Into<SharedString>,
     is_default: bool,
     on_reset: impl Fn(&mut Window, &mut App) + 'static,
     cx: &App,
-) -> AnyElement {
+) -> Mark {
+    let dot = div().flex_none().size(rems_from_px(6.0_f32)).rounded_full();
     if is_default {
-        return pill(
-            "Default",
-            cx.theme().colors().element_background,
-            Color::Muted,
-        );
+        return Mark {
+            dot: dot
+                .border_1()
+                .border_color(cx.theme().colors().text_muted)
+                .into_any_element(),
+            reset: None,
+        };
     }
-    let changed = signal(cx);
-    h_flex()
-        .gap_2()
-        .child(pill("Changed", changed.bg, Color::Custom(changed.fg)))
-        .child(
-            quiet_button(id.into(), "Use default")
-                .label_size(LabelSize::Small)
-                .on_click(move |_, window, cx| on_reset(window, cx)),
-        )
-        .into_any_element()
-}
-
-fn pill(text: &'static str, background: Hsla, color: Color) -> AnyElement {
-    div()
-        .px_1p5()
-        .rounded_md()
-        .bg(background)
-        .child(
-            Label::new(text)
-                .size(LabelSize::XSmall)
-                .weight(FontWeight::MEDIUM)
-                .color(color),
-        )
-        .into_any_element()
+    Mark {
+        dot: dot.bg(signal(cx).fg).into_any_element(),
+        reset: Some(
+            IconButton::new(id.into(), IconName::RotateCcw)
+                .icon_size(IconSize::Small)
+                .tooltip(Tooltip::text("Use default"))
+                .on_click(move |_, window, cx| on_reset(window, cx))
+                .into_any_element(),
+        ),
+    }
 }
 
 /// The width of a select beside its label: "Task's agent" and "GitHub Copilot" fit.

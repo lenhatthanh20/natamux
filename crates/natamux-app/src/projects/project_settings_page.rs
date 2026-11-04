@@ -1,5 +1,5 @@
 //! Project settings (docs/ui-spec.md 4.31, `ProjectSettingsDialog.tsx`): `.natamux.json` of a
-//! project, as a page of Settings (T-0174). Its Stages, Issues and JSON tabs edit one draft text,
+//! project, as a page of Settings (T-0174). Its General, Stages and JSON tabs edit one draft text,
 //! which may not parse (then the JSON tab shows); Save writes it through `PUT /repos/:id/settings`
 //! with the version that was read, so a file another client changed shows Reload and Overwrite.
 //! The draft stays while the person looks at other pages; Discard drops it. The page draws its own
@@ -7,13 +7,13 @@
 
 use gpui::{Entity, EventEmitter, FocusHandle, Focusable, ScrollHandle, Subscription};
 use natamux_proto::projects::repo::{LoadedSettings, SkillList};
-use ui::{Tooltip, prelude::*};
+use ui::{ScrollAxes, Tooltip, WithScrollbar, prelude::*};
 
 use super::branch_name_field::BranchNameField;
 use super::idle_pause_field::IdlePauseField;
 use super::repo_trust_dialog::row::RepoTrustRow;
 use super::send_backs_field::SendBacksField;
-use super::settings_tab_rules::{PIPELINE_NOTE, SettingsTab, export_reason, shows_pipeline_note};
+use super::settings_tab_rules::{PIPELINE_NOTE, SettingsTab, shows_pipeline_note};
 use super::settings_tabs::SettingsTabs;
 use super::settings_text::{Base, base_of, blocked_reason};
 use crate::app::dashboard::Dashboard;
@@ -21,6 +21,7 @@ use crate::app::source::reason;
 use crate::components::button_style::quiet_button;
 use crate::components::confirm::Confirm;
 use crate::components::dialog::primary_button;
+use crate::components::scrollbars::scrollbars;
 use crate::stages::editor_draft::same_settings;
 use crate::stages::pipeline_editor::{DraftEdited, PipelineEditor};
 use crate::stages::pipeline_preview::pipeline_preview;
@@ -39,12 +40,10 @@ pub(super) struct StagesTab {
     pub(super) editor: Entity<PipelineEditor>,
     list: Entity<StageList>,
     pub(super) details: Entity<DetailsPane>,
-    /// The picker showed at the last change, so focus moves only when it opens or closes.
-    was_picking: bool,
     pub(super) tabs: SettingsTabs,
-    send_backs: Entity<SendBacksField>,
-    branch_name: Entity<BranchNameField>,
-    idle_pause: Entity<IdlePauseField>,
+    pub(super) send_backs: Entity<SendBacksField>,
+    pub(super) branch_name: Entity<BranchNameField>,
+    pub(super) idle_pause: Entity<IdlePauseField>,
 }
 
 pub struct ProjectSettingsPage {
@@ -164,7 +163,6 @@ impl ProjectSettingsPage {
                 cx.notify();
             }),
             cx.observe(&editor, |_, _, cx| cx.notify()),
-            cx.observe_in(&editor, window, Self::follow_picker),
         ];
         let tabs = SettingsTabs::new(&editor, window, cx);
         let send_backs = cx.new(|cx| SendBacksField::new(editor.clone(), window, cx));
@@ -174,40 +172,10 @@ impl ProjectSettingsPage {
             editor,
             list,
             details,
-            was_picking: false,
             tabs,
             send_backs,
             branch_name,
             idle_pause,
-        });
-    }
-
-    /// The picker takes the focus to its search when it opens, and gives it back to Add stage
-    /// when it closes. Done after the details pane made or dropped the picker.
-    fn follow_picker(
-        &mut self,
-        editor: Entity<PipelineEditor>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let picking = editor.read(cx).picking;
-        let Some(stages) = self.stages.as_mut() else {
-            return;
-        };
-        if picking == stages.was_picking {
-            return;
-        }
-        stages.was_picking = picking;
-        let (details, list) = (stages.details.clone(), stages.list.clone());
-        window.defer(cx, move |window, cx| {
-            let focus = if picking {
-                details.read(cx).search_focus(cx)
-            } else {
-                Some(list.read(cx).add_stage_focus())
-            };
-            if let Some(focus) = focus {
-                window.focus(&focus, cx);
-            }
         });
     }
 
@@ -268,12 +236,12 @@ impl ProjectSettingsPage {
         });
     }
 
-    /// The preview and the agent fields, then the list and the details: two parts of the
-    /// body, so a shot can scroll to the second.
+    /// The preview, then the list and the details: two parts of the body, so a shot can scroll to
+    /// the second.
     pub(super) fn render_stages(
         &self,
         stages: &StagesTab,
-        window: &Window,
+        window: &mut Window,
         cx: &mut App,
     ) -> [AnyElement; 2] {
         let wide = window.viewport_size().width >= px(SIDE_BY_SIDE_FROM);
@@ -294,13 +262,8 @@ impl ProjectSettingsPage {
                 .child(stages.list.clone())
                 .child(stages.details.clone())
         };
-        let top = v_flex()
-            .gap_3()
-            .child(pipeline_preview(&stages.editor, &self.preview_scroll, cx))
-            .child(stages.send_backs.clone())
-            .child(stages.idle_pause.clone())
-            .child(stages.branch_name.clone());
-        [top.into_any_element(), parts.into_any_element()]
+        let top = pipeline_preview(&stages.editor, &self.preview_scroll, window, cx);
+        [top, parts.into_any_element()]
     }
 
     /// The sideways scroll of the pipeline preview; `--smoke` reads its range.
@@ -332,12 +295,18 @@ impl ProjectSettingsPage {
         if let Some(stages) = &self.stages {
             let shown = self.shown_tab(cx);
             ring.extend(stages.tabs.stops(shown, cx));
-            if shown == SettingsTab::Stages {
-                ring.push(stages.send_backs.read(cx).stop(cx));
-                ring.push(stages.idle_pause.read(cx).stop(cx));
-                ring.push(stages.branch_name.read(cx).stop(cx));
-                ring.extend(stages.list.read(cx).tab_stops());
-                ring.extend(stages.details.read(cx).tab_stops(cx));
+            match shown {
+                SettingsTab::General => {
+                    ring.push(stages.send_backs.read(cx).stop(cx));
+                    ring.push(stages.idle_pause.read(cx).stop(cx));
+                    ring.push(stages.branch_name.read(cx).stop(cx));
+                    ring.push(stages.tabs.issues.read(cx).stop());
+                }
+                SettingsTab::Stages => {
+                    ring.extend(stages.list.read(cx).tab_stops());
+                    ring.extend(stages.details.read(cx).tab_stops(cx));
+                }
+                SettingsTab::Json => {}
             }
         }
         ring.extend([self.discard.clone(), self.submit.clone()]);
@@ -349,7 +318,7 @@ impl ProjectSettingsPage {
         self.saving
     }
 
-    /// Esc closes the page's own layer first: the skill menu or the stage picker. True: it did.
+    /// Esc closes the page's own layer first: the skill menu. True: it did.
     pub fn closes_layer(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
         let Some(details) = self.stages.as_ref().map(|stages| stages.details.clone()) else {
             return false;
@@ -357,8 +326,8 @@ impl ProjectSettingsPage {
         details.update(cx, |details, cx| details.closes_layer(window, cx))
     }
 
-    /// Under the body, as the dialog's footer: the note, the path of the file and its buttons,
-    /// the count, Discard and Save.
+    /// Under the body, on one line: the path and the note's info icon, the counts, the "..." menu,
+    /// Discard and Save.
     fn bottom_bar(&self, shown: SettingsTab, cx: &mut Context<Self>) -> impl IntoElement {
         let path = self.path_label(cx);
         let blocked = self.save_blocked(cx);
@@ -380,43 +349,49 @@ impl ProjectSettingsPage {
                 button.tooltip(Tooltip::text("Nothing to discard"))
             })
             .on_click(cx.listener(|this, _, window, cx| this.request_discard(window, cx)));
-        let reset = self.ghost("settings-reset", "Reset to default", Self::reset, cx);
-        let import = self.ghost("settings-import", "Import\u{2026}", Self::import, cx);
-        let cannot_export = export_reason(self.draft_ok(cx));
-        let export = self
-            .ghost("settings-export", "Export", Self::export, cx)
-            .disabled(self.base.is_none() || cannot_export.is_some())
-            .when_some(cannot_export, |button, reason| {
-                button.tooltip(Tooltip::text(reason))
-            });
-        v_flex()
+        let more = self.more_button(cx);
+        h_flex()
             .flex_none()
-            .gap_1()
+            .w_full()
+            .items_center()
+            .gap_2()
             .px_6()
             .py_2()
             .border_t_1()
             .border_color(cx.theme().colors().border_variant)
-            .when(shows_pipeline_note(shown), |this| {
-                this.child(
-                    Label::new(PIPELINE_NOTE)
-                        .size(LabelSize::Small)
-                        .color(Color::Muted),
-                )
-            })
             .child(
                 h_flex()
-                    .flex_wrap()
-                    .gap_1()
+                    .min_w_0()
+                    .flex_1()
+                    .items_center()
+                    .gap_1p5()
                     .children(path)
-                    .child(reset)
-                    .child(import)
-                    .child(export)
-                    .child(div().flex_1())
+                    .when(shows_pipeline_note(shown), |this| this.child(note_icon())),
+            )
+            .child(
+                h_flex()
+                    .flex_none()
+                    .items_center()
+                    .gap_1()
                     .child(self.footer_status(cx))
-                    .child(discard)
-                    .child(save_button),
+                    .child(more)
+                    .child(discard.size(ButtonSize::Compact))
+                    .child(save_button.size(ButtonSize::Compact)),
             )
     }
+}
+
+/// The pipeline note as the tooltip of an info icon, so the bar stays one line.
+fn note_icon() -> impl IntoElement {
+    div()
+        .id("pipeline-note")
+        .flex_none()
+        .tooltip(Tooltip::text(PIPELINE_NOTE))
+        .child(
+            Icon::new(IconName::Info)
+                .size(IconSize::Small)
+                .color(Color::Muted),
+        )
 }
 
 impl Render for ProjectSettingsPage {
@@ -443,7 +418,12 @@ impl Render for ProjectSettingsPage {
                     .px_6()
                     .py_3()
                     .gap_3()
-                    .children(body),
+                    .children(body)
+                    .custom_scrollbars(
+                        scrollbars(ScrollAxes::Vertical, &self.body_scroll),
+                        window,
+                        cx,
+                    ),
             )
             .child(self.bottom_bar(shown, cx))
     }

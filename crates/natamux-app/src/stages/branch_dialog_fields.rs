@@ -1,16 +1,17 @@
-//! The text fields of the picked branch and its paths: one editor each, made when a path shows.
+//! The text fields of the branch dialog and its paths: one editor each, made when a path shows.
+//! They write the dialog's own copy of the draft.
 
 use gpui::Entity;
 use natamux_proto::stages::capabilities::stage_name_of_id;
 use natamux_proto::stages::schema::{BranchPath, Condition, Step};
 use ui::prelude::*;
 
+use super::branch_dialog::BranchDialog;
 use super::editor_branches::{
     ConditionField, edit_condition, set_branch_name, set_path_condition, set_path_name,
 };
 use super::editor_find::find_branch;
 use super::pipeline_editor::PipelineEditor;
-use super::stage_details::DetailsPane;
 use super::stage_fields_view::LiveField;
 
 fn path_of<'a>(steps: &'a [Step], path_id: &str) -> Option<&'a BranchPath> {
@@ -49,7 +50,7 @@ impl PathFields {
         branch_id: &str,
         path_id: &str,
         window: &mut Window,
-        cx: &mut Context<DetailsPane>,
+        cx: &mut Context<BranchDialog>,
     ) -> Self {
         let name = {
             let (read_id, branch, id) =
@@ -69,7 +70,7 @@ impl PathFields {
             )
         };
         let mut condition =
-            |field: ConditionField, placeholder: &str, cx: &mut Context<DetailsPane>| {
+            |field: ConditionField, placeholder: &str, cx: &mut Context<BranchDialog>| {
                 let (read_id, branch, id) =
                     (path_id.to_owned(), branch_id.to_owned(), path_id.to_owned());
                 LiveField::new(
@@ -126,7 +127,7 @@ impl BranchFields {
         pipeline: &Entity<PipelineEditor>,
         id: &str,
         window: &mut Window,
-        cx: &mut Context<DetailsPane>,
+        cx: &mut Context<BranchDialog>,
     ) -> Self {
         let (read_id, write_id) = (id.to_owned(), id.to_owned());
         let name = LiveField::new(
@@ -152,10 +153,6 @@ impl BranchFields {
         fields
     }
 
-    pub fn id(&self) -> &str {
-        &self.id
-    }
-
     /// Fields for the new paths, none for the removed ones, and the draft in the ones without the
     /// focus.
     pub fn sync(
@@ -163,7 +160,7 @@ impl BranchFields {
         pipeline: &Entity<PipelineEditor>,
         steps: &[Step],
         window: &mut Window,
-        cx: &mut Context<DetailsPane>,
+        cx: &mut Context<BranchDialog>,
     ) {
         let Some(branch) = find_branch(steps, &self.id) else {
             return;
