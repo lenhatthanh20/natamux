@@ -504,3 +504,21 @@ fn write_output_turns_a_bare_lf_into_cr_lf(cx: &mut TestAppContext) {
     let rows: Vec<&str> = text.lines().take(3).map(str::trim_end).collect();
     assert_eq!(rows, ["built", "in 2.1 s", "done"]);
 }
+
+#[test]
+fn a_point_past_the_grid_takes_the_whole_cell() {
+    // 10 columns and 5 lines of 8 x 10 px.
+    let grid = TermBounds::new(
+        px(10.),
+        px(8.),
+        Bounds::new(point(px(0.), px(0.)), size(px(80.), px(50.))),
+    );
+    let at = |x: f32, y: f32| grid.shown_cell(point(px(x), px(y)), 10, 5);
+    assert_eq!(at(5., 1.), (0, Column(0), Side::Right));
+    assert_eq!(at(3., 1.), (0, Column(0), Side::Left));
+    // Right of the last column and below the last row: the right side.
+    assert_eq!(at(81., 1.), (0, Column(9), Side::Right));
+    assert_eq!(at(1., 55.), (4, Column(0), Side::Right));
+    // Above the top: the line above, left side.
+    assert_eq!(at(7., -12.), (-1, Column(0), Side::Left));
+}

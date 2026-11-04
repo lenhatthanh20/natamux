@@ -123,6 +123,8 @@ struct Scrollbar {
 
 pub struct Frame {
     hitbox: Hitbox,
+    /// The scrollbar's track, which the grid leaves free.
+    track: Bounds<Pixels>,
     background: Hsla,
     rects: Vec<(Bounds<Pixels>, Hsla)>,
     highlights: Vec<(Path<Pixels>, Hsla)>,
@@ -464,6 +466,7 @@ impl Element for TermElement {
         }
         Frame {
             hitbox,
+            track,
             background,
             rects,
             highlights,
@@ -489,7 +492,7 @@ impl Element for TermElement {
     ) {
         window.with_content_mask(Some(ContentMask { bounds }), |window| {
             window.paint_quad(fill(bounds, frame.background));
-            self.listen(&frame.hitbox, window);
+            self.listen(&frame.hitbox, frame.track, window);
             let style = if frame.over_link {
                 CursorStyle::PointingHand
             } else {
@@ -575,8 +578,9 @@ impl Element for TermElement {
 
 impl TermElement {
     /// The mouse goes to the view: presses and the wheel over the element, moves and releases
-    /// anywhere, so a drag can leave it.
-    fn listen(&self, hitbox: &Hitbox, window: &mut Window) {
+    /// anywhere, so a drag can leave it. For moves and releases, the scrollbar's track is not
+    /// over the screen.
+    fn listen(&self, hitbox: &Hitbox, track: Bounds<Pixels>, window: &mut Window) {
         let (view, area) = (self.view.clone(), hitbox.clone());
         window.on_mouse_event(move |event: &MouseDownEvent, phase, window, cx| {
             if phase == DispatchPhase::Bubble && area.is_hovered(window) {
@@ -586,14 +590,15 @@ impl TermElement {
         let (view, area) = (self.view.clone(), hitbox.clone());
         window.on_mouse_event(move |event: &MouseMoveEvent, phase, window, cx| {
             if phase == DispatchPhase::Bubble {
-                let over = area.is_hovered(window);
+                let over = area.is_hovered(window) && !track.contains(&event.position);
                 view.update(cx, |view, cx| view.mouse_move(event, over, window, cx));
             }
         });
-        let view = self.view.clone();
-        window.on_mouse_event(move |event: &MouseUpEvent, phase, _, cx| {
+        let (view, area) = (self.view.clone(), hitbox.clone());
+        window.on_mouse_event(move |event: &MouseUpEvent, phase, window, cx| {
             if phase == DispatchPhase::Bubble {
-                view.update(cx, |view, cx| view.mouse_up(event, cx));
+                let over = area.is_hovered(window) && !track.contains(&event.position);
+                view.update(cx, |view, cx| view.mouse_up(event, over, window, cx));
             }
         });
         let (view, area) = (self.view.clone(), hitbox.clone());

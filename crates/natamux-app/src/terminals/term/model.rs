@@ -19,9 +19,7 @@ use alacritty_terminal::sync::FairMutex;
 use alacritty_terminal::term::cell::{Cell, Flags};
 use alacritty_terminal::term::color::COUNT;
 use alacritty_terminal::term::search::{Match, RegexIter, RegexSearch};
-use alacritty_terminal::term::{
-    Config, Osc52, RenderableCursor, SEMANTIC_ESCAPE_CHARS, TermMode, viewport_to_point,
-};
+use alacritty_terminal::term::{Config, Osc52, RenderableCursor, SEMANTIC_ESCAPE_CHARS, TermMode};
 use alacritty_terminal::vte::ansi::{
     ClearMode, Color, CursorShape, CursorStyle, Handler, NamedColor, Processor, Rgb,
 };
@@ -96,28 +94,39 @@ impl TermBounds {
         self
     }
 
-    /// The cell under `position` (window pixels) on the shown rows, clamped to a grid of
-    /// `columns` x `lines`, and the side of the cell it is on.
+    /// The shown line (above the screen negative) and the column under `position` (window
+    /// pixels), clamped to a grid of `columns` x `lines`, and the side of the cell it is on.
     pub fn shown_cell(
         &self,
         position: gpui::Point<Pixels>,
         columns: usize,
         lines: usize,
-    ) -> (Point<usize>, Side) {
+    ) -> (i32, Column, Side) {
         let from = position - self.bounds.origin;
-        let x = f32::from(from.x).max(0.);
-        let y = f32::from(from.y).max(0.);
+        let (x, y) = (f32::from(from.x), f32::from(from.y));
         let (width, height) = (f32::from(self.cell_width), f32::from(self.line_height));
-        let column = ((x / width) as usize).min(columns.saturating_sub(1));
-        let line = ((y / height) as usize).min(lines.saturating_sub(1));
         // The rest of a division, as the old view took it: a press in the very middle of a cell
         // falls on either side by the last bit of the float (T-S1).
-        let side = if x % width > width / 2. {
+        let mut side = if x.max(0.) % width > width / 2. {
             Side::Right
         } else {
             Side::Left
         };
-        (Point::new(line, Column(column)), side)
+        let (last_column, last_line) = (columns.saturating_sub(1), lines.saturating_sub(1));
+        let mut column = (x / width) as usize;
+        // Past the last column or below the last row, the whole cell counts.
+        if column > last_column {
+            column = last_column;
+            side = Side::Right;
+        }
+        let mut line = (y / height) as i32;
+        if line > last_line as i32 {
+            line = last_line as i32;
+            side = Side::Right;
+        } else if y < 0. {
+            side = Side::Left;
+        }
+        (line, Column(column), side)
     }
 
     /// A change the shell would see: the grid or the cell size.
@@ -664,8 +673,9 @@ impl TermModel {
     /// screen has now.
     fn cell_at(&self, term: &Term<Listener>, position: gpui::Point<Pixels>) -> (Point, Side) {
         let (columns, lines) = (term.columns(), term.screen_lines());
-        let (shown, side) = self.bounds.shown_cell(position, columns, lines);
-        (viewport_to_point(term.grid().display_offset(), shown), side)
+        let (line, column, side) = self.bounds.shown_cell(position, columns, lines);
+        let offset = term.grid().display_offset() as i32;
+        (Point::new(Line(line - offset), column), side)
     }
 
     /// The events of one batch of the event loop, in order. Events of a screen that was

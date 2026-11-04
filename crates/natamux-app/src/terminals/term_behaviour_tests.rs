@@ -1087,6 +1087,498 @@ fn golden_terminal_links(cx: &mut TestAppContext) {
     golden_files::write(SET, "links", &link_rows(cx));
 }
 
+// T-M1 and T-L1, more rows (S2.4 review): mouse reports while the screen is scrolled up, the
+// secondary key on a link while a program takes the mouse, a drag that leaves the pane, a move
+// across the middle of a cell, a move after a release, the middle button, and OSC 8 releases
+// with Shift or a second click.
+const POINTER_LINES: [&str; 10] = [
+    "web https://example.com/m1 tail",
+    "\x1b]8;;https://example.com/m2\x1b\\osc two\x1b]8;;\x1b\\ tail",
+    "\x1b]8;;https://example.com/m3\x1b\\osc three\x1b]8;;\x1b\\ tail",
+    "\x1b]8;;https://example.com/m4\x1b\\osc four\x1b]8;;\x1b\\ tail",
+    "web https://example.com/m5 tail",
+    "abc def ghi",
+    "web https://example.com/m6 tail",
+    "\x1b]8;;https://example.com/m7\x1b\\osc seven\x1b]8;;\x1b\\ tail",
+    "\x1b]8;;https://example.com/m8\x1b\\osc eight\x1b]8;;\x1b\\ tail",
+    "\x1b]8;;https://example.com/m9\x1b\\osc nine\x1b]8;;\x1b\\ tail",
+];
+
+/// The primary selection's text, on the systems that have one.
+fn primary(cx: &mut VisualTestContext) -> Value {
+    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+    let text = cx.update(|_, cx| cx.read_from_primary().and_then(|item| item.text()));
+    #[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
+    let text: Option<String> = {
+        let _ = cx;
+        None
+    };
+    json!(text)
+}
+
+fn view_focused(terminal: &Entity<RemoteTerminal>, cx: &mut VisualTestContext) -> bool {
+    terminal.update_in(cx, |terminal, window, cx| {
+        terminal.view.focus_handle(cx).is_focused(window)
+    })
+}
+
+fn pointer_rows(cx: &mut TestAppContext) -> Vec<Value> {
+    let (host, terminal, cx) = open(cx, PANE, false);
+    let mut rows = Vec::new();
+    let none = Modifiers::default();
+    let shift = mods("shift");
+    let key = mods(secondary());
+    let left = Some(MouseButton::Left);
+    feed(&terminal, &history(60), cx);
+    // The lines go on the top rows, over the screen the history left.
+    feed(
+        &terminal,
+        &format!("\x1b[H{}\x1b[K", POINTER_LINES.join("\x1b[K\r\n")),
+        cx,
+    );
+    let lh = content(&terminal, cx, |content| content.terminal_bounds.line_height);
+    let cw = content(&terminal, cx, |content| content.terminal_bounds.cell_width);
+    let sgr = |mode: &str| format!("\x1b[?{mode}h\x1b[?1006h");
+    let off = "\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l";
+    let row = |case: &str, terminal: &Entity<RemoteTerminal>, cx: &mut VisualTestContext| {
+        let offset = display_offset(terminal, cx);
+        json!([case, sent_text(), offset])
+    };
+    let mut last_opened: Option<String> = None;
+    let mut opened = |cx: &mut VisualTestContext| {
+        let now = cx.opened_url();
+        let new = (now != last_opened).then(|| now.clone()).flatten();
+        last_opened = now;
+        new
+    };
+
+    // Mouse mode on the main screen, scrolled up 5 lines with Shift.
+    feed(&terminal, &sgr("1000"), cx);
+    sent_text();
+    wheel(
+        cell(&terminal, (10, 10), cx),
+        ScrollDelta::Lines(point(0., 5.)),
+        shift,
+        TouchPhase::Moved,
+        cx,
+    );
+    rows.push(row("scrolled up", &terminal, cx));
+    click(cell(&terminal, (2, 4), cx), MouseButton::Left, none, 1, cx);
+    rows.push(row("click above the offset", &terminal, cx));
+    click(cell(&terminal, (8, 4), cx), MouseButton::Left, none, 1, cx);
+    rows.push(row("click below the offset", &terminal, cx));
+    let lines = |y: f32| ScrollDelta::Lines(point(0., y));
+    wheel(
+        cell(&terminal, (8, 4), cx),
+        lines(-1.),
+        none,
+        TouchPhase::Moved,
+        cx,
+    );
+    rows.push(row("wheel below the offset", &terminal, cx));
+    wheel(
+        cell(&terminal, (2, 4), cx),
+        lines(1.),
+        none,
+        TouchPhase::Moved,
+        cx,
+    );
+    rows.push(row("wheel above the offset", &terminal, cx));
+    terminal.update(cx, |terminal, cx| terminal.jump_to_latest(cx));
+    settle(cx);
+    sent_text();
+
+    // The secondary key on a link while the program takes the mouse.
+    let at = cell(&terminal, (0, 8), cx);
+    cx.simulate_modifiers_change(key);
+    mouse_move(at, None, key, cx);
+    settle(cx);
+    sent_text();
+    mouse_down(at, MouseButton::Left, key, 1, cx);
+    mouse_up(at, MouseButton::Left, key, 1, cx);
+    settle(cx);
+    rows.push(json!([
+        "key click on a hovered url",
+        sent_text(),
+        opened(cx)
+    ]));
+    cx.simulate_modifiers_change(none);
+    let at = cell(&terminal, (1, 2), cx);
+    mouse_move(at, None, none, cx);
+    settle(cx);
+    sent_text();
+    mouse_down(at, MouseButton::Left, key, 1, cx);
+    mouse_up(at, MouseButton::Left, key, 1, cx);
+    settle(cx);
+    rows.push(json!(["key click on an osc link", sent_text(), opened(cx)]));
+    feed(&terminal, &sgr("1002"), cx);
+    sent_text();
+    let (from, to) = (cell(&terminal, (2, 1), cx), cell(&terminal, (2, 4), cx));
+    mouse_move(from, None, none, cx);
+    mouse_down(from, MouseButton::Left, key, 1, cx);
+    mouse_move(to, left, key, cx);
+    mouse_up(to, MouseButton::Left, key, 1, cx);
+    settle(cx);
+    rows.push(json!(["key drag on a link", sent_text(), opened(cx)]));
+    let (from, to) = (cell(&terminal, (3, 2), cx), cell(&terminal, (12, 10), cx));
+    mouse_move(from, None, none, cx);
+    mouse_down(from, MouseButton::Left, key, 1, cx);
+    mouse_move(to, left, key, cx);
+    mouse_up(to, MouseButton::Left, key, 1, cx);
+    settle(cx);
+    rows.push(json!([
+        "key press on a link, release off it",
+        sent_text(),
+        opened(cx)
+    ]));
+    let at = cell(&terminal, (4, 8), cx);
+    mouse_move(at, None, none, cx);
+    mouse_down(at, MouseButton::Left, key, 1, cx);
+    mouse_up(at, MouseButton::Left, none, 1, cx);
+    settle(cx);
+    rows.push(json!([
+        "key press on a link, release with no key",
+        sent_text(),
+        opened(cx)
+    ]));
+    let at = cell(&terminal, (12, 10), cx);
+    mouse_move(at, None, none, cx);
+    settle(cx);
+    sent_text();
+    mouse_down(at, MouseButton::Left, key, 1, cx);
+    mouse_up(at, MouseButton::Left, key, 1, cx);
+    settle(cx);
+    rows.push(json!(["key click off a link", sent_text(), opened(cx)]));
+    feed(&terminal, off, cx);
+    let at = cell(&terminal, (6, 8), cx);
+    mouse_move(at, None, none, cx);
+    settle(cx);
+    mouse_down(at, MouseButton::Left, key, 1, cx);
+    mouse_up(at, MouseButton::Left, key, 1, cx);
+    settle(cx);
+    rows.push(json!([
+        "no mouse mode, key click on a url",
+        sent_text(),
+        opened(cx)
+    ]));
+    focus(&terminal, cx);
+    sent_text();
+
+    // A drag that leaves the pane, in mode 1002.
+    feed(&terminal, &sgr("1002"), cx);
+    sent_text();
+    let at = cell(&terminal, (14, 5), cx);
+    mouse_move(at, None, none, cx);
+    mouse_down(at, MouseButton::Left, none, 1, cx);
+    settle(cx);
+    rows.push(row("press", &terminal, cx));
+    mouse_move(cell(&terminal, (15, 6), cx), left, none, cx);
+    settle(cx);
+    rows.push(row("drag in the pane", &terminal, cx));
+    let outside = point(cell(&terminal, (15, 6), cx).x, PANE.height + px(10.));
+    mouse_move(outside, left, none, cx);
+    settle(cx);
+    rows.push(row("drag out of the pane", &terminal, cx));
+    let further = point(outside.x + cw * 3., outside.y);
+    mouse_move(further, left, none, cx);
+    settle(cx);
+    rows.push(row("drag outside the pane", &terminal, cx));
+    mouse_up(further, MouseButton::Left, none, 1, cx);
+    settle(cx);
+    rows.push(row("release outside the pane", &terminal, cx));
+    focus(&terminal, cx);
+    sent_text();
+
+    // Every move in mode 1003: across the middle of a cell, and after a release in one cell.
+    feed(&terminal, &sgr("1003"), cx);
+    sent_text();
+    let middle = cell(&terminal, (16, 7), cx);
+    for (case, dx) in [
+        ("move to the left half", -0.3),
+        ("move to the right half", 0.3),
+        ("move in the right half", 0.4),
+    ] {
+        mouse_move(point(middle.x + cw * dx, middle.y), None, none, cx);
+        settle(cx);
+        rows.push(row(case, &terminal, cx));
+    }
+    let at = cell(&terminal, (17, 9), cx);
+    mouse_move(at, None, none, cx);
+    settle(cx);
+    rows.push(row("move to a cell", &terminal, cx));
+    mouse_down(at, MouseButton::Left, none, 1, cx);
+    mouse_up(at, MouseButton::Left, none, 1, cx);
+    settle(cx);
+    rows.push(row("click in it", &terminal, cx));
+    mouse_move(point(at.x, at.y + lh * 0.1), None, none, cx);
+    settle(cx);
+    rows.push(row("move in it after the release", &terminal, cx));
+    feed(&terminal, off, cx);
+    sent_text();
+
+    // The middle button: it focuses the view, and on Linux pastes the primary selection when
+    // the press is not a report.
+    let (from, to) = (cell(&terminal, (5, 0), cx), cell(&terminal, (5, 2), cx));
+    mouse_move(from, None, none, cx);
+    mouse_down(from, MouseButton::Left, none, 1, cx);
+    mouse_move(to, left, none, cx);
+    mouse_up(to, MouseButton::Left, none, 1, cx);
+    settle(cx);
+    rows.push(json!(["drag over abc", primary(cx)]));
+    blur(&host, cx);
+    click(
+        cell(&terminal, (12, 3), cx),
+        MouseButton::Middle,
+        none,
+        1,
+        cx,
+    );
+    let focused = view_focused(&terminal, cx);
+    rows.push(json!(["middle click", sent_text(), focused]));
+    feed(&terminal, &sgr("1000"), cx);
+    sent_text();
+    let (from, to) = (cell(&terminal, (5, 4), cx), cell(&terminal, (5, 6), cx));
+    mouse_move(from, None, shift, cx);
+    mouse_down(from, MouseButton::Left, shift, 1, cx);
+    mouse_move(to, left, shift, cx);
+    mouse_up(to, MouseButton::Left, shift, 1, cx);
+    settle(cx);
+    rows.push(json!(["shift drag over def", primary(cx), sent_text()]));
+    click(
+        cell(&terminal, (12, 3), cx),
+        MouseButton::Middle,
+        shift,
+        1,
+        cx,
+    );
+    rows.push(json!(["shift middle click in mouse mode", sent_text()]));
+    let (from, to) = (cell(&terminal, (14, 30), cx), cell(&terminal, (15, 32), cx));
+    mouse_move(from, None, shift, cx);
+    mouse_down(from, MouseButton::Left, shift, 1, cx);
+    mouse_move(to, left, shift, cx);
+    mouse_up(to, MouseButton::Left, shift, 1, cx);
+    settle(cx);
+    rows.push(json!([
+        "shift drag over blank cells",
+        primary(cx),
+        sent_text()
+    ]));
+    click(
+        cell(&terminal, (12, 3), cx),
+        MouseButton::Middle,
+        shift,
+        1,
+        cx,
+    );
+    rows.push(json!(["shift middle click after blank cells", sent_text()]));
+    blur(&host, cx);
+    click(
+        cell(&terminal, (12, 3), cx),
+        MouseButton::Middle,
+        none,
+        1,
+        cx,
+    );
+    let focused = view_focused(&terminal, cx);
+    rows.push(json!(["middle click in mouse mode", sent_text(), focused]));
+    feed(&terminal, off, cx);
+    sent_text();
+
+    // Releases on an OSC 8 link: a second click, and a click with Shift. Above the middle of
+    // the cell, so the rounding of a plain click stays on its line.
+    let upper = |line: usize, cx: &mut VisualTestContext| {
+        let at = cell(&terminal, (line, 2), cx);
+        point(at.x, at.y - lh * 0.25)
+    };
+    let at = upper(7, cx);
+    mouse_move(at, None, none, cx);
+    mouse_down(at, MouseButton::Left, none, 2, cx);
+    mouse_up(at, MouseButton::Left, none, 2, cx);
+    settle(cx);
+    rows.push(json!([
+        "second click on an osc link",
+        sent_text(),
+        opened(cx)
+    ]));
+    let at = upper(8, cx);
+    mouse_move(at, None, shift, cx);
+    mouse_down(at, MouseButton::Left, shift, 1, cx);
+    mouse_up(at, MouseButton::Left, shift, 1, cx);
+    settle(cx);
+    rows.push(json!([
+        "shift click on an osc link",
+        sent_text(),
+        opened(cx)
+    ]));
+    click(upper(9, cx), MouseButton::Left, none, 1, cx);
+    rows.push(json!([
+        "plain click on an osc link",
+        sent_text(),
+        opened(cx)
+    ]));
+    rows
+}
+
+#[gpui::test]
+fn pointer_edges_match_the_golden(cx: &mut TestAppContext) {
+    golden_files::check(SET, "pointer_edges", &pointer_rows(cx));
+}
+
+#[gpui::test]
+#[ignore]
+fn golden_terminal_pointer_edges(cx: &mut TestAppContext) {
+    golden_files::write(SET, "pointer_edges", &pointer_rows(cx));
+}
+
+// T-S1, more rows (S2.4 review): drags past the right edge, below the last row, and out of the
+// screen above and below, where the screen scrolls.
+fn selection_edge_rows(cx: &mut TestAppContext) -> Vec<Value> {
+    let (_, terminal, cx) = open(cx, PANE, false);
+    let mut rows = Vec::new();
+    let none = Modifiers::default();
+    let left = Some(MouseButton::Left);
+    let full: String = (0..80).map(|i| char::from(b'a' + (i % 26) as u8)).collect();
+    feed(&terminal, &history(60), cx);
+    // A full line on every row, each ending in its row number, so a selection names its rows.
+    let rows_text: Vec<String> = (0..20)
+        .map(|row| format!("{}{row:02}", &full[..78]))
+        .collect();
+    feed(&terminal, &format!("\x1b[H{}", rows_text.join("\r\n")), cx);
+    let grid = content(&terminal, cx, |content| content.terminal_bounds);
+    let (cw, lh) = (grid.cell_width, grid.line_height);
+    let top = grid.bounds.origin.y;
+    let right = grid.bounds.origin.x + cw * 80.;
+    let bottom = top + lh * 20.;
+    let row = |case: &str, terminal: &Entity<RemoteTerminal>, cx: &mut VisualTestContext| {
+        let text = selection(terminal, cx);
+        let offset = display_offset(terminal, cx);
+        json!([case, text, offset])
+    };
+    let drag = |from: Point<Pixels>, to: &[Point<Pixels>], cx: &mut VisualTestContext| {
+        mouse_move(from, None, none, cx);
+        mouse_down(from, MouseButton::Left, none, 1, cx);
+        for at in to {
+            mouse_move(*at, left, none, cx);
+        }
+        mouse_up(*to.last().unwrap(), MouseButton::Left, none, 1, cx);
+        settle(cx);
+    };
+    let reset = |terminal: &Entity<RemoteTerminal>, cx: &mut VisualTestContext| {
+        terminal.update(cx, |terminal, cx| terminal.jump_to_latest(cx));
+        settle(cx);
+        click(cell(terminal, (10, 40), cx), MouseButton::Left, none, 1, cx);
+    };
+    let y0 = cell(&terminal, (0, 0), cx).y;
+    for (case, x) in [
+        ("drag past the right edge", right + px(3.)),
+        ("drag out of the pane to the right", PANE.width + px(10.)),
+    ] {
+        reset(&terminal, cx);
+        drag(cell(&terminal, (0, 70), cx), &[point(x, y0)], cx);
+        rows.push(row(case, &terminal, cx));
+    }
+    let x4 = cell(&terminal, (19, 4), cx).x - cw * 0.3;
+    for (case, y) in [
+        ("drag below the last row", bottom + px(1.)),
+        ("drag out of the pane below", PANE.height + px(10.)),
+    ] {
+        reset(&terminal, cx);
+        drag(cell(&terminal, (17, 0), cx), &[point(x4, y)], cx);
+        rows.push(row(case, &terminal, cx));
+    }
+    let x6 = cell(&terminal, (0, 6), cx).x;
+    for (case, ys) in [
+        ("drag above the top, 5 px", vec![top - px(5.)]),
+        ("drag above the top, 25 px", vec![top - px(25.)]),
+        (
+            "drag above the top, two moves",
+            vec![top - px(5.), top - px(6.)],
+        ),
+    ] {
+        reset(&terminal, cx);
+        let to: Vec<_> = ys.into_iter().map(|y| point(x6, y)).collect();
+        drag(cell(&terminal, (5, 3), cx), &to, cx);
+        rows.push(row(case, &terminal, cx));
+    }
+    reset(&terminal, cx);
+    wheel(
+        cell(&terminal, (10, 10), cx),
+        ScrollDelta::Lines(point(0., 10.)),
+        none,
+        TouchPhase::Moved,
+        cx,
+    );
+    let below = [point(x6, bottom + px(5.)), point(x6, bottom + px(6.))];
+    drag(cell(&terminal, (5, 3), cx), &below, cx);
+    rows.push(row(
+        "drag below the bottom while scrolled up",
+        &terminal,
+        cx,
+    ));
+    // The same drags with a first move inside the screen, released outside or back inside.
+    let y5 = cell(&terminal, (5, 0), cx).y;
+    let inside = |line: usize, column: usize, cx: &mut VisualTestContext| {
+        cell(&terminal, (line, column), cx)
+    };
+    let cases = [
+        (
+            "drag in, then past the right edge",
+            (0, 70),
+            vec![inside(0, 75, cx), point(right + px(3.), y0)],
+        ),
+        (
+            "drag in, then past the right edge and back",
+            (0, 70),
+            vec![
+                inside(0, 75, cx),
+                point(right + px(3.), y0),
+                inside(0, 77, cx),
+            ],
+        ),
+        (
+            "drag in, then above the top",
+            (5, 3),
+            vec![inside(2, 6, cx), point(x6, top - px(5.))],
+        ),
+        (
+            "drag in, then above the top and back",
+            (5, 3),
+            vec![inside(2, 6, cx), point(x6, top - px(5.)), inside(1, 6, cx)],
+        ),
+        (
+            "drag in, then below the bottom",
+            (5, 3),
+            vec![inside(10, 6, cx), point(x6, PANE.height + px(10.))],
+        ),
+        (
+            "drag in, then below the bottom and back",
+            (5, 3),
+            vec![
+                inside(10, 6, cx),
+                point(x6, PANE.height + px(10.)),
+                point(x6, y5),
+            ],
+        ),
+    ];
+    for (case, from, to) in cases {
+        reset(&terminal, cx);
+        drag(cell(&terminal, from, cx), &to, cx);
+        rows.push(row(case, &terminal, cx));
+    }
+    rows
+}
+
+#[gpui::test]
+fn selection_edges_match_the_golden(cx: &mut TestAppContext) {
+    golden_files::check(SET, "selection_edges", &selection_edge_rows(cx));
+}
+
+#[gpui::test]
+#[ignore]
+fn golden_terminal_selection_edges(cx: &mut TestAppContext) {
+    golden_files::write(SET, "selection_edges", &selection_edge_rows(cx));
+}
+
 // T-F1: focus reports only with mode 1004; the size claims of focus; the cursor of an unfocused
 // view, and of a view whose context menu has the focus.
 fn focus_rows(cx: &mut TestAppContext) -> Vec<Value> {

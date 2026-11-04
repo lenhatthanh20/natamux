@@ -6,7 +6,7 @@
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-use alacritty_terminal::index::{Column, Line, Point as GridPoint};
+use alacritty_terminal::index::{Column, Line, Point as GridPoint, Side};
 use alacritty_terminal::selection::SelectionType;
 use alacritty_terminal::term::TermMode;
 use gpui::{
@@ -19,7 +19,7 @@ use ui::{ContextMenu, prelude::*};
 use super::element::TermElement;
 use super::input_bytes::encode;
 use super::links;
-use super::model::{TermEvent, TermModel};
+use super::model::{HoveredWord, TermEvent, TermModel};
 use super::mouse_report::{MouseAction, report, wheel_report};
 use super::scrollbar::{self, Show};
 use crate::app::appearance::Inputs;
@@ -53,8 +53,9 @@ struct Press {
     shift: bool,
     /// A press that went to the program as a report.
     reported: bool,
-    /// A press with the secondary key on a shown link: its release may open it.
-    on_link: bool,
+    /// A press with the secondary key on a link: no selection and no reports while it lasts,
+    /// and a release on the same link opens it.
+    link: Option<HoveredWord>,
     dragged: bool,
 }
 
@@ -99,8 +100,8 @@ pub struct TermView {
     press: Option<Press>,
     /// Wheel pixels not yet a whole line.
     wheel: Pixels,
-    /// The cell of the last mouse report: a move is reported once per cell.
-    reported: Option<(i32, usize)>,
+    /// The cell and side of the last move: a move is reported only when one of them changed.
+    reported: Option<(i32, usize, Side)>,
     /// Where and when the pointer last looked for a link.
     hover_look: Option<(Point<Pixels>, Instant)>,
     pub(super) bar: Bar,
@@ -372,14 +373,15 @@ impl TermView {
         cx.notify();
     }
 
-    /// The shown cell (line, column) under `position`, from the grid of the last frame.
-    fn cell_at(&self, position: Point<Pixels>, cx: &App) -> (i32, usize) {
+    /// The grid cell (line, column) under `position` and its side, from the grid of the last
+    /// frame; lines of the history above the screen are negative.
+    fn cell_at(&self, position: Point<Pixels>, cx: &App) -> (i32, usize, Side) {
         let content = self.model.read(cx).last_content();
-        let (cell, _) =
+        let (line, column, side) =
             content
                 .terminal_bounds
                 .shown_cell(position, content.columns, content.screen_lines);
-        (cell.line as i32, cell.column.0)
+        (line - content.display_offset as i32, column.0, side)
     }
 
     /// The grid point of the cell corner nearest `position`, as the old view found an OSC 8 cell
@@ -399,15 +401,12 @@ impl TermView {
         GridPoint::new(Line(line - content.display_offset as i32), Column(column))
     }
 
-    /// The shown link has the cell under `position`.
-    fn on_shown_link(&self, position: Point<Pixels>, cx: &App) -> bool {
-        let content = self.model.read(cx).last_content();
-        let Some(word) = &content.last_hovered_word else {
-            return false;
-        };
-        let (line, column) = self.cell_at(position, cx);
-        let point = GridPoint::new(Line(line - content.display_offset as i32), Column(column));
-        word.range.contains(&point)
+    /// The link of the cell under `position`: an OSC 8 link, else a URL of its line.
+    fn link_under(&self, position: Point<Pixels>, cx: &App) -> Option<HoveredWord> {
+        let (line, column, _) = self.cell_at(position, cx);
+        self.model
+            .read(cx)
+            .link_at(GridPoint::new(Line(line), Column(column)))
     }
 
     fn mouse_mode(&self, shift: bool, cx: &App) -> Option<TermMode> {
@@ -423,8 +422,7 @@ impl TermView {
         mode: TermMode,
         cx: &mut Context<Self>,
     ) {
-        let (line, column) = self.cell_at(event_at, cx);
-        self.reported = Some((line, column));
+        let (line, column, _) = self.cell_at(event_at, cx);
         if let Some(bytes) = report(action, line, column, mods, mode) {
             self.model.update(cx, |model, _| model.write_to_pty(bytes));
         }
@@ -442,18 +440,30 @@ impl TermView {
             return;
         }
         let mouse_mode = self.mouse_mode(event.modifiers.shift, cx);
-        if event.button == MouseButton::Left || mouse_mode.is_some() {
+        if matches!(event.button, MouseButton::Left | MouseButton::Middle) || mouse_mode.is_some() {
             window.focus(&self.focus, cx);
         }
+        // The secondary key on a link: the link wins over selection and mouse reports.
+        let link = if event.button == MouseButton::Left && event.modifiers.secondary() {
+            self.link_under(event.position, cx)
+        } else {
+            None
+        };
         let mut press = Press {
             position: event.position,
             button: event.button,
             clicks: event.click_count,
             shift: event.modifiers.shift,
             reported: false,
-            on_link: false,
+            link: None,
             dragged: false,
         };
+        if link.is_some() {
+            press.link = link;
+            self.press = Some(press);
+            cx.notify();
+            return;
+        }
         if let Some(mode) = mouse_mode {
             let action = MouseAction::Press(event.button);
             self.send_report(action, event.position, &event.modifiers, mode, cx);
@@ -462,13 +472,7 @@ impl TermView {
             return;
         }
         match event.button {
-            MouseButton::Left => {
-                if event.modifiers.secondary() && self.on_shown_link(event.position, cx) {
-                    press.on_link = true;
-                } else {
-                    self.select_from(event, cx);
-                }
-            }
+            MouseButton::Left => self.select_from(event, cx),
             MouseButton::Right => {
                 if self.model.read(cx).last_content().selection.is_none() {
                     let at = event.position;
@@ -502,19 +506,9 @@ impl TermView {
         });
     }
 
-    /// On Linux and FreeBSD a middle click pastes the primary selection, when the program does
-    /// not take the mouse.
+    /// On Linux and FreeBSD a middle click that is not a report pastes the primary selection.
     #[cfg(any(target_os = "linux", target_os = "freebsd"))]
     fn paste_primary(&mut self, cx: &mut Context<Self>) {
-        if self
-            .model
-            .read(cx)
-            .last_content()
-            .mode
-            .intersects(TermMode::MOUSE_MODE)
-        {
-            return;
-        }
         if let Some(text) = cx.read_from_primary().and_then(|item| item.text()) {
             self.model.update(cx, |model, _| model.paste(&text));
         }
@@ -534,17 +528,26 @@ impl TermView {
             return;
         }
         self.look_for_link(event.position, &event.modifiers, over, cx);
+        // A press on a link takes the moves until its release.
+        if self
+            .press
+            .as_ref()
+            .is_some_and(|press| press.link.is_some())
+        {
+            return;
+        }
         if let Some(mode) = self.mouse_mode(event.modifiers.shift, cx) {
-            if over || event.pressed_button.is_some() {
+            if over {
                 let cell = self.cell_at(event.position, cx);
                 if self.reported != Some(cell) {
+                    self.reported = Some(cell);
                     let action = MouseAction::Move(event.pressed_button);
                     self.send_report(action, event.position, &event.modifiers, mode, cx);
                 }
             }
             return;
         }
-        self.drag(event, window, cx);
+        self.drag(event, over, window, cx);
     }
 
     /// With the secondary key held, the link under the pointer shows; not while selecting.
@@ -594,8 +597,15 @@ impl TermView {
         self.look_for_link(position, &event.modifiers, over, cx);
     }
 
-    /// A left drag selects once it moved past a few pixels; outside the screen it scrolls.
-    fn drag(&mut self, event: &MouseMoveEvent, window: &mut Window, cx: &mut Context<Self>) {
+    /// A left drag selects once it moved past a few pixels over the screen; then outside the
+    /// screen it scrolls.
+    fn drag(
+        &mut self,
+        event: &MouseMoveEvent,
+        over: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if event.pressed_button != Some(MouseButton::Left)
             || !self.focus.is_focused(window)
             || cx.has_active_drag()
@@ -605,11 +615,11 @@ impl TermView {
         let Some(press) = self.press.as_mut() else {
             return;
         };
-        if press.button != MouseButton::Left || press.on_link || press.reported {
+        if press.button != MouseButton::Left || press.link.is_some() || press.reported {
             return;
         }
         if !press.dragged {
-            if distance(press.position, event.position) <= DRAG_START {
+            if !over || distance(press.position, event.position) <= DRAG_START {
                 return;
             }
             press.dragged = true;
@@ -634,47 +644,55 @@ impl TermView {
                 None
             }
         });
+        // The selection moves first, then the screen scrolls, so the end is the cell under the
+        // pointer before the scroll.
         self.model.update(cx, |model, _| {
+            model.update_selection(at);
             match scroll {
                 Some(lines) if lines > 0 => model.scroll_up_by(lines as usize),
                 Some(lines) if lines < 0 => model.scroll_down_by(lines.unsigned_abs() as usize),
                 _ => {}
             }
-            model.update_selection(at);
         });
         cx.notify();
     }
 
-    pub(super) fn mouse_up(&mut self, event: &MouseUpEvent, cx: &mut Context<Self>) {
+    /// A release: `over` when the pointer is over the element.
+    pub(super) fn mouse_up(
+        &mut self,
+        event: &MouseUpEvent,
+        over: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if self.bar.grab.take().is_some() {
             cx.notify();
             return;
         }
-        let Some(press) = self.press.take() else {
+        // The next move is reported, even in the same cell.
+        self.reported = None;
+        let press = self.press.take();
+        if let Some(link) = press.as_ref().and_then(|press| press.link.as_ref()) {
+            if self.link_under(event.position, cx).as_ref() == Some(link)
+                && links::may_open(&link.word)
+            {
+                crate::app::links::open_link(&link.word, cx);
+            }
             return;
-        };
-        if press.reported {
-            if let Some(mode) = self.mouse_mode(event.modifiers.shift, cx) {
+        }
+        if let Some(mode) = self.mouse_mode(event.modifiers.shift, cx) {
+            if over && self.focus.is_focused(window) {
                 let action = MouseAction::Release(event.button);
                 self.send_report(action, event.position, &event.modifiers, mode, cx);
             }
             return;
         }
-        if press.on_link {
-            if event.modifiers.secondary() && self.on_shown_link(event.position, cx) {
-                let at = event.position;
-                self.model.update(cx, |model, _| model.open_link(at));
-                cx.notify();
-            }
+        let Some(press) = press.filter(|press| !press.reported) else {
             return;
-        }
-        let plain = press.button == MouseButton::Left
-            && press.clicks == 1
-            && !press.dragged
-            && !press.shift
-            && !event.modifiers.secondary();
-        if plain {
-            // D5: a plain click on an OSC 8 cell opens it, only a web or mail link.
+        };
+        if press.button == MouseButton::Left && !press.dragged && !event.modifiers.secondary() {
+            // D5: a left release with no drag on an OSC 8 cell opens it, only a web or mail
+            // link.
             let point = self.nearest_cell(event.position, cx);
             if let Some(url) = self.model.read(cx).hyperlink_at(point)
                 && links::may_open(&url)
@@ -699,7 +717,7 @@ impl TermView {
         let content = self.model.read(cx).last_content();
         let line_height = content.terminal_bounds.line_height;
         let mode = content.mode;
-        let screen = line_height * content.screen_lines as f32;
+        let screen = content.terminal_bounds.bounds.size.height;
         let old = self.wheel;
         let new = old + event.delta.pixel_delta(line_height).y;
         let lines = (new / line_height) as i32 - (old / line_height) as i32;
@@ -714,7 +732,7 @@ impl TermView {
         let shift = event.modifiers.shift;
         let count = lines.unsigned_abs() as usize;
         if mode.intersects(TermMode::MOUSE_MODE) && !shift {
-            let (line, column) = self.cell_at(event.position, cx);
+            let (line, column, _) = self.cell_at(event.position, cx);
             if let Some(bytes) = wheel_report(lines > 0, line, column, &event.modifiers, mode) {
                 let bytes = bytes.repeat(count);
                 self.model.update(cx, |model, _| model.write_to_pty(bytes));
@@ -853,7 +871,7 @@ impl Render for TermView {
             deferred(
                 anchored()
                     .position(open.position)
-                    .snap_to_window_with_margin(px(8.))
+                    .anchor(gpui::Anchor::TopLeft)
                     .child(open.menu.clone()),
             )
             .with_priority(1)
