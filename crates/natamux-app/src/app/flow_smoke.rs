@@ -226,6 +226,16 @@ async fn f3_send_back(handle: WindowHandle<Root>, cx: &mut AsyncApp) {
         cx,
     )
     .await;
+    until(
+        "the dashboard still shows the task in review after Send back",
+        handle,
+        |root, cx| {
+            let task = root.dashboard().read(cx).data.task(REVIEWED);
+            task.is_some_and(|task| task.state != TaskState::Review)
+        },
+        cx,
+    )
+    .await;
     println!("smoke: F3 Send back with a reason and Mod+Enter sends the task back");
 }
 
