@@ -20,10 +20,11 @@ use alacritty_terminal::term::cell::{Cell, Flags};
 use alacritty_terminal::term::color::COUNT;
 use alacritty_terminal::term::search::{Match, RegexIter, RegexSearch};
 use alacritty_terminal::term::{
-    Config, Osc52, RenderableCursor, SEMANTIC_ESCAPE_CHARS, TermMode, point_to_viewport,
-    viewport_to_point,
+    Config, Osc52, RenderableCursor, SEMANTIC_ESCAPE_CHARS, TermMode, viewport_to_point,
 };
-use alacritty_terminal::vte::ansi::{Color, CursorShape, CursorStyle, NamedColor, Processor, Rgb};
+use alacritty_terminal::vte::ansi::{
+    ClearMode, Color, CursorShape, CursorStyle, Handler, NamedColor, Processor, Rgb,
+};
 use futures::channel::mpsc::{UnboundedSender, unbounded};
 use gpui::{
     App, Bounds, ClipboardItem, Context, EventEmitter, Hsla, Pixels, Rgba, Task, point, px, size,
@@ -86,6 +87,35 @@ impl TermBounds {
             cell_width: whole_px(self.cell_width),
             cell_height: whole_px(self.line_height),
         }
+    }
+
+    /// At least one cell each way, so the screen always has a row and a column.
+    fn at_least_one_cell(mut self) -> Self {
+        self.bounds.size.width = self.bounds.size.width.max(self.cell_width);
+        self.bounds.size.height = self.bounds.size.height.max(self.line_height);
+        self
+    }
+
+    /// The cell under `position` (window pixels) on the shown rows, clamped to a grid of
+    /// `columns` x `lines`, and the side of the cell it is on.
+    fn shown_cell(
+        &self,
+        position: gpui::Point<Pixels>,
+        columns: usize,
+        lines: usize,
+    ) -> (Point<usize>, Side) {
+        let from = position - self.bounds.origin;
+        let x = f32::from(from.x).max(0.);
+        let y = f32::from(from.y).max(0.);
+        let (width, height) = (f32::from(self.cell_width), f32::from(self.line_height));
+        let column = ((x / width) as usize).min(columns.saturating_sub(1));
+        let line = ((y / height) as usize).min(lines.saturating_sub(1));
+        let side = if x - column as f32 * width > width / 2. {
+            Side::Right
+        } else {
+            Side::Left
+        };
+        (Point::new(line, Column(column)), side)
     }
 
     /// A change the shell would see: the grid or the cell size.
@@ -174,10 +204,12 @@ enum Change {
     Scroll(Scroll),
     ScrollToPoint(Point),
     SetSelection(Option<Selection>),
-    UpdateSelection(Point, Side),
+    /// The pixel positions are turned into cells when the change runs, with the display
+    /// offset of that moment, so a scroll queued before them counts.
+    UpdateSelection(gpui::Point<Pixels>),
     Copy,
-    FindLink(Point),
-    OpenLink(Point),
+    FindLink(gpui::Point<Pixels>),
+    OpenLink(gpui::Point<Pixels>),
 }
 
 pub struct TermModel {
@@ -195,8 +227,10 @@ pub struct TermModel {
     bounds: TermBounds,
     /// Parses the output tests and shots write with no writer.
     processor: Processor,
-    /// Where the pointer looked for a link, on the shown rows.
-    hovered: Option<Point<usize>>,
+    /// The last byte `write_output` got was a CR.
+    after_cr: bool,
+    /// Where the pointer looked for a link, in window pixels.
+    hovered: Option<gpui::Point<Pixels>>,
     hovered_word: Option<HoveredWord>,
     pub matches: Vec<Match>,
     bell: bool,
@@ -227,10 +261,10 @@ impl TermModel {
         let last_content = copy_content(&term, bounds, None);
         let pace = Arc::new(AtomicU64::new(nanos(DEFAULT_PACE)));
         let executor = cx.background_executor().clone();
-        let (loop_pace, current) = (pace.clone(), generation.clone());
+        let loop_pace = pace.clone();
         let event_loop = cx.spawn(async move |this, cx| {
             event_loop::run(
-                event_loop::current(queued, current),
+                queued,
                 || executor.timer(Duration::from_nanos(loop_pace.load(Ordering::Relaxed))),
                 |batch| this.update(cx, |model, cx| model.handle(batch, cx)).is_ok(),
             )
@@ -247,6 +281,7 @@ impl TermModel {
             last_content,
             bounds,
             processor: Processor::new(),
+            after_cr: false,
             hovered: None,
             hovered_word: None,
             matches: Vec::new(),
@@ -277,8 +312,9 @@ impl TermModel {
         Duration::from_nanos(self.pace.load(Ordering::Relaxed))
     }
 
-    /// A new screen at the same size, with `bytes` on it. Selection, matches, the link under the
-    /// pointer, the title and the queued changes go with the old one.
+    /// A new screen at the size asked for last, with `bytes` on it. Selection, matches, the link
+    /// under the pointer, the title and the queued changes go with the old one; a queued resize
+    /// is in the new size.
     pub fn replace_display_output(
         &mut self,
         bytes: &[u8],
@@ -286,29 +322,42 @@ impl TermModel {
     ) -> anyhow::Result<()> {
         let generation = self.generation.fetch_add(1, Ordering::AcqRel) + 1;
         let listener = Listener::new(self.events.clone(), generation);
-        let bounds = self.last_content.terminal_bounds;
+        let bounds = self.bounds;
         let term = Term::new(self.config.clone(), &bounds, listener);
         self.term = Arc::new(FairMutex::new(term));
         self.processor = Processor::new();
+        self.after_cr = false;
         self.queue.clear();
         self.matches.clear();
         self.hovered = None;
         self.hovered_word = None;
         self.title = None;
         self.bell = false;
-        let mut term = self.term.lock();
+        let mut term = self.term.lock_unfair();
         self.processor.advance(&mut *term, bytes);
         self.last_content = copy_content(&term, bounds, None);
         drop(term);
         cx.emit(TermEvent::OutputReplaced);
+        // The new screen may blink another way, and its view draws it.
+        cx.emit(TermEvent::BlinkChanged);
+        cx.emit(TermEvent::Wakeup);
         cx.notify();
         Ok(())
     }
 
-    /// Output written straight to the screen, as tests and shots do.
+    /// Output written straight to the screen, as tests and shots do. A bare LF becomes CR LF,
+    /// also when the CR came at the end of the last call.
     pub fn write_output(&mut self, bytes: &[u8], cx: &mut Context<Self>) {
-        let mut term = self.term.lock();
-        self.processor.advance(&mut *term, bytes);
+        let mut output = Vec::with_capacity(bytes.len());
+        for &byte in bytes {
+            if byte == b'\n' && !self.after_cr {
+                output.push(b'\r');
+            }
+            output.push(byte);
+            self.after_cr = byte == b'\r';
+        }
+        let mut term = self.term.lock_unfair();
+        self.processor.advance(&mut *term, &output);
         drop(term);
         cx.emit(TermEvent::Wakeup);
         cx.notify();
@@ -338,12 +387,12 @@ impl TermModel {
 
     /// The program asked for a blinking cursor (DECSCUSR or mode 12).
     pub fn cursor_blinks(&self) -> bool {
-        self.term.lock().cursor_style().blinking
+        self.term.lock_unfair().cursor_style().blinking
     }
 
     /// All the text of the screen and its history.
     pub fn get_content(&self) -> String {
-        let term = self.term.lock();
+        let term = self.term.lock_unfair();
         let start = Point::new(term.topmost_line(), Column(0));
         let end = Point::new(term.bottommost_line(), term.last_column());
         term.bounds_to_string(start, end)
@@ -400,10 +449,14 @@ impl TermModel {
         term.set_options(self.config.clone());
     }
 
-    /// A new size reaches the screen only when the grid or the cell size changes.
+    /// The new bounds are kept at once (points are mapped from their origin); the screen is
+    /// resized, at the next sync, only when the grid or the cell size changes.
     pub fn set_size(&mut self, bounds: TermBounds) {
-        if bounds.differs(&self.bounds) {
-            self.bounds = bounds;
+        let bounds = bounds.at_least_one_cell();
+        let resize = bounds.differs(&self.bounds);
+        self.bounds = bounds;
+        self.last_content.terminal_bounds = bounds;
+        if resize {
             self.queue.push_back(Change::Resize(bounds));
         }
     }
@@ -436,14 +489,15 @@ impl TermModel {
         self.queue.push_back(Change::SetSelection(selection));
     }
 
-    pub fn update_selection(&mut self, point: Point, side: Side) {
-        self.queue.push_back(Change::UpdateSelection(point, side));
+    /// Moves the end of the selection to the cell under `position` (window pixels).
+    pub fn update_selection(&mut self, position: gpui::Point<Pixels>) {
+        self.queue.push_back(Change::UpdateSelection(position));
     }
 
     /// The whole history and screen, as they are now: a resize queued before it moves the
     /// lines, not the selection.
     pub fn select_all(&mut self) {
-        let term = self.term.lock();
+        let term = self.term.lock_unfair();
         let start = Point::new(term.topmost_line(), Column(0));
         let end = Point::new(term.bottommost_line(), term.last_column());
         drop(term);
@@ -455,14 +509,14 @@ impl TermModel {
         self.queue.push_back(Change::Copy);
     }
 
-    /// Looks for a link at `point` for the hover.
-    pub fn find_link(&mut self, point: Point) {
-        self.queue.push_back(Change::FindLink(point));
+    /// Looks for a link under `position` (window pixels) for the hover.
+    pub fn find_link(&mut self, position: gpui::Point<Pixels>) {
+        self.queue.push_back(Change::FindLink(position));
     }
 
-    /// Opens the link at `point` when it is a web or mail link (D5).
-    pub fn open_link(&mut self, point: Point) {
-        self.queue.push_back(Change::OpenLink(point));
+    /// Opens the link under `position` (window pixels) when it is a web or mail link (D5).
+    pub fn open_link(&mut self, position: gpui::Point<Pixels>) {
+        self.queue.push_back(Change::OpenLink(position));
     }
 
     pub fn clear_hovered_word(&mut self) {
@@ -472,7 +526,7 @@ impl TermModel {
 
     /// The link at `point` on the screen as it is now.
     pub fn link_at(&self, point: Point) -> Option<HoveredWord> {
-        link_at(&self.term.lock(), point)
+        link_at(&self.term.lock_unfair(), point)
     }
 
     /// Every match of `search` in the history and the screen, found on the background pool.
@@ -500,51 +554,70 @@ impl TermModel {
     /// paint, under the lock.
     pub fn sync(&mut self, cx: &mut Context<Self>) {
         let term = self.term.clone();
-        let mut term = term.lock();
+        let mut term = term.lock_unfair();
         while let Some(change) = self.queue.pop_front() {
             self.apply_change(change, &mut term, cx);
         }
-        let offset = self.last_content.display_offset;
-        let bounds = self.last_content.terminal_bounds;
-        self.last_content = copy_content(&term, bounds, self.hovered_word.clone());
+        let before = &self.last_content;
+        let grid = (before.columns, before.screen_lines);
+        let (lines, offset) = (before.total_lines as i64, before.display_offset as i64);
+        let mut content = copy_content(&term, self.bounds, None);
         drop(term);
-        // Other lines are under the pointer now: look for the link again.
-        if let Some(shown) = self.hovered
-            && self.last_content.display_offset != offset
+        let added = content.total_lines as i64 - lines;
+        let scrolled = content.display_offset as i64 - offset;
+        if grid != (content.columns, content.screen_lines) || added != scrolled {
+            // Other lines are under the pointer now: look for the link again.
+            self.hovered_word = None;
+            if let Some(position) = self.hovered {
+                self.queue.push_back(Change::FindLink(position));
+                cx.emit(TermEvent::Wakeup);
+            }
+        } else if added != 0
+            && let Some(word) = self.hovered_word.as_mut()
         {
-            let point = viewport_to_point(self.last_content.display_offset, shown);
-            self.queue.push_back(Change::FindLink(point));
-            cx.emit(TermEvent::Wakeup);
+            // The view kept its lines while output came: the link moved into the history with
+            // them.
+            let shift = |point: Point| Point::new(point.line - added as i32, point.column);
+            word.range = shift(*word.range.start())..=shift(*word.range.end());
         }
+        content.last_hovered_word = self.hovered_word.clone();
+        self.last_content = content;
     }
 
     fn apply_change(&mut self, change: Change, term: &mut Term<Listener>, cx: &mut Context<Self>) {
         match change {
             Change::Resize(bounds) => {
                 term.resize(bounds);
-                self.last_content.terminal_bounds = bounds;
+                // Matches are worked out again on the new grid.
+                if !self.matches.is_empty() {
+                    cx.emit(TermEvent::Wakeup);
+                }
             }
-            // As `clear` would: cursor home, then the screen and the history cleared.
-            Change::Clear => self.processor.advance(term, b"\x1b[H\x1b[2J\x1b[3J"),
+            Change::Clear => clear_keeping_the_cursor_line(term),
             Change::Scroll(scroll) => term.scroll_display(scroll),
             Change::ScrollToPoint(point) => term.scroll_to_point(point),
-            Change::SetSelection(selection) => term.selection = selection,
-            Change::UpdateSelection(point, side) => {
+            Change::SetSelection(selection) => {
+                term.selection = selection;
+                write_primary(term, cx);
+            }
+            Change::UpdateSelection(position) => {
+                let (point, side) = self.cell_at(term, position);
                 if let Some(selection) = term.selection.as_mut() {
                     selection.update(point, side);
                 }
+                write_primary(term, cx);
             }
             Change::Copy => {
                 if let Some(text) = term.selection_to_string() {
                     cx.write_to_clipboard(ClipboardItem::new_string(text));
                 }
             }
-            Change::FindLink(point) => {
-                self.hovered = point_to_viewport(term.grid().display_offset(), point);
-                self.hovered_word = link_at(term, point);
+            Change::FindLink(position) => {
+                self.hovered = Some(position);
+                self.hovered_word = link_at(term, self.cell_at(term, position).0);
             }
-            Change::OpenLink(point) => {
-                if let Some(link) = link_at(term, point)
+            Change::OpenLink(position) => {
+                if let Some(link) = link_at(term, self.cell_at(term, position).0)
                     && links::may_open(&link.word)
                 {
                     crate::app::links::open_link(&link.word, cx);
@@ -553,9 +626,22 @@ impl TermModel {
         }
     }
 
-    /// The events of one batch of the event loop, in order.
-    fn handle(&mut self, batch: Vec<Event>, cx: &mut Context<Self>) {
-        for event in batch {
+    /// The grid cell under `position` (window pixels) and its side, with the display offset the
+    /// screen has now.
+    fn cell_at(&self, term: &Term<Listener>, position: gpui::Point<Pixels>) -> (Point, Side) {
+        let (columns, lines) = (term.columns(), term.screen_lines());
+        let (shown, side) = self.bounds.shown_cell(position, columns, lines);
+        (viewport_to_point(term.grid().display_offset(), shown), side)
+    }
+
+    /// The events of one batch of the event loop, in order. Events of a screen that was
+    /// replaced since they were sent are dropped here, when they would be applied.
+    fn handle(&mut self, batch: Vec<(u64, Event)>, cx: &mut Context<Self>) {
+        let current = self.generation.load(Ordering::Acquire);
+        for (generation, event) in batch {
+            if generation != current {
+                continue;
+            }
             match event {
                 Event::Wakeup => cx.emit(TermEvent::Wakeup),
                 Event::PtyWrite(text) => self.write_to_pty(text),
@@ -586,7 +672,7 @@ impl TermModel {
     /// background is the terminal's own background, not the cells' default (T-Q1).
     fn colour_at(&self, index: usize, cx: &App) -> Rgb {
         if index < COUNT
-            && let Some(rgb) = self.term.lock().colors()[index]
+            && let Some(rgb) = self.term.lock_unfair().colors()[index]
         {
             return rgb;
         }
@@ -635,6 +721,32 @@ fn premultiplied(colour: Hsla) -> Rgb {
 fn nanos(pace: Duration) -> u64 {
     u64::try_from(pace.as_nanos()).unwrap_or(u64::MAX)
 }
+
+/// Clears the history and the screen but keeps the cursor's line: it moves to the top row, and
+/// the cursor stays in its column. The shell is not told, so its prompt stays in sight.
+fn clear_keeping_the_cursor_line(term: &mut Term<Listener>) {
+    term.clear_screen(ClearMode::Saved);
+    let line = term.grid().cursor.point.line;
+    let row = term.grid()[line].clone();
+    let lines = term.screen_lines();
+    let grid = term.grid_mut();
+    grid[Line(0)] = row;
+    grid.cursor.point.line = Line(0);
+    if lines > 1 {
+        grid.reset_region(Line(1)..);
+    }
+}
+
+/// On Linux and FreeBSD a selection is also the primary selection.
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+fn write_primary(term: &Term<Listener>, cx: &App) {
+    if let Some(text) = term.selection_to_string() {
+        cx.write_to_primary(ClipboardItem::new_string(text));
+    }
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
+fn write_primary(_: &Term<Listener>, _: &App) {}
 
 /// A plain selection over `range`, both ends included.
 fn simple(range: RangeInclusive<Point>) -> Selection {

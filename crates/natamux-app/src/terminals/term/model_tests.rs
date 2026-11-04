@@ -11,7 +11,7 @@ use std::time::Duration;
 use alacritty_terminal::index::{Column, Line, Point, Side};
 use alacritty_terminal::selection::{Selection, SelectionType};
 use futures::channel::mpsc::{UnboundedReceiver, unbounded};
-use gpui::{AppContext as _, Bounds, Entity, TestAppContext, point, px, size};
+use gpui::{AppContext as _, Bounds, Entity, Pixels, TestAppContext, point, px, size};
 
 use super::{Search, TermBounds, TermEvent, TermModel};
 use crate::terminals::term::writer::TermWriter;
@@ -101,6 +101,19 @@ fn at(line: i32, column: usize) -> Point {
     Point::new(Line(line), Column(column))
 }
 
+/// A window position on shown row `line`, `column` cells from the left (2.5 is the middle of
+/// the third cell). The tests' bounds start at 0, 0.
+fn pixel(line: usize, column: f32) -> gpui::Point<Pixels> {
+    point(px(column * CELL.0), px((line as f32 + 0.5) * CELL.1))
+}
+
+fn hovered(screen: &Screen, cx: &mut TestAppContext) -> Option<(String, Point, Point)> {
+    screen.model.read_with(cx, |model, _| {
+        let word = model.last_content().last_hovered_word.clone()?;
+        Some((word.word, *word.range.start(), *word.range.end()))
+    })
+}
+
 #[gpui::test]
 fn typing_scrolls_to_the_bottom_and_drops_the_selection(cx: &mut TestAppContext) {
     let mut screen = screen(cx, (40, 10));
@@ -159,7 +172,7 @@ fn copy_keeps_the_selection(cx: &mut TestAppContext) {
     change(&screen, cx, |model| {
         let start = Selection::new(SelectionType::Simple, at(0, 0), Side::Left);
         model.set_selection(Some(start));
-        model.update_selection(at(0, 4), Side::Right);
+        model.update_selection(pixel(0, 4.75));
         model.copy();
     });
     let copied = cx.read_from_clipboard().and_then(|item| item.text());
@@ -173,9 +186,29 @@ fn copy_keeps_the_selection(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn clear_empties_the_screen_and_the_history(cx: &mut TestAppContext) {
+fn a_selection_update_after_a_queued_scroll_takes_the_new_lines(cx: &mut TestAppContext) {
     let mut screen = screen(cx, (40, 10));
     feed(&mut screen, &lines(60), cx);
+    change(&screen, cx, |model| {
+        let start = Selection::new(SelectionType::Simple, at(-8, 0), Side::Left);
+        model.set_selection(Some(start));
+        // A drag below the pane: a scroll, then the end of the selection, in one mouse move.
+        model.scroll_up_by(5);
+        model.update_selection(pixel(2, 3.75));
+    });
+    let (offset, selection) = screen.model.read_with(cx, |model, _| {
+        let content = model.last_content();
+        (content.display_offset, content.selection.unwrap())
+    });
+    assert_eq!(offset, 5);
+    assert_eq!((selection.start, selection.end), (at(-8, 0), at(-3, 3)));
+}
+
+// The old row is `clear_keeps_the_line_of_the_cursor` in term_behaviour_tests.rs.
+#[gpui::test]
+fn clear_keeps_only_the_line_of_the_cursor(cx: &mut TestAppContext) {
+    let mut screen = screen(cx, (40, 10));
+    feed(&mut screen, &format!("{}prompt$ ab", lines(60)), cx);
     change(&screen, cx, TermModel::clear);
     let (text, history, cursor) = screen.model.read_with(cx, |model, _| {
         let content = model.last_content();
@@ -185,8 +218,8 @@ fn clear_empties_the_screen_and_the_history(cx: &mut TestAppContext) {
             content.cursor.point,
         )
     });
-    assert_eq!(text.trim(), "");
-    assert_eq!((history, cursor), (0, at(0, 0)));
+    assert_eq!(text.trim_end(), "prompt$ ab");
+    assert_eq!((history, cursor), (0, at(0, 10)));
     assert_eq!(sent(&mut screen), "", "the shell was told");
 }
 
@@ -211,12 +244,12 @@ fn a_link_comes_from_its_osc8_cells_or_from_its_line(cx: &mut TestAppContext) {
     assert_eq!(wrapped.range, at(1, 3)..=at(2, 9));
     assert_eq!(link(&screen, at(1, 5), cx), Some(wrapped));
 
-    change(&screen, cx, |model| model.find_link(at(0, 0)));
+    change(&screen, cx, |model| model.find_link(pixel(0, 0.5)));
     let hovered = screen.model.read_with(cx, |model, _| {
         model.last_content().last_hovered_word.clone()
     });
     assert_eq!(hovered, Some(osc));
-    change(&screen, cx, |model| model.open_link(at(0, 1)));
+    change(&screen, cx, |model| model.open_link(pixel(0, 1.5)));
     assert_eq!(cx.opened_url().as_deref(), Some("https://x.y/"));
     change(&screen, cx, TermModel::clear_hovered_word);
     let hovered = screen.model.read_with(cx, |model, _| {
@@ -249,7 +282,7 @@ fn a_scroll_looks_for_the_link_under_the_pointer_again(cx: &mut TestAppContext) 
                 .map(|word| word.word.clone())
         })
     };
-    change(&screen, cx, |model| model.find_link(at(4, 6)));
+    change(&screen, cx, |model| model.find_link(pixel(4, 6.5)));
     assert_eq!(
         hovered(&screen, cx).as_deref(),
         Some("https://example.com/z")
@@ -259,6 +292,55 @@ fn a_scroll_looks_for_the_link_under_the_pointer_again(cx: &mut TestAppContext) 
     assert_eq!(wakes.get(), 1, "no wake to look again");
     settle(&screen.model, cx);
     assert_eq!(hovered(&screen, cx), None, "the old link stayed");
+}
+
+#[gpui::test]
+fn output_or_a_resize_looks_for_the_link_under_the_pointer_again(cx: &mut TestAppContext) {
+    let mut screen = screen(cx, (40, 5));
+    feed(&mut screen, &lines(10), cx);
+    feed(&mut screen, "see https://example.com/z", cx);
+    let url = "https://example.com/z".to_owned();
+    change(&screen, cx, |model| model.find_link(pixel(4, 6.5)));
+    assert_eq!(
+        hovered(&screen, cx),
+        Some((url.clone(), at(4, 4), at(4, 24)))
+    );
+    // At the bottom, new output moves the lines up under the pointer.
+    feed(&mut screen, "\r\nmore", cx);
+    settle(&screen.model, cx);
+    assert_eq!(hovered(&screen, cx), None, "output kept the old link");
+
+    feed(&mut screen, "\r\nsee https://example.com/z", cx);
+    change(&screen, cx, |model| model.find_link(pixel(4, 6.5)));
+    assert!(hovered(&screen, cx).is_some());
+    // At 20 columns the line wraps: the pointer is past its second row.
+    change(&screen, cx, |model| model.set_size(bounds(20, 5)));
+    settle(&screen.model, cx);
+    assert_eq!(hovered(&screen, cx), None, "a resize kept the old link");
+}
+
+#[gpui::test]
+fn output_while_scrolled_up_moves_the_hovered_link_with_its_line(cx: &mut TestAppContext) {
+    let mut screen = screen(cx, (40, 5));
+    feed(
+        &mut screen,
+        &format!("see https://example.com/z\r\n{}", lines(10)),
+        cx,
+    );
+    change(&screen, cx, |model| model.scroll_up_by(7));
+    change(&screen, cx, |model| model.find_link(pixel(0, 6.5)));
+    let url = "https://example.com/z".to_owned();
+    assert_eq!(
+        hovered(&screen, cx),
+        Some((url.clone(), at(-7, 4), at(-7, 24)))
+    );
+    // The view keeps its lines; the link goes one line further into the history.
+    feed(&mut screen, "x\r\n", cx);
+    let offset = screen
+        .model
+        .read_with(cx, |model, _| model.last_content().display_offset);
+    assert_eq!(offset, 8);
+    assert_eq!(hovered(&screen, cx), Some((url, at(-8, 4), at(-8, 24))));
 }
 
 #[gpui::test]
@@ -345,7 +427,13 @@ fn a_sync_copies_the_screen_and_the_program_state(cx: &mut TestAppContext) {
     settle(&screen.model, cx);
     let text = screen.model.read_with(cx, |model, _| model.get_content());
     assert!(text.contains("fresh") && !text.contains("last"), "{text}");
-    assert!(events.borrow().contains(&TermEvent::OutputReplaced));
+    for event in [
+        TermEvent::OutputReplaced,
+        TermEvent::BlinkChanged,
+        TermEvent::Wakeup,
+    ] {
+        assert!(events.borrow().contains(&event), "no {event:?}");
+    }
     assert!(
         screen
             .model
@@ -360,4 +448,59 @@ fn a_sync_copies_the_screen_and_the_program_state(cx: &mut TestAppContext) {
         text.contains("fresh new") && !text.contains("old"),
         "{text}"
     );
+}
+
+#[gpui::test]
+fn a_size_asked_for_before_a_replace_is_the_new_screens_size(cx: &mut TestAppContext) {
+    let screen = screen(cx, (79, 20));
+    screen.model.update(cx, |model, cx| {
+        model.set_size(bounds(48, 11));
+        model.replace_display_output(b"fresh", cx).unwrap();
+    });
+    settle(&screen.model, cx);
+    let grid = screen.model.read_with(cx, |model, _| {
+        let content = model.last_content();
+        (
+            content.columns,
+            content.screen_lines,
+            content.terminal_bounds,
+        )
+    });
+    assert_eq!(grid, (48, 11, bounds(48, 11)));
+}
+
+#[gpui::test]
+fn a_moved_pane_keeps_its_grid_and_takes_the_new_origin(cx: &mut TestAppContext) {
+    let mut screen = screen(cx, (40, 10));
+    let mut moved = bounds(40, 10);
+    moved.bounds.origin = point(px(120.), px(30.));
+    change(&screen, cx, |model| model.set_size(moved));
+    let (grid, stored) = screen.model.read_with(cx, |model, _| {
+        let content = model.last_content();
+        (
+            (content.columns, content.screen_lines),
+            content.terminal_bounds,
+        )
+    });
+    assert_eq!((grid, stored), ((40, 10), moved));
+    assert_eq!(sent(&mut screen), "");
+    // Points are taken from the new origin.
+    feed(&mut screen, "see https://example.com/z", cx);
+    change(&screen, cx, |model| {
+        model.find_link(point(px(120. + 6.5 * CELL.0), px(30. + 0.5 * CELL.1)))
+    });
+    assert!(hovered(&screen, cx).is_some(), "the old origin was used");
+}
+
+#[gpui::test]
+fn write_output_turns_a_bare_lf_into_cr_lf(cx: &mut TestAppContext) {
+    let screen = screen(cx, (40, 10));
+    screen.model.update(cx, |model, cx| {
+        model.write_output(b"built\nin 2.1 s\r", cx);
+        model.write_output(b"\ndone\r\n", cx);
+    });
+    settle(&screen.model, cx);
+    let text = screen.model.read_with(cx, |model, _| model.get_content());
+    let rows: Vec<&str> = text.lines().take(3).map(str::trim_end).collect();
+    assert_eq!(rows, ["built", "in 2.1 s", "done"]);
 }

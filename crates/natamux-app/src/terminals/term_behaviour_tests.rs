@@ -1267,6 +1267,21 @@ fn a_resize_keeps_the_text_and_the_history_limit(cx: &mut TestAppContext) {
     assert_eq!(sent_text(), "");
 }
 
+// "Clear" of the menu: the history and the screen go, but the line of the cursor stays: it
+// moves to the top row and the cursor keeps its column. The shell is not told.
+#[gpui::test]
+fn clear_keeps_the_line_of_the_cursor(cx: &mut TestAppContext) {
+    let (_, terminal, cx) = open(cx, PANE, false);
+    feed(&terminal, &format!("{}prompt$ ab", history(40)), cx);
+    zed(&terminal, cx).update(cx, |screen, _| screen.clear());
+    settle(cx);
+    let cursor = content(&terminal, cx, |content| content.cursor.point);
+    let text = zed(&terminal, cx).read_with(cx, |screen, _| screen.get_content());
+    assert_eq!(text.trim_end(), "prompt$ ab");
+    assert_eq!((cursor.line, cursor.column), (0, 10));
+    assert_eq!(sent_text(), "");
+}
+
 // T-R2: a new terminal font draws the cached view again with no new output, and the shell gets
 // the new grid size.
 #[gpui::test]
@@ -1537,17 +1552,21 @@ mod own {
         assert!(text.contains(&long[..79]), "{text}");
         assert_eq!(own.model.read_with(cx, |model, _| model.history()), history);
 
-        let before = own
+        // Less than a cell: the grid stays and nothing reaches the shell.
+        let grid = |own: &Screen, cx: &mut TestAppContext| {
+            own.model.read_with(cx, |model, _| {
+                let content = model.last_content();
+                (content.columns, content.screen_lines)
+            })
+        };
+        let before = grid(&own, cx);
+        let mut wider = own
             .model
             .read_with(cx, |model, _| model.last_content().terminal_bounds);
-        let mut wider = before;
         wider.bounds.size.width += px(3.);
         own.model.update(cx, |model, _| model.set_size(wider));
         settle(&own.model, cx);
-        let after = own
-            .model
-            .read_with(cx, |model, _| model.last_content().terminal_bounds);
-        assert_eq!(after, before, "a few pixels changed the grid");
+        assert_eq!(grid(&own, cx), before, "a few pixels changed the grid");
         assert_eq!(sent(&mut own), "");
     }
 
