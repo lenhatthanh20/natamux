@@ -520,13 +520,15 @@ pub fn send_input(handle: &TerminalHandle, text: String) {
     handle.input(text);
 }
 
-/// What `send_input` sent on this test's thread, in order.
+/// What `send_input` sent on this test's thread, in order, and how often focus claimed the
+/// shell's size.
 #[cfg(test)]
 pub mod sent {
-    use std::cell::RefCell;
+    use std::cell::{Cell, RefCell};
 
     thread_local! {
         static SENT: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+        static CLAIMS: Cell<usize> = const { Cell::new(0) };
     }
 
     pub fn record(text: &str) {
@@ -536,6 +538,15 @@ pub mod sent {
     /// What was sent since the last take.
     pub fn take() -> Vec<String> {
         SENT.with(|sent| std::mem::take(&mut *sent.borrow_mut()))
+    }
+
+    pub fn claimed() {
+        CLAIMS.with(|claims| claims.set(claims.get() + 1));
+    }
+
+    /// The size claims since the last look.
+    pub fn claims() -> usize {
+        CLAIMS.with(|claims| claims.take())
     }
 }
 

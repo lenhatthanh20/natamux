@@ -3023,5 +3023,5 @@
 ["alt-screen","shift-alt","f20","\u001b[34;4~",false],
 ["alt-screen","cmd","f20","\u001b[34;1~",false],
 ["alt-screen","cmd-shift","f20","\u001b[34;2~",false],
-["app-cursor, no frame","none","up","\u001bOA",false]
+["app-cursor, no frame","none","up","\u001b[A",false]
 ]
