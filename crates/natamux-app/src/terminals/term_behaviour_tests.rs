@@ -936,7 +936,7 @@ fn text_typed_before_the_socket_opens_is_sent_once_on_open(cx: &mut TestAppConte
 
 // T-L1: links. The secondary key shows a link under the pointer; a click with it opens only
 // web and mail links; a plain click on an OSC 8 link records today's behaviour (D5).
-const LINK_LINES: [&str; 10] = [
+const LINK_LINES: [&str; 15] = [
     "see https://example.com/a). and more",
     "mail mailto:me@example.com, ok",
     "ftp ftp://files.example.com/x;",
@@ -947,10 +947,15 @@ const LINK_LINES: [&str; 10] = [
     "\x1b]8;;file:///etc/passwd\x1b\\osc file\x1b]8;;\x1b\\ tail",
     "\x1b]8;;ssh://host\x1b\\osc ssh\x1b]8;;\x1b\\ tail",
     "\x1b]8;;HTTPS://EXAMPLE.COM/UP\x1b\\osc upper\x1b]8;;\x1b\\ tail",
+    "json \"url\":\"https://example.com/j\", ok",
+    "angle <https://example.com/b> ok",
+    "tick `https://example.com/t` ok",
+    "quote 'https://example.com/q' ok",
+    "brace {https://example.com/c} ok",
 ];
 
 /// Each case of T-L1: the cell (line, column) the pointer is on.
-const LINK_CASES: [(&str, (usize, usize)); 10] = [
+const LINK_CASES: [(&str, (usize, usize)); 15] = [
     ("url", (0, 8)),
     ("mailto", (1, 8)),
     ("ftp", (2, 8)),
@@ -961,6 +966,11 @@ const LINK_CASES: [(&str, (usize, usize)); 10] = [
     ("osc file", (7, 2)),
     ("osc ssh", (8, 2)),
     ("osc upper", (9, 2)),
+    ("json quotes", (10, 16)),
+    ("angle brackets", (11, 12)),
+    ("backticks", (12, 10)),
+    ("single quotes", (13, 12)),
+    ("braces", (14, 12)),
 ];
 
 fn link_rows(cx: &mut TestAppContext) -> Vec<Value> {

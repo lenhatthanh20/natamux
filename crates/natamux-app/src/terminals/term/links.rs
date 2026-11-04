@@ -6,10 +6,12 @@ use std::sync::LazyLock;
 
 use regex::Regex;
 
-/// A URL: one of these schemes, then everything up to a space. Plain paths never match.
+/// A URL: one of these schemes, then everything up to a space, a control character, a quote,
+/// a backtick, `< > { | } ^` or `⟨ ⟩` (the set of alacritty's default hint regex, plus `'`).
+/// Plain paths never match.
 static URL: LazyLock<Option<Regex>> = LazyLock::new(|| {
     Regex::new(
-        r"(?:ipfs:|ipns:|magnet:|mailto:|gemini://|gopher://|https://|http://|news:|file://|git://|ssh:|ftp://|zed://)\S+",
+        r#"(?:ipfs:|ipns:|magnet:|mailto:|gemini://|gopher://|https://|http://|news:|file://|git://|ssh:|ftp://|zed://)[^\x00-\x1F\x7F-\x9F\s<>"'`{|}\^⟨⟩]+"#,
     )
     .ok()
 });
@@ -71,6 +73,17 @@ mod tests {
         assert_eq!(url("path src/main.rs:12 no link", 6), None);
         // The trimmed dot is not part of the link.
         assert_eq!(url("a http://x.y. b", 12), None);
+        // Quotes, brackets and braces end a link.
+        for line in [
+            r#""url":"https://x.y/z","#,
+            "<https://x.y/z>",
+            "`https://x.y/z`",
+            "'https://x.y/z'",
+            "{https://x.y/z|^}",
+            "⟨https://x.y/z⟩",
+        ] {
+            assert_eq!(url(line, 9).as_deref(), Some("https://x.y/z"), "{line}");
+        }
     }
 
     #[test]
