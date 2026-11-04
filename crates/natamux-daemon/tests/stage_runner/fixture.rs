@@ -209,6 +209,8 @@ impl Fixture {
     }
 
     pub fn settle(&self) {
+        // `publish` skips sending while another thread sends, so wait for the queue first.
+        self.bus.deliver_all();
         self.runner.settle();
     }
 
