@@ -1,6 +1,7 @@
 //! The keys and menu items of screen 6 that act on the open workspace: the Docs tab, the open
-//! file, the files of the worktree. And quitting while edits are not saved, which asks first, as
-//! the browser does before it closes a page with a draft (`useWarnOnUnsavedFiles`).
+//! file, the files of the worktree. And quitting, which always asks first: a slipped Mod+Q would
+//! end every agent. With edits not saved it names them, as the browser does before it closes a
+//! page with a draft (`useWarnOnUnsavedFiles`).
 
 use ui::prelude::*;
 
@@ -9,6 +10,7 @@ use crate::app::shortcuts::{CloseTab, Quit, ShowDocsTab, ShowOpenFile, ShowWorkt
 use crate::app::view_rules::{DetailsView, WorkspaceTab};
 use crate::components::confirm::Confirm;
 use crate::files::draft_store::DraftStore;
+use crate::files::file_drafts::QuitQuestion;
 
 impl Root {
     pub(super) fn show_docs_tab(
@@ -50,7 +52,7 @@ impl Root {
         }
     }
 
-    /// Mod+Q and the menu: asks first while edits are not saved.
+    /// Mod+Q, the menu and the palette: asks first.
     pub(super) fn quit_app(&mut self, _: &Quit, window: &mut Window, cx: &mut Context<Self>) {
         if !self.ask_before_quit(window, cx) {
             cx.quit();
@@ -70,37 +72,67 @@ impl Root {
         !bench_runs
     }
 
-    /// Opens the question when there are edits to lose; true when it did.
+    /// Opens the question; true when it did. A tool run (bench, IME check) has no person to
+    /// ask, so it asks only when there are edits to lose.
     fn ask_before_quit(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
-        self.ask_before_quit_with(window, cx, |_, cx| cx.quit())
+        let plain = matches!(self.tool, Tool::None);
+        self.ask_before_quit_with(plain, window, cx, |_, cx| cx.quit())
     }
 
+    /// `plain`: ask also when no edits would be lost.
     pub(super) fn ask_before_quit_with(
         &mut self,
+        plain: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
         after: impl Fn(&mut Window, &mut App) + 'static,
     ) -> bool {
-        let store = DraftStore::global(cx);
-        let Some(question) = store.read(cx).quit_question() else {
+        let drafts = DraftStore::global(cx).read(cx).quit_question();
+        let Some(text) = quit_text(drafts, plain) else {
             return false;
         };
-        let rows = question
-            .rows
-            .iter()
-            .map(|row| match row.split_once(" \u{b7} ") {
-                Some((task, path)) => (task.to_owned().into(), path.to_owned().into()),
-                None => (SharedString::default(), row.clone().into()),
-            })
-            .collect();
-        let confirm = Confirm::new(
-            question.title,
-            "These edits are not saved. Quitting drops them.",
-            "Quit",
-            after,
-        )
-        .rows(rows);
+        let confirm = Confirm::new(text.title, text.description, "Quit", after).rows(text.rows);
         window.defer(cx, move |window, cx| confirm.open(window, cx));
         true
     }
 }
+
+/// What the quit question says.
+#[derive(Debug, PartialEq)]
+struct QuitText {
+    title: SharedString,
+    description: SharedString,
+    /// (task, path) of each draft.
+    rows: Vec<(SharedString, SharedString)>,
+}
+
+const PLAIN_QUIT: &str =
+    "Every agent and terminal stops. They come back the next time you open Natamux.";
+
+/// None when quitting needs no question.
+fn quit_text(drafts: Option<QuitQuestion>, plain: bool) -> Option<QuitText> {
+    let Some(question) = drafts else {
+        return plain.then(|| QuitText {
+            title: "Quit Natamux?".into(),
+            description: PLAIN_QUIT.into(),
+            rows: Vec::new(),
+        });
+    };
+    let rows = question
+        .rows
+        .iter()
+        .map(|row| match row.split_once(" \u{b7} ") {
+            Some((task, path)) => (task.to_owned().into(), path.to_owned().into()),
+            None => (SharedString::default(), row.clone().into()),
+        })
+        .collect();
+    Some(QuitText {
+        title: question.title.into(),
+        description: "These edits are not saved. Quitting drops them.".into(),
+        rows,
+    })
+}
+
+#[cfg(test)]
+#[path = "window_files_tests.rs"]
+mod tests;
