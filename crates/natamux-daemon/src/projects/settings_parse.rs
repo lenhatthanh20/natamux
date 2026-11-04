@@ -6,6 +6,7 @@ use natamux_proto::projects::settings_rules::other_settings_problem;
 use natamux_proto::stages::catalog::default_pipeline;
 use natamux_proto::stages::pipeline_rules::stage_problems;
 use natamux_proto::stages::pipeline_rules::{IssueLevel, pipeline_issues};
+use natamux_proto::stages::position::path_of;
 use natamux_proto::stages::schema::{Stage, StageKind, Step};
 use serde_json::{Map, Value, json};
 
@@ -110,22 +111,26 @@ fn kind_of(value: &Value) -> &'static str {
     }
 }
 
-/// Where each stage sits, as the zod path: itself, its lane in a group, itself in a path.
+/// Where each stage sits, as the zod path: itself, its lane in a group, itself in a path (also a
+/// lane of a group in a path).
 fn places(steps: &[Step]) -> Vec<(String, &Stage)> {
+    places_in("stages", steps)
+}
+
+fn places_in<'a>(prefix: &str, steps: &'a [Step]) -> Vec<(String, &'a Stage)> {
     let mut found = Vec::new();
     for (index, step) in steps.iter().enumerate() {
         match step {
-            Step::Stage(stage) => found.push((format!("stages.{index}"), stage)),
+            Step::Stage(stage) => found.push((format!("{prefix}.{index}"), stage)),
             Step::Group(group) => {
                 for (lane, stage) in group.parallel.iter().enumerate() {
-                    found.push((format!("stages.{index}.parallel.{lane}"), stage));
+                    found.push((format!("{prefix}.{index}.parallel.{lane}"), stage));
                 }
             }
             Step::Branch(branch) => {
                 for (p, path) in branch.paths.iter().enumerate() {
-                    for (s, stage) in path.stages.iter().enumerate() {
-                        found.push((format!("stages.{index}.paths.{p}.stages.{s}"), stage));
-                    }
+                    let inner = format!("{prefix}.{index}.paths.{p}.stages");
+                    found.extend(places_in(&inner, &path.stages));
                 }
             }
         }
@@ -141,10 +146,23 @@ fn locate(steps: &[Step], id: Option<&str>) -> String {
     if let Some(index) = steps.iter().position(|step| step.id() == id) {
         return format!("stages.{index}");
     }
-    places(steps)
-        .into_iter()
-        .find(|(_, stage)| stage.id == id)
-        .map_or_else(|| "stages".into(), |(path, _)| path)
+    // A group inside a path sits where its first lane does, without the lane.
+    let first_lane = match path_of(steps, id).map(|place| place.item) {
+        Some(Step::Group(group)) if group.id == id => group.parallel.first(),
+        _ => None,
+    };
+    let place = |stage_id: &str| {
+        places(steps)
+            .into_iter()
+            .find(|(_, stage)| stage.id == stage_id)
+            .map(|(path, _)| path)
+    };
+    if let Some(lane) = first_lane {
+        return place(&lane.id)
+            .and_then(|at| at.strip_suffix(".parallel.0").map(str::to_owned))
+            .unwrap_or_else(|| "stages".into());
+    }
+    place(id).unwrap_or_else(|| "stages".into())
 }
 
 /// The problems of `pipelineSchema`: the fields of each stage first (zod names them one by one),

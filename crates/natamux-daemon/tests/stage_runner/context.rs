@@ -391,7 +391,10 @@ pub fn change_stage(f: &Fixture, id: &str, change: impl Fn(&mut Stage)) {
                 .paths
                 .iter_mut()
                 .flat_map(|path| path.stages.iter_mut())
-                .filter(|stage| stage.id == id)
+                .filter_map(|item| match item {
+                    Step::Stage(stage) if stage.id == id => Some(stage),
+                    _ => None,
+                })
                 .for_each(&change),
             Step::Stage(_) => {}
         }

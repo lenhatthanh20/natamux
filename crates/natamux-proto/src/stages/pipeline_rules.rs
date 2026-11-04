@@ -1,8 +1,8 @@
 //! The rules of a pipeline (`pipeline-schema.ts` and `pipeline-issues.ts` in
 //! `packages/core/src/stages`), as the messages the settings screen shows next to a stage.
 //!
-//! The rules work on steps that were read, so a field of a wrong JSON type, and a group or a
-//! branch inside a path, are refused at read time, not shown here.
+//! The rules work on steps that were read, so a field of a wrong JSON type is refused at read
+//! time, not shown here.
 
 use std::collections::HashSet;
 
@@ -82,10 +82,7 @@ pub fn pipeline_issues(steps: &[Step]) -> Vec<PipelineIssue> {
                 .map(|(stage, message)| error(stage, message)),
         );
     }
-    for step in steps {
-        let Step::Group(group) = step else {
-            continue;
-        };
+    for group in groups_of(steps) {
         let writers = group
             .parallel
             .iter()
@@ -104,6 +101,22 @@ pub fn pipeline_issues(steps: &[Step]) -> Vec<PipelineIssue> {
         }
     }
     issues
+}
+
+/// Every group of the pipeline, also those inside a path.
+fn groups_of(steps: &[Step]) -> Vec<&StageGroup> {
+    steps
+        .iter()
+        .flat_map(|step| match step {
+            Step::Group(group) => vec![group],
+            Step::Branch(branch) => branch
+                .paths
+                .iter()
+                .flat_map(|path| groups_of(&path.stages))
+                .collect(),
+            Step::Stage(_) => Vec::new(),
+        })
+        .collect()
 }
 
 /// Every issue of `pipelineSchema.safeParse(steps)`: the shape of each step first, then the rules
@@ -182,8 +195,15 @@ fn branch_shape(branch: &StageBranch) -> Vec<Found> {
         if path.stages.is_empty() {
             found.push((Some(id.into()), "A path has at least one stage".into()));
         }
-        for stage in &path.stages {
-            found.extend(stage_shape(stage));
+        for item in &path.stages {
+            match item {
+                Step::Stage(stage) => found.extend(stage_shape(stage)),
+                Step::Group(group) => found.extend(group_shape(group)),
+                Step::Branch(inner) => found.push((
+                    Some(inner.id.clone()),
+                    "A path holds stages and side-by-side groups, not a branch".into(),
+                )),
+            }
         }
     }
     if branch.paths.len() < 2 || branch.paths.len() > 4 {
@@ -216,6 +236,11 @@ impl Rules {
         self.unique(id, format!("The stage id \"{id}\" is used twice"), id);
         if let Step::Branch(branch) = step {
             self.branch_paths(branch);
+            for group in groups_of(std::slice::from_ref(step)) {
+                let message = format!("The stage id \"{}\" is used twice", group.id);
+                self.unique(&group.id, message, &group.id);
+                self.lone_lane(group);
+            }
         }
         for (stage, at, whole) in places(step) {
             if !matches!(step, Step::Stage(_)) {
@@ -224,9 +249,13 @@ impl Rules {
             }
             self.found.extend(stage_rules(step, stage, at, whole));
         }
-        if let Step::Group(group) = step
-            && group.parallel.iter().filter(|stage| stage.is_on()).count() == 1
-        {
+        if let Step::Group(group) = step {
+            self.lone_lane(group);
+        }
+    }
+
+    fn lone_lane(&mut self, group: &StageGroup) {
+        if group.parallel.iter().filter(|stage| stage.is_on()).count() == 1 {
             self.fail(
                 &group.id,
                 "A group needs 2 stages that are on. Turn on another, or run it on its own".into(),
@@ -253,7 +282,7 @@ impl Rules {
             .collect();
         let left: Vec<_> = filled
             .iter()
-            .filter(|path| path.stages.iter().any(Stage::is_on))
+            .filter(|path| path.all_stages().into_iter().any(Stage::is_on))
             .collect();
         if filled.len() >= 2 && left.len() == 1 && left[0].when.is_some() {
             let message = "Turn on a stage in another path, or remove the branch".into();
@@ -276,7 +305,7 @@ fn places(step: &Step) -> Vec<(&Stage, &str, &str)> {
             .paths
             .iter()
             .flat_map(|path| &path.stages)
-            .map(|stage| (stage, stage.id.as_str(), stage.id.as_str()))
+            .flat_map(places)
             .collect(),
     }
 }

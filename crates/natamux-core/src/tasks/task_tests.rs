@@ -110,6 +110,26 @@ fn reads_the_path_taken_at_each_branch_and_the_paths_of_a_branch_in_its_steps() 
 }
 
 #[test]
+fn reads_a_group_inside_a_path_and_refuses_a_branch_there() {
+    let stages = json!([
+        "spec",
+        {"id": "kind", "paths": [
+            {"id": "bug", "stages": [{"id": "triage", "parallel": ["repro", "look"]}, "fix"]},
+            {"id": "other", "stages": ["plan"]}
+        ]}
+    ]);
+    assert_eq!(Value::Array(ok(json!({"stages": stages})).stages), stages);
+    let nested = json!([
+        "spec",
+        {"id": "kind", "paths": [
+            {"id": "bug", "stages": [{"id": "inner", "paths": []}]},
+            {"id": "other", "stages": ["plan"]}
+        ]}
+    ]);
+    assert!(parse(json!({"stages": nested})).is_err());
+}
+
+#[test]
 fn trims_the_title() {
     assert_eq!(ok(json!({"title": "  Fix it  "})).title, "Fix it");
 }

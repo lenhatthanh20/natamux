@@ -35,7 +35,7 @@
       "prStatus": { "state": "open", "checks": "passing" },
       "description": "A coupon larger than the cart total gives a negative amount at checkout.",
       "priority": "high", "labels": ["bug"], "paths": { "kind": "bug" },
-      "stages": ["context","spec",{"id":"kind","paths":[{"id":"bug","stages":["reproduce"]},{"id":"feature","stages":["plan"]}]},{"id":"build","parallel":["test-spec","implement"]},"agent-review","security","review","release"],
+      "stages": ["context","spec",{"id":"kind","paths":[{"id":"bug","stages":[{"id":"triage","parallel":["reproduce","investigate"]}]},{"id":"feature","stages":["plan"]}]},{"id":"build","parallel":["test-spec","implement"]},"agent-review","security","review","release"],
       "stageSince": "2026-10-22T08:10:00.000Z",
       "createdAt": "2026-10-21T07:00:00.000Z", "updatedAt": "2026-10-22T08:10:00.000Z"
     },

@@ -2,7 +2,7 @@ use natamux_proto::stages::schema::StageKind;
 
 use super::*;
 use crate::stages::editor_draft::parse_draft;
-use crate::stages::editor_fixtures::branched;
+use crate::stages::editor_fixtures::{branched, path_grouped};
 
 #[test]
 fn reads_a_branch_from_the_json_and_refuses_one_the_list_cannot_draw() {
@@ -17,10 +17,10 @@ fn reads_a_branch_from_the_json_and_refuses_one_the_list_cannot_draw() {
             .unwrap_err()
             .starts_with("stages, item 1: a branch needs an id and paths")
     );
-    let group = parse_draft(
-        r#"{ "stages": [{ "id": "b", "paths": [{ "id": "p", "stages": [{ "id": "g", "parallel": [] }] }] }] }"#,
+    let nested = parse_draft(
+        r#"{ "stages": [{ "id": "b", "paths": [{ "id": "p", "stages": [{ "id": "c", "paths": [] }] }] }] }"#,
     );
-    assert!(group.is_err());
+    assert!(nested.is_err());
 }
 
 #[test]
@@ -73,4 +73,34 @@ fn finds_a_stage_of_a_path_its_path_and_its_place_in_it() {
         Some(2)
     );
     assert!(find_branch(&steps, "plan").is_none());
+}
+
+#[test]
+fn finds_a_lane_of_a_group_in_a_path_and_the_group_itself() {
+    let steps = path_grouped();
+    let at = |lane, slot| Place {
+        index: 2,
+        lane,
+        path: Some(0),
+        slot: Some(slot),
+    };
+    assert_eq!(find_place(&steps, "docs"), Some(at(Some(1), 0)));
+    assert_eq!(find_place(&steps, "build"), Some(at(None, 0)));
+    assert_eq!(find_place(&steps, "testing"), Some(at(None, 1)));
+    assert_eq!(
+        group_of(&steps, "docs").map(|group| group.id.as_str()),
+        Some("build")
+    );
+    assert!(group_of(&steps, "build").is_none());
+    assert!(used_ids(&steps).contains("build"));
+    assert_eq!(
+        find_stage(&steps, "docs").map(|stage| stage.kind),
+        Some(StageKind::Agent)
+    );
+    assert_eq!(
+        step_of_stage(&steps, "docs").map(Step::id),
+        Some("after-plan")
+    );
+    assert!(item_at(&steps, at(None, 0)).is_some_and(fits_in_path));
+    assert!(!fits_in_path(&steps[2]));
 }

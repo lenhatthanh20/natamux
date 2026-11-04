@@ -148,7 +148,11 @@ fn step_of(value: &Value) -> StepRef {
                     .and_then(Value::as_str)
                     .unwrap_or_default()
                     .to_owned(),
-                stages: strings(path.get("stages")),
+                stages: path
+                    .get("stages")
+                    .and_then(Value::as_array)
+                    .map(|items| items.iter().map(step_of).collect())
+                    .unwrap_or_default(),
             })
             .collect();
         return StepRef::Branch { id, paths };
@@ -168,7 +172,7 @@ pub fn stages_of_ref(step: &StepRef) -> Vec<&str> {
         StepRef::Group { parallel, .. } => parallel.iter().map(String::as_str).collect(),
         StepRef::Branch { paths, .. } => paths
             .iter()
-            .flat_map(|path| path.stages.iter().map(String::as_str))
+            .flat_map(|path| path.stages.iter().flat_map(stages_of_ref))
             .collect(),
     }
 }
@@ -178,8 +182,13 @@ pub fn stages_of_ref(step: &StepRef) -> Vec<&str> {
 pub fn step_holds(step: &StepRef, stage: &str) -> bool {
     match step {
         StepRef::Stage(id) => id == stage,
-        StepRef::Group { id, .. } | StepRef::Branch { id, .. } => {
-            id == stage || stages_of_ref(step).contains(&stage)
+        StepRef::Group { id, .. } => id == stage || stages_of_ref(step).contains(&stage),
+        // A group inside a path counts too.
+        StepRef::Branch { id, paths } => {
+            id == stage
+                || paths
+                    .iter()
+                    .any(|path| path.stages.iter().any(|item| step_holds(item, stage)))
         }
     }
 }

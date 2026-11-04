@@ -86,7 +86,8 @@ fn finish_lane(
     lane: &str,
     path: Option<&str>,
 ) -> (StagePosition, bool) {
-    if let Some(Step::Group(_)) = usize::try_from(index).ok().and_then(|at| steps.get(at)) {
+    // The group of the lane, also one inside a path.
+    if let Some(Step::Group(_)) = step_to_run(steps, lane) {
         let lanes = with(&position.lanes, lane, TaskState::Done);
         if lanes.iter().any(|(_, state)| *state != TaskState::Done) {
             let state = combined_state(&lanes);
@@ -102,7 +103,7 @@ fn finish_lane(
     }
     let following = path_of(steps, lane).and_then(|place| place.path.stages.get(place.index + 1));
     if let Some(following) = following {
-        let next = enter_step(&Step::Stage(following.clone()), None, None);
+        let next = enter_step(following, None, None);
         return (with_paths(next, position.paths.clone()), true);
     }
     let mut paths = position.paths.clone();
@@ -205,6 +206,7 @@ fn complete_on_merge(position: &StagePosition, steps: &[Step], index: i64) -> Ap
         && path_of(steps, &position.stage).is_some_and(|place| {
             !place.path.stages[..=place.index]
                 .iter()
+                .flat_map(Step::stages)
                 .any(review_or_later)
         });
     if first_review < 0 || index < first_review || early {
@@ -359,3 +361,7 @@ mod tests;
 #[cfg(test)]
 #[path = "apply_branch_tests.rs"]
 mod branch_tests;
+
+#[cfg(test)]
+#[path = "apply_path_group_tests.rs"]
+mod path_group_tests;

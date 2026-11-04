@@ -68,6 +68,11 @@ fn the_review_task_is_at_manual_review_after_two_rounds() {
             .as_deref()
             .is_some_and(|b| b.contains("grep -qi bug"))
     );
+    // The bug path reproduced and investigated side by side.
+    let investigate = progress.iter().find(|e| e.stage == "investigate").unwrap();
+    assert_eq!(investigate.status, StageStatus::Done);
+    assert_eq!(investigate.group.as_deref(), Some("triage"));
+    assert_eq!(bug.group.as_deref(), Some("triage"));
     let plan = progress.iter().find(|e| e.stage == "plan").unwrap();
     assert_eq!(plan.status, StageStatus::NotTaken);
     assert_eq!(task.priority, "high");

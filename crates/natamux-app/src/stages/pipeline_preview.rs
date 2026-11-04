@@ -161,7 +161,7 @@ pub(super) fn stage_node(chart: &Chart, stage: &Stage, cx: &App) -> AnyElement {
 }
 
 /// Stages that run side by side: a dashed box with one node under the other.
-fn group_box(
+pub(super) fn group_box(
     chart: &Chart,
     group: &natamux_proto::stages::schema::StageGroup,
     cx: &App,

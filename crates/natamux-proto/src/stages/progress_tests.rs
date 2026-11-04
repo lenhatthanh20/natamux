@@ -1,6 +1,6 @@
 use super::*;
 use crate::stages::catalog::full_pipeline;
-use crate::stages::schema::{Condition, StageBranch};
+use crate::stages::schema::{Condition, StageBranch, StageGroup};
 use serde_json::json;
 
 // Each event comes one minute after the one before, like the fixture of the TypeScript test.
@@ -291,8 +291,8 @@ fn branch_steps() -> Vec<Step> {
                     }),
                     not: None,
                     stages: vec![
-                        Stage::new("implement", StageKind::Agent, Gate::Auto),
-                        Stage::new("testing", StageKind::Testing, Gate::Auto),
+                        Step::Stage(Stage::new("implement", StageKind::Agent, Gate::Auto)),
+                        Step::Stage(Stage::new("testing", StageKind::Testing, Gate::Auto)),
                     ],
                 },
                 BranchPath {
@@ -300,7 +300,11 @@ fn branch_steps() -> Vec<Step> {
                     name: None,
                     when: None,
                     not: None,
-                    stages: vec![Stage::new("review", StageKind::Review, Gate::Manual)],
+                    stages: vec![Step::Stage(Stage::new(
+                        "review",
+                        StageKind::Review,
+                        Gate::Manual,
+                    ))],
                 },
             ],
         }),
@@ -429,4 +433,97 @@ fn shows_every_stage_of_a_skipped_branch_as_not_taken_and_all_as_upcoming_before
                 .all(|each| each.status == StageStatus::Upcoming)
         );
     }
+}
+
+// A branch whose bug path runs Reproduce and Investigate side by side, then Fix.
+fn path_group_steps() -> Vec<Step> {
+    let agent = |id: &str, gate: Gate| Step::Stage(Stage::new(id, StageKind::Agent, gate));
+    let triage = Step::Group(StageGroup {
+        id: "triage".into(),
+        name: None,
+        parallel: vec![
+            Stage::new("repro", StageKind::Agent, Gate::Auto),
+            Stage::new("look", StageKind::Agent, Gate::Manual),
+        ],
+    });
+    vec![
+        agent("spec", Gate::Manual),
+        Step::Branch(StageBranch {
+            id: "kind".into(),
+            name: None,
+            paths: vec![
+                BranchPath {
+                    id: "bug".into(),
+                    name: None,
+                    when: Some(Condition::Command { run: "true".into() }),
+                    not: None,
+                    stages: vec![triage, agent("fix", Gate::Auto)],
+                },
+                BranchPath {
+                    id: "other".into(),
+                    name: None,
+                    when: None,
+                    not: None,
+                    stages: vec![agent("plan", Gate::Manual)],
+                },
+            ],
+        }),
+        Step::Stage(Stage::new("release", StageKind::Release, Gate::Manual)),
+    ]
+}
+
+#[test]
+fn shows_the_lanes_of_a_group_in_a_path_with_their_own_states() {
+    let mut log = Log::new();
+    let events = [
+        log.sys("stage.started", json!({"stage": "spec"})),
+        log.human(
+            "stage.approved",
+            json!({"stage": "spec", "path": "bug", "because": "true succeeds"}),
+        ),
+        log.sys("stage.started", json!({"stage": "repro"})),
+        log.sys("stage.started", json!({"stage": "look"})),
+        log.human("stage.approved", json!({"stage": "look"})),
+    ];
+    let task = Task {
+        lanes: json!({"repro": "running", "look": "done"})
+            .as_object()
+            .cloned()
+            .unwrap_or_default(),
+        ..branched("triage", TaskState::Running, json!({"kind": "bug"}))
+    };
+    let progress = stage_progress(&task, &events, &path_group_steps());
+    use StageStatus::{Current, Done, NotTaken, Upcoming};
+    assert_eq!(
+        statuses(&progress),
+        [
+            ("spec", Done),
+            ("repro", Current),
+            ("look", Done),
+            ("fix", Upcoming),
+            ("plan", NotTaken),
+            ("release", Upcoming),
+        ]
+    );
+    let repro = find(&progress, "repro");
+    assert_eq!(repro.group.as_deref(), Some("triage"));
+    assert_eq!(repro.path.as_deref(), Some("bug"));
+    assert_eq!(repro.state, Some(TaskState::Running));
+    assert_eq!(repro.because.as_deref(), Some("true succeeds"));
+    assert_eq!(
+        find(&progress, "look").because.as_deref(),
+        Some("true succeeds")
+    );
+    assert_eq!(find(&progress, "fix").group, None);
+
+    // Both lanes done: the task is at Fix, and the lanes count as done before it.
+    let at_fix = Task {
+        paths: task.paths.clone(),
+        ..at("fix", TaskState::Ready, json!({}))
+    };
+    let progress = stage_progress(&at_fix, &events, &path_group_steps());
+    assert_eq!(
+        statuses(&progress)[1..4],
+        [("repro", Done), ("look", Done), ("fix", Current)]
+    );
 }

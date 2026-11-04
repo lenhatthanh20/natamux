@@ -61,7 +61,9 @@ pub fn add_catalog_stage(steps: &[Step], id: &str, path_id: Option<&str>) -> Vec
     if !stage_fits_in_path(&stage) || find_path(steps, path_id).is_none() {
         return steps.to_vec();
     }
-    update_path(steps, path_id, |path| path.stages.push(stage.clone()))
+    update_path(steps, path_id, |path| {
+        path.stages.push(Step::Stage(stage.clone()))
+    })
 }
 
 /// The catalog stages that are not in the pipeline, in catalog order.

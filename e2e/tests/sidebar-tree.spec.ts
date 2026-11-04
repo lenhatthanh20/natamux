@@ -1,5 +1,12 @@
 import { type APIRequestContext, expect, type Page, test } from '@playwright/test'
-import { signIn, TOKEN, taskNamed } from './helpers'
+import {
+  firstRepo,
+  restoreSettings,
+  signIn,
+  TOKEN,
+  taskNamed,
+  useFullPipeline,
+} from './helpers'
 
 const headers = { authorization: `Bearer ${TOKEN}` }
 
@@ -108,12 +115,23 @@ test('shows a subtask and the agents under their task', async ({ page, request }
 
 // M1 and G6 of the test spec.
 test('lists the stages of a parallel group, with reduced motion', async ({ page, request }) => {
+  // The default pipeline has no group since T-0282, so the task gets the one with a group.
+  const repo = await firstRepo(request)
+  const before = await useFullPipeline(request, repo)
+  try {
+    await listsGroupStages(page, request)
+  } finally {
+    await restoreSettings(request, repo, before)
+  }
+})
+
+async function listsGroupStages(page: Page, request: APIRequestContext) {
   await page.emulateMedia({ reducedMotion: 'reduce' })
   const title = `[no-done] Tree group ${Date.now()}`
   const id = await runningTask(request, title)
   const stages: Step[] = (await taskOf(request, id)).stages
   const group = stages.find((step) => typeof step !== 'string')
-  expect(group, 'the default pipeline has a parallel group').toBeDefined()
+  expect(group, 'the full pipeline has a parallel group').toBeDefined()
   if (group === undefined || typeof group === 'string') {
     return
   }
@@ -142,4 +160,4 @@ test('lists the stages of a parallel group, with reduced motion', async ({ page,
     return forever.length
   })
   expect(endless).toBe(0)
-})
+}
