@@ -32,21 +32,23 @@ pub(crate) fn step_refs(value: &Value, path: &[Value], issues: &mut Issues) -> O
     .map(Value::Array)
 }
 
-/// The first option of `stepRefSchema` that takes the value, stripped to its keys.
-fn step_ref(value: &Value) -> Option<Value> {
-    let stage_id = |value: Option<&Value>, quiet: &mut Issues| {
-        string(value, &[], &STAGE_ID, quiet).map(Value::from)
-    };
-    let ids = |value: Option<&Value>, length: Length, quiet: &mut Issues| {
-        array(value, &[], length, quiet, |each, _, quiet| {
-            stage_id(Some(each), quiet)
-        })
-    };
+fn stage_id(value: Option<&Value>, quiet: &mut Issues) -> Option<Value> {
+    string(value, &[], &STAGE_ID, quiet).map(Value::from)
+}
+
+fn ids(value: Option<&Value>, length: Length, quiet: &mut Issues) -> Option<Vec<Value>> {
+    array(value, &[], length, quiet, |each, _, quiet| {
+        stage_id(Some(each), quiet)
+    })
+}
+
+/// A stage id, or a group of 2 to 4 stage ids: what a path and the pipeline both hold.
+fn stage_or_group(value: &Value) -> Option<Value> {
     if let Some(id) = quietly(|quiet| stage_id(Some(value), quiet)) {
         return Some(id);
     }
     let map = value.as_object()?;
-    let group = quietly(|quiet| {
+    quietly(|quiet| {
         let id = stage_id(map.get("id"), quiet);
         let length = Length {
             min: Some(2),
@@ -54,10 +56,15 @@ fn step_ref(value: &Value) -> Option<Value> {
         };
         let parallel = ids(map.get("parallel"), length, quiet);
         Some(json!({ "id": id?, "parallel": parallel? }))
-    });
-    if group.is_some() {
-        return group;
+    })
+}
+
+/// The first option of `stepRefSchema` that takes the value, stripped to its keys.
+fn step_ref(value: &Value) -> Option<Value> {
+    if let Some(step) = stage_or_group(value) {
+        return Some(step);
     }
+    let map = value.as_object()?;
     quietly(|quiet| {
         let id = stage_id(map.get("id"), quiet);
         let length = Length {
@@ -71,7 +78,14 @@ fn step_ref(value: &Value) -> Option<Value> {
                 min: Some(1),
                 max: None,
             };
-            let stages = ids(path.get("stages"), one, quiet);
+            // A path holds stage ids and groups (a group runs side by side inside the path).
+            let stages = array(path.get("stages"), &[], one, quiet, |item, at_path, quiet| {
+                let parsed = stage_or_group(item);
+                if parsed.is_none() {
+                    quiet.push(Issue::new(Vec::new(), at_path, "Invalid input".into()));
+                }
+                parsed
+            });
             Some(json!({ "id": id?, "stages": stages? }))
         });
         Some(json!({ "id": id?, "paths": paths? }))

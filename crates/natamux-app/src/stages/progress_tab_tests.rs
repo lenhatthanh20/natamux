@@ -331,7 +331,7 @@ fn a_node_of_a_path_places_its_card_inside_the_branch() {
         ],
     );
     let lane = source_of(include_str!("progress_branch.rs"), "fn lane(");
-    assert!(lane.contains("self.column(&steps, cx)"));
+    assert!(lane.contains("self.column(&path.stages, cx)"));
     let branch = source_of(include_str!("progress_branch.rs"), "pub(super) fn branch(");
     assert!(!branch.contains(".children(details)"));
 }

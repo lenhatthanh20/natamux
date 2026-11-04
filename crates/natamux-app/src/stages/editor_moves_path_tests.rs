@@ -4,7 +4,6 @@ use natamux_proto::stages::schema::{Step, StepRef};
 
 use super::*;
 use crate::stages::editor_catalog::add_catalog_stage;
-use crate::stages::editor_find::used_ids;
 use crate::stages::editor_fixtures::{branch_refs, branched, group_ref, ids, path_grouped, sid};
 
 /// The branch of `path_grouped` with these items in its Small change path.
@@ -104,11 +103,22 @@ fn moves_a_lane_and_a_whole_group_of_a_path() {
 }
 
 #[test]
-fn keeps_every_id_once_after_any_move_in_a_path_group() {
+fn keeps_every_stage_once_after_any_move_in_a_path_group() {
+    let stage_ids = |steps: &[Step]| -> Vec<String> {
+        let mut ids: Vec<String> = steps
+            .iter()
+            .flat_map(Step::stages)
+            .map(|stage| stage.id.clone())
+            .collect();
+        ids.sort();
+        ids
+    };
+    // A lane that leaves a group of two folds the group into its other stage, so the group id
+    // may go; every stage stays, once.
     for id in ["implement", "docs", "build", "testing"] {
         for direction in [-1, 1] {
             let moved = move_stage(&path_grouped(), id, direction);
-            assert_eq!(used_ids(&moved), used_ids(&path_grouped()));
+            assert_eq!(stage_ids(&moved), stage_ids(&path_grouped()));
             assert!(!has_nested_branch(&moved));
         }
     }
