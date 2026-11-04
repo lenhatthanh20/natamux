@@ -1,6 +1,6 @@
 //! Ports `packages/daemon/src/stages/__tests__/stage-prompts.test.ts`.
 
-use natamux_proto::stages::catalog::default_pipeline;
+use natamux_proto::stages::catalog::full_pipeline;
 use natamux_proto::stages::prompt::default_prompt;
 use natamux_proto::stages::schema::{Gate, StageKind};
 use serde_json::{Value, json};
@@ -27,7 +27,7 @@ fn leaves_the_one_agent_stage_without_any_prompt() {
 }
 
 fn default_stage(id: &str) -> Stage {
-    default_pipeline()
+    full_pipeline()
         .iter()
         .flat_map(|step| step.stages())
         .find(|stage| stage.id == id)

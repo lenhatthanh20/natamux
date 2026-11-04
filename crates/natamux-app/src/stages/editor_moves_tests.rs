@@ -1,4 +1,4 @@
-use natamux_proto::stages::catalog::default_pipeline;
+use natamux_proto::stages::catalog::full_pipeline;
 use natamux_proto::stages::pipeline_rules::{IssueLevel, pipeline_issues};
 use natamux_proto::stages::schema::{Gate, StageGroup, StageKind, Step, StepRef};
 
@@ -31,7 +31,7 @@ fn lanes(id: &str, stages: &[&str]) -> Step {
 
 #[test]
 fn swaps_a_stage_with_the_step_above_or_below() {
-    let steps = default_pipeline();
+    let steps = full_pipeline();
     assert_eq!(
         span(ids(&move_stage(&steps, "plan", -1)), 0, 3),
         ref_ids(&["context", "plan", "spec"])
@@ -44,7 +44,7 @@ fn swaps_a_stage_with_the_step_above_or_below() {
 
 #[test]
 fn moves_a_stage_within_its_group_and_out_of_it_at_the_edge() {
-    let steps = default_pipeline();
+    let steps = full_pipeline();
     assert_eq!(
         ids(&move_stage(&steps, "implement", -1))[3],
         group_ref("build", &["implement", "test-spec"])
@@ -62,7 +62,7 @@ fn moves_a_stage_within_its_group_and_out_of_it_at_the_edge() {
 
 #[test]
 fn does_nothing_at_the_ends() {
-    let steps = default_pipeline();
+    let steps = full_pipeline();
     assert_eq!(move_stage(&steps, "context", -1), steps);
     assert!(!can_move(&steps, "context", -1));
     assert!(!can_move(&steps, "release", 1));
@@ -71,7 +71,7 @@ fn does_nothing_at_the_ends() {
 
 #[test]
 fn puts_a_stage_before_or_after_another() {
-    let steps = default_pipeline();
+    let steps = full_pipeline();
     assert_eq!(
         span(
             ids(&drop_stage(&steps, "testing", "spec", Side::Before)),
@@ -92,7 +92,7 @@ fn puts_a_stage_before_or_after_another() {
 
 #[test]
 fn reorders_the_stages_of_a_group_without_breaking_it() {
-    let steps = drop_stage(&default_pipeline(), "implement", "test-spec", Side::Before);
+    let steps = drop_stage(&full_pipeline(), "implement", "test-spec", Side::Before);
     assert_eq!(
         ids(&steps)[3],
         group_ref("build", &["implement", "test-spec"])
@@ -101,7 +101,7 @@ fn reorders_the_stages_of_a_group_without_breaking_it() {
 
 #[test]
 fn lets_an_agent_stage_join_a_group_but_puts_a_review_next_to_it() {
-    let steps = default_pipeline();
+    let steps = full_pipeline();
     assert_eq!(
         ids(&drop_stage(&steps, "plan", "implement", Side::After))[2],
         group_ref("build", &["test-spec", "implement", "plan"])
@@ -122,7 +122,7 @@ fn lets_an_agent_stage_join_a_group_but_puts_a_review_next_to_it() {
 
 #[test]
 fn moves_a_whole_group() {
-    let steps = default_pipeline();
+    let steps = full_pipeline();
     assert_eq!(
         span(
             ids(&drop_stage(&steps, "build", "spec", Side::Before)),
@@ -139,7 +139,7 @@ fn moves_a_whole_group() {
 
 #[test]
 fn makes_a_new_group_of_a_stage_and_the_stage_above_with_an_unused_id() {
-    let steps = join_above(&default_pipeline(), "plan");
+    let steps = join_above(&full_pipeline(), "plan");
     assert_eq!(ids(&steps)[1], group_ref("spec-group", &["spec", "plan"]));
     let added = add_catalog_stage(
         &add_catalog_stage(&steps, "research", None),
@@ -152,7 +152,7 @@ fn makes_a_new_group_of_a_stage_and_the_stage_above_with_an_unused_id() {
 
 #[test]
 fn joins_the_group_above_up_to_4_stages() {
-    let mut steps = drop_stage(&default_pipeline(), "plan", "testing", Side::Before);
+    let mut steps = drop_stage(&full_pipeline(), "plan", "testing", Side::Before);
     steps = join_above(&steps, "plan");
     assert_eq!(
         ids(&steps)[2],
@@ -171,7 +171,7 @@ fn joins_the_group_above_up_to_4_stages() {
 
 #[test]
 fn is_not_offered_for_review_testing_context_or_release_stages() {
-    let steps = default_pipeline();
+    let steps = full_pipeline();
     let only = Some("Only agent and manual stages run side by side".to_string());
     assert_eq!(join_problem(&steps, "testing"), only);
     assert_eq!(join_problem(&steps, "release"), only);
@@ -190,14 +190,14 @@ fn is_not_offered_for_review_testing_context_or_release_stages() {
 #[test]
 fn takes_a_stage_out_of_its_group_a_group_of_one_left_runs_on_its_own() {
     assert_eq!(
-        span(ids(&run_alone(&default_pipeline(), "test-spec")), 3, 5),
+        span(ids(&run_alone(&full_pipeline(), "test-spec")), 3, 5),
         ref_ids(&["implement", "test-spec"])
     );
 }
 
 #[test]
 fn c4_keeps_a_stage_off_when_it_moves() {
-    let off = set_enabled(&default_pipeline(), "plan", false);
+    let off = set_enabled(&full_pipeline(), "plan", false);
     let moved = move_stage(&off, "plan", -1);
     assert_eq!(
         span(ids(&moved), 0, 3),
@@ -211,7 +211,7 @@ fn c4_keeps_a_stage_off_when_it_moves() {
 
 #[test]
 fn c6_joins_the_stage_above_even_when_it_is_off() {
-    let off = set_enabled(&default_pipeline(), "spec", false);
+    let off = set_enabled(&full_pipeline(), "spec", false);
     let steps = join_above(&off, "plan");
     let group = group_of(&steps, "plan").map(|group| {
         group
@@ -239,7 +239,7 @@ fn c6_lets_a_manual_stage_run_alongside_an_agent_stage() {
 #[test]
 fn c6_dissolves_a_group_of_two_when_one_of_its_stages_is_removed() {
     assert_eq!(
-        span(ids(&remove_stage(&default_pipeline(), "implement")), 2, 5),
+        span(ids(&remove_stage(&full_pipeline(), "implement")), 2, 5),
         ref_ids(&["plan", "test-spec", "testing"])
     );
 }

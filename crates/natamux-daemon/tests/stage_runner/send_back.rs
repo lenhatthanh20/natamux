@@ -2,7 +2,7 @@
 
 use natamux_daemon::stages::act::StageActionInput;
 use natamux_daemon::stages::errors::StageError;
-use natamux_proto::stages::catalog::default_pipeline;
+use natamux_proto::stages::catalog::full_pipeline;
 use natamux_proto::stages::schema::{Gate, Stage, StageKind, Step};
 use natamux_proto::tasks::task::{Task, TaskState};
 use natamux_stages::actions::StageAction;
@@ -11,10 +11,10 @@ use serde_json::{Value, json};
 use crate::support::SIZE;
 use crate::{Fixture, wait_for};
 
-// The default pipeline with a person's review in place of the agent's.
+// The full pipeline with a person's review in place of the agent's.
 fn fixture() -> Fixture {
     let f = Fixture::new();
-    let stages = default_pipeline()
+    let stages = full_pipeline()
         .into_iter()
         .map(|step| match &step {
             Step::Stage(stage) if stage.id == "agent-review" => {

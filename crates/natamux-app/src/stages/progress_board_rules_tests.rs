@@ -1,4 +1,4 @@
-use natamux_proto::stages::catalog::default_pipeline;
+use natamux_proto::stages::catalog::full_pipeline;
 use natamux_proto::stages::progress::{StageStatus, stage_progress};
 use serde_json::{Map, json};
 
@@ -21,8 +21,8 @@ fn ids(rows: &[Task]) -> Vec<&str> {
     rows.iter().map(|row| row.id.as_str()).collect()
 }
 
-fn default_pipelines() -> BTreeMap<String, Vec<Step>> {
-    BTreeMap::from([(DEFAULT_REPO_ID.to_owned(), default_pipeline())])
+fn full_pipelines() -> BTreeMap<String, Vec<Step>> {
+    BTreeMap::from([(DEFAULT_REPO_ID.to_owned(), full_pipeline())])
 }
 
 #[test]
@@ -32,7 +32,7 @@ fn keeps_the_order_of_the_tasks_within_equal_rows_whatever_their_updated_at_says
         task("b", "2026-10-09T09:59:30Z"),
         task("c", "2026-10-09T09:59:10Z"),
     ];
-    let sections = board_sections(&tasks, &[], &default_pipelines(), NOW);
+    let sections = board_sections(&tasks, &[], &full_pipelines(), NOW);
     assert_eq!(ids(&sections[0].open), ["a", "b", "c"]);
 }
 
@@ -48,7 +48,7 @@ fn still_shows_the_tasks_while_the_settings_are_not_loaded() {
 
 #[test]
 fn takes_the_tasks_made_with_the_stages_that_are_on_as_the_current_pipeline() {
-    let mut pipeline = default_pipeline();
+    let mut pipeline = full_pipeline();
     for step in &mut pipeline {
         if let Step::Stage(stage) = step
             && stage.id == "plan"
@@ -183,7 +183,7 @@ fn leaves_cancelled_tasks_out_and_splits_done_ones() {
 
 #[test]
 fn makes_an_earlier_pipeline_section_for_tasks_with_other_stages() {
-    let current = default_pipeline();
+    let current = full_pipeline();
     let mut fresh = task("fresh", "2026-10-09T09:59:00Z");
     fresh.stages = step_refs_of(&active_steps(&current))
         .iter()
@@ -194,7 +194,7 @@ fn makes_an_earlier_pipeline_section_for_tasks_with_other_stages() {
         id: DEFAULT_REPO_ID.into(),
         name: "Natamux".into(),
     }];
-    let sections = board_sections(&[old, fresh], &repos, &default_pipelines(), NOW);
+    let sections = board_sections(&[old, fresh], &repos, &full_pipelines(), NOW);
     let titles: Vec<&str> = sections.iter().map(|s| s.title.as_str()).collect();
     assert_eq!(titles, ["Natamux", "Natamux, earlier pipeline"]);
     assert_eq!(ids(&sections[0].open), ["fresh"]);

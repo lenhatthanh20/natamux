@@ -31,7 +31,7 @@ No. You log in to your agents (and `gh`) as you do today. The dashboard uses a l
 
 ## Can two agents work on one task?
 
-Yes. A task has one worktree, and its agent runs in Terminal 1. In the default pipeline, **Test spec** starts a second agent in Terminal 2 while Implement runs, and **Review** starts a third one in Terminal 5 that can send the work back. Each of them can be another agent or model. See [The review loop](/docs/concepts/review-loop/).
+Yes. A task has one worktree, and its agent runs in Terminal 1. In the default pipeline, **Review** starts a second agent in Terminal 5 that can send the work back. If you add **Test spec** from the catalog, it starts another agent in Terminal 2 while Implement runs. Each of them can be another agent or model. See [The review loop](/docs/concepts/review-loop/).
 
 To compare several approaches to the same job, use **fan out**: it copies a task up to five times, each copy with its own worktree, so you can keep the best try. See [Fan out](/docs/guides/fan-out/).
 

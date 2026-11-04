@@ -3,7 +3,7 @@
 use natamux_daemon::stages::act::StageActionInput;
 use natamux_daemon::terminals::shell_files::read_ended_shells;
 use natamux_proto::projects::repo::ProjectSettings;
-use natamux_proto::stages::catalog::default_pipeline;
+use natamux_proto::stages::catalog::full_pipeline;
 use natamux_proto::stages::schema::{Gate, StageKind, Step};
 use natamux_proto::tasks::task::{Task, TaskState};
 use natamux_stages::actions::StageAction;
@@ -15,7 +15,7 @@ use crate::{Fixture, wait_for};
 
 /// The build group: Implement keeps Shell 1, Test spec runs in Shell 2.
 fn building(f: &Fixture, end_shell: &str) -> Task {
-    let steps = default_pipeline()
+    let steps = full_pipeline()
         .into_iter()
         .map(|step| match step {
             Step::Group(mut group) => {

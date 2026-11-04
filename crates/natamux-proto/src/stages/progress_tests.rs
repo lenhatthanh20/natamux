@@ -1,5 +1,5 @@
 use super::*;
-use crate::stages::catalog::default_pipeline;
+use crate::stages::catalog::full_pipeline;
 use crate::stages::schema::{Condition, StageBranch};
 use serde_json::json;
 
@@ -72,7 +72,7 @@ fn marks_stages_done_current_and_upcoming_with_times_rounds_and_evidence() {
     let progress = stage_progress(
         &at("spec", TaskState::Running, json!({})),
         &events,
-        &default_pipeline(),
+        &full_pipeline(),
     );
     use StageStatus::{Current, Done, Upcoming};
     assert_eq!(
@@ -122,7 +122,7 @@ fn shows_each_stage_of_a_group_on_its_own_and_counts_a_stage_sent_back() {
         TaskState::Review,
         json!({"test-spec": "review", "implement": "done"}),
     );
-    let progress = stage_progress(&task, &events, &default_pipeline());
+    let progress = stage_progress(&task, &events, &full_pipeline());
     let test_spec = find(&progress, "test-spec");
     assert_eq!(test_spec.status, StageStatus::Current);
     assert_eq!(test_spec.state, Some(TaskState::Review));
@@ -154,7 +154,7 @@ fn reads_an_approval_from_review_and_a_request_for_changes_like_their_stage_even
         TaskState::Running,
         json!({"test-spec": "review", "implement": "running"}),
     );
-    let progress = stage_progress(&task, &events, &default_pipeline());
+    let progress = stage_progress(&task, &events, &full_pipeline());
     let plan = find(&progress, "plan");
     assert_eq!(plan.status, StageStatus::Done);
     assert_eq!(plan.ended_at.as_deref(), Some("2026-10-09T09:03:00.000Z"));
@@ -177,7 +177,7 @@ fn tells_a_send_back_by_ci_from_one_by_a_review() {
         json!({"test-spec": "review", "implement": "running"}),
     );
     let implement_of = |events: &[TaskEvent]| {
-        let progress = stage_progress(&task, events, &default_pipeline());
+        let progress = stage_progress(&task, events, &full_pipeline());
         let implement = find(&progress, "implement");
         (
             implement.rounds,
@@ -240,14 +240,14 @@ fn marks_a_skipped_stage_and_every_stage_of_a_done_task() {
     let progress = stage_progress(
         &at("spec", TaskState::Ready, json!({})),
         &events,
-        &default_pipeline(),
+        &full_pipeline(),
     );
     assert_eq!(progress[0].status, StageStatus::Skipped);
 
     let done = stage_progress(
         &at("release", TaskState::Done, json!({})),
         &[],
-        &default_pipeline(),
+        &full_pipeline(),
     );
     assert!(done.iter().all(|each| each.status == StageStatus::Done));
 }

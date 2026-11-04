@@ -41,7 +41,7 @@ Open them from the sidebar: click the gear next to the project. Or right-click t
 | **Finished when** | Every stage | The sentence the progress view shows before the stage starts. |
 
 - **Problems.** Each problem shows next to its stage, and **Save** is off until they are fixed. The rules are in [Rules for the pipeline](/docs/reference/configuration/#rules-for-the-pipeline).
-- **Footer.** **Reset to default** puts the default pipeline in the editor. **Import…** and **Export** load and save a file; see [Import and export](#import-and-export). **Cancel** closes the screen. **Save** (`Mod+Enter`) writes the file. A line above them, except on the **Issues** tab, says: "New tasks use this pipeline. Tasks on their way keep their stages, but use the new prompts and approvals."
+- **Footer.** **Reset to default** puts the default pipeline in the editor: Context, Spec, Implement, Review and Release. **Import…** and **Export** load and save a file; see [Import and export](#import-and-export). **Cancel** closes the screen. **Save** (`Mod+Enter`) writes the file. A line above them, except on the **Issues** tab, says: "New tasks use this pipeline. Tasks on their way keep their stages, but use the new prompts and approvals."
 - **Phone.** Below 640 px the list and the details are one column. A stage opens in place of the list, with **Back**.
 
 **Save** changes only `stages` and `agents.maxSendBacks`. Other fields and keys it does not know stay in the file. When the stages equal the default pipeline, Save leaves `stages` out of the file, so the project follows later changes of the default.

@@ -13,34 +13,27 @@ A stage is one step of the work on a task, such as writing a spec or implementin
 
 <Figure src="/screens/native/progress" width={1600} height={900} alt="The native Progress layout with one row per task and columns for Context, Spec, Reproduce the bug, Plan, Test spec, Implement, Review and Manual review. State markers and the next action appear in each row." caption="The native Progress layout shows each task against its stages, with the next action on the right." />
 
-For the default pipeline at work, with two agents side by side and a review agent that sends the task back, see [The review loop](/docs/concepts/review-loop/).
+For the review loop at work, with a review agent that sends the task back, see [The review loop](/docs/concepts/review-loop/).
 
 ## The default pipeline
 
-A project without a `.natamux.json` file uses this pipeline:
+A new project, or any project without its own `stages` in `.natamux.json`, uses this short pipeline:
 
 ```text
-Context → Spec → Plan → [ Test spec ‖ Implement ] → Automated tests → Review → Release
+Context → Spec → Implement → Review → Release
 ```
 
 | Stage | Kind | Gate | What happens |
 |---|---|---|---|
 | Context | `context` | manual | Natamux collects what the task is about into `context.md`. |
-| Spec | `agent` | manual | The agent writes `spec.md`, with a **Code map** of the files and functions to change. It does not change code. |
-| Plan | `agent` | manual | The agent writes `plan.md`. It does not change code. |
-| Test spec and Implement | group | | Two stages run side by side, see below. |
-| Automated tests | `testing` | auto | The agent adds a test for each case of the test spec, runs all tests and fixes failures. It does not commit. |
+| Spec | `agent` | manual | The agent writes `spec.md`, with a **Code map** of the files and functions to change. It does not change code. You approve it. |
+| Implement | `agent` | auto | The agent writes tests and code from the spec. It does not commit: you read the changes in the **Changes** tab and commit them. |
 | Review | `agent` | auto | An agent in its own terminal reviews the changes against the spec and writes `review.md`. When something must be fixed, it sends the task back to Implement by itself. See [Review by an agent](#review-by-an-agent). |
-| Release | `release` | manual | The task finishes when its pull request is merged. |
+| Release | `release` | manual | Natamux pushes the branch and opens a pull request. The task finishes when it is merged. |
 
-The group in the middle holds two stages:
+You approve once, the spec. Then the agents work until the pull request.
 
-| Stage | Kind | Gate | What happens |
-|---|---|---|---|
-| Test spec | `agent` | manual | An agent writes `test-spec.md` with a **Cases** section. It does not read the code. |
-| Implement | `agent` | auto | The agent writes tests and code. It does not commit: you read the changes in the **Changes** tab and commit them. |
-
-To change the pipeline, use [Project settings](/docs/guides/project-settings/) or see the [configuration reference](/docs/reference/configuration/). The catalog also has **Manual review**, where you read the diff and approve it, and **Manual testing**, where a person tries the change. They are not in the default pipeline, so no person has to act between Plan and Release.
+To change the pipeline, use [Project settings](/docs/guides/project-settings/) or see the [configuration reference](/docs/reference/configuration/). The catalog has more stages to add, for example **Plan**, **Test spec** next to Implement, **Automated tests**, **Manual review**, where you read the diff and approve it, and **Manual testing**, where a person tries the change.
 
 ### One agent for a task
 
@@ -50,16 +43,16 @@ Context works as usual. Once it passes, the agent opens in Terminal 1 without an
 
 ### Terminals and agents
 
-The default pipeline runs three agents. All are the task's agent unless a stage names its own.
+The default pipeline runs two agents. All are the task's agent unless a stage names its own. The table also shows stages from the catalog.
 
 | Stage | Terminal | Agent |
 |---|---|---|
 | Context | none, or Terminal 1 for a `skill` or `mcp` source | none, or agent A |
 | Spec, Plan | Terminal 1 | Agent A. Each stage's prompt goes into the same session. |
 | Implement | Terminal 1 | Agent A, same session |
-| Test spec | Terminal 2 | Agent B, a new session. It can be another agent, see [Choose a model](#choose-a-model); then it gets a terminal of its own. |
-| Automated tests | Terminal 1 | Agent A, same session. With a `command`: a new terminal and no agent. |
-| Review | Terminal 5 | Agent C, a new session, so it reads the work with fresh eyes. It can be another agent; then it gets a terminal of its own. A later round goes into the same session. |
+| Test spec (catalog) | Terminal 2 | Agent B, a new session. It can be another agent, see [Choose a model](#choose-a-model); then it gets a terminal of its own. |
+| Automated tests (catalog) | Terminal 1 | Agent A, same session. With a `command`: a new terminal and no agent. |
+| Review | Terminal 5 | A new session, so it reads the work with fresh eyes. It can be another agent; then it gets a terminal of its own. A later round goes into the same session. |
 | Release | none | none |
 
 With `"ownShell": true` on Spec (or Plan), the **Run in a terminal of its own** checkbox in project settings, that stage runs in Terminal 5. Terminal 1 then stays a plain shell until the first stage that runs there, such as Implement, starts the task's agent. While it waits, its pane names the terminal that works, such as **Terminal 5 is working**.
@@ -237,8 +230,8 @@ You can also skip a stage before the task gets there. In **Progress**, a stage t
 
 A stage can run as a **workflow**: Claude Code splits the work across several sub-agents and checks the result before it finishes. The result is more accurate, but the stage uses many more tokens. Use it for hard stages, such as **Plan** or **Implement**.
 
-- **Project settings** decide which stages offer it. Open the project settings, click an `agent` stage, and tick **Tasks can run it as a workflow**. This writes `"workflow": true` on the stage in `.natamux.json`. The default pipeline offers it on **Plan** and **Implement**.
-- On each task, the card of such a stage in the **Progress** view has a **Run with a workflow** checkbox. It is off by default. Tick it before the stage starts; Implement starts by itself once Plan is approved.
+- **Project settings** decide which stages offer it. Open the project settings, click an `agent` stage, and tick **Tasks can run it as a workflow**. This writes `"workflow": true` on the stage in `.natamux.json`. The default pipeline offers it on **Implement**; the catalog also offers it on **Plan**.
+- On each task, the card of such a stage in the **Progress** view has a **Run with a workflow** checkbox. It is off by default. Tick it before the stage starts; Implement starts by itself once the stage before it passes.
 - When the stage starts, Natamux adds a line to its prompt that asks the agent for a workflow (with the keyword `ultracode`). This happens each time the stage starts, also after **Send back**. The prompt with failed checks does not get the line.
 - A change while the stage runs does not reach the agent. It counts the next time the stage starts.
 - Only Claude Code runs workflows. For a task with another agent, the checkbox cannot be ticked.
@@ -285,7 +278,7 @@ Check **End the agent and close its terminal when the stage is done** in the sta
 
 A stage that changes code (an agent stage without an output file) or a testing stage can wait for your CI before it passes. This tests the work on CI when it cannot run on your machine, and sends the agent the error instead of a guess.
 
-- **Project settings** decide which stages offer it: tick **Tasks can check it on CI** on the stage, or write `"ci": true` in `.natamux.json`. The default pipeline offers it on **Implement** and **Automated tests**.
+- **Project settings** decide which stages offer it: tick **Tasks can check it on CI** on the stage, or write `"ci": true` in `.natamux.json`. The default pipeline offers it on **Implement**; the catalog also offers it on **Automated tests**.
 - On each task, the card of such a stage has a **Check on CI** checkbox. It is off by default, because it pushes the work to your remote.
 - When the agent runs `natamux done` and the other checks pass, Natamux:
   1. makes a commit of the worktree as it is, without changing your branch, your index or your files. It holds every file that git does not ignore, also new files you did not add, so keep secrets such as `.env` in ignored files. A worktree with no change uses the last commit of the branch instead;

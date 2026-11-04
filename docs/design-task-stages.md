@@ -2,7 +2,7 @@
 
 Status: built in the stage pull requests (#60 to #63). The notes at the end say where the code differs from this text.
 
-This is design history. Since v0.1.12 the default pipeline is `Context → Spec → Plan → [Test spec ‖ Implement] → Automated tests → Review → Release`: the tests run before Review, and Review is an agent stage that can send the task back to Implement. The user docs are current: [Stages](https://natamux.github.io/docs/concepts/stages/) and [The review loop](https://natamux.github.io/docs/concepts/review-loop/).
+This is design history. The default pipeline is now `Context → Spec → Implement → Review → Release`, so a new project starts simple; Review is an agent stage that can send the task back to Implement. From v0.1.12 until then it was `Context → Spec → Plan → [Test spec ‖ Implement] → Automated tests → Review → Release`. The user docs are current: [Stages](https://natamux.github.io/docs/concepts/stages/) and [The review loop](https://natamux.github.io/docs/concepts/review-loop/).
 
 ## 1. Goal
 

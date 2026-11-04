@@ -162,6 +162,28 @@ fn has_every_stage_of_the_default_pipeline() {
 }
 
 #[test]
+fn keeps_the_default_pipeline_simple_with_one_wait_for_a_person() {
+    let steps = default_pipeline();
+    assert!(!steps.iter().any(Step::is_group));
+    let waits: Vec<&str> = steps
+        .iter()
+        .flat_map(|step| step.stages())
+        .filter(|stage| stage.gate == Gate::Manual && stage.kind == StageKind::Agent)
+        .map(|stage| stage.id.as_str())
+        .collect();
+    assert_eq!(waits, ["spec"]);
+}
+
+#[test]
+fn has_every_stage_of_the_full_pipeline() {
+    for step in full_pipeline() {
+        for stage in step.stages() {
+            assert_eq!(catalog_stage(&stage.id).as_ref(), Some(stage));
+        }
+    }
+}
+
+#[test]
 fn only_lets_agent_and_manual_stages_run_side_by_side() {
     assert_eq!(GROUP_KINDS, [StageKind::Agent, StageKind::Manual]);
 }

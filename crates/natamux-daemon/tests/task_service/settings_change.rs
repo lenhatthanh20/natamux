@@ -1,6 +1,6 @@
 //! The group 'a task on its way when the settings change'.
 
-use natamux_proto::stages::catalog::default_pipeline;
+use natamux_proto::stages::catalog::full_pipeline;
 use natamux_proto::stages::schema::{Gate, StageKind};
 
 use super::*;
@@ -8,7 +8,7 @@ use super::*;
 #[test]
 fn keeps_its_stages_with_catalog_settings_for_a_stage_that_is_gone_and_live_prompts() {
     let fx = Fixture::new();
-    let mut first = default_pipeline();
+    let mut first = full_pipeline();
     let rest = first.split_off(2);
     let with_extra: Vec<Step> = first
         .into_iter()
@@ -22,7 +22,7 @@ fn keeps_its_stages_with_catalog_settings_for_a_stage_that_is_gone_and_live_prom
     let live = fx.make(Some(settings_of));
     let a = create(&live, "A");
 
-    *shared.lock().unwrap() = default_pipeline()
+    *shared.lock().unwrap() = full_pipeline()
         .into_iter()
         .map(|step| match step {
             Step::Stage(stage) if stage.id == "plan" => Step::Stage(Stage {

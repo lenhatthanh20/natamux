@@ -1,7 +1,7 @@
 //! Ports the cases of `packages/core/src/stages/__tests__/capabilities.test.ts` for the functions
 //! that are in this crate. The others are tested in `natamux-proto`.
 
-use natamux_proto::stages::catalog::default_pipeline;
+use natamux_proto::stages::catalog::full_pipeline;
 use natamux_proto::stages::schema::{Gate, Stage, StageKind, Step};
 
 use super::*;
@@ -13,7 +13,7 @@ fn code_id(steps: &[Step], id: &str, taken: Option<&Paths>) -> Option<String> {
 
 #[test]
 fn finds_the_last_stage_that_changes_code_before_a_stage() {
-    let steps = default_pipeline();
+    let steps = full_pipeline();
     assert_eq!(
         code_id(&steps, "testing", None).as_deref(),
         Some("implement")
@@ -55,7 +55,7 @@ fn finds_the_stage_that_changes_code_only_on_the_way_the_task_went() {
 
 #[test]
 fn runs_a_workflow_when_the_stage_offers_it_the_task_chose_it_and_the_agent_can() {
-    let steps = default_pipeline();
+    let steps = full_pipeline();
     let implement = steps
         .iter()
         .flat_map(|step| step.stages())

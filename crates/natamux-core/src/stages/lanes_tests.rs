@@ -2,7 +2,7 @@
 //! the 8 of 'terminalLane' and the lane checks inside 'a stage with its own agent', 'a stage in its
 //! own shell', 'a branch' and 'a terminal pinned at the start of its stage'.
 
-use natamux_proto::stages::catalog::default_pipeline;
+use natamux_proto::stages::catalog::full_pipeline;
 use natamux_proto::stages::schema::{BranchPath, Condition, Gate, StageBranch, StageKind};
 use natamux_proto::tasks::task::TaskState::{self, Done, NeedsInput, Review, Running};
 
@@ -130,7 +130,7 @@ fn runs_in_shell_5_apart_from_the_agent_in_shell_1_and_the_stages_of_a_group() {
 }
 
 fn build() -> Step {
-    default_pipeline().remove(3)
+    full_pipeline().remove(3)
 }
 
 fn in_build(lanes: &[(&str, TaskState)]) -> StagePosition {
@@ -212,7 +212,7 @@ fn shows_the_shell_of_a_stage_before_the_group_as_done() {
 
 #[test]
 fn shows_the_shell_of_a_group_stage_as_done_once_the_task_is_past_the_group() {
-    let steps = default_pipeline();
+    let steps = full_pipeline();
     let position = at("testing", Running);
     is(
         terminal_lane(&position, &steps, "2", &none()),
@@ -240,7 +240,7 @@ fn gives_the_task_state_to_shell_1_outside_a_group_and_no_lane_to_the_others() {
 }
 
 fn steps_spec() -> Vec<Step> {
-    vec![default_pipeline().remove(1)]
+    vec![full_pipeline().remove(1)]
 }
 
 #[test]
