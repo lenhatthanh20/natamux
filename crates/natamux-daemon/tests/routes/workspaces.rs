@@ -366,6 +366,36 @@ async fn answers_a_new_workspace_before_its_worktree_is_made_then_lists_none_pre
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn makes_only_the_task_when_no_worktree_is_asked() {
+    let d = git_daemon("new-ws-no-worktree").await;
+
+    let body = json!({ "title": "Example", "agent": "claude-code", "worktree": false });
+    let (status, answer) = new_workspace(&d, &body).await;
+
+    assert_eq!(status, 202, "{answer}");
+    d.settle();
+    let (_, preparing) = d.get("/workspaces/preparing").await;
+    assert_eq!(preparing, json!({ "preparing": {} }));
+    let (_, task) = d.get("/tasks/T-0001").await;
+    assert!(task["task"]["workspace"].is_null());
+    assert!(task["task"]["branch"].is_null());
+    assert_eq!(task["task"]["agent"], "claude-code");
+    assert_eq!(run_git(&d.repo(), &["branch", "--list", "natamux/*"]), "");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn refuses_a_worktree_that_is_not_a_boolean_and_makes_no_task() {
+    let d = git_daemon("new-ws-bad-worktree").await;
+
+    let body = json!({ "title": "Example", "worktree": "no" });
+    let (status, answer) = new_workspace(&d, &body).await;
+
+    assert_eq!(status, 400, "{answer}");
+    assert_eq!(answer["issues"][0]["path"], json!(["worktree"]));
+    assert_eq!(task_count(&d).await, 0);
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn keeps_the_skill_picked_as_the_context_of_a_new_workspace() {
     let d = git_daemon("new-ws-skill").await;
     let context = json!({ "source": "skill", "skill": "jira-ticket", "ref": "ABC-1" });
