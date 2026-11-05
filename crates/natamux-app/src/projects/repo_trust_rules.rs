@@ -11,7 +11,9 @@ pub const LEAD: &str = "Natamux runs these on this machine for the tasks of this
 pub const CHANGED: &str =
     "The commands changed since this dialog opened. Read the new ones, then approve again.";
 
-/// The row of the project settings page while the commands wait for approval.
+/// The alert of the project settings page while the commands wait for approval.
+pub const NOT_APPROVED_TITLE: &str = "Commands not approved";
+
 pub const NOT_APPROVED: &str = "The commands of this project are not approved: stage checks, \
                                 command stages and the setup script do not run, and agents start \
                                 without auto mode.";

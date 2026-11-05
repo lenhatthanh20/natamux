@@ -1,6 +1,6 @@
 //! The small "Built-in" / "Custom" tag next to a stage name, and the one look every custom mark
-//! uses (tag, preview ring and legend, details kind box), so a custom stage stands out the same
-//! way everywhere.
+//! uses (the tag in the stage list, the preview ring and legend), so a custom stage stands out the
+//! same way everywhere.
 
 use gpui::{AnyElement, BoxShadow, FontWeight, Hsla, point};
 use ui::prelude::*;

@@ -1,17 +1,18 @@
-//! The "..." menus of the stage list and the asks before a remove (`StageList.tsx`): a stage menu
-//! (move, run alongside or on its own, remove), a branch menu (edit, move, remove) and a group
-//! menu (edit, move).
+//! The "..." menus of the stage list and the asks before a remove (layout-b 5.2.4): a stage menu
+//! (edit, move, run alongside or on its own, remove), a branch menu and a group menu (edit, move,
+//! remove).
 
 use std::rc::Rc;
 
-use gpui::{Action, Pixels, Point};
+use gpui::{Action, Pixels, Point, WeakEntity};
 use natamux_proto::stages::capabilities::stage_name;
-use natamux_proto::stages::schema::GROUP_KINDS;
+use natamux_proto::stages::schema::Step;
 use ui::{ContextMenu, ContextMenuEntry, prelude::*};
 
-use super::editor_find::{find_branch, find_stage, group_of};
+use super::editor_find::{find_branch, find_place, find_stage, item_at};
 use super::editor_labels::branch_name;
-use super::editor_moves::{can_move, join_above, join_problem, remove_stage, run_alone};
+use super::editor_moves::{can_move, join_above, remove_stage, run_alone};
+use super::list_rules::{JoinItem, stage_menu};
 use super::stage_list::StageList;
 use super::{branch_dialog, group_dialog};
 use crate::app::shortcuts::{MoveStageDown, MoveStageUp};
@@ -82,6 +83,22 @@ fn item(label: &'static str, run: Run) -> Part {
     }
 }
 
+/// The danger item that asks, then removes `id`.
+fn remove_part(label: &'static str, id: &str, list: WeakEntity<StageList>) -> Part {
+    let id = id.to_owned();
+    Part::Item {
+        label,
+        icon: Some("trash"),
+        key: None,
+        danger: true,
+        disabled: false,
+        hint: None,
+        run: StageList::command(list, move |this, window, cx| {
+            this.remove_ask(&id, window, cx);
+        }),
+    }
+}
+
 impl StageList {
     /// A command of a menu: it runs on the list, which may be gone by then.
     fn command(
@@ -144,15 +161,30 @@ impl StageList {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let mut parts = self.move_parts(id, cx);
-        let list = cx.weak_entity();
         let steps = self.editor.read(cx).steps().to_vec();
         let Some(stage) = find_stage(&steps, id) else {
             return;
         };
-        let (own, alone_id) = (id.to_owned(), id.to_owned());
-        if group_of(&steps, id).is_some() {
-            parts.push(item(
+        let list = cx.weak_entity();
+        let (pipeline, edit_id) = (self.editor.clone(), id.to_owned());
+        let mut parts = vec![
+            Part::Item {
+                label: "Edit\u{2026}",
+                icon: Some("pencil"),
+                key: None,
+                danger: false,
+                disabled: false,
+                hint: None,
+                run: Rc::new(move |_, cx| {
+                    pipeline.update(cx, |pipeline, cx| pipeline.select(&edit_id, cx))
+                }),
+            },
+            Part::Separator,
+        ];
+        parts.extend(self.move_parts(id, cx));
+        let alone_id = id.to_owned();
+        match stage_menu(&steps, stage).join {
+            JoinItem::Alone => parts.push(item(
                 "Run on its own",
                 Self::command(list.clone(), move |this, _, cx| {
                     this.apply(
@@ -161,34 +193,25 @@ impl StageList {
                         cx,
                     );
                 }),
-            ));
-        } else if GROUP_KINDS.contains(&stage.kind) {
-            let problem = join_problem(&steps, id);
-            let join_id = id.to_owned();
-            parts.push(Part::Item {
-                label: "Run alongside the stage above",
-                icon: None,
-                key: None,
-                danger: false,
-                disabled: problem.is_some(),
-                hint: problem,
-                run: Self::command(list.clone(), move |this, _, cx| {
-                    this.apply(|steps| join_above(steps, &join_id), None, cx);
-                }),
-            });
+            )),
+            JoinItem::Alongside(problem) => {
+                let join_id = id.to_owned();
+                parts.push(Part::Item {
+                    label: "Run alongside the stage above",
+                    icon: None,
+                    key: None,
+                    danger: false,
+                    disabled: problem.is_some(),
+                    hint: problem,
+                    run: Self::command(list.clone(), move |this, _, cx| {
+                        this.apply(|steps| join_above(steps, &join_id), None, cx);
+                    }),
+                });
+            }
+            JoinItem::None => {}
         }
         parts.push(Part::Separator);
-        parts.push(Part::Item {
-            label: "Remove",
-            icon: Some("trash"),
-            key: None,
-            danger: true,
-            disabled: false,
-            hint: None,
-            run: Self::command(list, move |this, window, cx| {
-                this.remove_ask(&own, window, cx);
-            }),
-        });
+        parts.push(remove_part("Remove", id, list));
         self.show_menu(id, parts, position, window, cx);
     }
 
@@ -210,19 +233,8 @@ impl StageList {
             Part::Separator,
         ];
         parts.extend(self.move_parts(id, cx));
-        let own = id.to_owned();
         parts.push(Part::Separator);
-        parts.push(Part::Item {
-            label: "Remove branch",
-            icon: Some("trash"),
-            key: None,
-            danger: true,
-            disabled: false,
-            hint: None,
-            run: Self::command(cx.weak_entity(), move |this, window, cx| {
-                this.remove_ask(&own, window, cx);
-            }),
-        });
+        parts.push(remove_part("Remove branch", id, cx.weak_entity()));
         self.show_menu(id, parts, position, window, cx);
     }
 
@@ -243,19 +255,27 @@ impl StageList {
             Part::Separator,
         ];
         parts.extend(self.move_parts(id, cx));
+        parts.push(Part::Separator);
+        parts.push(remove_part("Remove", id, cx.weak_entity()));
         self.show_menu(id, parts, position, window, cx);
     }
 
-    /// Removes a stage or a branch. A stage loses its prompt and settings (the catalog brings back
-    /// only its defaults), and a branch with stages loses them: those ask first.
+    /// Removes a stage, a group or a branch. A stage loses its prompt and settings (the catalog
+    /// brings back only its defaults), and a group or a branch with stages loses them: those ask
+    /// first.
     fn remove_ask(&mut self, id: &str, window: &mut Window, cx: &mut Context<Self>) {
+        const LOST: &str = "Its paths and stages, with their settings, are lost.";
         let steps = self.editor.read(cx).steps().to_vec();
+        let group = find_place(&steps, id).and_then(|place| match item_at(&steps, place) {
+            Some(Step::Group(group)) if group.id == id => Some(group.clone()),
+            _ => None,
+        });
         let (name, lost) = if let Some(branch) = find_branch(&steps, id) {
             let loses = branch.paths.iter().any(|path| !path.stages.is_empty());
-            (
-                branch_name(branch),
-                loses.then_some("Its paths and stages, with their settings, are lost."),
-            )
+            (branch_name(branch), loses.then_some(LOST))
+        } else if let Some(group) = group {
+            let name = group.name.filter(|name| !name.trim().is_empty());
+            (name.unwrap_or_else(|| "group".to_owned()), Some(LOST))
         } else if let Some(stage) = find_stage(&steps, id) {
             (stage_name(stage), Some("Its prompt and settings are lost."))
         } else {
@@ -269,6 +289,7 @@ impl StageList {
         Confirm::new(format!("Remove {name}?"), lost, "Remove", move |_, cx| {
             list.update(cx, |this, cx| this.remove_now(&id, cx)).ok();
         })
+        .sheet()
         .open_over(window, cx);
     }
 

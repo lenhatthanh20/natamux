@@ -1,7 +1,8 @@
-//! The stage list of the Stages tab (`StageList.tsx`, docs/ui-spec.md 4.31): the stages in
-//! pipeline order, as rows, group blocks and branch blocks. A row turns its stage on or off,
-//! picks it, and has a menu. Rows move by drag and drop, or Alt+Up and Alt+Down on the focused
-//! row. The parts of a row are in `stage_rows`, the menus and confirms in `stage_list_menus`.
+//! The "Stages" group of the Stages tab (layout-b 5.2): the stages in pipeline order in one card,
+//! as rows, group blocks and branch blocks. A row turns its stage on or off, opens its sheet, and
+//! has a menu. Rows move by drag and drop, or Alt+Up and Alt+Down on the focused row. The rows are
+//! in `stage_rows`, the blocks in `stage_blocks` and `branch_details`, the menus in
+//! `stage_list_menus`.
 
 use std::collections::HashMap;
 
@@ -13,11 +14,19 @@ use ui::prelude::*;
 use super::add_menu::add_button;
 use super::editor_moves::{Side, drop_stage, move_stage};
 use super::kind_icon::problem_icon;
+use super::list_rules::stage_count;
 use super::pipeline_editor::PipelineEditor;
 use super::stage_rows::{DragGhost, DraggedStage};
 use crate::app::shortcuts::{MoveStageDown, MoveStageUp};
 use crate::components::colors::signal;
+use crate::components::settings_card::{
+    SeparatorInset, SettingsCard, SettingsGroup, SettingsRow, foot_text,
+};
 use crate::components::tab_order;
+
+/// The footnote of the list.
+const PIPELINE_NOTE: &str = "New tasks use this pipeline. Tasks on their way keep their stages, \
+                             but use the new prompts and approvals.";
 
 pub struct StageList {
     pub(super) editor: Entity<PipelineEditor>,
@@ -93,26 +102,6 @@ impl StageList {
         }
     }
 
-    fn header(&self, cx: &App) -> impl IntoElement + use<> {
-        let border = cx.theme().colors().border_variant;
-        h_flex()
-            .h(rems_from_px(36.0_f32))
-            .flex_none()
-            .gap_1p5()
-            .pl(rems_from_px(10.0_f32))
-            .pr(rems_from_px(6.0_f32))
-            .border_b_1()
-            .border_color(border)
-            .child(
-                div().flex_1().child(
-                    Label::new("Stages")
-                        .size(LabelSize::Custom(rems_from_px(13.0_f32)))
-                        .weight(gpui::FontWeight::MEDIUM),
-                ),
-            )
-            .child(add_button(&self.editor, &self.add_stage))
-    }
-
     /// Looks at where a dragged row is, to show the drop line and work out its side.
     pub(super) fn drag_over(
         &mut self,
@@ -157,6 +146,26 @@ impl StageList {
     }
 }
 
+impl StageList {
+    /// Every step of the list, in order: the top-level items of the card.
+    fn steps(
+        &mut self,
+        steps: &[Step],
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> Vec<AnyElement> {
+        let issues = self.editor.read(cx).issues().to_vec();
+        steps
+            .iter()
+            .map(|step| match step {
+                Step::Stage(stage) => self.stage_row(stage, &issues, window, cx),
+                Step::Group(group) => self.group_block(group, &issues, window, cx),
+                Step::Branch(branch) => self.branch_block(branch, &issues, window, cx),
+            })
+            .collect()
+    }
+}
+
 impl Render for StageList {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         // The line goes with the drag: a drop outside any row leaves no target behind.
@@ -167,9 +176,15 @@ impl Render for StageList {
         let general = self.editor.read(cx).issues_of(None);
         tab_order::begin();
         tab_order::push(&self.add_stage);
-        let header = self.header(cx);
-        let rows = self.steps(&steps, window, cx);
+        let mut rows = self.steps(&steps, window, cx);
         self.stops = tab_order::end();
+        if rows.is_empty() {
+            rows.push(
+                SettingsRow::new("no-stage", "No stage yet")
+                    .label_color(Color::Muted)
+                    .into_any_element(),
+            );
+        }
         if let Some(handle) = self
             .refocus
             .take()
@@ -177,6 +192,24 @@ impl Render for StageList {
         {
             window.focus(&handle, cx);
         }
+        let mut group = SettingsGroup::new("Stages")
+            .count(stage_count(&steps).to_string())
+            .action(add_button(&self.editor, &self.add_stage))
+            .child(SettingsCard::new(SeparatorInset::Tile).children(rows));
+        if !general.is_empty() {
+            group = group.footnote_child(issue_lines(&general, cx));
+        }
+        let note = h_flex()
+            .items_start()
+            .gap(rems_from_px(6.0_f32))
+            .child(
+                div().mt(rems_from_px(2.0_f32)).child(
+                    Icon::new(IconName::Info)
+                        .size(IconSize::XSmall)
+                        .color(Color::Muted),
+                ),
+            )
+            .child(div().min_w_0().flex_1().child(foot_text(PIPELINE_NOTE)));
         v_flex()
             .id("stage-list")
             .key_context("StageList")
@@ -187,16 +220,7 @@ impl Render for StageList {
                 this.move_focused(1, window, cx);
             }))
             .w_full()
-            .child(header)
-            .child(
-                v_flex()
-                    .id("stage-body")
-                    .p(rems_from_px(6.0_f32))
-                    .when(!general.is_empty(), |this| {
-                        this.child(issue_lines(&general, cx))
-                    })
-                    .child(v_flex().id("stage-rows").children(rows)),
-            )
+            .child(group.footnote_child(note))
     }
 }
 

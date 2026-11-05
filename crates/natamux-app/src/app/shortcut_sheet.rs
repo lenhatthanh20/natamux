@@ -3,15 +3,20 @@
 //! columns.
 
 use editor::{Editor, EditorEvent};
-use gpui::{DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, FontWeight, Subscription};
+use gpui::{DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, Subscription};
 use ui::prelude::*;
 
 use super::commands::all_commands;
 use super::sheet_rules::{SheetSection, filtered, no_match_text, sheet_groups};
 use super::shortcut_text::keystroke;
+use crate::components::button_style::action_button;
 use crate::components::chips::Kbd;
+use crate::components::colors::TileColor;
 use crate::components::dialog::{DialogFrame, DialogLayer, DialogSize, DialogView};
-use crate::components::form::{input_box, text_editor};
+use crate::components::form::{SettingsInput, text_editor};
+use crate::components::settings_card::{SeparatorInset, SettingsCard, SettingsGroup};
+use crate::components::settings_tile::{SettingsTile, TileSize};
+use crate::components::text_size::row_text;
 
 const MAC: bool = cfg!(target_os = "macos");
 /// The web's `lg`: the groups sit in two columns from this window width.
@@ -72,22 +77,21 @@ fn group_view(section: &SheetSection) -> impl IntoElement + use<> {
             .iter()
             .map(|key| Kbd::new(&keystroke(key, MAC)));
         h_flex()
-            .min_h(rems_from_px(28.0_f32))
-            .gap_3()
-            .justify_between()
+            .min_h(rems_from_px(32.0_f32))
+            .px(rems_from_px(12.0_f32))
+            .py(rems_from_px(4.0_f32))
+            .gap(rems_from_px(16.0_f32))
             // A long title wraps, so the keys stay in the column.
-            .child(div().flex_1().min_w_0().child(Label::new(command.title)))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .child(Label::new(command.title).size(row_text())),
+            )
             .child(h_flex().flex_none().gap_1().children(keys))
     });
-    v_flex()
-        .gap_1()
-        .child(
-            Label::new(section.group.title().to_uppercase())
-                .size(LabelSize::XSmall)
-                .weight(FontWeight::SEMIBOLD)
-                .color(Color::Muted),
-        )
-        .children(rows)
+    let card = SettingsCard::new(SeparatorInset::Text).children(rows);
+    SettingsGroup::new(section.group.title()).child(card)
 }
 
 impl EventEmitter<DismissEvent> for ShortcutSheet {}
@@ -116,12 +120,15 @@ impl Render for ShortcutSheet {
         let all: Vec<_> = all_commands().collect();
         let sections = filtered(&sheet_groups(&all), &query, MAC);
         let content = if sections.is_empty() {
-            Label::new(no_match_text(&query))
-                .color(Color::Muted)
+            h_flex()
+                .w_full()
+                .justify_center()
+                .py(rems_from_px(40.0_f32))
+                .child(Label::new(no_match_text(&query)).color(Color::Muted))
                 .into_any_element()
         } else if window.viewport_size().width >= px(TWO_COLUMNS_FROM) {
             let counts: Vec<usize> = sections.iter().map(|s| s.commands.len()).collect();
-            let column = || v_flex().flex_1().flex_basis(px(0.)).min_w_0().gap_4();
+            let column = || v_flex().flex_1().flex_basis(px(0.)).min_w_0();
             let (mut left, mut right) = (column(), column());
             for (section, to_left) in sections.iter().zip(left_column(&counts)) {
                 if to_left {
@@ -132,20 +139,35 @@ impl Render for ShortcutSheet {
             }
             h_flex()
                 .items_start()
-                .gap_8()
+                .gap(rems_from_px(16.0_f32))
                 .child(left)
                 .child(right)
                 .into_any_element()
         } else {
             v_flex()
-                .gap_4()
                 .children(sections.iter().map(group_view))
                 .into_any_element()
         };
         let close = cx.listener(|_, _, _, cx| cx.emit(DismissEvent));
+        let done = action_button("shortcuts-close", "Close")
+            .on_click(cx.listener(|_, _, _, cx| cx.emit(DismissEvent)));
+        let tile = SettingsTile::icon(
+            Icon::new(IconName::Keyboard),
+            TileColor::Yellow,
+            TileSize::Row,
+        );
         div().track_focus(&self.focus).child(
             DialogFrame::new("Keyboard shortcuts", close)
-                .child(input_box(&self.query, cx))
+                .sheet()
+                .lead(tile)
+                .body_max_h(520.)
+                .footer_note("Read only. Two columns from a 1024 px wide window.")
+                .footer(done)
+                .child(
+                    div()
+                        .pt(rems_from_px(12.0_f32))
+                        .child(SettingsInput::new(&self.query)),
+                )
                 .child(content),
         )
     }

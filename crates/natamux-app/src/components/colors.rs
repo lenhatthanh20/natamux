@@ -110,3 +110,75 @@ pub fn checker_colors(cx: &App) -> (Hsla, Hsla) {
     let colors = cx.theme().colors();
     (colors.element_background, colors.editor_background)
 }
+
+/// The accent of the Settings screen (switches, radios, unsaved dots, blue tiles): the local
+/// player's cursor colour, which differs from `text_accent` in the light themes.
+pub fn accent(cx: &App) -> Hsla {
+    cx.theme().players().local().cursor
+}
+
+/// The colour of a Settings tile or avatar: a theme token, filled at `fill_alpha`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TileColor {
+    Gray,
+    Blue,
+    Green,
+    Yellow,
+    Cyan,
+    Violet,
+    Red,
+}
+
+impl TileColor {
+    /// Red is a bit lighter, so an error tile does not shout.
+    pub fn fill_alpha(self) -> f32 {
+        match self {
+            TileColor::Red => 0.18,
+            _ => 0.2,
+        }
+    }
+}
+
+/// (fill, glyph) of a tile. Not `StateColors::tinted()`, which is 10% / 20%.
+pub fn tile_colors(color: TileColor, cx: &App) -> (Hsla, Hsla) {
+    let status = cx.theme().status();
+    let fg = match color {
+        TileColor::Gray => cx.theme().colors().icon_muted,
+        TileColor::Blue => accent(cx),
+        TileColor::Green => status.success,
+        TileColor::Yellow => status.warning,
+        TileColor::Cyan => status.hint,
+        TileColor::Violet => status.info,
+        TileColor::Red => status.error,
+    };
+    (fg.opacity(color.fill_alpha()), fg)
+}
+
+/// A project's avatar colour from its name, so a project keeps its colour: the sum of the
+/// first UTF-16 unit of each char (the mockup's `charCodeAt(0)`), % 5.
+pub fn avatar_color(name: &str) -> TileColor {
+    const ORDER: [TileColor; 5] = [
+        TileColor::Blue,
+        TileColor::Green,
+        TileColor::Violet,
+        TileColor::Cyan,
+        TileColor::Yellow,
+    ];
+    let sum: u64 = name
+        .chars()
+        .map(|c| u64::from(c.encode_utf16(&mut [0; 2])[0]))
+        .sum();
+    ORDER[(sum % 5) as usize]
+}
+
+/// The letter of a project's avatar: the first char of its name in upper case.
+pub fn avatar_letter(name: &str) -> String {
+    name.chars()
+        .next()
+        .map(|c| c.to_uppercase().collect())
+        .unwrap_or_default()
+}
+
+#[cfg(test)]
+#[path = "colors_tests.rs"]
+mod tests;

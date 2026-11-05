@@ -1,5 +1,5 @@
-//! The Add stage dialog (docs/ui-spec.md 4.31): the stage picker of the catalog stages. Up, Down
-//! and Enter work from the search field; adding a stage picks it and closes the dialog.
+//! The Add stage sheet (layout-b 5.4): the stage picker of the catalog stages. Up, Down and Enter
+//! work from the search field; adding a stage closes the sheet and opens the new stage's sheet.
 
 use gpui::{
     DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, KeystrokeEvent, Subscription,
@@ -100,6 +100,7 @@ impl Render for AddStageDialog {
             "Add stage",
             cx.listener(|_, _, _, cx| cx.emit(DismissEvent)),
         )
+        .sheet()
         .child(self.picker.clone())
         .footer(cancel_button(
             "Cancel",

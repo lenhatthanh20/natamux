@@ -1,6 +1,7 @@
 //! The terminal font rows of the Appearance page (T-0174; they were the Terminal font dialog,
-//! `TerminalFontDialog.tsx`): the family and size fields, − and +, a preview and the reset. A field
-//! applies on Enter or when it loses focus, so a terminal does not lay out again on each key.
+//! `TerminalFontDialog.tsx`): the family and size fields, − and +, a preview row and the footnote
+//! with the reset. A field applies on Enter or when it loses focus, so a terminal does not lay out
+//! again on each key.
 
 use editor::{Editor, EditorEvent};
 use gpui::{Entity, FocusHandle, Focusable, KeyDownEvent, Subscription};
@@ -10,7 +11,7 @@ use super::dashboard::Dashboard;
 use super::settings_rules::font_size_step;
 use super::settings_view::SettingsView;
 use crate::components::button_style::quiet_button;
-use crate::components::form::text_editor;
+use crate::components::form::{SettingsInput, text_editor};
 use crate::terminals::terminal_font::{
     BUILT_IN_FAMILY, BUILT_IN_SIZE, PREVIEW, RESET_LABEL, SIZE_REASON, TerminalFont, clean_family,
     dialog_description, font_to_save, parse_terminal_font, size_ok,
@@ -127,13 +128,18 @@ impl FontRows {
 
     pub fn family_control(&self, cx: &mut Context<SettingsView>) -> AnyElement {
         div()
-            .w(rems_from_px(220.0_f32))
+            .flex_none()
             .on_key_down(cx.listener(on_enter))
-            .child(input(&self.family, false, cx))
+            .child(SettingsInput::new(&self.family).width(220.))
             .into_any_element()
     }
 
-    /// − field +, and why the size is wrong under them.
+    /// Why the typed size is wrong, for the row's error line.
+    pub fn size_error(&self, cx: &App) -> Option<&'static str> {
+        (!self.size_valid(cx)).then_some(SIZE_REASON)
+    }
+
+    /// − field +.
     pub fn size_control(&self, cx: &mut Context<SettingsView>) -> AnyElement {
         let invalid = !self.size_valid(cx);
         let button = |id: &'static str, icon: IconName, tip: &'static str, focus: &FocusHandle| {
@@ -157,33 +163,21 @@ impl FontRows {
             &self.bigger,
         )
         .on_click(cx.listener(|view, _, window, cx| view.font.step(1., window, cx)));
-        v_flex()
-            .items_end()
-            .gap_1()
+        h_flex()
+            .flex_none()
+            .gap(rems_from_px(6.0_f32))
+            .child(smaller)
             .child(
-                h_flex()
-                    .gap_1()
-                    .child(smaller)
-                    .child(
-                        div()
-                            .w(rems_from_px(56.0_f32))
-                            .on_key_down(cx.listener(on_enter))
-                            .child(input(&self.size, invalid, cx)),
-                    )
-                    .child(bigger),
+                div()
+                    .flex_none()
+                    .on_key_down(cx.listener(on_enter))
+                    .child(SettingsInput::new(&self.size).width(56.).invalid(invalid)),
             )
-            .when(invalid, |this| {
-                this.child(
-                    Label::new(SIZE_REASON)
-                        .size(LabelSize::Small)
-                        .color(Color::Error),
-                )
-            })
+            .child(bigger)
             .into_any_element()
     }
 
-    /// The preview in the typed font (the saved size while the field is wrong), then the reset
-    /// when a font of the user's is saved.
+    /// The preview row: one line in the typed font (the saved size while the field is wrong).
     pub fn preview(&self, cx: &mut Context<SettingsView>) -> AnyElement {
         let typed = clean_family(&self.family.read(cx).text(cx));
         let family = if typed.is_empty() {
@@ -191,48 +185,51 @@ impl FontRows {
         } else {
             typed
         };
-        let saved_font = saved(&self.dashboard, cx);
-        let fallback = saved_font
-            .as_ref()
+        let fallback = saved(&self.dashboard, cx)
             .and_then(|font| font.size)
             .unwrap_or(BUILT_IN_SIZE);
         let size = size_ok(&self.size_text(cx), fallback).unwrap_or(fallback);
-        let reset = saved_font.is_some().then(|| {
-            quiet_button("settings-font-reset", RESET_LABEL)
-                .label_size(LabelSize::Small)
-                .track_focus(&self.reset)
-                .on_click(cx.listener(|view, _, window, cx| view.font.use_built_in(window, cx)))
-        });
         let colors = cx.theme().colors();
-        v_flex()
-            .py_3()
-            .gap_2()
+        div()
+            .w_full()
+            .px(rems_from_px(12.0_f32))
+            .py(rems_from_px(10.0_f32))
             .child(
                 div()
-                    .px_3()
-                    .py_2()
-                    .rounded_sm()
+                    .w_full()
+                    .px(rems_from_px(12.0_f32))
+                    .py(rems_from_px(8.0_f32))
+                    .rounded(rems_from_px(6.0_f32))
                     .border_1()
                     .border_color(colors.border_variant)
                     .bg(colors.editor_background)
+                    .overflow_hidden()
+                    .whitespace_nowrap()
                     .font_family(family)
                     .text_size(px(size))
                     .child(PREVIEW),
             )
-            .child(
-                h_flex()
-                    .justify_between()
-                    .gap_2()
-                    .child(
-                        div().min_w_0().flex_1().child(
-                            Label::new(dialog_description())
-                                .size(LabelSize::Small)
-                                .color(Color::Muted),
-                        ),
-                    )
-                    .children(reset),
-            )
             .into_any_element()
+    }
+
+    /// The Terminal font group's footnote: the text, then "Use built-in font" when a font of the
+    /// user's is saved.
+    pub fn footnote(&self, cx: &mut Context<SettingsView>) -> (String, Option<AnyElement>) {
+        let reset = saved(&self.dashboard, cx).is_some().then(|| {
+            div()
+                .mt(rems_from_px(6.0_f32))
+                .child(
+                    quiet_button("settings-font-reset", RESET_LABEL)
+                        .size(ButtonSize::Compact)
+                        .label_size(LabelSize::Small)
+                        .track_focus(&self.reset)
+                        .on_click(
+                            cx.listener(|view, _, window, cx| view.font.use_built_in(window, cx)),
+                        ),
+                )
+                .into_any_element()
+        });
+        (dialog_description(), reset)
     }
 }
 
@@ -256,21 +253,4 @@ fn on_enter(
     if keys.key == "enter" && !keys.modifiers.modified() {
         view.font.apply(cx);
     }
-}
-
-fn input(editor: &Entity<Editor>, invalid: bool, cx: &App) -> Div {
-    let colors = cx.theme().colors();
-    let border = if invalid {
-        cx.theme().status().error_border
-    } else {
-        colors.border
-    };
-    div()
-        .px_2()
-        .py_1()
-        .rounded_sm()
-        .border_1()
-        .border_color(border)
-        .bg(colors.editor_background)
-        .child(editor.clone())
 }

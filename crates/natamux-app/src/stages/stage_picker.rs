@@ -1,21 +1,27 @@
-//! The stage picker (`StagePicker.tsx`) of the Add stage dialog: a search field and the catalog
-//! stages that are not in the pipeline, by phase. Up and Down move the active row, Enter or a
-//! click adds its stage.
+//! The stage picker of the Add stage sheet (layout-b 5.4): a search field and the catalog
+//! stages that are not in the pipeline, a group per phase. Up and Down move the active row, Enter
+//! or a click adds its stage.
 
 use editor::{Editor, EditorEvent};
 use gpui::{
-    AnyElement, Entity, EntityInputHandler, EventEmitter, FocusHandle, Focusable, FontWeight,
-    ScrollHandle,
+    AnyElement, Entity, EntityInputHandler, EventEmitter, FocusHandle, Focusable, ScrollHandle,
 };
 use natamux_proto::stages::capabilities::stage_name;
 use natamux_proto::stages::catalog::CatalogStage;
 use ui::{ScrollAxes, prelude::*};
 
 use super::editor_catalog::{add_catalog_stage, picker_detail, picker_empty_text, picker_groups};
-use super::kind_icon::kind_icon;
+use super::list_rules::{kind_tile, kind_tile_icon};
 use super::pipeline_editor::PipelineEditor;
-use crate::components::form::text_editor;
+use crate::components::button_style::button_icon;
+use crate::components::form::{SettingsInput, text_editor};
 use crate::components::scrollbars::scroll_area;
+use crate::components::settings_card::{SeparatorInset, SettingsCard, SettingsGroup, foot_text};
+use crate::components::settings_tile::{SettingsTile, TileSize};
+use crate::components::text_size::row_text;
+
+/// The body of the Add stage sheet is 460 px; the search field and its space take the rest.
+const LIST_HEIGHT: f32 = 412.;
 
 /// A stage was added and picked: the dialog closes.
 pub struct StageAdded;
@@ -90,20 +96,20 @@ impl StagePicker {
         cx.notify();
     }
 
-    /// The child of the list that shows the shown stage `index`: phase titles are children too.
+    /// The child of the list (one group per phase) that holds the shown stage `index`.
     fn child_of(&self, index: usize, cx: &App) -> usize {
         let query = self.search.read(cx).text(cx);
-        let mut child = 0;
         let mut seen = 0;
-        for (_, entries) in picker_groups(self.pipeline.read(cx).steps(), &query) {
-            child += 1;
-            if index < seen + entries.len() {
-                return child + index - seen;
-            }
-            child += entries.len();
+        for (child, (_, entries)) in picker_groups(self.pipeline.read(cx).steps(), &query)
+            .into_iter()
+            .enumerate()
+        {
             seen += entries.len();
+            if index < seen {
+                return child;
+            }
         }
-        child
+        0
     }
 
     /// Enter: adds the active stage.
@@ -124,6 +130,7 @@ impl StagePicker {
         cx.emit(StageAdded);
     }
 
+    /// A clickable row: kind tile, name and description, then kind and approval.
     fn render_row(
         &self,
         entry: &'static CatalogStage,
@@ -133,102 +140,85 @@ impl StagePicker {
         let colors = cx.theme().colors();
         let (hover, selected) = (colors.ghost_element_hover, colors.ghost_element_selected);
         let id = entry.stage.id.clone();
+        let tile = SettingsTile::icon(
+            button_icon(kind_tile_icon(entry.stage.kind)),
+            kind_tile(&entry.stage),
+            TileSize::Row,
+        );
         h_flex()
             .id(SharedString::from(format!("pick-{id}")))
             .w_full()
-            .gap(rems_from_px(10.0_f32))
-            .items_center()
-            .px(rems_from_px(8.0_f32))
-            .py(rems_from_px(5.0_f32))
-            .rounded(px(5.))
+            .min_h(rems_from_px(40.0_f32))
+            .gap(rems_from_px(16.0_f32))
+            .px(rems_from_px(12.0_f32))
+            .py(rems_from_px(8.0_f32))
             .cursor_pointer()
             .when(active, |this| this.bg(selected))
             .when(!active, |this| this.hover(move |style| style.bg(hover)))
             .on_click(cx.listener(move |this, _, _, cx| this.add(&id, cx)))
-            .child(
-                kind_icon(entry.stage.kind)
-                    .size(IconSize::Custom(rems_from_px(15.0_f32)))
-                    .color(Color::Muted),
-            )
+            .child(tile)
             .child(
                 v_flex()
                     .min_w_0()
                     .flex_1()
-                    .child(Label::new(stage_name(&entry.stage)).weight(FontWeight::MEDIUM))
                     .child(
-                        Label::new(entry.description)
-                            .size(LabelSize::Custom(rems_from_px(11.5_f32)))
-                            .color(Color::Muted)
+                        Label::new(stage_name(&entry.stage))
+                            .size(row_text())
                             .truncate(),
-                    ),
+                    )
+                    .child(foot_text(entry.description)),
             )
             .child(
                 Label::new(picker_detail(entry))
-                    .size(LabelSize::Custom(rems_from_px(11_f32)))
-                    .color(Color::Placeholder),
+                    .size(LabelSize::Small)
+                    .color(Color::Muted)
+                    .single_line(),
             )
             .into_any_element()
     }
 
-    /// Phase titles and rows as children of one list, so a row can be scrolled to.
+    /// One group per phase, each a card of rows; the active row is the one Enter adds.
     fn render_list(&self, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let query = self.search.read(cx).text(cx);
         let steps = self.pipeline.read(cx).steps().to_vec();
-        let mut rows: Vec<AnyElement> = Vec::new();
+        let mut groups: Vec<AnyElement> = Vec::new();
         let mut index = 0;
         for (phase, entries) in picker_groups(&steps, &query) {
-            rows.push(
-                div()
-                    .mx(rems_from_px(8.0_f32))
-                    .mt(rems_from_px(10.0_f32))
-                    .mb(rems_from_px(2.0_f32))
-                    .child(
-                        Label::new(phase.name().to_uppercase())
-                            .size(LabelSize::Custom(rems_from_px(10.5_f32)))
-                            .weight(FontWeight::MEDIUM)
-                            .color(Color::Placeholder),
-                    )
-                    .into_any_element(),
-            );
+            let mut rows = Vec::new();
             for entry in entries {
                 rows.push(self.render_row(entry, index == self.active, cx));
                 index += 1;
             }
+            groups.push(
+                SettingsGroup::new(phase.name())
+                    .child(SettingsCard::new(SeparatorInset::Tile).children(rows))
+                    .into_any_element(),
+            );
         }
         if let Some(text) = picker_empty_text(&steps, &query) {
-            rows.push(Label::new(text).color(Color::Muted).into_any_element());
+            groups.push(
+                div()
+                    .pt(rems_from_px(12.0_f32))
+                    .child(foot_text(text))
+                    .into_any_element(),
+            );
         }
-        rows
+        groups
     }
 }
 
 impl Render for StagePicker {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let rows = self.render_list(cx);
+        let groups = self.render_list(cx);
         let list = v_flex()
             .id("stage-picker-list")
-            .max_h(rems_from_px(360.0_f32))
+            .max_h(rems_from_px(LIST_HEIGHT))
             .overflow_y_scroll()
             .track_scroll(&self.scroll)
-            .children(rows);
-        let icon = Icon::new(IconName::MagnifyingGlass)
-            .size(IconSize::Custom(rems_from_px(13.0_f32)))
-            .color(Color::Placeholder);
+            .children(groups);
         v_flex()
-            .gap(rems_from_px(4.0_f32))
-            .child(
-                h_flex()
-                    .items_center()
-                    .gap(rems_from_px(6.0_f32))
-                    .px(rems_from_px(8.0_f32))
-                    .h(rems_from_px(24.0_f32))
-                    .rounded(px(5.))
-                    .border_1()
-                    .border_color(cx.theme().colors().border_variant)
-                    .bg(cx.theme().colors().panel_background)
-                    .child(icon)
-                    .child(div().min_w_0().flex_1().child(self.search.clone())),
-            )
+            .pt(rems_from_px(12.0_f32))
+            .child(SettingsInput::new(&self.search))
             .child(scroll_area(
                 list,
                 ScrollAxes::Vertical,

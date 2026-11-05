@@ -7,6 +7,7 @@ use natamux_proto::projects::settings_rules::branch_name_problem;
 
 use crate::components::input_rules::segment_step;
 use crate::projects::settings_text::CREATE_ISSUE_OPTIONS;
+use crate::stages::editor_draft::DEFAULT_CREATE_ISSUE;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SettingsTab {
@@ -38,15 +39,129 @@ pub fn shown_tab(draft_ok: bool, picked: SettingsTab) -> SettingsTab {
     if draft_ok { picked } else { SettingsTab::Json }
 }
 
+pub const JSON_FIRST: &str = "Fix the JSON first";
+
+/// Why a tab cannot be picked: General and Stages need text that parses.
+pub fn tab_blocked(tab: SettingsTab, draft_ok: bool) -> Option<&'static str> {
+    (!draft_ok && tab != SettingsTab::Json).then_some(JSON_FIRST)
+}
+
+/// The status at the left of the bottom bar.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SaveStatus {
+    Unsaved,
+    Saved,
+}
+
+impl SaveStatus {
+    pub fn label(self) -> &'static str {
+        match self {
+            SaveStatus::Unsaved => "Unsaved changes",
+            SaveStatus::Saved => "Saved",
+        }
+    }
+}
+
+/// A broken file counts as unsaved: Save replaces it.
+pub fn save_status(dirty: bool, file_broken: bool) -> SaveStatus {
+    if dirty || file_broken {
+        SaveStatus::Unsaved
+    } else {
+        SaveStatus::Saved
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FileAction {
+    Reset,
+    Import,
+    Export,
+}
+
+/// An entry of the bottom bar's "..." menu; `icon` is a Lucide name for `icon_path`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FileMenuEntry {
+    Item {
+        action: FileAction,
+        label: &'static str,
+        icon: &'static str,
+        disabled: bool,
+    },
+    Label(&'static str),
+}
+
+/// Reset to default, Import… and Export; text that cannot be read turns Export off, with the
+/// reason above it.
+pub fn file_menu(draft_ok: bool) -> Vec<FileMenuEntry> {
+    let item = |action, label, icon, disabled| FileMenuEntry::Item {
+        action,
+        label,
+        icon,
+        disabled,
+    };
+    let mut entries = vec![
+        item(FileAction::Reset, "Reset to default", "rotate-ccw", false),
+        item(FileAction::Import, "Import\u{2026}", "download", false),
+    ];
+    let cannot_export = export_reason(draft_ok);
+    entries.extend(cannot_export.map(FileMenuEntry::Label));
+    entries.push(item(
+        FileAction::Export,
+        "Export",
+        "upload",
+        cannot_export.is_some(),
+    ));
+    entries
+}
+
+/// A radio row of the issues group.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct IssueRow {
+    pub value: &'static str,
+    pub label: &'static str,
+    pub selected: bool,
+    pub is_default: bool,
+    /// The muted text at the right end.
+    pub note: Option<&'static str>,
+    pub disabled: bool,
+}
+
+/// The four choices of `tracker.createIssue`; all off while the project has no tracker.
+pub fn issue_rows(create_issue: &str, off: bool) -> Vec<IssueRow> {
+    let selected = choice_index(create_issue);
+    CREATE_ISSUE_OPTIONS
+        .iter()
+        .enumerate()
+        .map(|(index, &(value, label))| {
+            let is_default = value == DEFAULT_CREATE_ISSUE;
+            IssueRow {
+                value,
+                label,
+                selected: index == selected,
+                is_default,
+                note: is_default.then_some("Button on the task"),
+                disabled: off,
+            }
+        })
+        .collect()
+}
+
 /// The footer note is about the pipeline, so General has none.
+// shortcut: option B moves the note to the Stages group footnote (stages/*); drop this once
+// nothing reads it.
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn shows_pipeline_note(tab: SettingsTab) -> bool {
     tab != SettingsTab::General
 }
 
+// shortcut: read by the Stages group footnote (stages/*) in option B; drop the allow once it is.
+#[cfg_attr(not(test), allow(dead_code))]
 pub const PIPELINE_NOTE: &str = "New tasks use this pipeline. Tasks on their way keep their stages, \
                                  but use the new prompts and approvals.";
 
 /// The tab an arrow key moves to from `shown`.
+// shortcut: `Segmented` moves with the arrows itself now; drop this with its test once agreed.
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn step_tab(shown: SettingsTab, key: &str) -> Option<SettingsTab> {
     let next = segment_step(SettingsTab::ALL.len(), shown.index(), key)?;
     SettingsTab::ALL.get(next).copied()
@@ -74,7 +189,7 @@ pub const ISSUES_OFF_NOTE: &str = "Issues are off: tracker.type is none (JSON ta
 
 /// Why Export is off, or None. Pipeline problems do not block it, only text it cannot read.
 pub fn export_reason(draft_ok: bool) -> Option<&'static str> {
-    (!draft_ok).then_some("Fix the JSON first")
+    (!draft_ok).then_some(JSON_FIRST)
 }
 
 /// The problems of the pipeline, plus one for text that cannot be read.

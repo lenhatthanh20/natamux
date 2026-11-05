@@ -1,17 +1,18 @@
-//! The `Review commands` row of the project settings page: shown only while the project's commands
-//! wait for approval. It reads the trust again when the projects change (an approval or a saved
-//! settings file sends `repos.changed`) and after its dialog closes.
+//! The `Review commands` alert of the project settings page: shown only while the project's
+//! commands wait for approval. It reads the trust again when the projects change (an approval or
+//! a saved settings file sends `repos.changed`) and after its dialog closes.
 
 use std::rc::Rc;
 
 use gpui::{Entity, Subscription};
 use ui::prelude::*;
 
-use super::rules::{NOT_APPROVED, needs_review};
+use super::rules::{NOT_APPROVED, NOT_APPROVED_TITLE, needs_review};
 use super::{Then, review};
 use crate::app::dashboard::Dashboard;
 use crate::app::dashboard_data::{Part, Seen};
-use crate::components::button_style::action_button;
+use crate::components::button_style::{action_button, button_icon};
+use crate::components::settings_tile::{AlertKind, SettingsAlert};
 
 pub struct RepoTrustRow {
     dashboard: Entity<Dashboard>,
@@ -91,23 +92,10 @@ impl RepoTrustRow {
 
 impl Render for RepoTrustRow {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let status = cx.theme().status();
-        h_flex()
-            .flex_wrap()
-            .gap_2()
-            .px_3()
-            .py_2()
-            .rounded_md()
-            .border_1()
-            .border_color(status.warning_border)
-            .bg(status.warning_background)
-            .child(
-                div()
-                    .min_w_0()
-                    .flex_1()
-                    .child(Label::new(NOT_APPROVED).color(Color::Default)),
-            )
-            .child(
+        SettingsAlert::new(AlertKind::Warning, NOT_APPROVED_TITLE)
+            .icon(button_icon("shield"))
+            .muted_text(NOT_APPROVED)
+            .action(
                 action_button("settings-review-commands", "Review commands")
                     .on_click(cx.listener(|this, _, window, cx| this.open(window, cx))),
             )

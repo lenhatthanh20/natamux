@@ -1,9 +1,10 @@
-//! The Add branch and Edit branch dialog (docs/ui-spec.md 4.31): the branch name and a card for
+//! The branch sheet, Add a branch and Edit branch (layout-b 5.6): the branch name and a group for
 //! each path. The dialog edits its own copy of the draft (`local`), so a half-made branch never
 //! reaches the draft: Add branch or Save branch writes it, Cancel drops it.
 
 use gpui::{
-    DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, ScrollHandle, Subscription,
+    DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, FontWeight, ScrollHandle,
+    Subscription,
 };
 use natamux_proto::stages::schema::{StageBranch, Step};
 use ui::{ScrollAxes, prelude::*};
@@ -14,12 +15,14 @@ use super::editor_branches::{add_branch, add_branch_with, add_path, replace_bran
 use super::editor_draft::MAX_PATHS;
 use super::editor_find::{find_branch, used_ids};
 use super::pipeline_editor::PipelineEditor;
-use super::stage_fields_view::{change, field_input, field_label, help_line, labelled};
+use super::stage_fields_view::change;
+use crate::components::button_style::{action_button, button_icon};
 use crate::components::dialog::{
     DialogFrame, DialogLayer, DialogSize, DialogView, cancel_button, primary_button,
 };
-
+use crate::components::form::SettingsInput;
 use crate::components::scrollbars::scroll_area;
+use crate::components::settings_card::{SeparatorInset, SettingsCard, SettingsGroup, SettingsRow};
 use crate::components::tab_order;
 
 /// A new branch after the picked step (before the release when none), from the `+ Add` menu.
@@ -144,7 +147,7 @@ impl DialogView for BranchDialog {
         });
         let id = branch.id.clone();
         self.pipeline
-            .update(cx, |pipeline, cx| pipeline.select(&id, cx));
+            .update(cx, |pipeline, cx| pipeline.pick(&id, cx));
         cx.emit(DismissEvent);
     }
 }
@@ -156,27 +159,37 @@ impl Render for BranchDialog {
         };
         let count = branch.paths.len();
         let (local, branch_id) = (self.local.clone(), branch.id.clone());
-        let add = Button::new("add-path", "Add path")
-            .style(ButtonStyle::Outlined)
-            .start_icon(Icon::new(IconName::Plus).size(IconSize::Small))
+        let add = action_button("add-path", "Add path")
+            .start_icon(button_icon("plus"))
             .on_click(move |_, _, cx| change(&local, cx, |steps| add_path(steps, &branch_id)));
-        let skip = branch.paths.last().is_some_and(|path| path.when.is_some());
         tab_order::begin();
-        let name = labelled(
-            "Branch name",
-            None,
-            None,
-            field_input(&self.fields.name.editor, cx),
-        );
-        let paths_title = div()
-            .mt(rems_from_px(10.0_f32))
-            .child(field_label("Paths, checked in order"));
+        tab_order::push(&self.fields.name.editor.focus_handle(cx));
+        let name = SettingsRow::new("branch-name", "Branch name")
+            .control(SettingsInput::new(&self.fields.name.editor).width(260.));
+        let name = SettingsGroup::new("Branch")
+            .first(true)
+            .child(SettingsCard::new(SeparatorInset::Text).child(name));
+        let paths_title = h_flex()
+            .h(rems_from_px(24.0_f32))
+            .mt(rems_from_px(20.0_f32))
+            .px(rems_from_px(12.0_f32))
+            .gap(rems_from_px(8.0_f32))
+            .child(
+                Label::new("Paths, checked in order")
+                    .size(LabelSize::Small)
+                    .weight(FontWeight::MEDIUM),
+            )
+            .child(div().flex_1())
+            .when(count < MAX_PATHS, |this| this.child(add));
         let cards = path_cards(&branch, &self.fields, &self.local, cx);
         self.stops = tab_order::end();
-        let adding_new = self.adding.is_some();
-        let (title, submit) = match self.adding {
-            Some(_) => ("Add a branch", "Add branch"),
-            None => ("Edit branch", "Save branch"),
+        let (title, submit, note) = match self.adding {
+            Some(_) => (
+                "Add a branch",
+                "Add branch",
+                "You add stages to the paths after.",
+            ),
+            None => ("Edit branch", "Save branch", "Stages stay in their paths."),
         };
         let body = v_flex()
             .id("branch-dialog-body")
@@ -185,24 +198,11 @@ impl Render for BranchDialog {
             .track_scroll(&self.scroll)
             .child(name)
             .child(paths_title)
-            .children(cards)
-            .child(
-                h_flex()
-                    .mt(rems_from_px(8.0_f32))
-                    .items_center()
-                    .gap(rems_from_px(10.0_f32))
-                    .when(count < MAX_PATHS, |this| this.child(add))
-                    .when(skip, |this| {
-                        this.child(help_line("If no path holds, the task skips this branch."))
-                    }),
-            );
+            .children(cards);
         let body = scroll_area(body, ScrollAxes::Vertical, &self.scroll, window, cx);
         let frame = DialogFrame::new(title, cx.listener(|_, _, _, cx| cx.emit(DismissEvent)))
-            .footer_note(if adding_new {
-                "You add stages to the paths after.".to_owned()
-            } else {
-                "Stages stay in their paths.".to_owned()
-            })
+            .sheet()
+            .footer_note(note)
             .footer(cancel_button(
                 "Cancel",
                 &self.cancel_focus,

@@ -272,7 +272,10 @@ pub(super) fn group_box(
         .into_any_element()
 }
 
-/// The preview box. It scrolls sideways when the chart is wide; `scroll` tracks that scroll.
+const FLOW_HEIGHT: f32 = 196.;
+
+/// The preview box (layout-b 5.2): dashed, 196 px high. It scrolls sideways when the chart is wide
+/// (`scroll` tracks that scroll), and down when branch notes do not fit.
 pub fn pipeline_preview(
     editor: &Entity<PipelineEditor>,
     scroll: &ScrollHandle,
@@ -280,7 +283,7 @@ pub fn pipeline_preview(
     cx: &mut App,
 ) -> AnyElement {
     let colors = cx.theme().colors();
-    let (box_bg, box_border) = (colors.panel_background, colors.border_variant);
+    let (box_bg, box_border) = (colors.surface_background, colors.border);
     let chart = {
         let state = editor.read(cx);
         Chart {
@@ -294,8 +297,11 @@ pub fn pipeline_preview(
     let frame = v_flex()
         .id("pipeline-preview")
         .flex_none()
+        .h(rems_from_px(FLOW_HEIGHT))
+        .overflow_y_scroll()
         .rounded(px(8.))
         .border_1()
+        .border_dashed()
         .border_color(box_border)
         .bg(box_bg);
     if shown.is_empty() {

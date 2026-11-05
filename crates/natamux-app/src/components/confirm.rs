@@ -20,6 +20,8 @@ pub struct Confirm {
     /// Rows under the description, as (id, title): the tasks a confirm acts on.
     pub rows: Vec<(SharedString, SharedString)>,
     pub on_confirm: Run,
+    /// The Settings sheet look (header 44, footer 48), for confirms opened from Settings.
+    pub sheet: bool,
 }
 
 impl Confirm {
@@ -36,11 +38,17 @@ impl Confirm {
             cancel_label: "Cancel".into(),
             rows: Vec::new(),
             on_confirm: Rc::new(on_confirm),
+            sheet: false,
         }
     }
 
     pub fn cancel_label(mut self, label: impl Into<SharedString>) -> Self {
         self.cancel_label = label.into();
+        self
+    }
+
+    pub fn sheet(mut self) -> Self {
+        self.sheet = true;
         self
     }
 
@@ -129,9 +137,20 @@ impl Render for ConfirmDialog {
         let close = cx.listener(|_, _, _, cx| cx.emit(DismissEvent));
         let cancel = cx.listener(|_, _, _, cx| cx.emit(DismissEvent));
         let submit = cx.listener(|this, _, window, cx| this.submit(window, cx));
+        let mut frame = DialogFrame::new(confirm.title.clone(), close);
+        if confirm.sheet {
+            // A sheet's header is 44 px high, so the text goes in the body (layout-b 6.3).
+            frame = frame.sheet().body_padded().child(
+                div()
+                    .text_size(rems_from_px(12.0_f32))
+                    .line_height(rems_from_px(18.0_f32))
+                    .child(confirm.description.clone()),
+            );
+        } else {
+            frame = frame.description(confirm.description.clone());
+        }
         div().track_focus(&self.focus).child(
-            DialogFrame::new(confirm.title.clone(), close)
-                .description(confirm.description.clone())
+            frame
                 .children(rows)
                 .footer(cancel_button(
                     confirm.cancel_label.clone(),

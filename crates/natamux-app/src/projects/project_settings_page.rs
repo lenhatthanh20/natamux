@@ -3,34 +3,33 @@
 //! which may not parse (then the JSON tab shows); Save writes it through `PUT /repos/:id/settings`
 //! with the version that was read, so a file another client changed shows Reload and Overwrite.
 //! The draft stays while the person looks at other pages; Discard drops it. The page draws its own
-//! header (`settings_header.rs`), so the tabs stay while the body scrolls.
+//! header (`settings_header.rs`) and bottom bar (`settings_bar.rs`), so the tabs and Save stay
+//! while the body scrolls (layout-b 5).
 
 use gpui::{Entity, EventEmitter, FocusHandle, Focusable, ScrollHandle, Subscription};
 use natamux_proto::projects::repo::{LoadedSettings, SkillList};
-use ui::{ScrollAxes, Tooltip, prelude::*};
+use ui::{ScrollAxes, prelude::*};
 
 use super::branch_name_field::BranchNameField;
 use super::idle_pause_field::IdlePauseField;
 use super::repo_trust_dialog::row::RepoTrustRow;
 use super::send_backs_field::SendBacksField;
-use super::settings_tab_rules::{PIPELINE_NOTE, SettingsTab, shows_pipeline_note};
+use super::settings_tab_rules::SettingsTab;
 use super::settings_tabs::SettingsTabs;
 use super::settings_text::{Base, base_of, blocked_reason};
 use crate::app::dashboard::Dashboard;
 use crate::app::source::reason;
-use crate::components::button_style::quiet_button;
 use crate::components::confirm::Confirm;
-use crate::components::dialog::primary_button;
 use crate::components::scrollbars::scroll_area;
 use crate::stages::editor_draft::same_settings;
 use crate::stages::pipeline_editor::{DraftEdited, PipelineEditor};
-use crate::stages::pipeline_preview::pipeline_preview;
 use crate::stages::stage_details::DetailsPane;
 use crate::stages::stage_list::StageList;
+use crate::stages::stages_tab::stages_tab;
 
-/// The list and the details sit side by side from this window width: mockup A always puts them
-/// side by side; below this the 300 px list leaves the details too narrow.
-const SIDE_BY_SIDE_FROM: f32 = 1000.;
+/// The content width of the General tab; Stages and JSON are wider.
+const CONTENT_MAX: f32 = 760.;
+const WIDE_CONTENT_MAX: f32 = 860.;
 
 /// Discard was confirmed: Settings makes the page again from the file.
 pub struct Discarded;
@@ -63,8 +62,8 @@ pub struct ProjectSettingsPage {
     body_scroll: ScrollHandle,
     preview_scroll: ScrollHandle,
     focus: FocusHandle,
-    discard: FocusHandle,
-    submit: FocusHandle,
+    pub(super) discard: FocusHandle,
+    pub(super) submit: FocusHandle,
     _reads: Vec<gpui::Task<()>>,
     _subscriptions: Vec<Subscription>,
 }
@@ -193,7 +192,7 @@ impl ProjectSettingsPage {
     }
 
     /// Save may replace the file without an edit (a file the daemon could not read).
-    fn file_broken(&self) -> bool {
+    pub(super) fn file_broken(&self) -> bool {
         self.base.as_ref().is_some_and(|base| base.broken.is_some())
     }
 
@@ -232,11 +231,12 @@ impl ProjectSettingsPage {
                 },
             )
             .cancel_label("Keep editing")
+            .sheet()
             .open_over(window, cx);
         });
     }
 
-    /// The preview, then the list and the details: two parts of the body, so a shot can scroll to
+    /// The Pipeline group, then the Stages group: two parts of the body, so a shot can scroll to
     /// the second.
     pub(super) fn render_stages(
         &self,
@@ -244,32 +244,13 @@ impl ProjectSettingsPage {
         window: &mut Window,
         cx: &mut App,
     ) -> [AnyElement; 2] {
-        let wide = window.viewport_size().width >= px(SIDE_BY_SIDE_FROM);
-        let colors = cx.theme().colors();
-        let (border, panel) = (colors.border_variant, colors.panel_background);
-        let card = move |id: &'static str| {
-            v_flex()
-                .id(id)
-                .min_h(rems_from_px(430.0_f32))
-                .rounded(px(8.))
-                .border_1()
-                .border_color(border)
-                .bg(panel)
-                .overflow_hidden()
-        };
-        let list = card("stage-list-card").child(stages.list.clone());
-        let details = card("stage-details-card").child(stages.details.clone());
-        let parts = if wide {
-            h_flex()
-                .items_start()
-                .gap(px(12.))
-                .child(list.w(rems_from_px(300.0_f32)).flex_none())
-                .child(details.min_w_0().flex_1())
-        } else {
-            v_flex().gap(px(12.)).child(list).child(details)
-        };
-        let top = pipeline_preview(&stages.editor, &self.preview_scroll, window, cx);
-        [top, parts.into_any_element()]
+        stages_tab(
+            &stages.editor,
+            &stages.list,
+            &self.preview_scroll,
+            window,
+            cx,
+        )
     }
 
     /// The sideways scroll of the pipeline preview; `--smoke` reads its range.
@@ -277,8 +258,8 @@ impl ProjectSettingsPage {
         &self.preview_scroll
     }
 
-    /// Scrolls the body to the stage list and the details (the third part, after the alerts and
-    /// the preview; the header and the tabs are above the body).
+    /// Scrolls the body to the Stages group (the third part, after the alerts and the Pipeline
+    /// group; the header is above the body).
     pub fn show_details(&self, cx: &mut Context<Self>) {
         self.body_scroll.scroll_to_top_of_item(2);
         cx.notify();
@@ -295,7 +276,7 @@ impl Focusable for ProjectSettingsPage {
 
 // What the dialog layer did for the dialog, Settings now asks the page for.
 impl ProjectSettingsPage {
-    /// The stage rows and the fields on screen, in the order they are drawn, then the bottom bar.
+    /// The tabs, the rows and fields on screen in the order they are drawn, then the bottom bar.
     pub fn tab_ring(&self, cx: &App) -> Vec<FocusHandle> {
         let mut ring = Vec::new();
         if let Some(stages) = &self.stages {
@@ -315,7 +296,9 @@ impl ProjectSettingsPage {
                 SettingsTab::Json => {}
             }
         }
-        ring.extend([self.discard.clone(), self.submit.clone()]);
+        if self.base.is_some() {
+            ring.extend([self.discard.clone(), self.submit.clone()]);
+        }
         ring
     }
 
@@ -331,73 +314,6 @@ impl ProjectSettingsPage {
         };
         details.update(cx, |details, cx| details.closes_layer(window, cx))
     }
-
-    /// Under the body, on one line: the path and the note's info icon, the counts, the "..." menu,
-    /// Discard and Save.
-    fn bottom_bar(&self, shown: SettingsTab, cx: &mut Context<Self>) -> impl IntoElement {
-        let path = self.path_label(cx);
-        let blocked = self.save_blocked(cx);
-        let save = cx.listener(|this, _, window, cx| this.save(window, cx));
-        let save_button = primary_button(
-            "Save",
-            &self.submit,
-            self.base.is_none() || blocked.is_some() || self.saving,
-            save,
-        )
-        .when_some(blocked, |button, reason| {
-            button.tooltip(Tooltip::text(reason))
-        });
-        let dirty = self.dirty(cx);
-        let discard = quiet_button("settings-discard", "Discard")
-            .track_focus(&self.discard)
-            .disabled(!dirty || self.saving)
-            .when(!dirty, |button| {
-                button.tooltip(Tooltip::text("Nothing to discard"))
-            })
-            .on_click(cx.listener(|this, _, window, cx| this.request_discard(window, cx)));
-        let more = self.more_button(cx);
-        h_flex()
-            .flex_none()
-            .w_full()
-            .items_center()
-            .h(rems_from_px(42.0_f32))
-            .gap(rems_from_px(10.0_f32))
-            .px(rems_from_px(14.0_f32))
-            .border_t_1()
-            .border_color(cx.theme().colors().border_variant)
-            .child(
-                h_flex()
-                    .min_w_0()
-                    .flex_1()
-                    .items_center()
-                    .gap(rems_from_px(6.0_f32))
-                    .children(path)
-                    .when(shows_pipeline_note(shown), |this| this.child(note_icon())),
-            )
-            .child(
-                h_flex()
-                    .flex_none()
-                    .items_center()
-                    .gap(rems_from_px(10.0_f32))
-                    .child(self.footer_status(cx))
-                    .child(more)
-                    .child(discard.size(ButtonSize::Default))
-                    .child(save_button.size(ButtonSize::Default)),
-            )
-    }
-}
-
-/// The pipeline note as the tooltip of an info icon, so the bar stays one line.
-fn note_icon() -> impl IntoElement {
-    div()
-        .id("pipeline-note")
-        .flex_none()
-        .tooltip(Tooltip::text(PIPELINE_NOTE))
-        .child(
-            Icon::new(IconName::Info)
-                .size(IconSize::Custom(rems_from_px(14.0_f32)))
-                .color(Color::Muted),
-        )
 }
 
 impl Render for ProjectSettingsPage {
@@ -409,6 +325,13 @@ impl Render for ProjectSettingsPage {
         if let Some(stages) = &self.stages {
             body.extend(self.render_tab_body(stages, shown, window, cx));
         }
+        let wide = self.stages.is_some() && shown != SettingsTab::General;
+        let width = rems_from_px(if wide { WIDE_CONTENT_MAX } else { CONTENT_MAX });
+        // Each part is centred on its own, so a shot can still scroll to a part by its index.
+        let body = body
+            .into_iter()
+            .map(|part| div().w_full().max_w(width).mx_auto().child(part));
+        let bar = self.render_bar(cx);
         v_flex()
             .track_focus(&self.focus)
             .size_full()
@@ -422,9 +345,9 @@ impl Render for ProjectSettingsPage {
                         .flex_1()
                         .overflow_y_scroll()
                         .track_scroll(&self.body_scroll)
-                        .px(rems_from_px(14.0_f32))
-                        .py(rems_from_px(10.0_f32))
-                        .gap(rems_from_px(10.0_f32))
+                        .pt(rems_from_px(8.0_f32))
+                        .px(rems_from_px(32.0_f32))
+                        .pb(rems_from_px(32.0_f32))
                         .children(body),
                     ScrollAxes::Vertical,
                     &self.body_scroll,
@@ -436,6 +359,6 @@ impl Render for ProjectSettingsPage {
                 .min_h_0()
                 .flex_1(),
             )
-            .child(self.bottom_bar(shown, cx))
+            .children(bar)
     }
 }

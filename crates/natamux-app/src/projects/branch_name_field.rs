@@ -10,9 +10,12 @@ use ui::prelude::*;
 use super::settings_tab_rules::{
     BRANCH_NAME_HINT, BRANCH_NAME_LABEL, BRANCH_NAME_PLACEHOLDER, branch_name_field,
 };
-use crate::components::form::text_editor;
+use crate::components::colors::TileColor;
+use crate::components::form::{SettingsInput, text_editor};
+use crate::components::settings_card::SettingsRow;
+use crate::components::settings_controls::changed_mark;
+use crate::components::settings_tile::{SettingsTile, TileSize};
 use crate::stages::pipeline_editor::PipelineEditor;
-use crate::stages::stage_fields_view::{default_mark, error_line, field_input, labelled};
 
 pub struct BranchNameField {
     pipeline: Entity<PipelineEditor>,
@@ -65,7 +68,7 @@ impl BranchNameField {
                     }
                 });
             }
-            Err(problem) => self.error = Some(format!("{BRANCH_NAME_LABEL}: {problem}")),
+            Err(problem) => self.error = Some(problem),
         }
         cx.notify();
     }
@@ -93,27 +96,28 @@ impl BranchNameField {
 impl Render for BranchNameField {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let this = cx.weak_entity();
-        let mark = default_mark(
-            "branch-name-reset",
-            self.editor.read(cx).text(cx).trim().is_empty(),
+        let changed = !self.editor.read(cx).text(cx).trim().is_empty();
+        let mark = changed_mark(
+            "branch-name",
+            changed,
             move |window, cx| {
                 this.update(cx, |this, cx| this.reset(window, cx)).ok();
             },
             cx,
         );
-        let control = div()
-            .w_full()
-            .max_w(rems_from_px(360.0_f32))
-            .child(field_input(&self.editor, cx));
-        v_flex()
-            .id("branch-name-field")
-            .gap_1()
-            .child(labelled(
-                BRANCH_NAME_LABEL,
-                Some(mark),
-                Some(BRANCH_NAME_HINT.into()),
-                control,
-            ))
-            .children(self.error.clone().map(error_line))
+        let tile = SettingsTile::icon(
+            Icon::new(IconName::GitBranch),
+            TileColor::Green,
+            TileSize::Row,
+        );
+        let input = SettingsInput::new(&self.editor)
+            .width(260.)
+            .invalid(self.error.is_some());
+        SettingsRow::new("branch-name-field", BRANCH_NAME_LABEL)
+            .lead(tile)
+            .help(BRANCH_NAME_HINT)
+            .error(self.error.clone())
+            .control(mark)
+            .control(input)
     }
 }

@@ -1,26 +1,30 @@
-//! The prompt of a stage (`PromptField.tsx`, `SkillPicker.tsx`): the editor with the placeholder
-//! chips above it, and the Insert skill menu of the project's skills.
+//! The Prompt group of the stage sheet (layout-b 5.3, `SkillPicker.tsx`): the placeholder buttons
+//! and Insert skill above the prompt, and the skill menu of the project's skills.
 
 use editor::Editor;
 use gpui::{AnyElement, ClickEvent, DismissEvent, Entity, Focusable, Hsla, Pixels, Point};
-use natamux_proto::projects::repo::{SkillInfo, SkillList};
+use natamux_proto::projects::repo::SkillInfo;
 use natamux_proto::stages::prompt::{PROMPT_PLACEHOLDERS, skill_placeholder};
 use natamux_proto::stages::schema::Stage;
 use ui::{ContextMenu, Tooltip, prelude::*};
 
 use super::editor_fields::{TextField, set_text};
 use super::skill_rules::{filter_skills, group_skills, skill_agents, skill_warnings};
-use super::stage_details::DetailsPane;
-use super::stage_fields_view::{change, default_mark, field_area, labelled_end};
+use super::stage_fields_view::change;
+use super::stage_sheet::{Skills, StageSheet};
 use crate::agents::agent_choices::{AGENT_CHOICES, agent_label};
 use crate::components::button_style::{action_button, button_icon, quiet_button};
 use crate::components::colors::signal;
+use crate::components::form::SettingsInput;
 use crate::components::menu::MenuLayer;
-
-type Skills = Option<Result<SkillList, String>>;
+use crate::components::settings_card::{SeparatorInset, SettingsCard, SettingsGroup};
+use crate::components::settings_controls::changed_mark;
 
 /// The fixed line under the prompt.
 const DONE_LINE: &str = "When you are done, run natamux done, unless the steps above say not to.";
+
+const CUSTOM_NOTE: &str =
+    "A prompt of your own gets no commit rule. Say whether the agent should commit.";
 
 /// Why Insert skill is off; None when it can open.
 fn skills_reason(skills: &Skills) -> Option<String> {
@@ -77,17 +81,16 @@ fn skill_row(skill: &SkillInfo, warning: Hsla) -> impl IntoElement {
         }))
 }
 
-impl DetailsPane {
+impl StageSheet {
+    /// The Prompt group: the placeholder buttons, the changed mark and Insert skill, the prompt,
+    /// and the done line under it.
     pub(super) fn render_prompt(&self, stage: &Stage, cx: &mut Context<Self>) -> AnyElement {
-        let Some(fields) = &self.stage_fields else {
-            return div().into_any_element();
-        };
-        let prompt = fields.prompt.editor.clone();
+        let prompt = self.fields.prompt.editor.clone();
         let custom = stage.prompt.is_some();
-        let (pipeline, id) = (self.editor.clone(), stage.id.clone());
-        let mark = default_mark(
+        let (pipeline, id) = (self.pipeline.clone(), stage.id.clone());
+        let mark = changed_mark(
             "prompt-default",
-            !custom,
+            custom,
             move |_, cx| {
                 change(&pipeline, cx, |steps| {
                     set_text(steps, &id, TextField::Prompt, "")
@@ -95,56 +98,55 @@ impl DetailsPane {
             },
             cx,
         );
-        let help = custom.then(|| {
-            SharedString::from(
-                "A prompt of your own gets no commit rule. Say whether the agent should commit.",
-            )
-        });
         let chips = PROMPT_PLACEHOLDERS.iter().map(|name| {
             let token = format!("{{{name}}}");
             let editor = prompt.clone();
             action_button(SharedString::from(format!("insert-{name}")), token.clone())
                 .size(ButtonSize::Compact)
-                .label_size(LabelSize::Custom(rems_from_px(11.0_f32)))
+                .label_size(LabelSize::Small)
                 .tooltip(Tooltip::text(format!("Insert {token}")))
                 .on_click(move |_, window, cx| insert_at_cursor(&editor, &token, window, cx))
         });
         let reason = skills_reason(&self.skills);
-        let plus = IconSize::Custom(rems_from_px(11.0_f32));
         let skills = quiet_button("insert-skill", "Insert skill")
             .size(ButtonSize::Compact)
             .label_size(LabelSize::Small)
-            .start_icon(button_icon("plus").size(plus))
+            .start_icon(button_icon("plus").size(IconSize::XSmall))
+            .end_icon(
+                Icon::new(IconName::ChevronDown)
+                    .size(IconSize::XSmall)
+                    .color(Color::Muted),
+            )
             .disabled(reason.is_some())
             .when_some(reason, |this, reason| this.tooltip(Tooltip::text(reason)))
             .on_click(cx.listener(|this, event: &ClickEvent, window, cx| {
                 this.toggle_skills(event.position(), window, cx)
             }));
-        let chips = h_flex()
-            .flex_wrap()
-            .gap_1()
-            .mb(rems_from_px(5.0_f32))
-            .children(chips);
-        let footer = Label::new(DONE_LINE)
+        let top = h_flex()
+            .items_center()
+            .gap(rems_from_px(6.0_f32))
+            .mb(rems_from_px(8.0_f32))
+            .children(chips)
+            .child(div().flex_1())
+            .child(mark)
+            .child(skills);
+        let done = Label::new(DONE_LINE)
             .size(LabelSize::Custom(rems_from_px(11.0_f32)))
-            .color(Color::Placeholder);
-        let control = v_flex()
-            .child(chips)
-            .child(field_area(&prompt, cx))
-            .child(div().mt(rems_from_px(3.0_f32)).child(footer));
-        labelled_end(
-            "Prompt",
-            Some(mark),
-            skills,
-            help,
-            Some(control.into_any_element()),
-        )
-        .into_any_element()
-    }
-
-    pub fn set_skills(&mut self, skills: Result<SkillList, String>, cx: &mut Context<Self>) {
-        self.skills = Some(skills);
-        cx.notify();
+            .color(Color::Muted);
+        let block = v_flex()
+            .w_full()
+            .px(rems_from_px(12.0_f32))
+            .py(rems_from_px(10.0_f32))
+            .child(top)
+            .child(SettingsInput::new(&prompt).area())
+            .child(div().mt(rems_from_px(6.0_f32)).child(done));
+        let card = SettingsCard::new(SeparatorInset::Text).child(block);
+        let group = SettingsGroup::new("Prompt").child(card);
+        if custom {
+            group.footnote(CUSTOM_NOTE).into_any_element()
+        } else {
+            group.into_any_element()
+        }
     }
 
     fn toggle_skills(
@@ -156,10 +158,10 @@ impl DetailsPane {
         if self.close_skills(cx) {
             return;
         }
-        let (Some(Ok(list)), Some(fields)) = (&self.skills, &self.stage_fields) else {
+        let Some(Ok(list)) = &self.skills else {
             return;
         };
-        let prompt = fields.prompt.editor.clone();
+        let prompt = self.fields.prompt.editor.clone();
         let warning = signal(cx).fg;
         let list = list.clone();
         let menu = ContextMenu::build(window, cx, move |mut menu, _, _| {

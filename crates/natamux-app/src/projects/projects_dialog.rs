@@ -18,8 +18,10 @@ use crate::app::dashboard_data::{Part, Seen};
 use crate::app::source::reason;
 use crate::components::button_style::quiet_button;
 use crate::components::dialog::{DialogFrame, DialogLayer, DialogView, primary_button};
-use crate::components::form::{field, text_editor};
+use crate::components::form::{SettingsInput, text_editor};
 use crate::components::icons::icon_path;
+use crate::components::settings_card::{SeparatorInset, SettingsCard, SettingsGroup, SettingsRow};
+use crate::components::settings_tile::{SettingsTile, TileSize};
 
 /// What a project is, in the Add project tooltip.
 const DESCRIPTION: &str = "Git repositories on the daemon's machine. The workspace of each task is a git worktree of one of them.";
@@ -254,6 +256,7 @@ impl ProjectsDialog {
             SharedString::from(format!("settings-{}", repo.id)),
             "Settings",
         )
+        .size(ButtonSize::Compact)
         .label_size(LabelSize::Small)
         .tooltip(Tooltip::text(format!("Settings of {}", repo.name)))
         .on_click(cx.listener(move |this, _, _, cx| {
@@ -265,36 +268,26 @@ impl ProjectsDialog {
         if let Some(stop) = self.settings_stops.get(index) {
             button = button.track_focus(stop);
         }
-        h_flex()
-            .gap_3()
-            .px_2()
-            .py_1p5()
-            .rounded_md()
-            .child(
-                Icon::from_path(icon_path("folder-git-2"))
-                    .size(IconSize::Small)
-                    .color(Color::Muted),
-            )
-            .child(Label::new(repo.name.clone()).weight(FontWeight::MEDIUM))
-            .child(
-                v_flex()
-                    .min_w_0()
-                    .flex_1()
-                    .items_end()
-                    .child(mono_line(repo.path.clone(), cx))
-                    .children(
-                        repo.worktrees_dir
-                            .as_ref()
-                            .map(|dir| mono_line(format!("Worktrees in {dir}"), cx)),
-                    ),
-            )
-            .child(button)
+        let paths = v_flex()
+            .min_w_0()
+            .child(mono_line(repo.path.clone(), cx))
+            .children(
+                repo.worktrees_dir
+                    .as_ref()
+                    .map(|dir| mono_line(format!("Worktrees in {dir}"), cx)),
+            );
+        let row_id = SharedString::from(format!("project-{}", repo.id));
+        SettingsRow::new(row_id, repo.name.clone())
+            .lead(SettingsTile::avatar(&repo.name, TileSize::Row))
+            .label_weight(FontWeight::MEDIUM)
+            .help_child(paths)
+            .control(button)
     }
 }
 
 fn mono_line(text: impl Into<SharedString>, cx: &App) -> Label {
     Label::new(text)
-        .size(LabelSize::XSmall)
+        .size(LabelSize::Custom(rems_from_px(11_f32)))
         .color(Color::Muted)
         .buffer_font(cx)
         .truncate()
@@ -313,49 +306,20 @@ pub(super) fn alert_line(text: impl Into<SharedString>) -> impl IntoElement {
         .child(Label::new(text).size(LabelSize::Small).color(Color::Error))
 }
 
-/// An input box whose border turns danger while it has an error.
-fn field_box(editor: &Entity<Editor>, invalid: bool, cx: &App) -> impl IntoElement {
-    let colors = cx.theme().colors();
-    let border = if invalid {
-        cx.theme().status().error
-    } else {
-        colors.border
-    };
-    div()
-        .px_2p5()
-        .py_1p5()
-        .rounded_md()
-        .border_1()
-        .border_color(border)
-        .bg(colors.editor_background)
-        .child(editor.clone())
-}
-
-/// A folder field: the box with Browse… after it, and the problem under them.
-fn problem_field(
+/// A row of the Add a project card: the input, Browse… for a folder, the problem under the label.
+fn input_row(
     label: &'static str,
-    editor: &Entity<Editor>,
+    input: SettingsInput,
+    browse: Option<Button>,
     problem: Option<String>,
-    browse: Button,
-    cx: &App,
-) -> impl IntoElement {
-    field(
-        label,
-        v_flex()
-            .gap_1()
-            .child(
-                h_flex()
-                    .gap_2()
-                    .child(
-                        div()
-                            .min_w_0()
-                            .flex_1()
-                            .child(field_box(editor, problem.is_some(), cx)),
-                    )
-                    .child(browse),
-            )
-            .children(problem.map(alert_line)),
-    )
+) -> SettingsRow {
+    let row = SettingsRow::new(SharedString::from(label), label)
+        .error(problem)
+        .control(input);
+    match browse {
+        Some(browse) => row.control(browse),
+        None => row,
+    }
 }
 
 impl EventEmitter<DismissEvent> for ProjectsDialog {}
@@ -411,38 +375,45 @@ impl Render for ProjectsDialog {
                 DESCRIPTION
             },
         ));
-        let mut rows = Vec::new();
-        for (index, repo) in repos.iter().enumerate() {
-            rows.push(self.repo_row(index, repo, cx).into_any_element());
-        }
-        let list = v_flex().children(rows);
-        let line = cx.theme().colors().border_variant;
+        let list = (!repos.is_empty()).then(|| {
+            let mut card = SettingsCard::new(SeparatorInset::Tile);
+            for (index, repo) in repos.iter().enumerate() {
+                card = card.child(self.repo_row(index, repo, cx));
+            }
+            SettingsGroup::new("Projects").first(true).child(card)
+        });
+        let folder = SettingsInput::new(&self.folder)
+            .width(230.)
+            .invalid(folder_problem.is_some());
+        let worktree = SettingsInput::new(&self.worktree)
+            .width(230.)
+            .invalid(worktree_problem.is_some());
+        let name = SettingsInput::new(&self.name).width(310.);
         let browse_folder = self.browse_button(Pick::Folder, cx);
         let browse_worktree = self.browse_button(Pick::Worktree, cx);
-        let form = v_flex()
-            .gap_2()
-            .pt_4()
-            .border_t_1()
-            .border_color(line)
-            .child(problem_field(
+        let form = SettingsCard::new(SeparatorInset::Text)
+            .child(input_row(
                 "Folder",
-                &self.folder,
+                folder,
+                Some(browse_folder),
                 folder_problem,
-                browse_folder,
-                cx,
             ))
-            .child(field("Name", field_box(&self.name, false, cx)))
-            .child(problem_field(
+            .child(input_row("Name", name, None, None))
+            .child(input_row(
                 "Worktree folder",
-                &self.worktree,
+                worktree,
+                Some(browse_worktree),
                 worktree_problem,
-                browse_worktree,
-                cx,
             ));
+        let add_group = SettingsGroup::new("Add a project")
+            .first(repos.is_empty())
+            .child(form)
+            .footnote(DESCRIPTION);
         div().track_focus(&self.focus).child(
             DialogFrame::new("Projects", cx.listener(|_, _, _, cx| cx.emit(DismissEvent)))
-                .child(list)
-                .child(form)
+                .sheet()
+                .children(list)
+                .child(add_group)
                 .footer(add),
         )
     }

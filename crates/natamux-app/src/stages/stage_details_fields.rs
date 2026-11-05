@@ -1,15 +1,15 @@
-//! The text fields of the picked stage: one editor each, made when the pick changes.
+//! The text fields of the stage sheet: one editor each, made when the sheet opens.
 
 use gpui::{Entity, TextStyleRefinement};
-use natamux_proto::stages::capabilities::stage_name;
+use natamux_proto::stages::capabilities::{stage_name, stage_name_of_id};
 use natamux_proto::stages::schema::{Stage, Step};
 use ui::prelude::*;
 
 use super::editor_fields::{TextField, set_sections, set_text, shown_default_prompt};
 use super::editor_find::find_stage;
 use super::pipeline_editor::PipelineEditor;
-use super::stage_details::DetailsPane;
 use super::stage_fields_view::LiveField;
+use super::stage_sheet::StageSheet;
 use super::stage_view_rules::finished_when;
 
 /// The text fields of one stage.
@@ -66,13 +66,13 @@ impl StageFields {
         pipeline: &Entity<PipelineEditor>,
         id: &str,
         window: &mut Window,
-        cx: &mut Context<DetailsPane>,
+        cx: &mut Context<StageSheet>,
     ) -> Self {
         let text = |field: TextField,
                     placeholder: &str,
                     lines: Option<(usize, usize)>,
                     window: &mut Window,
-                    cx: &mut Context<DetailsPane>| {
+                    cx: &mut Context<StageSheet>| {
             let (read_id, write_id) = (id.to_owned(), id.to_owned());
             LiveField::new(
                 pipeline,
@@ -106,7 +106,7 @@ impl StageFields {
         );
         let fields = StageFields {
             id: id.to_owned(),
-            name: text(TextField::Name, "", None, window, cx),
+            name: text(TextField::Name, &stage_name_of_id(id), None, window, cx),
             args: text(TextField::Args, "--model sonnet", None, window, cx),
             prompt: text(TextField::Prompt, "", Some((9, 24)), window, cx),
             command: text(TextField::Command, "pnpm test", None, window, cx),

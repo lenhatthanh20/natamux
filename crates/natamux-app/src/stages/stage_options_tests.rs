@@ -1,43 +1,31 @@
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
-
 use gpui::TestAppContext;
+use natamux_proto::stages::schema::{Gate, Stage, StageKind, Step};
 use ui::prelude::*;
 
-use super::{Row, render};
+use super::option_rows;
 use crate::app::test_views;
-use crate::stages::stage_fields_view::default_mark;
+use crate::stages::pipeline_editor::PipelineEditor;
+use crate::stages::sheet_rules::sheet_shows;
 
-/// One checkbox row at its default, with a note.
-struct OptionRow;
-
-impl Render for OptionRow {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let mark = default_mark("gate-default-spec", true, |_, _| {}, cx);
-        v_flex().w(px(400.)).child(render(
-            Row {
-                id: "gate-spec".into(),
-                label: "Wait for my approval",
-                note: Some("Unchecked, the pull request opens when the stage starts."),
-                help: None,
-                on: false,
-                disabled: false,
-                mark: Some(mark),
-                toggle: Box::new(|_, _, _| {}),
-            },
-            cx,
-        ))
-    }
+/// How many Options rows a stage alone in the pipeline gets.
+fn rows_of(stage: Stage, cx: &mut TestAppContext) -> usize {
+    cx.update(|cx| {
+        let editor = cx.new(|_| PipelineEditor::new("{}"));
+        let steps = vec![Step::Stage(stage.clone())];
+        let shows = sheet_shows(&stage, &steps);
+        option_rows(&stage, &shows, &editor, cx).len()
+    })
 }
 
 #[gpui::test]
-fn the_dot_sits_at_the_end_of_a_one_line_checkbox_row(cx: &mut TestAppContext) {
+fn an_agent_stage_has_two_options_and_a_manual_stage_none(cx: &mut TestAppContext) {
     test_views::init(cx);
-    let (_view, cx) = cx.add_window_view(|_, _| OptionRow);
-    cx.run_until_parked();
-    let dot = cx
-        .debug_bounds("option-dot")
-        .expect("option-dot was not drawn");
-    // No Reset at the default, so the dot is last.
-    assert_eq!(dot.right(), px(400.));
-    assert!(dot.bottom() <= px(22.));
+    assert_eq!(
+        rows_of(Stage::new("implement", StageKind::Agent, Gate::Auto), cx),
+        2
+    );
+    assert_eq!(
+        rows_of(Stage::new("qa", StageKind::Manual, Gate::Manual), cx),
+        0
+    );
 }
