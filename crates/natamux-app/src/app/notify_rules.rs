@@ -5,7 +5,7 @@
 // Ported with their tests (spec D14); the notifier and the app shell call them.
 #![cfg_attr(not(test), allow(dead_code))]
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 use gpui::SystemNotification;
 use natamux_proto::projects::repo::Repo;
@@ -14,8 +14,27 @@ use natamux_proto::tasks::task::{Task, TaskState};
 
 use crate::tasks::task_rules::needs_me;
 
-/// The state of each task at the last look.
-pub type States = HashMap<String, TaskState>;
+/// What the last look saw of a task: its state, and the stages whose lane waited for the user.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Seen {
+    pub state: TaskState,
+    pub waits: BTreeSet<String>,
+}
+
+/// Each task at the last look.
+pub type States = HashMap<String, Seen>;
+
+/// The stages whose lane needs the user now. Stages run side by side, each in its own terminal,
+/// so one can start to wait while the task already waits at another.
+fn waiting_stages(task: &Task) -> BTreeSet<String> {
+    task.lanes
+        .iter()
+        .filter(|(_, state)| {
+            serde_json::from_value::<TaskState>((*state).clone()).is_ok_and(needs_me)
+        })
+        .map(|(stage, _)| stage.clone())
+        .collect()
+}
 
 /// Tasks that moved into a state that needs the user since the last look. A task seen for the
 /// first time does not count, so opening the app does not ring for every waiting task.
@@ -25,7 +44,7 @@ pub fn tasks_that_started_waiting<'a>(previous: &States, tasks: &'a [Task]) -> V
         .filter(|task| {
             previous
                 .get(&task.id)
-                .is_some_and(|before| needs_me(task.state) && !needs_me(*before))
+                .is_some_and(|before| needs_me(task.state) && !needs_me(before.state))
         })
         .collect()
 }
@@ -33,7 +52,13 @@ pub fn tasks_that_started_waiting<'a>(previous: &States, tasks: &'a [Task]) -> V
 pub fn states_by_id(tasks: &[Task]) -> States {
     tasks
         .iter()
-        .map(|task| (task.id.clone(), task.state))
+        .map(|task| {
+            let seen = Seen {
+                state: task.state,
+                waits: waiting_stages(task),
+            };
+            (task.id.clone(), seen)
+        })
         .collect()
 }
 
@@ -46,10 +71,15 @@ pub struct Notification {
 /// The title is the task; the body says what happened at which stage, then the task id and its
 /// project, for example "Spec waits for your approval" and "T-0201 · natamux".
 pub fn notification_for(task: &Task, repos: &[Repo]) -> Notification {
-    let stage = if task.stage.is_empty() {
+    notification_at(task, task.state, &task.stage, repos)
+}
+
+/// The note of one stage of the task, in the state of its lane.
+fn notification_at(task: &Task, state: TaskState, stage: &str, repos: &[Repo]) -> Notification {
+    let stage = if stage.is_empty() {
         None
     } else {
-        Some(stage_name_of_id(&task.stage))
+        Some(stage_name_of_id(stage))
     };
     let project = task
         .repo
@@ -61,7 +91,7 @@ pub fn notification_for(task: &Task, repos: &[Repo]) -> Notification {
     };
     // The body is two lines: a line break in a name would push the place onto more.
     let place = place.replace(['\r', '\n'], " ");
-    let what = what_happened(task.state, stage.as_deref());
+    let what = what_happened(state, stage.as_deref());
     Notification {
         title: task.title.clone(),
         body: format!("{what}\n{place}"),
@@ -81,18 +111,87 @@ fn what_happened(state: TaskState, stage: Option<&str>) -> String {
     }
 }
 
-/// What rings after a new task list: the tasks that started to wait, then the ones that became
-/// done, each with its task id, the tag that lets a newer note replace the older one.
-pub fn rings(previous: &States, tasks: &[Task], repos: &[Repo]) -> Vec<(String, Notification)> {
-    tasks_that_started_waiting(previous, tasks)
-        .into_iter()
-        .chain(tasks_that_finished(previous, tasks))
-        .map(|task| (task.id.clone(), notification_for(task, repos)))
-        .collect()
+/// One note to post. `stage` is the stage whose lane waits, so the note can name its terminal.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Ring {
+    pub task_id: String,
+    pub stage: Option<String>,
+    pub note: Notification,
+}
+
+/// What rings after a new task list: the stages that started to wait (a task that waits already
+/// rings again when another of its terminals starts to wait), then the tasks that became done.
+pub fn rings(previous: &States, tasks: &[Task], repos: &[Repo]) -> Vec<Ring> {
+    let started: HashSet<&str> = tasks_that_started_waiting(previous, tasks)
+        .iter()
+        .map(|task| task.id.as_str())
+        .collect();
+    let mut ring = Vec::new();
+    for task in tasks {
+        let Some(before) = previous.get(&task.id) else {
+            continue;
+        };
+        let mut new: Vec<(String, TaskState)> = waiting_stages(task)
+            .difference(&before.waits)
+            .filter_map(|stage| {
+                let state = serde_json::from_value(task.lanes.get(stage)?.clone()).ok()?;
+                Some((stage.clone(), state))
+            })
+            .collect();
+        if new.is_empty() && started.contains(task.id.as_str()) {
+            new.push((task.stage.clone(), task.state));
+        }
+        for (stage, state) in new {
+            ring.push(Ring {
+                task_id: task.id.clone(),
+                note: notification_at(task, state, &stage, repos),
+                stage: (!stage.is_empty()).then_some(stage),
+            });
+        }
+    }
+    ring.extend(
+        tasks_that_finished(previous, tasks)
+            .into_iter()
+            .map(|task| Ring {
+                task_id: task.id.clone(),
+                stage: None,
+                note: notification_for(task, repos),
+            }),
+    );
+    ring
+}
+
+/// The note names the terminal that waits: "Needs your input at Self check · Terminal 17".
+pub fn with_terminal(note: &Notification, terminal: &str) -> Notification {
+    let body = match note.body.split_once('\n') {
+        Some((what, place)) => format!("{what} \u{b7} Terminal {terminal}\n{place}"),
+        None => format!("{} \u{b7} Terminal {terminal}", note.body),
+    };
+    Notification {
+        title: note.title.clone(),
+        body,
+    }
+}
+
+/// The tag of a note: the task id, and the terminal after a `#` when the note names one. Task ids
+/// hold no `#` (`T-42`), so the click can split it back.
+pub fn note_tag(task_id: &str, terminal: Option<&str>) -> String {
+    match terminal {
+        Some(terminal) => format!("{task_id}#{terminal}"),
+        None => task_id.to_string(),
+    }
+}
+
+/// The task and the terminal a clicked note names.
+pub fn tag_target(tag: &str) -> (&str, Option<&str>) {
+    match tag.split_once('#') {
+        Some((task_id, terminal)) => (task_id, Some(terminal)),
+        None => (tag, None),
+    }
 }
 
 /// One sound for a batch of rings, not one for each task, and none when nothing rings.
-pub fn plays_sound(ring: &[(String, Notification)]) -> bool {
+pub fn plays_sound<T>(ring: &[T]) -> bool {
     !ring.is_empty()
 }
 
@@ -118,9 +217,9 @@ pub fn tasks_that_finished<'a>(previous: &States, tasks: &'a [Task]) -> Vec<&'a 
     tasks
         .iter()
         .filter(|task| {
-            previous
-                .get(&task.id)
-                .is_some_and(|before| *before != TaskState::Done && task.state == TaskState::Done)
+            previous.get(&task.id).is_some_and(|before| {
+                before.state != TaskState::Done && task.state == TaskState::Done
+            })
         })
         .collect()
 }
