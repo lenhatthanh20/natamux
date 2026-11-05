@@ -18,7 +18,7 @@ use super::editor_fields::{
 use super::editor_labels::kind_label;
 use super::kind_icon::kind_icon;
 use super::pipeline_editor::PipelineEditor;
-use super::source_tag::source_tag;
+use super::source_tag::{custom_fill, source_tag};
 use super::stage_details_fields::StageFields;
 use super::stage_fields_view::{
     Choice, SELECT_WIDTH, change, default_mark, details_section, field_area, field_input,
@@ -397,7 +397,7 @@ fn two_columns(left: Option<AnyElement>, right: Option<AnyElement>) -> impl Into
 pub(super) fn kind_box(icon: Icon, accent: bool, cx: &App) -> impl IntoElement {
     let colors = cx.theme().colors();
     let bg = if accent {
-        colors.text_accent.opacity(0.16)
+        custom_fill(colors.text_accent)
     } else {
         colors.ghost_element_hover
     };
