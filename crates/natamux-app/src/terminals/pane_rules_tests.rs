@@ -324,9 +324,18 @@ fn new_terminal_is_in_workspace_panes_and_off_when_full() {
 #[test]
 fn a_maximized_task_shows_the_shown_terminal_else_its_agent_else_the_first() {
     let names = picked(&["1", "2", "3"]);
-    assert_eq!(maximized_pane(&names, Some("3"), Some("2")), Some("3".into()));
-    assert_eq!(maximized_pane(&names, Some("9"), Some("2")), Some("2".into()));
+    assert_eq!(
+        maximized_pane(&names, Some("3"), Some("2")),
+        Some("3".into())
+    );
+    assert_eq!(
+        maximized_pane(&names, Some("9"), Some("2")),
+        Some("2".into())
+    );
     assert_eq!(maximized_pane(&names, None, Some("2")), Some("2".into()));
-    assert_eq!(maximized_pane(&names, Some("9"), Some("8")), Some("1".into()));
+    assert_eq!(
+        maximized_pane(&names, Some("9"), Some("8")),
+        Some("1".into())
+    );
     assert_eq!(maximized_pane(&[], Some("1"), Some("1")), None);
 }

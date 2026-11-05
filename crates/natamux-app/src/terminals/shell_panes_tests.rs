@@ -30,7 +30,11 @@ fn open_task<'a>(
     task_id: &str,
     held: TerminalList,
     cx: &'a mut TestAppContext,
-) -> (Entity<Dashboard>, Entity<ShellPanes>, &'a mut VisualTestContext) {
+) -> (
+    Entity<Dashboard>,
+    Entity<ShellPanes>,
+    &'a mut VisualTestContext,
+) {
     test_views::init(cx);
     let source = Arc::new(Source::FakeDaemon);
     let dashboard = cx.new(|cx| Dashboard::new(Ok(source), Default::default(), cx));

@@ -234,8 +234,9 @@ impl ShellPanes {
         if on {
             self.shown = Some(name.to_owned());
         }
-        self.dashboard
-            .update(cx, |dashboard, cx| dashboard.set_maximized(&task_id, on, cx));
+        self.dashboard.update(cx, |dashboard, cx| {
+            dashboard.set_maximized(&task_id, on, cx)
+        });
         cx.notify();
     }
 
