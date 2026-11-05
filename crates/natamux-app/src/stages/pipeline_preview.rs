@@ -18,6 +18,7 @@ use super::pipeline_preview_branch::{branch_chart, branch_notes};
 use super::preview_rules::{
     NO_STAGE_ON, agent_line_text, error_ids, group_list_label, tip_of, waits_for_person,
 };
+use super::source_tag::{custom_fill, custom_glow};
 use crate::agents::agent_choices::agent_label;
 use crate::components::agent_badge::AgentIcon;
 use crate::components::scrollbars::scroll_area;
@@ -114,6 +115,10 @@ fn ring(stage: &Stage, error: bool, cx: &App) -> impl IntoElement + use<> {
         .border_1()
         // A solid ring marks a stage of your own; the catalog's keep the dashed one.
         .when(!custom, |this| this.border_dashed())
+        .when(custom && !error, |this| {
+            this.bg(custom_fill(colors.text_accent))
+                .shadow(custom_glow(colors.text_accent))
+        })
         .border_color(border)
         .child(
             kind_icon(stage.kind)
@@ -184,6 +189,7 @@ fn title_row(cx: &App) -> impl IntoElement + use<> {
             swatch()
                 .border_1()
                 .border_color(colors.text_accent)
+                .bg(custom_fill(colors.text_accent))
                 .into_any_element(),
             "Custom",
         ))
