@@ -252,6 +252,8 @@ pub struct StartForm {
     pub reference: String,
     /// The skill picked for An agent skill; empty until one is picked.
     pub skill: String,
+    /// "Create a worktree" unchecked: the task only, with no base or branch.
+    pub no_worktree: bool,
 }
 
 /// Why Start task is off, if it is.
@@ -288,11 +290,12 @@ pub fn new_workspace_input(
     attachments: Vec<AttachmentUpload>,
 ) -> NewWorkspaceInput {
     let manual = choice.kind() == "manual";
+    let worktree = !form.no_worktree;
     NewWorkspaceInput {
         title: form.title.trim().into(),
         repo: Some(form.repo.clone()),
-        base: filled(&form.base),
-        branch: filled(form.branch.trim()),
+        base: filled(&form.base).filter(|_| worktree),
+        branch: filled(form.branch.trim()).filter(|_| worktree),
         agent: filled(&form.agent),
         mode: form.single_agent.then(|| "single-agent".into()),
         prompt: if manual {
@@ -302,6 +305,25 @@ pub fn new_workspace_input(
         },
         context: (!manual).then(|| choice.context(&form.reference, &form.skill)),
         attachments,
+        worktree: form.no_worktree.then_some(false),
+    }
+}
+
+/// The toast once the daemon made the task: only a worktree has something to prepare.
+pub fn made_toast(id: &str, worktree: Option<bool>) -> String {
+    if worktree == Some(false) {
+        format!("{id} is created.")
+    } else {
+        format!("{id} is being prepared.")
+    }
+}
+
+/// What Start task does, in its tooltip.
+pub fn start_hint(no_worktree: bool) -> &'static str {
+    if no_worktree {
+        "A new task with no workspace yet. Make it later from the task."
+    } else {
+        "A new task with its own workspace: a git worktree on a new branch."
     }
 }
 

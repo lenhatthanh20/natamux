@@ -40,6 +40,9 @@ pub struct NewWorkspaceInput {
     pub context: Option<TaskContext>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub attachments: Vec<AttachmentUpload>,
+    /// Some(false): make the task only; its workspace is made later. None: with a worktree.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub worktree: Option<bool>,
 }
 
 /// The body of `POST /tasks/:id/workspace`. The body may be left out when both fields are None.
@@ -279,6 +282,7 @@ mod tests {
                 name: "a.png".into(),
                 data: "AAAA".into(),
             }],
+            worktree: Some(false),
         };
         assert_eq!(
             serde_json::to_string(&input).unwrap(),
@@ -286,7 +290,7 @@ mod tests {
                 r#"{"title":"Fix","repo":"natamux","base":"dev","branch":"ABC-12","#,
                 r#""agent":"claude-code","#,
                 r#""prompt":"Do it","context":{"source":"github-issue","ref":"42"},"#,
-                r#""attachments":[{"name":"a.png","data":"AAAA"}]}"#
+                r#""attachments":[{"name":"a.png","data":"AAAA"}],"worktree":false}"#
             )
         );
     }

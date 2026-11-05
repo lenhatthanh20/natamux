@@ -13,7 +13,7 @@ use ui::prelude::*;
 use super::new_workspace_rules::{
     PickedFile, SourceChoice, StartForm, blocked_reason, branch_text, initial_repo,
     new_workspace_input, pick_source, prefill_branch, read_uploads, shown_repo, source_choices,
-    start_label,
+    start_hint, start_label,
 };
 use crate::agents::agent_choices::DEFAULT_AGENT;
 use crate::app::dashboard::Dashboard;
@@ -24,9 +24,6 @@ use crate::components::dialog::{
 };
 use crate::components::form::text_editor;
 use crate::components::toast_rules::ToastTone;
-
-/// What Start a task does, in its tooltip.
-const START_HINT: &str = "A new task with its own workspace: a git worktree on a new branch.";
 
 /// The Branch field's placeholder when the project sets no `git.branchName`.
 const DEFAULT_BRANCH_HINT: &str = "natamux/{id}-{slug}";
@@ -96,6 +93,8 @@ pub struct NewWorkspaceDialog {
     base: String,
     agent: String,
     single_agent: bool,
+    /// "Create a worktree": unchecked makes the task only.
+    worktree: bool,
     picked_source: String,
     skill: String,
     files: Vec<PickedFile>,
@@ -121,6 +120,7 @@ struct Stops {
     skill: FocusHandle,
     files: FocusHandle,
     project: FocusHandle,
+    worktree: FocusHandle,
     branch: FocusHandle,
     agent: FocusHandle,
     flow: FocusHandle,
@@ -186,6 +186,7 @@ impl NewWorkspaceDialog {
             base: String::new(),
             agent: DEFAULT_AGENT.into(),
             single_agent: false,
+            worktree: true,
             picked_source: "manual".into(),
             skill: String::new(),
             files: Vec::new(),
@@ -204,6 +205,7 @@ impl NewWorkspaceDialog {
                 skill: cx.focus_handle(),
                 files: cx.focus_handle(),
                 project: cx.focus_handle(),
+                worktree: cx.focus_handle(),
                 branch: cx.focus_handle(),
                 agent: cx.focus_handle(),
                 flow: cx.focus_handle(),
@@ -279,6 +281,7 @@ impl NewWorkspaceDialog {
             notes: self.notes.read(cx).text(cx),
             reference: self.reference.read(cx).text(cx),
             skill: self.skill.clone(),
+            no_worktree: !self.worktree,
         }
     }
 
@@ -441,14 +444,16 @@ impl DialogView for NewWorkspaceDialog {
         };
         ring.push(text.focus_handle(cx));
         let stops = &self.stops;
-        ring.extend(
-            [&stops.files, &stops.project, &stops.agent, &stops.flow].map(FocusHandle::clone),
-        );
-        if self.branches.is_some() {
-            ring.insert(ring.len() - 2, stops.branch.clone());
+        ring.extend([&stops.files, &stops.project, &stops.worktree].map(FocusHandle::clone));
+        if self.worktree {
+            if self.branches.is_some() {
+                ring.push(stops.branch.clone());
+            }
+            ring.push(self.branch_name.focus_handle(cx));
         }
-        ring.insert(ring.len() - 2, self.branch_name.focus_handle(cx));
-        ring.extend([stops.cancel.clone(), stops.submit.clone()]);
+        ring.extend(
+            [&stops.agent, &stops.flow, &stops.cancel, &stops.submit].map(FocusHandle::clone),
+        );
         ring
     }
 
@@ -477,7 +482,7 @@ impl Render for NewWorkspaceDialog {
             missing.is_some() || self.busy,
             submit,
         )
-        .tooltip(ui::Tooltip::text(missing.unwrap_or(START_HINT)));
+        .tooltip(ui::Tooltip::text(missing.unwrap_or(start_hint(form.no_worktree))));
         let last_base = self.last_base(cx);
         let branch = branch_text(self.branches.as_ref(), &self.base, last_base.as_deref());
         let body = v_flex()
