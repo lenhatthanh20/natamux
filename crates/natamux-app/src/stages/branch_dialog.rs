@@ -6,7 +6,7 @@ use gpui::{
     DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, ScrollHandle, Subscription,
 };
 use natamux_proto::stages::schema::{StageBranch, Step};
-use ui::{ScrollAxes, WithScrollbar, prelude::*};
+use ui::{ScrollAxes, prelude::*};
 
 use super::branch_dialog_fields::BranchFields;
 use super::branch_dialog_paths::path_cards;
@@ -19,7 +19,7 @@ use crate::components::dialog::{
     DialogFrame, DialogLayer, DialogView, cancel_button, primary_button,
 };
 use crate::components::form::input_box;
-use crate::components::scrollbars::scrollbars;
+use crate::components::scrollbars::scroll_area;
 use crate::components::tab_order;
 
 /// A new branch after the picked step (before the release when none), from the `+ Add` menu.
@@ -187,8 +187,8 @@ impl Render for BranchDialog {
                             "No path holds: the task skips this branch and goes on.",
                         ))
                     }),
-            )
-            .custom_scrollbars(scrollbars(ScrollAxes::Vertical, &self.scroll), window, cx);
+            );
+        let body = scroll_area(body, ScrollAxes::Vertical, &self.scroll, window, cx);
         let frame = DialogFrame::new(title, cx.listener(|_, _, _, cx| cx.emit(DismissEvent)))
             .footer_note(format!("{count} of {MAX_PATHS} paths"))
             .footer(cancel_button(
