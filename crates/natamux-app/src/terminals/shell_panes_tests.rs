@@ -13,7 +13,7 @@ use super::ShellPanes;
 use crate::app::dashboard::Dashboard;
 use crate::app::source::Source;
 use crate::app::test_views;
-use crate::terminals::terminal_cache::TerminalCache;
+use crate::terminals::terminal_cache::{Owner, TerminalCache};
 
 fn listed(names: &[&str]) -> TerminalList {
     let names: Vec<String> = names.iter().map(|name| name.to_string()).collect();
@@ -192,6 +192,14 @@ fn shown(panes: &Entity<ShellPanes>, cx: &mut VisualTestContext) -> Option<Strin
     panes.read_with(cx, |panes, _| panes.shown.clone())
 }
 
+/// The terminals of T-0146 the grid drew last.
+fn drawn(cx: &mut VisualTestContext) -> Vec<String> {
+    cx.update(|_, cx| TerminalCache::claimed(Owner::Workspace, cx))
+        .into_iter()
+        .filter_map(|key| key.strip_prefix("T-0146/").map(str::to_owned))
+        .collect()
+}
+
 fn maximized(dashboard: &Entity<Dashboard>, cx: &mut VisualTestContext) -> bool {
     dashboard.read_with(cx, |dashboard, _| dashboard.is_maximized("T-0146"))
 }
@@ -207,6 +215,7 @@ fn a_maximized_task_shows_each_terminal_switched_to_full_size(cx: &mut TestAppCo
     cx.run_until_parked();
     assert!(maximized(&dashboard, cx));
     assert_eq!(shown(&panes, cx).as_deref(), Some("10"));
+    assert_eq!(drawn(cx), ["10"]);
 
     // A sidebar terminal row asks for Terminal 2.
     dashboard.update(cx, |dashboard, cx| {
@@ -216,6 +225,7 @@ fn a_maximized_task_shows_each_terminal_switched_to_full_size(cx: &mut TestAppCo
     cx.run_until_parked();
     assert!(maximized(&dashboard, cx), "switching ended the mode");
     assert_eq!(shown(&panes, cx).as_deref(), Some("2"));
+    assert_eq!(drawn(cx), ["2"], "the switch drew more than Terminal 2");
 
     // Another task and back: the mode stays, the first agent terminal shows.
     panes.update(cx, |panes, cx| panes.set_task(Some("T-0141".into()), cx));
@@ -224,8 +234,11 @@ fn a_maximized_task_shows_each_terminal_switched_to_full_size(cx: &mut TestAppCo
     cx.run_until_parked();
     assert!(maximized(&dashboard, cx), "another task ended the mode");
     assert_eq!(shown(&panes, cx).as_deref(), Some("1"));
+    assert_eq!(drawn(cx), ["1"]);
 
     panes.update(cx, |panes, cx| panes.toggle_maximized("1", cx));
     cx.run_until_parked();
     assert!(!maximized(&dashboard, cx), "Restore kept the mode");
+    // The claim is a sorted set of keys.
+    assert_eq!(drawn(cx), ["1", "10", "12", "2"], "Restore did not draw every pane");
 }
