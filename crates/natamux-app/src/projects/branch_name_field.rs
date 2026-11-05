@@ -10,9 +10,9 @@ use ui::prelude::*;
 use super::settings_tab_rules::{
     BRANCH_NAME_HINT, BRANCH_NAME_LABEL, BRANCH_NAME_PLACEHOLDER, branch_name_field,
 };
-use crate::components::form::{input_box, text_editor};
+use crate::components::form::text_editor;
 use crate::stages::pipeline_editor::PipelineEditor;
-use crate::stages::stage_fields_view::{default_mark, error_line, inline_field};
+use crate::stages::stage_fields_view::{default_mark, error_line, field_input, labelled};
 
 pub struct BranchNameField {
     pipeline: Entity<PipelineEditor>,
@@ -101,11 +101,14 @@ impl Render for BranchNameField {
             },
             cx,
         );
-        let control = div().w_full().child(input_box(&self.editor, cx));
+        let control = div()
+            .w_full()
+            .max_w(rems_from_px(360.0_f32))
+            .child(field_input(&self.editor, cx));
         v_flex()
             .id("branch-name-field")
             .gap_1()
-            .child(inline_field(
+            .child(labelled(
                 BRANCH_NAME_LABEL,
                 Some(mark),
                 Some(BRANCH_NAME_HINT.into()),

@@ -8,9 +8,9 @@ use gpui::{Entity, FocusHandle, Focusable, Subscription};
 use ui::prelude::*;
 
 use super::settings_tab_rules::{SEND_BACKS_HINT, SEND_BACKS_LABEL, send_backs_field};
-use crate::components::form::{input_box, text_editor};
+use crate::components::form::text_editor;
 use crate::stages::pipeline_editor::PipelineEditor;
-use crate::stages::stage_fields_view::{default_mark, error_line, inline_field};
+use crate::stages::stage_fields_view::{default_mark, error_line, field_input, labelled};
 
 pub struct SendBacksField {
     pipeline: Entity<PipelineEditor>,
@@ -101,11 +101,11 @@ impl Render for SendBacksField {
         );
         let control = div()
             .w(rems_from_px(120.0_f32))
-            .child(input_box(&self.editor, cx));
+            .child(field_input(&self.editor, cx));
         v_flex()
             .id("send-backs-field")
             .gap_1()
-            .child(inline_field(
+            .child(labelled(
                 SEND_BACKS_LABEL,
                 Some(mark),
                 Some(SEND_BACKS_HINT.into()),

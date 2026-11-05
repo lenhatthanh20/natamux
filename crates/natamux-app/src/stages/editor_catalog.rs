@@ -18,7 +18,8 @@ use crate::stages::editor_draft::{MAX_ID, fits_id_rule};
 use crate::stages::editor_find::{
     find_path, insert_at, release_index, stage_fits_in_path, used_ids,
 };
-use crate::stages::editor_labels::{approval_label, kind_label};
+use crate::stages::editor_labels::kind_label;
+use crate::stages::preview_rules::waits_for_person;
 
 /// A stage is custom when its id is not in the catalog; a custom stage cannot take a catalog id.
 pub fn is_custom(stage: &Stage) -> bool {
@@ -306,12 +307,16 @@ pub fn picker_empty_text(steps: &[Step], query: &str) -> Option<String> {
     })
 }
 
-/// The line under a stage of the picker: "Agent · Waits for your approval".
+/// The right side of a picker row: "Agent · Approval" or "Agent · Auto".
 pub fn picker_detail(entry: &CatalogStage) -> String {
     format!(
         "{} \u{b7} {}",
         kind_label(entry.stage.kind),
-        approval_label(&entry.stage)
+        if waits_for_person(&entry.stage) {
+            "Approval"
+        } else {
+            "Auto"
+        }
     )
 }
 

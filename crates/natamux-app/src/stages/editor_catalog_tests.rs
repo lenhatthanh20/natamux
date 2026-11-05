@@ -301,10 +301,7 @@ fn picker_lists_every_catalog_stage_that_is_not_in_the_pipeline_by_phase() {
         security.description,
         "Checks the diff for security problems."
     );
-    assert_eq!(
-        picker_detail(security),
-        "Agent \u{b7} Waits for your approval"
-    );
+    assert_eq!(picker_detail(security), "Agent \u{b7} Approval");
     assert!(
         groups
             .iter()

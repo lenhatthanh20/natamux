@@ -4,7 +4,7 @@
 
 use editor::{Editor, EditorEvent};
 use gpui::{ClickEvent, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, Subscription};
-use ui::prelude::*;
+use ui::{ButtonLike, prelude::*};
 
 use super::editor_catalog::{
     CUSTOM_KINDS, CustomKind, CustomStageInput, add_custom_stage, custom_stage_problems, form_id,
@@ -12,9 +12,9 @@ use super::editor_catalog::{
 };
 use super::editor_labels::kind_label;
 use super::pipeline_editor::PipelineEditor;
-use super::stage_fields_view::{Choice, SELECT_WIDTH, error_line, open_choices, select};
+use super::stage_fields_view::{Choice, error_line, help_line, open_choices, select};
 use crate::components::dialog::{
-    DialogFrame, DialogLayer, DialogSize, DialogView, cancel_button, primary_button,
+    DialogFrame, DialogLayer, DialogView, cancel_button, primary_button,
 };
 use crate::components::form::{field, input_box, text_editor};
 
@@ -109,7 +109,7 @@ impl CustomStageDialog {
         }
     }
 
-    fn kind_menu(&self, cx: &mut Context<Self>) -> Button {
+    fn kind_menu(&self, cx: &mut Context<Self>) -> ButtonLike {
         let kind = self.kind;
         let this = cx.weak_entity();
         select("custom-kind", kind_label(kind.stage_kind()))
@@ -143,10 +143,6 @@ impl Focusable for CustomStageDialog {
 }
 
 impl DialogView for CustomStageDialog {
-    fn size(&self) -> DialogSize {
-        DialogSize::Small
-    }
-
     fn tab_ring(&self, cx: &App) -> Vec<FocusHandle> {
         let mut ring = vec![
             self.name.focus_handle(cx),
@@ -194,7 +190,6 @@ impl Render for CustomStageDialog {
             "Add a custom stage",
             cx.listener(|_, _, _, cx| cx.emit(DismissEvent)),
         )
-        .footer_note("It waits for your approval. You can change that.")
         .footer(cancel_button(
             "Cancel",
             &self.cancel_focus,
@@ -207,14 +202,24 @@ impl Render for CustomStageDialog {
             cx.listener(|this, _, window, cx| this.submit(window, cx)),
         ))
         .child(group("Name", &self.name, shown.name))
-        .child(group("Id", &self.id, shown.id))
-        .child(field(
-            "Kind",
-            div().w(rems_from_px(SELECT_WIDTH)).child(kind),
-        ))
+        .child(
+            h_flex()
+                .items_start()
+                .gap(rems_from_px(12.0_f32))
+                .child(
+                    div()
+                        .min_w_0()
+                        .flex_1()
+                        .child(group("Id", &self.id, shown.id)),
+                )
+                .child(div().min_w_0().flex_1().child(field("Kind", kind))),
+        )
         .when(agent, |this| {
             this.child(group("Output file", &self.output, shown.output))
-        });
+        })
+        .child(help_line(
+            "It waits for your approval. You can change that.",
+        ));
         div()
             .key_context("Dialog")
             .track_focus(&self.focus)

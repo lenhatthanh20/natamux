@@ -1,6 +1,6 @@
 //! The text fields of the picked stage: one editor each, made when the pick changes.
 
-use gpui::Entity;
+use gpui::{Entity, TextStyleRefinement};
 use natamux_proto::stages::capabilities::stage_name;
 use natamux_proto::stages::schema::{Stage, Step};
 use ui::prelude::*;
@@ -44,6 +44,23 @@ fn stage_value(stage: &Stage, field: TextField) -> String {
     text.clone().unwrap_or_default()
 }
 
+/// Text at 13 px, or the buffer font at 12 px for commands, arguments, files and the prompt.
+fn set_font(field: &LiveField, mono: bool, cx: &mut App) {
+    let font = theme::theme_settings(cx).buffer_font(cx).family.clone();
+    let (family, size) = if mono {
+        (Some(font), 12.0_f32)
+    } else {
+        (None, 13.0_f32)
+    };
+    field.editor.update(cx, |editor, _| {
+        editor.set_text_style_refinement(TextStyleRefinement {
+            font_family: family,
+            font_size: Some(rems_from_px(size).into()),
+            ..Default::default()
+        })
+    });
+}
+
 impl StageFields {
     pub(super) fn new(
         pipeline: &Entity<PipelineEditor>,
@@ -74,7 +91,7 @@ impl StageFields {
         let read_id = id.to_owned();
         let sections = LiveField::new(
             pipeline,
-            "",
+            "One heading per line",
             Some((3, 8)),
             move |steps| {
                 find_stage(steps, &read_id)
@@ -87,7 +104,7 @@ impl StageFields {
             window,
             cx,
         );
-        StageFields {
+        let fields = StageFields {
             id: id.to_owned(),
             name: text(TextField::Name, "", None, window, cx),
             args: text(TextField::Args, "--model sonnet", None, window, cx),
@@ -97,7 +114,21 @@ impl StageFields {
             output: text(TextField::Output, "notes.md", None, window, cx),
             sections,
             done_when: text(TextField::DoneWhen, "", None, window, cx),
+        };
+        for field in [&fields.name, &fields.done_when] {
+            set_font(field, false, cx);
         }
+        for field in [
+            &fields.args,
+            &fields.prompt,
+            &fields.command,
+            &fields.check,
+            &fields.output,
+            &fields.sections,
+        ] {
+            set_font(field, true, cx);
+        }
+        fields
     }
 
     pub(super) fn sync(&self, steps: &[Step], window: &mut Window, cx: &mut App) {

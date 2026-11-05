@@ -14,11 +14,11 @@ use super::editor_branches::{add_branch, add_branch_with, add_path, replace_bran
 use super::editor_draft::MAX_PATHS;
 use super::editor_find::{find_branch, used_ids};
 use super::pipeline_editor::PipelineEditor;
-use super::stage_fields_view::{change, help_line, labelled};
+use super::stage_fields_view::{change, field_input, field_label, help_line, labelled};
 use crate::components::dialog::{
-    DialogFrame, DialogLayer, DialogView, cancel_button, primary_button,
+    DialogFrame, DialogLayer, DialogSize, DialogView, cancel_button, primary_button,
 };
-use crate::components::form::input_box;
+
 use crate::components::scrollbars::scroll_area;
 use crate::components::tab_order;
 
@@ -123,6 +123,10 @@ impl Focusable for BranchDialog {
 }
 
 impl DialogView for BranchDialog {
+    fn size(&self) -> DialogSize {
+        DialogSize::Wide
+    }
+
     fn tab_ring(&self, _: &App) -> Vec<FocusHandle> {
         let mut ring = self.stops.clone();
         ring.extend([self.cancel_focus.clone(), self.submit_focus.clone()]);
@@ -162,10 +166,14 @@ impl Render for BranchDialog {
             "Branch name",
             None,
             None,
-            input_box(&self.fields.name.editor, cx),
+            field_input(&self.fields.name.editor, cx),
         );
+        let paths_title = div()
+            .mt(rems_from_px(10.0_f32))
+            .child(field_label("Paths, checked in order"));
         let cards = path_cards(&branch, &self.fields, &self.local, cx);
         self.stops = tab_order::end();
+        let adding_new = self.adding.is_some();
         let (title, submit) = match self.adding {
             Some(_) => ("Add a branch", "Add branch"),
             None => ("Edit branch", "Save branch"),
@@ -173,24 +181,28 @@ impl Render for BranchDialog {
         let body = v_flex()
             .id("branch-dialog-body")
             .max_h(rems_from_px(440.0_f32))
-            .gap_3()
             .overflow_y_scroll()
             .track_scroll(&self.scroll)
             .child(name)
+            .child(paths_title)
             .children(cards)
             .child(
                 h_flex()
-                    .gap_2()
+                    .mt(rems_from_px(8.0_f32))
+                    .items_center()
+                    .gap(rems_from_px(10.0_f32))
                     .when(count < MAX_PATHS, |this| this.child(add))
                     .when(skip, |this| {
-                        this.child(help_line(
-                            "No path holds: the task skips this branch and goes on.",
-                        ))
+                        this.child(help_line("If no path holds, the task skips this branch."))
                     }),
             );
         let body = scroll_area(body, ScrollAxes::Vertical, &self.scroll, window, cx);
         let frame = DialogFrame::new(title, cx.listener(|_, _, _, cx| cx.emit(DismissEvent)))
-            .footer_note(format!("{count} of {MAX_PATHS} paths"))
+            .footer_note(if adding_new {
+                "You add stages to the paths after.".to_owned()
+            } else {
+                "Stages stay in their paths.".to_owned()
+            })
             .footer(cancel_button(
                 "Cancel",
                 &self.cancel_focus,
