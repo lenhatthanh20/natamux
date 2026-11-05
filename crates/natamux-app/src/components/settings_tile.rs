@@ -10,9 +10,11 @@ use super::button_style::button_icon;
 use super::chips::tip_with_keys;
 use super::colors::{StateColors, TileColor, avatar_color, avatar_letter, tile_colors};
 
-/// 20 px in the nav, 24 px in a row or a dialog header, 32 px in the page header.
+/// 16 px inside a select, 20 px in the nav, 24 px in a row or a dialog header, 32 px in the
+/// page header.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TileSize {
+    Inline,
     Nav,
     Row,
     Header,
@@ -22,6 +24,7 @@ impl TileSize {
     /// (box, radius, icon, letter) in px.
     pub fn metrics(self) -> (f32, f32, f32, f32) {
         match self {
+            TileSize::Inline => (16., 4., 10., 10.),
             TileSize::Nav => (20., 5., 12., 11.),
             TileSize::Row => (24., 6., 13., 11.),
             TileSize::Header => (32., 8., 16., 15.),

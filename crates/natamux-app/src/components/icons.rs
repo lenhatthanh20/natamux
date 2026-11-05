@@ -83,7 +83,7 @@ mod tests {
     use crate::app::asset_table;
 
     /// The Lucide icons Zed has no twin for.
-    const KEPT: [&str; 28] = [
+    const KEPT: [&str; 29] = [
         "bot",
         "circle-dot",
         "columns-3",
@@ -108,6 +108,7 @@ mod tests {
         "moon",
         "palette",
         "panels-top-left",
+        "plug",
         "shield",
         "sliders-vertical",
         "sun",

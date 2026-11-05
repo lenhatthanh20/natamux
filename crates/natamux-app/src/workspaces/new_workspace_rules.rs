@@ -11,7 +11,6 @@ use natamux_proto::tasks::attachments::{AttachmentUpload, attachment_limit_error
 use natamux_proto::tasks::task::TaskContext;
 use natamux_proto::workspaces::workspace::NewWorkspaceInput;
 
-use super::branches::branch_options;
 use super::workspace_rules::create_blocked_reason;
 use crate::sidebar::workspace_groups::DEFAULT_REPO_ID;
 
@@ -209,32 +208,6 @@ pub fn base_after_pick(name: &str, start: Option<&str>) -> String {
     }
 }
 
-/// The text of the "Branch from" button: the picked branch, or the start one, by its option
-/// label, such as "main (default)".
-pub fn branch_text(list: Option<&BranchList>, base: &str, last_used: Option<&str>) -> String {
-    let start = start_branch(list);
-    let value = if base.is_empty() {
-        start.clone()
-    } else {
-        Some(base.to_string())
-    };
-    let Some(value) = value else {
-        return "The default branch".into();
-    };
-    let Some(list) = list else {
-        return value;
-    };
-    branch_options(
-        &list.branches,
-        list.current.as_deref(),
-        last_used,
-        start.as_deref(),
-    )
-    .into_iter()
-    .find(|option| option.value == value)
-    .map_or(value, |option| option.label)
-}
-
 /// What the user typed and picked.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct StartForm {
@@ -370,13 +343,15 @@ pub fn fit_attachments(
     (kept, refused)
 }
 
-/// `formatBytes` of core.
+/// `formatBytes` of core, with no decimal from 100 KB (T-0292): "412 KB", "12.4 KB".
 pub fn format_bytes(bytes: u64) -> String {
     const MB: u64 = 1_000_000;
     if bytes < 1000 {
         format!("{bytes} B")
-    } else if bytes < MB {
+    } else if bytes < 100_000 {
         format!("{:.1} KB", bytes as f64 / 1000.0)
+    } else if bytes < MB {
+        format!("{} KB", bytes / 1000)
     } else {
         format!("{:.1} MB", bytes as f64 / MB as f64)
     }

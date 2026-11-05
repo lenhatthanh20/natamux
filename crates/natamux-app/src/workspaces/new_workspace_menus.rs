@@ -1,5 +1,6 @@
 //! The selects of the Start a task dialog: each opens a menu of its options at the button. The
 //! task branches and the branches of origin fill the branch list, so they sit in folded submenus.
+//! Task flow is a segmented control, not a menu.
 
 use std::rc::Rc;
 
@@ -9,7 +10,8 @@ use ui::{ContextMenu, prelude::*};
 use super::super::branches::{
     REMOTE_BRANCH_GROUP, TASK_BRANCH_GROUP, branch_options, remote_loading, remote_options,
 };
-use super::super::new_workspace_rules::{base_after_pick, start_branch};
+use super::super::new_workspace_rules::{SourceChoice, base_after_pick, start_branch};
+use super::super::new_workspace_view_rules::skill_menu_header;
 use super::NewWorkspaceDialog;
 use crate::agents::agent_choices::{custom_agents, pick_list};
 use crate::agents::limits_rules::{current, picker_note};
@@ -24,7 +26,6 @@ pub(super) enum Pick {
     Project,
     Branch,
     Agent,
-    Flow,
 }
 
 /// The groups of the branch menu that sit in a submenu each.
@@ -36,6 +37,8 @@ struct MenuOption {
     label: String,
     value: String,
     checked: bool,
+    /// A separator goes before it ("An agent skill", "No agent, a plain terminal").
+    sep: bool,
 }
 
 impl NewWorkspaceDialog {
@@ -45,6 +48,7 @@ impl NewWorkspaceDialog {
             label,
             value,
             checked,
+            sep: false,
         };
         match pick {
             Pick::Source => {
@@ -52,7 +56,10 @@ impl NewWorkspaceDialog {
                 let choices = self.choices();
                 choices
                     .iter()
-                    .map(|c| option(None, c.label(), c.key(), c.key() == picked))
+                    .map(|c| MenuOption {
+                        sep: *c == SourceChoice::AgentSkill,
+                        ..option(None, c.label(), c.key(), c.key() == picked)
+                    })
                     .collect()
             }
             Pick::Skill => self
@@ -106,26 +113,37 @@ impl NewWorkspaceDialog {
             }
             Pick::Agent => {
                 let limits = current(&self.dashboard.read(cx).data.limits, now_ms());
-                pick_list(&custom_agents())
+                let own: Vec<(String, String)> = custom_agents()
                     .into_iter()
-                    .map(|(id, label)| match picker_note(&id, &limits) {
-                        Some(note) => (format!("{label} · {note}"), id),
-                        None => (label, id),
+                    .map(|agent| (agent.id.clone(), agent.id))
+                    .collect();
+                let mut list: Vec<MenuOption> = [("Custom", own), ("Built-in", pick_list(&[]))]
+                    .into_iter()
+                    .flat_map(|(group, agents)| {
+                        agents
+                            .into_iter()
+                            .map(move |(id, label)| (group, id, label))
                     })
-                    .chain([("No agent, a plain terminal".to_string(), String::new())])
-                    .map(|(label, id)| {
+                    .map(|(group, id, label)| {
+                        let label = match picker_note(&id, &limits) {
+                            Some(note) => format!("{label} · {note}"),
+                            None => label,
+                        };
                         let checked = id == self.agent;
-                        option(None, label, id, checked)
+                        option(Some(group), label, id, checked)
                     })
-                    .collect()
+                    .collect();
+                list.push(MenuOption {
+                    sep: true,
+                    ..option(
+                        None,
+                        "No agent, a plain terminal".into(),
+                        String::new(),
+                        self.agent.is_empty(),
+                    )
+                });
+                list
             }
-            Pick::Flow => [
-                ("Full flow", "full", !self.single_agent),
-                ("One agent", "single-agent", self.single_agent),
-            ]
-            .into_iter()
-            .map(|(label, value, checked)| option(None, label.into(), value.into(), checked))
-            .collect(),
         }
     }
 
@@ -140,12 +158,20 @@ impl NewWorkspaceDialog {
         let loading = (pick == Pick::Branch)
             .then(|| remote_loading(self.remote_branches.as_deref()))
             .flatten();
+        let header = (pick == Pick::Skill).then(|| skill_menu_header(&self.agent));
         let this = cx.weak_entity();
         let menu = ContextMenu::build(window, cx, move |menu, _, _| {
             let (folded, options): (Vec<_>, Vec<_>) = options
                 .into_iter()
                 .partition(|each| each.group.is_some_and(|group| FOLDED.contains(&group)));
+            let menu = match header {
+                Some(header) => menu.header(header),
+                None => menu,
+            };
             let mut menu = add_options(menu, options, &this, pick);
+            if !folded.is_empty() {
+                menu = menu.separator();
+            }
             // Task and remote branches fill the list, so they are folded away.
             for group in FOLDED {
                 let shown: Vec<MenuOption> = folded
@@ -205,7 +231,6 @@ impl NewWorkspaceDialog {
                 self.base = base_after_pick(&value, start.as_deref());
             }
             Pick::Agent => self.agent = value,
-            Pick::Flow => self.single_agent = value == "single-agent",
         }
         cx.notify();
     }
@@ -219,6 +244,9 @@ fn add_options(
 ) -> ContextMenu {
     let mut group = None;
     for option in options {
+        if option.sep {
+            menu = menu.separator();
+        }
         if option.group != group {
             if let Some(title) = option.group {
                 menu = menu.header(title);

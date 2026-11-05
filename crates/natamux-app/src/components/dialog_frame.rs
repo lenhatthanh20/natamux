@@ -4,7 +4,7 @@
 
 use std::rc::Rc;
 
-use gpui::ClickEvent;
+use gpui::{ClickEvent, ScrollHandle};
 use ui::prelude::*;
 
 use super::chips::tip_with_keys;
@@ -29,6 +29,7 @@ pub struct DialogFrame {
     header_end: Vec<AnyElement>,
     body_pad_top: f32,
     body_max_h: Option<f32>,
+    body_scroll: Option<ScrollHandle>,
 }
 
 impl DialogFrame {
@@ -50,6 +51,7 @@ impl DialogFrame {
             header_end: Vec::new(),
             body_pad_top: 4.,
             body_max_h: None,
+            body_scroll: None,
         }
     }
 
@@ -108,6 +110,12 @@ impl DialogFrame {
     /// The body scrolls past this height.
     pub fn body_max_h(mut self, px: f32) -> Self {
         self.body_max_h = Some(px);
+        self
+    }
+
+    /// The body's scroll follows `scroll`, so the view can move it (the Start a task shots).
+    pub fn body_scroll(mut self, scroll: &ScrollHandle) -> Self {
+        self.body_scroll = Some(scroll.clone());
         self
     }
 }
@@ -243,7 +251,8 @@ impl RenderOnce for DialogFrame {
                 .flex_1()
                 .overflow_y_scroll()
                 .px(rems_from_px(16.0_f32))
-                .when_some(self.body_max_h, |body, max| body.max_h(rems_from_px(max)));
+                .when_some(self.body_max_h, |body, max| body.max_h(rems_from_px(max)))
+                .when_some(self.body_scroll, |body, scroll| body.track_scroll(&scroll));
             if sheet {
                 body.bg(editor_bg)
                     .pt(rems_from_px(self.body_pad_top))

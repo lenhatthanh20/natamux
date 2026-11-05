@@ -127,6 +127,11 @@ pub enum Shot {
     ChangesOverMain,
     StageEvidence,
     StartTaskBranchMenu,
+    StartTaskFilled,
+    StartTaskFilledEnd,
+    StartTaskNoWorktree,
+    StartTaskOneAgent,
+    StartTaskError,
     SidebarBlurred,
     RemoveWorkspaceAnyway,
     UpdateDownloading,
@@ -137,7 +142,7 @@ pub enum Shot {
 }
 
 impl Shot {
-    pub const ALL: [Shot; 95] = [
+    pub const ALL: [Shot; 100] = [
         Shot::TasksTable,
         Shot::TasksBoard,
         Shot::BoardHoverCard,
@@ -226,6 +231,11 @@ impl Shot {
         Shot::ChangesOverMain,
         Shot::StageEvidence,
         Shot::StartTaskBranchMenu,
+        Shot::StartTaskFilled,
+        Shot::StartTaskFilledEnd,
+        Shot::StartTaskNoWorktree,
+        Shot::StartTaskOneAgent,
+        Shot::StartTaskError,
         Shot::SidebarBlurred,
         Shot::RemoveWorkspaceAnyway,
         Shot::UpdateDownloading,
@@ -325,6 +335,11 @@ impl Shot {
             Shot::ChangesOverMain => "changes-over-main",
             Shot::StageEvidence => "stage-evidence",
             Shot::StartTaskBranchMenu => "start-task-branch-menu",
+            Shot::StartTaskFilled => "start-task-filled",
+            Shot::StartTaskFilledEnd => "start-task-filled-end",
+            Shot::StartTaskNoWorktree => "start-task-no-worktree",
+            Shot::StartTaskOneAgent => "start-task-one-agent",
+            Shot::StartTaskError => "start-task-error",
             Shot::SidebarBlurred => "sidebar-blurred",
             Shot::RemoveWorkspaceAnyway => "remove-workspace-anyway",
             Shot::UpdateDownloading => "update-downloading",
