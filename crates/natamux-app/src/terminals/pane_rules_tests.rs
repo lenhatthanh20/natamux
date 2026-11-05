@@ -320,3 +320,13 @@ fn new_terminal_is_in_workspace_panes_and_off_when_full() {
     assert_eq!(tip, "New terminal: at most 6 terminals");
     assert_eq!(new_terminal_button(true, true, false), None);
 }
+
+#[test]
+fn a_maximized_task_shows_the_shown_terminal_else_its_agent_else_the_first() {
+    let names = picked(&["1", "2", "3"]);
+    assert_eq!(maximized_pane(&names, Some("3"), Some("2")), Some("3".into()));
+    assert_eq!(maximized_pane(&names, Some("9"), Some("2")), Some("2".into()));
+    assert_eq!(maximized_pane(&names, None, Some("2")), Some("2".into()));
+    assert_eq!(maximized_pane(&names, Some("9"), Some("8")), Some("1".into()));
+    assert_eq!(maximized_pane(&[], Some("1"), Some("1")), None);
+}

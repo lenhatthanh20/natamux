@@ -183,3 +183,51 @@ fn an_answer_that_waited_long_for_a_draw_ends_no_wait(cx: &mut TestAppContext) {
     );
     assert!(cached("T-0141/1", cx), "Terminal 1 did not show");
 }
+
+fn shown(panes: &Entity<ShellPanes>, cx: &mut VisualTestContext) -> Option<String> {
+    panes.read_with(cx, |panes, _| panes.shown.clone())
+}
+
+fn maximized(dashboard: &Entity<Dashboard>, cx: &mut VisualTestContext) -> bool {
+    dashboard.read_with(cx, |dashboard, _| dashboard.is_maximized("T-0146"))
+}
+
+/// T-0287: maximize is a mode of the task. Switching terminals keeps it, and so does another
+/// task; only Restore ends it.
+#[gpui::test]
+fn a_maximized_task_shows_each_terminal_switched_to_full_size(cx: &mut TestAppContext) {
+    test_views::init(cx);
+    let source = Arc::new(Source::FakeDaemon);
+    let dashboard = cx.new(|cx| Dashboard::new(Ok(source), Default::default(), cx));
+    cx.run_until_parked();
+    let held = dashboard.clone();
+    let (panes, cx) = cx.add_window_view(move |_, cx| ShellPanes::new(held, cx));
+    panes.update(cx, |panes, cx| panes.set_task(Some("T-0146".into()), cx));
+    cx.run_until_parked();
+
+    panes.update(cx, |panes, cx| panes.toggle_maximized("10", cx));
+    cx.run_until_parked();
+    assert!(maximized(&dashboard, cx));
+    assert_eq!(shown(&panes, cx).as_deref(), Some("10"));
+
+    // A sidebar terminal row asks for Terminal 2.
+    dashboard.update(cx, |dashboard, cx| {
+        dashboard.open_shell("T-0146", Some("2".into()), cx)
+    });
+    panes.update(cx, |_, cx| cx.notify());
+    cx.run_until_parked();
+    assert!(maximized(&dashboard, cx), "switching ended the mode");
+    assert_eq!(shown(&panes, cx).as_deref(), Some("2"));
+
+    // Another task and back: the mode stays, the first agent terminal shows.
+    panes.update(cx, |panes, cx| panes.set_task(Some("T-0141".into()), cx));
+    cx.run_until_parked();
+    panes.update(cx, |panes, cx| panes.set_task(Some("T-0146".into()), cx));
+    cx.run_until_parked();
+    assert!(maximized(&dashboard, cx), "another task ended the mode");
+    assert_eq!(shown(&panes, cx).as_deref(), Some("1"));
+
+    panes.update(cx, |panes, cx| panes.toggle_maximized("1", cx));
+    cx.run_until_parked();
+    assert!(!maximized(&dashboard, cx), "Restore kept the mode");
+}
