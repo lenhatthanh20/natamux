@@ -44,6 +44,18 @@ impl Dashboard {
         self.update_view(cx, |view| view.remember_tab(&id, tab));
     }
 
+    /// The task's terminals show one at a time, full size (T-0287).
+    pub fn is_maximized(&self, id: &str) -> bool {
+        self.view.is_maximized(id)
+    }
+
+    /// Maximize or restore: kept per task in `view.json`, until the user restores it.
+    pub fn set_maximized(&mut self, id: &str, on: bool, cx: &mut Context<Self>) {
+        if self.view.is_maximized(id) != on {
+            self.update_view(cx, |view| view.set_maximized(id, on));
+        }
+    }
+
     /// The count of files to commit in the open task's workspace, as the workspace last read
     /// it: the badge of the rail's Changes.
     pub fn open_changes_of(&self, id: &str) -> Option<usize> {

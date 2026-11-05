@@ -572,6 +572,7 @@ Shared shell:
 - Height 32 fixed (fixes the 29/30px mismatch, WS-12), pad 0 4 0 10, bg surface, border-bottom line.
 - Left: status glyph 16 (agent panes) or `SquareTerminal` 14 (terminals); terminal name 12/500 ink, or in Agents: `T-0018` mono muted + task title 12/400 as a link-style button with pointer cursor, underline on hover, tooltip "Open workspace T-0018" (WS-20); agent badge only when an agent runs in it, naming the agent the daemon found there, not the task's (WS-13); state text 12 muted truncate; an agent on no stage (started by hand in an extra terminal) shows the state its own hooks gave, or none ("Running · Edit notes/T-0018.md", WS-21).
 - Right: icon buttons 24: Maximize/Restore (`Mod+Shift+Enter`), Open workspace (agents grid only), Close. Close tooltip: "Close terminal (ends the process)" and confirms when a foreground process other than the shell is running.
+- Maximize in a workspace is a mode of the task (native app, T-0287): the task shows one terminal at a time, full size, whichever terminal the user switches to, until Restore. It is kept per task across tasks and restarts (`view.json`, `maximized`). In the Agents grid, maximize stays with one pane.
 - Focus: the focused pane gets `outline: 1px solid var(--focus); outline-offset: -1px` on the pane frame; header title ink, other headers muted.
 - Opening another task's workspace on its Terminal tab puts the keyboard in its first agent terminal (the lowest-numbered terminal that runs an agent, else Terminal 1), once the terminals are read. Not on a phone, not when opened from an address, and a terminal picked in the jump palette wins.
 - Hint after the state text (Agents grid, and Terminal 1 of a workspace while it has no agent): another agent terminal of the task. "Terminal 2 needs input" and "Terminal 2 failed" in signal; "Terminal 5 is working" (Terminal 1 has no agent, such as during an `ownShell` Spec) in muted, as it does not need the user.
@@ -768,7 +769,7 @@ Rules:
 | | Delete | Remove workspace (asks) |
 | | Alt+Up / Alt+Down | Move the focused stage in the stage list of Project settings |
 | | type letters | Jump to a row by title |
-| Panes | Mod+Shift+Enter | Maximize / restore the focused pane |
+| Panes | Mod+Shift+Enter | Maximize / restore the task's terminals (Agents grid: the focused pane) |
 | | Ctrl+Shift+` | New terminal (works inside a terminal on both OSes) |
 | | Mod+F (in a pane, P2, needs `@xterm/addon-search`) | Find in scrollback |
 | Diff | `[` `]` | Previous / next file |
@@ -871,7 +872,7 @@ One helper in `lib/tasks.ts`: `formatAge(date, now, 'short' | 'long')`. Short (r
 | Quiet chrome | neutral surfaces, color for state | 1, 2.3 |
 | Command palette | top-center, ~600px, kbd chips, groups, recents, create fallback | 4.17 |
 | Jump palette | needs-you first, frozen order, digit jump, create row | 4.17 |
-| Panes | splits, maximize, sizes saved per workspace, each workspace owns its layout | 4.23; per-workspace pane layout saved in `view-store` (P1) |
+| Panes | splits, maximize as a per-task mode kept until restore and across restarts, sizes saved per workspace, each workspace owns its layout | 4.23; per-workspace pane layout saved in `view-store` (P1) |
 | Terminal quality | themed palette, min contrast, scrollback search, links, scroll to bottom | 2.3, 4.23 (search and links need two xterm addons; ask owner) |
 | Diff quality | themed Monaco, hide unchanged, wrap, hunk nav, per-line comments to the agent | 4.24 |
 | Create flow | short dialog, Mod+Enter, closes at once, progress in context | 4.14, 5.4 |

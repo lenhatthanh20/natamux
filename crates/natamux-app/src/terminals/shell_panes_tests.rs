@@ -13,7 +13,7 @@ use super::ShellPanes;
 use crate::app::dashboard::Dashboard;
 use crate::app::source::Source;
 use crate::app::test_views;
-use crate::terminals::terminal_cache::TerminalCache;
+use crate::terminals::terminal_cache::{Owner, TerminalCache};
 
 fn listed(names: &[&str]) -> TerminalList {
     let names: Vec<String> = names.iter().map(|name| name.to_string()).collect();
@@ -30,7 +30,11 @@ fn open_task<'a>(
     task_id: &str,
     held: TerminalList,
     cx: &'a mut TestAppContext,
-) -> (Entity<Dashboard>, &'a mut VisualTestContext) {
+) -> (
+    Entity<Dashboard>,
+    Entity<ShellPanes>,
+    &'a mut VisualTestContext,
+) {
     test_views::init(cx);
     let source = Arc::new(Source::FakeDaemon);
     let dashboard = cx.new(|cx| Dashboard::new(Ok(source), Default::default(), cx));
@@ -43,7 +47,7 @@ fn open_task<'a>(
     let id = task_id.to_owned();
     panes.update(cx, |panes, cx| panes.set_task(Some(id), cx));
     cx.run_until_parked();
-    (dashboard, cx)
+    (dashboard, panes, cx)
 }
 
 fn cached(key: &str, cx: &mut VisualTestContext) -> bool {
@@ -56,7 +60,7 @@ fn cached(key: &str, cx: &mut VisualTestContext) -> bool {
 #[gpui::test]
 fn a_listed_shell_the_daemon_closed_gets_no_terminal(cx: &mut TestAppContext) {
     // The fake daemon lists only Terminal 1 for T-0141.
-    let (dashboard, cx) = open_task("T-0141", listed(&["1", "8"]), cx);
+    let (dashboard, _, cx) = open_task("T-0141", listed(&["1", "8"]), cx);
 
     assert!(
         !cached("T-0141/8", cx),
@@ -75,7 +79,7 @@ fn a_listed_shell_the_daemon_closed_gets_no_terminal(cx: &mut TestAppContext) {
 #[gpui::test]
 fn a_listed_shell_the_daemon_still_has_gets_its_terminal_after_the_read(cx: &mut TestAppContext) {
     // The fake daemon lists Terminals 1, 2, 10 and 12 for T-0146.
-    let (_, cx) = open_task("T-0146", listed(&["1", "2", "10", "12"]), cx);
+    let (_, _, cx) = open_task("T-0146", listed(&["1", "2", "10", "12"]), cx);
 
     for name in ["1", "2", "10", "12"] {
         assert!(
@@ -182,4 +186,63 @@ fn an_answer_that_waited_long_for_a_draw_ends_no_wait(cx: &mut TestAppContext) {
         "the old answer let Terminal 9 skip its read"
     );
     assert!(cached("T-0141/1", cx), "Terminal 1 did not show");
+}
+
+fn shown(panes: &Entity<ShellPanes>, cx: &mut VisualTestContext) -> Option<String> {
+    panes.read_with(cx, |panes, _| panes.shown.clone())
+}
+
+/// The terminals of T-0146 the grid drew last.
+fn drawn(cx: &mut VisualTestContext) -> Vec<String> {
+    cx.update(|_, cx| TerminalCache::claimed(Owner::Workspace, cx))
+        .into_iter()
+        .filter_map(|key| key.strip_prefix("T-0146/").map(str::to_owned))
+        .collect()
+}
+
+fn maximized(dashboard: &Entity<Dashboard>, cx: &mut VisualTestContext) -> bool {
+    dashboard.read_with(cx, |dashboard, _| dashboard.is_maximized("T-0146"))
+}
+
+/// T-0287: maximize is a mode of the task. Switching terminals keeps it, and so does another
+/// task; only Restore ends it.
+#[gpui::test]
+fn a_maximized_task_shows_each_terminal_switched_to_full_size(cx: &mut TestAppContext) {
+    // The fake daemon lists Terminals 1, 2, 10 and 12 for T-0146.
+    let (dashboard, panes, cx) = open_task("T-0146", listed(&["1", "2", "10", "12"]), cx);
+
+    panes.update(cx, |panes, cx| panes.toggle_maximized("10", cx));
+    cx.run_until_parked();
+    assert!(maximized(&dashboard, cx));
+    assert_eq!(shown(&panes, cx).as_deref(), Some("10"));
+    assert_eq!(drawn(cx), ["10"]);
+
+    // A sidebar terminal row asks for Terminal 2.
+    dashboard.update(cx, |dashboard, cx| {
+        dashboard.open_shell("T-0146", Some("2".into()), cx)
+    });
+    panes.update(cx, |_, cx| cx.notify());
+    cx.run_until_parked();
+    assert!(maximized(&dashboard, cx), "switching ended the mode");
+    assert_eq!(shown(&panes, cx).as_deref(), Some("2"));
+    assert_eq!(drawn(cx), ["2"], "the switch drew more than Terminal 2");
+
+    // Another task and back: the mode stays, the first agent terminal shows.
+    panes.update(cx, |panes, cx| panes.set_task(Some("T-0141".into()), cx));
+    cx.run_until_parked();
+    panes.update(cx, |panes, cx| panes.set_task(Some("T-0146".into()), cx));
+    cx.run_until_parked();
+    assert!(maximized(&dashboard, cx), "another task ended the mode");
+    assert_eq!(shown(&panes, cx).as_deref(), Some("1"));
+    assert_eq!(drawn(cx), ["1"]);
+
+    panes.update(cx, |panes, cx| panes.toggle_maximized("1", cx));
+    cx.run_until_parked();
+    assert!(!maximized(&dashboard, cx), "Restore kept the mode");
+    // The claim is a sorted set of keys.
+    assert_eq!(
+        drawn(cx),
+        ["1", "10", "12", "2"],
+        "Restore did not draw every pane"
+    );
 }

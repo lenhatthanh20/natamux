@@ -51,6 +51,22 @@ pub fn with_tab(
     with_entry(current, task_id, tab, MAX_REMEMBERED_DETAILS)
 }
 
+/// The tasks whose terminals show one at a time, full size (T-0287). The newest last; the oldest
+/// go when there are too many.
+pub fn with_maximized(current: &[String], task_id: &str, on: bool) -> Vec<String> {
+    let mut next: Vec<String> = current
+        .iter()
+        .filter(|id| id.as_str() != task_id)
+        .cloned()
+        .collect();
+    if on {
+        next.push(task_id.to_owned());
+    }
+    let extra = next.len().saturating_sub(MAX_REMEMBERED_DETAILS);
+    next.drain(..extra);
+    next
+}
+
 fn find<'a, T>(entries: &'a [(String, T)], task_id: &str) -> Option<&'a T> {
     entries
         .iter()
@@ -347,5 +363,42 @@ mod tests {
         assert!(parse_pinned(Some(r#"{"a":1}"#)).is_empty());
         assert!(parse_pinned(Some("not json")).is_empty());
         assert!(parse_pinned(None).is_empty());
+    }
+
+    #[test]
+    fn with_maximized_adds_a_task_once_removes_it_and_drops_the_oldest() {
+        let one = with_maximized(&[], "T-1", true);
+        assert_eq!(one, ids(&["T-1"]));
+        assert_eq!(with_maximized(&one, "T-1", true), ids(&["T-1"]));
+        assert!(with_maximized(&one, "T-1", false).is_empty());
+        assert!(with_maximized(&[], "T-1", false).is_empty());
+        let full: Vec<String> = (0..MAX_REMEMBERED_DETAILS)
+            .map(|n| format!("T-{n}"))
+            .collect();
+        let next = with_maximized(&full, "T-new", true);
+        assert_eq!(next.len(), MAX_REMEMBERED_DETAILS);
+        assert_eq!(next.first().map(String::as_str), Some("T-1"));
+        assert_eq!(next.last().map(String::as_str), Some("T-new"));
+    }
+
+    #[test]
+    fn view_json_keeps_the_maximized_tasks() {
+        use crate::app::view_state::ViewState;
+        let mut view = ViewState::default();
+        assert!(!view.is_maximized("T-1"));
+        view.set_maximized("T-1", true);
+        let back = ViewState::parse(&view.to_json());
+        assert!(back.is_maximized("T-1"));
+        assert_eq!(back.maximized, ids(&["T-1"]));
+        let bad = ViewState::parse(r#"{"maximized": {"T-1": true}}"#);
+        assert!(bad.maximized.is_empty());
+        assert!(ViewState::parse("{}").maximized.is_empty());
+        let many: Vec<String> = (0..=MAX_REMEMBERED_DETAILS)
+            .map(|n| format!("T-{n}"))
+            .collect();
+        let text = serde_json::json!({ "maximized": many }).to_string();
+        let capped = ViewState::parse(&text).maximized;
+        assert_eq!(capped.len(), MAX_REMEMBERED_DETAILS);
+        assert_eq!(capped.first().map(String::as_str), Some("T-1"));
     }
 }
