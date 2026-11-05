@@ -286,3 +286,17 @@ fn fills_words_by_hand() {
         "1{b} 2 {} {a b} {1} {a"
     );
 }
+
+#[test]
+fn fills_the_task_id_in_a_prompt_and_in_args_but_no_issue_text_in_args() {
+    let stage = with_prompt("implement", "Work on {id}: {title}.");
+    assert!(stage_prompt(&stage, &task(), false).starts_with("Work on T-1: Export tasks."));
+    let args = fill(
+        "--name {id}\u{b7}Self-review --out {dir} {title}",
+        &arg_values(&task()),
+    );
+    assert_eq!(
+        args,
+        "--name T-1\u{b7}Self-review --out .natamux-task {title}"
+    );
+}
