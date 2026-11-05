@@ -8,7 +8,7 @@ use gpui::{AnyElement, Div, Entity, FontWeight, ScrollHandle, Stateful};
 use natamux_proto::stages::capabilities::stage_name;
 use natamux_proto::stages::resolve::active_steps;
 use natamux_proto::stages::schema::{Stage, Step};
-use ui::{ScrollAxes, Tooltip, WithScrollbar, prelude::*};
+use ui::{ScrollAxes, Tooltip, prelude::*};
 
 use super::editor_catalog::is_custom;
 use super::editor_labels::{StageRunner, stage_runner};
@@ -20,7 +20,7 @@ use super::preview_rules::{
 };
 use crate::agents::agent_choices::agent_label;
 use crate::components::agent_badge::AgentIcon;
-use crate::components::scrollbars::scrollbars;
+use crate::components::scrollbars::scroll_area;
 use crate::stages::editor_fields::has_custom_prompt;
 
 /// A node is 104 wide; its ring is 24.
@@ -290,8 +290,10 @@ pub fn pipeline_preview(
         })
         .collect();
     let top = if branches.is_empty() { 12. } else { 40. };
-    let row = chart_row(&chart, &shown, top, scroll, cx).custom_scrollbars(
-        scrollbars(ScrollAxes::Horizontal, scroll),
+    let row = scroll_area(
+        chart_row(&chart, &shown, top, scroll, cx),
+        ScrollAxes::Horizontal,
+        scroll,
         window,
         cx,
     );
@@ -315,7 +317,8 @@ fn chart_row(
     cx: &App,
 ) -> Stateful<Div> {
     // The steps are the scroll box's own children: gpui takes the scroll range from them, so a
-    // row inside the box would be as wide as the box and nothing would scroll.
+    // row inside the box would be as wide as the box and nothing would scroll. For the same
+    // reason the bar goes on a wrapper (`scroll_area`), not in here.
     let mut row = h_flex()
         .id("pipeline-scroll")
         .items_start()

@@ -9,13 +9,13 @@ use gpui::{
 };
 use natamux_proto::stages::capabilities::stage_name;
 use natamux_proto::stages::catalog::CatalogStage;
-use ui::{ScrollAxes, WithScrollbar, prelude::*};
+use ui::{ScrollAxes, prelude::*};
 
 use super::editor_catalog::{add_catalog_stage, picker_detail, picker_empty_text, picker_groups};
 use super::kind_icon::kind_icon;
 use super::pipeline_editor::PipelineEditor;
 use crate::components::form::{input_box, text_editor};
-use crate::components::scrollbars::scrollbars;
+use crate::components::scrollbars::scroll_area;
 
 /// A stage was added and picked: the dialog closes.
 pub struct StageAdded;
@@ -199,15 +199,22 @@ impl StagePicker {
 impl Render for StagePicker {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let rows = self.render_list(cx);
-        v_flex().gap_2().child(input_box(&self.search, cx)).child(
-            v_flex()
-                .id("stage-picker-list")
-                .max_h(rems_from_px(360.0_f32))
-                .gap_0p5()
-                .overflow_y_scroll()
-                .track_scroll(&self.scroll)
-                .children(rows)
-                .custom_scrollbars(scrollbars(ScrollAxes::Vertical, &self.scroll), window, cx),
-        )
+        let list = v_flex()
+            .id("stage-picker-list")
+            .max_h(rems_from_px(360.0_f32))
+            .gap_0p5()
+            .overflow_y_scroll()
+            .track_scroll(&self.scroll)
+            .children(rows);
+        v_flex()
+            .gap_2()
+            .child(input_box(&self.search, cx))
+            .child(scroll_area(
+                list,
+                ScrollAxes::Vertical,
+                &self.scroll,
+                window,
+                cx,
+            ))
     }
 }

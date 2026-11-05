@@ -7,7 +7,7 @@
 
 use gpui::{Entity, EventEmitter, FocusHandle, Focusable, ScrollHandle, Subscription};
 use natamux_proto::projects::repo::{LoadedSettings, SkillList};
-use ui::{ScrollAxes, Tooltip, WithScrollbar, prelude::*};
+use ui::{ScrollAxes, Tooltip, prelude::*};
 
 use super::branch_name_field::BranchNameField;
 use super::idle_pause_field::IdlePauseField;
@@ -21,7 +21,7 @@ use crate::app::source::reason;
 use crate::components::button_style::quiet_button;
 use crate::components::confirm::Confirm;
 use crate::components::dialog::primary_button;
-use crate::components::scrollbars::scrollbars;
+use crate::components::scrollbars::scroll_area;
 use crate::stages::editor_draft::same_settings;
 use crate::stages::pipeline_editor::{DraftEdited, PipelineEditor};
 use crate::stages::pipeline_preview::pipeline_preview;
@@ -409,21 +409,26 @@ impl Render for ProjectSettingsPage {
             .min_h_0()
             .child(header)
             .child(
-                v_flex()
-                    .id("project-settings-body")
-                    .min_h_0()
-                    .flex_1()
-                    .overflow_y_scroll()
-                    .track_scroll(&self.body_scroll)
-                    .px_6()
-                    .py_3()
-                    .gap_3()
-                    .children(body)
-                    .custom_scrollbars(
-                        scrollbars(ScrollAxes::Vertical, &self.body_scroll),
-                        window,
-                        cx,
-                    ),
+                scroll_area(
+                    v_flex()
+                        .id("project-settings-body")
+                        .min_h_0()
+                        .flex_1()
+                        .overflow_y_scroll()
+                        .track_scroll(&self.body_scroll)
+                        .px_6()
+                        .py_3()
+                        .gap_3()
+                        .children(body),
+                    ScrollAxes::Vertical,
+                    &self.body_scroll,
+                    window,
+                    cx,
+                )
+                .flex()
+                .flex_col()
+                .min_h_0()
+                .flex_1(),
             )
             .child(self.bottom_bar(shown, cx))
     }
