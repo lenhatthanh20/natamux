@@ -144,35 +144,56 @@ fn ring(stage: &Stage, error: bool, cx: &App) -> impl IntoElement + use<> {
 /// The "Pipeline" title and the legend of the marks, above the chart.
 fn title_row(cx: &App) -> impl IntoElement + use<> {
     let colors = cx.theme().colors();
-    let item = |ring: Div, text: &'static str| {
+    let item = |ring: AnyElement, text: &'static str| {
         h_flex()
-            .gap_1()
+            .gap(rems_from_px(5.0_f32))
+            .items_center()
             .child(ring)
-            .child(Label::new(text).size(LabelSize::XSmall).color(Color::Muted))
+            .child(
+                Label::new(text)
+                    .size(LabelSize::Custom(rems_from_px(11_f32)))
+                    .color(Color::Muted),
+            )
     };
-    let swatch = || div().flex_none().size(rems_from_px(8.0_f32)).rounded_full();
+    let swatch = || {
+        div()
+            .flex_none()
+            .size(rems_from_px(10.0_f32))
+            .rounded_full()
+    };
     h_flex()
-        .px_4()
-        .pt_2()
-        .gap_3()
+        .items_center()
+        .px(rems_from_px(10.0_f32))
+        .pt(rems_from_px(6.0_f32))
+        .gap(rems_from_px(10.0_f32))
         .child(
             Label::new("Pipeline")
                 .size(LabelSize::Small)
-                .weight(FontWeight::SEMIBOLD),
+                .weight(FontWeight::MEDIUM),
         )
         .child(div().flex_1())
         .child(item(
             swatch()
                 .border_1()
                 .border_dashed()
-                .border_color(colors.border),
+                .border_color(colors.text_muted)
+                .into_any_element(),
             "Built-in",
         ))
         .child(item(
-            swatch().border_1().border_color(colors.text_accent),
+            swatch()
+                .border_1()
+                .border_color(colors.text_accent)
+                .into_any_element(),
             "Custom",
         ))
-        .child(item(swatch().bg(colors.text_muted), "Waits for you"))
+        .child(item(
+            waits_icon()
+                .size(IconSize::Custom(rems_from_px(11_f32)))
+                .color(Color::Muted)
+                .into_any_element(),
+            "Waits for you",
+        ))
 }
 
 fn agent_line(runner: &StageRunner) -> impl IntoElement + use<> {
@@ -253,7 +274,7 @@ pub fn pipeline_preview(
     cx: &mut App,
 ) -> AnyElement {
     let colors = cx.theme().colors();
-    let (box_bg, box_border) = (colors.elevated_surface_background, colors.border);
+    let (box_bg, box_border) = (colors.panel_background, colors.border_variant);
     let chart = {
         let state = editor.read(cx);
         Chart {
@@ -267,7 +288,7 @@ pub fn pipeline_preview(
     let frame = v_flex()
         .id("pipeline-preview")
         .flex_none()
-        .rounded_md()
+        .rounded(px(8.))
         .border_1()
         .border_color(box_border)
         .bg(box_bg);
@@ -289,7 +310,7 @@ pub fn pipeline_preview(
             _ => None,
         })
         .collect();
-    let top = if branches.is_empty() { 12. } else { 40. };
+    let top = if branches.is_empty() { 22. } else { 40. };
     let row = scroll_area(
         chart_row(&chart, &shown, top, scroll, cx),
         ScrollAxes::Horizontal,
@@ -333,9 +354,9 @@ fn chart_row(
                 cx.stop_propagation();
             }
         })
-        .px_4()
+        .px(rems_from_px(14.0_f32))
         .pt(px(top))
-        .pb_3();
+        .pb(rems_from_px(8.0_f32));
     for (index, step) in shown.iter().enumerate() {
         if index > 0 {
             row = row.child(link(LINE_Y, cx));

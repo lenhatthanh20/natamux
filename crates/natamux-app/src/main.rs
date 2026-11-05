@@ -240,6 +240,7 @@ mod stages {
     pub mod group_rules;
     pub mod kind_icon;
     pub mod overview_rules;
+    pub mod path_add;
     pub mod pipeline_editor;
     pub mod pipeline_preview;
     pub mod pipeline_preview_branch;
@@ -252,6 +253,7 @@ mod stages {
     pub mod send_back_rules;
     pub mod skill_rules;
     pub mod source_tag;
+    pub mod stage_blocks;
     pub mod stage_card;
     pub mod stage_choices;
     pub mod stage_details;

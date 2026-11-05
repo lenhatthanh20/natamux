@@ -8,7 +8,7 @@ use ui::prelude::*;
 
 use super::pipeline_editor::PipelineEditor;
 use super::stage_picker::{StageAdded, StagePicker};
-use crate::components::dialog::{DialogFrame, DialogLayer, DialogView};
+use crate::components::dialog::{DialogFrame, DialogLayer, DialogView, cancel_button};
 use crate::components::menu::press_of;
 
 /// Opens the dialog with the focus in its search field.
@@ -97,10 +97,15 @@ impl DialogView for AddStageDialog {
 impl Render for AddStageDialog {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let frame = DialogFrame::new(
-            "Add a built-in stage",
+            "Add stage",
             cx.listener(|_, _, _, cx| cx.emit(DismissEvent)),
         )
-        .child(self.picker.clone());
+        .child(self.picker.clone())
+        .footer(cancel_button(
+            "Cancel",
+            &self.focus,
+            cx.listener(|_, _, _, cx| cx.emit(DismissEvent)),
+        ));
         div()
             .key_context("Dialog")
             .track_focus(&self.focus)

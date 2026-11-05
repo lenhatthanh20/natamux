@@ -24,6 +24,8 @@ pub enum DialogSize {
     #[default]
     Medium,
     Large,
+    /// 600 px: the Add branch dialog.
+    Wide,
 }
 
 impl DialogSize {
@@ -32,6 +34,7 @@ impl DialogSize {
             DialogSize::Small => 400_f32,
             DialogSize::Medium => 520.,
             DialogSize::Large => 640.,
+            DialogSize::Wide => 600.,
         })
     }
 }
@@ -307,6 +310,7 @@ pub struct DialogFrame {
     description: Option<SharedString>,
     body: Vec<AnyElement>,
     footer: Vec<AnyElement>,
+    footer_start: Vec<AnyElement>,
     on_close: ClickHandler,
 }
 
@@ -322,6 +326,7 @@ impl DialogFrame {
             description: None,
             body: Vec::new(),
             footer: Vec::new(),
+            footer_start: Vec::new(),
             on_close: Rc::new(on_close),
         }
     }
@@ -336,6 +341,12 @@ impl DialogFrame {
     /// tooltip, so dialogs stay short.
     pub fn description(mut self, description: impl Into<SharedString>) -> Self {
         self.description = Some(description.into());
+        self
+    }
+
+    /// A footer item at the left, before the note (the Split group button).
+    pub fn footer_start(mut self, item: impl IntoElement) -> Self {
+        self.footer_start.push(item.into_any_element());
         self
     }
 
@@ -356,34 +367,40 @@ impl RenderOnce for DialogFrame {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let on_close = self.on_close;
         let header = h_flex()
-            .items_start()
-            .gap(DynamicSpacing::Base08.rems(cx))
-            .px(DynamicSpacing::Base12.rems(cx))
-            .pt(DynamicSpacing::Base08.rems(cx))
-            .pb(DynamicSpacing::Base04.rems(cx))
+            .items_center()
+            .gap_2()
+            .pt(rems_from_px(10.0_f32))
+            .pb(rems_from_px(10.0_f32))
+            .pl(rems_from_px(16.0_f32))
+            .pr(rems_from_px(12.0_f32))
             .child(
                 v_flex()
                     .min_w_0()
                     .flex_1()
                     .gap_1()
-                    .child(Headline::new(self.title).size(HeadlineSize::Small))
+                    .child(
+                        Label::new(self.title)
+                            .size(LabelSize::Custom(rems_from_px(14_f32)))
+                            .weight(gpui::FontWeight::SEMIBOLD),
+                    )
                     .when_some(self.description, |this, text| {
                         this.child(Label::new(text).color(Color::Muted))
                     }),
             )
             .child(
                 IconButton::new("dialog-close", IconName::Close)
-                    .icon_size(IconSize::Medium)
+                    .icon_size(IconSize::Small)
                     .tooltip(ui::Tooltip::text("Close"))
                     .on_click(move |event, window, cx| on_close(event, window, cx)),
             );
-        let has_footer = !self.footer.is_empty();
+        let has_footer = !self.footer.is_empty() || !self.footer_start.is_empty();
         let height = window.viewport_size().height;
         v_flex()
             .w_full()
             .max_h(height * 0.8)
             .overflow_hidden()
             .elevation_3(cx)
+            .rounded(px(10.))
             .child(header)
             .when(!self.body.is_empty(), |this| {
                 this.child(
@@ -392,32 +409,36 @@ impl RenderOnce for DialogFrame {
                         .min_h_0()
                         .flex_1()
                         .overflow_y_scroll()
-                        .px(DynamicSpacing::Base12.rems(cx))
-                        .py(DynamicSpacing::Base08.rems(cx))
-                        .gap(DynamicSpacing::Base12.rems(cx))
+                        .px(rems_from_px(16.0_f32))
+                        .pb(rems_from_px(12.0_f32))
+                        .gap(rems_from_px(10.0_f32))
                         .children(self.body),
                 )
             })
-            // Zed's `ModalFooter` spacing; the note gets a line of its own, so a long one never
-            // pushes the buttons out of the dialog.
+            // The note sits left of the buttons and wraps, so a long one never pushes them out.
             .when(has_footer, |this| {
                 this.child(
-                    v_flex()
+                    h_flex()
                         .flex_none()
-                        .gap_1()
-                        .p(DynamicSpacing::Base08.rems(cx))
+                        .items_center()
+                        .gap_2()
+                        .px(rems_from_px(16.0_f32))
+                        .py(rems_from_px(10.0_f32))
                         .border_t_1()
                         .border_color(cx.theme().colors().border_variant)
-                        .when_some(self.note, |this, note| {
-                            this.child(Label::new(note).size(LabelSize::Small).color(Color::Muted))
-                        })
                         .child(
                             h_flex()
-                                .flex_wrap()
-                                .justify_end()
-                                .gap_1()
-                                .children(self.footer),
-                        ),
+                                .min_w_0()
+                                .flex_1()
+                                .gap_2()
+                                .children(self.footer_start)
+                                .children(self.note.map(|note| {
+                                    Label::new(note)
+                                        .size(LabelSize::Custom(rems_from_px(11_f32)))
+                                        .color(Color::Muted)
+                                })),
+                        )
+                        .child(h_flex().flex_none().gap_2().children(self.footer)),
                 )
             })
     }

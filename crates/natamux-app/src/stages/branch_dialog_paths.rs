@@ -11,14 +11,12 @@ use super::editor_branches::{
     ConditionType, condition_problems_by_field, remove_path, retype_condition, set_otherwise,
     set_path_condition,
 };
-use super::kind_icon::remove_icon;
 use super::pipeline_editor::PipelineEditor;
 use super::stage_fields_view::{
-    Choice, LiveField, change, error_line, help_line, labelled, open_choices, select,
+    Choice, LiveField, change, error_line, field_input, open_choices, select,
 };
 use super::stage_options::checkbox_row;
 use crate::components::confirm::Confirm;
-use crate::components::form::input_box;
 
 /// The cards of every path of `branch`.
 pub(super) fn path_cards(
@@ -69,12 +67,19 @@ fn path_card(
     let colors = cx.theme().colors();
     let otherwise = path.when.is_none();
     let condition = match &path.when {
-        None => help_line("Taken when no condition above holds.").into_any_element(),
+        None => div()
+            .ml(rems_from_px(54.0_f32))
+            .child(
+                Label::new("Runs when no earlier path holds.")
+                    .size(LabelSize::Custom(rems_from_px(11.5_f32)))
+                    .color(Color::Muted),
+            )
+            .into_any_element(),
         Some(when) => condition_fields(card, own, when, pipeline, cx),
     };
     let toggle = is_last.then(|| {
         let (pipeline, branch_id, path_id) = (pipeline.clone(), branch.id.clone(), path.id.clone());
-        checkbox_row(
+        div().mt(rems_from_px(4.0_f32)).child(checkbox_row(
             format!("otherwise-{}", path.id),
             "Make this the Otherwise path",
             otherwise,
@@ -84,41 +89,50 @@ fn path_card(
                 })
             },
             cx,
-        )
-    });
-    v_flex()
-        .gap_3()
-        .p_3()
-        .rounded_md()
-        .border_1()
-        .border_color(colors.border)
-        .bg(colors.elevated_surface_background)
-        .child(
-            h_flex()
-                .gap_2()
-                .child(Label::new(label.clone()).weight(FontWeight::SEMIBOLD))
-                .when(otherwise, |this| {
-                    this.child(
-                        div()
-                            .px_1p5()
-                            .rounded_md()
-                            .bg(colors.element_background)
-                            .child(
-                                Label::new("Otherwise")
-                                    .size(LabelSize::XSmall)
-                                    .color(Color::Muted),
-                            ),
-                    )
-                })
-                .child(div().flex_1())
-                .child(remove_button(card, &label, pipeline)),
-        )
-        .child(labelled(
-            "Path name",
-            None,
-            None,
-            input_box(&own.name.editor, cx),
         ))
+    });
+    let head = h_flex()
+        .items_center()
+        .gap(rems_from_px(6.0_f32))
+        .child(
+            div().w(rems_from_px(48.0_f32)).flex_none().child(
+                Label::new(label.clone())
+                    .size(LabelSize::Custom(rems_from_px(11_f32)))
+                    .color(Color::Muted),
+            ),
+        )
+        .child(
+            div()
+                .min_w_0()
+                .flex_1()
+                .child(field_input(&own.name.editor, cx)),
+        )
+        .when(otherwise, |this| {
+            this.child(
+                div()
+                    .flex_none()
+                    .h(rems_from_px(16.0_f32))
+                    .px(rems_from_px(5.0_f32))
+                    .rounded(px(4.))
+                    .bg(colors.ghost_element_hover)
+                    .child(
+                        Label::new("Otherwise")
+                            .size(LabelSize::Custom(rems_from_px(10.5_f32)))
+                            .weight(FontWeight::MEDIUM)
+                            .color(Color::Muted),
+                    ),
+            )
+        })
+        .child(remove_button(card, &label, pipeline));
+    v_flex()
+        .mt(rems_from_px(8.0_f32))
+        .p(rems_from_px(8.0_f32))
+        .gap(rems_from_px(6.0_f32))
+        .rounded(px(7.))
+        .border_1()
+        .border_color(colors.border_variant)
+        .bg(colors.panel_background)
+        .child(head)
         .child(condition)
         .children(toggle)
         .into_any_element()
@@ -139,9 +153,9 @@ fn remove_button(
         format!("Remove {label}?"),
         format!("remove-{}", card.path.id),
     );
-    Button::new(SharedString::from(id), "Remove path")
-        .style(ButtonStyle::Subtle)
-        .start_icon(remove_icon().size(IconSize::Small))
+    IconButton::new(SharedString::from(id), IconName::Close)
+        .icon_size(IconSize::Small)
+        .tooltip(ui::Tooltip::text("Remove path"))
         .disabled(card.branch.paths.len() < 2)
         .on_click(move |_, window, cx| {
             let (pipeline, branch_id, path_id) =
@@ -220,12 +234,27 @@ fn condition_selects(
         });
         open_choices(choices.into(), event.position(), window, cx);
     });
+    cond_row(
+        "If",
+        h_flex()
+            .gap(rems_from_px(6.0_f32))
+            .child(v_flex().w(rems_from_px(150.0_f32)).child(kind_button))
+            .child(v_flex().w(rems_from_px(128.0_f32)).child(holds_button)),
+    )
+}
+
+/// A condition row: a 60 px label column, then the control.
+fn cond_row(label: &'static str, control: impl IntoElement) -> impl IntoElement {
     h_flex()
-        .flex_wrap()
-        .gap_2()
-        .child(Label::new("If").weight(FontWeight::MEDIUM))
-        .child(div().w(rems_from_px(176.0_f32)).child(kind_button))
-        .child(div().w(rems_from_px(160.0_f32)).child(holds_button))
+        .items_center()
+        .gap(rems_from_px(6.0_f32))
+        .child(
+            div()
+                .w(rems_from_px(60.0_f32))
+                .flex_none()
+                .child(Label::new(label).size(LabelSize::Small).color(Color::Muted)),
+        )
+        .child(div().min_w_0().flex_1().child(control))
 }
 
 fn condition_fields(
@@ -237,53 +266,23 @@ fn condition_fields(
 ) -> AnyElement {
     let problems = condition_problems_by_field(when);
     let on_command = matches!(when, Condition::Command { .. });
-    let text = |label: &'static str,
-                help: Option<&'static str>,
-                field: &LiveField,
-                problem: Option<String>| {
+    let text = |label: &'static str, field: &LiveField, problem: Option<String>| {
         v_flex()
-            .gap_1p5()
-            .child(labelled(
-                label,
-                None,
-                help.map(Into::into),
-                input_box(&field.editor, cx),
-            ))
+            .gap_1()
+            .child(cond_row(label, field_input(&field.editor, cx)))
             .children(problem.map(error_line))
     };
     let fields = if on_command {
-        vec![text(
-            "Command",
-            Some(
-                "Runs in the task's folder, like a check command. The condition holds when it exits with code 0.",
-            ),
-            &own.run,
-            problems.run,
-        )]
+        vec![text("Command", &own.run, problems.run)]
     } else {
         vec![
-            text(
-                "File",
-                Some("A markdown file in the task's folder."),
-                &own.file,
-                problems.file,
-            ),
-            text(
-                "Section (optional)",
-                Some("Only the lines under this heading count. Empty: the whole file."),
-                &own.section,
-                problems.section,
-            ),
-            text(
-                "Text to look for",
-                Some("Upper and lower case do not matter."),
-                &own.contains,
-                problems.contains,
-            ),
+            text("File", &own.file, problems.file),
+            text("Section", &own.section, problems.section),
+            text("Text", &own.contains, problems.contains),
         ]
     };
     v_flex()
-        .gap_3()
+        .gap(rems_from_px(6.0_f32))
         .child(condition_selects(card, when, pipeline))
         .children(fields)
         .into_any_element()

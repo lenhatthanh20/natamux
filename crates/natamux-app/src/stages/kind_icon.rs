@@ -38,16 +38,6 @@ pub fn branch_icon() -> Icon {
     Icon::new(IconName::GitBranch)
 }
 
-/// `GripVertical`: the drag handle of a row.
-pub fn grip_icon() -> Icon {
-    Icon::new(IconName::Menu)
-}
-
-/// `Trash2`: Remove.
-pub fn remove_icon() -> Icon {
-    icon("trash")
-}
-
 /// `CircleAlert`: a problem under a row or a field.
 pub fn problem_icon() -> Icon {
     icon("circle-alert")

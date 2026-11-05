@@ -1,5 +1,6 @@
 //! The checkboxes of a stage (`StageOptions.tsx`): approval, workflow, CI, end the terminal, and
-//! a terminal of its own. Each has a default dot and Reset icon, and a note in a tooltip.
+//! a terminal of its own. Each has a default dot and Reset icon at the row end, and a note in a
+//! tooltip of its label.
 
 use gpui::{AnyElement, Entity};
 use natamux_proto::stages::capabilities::{can_end_shell, checks_on_ci};
@@ -32,20 +33,24 @@ type Toggle = Box<dyn Fn(bool, &mut Window, &mut App)>;
 struct Row {
     id: String,
     label: &'static str,
+    /// Shown as a tooltip of the label.
     note: Option<&'static str>,
+    /// Shown as a line under the label.
+    help: Option<&'static str>,
     on: bool,
     disabled: bool,
     mark: Option<Mark>,
     toggle: Toggle,
 }
 
-/// One line: the checkbox with its label, the mark, and the note as a tooltip of an info icon at
-/// the end.
+/// The checkbox, its label (13 px), a spacer, then the dot and the Reset button at the row end;
+/// the help line under the label.
 fn render(row: Row, _cx: &App) -> AnyElement {
     let Row {
         id,
         label,
         note,
+        help,
         on,
         disabled,
         mark,
@@ -55,57 +60,74 @@ fn render(row: Row, _cx: &App) -> AnyElement {
         Some(mark) => (Some(mark.dot), mark.reset),
         None => (None, None),
     };
-    h_flex()
-        .w_full()
-        .min_h(rems_from_px(28.0_f32))
-        .gap_2()
-        .children(dot)
+    let text = LabelSize::Custom(rems_from_px(13.0_f32));
+    let check = ButtonLike::new(SharedString::from(id.clone()))
+        .size(ButtonSize::None)
+        .height(rems_from_px(22.0_f32).into())
+        .disabled(disabled)
+        .when_some(note, |this, note| this.tooltip(Tooltip::text(note)))
+        .on_click(move |_, window, cx| toggle(!on, window, cx))
         .child(
-            ButtonLike::new(SharedString::from(id.clone()))
-                .disabled(disabled)
-                .on_click(move |_, window, cx| toggle(!on, window, cx))
+            // The Zed checkbox draws its 16 px box in a 20 px frame, so 6 px leaves 8 between.
+            h_flex()
+                .gap_1p5()
                 .child(
-                    h_flex()
-                        .gap_2()
-                        .child(
-                            Checkbox::new(SharedString::from(format!("{id}-box")), on.into())
-                                .disabled(disabled)
-                                .visualization_only(true),
-                        )
-                        .child(Label::new(label).size(LabelSize::Small)),
-                ),
-        )
-        .child(div().flex_1())
-        .children(reset)
-        .children(note.map(|note| {
-            div()
-                .id(SharedString::from(format!("{id}-info")))
-                .debug_selector(|| "option-info".into())
-                .child(
-                    Icon::new(IconName::Info)
-                        .size(IconSize::XSmall)
-                        .color(Color::Muted),
+                    Checkbox::new(SharedString::from(format!("{id}-box")), on.into())
+                        .disabled(disabled)
+                        .visualization_only(true),
                 )
-                .tooltip(Tooltip::text(note))
+                .child(Label::new(label).size(text)),
+        );
+    v_flex()
+        .w_full()
+        .mb_1()
+        .child(
+            h_flex()
+                .w_full()
+                .min_h(rems_from_px(22.0_f32))
+                .gap_2()
+                .child(check)
+                .child(div().flex_1())
+                .children(dot.map(dot_box))
+                .children(reset),
+        )
+        .children(help.map(|help| {
+            div()
+                .ml(rems_from_px(26.0_f32))
+                .mb(rems_from_px(6.0_f32))
+                .child(help_line(help))
         }))
         .into_any_element()
 }
 
-/// The Basic checkboxes of `stage`: approval, and end the terminal, or the Terminal 1 line when
-/// the stage runs there.
+fn dot_box(dot: AnyElement) -> impl IntoElement {
+    div().debug_selector(|| "option-dot".into()).child(dot)
+}
+
+/// The Terminal 1 line of a stage that runs there: one help line, 6 px under it.
+fn shell_one_line() -> AnyElement {
+    div()
+        .mb(rems_from_px(6.0_f32))
+        .child(help_line(IN_SHELL_ONE))
+        .into_any_element()
+}
+
+/// The Basic rows of `stage`: the Terminal 1 line when the stage runs there, approval, and end
+/// the terminal otherwise.
 pub fn basic_options(
     stage: &Stage,
     steps: &[Step],
     pipeline: &Entity<PipelineEditor>,
     cx: &App,
 ) -> Vec<AnyElement> {
-    let mut rows = vec![approval(stage, pipeline, cx)];
-    if can_end_shell(stage) {
-        if ends_shell_one(steps, stage) {
-            rows.push(help_line(IN_SHELL_ONE).into_any_element());
-        } else {
-            rows.push(end_shell(stage, pipeline, cx));
-        }
+    let in_shell_one = can_end_shell(stage) && ends_shell_one(steps, stage);
+    let mut rows = Vec::new();
+    if in_shell_one {
+        rows.push(shell_one_line());
+    }
+    rows.push(approval(stage, pipeline, cx));
+    if can_end_shell(stage) && !in_shell_one {
+        rows.push(end_shell(stage, pipeline, cx));
     }
     rows
 }
@@ -133,20 +155,16 @@ pub fn advanced_options(
 fn approval(stage: &Stage, pipeline: &Entity<PipelineEditor>, cx: &App) -> AnyElement {
     let always = always_waits(stage);
     let release = stage.kind == StageKind::Release;
-    let note = if always {
-        Some("This stage is a check by a person.")
-    } else if release {
-        Some("Unchecked, the pull request opens when the stage starts.")
-    } else {
-        None
-    };
+    let help = always.then_some("Always on for this kind of stage.");
+    let note = release.then_some("Unchecked, the pull request opens when the stage starts.");
     let id = stage.id.clone();
     let kind = stage.kind;
-    let mark = (!always).then(|| {
+    // A stage that always waits has only its default, so its dot stays an outline.
+    let mark = {
         let (pipeline, id) = (pipeline.clone(), id.clone());
         default_mark(
             format!("gate-default-{}", stage.id),
-            is_default_gate(stage),
+            always || is_default_gate(stage),
             move |_, cx| {
                 change(&pipeline, cx, |steps| {
                     set_gate(steps, &id, default_gate(&id, kind))
@@ -154,7 +172,7 @@ fn approval(stage: &Stage, pipeline: &Entity<PipelineEditor>, cx: &App) -> AnyEl
             },
             cx,
         )
-    });
+    };
     let pipeline = pipeline.clone();
     let stage_id = id.clone();
     render(
@@ -166,9 +184,10 @@ fn approval(stage: &Stage, pipeline: &Entity<PipelineEditor>, cx: &App) -> AnyEl
                 "Wait for my approval"
             },
             note,
+            help,
             on: always || stage.gate == Gate::Manual,
             disabled: always,
-            mark,
+            mark: Some(mark),
             toggle: Box::new(move |on, _, cx| {
                 let gate = if on { Gate::Manual } else { Gate::Auto };
                 change(&pipeline, cx, |steps| set_gate(steps, &stage_id, gate));
@@ -200,6 +219,7 @@ fn flag(
             id: format!("{key}-{}", stage.id),
             label,
             note: Some(note),
+            help: None,
             on,
             disabled: false,
             mark: Some(mark),
@@ -272,6 +292,7 @@ pub fn checkbox_row(
             id,
             label,
             note: None,
+            help: None,
             on,
             disabled: false,
             mark: None,

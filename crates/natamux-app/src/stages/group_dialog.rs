@@ -19,7 +19,7 @@ use super::group_rules::{GroupPlace, edit_group, group_choices, make_group, spli
 use super::kind_icon::kind_icon;
 use super::pipeline_editor::PipelineEditor;
 use super::source_tag::source_tag;
-use super::stage_fields_view::help_line;
+use super::stage_fields_view::{field_label, help_line};
 use crate::components::button_style::quiet_button;
 use crate::components::dialog::{
     DialogFrame, DialogLayer, DialogView, cancel_button, primary_button,
@@ -259,7 +259,10 @@ impl GroupDialog {
             .child(
                 h_flex()
                     .w_full()
-                    .gap_2()
+                    .items_center()
+                    .gap(rems_from_px(10.0_f32))
+                    .px(rems_from_px(8.0_f32))
+                    .py(rems_from_px(5.0_f32))
                     .child(
                         Checkbox::new(box_id, checked.into())
                             .disabled(block.is_some())
@@ -267,10 +270,20 @@ impl GroupDialog {
                     )
                     .child(
                         kind_icon(stage.kind)
-                            .size(IconSize::Small)
-                            .color(Color::Muted),
+                            .size(IconSize::Custom(rems_from_px(15.0_f32)))
+                            .color(if is_custom(stage) {
+                                Color::Accent
+                            } else {
+                                Color::Muted
+                            }),
                     )
-                    .child(Label::new(stage_name(stage)).truncate())
+                    .child(
+                        div().min_w_0().flex_1().child(
+                            Label::new(stage_name(stage))
+                                .weight(gpui::FontWeight::MEDIUM)
+                                .truncate(),
+                        ),
+                    )
                     .child(source_tag(is_custom(stage), cx)),
             );
         if let Some(block) = block {
@@ -290,11 +303,14 @@ impl GroupDialog {
                 if let GroupPlace::Path { name, .. } = place {
                     rows.push(
                         div()
-                            .pt_1()
+                            .mx(rems_from_px(8.0_f32))
+                            .mt(rems_from_px(10.0_f32))
+                            .mb(rems_from_px(2.0_f32))
                             .child(
                                 Label::new(name.to_uppercase())
-                                    .size(LabelSize::XSmall)
-                                    .color(Color::Muted),
+                                    .size(LabelSize::Custom(rems_from_px(10.5_f32)))
+                                    .weight(gpui::FontWeight::MEDIUM)
+                                    .color(Color::Placeholder),
                             )
                             .into_any_element(),
                     );
@@ -320,18 +336,15 @@ impl Render for GroupDialog {
         let mut frame = DialogFrame::new(
             "Run stages side by side",
             cx.listener(|_, _, _, cx| cx.emit(DismissEvent)),
-        )
-        .footer_note(format!("{count} of {MAX_GROUP}"));
+        );
         if editing {
-            frame = frame
-                .footer(
-                    quiet_button("group-split", "Split group")
-                        .color(Color::Error)
-                        .track_focus(&self.split_focus)
-                        .tooltip(Tooltip::text("Every stage runs on its own, in order"))
-                        .on_click(cx.listener(|this, _, _, cx| this.split(cx))),
-                )
-                .footer(div().flex_1());
+            frame = frame.footer_start(
+                quiet_button("group-split", "Split group")
+                    .color(Color::Error)
+                    .track_focus(&self.split_focus)
+                    .tooltip(Tooltip::text("Every stage runs on its own, in order"))
+                    .on_click(cx.listener(|this, _, _, cx| this.split(cx))),
+            );
         }
         let submit = if editing {
             "Save group"
@@ -350,11 +363,16 @@ impl Render for GroupDialog {
                 count < 2,
                 cx.listener(|this, _, window, cx| this.submit(window, cx)),
             ))
-            .child(field("Group name", input_box(&self.name, cx)))
-            .child(v_flex().gap_0p5().children(rows))
-            .child(help_line(
+            .child(field("Group name (optional)", input_box(&self.name, cx)))
+            .child(
+                h_flex()
+                    .child(div().flex_1().child(field_label("Pick 2 to 4 stages")))
+                    .child(field_label(format!("{count} of {MAX_GROUP}"))),
+            )
+            .child(v_flex().children(rows))
+            .child(div().mt(rems_from_px(-2.0_f32)).child(help_line(
                 "They move next to the first picked stage and start together.",
-            ));
+            )));
         div()
             .key_context("Dialog")
             .track_focus(&self.focus)

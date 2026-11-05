@@ -89,7 +89,7 @@ impl ProjectSettingsPage {
             v_flex()
                 .id(SharedString::from(id))
                 .h_full()
-                .px_2()
+                .px(rems_from_px(10.0_f32))
                 .cursor_pointer()
                 .hover(|style| style.bg(hover))
                 .on_click(cx.listener(move |this, _, _, cx| this.pick_tab(tab, cx)))
@@ -99,9 +99,9 @@ impl ProjectSettingsPage {
         h_flex()
             .id("project-settings-tabs")
             .flex_none()
-            .h(rems_from_px(32.0_f32))
-            .px_4()
-            .gap_1()
+            .h(rems_from_px(31.0_f32))
+            .px(rems_from_px(14.0_f32))
+            .gap(rems_from_px(2.0_f32))
             .border_b_1()
             .border_color(line)
             .track_focus(&stages.tabs.focus)
@@ -124,7 +124,7 @@ impl ProjectSettingsPage {
         cx: &mut App,
     ) -> Vec<AnyElement> {
         match shown {
-            SettingsTab::General => vec![render_general(stages)],
+            SettingsTab::General => vec![render_general(stages, cx)],
             SettingsTab::Stages => self.render_stages(stages, window, cx).into(),
             SettingsTab::Json => vec![stages.tabs.json.clone().into_any_element()],
         }
