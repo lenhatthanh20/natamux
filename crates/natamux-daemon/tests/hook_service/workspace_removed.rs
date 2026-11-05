@@ -99,7 +99,7 @@ fn follows_the_agent_in_a_new_workspace_as_usual() {
     assert_eq!(started.applied, ["agent.started"]);
     let stopped = claude(&service, &before.id, &hook("Stop", json!({})), Some("1"));
     assert_eq!(stopped.applied, ["agent.finished"]);
-    assert_eq!(fx.state(&before.id), TaskState::NeedsInput);
+    assert_eq!(fx.state(&before.id), TaskState::Idle);
 }
 
 #[test]

@@ -43,7 +43,7 @@ The daemon writes `gemini-settings.json` into its data folder. Gemini CLI reads 
 | `BeforeAgent` | A prompt was sent | running |
 | `BeforeTool`, `AfterTool` | The agent works | no change |
 | `Notification` with type `ToolPermission` | Gemini waits for permission | needs input |
-| `AfterAgent` | The turn ended | needs input |
+| `AfterAgent` | The turn ended | idle |
 
 ## Skills
 

@@ -1,5 +1,5 @@
-//! The Side by side dialog, "Run stages side by side" (docs/ui-spec.md 4.31): an optional group
-//! name and a checklist of the agent and manual stages that are not in a group. 2 to 4 stages of
+//! The group sheet, "Run stages side by side" (layout-b 5.7): an optional group name and a
+//! checklist of the agent and manual stages that are not in a group. 2 to 4 stages of
 //! one place (the top level or one path) make a group. Opened on a group (Edit group…), it shows
 //! the group's stages checked and offers Split group.
 
@@ -9,24 +9,26 @@ use editor::Editor;
 use gpui::{AnyElement, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable};
 use natamux_proto::stages::capabilities::stage_name;
 use natamux_proto::stages::schema::{Stage, StageGroup, Step};
-use ui::{ButtonLike, Checkbox, Tooltip, prelude::*};
+use ui::{Checkbox, Tooltip, prelude::*};
 
-use super::editor_catalog::is_custom;
 use super::editor_draft::MAX_GROUP;
 use super::editor_find::{find_place, group_of, item_at};
 use super::editor_labels::join_names;
 use super::group_rules::{GroupPlace, edit_group, group_choices, make_group, split_group};
-use super::kind_icon::kind_icon;
+use super::list_rules::{kind_tile, kind_tile_icon};
 use super::pipeline_editor::PipelineEditor;
-use super::source_tag::source_tag;
-use super::stage_fields_view::{field_label, help_line};
-use crate::components::button_style::quiet_button;
+use crate::components::button_style::{button_icon, quiet_button};
 use crate::components::dialog::{
     DialogFrame, DialogLayer, DialogView, cancel_button, primary_button,
 };
-use crate::components::form::{field, input_box, text_editor};
+use crate::components::form::{SettingsInput, text_editor};
+use crate::components::settings_card::{SeparatorInset, SettingsCard, SettingsGroup, SettingsRow};
+use crate::components::settings_tile::{SettingsTile, TileSize};
 
 const OTHER_PLACE: &str = "A group runs in one place: the top level or one path";
+const NONE_FREE: &str = "No agent or manual stage is free to run side by side.";
+const PICK_NOTE: &str = "They move next to the first picked stage and start together. A group runs \
+                         in one place: the top level or one path.";
 const KEEP_TWO: &str = "A group keeps 2 stages. Split group runs each on its own";
 
 /// A new group, from the `+ Add` menu.
@@ -233,7 +235,7 @@ impl DialogView for GroupDialog {
                 .and_then(|group| group.parallel.first())
                 .map(|stage| stage.id.clone());
             if let Some(first) = first {
-                pipeline.select(&first, cx);
+                pipeline.pick(&first, cx);
             }
         });
         cx.emit(DismissEvent);
@@ -241,88 +243,61 @@ impl DialogView for GroupDialog {
 }
 
 impl GroupDialog {
+    /// A pick row: checkbox, kind tile, name; the path's name under a stage in a path.
     fn render_row(
         &mut self,
         stage: &Stage,
+        place: &GroupPlace,
         block: Option<&'static str>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let id = stage.id.clone();
         let focus = self.row_focus(&id, cx);
         let checked = self.picked.contains(&id);
-        let (toggle_id, box_id) = (id.clone(), SharedString::from(format!("group-box-{id}")));
-        let mut row = ButtonLike::new(SharedString::from(format!("group-pick-{id}")))
-            .full_width()
-            .disabled(block.is_some())
-            .track_focus(&focus)
-            .on_click(cx.listener(move |this, _, window, cx| this.toggle(&toggle_id, window, cx)))
+        let lead = h_flex()
+            .flex_none()
+            .gap(rems_from_px(16.0_f32))
             .child(
-                h_flex()
-                    .w_full()
-                    .items_center()
-                    .gap(rems_from_px(10.0_f32))
-                    .px(rems_from_px(8.0_f32))
-                    .py(rems_from_px(5.0_f32))
-                    .child(
-                        Checkbox::new(box_id, checked.into())
-                            .disabled(block.is_some())
-                            .visualization_only(true),
-                    )
-                    .child(
-                        kind_icon(stage.kind)
-                            .size(IconSize::Custom(rems_from_px(15.0_f32)))
-                            .color(if is_custom(stage) {
-                                Color::Accent
-                            } else {
-                                Color::Muted
-                            }),
-                    )
-                    .child(
-                        div().min_w_0().flex_1().child(
-                            Label::new(stage_name(stage))
-                                .weight(gpui::FontWeight::MEDIUM)
-                                .truncate(),
-                        ),
-                    )
-                    .child(source_tag(is_custom(stage), cx)),
-            );
-        if let Some(block) = block {
-            row = row.tooltip(Tooltip::text(block));
+                Checkbox::new(
+                    SharedString::from(format!("group-box-{id}")),
+                    checked.into(),
+                )
+                .disabled(block.is_some())
+                .visualization_only(true),
+            )
+            .child(SettingsTile::icon(
+                button_icon(kind_tile_icon(stage.kind)),
+                kind_tile(stage),
+                TileSize::Row,
+            ));
+        let this = cx.weak_entity();
+        let row_id = SharedString::from(format!("group-pick-{id}"));
+        let row = SettingsRow::new(row_id, stage_name(stage))
+            .lead(lead)
+            .disabled(block.is_some())
+            .on_press(Some(&focus), move |window, cx| {
+                this.update(cx, |this, cx| this.toggle(&id, window, cx))
+                    .ok();
+            });
+        let row = match place {
+            GroupPlace::Path { name, .. } => row.help(format!("In {name}")),
+            _ => row,
+        };
+        match block {
+            Some(block) => row.tooltip(block),
+            None => row,
         }
-        row.into_any_element()
+        .into_any_element()
     }
 
-    /// The checklist: the top-level stages, then the stages of each path under its name.
+    /// The pick list: the top-level stages, then the stages of each path.
     fn render_list(&mut self, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let choices = self.choices(cx);
         let picked_place = self.picked_place(&choices);
         let mut rows = Vec::new();
-        let mut last: Option<GroupPlace> = None;
         for (place, stage) in &choices {
-            if last.as_ref() != Some(place) {
-                if let GroupPlace::Path { name, .. } = place {
-                    rows.push(
-                        div()
-                            .mx(rems_from_px(8.0_f32))
-                            .mt(rems_from_px(10.0_f32))
-                            .mb(rems_from_px(2.0_f32))
-                            .child(
-                                Label::new(name.to_uppercase())
-                                    .size(LabelSize::Custom(rems_from_px(10.5_f32)))
-                                    .weight(gpui::FontWeight::MEDIUM)
-                                    .color(Color::Placeholder),
-                            )
-                            .into_any_element(),
-                    );
-                }
-                last = Some(place.clone());
-            }
             let block = self.row_block(stage, place, picked_place.as_ref());
-            rows.push(self.render_row(stage, block, cx));
-        }
-        if rows.is_empty() {
-            let empty = help_line("No agent or manual stage is free to run side by side.");
-            rows.push(empty.into_any_element());
+            rows.push(self.render_row(stage, place, block, cx));
         }
         rows
     }
@@ -333,10 +308,13 @@ impl Render for GroupDialog {
         let rows = self.render_list(cx);
         let count = self.picked.len();
         let editing = self.editing.is_some();
-        let mut frame = DialogFrame::new(
-            "Run stages side by side",
-            cx.listener(|_, _, _, cx| cx.emit(DismissEvent)),
-        );
+        let (title, submit) = if editing {
+            ("Edit group", "Save group")
+        } else {
+            ("Run stages side by side", "Run side by side")
+        };
+        let close = cx.listener(|_, _, _, cx| cx.emit(DismissEvent));
+        let mut frame = DialogFrame::new(title, close).sheet();
         if editing {
             frame = frame.footer_start(
                 quiet_button("group-split", "Split group")
@@ -346,11 +324,30 @@ impl Render for GroupDialog {
                     .on_click(cx.listener(|this, _, _, cx| this.split(cx))),
             );
         }
-        let submit = if editing {
-            "Save group"
+        let name = SettingsRow::new("group-name", "Group name (optional)")
+            .control(SettingsInput::new(&self.name).width(220.));
+        let name_group = SettingsGroup::new("Group")
+            .first(true)
+            .child(SettingsCard::new(SeparatorInset::Text).child(name));
+        let picks = if rows.is_empty() {
+            SettingsCard::new(SeparatorInset::Text)
+                .child(SettingsRow::new("group-none", NONE_FREE).label_color(Color::Muted))
         } else {
-            "Run side by side"
+            SettingsCard::new(SeparatorInset::CheckTile).children(rows)
         };
+        let count_color = if count > MAX_GROUP {
+            Color::Error
+        } else {
+            Color::Muted
+        };
+        let pick_group = SettingsGroup::new("Pick 2 to 4 stages")
+            .action(
+                Label::new(format!("{count} of {MAX_GROUP}"))
+                    .size(LabelSize::Small)
+                    .color(count_color),
+            )
+            .child(picks)
+            .footnote(PICK_NOTE);
         let frame = frame
             .footer(cancel_button(
                 "Cancel",
@@ -360,19 +357,11 @@ impl Render for GroupDialog {
             .footer(primary_button(
                 submit,
                 &self.submit_focus,
-                count < 2,
+                !(2..=MAX_GROUP).contains(&count),
                 cx.listener(|this, _, window, cx| this.submit(window, cx)),
             ))
-            .child(field("Group name (optional)", input_box(&self.name, cx)))
-            .child(
-                h_flex()
-                    .child(div().flex_1().child(field_label("Pick 2 to 4 stages")))
-                    .child(field_label(format!("{count} of {MAX_GROUP}"))),
-            )
-            .child(v_flex().children(rows))
-            .child(div().mt(rems_from_px(-2.0_f32)).child(help_line(
-                "They move next to the first picked stage and start together.",
-            )));
+            .child(name_group)
+            .child(pick_group);
         div()
             .key_context("Dialog")
             .track_focus(&self.focus)

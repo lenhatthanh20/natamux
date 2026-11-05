@@ -127,6 +127,8 @@ pub struct ViewState {
     pub details_open: bool,
     /// System notifications for tasks that start to need the user (off until switched on).
     pub notify: bool,
+    /// Notifications also while the window is in front; off, the open window is enough.
+    pub notify_always: bool,
     /// The last workspace tab of each task (`tabByTask`): terminal, changes, history or docs.
     pub tabs: Entries<WorkspaceTab>,
     /// Tasks whose terminals show one at a time, full size, until the user restores them.
@@ -169,6 +171,7 @@ impl Default for ViewState {
             sections: Vec::new(),
             details_open: true,
             notify: false,
+            notify_always: false,
             tabs: Vec::new(),
             maximized: Vec::new(),
             docs_source: false,
@@ -288,6 +291,7 @@ impl ViewState {
                 }),
             details_open: flag(map.get("detailsOpen"), default.details_open),
             notify: flag(map.get("notify"), default.notify),
+            notify_always: flag(map.get("notifyAlways"), default.notify_always),
             tabs: tabs_of(pairs("tabs")),
             maximized: strings(map.get("maximized"))
                 .iter()
@@ -351,6 +355,7 @@ impl ViewState {
                 .collect::<Map<String, Value>>(),
             "detailsOpen": self.details_open,
             "notify": self.notify,
+            "notifyAlways": self.notify_always,
             "tabs": self
                 .tabs
                 .iter()

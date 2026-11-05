@@ -1,4 +1,4 @@
-//! What the bottom bar and the conflict box of Project settings do (`ProjectSettingsDialog.tsx`):
+//! What the bottom bar and the conflict alert of Project settings do (`ProjectSettingsDialog.tsx`):
 //! Save, Overwrite, Reload, Reset to default, Import and Export. Import and Export change only the
 //! draft or the picked file; only Save and Overwrite write `.natamux.json`.
 
@@ -52,6 +52,7 @@ impl ProjectSettingsPage {
                         .ok();
                 },
             )
+            .sheet()
             .open_over(window, cx);
         });
     }
@@ -197,6 +198,7 @@ impl ProjectSettingsPage {
                     None => editor.edit(default_pipeline(), cx),
                 });
             })
+            .sheet()
             .open_over(window, cx);
         });
     }
@@ -236,8 +238,7 @@ impl ProjectSettingsPage {
         let (name, text) = match read {
             Ok(read) => read,
             Err(problem) => {
-                self.problem = Some(problem);
-                cx.notify();
+                self.toast(&problem, ToastTone::Error, cx);
                 return;
             }
         };
@@ -262,6 +263,7 @@ impl ProjectSettingsPage {
                 Confirm::new("Import settings", question, "Import", move |_, cx| {
                     apply(cx)
                 })
+                .sheet()
                 .open_over(window, cx);
             }
         }
@@ -292,18 +294,24 @@ impl ProjectSettingsPage {
             this.update(cx, |this, cx| match written {
                 Ok(()) => {
                     let said = format!("Exported {}.", file_name(&path));
-                    this.dashboard.update(cx, |dashboard, cx| {
-                        dashboard.toast(&said, ToastTone::Info, None, cx)
-                    });
+                    this.toast(&said, ToastTone::Success, cx);
                 }
                 Err(error) => {
-                    this.problem = Some(format!("Could not write {}: {error}", file_name(&path)));
-                    cx.notify();
+                    let said = format!("Could not write {}: {error}", file_name(&path));
+                    this.toast(&said, ToastTone::Error, cx);
                 }
             })
             .ok();
         })
         .detach();
+    }
+}
+
+impl ProjectSettingsPage {
+    /// Import and Export say how they went in a toast; the alerts are for the file.
+    fn toast(&self, text: &str, tone: ToastTone, cx: &mut Context<Self>) {
+        self.dashboard
+            .update(cx, |dashboard, cx| dashboard.toast(text, tone, None, cx));
     }
 }
 

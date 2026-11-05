@@ -23,7 +23,7 @@ A task without a workspace shows **Start agent** and a way to make a workspace i
 
 ## Terminals
 
-The tab shows each terminal in its own pane. Terminal 1 is always there. The agent runs in Terminal 1. Its pane header shows the agent's icon and name, such as `Claude Code` (only the icon in a narrow pane), and the state of its stage, for example `Running · Edit a.ts`. When stages run side by side, each terminal shows the state of its own stage. In **Agents**, the grid shows Terminal 1 and names another terminal that needs you.
+The tab shows each terminal in its own pane. Terminal 1 is always there. The agent runs in Terminal 1. A pane header names the terminal, with the stage it works on first, such as `Self check · Terminal 17`. It also shows the agent's icon and name, such as `Claude Code` (only the icon in a narrow pane), and the state of its stage, for example `Running · Edit a.ts`. When stages run side by side, each terminal shows the state of its own stage. In **Agents**, the grid shows Terminal 1 and names another terminal that needs you.
 
 | To do this | Do this |
 |---|---|
@@ -96,9 +96,11 @@ Inside a terminal, the shell gets your keys. On macOS the ⌘ shortcuts of Natam
 
 Click in the pane and type. Your keys go straight to the agent. This is how you answer a question.
 
-When an agent asks something, the task goes to **Needs input** and the current stage card in the **Progress** view of the details shows what it asks (on a phone, a banner under the header). With the details closed, click **Needs input** in the workspace header to open them. When the workspace shows more than one agent pane, the waiting pane says **Needs input** in its header. Click **Answer in terminal** to put the cursor in Terminal 1. If you answered another way, click **Resume**. When the agent ended its turn and still runs, **Resume** asks it to go on with the stage.
+When an agent asks something, the task goes to **Needs input** and the current stage card in the **Progress** view of the details shows what it asks (on a phone, a banner under the header). With the details closed, click **Needs input** in the workspace header to open them. When the workspace shows more than one agent pane, the waiting pane says **Needs input** in its header. Click **Answer in terminal** to put the cursor in Terminal 1. If you answered another way, click **Resume**.
 
-After you quit and open the app again, Natamux starts the agent of each running, waiting or in-review task again, in its terminal. Claude Code goes on with the same conversation; other agents start again with the stage prompt. The task keeps its state. The other terminals of the task come back too, see [A terminal after a daemon restart](#a-terminal-after-a-daemon-restart).
+When an agent ends its turn without a question and without `natamux done`, the task goes to **Idle**, shown in grey with three dots. Idle does not need you: no notification, no Dock count. Type in the terminal to give the agent its next prompt, or click **Resume** in the stage card to ask it to go on with the stage.
+
+After you quit and open the app again, Natamux starts the agent of each running, idle, waiting or in-review task again, in its terminal. Claude Code goes on with the same conversation; other agents start again with the stage prompt. The task keeps its state. The other terminals of the task come back too, see [A terminal after a daemon restart](#a-terminal-after-a-daemon-restart).
 
 ### Send a message to the agent
 
@@ -146,7 +148,7 @@ Terminals belong to the daemon. When the daemon stops, it ends every terminal, a
 
 Natamux remembers the terminals of each task that is not done or cancelled. After a restart:
 
-- The agent of a running, waiting or in-review stage starts again at once, as in [Type to the agent](#type-to-the-agent).
+- The agent of a running, idle, waiting or in-review stage starts again at once, as in [Type to the agent](#type-to-the-agent).
 - Every other terminal comes back with the same name when you open its task, or when the **Agents** view shows its Terminal 1. Until then nothing runs in it, so the start stays fast.
 - An agent comes back on its last conversation, with no new prompt. It waits for you, and the task keeps its state.
 - A plain terminal, and a terminal whose agent never named its conversation, come back as a plain terminal in the workspace folder.

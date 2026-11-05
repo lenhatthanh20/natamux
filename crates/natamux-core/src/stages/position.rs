@@ -48,12 +48,13 @@ impl StagePosition {
 }
 
 // The lane states, the most urgent first. A group's state is its most urgent lane.
-const URGENCY: [TaskState; 7] = [
+const URGENCY: [TaskState; 8] = [
     TaskState::NeedsInput,
     TaskState::Failed,
     TaskState::Blocked,
     TaskState::Review,
     TaskState::Running,
+    TaskState::Idle,
     TaskState::Ready,
     TaskState::Draft,
 ];

@@ -51,13 +51,20 @@ fn reference(task: &Task) -> &str {
         .map_or("", |context| context.reference.as_str())
 }
 
-fn values(task: &Task) -> [(&'static str, &str); 4] {
+fn values(task: &Task) -> [(&'static str, &str); 5] {
     [
+        ("id", &task.id),
         ("title", &task.title),
         ("description", &task.description),
         ("dir", STAGE_DIR),
         ("ref", reference(task)),
     ]
+}
+
+/// The placeholders a stage's `args` can use. Not the title, description or reference: an
+/// imported issue's text, which anyone can write (S-28), must not become a flag of the agent.
+pub fn arg_values(task: &Task) -> [(&'static str, &str); 2] {
+    [("id", &task.id), ("dir", STAGE_DIR)]
 }
 
 /// The prompt an agent gets when its stage starts. `{skill:<name>}` is left for `fill_skills`,

@@ -46,7 +46,7 @@ Codex runs a hook only after you trust it. The hooks change with the daemon's ad
 | `UserPromptSubmit` | A prompt was sent | running |
 | `PreToolUse`, `PostToolUse` | The agent works | no change |
 | `PermissionRequest` | Codex asks for permission | needs input |
-| `Stop`, `Interrupt` | The turn ended, or you pressed Esc | needs input |
+| `Stop`, `Interrupt` | The turn ended, or you pressed Esc | idle |
 
 Codex has no failure hook, so a failed turn does not move the task to failed.
 

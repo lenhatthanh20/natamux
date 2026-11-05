@@ -57,6 +57,8 @@ pub fn state_status(state: TaskState) -> StatusKey {
         TaskState::Draft => StatusKey::Ignored,
         TaskState::Ready => StatusKey::Hint,
         TaskState::Running => StatusKey::Info,
+        // Calm: the three dots tell it from a draft.
+        TaskState::Idle => StatusKey::Ignored,
         TaskState::NeedsInput => StatusKey::Warning,
         TaskState::Review => StatusKey::Predictive,
         TaskState::Blocked => StatusKey::Conflict,
@@ -370,5 +372,6 @@ mod tests {
         }
         assert_eq!(state_status(TaskState::NeedsInput), StatusKey::Warning);
         assert_eq!(state_status(TaskState::Unknown), StatusKey::Hidden);
+        assert_eq!(state_status(TaskState::Idle), StatusKey::Ignored);
     }
 }

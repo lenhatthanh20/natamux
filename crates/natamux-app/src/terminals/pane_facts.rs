@@ -11,6 +11,7 @@ use natamux_proto::terminals::list::{TerminalLane, TerminalList};
 use super::pane_rules::{PaneHint, other_terminal_hint, pane_state_text};
 use crate::agents::agent_choices::agent_label;
 use crate::sidebar::shell_rows::terminal_state;
+use crate::sidebar::sidebar_tree::stage_name;
 
 /// The agent lanes of a task's terminals (`agentLanes`): every agent shell, with its lane or an
 /// empty one.
@@ -40,6 +41,8 @@ pub fn restoring_label(list: &TerminalList, name: &str) -> Option<String> {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PaneFacts {
     pub name: String,
+    /// "Self check · Terminal 17" for a terminal that works on a stage, else "Terminal 2".
+    pub title: String,
     /// Some: an agent shell, with its state when known.
     pub agent_state: Option<Option<TaskState>>,
     pub agent: Option<String>,
@@ -83,6 +86,7 @@ pub fn pane_facts(
                 .flatten();
             PaneFacts {
                 name: name.clone(),
+                title: pane_title(name, lane),
                 agent_state: lane.map(|_| state),
                 agent: agent.flatten(),
                 state_text,
@@ -91,6 +95,15 @@ pub fn pane_facts(
             }
         })
         .collect()
+}
+
+/// With many terminals on one task, the stage tells them apart better than the number.
+fn pane_title(name: &str, lane: Option<&TerminalLane>) -> String {
+    let stage = lane.and_then(|lane| lane.stage.as_deref());
+    match stage.filter(|stage| !stage.is_empty()) {
+        Some(stage) => format!("{} \u{b7} Terminal {name}", stage_name(stage)),
+        None => format!("Terminal {name}"),
+    }
 }
 
 /// The pane that takes the focus when the focused one closes: the next one, else the one before.
@@ -191,6 +204,8 @@ mod tests {
         );
         assert_eq!(facts[1].agent_state, Some(Some(TaskState::Running)));
         assert_eq!(facts[1].hint, None);
+        assert_eq!(facts[0].title, "Terminal 1");
+        assert_eq!(facts[1].title, "Spec \u{b7} Terminal 5");
     }
 
     #[test]

@@ -1,118 +1,92 @@
-//! The top of Project settings (T-0189): "Projects / <name>" with the close button, then the tab
-//! row. The body scrolls under them. The path of `.natamux.json` sits in the bottom bar, with the
-//! "..." menu of the actions on the file.
+//! The 72 px header of a project page (layout-b 5): the letter avatar, the name, the summary with
+//! the path of `.natamux.json`, the General / Stages / JSON segmented tabs and the close button.
 
-use gpui::{ClickEvent, FontWeight, Pixels, Point, WeakEntity};
-use ui::{ContextMenu, ContextMenuEntry, Tooltip, prelude::*};
+use ui::prelude::*;
 
 use super::project_settings_page::ProjectSettingsPage;
-use super::settings_tab_rules::{SettingsTab, export_reason};
-use super::settings_text::{file_hint, home_folder, short_path};
-use crate::components::menu::MenuLayer;
+use super::settings_tab_rules::{JSON_FIRST, SettingsTab};
+use super::settings_text::{SUMMARY_NOTE, file_hint, home_folder, short_path};
+use crate::components::segmented::Segmented;
+use crate::components::settings_tile::{PageHeader, SettingsTile, TileSize};
 
-type Command = fn(&mut ProjectSettingsPage, &mut Window, &mut Context<ProjectSettingsPage>);
+/// Each tab's width while some are off, so their covers line up.
+const BLOCKED_TAB_WIDTH: f32 = 82.;
 
-/// A menu entry that runs `command` on the page, which may be gone by then.
-fn entry(
-    label: &'static str,
-    page: &WeakEntity<ProjectSettingsPage>,
-    command: Command,
-) -> ContextMenuEntry {
-    let page = page.clone();
-    ContextMenuEntry::new(label).handler(move |window, cx| {
-        page.update(cx, |this, cx| command(this, window, cx)).ok();
-    })
-}
-
-/// The "..." menu: Reset to default, Import and Export. Export says why it is off.
-fn open_more(
-    page: WeakEntity<ProjectSettingsPage>,
-    cannot_export: Option<&'static str>,
-    position: Point<Pixels>,
-    window: &mut Window,
-    cx: &mut App,
-) {
-    let menu = ContextMenu::build(window, cx, move |menu, _, _| {
-        let menu = menu
-            .item(entry("Reset to default", &page, ProjectSettingsPage::reset))
-            .item(entry("Import\u{2026}", &page, ProjectSettingsPage::import))
-            .item(
-                entry("Export", &page, ProjectSettingsPage::export)
-                    .disabled(cannot_export.is_some()),
-            );
-        match cannot_export {
-            Some(reason) => menu.label(reason),
-            None => menu,
-        }
-    });
-    MenuLayer::open(menu, position, window, cx);
+/// The icon of a tab. Zed has no sliders, layout or braces icon: these stand in.
+fn tab_icon(tab: SettingsTab) -> IconName {
+    match tab {
+        SettingsTab::General => IconName::Settings,
+        SettingsTab::Stages => IconName::ListTree,
+        SettingsTab::Json => IconName::FileCode,
+    }
 }
 
 impl ProjectSettingsPage {
-    /// The path in the buffer font (home as `~`), with the full path and why to commit it on
-    /// hover. None until the file is read.
-    pub(super) fn path_label(&self, cx: &App) -> Option<AnyElement> {
+    /// The mono path (home as `~`) and the note, in one line that truncates.
+    fn summary(&self, cx: &App) -> Option<(AnyElement, String)> {
         let path = &self.base.as_ref()?.path;
-        let label = Label::new(short_path(path, home_folder().as_deref()))
+        let shown = Label::new(short_path(path, home_folder().as_deref()))
             .size(LabelSize::Custom(rems_from_px(11_f32)))
             .color(Color::Muted)
             .buffer_font(cx)
             .truncate();
-        Some(
-            div()
-                .id("settings-file-path")
-                .min_w_0()
-                .overflow_hidden()
-                .tooltip(Tooltip::text(file_hint(path)))
-                .child(label)
-                .into_any_element(),
-        )
-    }
-
-    /// The "..." button of the bottom bar, with the menu of the actions on the file.
-    pub(super) fn more_button(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        let page = cx.weak_entity();
-        let cannot_export = export_reason(self.draft_ok(cx));
-        IconButton::new("settings-more", IconName::Ellipsis)
-            .icon_size(IconSize::Small)
-            .size(ButtonSize::Default)
-            .tooltip(Tooltip::text("Reset, import or export"))
-            .disabled(self.base.is_none())
-            .on_click(move |event: &ClickEvent, window, cx| {
-                open_more(page.clone(), cannot_export, event.position(), window, cx);
-            })
-    }
-
-    /// The header row, then the tab row.
-    pub(super) fn render_header(&self, shown: SettingsTab, cx: &mut Context<Self>) -> AnyElement {
-        let close = IconButton::new("settings-close", IconName::Close)
-            .icon_size(IconSize::Small)
-            .tooltip(Tooltip::text("Close settings"))
-            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                this.dashboard
-                    .update(cx, |dashboard, cx| dashboard.close_settings(cx))
-            }));
-        let name = Label::new(self.repo_name.clone())
-            .weight(FontWeight::SEMIBOLD)
-            .truncate();
-        let title = h_flex()
+        let note = Label::new(SUMMARY_NOTE)
+            .size(LabelSize::Small)
+            .color(Color::Muted);
+        let line = h_flex()
             .min_w_0()
-            .gap_1()
-            .child(Label::new("Projects /").color(Color::Muted))
-            .child(div().min_w_0().child(name));
-        let tabs = self.render_tab_bar(shown, cx);
-        let row = h_flex()
-            .flex_none()
-            .h(rems_from_px(40.0_f32))
-            .px(rems_from_px(14.0_f32))
-            .gap_1p5()
-            .child(title)
-            .child(div().flex_1())
-            .child(close);
-        v_flex()
-            .flex_none()
-            .child(row)
-            .child(tabs)
-            .into_any_element()
+            .overflow_hidden()
+            .child(div().min_w_0().overflow_hidden().child(shown))
+            .child(div().flex_none().child(note));
+        Some((line.into_any_element(), file_hint(path)))
+    }
+
+    /// The segmented tabs; while the JSON cannot be read only JSON shows and the others say why.
+    fn tabs(&self, shown: SettingsTab, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let stages = self.stages.as_ref()?;
+        let page = cx.weak_entity();
+        let option = |tab: SettingsTab| (SharedString::from(tab.label()), tab_icon(tab));
+        let options = SettingsTab::ALL.map(option);
+        let segmented = Segmented::new(
+            "project-settings-tabs",
+            &stages.tabs.focus,
+            options,
+            shown.index(),
+            move |index, _, cx| {
+                let Some(tab) = SettingsTab::ALL.get(index).copied() else {
+                    return;
+                };
+                page.update(cx, |page, cx| page.pick_tab(tab, cx)).ok();
+            },
+        );
+        // Broken JSON: General and Stages look off and say why (layout-b 5, state "JSON error").
+        let segmented = if self.draft_ok(cx) {
+            segmented
+        } else {
+            [SettingsTab::General, SettingsTab::Stages]
+                .into_iter()
+                .fold(segmented.option_width(BLOCKED_TAB_WIDTH), |tabs, tab| {
+                    tabs.disabled(tab.index(), JSON_FIRST)
+                })
+        };
+        Some(div().flex_none().child(segmented).into_any_element())
+    }
+
+    /// Tile, name and summary, the tabs once the settings are read, then the close button.
+    pub(super) fn render_header(&self, shown: SettingsTab, cx: &mut Context<Self>) -> AnyElement {
+        let board = self.dashboard.clone();
+        let header = PageHeader::new(
+            SettingsTile::avatar(&self.repo_name, TileSize::Header),
+            self.repo_name.clone(),
+            move |_, cx| board.update(cx, |board, cx| board.close_settings(cx)),
+        );
+        let header = match self.summary(cx) {
+            Some((line, tip)) => header.summary_child(line).summary_tooltip(tip),
+            None => header,
+        };
+        match self.tabs(shown, cx) {
+            Some(tabs) => header.end(tabs).into_any_element(),
+            None => header.into_any_element(),
+        }
     }
 }

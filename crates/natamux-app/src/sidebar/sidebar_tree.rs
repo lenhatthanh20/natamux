@@ -47,12 +47,13 @@ pub fn is_fold_open(folds: &[(String, bool)], key: &str, fallback: bool) -> bool
 }
 
 // The order of the most urgent first.
-const URGENT: [TaskState; 6] = [
+const URGENT: [TaskState; 7] = [
     TaskState::NeedsInput,
     TaskState::Failed,
     TaskState::Blocked,
     TaskState::Review,
     TaskState::Running,
+    TaskState::Idle,
     TaskState::Ready,
 ];
 
@@ -82,7 +83,7 @@ pub fn opens_by_default(states: &[TaskState]) -> bool {
     states.iter().any(|state| {
         matches!(
             state,
-            TaskState::Running | TaskState::NeedsInput | TaskState::Failed
+            TaskState::Running | TaskState::Idle | TaskState::NeedsInput | TaskState::Failed
         )
     })
 }

@@ -292,8 +292,8 @@ mod tests {
     #[test]
     fn hides_finished_columns_unless_asked_and_keeps_only_the_filtered_one() {
         assert!(!board_states(None, false).contains(&TaskState::Done));
-        assert_eq!(board_states(None, false).len(), 7);
-        assert_eq!(board_states(None, true).len(), 9);
+        assert_eq!(board_states(None, false).len(), 8);
+        assert_eq!(board_states(None, true).len(), 10);
         assert_eq!(
             board_states(Some(TaskState::Done), false),
             vec![TaskState::Done]

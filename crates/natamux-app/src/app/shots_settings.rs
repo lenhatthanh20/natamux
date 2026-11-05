@@ -10,6 +10,7 @@ use natamux_proto::agents::custom::CustomAgent;
 use super::account_menu::open_account_menu;
 use super::fake_daemon;
 use super::options::Shot;
+use super::settings_agents::open_agent_sheet;
 use super::settings_rules::SettingsPage;
 use super::shortcut_sheet;
 use super::update::show_for_shot;
@@ -51,13 +52,16 @@ pub fn is_screen7_shot(shot: Shot) -> bool {
             | Shot::AccountMenu
             | Shot::Settings
             | Shot::SettingsGeneral
+            | Shot::SettingsAppearance
             | Shot::SettingsAgents
+            | Shot::SettingsAgentSheet
             | Shot::SettingsSearch
             | Shot::Projects
             | Shot::ProjectSettings
             | Shot::ProjectSettingsTabGeneral
             | Shot::ProjectSettingsTabJson
             | Shot::ProjectSettingsJsonError
+            | Shot::ProjectSettingsTrust
             | Shot::ImportIssues
             | Shot::SignIn
             | Shot::SignInError
@@ -72,7 +76,7 @@ pub fn is_screen7_shot(shot: Shot) -> bool {
 /// The fake's data of the shot, before the window watches it.
 pub fn prepare(shot: Shot) {
     fake_daemon::shared().set_gh_missing(shot == Shot::ImportIssues);
-    if shot == Shot::RepoTrustDialog {
+    if matches!(shot, Shot::RepoTrustDialog | Shot::ProjectSettingsTrust) {
         fake_daemon::shared().distrust_repo(PROJECT);
     }
 }
@@ -81,8 +85,18 @@ pub async fn run(handle: WindowHandle<Root>, shot: Shot, cx: &mut AsyncApp) {
     let Ok(page) = handle.update(cx, |root, window, cx| enter(shot, root, window, cx)) else {
         return;
     };
+    if shot == Shot::SettingsAgentSheet {
+        // The agents page takes its draft when it draws.
+        cx.background_executor().timer(READ).await;
+        handle
+            .update(cx, |root, window, cx| {
+                let view = root.settings_view().clone();
+                open_agent_sheet(&view, Some(0), window, cx)
+            })
+            .ok();
+    }
     let tab = match shot {
-        Shot::ProjectSettingsTabGeneral => Some(SettingsTab::General),
+        Shot::ProjectSettingsTabGeneral | Shot::ProjectSettingsTrust => Some(SettingsTab::General),
         Shot::ProjectSettingsTabJson | Shot::ProjectSettingsJsonError => Some(SettingsTab::Json),
         _ => None,
     };
@@ -127,12 +141,15 @@ fn enter(
             open_account_menu(&dashboard, at, window, cx);
         }
         Shot::Settings => {
+            root.show_settings(SettingsPage::General, window, cx);
+        }
+        Shot::SettingsAppearance => {
             root.show_settings(SettingsPage::Appearance, window, cx);
         }
         Shot::SettingsGeneral => {
             root.show_settings(SettingsPage::General, window, cx);
         }
-        Shot::SettingsAgents => {
+        Shot::SettingsAgents | Shot::SettingsAgentSheet => {
             // The fake has none, so other shots' agent menus stay as they were.
             let sample = CustomAgent {
                 id: "claude-qwen".into(),
@@ -154,7 +171,8 @@ fn enter(
         Shot::ProjectSettings
         | Shot::ProjectSettingsTabGeneral
         | Shot::ProjectSettingsTabJson
-        | Shot::ProjectSettingsJsonError => {
+        | Shot::ProjectSettingsJsonError
+        | Shot::ProjectSettingsTrust => {
             return root.show_settings(SettingsPage::Project(PROJECT.to_owned()), window, cx);
         }
         Shot::ImportIssues => issue_import::open(&dashboard, Some(PROJECT.to_owned()), window, cx),

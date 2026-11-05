@@ -1,4 +1,5 @@
 use super::*;
+use crate::components::colors::TileColor;
 
 fn repo(id: &str, name: &str) -> Repo {
     Repo {
@@ -52,9 +53,9 @@ fn a_project_page_is_titled_with_the_project_name() {
 fn rows_sit_on_their_pages() {
     for row in [
         SettingRow::Notify,
+        SettingRow::NotifyAlways,
         SettingRow::UpdatesVersion,
         SettingRow::UpdatesAuto,
-        SettingRow::UpdatesCheck,
     ] {
         assert_eq!(row.page(), SettingsPage::General);
     }
@@ -141,11 +142,7 @@ fn finds_the_update_rows() {
     let found = search("update", &[]);
     assert_eq!(
         found.map(|found| found.rows),
-        Some(vec![
-            SettingRow::UpdatesVersion,
-            SettingRow::UpdatesAuto,
-            SettingRow::UpdatesCheck,
-        ])
+        Some(vec![SettingRow::UpdatesVersion, SettingRow::UpdatesAuto])
     );
 }
 
@@ -193,4 +190,145 @@ fn steps_the_font_size_from_the_field_else_the_saved_size() {
 fn keeps_the_font_size_from_8_to_32() {
     assert_eq!(font_size_step("32", None, 1.), MAX_SIZE);
     assert_eq!(font_size_step("8", None, -1.), MIN_SIZE);
+}
+
+#[test]
+fn finds_the_version_row_by_check() {
+    let found = search("check now", &[]).unwrap_or_default();
+    assert!(found.rows.contains(&SettingRow::UpdatesVersion));
+}
+
+#[test]
+fn app_pages_draw_their_rows_in_groups() {
+    assert_eq!(
+        page_groups(&SettingsPage::General),
+        vec![
+            (
+                "Notifications",
+                vec![SettingRow::Notify, SettingRow::NotifyAlways]
+            ),
+            (
+                "Updates",
+                vec![SettingRow::UpdatesVersion, SettingRow::UpdatesAuto]
+            ),
+        ]
+    );
+    assert_eq!(
+        page_groups(&SettingsPage::Appearance),
+        vec![
+            (
+                "Theme",
+                vec![
+                    SettingRow::Theme,
+                    SettingRow::LightTheme,
+                    SettingRow::DarkTheme,
+                    SettingRow::UiSize,
+                ]
+            ),
+            ("Sidebar", vec![SettingRow::SidebarIds]),
+            (
+                "Terminal font",
+                vec![SettingRow::FontFamily, SettingRow::FontSize]
+            ),
+        ]
+    );
+    // The Custom agents row shows in the results only; the Agents page draws its own lists.
+    assert!(page_groups(&SettingsPage::Agents).is_empty());
+    assert!(page_groups(&SettingsPage::Project("r1".to_owned())).is_empty());
+}
+
+#[test]
+fn a_group_lists_rows_of_its_own_page_only() {
+    for page in [SettingsPage::General, SettingsPage::Appearance] {
+        for (group, rows) in page_groups(&page) {
+            for row in rows {
+                assert_eq!(row.page(), page, "{row:?}");
+                assert_eq!(row.group(), group, "{row:?}");
+            }
+        }
+    }
+    assert_eq!(SettingRow::CustomAgents.group(), "Custom agents");
+}
+
+#[test]
+fn app_pages_have_a_tile_and_a_summary() {
+    assert_eq!(
+        page_tile(&SettingsPage::General),
+        Some(("sliders-vertical", TileColor::Gray))
+    );
+    assert_eq!(
+        page_tile(&SettingsPage::Appearance),
+        Some(("palette", TileColor::Blue))
+    );
+    assert_eq!(
+        page_tile(&SettingsPage::Agents),
+        Some(("bot", TileColor::Green))
+    );
+    assert_eq!(page_tile(&SettingsPage::Project("r1".to_owned())), None);
+    assert_eq!(
+        page_summary(&SettingsPage::General),
+        "Notifications and updates \u{b7} changes apply at once"
+    );
+    assert_eq!(
+        page_summary(&SettingsPage::Appearance),
+        "Theme, UI size, sidebar and terminal font \u{b7} changes apply at once"
+    );
+    assert_eq!(
+        page_summary(&SettingsPage::Agents),
+        "Built-in agents and your own agent commands \u{b7} custom agents need Save"
+    );
+}
+
+#[test]
+fn results_group_rows_by_page_in_page_order() {
+    let found = SearchResults {
+        rows: vec![
+            SettingRow::FontSize,
+            SettingRow::CustomAgents,
+            SettingRow::Notify,
+            SettingRow::Theme,
+        ],
+        projects: Vec::new(),
+    };
+    assert_eq!(
+        results_groups(&found),
+        vec![
+            (SettingsPage::General, "General", vec![SettingRow::Notify]),
+            (
+                SettingsPage::Appearance,
+                "Appearance",
+                vec![SettingRow::FontSize, SettingRow::Theme]
+            ),
+            (
+                SettingsPage::Agents,
+                "Agents",
+                vec![SettingRow::CustomAgents]
+            ),
+        ]
+    );
+    assert!(results_groups(&SearchResults::default()).is_empty());
+}
+
+#[test]
+fn the_results_summary_counts_rows_and_projects() {
+    let found = SearchResults {
+        rows: vec![SettingRow::FontFamily, SettingRow::FontSize],
+        projects: vec![("r1".to_owned(), "natamux".to_owned())],
+    };
+    assert_eq!(
+        results_summary(&found, " font "),
+        "3 matches for \u{201c}font\u{201d} \u{b7} the controls work here"
+    );
+    let one = SearchResults {
+        rows: vec![SettingRow::Notify],
+        projects: Vec::new(),
+    };
+    assert_eq!(
+        results_summary(&one, "notify"),
+        "1 match for \u{201c}notify\u{201d} \u{b7} the controls work here"
+    );
+    assert_eq!(
+        no_match_text(" qqzz "),
+        "No settings match \u{201c}qqzz\u{201d}"
+    );
 }

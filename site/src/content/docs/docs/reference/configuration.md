@@ -58,13 +58,13 @@ An array of **steps**. A step is a stage, a group of stages that run side by sid
 | `ci` | boolean | no | `true` for `implement` and `testing` of the catalog, else `false` | Tasks get a **Check on CI** checkbox on this stage. Only for a testing stage or an agent stage without an `output`. See [Check a stage on CI](/docs/concepts/stages/#check-a-stage-on-ci). |
 | `ownShell` | boolean | no | `true` for the catalog's report stages (Review, Test spec, Security review, Performance check, Accessibility check) | The stage runs in its own terminal (Terminal 5) with a new session, or in a terminal of its own from Terminal 6 when it has its own `agent` or `args`. The stage then does not use Terminal 1, so the task's agent starts there only at the next stage that does. Only for an `agent` stage with an `output`. |
 | `endShell` | boolean | no | `false` | When the stage is done or sends the task back, end its agent or command and close its terminal. Without it, the terminal stays open until the task ends or you close it. Only for `context`, `agent` and `testing` stages. Ignored on a stage in Terminal 1, which is never closed. See [End a stage's terminal](/docs/concepts/stages/#end-a-stages-terminal). |
-| `args` | string | no | none | Words added to the command line of this stage's agent, after `NATAMUX_<AGENT>_ARGS`, such as `--model sonnet`. Split at spaces, each word quoted, so a quoted value with spaces becomes several words. Left out until the project's commands are approved. Same rule as `agent`. |
+| `args` | string | no | none | Words added to the command line of this stage's agent, after `NATAMUX_<AGENT>_ARGS`, such as `--model sonnet`. Split at spaces, each word quoted, so a quoted value with spaces becomes several words. A word can use `{id}` (the task id) and `{dir}`, such as `--name {id}-review`. The title, description and reference are not filled here: an imported issue's text must not become a flag. Left out until the project's commands are approved. Same rule as `agent`. |
 
 Details:
 
 - `kind` and `gate` are explained in [Stages](/docs/concepts/stages/).
 - `output` is a file name in `.natamux-task/`. It has letters, digits, `_`, `-` and `.`, and ends in `.md`. It has no folder.
-- `prompt` can use `{title}`, `{description}`, `{dir}`, `{ref}` and `{skill:<name>}`. `{dir}` is the stage file folder (`.natamux-task`). `{ref}` is the context reference of the task. Natamux adds the line `When you are done, run natamux done, unless the steps above say not to.` after your text, so your prompt can say when the agent must not run it, for example after it sends the task back. The catalog's Agent stage has no default prompt and sends no text.
+- `prompt` can use `{id}`, `{title}`, `{description}`, `{dir}`, `{ref}` and `{skill:<name>}`. `{id}` is the task id, such as `T-42`. `{dir}` is the stage file folder (`.natamux-task`). `{ref}` is the context reference of the task. Natamux adds the line `When you are done, run natamux done, unless the steps above say not to.` after your text, so your prompt can say when the agent must not run it, for example after it sends the task back. The catalog's Agent stage has no default prompt and sends no text.
 - `{skill:<name>}` names a skill. A plugin skill is `<plugin>:<skill>`. Natamux fills it when the stage starts, for the agent of the task. See [Skill placeholder](#skill-placeholder).
 - A stage with `"enabled": false` keeps its settings in the file. The pipeline rules below count only stages that are on.
 - `check` runs in the root of the worktree. It gets 10 minutes. It runs with `sh -c`, or `cmd.exe` on Windows.
@@ -283,7 +283,7 @@ When you create a task, you pick one source with its type, for example `--contex
 - `skill` is the name of the skill, without the slash or the dollar sign.
 - A `skill` source is optional. **Start a task** offers every skill of the agents as **An agent skill**. Configure one to give it a name in **Context from**.
 - A `skill` source follows the three rules of the [skill placeholder](#skill-placeholder), as a whole line. For the skill `fetch-ticket` and the reference `ABC-1`, an agent with the skill gets `/fetch-ticket ABC-1` (a call). Otherwise it gets `Read <path> and follow it for ABC-1.` (the file), or `Use the fetch-ticket skill for ABC-1.` (not found). The file format does not change.
-- `prompt` can use `{title}`, `{description}`, `{dir}` and `{ref}`.
+- `prompt` can use `{id}`, `{title}`, `{description}`, `{dir}` and `{ref}`.
 - The `agent` field is accepted, but Natamux does not use it yet. The task's own agent runs a `skill` or `mcp` source, or `claude-code` when the task has none.
 
 ```json

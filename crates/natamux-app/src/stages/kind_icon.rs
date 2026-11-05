@@ -33,9 +33,9 @@ pub fn prompt_icon() -> Icon {
     icon("pencil")
 }
 
-/// `GitFork`: a branch.
+/// `Diamond`: a branch, as the flowchart's decision.
 pub fn branch_icon() -> Icon {
-    Icon::new(IconName::GitBranch)
+    icon("diamond")
 }
 
 /// `CircleAlert`: a problem under a row or a field.

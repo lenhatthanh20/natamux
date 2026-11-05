@@ -8,9 +8,12 @@ use gpui::{Entity, FocusHandle, Focusable, Subscription};
 use ui::prelude::*;
 
 use super::settings_tab_rules::{SEND_BACKS_HINT, SEND_BACKS_LABEL, send_backs_field};
-use crate::components::form::text_editor;
+use crate::components::colors::TileColor;
+use crate::components::form::{SettingsInput, text_editor};
+use crate::components::settings_card::SettingsRow;
+use crate::components::settings_controls::changed_mark;
+use crate::components::settings_tile::{SettingsTile, TileSize};
 use crate::stages::pipeline_editor::PipelineEditor;
-use crate::stages::stage_fields_view::{default_mark, error_line, field_input, labelled};
 
 pub struct SendBacksField {
     pipeline: Entity<PipelineEditor>,
@@ -91,26 +94,28 @@ impl SendBacksField {
 impl Render for SendBacksField {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let this = cx.weak_entity();
-        let mark = default_mark(
-            "send-backs-reset",
-            self.editor.read(cx).text(cx).trim().is_empty(),
+        let changed = !self.editor.read(cx).text(cx).trim().is_empty();
+        let mark = changed_mark(
+            "send-backs",
+            changed,
             move |window, cx| {
                 this.update(cx, |this, cx| this.reset(window, cx)).ok();
             },
             cx,
         );
-        let control = div()
-            .w(rems_from_px(120.0_f32))
-            .child(field_input(&self.editor, cx));
-        v_flex()
-            .id("send-backs-field")
-            .gap_1()
-            .child(labelled(
-                SEND_BACKS_LABEL,
-                Some(mark),
-                Some(SEND_BACKS_HINT.into()),
-                control,
-            ))
-            .children(self.error.map(error_line))
+        let tile = SettingsTile::icon(
+            Icon::new(IconName::RotateCcw),
+            TileColor::Blue,
+            TileSize::Row,
+        );
+        let input = SettingsInput::new(&self.editor)
+            .width(120.)
+            .invalid(self.error.is_some());
+        SettingsRow::new("send-backs-field", SEND_BACKS_LABEL)
+            .lead(tile)
+            .help(SEND_BACKS_HINT)
+            .error(self.error)
+            .control(mark)
+            .control(input)
     }
 }

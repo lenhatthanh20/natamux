@@ -347,7 +347,7 @@ impl ShellPanes {
             .task(task_id)
             .is_some_and(|task| task.agent.is_some());
         let full = self.is_full(cx);
-        let mut header = PaneHeader::new(key.clone(), PaneTitle::Terminal(name.clone()))
+        let mut header = PaneHeader::new(key.clone(), PaneTitle::Terminal(fact.title.clone()))
             .narrow(self.narrow)
             .state_text(fact.state_text)
             .hint(fact.hint)

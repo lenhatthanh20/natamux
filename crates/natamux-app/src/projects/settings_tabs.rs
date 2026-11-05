@@ -1,23 +1,26 @@
 //! The tabs of Project settings (`ProjectSettingsDialog.tsx`): General, Stages and JSON over one
-//! draft, the tab bar, the body of each tab, and the alerts and the problem count around them.
+//! draft, the body of each tab, and the alerts above them (layout-b 5.9, 7).
 
-use gpui::{Entity, FocusHandle, KeyDownEvent};
+use gpui::{DefiniteLength, Entity, FocusHandle};
 use ui::prelude::*;
 
 use super::general_tab::render_general;
 use super::issues_tab::IssuesTab;
 use super::json_tab::JsonTab;
 use super::project_settings_page::{ProjectSettingsPage, StagesTab};
-use super::settings_tab_rules::{SettingsTab, error_count, shown_tab, step_tab};
-use super::settings_text::count_label;
+use super::settings_tab_rules::{SettingsTab, error_count, shown_tab, tab_blocked};
 use crate::components::button_style::action_button;
-use crate::stages::kind_icon::problem_icon;
+use crate::components::settings_card::{SeparatorInset, SettingsCard, foot_text};
+use crate::components::settings_tile::{AlertKind, SettingsAlert};
 use crate::stages::pipeline_editor::PipelineEditor;
+
+/// The bars of a loading card, as parts of its width.
+const SKELETON_WIDTHS: [f32; 3] = [0.6, 0.45, 0.7];
 
 /// The tab the person picked, and the two tabs that are not Stages (General holds the issues).
 pub(super) struct SettingsTabs {
     pub(super) picked: SettingsTab,
-    /// The tab bar is one tab stop; the arrows move over the tabs.
+    /// The segmented tabs are one tab stop; the arrows move over the tabs.
     pub(super) focus: FocusHandle,
     pub(super) issues: Entity<IssuesTab>,
     pub(super) json: Entity<JsonTab>,
@@ -38,7 +41,7 @@ impl SettingsTabs {
         }
     }
 
-    /// The Tab stops of the tab bar and of the JSON tab; General and Stages have their own.
+    /// The Tab stops of the tabs and of the JSON tab; General and Stages have their own.
     pub(super) fn stops(&self, shown: SettingsTab, cx: &App) -> Vec<FocusHandle> {
         let mut stops = vec![self.focus.clone()];
         match shown {
@@ -47,6 +50,34 @@ impl SettingsTabs {
         }
         stops
     }
+}
+
+/// A loading group: a title bar, then a card of three rows of bars.
+fn skeleton_group(cx: &App) -> impl IntoElement + use<> {
+    let fill = cx.theme().colors().ghost_element_hover;
+    let bar = move |width: DefiniteLength| {
+        div()
+            .h(rems_from_px(10.0_f32))
+            .w(width)
+            .rounded(rems_from_px(4.0_f32))
+            .bg(fill)
+    };
+    let rows = SKELETON_WIDTHS.map(|width| {
+        h_flex()
+            .h(rems_from_px(40.0_f32))
+            .mx(rems_from_px(12.0_f32))
+            .child(bar(relative(width)))
+    });
+    v_flex()
+        .child(
+            h_flex()
+                .h(rems_from_px(24.0_f32))
+                .mt(rems_from_px(20.0_f32))
+                .mb(rems_from_px(6.0_f32))
+                .px(rems_from_px(12.0_f32))
+                .child(bar(rems_from_px(80.0_f32).into())),
+        )
+        .child(SettingsCard::new(SeparatorInset::Text).children(rows))
 }
 
 impl ProjectSettingsPage {
@@ -61,61 +92,20 @@ impl ProjectSettingsPage {
         }
     }
 
+    /// A tab the JSON blocks stays unpicked.
     pub fn pick_tab(&mut self, tab: SettingsTab, cx: &mut Context<Self>) {
+        let draft_ok = self.draft_ok(cx);
         let Some(stages) = self.stages.as_mut() else {
             return;
         };
+        if tab_blocked(tab, draft_ok).is_some() {
+            return;
+        }
         stages.tabs.picked = tab;
         cx.notify();
     }
 
-    /// The tabs as views of one file, not as file tabs: underline tabs in a row of their own. The
-    /// row is one Tab stop.
-    pub(super) fn render_tab_bar(&self, shown: SettingsTab, cx: &mut Context<Self>) -> AnyElement {
-        let Some(stages) = &self.stages else {
-            return div().into_any_element();
-        };
-        let colors = cx.theme().colors();
-        let (accent, hover, line) = (
-            colors.text_accent,
-            colors.ghost_element_hover,
-            colors.border_variant,
-        );
-        let tabs = SettingsTab::ALL.map(|tab| {
-            let on = tab == shown;
-            let id = format!("project-settings-{}", tab.label());
-            let color = if on { Color::Default } else { Color::Muted };
-            let label = Label::new(tab.label()).color(color);
-            v_flex()
-                .id(SharedString::from(id))
-                .h_full()
-                .px(rems_from_px(10.0_f32))
-                .cursor_pointer()
-                .hover(|style| style.bg(hover))
-                .on_click(cx.listener(move |this, _, _, cx| this.pick_tab(tab, cx)))
-                .child(h_flex().flex_1().child(label))
-                .child(div().h(px(2.)).w_full().when(on, |this| this.bg(accent)))
-        });
-        h_flex()
-            .id("project-settings-tabs")
-            .flex_none()
-            .h(rems_from_px(31.0_f32))
-            .px(rems_from_px(14.0_f32))
-            .gap(rems_from_px(2.0_f32))
-            .border_b_1()
-            .border_color(line)
-            .track_focus(&stages.tabs.focus)
-            .on_key_down(cx.listener(move |this, event: &KeyDownEvent, _, cx| {
-                if let Some(next) = step_tab(shown, &event.keystroke.key) {
-                    cx.stop_propagation();
-                    this.pick_tab(next, cx);
-                }
-            }))
-            .children(tabs)
-            .into_any_element()
-    }
-
-    /// The parts of the body under the tab bar. Stages has two (a shot scrolls to the second).
+    /// The parts of the body under the alerts. Stages has two (a shot scrolls to the second).
     pub(super) fn render_tab_body(
         &self,
         stages: &StagesTab,
@@ -124,69 +114,71 @@ impl ProjectSettingsPage {
         cx: &mut App,
     ) -> Vec<AnyElement> {
         match shown {
-            SettingsTab::General => vec![render_general(stages, cx)],
+            SettingsTab::General => vec![render_general(stages)],
             SettingsTab::Stages => self.render_stages(stages, window, cx).into(),
             SettingsTab::Json => vec![stages.tabs.json.clone().into_any_element()],
         }
     }
 
-    pub(super) fn render_alerts(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let line = |text: String| {
-            h_flex()
-                .gap_1p5()
-                .items_start()
-                .child(problem_icon().size(IconSize::XSmall).color(Color::Error))
-                .child(Label::new(text).size(LabelSize::Small).color(Color::Error))
-        };
-        let reading = self.base.is_none() && self.read_error.is_none();
+    /// While reading: the line and two loading groups.
+    fn render_reading(&self, cx: &App) -> impl IntoElement + use<> {
         v_flex()
-            .gap_2()
-            .when(reading, |this| {
-                this.child(Label::new("Reading the settings\u{2026}").color(Color::Muted))
-            })
-            .children(self.read_error.clone().map(line))
-            .children(
-                self.base
-                    .as_ref()
-                    .and_then(|base| base.broken.clone())
-                    .map(|broken| {
-                        line(format!(
-                            "The file has a problem, so the defaults apply: {broken}"
-                        ))
-                    }),
+            .child(
+                div()
+                    .mt(rems_from_px(20.0_f32))
+                    .mx(rems_from_px(12.0_f32))
+                    .child(foot_text("Reading the settings\u{2026}")),
             )
-            .when(self.conflict, |this| this.child(self.conflict_box(cx)))
-            .children(self.trust.read(cx).untrusted().then(|| self.trust.clone()))
-            .children(self.problem.clone().map(line))
+            .child(skeleton_group(cx))
+            .child(skeleton_group(cx))
     }
 
-    fn conflict_box(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        h_flex()
-            .flex_wrap()
-            .gap_2()
-            .px_3()
-            .py_2()
-            .rounded_md()
-            .border_1()
-            .border_color(cx.theme().status().warning_border)
-            .bg(cx.theme().status().warning_background)
-            .child(
-                div().min_w_0().flex_1().child(
-                    Label::new(
-                        "The file changed on disk since you opened it. Reload drops your changes \
-                         here; Overwrite replaces the file with them.",
-                    )
-                    .color(Color::Default),
-                ),
+    /// Each alert only when it applies, in this order: read error, broken file, conflict, repo
+    /// trust, save failed.
+    pub(super) fn render_alerts(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let reading =
+            (self.base.is_none() && self.read_error.is_none()).then(|| self.render_reading(cx));
+        let read_error = self.read_error.clone().map(|error| {
+            SettingsAlert::new(AlertKind::Error, "Could not read the settings").text(error)
+        });
+        let broken = self.base.as_ref().and_then(|base| base.broken.clone());
+        let broken = broken.map(|broken| {
+            SettingsAlert::new(
+                AlertKind::Error,
+                "The file has a problem, so the defaults apply",
             )
-            .child(
-                action_button("settings-reload", "Reload")
-                    .on_click(cx.listener(|this, _, _, cx| this.reload(cx))),
-            )
-            .child(
-                action_button("settings-overwrite", "Overwrite")
-                    .on_click(cx.listener(|this, _, _, cx| this.overwrite(cx))),
-            )
+            .text(broken)
+        });
+        let conflict = self.conflict.then(|| self.conflict_alert(cx));
+        let trust = self.trust.read(cx).untrusted().then(|| self.trust.clone());
+        let failed = self
+            .problem
+            .clone()
+            .map(|problem| SettingsAlert::new(AlertKind::Error, "Save failed").text(problem));
+        v_flex()
+            .w_full()
+            .children(reading)
+            .children(read_error)
+            .children(broken)
+            .children(conflict)
+            .children(trust)
+            .children(failed)
+    }
+
+    fn conflict_alert(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        SettingsAlert::new(
+            AlertKind::Warning,
+            "The file changed on disk since you opened it",
+        )
+        .muted_text("Reload drops your changes here; Overwrite replaces the file with them.")
+        .action(
+            action_button("settings-reload", "Reload")
+                .on_click(cx.listener(|this, _, _, cx| this.reload(cx))),
+        )
+        .action(
+            action_button("settings-overwrite", "Overwrite")
+                .on_click(cx.listener(|this, _, _, cx| this.overwrite(cx))),
+        )
     }
 
     /// The pipeline problems, and one more while the text cannot be read.
@@ -197,27 +189,9 @@ impl ProjectSettingsPage {
         })
     }
 
-    pub(super) fn footer_status(&self, cx: &App) -> impl IntoElement {
-        let warnings = self
-            .stages
+    pub(super) fn warnings(&self, cx: &App) -> usize {
+        self.stages
             .as_ref()
-            .map_or(0, |stages| stages.editor.read(cx).warnings());
-        let errors = self.errors(cx);
-        h_flex()
-            .gap_2()
-            .when(errors > 0, |this| {
-                this.child(
-                    Label::new(count_label(errors, "problem"))
-                        .size(LabelSize::Small)
-                        .color(Color::Error),
-                )
-            })
-            .when(warnings > 0, |this| {
-                this.child(
-                    Label::new(count_label(warnings, "warning"))
-                        .size(LabelSize::Small)
-                        .color(Color::Warning),
-                )
-            })
+            .map_or(0, |stages| stages.editor.read(cx).warnings())
     }
 }

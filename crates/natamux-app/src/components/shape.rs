@@ -9,6 +9,8 @@ pub enum ShapeKind {
     Running,
     /// Running, but no output for a while.
     Quiet,
+    /// The agent ended its turn and asked nothing.
+    Idle,
     NeedsInput,
     Review,
     Blocked,
@@ -45,6 +47,7 @@ impl ShapeKind {
             Some(TaskState::Draft) => ShapeKind::Draft,
             Some(TaskState::Ready) => ShapeKind::Ready,
             Some(TaskState::Running) => ShapeKind::Running,
+            Some(TaskState::Idle) => ShapeKind::Idle,
             Some(TaskState::NeedsInput) => ShapeKind::NeedsInput,
             Some(TaskState::Review) => ShapeKind::Review,
             Some(TaskState::Blocked) => ShapeKind::Blocked,
@@ -61,6 +64,7 @@ impl ShapeKind {
             ShapeKind::Ready => "Ready",
             ShapeKind::Running => "Running",
             ShapeKind::Quiet => "Running, but quiet",
+            ShapeKind::Idle => "Idle",
             ShapeKind::NeedsInput => "Needs input",
             ShapeKind::Review => "In review",
             ShapeKind::Blocked => "Blocked",
@@ -77,6 +81,7 @@ impl ShapeKind {
             ShapeKind::Ready => "ready",
             ShapeKind::Running => "running",
             ShapeKind::Quiet => "quiet",
+            ShapeKind::Idle => "idle",
             ShapeKind::NeedsInput => "needs-input",
             ShapeKind::Review => "review",
             ShapeKind::Blocked => "blocked",
@@ -102,11 +107,12 @@ mod tests {
     use super::*;
     use crate::app::asset_table;
 
-    const ALL: [ShapeKind; 11] = [
+    const ALL: [ShapeKind; 12] = [
         ShapeKind::Draft,
         ShapeKind::Ready,
         ShapeKind::Running,
         ShapeKind::Quiet,
+        ShapeKind::Idle,
         ShapeKind::NeedsInput,
         ShapeKind::Review,
         ShapeKind::Blocked,

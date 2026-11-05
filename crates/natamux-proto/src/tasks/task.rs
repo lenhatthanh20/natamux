@@ -7,10 +7,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 /// `TASK_STATES` in `packages/core/src/tasks/task-state.ts`.
-pub const TASK_STATES: [&str; 9] = [
+pub const TASK_STATES: [&str; 10] = [
     "draft",
     "ready",
     "running",
+    "idle",
     "needs-input",
     "review",
     "blocked",
@@ -50,6 +51,8 @@ pub enum TaskState {
     Draft,
     Ready,
     Running,
+    /// The agent ended its turn without a question: nothing waits for the user.
+    Idle,
     NeedsInput,
     Review,
     Blocked,
@@ -67,6 +70,7 @@ impl TaskState {
             TaskState::Draft => "Draft",
             TaskState::Ready => "Ready",
             TaskState::Running => "Running",
+            TaskState::Idle => "Idle",
             TaskState::NeedsInput => "Needs input",
             TaskState::Review => "Review",
             TaskState::Blocked => "Blocked",
@@ -82,12 +86,21 @@ impl TaskState {
         matches!(self, TaskState::Done | TaskState::Cancelled)
     }
 
+    /// The agent is there: it works, ended its turn, or waits for an answer.
+    pub fn has_live_agent(self) -> bool {
+        matches!(
+            self,
+            TaskState::Running | TaskState::Idle | TaskState::NeedsInput
+        )
+    }
+
     /// The state's name, as the daemon writes it.
     pub fn name(self) -> &'static str {
         match self {
             TaskState::Draft => "draft",
             TaskState::Ready => "ready",
             TaskState::Running => "running",
+            TaskState::Idle => "idle",
             TaskState::NeedsInput => "needs-input",
             TaskState::Review => "review",
             TaskState::Blocked => "blocked",
@@ -373,6 +386,14 @@ mod tests {
         ] {
             assert!(!is_task_id(id), "{id}");
         }
+    }
+
+    #[test]
+    fn reads_and_writes_the_idle_state() {
+        let task: Task = serde_json::from_str(&TASK.replace("needs-input", "idle")).unwrap();
+        assert_eq!(task.state, TaskState::Idle);
+        assert_eq!(serde_json::to_value(TaskState::Idle).unwrap(), "idle");
+        assert_eq!(TaskState::Idle.name(), "idle");
     }
 
     #[test]

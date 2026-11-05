@@ -85,6 +85,7 @@ mod components {
     pub mod confirm;
     pub mod detail_section;
     pub mod dialog;
+    pub mod dialog_frame;
     pub mod empty_state;
     pub mod form;
     pub mod glyph;
@@ -98,6 +99,9 @@ mod components {
     pub mod scroll_rules;
     pub mod scrollbars;
     pub mod segmented;
+    pub mod settings_card;
+    pub mod settings_controls;
+    pub mod settings_tile;
     pub mod shape;
     pub mod skeleton;
     pub mod spinner;
@@ -185,6 +189,7 @@ mod projects {
     pub mod projects_dialog;
     pub mod repo_trust_dialog;
     pub mod send_backs_field;
+    pub mod settings_bar;
     pub mod settings_header;
     pub mod settings_tab_rules;
     pub mod settings_tabs;
@@ -239,6 +244,7 @@ mod stages {
     pub mod group_dialog;
     pub mod group_rules;
     pub mod kind_icon;
+    pub mod list_rules;
     pub mod overview_rules;
     pub mod path_add;
     pub mod pipeline_editor;
@@ -251,6 +257,7 @@ mod stages {
     pub mod prompt_field;
     pub mod send_back_dialog;
     pub mod send_back_rules;
+    pub mod sheet_rules;
     pub mod skill_rules;
     pub mod source_tag;
     pub mod stage_blocks;
@@ -265,7 +272,10 @@ mod stages {
     pub mod stage_options;
     pub mod stage_picker;
     pub mod stage_rows;
+    pub mod stage_sheet;
+    pub mod stage_sheet_groups;
     pub mod stage_view_rules;
+    pub mod stages_tab;
 }
 
 mod tasks {

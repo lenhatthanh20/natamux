@@ -79,12 +79,13 @@ impl StageLookup for NoStages {
     }
 }
 
-/// The state of an agent in a shell that no stage uses. A turn end waits for the user, as it does
-/// for the task's own agent.
+/// The state of an agent in a shell that no stage uses. A turn end is idle and a question waits
+/// for the user, as for the task's own agent.
 fn shell_state_of(signal: Signal) -> TaskState {
     match signal {
         Signal::Prompt | Signal::Activity | Signal::TurnPaused => TaskState::Running,
-        Signal::Asking | Signal::TurnEnded => TaskState::NeedsInput,
+        Signal::TurnEnded => TaskState::Idle,
+        Signal::Asking => TaskState::NeedsInput,
         Signal::Failed => TaskState::Failed,
     }
 }

@@ -409,16 +409,18 @@ jobs:
             workspace-changes-empty workspace-changes-list workspace-changes-diff
             workspace-changes-ask workspace-changes-comments rollback image-diff workspace-history
             history-over-main tasks-progress
-            project-settings-tab-stages project-settings-agent-stage project-settings-add-stage
+            project-settings-tab-stages project-settings-stage-sheet project-settings-stage-sheet-advanced
+            project-settings-add-stage
             project-settings-branch project-settings-problems project-settings-conflict
             details-files workspace-docs workspace-docs-edit workspace-editor
             workspace-editor-source workspace-editor-draft workspace-editor-conflict
             workspace-editor-tabs
             terminal-drop-target
             palette palette-query palette-no-match palette-jump shortcuts account-menu
-            settings settings-general settings-agents settings-search projects project-settings
+            settings settings-general settings-appearance settings-agents settings-agent-sheet
+            settings-search projects project-settings
             project-settings-tab-general
-            project-settings-tab-json project-settings-json-error import-issues sign-in
+            project-settings-tab-json project-settings-json-error project-settings-trust import-issues sign-in
             sign-in-error add-menu details-empty rail-closed-panel changes-over-main stage-evidence
             start-task-branch-menu sidebar-blurred remove-workspace-anyway
             update-downloading update-ready update-failed settings-update-ready
@@ -431,16 +433,18 @@ jobs:
             details-more-menu fan-out workspace-changes-empty workspace-changes-list workspace-changes-diff
             workspace-changes-ask workspace-changes-comments rollback image-diff workspace-history
             history-over-main tasks-progress
-            project-settings-tab-stages project-settings-agent-stage project-settings-add-stage
+            project-settings-tab-stages project-settings-stage-sheet project-settings-stage-sheet-advanced
+            project-settings-add-stage
             project-settings-branch project-settings-problems project-settings-conflict
             details-files workspace-docs workspace-docs-edit workspace-editor
             workspace-editor-source workspace-editor-draft workspace-editor-conflict
             workspace-editor-tabs
             terminal-drop-target
             palette palette-query palette-no-match palette-jump shortcuts account-menu
-            settings settings-general settings-agents settings-search projects project-settings
+            settings settings-general settings-appearance settings-agents settings-agent-sheet
+            settings-search projects project-settings
             project-settings-tab-general
-            project-settings-tab-json project-settings-json-error import-issues sign-in
+            project-settings-tab-json project-settings-json-error project-settings-trust import-issues sign-in
             sign-in-error add-menu details-empty rail-closed-panel changes-over-main stage-evidence
             start-task-branch-menu sidebar-blurred remove-workspace-anyway
             update-downloading update-ready update-failed settings-update-ready

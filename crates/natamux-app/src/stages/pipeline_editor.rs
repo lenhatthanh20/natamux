@@ -1,6 +1,6 @@
 //! The draft of Project settings (`ProjectSettingsDialog.tsx`): the text of `.natamux.json` (which
-//! may not parse), its steps and problems, and the picked stage or branch. The preview, the
-//! stage list and the details read it; every edit goes through `edit`, which writes the steps
+//! may not parse), its steps and problems, and the picked stage or branch. The flowchart, the
+//! stage list and the sheets read it; every edit goes through `edit`, which writes the steps
 //! back into the draft and keeps every other key as it is.
 
 use gpui::EventEmitter;
@@ -21,6 +21,9 @@ use super::editor_find::{find_branch, find_stage};
 /// The draft changed: the dialog works out again whether it differs from the file.
 pub struct DraftEdited;
 
+/// A stage or branch was picked to edit (a row, a flowchart node, a new stage): its sheet opens.
+pub struct OpenSheet(pub String);
+
 pub struct PipelineEditor {
     text: String,
     /// The settings of `text`; the default pipeline with no other keys while `error` is set.
@@ -33,6 +36,7 @@ pub struct PipelineEditor {
 }
 
 impl EventEmitter<DraftEdited> for PipelineEditor {}
+impl EventEmitter<OpenSheet> for PipelineEditor {}
 
 impl PipelineEditor {
     /// `text` is the file as read, or `{}`. A text the tab cannot read is kept as it is.
@@ -220,7 +224,14 @@ impl PipelineEditor {
             .or_else(|| self.selected_stage().map(|stage| stage.id.clone()))
     }
 
+    /// Picks `id` and opens its sheet.
     pub fn select(&mut self, id: &str, cx: &mut Context<Self>) {
+        self.pick(id, cx);
+        cx.emit(OpenSheet(id.to_owned()));
+    }
+
+    /// Picks `id` without opening its sheet (a new group or branch).
+    pub fn pick(&mut self, id: &str, cx: &mut Context<Self>) {
         self.picked = Some(id.to_owned());
         cx.notify();
     }

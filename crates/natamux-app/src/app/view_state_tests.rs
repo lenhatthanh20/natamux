@@ -31,6 +31,7 @@ fn a_saved_view_reads_back_the_same() {
         sections: vec![("notes".into(), false), ("details".into(), true)],
         details_open: false,
         notify: true,
+        notify_always: true,
         tabs: vec![
             ("T-1".into(), WorkspaceTab::Changes),
             ("T-2".into(), WorkspaceTab::Docs),

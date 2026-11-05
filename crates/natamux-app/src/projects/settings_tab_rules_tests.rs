@@ -233,3 +233,94 @@ fn reads_the_idle_pause_field_as_the_default_off_or_5_to_1440_minutes() {
         assert_eq!(idle_pause_field(bad), Err(IDLE_PAUSE_ERROR), "{bad}");
     }
 }
+
+#[test]
+fn blocks_general_and_stages_while_the_json_is_broken() {
+    assert_eq!(tab_blocked(SettingsTab::General, true), None);
+    assert_eq!(tab_blocked(SettingsTab::Stages, true), None);
+    assert_eq!(tab_blocked(SettingsTab::Json, true), None);
+    assert_eq!(
+        tab_blocked(SettingsTab::General, false),
+        Some("Fix the JSON first")
+    );
+    assert_eq!(
+        tab_blocked(SettingsTab::Stages, false),
+        Some("Fix the JSON first")
+    );
+    assert_eq!(tab_blocked(SettingsTab::Json, false), None);
+}
+
+#[test]
+fn says_unsaved_for_an_edit_or_a_broken_file() {
+    assert_eq!(save_status(false, false), SaveStatus::Saved);
+    assert_eq!(save_status(true, false), SaveStatus::Unsaved);
+    assert_eq!(save_status(false, true), SaveStatus::Unsaved);
+    assert_eq!(SaveStatus::Unsaved.label(), "Unsaved changes");
+    assert_eq!(SaveStatus::Saved.label(), "Saved");
+}
+
+#[test]
+fn lists_reset_import_and_export_in_the_file_menu() {
+    let items = |draft_ok| -> Vec<(Option<FileAction>, &'static str, bool)> {
+        file_menu(draft_ok)
+            .into_iter()
+            .map(|entry| match entry {
+                FileMenuEntry::Item {
+                    action,
+                    label,
+                    disabled,
+                    ..
+                } => (Some(action), label, disabled),
+                FileMenuEntry::Label(label) => (None, label, true),
+            })
+            .collect()
+    };
+    assert_eq!(
+        items(true),
+        [
+            (Some(FileAction::Reset), "Reset to default", false),
+            (Some(FileAction::Import), "Import\u{2026}", false),
+            (Some(FileAction::Export), "Export", false),
+        ]
+    );
+    assert_eq!(
+        items(false),
+        [
+            (Some(FileAction::Reset), "Reset to default", false),
+            (Some(FileAction::Import), "Import\u{2026}", false),
+            (None, "Fix the JSON first", true),
+            (Some(FileAction::Export), "Export", true),
+        ]
+    );
+}
+
+#[test]
+fn draws_four_issue_rows_with_the_default_and_its_note() {
+    let rows = issue_rows("on-pr", false);
+    let labels: Vec<&str> = rows.iter().map(|row| row.label).collect();
+    assert_eq!(
+        labels,
+        [
+            "Manual",
+            "On Spec approved",
+            "Just before PR opens",
+            "Never"
+        ]
+    );
+    let picked: Vec<bool> = rows.iter().map(|row| row.selected).collect();
+    assert_eq!(picked, [false, false, true, false]);
+    assert!(rows[0].is_default);
+    assert_eq!(rows[0].note, Some("Button on the task"));
+    assert_eq!(rows.iter().filter(|row| row.is_default).count(), 1);
+    assert!(rows.iter().skip(1).all(|row| row.note.is_none()));
+    assert!(rows.iter().all(|row| !row.disabled));
+}
+
+#[test]
+fn turns_every_issue_row_off_without_a_tracker_and_keeps_the_value() {
+    let rows = issue_rows("never", true);
+    assert!(rows.iter().all(|row| row.disabled));
+    assert!(rows[3].selected);
+    // A value the list lacks shows the default.
+    assert!(issue_rows("soon", false)[0].selected);
+}

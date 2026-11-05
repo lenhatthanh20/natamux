@@ -50,6 +50,7 @@ impl When {
                         Some(
                             TaskState::Ready
                                 | TaskState::Running
+                                | TaskState::Idle
                                 | TaskState::NeedsInput
                                 | TaskState::Review
                         )
