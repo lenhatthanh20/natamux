@@ -160,7 +160,7 @@ impl Store {
             position.lanes
         };
         for (stage, state) in lanes {
-            if matches!(state, TaskState::Running | TaskState::NeedsInput) {
+            if state.has_live_agent() {
                 let input = json!({ "source": "system", "type": "agent.stopped", "payload": { "stage": stage } });
                 self.apply_event(task_id, Some(&input))?;
             }

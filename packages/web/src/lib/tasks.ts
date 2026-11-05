@@ -14,6 +14,7 @@ export const STATE_LABEL: Record<TaskState, string> = {
   draft: 'Draft',
   ready: 'Ready',
   running: 'Running',
+  idle: 'Idle',
   'needs-input': 'Needs input',
   review: 'In review',
   blocked: 'Blocked',
@@ -43,6 +44,7 @@ const STATE_ACTIONS: Record<TaskState, readonly TaskAction[]> = {
   draft: [{ label: 'Mark ready', type: 'task.readied' }],
   ready: [{ label: 'Block', type: 'task.blocked' }],
   running: [{ label: 'Block', type: 'task.blocked' }],
+  idle: [{ label: 'Resume', type: 'agent.resumed' }],
   'needs-input': [{ label: 'Resume', type: 'agent.resumed' }],
   review: [
     { label: 'Approve', type: 'review.approved', hotkey: 'a' },
@@ -185,6 +187,7 @@ export const STATE_ORDER: readonly TaskState[] = [
   'failed',
   'blocked',
   'running',
+  'idle',
   'ready',
   'draft',
   'done',

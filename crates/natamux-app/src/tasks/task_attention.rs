@@ -81,6 +81,7 @@ pub fn count_by_state(tasks: &[Task]) -> Vec<(TaskState, usize)> {
         TaskState::Draft,
         TaskState::Ready,
         TaskState::Running,
+        TaskState::Idle,
         TaskState::NeedsInput,
         TaskState::Review,
         TaskState::Blocked,
@@ -154,10 +155,11 @@ mod tests {
         })
     }
 
-    const ALL_STATES: [TaskState; 9] = [
+    const ALL_STATES: [TaskState; 10] = [
         TaskState::Draft,
         TaskState::Ready,
         TaskState::Running,
+        TaskState::Idle,
         TaskState::NeedsInput,
         TaskState::Review,
         TaskState::Blocked,
@@ -202,6 +204,7 @@ mod tests {
         let states = [
             TaskState::Draft,
             TaskState::Ready,
+            TaskState::Idle,
             TaskState::NeedsInput,
             TaskState::Review,
             TaskState::Blocked,

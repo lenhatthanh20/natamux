@@ -121,7 +121,7 @@ mod background_wait {
             json!({ "source": "agent", "type": "agent.finished" }),
         );
 
-        assert_eq!(result.task.state, TaskState::NeedsInput);
+        assert_eq!(result.task.state, TaskState::Idle);
         assert_eq!(result.task.background_since, None);
     }
 

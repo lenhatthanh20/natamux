@@ -42,7 +42,7 @@ Natamux also writes the Cursor CLI's trust file for the worktree, so `cursor-age
 |---|---|---|
 | `beforeSubmitPrompt` | A prompt was sent | running |
 | `preToolUse`, `postToolUse`, `postToolUseFailure`, `beforeShellExecution`, `afterShellExecution`, `afterFileEdit` | The agent works | no change |
-| `stop` | The turn ended | needs input |
+| `stop` | The turn ended | idle |
 | `stop` with `status: error` | The turn failed | failed |
 
 The Cursor CLI has no hook for waiting on your approval. The terminal bell moves a running task to needs input instead.

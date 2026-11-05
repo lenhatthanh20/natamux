@@ -42,7 +42,12 @@ async function waitingTask(request: APIRequestContext): Promise<string> {
   await expect
     .poll(async () => (await taskOf(request, task.id)).state, { timeout: 30_000 })
     .toBe('running')
-  // The images have no natamux CLI, so the agent's turn end is set through the API. No question
+  // [no-done]: the fake agent ends its turn with no question, so the task goes idle first. The
+  // override comes after, or that turn end would move it back to idle.
+  await expect
+    .poll(async () => (await taskOf(request, task.id)).state, { timeout: 30_000 })
+    .toBe('idle')
+  // The images have no natamux CLI, so the wait for the user is set through the API. No question
   // follows the start, so the reason is "stopped".
   await request.post(`/api/tasks/${task.id}/events`, {
     headers,

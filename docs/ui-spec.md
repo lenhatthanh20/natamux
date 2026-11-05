@@ -145,6 +145,7 @@ One `data-state` attribute drives chip, dot, glyph, board column and filter. `--
 | draft | `#9a9ea6` / `#1d1f23` | 6.1 / 7.2 | `#5f6570` / `#eceef1` | 5.0 / 5.3 |
 | ready | `#6cc4d6` / `#13262b` | 7.8 / 9.7 | `#0b6274` / `#e0f1f5` | 6.0 / 6.3 |
 | running | `#8fb0ff` / `#172140` | 7.4 / 9.1 | `#2448b8` / `#e4ebff` | 6.5 / 7.1 |
+| idle | as draft (native app: Zed `ignored`) | | | |
 | needs-input | `#f5b54a` / `#33260f` | 8.1 / 10.7 | `#8a5300` / `#fdefd0` | 5.6 / 5.8 |
 | review | `#b9a4ff` / `#241d3d` | 7.5 / 9.1 | `#5634b8` / `#ede7fc` | 6.8 / 7.4 |
 | blocked | `#f08fb3` / `#331a26` | 7.1 / 8.6 | `#a33b62` / `#f9e4ec` | 5.2 / 5.7 |
@@ -152,7 +153,7 @@ One `data-state` attribute drives chip, dot, glyph, board column and filter. `--
 | done | `#6fd19a` / `#142a1e` | 8.2 / 10.4 | `#1c7442` / `#e1f3e8` | 5.0 / 5.3 |
 | cancelled | `#8d919a` / `#1d1f23` | 5.2 / 6.2 (was 2.1-3.3) | `#5f6570` / `#eceef1` | 5.0 / 5.3 (was 2.0-3.3) |
 
-Running (blue) and needs-input (amber) are far apart in hue, so "working" never reads as "needs you".
+Running (blue) and needs-input (amber) are far apart in hue, so "working" never reads as "needs you". Idle (an agent that ended its turn without a question) is grey and not in Needs you: no ring, no Dock count, no Answer button.
 
 #### Project colors
 
@@ -463,6 +464,7 @@ One family of filled shapes for every place: the table, palette, pane tabs and t
 | ready | ring | — | Ready |
 | running | full disk | blinks once per 2000ms (`.hm-beat`) | Running |
 | running but quiet | ring, lower half filled, needs-input color | — | Running, but quiet |
+| idle | three dots in a row | — | Idle |
 | needs-input | diamond | — | Needs input |
 | review | rounded square | — | In review |
 | blocked | two bars | — | Blocked |
@@ -624,7 +626,7 @@ Shared shell:
 - Age column removed; created time goes in the Last activity tooltip (NAV-08). Changes and PR columns are hidden when no visible row has a value (NAV-08). Last activity cell is `white-space: nowrap`, min 72 (NAV-07).
 - Task cell: title 13/400 truncate + label chips after it (relation "part of T-0014" / "waits for T-0009", repo when several repos), never wrapping. Running activity shows in the Agent column as 12 muted text instead of a second line.
 - Whole row is the click target (stretched button over the row, `cursor: pointer`), hover bg-hover, selected bg-selected (bg-selection-active when the table has focus) (RA-26, RA-28).
-- Sorting: headers are buttons with `aria-sort` and a 12px arrow; click cycles asc/desc. Default sort is stable: state group (needs-input, review, failed, blocked, running, ready, draft, done, cancelled), then id descending. Live updates never reorder rows while the pointer is over the table or within 2s after a keyboard move; they apply on the next pause (fixes NAV-05).
+- Sorting: headers are buttons with `aria-sort` and a 12px arrow; click cycles asc/desc. Default sort is stable: state group (needs-input, review, failed, blocked, running, idle, ready, draft, done, cancelled), then id descending. Live updates never reorder rows while the pointer is over the table or within 2s after a keyboard move; they apply on the next pause (fixes NAV-05).
 - Keys: the table is one tab stop (roving on rows); Up/Down/j/k, Home/End, Enter opens the workspace, `i` toggles details, Shift+F10 row menu: Open workspace, Show details, Add subtask… (`ListPlus`, after Show details; only for a task with no parent), the actions for its state, copy items, Cancel task, Delete task.
 - Overflow at intermediate widths: right-edge fade + visible thin scrollbar (NAV-03).
 
@@ -803,7 +805,7 @@ Rules:
 
 | Action | Result |
 |---|---|
-| Click a workspace row (sidebar, jump palette) | Opens the workspace in main. Tab: Terminal when running/needs-input; otherwise the last tab used for THAT workspace; Terminal for a new one (WS-18). Details keep their per-task open state; never opened or closed, they open where they dock (see Details in 3.1). |
+| Click a workspace row (sidebar, jump palette) | Opens the workspace in main. Tab: Terminal when running/idle/needs-input; otherwise the last tab used for THAT workspace; Terminal for a new one (WS-18). Details keep their per-task open state; never opened or closed, they open where they dock (see Details in 3.1). |
 | Click a table row / board card | Selects it and opens details (dock or sheet by 3.2). |
 | Double-click a row / Enter | Opens the workspace; for a task without one, the No-workspace view in main with [Create workspace] and [Start agent] (WS-23). |
 | Shift+Enter in palette, "Add to Agents" in row menu | Adds the task's Terminal 1 to the Agents grid. |

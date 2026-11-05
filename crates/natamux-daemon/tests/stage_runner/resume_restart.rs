@@ -55,7 +55,7 @@ fn keeps_the_claude_code_session_of_a_stage_after_an_agent_came_back_in_another_
 fn goes_on_with_the_last_claude_code_session_of_the_stage_with_no_new_prompt() {
     let f = Fixture::new();
     let task = waiting_after_restart(&f, json!({ "sessionId": "s-1" }), "claude-code");
-    assert_eq!(task.state, TaskState::NeedsInput);
+    assert_eq!(task.state, TaskState::Idle);
 
     resume(&f, &task.id, json!({}));
 
@@ -282,7 +282,7 @@ fn goes_on_with_the_session_of_the_stage_in_the_terminal_of_that_stage() {
 
     resume(&f, &task.id, json!({ "stage": "test-spec" }));
 
-    let lanes = json!({ "test-spec": "running", "implement": "needs-input" });
+    let lanes = json!({ "test-spec": "running", "implement": "idle" });
     assert_eq!(lanes_of(&f, &task.id), lanes);
     assert_eq!(shells(&f, &task.id), ["2"]);
     assert!(script_has(&f, &task.id, "2", "--resume 's-2'"));
@@ -366,7 +366,7 @@ fn in_a_group_puts_only_the_resumed_stage_back_when_its_agent_cannot_start() {
 
     resume(&f, &task.id, json!({ "stage": "test-spec" }));
 
-    let lanes = json!({ "test-spec": "needs-input", "implement": "needs-input" });
+    let lanes = json!({ "test-spec": "needs-input", "implement": "idle" });
     assert_eq!(lanes_of(&f, &task.id), lanes);
     let (_, kind, payload) = last_event(&f, &task.id);
     assert_eq!(kind, "stage.check-failed");

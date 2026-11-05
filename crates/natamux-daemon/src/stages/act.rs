@@ -64,7 +64,7 @@ impl StageRun {
             task,
             step,
             input,
-            &[TaskState::Running, TaskState::NeedsInput],
+            &[TaskState::Running, TaskState::Idle, TaskState::NeedsInput],
         )?;
         let reporter = if input.terminal.is_none() {
             source
@@ -135,12 +135,12 @@ impl StageRun {
         input: &StageActionInput,
         source: &str,
     ) -> StageResult<Task> {
-        use TaskState::{Draft, NeedsInput, Ready, Review, Running};
+        use TaskState::{Draft, Idle, NeedsInput, Ready, Review, Running};
         let (kind, states): (&str, &[TaskState]) = match what {
-            StageAction::Approve => ("stage.approved", &[Review, NeedsInput]),
+            StageAction::Approve => ("stage.approved", &[Review, Idle, NeedsInput]),
             StageAction::Skip => (
                 "stage.skipped",
-                &[Draft, Ready, Running, NeedsInput, Review],
+                &[Draft, Ready, Running, Idle, NeedsInput, Review],
             ),
             StageAction::Pass => ("stage.passed", &[Ready, Running, Review]),
             _ => ("stage.failed", &[Running]),

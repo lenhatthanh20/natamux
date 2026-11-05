@@ -400,7 +400,7 @@ fn starts_only_the_failed_stage_of_a_group_in_its_own_terminal() {
     let lanes = Value::Object(f.task(&task.id).lanes);
     assert_eq!(
         lanes,
-        json!({ "test-spec": "needs-input", "implement": "running" })
+        json!({ "test-spec": "idle", "implement": "running" })
     );
     assert_eq!(f.terminals.list(&task.id), ["1"]);
     assert!(f.launch_script(&task.id, "1").contains("--resume 's-1'"));

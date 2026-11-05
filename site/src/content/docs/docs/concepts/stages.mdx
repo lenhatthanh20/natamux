@@ -313,7 +313,7 @@ A group holds 2 to 4 stages that are on and work at the same time. Only `agent` 
 - The group finishes when every stage in it is done.
 - Each stage works in its own terminal. The stage that changes code (an agent stage without an output file) keeps the first terminal.
 - Any stage of the group can start another agent, with words of its own: set **Agent** and **Arguments** in its settings (`agent` and `args` in the file). The stage that changes code then leaves the first terminal to the task's agent and runs in a terminal of its own.
-- The state of the group is the most urgent state of its stages: `needs-input`, `failed`, `blocked`, `review`, `running`, `ready`, `draft`, in that order.
+- The state of the group is the most urgent state of its stages: `needs-input`, `failed`, `blocked`, `review`, `running`, `idle`, `ready`, `draft`, in that order.
 
 ## Paths with a condition
 

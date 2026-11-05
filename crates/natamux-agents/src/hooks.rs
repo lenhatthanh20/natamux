@@ -134,7 +134,8 @@ fn planned(kind: &'static str, payload: &Map<String, Value>) -> PlannedEvent {
     }
 }
 
-// Brings a task that waits for the user back to running, then adds the closing event.
+// Brings an idle task, or one that waits for the user, back to running, then adds the closing
+// event.
 fn end_turn(
     state: TaskState,
     closing: &'static str,
@@ -142,7 +143,9 @@ fn end_turn(
 ) -> Vec<PlannedEvent> {
     match state {
         TaskState::Running => vec![planned(closing, payload)],
-        TaskState::NeedsInput => vec![planned("agent.resumed", payload), planned(closing, payload)],
+        TaskState::Idle | TaskState::NeedsInput => {
+            vec![planned("agent.resumed", payload), planned(closing, payload)]
+        }
         _ => Vec::new(),
     }
 }
@@ -161,7 +164,7 @@ pub fn plan_signal_events(
                 planned("agent.started", payload),
             ],
             TaskState::Ready => vec![planned("agent.started", payload)],
-            TaskState::NeedsInput | TaskState::Review | TaskState::Failed => {
+            TaskState::Idle | TaskState::NeedsInput | TaskState::Review | TaskState::Failed => {
                 vec![planned("agent.resumed", payload)]
             }
             _ => Vec::new(),
@@ -169,10 +172,14 @@ pub fn plan_signal_events(
         // A tool ran, so a permission that was asked for has been answered, or the agent works
         // again after an API error.
         Signal::Activity => match state {
-            TaskState::NeedsInput | TaskState::Failed => vec![planned("agent.resumed", payload)],
+            TaskState::Idle | TaskState::NeedsInput | TaskState::Failed => {
+                vec![planned("agent.resumed", payload)]
+            }
             _ => Vec::new(),
         },
-        Signal::Asking if state == TaskState::Running => vec![planned("agent.asked", payload)],
+        Signal::Asking if matches!(state, TaskState::Running | TaskState::Idle) => {
+            vec![planned("agent.asked", payload)]
+        }
         Signal::Asking => Vec::new(),
         Signal::TurnEnded => end_turn(state, "agent.finished", payload),
         Signal::TurnPaused => end_turn(state, "agent.waiting", payload),
