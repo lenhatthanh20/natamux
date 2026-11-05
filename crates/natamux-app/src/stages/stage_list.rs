@@ -93,11 +93,23 @@ impl StageList {
         }
     }
 
-    fn header(&self) -> impl IntoElement + use<> {
+    fn header(&self, cx: &App) -> impl IntoElement + use<> {
+        let border = cx.theme().colors().border_variant;
         h_flex()
-            .gap_2()
-            .child(Label::new("Stages").weight(gpui::FontWeight::SEMIBOLD))
-            .child(div().flex_1())
+            .h(rems_from_px(36.0_f32))
+            .flex_none()
+            .gap_1p5()
+            .pl(rems_from_px(10.0_f32))
+            .pr(rems_from_px(6.0_f32))
+            .border_b_1()
+            .border_color(border)
+            .child(
+                div().flex_1().child(
+                    Label::new("Stages")
+                        .size(LabelSize::Custom(rems_from_px(13.0_f32)))
+                        .weight(gpui::FontWeight::MEDIUM),
+                ),
+            )
             .child(add_button(&self.editor, &self.add_stage))
     }
 
@@ -155,7 +167,7 @@ impl Render for StageList {
         let general = self.editor.read(cx).issues_of(None);
         tab_order::begin();
         tab_order::push(&self.add_stage);
-        let header = self.header();
+        let header = self.header(cx);
         let rows = self.steps(&steps, window, cx);
         self.stops = tab_order::end();
         if let Some(handle) = self
@@ -174,12 +186,17 @@ impl Render for StageList {
             .on_action(cx.listener(|this, _: &MoveStageDown, window, cx| {
                 this.move_focused(1, window, cx);
             }))
-            .gap_2()
+            .w_full()
             .child(header)
-            .when(!general.is_empty(), |this| {
-                this.child(issue_lines(&general, cx))
-            })
-            .child(v_flex().id("stage-rows").gap_1().children(rows))
+            .child(
+                v_flex()
+                    .id("stage-body")
+                    .p(rems_from_px(6.0_f32))
+                    .when(!general.is_empty(), |this| {
+                        this.child(issue_lines(&general, cx))
+                    })
+                    .child(v_flex().id("stage-rows").children(rows)),
+            )
     }
 }
 
@@ -197,7 +214,7 @@ impl Render for DragGhost {
     }
 }
 
-/// The problems of a row, 12 px with the alert icon.
+/// The problems of a row, 11 px with the alert icon.
 pub(super) fn issue_lines(issues: &[PipelineIssue], cx: &App) -> impl IntoElement + use<> {
     let warning = signal(cx).fg;
     v_flex().gap_0p5().children(issues.iter().map(move |issue| {
@@ -216,7 +233,7 @@ pub(super) fn issue_lines(issues: &[PipelineIssue], cx: &App) -> impl IntoElemen
             .child(
                 div().min_w_0().child(
                     Label::new(issue.message.clone())
-                        .size(LabelSize::XSmall)
+                        .size(LabelSize::Custom(rems_from_px(11.0_f32)))
                         .color(label_color),
                 ),
             )

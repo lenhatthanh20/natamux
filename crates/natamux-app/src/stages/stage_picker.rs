@@ -14,7 +14,7 @@ use ui::{ScrollAxes, prelude::*};
 use super::editor_catalog::{add_catalog_stage, picker_detail, picker_empty_text, picker_groups};
 use super::kind_icon::kind_icon;
 use super::pipeline_editor::PipelineEditor;
-use crate::components::form::{input_box, text_editor};
+use crate::components::form::text_editor;
 use crate::components::scrollbars::scroll_area;
 
 /// A stage was added and picked: the dialog closes.
@@ -136,31 +136,36 @@ impl StagePicker {
         h_flex()
             .id(SharedString::from(format!("pick-{id}")))
             .w_full()
-            .gap_2()
-            .items_start()
-            .px_1p5()
-            .py_1p5()
-            .rounded_md()
+            .gap(rems_from_px(10.0_f32))
+            .items_center()
+            .px(rems_from_px(8.0_f32))
+            .py(rems_from_px(5.0_f32))
+            .rounded(px(5.))
             .cursor_pointer()
             .when(active, |this| this.bg(selected))
             .when(!active, |this| this.hover(move |style| style.bg(hover)))
             .on_click(cx.listener(move |this, _, _, cx| this.add(&id, cx)))
             .child(
-                div()
-                    .mt_0p5()
-                    .child(kind_icon(entry.stage.kind).size(IconSize::Small)),
+                kind_icon(entry.stage.kind)
+                    .size(IconSize::Custom(rems_from_px(15.0_f32)))
+                    .color(Color::Muted),
             )
             .child(
                 v_flex()
                     .min_w_0()
-                    .gap_0p5()
+                    .flex_1()
                     .child(Label::new(stage_name(&entry.stage)).weight(FontWeight::MEDIUM))
-                    .child(Label::new(entry.description).size(LabelSize::Small))
                     .child(
-                        Label::new(picker_detail(entry))
-                            .size(LabelSize::Small)
-                            .color(Color::Muted),
+                        Label::new(entry.description)
+                            .size(LabelSize::Custom(rems_from_px(11.5_f32)))
+                            .color(Color::Muted)
+                            .truncate(),
                     ),
+            )
+            .child(
+                Label::new(picker_detail(entry))
+                    .size(LabelSize::Custom(rems_from_px(11_f32)))
+                    .color(Color::Placeholder),
             )
             .into_any_element()
     }
@@ -174,13 +179,14 @@ impl StagePicker {
         for (phase, entries) in picker_groups(&steps, &query) {
             rows.push(
                 div()
-                    .px_1p5()
-                    .pt_1()
+                    .mx(rems_from_px(8.0_f32))
+                    .mt(rems_from_px(10.0_f32))
+                    .mb(rems_from_px(2.0_f32))
                     .child(
                         Label::new(phase.name().to_uppercase())
-                            .size(LabelSize::XSmall)
-                            .weight(FontWeight::SEMIBOLD)
-                            .color(Color::Muted),
+                            .size(LabelSize::Custom(rems_from_px(10.5_f32)))
+                            .weight(FontWeight::MEDIUM)
+                            .color(Color::Placeholder),
                     )
                     .into_any_element(),
             );
@@ -202,13 +208,27 @@ impl Render for StagePicker {
         let list = v_flex()
             .id("stage-picker-list")
             .max_h(rems_from_px(360.0_f32))
-            .gap_0p5()
             .overflow_y_scroll()
             .track_scroll(&self.scroll)
             .children(rows);
+        let icon = Icon::new(IconName::MagnifyingGlass)
+            .size(IconSize::Custom(rems_from_px(13.0_f32)))
+            .color(Color::Placeholder);
         v_flex()
-            .gap_2()
-            .child(input_box(&self.search, cx))
+            .gap(rems_from_px(4.0_f32))
+            .child(
+                h_flex()
+                    .items_center()
+                    .gap(rems_from_px(6.0_f32))
+                    .px(rems_from_px(8.0_f32))
+                    .h(rems_from_px(24.0_f32))
+                    .rounded(px(5.))
+                    .border_1()
+                    .border_color(cx.theme().colors().border_variant)
+                    .bg(cx.theme().colors().panel_background)
+                    .child(icon)
+                    .child(div().min_w_0().flex_1().child(self.search.clone())),
+            )
             .child(scroll_area(
                 list,
                 ScrollAxes::Vertical,

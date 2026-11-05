@@ -19,12 +19,12 @@ Open them from the sidebar: click the gear next to the project. Or right-click t
 **Project** holds three fields. Each one shows a dot (outline: the default, filled: changed) and, when changed, a reset icon that clears it.
 
 - **Agent send backs.** The most times an agent, or a CI failure, may send the task back from one stage before it waits for you (`agents.maxSendBacks`). Empty means no limit, the default. See [Limit the send backs](#limit-the-send-backs).
-- **Pause idle agents after (min).** After how many minutes an agent that ended its turn, in a terminal nobody looks at, is paused (`agents.pauseIdleAfterMinutes`). Empty means 30. `0` turns the pause off. See [An idle agent pauses](/docs/guides/terminal/#an-idle-agent-pauses).
+- **Pause idle agents after (minutes).** After how many minutes an agent that ended its turn, in a terminal nobody looks at, is paused (`agents.pauseIdleAfterMinutes`). Empty means 30. `0` turns the pause off. See [An idle agent pauses](/docs/guides/terminal/#an-idle-agent-pauses).
 - **Branch name.** The name of the branch of a new task (`git.branchName`). Empty means `natamux/{id}-{slug}`.
 
 ### GitHub issues
 
-**GitHub issues** sets when Natamux opens a GitHub issue for a task (`tracker.createIssue`). By default it opens none: **Only when you click Create issue in the task's Progress view**. The other choices open the issue when you approve the Spec stage, or just before the pull request opens. **Never** also hides the **Create issue** button.
+**GitHub issues** sets when Natamux opens a GitHub issue for a task (`tracker.createIssue`). By default it opens none: **Manual** opens one only when you click **Create issue** in the task's Progress view. **On Spec approved** opens it when you approve the Spec stage (without a Spec stage, when the pull request opens), and **Just before PR opens** just before the pull request opens. **Never** also hides the **Create issue** button.
 
 Under the choices, the tab says what the issue is made of. With `tracker.type` set to `none`, the choices are turned off. See [Open an issue for a task](/docs/guides/github/#open-an-issue-for-a-task).
 

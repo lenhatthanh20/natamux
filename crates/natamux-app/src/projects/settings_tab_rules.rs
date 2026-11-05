@@ -105,8 +105,8 @@ pub fn reset_ask(draft_ok: bool) -> ResetAsk {
 }
 
 pub const SEND_BACKS_LABEL: &str = "Agent send backs";
-pub const SEND_BACKS_HINT: &str = "The most times an agent may send the task back from one stage \
-                                   before it waits for you. Empty: no limit.";
+pub const SEND_BACKS_HINT: &str =
+    "How many times an agent can send a stage back. Empty means no limit.";
 pub const SEND_BACKS_ERROR: &str = "Give a whole number of 0 or more, or leave it empty.";
 
 /// The text of the send backs field: empty is no limit. Digits only, as JSON writes the number.
@@ -123,8 +123,7 @@ pub fn send_backs_field(text: &str) -> Result<Option<usize>, &'static str> {
 
 pub const BRANCH_NAME_LABEL: &str = "Branch name";
 pub const BRANCH_NAME_PLACEHOLDER: &str = "natamux/{id}-{slug}";
-pub const BRANCH_NAME_HINT: &str = "The name of the branch of a new task. {id} is the task id, \
-                                    {slug} the title as a slug. Empty: natamux/{id}-{slug}.";
+pub const BRANCH_NAME_HINT: &str = "Use {id} and {slug}. New tasks use it for their branch.";
 
 /// The text of the branch name field: empty is None (the key is left out), else the trimmed text
 /// or the problem of `git.branchName`.
@@ -139,9 +138,8 @@ pub fn branch_name_field(text: &str) -> Result<Option<String>, String> {
     }
 }
 
-pub const IDLE_PAUSE_LABEL: &str = "Pause idle agents after (min)";
-pub const IDLE_PAUSE_HINT: &str = "An agent that ended its turn and that no one looks at stops \
-                                   after this long, and comes back when shown. 0 = off.";
+pub const IDLE_PAUSE_LABEL: &str = "Pause idle agents after (minutes)";
+pub const IDLE_PAUSE_HINT: &str = "0 turns it off. Otherwise 5 to 1440.";
 pub const IDLE_PAUSE_ERROR: &str = "Give 0 (off) or a whole number from 5 to 1440, or leave it \
                                     empty.";
 

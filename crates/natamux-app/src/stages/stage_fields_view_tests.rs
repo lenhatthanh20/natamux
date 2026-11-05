@@ -3,54 +3,47 @@
 use gpui::TestAppContext;
 use ui::prelude::*;
 
-use super::inline_field;
+use super::{Mark, labelled};
 use crate::app::test_views;
 
 const WIDE: f32 = 400.;
-const NARROW: f32 = 100.;
-const CONTROL: f32 = 80.;
 
-/// An inline field with a long label and a fixed-width control, in a box of `width`.
-struct Field {
-    width: f32,
-}
+/// A labelled field with a changed mark and a 24 px control, in a box of `WIDE`.
+struct Labelled;
 
-impl Render for Field {
+impl Render for Labelled {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        let mark = Mark {
+            dot: div().size(px(6.)).into_any_element(),
+            reset: Some(
+                div()
+                    .size(px(20.))
+                    .debug_selector(|| "field-reset".into())
+                    .into_any_element(),
+            ),
+        };
         let control = div()
-            .w(px(CONTROL))
-            .h(px(20.))
-            .debug_selector(|| "inline-control".into());
-        div().w(px(self.width)).child(inline_field(
-            "Pause idle agents after (min)",
-            None,
-            Some("Help".into()),
-            control,
-        ))
+            .w_full()
+            .h(px(24.))
+            .debug_selector(|| "field-control".into());
+        div()
+            .w(px(WIDE))
+            .child(labelled("Name", Some(mark), Some("Help".into()), control))
     }
 }
 
-fn control_bounds(width: f32, cx: &mut TestAppContext) -> gpui::Bounds<Pixels> {
-    let (_view, cx) = cx.add_window_view(|_, _| Field { width });
+#[gpui::test]
+fn a_field_has_a_20_px_label_row_with_reset_at_its_end_and_the_control_under_it(
+    cx: &mut TestAppContext,
+) {
+    test_views::init(cx);
+    let (_view, cx) = cx.add_window_view(|_, _| Labelled);
     cx.run_until_parked();
-    cx.debug_bounds("inline-control")
-        .expect("the control was not drawn")
-}
-
-#[gpui::test]
-fn an_inline_control_sits_at_the_right_of_its_label(cx: &mut TestAppContext) {
-    test_views::init(cx);
-    let control = control_bounds(WIDE, cx);
-    assert_eq!(control.right(), px(WIDE));
-    // On the label's row, not under it.
-    assert!(control.top() < px(12.));
-}
-
-#[gpui::test]
-fn an_inline_control_wraps_under_a_label_that_leaves_no_room(cx: &mut TestAppContext) {
-    test_views::init(cx);
-    let wide = control_bounds(WIDE, cx);
-    let narrow = control_bounds(NARROW, cx);
-    assert!(narrow.top() >= wide.bottom());
-    assert!(narrow.right() <= px(NARROW));
+    let reset = cx.debug_bounds("field-reset").expect("no reset");
+    let control = cx.debug_bounds("field-control").expect("no control");
+    assert_eq!(reset.right(), px(WIDE));
+    assert_eq!(reset.top(), px(0.));
+    // Label row 20 px, then 3 px.
+    assert_eq!(control.top(), px(23.));
+    assert_eq!(control.size.width, px(WIDE));
 }
