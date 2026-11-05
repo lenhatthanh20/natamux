@@ -11,14 +11,16 @@ use ui::{ContextMenu, Tooltip, prelude::*};
 use super::editor_fields::{TextField, set_text};
 use super::skill_rules::{filter_skills, group_skills, skill_agents, skill_warnings};
 use super::stage_details::DetailsPane;
-use super::stage_fields_view::{change, default_mark, labelled};
+use super::stage_fields_view::{change, default_mark, field_area, labelled_end};
 use crate::agents::agent_choices::{AGENT_CHOICES, agent_label};
-use crate::components::button_style::{action_button, button_icon};
+use crate::components::button_style::{action_button, button_icon, quiet_button};
 use crate::components::colors::signal;
-use crate::components::form::input_box;
 use crate::components::menu::MenuLayer;
 
 type Skills = Option<Result<SkillList, String>>;
+
+/// The fixed line under the prompt.
+const DONE_LINE: &str = "When you are done, run natamux done, unless the steps above say not to.";
 
 /// Why Insert skill is off; None when it can open.
 fn skills_reason(skills: &Skills) -> Option<String> {
@@ -102,39 +104,36 @@ impl DetailsPane {
             let token = format!("{{{name}}}");
             let editor = prompt.clone();
             action_button(SharedString::from(format!("insert-{name}")), token.clone())
-                .label_size(LabelSize::Small)
+                .size(ButtonSize::Compact)
+                .label_size(LabelSize::Custom(rems_from_px(11.0_f32)))
                 .tooltip(Tooltip::text(format!("Insert {token}")))
                 .on_click(move |_, window, cx| insert_at_cursor(&editor, &token, window, cx))
         });
         let reason = skills_reason(&self.skills);
-        let skills = action_button("insert-skill", "Insert skill")
+        let plus = IconSize::Custom(rems_from_px(11.0_f32));
+        let skills = quiet_button("insert-skill", "Insert skill")
+            .size(ButtonSize::Compact)
             .label_size(LabelSize::Small)
-            .start_icon(button_icon("sparkles"))
+            .start_icon(button_icon("plus").size(plus))
             .disabled(reason.is_some())
             .when_some(reason, |this, reason| this.tooltip(Tooltip::text(reason)))
             .on_click(cx.listener(|this, event: &ClickEvent, window, cx| {
                 this.toggle_skills(event.position(), window, cx)
             }));
+        let chips = h_flex()
+            .flex_wrap()
+            .gap_1()
+            .mb(rems_from_px(5.0_f32))
+            .children(chips);
+        let footer = Label::new(DONE_LINE)
+            .size(LabelSize::Custom(rems_from_px(11.0_f32)))
+            .color(Color::Placeholder);
         let control = v_flex()
-            .gap_1p5()
-            .child(
-                h_flex()
-                    .flex_wrap()
-                    .gap_1()
-                    .children(chips)
-                    .child(div().flex_1())
-                    .child(skills),
-            )
-            .child(input_box(&prompt, cx))
-            .child(
-                Label::new(
-                    "When you are done, run natamux done, unless the steps above say not to.",
-                )
-                .size(LabelSize::Small)
-                .color(Color::Muted)
-                .buffer_font(cx),
-            );
-        labelled("Prompt", Some(mark), help, control).into_any_element()
+            .child(chips)
+            .child(field_area(&prompt, cx))
+            .child(div().mt(rems_from_px(3.0_f32)).child(footer));
+        labelled_end("Prompt", Some(mark), skills, help, Some(control.into_any_element()))
+            .into_any_element()
     }
 
     pub fn set_skills(&mut self, skills: Result<SkillList, String>, cx: &mut Context<Self>) {

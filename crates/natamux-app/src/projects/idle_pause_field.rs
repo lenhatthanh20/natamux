@@ -9,9 +9,9 @@ use natamux_proto::projects::repo::DEFAULT_PAUSE_IDLE_MINUTES;
 use ui::prelude::*;
 
 use super::settings_tab_rules::{IDLE_PAUSE_HINT, IDLE_PAUSE_LABEL, idle_pause_field};
-use crate::components::form::{input_box, text_editor};
+use crate::components::form::text_editor;
 use crate::stages::pipeline_editor::PipelineEditor;
-use crate::stages::stage_fields_view::{default_mark, error_line, inline_field};
+use crate::stages::stage_fields_view::{default_mark, error_line, field_input, labelled};
 
 pub struct IdlePauseField {
     pipeline: Entity<PipelineEditor>,
@@ -105,11 +105,11 @@ impl Render for IdlePauseField {
         );
         let control = div()
             .w(rems_from_px(120.0_f32))
-            .child(input_box(&self.editor, cx));
+            .child(field_input(&self.editor, cx));
         v_flex()
             .id("idle-pause-field")
             .gap_1()
-            .child(inline_field(
+            .child(labelled(
                 IDLE_PAUSE_LABEL,
                 Some(mark),
                 Some(IDLE_PAUSE_HINT.into()),

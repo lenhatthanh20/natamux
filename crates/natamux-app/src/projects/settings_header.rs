@@ -3,7 +3,7 @@
 //! "..." menu of the actions on the file.
 
 use gpui::{ClickEvent, FontWeight, Pixels, Point, WeakEntity};
-use ui::{ContextMenu, ContextMenuEntry, Tab, Tooltip, prelude::*};
+use ui::{ContextMenu, ContextMenuEntry, Tooltip, prelude::*};
 
 use super::project_settings_page::ProjectSettingsPage;
 use super::settings_tab_rules::{SettingsTab, export_reason};
@@ -54,7 +54,7 @@ impl ProjectSettingsPage {
     pub(super) fn path_label(&self, cx: &App) -> Option<AnyElement> {
         let path = &self.base.as_ref()?.path;
         let label = Label::new(short_path(path, home_folder().as_deref()))
-            .size(LabelSize::Small)
+            .size(LabelSize::Custom(rems_from_px(11_f32)))
             .color(Color::Muted)
             .buffer_font(cx)
             .truncate();
@@ -75,6 +75,7 @@ impl ProjectSettingsPage {
         let cannot_export = export_reason(self.draft_ok(cx));
         IconButton::new("settings-more", IconName::Ellipsis)
             .icon_size(IconSize::Small)
+            .size(ButtonSize::Default)
             .tooltip(Tooltip::text("Reset, import or export"))
             .disabled(self.base.is_none())
             .on_click(move |event: &ClickEvent, window, cx| {
@@ -102,12 +103,9 @@ impl ProjectSettingsPage {
         let tabs = self.render_tab_bar(shown, cx);
         let row = h_flex()
             .flex_none()
-            .h(Tab::container_height(cx))
-            .pl_6()
-            .pr_2()
-            .gap_3()
-            .border_b_1()
-            .border_color(cx.theme().colors().border_variant)
+            .h(rems_from_px(40.0_f32))
+            .px(rems_from_px(14.0_f32))
+            .gap_1p5()
             .child(title)
             .child(div().flex_1())
             .child(close);

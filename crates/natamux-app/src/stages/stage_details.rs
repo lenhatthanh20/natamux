@@ -1,8 +1,8 @@
-//! The details pane of the Stages tab (`StageDetails.tsx`): in a bordered box, the branch details
-//! or the settings of the picked stage. The text fields are editors made when the pick changes and
-//! kept otherwise.
+//! The details pane of the Stages tab (`StageDetails.tsx`): the branch details or the settings of
+//! the picked stage, inside the card the page draws. The text fields are editors made when the pick
+//! changes and kept otherwise.
 
-use gpui::{AnyElement, ClickEvent, Entity, FocusHandle, Subscription, rems};
+use gpui::{AnyElement, ClickEvent, Div, Entity, FocusHandle, FontWeight, Subscription};
 use natamux_proto::projects::repo::SkillList;
 use natamux_proto::stages::capabilities::stage_name;
 use natamux_proto::stages::catalog::catalog_entry;
@@ -21,12 +21,12 @@ use super::pipeline_editor::PipelineEditor;
 use super::source_tag::source_tag;
 use super::stage_details_fields::StageFields;
 use super::stage_fields_view::{
-    Choice, SELECT_WIDTH, change, default_mark, inline_field, issue_list, labelled, open_choices,
-    select,
+    Choice, change, default_mark, details_section, field_area, field_input, field_space,
+    SELECT_WIDTH, issue_list, labelled, labelled_end, open_choices, select,
 };
 use super::stage_options::{advanced_options, basic_options};
 use crate::agents::agent_choices::{agent_label, custom_agents, pick_list};
-use crate::components::form::input_box;
+use crate::components::colors::signal;
 use crate::components::tab_order;
 
 /// A command or arguments set in the file on a stage that does not run them stay visible, so a
@@ -133,19 +133,15 @@ impl Render for DetailsPane {
         };
         tab_order::begin();
         let body = match (branch, stage) {
-            (Some(branch), _) => self.render_branch(&branch, &steps, &issues, cx),
+            (Some(branch), _) => self.render_branch(&branch, &issues, cx),
             (_, Some(stage)) => self.render_stage(&stage, &steps, &issues, window, cx),
-            _ => Label::new("Pick a stage to see its settings.")
-                .color(Color::Muted)
+            _ => div()
+                .p(rems_from_px(14.0_f32))
+                .child(Label::new("Pick a stage").color(Color::Muted))
                 .into_any_element(),
         };
         self.stops = tab_order::end();
-        div()
-            .p_3()
-            .rounded_md()
-            .border_1()
-            .border_color(cx.theme().colors().border)
-            .child(body)
+        v_flex().w_full().child(body)
     }
 }
 
@@ -162,42 +158,39 @@ impl DetailsPane {
             return div().into_any_element();
         };
         let own_agent = takes_own_agent(steps, &stage.id);
-        let mut body = v_flex()
-            .gap_3()
-            .child(stage_header(stage, cx))
-            .children(issue_list(issues, cx))
-            .child(
-                Label::new("BASIC")
-                    .size(LabelSize::XSmall)
-                    .weight(gpui::FontWeight::MEDIUM)
-                    .color(Color::Muted),
-            )
-            .child(self.name_field(stage, cx))
-            .child(
-                v_flex()
-                    .gap_2()
-                    .children(basic_options(stage, steps, &self.editor, cx)),
-            );
+        let mut basic = details_section(Some("Basic"))
+            .child(field_space(self.name_field(stage, cx)))
+            .children(basic_options(stage, steps, &self.editor, cx));
         if own_agent {
-            body = body.child(self.agent_field(stage, steps, cx));
+            basic = basic.child(field_space(self.agent_field(stage, steps, cx)));
         }
         if takes_prompt(stage) {
-            body = body.child(self.render_prompt(stage, cx));
+            basic = basic.child(field_space(self.render_prompt(stage, cx)));
         }
         let open = self.advanced_open;
-        body = body.child(self.advanced_header(stage, open, window, cx));
+        let mut advanced = v_flex()
+            .w_full()
+            .border_t_1()
+            .border_color(cx.theme().colors().border_variant)
+            .child(self.advanced_header(stage, open, window, cx));
         if open {
-            body = body.child(self.advanced_body(stage, steps, own_agent, fields, cx));
+            advanced = advanced.child(self.advanced_body(stage, steps, own_agent, fields, cx));
         }
-        body.into_any_element()
+        v_flex()
+            .w_full()
+            .child(stage_header(stage, cx))
+            .children(issue_list(issues, cx))
+            .child(basic)
+            .child(advanced)
+            .into_any_element()
     }
 
-    /// The disclosure row: a chevron, "Advanced", and how many of its values are not the default.
     fn toggle_advanced(&mut self, cx: &mut Context<Self>) {
         self.advanced_open = !self.advanced_open;
         cx.notify();
     }
 
+    /// The disclosure row: a chevron, "Advanced", and how many of its values are not the default.
     fn advanced_header(
         &self,
         stage: &Stage,
@@ -206,28 +199,36 @@ impl DetailsPane {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let changed = changed_count(stage);
-        let count = if changed == 0 {
-            "\u{b7} all default".to_string()
+        let (count, count_color) = if changed == 0 {
+            ("\u{b7} all default".to_string(), Color::Muted)
         } else {
-            format!("\u{b7} {changed} changed")
+            (
+                format!("\u{b7} {changed} changed"),
+                Color::Custom(signal(cx).fg),
+            )
         };
         let icon = if open {
             IconName::ChevronDown
         } else {
             IconName::ChevronRight
         };
+        let chevron = IconSize::Custom(rems_from_px(13.0_f32));
+        let colors = cx.theme().colors();
+        let (focused, hover) = (colors.border_focused, colors.ghost_element_hover);
         tab_order::push(&self.advanced_focus);
         h_flex()
             .id("advanced-toggle")
             .track_focus(&self.advanced_focus)
-            .gap_1()
-            .px_1()
-            .rounded_sm()
+            .w_full()
+            .h(rems_from_px(34.0_f32))
+            .px(rems_from_px(14.0_f32))
+            .gap_1p5()
             .border_1()
             .border_color(gpui::transparent_black())
             .when(self.advanced_focus.is_focused(window), |this| {
-                this.border_color(cx.theme().colors().border_focused)
+                this.border_color(focused)
             })
+            .hover(move |style| style.bg(hover))
             .cursor_pointer()
             .on_click(cx.listener(|this, _, _, cx| this.toggle_advanced(cx)))
             .on_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, _, cx| {
@@ -235,49 +236,50 @@ impl DetailsPane {
                     this.toggle_advanced(cx);
                 }
             }))
-            .child(Icon::new(icon).size(IconSize::XSmall).color(Color::Muted))
+            .child(Icon::new(icon).size(chevron))
             .child(
                 Label::new("Advanced")
-                    .size(LabelSize::Small)
-                    .weight(gpui::FontWeight::MEDIUM),
+                    .size(LabelSize::Custom(rems_from_px(13.0_f32)))
+                    .weight(FontWeight::MEDIUM),
             )
-            .child(Label::new(count).size(LabelSize::Small).color(Color::Muted))
+            .child(Label::new(count).size(LabelSize::Small).color(count_color))
             .into_any_element()
     }
 
-    /// Arguments, command, check, output, sections, finished when, then the checkboxes.
+    /// [Arguments | Command], [Check command | Output file], sections, finished when, then the
+    /// checkboxes.
     fn advanced_body(
         &self,
         stage: &Stage,
         steps: &[Step],
         own_agent: bool,
         fields: &StageFields,
-        cx: &mut Context<Self>,
+        cx: &App,
     ) -> AnyElement {
-        let mut body = v_flex().gap_3();
-        if own_agent || stage.args.is_some() {
-            let help = if own_agent {
-                "Words added to the agent's command line, such as --model sonnet."
-            } else {
-                NOT_USED
-            };
-            body = body.child(labelled(
+        let args = (own_agent || stage.args.is_some()).then(|| {
+            let help = (!own_agent).then(|| SharedString::from(NOT_USED));
+            labelled(
                 "Arguments",
                 None,
-                Some(help.into()),
-                input_box(&fields.args.editor, cx),
-            ));
-        }
-        body.children(self.command_fields(stage, cx))
-            .child(
-                v_flex()
-                    .gap_2()
-                    .children(advanced_options(stage, steps, &self.editor, cx)),
+                help,
+                field_input(&fields.args.editor, cx),
             )
+            .into_any_element()
+        });
+        let [command, check, output, sections, done_when] = self.command_fields(stage, cx);
+        let mut body = details_section(None);
+        if args.is_some() || command.is_some() {
+            body = body.child(two_columns(args, command));
+        }
+        body.child(two_columns(check, output))
+            .children(sections.map(field_space))
+            .children(done_when.map(field_space))
+            .child(div().mt_0p5())
+            .children(advanced_options(stage, steps, &self.editor, cx))
             .into_any_element()
     }
 
-    fn name_field(&self, stage: &Stage, cx: &App) -> impl IntoElement {
+    fn name_field(&self, stage: &Stage, cx: &App) -> AnyElement {
         let Some(fields) = &self.stage_fields else {
             return div().into_any_element();
         };
@@ -292,19 +294,17 @@ impl DetailsPane {
             },
             cx,
         );
-        labelled("Name", Some(mark), None, input_box(&fields.name.editor, cx)).into_any_element()
+        let control = field_input(&fields.name.editor, cx);
+        labelled("Name", Some(mark), None, control).into_any_element()
     }
 
     fn agent_field(&self, stage: &Stage, steps: &[Step], _cx: &App) -> AnyElement {
         let help = if runs_in_shell_one(steps, &stage.id) {
-            "With the task's agent, this stage runs in Terminal 1. Another agent or arguments run in \
-             a terminal of its own, so Terminal 1 keeps the task's agent."
+            "\"Task's agent\" shares Terminal 1. Another agent gets a terminal of its own."
         } else if runs_in_own_shell(steps, &stage.id) {
-            "This stage runs in a terminal of its own. With the task's agent it uses Terminal 5; \
-             another agent or arguments use a terminal from Terminal 6. Uncheck Run in a terminal \
-             of its own to run it in Terminal 1."
+            "This stage runs in a terminal of its own, apart from Terminal 1."
         } else {
-            "This stage starts its own agent beside the one in Terminal 1, so it may use another."
+            "This stage starts its own agent beside Terminal 1, so it may use another."
         };
         let picked = stage.agent.clone();
         let text = picked
@@ -331,128 +331,124 @@ impl DetailsPane {
                 open_choices(choices, event.position(), window, cx);
             },
         );
-        let control = div().w(rems_from_px(SELECT_WIDTH)).child(button);
-        inline_field("Agent", None, Some(help.into()), control).into_any_element()
+        let button = v_flex().w(rems_from_px(SELECT_WIDTH)).flex_none().child(button);
+        labelled_end("Agent", None, button, Some(help.into()), None).into_any_element()
     }
 
-    /// Command, check, output, sections and finished when.
-    fn command_fields(&self, stage: &Stage, cx: &App) -> Vec<AnyElement> {
+    /// Command, check, output, sections and finished when; None where the stage has no such field.
+    fn command_fields(&self, stage: &Stage, cx: &App) -> [Option<AnyElement>; 5] {
         let Some(fields) = &self.stage_fields else {
-            return Vec::new();
+            return [None, None, None, None, None];
         };
-        let catalog = catalog_entry(&stage.id);
-        let mut rows = Vec::new();
-        if stage.kind == StageKind::Testing || stage.command.is_some() {
-            let help = if stage.kind != StageKind::Testing {
-                NOT_USED
-            } else if catalog.is_some_and(|entry| entry.needs_command) {
-                "Required. The stage passes when this command passes."
-            } else {
-                "Empty: the agent writes the tests and runs them, as the prompt says."
-            };
-            rows.push(
-                labelled(
-                    "Command",
-                    None,
-                    Some(help.into()),
-                    input_box(&fields.command.editor, cx),
-                )
-                .into_any_element(),
-            );
-        }
-        rows.push(
-            labelled(
-                "Check command",
-                None,
-                Some("Runs in a shell in the task's folder after the stage reports done. Exit code 0 passes. Empty: none.".into()),
-                input_box(&fields.check.editor, cx),
-            )
-            .into_any_element(),
-        );
-        if stage.kind == StageKind::Agent {
-            let help = "A markdown file the stage must write, such as notes.md. Empty: none.";
-            rows.push(
-                labelled(
-                    "Output file",
-                    None,
-                    Some(help.into()),
-                    input_box(&fields.output.editor, cx),
-                )
-                .into_any_element(),
-            );
-        }
-        if let (StageKind::Agent, Some(output)) = (stage.kind, &stage.output) {
-            let help = format!("One heading per line. {output} must have each.");
-            rows.push(
-                labelled(
+        let field = |label: &'static str, help: Option<SharedString>, control: Div| {
+            Some(labelled(label, None, help, control).into_any_element())
+        };
+        let testing = stage.kind == StageKind::Testing;
+        let agent = stage.kind == StageKind::Agent;
+        let command = if testing || stage.command.is_some() {
+            let help = (!testing).then(|| SharedString::from(NOT_USED));
+            field("Command", help, field_input(&fields.command.editor, cx))
+        } else {
+            None
+        };
+        // In the order they are drawn, for the Tab ring.
+        let check = field("Check command", None, field_input(&fields.check.editor, cx));
+        let output = if agent {
+            field("Output file", None, field_input(&fields.output.editor, cx))
+        } else {
+            None
+        };
+        let sections = match (agent, &stage.output) {
+            (true, Some(file)) => {
+                let help = Some(format!("{file} must have each.").into());
+                field(
                     "Required sections",
-                    None,
-                    Some(help.into()),
-                    input_box(&fields.sections.editor, cx),
+                    help,
+                    field_area(&fields.sections.editor, cx),
                 )
-                .into_any_element(),
-            );
-        }
-        rows.push(
-            labelled(
-                "Finished when",
-                None,
-                Some("Shown on the stage card. Empty: the sentence in the field.".into()),
-                input_box(&fields.done_when.editor, cx),
-            )
-            .into_any_element(),
+            }
+            _ => None,
+        };
+        let done_when = field(
+            "Finished when",
+            None,
+            field_input(&fields.done_when.editor, cx),
         );
-        rows
+        [command, check, output, sections, done_when]
     }
 }
 
+/// Two fields side by side, 12 px apart, each half the width; a missing one leaves its half empty.
+fn two_columns(left: Option<AnyElement>, right: Option<AnyElement>) -> impl IntoElement {
+    let half = |field: Option<AnyElement>| div().flex_1().min_w_0().children(field);
+    h_flex()
+        .w_full()
+        .items_start()
+        .gap(rems_from_px(12.0_f32))
+        .mb(rems_from_px(10.0_f32))
+        .child(half(left))
+        .child(half(right))
+}
+
+/// The 28 px kind box of a details header: the hover colour, or an accent tint for a custom stage.
+pub(super) fn kind_box(icon: Icon, accent: bool, cx: &App) -> impl IntoElement {
+    let colors = cx.theme().colors();
+    let bg = if accent {
+        colors.text_accent.opacity(0.16)
+    } else {
+        colors.ghost_element_hover
+    };
+    h_flex()
+        .flex_none()
+        .size(rems_from_px(28.0_f32))
+        .justify_center()
+        .rounded(rems_from_px(7.0_f32))
+        .bg(bg)
+        .child(icon.size(IconSize::Custom(rems_from_px(15.0_f32))))
+}
+
+/// The header of the details card: 10 px 14 px, a border under it.
+pub(super) fn details_header(cx: &App) -> Div {
+    h_flex()
+        .w_full()
+        .gap(rems_from_px(10.0_f32))
+        .px(rems_from_px(14.0_f32))
+        .py(rems_from_px(10.0_f32))
+        .border_b_1()
+        .border_color(cx.theme().colors().border_variant)
+}
+
+/// The 14 px semibold name of a details header.
+pub(super) fn header_name(name: impl Into<SharedString>) -> Label {
+    Label::new(name)
+        .size(LabelSize::Custom(rems_from_px(14.0_f32)))
+        .weight(FontWeight::SEMIBOLD)
+        .truncate()
+}
+
 fn stage_header(stage: &Stage, cx: &App) -> impl IntoElement {
+    let custom = is_custom(stage);
     let sentence =
         catalog_entry(&stage.id).map_or("A stage of your own", |entry| entry.description);
-    let dot = || {
-        Label::new("\u{b7}")
-            .size(LabelSize::Small)
-            .color(Color::Muted)
-    };
-    v_flex()
-        .gap_0p5()
+    let muted = |text: SharedString| Label::new(text).size(LabelSize::Small).color(Color::Muted);
+    let color = if custom { Color::Accent } else { Color::Muted };
+    let icon = kind_icon(stage.kind).color(color);
+    let title = h_flex()
+        .min_w_0()
+        .gap_1()
+        .child(div().min_w_0().child(header_name(stage_name(stage))))
+        .child(source_tag(custom, cx));
+    let line = h_flex()
+        .min_w_0()
+        .overflow_hidden()
+        .child(muted(format!("{} \u{b7} ", kind_label(stage.kind)).into()))
+        .child(muted(stage.id.clone().into()).buffer_font(cx))
         .child(
-            h_flex()
-                .gap_2()
-                .child(
-                    kind_icon(stage.kind)
-                        .size(IconSize::Medium)
-                        .color(Color::Muted),
-                )
-                .child(
-                    Label::new(stage_name(stage))
-                        .size(LabelSize::Custom(rems(15. / 16.)))
-                        .weight(gpui::FontWeight::SEMIBOLD)
-                        .truncate(),
-                )
-                .child(source_tag(is_custom(stage), cx)),
-        )
-        .child(
-            h_flex()
-                .flex_wrap()
-                .gap_1()
-                .child(
-                    Label::new(kind_label(stage.kind))
-                        .size(LabelSize::Small)
-                        .color(Color::Muted),
-                )
-                .child(dot())
-                .child(
-                    Label::new(stage.id.clone())
-                        .size(LabelSize::Small)
-                        .color(Color::Muted)
-                        .buffer_font(cx),
-                )
-                .child(dot())
-                .child(
-                    Label::new(sentence)
-                        .size(LabelSize::Small)
-                        .color(Color::Muted),
-                ),
-        )
+            div()
+                .min_w_0()
+                .child(muted(format!(" \u{b7} {sentence}").into()).truncate()),
+        );
+    details_header(cx)
+        .child(kind_box(icon, custom, cx))
+        .child(v_flex().flex_1().min_w_0().child(title).child(line))
 }

@@ -10,15 +10,9 @@ use crate::stages::editor_fields::{ShellField, ShellKind};
 
 /// `CREATE_ISSUE_OPTIONS`: the value and the words of each choice.
 pub const CREATE_ISSUE_OPTIONS: [(&str, &str); 4] = [
-    (
-        "manual",
-        "Only when you click Create issue in the task's Progress view",
-    ),
-    (
-        "on-spec-approved",
-        "Automatically, when you approve the Spec stage. Without a Spec stage, when the pull request opens",
-    ),
-    ("on-pr", "Automatically, just before the pull request opens"),
+    ("manual", "Manual"),
+    ("on-spec-approved", "On Spec approved"),
+    ("on-pr", "Just before PR opens"),
     ("never", "Never"),
 ];
 

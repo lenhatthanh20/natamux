@@ -28,9 +28,9 @@ use crate::stages::pipeline_preview::pipeline_preview;
 use crate::stages::stage_details::DetailsPane;
 use crate::stages::stage_list::StageList;
 
-/// The list and the details sit side by side from this window width (the web's `lg` plus the
-/// Settings nav, so the details keep the width they had in the dialog).
-const SIDE_BY_SIDE_FROM: f32 = 1200.;
+/// The list and the details sit side by side from this window width: mockup A always puts them
+/// side by side; below this the 300 px list leaves the details too narrow.
+const SIDE_BY_SIDE_FROM: f32 = 1000.;
 
 /// Discard was confirmed: Settings makes the page again from the file.
 pub struct Discarded;
@@ -245,22 +245,28 @@ impl ProjectSettingsPage {
         cx: &mut App,
     ) -> [AnyElement; 2] {
         let wide = window.viewport_size().width >= px(SIDE_BY_SIDE_FROM);
+        let colors = cx.theme().colors();
+        let (border, panel) = (colors.border_variant, colors.panel_background);
+        let card = move |id: &'static str| {
+            v_flex()
+                .id(id)
+                .min_h(rems_from_px(430.0_f32))
+                .rounded(px(8.))
+                .border_1()
+                .border_color(border)
+                .bg(panel)
+                .overflow_hidden()
+        };
+        let list = card("stage-list-card").child(stages.list.clone());
+        let details = card("stage-details-card").child(stages.details.clone());
         let parts = if wide {
             h_flex()
                 .items_start()
-                .gap_4()
-                .child(
-                    div()
-                        .w(rems_from_px(352.0_f32))
-                        .flex_none()
-                        .child(stages.list.clone()),
-                )
-                .child(div().min_w_0().flex_1().child(stages.details.clone()))
+                .gap(px(12.))
+                .child(list.w(rems_from_px(300.0_f32)).flex_none())
+                .child(details.min_w_0().flex_1())
         } else {
-            v_flex()
-                .gap_4()
-                .child(stages.list.clone())
-                .child(stages.details.clone())
+            v_flex().gap(px(12.)).child(list).child(details)
         };
         let top = pipeline_preview(&stages.editor, &self.preview_scroll, window, cx);
         [top, parts.into_any_element()]
@@ -354,9 +360,9 @@ impl ProjectSettingsPage {
             .flex_none()
             .w_full()
             .items_center()
-            .gap_2()
-            .px_6()
-            .py_2()
+            .h(rems_from_px(42.0_f32))
+            .gap(rems_from_px(10.0_f32))
+            .px(rems_from_px(14.0_f32))
             .border_t_1()
             .border_color(cx.theme().colors().border_variant)
             .child(
@@ -364,7 +370,7 @@ impl ProjectSettingsPage {
                     .min_w_0()
                     .flex_1()
                     .items_center()
-                    .gap_1p5()
+                    .gap(rems_from_px(6.0_f32))
                     .children(path)
                     .when(shows_pipeline_note(shown), |this| this.child(note_icon())),
             )
@@ -372,11 +378,11 @@ impl ProjectSettingsPage {
                 h_flex()
                     .flex_none()
                     .items_center()
-                    .gap_1()
+                    .gap(rems_from_px(10.0_f32))
                     .child(self.footer_status(cx))
                     .child(more)
-                    .child(discard.size(ButtonSize::Compact))
-                    .child(save_button.size(ButtonSize::Compact)),
+                    .child(discard.size(ButtonSize::Default))
+                    .child(save_button.size(ButtonSize::Default)),
             )
     }
 }
@@ -389,7 +395,7 @@ fn note_icon() -> impl IntoElement {
         .tooltip(Tooltip::text(PIPELINE_NOTE))
         .child(
             Icon::new(IconName::Info)
-                .size(IconSize::Small)
+                .size(IconSize::Custom(rems_from_px(14.0_f32)))
                 .color(Color::Muted),
         )
 }
@@ -416,9 +422,9 @@ impl Render for ProjectSettingsPage {
                         .flex_1()
                         .overflow_y_scroll()
                         .track_scroll(&self.body_scroll)
-                        .px_6()
-                        .py_3()
-                        .gap_3()
+                        .px(rems_from_px(14.0_f32))
+                        .py(rems_from_px(10.0_f32))
+                        .gap(rems_from_px(10.0_f32))
                         .children(body),
                     ScrollAxes::Vertical,
                     &self.body_scroll,

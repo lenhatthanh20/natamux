@@ -47,7 +47,6 @@ impl IssuesTab {
             colors.border
         };
         div()
-            .mt(rems_from_px(2.0_f32))
             .size(rems_from_px(14.0_f32))
             .flex_none()
             .flex()
@@ -76,16 +75,15 @@ impl IssuesTab {
     ) -> impl IntoElement {
         let (value, words) = CREATE_ISSUE_OPTIONS[index];
         let hover = cx.theme().colors().ghost_element_hover;
-        let colors = cx.theme().colors();
         let color = if off { Color::Disabled } else { Color::Default };
         h_flex()
-            .min_h(rems_from_px(28.0_f32))
-            .flex_wrap()
+            .h(rems_from_px(26.0_f32))
+            .items_center()
             .gap_2()
             .child(
                 h_flex()
                     .id(SharedString::from(format!("create-issue-{value}")))
-                    .items_start()
+                    .items_center()
                     .gap_2()
                     .when(!off, |this| {
                         this.cursor_pointer()
@@ -101,15 +99,9 @@ impl IssuesTab {
             )
             .when(value == DEFAULT_CREATE_ISSUE, |this| {
                 this.child(
-                    div()
-                        .px_1p5()
-                        .rounded_sm()
-                        .bg(colors.element_background)
-                        .child(
-                            Label::new("Default")
-                                .size(LabelSize::XSmall)
-                                .color(Color::Muted),
-                        ),
+                    Label::new("Default")
+                        .size(LabelSize::Small)
+                        .color(Color::Muted),
                 )
             })
     }
@@ -128,14 +120,14 @@ fn bullet(pieces: Vec<(&'static str, bool)>, cx: &App) -> impl IntoElement + use
         .gap_1p5()
         .child(
             Label::new("\u{2022}")
-                .size(LabelSize::XSmall)
+                .size(LabelSize::Small)
                 .color(Color::Muted),
         )
         .child(
             h_flex()
                 .flex_wrap()
                 .children(pieces.into_iter().map(|(text, code)| {
-                    let label = Label::new(text).size(LabelSize::XSmall).color(Color::Muted);
+                    let label = Label::new(text).size(LabelSize::Small).color(Color::Muted);
                     if code { label.buffer_font(cx) } else { label }
                 })),
         )
@@ -152,11 +144,9 @@ impl Render for IssuesTab {
             options.push(self.option_row(index, selected, off, cx).into_any_element());
         }
         v_flex()
-            .gap_3()
             .child(
                 v_flex()
                     .id("create-issue-group")
-                    .gap_1p5()
                     .track_focus(&self.focus)
                     .on_key_down(cx.listener(move |this, event: &KeyDownEvent, _, cx| {
                         if off {
@@ -170,46 +160,30 @@ impl Render for IssuesTab {
                             this.pick(next, cx);
                         }
                     }))
-                    .child(
-                        div().mb_1p5().child(
-                            Label::new("Open a GitHub issue for a task")
-                                .size(LabelSize::Small)
-                                .weight(gpui::FontWeight::SEMIBOLD),
-                        ),
-                    )
                     .children(options),
             )
             .when(off, |this| {
                 this.child(
                     Label::new(ISSUES_OFF_NOTE)
-                        .size(LabelSize::XSmall)
+                        .size(LabelSize::Small)
                         .color(Color::Custom(warning)),
                 )
             })
             .child(
                 v_flex()
+                    .mt(rems_from_px(8.0_f32))
+                    .pl(rems_from_px(18.0_f32))
                     .gap_0p5()
                     .child(bullet(
                         vec![
-                            ("Opened with ", false),
+                            ("Runs ", false),
                             ("gh issue create", true),
-                            (" on GitHub, in this project.", false),
+                            (" in the project folder.", false),
                         ],
                         cx,
                     ))
-                    .child(bullet(vec![("Title: the task title.", false)], cx))
-                    .child(bullet(
-                        vec![
-                            ("Body: the ", false),
-                            ("spec.md", true),
-                            (
-                                " of the task, or the task notes without one, and a line \
-                                 \"Made by Natamux for T-0001.\"",
-                                false,
-                            ),
-                        ],
-                        cx,
-                    )),
+                    .child(bullet(vec![("The title is the task title.", false)], cx))
+                    .child(bullet(vec![("The body is spec.md.", false)], cx)),
             )
     }
 }
