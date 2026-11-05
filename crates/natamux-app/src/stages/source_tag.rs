@@ -81,11 +81,30 @@ pub fn source_tag(custom: bool, cx: &App) -> AnyElement {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use gpui::hsla;
+    use crate::components::theme_contrast::{parse_hex, theme_style};
+    use serde_json::Value;
+
+    const FAMILY: &str = include_str!("../../assets/themes/natamux.json");
+
+    /// A colour of the shipped dark theme, so the test holds no colour literal.
+    fn theme_colour(key: &str) -> Hsla {
+        let family: Value = serde_json::from_str(FAMILY).expect("theme file is JSON");
+        let style = theme_style(&family, "Natamux Dark").expect("dark theme");
+        let hex = style[key].as_str().expect("colour key");
+        let c = parse_hex(hex).expect("hex colour");
+        let unit = |v: u8| f32::from(v) / 255.;
+        gpui::Rgba {
+            r: unit(c.r),
+            g: unit(c.g),
+            b: unit(c.b),
+            a: c.a as f32,
+        }
+        .into()
+    }
 
     #[test]
     fn custom_marks_are_the_accent_lit() {
-        let accent = hsla(0.6, 0.7, 0.6, 1.);
+        let accent = theme_colour("text.accent");
         assert_eq!(custom_fill(accent), accent.opacity(0.22));
         assert_eq!(custom_border(accent), accent.opacity(0.55));
         let glow = custom_glow(accent);
@@ -95,8 +114,8 @@ mod tests {
 
     #[test]
     fn custom_tag_is_lit_and_built_in_tag_is_not() {
-        let accent = hsla(0.6, 0.7, 0.6, 1.);
-        let hover = hsla(0., 0., 0.5, 0.1);
+        let accent = theme_colour("text.accent");
+        let hover = theme_colour("ghost_element.hover");
         let custom = tag_style(true, accent, hover);
         assert_eq!(custom.text, "Custom");
         assert_eq!(custom.bg, custom_fill(accent));
