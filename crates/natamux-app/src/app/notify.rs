@@ -36,6 +36,7 @@ impl Notifier {
         let tasks = board.data.tasks.clone();
         let repos = board.data.repos.clone();
         let (on, loaded) = (board.view().notify, board.data.loaded);
+        let always = board.view().notify_always;
         let now = super::clock::now_ms();
         let waiting: Vec<Task> = needs_me_tasks(&tasks, now);
         self.announcer.update(&waiting, loaded);
@@ -43,7 +44,7 @@ impl Notifier {
         let Some(previous) = self.previous.replace(states_by_id(&tasks)) else {
             return;
         };
-        if window.is_window_active() || !on {
+        if !on || (window.is_window_active() && !always) {
             return;
         }
         let ring = rings(&previous, &tasks, &repos);

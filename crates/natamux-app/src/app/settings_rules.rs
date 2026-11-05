@@ -64,6 +64,7 @@ pub fn page_title(page: &SettingsPage, repos: &[Repo]) -> String {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SettingRow {
     Notify,
+    NotifyAlways,
     UpdatesVersion,
     UpdatesAuto,
     UpdatesCheck,
@@ -78,8 +79,9 @@ pub enum SettingRow {
 }
 
 impl SettingRow {
-    pub const ALL: [SettingRow; 12] = [
+    pub const ALL: [SettingRow; 13] = [
         SettingRow::Notify,
+        SettingRow::NotifyAlways,
         SettingRow::UpdatesVersion,
         SettingRow::UpdatesAuto,
         SettingRow::UpdatesCheck,
@@ -96,6 +98,7 @@ impl SettingRow {
     pub fn page(self) -> SettingsPage {
         match self {
             SettingRow::Notify
+            | SettingRow::NotifyAlways
             | SettingRow::UpdatesVersion
             | SettingRow::UpdatesAuto
             | SettingRow::UpdatesCheck => SettingsPage::General,
@@ -107,6 +110,7 @@ impl SettingRow {
     pub fn label(self) -> &'static str {
         match self {
             SettingRow::Notify => "Notify me",
+            SettingRow::NotifyAlways => "Always notify",
             SettingRow::UpdatesVersion => "Version",
             SettingRow::UpdatesAuto => "Check for updates automatically",
             SettingRow::UpdatesCheck => "Check for updates",
@@ -124,6 +128,7 @@ impl SettingRow {
     pub fn description(self) -> &'static str {
         match self {
             SettingRow::Notify => "Show a system notification when a task starts to need you.",
+            SettingRow::NotifyAlways => "With Notify me on, also notify while you use the app.",
             SettingRow::UpdatesVersion => "The running version and the last update check.",
             SettingRow::UpdatesAuto => {
                 "Look up new versions 30 seconds after start, then every 6 hours."
@@ -144,6 +149,7 @@ impl SettingRow {
     fn keywords(self) -> &'static str {
         match self {
             SettingRow::Notify => "notifications alert",
+            SettingRow::NotifyAlways => "notifications alert focused active",
             SettingRow::UpdatesVersion | SettingRow::UpdatesAuto | SettingRow::UpdatesCheck => {
                 "update version release"
             }

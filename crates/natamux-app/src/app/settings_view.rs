@@ -79,6 +79,7 @@ pub struct SettingsView {
     dark_focus: FocusHandle,
     size_focus: FocusHandle,
     notify_focus: FocusHandle,
+    notify_always_focus: FocusHandle,
     sidebar_ids_focus: FocusHandle,
     update_focus: FocusHandle,
     check_focus: FocusHandle,
@@ -131,6 +132,7 @@ impl SettingsView {
             dark_focus: cx.focus_handle().tab_stop(true),
             size_focus: cx.focus_handle().tab_stop(true),
             notify_focus: cx.focus_handle(),
+            notify_always_focus: cx.focus_handle(),
             sidebar_ids_focus: cx.focus_handle(),
             update_focus: cx.focus_handle(),
             check_focus: cx.focus_handle(),
@@ -294,6 +296,7 @@ impl SettingsView {
         match self.page(cx) {
             SettingsPage::General => ring.extend([
                 self.notify_focus.clone(),
+                self.notify_always_focus.clone(),
                 self.update_focus.clone(),
                 self.check_focus.clone(),
             ]),
@@ -320,6 +323,7 @@ impl SettingsView {
     fn row_stops(&self, row: SettingRow, cx: &App) -> Vec<FocusHandle> {
         match row {
             SettingRow::Notify => vec![self.notify_focus.clone()],
+            SettingRow::NotifyAlways => vec![self.notify_always_focus.clone()],
             SettingRow::UpdatesVersion => Vec::new(),
             SettingRow::UpdatesAuto => vec![self.update_focus.clone()],
             SettingRow::UpdatesCheck => vec![self.check_focus.clone()],
