@@ -328,6 +328,14 @@ fn new_workspace_fields(body: Option<&Value>, issues: &mut Issues) -> Option<New
         .get("context")
         .and_then(|context| task_context(context, &[json!("context")], issues))
         .and_then(|context| serde_json::from_value::<TaskContext>(context).ok());
+    let worktree = match map.get("worktree") {
+        None => true,
+        Some(Value::Bool(worktree)) => *worktree,
+        other => {
+            issues.push(invalid_type("boolean", other, &[json!("worktree")]));
+            true
+        }
+    };
     let title = name?.as_str().map(str::to_string)?;
     Some(NewBody {
         repo: repo.clone(),
@@ -341,6 +349,7 @@ fn new_workspace_fields(body: Option<&Value>, issues: &mut Issues) -> Option<New
             prompt,
             context,
             attachments: Vec::new(),
+            no_worktree: !worktree,
         },
     })
 }

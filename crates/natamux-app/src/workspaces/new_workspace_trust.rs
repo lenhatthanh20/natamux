@@ -16,6 +16,11 @@ impl NewWorkspaceDialog {
         if self.busy || blocked_reason(&self.form(cx), &self.choice()).is_some() {
             return;
         }
+        // No project command runs until the workspace is made, and that path asks itself.
+        if !self.worktree {
+            self.start(cx);
+            return;
+        }
         let Some(source) = self.dashboard.read(cx).source().cloned() else {
             return;
         };

@@ -404,6 +404,28 @@ fn started_agents_send_until_dropped() {
 }
 
 #[test]
+fn makes_only_the_task_when_no_worktree_is_asked() {
+    let fake = FakeDaemon::default();
+    let (mut receiver, _) = fake.watch();
+    drain(&mut receiver);
+    let task = fake
+        .new_workspace(NewWorkspaceInput {
+            title: "Try it".into(),
+            agent: Some("codex".into()),
+            worktree: Some(false),
+            ..NewWorkspaceInput::default()
+        })
+        .unwrap();
+    assert_eq!((task.workspace, task.branch), (None, None));
+    assert_eq!(task.agent.as_deref(), Some("codex"));
+    assert!(
+        drain(&mut receiver)
+            .iter()
+            .all(|event| !matches!(event, DashboardEvent::WorkspaceStep(_)))
+    );
+}
+
+#[test]
 fn takes_the_branch_of_the_input() {
     let fake = FakeDaemon::default();
     let task = fake

@@ -48,6 +48,8 @@ pub struct NewWorkspaceInput {
     pub context: Option<TaskContext>,
     /// Files for the agents to read, already checked.
     pub attachments: Vec<AttachmentFile>,
+    /// Make the task only; the person makes its workspace later, from the task.
+    pub no_worktree: bool,
 }
 
 /// The branch name and the base branch are checked first, so a typo leaves no task behind. The
@@ -98,6 +100,9 @@ pub fn new_workspace(parts: &NewWorkspaceParts, input: NewWorkspaceInput) -> Wor
         // A first stage that passes by itself, such as a manual context, would start the next
         // stage's agent in the new workspace.
         (parts.leave_to_person)(&created.id).map_err(stage_failure)?;
+    }
+    if input.no_worktree {
+        return Ok(parts.tasks.get_task(&created.id)?);
     }
     // As Node's `create` up to its first `await`: the task is taken, its job listed and its
     // `fetch` step told before the answer, so a dashboard that opens the task sees it and a

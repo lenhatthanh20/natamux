@@ -376,3 +376,27 @@ fn sends_the_trimmed_branch_or_none() {
         None
     );
 }
+
+#[test]
+fn sends_no_worktree_and_drops_the_base_and_branch_when_unchecked() {
+    let unchecked = StartForm {
+        base: "dev".into(),
+        branch: "ABC-12".into(),
+        no_worktree: true,
+        ..form("Fix it")
+    };
+    let input = new_workspace_input(&unchecked, &manual(), Vec::new());
+    assert_eq!(
+        serde_json::to_value(&input).unwrap(),
+        serde_json::json!({
+            "title": "Fix it", "repo": "default", "agent": "claude-code", "worktree": false
+        })
+    );
+}
+
+#[test]
+fn tells_whether_the_task_starts_with_a_worktree() {
+    assert_eq!(made_toast("T-1", None), "T-1 is being prepared.");
+    assert_eq!(made_toast("T-1", Some(true)), "T-1 is being prepared.");
+    assert_eq!(made_toast("T-1", Some(false)), "T-1 is created.");
+}

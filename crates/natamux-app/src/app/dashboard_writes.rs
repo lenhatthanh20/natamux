@@ -16,6 +16,7 @@ use crate::components::toast_rules::ToastTone;
 use crate::tasks::delete_finished::{DeleteOutcome, delete_summary};
 use crate::tasks::task_rules::actions_for;
 use crate::workspaces::finished_rules::removed_text;
+use crate::workspaces::new_workspace_rules::made_toast;
 use crate::workspaces::remove_finished_rules::{SummaryTone, remove_summary};
 
 /// What a write gives back to the view that asked for it.
@@ -89,6 +90,7 @@ impl Dashboard {
             return Self::no_daemon();
         };
         let base = input.repo.clone().zip(input.base.clone());
+        let worktree = input.worktree;
         self.write(
             source.new_workspace(input),
             true,
@@ -100,12 +102,7 @@ impl Dashboard {
                     this.view.remember_base(repo, base);
                     this.save_view(cx);
                 }
-                this.toast(
-                    &format!("{} is being prepared.", task.id),
-                    ToastTone::Info,
-                    None,
-                    cx,
-                );
+                this.toast(&made_toast(&task.id, worktree), ToastTone::Info, None, cx);
                 if let Some(notice) = this.data.announce(&task.id) {
                     this.toast(&notice.text, notice.tone, None, cx);
                 }

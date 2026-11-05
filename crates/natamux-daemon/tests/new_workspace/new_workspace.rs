@@ -319,3 +319,33 @@ fn keeps_the_task_and_logs_why_when_the_worktree_cannot_be_made() {
     );
     assert_eq!(fx.pty_count(), 0);
 }
+
+#[test]
+fn makes_only_the_task_without_a_worktree_and_starts_no_agent() {
+    let fx = Fx::new();
+    let notes = "Keep the old URL.";
+
+    let created = new_workspace(
+        &fx.new_parts(),
+        NewWorkspaceInput {
+            agent: Some("claude-code".to_string()),
+            prompt: Some(notes.to_string()),
+            no_worktree: true,
+            ..input("Fix the login page")
+        },
+    )
+    .unwrap();
+    assert!(fx.workspaces.preparing().is_empty());
+    fx.settle();
+
+    let task = fx.task(&created.id);
+    assert_eq!((task.workspace, task.branch), (None, None));
+    assert_eq!(task.agent.as_deref(), Some("claude-code"));
+    assert_eq!(task.description, notes);
+    assert_eq!(fx.pty_count(), 0);
+    assert!(
+        fx.events(&created.id)
+            .iter()
+            .all(|event| event.kind != "workspace.failed")
+    );
+}

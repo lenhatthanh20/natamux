@@ -4,7 +4,7 @@
 use std::path::PathBuf;
 
 use gpui::{AnyElement, ClickEvent, FontWeight, PathPromptOptions};
-use ui::prelude::*;
+use ui::{ButtonLike, Checkbox, prelude::*};
 
 use super::super::new_workspace_rules::{PickedFile, SourceChoice, fit_attachments, format_bytes};
 use super::{NewWorkspaceDialog, Pick};
@@ -204,12 +204,33 @@ impl NewWorkspaceDialog {
             false,
             cx,
         );
+        let worktree = ButtonLike::new("new-task-worktree")
+            .track_focus(&self.stops.worktree)
+            .on_click(cx.listener(|this, _, _, cx| {
+                this.worktree = !this.worktree;
+                cx.notify();
+            }))
+            .child(
+                h_flex()
+                    .gap_2()
+                    .child(
+                        Checkbox::new("new-task-worktree-box", self.worktree.into())
+                            .visualization_only(true),
+                    )
+                    .child(Label::new("Create a worktree")),
+            );
+        let branch_rows = self.worktree.then(|| {
+            [
+                select_row("Branch from", branch),
+                field("Branch", input_box(&self.branch_name, cx)).into_any_element(),
+            ]
+        });
         v_flex()
             .gap_3()
             .child(section_title("Workspace and agent"))
             .child(select_row("Project", project))
-            .child(select_row("Branch from", branch))
-            .child(field("Branch", input_box(&self.branch_name, cx)))
+            .child(worktree)
+            .children(branch_rows.into_iter().flatten())
             .child(select_row("Agent", agent))
             .child(select_row("Task flow", flow))
     }

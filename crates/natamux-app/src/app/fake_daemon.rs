@@ -392,6 +392,13 @@ impl FakeDaemon {
     pub fn new_workspace(&self, input: NewWorkspaceInput) -> Answer<Task> {
         let mut data = self.data();
         let mut task = data.new_task(&input.title, input.repo);
+        if input.worktree == Some(false) {
+            task.agent = input.agent;
+            task.context = input.context;
+            data.tasks.insert(0, task.clone());
+            data.tasks_changed();
+            return Ok(task);
+        }
         let folder = data.worktrees_dir.clone().unwrap_or_else(|| "/work".into());
         task.workspace = Some(format!("{folder}/{}", task.id));
         task.branch = input

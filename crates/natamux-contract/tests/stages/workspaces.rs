@@ -318,7 +318,8 @@ async fn workspace_create() {
 
 /// Scenario 41: `POST /workspaces` answers 202 before the workspace exists, the workspace
 /// comes ready on `/events`, nothing is left preparing; with an agent its stage starts; an
-/// attachment is kept; an unknown base is refused and leaves no task.
+/// attachment is kept; an unknown base is refused and leaves no task; `worktree: false` makes
+/// the task only.
 #[tokio::test]
 #[ignore = "needs both daemons: the daemon-contract CI job"]
 async fn new_workspace() {
@@ -328,10 +329,12 @@ async fn new_workspace() {
         &[],
         |d: Daemon, id, mut t: Transcript| async move {
             let (agent, files, bad) = (twin(&d, 4102), twin(&d, 4103), twin(&d, 4104));
+            let bare = twin(&d, 4105);
             for (each, label) in [
                 (&agent, "<task 2>"),
                 (&files, "<task 3>"),
                 (&bad, "<task 4>"),
+                (&bare, "<task 5>"),
             ] {
                 alias(&mut t, each, label);
             }
@@ -377,7 +380,11 @@ async fn new_workspace() {
             let body = json!({ "title": title, "repo": repo(), "base": "nope" });
             t.note("unknown base", kept(&post(&d, "/workspaces", body).await));
             t.note("no task", kept(&get(&d, &format!("/tasks/{bad}")).await));
-            for each in [&id, &agent, &files] {
+
+            let title = format!("{bare}: No worktree");
+            let body = json!({ "title": title, "repo": repo(), "worktree": false });
+            t.note("no worktree", kept(&post(&d, "/workspaces", body).await));
+            for each in [&id, &agent, &files, &bare] {
                 retire(&d, each).await;
             }
             t
