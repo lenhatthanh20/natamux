@@ -102,12 +102,7 @@ impl Dashboard {
                     this.view.remember_base(repo, base);
                     this.save_view(cx);
                 }
-                this.toast(
-                    &made_toast(&task.id, worktree),
-                    ToastTone::Info,
-                    None,
-                    cx,
-                );
+                this.toast(&made_toast(&task.id, worktree), ToastTone::Info, None, cx);
                 if let Some(notice) = this.data.announce(&task.id) {
                     this.toast(&notice.text, notice.tone, None, cx);
                 }

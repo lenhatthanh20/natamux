@@ -482,7 +482,9 @@ impl Render for NewWorkspaceDialog {
             missing.is_some() || self.busy,
             submit,
         )
-        .tooltip(ui::Tooltip::text(missing.unwrap_or(start_hint(form.no_worktree))));
+        .tooltip(ui::Tooltip::text(
+            missing.unwrap_or(start_hint(form.no_worktree)),
+        ));
         let last_base = self.last_base(cx);
         let branch = branch_text(self.branches.as_ref(), &self.base, last_base.as_deref());
         let body = v_flex()
