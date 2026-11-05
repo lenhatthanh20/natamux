@@ -175,6 +175,21 @@ pub fn other_terminal_hint(
     })
 }
 
+/// The one terminal a maximized task shows: the one shown before while it is listed, else the
+/// first agent terminal, else the first terminal.
+pub fn maximized_pane(
+    names: &[String],
+    shown: Option<&str>,
+    first_agent: Option<&str>,
+) -> Option<String> {
+    let listed = |name: &&str| names.iter().any(|each| each == name);
+    shown
+        .filter(listed)
+        .or_else(|| first_agent.filter(listed))
+        .map(str::to_owned)
+        .or_else(|| names.first().cloned())
+}
+
 /// A pane header's New terminal button: the workspace's panes have it (its tooltip, and whether
 /// it can be used); the Agents grid's do not.
 pub fn new_terminal_button(in_grid: bool, has_agent: bool, full: bool) -> Option<(String, bool)> {

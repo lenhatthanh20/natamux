@@ -10,7 +10,8 @@ use serde_json::{Map, Value, json};
 use crate::app::layout_mode::{DETAILS_WIDTH, SIDEBAR_WIDTH};
 use crate::app::theme_catalog::ThemeNames;
 use crate::app::view_rules::{
-    DetailsView, Entries, MAX_RECENT, WorkspaceTab, parse_pinned, with_seen, with_tab,
+    DetailsView, Entries, MAX_RECENT, WorkspaceTab, parse_pinned, with_maximized, with_seen,
+    with_tab,
 };
 use crate::git::change_tree::FileViewMode;
 use crate::sidebar::sidebar_tree::{Folds, with_fold};
@@ -128,6 +129,8 @@ pub struct ViewState {
     pub notify: bool,
     /// The last workspace tab of each task (`tabByTask`): terminal, changes, history or docs.
     pub tabs: Entries<WorkspaceTab>,
+    /// Tasks whose terminals show one at a time, full size, until the user restores them.
+    pub maximized: Vec<String>,
     /// The Docs tab shows the raw text (`natamux.docs-source`).
     pub docs_source: bool,
     pub changes_view: FileViewMode,
@@ -167,6 +170,7 @@ impl Default for ViewState {
             details_open: true,
             notify: false,
             tabs: Vec::new(),
+            maximized: Vec::new(),
             docs_source: false,
             changes_view: FileViewMode::List,
             files_width: FILES_DEFAULT,
@@ -285,6 +289,9 @@ impl ViewState {
             details_open: flag(map.get("detailsOpen"), default.details_open),
             notify: flag(map.get("notify"), default.notify),
             tabs: tabs_of(pairs("tabs")),
+            maximized: strings(map.get("maximized"))
+                .iter()
+                .fold(Vec::new(), |tasks, id| with_maximized(&tasks, id, true)),
             docs_source: flag(map.get("docsSource"), default.docs_source),
             changes_view: map
                 .get("changesView")
@@ -349,6 +356,7 @@ impl ViewState {
                 .iter()
                 .map(|(id, tab)| (id.clone(), Value::from(tab.name())))
                 .collect::<Map<String, Value>>(),
+            "maximized": self.maximized,
             "docsSource": self.docs_source,
             "changesView": self.changes_view.name(),
             "filesWidth": self.files_width,
@@ -417,6 +425,14 @@ impl ViewState {
             .iter()
             .find(|(id, _)| id == task_id)
             .map(|(_, tab)| *tab)
+    }
+
+    pub fn is_maximized(&self, task_id: &str) -> bool {
+        self.maximized.iter().any(|id| id == task_id)
+    }
+
+    pub fn set_maximized(&mut self, task_id: &str, on: bool) {
+        self.maximized = with_maximized(&self.maximized, task_id, on);
     }
 
     pub fn set_files_width(&mut self, width: u32) {

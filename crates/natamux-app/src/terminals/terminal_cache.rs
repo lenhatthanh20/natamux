@@ -178,6 +178,14 @@ impl TerminalCache {
         Self::settle(cx);
     }
 
+    /// The terminals `owner` shows now, for tests of what a view draws.
+    #[cfg(test)]
+    pub fn claimed(owner: Owner, cx: &App) -> BTreeSet<String> {
+        cx.try_global::<TerminalCache>()
+            .and_then(|cache| cache.claims.get(&owner).cloned())
+            .unwrap_or_default()
+    }
+
     /// The task list changed: the terminals of tasks that are gone, finished or have no
     /// workspace are freed once hidden.
     pub fn set_live(live: BTreeSet<String>, cx: &mut App) {

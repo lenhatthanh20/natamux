@@ -114,7 +114,7 @@ The row menu has the same moves as **Move up** and **Move down**. See [Project s
 
 | Action | Shortcut |
 |---|---|
-| Maximize or restore the focused pane | `Mod+Shift+Enter` |
+| Maximize or restore the task's terminals | `Mod+Shift+Enter` |
 | New terminal | ``Ctrl+Shift+` `` |
 | Find in the terminal | `Mod+F` or `Mod+Shift+F` |
 
