@@ -111,7 +111,7 @@ Pick a view with the **Layout** switch above the list.
 
 The table columns are Id, Task, State, Agent, Branch, Changes, PR, Cost and Last activity. A narrow window shows fewer columns. Below 560 px wide each task is a card. Changes and PR appear only when some task has a value. **Cost** shows only in a wide window, and only when some task has usage. It is the estimated cost of the task; hover it for the tokens. Click the header to sort; tasks with no price come last.
 
-The default order puts what needs you first: Needs input, In review, Failed, Blocked, Running, Ready, Draft, Done, Cancelled.
+The default order puts what needs you first: Needs input, In review, Failed, Blocked, Running, Idle, Ready, Draft, Done, Cancelled.
 
 Click a row to select it and open its details. Double-click, or press `Enter`, to open its workspace. The workspace opens on the terminal while an agent works, and otherwise on the tab you used last.
 
@@ -196,7 +196,8 @@ The palette also changes the view (**All tasks**, **Agents**, table, board, prog
 | Ready | Ring | Marked ready to start. |
 | Running | Full disk that blinks | An agent works on it. |
 | Running, but quiet | Half disk in amber | It runs, but the agent has been silent for 10 minutes. |
-| Needs input | Diamond | The agent asked a question, or ended its turn without `natamux done`. |
+| Idle | Three dots, grey | The agent ended its turn without a question and without `natamux done`. It does not need you. |
+| Needs input | Diamond | The agent asked a question or a permission. |
 | In review | Rounded square | Work is ready for you to review. |
 | Blocked | Two bars | You or Natamux blocked it. |
 | Failed | Triangle | The agent or a stage failed. |
@@ -238,10 +239,14 @@ Tick **Notify me** in the account menu, or in **Settings → General**. macOS as
 When a task starts to wait for you, or is done, while the app is not in front, macOS shows a notification and plays your alert sound once:
 
 - The title is the task title.
-- The first line says what happened, at which stage: **Needs your input at Spec**, **Spec waits for your approval**, **Failed at Build**, **Blocked at Plan** or **Done**.
+- The first line says what happened, at which stage, and in which terminal: **Needs your input at Spec · Terminal 5**, **Spec waits for your approval**, **Failed at Build**, **Blocked at Plan** or **Done**.
 - The second line is the task id and its project, such as `T-0003 · storefront`.
 
-Click it to bring the app forward and open the task. A newer notification of the same task replaces the older one.
+To get them also while you use the app, even for the task you have open, turn on **Always notify** in **Settings → General**.
+
+When stages run side by side, each terminal that starts to wait rings, also when the task already waits in another terminal.
+
+Click it to bring the app forward and open the task on the terminal it names. A newer notification of the same terminal replaces the older one.
 
 The app icon in the Dock shows how many tasks need you, the same count as **(N) Natamux** in the window title, also with **Notify me** off. The count goes away when nothing waits.
 

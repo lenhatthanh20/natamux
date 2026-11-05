@@ -61,6 +61,7 @@ impl SettingsView {
     fn control(&mut self, row: SettingRow, cx: &mut Context<Self>) -> AnyElement {
         match row {
             SettingRow::Notify => self.notify_switch(cx),
+            SettingRow::NotifyAlways => self.notify_always_switch(cx),
             SettingRow::SidebarIds => self.sidebar_ids_switch(cx),
             SettingRow::UpdatesAuto => self.updates_switch(cx),
             SettingRow::UpdatesVersion => {
@@ -127,6 +128,16 @@ impl SettingsView {
             &self.notify_focus,
             on,
             Dashboard::toggle_notify,
+        )
+    }
+
+    fn notify_always_switch(&self, cx: &mut Context<Self>) -> AnyElement {
+        let on = self.dashboard.read(cx).view().notify_always;
+        self.view_switch(
+            "settings-notify-always",
+            &self.notify_always_focus,
+            on,
+            Dashboard::toggle_notify_always,
         )
     }
 
@@ -231,6 +242,7 @@ impl SettingsView {
 
     fn general(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let notify = self.row(SettingRow::Notify, cx);
+        let always = self.row(SettingRow::NotifyAlways, cx);
         let updates = [
             SettingRow::UpdatesVersion,
             SettingRow::UpdatesAuto,
@@ -241,6 +253,7 @@ impl SettingsView {
             "settings-general",
             v_flex()
                 .child(notify)
+                .child(always)
                 .child(section("Updates"))
                 .children(updates),
         )

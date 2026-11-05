@@ -123,9 +123,61 @@ fn rings_for_tasks_that_started_waiting_and_then_for_tasks_that_finished() {
     ];
     let ids: Vec<String> = rings(&before, &now, &[])
         .into_iter()
-        .map(|(id, _)| id)
+        .map(|ring| ring.task_id)
         .collect();
     assert_eq!(ids, ["T-0003", "T-0001"]);
+}
+
+fn with_lanes(state: TaskState, lanes: serde_json::Value) -> Task {
+    Task {
+        lanes: lanes.as_object().cloned().unwrap_or_default(),
+        ..at_stage("T-0001", state, "implement")
+    }
+}
+
+#[test]
+fn rings_again_when_another_terminal_of_a_waiting_task_starts_to_wait() {
+    let one = with_lanes(
+        TaskState::NeedsInput,
+        serde_json::json!({ "implement": "needs-input", "self-check": "running" }),
+    );
+    let two = with_lanes(
+        TaskState::NeedsInput,
+        serde_json::json!({ "implement": "needs-input", "self-check": "needs-input" }),
+    );
+    let ring = rings(&states_by_id(&[one]), std::slice::from_ref(&two), &repos());
+    assert_eq!(ring.len(), 1);
+    assert_eq!(ring[0].stage.as_deref(), Some("self-check"));
+    assert_eq!(
+        ring[0].note.body,
+        "Needs your input at Self check\nT-0001 \u{b7} natamux"
+    );
+    assert!(rings(&states_by_id(std::slice::from_ref(&two)), &[two], &repos()).is_empty());
+}
+
+#[test]
+fn rings_with_the_task_stage_when_the_task_has_no_lanes() {
+    let before = states_by_id(&[at_stage("T-0001", TaskState::Running, "spec")]);
+    let now = [at_stage("T-0001", TaskState::NeedsInput, "spec")];
+    let ring = rings(&before, &now, &repos());
+    assert_eq!(ring.len(), 1);
+    assert_eq!(ring[0].stage.as_deref(), Some("spec"));
+}
+
+#[test]
+fn names_the_terminal_and_tags_the_note_with_it() {
+    let note = Notification {
+        title: "Fix it".into(),
+        body: "Needs your input at Self check\nT-0001 \u{b7} natamux".into(),
+    };
+    assert_eq!(
+        with_terminal(&note, "17").body,
+        "Needs your input at Self check \u{b7} Terminal 17\nT-0001 \u{b7} natamux"
+    );
+    assert_eq!(note_tag("T-0001", Some("17")), "T-0001#17");
+    assert_eq!(tag_target("T-0001#17"), ("T-0001", Some("17")));
+    assert_eq!(tag_target("T-0001"), ("T-0001", None));
+    assert_eq!(note_tag("T-0001", None), "T-0001");
 }
 
 #[test]

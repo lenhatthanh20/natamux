@@ -52,6 +52,7 @@ fn a_project_page_is_titled_with_the_project_name() {
 fn rows_sit_on_their_pages() {
     for row in [
         SettingRow::Notify,
+        SettingRow::NotifyAlways,
         SettingRow::UpdatesVersion,
         SettingRow::UpdatesAuto,
         SettingRow::UpdatesCheck,

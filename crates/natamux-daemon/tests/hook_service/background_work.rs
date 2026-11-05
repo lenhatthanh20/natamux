@@ -79,7 +79,7 @@ fn goes_on_as_before_when_the_agent_comes_back_and_then_really_stops() {
     );
 
     assert_eq!(step(&service, &task.id, "Stop").applied, ["agent.finished"]);
-    assert_eq!(fx.state(&task.id), TaskState::NeedsInput);
+    assert_eq!(fx.state(&task.id), TaskState::Idle);
     assert!(fx.task(&task.id).background_since.is_none());
     assert!(service.activity().is_empty());
 }
@@ -174,7 +174,7 @@ fn ends_the_turn_as_before_for_a_task_that_waits_for_the_user_with_no_background
     );
 
     assert_eq!(result.applied, ["agent.resumed", "agent.finished"]);
-    assert_eq!(fx.state(&task.id), TaskState::NeedsInput);
+    assert_eq!(fx.state(&task.id), TaskState::Idle);
     assert!(!fx.kinds(&task.id).contains(&"agent.waiting".to_string()));
 }
 

@@ -47,6 +47,8 @@ pub const FILES: &[(&str, &[u8])] = &[
     file!("icons/lucide/folder-git-2.svg"),
     file!("icons/lucide/folder-minus.svg"),
     file!("icons/agents/gemini-ai.svg"),
+    file!("icons/states/idle-8.svg"),
+    file!("icons/states/idle.svg"),
     file!("icons/lucide/layout-grid.svg"),
     file!("icons/lucide/LICENSE"),
     file!("icons/agents/LICENSE-lobe-icons"),

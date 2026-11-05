@@ -148,9 +148,16 @@ fn moves_a_task_through_a_run_prompt_question_answer_end_of_turn_without_a_repor
     step(&service, &task.id, "PostToolUse");
     assert_eq!(fx.state(&task.id), TaskState::Running);
 
-    // The agent did not run `natamux done`, so the turn end waits for you.
+    // The agent did not run `natamux done` and asked nothing, so it is idle.
     step(&service, &task.id, "Stop");
-    assert_eq!(fx.state(&task.id), TaskState::NeedsInput);
+    assert_eq!(fx.state(&task.id), TaskState::Idle);
+
+    // A new prompt takes it up again.
+    assert_eq!(
+        step(&service, &task.id, "UserPromptSubmit").applied,
+        ["agent.resumed"]
+    );
+    assert_eq!(fx.state(&task.id), TaskState::Running);
 }
 
 // An API error ends the turn, but the session lives on and the user can type to it again.
@@ -182,7 +189,7 @@ fn takes_a_failed_task_up_again_on_a_prompt_or_a_tool_then_goes_on_as_before() {
         assert_eq!(fx.state(&task.id), TaskState::Running, "{name}");
 
         step(&service, &task.id, "Stop");
-        assert_eq!(fx.state(&task.id), TaskState::NeedsInput, "{name}");
+        assert_eq!(fx.state(&task.id), TaskState::Idle, "{name}");
     }
 }
 
@@ -220,12 +227,9 @@ fn gives_an_agent_in_a_shell_that_no_stage_uses_a_state_of_its_own_and_leaves_th
         Some("Reading the prompt".into())
     );
 
-    // The turn ends: the agent waits for the user, as the task's own agent does.
+    // The turn ends: the agent is idle, as the task's own agent is.
     cursor(json!({ "hook_event_name": "stop", "status": "completed" }));
-    assert_eq!(
-        shells.shell_state(&task.id, "2"),
-        Some(TaskState::NeedsInput)
-    );
+    assert_eq!(shells.shell_state(&task.id, "2"), Some(TaskState::Idle));
     cursor(json!({ "hook_event_name": "stop", "status": "error" }));
     assert_eq!(shells.shell_state(&task.id, "2"), Some(TaskState::Failed));
 

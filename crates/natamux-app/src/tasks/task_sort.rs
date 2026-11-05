@@ -10,12 +10,13 @@ use natamux_proto::workspaces::workspace::DiffStat;
 
 /// What needs the user comes first, finished work last. The default sort and the order of the
 /// filter chips.
-pub const STATE_ORDER: [TaskState; 9] = [
+pub const STATE_ORDER: [TaskState; 10] = [
     TaskState::NeedsInput,
     TaskState::Review,
     TaskState::Failed,
     TaskState::Blocked,
     TaskState::Running,
+    TaskState::Idle,
     TaskState::Ready,
     TaskState::Draft,
     TaskState::Done,

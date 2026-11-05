@@ -32,14 +32,15 @@ To choose the id yourself, start the title with it: `ABC-12: Fix the login bug` 
 
 ## States
 
-A task is always in one of nine states. When the task has stages, the state describes the current stage. A task that moves from Spec to Plan goes back to `ready` or `review` at the start of the new stage.
+A task is always in one of ten states. When the task has stages, the state describes the current stage. A task that moves from Spec to Plan goes back to `ready` or `review` at the start of the new stage.
 
 | State | Meaning | How a task gets there |
 |---|---|---|
 | `draft` | Created, not started. | You create a task. |
 | `ready` | The stage is waiting to start. | You mark a draft ready. A stage starts and waits for its agent, a workspace, or the tasks it depends on. You unblock or retry a task. |
 | `running` | An agent or command works on the stage. | The stage starts. You type a prompt to the agent. A task that waited for you gets going again. |
-| `needs-input` | The agent waits for you. | The agent asks a question or a permission. The agent ends its turn without running `natamux done`. The checks of the stage failed on the last try. A terminal bell rings from an agent without hooks. |
+| `idle` | The agent ended its turn and asked nothing. It does not need you. | The agent ends its turn without running `natamux done`. |
+| `needs-input` | The agent waits for you. | The agent asks a question or a permission. The checks of the stage failed on the last try. A terminal bell rings from an agent without hooks. |
 | `review` | The stage waits for your approval. | A stage with a manual gate passed its checks. A review or manual stage starts. |
 | `blocked` | You paused the task. | You block a `ready` or `running` task. |
 | `failed` | The stage failed. | The agent reports a failure. The agent program is not found. A stage command exits with an error. |
@@ -57,7 +58,7 @@ draft ──► ready ──► running ──► review ──► done
             ▲  │      │  ▲        │
             │  │      │  │        └──► (next stage, or running again
             │  │      ▼  │             when you send it back)
-            │  │   needs-input
+            │  │   idle, needs-input
             │  │
             │  └──► blocked ──► ready
             │
@@ -69,8 +70,9 @@ Any state that is not final ──► cancelled
 Common moves:
 
 - `draft` to `ready` to `running`: you start a stage, or the first prompt reaches the agent.
-- `running` to `needs-input`: the agent needs you.
-- `needs-input` to `running`: you answer, or the agent continues by itself.
+- `running` to `idle`: the agent ended its turn without a question. Type in its terminal to go on.
+- `running` or `idle` to `needs-input`: the agent needs you.
+- `idle` or `needs-input` to `running`: you answer or type a new prompt, or the agent continues by itself.
 - `running` to `review`: the agent runs `natamux done`, the checks pass, and the gate is manual.
 - `review` to the next stage: you approve.
 - `review` to `running`: you send the task back to an earlier stage.
@@ -152,7 +154,7 @@ A task needs you when it waits for a person:
 
 | Reason | Which tasks |
 |---|---|
-| Asks | State `needs-input`. |
+| Asks | State `needs-input`. An `idle` task does not need you. |
 | Review | State `review`. |
 | Failed | State `failed`. |
 | Blocked | State `blocked`. |

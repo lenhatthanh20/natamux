@@ -5,10 +5,11 @@ use natamux_proto::events::task_event::TaskEvent;
 use natamux_proto::stages::schema::{Gate, Stage, StageKind, Step};
 use serde_json::json;
 
-const STATES: [TaskState; 9] = [
+const STATES: [TaskState; 10] = [
     TaskState::Draft,
     TaskState::Ready,
     TaskState::Running,
+    TaskState::Idle,
     TaskState::NeedsInput,
     TaskState::Review,
     TaskState::Blocked,
@@ -35,9 +36,10 @@ fn legacy_pipeline() -> Vec<Step> {
 
 #[test]
 fn maps_a_prompt_in_a_task_that_is_each_state() {
-    let cases: [(TaskState, Vec<&str>); 9] = [
+    let cases: [(TaskState, Vec<&str>); 10] = [
         (TaskState::Draft, vec!["task.readied", "agent.started"]),
         (TaskState::Ready, vec!["agent.started"]),
+        (TaskState::Idle, vec!["agent.resumed"]),
         (TaskState::NeedsInput, vec!["agent.resumed"]),
         (TaskState::Review, vec!["agent.resumed"]),
         (TaskState::Running, vec![]),
@@ -65,6 +67,40 @@ fn first_resumes_then_finishes_when_the_agent_was_waiting_for_the_user() {
         kinds(TaskState::NeedsInput, Signal::TurnEnded),
         ["agent.resumed", "agent.finished"]
     );
+}
+
+// The agent stopped without a question, so nothing waits for the user.
+#[test]
+fn an_ended_turn_makes_the_task_idle_and_a_question_makes_it_need_input() {
+    let steps = legacy_pipeline();
+    let apply = |state: TaskState, signal: Signal| {
+        let mut position = StagePosition::new("implement", state);
+        for planned in plan_signal_events(state, signal, &Map::new()) {
+            let event = TaskEvent {
+                task_id: "T-0001".into(),
+                source: "agent".into(),
+                kind: planned.kind.into(),
+                at: "2026-10-08T09:00:00.000Z".into(),
+                payload: Map::new(),
+            };
+            position = apply_task_event(&position, &event, &steps).position;
+        }
+        position.state
+    };
+    assert_eq!(
+        apply(TaskState::Running, Signal::TurnEnded),
+        TaskState::Idle
+    );
+    assert_eq!(
+        apply(TaskState::Running, Signal::Asking),
+        TaskState::NeedsInput
+    );
+    assert_eq!(
+        apply(TaskState::Idle, Signal::Asking),
+        TaskState::NeedsInput
+    );
+    assert_eq!(apply(TaskState::Idle, Signal::Prompt), TaskState::Running);
+    assert_eq!(apply(TaskState::Idle, Signal::Activity), TaskState::Running);
 }
 
 #[test]

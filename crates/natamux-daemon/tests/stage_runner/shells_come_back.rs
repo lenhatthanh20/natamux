@@ -260,7 +260,7 @@ fn takes_the_session_of_the_shell_over_an_older_one_in_the_events() {
     let task = spec_running(&f, "claude-code");
     let payload = json!({ "stage": "spec", "sessionId": "old" });
     ev(&f, &task.id, "agent", "agent.finished", payload);
-    assert_eq!(f.task(&task.id).state, TaskState::NeedsInput);
+    assert_eq!(f.task(&task.id).state, TaskState::Idle);
     restart(
         &mut f,
         &task.id,

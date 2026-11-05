@@ -8,6 +8,7 @@ type Kind =
   | 'ready'
   | 'running'
   | 'quiet'
+  | 'idle'
   | 'needs-input'
   | 'review'
   | 'blocked'
@@ -37,6 +38,7 @@ const LABEL: Record<Kind, string> = {
   ready: 'Ready',
   running: 'Running',
   quiet: 'Running, but quiet',
+  idle: 'Idle',
   'needs-input': 'Needs input',
   review: 'In review',
   blocked: 'Blocked',
@@ -73,6 +75,11 @@ function shape(of: Kind, art: number): string {
       return `<circle cx="${half}" cy="${half}" r="${r}" fill="none" stroke="currentColor" stroke-width="${stroke}" pathLength="16" stroke-dasharray="3 1" stroke-dashoffset="1.5"/>`
     case 'quiet':
       return `${ring}<path d="M0 ${half}H${art}A${half} ${half} 0 0 1 0 ${half}Z" fill="currentColor"/>`
+    case 'idle': {
+      const dot = round(art * 0.14)
+      const at = (x: number) => `<circle cx="${round(x)}" cy="${half}" r="${dot}" fill="currentColor"/>`
+      return at(dot) + at(half) + at(art - dot)
+    }
     case 'needs-input': {
       const tip = round(art * 0.07)
       return `<path d="M${half} ${-tip}L${art + tip} ${half}L${half} ${art + tip}L${-tip} ${half}Z" fill="currentColor" stroke="currentColor" stroke-width="${round(art * 0.1)}" stroke-linejoin="round"/>`

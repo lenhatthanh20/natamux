@@ -14,7 +14,7 @@ use crate::tasks::task_sort::task_number;
 pub const MAX_PANES: usize = 6;
 
 fn has_agent(task: &Task) -> bool {
-    task.workspace.is_some() && matches!(task.state, TaskState::Running | TaskState::NeedsInput)
+    task.workspace.is_some() && task.state.has_live_agent()
 }
 
 /// The tasks in the agents grid. Until the user picks (`chosen` is None), the ones whose agent

@@ -233,10 +233,10 @@ pub fn shown_after_remember(
     if open == Some(task_id) { tab } else { shown }
 }
 
-/// A task whose agent works or waits opens on its terminal. Another task opens on the tab that
-/// the user used last in it, and a new one opens on its terminal.
+/// A task whose agent works, is idle or waits opens on its terminal. Another task opens on the tab
+/// that the user used last in it, and a new one opens on its terminal.
 pub fn tab_to_open(state: TaskState, saved: Option<WorkspaceTab>) -> WorkspaceTab {
-    if matches!(state, TaskState::Running | TaskState::NeedsInput) {
+    if state.has_live_agent() {
         return WorkspaceTab::Terminal;
     }
     saved.unwrap_or(WorkspaceTab::Terminal)
