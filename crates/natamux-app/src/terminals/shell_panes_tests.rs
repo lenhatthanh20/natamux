@@ -30,7 +30,7 @@ fn open_task<'a>(
     task_id: &str,
     held: TerminalList,
     cx: &'a mut TestAppContext,
-) -> (Entity<Dashboard>, &'a mut VisualTestContext) {
+) -> (Entity<Dashboard>, Entity<ShellPanes>, &'a mut VisualTestContext) {
     test_views::init(cx);
     let source = Arc::new(Source::FakeDaemon);
     let dashboard = cx.new(|cx| Dashboard::new(Ok(source), Default::default(), cx));
@@ -43,7 +43,7 @@ fn open_task<'a>(
     let id = task_id.to_owned();
     panes.update(cx, |panes, cx| panes.set_task(Some(id), cx));
     cx.run_until_parked();
-    (dashboard, cx)
+    (dashboard, panes, cx)
 }
 
 fn cached(key: &str, cx: &mut VisualTestContext) -> bool {
@@ -56,7 +56,7 @@ fn cached(key: &str, cx: &mut VisualTestContext) -> bool {
 #[gpui::test]
 fn a_listed_shell_the_daemon_closed_gets_no_terminal(cx: &mut TestAppContext) {
     // The fake daemon lists only Terminal 1 for T-0141.
-    let (dashboard, cx) = open_task("T-0141", listed(&["1", "8"]), cx);
+    let (dashboard, _, cx) = open_task("T-0141", listed(&["1", "8"]), cx);
 
     assert!(
         !cached("T-0141/8", cx),
@@ -75,7 +75,7 @@ fn a_listed_shell_the_daemon_closed_gets_no_terminal(cx: &mut TestAppContext) {
 #[gpui::test]
 fn a_listed_shell_the_daemon_still_has_gets_its_terminal_after_the_read(cx: &mut TestAppContext) {
     // The fake daemon lists Terminals 1, 2, 10 and 12 for T-0146.
-    let (_, cx) = open_task("T-0146", listed(&["1", "2", "10", "12"]), cx);
+    let (_, _, cx) = open_task("T-0146", listed(&["1", "2", "10", "12"]), cx);
 
     for name in ["1", "2", "10", "12"] {
         assert!(
@@ -196,14 +196,8 @@ fn maximized(dashboard: &Entity<Dashboard>, cx: &mut VisualTestContext) -> bool 
 /// task; only Restore ends it.
 #[gpui::test]
 fn a_maximized_task_shows_each_terminal_switched_to_full_size(cx: &mut TestAppContext) {
-    test_views::init(cx);
-    let source = Arc::new(Source::FakeDaemon);
-    let dashboard = cx.new(|cx| Dashboard::new(Ok(source), Default::default(), cx));
-    cx.run_until_parked();
-    let held = dashboard.clone();
-    let (panes, cx) = cx.add_window_view(move |_, cx| ShellPanes::new(held, cx));
-    panes.update(cx, |panes, cx| panes.set_task(Some("T-0146".into()), cx));
-    cx.run_until_parked();
+    // The fake daemon lists Terminals 1, 2, 10 and 12 for T-0146.
+    let (dashboard, panes, cx) = open_task("T-0146", listed(&["1", "2", "10", "12"]), cx);
 
     panes.update(cx, |panes, cx| panes.toggle_maximized("10", cx));
     cx.run_until_parked();
