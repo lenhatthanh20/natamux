@@ -4,24 +4,22 @@
 
 use editor::{Editor, EditorEvent};
 use gpui::{
-    DismissEvent, Entity, EventEmitter, ExternalPaths, FocusHandle, Focusable, Subscription,
+    DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, ScrollHandle, Subscription,
+    TextStyleRefinement,
 };
 use natamux_client::Answer;
 use natamux_proto::projects::repo::{BranchList, LoadedSettings, RemoteBranchList, SkillList};
 use ui::prelude::*;
 
 use super::new_workspace_rules::{
-    PickedFile, SourceChoice, StartForm, blocked_reason, branch_text, initial_repo,
-    new_workspace_input, pick_source, prefill_branch, read_uploads, shown_repo, source_choices,
-    start_hint, start_label,
+    PickedFile, SourceChoice, StartForm, blocked_reason, initial_repo, new_workspace_input,
+    pick_source, prefill_branch, read_uploads, shown_repo, source_choices,
 };
 use crate::agents::agent_choices::DEFAULT_AGENT;
 use crate::app::dashboard::Dashboard;
 use crate::app::dashboard_data::{Part, Seen};
 use crate::app::source::reason;
-use crate::components::dialog::{
-    DialogFrame, DialogLayer, DialogView, cancel_button, primary_button,
-};
+use crate::components::dialog::{DialogLayer, DialogSize, DialogView};
 use crate::components::form::text_editor;
 use crate::components::toast_rules::ToastTone;
 
@@ -32,10 +30,15 @@ const DEFAULT_BRANCH_HINT: &str = "natamux/{id}-{slug}";
 mod fields;
 #[path = "new_workspace_menus.rs"]
 mod menus;
+#[path = "new_workspace_shot.rs"]
+mod shot;
 #[path = "new_workspace_trust.rs"]
 mod trust;
+#[path = "new_workspace_view.rs"]
+mod view;
 
 use menus::Pick;
+pub use shot::StartShot;
 
 /// Opens the dialog, in `repo` when given, with the title focused. With no project yet it only
 /// says so: the projects panel comes with a later screen.
@@ -85,7 +88,8 @@ pub struct NewWorkspaceDialog {
     branch_name: Entity<Editor>,
     /// What the field holds from a refill: a text equal to it is not an edit by the user.
     filled: String,
-    /// The user typed a branch: the title and project no longer refill it.
+    /// The user typed a branch: the title and project no longer refill it, until the reset
+    /// button makes it follow the title again.
     branch_edited: bool,
     branch_hint: String,
     reference: Entity<Editor>,
@@ -109,6 +113,7 @@ pub struct NewWorkspaceDialog {
     busy: bool,
     error: Option<String>,
     focus: FocusHandle,
+    scroll: ScrollHandle,
     stops: Stops,
     _reads: Vec<gpui::Task<()>>,
     _subscriptions: Vec<Subscription>,
@@ -122,10 +127,24 @@ struct Stops {
     project: FocusHandle,
     worktree: FocusHandle,
     branch: FocusHandle,
+    /// The Branch field's reset button, shown once the user typed a branch.
+    reset: FocusHandle,
     agent: FocusHandle,
     flow: FocusHandle,
     cancel: FocusHandle,
     submit: FocusHandle,
+}
+
+/// Branch names read in the buffer font, 12 px as the mockup's mono inputs.
+fn set_mono(editor: &Entity<Editor>, cx: &mut App) {
+    let font = theme::theme_settings(cx).buffer_font(cx).family.clone();
+    editor.update(cx, |editor, _| {
+        editor.set_text_style_refinement(TextStyleRefinement {
+            font_family: Some(font),
+            font_size: Some(rems_from_px(12.0_f32).into()),
+            ..Default::default()
+        })
+    });
 }
 
 impl NewWorkspaceDialog {
@@ -145,6 +164,7 @@ impl NewWorkspaceDialog {
         );
         let reference = text_editor("", None, window, cx);
         let branch_name = text_editor(DEFAULT_BRANCH_HINT, None, window, cx);
+        set_mono(&branch_name, cx);
         let ids = repo_ids(&dashboard, cx);
         let mut seen = Seen::default();
         let follow = cx.observe(&dashboard, move |this, dashboard, cx| {
@@ -200,6 +220,7 @@ impl NewWorkspaceDialog {
             busy: false,
             error: None,
             focus: cx.focus_handle(),
+            scroll: ScrollHandle::new(),
             stops: Stops {
                 source: cx.focus_handle(),
                 skill: cx.focus_handle(),
@@ -207,6 +228,7 @@ impl NewWorkspaceDialog {
                 project: cx.focus_handle(),
                 worktree: cx.focus_handle(),
                 branch: cx.focus_handle(),
+                reset: cx.focus_handle(),
                 agent: cx.focus_handle(),
                 flow: cx.focus_handle(),
                 cancel: cx.focus_handle(),
@@ -428,6 +450,10 @@ impl Focusable for NewWorkspaceDialog {
 }
 
 impl DialogView for NewWorkspaceDialog {
+    fn size(&self) -> DialogSize {
+        DialogSize::Wide
+    }
+
     fn tab_ring(&self, cx: &App) -> Vec<FocusHandle> {
         let choice = self.choice();
         let mut ring = vec![self.title.focus_handle(cx)];
@@ -449,6 +475,9 @@ impl DialogView for NewWorkspaceDialog {
             if self.branches.is_some() {
                 ring.push(stops.branch.clone());
             }
+            if self.branch_edited {
+                ring.push(stops.reset.clone());
+            }
             ring.push(self.branch_name.focus_handle(cx));
         }
         ring.extend(
@@ -463,47 +492,5 @@ impl DialogView for NewWorkspaceDialog {
 
     fn submit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.start_checked(window, cx);
-    }
-}
-
-impl Render for NewWorkspaceDialog {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        self.sync_branch(window, cx);
-        let form = self.form(cx);
-        let choice = self.choice();
-        let missing = blocked_reason(&form, &choice);
-        let close = cx.listener(|_, _, _, cx| cx.emit(DismissEvent));
-        let cancel = cx.listener(|_, _, _, cx| cx.emit(DismissEvent));
-        let submit = cx.listener(|this, _, window, cx| this.start_checked(window, cx));
-        let stops = &self.stops;
-        let start = primary_button(
-            start_label(self.busy),
-            &stops.submit,
-            missing.is_some() || self.busy,
-            submit,
-        )
-        .tooltip(ui::Tooltip::text(
-            missing.unwrap_or(start_hint(form.no_worktree)),
-        ));
-        let last_base = self.last_base(cx);
-        let branch = branch_text(self.branches.as_ref(), &self.base, last_base.as_deref());
-        let body = v_flex()
-            .gap_5()
-            .on_drop(cx.listener(|this, paths: &ExternalPaths, _, cx| {
-                this.add_paths(paths.paths().to_vec(), cx)
-            }))
-            .child(self.render_context(&choice, cx))
-            .child(self.render_setup(branch, cx))
-            .children(
-                self.error
-                    .clone()
-                    .map(|error| Label::new(error).color(Color::Error)),
-            );
-        div().track_focus(&self.focus).child(
-            DialogFrame::new("Start a task", close)
-                .child(body)
-                .footer(cancel_button("Cancel", &stops.cancel, cancel))
-                .footer(start),
-        )
     }
 }

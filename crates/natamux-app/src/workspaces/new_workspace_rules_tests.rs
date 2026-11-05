@@ -257,9 +257,7 @@ fn starts_from_the_default_branch_and_sends_no_base_while_it_is_kept() {
         default_branch: Some("main".into()),
     };
     assert_eq!(start_branch(Some(&list)).as_deref(), Some("main"));
-    assert_eq!(branch_text(Some(&list), "", None), "main (default)");
     assert_eq!(base_after_pick("main", Some("main")), "");
-    assert_eq!(branch_text(None, "", None), "The default branch");
 }
 
 #[test]
@@ -271,7 +269,6 @@ fn sends_the_picked_branch_as_the_base_even_the_current_one() {
     };
     let base = base_after_pick("dev", start_branch(Some(&list)).as_deref());
     assert_eq!(base, "dev");
-    assert_eq!(branch_text(Some(&list), &base, None), "dev (current)");
     let typed = StartForm {
         base,
         ..form("Fix")
@@ -344,6 +341,10 @@ fn formats_sizes_as_core_does() {
     assert_eq!(format_bytes(5), "5 B");
     assert_eq!(format_bytes(1500), "1.5 KB");
     assert_eq!(format_bytes(2_500_000), "2.5 MB");
+    assert_eq!(format_bytes(12_400), "12.4 KB");
+    assert_eq!(format_bytes(412_000), "412 KB");
+    assert_eq!(format_bytes(999_999), "999 KB");
+    assert_eq!(format_bytes(1_240_000), "1.2 MB");
 }
 
 #[test]

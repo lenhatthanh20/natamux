@@ -52,6 +52,7 @@ mod app {
     pub mod shots_files;
     pub mod shots_settings;
     pub mod shots_stages;
+    pub mod shots_start_task;
     pub mod shown_cache;
     pub mod sign_in;
     pub mod sign_in_rules;
@@ -344,6 +345,7 @@ mod workspaces {
     pub mod finished_summary;
     pub mod new_workspace_dialog;
     pub mod new_workspace_rules;
+    pub mod new_workspace_view_rules;
     pub mod no_workspace;
     pub mod remove_dialog_rules;
     pub mod remove_finished;

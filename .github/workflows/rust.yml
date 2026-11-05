@@ -422,7 +422,8 @@ jobs:
             project-settings-tab-general
             project-settings-tab-json project-settings-json-error project-settings-trust import-issues sign-in
             sign-in-error add-menu details-empty rail-closed-panel changes-over-main stage-evidence
-            start-task-branch-menu sidebar-blurred remove-workspace-anyway
+            start-task-branch-menu start-task-filled start-task-filled-end start-task-no-worktree
+            start-task-one-agent start-task-error sidebar-blurred remove-workspace-anyway
             update-downloading update-ready update-failed settings-update-ready
             repo-trust-dialog
           DOCKED: >-
@@ -446,7 +447,8 @@ jobs:
             project-settings-tab-general
             project-settings-tab-json project-settings-json-error project-settings-trust import-issues sign-in
             sign-in-error add-menu details-empty rail-closed-panel changes-over-main stage-evidence
-            start-task-branch-menu sidebar-blurred remove-workspace-anyway
+            start-task-branch-menu start-task-filled start-task-filled-end start-task-no-worktree
+            start-task-one-agent start-task-error sidebar-blurred remove-workspace-anyway
             update-downloading update-ready update-failed settings-update-ready
             repo-trust-dialog
         run: |
