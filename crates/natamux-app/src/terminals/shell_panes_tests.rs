@@ -240,5 +240,9 @@ fn a_maximized_task_shows_each_terminal_switched_to_full_size(cx: &mut TestAppCo
     cx.run_until_parked();
     assert!(!maximized(&dashboard, cx), "Restore kept the mode");
     // The claim is a sorted set of keys.
-    assert_eq!(drawn(cx), ["1", "10", "12", "2"], "Restore did not draw every pane");
+    assert_eq!(
+        drawn(cx),
+        ["1", "10", "12", "2"],
+        "Restore did not draw every pane"
+    );
 }
