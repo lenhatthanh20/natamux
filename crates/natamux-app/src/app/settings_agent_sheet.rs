@@ -5,7 +5,7 @@
 use editor::{Editor, EditorEvent};
 use gpui::{
     ClickEvent, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, Subscription,
-    TextStyleRefinement, WeakEntity,
+    WeakEntity,
 };
 use natamux_core::formats::is_slug;
 use natamux_proto::agents::custom::{CustomAgent, OTHER_BASE};
@@ -20,7 +20,7 @@ use crate::components::confirm::Confirm;
 use crate::components::dialog::{
     DialogFrame, DialogLayer, DialogView, cancel_button, primary_button,
 };
-use crate::components::form::{SettingsInput, text_editor};
+use crate::components::form::{SettingsInput, input_style, text_editor};
 use crate::components::settings_card::{SeparatorInset, SettingsCard, SettingsGroup, SettingsRow};
 use crate::components::settings_tile::{SettingsTile, TileSize};
 use crate::stages::stage_fields_view::{Choice, SELECT_WIDTH, open_choices, select};
@@ -144,11 +144,7 @@ pub(super) fn sheet_errors(agent: &CustomAgent, others: &[CustomAgent]) -> Sheet
 fn set_mono(editor: &Entity<Editor>, cx: &mut App) {
     let font = theme::theme_settings(cx).buffer_font(cx).family.clone();
     editor.update(cx, |editor, _| {
-        editor.set_text_style_refinement(TextStyleRefinement {
-            font_family: Some(font),
-            font_size: Some(rems_from_px(13.0_f32).into()),
-            ..Default::default()
-        })
+        editor.set_text_style_refinement(input_style(Some(font), Some(13.0)))
     });
 }
 

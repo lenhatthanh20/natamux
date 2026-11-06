@@ -15,6 +15,7 @@ use super::terminal_cache::TerminalCache;
 use crate::app::commands::TERMINAL_FIND;
 use crate::app::shortcuts::{Back, FindNext, FindPrevious};
 use crate::components::chips::tip_with_keys;
+use crate::components::form::input_editor;
 
 /// The bar closed: the pane gives the keyboard back to its terminal.
 pub struct FindClosed;
@@ -69,7 +70,7 @@ impl TerminalFind {
         cx: &mut Context<Self>,
     ) -> Self {
         let field = cx.new(|cx| {
-            let mut editor = Editor::single_line(window, cx);
+            let mut editor = input_editor(None, window, cx);
             editor.set_placeholder_text("Find", window, cx);
             editor
         });

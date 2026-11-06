@@ -20,6 +20,7 @@ use crate::components::agent_badge::AgentIcon;
 use crate::components::button_style::quiet_button;
 use crate::components::chips::{Kbd, tip_with_keys};
 use crate::components::colors::state_colors;
+use crate::components::form::input_editor;
 use crate::components::icons::icon_path;
 use crate::components::skeleton::{Loading, SkeletonList};
 use crate::components::text_size::row_text;
@@ -39,7 +40,7 @@ pub struct Sidebar {
 impl Sidebar {
     pub fn new(dashboard: Entity<Dashboard>, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let filter = cx.new(|cx| {
-            let mut editor = Editor::single_line(window, cx);
+            let mut editor = input_editor(None, window, cx);
             editor.set_placeholder_text("Filter tasks", window, cx);
             editor
         });

@@ -1,9 +1,10 @@
 //! Form parts shared by dialogs and the edit form: a labelled field, a bordered text box, and a
 //! text editor with a placeholder. `SettingsInput` is the Settings screen's smaller box.
+//! Every input editor comes from `input_editor`, so all inputs share one text style.
 
 use editor::Editor;
 use gpui::Focusable;
-use gpui::{Entity, FontWeight};
+use gpui::{Entity, FontWeight, TextStyleRefinement, relative};
 use language::language_settings::SoftWrap;
 use ui::prelude::*;
 
@@ -143,6 +144,40 @@ impl RenderOnce for SettingsInput {
     }
 }
 
+/// Inputs draw the cursor one line high. Zed's default buffer line (1.618) makes it fill a
+/// 24 px box, so inputs use Zed's "standard" line instead.
+pub const INPUT_LINE_HEIGHT: f32 = 1.3;
+
+/// The text style of every input: the input line height, and a font family or size in px for
+/// the fields that need one (mono ids, commands, branches).
+pub fn input_style(family: Option<SharedString>, size: Option<f32>) -> TextStyleRefinement {
+    TextStyleRefinement {
+        font_family: family,
+        font_size: size.map(|px| rems_from_px(px).into()),
+        line_height: Some(relative(INPUT_LINE_HEIGHT)),
+        ..Default::default()
+    }
+}
+
+/// An input editor with the input text style: one line, or `lines` (min, max) that grow.
+pub fn input_editor(
+    lines: Option<(usize, usize)>,
+    window: &mut Window,
+    cx: &mut Context<Editor>,
+) -> Editor {
+    let mut editor = match lines {
+        Some((min, max)) => {
+            let mut editor = Editor::auto_height(min, max, window, cx);
+            // A textarea wraps long lines; Zed's default setting does not.
+            editor.set_soft_wrap_mode(SoftWrap::EditorWidth, cx);
+            editor
+        }
+        None => Editor::single_line(window, cx),
+    };
+    editor.set_text_style_refinement(input_style(None, None));
+    editor
+}
+
 /// One line, or `lines` (min, max) of text that grows with what is typed.
 pub fn text_editor(
     placeholder: &str,
@@ -151,16 +186,12 @@ pub fn text_editor(
     cx: &mut App,
 ) -> Entity<Editor> {
     cx.new(|cx| {
-        let mut editor = match lines {
-            Some((min, max)) => {
-                let mut editor = Editor::auto_height(min, max, window, cx);
-                // A textarea wraps long lines; Zed's default setting does not.
-                editor.set_soft_wrap_mode(SoftWrap::EditorWidth, cx);
-                editor
-            }
-            None => Editor::single_line(window, cx),
-        };
+        let mut editor = input_editor(lines, window, cx);
         editor.set_placeholder_text(placeholder, window, cx);
         editor
     })
 }
+
+#[cfg(test)]
+#[path = "form_tests.rs"]
+mod tests;

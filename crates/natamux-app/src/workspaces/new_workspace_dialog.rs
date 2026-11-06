@@ -5,7 +5,6 @@
 use editor::{Editor, EditorEvent};
 use gpui::{
     DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, ScrollHandle, Subscription,
-    TextStyleRefinement,
 };
 use natamux_client::Answer;
 use natamux_proto::projects::repo::{BranchList, LoadedSettings, RemoteBranchList, SkillList};
@@ -20,7 +19,7 @@ use crate::app::dashboard::Dashboard;
 use crate::app::dashboard_data::{Part, Seen};
 use crate::app::source::reason;
 use crate::components::dialog::{DialogLayer, DialogSize, DialogView};
-use crate::components::form::text_editor;
+use crate::components::form::{input_style, text_editor};
 use crate::components::toast_rules::ToastTone;
 
 /// The Branch field's placeholder when the project sets no `git.branchName`.
@@ -139,11 +138,7 @@ struct Stops {
 fn set_mono(editor: &Entity<Editor>, cx: &mut App) {
     let font = theme::theme_settings(cx).buffer_font(cx).family.clone();
     editor.update(cx, |editor, _| {
-        editor.set_text_style_refinement(TextStyleRefinement {
-            font_family: Some(font),
-            font_size: Some(rems_from_px(12.0_f32).into()),
-            ..Default::default()
-        })
+        editor.set_text_style_refinement(input_style(Some(font), Some(12.0)))
     });
 }
 
