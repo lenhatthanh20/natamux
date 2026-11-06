@@ -4,6 +4,7 @@
 use serde_json::json;
 
 use crate::app::theme_catalog::ThemeNames;
+use crate::components::colors::CLEAR;
 use crate::terminals::terminal_font::{FontSource, ResolvedFont};
 
 // The base the UI size scales. The UI is Zed's default; code (terminal, diff, editors) is 13, not
@@ -147,7 +148,7 @@ pub fn user_settings(
         "buffer_font_size": scaled(BASE_BUFFER_FONT_SIZE, ui_zoom),
         "terminal": terminal,
         "scrollbar": {"cursors": false, "selected_text": false, "selected_symbol": false},
-        "experimental.theme_overrides": {"scrollbar.track.border": "#00000000"},
+        "experimental.theme_overrides": {"scrollbar.track.border": CLEAR},
     });
     if shot {
         settings["scrollbar"]["show"] = json!("never");

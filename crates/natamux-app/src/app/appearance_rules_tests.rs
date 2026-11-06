@@ -159,9 +159,6 @@ fn draws_only_the_thumb_of_the_editor_scrollbars() {
         for marker in ["cursors", "selected_text", "selected_symbol"] {
             assert_eq!(value["scrollbar"][marker], false, "{marker}");
         }
-        assert_eq!(
-            value["experimental.theme_overrides"]["scrollbar.track.border"],
-            "#00000000"
-        );
+        assert_eq!(value["experimental.theme_overrides"]["scrollbar.track.border"], CLEAR);
     }
 }
