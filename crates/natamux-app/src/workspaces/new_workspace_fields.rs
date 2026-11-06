@@ -175,7 +175,8 @@ impl NewWorkspaceDialog {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let title = SettingsRow::new("new-task-title", "Title")
-            .control(SettingsInput::new(&self.title).width(INPUT_WIDTH));
+            .fill(true)
+            .control(SettingsInput::new(&self.title));
         let mut rows = vec![title.into_any_element()];
         if self.choices().len() > 1 {
             let lead = lead_icon(source_icon(choice));
