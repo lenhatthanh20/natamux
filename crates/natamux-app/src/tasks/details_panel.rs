@@ -26,6 +26,7 @@ use crate::app::shown_cache::ShownCache;
 use crate::app::tab_rules::ShowWatch;
 use crate::app::view_rules::DetailsView;
 use crate::components::empty_state::EmptyState;
+use crate::components::form::input_editor;
 use crate::components::motion;
 use crate::files::file_tree::FileTree;
 use crate::stages::flow_lines::dot_grid;
@@ -104,7 +105,7 @@ impl DetailsPanel {
         cx: &mut Context<Self>,
     ) -> Self {
         let subtask = cx.new(|cx| {
-            let mut editor = Editor::single_line(window, cx);
+            let mut editor = input_editor(None, window, cx);
             editor.set_placeholder_text("Add a subtask", window, cx);
             editor
         });

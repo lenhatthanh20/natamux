@@ -12,6 +12,7 @@ use super::word_check::{WordCheck, shell_quote, terminal_check_command, words};
 use crate::app::source::Source;
 use crate::app::view_state;
 use crate::components::button_style::quiet_button;
+use crate::components::form::input_editor;
 use crate::terminals::remote_terminal::{RemoteTerminal, Target};
 use crate::terminals::terminal_screen::terminal_screen;
 
@@ -43,7 +44,7 @@ impl ImeCheck {
         cx: &mut Context<Self>,
     ) -> Self {
         let input = cx.new(|cx| {
-            let mut editor = Editor::single_line(window, cx);
+            let mut editor = input_editor(None, window, cx);
             editor.set_placeholder_text("Type the word above, then Enter", window, cx);
             editor
         });

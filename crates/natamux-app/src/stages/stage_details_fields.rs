@@ -1,6 +1,6 @@
 //! The text fields of the stage sheet: one editor each, made when the sheet opens.
 
-use gpui::{Entity, TextStyleRefinement};
+use gpui::Entity;
 use natamux_proto::stages::capabilities::{stage_name, stage_name_of_id};
 use natamux_proto::stages::schema::{Stage, Step};
 use ui::prelude::*;
@@ -11,6 +11,7 @@ use super::pipeline_editor::PipelineEditor;
 use super::stage_fields_view::LiveField;
 use super::stage_sheet::StageSheet;
 use super::stage_view_rules::finished_when;
+use crate::components::form::input_style;
 
 /// The text fields of one stage.
 pub(super) struct StageFields {
@@ -53,11 +54,7 @@ fn set_font(field: &LiveField, mono: bool, cx: &mut App) {
         (None, 13.0_f32)
     };
     field.editor.update(cx, |editor, _| {
-        editor.set_text_style_refinement(TextStyleRefinement {
-            font_family: family,
-            font_size: Some(rems_from_px(size).into()),
-            ..Default::default()
-        })
+        editor.set_text_style_refinement(input_style(family, Some(size)))
     });
 }
 
