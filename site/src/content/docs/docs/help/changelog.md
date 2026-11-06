@@ -7,6 +7,18 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v1.0.20 (2026-11-06)
+
+- After an update, the desktop app shows the notes of the new version once in a **What's new** dialog.
+- A turn that ends on a question, also one followed by a list of options, keeps the task in **Needs input** until you answer. See [Agents and hooks](/docs/concepts/agents-and-hooks/).
+- A turn that ends with a report notifies **Finished its turn**; the task is **Idle** and the Dock counts it until you open the task. See [Notifications in the desktop app](/docs/guides/dashboard/#notifications-in-the-desktop-app).
+- `natamux ask` keeps the task waiting for your answer, also when the agent goes on with other tools or the ask first needed a permission.
+- A maximized task opens on the terminal you looked at last.
+- **Idle** shows as a speech bubble.
+- Fix: a task went **Idle** right after the agent ran `natamux ask`. It now waits for your answer.
+- Fix: a permission you denied left the task in **Needs input** after the turn ended. It now goes **Idle**.
+- Fix: the cursor filled almost the whole height of a text box. Text boxes now use a shorter line.
+
 ## v1.0.19 (2026-11-06)
 
 - A new project gets a short default pipeline: Context → Spec → Implement → Review → Release. See [The default pipeline](/docs/concepts/stages/#the-default-pipeline).
