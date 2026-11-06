@@ -69,6 +69,10 @@ impl DashboardData {
     /// `merge_task` keeps a held task that is newer. Unlike a list, one task changes neither
     /// `loaded` nor the link, so those do not count.
     pub(super) fn task_changes(&self, task: &Task) -> bool {
+        // A task hidden while its delete runs draws nothing.
+        if self.is_deleting(&task.id) {
+            return false;
+        }
         match self.task(&task.id) {
             Some(held) => held != task && held.updated_at <= task.updated_at,
             None => true,
