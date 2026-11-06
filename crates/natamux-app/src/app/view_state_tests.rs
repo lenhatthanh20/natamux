@@ -546,3 +546,12 @@ fn showing_the_changes_tab_keeps_the_details_dock_open() {
     assert!(state.details_open);
     assert!(ViewState::parse(&state.to_json()).details_open);
 }
+
+#[test]
+fn keeps_the_version_of_the_last_release_notes() {
+    let state = ViewState::parse(r#"{"whatsNewSeen":"1.0.19"}"#);
+    assert_eq!(state.whats_new_seen.as_deref(), Some("1.0.19"));
+    assert_eq!(ViewState::parse(&state.to_json()), state);
+    assert_eq!(ViewState::parse("{}").whats_new_seen, None);
+    assert_eq!(ViewState::parse(r#"{"whatsNewSeen":7}"#).whats_new_seen, None);
+}

@@ -139,10 +139,11 @@ pub enum Shot {
     UpdateFailed,
     SettingsUpdateReady,
     RepoTrustDialog,
+    WhatsNew,
 }
 
 impl Shot {
-    pub const ALL: [Shot; 100] = [
+    pub const ALL: [Shot; 101] = [
         Shot::TasksTable,
         Shot::TasksBoard,
         Shot::BoardHoverCard,
@@ -243,6 +244,7 @@ impl Shot {
         Shot::UpdateFailed,
         Shot::SettingsUpdateReady,
         Shot::RepoTrustDialog,
+        Shot::WhatsNew,
     ];
 
     pub fn name(self) -> &'static str {
@@ -347,6 +349,7 @@ impl Shot {
             Shot::UpdateFailed => "update-failed",
             Shot::SettingsUpdateReady => "settings-update-ready",
             Shot::RepoTrustDialog => "repo-trust-dialog",
+            Shot::WhatsNew => "whats-new",
         }
     }
 

@@ -95,6 +95,27 @@ A manual check shows a small frameless window over the main window (on the scree
 - `mac` also installs on a normal quit when an update is ready, without starting the app again.
 - The script writes what it did to `<user data>/logs/update.log`.
 
+## What's new
+
+After an update the app shows what changed, without a browser (T-0301).
+
+- Source: the build embeds `docs/releases/v<version>.md` of its own version (`include_str!` in `crates/natamux-app/src/app/whats_new_rules.rs`). No network, nothing new to trust. A version without notes does not build; `scripts/release.test.sh` already demands them.
+- The dialog **What's new in Natamux X.Y.Z** shows the notes up to the `## Download` heading (the rest is for a fresh install), then a link to the site changelog for older versions. Footer: **Full changelog** and **Close**.
+- It opens by itself once, about 1 s after the window opens. `whatsNewSeen` in `view.json` holds the version whose notes the app last showed or skipped:
+
+| `whatsNewSeen` | `updates/<version>/` exists | Opens |
+|---|---|---|
+| the running version | any | no |
+| an older version, or a value that is not a version | any | yes |
+| a newer version (an older build started) | any | no |
+| none | yes (the first update from a version before this feature) | yes |
+| none | no (a new install) | no |
+
+- After the check the app saves the running version, so the dialog opens once per version. When another dialog is open at that moment, nothing is saved and the next start tries again.
+- Fake, smoke and `--shot` runs never open it by themselves.
+- **What's New** opens it at any time: in the menu above **Check for Updates…**, in the command palette, and in **Settings → General → Updates**.
+- The **What's New** button of the "update is ready" toast still opens the release page: that is the next version's notes, which the running build does not have.
+
 ## Log
 
 `<user data>/logs/update.log` gets one line for each step: check, version found, signature result, download start and end, hash result, install start, and every failure with its reason.

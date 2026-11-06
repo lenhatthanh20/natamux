@@ -1,5 +1,6 @@
-//! The rendered view of a stage file (`Markdown.tsx`), on Zed's `markdown` crate: no HTML, no
-//! Mermaid, no images, and only web and mail links open. All use of that crate stays in this file.
+//! The rendered view of a stage file (`Markdown.tsx`) and of the release notes, on Zed's
+//! `markdown` crate: no HTML, no Mermaid, no images, and only web and mail links open. All use of
+//! that crate stays in this file.
 
 use gpui::{AnyElement, Entity, TextStyleRefinement};
 use markdown::{
@@ -38,9 +39,21 @@ impl MarkdownDoc {
     }
 
     pub fn view(&self, window: &Window, cx: &App) -> AnyElement {
+        div()
+            .id("docs-markdown")
+            .size_full()
+            .min_h_0()
+            .p_4()
+            .overflow_y_scroll()
+            .child(self.body(window, cx))
+            .into_any_element()
+    }
+
+    /// The text alone, for a parent that scrolls (the What's new dialog).
+    pub fn body(&self, window: &Window, cx: &App) -> MarkdownElement {
         let mut style = MarkdownStyle::themed(MarkdownFont::Preview, window, cx);
         doc_text_sizes(&mut style);
-        let body = MarkdownElement::new(self.markdown.clone(), style)
+        MarkdownElement::new(self.markdown.clone(), style)
             .code_block_renderer(CodeBlockRenderer::Default {
                 copy_button_visibility: CopyButtonVisibility::Hidden,
                 wrap_button_visibility: WrapButtonVisibility::Hidden,
@@ -48,15 +61,7 @@ impl MarkdownDoc {
             })
             .on_url_click(|url, _, cx| {
                 open_link(&url, cx);
-            });
-        div()
-            .id("docs-markdown")
-            .size_full()
-            .min_h_0()
-            .p_4()
-            .overflow_y_scroll()
-            .child(body)
-            .into_any_element()
+            })
     }
 }
 

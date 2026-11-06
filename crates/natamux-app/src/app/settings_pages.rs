@@ -12,12 +12,12 @@ use super::super::settings_rules::{
     SearchResults, SettingRow, SettingsPage, no_match_text, page_groups, results_groups,
 };
 use super::super::settings_theme::{theme_select, theme_tiles};
-use super::super::shortcuts::RestartToUpdate;
+use super::super::shortcuts::{RestartToUpdate, ShowWhatsNew};
 use super::super::theme_catalog::ThemeKind;
 use super::super::update;
 use super::super::update_state::UpdateState;
 use super::{PAGE_MAX, SettingsView, segment};
-use crate::components::button_style::{action_button, button_icon};
+use crate::components::button_style::{action_button, button_icon, quiet_button};
 use crate::components::colors::TileColor;
 use crate::components::settings_card::{SeparatorInset, SettingsCard, SettingsGroup, SettingsRow};
 use crate::components::settings_tile::{SettingsTile, TileSize};
@@ -118,6 +118,7 @@ impl SettingsView {
         )
         .lead(row_tile("download", TileColor::Blue))
         .help_child(Label::new(line).size(LabelSize::Small).color(color))
+        .control(whats_new_button())
         .control(self.check_button())
     }
 
@@ -140,6 +141,17 @@ impl SettingsView {
             .into_any_element()
     }
 
+}
+
+/// The release notes of this version (T-0301).
+fn whats_new_button() -> AnyElement {
+    quiet_button("settings-whats-new", "What's New")
+        .tooltip(Tooltip::text("Read what changed in this version."))
+        .on_click(|_, window, cx| window.dispatch_action(Box::new(ShowWhatsNew), cx))
+        .into_any_element()
+}
+
+impl SettingsView {
     fn notify_switch(&self, cx: &mut Context<Self>) -> AnyElement {
         let on = self.dashboard.read(cx).view().notify;
         self.view_switch(

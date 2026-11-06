@@ -149,6 +149,8 @@ pub struct ViewState {
     pub terminal_font: Option<Value>,
     /// Task ids of the workspaces opened, newest first (`natamux.recent`).
     pub recent: Vec<String>,
+    /// The version whose release notes the app last showed or skipped (`whatsNewSeen`, T-0301).
+    pub whats_new_seen: Option<String>,
 }
 
 impl Default for ViewState {
@@ -183,6 +185,7 @@ impl Default for ViewState {
             ui_size: "default".to_owned(),
             terminal_font: None,
             recent: Vec::new(),
+            whats_new_seen: None,
         }
     }
 }
@@ -314,6 +317,10 @@ impl ViewState {
                 .into_iter()
                 .take(MAX_RECENT)
                 .collect(),
+            whats_new_seen: map
+                .get("whatsNewSeen")
+                .and_then(Value::as_str)
+                .map(str::to_owned),
         }
     }
 
@@ -372,6 +379,7 @@ impl ViewState {
             "uiSize": self.ui_size,
             "terminalFont": self.terminal_font,
             "recent": self.recent,
+            "whatsNewSeen": self.whats_new_seen,
         });
         format!("{value:#}\n")
     }
