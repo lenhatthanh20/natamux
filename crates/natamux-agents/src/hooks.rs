@@ -278,7 +278,8 @@ fn is_question(line: &str) -> bool {
 /// question counts too. A heading or a code block at the end is no question. shortcut: a question
 /// mid-message or one without "?" counts as none; a missed question still shows as unseen.
 pub fn question_of(message: &str) -> Option<&str> {
-    let mut lines = message.lines().rev().filter(|line| !bare(line).is_empty());
+    // Not `bare`: it would turn a closing code fence into an empty line.
+    let mut lines = message.lines().rev().filter(|line| !line.trim().is_empty());
     let last = lines.next()?;
     if last.trim_start().starts_with("```") {
         return None;
