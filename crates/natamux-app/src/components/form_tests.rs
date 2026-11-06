@@ -46,7 +46,10 @@ fn every_input_editor_comes_from_input_editor() {
     assert!(!files.is_empty());
     let mut found = Vec::new();
     for file in files {
-        let name = file.file_name().and_then(|name| name.to_str()).unwrap_or("");
+        let name = file
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("");
         if name == "form.rs" || name.ends_with("_tests.rs") {
             continue;
         }
