@@ -7,7 +7,7 @@ use natamux_core::zod::{self, Issues, ZodError};
 use serde_json::{Map, Value, json};
 
 use super::fields;
-use super::{HookResult, NormalizedHook, Signal, tool_summary};
+use super::{HookResult, NormalizedHook, Signal, input_runs_ask, tool_summary};
 
 /// The event a hook of Copilot belongs to. Copilot does not name it in the JSON, so
 /// `natamux hook copilot <event>` adds it.
@@ -83,14 +83,16 @@ pub fn normalize(raw: &Value, home: &Path) -> HookResult {
     let tool_name = fields::text(map, "toolName", &mut issues);
     let recoverable = fields::flag(map, "recoverable", &mut issues);
     issues.into_result(Some(()))?;
+    let input = tool_args(map.get("toolArgs"));
+    let after = matches!(event.as_str(), "postToolUse" | "postToolUseFailure");
+    if after && input_runs_ask(Some(&input)) {
+        return Ok(None);
+    }
     let Some(signal) = signal(&event, map, recoverable) else {
         return Ok(None);
     };
     let summary = match event.as_str() {
-        "preToolUse" => {
-            let input = tool_args(map.get("toolArgs"));
-            tool_summary(tool_name.as_deref(), Some(&input), cwd.as_deref())
-        }
+        "preToolUse" => tool_summary(tool_name.as_deref(), Some(&input), cwd.as_deref()),
         "userPromptSubmitted" => Some("Reading the prompt".to_string()),
         "notification" => asking_summary(map).map(str::to_string),
         _ => None,

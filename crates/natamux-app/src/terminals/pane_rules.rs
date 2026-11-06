@@ -190,6 +190,23 @@ pub fn maximized_pane(
         .or_else(|| names.first().cloned())
 }
 
+/// The terminal a workspace shows and focuses when it opens: the one asked for, else the one the
+/// user last looked at in the maximized task (`remembered`), else the first agent terminal, else
+/// Terminal 1. A name the list does not have is skipped.
+pub fn opened_pane(
+    names: &[String],
+    requested: Option<String>,
+    remembered: Option<String>,
+    first_agent: Option<String>,
+) -> String {
+    let listed = |name: &String| names.contains(name);
+    requested
+        .filter(listed)
+        .or_else(|| remembered.filter(listed))
+        .or(first_agent)
+        .unwrap_or_else(|| "1".into())
+}
+
 /// A pane header's New terminal button: the workspace's panes have it (its tooltip, and whether
 /// it can be used); the Agents grid's do not.
 pub fn new_terminal_button(in_grid: bool, has_agent: bool, full: bool) -> Option<(String, bool)> {

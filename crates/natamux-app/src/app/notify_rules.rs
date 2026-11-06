@@ -14,26 +14,36 @@ use natamux_proto::tasks::task::{Task, TaskState};
 
 use crate::tasks::task_rules::needs_me;
 
-/// What the last look saw of a task: its state, and the stages whose lane waited for the user.
+/// What the last look saw of a task: its state, the stages whose lane waited for the user, and
+/// the stages whose lane was idle.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Seen {
     pub state: TaskState,
     pub waits: BTreeSet<String>,
+    pub idle: BTreeSet<String>,
 }
 
 /// Each task at the last look.
 pub type States = HashMap<String, Seen>;
 
+/// The stages whose lane is in a state `keep` takes.
+fn stages_where(task: &Task, keep: impl Fn(TaskState) -> bool) -> BTreeSet<String> {
+    task.lanes
+        .iter()
+        .filter(|(_, state)| serde_json::from_value::<TaskState>((*state).clone()).is_ok_and(&keep))
+        .map(|(stage, _)| stage.clone())
+        .collect()
+}
+
 /// The stages whose lane needs the user now. Stages run side by side, each in its own terminal,
 /// so one can start to wait while the task already waits at another.
 fn waiting_stages(task: &Task) -> BTreeSet<String> {
-    task.lanes
-        .iter()
-        .filter(|(_, state)| {
-            serde_json::from_value::<TaskState>((*state).clone()).is_ok_and(needs_me)
-        })
-        .map(|(stage, _)| stage.clone())
-        .collect()
+    stages_where(task, needs_me)
+}
+
+/// The stages whose agent ended its turn without a question and without `natamux done`.
+fn idle_stages(task: &Task) -> BTreeSet<String> {
+    stages_where(task, |state| state == TaskState::Idle)
 }
 
 /// Tasks that moved into a state that needs the user since the last look. A task seen for the
@@ -56,6 +66,7 @@ pub fn states_by_id(tasks: &[Task]) -> States {
             let seen = Seen {
                 state: task.state,
                 waits: waiting_stages(task),
+                idle: idle_stages(task),
             };
             (task.id.clone(), seen)
         })
@@ -107,6 +118,8 @@ fn what_happened(state: TaskState, stage: Option<&str>) -> String {
         (TaskState::Failed | TaskState::Blocked, Some(stage)) => {
             format!("{} at {stage}", state.label())
         }
+        (TaskState::Idle, Some(stage)) => format!("Finished its turn at {stage}"),
+        (TaskState::Idle, None) => "Finished its turn".into(),
         _ => state.label().into(),
     }
 }
@@ -119,8 +132,23 @@ pub struct Ring {
     pub note: Notification,
 }
 
+/// The stages that became idle since the last look: an agent ended its turn with a report, which
+/// the user may want to read. A task with no lanes counts with its own stage.
+fn newly_idle(before: &Seen, task: &Task) -> Vec<(String, TaskState)> {
+    let mut idle: Vec<(String, TaskState)> = idle_stages(task)
+        .difference(&before.idle)
+        .map(|stage| (stage.clone(), TaskState::Idle))
+        .collect();
+    let task_idle = task.state == TaskState::Idle && before.state != TaskState::Idle;
+    if idle.is_empty() && task_idle && task.lanes.is_empty() {
+        idle.push((task.stage.clone(), TaskState::Idle));
+    }
+    idle
+}
+
 /// What rings after a new task list: the stages that started to wait (a task that waits already
-/// rings again when another of its terminals starts to wait), then the tasks that became done.
+/// rings again when another of its terminals starts to wait), the stages whose agent ended its
+/// turn, then the tasks that became done.
 pub fn rings(previous: &States, tasks: &[Task], repos: &[Repo]) -> Vec<Ring> {
     let started: HashSet<&str> = tasks_that_started_waiting(previous, tasks)
         .iter()
@@ -141,6 +169,7 @@ pub fn rings(previous: &States, tasks: &[Task], repos: &[Repo]) -> Vec<Ring> {
         if new.is_empty() && started.contains(task.id.as_str()) {
             new.push((task.stage.clone(), task.state));
         }
+        new.extend(newly_idle(before, task));
         for (stage, state) in new {
             ring.push(Ring {
                 task_id: task.id.clone(),

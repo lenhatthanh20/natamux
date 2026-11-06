@@ -85,7 +85,7 @@ fn shell_state_of(signal: Signal) -> TaskState {
     match signal {
         Signal::Prompt | Signal::Activity | Signal::TurnPaused => TaskState::Running,
         Signal::TurnEnded => TaskState::Idle,
-        Signal::Asking => TaskState::NeedsInput,
+        Signal::Asking | Signal::TurnAsked => TaskState::NeedsInput,
         Signal::Failed => TaskState::Failed,
     }
 }
@@ -108,17 +108,14 @@ fn changes_files(hook: &NormalizedHook) -> bool {
             .get("hook")
             .and_then(Value::as_str)
             .is_none_or(|name| !is_before_tool(name)),
-        Signal::TurnEnded | Signal::TurnPaused | Signal::Failed => true,
+        Signal::TurnEnded | Signal::TurnPaused | Signal::TurnAsked | Signal::Failed => true,
         Signal::Prompt | Signal::Asking => false,
     }
 }
 
 /// The signals after which the session's file holds the usage of a whole model call.
 fn reads_usage(signal: Signal) -> bool {
-    matches!(
-        signal,
-        Signal::TurnEnded | Signal::TurnPaused | Signal::Failed | Signal::Asking
-    )
+    signal.ends_turn() || matches!(signal, Signal::Failed | Signal::Asking)
 }
 
 /// The parts of a path, as Node's `path.relative` reads them: `.` and `..` resolved, and on
@@ -395,8 +392,7 @@ impl HookService {
         let pending = self.stages.report_of(&task.id, shell);
         // The turn in which the agent ran `natamux done`, or sent the task back, ends as planned,
         // not "stopped early", even when background work is still running.
-        let reported = matches!(hook.signal, Signal::TurnEnded | Signal::TurnPaused)
-            && self.stages.take_report(&task.id, shell);
+        let reported = hook.signal.ends_turn() && self.stages.take_report(&task.id, shell);
         let usage = TurnStage {
             lane: lane.as_ref(),
             pending,

@@ -61,12 +61,35 @@ fn treats_the_end_of_a_turn_as_finished_when_the_agent_was_running() {
     );
 }
 
+// T-0008: `natamux ask`, then the turn ended. The question still waits for the user.
 #[test]
-fn first_resumes_then_finishes_when_the_agent_was_waiting_for_the_user() {
+fn keeps_a_task_that_waits_for_the_user_waiting_when_the_turn_ends() {
+    for signal in [Signal::TurnEnded, Signal::TurnPaused, Signal::TurnAsked] {
+        assert!(
+            kinds(TaskState::NeedsInput, signal).is_empty(),
+            "{}",
+            signal.as_str()
+        );
+    }
+}
+
+#[test]
+fn first_resumes_then_finishes_when_the_agent_was_idle() {
     assert_eq!(
-        kinds(TaskState::NeedsInput, Signal::TurnEnded),
+        kinds(TaskState::Idle, Signal::TurnEnded),
         ["agent.resumed", "agent.finished"]
     );
+}
+
+#[test]
+fn a_turn_that_ends_on_a_question_makes_the_task_wait_for_the_user() {
+    assert_eq!(
+        kinds(TaskState::Running, Signal::TurnAsked),
+        ["agent.asked"]
+    );
+    assert_eq!(kinds(TaskState::Idle, Signal::TurnAsked), ["agent.asked"]);
+    assert!(kinds(TaskState::Review, Signal::TurnAsked).is_empty());
+    assert!(kinds(TaskState::Done, Signal::TurnAsked).is_empty());
 }
 
 // The agent stopped without a question, so nothing waits for the user.
@@ -124,14 +147,6 @@ fn keeps_a_running_task_running_when_the_agent_pauses_for_background_work() {
     assert_eq!(
         kinds(TaskState::Running, Signal::TurnPaused),
         ["agent.waiting"]
-    );
-}
-
-#[test]
-fn first_resumes_then_waits_when_the_agent_was_waiting_for_the_user() {
-    assert_eq!(
-        kinds(TaskState::NeedsInput, Signal::TurnPaused),
-        ["agent.resumed", "agent.waiting"]
     );
 }
 
@@ -223,6 +238,50 @@ fn only_plans_events_the_state_machine_accepts_in_every_state() {
                 position = applied.position;
             }
         }
+    }
+}
+
+#[test]
+fn finds_natamux_ask_in_a_shell_command() {
+    let asks = [
+        "natamux ask \"Which branch?\"",
+        "cd a && natamux ask -",
+        "/opt/bin/natamux ask x",
+        "natamux ask --stage spec 'x'",
+    ];
+    for command in asks {
+        assert!(runs_ask(command), "{command}");
+    }
+    let others = [
+        "natamux done",
+        "echo natamux asked",
+        "natamuxask x",
+        "ask natamux",
+    ];
+    for command in others {
+        assert!(!runs_ask(command), "{command}");
+    }
+    // Accepted: it only skips one after-tool hook while the agent runs.
+    assert!(runs_ask("grep \"natamux ask\" notes.md"));
+}
+
+#[test]
+fn reads_a_question_from_the_last_line_of_a_message() {
+    let asked = [
+        ("Done.\n\nShould I merge it?", "Should I merge it?"),
+        ("Pick one:\n1. A\n2. B\n\n**Which one?**\n", "Which one?"),
+        ("Tiếp tục không？", "Tiếp tục không？"),
+        ("  Use `main` (the default)?)", "Use `main` (the default)?"),
+    ];
+    for (message, question) in asked {
+        assert_eq!(question_of(message), Some(question), "{message}");
+    }
+    for message in [
+        "Why? Because the test failed.\nFixed it.",
+        "All tests pass.",
+        "",
+    ] {
+        assert_eq!(question_of(message), None, "{message}");
     }
 }
 

@@ -16,7 +16,9 @@ use self::list_read::ListRead;
 use super::pane_facts::{PaneFacts, agent_lanes, focus_after_close, pane_facts, restoring_label};
 use super::pane_grid::{GAP, grid_rows, skeleton};
 use super::pane_header::{PaneHeader, PaneTitle};
-use super::pane_rules::{MAX_PANES, PaneLayout, columns_for, maximized_pane, new_terminal_button};
+use super::pane_rules::{
+    MAX_PANES, PaneLayout, columns_for, maximized_pane, new_terminal_button, opened_pane,
+};
 use super::remote_terminal::RemoteTerminal;
 use super::terminal_cache::{Owner, TerminalCache, terminal_key};
 use super::terminal_find::open_find;
@@ -241,8 +243,8 @@ impl ShellPanes {
     }
 
     /// The request of a sidebar row or of opening the workspace: show and focus that terminal
-    /// (full size while the task is maximized) once the list is read. A name the list does not
-    /// have falls back to the first agent terminal (`first_agent`), else Terminal 1.
+    /// (full size while the task is maximized) once the list is read. Opening a maximized task
+    /// goes back to the terminal looked at last (`opened_pane`).
     fn take_request(
         &mut self,
         task_id: &str,
@@ -256,11 +258,8 @@ impl ShellPanes {
         let Some(request) = request else {
             return;
         };
-        let wanted = request
-            .name
-            .filter(|name| names.contains(name))
-            .or(first_agent)
-            .unwrap_or_else(|| "1".into());
+        let remembered = self.dashboard.read(cx).remembered_terminal(task_id);
+        let wanted = opened_pane(names, request.name, remembered, first_agent);
         self.shown = Some(wanted.clone());
         self.focus_next = Some(wanted);
     }
@@ -424,8 +423,11 @@ impl Render for ShellPanes {
             .is_maximized(cx)
             .then(|| maximized_pane(&names, self.shown.as_deref(), first_agent.as_deref()))
             .flatten();
-        if maximized.is_some() {
-            self.shown.clone_from(&maximized);
+        if let Some(name) = &maximized {
+            self.shown = Some(name.clone());
+            self.dashboard.update(cx, |dashboard, cx| {
+                dashboard.remember_terminal(&task_id, name, cx)
+            });
         }
         let visible: Vec<String> = match (maximized, &self.only) {
             (Some(name), _) => vec![name],

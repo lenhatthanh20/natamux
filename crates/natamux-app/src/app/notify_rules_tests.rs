@@ -313,3 +313,45 @@ fn names_a_task_again_when_it_stops_waiting_and_then_waits_again() {
     announcer.update(&[first(), other, later], true);
     assert_eq!(announcer.text(), "Ship docs needs you");
 }
+
+// T-0304: an agent that ends its turn with a report rings, so the user goes to read it.
+#[test]
+fn rings_once_when_an_agent_ends_its_turn_without_a_question() {
+    let one = with_lanes(
+        TaskState::Running,
+        serde_json::json!({ "implement": "running" }),
+    );
+    let two = with_lanes(TaskState::Idle, serde_json::json!({ "implement": "idle" }));
+    let ring = rings(&states_by_id(&[one]), std::slice::from_ref(&two), &repos());
+    assert_eq!(ring.len(), 1);
+    assert_eq!(ring[0].stage.as_deref(), Some("implement"));
+    assert_eq!(
+        ring[0].note.body,
+        "Finished its turn at Implement\nT-0001 \u{b7} natamux"
+    );
+    assert!(rings(&states_by_id(std::slice::from_ref(&two)), &[two], &repos()).is_empty());
+}
+
+#[test]
+fn rings_for_an_idle_task_with_no_lanes_but_not_for_one_seen_first() {
+    let before = states_by_id(&[at_stage("T-0001", TaskState::Running, "spec")]);
+    let now = [
+        at_stage("T-0001", TaskState::Idle, "spec"),
+        at_stage("T-0002", TaskState::Idle, "spec"),
+    ];
+    let ring = rings(&before, &now, &repos());
+    assert_eq!(ring.len(), 1);
+    assert_eq!(ring[0].task_id, "T-0001");
+    assert_eq!(
+        ring[0].note.body,
+        "Finished its turn at Spec\nT-0001 \u{b7} natamux"
+    );
+}
+
+#[test]
+fn an_idle_task_does_not_count_as_needing_the_user() {
+    let before = states_by_id(&[task("T-0001", TaskState::Running)]);
+    let now = [task("T-0001", TaskState::Idle)];
+    assert!(tasks_that_started_waiting(&before, &now).is_empty());
+    assert!(!needs_me(TaskState::Idle));
+}
