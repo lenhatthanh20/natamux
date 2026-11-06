@@ -2,18 +2,20 @@
 //! cannot be read, the problems of the pipeline, then the draft text in a full Zed editor. The
 //! editor and the draft follow each other: a user edit sets the draft text, a text set from
 //! outside (Stages, Issues, Import, Reset, Reload) goes into the same buffer as an edit of the
-//! changed parts.
+//! changed parts. The Copy button copies the draft as shown, also when it cannot be read.
 
 use editor::{CurrentLineHighlight, Editor, EditorEvent, MultiBuffer};
-use gpui::{Entity, FocusHandle, Focusable, Subscription};
+use gpui::{ClickEvent, ClipboardItem, Entity, FocusHandle, Focusable, Subscription};
 use language::Buffer;
 use natamux_proto::stages::pipeline_rules::IssueLevel;
-use ui::prelude::*;
+use ui::{Tooltip, prelude::*};
 
 use super::settings_tab_rules::{json_alert, problem_line};
 use crate::components::form::SettingsInput;
 use crate::components::settings_card::SettingsGroup;
 use crate::components::settings_tile::{AlertKind, SettingsAlert};
+use crate::components::toast_rules::ToastTone;
+use crate::components::toasts::toast;
 use crate::git::diff_editors::plain_switches;
 use crate::git::languages::language_for;
 use crate::stages::pipeline_editor::PipelineEditor;
@@ -43,7 +45,9 @@ impl JsonTab {
         let multi = cx.new(|cx| MultiBuffer::singleton(buffer.clone(), cx));
         let editor = cx.new(|cx| {
             let mut editor = Editor::for_multibuffer(multi, None, window, cx);
-            plain_switches(&mut editor, false, window, cx);
+            // Long prompts wrap, so no horizontal bar.
+            plain_switches(&mut editor, true, window, cx);
+            editor.set_show_horizontal_scrollbar(false, cx);
             editor.set_show_gutter(false, cx);
             editor.set_current_line_highlight(Some(CurrentLineHighlight::None));
             editor
@@ -132,8 +136,19 @@ impl Render for JsonTab {
             })
             .collect();
         let has_problems = !problems.is_empty();
+        let draft = self.pipeline.clone();
+        let copy = div().debug_selector(|| "json-copy".into()).child(
+            IconButton::new("json-copy", IconName::Copy)
+                .icon_size(IconSize::Small)
+                .tooltip(Tooltip::text("Copy JSON"))
+                .on_click(move |_: &ClickEvent, _, cx| {
+                    let text = draft.read(cx).text().to_owned();
+                    cx.write_to_clipboard(ClipboardItem::new_string(text));
+                    toast("Copied the JSON.", ToastTone::Info, cx);
+                }),
+        );
         let editor = SettingsInput::new(&self.editor)
-            .area()
+            .bar_edge()
             .radius(8.)
             .height(EDITOR_HEIGHT)
             .invalid(error.is_some());
@@ -147,8 +162,13 @@ impl Render for JsonTab {
             })
             .child(
                 SettingsGroup::new(".natamux.json")
-                    .child(editor)
+                    .action(copy)
+                    .child(div().debug_selector(|| "json-box".into()).child(editor))
                     .footnote(NOTE),
             )
     }
 }
+
+#[cfg(test)]
+#[path = "json_tab_tests.rs"]
+mod tests;
