@@ -131,9 +131,11 @@ pub fn workspace_foot(on: bool, branch: &str, base: &str) -> Vec<FootPart> {
 
 /// The footnote under the Agent card; a full flow has none, the footer note counts its stages.
 pub fn agent_foot(single: bool) -> Option<&'static str> {
-    single.then_some(
-        "One agent does the whole task in Terminal 1. The pipeline stages do not run.",
-    )
+    if single {
+        Some("One agent does the whole task in Terminal 1. The pipeline stages do not run.")
+    } else {
+        None
+    }
 }
 
 /// The row whose red line says the blocked reason.
