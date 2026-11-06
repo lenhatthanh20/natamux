@@ -47,7 +47,9 @@ pub fn on_start(handle: WindowHandle<Root>, cx: &mut App) {
             if show && DialogLayer::is_open(cx) {
                 return;
             }
-            dashboard.update(cx, |dashboard, cx| dashboard.set_whats_new_seen(VERSION, cx));
+            dashboard.update(cx, |dashboard, cx| {
+                dashboard.set_whats_new_seen(VERSION, cx)
+            });
             if show {
                 open(window, cx);
             }

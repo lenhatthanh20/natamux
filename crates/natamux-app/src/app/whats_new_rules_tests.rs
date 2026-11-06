@@ -31,7 +31,8 @@ fn a_saved_version_that_does_not_parse_counts_as_older() {
 
 #[test]
 fn cuts_the_notes_at_the_download_heading() {
-    let text = "Intro.\n\n## Desktop app\n\n- New.\n\n## Download\n\n| a | b |\n\n## Before you open it\n";
+    let text =
+        "Intro.\n\n## Desktop app\n\n- New.\n\n## Download\n\n| a | b |\n\n## Before you open it\n";
     assert_eq!(notes_body(text), "Intro.\n\n## Desktop app\n\n- New.");
 }
 
