@@ -26,6 +26,7 @@ use super::view_state::{self, Layout, ViewState};
 use crate::components::toast_rules::{ToastTone, Toasts, toast_duration};
 use crate::sidebar::card_rules::opened_folds;
 use crate::sidebar::sidebar_tree::with_fold;
+use crate::tasks::delete_finished::DeleteQueue;
 use crate::tasks::task_sort::{SortKey, TaskSort, next_sort};
 use crate::terminals::pane_rules::PaneLayout;
 
@@ -105,6 +106,7 @@ pub struct Dashboard {
     pub state_filter: Option<TaskState>,
     pub sort: TaskSort,
     pub bulk: BulkRuns,
+    pub deletes: DeleteQueue,
 }
 
 impl EventEmitter<DashboardChange> for Dashboard {}
@@ -149,6 +151,7 @@ impl Dashboard {
             state_filter: None,
             sort: None,
             bulk: BulkRuns::default(),
+            deletes: DeleteQueue::default(),
         };
         dashboard.watch(cx);
         dashboard

@@ -56,9 +56,7 @@ fn open_delete_task(
         delete_task_label(uncommitted),
         move |_, cx| {
             dashboard.update(cx, |dashboard, cx| {
-                dashboard
-                    .delete_task(&task_id, uncommitted > 0, cx)
-                    .detach()
+                dashboard.delete_task(&task_id, uncommitted > 0, cx);
             });
         },
     )

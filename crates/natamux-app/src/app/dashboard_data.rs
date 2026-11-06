@@ -36,25 +36,22 @@ pub enum Link {
     },
 }
 
-/// The bulk runs that work one task after the other (`deletingTasks` and `removingFinished` of
-/// the web). A second run while one goes would race its git work on the same ids and fail on each
-/// task, so it is refused, and its buttons are off.
+/// The bulk runs that work one task after the other (`removingFinished` of the web). A second run
+/// while one goes would race its git work on the same ids and fail on each task, so it is
+/// refused, and its buttons are off. Deletes go through `DeleteQueue` instead.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BulkRun {
-    DeleteTasks,
     RemoveFinished,
 }
 
 #[derive(Debug, Default)]
 pub struct BulkRuns {
-    deleting_tasks: bool,
     removing_finished: bool,
 }
 
 impl BulkRuns {
     pub fn running(&self, run: BulkRun) -> bool {
         match run {
-            BulkRun::DeleteTasks => self.deleting_tasks,
             BulkRun::RemoveFinished => self.removing_finished,
         }
     }
@@ -70,7 +67,6 @@ impl BulkRuns {
 
     fn flag(&mut self, run: BulkRun) -> &mut bool {
         match run {
-            BulkRun::DeleteTasks => &mut self.deleting_tasks,
             BulkRun::RemoveFinished => &mut self.removing_finished,
         }
     }
@@ -93,6 +89,9 @@ pub struct DashboardData {
     /// The task list came at least once: before that the views show skeletons.
     pub loaded: bool,
     pub tasks: Vec<Task>,
+    /// Tasks hidden while their delete runs, with their newest state. The daemon writes a task
+    /// while it deletes it, and the feed must not show it again.
+    deleting: BTreeMap<String, Task>,
     pub repos: Vec<Repo>,
     pub worktrees_dir: Option<String>,
     pub jobs: Vec<Job>,
@@ -128,6 +127,7 @@ impl Default for DashboardData {
             refused: false,
             loaded: false,
             tasks: Vec::new(),
+            deleting: BTreeMap::new(),
             repos: Vec::new(),
             worktrees_dir: None,
             jobs: Vec::new(),
@@ -157,7 +157,15 @@ impl DashboardData {
             self.bump_parts(&event);
         }
         match event {
-            DashboardEvent::Tasks(tasks) => {
+            DashboardEvent::Tasks(mut tasks) => {
+                let deleting = &mut self.deleting;
+                tasks.retain(|task| match deleting.get_mut(&task.id) {
+                    Some(copy) => {
+                        *copy = task.clone();
+                        false
+                    }
+                    None => true,
+                });
                 self.tasks = tasks;
                 self.loaded = true;
                 self.link = Link::Live;
@@ -302,14 +310,47 @@ impl DashboardData {
     /// A task an answer of the daemon changed, before the feed brings the list. A late answer
     /// keeps what the feed brought since (`upsertTask`).
     pub fn merge_task(&mut self, task: Task) {
+        if let Some(copy) = self.deleting.get_mut(&task.id) {
+            if copy.updated_at <= task.updated_at {
+                *copy = task;
+            }
+            return;
+        }
         if self.task_changes(&task) {
             self.gens.bump(Part::Tasks);
         }
         upsert_task_in(&mut self.tasks, task);
     }
 
+    pub fn is_deleting(&self, id: &str) -> bool {
+        self.deleting.contains_key(id)
+    }
+
+    /// A delete started: the task leaves the views at once, with what belongs to it.
+    pub fn hide_task(&mut self, id: &str) {
+        let Some(at) = self.tasks.iter().position(|task| task.id == id) else {
+            return;
+        };
+        let task = self.tasks.remove(at);
+        self.deleting.insert(task.id.clone(), task);
+        self.drop_parts_of(id);
+    }
+
+    /// The delete failed: the task shows again, as the feed last brought it.
+    pub fn restore_task(&mut self, id: &str) {
+        if let Some(task) = self.deleting.remove(id) {
+            upsert_task_in(&mut self.tasks, task);
+            self.gens.bump(Part::Tasks);
+        }
+    }
+
     pub fn forget_task(&mut self, id: &str) {
+        self.deleting.remove(id);
         self.tasks.retain(|task| task.id != id);
+        self.drop_parts_of(id);
+    }
+
+    fn drop_parts_of(&mut self, id: &str) {
         self.events.remove(id);
         self.terminals.remove(id);
         for part in [Part::Tasks, Part::Events, Part::Terminals] {
