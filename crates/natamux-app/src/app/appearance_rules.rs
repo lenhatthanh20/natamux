@@ -125,7 +125,9 @@ pub struct ThemeSetting<'a> {
 
 /// The user settings JSON for Zed: `ui_zoom` is `UiSize::zoom`. Zed's own fonts; the terminal
 /// gets a font only when the user picked one, else Zed gives it the buffer font and size. A
-/// `--shot` hides the editors' scrollbars, which Zed shows for a moment after a scroll.
+/// `--shot` hides the editors' scrollbars, which Zed shows for a moment after a scroll. The
+/// editors' scrollbars show only the thumb: no cursor or selection markers, which also keep the
+/// bar from fading, and no track border line.
 pub fn user_settings(
     theme: ThemeSetting<'_>,
     ui_zoom: f32,
@@ -144,9 +146,11 @@ pub fn user_settings(
         "buffer_font_family": ".ZedMono",
         "buffer_font_size": scaled(BASE_BUFFER_FONT_SIZE, ui_zoom),
         "terminal": terminal,
+        "scrollbar": {"cursors": false, "selected_text": false, "selected_symbol": false},
+        "experimental.theme_overrides": {"scrollbar.track.border": "#00000000"},
     });
     if shot {
-        settings["scrollbar"] = json!({"show": "never"});
+        settings["scrollbar"]["show"] = json!("never");
     }
     settings.to_string()
 }

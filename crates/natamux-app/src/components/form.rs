@@ -43,6 +43,7 @@ pub struct SettingsInput {
     height: Option<f32>,
     radius: Option<f32>,
     area: bool,
+    bar_edge: bool,
     invalid: bool,
 }
 
@@ -54,6 +55,7 @@ impl SettingsInput {
             height: None,
             radius: None,
             area: false,
+            bar_edge: false,
             invalid: false,
         }
     }
@@ -67,6 +69,14 @@ impl SettingsInput {
     /// A textarea, for an editor made with `text_editor(.., Some(lines), ..)`.
     pub fn area(mut self) -> Self {
         self.area = true;
+        self
+    }
+
+    /// A textarea with only left padding, so the editor's own scrollbar runs along the right
+    /// border from top to bottom.
+    pub fn bar_edge(mut self) -> Self {
+        self.area = true;
+        self.bar_edge = true;
         self
     }
 
@@ -109,7 +119,9 @@ impl RenderOnce for SettingsInput {
             .border_color(border)
             .bg(colors.editor_background);
         let input = if self.area {
-            input.px(rems_from_px(10.0_f32)).py(rems_from_px(8.0_f32))
+            input.pl(rems_from_px(10.0_f32)).when(!self.bar_edge, |input| {
+                input.pr(rems_from_px(10.0_f32)).py(rems_from_px(8.0_f32))
+            })
         } else {
             input
                 .flex()
