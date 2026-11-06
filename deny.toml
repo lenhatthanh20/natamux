@@ -15,6 +15,7 @@ ignore = [
   { id = "RUSTSEC-2026-0423", reason = "wasmtime 48.0.7, cross-engine GC struct type confusion; fixed in 48.0.8, still in its 7-day cooldown. Only tree-sitter's wasm store (Zed's language crate) links wasmtime, and Natamux loads no wasm grammars, modules or components; take 48.0.8 after its cooldown. Review by 2026-11-06." },
   { id = "RUSTSEC-2026-0424", reason = "wasmtime 48.0.7, component resource transfer memory; fixed in 48.0.8, still in its 7-day cooldown. Only tree-sitter's wasm store (Zed's language crate) links wasmtime, and Natamux loads no wasm grammars, modules or components; take 48.0.8 after its cooldown. Review by 2026-11-06." },
   { id = "RUSTSEC-2025-0052", reason = "async-std unmaintained; a Zed dependency, no known hole. Review by 2026-12-31." },
+  { id = "RUSTSEC-2026-0441", reason = "pin-utils unmaintained; only async-std (a Zed dependency, via fs, node_runtime and async-tar) uses it, no known hole. Review by 2026-12-31." },
   { id = "RUSTSEC-2024-0436", reason = "paste unmaintained; a Zed dependency (macro only), no known hole. Review by 2026-12-31." },
   { id = "RUSTSEC-2026-0206", reason = "rustybuzz unmaintained; a Zed dependency, no known hole. Review by 2026-12-31." },
   { id = "RUSTSEC-2026-0192", reason = "ttf-parser unmaintained; a Zed dependency, no known hole. Review by 2026-12-31." },
