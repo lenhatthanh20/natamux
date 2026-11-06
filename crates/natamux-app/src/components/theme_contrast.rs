@@ -57,7 +57,7 @@ pub fn state_status(state: TaskState) -> StatusKey {
         TaskState::Draft => StatusKey::Ignored,
         TaskState::Ready => StatusKey::Hint,
         TaskState::Running => StatusKey::Info,
-        // Calm: the three dots tell it from a draft.
+        // Calm: the speech bubble tells it from a draft.
         TaskState::Idle => StatusKey::Ignored,
         TaskState::NeedsInput => StatusKey::Warning,
         TaskState::Review => StatusKey::Predictive,

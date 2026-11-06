@@ -76,9 +76,12 @@ function shape(of: Kind, art: number): string {
     case 'quiet':
       return `${ring}<path d="M0 ${half}H${art}A${half} ${half} 0 0 1 0 ${half}Z" fill="currentColor"/>`
     case 'idle': {
-      const dot = round(art * 0.14)
-      const at = (x: number) => `<circle cx="${round(x)}" cy="${half}" r="${dot}" fill="currentColor"/>`
-      return at(dot) + at(half) + at(art - dot)
+      // Speech bubble, as the app's icons/states/idle.svg and idle-8.svg. The 8 px body keeps whole-pixel edges.
+      if (art === 8) {
+        return '<rect x="0" y="0" width="8" height="6" rx="2.4" fill="currentColor"/><path d="M1.6 4.8L1 7.8L4.6 5.6Z" fill="currentColor" stroke="currentColor" stroke-width="0.5" stroke-linejoin="round"/>'
+      }
+      const at = (x: number, y: number) => `${round(art * x)} ${round(art * y)}`
+      return `<rect x="0" y="0" width="${art}" height="${round(art * 0.7)}" rx="${round(art * 0.3)}" fill="currentColor"/><path d="M${at(0.2, 0.56)}L${at(0.12, 0.96)}L${at(0.56, 0.66)}Z" fill="currentColor" stroke="currentColor" stroke-width="${round(art * 0.06)}" stroke-linejoin="round"/>`
     }
     case 'needs-input': {
       const tip = round(art * 0.07)
