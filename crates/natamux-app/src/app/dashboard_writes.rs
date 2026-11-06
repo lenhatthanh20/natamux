@@ -5,7 +5,7 @@
 use natamux_client::{Answer, ClientError, SendEventAnswer};
 use natamux_proto::agents::start::StartAgentInput;
 use natamux_proto::events::task_event::TaskEventInput;
-use natamux_proto::tasks::task::{DeleteTaskAnswer, NewTaskInput, Task, TemplateTaskInput};
+use natamux_proto::tasks::task::{NewTaskInput, Task, TemplateTaskInput};
 use natamux_proto::workspaces::workspace::{NewWorkspaceInput, RemoveWorkspaceAnswer};
 use ui::prelude::*;
 
@@ -13,7 +13,7 @@ use super::Dashboard;
 use crate::app::dashboard_data::{BulkRun, Part};
 use crate::app::source::{delete_all, reason, remove_all};
 use crate::components::toast_rules::ToastTone;
-use crate::tasks::delete_finished::{DeleteOutcome, delete_summary};
+use crate::tasks::delete_finished::{DeleteJob, DeleteOutcome, delete_summary, delete_toast};
 use crate::tasks::task_rules::actions_for;
 use crate::workspaces::finished_rules::removed_text;
 use crate::workspaces::new_workspace_rules::made_toast;
@@ -166,43 +166,106 @@ impl Dashboard {
         )
     }
 
-    pub fn delete_task(
-        &mut self,
-        task_id: &str,
-        force: bool,
-        cx: &mut Context<Self>,
-    ) -> Written<DeleteTaskAnswer> {
-        let Some(source) = self.source.clone() else {
-            return Self::no_daemon();
+    /// The task leaves the views at once; the daemon deletes it in the background, after the
+    /// deletes queued before it.
+    pub fn delete_task(&mut self, task_id: &str, force: bool, cx: &mut Context<Self>) {
+        let force = if force {
+            vec![task_id.to_owned()]
+        } else {
+            Vec::new()
         };
-        self.write(
-            source.delete_task(task_id, force),
-            false,
-            cx,
-            |this, answer, cx| {
-                this.forget(&answer.id, cx);
-                for task in &answer.tasks {
-                    this.take_task(task);
-                }
-                this.toast(
-                    &format!("Deleted {}.", answer.id),
-                    ToastTone::Info,
-                    None,
-                    cx,
-                );
-            },
-        )
+        self.queue_delete(vec![task_id.to_owned()], force, false, cx);
     }
 
-    /// `forgetTask`: a deleted task leaves the selection, main and the pinned list.
-    fn forget(&mut self, id: &str, cx: &mut Context<Self>) {
-        self.data.forget_task(id);
+    /// Delete all done or cancelled: the tasks leave the views at once, then one summary toast.
+    /// `force`: the tasks deleted with their files that are not committed.
+    pub fn delete_tasks(&mut self, ids: Vec<String>, force: Vec<String>, cx: &mut Context<Self>) {
+        self.queue_delete(ids, force, true, cx);
+    }
+
+    fn queue_delete(
+        &mut self,
+        ids: Vec<String>,
+        force: Vec<String>,
+        batch: bool,
+        cx: &mut Context<Self>,
+    ) {
+        if self.source.is_none() {
+            return;
+        }
+        for id in self.deletes.push(ids, force, batch) {
+            self.data.hide_task(&id);
+            self.leave(&id, cx);
+        }
+        self.touch_view(cx);
+        self.run_next_delete(cx);
+    }
+
+    fn run_next_delete(&mut self, cx: &mut Context<Self>) {
+        let Some(source) = self.source.clone() else {
+            return;
+        };
+        let Some(job) = self.deletes.start_next() else {
+            return;
+        };
+        let (ids, force) = (job.ids.clone(), job.force.clone());
+        let outcomes = cx
+            .background_executor()
+            .spawn(async move { delete_all(&source, &ids, &force) });
+        cx.spawn(async move |this, cx| {
+            let (outcomes, related) = outcomes.await;
+            this.update(cx, |this, cx| {
+                this.deletes.finish();
+                this.end_delete(&job, &outcomes, &related, cx);
+                this.touch_view(cx);
+                this.run_next_delete(cx);
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    fn end_delete(
+        &mut self,
+        job: &DeleteJob,
+        outcomes: &[DeleteOutcome],
+        related: &[Task],
+        cx: &mut Context<Self>,
+    ) {
+        for outcome in outcomes {
+            match outcome {
+                DeleteOutcome::Deleted { id } => self.forget(id, cx),
+                DeleteOutcome::Failed { id, .. } => self.data.restore_task(id),
+            }
+        }
+        for task in related {
+            self.take_task(task);
+        }
+        if job.batch {
+            let summary = delete_summary(outcomes);
+            self.toast(&summary.text, summary.tone, summary.detail, cx);
+        } else {
+            for outcome in outcomes {
+                let (text, tone) = delete_toast(outcome);
+                self.toast(&text, tone, None, cx);
+            }
+        }
+    }
+
+    /// A task that goes leaves the selection and main.
+    fn leave(&mut self, id: &str, cx: &mut Context<Self>) {
         if self.selected.as_deref() == Some(id) {
             self.selected = None;
         }
         if self.open_task.as_deref() == Some(id) {
             self.back(cx);
         }
+    }
+
+    /// `forgetTask`: a deleted task leaves the selection, main and the pinned list.
+    fn forget(&mut self, id: &str, cx: &mut Context<Self>) {
+        self.data.forget_task(id);
+        self.leave(id, cx);
         if self.view.pinned.iter().any(|pinned| pinned == id) {
             self.toggle_pin(id, cx);
         }
@@ -289,39 +352,6 @@ impl Dashboard {
             cx,
             |_, _, _| {},
         )
-    }
-
-    /// Delete all done or cancelled: one task after the other, then one summary toast. `force`:
-    /// the tasks deleted with their files that are not committed.
-    pub fn delete_tasks(&mut self, ids: Vec<String>, force: Vec<String>, cx: &mut Context<Self>) {
-        let Some(source) = self.source.clone() else {
-            return;
-        };
-        if !self.bulk.start(BulkRun::DeleteTasks) {
-            return;
-        }
-        self.touch_view(cx);
-        let outcomes = cx
-            .background_executor()
-            .spawn(async move { delete_all(&source, &ids, &force) });
-        cx.spawn(async move |this, cx| {
-            let (outcomes, related) = outcomes.await;
-            this.update(cx, |this, cx| {
-                this.bulk.finish(BulkRun::DeleteTasks);
-                for outcome in &outcomes {
-                    if let DeleteOutcome::Deleted { id } = outcome {
-                        this.forget(id, cx);
-                    }
-                }
-                for task in &related {
-                    this.take_task(task);
-                }
-                let summary = delete_summary(&outcomes);
-                this.toast(&summary.text, summary.tone, summary.detail, cx);
-            })
-            .ok();
-        })
-        .detach();
     }
 
     /// Remove finished workspaces: one after the other, then one summary toast. `force`: the
