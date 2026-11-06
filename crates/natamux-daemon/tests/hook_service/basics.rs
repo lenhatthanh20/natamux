@@ -391,3 +391,60 @@ fn throws_for_input_that_is_not_a_hook_of_the_agent() {
         .unwrap_err();
     assert!(matches!(error, HookError::Invalid(_)));
 }
+
+// T-0008: `natamux ask`, the end of its Bash call, then the end of the turn left the task idle.
+#[test]
+fn keeps_a_task_waiting_after_natamux_ask_until_the_user_answers() {
+    let fx = Fx::new();
+    let service = fx.service();
+    let task = fx.make("Fix it");
+    step(&service, &task.id, "UserPromptSubmit");
+    let ask = json!({
+        "tool_name": "Bash",
+        "tool_input": { "command": "natamux ask \"Which branch?\"" },
+    });
+    claude(&service, &task.id, &hook("PreToolUse", ask.clone()), None);
+    let asked = json!({
+        "source": "agent",
+        "type": "agent.asked",
+        "payload": { "question": "Which branch?" },
+    });
+    fx.apply(&task.id, asked);
+    assert_eq!(fx.state(&task.id), TaskState::NeedsInput);
+
+    let end = claude(&service, &task.id, &hook("PostToolUse", ask), None);
+    assert_eq!(end, no_task());
+    assert!(step(&service, &task.id, "Stop").applied.is_empty());
+    assert_eq!(fx.state(&task.id), TaskState::NeedsInput);
+    let kinds = fx.kinds(&task.id);
+    assert!(!kinds.contains(&"agent.resumed".to_string()));
+    assert!(!kinds.contains(&"agent.finished".to_string()));
+
+    assert_eq!(
+        step(&service, &task.id, "UserPromptSubmit").applied,
+        ["agent.resumed"]
+    );
+    assert_eq!(fx.state(&task.id), TaskState::Running);
+}
+
+#[test]
+fn a_turn_that_ends_on_a_question_waits_for_the_user_and_keeps_the_question() {
+    let fx = Fx::new();
+    let service = fx.service();
+    let task = fx.make("Fix it");
+    step(&service, &task.id, "UserPromptSubmit");
+
+    let stop = hook(
+        "Stop",
+        json!({ "last_assistant_message": "Tests pass.\n\nShould I open the PR?" }),
+    );
+    let result = claude(&service, &task.id, &stop, None);
+
+    assert_eq!(result.applied, ["agent.asked"]);
+    assert_eq!(fx.state(&task.id), TaskState::NeedsInput);
+    assert_eq!(
+        fx.last_payload(&task.id)["message"],
+        "Should I open the PR?"
+    );
+    assert!(service.activity().is_empty());
+}

@@ -11,7 +11,7 @@ use crate::app::layout_mode::{DETAILS_WIDTH, SIDEBAR_WIDTH};
 use crate::app::theme_catalog::ThemeNames;
 use crate::app::view_rules::{
     DetailsView, Entries, MAX_RECENT, WorkspaceTab, parse_pinned, with_maximized, with_seen,
-    with_tab,
+    with_tab, with_terminal,
 };
 use crate::git::change_tree::FileViewMode;
 use crate::sidebar::sidebar_tree::{Folds, with_fold};
@@ -133,6 +133,8 @@ pub struct ViewState {
     pub tabs: Entries<WorkspaceTab>,
     /// Tasks whose terminals show one at a time, full size, until the user restores them.
     pub maximized: Vec<String>,
+    /// The terminal each maximized task showed last.
+    pub terminals: Entries<String>,
     /// The Docs tab shows the raw text (`natamux.docs-source`).
     pub docs_source: bool,
     pub changes_view: FileViewMode,
@@ -176,6 +178,7 @@ impl Default for ViewState {
             notify_always: false,
             tabs: Vec::new(),
             maximized: Vec::new(),
+            terminals: Vec::new(),
             docs_source: false,
             changes_view: FileViewMode::List,
             files_width: FILES_DEFAULT,
@@ -299,6 +302,12 @@ impl ViewState {
             maximized: strings(map.get("maximized"))
                 .iter()
                 .fold(Vec::new(), |tasks, id| with_maximized(&tasks, id, true)),
+            terminals: pairs("terminals")
+                .into_iter()
+                .filter_map(|(id, name)| Some((id, name.as_str()?.to_owned())))
+                .fold(Vec::new(), |names, (id, name)| {
+                    with_terminal(&names, &id, &name)
+                }),
             docs_source: flag(map.get("docsSource"), default.docs_source),
             changes_view: map
                 .get("changesView")
@@ -369,6 +378,11 @@ impl ViewState {
                 .map(|(id, tab)| (id.clone(), Value::from(tab.name())))
                 .collect::<Map<String, Value>>(),
             "maximized": self.maximized,
+            "terminals": self
+                .terminals
+                .iter()
+                .map(|(id, name)| (id.clone(), Value::from(name.as_str())))
+                .collect::<Map<String, Value>>(),
             "docsSource": self.docs_source,
             "changesView": self.changes_view.name(),
             "filesWidth": self.files_width,
@@ -446,6 +460,17 @@ impl ViewState {
 
     pub fn set_maximized(&mut self, task_id: &str, on: bool) {
         self.maximized = with_maximized(&self.maximized, task_id, on);
+    }
+
+    pub fn remember_terminal(&mut self, task_id: &str, name: &str) {
+        self.terminals = with_terminal(&self.terminals, task_id, name);
+    }
+
+    pub fn terminal_of(&self, task_id: &str) -> Option<&str> {
+        self.terminals
+            .iter()
+            .find(|(id, _)| id == task_id)
+            .map(|(_, name)| name.as_str())
     }
 
     pub fn set_files_width(&mut self, width: u32) {

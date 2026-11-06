@@ -6,7 +6,7 @@ use natamux_core::zod::{self, Issues, ZodError};
 use serde_json::{Map, Value, json};
 
 use super::fields;
-use super::{HookResult, NormalizedHook, Signal, slice_utf16, tool_summary};
+use super::{HookResult, NormalizedHook, Signal, input_runs_ask, slice_utf16, tool_summary};
 
 // Gemini CLI has no event for a failed turn; a turn that ends in an error leaves the task running
 // until the quiet rule or the user notices.
@@ -34,6 +34,9 @@ pub fn normalize(raw: &Value, _home: &Path) -> HookResult {
     let tool_name = fields::text(map, "tool_name", &mut issues);
     let tool_input = fields::record(map, "tool_input", &mut issues);
     issues.into_result(Some(()))?;
+    if event == "AfterTool" && input_runs_ask(tool_input.as_ref()) {
+        return Ok(None);
+    }
     let Some(signal) = signal(&event, notification_type.as_deref()) else {
         return Ok(None);
     };

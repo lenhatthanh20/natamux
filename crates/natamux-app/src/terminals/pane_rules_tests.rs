@@ -322,6 +322,18 @@ fn new_terminal_is_in_workspace_panes_and_off_when_full() {
 }
 
 #[test]
+fn opens_the_asked_terminal_else_the_remembered_one_else_the_agent_else_terminal_1() {
+    let names = picked(&["1", "8", "9"]);
+    let name = |text: &str| Some(text.to_owned());
+    assert_eq!(opened_pane(&names, name("8"), name("9"), name("1")), "8");
+    // T-0304: back to a maximized task, the terminal looked at last, not Terminal 1.
+    assert_eq!(opened_pane(&names, None, name("9"), name("1")), "9");
+    assert_eq!(opened_pane(&names, name("5"), name("9"), name("1")), "9");
+    assert_eq!(opened_pane(&names, None, name("5"), name("8")), "8");
+    assert_eq!(opened_pane(&names, None, None, None), "1");
+}
+
+#[test]
 fn a_maximized_task_shows_the_shown_terminal_else_its_agent_else_the_first() {
     let names = picked(&["1", "2", "3"]);
     assert_eq!(

@@ -461,3 +461,59 @@ fn gives_the_summary_for_the_tool_about_to_run_and_for_a_new_prompt() {
         Some("Reading the prompt")
     );
 }
+
+// T-0008: the end of the Bash call that ran `natamux ask` resumed the task the ask had stopped.
+#[test]
+fn ignores_the_end_of_the_call_that_ran_natamux_ask() {
+    let ask = json!({ "tool_name": "Bash", "tool_input": { "command": "natamux ask \"Why?\"" } });
+    assert_eq!(signal_of("PostToolUse", ask.clone()), None);
+    assert_eq!(signal_of("PreToolUse", ask), Some("activity"));
+    let other = json!({ "tool_name": "Bash", "tool_input": { "command": "natamux done" } });
+    assert_eq!(signal_of("PostToolUse", other), Some("activity"));
+}
+
+#[test]
+fn waits_for_the_user_while_the_options_dialog_is_open() {
+    let options = json!({ "tool_name": "AskUserQuestion", "tool_input": {} });
+    assert_eq!(signal_of("PreToolUse", options.clone()), Some("asking"));
+    assert_eq!(signal_of("PostToolUse", options), Some("activity"));
+}
+
+#[test]
+fn a_turn_that_ends_on_a_question_asks_and_shows_the_question() {
+    let found = hook(
+        "Stop",
+        json!({ "last_assistant_message": "Tests pass.\n\n**Open the PR now?**" }),
+    )
+    .unwrap();
+    assert_eq!(found.signal, Signal::TurnAsked);
+    assert_eq!(
+        found.details.get("message"),
+        Some(&json!("Open the PR now?"))
+    );
+}
+
+#[test]
+fn a_turn_that_ends_on_a_report_or_without_a_message_just_ends() {
+    let report = json!({ "last_assistant_message": "Done. Why? The test was flaky.\nFixed." });
+    assert_eq!(signal_of("Stop", report), Some("turn-ended"));
+    assert_eq!(signal_of("Stop", json!({})), Some("turn-ended"));
+}
+
+#[test]
+fn background_work_wins_over_a_question() {
+    let extra = json!({
+        "last_assistant_message": "Wait for the tests?",
+        "background_tasks": [{ "type": "shell", "command": "pnpm test" }],
+    });
+    assert_eq!(signal_of("Stop", extra), Some("turn-paused"));
+}
+
+// Review rev 1: an odd last message must not lose the turn end.
+#[test]
+fn a_null_or_odd_last_message_still_ends_the_turn() {
+    for value in [Value::Null, json!(7), json!({ "text": "Why?" })] {
+        let extra = json!({ "last_assistant_message": value });
+        assert_eq!(signal_of("Stop", extra), Some("turn-ended"), "{value}");
+    }
+}

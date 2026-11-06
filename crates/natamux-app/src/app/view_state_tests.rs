@@ -37,6 +37,7 @@ fn a_saved_view_reads_back_the_same() {
             ("T-2".into(), WorkspaceTab::Docs),
         ],
         maximized: vec!["T-2".into()],
+        terminals: vec![("T-2".into(), "9".into())],
         docs_source: true,
         changes_view: FileViewMode::Tree,
         files_width: 300,

@@ -21,7 +21,8 @@ pub use copilot::COPILOT_EVENT_FIELD;
 pub const SUMMARY_LENGTH: usize = 80;
 
 /// What an agent tells Natamux, whatever the agent calls it. `TurnPaused`: the turn ended, but the
-/// agent's background work will wake it again.
+/// agent's background work will wake it again. `TurnAsked`: the turn ended on a question to the
+/// user.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Signal {
     Prompt,
@@ -29,16 +30,18 @@ pub enum Signal {
     Asking,
     TurnEnded,
     TurnPaused,
+    TurnAsked,
     Failed,
 }
 
 /// `AGENT_SIGNALS`.
-pub const SIGNALS: [Signal; 6] = [
+pub const SIGNALS: [Signal; 7] = [
     Signal::Prompt,
     Signal::Activity,
     Signal::Asking,
     Signal::TurnEnded,
     Signal::TurnPaused,
+    Signal::TurnAsked,
     Signal::Failed,
 ];
 
@@ -50,8 +53,17 @@ impl Signal {
             Signal::Asking => "asking",
             Signal::TurnEnded => "turn-ended",
             Signal::TurnPaused => "turn-paused",
+            Signal::TurnAsked => "turn-asked",
             Signal::Failed => "failed",
         }
+    }
+
+    /// The end of a turn: plain, on a question, or with background work left.
+    pub fn ends_turn(self) -> bool {
+        matches!(
+            self,
+            Signal::TurnEnded | Signal::TurnPaused | Signal::TurnAsked
+        )
     }
 }
 
@@ -134,8 +146,8 @@ fn planned(kind: &'static str, payload: &Map<String, Value>) -> PlannedEvent {
     }
 }
 
-// Brings an idle task, or one that waits for the user, back to running, then adds the closing
-// event.
+// Brings an idle task back to running, then adds the closing event. A task that waits for the
+// user keeps waiting: the agent asked (`natamux ask`, a permission) and the turn end is no answer.
 fn end_turn(
     state: TaskState,
     closing: &'static str,
@@ -143,7 +155,7 @@ fn end_turn(
 ) -> Vec<PlannedEvent> {
     match state {
         TaskState::Running => vec![planned(closing, payload)],
-        TaskState::Idle | TaskState::NeedsInput => {
+        TaskState::Idle => {
             vec![planned("agent.resumed", payload), planned(closing, payload)]
         }
         _ => Vec::new(),
@@ -177,14 +189,57 @@ pub fn plan_signal_events(
             }
             _ => Vec::new(),
         },
-        Signal::Asking if matches!(state, TaskState::Running | TaskState::Idle) => {
+        Signal::Asking | Signal::TurnAsked
+            if matches!(state, TaskState::Running | TaskState::Idle) =>
+        {
             vec![planned("agent.asked", payload)]
         }
-        Signal::Asking => Vec::new(),
+        Signal::Asking | Signal::TurnAsked => Vec::new(),
         Signal::TurnEnded => end_turn(state, "agent.finished", payload),
         Signal::TurnPaused => end_turn(state, "agent.waiting", payload),
+        // A failure ends the wait too: the agent cannot answer any more.
+        Signal::Failed if state == TaskState::NeedsInput => vec![
+            planned("agent.resumed", payload),
+            planned("agent.failed", payload),
+        ],
         Signal::Failed => end_turn(state, "agent.failed", payload),
     }
+}
+
+/// Whether a shell command runs `natamux ask`: the word `natamux` (or a path that ends in
+/// `/natamux`), then the word `ask`. A quoted or echoed "natamux ask" counts too; that only skips
+/// one after-tool hook, which changes nothing while the agent runs.
+pub fn runs_ask(command: &str) -> bool {
+    let breaks = |c: char| c.is_whitespace() || ";&|()\"'".contains(c);
+    let words: Vec<&str> = command
+        .split(breaks)
+        .filter(|word| !word.is_empty())
+        .collect();
+    words.windows(2).any(|pair| {
+        let program = pair[0];
+        (program == "natamux" || program.ends_with("/natamux")) && pair[1] == "ask"
+    })
+}
+
+/// Whether a tool's input is a shell command that runs `natamux ask`. The CLI already asked, so the
+/// end of that call is no answer (T-0008): adapters drop that after-tool hook.
+pub fn input_runs_ask(tool_input: Option<&Map<String, Value>>) -> bool {
+    let command = tool_input.and_then(|input| input.get("command"));
+    command.and_then(Value::as_str).is_some_and(runs_ask)
+}
+
+// A line without the white space and markdown around it: "**Merge now?**" is "Merge now?".
+fn bare(line: &str) -> &str {
+    let start = line.trim_start_matches(|c: char| c.is_whitespace() || "*_".contains(c));
+    start.trim_end_matches(|c: char| c.is_whitespace() || "*_`)".contains(c))
+}
+
+/// The question an agent's last message ends on: its last line, when that ends with a question
+/// mark. shortcut: a question mid-message or one without "?" counts as none; read the transcript
+/// if that misses too often.
+pub fn question_of(message: &str) -> Option<&str> {
+    let last = message.lines().map(bare).rfind(|line| !line.is_empty())?;
+    last.ends_with(['?', '？']).then_some(last)
 }
 
 /// `text.slice(0, units)`, counted in UTF-16 units. A pair cut in the middle is dropped whole,

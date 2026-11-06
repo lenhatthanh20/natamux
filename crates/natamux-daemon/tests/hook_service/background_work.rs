@@ -84,8 +84,9 @@ fn goes_on_as_before_when_the_agent_comes_back_and_then_really_stops() {
     assert!(service.activity().is_empty());
 }
 
+// A turn end is no answer: the task keeps waiting for the user (T-0008).
 #[test]
-fn takes_a_task_that_waits_for_the_user_back_to_running() {
+fn keeps_a_task_that_waits_for_the_user_waiting() {
     let fx = Fx::new();
     let service = fx.service();
     let task = running_task(&fx, &service);
@@ -93,9 +94,9 @@ fn takes_a_task_that_waits_for_the_user_back_to_running() {
 
     let result = claude(&service, &task.id, &stop_with(background()), None);
 
-    assert_eq!(result.applied, ["agent.resumed", "agent.waiting"]);
-    assert_eq!(fx.state(&task.id), TaskState::Running);
-    assert!(fx.task(&task.id).background_since.is_some());
+    assert!(result.applied.is_empty());
+    assert_eq!(fx.state(&task.id), TaskState::NeedsInput);
+    assert!(fx.task(&task.id).background_since.is_none());
 }
 
 #[test]
@@ -147,7 +148,7 @@ fn logs_each_paused_turn_and_shows_the_newest_list_of_work() {
 }
 
 #[test]
-fn takes_a_task_that_waits_for_the_user_back_to_running_for_a_scheduled_prompt_too() {
+fn keeps_a_task_that_waits_for_the_user_waiting_for_a_scheduled_prompt_too() {
     let fx = Fx::new();
     let service = fx.service();
     let task = running_task(&fx, &service);
@@ -155,12 +156,12 @@ fn takes_a_task_that_waits_for_the_user_back_to_running_for_a_scheduled_prompt_t
 
     let result = claude(&service, &task.id, &stop_with(crons()), None);
 
-    assert_eq!(result.applied, ["agent.resumed", "agent.waiting"]);
-    assert_eq!(fx.state(&task.id), TaskState::Running);
+    assert!(result.applied.is_empty());
+    assert_eq!(fx.state(&task.id), TaskState::NeedsInput);
 }
 
 #[test]
-fn ends_the_turn_as_before_for_a_task_that_waits_for_the_user_with_no_background_work() {
+fn keeps_a_task_that_waits_for_the_user_waiting_with_no_background_work() {
     let fx = Fx::new();
     let service = fx.service();
     let task = running_task(&fx, &service);
@@ -173,9 +174,9 @@ fn ends_the_turn_as_before_for_a_task_that_waits_for_the_user_with_no_background
         None,
     );
 
-    assert_eq!(result.applied, ["agent.resumed", "agent.finished"]);
-    assert_eq!(fx.state(&task.id), TaskState::Idle);
-    assert!(!fx.kinds(&task.id).contains(&"agent.waiting".to_string()));
+    assert!(result.applied.is_empty());
+    assert_eq!(fx.state(&task.id), TaskState::NeedsInput);
+    assert!(!fx.kinds(&task.id).contains(&"agent.finished".to_string()));
 }
 
 #[test]

@@ -51,6 +51,11 @@ pub fn with_tab(
     with_entry(current, task_id, tab, MAX_REMEMBERED_DETAILS)
 }
 
+/// The terminal each task showed last while maximized (T-0304).
+pub fn with_terminal(current: &[(String, String)], task_id: &str, name: &str) -> Entries<String> {
+    with_entry(current, task_id, name.to_owned(), MAX_REMEMBERED_DETAILS)
+}
+
 /// The tasks whose terminals show one at a time, full size (T-0287). The newest last; the oldest
 /// go when there are too many.
 pub fn with_maximized(current: &[String], task_id: &str, on: bool) -> Vec<String> {
@@ -400,5 +405,24 @@ mod tests {
         let capped = ViewState::parse(&text).maximized;
         assert_eq!(capped.len(), MAX_REMEMBERED_DETAILS);
         assert_eq!(capped.first().map(String::as_str), Some("T-1"));
+    }
+
+    // T-0304: a maximized task opens on the terminal looked at last, also after a restart.
+    #[test]
+    fn view_json_keeps_the_terminal_each_task_showed_last() {
+        use crate::app::view_state::ViewState;
+        let mut view = ViewState::default();
+        assert_eq!(view.terminal_of("T-1"), None);
+        view.remember_terminal("T-1", "8");
+        view.remember_terminal("T-2", "3");
+        view.remember_terminal("T-1", "9");
+        let back = ViewState::parse(&view.to_json());
+        assert_eq!(back.terminal_of("T-1"), Some("9"));
+        assert_eq!(back.terminal_of("T-2"), Some("3"));
+        let newest = back.terminals.last().map(|(id, _)| id.as_str());
+        assert_eq!(newest, Some("T-1"));
+        let bad = ViewState::parse(r#"{"terminals": {"T-1": 9, "T-2": "2"}}"#);
+        assert_eq!(bad.terminal_of("T-1"), None);
+        assert_eq!(bad.terminal_of("T-2"), Some("2"));
     }
 }
