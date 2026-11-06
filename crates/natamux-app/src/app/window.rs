@@ -120,7 +120,8 @@ impl Root {
             .detach();
         Self::watch_window(window, cx);
         notify::follow_clicks(&dashboard, window.window_handle(), cx);
-        // Adds the badge for users who allowed notes before the app asked for it; no prompt then.
+        // Asks for alerts, sounds and the badge before GPUI's first note: on a fresh install
+        // (Notify me is on by default) this is the one macOS prompt; later launches ask nothing.
         if dashboard.read(cx).view().notify {
             ask_for_badges();
         }
