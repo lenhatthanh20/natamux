@@ -14,7 +14,9 @@ Four signals are enough to drive every state in the task state machine:
 |---|---|
 | The user sent a prompt, or the agent started working | running |
 | The agent waits for the user (a permission, a question) | needs input |
-| The agent ended its turn | needs input (the stage is done only when the agent runs `natamux done`; then the checks run) |
+| The agent ended its turn with a report | idle, and the app rings "Finished its turn" (the stage is done only when the agent runs `natamux done`; then the checks run) |
+| The agent ended its turn on a question (the last line of its message ends in `?`) | needs input |
+| The agent ended its turn while the task waits for the user (`natamux ask`, a permission) | stays needs input |
 | The agent failed | failed |
 
 ## How each agent can send them
@@ -52,7 +54,7 @@ All tiers end in the same task events (`agent.started`, `agent.asked`, `agent.fi
 
 - **`natamux hook <agent>`**: a command that reads a hook's JSON from stdin and forwards it to the daemon. Most agents (Codex, Gemini CLI, Cursor, Copilot CLI) can only run a command, not call a URL. A command also keeps working on a machine with a proxy: in the first real test of the Claude Code `http` hook, the proxy of the machine refused the request to the daemon until `NO_PROXY` was set. It reads the token and the task id from the environment, and it must never make the agent fail: if the daemon is down it exits 0 quietly. Claude Code can keep using its `http` hook, which needs no process.
 - **`POST /hooks/:agent`** on the daemon, where the agent name picks the adapter.
-- **An adapter interface** (done): for each agent, a function that turns the raw hook input into one of six signals: `prompt`, `activity`, `asking`, `turn-ended`, `turn-paused`, `failed` (plus the working directory and some details). The Rust adapters are in `crates/natamux-agents/src/hooks/`; `crates/natamux-daemon/src/agents/hook_service.rs` decides which task events follow and which task a hook belongs to. `claude_code.rs` is an example.
+- **An adapter interface** (done): for each agent, a function that turns the raw hook input into one of seven signals: `prompt`, `activity`, `asking`, `turn-ended`, `turn-paused`, `turn-asked`, `failed` (plus the working directory and some details). The Rust adapters are in `crates/natamux-agents/src/hooks/`; `crates/natamux-daemon/src/agents/hook_service.rs` decides which task events follow and which task a hook belongs to. `claude_code.rs` is an example.
 - **A config generator per agent**: `natamux hooks <agent>` prints the settings for that agent's own file format (Claude Code settings JSON, Codex `hooks`, Gemini `settings.json`, Cursor `hooks.json`, Copilot `.github/hooks/*.json`).
 
 ### How a hook finds its task
@@ -153,7 +155,7 @@ Tokens and cost per task, read from the files the agents write. Checked on 2026-
 | Agents without hooks | none (no session, no file) | | | Not supported |
 
 - **One shape.** Per model: `input` (fresh, no cache), `cacheRead`, `cacheWrite`, `output` (includes reasoning or thinking). Each reader converts its own fields.
-- **When.** After a hook with signal `turn-ended`, `turn-paused`, `failed` or `asking`. The read is async and never delays the hook answer.
+- **When.** After a hook with signal `turn-ended`, `turn-paused`, `turn-asked`, `failed` or `asking`. The read is async and never delays the hook answer.
 - **Path check.** The path must be absolute, inside the user's home folder (after links are resolved), end in `.jsonl` or `.json`, be a regular file, and be at most 200 MB. Otherwise no usage is read and the hook works as before. A bad line is skipped.
 - **Per stage.** The daemon keeps the last totals of each file. A read adds only what is new to the stage of the hook's terminal, so a resumed session, or one that goes on into the next stage, is not counted twice. A stage that is sent back and runs again adds to its own row. The stage of a hook:
   1. the stage reported from its terminal (`natamux done` or a send back), until the turn end that follows: the report moves the task on before the turn ends;

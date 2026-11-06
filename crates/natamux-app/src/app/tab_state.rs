@@ -56,6 +56,24 @@ impl Dashboard {
         }
     }
 
+    /// The terminal the user last looked at in the task while it is maximized (T-0304).
+    pub fn remembered_terminal(&self, id: &str) -> Option<String> {
+        let name = self
+            .view
+            .terminal_of(id)
+            .filter(|_| self.view.is_maximized(id));
+        name.map(str::to_owned)
+    }
+
+    /// Keeps the terminal a maximized task shows in `view.json`, so the task opens on it again.
+    /// Nothing on screen shows it, so the view is not drawn again.
+    pub fn remember_terminal(&mut self, id: &str, name: &str, cx: &mut Context<Self>) {
+        if self.view.terminal_of(id) != Some(name) {
+            self.view.remember_terminal(id, name);
+            self.save_view(cx);
+        }
+    }
+
     /// The count of files to commit in the open task's workspace, as the workspace last read
     /// it: the badge of the rail's Changes.
     pub fn open_changes_of(&self, id: &str) -> Option<usize> {

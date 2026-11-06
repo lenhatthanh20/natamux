@@ -58,7 +58,7 @@ impl Activities {
         }
         if matches!(
             hook.signal,
-            Signal::TurnEnded | Signal::Failed | Signal::Asking
+            Signal::TurnEnded | Signal::TurnAsked | Signal::Failed | Signal::Asking
         ) {
             changed = lines.shift_remove(terminal).is_some() || changed;
         }

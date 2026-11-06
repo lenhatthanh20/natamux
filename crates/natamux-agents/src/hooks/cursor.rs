@@ -7,7 +7,7 @@ use natamux_core::zod::{self, Issues, ZodError};
 use serde_json::{Map, Value, json};
 
 use super::fields;
-use super::{HookResult, NormalizedHook, Signal, tool_summary};
+use super::{HookResult, NormalizedHook, Signal, input_runs_ask, runs_ask, tool_summary};
 
 // The Cursor CLI has no event for a wait on the user's approval: `beforeShellExecution` comes
 // before the Run or Reject card, but also before commands that run without one. The terminal bell
@@ -42,6 +42,14 @@ pub fn normalize(raw: &Value, _home: &Path) -> HookResult {
     // `file_path` is read by the schema, but nothing uses it.
     fields::text(map, "file_path", &mut issues);
     issues.into_result(Some(()))?;
+    let after = matches!(
+        event.as_str(),
+        "postToolUse" | "postToolUseFailure" | "afterShellExecution"
+    );
+    let input = fields::object_or_empty(map.get("tool_input"));
+    if after && (command.as_deref().is_some_and(runs_ask) || input_runs_ask(Some(&input))) {
+        return Ok(None);
+    }
     let Some(signal) = signal(&event, status.as_deref()) else {
         return Ok(None);
     };
@@ -54,10 +62,7 @@ pub fn normalize(raw: &Value, _home: &Path) -> HookResult {
             }
             tool_summary(Some("Shell"), Some(&input), cwd.as_deref())
         }
-        "preToolUse" => {
-            let input = fields::object_or_empty(map.get("tool_input"));
-            tool_summary(tool_name.as_deref(), Some(&input), cwd.as_deref())
-        }
+        "preToolUse" => tool_summary(tool_name.as_deref(), Some(&input), cwd.as_deref()),
         "beforeSubmitPrompt" => Some("Reading the prompt".to_string()),
         _ => None,
     };

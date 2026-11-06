@@ -395,3 +395,61 @@ mod cursor {
         assert_eq!(found.details["sessionId"], json!("c1"));
     }
 }
+
+// T-0008: the end of the shell call that ran `natamux ask` is no answer, for every agent.
+#[test]
+fn every_adapter_ignores_the_end_of_the_call_that_ran_natamux_ask() {
+    let ask = json!({ "command": "natamux ask \"Why?\"" });
+    let copilot = json!({ COPILOT_EVENT_FIELD: "postToolUse", "toolArgs": ask.to_string() });
+    let shell = json!({ "hook_event_name": "afterShellExecution", "command": "natamux ask" });
+    let ends = [
+        (
+            "claude-code",
+            json!({ "hook_event_name": "PostToolUse", "tool_input": ask }),
+        ),
+        (
+            "codex",
+            json!({ "hook_event_name": "PostToolUse", "tool_input": ask }),
+        ),
+        (
+            "gemini",
+            json!({ "hook_event_name": "AfterTool", "tool_input": ask }),
+        ),
+        ("copilot", copilot),
+        ("cursor", shell),
+        (
+            "cursor",
+            json!({ "hook_event_name": "postToolUse", "tool_input": ask }),
+        ),
+    ];
+    for (agent, raw) in ends {
+        assert_eq!(signal_of(agent, raw.clone()), None, "{agent} {raw}");
+    }
+    let done = json!({ "hook_event_name": "AfterTool", "tool_input": { "command": "ls" } });
+    assert_eq!(signal_of("gemini", done), Some("activity"));
+}
+
+#[test]
+fn codex_asks_when_its_turn_ends_on_a_question() {
+    let asked = normalize(
+        "codex",
+        json!({ "hook_event_name": "Stop", "last_assistant_message": "Ready.\nMerge it?" }),
+    )
+    .unwrap();
+    assert_eq!(asked.signal, Signal::TurnAsked);
+    assert_eq!(asked.details.get("message"), Some(&json!("Merge it?")));
+    let report = json!({ "hook_event_name": "Stop", "last_assistant_message": "Merged." });
+    assert_eq!(signal_of("codex", report), Some("turn-ended"));
+    let ask = json!({ "command": ["bash", "-lc", "natamux ask x"] });
+    let end = json!({ "hook_event_name": "PostToolUse", "tool_input": ask });
+    assert_eq!(signal_of("codex", end), None);
+}
+
+// Review rev 1: Codex sends null when there is no last message.
+#[test]
+fn codex_ends_the_turn_when_the_last_message_is_null_or_odd() {
+    for value in [Value::Null, json!(7), json!(["Why?"])] {
+        let raw = json!({ "hook_event_name": "Stop", "last_assistant_message": value });
+        assert_eq!(signal_of("codex", raw), Some("turn-ended"), "{value}");
+    }
+}
