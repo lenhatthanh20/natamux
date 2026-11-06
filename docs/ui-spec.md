@@ -464,7 +464,7 @@ One family of filled shapes for every place: the table, palette, pane tabs and t
 | ready | ring | — | Ready |
 | running | full disk | blinks once per 2000ms (`.hm-beat`) | Running |
 | running but quiet | ring, lower half filled, needs-input color | — | Running, but quiet |
-| idle | three dots in a row | — | Idle |
+| idle | speech bubble (wide body, tail at lower left) | — | Idle |
 | needs-input | diamond | — | Needs input |
 | review | rounded square | — | In review |
 | blocked | two bars | — | Blocked |

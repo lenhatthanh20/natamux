@@ -143,6 +143,17 @@ mod tests {
     }
 
     #[test]
+    fn idle_is_a_speech_bubble_not_the_still_spinner_dots() {
+        for size in [ShapeSize::Task, ShapeSize::Terminal] {
+            let path = ShapeKind::Idle.svg_path(size);
+            let art = asset_table::find(&path).map(String::from_utf8_lossy);
+            let art = art.as_deref().unwrap_or_default();
+            assert!(art.contains("<rect") && art.contains("<path"), "{path}: {art}");
+            assert!(!art.contains("<circle"), "{path} still draws dots");
+        }
+    }
+
+    #[test]
     fn a_state_not_known_yet_is_a_muted_ring_with_a_dot() {
         assert_eq!(ShapeKind::of(None, false), ShapeKind::Unknown);
         assert_eq!(
