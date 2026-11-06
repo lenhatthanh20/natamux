@@ -52,9 +52,7 @@ mod fill {
     }
 
     #[gpui::test]
-    fn a_fill_row_puts_its_control_right_after_the_label_up_to_the_edge(
-        cx: &mut TestAppContext,
-    ) {
+    fn a_fill_row_puts_its_control_right_after_the_label_up_to_the_edge(cx: &mut TestAppContext) {
         test_views::init(cx);
         let (_row, cx) = cx.add_window_view(|_, _| Row);
         cx.run_until_parked();
