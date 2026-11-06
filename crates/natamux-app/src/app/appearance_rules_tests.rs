@@ -142,7 +142,11 @@ fn hides_the_editor_scrollbars_in_a_shot_only() {
     let shot: Value =
         serde_json::from_str(&user_settings(theme, 1.0, &font, true)).unwrap_or(Value::Null);
     assert_eq!(shot["scrollbar"]["show"], "never");
-    assert!(settings("dark", 1.0, &font)["scrollbar"].get("show").is_none());
+    assert!(
+        settings("dark", 1.0, &font)["scrollbar"]
+            .get("show")
+            .is_none()
+    );
 }
 
 // The JSON tab's bar drew a blue cursor line on its thumb and a track border line (T-0294).
@@ -159,6 +163,9 @@ fn draws_only_the_thumb_of_the_editor_scrollbars() {
         for marker in ["cursors", "selected_text", "selected_symbol"] {
             assert_eq!(value["scrollbar"][marker], false, "{marker}");
         }
-        assert_eq!(value["experimental.theme_overrides"]["scrollbar.track.border"], CLEAR);
+        assert_eq!(
+            value["experimental.theme_overrides"]["scrollbar.track.border"],
+            CLEAR
+        );
     }
 }

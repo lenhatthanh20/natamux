@@ -48,8 +48,20 @@ fn the_editor_fills_the_box_but_its_left_inset(cx: &mut TestAppContext) {
     let inner = tab.read_with(cx, |tab, cx| tab.editor.read(cx).last_bounds().cloned());
     let inner = inner.expect("the editor was not drawn");
     let border = px(1.);
-    assert!(near(inner.top(), outer.top() + border), "{inner:?} in {outer:?}");
-    assert!(near(inner.bottom(), outer.bottom() - border), "{inner:?} in {outer:?}");
-    assert!(near(inner.right(), outer.right() - border), "{inner:?} in {outer:?}");
-    assert!(inner.left() > outer.left() + border, "no left inset: {inner:?} in {outer:?}");
+    assert!(
+        near(inner.top(), outer.top() + border),
+        "{inner:?} in {outer:?}"
+    );
+    assert!(
+        near(inner.bottom(), outer.bottom() - border),
+        "{inner:?} in {outer:?}"
+    );
+    assert!(
+        near(inner.right(), outer.right() - border),
+        "{inner:?} in {outer:?}"
+    );
+    assert!(
+        inner.left() > outer.left() + border,
+        "no left inset: {inner:?} in {outer:?}"
+    );
 }

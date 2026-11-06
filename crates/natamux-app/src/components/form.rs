@@ -119,9 +119,11 @@ impl RenderOnce for SettingsInput {
             .border_color(border)
             .bg(colors.editor_background);
         let input = if self.area {
-            input.pl(rems_from_px(10.0_f32)).when(!self.bar_edge, |input| {
-                input.pr(rems_from_px(10.0_f32)).py(rems_from_px(8.0_f32))
-            })
+            input
+                .pl(rems_from_px(10.0_f32))
+                .when(!self.bar_edge, |input| {
+                    input.pr(rems_from_px(10.0_f32)).py(rems_from_px(8.0_f32))
+                })
         } else {
             input
                 .flex()
