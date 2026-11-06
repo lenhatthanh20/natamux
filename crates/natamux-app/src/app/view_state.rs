@@ -125,7 +125,7 @@ pub struct ViewState {
     pub sections: Vec<(String, bool)>,
     /// The details dock is open, for every task at once (one flag, as a Zed dock).
     pub details_open: bool,
-    /// System notifications for tasks that start to need the user (off until switched on).
+    /// System notifications for tasks that start to need the user (on by default).
     pub notify: bool,
     /// Notifications also while the window is in front; off, the open window is enough.
     pub notify_always: bool,
@@ -170,7 +170,7 @@ impl Default for ViewState {
             details_view: None,
             sections: Vec::new(),
             details_open: true,
-            notify: false,
+            notify: true,
             notify_always: false,
             tabs: Vec::new(),
             maximized: Vec::new(),

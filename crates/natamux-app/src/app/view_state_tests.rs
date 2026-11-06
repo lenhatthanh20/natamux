@@ -71,6 +71,15 @@ fn a_missing_file_is_the_default_view() {
 }
 
 #[test]
+fn notify_me_is_on_by_default_and_always_notify_off() {
+    let fresh = ViewState::parse("{}");
+    assert!(fresh.notify);
+    assert!(!fresh.notify_always);
+    assert!(!ViewState::parse(r#"{"notify": false}"#).notify);
+    assert!(ViewState::parse(r#"{"notify": true}"#).notify);
+}
+
+#[test]
 fn the_sidebar_hides_task_ids_until_switched_on() {
     assert!(!ViewState::parse("{}").sidebar_ids);
     assert!(ViewState::parse(r#"{"sidebarIds": true}"#).sidebar_ids);
@@ -117,7 +126,7 @@ fn the_details_panel_keeps_its_width_tab_and_folded_sections() {
     assert!(!state.section_open("details", false));
     let broken = ViewState::parse(r#"{"detailsView": "terminal", "notify": "yes"}"#);
     assert_eq!(broken.details_view, None);
-    assert!(!broken.notify);
+    assert!(broken.notify);
 }
 
 // The details dock: one global flag.
