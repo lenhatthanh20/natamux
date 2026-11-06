@@ -8,8 +8,8 @@ use super::commands::{Command, is_single_key, reaches_app_from_terminal};
 use super::commands::{MenuName, all_commands, command_by_id, keystroke, menu_items};
 pub use super::commands_app::{
     AddProject, CheckForUpdates, ImportIssues, OpenJump, OpenPalette, OpenSettings,
-    RestartToUpdate, ShowShortcuts, ToggleAutomaticUpdates, UseCompactSize, UseDarkTheme,
-    UseDefaultSize, UseLargeSize, UseLightTheme, UseSystemTheme,
+    RestartToUpdate, ShowShortcuts, ShowWhatsNew, ToggleAutomaticUpdates, UseCompactSize,
+    UseDarkTheme, UseDefaultSize, UseLargeSize, UseLightTheme, UseSystemTheme,
 };
 pub use super::commands_files::{CloseTab, SaveFile, ShowDocsTab, ShowOpenFile, ShowWorktreeFiles};
 pub use super::commands_stages::{MoveStageDown, MoveStageUp, ShowTasksProgress};
@@ -181,6 +181,7 @@ command_actions! {
     "app.update-check" => CheckForUpdates,
     "app.update-auto" => ToggleAutomaticUpdates,
     "app.update-restart" => RestartToUpdate,
+    "app.whats-new" => ShowWhatsNew,
     "theme.system" => UseSystemTheme,
     "theme.light" => UseLightTheme,
     "theme.dark" => UseDarkTheme,
@@ -293,6 +294,7 @@ mod tests {
         assert!(action_for("app.update-check").is_some());
         assert!(action_for("app.update-auto").is_some());
         assert!(action_for("app.update-restart").is_some());
+        assert!(action_for("app.whats-new").is_some());
     }
 
     #[test]

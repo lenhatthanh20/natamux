@@ -488,6 +488,9 @@ pub mod details;
 #[path = "docs_state.rs"]
 mod docs_state;
 
+#[path = "whats_new_state.rs"]
+mod whats_new_state;
+
 #[path = "details_writes.rs"]
 mod details_writes;
 

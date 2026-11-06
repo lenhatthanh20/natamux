@@ -15,8 +15,8 @@ use crate::app::settings_view::SettingsView;
 use crate::app::shortcut_sheet;
 use crate::app::shortcuts::{
     AddProject, CheckForUpdates, ImportIssues, OpenJump, OpenPalette, OpenSettings,
-    RestartToUpdate, ShowShortcuts, ToggleAutomaticUpdates, UseCompactSize, UseDarkTheme,
-    UseDefaultSize, UseLargeSize, UseLightTheme, UseSystemTheme,
+    RestartToUpdate, ShowShortcuts, ShowWhatsNew, ToggleAutomaticUpdates, UseCompactSize,
+    UseDarkTheme, UseDefaultSize, UseLargeSize, UseLightTheme, UseSystemTheme,
 };
 use crate::app::sign_in::{SignIn, SignedIn, access_file};
 use crate::app::source::Source;
@@ -62,6 +62,9 @@ impl Root {
             }))
             .on_action(cx.listener(|root, _: &RestartToUpdate, window, cx| {
                 root.restart_to_update(window, cx)
+            }))
+            .on_action(cx.listener(|_, _: &ShowWhatsNew, window, cx| {
+                crate::app::whats_new::open(window, cx)
             }))
             .on_action(cx.listener(|root, _: &AddProject, window, cx| {
                 projects_dialog::open(&root.dashboard, window, cx)

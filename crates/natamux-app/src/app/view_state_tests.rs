@@ -56,6 +56,7 @@ fn a_saved_view_reads_back_the_same() {
         ui_size: "large".into(),
         terminal_font: Some(serde_json::json!({ "family": "Iosevka", "size": 15 })),
         recent: vec!["T-2".into(), "T-1".into()],
+        whats_new_seen: Some("1.0.19".into()),
     };
     state.remember_base("r1", "main");
     let folder = temp_folder("round");
@@ -545,4 +546,16 @@ fn showing_the_changes_tab_keeps_the_details_dock_open() {
     state.remember_tab("T-1", WorkspaceTab::Changes);
     assert!(state.details_open);
     assert!(ViewState::parse(&state.to_json()).details_open);
+}
+
+#[test]
+fn keeps_the_version_of_the_last_release_notes() {
+    let state = ViewState::parse(r#"{"whatsNewSeen":"1.0.19"}"#);
+    assert_eq!(state.whats_new_seen.as_deref(), Some("1.0.19"));
+    assert_eq!(ViewState::parse(&state.to_json()), state);
+    assert_eq!(ViewState::parse("{}").whats_new_seen, None);
+    assert_eq!(
+        ViewState::parse(r#"{"whatsNewSeen":7}"#).whats_new_seen,
+        None
+    );
 }

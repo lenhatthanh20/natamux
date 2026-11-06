@@ -21,6 +21,7 @@ actions!(
         CheckForUpdates,
         ToggleAutomaticUpdates,
         RestartToUpdate,
+        ShowWhatsNew,
         UseSystemTheme,
         UseLightTheme,
         UseDarkTheme,
@@ -72,6 +73,15 @@ pub const APP_COMMANDS: &[Command] = &[
         ),
         MenuName::App,
         0,
+    ),
+    menu(
+        command("app.whats-new", "What's New", Category::App),
+        if cfg!(target_os = "macos") {
+            MenuName::App
+        } else {
+            MenuName::Help
+        },
+        2,
     ),
     menu(
         command("app.update-check", "Check for Updates…", Category::App),
