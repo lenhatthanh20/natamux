@@ -36,8 +36,11 @@ impl Render for DragChip {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let colors = cx.theme().colors();
         let icon = match self.kind {
-            EntryKind::Folder => Icon::new(IconName::Folder).size(IconSize::XSmall),
-            EntryKind::File => file_icon(&self.path, cx),
+            EntryKind::Folder => Icon::new(IconName::Folder)
+                .size(IconSize::XSmall)
+                .color(Color::Muted)
+                .into_any_element(),
+            EntryKind::File => file_icon(&self.path, cx).into_any_element(),
         };
         h_flex()
             .gap_1p5()
@@ -47,7 +50,7 @@ impl Render for DragChip {
             .border_1()
             .border_color(colors.border)
             .bg(colors.elevated_surface_background)
-            .child(icon.color(Color::Muted))
+            .child(icon)
             .child(Label::new(self.name.clone()).size(LabelSize::Small))
     }
 }
@@ -151,9 +154,7 @@ fn status_letter(status: ChangeStatus, tone: Color, cx: &App) -> Div {
 /// The chevron of a folder, the icon of a file.
 fn lead_icon(index: usize, row: &ExplorerRow, cx: &App) -> AnyElement {
     match row.kind {
-        EntryKind::File => file_icon(&row.key, cx)
-            .color(Color::Muted)
-            .into_any_element(),
+        EntryKind::File => file_icon(&row.key, cx).into_any_element(),
         EntryKind::Folder => {
             Disclosure::new(("file-folder", index), row.expanded).into_any_element()
         }
