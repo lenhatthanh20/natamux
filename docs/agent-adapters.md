@@ -14,9 +14,10 @@ Four signals are enough to drive every state in the task state machine:
 |---|---|
 | The user sent a prompt, or the agent started working | running |
 | The agent waits for the user (a permission, a question) | needs input |
-| The agent ended its turn with a report | idle, and the app rings "Finished its turn" (the stage is done only when the agent runs `natamux done`; then the checks run) |
-| The agent ended its turn on a question (the last line of its message ends in `?`) | needs input |
-| The agent ended its turn while the task waits for the user (`natamux ask`, a permission) | stays needs input |
+| The agent ended its turn with a report | idle, and the app rings "Finished its turn"; the Dock counts it until you open the task (the stage is done only when the agent runs `natamux done`; then the checks run) |
+| The agent ended its turn on a question (its last line, or the line before the list of options it ends with, ends in `?`) | needs input |
+| The agent ended its turn while the task waits for an answer (`natamux ask`, a question) | stays needs input |
+| The agent ended its turn while the task waits on a hook (a permission, an options dialog) | idle: the wait ended with the turn, as after a denied permission |
 | The agent failed | failed |
 
 ## How each agent can send them

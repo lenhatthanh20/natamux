@@ -12,6 +12,7 @@ use natamux_proto::projects::repo::Repo;
 use natamux_proto::stages::capabilities::stage_name_of_id;
 use natamux_proto::tasks::task::{Task, TaskState};
 
+use crate::app::view_rules::is_unseen;
 use crate::tasks::task_rules::needs_me;
 
 /// What the last look saw of a task: its state, the stages whose lane waited for the user, and
@@ -222,6 +223,15 @@ pub fn tag_target(tag: &str) -> (&str, Option<&str>) {
 /// One sound for a batch of rings, not one for each task, and none when nothing rings.
 pub fn plays_sound<T>(ring: &[T]) -> bool {
     !ring.is_empty()
+}
+
+/// Idle tasks the user has not looked at since their agent ended its turn: the report still
+/// waits to be read, so the Dock counts them until the task is opened.
+pub fn unread_turn_ends(tasks: &[Task], seen: &[(String, TaskState)]) -> usize {
+    tasks
+        .iter()
+        .filter(|task| task.state == TaskState::Idle && is_unseen(seen, &task.id, task.state))
+        .count()
 }
 
 /// The label of the Dock icon: the needs-you count, none when nothing waits.

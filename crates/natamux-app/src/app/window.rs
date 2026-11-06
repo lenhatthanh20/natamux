@@ -186,6 +186,7 @@ impl Root {
                 self.notifier.after_tasks(&self.dashboard, window, cx);
             }
             DashboardChange::Opened(_) | DashboardChange::AgentsOpened => {
+                self.notifier.after_open(&self.dashboard, cx);
                 self.close_tool(cx);
                 self.drawer_open = false;
                 self.sync_pane(cx);

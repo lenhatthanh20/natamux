@@ -230,8 +230,6 @@ Click **Notify me** in the status bar to allow system notifications. When a task
 
 Natamux does not notify about tasks that already waited when you opened the dashboard.
 
-In the desktop app, an agent that ends its turn with a report also notifies (`Finished its turn at Implement`), so you can read it; the task stays idle. An agent whose turn ends on a question, or that runs `natamux ask`, keeps the task waiting for you until you answer.
-
 The button is gone once you decide. If you blocked notifications, the status bar says **Notifications are blocked**. Allow them in the site settings of your browser.
 
 ### Notifications in the desktop app
@@ -247,6 +245,8 @@ When a task starts to wait for you, or is done, while the app is not in front, m
 To get them also while you use the app, even for the task you have open, turn on **Always notify** in **Settings → General**.
 
 When stages run side by side, each terminal that starts to wait rings, also when the task already waits in another terminal.
+
+An agent that ends its turn with a report, not a question, also notifies: **Finished its turn at Implement**. The task stays idle, not red, but the Dock counts it until you open the task, so a report you missed still shows. An agent whose turn ends on a question, or that runs `natamux ask`, keeps the task waiting for you until you answer.
 
 Click it to bring the app forward and open the task on the terminal it names. A newer notification of the same terminal replaces the older one.
 

@@ -18,11 +18,16 @@ const STATES: [TaskState; 10] = [
     TaskState::Cancelled,
 ];
 
-fn kinds(state: TaskState, signal: Signal) -> Vec<&'static str> {
-    plan_signal_events(state, signal, &Map::new())
+fn kinds_in(state: TaskState, wait: Wait, signal: Signal) -> Vec<&'static str> {
+    plan_signal_events(state, wait, signal, &Map::new())
         .iter()
         .map(|planned| planned.kind)
         .collect()
+}
+
+// A wait for an answer, as after `natamux ask` or a question in plain text.
+fn kinds(state: TaskState, signal: Signal) -> Vec<&'static str> {
+    kinds_in(state, Wait::Answer, signal)
 }
 
 // The pipeline of a task made before stages existed.
@@ -73,6 +78,16 @@ fn keeps_a_task_that_waits_for_the_user_waiting_when_the_turn_ends() {
     }
 }
 
+// a permission the user denied leaves no tool hook; the turn end ends that wait.
+#[test]
+fn ends_a_hooks_wait_at_the_end_of_the_turn() {
+    let hook = |signal| kinds_in(TaskState::NeedsInput, Wait::Hook, signal);
+    assert_eq!(hook(Signal::TurnEnded), ["agent.resumed", "agent.finished"]);
+    assert_eq!(hook(Signal::TurnPaused), ["agent.resumed", "agent.waiting"]);
+    assert_eq!(hook(Signal::TurnAsked), ["agent.resumed", "agent.asked"]);
+    assert!(hook(Signal::Asking).is_empty());
+}
+
 #[test]
 fn first_resumes_then_finishes_when_the_agent_was_idle() {
     assert_eq!(
@@ -98,7 +113,7 @@ fn an_ended_turn_makes_the_task_idle_and_a_question_makes_it_need_input() {
     let steps = legacy_pipeline();
     let apply = |state: TaskState, signal: Signal| {
         let mut position = StagePosition::new("implement", state);
-        for planned in plan_signal_events(state, signal, &Map::new()) {
+        for planned in plan_signal_events(state, Wait::Answer, signal, &Map::new()) {
             let event = TaskEvent {
                 task_id: "T-0001".into(),
                 source: "agent".into(),
@@ -190,10 +205,20 @@ fn maps_a_question_of_a_running_agent_to_needs_input_and_ignores_it_otherwise() 
 #[test]
 fn resumes_a_waiting_task_when_the_agent_works_and_ignores_the_call_otherwise() {
     assert_eq!(
-        kinds(TaskState::NeedsInput, Signal::Activity),
+        kinds_in(TaskState::NeedsInput, Wait::Hook, Signal::Activity),
         ["agent.resumed"]
     );
     assert!(kinds(TaskState::Running, Signal::Activity).is_empty());
+}
+
+// `natamux ask` returns at once; a tool the agent runs after it is no answer.
+#[test]
+fn keeps_waiting_for_an_answer_while_the_agent_works() {
+    assert!(kinds(TaskState::NeedsInput, Signal::Activity).is_empty());
+    assert_eq!(
+        kinds(TaskState::NeedsInput, Signal::Prompt),
+        ["agent.resumed"]
+    );
 }
 
 // After an API error the session lives on, so a tool that runs shows the agent works again.
@@ -209,7 +234,7 @@ fn resumes_a_failed_task_when_the_agent_works_again() {
 fn passes_the_payload_to_every_event_it_plans() {
     let payload = json!({ "hook": "x" });
     let payload = payload.as_object().cloned().unwrap_or_default();
-    let planned = plan_signal_events(TaskState::Draft, Signal::Prompt, &payload);
+    let planned = plan_signal_events(TaskState::Draft, Wait::Answer, Signal::Prompt, &payload);
     let payloads: Vec<_> = planned.iter().map(|event| &event.payload).collect();
     assert_eq!(payloads, [&payload, &payload]);
 }
@@ -217,7 +242,10 @@ fn passes_the_payload_to_every_event_it_plans() {
 #[test]
 fn only_plans_events_the_state_machine_accepts_in_every_state() {
     let steps = legacy_pipeline();
-    for start in STATES {
+    for (start, wait) in STATES
+        .into_iter()
+        .flat_map(|state| [(state, Wait::Hook), (state, Wait::Answer)])
+    {
         for signal in SIGNALS {
             let stage = if start == TaskState::Review {
                 "review"
@@ -225,7 +253,7 @@ fn only_plans_events_the_state_machine_accepts_in_every_state() {
                 "implement"
             };
             let mut position = StagePosition::new(stage, start);
-            for planned in plan_signal_events(start, signal, &Map::new()) {
+            for planned in plan_signal_events(start, wait, signal, &Map::new()) {
                 let event = TaskEvent {
                     task_id: "T-0001".into(),
                     source: "agent".into(),
@@ -272,12 +300,19 @@ fn reads_a_question_from_the_last_line_of_a_message() {
         ("Pick one:\n1. A\n2. B\n\n**Which one?**\n", "Which one?"),
         ("Tiếp tục không？", "Tiếp tục không？"),
         ("  Use `main` (the default)?)", "Use `main` (the default)?"),
+        (
+            "Two ways:\n\nWhich one?\n1. Keep it\n2) Drop it\n- or merge\na) later",
+            "Which one?",
+        ),
     ];
     for (message, question) in asked {
         assert_eq!(question_of(message), Some(question), "{message}");
     }
     for message in [
         "Why? Because the test failed.\nFixed it.",
+        "Done?\nOK. Merged.",
+        "Changes:\n1. A\n2. B",
+        "1. A\n2. B",
         "All tests pass.",
         "",
     ] {

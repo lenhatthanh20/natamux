@@ -26,22 +26,27 @@ Facts below come from the Claude Code docs (`code.claude.com/docs/en/hooks` and 
 | `PermissionRequest` | running | `agent.asked` | needs input |
 | `Notification` (`permission_prompt`, `elicitation_dialog`, `agent_needs_input`) | running | `agent.asked` | needs input |
 | `PreToolUse` of `AskUserQuestion` | running | `agent.asked` | needs input (its dialog of options waits) |
-| `PostToolUse` | needs input | `agent.resumed` | running (the permission was answered) |
+| `PreToolUse`, `PostToolUse` | needs input from a hook | `agent.resumed` | running (the permission was answered) |
+| `PreToolUse`, `PostToolUse` | needs input for an answer | none | needs input: `natamux ask` returns at once, so a tool after it is no answer |
 | `PostToolUse` of a Bash call that ran `natamux ask` | any | none, not logged | unchanged: the CLI already asked, and the end of the call is no answer (T-0304) |
 | `PreToolUse`, `PostToolUse` | failed | `agent.resumed` | running (the agent works again) |
 | `PreToolUse` | any | none (a sign of life) | unchanged; the tool and its file or command become the task's one-line summary, such as "Edit src/a.ts" |
 | `Stop` whose `last_assistant_message` ends on a question | running or idle | `agent.asked` (the question in `message`) | needs input |
+| `Stop` whose `last_assistant_message` ends on a question | needs input from a hook | `agent.resumed`, `agent.asked` | needs input, for the answer |
 | `Stop` with no background work | running | `agent.finished` | idle; the app still rings "Finished its turn" |
 | `Stop` with background work | running | `agent.waiting` | running |
-| `Stop` (any) | needs input | none | needs input: a turn end does not answer a question |
+| `Stop` with no question | needs input from a hook | `agent.resumed`, `agent.finished` (or `agent.waiting`) | idle (or running): a denied permission leaves no tool hook, so the turn end ends the wait |
+| `Stop` (any) | needs input for an answer | none | needs input: a turn end does not answer a question |
 | `StopFailure` | running | `agent.failed` | failed |
 | `StopFailure` | needs input | `agent.resumed`, `agent.failed` | failed |
 
-A question is the last line of `last_assistant_message` (markdown such as `**` around it dropped) ending in `?` or `？`. A question in the middle of the message, or one without a question mark, counts as none. Codex's `Stop` has the same field and follows the same rule. Every agent's after-tool hook of a shell command that runs `natamux ask` is dropped.
+A question is the last line of `last_assistant_message` (markdown such as `**` around it dropped) ending in `?` or `？`. A list of options at the end (`1. `, `2) `, `- `, `* `, `a) `) is skipped first, so "Which one?" followed by its options counts. A question in the middle of the message, or one without a question mark, counts as none: the task is then idle, and stays unseen until you open it, so a missed question is not lost. Codex's `Stop` has the same field and follows the same rule. Every agent's after-tool hook of a shell command that runs `natamux ask` is dropped.
+
+**Two kinds of needs input.** The daemon keeps, for each terminal, whether its needs input came from a hook (`PermissionRequest`, a `Notification`, `PreToolUse` of `AskUserQuestion`, and the same hooks of other agents). That wait ends when the agent works again or ends its turn. Any other needs input (`natamux ask`, a turn that ended on a question, a send back over the limit, or one from before a restart) waits for an answer: only a prompt, Answer or a stage action ends it.
 
 Everything else is ignored and not logged, so the event log does not fill with calls that change nothing. `idle_prompt` is ignored: `Stop` already moved the task to idle or needs input.
 
-**A choice to know about:** `Stop` fires after every answer. A turn that ends on a question (the last line of `last_assistant_message` ends in `?`) puts the task in needs input; any other turn end puts it in idle, and the desktop app rings "Finished its turn" so you can read the report. A task that already waits (`natamux ask`, a permission) keeps waiting at a turn end. The stage is done only when the agent runs `natamux done`; the daemon drops the `Stop` that follows that report, runs the checks, and the stage then waits for approval ("in review") or moves on. A person can also mark the stage as done, or type the next prompt, which resumes it.
+**A choice to know about:** `Stop` fires after every answer. A turn that ends on a question puts the task in needs input; any other turn end puts it in idle, and the desktop app rings "Finished its turn" so you can read the report. The Dock counts that idle task until you open it. A task that waits for an answer (`natamux ask`, a question) keeps waiting at a turn end; a hook's wait (a permission) ends with it. The stage is done only when the agent runs `natamux done`; the daemon drops the `Stop` that follows that report, runs the checks, and the stage then waits for approval ("in review") or moves on. A person can also mark the stage as done, or type the next prompt, which resumes it.
 
 **Resume after a restart.** Quitting the app ends every agent, but a task keeps its state. The agent of a stage starts again in that stage's terminal in two cases:
 

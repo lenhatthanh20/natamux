@@ -355,3 +355,20 @@ fn an_idle_task_does_not_count_as_needing_the_user() {
     assert!(tasks_that_started_waiting(&before, &now).is_empty());
     assert!(!needs_me(TaskState::Idle));
 }
+
+// An idle task whose report was not read yet keeps a count on the Dock until it is opened.
+#[test]
+fn counts_idle_tasks_not_seen_since_their_turn_ended() {
+    let seen = vec![
+        ("T-0001".to_string(), TaskState::Running),
+        ("T-0002".to_string(), TaskState::Idle),
+        ("T-0003".to_string(), TaskState::Running),
+    ];
+    let tasks = [
+        task("T-0001", TaskState::Idle),
+        task("T-0002", TaskState::Idle),
+        task("T-0003", TaskState::NeedsInput),
+        task("T-0004", TaskState::Idle),
+    ];
+    assert_eq!(unread_turn_ends(&tasks, &seen), 1);
+}

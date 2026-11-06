@@ -14,7 +14,7 @@ use super::dashboard::Dashboard;
 use super::dock_badge::set_dock_badge;
 use super::notify_rules::{
     NeedsYouAnnouncer, Notification, Ring, States, badge_label, note_tag, plays_sound, rings,
-    states_by_id, tag_target, with_terminal,
+    states_by_id, tag_target, unread_turn_ends, with_terminal,
 };
 use crate::tasks::task_attention::needs_me_tasks;
 use crate::tasks::task_rules::needs_me;
@@ -40,7 +40,8 @@ impl Notifier {
         let now = super::clock::now_ms();
         let waiting: Vec<Task> = needs_me_tasks(&tasks, now);
         self.announcer.update(&waiting, loaded);
-        self.set_badge(badge_label(waiting.len()));
+        let unread = unread_turn_ends(&tasks, &board.view().seen);
+        self.set_badge(badge_label(waiting.len() + unread));
         let Some(previous) = self.previous.replace(states_by_id(&tasks)) else {
             return;
         };
@@ -54,6 +55,14 @@ impl Notifier {
         if plays_sound(&ring) {
             window.play_system_bell();
         }
+    }
+
+    /// After the user opened a task: an unread turn end it had is read now.
+    pub fn after_open(&mut self, dashboard: &Entity<Dashboard>, cx: &App) {
+        let board = dashboard.read(cx);
+        let waiting = needs_me_tasks(&board.data.tasks, super::clock::now_ms()).len();
+        let unread = unread_turn_ends(&board.data.tasks, &board.view().seen);
+        self.set_badge(badge_label(waiting + unread));
     }
 
     fn set_badge(&mut self, label: Option<String>) {
