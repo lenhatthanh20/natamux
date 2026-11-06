@@ -274,8 +274,9 @@ pub(super) fn group_box(
 
 const FLOW_HEIGHT: f32 = 196.;
 
-/// The preview box (layout-b 5.2): dashed, 196 px high. It scrolls sideways when the chart is wide
-/// (`scroll` tracks that scroll), and down when branch notes do not fit.
+/// The preview box (layout-b 5.2): dashed, at least 196 px high. It grows to fit branch notes,
+/// so the page is the only vertical scroller (a box that scrolled down inside it was hard to
+/// scroll, T-0293). The chart scrolls sideways when it is wide; `scroll` tracks that scroll.
 pub fn pipeline_preview(
     editor: &Entity<PipelineEditor>,
     scroll: &ScrollHandle,
@@ -296,9 +297,9 @@ pub fn pipeline_preview(
     let shown = active_steps(&chart.steps);
     let frame = v_flex()
         .id("pipeline-preview")
+        .debug_selector(|| "pipeline-preview".into())
         .flex_none()
-        .h(rems_from_px(FLOW_HEIGHT))
-        .overflow_y_scroll()
+        .min_h(rems_from_px(FLOW_HEIGHT))
         .rounded(px(8.))
         .border_1()
         .border_dashed()
@@ -389,3 +390,7 @@ pub(super) fn bold(text: impl Into<SharedString>) -> Label {
         .size(LabelSize::Small)
         .weight(FontWeight::SEMIBOLD)
 }
+
+#[cfg(test)]
+#[path = "pipeline_preview_tests.rs"]
+mod tests;

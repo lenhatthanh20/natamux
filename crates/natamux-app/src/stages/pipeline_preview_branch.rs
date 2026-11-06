@@ -199,6 +199,7 @@ pub(super) fn branch_notes(branch: &StageBranch, next: Option<&Step>, cx: &App) 
     });
     v_flex()
         .id(SharedString::from(format!("preview-notes-{}", branch.id)))
+        .debug_selector(|| format!("preview-notes-{}", branch.id))
         .gap_0p5()
         .px(rems_from_px(12.0_f32))
         .py(rems_from_px(7.0_f32))
