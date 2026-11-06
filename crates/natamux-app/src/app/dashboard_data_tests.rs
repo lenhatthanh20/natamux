@@ -8,9 +8,6 @@ fn a_bulk_run_does_not_start_twice_while_it_runs() {
     assert!(runs.start(BulkRun::RemoveFinished));
     assert!(runs.running(BulkRun::RemoveFinished));
     assert!(!runs.start(BulkRun::RemoveFinished));
-    // The other kind is its own run.
-    assert!(!runs.running(BulkRun::DeleteTasks));
-    assert!(runs.start(BulkRun::DeleteTasks));
     runs.finish(BulkRun::RemoveFinished);
     assert!(!runs.running(BulkRun::RemoveFinished));
     assert!(runs.start(BulkRun::RemoveFinished));
@@ -158,6 +155,70 @@ fn merges_an_answer_and_forgets_a_deleted_task() {
     );
     data.forget_task("T-1");
     assert!(data.task("T-1").is_none());
+}
+
+#[test]
+fn hides_a_task_while_it_is_deleted_and_keeps_its_newest_state() {
+    let mut data = DashboardData::default();
+    data.apply(DashboardEvent::Tasks(vec![
+        task("T-1", TaskState::Running, "a"),
+        task("T-2", TaskState::Draft, "a"),
+    ]));
+    data.apply(DashboardEvent::Terminals {
+        task_id: "T-1".into(),
+        terminals: TerminalList::default(),
+    });
+    data.hide_task("T-1");
+    assert!(data.task("T-1").is_none());
+    assert!(data.is_deleting("T-1"));
+    assert!(!data.terminals.contains_key("T-1"));
+    // The daemon writes the task while it deletes it: the feed must not show it again.
+    data.apply(DashboardEvent::TaskChanged(Box::new(task(
+        "T-1",
+        TaskState::Running,
+        "b",
+    ))));
+    data.apply(DashboardEvent::Tasks(vec![
+        task("T-1", TaskState::Done, "c"),
+        task("T-2", TaskState::Draft, "a"),
+    ]));
+    data.merge_task(task("T-1", TaskState::Ready, "old"));
+    assert!(data.task("T-1").is_none());
+    assert_eq!(data.tasks.len(), 1);
+    // The delete failed: the task shows again as the feed last brought it.
+    data.restore_task("T-1");
+    assert!(!data.is_deleting("T-1"));
+    assert_eq!(
+        data.task("T-1").map(|task| task.state),
+        Some(TaskState::Done)
+    );
+}
+
+#[test]
+fn a_hidden_task_draws_nothing_and_goes_when_its_delete_worked() {
+    let mut data = DashboardData::default();
+    data.apply(DashboardEvent::Tasks(vec![task(
+        "T-1",
+        TaskState::Running,
+        "a",
+    )]));
+    data.hide_task("T-1");
+    let before = data.gens;
+    let changed = DashboardEvent::TaskChanged(Box::new(task("T-1", TaskState::Done, "b")));
+    assert!(!data.changes(&changed));
+    data.apply(changed);
+    assert!(bumped(before, data.gens).is_empty());
+    data.forget_task("T-1");
+    assert!(!data.is_deleting("T-1"));
+    data.restore_task("T-1");
+    assert!(data.task("T-1").is_none());
+}
+
+#[test]
+fn hiding_a_task_the_app_does_not_know_does_nothing() {
+    let mut data = DashboardData::default();
+    data.hide_task("T-9");
+    assert!(!data.is_deleting("T-9"));
 }
 
 #[test]

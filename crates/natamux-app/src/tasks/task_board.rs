@@ -15,7 +15,6 @@ use super::task_time::{AgeStyle, format_age, format_exact};
 use super::task_view::now_ms;
 use super::task_view_rules::{BoardFolds, board_states, task_count};
 use crate::app::dashboard::Dashboard;
-use crate::app::dashboard_data::BulkRun;
 use crate::app::shortcuts::{OpenSelected, SelectFirst, SelectLast, SelectNext, SelectPrevious};
 use crate::components::agent_badge::agent_name;
 use crate::components::button_style::quiet_button;
@@ -259,7 +258,7 @@ impl TaskBoard {
         let colors = cx.theme().colors();
         let label = state_label(state);
         let deletable = state.is_finished() && !tasks.is_empty();
-        let deleting = self.dashboard.read(cx).bulk.running(BulkRun::DeleteTasks);
+        let deleting = self.dashboard.read(cx).deletes.batch_queued();
         let dashboard = self.dashboard.clone();
         let empty = cards.is_empty();
         let hidden = tasks.len() - cards.len();
