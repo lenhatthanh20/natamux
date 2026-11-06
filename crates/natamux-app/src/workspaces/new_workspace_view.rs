@@ -103,7 +103,6 @@ impl NewWorkspaceDialog {
         let form = self.form(cx);
         let choice = self.choice();
         let error_row = inline_error(blocked_reason(&form, &choice));
-        let stages = self.stage_names();
         let project = self.repo_name(cx);
         let task = SettingsGroup::new("Task")
             .first(self.error.is_none())
@@ -115,11 +114,9 @@ impl NewWorkspaceDialog {
                 workspace_foot(self.worktree, &form.branch, &self.base_name()),
                 cx,
             ));
-        let mut agent = SettingsGroup::new("Agent")
-            .child(self.agent_card(error_row, cx))
-            .footnote(agent_foot(self.single_agent, stages.len(), &project));
-        if !self.single_agent && !stages.is_empty() {
-            agent = agent.footnote_child(stage_chips(stages, cx));
+        let mut agent = SettingsGroup::new("Agent").child(self.agent_card(error_row, cx));
+        if let Some(foot) = agent_foot(self.single_agent) {
+            agent = agent.footnote(foot);
         }
         div()
             .relative()
@@ -155,40 +152,6 @@ fn foot_line(parts: Vec<FootPart>, cx: &App) -> impl IntoElement {
                 .into_any_element(),
         }
     }))
-}
-
-/// The stages of the full flow as chips joined by chevrons.
-fn stage_chips(stages: Vec<String>, cx: &App) -> impl IntoElement {
-    let colors = cx.theme().colors();
-    let mut row = h_flex()
-        .flex_wrap()
-        .gap(rems_from_px(4.0_f32))
-        .mt(rems_from_px(6.0_f32));
-    for (index, name) in stages.into_iter().enumerate() {
-        if index > 0 {
-            row = row.child(
-                Icon::new(IconName::ChevronRight)
-                    .size(IconSize::Custom(rems_from_px(10.0_f32)))
-                    .color(Color::Placeholder),
-            );
-        }
-        row = row.child(
-            h_flex()
-                .flex_none()
-                .h(rems_from_px(18.0_f32))
-                .px(rems_from_px(6.0_f32))
-                .rounded(rems_from_px(4.0_f32))
-                .bg(colors.element_background)
-                .border_1()
-                .border_color(colors.border_variant)
-                .child(
-                    Label::new(name)
-                        .size(LabelSize::Custom(rems_from_px(11.0_f32)))
-                        .color(Color::Muted),
-                ),
-        );
-    }
-    row
 }
 
 impl Render for NewWorkspaceDialog {

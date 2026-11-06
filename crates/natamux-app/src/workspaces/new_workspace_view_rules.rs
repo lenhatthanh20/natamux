@@ -129,18 +129,11 @@ pub fn workspace_foot(on: bool, branch: &str, base: &str) -> Vec<FootPart> {
     ]
 }
 
-/// The footnote under the Agent card; the stage chips follow a full flow's line.
-pub fn agent_foot(single: bool, stages: usize, project: &str) -> String {
-    if single {
-        "One agent does the whole task in Terminal 1. The pipeline stages do not run.".into()
-    } else if stages == 0 {
-        format!("Full flow runs the stages of the {project} pipeline.")
-    } else {
-        format!(
-            "Full flow runs the {} of the {project} pipeline:",
-            stage_count(stages)
-        )
-    }
+/// The footnote under the Agent card; a full flow has none, the footer note counts its stages.
+pub fn agent_foot(single: bool) -> Option<&'static str> {
+    single.then_some(
+        "One agent does the whole task in Terminal 1. The pipeline stages do not run.",
+    )
 }
 
 /// The row whose red line says the blocked reason.
