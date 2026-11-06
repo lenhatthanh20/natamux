@@ -7,6 +7,20 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v1.0.19 (2026-11-06)
+
+- A new project gets a short default pipeline: Context → Spec → Implement → Review → Release. See [The default pipeline](/docs/concepts/stages/#the-default-pipeline).
+- A path of an If branch can hold side-by-side stages. See [Paths with a condition](/docs/concepts/stages/#paths-with-a-condition).
+- **Start a task** has a new card layout and a **Create a worktree** switch. Turn it off to make the task without a worktree.
+- **Settings** and **Project settings** have a new layout with inset cards; agents, stages and branches open in their own sheet. Custom stage marks are brighter, the **JSON** tab has a Copy button, and file icons show in their own colours.
+- Quitting the desktop app asks first. See [Quit and close](/docs/guides/desktop-app/#quit-and-close).
+- Maximize is a mode of the task: one terminal at a time, full size, until Restore.
+- Files and folders dropped onto a terminal type their paths.
+- A terminal header names its stage, and a notification names the waiting terminal. **Notify me** is on for a new install, and **Always notify** also notifies while the window is in front. An agent that ends its turn without a question shows **Idle**.
+- Stage args and prompts can use `{id}`.
+- **Delete task** removes the task at once and deletes it in the background.
+- Fix: Settings scrollbars, the Project settings flowchart, the **JSON** tab scrollbar and the Start a task **Title** box.
+
 ## v1.0.18 (2026-11-03)
 
 - The homepage and documentation share navigation, theme controls and a footer. The documentation overview follows the Signal flow layout with numbered guides. Its compact sidebar groups related pages, and a page contents menu replaces the vertical rail.
