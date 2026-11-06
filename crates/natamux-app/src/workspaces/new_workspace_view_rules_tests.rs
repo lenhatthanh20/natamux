@@ -142,18 +142,11 @@ fn the_workspace_footnote_names_the_branch_and_its_base_in_mono() {
 }
 
 #[test]
-fn the_agent_footnote_counts_the_stages_of_the_full_flow() {
+fn only_one_agent_has_an_agent_footnote() {
+    assert_eq!(agent_foot(false), None);
     assert_eq!(
-        agent_foot(false, 5, "storefront"),
-        "Full flow runs the 5 stages of the storefront pipeline:"
-    );
-    assert_eq!(
-        agent_foot(false, 0, "storefront"),
-        "Full flow runs the stages of the storefront pipeline."
-    );
-    assert_eq!(
-        agent_foot(true, 5, "storefront"),
-        "One agent does the whole task in Terminal 1. The pipeline stages do not run."
+        agent_foot(true),
+        Some("One agent does the whole task in Terminal 1. The pipeline stages do not run.")
     );
 }
 
