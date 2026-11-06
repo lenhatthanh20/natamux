@@ -295,6 +295,22 @@ impl HookService {
         }
     }
 
+    /// An `agent.asked` that no hook sent, such as `natamux ask`: the wait of that terminal (all
+    /// of the task's when none is named) is for an answer now, also when a permission prompt
+    /// started it and the end of the asking tool call sent no hook.
+    pub fn waits_for_answer(&self, task_id: &str, terminal: Option<&str>) {
+        let mut state = self.state();
+        match terminal {
+            Some(terminal) => {
+                state.hook_waits.remove(&format!("{task_id}/{terminal}"));
+            }
+            None => {
+                let prefix = format!("{task_id}/");
+                state.hook_waits.retain(|key| !key.starts_with(&prefix));
+            }
+        }
+    }
+
     /// `UnknownAgent` for an agent without an adapter, and `Invalid` when the input is not a hook
     /// of that agent.
     pub fn handle(
@@ -431,7 +447,9 @@ impl HookService {
         let plan = plan_signal_events(state, wait, hook.signal, &hook.details);
         // The kind of the wait the plan starts or ends. A hook in any other state shows that a
         // wait of before ended without a hook, such as by a stage action.
-        let asks = plan.last().is_some_and(|planned| planned.kind == "agent.asked");
+        let asks = plan
+            .last()
+            .is_some_and(|planned| planned.kind == "agent.asked");
         if asks && hook.signal == Signal::Asking {
             self.state().hook_waits.insert(key);
         } else if asks || !plan.is_empty() || state != TaskState::NeedsInput {

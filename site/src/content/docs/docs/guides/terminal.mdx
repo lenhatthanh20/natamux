@@ -17,7 +17,7 @@ Every task with a workspace has a **Terminal** tab. It holds real terminals that
 2. Double-click it, or press `Enter`. The workspace opens on the terminal while an agent works.
 3. From another tab of the workspace, click **Terminal** or press `1`.
 
-When you switch to another task's workspace, the keyboard goes to its first agent terminal, so you can type to the agent at once. A terminal you pick with **Jump to a workspace** gets the keyboard instead.
+When you switch to another task's workspace, the keyboard goes to its first agent terminal, so you can type to the agent at once. A maximized task goes back to the terminal you looked at last. A terminal you pick with **Jump to a workspace**, a sidebar row, **Answer** or a notification gets the keyboard instead.
 
 A task without a workspace shows **Start agent** and a way to make a workspace instead. See [Workspaces](/docs/concepts/workspaces/).
 
@@ -98,7 +98,7 @@ Click in the pane and type. Your keys go straight to the agent. This is how you 
 
 When an agent asks something, the task goes to **Needs input** and the current stage card in the **Progress** view of the details shows what it asks (on a phone, a banner under the header). With the details closed, click **Needs input** in the workspace header to open them. When the workspace shows more than one agent pane, the waiting pane says **Needs input** in its header. Click **Answer in terminal** to put the cursor in Terminal 1. If you answered another way, click **Resume**.
 
-When an agent ends its turn without a question and without `natamux done`, the task goes to **Idle**, shown as a grey speech bubble. Idle does not need you: no notification, no Dock count. Type in the terminal to give the agent its next prompt, or click **Resume** in the stage card to ask it to go on with the stage.
+When an agent ends its turn without a question and without `natamux done`, the task goes to **Idle**, shown as a grey speech bubble. Idle is not red. The desktop app notifies once (**Finished its turn**) and counts the task on the Dock until you open it. Type in the terminal to give the agent its next prompt, or click **Resume** in the stage card to ask it to go on with the stage.
 
 After you quit and open the app again, Natamux starts the agent of each running, idle, waiting or in-review task again, in its terminal. Claude Code goes on with the same conversation; other agents start again with the stage prompt. The task keeps its state. The other terminals of the task come back too, see [A terminal after a daemon restart](#a-terminal-after-a-daemon-restart).
 

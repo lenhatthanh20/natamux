@@ -252,10 +252,12 @@ fn bare(line: &str) -> &str {
     start.trim_end_matches(|c: char| c.is_whitespace() || "*_`)".contains(c))
 }
 
-// "1. A", "2) B", "- C", "* D", "a) E": a line of a list of options.
+const LIST_MARKS: [&str; 4] = ["- ", "* ", "+ ", "・"];
+
+// "1. A", "2) B", "- C", "* D", "+ E", "・F", "a) G": a line of a list of options.
 fn is_list_item(line: &str) -> bool {
     let line = line.trim_start();
-    if line.starts_with("- ") || line.starts_with("* ") {
+    if LIST_MARKS.iter().any(|mark| line.starts_with(mark)) {
         return true;
     }
     let mark = line.trim_start_matches(|c: char| c.is_ascii_digit());
@@ -267,13 +269,34 @@ fn is_list_item(line: &str) -> bool {
     chars.next().is_some_and(|c| c.is_ascii_alphabetic()) && chars.as_str().starts_with(") ")
 }
 
+fn is_question(line: &str) -> bool {
+    line.ends_with(['?', '？'])
+}
+
 /// The question an agent's last message ends on: its last line, or the line just before the list
-/// of options it ends with, when that line ends with a question mark. shortcut: a question
+/// of options it ends with, when that line ends with a question mark. A last list item that is a
+/// question counts too. A heading or a code block at the end is no question. shortcut: a question
 /// mid-message or one without "?" counts as none; a missed question still shows as unseen.
 pub fn question_of(message: &str) -> Option<&str> {
     let mut lines = message.lines().rev().filter(|line| !bare(line).is_empty());
-    let last = lines.find(|line| !is_list_item(line)).map(bare)?;
-    last.ends_with(['?', '？']).then_some(last)
+    let last = lines.next()?;
+    if last.trim_start().starts_with("```") {
+        return None;
+    }
+    if is_list_item(last) {
+        let item = bare(last);
+        if is_question(item) {
+            return Some(item);
+        }
+    }
+    let line = std::iter::once(last)
+        .chain(lines)
+        .find(|line| !is_list_item(line))?;
+    if line.trim_start().starts_with('#') {
+        return None;
+    }
+    let line = bare(line);
+    is_question(line).then_some(line)
 }
 
 /// `text.slice(0, units)`, counted in UTF-16 units. A pair cut in the middle is dropped whole,

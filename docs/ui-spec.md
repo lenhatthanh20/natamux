@@ -153,7 +153,7 @@ One `data-state` attribute drives chip, dot, glyph, board column and filter. `--
 | done | `#6fd19a` / `#142a1e` | 8.2 / 10.4 | `#1c7442` / `#e1f3e8` | 5.0 / 5.3 |
 | cancelled | `#8d919a` / `#1d1f23` | 5.2 / 6.2 (was 2.1-3.3) | `#5f6570` / `#eceef1` | 5.0 / 5.3 (was 2.0-3.3) |
 
-Running (blue) and needs-input (amber) are far apart in hue, so "working" never reads as "needs you". Idle (an agent that ended its turn without a question) is grey and not in Needs you: no ring, no Dock count, no Answer button.
+Running (blue) and needs-input (amber) are far apart in hue, so "working" never reads as "needs you". Idle (an agent that ended its turn without a question) is grey and not in Needs you: no red, no Answer button. The native app rings once and counts an unseen idle task on the Dock (4.12).
 
 #### Project colors
 

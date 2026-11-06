@@ -2,7 +2,7 @@
 //! starts to need the user, or becomes done, while the app window is not active, a system
 //! notification names it, with the terminal that waits, and the alert sound plays. A click brings
 //! the app forward and opens the task on that terminal. macOS shows none when the app does not
-//! run from its bundle, as in a dev run. The Dock icon shows the needs-you count once macOS
+//! run from its bundle, as in a dev run. The Dock icon shows the needs-you count, plus idle tasks not seen since their turn ended, once macOS
 //! allows badges (`dock_badge.rs`). The screen-reader announcement text is kept too; GPUI has no live region to speak it yet (`docs/rust-phase3.md`).
 
 use gpui::{AnyWindowHandle, Entity, SystemNotification};
@@ -60,7 +60,8 @@ impl Notifier {
     /// After the user opened a task: an unread turn end it had is read now.
     pub fn after_open(&mut self, dashboard: &Entity<Dashboard>, cx: &App) {
         let board = dashboard.read(cx);
-        let waiting = needs_me_tasks(&board.data.tasks, super::clock::now_ms()).len();
+        let now = super::clock::now_ms();
+        let waiting = needs_me_tasks(&board.data.tasks, now).len();
         let unread = unread_turn_ends(&board.data.tasks, &board.view().seen);
         self.set_badge(badge_label(waiting + unread));
     }

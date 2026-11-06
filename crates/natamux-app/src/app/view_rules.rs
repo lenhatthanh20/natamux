@@ -104,7 +104,8 @@ pub fn with_seen(
 /// The seen states after a new task list (the two `markSeen` effects of `Dashboard.tsx`). A task
 /// with a workspace seen for the first time is the baseline, so nothing starts out unseen; a
 /// backlog task is not recorded, or it would start unseen once it runs. The open task is being
-/// looked at, so its new state is seen whatever it does.
+/// looked at, so its new state is seen whatever it does. A running task counts as seen running,
+/// so the next turn end shows as unseen even when the user had seen the last one.
 pub fn seen_after_list(
     current: &[(String, TaskState)],
     tasks: &[Task],
@@ -116,6 +117,14 @@ pub fn seen_after_list(
         .map(|task| (task.id.as_str(), task.state))
         .collect();
     let next = with_seen(current, &baseline, false);
+    let running: Vec<(&str, TaskState)> = baseline
+        .iter()
+        .filter(|&&(id, state)| {
+            state == TaskState::Running && find(&next, id).is_some_and(|seen| *seen != state)
+        })
+        .copied()
+        .collect();
+    let next = with_seen(&next, &running, true);
     match open.and_then(|id| tasks.iter().find(|task| task.id == id)) {
         Some(task) => with_seen(&next, &[(task.id.as_str(), task.state)], true),
         None => next,
@@ -293,6 +302,16 @@ mod tests {
         let running = [task("T-0001", TaskState::Running, true)];
         let next = seen_after_list(&next, &running, None);
         assert!(!is_unseen(&next, "T-0001", TaskState::Running));
+    }
+
+    // A task seen idle runs again while not open: its next turn end must show as unseen.
+    #[test]
+    fn a_task_that_runs_again_shows_its_next_turn_end_as_unseen() {
+        let seen = vec![("T-0001".to_owned(), TaskState::Idle)];
+        let next = seen_after_list(&seen, &[task("T-0001", TaskState::Running, true)], None);
+        assert!(!is_unseen(&next, "T-0001", TaskState::Running));
+        let next = seen_after_list(&next, &[task("T-0001", TaskState::Idle, true)], None);
+        assert!(is_unseen(&next, "T-0001", TaskState::Idle));
     }
 
     fn ids(list: &[&str]) -> Vec<String> {

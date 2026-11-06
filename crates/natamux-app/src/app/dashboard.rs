@@ -107,6 +107,9 @@ pub struct Dashboard {
     pub sort: TaskSort,
     pub bulk: BulkRuns,
     pub deletes: DeleteQueue,
+    /// The window is in front. The open task counts as seen only then: a turn that ends while the
+    /// user is in another app stays unseen until they come back.
+    window_active: bool,
 }
 
 impl EventEmitter<DashboardChange> for Dashboard {}
@@ -152,6 +155,7 @@ impl Dashboard {
             sort: None,
             bulk: BulkRuns::default(),
             deletes: DeleteQueue::default(),
+            window_active: true,
         };
         dashboard.watch(cx);
         dashboard
@@ -214,7 +218,8 @@ impl Dashboard {
         if gone(&self.open_task) {
             self.back(cx);
         }
-        let seen = seen_after_list(&self.view.seen, &self.data.tasks, self.open_task.as_deref());
+        let open = self.open_task.as_deref().filter(|_| self.window_active);
+        let seen = seen_after_list(&self.view.seen, &self.data.tasks, open);
         if seen != self.view.seen {
             self.view.seen = seen;
             self.save_view(cx);

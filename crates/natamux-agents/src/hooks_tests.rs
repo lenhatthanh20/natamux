@@ -81,11 +81,11 @@ fn keeps_a_task_that_waits_for_the_user_waiting_when_the_turn_ends() {
 // a permission the user denied leaves no tool hook; the turn end ends that wait.
 #[test]
 fn ends_a_hooks_wait_at_the_end_of_the_turn() {
-    let hook = |signal| kinds_in(TaskState::NeedsInput, Wait::Hook, signal);
-    assert_eq!(hook(Signal::TurnEnded), ["agent.resumed", "agent.finished"]);
-    assert_eq!(hook(Signal::TurnPaused), ["agent.resumed", "agent.waiting"]);
-    assert_eq!(hook(Signal::TurnAsked), ["agent.resumed", "agent.asked"]);
-    assert!(hook(Signal::Asking).is_empty());
+    let ends = |signal| kinds_in(TaskState::NeedsInput, Wait::Hook, signal);
+    assert_eq!(ends(Signal::TurnEnded), ["agent.resumed", "agent.finished"]);
+    assert_eq!(ends(Signal::TurnPaused), ["agent.resumed", "agent.waiting"]);
+    assert_eq!(ends(Signal::TurnAsked), ["agent.resumed", "agent.asked"]);
+    assert!(ends(Signal::Asking).is_empty());
 }
 
 #[test]
@@ -304,6 +304,14 @@ fn reads_a_question_from_the_last_line_of_a_message() {
             "Two ways:\n\nWhich one?\n1. Keep it\n2) Drop it\n- or merge\na) later",
             "Which one?",
         ),
+        (
+            "Before I go on:\n1. Merge now?\n2. Keep the branch?",
+            "2. Keep the branch?",
+        ),
+        (
+            "Xong rồi.\n\nAnh muốn em commit luôn không?",
+            "Anh muốn em commit luôn không?",
+        ),
     ];
     for (message, question) in asked {
         assert_eq!(question_of(message), Some(question), "{message}");
@@ -313,6 +321,8 @@ fn reads_a_question_from_the_last_line_of_a_message() {
         "Done?\nOK. Merged.",
         "Changes:\n1. A\n2. B",
         "1. A\n2. B",
+        "## Why did it fail?\n- flaky\n- timeout",
+        "Run this:\n```sql\nSELECT * FROM t WHERE id = ?\n```",
         "All tests pass.",
         "",
     ] {

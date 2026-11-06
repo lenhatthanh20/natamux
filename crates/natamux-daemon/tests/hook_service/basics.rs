@@ -490,3 +490,19 @@ fn a_turn_that_ends_on_a_question_waits_for_the_user_and_keeps_the_question() {
     );
     assert!(service.activity().is_empty());
 }
+
+// `natamux ask` behind a permission prompt: the end of its call sends no hook, so the ask itself
+// turns the permission's wait into a wait for the answer.
+#[test]
+fn an_ask_behind_a_permission_prompt_still_waits_for_the_answer() {
+    let fx = Fx::new();
+    let service = fx.service();
+    let task = fx.make("Fix it");
+    step(&service, &task.id, "UserPromptSubmit");
+    step(&service, &task.id, "PermissionRequest");
+
+    service.waits_for_answer(&task.id, None);
+
+    assert!(step(&service, &task.id, "Stop").applied.is_empty());
+    assert_eq!(fx.state(&task.id), TaskState::NeedsInput);
+}
