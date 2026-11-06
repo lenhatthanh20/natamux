@@ -140,7 +140,6 @@ impl SettingsView {
             })
             .into_any_element()
     }
-
 }
 
 /// The release notes of this version (T-0301).

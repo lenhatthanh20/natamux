@@ -56,6 +56,7 @@ fn a_saved_view_reads_back_the_same() {
         ui_size: "large".into(),
         terminal_font: Some(serde_json::json!({ "family": "Iosevka", "size": 15 })),
         recent: vec!["T-2".into(), "T-1".into()],
+        whats_new_seen: Some("1.0.19".into()),
     };
     state.remember_base("r1", "main");
     let folder = temp_folder("round");
