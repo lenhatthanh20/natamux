@@ -148,7 +148,10 @@ mod tests {
             let path = ShapeKind::Idle.svg_path(size);
             let art = asset_table::find(&path).map(String::from_utf8_lossy);
             let art = art.as_deref().unwrap_or_default();
-            assert!(art.contains("<rect") && art.contains("<path"), "{path}: {art}");
+            assert!(
+                art.contains("<rect") && art.contains("<path"),
+                "{path}: {art}"
+            );
             assert!(!art.contains("<circle"), "{path} still draws dots");
         }
     }
