@@ -95,6 +95,11 @@ pub(super) struct Ready {
     pub(super) sha256: String,
 }
 
+/// Where an update of `version` downloads; its presence tells What's new that the app updated.
+pub fn updates_folder(folder: &Path, version: &str) -> PathBuf {
+    folder.join("updates").join(version)
+}
+
 fn settings_file() -> Option<PathBuf> {
     view_state::folder().map(|folder| folder.join("settings.json"))
 }
@@ -266,7 +271,7 @@ fn fetch() -> Result<(CheckOutcome, Option<Ready>), String> {
         sha256,
     } = &outcome
     {
-        let update_folder = folder.join("updates").join(&release.version);
+        let update_folder = updates_folder(&folder, &release.version);
         let file = update_folder.join(name);
         log(&folder, &format!("downloading {name} for {}", release.tag));
         store(state().downloading(&release.version));

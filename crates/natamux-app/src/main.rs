@@ -73,6 +73,8 @@ mod app {
     pub mod update_state;
     pub mod view_rules;
     pub mod view_state;
+    pub mod whats_new;
+    pub mod whats_new_rules;
     pub mod window;
 }
 mod bench {
@@ -87,6 +89,7 @@ mod components {
     pub mod detail_section;
     pub mod dialog;
     pub mod dialog_frame;
+    pub mod docs_markdown;
     pub mod empty_state;
     pub mod form;
     pub mod glyph;
@@ -335,7 +338,6 @@ mod terminals {
 mod workspaces {
     pub mod branches;
     pub mod docs_list;
-    pub mod docs_markdown;
     pub mod docs_rules;
     pub mod docs_tab;
     pub mod docs_view;
@@ -471,6 +473,7 @@ fn start(
     app::update::set_window(window, cx);
     if !fake && !options.smoke {
         app::update::start_timers(cx);
+        app::whats_new::on_start(window, cx);
     }
     if let Some(started) = started {
         let smoke = options.smoke.then(|| Arc::clone(failed));

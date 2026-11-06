@@ -1,6 +1,7 @@
 //! Screen 7's `--shot` states: the palettes, the shortcut sheet, the account menu, the Settings
 //! page (T-0174) with its app pages, a search and a project's tabs, the Projects dialog, Sign in,
-//! the app update in the status bar and in Settings (T-0214), and the repo trust dialog.
+//! the app update in the status bar and in Settings (T-0214), the repo trust dialog, and What's
+//! new (T-0301).
 
 use std::time::Duration;
 
@@ -15,6 +16,7 @@ use super::settings_rules::SettingsPage;
 use super::shortcut_sheet;
 use super::update::show_for_shot;
 use super::update_state::UpdateState;
+use super::whats_new;
 use super::window::Root;
 use crate::palette::palette_layer::PaletteLayer;
 use crate::palette::palette_rows::{PaletteMode, PaletteScope};
@@ -40,6 +42,27 @@ const MENU_FROM_TOP: f32 = 30.;
 /// The update shots: a version after the running one, and a download under way.
 const NEXT_VERSION: &str = "9.9.9";
 const DOWNLOADED: u64 = 42 * 1024 * 1024;
+/// Fixed notes for the What's new shot, in the form of `docs/releases/*.md`.
+const SHOT_NOTES: &str = "This version adds a What's new dialog. If you have v0.1.2 or later, \
+the app updates itself to this version.
+
+Guide: https://natamux.github.io/docs/
+
+## Desktop app
+
+- After an update, the app shows what changed in the new version.
+- **What's New** in the menu and in Settings opens the notes again.
+
+## Fixes
+
+- Fix: a long release note scrolls inside the dialog.
+
+## Download
+
+| System | File |
+|---|---|
+| macOS, Apple silicon | `Natamux-mac-arm64.dmg` |
+";
 
 pub fn is_screen7_shot(shot: Shot) -> bool {
     matches!(
@@ -70,6 +93,7 @@ pub fn is_screen7_shot(shot: Shot) -> bool {
             | Shot::UpdateFailed
             | Shot::SettingsUpdateReady
             | Shot::RepoTrustDialog
+            | Shot::WhatsNew
     )
 }
 
@@ -135,6 +159,7 @@ fn enter(
             cx,
         ),
         Shot::Shortcuts => shortcut_sheet::open(window, cx),
+        Shot::WhatsNew => whats_new::open_notes(SHOT_NOTES, window, cx),
         Shot::AccountMenu => {
             let width = window.viewport_size().width;
             let at = point(width - px(MENU_FROM_RIGHT), px(MENU_FROM_TOP));
