@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
-use natamux_agents::hooks::{NormalizedHook, Signal, find_adapter, plan_signal_events};
+use natamux_agents::hooks::{NormalizedHook, Signal, Wait, find_adapter, plan_signal_events};
 use natamux_core::tasks::inputs::task_id_param;
 use natamux_proto::tasks::task::{Task, TaskState};
 use serde_json::{Map, Value, json};
@@ -179,6 +179,10 @@ struct State {
     hidden_shells: HashSet<String>,
     /// The stage and session file of each shell's last hook, for its usage.
     usage: UsageStages,
+    /// "<task>/<terminal>" of the shells whose needs input came from a hook (a permission, an
+    /// options dialog). Any other needs input, such as `natamux ask` or one from before a
+    /// restart, waits for an answer.
+    hook_waits: HashSet<String>,
 }
 
 pub struct HookService {
@@ -288,6 +292,22 @@ impl HookService {
         }
         for terminal in running {
             hidden_shells.remove(&format!("{task_id}/{terminal}"));
+        }
+    }
+
+    /// An `agent.asked` that no hook sent, such as `natamux ask`: the wait of that terminal (all
+    /// of the task's when none is named) is for an answer now, also when a permission prompt
+    /// started it and the end of the asking tool call sent no hook.
+    pub fn waits_for_answer(&self, task_id: &str, terminal: Option<&str>) {
+        let mut state = self.state();
+        match terminal {
+            Some(terminal) => {
+                state.hook_waits.remove(&format!("{task_id}/{terminal}"));
+            }
+            None => {
+                let prefix = format!("{task_id}/");
+                state.hook_waits.retain(|key| !key.starts_with(&prefix));
+            }
         }
     }
 
@@ -418,8 +438,25 @@ impl HookService {
         if let Some(states) = self.state().shell_states.get_mut(&task.id) {
             states.remove(shell);
         }
+        let key = format!("{}/{shell}", task.id);
+        let wait = if state == TaskState::NeedsInput && self.state().hook_waits.contains(&key) {
+            Wait::Hook
+        } else {
+            Wait::Answer
+        };
+        let plan = plan_signal_events(state, wait, hook.signal, &hook.details);
+        // The kind of the wait the plan starts or ends. A hook in any other state shows that a
+        // wait of before ended without a hook, such as by a stage action.
+        let asks = plan
+            .last()
+            .is_some_and(|planned| planned.kind == "agent.asked");
+        if asks && hook.signal == Signal::Asking {
+            self.state().hook_waits.insert(key);
+        } else if asks || !plan.is_empty() || state != TaskState::NeedsInput {
+            self.state().hook_waits.remove(&key);
+        }
         let mut applied = Vec::new();
-        for planned in plan_signal_events(state, hook.signal, &hook.details) {
+        for planned in plan {
             let mut payload = planned.payload.clone();
             payload.insert("stage".into(), Value::String(stage.clone()));
             let input = json!({

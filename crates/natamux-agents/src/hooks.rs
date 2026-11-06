@@ -146,26 +146,39 @@ fn planned(kind: &'static str, payload: &Map<String, Value>) -> PlannedEvent {
     }
 }
 
-// Brings an idle task back to running, then adds the closing event. A task that waits for the
-// user keeps waiting: the agent asked (`natamux ask`, a permission) and the turn end is no answer.
+/// Why a task in needs input waits. `Hook`: a permission prompt or an options dialog of the agent;
+/// the agent working again, or ending its turn, ends it. `Answer`: a question in plain text or
+/// `natamux ask`; only the user's answer (a prompt) ends it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Wait {
+    Hook,
+    Answer,
+}
+
+// Brings an idle task back to running, then adds the closing event. A task that waits for an
+// answer keeps waiting: the turn end is no answer. A hook's wait ends with the turn: a permission
+// the user denied leaves no other hook to end it.
 fn end_turn(
     state: TaskState,
+    wait: Wait,
     closing: &'static str,
     payload: &Map<String, Value>,
 ) -> Vec<PlannedEvent> {
-    match state {
-        TaskState::Running => vec![planned(closing, payload)],
-        TaskState::Idle => {
+    match (state, wait) {
+        (TaskState::Running, _) => vec![planned(closing, payload)],
+        (TaskState::Idle, _) | (TaskState::NeedsInput, Wait::Hook) => {
             vec![planned("agent.resumed", payload), planned(closing, payload)]
         }
         _ => Vec::new(),
     }
 }
 
-/// Which task events a signal means for a task in this state. An empty list means "ignore it", so
-/// the event log does not fill up with calls that change nothing.
+/// Which task events a signal means for a task in this state. `wait` counts only in needs input.
+/// An empty list means "ignore it", so the event log does not fill up with calls that change
+/// nothing.
 pub fn plan_signal_events(
     state: TaskState,
+    wait: Wait,
     signal: Signal,
     payload: &Map<String, Value>,
 ) -> Vec<PlannedEvent> {
@@ -182,9 +195,9 @@ pub fn plan_signal_events(
             _ => Vec::new(),
         },
         // A tool ran, so a permission that was asked for has been answered, or the agent works
-        // again after an API error.
-        Signal::Activity => match state {
-            TaskState::Idle | TaskState::NeedsInput | TaskState::Failed => {
+        // again after an API error. A tool after `natamux ask` answers nothing.
+        Signal::Activity => match (state, wait) {
+            (TaskState::Idle | TaskState::Failed, _) | (TaskState::NeedsInput, Wait::Hook) => {
                 vec![planned("agent.resumed", payload)]
             }
             _ => Vec::new(),
@@ -194,15 +207,20 @@ pub fn plan_signal_events(
         {
             vec![planned("agent.asked", payload)]
         }
+        // The turn ended on a question after a hook's wait: the question waits now.
+        Signal::TurnAsked if state == TaskState::NeedsInput && wait == Wait::Hook => vec![
+            planned("agent.resumed", payload),
+            planned("agent.asked", payload),
+        ],
         Signal::Asking | Signal::TurnAsked => Vec::new(),
-        Signal::TurnEnded => end_turn(state, "agent.finished", payload),
-        Signal::TurnPaused => end_turn(state, "agent.waiting", payload),
+        Signal::TurnEnded => end_turn(state, wait, "agent.finished", payload),
+        Signal::TurnPaused => end_turn(state, wait, "agent.waiting", payload),
         // A failure ends the wait too: the agent cannot answer any more.
         Signal::Failed if state == TaskState::NeedsInput => vec![
             planned("agent.resumed", payload),
             planned("agent.failed", payload),
         ],
-        Signal::Failed => end_turn(state, "agent.failed", payload),
+        Signal::Failed => end_turn(state, wait, "agent.failed", payload),
     }
 }
 
@@ -234,12 +252,52 @@ fn bare(line: &str) -> &str {
     start.trim_end_matches(|c: char| c.is_whitespace() || "*_`)".contains(c))
 }
 
-/// The question an agent's last message ends on: its last line, when that ends with a question
-/// mark. shortcut: a question mid-message or one without "?" counts as none; read the transcript
-/// if that misses too often.
+const LIST_MARKS: [&str; 4] = ["- ", "* ", "+ ", "・"];
+
+// "1. A", "2) B", "- C", "* D", "+ E", "・F", "a) G": a line of a list of options.
+fn is_list_item(line: &str) -> bool {
+    let line = line.trim_start();
+    if LIST_MARKS.iter().any(|mark| line.starts_with(mark)) {
+        return true;
+    }
+    let mark = line.trim_start_matches(|c: char| c.is_ascii_digit());
+    let digits = line.len() - mark.len();
+    if (1..=3).contains(&digits) {
+        return mark.starts_with(". ") || mark.starts_with(") ");
+    }
+    let mut chars = line.chars();
+    chars.next().is_some_and(|c| c.is_ascii_alphabetic()) && chars.as_str().starts_with(") ")
+}
+
+fn is_question(line: &str) -> bool {
+    line.ends_with(['?', '？'])
+}
+
+/// The question an agent's last message ends on: its last line, or the line just before the list
+/// of options it ends with, when that line ends with a question mark. A last list item that is a
+/// question counts too. A heading or a code block at the end is no question. shortcut: a question
+/// mid-message or one without "?" counts as none; a missed question still shows as unseen.
 pub fn question_of(message: &str) -> Option<&str> {
-    let last = message.lines().map(bare).rfind(|line| !line.is_empty())?;
-    last.ends_with(['?', '？']).then_some(last)
+    // Not `bare`: it would turn a closing code fence into an empty line.
+    let mut lines = message.lines().rev().filter(|row| !row.trim().is_empty());
+    let last = lines.next()?;
+    if last.trim_start().starts_with("```") {
+        return None;
+    }
+    if is_list_item(last) {
+        let item = bare(last);
+        if is_question(item) {
+            return Some(item);
+        }
+    }
+    let line = std::iter::once(last)
+        .chain(lines)
+        .find(|line| !is_list_item(line))?;
+    if line.trim_start().starts_with('#') {
+        return None;
+    }
+    let line = bare(line);
+    is_question(line).then_some(line)
 }
 
 /// `text.slice(0, units)`, counted in UTF-16 units. A pair cut in the middle is dropped whole,

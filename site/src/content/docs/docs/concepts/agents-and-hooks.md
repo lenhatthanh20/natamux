@@ -39,16 +39,16 @@ The agent that starts is, in this order: the one you choose when you start it, t
 
 ## How Natamux knows what the agent does
 
-Every agent has its own hook names. Natamux turns them into six common signals:
+Every agent has its own hook names. Natamux turns them into seven common signals:
 
 | Signal | Meaning | Effect on the task |
 |---|---|---|
 | `prompt` | A prompt was sent to the agent. | A `draft` or `ready` task becomes `running`. A task in `idle`, `needs-input` or `review` becomes `running` again. |
-| `activity` | The agent ran a tool. | A task in `idle` or `needs-input` becomes `running`, because a permission was answered or the agent works again. Otherwise the dashboard shows that the agent is alive. |
+| `activity` | The agent ran a tool. | A task in `idle` becomes `running`. A task in `needs-input` because of a permission or an options dialog becomes `running`: you answered it. One that waits for your answer (`natamux ask`, a question) keeps waiting. Otherwise the dashboard shows that the agent is alive. |
 | `asking` | The agent waits for you: a permission or a question. | A `running` or `idle` task becomes `needs-input`. |
-| `turn-ended` | The agent finished its turn. | A `running` task becomes `idle`, unless the agent ran `natamux done` first. The desktop app notifies once ("Finished its turn"), but `idle` does not need you: no red, no Dock count. A `needs-input` task stays `needs-input`. |
-| `turn-paused` | The agent finished its turn, but background work will wake it again. | The task stays `running`, and its summary says what the agent waits for, such as `Waiting for Bash: pnpm test`. It is not quiet. A `needs-input` task stays `needs-input`. |
-| `turn-asked` | The agent finished its turn on a question: the last line of its message ends in `?` (Claude Code and Codex). | A `running` or `idle` task becomes `needs-input`, and the question is shown. |
+| `turn-ended` | The agent finished its turn. | A `running` task becomes `idle`, unless the agent ran `natamux done` first. The desktop app notifies once ("Finished its turn") and counts the task on the Dock until you open it; `idle` is not red. A task that waits for your answer stays `needs-input`; one that waited on a permission becomes `idle`. |
+| `turn-paused` | The agent finished its turn, but background work will wake it again. | The task stays `running`, and its summary says what the agent waits for, such as `Waiting for Bash: pnpm test`. It is not quiet. A task that waits for your answer stays `needs-input`; one that waited on a permission becomes `running`. |
+| `turn-asked` | The agent finished its turn on a question: its last line, or the line before the list of options it ends with, ends in `?` (Claude Code and Codex). | A `running` or `idle` task becomes `needs-input`, and the question is shown. |
 | `failed` | The agent stopped with an error. | A `running`, `idle` or `needs-input` task becomes `failed`. |
 
 A turn that ends without `natamux done` means the agent stopped early. The task is then `idle`, or `needs-input` when the turn ends on a question or after `natamux ask`; it waits until you answer. The stage is done only when the agent runs `natamux done`. Then the checks run. See [Stages](/docs/concepts/stages/).

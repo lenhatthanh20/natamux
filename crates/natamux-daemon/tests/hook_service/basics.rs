@@ -427,6 +427,48 @@ fn keeps_a_task_waiting_after_natamux_ask_until_the_user_answers() {
     assert_eq!(fx.state(&task.id), TaskState::Running);
 }
 
+// `natamux ask` returns at once: a tool the agent runs after it is no answer.
+#[test]
+fn keeps_a_task_waiting_after_natamux_ask_while_the_agent_works_on() {
+    let fx = Fx::new();
+    let service = fx.service();
+    let task = fx.make("Fix it");
+    step(&service, &task.id, "UserPromptSubmit");
+    let asked = json!({
+        "source": "agent",
+        "type": "agent.asked",
+        "payload": { "question": "Which branch?" },
+    });
+    fx.apply(&task.id, asked);
+
+    claude(&service, &task.id, &edit("notes.md"), None);
+    step(&service, &task.id, "PostToolUse");
+    step(&service, &task.id, "Stop");
+
+    assert_eq!(fx.state(&task.id), TaskState::NeedsInput);
+    assert!(!fx.kinds(&task.id).contains(&"agent.resumed".to_string()));
+}
+
+// A permission answered by a tool hook, then `natamux ask`: the old permission is not the wait.
+#[test]
+fn a_wait_for_an_answer_after_a_permission_still_waits_for_the_answer() {
+    let fx = Fx::new();
+    let service = fx.service();
+    let task = fx.make("Fix it");
+    step(&service, &task.id, "UserPromptSubmit");
+    step(&service, &task.id, "PermissionRequest");
+    step(&service, &task.id, "PostToolUse");
+    let asked = json!({
+        "source": "agent",
+        "type": "agent.asked",
+        "payload": { "question": "Which branch?" },
+    });
+    fx.apply(&task.id, asked);
+
+    assert!(step(&service, &task.id, "Stop").applied.is_empty());
+    assert_eq!(fx.state(&task.id), TaskState::NeedsInput);
+}
+
 #[test]
 fn a_turn_that_ends_on_a_question_waits_for_the_user_and_keeps_the_question() {
     let fx = Fx::new();
@@ -447,4 +489,20 @@ fn a_turn_that_ends_on_a_question_waits_for_the_user_and_keeps_the_question() {
         "Should I open the PR?"
     );
     assert!(service.activity().is_empty());
+}
+
+// `natamux ask` behind a permission prompt: the end of its call sends no hook, so the ask itself
+// turns the permission's wait into a wait for the answer.
+#[test]
+fn an_ask_behind_a_permission_prompt_still_waits_for_the_answer() {
+    let fx = Fx::new();
+    let service = fx.service();
+    let task = fx.make("Fix it");
+    step(&service, &task.id, "UserPromptSubmit");
+    step(&service, &task.id, "PermissionRequest");
+
+    service.waits_for_answer(&task.id, None);
+
+    assert!(step(&service, &task.id, "Stop").applied.is_empty());
+    assert_eq!(fx.state(&task.id), TaskState::NeedsInput);
 }

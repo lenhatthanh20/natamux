@@ -191,6 +191,10 @@ pub async fn post_event(
             .cloned()
             .unwrap_or_default(),
     };
+    if input.kind == "agent.asked" {
+        let terminal = input.payload.get("terminal").and_then(Value::as_str);
+        state.hooks.waits_for_answer(&id, terminal);
+    }
     // Any event may end the step before a branch, whose conditions are checked first. Only the
     // daemon picks the path.
     stage_answer(StatusCode::OK, move || {

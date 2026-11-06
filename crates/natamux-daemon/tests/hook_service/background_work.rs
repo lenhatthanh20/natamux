@@ -84,13 +84,23 @@ fn goes_on_as_before_when_the_agent_comes_back_and_then_really_stops() {
     assert!(service.activity().is_empty());
 }
 
+/// `natamux ask` from the agent's shell: the task waits for an answer.
+fn ask_by_cli(fx: &Fx, task_id: &str) {
+    let asked = json!({
+        "source": "agent",
+        "type": "agent.asked",
+        "payload": { "question": "Which branch?" },
+    });
+    fx.apply(task_id, asked);
+}
+
 // A turn end is no answer: the task keeps waiting for the user (T-0008).
 #[test]
 fn keeps_a_task_that_waits_for_the_user_waiting() {
     let fx = Fx::new();
     let service = fx.service();
     let task = running_task(&fx, &service);
-    step(&service, &task.id, "PermissionRequest");
+    ask_by_cli(&fx, &task.id);
 
     let result = claude(&service, &task.id, &stop_with(background()), None);
 
@@ -152,7 +162,7 @@ fn keeps_a_task_that_waits_for_the_user_waiting_for_a_scheduled_prompt_too() {
     let fx = Fx::new();
     let service = fx.service();
     let task = running_task(&fx, &service);
-    step(&service, &task.id, "PermissionRequest");
+    ask_by_cli(&fx, &task.id);
 
     let result = claude(&service, &task.id, &stop_with(crons()), None);
 
@@ -165,7 +175,7 @@ fn keeps_a_task_that_waits_for_the_user_waiting_with_no_background_work() {
     let fx = Fx::new();
     let service = fx.service();
     let task = running_task(&fx, &service);
-    step(&service, &task.id, "PermissionRequest");
+    ask_by_cli(&fx, &task.id);
 
     let result = claude(
         &service,
@@ -177,6 +187,25 @@ fn keeps_a_task_that_waits_for_the_user_waiting_with_no_background_work() {
     assert!(result.applied.is_empty());
     assert_eq!(fx.state(&task.id), TaskState::NeedsInput);
     assert!(!fx.kinds(&task.id).contains(&"agent.finished".to_string()));
+}
+
+// A permission the user denied leaves no tool hook; the turn end ends that wait.
+#[test]
+fn ends_a_permission_wait_at_the_end_of_the_turn() {
+    let fx = Fx::new();
+    let service = fx.service();
+    let task = running_task(&fx, &service);
+    step(&service, &task.id, "PermissionRequest");
+
+    let result = claude(
+        &service,
+        &task.id,
+        &stop_with(json!({ "background_tasks": [] })),
+        None,
+    );
+
+    assert_eq!(result.applied, ["agent.resumed", "agent.finished"]);
+    assert_eq!(fx.state(&task.id), TaskState::Idle);
 }
 
 #[test]
