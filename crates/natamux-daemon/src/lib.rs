@@ -73,6 +73,7 @@ pub mod terminals {
     pub mod open_shells;
     mod open_shells_pause;
     mod open_shells_sync;
+    pub mod screen_files;
     pub mod service;
     pub mod session_input;
     pub mod session_lifecycle;

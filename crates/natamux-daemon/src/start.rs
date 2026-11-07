@@ -1,7 +1,7 @@
 //! Builds the daemon and starts its server (`main.ts`, the parts that exist in Rust so far).
 
 use std::net::SocketAddr;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
@@ -218,6 +218,7 @@ fn terminal_service(
     store: &TaskStore,
     daemon_url: &str,
     cells: &Cells,
+    data_dir: &Path,
 ) -> TerminalService {
     let output = Arc::clone(&cells.runner);
     let idle = Arc::clone(&cells.workspaces);
@@ -253,6 +254,7 @@ fn terminal_service(
             }
         })),
         trace_input: trace_input_on(env.get("NATAMUX_INPUT_TRACE").map(String::as_str)),
+        screens_in: Some(data_dir.to_path_buf()),
     })
 }
 
@@ -358,7 +360,15 @@ pub async fn start(
     let daemon_url = format!("http://127.0.0.1:{}", address.port());
     let cells = Cells::default();
     let spawn = with_hook_files(spawn);
-    let terminals = terminal_service(env, spawn, &scheduler, &store, &daemon_url, &cells);
+    let terminals = terminal_service(
+        env,
+        spawn,
+        &scheduler,
+        &store,
+        &daemon_url,
+        &cells,
+        &config.data_dir,
+    );
     let open_shells = open_shells(config, &store, &terminals, &scheduler, &cells.runner);
     let agents = Arc::new(agent_runner(
         config,
@@ -492,6 +502,7 @@ impl Daemon {
         self.state.issue_linker.stop();
         self.state.idle_pause.stop();
         self.state.open_shells.stop();
+        self.state.terminals.save_screens();
         let ended = self.state.terminals.close_all_and_wait();
         self.state.stages.stop();
         ended.wait();

@@ -87,6 +87,9 @@ CPU and draws a second of the fake's task table with focus and behind Finder; it
 | `task_init_500_ms`, `task_init_2000_ms` | `TaskSync::init` with 500 and 2,000 task files and a new index: every file is read |
 | `task_init_500_warm_ms`, `task_init_2000_warm_ms` | the same files again with the index of the first load, as at a daemon start with no change |
 | `hook_p50_ms`, `hook_p95_ms` | `HookService::handle` from 30 threads at once, 40 Claude Code hooks each (prompt, tool start, tool end, turn end), the task found by the working directory |
+| `restore_snapshot_ms` | p50 of 10 runs: from `attach` to the first snapshot bytes the client gets, for a shell with a saved screen (120x40, 1,000 history rows) that the open-shells file lists. Asserted at 50 ms in `daemon_bench.rs`; the numbers are in `tests/daemon_bench_parts/opens.rs`. |
+| `screen_save_30_ms` | `TerminalService::save_screens` with 30 shells that each hold a full screen and printed since: the cost at shutdown. Reported; asserted at 1,000 ms in `daemon_bench.rs`. |
+| `shell_first_output_ms` | p50 of 5 runs: from the real `spawn_shell` of the login shell in a temp folder to its first output byte. It depends on the shell and its startup files, so it is only reported. `null` when the spawn fails or on Windows. |
 
 ## Before and after (CI)
 

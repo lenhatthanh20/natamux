@@ -14,6 +14,7 @@ use natamux_screen::Screen;
 use natamux_screen::frames::whole_chars;
 
 use super::limits::{EXIT_WAIT_MS, KILL_GRACE_MS, PARSE_TURN_BYTES};
+use super::screen_files::RESTORED_LINE;
 use super::session_input::set_paused;
 use super::session_output::{flush_output, queue_output};
 use super::session_snapshot::{catch_up_at_exit, end_snapshots, frame_parsed};
@@ -49,6 +50,8 @@ pub struct NewSession<'a> {
     pub size: Size,
     pub scheduler: &'a Arc<Scheduler>,
     pub trace_input: bool,
+    /// The screen the shell had before a restart: shown above the new shell's output.
+    pub restored: Option<Vec<u8>>,
 }
 
 pub fn spawn_session(new: NewSession<'_>) -> Result<SessionRef, TerminalError> {
@@ -72,6 +75,11 @@ pub fn spawn_session(new: NewSession<'_>) -> Result<SessionRef, TerminalError> {
     .map_err(|error| TerminalError::Spawn(error.to_string()))?;
     let program = pty.foreground();
     let processes = pty.processes();
+    let mut screen = Screen::new(new.size.cols, new.size.rows);
+    if let Some(old) = &new.restored {
+        screen.write(old);
+        screen.write(RESTORED_LINE.as_bytes());
+    }
     Ok(Arc::new_cyclic(|this| {
         Mutex::new(Session {
             task_id: new.task_id.into(),
@@ -79,7 +87,7 @@ pub fn spawn_session(new: NewSession<'_>) -> Result<SessionRef, TerminalError> {
             shell_id: random_id(16),
             pty,
             processes,
-            screen: Screen::new(new.size.cols, new.size.rows),
+            screen,
             clients: Vec::new(),
             size: new.size,
             offset: 0,

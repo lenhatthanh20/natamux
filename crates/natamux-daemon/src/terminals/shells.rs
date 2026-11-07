@@ -1,14 +1,17 @@
 //! The open shells of the daemon and what happens to them on their own: output, exit, quiet
 //! moments, idle ends. `TerminalService` is the public side.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::AtomicU64;
 use std::sync::{Arc, Mutex, MutexGuard, Weak};
+use std::time::{Duration, Instant};
 
+use natamux_proto::terminals::history::CATCH_UP_HISTORY_ROWS;
 use natamux_proto::terminals::messages::ServerMessage;
 use natamux_pty::{Env, PtyEvents};
 
 use super::limits::{ENDED_IDLE_MS, MAX_SESSIONS, SHELL_PROGRAMS, WORKSPACE_QUIET_MS};
+use super::screen_files::{read_screen, save_screen};
 use super::service::TerminalOptions;
 use super::session_input::set_size;
 use super::session_lifecycle::{
@@ -33,6 +36,11 @@ pub(super) struct Inner {
     pub(super) next_attach: AtomicU64,
     /// Held while a shell starts, so two attaches at once start one shell, and the limit holds.
     pub(super) starting: Mutex<()>,
+    /// The shells started since the daemon started: only the first start of a name shows the
+    /// saved screen.
+    pub(super) started: Mutex<HashSet<String>>,
+    /// By shell: the output offset and the time of its last saved screen.
+    pub(super) saved_screens: Mutex<HashMap<String, (u64, Instant)>>,
     /// Held while one shell's output is parsed: up to `parse_lanes` shells parse at once, so
     /// floods in many shells take at most 4 cores (on 1 or 2 cores, every core: see
     /// `parse_lanes`). Turns go in order, so a flood never keeps a quiet shell waiting more than
@@ -40,6 +48,9 @@ pub(super) struct Inner {
     pub(super) parsing: Turns,
     pub(super) this: Weak<Inner>,
 }
+
+/// How often a busy shell's screen is saved at most.
+const SCREEN_SAVE_EVERY: Duration = Duration::from_secs(5);
 
 pub(super) fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     // A panic in one shell (a bug) must not stop all the others.
@@ -102,6 +113,53 @@ impl Inner {
         lock(&self.sessions)
             .get(key)
             .is_some_and(|known| Arc::ptr_eq(known, session))
+    }
+
+    /// Saves the screen of each shell of the task that printed since its last save. A busy shell
+    /// is saved at most once in SCREEN_SAVE_EVERY, so a crash loses at most that much; `now`
+    /// skips that wait, for a quiet moment and the shutdown.
+    pub(super) fn save_screens(&self, task_id: &str, now: bool) {
+        let Some(data_dir) = &self.options.screens_in else {
+            return;
+        };
+        for session in self.sessions_of_task(task_id) {
+            let (key, terminal, offset, exited) = {
+                let guard = lock(&session);
+                let key = session_key(&guard.task_id, &guard.terminal);
+                (key, guard.terminal.clone(), guard.offset, guard.exited)
+            };
+            if exited || !self.due_screen(&key, offset, now) {
+                continue;
+            }
+            let screen = lock(&session).screen.snapshot_tail(CATCH_UP_HISTORY_ROWS);
+            // The screen is a convenience: a full disk must not break a shell.
+            let _ = save_screen(data_dir, task_id, &terminal, &screen);
+        }
+    }
+
+    /// Whether a shell's screen is due a save, and if so, marks it saved.
+    fn due_screen(&self, key: &str, offset: u64, now: bool) -> bool {
+        let mut saved = lock(&self.saved_screens);
+        let at = Instant::now();
+        if let Some((saved_offset, saved_at)) = saved.get(key)
+            && (*saved_offset == offset
+                || (!now && at.duration_since(*saved_at) < SCREEN_SAVE_EVERY))
+        {
+            return false;
+        }
+        saved.insert(key.to_string(), (offset, at));
+        true
+    }
+
+    pub(super) fn save_all_screens(&self) {
+        let all: Vec<SessionRef> = lock(&self.sessions).values().cloned().collect();
+        let tasks: HashSet<String> = all
+            .iter()
+            .map(|session| lock(session).task_id.clone())
+            .collect();
+        for task_id in tasks {
+            self.save_screens(&task_id, true);
+        }
     }
 
     /// The shells of one task, found by key: no other session is locked, so a parser that holds
@@ -179,6 +237,12 @@ impl Inner {
         if lock(&self.sessions).len() >= MAX_SESSIONS {
             return Err(TerminalError::Limit(MAX_SESSIONS));
         }
+        let key = session_key(task_id, terminal);
+        let first = !lock(&self.started).contains(&key);
+        let restored = match &self.options.screens_in {
+            Some(data_dir) if first => read_screen(data_dir, task_id, terminal),
+            _ => None,
+        };
         let session = spawn_session(NewSession {
             spawn: self.options.spawn.as_ref(),
             env: &self.env,
@@ -189,9 +253,10 @@ impl Inner {
             size,
             scheduler: &self.options.scheduler,
             trace_input: self.options.trace_input,
+            restored,
         })?;
-        let key = session_key(task_id, terminal);
         lock(&self.sessions).insert(key.clone(), Arc::clone(&session));
+        lock(&self.started).insert(key.clone());
         self.publish_shells_changed(task_id);
         let events = self.events(key, &session);
         lock(&session).pty.start(events);
@@ -251,7 +316,7 @@ impl Inner {
     }
 
     pub(super) fn output(&self, task_id: &str, terminal: &str, data: &[u8]) {
-        if self.options.on_output_idle.is_some() {
+        if self.options.on_output_idle.is_some() || self.options.screens_in.is_some() {
             self.note_output(task_id);
         }
         if let Some(listener) = &self.options.on_output {
@@ -282,12 +347,14 @@ impl Inner {
             if seen.get(&task_id) == Some(&true) {
                 seen.insert(task_id.clone(), false);
                 drop(seen);
+                inner.save_screens(&task_id, false);
                 inner.note_foreground(&task_id);
                 inner.check_quiet(task_id);
                 return;
             }
             seen.remove(&task_id);
             drop(seen);
+            inner.save_screens(&task_id, true);
             if let Some(listener) = &inner.options.on_output_idle {
                 listener(&task_id);
             }

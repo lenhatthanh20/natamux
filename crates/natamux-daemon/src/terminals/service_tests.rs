@@ -4,6 +4,7 @@ use std::time::Duration;
 use natamux_pty::{Pty, PtyEvents, Signal, SpawnOptions};
 
 use super::*;
+use crate::terminals::session_lifecycle::random_id;
 use crate::terminals::types::TerminalClient;
 
 struct StillPty;
@@ -28,6 +29,10 @@ fn spawn(_: SpawnOptions) -> std::io::Result<Box<dyn Pty>> {
 }
 
 fn service() -> TerminalService {
+    service_in(None)
+}
+
+fn service_in(screens_in: Option<std::path::PathBuf>) -> TerminalService {
     TerminalService::new(TerminalOptions {
         spawn: Arc::new(spawn),
         workspace_of: Arc::new(|task| Ok(format!("/work/{task}").into())),
@@ -39,6 +44,7 @@ fn service() -> TerminalService {
         on_output_idle: None,
         on_exit: None,
         trace_input: false,
+        screens_in,
     })
 }
 
@@ -76,4 +82,79 @@ fn the_quiet_check_of_a_task_never_waits_for_a_session_of_another_task() {
     holder.join().unwrap();
     // Only its own shell: "T-00010" starts with "T-0001" but is another task.
     assert_eq!(found, Ok(1));
+}
+
+struct TempDir(std::path::PathBuf);
+
+impl Drop for TempDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+fn temp_dir() -> TempDir {
+    let name = format!("natamux-screens-{}", random_id(8));
+    let path = std::env::temp_dir().join(name);
+    std::fs::create_dir_all(&path).unwrap();
+    TempDir(path)
+}
+
+fn attach_one(service: &TerminalService, terminal: &str) -> Detach {
+    let client: ClientRef = Arc::new(Nobody);
+    let size = Size { cols: 80, rows: 24 };
+    let options = AttachOptions::default();
+    service
+        .attach("T-0001", client, size, terminal, options)
+        .unwrap()
+}
+
+#[test]
+fn a_listed_shell_starts_with_its_saved_screen_and_the_restored_line() {
+    use crate::terminals::screen_files::save_screen;
+    use crate::terminals::shell_files::{OpenShell, save_open_shells};
+
+    let dir = temp_dir();
+    let listed = OpenShell {
+        name: "1".into(),
+        agent: None,
+        session: None,
+        paused: false,
+    };
+    save_open_shells(&dir.0, "T-0001", &[listed]).unwrap();
+    save_screen(&dir.0, "T-0001", "1", b"old agent answer\r\n").unwrap();
+    save_screen(&dir.0, "T-0001", "2", b"closed shell\r\n").unwrap();
+    let service = service_in(Some(dir.0.clone()));
+    let _one = attach_one(&service, "1");
+    let _two = attach_one(&service, "2");
+
+    let one = service.last_screen("T-0001", "1", 24).unwrap();
+    assert!(one.contains("old agent answer"), "{one}");
+    assert!(one.contains("Restored after restart"), "{one}");
+    // Not in the open-shells list: a stale file is never shown.
+    let two = service.last_screen("T-0001", "2", 24).unwrap();
+    assert!(!two.contains("closed shell"), "{two}");
+}
+
+#[test]
+fn a_quiet_moment_saves_the_screen_of_a_shell_that_printed() {
+    use crate::terminals::screen_files::screens_dir;
+
+    let dir = temp_dir();
+    let service = service_in(Some(dir.0.clone()));
+    let _one = attach_one(&service, "1");
+    let session = service.inner.get("T-0001", "1").unwrap();
+    {
+        let mut guard = lock(&session);
+        guard.screen.write(b"build done\r\n");
+        guard.offset += 12;
+    }
+    service.inner.save_screens("T-0001", true);
+
+    let file = screens_dir(&dir.0, "T-0001").join("1.ans");
+    let saved = std::fs::read(&file).unwrap();
+    assert!(String::from_utf8_lossy(&saved).contains("build done"));
+    // Nothing printed since: no second write.
+    std::fs::remove_file(&file).unwrap();
+    service.inner.save_screens("T-0001", true);
+    assert!(!file.exists());
 }

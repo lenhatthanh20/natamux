@@ -11,6 +11,7 @@ use std::sync::{Arc, Mutex, MutexGuard, Weak};
 use natamux_agents::custom::{agent_kind, has_adapter};
 
 use super::limits::SHELL_PROGRAMS;
+use super::screen_files::keep_screens;
 use super::shell_files::{OpenShell, delete_open_shells, note_ended_session, save_open_shells};
 use crate::shared::event_bus::{DaemonMessage, EventBus};
 use crate::shared::scheduler::{Scheduler, TimerId};
@@ -418,6 +419,7 @@ impl OpenShells {
         }
         drop(guard);
         let _ = delete_open_shells(&self.options.data_dir, task_id);
+        let _ = keep_screens(&self.options.data_dir, task_id, &[]);
     }
 
     /// Before the shutdown closes every shell. After this the list is not written again, so the
@@ -484,6 +486,8 @@ impl OpenShells {
             .collect();
         shells.sort_by_key(|shell| shell.name.parse::<u32>().unwrap_or(u32::MAX));
         let data_dir = &self.options.data_dir;
+        let names: Vec<&str> = shells.iter().map(|shell| shell.name.as_str()).collect();
+        let _ = keep_screens(data_dir, task_id, &names);
         // The list is a convenience: a full disk must not break a shell.
         let _ = if shells.is_empty() {
             delete_open_shells(data_dir, task_id)
