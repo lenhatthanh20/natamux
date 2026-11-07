@@ -215,7 +215,7 @@ pub struct StartForm {
     pub reference: String,
     /// The skill picked for An agent skill; empty until one is picked.
     pub skill: String,
-    /// "Create a worktree" unchecked: the task only, with no base or branch.
+    /// "Create a worktree" unchecked: the task works in the project folder, with no base or branch.
     pub no_worktree: bool,
 }
 
@@ -275,7 +275,7 @@ pub fn new_workspace_input(
 /// The toast once the daemon made the task: only a worktree has something to prepare.
 pub fn made_toast(id: &str, worktree: Option<bool>) -> String {
     if worktree == Some(false) {
-        format!("{id} is created.")
+        format!("{id} is started in the main checkout.")
     } else {
         format!("{id} is being prepared.")
     }
@@ -284,7 +284,7 @@ pub fn made_toast(id: &str, worktree: Option<bool>) -> String {
 /// What Start task does, in its tooltip.
 pub fn start_hint(no_worktree: bool) -> &'static str {
     if no_worktree {
-        "A new task with no workspace yet. Make it later from the task."
+        "A new task in the project folder itself: no worktree, no new branch."
     } else {
         "A new task with its own workspace: a git worktree on a new branch."
     }

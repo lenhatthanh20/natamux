@@ -106,6 +106,30 @@ impl Store {
         self.record(updated, event)
     }
 
+    /// Records that the task works in the project folder itself, on `branch`.
+    pub fn record_main_checkout(
+        &mut self,
+        task_id: &str,
+        workspace: String,
+        branch: Option<String>,
+    ) -> TaskResult<Task> {
+        let task = self.get_task(task_id)?;
+        let event = self.event(
+            task_id,
+            "system",
+            "workspace.created",
+            json!({ "workspace": workspace, "branch": branch, "mainCheckout": true }),
+        );
+        let updated = Task {
+            workspace: Some(workspace),
+            branch,
+            main_checkout: Some(true),
+            updated_at: event.at.clone(),
+            ..task
+        };
+        self.record(updated, event)
+    }
+
     /// Writes down why a workspace that was made after its request answered could not be made.
     pub fn record_workspace_failure(&mut self, task_id: &str, message: &str) -> TaskResult<Task> {
         let task = self.get_task(task_id)?;

@@ -164,6 +164,10 @@ pub struct Task {
     pub skip_stages: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub without_agent: Option<bool>,
+    /// The task works in the project folder itself, not in a worktree: Natamux never makes a
+    /// worktree for it nor deletes that folder or its branch.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub main_checkout: Option<bool>,
     #[serde(default)]
     pub context: Option<TaskContext>,
     #[serde(default)]

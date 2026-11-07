@@ -44,6 +44,10 @@ pub fn step_text(step: PreparingStep) -> &'static str {
     }
 }
 
+/// What a task that left the main checkout says: the daemon gives it no worktree, so it offers
+/// no Create workspace nor Start agent.
+pub const DETACHED: &str = "Detached from the main checkout. Start a new task to work on it again.";
+
 /// "Waits for T-2, T-3 to be done".
 pub fn waits_text(ids: &[String]) -> Option<String> {
     (!ids.is_empty()).then(|| format!("Waits for {} to be done", ids.join(", ")))
@@ -140,6 +144,11 @@ impl RenderOnce for NoWorkspace {
                 .child(Label::new("Preparing workspace").weight(FontWeight::MEDIUM))
                 .child(Label::new(step_text(step)).color(Color::Muted))
                 .into_any_element(),
+            None if self.task.main_checkout == Some(true) => {
+                EmptyState::new("no-workspace", "folder-git-2", "No workspace")
+                    .body(DETACHED)
+                    .into_any_element()
+            }
             None => {
                 let start =
                     no_workspace_start(self.branches.as_ref(), self.parent_branch.as_deref());

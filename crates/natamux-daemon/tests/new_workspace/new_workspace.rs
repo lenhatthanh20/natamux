@@ -4,9 +4,11 @@ use std::fs::{create_dir_all, read_to_string, write};
 use std::path::Path;
 
 use natamux_daemon::workspaces::errors::WorkspaceError;
+use natamux_git::test_support::run_git;
 use natamux_daemon::workspaces::new_workspace::{NewWorkspaceInput, new_workspace};
 use natamux_proto::tasks::task::TaskState;
 use natamux_store::attachments::AttachmentFile;
+use natamux_store::task_files::archive_dir;
 use serde_json::json;
 
 use crate::{Fx, default_settings};
@@ -320,32 +322,114 @@ fn keeps_the_task_and_logs_why_when_the_worktree_cannot_be_made() {
     assert_eq!(fx.pty_count(), 0);
 }
 
+fn main_checkout_input(title: &str, agent: Option<&str>) -> NewWorkspaceInput {
+    NewWorkspaceInput {
+        agent: agent.map(str::to_string),
+        no_worktree: true,
+        ..input(title)
+    }
+}
+
+fn worktree_count(repo: &Path) -> usize {
+    run_git(repo, &["worktree", "list", "--porcelain"])
+        .lines()
+        .filter(|line| line.starts_with("worktree "))
+        .count()
+}
+
 #[test]
-fn makes_only_the_task_without_a_worktree_and_starts_no_agent() {
+fn works_in_the_main_checkout_without_a_worktree_and_starts_the_agent() {
     let fx = Fx::new();
     let notes = "Keep the old URL.";
 
     let created = new_workspace(
         &fx.new_parts(),
         NewWorkspaceInput {
-            agent: Some("claude-code".to_string()),
             prompt: Some(notes.to_string()),
-            no_worktree: true,
-            ..input("Fix the login page")
+            ..main_checkout_input("Fix the login page", Some("claude-code"))
         },
     )
     .unwrap();
     assert!(fx.workspaces.preparing().is_empty());
+    assert_eq!(created.main_checkout, Some(true));
     fx.settle();
 
     let task = fx.task(&created.id);
-    assert_eq!((task.workspace, task.branch), (None, None));
-    assert_eq!(task.agent.as_deref(), Some("claude-code"));
+    let repo = fx.repo.to_string_lossy().into_owned();
+    assert_eq!(task.workspace.as_deref(), Some(repo.as_str()));
+    assert_eq!(task.branch.as_deref(), Some("main"));
     assert_eq!(task.description, notes);
-    assert_eq!(fx.pty_count(), 0);
+    assert_eq!(task.state, TaskState::Running);
+    assert_eq!(fx.pty_count(), 1);
+    assert_eq!(worktree_count(&fx.repo), 1);
+    assert_eq!(run_git(&fx.repo, &["branch", "--list", "natamux/*"]), "");
+}
+
+#[test]
+fn refuses_a_second_open_task_in_the_main_checkout_before_it_is_made() {
+    let fx = Fx::new();
+    new_workspace(&fx.new_parts(), main_checkout_input("First", None)).unwrap();
+
+    let second = new_workspace(&fx.new_parts(), main_checkout_input("Second", None));
+
     assert!(
-        fx.events(&created.id)
-            .iter()
-            .all(|event| event.kind != "workspace.failed")
+        matches!(&second, Err(WorkspaceError::Conflict(text)) if text.contains("T-0001")),
+        "{second:?}"
     );
+    assert_eq!(fx.tasks.list_tasks(None).unwrap().len(), 1);
+    fx.settle();
+}
+
+#[test]
+fn detaches_a_finished_task_from_the_main_checkout_for_the_next_one() {
+    let fx = Fx::new();
+    let first = new_workspace(&fx.new_parts(), main_checkout_input("First", None)).unwrap();
+    fx.settle();
+    let stage_dir = fx.repo.join(".natamux-task");
+    create_dir_all(&stage_dir).unwrap();
+    write(stage_dir.join("spec.md"), "# Old spec\n").unwrap();
+    fx.tasks
+        .apply_event(
+            &first.id,
+            Some(&json!({ "source": "human", "type": "task.cancelled" })),
+        )
+        .unwrap();
+
+    let second = new_workspace(&fx.new_parts(), main_checkout_input("Second", None)).unwrap();
+    fx.settle();
+
+    assert_eq!(fx.task(&first.id).workspace, None);
+    assert!(fx.task(&second.id).workspace.is_some());
+    assert!(!stage_dir.join("spec.md").exists());
+    let archived = archive_dir(&fx.data, &first.id).join("spec.md");
+    assert_eq!(read_to_string(archived).unwrap(), "# Old spec\n");
+}
+
+#[test]
+fn detach_keeps_the_folder_its_changes_and_its_branch_and_no_worktree_comes_after() {
+    let fx = Fx::new();
+    run_git(&fx.repo, &["checkout", "-b", "feature"]);
+    let task = new_workspace(&fx.new_parts(), main_checkout_input("Fix", None)).unwrap();
+    fx.settle();
+    write(fx.repo.join("notes.txt"), "mine\n").unwrap();
+    create_dir_all(fx.repo.join(".natamux-task")).unwrap();
+    write(fx.repo.join(".natamux-task/plan.md"), "# Plan\n").unwrap();
+
+    let removed = fx.workspaces.remove(&task.id, true).unwrap();
+
+    assert!(!removed.branch_deleted);
+    assert_eq!(removed.task.workspace, None);
+    assert_eq!(removed.task.branch.as_deref(), Some("feature"));
+    assert_eq!(read_to_string(fx.repo.join("notes.txt")).unwrap(), "mine\n");
+    assert!(!fx.repo.join(".natamux-task").exists());
+    // The delete of the task leaves the branch too, also once the checkout moved on.
+    run_git(&fx.repo, &["checkout", "main"]);
+    fx.workspaces.delete_branches_of(&removed.task).unwrap();
+    assert!(run_git(&fx.repo, &["branch", "--list", "feature"]).contains("feature"));
+    let again = fx.workspaces.create(&task.id, None, None);
+    assert!(
+        matches!(&again, Err(WorkspaceError::Conflict(text)) if text.contains("detached")),
+        "{again:?}"
+    );
+    assert_eq!(worktree_count(&fx.repo), 1);
 }

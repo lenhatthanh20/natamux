@@ -23,6 +23,8 @@ use crate::tasks::edit_rules::label_text;
 use crate::tasks::table_rules::waits_for;
 use crate::tasks::task_attention::is_quiet;
 use crate::tasks::task_rules::{actions_for, agent_action, context_text};
+use crate::workspaces::no_workspace::DETACHED;
+use crate::workspaces::remove_dialog_rules::remove_label;
 use crate::workspaces::wrap_up_rules::is_finished_state;
 
 fn capitalized(text: &str) -> String {
@@ -236,9 +238,11 @@ impl DetailsPanel {
         );
         let busy = self.shown.as_ref().is_some_and(|shown| shown.busy);
         let Some(folder) = task.workspace.clone() else {
-            if is_finished_state(task.state) {
+            let detached = task.main_checkout == Some(true);
+            if detached || is_finished_state(task.state) {
+                let text = if detached { DETACHED } else { NO_WORKSPACE };
                 return section.child(
-                    Label::new(NO_WORKSPACE)
+                    Label::new(text)
                         .size(LabelSize::Small)
                         .color(Color::Muted),
                 );
@@ -298,7 +302,7 @@ impl DetailsPanel {
                             .color(Color::Muted),
                     ),
             ))
-            .child(workspace_buttons(on, busy))
+            .child(workspace_buttons(on, busy, remove_label(task)))
     }
 
     /// "Start from branch" and Create workspace, for a task with no workspace.
@@ -386,7 +390,11 @@ impl DetailsPanel {
 }
 
 /// View changes and Remove workspace, under the workspace's fields.
-fn workspace_buttons(on: &OnCommand, busy: bool) -> impl IntoElement + use<> {
+fn workspace_buttons(
+    on: &OnCommand,
+    busy: bool,
+    remove: &'static str,
+) -> impl IntoElement + use<> {
     h_flex()
         .flex_wrap()
         .gap_2()
@@ -398,7 +406,7 @@ fn workspace_buttons(on: &OnCommand, busy: bool) -> impl IntoElement + use<> {
                 .on_click(send(on, PanelCommand::ViewChanges)),
         )
         .child(
-            Button::new("details-remove-workspace", "Remove workspace")
+            Button::new("details-remove-workspace", remove)
                 .label_size(LabelSize::Small)
                 .start_icon(Icon::from_path(icon_path("folder-minus")).size(IconSize::Small))
                 .disabled(busy)

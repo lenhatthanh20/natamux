@@ -8,7 +8,7 @@ use ui::{Tooltip, prelude::*};
 
 use super::super::new_workspace_rules::{blocked_reason, start_label};
 use super::super::new_workspace_view_rules::{
-    FooterNote, base_name, footer_note, inline_error, stage_names, start_tip,
+    FooterNote, base_name, checked_out, footer_note, inline_error, stage_names, start_tip,
 };
 use super::NewWorkspaceDialog;
 use crate::components::button_style::button_icon;
@@ -136,7 +136,12 @@ impl Render for NewWorkspaceDialog {
         let form = self.form(cx);
         let choice = self.choice();
         let reason = blocked_reason(&form, &choice);
-        let note = footer_note(&form, &choice, &self.base_name(), self.stage_names().len());
+        let branch = if self.worktree {
+            self.base_name()
+        } else {
+            checked_out(self.branches.as_ref())
+        };
+        let note = footer_note(&form, &choice, &branch, self.stage_names().len());
         let close = cx.listener(|this, _, _, cx| {
             if !this.busy {
                 cx.emit(DismissEvent)

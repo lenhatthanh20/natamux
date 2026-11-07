@@ -64,7 +64,7 @@ The dialog has three groups. **Task** is what the agent reads as the task's cont
 | Reference | With any other source. The issue, ticket or record to read, for example `#42` |
 | Attachments | Optional. Screenshots, logs or specs. Click **Add files**, drop them, or paste a screenshot |
 | Project | The project to work in |
-| Create a worktree | On by default. Off: Natamux makes only the task, with no worktree and no agent yet. Make the workspace or start the agent later from the task |
+| Create a worktree | On by default. Off: the task works in the project folder itself, on the branch checked out there, with no worktree and no new branch. Only one open task can work there at a time. Removing its workspace only detaches it: the folder, its changes and its branch stay |
 | Branch from | The branch to start from. It defaults to the default branch, such as `main`. Natamux fetches it first, so the task starts from its newest commit. **Remote branches** has the branches of `origin`, also ones you never fetched |
 | Branch | The name of the new branch. It follows the title, such as `natamux/ABC-123-fix-the-login-redirect` for "ABC-123 Fix the login redirect". Type your own name to change it; the reset button next to it makes it follow the title again |
 | Agent | Pick an agent, or "No agent, a plain terminal" |

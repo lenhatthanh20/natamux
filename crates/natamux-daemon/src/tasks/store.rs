@@ -150,16 +150,21 @@ impl Store {
         tasks
     }
 
-    /// The first task of `list_tasks` whose workspace `holds` accepts, with one clone: a hook
-    /// looks for its task by folder on every call.
+    /// The task with the longest workspace that `holds` accepts, then the first of `list_tasks`,
+    /// with one clone: a hook looks for its task by folder on every call.
     pub fn task_in_workspace(&mut self, holds: impl Fn(&str) -> bool) -> Option<Task> {
         self.sync.check_folder();
         self.sync
             .tasks
             .values()
             .filter(|task| task.workspace.as_deref().is_some_and(&holds))
+            // The innermost workspace first: a worktree folder may be inside a main checkout.
             .min_by(|a, b| {
-                compare_text(&b.updated_at, &a.updated_at).then_with(|| compare_text(&a.id, &b.id))
+                let length = |task: &Task| task.workspace.as_deref().map_or(0, str::len);
+                length(b)
+                    .cmp(&length(a))
+                    .then_with(|| compare_text(&b.updated_at, &a.updated_at))
+                    .then_with(|| compare_text(&a.id, &b.id))
             })
             .cloned()
     }
