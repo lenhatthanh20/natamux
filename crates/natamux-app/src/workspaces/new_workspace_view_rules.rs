@@ -1,5 +1,5 @@
-//! Pure rules of how the Start a task dialog reads (T-0292, option B): the footer note, the help
-//! lines, the footnotes under the cards, and which blocked reason shows as a red line.
+//! Pure rules of how the Start a task dialog reads (T-0305, option A): the footer note, the help
+//! texts of the row tooltips, and which blocked reason shows as a red line.
 
 use natamux_proto::projects::repo::BranchList;
 use natamux_proto::stages::capabilities::stage_name;
@@ -71,7 +71,7 @@ pub fn footer_note(
     FooterNote::Plan(format!("{place} · {agent} · {flow}"))
 }
 
-/// The help under Branch. `follows`: the title gives a name.
+/// The tooltip of the branch row's as label. `follows`: the title gives a name.
 pub fn branch_help(edited: bool, follows: bool) -> &'static str {
     if edited {
         "Your own name"
@@ -98,45 +98,9 @@ pub fn worktree_tip(on: bool) -> &'static str {
     }
 }
 
-/// A piece of a footnote line: plain text, or a name in the mono font.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum FootPart {
-    Text(String),
-    Mono(String),
-}
-
-/// The footnote under the Workspace card.
-pub fn workspace_foot(on: bool, branch: &str, base: &str) -> Vec<FootPart> {
-    if !on {
-        return vec![FootPart::Text(
-            "No workspace yet: the task gets an id and waits. Make the workspace later from the \
-             task."
-                .into(),
-        )];
-    }
-    let branch = branch.trim();
-    let named = if branch.is_empty() {
-        FootPart::Text("a new branch".into())
-    } else {
-        FootPart::Mono(branch.into())
-    };
-    vec![
-        FootPart::Text("A new worktree on ".into()),
-        named,
-        FootPart::Text(", made from ".into()),
-        FootPart::Mono(base.into()),
-        FootPart::Text(".".into()),
-    ]
-}
-
-/// The footnote under the Agent card; a full flow has none, the footer note counts its stages.
-pub fn agent_foot(single: bool) -> Option<&'static str> {
-    if single {
-        Some("One agent does the whole task in Terminal 1. The pipeline stages do not run.")
-    } else {
-        None
-    }
-}
+/// The tooltip of the Flow label.
+pub const FLOW_TIP: &str = "Full flow runs the project's stages. One agent does the whole task in \
+                            Terminal 1, and the stages do not run.";
 
 /// The row whose red line says the blocked reason.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -24,9 +24,13 @@ use crate::components::toast_rules::ToastTone;
 
 /// The Branch field's placeholder when the project sets no `git.branchName`.
 const DEFAULT_BRANCH_HINT: &str = "natamux/{id}-{slug}";
+/// The notes box starts at 3 lines and grows to 8, so the dialog fits a 768 px window.
+const NOTES_LINES: (usize, usize) = (3, 8);
 
 #[path = "new_workspace_fields.rs"]
 mod fields;
+#[path = "new_workspace_files.rs"]
+mod files;
 #[path = "new_workspace_menus.rs"]
 mod menus;
 #[path = "new_workspace_shot.rs"]
@@ -149,11 +153,11 @@ impl NewWorkspaceDialog {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let title = text_editor("Fix the login redirect", None, window, cx);
+        let title = text_editor("Task title", None, window, cx);
         let notes = text_editor(
             "Optional. What to change and why, where to look (files, screens), and how to tell \
              it is done.",
-            Some((6, 12)),
+            Some(NOTES_LINES),
             window,
             cx,
         );
@@ -470,10 +474,11 @@ impl DialogView for NewWorkspaceDialog {
             if self.branches.is_some() {
                 ring.push(stops.branch.clone());
             }
+            // The reset button sits after the branch input.
+            ring.push(self.branch_name.focus_handle(cx));
             if self.branch_edited {
                 ring.push(stops.reset.clone());
             }
-            ring.push(self.branch_name.focus_handle(cx));
         }
         ring.extend(
             [&stops.agent, &stops.flow, &stops.cancel, &stops.submit].map(FocusHandle::clone),

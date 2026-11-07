@@ -1,39 +1,34 @@
-//! The cards of the Start a task dialog (T-0292, option B): Task (title, source, skill, notes or
-//! reference, attachments and their file rows), Workspace (project, worktree, branch) and Agent
-//! (agent, task flow). Each select opens its menu (`new_workspace_menus`).
+//! The rows of the Start a task dialog (T-0305, option A "Compact sheet"): one flat column of
+//! 32 px rows with short labels. Title; Context from and Skill; the context box (notes or
+//! reference, and a bar with the paperclip and the file chips); project and worktree; "from"
+//! base "as" branch; agent and flow. Help texts are tooltips. Each select opens its menu
+//! (`new_workspace_menus`).
 
-use std::path::PathBuf;
-
-use gpui::{AnyElement, ClickEvent, ExternalPaths, KeyDownEvent, PathPromptOptions};
+use gpui::{AnyElement, ClickEvent, Div, ExternalPaths, Focusable, KeyDownEvent};
 use ui::{ButtonLike, Switch, ToggleState, Tooltip, prelude::*};
 
-use super::super::new_workspace_rules::{
-    PickedFile, SourceChoice, fit_attachments, format_bytes, prefill_branch,
-};
+use super::super::new_workspace_rules::{SourceChoice, prefill_branch};
 use super::super::new_workspace_view_rules::{
-    CHOOSE_AGENT, ErrorRow, PICK_AGENT, branch_help, shows_default, source_icon, worktree_help,
-    worktree_tip,
+    CHOOSE_AGENT, ErrorRow, FLOW_TIP, PICK_AGENT, branch_help, shows_default, source_icon,
+    worktree_help, worktree_tip,
 };
 use super::{NewWorkspaceDialog, Pick};
 use crate::agents::agent_choices::agent_label;
 use crate::agents::limits_rules::{current, picker_note};
 use crate::app::clock::now_ms;
-use crate::components::button_style::{action_button, button_icon};
+use crate::components::button_style::button_icon;
 use crate::components::colors::accent;
 use crate::components::form::SettingsInput;
 use crate::components::segmented::Segmented;
-use crate::components::settings_card::{
-    SeparatorInset, SettingsCard, SettingsRow, error_line, foot_text,
-};
+use crate::components::settings_card::{error_line, foot_text};
 use crate::components::settings_tile::{SettingsTile, TileSize};
 use crate::components::text_size::row_text;
 
-/// Every select of the dialog has this width, not the width of its text.
-const SELECT_WIDTH: f32 = 240.;
-/// The Title and Branch inputs.
-const INPUT_WIDTH: f32 = 340.;
-const ATTACH_HELP: &str =
-    "Or drop files here, such as screenshots, logs or specs. They are part of the context.";
+const ROW_HEIGHT: f32 = 32.;
+/// The Branch from select; the branch input takes the rest of its row.
+const BASE_WIDTH: f32 = 160.;
+/// The agent select; the flow control takes the rest of its row.
+const AGENT_WIDTH: f32 = 200.;
 
 /// The 12 px icon before a select's text.
 fn lead_icon(name: &str) -> AnyElement {
@@ -63,39 +58,34 @@ fn select_text(text: impl Into<SharedString>, color: Color, note: Option<String>
         .into_any_element()
 }
 
-/// A row whose control takes the next line at full width (Notes, Reference): the label, an
-/// optional word at the right, the control, then a hint.
-fn stack_row(
-    label: &'static str,
-    end: Option<&'static str>,
-    control: impl IntoElement,
-    hint: Option<String>,
-) -> AnyElement {
-    v_flex()
+/// One 32 px row; its items sit 8 px apart.
+fn line() -> Div {
+    h_flex()
         .w_full()
-        .gap(rems_from_px(6.0_f32))
-        .px(rems_from_px(12.0_f32))
-        .pt(rems_from_px(8.0_f32))
-        .pb(rems_from_px(10.0_f32))
-        .child(
-            h_flex()
-                .w_full()
-                .gap(rems_from_px(8.0_f32))
-                .child(Label::new(label).size(row_text()))
-                .child(div().flex_1())
-                .children(end.map(|end| {
-                    Label::new(end)
-                        .size(LabelSize::Small)
-                        .color(Color::Placeholder)
-                })),
-        )
-        .child(control)
-        .children(hint.map(foot_text))
+        .min_h(rems_from_px(ROW_HEIGHT))
+        .gap(rems_from_px(8.0_f32))
+}
+
+/// A short muted label before a control.
+fn row_label(text: &'static str) -> AnyElement {
+    div()
+        .flex_none()
+        .child(Label::new(text).size(row_text()).color(Color::Muted))
         .into_any_element()
 }
 
-/// Files dragged over the Task card turn its border dashed in the accent colour. The frame lies
-/// over the card and takes no click; the drop itself is handled by the whole body.
+/// A label whose tooltip holds the help text that used to sit under the row.
+fn tip_label(id: &'static str, text: &'static str, tip: impl Into<SharedString>) -> AnyElement {
+    div()
+        .id(id)
+        .flex_none()
+        .tooltip(Tooltip::text(tip.into()))
+        .child(Label::new(text).size(row_text()).color(Color::Muted))
+        .into_any_element()
+}
+
+/// Files dragged over the context box turn its border dashed in the accent colour. The frame
+/// lies over the box and takes no click; the drop itself is handled by the whole body.
 fn drop_frame(card: impl IntoElement, cx: &App) -> AnyElement {
     let accent = accent(cx);
     div()
@@ -106,7 +96,7 @@ fn drop_frame(card: impl IntoElement, cx: &App) -> AnyElement {
             div()
                 .absolute()
                 .inset_0()
-                .rounded(rems_from_px(8.0_f32))
+                .rounded(rems_from_px(6.0_f32))
                 .border_1()
                 .border_dashed()
                 .border_color(gpui::transparent_black())
@@ -116,13 +106,16 @@ fn drop_frame(card: impl IntoElement, cx: &App) -> AnyElement {
 }
 
 impl NewWorkspaceDialog {
-    /// A select: the lead icon, the picked option and a chevron; a click opens its menu.
+    /// A select: the lead icon, the picked option and a chevron; a click opens its menu. With no
+    /// `width` it fills the rest of its row.
+    #[allow(clippy::too_many_arguments)]
     fn select(
         &self,
         id: &'static str,
         pick: Pick,
         lead: AnyElement,
         text: AnyElement,
+        width: Option<f32>,
         disabled: bool,
         cx: &mut Context<Self>,
     ) -> AnyElement {
@@ -161,29 +154,38 @@ impl NewWorkspaceDialog {
                     ),
             );
         div()
-            .flex_none()
-            .w(rems_from_px(SELECT_WIDTH))
+            .map(|select| match width {
+                Some(width) => select.flex_none().w(rems_from_px(width)),
+                None => select.flex_1().min_w_0(),
+            })
             .when(disabled, |select| select.opacity(0.45))
             .child(button)
             .into_any_element()
     }
 
-    pub(super) fn task_card(
+    /// Title, Context from, Skill, the context box and the refused files.
+    pub(super) fn task_rows(
         &self,
         choice: &SourceChoice,
         error_row: Option<ErrorRow>,
+        window: &Window,
         cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let title = SettingsRow::new("new-task-title", "Title")
-            .fill(true)
-            .control(SettingsInput::new(&self.title));
-        let mut rows = vec![title.into_any_element()];
+    ) -> Vec<AnyElement> {
+        let mut rows = vec![
+            line()
+                .child(SettingsInput::new(&self.title))
+                .into_any_element(),
+        ];
         if self.choices().len() > 1 {
             let lead = lead_icon(source_icon(choice));
             let text = select_text(choice.label(), Color::Default, None);
-            let select = self.select("new-task-source", Pick::Source, lead, text, false, cx);
-            let row = SettingsRow::new("new-task-source-row", "Context from").control(select);
-            rows.push(row.into_any_element());
+            let select = self.select("new-task-source", Pick::Source, lead, text, None, false, cx);
+            let label = tip_label(
+                "new-task-source-label",
+                "Context from",
+                choice.context_hint(&self.skill),
+            );
+            rows.push(line().child(label).child(select).into_any_element());
         }
         if *choice == SourceChoice::AgentSkill {
             let text = if self.skill.is_empty() {
@@ -192,98 +194,92 @@ impl NewWorkspaceDialog {
                 select_text(self.skill.clone(), Color::Default, None)
             };
             let lead = lead_icon("sparkles");
-            let select = self.select("new-task-skill", Pick::Skill, lead, text, false, cx);
-            let row = SettingsRow::new("new-task-skill-row", "Skill")
-                .error((error_row == Some(ErrorRow::Skill)).then_some(PICK_AGENT))
-                .control(select);
+            let select = self.select("new-task-skill", Pick::Skill, lead, text, None, false, cx);
+            let error = (error_row == Some(ErrorRow::Skill)).then(|| error_line(PICK_AGENT));
+            let row = v_flex()
+                .w_full()
+                .child(line().child(row_label("Skill")).child(select))
+                .children(error);
             rows.push(row.into_any_element());
         }
-        rows.push(if choice.kind() == "manual" {
-            stack_row(
-                "Notes",
-                Some("Optional"),
-                SettingsInput::new(&self.notes).area(),
-                None,
-            )
+        rows.push(self.context_box(choice, window, cx));
+        rows.extend(
+            self.refused
+                .iter()
+                .map(|reason| error_line(reason.clone()).into_any_element()),
+        );
+        rows
+    }
+
+    /// One bordered box: the notes (or the reference and its hint), then the attachments bar.
+    fn context_box(
+        &self,
+        choice: &SourceChoice,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let manual = choice.kind() == "manual";
+        let editor = if manual { &self.notes } else { &self.reference };
+        let focused = editor.focus_handle(cx).contains_focused(window, cx);
+        let colors = cx.theme().colors();
+        let border = if focused {
+            colors.border_focused
         } else {
-            stack_row(
-                "Reference",
-                None,
-                SettingsInput::new(&self.reference),
-                Some(choice.ref_hint(&self.skill)),
-            )
+            colors.border
+        };
+        let (bg, bar_line) = (colors.editor_background, colors.border_variant);
+        let hint = (!manual).then(|| {
+            div()
+                .px(rems_from_px(10.0_f32))
+                .pb(rems_from_px(6.0_f32))
+                .child(foot_text(choice.ref_hint(&self.skill)))
         });
-        rows.push(self.attachments_row(cx));
-        let files: Vec<AnyElement> = self
-            .files
-            .iter()
-            .map(|file| self.file_row(file, cx))
-            .collect();
-        rows.extend(files);
-        drop_frame(SettingsCard::new(SeparatorInset::Text).children(rows), cx)
-    }
-
-    fn attachments_row(&self, cx: &mut Context<Self>) -> AnyElement {
-        let add = action_button("new-task-files", "Add files")
-            .start_icon(button_icon("paperclip"))
-            .track_focus(&self.stops.files)
-            .on_click(cx.listener(|this, _, _, cx| this.pick_files(cx)));
-        let help = v_flex()
-            .child(foot_text(ATTACH_HELP))
-            .children(self.refused.iter().map(|reason| error_line(reason.clone())));
-        SettingsRow::new("new-task-attachments", "Attachments")
-            .help_child(help)
-            .control(add)
-            .into_any_element()
-    }
-
-    fn file_row(&self, file: &PickedFile, cx: &mut Context<Self>) -> AnyElement {
-        let id = file.id;
-        let name = Label::new(file.name.clone())
-            .size(LabelSize::Small)
-            .buffer_font(cx)
-            .truncate();
-        let remove = IconButton::new(("remove-file", id), IconName::Close)
-            .icon_size(IconSize::XSmall)
-            .tooltip(Tooltip::text(format!("Remove {}", file.name)))
-            .on_click(cx.listener(move |this, _, _, cx| this.remove_file(id, cx)));
-        h_flex()
+        let text = div()
             .w_full()
-            .h(rems_from_px(32.0_f32))
-            .gap(rems_from_px(8.0_f32))
-            .pl(rems_from_px(12.0_f32))
-            .pr(rems_from_px(8.0_f32))
-            .child(
-                Icon::new(IconName::File)
-                    .size(IconSize::Custom(rems_from_px(13.0_f32)))
-                    .color(Color::Muted),
-            )
-            .child(div().flex_1().min_w_0().overflow_hidden().child(name))
-            .child(foot_text(format_bytes(file.size)))
-            .child(remove)
-            .into_any_element()
+            .px(rems_from_px(10.0_f32))
+            .py(rems_from_px(8.0_f32))
+            .child(editor.clone());
+        let card = v_flex()
+            .w_full()
+            .rounded(rems_from_px(6.0_f32))
+            .border_1()
+            .border_color(border)
+            .bg(bg)
+            .child(text)
+            .children(hint)
+            .child(self.attach_bar(bar_line, cx));
+        drop_frame(card, cx)
     }
 
-    pub(super) fn workspace_card(&self, project: &str, cx: &mut Context<Self>) -> AnyElement {
+    /// Project with the worktree switch, then the branch row while the switch is on.
+    pub(super) fn workspace_rows(&self, project: &str, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let avatar = SettingsTile::avatar(project, TileSize::Inline).into_any_element();
         let text = select_text(project.to_string(), Color::Default, None);
-        let select = self.select("new-task-project", Pick::Project, avatar, text, false, cx);
+        let select = self.select(
+            "new-task-project",
+            Pick::Project,
+            avatar,
+            text,
+            None,
+            false,
+            cx,
+        );
+        let label = tip_label(
+            "new-task-worktree-label",
+            "Worktree",
+            worktree_help(self.worktree),
+        );
         let mut rows = vec![
-            SettingsRow::new("new-task-project-row", "Project")
-                .control(select)
-                .into_any_element(),
-            SettingsRow::new("new-task-worktree-row", "Create a worktree")
-                .help(worktree_help(self.worktree))
-                .control(self.worktree_switch(cx))
+            line()
+                .child(select)
+                .child(label)
+                .child(self.worktree_switch(cx))
                 .into_any_element(),
         ];
         if self.worktree {
-            rows.push(self.base_row(project, cx));
-            rows.push(self.branch_row(cx));
+            rows.push(self.branch_row(project, cx));
         }
-        SettingsCard::new(SeparatorInset::Text)
-            .children(rows)
-            .into_any_element()
+        rows
     }
 
     /// The switch in a focus stop of its own: Space or Enter flips it, as a click does.
@@ -311,32 +307,42 @@ impl NewWorkspaceDialog {
         cx.notify();
     }
 
-    /// "Branch from": off, with a tooltip, until the project's branches are read.
-    fn base_row(&self, project: &str, cx: &mut Context<Self>) -> AnyElement {
+    /// "from" the base select "as" the branch input. The select is off, with a tooltip, until
+    /// the project's branches are read. Once the user typed a name, a warning dot and a reset
+    /// button follow the input.
+    fn branch_row(&self, project: &str, cx: &mut Context<Self>) -> AnyElement {
         let loading = self.branches.is_none();
         let note = shows_default(self.branches.as_ref(), &self.base).then(|| "· default".into());
         let text = select_text(self.base_name(), Color::Default, note);
         let lead = lead_icon("git-branch");
-        let select = self.select("new-task-branch", Pick::Branch, lead, text, loading, cx);
+        let select = self.select(
+            "new-task-branch",
+            Pick::Branch,
+            lead,
+            text,
+            Some(BASE_WIDTH),
+            loading,
+            cx,
+        );
         let tip = format!("Reading the branches of {project}\u{2026}");
-        let control = div()
+        let base = div()
             .id("new-task-branch-tip")
+            .flex_none()
             .when(loading, |wrap| wrap.tooltip(Tooltip::text(tip)))
             .child(select);
-        let row = SettingsRow::new("new-task-branch-row", "Branch from").control(control);
-        if loading {
-            row.help("Reading the branches\u{2026}").into_any_element()
-        } else {
-            row.into_any_element()
-        }
-    }
-
-    /// "Branch": a warning dot and a reset button before the input once the user typed a name.
-    fn branch_row(&self, cx: &mut Context<Self>) -> AnyElement {
         let title = self.title.read(cx).text(cx);
         let follows = prefill_branch(self.branch_pattern().as_deref(), &title).is_some();
-        let mut row = SettingsRow::new("new-task-branch-name", "Branch")
-            .help(branch_help(self.branch_edited, follows));
+        let help = branch_help(self.branch_edited, follows);
+        let mut row = line()
+            .child(row_label("from"))
+            .child(base)
+            .child(tip_label("new-task-branch-as", "as", help))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .child(SettingsInput::new(&self.branch_name)),
+            );
         if self.branch_edited {
             let warning = cx.theme().status().warning;
             let dot = div()
@@ -354,13 +360,13 @@ impl NewWorkspaceDialog {
                 .track_focus(&self.stops.reset)
                 .tooltip(Tooltip::text("Follow the title again"))
                 .on_click(cx.listener(|this, _, _, cx| this.follow_title(cx)));
-            row = row.control(dot).control(reset);
+            row = row.child(dot).child(reset);
         }
-        row.control(SettingsInput::new(&self.branch_name).width(INPUT_WIDTH))
-            .into_any_element()
+        row.into_any_element()
     }
 
-    pub(super) fn agent_card(
+    /// The agent select and the flow control on one row; the flow's red line under it.
+    pub(super) fn agent_row(
         &self,
         error_row: Option<ErrorRow>,
         cx: &mut Context<Self>,
@@ -378,6 +384,7 @@ impl NewWorkspaceDialog {
             Pick::Agent,
             lead_icon(icon),
             text,
+            Some(AGENT_WIDTH),
             false,
             cx,
         );
@@ -400,74 +407,17 @@ impl NewWorkspaceDialog {
                 .ok();
             },
         );
-        SettingsCard::new(SeparatorInset::Text)
-            .child(SettingsRow::new("new-task-agent-row", "Agent").control(select))
-            .child(
-                SettingsRow::new("new-task-flow-row", "Task flow")
-                    .error((error_row == Some(ErrorRow::Flow)).then_some(CHOOSE_AGENT))
-                    .control(flow),
-            )
+        let row = line()
+            .child(row_label("Agent"))
+            .child(select)
+            .child(div().flex_1())
+            .child(tip_label("new-task-flow-label", "Flow", FLOW_TIP))
+            .child(flow);
+        let error = (error_row == Some(ErrorRow::Flow)).then(|| error_line(CHOOSE_AGENT));
+        v_flex()
+            .w_full()
+            .child(row)
+            .children(error)
             .into_any_element()
-    }
-
-    pub(super) fn pick_files(&mut self, cx: &mut Context<Self>) {
-        let paths = cx.prompt_for_paths(PathPromptOptions {
-            files: true,
-            directories: false,
-            multiple: true,
-            prompt: None,
-        });
-        cx.spawn(async move |this, cx| {
-            if let Ok(Ok(Some(paths))) = paths.await {
-                this.update(cx, |this, cx| this.add_paths(paths, cx)).ok();
-            }
-        })
-        .detach();
-    }
-
-    /// Files from the picker or dropped on the dialog. Their sizes are read off the main thread;
-    /// a file that cannot be read fails the start with its name.
-    pub(super) fn add_paths(&mut self, paths: Vec<PathBuf>, cx: &mut Context<Self>) {
-        let sizes = cx.background_executor().spawn(async move {
-            paths
-                .into_iter()
-                .map(|path| {
-                    let size = std::fs::metadata(&path).map_or(0, |meta| meta.len());
-                    let name = path
-                        .file_name()
-                        .map_or_else(String::new, |name| name.to_string_lossy().into_owned());
-                    (name, size, path)
-                })
-                .collect::<Vec<_>>()
-        });
-        cx.spawn(async move |this, cx| {
-            let sizes = sizes.await;
-            this.update(cx, |this, cx| {
-                let added = sizes
-                    .into_iter()
-                    .map(|(name, size, path)| {
-                        this.next_file += 1;
-                        PickedFile {
-                            id: this.next_file,
-                            name,
-                            size,
-                            path,
-                        }
-                    })
-                    .collect();
-                let (kept, refused) = fit_attachments(&this.files, added);
-                this.files.extend(kept);
-                this.refused = refused;
-                cx.notify();
-            })
-            .ok();
-        })
-        .detach();
-    }
-
-    fn remove_file(&mut self, id: u64, cx: &mut Context<Self>) {
-        self.files.retain(|file| file.id != id);
-        self.refused.clear();
-        cx.notify();
     }
 }

@@ -117,37 +117,9 @@ fn the_worktree_switch_says_what_on_and_off_make() {
 }
 
 #[test]
-fn the_workspace_footnote_names_the_branch_and_its_base_in_mono() {
-    assert_eq!(
-        workspace_foot(true, "natamux/ABC-123-fix", "main"),
-        [
-            FootPart::Text("A new worktree on ".into()),
-            FootPart::Mono("natamux/ABC-123-fix".into()),
-            FootPart::Text(", made from ".into()),
-            FootPart::Mono("main".into()),
-            FootPart::Text(".".into()),
-        ]
-    );
-    assert_eq!(
-        workspace_foot(true, " ", "main")[1],
-        FootPart::Text("a new branch".into())
-    );
-    assert_eq!(
-        workspace_foot(false, "x", "main"),
-        [FootPart::Text(
-            "No workspace yet: the task gets an id and waits. Make the workspace later from the task."
-                .into()
-        )]
-    );
-}
-
-#[test]
-fn only_one_agent_has_an_agent_footnote() {
-    assert_eq!(agent_foot(false), None);
-    assert_eq!(
-        agent_foot(true),
-        Some("One agent does the whole task in Terminal 1. The pipeline stages do not run.")
-    );
+fn the_flow_tooltip_says_what_one_agent_skips() {
+    assert!(FLOW_TIP.contains("One agent does the whole task in Terminal 1"));
+    assert!(FLOW_TIP.contains("the stages do not run"));
 }
 
 #[test]

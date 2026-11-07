@@ -1,21 +1,20 @@
-//! How the Start a task dialog looks (T-0292, option B "Inset cards sheet"): a sheet with three
-//! cards, Task, Workspace and Agent, a footnote under each, the daemon's error as an alert at the
-//! top, and a footer note that says why Start task is off or what it will make.
+//! How the Start a task dialog looks (T-0305, option A "Compact sheet"): a sheet with one flat
+//! column of rows, no group titles, cards or footnotes, so it fits a 1024x768 window without
+//! scrolling. The daemon's error is an alert at the top; the footer note says why Start task is
+//! off or what it will make.
 
 use gpui::{AnyElement, DismissEvent, ExternalPaths};
 use ui::{Tooltip, prelude::*};
 
 use super::super::new_workspace_rules::{blocked_reason, start_label};
 use super::super::new_workspace_view_rules::{
-    FootPart, FooterNote, agent_foot, base_name, footer_note, inline_error, stage_names, start_tip,
-    workspace_foot,
+    FooterNote, base_name, footer_note, inline_error, stage_names, start_tip,
 };
 use super::NewWorkspaceDialog;
 use crate::components::button_style::button_icon;
 use crate::components::chips::tip_with_keys;
 use crate::components::colors::TileColor;
 use crate::components::dialog::{DialogFrame, cancel_button, primary_button};
-use crate::components::settings_card::{SettingsGroup, foot_text};
 use crate::components::settings_tile::{AlertKind, SettingsAlert, SettingsTile, TileSize};
 
 impl NewWorkspaceDialog {
@@ -98,26 +97,16 @@ impl NewWorkspaceDialog {
             .into_any_element()
     }
 
-    /// The three groups, dimmed and closed to the pointer while the task starts.
-    fn render_groups(&self, cx: &mut Context<Self>) -> AnyElement {
+    /// The rows, dimmed and closed to the pointer while the task starts. Files dropped anywhere
+    /// on the body are added.
+    fn render_rows(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         let form = self.form(cx);
         let choice = self.choice();
         let error_row = inline_error(blocked_reason(&form, &choice));
         let project = self.repo_name(cx);
-        let task = SettingsGroup::new("Task")
-            .first(self.error.is_none())
-            .child(self.task_card(&choice, error_row, cx))
-            .footnote(choice.context_hint(&self.skill));
-        let workspace = SettingsGroup::new("Workspace")
-            .child(self.workspace_card(&project, cx))
-            .footnote_child(foot_line(
-                workspace_foot(self.worktree, &form.branch, &self.base_name()),
-                cx,
-            ));
-        let mut agent = SettingsGroup::new("Agent").child(self.agent_card(error_row, cx));
-        if let Some(foot) = agent_foot(self.single_agent) {
-            agent = agent.footnote(foot);
-        }
+        let mut rows = self.task_rows(&choice, error_row, window, cx);
+        rows.extend(self.workspace_rows(&project, cx));
+        rows.push(self.agent_row(error_row, cx));
         div()
             .relative()
             .w_full()
@@ -129,29 +118,15 @@ impl NewWorkspaceDialog {
             .child(
                 v_flex()
                     .w_full()
-                    .when(self.busy, |groups| groups.opacity(0.6))
-                    .child(task)
-                    .child(workspace)
-                    .child(agent),
+                    .gap(rems_from_px(8.0_f32))
+                    .when(self.busy, |rows| rows.opacity(0.6))
+                    .children(rows),
             )
             .when(self.busy, |body| {
                 body.child(div().absolute().inset_0().occlude())
             })
             .into_any_element()
     }
-}
-
-/// A footnote line with names in the mono font; it wraps between its parts.
-fn foot_line(parts: Vec<FootPart>, cx: &App) -> impl IntoElement {
-    h_flex().flex_wrap().children(parts.into_iter().map(|part| {
-        match part {
-            FootPart::Text(text) => foot_text(text).into_any_element(),
-            FootPart::Mono(name) => Label::new(name)
-                .size(LabelSize::Custom(rems_from_px(11.0_f32)))
-                .buffer_font(cx)
-                .into_any_element(),
-        }
-    }))
 }
 
 impl Render for NewWorkspaceDialog {
@@ -172,17 +147,20 @@ impl Render for NewWorkspaceDialog {
         let tile =
             SettingsTile::icon(button_icon("play"), TileColor::Blue, TileSize::Row).glyph_px(12.);
         let alert = self.error.clone().map(|error| {
-            SettingsAlert::new(AlertKind::Error, "Could not start the task")
-                .muted_text(format!("The daemon said: {error}"))
+            div().pb(rems_from_px(12.0_f32)).child(
+                SettingsAlert::new(AlertKind::Error, "Could not start the task")
+                    .muted_text(format!("The daemon said: {error}")),
+            )
         });
-        let groups = self.render_groups(cx);
+        let rows = self.render_rows(window, cx);
         let frame = DialogFrame::new("Start a task", close)
             .sheet()
+            .body_padded()
             .body_scroll(&self.scroll)
             .lead(tile)
             .footer_start(self.footer_note_line(note))
             .children(alert)
-            .child(groups)
+            .child(rows)
             .footer(cancel)
             .footer(start);
         div().track_focus(&self.focus).child(frame)
