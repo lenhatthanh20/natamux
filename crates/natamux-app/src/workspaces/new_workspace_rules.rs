@@ -101,8 +101,7 @@ impl SourceChoice {
         format!("The agent {reads} as the task's context.")
     }
 
-    /// The line under the Reference field. The placeholder goes away once the user types, so this
-    /// line keeps saying it.
+    /// The Reference field's placeholder: what to enter for the source.
     pub fn ref_hint(&self, skill: &str) -> String {
         match self.kind() {
             "github-issue" => {
@@ -122,15 +121,6 @@ impl SourceChoice {
                 self.name()
             ),
             _ => String::new(),
-        }
-    }
-
-    pub fn ref_placeholder(&self) -> &'static str {
-        match self.kind() {
-            "github-issue" => "#42 or the issue address",
-            "skill" => "The ticket key or address",
-            "mcp" => "The ticket key or address, such as ABC-123",
-            _ => "",
         }
     }
 
