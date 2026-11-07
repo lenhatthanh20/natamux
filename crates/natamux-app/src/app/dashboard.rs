@@ -29,6 +29,7 @@ use crate::sidebar::sidebar_tree::with_fold;
 use crate::tasks::delete_finished::DeleteQueue;
 use crate::tasks::task_sort::{SortKey, TaskSort, next_sort};
 use crate::terminals::pane_rules::PaneLayout;
+use crate::terminals::terminal_cache::TerminalCache;
 
 /// What views and Root follow besides `cx.notify()`.
 #[derive(Clone, Debug)]
@@ -195,6 +196,9 @@ impl Dashboard {
             }
             DashboardEvent::TaskLogged { task_id } => {
                 cx.emit(DashboardChange::TaskLogged(task_id.clone()))
+            }
+            DashboardEvent::Terminals { task_id, terminals } => {
+                TerminalCache::set_shells(task_id, &terminals.shells, cx)
             }
             _ => {}
         }
