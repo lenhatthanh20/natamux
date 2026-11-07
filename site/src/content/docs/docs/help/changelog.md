@@ -7,6 +7,12 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v1.0.22 (2026-11-07)
+
+- After a restart, a terminal shows its old screen at once while its shell or agent starts.
+- With **Create a worktree** off, a task works in the project folder itself; removing it keeps the folder, its changes and its branch.
+- A stage that opens a terminal again under the same name shows the new shell, not "The terminal ended."
+
 ## v1.0.21 (2026-11-07)
 
 - **Settings** opens as a popup over the dashboard; the dashboard and its terminals stay as they were under it.
