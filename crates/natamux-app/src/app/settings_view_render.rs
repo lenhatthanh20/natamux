@@ -1,4 +1,4 @@
-//! How the Settings page draws (layout-b 1, 2): the nav with its search, tiles and avatars, the
+//! How the Settings popup draws (layout-b 1, 2): the nav with its search, tiles and avatars, the
 //! 72 px page header, the page or the search results, and the Agents page's bottom bar. A project
 //! page draws its own header and bar.
 
@@ -8,11 +8,13 @@ use ui::{Tooltip, prelude::*};
 use super::super::settings_rules::{
     SearchResults, SettingsPage, page_summary, page_tile, page_title, results_summary, search,
 };
+use super::super::shortcuts::{CloseSettings, SETTINGS_CONTEXT};
 use super::nav::{APP_ITEMS, NavItem, NavTile, nav_items, nav_state, nav_tile};
 use super::pages::scroll_body;
 use super::{NAV_WIDTH, SettingsView};
 use crate::components::button_style::button_icon;
 use crate::components::colors::{TileColor, accent};
+use crate::components::dialog::POPUP_RADIUS;
 use crate::components::settings_tile::{PageHeader, SettingsTile, TileSize};
 use crate::components::text_size::row_text;
 
@@ -223,6 +225,7 @@ impl SettingsView {
             .w(rems_from_px(NAV_WIDTH))
             .flex_none()
             .h_full()
+            .rounded_l(px(POPUP_RADIUS - 1.))
             .bg(panel)
             .border_r_1()
             .border_color(border)
@@ -297,7 +300,13 @@ impl Render for SettingsView {
         let nav = self.nav(&page, found.as_ref(), query, window, cx);
         h_flex()
             .size_full()
+            .key_context(SETTINGS_CONTEXT)
             .track_focus(&self.focus)
+            .on_action(cx.listener(|view, _: &CloseSettings, _, cx| {
+                view.dashboard
+                    .update(cx, |dashboard, cx| dashboard.close_settings(cx))
+            }))
+            .rounded(px(POPUP_RADIUS - 1.))
             .bg(cx.theme().colors().editor_background)
             .child(nav)
             .child(v_flex().flex_1().min_w_0().h_full().children(main))

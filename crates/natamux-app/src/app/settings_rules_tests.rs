@@ -332,3 +332,14 @@ fn the_results_summary_counts_rows_and_projects() {
         "No settings match \u{201c}qqzz\u{201d}"
     );
 }
+
+#[test]
+fn the_popup_is_centered_and_keeps_a_margin_on_small_windows() {
+    let at = |w, h| {
+        let b = popup_bounds(w, h);
+        (b.left, b.top, b.width, b.height)
+    };
+    assert_eq!(at(1440., 900.), (200., 90., 1040., 720.));
+    assert_eq!(at(1024., 768.), (32., 48., 960., 672.));
+    assert_eq!(at(40., 50.), (20., 25., 0., 0.));
+}

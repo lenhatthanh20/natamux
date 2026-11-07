@@ -10,7 +10,7 @@ use std::rc::Rc;
 
 use gpui::{
     AnyView, ClickEvent, DismissEvent, Entity, EntityId, EventEmitter, FocusHandle, Focusable,
-    Global, KeystrokeEvent, MouseButton, Subscription, anchored, deferred, point,
+    Global, Hsla, KeystrokeEvent, MouseButton, Subscription, anchored, deferred, point,
 };
 use ui::prelude::*;
 
@@ -40,6 +40,17 @@ impl DialogSize {
         })
     }
 }
+
+/// The colour over the window under a dialog, the Settings popup and the drawer: Zed's modal
+/// layer look, read from the theme.
+pub fn scrim(cx: &App) -> Hsla {
+    let mut scrim = cx.theme().colors().elevated_surface_background;
+    scrim.fade_out(0.2);
+    scrim
+}
+
+/// The Settings popup's corner radius in px; its content rounds 1 px less, inside the border.
+pub const POPUP_RADIUS: f32 = 10.;
 
 /// The share of the window above a dialog.
 const TOP: f32 = 0.14;
@@ -266,9 +277,7 @@ impl DialogLayer {
 impl Render for DialogLayer {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let viewport = window.viewport_size();
-        // Zed's modal layer look, read from the theme.
-        let mut scrim = cx.theme().colors().elevated_surface_background;
-        scrim.fade_out(0.2);
+        let scrim = scrim(cx);
         let top = self.open.len().saturating_sub(1);
         let layers = self.open.iter().enumerate().map(|(index, open)| {
             let size = open.handle.size(cx);

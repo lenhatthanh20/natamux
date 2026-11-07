@@ -231,7 +231,8 @@ impl RenderOnce for PageHeader {
     }
 }
 
-/// The 44 px bar under a page's scroll area; add the status, a spacer and the buttons.
+/// The 44 px bar under a page's scroll area, at the Settings popup's bottom right corner; add the
+/// status, a spacer and the buttons.
 pub fn bottom_bar(cx: &App) -> Div {
     let colors = cx.theme().colors();
     h_flex()
@@ -242,6 +243,7 @@ pub fn bottom_bar(cx: &App) -> Div {
         .pr(rems_from_px(16.0_f32))
         .border_t_1()
         .border_color(colors.border_variant)
+        .rounded_br(px(super::dialog::POPUP_RADIUS - 1.))
         .bg(colors.panel_background)
 }
 

@@ -1,8 +1,8 @@
-//! The Settings page (T-0174; docs/rust-phase3.md "Lean layout"): a nav with a search, the app's
-//! pages (General, Appearance, Agents) and a page per project (`ProjectSettingsPage`). It fills
-//! the window body over main. App settings apply at once; a project page keeps its draft until Save
-//! or Discard, also while other pages show. The page owns its keys as a dialog does: Esc,
-//! Mod+Enter and a Tab ring.
+//! The Settings popup (T-0174, T-0306; docs/rust-phase3.md "Lean layout"): a nav with a search,
+//! the app's pages (General, Appearance, Agents) and a page per project (`ProjectSettingsPage`).
+//! It opens over the dashboard, which stays drawn under it. App settings apply at once; a project
+//! page keeps its draft until Save or Discard, also while other pages show. The popup owns its
+//! keys as a dialog does: Esc, Mod+Enter and a Tab ring.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;

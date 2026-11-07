@@ -13,7 +13,7 @@ use crate::agents::limits_rules::{agents_in_use, current, limits_chip, without_l
 use crate::app::dashboard::Dashboard;
 use crate::app::dashboard_data::{Part, Seen};
 use crate::app::links::open_link;
-use crate::app::shell_rules::{Crumb, crumb, live_item, running_count, window_title};
+use crate::app::shell_rules::{crumb, live_item, running_count, window_title};
 use crate::app::shortcuts::{ToggleAgents, ToggleDetails, ToggleSidebar};
 use crate::app::status_bar::{StatusBar, now_ms};
 use crate::app::status_limits::LimitsItem;
@@ -77,15 +77,12 @@ impl Render for TitleBarView {
             self.draws += 1;
         }
         let dashboard = self.dashboard.read(cx);
-        let crumb = if dashboard.settings.is_some() {
-            Crumb::View("Settings")
-        } else {
-            let open = dashboard
-                .open_task
-                .as_deref()
-                .and_then(|id| dashboard.data.task(id));
-            crumb(open, dashboard.agents_open, &dashboard.data.repos)
-        };
+        // The Settings popup leaves the crumb of the view under it (T-0306).
+        let open = dashboard
+            .open_task
+            .as_deref()
+            .and_then(|id| dashboard.data.task(id));
+        let crumb = crumb(open, dashboard.agents_open, &dashboard.data.repos);
         TitleBar::new(crumb, self.dashboard.clone())
     }
 }
@@ -278,17 +275,12 @@ impl Root {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> (AnyElement, AnyElement) {
-        let dashboard = self.dashboard.read(cx);
-        let (settings, agents) = (dashboard.settings.is_some(), dashboard.agents_open);
-        // Over Settings both toggles show off; a click closes Settings (`close_settings`).
-        let details = if settings {
-            Ok(false)
-        } else {
-            self.details_toggle(window, cx)
-        };
+        let agents = self.dashboard.read(cx).agents_open;
+        // The toggles show the view under the Settings popup; a key closes Settings first
+        // (`close_settings`).
         let toggles = Toggles {
-            sidebar: sidebar_shown && !settings,
-            details,
+            sidebar: sidebar_shown,
+            details: self.details_toggle(window, cx),
             agents,
         };
         self.status_bar
