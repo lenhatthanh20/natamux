@@ -1,6 +1,6 @@
-//! The Start a task `--shot` states of option B (T-0292): the dialog filled with files and an
-//! edited branch (top and end), no worktree, One agent with no agent, and the daemon's error.
-//! The runner's screen is 1024x768, so the states that show the lower cards scroll the body.
+//! The Start a task `--shot` states (T-0292): the dialog filled with files and an edited branch
+//! (top and end), no worktree, One agent with no agent, and the daemon's error. Since T-0305 the
+//! body fits the runner's 1024x768 screen, so the scroll to the end changes nothing there.
 
 use std::time::Duration;
 

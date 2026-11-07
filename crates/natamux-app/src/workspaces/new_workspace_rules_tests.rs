@@ -71,7 +71,7 @@ fn says_what_the_agent_reads_for_each_source() {
 }
 
 #[test]
-fn says_under_the_reference_what_to_enter_for_each_source() {
+fn the_reference_placeholder_says_what_to_enter_for_each_source() {
     assert_eq!(
         source("github-issue", None).ref_hint(""),
         "The issue number, such as #42, or its address. Natamux reads the issue from GitHub."
@@ -83,10 +83,6 @@ fn says_under_the_reference_what_to_enter_for_each_source() {
     assert_eq!(
         source("mcp", Some("Tracker")).ref_hint(""),
         "The key or address of the ticket. The agent reads it through the Tracker MCP server."
-    );
-    assert_eq!(
-        source("github-issue", None).ref_placeholder(),
-        "#42 or the issue address"
     );
 }
 

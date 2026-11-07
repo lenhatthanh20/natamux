@@ -231,7 +231,6 @@ pub struct SettingsRow {
     error: Option<SharedString>,
     controls: Vec<AnyElement>,
     stacked: bool,
-    fill: bool,
     disabled: bool,
     min_h: f32,
     pad_y: f32,
@@ -252,7 +251,6 @@ impl SettingsRow {
             error: None,
             controls: Vec::new(),
             stacked: false,
-            fill: false,
             disabled: false,
             min_h: 40.,
             pad_y: 8.,
@@ -312,13 +310,6 @@ impl SettingsRow {
         self
     }
 
-    /// The controls start right after the label and fill the rest of the row (Start a task's
-    /// Title).
-    pub fn fill(mut self, fill: bool) -> Self {
-        self.fill = fill;
-        self
-    }
-
     /// Half opacity, and a click does nothing.
     pub fn disabled(mut self, disabled: bool) -> Self {
         self.disabled = disabled;
@@ -354,13 +345,7 @@ impl RenderOnce for SettingsRow {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let hover = cx.theme().colors().ghost_element_hover;
         let label = v_flex()
-            .map(|label| {
-                if self.fill {
-                    label.flex_none()
-                } else {
-                    label.flex_1()
-                }
-            })
+            .flex_1()
             .min_w_0()
             .child(
                 Label::new(self.label)
@@ -373,13 +358,7 @@ impl RenderOnce for SettingsRow {
             .children(self.error.map(error_line));
         let has_controls = !self.controls.is_empty();
         let controls = h_flex()
-            .map(|controls| {
-                if self.fill {
-                    controls.flex_1().min_w_0()
-                } else {
-                    controls.flex_none()
-                }
-            })
+            .flex_none()
             .gap(rems_from_px(6.0_f32))
             .children(self.controls);
         let main = h_flex()
