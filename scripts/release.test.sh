@@ -40,6 +40,7 @@ tag="v$version"
 notes="docs/releases/$tag.md"
 changelog="site/src/content/docs/docs/help/changelog.md"
 homepage="site/src/pages/index.astro"
+download_page="site/src/pages/download.astro"
 prev=$(ls docs/releases | sed 's/\.md$//' | sort -V | grep -vx "$tag" | tail -n 1)
 # The files .github/workflows/release.yml publishes, besides SHA256SUMS.txt.
 files="Natamux-mac-arm64.dmg Natamux-mac-x64.dmg Natamux-win-x64.exe Natamux-linux-x86_64.AppImage
@@ -164,8 +165,12 @@ check "packages depend on each other with workspace:*" \
 check "homepage version is $version" "grep -qx \"const version = '$version'\" $homepage"
 check "homepage sets the version once" '[ "$(grep -c "^const version = " "$homepage")" = 1 ]'
 check "homepage has no ${prev#v} left" '[ -z "$prev" ] || ! grep -qF "${prev#v}" "$homepage"'
-check "homepage downloads Natamux-mac-arm64.dmg of the latest release" \
-  'grep -qF "/releases/latest/download/" "$homepage" && grep -qF "Natamux-mac-arm64.dmg" "$homepage"'
+check "homepage installs with install.sh" 'grep -qF "/install.sh | sh" "$homepage"'
+# Files are on their own page, so the homepage offers only the install command.
+check "homepage links no release file" '! grep -qF "/releases/latest/download/" "$homepage"'
+check "download page downloads Natamux-mac-arm64.dmg of the latest release" \
+  'grep -qF "/releases/latest/download/" "$download_page" && grep -qF "Natamux-mac-arm64.dmg" "$download_page"'
+check "download page has no version" '! grep -qF "$version" "$download_page"'
 
 # Case 3: the release notes.
 # The release workflow reads docs/releases/<tag>.md, so a file named 0.1.8.md or v0.1.8.MD is never used.

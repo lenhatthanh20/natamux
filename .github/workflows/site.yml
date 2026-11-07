@@ -45,6 +45,16 @@ jobs:
           grep -Eq '<a [^>]*href="#download"[^>]*data-hero-download' dist/index.html
           ! grep -q 'hero.href' src/scripts/landing.js
         working-directory: site
+      # Release files live on /download/; the homepage offers only the install command.
+      - run: |
+          ! grep -q 'releases/latest/download/' dist/index.html
+          grep -q 'install.sh | sh' dist/index.html
+          grep -q 'href="/download/"' dist/index.html
+          for f in Natamux-mac-arm64.dmg Natamux-mac-x64.dmg Natamux-win-x64.exe Natamux-linux-x86_64.AppImage \
+            Natamux-linux-amd64.deb Natamux-linux-x64.tar.gz SHA256SUMS.txt; do
+            grep -q "releases/latest/download/$f" dist/download/index.html
+          done
+        working-directory: site
       # The deploy job pushes this; on a pull request it is there to look at before it merges.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

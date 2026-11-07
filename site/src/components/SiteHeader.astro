@@ -4,7 +4,6 @@ import '../styles/site.css'
 interface Props { docs?: boolean }
 const { docs = false } = Astro.props
 const base = import.meta.env.BASE_URL.replace(/\/?$/, '/')
-const home = docs ? base : ''
 ---
 
 <div class="site-nav">
@@ -13,8 +12,8 @@ const home = docs ? base : ''
     <span>Natamux</span>
   </a>
   <nav class="site-links" aria-label="Main">
-    <a href={`${home}#workflow`}>How it works</a>
-    <a href={`${home}#features`}>Product</a>
+    <a href={`${base}#workflow`}>How it works</a>
+    <a href={`${base}#features`}>Product</a>
     <a href={`${base}docs/`} aria-current={docs ? 'location' : undefined}>Docs</a>
   </nav>
   <div class="site-actions">
@@ -24,7 +23,7 @@ const home = docs ? base : ''
       <svg class="sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2" /><path d="M12 2.5v2.2M12 19.3v2.2M4.6 4.6l1.6 1.6M17.8 17.8l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.6 19.4l1.6-1.6M17.8 6.2l1.6-1.6" /></svg>
       <svg class="moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.6A8.2 8.2 0 0 1 9.4 4a8.2 8.2 0 1 0 10.6 10.6Z" /></svg>
     </button>
-    <a class="site-download" href={`${home}#download`}>Download <span aria-hidden="true">↗</span></a>
+    <a class="site-download" href={`${base}#download`}>Download <span aria-hidden="true">↗</span></a>
   </div>
 </div>
 
