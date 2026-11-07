@@ -34,6 +34,9 @@ pub struct RemoteTerminal {
     _focus: [Subscription; 2],
     handle: Option<Arc<TerminalHandle>>,
     status: TerminalStatus,
+    /// For the cache's tests: the fake daemon's terminals have no shell id.
+    #[cfg(test)]
+    test_shell_id: Option<String>,
     /// The size the shell was told.
     size: (u16, u16),
     /// The grid size at the last check, for the settle rule.
@@ -119,6 +122,8 @@ impl RemoteTerminal {
             _focus: screen._focus,
             handle: None,
             status: TerminalStatus::Connecting,
+            #[cfg(test)]
+            test_shell_id: None,
             size: (0, 0),
             seen: None,
             laid: None,
@@ -167,6 +172,15 @@ impl RemoteTerminal {
         &self.status
     }
 
+    /// The daemon's id of the shell it showed last, kept after the shell ends.
+    pub fn shell_id(&self) -> Option<String> {
+        #[cfg(test)]
+        if self.test_shell_id.is_some() {
+            return self.test_shell_id.clone();
+        }
+        self.handle.as_ref()?.shell_id()
+    }
+
     /// Zed's terminal, for the find bar.
     pub fn terminal(&self) -> &Entity<Terminal> {
         &self.terminal
@@ -176,6 +190,11 @@ impl RemoteTerminal {
     #[cfg(test)]
     pub fn set_status(&mut self, status: TerminalStatus) {
         self.status = status;
+    }
+
+    #[cfg(test)]
+    pub fn set_shell_id(&mut self, shell_id: &str) {
+        self.test_shell_id = Some(shell_id.to_string());
     }
 
     pub fn replaying(&self) -> bool {

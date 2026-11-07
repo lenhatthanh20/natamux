@@ -26,8 +26,16 @@ use crate::terminals::api;
 /// together, so a busy shell wakes it once per burst, not once per frame.
 const JOIN_BYTES: usize = 256 * 1024;
 
-/// Why the last socket was lost, for the app's log.
-type Loss = Arc<Mutex<Option<String>>>;
+/// What the session tells the app beside its events.
+#[derive(Debug, Default)]
+struct Notes {
+    /// Why the last socket was lost, for the app's log.
+    loss: Option<String>,
+    /// The shell of the last `Hello`, kept after the shell ends.
+    shell_id: Option<String>,
+}
+
+type Loss = Arc<Mutex<Notes>>;
 
 /// What the app asks of a terminal.
 #[derive(Debug)]
@@ -83,10 +91,16 @@ impl TerminalHandle {
 
     /// Why the socket was lost last, once a `Reconnecting` status came.
     pub fn last_loss(&self) -> Option<String> {
-        self.loss
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .clone()
+        self.notes().loss.clone()
+    }
+
+    /// The daemon's id of the shell this terminal showed last; None before its first `Hello`.
+    pub fn shell_id(&self) -> Option<String> {
+        self.notes().shell_id.clone()
+    }
+
+    fn notes(&self) -> std::sync::MutexGuard<'_, Notes> {
+        self.loss.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
     /// A handle with no socket: the app shows `events`, and what it sends goes nowhere. For the
@@ -146,7 +160,13 @@ pub fn open(
 }
 
 fn note_loss(loss: &Loss, reason: impl Into<String>) {
-    *loss.lock().unwrap_or_else(PoisonError::into_inner) = Some(reason.into());
+    loss.lock().unwrap_or_else(PoisonError::into_inner).loss = Some(reason.into());
+}
+
+fn note_shell(loss: &Loss, shell_id: Option<&str>) {
+    if let Some(shell_id) = shell_id {
+        loss.lock().unwrap_or_else(PoisonError::into_inner).shell_id = Some(shell_id.to_string());
+    }
 }
 
 enum Outcome {
@@ -326,6 +346,7 @@ async fn drive(
                             pong_deadline = None;
                         }
                         step = protocol.server(message);
+                        note_shell(loss, protocol.shell_id());
                     }
                 }
                 Some(Ok(Message::Close(frame))) => {

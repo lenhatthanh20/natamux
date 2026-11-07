@@ -125,6 +125,19 @@ impl TerminalService {
         names
     }
 
+    /// The shell id of each open terminal of a task. A client whose ended terminal sees another
+    /// id under the same name knows a new shell took that name.
+    pub fn shell_ids(&self, task_id: &str) -> HashMap<String, String> {
+        self.inner
+            .sessions_of_task(task_id)
+            .iter()
+            .map(|session| {
+                let session = lock(session);
+                (session.terminal.clone(), session.shell_id.clone())
+            })
+            .collect()
+    }
+
     /// Starts the shell when there is none. A client that is not on screen does not take the
     /// shell's size.
     pub fn attach(

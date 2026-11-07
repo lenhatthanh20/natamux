@@ -64,6 +64,9 @@ pub struct TerminalList {
     /// The shells that close at the turn end of their agent: their stage is over.
     #[serde(default)]
     pub closing: Vec<String>,
+    /// The daemon's shell id of each open shell: a new shell under an old name has a new id.
+    #[serde(default)]
+    pub shells: BTreeMap<String, String>,
 }
 
 #[cfg(test)]
@@ -78,7 +81,8 @@ mod tests {
             "5": {"stage":"spec","state":"done"}
         },
         "programs": {"1": null, "2": "node", "5": "zsh"},
-        "restoring": {"2": "claude-code", "5": null}, "closing": ["5"], "later": 1
+        "restoring": {"2": "claude-code", "5": null}, "closing": ["5"],
+        "shells": {"1": "a", "5": "b"}, "later": 1
     }"#;
 
     #[test]
@@ -91,6 +95,7 @@ mod tests {
         assert_eq!(list.restoring["2"].as_deref(), Some("claude-code"));
         assert_eq!(list.restoring["5"], None);
         assert_eq!(list.closing, ["5"]);
+        assert_eq!(list.shells["5"], "b");
     }
 
     #[test]
@@ -105,6 +110,6 @@ mod tests {
     fn missing_parts_default_to_empty() {
         let list: TerminalList = serde_json::from_str(r#"{"terminals":["1"]}"#).unwrap();
         assert!(list.lanes.is_empty() && list.programs.is_empty() && list.restoring.is_empty());
-        assert!(list.closing.is_empty());
+        assert!(list.closing.is_empty() && list.shells.is_empty());
     }
 }

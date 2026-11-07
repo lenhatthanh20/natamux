@@ -312,6 +312,7 @@ async fn lists_no_terminals_for_a_task_that_has_none() {
     let d = daemon("none", true).await;
     let empty = json!({
         "terminals": [], "agents": [], "lanes": {}, "programs": {}, "restoring": {}, "closing": [],
+        "shells": {},
     });
     assert_eq!(
         d.call(Method::GET, "/tasks/T-0001/terminals", Some(TOKEN))
@@ -332,9 +333,12 @@ async fn opens_a_second_terminal_lists_the_terminals_and_closes_one() {
     let listed = d
         .call(Method::GET, "/tasks/T-0001/terminals", Some(TOKEN))
         .await;
+    // Each shell's id, so an app can tell a new shell under an old name (T-0309).
+    let id_of = |controls: Vec<serde_json::Value>| controls[0]["shellId"].clone();
     let both = json!({
         "terminals": ["1", "2"], "agents": [], "lanes": {},
         "programs": { "1": "bash", "2": "bash" }, "restoring": {}, "closing": [],
+        "shells": { "1": id_of(first.controls()), "2": id_of(second.controls()) },
     });
     assert_eq!(listed, (200, both));
 

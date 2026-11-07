@@ -119,7 +119,7 @@ Files, git, GitHub, terminals and templates.
 | `POST /tasks/:id/issue` | Open a GitHub issue for the task now |
 | `PUT /tasks/:id/issue` | Link an issue that exists `{ provider, key, url }` |
 | `POST /tasks/:id/fan-out` | Run more tries of a task `{ count, start? }`. `count` is 1 to 5 |
-| `GET /tasks/:id/terminals` | The open terminals of a task: `{ terminals, agents, lanes, programs, restoring }` |
+| `GET /tasks/:id/terminals` | The open terminals of a task: `{ terminals, agents, lanes, programs, restoring, closing, shells }`; `shells` maps each open terminal to its shell id |
 | `DELETE /tasks/:id/terminals/:terminal` | Close one terminal. `:terminal` is its number |
 | `POST /tasks/:id/terminal/ticket` | A one-time ticket for the terminal WebSocket |
 | `GET /templates` | The saved task templates: `{ templates }` |
