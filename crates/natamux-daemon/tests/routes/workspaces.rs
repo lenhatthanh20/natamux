@@ -365,22 +365,61 @@ async fn answers_a_new_workspace_before_its_worktree_is_made_then_lists_none_pre
     assert!(!task["task"]["workspace"].is_null());
 }
 
+#[cfg(unix)]
+fn worktree_count(d: &TestDaemon) -> usize {
+    run_git(&d.repo(), &["worktree", "list", "--porcelain"])
+        .lines()
+        .filter(|line| line.starts_with("worktree "))
+        .count()
+}
+
+// Regression: Start agent on a task made with no worktree made a worktree anyway.
+#[cfg(unix)]
 #[tokio::test(flavor = "multi_thread")]
-async fn makes_only_the_task_when_no_worktree_is_asked() {
+async fn works_in_the_main_checkout_when_no_worktree_is_asked_and_start_agent_makes_none() {
     let d = git_daemon("new-ws-no-worktree").await;
 
-    let body = json!({ "title": "Example", "agent": "claude-code", "worktree": false });
+    let body = json!({ "title": "Example", "worktree": false });
     let (status, answer) = new_workspace(&d, &body).await;
 
     assert_eq!(status, 202, "{answer}");
+    assert_eq!(answer["task"]["mainCheckout"], true, "{answer}");
+    assert!(answer["task"]["workspace"].is_string(), "{answer}");
+    assert_eq!(answer["task"]["branch"], "main");
     d.settle();
     let (_, preparing) = d.get("/workspaces/preparing").await;
     assert_eq!(preparing, json!({ "preparing": {} }));
+
+    let (status, started) = d
+        .post("/tasks/T-0001/agent", &json!({ "agent": "claude-code" }))
+        .await;
+    assert_eq!(status, 200, "{started}");
+    d.settle();
+
     let (_, task) = d.get("/tasks/T-0001").await;
-    assert!(task["task"]["workspace"].is_null());
-    assert!(task["task"]["branch"].is_null());
-    assert_eq!(task["task"]["agent"], "claude-code");
+    assert_eq!(task["task"]["workspace"], answer["task"]["workspace"]);
+    assert_eq!(worktree_count(&d), 1);
     assert_eq!(run_git(&d.repo(), &["branch", "--list", "natamux/*"]), "");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn refuses_a_second_open_task_in_the_main_checkout_and_makes_no_task() {
+    let d = git_daemon("new-ws-main-busy").await;
+    let body = json!({ "title": "Example", "worktree": false });
+    let (first, _) = new_workspace(&d, &body).await;
+    assert_eq!(first, 202);
+
+    let (status, answer) = new_workspace(&d, &body).await;
+
+    assert_eq!(status, 409, "{answer}");
+    assert!(
+        answer["message"]
+            .as_str()
+            .is_some_and(|text| text.contains("T-0001 already works in the main checkout")),
+        "{answer}"
+    );
+    assert_eq!(task_count(&d).await, 1);
+    d.settle();
 }
 
 #[tokio::test(flavor = "multi_thread")]

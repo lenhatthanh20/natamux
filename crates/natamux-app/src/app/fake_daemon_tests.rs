@@ -404,20 +404,27 @@ fn started_agents_send_until_dropped() {
 }
 
 #[test]
-fn makes_only_the_task_when_no_worktree_is_asked() {
+fn works_in_the_main_checkout_when_no_worktree_is_asked_and_detaches_keeping_the_branch() {
     let fake = FakeDaemon::default();
     let (mut receiver, _) = fake.watch();
     drain(&mut receiver);
-    let task = fake
-        .new_workspace(NewWorkspaceInput {
-            title: "Try it".into(),
-            agent: Some("codex".into()),
-            worktree: Some(false),
-            ..NewWorkspaceInput::default()
-        })
-        .unwrap();
-    assert_eq!((task.workspace, task.branch), (None, None));
+    let input = NewWorkspaceInput {
+        title: "Try it".into(),
+        agent: Some("codex".into()),
+        worktree: Some(false),
+        ..NewWorkspaceInput::default()
+    };
+    let task = fake.new_workspace(input.clone()).unwrap();
+    assert_eq!(task.main_checkout, Some(true));
+    assert!(task.workspace.is_some());
+    assert_eq!(task.branch.as_deref(), Some("main"));
     assert_eq!(task.agent.as_deref(), Some("codex"));
+    assert!(matches!(
+        fake.new_workspace(input),
+        Err(ClientError::Status { status: 409, .. })
+    ));
+    let removed = fake.remove_workspace(&task.id, true).unwrap();
+    assert_eq!(removed.task.branch.as_deref(), Some("main"));
     assert!(
         drain(&mut receiver)
             .iter()

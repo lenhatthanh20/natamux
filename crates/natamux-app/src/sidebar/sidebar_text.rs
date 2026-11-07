@@ -5,6 +5,8 @@
 use natamux_proto::events::task_event::{StoredEvent, WaitReason, wait_reason};
 use natamux_proto::tasks::task::{PullRequestStatus, Task, TaskState};
 
+use crate::workspaces::remove_dialog_rules::remove_label;
+
 /// Letters typed within this time make one word for type-ahead (`useRovingFocus`).
 pub const TYPE_AHEAD_MS: i64 = 600;
 
@@ -143,7 +145,7 @@ pub fn row_menu(task: &Task, pinned: bool) -> Vec<MenuItem<RowCommand>> {
     items.push(MenuItem::Separator);
     items.push(danger(
         "row.remove",
-        "Remove workspace",
+        remove_label(task),
         "folder-minus",
         RowCommand::RemoveWorkspace,
     ));

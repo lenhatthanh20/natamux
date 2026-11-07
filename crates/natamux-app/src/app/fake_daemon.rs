@@ -393,6 +393,7 @@ impl FakeDaemon {
         let mut data = self.data();
         let mut task = data.new_task(&input.title, input.repo);
         if input.worktree == Some(false) {
+            data.use_main_checkout(&mut task)?;
             task.agent = input.agent;
             task.context = input.context;
             data.tasks.insert(0, task.clone());
@@ -432,7 +433,8 @@ impl FakeDaemon {
         let mut data = self.data();
         let task = data.task_mut(task_id)?;
         task.workspace = None;
-        if delete_branch {
+        // A main checkout task is only detached: the branch is the user's.
+        if delete_branch && task.main_checkout != Some(true) {
             task.branch = None;
         }
         let task = task.clone();

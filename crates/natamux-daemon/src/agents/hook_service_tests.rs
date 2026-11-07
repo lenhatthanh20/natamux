@@ -181,7 +181,7 @@ fn drops_the_locks_that_no_hook_holds() {
 }
 
 #[test]
-fn finds_the_task_that_list_tasks_lists_first() {
+fn finds_the_task_of_the_innermost_workspace_then_the_one_list_tasks_lists_first() {
     let (dir, time) = (temp_dir(), Arc::new(AtomicI64::new(1_000_000)));
     let tasks = service(&dir, &time);
     let outer = new_task(&tasks, &time);
@@ -193,11 +193,20 @@ fn finds_the_task_that_list_tasks_lists_first() {
     let service = hooks(&tasks, Arc::new(NoStages));
 
     let old_way = |cwd: &str| {
-        tasks.list_tasks(None).unwrap().into_iter().find(|task| {
-            task.workspace
-                .as_deref()
-                .is_some_and(|workspace| is_inside(workspace, cwd))
-        })
+        let mut found: Vec<_> = tasks
+            .list_tasks(None)
+            .unwrap()
+            .into_iter()
+            .filter(|task| {
+                task.workspace
+                    .as_deref()
+                    .is_some_and(|workspace| is_inside(workspace, cwd))
+            })
+            .collect();
+        // Stable: the order of list_tasks stays among workspaces of one length.
+        let length = |task: &Task| task.workspace.as_deref().map_or(0, str::len);
+        found.sort_by_key(|task| std::cmp::Reverse(length(task)));
+        found.into_iter().next()
     };
     for round in 0..2 {
         for cwd in ["/w/a/b/src", "/w/a/x", "/w/c", "/w/c/d/e", "/elsewhere"] {
@@ -209,6 +218,7 @@ fn finds_the_task_that_list_tasks_lists_first() {
             place(&tasks, &time, &outer, "/w/a");
         }
     }
+    // A worktree inside a main checkout: the newer outer task does not take its hooks.
     let nested = service.find_task(Some("/w/a/b/src"), None).unwrap();
-    assert_eq!(nested.map(|task| task.id), Some(outer.id));
+    assert_eq!(nested.map(|task| task.id), Some(inner.id));
 }

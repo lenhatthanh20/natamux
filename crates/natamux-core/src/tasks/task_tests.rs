@@ -94,6 +94,15 @@ fn reads_whether_the_task_is_left_to_a_person_and_a_bad_value_as_not() {
 }
 
 #[test]
+fn reads_whether_the_task_works_in_the_main_checkout_and_a_bad_value_as_not() {
+    assert_eq!(ok(json!({"mainCheckout": true})).main_checkout, Some(true));
+    assert_eq!(ok(json!({})).main_checkout, None);
+    for bad in [json!(false), json!("x")] {
+        assert_eq!(ok(json!({"mainCheckout": bad})).main_checkout, None);
+    }
+}
+
+#[test]
 fn reads_the_path_taken_at_each_branch_and_the_paths_of_a_branch_in_its_steps() {
     let stages = json!([
         "plan",

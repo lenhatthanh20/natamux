@@ -1,6 +1,7 @@
 //! Start a task in a project whose commands wait for approval: the repo trust dialog opens first,
 //! and the start goes on after either answer. Not approved, the daemon runs none of the project's
-//! commands, so the task still starts safely.
+//! commands, so the task still starts safely. Also with no worktree: the agent and the stage
+//! commands then run in the project folder at once.
 
 use std::rc::Rc;
 
@@ -14,11 +15,6 @@ use crate::projects::repo_trust_dialog::{Then, review};
 impl NewWorkspaceDialog {
     pub(super) fn start_checked(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.busy || blocked_reason(&self.form(cx), &self.choice()).is_some() {
-            return;
-        }
-        // No project command runs until the workspace is made, and that path asks itself.
-        if !self.worktree {
-            self.start(cx);
             return;
         }
         let Some(source) = self.dashboard.read(cx).source().cloned() else {

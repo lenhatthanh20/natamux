@@ -395,5 +395,8 @@ fn sends_no_worktree_and_drops_the_base_and_branch_when_unchecked() {
 fn tells_whether_the_task_starts_with_a_worktree() {
     assert_eq!(made_toast("T-1", None), "T-1 is being prepared.");
     assert_eq!(made_toast("T-1", Some(true)), "T-1 is being prepared.");
-    assert_eq!(made_toast("T-1", Some(false)), "T-1 is created.");
+    assert_eq!(
+        made_toast("T-1", Some(false)),
+        "T-1 is started in the main checkout."
+    );
 }

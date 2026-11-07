@@ -75,7 +75,7 @@ fn the_footer_note_says_what_start_task_makes_when_nothing_blocks() {
     };
     assert_eq!(
         footer_note(&no_worktree, &manual(), "main", 1),
-        FooterNote::Plan("Task only, no workspace yet · Claude Code · 1 stage".into())
+        FooterNote::Plan("Main checkout on main · Claude Code · 1 stage".into())
     );
     let plain = StartForm {
         agent: String::new(),
@@ -96,6 +96,17 @@ fn the_footer_note_says_what_start_task_makes_when_nothing_blocks() {
 }
 
 #[test]
+fn the_main_checkout_note_names_the_checked_out_branch_or_head() {
+    assert_eq!(checked_out(Some(&list(None))), "dev");
+    let detached = BranchList {
+        current: None,
+        ..list(None)
+    };
+    assert_eq!(checked_out(Some(&detached)), "HEAD");
+    assert_eq!(checked_out(None), "HEAD");
+}
+
+#[test]
 fn the_branch_help_says_where_its_name_comes_from() {
     assert_eq!(branch_help(true, true), "Your own name");
     assert_eq!(branch_help(false, true), "Follows the title");
@@ -110,10 +121,13 @@ fn the_worktree_switch_says_what_on_and_off_make() {
     );
     assert_eq!(
         worktree_help(false),
-        "Task only. Make the workspace later from the task."
+        "The task works in the project folder itself, on the branch checked out there."
     );
     assert_eq!(worktree_tip(true), "On: a git worktree on a new branch");
-    assert_eq!(worktree_tip(false), "Off: the task only, no workspace yet");
+    assert_eq!(
+        worktree_tip(false),
+        "Off: work in the project folder, no worktree"
+    );
 }
 
 #[test]
@@ -177,7 +191,7 @@ fn the_start_tooltip_says_why_it_is_off_or_what_it_does() {
     );
     assert_eq!(
         start_tip(None, false, true),
-        "A new task with no workspace yet. Make it later from the task."
+        "A new task in the project folder itself: no worktree, no new branch."
     );
 }
 

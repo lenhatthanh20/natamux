@@ -8,7 +8,9 @@ use ui::prelude::*;
 use super::task_rules::{
     actions_for, cancel_task_description, delete_task_description, delete_task_label,
 };
-use super::task_view_rules::{delete_all_description, delete_all_label, delete_all_title};
+use super::task_view_rules::{
+    DELETE_CHECKOUT_TASK, delete_all_description, delete_all_label, delete_all_title, worktree_ids,
+};
 use crate::app::dashboard::Dashboard;
 use crate::app::source::read_uncommitted;
 use crate::components::confirm::{Confirm, ConfirmDialog};
@@ -32,6 +34,11 @@ pub(crate) fn open_confirm_delete_task(
     cx: &mut App,
 ) -> Entity<ConfirmDialog> {
     let (description, label, run) = delete_task_text(dashboard, &task.id, 0);
+    // A main checkout task is only detached: its changes stay, so none are read or named.
+    if task.main_checkout == Some(true) {
+        let title = format!("Delete {}?", task.id);
+        return Confirm::new(title, DELETE_CHECKOUT_TASK, label, run).open_view(window, cx);
+    }
     let confirm = Confirm::new(format!("Delete {}?", task.id), description, label, run);
     let source = dashboard.read(cx).source().cloned();
     let (Some(source), Some(_)) = (source, &task.workspace) else {
@@ -107,7 +114,7 @@ pub fn confirm_cancel_task(
     .open(window, cx);
 }
 
-/// Reads the files that are not committed of the `tasks` with a workspace, then calls `open`
+/// Reads the files that are not committed of the `tasks` with a worktree, then calls `open`
 /// with (task id, file count) of those that have any. A bulk confirm names them, and only those
 /// are then forced.
 pub fn with_uncommitted(
@@ -121,12 +128,7 @@ pub fn with_uncommitted(
         open(Vec::new(), window, cx);
         return;
     };
-    let ids: Vec<String> = tasks
-        .iter()
-        .filter(|task| task.workspace.is_some())
-        .map(|task| task.id.clone())
-        .collect();
-    let reads = read_uncommitted(&source, &ids);
+    let reads = read_uncommitted(&source, &worktree_ids(tasks));
     let main = window.window_handle();
     cx.spawn(async move |cx| {
         let dirty = reads.await;

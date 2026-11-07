@@ -9,6 +9,7 @@ use gpui::{ClickEvent, FontWeight};
 use natamux_proto::tasks::task::{Task, TaskState};
 use ui::{Tooltip, prelude::*};
 
+use super::remove_dialog_rules::remove_label;
 use super::workspace_rules::{GitStep, push_button};
 use super::wrap_up_rules::{FinishedAction, FinishedBannerText, GitFacts, finished_banner};
 use crate::app::links::open_link;
@@ -96,7 +97,8 @@ impl FinishedBanner {
             }),
             FinishedAction::Remove => {
                 let run = self.actions.remove.clone();
-                Some(button("finished-remove", "Remove workspace", busy, run).into_any_element())
+                let label = remove_label(&self.task);
+                Some(button("finished-remove", label, busy, run).into_any_element())
             }
             FinishedAction::Commit => {
                 let run = self.actions.commit.clone();
@@ -116,7 +118,7 @@ impl FinishedBanner {
         }
         Some(button(
             "finished-remove",
-            "Remove workspace",
+            remove_label(&self.task),
             self.pending.is_some(),
             self.actions.remove.clone(),
         ))
