@@ -11,56 +11,67 @@ use super::task_rules::{
 use super::task_view_rules::{delete_all_description, delete_all_label, delete_all_title};
 use crate::app::dashboard::Dashboard;
 use crate::app::source::read_uncommitted;
-use crate::components::confirm::Confirm;
+use crate::components::confirm::{Confirm, ConfirmDialog};
 
-/// Asks before the task, its notes, its history and its worktree are deleted. The files that are
-/// not committed are read first: the confirm names them, and only then the delete discards them.
+/// Asks before the task, its notes, its history and its worktree are deleted. The confirm opens
+/// at once (T-0307); the files that are not committed are read meanwhile, and the main button
+/// waits for that read: the confirm then names them, and only then the delete discards them.
 pub fn confirm_delete_task(
     dashboard: &Entity<Dashboard>,
     task: &Task,
     window: &mut Window,
     cx: &mut App,
 ) {
+    open_confirm_delete_task(dashboard, task, window, cx);
+}
+
+pub(crate) fn open_confirm_delete_task(
+    dashboard: &Entity<Dashboard>,
+    task: &Task,
+    window: &mut Window,
+    cx: &mut App,
+) -> Entity<ConfirmDialog> {
+    let (description, label, run) = delete_task_text(dashboard, &task.id, 0);
+    let confirm = Confirm::new(format!("Delete {}?", task.id), description, label, run);
     let source = dashboard.read(cx).source().cloned();
     let (Some(source), Some(_)) = (source, &task.workspace) else {
-        open_delete_task(dashboard, &task.id, 0, window, cx);
-        return;
+        return confirm.open_view(window, cx);
     };
+    let dialog = confirm.checking().open_view(window, cx);
     let changes = source.list_changes(&task.id);
-    let dashboard = dashboard.clone();
-    let id = task.id.clone();
-    let main = window.window_handle();
+    let (dashboard, id, weak) = (dashboard.clone(), task.id.clone(), dialog.downgrade());
     cx.spawn(async move |cx| {
         // A failed read counts as none: the daemon then still refuses changes.
         let count = changes.await.map_or(0, |files| files.len());
-        main.update(cx, |_, window, cx| {
-            open_delete_task(&dashboard, &id, count, window, cx);
+        // Closed before the read ended: nothing to update.
+        weak.update(cx, |dialog, cx| {
+            let (description, label, run) = delete_task_text(&dashboard, &id, count);
+            dialog.resolve(description, label, run, cx);
         })
         .ok();
     })
     .detach();
+    dialog
 }
 
-fn open_delete_task(
+/// The text and the action of the Delete task confirm for `uncommitted` files.
+fn delete_task_text(
     dashboard: &Entity<Dashboard>,
     id: &str,
     uncommitted: usize,
-    window: &mut Window,
-    cx: &mut App,
-) {
+) -> (String, &'static str, impl Fn(&mut Window, &mut App) + 'static) {
     let dashboard = dashboard.clone();
     let task_id = id.to_string();
-    Confirm::new(
-        format!("Delete {id}?"),
+    let run = move |_: &mut Window, cx: &mut App| {
+        dashboard.update(cx, |dashboard, cx| {
+            dashboard.delete_task(&task_id, uncommitted > 0, cx);
+        });
+    };
+    (
         delete_task_description(uncommitted),
         delete_task_label(uncommitted),
-        move |_, cx| {
-            dashboard.update(cx, |dashboard, cx| {
-                dashboard.delete_task(&task_id, uncommitted > 0, cx);
-            });
-        },
+        run,
     )
-    .open(window, cx);
 }
 
 /// Asks before the task is cancelled. Does nothing for a state that has no Cancel.
@@ -173,3 +184,7 @@ pub fn confirm_keep_try(
     )
     .open(window, cx);
 }
+
+#[cfg(test)]
+#[path = "task_confirms_tests.rs"]
+mod tests;
