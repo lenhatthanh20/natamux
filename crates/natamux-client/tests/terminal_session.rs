@@ -236,7 +236,11 @@ fn final_close_codes_exit_and_error_do_not_reconnect() {
                 next_non_link_event(&mut handle).await,
                 TerminalEvent::Status(expected)
             );
-            assert_eq!(handle.shell_id().as_deref(), Some("s1"), "kept after the end");
+            assert_eq!(
+                handle.shell_id().as_deref(),
+                Some("s1"),
+                "kept after the end"
+            );
             tokio::time::sleep(Duration::from_millis(800)).await;
         });
         assert_eq!(daemon.state(|state| state.tickets), 1, "no second connect");

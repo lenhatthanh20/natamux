@@ -232,7 +232,9 @@ impl TerminalCache {
             })
             .collect();
         for name in replaced_shells(&ended, shells) {
-            Self::global(cx).entries.remove(&terminal_key(task_id, &name));
+            Self::global(cx)
+                .entries
+                .remove(&terminal_key(task_id, &name));
         }
     }
 
