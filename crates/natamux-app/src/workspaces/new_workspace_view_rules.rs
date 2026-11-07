@@ -44,6 +44,8 @@ pub enum FooterNote {
     Plan(String),
 }
 
+/// `base`: the branch the worktree starts from, or with no worktree the one checked out in the
+/// project folder.
 pub fn footer_note(
     form: &StartForm,
     choice: &SourceChoice,
@@ -54,7 +56,7 @@ pub fn footer_note(
         return FooterNote::Blocked(reason);
     }
     let place = if form.no_worktree {
-        "Task only, no workspace yet".to_string()
+        format!("Main checkout on {base}")
     } else {
         format!("New worktree from {base}")
     };
@@ -86,7 +88,7 @@ pub fn worktree_help(on: bool) -> &'static str {
     if on {
         "A git worktree on a new branch, apart from your checkout."
     } else {
-        "Task only. Make the workspace later from the task."
+        "The task works in the project folder itself, on the branch checked out there."
     }
 }
 
@@ -94,7 +96,7 @@ pub fn worktree_tip(on: bool) -> &'static str {
     if on {
         "On: a git worktree on a new branch"
     } else {
-        "Off: the task only, no workspace yet"
+        "Off: work in the project folder, no worktree"
     }
 }
 
@@ -124,6 +126,12 @@ pub fn base_name(list: Option<&BranchList>, base: &str) -> String {
         return base.into();
     }
     start_branch(list).unwrap_or_else(|| DEFAULT_BASE.into())
+}
+
+/// The branch checked out in the project folder; HEAD when detached or not read yet.
+pub fn checked_out(list: Option<&BranchList>) -> String {
+    list.and_then(|list| list.current.clone())
+        .unwrap_or_else(|| "HEAD".into())
 }
 
 /// "· default" after the Branch from text: nothing is picked and the start branch is the

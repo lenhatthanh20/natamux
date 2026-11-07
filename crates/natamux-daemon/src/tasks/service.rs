@@ -163,6 +163,15 @@ impl TaskService {
         self.with(|store| store.record_workspace(task_id, change))
     }
 
+    pub fn record_main_checkout(
+        &self,
+        task_id: &str,
+        workspace: String,
+        branch: Option<String>,
+    ) -> TaskResult<Task> {
+        self.with(|store| store.record_main_checkout(task_id, workspace, branch))
+    }
+
     pub fn record_workspace_failure(&self, task_id: &str, message: &str) -> TaskResult<Task> {
         self.with(|store| store.record_workspace_failure(task_id, message))
     }

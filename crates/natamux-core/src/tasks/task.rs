@@ -193,10 +193,9 @@ fn tail_fields(
     for key in ["ciStages", "skipStages"] {
         put(key, get(key).and_then(|v| stage_list(Some(v))));
     }
-    put(
-        "withoutAgent",
-        get("withoutAgent").filter(|v| **v == json!(true)).cloned(),
-    );
+    for key in ["withoutAgent", "mainCheckout"] {
+        put(key, get(key).filter(|v| **v == json!(true)).cloned());
+    }
     put(
         "context",
         nullable(get("context"), |v| {

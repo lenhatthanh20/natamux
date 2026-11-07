@@ -120,6 +120,7 @@ pub mod workspaces {
     pub mod errors;
     pub mod fan_out;
     pub mod files;
+    pub mod main_checkout;
     pub mod new_workspace;
     pub mod publish;
     pub mod remove;

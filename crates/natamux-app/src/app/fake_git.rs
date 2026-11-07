@@ -41,6 +41,28 @@ fn status(code: u16, message: String) -> ClientError {
 }
 
 impl Data {
+    /// As the daemon: the task works in the project folder, one open task at a time.
+    pub(super) fn use_main_checkout(&self, task: &mut Task) -> Answer<()> {
+        let busy = self.tasks.iter().find(|other| {
+            other.main_checkout == Some(true)
+                && other.workspace.is_some()
+                && other.repo == task.repo
+                && !other.state.is_finished()
+        });
+        if let Some(busy) = busy {
+            let message = format!("{} already works in the main checkout", busy.id);
+            return Err(status(409, message));
+        }
+        let repo = self
+            .repos
+            .iter()
+            .find(|repo| task.repo.as_ref() == Some(&repo.id));
+        task.workspace = repo.map(|repo| repo.path.clone());
+        task.branch = Some("main".into());
+        task.main_checkout = Some(true);
+        Ok(())
+    }
+
     /// Adds the changes, graph and file texts of screen 4 to the seed.
     pub(super) fn add_git_seed(&mut self) {
         let seed: Value = serde_json::from_str(SEED).unwrap_or(Value::Null);

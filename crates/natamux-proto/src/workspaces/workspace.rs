@@ -40,7 +40,8 @@ pub struct NewWorkspaceInput {
     pub context: Option<TaskContext>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub attachments: Vec<AttachmentUpload>,
-    /// Some(false): make the task only; its workspace is made later. None: with a worktree.
+    /// Some(false): no worktree; the task works in the project folder (the main checkout). None:
+    /// with a worktree.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub worktree: Option<bool>,
 }

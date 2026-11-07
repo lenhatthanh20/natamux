@@ -53,6 +53,12 @@ impl WorkspaceService {
     /// step. A new workspace runs it before its answer, under a `claim` of the task.
     pub fn begin_create(&self, task_id: &str) -> WorkspaceResult<Task> {
         let task = self.tasks.get_task(task_id)?;
+        // Its work is in the project folder; a worktree would start without it.
+        if task.main_checkout == Some(true) && task.workspace.is_none() {
+            return Err(WorkspaceError::Conflict(format!(
+                "{task_id} was detached from the main checkout. Start a new task"
+            )));
+        }
         if let Some(workspace) = &task.workspace {
             return Err(WorkspaceError::Conflict(format!(
                 "{task_id} already has a workspace at {workspace}"
