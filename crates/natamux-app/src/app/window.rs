@@ -271,11 +271,11 @@ impl Root {
         })
     }
 
-    /// The terminals give up their size while something else fills main (a tool, Settings). The
-    /// workspace and the Agents grid claim theirs again when they draw.
+    /// The terminals give up their size while a tool fills main; the Settings popup leaves them
+    /// as they are (T-0306). The workspace and the Agents grid claim theirs again when they draw.
     fn sync_pane(&mut self, cx: &mut Context<Self>) {
         let dashboard = self.dashboard.read(cx);
-        let tool = !matches!(self.tool, Tool::None) || dashboard.settings.is_some();
+        let tool = !matches!(self.tool, Tool::None);
         let (workspace, agents) = (dashboard.open_task.is_some(), dashboard.agents_open);
         if tool || !workspace {
             TerminalCache::claim(Owner::Workspace, BTreeSet::new(), cx);
