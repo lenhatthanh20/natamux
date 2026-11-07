@@ -208,19 +208,24 @@ impl TerminalPane {
         )
     }
 
-    /// "Restoring Claude Code…" over the whole body; the terminal keeps its size under it.
+    /// "Restoring Claude Code…" in a chip at the top right: the screen saved before the restart
+    /// shows under it at once, so it covers nothing.
     fn cover(&self, cx: &App) -> Option<Div> {
         let label = self.restoring.clone()?;
+        let colors = cx.theme().colors();
         Some(
-            div()
+            h_flex()
                 .absolute()
-                .inset_0()
-                .flex()
-                .items_center()
-                .justify_center()
+                .top_2()
+                .right_3()
+                .px_2()
+                .py_1()
                 .gap_2()
-                .bg(cx.theme().colors().terminal_background)
-                .child(Spinner::new(IconSize::Medium))
+                .rounded(px(6.))
+                .bg(colors.surface_background)
+                .border_1()
+                .border_color(colors.border)
+                .child(Spinner::new(IconSize::Small))
                 .child(Label::new(label).size(LabelSize::Small).color(Color::Muted)),
         )
     }

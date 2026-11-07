@@ -154,9 +154,9 @@ Natamux remembers the terminals of each task that is not done or cancelled. Afte
 - A plain terminal, and a terminal whose agent never named its conversation, come back as a plain terminal in the workspace folder.
 - A terminal you closed, or that a stage closed with `endShell`, does not come back. A terminal whose agent you quit comes back as a plain terminal.
 
-While a terminal comes back, its pane shows a spinner and **Restoring GitHub Copilot…** (the name of its agent), or **Restoring terminal…**. The spinner goes once the agent runs, after 15 seconds at most.
+A terminal that comes back shows its old screen at once, as it was when the daemon stopped (at most 5 seconds older while its program printed), with the last 1,000 lines above it. A dim **── Restored after restart ──** line follows, and the new shell or agent starts below it. While the agent starts, a chip at the top right of the pane shows a spinner and **Restoring GitHub Copilot…** (the name of its agent), or **Restoring terminal…**. The chip goes once the agent runs, after 15 seconds at most.
 
-The old screen of a plain terminal and the programs in it, such as a dev server, are gone. Your files and your git state are not.
+The programs that ran in a terminal, such as a dev server, are gone; only their screen is kept. Your files and your git state are not lost.
 
 When a pane changes size, for example when a panel opens or a new terminal is added, Natamux hides it while the size changes and fades it in after the terminal has redrawn.
 

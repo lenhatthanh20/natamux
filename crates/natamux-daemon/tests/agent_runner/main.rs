@@ -101,6 +101,7 @@ fn terminals_with(
         on_output_idle: None,
         on_exit: None,
         trace_input: false,
+        screens_in: None,
     })
 }
 

@@ -71,6 +71,7 @@ pub mod terminals {
     pub mod limits;
     pub mod login_path;
     pub mod open_shells;
+    pub mod screen_files;
     mod open_shells_pause;
     mod open_shells_sync;
     pub mod service;

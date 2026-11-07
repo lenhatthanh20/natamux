@@ -65,6 +65,8 @@ unsafe impl GlobalAlloc for Counting {
 
 #[path = "daemon_bench_parts/loads.rs"]
 mod loads;
+#[path = "daemon_bench_parts/opens.rs"]
+mod opens;
 #[path = "daemon_bench_parts/snapshots.rs"]
 mod snapshots;
 
@@ -109,6 +111,7 @@ fn setup() -> (TerminalService, Sinks) {
         on_output_idle: None,
         on_exit: None,
         trace_input: false,
+        screens_in: None,
     });
     (service, sinks)
 }
@@ -393,24 +396,6 @@ fn echo_while_agents_print() -> (f64, f64) {
     measured
 }
 
-/// The time a new client waits for the snapshot of a full history.
-fn snapshot_of_full_history() -> f64 {
-    let (service, sinks) = setup();
-    open(&service, "1");
-    let sink = Arc::clone(&sinks.lock().unwrap()[0]);
-    for piece in history().chunks(64 * 1024) {
-        emit(&sink, piece);
-    }
-    service.settled(TASK, "1");
-    let client: ClientRef = Arc::new(Nobody);
-    let start = Instant::now();
-    let detach = service.attach(TASK, client, size(), "1", AttachOptions::default());
-    let held = start.elapsed();
-    drop(detach);
-    service.close_all();
-    ms(held)
-}
-
 /// `serialize` of a full history on its own: ms, allocations and MiB allocated.
 fn serialize() -> (f64, u64, f64) {
     let mut screen = Screen::new(COLS, ROWS);
@@ -440,7 +425,8 @@ fn daemon_benchmark() {
     let (rss_mib, per_shell_kib) = idle_shells();
     let (echo_p50, echo_p95) = echo_while_flooding();
     let (agent_p50, agent_p95) = echo_while_agents_print();
-    let snapshot_ms = snapshot_of_full_history();
+    let snapshot_ms = snapshots::full_history_snapshot();
+    let opens = opens::measure();
     let ((full_kib, full_ms), (tail_kib, tail_ms)) = snapshots::catch_up();
     let (init_500, init_500_warm) = loads::task_init(500);
     let (init_2000, init_2000_warm) = loads::task_init(2_000);
@@ -457,10 +443,16 @@ fn daemon_benchmark() {
          | echo of a typed shell while {AGENTS} agents print, p95 (target {AGENT_ECHO_P95_MS}) | {agent_p95} ms |\n\
          | snapshot of a full history at {COLS} cols | {snapshot_ms} ms |\n\
          | serialize of a full history | {serialize_ms} ms, {allocations} allocations, {allocated} MiB |\n\
+         | restored screen, attach to first snapshot, p50 (max 50) | {} ms |\n\
+         | save of 30 screens at shutdown | {} ms |\n\
+         | first output of a new login shell, p50 | {} |\n\
          | snapshot at 80 cols, full / catch-up | {full_kib} / {tail_kib} KiB, {full_ms} / {tail_ms} ms |\n\
          | RSS after {busy} shells printed 20 MB each | {busy_mib} MiB |\n\
          | `TaskSync::init`, 500 / 2,000 tasks, cold / warm | {init_500} / {init_500_warm}, {init_2000} / {init_2000_warm} ms |\n\
-         | hook with {agents} agents at once, p50 / p95 | {hook_p50} / {hook_p95} ms |\n"
+         | hook with {agents} agents at once, p50 / p95 | {hook_p50} / {hook_p95} ms |\n",
+        opens.restore_ms,
+        opens.save_ms,
+        opens.first_output_text(),
     );
     let numbers = serde_json::json!({
         "daemon_idle_rss_mb": rss_mib,
@@ -479,6 +471,9 @@ fn daemon_benchmark() {
         "task_init_2000_warm_ms": init_2000_warm,
         "hook_p50_ms": hook_p50,
         "hook_p95_ms": hook_p95,
+        "restore_snapshot_ms": opens.restore_ms,
+        "screen_save_30_ms": opens.save_ms,
+        "shell_first_output_ms": opens.first_output_ms,
     });
     println!("daemon_bench: {numbers}");
     if let Ok(path) = std::env::var("NATAMUX_BENCH_JSON") {

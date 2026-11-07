@@ -45,6 +45,7 @@ TARGETS = {
     "hook_p95_ms": (5, False),
     "echo_flood_p95_ms": (10, True),
     "echo_agents_p95_ms": (5, True),
+    "restore_snapshot_ms": (50, True),
     # The report's 0.5% and 1% are not met on CI: the gate is the T-0223 "after" + 20%.
     "table_background_cpu_pct": (1.0, True),
     "table_focus_cpu_pct": (2.5, True),

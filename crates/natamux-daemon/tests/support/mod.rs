@@ -353,6 +353,7 @@ pub fn setup_with(options: SetupOptions) -> Harness {
         on_output_idle: options.on_output_idle,
         on_exit: options.on_exit,
         trace_input: false,
+        screens_in: None,
     });
     Harness {
         service,
