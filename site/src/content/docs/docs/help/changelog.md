@@ -7,6 +7,12 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v1.0.21 (2026-11-07)
+
+- **Settings** opens as a popup over the dashboard; the dashboard and its terminals stay as they were under it.
+- **Start a task** is a compact sheet that fits a 1024 x 768 window without scrolling.
+- **Delete task** opens its confirm at once and shows the uncommitted files when it has read them.
+
 ## v1.0.20 (2026-11-06)
 
 - After an update, the desktop app shows the notes of the new version once in a **What's new** dialog.
