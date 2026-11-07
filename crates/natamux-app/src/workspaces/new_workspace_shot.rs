@@ -1,5 +1,5 @@
-//! Fills the Start a task dialog for the `--shot` states of option B (T-0292): files and an
-//! edited branch, no worktree, One agent with no agent, and the daemon's error. Shots only.
+//! Fills the Start a task dialog for its `--shot` states (T-0292, layout of T-0305): files and
+//! an edited branch, no worktree, One agent with no agent, and the daemon's error. Shots only.
 
 use std::path::PathBuf;
 
@@ -62,7 +62,8 @@ impl NewWorkspaceDialog {
         cx.notify();
     }
 
-    /// Scrolls the body to its end, so a shot shows the Workspace and Agent cards.
+    /// Scrolls the body to its end. Since T-0305 the body fits 1024x768, so this moves it only in
+    /// a smaller window.
     pub fn scroll_to_end(&mut self, cx: &mut Context<Self>) {
         let end = self.scroll.max_offset().y;
         self.scroll.set_offset(point(px(0.), -end));

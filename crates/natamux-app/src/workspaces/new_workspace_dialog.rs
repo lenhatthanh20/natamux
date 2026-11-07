@@ -12,7 +12,7 @@ use ui::prelude::*;
 
 use super::new_workspace_rules::{
     PickedFile, SourceChoice, StartForm, blocked_reason, initial_repo, new_workspace_input,
-    pick_source, prefill_branch, read_uploads, shown_repo, source_choices,
+    pick_source, read_uploads, shown_repo, source_choices,
 };
 use crate::agents::agent_choices::DEFAULT_AGENT;
 use crate::app::dashboard::Dashboard;
@@ -24,9 +24,13 @@ use crate::components::toast_rules::ToastTone;
 
 /// The Branch field's placeholder when the project sets no `git.branchName`.
 const DEFAULT_BRANCH_HINT: &str = "natamux/{id}-{slug}";
+/// The notes box starts at 3 lines and grows to 8, so the dialog fits a 768 px window.
+const NOTES_LINES: (usize, usize) = (3, 8);
 
 #[path = "new_workspace_fields.rs"]
 mod fields;
+#[path = "new_workspace_files.rs"]
+mod files;
 #[path = "new_workspace_menus.rs"]
 mod menus;
 #[path = "new_workspace_shot.rs"]
@@ -92,6 +96,8 @@ pub struct NewWorkspaceDialog {
     branch_edited: bool,
     branch_hint: String,
     reference: Entity<Editor>,
+    /// The Reference field's placeholder now: the hint of the source and skill.
+    ref_hint: String,
     picked_repo: String,
     base: String,
     agent: String,
@@ -149,11 +155,11 @@ impl NewWorkspaceDialog {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let title = text_editor("Fix the login redirect", None, window, cx);
+        let title = text_editor("Task title", None, window, cx);
         let notes = text_editor(
             "Optional. What to change and why, where to look (files, screens), and how to tell \
              it is done.",
-            Some((6, 12)),
+            Some(NOTES_LINES),
             window,
             cx,
         );
@@ -197,6 +203,7 @@ impl NewWorkspaceDialog {
             branch_edited: false,
             branch_hint: DEFAULT_BRANCH_HINT.into(),
             reference,
+            ref_hint: String::new(),
             picked_repo: initial_repo(repo.as_deref(), &ids),
             base: String::new(),
             agent: DEFAULT_AGENT.into(),
@@ -307,31 +314,6 @@ impl NewWorkspaceDialog {
         self.settings
             .as_ref()
             .and_then(|loaded| loaded.settings.git.branch_name.clone())
-    }
-
-    /// Runs on each render, so a title, project or settings change refills the branch with no
-    /// event wiring. Once the user edited the field, it stays as typed.
-    fn sync_branch(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let pattern = self.branch_pattern();
-        let hint = pattern
-            .clone()
-            .unwrap_or_else(|| DEFAULT_BRANCH_HINT.into());
-        if hint != self.branch_hint {
-            self.branch_hint = hint.clone();
-            self.branch_name.update(cx, |editor, cx| {
-                editor.set_placeholder_text(hint.as_str(), window, cx)
-            });
-        }
-        if self.branch_edited {
-            return;
-        }
-        let title = self.title.read(cx).text(cx);
-        let value = prefill_branch(pattern.as_deref(), &title).unwrap_or_default();
-        if self.branch_name.read(cx).text(cx) != value {
-            self.filled = value.clone();
-            self.branch_name
-                .update(cx, |editor, cx| editor.set_text(value, window, cx));
-        }
     }
 
     fn last_base(&self, cx: &App) -> Option<String> {
@@ -470,10 +452,11 @@ impl DialogView for NewWorkspaceDialog {
             if self.branches.is_some() {
                 ring.push(stops.branch.clone());
             }
+            // The reset button sits after the branch input.
+            ring.push(self.branch_name.focus_handle(cx));
             if self.branch_edited {
                 ring.push(stops.reset.clone());
             }
-            ring.push(self.branch_name.focus_handle(cx));
         }
         ring.extend(
             [&stops.agent, &stops.flow, &stops.cancel, &stops.submit].map(FocusHandle::clone),

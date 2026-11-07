@@ -209,15 +209,9 @@ impl NewWorkspaceDialog {
         self.open_menu(Pick::Branch, position, window, cx);
     }
 
-    fn pick(&mut self, pick: Pick, value: String, window: &mut Window, cx: &mut Context<Self>) {
+    fn pick(&mut self, pick: Pick, value: String, _: &mut Window, cx: &mut Context<Self>) {
         match pick {
-            Pick::Source => {
-                self.picked_source = value;
-                let placeholder = self.choice().ref_placeholder();
-                self.reference.update(cx, |editor, cx| {
-                    editor.set_placeholder_text(placeholder, window, cx)
-                });
-            }
+            Pick::Source => self.picked_source = value,
             Pick::Skill => self.skill = value,
             Pick::Project => {
                 self.picked_repo = value;
