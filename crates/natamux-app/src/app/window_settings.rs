@@ -1,16 +1,16 @@
-//! Screen 7's commands on Root: the palettes, the shortcut sheet, the Settings page (T-0174), the
-//! theme and the UI size, the project dialogs, and Sign in when the daemon has no token for the
-//! app.
+//! Screen 7's commands on Root: the palettes, the shortcut sheet, the Settings popup (T-0174,
+//! T-0306), the theme and the UI size, the project dialogs, and Sign in when the daemon has no
+//! token for the app.
 
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
-use gpui::{Entity, Focusable};
+use gpui::{Entity, Focusable, MouseButton, MouseDownEvent, anchored, deferred, point};
 use ui::prelude::*;
 
 use super::Root;
 use crate::app::appearance_rules::{ThemeChoice, UiSize};
-use crate::app::settings_rules::{SettingsFocus, SettingsPage};
+use crate::app::settings_rules::{SettingsFocus, SettingsPage, popup_bounds};
 use crate::app::settings_view::SettingsView;
 use crate::app::shortcut_sheet;
 use crate::app::shortcuts::{
@@ -20,6 +20,7 @@ use crate::app::shortcuts::{
 };
 use crate::app::sign_in::{SignIn, SignedIn, access_file};
 use crate::app::source::Source;
+use crate::components::dialog::{DialogLayer, POPUP_RADIUS, scrim};
 use crate::palette::palette_layer::PaletteLayer;
 use crate::palette::palette_rows::{PaletteMode, PaletteScope};
 use crate::projects::project_settings_page::ProjectSettingsPage;
@@ -96,18 +97,66 @@ impl Root {
             )
     }
 
-    /// Settings fills the body: tools stop, the drawer closes, the terminals give up their size.
+    /// Settings opens over the body, which stays as it was: the terminals keep their size.
     pub(super) fn settings_opened(
         &mut self,
         focus: SettingsFocus,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.close_tool(cx);
-        self.drawer_open = false;
-        self.sync_pane(cx);
         self.settings
             .update(cx, |settings, cx| settings.show(focus, window, cx));
+    }
+
+    /// The Settings popup (T-0306, mockup A): centered over a scrim on the whole window, under
+    /// the dialogs (its sheets and confirms), menus, palette and toasts. A click on the scrim
+    /// closes it; with a dialog open the dialog's own scrim takes the click.
+    pub(super) fn render_settings(
+        &self,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
+        self.dashboard.read(cx).settings.as_ref()?;
+        let viewport = window.viewport_size();
+        let bounds = popup_bounds(f32::from(viewport.width), f32::from(viewport.height));
+        let close = cx.listener(|root, _: &MouseDownEvent, _, cx| {
+            if !DialogLayer::is_open(cx) {
+                root.close_settings(cx);
+            }
+        });
+        let scrim = scrim(cx);
+        let colors = cx.theme().colors();
+        let popup = div()
+            .absolute()
+            .left(px(bounds.left))
+            .top(px(bounds.top))
+            .w(px(bounds.width))
+            .h(px(bounds.height))
+            .rounded(px(POPUP_RADIUS))
+            .border_1()
+            .border_color(colors.border)
+            .bg(colors.editor_background)
+            .shadow_lg()
+            // Else a mouse down in the popup also reaches the scrim (T-0198, as the drawer).
+            .occlude()
+            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .child(self.settings.clone());
+        let layer = div()
+            .relative()
+            .w(viewport.width)
+            .h(viewport.height)
+            .occlude()
+            .child(
+                div()
+                    .id("settings-scrim")
+                    .absolute()
+                    .inset_0()
+                    .bg(scrim)
+                    .on_mouse_down(MouseButton::Left, close),
+            )
+            .child(popup);
+        let layer = anchored().position(point(px(0.), px(0.))).child(layer);
+        Some(deferred(layer).with_priority(1).into_any_element())
     }
 
     /// Focus goes back to what main shows.

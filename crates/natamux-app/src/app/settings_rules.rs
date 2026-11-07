@@ -1,5 +1,5 @@
-//! The rules of the Settings page (T-0174): its pages, the page it opens on and shows, the search
-//! over the app's rows and the projects, and the steps of the font size.
+//! The rules of the Settings popup (T-0174, T-0306): its box, its pages, the page it opens on
+//! and shows, the search over the app's rows and the projects, and the steps of the font size.
 
 use natamux_proto::projects::repo::Repo;
 
@@ -40,6 +40,29 @@ pub fn page_to_open(
     asked
         .or_else(|| shown.cloned())
         .unwrap_or_else(|| last.clone())
+}
+
+/// The Settings popup's box in the window, in px (T-0306, mockup A). Fixed px, not rems, so it
+/// fits the window at every UI size.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PopupBounds {
+    pub left: f32,
+    pub top: f32,
+    pub width: f32,
+    pub height: f32,
+}
+
+/// At most 1040 x 720, at least 32 px from the window's sides and 48 px from its top and bottom,
+/// centered both ways.
+pub fn popup_bounds(window_width: f32, window_height: f32) -> PopupBounds {
+    let width = 1040_f32.min(window_width - 64.).max(0.);
+    let height = 720_f32.min(window_height - 96.).max(0.);
+    PopupBounds {
+        left: (window_width - width) / 2.,
+        top: (window_height - height) / 2.,
+        width,
+        height,
+    }
 }
 
 /// The page drawn: a project that is gone shows Appearance.

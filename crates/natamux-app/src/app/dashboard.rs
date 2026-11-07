@@ -86,7 +86,7 @@ pub struct Dashboard {
     pub open_task: Option<String>,
     /// Main shows the Agents grid (then no task is open).
     pub agents_open: bool,
-    /// The Settings page fills the body over main (T-0174); None: closed.
+    /// The Settings popup over the dashboard (T-0174, T-0306); None: closed.
     pub settings: Option<SettingsPage>,
     last_settings_page: SettingsPage,
     /// The terminal the open workspace shows and focuses once its terminals are read.
