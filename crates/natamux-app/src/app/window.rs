@@ -1,7 +1,7 @@
 //! The window and the root view, the app shell of docs/ui-spec.md 3.1 (`features/app/AppShell.tsx`):
 //! title bar, the sidebar (docked, or a drawer under 1024), main and the status bar, with the menu,
 //! dialog and toast layers on top. Main shows All tasks, the open task's workspace, the Agents
-//! grid, or a tool of phase 1 (bench, IME check). The Settings page fills the body over them.
+//! grid, or a tool of phase 1 (bench, IME check). The Settings popup opens over them (T-0306).
 
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -271,11 +271,11 @@ impl Root {
         })
     }
 
-    /// The terminals give up their size while something else fills main (a tool, Settings). The
-    /// workspace and the Agents grid claim theirs again when they draw.
+    /// The terminals give up their size while a tool fills main; the Settings popup leaves them
+    /// as they are (T-0306). The workspace and the Agents grid claim theirs again when they draw.
     fn sync_pane(&mut self, cx: &mut Context<Self>) {
         let dashboard = self.dashboard.read(cx);
-        let tool = !matches!(self.tool, Tool::None) || dashboard.settings.is_some();
+        let tool = !matches!(self.tool, Tool::None);
         let (workspace, agents) = (dashboard.open_task.is_some(), dashboard.agents_open);
         if tool || !workspace {
             TerminalCache::claim(Owner::Workspace, BTreeSet::new(), cx);

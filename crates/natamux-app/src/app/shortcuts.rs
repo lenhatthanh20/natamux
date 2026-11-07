@@ -50,6 +50,7 @@ actions!(
         StartBench,
         StopBench,
         CheckIme,
+        CloseSettings,
         CloseTool,
         ShowAgents,
         ToggleAgents,
@@ -226,10 +227,25 @@ fn terminal_keeps(mac: bool) -> Vec<KeyBinding> {
         .collect()
 }
 
+/// The Settings key (Mod+,) closes the popup while focus is in it (T-0306). The menu, the
+/// palette and the account menu keep `OpenSettings`, which only opens.
+fn settings_keys(mac: bool) -> Vec<KeyBinding> {
+    command_by_id("app.settings")
+        .map(|command| command.keys)
+        .unwrap_or_default()
+        .iter()
+        .map(|key| KeyBinding::new(&keystroke(key, mac), CloseSettings, Some(SETTINGS_CONTEXT)))
+        .collect()
+}
+
+/// The key context of the Settings popup's root.
+pub const SETTINGS_CONTEXT: &str = "Settings";
+
 pub fn bind(cx: &mut App) {
     cx.on_action(|_: &Quit, cx| cx.quit());
     let mac = cfg!(target_os = "macos");
     cx.bind_keys(command_bindings(mac));
+    cx.bind_keys(settings_keys(mac));
     cx.bind_keys(terminal_keeps(mac));
     super::text_boxes::bind(cx, mac);
     // A terminal sends ctrl-c and the like to the shell; only copy and paste are the app's.
@@ -314,6 +330,29 @@ mod tests {
             .map(|command| command.keys.len() * command.contexts.len().max(1))
             .sum();
         assert_eq!(command_bindings(true).len(), expected);
+    }
+
+    #[test]
+    fn the_settings_key_closes_settings_only_inside_it() {
+        for mac in [true, false] {
+            let keys = settings_keys(mac);
+            assert_eq!(keys.len(), 1);
+            let key = &keys[0];
+            assert_eq!(key.action().name(), "natamux::CloseSettings");
+            assert!(key.predicate().is_some());
+            let strokes = |binding: &KeyBinding| -> Vec<String> {
+                binding
+                    .keystrokes()
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect()
+            };
+            let open = command_bindings(mac)
+                .iter()
+                .find(|binding| binding.action().name() == "natamux::OpenSettings")
+                .map(strokes);
+            assert_eq!(open, Some(strokes(key)));
+        }
     }
 
     #[test]
