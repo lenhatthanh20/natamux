@@ -116,7 +116,8 @@ pub fn image_type_of(path: &str) -> Option<&'static str> {
         .map(|(_, mime)| *mime)
 }
 
-/// Which side of a changed image to read: the last commit or the working tree.
+/// Which side of a changed file (an image, or the blame of a text) to read: the last commit or
+/// the working tree.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum ImageSide {
     Original,
@@ -130,6 +131,45 @@ impl ImageSide {
             Self::Modified => "modified",
         }
     }
+}
+
+/// The sha git gives a line that is not committed yet.
+pub const UNCOMMITTED_SHA: &str = "0000000000000000000000000000000000000000";
+
+/// The body of `GET /tasks/:id/blame`: who last changed each line. `tracked` is false for a file
+/// git does not know; it has no runs then.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BlameAnswer {
+    pub path: String,
+    pub tracked: bool,
+    pub commits: Vec<BlameCommit>,
+    pub runs: Vec<BlameRun>,
+}
+
+/// One commit of a blame. `time` is the author time in unix seconds.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BlameCommit {
+    pub sha: String,
+    pub author: String,
+    pub time: i64,
+    pub summary: String,
+}
+
+impl BlameCommit {
+    pub fn committed(&self) -> bool {
+        self.sha != UNCOMMITTED_SHA
+    }
+}
+
+/// `count` lines from `start` (0-based) last changed by `commits[commit]`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BlameRun {
+    pub start: u32,
+    pub count: u32,
+    pub commit: usize,
 }
 
 /// The body of `GET /tasks/:id/changes/file` (`fileDiffSchema`): the text at the last commit and

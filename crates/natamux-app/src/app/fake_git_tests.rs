@@ -80,6 +80,22 @@ fn a_file_diff_has_both_texts_and_two_hunks_worth_of_lines() {
 }
 
 #[test]
+fn a_blame_has_two_commits_and_a_new_file_is_not_tracked() {
+    let fake = FakeDaemon::default();
+    let blame = fake
+        .blame(REVIEWED, "src/checkout.ts", ImageSide::Modified)
+        .unwrap();
+    assert!(blame.tracked);
+    assert_eq!(blame.commits.len(), 2);
+    assert_eq!((blame.runs[1].start, blame.runs[1].commit), (3, 1));
+    let new = fake
+        .blame(REVIEWED, "test/coupon.test.ts", ImageSide::Modified)
+        .unwrap();
+    assert!(!new.tracked);
+    assert!(new.runs.is_empty());
+}
+
+#[test]
 fn a_diff_of_a_path_that_is_not_changed_is_404() {
     let fake = FakeDaemon::default();
     let missing = fake.file_diff(REVIEWED, "src/none.ts").unwrap_err();

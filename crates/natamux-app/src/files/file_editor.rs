@@ -4,6 +4,7 @@
 //! its header ends with the Terminals button.
 
 use gpui::{ClickEvent, Entity, FocusHandle, Focusable, Subscription};
+use natamux_proto::workspaces::changes::ImageSide;
 use natamux_proto::workspaces::files::WorkspaceFile;
 use ui::{Tooltip, prelude::*};
 
@@ -23,6 +24,8 @@ use crate::components::colors::signal;
 use crate::components::confirm::Confirm;
 use crate::components::skeleton::SkeletonList;
 use crate::components::terminals_button::terminals_button;
+use crate::components::toast_rules::ToastTone;
+use crate::git::blame_marks::{BlameFailed, BlameMarks, Blocked};
 use crate::git::change_rules::split_path;
 use crate::git::editor_find::EditorFind;
 use crate::terminals::pane_header::icon_button;
@@ -38,6 +41,7 @@ pub struct FileEditor {
     error: Option<String>,
     pub(super) body: Option<Entity<FileEditorBody>>,
     pub(super) find: Option<Entity<EditorFind>>,
+    blame: Entity<BlameMarks>,
     pub(super) saving: bool,
     focus: FocusHandle,
     _subscriptions: Vec<Subscription>,
@@ -52,7 +56,21 @@ impl FileEditor {
         cx: &mut Context<Self>,
     ) -> Self {
         let store = DraftStore::global(cx);
-        let subscriptions = vec![cx.observe(&store, |_, _, cx| cx.notify())];
+        // Blame reads the file on disk, so it waits for unsaved edits to be saved.
+        let draft_of = (store.clone(), task_id.clone(), path.clone());
+        let blocked: Blocked = Box::new(move |cx| {
+            let (store, task, path) = &draft_of;
+            store.read(cx).file(task, path).is_some()
+        });
+        let blame = cx.new(|_| BlameMarks::new(Some(blocked)));
+        let subscriptions = vec![
+            cx.observe(&store, |_, _, cx| cx.notify()),
+            cx.subscribe(&blame, |this, _, failed: &BlameFailed, cx| {
+                this.dashboard.update(cx, |dashboard, cx| {
+                    dashboard.toast(&failed.0, ToastTone::Error, None, cx)
+                });
+            }),
+        ];
         let mut editor = FileEditor {
             dashboard,
             task_id,
@@ -62,6 +80,7 @@ impl FileEditor {
             error: None,
             body: None,
             find: None,
+            blame,
             saving: false,
             focus: cx.focus_handle(),
             _subscriptions: subscriptions,
@@ -76,6 +95,11 @@ impl FileEditor {
 
     pub fn path(&self) -> &str {
         &self.path
+    }
+
+    /// Annotate with Git Blame on, for the shots.
+    pub fn annotate(&self, cx: &mut App) {
+        self.blame.update(cx, |blame, cx| blame.annotate(cx));
     }
 
     fn name(&self) -> &str {
@@ -113,8 +137,11 @@ impl FileEditor {
         match shown {
             // A draft stays; the banner shows when the version moved.
             Some(text) if self.draft(cx).is_none() => {
-                if let Some(body) = &self.body {
+                if let Some(body) = &self.body
+                    && body.read(cx).text(cx) != text
+                {
                     body.update(cx, |body, cx| body.set_disk_text(&text, cx));
+                    self.blame.update(cx, |blame, cx| blame.refresh(cx));
                 }
             }
             Some(_) => {}
@@ -143,6 +170,13 @@ impl FileEditor {
             .push(cx.subscribe(&body, |this, _, edited: &Edited, cx| {
                 this.edited(&edited.0, cx)
             }));
+        if let Some(source) = self.dashboard.read(cx).source().cloned() {
+            let editor = body.read(cx).editor().clone();
+            let sides = vec![(editor, body.read(cx).buffer().clone(), ImageSide::Modified)];
+            self.blame.update(cx, |blame, cx| {
+                blame.attach(source, (&self.task_id, &self.path), sides, cx)
+            });
+        }
         self.body = Some(body);
     }
 

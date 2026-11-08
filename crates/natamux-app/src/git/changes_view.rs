@@ -14,6 +14,7 @@ use natamux_proto::workspaces::changes::{FileDiff, ImageSide};
 use natamux_proto::workspaces::workspace::ChangeEntry;
 use ui::prelude::*;
 
+use super::blame_marks::BlameMarks;
 use super::change_rules::{BodyKind, body_kind, shows_image, wraps_by_default};
 use super::change_tree::file_order;
 use super::comment_rules::Quote;
@@ -65,6 +66,7 @@ pub struct ChangesView {
     pub(super) reads: u64,
     prefetch: Option<prefetch::Prefetched>,
     pub(super) diff: Entity<DiffView>,
+    pub(super) blame: Entity<BlameMarks>,
     pub(super) svg_preview: bool,
     pub(super) message: Option<Entity<Editor>>,
     pub(super) drafting: bool,
@@ -92,8 +94,10 @@ impl ChangesView {
         cx: &mut Context<Self>,
     ) -> Self {
         let diff = cx.new(|_| DiffView::new());
+        let blame = cx.new(|_| BlameMarks::new(None));
         let width = cx.new(|_| None);
-        let subscriptions = vec![
+        let mut subscriptions = Self::blame_subscriptions(&diff, &blame, cx);
+        subscriptions.extend([
             cx.subscribe(&diff, |view, _, event: &DiffEvent, cx| {
                 if let DiffEvent::RevertHunk { index, version } = *event {
                     view.revert_hunk(index, version, cx);
@@ -102,7 +106,7 @@ impl ChangesView {
             }),
             cx.observe(&width, |_, _, cx| cx.notify()),
             Dashboard::redraw_on(&dashboard, rows::DASHBOARD_PARTS, cx),
-        ];
+        ]);
         ChangesView {
             dashboard,
             workspace,
@@ -117,6 +121,7 @@ impl ChangesView {
             reads: 0,
             prefetch: None,
             diff,
+            blame,
             svg_preview: false,
             message: None,
             drafting: false,

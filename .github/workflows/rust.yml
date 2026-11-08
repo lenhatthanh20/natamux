@@ -426,6 +426,7 @@ jobs:
             start-task-one-agent start-task-error sidebar-blurred remove-workspace-anyway
             update-downloading update-ready update-failed settings-update-ready
             repo-trust-dialog whats-new diff-find editor-find editor-go-to-line editor-outline
+            diff-blame editor-blame
           DOCKED: >-
             tasks-table workspace-terminal-running terminal-find workspace-terminal-needs-input
             workspace-terminal-review no-workspace workspace-preparing finished-wrap-up agents-grid
@@ -451,6 +452,7 @@ jobs:
             start-task-one-agent start-task-error sidebar-blurred remove-workspace-anyway
             update-downloading update-ready update-failed settings-update-ready
             repo-trust-dialog whats-new diff-find editor-find editor-go-to-line editor-outline
+            diff-blame editor-blame
         run: |
           mkdir -p shots
           only=$ONLY

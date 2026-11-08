@@ -101,6 +101,7 @@ Files, git, GitHub, terminals and templates.
 | `GET /tasks/:id/ended-shells` | The last screens of the terminals of a done or cancelled task: `{ shells }`. Each has `name`, `agent`, `stage`, `session` (the agent's last session, or null), `endedAt` and `text` |
 | `GET /tasks/:id/changes/file?path=<file>` | The diff of one changed file |
 | `GET /tasks/:id/changes/image?path=<file>&side=original\|modified` | One side of a changed image |
+| `GET /tasks/:id/blame?path=<file>&side=original\|modified` | Who last changed each line: `{ path, tracked, commits, runs }`. `modified` (the default) is the file in the worktree, `original` a changed file at the last commit. Each commit has `sha`, `author`, `time` (unix seconds) and `summary`; a line not committed has a sha of 40 zeros. Each run is `{ start, count, commit }`: lines from `start` (0-based) and the index of their commit. `tracked` is false, with no runs, for a file git does not track. Answers 413 for a file larger than 1 MB |
 | `GET /tasks/:id/tree?path=<folder>` | One folder of the worktree: `{ entries }`. No `path` is the root. `.git` is never listed |
 | `GET /tasks/:id/file?path=<file>` | One file of the worktree: `{ path, text, binary, tooLarge, version }` |
 | `PUT /tasks/:id/file?path=<file>` | Save a file that exists `{ text }`, with the `version` you read in `If-Match`. Answers 409 when the file changed since |

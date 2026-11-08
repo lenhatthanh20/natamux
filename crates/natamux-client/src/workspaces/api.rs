@@ -6,7 +6,7 @@ use hyper::Method;
 use natamux_proto::tasks::task::{Task, TaskAnswer};
 use natamux_proto::terminals::query::encode;
 use natamux_proto::workspaces::changes::{
-    CommitAnswer, CommitInput, CommitMessageDraft, FileDiff, ImageSide, RollbackInput,
+    BlameAnswer, CommitAnswer, CommitInput, CommitMessageDraft, FileDiff, ImageSide, RollbackInput,
     RollbackResult,
 };
 use natamux_proto::workspaces::files::{FileText, SavedFile, TreeEntry, TreeList, WorkspaceFile};
@@ -141,6 +141,22 @@ pub async fn file_image(
         side.name()
     );
     Ok(send(config, Method::GET, &path, None).await?.to_vec())
+}
+
+/// Who last changed each line of `file`: the working tree, or the last commit (`Original`).
+pub async fn blame(
+    config: &Config,
+    task_id: &str,
+    file: &str,
+    side: ImageSide,
+) -> Result<BlameAnswer, ClientError> {
+    let path = format!(
+        "/tasks/{}/blame?path={}&side={}",
+        encode(task_id),
+        encode(file),
+        side.name()
+    );
+    call(config, Method::GET, &path).await
 }
 
 /// Commits every change. Git work can take long: this call has no time limit.

@@ -187,7 +187,6 @@ impl DiffView {
                         editor.set_scroll_position(position, window, cx);
                     });
                 }
-                cx.emit(DiffEvent::Ready);
             })
             .ok();
         }));
@@ -345,6 +344,8 @@ impl DiffView {
             _subscriptions: subscriptions,
         });
         self.place_comments(cx);
+        // New editors: the owner hooks them up again (blame menu), also after an option change.
+        cx.emit(DiffEvent::Ready);
         cx.notify();
     }
 

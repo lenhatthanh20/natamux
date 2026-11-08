@@ -48,6 +48,19 @@ fn reads_the_diff_of_a_file_with_its_path_encoded() {
 }
 
 #[test]
+fn reads_the_blame_of_one_side() {
+    let body = r#"{"path":"a b.ts","tracked":true,"commits":[{"sha":"abc","author":"Ann","time":5,"summary":"Add"}],"runs":[{"start":0,"count":2,"commit":0}]}"#;
+    let (blame, _) = ok(
+        "GET /tasks/T-0009/blame?path=a%20b.ts&side=original",
+        body,
+        |client| client.blame("T-0009", "a b.ts", ImageSide::Original),
+    );
+    assert!(blame.tracked);
+    assert_eq!(blame.commits[0].author, "Ann");
+    assert_eq!(blame.runs[0].count, 2);
+}
+
+#[test]
 fn reads_the_bytes_of_an_image_unchanged() {
     let bytes = "\u{89}PNG\r\n\u{1a}\n\u{0}\u{7f}é";
     for (side, name) in [
