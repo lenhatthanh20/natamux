@@ -41,6 +41,7 @@ GET /changes/image
 GET /tree
 GET /file
 GET /graph
+GET /blame
 POST /terminal/ticket
 POST /review-comments/send
 POST /review-comments

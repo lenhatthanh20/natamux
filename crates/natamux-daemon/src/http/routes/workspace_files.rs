@@ -87,6 +87,48 @@ pub async fn changed_file(state: Arc<AppState>, id: String, query: &str) -> Answ
     .await
 }
 
+fn side_of(name: &str) -> ImageSide {
+    if name == "original" {
+        ImageSide::Original
+    } else {
+        ImageSide::Modified
+    }
+}
+
+/// `?side=original|modified`; the working tree when it is not there.
+fn side_query(query: &str, issues: &mut Issues) -> Option<ImageSide> {
+    match query_value(query, "side") {
+        None => Some(ImageSide::Modified),
+        Some(value) => one_of(
+            Some(&value),
+            &[json!("side")],
+            &["original", "modified"],
+            issues,
+        )
+        .map(|name| side_of(&name)),
+    }
+}
+
+/// Who last changed each line of a file.
+pub async fn blame(state: Arc<AppState>, id: String, query: &str) -> Answer {
+    let id = match param(&id) {
+        Ok(id) => id,
+        Err(answer) => return *answer,
+    };
+    let (path, side) = match parsed(|issues| {
+        let path = path_query(query, issues);
+        let side = side_query(query, issues);
+        path.zip(side)
+    }) {
+        Ok(found) => found,
+        Err(answer) => return *answer,
+    };
+    answer(StatusCode::OK, move || {
+        Ok(to_value(&state.workspaces.blame(&id, &path, side)?))
+    })
+    .await
+}
+
 /// The bytes of one side of a changed image.
 pub async fn changed_image(state: Arc<AppState>, id: String, query: &str) -> Answer {
     let id = match param(&id) {
@@ -103,13 +145,8 @@ pub async fn changed_image(state: Arc<AppState>, id: String, query: &str) -> Ans
         );
         path.zip(side)
     }) {
-        Ok(found) => found,
+        Ok((path, side)) => (path, side_of(&side)),
         Err(answer) => return *answer,
-    };
-    let side = if side == "original" {
-        ImageSide::Original
-    } else {
-        ImageSide::Modified
     };
     let read = tokio::task::spawn_blocking(move || state.workspaces.file_image(&id, &path, side));
     match read.await {

@@ -3,7 +3,7 @@
 use natamux_client::Answer;
 use natamux_proto::tasks::task::Task;
 use natamux_proto::workspaces::changes::{
-    CommitAnswer, CommitMessageDraft, FileDiff, ImageSide, RollbackResult,
+    BlameAnswer, CommitAnswer, CommitMessageDraft, FileDiff, ImageSide, RollbackResult,
 };
 use natamux_proto::workspaces::review_comments::{
     CommentSide, CommentState, ReviewComment, SendReviewAnswer,
@@ -36,6 +36,13 @@ impl Source {
         self.ask(
             |c| c.file_image(task_id, path, side),
             |f| f.file_image(task_id, path, side),
+        )
+    }
+
+    pub fn blame(&self, task_id: &str, path: &str, side: ImageSide) -> Answer<BlameAnswer> {
+        self.ask(
+            |c| c.blame(task_id, path, side),
+            |f| f.blame(task_id, path, side),
         )
     }
 

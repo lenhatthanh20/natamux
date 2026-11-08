@@ -147,12 +147,15 @@ mod files {
     pub mod outline_rules;
 }
 mod git {
+    pub mod blame_marks;
+    pub mod blame_rules;
     pub mod change_rules;
     pub mod change_tree;
     pub mod changes_view;
     pub mod comment_rules;
     pub mod commit_rules;
     pub mod diff_arrows;
+    pub mod diff_blame;
     pub mod diff_cursor;
     pub mod diff_editors;
     pub mod diff_hunk_controls;

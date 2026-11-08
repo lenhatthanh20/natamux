@@ -62,6 +62,7 @@ pub fn is_files_shot(shot: Shot) -> bool {
             | Shot::EditorFind
             | Shot::EditorGoToLine
             | Shot::EditorOutline
+            | Shot::EditorBlame
     )
 }
 
@@ -75,7 +76,7 @@ pub async fn run(handle: WindowHandle<Root>, shot: Shot, cx: &mut AsyncApp) {
     }
     if matches!(
         shot,
-        Shot::EditorFind | Shot::EditorGoToLine | Shot::EditorOutline
+        Shot::EditorFind | Shot::EditorGoToLine | Shot::EditorOutline | Shot::EditorBlame
     ) {
         // The file is read and drawn; CI takes the picture 3 s after start.
         cx.background_executor().timer(READ + READ / 2).await;
@@ -118,7 +119,8 @@ fn enter(shot: Shot, dashboard: &Entity<Dashboard>, cx: &mut App) {
         Shot::WorkspaceEditorSource
         | Shot::EditorFind
         | Shot::EditorGoToLine
-        | Shot::EditorOutline => {
+        | Shot::EditorOutline
+        | Shot::EditorBlame => {
             panel(dashboard, REVIEWED, DetailsView::Details, cx);
             open_file(dashboard, SOURCE, cx);
         }
@@ -155,6 +157,7 @@ fn editor_tool(shot: Shot, root: &mut Root, window: &mut Window, cx: &mut gpui::
     editor.update(cx, |editor, cx| match shot {
         Shot::EditorFind => editor.shot_find(FOUND_IN_SOURCE, window, cx),
         Shot::EditorGoToLine => editor.go_to_line(window, cx),
+        Shot::EditorBlame => editor.annotate(cx),
         _ => editor.outline(window, cx),
     });
 }

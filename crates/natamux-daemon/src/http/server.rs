@@ -297,6 +297,9 @@ async fn workspace_route(
         (&Method::GET, ["tasks", id, "changes", "image"]) => {
             workspace_files::changed_image(state, id.to_string(), query).await
         }
+        (&Method::GET, ["tasks", id, "blame"]) => {
+            workspace_files::blame(state, id.to_string(), query).await
+        }
         (&Method::GET, ["tasks", id, "tree"]) => {
             workspace_files::tree(state, id.to_string(), query).await
         }

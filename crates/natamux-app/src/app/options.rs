@@ -146,10 +146,13 @@ pub enum Shot {
     EditorFind,
     EditorGoToLine,
     EditorOutline,
+    /// T-0318: Annotate with Git Blame on in the diff and in the editor tab.
+    DiffBlame,
+    EditorBlame,
 }
 
 impl Shot {
-    pub const ALL: [Shot; 105] = [
+    pub const ALL: [Shot; 107] = [
         Shot::TasksTable,
         Shot::TasksBoard,
         Shot::BoardHoverCard,
@@ -255,6 +258,8 @@ impl Shot {
         Shot::EditorFind,
         Shot::EditorGoToLine,
         Shot::EditorOutline,
+        Shot::DiffBlame,
+        Shot::EditorBlame,
     ];
 
     pub fn name(self) -> &'static str {
@@ -364,6 +369,8 @@ impl Shot {
             Shot::EditorFind => "editor-find",
             Shot::EditorGoToLine => "editor-go-to-line",
             Shot::EditorOutline => "editor-outline",
+            Shot::DiffBlame => "diff-blame",
+            Shot::EditorBlame => "editor-blame",
         }
     }
 

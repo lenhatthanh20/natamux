@@ -149,6 +149,7 @@ pub fn run(handle: WindowHandle<Root>, shot: Shot, cx: &mut App) {
                 | Shot::Rollback
                 | Shot::StageEvidence
                 | Shot::DiffFind
+                | Shot::DiffBlame
         ) {
             cx.background_executor().timer(SETTLE).await;
             handle
@@ -188,6 +189,11 @@ fn view_of(shot: Shot) -> ViewState {
     // The Ask agent shot shows the inline diff; the others keep side by side.
     view.diff.side_by_side = shot != Shot::WorkspaceChangesAsk;
     view.diff.show_whitespace = shot == Shot::DiffFind;
+    if shot == Shot::DiffBlame {
+        // T-0318: side by side needs a 720 px diff: no sidebar, the narrowest file list.
+        view.sidebar_open = false;
+        view.files_width = 200;
+    }
     view
 }
 
@@ -302,7 +308,7 @@ fn enter_git(shot: Shot, dashboard: &gpui::Entity<Dashboard>, cx: &mut App) {
             dashboard.set_details_open(false, cx);
         }),
         // T-0183: Changes over the terminals with the panel closed: main has the whole screen.
-        Shot::ChangesOverMain => dashboard.update(cx, |dashboard, cx| {
+        Shot::ChangesOverMain | Shot::DiffBlame => dashboard.update(cx, |dashboard, cx| {
             dashboard.open_changes(REVIEWED, false, cx);
             dashboard.set_details_open(false, cx);
         }),
@@ -416,7 +422,8 @@ fn panel_step(shot: Shot, root: &mut Root, window: &mut Window, cx: &mut gpui::C
         | Shot::WorkspaceChangesAsk
         | Shot::WorkspaceChangesComments
         | Shot::Rollback
-        | Shot::DiffFind => {
+        | Shot::DiffFind
+        | Shot::DiffBlame => {
             let changes = root.workspace_view().read(cx).changes_view().clone();
             changes.update(cx, |changes, cx| match shot {
                 Shot::WorkspaceChangesDiff => changes.shot_change(CHANGED_FILE, 2, window, cx),
@@ -425,6 +432,7 @@ fn panel_step(shot: Shot, root: &mut Root, window: &mut Window, cx: &mut gpui::C
                 }
                 Shot::WorkspaceChangesComments => changes.shot_comments(CHANGED_FILE, cx),
                 Shot::DiffFind => changes.shot_find(CHANGED_FILE, FOUND_IN_DIFF, window, cx),
+                Shot::DiffBlame => changes.shot_blame(CHANGED_FILE, cx),
                 _ => changes.shot_rollback(window, cx),
             });
         }

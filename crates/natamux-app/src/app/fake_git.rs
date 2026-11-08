@@ -9,8 +9,8 @@ use natamux_client::{ClientError, DashboardEvent};
 use natamux_proto::projects::repo::RemoteBranchList;
 use natamux_proto::tasks::task::{Task, TaskState};
 use natamux_proto::workspaces::changes::{
-    COMMIT_SUBJECT_MAX, ChangeStatus, CommitAnswer, CommitMessageDraft, DraftSource, FileDiff,
-    ImageSide, RollbackResult, image_type_of,
+    BlameAnswer, BlameCommit, BlameRun, COMMIT_SUBJECT_MAX, ChangeStatus, CommitAnswer,
+    CommitMessageDraft, DraftSource, FileDiff, ImageSide, RollbackResult, image_type_of,
 };
 use natamux_proto::workspaces::workspace::{ChangeEntry, GitGraph, GraphCommit, PushStatus};
 use serde_json::{Value, json};
@@ -179,6 +179,39 @@ impl FakeDaemon {
         });
         diff.status = entry.status;
         Ok(diff)
+    }
+
+    /// Two made-up commits: the first 3 lines from one, the rest from the other. A new file is
+    /// not tracked. Lines past the end of the file are not shown, so one answer fits every file.
+    pub fn blame(&self, task_id: &str, path: &str, _side: ImageSide) -> Answer<BlameAnswer> {
+        let data = self.data();
+        let status = data.change(task_id, path).ok().map(|entry| entry.status);
+        if matches!(status, Some(ChangeStatus::Added | ChangeStatus::Untracked)) {
+            return Ok(BlameAnswer {
+                path: path.into(),
+                ..BlameAnswer::default()
+            });
+        }
+        let commit = |sha: char, author: &str, time: i64, summary: &str| BlameCommit {
+            sha: sha.to_string().repeat(40),
+            author: author.into(),
+            time,
+            summary: summary.into(),
+        };
+        let run = |start, count, commit| BlameRun {
+            start,
+            count,
+            commit,
+        };
+        Ok(BlameAnswer {
+            path: path.into(),
+            tracked: true,
+            commits: vec![
+                commit('a', AUTHOR, 1_760_000_000, "Add the first version"),
+                commit('b', "Sam Doe", 1_761_500_000, "Clamp the coupon"),
+            ],
+            runs: vec![run(0, 3, 0), run(3, 100_000, 1)],
+        })
     }
 
     pub fn file_image(&self, task_id: &str, path: &str, side: ImageSide) -> Answer<Vec<u8>> {

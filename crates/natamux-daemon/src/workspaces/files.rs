@@ -53,7 +53,7 @@ fn normalize(path: &Path) -> PathBuf {
 }
 
 /// The path in the worktree, with the guards of every explorer request.
-fn resolve_inside(root: &Path, path: &str) -> WorkspaceResult<FileInWorktree> {
+pub(super) fn resolve_inside(root: &Path, path: &str) -> WorkspaceResult<FileInWorktree> {
     // Checked before the disk is read, so the answer never tells whether a file outside is there.
     let base = normalize(root);
     let wanted = normalize(&root.join(path));

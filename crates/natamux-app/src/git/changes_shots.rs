@@ -53,6 +53,12 @@ impl ChangesView {
         }
     }
 
+    /// `path` shows with Annotate with Git Blame on (T-0318).
+    pub fn shot_blame(&mut self, path: &str, cx: &mut Context<Self>) {
+        self.pick(path, cx);
+        self.blame.update(cx, |blame, cx| blame.annotate(cx));
+    }
+
     /// Rollback… of the header: every file.
     pub fn shot_rollback(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let files = self.list.clone().unwrap_or_default();
