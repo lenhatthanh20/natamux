@@ -20,6 +20,7 @@ mod app {
     pub mod command_when;
     pub mod commands;
     pub mod commands_app;
+    pub mod commands_editor;
     pub mod commands_files;
     pub mod commands_git;
     pub mod commands_stages;
@@ -93,6 +94,7 @@ mod components {
     pub mod empty_state;
     pub mod form;
     pub mod glyph;
+    pub mod go_to_line;
     pub mod icons;
     pub mod input_rules;
     pub mod menu;
@@ -132,6 +134,7 @@ mod files {
     pub mod file_drafts;
     pub mod file_editor;
     pub mod file_editor_body;
+    pub mod file_editor_tools;
     pub mod file_icon_view;
     pub mod file_icons;
     pub mod file_reads;
@@ -140,6 +143,8 @@ mod files {
     pub mod file_tree_rows;
     pub mod file_writes;
     pub mod open_files;
+    pub mod outline_picker;
+    pub mod outline_rules;
 }
 mod git {
     pub mod change_rules;
@@ -150,8 +155,11 @@ mod git {
     pub mod diff_arrows;
     pub mod diff_cursor;
     pub mod diff_editors;
+    pub mod diff_hunk_controls;
     pub mod diff_rules;
     pub mod diff_view;
+    pub mod editor_find;
+    pub mod editor_find_rules;
     pub mod graph_lanes;
     pub mod graph_layout;
     pub mod history_view;
@@ -162,6 +170,7 @@ mod git {
     pub mod review_rules;
     pub mod rollback_dialog;
     pub mod rollback_rules;
+    pub mod whitespace_rules;
 }
 mod ime {
     pub mod ime_check;

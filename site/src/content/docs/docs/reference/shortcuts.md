@@ -141,6 +141,28 @@ These work when a workspace is open.
 
 `Mod+Shift+A` puts the cursor in the comment box. With lines selected in the diff, it also adds them to the comment. In that box, `Mod+Enter` adds the comment as a draft; **Send now** sends it at once. `Mod+Shift+G` works only with the cursor in the commit box. `F7` is handled by the diff editor, so it works while the focus is in the diff. See [Changes and history](/docs/guides/changes-and-history/).
 
+## Editor
+
+These work in the desktop app, in the diff and in the editor tab of an open file. Keys that edit text do nothing in the diff, which is read-only.
+
+| Action | Shortcut |
+|---|---|
+| Find in the file | `Mod+F` |
+| Go to line | `Ctrl+G` |
+| Go to symbol | `Mod+Shift+O` |
+| Select the next match, or all matches | `Mod+D`, `Mod+Shift+L` |
+| Expand or shrink the selection to the syntax node | `Ctrl+Shift+↑`, `Ctrl+Shift+↓` |
+| Add a cursor above or below | `Mod+Alt+↑`, `Mod+Alt+↓` |
+| Move the line up or down | `Alt+↑`, `Alt+↓` |
+| Duplicate the line | `Alt+Shift+↓` |
+| Delete the line | `Mod+Shift+K` |
+| Comment or uncomment the lines | `Mod+/` |
+| Fold or unfold the block (editor tab) | `Mod+Alt+[` |
+| Fold or unfold all blocks (editor tab) | `Mod+Alt+Shift+[`, `Mod+Alt+Shift+]` |
+| Collapse or expand the change (inline diff) | `Mod+'` |
+
+`Ctrl+G` is `Ctrl` on macOS too. In the find bar, `Enter` goes to the next match, `Shift+Enter` to the previous one and `Esc` closes the bar.
+
 ## Command palette
 
 | Action | Shortcut |

@@ -1,77 +1,20 @@
 //! The revert arrow of the diff (T-0314), as in PhpStorm: the change the cursor is in shows an
 //! arrow at its right. Side by side, the last commit's side has `>>` and the working tree's side a
 //! revert icon; inline has the revert icon. Each puts the last commit's lines of that change back
-//! into the working tree. The Changes tab does the write, so this only asks for it.
+//! into the working tree. The Changes tab does the write, so this only asks for it. The buttons
+//! are drawn by `diff_hunk_controls.rs`.
 
-use std::ops::Range;
 use std::sync::Arc;
 
-use buffer_diff::DiffHunkStatus;
-use editor::{Anchor, DiffHunkRenderer, Editor, ToPoint};
-use gpui::{Entity, Pixels, WeakEntity};
+use editor::{DiffHunkRenderer, Editor};
+use gpui::Entity;
 use text::BufferId;
-use ui::{Tooltip, prelude::*};
+use ui::prelude::*;
 
 use super::change_rules::Side;
+use super::diff_hunk_controls::HunkControls;
 use super::diff_rules::hunk_at;
 use super::diff_view::{DiffEvent, DiffView};
-
-pub const REVERT_TIP: &str = "Revert this change";
-
-struct RevertArrow {
-    view: WeakEntity<DiffView>,
-    icon: IconName,
-}
-
-impl DiffHunkRenderer for RevertArrow {
-    fn render_hunk_controls(
-        &self,
-        row: u32,
-        _status: &DiffHunkStatus,
-        hunk_range: Range<Anchor>,
-        _is_created_file: bool,
-        line_height: Pixels,
-        editor: &Entity<Editor>,
-        _window: &mut Window,
-        cx: &mut App,
-    ) -> AnyElement {
-        let Some(view) = self.view.upgrade() else {
-            return gpui::Empty.into_any_element();
-        };
-        let multi = editor.read(cx).buffer().read(cx).snapshot(cx);
-        let start = hunk_range.start.to_point(&multi);
-        let Some((buffer, point)) = multi.point_to_buffer_point(start) else {
-            return gpui::Empty.into_any_element();
-        };
-        let Some(arrow) = view.read(cx).arrow_at(buffer.remote_id(), point.row, cx) else {
-            return gpui::Empty.into_any_element();
-        };
-        let view = self.view.clone();
-        h_flex()
-            .h(line_height)
-            .mr_1()
-            .px_0p5()
-            .rounded_sm()
-            .border_1()
-            .border_color(cx.theme().colors().border_variant)
-            .bg(cx.theme().colors().editor_background)
-            .block_mouse_except_scroll()
-            .child(
-                IconButton::new(("diff-revert", row as usize), self.icon)
-                    .icon_size(IconSize::Small)
-                    .icon_color(Color::Muted)
-                    .disabled(arrow.moving)
-                    .tooltip(Tooltip::text(REVERT_TIP))
-                    .on_click(move |_, _, cx| {
-                        view.update(cx, |view, cx| {
-                            view.ask_revert(arrow.index, arrow.version, cx)
-                        })
-                        .ok();
-                    }),
-            )
-            .into_any_element()
-    }
-}
 
 /// The hunk an arrow stands for, the read of the texts its rows belong to, and whether a write
 /// runs now.
@@ -91,12 +34,11 @@ impl DiffView {
         cx: &mut Context<Self>,
     ) {
         let view = cx.weak_entity();
-        let editors = std::iter::once((right, IconName::Undo))
-            .chain(left.map(|left| (left, IconName::ArrowRight)));
-        for (editor, icon) in editors {
-            let renderer: Arc<dyn DiffHunkRenderer> = Arc::new(RevertArrow {
+        let editors = std::iter::once((right, true)).chain(left.map(|left| (left, false)));
+        for (editor, new_side) in editors {
+            let renderer: Arc<dyn DiffHunkRenderer> = Arc::new(HunkControls {
                 view: view.clone(),
-                icon,
+                new_side,
             });
             editor.update(cx, |editor, cx| {
                 editor.set_diff_hunk_renderer(Some(renderer), cx)

@@ -69,6 +69,8 @@ const SITE: &str = "natamux-site";
 const CLEAN: &str = "T-0144";
 const IMAGE: &str = "T-0147";
 const CHANGED_FILE: &str = "src/checkout.ts";
+/// The term of the diff's find shot.
+const FOUND_IN_DIFF: &str = "total";
 /// The lines Ask agent quotes: the new body of the function.
 const ASKED_LINES: (u32, u32) = (5, 6);
 
@@ -146,6 +148,7 @@ pub fn run(handle: WindowHandle<Root>, shot: Shot, cx: &mut App) {
                 | Shot::WorkspaceChangesComments
                 | Shot::Rollback
                 | Shot::StageEvidence
+                | Shot::DiffFind
         ) {
             cx.background_executor().timer(SETTLE).await;
             handle
@@ -184,6 +187,7 @@ fn view_of(shot: Shot) -> ViewState {
     view.recent = vec![RUNNING.to_string(), REVIEWED.to_string()];
     // The Ask agent shot shows the inline diff; the others keep side by side.
     view.diff.side_by_side = shot != Shot::WorkspaceChangesAsk;
+    view.diff.show_whitespace = shot == Shot::DiffFind;
     view
 }
 
@@ -277,7 +281,8 @@ fn enter_git(shot: Shot, dashboard: &gpui::Entity<Dashboard>, cx: &mut App) {
         | Shot::WorkspaceChangesDiff
         | Shot::WorkspaceChangesAsk
         | Shot::WorkspaceChangesComments
-        | Shot::Rollback => changes(dashboard, REVIEWED, cx),
+        | Shot::Rollback
+        | Shot::DiffFind => changes(dashboard, REVIEWED, cx),
         Shot::ImageDiff => changes(dashboard, IMAGE, cx),
         // T-0183: History is a view of the panel.
         Shot::WorkspaceHistory => dashboard.update(cx, |dashboard, cx| {
@@ -410,7 +415,8 @@ fn panel_step(shot: Shot, root: &mut Root, window: &mut Window, cx: &mut gpui::C
         Shot::WorkspaceChangesDiff
         | Shot::WorkspaceChangesAsk
         | Shot::WorkspaceChangesComments
-        | Shot::Rollback => {
+        | Shot::Rollback
+        | Shot::DiffFind => {
             let changes = root.workspace_view().read(cx).changes_view().clone();
             changes.update(cx, |changes, cx| match shot {
                 Shot::WorkspaceChangesDiff => changes.shot_change(CHANGED_FILE, 2, window, cx),
@@ -418,6 +424,7 @@ fn panel_step(shot: Shot, root: &mut Root, window: &mut Window, cx: &mut gpui::C
                     changes.shot_ask(ASKED_LINES.0, ASKED_LINES.1, window, cx)
                 }
                 Shot::WorkspaceChangesComments => changes.shot_comments(CHANGED_FILE, cx),
+                Shot::DiffFind => changes.shot_find(CHANGED_FILE, FOUND_IN_DIFF, window, cx),
                 _ => changes.shot_rollback(window, cx),
             });
         }

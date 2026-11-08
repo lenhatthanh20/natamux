@@ -56,6 +56,7 @@ fn rows_sit_on_their_pages() {
         SettingRow::NotifyAlways,
         SettingRow::UpdatesVersion,
         SettingRow::UpdatesAuto,
+        SettingRow::CleanOnSave,
     ] {
         assert_eq!(row.page(), SettingsPage::General);
     }
@@ -211,6 +212,7 @@ fn app_pages_draw_their_rows_in_groups() {
                 "Updates",
                 vec![SettingRow::UpdatesVersion, SettingRow::UpdatesAuto]
             ),
+            ("Editor", vec![SettingRow::CleanOnSave]),
         ]
     );
     assert_eq!(
@@ -267,7 +269,7 @@ fn app_pages_have_a_tile_and_a_summary() {
     assert_eq!(page_tile(&SettingsPage::Project("r1".to_owned())), None);
     assert_eq!(
         page_summary(&SettingsPage::General),
-        "Notifications and updates \u{b7} changes apply at once"
+        "Notifications, updates and the editor \u{b7} changes apply at once"
     );
     assert_eq!(
         page_summary(&SettingsPage::Appearance),

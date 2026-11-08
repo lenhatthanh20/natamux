@@ -19,6 +19,7 @@ use super::change_tree::file_order;
 use super::comment_rules::Quote;
 use super::diff_rules::{WIDE_FROM, files_width, side_by_side};
 use super::diff_view::{DiffEvent, DiffOptions, DiffView};
+use super::editor_find::EditorFind;
 use crate::app::dashboard::Dashboard;
 use crate::app::source::reason;
 use crate::app::view_rules::DetailsView;
@@ -69,6 +70,7 @@ pub struct ChangesView {
     pub(super) drafting: bool,
     pub(super) comment: Option<Entity<Editor>>,
     pub(super) quote: Option<Quote>,
+    pub(super) find: Option<Entity<EditorFind>>,
     pub(super) sending: bool,
     pub(super) sent: Option<Result<(), String>>,
     review: review::Review,
@@ -120,6 +122,7 @@ impl ChangesView {
             drafting: false,
             comment: None,
             quote: None,
+            find: None,
             sending: false,
             sent: None,
             review: review::Review::default(),
@@ -336,6 +339,7 @@ impl ChangesView {
             side_by_side: two_sides && !whole,
             collapse: flags.collapse_unchanged && !whole,
             wrap,
+            ignore_whitespace: flags.ignore_whitespace && !whole,
         };
         (options, blocked)
     }
@@ -376,6 +380,7 @@ impl Render for ChangesView {
             .size_full()
             .child(width_probe(&self.width));
         let root = self.with_actions(root, cx);
+        let root = self.with_editor_tools(root, cx);
         if let Some(error) = self.error.clone().filter(|_| self.list.is_none()) {
             return root
                 .child(div().p_4().child(Label::new(error).color(Color::Error)))
@@ -484,3 +489,6 @@ mod review_list;
 
 #[path = "diff_moves.rs"]
 mod moves;
+
+#[path = "diff_tools.rs"]
+mod tools;

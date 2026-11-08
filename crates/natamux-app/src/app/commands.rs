@@ -34,6 +34,7 @@ pub use super::command_types::{Category, Command, MenuName, SheetGroup};
 pub(super) use super::command_types::{command, group, hidden, keys, menu, suggested, when};
 pub use super::command_when::{CommandState, When};
 pub use super::commands_app::APP_COMMANDS;
+pub use super::commands_editor::EDITOR_COMMANDS;
 pub use super::commands_files::FILE_COMMANDS;
 pub use super::commands_git::GIT_COMMANDS;
 pub use super::commands_stages::STAGE_COMMANDS;
@@ -454,6 +455,7 @@ pub fn all_commands() -> impl Iterator<Item = &'static Command> {
         .chain(GIT_COMMANDS)
         .chain(STAGE_COMMANDS)
         .chain(FILE_COMMANDS)
+        .chain(EDITOR_COMMANDS)
 }
 
 pub fn command_by_id(id: &str) -> Option<&'static Command> {

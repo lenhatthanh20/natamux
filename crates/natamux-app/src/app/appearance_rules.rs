@@ -128,12 +128,14 @@ pub struct ThemeSetting<'a> {
 /// gets a font only when the user picked one, else Zed gives it the buffer font and size. A
 /// `--shot` hides the editors' scrollbars, which Zed shows for a moment after a scroll. The
 /// editors' scrollbars show only the thumb: no cursor or selection markers, which also keep the
-/// bar from fading, and no track border line.
+/// bar from fading, and no track border line. Sticky scroll shows in the editor tab only (Zed
+/// keeps it to singleton editors); whitespace shows everywhere while the diff's toggle is on.
 pub fn user_settings(
     theme: ThemeSetting<'_>,
     ui_zoom: f32,
     terminal: &ResolvedFont,
     shot: bool,
+    show_whitespace: bool,
 ) -> String {
     let terminal = if terminal.source == FontSource::Default {
         json!({})
@@ -148,10 +150,14 @@ pub fn user_settings(
         "buffer_font_size": scaled(BASE_BUFFER_FONT_SIZE, ui_zoom),
         "terminal": terminal,
         "scrollbar": {"cursors": false, "selected_text": false, "selected_symbol": false},
+        "sticky_scroll": {"enabled": true},
         "experimental.theme_overrides": {"scrollbar.track.border": CLEAR},
     });
     if shot {
         settings["scrollbar"]["show"] = json!("never");
+    }
+    if show_whitespace {
+        settings["show_whitespaces"] = json!("all");
     }
     settings.to_string()
 }

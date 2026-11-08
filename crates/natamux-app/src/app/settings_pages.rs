@@ -68,6 +68,7 @@ impl SettingsView {
             SettingRow::NotifyAlways => Self::plain_row(row).control(self.notify_always_switch(cx)),
             SettingRow::UpdatesVersion => self.version_row(),
             SettingRow::UpdatesAuto => Self::plain_row(row).control(self.updates_switch(cx)),
+            SettingRow::CleanOnSave => Self::plain_row(row).control(self.clean_switch(cx)),
             SettingRow::Theme => Self::plain_row(row).spacing(0., 12.).control(theme_tiles(
                 &self.theme_focus,
                 &self.dashboard,
@@ -168,6 +169,16 @@ impl SettingsView {
             &self.notify_always_focus,
             on,
             Dashboard::toggle_notify_always,
+        )
+    }
+
+    fn clean_switch(&self, cx: &mut Context<Self>) -> AnyElement {
+        let on = self.dashboard.read(cx).view().clean_on_save;
+        self.view_switch(
+            "settings-clean-on-save",
+            &self.clean_focus,
+            on,
+            Dashboard::toggle_clean_on_save,
         )
     }
 

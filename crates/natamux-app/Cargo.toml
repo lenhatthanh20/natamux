@@ -21,6 +21,7 @@ natamux-client.workspace = true
 natamux-core.workspace = true
 natamux-proto.workspace = true
 natamux-update = { path = "../natamux-update" }
+regex.workspace = true
 release_channel.workspace = true
 serde_json.workspace = true
 settings.workspace = true

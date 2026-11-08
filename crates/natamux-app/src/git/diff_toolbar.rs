@@ -3,8 +3,8 @@
 //! Inline (Stacked for images), the toggles, and the previous and next file at the right, then the
 //! Terminals button that shows the terminals again (T-0183).
 //!
-//! The diff options menu of the web ("Ignore leading and trailing whitespace", "Show moved
-//! code") is not here: Zed's `buffer_diff` has neither.
+//! Ignore whitespace and Show whitespace are toggles here (T-0316); the web's "Show moved code"
+//! is not, as Zed's `buffer_diff` has no moves.
 
 use gpui::{ClickEvent, ClipboardItem};
 use natamux_proto::workspaces::workspace::ChangeEntry;
@@ -68,7 +68,7 @@ impl ChangesView {
                     });
                 },
             )));
-        h_flex()
+        let toolbar = h_flex()
             .min_h(rems_from_px(36.0_f32))
             .flex_none()
             .flex_wrap()
@@ -79,8 +79,17 @@ impl ChangesView {
             .border_b_1()
             .border_color(cx.theme().colors().border)
             .child(self.path_part(&entry, cx))
-            .child(right)
-            .into_any_element()
+            .child(right);
+        // The find bar (Mod+F) sits under the toolbar.
+        match self.find_bar(cx) {
+            Some(bar) => v_flex()
+                .flex_none()
+                .w_full()
+                .child(toolbar)
+                .child(bar)
+                .into_any_element(),
+            None => toolbar.into_any_element(),
+        }
     }
 
     /// The path (an old one first for a rename), Copy path, and the new or deleted badge.
@@ -137,8 +146,8 @@ impl ChangesView {
             .children(badge)
     }
 
-    /// Collapse unchanged lines (text), Wrap long lines (text and whole file), Show image
-    /// preview (SVG).
+    /// Collapse unchanged lines and Ignore whitespace (text), Wrap long lines and Show whitespace
+    /// (text and whole file), Show image preview (SVG).
     fn toggles(
         &self,
         path: &str,
@@ -146,7 +155,8 @@ impl ChangesView {
         wrap: bool,
         cx: &mut Context<Self>,
     ) -> Vec<AnyElement> {
-        let collapse = self.dashboard.read(cx).view().diff.collapse_unchanged;
+        let flags = self.dashboard.read(cx).view().diff;
+        let collapse = flags.collapse_unchanged;
         let prose = wraps_by_default(path);
         let mut toggles = Vec::new();
         if kind == BodyKind::Text {
@@ -165,6 +175,7 @@ impl ChangesView {
                     .into_any_element(),
             );
         }
+        toggles.extend(self.whitespace_toggles(kind, flags, cx));
         if matches!(kind, BodyKind::Text | BodyKind::Whole) {
             toggles.push(
                 zed_button("diff-wrap", IconName::TextWrap)
@@ -195,6 +206,41 @@ impl ChangesView {
                         view.svg_preview = !on;
                         view.read_file(cx);
                         cx.notify();
+                    }))
+                    .into_any_element(),
+            );
+        }
+        toggles
+    }
+
+    /// Ignore whitespace (text diffs) and Show whitespace (also the whole file).
+    fn whitespace_toggles(
+        &self,
+        kind: BodyKind,
+        flags: DiffFlags,
+        cx: &mut Context<Self>,
+    ) -> Vec<AnyElement> {
+        let mut toggles = Vec::new();
+        if kind == BodyKind::Text {
+            let ignore = flags.ignore_whitespace;
+            toggles.push(
+                zed_button("diff-ignore-whitespace", IconName::EyeOff)
+                    .toggle_state(ignore)
+                    .tooltip(Tooltip::text("Ignore whitespace"))
+                    .on_click(cx.listener(move |view, _: &ClickEvent, _, cx| {
+                        view.set_flags(move |flags| flags.ignore_whitespace = !ignore, cx)
+                    }))
+                    .into_any_element(),
+            );
+        }
+        if matches!(kind, BodyKind::Text | BodyKind::Whole) {
+            let shown = flags.show_whitespace;
+            toggles.push(
+                zed_button("diff-show-whitespace", IconName::Space)
+                    .toggle_state(shown)
+                    .tooltip(Tooltip::text("Show whitespace"))
+                    .on_click(cx.listener(move |view, _: &ClickEvent, _, cx| {
+                        view.set_flags(move |flags| flags.show_whitespace = !shown, cx)
                     }))
                     .into_any_element(),
             );

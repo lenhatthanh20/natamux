@@ -140,10 +140,16 @@ pub enum Shot {
     SettingsUpdateReady,
     RepoTrustDialog,
     WhatsNew,
+    /// T-0316: the find bar in the diff, Show whitespace on.
+    DiffFind,
+    /// T-0316: the editor tab's find bar, Go to line and Go to symbol.
+    EditorFind,
+    EditorGoToLine,
+    EditorOutline,
 }
 
 impl Shot {
-    pub const ALL: [Shot; 101] = [
+    pub const ALL: [Shot; 105] = [
         Shot::TasksTable,
         Shot::TasksBoard,
         Shot::BoardHoverCard,
@@ -245,6 +251,10 @@ impl Shot {
         Shot::SettingsUpdateReady,
         Shot::RepoTrustDialog,
         Shot::WhatsNew,
+        Shot::DiffFind,
+        Shot::EditorFind,
+        Shot::EditorGoToLine,
+        Shot::EditorOutline,
     ];
 
     pub fn name(self) -> &'static str {
@@ -350,6 +360,10 @@ impl Shot {
             Shot::SettingsUpdateReady => "settings-update-ready",
             Shot::RepoTrustDialog => "repo-trust-dialog",
             Shot::WhatsNew => "whats-new",
+            Shot::DiffFind => "diff-find",
+            Shot::EditorFind => "editor-find",
+            Shot::EditorGoToLine => "editor-go-to-line",
+            Shot::EditorOutline => "editor-outline",
         }
     }
 

@@ -176,6 +176,16 @@ impl Dashboard {
 
     /// One of the diff toggles of the toolbar, kept for every workspace.
     pub fn set_diff_flags(&mut self, change: impl FnOnce(&mut DiffFlags), cx: &mut Context<Self>) {
+        let before = self.view.diff.show_whitespace;
         self.update_view(cx, |view| change(&mut view.diff));
+        // Show whitespace is a Zed setting of every editor.
+        if self.view.diff.show_whitespace != before {
+            crate::app::appearance::apply(&self.view, cx);
+        }
+    }
+
+    /// Clean on save of the editor tab (Settings, General).
+    pub fn toggle_clean_on_save(&mut self, cx: &mut Context<Self>) {
+        self.update_view(cx, |view| view.clean_on_save = !view.clean_on_save);
     }
 }

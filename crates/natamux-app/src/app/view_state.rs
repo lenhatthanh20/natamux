@@ -59,6 +59,8 @@ pub struct DiffFlags {
     pub show_moves: bool,
     pub wrap_prose: bool,
     pub wrap_code: bool,
+    /// Zed's `show_whitespaces: "all"` in every editor (T-0316).
+    pub show_whitespace: bool,
 }
 
 impl Default for DiffFlags {
@@ -70,6 +72,7 @@ impl Default for DiffFlags {
             show_moves: false,
             wrap_prose: true,
             wrap_code: false,
+            show_whitespace: false,
         }
     }
 }
@@ -85,6 +88,7 @@ impl DiffFlags {
             show_moves: get("showMoves", default.show_moves),
             wrap_prose: get("wrapProse", default.wrap_prose),
             wrap_code: get("wrapCode", default.wrap_code),
+            show_whitespace: get("showWhitespace", default.show_whitespace),
         }
     }
 
@@ -96,6 +100,7 @@ impl DiffFlags {
             "showMoves": self.show_moves,
             "wrapProse": self.wrap_prose,
             "wrapCode": self.wrap_code,
+            "showWhitespace": self.show_whitespace,
         })
     }
 }
@@ -153,6 +158,8 @@ pub struct ViewState {
     pub recent: Vec<String>,
     /// The version whose release notes the app last showed or skipped (`whatsNewSeen`, T-0301).
     pub whats_new_seen: Option<String>,
+    /// The editor tab trims trailing whitespace and ends the file with one newline on save.
+    pub clean_on_save: bool,
 }
 
 impl Default for ViewState {
@@ -189,6 +196,7 @@ impl Default for ViewState {
             terminal_font: None,
             recent: Vec::new(),
             whats_new_seen: None,
+            clean_on_save: false,
         }
     }
 }
@@ -330,6 +338,7 @@ impl ViewState {
                 .get("whatsNewSeen")
                 .and_then(Value::as_str)
                 .map(str::to_owned),
+            clean_on_save: flag(map.get("cleanOnSave"), default.clean_on_save),
         }
     }
 
@@ -394,6 +403,7 @@ impl ViewState {
             "terminalFont": self.terminal_font,
             "recent": self.recent,
             "whatsNewSeen": self.whats_new_seen,
+            "cleanOnSave": self.clean_on_save,
         });
         format!("{value:#}\n")
     }

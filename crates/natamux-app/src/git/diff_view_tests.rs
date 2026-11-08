@@ -101,6 +101,7 @@ fn options(collapse: bool) -> DiffOptions {
         side_by_side: true,
         collapse,
         wrap: false,
+        ignore_whitespace: false,
     }
 }
 

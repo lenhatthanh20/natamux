@@ -38,6 +38,21 @@ impl ChangesView {
         self.read_comments(cx);
     }
 
+    /// `path` at its second change, with the find bar open on `term` (T-0316).
+    pub fn shot_find(
+        &mut self,
+        path: &str,
+        term: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.shot_change(path, 2, window, cx);
+        self.find(window, cx);
+        if let Some(find) = &self.find {
+            find.update(cx, |find, cx| find.set_term(term, window, cx));
+        }
+    }
+
     /// Rollback… of the header: every file.
     pub fn shot_rollback(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let files = self.list.clone().unwrap_or_default();
