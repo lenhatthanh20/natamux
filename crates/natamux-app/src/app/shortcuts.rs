@@ -11,6 +11,7 @@ pub use super::commands_app::{
     RestartToUpdate, ShowShortcuts, ShowWhatsNew, ToggleAutomaticUpdates, UseCompactSize,
     UseDarkTheme, UseDefaultSize, UseLargeSize, UseLightTheme, UseSystemTheme,
 };
+pub use super::commands_editor::{FindInEditor, GoToLine, ShowOutline};
 pub use super::commands_files::{CloseTab, SaveFile, ShowDocsTab, ShowOpenFile, ShowWorktreeFiles};
 pub use super::commands_stages::{MoveStageDown, MoveStageUp, ShowTasksProgress};
 use crate::ime::ime_check::SubmitWord;
@@ -177,6 +178,11 @@ command_actions! {
     "files.show" => ShowWorktreeFiles,
     "file.save" => SaveFile,
     "tab.close" => CloseTab,
+    "editor.find" => FindInEditor,
+    "editor.find-next" => FindNext,
+    "editor.find-previous" => FindPrevious,
+    "editor.go-to-line" => GoToLine,
+    "editor.outline" => ShowOutline,
     "palette.open" => OpenPalette,
     "jump.open" => OpenJump,
     "help.shortcuts" => ShowShortcuts,

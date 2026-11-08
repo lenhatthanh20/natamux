@@ -70,6 +70,14 @@ New and deleted files show their whole text with a **New file** or **Deleted** b
 
 Your toolbar choices are kept in this browser. In a diff, `F7` and `Shift+F7` open the accessible diff view.
 
+In the desktop app the toolbar has **Ignore whitespace** (on by default) and **Show whitespace** as buttons instead of **Diff options**. Also in the desktop app:
+
+- `Mod+F` opens a find bar under the toolbar. It searches the side that has the focus. `Enter` and `Shift+Enter` go to the next and previous match, `Esc` closes it.
+- `Ctrl+G` goes to a line of the working tree: type `120`, or `120:5` for a column.
+- `Mod+Shift+O` lists the functions and types of the file. Pick one to go there.
+- The change the cursor is in has a **Comment** button next to the revert button. It quotes the change's lines in the comment box.
+- In the inline layout, `Mod+'` folds or opens the change at the cursor.
+
 ### Image diffs
 
 A changed PNG, JPEG, GIF, WebP or SVG file shows as images, not text. You see **Before (last commit)** and **After (working tree)**, side by side or stacked. A new image has only the after side. A deleted one has only the before side.

@@ -39,7 +39,8 @@ pub fn apply(view: &ViewState, cx: &mut App) {
         mode,
         names: view.themes,
     };
-    let content = user_settings(theme, parse_ui_size(&view.ui_size).zoom(), &font, shot);
+    let zoom = parse_ui_size(&view.ui_size).zoom();
+    let content = user_settings(theme, zoom, &font, shot, view.diff.show_whitespace);
     SettingsStore::update_global(cx, |store, cx| {
         let _ = store.set_user_settings(&content, cx);
     });

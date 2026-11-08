@@ -24,6 +24,7 @@ use crate::components::confirm::Confirm;
 use crate::components::skeleton::SkeletonList;
 use crate::components::terminals_button::terminals_button;
 use crate::git::change_rules::split_path;
+use crate::git::editor_find::EditorFind;
 use crate::terminals::pane_header::icon_button;
 
 pub struct FileEditor {
@@ -35,7 +36,8 @@ pub struct FileEditor {
     pub(super) disk: Option<WorkspaceFile>,
     /// The error of the first read, shown while there is no text.
     error: Option<String>,
-    body: Option<Entity<FileEditorBody>>,
+    pub(super) body: Option<Entity<FileEditorBody>>,
+    pub(super) find: Option<Entity<EditorFind>>,
     pub(super) saving: bool,
     focus: FocusHandle,
     _subscriptions: Vec<Subscription>,
@@ -59,6 +61,7 @@ impl FileEditor {
             disk: None,
             error: None,
             body: None,
+            find: None,
             saving: false,
             focus: cx.focus_handle(),
             _subscriptions: subscriptions,
@@ -248,13 +251,15 @@ impl Render for FileEditor {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.ensure_body(window, cx);
         let stale = self.stale_now(cx);
-        v_flex()
+        let root = v_flex()
             .id("file-editor")
             .key_context("NatamuxFileEditor")
             .track_focus(&self.focus)
-            .on_action(cx.listener(|this, _: &SaveFile, _, cx| this.save(cx)))
+            .on_action(cx.listener(|this, _: &SaveFile, _, cx| this.save(cx)));
+        self.with_editor_tools(root, cx)
             .size_full()
             .child(self.render_header(stale, cx))
+            .children(self.find_bar())
             .children(stale.then(|| self.render_banner(cx)))
             .child(self.render_body(cx))
     }
@@ -286,6 +291,7 @@ impl FileEditor {
                         .truncate(),
                 ),
             )
+            .children(self.wrap_button(cx))
             .children(has_draft.then(|| {
                 Label::new("Modified")
                     .size(LabelSize::XSmall)

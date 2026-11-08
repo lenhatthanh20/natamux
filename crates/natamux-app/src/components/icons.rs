@@ -61,6 +61,7 @@ pub fn zed_icon(name: &str) -> Option<IconName> {
         "square-split-horizontal" => IconName::Split,
         "square-terminal" => IconName::TerminalAlt,
         "terminal" => IconName::Terminal,
+        "text-wrap" => IconName::TextWrap,
         "trash" => IconName::Trash,
         "undo-2" => IconName::Undo,
         "x" => IconName::Close,

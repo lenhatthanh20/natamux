@@ -425,7 +425,7 @@ jobs:
             start-task-branch-menu start-task-filled start-task-filled-end start-task-no-worktree
             start-task-one-agent start-task-error sidebar-blurred remove-workspace-anyway
             update-downloading update-ready update-failed settings-update-ready
-            repo-trust-dialog whats-new
+            repo-trust-dialog whats-new diff-find editor-find editor-go-to-line editor-outline
           DOCKED: >-
             tasks-table workspace-terminal-running terminal-find workspace-terminal-needs-input
             workspace-terminal-review no-workspace workspace-preparing finished-wrap-up agents-grid
@@ -450,7 +450,7 @@ jobs:
             start-task-branch-menu start-task-filled start-task-filled-end start-task-no-worktree
             start-task-one-agent start-task-error sidebar-blurred remove-workspace-anyway
             update-downloading update-ready update-failed settings-update-ready
-            repo-trust-dialog whats-new
+            repo-trust-dialog whats-new diff-find editor-find editor-go-to-line editor-outline
         run: |
           mkdir -p shots
           only=$ONLY

@@ -46,6 +46,7 @@ pub struct SettingsView {
     notify_focus: FocusHandle,
     notify_always_focus: FocusHandle,
     sidebar_ids_focus: FocusHandle,
+    clean_focus: FocusHandle,
     update_focus: FocusHandle,
     check_focus: FocusHandle,
     pub(super) font: FontRows,
@@ -99,6 +100,7 @@ impl SettingsView {
             notify_focus: cx.focus_handle(),
             notify_always_focus: cx.focus_handle(),
             sidebar_ids_focus: cx.focus_handle(),
+            clean_focus: cx.focus_handle(),
             update_focus: cx.focus_handle(),
             check_focus: cx.focus_handle(),
             font,
@@ -264,6 +266,7 @@ impl SettingsView {
                 self.notify_always_focus.clone(),
                 self.check_focus.clone(),
                 self.update_focus.clone(),
+                self.clean_focus.clone(),
             ]),
             SettingsPage::Appearance => {
                 ring.extend([
@@ -291,6 +294,7 @@ impl SettingsView {
             SettingRow::NotifyAlways => vec![self.notify_always_focus.clone()],
             SettingRow::UpdatesVersion => vec![self.check_focus.clone()],
             SettingRow::UpdatesAuto => vec![self.update_focus.clone()],
+            SettingRow::CleanOnSave => vec![self.clean_focus.clone()],
             SettingRow::Theme => vec![self.theme_focus.clone()],
             SettingRow::LightTheme => vec![self.light_focus.clone()],
             SettingRow::DarkTheme => vec![self.dark_focus.clone()],

@@ -102,7 +102,9 @@ pub fn page_tile(page: &SettingsPage) -> Option<(&'static str, TileColor)> {
 /// The line under an app page's title. A project page writes its own.
 pub fn page_summary(page: &SettingsPage) -> &'static str {
     match page {
-        SettingsPage::General => "Notifications and updates \u{b7} changes apply at once",
+        SettingsPage::General => {
+            "Notifications, updates and the editor \u{b7} changes apply at once"
+        }
         SettingsPage::Appearance => {
             "Theme, UI size, sidebar and terminal font \u{b7} changes apply at once"
         }
@@ -119,6 +121,7 @@ pub enum SettingRow {
     /// The version, the updater's state and Check now (or Restart to Update).
     UpdatesVersion,
     UpdatesAuto,
+    CleanOnSave,
     Theme,
     LightTheme,
     DarkTheme,
@@ -130,11 +133,12 @@ pub enum SettingRow {
 }
 
 impl SettingRow {
-    pub const ALL: [SettingRow; 12] = [
+    pub const ALL: [SettingRow; 13] = [
         SettingRow::Notify,
         SettingRow::NotifyAlways,
         SettingRow::UpdatesVersion,
         SettingRow::UpdatesAuto,
+        SettingRow::CleanOnSave,
         SettingRow::Theme,
         SettingRow::LightTheme,
         SettingRow::DarkTheme,
@@ -150,7 +154,8 @@ impl SettingRow {
             SettingRow::Notify
             | SettingRow::NotifyAlways
             | SettingRow::UpdatesVersion
-            | SettingRow::UpdatesAuto => SettingsPage::General,
+            | SettingRow::UpdatesAuto
+            | SettingRow::CleanOnSave => SettingsPage::General,
             SettingRow::CustomAgents => SettingsPage::Agents,
             _ => SettingsPage::Appearance,
         }
@@ -161,6 +166,7 @@ impl SettingRow {
         match self {
             SettingRow::Notify | SettingRow::NotifyAlways => "Notifications",
             SettingRow::UpdatesVersion | SettingRow::UpdatesAuto => "Updates",
+            SettingRow::CleanOnSave => "Editor",
             SettingRow::Theme
             | SettingRow::LightTheme
             | SettingRow::DarkTheme
@@ -177,6 +183,7 @@ impl SettingRow {
             SettingRow::NotifyAlways => "Always notify",
             SettingRow::UpdatesVersion => "Version",
             SettingRow::UpdatesAuto => "Check for updates automatically",
+            SettingRow::CleanOnSave => "Clean on save",
             SettingRow::Theme => "Theme",
             SettingRow::LightTheme => "Light theme",
             SettingRow::DarkTheme => "Dark theme",
@@ -196,6 +203,9 @@ impl SettingRow {
             SettingRow::UpdatesAuto => {
                 "Look up new versions 30 seconds after start, then every 6 hours."
             }
+            SettingRow::CleanOnSave => {
+                "Trim trailing whitespace and end the file with one line break when you save."
+            }
             SettingRow::Theme => "Follow the system, or always light or dark.",
             SettingRow::LightTheme => "The theme used when the app is light.",
             SettingRow::DarkTheme => "The theme used when the app is dark.",
@@ -214,6 +224,7 @@ impl SettingRow {
             SettingRow::NotifyAlways => "notifications alert focused active",
             SettingRow::UpdatesVersion => "update version release check now",
             SettingRow::UpdatesAuto => "update version release automatically",
+            SettingRow::CleanOnSave => "editor file trailing whitespace newline line break format",
             SettingRow::Theme => "dark light system colors",
             SettingRow::LightTheme => {
                 "color scheme colors ayu catppuccin latte github gruvbox rose pine dawn solarized"

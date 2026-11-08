@@ -1,5 +1,6 @@
 //! Saving the open file (`FileEditor.tsx` `save`): `PUT /tasks/:id/file` with the draft and the
-//! version it began on.
+//! version it began on. With Clean on save (Settings), the text is cleaned first, so the draft
+//! and the version check are those of the cleaned text (T-0316).
 
 use natamux_client::ClientError;
 use natamux_proto::workspaces::files::SavedFile;
@@ -12,9 +13,25 @@ use crate::components::toast_rules::ToastTone;
 use crate::components::toasts::{push_toast, toast};
 
 impl FileEditor {
-    /// Mod+S or the Save button. Ignored without a draft, while the banner shows or while a save
-    /// runs.
+    /// Mod+S or the Save button. Ignored while a save runs.
     pub(super) fn save(&mut self, cx: &mut Context<Self>) {
+        let clean = self.dashboard.read(cx).view().clean_on_save;
+        let ready = clean && !self.saving && !self.stale_now(cx) && self.draft(cx).is_some();
+        let body = self.body.clone().filter(|_| ready);
+        let Some(body) = body else {
+            self.write(cx);
+            return;
+        };
+        let cleaned = body.update(cx, |body, cx| body.clean(cx));
+        cx.spawn(async move |this, cx| {
+            cleaned.await;
+            this.update(cx, |this, cx| this.write(cx)).ok();
+        })
+        .detach();
+    }
+
+    /// The write itself. Ignored without a draft, while the banner shows or while a save runs.
+    fn write(&mut self, cx: &mut Context<Self>) {
         let draft = self.draft(cx);
         let stale = self.stale_now(cx);
         let Some(draft) = draft.filter(|d| can_save(Some(d), stale, self.saving)) else {
