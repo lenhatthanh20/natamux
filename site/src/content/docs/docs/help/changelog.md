@@ -7,6 +7,14 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v1.0.23 (2026-11-08)
+
+- In the Changes diff, a revert arrow puts the last commit's lines of a change back into the file, with Undo.
+- The editor and the diff get a find bar, Go to line, Go to symbol, whitespace toggles and more editor keys; **Clean on save** is in Settings → General → Editor.
+- The stage sheet puts the prompt first, with settings in folding groups and arrows to the stage before or after.
+- The homepage offers a one-line install command; all files are on the new Download page.
+- Fix: undo in the editor tab no longer brings back old text after the file was read again from disk.
+
 ## v1.0.22 (2026-11-07)
 
 - After a restart, a terminal shows its old screen at once while its shell or agent starts.
