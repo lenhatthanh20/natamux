@@ -33,11 +33,13 @@ pub struct DiffOptions {
 }
 
 /// What the Changes tab follows: the changes were worked out (the toolbar's counts and
-/// navigator), or the cursor or the selection moved (the comment box's label).
+/// navigator), the cursor or the selection moved (the comment box's label), or a revert arrow
+/// was clicked (hunk `index` of the read `version`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DiffEvent {
     Ready,
     CursorMoved,
+    RevertHunk { index: usize, version: u64 },
 }
 
 pub(super) struct Sides {
@@ -54,7 +56,11 @@ pub(super) struct Sides {
 
 pub struct DiffView {
     key: Option<String>,
-    version: u64,
+    pub(super) version: u64,
+    /// The read whose texts `hunks` were worked out from; None while a read is diffed.
+    pub(super) hunks_for: Option<u64>,
+    pub(super) movable: bool,
+    pub(super) moving: bool,
     options: Option<DiffOptions>,
     pub(super) buffer: Option<Entity<Buffer>>,
     pub(super) diff: Option<Entity<BufferDiff>>,
@@ -73,6 +79,9 @@ impl DiffView {
         DiffView {
             key: None,
             version: 0,
+            hunks_for: None,
+            movable: false,
+            moving: false,
             options: None,
             buffer: None,
             diff: None,
@@ -149,6 +158,7 @@ impl DiffView {
         self.key = Some(key.to_owned());
         self.path = Some(path.to_owned());
         self.version = version;
+        self.hunks_for = None;
         self.options = Some(options);
         let buffer = cx.new(|cx| {
             let mut buffer = Buffer::local(modified, cx);
@@ -166,6 +176,7 @@ impl DiffView {
             update.await;
             this.update_in(cx, |this, window, cx| {
                 this.read_hunks(cx);
+                this.hunks_for = Some(version);
                 this.build(window, cx);
                 if let (Some(position), Some(sides)) = (scroll, this.sides.as_ref()) {
                     sides.right.update(cx, |editor, cx| {
@@ -192,6 +203,8 @@ impl DiffView {
         };
         let edits = buffer.read(cx).diff(modified.to_owned(), cx);
         let base: Option<Arc<str>> = original.map(Arc::from);
+        let version = self.version;
+        self.hunks_for = None;
         self._update = Some(cx.spawn_in(window, async move |this, cx| {
             let edits = edits.await;
             let Ok(update) = this.update(cx, |_, cx| {
@@ -208,6 +221,7 @@ impl DiffView {
             update.await;
             this.update(cx, |this, cx| {
                 this.read_hunks(cx);
+                this.hunks_for = Some(version);
                 this.refit(cx);
                 cx.emit(DiffEvent::Ready);
             })
@@ -310,6 +324,7 @@ impl DiffView {
             subscriptions.push(cx.subscribe_in(left, window, Self::on_editor));
         }
         let spacer_blocks = self.add_spacers(&right, left.as_ref(), cx);
+        self.add_arrows(&right, left.as_ref(), cx);
         self.sides = Some(Sides {
             right,
             left,
@@ -442,12 +457,14 @@ impl Render for DiffView {
         let border = cx.theme().colors().border;
         match &sides.left {
             Some(left) => h_flex()
+                .key_context("NatamuxDiff")
                 .size_full()
                 .child(div().flex_1().min_w_0().h_full().child(left.clone()))
                 .child(div().w_px().h_full().bg(border))
                 .child(div().flex_1().min_w_0().h_full().child(sides.right.clone()))
                 .into_any_element(),
             None => div()
+                .key_context("NatamuxDiff")
                 .size_full()
                 .child(sides.right.clone())
                 .into_any_element(),

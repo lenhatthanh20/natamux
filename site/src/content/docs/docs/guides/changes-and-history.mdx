@@ -171,6 +171,17 @@ The dialog says how many new files will be deleted. Ignored files are never touc
 
 A toast says **Rolled back N files.** and has an **Undo** action. **Undo** brings back those files as they were just before the rollback, new files too. Only the last rollback of a task can be undone, until the daemon restarts. An added file comes back as a new file (U); the commit takes it either way.
 
+### Revert one change
+
+To put back only one change of a file, click a line of that change in the diff, or step to it with `Alt+F5`. An arrow shows at the right of the change:
+
+- **Side by side**: `→` on the left (last commit) side, and a revert icon on the right side.
+- **Inline**: a revert icon.
+
+Click it to replace the change with the lines of the last commit. The file is written on disk, and the diff reads it again. The toast **Reverted a change in &lt;file&gt;.** has **Undo**. `Mod+Z` in the diff also undoes the last revert, up to 50 of them.
+
+The last commit cannot be changed here, so the arrows only write the working tree. When the agent changed the file after the diff was read, nothing is written: a toast says so and the diff reads the file again. There is no arrow on new, deleted or conflicted files.
+
 ### Push and open a pull request
 
 The header of the workspace has two buttons.

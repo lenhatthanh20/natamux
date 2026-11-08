@@ -104,6 +104,37 @@ pub fn end_spacer(hunks: &[HunkRows], old_rows: u32, new_rows: u32) -> Option<Sp
     }
 }
 
+/// The working tree's text with one hunk's lines put back to the last commit's lines (T-0314).
+/// Each line keeps its own ending, so CRLF and a missing final line break stay as they were.
+pub fn revert_hunk(original: &str, modified: &str, hunk: &HunkRows) -> String {
+    let old: Vec<&str> = original.split_inclusive('\n').collect();
+    let new: Vec<&str> = modified.split_inclusive('\n').collect();
+    let rows = |lines: &[&str], range: Range<u32>| -> String {
+        let end = (range.end as usize).min(lines.len());
+        let start = (range.start as usize).min(end);
+        lines.get(start..end).unwrap_or_default().concat()
+    };
+    let total = new.len() as u32;
+    [
+        rows(&new, 0..hunk.new.start),
+        rows(&old, hunk.old.clone()),
+        rows(&new, hunk.new.end.max(hunk.new.start)..total),
+    ]
+    .concat()
+}
+
+/// The hunk whose rows on `side` start at `row`, else the one that holds it.
+pub fn hunk_at(hunks: &[HunkRows], side: Side, row: u32) -> Option<usize> {
+    let rows = |hunk: &HunkRows| match side {
+        Side::Old => hunk.old.clone(),
+        Side::New => hunk.new.clone(),
+    };
+    hunks
+        .iter()
+        .position(|hunk| rows(hunk).start == row)
+        .or_else(|| hunks.iter().position(|hunk| rows(hunk).contains(&row)))
+}
+
 /// Side by side is on when the user wants it and the diff column has room; the stored choice
 /// stays either way. `Some(reason)` when it is off for want of room.
 pub fn side_by_side(wanted: bool, diff_width: f32) -> (bool, Option<&'static str>) {
@@ -260,6 +291,72 @@ mod tests {
         );
         assert_eq!(end_spacer(&hunks, 428, 281), None);
         assert_eq!(end_spacer(&[], 100, 100), None);
+    }
+
+    #[test]
+    fn reverting_a_changed_hunk_puts_the_old_lines_back_in_place() {
+        let original = "a\nold 1\nold 2\nb\n";
+        let modified = "a\nnew\nb\n";
+        assert_eq!(revert_hunk(original, modified, &hunk(1..3, 1..2)), original);
+    }
+
+    #[test]
+    fn reverting_an_added_or_a_deleted_block_removes_or_restores_it() {
+        let original = "a\nb\nc\n";
+        let added = "a\nnew 1\nnew 2\nb\nc\n";
+        let deleted = "a\nc\n";
+        assert_eq!(revert_hunk(original, added, &hunk(1..1, 1..3)), original);
+        assert_eq!(revert_hunk(original, deleted, &hunk(1..2, 1..1)), original);
+    }
+
+    #[test]
+    fn reverting_at_the_top_keeps_the_rest() {
+        let original = "first\nb\nc\n";
+        let modified = "b\nc\n";
+        assert_eq!(revert_hunk(original, modified, &hunk(0..1, 0..0)), original);
+    }
+
+    #[test]
+    fn reverting_at_the_end_keeps_the_old_final_line_break() {
+        // The old text has no final line break; the new one added lines and one.
+        let original = "a\nb";
+        let modified = "a\nb\nc\n";
+        assert_eq!(revert_hunk(original, modified, &hunk(1..2, 1..4)), original);
+        // The new text dropped the final line break.
+        assert_eq!(revert_hunk("a\nb\n", "a\nb", &hunk(1..2, 1..2)), "a\nb\n");
+    }
+
+    #[test]
+    fn reverting_keeps_crlf_line_endings() {
+        let original = "a\r\nold\r\nb\r\n";
+        let modified = "a\r\nnew\r\nb\r\n";
+        assert_eq!(revert_hunk(original, modified, &hunk(1..2, 1..2)), original);
+    }
+
+    #[test]
+    fn reverting_one_of_two_hunks_leaves_the_other() {
+        let original = "a\nold\nb\nc\nold 2\n";
+        let modified = "a\nnew\nb\nc\nnew 2\n";
+        assert_eq!(
+            revert_hunk(original, modified, &hunk(4..5, 4..5)),
+            "a\nnew\nb\nc\nold 2\n"
+        );
+    }
+
+    #[test]
+    fn rows_past_the_end_do_not_panic() {
+        assert_eq!(revert_hunk("a\n", "a\n", &hunk(5..9, 7..9)), "a\n");
+    }
+
+    #[test]
+    fn finds_the_hunk_that_starts_at_a_row_before_the_one_that_holds_it() {
+        let hunks = [hunk(2..2, 2..4), hunk(5..8, 7..7)];
+        assert_eq!(hunk_at(&hunks, Side::New, 2), Some(0));
+        assert_eq!(hunk_at(&hunks, Side::New, 3), Some(0));
+        assert_eq!(hunk_at(&hunks, Side::New, 7), Some(1));
+        assert_eq!(hunk_at(&hunks, Side::Old, 2), Some(0));
+        assert_eq!(hunk_at(&hunks, Side::Old, 6), Some(1));
+        assert_eq!(hunk_at(&hunks, Side::Old, 9), None);
     }
 
     #[test]

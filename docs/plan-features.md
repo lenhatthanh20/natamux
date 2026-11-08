@@ -127,7 +127,7 @@ Goals:
 
 | Feature | Tag |
 |---|---|
-| Diff view per task (unified and split). Done: changed files list, a Monaco diff of uncommitted changes, and a git graph of the task branch against its base | MVP |
+| Diff view per task (unified and split). Done: changed files list, a Monaco diff of uncommitted changes, and a git graph of the task branch against its base. The native app reverts one change with its arrow, with Undo (`Mod+Z`) | MVP |
 | Inline comments that are sent back to the agent as a follow-up prompt. Done: a comment under the diff, about the file and the line the cursor is on, is pasted into the agent's terminal as its next prompt. Lines selected in the diff can be added, and are quoted to the agent | v1 |
 | Roll back uncommitted changes. Done: in the Changes tab, **Rollback…** on the list, on a file or folder row, or `Mod+Alt+Z` asks which files go back to the last commit; new files are deleted, conflicts are refused. A snapshot made first lets the toast **Undo** the last rollback | v1 |
 | Commit from the app with a message draft. Done: commit all changes with a message; **Generate** and **Commit…** draft the message with the task's agent, with a simple draft when the agent fails | v1 |

@@ -80,7 +80,8 @@ actions!(
         DraftCommit,
         AddReviewComment,
         SendReviewComments,
-        CommitChanges
+        CommitChanges,
+        UndoMove
     ]
 );
 
@@ -163,6 +164,7 @@ command_actions! {
     "diff.prev-change" => PrevChange,
     "diff.comment" => CommentOnDiff,
     "changes.rollback" => RollbackFile,
+    "diff.undo-move" => UndoMove,
     "diff.draft-commit" => DraftCommit,
     "diff.add-comment" => AddReviewComment,
     "diff.send-comments" => SendReviewComments,
@@ -238,6 +240,15 @@ fn settings_keys(mac: bool) -> Vec<KeyBinding> {
         .collect()
 }
 
+/// Mod+Z in the diff's read-only editors undoes the last revert (T-0314). The text box keys bind
+/// it to the editor's own undo at the same depth, and of two such bindings the later one wins,
+/// so this goes after them.
+fn diff_undo_keys(mac: bool) -> Vec<KeyBinding> {
+    let mut bindings = Vec::new();
+    push_bindings("diff.undo-move", UndoMove, mac, &mut bindings);
+    bindings
+}
+
 /// The key context of the Settings popup's root.
 pub const SETTINGS_CONTEXT: &str = "Settings";
 
@@ -248,6 +259,7 @@ pub fn bind(cx: &mut App) {
     cx.bind_keys(settings_keys(mac));
     cx.bind_keys(terminal_keeps(mac));
     super::text_boxes::bind(cx, mac);
+    cx.bind_keys(diff_undo_keys(mac));
     // A terminal sends ctrl-c and the like to the shell; only copy and paste are the app's.
     let (copy, paste) = if mac {
         ("cmd-c", "cmd-v")

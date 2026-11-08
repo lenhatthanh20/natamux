@@ -2,14 +2,14 @@
 //! (`[`, `]`), the previous and next change (Shift+Alt+F5, Alt+F5), comment or Ask agent
 //! (Mod+Shift+A), roll back the shown file (Mod+Alt+Z) and draft the commit message
 //! (Mod+Shift+G in the commit box), add a review comment (Mod+Enter in the comment box) and
-//! send them (Mod+Alt+Enter).
+//! send them (Mod+Alt+Enter), and undo the last revert arrow (Mod+Z in the diff).
 
 use ui::prelude::*;
 
 use super::ChangesView;
 use crate::app::shortcuts::{
     AddReviewComment, CommentOnDiff, DraftCommit, NextChange, NextFile, PrevChange, PrevFile,
-    RefreshChanges, RollbackFile, SendReviewComments,
+    RefreshChanges, RollbackFile, SendReviewComments, UndoMove,
 };
 use crate::git::change_rules::{Step, step_file};
 
@@ -59,5 +59,6 @@ impl ChangesView {
                 cx.listener(|view, _: &AddReviewComment, window, cx| view.add_comment(window, cx)),
             )
             .on_action(cx.listener(|view, _: &SendReviewComments, _, cx| view.send_comments(cx)))
+            .on_action(cx.listener(|view, _: &UndoMove, _, cx| view.undo_move(cx)))
     }
 }

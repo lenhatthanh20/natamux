@@ -2,8 +2,8 @@
 //! registry as `commands.rs`; `all_commands` joins the two lists.
 
 use super::commands::{
-    BODY, CHANGES, CHANGES_ANY, COMMENT_BOX, COMMIT_BOX, Category, Command, MenuName, SheetGroup,
-    When, command, group, keys, menu, when,
+    BODY, CHANGES, CHANGES_ANY, COMMENT_BOX, COMMIT_BOX, Category, Command, DIFF_EDITOR, MenuName,
+    SheetGroup, When, command, group, keys, menu, when,
 };
 use super::commands_files::DOCS;
 
@@ -130,6 +130,19 @@ pub const GIT_COMMANDS: &[Command] = &[
         ),
         &["Mod+Alt+Z"],
         &[CHANGES_ANY],
+    )),
+    // Only in the diff: the comment and the commit box keep their own text undo.
+    in_workspace(keys(
+        group(
+            command(
+                "diff.undo-move",
+                "Undo the last revert in the diff",
+                Category::Workspace,
+            ),
+            SheetGroup::Diff,
+        ),
+        &["Mod+Z"],
+        &[DIFF_EDITOR],
     )),
     // Only in the commit box: elsewhere the key would start an agent run, and its draft could
     // replace text the user did not mean to give up.
