@@ -134,6 +134,7 @@ These work when a workspace is open.
 | Previous change in the file | `Shift+Alt+F5` |
 | Comment on the file or the selection for the agent | `Mod+Shift+A` |
 | Roll back the shown file | `Mod+Alt+Z` |
+| Undo the last revert in the diff (focus in the diff) | `Mod+Z` |
 | Send the review comments to the agent | `Mod+Alt+Enter` |
 | Draft the commit message with the agent | `Mod+Shift+G` |
 | Accessible diff view | `F7` or `Shift+F7` |

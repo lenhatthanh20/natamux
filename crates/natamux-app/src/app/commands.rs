@@ -22,6 +22,9 @@ pub const CHANGES: &str = "NatamuxChanges && not_editing";
 pub const CHANGES_ANY: &str = "NatamuxChanges";
 /// The wrapper of the commit box.
 pub const COMMIT_BOX: &str = "NatamuxCommitBox";
+/// The read-only editors of the diff. Same depth as the text box keys' `Editor`, so a binding
+/// made after those wins here (`shortcuts.rs`).
+pub const DIFF_EDITOR: &str = "NatamuxDiff > Editor";
 /// The wrapper of the comment box under the diff.
 pub const COMMENT_BOX: &str = "NatamuxCommentBox";
 /// Where single keys work: outside text boxes and terminals.

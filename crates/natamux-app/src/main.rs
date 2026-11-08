@@ -147,6 +147,7 @@ mod git {
     pub mod changes_view;
     pub mod comment_rules;
     pub mod commit_rules;
+    pub mod diff_arrows;
     pub mod diff_cursor;
     pub mod diff_editors;
     pub mod diff_rules;
@@ -156,6 +157,7 @@ mod git {
     pub mod history_view;
     pub mod image_rules;
     pub mod languages;
+    pub mod move_rules;
     pub mod review_blocks;
     pub mod review_rules;
     pub mod rollback_dialog;

@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use editor::Editor;
 use gpui::{Entity, FocusHandle, Focusable, Image, KeyContext, Subscription, WeakEntity};
-use natamux_proto::workspaces::changes::{FileDiff, ImageSide, image_type_of};
+use natamux_proto::workspaces::changes::{FileDiff, ImageSide};
 use natamux_proto::workspaces::workspace::ChangeEntry;
 use ui::prelude::*;
 
@@ -72,6 +72,7 @@ pub struct ChangesView {
     pub(super) sending: bool,
     pub(super) sent: Option<Result<(), String>>,
     review: review::Review,
+    moves: moves::Moves,
     pub(super) focus: FocusHandle,
     pub(super) files_focus: FocusHandle,
     pub(super) layout_focus: FocusHandle,
@@ -91,7 +92,12 @@ impl ChangesView {
         let diff = cx.new(|_| DiffView::new());
         let width = cx.new(|_| None);
         let subscriptions = vec![
-            cx.subscribe(&diff, |_, _, _: &DiffEvent, cx| cx.notify()),
+            cx.subscribe(&diff, |view, _, event: &DiffEvent, cx| {
+                if let DiffEvent::RevertHunk { index, version } = *event {
+                    view.revert_hunk(index, version, cx);
+                }
+                cx.notify()
+            }),
             cx.observe(&width, |_, _, cx| cx.notify()),
             Dashboard::redraw_on(&dashboard, rows::DASHBOARD_PARTS, cx),
         ];
@@ -117,6 +123,7 @@ impl ChangesView {
             sending: false,
             sent: None,
             review: review::Review::default(),
+            moves: moves::Moves::default(),
             focus: cx.focus_handle(),
             files_focus: cx.focus_handle().tab_stop(true),
             layout_focus: cx.focus_handle().tab_stop(true),
@@ -145,6 +152,7 @@ impl ChangesView {
             self.quote = None;
             self.sent = None;
             self.reset_review();
+            self.moves.undo.clear();
             self.diff.update(cx, |diff, _| diff.clear());
         }
         self.pending = pending;
@@ -252,7 +260,7 @@ impl ChangesView {
             if wants_image {
                 for side in [ImageSide::Original, ImageSide::Modified] {
                     let bytes = source.file_image(&task_id, &path, side).await;
-                    images.insert(side.name(), image_read(&path, bytes));
+                    images.insert(side.name(), body::image_read(&path, bytes));
                 }
             }
             this.update(cx, |this, cx| {
@@ -344,31 +352,6 @@ impl ChangesView {
                 .is_some_and(|editor| editor.focus_handle(cx).contains_focused(window, cx))
         };
         focused(&self.message) || focused(&self.comment)
-    }
-}
-
-/// The picture of one side, or the sentence that stands in for it (413: too large).
-fn image_read(path: &str, bytes: Result<Vec<u8>, natamux_client::ClientError>) -> ImageRead {
-    match bytes {
-        Ok(bytes) => Ok(ShownImage {
-            bytes: bytes.len() as u64,
-            size: super::image_rules::image_size(&bytes),
-            image: Arc::new(Image::from_bytes(image_format(path), bytes)),
-        }),
-        Err(natamux_client::ClientError::Status { status: 413, .. }) => {
-            Err(super::image_rules::TOO_LARGE_TEXT.to_owned())
-        }
-        Err(error) => Err(reason(&error)),
-    }
-}
-
-fn image_format(path: &str) -> gpui::ImageFormat {
-    match image_type_of(path) {
-        Some("image/jpeg") => gpui::ImageFormat::Jpeg,
-        Some("image/gif") => gpui::ImageFormat::Gif,
-        Some("image/webp") => gpui::ImageFormat::Webp,
-        Some("image/svg+xml") => gpui::ImageFormat::Svg,
-        _ => gpui::ImageFormat::Png,
     }
 }
 
@@ -498,3 +481,6 @@ mod review;
 
 #[path = "review_list.rs"]
 mod review_list;
+
+#[path = "diff_moves.rs"]
+mod moves;

@@ -313,6 +313,16 @@ fn has_the_keys_of_the_changes_tab() {
     assert_eq!(shortcut_of("task.commit"), None);
 }
 
+/// T-0314: Mod+Z undoes a revert arrow only in the diff's editors; the comment and the commit
+/// box keep their own text undo.
+#[test]
+fn undoes_a_revert_with_mod_z_only_in_the_diff_editors() {
+    let command = command_by_id("diff.undo-move");
+    assert_eq!(command.map(|c| c.keys), Some(&["Mod+Z"][..]));
+    assert_eq!(command.map(|c| c.contexts), Some(&[DIFF_EDITOR][..]));
+    assert!(crate::app::shortcuts::action_for("diff.undo-move").is_some());
+}
+
 #[test]
 fn keeps_single_keys_out_of_text_boxes_and_terminals() {
     for command in all_commands().filter(|command| command.keys.iter().any(|k| is_single_key(k))) {
