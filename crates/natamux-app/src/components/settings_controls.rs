@@ -5,7 +5,7 @@ use gpui::{AnyElement, FontWeight};
 use ui::{Tooltip, prelude::*};
 
 use super::colors::accent;
-use super::settings_card::{error_line, foot_text};
+use super::settings_card::error_line;
 
 /// The changed-value mark before a control: a ring at the default, a warning dot when changed,
 /// then a reset button that runs `on_reset`. `id` must be unique on the page.
@@ -62,12 +62,11 @@ pub fn radio(selected: bool, cx: &App) -> impl IntoElement {
         .when(selected, |ring| ring.child(dot))
 }
 
-/// A labelled field of a sheet: label, control, then help or the error line.
+/// A labelled field of a sheet: label, control, then the error line.
 #[derive(IntoElement)]
 pub struct SheetField {
     label: SharedString,
     control: AnyElement,
-    help: Option<SharedString>,
     error: Option<SharedString>,
 }
 
@@ -76,17 +75,10 @@ impl SheetField {
         Self {
             label: label.into(),
             control: control.into_any_element(),
-            help: None,
             error: None,
         }
     }
 
-    pub fn help(mut self, help: Option<impl Into<SharedString>>) -> Self {
-        self.help = help.map(Into::into);
-        self
-    }
-
-    /// Shown instead of the help.
     pub fn error(mut self, error: Option<impl Into<SharedString>>) -> Self {
         self.error = error.map(Into::into);
         self
@@ -95,16 +87,7 @@ impl SheetField {
 
 impl RenderOnce for SheetField {
     fn render(self, _: &mut Window, _: &mut App) -> impl IntoElement {
-        let under = match (self.error, self.help) {
-            (Some(error), _) => Some(error_line(error).into_any_element()),
-            (None, Some(help)) => Some(
-                div()
-                    .mt(rems_from_px(3.0_f32))
-                    .child(foot_text(help))
-                    .into_any_element(),
-            ),
-            (None, None) => None,
-        };
+        let under = self.error.map(error_line);
         v_flex()
             .w_full()
             .mb(rems_from_px(12.0_f32))

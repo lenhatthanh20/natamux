@@ -1,6 +1,7 @@
-//! The text fields of the stage sheet: one editor each, made when the sheet opens.
+//! The text fields of the stage sheet: one editor each, made when the sheet opens or steps to
+//! another stage.
 
-use gpui::Entity;
+use gpui::{Entity, TextStyleRefinement};
 use natamux_proto::stages::capabilities::{stage_name, stage_name_of_id};
 use natamux_proto::stages::schema::{Stage, Step};
 use ui::prelude::*;
@@ -11,7 +12,7 @@ use super::pipeline_editor::PipelineEditor;
 use super::stage_fields_view::LiveField;
 use super::stage_sheet::StageSheet;
 use super::stage_view_rules::finished_when;
-use crate::components::form::input_style;
+use crate::components::form::{FILL_LINES, input_style};
 
 /// The text fields of one stage.
 pub(super) struct StageFields {
@@ -105,8 +106,9 @@ impl StageFields {
             id: id.to_owned(),
             name: text(TextField::Name, &stage_name_of_id(id), None, window, cx),
             args: text(TextField::Args, "--model sonnet", None, window, cx),
-            prompt: text(TextField::Prompt, "", Some((9, 24)), window, cx),
-            command: text(TextField::Command, "pnpm test", None, window, cx),
+            prompt: text(TextField::Prompt, "", Some(FILL_LINES), window, cx),
+            // Five lines at the least: the 96 px box of mockup B.
+            command: text(TextField::Command, "pnpm test", Some((5, 8)), window, cx),
             check: text(TextField::Check, "pnpm typecheck", None, window, cx),
             output: text(TextField::Output, "notes.md", None, window, cx),
             sections,
@@ -125,6 +127,14 @@ impl StageFields {
         ] {
             set_font(field, true, cx);
         }
+        // Mockup B: the prompt reads as code, 12.5 px on 19 px lines.
+        let font = theme::theme_settings(cx).buffer_font(cx).family.clone();
+        fields.prompt.editor.update(cx, |editor, _| {
+            editor.set_text_style_refinement(TextStyleRefinement {
+                line_height: Some(px(19.).into()),
+                ..input_style(Some(font), Some(12.5))
+            })
+        });
         fields
     }
 

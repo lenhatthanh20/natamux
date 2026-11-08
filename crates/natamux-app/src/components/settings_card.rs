@@ -224,6 +224,7 @@ impl RenderOnce for SettingsCard {
 pub struct SettingsRow {
     id: ElementId,
     label: SharedString,
+    label_size: Option<LabelSize>,
     label_weight: FontWeight,
     label_color: Color,
     lead: Option<AnyElement>,
@@ -244,6 +245,7 @@ impl SettingsRow {
         Self {
             id: id.into(),
             label: label.into(),
+            label_size: None,
             label_weight: FontWeight::NORMAL,
             label_color: Color::Default,
             lead: None,
@@ -290,6 +292,12 @@ impl SettingsRow {
     /// A control at the right, in order; controls sit 6 px apart.
     pub fn control(mut self, control: impl IntoElement) -> Self {
         self.controls.push(control.into_any_element());
+        self
+    }
+
+    /// A label size other than the row text (the stage sheet's column uses 12 px).
+    pub fn label_size(mut self, size: LabelSize) -> Self {
+        self.label_size = Some(size);
         self
     }
 
@@ -349,7 +357,7 @@ impl RenderOnce for SettingsRow {
             .min_w_0()
             .child(
                 Label::new(self.label)
-                    .size(row_text())
+                    .size(self.label_size.unwrap_or_else(row_text))
                     .weight(self.label_weight)
                     .color(self.label_color)
                     .truncate(),

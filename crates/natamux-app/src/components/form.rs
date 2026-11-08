@@ -2,7 +2,7 @@
 //! text editor with a placeholder. `SettingsInput` is the Settings screen's smaller box.
 //! Every input editor comes from `input_editor`, so all inputs share one text style.
 
-use editor::Editor;
+use editor::{CurrentLineHighlight, Editor};
 use gpui::Focusable;
 use gpui::{Entity, FontWeight, TextStyleRefinement, relative};
 use language::language_settings::SoftWrap;
@@ -45,6 +45,7 @@ pub struct SettingsInput {
     radius: Option<f32>,
     area: bool,
     bar_edge: bool,
+    fill: bool,
     invalid: bool,
 }
 
@@ -57,6 +58,7 @@ impl SettingsInput {
             radius: None,
             area: false,
             bar_edge: false,
+            fill: false,
             invalid: false,
         }
     }
@@ -78,6 +80,14 @@ impl SettingsInput {
     pub fn bar_edge(mut self) -> Self {
         self.area = true;
         self.bar_edge = true;
+        self
+    }
+
+    /// A textarea that fills the height of its column (the stage sheet's prompt, T-0313), for an
+    /// editor made with `FILL_LINES`: radius 8, padding 10 12, the editor scrolls inside.
+    pub fn fill(mut self) -> Self {
+        self.area = true;
+        self.fill = true;
         self
     }
 
@@ -112,14 +122,27 @@ impl RenderOnce for SettingsInput {
         } else {
             colors.border
         };
-        let radius = self.radius.unwrap_or(if self.area { 6. } else { 5. });
+        let radius = self.radius.unwrap_or(if self.fill {
+            8.
+        } else if self.area {
+            6.
+        } else {
+            5.
+        });
         let input = div()
             .min_w_0()
             .rounded(rems_from_px(radius))
             .border_1()
             .border_color(border)
             .bg(colors.editor_background);
-        let input = if self.area {
+        let input = if self.fill {
+            input
+                .flex_1()
+                .min_h_0()
+                .overflow_hidden()
+                .px(rems_from_px(12.0_f32))
+                .py(rems_from_px(10.0_f32))
+        } else if self.area {
             input
                 .pl(rems_from_px(10.0_f32))
                 .when(!self.bar_edge, |input| {
@@ -159,13 +182,27 @@ pub fn input_style(family: Option<SharedString>, size: Option<f32>) -> TextStyle
     }
 }
 
-/// An input editor with the input text style: one line, or `lines` (min, max) that grow.
+/// `lines` of an editor that fills its box and scrolls inside (`SettingsInput::fill`).
+pub const FILL_LINES: (usize, usize) = (0, 0);
+
+/// An input editor with the input text style: one line, `lines` (min, max) that grow, or
+/// `FILL_LINES`.
 pub fn input_editor(
     lines: Option<(usize, usize)>,
     window: &mut Window,
     cx: &mut Context<Editor>,
 ) -> Editor {
     let mut editor = match lines {
+        Some(FILL_LINES) => {
+            let mut editor = Editor::multi_line(window, cx);
+            editor.set_show_gutter(false, cx);
+            editor.set_show_line_numbers(false, cx);
+            editor.set_show_wrap_guides(false, cx);
+            editor.set_show_indent_guides(false, cx);
+            editor.set_current_line_highlight(Some(CurrentLineHighlight::None));
+            editor.set_soft_wrap_mode(SoftWrap::EditorWidth, cx);
+            editor
+        }
         Some((min, max)) => {
             let mut editor = Editor::auto_height(min, max, window, cx);
             // A textarea wraps long lines; Zed's default setting does not.

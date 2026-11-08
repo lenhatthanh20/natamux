@@ -343,3 +343,10 @@ fn the_popup_is_centered_and_keeps_a_margin_on_small_windows() {
     assert_eq!(at(1024., 768.), (32., 48., 960., 672.));
     assert_eq!(at(40., 50.), (20., 25., 0., 0.));
 }
+
+#[test]
+fn a_fill_sheet_keeps_24_px_inside_the_popup_up_to_960_by_640() {
+    assert_eq!(sheet_fill_size(1024., 768.), (912., 624.));
+    assert_eq!(sheet_fill_size(1440., 900.), (960., 640.));
+    assert_eq!(sheet_fill_size(40., 50.), (0., 0.));
+}

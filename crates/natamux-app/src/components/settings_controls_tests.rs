@@ -20,7 +20,7 @@ impl Render for Field {
         div()
             .w(px(WIDE))
             .debug_selector(|| "field-box".into())
-            .child(SheetField::new("Name", control).help(Some("Help")))
+            .child(SheetField::new("Name", control).error(Some("Wrong")))
     }
 }
 

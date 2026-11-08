@@ -1,11 +1,12 @@
-//! Words and rules of the stage sheet (layout-b 5.3): its first line, the Advanced segment's
-//! label, the approval row, and which rows and fields a stage shows.
+//! Words and rules of the stage sheet (layout-b 5.3, T-0313 mockup B): its first line, the
+//! approval row, which rows and fields a stage shows, and the stages before and after it.
 
-use natamux_proto::stages::capabilities::{can_end_shell, checks_on_ci};
+use natamux_proto::stages::capabilities::{can_end_shell, checks_on_ci, stage_name};
 use natamux_proto::stages::catalog::catalog_entry;
 use natamux_proto::stages::schema::{Stage, StageKind, Step};
 use natamux_proto::stages::terminal_lane::terminal_of_stage;
 
+use super::advanced_rules::SheetGroup;
 use super::editor_fields::{
     always_waits, offers_own_shell, runs_in_own_shell, runs_in_shell_one, takes_own_agent,
     takes_prompt,
@@ -35,15 +36,6 @@ pub fn sheet_kind(kind: StageKind) -> &'static str {
     }
 }
 
-/// The Advanced segment: "Advanced · 2 changed" or "Advanced · all default".
-pub fn advanced_label(changed: usize) -> String {
-    if changed == 0 {
-        "Advanced \u{b7} all default".to_owned()
-    } else {
-        format!("Advanced \u{b7} {changed} changed")
-    }
-}
-
 /// The approval row: label, and the help line under it.
 pub fn approval_text(stage: &Stage) -> (&'static str, Option<&'static str>) {
     if stage.kind == StageKind::Release {
@@ -70,7 +62,7 @@ pub fn agent_help(steps: &[Step], id: &str) -> &'static str {
 /// What the stage sheet shows under the Agent row.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EndAgent {
-    /// The "End the agent and close its terminal" switch.
+    /// The "End the agent when done" switch.
     Switch,
     /// The Terminal 1 line: the stage runs there, which never closes.
     TerminalOne,
@@ -131,6 +123,62 @@ pub fn sheet_shows(stage: &Stage, steps: &[Step]) -> SheetShows {
         ci: checks_on_ci(stage),
         own_terminal: offers_own_shell(steps, &stage.id),
     }
+}
+
+/// A testing stage runs its command and also takes a prompt: the command sits over the prompt
+/// at the left. A command the stage does not run stays in Files and arguments.
+pub fn command_at_left(shows: &SheetShows) -> bool {
+    shows.prompt && shows.command && !shows.command_unused
+}
+
+/// The folding groups the right column draws: Done check and Files only for a stage with a
+/// prompt (the others show their run fields in the left pane), each only when it has a row.
+pub fn groups_shown(shows: &SheetShows) -> Vec<SheetGroup> {
+    let command = shows.command && !command_at_left(shows);
+    let files = shows.prompt && (shows.args || command || shows.output || shows.sections);
+    let options = shows.workflow || shows.ci || shows.own_terminal;
+    [
+        (shows.prompt, SheetGroup::DoneCheck),
+        (files, SheetGroup::Files),
+        (options, SheetGroup::Options),
+    ]
+    .into_iter()
+    .filter_map(|(shown, group)| shown.then_some(group))
+    .collect()
+}
+
+/// A stage the stepper of the sheet goes to: its id and its name.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StageLink {
+    pub id: String,
+    pub name: String,
+}
+
+/// Where a stage sits in the list of all stages (in groups and paths too, list order): the one
+/// before, the one after, its place from 1, and how many there are.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Neighbours {
+    pub prev: Option<StageLink>,
+    pub next: Option<StageLink>,
+    pub place: usize,
+    pub count: usize,
+}
+
+pub fn stage_neighbours(steps: &[Step], id: &str) -> Option<Neighbours> {
+    let stages: Vec<&Stage> = steps.iter().flat_map(Step::stages).collect();
+    let index = stages.iter().position(|stage| stage.id == id)?;
+    let link = |at: Option<usize>| {
+        at.and_then(|at| stages.get(at)).map(|stage| StageLink {
+            id: stage.id.clone(),
+            name: stage_name(stage),
+        })
+    };
+    Some(Neighbours {
+        prev: link(index.checked_sub(1)),
+        next: link(Some(index + 1)),
+        place: index + 1,
+        count: stages.len(),
+    })
 }
 
 #[cfg(test)]

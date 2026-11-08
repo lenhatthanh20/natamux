@@ -34,7 +34,7 @@ pub fn is_settings_shot(shot: Shot) -> bool {
         shot,
         Shot::ProjectSettingsTabStages
             | Shot::ProjectSettingsStageSheet
-            | Shot::ProjectSettingsStageSheetAdvanced
+            | Shot::ProjectSettingsStageSheetTesting
             | Shot::ProjectSettingsAddStage
             | Shot::ProjectSettingsBranch
             | Shot::ProjectSettingsProblems
@@ -59,12 +59,12 @@ pub async fn run(handle: WindowHandle<Root>, shot: Shot, cx: &mut AsyncApp) {
             };
             let steps: Vec<Step> = editor.read(cx).steps().to_vec();
             match shot {
-                // A row or node opens its sheet: the stage sheet on Basic.
+                // A row or node opens its sheet: the prompt at the left, the column at the right.
                 Shot::ProjectSettingsStageSheet => {
                     editor.update(cx, |editor, cx| editor.select(AGENT_STAGE, cx));
                 }
-                // A stage with a problem in a command field opens on Advanced.
-                Shot::ProjectSettingsStageSheetAdvanced => {
+                // A testing stage with a problem: its run fields at the left, the alert on top.
+                Shot::ProjectSettingsStageSheetTesting => {
                     let next = add_catalog_stage(&steps, NEEDS_COMMAND, None);
                     editor.update(cx, |editor, cx| {
                         editor.edit(next, cx);

@@ -409,7 +409,7 @@ jobs:
             workspace-changes-empty workspace-changes-list workspace-changes-diff
             workspace-changes-ask workspace-changes-comments rollback image-diff workspace-history
             history-over-main tasks-progress
-            project-settings-tab-stages project-settings-stage-sheet project-settings-stage-sheet-advanced
+            project-settings-tab-stages project-settings-stage-sheet project-settings-stage-sheet-testing
             project-settings-add-stage
             project-settings-branch project-settings-problems project-settings-conflict
             details-files workspace-docs workspace-docs-edit workspace-editor
@@ -434,7 +434,7 @@ jobs:
             details-more-menu fan-out workspace-changes-empty workspace-changes-list workspace-changes-diff
             workspace-changes-ask workspace-changes-comments rollback image-diff workspace-history
             history-over-main tasks-progress
-            project-settings-tab-stages project-settings-stage-sheet project-settings-stage-sheet-advanced
+            project-settings-tab-stages project-settings-stage-sheet project-settings-stage-sheet-testing
             project-settings-add-stage
             project-settings-branch project-settings-problems project-settings-conflict
             details-files workspace-docs workspace-docs-edit workspace-editor
