@@ -65,6 +65,16 @@ pub fn popup_bounds(window_width: f32, window_height: f32) -> PopupBounds {
     }
 }
 
+/// The size in px of a sheet that fills the Settings popup (T-0313, the stage sheet): 24 px from
+/// each side of the popup, at most 960 x 640. It is centered in the window, as the popup is.
+pub fn sheet_fill_size(window_width: f32, window_height: f32) -> (f32, f32) {
+    let popup = popup_bounds(window_width, window_height);
+    (
+        960_f32.min(popup.width - 48.).max(0.),
+        640_f32.min(popup.height - 48.).max(0.),
+    )
+}
+
 /// The page drawn: a project that is gone shows Appearance.
 pub fn shown_page(page: &SettingsPage, repos: &[Repo]) -> SettingsPage {
     match page {

@@ -1,208 +1,247 @@
-//! The groups of the stage sheet (layout-b 5.3): Basic (name, approval, agent, end the agent)
-//! and Prompt on the Basic tab; Commands and files, and Options on the Advanced tab.
+//! The left pane of the stage sheet (T-0313 mockup B): the prompt at full height for a stage
+//! that takes one (a testing stage's Command over it); for a stage without a prompt (context,
+//! review, release, manual) the run fields (Command, Arguments, Check command, Finished when)
+//! in one card. Also the labelled field both panes use, and the Tab ring
+//! of the fields.
 
-use gpui::{AnyElement, ClickEvent, FocusHandle, Focusable};
-use natamux_proto::stages::schema::{Stage, Step};
+use gpui::{AnyElement, FocusHandle, Focusable, FontWeight};
+use natamux_proto::stages::schema::{Stage, StageKind, Step};
 use ui::prelude::*;
 
-use super::editor_fields::{TextField, set_text};
+use super::advanced_rules::SheetGroup;
 use super::editor_find::find_stage;
-use super::sheet_rules::{EndAgent, NOT_USED, agent_help, sheet_shows};
-use super::stage_fields_view::{Choice, LiveField, SELECT_WIDTH, change, open_choices, select};
-use super::stage_options::{approval_row, end_agent_row, option_rows, terminal_one_row};
+use super::sheet_rules::{NOT_USED, SheetShows, command_at_left, groups_shown, sheet_shows};
+use super::stage_fields_view::LiveField;
+use super::stage_options::small_help;
 use super::stage_sheet::StageSheet;
-use crate::agents::agent_choices::{agent_label, custom_agents, pick_list};
 use crate::components::form::SettingsInput;
-use crate::components::settings_card::{SeparatorInset, SettingsCard, SettingsGroup, SettingsRow};
-use crate::components::settings_controls::{SheetField, changed_mark};
 
-/// Two fields side by side, 12 px apart; a missing one leaves its half empty.
-fn two_columns(left: Option<AnyElement>, right: Option<AnyElement>) -> AnyElement {
-    let half = |field: Option<AnyElement>| div().flex_1().min_w_0().children(field);
-    h_flex()
+/// A labelled field: label 12 (the changed mark at the right end), 6 px, the control, then the
+/// 11 px help 5 px under it. Padding `pad` (y, x).
+pub(super) fn sheet_field(
+    label: &'static str,
+    mark: Option<AnyElement>,
+    control: impl IntoElement,
+    help: Option<SharedString>,
+    pad: (f32, f32),
+) -> AnyElement {
+    let (pad_y, pad_x) = pad;
+    v_flex()
+        .debug_selector(move || format!("field-{label}"))
         .w_full()
-        .items_start()
-        .gap(rems_from_px(12.0_f32))
-        .child(half(left))
-        .child(half(right))
+        .px(rems_from_px(pad_x))
+        .py(rems_from_px(pad_y))
+        .child(
+            h_flex()
+                .items_center()
+                .gap(rems_from_px(6.0_f32))
+                .mb(rems_from_px(6.0_f32))
+                .child(Label::new(label).size(LabelSize::Small))
+                .child(div().flex_1())
+                .children(mark),
+        )
+        .child(control)
+        .children(help.map(|help| div().mt(rems_from_px(5.0_f32)).child(small_help(help))))
         .into_any_element()
 }
 
-/// A row of the Commands and files card: padding 10 12, the fields at the top.
-fn field_row(child: AnyElement) -> AnyElement {
-    div()
-        .w_full()
-        .px(rems_from_px(12.0_f32))
-        .pt(rems_from_px(10.0_f32))
-        .child(child)
+/// A one-line input of the sheet, `height` px high.
+pub(super) fn line_input(field: &LiveField, height: f32) -> AnyElement {
+    SettingsInput::new(&field.editor)
+        .height(height)
         .into_any_element()
+}
+
+/// The 1 px line between two fields of a card, 12 px in from the left.
+pub(super) fn card_line(cx: &App) -> AnyElement {
+    div()
+        .h(px(1.))
+        .ml(rems_from_px(12.0_f32))
+        .bg(cx.theme().colors().border_variant)
+        .into_any_element()
+}
+
+/// The words at the right of the left pane's "Run" title.
+fn no_prompt_line(kind: StageKind) -> &'static str {
+    match kind {
+        StageKind::Manual => "No prompt: a manual stage waits for you.",
+        _ => "No prompt to edit for this kind of stage.",
+    }
+}
+
+/// A 12 px semibold muted pane title.
+pub(super) fn pane_title(text: &'static str) -> Label {
+    Label::new(text)
+        .size(LabelSize::Small)
+        .weight(FontWeight::SEMIBOLD)
+        .color(Color::Muted)
 }
 
 impl StageSheet {
-    pub(super) fn basic_groups(
+    pub(super) fn left_pane(
         &mut self,
         stage: &Stage,
         steps: &[Step],
+        alerts: Vec<AnyElement>,
         cx: &mut Context<Self>,
-    ) -> Vec<AnyElement> {
+    ) -> AnyElement {
         let shows = sheet_shows(stage, steps);
-        let mut rows = vec![
-            self.name_row(stage, cx),
-            approval_row(stage, &self.pipeline, cx),
-        ];
-        if shows.agent {
-            rows.push(self.agent_row(stage, steps));
-        }
-        match shows.end_agent {
-            EndAgent::Switch => rows.push(end_agent_row(stage, &self.pipeline, cx)),
-            EndAgent::TerminalOne => rows.push(terminal_one_row()),
-            EndAgent::Hidden => {}
-        }
-        let mut groups = vec![
-            SettingsGroup::new("Basic")
-                .child(SettingsCard::new(SeparatorInset::Text).children(rows))
-                .into_any_element(),
-        ];
-        if shows.prompt {
-            groups.push(self.render_prompt(stage, cx));
-        }
-        groups
-    }
-
-    pub(super) fn advanced_groups(
-        &mut self,
-        stage: &Stage,
-        steps: &[Step],
-        cx: &mut Context<Self>,
-    ) -> Vec<AnyElement> {
-        let rows = self.command_rows(stage, steps);
-        let mut groups = vec![
-            SettingsGroup::new("Commands and files")
-                .child(SettingsCard::new(SeparatorInset::Text).children(rows))
-                .into_any_element(),
-        ];
-        let options = option_rows(stage, &sheet_shows(stage, steps), &self.pipeline, cx);
-        if !options.is_empty() {
-            groups.push(
-                SettingsGroup::new("Options")
-                    .child(SettingsCard::new(SeparatorInset::Text).children(options))
-                    .into_any_element(),
+        let pane = v_flex()
+            .id("stage-sheet-left")
+            .flex_1()
+            .min_w_0()
+            .min_h_0()
+            .overflow_hidden()
+            .p(rems_from_px(16.0_f32))
+            .gap(rems_from_px(8.0_f32))
+            .children(
+                alerts
+                    .into_iter()
+                    .map(|alert| div().flex_none().child(alert)),
             );
-        }
-        groups
-    }
-
-    fn name_row(&self, stage: &Stage, cx: &App) -> AnyElement {
-        let (pipeline, id) = (self.pipeline.clone(), stage.id.clone());
-        let mark = changed_mark(
-            "stage-name-default",
-            stage.name.is_some(),
-            move |_, cx| {
-                change(&pipeline, cx, |steps| {
-                    set_text(steps, &id, TextField::Name, "")
-                })
-            },
-            cx,
-        );
-        SettingsRow::new("stage-name", "Name")
-            .control(mark)
-            .control(SettingsInput::new(&self.fields.name.editor).width(240.))
-            .into_any_element()
-    }
-
-    fn agent_row(&self, stage: &Stage, steps: &[Step]) -> AnyElement {
-        let picked = stage.agent.clone();
-        let text = picked
-            .as_deref()
-            .map_or_else(|| "Task's agent".to_string(), |id| agent_label(Some(id)));
-        let (pipeline, id) = (self.pipeline.clone(), stage.id.clone());
-        let button = select(SharedString::from(format!("agent-{id}")), text).on_click(
-            move |event: &ClickEvent, window, cx| {
-                let pick = |value: String, label: String| {
-                    let (pipeline, id) = (pipeline.clone(), id.clone());
-                    let checked = picked.as_deref().unwrap_or("") == value;
-                    Choice::new(label, Some(checked), move |_, cx| {
-                        change(&pipeline, cx, |steps| {
-                            set_text(steps, &id, TextField::Agent, &value)
-                        })
-                    })
-                };
-                let mut choices = vec![pick(String::new(), "Task's agent".to_owned())];
-                choices.extend(
-                    pick_list(&custom_agents())
-                        .into_iter()
-                        .map(|(value, label)| pick(value, label)),
+        let body = if shows.prompt {
+            let mut body = Vec::new();
+            if command_at_left(&shows) {
+                let area = SettingsInput::new(&self.fields.command.editor).area();
+                body.push(
+                    div()
+                        .flex_none()
+                        .debug_selector(|| "stage-command".into())
+                        .child(sheet_field("Command", None, area, None, (0., 0.)))
+                        .into_any_element(),
                 );
-                open_choices(choices, event.position(), window, cx);
-            },
-        );
-        SettingsRow::new("stage-agent", "Agent")
-            .help(agent_help(steps, &stage.id))
-            .stacked(true)
-            .control(v_flex().w(rems_from_px(SELECT_WIDTH)).child(button))
+            }
+            body.extend(self.render_prompt(stage, cx));
+            body
+        } else {
+            vec![self.run_card(stage, &shows, cx)]
+        };
+        pane.children(body).into_any_element()
+    }
+
+    /// The run fields of a stage without a prompt, in a card that fills the pane.
+    fn run_card(&self, stage: &Stage, shows: &SheetShows, cx: &mut Context<Self>) -> AnyElement {
+        let fields = &self.fields;
+        let pad = (12.0_f32, 14.0_f32);
+        let not_used = |unused: bool| unused.then(|| SharedString::from(NOT_USED));
+        let mut rows = Vec::new();
+        if shows.command {
+            let area = SettingsInput::new(&fields.command.editor).area();
+            rows.push(sheet_field(
+                "Command",
+                None,
+                area,
+                not_used(shows.command_unused),
+                pad,
+            ));
+        }
+        if shows.args {
+            let input = line_input(&fields.args, 28.);
+            rows.push(sheet_field(
+                "Arguments",
+                None,
+                input,
+                not_used(shows.args_unused),
+                pad,
+            ));
+        }
+        let check = line_input(&fields.check, 28.);
+        rows.push(sheet_field("Check command", None, check, None, pad));
+        let done = line_input(&fields.done_when, 28.);
+        rows.push(sheet_field("Finished when", None, done, None, pad));
+        let colors = cx.theme().colors();
+        let mut card = v_flex()
+            .id("stage-run-card")
+            .debug_selector(|| "stage-run-card".into())
+            .w_full()
+            .flex_1()
+            .min_h_0()
+            .overflow_y_scroll()
+            .track_scroll(&self.left_scroll)
+            .bg(colors.surface_background)
+            .border_1()
+            .border_color(colors.border_variant)
+            .rounded(rems_from_px(8.0_f32));
+        let count = rows.len();
+        for (index, row) in rows.into_iter().enumerate() {
+            card = card.child(div().flex_none().child(row));
+            if index + 1 < count {
+                card = card.child(card_line(cx));
+            }
+        }
+        let title = h_flex()
+            .h(rems_from_px(28.0_f32))
+            .flex_none()
+            .items_center()
+            .child(pane_title("Run"))
+            .child(div().flex_1())
+            .child(
+                Label::new(no_prompt_line(stage.kind))
+                    .size(LabelSize::XSmall)
+                    .color(Color::Placeholder),
+            );
+        v_flex()
+            .flex_1()
+            .min_h_0()
+            .gap(rems_from_px(8.0_f32))
+            .child(title)
+            .child(card)
             .into_any_element()
     }
 
-    /// The text fields on the open tab, in drawn order, for the Tab ring.
-    pub(super) fn field_stops(&self, advanced: bool, cx: &App) -> Vec<FocusHandle> {
-        let Some(stage) = find_stage(self.pipeline.read(cx).steps(), &self.id) else {
+    /// The text fields in drawn order, for the Tab ring: the left pane, Name, then for each open
+    /// group of the right column its fold header and its fields.
+    pub(super) fn field_stops(&self, cx: &App) -> Vec<FocusHandle> {
+        let steps = self.pipeline.read(cx).steps();
+        let Some(stage) = find_stage(steps, &self.id) else {
             return Vec::new();
         };
-        let shows = sheet_shows(stage, self.pipeline.read(cx).steps());
-        let fields = &self.fields;
-        let wanted = if advanced {
-            vec![
-                (shows.args, &fields.args),
-                (shows.command, &fields.command),
-                (true, &fields.check),
-                (shows.output, &fields.output),
-                (shows.sections, &fields.sections),
-                (true, &fields.done_when),
-            ]
-        } else {
-            vec![(true, &fields.name), (shows.prompt, &fields.prompt)]
-        };
-        wanted
-            .into_iter()
-            .filter(|(shown, _)| *shown)
-            .map(|(_, field)| field.editor.focus_handle(cx))
-            .collect()
-    }
-
-    /// [Arguments | Command], [Check command | Output file], Required sections, Finished when.
-    fn command_rows(&self, stage: &Stage, steps: &[Step]) -> Vec<AnyElement> {
         let shows = sheet_shows(stage, steps);
         let fields = &self.fields;
-        let input = |field: &LiveField| SettingsInput::new(&field.editor).into_any_element();
-        let not_used = |unused: bool| unused.then_some(NOT_USED);
-        let args = shows.args.then(|| {
-            SheetField::new("Arguments", input(&fields.args))
-                .help(not_used(shows.args_unused))
-                .into_any_element()
-        });
-        let command = shows.command.then(|| {
-            SheetField::new("Command", input(&fields.command))
-                .help(not_used(shows.command_unused))
-                .into_any_element()
-        });
-        let check = SheetField::new("Check command", input(&fields.check)).into_any_element();
-        let output = shows
-            .output
-            .then(|| SheetField::new("Output file", input(&fields.output)).into_any_element());
-        let mut rows = Vec::new();
-        if args.is_some() || command.is_some() {
-            rows.push(field_row(two_columns(args, command)));
+        let handle = |field: &LiveField| field.editor.focus_handle(cx);
+        let mut stops = Vec::new();
+        if shows.prompt {
+            if command_at_left(&shows) {
+                stops.push(handle(&fields.command));
+            }
+            stops.push(handle(&fields.prompt));
+        } else {
+            if shows.command {
+                stops.push(handle(&fields.command));
+            }
+            if shows.args {
+                stops.push(handle(&fields.args));
+            }
+            stops.extend([handle(&fields.check), handle(&fields.done_when)]);
         }
-        rows.push(field_row(two_columns(Some(check), output)));
-        if shows.sections {
-            let file = stage.output.clone().unwrap_or_default();
-            let area = SettingsInput::new(&fields.sections.editor).area();
-            let field = SheetField::new("Required sections", area)
-                .help(Some(format!("{file} must have each.")));
-            rows.push(field_row(field.into_any_element()));
+        stops.push(handle(&fields.name));
+        for group in groups_shown(&shows) {
+            stops.push(self.fold_focus[group.index()].clone());
+            if !self.open[group.index()] {
+                continue;
+            }
+            let wanted = match group {
+                SheetGroup::DoneCheck => vec![&fields.check, &fields.done_when],
+                SheetGroup::Files => {
+                    let mut list = Vec::new();
+                    if shows.args {
+                        list.push(&fields.args);
+                    }
+                    if shows.command && !command_at_left(&shows) {
+                        list.push(&fields.command);
+                    }
+                    if shows.output {
+                        list.push(&fields.output);
+                    }
+                    if shows.sections {
+                        list.push(&fields.sections);
+                    }
+                    list
+                }
+                SheetGroup::Options => Vec::new(),
+            };
+            stops.extend(wanted.into_iter().map(&handle));
         }
-        let finished = SheetField::new("Finished when", input(&fields.done_when));
-        rows.push(field_row(finished.into_any_element()));
-        rows
+        stops
     }
 }

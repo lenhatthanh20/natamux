@@ -17,6 +17,7 @@ use ui::prelude::*;
 use super::button_style::{action_button, key_hint, quiet_button};
 use super::input_rules::{DialogKey, dialog_key, ring_step};
 use super::menu::{MenuLayer, press_of};
+use crate::app::settings_rules::sheet_fill_size;
 
 pub use super::dialog_frame::DialogFrame;
 
@@ -28,6 +29,9 @@ pub enum DialogSize {
     Large,
     /// 600 px: the Add branch dialog.
     Wide,
+    /// The stage sheet (T-0313): it fills the Settings popup, `sheet_fill_size` in px, and sits
+    /// centered in the window.
+    Fill,
 }
 
 impl DialogSize {
@@ -37,6 +41,8 @@ impl DialogSize {
             DialogSize::Medium => 520.,
             DialogSize::Large => 640.,
             DialogSize::Wide => 600.,
+            // The layer sizes a Fill dialog from the window; this is its widest.
+            DialogSize::Fill => 960.,
         })
     }
 }
@@ -281,8 +287,17 @@ impl Render for DialogLayer {
         let top = self.open.len().saturating_sub(1);
         let layers = self.open.iter().enumerate().map(|(index, open)| {
             let size = open.handle.size(cx);
-            let panel = div()
-                .w(size.width())
+            let fill = (size == DialogSize::Fill)
+                .then(|| sheet_fill_size(f32::from(viewport.width), f32::from(viewport.height)));
+            let panel = match fill {
+                Some((width, height)) => div().w(px(width)).h(px(height)),
+                None => div().w(size.width()),
+            };
+            let pad_top = match fill {
+                Some((_, height)) => (viewport.height - px(height)) / 2.,
+                None => viewport.height * TOP,
+            };
+            let panel = panel
                 .max_w(viewport.width - px(32.))
                 .occlude()
                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
@@ -294,7 +309,7 @@ impl Render for DialogLayer {
                 .occlude()
                 .bg(scrim)
                 .items_center()
-                .pt(viewport.height * TOP)
+                .pt(pad_top)
                 .child(panel);
             // Only the top dialog closes on a click outside it.
             if index == top {

@@ -30,6 +30,8 @@ pub struct DialogFrame {
     body_pad_top: f32,
     body_max_h: Option<f32>,
     body_scroll: Option<ScrollHandle>,
+    fill: bool,
+    intro: Option<SharedString>,
 }
 
 impl DialogFrame {
@@ -52,6 +54,8 @@ impl DialogFrame {
             body_pad_top: 4.,
             body_max_h: None,
             body_scroll: None,
+            fill: false,
+            intro: None,
         }
     }
 
@@ -95,7 +99,7 @@ impl DialogFrame {
         self
     }
 
-    /// An item between the title and the close button (the stage sheet's Basic / Advanced).
+    /// An item between the title and the close button (the stage sheet's stepper).
     pub fn header_end(mut self, item: impl IntoElement) -> Self {
         self.header_end.push(item.into_any_element());
         self
@@ -110,6 +114,22 @@ impl DialogFrame {
     /// The body scrolls past this height.
     pub fn body_max_h(mut self, px: f32) -> Self {
         self.body_max_h = Some(px);
+        self
+    }
+
+    /// A sheet as high as its dialog (`DialogSize::Fill`, T-0313 mockup B): the body is a row
+    /// that fills the space between header and footer, without padding or scroll, so each of
+    /// its panes scrolls on its own. Header right padding 8, footer padding 0 12 0 8 with the
+    /// note at the right, next to the buttons.
+    pub fn fill(mut self) -> Self {
+        self.sheet = true;
+        self.fill = true;
+        self
+    }
+
+    /// A muted 12 px line after the title on the same row; it is cut with "…" when long.
+    pub fn intro(mut self, intro: impl Into<SharedString>) -> Self {
+        self.intro = Some(intro.into());
         self
     }
 
@@ -139,12 +159,12 @@ fn close_button(sheet: bool, on_close: ClickHandler) -> IconButton {
 
 impl DialogFrame {
     fn render_header(
-        title: SharedString,
+        (title, intro): (SharedString, Option<SharedString>),
         description: Option<SharedString>,
         lead: Option<AnyElement>,
         end: Vec<AnyElement>,
         close: IconButton,
-        sheet: bool,
+        (sheet, fill): (bool, bool),
         cx: &App,
     ) -> Div {
         let header = h_flex().items_center();
@@ -154,7 +174,7 @@ impl DialogFrame {
                 .h(rems_from_px(44.0_f32))
                 .gap(rems_from_px(10.0_f32))
                 .pl(rems_from_px(16.0_f32))
-                .pr(rems_from_px(10.0_f32))
+                .pr(rems_from_px(if fill { 8.0_f32 } else { 10.0_f32 }))
                 .border_b_1()
                 .border_color(cx.theme().colors().border_variant)
         } else {
@@ -171,18 +191,37 @@ impl DialogFrame {
         if sheet {
             title = title.truncate();
         }
+        let middle = match intro {
+            Some(intro) => h_flex()
+                .min_w_0()
+                .flex_1()
+                .gap(rems_from_px(10.0_f32))
+                .child(
+                    div()
+                        .flex_none()
+                        .max_w(rems_from_px(240.0_f32))
+                        .child(title),
+                )
+                .child(
+                    div().min_w_0().flex_1().child(
+                        Label::new(intro)
+                            .size(LabelSize::Small)
+                            .color(Color::Muted)
+                            .truncate(),
+                    ),
+                ),
+            None => v_flex()
+                .min_w_0()
+                .flex_1()
+                .gap_1()
+                .child(title)
+                .when_some(description, |this, text| {
+                    this.child(Label::new(text).color(Color::Muted))
+                }),
+        };
         header
             .children(lead)
-            .child(
-                v_flex()
-                    .min_w_0()
-                    .flex_1()
-                    .gap_1()
-                    .child(title)
-                    .when_some(description, |this, text| {
-                        this.child(Label::new(text).color(Color::Muted))
-                    }),
-            )
+            .child(middle)
             .children(end)
             .child(close)
     }
@@ -191,14 +230,20 @@ impl DialogFrame {
         start: Vec<AnyElement>,
         note: Option<SharedString>,
         buttons: Vec<AnyElement>,
-        sheet: bool,
+        (sheet, fill): (bool, bool),
         cx: &App,
     ) -> Div {
+        let (pad_left, pad_right) = if fill {
+            (8.0_f32, 12.0_f32)
+        } else {
+            (16., 16.)
+        };
         let footer = h_flex()
             .flex_none()
             .items_center()
             .gap_2()
-            .px(rems_from_px(16.0_f32))
+            .pl(rems_from_px(pad_left))
+            .pr(rems_from_px(pad_right))
             .border_t_1()
             .border_color(cx.theme().colors().border_variant);
         let footer = if sheet {
@@ -212,38 +257,55 @@ impl DialogFrame {
             LabelSize::Custom(rems_from_px(11_f32))
         };
         // The note sits left of the buttons and wraps, so a long one never pushes them out.
+        let note = note.map(|note| Label::new(note).size(note_size).color(Color::Muted));
+        let left = h_flex().min_w_0().flex_1().gap_2().children(start);
+        let left = if fill {
+            left.child(div().flex_1()).children(note)
+        } else {
+            left.children(note)
+        };
         footer
-            .child(
-                h_flex()
-                    .min_w_0()
-                    .flex_1()
-                    .gap_2()
-                    .children(start)
-                    .children(
-                        note.map(|note| Label::new(note).size(note_size).color(Color::Muted)),
-                    ),
-            )
+            .child(left)
             .child(h_flex().flex_none().gap_2().children(buttons))
     }
 }
 
 impl RenderOnce for DialogFrame {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
-        let sheet = self.sheet;
+        let (sheet, fill) = (self.sheet, self.fill);
         let close = close_button(sheet, self.on_close);
         let header = Self::render_header(
-            self.title,
+            (self.title, self.intro),
             self.description,
             self.lead,
             self.header_end,
             close,
-            sheet,
+            (sheet, fill),
             cx,
         );
         let has_footer = !self.footer.is_empty() || !self.footer_start.is_empty();
-        let footer = has_footer
-            .then(|| Self::render_footer(self.footer_start, self.note, self.footer, sheet, cx));
+        let footer = has_footer.then(|| {
+            Self::render_footer(self.footer_start, self.note, self.footer, (sheet, fill), cx)
+        });
         let editor_bg = cx.theme().colors().editor_background;
+        if fill {
+            let body = h_flex()
+                .id("dialog-body")
+                .w_full()
+                .min_h_0()
+                .flex_1()
+                .items_stretch()
+                .bg(editor_bg)
+                .children(self.body);
+            return v_flex()
+                .size_full()
+                .overflow_hidden()
+                .elevation_3(cx)
+                .rounded(px(10.))
+                .child(header)
+                .child(body)
+                .children(footer);
+        }
         let body = (!self.body.is_empty()).then(|| {
             let body = v_flex()
                 .id("dialog-body")

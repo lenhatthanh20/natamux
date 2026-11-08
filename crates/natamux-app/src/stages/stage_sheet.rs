@@ -1,30 +1,29 @@
-//! The stage sheet (layout-b 5.3): a 640 px Settings sheet that edits one stage of the draft.
-//! The header has the kind tile and Basic / Advanced; the body the groups of the tab, the footer
-//! Remove and Done. Every edit writes the draft at once, as the fields did in the details pane.
+//! The stage sheet (T-0313, mockup B "Prompt first"): a sheet that fills the Settings popup and
+//! edits one stage of the draft. The header has the kind tile, the name, the first line and the
+//! stepper to the stage before and after; the body the prompt (or the run fields) at the left and
+//! the 296 px settings column at the right; the footer Remove and Done. Every edit writes the
+//! draft at once.
 
 use gpui::{
     AnyElement, ClickEvent, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable,
-    Subscription,
+    ScrollHandle, Subscription,
 };
 use natamux_proto::projects::repo::SkillList;
 use natamux_proto::stages::capabilities::stage_name;
-use natamux_proto::stages::pipeline_rules::IssueLevel;
-use natamux_proto::stages::schema::{Stage, Step};
+use natamux_proto::stages::pipeline_rules::{IssueLevel, PipelineIssue};
 use ui::{ContextMenu, prelude::*};
 
-use super::advanced_rules::{advanced_has_issue, changed_count};
+use super::advanced_rules::{SheetGroup, group_has_issue};
 use super::editor_find::find_stage;
 use super::editor_moves::remove_stage;
 use super::list_rules::{kind_tile, kind_tile_icon};
 use super::pipeline_editor::PipelineEditor;
-use super::sheet_rules::{advanced_label, sheet_intro};
+use super::sheet_rules::sheet_intro;
 use super::stage_details_fields::StageFields;
 use super::stage_fields_view::change;
 use crate::components::button_style::{button_icon, quiet_button};
 use crate::components::confirm::Confirm;
 use crate::components::dialog::{DialogFrame, DialogLayer, DialogSize, DialogView, primary_button};
-use crate::components::segmented::Segmented;
-use crate::components::settings_card::foot_text;
 use crate::components::settings_tile::{AlertKind, SettingsAlert, SettingsTile, TileSize};
 
 pub type Skills = Option<Result<SkillList, String>>;
@@ -45,14 +44,29 @@ pub fn open(
     sheet
 }
 
+/// Which folding groups are open when a stage shows: Done check, and any group with a problem.
+fn groups_open_at_first(pipeline: &Entity<PipelineEditor>, id: &str, cx: &App) -> [bool; 3] {
+    let editor = pipeline.read(cx);
+    let issues = editor.issues_of(Some(id));
+    let stage = find_stage(editor.steps(), id);
+    SheetGroup::ALL.map(|group| {
+        group.open_at_first() || stage.is_some_and(|stage| group_has_issue(stage, &issues, group))
+    })
+}
+
 pub struct StageSheet {
     pub(super) pipeline: Entity<PipelineEditor>,
     pub(super) id: String,
     pub(super) fields: StageFields,
     pub(super) skills: Skills,
     pub(super) skill_menu: Option<(Entity<ContextMenu>, Subscription)>,
-    advanced: bool,
-    tabs_focus: FocusHandle,
+    /// Open or folded, by `SheetGroup::index`.
+    pub(super) open: [bool; 3],
+    pub(super) fold_focus: [FocusHandle; 3],
+    pub(super) prev_focus: FocusHandle,
+    pub(super) next_focus: FocusHandle,
+    pub(super) column_scroll: ScrollHandle,
+    pub(super) left_scroll: ScrollHandle,
     focus: FocusHandle,
     remove_focus: FocusHandle,
     done_focus: FocusHandle,
@@ -78,20 +92,19 @@ impl StageSheet {
             this.fields.sync(&steps, window, cx);
             cx.notify();
         });
-        // A stage with a problem in an Advanced field opens there.
-        let advanced = {
-            let editor = pipeline.read(cx);
-            find_stage(editor.steps(), id)
-                .is_some_and(|stage| advanced_has_issue(stage, &editor.issues_of(Some(id))))
-        };
+        let open = groups_open_at_first(&pipeline, id, cx);
         StageSheet {
             pipeline,
             id: id.to_owned(),
             fields,
             skills,
             skill_menu: None,
-            advanced,
-            tabs_focus: cx.focus_handle().tab_stop(true),
+            open,
+            fold_focus: [cx.focus_handle(), cx.focus_handle(), cx.focus_handle()],
+            prev_focus: cx.focus_handle(),
+            next_focus: cx.focus_handle(),
+            column_scroll: ScrollHandle::new(),
+            left_scroll: ScrollHandle::new(),
             focus: cx.focus_handle(),
             remove_focus: cx.focus_handle(),
             done_focus: cx.focus_handle(),
@@ -101,6 +114,29 @@ impl StageSheet {
 
     pub fn set_skills(&mut self, skills: Result<SkillList, String>, cx: &mut Context<Self>) {
         self.skills = Some(skills);
+        cx.notify();
+    }
+
+    /// The stepper: the sheet edits stage `id` now. Its fields are made again, since each one
+    /// reads and writes its stage by id; edits of the stage before stay in the draft.
+    pub(super) fn go_to(&mut self, id: &str, window: &mut Window, cx: &mut Context<Self>) {
+        if find_stage(self.pipeline.read(cx).steps(), id).is_none() {
+            return;
+        }
+        self.close_skills(cx);
+        self.id = id.to_owned();
+        self.fields = StageFields::new(&self.pipeline, id, window, cx);
+        self.open = groups_open_at_first(&self.pipeline, id, cx);
+        self.column_scroll = ScrollHandle::new();
+        self.left_scroll = ScrollHandle::new();
+        let name = self.fields.name.editor.focus_handle(cx);
+        window.focus(&name, cx);
+        cx.notify();
+    }
+
+    pub(super) fn toggle_group(&mut self, group: SheetGroup, cx: &mut Context<Self>) {
+        let open = &mut self.open[group.index()];
+        *open = !*open;
         cx.notify();
     }
 
@@ -119,38 +155,12 @@ impl StageSheet {
         .open_over(window, cx);
     }
 
-    /// The groups of the open tab.
-    fn groups(&mut self, stage: &Stage, steps: &[Step], cx: &mut Context<Self>) -> Vec<AnyElement> {
-        if self.advanced {
-            self.advanced_groups(stage, steps, cx)
-        } else {
-            self.basic_groups(stage, steps, cx)
-        }
-    }
-
-    fn tabs(&self, stage: &Stage, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        let this = cx.weak_entity();
-        let options = [
-            (SharedString::from("Basic"), IconName::Settings),
-            (
-                advanced_label(changed_count(stage)).into(),
-                IconName::ListTree,
-            ),
-        ];
-        let tabs = Segmented::new(
-            "stage-sheet-tabs",
-            &self.tabs_focus,
-            options,
-            usize::from(self.advanced),
-            move |index, _, cx| {
-                this.update(cx, |this, cx| {
-                    this.advanced = index == 1;
-                    cx.notify();
-                })
-                .ok();
-            },
-        );
-        div().mr(rems_from_px(4.0_f32)).child(tabs)
+    fn remove_button(&self, cx: &mut Context<Self>) -> Button {
+        quiet_button("stage-remove", "Remove")
+            .start_icon(button_icon("trash").color(Color::Error))
+            .color(Color::Error)
+            .track_focus(&self.remove_focus)
+            .on_click(cx.listener(|this, _: &ClickEvent, window, cx| this.remove_ask(window, cx)))
     }
 }
 
@@ -164,12 +174,12 @@ impl Focusable for StageSheet {
 
 impl DialogView for StageSheet {
     fn size(&self) -> DialogSize {
-        DialogSize::Large
+        DialogSize::Fill
     }
 
     fn tab_ring(&self, cx: &App) -> Vec<FocusHandle> {
-        let mut ring = vec![self.tabs_focus.clone()];
-        ring.extend(self.field_stops(self.advanced, cx));
+        let mut ring = self.stepper_stops(cx);
+        ring.extend(self.field_stops(cx));
         ring.extend([self.remove_focus.clone(), self.done_focus.clone()]);
         ring
     }
@@ -185,8 +195,22 @@ impl DialogView for StageSheet {
     }
 }
 
+/// The alerts of the stage's issues, at the top of the left pane.
+fn alerts(issues: Vec<PipelineIssue>) -> Vec<AnyElement> {
+    issues
+        .into_iter()
+        .map(|issue| {
+            let kind = match issue.level {
+                IssueLevel::Error => AlertKind::Error,
+                IssueLevel::Warning => AlertKind::Warning,
+            };
+            SettingsAlert::new(kind, issue.message).into_any_element()
+        })
+        .collect()
+}
+
 impl Render for StageSheet {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let (stage, steps, issues) = {
             let editor = self.pipeline.read(cx);
             (
@@ -198,24 +222,13 @@ impl Render for StageSheet {
         let Some(stage) = stage else {
             return div().track_focus(&self.focus).into_any_element();
         };
-        let groups = self.groups(&stage, &steps, cx);
-        let alerts = issues.into_iter().map(|issue| {
-            let kind = match issue.level {
-                IssueLevel::Error => AlertKind::Error,
-                IssueLevel::Warning => AlertKind::Warning,
-            };
-            SettingsAlert::new(kind, issue.message)
-        });
         let tile = SettingsTile::icon(
             button_icon(kind_tile_icon(stage.kind)),
             kind_tile(&stage),
             TileSize::Row,
         );
-        let remove = quiet_button("stage-remove", "Remove")
-            .start_icon(button_icon("trash").color(Color::Error))
-            .color(Color::Error)
-            .track_focus(&self.remove_focus)
-            .on_click(cx.listener(|this, _: &ClickEvent, window, cx| this.remove_ask(window, cx)));
+        let left = self.left_pane(&stage, &steps, alerts(issues), cx);
+        let column = self.right_column(&stage, &steps, window, cx);
         let done = primary_button(
             "Done",
             &self.done_focus,
@@ -226,23 +239,24 @@ impl Render for StageSheet {
             stage_name(&stage),
             cx.listener(|_, _, _, cx| cx.emit(DismissEvent)),
         )
-        .sheet()
+        .fill()
         .lead(tile)
-        .header_end(self.tabs(&stage, cx))
+        .intro(sheet_intro(&stage))
+        .header_end(self.stepper(&steps, cx))
+        .footer_start(self.remove_button(cx))
         .footer_note("Edits go to the draft. Save on the page.")
-        .footer(remove)
         .footer(done)
-        .child(
-            div()
-                .pt(rems_from_px(12.0_f32))
-                .child(foot_text(sheet_intro(&stage))),
-        )
-        .children(alerts)
-        .children(groups);
+        .child(left)
+        .child(column);
         div()
             .key_context("Dialog")
             .track_focus(&self.focus)
+            .size_full()
             .child(frame)
             .into_any_element()
     }
 }
+
+#[cfg(test)]
+#[path = "stage_sheet_tests.rs"]
+mod tests;

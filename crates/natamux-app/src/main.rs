@@ -288,7 +288,9 @@ mod stages {
     pub mod stage_picker;
     pub mod stage_rows;
     pub mod stage_sheet;
+    pub mod stage_sheet_column;
     pub mod stage_sheet_groups;
+    pub mod stage_stepper;
     pub mod stage_view_rules;
     pub mod stages_tab;
 }

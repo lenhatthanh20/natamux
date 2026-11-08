@@ -263,7 +263,7 @@ A stage that only writes a report can run in its own terminal with a new session
 
 ### End a stage's terminal
 
-Check **End the agent and close its terminal when the stage is done** in the stage settings (`"endShell": true`) to free the memory of a stage once it is done. It is off by default, and only for context, agent and testing stages outside Terminal 1.
+Turn on **End the agent when done** in the stage settings (`"endShell": true`) to free the memory of a stage once it is done. It is off by default, and only for context, agent and testing stages outside Terminal 1.
 
 - Done means the stage passed, was approved or was skipped, or sent the task back to an earlier stage. A stage that waits for your approval keeps its terminal until you approve.
 - Without the setting, Natamux does not close the stage's terminal while the task runs.
