@@ -11,6 +11,8 @@ Claude Code is the default agent. Natamux starts it with hooks for that session 
 
 Install Claude Code and log in. Follow the [Claude Code documentation](https://code.claude.com/docs). Check that `claude` runs in your terminal.
 
+If you are not logged in, the task waits and asks you to sign in in its terminal. See [The agent asks me to sign in](/docs/help/troubleshooting/#the-agent-asks-me-to-sign-in).
+
 ## What Natamux runs
 
 | | |

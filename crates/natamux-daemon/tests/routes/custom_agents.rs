@@ -4,6 +4,7 @@
 use std::os::unix::fs::PermissionsExt;
 
 use hyper::Method;
+use natamux_daemon::agents::runner::failed_mark;
 use serde_json::{Value, json};
 
 use crate::server::{TOKEN, TestDaemon, start_daemon, test_root};
@@ -17,11 +18,15 @@ fn qwen_and_other() -> Value {
     ]})
 }
 
-/// The command of a launch script, without the PATH it sets first.
+/// The command of a launch script, without the PATH it sets first and the failed mark after it.
 fn launch_line(d: &TestDaemon, id: &str) -> String {
     let script =
         std::fs::read_to_string(d.root.join(format!("data/agent-launch-{id}.sh"))).unwrap();
-    let line = script.lines().last().unwrap_or("").to_string();
+    let line = script.lines().last().unwrap_or("");
+    let line = line
+        .strip_suffix(&failed_mark())
+        .unwrap_or(line)
+        .to_string();
     match line.split_once(' ') {
         Some((first, rest)) if first.starts_with("PATH=") => rest.to_string(),
         _ => line,

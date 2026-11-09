@@ -19,7 +19,7 @@ use natamux_agents::launch::{Platform, quote_argument};
 use natamux_agents::trust::trust_paths;
 use natamux_daemon::agents::errors::AgentError;
 use natamux_daemon::agents::runner::{
-    AgentLaunch, AgentRunner, AgentRunnerOptions, OwnAgent, first_prompt,
+    AgentLaunch, AgentRunner, AgentRunnerOptions, OwnAgent, failed_mark, first_prompt,
 };
 use natamux_daemon::projects::repos::Repos;
 use natamux_daemon::shared::event_bus::EventBus;
@@ -166,8 +166,9 @@ impl Env {
         self.data_dir.join(format!("agent-launch-{task_id}.sh"))
     }
 
+    /// The script without the mark of a failed agent, which every script ends with.
     fn script_text(&self, task_id: &str) -> String {
-        std::fs::read_to_string(self.script(task_id)).unwrap()
+        without_mark(std::fs::read_to_string(self.script(task_id)).unwrap())
     }
 
     fn pty(&self, index: usize) -> FakePty {
@@ -259,8 +260,16 @@ fn dummy_runner() -> AgentRunner {
 /// What Windows types: the command between the window titles that tell its start and its end.
 fn windows_line(command: &str) -> String {
     format!(
-        "$Host.UI.RawUI.WindowTitle = 'natamux-agent'; {command}; $Host.UI.RawUI.WindowTitle = 'natamux-agent-exited'\r"
+        "$Host.UI.RawUI.WindowTitle = 'natamux-agent'; {command}; if ($LASTEXITCODE -ne 0) {{ $Host.UI.RawUI.WindowTitle = 'natamux-agent-failed' }}; $Host.UI.RawUI.WindowTitle = 'natamux-agent-exited'\r"
     )
+}
+
+fn without_mark(script: String) -> String {
+    let mark = format!("{}\n", failed_mark());
+    match script.strip_suffix(&mark) {
+        Some(command) => format!("{command}\n"),
+        None => panic!("no failed mark at the end of {script:?}"),
+    }
 }
 
 fn source_line(env: &Env, task: &Task) -> String {

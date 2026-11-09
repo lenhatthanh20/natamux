@@ -33,6 +33,14 @@ use crate::terminals::types::DEFAULT_SIZE;
 /// sequences: the first as the agent starts, the second once it has ended.
 pub const AGENT_TITLE: &str = "natamux-agent";
 pub const AGENT_EXITED_TITLE: &str = "natamux-agent-exited";
+/// Set when the agent ends with an error, on every platform, so an agent that ends right after
+/// its start (no login, a bad flag) is seen in its output.
+pub const AGENT_FAILED_TITLE: &str = "natamux-agent-failed";
+
+/// What the POSIX launch script adds after the agent's command line.
+pub fn failed_mark() -> String {
+    format!(" || printf '\\033]2;{AGENT_FAILED_TITLE}\\007'")
+}
 
 /// JS `text.replace(/\s+/g, ' ').trim()`.
 fn one_line(text: &str) -> String {
@@ -324,8 +332,9 @@ impl AgentRunner {
         if self.options.windows {
             let title = |text: &str| format!("$Host.UI.RawUI.WindowTitle = '{text}'");
             return Ok(format!(
-                "{}; {command}; {}",
+                "{}; {command}; if ($LASTEXITCODE -ne 0) {{ {} }}; {}",
                 title(AGENT_TITLE),
+                title(AGENT_FAILED_TITLE),
                 title(AGENT_EXITED_TITLE)
             ));
         }
@@ -347,7 +356,8 @@ impl AgentRunner {
             .map_or_else(String::new, |bin| {
                 format!("PATH={}:\"$PATH\" ", quote_argument(bin, platform))
             });
-        write_private(&script, &format!("{path}{command}\n")).map_err(io)?;
+        // `||` and printf, not `$?`, which fish does not have.
+        write_private(&script, &format!("{path}{command}{}\n", failed_mark())).map_err(io)?;
         Ok(format!(
             ". {}",
             quote_argument(&script.to_string_lossy(), platform)

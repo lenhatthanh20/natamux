@@ -64,6 +64,23 @@ fn runs_a_launch_script_with_the_hook_settings_and_the_first_prompt() {
     assert_eq!(payload(&event, "agent"), json!("claude-code"));
 }
 
+// sh, bash, zsh and fish all run `a || b`; fish has no `$?`.
+#[test]
+fn marks_an_agent_that_ends_with_an_error_in_its_output() {
+    let env = Env::new();
+    let task = env.task();
+    env.start(&task, "claude-code", "Only this");
+
+    let script = std::fs::read_to_string(env.script(&task.id)).unwrap();
+    assert_eq!(
+        script,
+        format!(
+            "{} || printf '\\033]2;natamux-agent-failed\\007'\n",
+            PROMPT_ONLY.trim_end()
+        )
+    );
+}
+
 #[test]
 fn does_not_show_the_settings_path_or_the_prompt_in_the_terminal() {
     let env = Env::new();
