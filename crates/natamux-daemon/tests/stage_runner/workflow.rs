@@ -148,7 +148,7 @@ fn never_asks_an_agent_other_than_claude_code_for_a_workflow() {
     let task = at_plan_review(&f, "claude-code");
     f.tasks.set_workflow(&task.id, "implement", true).unwrap();
     f.tasks
-        .record_agent_launch(&task.id, "codex", None, None, None)
+        .record_agent_launch(&task.id, "codex", None, None, None, ("1", None))
         .unwrap();
 
     approve(&f, &task.id);
@@ -238,10 +238,10 @@ fn asks_for_it_again_once_the_task_is_back_on_claude_code() {
     let task = at_plan_review(&f, "claude-code");
     f.tasks.set_workflow(&task.id, "implement", true).unwrap();
     f.tasks
-        .record_agent_launch(&task.id, "codex", None, None, None)
+        .record_agent_launch(&task.id, "codex", None, None, None, ("1", None))
         .unwrap();
     f.tasks
-        .record_agent_launch(&task.id, "claude-code", None, None, None)
+        .record_agent_launch(&task.id, "claude-code", None, None, None, ("1", None))
         .unwrap();
 
     approve(&f, &task.id);

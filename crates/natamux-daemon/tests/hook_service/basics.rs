@@ -501,7 +501,13 @@ fn an_ask_behind_a_permission_prompt_still_waits_for_the_answer() {
     step(&service, &task.id, "UserPromptSubmit");
     step(&service, &task.id, "PermissionRequest");
 
-    service.waits_for_answer(&task.id, None);
+    fx.apply(
+        &task.id,
+        json!({
+            "source": "agent", "type": "agent.asked",
+            "payload": { "question": "Which branch?" },
+        }),
+    );
 
     assert!(step(&service, &task.id, "Stop").applied.is_empty());
     assert_eq!(fx.state(&task.id), TaskState::NeedsInput);

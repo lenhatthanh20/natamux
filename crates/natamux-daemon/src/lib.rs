@@ -10,6 +10,7 @@ pub mod agents {
     mod hook_activity;
     pub mod hook_service;
     mod hook_usage;
+    mod hook_waits;
     pub mod idle_pause;
     mod launch_text;
     pub mod runner;

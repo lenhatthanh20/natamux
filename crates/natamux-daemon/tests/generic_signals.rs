@@ -9,6 +9,7 @@ use std::sync::atomic::{AtomicI64, AtomicU32, Ordering};
 
 use natamux_core::js::parse_iso_millis;
 use natamux_daemon::agents::generic_signals::GenericSignals;
+use natamux_daemon::agents::hook_service::{HookOptions, HookService, NoStages};
 use natamux_daemon::agents::runner::AgentLaunch;
 use natamux_daemon::shared::event_bus::EventBus;
 use natamux_daemon::shared::jobs::Clock;
@@ -112,6 +113,21 @@ impl Fixture {
     fn task(&self, id: &str) -> Task {
         self.tasks.get_task(id).unwrap()
     }
+
+    fn hooks(&self) -> HookService {
+        HookService::new(
+            self.tasks.clone(),
+            Arc::new(NoStages),
+            HookOptions {
+                bus: None,
+                workspace_changed: None,
+                session_seen: None,
+                signal_seen: None,
+                usage_seen: None,
+                home: self.dir.0.join("home"),
+            },
+        )
+    }
 }
 
 #[test]
@@ -169,6 +185,31 @@ fn moves_a_running_task_to_needs_input_when_an_agent_without_hooks_rings_the_bel
     let last = f.tasks.list_events(&task.id).unwrap().pop().unwrap().event;
     assert_eq!(last.kind, "agent.asked");
     assert_eq!(last.payload["reason"], "terminal bell");
+}
+
+#[test]
+fn a_cursor_or_copilot_tool_completion_ends_a_bell_wait_without_a_new_prompt() {
+    for (agent, raw) in [
+        (
+            "cursor",
+            json!({ "hook_event_name": "afterShellExecution" }),
+        ),
+        ("copilot", json!({ "natamux_event": "postToolUse" })),
+    ] {
+        let f = Fixture::new();
+        let task = f.running_task(Some(agent));
+        let hooks = f.hooks();
+        f.output(&task.id, "1", "Allow this command? \x07");
+        assert_eq!(f.task(&task.id).state, TaskState::NeedsInput);
+        f.output(&task.id, "1", "a redraw is not an answer");
+        assert_eq!(f.task(&task.id).state, TaskState::NeedsInput);
+        let result = hooks.handle(agent, &raw, Some(&task.id), None).unwrap();
+        assert_eq!(result.applied, ["agent.resumed"], "{agent}");
+        assert_eq!(f.task(&task.id).state, TaskState::Running);
+        let last = f.tasks.list_events(&task.id).unwrap().pop().unwrap();
+        assert!(last.accepted);
+        assert_eq!(last.event.payload["stage"], "implement");
+    }
 }
 
 #[test]
@@ -607,9 +648,25 @@ fn reads_a_custom_agent_as_its_base_and_names_settings_when_its_command_is_missi
     };
     set_custom_agents(vec![
         agent("claude-qwen", "claude-code", "cq"),
+        agent("custom-cursor", "cursor", "cursor-agent"),
         agent("my-agent", "other", "my-agent"),
     ]);
     let f = Fixture::new();
+
+    let cursor = f.running_task(Some("custom-cursor"));
+    f.output(&cursor.id, "1", "\x07");
+    assert_eq!(f.task(&cursor.id).state, TaskState::NeedsInput);
+    let result = f
+        .hooks()
+        .handle(
+            "cursor",
+            &json!({ "hook_event_name": "afterShellExecution" }),
+            Some(&cursor.id),
+            None,
+        )
+        .unwrap();
+    assert_eq!(result.applied, ["agent.resumed"]);
+    assert_eq!(f.task(&cursor.id).state, TaskState::Running);
 
     // A Claude Code variant has Claude Code's hooks: the bell is not a question.
     let qwen = f.running_task(Some("claude-qwen"));
