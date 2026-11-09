@@ -6,6 +6,15 @@ use serde_json::{Map, json};
 
 use super::*;
 
+#[test]
+fn bundled_sqlite_includes_the_wal_page_size_fix() {
+    assert!(
+        rusqlite::version_number() >= 3_054_000,
+        "RUSTSEC-2026-0459 requires SQLite 3.54.0 or later, linked {}",
+        rusqlite::version()
+    );
+}
+
 fn make_task(id: &str) -> Task {
     Task {
         id: id.into(),

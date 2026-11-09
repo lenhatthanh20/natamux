@@ -127,7 +127,7 @@ dependencies = [
 [[package]]
 name = "agent_settings"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "collections",
@@ -350,7 +350,7 @@ dependencies = [
 [[package]]
 name = "askpass"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "futures",
@@ -368,7 +368,7 @@ dependencies = [
 [[package]]
 name = "assets"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "gpui",
@@ -918,7 +918,7 @@ dependencies = [
 [[package]]
 name = "breadcrumbs"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "gpui",
  "ui",
@@ -938,7 +938,7 @@ dependencies = [
 [[package]]
 name = "buffer_diff"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "clock",
  "gpui",
@@ -1177,7 +1177,7 @@ dependencies = [
 [[package]]
 name = "client"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "async-channel 2.5.0",
@@ -1234,7 +1234,7 @@ dependencies = [
 [[package]]
 name = "clock"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "serde",
  "smallvec",
@@ -1243,7 +1243,7 @@ dependencies = [
 [[package]]
 name = "cloud_api_client"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "async-lock",
@@ -1265,7 +1265,7 @@ dependencies = [
 [[package]]
 name = "cloud_api_types"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1280,7 +1280,7 @@ dependencies = [
 [[package]]
 name = "cloud_llm_client"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "serde",
@@ -1381,7 +1381,7 @@ dependencies = [
 [[package]]
 name = "collections"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "gpui_util",
  "indexmap",
@@ -1417,7 +1417,7 @@ dependencies = [
 [[package]]
 name = "component"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "collections",
  "gpui",
@@ -1514,7 +1514,7 @@ dependencies = [
 [[package]]
 name = "context_server"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "async-channel 2.5.0",
@@ -1904,7 +1904,7 @@ dependencies = [
 [[package]]
 name = "credentials_provider"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "gpui",
@@ -2002,7 +2002,7 @@ checksum = "f27ae1dd37df86211c42e150270f82743308803d90a6f6e6651cd730d5e1732f"
 [[package]]
 name = "dap"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -2063,7 +2063,7 @@ checksum = "be1e0bca6c3637f992fc1cc7cbc52a78c1ef6db076dbf1059c4323d6a2048376"
 [[package]]
 name = "db"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "gpui",
@@ -2130,7 +2130,7 @@ dependencies = [
 [[package]]
 name = "derive_refineable"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2176,7 +2176,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2329,7 +2329,7 @@ checksum = "3b31a881d38439026e3d5dd938ab20328d36e23caca8fd5981c42e4b677f5842"
 [[package]]
 name = "edit_prediction_types"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "client",
  "gpui",
@@ -2341,7 +2341,7 @@ dependencies = [
 [[package]]
 name = "editor"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "aho-corasick",
  "anyhow",
@@ -2497,7 +2497,7 @@ dependencies = [
 [[package]]
 name = "env_var"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "gpui_shared_string",
 ]
@@ -2546,7 +2546,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2613,7 +2613,7 @@ dependencies = [
 [[package]]
 name = "extension"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2717,7 +2717,7 @@ checksum = "b97b65636e5b9ef369943878ac74335ba1c55c1cb6adbf1e2c293c624248d693"
 [[package]]
 name = "feature_flags"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "collections",
  "feature_flags_macros",
@@ -2732,7 +2732,7 @@ dependencies = [
 [[package]]
 name = "feature_flags_macros"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2742,7 +2742,7 @@ dependencies = [
 [[package]]
 name = "file_content"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "chardetng",
@@ -2753,7 +2753,7 @@ dependencies = [
 [[package]]
 name = "file_icons"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "gpui",
  "settings_content",
@@ -2957,7 +2957,7 @@ dependencies = [
 [[package]]
 name = "fs"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "async-channel 2.5.0",
@@ -3117,7 +3117,7 @@ dependencies = [
 [[package]]
 name = "fuzzy"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "gpui",
  "gpui_util",
@@ -3128,7 +3128,7 @@ dependencies = [
 [[package]]
 name = "fuzzy_nucleo"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "fuzzy",
  "gpui",
@@ -3229,7 +3229,7 @@ dependencies = [
 [[package]]
 name = "git"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "askpass",
@@ -3264,7 +3264,7 @@ dependencies = [
 [[package]]
 name = "git_hosting_providers"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3376,7 +3376,7 @@ dependencies = [
 [[package]]
 name = "gpui"
 version = "0.2.2"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "accesskit",
  "anyhow",
@@ -3443,7 +3443,7 @@ dependencies = [
 [[package]]
 name = "gpui_apple"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "async-task",
@@ -3472,7 +3472,7 @@ dependencies = [
 [[package]]
 name = "gpui_linux"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "accesskit",
  "accesskit_unix",
@@ -3516,7 +3516,7 @@ dependencies = [
 [[package]]
 name = "gpui_macos"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "accesskit",
  "accesskit_macos",
@@ -3558,7 +3558,7 @@ dependencies = [
 [[package]]
 name = "gpui_macros"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
@@ -3569,7 +3569,7 @@ dependencies = [
 [[package]]
 name = "gpui_platform"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "console_error_panic_hook",
@@ -3583,7 +3583,7 @@ dependencies = [
 [[package]]
 name = "gpui_shared_string"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "schemars",
  "serde",
@@ -3593,7 +3593,7 @@ dependencies = [
 [[package]]
 name = "gpui_tokio"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "gpui",
@@ -3604,7 +3604,7 @@ dependencies = [
 [[package]]
 name = "gpui_util"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "log",
@@ -3614,7 +3614,7 @@ dependencies = [
 [[package]]
 name = "gpui_web"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "console_error_panic_hook",
@@ -3642,7 +3642,7 @@ dependencies = [
 [[package]]
 name = "gpui_wgpu"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -3668,7 +3668,7 @@ dependencies = [
 [[package]]
 name = "gpui_windows"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "accesskit",
  "accesskit_windows",
@@ -3697,7 +3697,7 @@ dependencies = [
 [[package]]
 name = "grammars"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "language_core",
@@ -3772,9 +3772,6 @@ name = "hashbrown"
 version = "0.14.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e5274423e17b7c9fc20b6e7e208532f9b19825d82dfd615708b70edd83df41f1"
-dependencies = [
- "ahash",
-]
 
 [[package]]
 name = "hashbrown"
@@ -3807,15 +3804,6 @@ dependencies = [
  "foldhash 0.2.0",
  "serde",
  "serde_core",
-]
-
-[[package]]
-name = "hashlink"
-version = "0.9.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ba4ff7128dee98c7dc9794b6a411377e1404dba1c97deb8d1a55297bd25d8af"
-dependencies = [
- "hashbrown 0.14.5",
 ]
 
 [[package]]
@@ -3954,7 +3942,7 @@ dependencies = [
 [[package]]
 name = "http_client"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -3978,7 +3966,7 @@ dependencies = [
 [[package]]
 name = "http_client_tls"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "log",
  "rustls",
@@ -4061,7 +4049,7 @@ dependencies = [
 [[package]]
 name = "icons"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "serde",
  "strum",
@@ -4618,7 +4606,7 @@ checksum = "884f3e747ed2dcee867cda1b0c31a048f9e20de2d916a248949319921a2e666e"
 [[package]]
 name = "language"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4668,7 +4656,7 @@ dependencies = [
 [[package]]
 name = "language_core"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "bitflags 2.13.1",
@@ -4692,7 +4680,7 @@ dependencies = [
 [[package]]
 name = "language_detection"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "betlang",
  "gpui",
@@ -4702,7 +4690,7 @@ dependencies = [
 [[package]]
 name = "language_model"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "base64",
@@ -4725,7 +4713,7 @@ dependencies = [
 [[package]]
 name = "language_model_core"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "async-lock",
@@ -4853,9 +4841,9 @@ dependencies = [
 
 [[package]]
 name = "libsqlite3-sys"
-version = "0.30.1"
+version = "0.39.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2e99fb7a497b1e3339bc746195567ed8d3e24945ecd636e3619d20b9de9e9149"
+checksum = "14a5f01b87b92705d07b433c06f96cbc764637d81a0bffb5734ce17cf0f9a2b3"
 dependencies = [
  "cc",
  "pkg-config",
@@ -5032,7 +5020,7 @@ dependencies = [
 [[package]]
 name = "lsp"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "async-channel 2.5.0",
@@ -5159,7 +5147,7 @@ dependencies = [
 [[package]]
 name = "markdown"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "base64",
@@ -5261,7 +5249,7 @@ dependencies = [
 [[package]]
 name = "menu"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "gpui",
 ]
@@ -5269,7 +5257,7 @@ dependencies = [
 [[package]]
 name = "mermaid_render"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "gpui",
@@ -5386,7 +5374,7 @@ dependencies = [
 [[package]]
 name = "migrator"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "collections",
@@ -5441,7 +5429,7 @@ version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "536bfad37a309d62069485248eeaba1e8d9853aaf951caaeaed0585a95346f08"
 dependencies = [
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -5457,7 +5445,7 @@ dependencies = [
 [[package]]
 name = "multi_buffer"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "buffer_diff",
@@ -5741,7 +5729,7 @@ dependencies = [
 [[package]]
 name = "net"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "async-io",
  "smol",
@@ -5778,7 +5766,7 @@ dependencies = [
 [[package]]
 name = "node_runtime"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -5881,7 +5869,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -6040,7 +6028,7 @@ dependencies = [
 [[package]]
 name = "oauth_callback_server"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "futures",
@@ -6515,7 +6503,7 @@ checksum = "35fb2e5f958ec131621fdd531e9fc186ed768cbe395337403ae56c17a74c68ec"
 [[package]]
 name = "path"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "dunce",
@@ -6551,7 +6539,7 @@ dependencies = [
 [[package]]
 name = "paths"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "const_format",
  "dirs",
@@ -6869,7 +6857,7 @@ checksum = "e8cf8e6a8aa66ce33f63993ffc4ea4271eb5b0530a9002db8455ea6050c77bfa"
 [[package]]
 name = "prettier"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "collections",
@@ -6958,7 +6946,7 @@ dependencies = [
 [[package]]
 name = "project"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "aho-corasick",
  "anyhow",
@@ -7130,7 +7118,7 @@ dependencies = [
 [[package]]
 name = "proto"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "prost",
@@ -7169,7 +7157,7 @@ dependencies = [
 [[package]]
 name = "proxy_handshake"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "base64",
  "httparse",
@@ -7546,7 +7534,7 @@ dependencies = [
 [[package]]
 name = "refineable"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "derive_refineable",
 ]
@@ -7598,7 +7586,7 @@ checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 [[package]]
 name = "release_channel"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "gpui",
  "semver",
@@ -7607,7 +7595,7 @@ dependencies = [
 [[package]]
 name = "remote"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "askpass",
@@ -7690,7 +7678,7 @@ checksum = "3582f63211428f83597b51b2ddb88e2a91a9d52d12831f9d08f5e624e8977422"
 [[package]]
 name = "rope"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "gpui_util",
  "heapless",
@@ -7732,7 +7720,7 @@ dependencies = [
 [[package]]
 name = "rpc"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "async-tungstenite",
@@ -7775,14 +7763,14 @@ dependencies = [
 
 [[package]]
 name = "rusqlite"
-version = "0.32.1"
+version = "0.41.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7753b721174eb8ff87a9a0e799e2d7bc3749323e773db92e0984debb00019d6e"
+checksum = "da9bba6f3506135e120a6586df05be18b48d18896600646a4bec8f993d91a594"
 dependencies = [
  "bitflags 2.13.1",
  "fallible-iterator",
  "fallible-streaming-iterator",
- "hashlink 0.9.1",
+ "hashlink",
  "libsqlite3-sys",
  "smallvec",
 ]
@@ -7860,7 +7848,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -7929,7 +7917,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -8019,7 +8007,7 @@ dependencies = [
 [[package]]
 name = "scheduler"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "async-task",
  "backtrace",
@@ -8314,7 +8302,7 @@ dependencies = [
 [[package]]
 name = "session"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "db",
  "gpui",
@@ -8326,7 +8314,7 @@ dependencies = [
 [[package]]
 name = "settings"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "collections",
@@ -8353,7 +8341,7 @@ dependencies = [
 [[package]]
 name = "settings_content"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "collections",
@@ -8375,7 +8363,7 @@ dependencies = [
 [[package]]
 name = "settings_json"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "serde",
@@ -8389,7 +8377,7 @@ dependencies = [
 [[package]]
 name = "settings_macros"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "quote",
  "syn 2.0.117",
@@ -8586,7 +8574,7 @@ dependencies = [
 [[package]]
 name = "snippet"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "smallvec",
@@ -8595,7 +8583,7 @@ dependencies = [
 [[package]]
 name = "snippet_provider"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "collections",
@@ -8620,7 +8608,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3d1e2c7f27f8d4cb10542a02c49005dbd6e93095799d6f3be745fae9f8fedd4"
 dependencies = [
  "libc",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -8663,7 +8651,7 @@ dependencies = [
 [[package]]
 name = "sqlez"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "collections",
@@ -8681,7 +8669,7 @@ dependencies = [
 [[package]]
 name = "sqlez_macros"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "sqlez",
  "sqlformat",
@@ -8714,7 +8702,7 @@ dependencies = [
  "cfg-if",
  "libc",
  "psm",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -8820,7 +8808,7 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 [[package]]
 name = "sum_tree"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "heapless",
  "rayon",
@@ -8969,7 +8957,7 @@ dependencies = [
 [[package]]
 name = "syntax_theme"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "gpui",
 ]
@@ -9044,7 +9032,7 @@ checksum = "adb6935a6f5c20170eeceb1a3835a49e12e19d792f6dd344ccc76a985ca5a6ca"
 [[package]]
 name = "task"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "collections",
@@ -9078,7 +9066,7 @@ dependencies = [
 [[package]]
 name = "telemetry"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "futures",
  "serde_json",
@@ -9088,7 +9076,7 @@ dependencies = [
 [[package]]
 name = "telemetry_events"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "semver",
  "serde",
@@ -9105,7 +9093,7 @@ dependencies = [
  "getrandom 0.4.1",
  "once_cell",
  "rustix",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -9129,7 +9117,7 @@ dependencies = [
 [[package]]
 name = "terminal"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "alacritty_terminal",
  "anyhow",
@@ -9163,7 +9151,7 @@ dependencies = [
 [[package]]
 name = "terminal_view"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -9199,7 +9187,7 @@ dependencies = [
 [[package]]
 name = "text"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "clock",
@@ -9217,7 +9205,7 @@ dependencies = [
 [[package]]
 name = "theme"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "collections",
@@ -9238,7 +9226,7 @@ dependencies = [
 [[package]]
 name = "theme_settings"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "collections",
@@ -9874,7 +9862,7 @@ dependencies = [
 [[package]]
 name = "ui"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "chrono",
  "component",
@@ -9898,7 +9886,7 @@ dependencies = [
 [[package]]
 name = "ui_input"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "component",
  "gpui",
@@ -9908,7 +9896,7 @@ dependencies = [
 [[package]]
 name = "ui_macros"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "quote",
  "syn 2.0.117",
@@ -10091,7 +10079,7 @@ checksum = "b6c140620e7ffbb22c2dee59cafe6084a59b5ffc27a8859a5f0d494b5d52b6be"
 [[package]]
 name = "util"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "async-fs",
@@ -10202,7 +10190,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 [[package]]
 name = "vim_mode_setting"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "gpui",
  "settings",
@@ -10628,7 +10616,7 @@ dependencies = [
 [[package]]
 name = "watch"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "arc-swap",
  "futures",
@@ -11013,7 +11001,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -11650,7 +11638,7 @@ dependencies = [
 [[package]]
 name = "workspace"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "agent_settings",
  "any_vec",
@@ -11703,7 +11691,7 @@ dependencies = [
 [[package]]
 name = "worktree"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "async-channel 2.5.0",
@@ -11884,7 +11872,7 @@ checksum = "57e5b818a27a4cd30884ea380857a5e56f7ec3ba24a3990a3cc0b95af3238e18"
 dependencies = [
  "arraydeque",
  "encoding_rs",
- "hashlink 0.12.2",
+ "hashlink",
 ]
 
 [[package]]
@@ -12118,7 +12106,7 @@ dependencies = [
 [[package]]
 name = "zed_actions"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "gpui",
  "schemars",
@@ -12129,7 +12117,7 @@ dependencies = [
 [[package]]
 name = "zed_credentials_provider"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "credentials_provider",
@@ -12143,7 +12131,7 @@ dependencies = [
 [[package]]
 name = "zed_env_vars"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "env_var",
 ]
@@ -12253,7 +12241,7 @@ dependencies = [
 [[package]]
 name = "zeta_prompt"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "imara-diff",
@@ -12264,7 +12252,7 @@ dependencies = [
 [[package]]
 name = "zlog"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "anyhow",
  "chrono",
@@ -12309,7 +12297,7 @@ dependencies = [
 [[package]]
 name = "ztracing"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 dependencies = [
  "tracing",
  "ztracing_macro",
@@ -12318,7 +12306,7 @@ dependencies = [
 [[package]]
 name = "ztracing_macro"
 version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=69c81337967403672ef5891e20851299cdba6c5b#69c81337967403672ef5891e20851299cdba6c5b"
+source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
 
 [[package]]
 name = "zune-core"
