@@ -245,6 +245,10 @@ impl AgentRunner {
             Some(&program),
             own.stage.as_deref(),
             restored_in,
+            (
+                shell,
+                session.filter(|session| !session.is_empty() && *session != LAST_SESSION),
+            ),
         )?)
     }
 

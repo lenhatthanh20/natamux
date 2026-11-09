@@ -308,7 +308,7 @@ fn refuses_a_workflow_for_an_agent_other_than_claude_code_but_turns_it_off() {
     );
     s.service.set_workflow(&task.id, "implement", true).unwrap();
     s.service
-        .record_agent_launch(&task.id, "codex", None, None, None)
+        .record_agent_launch(&task.id, "codex", None, None, None, ("1", None))
         .unwrap();
 
     assert!(err_text(s.service.set_workflow(&task.id, "plan", true)).contains("Only Claude Code"));

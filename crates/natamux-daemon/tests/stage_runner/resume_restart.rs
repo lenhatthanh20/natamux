@@ -43,7 +43,14 @@ fn keeps_the_claude_code_session_of_a_stage_after_an_agent_came_back_in_another_
     let f = Fixture::new();
     let task = waiting_after_restart(&f, json!({ "sessionId": "s-1" }), "claude-code");
     f.tasks
-        .record_agent_launch(&task.id, "copilot", Some("copilot"), None, Some("6"))
+        .record_agent_launch(
+            &task.id,
+            "copilot",
+            Some("copilot"),
+            None,
+            Some("6"),
+            ("6", None),
+        )
         .unwrap();
 
     resume(&f, &task.id, json!({}));
@@ -208,7 +215,14 @@ fn asks_the_agent_to_go_on_after_a_restart_started_it_again() {
     let payload = json!({ "stage": "spec", "sessionId": "s-1" });
     ev(&f, &task.id, "agent", "agent.finished", payload);
     f.tasks
-        .record_agent_launch(&task.id, "claude-code", Some("claude"), None, None)
+        .record_agent_launch(
+            &task.id,
+            "claude-code",
+            Some("claude"),
+            None,
+            None,
+            ("1", None),
+        )
         .unwrap();
     let pty = last_pty(&f);
     pty.set_program(Some("node"));

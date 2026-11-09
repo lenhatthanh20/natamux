@@ -20,6 +20,20 @@ Four signals are enough to drive every state in the task state machine:
 | The agent ended its turn while the task waits on a hook (a permission, an options dialog) | idle: the wait ended with the turn, as after a denied permission |
 | The agent failed | failed |
 
+Permission and terminal-bell waits return to running after a tool completion hook, or to idle when the turn ends after a denied permission. A before-tool hook can fire before the permission card, so it does not clear a wait. An explicit question (`natamux ask` or a turn that ends on a question) stays waiting until a new prompt arrives, even if other tools run. The daemon reads the wait source from the stage's event log, so it also works after a restart. Unknown waits stay conservative. Each parallel stage keeps its own wait.
+
+The regression cases in `crates/natamux-daemon/tests/hook_service/resume_waits.rs` cover these adapter events with synthetic payloads:
+
+| Agent | Submitted answer | Permission or dialog wait | Tool completion |
+|---|---|---|---|
+| Claude Code | `UserPromptSubmit` | `PermissionRequest` | `PostToolUse` |
+| Codex | `UserPromptSubmit` | `PermissionRequest` | `PostToolUse` |
+| Gemini CLI | `BeforeAgent` | `Notification` (`ToolPermission`) | `AfterTool` |
+| Copilot CLI | `userPromptSubmitted` | `notification` (`permission_prompt`), or terminal bell | `postToolUse` |
+| Cursor CLI | `beforeSubmitPrompt` | Terminal bell; the CLI has no reliable permission-wait hook | `afterShellExecution` |
+
+These cases cover submitted answers, tool completion, denied permissions, duplicate hooks, restart recovery and explicit questions. They do not replace checks in live agent sessions. A custom agent uses its base agent's hooks. An agent without hooks still needs a prompt event or an explicit state change; output alone does not prove that a question was answered.
+
 ## How each agent can send them
 
 | Agent | Prompt sent | Waits for the user | Turn ended | Failed | Handler types | Label |
@@ -194,5 +208,5 @@ Each adapter needs a real session to check it. Until then it is tested only agai
 Any agent started in a task's first terminal is followed by its output (`generic-signals.ts`):
 
 - Output is a sign of life. A running task whose terminal stays silent for 10 minutes shows as quiet.
-- The terminal bell (`\x07`) moves a running task to needs input, unless the task's agent has hooks (Claude Code).
+- The terminal bell (`\x07`) moves a running task to needs input. Claude Code, Codex and Gemini use their wait hooks instead; Cursor and Copilot still use the bell as a fallback.
 - `natamux ask` and `natamux done` let such an agent report the rest (see the plugin skill in `plugins/natamux`).

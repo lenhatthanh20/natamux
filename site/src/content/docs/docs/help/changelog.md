@@ -9,6 +9,7 @@ All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/r
 
 ## v1.0.23 (2026-11-08)
 
+- Fix: Cursor and Copilot stages could keep showing needs input after a permission was answered. Tool completion now clears a permission or bell wait, including after a restart. Explicit questions still wait for an answer.
 - In the Changes diff, a revert arrow puts the last commit's lines of a change back into the file, with Undo.
 - The editor and the diff get a find bar, Go to line, Go to symbol, whitespace toggles and more editor keys; **Clean on save** is in Settings → General → Editor.
 - The stage sheet puts the prompt first, with settings in folding groups and arrows to the stage before or after.

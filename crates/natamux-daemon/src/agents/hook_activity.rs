@@ -6,6 +6,29 @@ use natamux_agents::hooks::{NormalizedHook, Signal};
 use natamux_core::js::iso_now;
 use serde_json::{Map, Value, json};
 
+/// `/^(pre|before)/i`
+pub(super) fn is_before_tool(name: &str) -> bool {
+    let starts = |word: &str| {
+        name.get(..word.len())
+            .is_some_and(|start| start.eq_ignore_ascii_case(word))
+    };
+    starts("pre") || starts("before")
+}
+
+/// Only a tool that ran, or the end of a turn, can have changed files. A tool that is about to run
+/// (PreToolUse, beforeShellExecution, BeforeTool) changed nothing yet.
+pub(super) fn changes_files(hook: &NormalizedHook) -> bool {
+    match hook.signal {
+        Signal::Activity => hook
+            .details
+            .get("hook")
+            .and_then(Value::as_str)
+            .is_none_or(|name| !is_before_tool(name)),
+        Signal::TurnEnded | Signal::TurnPaused | Signal::TurnAsked | Signal::Failed => true,
+        Signal::Prompt | Signal::Asking => false,
+    }
+}
+
 /// Tasks in the order they got their first line, as a JS `Map` keeps them.
 #[derive(Default)]
 pub struct Activities {

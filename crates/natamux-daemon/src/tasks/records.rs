@@ -254,10 +254,14 @@ impl Store {
         program: Option<&str>,
         stage: Option<&str>,
         restored_in: Option<&str>,
+        (terminal, session): (&str, Option<&str>),
     ) -> TaskResult<Task> {
         let task = self.get_task(task_id)?;
-        let mut payload = json!({ "agent": agent });
+        let mut payload = json!({ "agent": agent, "terminal": terminal });
         if let Some(map) = payload.as_object_mut() {
+            if let Some(session) = session {
+                map.insert("resumeSessionId".into(), json!(session));
+            }
             if let Some(program) = program {
                 map.insert("program".into(), json!(program));
             }

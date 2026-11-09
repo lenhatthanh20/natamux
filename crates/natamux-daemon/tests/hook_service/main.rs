@@ -12,6 +12,7 @@ mod background_work;
 mod basics;
 mod failed_group;
 mod pushed;
+mod resume_waits;
 mod sign_of_life;
 mod usage_stage;
 mod workspace_removed;

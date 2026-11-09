@@ -208,8 +208,11 @@ impl TaskService {
         program: Option<&str>,
         stage: Option<&str>,
         restored_in: Option<&str>,
+        launch: (&str, Option<&str>),
     ) -> TaskResult<Task> {
-        self.with(|store| store.record_agent_launch(task_id, agent, program, stage, restored_in))
+        self.with(|store| {
+            store.record_agent_launch(task_id, agent, program, stage, restored_in, launch)
+        })
     }
 
     pub fn record_pull_request_status(
