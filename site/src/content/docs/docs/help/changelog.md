@@ -9,6 +9,7 @@ All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/r
 
 ## v1.0.23 (2026-11-08)
 
+- The new **Use cases** guide has practical workflows for simple projects, solo work, teams and larger organizations, with links from the homepage.
 - Fix: bundled SQLite could expose memory when a database and its WAL file had different page sizes. Update SQLite to 3.54.1.
 - Fix: Cursor and Copilot stages could keep showing needs input after a permission was answered. Tool completion now clears a permission or bell wait, including after a restart. Explicit questions still wait for an answer.
 - In the Changes diff, a revert arrow puts the last commit's lines of a change back into the file, with Undo.

@@ -52,6 +52,12 @@ const buildingBlocks = [
   { number: '05', title: 'CI as a stage', text: 'Run checks on a snapshot and send a failed log to the agent.', link: 'concepts/stages/#check-a-stage-on-ci' },
   { number: '06', title: 'An agent per stage', text: 'Set the agent and its model for each step in the file.', link: 'guides/mix-agents/' },
 ]
+const useCases = [
+  { number: '01', title: 'Simple projects', text: 'Make a small change, update the docs or build a personal website.', anchor: 'first-small-change' },
+  { number: '02', title: 'Solo work', text: 'Fix a bug, compare agent attempts or ask another agent to review.', anchor: 'independent-review' },
+  { number: '03', title: 'Teams', text: 'Plan tests beside implementation, route tasks and retry failed CI.', anchor: 'parallel-test-planning' },
+  { number: '04', title: 'Larger organizations', text: 'Share project settings and keep human decisions at clear gates.', anchor: 'shared-settings-and-human-approvals' },
+]
 const agents = [
   { name: 'Claude Code', command: 'claude', link: 'agents/claude-code/' },
   { name: 'Codex', command: 'codex', link: 'agents/codex/' },
@@ -110,6 +116,7 @@ const agents = [
             <div class="ctas">
               <a class="btn primary big" href="#download" data-hero-download><span data-hero-label>Install on macOS</span><span aria-hidden="true">↗</span></a>
               <a class="btn big" href={docs}>Read the docs</a>
+              <a class="btn big" href={`${docs}guides/use-cases/`}>Use cases</a>
             </div>
             <p class="fine"><span data-hero-note data-version={version}>Version {version} for Apple silicon.</span> <a href="#download">Other systems</a>.</p>
             <p class="hero-note">Open source · Local first · No account</p>
@@ -165,7 +172,9 @@ const agents = [
             <div class="blocks-grid">{buildingBlocks.map((block) => <a class="building-block" href={`${docs}${block.link}`}><span>{block.number}</span><div><h3>{block.title}</h3><p>{block.text}</p></div><span aria-hidden="true">↗</span></a>)}</div>
             <NativeClip name="settings" description="Project settings and the workflow stage editor in the native app" caption="Edit the workflow in Project settings and share it through .natamux.json." />
           </div>
-          <p class="more"><a href={`${docs}guides/workflows/`}>Explore solo and team workflows <span aria-hidden="true">↗</span></a></p>
+          <p class="more"><a href={`${docs}guides/use-cases/`}>Find a use case for your project <span aria-hidden="true">↗</span></a></p>
+          <div class="blocks-grid">{useCases.map((useCase) => <a class="building-block" href={`${docs}guides/use-cases/#${useCase.anchor}`}><span>{useCase.number}</span><div><h3>{useCase.title}</h3><p>{useCase.text}</p></div><span aria-hidden="true">↗</span></a>)}</div>
+          <p class="more"><a href={`${docs}guides/workflows/`}>Build a workflow step by step <span aria-hidden="true">↗</span></a></p>
         </div>
       </section>
 
