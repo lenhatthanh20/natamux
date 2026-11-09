@@ -2,7 +2,10 @@
 //! - output is a sign of life, so a running task does not look quiet while it prints;
 //! - the terminal bell, which many command line tools ring when they wait for the user, moves a
 //!   running task to needs input. Agents with hooks are left to their hooks;
-//! - a shell that cannot find the agent fails the task.
+//! - a shell that cannot find the agent fails the task;
+//! - an agent that shows its sign-in screen moves the task to needs input: it waits for the user,
+//!   and no hook runs before the login;
+//! - an agent that ends with an error right after its start, before it reported, fails the task.
 //!
 //! `on_output` runs on the terminal's output path, so it only takes a lock on a small map, checks
 //! the clock and looks for the bell. The work on the task store goes over a channel to one thread.
@@ -12,9 +15,13 @@ use std::sync::mpsc::{Sender, channel};
 use std::sync::{Mutex, PoisonError};
 
 use natamux_agents::custom::{agent_kind, custom_agent};
-use natamux_core::js::{js_trim, parse_iso_millis, utf16_len};
+use natamux_agents::sign_in::sign_in_line;
+use natamux_core::js::parse_iso_millis;
 use serde_json::{Value, json};
 
+use super::launch_text::{
+    BellScan, failed_mark_at, last_line, not_found_line, quoted, tail, without_escapes,
+};
 use super::runner::AgentLaunch;
 use crate::shared::jobs::{Clock, system_clock};
 use crate::tasks::records::ActivityOptions;
@@ -25,24 +32,25 @@ use crate::terminals::limits::MAIN_TERMINAL;
 /// folder is trusted, and Cursor's CLI has no such hook, so the bell still counts for them.
 const AGENTS_WITH_HOOKS: [&str; 3] = ["claude-code", "codex", "gemini"];
 
-const BELL: u8 = 0x07;
-
 /// Output comes in many small pieces. Looking at the task for each would read its file each time.
 const LOOK_EVERY_MS: i64 = 10_000;
 /// Some agents ring the bell as they start (GitHub Copilot does); that is not a question.
 pub const START_BELL_MS: i64 = 15_000;
-/// How long after a start the terminal is read for a shell that cannot find the agent.
-pub const LAUNCH_WATCH_MS: i64 = 15_000;
+/// How long after a start the terminal is read for a shell that cannot find the agent, a sign-in
+/// screen, or an agent that ended. As long as the launch grace of a shell: an agent installed
+/// with npm can take more than 15 s to show its first screen on a cold start.
+pub const LAUNCH_WATCH_MS: i64 = 30_000;
 /// The last bit of text kept to join a line that came in two pieces, in UTF-16 units.
 const WATCH_TEXT_UNITS: usize = 4000;
 
-/// What shells say when they do not know a command: bash, zsh, sh and dash, fish, PowerShell, cmd.
-const NOT_FOUND: [&str; 4] = [
-    "command not found",
-    ": not found",
-    "unknown command",
-    "is not recognized",
-];
+/// The part of the daemon's variables for an agent: `NATAMUX_<name>_COMMAND`.
+fn variable_name(agent: &str) -> String {
+    if agent == "claude-code" {
+        "CLAUDE".to_string()
+    } else {
+        agent.to_uppercase()
+    }
+}
 
 /// Where the user changes an agent's command: the variable the daemon reads, or Settings > Agents
 /// for a custom agent.
@@ -50,100 +58,30 @@ fn command_hint(agent: &str) -> String {
     if custom_agent(agent).is_some() {
         return "change its command in Settings > Agents".into();
     }
-    let name = if agent == "claude-code" {
-        "CLAUDE".to_string()
-    } else {
-        agent.to_uppercase()
-    };
+    let name = variable_name(agent);
     format!("set NATAMUX_{name}_COMMAND to its command")
 }
 
-/// The text without colors and cursor moves, which would split the words of a line:
-/// `ESC [ params letter`, and `ESC ] ... (BEL | ESC \)`.
-fn without_escapes(text: &str) -> String {
-    let chars: Vec<char> = text.chars().collect();
-    let mut out = String::with_capacity(text.len());
-    let mut at = 0;
-    while at < chars.len() {
-        if chars[at] == '\x1b'
-            && let Some(end) = escape_end(&chars, at)
-        {
-            at = end;
-            continue;
-        }
-        out.push(chars[at]);
-        at += 1;
+/// Where the user changes the words an agent starts with.
+fn words_hint(agent: &str) -> String {
+    if custom_agent(agent).is_some() {
+        return "its command in Settings > Agents".into();
     }
-    out
+    let name = variable_name(agent);
+    format!("the words in NATAMUX_{name}_ARGS")
 }
 
-/// Where the escape sequence that starts at `start` ends, if one does.
-fn escape_end(chars: &[char], start: usize) -> Option<usize> {
-    match *chars.get(start + 1)? {
-        '[' => {
-            let mut at = start + 2;
-            while chars
-                .get(at)
-                .is_some_and(|c| c.is_ascii_digit() || matches!(*c, ';' | '?'))
-            {
-                at += 1;
-            }
-            chars
-                .get(at)
-                .filter(|c| c.is_ascii_alphabetic())
-                .map(|_| at + 1)
-        }
-        ']' => {
-            let mut at = start + 2;
-            while let Some(c) = chars.get(at) {
-                match *c {
-                    '\x07' => return Some(at + 1),
-                    '\x1b' => {
-                        return (chars.get(at + 1) == Some(&'\\')).then_some(at + 2);
-                    }
-                    _ => at += 1,
-                }
-            }
-            None
-        }
-        _ => None,
-    }
-}
-
-/// The shell's line that says it could not find the program, if the text holds one.
-pub fn not_found_line(text: &str, program: &str) -> Option<String> {
-    let name = program.rsplit(['\\', '/']).next().unwrap_or(program);
-    without_escapes(text)
-        .split(['\r', '\n'])
-        .map(js_trim)
-        .find(|line| {
-            let lower = line.to_lowercase();
-            NOT_FOUND.iter().any(|words| lower.contains(words)) && line.contains(name)
-        })
-        .map(String::from)
-}
-
-/// The last `units` UTF-16 units of the text.
-fn tail(text: String, units: usize) -> String {
-    if utf16_len(&text) <= units {
-        return text;
-    }
-    let mut used = 0;
-    let mut start = text.len();
-    for (index, c) in text.char_indices().rev() {
-        used += c.len_utf16();
-        if used > units {
-            break;
-        }
-        start = index;
-    }
-    text[start..].to_string()
+fn terminal_label(terminal: &str) -> String {
+    format!("Terminal {terminal}")
 }
 
 struct LaunchWatch {
     launch: AgentLaunch,
     at: i64,
     text: String,
+    /// Windows types the whole launch line, prompt and all, and the terminal echoes it. Its first
+    /// line is left out once, so a prompt that names a sign-in line does not match.
+    echo_left: bool,
 }
 
 #[derive(Default)]
@@ -151,6 +89,8 @@ struct Watching {
     last_look: HashMap<String, i64>,
     /// Its own clock: output just before a bell must not hide it.
     last_bell: HashMap<String, i64>,
+    /// Where the output of each task's first terminal stands in an OSC sequence.
+    bell_scans: HashMap<String, BellScan>,
     launches: HashMap<String, LaunchWatch>,
 }
 
@@ -188,12 +128,25 @@ enum Job {
         launch: AgentLaunch,
         line: String,
     },
+    SignIn {
+        task_id: String,
+        launch: AgentLaunch,
+        line: String,
+    },
+    Ended {
+        task_id: String,
+        launch: AgentLaunch,
+        /// When the launch was, so an agent that reported since is left alone.
+        at: i64,
+        line: Option<String>,
+    },
     /// Answered when every job before it is done.
     Barrier(Sender<()>),
 }
 
 pub struct GenericSignals {
     now: Clock,
+    windows: bool,
     watching: Mutex<Watching>,
     jobs: Mutex<Sender<Job>>,
 }
@@ -201,6 +154,11 @@ pub struct GenericSignals {
 impl GenericSignals {
     /// `now`: milliseconds; the system clock by default.
     pub fn new(tasks: TaskService, now: Option<Clock>) -> GenericSignals {
+        GenericSignals::with_platform(tasks, now, cfg!(windows))
+    }
+
+    /// As `new`, for the launch lines of Windows or not.
+    pub fn with_platform(tasks: TaskService, now: Option<Clock>, windows: bool) -> GenericSignals {
         let (sender, receiver) = channel::<Job>();
         let work = Worker { tasks };
         // Ends when the service is dropped: the channel closes. If no thread can be made, jobs
@@ -214,6 +172,7 @@ impl GenericSignals {
             });
         GenericSignals {
             now: now.unwrap_or_else(system_clock),
+            windows,
             watching: Mutex::new(Watching::default()),
             jobs: Mutex::new(sender),
         }
@@ -238,6 +197,7 @@ impl GenericSignals {
             launch: launch.clone(),
             at: (self.now)(),
             text: String::new(),
+            echo_left: self.windows,
         };
         self.watching
             .lock()
@@ -254,12 +214,20 @@ impl GenericSignals {
         if terminal != MAIN_TERMINAL {
             return;
         }
-        let rang = data.contains(&BELL);
-        let look = self
-            .watching
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .look_for(task_id, rang, now);
+        let look = {
+            let mut watching = self.watching.lock().unwrap_or_else(PoisonError::into_inner);
+            // No new key per chunk: this runs on the output path.
+            let rang = match watching.bell_scans.get_mut(task_id) {
+                Some(scan) => scan.rings(data),
+                None => {
+                    let mut scan = BellScan::default();
+                    let rang = scan.rings(data);
+                    watching.bell_scans.insert(task_id.to_string(), scan);
+                    rang
+                }
+            };
+            watching.look_for(task_id, rang, now)
+        };
         let Some(bell) = look else {
             return;
         };
@@ -271,8 +239,9 @@ impl GenericSignals {
         });
     }
 
-    /// A shell that cannot find the agent prints so at once. The stage would wait for an agent
-    /// that never came, so the task fails with the shell's words and what to do.
+    /// A shell that cannot find the agent prints so at once, and an agent with no login shows
+    /// its sign-in screen or ends. The stage would wait for an agent that never came, so the
+    /// task fails, or waits for the user, with the words seen and what to do.
     fn check_launch(&self, task_id: &str, terminal: &str, data: &[u8], now: i64) -> Option<Job> {
         let mut watching = self.watching.lock().unwrap_or_else(PoisonError::into_inner);
         if watching.launches.is_empty() {
@@ -286,14 +255,49 @@ impl GenericSignals {
         }
         // A line can come in two pieces; the last bit of text is enough to join them. Decoded
         // only here, while a launch is watched: the rest needs no text.
-        let joined = format!("{}{}", watch.text, String::from_utf8_lossy(data));
+        let decoded = String::from_utf8_lossy(data);
+        let mut chunk: &str = &decoded;
+        if watch.echo_left {
+            match chunk.split_once('\n') {
+                Some((_, rest)) => {
+                    watch.echo_left = false;
+                    chunk = rest;
+                }
+                None => chunk = "",
+            }
+        }
+        let joined = format!("{}{chunk}", watch.text);
         watch.text = tail(joined, WATCH_TEXT_UNITS);
-        let line = not_found_line(&watch.text, &watch.launch.program)?;
+        let task_id = task_id.to_string();
         let launch = watch.launch.clone();
+        if let Some(line) = not_found_line(&watch.text, &launch.program) {
+            watching.launches.remove(&key);
+            return Some(Job::Failed {
+                task_id,
+                launch,
+                line,
+            });
+        }
+        // Sign-in before the failed mark: the same output gives the same state, however the
+        // terminal splits it into chunks.
+        let kind = agent_kind(&launch.agent);
+        if let Some(line) = sign_in_line(&kind, &without_escapes(&watch.text)) {
+            watching.launches.remove(&key);
+            return Some(Job::SignIn {
+                task_id,
+                launch,
+                line: quoted(&line),
+            });
+        }
+        let mark = failed_mark_at(&watch.text)?;
+        let line = last_line(&watch.text[..mark]);
+        let at = watch.at;
         watching.launches.remove(&key);
-        Some(Job::Failed {
-            task_id: task_id.to_string(),
+        // A restored agent goes on with an old session; one it cannot find is no failure.
+        (!launch.restored).then_some(Job::Ended {
+            task_id,
             launch,
+            at,
             line,
         })
     }
@@ -333,10 +337,70 @@ impl Worker {
                     }),
                 );
             }
+            Job::SignIn {
+                task_id,
+                launch,
+                line,
+            } => {
+                let message = format!(
+                    "{} asks you to sign in: \"{line}\". Sign in in {}. If the agent then lost \
+                     the prompt, send it again.",
+                    launch.program,
+                    terminal_label(&launch.terminal)
+                );
+                self.apply(
+                    &task_id,
+                    json!({
+                        "source": "system",
+                        "type": "agent.asked",
+                        "payload": {
+                            "reason": "sign in",
+                            "message": message,
+                            "terminal": launch.terminal,
+                        },
+                    }),
+                );
+            }
+            Job::Ended {
+                task_id,
+                launch,
+                at,
+                line,
+            } => self.ended(&task_id, &launch, at, line.as_deref()),
             Job::Barrier(done) => {
                 let _ = done.send(());
             }
         }
+    }
+
+    /// Fails the task of an agent that ended with an error right after its start. One that
+    /// reported since its launch was up, so a person or the agent ended it later: left alone.
+    fn ended(&self, task_id: &str, launch: &AgentLaunch, at: i64, line: Option<&str>) {
+        let Ok(events) = self.tasks.list_events(task_id) else {
+            return;
+        };
+        let reported = events.iter().any(|entry| {
+            entry.event.source == "agent"
+                && parse_iso_millis(&entry.event.at).is_some_and(|when| when >= at)
+        });
+        if reported {
+            return;
+        }
+        let said = line.map_or(String::new(), |line| format!(": \"{line}\""));
+        let reason = format!(
+            "The agent ended right after it started{said}. Read {} for the cause (sign-in, \
+             version, {}), fix it, then start the agent again.",
+            terminal_label(&launch.terminal),
+            words_hint(&launch.agent)
+        );
+        self.apply(
+            task_id,
+            json!({
+                "source": "system",
+                "type": "agent.failed",
+                "payload": { "reason": reason, "terminal": launch.terminal },
+            }),
+        );
     }
 
     fn apply(&self, task_id: &str, input: Value) {

@@ -11,6 +11,8 @@ Natamux starts Codex with hooks for that session only.
 
 Install Codex and log in. Follow the [Codex project page](https://github.com/openai/codex). Check that `codex` runs in your terminal.
 
+If you are not logged in, the task waits and asks you to sign in in its terminal. See [The agent asks me to sign in](/docs/help/troubleshooting/#the-agent-asks-me-to-sign-in).
+
 ## What Natamux runs
 
 | | |

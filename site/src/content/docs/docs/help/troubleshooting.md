@@ -50,6 +50,23 @@ The commands are `claude`, `codex`, `gemini`, `copilot` and `cursor-agent`.
 
 The desktop app uses the PATH of your login shell. If you installed the agent after you opened the app, quit the app and open it again. Use `NATAMUX_<AGENT>_ARGS` to add options to an agent's command line. See [Environment variables](/docs/reference/environment-variables/).
 
+## The agent asks me to sign in
+
+An agent that is not logged in shows its sign-in screen in the task's terminal and waits. In the first 30 seconds after the start, Natamux sees that screen: the task moves to **Needs input**, and the sidebar and the stage card show the agent's sign-in line and the terminal to open.
+
+1. Open the terminal the message names, and sign in there as the agent asks.
+2. The task goes back to **Running** when the agent starts work. If the agent shows an empty prompt, it lost the first prompt: send it again.
+
+To skip this step for the next tasks, log in to the agent once in your own terminal.
+
+## "The agent ended right after it started"
+
+The agent exited with an error in the first 30 seconds, before it reported anything. Some agents do this when they are not logged in; others when a flag in `NATAMUX_<AGENT>_ARGS` is wrong or the agent is too old. The task fails with the agent's last line.
+
+1. Open the terminal the message names and read the agent's output.
+2. Fix the cause: log in, update the agent, or change `NATAMUX_<AGENT>_ARGS` (for a custom agent, its command in **Settings → Agents**).
+3. Start the agent again with **Start agent**.
+
 ## The dashboard rejects my token
 
 The dashboard shows "The daemon rejected that token. Paste the token it printed when it started."

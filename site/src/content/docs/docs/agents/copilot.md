@@ -11,6 +11,8 @@ Natamux starts Copilot CLI with a hook file in the task's worktree.
 
 Install Copilot CLI and sign in. Follow the [GitHub documentation](https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-hooks-reference) for the CLI. Check that `copilot` runs in your terminal.
 
+If you are not logged in, the task waits and asks you to sign in in its terminal. See [The agent asks me to sign in](/docs/help/troubleshooting/#the-agent-asks-me-to-sign-in).
+
 ## What Natamux runs
 
 | | |

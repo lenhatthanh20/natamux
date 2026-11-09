@@ -11,6 +11,7 @@ pub mod agents {
     pub mod hook_service;
     mod hook_usage;
     pub mod idle_pause;
+    mod launch_text;
     pub mod runner;
     pub mod task_access;
     mod usage_file;

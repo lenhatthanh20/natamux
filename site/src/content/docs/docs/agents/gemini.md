@@ -11,6 +11,8 @@ Natamux starts Gemini CLI with hooks for that session only.
 
 Install Gemini CLI and sign in. Follow the [Gemini CLI documentation](https://geminicli.com/docs/). Check that `gemini` runs in your terminal.
 
+If you are not logged in, the task waits and asks you to sign in in its terminal. See [The agent asks me to sign in](/docs/help/troubleshooting/#the-agent-asks-me-to-sign-in).
+
 :::note
 Per `docs/agent-adapters.md`, the Gemini CLI free tier was replaced by the Antigravity CLI on 2026-06-18. Paid accounts keep `gemini`.
 :::
