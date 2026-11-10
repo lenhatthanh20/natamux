@@ -414,7 +414,7 @@ jobs:
             project-settings-branch project-settings-problems project-settings-conflict
             details-files workspace-docs workspace-docs-edit workspace-editor
             workspace-editor-source workspace-editor-draft workspace-editor-conflict
-            workspace-editor-tabs
+            workspace-editor-tabs workspace-editor-markdown
             terminal-drop-target
             palette palette-query palette-no-match palette-jump shortcuts account-menu
             settings settings-general settings-appearance settings-agents settings-agent-sheet
@@ -440,7 +440,7 @@ jobs:
             project-settings-branch project-settings-problems project-settings-conflict
             details-files workspace-docs workspace-docs-edit workspace-editor
             workspace-editor-source workspace-editor-draft workspace-editor-conflict
-            workspace-editor-tabs
+            workspace-editor-tabs workspace-editor-markdown
             terminal-drop-target
             palette palette-query palette-no-match palette-jump shortcuts account-menu
             settings settings-general settings-appearance settings-agents settings-agent-sheet

@@ -58,6 +58,7 @@ pub fn is_files_shot(shot: Shot) -> bool {
             | Shot::WorkspaceEditorDraft
             | Shot::WorkspaceEditorConflict
             | Shot::WorkspaceEditorTabs
+            | Shot::WorkspaceEditorMarkdown
             | Shot::TerminalDropTarget
             | Shot::EditorFind
             | Shot::EditorGoToLine
@@ -76,7 +77,11 @@ pub async fn run(handle: WindowHandle<Root>, shot: Shot, cx: &mut AsyncApp) {
     }
     if matches!(
         shot,
-        Shot::EditorFind | Shot::EditorGoToLine | Shot::EditorOutline | Shot::EditorBlame
+        Shot::EditorFind
+            | Shot::EditorGoToLine
+            | Shot::EditorOutline
+            | Shot::EditorBlame
+            | Shot::WorkspaceEditorMarkdown
     ) {
         // The file is read and drawn; CI takes the picture 3 s after start.
         cx.background_executor().timer(READ + READ / 2).await;
@@ -112,7 +117,7 @@ fn enter(shot: Shot, dashboard: &Entity<Dashboard>, cx: &mut App) {
                 dashboard.open_stage_file(REVIEWED, SPEC, cx)
             });
         }
-        Shot::WorkspaceEditor => {
+        Shot::WorkspaceEditor | Shot::WorkspaceEditorMarkdown => {
             panel(dashboard, REVIEWED, DetailsView::Progress, cx);
             open_file(dashboard, README, cx);
         }
@@ -147,14 +152,21 @@ fn enter(shot: Shot, dashboard: &Entity<Dashboard>, cx: &mut App) {
     }
 }
 
-/// T-0316: the find bar, Go to line or Go to symbol over the source file's editor.
+/// T-0316: the find bar, Go to line or Go to symbol over the source file's editor. T-0323:
+/// README.md rendered.
 fn editor_tool(shot: Shot, root: &mut Root, window: &mut Window, cx: &mut gpui::Context<Root>) {
+    let path = if shot == Shot::WorkspaceEditorMarkdown {
+        README
+    } else {
+        SOURCE
+    };
     let editors = root.workspace_view().read(cx).file_editors().to_vec();
-    let Some(editor) = editors.into_iter().find(|e| e.read(cx).path() == SOURCE) else {
-        eprintln!("shot: {SOURCE} is not open");
+    let Some(editor) = editors.into_iter().find(|e| e.read(cx).path() == path) else {
+        eprintln!("shot: {path} is not open");
         return;
     };
     editor.update(cx, |editor, cx| match shot {
+        Shot::WorkspaceEditorMarkdown => editor.set_rendered(true, window, cx),
         Shot::EditorFind => editor.shot_find(FOUND_IN_SOURCE, window, cx),
         Shot::EditorGoToLine => editor.go_to_line(window, cx),
         Shot::EditorBlame => editor.annotate(cx),

@@ -22,11 +22,13 @@ use crate::app::view_rules::WorkspaceTab;
 use crate::components::button_style::{action_button, key_hint, quiet_button};
 use crate::components::colors::signal;
 use crate::components::confirm::Confirm;
+use crate::components::docs_markdown::MarkdownDoc;
+use crate::components::segmented::Segmented;
 use crate::components::skeleton::SkeletonList;
 use crate::components::terminals_button::terminals_button;
 use crate::components::toast_rules::ToastTone;
 use crate::git::blame_marks::{BlameFailed, BlameMarks, Blocked};
-use crate::git::change_rules::split_path;
+use crate::git::change_rules::{is_markdown, split_path};
 use crate::git::editor_find::EditorFind;
 use crate::terminals::pane_header::icon_button;
 
@@ -43,7 +45,12 @@ pub struct FileEditor {
     pub(super) find: Option<Entity<EditorFind>>,
     blame: Entity<BlameMarks>,
     pub(super) saving: bool,
+    /// A Markdown file shows rendered instead of the editor. Per open file, not stored.
+    pub(super) rendered: bool,
+    /// Made on the first Rendered pick.
+    markdown: Option<MarkdownDoc>,
     focus: FocusHandle,
+    view_focus: FocusHandle,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -82,7 +89,10 @@ impl FileEditor {
             find: None,
             blame,
             saving: false,
+            rendered: false,
+            markdown: None,
             focus: cx.focus_handle(),
+            view_focus: cx.focus_handle().tab_stop(true),
             _subscriptions: subscriptions,
         };
         editor.refresh(cx);
@@ -104,6 +114,25 @@ impl FileEditor {
 
     fn name(&self) -> &str {
         split_path(&self.path).1
+    }
+
+    /// Rendered or Source, for a Markdown file. The shown part takes the focus: the hidden one
+    /// is not drawn, so keys sent to it would reach no action (a click on the switch does not
+    /// move the focus).
+    pub fn set_rendered(&mut self, rendered: bool, window: &mut Window, cx: &mut Context<Self>) {
+        let rendered = rendered && is_markdown(&self.path);
+        if rendered == self.rendered {
+            return;
+        }
+        if rendered && self.markdown.is_none() {
+            self.markdown = Some(MarkdownDoc::new(cx));
+        }
+        self.rendered = rendered;
+        match self.body.as_ref().filter(|_| !rendered) {
+            Some(body) => window.focus(&body.read(cx).editor().focus_handle(cx), cx),
+            None => window.focus(&self.focus, cx),
+        }
+        cx.notify();
     }
 
     pub(super) fn draft(&self, cx: &App) -> Option<FileDraft> {
@@ -293,9 +322,9 @@ impl Render for FileEditor {
         self.with_editor_tools(root, cx)
             .size_full()
             .child(self.render_header(stale, cx))
-            .children(self.find_bar())
+            .children(self.find_bar().filter(|_| !self.rendered))
             .children(stale.then(|| self.render_banner(cx)))
-            .child(self.render_body(cx))
+            .child(self.render_body(window, cx))
     }
 }
 
@@ -325,6 +354,7 @@ impl FileEditor {
                         .truncate(),
                 ),
             )
+            .children(self.view_switch(cx))
             .children(self.wrap_button(cx))
             .children(has_draft.then(|| {
                 Label::new("Modified")
@@ -360,6 +390,29 @@ impl FileEditor {
             )
     }
 
+    /// Source | Rendered, for a Markdown file once its text shows.
+    fn view_switch(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if !is_markdown(&self.path) || self.body.is_none() {
+            return None;
+        }
+        let this = cx.entity();
+        Some(
+            Segmented::new(
+                "editor-view",
+                &self.view_focus,
+                [
+                    ("Source".into(), IconName::FileCode),
+                    ("Rendered".into(), IconName::FileMarkdown),
+                ],
+                usize::from(self.rendered),
+                move |index, window, cx| {
+                    this.update(cx, |this, cx| this.set_rendered(index == 1, window, cx));
+                },
+            )
+            .into_any_element(),
+        )
+    }
+
     fn render_banner(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let colors = cx.theme().colors();
         h_flex()
@@ -390,7 +443,7 @@ impl FileEditor {
             )
     }
 
-    fn render_body(&self, _: &mut Context<Self>) -> AnyElement {
+    fn render_body(&self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         if let Some(message) = self.error.as_ref().filter(|_| self.disk.is_none()) {
             return notice(message.clone(), Color::Error);
         }
@@ -404,6 +457,18 @@ impl FileEditor {
             return notice(text.to_owned(), Color::Muted);
         }
         match &self.body {
+            Some(body) if self.rendered => {
+                let Some(markdown) = &self.markdown else {
+                    return div().flex_1().into_any_element();
+                };
+                markdown.set_text(&body.read(cx).text(cx), cx);
+                div()
+                    .flex_1()
+                    .min_h_0()
+                    .w_full()
+                    .child(markdown.view(window, cx))
+                    .into_any_element()
+            }
             Some(body) => div()
                 .flex_1()
                 .min_h_0()
@@ -414,6 +479,10 @@ impl FileEditor {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "file_editor_tests.rs"]
+mod tests;
 
 fn notice(text: String, color: Color) -> AnyElement {
     div()

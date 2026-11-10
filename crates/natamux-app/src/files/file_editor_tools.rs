@@ -1,5 +1,6 @@
 //! Find (Mod+F), Go to line (Ctrl+G), Go to symbol (Mod+Shift+O) and Wrap long lines in the
-//! editor tab (T-0316). The find bar sits under the header.
+//! editor tab (T-0316). The find bar sits under the header. The tools need the editor, so a
+//! rendered Markdown file goes back to Source first.
 
 use gpui::{ClickEvent, Stateful};
 use ui::{Tooltip, prelude::*};
@@ -31,6 +32,7 @@ impl FileEditor {
     }
 
     fn find(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.set_rendered(false, window, cx);
         let Some(body) = self.body.clone() else {
             return;
         };
@@ -39,6 +41,7 @@ impl FileEditor {
     }
 
     pub fn go_to_line(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.set_rendered(false, window, cx);
         let Some(body) = self.body.as_ref().map(|body| body.downgrade()) else {
             return;
         };
@@ -53,6 +56,7 @@ impl FileEditor {
     }
 
     pub fn outline(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.set_rendered(false, window, cx);
         let Some(body) = self.body.clone() else {
             return;
         };
@@ -71,8 +75,11 @@ impl FileEditor {
         );
     }
 
-    /// The header's Wrap long lines toggle, once the body is there. Not stored.
+    /// The header's Wrap long lines toggle, once the body is there and shows. Not stored.
     pub(super) fn wrap_button(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if self.rendered {
+            return None;
+        }
         let on = self.body.as_ref()?.read(cx).wraps();
         Some(
             icon_button("file-wrap", "text-wrap")
