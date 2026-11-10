@@ -5507,7 +5507,7 @@ dependencies = [
 
 [[package]]
 name = "natamux-agents"
-version = "1.0.23"
+version = "1.0.24"
 dependencies = [
  "natamux-core",
  "natamux-proto",
@@ -5516,7 +5516,7 @@ dependencies = [
 
 [[package]]
 name = "natamux-app"
-version = "1.0.23"
+version = "1.0.24"
 dependencies = [
  "anyhow",
  "assets",
@@ -5555,7 +5555,7 @@ dependencies = [
 
 [[package]]
 name = "natamux-cli"
-version = "1.0.23"
+version = "1.0.24"
 dependencies = [
  "base64",
  "natamux-client",
@@ -5567,7 +5567,7 @@ dependencies = [
 
 [[package]]
 name = "natamux-client"
-version = "1.0.23"
+version = "1.0.24"
 dependencies = [
  "async-tungstenite",
  "fastrand",
@@ -5583,7 +5583,7 @@ dependencies = [
 
 [[package]]
 name = "natamux-contract"
-version = "1.0.23"
+version = "1.0.24"
 dependencies = [
  "async-tungstenite",
  "futures",
@@ -5598,7 +5598,7 @@ dependencies = [
 
 [[package]]
 name = "natamux-core"
-version = "1.0.23"
+version = "1.0.24"
 dependencies = [
  "natamux-proto",
  "serde",
@@ -5608,7 +5608,7 @@ dependencies = [
 
 [[package]]
 name = "natamux-daemon"
-version = "1.0.23"
+version = "1.0.24"
 dependencies = [
  "async-tungstenite",
  "base64",
@@ -5634,7 +5634,7 @@ dependencies = [
 
 [[package]]
 name = "natamux-git"
-version = "1.0.23"
+version = "1.0.24"
 dependencies = [
  "natamux-core",
  "natamux-proto",
@@ -5643,7 +5643,7 @@ dependencies = [
 
 [[package]]
 name = "natamux-proto"
-version = "1.0.23"
+version = "1.0.24"
 dependencies = [
  "serde",
  "serde_json",
@@ -5651,7 +5651,7 @@ dependencies = [
 
 [[package]]
 name = "natamux-pty"
-version = "1.0.23"
+version = "1.0.24"
 dependencies = [
  "alacritty_terminal",
  "nix",
@@ -5659,7 +5659,7 @@ dependencies = [
 
 [[package]]
 name = "natamux-screen"
-version = "1.0.23"
+version = "1.0.24"
 dependencies = [
  "alacritty_terminal",
  "memchr",
@@ -5668,7 +5668,7 @@ dependencies = [
 
 [[package]]
 name = "natamux-stages"
-version = "1.0.23"
+version = "1.0.24"
 dependencies = [
  "natamux-agents",
  "natamux-core",
@@ -5680,7 +5680,7 @@ dependencies = [
 
 [[package]]
 name = "natamux-store"
-version = "1.0.23"
+version = "1.0.24"
 dependencies = [
  "natamux-core",
  "natamux-proto",
@@ -5692,7 +5692,7 @@ dependencies = [
 
 [[package]]
 name = "natamux-update"
-version = "1.0.23"
+version = "1.0.24"
 dependencies = [
  "base64",
  "ring",

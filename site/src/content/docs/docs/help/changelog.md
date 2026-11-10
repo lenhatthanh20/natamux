@@ -7,11 +7,17 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v1.0.24 (2026-11-10)
+
+- Right-click the file editor or the Changes diff and choose **Annotate with Git Blame** to show each line's date and author. An annotated line's menu shows its commit, **Copy Commit Hash**, and **Close Annotations**. See [Changes and History](/docs/guides/changes-and-history/).
+- When an agent shows a known sign-in screen just after launch, the task moves to **Needs input** and names the terminal to open. See [Agent sign-in](/docs/help/troubleshooting/#the-agent-asks-me-to-sign-in).
+- Fix: an agent could exit with an error just after launch without a clear task failure. An error exit in the first 30 seconds, before the agent reports anything, now fails the task and shows its last line and terminal.
+- Fix: Cursor and Copilot stages could keep showing needs input after a permission was answered. Tool completion now clears a permission or bell wait, including after a restart. Explicit questions still wait for an answer.
+- Fix: bundled SQLite could expose memory when a database and its WAL file had different page sizes. Update SQLite to 3.54.1.
+- The new **Use cases** guide has practical workflows for simple projects, solo work, teams and larger organizations, with links from the homepage. See [Use cases](/docs/guides/use-cases/).
+
 ## v1.0.23 (2026-11-08)
 
-- The new **Use cases** guide has practical workflows for simple projects, solo work, teams and larger organizations, with links from the homepage.
-- Fix: bundled SQLite could expose memory when a database and its WAL file had different page sizes. Update SQLite to 3.54.1.
-- Fix: Cursor and Copilot stages could keep showing needs input after a permission was answered. Tool completion now clears a permission or bell wait, including after a restart. Explicit questions still wait for an answer.
 - In the Changes diff, a revert arrow puts the last commit's lines of a change back into the file, with Undo.
 - The editor and the diff get a find bar, Go to line, Go to symbol, whitespace toggles and more editor keys; **Clean on save** is in Settings → General → Editor.
 - The stage sheet puts the prompt first, with settings in folding groups and arrows to the stage before or after.
