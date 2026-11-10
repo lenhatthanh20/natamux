@@ -49,6 +49,7 @@ Screenshots of every screen and main state of the React dashboard, for the Rust 
 | [workspace-history](shots/workspace-history-dark.webp) ([light](shots/workspace-history-light.webp)) | History: the git graph of the task | 4.24 | `features/git/GitGraph.tsx` |
 | [workspace-docs](shots/workspace-docs-dark.webp) ([light](shots/workspace-docs-light.webp)) | Docs: the stage files (spec, plan, review) | 4.29 | `features/workspaces/DocsTab.tsx` |
 | [workspace-editor](shots/workspace-editor-dark.webp) ([light](shots/workspace-editor-light.webp)) | Editor tab with a Markdown file | 4.33 | `features/files/FileEditor.tsx` |
+| workspace-editor-markdown (native app only, no shot yet) | Editor tab with `README.md` on Rendered | 4.33 | `crates/natamux-app/src/files/file_editor.rs` |
 | [workspace-editor-source](shots/workspace-editor-source-dark.webp) ([light](shots/workspace-editor-source-light.webp)) | Editor tab with a changed TypeScript file | 4.33 | `features/files/MonacoFile.tsx` |
 | [palette](shots/palette-dark.webp) ([light](shots/palette-light.webp)) | Command palette, empty: Needs you, suggestions | 4.17 | `features/palette/CommandPalette.tsx` |
 | [palette-query](shots/palette-query-dark.webp) ([light](shots/palette-query-light.webp)) | Command palette with a query | 4.17 | `features/palette/CommandPalette.tsx` |

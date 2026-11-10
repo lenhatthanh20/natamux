@@ -1,6 +1,6 @@
-//! The rendered view of a stage file (`Markdown.tsx`) and of the release notes, on Zed's
-//! `markdown` crate: no HTML, no Mermaid, no images, and only web and mail links open. All use of
-//! that crate stays in this file.
+//! The rendered view of a stage file (`Markdown.tsx`), of a Markdown file in the editor tab and
+//! of the release notes, on Zed's `markdown` crate: no HTML, no Mermaid, no images, and only web
+//! and mail links open. All use of that crate stays in this file.
 
 use gpui::{AnyElement, Entity, TextStyleRefinement};
 use markdown::{
