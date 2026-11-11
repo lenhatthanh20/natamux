@@ -176,7 +176,7 @@ fn own_agent_is_offered_on_every_agent_or_testing_stage_in_terminal_1() {
     let steps = write_docs("");
     assert!(takes_own_agent(&steps, "write-docs"));
     assert!(runs_in_shell_one(&steps, "write-docs"));
-    assert!(takes_own_agent(&steps, "spec"));
+    assert!(takes_own_agent(&steps, "plan"));
     assert!(takes_own_agent(&steps, "implement"));
     assert!(takes_own_agent(&steps, "testing"));
     assert!(!takes_own_agent(&steps, "context"));
@@ -185,9 +185,9 @@ fn own_agent_is_offered_on_every_agent_or_testing_stage_in_terminal_1() {
 
 #[test]
 fn own_agent_moves_a_catalog_stage_out_of_terminal_1_with_no_issue() {
-    let with_agent = set_text(&full_pipeline(), "spec", TextField::Agent, "codex");
-    assert!(!runs_in_shell_one(&with_agent, "spec"));
-    assert!(runs_in_shell_one(&with_agent, "plan"));
+    let with_agent = set_text(&full_pipeline(), "plan", TextField::Agent, "codex");
+    assert!(!runs_in_shell_one(&with_agent, "plan"));
+    assert!(runs_in_shell_one(&with_agent, "spec"));
     assert!(pipeline_issues(&with_agent).is_empty());
 }
 
@@ -210,7 +210,7 @@ fn own_agent_is_offered_as_before_on_stages_outside_terminal_1() {
 #[test]
 fn own_shell_is_offered_on_an_agent_stage_with_an_output_outside_a_group() {
     let steps = full_pipeline();
-    assert!(offers_own_shell(&steps, "spec"));
+    assert!(offers_own_shell(&steps, "plan"));
     assert!(offers_own_shell(&steps, "agent-review"));
     // Implement has no output; Testing is not an agent stage; a group ignores it.
     assert!(!offers_own_shell(&steps, "implement"));
@@ -235,15 +235,40 @@ fn own_shell_is_shown_on_any_stage_that_has_it_so_it_can_be_cleared() {
 }
 
 #[test]
-fn own_shell_writes_true_and_off_leaves_the_field_out_so_spec_runs_in_terminal_1() {
-    let on = set_own_shell(&full_pipeline(), "spec", true);
-    assert_eq!(field(&on, "spec").own_shell, Some(true));
-    assert!(!runs_in_shell_one(&on, "spec"));
-    assert!(runs_in_own_shell(&on, "spec"));
-    let off = set_own_shell(&on, "spec", false);
-    assert_eq!(field(&off, "spec"), field(&full_pipeline(), "spec"));
-    assert!(runs_in_shell_one(&off, "spec"));
-    assert!(!runs_in_own_shell(&off, "spec"));
+fn own_shell_writes_true_and_off_leaves_the_field_out_so_plan_runs_in_terminal_1() {
+    let on = set_own_shell(&full_pipeline(), "plan", true);
+    assert_eq!(field(&on, "plan").own_shell, Some(true));
+    assert!(!runs_in_shell_one(&on, "plan"));
+    assert!(runs_in_own_shell(&on, "plan"));
+    let off = set_own_shell(&on, "plan", false);
+    assert_eq!(field(&off, "plan"), field(&full_pipeline(), "plan"));
+    assert!(runs_in_shell_one(&off, "plan"));
+    assert!(!runs_in_own_shell(&off, "plan"));
+}
+
+// T-0333: the stage right after the context keeps the task's agent in Terminal 1.
+#[test]
+fn offers_no_own_agent_or_terminal_on_the_stage_after_the_context_until_one_is_set() {
+    let steps = full_pipeline();
+    assert!(!takes_own_agent(&steps, "spec"));
+    assert!(!offers_own_shell(&steps, "spec"));
+    let with_agent = set_text(&steps, "spec", TextField::Agent, "codex");
+    assert!(takes_own_agent(&with_agent, "spec"));
+    let with_args = set_text(&steps, "spec", TextField::Args, "--model x");
+    assert!(takes_own_agent(&with_args, "spec"));
+    let own = set_own_shell(&steps, "spec", true);
+    assert!(offers_own_shell(&own, "spec"));
+    assert!(!pipeline_issues(&own).is_empty());
+    // With Spec off, Plan comes right after the context.
+    let off = set_enabled(&steps, "spec", false);
+    assert!(takes_own_agent(&off, "spec"));
+    assert!(!takes_own_agent(&off, "plan"));
+}
+
+#[test]
+fn keeps_the_context_stage_on() {
+    let steps = set_enabled(&full_pipeline(), "context", false);
+    assert_eq!(field(&steps, "context").enabled, None);
 }
 
 #[test]

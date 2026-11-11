@@ -4,7 +4,7 @@
 use gpui::{ClickEvent, Div, DragMoveEvent, FontWeight, KeyDownEvent, MouseButton, Stateful};
 use natamux_proto::stages::capabilities::stage_name;
 use natamux_proto::stages::pipeline_rules::{IssueLevel, PipelineIssue};
-use natamux_proto::stages::schema::Stage;
+use natamux_proto::stages::schema::{Stage, StageKind};
 use ui::{Switch, ToggleState, Tooltip, prelude::*};
 
 use super::editor_catalog::is_custom;
@@ -30,6 +30,8 @@ pub(super) struct DragGhost(pub(super) SharedString);
 const ROW_HEIGHT: f32 = 40.;
 
 const ROW_TIP: &str = "Click to edit \u{b7} \u{2325}\u{2191} \u{2325}\u{2193} to move";
+
+const CONTEXT_ALWAYS_ON: &str = "The context stage is always on";
 
 /// The problems of one id.
 pub(super) fn issues_of(issues: &[PipelineIssue], id: &str) -> Vec<PipelineIssue> {
@@ -257,11 +259,17 @@ impl StageList {
         }
         marks.extend(problem_mark(&id, &mine, cx));
         let (toggle_id, menu_id) = (id.clone(), id.clone());
-        let switch = Switch::new(SharedString::from(format!("on-{id}")), on.into()).on_click(
-            cx.listener(move |this, _: &ToggleState, _, cx| {
+        // The context stage opens every pipeline, so it cannot be turned off (T-0333).
+        let fixed = stage.kind == StageKind::Context;
+        let switch = Switch::new(SharedString::from(format!("on-{id}")), on.into())
+            .disabled(fixed)
+            .on_click(cx.listener(move |this, _: &ToggleState, _, cx| {
                 this.apply(|steps| set_enabled(steps, &toggle_id, !on), None, cx);
-            }),
-        );
+            }));
+        let switch = div()
+            .id(SharedString::from(format!("on-tip-{id}")))
+            .when(fixed, |it| it.tooltip(Tooltip::text(CONTEXT_ALWAYS_ON)))
+            .child(switch);
         let more = more_button(
             &id,
             &name,

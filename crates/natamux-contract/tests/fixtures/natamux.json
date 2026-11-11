@@ -1,6 +1,7 @@
 {
   "stages": [
-    { "id": "outline", "kind": "manual", "gate": "manual" },
+    { "id": "context", "kind": "context", "gate": "manual" },
+    { "id": "outline", "kind": "agent", "gate": "manual" },
     {
       "id": "build",
       "name": "Build",

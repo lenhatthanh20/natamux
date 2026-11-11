@@ -149,3 +149,28 @@ fn a_testing_stage_command_is_not_in_files() {
         SheetGroup::Files
     ));
 }
+
+// T-0333: one message names the agent, the arguments and the terminal of the stage after the
+// context; it opens the group of each one that is set.
+#[test]
+fn the_after_context_issue_opens_the_groups_of_what_is_set() {
+    let found = [issue(
+        "\"perf-budget\" comes right after the context stage, so it runs with the task's agent in Terminal 1. Clear its own agent, arguments and terminal",
+    )];
+    let plain = custom();
+    for group in SheetGroup::ALL {
+        assert!(!group_has_issue(&plain, &found, group));
+    }
+    let own = Stage {
+        own_shell: Some(true),
+        ..custom()
+    };
+    assert!(group_has_issue(&own, &found, SheetGroup::Options));
+    assert!(!group_has_issue(&own, &found, SheetGroup::Files));
+    let args = Stage {
+        args: Some("--model x".into()),
+        ..custom()
+    };
+    assert!(group_has_issue(&args, &found, SheetGroup::Files));
+    assert!(!group_has_issue(&args, &found, SheetGroup::Options));
+}

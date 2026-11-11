@@ -2,6 +2,7 @@
 //! holds, how many of them differ from the default, and whether one of them has a problem.
 
 use natamux_proto::stages::catalog::catalog_stage;
+use natamux_proto::stages::context_rules::AFTER_CONTEXT;
 use natamux_proto::stages::pipeline_rules::PipelineIssue;
 use natamux_proto::stages::schema::{Gate, Stage, StageKind};
 
@@ -122,6 +123,17 @@ const COMMAND_WORDS: [&str; 2] = ["Command:", "Give the command to run"];
 
 const OWN_AGENT_OR_ARGS: &str = "its own agent or arguments";
 
+/// The stage after the context names its agent, arguments and terminal in one message: open
+/// the group of each one it has set (T-0333).
+fn after_context_field(stage: &Stage, issue: &PipelineIssue, group: SheetGroup) -> bool {
+    let set = match group {
+        SheetGroup::Options => stage.own_shell == Some(true),
+        SheetGroup::Files => filled(&stage.args),
+        SheetGroup::DoneCheck => false,
+    };
+    set && issue.message.contains(AFTER_CONTEXT)
+}
+
 /// True when an issue of `stage` is about a field of `group`, so the group opens on its own.
 pub fn group_has_issue(stage: &Stage, issues: &[PipelineIssue], group: SheetGroup) -> bool {
     issues.iter().any(|issue| {
@@ -135,7 +147,8 @@ pub fn group_has_issue(stage: &Stage, issues: &[PipelineIssue], group: SheetGrou
                 // It names agent and arguments; Arguments is in Files, so open when it is set.
                 || (group == SheetGroup::Files
                     && filled(&stage.args)
-                    && issue.message.contains(OWN_AGENT_OR_ARGS)))
+                    && issue.message.contains(OWN_AGENT_OR_ARGS))
+                || after_context_field(stage, issue, group))
     })
 }
 

@@ -24,6 +24,7 @@ pub mod stages {
     pub mod capabilities;
     pub mod catalog;
     mod catalog_text;
+    pub mod context_rules;
     mod field_rules;
     pub mod pipeline_rules;
     pub mod position;
