@@ -39,6 +39,9 @@ use crate::tasks::helpers::{background_since_after, compare_text, move_task, pos
 /// The stages of a repository (`.natamux.json`); None is the default project.
 pub type SettingsOf = Arc<dyn Fn(Option<&str>) -> Vec<Step> + Send + Sync>;
 
+/// A repository and its stages.
+pub type Catalog = (Option<String>, Vec<Step>);
+
 /// What `applyEvent` gives.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Applied {
@@ -103,12 +106,17 @@ impl Store {
 
     /// The steps of a task, with each stage's settings from its repository.
     pub fn steps_of(&self, task: &Task) -> Vec<Step> {
+        self.steps_in(task, &(self.settings_of)(task.repo.as_deref()))
+    }
+
+    /// The steps of a task from `stages`, the settings of its repository.
+    fn steps_in(&self, task: &Task, stages: &[Step]) -> Vec<Step> {
         let refs: Vec<StepRef> = task
             .stages
             .iter()
             .filter_map(|each| serde_json::from_value(each.clone()).ok())
             .collect();
-        resolve_steps(&refs, &(self.settings_of)(task.repo.as_deref()))
+        resolve_steps(&refs, stages)
     }
 
     pub fn get_task(&mut self, task_id: &str) -> TaskResult<Task> {
@@ -421,9 +429,23 @@ impl Store {
     }
 
     pub fn apply_event(&mut self, task_id: &str, raw: Option<&Value>) -> TaskResult<Applied> {
+        self.apply_event_on(task_id, raw, None)
+    }
+
+    /// `apply_event` with the stages of a repository read before the lock, used while the task
+    /// is still in that repository.
+    pub fn apply_event_on(
+        &mut self,
+        task_id: &str,
+        raw: Option<&Value>,
+        catalog: Option<&Catalog>,
+    ) -> TaskResult<Applied> {
         let task = self.get_task(task_id)?;
         let mut input = apply_event_input(raw)?;
-        let steps = self.steps_of(&task);
+        let steps = match catalog {
+            Some((repo, stages)) if *repo == task.repo => self.steps_in(&task, stages),
+            _ => self.steps_of(&task),
+        };
         // Read only when needed: an event that names its terminal and no stage, such as a bell.
         let payload = input
             .get("payload")

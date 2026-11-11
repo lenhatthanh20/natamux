@@ -15,7 +15,7 @@ use crate::task_files::{
     FileStat, ReadError, list_task_ids, read_task_file, same_stat, stat_file, task_file_path,
 };
 use crate::task_index::{TaskFiles, TaskIndex};
-use crate::task_writes::{Disk, TaskSlot, Undo, WriteError, WriteJob, Writes};
+use crate::task_writes::{Disk, TaskSlot, WriteError, WriteJob, Writes};
 use crate::watch::TaskWatch;
 
 pub use crate::task_writes::StoreError;
@@ -219,9 +219,13 @@ impl TaskSync {
 
     /// A task file changed on disk. Unless this service wrote it, the task is read again.
     fn reload(&mut self, task_id: &str) -> Result<(), ReadError> {
-        // After this service's writes of the task: one between its rename and its stat must not
-        // look like an edit by hand.
-        let known = self.known_stat(task_id);
+        // A write of the task runs: between its rename and its stat it looks like an edit by hand.
+        // It keeps its stat when it ends; a later check sees an edit by hand. Not waited for, as
+        // a check under the store lock must not wait for the disk.
+        if self.writing(task_id) {
+            return Ok(());
+        }
+        let known = self.slots.get(task_id).and_then(|slot| slot.stat());
         let stat = stat_file(&task_file_path(self.data_dir(), task_id))?;
         if same_stat(stat, known) {
             return Ok(());
@@ -231,7 +235,9 @@ impl TaskSync {
             return Ok(());
         };
         // Before the read, so a broken file is read again only when it changes.
-        self.slot(task_id).set_stat(Some(stat));
+        let slot = self.slot(task_id);
+        slot.set_stat(Some(stat));
+        slot.mark_read();
         let Some(task) = read_task_file(self.data_dir(), task_id)? else {
             return Ok(());
         };
@@ -254,7 +260,8 @@ impl TaskSync {
             return;
         }
         let now = (self.clock)();
-        if now - self.checked_at.get(task_id).copied().unwrap_or(0) < STAT_CHECK_MS {
+        let checked = self.checked_at.get(task_id).copied().unwrap_or(0);
+        if now - checked < STAT_CHECK_MS || self.writing(task_id) {
             return;
         }
         self.checked_at.insert(task_id.to_string(), now);
@@ -276,6 +283,9 @@ impl TaskSync {
             }
         };
         for id in ids {
+            if self.writing(&id) {
+                continue;
+            }
             self.checked_at.insert(id.clone(), now);
             self.try_reload(&id);
         }
@@ -299,8 +309,8 @@ impl TaskSync {
                 self.written_at
                     .insert(task.id.clone(), task.updated_at.clone());
             }
-            let previous = self.tasks.insert(task.id.clone(), task.clone());
-            let job = WriteJob::new(slot, task, previous, events.to_vec(), write_file);
+            self.tasks.insert(task.id.clone(), task.clone());
+            let job = WriteJob::new(slot, task, events.to_vec(), write_file);
             self.later.push(job);
             return Ok(());
         }
@@ -325,7 +335,8 @@ impl TaskSync {
 
     /// The task in memory may be older than an edit by hand. Then that edit is read and the
     /// change is refused. shortcut: an edit between this stat and the write is still lost; that
-    /// needs a file lock.
+    /// needs a file lock. A write left for later renames its file after the lock, so that window
+    /// is wider than the stat and rename of one call.
     fn refuse_unread_edit(&mut self, task_id: &str) -> Result<(), StoreError> {
         if !self.started {
             return Ok(());
@@ -368,29 +379,73 @@ impl TaskSync {
         })
     }
 
-    /// A change whose files could not be written leaves memory, as a store under the lock does,
-    /// unless a later change or a read of the file replaced it since.
-    pub fn undo(&mut self, undo: Undo) {
-        if self.tasks.get(&undo.written.id) != Some(&undo.written) {
+    /// After a failed write left for later, memory may hold changes that no file and no row has,
+    /// and later changes may build on them. Once the task's writes are done, memory takes the
+    /// newer of its file and its row. A failed event line leaves the file written, so memory
+    /// keeps that change, as the file does; its event is lost, as under the lock.
+    pub fn restore(&mut self, task_id: &str) {
+        self.settle(task_id);
+        // The next file write of the task must not be skipped as recent.
+        self.written_at.remove(task_id);
+        if !self.tasks.contains_key(task_id) {
             return;
         }
-        (self.on_changed)(&undo.previous);
-        self.tasks.insert(undo.previous.id.clone(), undo.previous);
+        // Neither: the task stays, as one whose file is gone from outside does.
+        let Some(task) = self.stored_task(task_id) else {
+            return;
+        };
+        if self.tasks.get(task_id) != Some(&task) {
+            (self.on_changed)(&task);
+            self.tasks.insert(task_id.to_string(), task);
+        }
+    }
+
+    /// The newer of the task file and the index row, or the other when it is missing or broken.
+    fn stored_task(&self, task_id: &str) -> Option<Task> {
+        let file_first = self
+            .slots
+            .get(task_id)
+            .is_none_or(|slot| slot.file_is_newer());
+        let read = |from_file: bool| {
+            if from_file {
+                read_task_file(self.data_dir(), task_id).map_err(|error| error.to_string())
+            } else {
+                self.index().get_task(task_id)
+            }
+        };
+        [file_first, !file_first]
+            .into_iter()
+            .find_map(|from_file| match read(from_file) {
+                Ok(task) => task,
+                Err(error) => {
+                    log_broken(task_id, &error);
+                    None
+                }
+            })
     }
 
     /// Runs the writes this call left for later now, under the lock, so a wait for the writes of
     /// a task never waits for this call itself.
     fn run_later(&mut self) {
+        let mut failed = Vec::new();
         for job in std::mem::take(&mut self.later) {
-            if let Err((error, undo)) = job.run(&self.disk) {
+            let task_id = job.task_id().to_string();
+            if let Err(error) = job.run(&self.disk) {
                 if self.later_failed.is_none() {
                     self.later_failed = Some(error);
                 }
-                if let Some(undo) = undo {
-                    self.undo(*undo);
-                }
+                failed.push(task_id);
             }
         }
+        // After every job: a restore waits for the task's writes, which may be among them.
+        for task_id in failed {
+            self.restore(&task_id);
+        }
+    }
+
+    /// Whether a write of the task runs or waits now.
+    fn writing(&self, task_id: &str) -> bool {
+        self.slots.get(task_id).is_some_and(|slot| slot.busy())
     }
 
     fn slot(&mut self, task_id: &str) -> Arc<TaskSlot> {

@@ -59,13 +59,7 @@ fn a_write_waits_for_every_turn_before_its_own() {
 #[test]
 fn a_job_dropped_before_it_ran_still_ends_its_turn() {
     let slot = Arc::new(TaskSlot::default());
-    let job = WriteJob::new(
-        Arc::clone(&slot),
-        make_task("T-0001"),
-        None,
-        Vec::new(),
-        true,
-    );
+    let job = WriteJob::new(Arc::clone(&slot), make_task("T-0001"), Vec::new(), true);
 
     drop(job);
 
@@ -80,7 +74,7 @@ fn a_write_keeps_the_stat_of_the_file_it_made_and_its_index_row() {
     let disk = disk();
     let slot = Arc::new(TaskSlot::default());
     let task = make_task("T-0001");
-    let job = WriteJob::new(Arc::clone(&slot), task.clone(), None, Vec::new(), true);
+    let job = WriteJob::new(Arc::clone(&slot), task.clone(), Vec::new(), true);
 
     assert!(job.run(&disk).is_ok());
 
@@ -92,32 +86,18 @@ fn a_write_keeps_the_stat_of_the_file_it_made_and_its_index_row() {
 }
 
 #[test]
-fn a_file_that_cannot_be_written_gives_the_task_to_take_back() {
+fn a_file_that_cannot_be_written_fails_with_no_stat_and_no_row() {
     let disk = disk();
     let slot = Arc::new(TaskSlot::default());
-    let before = make_task("T-0001");
-    let after = Task {
-        title: "Renamed".into(),
-        ..before.clone()
-    };
     // A folder where the temporary file goes makes the write fail on every platform.
     let mut temporary = task_file_path(&disk.data_dir, "T-0001").into_os_string();
     temporary.push(".tmp");
     std::fs::create_dir_all(temporary).unwrap();
-    let job = WriteJob::new(
-        Arc::clone(&slot),
-        after.clone(),
-        Some(before.clone()),
-        Vec::new(),
-        true,
-    );
+    let job = WriteJob::new(Arc::clone(&slot), make_task("T-0001"), Vec::new(), true);
 
-    let Err((_, Some(undo))) = job.run(&disk) else {
-        panic!("the write did not fail with a task to take back");
-    };
+    assert!(job.run(&disk).is_err());
 
-    let Undo { written, previous } = *undo;
-    assert_eq!((written, previous), (after, before));
+    slot.wait_idle();
     assert_eq!(slot.stat(), None);
     assert_eq!(disk.index().list_tasks(None).unwrap(), []);
     std::fs::remove_dir_all(&disk.data_dir).ok();

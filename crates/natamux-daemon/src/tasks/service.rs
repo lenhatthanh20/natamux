@@ -20,7 +20,7 @@ use crate::shared::jobs::{Clock, system_clock};
 use crate::tasks::errors::{TaskError, TaskResult};
 use crate::tasks::helpers::legacy_pipeline;
 use crate::tasks::records::{ActivityOptions, WorkspaceChange, activity_due};
-use crate::tasks::store::{Applied, SettingsOf, Store};
+use crate::tasks::store::{Applied, Catalog, SettingsOf, Store};
 
 pub struct TaskServiceOptions {
     pub data_dir: PathBuf,
@@ -39,6 +39,7 @@ pub struct TaskService {
     store: Arc<Mutex<Store>>,
     bus: Arc<EventBus>,
     now: Clock,
+    settings_of: SettingsOf,
 }
 
 impl TaskService {
@@ -54,18 +55,20 @@ impl TaskService {
             }),
         );
         let now = options.now.unwrap_or_else(system_clock);
+        let settings_of: SettingsOf = options
+            .settings_of
+            .unwrap_or_else(|| Arc::new(|_| legacy_pipeline()));
         let store = Store {
             sync,
             bus: Arc::clone(&bus),
-            settings_of: options
-                .settings_of
-                .unwrap_or_else(|| Arc::new(|_| legacy_pipeline())),
+            settings_of: Arc::clone(&settings_of),
             now: Arc::clone(&now),
         };
         TaskService {
             store: Arc::new(Mutex::new(store)),
             bus,
             now,
+            settings_of,
         }
     }
 
@@ -106,14 +109,13 @@ impl TaskService {
         Ok(value)
     }
 
-    /// Runs the writes left for later. A change whose files failed leaves memory again, as a
-    /// change written under the lock does.
+    /// Runs the writes left for later. A task whose write failed goes back to what is stored.
     fn finish(&self, writes: Writes) -> TaskResult<()> {
         let ran = writes.run();
-        if !ran.undo.is_empty() {
+        if !ran.failed.is_empty() {
             let mut store = self.lock()?;
-            for undo in ran.undo {
-                store.sync.undo(undo);
+            for task_id in &ran.failed {
+                store.sync.restore(task_id);
             }
         }
         ran.result.map_err(TaskError::from)
@@ -225,6 +227,22 @@ impl TaskService {
 
     pub fn apply_event(&self, task_id: &str, raw: Option<&Value>) -> TaskResult<Applied> {
         self.with_later(|store| store.apply_event(task_id, raw))
+    }
+
+    /// The stages of a repository, read with no lock, for `apply_event_in`.
+    pub fn catalog(&self, repo: Option<&str>) -> Catalog {
+        (repo.map(str::to_string), (self.settings_of)(repo))
+    }
+
+    /// `apply_event` for a caller that holds a copy of the task, such as a hook: `catalog`, the
+    /// stages of its repository, is read before the lock that the other tasks' changes wait for.
+    pub fn apply_event_in(
+        &self,
+        task_id: &str,
+        catalog: &Catalog,
+        raw: Option<&Value>,
+    ) -> TaskResult<Applied> {
+        self.with_later(|store| store.apply_event_on(task_id, raw, Some(catalog)))
     }
 
     pub fn steps_of(&self, task: &Task) -> TaskResult<Vec<natamux_proto::stages::schema::Step>> {

@@ -9,8 +9,9 @@ use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 use natamux_proto::tasks::task::Task;
 
 use crate::event_log::{LoggedEvent, append_event_line};
+use crate::index_commits::Commits;
 use crate::task_files::{FileStat, write_task_file};
-use crate::task_index::{TaskChange, TaskFiles, TaskIndex};
+use crate::task_index::{ChangeRows, TaskChange, TaskFiles, TaskIndex};
 
 /// A store refused or failed: the task file changed by hand, or the disk or index failed.
 #[derive(Debug)]
@@ -49,11 +50,6 @@ pub enum WriteError {
 }
 
 impl WriteError {
-    /// Whether the task file and its log lines were written, as the task in memory says.
-    pub fn files_written(&self) -> bool {
-        matches!(self, WriteError::Index(_))
-    }
-
     pub fn into_error(self) -> StoreError {
         match self {
             WriteError::File(error) | WriteError::Log(error) | WriteError::Index(error) => error,
@@ -67,6 +63,10 @@ struct SlotState {
     done: u64,
     /// The stat of the task file as this service last wrote or read it.
     stat: Option<FileStat>,
+    /// Which holds the later change, the file or the index row: one more than the ticket of the
+    /// write that last reached it, or `issued` when the file was read.
+    file_mark: u64,
+    row_mark: u64,
 }
 
 /// The order of the writes of one task. A write takes a ticket under the store lock and runs when
@@ -96,6 +96,26 @@ impl TaskSlot {
         self.state().stat = stat;
     }
 
+    /// The file was read into memory, under the store lock with no write running: it is newer
+    /// than every row so far.
+    pub fn mark_read(&self) {
+        let mut state = self.state();
+        state.file_mark = state.issued;
+    }
+
+    /// Whether the task file holds a change at least as new as the index row. A write and its
+    /// row tie, and so does a read file after the last write: the file wins.
+    pub fn file_is_newer(&self) -> bool {
+        let state = self.state();
+        state.file_mark >= state.row_mark
+    }
+
+    /// Whether a write has a ticket and is not done.
+    pub fn busy(&self) -> bool {
+        let state = self.state();
+        state.done != state.issued
+    }
+
     pub fn ticket(&self) -> u64 {
         let mut state = self.state();
         state.issued += 1;
@@ -118,7 +138,9 @@ impl TaskSlot {
         }
         Turn {
             slot: self,
+            ticket,
             stat: None,
+            row: false,
         }
     }
 }
@@ -126,8 +148,11 @@ impl TaskSlot {
 /// A write's turn. It ends when dropped, also after an error, so the next write of the task runs.
 pub struct Turn<'a> {
     slot: &'a TaskSlot,
+    ticket: u64,
     /// The stat of the file this write made, kept when the turn ends.
     stat: Option<FileStat>,
+    /// Whether the index committed this write.
+    row: bool,
 }
 
 impl Drop for Turn<'_> {
@@ -135,6 +160,10 @@ impl Drop for Turn<'_> {
         let mut state = self.slot.state();
         if let Some(stat) = self.stat {
             state.stat = Some(stat);
+            state.file_mark = self.ticket + 1;
+        }
+        if self.row {
+            state.row_mark = self.ticket + 1;
         }
         state.done += 1;
         drop(state);
@@ -147,6 +176,7 @@ impl Drop for Turn<'_> {
 pub struct Disk {
     pub data_dir: PathBuf,
     index: Arc<Mutex<TaskIndex>>,
+    commits: Arc<Commits>,
 }
 
 impl Disk {
@@ -154,6 +184,7 @@ impl Disk {
         Disk {
             data_dir,
             index: Arc::new(Mutex::new(index)),
+            commits: Arc::default(),
         }
     }
 
@@ -162,8 +193,9 @@ impl Disk {
         self.index.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    /// The file, then the event lines, then the index in one transaction: `init` heals a crash
-    /// at any point between them. Runs in the task's turn.
+    /// The file, then the event lines, then the index in one transaction, which may hold the
+    /// changes of other tasks too: `init` heals a crash at any point between them. Runs in the
+    /// task's turn, and returns once the index has the change.
     pub fn write(
         &self,
         turn: &mut Turn<'_>,
@@ -188,17 +220,13 @@ impl Disk {
             events,
             files,
         };
-        self.index()
-            .record(&task.id, &change)
-            .map_err(|error| WriteError::Index(StoreError::Failed(error)))
+        let rows = ChangeRows::new(&task.id, &change);
+        self.commits
+            .commit(&self.index, rows)
+            .map_err(|error| WriteError::Index(StoreError::Failed(error)))?;
+        turn.row = true;
+        Ok(())
     }
-}
-
-/// A change already in memory whose files could not be written: memory goes back to `previous`
-/// unless a later change replaced `written` there.
-pub struct Undo {
-    pub written: Task,
-    pub previous: Task,
 }
 
 /// A write the store decided and left for later, with its ticket.
@@ -206,7 +234,6 @@ pub struct WriteJob {
     slot: Arc<TaskSlot>,
     ticket: u64,
     task: Task,
-    previous: Option<Task>,
     events: Vec<LoggedEvent>,
     write_file: bool,
     ran: bool,
@@ -216,7 +243,6 @@ impl WriteJob {
     pub fn new(
         slot: Arc<TaskSlot>,
         task: Task,
-        previous: Option<Task>,
         events: Vec<LoggedEvent>,
         write_file: bool,
     ) -> WriteJob {
@@ -225,36 +251,28 @@ impl WriteJob {
             slot,
             ticket,
             task,
-            previous,
             events,
             write_file,
             ran: false,
         }
     }
 
-    /// The error, and what to take back from memory when the files were not written.
-    pub fn run(mut self, disk: &Disk) -> Result<(), (StoreError, Option<Box<Undo>>)> {
+    pub fn task_id(&self) -> &str {
+        &self.task.id
+    }
+
+    pub fn run(mut self, disk: &Disk) -> Result<(), StoreError> {
         self.ran = true;
         let mut turn = self.slot.wait_turn(self.ticket);
-        let result = disk.write(&mut turn, &self.task, &self.events, self.write_file);
-        drop(turn);
-        let Err(error) = result else {
-            return Ok(());
-        };
-        if error.files_written() {
-            return Err((error.into_error(), None));
-        }
-        let undo = self.previous.take().map(|previous| Undo {
-            written: std::mem::take(&mut self.task),
-            previous,
-        });
-        Err((error.into_error(), undo.map(Box::new)))
+        disk.write(&mut turn, &self.task, &self.events, self.write_file)
+            .map_err(WriteError::into_error)
     }
 }
 
 impl Drop for WriteJob {
-    /// A job dropped unrun, as by a panic before it, still ends its turn; else the task's next
-    /// write would wait for ever.
+    /// Ends the turn of a job dropped before it ran, such as one after a write that panicked in
+    /// `Writes::run`. A panic under the store lock leaves its jobs in the store instead; the
+    /// poisoned lock then refuses every later call, so no write waits behind them.
     fn drop(&mut self) {
         if !self.ran {
             drop(self.slot.wait_turn(self.ticket));
@@ -273,7 +291,8 @@ pub struct Writes {
 /// What `Writes::run` did.
 pub struct Ran {
     pub result: Result<(), StoreError>,
-    pub undo: Vec<Undo>,
+    /// The tasks whose write failed, to put back as stored (`TaskSync::restore`).
+    pub failed: Vec<String>,
 }
 
 impl Writes {
@@ -282,14 +301,15 @@ impl Writes {
         let Writes { disk, jobs, failed } = self;
         let mut ran = Ran {
             result: failed.map_or(Ok(()), Err),
-            undo: Vec::new(),
+            failed: Vec::new(),
         };
         for job in jobs {
-            if let Err((error, undo)) = job.run(&disk) {
+            let task_id = job.task_id().to_string();
+            if let Err(error) = job.run(&disk) {
                 if ran.result.is_ok() {
                     ran.result = Err(error);
                 }
-                ran.undo.extend(undo.map(|undo| *undo));
+                ran.failed.push(task_id);
             }
         }
         ran
