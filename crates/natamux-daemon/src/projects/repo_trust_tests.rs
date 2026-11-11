@@ -1,5 +1,6 @@
 use std::fs::{create_dir_all, read_to_string, write};
 use std::sync::atomic::{AtomicI64, AtomicUsize, Ordering};
+use std::time::{Duration, SystemTime};
 
 use natamux_git::test_support::TempDir;
 use serde_json::json;
@@ -46,8 +47,18 @@ impl Setup {
 
     /// Writes the settings; the service looks at the file again a second later.
     fn settings(&self, text: &str) {
-        write(self.folder().join(SETTINGS_FILE), text).unwrap();
-        self.clock.fetch_add(1000, Ordering::SeqCst);
+        let file = self.folder().join(SETTINGS_FILE);
+        write(&file, text).unwrap();
+        let step = self.clock.fetch_add(1000, Ordering::SeqCst) / 1000 + 1;
+        // A later modified time, so a rewrite counts as a change on a file system with coarse
+        // times (Windows): the service reads the file again only when its time changed.
+        let at = SystemTime::now() + Duration::from_secs(5 * u64::try_from(step).unwrap());
+        std::fs::File::options()
+            .write(true)
+            .open(&file)
+            .unwrap()
+            .set_modified(at)
+            .unwrap();
     }
 
     fn view(&self) -> RepoTrustView {
