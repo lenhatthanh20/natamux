@@ -17,6 +17,7 @@ The existing targets are in [plan-rust-migration.md, "Target numbers"](plan-rust
 | Start | Start to the first frame | `first_frame_ms` | ≤ 300 ms | Yes |
 | Start | Start to the dashboard with data | `first_data_ms` | ≤ 1,000 ms | Yes |
 | Start | Start to the first frame, `$SHELL` rc sleeps 3 s | `slow_shell_first_frame_ms` | ≤ 300 ms | Yes |
+| Start | Start to the dashboard with data, `$SHELL` rc sleeps 3 s | `slow_shell_first_data_ms` | ≤ 1,000 ms | Yes |
 | Task switch | Click to a frame with the task's data, task seen in the last 10 switches | `task_switch_seen_p95_ms` | ≤ 1 refresh | No: 22–30 ms on CI (2 frames) |
 | Task switch | Click to full data, task not seen before | `task_switch_unseen_p95_ms` | ≤ 300 ms p95 | Yes |
 | Live events | A task change in the daemon to the redrawn row | `event_to_row_p95_ms` | ≤ 50 ms p95 | Yes |
@@ -233,6 +234,8 @@ Notes:
 
 - Single runs. Read them as a direction, not as exact numbers.
 - The main binary's bench forces a full window refresh before every measured frame (all flows and the board frame). The branch's does not. So every flow row and the board row compare a full-window draw on main with the draw of the changed views on the branch. Only `event_ui_p95_ms` (main-thread time) and `app_rss_mb` (`ps`) are measured the same way.
+
+Start with a slow login shell on this Mac (`--smoke` of the app artifacts of main and of the branch, a temporary `HOME`, `$SHELL` a script that sleeps 3 s, 3 starts each): first data 3,488 / 3,069 / 3,095 ms on main, 271 / 278 / 306 ms on the branch. The first frame is the same (165–196 ms). With a plain zsh the two are within the noise: 260–378 ms on main, 304–389 ms on the branch. `perf.yml` now reports this as `slow_shell_first_data_ms`, gated at 1,000 ms.
 
 ## Decisions from the numbers
 

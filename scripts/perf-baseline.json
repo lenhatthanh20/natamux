@@ -2,6 +2,7 @@
   "first_frame_ms": 200.8,
   "first_data_ms": 272.2,
   "slow_shell_first_frame_ms": null,
+  "slow_shell_first_data_ms": null,
   "task_switch_seen_p95_ms": 29.185,
   "task_switch_unseen_p95_ms": 29.974,
   "event_to_row_p95_ms": 35.017,

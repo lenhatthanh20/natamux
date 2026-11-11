@@ -31,6 +31,7 @@ TARGETS = {
     "first_frame_ms": (300, True),
     "first_data_ms": (1000, True),
     "slow_shell_first_frame_ms": (300, True),
+    "slow_shell_first_data_ms": (1000, True),
     "task_switch_seen_p95_ms": (REFRESH_MS, False),
     "task_switch_unseen_p95_ms": (300, True),
     "event_to_row_p95_ms": (50, True),
