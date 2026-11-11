@@ -174,7 +174,7 @@ async fn removes_a_repository_once_it_has_no_workspaces_and_keeps_its_tasks() {
         std::fs::read_to_string(other.join(".natamux.json")).unwrap(),
         settings_text
     );
-    assert!(run_git(&other, &["branch", "--list", "natamux/*"]).contains("natamux/t-0001"));
+    assert!(run_git(&other, &["branch", "--list", "other-app/*"]).contains("other-app/t-0001"));
     assert_eq!(std::fs::read_to_string(&task_file).unwrap(), task_text);
 
     let (_, kept) = d.get("/tasks/T-0002").await;

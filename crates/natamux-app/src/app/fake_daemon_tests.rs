@@ -1,4 +1,5 @@
 use natamux_client::TerminalEvent;
+use natamux_proto::projects::repo::AddRepo;
 use natamux_proto::workspaces::workspace::PushStatus;
 
 use super::*;
@@ -205,7 +206,10 @@ fn makes_a_workspace_for_a_task_that_has_none() {
         task.workspace.as_deref(),
         Some("/work/.natamux/worktrees/T-0135")
     );
-    assert_eq!(task.branch.as_deref(), Some("natamux/t-0135"));
+    assert_eq!(
+        task.branch.as_deref(),
+        Some("natamux/t-0135-background-jobs-in-the-footer")
+    );
     let events = drain(&mut receiver);
     assert!(tasks_of(&events).is_some());
     assert!(events.iter().any(|event| matches!(
@@ -434,6 +438,26 @@ fn works_in_the_main_checkout_when_no_worktree_is_asked_and_detaches_keeping_the
             .iter()
             .all(|event| !matches!(event, DashboardEvent::WorkspaceStep(_)))
     );
+}
+
+#[test]
+fn names_the_default_branch_after_the_project() {
+    let fake = FakeDaemon::default();
+    let added = AddRepo {
+        path: "/srv/app".into(),
+        name: Some("My App".into()),
+        worktrees_dir: None,
+    };
+    let repo = fake.add_repo(&added).unwrap();
+    let task = fake
+        .new_workspace(NewWorkspaceInput {
+            title: "Fix it".into(),
+            repo: Some(repo.id),
+            ..NewWorkspaceInput::default()
+        })
+        .unwrap();
+    let want = format!("my-app/{}-fix-it", task.id.to_lowercase());
+    assert_eq!(task.branch, Some(want));
 }
 
 #[test]

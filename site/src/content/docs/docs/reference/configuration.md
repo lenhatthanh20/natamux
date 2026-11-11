@@ -359,12 +359,13 @@ To keep idle agents running, turn the pause off:
 
 | Field | Type | Default | Meaning |
 |---|---|---|---|
-| `branchName` | string | `natamux/{id}-{slug}` | The name of the branch of a new workspace. See [Branch name](/docs/concepts/workspaces/#branch-name). |
+| `branchName` | string | `{project}/{id}-{slug}` | The name of the branch of a new workspace. See [Branch name](/docs/concepts/workspaces/#branch-name). |
 
 Placeholders:
 
 | Placeholder | Value |
 |---|---|
+| `{project}` | The slug of the project name, such as `my-app` for "My App" |
 | `{id}` | The task id as it is, such as `ABC-12` or `T-0042` |
 | `{slug}` | The slug of the title, such as `fix-login` |
 
@@ -379,7 +380,7 @@ Rules:
 { "git": { "branchName": "{id}" } }
 ```
 
-Without `branchName`, the name is `natamux/` + the id in lower case + the slug.
+Without `branchName`, the name is the project slug + `/` + the id in lower case + the slug, such as `my-app/abc-12-fix-login`.
 
 ## Examples
 

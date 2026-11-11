@@ -240,16 +240,22 @@ pub fn report_row(line: &str) {
 }
 
 /// The list of branches as the scenarios compare it: the branches of tasks differ by daemon, so
-/// they show as a flag for the task asked about.
+/// they show as a flag for the task asked about. A task branch is `<project>/<id>-<slug>`, and
+/// the twin ids are `CT-` or `CR-` (`twin`).
 fn branch_view(answer: &Answer, id: &str) -> Value {
-    let prefix = format!("natamux/{}-", id.to_lowercase());
+    let own_part = format!("{}-", id.to_lowercase());
+    let task_part = |name: &str| name.split_once('/').map(|(_, rest)| rest.to_owned());
     let branches = answer.body["branches"].as_array().into_iter().flatten();
     let names: Vec<&str> = branches.filter_map(|b| b.as_str()).collect();
     let others: Vec<&&str> = names
         .iter()
-        .filter(|n| !n.starts_with("natamux/"))
+        .filter(|n| {
+            !task_part(n).is_some_and(|rest| rest.starts_with("ct-") || rest.starts_with("cr-"))
+        })
         .collect();
-    let own = names.iter().any(|name| name.starts_with(&prefix));
+    let own = names
+        .iter()
+        .any(|name| task_part(name).is_some_and(|rest| rest.starts_with(&own_part)));
     json!([
         answer.status,
         answer.body["current"],

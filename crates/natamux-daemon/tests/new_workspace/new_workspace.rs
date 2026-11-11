@@ -32,7 +32,7 @@ fn makes_a_task_with_a_worktree_and_leaves_the_shell_to_the_user() {
     assert!(task.workspace.is_some());
     assert_eq!(
         task.branch.as_deref(),
-        Some("natamux/t-0001-fix-the-login-page")
+        Some("default/t-0001-fix-the-login-page")
     );
     assert_eq!(fx.pty_count(), 0);
 }
@@ -310,7 +310,7 @@ fn keeps_the_task_and_logs_why_when_the_worktree_cannot_be_made() {
         .join(".git")
         .join("refs")
         .join("heads")
-        .join("natamux");
+        .join("default");
     create_dir_all(&heads).unwrap();
     write(heads.join("t-0001-x.lock"), "").unwrap();
 
@@ -380,7 +380,7 @@ fn works_in_the_main_checkout_without_a_worktree_and_starts_the_agent() {
     assert_eq!(task.state, TaskState::Running);
     assert_eq!(fx.pty_count(), 1);
     assert_eq!(worktree_count(&fx.repo), 1);
-    assert_eq!(run_git(&fx.repo, &["branch", "--list", "natamux/*"]), "");
+    assert_eq!(run_git(&fx.repo, &["branch", "--list", "default/*"]), "");
 }
 
 #[test]

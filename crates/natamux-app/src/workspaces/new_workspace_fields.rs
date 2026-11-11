@@ -329,7 +329,8 @@ impl NewWorkspaceDialog {
             .when(loading, |wrap| wrap.tooltip(Tooltip::text(tip)))
             .child(select);
         let title = self.title.read(cx).text(cx);
-        let follows = prefill_branch(self.branch_pattern().as_deref(), &title).is_some();
+        let project = self.project_name(cx);
+        let follows = prefill_branch(self.branch_pattern().as_deref(), &project, &title).is_some();
         let help = branch_help(self.branch_edited, follows);
         let mut row = line()
             .child(row_label("from"))
@@ -467,7 +468,8 @@ impl NewWorkspaceDialog {
             return;
         }
         let title = self.title.read(cx).text(cx);
-        let value = prefill_branch(pattern.as_deref(), &title).unwrap_or_default();
+        let project = self.project_name(cx);
+        let value = prefill_branch(pattern.as_deref(), &project, &title).unwrap_or_default();
         if self.branch_name.read(cx).text(cx) != value {
             self.filled = value.clone();
             self.branch_name

@@ -23,7 +23,7 @@ use crate::components::form::{input_style, text_editor};
 use crate::components::toast_rules::ToastTone;
 
 /// The Branch field's placeholder when the project sets no `git.branchName`.
-const DEFAULT_BRANCH_HINT: &str = "natamux/{id}-{slug}";
+const DEFAULT_BRANCH_HINT: &str = "{project}/{id}-{slug}";
 /// The notes box starts at 3 lines and grows to 8, so the dialog fits a 768 px window.
 const NOTES_LINES: (usize, usize) = (3, 8);
 
@@ -333,6 +333,14 @@ impl NewWorkspaceDialog {
         self.settings
             .as_ref()
             .and_then(|loaded| loaded.settings.git.branch_name.clone())
+    }
+
+    /// The name of the shown project, which `{project}` of the branch name is made from.
+    fn project_name(&self, cx: &App) -> String {
+        let repo = self.repo(cx);
+        let board = self.dashboard.read(cx);
+        let found = board.data.repos.iter().find(|known| known.id == repo);
+        found.map_or(repo, |known| known.name.clone())
     }
 
     fn last_base(&self, cx: &App) -> Option<String> {
