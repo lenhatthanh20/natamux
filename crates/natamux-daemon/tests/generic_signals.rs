@@ -521,7 +521,11 @@ fn names_the_model_when_the_agent_ends_right_after_a_start_with_one() {
     };
     f.signals.watch_launch(&launch);
 
-    f.output(&task.id, "1", &format!("{ECHO}Unknown model\r\n{FAILED_MARK}$ "));
+    f.output(
+        &task.id,
+        "1",
+        &format!("{ECHO}Unknown model\r\n{FAILED_MARK}$ "),
+    );
 
     let failed = last_event(&f, &task.id);
     let reason = failed.payload["reason"].as_str().unwrap();

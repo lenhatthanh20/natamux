@@ -7,6 +7,13 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v1.0.26 (2026-11-12)
+
+- **Start a task** and the task **Edit** form have a **Model** field; Natamux starts the task's agent with `--model '<model>'`. See [Models](/docs/reference/http-api/#models).
+- A new task's branch is `<project>/<id>-<slug>`, was `natamux/<id>-<slug>`, and `git.branchName` can use `{project}`. Existing branches keep their names. See [Branch name](/docs/concepts/workspaces/#branch-name).
+- Context is always the first stage, and the stage after it runs in Terminal 1 with the task's agent; a `.natamux.json` that breaks this is refused with the reason. See [Rules for the pipeline](/docs/reference/configuration/#rules-for-the-pipeline).
+- The default **Review** stage keeps every round in `review.md` as a **Revision N**, and only the newest one counts. See [The review agent](/docs/concepts/review-loop/#the-review-agent).
+
 ## v1.0.25 (2026-11-11)
 
 - A Markdown file in the editor tab has **Source | Rendered** in its header; **Rendered** shows it formatted, with your unsaved edits. See [Files of the worktree](/docs/guides/dashboard/#files-of-the-worktree).

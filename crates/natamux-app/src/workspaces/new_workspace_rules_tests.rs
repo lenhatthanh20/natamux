@@ -50,7 +50,10 @@ fn sends_the_trimmed_model_and_none_when_it_is_empty() {
         agent: String::new(),
         ..typed
     };
-    assert_eq!(new_workspace_input(&no_agent, &manual(), Vec::new()).model, None);
+    assert_eq!(
+        new_workspace_input(&no_agent, &manual(), Vec::new()).model,
+        None
+    );
 }
 
 #[test]

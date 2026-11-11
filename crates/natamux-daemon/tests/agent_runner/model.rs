@@ -24,9 +24,18 @@ fn gives_the_model_only_to_the_tasks_own_built_in_agent() {
     let task = task_of(Some("claude-code"), Some("opus"));
     assert_eq!(task_model(&task, "claude-code", None), Some("opus"));
     assert_eq!(task_model(&task, "codex", None), None);
-    assert_eq!(task_model(&task_of(None, Some("opus")), "codex", None), Some("opus"));
-    assert_eq!(task_model(&task_of(Some("my-tool"), Some("opus")), "my-tool", None), None);
-    assert_eq!(task_model(&task_of(Some("codex"), None), "codex", None), None);
+    assert_eq!(
+        task_model(&task_of(None, Some("opus")), "codex", None),
+        Some("opus")
+    );
+    assert_eq!(
+        task_model(&task_of(Some("my-tool"), Some("opus")), "my-tool", None),
+        None
+    );
+    assert_eq!(
+        task_model(&task_of(Some("codex"), None), "codex", None),
+        None
+    );
 }
 
 #[test]
@@ -35,7 +44,10 @@ fn leaves_the_model_to_stage_words_that_name_one() {
     for args in ["--model haiku", "--model=haiku", "-m haiku"] {
         assert_eq!(task_model(&task, "claude-code", Some(args)), None, "{args}");
     }
-    assert_eq!(task_model(&task, "claude-code", Some("--verbose")), Some("opus"));
+    assert_eq!(
+        task_model(&task, "claude-code", Some("--verbose")),
+        Some("opus")
+    );
 }
 
 #[test]
@@ -63,7 +75,10 @@ fn puts_the_model_after_the_configured_words_and_before_the_stage_words() {
         .unwrap();
 
     let script = env.script_text(&task.id);
-    assert!(script.contains("--foo --model 'opus' '--verbose'"), "{script}");
+    assert!(
+        script.contains("--foo --model 'opus' '--verbose'"),
+        "{script}"
+    );
 }
 
 #[test]
