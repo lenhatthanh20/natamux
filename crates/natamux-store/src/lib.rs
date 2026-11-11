@@ -5,6 +5,7 @@
 pub mod attachments;
 pub mod event_log;
 pub mod front_matter;
+pub mod index_commits;
 pub mod task_files;
 pub mod task_index;
 pub mod task_sync;
