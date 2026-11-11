@@ -169,7 +169,7 @@ Notes on the numbers:
 - Flow bench change: `drawn_when` no longer calls `window.refresh()` before it waits for the frame. That call drew every view again, also the cached ones, so every flow timed a full window draw (with 1,000 tasks for the palette). Numbers of the flows from 2026-11-11 on do not compare with earlier ones. Part of the board and palette gain is this change.
 - Noise: the start numbers moved with the runner, not the code. In the slow runs the font load (`fonts_ms`, not touched) took 27–48 ms against 15–24 ms, and `first_frame_ms` / `fonts_ms` stayed about 10.5. One run had `first_frame_ms` 697. So `first_frame_ms`, `first_data_ms` and `slow_shell_first_frame_ms` failed their gate in three of the snapshot runs without a start change.
 - `task_switch_seen_p95_ms`, `resize_frame_p99_ms` and `hook_p95_ms` were not changed; their moves are noise.
-- Resize frames (`resize_frame_*`) are the gaps between frames from the perf overlay. So p50 16.7 ms is the display's refresh, not work. p95 29–34 ms and p99 36–44 ms mean that about 5% of frames miss one refresh while the window size changes.
+- Resize frames (`resize_frame_*`) are the gaps between frames from the perf overlay. So p50 16.7 ms is the display's refresh, not work. On the owner's Mac the resize is fine (numbers in "Numbers of 2026-11-11" above). The p95 29–34 ms and p99 36–44 ms here come from the CI virtual machine, which misses about 5% of refreshes while the window size changes.
 - Run [42972562275](https://github.com/lenhatthanh20/natamux/actions/runs/42972562275): no gated number failed. `board_frame_p95_ms` 13.5, `event_ui_p95_ms` 0.91, `palette_key_draw` p50 / p95 6.2 / 11.1 ms. Start: `first_frame_ms` 191.5, `first_data_ms` 275.9, `slow_shell_first_frame_ms` 260.5, `fonts_ms` 18.7.
 - Frame alone (`<flow>_draw_*`): these numbers start at the frame that shows the change, not at the action. The older `<flow>_*` numbers start at the action, so they also hold the wait for the display's next refresh: 0 to 16.7 ms at 60 Hz. So a "≤ 1 refresh" target on the older number cannot hold at p95. Read the `_draw` number against 1 refresh.
 - Flow timings vary by run: one run after the hook change (run [42966055436](https://github.com/lenhatthanh20/natamux/actions/runs/42966055436)) was slow in every flow (`board_frame_p50_ms` 17.6, `event_ui_p95_ms` 2.45) with no app change. The next run of the same app code was back (`board_frame_p95_ms` 13.6, `event_ui_p95_ms` 1.06). Read a flow number over several runs.
@@ -197,6 +197,42 @@ python3 scripts/perf-check.py flows.txt smoke.txt motion.txt
 - Quit Natamux first: `--smoke` starts its own daemon, and fails when one already runs for the data folder.
 - `--bench-flows` uses only the fake daemon; it reads and writes no task of yours.
 - The daemon numbers come from CI only.
+- Bench runs: use a temporary `HOME`, e.g. `HOME=$(mktemp -d) "$app" --bench-flows`. The app saves its view state under `$HOME/Library/Application Support/Natamux`, also in a bench run, so a bench with the real `HOME` would overwrite the real app's view state.
+
+### Numbers of 2026-11-11 (MacBook Pro M3 Pro, 120 Hz display)
+
+One run of `--bench-flows` for each build: the CI-built release binaries of `main` (ddacf373) and of this branch, 200 fake tasks. Times in ms.
+
+| Number (CI name) | main | branch |
+|---|---|---|
+| `board_frame_p50_ms` / `board_frame_p95_ms` | 39.8 / 41.1 | 12.1 / 17.3 |
+| `palette_key_p50_ms` / `palette_key_p95_ms` (action to drawn) | 19.6 / 26.6 | 10.1 / 12.9 |
+| `palette_key_draw_p50_ms` / `palette_key_draw_p95_ms` (frame alone) | – | 5.0 / 8.0 |
+| `event_to_row_p50_ms` / `event_to_row_p95_ms` | 22.2 / 25.4 | 13.7 / 22.0 |
+| `event_ui_p95_ms` | 0.98 | 0.63 |
+| `task_switch_seen_p50_ms` / `task_switch_seen_p95_ms` | 15.9 / 21.3 | 14.7 / 17.1 |
+| `task_switch_unseen_p50_ms` / `task_switch_unseen_p95_ms` | 12.3 / 18.2 | 12.2 / 14.0 |
+| `diff_click_p50_ms` / `diff_click_p95_ms` | 10.4 / 18.2 | 12.2 / 14.2 |
+| `resize_frame_p99_ms` | 19.3 | 17.0 |
+| Frames over one refresh (of 240) | 23 | 9 |
+| `app_rss_mb` | 240 | 196 |
+
+Resize alone on the branch (`--bench-only resize`, 6 panes, 120 Hz, so one refresh is 8.33 ms), four runs:
+
+- p50 is 8.33 ms in all four.
+- p95 is 17.1, 17.3 and 17.3 ms, and p99 is 20.1, 18.6 and 19.1 ms, in three runs. Max is 20–60 ms.
+- About 8% of the frames take two refreshes. In those three runs no frame gap is over 21 ms, except one 60 ms frame.
+- The first run after the download was slower: p95 35.1, p99 41.7 ms, 128 of 943 frames over one refresh. It did not repeat.
+
+So on this Mac a size step costs at most one extra 8.3 ms refresh. The CI numbers (p95 29–34, p99 36–44 ms at 60 Hz) come from the runner's virtual GPU.
+
+- Profile on this Mac (`sample`, resize alone): about 16 ms of main-thread time per size step. NSWindow `setFrame` about 1 ms; the draw under `display_layer` about 7.5 ms (2.5 ms of it Metal waits); a second draw from the display link about 3 ms; about 4 ms in AppKit setting the mouse cursor again in each display cycle (`NSCursor set`, the accessibility pointer generator). This is likely this Mac's pointer settings. Not checked whether the app sets a cursor each frame.
+- gpui restarts the CVDisplayLink on each size step: 162 short-lived display-link threads in 6 s.
+
+Notes:
+
+- Single runs. Read them as a direction, not as exact numbers.
+- The main binary's bench forces a full window refresh before every measured frame (all flows and the board frame). The branch's does not. So every flow row and the board row compare a full-window draw on main with the draw of the changed views on the branch. Only `event_ui_p95_ms` (main-thread time) and `app_rss_mb` (`ps`) are measured the same way.
 
 ## Decisions from the numbers
 
@@ -219,12 +255,12 @@ The spec of T-0223 builds some steps only when a "before" number is over a thres
 - The daemon no longer waits for the login-shell PATH: it binds and serves the task list at once. The PATH sits in a process-wide cell (`natamux-core/src/login_path.rs`; no `set_var` after threads run). Only a spawn of a program (shells and agents, git, gh, `check` commands, one-shot agents) waits for it, at most 15 s, then keeps the inherited PATH. The app polls the daemon health and the login shell every 5 ms (was 20).
 - No number yet shows first data with a slow login shell. `--smoke` with a slow `$SHELL` only reports the first frame.
 - `event_ui_p95_ms` (0.95–1.02 ms) is the task changes. Tasks held as `Arc<Task>`, and a tree that changes only the moved rows, are the next steps.
-- `resize_frame_p99_ms` (38–44 ms in every run) still needs a fix. A profile of the resize alone (`natamux-app --bench-only resize --bench-repeat 15` under macOS `sample`, 30 s, `resize-sample.txt` in the `perf-app` artifact, run [42972562275](https://github.com/lenhatthanh20/natamux/actions/runs/42972562275); 3,789 frames, p95 33.9, p99 44.0, max 131 ms):
+- `resize_frame_p99_ms` (38–44 ms in every CI run): on the owner's Mac the resize is fine (numbers in "Numbers of 2026-11-11"); the CI p99 comes from the virtual machine, so no fix is needed. A profile of the resize alone (`natamux-app --bench-only resize --bench-repeat 15` under macOS `sample`, 30 s, `resize-sample.txt` in the `perf-app` artifact, run [42972562275](https://github.com/lenhatthanh20/natamux/actions/runs/42972562275); 3,789 frames, p95 33.9, p99 44.0, max 131 ms):
   - The main thread is busy 16% of the time: about 5 ms of work per size step, far under one refresh.
   - gpui draws the window twice per size step: in `display_layer` (the Core Animation commit AppKit runs inside the resize, 1,937 samples) and in the display-link step (1,007 samples).
   - Metal work for the new size is 20% of busy time: `waitUntilScheduled`, a blocking wait (313 samples), `nextDrawable` with a new IOSurface and texture (295), `setDrawableSize` (62). All of the blocking wait is in the `display_layer` draw. This is the likely cause of the missed refreshes: a blocking wait added to a 3 ms draw, on a CI virtual GPU. It is in gpui and macOS, not app code.
   - App views are about half of busy time: the 6 terminal panes 42% of the draw (grid element about 330 samples, pane header about 235, the rest layout); the sidebar 20% (the workspace tree builds its row data again: `row_texts` 94, `add_task` 115); bars 3%. The terminal grid resize itself (`Term::resize`) is not visible.
-  - Next steps if this must go down: one draw per size step in the gpui fork; keep the sidebar tree's row data when only the size changed; pane headers that do not measure text again.
+  - Possible next steps, not a need: one draw per size step in the gpui fork; keep the sidebar tree's row data when only the size changed; pane headers that do not measure text again.
 - The task switch path is synchronous. Its number (`task_switch_seen_p95_ms`, 26–33 ms) is one vsync wait plus one draw.
 - A hook takes the global store lock once to read (was 3 takes) and once more only when it writes. A throttled activity bump takes no write lock. The lookup by working directory no longer allocates per task. A hook clones the task 1 to 4 times (was 3 to 5).
 - `hook_p50_ms` / `hook_p95_ms` did not move: 4.2 / 21.8 ms in run 42972562275, the same run as the resize profile. So the store lock was not the cause. The bench runs 30 threads on a 4-core runner, so its p95 is the scheduler. Where the 4 ms of a hook go is not known; it needs a profile of the daemon bench on Linux.
