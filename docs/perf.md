@@ -239,6 +239,8 @@ Start with a slow login shell on this Mac (`--smoke` of the app artifacts of mai
 
 Idle cost on this Mac (`scripts/motion-cost.sh` with a temporary `HOME`, CPU % with focus / in the background): the task table 1.5 / 0.7 on main and 2.0 / 0.7 on the branch; task T-0146 open, three runs of main and two of the branch, 2.0–2.3 / 0.6–0.7 on both, apart from one run of main with 5.0% and 9.7 draws a second in the background that did not repeat. So the idle cost did not change: the app draws about 2 times a second with focus and not at all in the background, on both. The work saved per draw of the sidebar and the details panel does not show at 2 draws a second.
 
+The owner's installed app in real use (v1.0.24, up 30 hours, 964 task files, read with `ps` over 20 s on 2026-11-11): daemon 0.00% of a core and 23 MB, app 0.85% and 114 MB. So the periodic scan of the task folder (`check_folder`) costs nothing that shows, and the idle cost is already low before this round.
+
 Resize, why no gpui change was made: a size step is about 16 ms of main-thread time on this Mac. The second draw of a step (display link, about 3 ms) is the part a gpui patch could remove; the rest is AppKit (cursor, about 4 ms), the first draw (7.5 ms) and `setFrame`. 13 ms is still over one 8.3 ms refresh, so the patch would not change which frames take two refreshes.
 
 ## Decisions from the numbers
