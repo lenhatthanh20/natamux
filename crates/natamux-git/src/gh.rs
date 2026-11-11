@@ -70,6 +70,7 @@ pub fn run_gh_with_timeout(
         .env("GH_PROMPT_DISABLED", "1")
         .env("GH_NO_UPDATE_NOTIFIER", "1")
         .env("NO_COLOR", "1");
+    natamux_core::login_path::apply(&mut command);
     note_spawn();
     let ran = capture(command, timeout, MAX_OUTPUT_BYTES);
     if ran.code == Some(0) && !ran.killed() && !ran.not_found {

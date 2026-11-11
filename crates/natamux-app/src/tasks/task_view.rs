@@ -14,9 +14,9 @@ use ui::prelude::*;
 
 use super::add_subtask_dialog;
 use super::frozen_order::{HOLD_MS, freeze_order, is_frozen};
-use super::task_attention::{filter_tasks, next_row_change_ms};
+use super::task_attention::{filter_task_refs, next_row_change_ms};
 use super::task_board::TaskBoard;
-use super::task_sort::{SortKey, TaskSort, sort_tasks};
+use super::task_sort::{SortKey, TaskSort, sort_task_refs};
 use super::task_table::{KeyMoved, TaskTable};
 use super::task_view_rules::{MainContent, main_content};
 use crate::app::clock::follow_labels;
@@ -164,28 +164,29 @@ impl TaskView {
     /// Sorts, filters and holds the rows still, then hands them to the table and the board.
     /// Draws again only when the rows or the next label change moved.
     fn refresh(&mut self, cx: &mut Context<Self>) {
-        let (sorted, key) = {
+        let now = now_ms();
+        let (ordered, key) = {
             let dashboard = self.dashboard.read(cx);
             let data = &dashboard.data;
-            let visible = filter_tasks(&data.tasks, dashboard.state_filter, &dashboard.filter);
-            let sorted = sort_tasks(&visible, dashboard.sort, &data.diff_stats, &data.usage);
+            let visible = filter_task_refs(&data.tasks, dashboard.state_filter, &dashboard.filter);
+            let sorted = sort_task_refs(visible, dashboard.sort, &data.diff_stats, &data.usage);
             let key = format!(
                 "{:?}|{:?}|{}",
                 dashboard.sort, dashboard.state_filter, dashboard.filter
             );
-            (sorted, key)
-        };
-        let now = now_ms();
-        let frozen = is_frozen(
-            self.pointer_inside,
-            self.held_at,
-            now,
-            key == self.shown_key,
-        );
-        let ordered: Vec<Task> = if frozen {
-            freeze_order(&self.shown_ids, &sorted, |task| task.id.as_str())
-        } else {
-            sorted
+            let frozen = is_frozen(
+                self.pointer_inside,
+                self.held_at,
+                now,
+                key == self.shown_key,
+            );
+            let shown: Vec<&Task> = if frozen {
+                freeze_order(&self.shown_ids, &sorted, |task| task.id.as_str())
+            } else {
+                sorted
+            };
+            // The one clone of each shown task.
+            (shown.into_iter().cloned().collect::<Vec<Task>>(), key)
         };
         self.shown_ids = ordered.iter().map(|task| task.id.clone()).collect();
         self.shown_key = key;

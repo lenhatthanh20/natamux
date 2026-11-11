@@ -183,10 +183,12 @@ mod palette {
     pub mod fuzzy;
     pub mod jump_rows;
     pub mod palette_layer;
+    pub mod palette_list;
     pub mod palette_pick;
     pub mod palette_row;
     pub mod palette_rows;
     pub mod palette_view;
+    pub mod task_match;
 }
 mod perf {
     pub mod draws;
@@ -228,9 +230,11 @@ mod sidebar {
     pub mod sidebar;
     pub mod sidebar_text;
     pub mod sidebar_tree;
+    pub mod snapshot_memo;
     pub mod task_card;
     pub mod task_card_open;
     pub mod tree_entries;
+    pub mod tree_keys;
     pub mod tree_lines;
     pub mod tree_model;
     pub mod tree_rename;
@@ -526,7 +530,8 @@ fn run_modes(options: &Options, window: WindowHandle<Root>, cx: &mut App) {
         );
     }
     if options.bench_flows {
-        app::flow_bench::run(window, options.bench_tasks, cx);
+        let only = options.bench_only.clone();
+        app::flow_bench::run(window, options.bench_tasks, only, options.bench_repeat, cx);
     }
     if options.count_draws {
         perf::draws::start(window, cx);

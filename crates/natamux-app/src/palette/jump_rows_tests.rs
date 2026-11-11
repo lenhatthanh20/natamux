@@ -291,3 +291,31 @@ fn the_jump_palette_reads_no_terminals_above_20_workspaces() {
 fn the_command_palette_reads_no_terminals() {
     assert!(terminal_reads(PaletteMode::All, &jump_tasks()).is_empty());
 }
+
+#[test]
+fn keeps_the_best_50_rows_in_order_for_1000_tasks() {
+    let mut input = base();
+    input.tasks = (1..=1000)
+        .map(|n| {
+            let mut each = task(&format!("T-{n:04}"), TaskState::Ready);
+            // "fix" starts a word in the even titles and sits inside a word in the odd ones.
+            each.title = if n % 2 == 0 {
+                format!("fix {n}")
+            } else {
+                format!("refix {n}")
+            };
+            each
+        })
+        .collect();
+    let sections = input.jump("fix");
+    assert_eq!(sections.len(), 1);
+    let found = ids(&sections);
+    assert_eq!(found.len(), crate::palette::palette_rows::MAX_ROWS);
+    // Equal scores keep the order of the list.
+    let expected: Vec<String> = (1..=1000)
+        .filter(|n| n % 2 == 0)
+        .take(found.len())
+        .map(|n| format!("T-{n:04}"))
+        .collect();
+    assert_eq!(found, expected);
+}

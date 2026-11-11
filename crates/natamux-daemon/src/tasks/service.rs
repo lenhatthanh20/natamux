@@ -17,7 +17,7 @@ use crate::shared::event_bus::{DaemonMessage, EventBus};
 use crate::shared::jobs::{Clock, system_clock};
 use crate::tasks::errors::{TaskError, TaskResult};
 use crate::tasks::helpers::legacy_pipeline;
-use crate::tasks::records::{ActivityOptions, WorkspaceChange};
+use crate::tasks::records::{ActivityOptions, WorkspaceChange, activity_due};
 use crate::tasks::store::{Applied, SettingsOf, Store};
 
 pub struct TaskServiceOptions {
@@ -36,6 +36,7 @@ pub struct TaskServiceOptions {
 pub struct TaskService {
     store: Arc<Mutex<Store>>,
     bus: Arc<EventBus>,
+    now: Clock,
 }
 
 impl TaskService {
@@ -50,17 +51,19 @@ impl TaskService {
                 changed.enqueue(DaemonMessage::TaskChanged { task: task.clone() });
             }),
         );
+        let now = options.now.unwrap_or_else(system_clock);
         let store = Store {
             sync,
             bus: Arc::clone(&bus),
             settings_of: options
                 .settings_of
                 .unwrap_or_else(|| Arc::new(|_| legacy_pipeline())),
-            now: options.now.unwrap_or_else(system_clock),
+            now: Arc::clone(&now),
         };
         TaskService {
             store: Arc::new(Mutex::new(store)),
             bus,
+            now,
         }
     }
 
@@ -130,9 +133,42 @@ impl TaskService {
         self.with(|store| Ok(store.list_tasks(state)))
     }
 
-    /// The task `list_tasks` lists first among those whose workspace `holds` accepts.
-    pub fn task_in_workspace(&self, holds: impl Fn(&str) -> bool) -> TaskResult<Option<Task>> {
-        self.with(|store| Ok(store.task_in_workspace(holds)))
+    /// The task a hook is for, in one lock take: the one the header names, else the one whose
+    /// workspace `holds` accepts. None when there is none.
+    pub fn task_for_hook(
+        &self,
+        header: Option<&str>,
+        holds: Option<&dyn Fn(&str) -> bool>,
+    ) -> TaskResult<Option<Task>> {
+        self.with(|store| {
+            if let Some(header) = header {
+                match store.get_task(header) {
+                    Ok(task) => return Ok(Some(task)),
+                    Err(TaskError::NotFound(_)) => {}
+                    Err(error) => return Err(error),
+                }
+            }
+            let Some(holds) = holds else {
+                return Ok(None);
+            };
+            match store.id_in_workspace(holds) {
+                Some(id) => match store.get_task(&id) {
+                    Ok(task) => Ok(Some(task)),
+                    Err(TaskError::NotFound(_)) => Ok(None),
+                    Err(error) => Err(error),
+                },
+                None => Ok(None),
+            }
+        })
+    }
+
+    pub fn has_task(&self, task_id: &str) -> TaskResult<bool> {
+        self.with(|store| store.has_task(task_id))
+    }
+
+    /// The id of the task `list_tasks` lists first among those whose workspace `holds` accepts.
+    pub fn id_in_workspace(&self, holds: impl Fn(&str) -> bool) -> TaskResult<Option<String>> {
+        self.with(|store| Ok(store.id_in_workspace(holds)))
     }
 
     pub fn workspace_list(&self) -> TaskResult<Vec<crate::tasks::store::WorkspaceRef>> {
@@ -255,6 +291,12 @@ impl TaskService {
 
     pub fn record_activity(&self, task_id: &str, options: ActivityOptions) -> TaskResult<bool> {
         self.with(|store| store.record_activity(task_id, options))
+    }
+
+    /// Whether `record_activity` would change `task` now, judged on this copy of it, with no
+    /// lock: the common, throttled sign of life then costs no lock take at all.
+    pub fn activity_due(&self, task: &Task, options: &ActivityOptions) -> bool {
+        activity_due(task, (self.now)(), options)
     }
 
     /// The data folder of the tasks.

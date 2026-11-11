@@ -121,9 +121,16 @@ pub fn serialize_task(task: &Task) -> String {
 /// Written through a `.tmp` file and a rename. Returns the stat of the new file, so a change seen
 /// later can be told from this write.
 pub fn write_task_file(data_dir: &Path, task: &Task) -> io::Result<FileStat> {
-    fs::create_dir_all(tasks_dir(data_dir))?;
     let path = task_file_path(data_dir, &task.id);
-    write_atomic(&path, serialize_task(task).as_bytes())?;
+    let text = serialize_task(task);
+    // The folder is made only when it is missing, not on every write.
+    match write_atomic(&path, text.as_bytes()) {
+        Err(error) if error.kind() == ErrorKind::NotFound => {
+            fs::create_dir_all(tasks_dir(data_dir))?;
+            write_atomic(&path, text.as_bytes())?;
+        }
+        other => other?,
+    }
     stat_file(&path)?.ok_or_else(|| io::Error::from(ErrorKind::NotFound))
 }
 

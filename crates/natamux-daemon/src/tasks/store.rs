@@ -150,9 +150,18 @@ impl Store {
         tasks
     }
 
-    /// The task with the longest workspace that `holds` accepts, then the first of `list_tasks`,
-    /// with one clone: a hook looks for its task by folder on every call.
-    pub fn task_in_workspace(&mut self, holds: impl Fn(&str) -> bool) -> Option<Task> {
+    /// Whether the task exists, with no copy of it: a hook asks on every call.
+    pub fn has_task(&mut self, task_id: &str) -> TaskResult<bool> {
+        self.sync.check_file(task_id);
+        if self.sync.tasks.contains_key(task_id) {
+            return Ok(true);
+        }
+        Ok(self.find_task(task_id)?.is_some())
+    }
+
+    /// The id of the task with the longest workspace that `holds` accepts, then the first of
+    /// `list_tasks`. No copy of the task: a hook looks for its task by folder on every call.
+    pub fn id_in_workspace(&mut self, holds: impl Fn(&str) -> bool) -> Option<String> {
         self.sync.check_folder();
         self.sync
             .tasks
@@ -166,7 +175,7 @@ impl Store {
                     .then_with(|| compare_text(&b.updated_at, &a.updated_at))
                     .then_with(|| compare_text(&a.id, &b.id))
             })
-            .cloned()
+            .map(|task| task.id.clone())
     }
 
     /// The tasks that have a workspace, in the order of `list_tasks`, without copying whole

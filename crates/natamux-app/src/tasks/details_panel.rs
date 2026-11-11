@@ -70,6 +70,9 @@ pub struct Shown {
     /// The focus of each folded card, so Enter and Space open it.
     pub card_focus: std::collections::BTreeMap<String, FocusHandle>,
     pub clock: crate::app::clock::LabelClock,
+    /// Bumped when `events` or `settings` change; with the Tasks generation it keys `memo`.
+    rev: u64,
+    memo: std::cell::RefCell<Option<(run::MemoKey, run::Computed)>>,
 }
 
 pub struct DetailsPanel {
@@ -288,7 +291,7 @@ impl DetailsPanel {
     fn take_pending(&mut self, task: &Task, window: &mut Window, cx: &mut Context<Self>) {
         let ready = match self.pending {
             Some(PanelRequest::Edit) => true,
-            Some(PanelRequest::SendBack) => self.progress(task).is_some(),
+            Some(PanelRequest::SendBack) => self.progress(task, cx).is_some(),
             None => false,
         };
         let Some(request) = self.pending.take_if(|_| ready) else {

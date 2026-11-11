@@ -426,13 +426,16 @@ fn daemon_benchmark() {
     let (echo_p50, echo_p95) = echo_while_flooding();
     let (agent_p50, agent_p95) = echo_while_agents_print();
     let snapshot_ms = snapshots::full_history_snapshot();
+    // Before `opens`: the memory its 30 full screens took may not go back to
+    // the system, and this number is the RSS of the whole process.
+    let busy_mib = loads::busy_shells();
     let opens = opens::measure();
     let ((full_kib, full_ms), (tail_kib, tail_ms)) = snapshots::catch_up();
     let (init_500, init_500_warm) = loads::task_init(500);
     let (init_2000, init_2000_warm) = loads::task_init(2_000);
-    let (hook_p50, hook_p95) = loads::hooks_at_once(loads::AGENTS_AT_ONCE);
-    // Last: the memory it takes may not go back to the system.
-    let busy_mib = loads::busy_shells();
+    let at_once = loads::hooks_at_once(loads::AGENTS_AT_ONCE);
+    let single = loads::hooks_single(loads::AGENTS_AT_ONCE);
+    let paced = loads::hooks_paced(loads::AGENTS_AT_ONCE);
     let (busy, agents) = (loads::BUSY_SHELLS, loads::AGENTS_AT_ONCE);
     let table = format!(
         "| measure | value |\n|---|---|\n\
@@ -449,10 +452,24 @@ fn daemon_benchmark() {
          | snapshot at 80 cols, full / catch-up | {full_kib} / {tail_kib} KiB, {full_ms} / {tail_ms} ms |\n\
          | RSS after {busy} shells printed 20 MB each | {busy_mib} MiB |\n\
          | `TaskSync::init`, 500 / 2,000 tasks, cold / warm | {init_500} / {init_500_warm}, {init_2000} / {init_2000_warm} ms |\n\
-         | hook with {agents} agents at once, p50 / p95 | {hook_p50} / {hook_p95} ms |\n",
+         | hook with {agents} agents at once, p50 / p95 | {} / {} ms |\n\
+         | hook from one thread, p50 / p95 | {} / {} ms |\n\
+         | hook from one thread, max, over 50 ms | {} ms, {} |\n\
+         | hook with {agents} agents, 20 ms between hooks, p50 / p95 | {} / {} ms |\n\
+         | hook with {agents} agents, 20 ms between hooks, max, over 50 ms | {} ms, {} |\n",
         opens.restore_ms,
         opens.save_ms,
         opens.first_output_text(),
+        at_once.p50,
+        at_once.p95,
+        single.p50,
+        single.p95,
+        single.max,
+        single.over_50,
+        paced.p50,
+        paced.p95,
+        paced.max,
+        paced.over_50,
     );
     let numbers = serde_json::json!({
         "daemon_idle_rss_mb": rss_mib,
@@ -469,8 +486,16 @@ fn daemon_benchmark() {
         "task_init_500_warm_ms": init_500_warm,
         "task_init_2000_ms": init_2000,
         "task_init_2000_warm_ms": init_2000_warm,
-        "hook_p50_ms": hook_p50,
-        "hook_p95_ms": hook_p95,
+        "hook_p50_ms": at_once.p50,
+        "hook_p95_ms": at_once.p95,
+        "hook_single_p50_ms": single.p50,
+        "hook_single_p95_ms": single.p95,
+        "hook_single_max_ms": single.max,
+        "hook_single_over_50": single.over_50,
+        "hook_paced_p50_ms": paced.p50,
+        "hook_paced_p95_ms": paced.p95,
+        "hook_paced_max_ms": paced.max,
+        "hook_paced_over_50": paced.over_50,
         "restore_snapshot_ms": opens.restore_ms,
         "screen_save_30_ms": opens.save_ms,
         "shell_first_output_ms": opens.first_output_ms,

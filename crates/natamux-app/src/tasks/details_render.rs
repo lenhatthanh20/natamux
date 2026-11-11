@@ -5,7 +5,7 @@ use std::rc::Rc;
 
 use gpui::AnyElement;
 use natamux_proto::agents::activity::latest_line;
-use natamux_proto::events::task_event::{TaskEvent, wait_reason};
+use natamux_proto::events::task_event::wait_reason;
 use natamux_proto::tasks::task::Task;
 use ui::prelude::*;
 
@@ -31,13 +31,13 @@ impl DetailsPanel {
 
     /// A focus handle for each node, kept while the task shows: Enter and Space select it.
     fn make_card_focus(&mut self, task: &Task, cx: &mut Context<Self>) {
-        let Some((_, progress)) = self.progress(task) else {
+        let Some(computed) = self.progress(task, cx) else {
             return;
         };
         let Some(shown) = self.shown.as_mut() else {
             return;
         };
-        for entry in &progress {
+        for entry in computed.progress.iter() {
             shown
                 .card_focus
                 .entry(entry.stage.clone())
@@ -47,18 +47,13 @@ impl DetailsPanel {
 
     fn progress_input(&self, task: &Task, cx: &App) -> Option<ProgressInput> {
         let shown = self.shown.as_ref()?;
-        let (steps, progress) = self.progress(task)?;
+        let computed = self.progress(task, cx)?;
         let stored = shown.events.as_ref()?.as_ref().ok()?;
-        let events: Vec<TaskEvent> = stored
-            .iter()
-            .filter(|s| s.accepted)
-            .map(|s| s.event.clone())
-            .collect();
         let dashboard = self.dashboard.read(cx);
         let beside = dashboard.open_task.as_deref() == Some(task.id.as_str());
         Some(ProgressInput {
-            steps,
-            progress,
+            steps: computed.steps,
+            progress: computed.progress,
             files: shown.files.clone(),
             usage: dashboard.data.usage.get(&task.id).cloned(),
             activity: dashboard
@@ -85,8 +80,8 @@ impl DetailsPanel {
             )),
             can_answer: beside && task.workspace.is_some(),
             can_act: !is_finished_state(task.state),
-            events,
-            task: task.clone(),
+            events: computed.events,
+            task: computed.task,
         })
     }
 

@@ -32,23 +32,25 @@ impl Notifier {
     /// After each task list: the Dock count, and a ring for what changed while the window is not
     /// active. `window` is the main window, which plays the sound.
     pub fn after_tasks(&mut self, dashboard: &Entity<Dashboard>, window: &Window, cx: &mut App) {
-        let board = dashboard.read(cx);
-        let tasks = board.data.tasks.clone();
-        let repos = board.data.repos.clone();
-        let (on, loaded) = (board.view().notify, board.data.loaded);
-        let always = board.view().notify_always;
-        let now = super::clock::now_ms();
-        let waiting: Vec<Task> = needs_me_tasks(&tasks, now);
-        self.announcer.update(&waiting, loaded);
-        let unread = unread_turn_ends(&tasks, &board.view().seen);
-        self.set_badge(badge_label(waiting.len() + unread));
-        let Some(previous) = self.previous.replace(states_by_id(&tasks)) else {
-            return;
+        // Borrowed from the dashboard in this block: the posts below need `cx` mutably.
+        let ring = {
+            let board = dashboard.read(cx);
+            let (tasks, repos) = (&board.data.tasks, &board.data.repos);
+            let (on, loaded) = (board.view().notify, board.data.loaded);
+            let always = board.view().notify_always;
+            let now = super::clock::now_ms();
+            let waiting: Vec<Task> = needs_me_tasks(tasks, now);
+            self.announcer.update(&waiting, loaded);
+            let unread = unread_turn_ends(tasks, &board.view().seen);
+            self.set_badge(badge_label(waiting.len() + unread));
+            let Some(previous) = self.previous.replace(states_by_id(tasks)) else {
+                return;
+            };
+            if !on || (window.is_window_active() && !always) {
+                return;
+            }
+            rings(&previous, tasks, repos)
         };
-        if !on || (window.is_window_active() && !always) {
-            return;
-        }
-        let ring = rings(&previous, &tasks, &repos);
         for each in &ring {
             post_naming_terminal(dashboard, each, cx);
         }

@@ -76,3 +76,45 @@ fn a_task_gone_from_the_list_leaves_the_kept_details(cx: &mut TestAppContext) {
     cx.run_until_parked();
     assert!(!kept(cx));
 }
+
+#[gpui::test]
+fn progress_is_worked_out_once_per_data_change(cx: &mut TestAppContext) {
+    use super::run::COMPUTES;
+    use crate::app::dashboard_data::Part;
+    use natamux_proto::projects::repo::LoadedSettings;
+
+    test_views::init(cx);
+    let source = Arc::new(Source::FakeDaemon);
+    let dashboard = cx.new(|cx| Dashboard::new(Ok(source), Default::default(), cx));
+    cx.run_until_parked();
+    let (panel_dashboard, workspace_dashboard) = (dashboard.clone(), dashboard.clone());
+    let (panel, cx) = cx.add_window_view(move |window, cx| {
+        let workspace = cx.new(|cx| WorkspaceView::new(workspace_dashboard, cx));
+        DetailsPanel::new(panel_dashboard, workspace, window, cx)
+    });
+    dashboard.update(cx, |dashboard, cx| {
+        dashboard.select(Some("T-0137".into()), cx)
+    });
+    panel.update(cx, |panel, cx| panel.sync(cx));
+    panel.update(cx, |panel, _| {
+        let shown = panel.shown.as_mut().expect("shown");
+        shown.events = Some(Ok(Vec::new()));
+        shown.settings = Some(Ok(LoadedSettings::default()));
+    });
+    let task = dashboard.read_with(cx, |dashboard, _| dashboard.data.task("T-0137").cloned());
+    let task = task.expect("task");
+    let computes = COMPUTES.with(|count| count.get());
+    let compute = |cx: &mut gpui::VisualTestContext| {
+        panel.update(cx, |panel, cx| panel.progress(&task, cx).is_some());
+        COMPUTES.with(|count| count.get()) - computes
+    };
+
+    assert_eq!(compute(cx), 1);
+    assert_eq!(compute(cx), 1);
+
+    dashboard.update(cx, |dashboard, _| dashboard.data.gens.bump(Part::Tasks));
+    assert_eq!(compute(cx), 2);
+
+    panel.update(cx, |panel, _| panel.shown.as_mut().expect("shown").rev += 1);
+    assert_eq!(compute(cx), 3);
+}

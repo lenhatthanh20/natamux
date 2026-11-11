@@ -4,7 +4,8 @@
 
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError, TryLockError};
 
 use natamux_agents::hooks::{NormalizedHook, Signal, Wait, find_adapter, plan_signal_events};
 use natamux_core::tasks::inputs::task_id_param;
@@ -13,6 +14,7 @@ use serde_json::{Map, Value, json};
 
 use super::errors::HookError;
 use super::hook_activity::{Activities, changes_files, is_before_tool};
+use super::hook_paths::{is_inside_parts, parts_of};
 use super::hook_usage::{TurnStage, UsageStages};
 use super::hook_waits::wait_of;
 use crate::shared::event_bus::{DaemonMessage, EventBus};
@@ -96,32 +98,6 @@ fn reads_usage(signal: Signal) -> bool {
     signal.ends_turn() || matches!(signal, Signal::Failed | Signal::Asking)
 }
 
-/// The parts of a path, as Node's `path.relative` reads them: `.` and `..` resolved, and on
-/// Windows both slashes and any case.
-fn parts_of(path: &str) -> Vec<String> {
-    let text = if cfg!(windows) {
-        path.replace('\\', "/").to_lowercase()
-    } else {
-        path.to_string()
-    };
-    let mut parts: Vec<String> = Vec::new();
-    for part in text.split('/') {
-        match part {
-            "" | "." => {}
-            ".." => {
-                parts.pop();
-            }
-            other => parts.push(other.to_string()),
-        }
-    }
-    parts
-}
-
-fn is_inside(folder: &str, path: &str) -> bool {
-    let folder = parts_of(folder);
-    !folder.is_empty() && parts_of(path).starts_with(&folder)
-}
-
 pub type SessionSeen = Arc<dyn Fn(&str, &str, &str, &str) + Send + Sync>;
 pub type UsageSeen = Arc<dyn Fn(&str, Option<&str>, &str, &str) + Send + Sync>;
 pub type WorkspaceChanged = Arc<dyn Fn(&str) + Send + Sync>;
@@ -167,6 +143,9 @@ pub struct HookService {
     /// other tasks run on. All the state a hook writes is kept by task id.
     serial: Mutex<HashMap<String, Arc<Mutex<()>>>>,
     state: Mutex<State>,
+    /// Counts the hooks that changed a task. A hook reads its task before it holds the task's
+    /// lock; when the count did not move, no hook changed the task in between.
+    changes: AtomicU64,
 }
 
 impl HookService {
@@ -177,6 +156,7 @@ impl HookService {
             options,
             serial: Mutex::new(HashMap::new()),
             state: Mutex::new(State::default()),
+            changes: AtomicU64::new(0),
         }
     }
 
@@ -214,20 +194,34 @@ impl HookService {
         cwd: Option<&str>,
         task_id_header: Option<&str>,
     ) -> Result<Option<Task>, TaskError> {
+        match self.find_id(cwd, task_id_header)? {
+            Some(id) => match self.tasks.get_task(&id) {
+                Ok(task) => Ok(Some(task)),
+                Err(TaskError::NotFound(_)) => Ok(None),
+                Err(error) => Err(error),
+            },
+            None => Ok(None),
+        }
+    }
+
+    /// `find_task` without a copy of the task.
+    fn find_id(
+        &self,
+        cwd: Option<&str>,
+        task_id_header: Option<&str>,
+    ) -> Result<Option<String>, TaskError> {
         if let Some(header) = task_id_header
             && task_id_param(header).is_ok()
+            && self.tasks.has_task(header)?
         {
-            match self.tasks.get_task(header) {
-                Ok(task) => return Ok(Some(task)),
-                Err(TaskError::NotFound(_)) => {}
-                Err(error) => return Err(error),
-            }
+            return Ok(Some(header.to_string()));
         }
         let Some(cwd) = cwd else {
             return Ok(None);
         };
+        let cwd = parts_of(cwd);
         self.tasks
-            .task_in_workspace(|workspace| is_inside(workspace, cwd))
+            .id_in_workspace(|workspace| is_inside_parts(workspace, &cwd))
     }
 
     /// What the agent of each task does now, from its last hook: `{ task: { terminal: line } }`.
@@ -309,16 +303,36 @@ impl HookService {
             return Ok(HookResult::none());
         };
         let cwd = hook.cwd.as_deref().filter(|_| by_cwd);
-        let Some(found) = self.find_task(cwd, task_id_header)? else {
+        let seen = self.changes.load(Ordering::SeqCst);
+        let cwd = cwd.map(parts_of);
+        let holds = |workspace: &str| {
+            cwd.as_ref()
+                .is_some_and(|cwd| is_inside_parts(workspace, cwd))
+        };
+        let header = task_id_header.filter(|header| task_id_param(header).is_ok());
+        let by_folder: Option<&dyn Fn(&str) -> bool> =
+            if cwd.is_some() { Some(&holds) } else { None };
+        // One lock take of the store finds the task and reads it.
+        let Some(read) = self.tasks.task_for_hook(header, by_folder)? else {
             return Ok(HookResult::none());
         };
-        let lock = self.task_lock(&found.id);
-        let _one_at_a_time = lock.lock().unwrap_or_else(PoisonError::into_inner);
-        // The hook before this one may have changed the task while this one waited.
-        let task = match self.tasks.get_task(&found.id) {
-            Ok(task) => task,
-            Err(TaskError::NotFound(_)) => return Ok(HookResult::none()),
-            Err(error) => return Err(error.into()),
+        let lock = self.task_lock(&read.id);
+        let (_one_at_a_time, waited) = match lock.try_lock() {
+            Ok(guard) => (guard, false),
+            Err(TryLockError::Poisoned(poisoned)) => (poisoned.into_inner(), false),
+            Err(TryLockError::WouldBlock) => {
+                (lock.lock().unwrap_or_else(PoisonError::into_inner), true)
+            }
+        };
+        // A hook of this task may have changed it while this one waited.
+        let task = if waited || self.changes.load(Ordering::SeqCst) != seen {
+            match self.tasks.get_task(&read.id) {
+                Ok(task) => task,
+                Err(TaskError::NotFound(_)) => return Ok(HookResult::none()),
+                Err(error) => return Err(error.into()),
+            }
+        } else {
+            read
         };
         // Natamux terminals run in the task's workspace only. Without one, the hook comes from an
         // agent that the removal of the workspace ended.
@@ -429,12 +443,17 @@ impl HookService {
                 "payload": Value::Object(payload),
             });
             self.tasks.apply_event(&task.id, Some(&input))?;
+            self.changes.fetch_add(1, Ordering::SeqCst);
             applied.push(planned.kind);
         }
         // A hook that changes nothing still shows that a running agent is alive.
-        if applied.is_empty() {
-            self.tasks
-                .record_activity(&task.id, ActivityOptions::default())?;
+        // Judged on the copy this hook holds: a throttled sign of life takes no store lock.
+        let options = ActivityOptions::default();
+        if applied.is_empty()
+            && self.tasks.activity_due(task, &options)
+            && self.tasks.record_activity(&task.id, options)?
+        {
+            self.changes.fetch_add(1, Ordering::SeqCst);
         }
         Ok(done(applied))
     }

@@ -39,11 +39,18 @@ const SETTLE: Duration = Duration::from_millis(300);
 pub const EVENT_UI: &str = "event_ui";
 
 /// Starts the flows once the window has the fake's tasks; `tasks`: the task count of the event
-/// flows (`--bench-tasks`).
-pub fn run(handle: WindowHandle<Root>, tasks: usize, cx: &mut App) {
+/// flows (`--bench-tasks`); `only`: the one flow to run (`--bench-only`), `repeat` its loops.
+pub fn run(
+    handle: WindowHandle<Root>,
+    tasks: usize,
+    only: Option<String>,
+    repeat: usize,
+    cx: &mut App,
+) {
     cx.spawn(async move |cx| {
         let mut extra = BTreeMap::new();
-        if let Err(error) = steps::all(handle, tasks, &mut extra, cx).await {
+        let result = steps::all(handle, tasks, only.as_deref(), repeat, &mut extra, cx).await;
+        if let Err(error) = result {
             eprintln!("flow_bench: {error:#}");
         }
         finish(handle, &mut extra, cx);
@@ -130,9 +137,10 @@ async fn drawn_when(
 ) -> Result<(Instant, Instant)> {
     let (sender, receiver) = oneshot::channel();
     let ready: Check = Rc::new(ready);
+    // No `window.refresh()` here: it would draw every view again, also the cached ones, and the
+    // flow would time a full window draw, not the draw its own change asks for.
     in_window(handle, cx, |window, _| {
-        window.refresh();
-        watch(window, ready, sender, MAX_FRAMES);
+        watch(window, ready, sender, MAX_FRAMES)
     })?;
     let timer = cx.background_executor().timer(FRAME_WAIT);
     match select(pin!(receiver), pin!(timer)).await {
@@ -178,8 +186,11 @@ async fn time_runs(
     for index in 0..RUNS {
         let started = Instant::now();
         handle.update(cx, |root, window, cx| action(index, root, window, cx))?;
-        let (_, drawn) = drawn_when(handle, cx, ready(index)).await?;
+        let (start, drawn) = drawn_when(handle, cx, ready(index)).await?;
         record(flow, drawn.saturating_duration_since(started), cx);
+        // The frame alone, without the wait for the display: that wait is up to one refresh.
+        let draw = drawn.saturating_duration_since(start);
+        record(&format!("{flow}_draw"), draw, cx);
         sleep(SETTLE, cx).await;
     }
     Ok(())

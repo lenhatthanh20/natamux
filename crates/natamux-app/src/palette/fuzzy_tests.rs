@@ -94,3 +94,20 @@ fn ranges_of_a_text_with_wide_chars_land_on_char_boundaries() {
             .any(|piece| piece.matched && piece.text == "été")
     );
 }
+
+#[test]
+fn rejects_a_non_match_for_empty_long_and_non_ascii_text() {
+    assert!(fuzzy_match("a", "").is_none());
+    let long = "b".repeat(1000);
+    assert!(fuzzy_match("a", &long).is_none());
+    // A match past the 160-character cut is not found.
+    assert!(fuzzy_match("z", &format!("{}z", "b".repeat(MAX_TEXT))).is_none());
+    assert!(fuzzy_match("é", "cafe").is_none());
+    assert_eq!(ranges("é", "café"), Some(vec![(3, 5)]));
+}
+
+#[test]
+fn matches_mixed_case_the_same_as_lower_case() {
+    assert_eq!(ranges("fIx", "FiX it"), ranges("fix", "fix it"));
+    assert_eq!(ranges("ÉCOLE", "école"), Some(vec![(0, 6)]));
+}

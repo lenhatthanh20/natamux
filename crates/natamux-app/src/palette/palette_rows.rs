@@ -6,9 +6,11 @@ use std::collections::BTreeSet;
 
 use natamux_proto::tasks::task::Task;
 
-use super::fuzzy::{FuzzyMatch, Range, fuzzy_match};
+use super::fuzzy::{Range, fuzzy_match};
+use super::task_match::ranked_tasks;
 use crate::sidebar::workspace_groups::DEFAULT_REPO_ID;
-use crate::tasks::task_attention::needs_me_tasks;
+use crate::tasks::task_attention::{is_quiet, needs_me_tasks};
+use crate::tasks::task_rules::needs_me;
 use crate::tasks::task_sort::task_number;
 use crate::terminals::pane_rules::MAX_PANES;
 
@@ -128,59 +130,17 @@ pub(super) fn sorted_by_score<T>(mut items: Vec<(T, f64)>) -> Vec<T> {
     items.into_iter().map(|(item, _)| item).collect()
 }
 
-fn scaled(found: Option<FuzzyMatch>, by: f64) -> Option<FuzzyMatch> {
-    found.map(|found| FuzzyMatch {
-        score: found.score * by,
-        ranges: found.ranges,
-    })
-}
-
-fn best_of(matches: [Option<FuzzyMatch>; 3]) -> Option<FuzzyMatch> {
-    let mut best: Option<FuzzyMatch> = None;
-    for found in matches.into_iter().flatten() {
-        if best.as_ref().is_none_or(|top| found.score > top.score) {
-            best = Some(found);
-        }
-    }
-    best
-}
-
-pub(super) fn match_task(task: &Task, query: &str) -> Option<(PaletteRow, f64)> {
-    let by_id = fuzzy_match(query, &task.id);
-    let by_title = fuzzy_match(query, &task.title);
-    let by_branch = task.branch.as_deref().and_then(|b| fuzzy_match(query, b));
-    let best = best_of([
-        scaled(by_id.clone(), 1.2),
-        by_title.clone(),
-        scaled(by_branch, 0.8),
-    ])?;
-    let row = PaletteRow::Task {
-        task: task.clone(),
-        title_ranges: by_title.map(|found| found.ranges).unwrap_or_default(),
-        id_ranges: by_id.map(|found| found.ranges).unwrap_or_default(),
-    };
-    Some((row, best.score))
-}
-
-pub(super) fn scoped(tasks: &[Task], scope: Option<&PaletteScope>, now_ms: i64) -> Vec<Task> {
+pub(super) fn scoped<'a>(
+    tasks: impl Iterator<Item = &'a Task>,
+    scope: Option<&PaletteScope>,
+    now_ms: i64,
+) -> Vec<&'a Task> {
     match scope {
-        None => tasks.to_vec(),
-        Some(PaletteScope::Repo(repo)) => tasks
-            .iter()
-            .filter(|task| repo_of(task) == repo)
-            .cloned()
+        None => tasks.collect(),
+        Some(PaletteScope::Repo(repo)) => tasks.filter(|task| repo_of(task) == repo).collect(),
+        Some(PaletteScope::NeedsYou) => tasks
+            .filter(|task| needs_me(task.state) || is_quiet(task, now_ms))
             .collect(),
-        Some(PaletteScope::NeedsYou) => {
-            let waiting: BTreeSet<String> = needs_me_tasks(tasks, now_ms)
-                .into_iter()
-                .map(|task| task.id)
-                .collect();
-            tasks
-                .iter()
-                .filter(|task| waiting.contains(&task.id))
-                .cloned()
-                .collect()
-        }
     }
 }
 
@@ -239,23 +199,28 @@ fn commands_only(commands: &[PaletteCommand], query: &str) -> Vec<PaletteSection
 
 fn tasks_by_id(input: &AllInput, query: &str) -> Vec<PaletteSection> {
     let needle = query.to_lowercase();
-    let mut found: Vec<Task> = scoped(input.tasks, input.scope, input.now_ms)
+    let mut found: Vec<&Task> = scoped(input.tasks.iter(), input.scope, input.now_ms)
         .into_iter()
         .filter(|task| task.id.to_lowercase().contains(&needle))
         .collect();
     found.sort_by_key(|task| std::cmp::Reverse(task_number(&task.id)));
-    let rows = found.iter().take(MAX_TASKS * 2).map(task_row).collect();
+    let rows = found
+        .into_iter()
+        .take(MAX_TASKS * 2)
+        .map(task_row)
+        .collect();
     one_section("tasks", "Tasks", rows)
 }
 
 fn empty_query(input: &AllInput) -> Vec<PaletteSection> {
-    let waiting: Vec<Task> = needs_me_tasks(
-        &scoped(input.tasks, input.scope, input.now_ms),
-        input.now_ms,
-    )
-    .into_iter()
-    .take(MAX_NEEDS_YOU)
-    .collect();
+    let in_scope: Vec<Task> = scoped(input.tasks.iter(), input.scope, input.now_ms)
+        .into_iter()
+        .cloned()
+        .collect();
+    let waiting: Vec<Task> = needs_me_tasks(&in_scope, input.now_ms)
+        .into_iter()
+        .take(MAX_NEEDS_YOU)
+        .collect();
     let waiting_ids: BTreeSet<&str> = waiting.iter().map(|task| task.id.as_str()).collect();
     let mut sections = Vec::new();
     if !waiting.is_empty() {
@@ -303,9 +268,13 @@ fn empty_query(input: &AllInput) -> Vec<PaletteSection> {
 }
 
 fn typed(input: &AllInput, raw: &str) -> Vec<PaletteSection> {
-    let task_matches: Vec<(PaletteRow, f64)> = scoped(input.tasks, input.scope, input.now_ms)
-        .iter()
-        .filter_map(|task| match_task(task, raw))
+    let in_scope = scoped(input.tasks.iter(), input.scope, input.now_ms);
+    let task_matches = ranked_tasks(&in_scope, raw);
+    let task_top = task_matches.first().map(|(_, found)| found.score);
+    let task_rows: Vec<PaletteRow> = task_matches
+        .into_iter()
+        .take(MAX_TASKS)
+        .map(|(task, found)| found.into_row(task))
         .collect();
     let repo_matches: Vec<(PaletteRow, f64)> = input
         .repos
@@ -320,8 +289,18 @@ fn typed(input: &AllInput, raw: &str) -> Vec<PaletteSection> {
         })
         .collect();
     // Sections go by their best row; on a tie tasks come first, then commands, then projects.
+    let mut sections: Vec<(f64, PaletteSection)> = Vec::new();
+    if let Some(top) = task_top {
+        sections.push((
+            top,
+            PaletteSection {
+                id: "tasks",
+                title: Some("Tasks"),
+                rows: task_rows,
+            },
+        ));
+    }
     let groups = [
-        ("tasks", "Tasks", task_matches, MAX_TASKS),
         (
             "commands",
             "Commands",
@@ -330,22 +309,21 @@ fn typed(input: &AllInput, raw: &str) -> Vec<PaletteSection> {
         ),
         ("repos", "Projects", repo_matches, MAX_REPOS),
     ];
-    let mut sections: Vec<(f64, PaletteSection)> = groups
-        .into_iter()
-        .filter(|(_, _, matches, _)| !matches.is_empty())
-        .map(|(id, title, matches, max)| {
-            let top = matches.iter().fold(f64::NEG_INFINITY, |a, m| a.max(m.1));
-            let rows = sorted_by_score(matches).into_iter().take(max).collect();
-            (
-                top,
-                PaletteSection {
-                    id,
-                    title: Some(title),
-                    rows,
-                },
-            )
-        })
-        .collect();
+    for (id, title, matches, max) in groups {
+        if matches.is_empty() {
+            continue;
+        }
+        let top = matches.iter().fold(f64::NEG_INFINITY, |a, m| a.max(m.1));
+        let rows = sorted_by_score(matches).into_iter().take(max).collect();
+        sections.push((
+            top,
+            PaletteSection {
+                id,
+                title: Some(title),
+                rows,
+            },
+        ));
+    }
     sections.sort_by(|a, b| b.0.total_cmp(&a.0));
     if !sections.is_empty() {
         return sections.into_iter().map(|(_, section)| section).collect();

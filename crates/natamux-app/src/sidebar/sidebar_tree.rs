@@ -4,6 +4,8 @@
 // Ported with their tests (spec D11); the stage rules serve the details panel of screen 3.
 #![cfg_attr(not(test), allow(dead_code))]
 
+use std::collections::BTreeMap;
+
 use natamux_proto::stages::capabilities::stage_name_of_id;
 pub use natamux_proto::stages::schema::{PathRef, StepRef};
 use natamux_proto::tasks::task::{Task, TaskState};
@@ -235,21 +237,25 @@ pub struct SubtaskCount {
     pub total: usize,
 }
 
-pub fn subtask_count(id: &str, tasks: &[Task]) -> Option<SubtaskCount> {
-    let own: Vec<&Task> = tasks
-        .iter()
-        .filter(|task| task.parent_id.as_deref() == Some(id))
-        .collect();
-    if own.is_empty() {
-        return None;
+/// The subtask count of every parent, from one pass over `tasks`.
+pub fn subtask_counts(tasks: &[Task]) -> BTreeMap<&str, SubtaskCount> {
+    let mut counts = BTreeMap::new();
+    for parent in tasks.iter().filter_map(|task| task.parent_id.as_deref()) {
+        counts
+            .entry(parent)
+            .or_insert(SubtaskCount { done: 0, total: 0 })
+            .total += 1;
     }
-    Some(SubtaskCount {
-        done: own
-            .iter()
-            .filter(|task| task.state == TaskState::Done)
-            .count(),
-        total: own.len(),
-    })
+    for task in tasks.iter().filter(|task| task.state == TaskState::Done) {
+        if let Some(count) = task
+            .parent_id
+            .as_deref()
+            .and_then(|parent| counts.get_mut(parent))
+        {
+            count.done += 1;
+        }
+    }
+    counts
 }
 
 /// The filtered tasks plus the parent of each subtask among them, so a match is shown in its place.

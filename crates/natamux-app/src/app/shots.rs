@@ -5,6 +5,7 @@
 use std::time::Duration;
 
 use gpui::{App, AsyncApp, Focusable, Window, WindowHandle, point, px};
+use natamux_proto::tasks::task::TaskState;
 use natamux_proto::workspaces::workspace::PreparingStep;
 
 use super::clock;
@@ -74,6 +75,11 @@ const FOUND_IN_DIFF: &str = "total";
 /// The lines Ask agent quotes: the new body of the function.
 const ASKED_LINES: (u32, u32) = (5, 6);
 
+/// The task count the board shots grow to.
+const GROWN: usize = 200;
+/// The card at the top of the Done column in the `board-scrolled` shot.
+const SCROLLED_TO: usize = 25;
+
 /// Sets the fake's data before the window watches it. Call it before `window::open`.
 pub fn prepare(shot: Shot) {
     if let Some(now) = parse_iso_ms(NOW) {
@@ -93,7 +99,15 @@ pub fn prepare(shot: Shot) {
     if shot == Shot::WorkspacePreparing {
         fake_daemon::shared().set_preparing(NO_WORKSPACE, PreparingStep::Fetch);
     }
+    if is_scrolled_board(shot) {
+        // The seed has fewer tasks, so every copy is Done: far over the 50 a column draws.
+        fake_daemon::shared().grow_tasks(GROWN, GROWN);
+    }
     shots_settings::prepare(shot);
+}
+
+fn is_scrolled_board(shot: Shot) -> bool {
+    matches!(shot, Shot::BoardMore | Shot::BoardScrolled)
 }
 
 pub fn run(handle: WindowHandle<Root>, shot: Shot, cx: &mut App) {
@@ -156,6 +170,16 @@ pub fn run(handle: WindowHandle<Root>, shot: Shot, cx: &mut App) {
                 .update(cx, |root, window, cx| panel_step(shot, root, window, cx))
                 .ok();
         }
+        if is_scrolled_board(shot) {
+            cx.background_executor().timer(SETTLE).await;
+            let at = (shot == Shot::BoardScrolled).then_some(SCROLLED_TO);
+            handle
+                .update(cx, |root, _, cx| {
+                    let board = root.task_view().read(cx).board().clone();
+                    board.update(cx, |board, cx| board.scroll_column(TaskState::Done, at, cx));
+                })
+                .ok();
+        }
         if shot == Shot::TerminalFind {
             cx.background_executor().timer(PANES_DRAWN).await;
             handle
@@ -167,7 +191,7 @@ pub fn run(handle: WindowHandle<Root>, shot: Shot, cx: &mut App) {
 }
 
 fn view_of(shot: Shot) -> ViewState {
-    let board = matches!(shot, Shot::TasksBoard | Shot::BoardHoverCard);
+    let board = matches!(shot, Shot::TasksBoard | Shot::BoardHoverCard) || is_scrolled_board(shot);
     let agents = (shot == Shot::AgentsGrid).then(|| vec![ASKING.to_string(), RUNNING.to_string()]);
     let mut view = ViewState {
         blurred: if shot == Shot::SidebarBlurred {
@@ -187,6 +211,7 @@ fn view_of(shot: Shot) -> ViewState {
     // The palette lists the workspaces opened last.
     view.recent = vec![RUNNING.to_string(), REVIEWED.to_string()];
     // The Ask agent shot shows the inline diff; the others keep side by side.
+    view.show_finished = is_scrolled_board(shot);
     view.diff.side_by_side = shot != Shot::WorkspaceChangesAsk;
     view.diff.show_whitespace = shot == Shot::DiffFind;
     if shot == Shot::DiffBlame {
@@ -210,6 +235,11 @@ fn enter(shot: Shot, root: &mut Root, window: &mut Window, cx: &mut gpui::Contex
             let first = board.read(cx).first_card(cx);
             board.update(cx, |board, cx| board.show_hover(first, cx));
         }
+        // Only the Done column draws; its list is made at the next draw, so the scroll is a
+        // step later (`run`).
+        Shot::BoardMore | Shot::BoardScrolled => dashboard.update(cx, |dashboard, cx| {
+            dashboard.set_state_filter(Some(TaskState::Done), cx)
+        }),
         Shot::AddTaskDialog => add_task_dialog::open(&dashboard, Some(TYPED.into()), window, cx),
         // The title bar's + menu, opened under its button at the right end.
         Shot::AddMenu => {
@@ -493,7 +523,9 @@ mod tests {
     fn only_the_board_and_progress_shots_leave_the_table() {
         for shot in Shot::ALL {
             let layout = match shot {
-                Shot::TasksBoard | Shot::BoardHoverCard => Layout::Board,
+                Shot::TasksBoard | Shot::BoardHoverCard | Shot::BoardMore | Shot::BoardScrolled => {
+                    Layout::Board
+                }
                 Shot::TasksProgress => Layout::Progress,
                 _ => Layout::Table,
             };

@@ -41,6 +41,18 @@ fn sidebar_tree(
     Entity<WorkspaceTree>,
     &mut VisualTestContext,
 ) {
+    let (_, dashboard, tree, cx) = hosted_tree(cx);
+    (dashboard, tree, cx)
+}
+
+fn hosted_tree(
+    cx: &mut TestAppContext,
+) -> (
+    Entity<Host>,
+    Entity<Dashboard>,
+    Entity<WorkspaceTree>,
+    &mut VisualTestContext,
+) {
     test_views::init(cx);
     let source = Arc::new(Source::FakeDaemon);
     let dashboard = cx.new(|cx| Dashboard::new(Ok(source), Default::default(), cx));
@@ -51,7 +63,7 @@ fn sidebar_tree(
     });
     cx.run_until_parked();
     let tree = host.read_with(cx, |host, _| host.tree.clone());
-    (dashboard, tree, cx)
+    (host, dashboard, tree, cx)
 }
 
 fn send(dashboard: &Entity<Dashboard>, event: DashboardEvent, cx: &mut VisualTestContext) {
@@ -97,6 +109,19 @@ fn usage_builds_and_draws_nothing_but_diff_stats_draw_without_a_build(cx: &mut T
 }
 
 #[gpui::test]
+fn the_parent_drawing_again_does_not_draw_the_tree_but_a_new_title_does(cx: &mut TestAppContext) {
+    let (host, dashboard, tree, cx) = hosted_tree(cx);
+    let before = counts(&tree, cx);
+    host.update(cx, |_, cx| cx.notify());
+    cx.run_until_parked();
+    assert_eq!(counts(&tree, cx), before);
+    let mut task = dashboard.read_with(cx, |dashboard, _| dashboard.data.tasks[0].clone());
+    task.title = "A new title".into();
+    send(&dashboard, DashboardEvent::TaskChanged(Box::new(task)), cx);
+    assert!(counts(&tree, cx).1 > before.1);
+}
+
+#[gpui::test]
 fn the_running_glyph_follows_terminals_and_activity(cx: &mut TestAppContext) {
     let (dashboard, tree, cx) = sidebar_tree(cx);
     let (builds, draws) = counts(&tree, cx);
@@ -120,6 +145,48 @@ fn the_running_glyph_follows_terminals_and_activity(cx: &mut TestAppContext) {
     let (rebuilt, redrawn) = counts(&tree, cx);
     assert_eq!(rebuilt, built);
     assert!(redrawn > drawn);
+}
+
+/// The builds of the rows' snapshot and the draws of the tree.
+fn snapshots(tree: &Entity<WorkspaceTree>, cx: &mut VisualTestContext) -> (usize, usize) {
+    tree.read_with(cx, |tree, _| (tree.memo.builds, tree.draws))
+}
+
+#[gpui::test]
+fn the_snapshot_is_read_again_only_when_an_input_changed(cx: &mut TestAppContext) {
+    let (dashboard, tree, cx) = sidebar_tree(cx);
+    let (built, drawn) = snapshots(&tree, cx);
+    assert!(built > 0);
+
+    // A bare notify, as a motion tick or a hover does: drawn, not read again.
+    tree.update(cx, |_, cx| cx.notify());
+    cx.run_until_parked();
+    let (same, redrawn) = snapshots(&tree, cx);
+    assert!(redrawn > drawn);
+    assert_eq!(same, built);
+
+    let mut task = dashboard.read_with(cx, |dashboard, _| dashboard.data.tasks[0].clone());
+    task.title = "A new title".into();
+    send(&dashboard, DashboardEvent::TaskChanged(Box::new(task)), cx);
+    let (after_title, _) = snapshots(&tree, cx);
+    assert!(after_title > same);
+
+    dashboard.update(cx, |dashboard, cx| {
+        dashboard.set_fold("task:T-0141", true, cx)
+    });
+    cx.run_until_parked();
+    let (after_fold, _) = snapshots(&tree, cx);
+    assert!(after_fold > after_title);
+
+    tree.update_in(cx, |tree, window, cx| window.focus(&tree.focus, cx));
+    cx.run_until_parked();
+    let (after_focus, _) = snapshots(&tree, cx);
+    assert!(after_focus > after_fold);
+
+    tree.update(cx, |tree, cx| tree.on_clock(cx));
+    cx.run_until_parked();
+    let (after_clock, _) = snapshots(&tree, cx);
+    assert!(after_clock > after_focus);
 }
 
 #[gpui::test]

@@ -17,7 +17,7 @@ use crate::app::view_state;
 use crate::daemon::health_proof::daemon_proves_itself;
 
 const START_WAIT: Duration = Duration::from_secs(30);
-const HEALTH_POLL: Duration = Duration::from_millis(20);
+const HEALTH_POLL: Duration = Duration::from_millis(5);
 
 /// The daemon's stdin. Closing it stops the daemon; the login PATH thread writes to it too.
 type ParentPipe = Arc<Mutex<Option<std::process::ChildStdin>>>;
@@ -373,6 +373,6 @@ fn login_shell_path() -> Option<String> {
             let _ = child.wait();
             return None;
         }
-        std::thread::sleep(Duration::from_millis(20));
+        std::thread::sleep(Duration::from_millis(5));
     }
 }

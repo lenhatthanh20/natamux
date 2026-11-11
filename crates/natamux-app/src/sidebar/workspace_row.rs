@@ -1,6 +1,8 @@
 //! The small pieces of the sidebar rows: the terminal row inside an open card, the inline rename
 //! field, the title, the age and the reason of a card (drawn in `task_card.rs`), and the tooltips.
 
+use std::collections::BTreeMap;
+
 use gpui::{AnyElement, ClickEvent, FontWeight, Stateful};
 use natamux_proto::agents::activity::latest_line;
 use natamux_proto::events::task_event::StoredEvent;
@@ -22,7 +24,7 @@ use crate::sidebar::shell_rows::{ShellRow, shell_row_name, shell_tag};
 use crate::sidebar::sidebar_text::{
     RowTip, card_line, pull_request_summary, row_tooltip, short_reason, step_text,
 };
-use crate::sidebar::sidebar_tree::{RowTier, row_tier, subtask_count};
+use crate::sidebar::sidebar_tree::{RowTier, SubtaskCount, row_tier};
 use crate::sidebar::workspace_groups::DEFAULT_REPO_ID;
 use crate::tasks::task_time::{AgeStyle, format_age, format_exact};
 
@@ -293,13 +295,15 @@ impl Snapshot {
         task: &Task,
         pinned_row: bool,
         blurred: &[String],
+        counts: &BTreeMap<&str, SubtaskCount>,
     ) {
         let id = &task.id;
         let events = data.events.get(id).map(|(_, events)| events.as_slice());
         let activity = data.activity.get(id);
         let repo = task.repo.as_deref().unwrap_or(DEFAULT_REPO_ID);
-        let subtasks =
-            subtask_count(id, &data.tasks).map(|count| format!("{}/{}", count.done, count.total));
+        let subtasks = counts
+            .get(id.as_str())
+            .map(|count| format!("{}/{}", count.done, count.total));
         let project = pinned_row
             .then(|| data.repos.iter().find(|known| known.id == repo))
             .flatten()

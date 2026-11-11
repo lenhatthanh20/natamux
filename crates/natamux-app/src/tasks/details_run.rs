@@ -1,6 +1,8 @@
 //! What the panel's clicks do: the stage card actions, the stage settings, the Details tab's
 //! buttons, the "..." menu, Edit and Close. Each makes the React screen's call.
 
+use std::rc::Rc;
+
 use gpui::{ClipboardItem, Entity, point};
 use natamux_proto::events::task_event::TaskEvent;
 use natamux_proto::stages::actions::StageAction;
@@ -13,6 +15,7 @@ use ui::{ContextMenu, ContextMenuEntry, prelude::*};
 use super::DetailsPanel;
 use crate::agents::agent_choices::{DEFAULT_AGENT, is_startable};
 use crate::app::dashboard::Dashboard;
+use crate::app::dashboard_data::Part;
 use crate::app::layout_mode::DetailsMode;
 use crate::app::shortcuts::EditTask;
 use crate::components::icons::icon_path;
@@ -53,17 +56,53 @@ pub fn agent_of(task: &Task) -> String {
         .unwrap_or_else(|| DEFAULT_AGENT.to_owned())
 }
 
+/// What `progress` works out; shared by Rc, so a redraw copies pointers, not the event log.
+#[derive(Clone)]
+pub(super) struct Computed {
+    pub steps: Rc<Vec<Step>>,
+    pub progress: Rc<Vec<StageProgress>>,
+    pub events: Rc<Vec<TaskEvent>>,
+    pub task: Rc<Task>,
+}
+
+/// What `Computed` depends on: the dashboard's task generation and the panel's read generation.
+pub(super) type MemoKey = (u64, u64);
+
+#[cfg(test)]
+thread_local! {
+    pub(super) static COMPUTES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 impl DetailsPanel {
     /// The task's steps with their settings, and the progress of each stage. None until the
-    /// settings and the events are read.
-    pub(super) fn progress(&self, task: &Task) -> Option<(Vec<Step>, Vec<StageProgress>)> {
+    /// settings and the events are read. Worked out again only when the task or a read changed,
+    /// not on each animation tick.
+    pub(super) fn progress(&self, task: &Task, cx: &App) -> Option<Computed> {
         let shown = self.shown.as_ref()?;
+        let key = (
+            self.dashboard.read(cx).data.gens.get(Part::Tasks),
+            shown.rev,
+        );
+        if let Some((kept, computed)) = shown.memo.borrow().as_ref()
+            && *kept == key
+        {
+            return Some(computed.clone());
+        }
         let settings = shown.settings.as_ref()?.as_ref().ok()?;
         let events = accepted(shown.events.as_ref()?.as_ref().ok()?);
         let steps = resolve_steps(&steps_of(task), &settings.settings.stages);
         let mut progress = natamux_proto::stages::progress::stage_progress(task, &events, &steps);
         end_with_the_task(&mut progress, task);
-        Some((steps, progress))
+        #[cfg(test)]
+        COMPUTES.with(|count| count.set(count.get() + 1));
+        let computed = Computed {
+            steps: Rc::new(steps),
+            progress: Rc::new(progress),
+            events: Rc::new(events),
+            task: Rc::new(task.clone()),
+        };
+        *shown.memo.borrow_mut() = Some((key, computed.clone()));
+        Some(computed)
     }
 
     pub(super) fn run(
@@ -207,8 +246,8 @@ impl DetailsPanel {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Option<Entity<SendBackDialog>> {
-        let (_, progress) = self.progress(task)?;
-        send_back_dialog::open(&self.dashboard, task, stage, &progress, window, cx)
+        let computed = self.progress(task, cx)?;
+        send_back_dialog::open(&self.dashboard, task, stage, &computed.progress, window, cx)
     }
 
     /// `stage.send-back`: the dialog of the stage that waits, once the stages are read.
@@ -218,8 +257,10 @@ impl DetailsPanel {
         cx: &mut Context<Self>,
     ) -> Option<Entity<SendBackDialog>> {
         let task = self.task(cx)?;
-        let (_, progress) = self.progress(&task)?;
-        let stage = send_back_target(&progress, task.state)?.stage.clone();
+        let computed = self.progress(&task, cx)?;
+        let stage = send_back_target(&computed.progress, task.state)?
+            .stage
+            .clone();
         self.open_send_back(&task, &stage, window, cx)
     }
 

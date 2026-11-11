@@ -8,17 +8,14 @@ use natamux_proto::tasks::task::{Task, TaskState};
 use ui::{Tooltip, prelude::*};
 
 use super::table_rules::{Step, pull_request_number, step};
-use super::task_confirms::confirm_delete_all;
 use super::task_rules::{needs_me, stage_label, state_label};
 use super::task_table_cells::{RowData, diff_label, quiet_chip};
 use super::task_time::{AgeStyle, format_age, format_exact};
-use super::task_view::now_ms;
 use super::task_view_rules::{BoardFolds, board_states, task_count};
 use crate::app::dashboard::Dashboard;
 use crate::app::shortcuts::{OpenSelected, SelectFirst, SelectLast, SelectNext, SelectPrevious};
 use crate::components::agent_badge::agent_name;
-use crate::components::button_style::quiet_button;
-use crate::components::chips::{CountBadge, StateChip};
+use crate::components::chips::CountBadge;
 use crate::components::colors::state_colors;
 use crate::components::empty_state::EmptyState;
 
@@ -26,7 +23,11 @@ const COLUMN_WIDTH: f32 = 272.;
 
 #[path = "task_board_cap.rs"]
 mod cap;
-use cap::{CardLimits, more_label};
+use cap::CardLimits;
+
+#[path = "task_board_columns.rs"]
+mod columns;
+use columns::Column;
 
 pub struct TaskBoard {
     dashboard: Entity<Dashboard>,
@@ -35,12 +36,17 @@ pub struct TaskBoard {
     folds: BoardFolds,
     /// The cards Done and Cancelled draw.
     limits: CardLimits,
+    /// What each unfolded column draws, set on every draw.
+    columns: Vec<(TaskState, Column)>,
     focus: FocusHandle,
     scroll: ScrollHandle,
     /// A card drawn with the hover look whatever the pointer does: the `board-hover-card` shot.
     hover_shown: Option<String>,
     #[cfg(test)]
     pub draws: usize,
+    /// Cards the lists built, to see that off-screen cards are not.
+    #[cfg(test)]
+    pub built: std::cell::Cell<usize>,
 }
 
 impl Focusable for TaskBoard {
@@ -56,11 +62,14 @@ impl TaskBoard {
             rows: Vec::new(),
             folds: BoardFolds::default(),
             limits: CardLimits::default(),
+            columns: Vec::new(),
             focus: cx.focus_handle(),
             scroll: ScrollHandle::new(),
             hover_shown: None,
             #[cfg(test)]
             draws: 0,
+            #[cfg(test)]
+            built: std::cell::Cell::new(0),
         }
     }
 
@@ -124,6 +133,7 @@ impl TaskBoard {
             .position(|task| Some(&task.id) == selected.as_ref());
         if let Some(task) = step(shown.len(), current, to).and_then(|index| shown.get(index)) {
             let id = task.id.clone();
+            self.reveal(&id);
             self.dashboard
                 .update(cx, |dashboard, cx| dashboard.select(Some(id), cx));
         }
@@ -174,6 +184,7 @@ impl TaskBoard {
         v_flex()
             .id(("board-card", index))
             .flex_none()
+            .w_full()
             .gap(rems_from_px(6.0_f32))
             .px(rems_from_px(12.0_f32))
             .py(rems_from_px(10.0_f32))
@@ -246,130 +257,6 @@ impl TaskBoard {
             )
             .child(CountBadge::new(count))
     }
-
-    fn render_column(
-        &self,
-        index: usize,
-        state: TaskState,
-        cards: Vec<AnyElement>,
-        tasks: Vec<Task>,
-        cx: &Context<Self>,
-    ) -> impl IntoElement + use<> {
-        let colors = cx.theme().colors();
-        let label = state_label(state);
-        let deletable = state.is_finished() && !tasks.is_empty();
-        let deleting = self.dashboard.read(cx).deletes.batch_queued();
-        let dashboard = self.dashboard.clone();
-        let empty = cards.is_empty();
-        let hidden = tasks.len() - cards.len();
-        let more = (hidden > 0).then(|| {
-            quiet_button(("board-more", index), more_label(hidden))
-                .label_size(LabelSize::Small)
-                .on_click(cx.listener(move |this, _, _, cx| this.more(state, cx)))
-        });
-        v_flex()
-            .flex_none()
-            .w(px(COLUMN_WIDTH))
-            .h_full()
-            .min_h_0()
-            .p_2()
-            .rounded_md()
-            .bg(colors.surface_background.opacity(0.6))
-            .child(
-                h_flex()
-                    .flex_none()
-                    .h(rems_from_px(36.0_f32))
-                    .px_1()
-                    .gap_2()
-                    .child(StateChip::new(state))
-                    .child(CountBadge::new(tasks.len()))
-                    .child(div().flex_1())
-                    .when(deletable, |header| {
-                        header.child(
-                            IconButton::new(("board-delete", index), IconName::Trash)
-                                .icon_size(IconSize::Small)
-                                .disabled(deleting)
-                                .tooltip(Tooltip::text(format!(
-                                    "Delete all {} tasks",
-                                    label.to_lowercase()
-                                )))
-                                .on_click(move |_, window, cx| {
-                                    confirm_delete_all(&dashboard, state, &tasks, window, cx)
-                                }),
-                        )
-                    })
-                    .child(
-                        IconButton::new(("board-collapse", index), IconName::ChevronDown)
-                            .icon_size(IconSize::Small)
-                            .tooltip(Tooltip::text(format!("Collapse {label}")))
-                            .on_click(
-                                cx.listener(move |this, _, _, cx| this.fold(state, true, cx)),
-                            ),
-                    ),
-            )
-            .child(
-                v_flex()
-                    .id(("board-cards", index))
-                    .flex_1()
-                    .min_h_0()
-                    .overflow_y_scroll()
-                    .gap_2()
-                    .p(rems_from_px(2.0_f32))
-                    .when(empty, |list| {
-                        list.child(
-                            Label::new("Nothing here")
-                                .size(LabelSize::Small)
-                                .color(Color::Muted),
-                        )
-                    })
-                    .children(cards)
-                    .children(more),
-            )
-    }
-
-    /// One state's column, folded or with its cards.
-    fn render_state(
-        &self,
-        index: usize,
-        state: TaskState,
-        columns_count: usize,
-        selected: Option<&str>,
-        now: i64,
-        cx: &Context<Self>,
-    ) -> AnyElement {
-        let in_column: Vec<(usize, &Task)> = self
-            .rows
-            .iter()
-            .enumerate()
-            .filter(|(_, task)| task.state == state)
-            .collect();
-        if self.folds.is_folded(state, in_column.len(), columns_count) {
-            let folded = self.render_folded(index, state, in_column.len(), cx);
-            return folded.into_any_element();
-        }
-        let tasks: Vec<&Task> = in_column.iter().map(|(_, task)| *task).collect();
-        let drawn = self.limits.drawn(state, &tasks);
-        // Only the cards drawn read the dashboard: a capped column skips the rest.
-        let rows: Vec<(usize, RowData)> = {
-            let data = &self.dashboard.read(cx).data;
-            in_column
-                .iter()
-                .zip(drawn)
-                .filter(|(_, drawn)| *drawn)
-                .map(|((at, task), _)| (*at, RowData::of(task, data, now)))
-                .collect()
-        };
-        let cards: Vec<AnyElement> = rows
-            .iter()
-            .map(|(at, row)| {
-                let picked = selected == Some(row.task.id.as_str());
-                self.render_card(*at, row, picked, cx).into_any_element()
-            })
-            .collect();
-        let tasks: Vec<Task> = tasks.into_iter().cloned().collect();
-        self.render_column(index, state, cards, tasks, cx)
-            .into_any_element()
-    }
 }
 
 /// Line 1 of a card: id, the quiet chip, and the age on the right.
@@ -421,20 +308,15 @@ impl Render for TaskBoard {
         {
             self.draws += 1;
         }
-        let now = now_ms();
-        let (states, selected) = {
+        let states = {
             let dashboard = self.dashboard.read(cx);
-            let states = board_states(dashboard.state_filter, dashboard.view().show_finished);
-            (states, dashboard.selected.clone())
+            board_states(dashboard.state_filter, dashboard.view().show_finished)
         };
         let columns_count = states.len();
-        let columns: Vec<AnyElement> = states
-            .into_iter()
-            .enumerate()
-            .map(|(index, state)| {
-                self.render_state(index, state, columns_count, selected.as_deref(), now, cx)
-            })
-            .collect();
+        let mut columns: Vec<AnyElement> = Vec::new();
+        for (index, state) in states.into_iter().enumerate() {
+            columns.push(self.render_state(index, state, columns_count, cx));
+        }
         let mut context = KeyContext::default();
         context.add("NatamuxList");
         context.add("not_editing");
@@ -465,3 +347,7 @@ impl Render for TaskBoard {
             .children(columns)
     }
 }
+
+#[cfg(test)]
+#[path = "task_board_tests.rs"]
+mod tests;

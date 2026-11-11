@@ -158,3 +158,35 @@ fn a_quiet_moment_saves_the_screen_of_a_shell_that_printed() {
     service.inner.save_screens("T-0001", true);
     assert!(!file.exists());
 }
+
+#[test]
+fn a_busy_shell_is_saved_at_most_once_in_a_while() {
+    use crate::terminals::screen_files::screens_dir;
+
+    let dir = temp_dir();
+    let service = service_in(Some(dir.0.clone()));
+    let _one = attach_one(&service, "1");
+    let session = service.inner.get("T-0001", "1").unwrap();
+    let print = |text: &[u8]| {
+        let mut guard = lock(&session);
+        guard.screen.write(text);
+        guard.offset += text.len() as u64;
+    };
+    let file = screens_dir(&dir.0, "T-0001").join("1.ans");
+
+    print(b"first\r\n");
+    service.inner.save_screens("T-0001", false);
+    assert!(file.exists());
+    std::fs::remove_file(&file).unwrap();
+    // Still printing, saved a moment ago: skipped.
+    print(b"second\r\n");
+    service.inner.save_screens("T-0001", false);
+    assert!(!file.exists());
+    // The quiet moment and the shutdown skip the wait.
+    service.inner.save_screens("T-0001", true);
+    assert!(file.exists());
+    std::fs::remove_file(&file).unwrap();
+    print(b"third\r\n");
+    service.inner.save_all_screens();
+    assert!(file.exists());
+}

@@ -11,14 +11,16 @@ use crate::support::{SIZE, Size, numbered, numbered_lines, setup};
 fn replays_the_whole_history_from_the_first_line() {
     let h = setup();
     attach_one(&h);
-    for index in 1..=7000 {
+    // As many lines as the history keeps at this width: none is lost yet.
+    let count = scrollback_lines(SIZE.cols);
+    for index in 1..=count {
         h.pty(0).emit(format!("line {index}\r\n"));
     }
 
     let (later, _, _) = attach_one(&h);
     h.settled("T-0001", "1");
 
-    assert_eq!(later.screen(SIZE), numbered_lines(7000));
+    assert_eq!(later.screen(SIZE), numbered_lines(count));
 }
 
 #[test]

@@ -82,3 +82,56 @@ fn usage_reader_has_a_reader_for_each_agent_that_writes_its_usage_and_none_for_c
     }
     assert!(usage_reader("cursor").is_none());
 }
+
+fn write_lines(name: &str, lines: &[String]) -> (crate::test_support::TempDir, std::path::PathBuf) {
+    let dir = crate::test_support::TempDir::new("usage-stream");
+    let path = dir.path().join(name);
+    std::fs::write(&path, lines.join("\n")).unwrap();
+    (dir, path)
+}
+
+#[test]
+fn readers_skip_big_broken_and_look_alike_lines_without_changing_the_totals() {
+    let big = format!(r#"{{"type":"user","content":"{}"}}"#, "x".repeat(200_000));
+    let look_alike = r#"{"type":"user","content":"the word \"usage\" in text"}"#.to_string();
+    let broken = r#"{"message":{"usage":"#.to_string();
+    let claude = |id: &str, out: u64| {
+        format!(
+            r#"{{"message":{{"id":"{id}","model":"m","usage":{{"input_tokens":1,"output_tokens":{out}}}}}}}"#
+        )
+    };
+    let lines = [
+        big.clone(),
+        claude("a", 5),
+        look_alike.clone(),
+        broken.clone(),
+        claude("a", 9),
+        big.clone(),
+        claude("b", 2),
+    ];
+    let (_dir, path) = write_lines("s.jsonl", &lines);
+    assert_eq!(read_claude_usage(&path).0, [row("m", [2, 0, 0, 0, 11])]);
+
+    let turn = r#"{"type":"turn_context","payload":{"model":"gpt"}}"#.to_string();
+    let count = |input: u64| {
+        format!(
+            r#"{{"type":"event_msg","payload":{{"type":"token_count","info":{{"total_token_usage":{{"input_tokens":{input},"output_tokens":1}}}}}}}}"#
+        )
+    };
+    let lines = [
+        big.clone(),
+        turn,
+        look_alike.clone(),
+        count(10),
+        broken.clone(),
+        count(10),
+        count(30),
+    ];
+    let (_dir, path) = write_lines("c.jsonl", &lines);
+    assert_eq!(read_codex_usage(&path).0, [row("gpt", [30, 0, 0, 0, 1])]);
+
+    let record = r#"{"type":"session.usage_record","data":{"usage":{"inputTokens":7,"outputTokens":3,"model":"cp"}}}"#.to_string();
+    let lines = [big, look_alike, broken, record.clone(), record];
+    let (_dir, path) = write_lines("e.jsonl", &lines);
+    assert_eq!(read_copilot_usage(&path).0, [row("cp", [14, 0, 0, 0, 6])]);
+}

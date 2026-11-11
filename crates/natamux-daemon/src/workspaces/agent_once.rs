@@ -94,6 +94,7 @@ fn run_with_env(run: AgentRun, daemon_env: &Env) -> Result<String, String> {
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    natamux_core::login_path::apply(&mut command);
     detach(&mut command, shell.detached);
     let mut child = command
         .spawn()
