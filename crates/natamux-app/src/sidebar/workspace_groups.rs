@@ -208,13 +208,17 @@ pub fn held_id(hold: &Hold) -> Option<&str> {
     if hold.open { hold.id.as_deref() } else { None }
 }
 
-/// The branch without the "natamux/t-0001-" part, which the row shows already.
+/// The branch without the "<project>/t-0001-" part, which the row shows already.
 pub fn short_branch(task: &Task) -> String {
     let Some(branch) = task.branch.as_deref() else {
         return String::new();
     };
-    let prefix = format!("natamux/{}-", task.id.to_lowercase());
-    branch.strip_prefix(&prefix).unwrap_or(branch).to_owned()
+    let prefix = format!("{}-", task.id.to_lowercase());
+    branch
+        .split_once('/')
+        .and_then(|(_, rest)| rest.strip_prefix(&prefix))
+        .unwrap_or(branch)
+        .to_owned()
 }
 
 /// What a folded group hides that the user should still see: a workspace that needs them, else

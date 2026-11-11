@@ -107,9 +107,11 @@ impl FakeDaemon {
     pub fn create_workspace(&self, task_id: &str, base: Option<&str>) -> Answer<Task> {
         let mut data = self.data();
         let folder = data.worktrees_dir.clone().unwrap_or_else(|| "/work".into());
+        let found = data.task_mut(task_id)?.clone();
+        let branch = data.default_branch(&found);
         let task = data.task_mut(task_id)?;
         task.workspace = Some(format!("{folder}/{task_id}"));
-        task.branch = Some(format!("natamux/{}", task_id.to_lowercase()));
+        task.branch = Some(branch);
         let task = task.clone();
         if let Some(base) = base {
             data.graphs.entry(task_id.into()).or_default().base = Some(base.into());

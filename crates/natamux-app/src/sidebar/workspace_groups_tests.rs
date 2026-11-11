@@ -311,6 +311,11 @@ fn drops_the_part_that_names_the_task() {
         branch("T-0012", Some("natamux/t-0012-fix-login")),
         "fix-login"
     );
+    assert_eq!(
+        branch("T-0012", Some("my-app/t-0012-fix-login")),
+        "fix-login"
+    );
+    assert_eq!(branch("T-0012", Some("my-app/T-0012")), "my-app/T-0012");
     assert_eq!(branch("T-0012", Some("feature/x")), "feature/x");
     assert_eq!(branch("T-0012", None), "");
 }

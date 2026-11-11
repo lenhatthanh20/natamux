@@ -5,6 +5,7 @@
 use std::collections::BTreeSet;
 
 use natamux_client::ClientError;
+use natamux_core::workspaces::branch_name::branch_name_for;
 use natamux_proto::projects::issues::GitHubIssue;
 use natamux_proto::projects::repo::{AddRepo, Repo};
 use natamux_proto::projects::repo_trust::{RepoCommand, RepoTrustView, SetupScript};
@@ -84,6 +85,13 @@ impl Data {
         if self.worktrees_dir.is_none() {
             self.worktrees_dir = Some("/data/worktrees".into());
         }
+    }
+
+    /// The daemon's default branch of `task`, named after the name of the task's project.
+    pub(super) fn default_branch(&self, task: &Task) -> String {
+        let repo = self.repos.iter().find(|repo| task.repo.as_ref() == Some(&repo.id));
+        let project = repo.map_or("", |repo| repo.name.as_str());
+        branch_name_for(project, &task.id, &task.title)
     }
 
     fn add_repo(&mut self, input: &AddRepo) -> Answer<Repo> {

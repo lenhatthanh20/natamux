@@ -346,14 +346,18 @@ fn formats_sizes_as_core_does() {
 #[test]
 fn prefills_the_branch_from_the_key_in_the_title() {
     assert_eq!(
-        prefill_branch(Some("{id}"), "ABC-12: Fix it").as_deref(),
+        prefill_branch(Some("{id}"), "My App", "ABC-12: Fix it").as_deref(),
         Some("ABC-12")
     );
     assert_eq!(
-        prefill_branch(None, "ABC-12: Fix it").as_deref(),
-        Some("natamux/abc-12-fix-it")
+        prefill_branch(Some("{project}/{id}"), "My App", "ABC-12: Fix it").as_deref(),
+        Some("my-app/ABC-12")
     );
-    assert_eq!(prefill_branch(None, "Fix it"), None);
+    assert_eq!(
+        prefill_branch(None, "My App", "ABC-12: Fix it").as_deref(),
+        Some("my-app/abc-12-fix-it")
+    );
+    assert_eq!(prefill_branch(None, "My App", "Fix it"), None);
 }
 
 #[test]

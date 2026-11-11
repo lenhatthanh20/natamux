@@ -402,9 +402,7 @@ impl FakeDaemon {
         }
         let folder = data.worktrees_dir.clone().unwrap_or_else(|| "/work".into());
         task.workspace = Some(format!("{folder}/{}", task.id));
-        task.branch = input
-            .branch
-            .or_else(|| Some(format!("natamux/{}", task.id.to_lowercase())));
+        task.branch = input.branch.or_else(|| Some(data.default_branch(&task)));
         task.agent = input.agent.or_else(|| Some("claude-code".into()));
         task.state = TaskState::Running;
         task.stage = "implement".into();

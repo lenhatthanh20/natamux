@@ -237,8 +237,9 @@ pub fn send_backs_field(text: &str) -> Result<Option<usize>, &'static str> {
 }
 
 pub const BRANCH_NAME_LABEL: &str = "Branch name";
-pub const BRANCH_NAME_PLACEHOLDER: &str = "natamux/{id}-{slug}";
-pub const BRANCH_NAME_HINT: &str = "Use {id} and {slug}. New tasks use it for their branch.";
+pub const BRANCH_NAME_PLACEHOLDER: &str = "{project}/{id}-{slug}";
+pub const BRANCH_NAME_HINT: &str =
+    "Use {project}, {id} and {slug}. New tasks use it for their branch.";
 
 /// The text of the branch name field: empty is None (the key is left out), else the trimmed text
 /// or the problem of `git.branchName`.

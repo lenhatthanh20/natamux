@@ -234,11 +234,12 @@ pub fn blocked_reason(form: &StartForm, choice: &SourceChoice) -> Option<&'stati
     )
 }
 
-/// The branch the field shows while the user has not edited it: the pattern applied to the key
-/// at the start of the title. None without a key, as the task id is not known yet.
-pub fn prefill_branch(pattern: Option<&str>, title: &str) -> Option<String> {
+/// The branch the field shows while the user has not edited it: the pattern applied to the
+/// project's name and the key at the start of the title. None without a key, as the task id is
+/// not known yet.
+pub fn prefill_branch(pattern: Option<&str>, project: &str, title: &str) -> Option<String> {
     let (id, rest) = split_task_id(title);
-    id.map(|id| branch_name_from(pattern, &id, &rest))
+    id.map(|id| branch_name_from(pattern, project, &id, &rest))
 }
 
 fn filled(text: &str) -> Option<String> {

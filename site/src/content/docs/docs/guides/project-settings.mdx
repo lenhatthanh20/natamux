@@ -20,7 +20,7 @@ The tab has three groups: **Agents** (the first two fields), **Git** (the branch
 
 - **Agent send backs.** The most times an agent, or a CI failure, may send the task back from one stage before it waits for you (`agents.maxSendBacks`). Empty means no limit, the default. See [Limit the send backs](#limit-the-send-backs).
 - **Pause idle agents after (minutes).** After how many minutes an agent that ended its turn, in a terminal nobody looks at, is paused (`agents.pauseIdleAfterMinutes`). Empty means 30. `0` turns the pause off. See [An idle agent pauses](/docs/guides/terminal/#an-idle-agent-pauses).
-- **Branch name.** The name of the branch of a new task (`git.branchName`). Empty means `natamux/{id}-{slug}`.
+- **Branch name.** The name of the branch of a new task (`git.branchName`). It can use `{project}`, `{id}` and `{slug}`. Empty means `{project}/{id}-{slug}`.
 
 ### GitHub issues
 
