@@ -89,8 +89,16 @@ fn keeps_the_stage_after_the_context_on_the_task_agent() {
         ("agent", json!("codex")),
         ("args", json!("--model x")),
     ] {
-        let found = issues(json!([context(), with(spec(), field, value), agent("implement")]));
-        assert_eq!(found, [error(Some("spec"), &own_message("spec"))], "{field}");
+        let found = issues(json!([
+            context(),
+            with(spec(), field, value),
+            agent("implement")
+        ]));
+        assert_eq!(
+            found,
+            [error(Some("spec"), &own_message("spec"))],
+            "{field}"
+        );
     }
 }
 
@@ -120,7 +128,11 @@ fn needs_a_stage_that_starts_the_task_agent_after_the_context() {
 
 #[test]
 fn skips_a_stage_that_is_off() {
-    let off = with(with(spec(), "ownShell", json!(true)), "enabled", json!(false));
+    let off = with(
+        with(spec(), "ownShell", json!(true)),
+        "enabled",
+        json!(false),
+    );
     let plan = json!({"id": "plan", "kind": "agent", "gate": "manual", "output": "plan.md"});
     assert!(issues(json!([context(), off, plan, agent("implement")])).is_empty());
 }

@@ -101,7 +101,9 @@ fn a_new_task_keeps_a_trimmed_model() {
 #[test]
 fn a_new_task_refuses_a_model_that_is_not_one_safe_word() {
     for model in ["-p", "opus; rm", "a b", "$(x)", ""] {
-        let error = failed(create_task_input(Some(&json!({"title": "x", "model": model}))));
+        let error = failed(create_task_input(Some(
+            &json!({"title": "x", "model": model}),
+        )));
         assert_eq!(error.0.len(), 1, "{model}");
         assert_eq!(error.0[0].path(), &[json!("model")], "{model}");
         assert!(error.describe().contains(MODEL_NAME_ERROR), "{model}");

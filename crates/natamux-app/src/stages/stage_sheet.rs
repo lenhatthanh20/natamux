@@ -182,8 +182,8 @@ impl DialogView for StageSheet {
         let mut ring = self.stepper_stops(cx);
         ring.extend(self.field_stops(cx));
         let steps = self.pipeline.read(cx).steps();
-        let context = find_stage(steps, &self.id)
-            .is_some_and(|stage| stage.kind == StageKind::Context);
+        let context =
+            find_stage(steps, &self.id).is_some_and(|stage| stage.kind == StageKind::Context);
         if !context {
             ring.push(self.remove_focus.clone());
         }
