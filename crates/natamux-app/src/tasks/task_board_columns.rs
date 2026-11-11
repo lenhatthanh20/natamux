@@ -1,7 +1,7 @@
 //! The columns of the task board. Each column draws its cards through a `list`: only the cards
 //! on screen are built, so hundreds of tasks cost a few cards a frame.
 
-use gpui::{ListAlignment, ListState, list};
+use gpui::{ListAlignment, ListOffset, ListState, list};
 use natamux_proto::tasks::task::{Task, TaskState};
 use ui::{Tooltip, prelude::*};
 
@@ -67,6 +67,21 @@ impl TaskBoard {
         }
         // New data can change a card's height, not only the count.
         column.list.remeasure_items(0..items);
+    }
+
+    /// The board shots: a column's list to its end (`None`) or with card `item` at the top.
+    /// The notify draws the board again, as a list's scroll alone does not.
+    pub fn scroll_column(&mut self, state: TaskState, item: Option<usize>, cx: &mut Context<Self>) {
+        if let Some((_, column)) = self.columns.iter().find(|(each, _)| *each == state) {
+            // The end: the last item at the top, and the list fills the rest from the items
+            // above it. `scroll_to_reveal_item` does not move to an item it has not measured.
+            let item_ix = item.unwrap_or(column.items().saturating_sub(1));
+            column.list.scroll_to(ListOffset {
+                item_ix,
+                offset_in_item: px(0.),
+            });
+        }
+        cx.notify();
     }
 
     /// Scrolls the column that holds the task so its card shows.

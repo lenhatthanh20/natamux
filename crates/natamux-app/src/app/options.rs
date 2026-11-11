@@ -155,10 +155,13 @@ pub enum Shot {
     /// T-0318: Annotate with Git Blame on in the diff and in the editor tab.
     DiffBlame,
     EditorBlame,
+    /// A Done column over its cap, scrolled to the end and to the middle.
+    BoardMore,
+    BoardScrolled,
 }
 
 impl Shot {
-    pub const ALL: [Shot; 108] = [
+    pub const ALL: [Shot; 110] = [
         Shot::TasksTable,
         Shot::TasksBoard,
         Shot::BoardHoverCard,
@@ -267,6 +270,8 @@ impl Shot {
         Shot::EditorOutline,
         Shot::DiffBlame,
         Shot::EditorBlame,
+        Shot::BoardMore,
+        Shot::BoardScrolled,
     ];
 
     pub fn name(self) -> &'static str {
@@ -379,6 +384,8 @@ impl Shot {
             Shot::EditorOutline => "editor-outline",
             Shot::DiffBlame => "diff-blame",
             Shot::EditorBlame => "editor-blame",
+            Shot::BoardMore => "board-more",
+            Shot::BoardScrolled => "board-scrolled",
         }
     }
 
