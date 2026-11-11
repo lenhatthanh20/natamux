@@ -77,6 +77,15 @@ mod tests {
     }
 
     #[test]
+    fn review_keeps_earlier_rounds_as_revisions() {
+        let prompt = default_prompt(&agent("agent-review", Some("review.md")));
+        assert!(prompt.contains("keep all of its text"));
+        assert!(prompt.contains("\"## Revision N\""));
+        assert!(prompt.contains("\"### Findings\""));
+        assert!(prompt.contains("newest revision"));
+    }
+
+    #[test]
     fn makes_one_for_a_stage_of_its_own() {
         assert_eq!(
             default_prompt(&agent("sign-off", Some("sign-off.md"))),
