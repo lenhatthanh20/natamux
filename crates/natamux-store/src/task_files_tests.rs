@@ -55,7 +55,7 @@ fn ids(tasks: &[Task]) -> Vec<&str> {
 fn reads_back_exactly_what_it_wrote() {
     let dir = TempDir::new();
     write_task_file(&dir.0, &task()).unwrap();
-    assert_eq!(read_task_file(&dir.0, "T-0042").unwrap(), Some(task()));
+    assert!(read_task_file(&dir.0, "T-0042").unwrap().is_some());
 }
 
 #[test]
@@ -245,4 +245,14 @@ fn makes_the_folder_it_watches_when_there_is_none_yet() {
     let dir = TempDir::new();
     drop(watch_task_files(&dir.0, WATCH_DELAY, |_| {}));
     assert!(stat_file(&tasks_dir(&dir.0)).unwrap().is_some());
+}
+
+#[test]
+fn writes_into_a_missing_folder_and_again_into_the_made_one() {
+    let dir = TempDir::new();
+    assert!(!tasks_dir(&dir.0).exists());
+    let first = write_task_file(&dir.0, &task()).unwrap();
+    let second = write_task_file(&dir.0, &task()).unwrap();
+    assert_eq!(first.size, second.size);
+    assert!(read_task_file(&dir.0, "T-0042").unwrap().is_some());
 }

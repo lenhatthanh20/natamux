@@ -90,7 +90,9 @@ fn does_not_count_a_snapshot_or_the_output_that_waited_as_unacked() {
     let (_, first) = client();
     h.attach(&first).detach();
     let pty = h.pty(0);
-    let history = format!("{}\r\n", "s".repeat(78)).repeat(8000);
+    // A colour change at every cell: the snapshot of the rows the history keeps must be larger
+    // than the high-water mark.
+    let history = format!("{}\r\n", "\x1b[31ms\x1b[32ms".repeat(39)).repeat(8000);
     pty.emit(&history);
     h.settled(TASK, MAIN);
 

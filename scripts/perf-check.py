@@ -43,6 +43,7 @@ TARGETS = {
     "daemon_busy_rss_mb": (1024, True),
     "task_init_2000_ms": (300, True),
     "hook_p95_ms": (5, False),
+    "hook_paced_p95_ms": (5, False),
     "echo_flood_p95_ms": (10, True),
     "echo_agents_p95_ms": (5, True),
     "restore_snapshot_ms": (50, True),

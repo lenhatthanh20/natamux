@@ -434,6 +434,8 @@ fn daemon_benchmark() {
     let (init_500, init_500_warm) = loads::task_init(500);
     let (init_2000, init_2000_warm) = loads::task_init(2_000);
     let (hook_p50, hook_p95) = loads::hooks_at_once(loads::AGENTS_AT_ONCE);
+    let (single_p50, single_p95) = loads::hooks_single(loads::AGENTS_AT_ONCE);
+    let (paced_p50, paced_p95) = loads::hooks_paced(loads::AGENTS_AT_ONCE);
     let (busy, agents) = (loads::BUSY_SHELLS, loads::AGENTS_AT_ONCE);
     let table = format!(
         "| measure | value |\n|---|---|\n\
@@ -450,7 +452,9 @@ fn daemon_benchmark() {
          | snapshot at 80 cols, full / catch-up | {full_kib} / {tail_kib} KiB, {full_ms} / {tail_ms} ms |\n\
          | RSS after {busy} shells printed 20 MB each | {busy_mib} MiB |\n\
          | `TaskSync::init`, 500 / 2,000 tasks, cold / warm | {init_500} / {init_500_warm}, {init_2000} / {init_2000_warm} ms |\n\
-         | hook with {agents} agents at once, p50 / p95 | {hook_p50} / {hook_p95} ms |\n",
+         | hook with {agents} agents at once, p50 / p95 | {hook_p50} / {hook_p95} ms |\n\
+         | hook from one thread, p50 / p95 | {single_p50} / {single_p95} ms |\n\
+         | hook with {agents} agents, 20 ms between hooks, p50 / p95 | {paced_p50} / {paced_p95} ms |\n",
         opens.restore_ms,
         opens.save_ms,
         opens.first_output_text(),
@@ -472,6 +476,10 @@ fn daemon_benchmark() {
         "task_init_2000_warm_ms": init_2000_warm,
         "hook_p50_ms": hook_p50,
         "hook_p95_ms": hook_p95,
+        "hook_single_p50_ms": single_p50,
+        "hook_single_p95_ms": single_p95,
+        "hook_paced_p50_ms": paced_p50,
+        "hook_paced_p95_ms": paced_p95,
         "restore_snapshot_ms": opens.restore_ms,
         "screen_save_30_ms": opens.save_ms,
         "shell_first_output_ms": opens.first_output_ms,

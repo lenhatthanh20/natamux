@@ -32,6 +32,7 @@ The existing targets are in [plan-rust-migration.md, "Target numbers"](plan-rust
 | Memory | Daemon RSS after 30 shells printed 20 MB each | `daemon_busy_rss_mb` | Draft ≤ 1 GB | Yes |
 | Daemon start | `TaskSync::init` with 2,000 task files, cold index | `task_init_2000_ms` | ≤ 300 ms (P4 threshold) | Yes |
 | Hooks | `HookService::handle` with 30 agents at once | `hook_p95_ms` | ≤ 5 ms p95 | No: 15–17 ms on CI |
+| Hooks | The same, 30 agents with 20 ms between hooks | `hook_paced_p95_ms` | ≤ 5 ms p95 | No: reported, no baseline yet |
 | Terminals | Echo of a quiet shell while 5 flood | `echo_flood_p95_ms` | ≤ 10 ms p95 | Yes (also asserted in `daemon_bench.rs`) |
 | Terminals | Echo of a typed shell while 29 agents print | `echo_agents_p95_ms` | ≤ 5 ms p95 | Yes (also asserted in `daemon_bench.rs`) |
 
@@ -90,6 +91,8 @@ CPU and draws a second of the fake's task table with focus and behind Finder; it
 | `task_init_500_ms`, `task_init_2000_ms` | `TaskSync::init` with 500 and 2,000 task files and a new index: every file is read |
 | `task_init_500_warm_ms`, `task_init_2000_warm_ms` | the same files again with the index of the first load, as at a daemon start with no change |
 | `hook_p50_ms`, `hook_p95_ms` | `HookService::handle` from 30 threads at once, 40 Claude Code hooks each (prompt, tool start, tool end, turn end), the task found by the working directory |
+| `hook_single_p50_ms`, `hook_single_p95_ms` | the same hooks from one thread, one agent after the other: the work of a hook, with no queue |
+| `hook_paced_p50_ms`, `hook_paced_p95_ms` | the same from 30 threads, each starting 0.7 ms after the one before and waiting 20 ms after each hook (50 hooks a second each, far more than a real agent): what an agent waits for a hook. `hook_p95_ms` adds the queue of 30 busy threads on 4 cores, which no real use has |
 | `restore_snapshot_ms` | p50 of 10 runs: from `attach` to the first snapshot bytes the client gets, for a shell with a saved screen (120x40, 1,000 history rows) that the open-shells file lists. Asserted at 50 ms in `daemon_bench.rs`; the numbers are in `tests/daemon_bench_parts/opens.rs`. |
 | `screen_save_30_ms` | `TerminalService::save_screens` with 30 shells that each hold a full screen and printed since: the cost at shutdown. Reported; asserted at 1,000 ms in `daemon_bench.rs`. |
 | `shell_first_output_ms` | p50 of 5 runs: from the real `spawn_shell` of the login shell in a temp folder to its first output byte. It depends on the shell and its startup files, so it is only reported. `null` when the spawn fails or on Windows. |
@@ -127,7 +130,7 @@ What the numbers say:
 - Live events (P2, P3): the median UI-thread time per event fell from 0.85 ms to 0.05 ms. The p95 is the task changes (1 event in 10), still over 1 ms: each one sorts and filters the task list and builds the sidebar tree again.
 - Board (P2): the cached board and the 50-card cap took a third off. The 200 open cards were the rest; the second round drew them with a list per column (see below).
 - Hooks (P7): with a lock per task, the 30 agents of the bench no longer take turns, so all 30 threads run at once on the 4-core runner: the median rose and the p95 stayed in the noise of the "before" runs (13–38 ms). The bench's hooks change no task file (no stage), so a background file writer would not change this number; it was not built. The lock per task matters when one task's stage lookup is slow: the other tasks' hooks no longer wait for it (`hook_service_tests.rs`).
-- Catch-up snapshots (P8): a catch-up sends at most 1,000 history rows of the 7,812 at 80 cols. `daemon_bench.rs` reports both snapshots at 80 cols (`snapshot_80_*_kib`, `serialize_80_*_ms`) and fails when the catch-up is not at least 5 times smaller. The change in behavior: the app builds a new screen from each catch-up, so a terminal that fell behind (a flooding agent, a parked terminal over 512 KiB behind, a reconnect out of the ring) keeps only those 1,000 rows above its screen. A first attach still gets the full history.
+- Catch-up snapshots (P8): a catch-up sends at most 1,000 history rows of the 5,208 at 80 cols. `daemon_bench.rs` reports both snapshots at 80 cols (`snapshot_80_*_kib`, `serialize_80_*_ms`) and fails when the catch-up is not at least 5 times smaller. The change in behavior: the app builds a new screen from each catch-up, so a terminal that fell behind (a flooding agent, a parked terminal over 512 KiB behind, a reconnect out of the ring) keeps only those 1,000 rows above its screen. A first attach still gets the full history.
 - Idle (P9): the bench runs on the fake daemon, which has neither the daemon watcher nor the fallback poll, so these numbers cannot show P9. The idle profile (`motion-sample.txt`) shows only waits, no Natamux code.
 - Noise: the same code moved 10–50% between runs (`task_init_2000_ms` 141 and 216 before). Only stable numbers have a baseline.
 
@@ -157,6 +160,7 @@ What was done:
 - Daemon start: the login-shell PATH no longer blocks the daemon from binding its port (see Follow-ups).
 - Usage: the transcript readers stream the file line by line and parse only the lines that can hold usage. Before, every line was parsed and all were kept in memory, at each turn end.
 - Screen files: a shell that keeps printing is saved at most once every 30 s (was 5 s), and once when its task goes quiet. The save at shutdown is as before.
+- History budget: a terminal now holds a true 10 MB, not about 15 MB (the daemon and the app each keep one screen per shell). The cost is less scrollback: 5,208 rows at 80 cols (was 7,812), 3,472 at 120 (was 5,208).
 - Terminal socket: `TCP_NODELAY` on the daemon's connections and on the app's terminal socket, so small frames (keys, short output) are not held by Nagle's algorithm. No bench shows this: the daemon bench does not use a real socket.
 
 Notes on the numbers:
@@ -224,7 +228,8 @@ The spec of T-0223 builds some steps only when a "before" number is over a thres
 - The task switch path is synchronous. Its number (`task_switch_seen_p95_ms`, 26–33 ms) is one vsync wait plus one draw.
 - A hook takes the global store lock once to read (was 3 takes) and once more only when it writes. A throttled activity bump takes no write lock. The lookup by working directory no longer allocates per task. A hook clones the task 1 to 4 times (was 3 to 5).
 - `hook_p50_ms` / `hook_p95_ms` did not move: 4.2 / 21.8 ms in run 42972562275, the same run as the resize profile. So the store lock was not the cause. The bench runs 30 threads on a 4-core runner, so its p95 is the scheduler. Where the 4 ms of a hook go is not known; it needs a profile of the daemon bench on Linux.
+- Per hook, under the one store lock, a hook that logs an event (2 of the bench's 4) writes the task file (YAML, tmp file, rename, stat), appends a log line and commits one SQLite transaction; no fsync. `steps_of` (in `natamux-proto` `resolve_steps`) copies the whole stage catalog on each event; not changed, outside this task's files. Read `hook_single_*` for the work and `hook_paced_*` for the wait.
 - `check_folder` still lists the task folder under the global lock every 2 s. The bench does not reach it, so it is not measured yet; it is a likely tail of `hook_p95_ms` (against 5 ms).
-- `BYTES_PER_CELL = 16` for the history budget may be low for the alacritty cell. Not checked.
+- `BYTES_PER_CELL` was 16 (the xterm.js cell) and is now 24, the size of the alacritty cell; a test in `natamux-screen` keeps it true. Not measured in the bench.
 - The palette flow has 5 runs, so its p95 is the slowest run. More runs would make it steadier.
 - A real-socket echo bench is needed to show `TCP_NODELAY`.

@@ -230,6 +230,7 @@ mod sidebar {
     pub mod sidebar;
     pub mod sidebar_text;
     pub mod sidebar_tree;
+    pub mod snapshot_memo;
     pub mod task_card;
     pub mod task_card_open;
     pub mod tree_entries;

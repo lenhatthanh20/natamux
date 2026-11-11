@@ -312,15 +312,15 @@ impl TaskSync {
                 logged.accepted,
             )?);
         }
-        self.tasks.insert(task.id.clone(), task.clone());
         let change = TaskChange {
             task: Some(&task),
             events,
             files,
         };
-        self.index
-            .record(&task.id, &change)
-            .map_err(StoreError::Failed)
+        // The map is updated also when the index fails, as before; no copy of the task is needed.
+        let recorded = self.index.record(&task.id, &change);
+        self.tasks.insert(task.id.clone(), task);
+        recorded.map_err(StoreError::Failed)
     }
 
     /// The task in memory may be older than an edit by hand. Then that edit is read and the

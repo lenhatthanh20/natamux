@@ -101,9 +101,8 @@ fn bench_task(number: usize) -> Task {
     }
 }
 
-/// `HookService::handle` while `agents` agents each send hooks from their own thread, all at
-/// once: p50 and p95 in ms. The task is found by the hook's working directory.
-pub fn hooks_at_once(agents: usize) -> (f64, f64) {
+/// A hook service over `agents` tasks, each with its own workspace; the folders of the tasks.
+fn hook_setup(agents: usize) -> (Arc<HookService>, Vec<String>, PathBuf) {
     let dir = temp_dir("hooks");
     let tasks = TaskService::new(TaskServiceOptions {
         data_dir: dir.clone(),
@@ -134,35 +133,85 @@ pub fn hooks_at_once(agents: usize) -> (f64, f64) {
         home: dir.join("home"),
     };
     let service = Arc::new(HookService::new(tasks, Arc::new(NoStages), options));
-    let start = Arc::new(Barrier::new(agents));
-    let senders: Vec<_> = workspaces
-        .into_iter()
-        .map(|cwd| {
-            let (service, start) = (Arc::clone(&service), Arc::clone(&start));
-            std::thread::spawn(move || {
-                start.wait();
-                (0..HOOKS_PER_AGENT)
-                    .map(|step| {
-                        let raw = agent_hook(step, &cwd);
-                        let sent = Instant::now();
-                        service
-                            .handle("claude-code", &raw, None, Some("1"))
-                            .unwrap();
-                        sent.elapsed()
-                    })
-                    .collect::<Vec<_>>()
-            })
+    (service, workspaces, dir)
+}
+
+/// One agent's hooks: `HOOKS_PER_AGENT` hooks of its folder, `pause` between two of them.
+fn send_hooks(service: &HookService, cwd: &str, pause: Option<Duration>) -> Vec<Duration> {
+    (0..HOOKS_PER_AGENT)
+        .map(|step| {
+            let raw = agent_hook(step, cwd);
+            let sent = Instant::now();
+            service
+                .handle("claude-code", &raw, None, Some("1"))
+                .unwrap();
+            let took = sent.elapsed();
+            if let Some(pause) = pause {
+                std::thread::sleep(pause);
+            }
+            took
         })
-        .collect();
-    let mut times: Vec<f64> = senders
-        .into_iter()
-        .flat_map(|sender| sender.join().unwrap())
-        .map(fine_ms)
-        .collect();
-    std::fs::remove_dir_all(&dir).ok();
+        .collect()
+}
+
+/// p50 and p95 in ms of the times.
+fn p50_p95(times: Vec<Duration>) -> (f64, f64) {
+    let mut times: Vec<f64> = times.into_iter().map(fine_ms).collect();
     times.sort_by(f64::total_cmp);
     let at = |share: f64| times[((times.len() - 1) as f64 * share).round() as usize];
     (at(0.5), at(0.95))
+}
+
+/// One thread per agent. `pace`: the start of agent `i` is delayed by `i * stagger` and each
+/// agent waits `pause` after each hook; None: all start at once and send back to back.
+fn hooks_from_threads(agents: usize, pace: Option<(Duration, Duration)>) -> (f64, f64) {
+    let (service, workspaces, dir) = hook_setup(agents);
+    let start = Arc::new(Barrier::new(agents));
+    let senders: Vec<_> = workspaces
+        .into_iter()
+        .enumerate()
+        .map(|(index, cwd)| {
+            let (service, start) = (Arc::clone(&service), Arc::clone(&start));
+            std::thread::spawn(move || {
+                start.wait();
+                if let Some((stagger, _)) = pace {
+                    std::thread::sleep(stagger * index as u32);
+                }
+                send_hooks(&service, &cwd, pace.map(|(_, pause)| pause))
+            })
+        })
+        .collect();
+    let times = senders
+        .into_iter()
+        .flat_map(|sender| sender.join().unwrap())
+        .collect();
+    std::fs::remove_dir_all(&dir).ok();
+    p50_p95(times)
+}
+
+/// `HookService::handle` while `agents` agents each send hooks from their own thread, all at
+/// once: p50 and p95 in ms. The task is found by the hook's working directory. The time of a hook
+/// here holds the wait for a core and for the store lock: 30 threads on 4 cores, no pause.
+pub fn hooks_at_once(agents: usize) -> (f64, f64) {
+    hooks_from_threads(agents, None)
+}
+
+/// The same hooks from one thread, one agent after the other: the work of a hook, no queue.
+pub fn hooks_single(agents: usize) -> (f64, f64) {
+    let (service, workspaces, dir) = hook_setup(agents);
+    let times = workspaces
+        .iter()
+        .flat_map(|cwd| send_hooks(&service, cwd, None))
+        .collect();
+    std::fs::remove_dir_all(&dir).ok();
+    p50_p95(times)
+}
+
+/// As `hooks_at_once`, but each agent starts 0.7 ms after the one before and waits 20 ms after
+/// each hook (50 hooks a second each, far more than a real agent sends): what an agent waits.
+pub fn hooks_paced(agents: usize) -> (f64, f64) {
+    let pace = (Duration::from_micros(700), Duration::from_millis(20));
+    hooks_from_threads(agents, Some(pace))
 }
 
 /// A turn of a Claude Code agent: prompt, tool start, tool end, turn end.
