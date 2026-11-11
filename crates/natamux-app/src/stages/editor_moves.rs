@@ -4,7 +4,7 @@
 //! inside one path runs the same rules on the items of that path.
 
 use natamux_proto::stages::capabilities::stage_name;
-use natamux_proto::stages::schema::{Stage, StageBranch, StageGroup, Step};
+use natamux_proto::stages::schema::{Stage, StageBranch, StageGroup, StageKind, Step};
 
 use crate::stages::editor_draft::MAX_GROUP;
 use crate::stages::editor_find::{
@@ -100,9 +100,26 @@ fn shift(index: usize, direction: i32) -> Option<usize> {
     index.checked_add_signed(direction as isize)
 }
 
+/// The context stage stays the first step (T-0333): an edit that moves it, removes it or puts a
+/// step before it gives the steps back unchanged.
+fn context_stays_first(steps: &[Step], next: Vec<Step>) -> Vec<Step> {
+    let first_context = |list: &[Step]| match list.first() {
+        Some(Step::Stage(stage)) if stage.kind == StageKind::Context => Some(stage.id.clone()),
+        _ => None,
+    };
+    match first_context(steps) {
+        Some(id) if first_context(&next).as_ref() != Some(&id) => steps.to_vec(),
+        _ => next,
+    }
+}
+
 /// One place up (-1) or down (1). A stage in a group moves among its lanes, and leaves the group
 /// at its edge. Gives the same steps back when nothing can move.
 pub fn move_stage(steps: &[Step], id: &str, direction: i32) -> Vec<Step> {
+    context_stays_first(steps, move_step(steps, id, direction))
+}
+
+fn move_step(steps: &[Step], id: &str, direction: i32) -> Vec<Step> {
     let same = || steps.to_vec();
     let Some(place) = find_place(steps, id) else {
         return same();
@@ -243,6 +260,10 @@ pub enum Side {
 /// a stage that may run side by side joins that group when it has room. A path takes stages and
 /// groups.
 pub fn drop_stage(steps: &[Step], id: &str, target_id: &str, side: Side) -> Vec<Step> {
+    context_stays_first(steps, drop_step(steps, id, target_id, side))
+}
+
+fn drop_step(steps: &[Step], id: &str, target_id: &str, side: Side) -> Vec<Step> {
     let same = || steps.to_vec();
     if id == target_id {
         return same();
@@ -444,7 +465,8 @@ pub fn run_alone(steps: &[Step], id: &str) -> Vec<Step> {
 }
 
 pub fn remove_stage(steps: &[Step], id: &str) -> Vec<Step> {
-    take_out(steps, id).map_or_else(|| steps.to_vec(), |out| out.rest)
+    let next = take_out(steps, id).map_or_else(|| steps.to_vec(), |out| out.rest);
+    context_stays_first(steps, next)
 }
 
 #[cfg(test)]

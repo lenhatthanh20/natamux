@@ -8,8 +8,7 @@ use super::*;
 use crate::projects::repos::RepoOptions;
 use crate::projects::settings_parse::SETTINGS_FILE;
 
-const CHECKED: &str =
-    r#"{"stages":[{"id":"test","kind":"agent","gate":"auto","check":"pnpm test"}]}"#;
+const CHECKED: &str = r#"{"stages":[{"id":"context","kind":"context","gate":"manual"},{"id":"test","kind":"agent","gate":"auto","check":"pnpm test"}]}"#;
 
 struct Setup {
     base: TempDir,

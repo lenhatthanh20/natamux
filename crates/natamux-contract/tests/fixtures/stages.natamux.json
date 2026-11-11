@@ -1,6 +1,7 @@
 {
   "context": { "sources": [{ "type": "manual" }] },
   "stages": [
+    { "id": "context", "kind": "context", "gate": "manual" },
     {
       "id": "spec",
       "kind": "agent",

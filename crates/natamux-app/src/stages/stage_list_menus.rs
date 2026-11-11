@@ -6,7 +6,7 @@ use std::rc::Rc;
 
 use gpui::{Action, Pixels, Point, WeakEntity};
 use natamux_proto::stages::capabilities::stage_name;
-use natamux_proto::stages::schema::Step;
+use natamux_proto::stages::schema::{StageKind, Step};
 use ui::{ContextMenu, ContextMenuEntry, prelude::*};
 
 use super::editor_find::{find_branch, find_place, find_stage, item_at};
@@ -210,8 +210,11 @@ impl StageList {
             }
             JoinItem::None => {}
         }
-        parts.push(Part::Separator);
-        parts.push(remove_part("Remove", id, list));
+        // The context stage opens every pipeline, so it cannot be removed (T-0333).
+        if stage.kind != StageKind::Context {
+            parts.push(Part::Separator);
+            parts.push(remove_part("Remove", id, list));
+        }
         self.show_menu(id, parts, position, window, cx);
     }
 

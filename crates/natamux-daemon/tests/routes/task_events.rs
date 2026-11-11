@@ -97,7 +97,7 @@ async fn payloads(d: &TestDaemon, id: &str) -> Vec<(String, Value)> {
 async fn checks_the_conditions_of_a_branch_before_any_event_of_a_person_or_an_agent() {
     let d = bare("branch").await;
     let pipeline = json!({ "stages": [
-        { "id": "spec", "kind": "agent", "gate": "auto" },
+        { "id": "context", "kind": "context", "gate": "auto" },
         { "id": "kind", "paths": [
             { "id": "bug", "when": { "type": "command", "run": "true" },
               "stages": [{ "id": "repro", "kind": "agent", "gate": "auto" }] },

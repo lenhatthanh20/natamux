@@ -262,13 +262,16 @@ fn the_tab_ring_follows_the_drawn_order_and_skips_folded_fields(cx: &mut TestApp
 #[gpui::test]
 fn the_first_stage_has_no_previous_stop_in_the_tab_ring(cx: &mut TestAppContext) {
     let (sheet, cx) = open("context", cx);
-    let (ring, prev, next) = sheet.read_with(cx, |sheet, cx| {
+    let (ring, prev, next, remove) = sheet.read_with(cx, |sheet, cx| {
         (
             sheet.tab_ring(cx),
             sheet.prev_focus.clone(),
             sheet.next_focus.clone(),
+            sheet.remove_focus.clone(),
         )
     });
     assert!(!ring.contains(&prev));
     assert!(ring.first() == Some(&next));
+    // T-0333: the context stage has no Remove button.
+    assert!(!ring.contains(&remove));
 }
