@@ -24,7 +24,7 @@ The existing targets are in [plan-rust-migration.md, "Target numbers"](plan-rust
 | Task list | UI-thread time per dashboard event, 200 tasks, 30 agents | `event_ui_p95_ms` | ≤ 1 ms p95 | No: 0.95–1.02 ms on CI (second round) |
 | Diff | Click on a file to its diff drawn | `diff_click_p95_ms` | ≤ 100 ms p95 | Yes |
 | Palette | Key to new rows, 1,000 tasks | `palette_key_p95_ms` | ≤ 1 refresh | No: p50 15–26, p95 23–37 ms on CI (second round) |
-| Agents grid | Frame time while the window resizes, 6 panes | `resize_frame_p99_ms` | ≤ 1 refresh p99 | No: 37–42 ms on CI |
+| Agents grid | Time between frames while the window resizes, 6 panes | `resize_frame_p99_ms` | ≤ 1 refresh p99 | No: 36–44 ms on CI (the runner's virtual GPU); 17–20 ms on the owner's Mac at 120 Hz, see "On the owner's Mac" |
 | Board | Frame that draws the board, 300 Done tasks | `board_frame_p95_ms` | ≤ 1 refresh | No: 13–31 ms on CI (second round) |
 | Background | App CPU, window in the background, idle | `table_background_cpu_pct` | ≤ 0.5% | Yes, at 1.0% (the CI "after" + 20%) |
 | Focused idle | App CPU with focus, nothing moving | `table_focus_cpu_pct` | ≤ 1% | Yes, at 2.5% (the CI "after" + 20%) |
@@ -32,7 +32,8 @@ The existing targets are in [plan-rust-migration.md, "Target numbers"](plan-rust
 | Memory | App RSS at the end of the flows | `app_rss_mb` | Draft ≤ 800 MB | Yes |
 | Memory | Daemon RSS after 30 shells printed 20 MB each | `daemon_busy_rss_mb` | Draft ≤ 1 GB | Yes |
 | Daemon start | `TaskSync::init` with 2,000 task files, cold index | `task_init_2000_ms` | ≤ 300 ms (P4 threshold) | Yes |
-| Hooks | `HookService::handle` with 30 agents at once | `hook_p95_ms` | ≤ 5 ms p95 | No: 15–17 ms on CI |
+| Hooks | `HookService::handle` with 30 agents at once, back to back | `hook_p95_ms` | ≤ 5 ms p95 | No: 18–43 ms on CI. 30 threads with no pause on 4 cores queue on the store lock; a hook's own work is 0.3 ms (`hook_single_p50_ms`). Meeting it needs task file writes outside the one store lock: its own task |
+| Hooks | The same with 20 ms between an agent's hooks | `hook_paced_p95_ms` | ≤ 5 ms p95 | No: 5.4–7.2 ms in the runs without a disk stall, 57–157 ms with one |
 | Hooks | The same, 30 agents with 20 ms between hooks | `hook_paced_p95_ms` | ≤ 5 ms p95 | No: reported, no baseline yet |
 | Terminals | Echo of a quiet shell while 5 flood | `echo_flood_p95_ms` | ≤ 10 ms p95 | Yes (also asserted in `daemon_bench.rs`) |
 | Terminals | Echo of a typed shell while 29 agents print | `echo_agents_p95_ms` | ≤ 5 ms p95 | Yes (also asserted in `daemon_bench.rs`) |
