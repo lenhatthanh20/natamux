@@ -434,6 +434,7 @@ impl HookService {
             plan_signal_events(state, wait, hook.signal, &hook.details)
         };
         let mut applied = Vec::new();
+        let mut stages = None;
         for planned in plan {
             let mut payload = planned.payload.clone();
             payload.insert("stage".into(), Value::String(stage.clone()));
@@ -442,7 +443,8 @@ impl HookService {
                 "type": planned.kind,
                 "payload": Value::Object(payload),
             });
-            self.tasks.apply_event(&task.id, Some(&input))?;
+            let stages = stages.get_or_insert_with(|| self.tasks.catalog(task.repo.as_deref()));
+            self.tasks.apply_event_in(&task.id, stages, Some(&input))?;
             self.changes.fetch_add(1, Ordering::SeqCst);
             applied.push(planned.kind);
         }
