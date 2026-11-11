@@ -237,6 +237,10 @@ Notes:
 
 Start with a slow login shell on this Mac (`--smoke` of the app artifacts of main and of the branch, a temporary `HOME`, `$SHELL` a script that sleeps 3 s, 3 starts each): first data 3,488 / 3,069 / 3,095 ms on main, 271 / 278 / 306 ms on the branch. The first frame is the same (165–196 ms). With a plain zsh the two are within the noise: 260–378 ms on main, 304–389 ms on the branch. `perf.yml` now reports this as `slow_shell_first_data_ms`, gated at 1,000 ms.
 
+Idle cost on this Mac (`scripts/motion-cost.sh` with a temporary `HOME`, CPU % with focus / in the background): the task table 1.5 / 0.7 on main and 2.0 / 0.7 on the branch; task T-0146 open, three runs of main and two of the branch, 2.0–2.3 / 0.6–0.7 on both, apart from one run of main with 5.0% and 9.7 draws a second in the background that did not repeat. So the idle cost did not change: the app draws about 2 times a second with focus and not at all in the background, on both. The work saved per draw of the sidebar and the details panel does not show at 2 draws a second.
+
+Resize, why no gpui change was made: a size step is about 16 ms of main-thread time on this Mac. The second draw of a step (display link, about 3 ms) is the part a gpui patch could remove; the rest is AppKit (cursor, about 4 ms), the first draw (7.5 ms) and `setFrame`. 13 ms is still over one 8.3 ms refresh, so the patch would not change which frames take two refreshes.
+
 ## Decisions from the numbers
 
 The spec of T-0223 builds some steps only when a "before" number is over a threshold.
