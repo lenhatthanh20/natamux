@@ -55,7 +55,7 @@ The default pipeline runs two agents. All are the task's agent unless a stage na
 | Review | Terminal 5 | A new session, so it reads the work with fresh eyes. It can be another agent; then it gets a terminal of its own. A later round goes into the same session. |
 | Release | none | none |
 
-With `"ownShell": true` on Spec (or Plan), the **Run in a terminal of its own** checkbox in project settings, that stage runs in Terminal 5. Terminal 1 then stays a plain shell until the first stage that runs there, such as Implement, starts the task's agent. While it waits, its pane names the terminal that works, such as **Terminal 5 is working**.
+The stage right after Context, Spec here, always runs in Terminal 1 with the task's agent, so it goes on in the session that Context started. It cannot have its own agent, arguments or terminal. With `"ownShell": true` on a later stage such as Plan, the **Run in a terminal of its own** checkbox in project settings, that stage runs in Terminal 5. If Terminal 1 has no agent yet, it stays a plain shell until the next stage that runs there, such as Implement, starts the task's agent. While it waits, its pane names the terminal that works, such as **Terminal 5 is working**.
 
 One session for the stages in a row keeps the agent's context and its prompt cache, so it does not read the code again. **Run with a workflow** on Implement adds sub-agents inside Claude Code.
 
@@ -259,7 +259,7 @@ For a review by a person, add **Manual review** from the catalog, for example af
 
 ### Stages in their own terminal
 
-A stage that only writes a report can run in its own terminal with a new session: check **Run in a terminal of its own** in the stage settings (`"ownShell": true` in `.natamux.json`). Unchecked, the stage runs in Terminal 1 with the task's agent. The catalog sets it on Review, Test spec, Security review, Performance check and Accessibility check. Such a stage runs in **Terminal 5**, and a turn of its agent does not touch the session in Terminal 1. With its own agent or arguments, it runs in a terminal of its own instead, from Terminal 6; see [Choose a model](#choose-a-model).
+A stage that only writes a report can run in its own terminal with a new session: check **Run in a terminal of its own** in the stage settings (`"ownShell": true` in `.natamux.json`). Unchecked, the stage runs in Terminal 1 with the task's agent. The stage right after Context does not offer it: it always runs in Terminal 1. The catalog sets it on Review, Test spec, Security review, Performance check and Accessibility check. Such a stage runs in **Terminal 5**, and a turn of its agent does not touch the session in Terminal 1. With its own agent or arguments, it runs in a terminal of its own instead, from Terminal 6; see [Choose a model](#choose-a-model).
 
 ### End a stage's terminal
 

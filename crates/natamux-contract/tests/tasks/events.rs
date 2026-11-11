@@ -15,7 +15,7 @@ fn human(kind: &str, payload: Value) -> Value {
     json!({ "source": "human", "type": kind, "payload": payload })
 }
 
-/// The contract pipeline: outline, a group (left, right), signoff, ship.
+/// The contract pipeline: context, outline, a group (left, right), signoff, ship.
 #[tokio::test]
 #[ignore = "needs both daemons: the daemon-contract CI job"]
 async fn events() {

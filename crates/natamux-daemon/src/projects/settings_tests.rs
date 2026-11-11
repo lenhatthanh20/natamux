@@ -190,7 +190,10 @@ fn keeps_a_second_for_each_repository_on_its_own() {
 #[test]
 fn saves_valid_settings_as_written_and_refuses_others() {
     let setup = setup();
-    let raw = json!({ "stages": [{ "id": "implement", "kind": "agent", "gate": "auto" }] });
+    let raw = json!({ "stages": [
+        { "id": "context", "kind": "context", "gate": "manual" },
+        { "id": "implement", "kind": "agent", "gate": "auto" },
+    ] });
     let (settings, _) = setup.repos.save("default", &raw, None).unwrap();
     assert_eq!(settings["stages"], raw["stages"]);
     assert_eq!(setup.written(), raw);
@@ -296,6 +299,7 @@ fn says_why_an_empty_file_or_one_that_is_not_an_object_cannot_be_used() {
 fn keeps_the_fields_of_a_stage_that_the_screen_does_not_show() {
     let setup = setup();
     let stages = json!([
+        { "id": "context", "kind": "context", "gate": "manual" },
         { "id": "implement", "kind": "agent", "gate": "auto", "requireCommit": true,
           "check": "make test" },
         { "id": "qa", "kind": "manual", "gate": "manual", "owner": "sam" },
@@ -328,15 +332,16 @@ fn keeps_fields_it_does_not_know() {
 fn names_the_step_that_does_not_read_as_a_stage_group_or_branch() {
     let setup = setup();
     let body = json!({ "stages": [
+        { "id": "context", "kind": "context", "gate": "manual" },
         { "id": "implement", "kind": "agent", "gate": "auto" },
         { "kind": "agent", "gate": "auto" },
     ] });
     let Err(RepoError::SettingsInput(message)) = setup.repos.save("default", &body, None) else {
         panic!("a step without an id is refused");
     };
-    assert_eq!(message, "stages.1: Invalid input");
+    assert_eq!(message, "stages.2: Invalid input");
     write(setup.file(), body.to_string()).unwrap();
-    assert_eq!(error_of(&setup.load()), "stages.1: Invalid input");
+    assert_eq!(error_of(&setup.load()), "stages.2: Invalid input");
 }
 
 #[test]
@@ -473,6 +478,7 @@ fn names_a_lane_of_a_group_inside_a_path_and_trims_its_fields() {
     use natamux_proto::stages::schema::Step;
     let with_lane = |lane: Value| {
         json!({ "stages": [
+            { "id": "context", "kind": "context", "gate": "manual" },
             { "id": "spec", "kind": "agent", "gate": "manual" },
             { "id": "kind", "paths": [
                 { "id": "bug", "when": { "type": "command", "run": "true" }, "stages": [
@@ -491,16 +497,47 @@ fn names_a_lane_of_a_group_inside_a_path_and_trims_its_fields() {
         panic!("a wrong id is refused");
     };
     assert!(
-        message.starts_with("stages.1.paths.0.stages.0.parallel.1.id: "),
+        message.starts_with("stages.2.paths.0.stages.0.parallel.1.id: "),
         "{message}"
     );
     let lane = json!({ "id": "look", "kind": "agent", "gate": "manual", "name": " Look " });
     let parsed = parse_settings(&with_lane(lane)).unwrap();
-    let Step::Branch(branch) = &parsed.settings.stages[1] else {
+    let Step::Branch(branch) = &parsed.settings.stages[2] else {
         panic!("not a branch");
     };
     let Step::Group(triage) = &branch.paths[0].stages[0] else {
         panic!("not a group");
     };
     assert_eq!(triage.parallel[1].name.as_deref(), Some("Look"));
+}
+
+#[test]
+fn refuses_stages_without_the_context_stage() {
+    let setup = setup();
+    let body = json!({ "stages": [{ "id": "implement", "kind": "agent", "gate": "auto" }] });
+    let Err(RepoError::SettingsInput(message)) = setup.repos.save("default", &body, None) else {
+        panic!("a pipeline without a context stage is refused");
+    };
+    assert!(
+        message.contains("A pipeline starts with the context stage"),
+        "{message}"
+    );
+}
+
+#[test]
+fn refuses_an_own_terminal_stage_right_after_the_context() {
+    let setup = setup();
+    let body = json!({ "stages": [
+        { "id": "context", "kind": "context", "gate": "manual" },
+        { "id": "spec", "kind": "agent", "gate": "manual", "ownShell": true,
+          "output": "spec.md" },
+        { "id": "implement", "kind": "agent", "gate": "auto" },
+    ] });
+    let Err(RepoError::SettingsInput(message)) = setup.repos.save("default", &body, None) else {
+        panic!("an own terminal right after the context is refused");
+    };
+    assert!(
+        message.contains("comes right after the context stage"),
+        "{message}"
+    );
 }

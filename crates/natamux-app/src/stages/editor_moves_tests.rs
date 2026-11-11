@@ -82,13 +82,21 @@ fn puts_a_stage_before_or_after_another() {
         ),
         ref_ids(&["context", "testing", "spec"])
     );
+}
+
+// T-0333: the context stage opens every pipeline.
+#[test]
+fn keeps_the_context_stage_first() {
+    let steps = full_pipeline();
+    assert!(!can_move(&steps, "context", 1));
+    assert!(!can_move(&steps, "spec", -1));
+    assert!(can_move(&steps, "spec", 1));
+    assert_eq!(drop_stage(&steps, "context", "plan", Side::After), steps);
+    assert_eq!(drop_stage(&steps, "plan", "context", Side::Before), steps);
+    assert_eq!(remove_stage(&steps, "context"), steps);
     assert_eq!(
-        span(
-            ids(&drop_stage(&steps, "context", "plan", Side::After)),
-            0,
-            3
-        ),
-        ref_ids(&["spec", "plan", "context"])
+        span(ids(&remove_stage(&steps, "spec")), 0, 2),
+        ref_ids(&["context", "plan"])
     );
 }
 

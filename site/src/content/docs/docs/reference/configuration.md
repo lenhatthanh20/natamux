@@ -56,7 +56,7 @@ An array of **steps**. A step is a stage, a group of stages that run side by sid
 | `workflow` | boolean | no | `true` for `plan` and `implement` of the catalog, else `false` | Tasks get a **Run with a workflow** checkbox on this stage. Only for `agent` stages. See [Run a stage as a workflow](/docs/concepts/stages/#run-a-stage-as-a-workflow). |
 | `agent` | string | no | The task's agent | The agent this stage starts: `claude-code`, `codex`, `gemini`, `copilot` or `cursor`. Only on an `agent` or `testing` stage, of the catalog or your own. |
 | `ci` | boolean | no | `true` for `implement` and `testing` of the catalog, else `false` | Tasks get a **Check on CI** checkbox on this stage. Only for a testing stage or an agent stage without an `output`. See [Check a stage on CI](/docs/concepts/stages/#check-a-stage-on-ci). |
-| `ownShell` | boolean | no | `true` for the catalog's report stages (Review, Test spec, Security review, Performance check, Accessibility check) | The stage runs in its own terminal (Terminal 5) with a new session, or in a terminal of its own from Terminal 6 when it has its own `agent` or `args`. The stage then does not use Terminal 1, so the task's agent starts there only at the next stage that does. Only for an `agent` stage with an `output`. |
+| `ownShell` | boolean | no | `true` for the catalog's report stages (Review, Test spec, Security review, Performance check, Accessibility check) | The stage runs in its own terminal (Terminal 5) with a new session, or in a terminal of its own from Terminal 6 when it has its own `agent` or `args`. The stage then does not use Terminal 1, so the task's agent starts there only at the next stage that does. Only for an `agent` stage with an `output`, and not on the stage right after the context. |
 | `endShell` | boolean | no | `false` | When the stage is done or sends the task back, end its agent or command and close its terminal. Without it, the terminal stays open until the task ends or you close it. Only for `context`, `agent` and `testing` stages. Ignored on a stage in Terminal 1, which is never closed. See [End a stage's terminal](/docs/concepts/stages/#end-a-stages-terminal). |
 | `args` | string | no | none | Words added to the command line of this stage's agent, after `NATAMUX_<AGENT>_ARGS`, such as `--model sonnet`. Split at spaces, each word quoted, so a quoted value with spaces becomes several words. A word can use `{id}` (the task id) and `{dir}`, such as `--name {id}-review`. The title, description and reference are not filled here: an imported issue's text must not become a flag. Left out until the project's commands are approved. Same rule as `agent`. |
 
@@ -69,7 +69,7 @@ Details:
 - A stage with `"enabled": false` keeps its settings in the file. The pipeline rules below count only stages that are on.
 - `check` runs in the root of the worktree. It gets 10 minutes. It runs with `sh -c`, or `cmd.exe` on Windows.
 - `command` only has an effect on a `testing` stage. Without it, an agent does the testing.
-- `agent` and `args` are for an `agent` or `testing` stage, wherever it runs, whether it comes from the [catalog](#stage-catalog) or is your own. Such a stage starts its own agent in its own terminal, so it can use another agent or model without touching the session in Terminal 1. A launch for such a stage does not change the task's agent.
+- `agent` and `args` are for an `agent` or `testing` stage, wherever it runs, whether it comes from the [catalog](#stage-catalog) or is your own, except the stage right after the context, which keeps the task's agent. Such a stage starts its own agent in its own terminal, so it can use another agent or model without touching the session in Terminal 1. A launch for such a stage does not change the task's agent.
 - A stage with its own `agent` or `args` runs in a terminal of its own: Terminal 6 plus the place of the stage among all stages of the task, counted from 0, so no two stages share one. Natamux closes no agent while the task runs, unless its stage has `"endShell": true`.
 - A stage keeps the terminal it started in until it starts again. A change to these settings applies at the stage's next start, never under an agent that runs. See [Choose a model](/docs/concepts/stages/#choose-a-model).
 - `workflow` only offers the choice. Each task turns it on for itself; it is off by default. A stage of your own does not take the default, so write `"workflow": true` on it to offer the choice.
@@ -152,14 +152,15 @@ The `type` of `when` picks the fields.
 
 - At least one step.
 - Every id is used once, counting the stages inside groups and paths.
-- A `context` stage must be the first step. There is at most one.
+- A `context` stage must be the first step. There is exactly one, and it is always on (`"enabled": false` on it is an error).
+- The step right after the context runs with the task's agent in Terminal 1, in the session the context started. That stage must be an `agent` stage, or a `testing` stage without a `command`, and it cannot have `agent`, `args` or `"ownShell": true`. For a group this is the stage that keeps Terminal 1; for a branch, the first stage of each path. Stages that are off do not count.
 - A `release` stage must be the last step. There is at most one.
 - A `context` or `release` stage cannot be inside a group.
 - These rules count only stages that are on. A group needs 2 stages that are on. At least one stage must be on.
 - When a task starts, a group with one stage on runs that stage on its own, and a group with none is left out.
 - `"workflow": true` is only allowed on an `agent` stage.
 - `agent` and `args` are only allowed on an `agent` stage in a group that does not keep Terminal 1, on one with `"ownShell": true`, or on an `agent` or `testing` stage of your own.
-- `"ownShell": true` is only allowed on an `agent` stage with an `output`.
+- `"ownShell": true` is only allowed on an `agent` stage with an `output`, and not on the stage right after the context.
 - `"ci": true` is only allowed on a `testing` stage or an `agent` stage without an `output`.
 - `"endShell": true` is only allowed on a `context`, `agent` or `testing` stage. On a stage in Terminal 1 it is ignored.
 
@@ -405,6 +406,7 @@ Run your tests in a shell. The stage passes when the command exits with 0:
 ```json
 {
   "stages": [
+    { "id": "context", "kind": "context", "gate": "manual" },
     { "id": "implement", "kind": "agent", "gate": "auto", "requireCommit": true },
     { "id": "review", "kind": "review", "gate": "manual" },
     { "id": "testing", "kind": "testing", "gate": "auto", "command": "pnpm test" },
@@ -420,6 +422,7 @@ Make a stage fail until a command passes. Here the `implement` stage needs a com
 ```json
 {
   "stages": [
+    { "id": "context", "kind": "context", "gate": "manual" },
     {
       "id": "implement",
       "kind": "agent",
@@ -439,6 +442,7 @@ Write the docs while the agent writes the code. Both stages start together, each
 ```json
 {
   "stages": [
+    { "id": "context", "kind": "context", "gate": "manual" },
     {
       "id": "build",
       "name": "Code and docs",

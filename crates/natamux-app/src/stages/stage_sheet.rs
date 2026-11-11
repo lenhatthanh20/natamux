@@ -11,6 +11,7 @@ use gpui::{
 use natamux_proto::projects::repo::SkillList;
 use natamux_proto::stages::capabilities::stage_name;
 use natamux_proto::stages::pipeline_rules::{IssueLevel, PipelineIssue};
+use natamux_proto::stages::schema::StageKind;
 use ui::{ContextMenu, prelude::*};
 
 use super::advanced_rules::{SheetGroup, group_has_issue};
@@ -180,7 +181,13 @@ impl DialogView for StageSheet {
     fn tab_ring(&self, cx: &App) -> Vec<FocusHandle> {
         let mut ring = self.stepper_stops(cx);
         ring.extend(self.field_stops(cx));
-        ring.extend([self.remove_focus.clone(), self.done_focus.clone()]);
+        let steps = self.pipeline.read(cx).steps();
+        let context = find_stage(steps, &self.id)
+            .is_some_and(|stage| stage.kind == StageKind::Context);
+        if !context {
+            ring.push(self.remove_focus.clone());
+        }
+        ring.push(self.done_focus.clone());
         ring
     }
 
@@ -242,12 +249,18 @@ impl Render for StageSheet {
         .fill()
         .lead(tile)
         .intro(sheet_intro(&stage))
-        .header_end(self.stepper(&steps, cx))
-        .footer_start(self.remove_button(cx))
-        .footer_note("Edits go to the draft. Save on the page.")
-        .footer(done)
-        .child(left)
-        .child(column);
+        .header_end(self.stepper(&steps, cx));
+        // The context stage opens every pipeline, so it cannot be removed (T-0333).
+        let frame = if stage.kind == StageKind::Context {
+            frame
+        } else {
+            frame.footer_start(self.remove_button(cx))
+        };
+        let frame = frame
+            .footer_note("Edits go to the draft. Save on the page.")
+            .footer(done)
+            .child(left)
+            .child(column);
         div()
             .key_context("Dialog")
             .track_focus(&self.focus)
