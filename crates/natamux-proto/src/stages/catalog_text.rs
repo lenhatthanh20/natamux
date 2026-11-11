@@ -257,7 +257,7 @@ pub(crate) const TEXTS: [Text; 29] = [
         description: "An agent reviews the changes against the spec, and sends the task back to Implement when they need fixes.",
         prompt: Some(concat!(
             "Task: {title}\n",
-            "Read {dir}/spec.md, and {dir}/test-spec.md when it is there. Review the changes of this task against them: what is not committed (git status, git diff) and the commits of this branch that are not on the default branch (git log, and git diff from the merge base). Read the changed files. Do not change any code.\n",
+            "Read {dir}/spec.md, and the other reports that earlier stages wrote in {dir}. Review the changes of this task against them: what is not committed (git status, git diff) and the commits of this branch that are not on the default branch (git log, and git diff from the merge base). Read the changed files. Do not change any code.\n",
             "Write {dir}/review.md with a Findings section: each problem that must be fixed, with its file and why, or \"None\".\n",
             "When a problem must be fixed, run `natamux stage back $NATAMUX_TASK_ID --reason \"<the problems, one per line>\"` and stop. Do not run natamux done then.",
         )),
