@@ -59,6 +59,17 @@ jobs:
           for run in 1 2 3 4 5; do
             target/release/natamux-app --bench-flows --size 1280x800 | tee -a perf/flows.txt
           done
+      # Where the frames of the resize go: the resize flow alone, 15 rounds (~30 s), under macOS
+      # `sample`, into the perf-app artifact. perf-check.py does not read these files.
+      # Process substitution keeps $! the app's pid, not tee's.
+      - name: Profile of one flows run
+        timeout-minutes: 10
+        run: |
+          target/release/natamux-app --bench-only resize --bench-repeat 15 --size 1280x800 > >(tee perf/resize-flows.txt) &
+          pid=$!
+          sleep 4
+          sample "$pid" 30 1 -file perf/resize-sample.txt >/dev/null 2>&1 || echo "sample failed"
+          wait "$pid" || true
       - name: Start times (5 runs)
         timeout-minutes: 10
         run: |

@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
 use async_tungstenite::WebSocketStream;
-use async_tungstenite::tokio::{ConnectStream, connect_async};
+use async_tungstenite::tokio::{TokioAdapter, client_async};
 use async_tungstenite::tungstenite::Message;
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
 use futures::stream::Peekable;
@@ -14,6 +14,7 @@ use natamux_proto::terminals::messages::{
     CATCH_UP_TIMEOUT, ClientMessage, HEARTBEAT, ServerMessage,
 };
 use natamux_proto::terminals::query::encode;
+use tokio::net::TcpStream;
 use tokio::sync::mpsc;
 use tokio::time::{Instant, sleep_until};
 
@@ -25,6 +26,8 @@ use crate::terminals::api;
 /// The most output joined into one event: frames that already wait in the socket go to the app
 /// together, so a busy shell wakes it once per burst, not once per frame.
 const JOIN_BYTES: usize = 256 * 1024;
+
+type Socket = WebSocketStream<TokioAdapter<TcpStream>>;
 
 /// What the session tells the app beside its events.
 #[derive(Debug, Default)]
@@ -236,11 +239,23 @@ async fn run(
     }
 }
 
+/// The `host:port` of a `ws://` URL, for the TCP connect.
+fn authority_of(url: &str) -> String {
+    let rest = url.strip_prefix("ws://").unwrap_or(url);
+    let authority = rest.split(['/', '?']).next().unwrap_or(rest);
+    // An IPv6 host ends with `]` when it has no port.
+    if authority.ends_with(']') || !authority.contains(':') {
+        format!("{authority}:80")
+    } else {
+        authority.to_string()
+    }
+}
+
 async fn connect(
     config: &Config,
     task_id: &str,
     protocol: &mut Protocol,
-) -> Result<WebSocketStream<ConnectStream>, String> {
+) -> Result<Socket, String> {
     // A new ticket for every socket: each is good for one use and 30 s.
     let ticket = api::terminal_ticket(config, task_id)
         .await
@@ -253,9 +268,16 @@ async fn connect(
             query.to_query_string()
         ))
         .map_err(|error| error.to_string())?;
-    let (socket, _) = connect_async(url.as_str())
+    let failed = |error: String| format!("Could not connect to the terminal: {error}");
+    let stream = TcpStream::connect(authority_of(&url))
         .await
-        .map_err(|error| format!("Could not connect to the terminal: {error}"))?;
+        .map_err(|error| failed(error.to_string()))?;
+    // Keys and output are small frames: Nagle's algorithm would hold each one until the frame
+    // before it is acked.
+    let _ = stream.set_nodelay(true);
+    let (socket, _) = client_async(url.as_str(), stream)
+        .await
+        .map_err(|error| failed(error.to_string()))?;
     Ok(socket)
 }
 
@@ -295,7 +317,7 @@ async fn wake(protocol: &mut Protocol, commands: &mut mpsc::UnboundedReceiver<Co
 }
 
 async fn drive(
-    socket: WebSocketStream<ConnectStream>,
+    socket: Socket,
     first: Step,
     heartbeat: Duration,
     protocol: &mut Protocol,
@@ -442,6 +464,17 @@ fn lost(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn takes_the_host_and_port_of_a_socket_url() {
+        assert_eq!(
+            authority_of("ws://127.0.0.1:4310/tasks/T-1/terminal?a=b"),
+            "127.0.0.1:4310"
+        );
+        assert_eq!(authority_of("ws://[::1]:4310/tasks"), "[::1]:4310");
+        assert_eq!(authority_of("ws://localhost/tasks"), "localhost:80");
+        assert_eq!(authority_of("ws://[::1]?a=b"), "[::1]:80");
+    }
 
     type Frames = Peekable<futures::stream::Iter<std::vec::IntoIter<Result<Message, ()>>>>;
 

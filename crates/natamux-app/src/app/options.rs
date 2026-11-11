@@ -6,7 +6,7 @@ pub const USAGE: &str =
     "usage: natamux-app [--smoke] [--theme light|dark] [--size WxH] [--hold SECONDS] [--fake-daemon]
                    [--gate2 TASK [--terminals N] [--output flood|agent]]
                    [--shot STATE] [--count-draws] [--open-task TASK]
-                   [--bench-flows [--bench-tasks N]]
+                   [--bench-flows [--bench-tasks N] [--bench-only FLOW [--bench-repeat N]]]
   --smoke   draw a frame, type into the text box, check it, then quit (exit 1 on failure)
             with --fake-daemon, also check that a workspace's terminal grid does not scroll
             and that the pipeline chart scrolls to its last step
@@ -22,6 +22,8 @@ pub const USAGE: &str =
   --open-task    open TASK once the dashboard has it, as a click on its row does
   --bench-flows  time the user flows on the fake daemon 5 times each, save the perf report,
                  print a `flow_bench: {...}` line of numbers, then quit (docs/perf.md)
+  --bench-only   run only this flow (resize); implies --bench-flows, for a profiler
+  --bench-repeat with --bench-only: run the flow's loop N times, 1 to 100 (default 1)
   --bench-tasks  with --bench-flows: the fake's task count for the event flows (default 200)
 
 The daemon: NATAMUX_URL and NATAMUX_TOKEN, else http://127.0.0.1:4317 and the Natamux app's token.";
@@ -29,6 +31,9 @@ The daemon: NATAMUX_URL and NATAMUX_TOKEN, else http://127.0.0.1:4317 and the Na
 /// `--bench-tasks`: the default is the report's "200 tasks, 30 agents" case.
 const BENCH_TASKS: usize = 200;
 const MAX_BENCH_TASKS: usize = 10_000;
+const MAX_BENCH_REPEAT: usize = 100;
+/// The flows `--bench-only` can run alone.
+const ONLY_FLOWS: [&str; 1] = ["resize"];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ThemeMode {
@@ -400,6 +405,8 @@ pub struct Options {
     pub open_task: Option<String>,
     pub bench_flows: bool,
     pub bench_tasks: usize,
+    pub bench_only: Option<String>,
+    pub bench_repeat: usize,
 }
 
 impl Options {
@@ -418,6 +425,8 @@ impl Options {
             open_task: None,
             bench_flows: false,
             bench_tasks: BENCH_TASKS,
+            bench_only: None,
+            bench_repeat: 1,
         };
         let mut args = args.into_iter();
         while let Some(arg) = args.next() {
@@ -430,6 +439,12 @@ impl Options {
                     options.bench_flows = true;
                     options.fake_daemon = true;
                 }
+                "--bench-only" => {
+                    options.bench_only = Some(parse_only(&value(&mut args, &arg)?)?);
+                    options.bench_flows = true;
+                    options.fake_daemon = true;
+                }
+                "--bench-repeat" => options.bench_repeat = parse_repeat(&value(&mut args, &arg)?)?,
                 "--bench-tasks" => options.bench_tasks = parse_tasks(&value(&mut args, &arg)?)?,
                 "--theme" => options.theme = Some(parse_theme(&value(&mut args, &arg)?)?),
                 "--size" => options.size = Some(parse_size(&value(&mut args, &arg)?)?),
@@ -480,6 +495,25 @@ fn parse_tasks(text: &str) -> Result<usize, String> {
         Ok(count) if (1..=MAX_BENCH_TASKS).contains(&count) => Ok(count),
         _ => Err(format!(
             "--bench-tasks is a number from 1 to {MAX_BENCH_TASKS}, not {text:?}"
+        )),
+    }
+}
+
+fn parse_only(text: &str) -> Result<String, String> {
+    if ONLY_FLOWS.contains(&text) {
+        return Ok(text.to_string());
+    }
+    Err(format!(
+        "--bench-only is one of {}, not {text:?}",
+        ONLY_FLOWS.join(", ")
+    ))
+}
+
+fn parse_repeat(text: &str) -> Result<usize, String> {
+    match text.parse::<usize>() {
+        Ok(count) if (1..=MAX_BENCH_REPEAT).contains(&count) => Ok(count),
+        _ => Err(format!(
+            "--bench-repeat is a number from 1 to {MAX_BENCH_REPEAT}, not {text:?}"
         )),
     }
 }

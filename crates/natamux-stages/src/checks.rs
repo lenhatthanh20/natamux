@@ -92,6 +92,7 @@ pub fn run_shell_command_with_timeout(command: &str, cwd: &Path, timeout: Durati
     #[cfg(not(windows))]
     process.args(["-c", command]);
     process.current_dir(cwd);
+    natamux_core::login_path::apply(&mut process);
     let ran = capture(process, timeout, MAX_COMMAND_OUTPUT);
     let output = format!("{}{}", ran.stdout, ran.stderr);
     if ran.code == Some(0) && !ran.overflow {

@@ -330,12 +330,13 @@ fn try_exclude(worktree: &Path, line: &str) -> std::io::Result<()> {
     if let Some(common) = crate::git_files::common_dir(worktree) {
         return add_exclude_line(worktree, &common, line);
     }
-    let output = Command::new("git")
-        .args(["rev-parse", "--git-common-dir"])
+    let mut git = Command::new("git");
+    git.args(["rev-parse", "--git-common-dir"])
         .current_dir(worktree)
         .stdin(Stdio::null())
-        .stderr(Stdio::null())
-        .output()?;
+        .stderr(Stdio::null());
+    natamux_core::login_path::apply(&mut git);
+    let output = git.output()?;
     if !output.status.success() {
         return Ok(());
     }

@@ -13,6 +13,7 @@ pub mod git {
 }
 pub mod js;
 pub mod json;
+pub mod login_path;
 pub mod zod;
 pub mod events {
     pub mod apply;

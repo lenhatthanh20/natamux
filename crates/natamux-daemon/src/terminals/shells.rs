@@ -49,8 +49,9 @@ pub(super) struct Inner {
     pub(super) this: Weak<Inner>,
 }
 
-/// How often a busy shell's screen is saved at most.
-const SCREEN_SAVE_EVERY: Duration = Duration::from_secs(5);
+/// How often a busy shell's screen is saved at most. The file is read only after a restart, so a
+/// crash may lose this much; a quiet moment (WORKSPACE_QUIET_MS to twice that) saves at once.
+const SCREEN_SAVE_EVERY: Duration = Duration::from_secs(30);
 
 pub(super) fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     // A panic in one shell (a bug) must not stop all the others.

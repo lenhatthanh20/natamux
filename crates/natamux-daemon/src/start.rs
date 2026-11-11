@@ -35,6 +35,7 @@ use crate::tasks::errors::TaskError;
 use crate::tasks::service::{TaskService, is_task_ended};
 use crate::tasks::templates::TemplateService;
 use crate::terminals::input_trace::trace_input_on;
+use crate::terminals::login_path::use_login_path;
 use crate::terminals::open_shells::{OpenShells, OpenShellsOptions, ShellsView};
 use crate::terminals::service::{TerminalOptions, TerminalService};
 use crate::terminals::session_lifecycle::SpawnPty;
@@ -95,8 +96,10 @@ fn home_of(env: &Env) -> PathBuf {
 
 /// An agent the user starts by hand in a shell finds its hooks there: the files are written at
 /// each shell start, and only there, not on the output path.
-fn with_hook_files(spawn: Arc<SpawnPty>) -> Arc<SpawnPty> {
-    Arc::new(move |options: SpawnOptions| {
+fn with_hook_files(spawn: Arc<SpawnPty>, bin_dir: Option<String>) -> Arc<SpawnPty> {
+    Arc::new(move |mut options: SpawnOptions| {
+        // The shell is the program that needs the login PATH; the daemon itself does not wait.
+        use_login_path(&mut options.env, bin_dir.as_deref());
         prepare_agent_hooks(&options.cwd, WorkspaceHooks { claude_code: true });
         (*spawn)(options)
     })
@@ -359,7 +362,7 @@ pub async fn start(
     // Shells run on the same machine as the daemon, so they reach it on loopback.
     let daemon_url = format!("http://127.0.0.1:{}", address.port());
     let cells = Cells::default();
-    let spawn = with_hook_files(spawn);
+    let spawn = with_hook_files(spawn, config.agents.bin_dir.clone());
     let terminals = terminal_service(
         env,
         spawn,

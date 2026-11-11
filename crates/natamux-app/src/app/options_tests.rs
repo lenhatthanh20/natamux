@@ -20,6 +20,22 @@ fn no_flags_follow_the_system() {
     assert_eq!(options.open_task, None);
     assert!(!options.bench_flows);
     assert_eq!(options.bench_tasks, 200);
+    assert_eq!(options.bench_only, None);
+    assert_eq!(options.bench_repeat, 1);
+}
+
+#[test]
+fn bench_only_picks_one_flow_and_implies_bench_flows() {
+    let options = parse(&["--bench-only", "resize", "--bench-repeat", "15"]).unwrap();
+    assert_eq!(options.bench_only.as_deref(), Some("resize"));
+    assert_eq!(options.bench_repeat, 15);
+    assert!(options.bench_flows);
+    assert!(options.fake_daemon);
+    assert!(parse(&["--bench-only", "board"]).is_err());
+    assert!(parse(&["--bench-only"]).is_err());
+    assert!(parse(&["--bench-repeat", "0"]).is_err());
+    assert!(parse(&["--bench-repeat", "101"]).is_err());
+    assert_eq!(parse(&["--bench-repeat", "100"]).unwrap().bench_repeat, 100);
 }
 
 #[test]

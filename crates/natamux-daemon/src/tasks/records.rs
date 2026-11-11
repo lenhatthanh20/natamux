@@ -36,6 +36,17 @@ pub struct ActivityOptions {
     pub ends_wait: bool,
 }
 
+/// Whether a sign of life changes the task at `now_ms`: it runs, and its last update is old
+/// enough, or the sign ends a wait for background work.
+pub fn activity_due(task: &Task, now_ms: i64, options: &ActivityOptions) -> bool {
+    if task.state != TaskState::Running {
+        return false;
+    }
+    let ends_wait_now = options.ends_wait && task.background_since.is_some();
+    let updated = parse_iso_millis(&task.updated_at).unwrap_or(0);
+    ends_wait_now || now_ms - updated >= options.min_interval_ms
+}
+
 impl Default for ActivityOptions {
     fn default() -> ActivityOptions {
         ActivityOptions {
@@ -518,14 +529,18 @@ impl Store {
     /// most once per `min_interval_ms`; the first sign of life ends a wait for background work at
     /// once. No line in the log. Returns whether it changed anything.
     pub fn record_activity(&mut self, task_id: &str, options: ActivityOptions) -> TaskResult<bool> {
-        let task = self.get_task(task_id)?;
-        if task.state != TaskState::Running {
-            return Ok(false);
+        self.sync.check_file(task_id);
+        // Read in place: most calls change nothing and need no copy of the task.
+        if !self.sync.tasks.contains_key(task_id) {
+            // Loads a task that is only on disk, or fails with NotFound.
+            self.get_task(task_id)?;
         }
+        let Some(task) = self.sync.tasks.get(task_id) else {
+            return Err(TaskError::NotFound(task_id.into()));
+        };
         let at = self.timestamp();
         let millis = |text: &str| parse_iso_millis(text).unwrap_or(0);
-        let ends_wait_now = options.ends_wait && task.background_since.is_some();
-        if !ends_wait_now && millis(&at) - millis(&task.updated_at) < options.min_interval_ms {
+        if !activity_due(task, millis(&at), &options) {
             return Ok(false);
         }
         let background_since = if options.ends_wait {
@@ -534,14 +549,14 @@ impl Store {
             task.background_since.clone()
         };
         // When only the time moves, the file can wait: the next real change writes it anyway.
-        let written_at = self.sync.written_at.get(task_id).cloned();
+        let written_at = self.sync.written_at.get(task_id);
         let write_file = background_since != task.background_since
             || written_at
-                .is_none_or(|written| millis(&at) - millis(&written) >= ACTIVITY_FILE_INTERVAL_MS);
+                .is_none_or(|written| millis(&at) - millis(written) >= ACTIVITY_FILE_INTERVAL_MS);
         let updated = Task {
             background_since,
             updated_at: at,
-            ..task
+            ..task.clone()
         };
         self.sync.store(updated.clone(), &[], write_file)?;
         self.publish(DaemonMessage::TaskChanged { task: updated });

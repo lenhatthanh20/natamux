@@ -41,6 +41,18 @@ fn sidebar_tree(
     Entity<WorkspaceTree>,
     &mut VisualTestContext,
 ) {
+    let (_, dashboard, tree, cx) = hosted_tree(cx);
+    (dashboard, tree, cx)
+}
+
+fn hosted_tree(
+    cx: &mut TestAppContext,
+) -> (
+    Entity<Host>,
+    Entity<Dashboard>,
+    Entity<WorkspaceTree>,
+    &mut VisualTestContext,
+) {
     test_views::init(cx);
     let source = Arc::new(Source::FakeDaemon);
     let dashboard = cx.new(|cx| Dashboard::new(Ok(source), Default::default(), cx));
@@ -51,7 +63,7 @@ fn sidebar_tree(
     });
     cx.run_until_parked();
     let tree = host.read_with(cx, |host, _| host.tree.clone());
-    (dashboard, tree, cx)
+    (host, dashboard, tree, cx)
 }
 
 fn send(dashboard: &Entity<Dashboard>, event: DashboardEvent, cx: &mut VisualTestContext) {
@@ -94,6 +106,19 @@ fn usage_builds_and_draws_nothing_but_diff_stats_draw_without_a_build(cx: &mut T
     assert!(draws > before.1);
     let shown = tree.update_in(cx, |tree, window, cx| tree.snapshot(window, cx).diff_stats);
     assert_eq!(shown.get("T-0146"), Some(&stat));
+}
+
+#[gpui::test]
+fn the_parent_drawing_again_does_not_draw_the_tree_but_a_new_title_does(cx: &mut TestAppContext) {
+    let (host, dashboard, tree, cx) = hosted_tree(cx);
+    let before = counts(&tree, cx);
+    host.update(cx, |_, cx| cx.notify());
+    cx.run_until_parked();
+    assert_eq!(counts(&tree, cx), before);
+    let mut task = dashboard.read_with(cx, |dashboard, _| dashboard.data.tasks[0].clone());
+    task.title = "A new title".into();
+    send(&dashboard, DashboardEvent::TaskChanged(Box::new(task)), cx);
+    assert!(counts(&tree, cx).1 > before.1);
 }
 
 #[gpui::test]

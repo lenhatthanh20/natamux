@@ -109,6 +109,9 @@ impl TaskSync {
         self.checked_at.clear();
         self.folder_checked_at = now;
         let mut files: Vec<(String, TaskFiles)> = Vec::new();
+        // Whether the index differs from the files: a file read again, or an event log that
+        // changed.
+        let mut changed = false;
         for id in list_task_ids(&self.data_dir)? {
             let stat = stat_file(&task_file_path(&self.data_dir, &id))?;
             let known_files = known.get(&id).copied().unwrap_or_default();
@@ -117,6 +120,7 @@ impl TaskSync {
             } else {
                 None
             };
+            changed |= cached.is_none();
             let task = match cached {
                 Some(task) => Some(task),
                 // One broken file must not stop the daemon: the task as the index saw it last
@@ -136,6 +140,7 @@ impl TaskSync {
                 continue;
             };
             let log = self.sync_event_log(&id, known_files.log)?;
+            changed |= !same_stat(log, known_files.log);
             self.tasks.insert(id.clone(), task);
             self.file_stats.insert(id.clone(), stat);
             self.checked_at.insert(id.clone(), now);
@@ -147,10 +152,15 @@ impl TaskSync {
                 },
             ));
         }
-        let tasks: Vec<&Task> = self.tasks.values().collect();
-        self.index
-            .replace_all_tasks(&tasks, &files)
-            .map_err(StoreError::Failed)?;
+        // Every task above came from the index unchanged, so the sets are equal when the counts
+        // are: a task or file gone from disk, or a new one, shows in the counts.
+        changed |= indexed.len() != files.len() || known.len() != files.len();
+        if changed {
+            let tasks: Vec<&Task> = self.tasks.values().collect();
+            self.index
+                .replace_all_tasks(&tasks, &files)
+                .map_err(StoreError::Failed)?;
+        }
         self.started = true;
         Ok(())
     }
@@ -337,3 +347,7 @@ impl TaskSync {
         self.checked_at.remove(task_id);
     }
 }
+
+#[cfg(test)]
+#[path = "task_sync_tests.rs"]
+mod tests;

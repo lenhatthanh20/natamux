@@ -2,6 +2,7 @@
 //! repo]`, `['stage-files', id]` and the branch list): on show, after a logged change and on the
 //! 60 s poll. An agent logs many lines a second: each kind reads at most once a second.
 
+use natamux_proto::stages::progress::StageProgress;
 use natamux_proto::tasks::task::Task;
 use ui::prelude::*;
 
@@ -65,7 +66,8 @@ impl DetailsPanel {
     /// Draws the panel again when a time it shows changes by the clock alone (`follow_labels`).
     pub(super) fn follow_times(&mut self, task: &Task, cx: &mut Context<Self>) {
         let now = now_ms();
-        let progress = self.progress(task).map(|(_, progress)| progress);
+        let computed = self.progress(task, cx);
+        let progress: &[StageProgress] = computed.as_ref().map_or(&[], |c| c.progress.as_slice());
         let Some(shown) = self.shown.as_mut() else {
             return;
         };
@@ -74,7 +76,7 @@ impl DetailsPanel {
             .into_iter()
             .flatten()
             .map(|stored| stored.event.at.as_str());
-        let wait = details_wait(task, times, progress.as_deref().unwrap_or_default(), now);
+        let wait = details_wait(task, times, progress, now);
         shown.clock.set_for(wait.map(|wait| now + wait));
         let wait = shown.clock.at.map(|at| at - now);
         follow_labels(&mut shown.clock.timer, wait, cx, |panel, cx| {
@@ -184,8 +186,10 @@ impl DetailsPanel {
             answer,
             Some(Kind::Events),
             |shown, events| {
-                (events.is_ok() || shown.events.is_none())
-                    && keep_new(&mut shown.events, Some(events))
+                let keep = events.is_ok() || shown.events.is_none();
+                let changed = keep && keep_new(&mut shown.events, Some(events));
+                shown.rev += u64::from(changed);
+                changed
             },
             cx,
         );
@@ -228,8 +232,10 @@ impl DetailsPanel {
             answer,
             Some(Kind::Settings),
             |shown, settings| {
-                (settings.is_ok() || shown.settings.is_none())
-                    && keep_new(&mut shown.settings, Some(settings))
+                let keep = settings.is_ok() || shown.settings.is_none();
+                let changed = keep && keep_new(&mut shown.settings, Some(settings));
+                shown.rev += u64::from(changed);
+                changed
             },
             cx,
         );

@@ -426,13 +426,14 @@ fn daemon_benchmark() {
     let (echo_p50, echo_p95) = echo_while_flooding();
     let (agent_p50, agent_p95) = echo_while_agents_print();
     let snapshot_ms = snapshots::full_history_snapshot();
+    // Before `opens`: the memory its 30 full screens took may not go back to
+    // the system, and this number is the RSS of the whole process.
+    let busy_mib = loads::busy_shells();
     let opens = opens::measure();
     let ((full_kib, full_ms), (tail_kib, tail_ms)) = snapshots::catch_up();
     let (init_500, init_500_warm) = loads::task_init(500);
     let (init_2000, init_2000_warm) = loads::task_init(2_000);
     let (hook_p50, hook_p95) = loads::hooks_at_once(loads::AGENTS_AT_ONCE);
-    // Last: the memory it takes may not go back to the system.
-    let busy_mib = loads::busy_shells();
     let (busy, agents) = (loads::BUSY_SHELLS, loads::AGENTS_AT_ONCE);
     let table = format!(
         "| measure | value |\n|---|---|\n\

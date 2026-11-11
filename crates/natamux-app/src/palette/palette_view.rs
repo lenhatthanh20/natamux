@@ -7,12 +7,13 @@ use std::collections::BTreeMap;
 use editor::{Editor, EditorEvent};
 use gpui::{
     ClickEvent, Entity, EntityInputHandler, EventEmitter, FocusHandle, Focusable, Keystroke,
-    ScrollHandle, Subscription,
+    ListAlignment, ListState, Subscription, list,
 };
 use natamux_proto::tasks::task::Task;
 use ui::{IconButton, ListItem, ListItemSpacing, Tooltip, prelude::*};
 
 use super::jump_rows::{JumpInput, jump_sections};
+use super::palette_list::{Item, content_height, flatten, item_of};
 use super::palette_pick::{PaletteKey, classify};
 use super::palette_row::{digit_hint, row_body, row_height};
 use super::palette_rows::{
@@ -34,6 +35,8 @@ use crate::components::input_rules::kbd_text;
 
 const MAC: bool = cfg!(target_os = "macos");
 const PAGE: usize = 8;
+/// Pixels the list builds above and below the window, so a scroll shows no blank.
+const OVERDRAW: f32 = 200.;
 
 /// What the view asks of its layer.
 pub enum PaletteEvent {
@@ -121,7 +124,8 @@ pub struct PaletteView {
     rows: Vec<PaletteRow>,
     /// The key of the active row; none or a row that is gone means the first row.
     active: Option<String>,
-    scroll: ScrollHandle,
+    items: Vec<Item>,
+    list: ListState,
     _edits: Subscription,
     _terminals: Option<Subscription>,
 }
@@ -173,7 +177,8 @@ impl PaletteView {
             sections: Vec::new(),
             rows: Vec::new(),
             active: None,
-            scroll: ScrollHandle::new(),
+            items: Vec::new(),
+            list: ListState::new(0, ListAlignment::Top, px(OVERDRAW)),
             _edits: edits,
             _terminals: terminals,
         };
@@ -210,6 +215,15 @@ impl PaletteView {
         };
         self.sections = cap_rows(sections);
         self.rows = flat_rows(&self.sections);
+        let items = flatten(&self.sections);
+        if items == self.items {
+            // New data under the same rows: the list keeps its place.
+            self.list.remeasure_items(0..items.len());
+        } else {
+            // A reset puts the list back on top, as a new query should.
+            self.list.reset(items.len());
+        }
+        self.items = items;
         cx.notify();
     }
 
@@ -231,19 +245,9 @@ impl PaletteView {
             return;
         };
         self.active = Some(row.key());
-        // Section headers are children of the list too.
-        let mut child = 0;
-        let mut seen = 0;
-        for section in &self.sections {
-            child += usize::from(section.title.is_some());
-            if index < seen + section.rows.len() {
-                child += index - seen;
-                break;
-            }
-            child += section.rows.len();
-            seen += section.rows.len();
+        if let Some(item) = item_of(&self.items, index) {
+            self.list.scroll_to_reveal_item(item);
         }
-        self.scroll.scroll_to_item(child);
         cx.notify();
     }
 
@@ -401,39 +405,48 @@ impl PaletteView {
             )))
     }
 
-    fn list(&self, window: &Window, cx: &mut Context<Self>) -> impl IntoElement {
+    /// Item `index` of the list, built when the list shows it.
+    fn palette_item(&self, index: usize, cx: &mut Context<Self>) -> AnyElement {
+        let item = match self.items.get(index) {
+            Some(Item::Title(title)) => Self::section_header(title).into_any_element(),
+            Some(Item::Row(at)) => match self.rows.get(*at) {
+                Some(row) => self.list_row(*at, row, cx).into_any_element(),
+                None => return div().into_any_element(),
+            },
+            None => return div().into_any_element(),
+        };
+        // The box's top and bottom padding scroll with the items, as in a plain scroll box: a
+        // row cut by the box edge shows up to that edge.
+        let edge = rems_from_px(6.0_f32);
+        div()
+            .w_full()
+            .when(index == 0, |item| item.pt(edge))
+            .when(index + 1 == self.items.len(), |item| item.pb(edge))
+            .child(item)
+            .into_any_element()
+    }
+
+    fn list(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         let max = (window.viewport_size().height * 0.6).min(px(440.));
-        let mut children: Vec<AnyElement> = Vec::new();
-        let mut index = 0;
-        for section in &self.sections {
-            if let Some(title) = section.title {
-                children.push(Self::section_header(title).into_any_element());
-            }
-            for row in &section.rows {
-                children.push(self.list_row(index, row, cx).into_any_element());
-                index += 1;
-            }
-        }
-        if children.is_empty() {
+        let body = v_flex().id("palette-list").px(rems_from_px(6.0_f32));
+        if self.items.is_empty() {
             let repo = match &self.scope {
                 Some(scope) => scope_name(scope, &self.snapshot.repos),
                 None => String::new(),
             };
             let text = empty_text(self.mode, self.scope.as_ref(), &self.text(cx), &repo);
-            children.push(
-                div()
-                    .p_4()
-                    .child(Label::new(text).color(Color::Muted))
-                    .into_any_element(),
-            );
+            return body
+                .py(rems_from_px(6.0_f32))
+                .max_h(max)
+                .child(div().p_4().child(Label::new(text).color(Color::Muted)))
+                .into_any_element();
         }
-        v_flex()
-            .id("palette-list")
-            .max_h(max)
-            .p(rems_from_px(6.0_f32))
-            .overflow_y_scroll()
-            .track_scroll(&self.scroll)
-            .children(children)
+        // A list does not size to its items: the box is as high as they are, up to `max`.
+        let wanted = px(content_height(&self.items, &self.rows) + 12.);
+        let items = cx.processor(|this, index: usize, _, cx| this.palette_item(index, cx));
+        body.h(wanted.min(max))
+            .child(list(self.list.clone(), items).size_full())
+            .into_any_element()
     }
 
     fn footer(cx: &App) -> impl IntoElement {

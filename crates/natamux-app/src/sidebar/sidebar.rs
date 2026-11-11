@@ -6,7 +6,9 @@
 #![allow(clippy::module_inception)]
 
 use editor::{Editor, EditorEvent};
-use gpui::{ClickEvent, Entity, FocusHandle, Focusable, FontWeight, Stateful, Subscription};
+use gpui::{
+    ClickEvent, Entity, FocusHandle, Focusable, FontWeight, Stateful, StyleRefinement, Subscription,
+};
 use natamux_proto::tasks::task::TaskState;
 use ui::{ButtonLike, Tab, Tooltip, prelude::*};
 
@@ -206,9 +208,13 @@ impl Render for Sidebar {
         let no_projects = data.loaded
             && data.repos.is_empty()
             && !data.tasks.iter().any(|task| task.workspace.is_some());
-        // Card blocks: 50 px card plus the 8 px gap.
-        let tree = Loading::new("sidebar-loading", loading, SkeletonList::new(4, 58.))
-            .content(self.tree.clone());
+        // Card blocks: 50 px card plus the 8 px gap. The tree draws again only when it notifies
+        // itself (its observers and its focus), not each time this view draws.
+        let tree = Loading::new("sidebar-loading", loading, SkeletonList::new(4, 58.)).content(
+            self.tree
+                .clone()
+                .cached(StyleRefinement::default().size_full()),
+        );
         let none = no_projects.then(|| {
             h_flex()
                 .gap_2()

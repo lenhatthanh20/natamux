@@ -40,6 +40,8 @@ const SIZES: [(f32, f32); 2] = [(1280., 800.), (1100., 700.)];
 pub(super) async fn all(
     handle: WindowHandle<Root>,
     tasks: usize,
+    only: Option<&str>,
+    repeat: usize,
     extra: &mut BTreeMap<String, f64>,
     cx: &mut AsyncApp,
 ) -> Result<()> {
@@ -49,11 +51,16 @@ pub(super) async fn all(
     in_window(handle, cx, |window, _| window.activate_window())?;
     sleep(Duration::from_secs(1), cx).await;
     extra.insert("tasks".into(), tasks as f64);
+    // `--bench-only`: one flow alone, for a profiler (options.rs checks the name).
+    if only == Some("resize") {
+        note("resize", resize(handle, repeat, extra, cx).await);
+        return Ok(());
+    }
     note("task switch", task_switch(handle, cx).await);
     note("event to row", event_to_row(handle, cx).await);
     note("event UI time", event_ui(handle, extra, cx).await);
     note("diff click", diff_click(handle, cx).await);
-    note("resize", resize(handle, extra, cx).await);
+    note("resize", resize(handle, 1, extra, cx).await);
     // The board first: its open columns keep the tasks of the event flows, as a busy day has.
     fake_daemon::shared().grow_tasks(tasks + BOARD_DONE, BOARD_DONE);
     sleep(Duration::from_secs(1), cx).await;
@@ -237,9 +244,10 @@ async fn diff_click(handle: WindowHandle<Root>, cx: &mut AsyncApp) -> Result<()>
 }
 
 /// Window resize with 6 panes in the Agents grid: the frame times while the window steps
-/// between two sizes, from the perf overlay's frame clock.
+/// between two sizes, from the perf overlay's frame clock. The steps run `repeat` times.
 async fn resize(
     handle: WindowHandle<Root>,
+    repeat: usize,
     extra: &mut BTreeMap<String, f64>,
     cx: &mut AsyncApp,
 ) -> Result<()> {
@@ -257,17 +265,19 @@ async fn resize(
     })?;
     sleep(PANES_OPEN, cx).await;
     overlay_on(true, handle, cx)?;
-    for step in 0..RESIZES {
+    for step in 0..RESIZES * repeat {
         let (width, height) = SIZES[step % SIZES.len()];
         in_window(handle, cx, |window, _| {
             window.resize(size(px(width), px(height)))
         })?;
         sleep(RESIZE_EVERY, cx).await;
     }
-    let summary = cx.update(|cx| {
+    let (summary, mut times) = cx.update(|cx| {
         let stats = &cx.global::<overlay::Perf>().stats;
-        stats.summary(Instant::now(), true)
+        let times: Vec<Duration> = stats.frame_samples().map(|(took, _)| took).collect();
+        (stats.summary(Instant::now(), true), times)
     });
+    times.sort();
     overlay_on(false, handle, cx)?;
     let (width, height) = SIZES[0];
     in_window(handle, cx, |window, _| {
@@ -281,6 +291,13 @@ async fn resize(
     extra.insert("resize_frame_p99_ms".into(), ms(summary.p99));
     let slow = summary.over_one_refresh as f64;
     extra.insert("resize_frames_over_1_refresh".into(), slow);
+    extra.insert("resize_frames".into(), summary.frames as f64);
+    extra.insert(
+        "resize_frame_p95_ms".into(),
+        ms(stats::percentile(&times, 0.95)),
+    );
+    let max = times.last().copied().unwrap_or_default();
+    extra.insert("resize_frame_max_ms".into(), ms(max));
     back(handle, cx)
 }
 
