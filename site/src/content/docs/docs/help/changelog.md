@@ -7,6 +7,14 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v1.0.25 (2026-11-11)
+
+- A Markdown file in the editor tab has **Source | Rendered** in its header; **Rendered** shows it formatted, with your unsaved edits. See [Files of the worktree](/docs/guides/dashboard/#files-of-the-worktree).
+- The board and the command palette draw only the rows on screen, and the app and the daemon use less memory.
+- The daemon shows the task list at start without waiting for your login shell's PATH, and handles hooks from many agents at once faster.
+- A terminal keeps about 5,200 lines of history at 80 columns, was about 7,800; the limit is still about 10 MB. See [Find in the terminal](/docs/guides/terminal/#find-in-the-terminal).
+- The default **Review** stage prompt reads the reports of earlier stages, not a `test-spec.md` the default workflow never writes. See [The review agent](/docs/concepts/review-loop/#the-review-agent).
+
 ## v1.0.24 (2026-11-10)
 
 - Right-click the file editor or the Changes diff and choose **Annotate with Git Blame** to show each line's date and author. An annotated line's menu shows its commit, **Copy Commit Hash**, and **Close Annotations**. See [Changes and History](/docs/guides/changes-and-history/).
