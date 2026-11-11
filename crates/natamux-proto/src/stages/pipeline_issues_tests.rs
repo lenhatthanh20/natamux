@@ -15,7 +15,7 @@ fn issues(value: Value) -> Vec<PipelineIssue> {
             json!({"id": "context", "kind": "context", "gate": "manual"}),
             json!({"id": "lead", "kind": "agent", "gate": "manual", "output": "lead.md"}),
         ];
-        let rest: Vec<Value> = list.drain(..).collect();
+        let rest = std::mem::take(list);
         *list = lead.into_iter().chain(rest).collect();
     }
     pipeline_issues(&steps(value))
