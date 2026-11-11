@@ -72,6 +72,39 @@ fn writes_nothing_when_nothing_changed() {
 }
 
 #[test]
+fn sets_and_clears_the_model_and_logs_it() {
+    let fx = Fixture::new();
+    let task = create(&fx.service, "First");
+
+    let set = update(&fx.service, &task.id, json!({ "model": "opus" })).unwrap();
+    assert_eq!(set.model.as_deref(), Some("opus"));
+    let event = last_event(&fx.service, &task.id).event;
+    assert_eq!(event.payload["fields"], json!(["model"]));
+    assert_eq!(file_task(&fx, &task.id), Some(set));
+
+    let count = fx.service.list_events(&task.id).unwrap().len();
+    update(&fx.service, &task.id, json!({ "model": "opus" })).unwrap();
+    assert_eq!(fx.service.list_events(&task.id).unwrap().len(), count);
+
+    let cleared = update(&fx.service, &task.id, json!({ "model": "" })).unwrap();
+    assert_eq!(cleared.model, None);
+    let event = last_event(&fx.service, &task.id).event;
+    assert_eq!(event.payload["fields"], json!(["model"]));
+}
+
+#[test]
+fn a_task_without_a_model_has_none_after_an_empty_model() {
+    let fx = Fixture::new();
+    let task = create(&fx.service, "First");
+    let count = fx.service.list_events(&task.id).unwrap().len();
+
+    let same = update(&fx.service, &task.id, json!({ "model": null })).unwrap();
+
+    assert_eq!(same, task);
+    assert_eq!(fx.service.list_events(&task.id).unwrap().len(), count);
+}
+
+#[test]
 fn refuses_what_a_person_may_not_change() {
     let inputs = [
         json!({ "title": "  " }),

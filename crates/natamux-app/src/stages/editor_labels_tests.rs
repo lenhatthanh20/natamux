@@ -30,31 +30,6 @@ fn says_each_branch_with_its_paths_for_a_screen_reader() {
     );
 }
 
-#[test]
-fn reads_the_model_from_the_words_of_a_command_line() {
-    assert_eq!(model_of(Some("--model sonnet")).as_deref(), Some("sonnet"));
-    assert_eq!(model_of(Some("--model=opus")).as_deref(), Some("opus"));
-    assert_eq!(model_of(Some("-m gpt-5")).as_deref(), Some("gpt-5"));
-    assert_eq!(
-        model_of(Some("--verbose  --model gpt-5-codex --yolo")).as_deref(),
-        Some("gpt-5-codex")
-    );
-}
-
-#[test]
-fn finds_no_model_when_the_args_name_none() {
-    for args in [
-        None,
-        Some(""),
-        Some("--verbose"),
-        Some("--verbose --model"),
-        Some("--model --verbose"),
-        Some("--model="),
-    ] {
-        assert_eq!(model_of(args), None, "{args:?}");
-    }
-}
-
 fn own(change: impl Fn(&mut Stage)) -> Vec<Step> {
     let mut mine = Stage::new("my-check", StageKind::Agent, Gate::Auto);
     change(&mut mine);

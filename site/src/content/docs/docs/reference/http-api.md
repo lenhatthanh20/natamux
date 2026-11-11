@@ -56,10 +56,10 @@ To do these from a script, use the daemon's own token, not the one in a task ter
 | Method and path | Meaning |
 |---|---|
 | `GET /tasks?state=<state>` | List tasks |
-| `POST /tasks` | Create a task (`title` is required) |
+| `POST /tasks` | Create a task (`title` is required). An optional `model` is passed to the task's agent as `--model`; see [Models](#models) |
 | `GET /tasks/:id` | One task |
 | `DELETE /tasks/:id` | Delete the task, its notes and its history. A workspace and its branch are removed too, also when the branch has commits that are not merged. Answers 409 when that workspace has changes that are not committed, and the task, the worktree and the branch stay. `?force=true` discards those changes and deletes anyway |
-| `PATCH /tasks/:id` | Change `title`, `description`, `priority`, `labels` or `dependsOn` |
+| `PATCH /tasks/:id` | Change `title`, `description`, `priority`, `labels`, `dependsOn` or `model`. A `model` of `null` or `""` clears it |
 | `GET /tasks/:id/events` | The event log of a task |
 | `POST /tasks/:id/events` | Send an event `{ source, type, payload? }`. Answers `{ task, accepted }` |
 | `POST /tasks/:id/stage` | A stage action `{ action, stage?, terminal?, to?, reason? }`. Actions: `approve`, `reopen`, `skip`, `pass`, `fail`, `report`, `start` |
@@ -73,7 +73,7 @@ To do these from a script, use the daemon's own token, not the one in a task ter
 | `GET /tasks/:id/changes` | Files changed in the workspace. The answer is kept for 5 seconds; `?fresh=1` reads git now |
 | `GET /tasks/:id/graph` | The history of the task branch next to the base branch. Kept and `?fresh=1` as for changes |
 | `POST /tasks/:id/commit-message` | A commit message for the changes, by the task's agent: `{ message, source, agent, reason? }`. `source` is `draft` when the agent failed and the message is a simple one; `reason` says why. Answers 409 when nothing changed |
-| `POST /workspaces` | Make a task with a worktree and optionally start an agent. The body can have `base` and `branch`. With `worktree: false`, the task works in the project folder (the main checkout): its `workspace` is that folder, `branch` the branch checked out there, and `mainCheckout` is `true`; nothing is checked out, `base` and `branch` are not used, and the agent starts at once. Answers 409 and makes no task when another open task of the project works in its main checkout. Set `mode` to `single-agent` with a known `agent` for only Context and Agent; omit it for the project's full pipeline. An invalid branch or mode answers 400 and no task is made. Answers 202 with the task as soon as it is made; the worktree and agent come after (see `workspace.preparing`) |
+| `POST /workspaces` | Make a task with a worktree and optionally start an agent. The body can have `base` and `branch`. With `worktree: false`, the task works in the project folder (the main checkout): its `workspace` is that folder, `branch` the branch checked out there, and `mainCheckout` is `true`; nothing is checked out, `base` and `branch` are not used, and the agent starts at once. Answers 409 and makes no task when another open task of the project works in its main checkout. Set `mode` to `single-agent` with a known `agent` for only Context and Agent; omit it for the project's full pipeline. An optional `model` is passed to the task's agent as `--model` (see [Models](#models)). An invalid branch, mode or model answers 400 and no task is made. Answers 202 with the task as soon as it is made; the worktree and agent come after (see `workspace.preparing`) |
 | `GET /workspaces/preparing` | The workspaces being made, and the step of each: `{ preparing: { "T-0001": "checkout" } }` |
 | `POST /hooks/:agent` | Where an agent's hook posts. Always answers `200 {}` for a known agent |
 | `GET /repos` | Projects Natamux manages, and the daemon's worktree folder: `{ repos, worktreesDir }`. A project with its own worktree folder has `worktreesDir`. Each project has `trusted`: whether its commands are approved |
@@ -86,6 +86,12 @@ To do these from a script, use the daemon's own token, not the one in a task ter
 | `GET /repos/:id/skills` | The skills of every agent for the project: `{ skills, notices }`. A skill is `{ name, description, origin, agents, path }`, and `origin` is `project`, `plugin` or `user`. A notice says, for example, that a plugin is on but not installed |
 
 The task is named in a hook by the `X-Natamux-Task` header. The `X-Natamux-Terminal` header names the terminal.
+
+### Models
+
+A task's `model` is optional; without it the agent uses its own default. It is 1 to 100 characters of `A-Z a-z 0-9 . _ - : / @ [ ]`, after trimming, and does not start with `-`. Anything else answers 400 `invalid_request` with the issue at `["model"]`, and `POST /tasks` and `POST /workspaces` make no task. Natamux keeps no list of model names: a well-formed but wrong name reaches the agent, which reports it.
+
+The daemon adds `--model '<model>'` when it starts the task's agent, a built-in agent or a custom one on a built-in base. A stage with another agent gets none, and a stage whose `args` name a model (`--model`, `--model=`, `-m`) keeps its own.
 
 ## More endpoints
 

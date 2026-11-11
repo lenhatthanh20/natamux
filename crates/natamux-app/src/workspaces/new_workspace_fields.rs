@@ -7,13 +7,13 @@
 use gpui::{AnyElement, ClickEvent, Div, ExternalPaths, Focusable, KeyDownEvent};
 use ui::{ButtonLike, Switch, ToggleState, Tooltip, prelude::*};
 
-use super::super::new_workspace_rules::{SourceChoice, prefill_branch};
+use super::super::new_workspace_rules::{SourceChoice, model_error, model_hint, prefill_branch};
 use super::super::new_workspace_view_rules::{
     CHOOSE_AGENT, ErrorRow, FLOW_TIP, PICK_AGENT, branch_help, shows_default, source_icon,
     worktree_help, worktree_tip,
 };
 use super::{DEFAULT_BRANCH_HINT, NewWorkspaceDialog, Pick};
-use crate::agents::agent_choices::agent_label;
+use crate::agents::agent_choices::{agent_label, base_in, custom_agents};
 use crate::agents::limits_rules::{current, picker_note};
 use crate::app::clock::now_ms;
 use crate::components::button_style::button_icon;
@@ -29,6 +29,7 @@ const ROW_HEIGHT: f32 = 32.;
 const BASE_WIDTH: f32 = 160.;
 /// The agent select; the flow control takes the rest of its row.
 const AGENT_WIDTH: f32 = 200.;
+const MODEL_TIP: &str = "Passed to the task's agent as --model. Empty: the agent's own default.";
 
 /// The 12 px icon before a select's text.
 fn lead_icon(name: &str) -> AnyElement {
@@ -418,6 +419,35 @@ impl NewWorkspaceDialog {
             .child(row)
             .children(error)
             .into_any_element()
+    }
+
+    /// The Model input under the agent row, with its red line when the name has bad signs.
+    pub(super) fn model_row(&self, cx: &App) -> AnyElement {
+        let error = model_error(&self.model.read(cx).text(cx));
+        let row = line()
+            .child(tip_label("new-task-model-label", "Model", MODEL_TIP))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .child(SettingsInput::new(&self.model).invalid(error.is_some())),
+            );
+        v_flex()
+            .w_full()
+            .child(row)
+            .children(error.map(error_line))
+            .into_any_element()
+    }
+
+    /// Runs on each render, so an agent change gives the Model field its example.
+    pub(super) fn sync_model(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let hint = model_hint(base_in(&self.agent, &custom_agents()));
+        if hint != self.model_hint {
+            self.model_hint = hint.clone();
+            self.model.update(cx, |editor, cx| {
+                editor.set_placeholder_text(hint.as_str(), window, cx)
+            });
+        }
     }
 
     /// Runs on each render, so a title, project or settings change refills the branch with no

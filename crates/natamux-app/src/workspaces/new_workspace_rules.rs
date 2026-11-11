@@ -6,6 +6,7 @@ use std::path::PathBuf;
 
 use natamux_core::tasks::task::split_task_id;
 use natamux_core::workspaces::branch_name::branch_name_from;
+use natamux_proto::agents::model::{MODEL_NAME_ERROR, is_model_name};
 use natamux_proto::projects::repo::{BranchList, ContextSource};
 use natamux_proto::tasks::attachments::{AttachmentUpload, attachment_limit_error};
 use natamux_proto::tasks::task::TaskContext;
@@ -217,12 +218,35 @@ pub struct StartForm {
     pub skill: String,
     /// "Create a worktree" unchecked: the task works in the project folder, with no base or branch.
     pub no_worktree: bool,
+    /// Empty: the agent's own default. The dialog leaves it empty for an agent that takes none.
+    pub model: String,
+}
+
+/// The red line under a model typed with signs a command line must not get. None when empty.
+pub fn model_error(model: &str) -> Option<&'static str> {
+    let model = model.trim();
+    (!model.is_empty() && !is_model_name(model)).then_some(MODEL_NAME_ERROR)
+}
+
+/// The Model field's placeholder: an example the picked agent knows.
+pub fn model_hint(base: &str) -> String {
+    let example = match base {
+        "codex" => "gpt-5-codex",
+        "gemini" => "gemini-2.5-pro",
+        "copilot" => "gpt-5",
+        "cursor" => "sonnet-4",
+        _ => "sonnet",
+    };
+    format!("Agent default (e.g. {example})")
 }
 
 /// Why Start task is off, if it is.
 pub fn blocked_reason(form: &StartForm, choice: &SourceChoice) -> Option<&'static str> {
     if form.single_agent && form.agent.is_empty() {
         return Some("Choose an agent for this task flow");
+    }
+    if let Some(error) = model_error(&form.model) {
+        return Some(error);
     }
     let skill = (*choice == SourceChoice::AgentSkill).then_some(form.skill.as_str());
     create_blocked_reason(
@@ -260,6 +284,7 @@ pub fn new_workspace_input(
         base: filled(&form.base).filter(|_| worktree),
         branch: filled(form.branch.trim()).filter(|_| worktree),
         agent: filled(&form.agent),
+        model: filled(form.model.trim()).filter(|_| !form.agent.is_empty()),
         mode: form.single_agent.then(|| "single-agent".into()),
         prompt: if manual {
             filled(form.notes.trim())

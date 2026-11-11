@@ -50,6 +50,7 @@ fn copies_a_task_and_labels_it_and_its_tries_alike() {
             "description": "Under 100 ms",
             "priority": "high",
             "labels": ["perf"],
+            "model": "opus",
         }),
     );
 
@@ -65,6 +66,7 @@ fn copies_a_task_and_labels_it_and_its_tries_alike() {
     let first = &tries[0];
     assert_eq!(first.description, "Under 100 ms");
     assert_eq!(first.priority, "high");
+    assert_eq!(first.model.as_deref(), Some("opus"));
     assert_eq!(first.labels, ["perf".to_string(), label.clone()]);
     assert_eq!(first.state, TaskState::Draft);
     assert_eq!(first.workspace, None);

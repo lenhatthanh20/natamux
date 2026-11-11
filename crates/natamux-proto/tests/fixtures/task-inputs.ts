@@ -35,7 +35,7 @@ export const updateTaskInputSchema = z
   .partial()
   .strict()
 
-export const EDITABLE_FIELDS = ['title', 'description', 'priority', 'labels', 'dependsOn'] as const
+export const EDITABLE_FIELDS = ['title', 'description', 'priority', 'labels', 'dependsOn', 'model'] as const
 
 export type ActivityOptions = { minIntervalMs?: number; endsWait?: boolean }
 

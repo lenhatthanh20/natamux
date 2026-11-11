@@ -362,7 +362,12 @@ impl Store {
         let before = task_value(&task);
         let mut next = before.clone();
         for (key, value) in input {
-            next.insert(key, value);
+            // Null clears a field, as a task without it never had it.
+            if value.is_null() {
+                next.remove(&key);
+            } else {
+                next.insert(key, value);
+            }
         }
         let changed: Vec<&str> = EDITABLE_FIELDS
             .into_iter()

@@ -128,6 +128,9 @@ pub struct Task {
     pub labels: Vec<String>,
     #[serde(default)]
     pub agent: Option<String>,
+    /// Passed to the task's agent as `--model`; None: the agent's own default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
     #[serde(default)]
     pub branch: Option<String>,
     #[serde(default)]
@@ -259,7 +262,14 @@ pub struct TemplateTaskInput {
 }
 
 /// `EDITABLE_FIELDS`: what a person may change after a task is created.
-pub const EDITABLE_FIELDS: [&str; 5] = ["title", "description", "priority", "labels", "dependsOn"];
+pub const EDITABLE_FIELDS: [&str; 6] = [
+    "title",
+    "description",
+    "priority",
+    "labels",
+    "dependsOn",
+    "model",
+];
 
 /// The body of `PATCH /tasks/:id` (`updateTaskInputSchema`): a field left out stays as it is.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
@@ -275,6 +285,9 @@ pub struct TaskChanges {
     pub labels: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub depends_on: Option<Vec<String>>,
+    /// An empty name clears the model.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
 }
 
 /// The answer of `POST /tasks`, `POST /templates/:id/tasks`, `PATCH /tasks/:id`,

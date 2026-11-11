@@ -14,6 +14,7 @@ use natamux_agents::launch::{
 use natamux_agents::trust::{TrustPaths, trust_workspace};
 use natamux_core::js::is_js_space;
 use natamux_core::tasks::dependencies::waiting_on;
+use natamux_proto::agents::model::{is_model_name, model_of};
 use natamux_proto::agents::start::LAUNCHABLE_AGENTS;
 use natamux_proto::tasks::task::Task;
 use natamux_proto::terminals::text::plain_text;
@@ -64,6 +65,16 @@ pub fn quoted_words(args: &str, values: &[(&str, &str)], platform: Platform) -> 
         .join(" ")
 }
 
+/// The task's model for this start: only for the task's agent (or the agent picked for a task
+/// without one), a built-in kind (a custom agent counts by its base), and a stage whose own words
+/// name no model, since the stage's `--model` wins.
+pub fn task_model<'a>(task: &'a Task, agent: &str, stage_args: Option<&str>) -> Option<&'a str> {
+    let model = task.model.as_deref().filter(|model| is_model_name(model))?;
+    let its_agent = task.agent.as_deref().is_none_or(|own| own == agent);
+    let built_in = LAUNCHABLE_AGENTS.contains(&agent_kind(agent).as_str());
+    (its_agent && built_in && model_of(stage_args).is_none()).then_some(model)
+}
+
 /// The first prompt: the task title, then its description. On one line, because the shell runs
 /// the command at the first line end. An imported issue's text goes inside a fence longer than
 /// any run of backticks in it, so the text cannot end the fence.
@@ -105,6 +116,8 @@ pub struct AgentLaunch {
     pub session: Option<String>,
     /// It came back in its shell with no prompt, so it waits at its prompt.
     pub restored: bool,
+    /// The task's model passed as `--model`, if any.
+    pub model: Option<String>,
 }
 
 pub type OnLaunch = Arc<dyn Fn(&AgentLaunch) + Send + Sync>;
@@ -244,6 +257,7 @@ impl AgentRunner {
                 program: program.clone(),
                 session: resumed.map(str::to_string),
                 restored: own.restored,
+                model: self.model_for(&task, agent, own),
             });
         }
         let restored_in = own.restored.then_some(shell);
@@ -258,6 +272,14 @@ impl AgentRunner {
                 session.filter(|session| !session.is_empty() && *session != LAST_SESSION),
             ),
         )?)
+    }
+
+    /// The task's model for this start. Stage words of an untrusted project are left out, so a
+    /// `--model` in them does not count.
+    fn model_for(&self, task: &Task, agent: &str, own: &OwnAgent) -> Option<String> {
+        let trusted = (self.options.trusted_of)(task.repo.as_deref());
+        let stage_args = own.args.as_deref().filter(|_| trusted);
+        task_model(task, agent, stage_args).map(str::to_string)
     }
 
     /// The command line of a start, with the agent's hook file and trust in place first.
@@ -285,8 +307,12 @@ impl AgentRunner {
             .as_deref()
             .filter(|_| trusted)
             .map(|args| quoted_words(args, &arg_values(task), self.platform()));
+        let model = self
+            .model_for(task, agent, own)
+            .map(|model| format!("--model {}", quote_argument(&model, self.platform())));
         let extra: Vec<&str> = [
             self.extra_args.get(&kind).map(String::as_str),
+            model.as_deref(),
             stage_words.as_deref(),
         ]
         .into_iter()

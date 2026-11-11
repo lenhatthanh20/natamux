@@ -276,6 +276,7 @@ fn launch_of(task_id: &str, agent: &str, program: &str, restored: bool) -> Agent
         program: program.to_string(),
         session: None,
         restored,
+        model: None,
     }
 }
 
@@ -510,6 +511,27 @@ fn fails_the_task_when_the_agent_ends_with_an_error_right_after_its_start() {
 }
 
 #[test]
+fn names_the_model_when_the_agent_ends_right_after_a_start_with_one() {
+    let f = Fixture::new();
+    let task = f.running_task(Some("claude-code"));
+    f.later(1);
+    let launch = AgentLaunch {
+        model: Some("opsu".to_string()),
+        ..launch_of(&task.id, "claude-code", "claude", false)
+    };
+    f.signals.watch_launch(&launch);
+
+    f.output(&task.id, "1", &format!("{ECHO}Unknown model\r\n{FAILED_MARK}$ "));
+
+    let failed = last_event(&f, &task.id);
+    let reason = failed.payload["reason"].as_str().unwrap();
+    assert!(
+        reason.contains("the model opsu (Edit the task), the words in NATAMUX_CLAUDE_ARGS"),
+        "{reason}"
+    );
+}
+
+#[test]
 fn quotes_nothing_when_the_ended_agent_printed_nothing() {
     let f = Fixture::new();
     let task = f.running_task(Some("codex"));
@@ -685,6 +707,7 @@ fn reads_a_custom_agent_as_its_base_and_names_settings_when_its_command_is_missi
         program: "cq".to_string(),
         session: None,
         restored: false,
+        model: None,
     });
     f.output(
         &task.id,

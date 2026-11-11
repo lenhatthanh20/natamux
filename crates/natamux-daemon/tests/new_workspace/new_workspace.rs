@@ -74,6 +74,24 @@ fn keeps_the_notes_of_a_task_with_no_agent() {
 }
 
 #[test]
+fn keeps_the_model_of_the_new_task() {
+    let fx = Fx::new();
+
+    let task = new_workspace(
+        &fx.new_parts(),
+        NewWorkspaceInput {
+            model: Some("opus".to_string()),
+            ..input("Fix the login page")
+        },
+    )
+    .unwrap();
+
+    assert_eq!(task.model.as_deref(), Some("opus"));
+    fx.settle();
+    assert_eq!(fx.task(&task.id).model.as_deref(), Some("opus"));
+}
+
+#[test]
 fn starts_the_first_stage_with_an_agent_and_the_prompt_becomes_the_notes() {
     let fx = Fx::new();
     fx.hold_create();

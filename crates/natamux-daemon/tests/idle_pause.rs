@@ -330,6 +330,7 @@ fn launch(terminal: &str, restored: bool) -> AgentLaunch {
         program: "copilot".into(),
         session: Some("c-1".into()),
         restored,
+        model: None,
     }
 }
 

@@ -107,6 +107,9 @@ impl NewWorkspaceDialog {
         let mut rows = self.task_rows(&choice, error_row, window, cx);
         rows.extend(self.workspace_rows(&project, cx));
         rows.push(self.agent_row(error_row, cx));
+        if self.takes_model() {
+            rows.push(self.model_row(cx));
+        }
         div()
             .relative()
             .w_full()
@@ -133,6 +136,7 @@ impl Render for NewWorkspaceDialog {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.sync_branch(window, cx);
         self.sync_reference(window, cx);
+        self.sync_model(window, cx);
         let form = self.form(cx);
         let choice = self.choice();
         let reason = blocked_reason(&form, &choice);
