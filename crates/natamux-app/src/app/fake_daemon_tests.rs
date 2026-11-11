@@ -140,6 +140,7 @@ fn makes_a_workspace_and_sends_its_steps() {
         .new_workspace(NewWorkspaceInput {
             title: "Try it".into(),
             repo: Some("natamux-site".into()),
+            model: Some("opus".into()),
             ..NewWorkspaceInput::default()
         })
         .unwrap();
@@ -147,6 +148,7 @@ fn makes_a_workspace_and_sends_its_steps() {
         task.workspace.as_deref(),
         Some("/work/.natamux/worktrees/T-0201")
     );
+    assert_eq!(task.model.as_deref(), Some("opus"));
     let steps: Vec<Option<PreparingStep>> = drain(&mut receiver)
         .into_iter()
         .filter_map(|event| match event {
@@ -411,11 +413,13 @@ fn works_in_the_main_checkout_when_no_worktree_is_asked_and_detaches_keeping_the
     let input = NewWorkspaceInput {
         title: "Try it".into(),
         agent: Some("codex".into()),
+        model: Some("gpt-5-codex".into()),
         worktree: Some(false),
         ..NewWorkspaceInput::default()
     };
     let task = fake.new_workspace(input.clone()).unwrap();
     assert_eq!(task.main_checkout, Some(true));
+    assert_eq!(task.model.as_deref(), Some("gpt-5-codex"));
     assert!(task.workspace.is_some());
     assert_eq!(task.branch.as_deref(), Some("main"));
     assert_eq!(task.agent.as_deref(), Some("codex"));

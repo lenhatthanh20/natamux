@@ -32,6 +32,9 @@ pub struct NewWorkspaceInput {
     pub branch: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub agent: Option<String>,
+    /// Passed to the task's agent as `--model`; None: the agent's own default.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mode: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -272,6 +275,7 @@ mod tests {
             base: Some("dev".into()),
             branch: Some("ABC-12".into()),
             agent: Some("claude-code".into()),
+            model: Some("opus".into()),
             mode: None,
             prompt: Some("Do it".into()),
             context: Some(TaskContext {
@@ -289,7 +293,7 @@ mod tests {
             serde_json::to_string(&input).unwrap(),
             concat!(
                 r#"{"title":"Fix","repo":"natamux","base":"dev","branch":"ABC-12","#,
-                r#""agent":"claude-code","#,
+                r#""agent":"claude-code","model":"opus","#,
                 r#""prompt":"Do it","context":{"source":"github-issue","ref":"42"},"#,
                 r#""attachments":[{"name":"a.png","data":"AAAA"}],"worktree":false}"#
             )

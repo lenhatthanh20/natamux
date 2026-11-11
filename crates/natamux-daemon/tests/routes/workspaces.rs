@@ -321,6 +321,29 @@ async fn refuses_a_new_workspace_for_an_agent_the_daemon_cannot_start() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn refuses_a_model_that_is_not_one_safe_word_and_makes_no_task() {
+    let d = git_daemon("new-ws-bad-model").await;
+    for model in ["-p", "opus; rm", "a b", "$(x)", ""] {
+        let body = json!({ "title": "Example", "model": model });
+        let (status, answer) = new_workspace(&d, &body).await;
+        assert_eq!(status, 400, "{model}: {answer}");
+        assert_eq!(answer["issues"][0]["path"], json!(["model"]), "{model}");
+    }
+    assert_eq!(task_count(&d).await, 0);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn keeps_the_model_of_a_new_workspace_trimmed() {
+    let d = git_daemon("new-ws-model").await;
+
+    let body = json!({ "title": "Example", "model": " sonnet[1m] " });
+    let (status, answer) = new_workspace(&d, &body).await;
+
+    assert_eq!(status, 202, "{answer}");
+    assert_eq!(answer["task"]["model"], "sonnet[1m]");
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn one_agent_mode_requires_a_known_agent_and_refuses_other_modes() {
     let d = git_daemon("new-ws-one-agent-validation").await;
     for body in [

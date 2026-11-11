@@ -1,6 +1,6 @@
 //! The edit form of the details panel (`features/tasks/TaskEditForm.tsx`): title, notes, priority,
-//! labels and the tasks it waits for. Save (Mod+Enter from any field) makes `PATCH /tasks/:id`;
-//! Cancel and a save close it.
+//! labels, the tasks it waits for and the model. Save (Mod+Enter from any field) makes
+//! `PATCH /tasks/:id`; Cancel and a save close it.
 
 use editor::Editor;
 use gpui::{ClickEvent, Entity, EventEmitter, FocusHandle, Focusable, KeyDownEvent};
@@ -12,6 +12,8 @@ use crate::app::dashboard::Dashboard;
 use crate::components::button_style::{action_button, key_hint, quiet_button};
 use crate::components::form::{field, input_box, text_editor};
 use crate::components::menu::MenuLayer;
+use crate::components::settings_card::error_line;
+use crate::workspaces::new_workspace_rules::model_error;
 
 /// The form is done: saved or cancelled.
 pub struct Saved;
@@ -23,6 +25,7 @@ pub struct EditForm {
     notes: Entity<Editor>,
     labels: Entity<Editor>,
     depends_on: Entity<Editor>,
+    model: Entity<Editor>,
     priority: String,
     busy: bool,
     priority_focus: FocusHandle,
@@ -59,6 +62,13 @@ impl EditForm {
             window,
             cx,
         );
+        let model = filled(
+            task.model.as_deref().unwrap_or_default(),
+            "Agent default",
+            None,
+            window,
+            cx,
+        );
         EditForm {
             priority: task.priority.clone(),
             task,
@@ -67,6 +77,7 @@ impl EditForm {
             notes,
             labels,
             depends_on,
+            model,
             busy: false,
             priority_focus: cx.focus_handle(),
         }
@@ -87,7 +98,8 @@ impl EditForm {
 
     fn save(&mut self, cx: &mut Context<Self>) {
         let title = Self::text(&self.title, cx).trim().to_owned();
-        if title.is_empty() || self.busy {
+        let model = Self::text(&self.model, cx).trim().to_owned();
+        if title.is_empty() || model_error(&model).is_some() || self.busy {
             return;
         }
         self.busy = true;
@@ -97,6 +109,8 @@ impl EditForm {
             priority: Some(self.priority.clone()),
             labels: Some(parse_labels(&Self::text(&self.labels, cx))),
             depends_on: Some(parse_task_ids(&Self::text(&self.depends_on, cx))),
+            // Empty clears it.
+            model: Some(model),
         };
         let id = self.task.id.clone();
         let written = self
@@ -152,13 +166,14 @@ fn capitalized(text: &str) -> String {
 impl Render for EditForm {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let blank = Self::text(&self.title, cx).trim().is_empty();
+        let model_error = model_error(&Self::text(&self.model, cx));
         let priority = Button::new("edit-priority", capitalized(&self.priority))
             .style(ButtonStyle::Outlined)
             .full_width()
             .end_icon(Icon::new(IconName::ChevronDown).size(IconSize::Small))
             .track_focus(&self.priority_focus)
             .on_click(cx.listener(|this, event, window, cx| this.open_priority(event, window, cx)));
-        let off = self.busy || blank;
+        let off = self.busy || blank || model_error.is_some();
         let save = action_button("edit-save", "Save")
             .key_binding(key_hint("mod-enter", off))
             .disabled(off)
@@ -188,7 +203,12 @@ impl Render for EditForm {
                     .child(field(
                         "Waits for tasks (ids, comma separated)",
                         input_box(&self.depends_on, cx),
-                    )),
+                    ))
+                    .child(field(
+                        "Model, passed to the task's agent as --model",
+                        input_box(&self.model, cx),
+                    ))
+                    .children(model_error.map(error_line)),
             )
             .child(
                 h_flex()

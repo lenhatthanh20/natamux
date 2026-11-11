@@ -36,6 +36,45 @@ fn one_agent_flow_requires_an_agent_and_sends_its_mode() {
     );
 }
 
+#[test]
+fn sends_the_trimmed_model_and_none_when_it_is_empty() {
+    let typed = StartForm {
+        model: " opus ".into(),
+        ..form("Fix it")
+    };
+    let input = new_workspace_input(&typed, &manual(), Vec::new());
+    assert_eq!(input.model.as_deref(), Some("opus"));
+    let empty = new_workspace_input(&form("Fix it"), &manual(), Vec::new());
+    assert_eq!(empty.model, None);
+    let no_agent = StartForm {
+        agent: String::new(),
+        ..typed
+    };
+    assert_eq!(new_workspace_input(&no_agent, &manual(), Vec::new()).model, None);
+}
+
+#[test]
+fn a_model_with_bad_signs_blocks_start_task() {
+    for model in ["-p", "opus; rm", "a b", "$(x)"] {
+        let typed = StartForm {
+            model: model.into(),
+            ..form("Fix it")
+        };
+        assert_eq!(model_error(model), Some(MODEL_NAME_ERROR), "{model}");
+        assert_eq!(blocked_reason(&typed, &manual()), Some(MODEL_NAME_ERROR));
+    }
+    for model in ["", "  ", "sonnet[1m]", "openrouter/qwen-3", "gpt-5:high"] {
+        assert_eq!(model_error(model), None, "{model}");
+    }
+}
+
+#[test]
+fn hints_a_model_the_agent_knows() {
+    assert_eq!(model_hint("claude-code"), "Agent default (e.g. sonnet)");
+    assert_eq!(model_hint("codex"), "Agent default (e.g. gpt-5-codex)");
+    assert_eq!(model_hint("gemini"), "Agent default (e.g. gemini-2.5-pro)");
+}
+
 fn file(id: u64, name: &str, size: u64) -> PickedFile {
     PickedFile {
         id,

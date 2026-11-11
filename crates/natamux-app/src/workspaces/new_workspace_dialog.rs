@@ -11,10 +11,10 @@ use natamux_proto::projects::repo::{BranchList, LoadedSettings, RemoteBranchList
 use ui::prelude::*;
 
 use super::new_workspace_rules::{
-    PickedFile, SourceChoice, StartForm, blocked_reason, initial_repo, new_workspace_input,
-    pick_source, read_uploads, shown_repo, source_choices,
+    PickedFile, SourceChoice, StartForm, blocked_reason, initial_repo, model_hint,
+    new_workspace_input, pick_source, read_uploads, shown_repo, source_choices,
 };
-use crate::agents::agent_choices::DEFAULT_AGENT;
+use crate::agents::agent_choices::{DEFAULT_AGENT, base_in, custom_agents, is_agent_id};
 use crate::app::dashboard::Dashboard;
 use crate::app::dashboard_data::{Part, Seen};
 use crate::app::source::reason;
@@ -102,6 +102,10 @@ pub struct NewWorkspaceDialog {
     base: String,
     agent: String,
     single_agent: bool,
+    /// Passed to the agent as `--model`; empty: its own default.
+    model: Entity<Editor>,
+    /// The Model field's placeholder now: an example for the picked agent.
+    model_hint: String,
     /// "Create a worktree": unchecked makes the task only.
     worktree: bool,
     picked_source: String,
@@ -166,6 +170,9 @@ impl NewWorkspaceDialog {
         let reference = text_editor("", None, window, cx);
         let branch_name = text_editor(DEFAULT_BRANCH_HINT, None, window, cx);
         set_mono(&branch_name, cx);
+        let model_hint = model_hint(DEFAULT_AGENT);
+        let model = text_editor(&model_hint, None, window, cx);
+        set_mono(&model, cx);
         let ids = repo_ids(&dashboard, cx);
         let mut seen = Seen::default();
         let follow = cx.observe(&dashboard, move |this, dashboard, cx| {
@@ -175,7 +182,7 @@ impl NewWorkspaceDialog {
             }
         });
         let mut subscriptions = vec![follow];
-        for field in [&title, &notes, &reference] {
+        for field in [&title, &notes, &reference, &model] {
             subscriptions.push(cx.subscribe(field, |_, _, event: &EditorEvent, cx| {
                 if matches!(event, EditorEvent::BufferEdited) {
                     cx.notify();
@@ -208,6 +215,8 @@ impl NewWorkspaceDialog {
             base: String::new(),
             agent: DEFAULT_AGENT.into(),
             single_agent: false,
+            model,
+            model_hint,
             worktree: true,
             picked_source: "manual".into(),
             skill: String::new(),
@@ -306,7 +315,17 @@ impl NewWorkspaceDialog {
             reference: self.reference.read(cx).text(cx),
             skill: self.skill.clone(),
             no_worktree: !self.worktree,
+            model: if self.takes_model() {
+                self.model.read(cx).text(cx)
+            } else {
+                String::new()
+            },
         }
+    }
+
+    /// A built-in agent, or a custom one on a built-in base: Natamux knows it takes `--model`.
+    fn takes_model(&self) -> bool {
+        !self.agent.is_empty() && is_agent_id(Some(base_in(&self.agent, &custom_agents())))
     }
 
     /// The project's `git.branchName`, once its settings are loaded.
@@ -458,9 +477,11 @@ impl DialogView for NewWorkspaceDialog {
                 ring.push(stops.reset.clone());
             }
         }
-        ring.extend(
-            [&stops.agent, &stops.flow, &stops.cancel, &stops.submit].map(FocusHandle::clone),
-        );
+        ring.extend([&stops.agent, &stops.flow].map(FocusHandle::clone));
+        if self.takes_model() {
+            ring.push(self.model.focus_handle(cx));
+        }
+        ring.extend([&stops.cancel, &stops.submit].map(FocusHandle::clone));
         ring
     }
 

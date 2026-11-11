@@ -39,6 +39,8 @@ pub struct NewWorkspaceInput {
     pub branch: Option<String>,
     /// The agent that works on the task's stages; none leaves a plain shell.
     pub agent: Option<String>,
+    /// Passed to the agent as `--model`; none is the agent's own default.
+    pub model: Option<String>,
     /// None uses the project's full pipeline; single-agent keeps Context and Agent only.
     pub mode: Option<String>,
     /// The task's notes. With a manual context source they are its context.
@@ -91,6 +93,9 @@ pub fn new_workspace(parts: &NewWorkspaceParts, input: NewWorkspaceInput) -> Wor
     }
     if let Some(agent) = &input.agent {
         raw.insert("agent".into(), json!(agent));
+    }
+    if let Some(model) = &input.model {
+        raw.insert("model".into(), json!(model));
     }
     if let Some(mode) = &input.mode {
         raw.insert("mode".into(), json!(mode));

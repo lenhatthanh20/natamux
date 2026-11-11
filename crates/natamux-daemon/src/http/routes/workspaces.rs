@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use hyper::StatusCode;
 use natamux_agents::custom::known_agents;
+use natamux_core::formats::MODEL;
 use natamux_core::tasks::inputs::{Upload, attachments_body, task_id_param};
 use natamux_core::tasks::task::{task_context, title};
 use natamux_core::zod::{
@@ -307,6 +308,10 @@ fn new_workspace_fields(body: Option<&Value>, issues: &mut Issues) -> Option<New
     let agent = map
         .get("agent")
         .and_then(|agent| one_of(Some(agent), &[json!("agent")], &known, issues));
+    let model = map
+        .get("model")
+        .filter(|model| !model.is_null())
+        .and_then(|model| string(Some(model), &[json!("model")], &MODEL, issues));
     let mode = map
         .get("mode")
         .and_then(|mode| one_of(Some(mode), &[json!("mode")], &["single-agent"], issues));
@@ -345,6 +350,7 @@ fn new_workspace_fields(body: Option<&Value>, issues: &mut Issues) -> Option<New
             base,
             branch,
             agent,
+            model,
             mode,
             prompt,
             context,

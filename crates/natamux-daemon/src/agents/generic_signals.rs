@@ -71,6 +71,15 @@ fn words_hint(agent: &str) -> String {
     format!("the words in NATAMUX_{name}_ARGS")
 }
 
+/// The words hint, after the task's model when one was passed: a wrong name can end the agent.
+fn launch_hint(launch: &AgentLaunch) -> String {
+    let words = words_hint(&launch.agent);
+    match &launch.model {
+        Some(model) => format!("the model {model} (Edit the task), {words}"),
+        None => words,
+    }
+}
+
 fn terminal_label(terminal: &str) -> String {
     format!("Terminal {terminal}")
 }
@@ -391,7 +400,7 @@ impl Worker {
             "The agent ended right after it started{said}. Read {} for the cause (sign-in, \
              version, {}), fix it, then start the agent again.",
             terminal_label(&launch.terminal),
-            words_hint(&launch.agent)
+            launch_hint(launch)
         );
         self.apply(
             task_id,

@@ -94,6 +94,15 @@ fn reads_whether_the_task_is_left_to_a_person_and_a_bad_value_as_not() {
 }
 
 #[test]
+fn reads_the_model_and_a_bad_value_as_none() {
+    assert_eq!(ok(json!({"model": "opus"})).model.as_deref(), Some("opus"));
+    assert_eq!(ok(json!({})).model, None);
+    for bad in [json!(null), json!(1), json!("a b"), json!("-p")] {
+        assert_eq!(ok(json!({"model": bad})).model, None);
+    }
+}
+
+#[test]
 fn reads_whether_the_task_works_in_the_main_checkout_and_a_bad_value_as_not() {
     assert_eq!(ok(json!({"mainCheckout": true})).main_checkout, Some(true));
     assert_eq!(ok(json!({})).main_checkout, None);

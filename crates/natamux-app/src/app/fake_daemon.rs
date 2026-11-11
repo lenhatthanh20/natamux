@@ -392,6 +392,8 @@ impl FakeDaemon {
     pub fn new_workspace(&self, input: NewWorkspaceInput) -> Answer<Task> {
         let mut data = self.data();
         let mut task = data.new_task(&input.title, input.repo);
+        // Both paths keep it: the main checkout returns early.
+        task.model = input.model;
         if input.worktree == Some(false) {
             data.use_main_checkout(&mut task)?;
             task.agent = input.agent;

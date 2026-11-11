@@ -10,6 +10,7 @@ use gpui::{
     AnyElement, BoxShadow, Div, Hsla, KeyDownEvent, Stateful, StyledText, TextLayout, canvas,
     point, px,
 };
+use natamux_proto::agents::model::model_of;
 use natamux_proto::tasks::task::TaskState;
 use ui::prelude::*;
 
@@ -22,7 +23,7 @@ use crate::components::motion;
 use crate::components::motion_rules::{Moving, pulse};
 use crate::components::shape::ShapeSize;
 use crate::stages::card_rules::CardChip;
-use crate::stages::editor_labels::{StageRunner, model_of};
+use crate::stages::editor_labels::StageRunner;
 use crate::stages::flow_lines::FlowLink;
 use crate::stages::flow_rules::{
     INSET, LinkStyle, NameGlyph, NodeTone, RUN_RING_OUT, STUB, Stroke, TILE, TILE_BOX, node_tone,

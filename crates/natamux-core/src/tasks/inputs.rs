@@ -5,7 +5,8 @@ use natamux_proto::events::task_event::{EVENT_SOURCES, EVENT_TYPES, RECORD_ONLY_
 use natamux_proto::tasks::task::{TASK_PRIORITIES, TASK_STATES};
 use serde_json::{Map, Value, json};
 
-use crate::formats::{REPO_ID, TASK_ID, TEMPLATE_ID};
+use crate::formats::{MODEL, REPO_ID, TASK_ID, TEMPLATE_ID};
+use crate::js::js_trim;
 use crate::tasks::task::{defaulted, labels, nullable, task_context, task_ids, title};
 use crate::zod::{
     Issue, Issues, Length, Rule, ZodError, array, at, object, one_of, strict, string,
@@ -54,6 +55,13 @@ pub fn create_task_input(value: Option<&Value>) -> Result<Map<String, Value>, Zo
             string(Some(v), &path("agent"), &[Rule::Min(1)], issues).map(Value::from)
         });
         put(out, "agent", agent);
+        if let Some(model) = map.get("model").filter(|model| !model.is_null()) {
+            put(
+                out,
+                "model",
+                string(Some(model), &path("model"), &MODEL, issues).map(Value::from),
+            );
+        }
         if let Some(mode) = map.get("mode") {
             put(
                 out,
@@ -84,7 +92,14 @@ pub fn create_task_input(value: Option<&Value>) -> Result<Map<String, Value>, Zo
 
 /// `updateTaskInputSchema`: partial and strict; only the keys sent.
 pub fn update_task_input(value: Option<&Value>) -> Result<Map<String, Value>, ZodError> {
-    const SHAPE: [&str; 5] = ["title", "description", "priority", "labels", "dependsOn"];
+    const SHAPE: [&str; 6] = [
+        "title",
+        "description",
+        "priority",
+        "labels",
+        "dependsOn",
+        "model",
+    ];
     parse_object(value, |map, out, issues| {
         let path = |key: &str| vec![json!(key)];
         if let Some(each) = map.get("title") {
@@ -114,8 +129,20 @@ pub fn update_task_input(value: Option<&Value>) -> Result<Map<String, Value>, Zo
         if let Some(each) = map.get("dependsOn") {
             put(out, "dependsOn", task_ids(each, &path("dependsOn"), issues));
         }
+        if let Some(each) = map.get("model") {
+            put(out, "model", model_change(each, &path("model"), issues));
+        }
         strict(map, &SHAPE, &[], issues);
     })
+}
+
+/// A new model, or null when it is null or blank: no model.
+fn model_change(value: &Value, path: &[Value], issues: &mut Issues) -> Option<Value> {
+    match value {
+        Value::Null => Some(Value::Null),
+        Value::String(text) if js_trim(text).is_empty() => Some(Value::Null),
+        _ => string(Some(value), path, &MODEL, issues).map(Value::from),
+    }
 }
 
 const REFINE_TEXT: &str = "This event is recorded by the daemon, not sent by clients";

@@ -87,6 +87,7 @@ Scope: tasks only. No sprints, no teams, no rosters, no diaries.
 | Run a hard stage as a Claude Code workflow (sub-agents, more accurate, more tokens). Done: the project settings choose the stages that offer it (Plan and Implement by default); each task ticks **Run with a workflow** on a stage, off by default; the stage prompt then asks for a workflow | v1 |
 | Task context from typed notes, a GitHub issue (with comments), a skill or an MCP server, written to `context.md`. Any skill of the agents can be picked when starting a task. Done | v1 |
 | Attach files (documents, screenshots) to a new task. Done: pick, drop or paste them in the Start a task dialog, or `natamux task create --attach`; up to 20 files, 20 MB each, 50 MB together. They are kept with the stage files, copied into `.natamux-task/attachments/`, listed in `context.md` and in the Docs tab | v1 |
+| Pick a model per task. Done: the optional Model field of the Start a task dialog and the Edit form, passed to the task's agent as `--model` (docs/agent-adapters.md) | v1 |
 | Stage files (`context.md`, `spec.md`, `plan.md`, `test-spec.md`) in the worktree, ignored by git, kept with the task, editable in the Docs tab. Done | v1 |
 | Event log files: every event is also kept in `tasks/T-0001.events.jsonl`, and the index is rebuilt from them. Done | v1 |
 | Task notes as markdown, with a run log. Done: edit title, notes, priority and labels; every change is in the activity list | MVP |

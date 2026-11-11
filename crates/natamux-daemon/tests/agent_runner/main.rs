@@ -289,4 +289,5 @@ const PROMPT_ONLY: &str =
 
 mod agents;
 mod launch;
+mod model;
 mod trust;

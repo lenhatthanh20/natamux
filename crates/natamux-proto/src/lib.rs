@@ -6,6 +6,7 @@ pub mod agents {
     pub mod claude_code;
     pub mod custom;
     pub mod limits;
+    pub mod model;
     pub mod start;
 }
 pub mod events {
