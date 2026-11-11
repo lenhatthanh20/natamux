@@ -204,10 +204,7 @@ impl Store {
 
     pub fn list_events(&mut self, task_id: &str) -> TaskResult<Vec<StoredEvent>> {
         self.get_task(task_id)?;
-        self.sync
-            .index
-            .list_events(task_id)
-            .map_err(TaskError::Failed)
+        self.sync.list_events(task_id).map_err(TaskError::Failed)
     }
 
     /// The attachments are written before the task is published. A title that starts with an id,

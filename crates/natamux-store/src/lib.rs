@@ -8,6 +8,7 @@ pub mod front_matter;
 pub mod task_files;
 pub mod task_index;
 pub mod task_sync;
+pub mod task_writes;
 pub mod watch;
 pub mod yaml_dump;
 pub mod yaml_load;
