@@ -386,5 +386,6 @@ fn fake_terminals(
         on_output_idle: None,
         on_exit: None,
         trace_input: false,
+        screens_in: None,
     })
 }

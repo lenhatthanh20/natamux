@@ -1,19 +1,14 @@
-//! Parts the stage details, the branch details and the stage picker share (`StageField.tsx`):
-//! a text field that writes the draft on each key, a labelled field with its Default / Changed
-//! mark, the problems list, and the plain pick menus.
+//! Parts the stage sheets and the Settings pages share: a text field that writes the draft on
+//! each key, the select button and its pick menu.
 
 use std::rc::Rc;
 
 use editor::{Editor, EditorEvent};
-use gpui::{AnyElement, Entity, Focusable, FontWeight, Hsla, Pixels, Point, Subscription};
-use natamux_proto::stages::pipeline_rules::{IssueLevel, PipelineIssue};
+use gpui::{Entity, Focusable, Pixels, Point, Subscription};
 use natamux_proto::stages::schema::Step;
-use ui::{ContextMenu, prelude::*};
+use ui::{ButtonLike, ContextMenu, prelude::*};
 
-use super::kind_icon::problem_icon;
 use super::pipeline_editor::PipelineEditor;
-use crate::components::button_style::quiet_button;
-use crate::components::colors::signal;
 use crate::components::form::text_editor;
 use crate::components::menu::MenuLayer;
 
@@ -82,151 +77,32 @@ impl LiveField {
     }
 }
 
-pub fn help_line(text: impl Into<SharedString>) -> impl IntoElement {
-    Label::new(text).size(LabelSize::Small).color(Color::Muted)
-}
-
-/// A problem under a field.
-pub fn error_line(text: impl Into<SharedString>) -> impl IntoElement {
-    h_flex()
-        .gap_1p5()
-        .items_start()
-        .child(problem_icon().size(IconSize::XSmall).color(Color::Error))
-        .child(Label::new(text).size(LabelSize::Small).color(Color::Error))
-}
-
-/// The problems of a stage or branch, errors in the error colour and warnings in the signal one.
-pub fn issue_list(issues: &[PipelineIssue], cx: &App) -> Option<AnyElement> {
-    if issues.is_empty() {
-        return None;
-    }
-    let warning = signal(cx).fg;
-    let rows = issues.iter().map(|issue| {
-        let error = issue.level == IssueLevel::Error;
-        let color = if error {
-            Color::Error
-        } else {
-            Color::Custom(warning)
-        };
-        h_flex()
-            .gap_1p5()
-            .items_start()
-            .child(problem_icon().size(IconSize::XSmall).color(color))
-            .child(
-                Label::new(issue.message.clone())
-                    .size(LabelSize::Small)
-                    .color(color),
-            )
-    });
-    Some(v_flex().gap_1().children(rows).into_any_element())
-}
-
-/// The label of a group of controls, 12 medium muted.
-pub fn field_label(text: impl Into<SharedString>) -> Label {
-    Label::new(text)
-        .size(LabelSize::Small)
-        .weight(FontWeight::MEDIUM)
-        .color(Color::Muted)
-}
-
-/// A label with its mark beside it, the control, and the help line under it.
-pub fn labelled(
-    label: impl Into<SharedString>,
-    mark: Option<AnyElement>,
-    help: Option<SharedString>,
-    control: impl IntoElement,
-) -> impl IntoElement {
-    v_flex()
-        .gap_1p5()
-        .child(
-            h_flex()
-                .min_h(rems_from_px(24.0_f32))
-                .flex_wrap()
-                .gap_2()
-                .child(field_label(label))
-                .children(mark),
-        )
-        .child(control)
-        .children(help.map(help_line))
-}
-
-/// A label with its mark at the left, the control at the right, and the help line under them.
-/// The label keeps its text width, so on a narrow pane the control wraps under it.
-pub fn inline_field(
-    label: impl Into<SharedString>,
-    mark: Option<AnyElement>,
-    help: Option<SharedString>,
-    control: impl IntoElement,
-) -> impl IntoElement {
-    v_flex()
-        .gap_1()
-        .child(
-            h_flex()
-                .flex_wrap()
-                .gap_2()
-                .child(
-                    h_flex()
-                        .flex_grow(1.)
-                        .min_h(rems_from_px(24.0_f32))
-                        .flex_wrap()
-                        .gap_2()
-                        .child(field_label(label))
-                        .children(mark),
-                )
-                .child(div().flex_none().child(control)),
-        )
-        .children(help.map(help_line))
-}
-
-/// "Default", or "Changed" with a button that puts the default back.
-pub fn default_mark(
-    id: impl Into<SharedString>,
-    is_default: bool,
-    on_reset: impl Fn(&mut Window, &mut App) + 'static,
-    cx: &App,
-) -> AnyElement {
-    if is_default {
-        return pill(
-            "Default",
-            cx.theme().colors().element_background,
-            Color::Muted,
-        );
-    }
-    let changed = signal(cx);
-    h_flex()
-        .gap_2()
-        .child(pill("Changed", changed.bg, Color::Custom(changed.fg)))
-        .child(
-            quiet_button(id.into(), "Use default")
-                .label_size(LabelSize::Small)
-                .on_click(move |_, window, cx| on_reset(window, cx)),
-        )
-        .into_any_element()
-}
-
-fn pill(text: &'static str, background: Hsla, color: Color) -> AnyElement {
-    div()
-        .px_1p5()
-        .rounded_md()
-        .bg(background)
-        .child(
-            Label::new(text)
-                .size(LabelSize::XSmall)
-                .weight(FontWeight::MEDIUM)
-                .color(color),
-        )
-        .into_any_element()
-}
-
 /// The width of a select beside its label: "Task's agent" and "GitHub Copilot" fit.
 pub const SELECT_WIDTH: f32 = 200.;
 
 /// A select: a full width button with the picked option, which opens a menu at the click.
-pub fn select(id: impl Into<ElementId>, text: impl Into<SharedString>) -> Button {
-    Button::new(id, text)
+pub fn select(id: impl Into<ElementId>, text: impl Into<SharedString>) -> ButtonLike {
+    // Mockup A: 24 px, the text at the left and the chevron at the right end.
+    ButtonLike::new(id)
         .style(ButtonStyle::Outlined)
         .full_width()
-        .end_icon(Icon::new(IconName::ChevronDown).size(IconSize::Small))
+        .height(rems_from_px(24.0_f32).into())
+        .child(
+            // `full_width` centres the text; a select reads from the left.
+            h_flex()
+                .flex_1()
+                .w_full()
+                .min_w_0()
+                .px_2()
+                .gap_1()
+                .text_left()
+                .child(div().flex_1().min_w_0().child(Label::new(text).truncate()))
+                .child(
+                    Icon::new(IconName::ChevronDown)
+                        .size(IconSize::XSmall)
+                        .color(Color::Muted),
+                ),
+        )
 }
 
 /// What a pick menu entry does.
@@ -276,7 +152,3 @@ pub fn open_choices(
     });
     MenuLayer::open(menu, position, window, cx);
 }
-
-#[cfg(test)]
-#[path = "stage_fields_view_tests.rs"]
-mod tests;

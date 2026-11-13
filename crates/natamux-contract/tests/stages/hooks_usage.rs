@@ -83,7 +83,7 @@ async fn usage() {
                     .any(|m| m["kind"] == "usage.changed" && m["taskId"] == id)
             };
             events.until(changed).await;
-            wait_at(&d, &id, "spec", "needs-input").await;
+            wait_at(&d, &id, "spec", "idle").await;
             t.note("usage.changed", Value::Array(usage_changes(&events, &id)));
             let all = get(&d, "/usage").await.body;
             let first = clean(all["usage"][&id].clone());
@@ -146,7 +146,7 @@ async fn time_one(agent: &Agent, events: &mut Events, event: &str, state: &str) 
     time
 }
 
-/// Ten hooks on each daemon (`Stop` to needs-input and `UserPromptSubmit` to running, five
+/// Ten hooks on each daemon (`Stop` to idle and `UserPromptSubmit` to running, five
 /// each), taking turns. Gate: Rust's median is not above Node's. Node is reached through nginx,
 /// which is in its number.
 #[tokio::test]
@@ -165,7 +165,7 @@ async fn hook_time() {
     let mut e_rust = Events::open(&rust, Some(&rust.token)).await;
     let (mut node_times, mut rust_times) = (Vec::new(), Vec::new());
     for _ in 0..5 {
-        for (event, state) in [("Stop", "needs-input"), ("UserPromptSubmit", "running")] {
+        for (event, state) in [("Stop", "idle"), ("UserPromptSubmit", "running")] {
             node_times.push(time_one(&a_node, &mut e_node, event, state).await);
             rust_times.push(time_one(&a_rust, &mut e_rust, event, state).await);
         }

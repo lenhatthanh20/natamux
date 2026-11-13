@@ -189,3 +189,84 @@ fn leaves_a_task_cancelled_in_the_group_alone_when_an_agent_reopened_in_it_works
     assert!(others.is_empty(), "{others:?}");
     assert_eq!(g.service.shell_state(&id, "1"), Some(TaskState::Failed));
 }
+
+#[test]
+fn a_bell_resume_updates_only_its_stage_and_publishes_the_combined_task() {
+    for sibling_waits in [false, true] {
+        let g = setup();
+        let id = g.build_task();
+        g.send(&id, "UserPromptSubmit", "1");
+        g.send(&id, "UserPromptSubmit", "2");
+        if sibling_waits {
+            g.send(&id, "PermissionRequest", "2");
+        } else {
+            g.log(&id, "system", "stage.checked", "test-spec");
+            g.log(&id, "human", "stage.approved", "test-spec");
+        }
+        g.fx.apply(
+            &id,
+            json!({ "source": "agent", "type": "agent.asked",
+            "payload": { "reason": "terminal bell", "terminal": "1" } }),
+        );
+        let raw = hook("afterShellExecution", json!({}));
+        let result = g
+            .service
+            .handle("cursor", &raw, Some(&id), Some("1"))
+            .unwrap();
+        assert_eq!(result.applied, ["agent.resumed"]);
+        let task = g.fx.task(&id);
+        assert_eq!(task.lanes["implement"], "running");
+        let expected = if sibling_waits { "needs-input" } else { "done" };
+        assert_eq!(task.lanes["test-spec"], expected);
+        assert_eq!(
+            task.state,
+            if sibling_waits {
+                TaskState::NeedsInput
+            } else {
+                TaskState::Running
+            }
+        );
+        assert_eq!(g.fx.last_payload(&id)["stage"], "implement");
+        assert!(g.fx.messages().iter().any(|message| matches!(message,
+            DaemonMessage::TaskUpdated { task: published, accepted: true, event, .. }
+                if published == &task && event.kind == "agent.resumed")));
+    }
+}
+
+#[test]
+fn fresh_launches_end_only_the_owning_terminals_permission_or_bell_wait() {
+    for terminal in ["1", "2", "7"] {
+        for bell in [false, true] {
+            let g = setup();
+            let id = g.build_task();
+            g.send(&id, "UserPromptSubmit", "1");
+            g.send(&id, "UserPromptSubmit", "2");
+            if bell {
+                g.fx.apply(
+                    &id,
+                    json!({ "source": "agent", "type": "agent.asked",
+                    "payload": { "reason": "terminal bell", "terminal": "1" } }),
+                );
+            } else {
+                g.send(&id, "PermissionRequest", "1");
+            }
+            // A default stage agent has no own-stage override, including on restart.
+            g.fx.tasks
+                .record_agent_launch(&id, "claude-code", None, None, None, (terminal, None))
+                .unwrap();
+            assert_eq!(g.fx.last_payload(&id)["terminal"], terminal);
+            assert!(!g.fx.last_payload(&id).contains_key("resumeSessionId"));
+            let resumed = g.send(&id, "PostToolUse", "1");
+            let task = g.fx.task(&id);
+            assert_eq!(task.lanes["test-spec"], "running");
+            if terminal == "1" {
+                assert!(resumed.applied.is_empty());
+                assert_eq!(task.lanes["implement"], "needs-input");
+            } else {
+                assert_eq!(resumed.applied, ["agent.resumed"]);
+                assert_eq!(task.lanes["implement"], "running");
+                assert_eq!(task.state, TaskState::Running);
+            }
+        }
+    }
+}

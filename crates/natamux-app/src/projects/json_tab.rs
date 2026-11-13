@@ -1,24 +1,29 @@
-//! The JSON tab of Project settings (`JsonTab.tsx`): the draft text in a full Zed editor, with the
-//! error while the text cannot be read and the problems of the pipeline above it, so they show
-//! without scrolling (the web puts them under its shorter textarea). The editor and the draft
-//! follow each other: a user edit sets the draft text, a text set from outside (Stages, Issues,
-//! Import, Reset, Reload) goes into the same buffer as an edit of the changed parts.
+//! The JSON tab of Project settings (`JsonTab.tsx`, layout-b 5.8): the error alert while the text
+//! cannot be read, the problems of the pipeline, then the draft text in a full Zed editor. The
+//! editor and the draft follow each other: a user edit sets the draft text, a text set from
+//! outside (Stages, Issues, Import, Reset, Reload) goes into the same buffer as an edit of the
+//! changed parts. The Copy button copies the draft as shown, also when it cannot be read.
 
 use editor::{CurrentLineHighlight, Editor, EditorEvent, MultiBuffer};
-use gpui::{Entity, FocusHandle, Focusable, Subscription};
+use gpui::{ClickEvent, ClipboardItem, Entity, FocusHandle, Focusable, Subscription};
 use language::Buffer;
 use natamux_proto::stages::pipeline_rules::IssueLevel;
-use ui::prelude::*;
+use ui::{Tooltip, prelude::*};
 
 use super::settings_tab_rules::{json_alert, problem_line};
-use crate::components::colors::signal;
+use crate::components::form::SettingsInput;
+use crate::components::settings_card::SettingsGroup;
+use crate::components::settings_tile::{AlertKind, SettingsAlert};
+use crate::components::toast_rules::ToastTone;
+use crate::components::toasts::toast;
 use crate::git::diff_editors::plain_switches;
 use crate::git::languages::language_for;
-use crate::stages::kind_icon::problem_icon;
 use crate::stages::pipeline_editor::PipelineEditor;
 
-/// 22 rows of 20 px, and the padding of the box.
-const EDITOR_HEIGHT: f32 = 22. * 20. + 16.;
+/// The box of the editor (layout-b 5.8).
+const EDITOR_HEIGHT: f32 = 456.;
+
+const NOTE: &str = "The same draft as the other tabs. Nothing is saved until you click Save.";
 
 pub struct JsonTab {
     pipeline: Entity<PipelineEditor>,
@@ -40,7 +45,9 @@ impl JsonTab {
         let multi = cx.new(|cx| MultiBuffer::singleton(buffer.clone(), cx));
         let editor = cx.new(|cx| {
             let mut editor = Editor::for_multibuffer(multi, None, window, cx);
-            plain_switches(&mut editor, false, window, cx);
+            // Long prompts wrap, so no horizontal bar.
+            plain_switches(&mut editor, true, window, cx);
+            editor.set_show_horizontal_scrollbar(false, cx);
             editor.set_show_gutter(false, cx);
             editor.set_current_line_highlight(Some(CurrentLineHighlight::None));
             editor
@@ -120,58 +127,49 @@ impl Render for JsonTab {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let pipeline = self.pipeline.read(cx);
         let error = pipeline.parse_error().map(json_alert);
-        let warning = signal(cx).fg;
-        let problems: Vec<(String, bool)> = pipeline
+        let problems: Vec<_> = pipeline
             .issues()
             .iter()
             .map(|issue| {
-                (
-                    problem_line(issue.stage.as_deref(), &issue.message),
-                    issue.level == IssueLevel::Error,
-                )
+                let color = if issue.level == IssueLevel::Error {
+                    Color::Error
+                } else {
+                    Color::Warning
+                };
+                let text = problem_line(issue.stage.as_deref(), &issue.message);
+                Label::new(text).size(LabelSize::Small).color(color)
             })
             .collect();
-        let colors = cx.theme().colors();
-        let border = if error.is_some() {
-            cx.theme().status().error_border
-        } else {
-            colors.border
-        };
+        let has_problems = !problems.is_empty();
+        let draft = self.pipeline.clone();
+        let copy = div().debug_selector(|| "json-copy".into()).child(
+            IconButton::new("json-copy", IconName::Copy)
+                .icon_size(IconSize::Small)
+                .tooltip(Tooltip::text("Copy JSON"))
+                .on_click(move |_: &ClickEvent, _, cx| {
+                    let text = draft.read(cx).text().to_owned();
+                    cx.write_to_clipboard(ClipboardItem::new_string(text));
+                    toast("Copied the JSON.", ToastTone::Info, cx);
+                }),
+        );
+        let editor = SettingsInput::new(&self.editor)
+            .bar_edge()
+            .radius(8.)
+            .height(EDITOR_HEIGHT)
+            .invalid(error.is_some());
         v_flex()
-            .gap_2()
+            .w_full()
             .children(error.map(|text| {
-                h_flex()
-                    .gap_1p5()
-                    .items_start()
-                    .child(
-                        div()
-                            .mt_0p5()
-                            .child(problem_icon().size(IconSize::XSmall).color(Color::Error)),
-                    )
-                    .child(Label::new(text).size(LabelSize::Small).color(Color::Error))
+                SettingsAlert::new(AlertKind::Error, "The JSON cannot be read").text(text)
             }))
-            .when(!problems.is_empty(), |this| {
-                this.child(v_flex().gap_0p5().children(problems.into_iter().map(
-                    |(text, is_error)| {
-                        let color = if is_error {
-                            Color::Error
-                        } else {
-                            Color::Custom(warning)
-                        };
-                        Label::new(text).size(LabelSize::Small).color(color)
-                    },
-                )))
+            .when(has_problems, |tab| {
+                tab.child(v_flex().pt(rems_from_px(10.0_f32)).children(problems))
             })
             .child(
-                div()
-                    .h(px(EDITOR_HEIGHT))
-                    .w_full()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(border)
-                    .bg(colors.editor_background)
-                    .overflow_hidden()
-                    .child(self.editor.clone()),
+                SettingsGroup::new(".natamux.json")
+                    .action(copy)
+                    .child(div().debug_selector(|| "json-box".into()).child(editor))
+                    .footnote(NOTE),
             )
     }
 }
@@ -179,3 +177,7 @@ impl Render for JsonTab {
 #[cfg(test)]
 #[path = "json_tab_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "json_tab_copy_tests.rs"]
+mod copy_tests;

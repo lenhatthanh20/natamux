@@ -6,7 +6,10 @@ use natamux_core::zod::{self, Issues, ZodError};
 use serde_json::{Map, Value, json};
 
 use super::fields;
-use super::{HookResult, NormalizedHook, SUMMARY_LENGTH, Signal, shorten, slice_utf16};
+use super::{
+    HookResult, NormalizedHook, SUMMARY_LENGTH, Signal, input_runs_ask, question_of, shorten,
+    slice_utf16,
+};
 
 const MAX_MESSAGE_LENGTH: usize = 500;
 const MAX_WAITING_ENTRIES: usize = 5;
@@ -30,6 +33,7 @@ struct Input {
     transcript_path: Option<String>,
     notification_type: Option<String>,
     message: Option<String>,
+    last_assistant_message: Option<String>,
     tool_name: Option<String>,
     tool_input: Option<Map<String, Value>>,
     // Read entry by entry in `background_work`, so a bad entry does not lose the hook.
@@ -45,6 +49,11 @@ fn read(map: &Map<String, Value>, issues: &mut Issues) -> Input {
         transcript_path: fields::text(map, "transcript_path", issues),
         notification_type: fields::text(map, "notification_type", issues),
         message: fields::text(map, "message", issues),
+        // Read leniently: a null or odd value must not lose the turn end.
+        last_assistant_message: map
+            .get("last_assistant_message")
+            .and_then(Value::as_str)
+            .map(str::to_string),
         tool_name: fields::text(map, "tool_name", issues),
         tool_input: fields::record(map, "tool_input", issues),
         background_tasks: map.get("background_tasks").cloned(),
@@ -118,9 +127,21 @@ fn waiting_summary(waiting_for: &[String]) -> String {
     )
 }
 
+/// The question the turn ended on, from the last message of a `Stop`.
+fn question(input: &Input) -> Option<&str> {
+    if input.event != "Stop" {
+        return None;
+    }
+    question_of(input.last_assistant_message.as_deref()?)
+}
+
 fn signal(input: &Input, waiting: bool) -> Option<Signal> {
     match input.event.as_str() {
         "UserPromptSubmit" => Some(Signal::Prompt),
+        // Its dialog of options waits for the user; the tool's end is the answer.
+        "PreToolUse" if input.tool_name.as_deref() == Some("AskUserQuestion") => {
+            Some(Signal::Asking)
+        }
         "PreToolUse" | "PostToolUse" => Some(Signal::Activity),
         "PermissionRequest" => Some(Signal::Asking),
         "Notification" => input
@@ -129,6 +150,7 @@ fn signal(input: &Input, waiting: bool) -> Option<Signal> {
             .is_some_and(|kind| ASKING_NOTIFICATIONS.contains(&kind))
             .then_some(Signal::Asking),
         "Stop" if waiting => Some(Signal::TurnPaused),
+        "Stop" if question(input).is_some() => Some(Signal::TurnAsked),
         "Stop" => Some(Signal::TurnEnded),
         "StopFailure" => Some(Signal::Failed),
         _ => None,
@@ -144,7 +166,8 @@ fn details(input: &Input, waiting_for: &[String]) -> Map<String, Value> {
     if let Some(kind) = &input.notification_type {
         details.insert("notificationType".into(), json!(kind));
     }
-    if let Some(message) = &input.message {
+    // A turn that ended on a question shows it as the question, as a `natamux ask` does.
+    if let Some(message) = input.message.as_deref().or_else(|| question(input)) {
         details.insert(
             "message".into(),
             json!(slice_utf16(message, MAX_MESSAGE_LENGTH)),
@@ -168,6 +191,9 @@ pub fn normalize(raw: &Value, _home: &Path) -> HookResult {
     };
     let input = read(map, &mut issues);
     let input = issues.into_result(Some(input))?;
+    if input.event == "PostToolUse" && input_runs_ask(input.tool_input.as_ref()) {
+        return Ok(None);
+    }
     let waiting_for = if input.event == "Stop" {
         background_work(&input)
     } else {

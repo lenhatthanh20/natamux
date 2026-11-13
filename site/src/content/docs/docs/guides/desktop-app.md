@@ -21,6 +21,7 @@ If the daemon stops unexpectedly, the app shows an error and offers to restart t
 | Item | What it does |
 |---|---|
 | **Settings…** (`Cmd/Ctrl+,`) | Opens Settings, including the automatic update switch |
+| **What's New** | Shows what changed in the running version. Above the item below |
 | **Check for Updates…** | Looks for a new version now. On the app menu on macOS, the **Help** menu on Windows and Linux |
 | **Check for Updates Automatically** | Off by default. Tick it to check every 6 hours. Next to the item above |
 
@@ -28,7 +29,7 @@ The app also has View, Task and Tools menus. Links to release pages open in your
 
 ## Notifications and the Dock
 
-The Dock icon shows how many tasks need you. Turn on **Notify me** and allow notifications to see the count. If it still does not show, turn on **Badge application icon** in System Settings → Notifications → Natamux. With **Notify me** on, a task that needs you or is done while the app is in the back shows a macOS notification with a sound. See [Notifications in the desktop app](/docs/guides/dashboard/#notifications-in-the-desktop-app).
+The Dock icon shows how many tasks need you, plus idle tasks whose finished turn you have not opened. **Notify me** is on by default; allow notifications when macOS asks to see the count. If it still does not show, turn on **Badge application icon** in System Settings → Notifications → Natamux. With **Notify me** on, a task that needs you or is done while the app is in the back shows a macOS notification with a sound. See [Notifications in the desktop app](/docs/guides/dashboard/#notifications-in-the-desktop-app).
 
 ## Full Disk Access on macOS
 
@@ -59,8 +60,9 @@ The app updates itself, the way other desktop apps do. It looks for a new versio
 3. It checks the signature of `SHA256SUMS.txt` of the release, then the download against `SHA256SUMS.txt`. On macOS it also checks the new app's signature and version. A release without a valid signature is not installed.
 4. The status bar shows **Restart to update**, and the menu has **Restart to Update to 1.0.6**, while the downloaded update is ready. After **Check for Updates…**, a dialog also offers **Restart Now** or **Later**. A timed check never opens a dialog: it shows one message with **Restart Now** and **What's New** (the release page). A ready update is not checked or downloaded again; **Check for Updates…** shows its dialog again.
 5. **Restart Now**, or a click on **Restart to update**, asks first if an editor has unsaved drafts. Then the app installs the new version and opens again. Tasks, worktrees and settings stay.
+6. The first start of the new version shows **What's new in Natamux 1.0.6**: the release notes of that version, with a link to the full changelog. It shows once. **What's New** in the menu, the command palette or Settings shows it again.
 
-**Settings → General → Updates** shows the running version and, under it, what the updater did last: "Up to date · last checked 3m ago", "1.0.6 is ready to install", or the error of the last check. Its **Check now…** button turns into **Restart to Update** while an update is ready.
+**Settings → General → Updates** shows the running version and, under it, what the updater did last: "Up to date · last checked 3m ago", "1.0.6 is ready to install", or the error of the last check. Its **Check now…** button turns into **Restart to Update** while an update is ready. **What's New** next to it shows the notes of the running version.
 
 How the new version goes in depends on how you installed the app:
 

@@ -51,6 +51,27 @@ pub fn with_tab(
     with_entry(current, task_id, tab, MAX_REMEMBERED_DETAILS)
 }
 
+/// The terminal each task showed last while maximized (T-0304).
+pub fn with_terminal(current: &[(String, String)], task_id: &str, name: &str) -> Entries<String> {
+    with_entry(current, task_id, name.to_owned(), MAX_REMEMBERED_DETAILS)
+}
+
+/// The tasks whose terminals show one at a time, full size (T-0287). The newest last; the oldest
+/// go when there are too many.
+pub fn with_maximized(current: &[String], task_id: &str, on: bool) -> Vec<String> {
+    let mut next: Vec<String> = current
+        .iter()
+        .filter(|id| id.as_str() != task_id)
+        .cloned()
+        .collect();
+    if on {
+        next.push(task_id.to_owned());
+    }
+    let extra = next.len().saturating_sub(MAX_REMEMBERED_DETAILS);
+    next.drain(..extra);
+    next
+}
+
 fn find<'a, T>(entries: &'a [(String, T)], task_id: &str) -> Option<&'a T> {
     entries
         .iter()
@@ -83,7 +104,8 @@ pub fn with_seen(
 /// The seen states after a new task list (the two `markSeen` effects of `Dashboard.tsx`). A task
 /// with a workspace seen for the first time is the baseline, so nothing starts out unseen; a
 /// backlog task is not recorded, or it would start unseen once it runs. The open task is being
-/// looked at, so its new state is seen whatever it does.
+/// looked at, so its new state is seen whatever it does. A running task counts as seen running,
+/// so the next turn end shows as unseen even when the user had seen the last one.
 pub fn seen_after_list(
     current: &[(String, TaskState)],
     tasks: &[Task],
@@ -95,6 +117,14 @@ pub fn seen_after_list(
         .map(|task| (task.id.as_str(), task.state))
         .collect();
     let next = with_seen(current, &baseline, false);
+    let running: Vec<(&str, TaskState)> = baseline
+        .iter()
+        .filter(|&&(id, state)| {
+            state == TaskState::Running && find(&next, id).is_some_and(|seen| *seen != state)
+        })
+        .copied()
+        .collect();
+    let next = with_seen(&next, &running, true);
     match open.and_then(|id| tasks.iter().find(|task| task.id == id)) {
         Some(task) => with_seen(&next, &[(task.id.as_str(), task.state)], true),
         None => next,
@@ -274,6 +304,16 @@ mod tests {
         assert!(!is_unseen(&next, "T-0001", TaskState::Running));
     }
 
+    // A task seen idle runs again while not open: its next turn end must show as unseen.
+    #[test]
+    fn a_task_that_runs_again_shows_its_next_turn_end_as_unseen() {
+        let seen = vec![("T-0001".to_owned(), TaskState::Idle)];
+        let next = seen_after_list(&seen, &[task("T-0001", TaskState::Running, true)], None);
+        assert!(!is_unseen(&next, "T-0001", TaskState::Running));
+        let next = seen_after_list(&next, &[task("T-0001", TaskState::Idle, true)], None);
+        assert!(is_unseen(&next, "T-0001", TaskState::Idle));
+    }
+
     fn ids(list: &[&str]) -> Vec<String> {
         list.iter().map(|id| (*id).to_owned()).collect()
     }
@@ -347,5 +387,61 @@ mod tests {
         assert!(parse_pinned(Some(r#"{"a":1}"#)).is_empty());
         assert!(parse_pinned(Some("not json")).is_empty());
         assert!(parse_pinned(None).is_empty());
+    }
+
+    #[test]
+    fn with_maximized_adds_a_task_once_removes_it_and_drops_the_oldest() {
+        let one = with_maximized(&[], "T-1", true);
+        assert_eq!(one, ids(&["T-1"]));
+        assert_eq!(with_maximized(&one, "T-1", true), ids(&["T-1"]));
+        assert!(with_maximized(&one, "T-1", false).is_empty());
+        assert!(with_maximized(&[], "T-1", false).is_empty());
+        let full: Vec<String> = (0..MAX_REMEMBERED_DETAILS)
+            .map(|n| format!("T-{n}"))
+            .collect();
+        let next = with_maximized(&full, "T-new", true);
+        assert_eq!(next.len(), MAX_REMEMBERED_DETAILS);
+        assert_eq!(next.first().map(String::as_str), Some("T-1"));
+        assert_eq!(next.last().map(String::as_str), Some("T-new"));
+    }
+
+    #[test]
+    fn view_json_keeps_the_maximized_tasks() {
+        use crate::app::view_state::ViewState;
+        let mut view = ViewState::default();
+        assert!(!view.is_maximized("T-1"));
+        view.set_maximized("T-1", true);
+        let back = ViewState::parse(&view.to_json());
+        assert!(back.is_maximized("T-1"));
+        assert_eq!(back.maximized, ids(&["T-1"]));
+        let bad = ViewState::parse(r#"{"maximized": {"T-1": true}}"#);
+        assert!(bad.maximized.is_empty());
+        assert!(ViewState::parse("{}").maximized.is_empty());
+        let many: Vec<String> = (0..=MAX_REMEMBERED_DETAILS)
+            .map(|n| format!("T-{n}"))
+            .collect();
+        let text = serde_json::json!({ "maximized": many }).to_string();
+        let capped = ViewState::parse(&text).maximized;
+        assert_eq!(capped.len(), MAX_REMEMBERED_DETAILS);
+        assert_eq!(capped.first().map(String::as_str), Some("T-1"));
+    }
+
+    // T-0304: a maximized task opens on the terminal looked at last, also after a restart.
+    #[test]
+    fn view_json_keeps_the_terminal_each_task_showed_last() {
+        use crate::app::view_state::ViewState;
+        let mut view = ViewState::default();
+        assert_eq!(view.terminal_of("T-1"), None);
+        view.remember_terminal("T-1", "8");
+        view.remember_terminal("T-2", "3");
+        view.remember_terminal("T-1", "9");
+        let back = ViewState::parse(&view.to_json());
+        assert_eq!(back.terminal_of("T-1"), Some("9"));
+        assert_eq!(back.terminal_of("T-2"), Some("3"));
+        let newest = back.terminals.last().map(|(id, _)| id.as_str());
+        assert_eq!(newest, Some("T-1"));
+        let bad = ViewState::parse(r#"{"terminals": {"T-1": 9, "T-2": "2"}}"#);
+        assert_eq!(bad.terminal_of("T-1"), None);
+        assert_eq!(bad.terminal_of("T-2"), Some("2"));
     }
 }

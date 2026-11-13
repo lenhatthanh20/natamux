@@ -2,7 +2,7 @@
 //! main shows, the states of the filter, the board's columns and folds, and when a task can be added.
 
 use natamux_proto::projects::repo::Repo;
-use natamux_proto::tasks::task::TaskState;
+use natamux_proto::tasks::task::{Task, TaskState};
 
 use super::task_rules::{state_label, uncommitted_sentence};
 use super::task_sort::STATE_ORDER;
@@ -175,6 +175,20 @@ pub fn delete_all_description(dirty: &[(String, usize)]) -> String {
     )
 }
 
+/// What Delete task says for a main checkout task: it is only detached, so the user's folder stays.
+pub const DELETE_CHECKOUT_TASK: &str = "This deletes the task, its notes and its history. The \
+     project folder, its changes and its branch stay. This cannot be undone.";
+
+/// The tasks whose files that are not committed a delete or a removal would lose. A main checkout
+/// task keeps them, so its changes are not read.
+pub fn worktree_ids(tasks: &[Task]) -> Vec<String> {
+    tasks
+        .iter()
+        .filter(|task| task.workspace.is_some() && task.main_checkout != Some(true))
+        .map(|task| task.id.clone())
+        .collect()
+}
+
 pub fn delete_all_label(any_dirty: bool) -> &'static str {
     if any_dirty { "Delete anyway" } else { "Delete" }
 }
@@ -209,6 +223,26 @@ mod tests {
             path: format!("/code/{id}"),
             worktrees_dir: None,
         }
+    }
+
+    #[test]
+    fn reads_no_changes_of_a_main_checkout_task_and_says_its_folder_stays() {
+        let task = |id: &str, workspace: Option<&str>, main: Option<bool>| Task {
+            id: id.into(),
+            workspace: workspace.map(str::to_string),
+            main_checkout: main,
+            ..Task::default()
+        };
+        let tasks = [
+            task("T-1", Some("/w/T-1"), None),
+            task("T-2", Some("/code/app"), Some(true)),
+            task("T-3", None, None),
+        ];
+        assert_eq!(worktree_ids(&tasks), ["T-1"]);
+        assert!(
+            DELETE_CHECKOUT_TASK.contains("The project folder, its changes and its branch stay.")
+        );
+        assert!(!DELETE_CHECKOUT_TASK.contains("lost"));
     }
 
     #[test]
@@ -292,8 +326,8 @@ mod tests {
     #[test]
     fn hides_finished_columns_unless_asked_and_keeps_only_the_filtered_one() {
         assert!(!board_states(None, false).contains(&TaskState::Done));
-        assert_eq!(board_states(None, false).len(), 7);
-        assert_eq!(board_states(None, true).len(), 9);
+        assert_eq!(board_states(None, false).len(), 8);
+        assert_eq!(board_states(None, true).len(), 10);
         assert_eq!(
             board_states(Some(TaskState::Done), false),
             vec![TaskState::Done]

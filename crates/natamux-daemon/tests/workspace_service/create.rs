@@ -52,6 +52,11 @@ fn adds_the_worktree_in_the_projects_own_worktree_folder() {
     );
     let here_path = fx.worktrees.join(&here.id);
     assert_eq!(here_made.workspace, Some(path_text(&here_path).to_string()));
+    // Each branch starts with the slug of its own project's name.
+    let there_branch = format!("other/{}-fix-it-there", there.id.to_lowercase());
+    assert_eq!(there_made.branch, Some(there_branch));
+    let here_branch = format!("default/{}-fix-it-here", here.id.to_lowercase());
+    assert_eq!(here_made.branch, Some(here_branch));
 }
 
 #[test]

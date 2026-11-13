@@ -301,10 +301,7 @@ fn picker_lists_every_catalog_stage_that_is_not_in_the_pipeline_by_phase() {
         security.description,
         "Checks the diff for security problems."
     );
-    assert_eq!(
-        picker_detail(security),
-        "Agent \u{b7} Waits for your approval"
-    );
+    assert_eq!(picker_detail(security), "Agent \u{b7} Approval");
     assert!(
         groups
             .iter()
@@ -484,4 +481,13 @@ fn picker_hides_an_output_problem_until_something_is_typed() {
         ..custom_stage_problems(&steps, &form)
     };
     assert_eq!(visible_problems(&problems, &form, false).output, None);
+}
+
+#[test]
+fn a_stage_is_custom_when_its_id_is_not_in_the_catalog() {
+    let custom = Stage::new("perf-budget", StageKind::Agent, Gate::Manual);
+    assert!(is_custom(&custom));
+    for entry in catalog_entries() {
+        assert!(!is_custom(&entry.stage));
+    }
 }

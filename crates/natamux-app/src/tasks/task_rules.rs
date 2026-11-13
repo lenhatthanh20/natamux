@@ -21,7 +21,8 @@ pub fn state_from_name(name: &str) -> TaskState {
     serde_json::from_value(serde_json::Value::String(name.into())).unwrap_or(TaskState::Unknown)
 }
 
-/// Needs-input, review, failed and blocked wait for the user.
+/// Needs-input, review, failed and blocked wait for the user. Idle does not: the agent ended its
+/// turn without a question.
 pub fn needs_me(state: TaskState) -> bool {
     matches!(
         state,
@@ -69,7 +70,7 @@ pub fn actions_for(state: TaskState) -> Vec<TaskAction> {
     let mut actions = match state {
         TaskState::Draft => vec![action("Mark ready", "task.readied")],
         TaskState::Ready | TaskState::Running => vec![action("Block", "task.blocked")],
-        TaskState::NeedsInput => vec![action("Resume", "agent.resumed")],
+        TaskState::Idle | TaskState::NeedsInput => vec![action("Resume", "agent.resumed")],
         TaskState::Review => vec![
             TaskAction {
                 hotkey: Some('a'),
@@ -157,7 +158,11 @@ pub enum AgentAction {
 /// task. After it ended or failed, starting it again is a restart.
 pub fn agent_action(state: TaskState, agent: Option<&str>) -> Option<AgentAction> {
     match state {
-        TaskState::Running | TaskState::NeedsInput | TaskState::Done | TaskState::Cancelled => None,
+        TaskState::Running
+        | TaskState::Idle
+        | TaskState::NeedsInput
+        | TaskState::Done
+        | TaskState::Cancelled => None,
         _ if agent.is_none() => Some(AgentAction::Start),
         _ => Some(AgentAction::Restart),
     }
@@ -238,10 +243,11 @@ mod tests {
         parse_iso_ms(time).unwrap()
     }
 
-    const ALL_STATES: [TaskState; 9] = [
+    const ALL_STATES: [TaskState; 10] = [
         TaskState::Draft,
         TaskState::Ready,
         TaskState::Running,
+        TaskState::Idle,
         TaskState::NeedsInput,
         TaskState::Review,
         TaskState::Blocked,
@@ -257,6 +263,14 @@ mod tests {
         assert_eq!(labels, ["Approve", "Request changes", "Cancel task"]);
         let keys: Vec<_> = actions.iter().map(|action| action.hotkey).collect();
         assert_eq!(keys, [Some('a'), Some('r'), None]);
+    }
+
+    #[test]
+    fn an_idle_task_does_not_need_the_user() {
+        assert!(!needs_me(TaskState::Idle));
+        assert!(needs_me(TaskState::NeedsInput));
+        assert_eq!(state_label(TaskState::Idle), "Idle");
+        assert_eq!(agent_action(TaskState::Idle, Some("claude-code")), None);
     }
 
     #[test]

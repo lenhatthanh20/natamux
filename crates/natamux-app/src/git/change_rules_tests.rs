@@ -175,6 +175,18 @@ fn wraps_prose_and_files_without_an_extension_not_code() {
 }
 
 #[test]
+fn knows_markdown_by_its_extension_in_any_case() {
+    assert!(is_markdown("README.md"));
+    assert!(is_markdown("a/b.MD"));
+    assert!(is_markdown("x.markdown"));
+    assert!(!is_markdown("md"));
+    assert!(!is_markdown(".md"));
+    assert!(!is_markdown("a.mdx"));
+    assert!(!is_markdown("a.txt"));
+    assert!(!is_markdown("a.md.bak"));
+}
+
+#[test]
 fn covers_every_line_the_selection_touches() {
     assert_eq!(whole_lines(4, 4, 9), (4, 4));
     assert_eq!(whole_lines(4, 7, 3), (4, 7));

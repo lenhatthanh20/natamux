@@ -239,7 +239,8 @@ async fn f3_send_back(handle: WindowHandle<Root>, cx: &mut AsyncApp) {
     println!("smoke: F3 Send back with a reason and Mod+Enter sends the task back");
 }
 
-/// F4: a stage prompt of Project settings is typed into and saved with Mod+Enter.
+/// F4: a stage prompt of Project settings is typed into in its sheet, the sheet closed and the
+/// page saved with Mod+Enter.
 async fn f4_edit_a_prompt(
     handle: WindowHandle<Root>,
     settings: gpui::Entity<ProjectSettingsPage>,
@@ -267,6 +268,16 @@ async fn f4_edit_a_prompt(
     wait(SETTLE, cx).await;
     press(handle, &[TEXT_END], cx);
     type_word(handle, PROMPT, cx);
+    // The prompt is in the stage sheet (main's T-0313): Mod+Enter there is Done, and a second
+    // Mod+Enter, on the page, saves.
+    press(handle, &[MOD_ENTER], cx);
+    until(
+        "Mod+Enter did not close the stage sheet",
+        handle,
+        |_, cx| !dialog_open(cx),
+        cx,
+    )
+    .await;
     press(handle, &[MOD_ENTER], cx);
     until(
         "Mod+Enter did not save the prompt",

@@ -8,12 +8,12 @@ use natamux_proto::stages::actions::StageFile;
 use natamux_proto::tasks::attachments::Attachment;
 use ui::prelude::*;
 
-use super::docs_markdown::MarkdownDoc;
 use super::docs_rules::{DocDraft, current_doc};
 use super::docs_view::plain;
 use crate::app::dashboard::Dashboard;
 use crate::app::source::reason;
 use crate::app::view_rules::DetailsView;
+use crate::components::docs_markdown::MarkdownDoc;
 use crate::files::draft_store::DraftStore;
 
 /// The text of a file as read, with the `modified_at` of the list it was read for.

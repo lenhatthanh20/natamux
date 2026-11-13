@@ -8,6 +8,7 @@ type Kind =
   | 'ready'
   | 'running'
   | 'quiet'
+  | 'idle'
   | 'needs-input'
   | 'review'
   | 'blocked'
@@ -37,6 +38,7 @@ const LABEL: Record<Kind, string> = {
   ready: 'Ready',
   running: 'Running',
   quiet: 'Running, but quiet',
+  idle: 'Idle',
   'needs-input': 'Needs input',
   review: 'In review',
   blocked: 'Blocked',
@@ -73,6 +75,14 @@ function shape(of: Kind, art: number): string {
       return `<circle cx="${half}" cy="${half}" r="${r}" fill="none" stroke="currentColor" stroke-width="${stroke}" pathLength="16" stroke-dasharray="3 1" stroke-dashoffset="1.5"/>`
     case 'quiet':
       return `${ring}<path d="M0 ${half}H${art}A${half} ${half} 0 0 1 0 ${half}Z" fill="currentColor"/>`
+    case 'idle': {
+      // Speech bubble, as the app's icons/states/idle.svg and idle-8.svg. The 8 px body keeps whole-pixel edges.
+      if (art === 8) {
+        return '<rect x="0" y="0" width="8" height="6" rx="2.4" fill="currentColor"/><path d="M1.6 4.8L1 7.8L4.6 5.6Z" fill="currentColor" stroke="currentColor" stroke-width="0.5" stroke-linejoin="round"/>'
+      }
+      const at = (x: number, y: number) => `${round(art * x)} ${round(art * y)}`
+      return `<rect x="0" y="0" width="${art}" height="${round(art * 0.7)}" rx="${round(art * 0.3)}" fill="currentColor"/><path d="M${at(0.2, 0.56)}L${at(0.12, 0.96)}L${at(0.56, 0.66)}Z" fill="currentColor" stroke="currentColor" stroke-width="${round(art * 0.06)}" stroke-linejoin="round"/>`
+    }
     case 'needs-input': {
       const tip = round(art * 0.07)
       return `<path d="M${half} ${-tip}L${art + tip} ${half}L${half} ${art + tip}L${-tip} ${half}Z" fill="currentColor" stroke="currentColor" stroke-width="${round(art * 0.1)}" stroke-linejoin="round"/>`

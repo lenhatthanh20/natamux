@@ -4,7 +4,20 @@ use super::tests::steps;
 use super::*;
 use crate::stages::catalog::default_pipeline;
 
+/// The issues of `value` after a context stage and a stage on the task's agent, which every
+/// pipeline needs (T-0333), so a test sees only the rule it is about. A value with its own context
+/// stage is left as it is.
 fn issues(value: Value) -> Vec<PipelineIssue> {
+    let mut value = value;
+    let has_context = value.to_string().contains(r#""kind":"context""#);
+    if let Some(list) = value.as_array_mut().filter(|_| !has_context) {
+        let lead = [
+            json!({"id": "context", "kind": "context", "gate": "manual"}),
+            json!({"id": "lead", "kind": "agent", "gate": "manual", "output": "lead.md"}),
+        ];
+        let rest = std::mem::take(list);
+        *list = lead.into_iter().chain(rest).collect();
+    }
     pipeline_issues(&steps(value))
 }
 

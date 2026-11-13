@@ -94,7 +94,7 @@ fn asks_the_task_agent_with_the_diff_and_leaves_the_worktree_as_it_was() {
     let drafts = Drafts::new(&fx);
     let task = drafts.task_with_work(&fx);
     fx.tasks
-        .record_agent_launch(&task.id, "codex", None, None, None)
+        .record_agent_launch(&task.id, "codex", None, None, None, ("1", None))
         .unwrap();
     let workspace = PathBuf::from(task.workspace.clone().unwrap());
     let status = run_git(&workspace, &["status", "--porcelain"]);
@@ -131,7 +131,7 @@ fn uses_claude_code_for_a_task_whose_agent_is_shell() {
     let drafts = Drafts::new(&fx);
     let task = drafts.task_with_work(&fx);
     fx.tasks
-        .record_agent_launch(&task.id, "shell", None, None, None)
+        .record_agent_launch(&task.id, "shell", None, None, None, ("1", None))
         .unwrap();
 
     assert_eq!(drafts.draft(&task.id).agent, "claude-code");

@@ -163,6 +163,7 @@ fn show(view: &Entity<DiffView>, side_by_side: bool, cx: &mut VisualTestContext)
                 side_by_side,
                 collapse: false,
                 wrap: false,
+                ignore_whitespace: false,
             },
             window,
             cx,

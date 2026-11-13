@@ -1,459 +1,99 @@
-//! The details pane of the Stages tab (`StageDetails.tsx`): in a bordered box, the stage picker
-//! while adding, else the branch details, else the settings of the picked stage. The text fields
-//! are editors made when the pick changes and kept otherwise.
+//! Opens the sheet of what is picked to edit (layout-b 5.3, 5.6): a stage row, a flowchart node
+//! or a new stage opens the stage sheet, a branch opens the branch sheet. It keeps the project's
+//! skills for the stage sheet. It draws nothing: the sheets are dialogs.
 
 use editor::Editor;
-use gpui::{AnyElement, ClickEvent, Entity, FocusHandle, Subscription, rems};
+use gpui::{Entity, FocusHandle, Subscription, WeakEntity};
 use natamux_proto::projects::repo::SkillList;
-use natamux_proto::stages::capabilities::stage_name;
-use natamux_proto::stages::catalog::catalog_entry;
-use natamux_proto::stages::pipeline_rules::PipelineIssue;
-use natamux_proto::stages::schema::{Stage, StageKind, Step};
-use ui::{ContextMenu, prelude::*};
+use ui::prelude::*;
 
-use super::branch_details_fields::BranchFields;
-use super::editor_fields::{
-    TextField, runs_in_own_shell, runs_in_shell_one, set_text, takes_own_agent, takes_prompt,
-};
-use super::editor_labels::kind_label;
-use super::kind_icon::kind_icon;
-use super::pipeline_editor::PipelineEditor;
-use super::stage_details_fields::StageFields;
-use super::stage_fields_view::{
-    Choice, SELECT_WIDTH, change, default_mark, inline_field, issue_list, labelled, open_choices,
-    select,
-};
-use super::stage_options::stage_options;
-use super::stage_picker::StagePicker;
-use crate::agents::agent_choices::{agent_label, custom_agents, pick_list};
-use crate::components::form::input_box;
-use crate::components::tab_order;
-
-/// A command or arguments set in the file on a stage that does not run them stay visible, so a
-/// shared file hides nothing.
-const NOT_USED: &str = "This stage does not use it. Clear it to remove it from the file.";
+use super::branch_dialog;
+use super::editor_find::{find_branch, find_stage};
+use super::pipeline_editor::{OpenSheet, PipelineEditor};
+use super::stage_sheet::{self, Skills, StageSheet};
 
 pub struct DetailsPane {
-    pub(super) editor: Entity<PipelineEditor>,
-    pub(super) skills: Option<Result<SkillList, String>>,
-    pub(super) stage_fields: Option<StageFields>,
-    branch_fields: Option<BranchFields>,
-    picker: Option<Entity<StagePicker>>,
-    pub(super) skill_menu: Option<(Entity<ContextMenu>, Subscription)>,
-    /// The fields drawn last, in order, for the Tab ring of the dialog.
-    stops: Vec<FocusHandle>,
-    _watch: Subscription,
+    editor: Entity<PipelineEditor>,
+    skills: Skills,
+    /// The open stage sheet, which takes the skills when they come late.
+    sheet: Option<WeakEntity<StageSheet>>,
+    _open: Subscription,
 }
 
 impl DetailsPane {
-    /// The prompt box of the stage that is picked, for the whole-app flows.
-    pub fn prompt_box(&self) -> Option<Entity<Editor>> {
-        let fields = self.stage_fields.as_ref()?;
-        Some(fields.prompt.editor.clone())
-    }
-
     pub fn new(
         editor: Entity<PipelineEditor>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let watch = cx.observe_in(&editor, window, |this, _, window, cx| {
-            this.refresh(window, cx)
+        let open = cx.subscribe_in(&editor, window, |this, _, event: &OpenSheet, window, cx| {
+            this.open(&event.0, window, cx);
         });
-        let mut pane = DetailsPane {
+        DetailsPane {
             editor,
             skills: None,
-            stage_fields: None,
-            branch_fields: None,
-            picker: None,
-            skill_menu: None,
-            stops: Vec::new(),
-            _watch: watch,
-        };
-        pane.refresh(window, cx);
-        pane
-    }
-
-    /// The fields on screen, in order: the picker's, or the details'.
-    pub fn tab_stops(&self, cx: &App) -> Vec<FocusHandle> {
-        match &self.picker {
-            Some(picker) if self.editor.read(cx).picking => picker.read(cx).tab_stops(),
-            _ => self.stops.clone(),
+            sheet: None,
+            _open: open,
         }
     }
 
-    /// The search field of the stage picker, while it is open.
-    pub fn search_focus(&self, cx: &App) -> Option<FocusHandle> {
-        self.picker
-            .as_ref()
-            .map(|picker| picker.read(cx).search_focus(cx))
+    /// The prompt box of the open stage sheet, for the whole-app flows.
+    pub fn prompt_box(&self, cx: &App) -> Option<Entity<Editor>> {
+        let sheet = self.sheet.as_ref()?.upgrade()?;
+        Some(sheet.read(cx).fields.prompt.editor.clone())
     }
 
-    /// Esc closes the top layer first: the skill menu, then the stage picker.
-    pub fn closes_layer(&mut self, _: &mut Window, cx: &mut Context<Self>) -> bool {
-        if self.close_skills(cx) {
-            return true;
-        }
-        if self.editor.read(cx).picking {
-            self.editor
-                .update(cx, |editor, cx| editor.set_picking(false, cx));
-            return true;
-        }
+    /// The open stage sheet, for the flow tests.
+    #[cfg(test)]
+    pub fn sheet(&self) -> Option<Entity<StageSheet>> {
+        self.sheet.as_ref()?.upgrade()
+    }
+
+    /// The sheets are dialogs with their own Tab ring: the page has no stops here.
+    pub fn tab_stops(&self, _: &App) -> Vec<FocusHandle> {
+        Vec::new()
+    }
+
+    /// The skill menu is in the stage sheet, which closes it on Esc itself.
+    pub fn closes_layer(&mut self, _: &mut Window, _: &mut Context<Self>) -> bool {
         false
     }
 
-    /// Makes the fields of the picked stage or branch, and shows the draft in the ones without
-    /// the focus.
-    fn refresh(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let (steps, picking, branch, stage) = {
-            let editor = self.editor.read(cx);
-            (
-                editor.steps().to_vec(),
-                editor.picking,
-                editor.selected_branch().map(|branch| branch.id.clone()),
-                editor.selected_stage().map(|stage| stage.id.clone()),
-            )
-        };
-        if !picking {
-            self.picker = None;
-        } else if self.picker.is_none() {
-            let editor = self.editor.clone();
-            let picker = cx.new(|cx| StagePicker::new(editor, window, cx));
-            let focus = picker.read(cx).search_focus(cx);
-            window.focus(&focus, cx);
-            self.picker = Some(picker);
+    pub fn set_skills(&mut self, skills: Result<SkillList, String>, cx: &mut Context<Self>) {
+        self.skills = Some(skills.clone());
+        if let Some(sheet) = self.sheet.as_ref().and_then(WeakEntity::upgrade) {
+            sheet.update(cx, |sheet, cx| sheet.set_skills(skills, cx));
         }
-        self.sync_stage(&steps, stage, window, cx);
-        self.sync_branch(&steps, branch, window, cx);
-        cx.notify();
     }
 
-    fn sync_stage(
-        &mut self,
-        steps: &[Step],
-        id: Option<String>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(id) = id else {
-            self.stage_fields = None;
+    fn open(&mut self, id: &str, window: &mut Window, cx: &mut Context<Self>) {
+        let (editor, id) = (self.editor.clone(), id.to_owned());
+        let steps = editor.read(cx).steps();
+        let (branch, stage) = (
+            find_branch(steps, &id).is_some(),
+            find_stage(steps, &id).is_some(),
+        );
+        if branch {
+            // Opened after the event: the click or the dialog that sent it is still running.
+            window.defer(cx, move |window, cx| {
+                branch_dialog::open_edit(&editor, &id, window, cx)
+            });
             return;
-        };
-        match &self.stage_fields {
-            Some(fields) if fields.id == id => fields.sync(steps, window, cx),
-            _ => {
-                self.close_skills(cx);
-                self.stage_fields = Some(StageFields::new(&self.editor, &id, window, cx));
-            }
         }
-    }
-
-    fn sync_branch(
-        &mut self,
-        steps: &[Step],
-        id: Option<String>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(id) = id else {
-            self.branch_fields = None;
+        if !stage {
             return;
-        };
-        match self.branch_fields.as_mut() {
-            Some(fields) if fields.id() == id => fields.sync(&self.editor, steps, window, cx),
-            _ => self.branch_fields = Some(BranchFields::new(&self.editor, &id, window, cx)),
         }
-    }
-
-    pub(super) fn branch_fields(&self) -> Option<&BranchFields> {
-        self.branch_fields.as_ref()
-    }
-
-    /// The stage picker while it is open, for the flow tests.
-    #[cfg(test)]
-    pub fn picker(&self) -> Option<Entity<StagePicker>> {
-        self.picker.clone()
-    }
-
-    /// The text fields of the picked stage or branch by name, for the flow tests.
-    #[cfg(test)]
-    pub fn field_focuses(&self, cx: &App) -> Vec<(&'static str, FocusHandle)> {
-        use gpui::Focusable as _;
-        let mut fields = Vec::new();
-        if let Some(stage) = &self.stage_fields {
-            fields.extend([
-                ("name", &stage.name),
-                ("args", &stage.args),
-                ("prompt", &stage.prompt),
-                ("command", &stage.command),
-                ("check", &stage.check),
-                ("output", &stage.output),
-                ("sections", &stage.sections),
-                ("done when", &stage.done_when),
-            ]);
-        }
-        if let Some(branch) = &self.branch_fields {
-            fields.push(("branch name", &branch.name));
-        }
-        fields
-            .into_iter()
-            .map(|(name, field)| (name, field.editor.focus_handle(cx)))
-            .collect()
+        let (skills, this) = (self.skills.clone(), cx.weak_entity());
+        window.defer(cx, move |window, cx| {
+            let sheet = stage_sheet::open(&editor, &id, skills, window, cx);
+            this.update(cx, |this, _| this.sheet = Some(sheet.downgrade()))
+                .ok();
+        });
     }
 }
 
 impl Render for DetailsPane {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let (steps, picking, branch, stage, issues) = {
-            let editor = self.editor.read(cx);
-            let id = editor.selected_id();
-            (
-                editor.steps().to_vec(),
-                editor.picking,
-                editor.selected_branch().cloned(),
-                editor.selected_stage().cloned(),
-                editor.issues_of(id.as_deref()),
-            )
-        };
-        tab_order::begin();
-        let body = match (&self.picker, picking, branch, stage) {
-            (Some(picker), true, _, _) => picker.clone().into_any_element(),
-            (_, _, Some(branch), _) => self.render_branch(&branch, &steps, &issues, cx),
-            (_, _, _, Some(stage)) => self.render_stage(&stage, &steps, &issues, cx),
-            _ => Label::new("Pick a stage to see its settings.")
-                .color(Color::Muted)
-                .into_any_element(),
-        };
-        self.stops = tab_order::end();
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
         div()
-            .p_3()
-            .rounded_md()
-            .border_1()
-            .border_color(cx.theme().colors().border)
-            .child(body)
     }
-}
-
-impl DetailsPane {
-    fn render_stage(
-        &self,
-        stage: &Stage,
-        steps: &[Step],
-        issues: &[PipelineIssue],
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let Some(fields) = &self.stage_fields else {
-            return div().into_any_element();
-        };
-        let own_agent = takes_own_agent(steps, &stage.id);
-        let mut body = v_flex()
-            .gap_3()
-            .child(stage_header(stage, cx))
-            .children(issue_list(issues, cx))
-            .child(self.name_field(stage, cx))
-            .child(
-                v_flex()
-                    .gap_2()
-                    .children(stage_options(stage, steps, &self.editor, cx)),
-            );
-        if own_agent {
-            body = body.child(self.agent_field(stage, steps, cx));
-        }
-        if own_agent || stage.args.is_some() {
-            let help = if own_agent {
-                "Words added to the agent's command line, such as --model sonnet."
-            } else {
-                NOT_USED
-            };
-            body = body.child(labelled(
-                "Arguments",
-                None,
-                Some(help.into()),
-                input_box(&fields.args.editor, cx),
-            ));
-        }
-        if takes_prompt(stage) {
-            body = body.child(self.render_prompt(stage, cx));
-        }
-        body.children(self.command_fields(stage, cx))
-            .into_any_element()
-    }
-
-    fn name_field(&self, stage: &Stage, cx: &App) -> impl IntoElement {
-        let Some(fields) = &self.stage_fields else {
-            return div().into_any_element();
-        };
-        let (pipeline, id) = (self.editor.clone(), stage.id.clone());
-        let mark = default_mark(
-            "name-default",
-            stage.name.is_none(),
-            move |_, cx| {
-                change(&pipeline, cx, |steps| {
-                    set_text(steps, &id, TextField::Name, "")
-                })
-            },
-            cx,
-        );
-        labelled("Name", Some(mark), None, input_box(&fields.name.editor, cx)).into_any_element()
-    }
-
-    fn agent_field(&self, stage: &Stage, steps: &[Step], _cx: &App) -> AnyElement {
-        let help = if runs_in_shell_one(steps, &stage.id) {
-            "With the task's agent, this stage runs in Terminal 1. Another agent or arguments run in \
-             a terminal of its own, so Terminal 1 keeps the task's agent."
-        } else if runs_in_own_shell(steps, &stage.id) {
-            "This stage runs in a terminal of its own. With the task's agent it uses Terminal 5; \
-             another agent or arguments use a terminal from Terminal 6. Uncheck Run in a terminal \
-             of its own to run it in Terminal 1."
-        } else {
-            "This stage starts its own agent beside the one in Terminal 1, so it may use another."
-        };
-        let picked = stage.agent.clone();
-        let text = picked
-            .as_deref()
-            .map_or_else(|| "Task's agent".to_string(), |id| agent_label(Some(id)));
-        let (pipeline, id) = (self.editor.clone(), stage.id.clone());
-        let button = select(SharedString::from(format!("agent-{id}")), text).on_click(
-            move |event: &ClickEvent, window, cx| {
-                let pick = |value: String, label: String| {
-                    let (pipeline, id) = (pipeline.clone(), id.clone());
-                    let checked = picked.as_deref().unwrap_or("") == value;
-                    Choice::new(label, Some(checked), move |_, cx| {
-                        change(&pipeline, cx, |steps| {
-                            set_text(steps, &id, TextField::Agent, &value)
-                        })
-                    })
-                };
-                let mut choices = vec![pick(String::new(), "Task's agent".to_owned())];
-                choices.extend(
-                    pick_list(&custom_agents())
-                        .into_iter()
-                        .map(|(value, label)| pick(value, label)),
-                );
-                open_choices(choices, event.position(), window, cx);
-            },
-        );
-        let control = div().w(rems_from_px(SELECT_WIDTH)).child(button);
-        inline_field("Agent", None, Some(help.into()), control).into_any_element()
-    }
-
-    /// Command, check, output, sections and finished when.
-    fn command_fields(&self, stage: &Stage, cx: &App) -> Vec<AnyElement> {
-        let Some(fields) = &self.stage_fields else {
-            return Vec::new();
-        };
-        let catalog = catalog_entry(&stage.id);
-        let mut rows = Vec::new();
-        if stage.kind == StageKind::Testing || stage.command.is_some() {
-            let help = if stage.kind != StageKind::Testing {
-                NOT_USED
-            } else if catalog.is_some_and(|entry| entry.needs_command) {
-                "Required. The stage passes when this command passes."
-            } else {
-                "Empty: the agent writes the tests and runs them, as the prompt says."
-            };
-            rows.push(
-                labelled(
-                    "Command",
-                    None,
-                    Some(help.into()),
-                    input_box(&fields.command.editor, cx),
-                )
-                .into_any_element(),
-            );
-        }
-        rows.push(
-            labelled(
-                "Check command",
-                None,
-                Some("Runs in a shell in the task's folder after the stage reports done. Exit code 0 passes. Empty: none.".into()),
-                input_box(&fields.check.editor, cx),
-            )
-            .into_any_element(),
-        );
-        if stage.kind == StageKind::Agent {
-            let help = "A markdown file the stage must write, such as notes.md. Empty: none.";
-            rows.push(
-                labelled(
-                    "Output file",
-                    None,
-                    Some(help.into()),
-                    input_box(&fields.output.editor, cx),
-                )
-                .into_any_element(),
-            );
-        }
-        if let (StageKind::Agent, Some(output)) = (stage.kind, &stage.output) {
-            let help = format!("One heading per line. {output} must have each.");
-            rows.push(
-                labelled(
-                    "Required sections",
-                    None,
-                    Some(help.into()),
-                    input_box(&fields.sections.editor, cx),
-                )
-                .into_any_element(),
-            );
-        }
-        rows.push(
-            labelled(
-                "Finished when",
-                None,
-                Some("Shown on the stage card. Empty: the sentence in the field.".into()),
-                input_box(&fields.done_when.editor, cx),
-            )
-            .into_any_element(),
-        );
-        rows
-    }
-}
-
-fn stage_header(stage: &Stage, cx: &App) -> impl IntoElement {
-    let sentence =
-        catalog_entry(&stage.id).map_or("A stage of your own", |entry| entry.description);
-    let dot = || {
-        Label::new("\u{b7}")
-            .size(LabelSize::Small)
-            .color(Color::Muted)
-    };
-    v_flex()
-        .gap_0p5()
-        .child(
-            h_flex()
-                .gap_2()
-                .child(
-                    kind_icon(stage.kind)
-                        .size(IconSize::Medium)
-                        .color(Color::Muted),
-                )
-                .child(
-                    Label::new(stage_name(stage))
-                        .size(LabelSize::Custom(rems(15. / 16.)))
-                        .weight(gpui::FontWeight::SEMIBOLD)
-                        .truncate(),
-                ),
-        )
-        .child(
-            h_flex()
-                .flex_wrap()
-                .gap_1()
-                .child(
-                    Label::new(kind_label(stage.kind))
-                        .size(LabelSize::Small)
-                        .color(Color::Muted),
-                )
-                .child(dot())
-                .child(
-                    Label::new(stage.id.clone())
-                        .size(LabelSize::Small)
-                        .color(Color::Muted)
-                        .buffer_font(cx),
-                )
-                .child(dot())
-                .child(
-                    Label::new(sentence)
-                        .size(LabelSize::Small)
-                        .color(Color::Muted),
-                ),
-        )
 }

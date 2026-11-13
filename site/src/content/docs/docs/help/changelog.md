@@ -7,6 +7,76 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v1.0.26 (2026-11-12)
+
+- **Start a task** and the task **Edit** form have a **Model** field; Natamux starts the task's agent with `--model '<model>'`. See [Models](/docs/reference/http-api/#models).
+- A new task's branch is `<project>/<id>-<slug>`, was `natamux/<id>-<slug>`, and `git.branchName` can use `{project}`. Existing branches keep their names. See [Branch name](/docs/concepts/workspaces/#branch-name).
+- Context is always the first stage, and the stage after it runs in Terminal 1 with the task's agent; a `.natamux.json` that breaks this is refused with the reason. See [Rules for the pipeline](/docs/reference/configuration/#rules-for-the-pipeline).
+- The default **Review** stage keeps every round in `review.md` as a **Revision N**, and only the newest one counts. See [The review agent](/docs/concepts/review-loop/#the-review-agent).
+
+## v1.0.25 (2026-11-11)
+
+- A Markdown file in the editor tab has **Source | Rendered** in its header; **Rendered** shows it formatted, with your unsaved edits. See [Files of the worktree](/docs/guides/dashboard/#files-of-the-worktree).
+- The board and the command palette draw only the rows on screen, and the app and the daemon use less memory.
+- The daemon shows the task list at start without waiting for your login shell's PATH, and handles hooks from many agents at once faster.
+- A terminal keeps about 5,200 lines of history at 80 columns, was about 7,800; the limit is still about 10 MB. See [Find in the terminal](/docs/guides/terminal/#find-in-the-terminal).
+- The default **Review** stage prompt reads the reports of earlier stages, not a `test-spec.md` the default workflow never writes. See [The review agent](/docs/concepts/review-loop/#the-review-agent).
+
+## v1.0.24 (2026-11-10)
+
+- Right-click the file editor or the Changes diff and choose **Annotate with Git Blame** to show each line's date and author. An annotated line's menu shows its commit, **Copy Commit Hash**, and **Close Annotations**. See [Changes and History](/docs/guides/changes-and-history/).
+- When an agent shows a known sign-in screen just after launch, the task moves to **Needs input** and names the terminal to open. See [Agent sign-in](/docs/help/troubleshooting/#the-agent-asks-me-to-sign-in).
+- Fix: an agent could exit with an error just after launch without a clear task failure. An error exit in the first 30 seconds, before the agent reports anything, now fails the task and shows its last line and terminal.
+- Fix: Cursor and Copilot stages could keep showing needs input after a permission was answered. Tool completion now clears a permission or bell wait, including after a restart. Explicit questions still wait for an answer.
+- Fix: bundled SQLite could expose memory when a database and its WAL file had different page sizes. Update SQLite to 3.54.1.
+- The new **Use cases** guide has practical workflows for simple projects, solo work, teams and larger organizations, with links from the homepage. See [Use cases](/docs/guides/use-cases/).
+
+## v1.0.23 (2026-11-08)
+
+- In the Changes diff, a revert arrow puts the last commit's lines of a change back into the file, with Undo.
+- The editor and the diff get a find bar, Go to line, Go to symbol, whitespace toggles and more editor keys; **Clean on save** is in Settings → General → Editor.
+- The stage sheet puts the prompt first, with settings in folding groups and arrows to the stage before or after.
+- The homepage offers a one-line install command; all files are on the new Download page.
+- Fix: undo in the editor tab no longer brings back old text after the file was read again from disk.
+
+## v1.0.22 (2026-11-07)
+
+- After a restart, a terminal shows its old screen at once while its shell or agent starts.
+- With **Create a worktree** off, a task works in the project folder itself; removing it keeps the folder, its changes and its branch.
+- A stage that opens a terminal again under the same name shows the new shell, not "The terminal ended."
+
+## v1.0.21 (2026-11-07)
+
+- **Settings** opens as a popup over the dashboard; the dashboard and its terminals stay as they were under it.
+- **Start a task** is a compact sheet that fits a 1024 x 768 window without scrolling.
+- **Delete task** opens its confirm at once and shows the uncommitted files when it has read them.
+
+## v1.0.20 (2026-11-06)
+
+- After an update, the desktop app shows the notes of the new version once in a **What's new** dialog.
+- A turn that ends on a question, also one followed by a list of options, keeps the task in **Needs input** until you answer. See [Agents and hooks](/docs/concepts/agents-and-hooks/).
+- A turn that ends with a report notifies **Finished its turn**; the task is **Idle** and the Dock counts it until you open the task. See [Notifications in the desktop app](/docs/guides/dashboard/#notifications-in-the-desktop-app).
+- `natamux ask` keeps the task waiting for your answer, also when the agent goes on with other tools or the ask first needed a permission.
+- A maximized task opens on the terminal you looked at last.
+- **Idle** shows as a speech bubble.
+- Fix: a task went **Idle** right after the agent ran `natamux ask`. It now waits for your answer.
+- Fix: a permission you denied left the task in **Needs input** after the turn ended. It now goes **Idle**.
+- Fix: the cursor filled almost the whole height of a text box. Text boxes now use a shorter line.
+
+## v1.0.19 (2026-11-06)
+
+- A new project gets a short default pipeline: Context → Spec → Implement → Review → Release. See [The default pipeline](/docs/concepts/stages/#the-default-pipeline).
+- A path of an If branch can hold side-by-side stages. See [Paths with a condition](/docs/concepts/stages/#paths-with-a-condition).
+- **Start a task** has a new card layout and a **Create a worktree** switch. Turn it off to make the task without a worktree.
+- **Settings** and **Project settings** have a new layout with inset cards; agents, stages and branches open in their own sheet. Custom stage marks are brighter, the **JSON** tab has a Copy button, and file icons show in their own colours.
+- Quitting the desktop app asks first. See [Quit and close](/docs/guides/desktop-app/#quit-and-close).
+- Maximize is a mode of the task: one terminal at a time, full size, until Restore.
+- Files and folders dropped onto a terminal type their paths.
+- A terminal header names its stage, and a notification names the waiting terminal. **Notify me** is on for a new install, and **Always notify** also notifies while the window is in front. An agent that ends its turn without a question shows **Idle**.
+- Stage args and prompts can use `{id}`.
+- **Delete task** removes the task at once and deletes it in the background.
+- Fix: Settings scrollbars, the Project settings flowchart, the **JSON** tab scrollbar and the Start a task **Title** box.
+
 ## v1.0.18 (2026-11-03)
 
 - The homepage and documentation share navigation, theme controls and a footer. The documentation overview follows the Signal flow layout with numbered guides. Its compact sidebar groups related pages, and a page contents menu replaces the vertical rail.

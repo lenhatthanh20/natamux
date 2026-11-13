@@ -127,9 +127,10 @@ fn t26_alt_up_and_alt_down_move_the_focused_row_and_keep_the_focus(cx: &mut Test
 fn t26_a_drop_puts_the_row_where_the_line_shows(cx: &mut TestAppContext) {
     let page = page(cx);
     let cx = page.cx;
+    // The context stage stays first since main's T-0333, so the drops are after it.
     page.list.update(cx, |list, cx| {
-        list.target = Some(("context".into(), Side::Before));
-        list.dropped("context", &DraggedStage("release".into()), cx);
+        list.target = Some(("spec".into(), Side::Before));
+        list.dropped("spec", &DraggedStage("release".into()), cx);
     });
     cx.run_until_parked();
     let mut seen = vec![format!(
@@ -139,8 +140,8 @@ fn t26_a_drop_puts_the_row_where_the_line_shows(cx: &mut TestAppContext) {
     )];
     // With no line shown, a drop goes after the row; a row dropped on itself stays.
     page.list.update(cx, |list, cx| {
-        list.dropped("security", &DraggedStage("context".into()), cx);
-        list.dropped("spec", &DraggedStage("spec".into()), cx);
+        list.dropped("security", &DraggedStage("spec".into()), cx);
+        list.dropped("review", &DraggedStage("review".into()), cx);
     });
     cx.run_until_parked();
     seen.push(format!(
@@ -151,13 +152,21 @@ fn t26_a_drop_puts_the_row_where_the_line_shows(cx: &mut TestAppContext) {
     assert_eq!(
         seen,
         [
-            "release context spec kind[reproduce investigate plan] build[test-spec implement] \
+            "context release spec kind[reproduce investigate plan] build[test-spec implement] \
              agent-review security review | focus Some(\"release\")",
-            "release spec kind[reproduce investigate plan] build[test-spec implement] \
-             agent-review security \
-             context review | writes 2",
+            "context release kind[reproduce investigate plan] build[test-spec implement] \
+             agent-review security spec review | writes 2",
         ]
     );
+    // A row dropped before the context stage, or the context stage moved, leaves it first.
+    page.list.update(cx, |list, cx| {
+        list.target = Some(("context".into(), Side::Before));
+        list.dropped("context", &DraggedStage("review".into()), cx);
+        list.dropped("security", &DraggedStage("context".into()), cx);
+    });
+    cx.run_until_parked();
+    let now = order(&page.pipeline, cx);
+    assert!(now.starts_with("context "), "{now}");
 }
 
 fn stage_menu(list: &Entity<StageList>, id: &str, cx: &mut VisualTestContext) {

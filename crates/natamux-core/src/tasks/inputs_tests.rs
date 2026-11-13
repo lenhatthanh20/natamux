@@ -1,6 +1,7 @@
 //! No TypeScript file to port: the texts are those of zod 4.6.7 for the schemas in `task.ts`,
 //! `task-inputs.ts` and `routes/tasks.ts`.
 
+use natamux_proto::agents::model::MODEL_NAME_ERROR;
 use serde_json::{Map, Value, json};
 
 use super::*;
@@ -87,6 +88,38 @@ fn an_update_holds_only_the_keys_sent() {
     let map = update_task_input(Some(&json!({"labels": [" a "], "title": " T "}))).unwrap();
     assert_eq!(text(map), r#"{"title":"T","labels":["a"]}"#);
     assert!(update_task_input(Some(&json!({}))).unwrap().is_empty());
+}
+
+#[test]
+fn a_new_task_keeps_a_trimmed_model() {
+    let map = create_task_input(Some(&json!({"title": "x", "model": " sonnet[1m] "}))).unwrap();
+    assert_eq!(map["model"], json!("sonnet[1m]"));
+    let map = create_task_input(Some(&json!({"title": "x", "model": null}))).unwrap();
+    assert!(!map.contains_key("model"));
+}
+
+#[test]
+fn a_new_task_refuses_a_model_that_is_not_one_safe_word() {
+    for model in ["-p", "opus; rm", "a b", "$(x)", ""] {
+        let error = failed(create_task_input(Some(
+            &json!({"title": "x", "model": model}),
+        )));
+        assert_eq!(error.0.len(), 1, "{model}");
+        assert_eq!(error.0[0].path(), &[json!("model")], "{model}");
+        assert!(error.describe().contains(MODEL_NAME_ERROR), "{model}");
+    }
+}
+
+#[test]
+fn an_update_sets_or_clears_the_model() {
+    let map = update_task_input(Some(&json!({"model": "opus"}))).unwrap();
+    assert_eq!(map["model"], json!("opus"));
+    for cleared in [json!(null), json!(""), json!("  ")] {
+        let map = update_task_input(Some(&json!({ "model": cleared }))).unwrap();
+        assert_eq!(map["model"], Value::Null);
+    }
+    let error = failed(update_task_input(Some(&json!({"model": "a b"}))));
+    assert_eq!(error.0[0].path(), &[json!("model")]);
 }
 
 #[test]

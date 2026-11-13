@@ -210,7 +210,7 @@ pub(super) fn file_row(
         .gap_1p5()
         .min_w_0()
         .tooltip(Tooltip::text(tip))
-        .child(file_icon(&entry.path, cx).color(Color::Muted))
+        .child(file_icon(&entry.path, cx))
         .child(
             div().min_w_0().flex_shrink(1.).child(
                 Label::new(name.to_owned())

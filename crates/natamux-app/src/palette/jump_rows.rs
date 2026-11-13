@@ -6,9 +6,9 @@ use std::collections::BTreeMap;
 use natamux_proto::tasks::task::{Task, TaskState};
 
 use super::palette_rows::{
-    PaletteMode, PaletteRow, PaletteScope, PaletteSection, match_task, scoped, sorted_by_score,
-    task_row,
+    MAX_ROWS, PaletteMode, PaletteRow, PaletteScope, PaletteSection, scoped, task_row,
 };
+use super::task_match::ranked_tasks;
 use crate::tasks::task_attention::is_quiet;
 use crate::tasks::task_sort::{state_rank, task_number};
 
@@ -92,18 +92,16 @@ fn with_shells(task: &Task, row: PaletteRow, input: &JumpInput) -> Vec<PaletteRo
     std::iter::once(row).chain(shells).collect()
 }
 
-fn jump_typed(workspaces: &[Task], query: &str, input: &JumpInput) -> Vec<PaletteSection> {
-    let found: Vec<((Task, PaletteRow), f64)> = workspaces
-        .iter()
-        .filter_map(|task| {
-            let (row, score) = match_task(task, query)?;
-            Some(((task.clone(), row), score))
-        })
-        .collect();
-    let rows: Vec<PaletteRow> = sorted_by_score(found)
-        .into_iter()
-        .flat_map(|(task, row)| with_shells(&task, row, input))
-        .collect();
+fn jump_typed(workspaces: &[&Task], query: &str, input: &JumpInput) -> Vec<PaletteSection> {
+    // Only the first MAX_ROWS rows are ever shown, so no task past them is cloned into a row.
+    let mut rows: Vec<PaletteRow> = Vec::new();
+    for (task, found) in ranked_tasks(workspaces, query) {
+        if rows.len() >= MAX_ROWS {
+            break;
+        }
+        rows.extend(with_shells(task, found.into_row(task), input));
+    }
+    rows.truncate(MAX_ROWS);
     if rows.is_empty() {
         return vec![PaletteSection {
             id: "create",
@@ -124,22 +122,25 @@ fn jump_typed(workspaces: &[Task], query: &str, input: &JumpInput) -> Vec<Palett
 pub fn jump_sections(input: &JumpInput) -> Vec<PaletteSection> {
     let now_ms = input.now_ms;
     // The needs-you pill counts the tasks without a workspace too, so its list shows them.
-    let pool: Vec<Task> = if input.scope == Some(&PaletteScope::NeedsYou) {
-        input.tasks.to_vec()
-    } else {
+    let all_tasks = input.scope == Some(&PaletteScope::NeedsYou);
+    let workspaces = scoped(
         input
             .tasks
             .iter()
-            .filter(|task| task.workspace.is_some())
-            .cloned()
-            .collect()
-    };
-    let workspaces = scoped(&pool, input.scope, now_ms);
+            .filter(|task| all_tasks || task.workspace.is_some()),
+        input.scope,
+        now_ms,
+    );
     let query = input.query.trim();
     if !query.is_empty() {
         return jump_typed(&workspaces, query, input);
     }
+    jump_idle(&workspaces, input)
+}
 
+/// The sections with nothing typed: needs you, running, recent, the rest.
+fn jump_idle(workspaces: &[&Task], input: &JumpInput) -> Vec<PaletteSection> {
+    let now_ms = input.now_ms;
     let recent_rank = |task: &Task| {
         input
             .recent
@@ -153,11 +154,11 @@ pub fn jump_sections(input: &JumpInput) -> Vec<PaletteSection> {
             .then_with(|| state_rank(a.state).cmp(&state_rank(b.state)))
             .then_with(|| task_number(&b.id).cmp(&task_number(&a.id)))
     };
-    let group = |wanted: JumpGroup| -> Vec<Task> {
+    let group = |wanted: JumpGroup| -> Vec<&Task> {
         workspaces
             .iter()
+            .copied()
             .filter(|task| jump_group(task, now_ms) == wanted)
-            .cloned()
             .collect()
     };
     let mut waiting = group(JumpGroup::NeedsYou);
@@ -167,28 +168,42 @@ pub fn jump_sections(input: &JumpInput) -> Vec<PaletteSection> {
             .then_with(|| by_recent(a, b))
     });
     let mut running = group(JumpGroup::Running);
-    running.sort_by(by_recent);
+    running.sort_by(|a, b| by_recent(a, b));
     let mut rest = group(JumpGroup::Other);
-    rest.sort_by(by_recent);
-    let (recent_rest, older): (Vec<Task>, Vec<Task>) = rest
+    rest.sort_by(|a, b| by_recent(a, b));
+    let (recent_rest, older): (Vec<&Task>, Vec<&Task>) = rest
         .into_iter()
         .partition(|task| input.recent.contains(&task.id));
 
-    [
+    // Only the first MAX_ROWS rows are ever shown, so later tasks are not cloned into rows.
+    let mut left = MAX_ROWS;
+    let mut sections = Vec::new();
+    for (id, title, tasks) in [
         ("needs-you", "Needs you", waiting),
         ("running", "Running", running),
         ("recent", "Recent", recent_rest),
         ("workspaces", "Workspaces", older),
-    ]
-    .into_iter()
-    .filter(|(_, _, tasks)| !tasks.is_empty())
-    .map(|(id, title, tasks)| PaletteSection {
-        id,
-        title: Some(title),
-        rows: tasks
-            .iter()
-            .flat_map(|task| with_shells(task, task_row(task), input))
-            .collect(),
-    })
-    .collect()
+    ] {
+        if left == 0 {
+            break;
+        }
+        if tasks.is_empty() {
+            continue;
+        }
+        let mut rows: Vec<PaletteRow> = Vec::new();
+        for task in tasks {
+            if rows.len() >= left {
+                break;
+            }
+            rows.extend(with_shells(task, task_row(task), input));
+        }
+        rows.truncate(left);
+        left -= rows.len();
+        sections.push(PaletteSection {
+            id,
+            title: Some(title),
+            rows,
+        });
+    }
+    sections
 }

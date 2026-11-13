@@ -59,6 +59,17 @@ jobs:
           for run in 1 2 3 4 5; do
             target/release/natamux-app --bench-flows --size 1280x800 | tee -a perf/flows.txt
           done
+      # Where the frames of the resize go: the resize flow alone, 15 rounds (~30 s), under macOS
+      # `sample`, into the perf-app artifact. perf-check.py does not read these files.
+      # Process substitution keeps $! the app's pid, not tee's.
+      - name: Profile of one flows run
+        timeout-minutes: 10
+        run: |
+          target/release/natamux-app --bench-only resize --bench-repeat 15 --size 1280x800 > >(tee perf/resize-flows.txt) &
+          pid=$!
+          sleep 4
+          sample "$pid" 30 1 -file perf/resize-sample.txt >/dev/null 2>&1 || echo "sample failed"
+          wait "$pid" || true
       - name: Start times (5 runs)
         timeout-minutes: 10
         run: |
@@ -66,7 +77,9 @@ jobs:
             target/release/natamux-app --smoke | tee -a perf/smoke.txt
           done
       # The window must not wait for the login shell (T-0223 P4): 5 starts with a $SHELL whose rc
-      # takes 3 s, as `slow_shell_first_frame_ms`. The pause outlasts the last start's shell and
+      # takes 3 s, as `slow_shell_first_frame_ms` and `slow_shell_first_data_ms` (the daemon serves
+      # the task list before the login PATH is known). No data in the 5 s of --smoke counts as
+      # 5000, so the gate fails. The pause outlasts the last start's shell and
       # daemon: while they still ran, a start took up to 3 times as long.
       - name: Start with a slow login shell
         run: |
@@ -76,7 +89,10 @@ jobs:
           for run in 1 2 3 4 5; do
             sleep 6
             SHELL="$shell" target/release/natamux-app --smoke |
-              sed -n 's/^smoke: first_frame_ms=\([0-9.]*\).*/slow_shell: slow_shell_first_frame_ms=\1/p' |
+              sed -n \
+                -e 's/^smoke: first_frame_ms=\([0-9.]*\) first_data_ms=\([0-9][0-9.]*\).*/slow_shell: slow_shell_first_frame_ms=\1 slow_shell_first_data_ms=\2/p' \
+                -e t \
+                -e 's/^smoke: first_frame_ms=\([0-9.]*\).*/slow_shell: slow_shell_first_frame_ms=\1 slow_shell_first_data_ms=5000/p' |
               tee -a perf/slow-shell.txt
           done
       - name: Idle cost and a background profile

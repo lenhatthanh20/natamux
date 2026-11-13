@@ -76,7 +76,7 @@ pub fn file_tab_strip(dashboard: &Entity<Dashboard>, task_id: &str, cx: &mut App
             Tab::new(("file-tab", index))
                 .position(position)
                 .toggle_state(index == active_at)
-                .start_slot(file_icon(&path, cx).size(IconSize::XSmall))
+                .start_slot(file_icon(&path, cx))
                 .end_slot(close)
                 .child(label)
                 .tooltip(Tooltip::text(path.clone()))

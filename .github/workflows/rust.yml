@@ -85,11 +85,18 @@ jobs:
       # The system libraries GPUI builds against on Linux, from Zed's script/linux.
       - name: Install the GPUI libraries
         if: ${{ !startsWith(github.ref, 'refs/heads/natamux-ci/daemon') }}
+        # The runner's DNS sometimes fails for a few minutes: try again before failing the job.
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libasound2-dev libfontconfig-dev \
-            libglib2.0-dev libssl-dev libva-dev libvulkan1 libwayland-dev libx11-xcb-dev \
-            libxkbcommon-x11-dev libzstd-dev libsqlite3-dev
+          for try in 1 2 3 4 5; do
+            sudo apt-get -o Acquire::Retries=3 update \
+              && sudo apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
+                libasound2-dev libfontconfig-dev libglib2.0-dev libssl-dev libva-dev libvulkan1 \
+                libwayland-dev libx11-xcb-dev libxkbcommon-x11-dev libzstd-dev libsqlite3-dev \
+              && exit 0
+            echo "apt failed (try $try), waiting $((try * 30)) s"
+            sleep $((try * 30))
+          done
+          exit 1
       # Installs the version that rust-toolchain.toml pins.
       - run: rustup toolchain install
       - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -483,20 +490,24 @@ jobs:
             workspace-changes-empty workspace-changes-list workspace-changes-diff
             workspace-changes-ask workspace-changes-comments rollback image-diff workspace-history
             history-over-main tasks-progress
-            project-settings-tab-stages project-settings-agent-stage project-settings-stage-picker
+            project-settings-tab-stages project-settings-stage-sheet project-settings-stage-sheet-testing
+            project-settings-add-stage
             project-settings-branch project-settings-problems project-settings-conflict
             details-files workspace-docs workspace-docs-edit workspace-editor
             workspace-editor-source workspace-editor-draft workspace-editor-conflict
-            workspace-editor-tabs
+            workspace-editor-tabs workspace-editor-markdown
             terminal-drop-target
             palette palette-query palette-no-match palette-jump shortcuts account-menu
-            settings settings-general settings-agents settings-search projects project-settings
-            project-settings-tab-issues
-            project-settings-tab-json project-settings-json-error import-issues sign-in
+            settings settings-general settings-appearance settings-agents settings-agent-sheet
+            settings-search projects project-settings
+            project-settings-tab-general
+            project-settings-tab-json project-settings-json-error project-settings-trust import-issues sign-in
             sign-in-error add-menu details-empty rail-closed-panel changes-over-main stage-evidence
-            start-task-branch-menu sidebar-blurred remove-workspace-anyway
+            start-task-branch-menu start-task-filled start-task-filled-end start-task-no-worktree
+            start-task-one-agent start-task-error sidebar-blurred remove-workspace-anyway
             update-downloading update-ready update-failed settings-update-ready
-            repo-trust-dialog
+            repo-trust-dialog whats-new diff-find editor-find editor-go-to-line editor-outline
+            diff-blame editor-blame board-more board-scrolled
             terminal-look terminal-cursors terminal-cursors-underline terminal-cursors-bar
             terminal-selection terminal-alt-screen terminal-scrolled terminal-context-menu
             terminal-scrollbar text-box-selection text-box-selection-unfocused
@@ -518,20 +529,24 @@ jobs:
             details-more-menu fan-out workspace-changes-empty workspace-changes-list workspace-changes-diff
             workspace-changes-ask workspace-changes-comments rollback image-diff workspace-history
             history-over-main tasks-progress
-            project-settings-tab-stages project-settings-agent-stage project-settings-stage-picker
+            project-settings-tab-stages project-settings-stage-sheet project-settings-stage-sheet-testing
+            project-settings-add-stage
             project-settings-branch project-settings-problems project-settings-conflict
             details-files workspace-docs workspace-docs-edit workspace-editor
             workspace-editor-source workspace-editor-draft workspace-editor-conflict
-            workspace-editor-tabs
+            workspace-editor-tabs workspace-editor-markdown
             terminal-drop-target
             palette palette-query palette-no-match palette-jump shortcuts account-menu
-            settings settings-general settings-agents settings-search projects project-settings
-            project-settings-tab-issues
-            project-settings-tab-json project-settings-json-error import-issues sign-in
+            settings settings-general settings-appearance settings-agents settings-agent-sheet
+            settings-search projects project-settings
+            project-settings-tab-general
+            project-settings-tab-json project-settings-json-error project-settings-trust import-issues sign-in
             sign-in-error add-menu details-empty rail-closed-panel changes-over-main stage-evidence
-            start-task-branch-menu sidebar-blurred remove-workspace-anyway
+            start-task-branch-menu start-task-filled start-task-filled-end start-task-no-worktree
+            start-task-one-agent start-task-error sidebar-blurred remove-workspace-anyway
             update-downloading update-ready update-failed settings-update-ready
-            repo-trust-dialog
+            repo-trust-dialog whats-new diff-find editor-find editor-go-to-line editor-outline
+            diff-blame editor-blame board-more board-scrolled
             terminal-look terminal-cursors terminal-cursors-underline terminal-cursors-bar
             terminal-selection terminal-alt-screen terminal-scrolled terminal-context-menu
             terminal-scrollbar text-box-selection text-box-selection-unfocused
@@ -1128,20 +1143,46 @@ jobs:
           NATAMUX_BENCH: "1"
         run: cargo test --release --locked -p natamux-daemon --test daemon_bench -- --nocapture
 
-  # The tools come as prebuilt binaries at pinned versions; install-action checks their hashes.
+  # Tools build from crates.io at pinned versions; the binary download host returned 504s.
   supply-chain:
     needs: changes
     if: ${{ !endsWith(github.ref, '-check') && needs.changes.outputs.lock == 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - run: rustup toolchain install
-      - uses: taiki-e/install-action@a4d3f3f761dcd95cce1b72cb61cb6d1963438177 # v2.87.30
+      - id: tools
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          tool: cargo-deny@0.20.2,cargo-audit@0.22.2,cargo-vet@0.10.0
+          path: |
+            ~/.cargo/bin/cargo-deny
+            ~/.cargo/bin/cargo-audit
+            ~/.cargo/bin/cargo-vet
+          key: supply-chain-tools-${{ runner.os }}-cargo-deny-0.20.2-cargo-audit-0.22.2-cargo-vet-0.10.0
+      - id: install
+        if: ${{ steps.tools.outputs.cache-hit != 'true' }}
+        run: |
+          retry() {
+            for i in 1 2 3; do
+              "$@" && return 0
+              sleep 30
+            done
+            return 1
+          }
+          retry cargo install --locked cargo-deny --version 0.20.2
+          retry cargo install --locked cargo-audit --version 0.22.2
+          retry cargo install --locked cargo-vet --version 0.10.0
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        with:
+          path: |
+            ~/.cargo/bin/cargo-deny
+            ~/.cargo/bin/cargo-audit
+            ~/.cargo/bin/cargo-vet
+          key: supply-chain-tools-${{ runner.os }}-cargo-deny-0.20.2-cargo-audit-0.22.2-cargo-vet-0.10.0
       - run: python3 scripts/advisory-dates.test.py
       - run: python3 scripts/advisory-dates.py
       - run: cargo deny --locked check

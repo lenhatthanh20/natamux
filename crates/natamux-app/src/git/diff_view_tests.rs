@@ -1,7 +1,10 @@
 //! Both sides of a side by side diff have the same rows, so either side scrolls to its end
-//! (T-0230).
+//! (T-0230). The revert arrows ask for the right hunk, and Mod+Z reaches their undo (T-0314).
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+
+use std::cell::RefCell;
+use std::rc::Rc;
 
 use editor::display_map::ToDisplayPoint;
 use editor::{Editor, MultiBuffer};
@@ -10,11 +13,12 @@ use language::{Buffer, Capability};
 use text::Point;
 use ui::prelude::*;
 
-use super::{DiffOptions, DiffView};
+use super::{DiffEvent, DiffOptions, DiffView};
+use crate::app::shortcuts::UndoMove;
 use crate::app::test_views;
 use crate::git::change_rules::Side;
 use crate::git::diff_editors::{add_spacer, read_only_editor, set_excerpts};
-use crate::git::diff_rules::Spacer;
+use crate::git::diff_rules::{Spacer, revert_hunk};
 
 pub(super) fn numbered(word: &str, count: u32) -> String {
     (0..count).map(|line| format!("{word} {line}\n")).collect()
@@ -97,6 +101,7 @@ fn options(collapse: bool) -> DiffOptions {
         side_by_side: true,
         collapse,
         wrap: false,
+        ignore_whitespace: false,
     }
 }
 
@@ -351,4 +356,120 @@ fn scrolling_one_side_to_the_end_is_not_pulled_back(cx: &mut TestAppContext) {
             cx.run_until_parked();
         }
     }
+}
+
+/// T-0314: every hunk's arrow, on either side, asks for the revert of that hunk, and only while
+/// the file can be reverted.
+#[gpui::test]
+fn each_hunk_has_an_arrow_on_both_sides_that_asks_for_its_revert(cx: &mut TestAppContext) {
+    let (view, cx) = open(cx);
+    let asked = Rc::new(RefCell::new(Vec::new()));
+    let seen = asked.clone();
+    cx.update(|_, cx| {
+        cx.subscribe(&view, move |_, event: &DiffEvent, _| {
+            seen.borrow_mut().push(*event)
+        })
+        .detach();
+    });
+    show(&view, "file", &several_hunks(), false, cx);
+    view.update(cx, |view, cx| {
+        let buffer = view.buffer.clone().expect("a buffer").read(cx).remote_id();
+        let diff = view.diff.clone().expect("a diff");
+        let base = diff.read(cx).base_text_buffer().read(cx).remote_id();
+        let hunks = view.hunks.clone();
+        assert!(hunks.len() >= 3, "{hunks:?}");
+        assert_eq!(view.arrow_at(buffer, hunks[0].new.start, cx), None);
+        view.set_movable(true);
+        for (index, hunk) in hunks.iter().enumerate() {
+            for (side, row) in [(base, hunk.old.start), (buffer, hunk.new.start)] {
+                let arrow = view.arrow_at(side, row, cx).expect("an arrow");
+                assert_eq!(arrow.index, index, "{hunk:?}");
+                assert!(!arrow.moving);
+                view.ask_revert(arrow.index, arrow.version, cx);
+            }
+        }
+        // A read that is not the shown one asks for nothing.
+        view.ask_revert(0, view.version + 1, cx);
+    });
+    cx.run_until_parked();
+    let version = view.read_with(cx, |view, _| view.version);
+    let count = view.read_with(cx, |view, _| view.hunks.len());
+    let expected: Vec<DiffEvent> = (0..count)
+        .flat_map(|index| [DiffEvent::RevertHunk { index, version }; 2])
+        .collect();
+    let asked: Vec<DiffEvent> = asked
+        .borrow()
+        .iter()
+        .filter(|event| matches!(event, DiffEvent::RevertHunk { .. }))
+        .copied()
+        .collect();
+    assert_eq!(asked, expected);
+}
+
+/// T-0314: reverting every hunk of the real diff, from the last one up, gives the last
+/// commit's text back. A final line break the diff does not count as a change may stay.
+#[gpui::test]
+fn reverting_every_hunk_gives_the_old_text_back(cx: &mut TestAppContext) {
+    let (view, cx) = open(cx);
+    for (name, (original, modified)) in cases() {
+        show(
+            &view,
+            &name,
+            &(original.clone(), modified.clone()),
+            false,
+            cx,
+        );
+        let hunks = view.read_with(cx, |view, _| view.hunks.clone());
+        let reverted = hunks.iter().rev().fold(modified.clone(), |text, hunk| {
+            revert_hunk(&original, &text, hunk)
+        });
+        if original.ends_with('\n') == modified.ends_with('\n') {
+            assert_eq!(reverted, original, "{name}: {hunks:?}");
+        } else {
+            assert_eq!(
+                reverted.trim_end_matches('\n'),
+                original.trim_end_matches('\n'),
+                "{name}: {hunks:?}"
+            );
+        }
+    }
+}
+
+/// The Changes tab around the diff, as far as keys go.
+struct Host {
+    diff: Entity<DiffView>,
+    undos: usize,
+}
+
+impl Render for Host {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        div()
+            .key_context("NatamuxChanges")
+            .size_full()
+            .on_action(cx.listener(|host, _: &UndoMove, _, _| host.undos += 1))
+            .child(self.diff.clone())
+    }
+}
+
+/// T-0314: Mod+Z in the read-only diff editor undoes the last revert; the editor's own undo,
+/// bound for every text box, does not take the key.
+#[gpui::test]
+fn mod_z_in_a_diff_editor_undoes_the_last_revert(cx: &mut TestAppContext) {
+    test_views::init(cx);
+    cx.update(crate::app::shortcuts::bind);
+    let (host, cx) = cx.add_window_view(|_, cx| Host {
+        diff: cx.new(|_| DiffView::new()),
+        undos: 0,
+    });
+    let view = host.read_with(cx, |host, _| host.diff.clone());
+    show(&view, "file", &several_hunks(), false, cx);
+    view.update_in(cx, |view, window, cx| view.focus(window, cx));
+    cx.run_until_parked();
+    let undo = if cfg!(target_os = "macos") {
+        "cmd-z"
+    } else {
+        "ctrl-z"
+    };
+    cx.simulate_keystrokes(undo);
+    assert_eq!(host.read_with(cx, |host, _| host.undos), 1);
 }

@@ -114,7 +114,7 @@ Where data lives (`<data dir>` is `NATAMUX_DATA_DIR`, default `<cwd>/.natamux`; 
 | Tasks | `tasks/<id>.md` |
 | Task events | `tasks/<id>.events.jsonl`, copied into SQLite |
 | Stage files, attachments | `.natamux-task/` in the worktree, archived in `tasks/<id>/` |
-| Shells to restore | `tasks/<id>.open-shells.json`, `tasks/<id>.shells.json` |
+| Shells to restore | `tasks/<id>.open-shells.json`, `tasks/<id>.shells.json`, `tasks/<id>.screens/<shell>.ans` |
 | Templates | `templates/<id>.md` |
 | Agent hook settings | `claude-code-settings.json`, `gemini-settings.json` |
 | Task list cache, file stats, event copy | `index.sqlite` (tables `tasks_index`, `events`, `task_files`) |

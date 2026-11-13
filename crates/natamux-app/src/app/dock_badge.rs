@@ -1,5 +1,6 @@
-//! The needs-you count on the app's Dock icon, as Electron's `app.setBadgeCount` gave it. GPUI has
-//! no API for it, so this calls AppKit. Other systems show no count.
+//! The needs-you count, plus unseen turn ends, on the app's Dock icon, as Electron's
+//! `app.setBadgeCount` gave it. GPUI has no API for it, so this calls AppKit. Other systems show
+//! no count.
 //!
 //! macOS hides the label of an app that asked for notifications without the badge option, and
 //! GPUI asks for alerts and sounds only. So the app asks itself, with badges, before GPUI posts

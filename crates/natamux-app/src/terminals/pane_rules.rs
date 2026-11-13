@@ -14,7 +14,7 @@ use crate::tasks::task_sort::task_number;
 pub const MAX_PANES: usize = 6;
 
 fn has_agent(task: &Task) -> bool {
-    task.workspace.is_some() && matches!(task.state, TaskState::Running | TaskState::NeedsInput)
+    task.workspace.is_some() && task.state.has_live_agent()
 }
 
 /// The tasks in the agents grid. Until the user picks (`chosen` is None), the ones whose agent
@@ -173,6 +173,38 @@ pub fn other_terminal_hint(
         text: format!("Terminal {name} is working"),
         needs_you: false,
     })
+}
+
+/// The one terminal a maximized task shows: the one shown before while it is listed, else the
+/// first agent terminal, else the first terminal.
+pub fn maximized_pane(
+    names: &[String],
+    shown: Option<&str>,
+    first_agent: Option<&str>,
+) -> Option<String> {
+    let listed = |name: &&str| names.iter().any(|each| each == name);
+    shown
+        .filter(listed)
+        .or_else(|| first_agent.filter(listed))
+        .map(str::to_owned)
+        .or_else(|| names.first().cloned())
+}
+
+/// The terminal a workspace shows and focuses when it opens: the one asked for, else the one the
+/// user last looked at in the maximized task (`remembered`), else the first agent terminal, else
+/// Terminal 1. A name the list does not have is skipped.
+pub fn opened_pane(
+    names: &[String],
+    requested: Option<String>,
+    remembered: Option<String>,
+    first_agent: Option<String>,
+) -> String {
+    let listed = |name: &String| names.contains(name);
+    requested
+        .filter(listed)
+        .or_else(|| remembered.filter(listed))
+        .or(first_agent)
+        .unwrap_or_else(|| "1".into())
 }
 
 /// A pane header's New terminal button: the workspace's panes have it (its tooltip, and whether

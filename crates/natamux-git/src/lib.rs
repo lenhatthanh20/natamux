@@ -3,6 +3,7 @@
 //! a library. Everything here is blocking: callers run it on their own threads, never on the
 //! HTTP reactor or the terminal output path.
 
+pub mod blame;
 pub mod branches;
 pub mod changes;
 pub mod commit_drafter;

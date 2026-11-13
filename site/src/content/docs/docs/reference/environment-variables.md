@@ -65,7 +65,7 @@ The desktop app starts the daemon and sets these for it. It passes your other `N
 | `NATAMUX_DATA_DIR` | `<user data>/data` |
 | `NATAMUX_REPO_DIR` | The repository an older version asked for, if any. Not set on a new install |
 | `NATAMUX_WEB_DIR` | Optional override for the dashboard embedded in the daemon |
-| `NATAMUX_PATH_PENDING` | `1` on macOS and Linux: the PATH of your login shell comes after the start. The daemon waits for it before it runs programs, and does not pass the variable on |
+| `NATAMUX_PATH_PENDING` | `1` on macOS and Linux: the PATH of your login shell comes after the start. The daemon serves at once and waits for it only before it runs a program, and does not pass the variable on |
 
 The Rust app uses `--smoke` and `--shot` for CI checks. `NATAMUX_UPDATE_AS_VERSION` overrides the running version for update tests.
 

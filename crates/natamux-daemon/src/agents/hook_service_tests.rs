@@ -7,6 +7,7 @@ use std::time::Duration;
 use natamux_store::task_index::TaskIndex;
 
 use super::*;
+use crate::agents::hook_paths::is_inside;
 use crate::tasks::records::WorkspaceChange;
 use crate::tasks::service::TaskServiceOptions;
 
@@ -181,7 +182,7 @@ fn drops_the_locks_that_no_hook_holds() {
 }
 
 #[test]
-fn finds_the_task_that_list_tasks_lists_first() {
+fn finds_the_task_of_the_innermost_workspace_then_the_one_list_tasks_lists_first() {
     let (dir, time) = (temp_dir(), Arc::new(AtomicI64::new(1_000_000)));
     let tasks = service(&dir, &time);
     let outer = new_task(&tasks, &time);
@@ -193,11 +194,20 @@ fn finds_the_task_that_list_tasks_lists_first() {
     let service = hooks(&tasks, Arc::new(NoStages));
 
     let old_way = |cwd: &str| {
-        tasks.list_tasks(None).unwrap().into_iter().find(|task| {
-            task.workspace
-                .as_deref()
-                .is_some_and(|workspace| is_inside(workspace, cwd))
-        })
+        let mut found: Vec<_> = tasks
+            .list_tasks(None)
+            .unwrap()
+            .into_iter()
+            .filter(|task| {
+                task.workspace
+                    .as_deref()
+                    .is_some_and(|workspace| is_inside(workspace, cwd))
+            })
+            .collect();
+        // Stable: the order of list_tasks stays among workspaces of one length.
+        let length = |task: &Task| task.workspace.as_deref().map_or(0, str::len);
+        found.sort_by_key(|task| std::cmp::Reverse(length(task)));
+        found.into_iter().next()
     };
     for round in 0..2 {
         for cwd in ["/w/a/b/src", "/w/a/x", "/w/c", "/w/c/d/e", "/elsewhere"] {
@@ -209,6 +219,115 @@ fn finds_the_task_that_list_tasks_lists_first() {
             place(&tasks, &time, &outer, "/w/a");
         }
     }
+    // A worktree inside a main checkout: the newer outer task does not take its hooks.
     let nested = service.find_task(Some("/w/a/b/src"), None).unwrap();
-    assert_eq!(nested.map(|task| task.id), Some(outer.id));
+    assert_eq!(nested.map(|task| task.id), Some(inner.id));
+}
+
+#[test]
+fn a_sibling_folder_with_the_same_prefix_is_not_inside() {
+    assert!(is_inside("/a/task-1", "/a/task-1/src/./x"));
+    assert!(is_inside("/a/task-1/", "/a/task-1"));
+    assert!(is_inside("/a/./task-1/../task-1", "/a/task-1/src"));
+    assert!(!is_inside("/a/task-1", "/a/task-10"));
+    assert!(!is_inside("/a/task-10", "/a/task-1/src"));
+    assert!(!is_inside("/a/task-1/src", "/a/task-1"));
+    assert!(!is_inside("", "/a"));
+    assert!(!is_inside("/", "/a"));
+}
+
+#[test]
+fn finds_by_folder_among_siblings_and_skips_tasks_without_a_workspace() {
+    let (dir, time) = (temp_dir(), Arc::new(AtomicI64::new(1_000_000)));
+    let tasks = service(&dir, &time);
+    let one = new_task(&tasks, &time);
+    let ten = new_task(&tasks, &time);
+    let _none = new_task(&tasks, &time);
+    place(&tasks, &time, &one, "/a/task-1");
+    place(&tasks, &time, &ten, "/a/task-10");
+    let service = hooks(&tasks, Arc::new(NoStages));
+
+    let id = |cwd: &str| service.find_task(Some(cwd), None).unwrap().map(|t| t.id);
+    assert_eq!(id("/a/task-1/src"), Some(one.id.clone()));
+    assert_eq!(id("/a/task-10/src"), Some(ten.id));
+    assert_eq!(id("/a/task-2"), None);
+    assert_eq!(service.find_task(None, None).unwrap(), None);
+}
+
+fn prompt_hook(cwd: &str, step: usize) -> Value {
+    let name = ["UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"][step % 4];
+    let mut raw = json!({ "hook_event_name": name, "cwd": cwd });
+    if name.ends_with("ToolUse") {
+        raw["tool_name"] = json!("Edit");
+        raw["tool_input"] = json!({ "file_path": format!("{cwd}/src/f{step}.rs") });
+    }
+    raw
+}
+
+#[test]
+fn many_threads_of_many_tasks_get_every_hook_applied_and_never_deadlock() {
+    let (dir, time) = (temp_dir(), Arc::new(AtomicI64::new(1_000_000)));
+    let tasks = service(&dir, &time);
+    let found: Vec<(Task, String)> = (0..8)
+        .map(|number| {
+            let task = new_task(&tasks, &time);
+            let workspace = format!("/w/many-{number}");
+            place(&tasks, &time, &task, &workspace);
+            (task, workspace)
+        })
+        .collect();
+    let service = hooks(&tasks, Arc::new(NoStages));
+
+    // Two threads on each task, so hooks of one task meet.
+    let senders: Vec<_> = (0..16)
+        .map(|thread_no| {
+            let (task, workspace) = found[thread_no % 8].clone();
+            let service = Arc::clone(&service);
+            thread::spawn(move || {
+                for step in 0..50 {
+                    let raw = prompt_hook(&workspace, step);
+                    let result = service
+                        .handle("claude-code", &raw, None, Some("1"))
+                        .unwrap();
+                    assert_eq!(result.task_id.as_deref(), Some(task.id.as_str()));
+                }
+            })
+        })
+        .collect();
+    for sender in senders {
+        sender.join().unwrap();
+    }
+
+    let activity = service.activity();
+    for (task, _) in &found {
+        assert!(activity.contains_key(&task.id), "{}", task.id);
+        assert!(tasks.get_task(&task.id).is_ok());
+    }
+}
+
+#[test]
+fn a_throttled_sign_of_life_is_not_due_and_writes_nothing() {
+    let (dir, time) = (temp_dir(), Arc::new(AtomicI64::new(1_000_000)));
+    let tasks = service(&dir, &time);
+    let task = new_task(&tasks, &time);
+    for event in [
+        json!({ "source": "human", "type": "task.readied" }),
+        json!({ "source": "agent", "type": "agent.started" }),
+    ] {
+        tasks.apply_event(&task.id, Some(&event)).unwrap();
+    }
+    let options = ActivityOptions::default();
+    let running = tasks.get_task(&task.id).unwrap();
+    assert_eq!(running.state, TaskState::Running);
+
+    assert!(!tasks.activity_due(&running, &options));
+    assert!(!tasks.record_activity(&task.id, options).unwrap());
+    assert_eq!(tasks.get_task(&task.id).unwrap(), running);
+
+    time.fetch_add(60_000, Ordering::SeqCst);
+    assert!(tasks.activity_due(&running, &options));
+    assert!(tasks.record_activity(&task.id, options).unwrap());
+    let bumped = tasks.get_task(&task.id).unwrap();
+    assert_ne!(bumped.updated_at, running.updated_at);
+    assert!(!tasks.activity_due(&bumped, &options));
 }

@@ -137,6 +137,11 @@ impl Protocol {
         self.ended
     }
 
+    /// The shell of the last `Hello`, until a wake asks for a new one.
+    pub fn shell_id(&self) -> Option<&str> {
+        self.shell_id.as_deref()
+    }
+
     /// The shell paused, and the terminal was not shown or typed into since.
     pub fn paused(&self) -> bool {
         self.paused

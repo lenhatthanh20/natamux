@@ -70,6 +70,15 @@ New and deleted files show their whole text with a **New file** or **Deleted** b
 
 Your toolbar choices are kept in this browser. In a diff, `F7` and `Shift+F7` open the accessible diff view.
 
+In the desktop app the toolbar has **Ignore whitespace** (on by default) and **Show whitespace** as buttons instead of **Diff options**. Also in the desktop app:
+
+- `Mod+F` opens a find bar under the toolbar. It searches the side that has the focus. `Enter` and `Shift+Enter` go to the next and previous match, `Esc` closes it.
+- `Ctrl+G` goes to a line of the working tree: type `120`, or `120:5` for a column.
+- `Mod+Shift+O` lists the functions and types of the file. Pick one to go there.
+- The change the cursor is in has a **Comment** button next to the revert button. It quotes the change's lines in the comment box.
+- In the inline layout, `Mod+'` folds or opens the change at the cursor.
+- Right-click the text and pick **Annotate with Git Blame**. The date and the author of the last commit that changed each line show before the line. Side by side, both sides show them. Right-click again for the commit of that line, **Copy Commit Hash** and **Close Annotations**. The editor tab of a file has the same menu; save your edits first, as blame reads the file on disk.
+
 ### Image diffs
 
 A changed PNG, JPEG, GIF, WebP or SVG file shows as images, not text. You see **Before (last commit)** and **After (working tree)**, side by side or stacked. A new image has only the after side. A deleted one has only the before side.
@@ -170,6 +179,17 @@ A dialog lists the files, all checked. Clear the ones to keep, then click **Roll
 The dialog says how many new files will be deleted. Ignored files are never touched.
 
 A toast says **Rolled back N files.** and has an **Undo** action. **Undo** brings back those files as they were just before the rollback, new files too. Only the last rollback of a task can be undone, until the daemon restarts. An added file comes back as a new file (U); the commit takes it either way.
+
+### Revert one change
+
+To put back only one change of a file, click a line of that change in the diff, or step to it with `Alt+F5`. An arrow shows at the right of the change:
+
+- **Side by side**: `→` on the left (last commit) side, and a revert icon on the right side.
+- **Inline**: a revert icon.
+
+Click it to replace the change with the lines of the last commit. The file is written on disk, and the diff reads it again. The toast **Reverted a change in &lt;file&gt;.** has **Undo**. `Mod+Z` in the diff also undoes the last revert, up to 50 of them.
+
+The last commit cannot be changed here, so the arrows only write the working tree. When the agent changed the file after the diff was read, nothing is written: a toast says so and the diff reads the file again. There is no arrow on new, deleted or conflicted files.
 
 ### Push and open a pull request
 

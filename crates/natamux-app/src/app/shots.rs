@@ -5,6 +5,7 @@
 use std::time::Duration;
 
 use gpui::{App, AsyncApp, Focusable, Window, WindowHandle, point, px};
+use natamux_proto::tasks::task::TaskState;
 use natamux_proto::workspaces::workspace::PreparingStep;
 
 use super::clock;
@@ -15,6 +16,7 @@ use super::shortcuts::{FindInTerminal, OpenRowMenu};
 use super::shots_files;
 use super::shots_settings;
 use super::shots_stages;
+use super::shots_start_task;
 use super::shots_terminal;
 use super::shots_text;
 use super::title_bar::open_add_menu;
@@ -70,6 +72,8 @@ const SITE: &str = "natamux-site";
 const CLEAN: &str = "T-0144";
 const IMAGE: &str = "T-0147";
 pub(super) const CHANGED_FILE: &str = "src/checkout.ts";
+/// The term of the diff's find shot.
+const FOUND_IN_DIFF: &str = "total";
 /// The lines Ask agent quotes: the new body of the function.
 const ASKED_LINES: (u32, u32) = (5, 6);
 /// The diff's language loads and parses in the background. A step to the change before the parse
@@ -86,6 +90,11 @@ const READY_LINE: &str = "shot: ready";
 const READY_AFTER: Duration = Duration::from_millis(2500);
 /// After the last step: what it reads comes in and the window draws it.
 const LAST_DRAWN: Duration = Duration::from_millis(500);
+
+/// The task count the board shots grow to.
+const GROWN: usize = 200;
+/// The card at the top of the Done column in the `board-scrolled` shot.
+const SCROLLED_TO: usize = 25;
 
 /// Sets the fake's data before the window watches it. Call it before `window::open`.
 pub fn prepare(shot: Shot) {
@@ -106,9 +115,17 @@ pub fn prepare(shot: Shot) {
     if shot == Shot::WorkspacePreparing {
         fake_daemon::shared().set_preparing(NO_WORKSPACE, PreparingStep::Fetch);
     }
+    if is_scrolled_board(shot) {
+        // The seed has fewer tasks, so every copy is Done: far over the 50 a column draws.
+        fake_daemon::shared().grow_tasks(GROWN, GROWN);
+    }
     shots_settings::prepare(shot);
     shots_terminal::prepare(shot);
     shots_text::prepare(shot);
+}
+
+fn is_scrolled_board(shot: Shot) -> bool {
+    matches!(shot, Shot::BoardMore | Shot::BoardScrolled)
 }
 
 pub fn run(handle: WindowHandle<Root>, shot: Shot, cx: &mut App) {
@@ -155,6 +172,10 @@ async fn steps(handle: WindowHandle<Root>, shot: Shot, cx: &mut AsyncApp) -> boo
         shots_settings::run(handle, shot, cx).await;
         return true;
     }
+    if shots_start_task::is_start_task_shot(shot) {
+        shots_start_task::run(handle, shot, cx).await;
+        return true;
+    }
     if shots_terminal::is_terminal_shot(shot) {
         shots_terminal::run(handle, shot, cx).await;
         return true;
@@ -181,13 +202,28 @@ async fn steps(handle: WindowHandle<Root>, shot: Shot, cx: &mut AsyncApp) -> boo
             | Shot::WorkspaceChangesComments
             | Shot::Rollback
             | Shot::StageEvidence
+            | Shot::DiffFind
+            | Shot::DiffBlame
     ) {
         cx.background_executor().timer(SETTLE).await;
-        if shot == Shot::WorkspaceChangesDiff {
+        if matches!(
+            shot,
+            Shot::WorkspaceChangesDiff | Shot::DiffFind | Shot::DiffBlame
+        ) {
             wait_for_parse(handle, CHANGED_FILE, false, cx).await;
         }
         handle
             .update(cx, |root, window, cx| panel_step(shot, root, window, cx))
+            .ok();
+    }
+    if is_scrolled_board(shot) {
+        cx.background_executor().timer(SETTLE).await;
+        let at = (shot == Shot::BoardScrolled).then_some(SCROLLED_TO);
+        handle
+            .update(cx, |root, _, cx| {
+                let board = root.task_view().read(cx).board().clone();
+                board.update(cx, |board, cx| board.scroll_column(TaskState::Done, at, cx));
+            })
             .ok();
     }
     if shot == Shot::TerminalFind {
@@ -200,7 +236,7 @@ async fn steps(handle: WindowHandle<Root>, shot: Shot, cx: &mut AsyncApp) -> boo
 }
 
 fn view_of(shot: Shot) -> ViewState {
-    let board = matches!(shot, Shot::TasksBoard | Shot::BoardHoverCard);
+    let board = matches!(shot, Shot::TasksBoard | Shot::BoardHoverCard) || is_scrolled_board(shot);
     let agents = (shot == Shot::AgentsGrid).then(|| vec![ASKING.to_string(), RUNNING.to_string()]);
     let mut view = ViewState {
         blurred: if shot == Shot::SidebarBlurred {
@@ -220,8 +256,15 @@ fn view_of(shot: Shot) -> ViewState {
     // The palette lists the workspaces opened last.
     view.recent = vec![RUNNING.to_string(), REVIEWED.to_string()];
     // The Ask agent shot shows the inline diff; the others keep side by side.
+    view.show_finished = is_scrolled_board(shot);
     view.diff.side_by_side = shot != Shot::WorkspaceChangesAsk;
     shots_text::adjust_view(shot, &mut view);
+    view.diff.show_whitespace = shot == Shot::DiffFind;
+    if shot == Shot::DiffBlame {
+        // T-0318: side by side needs a 720 px diff: no sidebar, the narrowest file list.
+        view.sidebar_open = false;
+        view.files_width = 200;
+    }
     view
 }
 
@@ -238,6 +281,11 @@ fn enter(shot: Shot, root: &mut Root, window: &mut Window, cx: &mut gpui::Contex
             let first = board.read(cx).first_card(cx);
             board.update(cx, |board, cx| board.show_hover(first, cx));
         }
+        // Only the Done column draws; its list is made at the next draw, so the scroll is a
+        // step later (`run`).
+        Shot::BoardMore | Shot::BoardScrolled => dashboard.update(cx, |dashboard, cx| {
+            dashboard.set_state_filter(Some(TaskState::Done), cx)
+        }),
         Shot::AddTaskDialog => add_task_dialog::open(&dashboard, Some(TYPED.into()), window, cx),
         // The title bar's + menu, opened under its button at the right end.
         Shot::AddMenu => {
@@ -315,7 +363,8 @@ fn enter_git(shot: Shot, dashboard: &gpui::Entity<Dashboard>, cx: &mut App) {
         | Shot::WorkspaceChangesDiff
         | Shot::WorkspaceChangesAsk
         | Shot::WorkspaceChangesComments
-        | Shot::Rollback => changes(dashboard, REVIEWED, cx),
+        | Shot::Rollback
+        | Shot::DiffFind => changes(dashboard, REVIEWED, cx),
         Shot::ImageDiff => changes(dashboard, IMAGE, cx),
         // T-0183: History is a view of the panel.
         Shot::WorkspaceHistory => dashboard.update(cx, |dashboard, cx| {
@@ -335,7 +384,7 @@ fn enter_git(shot: Shot, dashboard: &gpui::Entity<Dashboard>, cx: &mut App) {
             dashboard.set_details_open(false, cx);
         }),
         // T-0183: Changes over the terminals with the panel closed: main has the whole screen.
-        Shot::ChangesOverMain => dashboard.update(cx, |dashboard, cx| {
+        Shot::ChangesOverMain | Shot::DiffBlame => dashboard.update(cx, |dashboard, cx| {
             dashboard.open_changes(REVIEWED, false, cx);
             dashboard.set_details_open(false, cx);
         }),
@@ -448,7 +497,9 @@ fn panel_step(shot: Shot, root: &mut Root, window: &mut Window, cx: &mut gpui::C
         Shot::WorkspaceChangesDiff
         | Shot::WorkspaceChangesAsk
         | Shot::WorkspaceChangesComments
-        | Shot::Rollback => {
+        | Shot::Rollback
+        | Shot::DiffFind
+        | Shot::DiffBlame => {
             let changes = root.workspace_view().read(cx).changes_view().clone();
             changes.update(cx, |changes, cx| match shot {
                 Shot::WorkspaceChangesDiff => changes.shot_change(CHANGED_FILE, 2, window, cx),
@@ -456,6 +507,8 @@ fn panel_step(shot: Shot, root: &mut Root, window: &mut Window, cx: &mut gpui::C
                     changes.shot_ask(ASKED_LINES.0, ASKED_LINES.1, window, cx)
                 }
                 Shot::WorkspaceChangesComments => changes.shot_comments(CHANGED_FILE, cx),
+                Shot::DiffFind => changes.shot_find(CHANGED_FILE, FOUND_IN_DIFF, window, cx),
+                Shot::DiffBlame => changes.shot_blame(CHANGED_FILE, cx),
                 _ => changes.shot_rollback(window, cx),
             });
         }
@@ -542,7 +595,9 @@ mod tests {
     fn only_the_board_and_progress_shots_leave_the_table() {
         for shot in Shot::ALL {
             let layout = match shot {
-                Shot::TasksBoard | Shot::BoardHoverCard => Layout::Board,
+                Shot::TasksBoard | Shot::BoardHoverCard | Shot::BoardMore | Shot::BoardScrolled => {
+                    Layout::Board
+                }
                 Shot::TasksProgress => Layout::Progress,
                 _ => Layout::Table,
             };

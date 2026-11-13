@@ -13,6 +13,7 @@ description: Which Natamux documents to update for a change, and how to write th
 | `site/src/content/docs/docs/help/changelog.md` | Users | The top `## vX.Y.Z (date)` section is the next release, even before it is tagged. Check `packages/web/package.json` `version` |
 | `docs/releases/vX.Y.Z.md` | Users | The body of the GitHub release. Sections: intro line, `## Fixes` / `## Terminal` / `## Dashboard`…, `## Download`, `## Before you open it`. The release workflow fails without it |
 | `site/src/pages/index.astro` | Visitors | The homepage. It holds the download version string |
+| `site/src/pages/download.astro` | Visitors | `/download/`: the release files. The homepage offers only the install commands. No version string here |
 | `docs/*.md` | Developers and agents | Plans (`plan-features.md`, `plan-tech-stack.md`), designs, `ui-spec.md`, `docker.md`, `e2e.md`, `dev-setup.md` |
 | `README.md`, `SECURITY.md`, `PRIVACY.md` | GitHub visitors | |
 

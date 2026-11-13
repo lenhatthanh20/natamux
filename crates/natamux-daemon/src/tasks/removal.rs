@@ -75,6 +75,8 @@ impl Store {
     }
 
     fn remove_stored_task(&mut self, task_id: &str) -> TaskResult<()> {
+        // A write of the task left for after the lock would bring its file back.
+        self.sync.settle(task_id);
         let data_dir = self.data_dir();
         remove_file(&task_file_path(&data_dir, task_id))?;
         remove_file(&event_log_path(&data_dir, task_id))?;
@@ -89,7 +91,7 @@ impl Store {
         )?;
         remove_launch_scripts(&data_dir, task_id)?;
         self.sync
-            .index
+            .index()
             .delete_task(task_id)
             .map_err(TaskError::Failed)?;
         self.sync.forget(task_id);

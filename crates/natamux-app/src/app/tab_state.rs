@@ -44,6 +44,36 @@ impl Dashboard {
         self.update_view(cx, |view| view.remember_tab(&id, tab));
     }
 
+    /// The task's terminals show one at a time, full size (T-0287).
+    pub fn is_maximized(&self, id: &str) -> bool {
+        self.view.is_maximized(id)
+    }
+
+    /// Maximize or restore: kept per task in `view.json`, until the user restores it.
+    pub fn set_maximized(&mut self, id: &str, on: bool, cx: &mut Context<Self>) {
+        if self.view.is_maximized(id) != on {
+            self.update_view(cx, |view| view.set_maximized(id, on));
+        }
+    }
+
+    /// The terminal the user last looked at in the task while it is maximized (T-0304).
+    pub fn remembered_terminal(&self, id: &str) -> Option<String> {
+        let name = self
+            .view
+            .terminal_of(id)
+            .filter(|_| self.view.is_maximized(id));
+        name.map(str::to_owned)
+    }
+
+    /// Keeps the terminal a maximized task shows in `view.json`, so the task opens on it again.
+    /// Nothing on screen shows it, so the view is not drawn again.
+    pub fn remember_terminal(&mut self, id: &str, name: &str, cx: &mut Context<Self>) {
+        if self.view.terminal_of(id) != Some(name) {
+            self.view.remember_terminal(id, name);
+            self.save_view(cx);
+        }
+    }
+
     /// The count of files to commit in the open task's workspace, as the workspace last read
     /// it: the badge of the rail's Changes.
     pub fn open_changes_of(&self, id: &str) -> Option<usize> {
@@ -146,6 +176,16 @@ impl Dashboard {
 
     /// One of the diff toggles of the toolbar, kept for every workspace.
     pub fn set_diff_flags(&mut self, change: impl FnOnce(&mut DiffFlags), cx: &mut Context<Self>) {
+        let before = self.view.diff.show_whitespace;
         self.update_view(cx, |view| change(&mut view.diff));
+        // Show whitespace is a Zed setting of every editor.
+        if self.view.diff.show_whitespace != before {
+            crate::app::appearance::apply(&self.view, cx);
+        }
+    }
+
+    /// Clean on save of the editor tab (Settings, General).
+    pub fn toggle_clean_on_save(&mut self, cx: &mut Context<Self>) {
+        self.update_view(cx, |view| view.clean_on_save = !view.clean_on_save);
     }
 }

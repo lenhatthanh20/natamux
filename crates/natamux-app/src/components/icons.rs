@@ -61,6 +61,7 @@ pub fn zed_icon(name: &str) -> Option<IconName> {
         "square-split-horizontal" => IconName::Split,
         "square-terminal" => IconName::TerminalAlt,
         "terminal" => IconName::Terminal,
+        "text-wrap" => IconName::TextWrap,
         "trash" => IconName::Trash,
         "undo-2" => IconName::Undo,
         "x" => IconName::Close,
@@ -83,7 +84,7 @@ mod tests {
     use crate::app::asset_table;
 
     /// The Lucide icons Zed has no twin for.
-    const KEPT: [&str; 15] = [
+    const KEPT: [&str; 29] = [
         "bot",
         "circle-dot",
         "columns-3",
@@ -99,6 +100,20 @@ mod tests {
         "panel-right",
         "save",
         "search-x",
+        "send",
+        "braces",
+        "clock",
+        "flask-conical",
+        "hand",
+        "monitor",
+        "moon",
+        "palette",
+        "panels-top-left",
+        "plug",
+        "shield",
+        "sliders-vertical",
+        "sun",
+        "upload",
     ];
 
     #[test]

@@ -115,8 +115,8 @@ pub struct ProjectSettings {
     pub git: GitSettings,
 }
 
-/// `git.branchName`: the name of a new task branch, with `{id}` and `{slug}`
-/// (`natamux_core::workspaces::branch_name`). None: `natamux/<id>-<slug>`.
+/// `git.branchName`: the name of a new task branch, with `{project}`, `{id}` and `{slug}`
+/// (`natamux_core::workspaces::branch_name`). None: `<project>/<id>-<slug>`.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GitSettings {

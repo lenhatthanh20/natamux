@@ -148,13 +148,20 @@ pub fn step_file<'a>(paths: &'a [String], current: Option<&str>, step: Step) -> 
 
 /// Prose has long lines that are better wrapped. Code is not.
 pub fn wraps_by_default(path: &str) -> bool {
+    extension(path).is_none_or(|ext| matches!(ext.as_str(), "md" | "markdown" | "txt" | "rst"))
+}
+
+/// A Markdown file: the editor tab can show it rendered.
+pub fn is_markdown(path: &str) -> bool {
+    extension(path).is_some_and(|ext| matches!(ext.as_str(), "md" | "markdown"))
+}
+
+/// The lower-case extension of the file name; a leading dot starts a hidden name, not one.
+fn extension(path: &str) -> Option<String> {
     let name = path.rsplit('/').next().unwrap_or(path);
     match name.rfind('.') {
-        None | Some(0) => true,
-        Some(dot) => {
-            let ext = name[dot + 1..].to_ascii_lowercase();
-            matches!(ext.as_str(), "md" | "markdown" | "txt" | "rst")
-        }
+        None | Some(0) => None,
+        Some(dot) => Some(name[dot + 1..].to_ascii_lowercase()),
     }
 }
 

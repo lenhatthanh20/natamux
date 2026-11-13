@@ -4,14 +4,16 @@
 use std::rc::Rc;
 
 use editor::actions as edit;
-use gpui::{App, DummyKeyboardMapper, KeyBinding, KeyBindingContextPredicate};
+use gpui::{Action, App, DummyKeyboardMapper, KeyBinding, KeyBindingContextPredicate};
 use serde_json::{Value, json};
+
+use super::commands::{command_by_id, keystroke};
 
 const ANY: &str = "Editor";
 /// A box of many lines (notes, a commit message) or a full editor (the editor tab, the Docs
 /// edit). Single-line boxes leave Up, Down and Enter to the lists and forms around them.
 const MANY_LINES: &str = "Editor && (mode == auto_height || mode == full)";
-const FULL: &str = "Editor && mode == full";
+const FULL: &str = super::commands_editor::FULL_EDITOR;
 
 pub fn bind(cx: &mut App, mac: bool) {
     let any = Some(ANY);
@@ -104,6 +106,93 @@ pub fn bind(cx: &mut App, mac: bool) {
         .filter_map(|(keys, name, data, context)| by_name(cx, keys, name, data, context))
         .collect::<Vec<_>>();
     cx.bind_keys(bindings);
+    cx.bind_keys(editor_bindings(mac));
+}
+
+/// The Zed actions of the full editors, with the keys and contexts of their registry entries
+/// (`commands_editor.rs`), so the shortcut sheet shows what is bound.
+pub fn editor_bindings(mac: bool) -> Vec<KeyBinding> {
+    let mut out = Vec::new();
+    push(
+        "editor.select-next",
+        edit::SelectNext::default(),
+        mac,
+        &mut out,
+    );
+    push(
+        "editor.select-all-matches",
+        edit::SelectAllMatches,
+        mac,
+        &mut out,
+    );
+    push(
+        "editor.select-larger",
+        edit::SelectLargerSyntaxNode,
+        mac,
+        &mut out,
+    );
+    push(
+        "editor.select-smaller",
+        edit::SelectSmallerSyntaxNode,
+        mac,
+        &mut out,
+    );
+    push(
+        "editor.add-cursor-above",
+        edit::AddSelectionAbove {
+            skip_soft_wrap: true,
+        },
+        mac,
+        &mut out,
+    );
+    push(
+        "editor.add-cursor-below",
+        edit::AddSelectionBelow {
+            skip_soft_wrap: true,
+        },
+        mac,
+        &mut out,
+    );
+    push("editor.move-line-up", edit::MoveLineUp, mac, &mut out);
+    push("editor.move-line-down", edit::MoveLineDown, mac, &mut out);
+    push(
+        "editor.duplicate-line",
+        edit::DuplicateLineDown,
+        mac,
+        &mut out,
+    );
+    push("editor.delete-line", edit::DeleteLine, mac, &mut out);
+    push(
+        "editor.toggle-comments",
+        edit::ToggleComments::default(),
+        mac,
+        &mut out,
+    );
+    push("editor.toggle-fold", edit::ToggleFold, mac, &mut out);
+    push("editor.fold-all", edit::FoldAll, mac, &mut out);
+    push("editor.unfold-all", edit::UnfoldAll, mac, &mut out);
+    push(
+        "editor.toggle-hunk",
+        edit::ToggleSelectedDiffHunks,
+        mac,
+        &mut out,
+    );
+    out
+}
+
+fn push<A: Action + Clone>(id: &str, action: A, mac: bool, out: &mut Vec<KeyBinding>) {
+    let Some(command) = command_by_id(id) else {
+        return;
+    };
+    for key in command.keys {
+        for context in command.contexts {
+            out.push(KeyBinding::new(
+                &keystroke(key, mac),
+                action.clone(),
+                Some(context),
+            ));
+        }
+    }
 }
 
 /// Zed's MoveUp and MoveDown live in a crate the app does not take, and the line-select actions
@@ -231,5 +320,70 @@ mod tests {
     fn word_delete_reaches_a_box_of_many_lines(cx: &mut TestAppContext) {
         let keys = keys_for(cx, "editor::DeleteToPreviousWordStart", many_lines);
         assert!(keys.contains(&word("backspace")), "{keys:?}");
+    }
+
+    /// T-0316: the Zed keys of the full editors.
+    const EDITOR_ACTIONS: &[&str] = &[
+        "editor::SelectNext",
+        "editor::SelectAllMatches",
+        "editor::SelectLargerSyntaxNode",
+        "editor::MoveLineUp",
+        "editor::DuplicateLineDown",
+        "editor::DeleteLine",
+        "editor::ToggleComments",
+        "editor::AddSelectionBelow",
+    ];
+
+    #[gpui::test]
+    fn the_editor_keys_reach_a_full_editor(cx: &mut TestAppContext) {
+        let keys = keys_for(cx, "editor::DeleteLine", Editor::multi_line);
+        let delete = if cfg!(target_os = "macos") {
+            "cmd-shift-k"
+        } else {
+            "ctrl-shift-k"
+        };
+        // gpui writes the key of a Shift chord in capitals.
+        assert!(
+            keys.iter().any(|key| key.eq_ignore_ascii_case(delete)),
+            "{keys:?}"
+        );
+        let keys = keys_for(cx, "editor::MoveLineUp", Editor::multi_line);
+        assert!(keys.iter().any(|key| key == "alt-up"), "{keys:?}");
+    }
+
+    #[gpui::test]
+    fn the_editor_keys_stay_out_of_a_one_line_box(cx: &mut TestAppContext) {
+        for name in EDITOR_ACTIONS {
+            let keys = keys_for(cx, name, Editor::single_line);
+            assert!(keys.is_empty(), "{name}: {keys:?}");
+        }
+    }
+
+    #[gpui::test]
+    fn the_editor_keys_stay_out_of_a_box_of_many_lines(cx: &mut TestAppContext) {
+        for name in EDITOR_ACTIONS {
+            let keys = keys_for(cx, name, many_lines);
+            assert!(keys.is_empty(), "{name}: {keys:?}");
+        }
+    }
+
+    /// Folds are for the editor tab: a plain full editor (the Docs box, the diff) has none.
+    #[gpui::test]
+    fn fold_keys_only_in_the_editor_tab(cx: &mut TestAppContext) {
+        let keys = keys_for(cx, "editor::FoldAll", Editor::multi_line);
+        assert!(keys.is_empty(), "{keys:?}");
+    }
+
+    #[test]
+    fn binds_every_editor_entry_of_the_registry() {
+        use crate::app::commands::EDITOR_COMMANDS;
+        let documented: usize = EDITOR_COMMANDS
+            .iter()
+            .filter(|command| command.documents_only)
+            .map(|command| command.keys.len() * command.contexts.len())
+            .sum();
+        for mac in [true, false] {
+            assert_eq!(super::editor_bindings(mac).len(), documented);
+        }
     }
 }

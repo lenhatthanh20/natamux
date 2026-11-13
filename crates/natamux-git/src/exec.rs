@@ -121,6 +121,7 @@ fn run(
         .current_dir(cwd)
         .env("GIT_TERMINAL_PROMPT", "0")
         .envs(env.iter().map(|(key, value)| (key, value)));
+    natamux_core::login_path::apply(&mut command);
     note_spawn();
     let ran = capture_bytes(
         command,
@@ -193,6 +194,7 @@ pub fn git_blob_limited(worktree: &Path, spec: &str, max: u64) -> Result<BlobRea
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null());
+    natamux_core::login_path::apply(&mut command);
     note_spawn();
     let mut child = command.spawn().map_err(|error| {
         if error.kind() == std::io::ErrorKind::NotFound {

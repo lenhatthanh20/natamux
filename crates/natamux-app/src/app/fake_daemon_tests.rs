@@ -1,4 +1,5 @@
 use natamux_client::TerminalEvent;
+use natamux_proto::projects::repo::AddRepo;
 use natamux_proto::workspaces::workspace::PushStatus;
 
 use super::*;
@@ -140,6 +141,7 @@ fn makes_a_workspace_and_sends_its_steps() {
         .new_workspace(NewWorkspaceInput {
             title: "Try it".into(),
             repo: Some("natamux-site".into()),
+            model: Some("opus".into()),
             ..NewWorkspaceInput::default()
         })
         .unwrap();
@@ -147,6 +149,7 @@ fn makes_a_workspace_and_sends_its_steps() {
         task.workspace.as_deref(),
         Some("/work/.natamux/worktrees/T-0201")
     );
+    assert_eq!(task.model.as_deref(), Some("opus"));
     let steps: Vec<Option<PreparingStep>> = drain(&mut receiver)
         .into_iter()
         .filter_map(|event| match event {
@@ -203,7 +206,10 @@ fn makes_a_workspace_for_a_task_that_has_none() {
         task.workspace.as_deref(),
         Some("/work/.natamux/worktrees/T-0135")
     );
-    assert_eq!(task.branch.as_deref(), Some("natamux/t-0135"));
+    assert_eq!(
+        task.branch.as_deref(),
+        Some("natamux/t-0135-background-jobs-in-the-footer")
+    );
     let events = drain(&mut receiver);
     assert!(tasks_of(&events).is_some());
     assert!(events.iter().any(|event| matches!(
@@ -401,6 +407,57 @@ fn started_agents_send_until_dropped() {
     std::thread::sleep(std::time::Duration::from_millis(50));
     assert!(drain(&mut events).is_empty());
     assert!(!fake.tasks_with_terminals().is_empty());
+}
+
+#[test]
+fn works_in_the_main_checkout_when_no_worktree_is_asked_and_detaches_keeping_the_branch() {
+    let fake = FakeDaemon::default();
+    let (mut receiver, _) = fake.watch();
+    drain(&mut receiver);
+    let input = NewWorkspaceInput {
+        title: "Try it".into(),
+        agent: Some("codex".into()),
+        model: Some("gpt-5-codex".into()),
+        worktree: Some(false),
+        ..NewWorkspaceInput::default()
+    };
+    let task = fake.new_workspace(input.clone()).unwrap();
+    assert_eq!(task.main_checkout, Some(true));
+    assert_eq!(task.model.as_deref(), Some("gpt-5-codex"));
+    assert!(task.workspace.is_some());
+    assert_eq!(task.branch.as_deref(), Some("main"));
+    assert_eq!(task.agent.as_deref(), Some("codex"));
+    assert!(matches!(
+        fake.new_workspace(input),
+        Err(ClientError::Status { status: 409, .. })
+    ));
+    let removed = fake.remove_workspace(&task.id, true).unwrap();
+    assert_eq!(removed.task.branch.as_deref(), Some("main"));
+    assert!(
+        drain(&mut receiver)
+            .iter()
+            .all(|event| !matches!(event, DashboardEvent::WorkspaceStep(_)))
+    );
+}
+
+#[test]
+fn names_the_default_branch_after_the_project() {
+    let fake = FakeDaemon::default();
+    let added = AddRepo {
+        path: "/srv/app".into(),
+        name: Some("My App".into()),
+        worktrees_dir: None,
+    };
+    let repo = fake.add_repo(&added).unwrap();
+    let task = fake
+        .new_workspace(NewWorkspaceInput {
+            title: "Fix it".into(),
+            repo: Some(repo.id),
+            ..NewWorkspaceInput::default()
+        })
+        .unwrap();
+    let want = format!("my-app/{}-fix-it", task.id.to_lowercase());
+    assert_eq!(task.branch, Some(want));
 }
 
 #[test]

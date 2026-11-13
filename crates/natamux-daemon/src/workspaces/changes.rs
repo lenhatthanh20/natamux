@@ -10,20 +10,25 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::SystemTime;
 
 use futures::executor::block_on;
+use natamux_git::blame::read_blame;
 use natamux_git::changes::list_changes;
 use natamux_git::commit_push::snapshot_commit;
 use natamux_git::exec::{GitError, current_branch};
 use natamux_git::file_diff::{read_file_diff, read_file_image, read_inside};
 use natamux_git::graph::{DEFAULT_LIMIT, read_git_graph};
 use natamux_git::rollback::{has_commit, restore_from_snapshot, rollback_files, rollback_paths};
-use natamux_proto::workspaces::changes::{ChangeStatus, FileDiff, ImageSide};
+use natamux_proto::workspaces::changes::{
+    BlameAnswer, ChangeStatus, FileDiff, ImageSide, MAX_FILE_BYTES,
+};
 use natamux_proto::workspaces::files::{SavedFile, TreeEntry, WorkspaceFile};
 use natamux_proto::workspaces::workspace::{ChangeEntry, GitGraph};
 
 use crate::shared::jobs::Clock;
 use crate::shared::ttl_cache::TtlCache;
 use crate::workspaces::errors::{WorkspaceError, WorkspaceResult};
-use crate::workspaces::files::{list_folder, read_workspace_file, write_workspace_file};
+use crate::workspaces::files::{
+    list_folder, read_workspace_file, resolve_inside, write_workspace_file,
+};
 use crate::workspaces::service::WorkspaceService;
 
 /// Dashboards ask for the changes, the graph and the diff stats on timers. Within this time they
@@ -155,6 +160,39 @@ impl WorkspaceService {
         let workspace = self.workspace_of(task_id)?;
         let change = self.changed_file(task_id, path)?;
         Ok(read_file_image(&workspace, &change, side)?)
+    }
+
+    /// Who last changed each line. `Modified`: the file in the worktree, with the explorer's path
+    /// guards. `Original`: a changed file at the last commit, from its old path when renamed.
+    pub fn blame(
+        &self,
+        task_id: &str,
+        path: &str,
+        side: ImageSide,
+    ) -> WorkspaceResult<BlameAnswer> {
+        let workspace = self.workspace_of(task_id)?;
+        let mut answer = match side {
+            ImageSide::Modified => {
+                let file = resolve_inside(&workspace, path)?;
+                if !file.is_file {
+                    return Err(WorkspaceError::NotA {
+                        path: path.to_string(),
+                        kind: "file",
+                    });
+                }
+                if file.size > MAX_FILE_BYTES {
+                    return Err(WorkspaceError::TooLarge(path.to_string()));
+                }
+                read_blame(&workspace, path, false)?
+            }
+            ImageSide::Original => {
+                let change = self.changed_file(task_id, path)?;
+                let from = change.original_path.as_deref().unwrap_or(&change.path);
+                read_blame(&workspace, from, true)?
+            }
+        };
+        answer.path = path.to_string();
+        Ok(answer)
     }
 
     /// The files explorer: one folder, one file, and a save by hand.

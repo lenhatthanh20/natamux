@@ -1,5 +1,5 @@
 //! The tabs of Project settings as rules (`ProjectSettingsDialog.tsx`, `IssuesTab.tsx`): which tab
-//! shows, the footer note, the Issues choice, and the words of the reset and the JSON alert. No
+//! shows, the footer note, the GitHub issues choice, and the words of the reset and the JSON alert. No
 //! gpui, so it is tested alone.
 
 use natamux_proto::projects::repo::{PAUSE_IDLE_MINUTES, TrackerSettings};
@@ -7,22 +7,24 @@ use natamux_proto::projects::settings_rules::branch_name_problem;
 
 use crate::components::input_rules::segment_step;
 use crate::projects::settings_text::CREATE_ISSUE_OPTIONS;
+use crate::stages::editor_draft::DEFAULT_CREATE_ISSUE;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SettingsTab {
+    General,
     Stages,
-    Issues,
     Json,
 }
 
 impl SettingsTab {
     /// In the order they are drawn.
-    pub const ALL: [SettingsTab; 3] = [SettingsTab::Stages, SettingsTab::Issues, SettingsTab::Json];
+    pub const ALL: [SettingsTab; 3] =
+        [SettingsTab::General, SettingsTab::Stages, SettingsTab::Json];
 
     pub fn label(self) -> &'static str {
         match self {
+            SettingsTab::General => "General",
             SettingsTab::Stages => "Stages",
-            SettingsTab::Issues => "Issues",
             SettingsTab::Json => "JSON",
         }
     }
@@ -37,15 +39,129 @@ pub fn shown_tab(draft_ok: bool, picked: SettingsTab) -> SettingsTab {
     if draft_ok { picked } else { SettingsTab::Json }
 }
 
-/// The footer note is about the pipeline, so Issues has none.
-pub fn shows_pipeline_note(tab: SettingsTab) -> bool {
-    tab != SettingsTab::Issues
+pub const JSON_FIRST: &str = "Fix the JSON first";
+
+/// Why a tab cannot be picked: General and Stages need text that parses.
+pub fn tab_blocked(tab: SettingsTab, draft_ok: bool) -> Option<&'static str> {
+    (!draft_ok && tab != SettingsTab::Json).then_some(JSON_FIRST)
 }
 
+/// The status at the left of the bottom bar.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SaveStatus {
+    Unsaved,
+    Saved,
+}
+
+impl SaveStatus {
+    pub fn label(self) -> &'static str {
+        match self {
+            SaveStatus::Unsaved => "Unsaved changes",
+            SaveStatus::Saved => "Saved",
+        }
+    }
+}
+
+/// A broken file counts as unsaved: Save replaces it.
+pub fn save_status(dirty: bool, file_broken: bool) -> SaveStatus {
+    if dirty || file_broken {
+        SaveStatus::Unsaved
+    } else {
+        SaveStatus::Saved
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FileAction {
+    Reset,
+    Import,
+    Export,
+}
+
+/// An entry of the bottom bar's "..." menu; `icon` is a Lucide name for `icon_path`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FileMenuEntry {
+    Item {
+        action: FileAction,
+        label: &'static str,
+        icon: &'static str,
+        disabled: bool,
+    },
+    Label(&'static str),
+}
+
+/// Reset to default, Import… and Export; text that cannot be read turns Export off, with the
+/// reason above it.
+pub fn file_menu(draft_ok: bool) -> Vec<FileMenuEntry> {
+    let item = |action, label, icon, disabled| FileMenuEntry::Item {
+        action,
+        label,
+        icon,
+        disabled,
+    };
+    let mut entries = vec![
+        item(FileAction::Reset, "Reset to default", "rotate-ccw", false),
+        item(FileAction::Import, "Import\u{2026}", "download", false),
+    ];
+    let cannot_export = export_reason(draft_ok);
+    entries.extend(cannot_export.map(FileMenuEntry::Label));
+    entries.push(item(
+        FileAction::Export,
+        "Export",
+        "upload",
+        cannot_export.is_some(),
+    ));
+    entries
+}
+
+/// A radio row of the issues group.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct IssueRow {
+    pub value: &'static str,
+    pub label: &'static str,
+    pub selected: bool,
+    pub is_default: bool,
+    /// The muted text at the right end.
+    pub note: Option<&'static str>,
+    pub disabled: bool,
+}
+
+/// The four choices of `tracker.createIssue`; all off while the project has no tracker.
+pub fn issue_rows(create_issue: &str, off: bool) -> Vec<IssueRow> {
+    let selected = choice_index(create_issue);
+    CREATE_ISSUE_OPTIONS
+        .iter()
+        .enumerate()
+        .map(|(index, &(value, label))| {
+            let is_default = value == DEFAULT_CREATE_ISSUE;
+            IssueRow {
+                value,
+                label,
+                selected: index == selected,
+                is_default,
+                note: is_default.then_some("Button on the task"),
+                disabled: off,
+            }
+        })
+        .collect()
+}
+
+/// The footer note is about the pipeline, so General has none.
+// shortcut: option B moves the note to the Stages group footnote (stages/*); drop this once
+// nothing reads it.
+#[cfg_attr(not(test), allow(dead_code))]
+pub fn shows_pipeline_note(tab: SettingsTab) -> bool {
+    tab != SettingsTab::General
+}
+
+// shortcut: read by the Stages group footnote (stages/*) in option B; drop the allow once it is.
+#[cfg_attr(not(test), allow(dead_code))]
 pub const PIPELINE_NOTE: &str = "New tasks use this pipeline. Tasks on their way keep their stages, \
                                  but use the new prompts and approvals.";
 
 /// The tab an arrow key moves to from `shown`.
+// shortcut: `Segmented` moves with the arrows itself now; drop this with its test once agreed.
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn step_tab(shown: SettingsTab, key: &str) -> Option<SettingsTab> {
     let next = segment_step(SettingsTab::ALL.len(), shown.index(), key)?;
     SettingsTab::ALL.get(next).copied()
@@ -73,7 +189,7 @@ pub const ISSUES_OFF_NOTE: &str = "Issues are off: tracker.type is none (JSON ta
 
 /// Why Export is off, or None. Pipeline problems do not block it, only text it cannot read.
 pub fn export_reason(draft_ok: bool) -> Option<&'static str> {
-    (!draft_ok).then_some("Fix the JSON first")
+    (!draft_ok).then_some(JSON_FIRST)
 }
 
 /// The problems of the pipeline, plus one for text that cannot be read.
@@ -104,8 +220,8 @@ pub fn reset_ask(draft_ok: bool) -> ResetAsk {
 }
 
 pub const SEND_BACKS_LABEL: &str = "Agent send backs";
-pub const SEND_BACKS_HINT: &str = "The most times an agent may send the task back from one stage \
-                                   before it waits for you. Empty: no limit.";
+pub const SEND_BACKS_HINT: &str =
+    "How many times an agent can send a stage back. Empty means no limit.";
 pub const SEND_BACKS_ERROR: &str = "Give a whole number of 0 or more, or leave it empty.";
 
 /// The text of the send backs field: empty is no limit. Digits only, as JSON writes the number.
@@ -121,9 +237,9 @@ pub fn send_backs_field(text: &str) -> Result<Option<usize>, &'static str> {
 }
 
 pub const BRANCH_NAME_LABEL: &str = "Branch name";
-pub const BRANCH_NAME_PLACEHOLDER: &str = "natamux/{id}-{slug}";
-pub const BRANCH_NAME_HINT: &str = "The name of the branch of a new task. {id} is the task id, \
-                                    {slug} the title as a slug. Empty: natamux/{id}-{slug}.";
+pub const BRANCH_NAME_PLACEHOLDER: &str = "{project}/{id}-{slug}";
+pub const BRANCH_NAME_HINT: &str =
+    "Use {project}, {id} and {slug}. New tasks use it for their branch.";
 
 /// The text of the branch name field: empty is None (the key is left out), else the trimmed text
 /// or the problem of `git.branchName`.
@@ -138,9 +254,8 @@ pub fn branch_name_field(text: &str) -> Result<Option<String>, String> {
     }
 }
 
-pub const IDLE_PAUSE_LABEL: &str = "Pause idle agents after (min)";
-pub const IDLE_PAUSE_HINT: &str = "An agent that ended its turn and that no one looks at stops \
-                                   after this long, and comes back when shown. 0 = off.";
+pub const IDLE_PAUSE_LABEL: &str = "Pause idle agents after (minutes)";
+pub const IDLE_PAUSE_HINT: &str = "0 turns it off. Otherwise 5 to 1440.";
 pub const IDLE_PAUSE_ERROR: &str = "Give 0 (off) or a whole number from 5 to 1440, or leave it \
                                     empty.";
 

@@ -485,11 +485,19 @@ impl FakeDaemon {
     pub fn new_workspace(&self, input: NewWorkspaceInput) -> Answer<Task> {
         let mut data = self.data();
         let mut task = data.new_task(&input.title, input.repo);
+        // Both paths keep it: the main checkout returns early.
+        task.model = input.model;
+        if input.worktree == Some(false) {
+            data.use_main_checkout(&mut task)?;
+            task.agent = input.agent;
+            task.context = input.context;
+            data.tasks.insert(0, task.clone());
+            data.tasks_changed();
+            return Ok(task);
+        }
         let folder = data.worktrees_dir.clone().unwrap_or_else(|| "/work".into());
         task.workspace = Some(format!("{folder}/{}", task.id));
-        task.branch = input
-            .branch
-            .or_else(|| Some(format!("natamux/{}", task.id.to_lowercase())));
+        task.branch = input.branch.or_else(|| Some(data.default_branch(&task)));
         task.agent = input.agent.or_else(|| Some("claude-code".into()));
         task.state = TaskState::Running;
         task.stage = "implement".into();
@@ -518,7 +526,8 @@ impl FakeDaemon {
         let mut data = self.data();
         let task = data.task_mut(task_id)?;
         task.workspace = None;
-        if delete_branch {
+        // A main checkout task is only detached: the branch is the user's.
+        if delete_branch && task.main_checkout != Some(true) {
             task.branch = None;
         }
         let task = task.clone();

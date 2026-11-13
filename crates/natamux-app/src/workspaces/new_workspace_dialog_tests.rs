@@ -154,10 +154,13 @@ fn ring_names(dialog: &Entity<NewWorkspaceDialog>, cx: &mut VisualTestContext) -
             ("reference", dialog.reference.focus_handle(cx)),
             ("files", stops.files.clone()),
             ("project", stops.project.clone()),
+            ("worktree", stops.worktree.clone()),
             ("branch", stops.branch.clone()),
             ("branch name", dialog.branch_name.focus_handle(cx)),
+            ("reset", stops.reset.clone()),
             ("agent", stops.agent.clone()),
             ("flow", stops.flow.clone()),
+            ("model", dialog.model.focus_handle(cx)),
             ("cancel", stops.cancel.clone()),
             ("submit", stops.submit.clone()),
         ];
@@ -191,13 +194,14 @@ fn t20_the_tab_ring_follows_what_the_dialog_shows(cx: &mut TestAppContext) {
     assert_eq!(
         seen,
         [
-            "opened: [\"title\", \"notes\", \"files\", \"project\", \"branch name\", \"agent\", \
-             \"flow\", \"cancel\", \"submit\"]",
-            "read: [\"title\", \"source\", \"notes\", \"files\", \"project\", \"branch\", \
-             \"branch name\", \"agent\", \"flow\", \"cancel\", \"submit\"]",
-            "agent skill: [\"title\", \"source\", \"skill\", \"reference\", \"files\", \
-             \"project\", \"branch\", \"branch name\", \"agent\", \"flow\", \"cancel\", \
+            "opened: [\"title\", \"notes\", \"files\", \"project\", \"worktree\", \
+             \"branch name\", \"agent\", \"flow\", \"model\", \"cancel\", \"submit\"]",
+            "read: [\"title\", \"source\", \"notes\", \"files\", \"project\", \"worktree\", \
+             \"branch\", \"branch name\", \"agent\", \"flow\", \"model\", \"cancel\", \
              \"submit\"]",
+            "agent skill: [\"title\", \"source\", \"skill\", \"reference\", \"files\", \
+             \"project\", \"worktree\", \"branch\", \"branch name\", \"agent\", \"flow\", \
+             \"model\", \"cancel\", \"submit\"]",
         ]
     );
     // Tab follows the ring as it is now.
@@ -222,12 +226,6 @@ fn picked(dialog: &Entity<NewWorkspaceDialog>, pick: Pick, cx: &mut VisualTestCo
         Pick::Project => dialog.picked_repo.clone(),
         Pick::Branch => dialog.base.clone(),
         Pick::Agent => dialog.agent.clone(),
-        Pick::Flow => if dialog.single_agent {
-            "single-agent"
-        } else {
-            "full"
-        }
-        .into(),
     })
 }
 
@@ -245,7 +243,6 @@ fn stop_of(
             Pick::Project => stops.project.clone(),
             Pick::Branch => stops.branch.clone(),
             Pick::Agent => stops.agent.clone(),
-            Pick::Flow => stops.flow.clone(),
         }
     })
 }
@@ -278,7 +275,6 @@ fn t20_the_selects_open_their_menus_over_the_dialog(cx: &mut TestAppContext) {
         Pick::Project,
         Pick::Branch,
         Pick::Agent,
-        Pick::Flow,
     ] {
         open_menu(&dialog, pick, cx);
         let opened = cx.update(|_, cx| MenuLayer::open_menu(cx)).is_some();
@@ -315,8 +311,26 @@ fn t20_the_selects_open_their_menus_over_the_dialog(cx: &mut TestAppContext) {
              \"dev\"",
             "Agent: opened true, esc closed true, dialog true, focus back true; down enter \
              \"codex\"",
-            "Flow: opened true, esc closed true, dialog true, focus back true; down enter \
-             \"single-agent\"",
         ]
     );
+}
+
+/// Flow is a segmented control since main's Start a task redesign (#629; it was a select): Right and Left on its stop
+/// pick Single agent and Full flow, and the dialog stays open.
+#[gpui::test]
+fn t20_the_flow_control_takes_the_arrows(cx: &mut TestAppContext) {
+    let (_, dashboard, cx) = test_views::init_opener(cx);
+    let dialog = open_dialog(&dashboard, cx);
+    let flow = dialog.read_with(cx, |dialog, _| dialog.stops.flow.clone());
+    cx.update(|window, cx| window.focus(&flow, cx));
+    cx.run_until_parked();
+    let single = |cx: &mut VisualTestContext| dialog.read_with(cx, |dialog, _| dialog.single_agent);
+    let mut seen = vec![single(cx)];
+    press(cx, "right");
+    seen.push(single(cx));
+    press(cx, "left");
+    seen.push(single(cx));
+    assert_eq!(seen, [false, true, false]);
+    assert!(is_open(cx));
+    assert!(cx.update(|window, _| flow.is_focused(window)));
 }

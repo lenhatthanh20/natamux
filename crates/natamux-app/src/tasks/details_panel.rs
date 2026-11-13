@@ -26,6 +26,7 @@ use crate::app::shown_cache::ShownCache;
 use crate::app::tab_rules::ShowWatch;
 use crate::app::view_rules::DetailsView;
 use crate::components::empty_state::EmptyState;
+use crate::components::form::input_editor;
 use crate::components::motion;
 use crate::files::file_tree::FileTree;
 use crate::stages::flow_lines::dot_grid;
@@ -69,6 +70,9 @@ pub struct Shown {
     /// The focus of each folded card, so Enter and Space open it.
     pub card_focus: std::collections::BTreeMap<String, FocusHandle>,
     pub clock: crate::app::clock::LabelClock,
+    /// Bumped when `events` or `settings` change; with the Tasks generation it keys `memo`.
+    rev: u64,
+    memo: std::cell::RefCell<Option<(run::MemoKey, run::Computed)>>,
 }
 
 pub struct DetailsPanel {
@@ -104,7 +108,7 @@ impl DetailsPanel {
         cx: &mut Context<Self>,
     ) -> Self {
         let subtask = cx.new(|cx| {
-            let mut editor = Editor::single_line(window, cx);
+            let mut editor = input_editor(None, window, cx);
             editor.set_placeholder_text("Add a subtask", window, cx);
             editor
         });
@@ -287,7 +291,7 @@ impl DetailsPanel {
     fn take_pending(&mut self, task: &Task, window: &mut Window, cx: &mut Context<Self>) {
         let ready = match self.pending {
             Some(PanelRequest::Edit) => true,
-            Some(PanelRequest::SendBack) => self.progress(task).is_some(),
+            Some(PanelRequest::SendBack) => self.progress(task, cx).is_some(),
             None => false,
         };
         let Some(request) = self.pending.take_if(|_| ready) else {

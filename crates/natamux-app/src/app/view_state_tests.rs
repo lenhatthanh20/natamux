@@ -31,10 +31,13 @@ fn a_saved_view_reads_back_the_same() {
         sections: vec![("notes".into(), false), ("details".into(), true)],
         details_open: false,
         notify: true,
+        notify_always: true,
         tabs: vec![
             ("T-1".into(), WorkspaceTab::Changes),
             ("T-2".into(), WorkspaceTab::Docs),
         ],
+        maximized: vec!["T-2".into()],
+        terminals: vec![("T-2".into(), "9".into())],
         docs_source: true,
         changes_view: FileViewMode::Tree,
         files_width: 300,
@@ -45,6 +48,7 @@ fn a_saved_view_reads_back_the_same() {
             show_moves: true,
             wrap_prose: false,
             wrap_code: true,
+            show_whitespace: true,
         },
         theme: "dark".into(),
         themes: ThemeNames {
@@ -54,6 +58,8 @@ fn a_saved_view_reads_back_the_same() {
         ui_size: "large".into(),
         terminal_font: Some(serde_json::json!({ "family": "Iosevka", "size": 15 })),
         recent: vec!["T-2".into(), "T-1".into()],
+        whats_new_seen: Some("1.0.19".into()),
+        clean_on_save: true,
     };
     state.remember_base("r1", "main");
     let folder = temp_folder("round");
@@ -66,6 +72,15 @@ fn a_saved_view_reads_back_the_same() {
 #[test]
 fn a_missing_file_is_the_default_view() {
     assert_eq!(load(&temp_folder("missing")), ViewState::default());
+}
+
+#[test]
+fn notify_me_is_on_by_default_and_always_notify_off() {
+    let fresh = ViewState::parse("{}");
+    assert!(fresh.notify);
+    assert!(!fresh.notify_always);
+    assert!(!ViewState::parse(r#"{"notify": false}"#).notify);
+    assert!(ViewState::parse(r#"{"notify": true}"#).notify);
 }
 
 #[test]
@@ -115,7 +130,7 @@ fn the_details_panel_keeps_its_width_tab_and_folded_sections() {
     assert!(!state.section_open("details", false));
     let broken = ViewState::parse(r#"{"detailsView": "terminal", "notify": "yes"}"#);
     assert_eq!(broken.details_view, None);
-    assert!(!broken.notify);
+    assert!(broken.notify);
 }
 
 // The details dock: one global flag.
@@ -343,6 +358,7 @@ fn the_changes_tab_starts_with_the_defaults_of_the_web() {
             show_moves: false,
             wrap_prose: true,
             wrap_code: false,
+            show_whitespace: false,
         }
     );
     assert_eq!(state, ViewState::default());
@@ -534,4 +550,26 @@ fn showing_the_changes_tab_keeps_the_details_dock_open() {
     state.remember_tab("T-1", WorkspaceTab::Changes);
     assert!(state.details_open);
     assert!(ViewState::parse(&state.to_json()).details_open);
+}
+
+#[test]
+fn keeps_the_version_of_the_last_release_notes() {
+    let state = ViewState::parse(r#"{"whatsNewSeen":"1.0.19"}"#);
+    assert_eq!(state.whats_new_seen.as_deref(), Some("1.0.19"));
+    assert_eq!(ViewState::parse(&state.to_json()), state);
+    assert_eq!(ViewState::parse("{}").whats_new_seen, None);
+    assert_eq!(
+        ViewState::parse(r#"{"whatsNewSeen":7}"#).whats_new_seen,
+        None
+    );
+}
+
+/// T-0316: an older file has neither flag; both start off.
+#[test]
+fn whitespace_and_clean_on_save_start_off_and_read_back() {
+    let old = ViewState::parse(r#"{"diff": {"sideBySide": false}}"#);
+    assert!(!old.diff.show_whitespace && !old.clean_on_save);
+    let new = ViewState::parse(r#"{"diff": {"showWhitespace": true}, "cleanOnSave": true}"#);
+    assert!(new.diff.show_whitespace && new.clean_on_save);
+    assert_eq!(ViewState::parse(&new.to_json()), new);
 }

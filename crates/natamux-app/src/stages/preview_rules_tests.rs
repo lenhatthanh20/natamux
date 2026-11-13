@@ -21,14 +21,20 @@ fn stage<'a>(steps: &'a [Step], id: &str) -> &'a Stage {
     find_stage(steps, id).unwrap()
 }
 
+/// `steps` with every stage off. The editor keeps the context stage on (T-0333), so it is left out.
 fn all_off(steps: &[Step]) -> Vec<Step> {
-    let ids: Vec<String> = steps
+    let rest: Vec<Step> = steps
+        .iter()
+        .filter(|step| !matches!(step, Step::Stage(stage) if stage.kind == StageKind::Context))
+        .cloned()
+        .collect();
+    let ids: Vec<String> = rest
         .iter()
         .flat_map(Step::stages)
         .map(|s| s.id.clone())
         .collect();
     ids.iter()
-        .fold(steps.to_vec(), |steps, id| set_enabled(&steps, id, false))
+        .fold(rest, |steps, id| set_enabled(&steps, id, false))
 }
 
 fn group_of_stages(id: &str, stages: &[&str]) -> Step {

@@ -3,15 +3,19 @@
 //! text of a new or deleted file, or the diff. Over a diff with no change it says only white
 //! space or line endings changed.
 
-use gpui::{ObjectFit, img};
-use natamux_proto::workspaces::changes::{FileDiff, ImageSide};
+use std::sync::Arc;
+
+use gpui::{Image, ObjectFit, img};
+use natamux_client::ClientError;
+use natamux_proto::workspaces::changes::{ChangeStatus, FileDiff, ImageSide, image_type_of};
 use ui::prelude::*;
 
-use super::{ChangesView, ShownImage};
+use super::{ChangesView, ImageRead, ShownImage};
+use crate::app::source::reason;
 use crate::components::colors::checker_colors;
 use crate::components::skeleton::{Loading, SkeletonList};
 use crate::git::change_rules::{BodyKind, WholeKind, notice_text, whole_file_kind, whole_text};
-use crate::git::image_rules::{caption_text, image_sides, side_short};
+use crate::git::image_rules::{TOO_LARGE_TEXT, caption_text, image_sides, image_size, side_short};
 
 /// The side of one checker square.
 const CHECKER: f32 = 8.;
@@ -58,8 +62,11 @@ impl ChangesView {
                 let (options, _) = self.diff_options(kind == BodyKind::Whole, cx);
                 let comments = self.shown_comments();
                 let owner = cx.weak_entity();
+                // A conflict has markers to resolve, not a change to put back.
+                let movable = kind == BodyKind::Text && read.status != ChangeStatus::Conflict;
                 self.diff.update(cx, |diff, cx| {
                     diff.set_comments(comments, owner, cx);
+                    diff.set_movable(movable);
                     diff.show(
                         &key,
                         &file.path,
@@ -130,7 +137,7 @@ impl ChangesView {
 
 /// The two texts the diff compares: a new file against nothing, a deleted one against an
 /// empty file.
-fn texts_of(read: &FileDiff) -> (Option<String>, String) {
+pub(super) fn texts_of(read: &FileDiff) -> (Option<String>, String) {
     match whole_file_kind(read.status) {
         Some(WholeKind::Added) => (None, whole_text(read, WholeKind::Added).to_owned()),
         Some(WholeKind::Removed) => (
@@ -219,4 +226,27 @@ fn checkerboard(cx: &App) -> Div {
             .absolute()
             .inset_0(),
         )
+}
+
+/// The picture of one side, or the sentence that stands in for it (413: too large).
+pub(super) fn image_read(path: &str, bytes: Result<Vec<u8>, ClientError>) -> ImageRead {
+    match bytes {
+        Ok(bytes) => Ok(ShownImage {
+            bytes: bytes.len() as u64,
+            size: image_size(&bytes),
+            image: Arc::new(Image::from_bytes(image_format(path), bytes)),
+        }),
+        Err(ClientError::Status { status: 413, .. }) => Err(TOO_LARGE_TEXT.to_owned()),
+        Err(error) => Err(reason(&error)),
+    }
+}
+
+fn image_format(path: &str) -> gpui::ImageFormat {
+    match image_type_of(path) {
+        Some("image/jpeg") => gpui::ImageFormat::Jpeg,
+        Some("image/gif") => gpui::ImageFormat::Gif,
+        Some("image/webp") => gpui::ImageFormat::Webp,
+        Some("image/svg+xml") => gpui::ImageFormat::Svg,
+        _ => gpui::ImageFormat::Png,
+    }
 }

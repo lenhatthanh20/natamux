@@ -15,6 +15,7 @@ use super::task_view_rules::{add_blocked_reason, task_repo};
 use crate::app::dashboard::Dashboard;
 use crate::components::button_style::{action_button, key_hint};
 use crate::components::dialog::{DialogFrame, DialogLayer, DialogSize, DialogView};
+use crate::components::form::input_editor;
 use crate::components::menu::MenuLayer;
 use crate::workspaces::new_workspace_dialog;
 
@@ -56,7 +57,7 @@ impl AddTaskDialog {
         cx: &mut Context<Self>,
     ) -> Self {
         let field = cx.new(|cx| {
-            let mut editor = Editor::single_line(window, cx);
+            let mut editor = input_editor(None, window, cx);
             editor.set_placeholder_text("Title", window, cx);
             if let Some(title) = title {
                 editor.set_text(title, window, cx);

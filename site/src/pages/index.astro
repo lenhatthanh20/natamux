@@ -5,27 +5,16 @@ import NativeClip from '../components/NativeClip.astro'
 import '../styles/landing.css'
 
 const base = import.meta.env.BASE_URL.replace(/\/?$/, '/')
-const version = '1.0.18'
+const version = '1.0.26'
 const repo = 'https://github.com/lenhatthanh20/natamux'
 const docs = `${base}docs/`
 const site = 'https://natamux.github.io'
-// Asset names stay stable between releases.
-const latest = (file: string) => `${repo}/releases/latest/download/${file}`
-const mac = latest('Natamux-mac-arm64.dmg')
 const installSh = `curl -fsSL ${site}/install.sh | sh`
 const installPs1 = `irm ${site}/install.ps1 | iex`
 const title = 'Natamux: from task to shipped change'
 const description =
   'Run coding agents in parallel, with a worktree for every task. Shape the stages, checks and approvals in one visible workflow. Open source, local first, for macOS, Windows and Linux.'
 
-const files = [
-  { label: 'macOS, Apple silicon (M1 and later)', file: 'Natamux-mac-arm64.dmg' },
-  { label: 'macOS, Intel', file: 'Natamux-mac-x64.dmg' },
-  { label: 'Windows 10 and 11, x64', file: 'Natamux-win-x64.exe' },
-  { label: 'Linux, any distribution', file: 'Natamux-linux-x86_64.AppImage' },
-  { label: 'Debian and Ubuntu', file: 'Natamux-linux-amd64.deb' },
-  { label: 'Linux, no install', file: 'Natamux-linux-x64.tar.gz' },
-]
 const workflow = [
   { step: '01 / Start', title: 'Give the task context', text: 'Add notes, a GitHub issue, a skill or files. Natamux creates a worktree and a branch for the task.' },
   { step: '02 / Run', title: 'Agents work in stages', text: 'Choose the agent for each stage. Test spec and Implement can run side by side, each in its own terminal.' },
@@ -62,6 +51,12 @@ const buildingBlocks = [
   { number: '04', title: 'Send back', text: 'Return work to an earlier stage with the reason.', link: 'concepts/review-loop/' },
   { number: '05', title: 'CI as a stage', text: 'Run checks on a snapshot and send a failed log to the agent.', link: 'concepts/stages/#check-a-stage-on-ci' },
   { number: '06', title: 'An agent per stage', text: 'Set the agent and its model for each step in the file.', link: 'guides/mix-agents/' },
+]
+const useCases = [
+  { number: '01', title: 'Simple projects', text: 'Make a small change, update the docs or build a personal website.', anchor: 'first-small-change' },
+  { number: '02', title: 'Solo work', text: 'Fix a bug, compare agent attempts or ask another agent to review.', anchor: 'independent-review' },
+  { number: '03', title: 'Teams', text: 'Plan tests beside implementation, route tasks and retry failed CI.', anchor: 'parallel-test-planning' },
+  { number: '04', title: 'Larger organizations', text: 'Share project settings and keep human decisions at clear gates.', anchor: 'shared-settings-and-human-approvals' },
 ]
 const agents = [
   { name: 'Claude Code', command: 'claude', link: 'agents/claude-code/' },
@@ -119,8 +114,9 @@ const agents = [
             <h1 id="hero-title">From task to shipped change. <em>One visible system.</em></h1>
             <p class="lede">Set the path once. Agents run the stages, checks and reviews. See every handoff, question and decision as the work happens.</p>
             <div class="ctas">
-              <a class="btn primary big" href="#download" data-hero-download><span data-hero-label>Download for macOS</span><span aria-hidden="true">↗</span></a>
+              <a class="btn primary big" href="#download" data-hero-download><span data-hero-label>Install on macOS</span><span aria-hidden="true">↗</span></a>
               <a class="btn big" href={docs}>Read the docs</a>
+              <a class="btn big" href={`${docs}guides/use-cases/`}>Use cases</a>
             </div>
             <p class="fine"><span data-hero-note data-version={version}>Version {version} for Apple silicon.</span> <a href="#download">Other systems</a>.</p>
             <p class="hero-note">Open source · Local first · No account</p>
@@ -176,7 +172,9 @@ const agents = [
             <div class="blocks-grid">{buildingBlocks.map((block) => <a class="building-block" href={`${docs}${block.link}`}><span>{block.number}</span><div><h3>{block.title}</h3><p>{block.text}</p></div><span aria-hidden="true">↗</span></a>)}</div>
             <NativeClip name="settings" description="Project settings and the workflow stage editor in the native app" caption="Edit the workflow in Project settings and share it through .natamux.json." />
           </div>
-          <p class="more"><a href={`${docs}guides/workflows/`}>Explore solo and team workflows <span aria-hidden="true">↗</span></a></p>
+          <p class="more"><a href={`${docs}guides/use-cases/`}>Find a use case for your project <span aria-hidden="true">↗</span></a></p>
+          <div class="blocks-grid">{useCases.map((useCase) => <a class="building-block" href={`${docs}guides/use-cases/#${useCase.anchor}`}><span>{useCase.number}</span><div><h3>{useCase.title}</h3><p>{useCase.text}</p></div><span aria-hidden="true">↗</span></a>)}</div>
+          <p class="more"><a href={`${docs}guides/workflows/`}>Build a workflow step by step <span aria-hidden="true">↗</span></a></p>
         </div>
       </section>
 
@@ -233,84 +231,27 @@ natamux stage back $NATAMUX_TASK_ID \
               <div class="dl-panel" role="tabpanel" id="panel-mac" aria-labelledby="tab-mac" data-active="true">
                 <p class="dl-label">Install with one command, in Terminal</p>
                 <div class="cmd"><code>{installSh}</code><button type="button" data-copy>Copy</button></div>
-                <p class="dl-label">Or download the file</p>
-                <div class="dl-buttons">
-                  <a class="btn primary big" href={mac} data-arch="arm64">Download for Apple silicon</a>
-                  <a class="btn big" href={latest('Natamux-mac-x64.dmg')} data-arch="x64">Download for Intel</a>
-                </div>
-                <ol class="dl-steps">
-                  <li>Open the <code>.dmg</code> and drag Natamux to Applications.</li>
-                </ol>
-                <div class="first-start" role="note">
-                  <svg class="first-start-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v5c0 4.4 3 8.4 7 10 4-1.6 7-5.6 7-10V6z"/><path d="M12 8v5M12 16.5v.5"/></svg>
-                  <div>
-                    <p class="first-start-title">macOS blocks the first start</p>
-                    <p>The app is not signed with an Apple certificate yet. The one-line command handles this for you. After a manual download, open <b>System Settings → Privacy &amp; Security</b> and click <b>Open Anyway</b>. Or run:</p>
-                    <div class="cmd"><code>xattr -dr com.apple.quarantine /Applications/Natamux.app</code><button type="button" data-copy>Copy</button></div>
-                  </div>
-                </div>
+                <p class="dl-note">It installs Natamux in Applications, checks the file and lets macOS open it the first time.</p>
               </div>
               <div class="dl-panel" role="tabpanel" id="panel-win" aria-labelledby="tab-win" data-active="false">
                 <p class="dl-label">Install with one command, in PowerShell</p>
                 <div class="cmd"><code>{installPs1}</code><button type="button" data-copy>Copy</button></div>
-                <p class="dl-label">Or download the installer</p>
-                <div class="dl-buttons">
-                  <a class="btn primary big" href={latest('Natamux-win-x64.exe')}>Download for Windows</a>
-                </div>
-                <ol class="dl-steps">
-                  <li>Run <code>Natamux-win-x64.exe</code>. It needs no administrator rights.</li>
-                  <li>Task terminals run PowerShell. For a new version, run the new installer; it keeps your data.</li>
-                </ol>
-                <div class="first-start" role="note">
-                  <svg class="first-start-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v5c0 4.4 3 8.4 7 10 4-1.6 7-5.6 7-10V6z"/><path d="M12 8v5M12 16.5v.5"/></svg>
-                  <div>
-                    <p class="first-start-title">SmartScreen stops the first start</p>
-                    <p>The installer is not signed with a Windows certificate yet. The one-line command handles this for you. After a manual download, if you see <b>Windows protected your PC</b>, click <b>More info</b>, then <b>Run anyway</b>.</p>
-                  </div>
-                </div>
+                <p class="dl-note">It checks the installer and runs it for your user, with no administrator rights.</p>
               </div>
               <div class="dl-panel" role="tabpanel" id="panel-linux" aria-labelledby="tab-linux" data-active="false">
                 <p class="dl-label">Debian and Ubuntu: install with one command</p>
                 <div class="cmd"><code>{installSh}</code><button type="button" data-copy>Copy</button></div>
-                <p class="dl-label">Or download the file</p>
-                <div class="dl-buttons">
-                  <a class="btn primary big" href={latest('Natamux-linux-x86_64.AppImage')}>Download AppImage</a>
-                  <a class="btn big" href={latest('Natamux-linux-amd64.deb')}>Download .deb</a>
-                </div>
-                <ol class="dl-steps">
-                  <li>AppImage: make it executable, then start it. Install <code>curl</code> for update checks.</li>
-                  <li>Debian and Ubuntu: install the <code>.deb</code> with apt. The app is in <code>/opt/Natamux</code>.</li>
-                </ol>
-                <div class="cmd"><code>sudo apt install ./Natamux-linux-amd64.deb</code><button type="button" data-copy>Copy</button></div>
+                <p class="dl-note">It checks the <code>.deb</code> and installs it with apt. On other distributions, <a href={`${base}download/`}>download the AppImage</a>.</p>
               </div>
             </div>
           </div>
 
-          <div class="dl-all">
-            <table>
-              <caption>Every file of version {version}</caption>
-              <thead><tr><th scope="col">System</th><th scope="col">File</th></tr></thead>
-              <tbody>
-                {
-                  files.map((f) => (
-                    <tr>
-                      <td>{f.label}</td>
-                      <td><a href={latest(f.file)}>{f.file}</a></td>
-                    </tr>
-                  ))
-                }
-                <tr>
-                  <td>Checksums of every file</td>
-                  <td><a href={latest('SHA256SUMS.txt')}>SHA256SUMS.txt</a></td>
-                </tr>
-              </tbody>
-            </table>
-            <ul class="dl-links">
-              <li><a href={`${docs}getting-started/install/`}>Install guide</a>, with checks and the command line in your shell</li>
-              <li><a href={`${repo}/releases/tag/v${version}`}>Release notes of {version}</a> and <a href={`${docs}help/changelog/`}>the changelog</a></li>
-              <li><a href={`${docs}guides/self-host-docker/`}>Run with Docker</a> or build the Rust images in a Codespace</li>
-            </ul>
-          </div>
+          <ul class="dl-links dl-more">
+            <li><a href={`${base}download/`}>Download a file instead</a>: <code>.dmg</code>, <code>.exe</code>, AppImage, <code>.deb</code> and <code>.tar.gz</code></li>
+            <li><a href={`${docs}getting-started/install/`}>Install guide</a>, with what the command does</li>
+            <li><a href={`${repo}/releases/tag/v${version}`}>Release notes of {version}</a> and <a href={`${docs}help/changelog/`}>the changelog</a></li>
+            <li><a href={`${docs}guides/self-host-docker/`}>Run with Docker</a> or build the Rust images in a Codespace</li>
+          </ul>
         </div>
       </section>
     </main>

@@ -82,6 +82,9 @@ pub struct AppState {
 pub async fn serve(listener: TcpListener, state: Arc<AppState>) -> std::io::Result<()> {
     loop {
         let (stream, _) = listener.accept().await?;
+        // Terminal output and events are small frames: Nagle's algorithm would hold each one
+        // until the frame before it is acked.
+        let _ = stream.set_nodelay(true);
         let state = Arc::clone(&state);
         tokio::spawn(async move {
             let service = service_fn(move |request| {
@@ -296,6 +299,9 @@ async fn workspace_route(
         }
         (&Method::GET, ["tasks", id, "changes", "image"]) => {
             workspace_files::changed_image(state, id.to_string(), query).await
+        }
+        (&Method::GET, ["tasks", id, "blame"]) => {
+            workspace_files::blame(state, id.to_string(), query).await
         }
         (&Method::GET, ["tasks", id, "tree"]) => {
             workspace_files::tree(state, id.to_string(), query).await

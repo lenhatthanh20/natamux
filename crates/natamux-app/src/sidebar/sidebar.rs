@@ -6,7 +6,9 @@
 #![allow(clippy::module_inception)]
 
 use editor::{Editor, EditorEvent};
-use gpui::{ClickEvent, Entity, FocusHandle, Focusable, FontWeight, Stateful, Subscription};
+use gpui::{
+    ClickEvent, Entity, FocusHandle, Focusable, FontWeight, Stateful, StyleRefinement, Subscription,
+};
 use natamux_proto::tasks::task::TaskState;
 use ui::{ButtonLike, Tab, Tooltip, prelude::*};
 
@@ -20,6 +22,7 @@ use crate::components::agent_badge::AgentIcon;
 use crate::components::button_style::quiet_button;
 use crate::components::chips::{Kbd, tip_with_keys};
 use crate::components::colors::state_colors;
+use crate::components::form::input_editor;
 use crate::components::icons::icon_path;
 use crate::components::skeleton::{Loading, SkeletonList};
 use crate::components::text_size::row_text;
@@ -39,7 +42,7 @@ pub struct Sidebar {
 impl Sidebar {
     pub fn new(dashboard: Entity<Dashboard>, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let filter = cx.new(|cx| {
-            let mut editor = Editor::single_line(window, cx);
+            let mut editor = input_editor(None, window, cx);
             editor.set_placeholder_text("Filter tasks", window, cx);
             editor
         });
@@ -205,9 +208,13 @@ impl Render for Sidebar {
         let no_projects = data.loaded
             && data.repos.is_empty()
             && !data.tasks.iter().any(|task| task.workspace.is_some());
-        // Card blocks: 50 px card plus the 8 px gap.
-        let tree = Loading::new("sidebar-loading", loading, SkeletonList::new(4, 58.))
-            .content(self.tree.clone());
+        // Card blocks: 50 px card plus the 8 px gap. The tree draws again only when it notifies
+        // itself (its observers and its focus), not each time this view draws.
+        let tree = Loading::new("sidebar-loading", loading, SkeletonList::new(4, 58.)).content(
+            self.tree
+                .clone()
+                .cached(StyleRefinement::default().size_full()),
+        );
         let none = no_projects.then(|| {
             h_flex()
                 .gap_2()

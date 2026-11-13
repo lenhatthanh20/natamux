@@ -6,12 +6,12 @@ use std::path::PathBuf;
 
 use natamux_core::tasks::task::split_task_id;
 use natamux_core::workspaces::branch_name::branch_name_from;
+use natamux_proto::agents::model::{MODEL_NAME_ERROR, is_model_name};
 use natamux_proto::projects::repo::{BranchList, ContextSource};
 use natamux_proto::tasks::attachments::{AttachmentUpload, attachment_limit_error};
 use natamux_proto::tasks::task::TaskContext;
 use natamux_proto::workspaces::workspace::NewWorkspaceInput;
 
-use super::branches::branch_options;
 use super::workspace_rules::create_blocked_reason;
 use crate::sidebar::workspace_groups::DEFAULT_REPO_ID;
 
@@ -102,8 +102,7 @@ impl SourceChoice {
         format!("The agent {reads} as the task's context.")
     }
 
-    /// The line under the Reference field. The placeholder goes away once the user types, so this
-    /// line keeps saying it.
+    /// The Reference field's placeholder: what to enter for the source.
     pub fn ref_hint(&self, skill: &str) -> String {
         match self.kind() {
             "github-issue" => {
@@ -123,15 +122,6 @@ impl SourceChoice {
                 self.name()
             ),
             _ => String::new(),
-        }
-    }
-
-    pub fn ref_placeholder(&self) -> &'static str {
-        match self.kind() {
-            "github-issue" => "#42 or the issue address",
-            "skill" => "The ticket key or address",
-            "mcp" => "The ticket key or address, such as ABC-123",
-            _ => "",
         }
     }
 
@@ -209,32 +199,6 @@ pub fn base_after_pick(name: &str, start: Option<&str>) -> String {
     }
 }
 
-/// The text of the "Branch from" button: the picked branch, or the start one, by its option
-/// label, such as "main (default)".
-pub fn branch_text(list: Option<&BranchList>, base: &str, last_used: Option<&str>) -> String {
-    let start = start_branch(list);
-    let value = if base.is_empty() {
-        start.clone()
-    } else {
-        Some(base.to_string())
-    };
-    let Some(value) = value else {
-        return "The default branch".into();
-    };
-    let Some(list) = list else {
-        return value;
-    };
-    branch_options(
-        &list.branches,
-        list.current.as_deref(),
-        last_used,
-        start.as_deref(),
-    )
-    .into_iter()
-    .find(|option| option.value == value)
-    .map_or(value, |option| option.label)
-}
-
 /// What the user typed and picked.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct StartForm {
@@ -252,12 +216,37 @@ pub struct StartForm {
     pub reference: String,
     /// The skill picked for An agent skill; empty until one is picked.
     pub skill: String,
+    /// "Create a worktree" unchecked: the task works in the project folder, with no base or branch.
+    pub no_worktree: bool,
+    /// Empty: the agent's own default. The dialog leaves it empty for an agent that takes none.
+    pub model: String,
+}
+
+/// The red line under a model typed with signs a command line must not get. None when empty.
+pub fn model_error(model: &str) -> Option<&'static str> {
+    let model = model.trim();
+    (!model.is_empty() && !is_model_name(model)).then_some(MODEL_NAME_ERROR)
+}
+
+/// The Model field's placeholder: an example the picked agent knows.
+pub fn model_hint(base: &str) -> String {
+    let example = match base {
+        "codex" => "gpt-5-codex",
+        "gemini" => "gemini-2.5-pro",
+        "copilot" => "gpt-5",
+        "cursor" => "sonnet-4",
+        _ => "sonnet",
+    };
+    format!("Agent default (e.g. {example})")
 }
 
 /// Why Start task is off, if it is.
 pub fn blocked_reason(form: &StartForm, choice: &SourceChoice) -> Option<&'static str> {
     if form.single_agent && form.agent.is_empty() {
         return Some("Choose an agent for this task flow");
+    }
+    if let Some(error) = model_error(&form.model) {
+        return Some(error);
     }
     let skill = (*choice == SourceChoice::AgentSkill).then_some(form.skill.as_str());
     create_blocked_reason(
@@ -269,11 +258,12 @@ pub fn blocked_reason(form: &StartForm, choice: &SourceChoice) -> Option<&'stati
     )
 }
 
-/// The branch the field shows while the user has not edited it: the pattern applied to the key
-/// at the start of the title. None without a key, as the task id is not known yet.
-pub fn prefill_branch(pattern: Option<&str>, title: &str) -> Option<String> {
+/// The branch the field shows while the user has not edited it: the pattern applied to the
+/// project's name and the key at the start of the title. None without a key, as the task id is
+/// not known yet.
+pub fn prefill_branch(pattern: Option<&str>, project: &str, title: &str) -> Option<String> {
     let (id, rest) = split_task_id(title);
-    id.map(|id| branch_name_from(pattern, &id, &rest))
+    id.map(|id| branch_name_from(pattern, project, &id, &rest))
 }
 
 fn filled(text: &str) -> Option<String> {
@@ -288,12 +278,14 @@ pub fn new_workspace_input(
     attachments: Vec<AttachmentUpload>,
 ) -> NewWorkspaceInput {
     let manual = choice.kind() == "manual";
+    let worktree = !form.no_worktree;
     NewWorkspaceInput {
         title: form.title.trim().into(),
         repo: Some(form.repo.clone()),
-        base: filled(&form.base),
-        branch: filled(form.branch.trim()),
+        base: filled(&form.base).filter(|_| worktree),
+        branch: filled(form.branch.trim()).filter(|_| worktree),
         agent: filled(&form.agent),
+        model: filled(form.model.trim()).filter(|_| !form.agent.is_empty()),
         mode: form.single_agent.then(|| "single-agent".into()),
         prompt: if manual {
             filled(form.notes.trim())
@@ -302,6 +294,25 @@ pub fn new_workspace_input(
         },
         context: (!manual).then(|| choice.context(&form.reference, &form.skill)),
         attachments,
+        worktree: form.no_worktree.then_some(false),
+    }
+}
+
+/// The toast once the daemon made the task: only a worktree has something to prepare.
+pub fn made_toast(id: &str, worktree: Option<bool>) -> String {
+    if worktree == Some(false) {
+        format!("{id} is started in the main checkout.")
+    } else {
+        format!("{id} is being prepared.")
+    }
+}
+
+/// What Start task does, in its tooltip.
+pub fn start_hint(no_worktree: bool) -> &'static str {
+    if no_worktree {
+        "A new task in the project folder itself: no worktree, no new branch."
+    } else {
+        "A new task with its own workspace: a git worktree on a new branch."
     }
 }
 
@@ -348,13 +359,15 @@ pub fn fit_attachments(
     (kept, refused)
 }
 
-/// `formatBytes` of core.
+/// `formatBytes` of core, with no decimal from 100 KB (T-0292): "412 KB", "12.4 KB".
 pub fn format_bytes(bytes: u64) -> String {
     const MB: u64 = 1_000_000;
     if bytes < 1000 {
         format!("{bytes} B")
-    } else if bytes < MB {
+    } else if bytes < 100_000 {
         format!("{:.1} KB", bytes as f64 / 1000.0)
+    } else if bytes < MB {
+        format!("{} KB", bytes / 1000)
     } else {
         format!("{:.1} MB", bytes as f64 / MB as f64)
     }

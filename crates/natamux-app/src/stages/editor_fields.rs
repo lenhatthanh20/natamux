@@ -3,6 +3,7 @@
 
 use natamux_proto::stages::capabilities::stage_name_of_id;
 use natamux_proto::stages::catalog::catalog_entry;
+use natamux_proto::stages::context_rules::after_context_stages;
 use natamux_proto::stages::prompt::{commit_rule, default_prompt};
 use natamux_proto::stages::schema::{Condition, Gate, Stage, StageKind, Step};
 use natamux_proto::stages::terminal_lane::{can_have_own_agent, terminal_of_stage};
@@ -39,11 +40,19 @@ fn update_in(step: &mut Step, id: &str, change: &impl Fn(&mut Stage)) {
     }
 }
 
-/// A stage that is off stays in the file with its settings; new tasks do not get it.
+/// A stage that is off stays in the file with its settings; new tasks do not get it. The context
+/// stage is always on (T-0333).
 pub fn set_enabled(steps: &[Step], id: &str, on: bool) -> Vec<Step> {
     update_stage(steps, id, |stage| {
-        stage.enabled = (!on).then_some(false);
+        if stage.kind != StageKind::Context {
+            stage.enabled = (!on).then_some(false);
+        }
     })
+}
+
+/// The stage runs right after the context, with the task's agent in Terminal 1 (T-0333).
+fn after_context(steps: &[Step], id: &str) -> bool {
+    after_context_stages(steps).iter().any(|each| each == id)
 }
 
 pub fn set_gate(steps: &[Step], id: &str, gate: Gate) -> Vec<Step> {
@@ -81,7 +90,8 @@ pub fn offers_own_shell(steps: &[Step], id: &str) -> bool {
         return false;
     };
     let fits = stage.kind == StageKind::Agent && stage.output.is_some();
-    stage.own_shell == Some(true) || (fits && group_of(steps, id).is_none())
+    let free = group_of(steps, id).is_none() && !after_context(steps, id);
+    stage.own_shell == Some(true) || (fits && free)
 }
 
 pub fn runs_in_own_shell(steps: &[Step], id: &str) -> bool {
@@ -187,9 +197,13 @@ pub fn shell_fields(steps: &[Step]) -> Vec<ShellField> {
 }
 
 /// Every agent or testing stage may pick another agent. One that would run in Terminal 1 then runs
-/// in a terminal of its own.
+/// in a terminal of its own. The stage right after the context keeps the task's agent, so it shows
+/// the row only when the file sets one, to clear it.
 pub fn takes_own_agent(steps: &[Step], id: &str) -> bool {
-    find_stage(steps, id).is_some_and(can_have_own_agent)
+    find_stage(steps, id).is_some_and(|stage| {
+        let set = stage.agent.is_some() || stage.args.is_some();
+        can_have_own_agent(stage) && (set || !after_context(steps, id))
+    })
 }
 
 pub fn runs_in_shell_one(steps: &[Step], id: &str) -> bool {

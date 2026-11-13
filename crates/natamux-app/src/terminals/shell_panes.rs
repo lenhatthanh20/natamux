@@ -16,7 +16,9 @@ use self::list_read::ListRead;
 use super::pane_facts::{PaneFacts, agent_lanes, focus_after_close, pane_facts, restoring_label};
 use super::pane_grid::{GAP, grid_rows, skeleton};
 use super::pane_header::{PaneHeader, PaneTitle};
-use super::pane_rules::{MAX_PANES, PaneLayout, columns_for, new_terminal_button};
+use super::pane_rules::{
+    MAX_PANES, PaneLayout, columns_for, maximized_pane, new_terminal_button, opened_pane,
+};
 use super::remote_terminal::RemoteTerminal;
 use super::terminal_cache::{Owner, TerminalCache, terminal_key};
 use super::terminal_find::open_find;
@@ -49,7 +51,8 @@ pub struct ShellPanes {
     closing: BTreeSet<String>,
     /// The list read that confirms a listed shell with no cached terminal.
     list_read: ListRead,
-    maximized: Option<String>,
+    /// The terminal a maximized task shows. Maximize itself is per task, in the view state.
+    shown: Option<String>,
     /// The terminal to focus once it is on screen.
     focus_next: Option<String>,
     /// The panes are narrower than the agent badge's name needs.
@@ -75,7 +78,7 @@ impl ShellPanes {
             exited: BTreeSet::new(),
             closing: BTreeSet::new(),
             list_read: ListRead::default(),
-            maximized: None,
+            shown: None,
             focus_next: None,
             narrow: false,
             only: None,
@@ -105,7 +108,7 @@ impl ShellPanes {
         self.exited.clear();
         self.closing.clear();
         self.list_read.reset();
-        self.maximized = None;
+        self.shown = None;
         self.focus_next = None;
         cx.notify();
     }
@@ -165,7 +168,7 @@ impl ShellPanes {
         }
         let name = next_terminal_name(&names);
         self.added.push(name.clone());
-        self.maximized = None;
+        self.shown = Some(name.clone());
         self.focus_next = Some(name);
         cx.notify();
     }
@@ -182,16 +185,20 @@ impl ShellPanes {
                 .focus_handle(cx)
                 .contains_focused(window, cx)
         });
-        if was_focused {
+        let was_shown = self.shown.as_deref() == Some(name.as_str());
+        if was_focused || was_shown {
             let names = self.names(self.list(cx).as_ref());
-            self.focus_next = focus_after_close(&names, &name);
+            let next = focus_after_close(&names, &name);
+            if was_shown {
+                self.shown = next.clone();
+            }
+            if was_focused {
+                self.focus_next = next;
+            }
         }
         TerminalCache::forget(&key, cx);
         self.added.retain(|each| *each != name);
         self.exited.remove(&name);
-        if self.maximized.as_deref() == Some(name.as_str()) {
-            self.maximized = None;
-        }
         self.closing.insert(name.clone());
         let failure = format!("Could not close Terminal {name}.");
         let answer = self.dashboard.update(cx, |dashboard, cx| {
@@ -212,18 +219,32 @@ impl ShellPanes {
         cx.notify();
     }
 
+    /// Whether the open task shows its terminals one at a time, full size.
+    fn is_maximized(&self, cx: &App) -> bool {
+        self.task_id
+            .as_ref()
+            .is_some_and(|id| self.dashboard.read(cx).is_maximized(id))
+    }
+
+    /// Maximize or restore the task: maximize shows `name`, then every terminal switched to,
+    /// full size until the user restores it (T-0287).
     pub fn toggle_maximized(&mut self, name: &str, cx: &mut Context<Self>) {
-        self.maximized = if self.maximized.as_deref() == Some(name) {
-            None
-        } else {
-            Some(name.to_owned())
+        let Some(task_id) = self.task_id.clone() else {
+            return;
         };
+        let on = !self.is_maximized(cx);
+        if on {
+            self.shown = Some(name.to_owned());
+        }
+        self.dashboard.update(cx, |dashboard, cx| {
+            dashboard.set_maximized(&task_id, on, cx)
+        });
         cx.notify();
     }
 
-    /// The request of a sidebar row or of opening the workspace: show, un-maximize and focus that
-    /// terminal once the list is read. A name the list does not have falls back to the first
-    /// agent terminal (`first_agent`), else Terminal 1.
+    /// The request of a sidebar row or of opening the workspace: show and focus that terminal
+    /// (full size while the task is maximized) once the list is read. Opening a maximized task
+    /// goes back to the terminal looked at last (`opened_pane`).
     fn take_request(
         &mut self,
         task_id: &str,
@@ -237,14 +258,9 @@ impl ShellPanes {
         let Some(request) = request else {
             return;
         };
-        let wanted = request
-            .name
-            .filter(|name| names.contains(name))
-            .or(first_agent)
-            .unwrap_or_else(|| "1".into());
-        if self.maximized.as_ref().is_some_and(|max| *max != wanted) {
-            self.maximized = None;
-        }
+        let remembered = self.dashboard.read(cx).remembered_terminal(task_id);
+        let wanted = opened_pane(names, request.name, remembered, first_agent);
+        self.shown = Some(wanted.clone());
         self.focus_next = Some(wanted);
     }
 
@@ -321,7 +337,7 @@ impl ShellPanes {
             .focus_handle(cx)
             .contains_focused(window, cx);
         let name = fact.name.clone();
-        let maximized = self.maximized.as_deref() == Some(name.as_str());
+        let maximized = self.is_maximized(cx);
         let this = cx.weak_entity();
         let has_agent = self
             .dashboard
@@ -330,7 +346,7 @@ impl ShellPanes {
             .task(task_id)
             .is_some_and(|task| task.agent.is_some());
         let full = self.is_full(cx);
-        let mut header = PaneHeader::new(key.clone(), PaneTitle::Terminal(name.clone()))
+        let mut header = PaneHeader::new(key.clone(), PaneTitle::Terminal(fact.title.clone()))
             .narrow(self.narrow)
             .state_text(fact.state_text)
             .hint(fact.hint)
@@ -402,9 +418,19 @@ impl Render for ShellPanes {
             TerminalCache::claim(Owner::Workspace, BTreeSet::new(), cx);
             return skeleton();
         };
-        self.take_request(&task_id, &names, first_agent, cx);
-        let visible: Vec<String> = match (&self.maximized, &self.only) {
-            (Some(name), _) if names.contains(name) => vec![name.clone()],
+        self.take_request(&task_id, &names, first_agent.clone(), cx);
+        let maximized = self
+            .is_maximized(cx)
+            .then(|| maximized_pane(&names, self.shown.as_deref(), first_agent.as_deref()))
+            .flatten();
+        if let Some(name) = &maximized {
+            self.shown = Some(name.clone());
+            self.dashboard.update(cx, |dashboard, cx| {
+                dashboard.remember_terminal(&task_id, name, cx)
+            });
+        }
+        let visible: Vec<String> = match (maximized, &self.only) {
+            (Some(name), _) => vec![name],
             (_, Some(only)) => names
                 .into_iter()
                 .filter(|name| only.contains(name))

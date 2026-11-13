@@ -209,6 +209,8 @@ impl Fixture {
     }
 
     pub fn settle(&self) {
+        // `publish` skips sending while another thread sends, so wait for the queue first.
+        self.bus.deliver_all();
         self.runner.settle();
     }
 
@@ -462,6 +464,7 @@ fn fake_terminals(
         on_output_idle: None,
         on_exit: None,
         trace_input: false,
+        screens_in: None,
     })
 }
 

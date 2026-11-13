@@ -1,0 +1,153 @@
+---
+import SiteFooter from '../components/SiteFooter.astro'
+import SiteHeader from '../components/SiteHeader.astro'
+import '../styles/landing.css'
+
+// No version here: scripts/release.test.sh keeps the one version string in index.astro.
+const base = import.meta.env.BASE_URL.replace(/\/?$/, '/')
+const repo = 'https://github.com/lenhatthanh20/natamux'
+const docs = `${base}docs/`
+const site = 'https://natamux.github.io'
+// Asset names stay stable between releases.
+const latest = (file: string) => `${repo}/releases/latest/download/${file}`
+const title = 'Download Natamux'
+const description = 'Download the Natamux desktop app for macOS, Windows or Linux as a file.'
+
+const files = [
+  { label: 'macOS, Apple silicon (M1 and later)', file: 'Natamux-mac-arm64.dmg' },
+  { label: 'macOS, Intel', file: 'Natamux-mac-x64.dmg' },
+  { label: 'Windows 10 and 11, x64', file: 'Natamux-win-x64.exe' },
+  { label: 'Linux, any distribution', file: 'Natamux-linux-x86_64.AppImage' },
+  { label: 'Debian and Ubuntu', file: 'Natamux-linux-amd64.deb' },
+  { label: 'Linux, no install', file: 'Natamux-linux-x64.tar.gz' },
+]
+---
+
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={`${site}${base}download/`} />
+    <meta name="theme-color" content="#11151b" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f7f5f0" media="(prefers-color-scheme: light)" />
+    <link rel="icon" href={`${base}icon.svg`} type="image/svg+xml" />
+    <script is:inline>
+      try {
+        const saved = localStorage.getItem('starlight-theme')
+        const light = saved === 'light' || (saved !== 'dark' && matchMedia('(prefers-color-scheme: light)').matches)
+        document.documentElement.dataset.theme = light ? 'light' : 'dark'
+      } catch {
+        document.documentElement.dataset.theme = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+      }
+    </script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <header class="site-header"><SiteHeader /></header>
+
+    <main id="main">
+      <section class="section download" id="download" aria-labelledby="download-title">
+        <div class="wrap">
+          <div class="head download-head">
+            <p class="section-kicker">Download</p>
+            <h2 id="download-title">Download Natamux as a file</h2>
+            <p>
+              The fastest way is the <a href={`${base}#download`}>install command</a>: it checks the file and handles
+              the first start for you. Download a file here when you cannot run it.
+            </p>
+          </div>
+
+          <div class="dl" data-tabs data-dl>
+            <div class="dl-tabs" role="tablist" aria-label="Operating system">
+              <button type="button" role="tab" id="tab-mac" aria-controls="panel-mac" aria-selected="true" tabindex="0">macOS</button>
+              <button type="button" role="tab" id="tab-win" aria-controls="panel-win" aria-selected="false" tabindex="-1">Windows</button>
+              <button type="button" role="tab" id="tab-linux" aria-controls="panel-linux" aria-selected="false" tabindex="-1">Linux</button>
+            </div>
+            <p class="dl-detect" data-dl-detect hidden></p>
+            <div class="stack">
+              <div class="dl-panel" role="tabpanel" id="panel-mac" aria-labelledby="tab-mac" data-active="true">
+                <div class="dl-buttons">
+                  <a class="btn primary big" href={latest('Natamux-mac-arm64.dmg')} data-arch="arm64">Download for Apple silicon</a>
+                  <a class="btn big" href={latest('Natamux-mac-x64.dmg')} data-arch="x64">Download for Intel</a>
+                </div>
+                <ol class="dl-steps">
+                  <li>Open the <code>.dmg</code> and drag Natamux to Applications.</li>
+                </ol>
+                <div class="first-start" role="note">
+                  <svg class="first-start-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v5c0 4.4 3 8.4 7 10 4-1.6 7-5.6 7-10V6z"/><path d="M12 8v5M12 16.5v.5"/></svg>
+                  <div>
+                    <p class="first-start-title">macOS blocks the first start</p>
+                    <p>The app is not signed with an Apple certificate yet. Open <b>System Settings → Privacy &amp; Security</b> and click <b>Open Anyway</b>. Or run:</p>
+                    <div class="cmd"><code>xattr -dr com.apple.quarantine /Applications/Natamux.app</code><button type="button" data-copy>Copy</button></div>
+                  </div>
+                </div>
+              </div>
+              <div class="dl-panel" role="tabpanel" id="panel-win" aria-labelledby="tab-win" data-active="false">
+                <div class="dl-buttons">
+                  <a class="btn primary big" href={latest('Natamux-win-x64.exe')}>Download for Windows</a>
+                </div>
+                <ol class="dl-steps">
+                  <li>Run <code>Natamux-win-x64.exe</code>. It needs no administrator rights.</li>
+                  <li>Task terminals run PowerShell. For a new version, run the new installer; it keeps your data.</li>
+                </ol>
+                <div class="first-start" role="note">
+                  <svg class="first-start-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v5c0 4.4 3 8.4 7 10 4-1.6 7-5.6 7-10V6z"/><path d="M12 8v5M12 16.5v.5"/></svg>
+                  <div>
+                    <p class="first-start-title">SmartScreen stops the first start</p>
+                    <p>The installer is not signed with a Windows certificate yet. If you see <b>Windows protected your PC</b>, click <b>More info</b>, then <b>Run anyway</b>.</p>
+                  </div>
+                </div>
+              </div>
+              <div class="dl-panel" role="tabpanel" id="panel-linux" aria-labelledby="tab-linux" data-active="false">
+                <div class="dl-buttons">
+                  <a class="btn primary big" href={latest('Natamux-linux-x86_64.AppImage')}>Download AppImage</a>
+                  <a class="btn big" href={latest('Natamux-linux-amd64.deb')}>Download .deb</a>
+                </div>
+                <ol class="dl-steps">
+                  <li>AppImage: make it executable, then start it. Install <code>curl</code> for update checks.</li>
+                  <li>Debian and Ubuntu: install the <code>.deb</code> with apt. The app is in <code>/opt/Natamux</code>.</li>
+                </ol>
+                <div class="cmd"><code>sudo apt install ./Natamux-linux-amd64.deb</code><button type="button" data-copy>Copy</button></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="dl-all">
+            <table>
+              <caption>Every file of the <a href={`${repo}/releases/latest`}>latest release</a></caption>
+              <thead><tr><th scope="col">System</th><th scope="col">File</th></tr></thead>
+              <tbody>
+                {
+                  files.map((f) => (
+                    <tr>
+                      <td>{f.label}</td>
+                      <td><a href={latest(f.file)}>{f.file}</a></td>
+                    </tr>
+                  ))
+                }
+                <tr>
+                  <td>Checksums of every file</td>
+                  <td><a href={latest('SHA256SUMS.txt')}>SHA256SUMS.txt</a></td>
+                </tr>
+              </tbody>
+            </table>
+            <ul class="dl-links">
+              <li><a href={`${docs}getting-started/install/#verify-the-download`}>Verify the download</a> with its checksum and signature</li>
+              <li><a href={`${docs}getting-started/install/`}>Install guide</a> and <a href={`${docs}help/changelog/`}>the changelog</a></li>
+              <li><a href={`${docs}guides/self-host-docker/`}>Run with Docker</a> or build the Rust images in a Codespace</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <SiteFooter />
+
+    <script>
+      import '../scripts/signal-flow.js'
+    </script>
+  </body>
+</html>

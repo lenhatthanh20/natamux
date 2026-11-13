@@ -18,6 +18,7 @@ use super::super::flow_bench;
 use super::super::settings_rules::{SettingsFocus, SettingsPage, page_to_open};
 use super::super::source::{Feed, Rows, Source};
 use super::super::theme_catalog::ThemeKind;
+use super::super::view_rules::with_seen;
 use super::super::view_state::ViewState;
 use super::{Dashboard, DashboardChange};
 use crate::agents::agent_choices::{custom_agents_set_count, set_custom_agents};
@@ -209,6 +210,21 @@ impl Dashboard {
     pub fn set_feed_active(&self, active: bool) {
         if let Some(Rows::Daemon(rows)) = &self.rows {
             rows.set_active(active);
+        }
+    }
+
+    /// The window came to the front or went to the back. Back in front, the open task's state is
+    /// seen.
+    pub fn set_window_active(&mut self, active: bool, cx: &mut Context<Self>) {
+        self.window_active = active;
+        let Some(task) = self.open_task.as_deref().and_then(|id| self.data.task(id)) else {
+            return;
+        };
+        let seen = with_seen(&self.view.seen, &[(&task.id, task.state)], true);
+        if active && seen != self.view.seen {
+            self.view.seen = seen;
+            self.save_view(cx);
+            cx.notify();
         }
     }
 }

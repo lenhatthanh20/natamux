@@ -33,19 +33,9 @@ pub fn prompt_icon() -> Icon {
     icon("pencil")
 }
 
-/// `GitFork`: a branch.
+/// `Diamond`: a branch, as the flowchart's decision.
 pub fn branch_icon() -> Icon {
-    Icon::new(IconName::GitBranch)
-}
-
-/// `GripVertical`: the drag handle of a row.
-pub fn grip_icon() -> Icon {
-    Icon::new(IconName::Menu)
-}
-
-/// `Trash2`: Remove.
-pub fn remove_icon() -> Icon {
-    icon("trash")
+    icon("diamond")
 }
 
 /// `CircleAlert`: a problem under a row or a field.

@@ -68,13 +68,13 @@ pub fn branch_name_problem(pattern: &str) -> Option<String> {
     (length > MAX_BRANCH_LENGTH).then(|| "Too long".into())
 }
 
-/// The first `{...}` in `pattern` that is not `{id}` or `{slug}`.
+/// The first `{...}` in `pattern` that is not `{project}`, `{id}` or `{slug}`.
 pub fn unknown_placeholder(pattern: &str) -> Option<&str> {
     let mut rest = pattern;
     while let Some(start) = rest.find('{') {
         let len = rest[start..].find('}')?;
         let found = &rest[start..start + len + 1];
-        if found != "{id}" && found != "{slug}" {
+        if !["{project}", "{id}", "{slug}"].contains(&found) {
             return Some(found);
         }
         rest = &rest[start + len + 1..];
@@ -391,10 +391,11 @@ mod tests {
     }
 
     #[test]
-    fn takes_a_branch_name_with_id_and_slug_only() {
+    fn takes_a_branch_name_with_project_id_and_slug_only() {
         let wrong = |value: Value| problem(json!({"git": {"branchName": value}}));
         assert_eq!(problem(json!({"git": {}})), None);
         assert_eq!(wrong(json!("{id}-{slug}")), None);
+        assert_eq!(wrong(json!("{project}/{id}")), None);
         assert_eq!(
             wrong(json!("a/{title}")).as_deref(),
             Some("git.branchName: Unknown placeholder {title}")

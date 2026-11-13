@@ -37,22 +37,22 @@ fn is_word_start(chars: &[(usize, char)], index: usize) -> bool {
 }
 
 fn match_word(word: &str, original: &str) -> Option<FuzzyMatch> {
+    // Reject a non-match before any allocation: most texts do not contain the query.
+    let mut wanted = word.chars().map(lower_of).peekable();
+    for c in original.chars().take(MAX_TEXT) {
+        if wanted.peek() == Some(&lower_of(c)) {
+            wanted.next();
+        }
+    }
+    if wanted.peek().is_some() {
+        return None;
+    }
+
     let chars: Vec<(usize, char)> = original.char_indices().take(MAX_TEXT).collect();
     let lower: Vec<char> = chars.iter().map(|(_, c)| lower_of(*c)).collect();
     let query: Vec<char> = word.chars().map(lower_of).collect();
     let n = lower.len();
     let m = query.len();
-
-    // A quick test first: most texts do not contain the query as a subsequence.
-    let mut probe = 0;
-    for c in &lower {
-        if probe < m && *c == query[probe] {
-            probe += 1;
-        }
-    }
-    if probe < m {
-        return None;
-    }
 
     let none = f64::NEG_INFINITY;
     // best[i * n + j]: the best score with query[i] matched at text[j].

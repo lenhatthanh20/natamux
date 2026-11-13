@@ -1,357 +1,80 @@
-//! How the Settings page draws: the nav with its search, the page header, the app's pages, the
-//! search results, and the project page.
+//! How the Settings popup draws (layout-b 1, 2): the nav with its search, tiles and avatars, the
+//! 72 px page header, the page or the search results, and the Agents page's bottom bar. A project
+//! page draws its own header and bar.
 
-use std::rc::Rc;
+use gpui::{ClickEvent, FontWeight};
+use ui::{Tooltip, prelude::*};
 
-use gpui::{ClickEvent, FocusHandle, FontWeight, KeyDownEvent};
-use ui::{Indicator, ListItem, ListItemSpacing, Switch, Tab, Tooltip, prelude::*};
-
-use super::super::appearance_rules::{ThemeChoice, UiSize, parse_theme, parse_ui_size};
-use super::super::dashboard::Dashboard;
-use super::super::settings_rules::{SearchResults, SettingRow, SettingsPage, page_title, search};
-use super::super::settings_theme::theme_select;
-use super::super::shortcuts::{AddProject, RestartToUpdate};
-use super::super::theme_catalog::ThemeKind;
-use super::super::update;
-use super::super::update_state::UpdateState;
-use super::{
-    APP_ITEMS, NAV_WIDTH, NavItem, PAGE_MAX, SettingsView, heading, nav_items, nav_matches, segment,
+use super::super::settings_rules::{
+    SearchResults, SettingsPage, page_summary, page_tile, page_title, results_summary, search,
 };
-use crate::components::button_style::quiet_button;
+use super::super::shortcuts::{CloseSettings, SETTINGS_CONTEXT};
+use super::nav::{APP_ITEMS, NavItem, NavTile, nav_items, nav_state, nav_tile};
+use super::pages::scroll_body;
+use super::{NAV_WIDTH, SettingsView};
+use crate::components::button_style::button_icon;
+use crate::components::colors::{TileColor, accent};
+use crate::components::dialog::POPUP_RADIUS;
+use crate::components::settings_tile::{PageHeader, SettingsTile, TileSize};
+use crate::components::text_size::row_text;
 
-/// A row of an app page: the label and its line at the left, the control at the right.
-fn setting_row(row: SettingRow, line: SharedString, control: AnyElement, cx: &App) -> AnyElement {
+fn nav_tile_view(tile: NavTile, dim: bool) -> SettingsTile {
+    let tile = match tile {
+        NavTile::Icon(icon, color) => SettingsTile::icon(button_icon(icon), color, TileSize::Nav),
+        NavTile::Avatar(name) => SettingsTile::avatar(&name, TileSize::Nav),
+        NavTile::Dashed => SettingsTile::dashed(button_icon("plus"), TileSize::Nav),
+    };
+    tile.dim(dim)
+}
+
+/// The nav's "App" and "Projects" heads: 24 px, 12 px medium placeholder text.
+fn nav_head(text: &'static str) -> Div {
     h_flex()
-        .w_full()
-        .min_h(rems_from_px(28.0_f32))
-        .py_3()
-        .gap_6()
-        .justify_between()
-        .border_b_1()
-        .border_color(cx.theme().colors().border_variant)
+        .h(rems_from_px(24.0_f32))
+        .px(rems_from_px(8.0_f32))
         .child(
-            v_flex()
-                .min_w_0()
-                .gap_0p5()
-                .child(Label::new(row.label()))
-                .child(Label::new(line).size(LabelSize::Small).color(Color::Muted)),
+            Label::new(text)
+                .size(LabelSize::Small)
+                .weight(FontWeight::MEDIUM)
+                .color(Color::Placeholder),
         )
-        .child(div().flex_none().child(control))
-        .into_any_element()
-}
-
-/// The body of an app page or of the results: it scrolls, its rows stay readable on a wide window.
-fn scroll_body(id: &'static str, inner: impl IntoElement) -> AnyElement {
-    v_flex()
-        .id(id)
-        .flex_1()
-        .min_h_0()
-        .overflow_y_scroll()
-        .px_6()
-        .py_5()
-        .child(div().w_full().max_w(rems_from_px(PAGE_MAX)).child(inner))
-        .into_any_element()
-}
-
-fn section(text: &'static str) -> impl IntoElement {
-    div().pt_5().pb_1().child(heading(text))
 }
 
 impl SettingsView {
-    fn control(&mut self, row: SettingRow, cx: &mut Context<Self>) -> AnyElement {
-        match row {
-            SettingRow::Notify => self.notify_switch(cx),
-            SettingRow::SidebarIds => self.sidebar_ids_switch(cx),
-            SettingRow::UpdatesAuto => self.updates_switch(cx),
-            SettingRow::UpdatesVersion => {
-                Label::new(format!("Natamux {}", update::running_version()))
-                    .color(Color::Muted)
-                    .into_any_element()
-            }
-            SettingRow::UpdatesCheck => self.check_button(),
-            SettingRow::Theme => self.theme_control(cx),
-            SettingRow::LightTheme => {
-                theme_select(ThemeKind::Light, &self.light_focus, &self.dashboard, cx)
-            }
-            SettingRow::DarkTheme => {
-                theme_select(ThemeKind::Dark, &self.dark_focus, &self.dashboard, cx)
-            }
-            SettingRow::UiSize => self.size_control(cx),
-            SettingRow::FontFamily => self.font.family_control(cx),
-            SettingRow::FontSize => self.font.size_control(cx),
-            SettingRow::CustomAgents => Button::new("settings-open-agents", "Open")
-                .style(ButtonStyle::Outlined)
-                .on_click(cx.listener(|view, _: &ClickEvent, window, cx| {
-                    view.open_page(SettingsPage::Agents, window, cx)
-                }))
-                .into_any_element(),
-        }
-    }
-
-    fn row(&mut self, row: SettingRow, cx: &mut Context<Self>) -> AnyElement {
-        let control = self.control(row, cx);
-        // The Version row's line is the updater's state; the others are fixed.
-        let line = match row {
-            SettingRow::UpdatesVersion => {
-                let ago = update::checked_ago();
-                update::state().settings_line(update::bytes(), ago.as_deref())
-            }
-            _ => row.description().to_owned(),
-        };
-        setting_row(row, line.into(), control, cx)
-    }
-
-    /// Check now, or Restart to Update while an update is ready; off while a check runs.
-    fn check_button(&self) -> AnyElement {
-        let state = update::state();
-        let (label, enabled) = state.check_button();
-        let ready = matches!(state, UpdateState::Ready { .. });
-        Button::new("settings-update-check", label)
-            .style(ButtonStyle::Outlined)
-            .disabled(!enabled)
-            .track_focus(&self.check_focus)
-            .on_click(move |_, window, cx| {
-                if ready {
-                    window.dispatch_action(Box::new(RestartToUpdate), cx);
-                } else {
-                    update::check(true, cx);
-                }
-            })
-            .into_any_element()
-    }
-
-    fn notify_switch(&self, cx: &mut Context<Self>) -> AnyElement {
-        let on = self.dashboard.read(cx).view().notify;
-        self.view_switch(
-            "settings-notify",
-            &self.notify_focus,
-            on,
-            Dashboard::toggle_notify,
-        )
-    }
-
-    fn sidebar_ids_switch(&self, cx: &mut Context<Self>) -> AnyElement {
-        let on = self.dashboard.read(cx).view().sidebar_ids;
-        self.view_switch(
-            "settings-sidebar-ids",
-            &self.sidebar_ids_focus,
-            on,
-            Dashboard::toggle_sidebar_ids,
-        )
-    }
-
-    /// A switch of a `view.json` flag: a click, or Space or Enter on its stop, flips it.
-    fn view_switch(
+    fn header(
         &self,
-        id: &'static str,
-        focus: &FocusHandle,
-        on: bool,
-        toggle: fn(&mut Dashboard, &mut Context<Dashboard>),
-    ) -> AnyElement {
-        let dashboard = self.dashboard.clone();
-        let flip = Rc::new(move |cx: &mut App| dashboard.update(cx, toggle));
-        let by_key = flip.clone();
-        div()
-            .id(SharedString::from(format!("{id}-stop")))
-            .track_focus(focus)
-            .on_key_down(move |event: &KeyDownEvent, _, cx| {
-                let keys = &event.keystroke;
-                if matches!(keys.key.as_str(), "space" | "enter") && !keys.modifiers.modified() {
-                    cx.stop_propagation();
-                    by_key(cx);
-                }
-            })
-            .child(Switch::new(id, on.into()).on_click(move |_, _, cx| flip(cx)))
-            .into_any_element()
-    }
-
-    /// The updater keeps this switch in its own file, not in `view.json`.
-    fn updates_switch(&self, cx: &mut Context<Self>) -> AnyElement {
-        div()
-            .id("settings-update-stop")
-            .track_focus(&self.update_focus)
-            .on_key_down(cx.listener(|_, event: &KeyDownEvent, _, cx| {
-                let keys = &event.keystroke;
-                if matches!(keys.key.as_str(), "space" | "enter") && !keys.modifiers.modified() {
-                    cx.stop_propagation();
-                    update::toggle_automatic(cx);
-                    cx.notify();
-                }
-            }))
-            .child(
-                Switch::new("settings-update-auto", update::automatic().into()).on_click(
-                    cx.listener(|_, _, _, cx| {
-                        update::toggle_automatic(cx);
-                        cx.notify();
-                    }),
-                ),
-            )
-            .into_any_element()
-    }
-
-    fn theme_control(&self, cx: &App) -> AnyElement {
-        let theme = parse_theme(&self.dashboard.read(cx).view().theme);
-        let selected = ThemeChoice::ALL
-            .iter()
-            .position(|choice| *choice == theme)
-            .unwrap_or(0);
-        let dashboard = self.dashboard.clone();
-        segment(
-            "settings-theme",
-            &self.theme_focus,
-            ThemeChoice::ALL.map(ThemeChoice::label),
-            selected,
-            move |index, _, cx| {
-                let name = ThemeChoice::ALL[index].name();
-                dashboard.update(cx, |dashboard, cx| dashboard.set_theme(name, cx))
-            },
-        )
-        .into_any_element()
-    }
-
-    fn size_control(&self, cx: &App) -> AnyElement {
-        let size = parse_ui_size(&self.dashboard.read(cx).view().ui_size);
-        let selected = UiSize::ALL
-            .iter()
-            .position(|choice| *choice == size)
-            .unwrap_or(0);
-        let dashboard = self.dashboard.clone();
-        segment(
-            "settings-ui-size",
-            &self.size_focus,
-            UiSize::ALL.map(UiSize::label),
-            selected,
-            move |index, _, cx| {
-                let name = UiSize::ALL[index].name();
-                dashboard.update(cx, |dashboard, cx| dashboard.set_ui_size(name, cx))
-            },
-        )
-        .into_any_element()
-    }
-
-    fn general(&mut self, cx: &mut Context<Self>) -> AnyElement {
-        let notify = self.row(SettingRow::Notify, cx);
-        let updates = [
-            SettingRow::UpdatesVersion,
-            SettingRow::UpdatesAuto,
-            SettingRow::UpdatesCheck,
-        ]
-        .map(|row| self.row(row, cx));
-        scroll_body(
-            "settings-general",
-            v_flex()
-                .child(notify)
-                .child(section("Updates"))
-                .children(updates),
-        )
-    }
-
-    fn appearance(&mut self, cx: &mut Context<Self>) -> AnyElement {
-        let rows = [
-            SettingRow::Theme,
-            SettingRow::LightTheme,
-            SettingRow::DarkTheme,
-            SettingRow::UiSize,
-        ]
-        .map(|row| self.row(row, cx));
-        let sidebar_ids = self.row(SettingRow::SidebarIds, cx);
-        let font = [SettingRow::FontFamily, SettingRow::FontSize].map(|row| self.row(row, cx));
-        let preview = self.font.preview(cx);
-        scroll_body(
-            "settings-appearance",
-            v_flex()
-                .child(section("Theme"))
-                .children(rows)
-                .child(section("Sidebar"))
-                .child(sidebar_ids)
-                .child(section("Terminal font"))
-                .children(font)
-                .child(preview),
-        )
-    }
-
-    fn agents_page(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
-        self.agents.sync(window, cx);
-        scroll_body("settings-agents", self.agents.content(cx))
-    }
-
-    /// The rows a search found, under their page, then the projects it found as links.
-    fn results(
-        &mut self,
-        found: &SearchResults,
+        page: &SettingsPage,
+        found: Option<&SearchResults>,
         query: &str,
-        cx: &mut Context<Self>,
+        cx: &App,
     ) -> AnyElement {
-        if found.is_empty() {
-            return v_flex()
-                .flex_1()
-                .items_center()
-                .justify_center()
-                .child(
-                    Label::new(format!("No settings match \u{201c}{query}\u{201d}"))
-                        .color(Color::Muted),
-                )
-                .into_any_element();
-        }
-        let mut parts: Vec<AnyElement> = Vec::new();
-        for (page, title) in [
-            (SettingsPage::General, "General"),
-            (SettingsPage::Appearance, "Appearance"),
-            (SettingsPage::Agents, "Agents"),
-        ] {
-            let rows: Vec<SettingRow> = found
-                .rows
-                .iter()
-                .copied()
-                .filter(|row| row.page() == page)
-                .collect();
-            if rows.is_empty() {
-                continue;
+        let dashboard = self.dashboard.clone();
+        let close = move |_: &mut Window, cx: &mut App| {
+            dashboard.update(cx, |dashboard, cx| dashboard.close_settings(cx))
+        };
+        let tile = |icon: &str, color: TileColor| {
+            SettingsTile::icon(button_icon(icon), color, TileSize::Header)
+        };
+        let header = match found {
+            Some(found) => PageHeader::new(tile("search", TileColor::Gray), "Results", close)
+                .summary(results_summary(found, query)),
+            None => {
+                let (icon, color) = page_tile(page).unwrap_or(("settings", TileColor::Gray));
+                let title = page_title(page, &self.dashboard.read(cx).data.repos);
+                PageHeader::new(tile(icon, color), title, close).summary(page_summary(page))
             }
-            parts.push(section(title).into_any_element());
-            for row in rows {
-                parts.push(self.row(row, cx));
-            }
-        }
-        if !found.projects.is_empty() {
-            parts.push(section("Projects").into_any_element());
-        }
-        for (index, (id, name)) in found.projects.iter().enumerate() {
-            let page = SettingsPage::Project(id.clone());
-            let link = quiet_button(("settings-result-project", index), name.clone())
-                .tooltip(Tooltip::text(format!("Settings of {name}")))
-                .on_click(cx.listener(move |view, _: &ClickEvent, window, cx| {
-                    view.open_page(page.clone(), window, cx)
-                }));
-            parts.push(div().py_1().child(link).into_any_element());
-        }
-        scroll_body("settings-results", v_flex().children(parts))
+        };
+        header.into_any_element()
     }
 
-    fn header(&self, title: String, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        h_flex()
-            .flex_none()
-            .h(Tab::container_height(cx))
-            .pl_6()
-            .pr_2()
-            .gap_2()
-            .border_b_1()
-            .border_color(cx.theme().colors().border_variant)
-            .child(
-                div()
-                    .min_w_0()
-                    .flex_1()
-                    .child(Label::new(title).weight(FontWeight::SEMIBOLD).truncate()),
-            )
-            .child(
-                IconButton::new("settings-close", IconName::Close)
-                    .icon_size(IconSize::Small)
-                    .tooltip(Tooltip::text("Close settings"))
-                    .on_click(cx.listener(|view, _: &ClickEvent, _, cx| {
-                        view.dashboard
-                            .update(cx, |dashboard, cx| dashboard.close_settings(cx))
-                    })),
-            )
+    fn unsaved(&self, item: &NavItem, cx: &App) -> bool {
+        match item {
+            NavItem::Page(SettingsPage::Project(id)) => self
+                .project_page(id)
+                .is_some_and(|page| page.read(cx).dirty(cx)),
+            NavItem::Page(SettingsPage::Agents) => self.agents.unsaved(),
+            _ => false,
+        }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -365,64 +88,101 @@ impl SettingsView {
         window: &Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let selected = found.is_none() && matches!(item, NavItem::Page(shown) if shown == page);
-        let dim = found.is_some_and(|found| !nav_matches(item, found));
-        let unsaved = match item {
-            NavItem::Page(SettingsPage::Project(id)) => self
-                .project_page(id)
-                .is_some_and(|page| page.read(cx).dirty(cx)),
-            _ => false,
-        };
+        let (selected, dim) = nav_state(item, page, found);
         let stop = self.nav_stops[index].clone();
-        let pick = item.clone();
-        let mark = unsaved.then(|| {
+        let colors = cx.theme().colors();
+        let (hover, on, ring) = (
+            colors.ghost_element_hover,
+            colors.ghost_element_selected,
+            colors.border_focused,
+        );
+        let quiet = dim || *item == NavItem::AddProject;
+        let dot = self.unsaved(item, cx).then(|| {
             div()
                 .id(("settings-unsaved", index))
+                .flex_none()
+                .size(rems_from_px(6.0_f32))
+                .rounded_full()
+                .bg(accent(cx))
                 .tooltip(Tooltip::text("Unsaved changes"))
-                .child(Indicator::dot().color(Color::Accent))
         });
-        div()
+        let shortcuts = *item == NavItem::Shortcuts;
+        let pick = item.clone();
+        h_flex()
+            .id(("settings-nav", index))
+            .h(rems_from_px(32.0_f32))
+            .gap(rems_from_px(10.0_f32))
+            .px(rems_from_px(8.0_f32))
+            .rounded(rems_from_px(6.0_f32))
+            .border_1()
+            .border_color(if stop.is_focused(window) {
+                ring
+            } else {
+                gpui::transparent_black()
+            })
             .track_focus(&stop)
-            .child(
-                ListItem::new(("settings-nav", index))
-                    .inset(true)
-                    .spacing(ListItemSpacing::Sparse)
-                    .toggle_state(selected)
-                    .focused(stop.is_focused(window))
-                    .end_slot::<AnyElement>(mark.map(IntoElement::into_any_element))
-                    .on_click(cx.listener(move |view, _: &ClickEvent, window, cx| {
-                        view.pick(&pick, window, cx)
-                    }))
-                    .child(
-                        Label::new(label.to_owned())
-                            .color(if dim { Color::Muted } else { Color::Default })
-                            .truncate(),
-                    ),
+            .when(selected, |row| row.bg(on))
+            .hover(move |style| style.bg(hover))
+            .when(shortcuts, |row| {
+                row.tooltip(Tooltip::text("Opens the shortcut sheet"))
+            })
+            .on_click(
+                cx.listener(move |view, _: &ClickEvent, window, cx| view.pick(&pick, window, cx)),
             )
+            .child(nav_tile_view(nav_tile(item, label), dim))
+            .child(
+                div().flex_1().min_w_0().child(
+                    Label::new(label.to_owned())
+                        .size(row_text())
+                        .color(if quiet {
+                            Color::Placeholder
+                        } else {
+                            Color::Default
+                        })
+                        .truncate(),
+                ),
+            )
+            .children(dot)
+            .when(shortcuts, |row| {
+                row.child(
+                    Icon::new(IconName::ArrowUpRight)
+                        .size(IconSize::XSmall)
+                        .color(Color::Placeholder),
+                )
+            })
             .into_any_element()
     }
 
-    /// As high as the page header and the sidebar filter, so one line runs under both.
-    fn search_bar(&self, cx: &App) -> impl IntoElement + use<> {
+    fn search_bar(&self, query: &str, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        let clear = (!query.is_empty()).then(|| {
+            IconButton::new("settings-search-clear", IconName::Close)
+                .icon_size(IconSize::Small)
+                .tooltip(Tooltip::text("Clear"))
+                .on_click(
+                    cx.listener(|view, _: &ClickEvent, window, cx| view.clear_search(window, cx)),
+                )
+        });
         h_flex()
             .flex_none()
-            .h(Tab::container_height(cx))
-            .px_3()
-            .gap(rems_from_px(6.0_f32))
+            .h(rems_from_px(34.0_f32))
+            .px(rems_from_px(12.0_f32))
+            .gap(rems_from_px(8.0_f32))
             .border_b_1()
-            .border_color(cx.theme().colors().border_variant)
+            .border_color(cx.theme().colors().border)
             .child(
                 Icon::new(IconName::MagnifyingGlass)
                     .size(IconSize::Small)
                     .color(Color::Muted),
             )
             .child(div().min_w_0().flex_1().child(self.search.clone()))
+            .children(clear)
     }
 
     fn nav(
         &mut self,
         page: &SettingsPage,
         found: Option<&SearchResults>,
+        query: &str,
         window: &Window,
         cx: &mut Context<Self>,
     ) -> impl IntoElement + use<> {
@@ -435,53 +195,63 @@ impl SettingsView {
             .enumerate()
             .map(|(index, (item, label))| self.nav_row(index, item, label, page, found, window, cx))
             .collect();
-        let projects = rows.split_off(APP_ITEMS.min(rows.len()));
+        // The last row is always "Add project…"; the projects sit between.
+        let add_project = rows.pop();
+        let mut projects = rows.split_off(APP_ITEMS.min(rows.len()));
+        let gap_after_head = |row: AnyElement| div().mt(rems_from_px(2.0_f32)).child(row);
+        let app: Vec<AnyElement> = rows
+            .into_iter()
+            .enumerate()
+            .map(|(index, row)| match index {
+                0 => gap_after_head(row).into_any_element(),
+                _ => row,
+            })
+            .collect();
+        let no_projects = projects.is_empty();
+        if !no_projects {
+            let first = projects.remove(0);
+            projects.insert(0, gap_after_head(first).into_any_element());
+        }
         let colors = cx.theme().colors();
         let (panel, border) = (colors.panel_background, colors.border);
         let add = IconButton::new("settings-add-project", IconName::Plus)
-            .icon_size(IconSize::Small)
+            .size(ButtonSize::Compact)
+            .icon_size(IconSize::XSmall)
             .tooltip(Tooltip::text("Add a project"))
-            .on_click(|_, window, cx| window.dispatch_action(Box::new(AddProject), cx));
-        let sub_header = |text: &'static str| {
-            h_flex()
-                .h(rems_from_px(24.0_f32))
-                .px_1p5()
-                .child(Label::new(text).size(LabelSize::Small).color(Color::Muted))
-        };
+            .on_click(|_, window, cx| {
+                window.dispatch_action(Box::new(super::super::shortcuts::AddProject), cx)
+            });
         v_flex()
             .w(rems_from_px(NAV_WIDTH))
             .flex_none()
             .h_full()
+            .rounded_l(px(POPUP_RADIUS - 1.))
             .bg(panel)
             .border_r_1()
             .border_color(border)
             .on_key_down(cx.listener(Self::nav_key))
-            .child(self.search_bar(cx))
+            .child(self.search_bar(query, cx))
             .child(
                 v_flex()
                     .id("settings-nav")
                     .flex_1()
                     .min_h_0()
                     .overflow_y_scroll()
-                    .p_1p5()
-                    .child(sub_header("App"))
-                    .children(rows)
-                    .child(
-                        h_flex()
-                            .pt_3()
-                            .justify_between()
-                            .child(sub_header("Projects"))
-                            .child(add),
-                    )
-                    .when(projects.is_empty(), |this| {
+                    .p(rems_from_px(8.0_f32))
+                    .child(nav_head("App"))
+                    .children(app)
+                    .child(div().h(rems_from_px(12.0_f32)))
+                    .child(nav_head("Projects").child(div().flex_1()).child(add))
+                    .when(no_projects, |this| {
                         this.child(
                             div()
-                                .px_1p5()
-                                .py_1()
-                                .child(Label::new("No projects yet").color(Color::Muted)),
+                                .px(rems_from_px(8.0_f32))
+                                .py(rems_from_px(4.0_f32))
+                                .child(Label::new("No projects yet").color(Color::Placeholder)),
                         )
                     })
-                    .children(projects),
+                    .children(projects)
+                    .children(add_project),
             )
     }
 }
@@ -493,39 +263,52 @@ impl Render for SettingsView {
             self.ensure_project(id, window, cx);
         }
         let query = self.query(cx);
+        let query = query.trim();
         let repos = self.dashboard.read(cx).data.repos.clone();
-        let found = search(&query, &repos);
-        let title = match &found {
-            Some(_) => "Results".to_owned(),
-            None => page_title(&page, &repos),
-        };
+        let found = search(query, &repos);
         let project = match (&found, &page) {
             (None, SettingsPage::Project(id)) => self.project_page(id),
             _ => None,
         };
-        // A project page draws its own header, with the file path and the tabs in it.
-        let header = project.is_none().then(|| self.header(title, cx));
-        let body = match (&found, &page, project) {
-            (_, _, Some(project)) => project.into_any_element(),
-            (Some(found), _, None) => self.results(found, query.trim(), cx),
-            (None, SettingsPage::General, None) => self.general(cx),
-            (None, SettingsPage::Appearance, None) => self.appearance(cx),
-            (None, SettingsPage::Agents, None) => self.agents_page(window, cx),
-            (None, SettingsPage::Project(_), None) => div().into_any_element(),
+        // A project page draws its own header and bottom bar.
+        let main: Vec<AnyElement> = match (&found, project) {
+            (_, Some(project)) => vec![project.into_any_element()],
+            (Some(found), None) => vec![
+                self.header(&page, Some(found), query, cx),
+                self.results(found, query, cx),
+            ],
+            (None, None) => {
+                let header = self.header(&page, None, query, cx);
+                match &page {
+                    SettingsPage::Agents => {
+                        self.agents.sync(window, cx);
+                        let content = self.agents.content(cx);
+                        vec![
+                            header,
+                            scroll_body("settings-agents", content),
+                            self.agents.bottom_bar(cx),
+                        ]
+                    }
+                    SettingsPage::Project(_) => vec![header, div().flex_1().into_any_element()],
+                    app => {
+                        let body = self.app_page(app, cx);
+                        vec![header, body]
+                    }
+                }
+            }
         };
-        let nav = self.nav(&page, found.as_ref(), window, cx);
+        let nav = self.nav(&page, found.as_ref(), query, window, cx);
         h_flex()
             .size_full()
+            .key_context(SETTINGS_CONTEXT)
             .track_focus(&self.focus)
+            .on_action(cx.listener(|view, _: &CloseSettings, _, cx| {
+                view.dashboard
+                    .update(cx, |dashboard, cx| dashboard.close_settings(cx))
+            }))
+            .rounded(px(POPUP_RADIUS - 1.))
             .bg(cx.theme().colors().editor_background)
             .child(nav)
-            .child(
-                v_flex()
-                    .flex_1()
-                    .min_w_0()
-                    .h_full()
-                    .children(header)
-                    .child(body),
-            )
+            .child(v_flex().flex_1().min_w_0().h_full().children(main))
     }
 }

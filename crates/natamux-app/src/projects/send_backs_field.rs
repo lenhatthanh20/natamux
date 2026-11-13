@@ -8,9 +8,12 @@ use gpui::{Entity, FocusHandle, Focusable, Subscription};
 use ui::prelude::*;
 
 use super::settings_tab_rules::{SEND_BACKS_HINT, SEND_BACKS_LABEL, send_backs_field};
-use crate::components::form::{input_box, text_editor};
+use crate::components::colors::TileColor;
+use crate::components::form::{SettingsInput, text_editor};
+use crate::components::settings_card::SettingsRow;
+use crate::components::settings_controls::changed_mark;
+use crate::components::settings_tile::{SettingsTile, TileSize};
 use crate::stages::pipeline_editor::PipelineEditor;
-use crate::stages::stage_fields_view::{error_line, inline_field};
 
 pub struct SendBacksField {
     pipeline: Entity<PipelineEditor>,
@@ -68,6 +71,12 @@ impl SendBacksField {
         cx.notify();
     }
 
+    /// Reset icon: an empty field is the default; the edit event writes the draft.
+    fn reset(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.editor
+            .update(cx, |editor, cx| editor.set_text("", window, cx));
+    }
+
     fn sync(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.editor.focus_handle(cx).is_focused(window) {
             return;
@@ -84,19 +93,30 @@ impl SendBacksField {
 
 impl Render for SendBacksField {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let control = div()
-            .w(rems_from_px(120.0_f32))
-            .child(input_box(&self.editor, cx));
-        v_flex()
-            .id("send-backs-field")
-            .gap_1()
-            .child(inline_field(
-                SEND_BACKS_LABEL,
-                None,
-                Some(SEND_BACKS_HINT.into()),
-                control,
-            ))
-            .children(self.error.map(error_line))
+        let this = cx.weak_entity();
+        let changed = !self.editor.read(cx).text(cx).trim().is_empty();
+        let mark = changed_mark(
+            "send-backs",
+            changed,
+            move |window, cx| {
+                this.update(cx, |this, cx| this.reset(window, cx)).ok();
+            },
+            cx,
+        );
+        let tile = SettingsTile::icon(
+            Icon::new(IconName::RotateCcw),
+            TileColor::Blue,
+            TileSize::Row,
+        );
+        let input = SettingsInput::new(&self.editor)
+            .width(120.)
+            .invalid(self.error.is_some());
+        SettingsRow::new("send-backs-field", SEND_BACKS_LABEL)
+            .lead(tile)
+            .help(SEND_BACKS_HINT)
+            .error(self.error)
+            .control(mark)
+            .control(input)
     }
 }
 

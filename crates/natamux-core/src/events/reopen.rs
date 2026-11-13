@@ -53,7 +53,10 @@ pub fn reopen_target(
             .filter(|stage| {
                 let state = lane_state_of(position, step, &stage.id);
                 stage.kind == StageKind::Agent
-                    && matches!(state, Some(TaskState::Review | TaskState::NeedsInput))
+                    && matches!(
+                        state,
+                        Some(TaskState::Review | TaskState::Idle | TaskState::NeedsInput)
+                    )
             })
             .collect();
         let code = agent_stage_of(step);

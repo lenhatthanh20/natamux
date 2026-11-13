@@ -10,12 +10,13 @@ use natamux_proto::workspaces::workspace::DiffStat;
 
 /// What needs the user comes first, finished work last. The default sort and the order of the
 /// filter chips.
-pub const STATE_ORDER: [TaskState; 9] = [
+pub const STATE_ORDER: [TaskState; 10] = [
     TaskState::NeedsInput,
     TaskState::Review,
     TaskState::Failed,
     TaskState::Blocked,
     TaskState::Running,
+    TaskState::Idle,
     TaskState::Ready,
     TaskState::Draft,
     TaskState::Done,
@@ -133,17 +134,30 @@ fn sort_value(
     }
 }
 
-/// The same tasks in a stable order. Ties fall back to the default order, so two rows never swap
-/// places just because a value is equal.
+/// `sort_task_refs` with owned tasks, for the tests.
+#[cfg(test)]
 pub fn sort_tasks(
     tasks: &[Task],
     sort: TaskSort,
     diff_stats: &BTreeMap<String, DiffStat>,
     usage: &BTreeMap<String, TaskUsage>,
 ) -> Vec<Task> {
-    let mut sorted = tasks.to_vec();
+    sort_task_refs(tasks.iter().collect(), sort, diff_stats, usage)
+        .into_iter()
+        .cloned()
+        .collect()
+}
+
+/// The same tasks in a stable order, borrowed. Ties fall back to the default order, so two rows
+/// never swap places just because a value is equal.
+pub fn sort_task_refs<'a>(
+    mut sorted: Vec<&'a Task>,
+    sort: TaskSort,
+    diff_stats: &BTreeMap<String, DiffStat>,
+    usage: &BTreeMap<String, TaskUsage>,
+) -> Vec<&'a Task> {
     let Some(column) = sort else {
-        sorted.sort_by(by_default);
+        sorted.sort_by(|a, b| by_default(a, b));
         return sorted;
     };
     sorted.sort_by(|a, b| {
@@ -339,6 +353,35 @@ mod tests {
         let result = sort_tasks(&mixed, sort, &BTreeMap::new(), &BTreeMap::new());
         let order: Vec<&str> = result.iter().map(|task| task.id.as_str()).collect();
         assert_eq!(order, ["T-0003", "TASK-0005", "T-0010"]);
+    }
+
+    #[test]
+    fn borrowed_sort_gives_the_same_rows_as_the_owned_sort() {
+        let list = tasks();
+        let stats = BTreeMap::new();
+        let usage = BTreeMap::new();
+        for sort in [
+            None,
+            Some(ColumnSort {
+                key: SortKey::State,
+                direction: Asc,
+            }),
+            Some(ColumnSort {
+                key: SortKey::Branch,
+                direction: SortDirection::Desc,
+            }),
+        ] {
+            let borrowed = sort_task_refs(list.iter().collect(), sort, &stats, &usage);
+            let owned = sort_tasks(&list, sort, &stats, &usage);
+            let borrowed: Vec<Task> = borrowed.into_iter().cloned().collect();
+            assert_eq!(borrowed, owned);
+        }
+        let default = sort_task_refs(list.iter().collect(), None, &stats, &usage);
+        let order: Vec<&str> = default.iter().map(|task| task.id.as_str()).collect();
+        assert_eq!(
+            order,
+            ["T-0003", "T-0005", "T-0004", "T-0010", "T-0002", "T-0001"]
+        );
     }
 
     #[test]

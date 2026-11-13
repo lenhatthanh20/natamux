@@ -4,6 +4,7 @@ export const TASK_STATES = [
   'draft',
   'ready',
   'running',
+  'idle',
   'needs-input',
   'review',
   'blocked',
@@ -18,7 +19,8 @@ export type TaskState = z.infer<typeof taskStateSchema>
 const ALLOWED_TRANSITIONS: Record<TaskState, readonly TaskState[]> = {
   draft: ['ready', 'cancelled'],
   ready: ['running', 'blocked', 'cancelled'],
-  running: ['needs-input', 'review', 'failed', 'blocked', 'cancelled'],
+  running: ['idle', 'needs-input', 'review', 'failed', 'blocked', 'cancelled'],
+  idle: ['running', 'needs-input', 'cancelled'],
   'needs-input': ['running', 'cancelled'],
   review: ['done', 'running', 'cancelled'],
   blocked: ['ready', 'cancelled'],

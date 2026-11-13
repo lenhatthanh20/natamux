@@ -64,6 +64,55 @@ fn runs_a_launch_script_with_the_hook_settings_and_the_first_prompt() {
     assert_eq!(payload(&event, "agent"), json!("claude-code"));
 }
 
+// sh, bash, zsh and fish all run `a || b`; fish has no `$?`.
+#[test]
+fn marks_an_agent_that_ends_with_an_error_in_its_output() {
+    let env = Env::new();
+    let task = env.task();
+    env.start(&task, "claude-code", "Only this");
+
+    let script = std::fs::read_to_string(env.script(&task.id)).unwrap();
+    assert_eq!(
+        script,
+        format!(
+            "{} || printf '\\033]2;natamux-agent-failed\\007'\n",
+            PROMPT_ONLY.trim_end()
+        )
+    );
+}
+
+#[test]
+fn records_only_a_named_resume_session_on_the_launch_event() {
+    for terminal in [None, Some("2"), Some("7")] {
+        for session in [
+            None,
+            Some("same-session"),
+            Some(natamux_agents::launch::LAST_SESSION),
+        ] {
+            let env = Env::new();
+            let task = env.task_with_workspace("Resume", "");
+            env.runner
+                .start(
+                    &task.id,
+                    "claude-code",
+                    None,
+                    terminal,
+                    session,
+                    &OwnAgent::default(),
+                )
+                .unwrap();
+            let event = last_event(&env.tasks, &task.id);
+            let expected = if session == Some("same-session") {
+                json!("same-session")
+            } else {
+                Value::Null
+            };
+            assert_eq!(payload(&event, "resumeSessionId"), expected);
+            assert_eq!(payload(&event, "terminal"), json!(terminal.unwrap_or("1")));
+        }
+    }
+}
+
 #[test]
 fn does_not_show_the_settings_path_or_the_prompt_in_the_terminal() {
     let env = Env::new();

@@ -1,4 +1,7 @@
-//! Deleting the finished tasks of a column (`features/tasks/delete-finished.ts`).
+//! Deleting the finished tasks of a column (`features/tasks/delete-finished.ts`), and the queue
+//! every delete of the app goes through.
+
+use std::collections::VecDeque;
 
 use crate::components::toast_rules::ToastTone;
 
@@ -88,6 +91,81 @@ pub fn delete_summary(outcomes: &[DeleteOutcome]) -> DeleteSummary {
         text: format!("Deleted {} of {tasks}.", outcomes.len() - failed.len()),
         tone: ToastTone::Error,
         detail: Some(format!("Not deleted: {}", reasons.join("; "))),
+    }
+}
+
+/// One delete the user confirmed. `batch`: the board's Delete all, which ends with one summary
+/// toast; else one task with its own toast.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DeleteJob {
+    pub ids: Vec<String>,
+    pub force: Vec<String>,
+    pub batch: bool,
+}
+
+/// The deletes that wait for the daemon. The views hide the tasks at once; the jobs run one at a
+/// time, so git work on the same repository does not race (see `delete_each`).
+#[derive(Debug, Default)]
+pub struct DeleteQueue {
+    waiting: VecDeque<DeleteJob>,
+    running: Option<DeleteJob>,
+}
+
+impl DeleteQueue {
+    /// Queues the ids that are not queued or running yet and gives them back. Nothing is queued
+    /// when all are known: a second click, or a task in a single and a bulk delete.
+    pub fn push(&mut self, ids: Vec<String>, force: Vec<String>, batch: bool) -> Vec<String> {
+        let mut fresh: Vec<String> = Vec::new();
+        for id in ids {
+            if !self.knows(&id) && !fresh.contains(&id) {
+                fresh.push(id);
+            }
+        }
+        if !fresh.is_empty() {
+            let force = force.into_iter().filter(|id| fresh.contains(id)).collect();
+            self.waiting.push_back(DeleteJob {
+                ids: fresh.clone(),
+                force,
+                batch,
+            });
+        }
+        fresh
+    }
+
+    /// The next job, which now runs. None while one runs or when none waits.
+    pub fn start_next(&mut self) -> Option<DeleteJob> {
+        if self.running.is_some() {
+            return None;
+        }
+        self.running = self.waiting.pop_front();
+        self.running.clone()
+    }
+
+    pub fn finish(&mut self) {
+        self.running = None;
+    }
+
+    /// A Delete all waits or runs: the board's trash buttons are off.
+    pub fn batch_queued(&self) -> bool {
+        self.jobs().any(|job| job.batch)
+    }
+
+    fn knows(&self, id: &str) -> bool {
+        self.jobs().any(|job| job.ids.iter().any(|each| each == id))
+    }
+
+    fn jobs(&self) -> impl Iterator<Item = &DeleteJob> {
+        self.running.iter().chain(self.waiting.iter())
+    }
+}
+
+/// The toast of a single delete.
+pub fn delete_toast(outcome: &DeleteOutcome) -> (String, ToastTone) {
+    match outcome {
+        DeleteOutcome::Deleted { id } => (format!("Deleted {id}."), ToastTone::Info),
+        DeleteOutcome::Failed { id, reason } => {
+            (format!("Could not delete {id}: {reason}"), ToastTone::Error)
+        }
     }
 }
 
@@ -213,6 +291,84 @@ mod tests {
                 tone: ToastTone::Error,
                 detail: Some("Not deleted: T-0001: Gone".into())
             }
+        );
+    }
+
+    #[test]
+    fn runs_one_job_at_a_time_in_order() {
+        let mut queue = DeleteQueue::default();
+        assert_eq!(queue.push(strings(&["T-1"]), Vec::new(), false), ["T-1"]);
+        queue.push(strings(&["T-2"]), strings(&["T-2"]), false);
+        let first = queue.start_next();
+        assert_eq!(first.map(|job| job.ids), Some(strings(&["T-1"])));
+        // T-1 still runs.
+        assert_eq!(queue.start_next(), None);
+        queue.finish();
+        assert_eq!(
+            queue.start_next(),
+            Some(DeleteJob {
+                ids: strings(&["T-2"]),
+                force: strings(&["T-2"]),
+                batch: false
+            })
+        );
+        queue.finish();
+        assert_eq!(queue.start_next(), None);
+    }
+
+    #[test]
+    fn queues_a_task_only_once() {
+        let mut queue = DeleteQueue::default();
+        queue.push(strings(&["T-1"]), Vec::new(), false);
+        queue.start_next();
+        // Running, then waiting: both count.
+        assert!(queue.push(strings(&["T-1"]), Vec::new(), false).is_empty());
+        queue.push(strings(&["T-2"]), Vec::new(), false);
+        assert_eq!(
+            queue.push(
+                strings(&["T-1", "T-2", "T-3", "T-3"]),
+                strings(&["T-1", "T-3"]),
+                true
+            ),
+            ["T-3"]
+        );
+        queue.finish();
+        queue.start_next();
+        queue.finish();
+        assert_eq!(
+            queue.start_next(),
+            Some(DeleteJob {
+                ids: strings(&["T-3"]),
+                force: strings(&["T-3"]),
+                batch: true
+            })
+        );
+    }
+
+    #[test]
+    fn a_batch_counts_while_it_waits_and_while_it_runs() {
+        let mut queue = DeleteQueue::default();
+        queue.push(strings(&["T-1"]), Vec::new(), false);
+        assert!(!queue.batch_queued());
+        queue.push(strings(&["T-2", "T-3"]), Vec::new(), true);
+        assert!(queue.batch_queued());
+        queue.start_next();
+        queue.finish();
+        queue.start_next();
+        assert!(queue.batch_queued());
+        queue.finish();
+        assert!(!queue.batch_queued());
+    }
+
+    #[test]
+    fn words_the_toast_of_one_delete() {
+        assert_eq!(
+            delete_toast(&ok("T-0001")),
+            ("Deleted T-0001.".into(), ToastTone::Info)
+        );
+        assert_eq!(
+            delete_toast(&failed("T-0002", "offline")),
+            ("Could not delete T-0002: offline".into(), ToastTone::Error)
         );
     }
 }

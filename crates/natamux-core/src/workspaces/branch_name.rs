@@ -1,22 +1,30 @@
 //! The branch name of a task: the default one, or a project's `git.branchName` pattern filled in.
+//! `project` is the project's name; the branch holds its slug, as git refuses many characters.
 //! The app fills the Start a task field with it, the daemon names the branch with it.
 
 pub use natamux_proto::projects::settings_rules::{MAX_BRANCH_LENGTH, unknown_placeholder};
 
 use crate::workspaces::slug::slugify;
 
-/// The default: `natamux/<id in lower case>-<slug of the title>`.
-pub fn branch_name_for(id: &str, title: &str) -> String {
-    format!("natamux/{}-{}", id.to_lowercase(), slugify(title))
+/// The default: `<slug of the project>/<id in lower case>-<slug of the title>`.
+pub fn branch_name_for(project: &str, id: &str, title: &str) -> String {
+    format!(
+        "{}/{}-{}",
+        slugify(project),
+        id.to_lowercase(),
+        slugify(title)
+    )
 }
 
-/// `pattern` with `{id}` and `{slug}` filled in, or the default name when there is none.
-pub fn branch_name_from(pattern: Option<&str>, id: &str, title: &str) -> String {
+/// `pattern` with `{project}`, `{id}` and `{slug}` filled in, or the default name when there is
+/// none.
+pub fn branch_name_from(pattern: Option<&str>, project: &str, id: &str, title: &str) -> String {
     match pattern {
         Some(pattern) => pattern
+            .replace("{project}", &slugify(project))
             .replace("{id}", id)
             .replace("{slug}", &slugify(title)),
-        None => branch_name_for(id, title),
+        None => branch_name_for(project, id, title),
     }
 }
 

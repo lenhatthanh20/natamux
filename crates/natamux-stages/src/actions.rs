@@ -57,8 +57,12 @@ impl StageAction {
 }
 
 /// The states of a stage whose agent starts again when the daemon starts.
-pub const RESUMED_STATES: [TaskState; 3] =
-    [TaskState::Running, TaskState::NeedsInput, TaskState::Review];
+pub const RESUMED_STATES: [TaskState; 4] = [
+    TaskState::Running,
+    TaskState::Idle,
+    TaskState::NeedsInput,
+    TaskState::Review,
+];
 
 /// Events that end a stage and so may move the task on to the next step. A send back does not
 /// count: a person who sends the task back to a stage marked to skip wants it to run.
@@ -114,6 +118,7 @@ fn state_named(name: &str) -> TaskState {
         TaskState::Draft,
         TaskState::Ready,
         TaskState::Running,
+        TaskState::Idle,
         TaskState::NeedsInput,
         TaskState::Review,
         TaskState::Blocked,

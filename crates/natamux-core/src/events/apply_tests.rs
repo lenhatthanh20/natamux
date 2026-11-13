@@ -2,7 +2,7 @@
 
 use natamux_proto::stages::schema::Step;
 use natamux_proto::tasks::task::TaskState::{
-    Cancelled, Done, Draft, Failed, NeedsInput, Ready, Review, Running,
+    Cancelled, Done, Draft, Failed, Idle, NeedsInput, Ready, Review, Running,
 };
 use serde_json::{Value, json};
 
@@ -194,11 +194,19 @@ fn passes_an_auto_stage_when_its_checks_pass() {
 }
 
 #[test]
-fn waits_for_you_when_the_agent_ends_its_turn_without_reporting_done() {
+fn is_idle_when_the_agent_ends_its_turn_without_reporting_done() {
     assert_eq!(
         run(at("plan", Running), &[event("agent.finished")]).0,
-        at("plan", NeedsInput)
+        at("plan", Idle)
     );
+}
+
+#[test]
+fn an_idle_agent_may_ask_go_on_or_be_stopped() {
+    let after = |kind| run(at("plan", Idle), &[event(kind)]).0;
+    assert_eq!(after("agent.asked"), at("plan", NeedsInput));
+    assert_eq!(after("agent.resumed"), at("plan", Running));
+    assert_eq!(after("agent.stopped"), at("plan", Ready));
 }
 
 #[test]

@@ -9,11 +9,10 @@
 //! not. "Collapse unchanged lines" shows 3 lines around each change.
 
 use std::ops::Range;
-use std::sync::Arc;
 
 use buffer_diff::BufferDiff;
 use editor::display_map::CustomBlockId;
-use editor::{Editor, EditorEvent, MultiBuffer};
+use editor::{Anchor, Editor, EditorEvent, MultiBuffer};
 use gpui::{Entity, EventEmitter, Subscription};
 use language::{Buffer, Capability, ParseStatus};
 use text::Point;
@@ -24,20 +23,24 @@ use super::diff_editors::{add_spacer, read_only_editor, refit_excerpts, set_exce
 use super::diff_rules::{DiffRefresh, HunkRows, diff_refresh, end_spacer, line_change, spacers};
 use super::languages::language_for;
 use super::review_blocks::ReviewInput;
+use super::whitespace_rules::diff_base;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct DiffOptions {
     pub side_by_side: bool,
     pub collapse: bool,
     pub wrap: bool,
+    pub ignore_whitespace: bool,
 }
 
 /// What the Changes tab follows: the changes were worked out (the toolbar's counts and
-/// navigator), or the cursor or the selection moved (the comment box's label).
+/// navigator), the cursor or the selection moved (the comment box's label), or a revert arrow
+/// was clicked (hunk `index` of the read `version`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DiffEvent {
     Ready,
     CursorMoved,
+    RevertHunk { index: usize, version: u64 },
 }
 
 pub(super) struct Sides {
@@ -54,7 +57,11 @@ pub(super) struct Sides {
 
 pub struct DiffView {
     key: Option<String>,
-    version: u64,
+    pub(super) version: u64,
+    /// The read whose texts `hunks` were worked out from; None while a read is diffed.
+    pub(super) hunks_for: Option<u64>,
+    pub(super) movable: bool,
+    pub(super) moving: bool,
     options: Option<DiffOptions>,
     pub(super) buffer: Option<Entity<Buffer>>,
     pub(super) diff: Option<Entity<BufferDiff>>,
@@ -73,6 +80,9 @@ impl DiffView {
         DiffView {
             key: None,
             version: 0,
+            hunks_for: None,
+            movable: false,
+            moving: false,
             options: None,
             buffer: None,
             diff: None,
@@ -103,13 +113,16 @@ impl DiffView {
     ) {
         let same_file = self.key.as_deref() == Some(key);
         let same_read = same_file && self.version == version;
+        // Ignore whitespace changes the diff's base, so the texts are diffed again.
+        let ignore = options.ignore_whitespace;
+        let same_base = self.options.map(|o| o.ignore_whitespace) == Some(ignore);
         match diff_refresh(same_file, same_read, self.options == Some(options)) {
             DiffRefresh::Keep => {}
             DiffRefresh::Update if self.sides.is_some() => {
                 self.version = version;
                 self.update_texts(original, modified, window, cx);
             }
-            _ if same_read => {
+            _ if same_read && same_base => {
                 self.options = Some(options);
                 self.build(window, cx);
             }
@@ -149,6 +162,7 @@ impl DiffView {
         self.key = Some(key.to_owned());
         self.path = Some(path.to_owned());
         self.version = version;
+        self.hunks_for = None;
         self.options = Some(options);
         let buffer = cx.new(|cx| {
             let mut buffer = Buffer::local(modified, cx);
@@ -157,7 +171,7 @@ impl DiffView {
         });
         let snapshot = buffer.read(cx).text_snapshot();
         let diff = cx.new(|cx| BufferDiff::new(&snapshot, None, None, cx));
-        let base: Option<Arc<str>> = original.map(Arc::from);
+        let base = diff_base(original, modified, options.ignore_whitespace);
         let update = diff.update(cx, |diff, cx| diff.set_base_text(base, snapshot, cx));
         self.color_by_language(path, &buffer, &diff, cx);
         self.buffer = Some(buffer);
@@ -166,13 +180,13 @@ impl DiffView {
             update.await;
             this.update_in(cx, |this, window, cx| {
                 this.read_hunks(cx);
+                this.hunks_for = Some(version);
                 this.build(window, cx);
                 if let (Some(position), Some(sides)) = (scroll, this.sides.as_ref()) {
                     sides.right.update(cx, |editor, cx| {
                         editor.set_scroll_position(position, window, cx);
                     });
                 }
-                cx.emit(DiffEvent::Ready);
             })
             .ok();
         }));
@@ -191,7 +205,12 @@ impl DiffView {
             return;
         };
         let edits = buffer.read(cx).diff(modified.to_owned(), cx);
-        let base: Option<Arc<str>> = original.map(Arc::from);
+        let ignore = self
+            .options
+            .is_some_and(|options| options.ignore_whitespace);
+        let base = diff_base(original, modified, ignore);
+        let version = self.version;
+        self.hunks_for = None;
         self._update = Some(cx.spawn_in(window, async move |this, cx| {
             let edits = edits.await;
             let Ok(update) = this.update(cx, |_, cx| {
@@ -208,6 +227,7 @@ impl DiffView {
             update.await;
             this.update(cx, |this, cx| {
                 this.read_hunks(cx);
+                this.hunks_for = Some(version);
                 this.refit(cx);
                 cx.emit(DiffEvent::Ready);
             })
@@ -317,9 +337,13 @@ impl DiffView {
             let mut multi = MultiBuffer::new(Capability::ReadOnly);
             set_excerpts(&mut multi, &buffer, new_ranges, options.collapse, cx);
             multi.add_diff(diff.clone(), cx);
-            multi.set_all_diff_hunks_expanded(cx);
+            // Side by side keeps every hunk open (the empty rows rely on it); inline opens them
+            // all once, and the user may close one (T-0316).
             if options.side_by_side {
+                multi.set_all_diff_hunks_expanded(cx);
                 multi.set_show_deleted_hunks(false, cx);
+            } else {
+                multi.expand_diff_hunks(vec![Anchor::Min..Anchor::Max], cx);
             }
             multi
         });
@@ -341,6 +365,7 @@ impl DiffView {
             subscriptions.push(cx.subscribe_in(left, window, Self::on_editor));
         }
         let spacer_blocks = self.add_spacers(&right, left.as_ref(), cx);
+        self.add_arrows(&right, left.as_ref(), cx);
         self.sides = Some(Sides {
             right,
             left,
@@ -350,6 +375,8 @@ impl DiffView {
             _subscriptions: subscriptions,
         });
         self.place_comments(cx);
+        // New editors: the owner hooks them up again (blame menu), also after an option change.
+        cx.emit(DiffEvent::Ready);
         cx.notify();
     }
 
@@ -402,6 +429,12 @@ impl DiffView {
             });
         }
         refit_excerpts(&right, &buffer, new_ranges, options.collapse, cx);
+        if !options.side_by_side {
+            let multi = right.read(cx).buffer().clone();
+            multi.update(cx, |multi, cx| {
+                multi.expand_diff_hunks(vec![Anchor::Min..Anchor::Max], cx)
+            });
+        }
         if let Some(left) = &left {
             let base = diff.read(cx).base_text_buffer().clone();
             refit_excerpts(left, &base, old_ranges, options.collapse, cx);
@@ -473,12 +506,14 @@ impl Render for DiffView {
         let border = cx.theme().colors().border;
         match &sides.left {
             Some(left) => h_flex()
+                .key_context("NatamuxDiff")
                 .size_full()
                 .child(div().flex_1().min_w_0().h_full().child(left.clone()))
                 .child(div().w_px().h_full().bg(border))
                 .child(div().flex_1().min_w_0().h_full().child(sides.right.clone()))
                 .into_any_element(),
             None => div()
+                .key_context("NatamuxDiff")
                 .size_full()
                 .child(sides.right.clone())
                 .into_any_element(),

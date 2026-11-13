@@ -8,6 +8,7 @@ use std::collections::HashSet;
 
 use crate::stages::capabilities::{can_end_shell, checks_on_ci};
 use crate::stages::catalog::catalog_entry;
+use crate::stages::context_rules::context_problems;
 use crate::stages::field_rules::name_problem;
 pub use crate::stages::field_rules::{condition_problems, stage_id_problem, stage_problems};
 use crate::stages::resolve::active_steps;
@@ -76,8 +77,12 @@ pub fn pipeline_issues(steps: &[Step]) -> Vec<PipelineIssue> {
         }
     }
     if issues.is_empty() {
+        let mut found = pipeline_problems(steps);
+        if found.is_empty() {
+            found = context_problems(steps);
+        }
         issues.extend(
-            pipeline_problems(steps)
+            found
                 .into_iter()
                 .map(|(stage, message)| error(stage, message)),
         );

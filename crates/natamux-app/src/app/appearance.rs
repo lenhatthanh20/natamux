@@ -99,7 +99,7 @@ pub fn apply(view: &ViewState, cx: &mut App) {
     let font = terminal_font(custom.as_ref());
     let theme = ThemeSetting { mode, names };
     let zoom = parse_ui_size(&view.ui_size).zoom();
-    let content = user_settings(theme, zoom, &font, shot);
+    let content = user_settings(theme, zoom, &font, shot, view.diff.show_whitespace);
     SettingsStore::update_global(cx, |store, cx| {
         let _ = store.set_user_settings(&content, cx);
     });

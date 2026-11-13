@@ -335,6 +335,9 @@ impl FakeDaemon {
         if let Some(depends_on) = changes.depends_on {
             task.depends_on = depends_on;
         }
+        if let Some(model) = changes.model {
+            task.model = (!model.is_empty()).then_some(model);
+        }
         task.updated_at = NOW.into();
         let task = task.clone();
         data.record(task_id, "human", "task.edited", json!({}));

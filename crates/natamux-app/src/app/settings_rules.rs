@@ -1,10 +1,15 @@
-//! The rules of the Settings page (T-0174): its pages, the page it opens on and shows, the search
-//! over the app's rows and the projects, and the steps of the font size.
+//! The rules of the Settings popup (T-0174, T-0306): its box, its pages, the page it opens on
+//! and shows, the search over the app's rows and the projects, and the steps of the font size.
 
 use natamux_proto::projects::repo::Repo;
 
+use crate::components::colors::TileColor;
 use crate::palette::fuzzy::fuzzy_match;
 use crate::terminals::terminal_font::{BUILT_IN_SIZE, MAX_SIZE, MIN_SIZE, size_ok};
+
+/// The Agents page header's summary line.
+pub const AGENTS_SUMMARY: &str =
+    "Built-in agents and your own agent commands · custom agents need Save";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SettingsPage {
@@ -37,6 +42,39 @@ pub fn page_to_open(
         .unwrap_or_else(|| last.clone())
 }
 
+/// The Settings popup's box in the window, in px (T-0306, mockup A). Fixed px, not rems, so it
+/// fits the window at every UI size.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PopupBounds {
+    pub left: f32,
+    pub top: f32,
+    pub width: f32,
+    pub height: f32,
+}
+
+/// At most 1040 x 720, at least 32 px from the window's sides and 48 px from its top and bottom,
+/// centered both ways.
+pub fn popup_bounds(window_width: f32, window_height: f32) -> PopupBounds {
+    let width = 1040_f32.min(window_width - 64.).max(0.);
+    let height = 720_f32.min(window_height - 96.).max(0.);
+    PopupBounds {
+        left: (window_width - width) / 2.,
+        top: (window_height - height) / 2.,
+        width,
+        height,
+    }
+}
+
+/// The size in px of a sheet that fills the Settings popup (T-0313, the stage sheet): 24 px from
+/// each side of the popup, at most 960 x 640. It is centered in the window, as the popup is.
+pub fn sheet_fill_size(window_width: f32, window_height: f32) -> (f32, f32) {
+    let popup = popup_bounds(window_width, window_height);
+    (
+        960_f32.min(popup.width - 48.).max(0.),
+        640_f32.min(popup.height - 48.).max(0.),
+    )
+}
+
 /// The page drawn: a project that is gone shows Appearance.
 pub fn shown_page(page: &SettingsPage, repos: &[Repo]) -> SettingsPage {
     match page {
@@ -60,13 +98,40 @@ pub fn page_title(page: &SettingsPage, repos: &[Repo]) -> String {
     }
 }
 
+/// The tile of an app page in the nav and its header: (Lucide icon name, colour). A project
+/// shows its letter avatar instead.
+pub fn page_tile(page: &SettingsPage) -> Option<(&'static str, TileColor)> {
+    match page {
+        SettingsPage::General => Some(("sliders-vertical", TileColor::Gray)),
+        SettingsPage::Appearance => Some(("palette", TileColor::Blue)),
+        SettingsPage::Agents => Some(("bot", TileColor::Green)),
+        SettingsPage::Project(_) => None,
+    }
+}
+
+/// The line under an app page's title. A project page writes its own.
+pub fn page_summary(page: &SettingsPage) -> &'static str {
+    match page {
+        SettingsPage::General => {
+            "Notifications, updates and the editor \u{b7} changes apply at once"
+        }
+        SettingsPage::Appearance => {
+            "Theme, UI size, sidebar and terminal font \u{b7} changes apply at once"
+        }
+        SettingsPage::Agents => AGENTS_SUMMARY,
+        SettingsPage::Project(_) => "",
+    }
+}
+
 /// The rows of the app's pages, in the order they are drawn.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SettingRow {
     Notify,
+    NotifyAlways,
+    /// The version, the updater's state and Check now (or Restart to Update).
     UpdatesVersion,
     UpdatesAuto,
-    UpdatesCheck,
+    CleanOnSave,
     Theme,
     LightTheme,
     DarkTheme,
@@ -78,11 +143,12 @@ pub enum SettingRow {
 }
 
 impl SettingRow {
-    pub const ALL: [SettingRow; 12] = [
+    pub const ALL: [SettingRow; 13] = [
         SettingRow::Notify,
+        SettingRow::NotifyAlways,
         SettingRow::UpdatesVersion,
         SettingRow::UpdatesAuto,
-        SettingRow::UpdatesCheck,
+        SettingRow::CleanOnSave,
         SettingRow::Theme,
         SettingRow::LightTheme,
         SettingRow::DarkTheme,
@@ -96,20 +162,38 @@ impl SettingRow {
     pub fn page(self) -> SettingsPage {
         match self {
             SettingRow::Notify
+            | SettingRow::NotifyAlways
             | SettingRow::UpdatesVersion
             | SettingRow::UpdatesAuto
-            | SettingRow::UpdatesCheck => SettingsPage::General,
+            | SettingRow::CleanOnSave => SettingsPage::General,
             SettingRow::CustomAgents => SettingsPage::Agents,
             _ => SettingsPage::Appearance,
+        }
+    }
+
+    /// The group title the row sits under on its page.
+    pub fn group(self) -> &'static str {
+        match self {
+            SettingRow::Notify | SettingRow::NotifyAlways => "Notifications",
+            SettingRow::UpdatesVersion | SettingRow::UpdatesAuto => "Updates",
+            SettingRow::CleanOnSave => "Editor",
+            SettingRow::Theme
+            | SettingRow::LightTheme
+            | SettingRow::DarkTheme
+            | SettingRow::UiSize => "Theme",
+            SettingRow::SidebarIds => "Sidebar",
+            SettingRow::FontFamily | SettingRow::FontSize => "Terminal font",
+            SettingRow::CustomAgents => "Custom agents",
         }
     }
 
     pub fn label(self) -> &'static str {
         match self {
             SettingRow::Notify => "Notify me",
+            SettingRow::NotifyAlways => "Always notify",
             SettingRow::UpdatesVersion => "Version",
             SettingRow::UpdatesAuto => "Check for updates automatically",
-            SettingRow::UpdatesCheck => "Check for updates",
+            SettingRow::CleanOnSave => "Clean on save",
             SettingRow::Theme => "Theme",
             SettingRow::LightTheme => "Light theme",
             SettingRow::DarkTheme => "Dark theme",
@@ -124,11 +208,14 @@ impl SettingRow {
     pub fn description(self) -> &'static str {
         match self {
             SettingRow::Notify => "Show a system notification when a task starts to need you.",
+            SettingRow::NotifyAlways => "With Notify me on, also notify while you use the app.",
             SettingRow::UpdatesVersion => "The running version and the last update check.",
             SettingRow::UpdatesAuto => {
                 "Look up new versions 30 seconds after start, then every 6 hours."
             }
-            SettingRow::UpdatesCheck => "Look up a new version now.",
+            SettingRow::CleanOnSave => {
+                "Trim trailing whitespace and end the file with one line break when you save."
+            }
             SettingRow::Theme => "Follow the system, or always light or dark.",
             SettingRow::LightTheme => "The theme used when the app is light.",
             SettingRow::DarkTheme => "The theme used when the app is dark.",
@@ -144,9 +231,10 @@ impl SettingRow {
     fn keywords(self) -> &'static str {
         match self {
             SettingRow::Notify => "notifications alert",
-            SettingRow::UpdatesVersion | SettingRow::UpdatesAuto | SettingRow::UpdatesCheck => {
-                "update version release"
-            }
+            SettingRow::NotifyAlways => "notifications alert focused active",
+            SettingRow::UpdatesVersion => "update version release check now",
+            SettingRow::UpdatesAuto => "update version release automatically",
+            SettingRow::CleanOnSave => "editor file trailing whitespace newline line break format",
             SettingRow::Theme => "dark light system colors",
             SettingRow::LightTheme => {
                 "color scheme colors ayu catppuccin latte github gruvbox rose pine dawn solarized"
@@ -163,6 +251,25 @@ impl SettingRow {
     }
 }
 
+/// The groups of an app page: (title, rows). The Agents page draws its own lists, so its one
+/// row shows in the results only.
+pub fn page_groups(page: &SettingsPage) -> Vec<(&'static str, Vec<SettingRow>)> {
+    if !matches!(page, SettingsPage::General | SettingsPage::Appearance) {
+        return Vec::new();
+    }
+    let mut groups: Vec<(&'static str, Vec<SettingRow>)> = Vec::new();
+    for row in SettingRow::ALL
+        .into_iter()
+        .filter(|row| &row.page() == page)
+    {
+        match groups.last_mut() {
+            Some((title, rows)) if *title == row.group() => rows.push(row),
+            _ => groups.push((row.group(), vec![row])),
+        }
+    }
+    groups
+}
+
 /// What a search finds: rows of the app's pages, then projects as (id, name).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct SearchResults {
@@ -176,6 +283,41 @@ impl SearchResults {
     }
 }
 
+/// The rows found, by page in nav order: (page, its title, rows in the order found).
+pub fn results_groups(found: &SearchResults) -> Vec<(SettingsPage, &'static str, Vec<SettingRow>)> {
+    [
+        (SettingsPage::General, "General"),
+        (SettingsPage::Appearance, "Appearance"),
+        (SettingsPage::Agents, "Agents"),
+    ]
+    .into_iter()
+    .filter_map(|(page, title)| {
+        let rows: Vec<SettingRow> = found
+            .rows
+            .iter()
+            .copied()
+            .filter(|row| row.page() == page)
+            .collect();
+        (!rows.is_empty()).then_some((page, title, rows))
+    })
+    .collect()
+}
+
+/// The line under the Results title.
+pub fn results_summary(found: &SearchResults, query: &str) -> String {
+    let count = found.rows.len() + found.projects.len();
+    let noun = if count == 1 { "match" } else { "matches" };
+    format!(
+        "{count} {noun} for \u{201c}{}\u{201d} \u{b7} the controls work here",
+        query.trim()
+    )
+}
+
+/// The Results page when nothing matches.
+pub fn no_match_text(query: &str) -> String {
+    format!("No settings match \u{201c}{}\u{201d}", query.trim())
+}
+
 const PROJECT_KEYWORDS: &str = "project stages issues json pipeline send back limit";
 
 /// None for an empty query: the page shows, not the results. Rows keep their page order.
@@ -187,7 +329,7 @@ pub fn search(query: &str, repos: &[Repo]) -> Option<SearchResults> {
     let hit = |texts: &[&str]| texts.iter().any(|text| fuzzy_match(query, text).is_some());
     let rows = SettingRow::ALL
         .into_iter()
-        .filter(|row| hit(&[row.label(), row.description(), row.keywords()]))
+        .filter(|row| hit(&[row.label(), row.description(), row.keywords(), row.group()]))
         .collect();
     let projects = repos
         .iter()

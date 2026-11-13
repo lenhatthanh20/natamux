@@ -1,0 +1,350 @@
+---
+title: Use cases
+description: Choose a Natamux workflow for a small project, solo work, a team or a larger organization, with complete settings examples.
+sidebar:
+  order: 5.05
+---
+
+Start with the work you want to finish. Pick a case, choose where a person should approve it, then save the settings in your repository.
+
+## Choose your starting point
+
+**Simple projects**
+
+| Your situation | Suggested workflow | Human approval | Start here |
+|---|---|---|---|
+| Try a small change | Context → Implement → Manual review | Diff | [First small change](#first-small-change) |
+| Update instructions | Context → Documentation → Manual review | Rendered instructions | [Documentation change](#documentation-change) |
+| Change a portfolio | Context → Implement → Manual testing → Manual review | Viewports and diff | [Personal website](#personal-website) |
+| Fix command behavior | Context → Implement → Automated tests → Manual review | Command output and diff | [CLI tool](#cli-tool) |
+
+**Solo work**
+
+| Your situation | Suggested workflow | Human approval | Start here |
+|---|---|---|---|
+| Fix a reproducible defect | Context → Spec → Implement → Agent review → Manual review | Spec and diff | [Bug fix](#bug-fix) |
+| Add user-facing behavior | Context → Spec → UX design → Implement → Agent review → Manual review | Spec, design and diff | [New feature](#new-feature) |
+| Split a large module | Context → Spec → Refactor → Automated tests → Manual review | Spec and diff | [Refactor](#refactor) |
+| Protect existing behavior | Context → Test spec → Implement → Automated tests → Manual review | Test spec and tests | [Test coverage](#test-coverage) |
+| Compare candidate solutions | Fan out → Compare → Keep one try | Winning attempt | [Compare attempts](#compare-attempts) |
+| Get a fresh review session | Context → Spec → Implement → Agent review → Manual review | Spec, findings and diff | [Independent review](#independent-review) |
+
+**Teams**
+
+| Your situation | Suggested workflow | Human approval | Start here |
+|---|---|---|---|
+| Use different agent CLIs | Context → Spec → Implement → Codex review → Manual review | Spec and diff | [Mix agents](#mix-agents) |
+| Plan tests beside implementation | Context → Spec → Parallel work → Automated tests → Manual review → Release | Spec, diff and release | [Parallel test planning](#parallel-test-planning) |
+| Start from an accepted issue | Import issue → Context → Spec → Implement → Review → Release | Spec, diff and release | [GitHub issue](#github-issue) |
+| Retry a failing CI check | Context → Spec → Implement with CI → Retry → Manual review | Spec, diff and retries past the limit | [CI retry](#ci-retry) |
+
+**Larger organizations**
+
+| Your situation | Suggested workflow | Human approval | Start here |
+|---|---|---|---|
+| Give fixes and features different paths | Context → Triage → Conditional work → Tests → QA → Release | Route, feature plan, tests, QA and release | [Conditional routing](#conditional-routing) |
+| Share a process across checkouts | Context → Triage → Conditional work → Tests → QA → Release | Route, feature plan, tests, QA and release | [Shared settings and human approvals](#shared-settings-and-human-approvals) |
+| Change an access check | Context → Spec → Threat model → Implement → Security review → Manual review → Release | Spec, threat notes, security findings, diff and release | [Security-sensitive change](#security-sensitive-change) |
+| Improve a slow path | Context → Spec → Implement → Performance check → Manual review | Spec, measurements and diff | [Performance-sensitive change](#performance-sensitive-change) |
+
+With a manual context source, Natamux writes `context.md` and passes Context automatically, even with `"gate": "manual"`. The short flow starts Implement next. To approve the notes before coding, add a separate manual stage after Context. See [Context sources](/docs/concepts/stages/#context-sources).
+
+:::tip[Create settings with an agent]
+Ask an agent such as Claude to read this page first. Then describe your work and the stages you want. The agent can help you quickly create a `.natamux.json` settings file that fits your workflow.
+:::
+
+The contents list links to each case and the four complete recipes below. For the building blocks, see [Build a workflow](/docs/guides/workflows/) and [Stages](/docs/concepts/stages/).
+
+## Use a recipe
+
+Save one complete JSON example as `.natamux.json` at your repository root. Open the project's **Settings**, then **Stages** to inspect the flow or **JSON** to edit the whole file. **Save** writes it back. Create a new task to use the new sequence. See [Project settings](/docs/guides/project-settings/) for import, export and how changes affect existing tasks.
+
+Before you start:
+
+- Install and sign in to the [agent CLIs](/docs/concepts/agents-and-hooks/) you choose. A stage without an `agent` uses the task's agent. The recipes with Codex need Codex as well as the task's agent.
+- Adapt test commands to your repository. The command recipes below assume Python 3 and a `tests/` directory containing `unittest` tests. Approve repository commands in **Project settings** before running them.
+- For a Release stage, configure a GitHub remote and sign in to `gh`. Release pushes the branch and opens a pull request after approval. It does not deploy your service. See [GitHub](/docs/guides/github/).
+- Commit the settings file to share the process. Each developer still has local tasks and workspaces. The file shares the sequence; it does not synchronize live task state or assign reviewer roles.
+
+Parallel stages of one task share its worktree. Let one stage edit code while the other writes a separate report. Separate tasks and fan-out attempts have separate worktrees when you create their workspaces. More agents also need more memory and agent capacity.
+
+## Simple projects
+
+### First small change
+
+**For:** someone trying Natamux on a small repository. **Task:** fix a button label. Choose this when you can describe the whole change in a few sentences.
+
+**Flow:** Context → Implement → Manual review. Use the [short flow](#recipe-short-flow). Context passes automatically and Implement starts next. You inspect the changed files at Manual review. The result is a small diff ready for your own commit. **Next:** create a task with the old and new label, then start it.
+
+### Documentation change
+
+**For:** a maintainer updating installation steps. **Task:** replace an outdated command and check the surrounding links. A short flow keeps a prose change easy to review.
+
+**Flow:** Context → Documentation → Manual review. Start from the [short flow](#recipe-short-flow), then replace Implement with **Documentation** from the stage catalog. In the task, name the pages and the documentation build command; that tool must already be installed. You approve the instructions after reading the rendered page. **Next:** attach the incorrect instructions to a new task.
+
+### Personal website
+
+**For:** a developer maintaining a portfolio. **Task:** add a project card that works on a phone. Choose a visual check before accepting the diff.
+
+**Flow:** Context → Implement → Manual testing → Manual review. Add **Manual testing** before the final stage of the [short flow](#recipe-short-flow). Include the repository's preview command in the task. The result is a card you can open locally. You check a narrow and a wide viewport before approving it. **Next:** supply the card text and a reference image you may publish.
+
+### CLI tool
+
+**For:** a developer maintaining a small command line tool. **Task:** make an invalid option print a useful error and return a nonzero exit code.
+
+**Flow:** Context → Implement → Automated tests → Manual review. Add **Automated tests** to the [short flow](#recipe-short-flow), with the tool's test command. The runtime and test dependencies must be available in the workspace. Expect a regression test and the corrected error. You try the command yourself before approving. **Next:** paste one failing invocation and its expected output into the task.
+
+## Solo work
+
+### Bug fix
+
+**For:** a solo maintainer fixing a reproducible defect. **Task:** correct a date calculation at the end of a month. Use a written spec to keep the edge cases visible.
+
+**Flow:** Context → Spec → Implement → Agent review → Manual review. Use the [agent review recipe](#recipe-agent-review). Expect a regression test, a fix and a review report. You approve the reproduction and final diff. **Next:** provide a failing date, expected result and test command.
+
+### New feature
+
+**For:** a developer adding search to a notes app. **Task:** search titles with clear empty and loading states. Choose this when agreement on behavior matters before coding.
+
+**Flow:** Context → Spec → UX design → Implement → Agent review → Manual review. Add **UX design** after Spec in the [agent review recipe](#recipe-agent-review). The result includes a screen description and an implementation. You approve the behavior, then test the states in the running app. **Next:** list what search must match and what it must leave out.
+
+### Refactor
+
+**For:** a maintainer splitting a large module. **Task:** move parsing and formatting into separate files while preserving behavior.
+
+**Flow:** Context → Spec → Refactor → Automated tests → Manual review. Adapt the [short flow](#recipe-short-flow): add **Spec**, replace Implement with **Refactor**, and add **Automated tests** with your test command. Existing tests are a prerequisite. Expect smaller files and passing tests. You check that the diff contains the agreed changes only. **Next:** name the module and the public interfaces that must stay stable.
+
+### Test coverage
+
+**For:** a developer protecting code that already works. **Task:** add tests for retry and timeout behavior without changing production code.
+
+**Flow:** Context → Test spec → Implement → Automated tests → Manual review. Adapt the [agent review recipe](#recipe-agent-review) with **Test spec** and a test command; tell Implement to edit tests only. Expect a case list and runnable tests. You review whether the tests represent real failure modes. **Next:** list the behavior and the test harness to use.
+
+### Compare attempts
+
+**For:** a developer choosing between approaches. **Task:** try different implementations of a slow parser. Separate attempts let you compare measured results.
+
+**Flow:** One task → Fan out → Compare diffs and measurements → Keep one try. Use [Fan out](/docs/guides/fan-out/) with the same input and benchmark command for every attempt. Automatic fan-out launches Claude Code only; start other agents yourself on draft tries. Expect separate workspaces and candidate diffs. You choose the result using correctness and timings. **Next:** define a benchmark and run more tries before the original task finishes.
+
+### Independent review
+
+**For:** a developer who wants a fresh session to inspect a change. **Task:** review a patch against its accepted spec.
+
+**Flow:** Context → Spec → Implement → Agent review → Manual review. Use the [agent review recipe](#recipe-agent-review). Its review stage uses its own terminal, writes findings and sends work back when needed. A fresh session still needs clear acceptance criteria. You read the final report and diff. **Next:** set the review agent and start a task with a testable result.
+
+## Teams
+
+### Mix agents
+
+**For:** a team that already uses more than one agent CLI. **Task:** let the task's agent implement a change and Codex review it.
+
+**Flow:** Context → Spec → Implement → Codex review → Manual review. Use the [agent review recipe](#recipe-agent-review) and install both agents. The review agent changes without replacing the task's agent. Expect a diff and a separate report. A person makes the final decision. **Next:** pick the agents your team can run; see [Mix agents in one task](/docs/guides/mix-agents/).
+
+### Parallel test planning
+
+**For:** a team building a Python feature from an agreed spec. **Task:** implement a CSV export while another stage lists test cases without reading the implementation.
+
+**Flow:** Context → Spec → [Test spec ‖ Implement] → Automated tests → Manual review → Release. Use the [parallel team recipe](#recipe-parallel-team). Python and the repository's tests must be available. The report writer owns `test-spec.md`; Implement owns the code. Expect code, a case list and tests checked against it. You approve the spec, diff and pull request creation. **Next:** define the CSV format and error cases.
+
+### GitHub issue
+
+**For:** a maintainer taking work from an issue queue. **Task:** implement an accepted issue with its discussion kept as context.
+
+**Flow:** Import issue → Context → Spec → Implement → Review → Release. Use the [parallel team recipe](#recipe-parallel-team), or the default pipeline for a smaller issue. Keep `github-issue` in `context.sources`; GitHub access and `gh` are required. Expect the issue context and a linked pull request. You check that the scope matches the discussion before implementation. **Next:** import one issue through the [GitHub guide](/docs/guides/github/).
+
+### CI retry
+
+**For:** a team with a CI workflow on GitHub. **Task:** fix an export change that passes locally but fails on a supported Python version in CI.
+
+**Flow:** Context → Spec → Implement with Check on CI → Failed logs → Implement again → Manual review. On Implement in the [parallel team recipe](#recipe-parallel-team), set `ci` to `true`, then enable **Check on CI** for the task. GitHub access and configured CI workflows are required. Natamux pushes a snapshot for the check and can send failed logs back. The recipe sets `agents.maxSendBacks` to `2`; past that limit, you decide what to do. **Next:** select the CI option before starting that stage; see [Check a stage on CI](/docs/concepts/stages/#check-a-stage-on-ci).
+
+## Larger organizations
+
+### Conditional routing
+
+**For:** maintainers of a repository with both small fixes and larger features. **Task:** give a bug a short path and a feature a written plan before implementation.
+
+**Flow:** Context → Triage → [Bug path or Feature path] → Automated tests → QA → Release. Use the [organization recipe](#recipe-organization). You approve the Triage report before the condition runs. A report containing `bug` in its **Route** section takes the first path; otherwise the feature path runs. Expect one chosen path, test results and a reviewable diff. **Next:** describe the change and check the route before approval.
+
+### Shared settings and human approvals
+
+**For:** a larger engineering group that wants the same steps in each local checkout. **Task:** change an account settings screen with explicit acceptance and QA decisions.
+
+**Flow:** Context → Triage → Conditional work → Tests → QA → Release. Commit the [organization recipe](#recipe-organization), then adapt it through code review. Python, tests and GitHub access are prerequisites. People agree outside Natamux who reviews the work; a local gate does not enforce a team role. Expect the same configured process for new tasks on each machine. **Next:** agree on the gates, commit the file and let each developer install their own agents.
+
+### Security-sensitive change
+
+**For:** a team changing an access check. **Task:** reject an unauthorized request while preserving authorized behavior.
+
+**Flow:** Context → Spec → Threat model → Implement → Security review → Manual review → Release. Add the **Threat model** and **Security review** catalog stages to the [agent review recipe](#recipe-agent-review), then add Release if you use GitHub. Expect threat notes, tests and findings for a person to inspect. Review prompts alone do not establish a secure result or certification. **Next:** name the protected resource and expected allow and deny cases, using synthetic data.
+
+### Performance-sensitive change
+
+**For:** maintainers of a service with a slow path. **Task:** reduce repeated parsing without changing the result.
+
+**Flow:** Context → Spec → Implement → Performance check → Manual review. Add **Performance check** to the [agent review recipe](#recipe-agent-review). Supply a reproducible benchmark and the required runtime. Expect before and after measurements alongside tests. You decide whether the improvement justifies the change. **Next:** agree on the input size and acceptable timing before implementation.
+
+## Complete settings recipes
+
+Each block below is a complete project file. Fields left out use the defaults. These examples use ordinary repository tools and public Natamux settings. Read the [configuration reference](/docs/reference/configuration/) before adding conditions, commands or agent arguments of your own.
+
+### Recipe: short flow
+
+For a small local change. It uses manual context only and does not open GitHub issues or pull requests. You commit after reviewing the result.
+
+Complete file: `.natamux.json`
+
+```json
+{
+  "context": { "sources": [{ "type": "manual" }] },
+  "tracker": { "type": "none" },
+  "stages": [
+    { "id": "context", "kind": "context", "gate": "manual", "output": "context.md" },
+    {
+      "id": "implement", "kind": "agent", "gate": "auto",
+      "prompt": "Read {dir}/context.md. Make the requested small change and run the relevant checks. Leave the changes for human review. Do not commit."
+    },
+    { "id": "review", "kind": "review", "gate": "manual" }
+  ]
+}
+```
+
+### Recipe: agent review
+
+For a solo change with a spec and a second opinion. Install Codex for the review stage, or change `agent` to an installed agent. The task's own agent implements the work. The two-send-back limit is explicit.
+
+Complete file: `.natamux.json`
+
+```json
+{
+  "context": { "sources": [{ "type": "manual" }] },
+  "tracker": { "type": "none" },
+  "agents": { "maxSendBacks": 2 },
+  "stages": [
+    { "id": "context", "kind": "context", "gate": "manual", "output": "context.md" },
+    {
+      "id": "spec", "kind": "agent", "gate": "manual", "output": "spec.md",
+      "sections": ["Goal", "Scope", "Out of scope", "Acceptance criteria", "Code map"]
+    },
+    {
+      "id": "implement", "kind": "agent", "gate": "auto",
+      "prompt": "Read {dir}/spec.md and {dir}/context.md. Implement the accepted scope, add relevant regression tests and run the repository checks. Do not commit."
+    },
+    {
+      "id": "agent-review", "name": "Agent review", "kind": "agent", "gate": "auto",
+      "agent": "codex", "ownShell": true, "endShell": true,
+      "output": "review.md", "sections": ["Findings"],
+      "prompt": "Read {dir}/spec.md and review the diff. Do not edit code. Write {dir}/review.md with a Findings section and file references, or None. If fixes are needed, run natamux stage back $NATAMUX_TASK_ID --to implement --reason \"Describe the findings\", replacing the reason with concrete findings, then stop. Do not run natamux done after sending back. If there are no findings, run natamux done."
+    },
+    { "id": "review", "kind": "review", "gate": "manual" }
+  ]
+}
+```
+
+After a send back, the earlier stage runs again. The reviewer must stop instead of marking the old stage done. See [The review loop](/docs/concepts/review-loop/).
+
+### Recipe: parallel team
+
+For a Python repository where implementation and test planning can run together. Install Codex, Python 3 and the project's dependencies. Adapt `python3 -m unittest discover -s tests` if your suite uses another runner. Sign in to `gh` before Release.
+
+Complete file: `.natamux.json`
+
+```json
+{
+  "context": { "sources": [{ "type": "manual" }, { "type": "github-issue" }] },
+  "tracker": { "type": "github", "createIssue": "manual", "linkInPr": true },
+  "agents": { "maxSendBacks": 2 },
+  "stages": [
+    { "id": "context", "kind": "context", "gate": "manual", "output": "context.md" },
+    {
+      "id": "spec", "kind": "agent", "gate": "manual", "output": "spec.md",
+      "sections": ["Goal", "Scope", "Out of scope", "Acceptance criteria", "Code map"]
+    },
+    {
+      "id": "build", "name": "Test planning and implementation",
+      "parallel": [
+        {
+          "id": "test-spec", "kind": "agent", "gate": "auto", "agent": "codex",
+          "output": "test-spec.md", "sections": ["Cases"], "endShell": true,
+          "prompt": "Read {dir}/spec.md only. Write {dir}/test-spec.md with a Cases section describing inputs, results and edge cases. Do not read the implementation. Write only this report; do not edit code or tests."
+        },
+        {
+          "id": "implement", "kind": "agent", "gate": "auto",
+          "prompt": "Read {dir}/spec.md. Implement the accepted behavior with regression tests. Do not read or change test-spec.md while the other stage writes it. Do not commit."
+        }
+      ]
+    },
+    {
+      "id": "coverage-check", "name": "Check planned cases", "kind": "agent", "gate": "auto",
+      "prompt": "Read {dir}/spec.md and {dir}/test-spec.md. Check that the tests cover each planned case. Add missing tests, fix failures and leave the changes for review. Do not commit."
+    },
+    {
+      "id": "testing", "kind": "testing", "gate": "auto",
+      "command": "python3 -m unittest discover -s tests"
+    },
+    { "id": "review", "kind": "review", "gate": "manual" },
+    { "id": "release", "kind": "release", "gate": "manual" }
+  ]
+}
+```
+
+The command stage runs after both parallel stages and the case check finish. Exit code zero passes it. A person reviews the diff and commits it before approving Release. For a longer solo and team walkthrough, see [Build a workflow](/docs/guides/workflows/).
+
+### Recipe: organization
+
+For a Python repository with an approved route and a QA gate. This example uses manual task context, Python tests and GitHub pull requests. Adapt the prompts and command before starting. `permissionMode: "ask"` leaves each agent's own permission settings in control; it does not define a new permission policy.
+
+Complete file: `.natamux.json`
+
+```json
+{
+  "context": { "sources": [{ "type": "manual" }] },
+  "tracker": { "type": "github", "createIssue": "on-pr", "linkInPr": true },
+  "agents": { "permissionMode": "ask", "maxSendBacks": 2 },
+  "stages": [
+    { "id": "context", "kind": "context", "gate": "manual", "output": "context.md" },
+    {
+      "id": "triage", "kind": "agent", "gate": "manual", "output": "triage.md",
+      "sections": ["Route", "Acceptance criteria"],
+      "prompt": "Read {dir}/context.md. Do not change code. Write {dir}/triage.md with Route and Acceptance criteria sections. In Route write only bug for a defect fix, or feature for new behavior. State testable results under Acceptance criteria."
+    },
+    {
+      "id": "change-route", "name": "Bug or feature",
+      "paths": [
+        {
+          "id": "bug-path", "name": "Bug fix",
+          "when": { "type": "output", "file": "triage.md", "section": "Route", "contains": "bug" },
+          "stages": [
+            {
+              "id": "fix-bug", "kind": "agent", "gate": "auto",
+              "prompt": "Read {dir}/context.md and {dir}/triage.md. Reproduce the defect, add a regression test and make the smallest fix. Do not commit."
+            }
+          ]
+        },
+        {
+          "id": "feature-path", "name": "Feature",
+          "stages": [
+            {
+              "id": "feature-plan", "kind": "agent", "gate": "manual",
+              "output": "feature-plan.md", "sections": ["Steps", "Tests"],
+              "prompt": "Read {dir}/context.md and {dir}/triage.md. Write {dir}/feature-plan.md with Steps and Tests sections. Do not change code."
+            },
+            {
+              "id": "build-feature", "kind": "agent", "gate": "auto",
+              "prompt": "Read {dir}/triage.md and {dir}/feature-plan.md. Implement the accepted plan with tests. Do not commit."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "testing", "kind": "testing", "gate": "manual",
+      "command": "python3 -m unittest discover -s tests"
+    },
+    { "id": "qa", "name": "Manual testing", "kind": "manual", "gate": "manual" },
+    { "id": "release", "kind": "release", "gate": "manual" }
+  ]
+}
+```
+
+Read the Triage report before approving it. Only the chosen path runs. After the tests pass, the manual testing gate is your place to try the accepted cases and inspect the diff. Commit approved work before approving Release. Use your GitHub branch rules for pull request review requirements; Natamux's local approvals do not replace them.

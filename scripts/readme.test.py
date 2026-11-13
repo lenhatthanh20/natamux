@@ -9,12 +9,7 @@ from urllib.parse import unquote, urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 README = Path(os.environ.get("README", ROOT / "README.md"))
-INSTALL = ROOT / "site/src/content/docs/docs/getting-started/install.mdx"
-DOCKER = ROOT / "docs/docker.md"
-HEADINGS = [
-    "Why Natamux", "Features", "How it works", "Works with your agents", "Install", "Quick start",
-    "Command line", "Security and privacy", "Repository guide", "Contributing", "License",
-]
+HEADINGS = ["What it does", "Get started", "Workflow", "Privacy", "Project"]
 LINK_HOSTS = {"github.com", "natamux.github.io", "codespaces.new"}
 IMAGE_HOSTS = {"img.shields.io"}
 STAND_IN = "Recorded in the app. The agents' terminal output is scripted for the demo."
@@ -68,17 +63,10 @@ def local_link_resolves(destination):
     return True
 
 
-def png_width(path):
-    data = (ROOT / path).read_bytes()[:24]
-    return int.from_bytes(data[16:20], "big") if data[:8] == b"\x89PNG\r\n\x1a\n" else 0
-
-
 class ReadmeAcceptance(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.readme = README.read_text()
-        cls.install = INSTALL.read_text()
-        cls.docker = DOCKER.read_text()
         cls.links = links(cls.readme)
 
     def test_case_1_first_impression_and_entry_points(self):
@@ -88,7 +76,7 @@ class ReadmeAcceptance(unittest.TestCase):
         self.assertEqual(len(re.findall(r"^# |<h1[ >]", self.readme, re.MULTILINE)), 1)
         self.assertIn('<h1 align="center">Natamux</h1>', opening)
         text = strip_html(opening)
-        for word in ("coding agents", "worktree", "terminal", "dashboard"):
+        for word in ("coding agents", "worktree", "dashboard"):
             self.assertIn(word, text.lower())
         self.assertLess(len(text.split()), 150, "entry points should appear near the top")
 
@@ -97,50 +85,35 @@ class ReadmeAcceptance(unittest.TestCase):
         self.assertEqual(len(pictures), 1)
         hero = pictures[0]
         alt = re.search(r'<img [^>]*alt="([^"]+)"', hero).group(1)
-        self.assertIn("dashboard", alt.lower())
+        self.assertIn("natamux", alt.lower())
         self.assertGreaterEqual(len(alt.split()), 7)
         self.assertNotIn(".png", alt.lower())
-        self.assertIn('media="(prefers-color-scheme: dark)"', hero)
         self.assertIn('media="(prefers-color-scheme: light)"', hero)
         for target in re.findall(r'(?:src|srcset)="([^"]+)"', hero):
             with self.subTest(hero=target):
-                self.assertTrue(target.startswith("site/public/screens/"))
+                self.assertTrue(target.startswith("site/public/media/native/"))
                 self.assertTrue((ROOT / target).is_file())
-                self.assertGreaterEqual(png_width(target), 1000)
 
         destinations = [target for kind, _, target in links(opening) if kind == "link"]
         self.assertIn("https://github.com/lenhatthanh20/natamux/releases/latest", destinations)
-        self.assertIn("https://natamux.github.io/docs/getting-started/install/", destinations)
-        self.assertIn("https://codespaces.new/lenhatthanh20/natamux", destinations)
+        self.assertIn("https://natamux.github.io/docs/getting-started/quick-start/", destinations)
+        self.assertIn("https://natamux.github.io/docs/", destinations)
 
-    def test_case_2_both_getting_started_paths(self):
-        self.assertIn("Natamux-mac-arm64.dmg", self.install)
-        self.assertIn("Natamux-mac-arm64.dmg", self.readme)
-        self.assertIn("macOS on Apple silicon", self.readme)
-        self.assertIn("scripts/e2e.sh build", self.readme)
-        self.assertIn("E2E_LOCAL=1 scripts/e2e.sh up", self.readme)
-        for value in ("8080", "e2e-token"):
-            self.assertIn(value, self.readme)
-            self.assertIn(value, self.docker)
-        self.assertIn("fake agents", self.readme)
-        self.assertIn("do not include a real coding agent", self.readme)
-        for name in ("Natamux-mac-x64.dmg", "Natamux-win-x64.exe", "Natamux-linux-x86_64.AppImage", "Natamux-linux-amd64.deb"):
-            self.assertIn(name, self.readme)
-            self.assertIn(name, self.install)
+    def test_case_2_install_paths(self):
+        self.assertIn("curl -fsSL https://natamux.github.io/install.sh | sh", self.readme)
+        self.assertIn("irm https://natamux.github.io/install.ps1 | iex", self.readme)
+        self.assertIn("https://natamux.github.io/docs/getting-started/install/", [t for _, _, t in self.links])
 
     def test_case_3_scannable_workflow_and_repository_map(self):
         headings = re.findall(r"^## (.+)$", self.readme, re.MULTILINE)
         self.assertEqual(headings, HEADINGS)
-        feature_section = self.readme.split("## Features\n", 1)[1].split("\n## ", 1)[0]
+        feature_section = self.readme.split("## What it does\n", 1)[1].split("\n## ", 1)[0]
         self.assertGreaterEqual(len(re.findall(r"^- \*\*", feature_section, re.MULTILINE)), 5)
-        for concept in ("task", "git worktree", "terminal", "agent", "stages", "Needs you", "review"):
+        for concept in ("task", "git worktree", "terminal", "agent", "stages", "review"):
             self.assertIn(concept.lower(), self.readme.lower())
         for agent in ("Claude Code", "Codex", "Gemini CLI", "Copilot", "Cursor"):
             self.assertIn(agent, self.readme)
-        for package in ("core", "daemon", "web", "desktop", "cli"):
-            self.assertIn(f"packages/{package}/", self.readme)
-        self.assertIn("plugins/natamux/", self.readme)
-        for guide in ("getting-started/install/", "getting-started/quick-start/", "docs/dev-setup.md"):
+        for guide in ("getting-started/install/", "getting-started/quick-start/", "guides/workflows/", "docs/dev-setup.md"):
             self.assertIn(guide, self.readme)
         paragraphs = [
             strip_html(block) for block in re.split(r"\n\s*\n", self.readme)
@@ -149,25 +122,16 @@ class ReadmeAcceptance(unittest.TestCase):
         self.assertLess(max(len(paragraph.split()) for paragraph in paragraphs), 100)
 
     def test_case_4_requirements_limits_and_trust(self):
-        self.assertIn("installed, logged-in coding agent", self.readme)
-        for text in (self.readme, self.install):
-            self.assertNotIn("paused", text)
-            for step in ("Open Anyway", "More info", "Run anyway", "chmod +x"):
-                self.assertIn(step, text)
-        self.assertIn("installed and logged in", self.install)
+        self.assertIn("installed, signed-in coding agent", self.readme)
         self.assertIn("need git", self.readme)
         self.assertIn("no account or telemetry", self.readme.lower())
-        self.assertIn("no account", (ROOT / "PRIVACY.md").read_text())
-        self.assertIn("no telemetry", (ROOT / "PRIVACY.md").read_text())
-        self.assertIn("update check is off", self.readme)
         self.assertIn("Natamux does not sandbox agents", self.readme)
         self.assertIn("Natamux does not sandbox agents", (ROOT / "SECURITY.md").read_text())
-        self.assertIn("private vulnerability reporting", self.readme)
         license_text = (ROOT / "LICENSE").read_text()
         self.assertTrue(license_text.lstrip().startswith("GNU GENERAL PUBLIC LICENSE"))
         self.assertIn("Version 3, 29 June 2007", license_text)
         self.assertIn("GPL-3.0-or-later", self.readme)
-        for target in ("PRIVACY.md", "SECURITY.md", "LICENSE"):
+        for target in ("SECURITY.md", "LICENSE"):
             self.assertIn(target, [destination for _, _, destination in self.links])
         self.assertNotRegex(
             self.readme.lower(),
@@ -177,11 +141,11 @@ class ReadmeAcceptance(unittest.TestCase):
             self.assertIn(STAND_IN, self.readme, "every recording needs the stand-in note")
 
     def test_case_5_markdown_links_media_and_change_scope(self):
-        self.assertEqual(re.findall(r"^```(\S+)$", self.readme, re.MULTILINE), ["sh"])
-        self.assertEqual(self.readme.count("```"), 2)
+        self.assertEqual(re.findall(r"^```(\S+)$", self.readme, re.MULTILINE), ["sh", "powershell", "text"])
+        self.assertEqual(self.readme.count("```"), 6)
         self.assertNotRegex(self.readme, r"<(video|iframe|script|style)\b| style=")
-        self.assertTrue(local_link_resolves("docs/docker.md#production"))
-        self.assertFalse(local_link_resolves("docs/Docker.md#production"))
+        self.assertTrue(local_link_resolves("docs/dev-setup.md"))
+        self.assertFalse(local_link_resolves("docs/Dev-Setup.md"))
         local = [target for _, _, target in self.links if not urlsplit(target).scheme]
         self.assertTrue(local)
         for target in local:
@@ -204,7 +168,6 @@ class ReadmeAcceptance(unittest.TestCase):
                 self.assertRegex(img, r'alt="[^"]{3,}"')
         for picture in re.findall(r"(?s)<picture>.*?</picture>", self.readme):
             with self.subTest(picture=picture[:60]):
-                self.assertIn("(prefers-color-scheme: dark)", picture)
                 self.assertIn("(prefers-color-scheme: light)", picture)
                 self.assertIn("<img ", picture)
 

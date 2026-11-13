@@ -1,6 +1,7 @@
 //! The Remove workspace dialog (`RemoveWorkspaceDialog.tsx`, docs/ui-spec.md 4.29). It says what
 //! goes and what stays, lists the files that are not committed first (Remove anyway discards
-//! them), and stays open, busy, until the daemon answers.
+//! them), and stays open, busy, until the daemon answers. A main checkout task is only detached:
+//! its folder, changes and branch stay, so the dialog asks for no commit and offers no branch.
 
 use gpui::{DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, svg};
 use natamux_proto::tasks::task::Task;
@@ -10,8 +11,9 @@ use ui::{ButtonLike, Checkbox, prelude::*};
 
 use super::finished_rules::{FinishedTask, branch_choice};
 use super::remove_dialog_rules::{
-    KEEPS, NOT_COMMITTED, REMOVE_ANYWAY, agent_stops, busy_text, confirm_label, discards_text,
-    not_committed_title, remove_title, shells_gone, shown_files,
+    KEEPS, KEEPS_CHECKOUT, NOT_COMMITTED, REMOVE_ANYWAY, agent_stops, busy_text, confirm_label,
+    detach_label, discards_text, is_main_checkout, not_committed_title, remove_title, shells_gone,
+    shown_files,
 };
 use crate::app::dashboard::Dashboard;
 use crate::app::source::reason;
@@ -134,6 +136,9 @@ impl RemoveWorkspaceDialog {
     }
 
     fn not_committed(&self) -> Option<&[ChangeEntry]> {
+        if is_main_checkout(&self.task) {
+            return None;
+        }
         self.changes.as_deref().filter(|files| !files.is_empty())
     }
 
@@ -149,6 +154,9 @@ impl RemoveWorkspaceDialog {
     }
 
     fn delete_branch(&self) -> bool {
+        if is_main_checkout(&self.task) {
+            return false;
+        }
         let choice = branch_choice(&FinishedTask::from_task(&self.task), self.graph.as_ref());
         choice.can_delete && !self.keep_branch
     }
@@ -300,6 +308,9 @@ impl RemoveWorkspaceDialog {
 
     fn render_branch(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         self.task.branch.as_ref()?;
+        if is_main_checkout(&self.task) {
+            return None;
+        }
         let choice = branch_choice(&FinishedTask::from_task(&self.task), self.graph.as_ref());
         let checked = self.delete_branch();
         let disabled = !choice.can_delete || self.removing;
@@ -344,18 +355,26 @@ impl RemoveWorkspaceDialog {
             .not_committed()
             .filter(|_| self.discard)
             .map(<[_]>::len);
-        let label = confirm_label(!gone.busy.is_empty(), self.removing, discarded.is_some());
-        let folder = v_flex().child(Label::new("Deletes the folder")).child(
-            Label::new(task.workspace.clone().unwrap_or_default())
-                .size(LabelSize::Small)
-                .color(Color::Muted),
-        );
+        let detach = is_main_checkout(task);
+        let any_busy = !gone.busy.is_empty();
+        let label = if detach {
+            detach_label(any_busy, self.removing)
+        } else {
+            confirm_label(any_busy, self.removing, discarded.is_some())
+        };
         let mut rows = Vec::new();
         if let Some(count) = discarded {
             let text = Label::new(discards_text(count));
             rows.push(row("triangle-alert", Color::Error, text, cx).into_any_element());
         }
-        rows.push(row("minus", Color::Error, folder, cx).into_any_element());
+        if !detach {
+            let folder = v_flex().child(Label::new("Deletes the folder")).child(
+                Label::new(task.workspace.clone().unwrap_or_default())
+                    .size(LabelSize::Small)
+                    .color(Color::Muted),
+            );
+            rows.push(row("minus", Color::Error, folder, cx).into_any_element());
+        }
         if let Some(text) = agent_stops(task) {
             rows.push(
                 row("triangle-alert", Color::Warning, Label::new(text), cx).into_any_element(),
@@ -369,6 +388,10 @@ impl RemoveWorkspaceDialog {
             rows.push(row("minus", Color::Error, Label::new(text), cx).into_any_element());
         }
         rows.extend(self.render_branch(cx));
+        if detach {
+            let keeps = Label::new(KEEPS_CHECKOUT);
+            rows.push(row("check", Color::Success, keeps, cx).into_any_element());
+        }
         rows.push(row("check", Color::Success, Label::new(KEEPS), cx).into_any_element());
 
         let close = cx.listener(|this, _, _, cx| {
@@ -384,7 +407,7 @@ impl RemoveWorkspaceDialog {
         let submit = cx.listener(|this, _, _, cx| this.confirm(cx));
         // Reading the changes: the button waits, as the web's "Reading the changes…".
         let waiting = self.changes.is_none() || self.removing;
-        DialogFrame::new(remove_title(&task.id), close)
+        DialogFrame::new(remove_title(task), close)
             .child(v_flex().gap_3().children(rows))
             .children(self.error.clone().map(|error| {
                 div()

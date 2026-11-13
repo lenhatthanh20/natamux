@@ -9,8 +9,7 @@ use serde_json::{Value, json};
 use crate::server::{EchoPty, TOKEN, TestDaemon, bare};
 
 const TRUST: &str = "/repos/default/trust";
-const CHECKED: &str =
-    r#"{"stages":[{"id":"test","kind":"agent","gate":"auto","check":"pnpm test"}]}"#;
+const CHECKED: &str = r#"{"stages":[{"id":"context","kind":"context","gate":"manual"},{"id":"test","kind":"agent","gate":"auto","check":"pnpm test"}]}"#;
 
 /// Writes the settings of the default project. The daemon looks at the file again after a
 /// second.

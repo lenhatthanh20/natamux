@@ -4,41 +4,44 @@
 
 use editor::{Editor, EditorEvent};
 use gpui::{
-    DismissEvent, Entity, EventEmitter, ExternalPaths, FocusHandle, Focusable, Subscription,
+    DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, ScrollHandle, Subscription,
 };
 use natamux_client::Answer;
 use natamux_proto::projects::repo::{BranchList, LoadedSettings, RemoteBranchList, SkillList};
 use ui::prelude::*;
 
 use super::new_workspace_rules::{
-    PickedFile, SourceChoice, StartForm, blocked_reason, branch_text, initial_repo,
-    new_workspace_input, pick_source, prefill_branch, read_uploads, shown_repo, source_choices,
-    start_label,
+    PickedFile, SourceChoice, StartForm, blocked_reason, initial_repo, model_hint,
+    new_workspace_input, pick_source, read_uploads, shown_repo, source_choices,
 };
-use crate::agents::agent_choices::DEFAULT_AGENT;
+use crate::agents::agent_choices::{DEFAULT_AGENT, base_in, custom_agents, is_agent_id};
 use crate::app::dashboard::Dashboard;
 use crate::app::dashboard_data::{Part, Seen};
 use crate::app::source::reason;
-use crate::components::dialog::{
-    DialogFrame, DialogLayer, DialogView, cancel_button, primary_button,
-};
-use crate::components::form::text_editor;
+use crate::components::dialog::{DialogLayer, DialogSize, DialogView};
+use crate::components::form::{input_style, text_editor};
 use crate::components::toast_rules::ToastTone;
 
-/// What Start a task does, in its tooltip.
-const START_HINT: &str = "A new task with its own workspace: a git worktree on a new branch.";
-
 /// The Branch field's placeholder when the project sets no `git.branchName`.
-const DEFAULT_BRANCH_HINT: &str = "natamux/{id}-{slug}";
+const DEFAULT_BRANCH_HINT: &str = "{project}/{id}-{slug}";
+/// The notes box starts at 3 lines and grows to 8, so the dialog fits a 768 px window.
+const NOTES_LINES: (usize, usize) = (3, 8);
 
 #[path = "new_workspace_fields.rs"]
 mod fields;
+#[path = "new_workspace_files.rs"]
+mod files;
 #[path = "new_workspace_menus.rs"]
 mod menus;
+#[path = "new_workspace_shot.rs"]
+mod shot;
 #[path = "new_workspace_trust.rs"]
 mod trust;
+#[path = "new_workspace_view.rs"]
+mod view;
 
 use menus::Pick;
+pub use shot::StartShot;
 
 /// Opens the dialog, in `repo` when given, with the title focused. With no project yet it only
 /// says so: the projects panel comes with a later screen.
@@ -88,14 +91,23 @@ pub struct NewWorkspaceDialog {
     branch_name: Entity<Editor>,
     /// What the field holds from a refill: a text equal to it is not an edit by the user.
     filled: String,
-    /// The user typed a branch: the title and project no longer refill it.
+    /// The user typed a branch: the title and project no longer refill it, until the reset
+    /// button makes it follow the title again.
     branch_edited: bool,
     branch_hint: String,
     reference: Entity<Editor>,
+    /// The Reference field's placeholder now: the hint of the source and skill.
+    ref_hint: String,
     picked_repo: String,
     base: String,
     agent: String,
     single_agent: bool,
+    /// Passed to the agent as `--model`; empty: its own default.
+    model: Entity<Editor>,
+    /// The Model field's placeholder now: an example for the picked agent.
+    model_hint: String,
+    /// "Create a worktree": unchecked makes the task only.
+    worktree: bool,
     picked_source: String,
     skill: String,
     files: Vec<PickedFile>,
@@ -110,6 +122,7 @@ pub struct NewWorkspaceDialog {
     busy: bool,
     error: Option<String>,
     focus: FocusHandle,
+    scroll: ScrollHandle,
     stops: Stops,
     _reads: Vec<gpui::Task<()>>,
     _subscriptions: Vec<Subscription>,
@@ -121,11 +134,22 @@ struct Stops {
     skill: FocusHandle,
     files: FocusHandle,
     project: FocusHandle,
+    worktree: FocusHandle,
     branch: FocusHandle,
+    /// The Branch field's reset button, shown once the user typed a branch.
+    reset: FocusHandle,
     agent: FocusHandle,
     flow: FocusHandle,
     cancel: FocusHandle,
     submit: FocusHandle,
+}
+
+/// Branch names read in the buffer font, 12 px as the mockup's mono inputs.
+fn set_mono(editor: &Entity<Editor>, cx: &mut App) {
+    let font = theme::theme_settings(cx).buffer_font(cx).family.clone();
+    editor.update(cx, |editor, _| {
+        editor.set_text_style_refinement(input_style(Some(font), Some(12.0)))
+    });
 }
 
 impl NewWorkspaceDialog {
@@ -135,16 +159,20 @@ impl NewWorkspaceDialog {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let title = text_editor("Fix the login redirect", None, window, cx);
+        let title = text_editor("Task title", None, window, cx);
         let notes = text_editor(
             "Optional. What to change and why, where to look (files, screens), and how to tell \
              it is done.",
-            Some((6, 12)),
+            Some(NOTES_LINES),
             window,
             cx,
         );
         let reference = text_editor("", None, window, cx);
         let branch_name = text_editor(DEFAULT_BRANCH_HINT, None, window, cx);
+        set_mono(&branch_name, cx);
+        let model_hint = model_hint(DEFAULT_AGENT);
+        let model = text_editor(&model_hint, None, window, cx);
+        set_mono(&model, cx);
         let ids = repo_ids(&dashboard, cx);
         let mut seen = Seen::default();
         let follow = cx.observe(&dashboard, move |this, dashboard, cx| {
@@ -154,7 +182,7 @@ impl NewWorkspaceDialog {
             }
         });
         let mut subscriptions = vec![follow];
-        for field in [&title, &notes, &reference] {
+        for field in [&title, &notes, &reference, &model] {
             subscriptions.push(cx.subscribe(field, |_, _, event: &EditorEvent, cx| {
                 if matches!(event, EditorEvent::BufferEdited) {
                     cx.notify();
@@ -182,10 +210,14 @@ impl NewWorkspaceDialog {
             branch_edited: false,
             branch_hint: DEFAULT_BRANCH_HINT.into(),
             reference,
+            ref_hint: String::new(),
             picked_repo: initial_repo(repo.as_deref(), &ids),
             base: String::new(),
             agent: DEFAULT_AGENT.into(),
             single_agent: false,
+            model,
+            model_hint,
+            worktree: true,
             picked_source: "manual".into(),
             skill: String::new(),
             files: Vec::new(),
@@ -199,12 +231,15 @@ impl NewWorkspaceDialog {
             busy: false,
             error: None,
             focus: cx.focus_handle(),
+            scroll: ScrollHandle::new(),
             stops: Stops {
                 source: cx.focus_handle(),
                 skill: cx.focus_handle(),
                 files: cx.focus_handle(),
                 project: cx.focus_handle(),
+                worktree: cx.focus_handle(),
                 branch: cx.focus_handle(),
+                reset: cx.focus_handle(),
                 agent: cx.focus_handle(),
                 flow: cx.focus_handle(),
                 cancel: cx.focus_handle(),
@@ -279,7 +314,18 @@ impl NewWorkspaceDialog {
             notes: self.notes.read(cx).text(cx),
             reference: self.reference.read(cx).text(cx),
             skill: self.skill.clone(),
+            no_worktree: !self.worktree,
+            model: if self.takes_model() {
+                self.model.read(cx).text(cx)
+            } else {
+                String::new()
+            },
         }
+    }
+
+    /// A built-in agent, or a custom one on a built-in base: Natamux knows it takes `--model`.
+    fn takes_model(&self) -> bool {
+        !self.agent.is_empty() && is_agent_id(Some(base_in(&self.agent, &custom_agents())))
     }
 
     /// The project's `git.branchName`, once its settings are loaded.
@@ -289,29 +335,12 @@ impl NewWorkspaceDialog {
             .and_then(|loaded| loaded.settings.git.branch_name.clone())
     }
 
-    /// Runs on each render, so a title, project or settings change refills the branch with no
-    /// event wiring. Once the user edited the field, it stays as typed.
-    fn sync_branch(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let pattern = self.branch_pattern();
-        let hint = pattern
-            .clone()
-            .unwrap_or_else(|| DEFAULT_BRANCH_HINT.into());
-        if hint != self.branch_hint {
-            self.branch_hint = hint.clone();
-            self.branch_name.update(cx, |editor, cx| {
-                editor.set_placeholder_text(hint.as_str(), window, cx)
-            });
-        }
-        if self.branch_edited {
-            return;
-        }
-        let title = self.title.read(cx).text(cx);
-        let value = prefill_branch(pattern.as_deref(), &title).unwrap_or_default();
-        if self.branch_name.read(cx).text(cx) != value {
-            self.filled = value.clone();
-            self.branch_name
-                .update(cx, |editor, cx| editor.set_text(value, window, cx));
-        }
+    /// The name of the shown project, which `{project}` of the branch name is made from.
+    fn project_name(&self, cx: &App) -> String {
+        let repo = self.repo(cx);
+        let board = self.dashboard.read(cx);
+        let found = board.data.repos.iter().find(|known| known.id == repo);
+        found.map_or(repo, |known| known.name.clone())
     }
 
     fn last_base(&self, cx: &App) -> Option<String> {
@@ -433,6 +462,10 @@ impl Focusable for NewWorkspaceDialog {
 }
 
 impl DialogView for NewWorkspaceDialog {
+    fn size(&self) -> DialogSize {
+        DialogSize::Wide
+    }
+
     fn tab_ring(&self, cx: &App) -> Vec<FocusHandle> {
         let choice = self.choice();
         let mut ring = vec![self.title.focus_handle(cx)];
@@ -449,14 +482,22 @@ impl DialogView for NewWorkspaceDialog {
         };
         ring.push(text.focus_handle(cx));
         let stops = &self.stops;
-        ring.extend(
-            [&stops.files, &stops.project, &stops.agent, &stops.flow].map(FocusHandle::clone),
-        );
-        if self.branches.is_some() {
-            ring.insert(ring.len() - 2, stops.branch.clone());
+        ring.extend([&stops.files, &stops.project, &stops.worktree].map(FocusHandle::clone));
+        if self.worktree {
+            if self.branches.is_some() {
+                ring.push(stops.branch.clone());
+            }
+            // The reset button sits after the branch input.
+            ring.push(self.branch_name.focus_handle(cx));
+            if self.branch_edited {
+                ring.push(stops.reset.clone());
+            }
         }
-        ring.insert(ring.len() - 2, self.branch_name.focus_handle(cx));
-        ring.extend([stops.cancel.clone(), stops.submit.clone()]);
+        ring.extend([&stops.agent, &stops.flow].map(FocusHandle::clone));
+        if self.takes_model() {
+            ring.push(self.model.focus_handle(cx));
+        }
+        ring.extend([&stops.cancel, &stops.submit].map(FocusHandle::clone));
         ring
     }
 
@@ -466,46 +507,6 @@ impl DialogView for NewWorkspaceDialog {
 
     fn submit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.start_checked(window, cx);
-    }
-}
-
-impl Render for NewWorkspaceDialog {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        self.sync_branch(window, cx);
-        let form = self.form(cx);
-        let choice = self.choice();
-        let missing = blocked_reason(&form, &choice);
-        let close = cx.listener(|_, _, _, cx| cx.emit(DismissEvent));
-        let cancel = cx.listener(|_, _, _, cx| cx.emit(DismissEvent));
-        let submit = cx.listener(|this, _, window, cx| this.start_checked(window, cx));
-        let stops = &self.stops;
-        let start = primary_button(
-            start_label(self.busy),
-            &stops.submit,
-            missing.is_some() || self.busy,
-            submit,
-        )
-        .tooltip(ui::Tooltip::text(missing.unwrap_or(START_HINT)));
-        let last_base = self.last_base(cx);
-        let branch = branch_text(self.branches.as_ref(), &self.base, last_base.as_deref());
-        let body = v_flex()
-            .gap_5()
-            .on_drop(cx.listener(|this, paths: &ExternalPaths, _, cx| {
-                this.add_paths(paths.paths().to_vec(), cx)
-            }))
-            .child(self.render_context(&choice, cx))
-            .child(self.render_setup(branch, cx))
-            .children(
-                self.error
-                    .clone()
-                    .map(|error| Label::new(error).color(Color::Error)),
-            );
-        div().track_focus(&self.focus).child(
-            DialogFrame::new("Start a task", close)
-                .child(body)
-                .footer(cancel_button("Cancel", &stops.cancel, cancel))
-                .footer(start),
-        )
     }
 }
 

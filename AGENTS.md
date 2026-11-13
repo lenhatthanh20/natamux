@@ -15,7 +15,6 @@ Natamux: an Agent Development Environment (ADE). Run many coding agents in paral
 - The dashboard and shared web types use `pnpm`, pinned in `package.json`. Never `npm`, `npx`, `yarn`, `bun`.
 - Run `pnpm` and `node` only in Codespaces or CI, never on the local machine. Local work is editing files only. The Claude Code settings (`.claude/settings.json`) deny these commands.
 - Keep dependencies few. Ask before adding a package.
-- Confirm with the user before deleting anything.
 - TypeScript unit tests and fixtures go in a `__tests__` folder inside the folder of the code they test. A fixture used by tests in 3 or more folders goes in `src/__tests__/`.
 - Follow `docs/plan-tech-stack.md` section 10 for build order. Do not skip ahead.
 

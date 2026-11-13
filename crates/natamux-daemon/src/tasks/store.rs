@@ -39,6 +39,9 @@ use crate::tasks::helpers::{background_since_after, compare_text, move_task, pos
 /// The stages of a repository (`.natamux.json`); None is the default project.
 pub type SettingsOf = Arc<dyn Fn(Option<&str>) -> Vec<Step> + Send + Sync>;
 
+/// A repository and its stages.
+pub type Catalog = (Option<String>, Vec<Step>);
+
 /// What `applyEvent` gives.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Applied {
@@ -103,12 +106,17 @@ impl Store {
 
     /// The steps of a task, with each stage's settings from its repository.
     pub fn steps_of(&self, task: &Task) -> Vec<Step> {
+        self.steps_in(task, &(self.settings_of)(task.repo.as_deref()))
+    }
+
+    /// The steps of a task from `stages`, the settings of its repository.
+    fn steps_in(&self, task: &Task, stages: &[Step]) -> Vec<Step> {
         let refs: Vec<StepRef> = task
             .stages
             .iter()
             .filter_map(|each| serde_json::from_value(each.clone()).ok())
             .collect();
-        resolve_steps(&refs, &(self.settings_of)(task.repo.as_deref()))
+        resolve_steps(&refs, stages)
     }
 
     pub fn get_task(&mut self, task_id: &str) -> TaskResult<Task> {
@@ -150,18 +158,32 @@ impl Store {
         tasks
     }
 
-    /// The first task of `list_tasks` whose workspace `holds` accepts, with one clone: a hook
-    /// looks for its task by folder on every call.
-    pub fn task_in_workspace(&mut self, holds: impl Fn(&str) -> bool) -> Option<Task> {
+    /// Whether the task exists, with no copy of it: a hook asks on every call.
+    pub fn has_task(&mut self, task_id: &str) -> TaskResult<bool> {
+        self.sync.check_file(task_id);
+        if self.sync.tasks.contains_key(task_id) {
+            return Ok(true);
+        }
+        Ok(self.find_task(task_id)?.is_some())
+    }
+
+    /// The id of the task with the longest workspace that `holds` accepts, then the first of
+    /// `list_tasks`. No copy of the task: a hook looks for its task by folder on every call.
+    pub fn id_in_workspace(&mut self, holds: impl Fn(&str) -> bool) -> Option<String> {
         self.sync.check_folder();
         self.sync
             .tasks
             .values()
             .filter(|task| task.workspace.as_deref().is_some_and(&holds))
+            // The innermost workspace first: a worktree folder may be inside a main checkout.
             .min_by(|a, b| {
-                compare_text(&b.updated_at, &a.updated_at).then_with(|| compare_text(&a.id, &b.id))
+                let length = |task: &Task| task.workspace.as_deref().map_or(0, str::len);
+                length(b)
+                    .cmp(&length(a))
+                    .then_with(|| compare_text(&b.updated_at, &a.updated_at))
+                    .then_with(|| compare_text(&a.id, &b.id))
             })
-            .cloned()
+            .map(|task| task.id.clone())
     }
 
     /// The tasks that have a workspace, in the order of `list_tasks`, without copying whole
@@ -190,10 +212,7 @@ impl Store {
 
     pub fn list_events(&mut self, task_id: &str) -> TaskResult<Vec<StoredEvent>> {
         self.get_task(task_id)?;
-        self.sync
-            .index
-            .list_events(task_id)
-            .map_err(TaskError::Failed)
+        self.sync.list_events(task_id).map_err(TaskError::Failed)
     }
 
     /// The attachments are written before the task is published. A title that starts with an id,
@@ -343,7 +362,12 @@ impl Store {
         let before = task_value(&task);
         let mut next = before.clone();
         for (key, value) in input {
-            next.insert(key, value);
+            // Null clears a field, as a task without it never had it.
+            if value.is_null() {
+                next.remove(&key);
+            } else {
+                next.insert(key, value);
+            }
         }
         let changed: Vec<&str> = EDITABLE_FIELDS
             .into_iter()
@@ -410,9 +434,23 @@ impl Store {
     }
 
     pub fn apply_event(&mut self, task_id: &str, raw: Option<&Value>) -> TaskResult<Applied> {
+        self.apply_event_on(task_id, raw, None)
+    }
+
+    /// `apply_event` with the stages of a repository read before the lock, used while the task
+    /// is still in that repository.
+    pub fn apply_event_on(
+        &mut self,
+        task_id: &str,
+        raw: Option<&Value>,
+        catalog: Option<&Catalog>,
+    ) -> TaskResult<Applied> {
         let task = self.get_task(task_id)?;
         let mut input = apply_event_input(raw)?;
-        let steps = self.steps_of(&task);
+        let steps = match catalog {
+            Some((repo, stages)) if *repo == task.repo => self.steps_in(&task, stages),
+            _ => self.steps_of(&task),
+        };
         // Read only when needed: an event that names its terminal and no stage, such as a bell.
         let payload = input
             .get("payload")

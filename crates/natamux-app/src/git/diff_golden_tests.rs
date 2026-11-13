@@ -60,6 +60,7 @@ fn show(
                 side_by_side,
                 collapse,
                 wrap: false,
+                ignore_whitespace: false,
             },
             window,
             cx,

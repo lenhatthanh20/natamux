@@ -1,14 +1,22 @@
-//! The Issues tab of Project settings (`IssuesTab.tsx`): when a task opens a GitHub issue, as four
-//! radio rows over `tracker.createIssue` of the draft. The group is one tab stop; the arrows move
-//! the choice. It is off (but still shows the value) while `tracker.type` is `none`.
+//! The GitHub issues group of the General tab (`IssuesTab.tsx`, layout-b 5.1): when a task opens a
+//! GitHub issue, as four radio rows over `tracker.createIssue` of the draft. The card is one tab
+//! stop; the arrows move the choice. It is off (but still shows the value) while `tracker.type`
+//! is `none`.
 
 use gpui::{Entity, FocusHandle, Focusable, KeyDownEvent};
 use ui::prelude::*;
 
-use super::settings_tab_rules::{ISSUES_OFF_NOTE, choice_index, issues_off, step_choice};
+use super::settings_tab_rules::{
+    ISSUES_OFF_NOTE, IssueRow, choice_index, issue_rows, issues_off, step_choice,
+};
 use super::settings_text::CREATE_ISSUE_OPTIONS;
-use crate::components::colors::signal;
-use crate::stages::editor_draft::DEFAULT_CREATE_ISSUE;
+use crate::components::button_style::button_icon;
+use crate::components::chips::label_chip;
+use crate::components::settings_card::{
+    SeparatorInset, SettingsCard, SettingsGroup, foot_bullets, foot_text,
+};
+use crate::components::settings_controls::radio;
+use crate::components::text_size::row_text;
 use crate::stages::pipeline_editor::PipelineEditor;
 
 pub struct IssuesTab {
@@ -39,79 +47,44 @@ impl IssuesTab {
             .update(cx, |pipeline, cx| pipeline.set_create_issue(value, cx));
     }
 
-    fn radio(&self, checked: bool, off: bool, cx: &App) -> impl IntoElement + use<> {
-        let colors = cx.theme().colors();
-        let ring = if checked {
-            colors.text_accent
-        } else {
-            colors.border
-        };
-        div()
-            .mt(rems_from_px(2.0_f32))
-            .size(rems_from_px(14.0_f32))
-            .flex_none()
-            .flex()
-            .items_center()
-            .justify_center()
-            .rounded_full()
-            .border_1()
-            .border_color(ring)
-            .when(checked, |this| {
-                this.child(
-                    div()
-                        .size(rems_from_px(6.0_f32))
-                        .rounded_full()
-                        .bg(colors.text_accent),
-                )
-            })
-            .when(off, |this| this.opacity(0.5))
-    }
-
+    /// A radio row: the radio, the label (with the Default chip), the note at the right.
     fn option_row(
         &self,
         index: usize,
-        selected: usize,
-        off: bool,
+        row: IssueRow,
         cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        let (value, words) = CREATE_ISSUE_OPTIONS[index];
+    ) -> impl IntoElement + use<> {
         let hover = cx.theme().colors().ghost_element_hover;
-        let colors = cx.theme().colors();
-        let color = if off { Color::Disabled } else { Color::Default };
         h_flex()
-            .min_h(rems_from_px(28.0_f32))
-            .flex_wrap()
-            .gap_2()
+            .id(SharedString::from(format!("create-issue-{}", row.value)))
+            .w_full()
+            .min_h(rems_from_px(36.0_f32))
+            .px(rems_from_px(12.0_f32))
+            .py(rems_from_px(6.0_f32))
+            .gap(rems_from_px(16.0_f32))
+            .when(row.disabled, |this| this.opacity(0.5))
+            .when(!row.disabled, |this| {
+                this.cursor_pointer()
+                    .hover(move |style| style.bg(hover))
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        window.focus(&this.focus, cx);
+                        this.pick(index, cx);
+                    }))
+            })
+            .child(radio(row.selected, cx))
             .child(
                 h_flex()
-                    .id(SharedString::from(format!("create-issue-{value}")))
-                    .items_start()
-                    .gap_2()
-                    .when(!off, |this| {
-                        this.cursor_pointer()
-                            .rounded_sm()
-                            .hover(move |style| style.bg(hover))
-                            .on_click(cx.listener(move |this, _, window, cx| {
-                                window.focus(&this.focus, cx);
-                                this.pick(index, cx);
-                            }))
-                    })
-                    .child(self.radio(index == selected, off, cx))
-                    .child(Label::new(words).size(LabelSize::Small).color(color)),
+                    .flex_1()
+                    .min_w_0()
+                    .gap(rems_from_px(6.0_f32))
+                    .child(Label::new(row.label).size(row_text()).truncate())
+                    .when(row.is_default, |this| this.child(label_chip("Default"))),
             )
-            .when(value == DEFAULT_CREATE_ISSUE, |this| {
-                this.child(
-                    div()
-                        .px_1p5()
-                        .rounded_sm()
-                        .bg(colors.element_background)
-                        .child(
-                            Label::new("Default")
-                                .size(LabelSize::XSmall)
-                                .color(Color::Muted),
-                        ),
-                )
-            })
+            .children(row.note.map(|note| {
+                Label::new(note)
+                    .size(LabelSize::Small)
+                    .color(Color::Placeholder)
+            }))
     }
 }
 
@@ -121,23 +94,31 @@ impl Focusable for IssuesTab {
     }
 }
 
-/// A line of the list under the choices: pieces side by side, `code` ones in the code font.
-fn bullet(pieces: Vec<(&'static str, bool)>, cx: &App) -> impl IntoElement + use<> {
+/// A footnote line: pieces side by side, `code` ones in the code font.
+fn foot_line(pieces: &[(&'static str, bool)], cx: &App) -> AnyElement {
     h_flex()
-        .items_start()
-        .gap_1p5()
+        .flex_wrap()
+        .children(pieces.iter().map(|(text, code)| {
+            let label = foot_text(*text);
+            if *code { label.buffer_font(cx) } else { label }
+        }))
+        .into_any_element()
+}
+
+/// The warning line over the footnote list while issues are off.
+fn off_line() -> impl IntoElement {
+    h_flex()
+        .gap(rems_from_px(6.0_f32))
+        .mb(rems_from_px(4.0_f32))
         .child(
-            Label::new("\u{2022}")
-                .size(LabelSize::XSmall)
-                .color(Color::Muted),
+            button_icon("triangle-alert")
+                .size(IconSize::XSmall)
+                .color(Color::Warning),
         )
         .child(
-            h_flex()
-                .flex_wrap()
-                .children(pieces.into_iter().map(|(text, code)| {
-                    let label = Label::new(text).size(LabelSize::XSmall).color(Color::Muted);
-                    if code { label.buffer_font(cx) } else { label }
-                })),
+            Label::new(ISSUES_OFF_NOTE)
+                .size(LabelSize::Small)
+                .color(Color::Warning),
         )
 }
 
@@ -146,70 +127,45 @@ impl Render for IssuesTab {
         let tracker = self.pipeline.read(cx).tracker();
         let off = issues_off(&tracker);
         let selected = choice_index(&tracker.create_issue);
-        let warning = signal(cx).fg;
-        let mut options = Vec::new();
-        for index in 0..CREATE_ISSUE_OPTIONS.len() {
-            options.push(self.option_row(index, selected, off, cx).into_any_element());
+        let mut card = SettingsCard::new(SeparatorInset::Tile);
+        let rows = issue_rows(&tracker.create_issue, off);
+        for (index, row) in rows.into_iter().enumerate() {
+            card = card.child(self.option_row(index, row, cx));
         }
-        v_flex()
-            .gap_3()
-            .child(
-                v_flex()
-                    .id("create-issue-group")
-                    .gap_1p5()
-                    .track_focus(&self.focus)
-                    .on_key_down(cx.listener(move |this, event: &KeyDownEvent, _, cx| {
-                        if off {
-                            return;
-                        }
-                        let Some(next) = step_choice(selected, &event.keystroke.key) else {
-                            return;
-                        };
-                        cx.stop_propagation();
-                        if next != selected {
-                            this.pick(next, cx);
-                        }
-                    }))
-                    .child(
-                        div().mb_1p5().child(
-                            Label::new("Open a GitHub issue for a task")
-                                .size(LabelSize::Small)
-                                .weight(gpui::FontWeight::SEMIBOLD),
-                        ),
-                    )
-                    .children(options),
-            )
-            .when(off, |this| {
-                this.child(
-                    Label::new(ISSUES_OFF_NOTE)
-                        .size(LabelSize::XSmall)
-                        .color(Color::Custom(warning)),
-                )
-            })
-            .child(
-                v_flex()
-                    .gap_0p5()
-                    .child(bullet(
-                        vec![
-                            ("Opened with ", false),
-                            ("gh issue create", true),
-                            (" on GitHub, in this project.", false),
-                        ],
-                        cx,
-                    ))
-                    .child(bullet(vec![("Title: the task title.", false)], cx))
-                    .child(bullet(
-                        vec![
-                            ("Body: the ", false),
-                            ("spec.md", true),
-                            (
-                                " of the task, or the task notes without one, and a line \
-                                 \"Made by Natamux for T-0001.\"",
-                                false,
-                            ),
-                        ],
-                        cx,
-                    )),
-            )
+        let card = div()
+            .id("create-issue-group")
+            .track_focus(&self.focus)
+            .on_key_down(cx.listener(move |this, event: &KeyDownEvent, _, cx| {
+                if off {
+                    return;
+                }
+                let Some(next) = step_choice(selected, &event.keystroke.key) else {
+                    return;
+                };
+                cx.stop_propagation();
+                if next != selected {
+                    this.pick(next, cx);
+                }
+            }))
+            .child(card);
+        let notes = [
+            foot_line(
+                &[
+                    ("Runs ", false),
+                    ("gh issue create", true),
+                    (" in the project folder.", false),
+                ],
+                cx,
+            ),
+            foot_line(&[("The title is the task title.", false)], cx),
+            foot_line(&[("The body is spec.md.", false)], cx),
+        ];
+        let group = SettingsGroup::new("Open a GitHub issue for a task").child(card);
+        let group = if off {
+            group.footnote_child(off_line())
+        } else {
+            group
+        };
+        group.footnote_child(foot_bullets(notes))
     }
 }

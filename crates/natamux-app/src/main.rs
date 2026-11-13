@@ -20,6 +20,7 @@ mod app {
     pub mod command_when;
     pub mod commands;
     pub mod commands_app;
+    pub mod commands_editor;
     pub mod commands_files;
     pub mod commands_git;
     pub mod commands_stages;
@@ -56,6 +57,7 @@ mod app {
     pub mod shots_input;
     pub mod shots_settings;
     pub mod shots_stages;
+    pub mod shots_start_task;
     pub mod shots_terminal;
     pub mod shots_text;
     pub mod shown_cache;
@@ -80,6 +82,8 @@ mod app {
     pub mod update_state;
     pub mod view_rules;
     pub mod view_state;
+    pub mod whats_new;
+    pub mod whats_new_rules;
     pub mod window;
 }
 mod bench {
@@ -95,13 +99,16 @@ mod components {
     mod context_menu_tests;
     pub mod detail_section;
     pub mod dialog;
+    pub mod dialog_frame;
     #[cfg(test)]
     mod dialog_tests;
+    pub mod docs_markdown;
     pub mod empty_state;
     pub mod form;
     #[cfg(test)]
     mod form_tests;
     pub mod glyph;
+    pub mod go_to_line;
     pub mod icons;
     pub mod input_rules;
     #[cfg(test)]
@@ -114,7 +121,11 @@ mod components {
     pub mod resize_handle;
     pub mod resize_rules;
     pub mod scroll_rules;
+    pub mod scrollbars;
     pub mod segmented;
+    pub mod settings_card;
+    pub mod settings_controls;
+    pub mod settings_tile;
     pub mod shape;
     pub mod skeleton;
     pub mod spinner;
@@ -141,6 +152,7 @@ mod files {
     pub mod file_drafts;
     pub mod file_editor;
     pub mod file_editor_body;
+    pub mod file_editor_tools;
     pub mod file_icon_view;
     pub mod file_icons;
     pub mod file_reads;
@@ -149,26 +161,37 @@ mod files {
     pub mod file_tree_rows;
     pub mod file_writes;
     pub mod open_files;
+    pub mod outline_picker;
+    pub mod outline_rules;
 }
 mod git {
+    pub mod blame_marks;
+    pub mod blame_rules;
     pub mod change_rules;
     pub mod change_tree;
     pub mod changes_view;
     pub mod comment_rules;
     pub mod commit_rules;
+    pub mod diff_arrows;
+    pub mod diff_blame;
     pub mod diff_cursor;
     pub mod diff_editors;
+    pub mod diff_hunk_controls;
     pub mod diff_rules;
     pub mod diff_view;
+    pub mod editor_find;
+    pub mod editor_find_rules;
     pub mod graph_lanes;
     pub mod graph_layout;
     pub mod history_view;
     pub mod image_rules;
     pub mod languages;
+    pub mod move_rules;
     pub mod review_blocks;
     pub mod review_rules;
     pub mod rollback_dialog;
     pub mod rollback_rules;
+    pub mod whitespace_rules;
 }
 mod ime {
     pub mod ime_check;
@@ -178,10 +201,12 @@ mod palette {
     pub mod fuzzy;
     pub mod jump_rows;
     pub mod palette_layer;
+    pub mod palette_list;
     pub mod palette_pick;
     pub mod palette_row;
     pub mod palette_rows;
     pub mod palette_view;
+    pub mod task_match;
 }
 mod perf {
     pub mod draws;
@@ -191,6 +216,7 @@ mod perf {
 }
 mod projects {
     pub mod branch_name_field;
+    pub mod general_tab;
     pub mod idle_pause_field;
     pub mod issue_import;
     pub mod issue_rules;
@@ -201,6 +227,7 @@ mod projects {
     pub mod projects_dialog;
     pub mod repo_trust_dialog;
     pub mod send_backs_field;
+    pub mod settings_bar;
     pub mod settings_header;
     pub mod settings_tab_rules;
     pub mod settings_tabs;
@@ -221,9 +248,11 @@ mod sidebar {
     pub mod sidebar;
     pub mod sidebar_text;
     pub mod sidebar_tree;
+    pub mod snapshot_memo;
     pub mod task_card;
     pub mod task_card_open;
     pub mod tree_entries;
+    pub mod tree_keys;
     pub mod tree_lines;
     pub mod tree_model;
     pub mod tree_rename;
@@ -232,9 +261,15 @@ mod sidebar {
     pub mod workspace_tree;
 }
 mod stages {
+    pub mod add_menu;
+    pub mod add_stage_dialog;
+    pub mod advanced_rules;
     pub mod branch_details;
-    pub mod branch_details_fields;
+    pub mod branch_dialog;
+    pub mod branch_dialog_fields;
+    pub mod branch_dialog_paths;
     pub mod card_rules;
+    pub mod custom_stage_dialog;
     pub mod editor_branches;
     pub mod editor_catalog;
     pub mod editor_draft;
@@ -246,8 +281,12 @@ mod stages {
     pub mod editor_moves;
     pub mod flow_lines;
     pub mod flow_rules;
+    pub mod group_dialog;
+    pub mod group_rules;
     pub mod kind_icon;
+    pub mod list_rules;
     pub mod overview_rules;
+    pub mod path_add;
     pub mod pipeline_editor;
     pub mod pipeline_preview;
     pub mod pipeline_preview_branch;
@@ -258,7 +297,10 @@ mod stages {
     pub mod prompt_field;
     pub mod send_back_dialog;
     pub mod send_back_rules;
+    pub mod sheet_rules;
     pub mod skill_rules;
+    pub mod source_tag;
+    pub mod stage_blocks;
     pub mod stage_card;
     pub mod stage_choices;
     pub mod stage_details;
@@ -270,7 +312,12 @@ mod stages {
     pub mod stage_options;
     pub mod stage_picker;
     pub mod stage_rows;
+    pub mod stage_sheet;
+    pub mod stage_sheet_column;
+    pub mod stage_sheet_groups;
+    pub mod stage_stepper;
     pub mod stage_view_rules;
+    pub mod stages_tab;
 }
 
 mod tasks {
@@ -359,7 +406,6 @@ mod text_view {
 mod workspaces {
     pub mod branches;
     pub mod docs_list;
-    pub mod docs_markdown;
     #[cfg(test)]
     mod docs_markdown_golden_tests;
     pub mod docs_rules;
@@ -371,6 +417,7 @@ mod workspaces {
     pub mod finished_summary;
     pub mod new_workspace_dialog;
     pub mod new_workspace_rules;
+    pub mod new_workspace_view_rules;
     pub mod no_workspace;
     pub mod remove_dialog_rules;
     pub mod remove_finished;
@@ -501,6 +548,7 @@ fn start(
     app::update::set_window(window, cx);
     if !fake && !options.smoke {
         app::update::start_timers(cx);
+        app::whats_new::on_start(window, cx);
     }
     if let Some(started) = started {
         let smoke = options.smoke.then(|| Arc::clone(failed));
@@ -537,7 +585,8 @@ fn run_modes(options: &Options, window: WindowHandle<Root>, cx: &mut App) {
         );
     }
     if options.bench_flows {
-        app::flow_bench::run(window, options.bench_tasks, cx);
+        let only = options.bench_only.clone();
+        app::flow_bench::run(window, options.bench_tasks, only, options.bench_repeat, cx);
     }
     if options.count_draws {
         perf::draws::start(window, cx);

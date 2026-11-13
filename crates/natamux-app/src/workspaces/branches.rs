@@ -5,7 +5,6 @@ use natamux_proto::projects::repo::ORIGIN_PREFIX;
 
 /// The branches that Natamux made for tasks. They fill the list, so they are folded away.
 pub const TASK_BRANCH_GROUP: &str = "Task branches";
-const TASK_BRANCH_PREFIX: &str = "natamux/";
 /// The branches of origin, also the ones never fetched. Folded away as well.
 pub const REMOTE_BRANCH_GROUP: &str = "Remote branches";
 /// The branch menu's entry while origin is asked.
@@ -60,13 +59,29 @@ pub fn branch_options(
     });
     let plain = rest
         .iter()
-        .filter(|name| !name.starts_with(TASK_BRANCH_PREFIX))
+        .filter(|name| !is_task_branch(name))
         .map(|&name| option(name, name.to_string(), "Branches"));
     let task = rest
         .iter()
-        .filter(|name| name.starts_with(TASK_BRANCH_PREFIX))
+        .filter(|name| is_task_branch(name))
         .map(|&name| option(name, name.to_string(), TASK_BRANCH_GROUP));
     recent_options.chain(plain).chain(task).collect()
+}
+
+/// A branch named like the default of a task, `<project>/<id>-<slug>`: after the first `/` comes
+/// letters, `-`, digits, then `-` or the end. Old `natamux/t-0001-x` branches match too.
+fn is_task_branch(name: &str) -> bool {
+    let Some((_, rest)) = name.split_once('/') else {
+        return false;
+    };
+    let Some((letters, rest)) = rest.split_once('-') else {
+        return false;
+    };
+    let digits = rest.split('-').next().unwrap_or_default();
+    !letters.is_empty()
+        && letters.chars().all(|c| c.is_ascii_alphabetic())
+        && !digits.is_empty()
+        && digits.chars().all(|c| c.is_ascii_digit())
 }
 
 /// The branches of origin that have no local branch of the same name: a local one already starts
@@ -102,11 +117,34 @@ mod tests {
             "main",
             "dev",
             "natamux/t-0001-a",
-            "natamux/t-0002-b",
+            "my-app/t-0002-b",
             "feature/x",
         ]
         .map(String::from)
         .to_vec()
+    }
+
+    #[test]
+    fn knows_task_branches_of_any_project_and_of_old_tasks() {
+        for name in [
+            "natamux/t-0001-fix",
+            "my-app/t-12-x",
+            "app/ABC-12",
+            "a/task-5",
+        ] {
+            assert!(is_task_branch(name), "{name}");
+        }
+        for name in [
+            "main",
+            "T-0001",
+            "feature/x",
+            "feature/x-y",
+            "a/t-",
+            "a/-1",
+            "a/t-1x",
+        ] {
+            assert!(!is_task_branch(name), "{name}");
+        }
     }
 
     fn pairs(options: &[BranchOption]) -> Vec<(&str, &str)> {
@@ -126,7 +164,7 @@ mod tests {
                 ("Recent", "feature/x"),
                 ("Branches", "dev"),
                 (TASK_BRANCH_GROUP, "natamux/t-0001-a"),
-                (TASK_BRANCH_GROUP, "natamux/t-0002-b"),
+                (TASK_BRANCH_GROUP, "my-app/t-0002-b"),
             ]
         );
         assert_eq!(options[0].label, "main (current)");
@@ -150,7 +188,7 @@ mod tests {
                 ("Recent", "dev"),
                 ("Recent", "feature/x"),
                 (TASK_BRANCH_GROUP, "natamux/t-0001-a"),
-                (TASK_BRANCH_GROUP, "natamux/t-0002-b"),
+                (TASK_BRANCH_GROUP, "my-app/t-0002-b"),
             ]
         );
         assert_eq!(options[0].label, "main (default)");

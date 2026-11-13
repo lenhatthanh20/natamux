@@ -1,7 +1,7 @@
 //! Builds the daemon and starts its server (`main.ts`, the parts that exist in Rust so far).
 
 use std::net::SocketAddr;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
@@ -35,6 +35,7 @@ use crate::tasks::errors::TaskError;
 use crate::tasks::service::{TaskService, is_task_ended};
 use crate::tasks::templates::TemplateService;
 use crate::terminals::input_trace::trace_input_on;
+use crate::terminals::login_path::use_login_path;
 use crate::terminals::open_shells::{OpenShells, OpenShellsOptions, ShellsView};
 use crate::terminals::service::{TerminalOptions, TerminalService};
 use crate::terminals::session_lifecycle::SpawnPty;
@@ -95,8 +96,10 @@ fn home_of(env: &Env) -> PathBuf {
 
 /// An agent the user starts by hand in a shell finds its hooks there: the files are written at
 /// each shell start, and only there, not on the output path.
-fn with_hook_files(spawn: Arc<SpawnPty>) -> Arc<SpawnPty> {
-    Arc::new(move |options: SpawnOptions| {
+fn with_hook_files(spawn: Arc<SpawnPty>, bin_dir: Option<String>) -> Arc<SpawnPty> {
+    Arc::new(move |mut options: SpawnOptions| {
+        // The shell is the program that needs the login PATH; the daemon itself does not wait.
+        use_login_path(&mut options.env, bin_dir.as_deref());
         prepare_agent_hooks(&options.cwd, WorkspaceHooks { claude_code: true });
         (*spawn)(options)
     })
@@ -218,6 +221,7 @@ fn terminal_service(
     store: &TaskStore,
     daemon_url: &str,
     cells: &Cells,
+    data_dir: &Path,
 ) -> TerminalService {
     let output = Arc::clone(&cells.runner);
     let idle = Arc::clone(&cells.workspaces);
@@ -253,6 +257,7 @@ fn terminal_service(
             }
         })),
         trace_input: trace_input_on(env.get("NATAMUX_INPUT_TRACE").map(String::as_str)),
+        screens_in: Some(data_dir.to_path_buf()),
     })
 }
 
@@ -357,8 +362,16 @@ pub async fn start(
     // Shells run on the same machine as the daemon, so they reach it on loopback.
     let daemon_url = format!("http://127.0.0.1:{}", address.port());
     let cells = Cells::default();
-    let spawn = with_hook_files(spawn);
-    let terminals = terminal_service(env, spawn, &scheduler, &store, &daemon_url, &cells);
+    let spawn = with_hook_files(spawn, config.agents.bin_dir.clone());
+    let terminals = terminal_service(
+        env,
+        spawn,
+        &scheduler,
+        &store,
+        &daemon_url,
+        &cells,
+        &config.data_dir,
+    );
     let open_shells = open_shells(config, &store, &terminals, &scheduler, &cells.runner);
     let agents = Arc::new(agent_runner(
         config,
@@ -492,6 +505,7 @@ impl Daemon {
         self.state.issue_linker.stop();
         self.state.idle_pause.stop();
         self.state.open_shells.stop();
+        self.state.terminals.save_screens();
         let ended = self.state.terminals.close_all_and_wait();
         self.state.stages.stop();
         ended.wait();

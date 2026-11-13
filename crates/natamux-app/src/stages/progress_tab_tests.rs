@@ -156,13 +156,13 @@ fn branch_input(taken: bool, expanded: bool) -> ProgressInput {
     ];
     progress[3].path = Some("other".into());
     ProgressInput {
-        task: Task {
+        task: Rc::new(Task {
             state: TaskState::Running,
             ..Task::default()
-        },
-        steps: branch_steps(taken),
-        progress,
-        events: Vec::new(),
+        }),
+        steps: Rc::new(branch_steps(taken)),
+        progress: Rc::new(progress),
+        events: Rc::default(),
         files: None,
         usage: None,
         activity: None,
@@ -199,20 +199,20 @@ fn bounds(cx: &mut VisualTestContext, selector: &'static str) -> Bounds<Pixels> 
 
 fn first_step_layout(with_timeline: bool, width: f32, cx: &mut TestAppContext) -> (Pixels, Pixels) {
     let mut input = branch_input(true, false);
-    input.steps = vec![
+    input.steps = Rc::new(vec![
         Step::Stage(Stage::new("context", StageKind::Context, Gate::Auto)),
         Step::Stage(Stage::new("next", StageKind::Agent, Gate::Auto)),
         Step::Stage(Stage::new("last", StageKind::Agent, Gate::Auto)),
-    ];
+    ]);
     let mut entry = progress("context", StageStatus::Done);
     entry.kind = StageKind::Context;
     entry.name = "Context".into();
     entry.path = None;
-    input.progress = vec![
+    input.progress = Rc::new(vec![
         entry,
         progress("next", StageStatus::Upcoming),
         progress("last", StageStatus::Upcoming),
-    ];
+    ]);
     let (_view, cx) = cx.add_window_view(|_, _| FirstStageView {
         input,
         width,

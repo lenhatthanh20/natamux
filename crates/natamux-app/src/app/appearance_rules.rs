@@ -4,6 +4,7 @@
 use serde_json::json;
 
 use crate::app::theme_catalog::ThemeNames;
+use crate::components::colors::CLEAR;
 use crate::terminals::terminal_font::{FontSource, ResolvedFont};
 
 // The base the UI size scales. The UI is Zed's default; code (terminal, diff, editors) is 13, not
@@ -134,14 +135,18 @@ pub struct ThemeSetting<'a> {
 
 /// The user settings JSON for Zed: `ui_zoom` is `UiSize::zoom`. Zed's own fonts; the terminal
 /// gets a font only when the user picked one, else Zed gives it the buffer font and size. `shot`
-/// is the state of a `--shot`: it hides the scrollbars, which Zed shows for a moment after a
-/// scroll, and holds the editors' caret solid, so a shot never catches it in the off half of a
-/// blink. A state whose name ends in `-scrollbar` shows the scrollbars instead, always.
+/// is the state of a `--shot`: it hides the editors' scrollbars, which Zed shows for a moment after
+/// a scroll, and holds the editors' caret solid, so a shot never catches it in the off half of a
+/// blink. A state whose name ends in `-scrollbar` shows the scrollbars instead, always. The
+/// editors' scrollbars show only the thumb: no cursor or selection markers, which also keep the
+/// bar from fading, and no track border line. Sticky scroll shows in the editor tab only (Zed
+/// keeps it to singleton editors); whitespace shows everywhere while the diff's toggle is on.
 pub fn user_settings(
     theme: ThemeSetting<'_>,
     ui_zoom: f32,
     terminal: &ResolvedFont,
     shot: Option<&str>,
+    show_whitespace: bool,
 ) -> String {
     let terminal = if terminal.source == FontSource::Default {
         json!({})
@@ -155,6 +160,9 @@ pub fn user_settings(
         "buffer_font_family": ".ZedMono",
         "buffer_font_size": scaled(BASE_BUFFER_FONT_SIZE, ui_zoom),
         "terminal": terminal,
+        "scrollbar": {"cursors": false, "selected_text": false, "selected_symbol": false},
+        "sticky_scroll": {"enabled": true},
+        "experimental.theme_overrides": {"scrollbar.track.border": CLEAR},
     });
     if let Some(state) = shot {
         let show = if shows_scrollbars(state) {
@@ -162,8 +170,11 @@ pub fn user_settings(
         } else {
             "never"
         };
-        settings["scrollbar"] = json!({"show": show});
+        settings["scrollbar"]["show"] = json!(show);
         settings["cursor_blink"] = json!(false);
+    }
+    if show_whitespace {
+        settings["show_whitespaces"] = json!("all");
     }
     settings.to_string()
 }

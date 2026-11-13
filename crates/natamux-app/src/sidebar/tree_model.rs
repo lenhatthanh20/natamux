@@ -188,8 +188,7 @@ impl TreeModel {
         let reads = |task: &Task| {
             !is_finished(task)
                 && task.workspace.is_some()
-                && (open.contains(&task.id)
-                    || matches!(task.state, TaskState::Running | TaskState::NeedsInput))
+                && (open.contains(&task.id) || task.state.has_live_agent())
         };
         let mut reads_terminals: Vec<String> = Vec::new();
         for task in cards.iter().filter(|task| reads(task)) {

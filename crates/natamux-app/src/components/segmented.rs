@@ -5,7 +5,10 @@
 use std::rc::Rc;
 
 use gpui::{FocusHandle, KeyDownEvent};
-use ui::{ToggleButtonGroup, ToggleButtonGroupStyle, ToggleButtonWithIcon, Tooltip, prelude::*};
+use ui::{
+    FixedWidth, ToggleButtonGroup, ToggleButtonGroupStyle, ToggleButtonWithIcon, Tooltip,
+    prelude::*,
+};
 
 use super::input_rules::segment_step;
 
@@ -18,6 +21,10 @@ pub struct Segmented<const N: usize> {
     options: [(SharedString, IconName); N],
     selected: usize,
     icon_only: bool,
+    /// Options that cannot be picked, each with the reason shown as its tooltip.
+    disabled: Vec<(usize, SharedString)>,
+    /// Each option this wide, so a disabled one can be covered exactly.
+    option_width: Option<f32>,
     on_change: OnChange,
 }
 
@@ -37,8 +44,23 @@ impl<const N: usize> Segmented<N> {
             options,
             selected,
             icon_only: false,
+            disabled: Vec::new(),
+            option_width: None,
             on_change: Rc::new(on_change),
         }
+    }
+
+    /// Option `index` looks off, says `reason` on hover and ignores clicks. Zed's toggle buttons
+    /// have no disabled state, so a dimmed cover sits on it; that needs `option_width`.
+    pub fn disabled(mut self, index: usize, reason: impl Into<SharedString>) -> Self {
+        self.disabled.push((index, reason.into()));
+        self
+    }
+
+    /// Every option `width` px wide instead of fitting its label.
+    pub fn option_width(mut self, width: f32) -> Self {
+        self.option_width = Some(width);
+        self
     }
 
     /// Icons only, with the names in tooltips: when main is narrower than 560.
@@ -49,8 +71,35 @@ impl<const N: usize> Segmented<N> {
 }
 
 impl<const N: usize> RenderOnce for Segmented<N> {
-    fn render(self, _: &mut Window, _: &mut App) -> impl IntoElement {
+    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let selected = self.selected;
+        let cover = self.option_width.map(|width| {
+            let dim = cx.theme().colors().editor_background.opacity(0.6);
+            let name = self.name.clone();
+            let cells = (0..N).map(|index| {
+                let cell = div()
+                    .id((name.clone(), index))
+                    .w(rems_from_px(width))
+                    .h_full();
+                match self.disabled.iter().find(|(at, _)| *at == index) {
+                    Some((_, reason)) => cell
+                        .bg(dim)
+                        .occlude()
+                        .tooltip(Tooltip::text(reason.clone()))
+                        .into_any_element(),
+                    None => cell.into_any_element(),
+                }
+            });
+            h_flex()
+                .absolute()
+                .top_0()
+                .left_0()
+                .size_full()
+                .children(cells)
+        });
+        let group_width = self
+            .option_width
+            .map(|width| rems_from_px(width * N as f32));
         let icon_only = self.icon_only;
         let buttons: [ToggleButtonWithIcon; N] = std::array::from_fn(|index| {
             let (label, icon) = self.options[index].clone();
@@ -83,11 +132,16 @@ impl<const N: usize> RenderOnce for Segmented<N> {
                     cx.stop_propagation();
                 }
             })
+            .relative()
             .child(
                 ToggleButtonGroup::single_row(self.name, buttons)
                     .style(ToggleButtonGroupStyle::Outlined)
                     .selected_index(selected)
-                    .auto_width(),
+                    .map(|group| match group_width {
+                        Some(width) => group.width(width),
+                        None => group.auto_width(),
+                    }),
             )
+            .children(cover)
     }
 }

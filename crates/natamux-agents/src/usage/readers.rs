@@ -58,6 +58,36 @@ pub(crate) fn json_lines(path: &Path) -> Vec<Json> {
     out
 }
 
+fn has_text(haystack: &[u8], needle: &str) -> bool {
+    let needle = needle.as_bytes();
+    haystack.windows(needle.len()).any(|part| part == needle)
+}
+
+/// Streams the JSON objects of a file with their 1-based line number, without keeping them. A line
+/// that has none of `needles` is not parsed: the callers only read keys named by a needle.
+fn for_each_json_line(path: &Path, needles: &[&str], mut each: impl FnMut(usize, Json)) {
+    let Ok(file) = File::open(path) else {
+        return;
+    };
+    let mut reader = BufReader::new(file);
+    let mut bytes = Vec::new();
+    let mut number = 0;
+    loop {
+        bytes.clear();
+        match reader.read_until(b'\n', &mut bytes) {
+            Ok(0) | Err(_) => break,
+            Ok(_) => number += 1,
+        }
+        if !needles.iter().any(|needle| has_text(&bytes, needle)) {
+            continue;
+        }
+        let line = String::from_utf8_lossy(&bytes);
+        if let Ok(Value::Object(map)) = parse_js(line.trim_end_matches(['\n', '\r'])) {
+            each(number, map);
+        }
+    }
+}
+
 /// A message of Claude Code by id, in the order it first appeared.
 #[derive(Default)]
 struct ByMessage {
@@ -79,19 +109,21 @@ impl ByMessage {
 
 // Claude Code writes one message on several lines, each with the usage so far: the last one counts.
 fn read_claude_file(path: &Path, by_message: &mut ByMessage) {
-    for (index, entry) in json_lines(path).iter().enumerate() {
+    // A line without the text "usage" has no usage object, so it never changes the result. The
+    // fallback id uses the file line number: it only has to be unique inside the file.
+    for_each_json_line(path, &["\"usage\""], |number, entry| {
         let message = object(entry.get("message"));
         let usage = object(message.and_then(|message| message.get("usage")));
         // "<synthetic>" marks a message that Claude Code made itself, without a model call.
         let (Some(message), Some(usage)) = (message, usage) else {
-            continue;
+            return;
         };
         if message.get("model").and_then(Value::as_str) == Some("<synthetic>") {
-            continue;
+            return;
         }
         let id = match message.get("id").and_then(Value::as_str) {
             Some(id) => id.to_string(),
-            None => format!("{}:{}", path.display(), index + 1),
+            None => format!("{}:{}", path.display(), number),
         };
         let long_cache = object(usage.get("cache_creation"));
         let counts = UsageCounts {
@@ -102,7 +134,7 @@ fn read_claude_file(path: &Path, by_message: &mut ByMessage) {
             output: count(usage.get("output_tokens")),
         };
         by_message.set(id, model_of(message.get("model")), counts);
-    }
+    });
 }
 
 /// The session's file, plus its sub-agents in `<session>/subagents/*.jsonl` next to it.
@@ -173,7 +205,8 @@ pub fn read_codex_usage(path: &Path) -> ModelUsage {
     let mut usage = ModelUsage::default();
     let mut model = UNKNOWN_MODEL.to_string();
     let mut last = zero_counts();
-    for entry in json_lines(path) {
+    // Only a turn_context line (payload.model) and a token_count line (total_token_usage) count.
+    for_each_json_line(path, &["\"model\"", "\"total_token_usage\""], |_, entry| {
         let payload = object(entry.get("payload"));
         let entry_type = entry.get("type").and_then(Value::as_str);
         let turn_model = payload
@@ -181,7 +214,7 @@ pub fn read_codex_usage(path: &Path) -> ModelUsage {
             .filter(|name| name.is_string());
         if let (Some("turn_context"), Some(name)) = (entry_type, turn_model) {
             model = model_of(Some(name));
-            continue;
+            return;
         }
         let info = object(payload.and_then(|payload| payload.get("info")));
         let total = object(info.and_then(|info| info.get("total_token_usage")));
@@ -189,14 +222,14 @@ pub fn read_codex_usage(path: &Path) -> ModelUsage {
             .and_then(|payload| payload.get("type"))
             .and_then(Value::as_str);
         let is_count = payload_type == Some("token_count");
-        let Some(total) = total else { continue };
+        let Some(total) = total else { return };
         if entry_type != Some("event_msg") || !is_count {
-            continue;
+            return;
         }
         let now = codex_counts(total);
         add_counts(&mut usage, &model, &change(&now, &last));
         last = now;
-    }
+    });
     usage.0.retain(|(_, counts)| !is_empty(counts));
     usage
 }
@@ -204,11 +237,11 @@ pub fn read_codex_usage(path: &Path) -> ModelUsage {
 /// Copilot's inputTokens include cache reads and writes.
 pub fn read_copilot_usage(path: &Path) -> ModelUsage {
     let mut usage = ModelUsage::default();
-    for entry in json_lines(path) {
+    for_each_json_line(path, &["\"usage\""], |_, entry| {
         let record = object(object(entry.get("data")).and_then(|data| data.get("usage")));
-        let Some(record) = record else { continue };
+        let Some(record) = record else { return };
         if entry.get("type").and_then(Value::as_str) != Some("session.usage_record") {
-            continue;
+            return;
         }
         let cache_read = count(record.get("cacheReadTokens"));
         let cache_write = count(record.get("cacheWriteTokens"));
@@ -222,7 +255,7 @@ pub fn read_copilot_usage(path: &Path) -> ModelUsage {
             output: count(record.get("outputTokens")),
         };
         add_counts(&mut usage, &model_of(record.get("model")), &counts);
-    }
+    });
     usage
 }
 

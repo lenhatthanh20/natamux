@@ -1,13 +1,15 @@
 //! A path dragged from the Files tab onto a terminal pane (`TerminalView.tsx` drop): a pane of
 //! the same task that has not ended takes it and types its quoted path. While the drag is over
-//! it, a 2 px outline in the focus colour shows inside the pane.
+//! it, a 2 px outline in the focus colour shows inside the pane. Files dropped from the OS file
+//! manager carry no task, so any pane that has not ended takes them and types their full paths.
 
 use std::any::Any;
 
-use gpui::{Entity, Focusable, Global, Stateful, transparent_black};
+use gpui::{Entity, ExternalPaths, Focusable, Global, Stateful, transparent_black};
 use natamux_client::TerminalStatus;
 use ui::prelude::*;
 
+use super::paste_rules::os_drop_text;
 use super::remote_terminal::RemoteTerminal;
 use crate::files::explorer_tree::{DraggedPath, drop_text};
 
@@ -46,6 +48,7 @@ pub fn with_drop(
         transparent_black()
     };
     let taker = terminal.clone();
+    let os_taker = terminal.clone();
     let accepted = task_id.clone();
     let area = div()
         .absolute()
@@ -54,9 +57,10 @@ pub fn with_drop(
         .border_2()
         .border_color(base)
         .can_drop(move |value: &dyn Any, _, _| {
-            value
-                .downcast_ref::<DraggedPath>()
-                .is_some_and(|dragged| dragged.accepts(&accepted))
+            value.is::<ExternalPaths>()
+                || value
+                    .downcast_ref::<DraggedPath>()
+                    .is_some_and(|dragged| dragged.accepts(&accepted))
         })
         .drag_over::<DraggedPath>(move |style, dragged, _, _| {
             if dragged.accepts(&task_id) {
@@ -69,6 +73,16 @@ pub fn with_drop(
             let text = drop_text(&dragged.path, dragged.kind);
             taker.update(cx, |terminal, cx| terminal.paste_text(&text, cx));
             let focus = taker.read(cx).view.focus_handle(cx);
+            window.focus(&focus, cx);
+        })
+        .drag_over::<ExternalPaths>(move |style, _, _, _| style.border_color(focus_color))
+        .on_drop(move |paths: &ExternalPaths, window, cx| {
+            if paths.paths().is_empty() {
+                return;
+            }
+            let text = os_drop_text(paths.paths(), cfg!(windows));
+            os_taker.update(cx, |terminal, cx| terminal.paste_text(&text, cx));
+            let focus = os_taker.read(cx).view.focus_handle(cx);
             window.focus(&focus, cx);
         });
     pane.relative().child(area)

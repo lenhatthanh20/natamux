@@ -26,8 +26,10 @@ use super::view_state::{self, Layout, ViewState};
 use crate::components::toast_rules::{ToastTone, Toasts, toast_duration};
 use crate::sidebar::card_rules::opened_folds;
 use crate::sidebar::sidebar_tree::with_fold;
+use crate::tasks::delete_finished::DeleteQueue;
 use crate::tasks::task_sort::{SortKey, TaskSort, next_sort};
 use crate::terminals::pane_rules::PaneLayout;
+use crate::terminals::terminal_cache::TerminalCache;
 
 /// What views and Root follow besides `cx.notify()`.
 #[derive(Clone, Debug)]
@@ -85,7 +87,7 @@ pub struct Dashboard {
     pub open_task: Option<String>,
     /// Main shows the Agents grid (then no task is open).
     pub agents_open: bool,
-    /// The Settings page fills the body over main (T-0174); None: closed.
+    /// The Settings popup over the dashboard (T-0174, T-0306); None: closed.
     pub settings: Option<SettingsPage>,
     last_settings_page: SettingsPage,
     /// The terminal the open workspace shows and focuses once its terminals are read.
@@ -105,6 +107,10 @@ pub struct Dashboard {
     pub state_filter: Option<TaskState>,
     pub sort: TaskSort,
     pub bulk: BulkRuns,
+    pub deletes: DeleteQueue,
+    /// The window is in front. The open task counts as seen only then: a turn that ends while the
+    /// user is in another app stays unseen until they come back.
+    window_active: bool,
 }
 
 impl EventEmitter<DashboardChange> for Dashboard {}
@@ -149,6 +155,8 @@ impl Dashboard {
             state_filter: None,
             sort: None,
             bulk: BulkRuns::default(),
+            deletes: DeleteQueue::default(),
+            window_active: true,
         };
         dashboard.watch(cx);
         dashboard
@@ -189,6 +197,9 @@ impl Dashboard {
             DashboardEvent::TaskLogged { task_id } => {
                 cx.emit(DashboardChange::TaskLogged(task_id.clone()))
             }
+            DashboardEvent::Terminals { task_id, terminals } => {
+                TerminalCache::set_shells(task_id, &terminals.shells, cx)
+            }
             _ => {}
         }
         if let Some(notice) = self.data.apply(event) {
@@ -211,7 +222,8 @@ impl Dashboard {
         if gone(&self.open_task) {
             self.back(cx);
         }
-        let seen = seen_after_list(&self.view.seen, &self.data.tasks, self.open_task.as_deref());
+        let open = self.open_task.as_deref().filter(|_| self.window_active);
+        let seen = seen_after_list(&self.view.seen, &self.data.tasks, open);
         if seen != self.view.seen {
             self.view.seen = seen;
             self.save_view(cx);
@@ -484,6 +496,9 @@ pub mod details;
 
 #[path = "docs_state.rs"]
 mod docs_state;
+
+#[path = "whats_new_state.rs"]
+mod whats_new_state;
 
 #[path = "details_writes.rs"]
 mod details_writes;

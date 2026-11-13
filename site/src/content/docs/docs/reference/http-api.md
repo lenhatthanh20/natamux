@@ -56,24 +56,24 @@ To do these from a script, use the daemon's own token, not the one in a task ter
 | Method and path | Meaning |
 |---|---|
 | `GET /tasks?state=<state>` | List tasks |
-| `POST /tasks` | Create a task (`title` is required) |
+| `POST /tasks` | Create a task (`title` is required). An optional `model` is passed to the task's agent as `--model`; see [Models](#models) |
 | `GET /tasks/:id` | One task |
 | `DELETE /tasks/:id` | Delete the task, its notes and its history. A workspace and its branch are removed too, also when the branch has commits that are not merged. Answers 409 when that workspace has changes that are not committed, and the task, the worktree and the branch stay. `?force=true` discards those changes and deletes anyway |
-| `PATCH /tasks/:id` | Change `title`, `description`, `priority`, `labels` or `dependsOn` |
+| `PATCH /tasks/:id` | Change `title`, `description`, `priority`, `labels`, `dependsOn` or `model`. A `model` of `null` or `""` clears it |
 | `GET /tasks/:id/events` | The event log of a task |
 | `POST /tasks/:id/events` | Send an event `{ source, type, payload? }`. Answers `{ task, accepted }` |
 | `POST /tasks/:id/stage` | A stage action `{ action, stage?, terminal?, to?, reason? }`. Actions: `approve`, `reopen`, `skip`, `pass`, `fail`, `report`, `start` |
 | `PUT /tasks/:id/ci` | Whether a stage waits for CI before it passes `{ stage, on }`. Answers 400 when the stage does not offer it |
 | `PUT /tasks/:id/skip` | Whether a stage not reached yet is skipped when the task reaches it `{ stage, on }`. Answers 400 when marking the current stage or an earlier one or the context stage, and for any change on a task that is over |
 | `PUT /tasks/:id/workflow` | Whether a stage runs as a workflow the next time it starts `{ stage, on }`. Answers 400 when the stage does not offer it or the agent is not Claude Code |
-| `POST /tasks/:id/workspace` | Create the worktree and branch. Body `{ base?, branch? }`. `branch` is 1 to 255 characters and a valid branch name, else 400. Answers 409 when a local branch of that name is checked out in another worktree |
-| `DELETE /tasks/:id/workspace?deleteBranch=true` | Remove the worktree. Answers 409 when it has changes that are not committed; `&force=true` discards them and removes anyway |
+| `POST /tasks/:id/workspace` | Create the worktree and branch. Body `{ base?, branch? }`. `branch` is 1 to 255 characters and a valid branch name, else 400. Answers 409 when a local branch of that name is checked out in another worktree, and for a `mainCheckout` task that was detached |
+| `DELETE /tasks/:id/workspace?deleteBranch=true` | Remove the worktree. Answers 409 when it has changes that are not committed; `&force=true` discards them and removes anyway. A `mainCheckout` task is only detached: its terminals end and its stage files are archived; the folder, its changes and its branch stay |
 | `POST /tasks/:id/agent` | Start an agent `{ agent, prompt?, base?, branch? }`. `branch` works as on `POST /tasks/:id/workspace`, for a task without a workspace |
 | `POST /tasks/:id/agent/reopen` | Start the agent of Terminal 1 of a done or cancelled task again, on its last session: `{ task }`. The task keeps its state. Answers 409 when the task is not finished, has no workspace or no agent, or an agent runs in Terminal 1 |
 | `GET /tasks/:id/changes` | Files changed in the workspace. The answer is kept for 5 seconds; `?fresh=1` reads git now |
 | `GET /tasks/:id/graph` | The history of the task branch next to the base branch. Kept and `?fresh=1` as for changes |
 | `POST /tasks/:id/commit-message` | A commit message for the changes, by the task's agent: `{ message, source, agent, reason? }`. `source` is `draft` when the agent failed and the message is a simple one; `reason` says why. Answers 409 when nothing changed |
-| `POST /workspaces` | Make a task with a worktree and optionally start an agent. The body can have `base` and `branch`. Set `mode` to `single-agent` with a known `agent` for only Context and Agent; omit it for the project's full pipeline. An invalid branch or mode answers 400 and no task is made. Answers 202 with the task as soon as it is made; the worktree and agent come after (see `workspace.preparing`) |
+| `POST /workspaces` | Make a task with a worktree and optionally start an agent. The body can have `base` and `branch`. With `worktree: false`, the task works in the project folder (the main checkout): its `workspace` is that folder, `branch` the branch checked out there, and `mainCheckout` is `true`; nothing is checked out, `base` and `branch` are not used, and the agent starts at once. Answers 409 and makes no task when another open task of the project works in its main checkout. Set `mode` to `single-agent` with a known `agent` for only Context and Agent; omit it for the project's full pipeline. An optional `model` is passed to the task's agent as `--model` (see [Models](#models)). An invalid branch, mode or model answers 400 and no task is made. Answers 202 with the task as soon as it is made; the worktree and agent come after (see `workspace.preparing`) |
 | `GET /workspaces/preparing` | The workspaces being made, and the step of each: `{ preparing: { "T-0001": "checkout" } }` |
 | `POST /hooks/:agent` | Where an agent's hook posts. Always answers `200 {}` for a known agent |
 | `GET /repos` | Projects Natamux manages, and the daemon's worktree folder: `{ repos, worktreesDir }`. A project with its own worktree folder has `worktreesDir`. Each project has `trusted`: whether its commands are approved |
@@ -86,6 +86,12 @@ To do these from a script, use the daemon's own token, not the one in a task ter
 | `GET /repos/:id/skills` | The skills of every agent for the project: `{ skills, notices }`. A skill is `{ name, description, origin, agents, path }`, and `origin` is `project`, `plugin` or `user`. A notice says, for example, that a plugin is on but not installed |
 
 The task is named in a hook by the `X-Natamux-Task` header. The `X-Natamux-Terminal` header names the terminal.
+
+### Models
+
+A task's `model` is optional; without it the agent uses its own default. It is 1 to 100 characters of `A-Z a-z 0-9 . _ - : / @ [ ]`, after trimming, and does not start with `-`. Anything else answers 400 `invalid_request` with the issue at `["model"]`, and `POST /tasks` and `POST /workspaces` make no task. Natamux keeps no list of model names: a well-formed but wrong name reaches the agent, which reports it.
+
+The daemon adds `--model '<model>'` when it starts the task's agent, a built-in agent or a custom one on a built-in base. A stage with another agent gets none, and a stage whose `args` name a model (`--model`, `--model=`, `-m`) keeps its own.
 
 ## More endpoints
 
@@ -101,6 +107,7 @@ Files, git, GitHub, terminals and templates.
 | `GET /tasks/:id/ended-shells` | The last screens of the terminals of a done or cancelled task: `{ shells }`. Each has `name`, `agent`, `stage`, `session` (the agent's last session, or null), `endedAt` and `text` |
 | `GET /tasks/:id/changes/file?path=<file>` | The diff of one changed file |
 | `GET /tasks/:id/changes/image?path=<file>&side=original\|modified` | One side of a changed image |
+| `GET /tasks/:id/blame?path=<file>&side=original\|modified` | Who last changed each line: `{ path, tracked, commits, runs }`. `modified` (the default) is the file in the worktree, `original` a changed file at the last commit. Each commit has `sha`, `author`, `time` (unix seconds) and `summary`; a line not committed has a sha of 40 zeros. Each run is `{ start, count, commit }`: lines from `start` (0-based) and the index of their commit. `tracked` is false, with no runs, for a file git does not track. Answers 413 for a file larger than 1 MB |
 | `GET /tasks/:id/tree?path=<folder>` | One folder of the worktree: `{ entries }`. No `path` is the root. `.git` is never listed |
 | `GET /tasks/:id/file?path=<file>` | One file of the worktree: `{ path, text, binary, tooLarge, version }` |
 | `PUT /tasks/:id/file?path=<file>` | Save a file that exists `{ text }`, with the `version` you read in `If-Match`. Answers 409 when the file changed since |
@@ -119,7 +126,7 @@ Files, git, GitHub, terminals and templates.
 | `POST /tasks/:id/issue` | Open a GitHub issue for the task now |
 | `PUT /tasks/:id/issue` | Link an issue that exists `{ provider, key, url }` |
 | `POST /tasks/:id/fan-out` | Run more tries of a task `{ count, start? }`. `count` is 1 to 5 |
-| `GET /tasks/:id/terminals` | The open terminals of a task: `{ terminals, agents, lanes, programs, restoring }` |
+| `GET /tasks/:id/terminals` | The open terminals of a task: `{ terminals, agents, lanes, programs, restoring, closing, shells }`; `shells` maps each open terminal to its shell id |
 | `DELETE /tasks/:id/terminals/:terminal` | Close one terminal. `:terminal` is its number |
 | `POST /tasks/:id/terminal/ticket` | A one-time ticket for the terminal WebSocket |
 | `GET /templates` | The saved task templates: `{ templates }` |

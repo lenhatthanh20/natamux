@@ -46,6 +46,7 @@ export default defineConfig({
         {
           label: 'Workflows', collapsed: true,
           items: [
+            { slug: 'docs/guides/use-cases' },
             { slug: 'docs/guides/workflows' },
             { slug: 'docs/concepts/stages' },
             { slug: 'docs/concepts/review-loop' },

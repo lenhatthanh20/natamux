@@ -45,6 +45,7 @@ const URGENT: readonly TaskState[] = [
   'blocked',
   'review',
   'running',
+  'idle',
   'ready',
 ]
 

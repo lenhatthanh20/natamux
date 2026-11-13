@@ -52,7 +52,7 @@ async fn moves_the_task_named_in_the_header_and_answers_with_an_empty_object() {
     assert_eq!(state_of(&d, "T-0001").await, "running");
 
     post(&d, hook("Stop"), &HEADER).await;
-    assert_eq!(state_of(&d, "T-0001").await, "needs-input");
+    assert_eq!(state_of(&d, "T-0001").await, "idle");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -120,7 +120,7 @@ async fn answers_200_and_ends_the_turn_as_before_for_odd_background_work_and_cro
         assert_eq!(status, 200, "{background_tasks} {session_crons}");
         assert_eq!(
             state_of(&d, "T-0001").await,
-            "needs-input",
+            "idle",
             "{background_tasks} {session_crons}"
         );
     }

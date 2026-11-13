@@ -36,6 +36,48 @@ fn one_agent_flow_requires_an_agent_and_sends_its_mode() {
     );
 }
 
+#[test]
+fn sends_the_trimmed_model_and_none_when_it_is_empty() {
+    let typed = StartForm {
+        model: " opus ".into(),
+        ..form("Fix it")
+    };
+    let input = new_workspace_input(&typed, &manual(), Vec::new());
+    assert_eq!(input.model.as_deref(), Some("opus"));
+    let empty = new_workspace_input(&form("Fix it"), &manual(), Vec::new());
+    assert_eq!(empty.model, None);
+    let no_agent = StartForm {
+        agent: String::new(),
+        ..typed
+    };
+    assert_eq!(
+        new_workspace_input(&no_agent, &manual(), Vec::new()).model,
+        None
+    );
+}
+
+#[test]
+fn a_model_with_bad_signs_blocks_start_task() {
+    for model in ["-p", "opus; rm", "a b", "$(x)"] {
+        let typed = StartForm {
+            model: model.into(),
+            ..form("Fix it")
+        };
+        assert_eq!(model_error(model), Some(MODEL_NAME_ERROR), "{model}");
+        assert_eq!(blocked_reason(&typed, &manual()), Some(MODEL_NAME_ERROR));
+    }
+    for model in ["", "  ", "sonnet[1m]", "openrouter/qwen-3", "gpt-5:high"] {
+        assert_eq!(model_error(model), None, "{model}");
+    }
+}
+
+#[test]
+fn hints_a_model_the_agent_knows() {
+    assert_eq!(model_hint("claude-code"), "Agent default (e.g. sonnet)");
+    assert_eq!(model_hint("codex"), "Agent default (e.g. gpt-5-codex)");
+    assert_eq!(model_hint("gemini"), "Agent default (e.g. gemini-2.5-pro)");
+}
+
 fn file(id: u64, name: &str, size: u64) -> PickedFile {
     PickedFile {
         id,
@@ -71,7 +113,7 @@ fn says_what_the_agent_reads_for_each_source() {
 }
 
 #[test]
-fn says_under_the_reference_what_to_enter_for_each_source() {
+fn the_reference_placeholder_says_what_to_enter_for_each_source() {
     assert_eq!(
         source("github-issue", None).ref_hint(""),
         "The issue number, such as #42, or its address. Natamux reads the issue from GitHub."
@@ -83,10 +125,6 @@ fn says_under_the_reference_what_to_enter_for_each_source() {
     assert_eq!(
         source("mcp", Some("Tracker")).ref_hint(""),
         "The key or address of the ticket. The agent reads it through the Tracker MCP server."
-    );
-    assert_eq!(
-        source("github-issue", None).ref_placeholder(),
-        "#42 or the issue address"
     );
 }
 
@@ -257,9 +295,7 @@ fn starts_from_the_default_branch_and_sends_no_base_while_it_is_kept() {
         default_branch: Some("main".into()),
     };
     assert_eq!(start_branch(Some(&list)).as_deref(), Some("main"));
-    assert_eq!(branch_text(Some(&list), "", None), "main (default)");
     assert_eq!(base_after_pick("main", Some("main")), "");
-    assert_eq!(branch_text(None, "", None), "The default branch");
 }
 
 #[test]
@@ -271,7 +307,6 @@ fn sends_the_picked_branch_as_the_base_even_the_current_one() {
     };
     let base = base_after_pick("dev", start_branch(Some(&list)).as_deref());
     assert_eq!(base, "dev");
-    assert_eq!(branch_text(Some(&list), &base, None), "dev (current)");
     let typed = StartForm {
         base,
         ..form("Fix")
@@ -344,19 +379,27 @@ fn formats_sizes_as_core_does() {
     assert_eq!(format_bytes(5), "5 B");
     assert_eq!(format_bytes(1500), "1.5 KB");
     assert_eq!(format_bytes(2_500_000), "2.5 MB");
+    assert_eq!(format_bytes(12_400), "12.4 KB");
+    assert_eq!(format_bytes(412_000), "412 KB");
+    assert_eq!(format_bytes(999_999), "999 KB");
+    assert_eq!(format_bytes(1_240_000), "1.2 MB");
 }
 
 #[test]
 fn prefills_the_branch_from_the_key_in_the_title() {
     assert_eq!(
-        prefill_branch(Some("{id}"), "ABC-12: Fix it").as_deref(),
+        prefill_branch(Some("{id}"), "My App", "ABC-12: Fix it").as_deref(),
         Some("ABC-12")
     );
     assert_eq!(
-        prefill_branch(None, "ABC-12: Fix it").as_deref(),
-        Some("natamux/abc-12-fix-it")
+        prefill_branch(Some("{project}/{id}"), "My App", "ABC-12: Fix it").as_deref(),
+        Some("my-app/ABC-12")
     );
-    assert_eq!(prefill_branch(None, "Fix it"), None);
+    assert_eq!(
+        prefill_branch(None, "My App", "ABC-12: Fix it").as_deref(),
+        Some("my-app/abc-12-fix-it")
+    );
+    assert_eq!(prefill_branch(None, "My App", "Fix it"), None);
 }
 
 #[test]
@@ -374,5 +417,32 @@ fn sends_the_trimmed_branch_or_none() {
     assert_eq!(
         new_workspace_input(&form("Fix it"), &manual(), Vec::new()).branch,
         None
+    );
+}
+
+#[test]
+fn sends_no_worktree_and_drops_the_base_and_branch_when_unchecked() {
+    let unchecked = StartForm {
+        base: "dev".into(),
+        branch: "ABC-12".into(),
+        no_worktree: true,
+        ..form("Fix it")
+    };
+    let input = new_workspace_input(&unchecked, &manual(), Vec::new());
+    assert_eq!(
+        serde_json::to_value(&input).unwrap(),
+        serde_json::json!({
+            "title": "Fix it", "repo": "default", "agent": "claude-code", "worktree": false
+        })
+    );
+}
+
+#[test]
+fn tells_whether_the_task_starts_with_a_worktree() {
+    assert_eq!(made_toast("T-1", None), "T-1 is being prepared.");
+    assert_eq!(made_toast("T-1", Some(true)), "T-1 is being prepared.");
+    assert_eq!(
+        made_toast("T-1", Some(false)),
+        "T-1 is started in the main checkout."
     );
 }

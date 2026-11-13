@@ -11,6 +11,8 @@ Natamux starts Copilot CLI with a hook file in the task's worktree.
 
 Install Copilot CLI and sign in. Follow the [GitHub documentation](https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-hooks-reference) for the CLI. Check that `copilot` runs in your terminal.
 
+If you are not logged in, the task waits and asks you to sign in in its terminal. See [The agent asks me to sign in](/docs/help/troubleshooting/#the-agent-asks-me-to-sign-in).
+
 ## What Natamux runs
 
 | | |
@@ -50,7 +52,7 @@ Natamux also adds the worktree to `trustedFolders` in `~/.copilot/config.json`, 
 | `userPromptSubmitted` | A prompt was sent | running |
 | `preToolUse`, `postToolUse`, `postToolUseFailure` | The agent works | no change |
 | `notification` with type `permission_prompt` or `elicitation_dialog` | Copilot asks for permission, or asks you a question | needs input |
-| `agentStop` | The turn ended | needs input |
+| `agentStop` | The turn ended | idle |
 | `errorOccurred` with `recoverable: false` | An error ended the work | failed |
 
 A recoverable error is ignored. Other notifications, such as `shell_completed`, change nothing. Natamux does not use `permissionRequest`: Copilot sends it before it checks its permission rules, so also for each tool that `--allow-all-tools` lets run at once.

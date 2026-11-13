@@ -415,20 +415,21 @@ fn t8_the_size_of_each_kind_of_box(cx: &mut TestAppContext) {
         let name = format!("area-4-8 with {lines} lines");
         got.push((name, bounds.size.width.into(), bounds.size.height.into()));
     }
-    // A line is 23 px; the frame adds 6 px of padding and a 1 px border at the top and bottom.
+    // A line is 18 px since main's short input line (T-0302, it was 23); the frame adds 6 px of
+    // padding and a 1 px border at the top and bottom.
     let want: Vec<(String, f32, f32)> = [
-        ("one-line", 37.),
-        ("area-4-8", 106.),
-        ("area-6-12", 152.),
-        ("area-8-20", 198.),
-        ("area-9-24", 221.),
-        ("area-3-8", 83.),
-        ("area-3-3", 83.),
-        ("area-1-4", 37.),
-        ("bare-one-line", 23.),
-        ("bare-area-4-8", 92.),
-        ("area-4-8 with 6 lines", 152.),
-        ("area-4-8 with 20 lines", 198.),
+        ("one-line", 32.),
+        ("area-4-8", 86.),
+        ("area-6-12", 122.),
+        ("area-8-20", 158.),
+        ("area-9-24", 176.),
+        ("area-3-8", 68.),
+        ("area-3-3", 68.),
+        ("area-1-4", 32.),
+        ("bare-one-line", 18.),
+        ("bare-area-4-8", 72.),
+        ("area-4-8 with 6 lines", 122.),
+        ("area-4-8 with 20 lines", 158.),
     ]
     .iter()
     .map(|(name, height)| (name.to_string(), 400., *height))

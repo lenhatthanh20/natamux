@@ -133,9 +133,6 @@ pub fn condition_problems_by_field(when: &Condition) -> ConditionProblems {
 /// A new branch goes after the step with this id, or before the release. It starts with a path
 /// that has a condition and an Otherwise path, both without stages: the person adds them.
 pub fn add_branch(steps: &[Step], after_id: Option<&str>) -> Vec<Step> {
-    let place = after_id.and_then(|id| find_place(steps, id));
-    let end = release_index(steps);
-    let index = place.map_or(end, |place| (place.index + 1).min(end));
     let mut used = used_ids(steps);
     let id = free_id(&used, "branch");
     used.insert(id.clone());
@@ -157,7 +154,24 @@ pub fn add_branch(steps: &[Step], after_id: Option<&str>) -> Vec<Step> {
             path(second, None),
         ],
     };
+    add_branch_with(steps, branch, after_id)
+}
+
+/// Puts a branch made elsewhere (the Add branch dialog) after the step with this id, or before
+/// the release. Refused when its id is used already.
+pub fn add_branch_with(steps: &[Step], branch: StageBranch, after_id: Option<&str>) -> Vec<Step> {
+    if used_ids(steps).contains(&branch.id) {
+        return steps.to_vec();
+    }
+    let place = after_id.and_then(|id| find_place(steps, id));
+    let end = release_index(steps);
+    let index = place.map_or(end, |place| (place.index + 1).min(end));
     insert_at(steps, index, Step::Branch(branch))
+}
+
+/// The branch with the same id takes the place of the old one (the Edit branch dialog).
+pub fn replace_branch(steps: &[Step], branch: &StageBranch) -> Vec<Step> {
+    update_branch(steps, &branch.id, |item| *item = branch.clone())
 }
 
 /// A path with a condition. It goes before the Otherwise path, which stays last. A branch holds 4
