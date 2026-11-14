@@ -6,7 +6,6 @@
 //! header (`settings_header.rs`) and bottom bar (`settings_bar.rs`), so the tabs and Save stay
 //! while the body scrolls (layout-b 5).
 
-use editor::Editor;
 use gpui::{Entity, EventEmitter, FocusHandle, Focusable, ScrollHandle, Subscription};
 use natamux_proto::projects::repo::{LoadedSettings, SkillList};
 use ui::{ScrollAxes, prelude::*};
@@ -27,6 +26,7 @@ use crate::stages::pipeline_editor::{DraftEdited, PipelineEditor};
 use crate::stages::stage_details::DetailsPane;
 use crate::stages::stage_list::StageList;
 use crate::stages::stages_tab::stages_tab;
+use crate::text_view::text_box::TextBox;
 
 /// The content width of the General tab; Stages and JSON are wider.
 const CONTENT_MAX: f32 = 760.;
@@ -192,7 +192,7 @@ impl ProjectSettingsPage {
     }
 
     /// The prompt box of the picked stage, for the whole-app flows.
-    pub fn stage_prompt(&self, cx: &App) -> Option<Entity<Editor>> {
+    pub fn stage_prompt(&self, cx: &App) -> Option<TextBox> {
         self.stages.as_ref()?.details.read(cx).prompt_box(cx)
     }
 

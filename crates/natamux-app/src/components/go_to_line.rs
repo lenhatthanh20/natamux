@@ -3,8 +3,7 @@
 
 use std::rc::Rc;
 
-use editor::Editor;
-use gpui::{DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, KeyDownEvent};
+use gpui::{DismissEvent, EventEmitter, FocusHandle, Focusable, KeyDownEvent};
 use text::Point;
 use ui::prelude::*;
 
@@ -12,6 +11,9 @@ use super::dialog::{
     DialogFrame, DialogLayer, DialogSize, DialogView, cancel_button, primary_button,
 };
 use super::form::{input_box, text_editor};
+
+use crate::text_view::text_box::TextBox;
+
 
 type OnGo = Rc<dyn Fn(u32, Option<u32>, &mut Window, &mut App)>;
 
@@ -73,7 +75,7 @@ pub fn open_go_to_line(
 }
 
 pub struct GoToLine {
-    input: Entity<Editor>,
+    input: TextBox,
     on_go: OnGo,
     focus: FocusHandle,
     cancel_focus: FocusHandle,
@@ -104,7 +106,7 @@ impl DialogView for GoToLine {
     /// Bad input does nothing: the dialog stays for a fix. The dialog closes first, so the focus
     /// that the jump gives the editor is not taken back to the opener.
     fn submit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some((line, column)) = parse_line_target(&self.input.read(cx).text(cx)) else {
+        let Some((line, column)) = parse_line_target(&self.input.text(cx)) else {
             return;
         };
         cx.emit(DismissEvent);

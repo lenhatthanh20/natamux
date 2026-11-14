@@ -203,7 +203,6 @@ fn t6_tab_and_shift_tab_walk_the_ring_of_each_dialog(cx: &mut TestAppContext) {
 /// opens over the dialog and closes alone, the opener gets the focus back, and a click outside
 /// closes only the top dialog.
 mod layer {
-    use editor::Editor;
     use gpui::{
         DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, TestAppContext,
         VisualTestContext, point,
@@ -217,11 +216,12 @@ mod layer {
     use super::super::form::{input_box, text_editor};
     use crate::app::test_driver::{is_focused, press, text_of, type_text};
     use crate::app::test_views::{self, Opener};
+    use crate::text_view::text_box::TextBox;
 
     struct Probe {
         focus: FocusHandle,
-        first: Entity<Editor>,
-        second: Entity<Editor>,
+        first: TextBox,
+        second: TextBox,
         cancel: FocusHandle,
         submit: FocusHandle,
         busy: bool,

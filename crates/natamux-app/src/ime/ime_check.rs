@@ -3,7 +3,6 @@
 
 use std::sync::Arc;
 
-use editor::Editor;
 use gpui::{App, Entity, FocusHandle, Focusable, actions};
 use natamux_proto::tasks::task::Task;
 use ui::prelude::*;
@@ -12,9 +11,10 @@ use super::word_check::{WordCheck, shell_quote, terminal_check_command, words};
 use crate::app::source::Source;
 use crate::app::view_state;
 use crate::components::button_style::quiet_button;
-use crate::components::form::input_editor;
+use crate::components::form::text_editor;
 use crate::terminals::remote_terminal::{RemoteTerminal, Target};
 use crate::terminals::terminal_screen::terminal_screen;
+use crate::text_view::text_box::TextBox;
 
 actions!(natamux, [SubmitWord]);
 
@@ -31,7 +31,7 @@ fn typed_file() -> String {
 
 pub struct ImeCheck {
     check: WordCheck,
-    input: Entity<Editor>,
+    input: TextBox,
     last: Option<(String, bool)>,
     terminal: Option<Entity<RemoteTerminal>>,
 }
@@ -43,11 +43,7 @@ impl ImeCheck {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let input = cx.new(|cx| {
-            let mut editor = input_editor(None, window, cx);
-            editor.set_placeholder_text("Type the word above, then Enter", window, cx);
-            editor
-        });
+        let input = text_editor("Type the word above, then Enter", None, window, cx);
         let terminal = match (source, task) {
             (Some(source), Some(task)) if task.has_live_terminal() => {
                 let target = Target {
@@ -67,13 +63,12 @@ impl ImeCheck {
     }
 
     fn submit(&mut self, _: &SubmitWord, window: &mut Window, cx: &mut Context<Self>) {
-        let typed = self.input.read(cx).text(cx);
+        let typed = self.input.text(cx);
         if let Some(expected) = self.check.expected() {
             let right = self.check.submit(&typed);
             self.last = Some((format!("{expected} ← {typed}"), right));
         }
-        self.input
-            .update(cx, |input, cx| input.set_text("", window, cx));
+        self.input.set_text("", window, cx);
         cx.notify();
     }
 

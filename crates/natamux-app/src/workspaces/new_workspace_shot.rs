@@ -33,12 +33,10 @@ pub enum StartShot {
 
 impl NewWorkspaceDialog {
     pub fn fill_for_shot(&mut self, shot: StartShot, window: &mut Window, cx: &mut Context<Self>) {
-        self.title
-            .update(cx, |editor, cx| editor.set_text(TITLE, window, cx));
+        self.title.set_text(TITLE, window, cx);
         match shot {
             StartShot::Filled => {
-                self.notes
-                    .update(cx, |editor, cx| editor.set_text(NOTES, window, cx));
+                self.notes.set_text(NOTES, window, cx);
                 for (name, size) in FILES {
                     self.next_file += 1;
                     self.files.push(PickedFile {
@@ -48,8 +46,7 @@ impl NewWorkspaceDialog {
                         path: PathBuf::from(name),
                     });
                 }
-                self.branch_name
-                    .update(cx, |editor, cx| editor.set_text(OWN_BRANCH, window, cx));
+                self.branch_name.set_text(OWN_BRANCH, window, cx);
                 self.branch_edited = true;
             }
             StartShot::NoWorktree => self.worktree = false,

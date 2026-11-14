@@ -1,18 +1,18 @@
 //! The inline rename of a sidebar row (F2 or the row menu): a one-line editor in place of the
 //! title. Enter or a blur saves, Esc drops.
 
-use editor::{Editor, EditorEvent};
-use gpui::{Entity, Focusable, Subscription};
+use gpui::{Focusable, Subscription};
 use ui::prelude::*;
 
-use crate::components::form::input_editor;
+use crate::components::form::text_editor;
 use crate::sidebar::sidebar_text::renamed_title;
 use crate::sidebar::workspace_tree::WorkspaceTree;
+use crate::text_view::text_box::{TextBox, TextEvent};
 
 /// The inline rename of a row: a one-line editor in place of the title.
 pub(super) struct Rename {
     pub(super) task_id: String,
-    pub(super) editor: Entity<Editor>,
+    pub(super) editor: TextBox,
     pub(super) _blur: Subscription,
 }
 
@@ -26,22 +26,15 @@ impl WorkspaceTree {
         let Some(task) = self.dashboard.read(cx).data.task(task_id).cloned() else {
             return;
         };
-        let editor = cx.new(|cx| {
-            let mut editor = input_editor(None, window, cx);
-            editor.set_text(task.title.clone(), window, cx);
-            editor.select_all(&editor::actions::SelectAll, window, cx);
-            editor
-        });
+        let editor = text_editor("", None, window, cx);
+        editor.set_text(task.title.clone(), window, cx);
+        editor.select_all(window, cx);
         // Leaving the field keeps the name, as Enter does.
-        let blur = cx.subscribe_in(
-            &editor,
-            window,
-            |tree, _, event: &EditorEvent, window, cx| {
-                if matches!(event, EditorEvent::Blurred) {
-                    tree.finish_rename(true, false, window, cx);
-                }
-            },
-        );
+        let blur = editor.subscribe_in(window, cx, |tree, _, event, window, cx| {
+            if event == TextEvent::Blurred {
+                tree.finish_rename(true, false, window, cx);
+            }
+        });
         window.focus(&editor.focus_handle(cx), cx);
         self.active = Some(format!("task:{task_id}"));
         self.rename = Some(Rename {
@@ -63,7 +56,7 @@ impl WorkspaceTree {
         let Some(rename) = self.rename.take() else {
             return;
         };
-        let draft = rename.editor.read(cx).text(cx);
+        let draft = rename.editor.text(cx);
         let title = self
             .dashboard
             .read(cx)

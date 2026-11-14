@@ -2,7 +2,6 @@
 //! Enter and Mod+Enter add the subtask. On success it closes and toasts "Added T-5 to T-1"; on
 //! an error the dashboard toasts the daemon's message and the dialog keeps the title.
 
-use editor::{Editor, EditorEvent};
 use gpui::{DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, Global, KeyDownEvent};
 use gpui::{Subscription, WeakEntity};
 use natamux_proto::tasks::task::{NewTaskInput, Task};
@@ -12,8 +11,9 @@ use crate::app::dashboard::Dashboard;
 use crate::components::dialog::{
     DialogFrame, DialogLayer, DialogSize, DialogView, cancel_button, primary_button,
 };
-use crate::components::form::input_editor;
+use crate::components::form::text_editor;
 use crate::components::toast_rules::ToastTone;
+use crate::text_view::text_box::{TextBox, TextEvent};
 
 struct GlobalDashboard(WeakEntity<Dashboard>);
 
@@ -41,7 +41,7 @@ pub fn open(parent: Task, window: &mut Window, cx: &mut App) {
 pub struct AddSubtaskDialog {
     parent: Task,
     dashboard: Entity<Dashboard>,
-    title: Entity<Editor>,
+    title: TextBox,
     busy: bool,
     focus: FocusHandle,
     cancel_focus: FocusHandle,
@@ -56,9 +56,9 @@ impl AddSubtaskDialog {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let title = cx.new(|cx| input_editor(None, window, cx));
-        let edits = cx.subscribe(&title, |_, _, event: &EditorEvent, cx| {
-            if matches!(event, EditorEvent::BufferEdited) {
+        let title = text_editor("", None, window, cx);
+        let edits = title.subscribe(cx, |_, _, event, cx| {
+            if event == TextEvent::Edited {
                 cx.notify();
             }
         });
@@ -75,7 +75,7 @@ impl AddSubtaskDialog {
     }
 
     fn typed(&self, cx: &App) -> String {
-        self.title.read(cx).text(cx).trim().to_string()
+        self.title.text(cx).trim().to_string()
     }
 }
 

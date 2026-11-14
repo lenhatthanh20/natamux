@@ -2,8 +2,7 @@
 //! group, with its keys, behind a search field. From a 1024 wide window the groups sit in two
 //! columns.
 
-use editor::{Editor, EditorEvent};
-use gpui::{DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, Subscription};
+use gpui::{DismissEvent, EventEmitter, FocusHandle, Focusable, Subscription};
 use ui::prelude::*;
 
 use super::commands::all_commands;
@@ -17,6 +16,7 @@ use crate::components::form::{SettingsInput, text_editor};
 use crate::components::settings_card::{SeparatorInset, SettingsCard, SettingsGroup};
 use crate::components::settings_tile::{SettingsTile, TileSize};
 use crate::components::text_size::row_text;
+use crate::text_view::text_box::{TextBox, TextEvent};
 
 const MAC: bool = cfg!(target_os = "macos");
 /// The web's `lg`: the groups sit in two columns from this window width.
@@ -31,7 +31,7 @@ pub fn open(window: &mut Window, cx: &mut App) {
 }
 
 pub struct ShortcutSheet {
-    query: Entity<Editor>,
+    query: TextBox,
     focus: FocusHandle,
     _typing: Subscription,
 }
@@ -39,8 +39,8 @@ pub struct ShortcutSheet {
 impl ShortcutSheet {
     fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let query = text_editor("Search the shortcuts", None, window, cx);
-        let typing = cx.subscribe(&query, |_, _, event: &EditorEvent, cx| {
-            if matches!(event, EditorEvent::BufferEdited) {
+        let typing = query.subscribe(cx, |_, _, event, cx| {
+            if event == TextEvent::Edited {
                 cx.notify();
             }
         });
@@ -116,7 +116,7 @@ impl DialogView for ShortcutSheet {
 
 impl Render for ShortcutSheet {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let query = self.query.read(cx).text(cx);
+        let query = self.query.text(cx);
         let all: Vec<_> = all_commands().collect();
         let sections = filtered(&sheet_groups(&all), &query, MAC);
         let content = if sections.is_empty() {

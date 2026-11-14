@@ -398,9 +398,12 @@ mod text_view {
     mod code_mouse_tests;
     #[cfg(test)]
     mod code_typing_tests;
+    #[cfg(test)]
+    mod text_box_facade_tests;
     // The code view uses it from S4.3; until then only its tests do.
     #[cfg_attr(not(test), allow(dead_code))]
     pub mod highlight;
+    pub mod text_box;
 }
 mod workspaces {
     pub mod branches;

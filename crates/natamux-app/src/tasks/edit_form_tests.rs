@@ -5,7 +5,6 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use editor::Editor;
 use gpui::{Entity, Focusable, TestAppContext, VisualTestContext};
 use natamux_proto::tasks::task::Task;
 
@@ -15,6 +14,7 @@ use crate::app::test_driver::{activate, click_on, is_focused, press, selection_o
 use crate::app::window::flow_tests::{REVIEWED, not_editing, parts, root};
 use crate::components::menu::MenuLayer;
 use crate::tasks::details_panel::DetailsPanel;
+use crate::text_view::text_box::TextBox;
 
 /// The names of the form's stops, in the order of `boxes` and then the priority button.
 const FIELDS: [&str; 5] = ["title", "notes", "labels", "depends on", "priority"];
@@ -37,7 +37,7 @@ fn is_open(details: &Entity<DetailsPanel>, cx: &mut VisualTestContext) -> bool {
     details.read_with(cx, |details, _| details.edit.is_some())
 }
 
-fn title_box(form: &Entity<EditForm>, cx: &mut VisualTestContext) -> Entity<Editor> {
+fn title_box(form: &Entity<EditForm>, cx: &mut VisualTestContext) -> TextBox {
     form.read_with(cx, |form, _| form.title.clone())
 }
 
@@ -81,7 +81,7 @@ fn focus(handle: &gpui::FocusHandle, cx: &mut VisualTestContext) {
 
 fn retitle(form: &Entity<EditForm>, title: &str, cx: &mut VisualTestContext) {
     let title_box = title_box(form, cx);
-    title_box.update_in(cx, |editor, window, cx| editor.set_text(title, window, cx));
+    cx.update(|window, cx| title_box.set_text(title, window, cx));
     cx.run_until_parked();
 }
 
@@ -200,7 +200,7 @@ fn t19_tab_and_esc_do_what_they_do_today(cx: &mut TestAppContext) {
         let handles = stops(&form, cx);
         let boxes = form.read_with(cx, |form, _| form.boxes());
         if let Some(text_box) = boxes.get(at) {
-            text_box.update_in(cx, |editor, window, cx| editor.set_text("x", window, cx));
+            cx.update(|window, cx| text_box.set_text("x", window, cx));
         }
         focus(&handles[at], cx);
         if at < boxes.len() {

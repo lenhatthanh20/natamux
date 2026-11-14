@@ -6,9 +6,8 @@
 
 use std::time::{Duration, Instant};
 
-use editor::Editor;
 use gpui::{
-    App, AppContext as _, AsyncApp, Entity, FocusHandle, Focusable, Keystroke, Modifiers,
+    App, AppContext as _, AsyncApp, FocusHandle, Focusable, Keystroke, Modifiers,
     MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, PlatformInput, Window, WindowHandle,
     point, px,
 };
@@ -20,6 +19,7 @@ use super::shots_stages::{PROJECT, READ};
 use super::title_bar::title_bar_height;
 use super::window::Root;
 use crate::perf::report::{start_steps, start_times};
+use crate::text_view::text_box::TextBox;
 
 const TYPED: &str = "abc";
 /// The fake's terminal list comes at once; the grid is drawn well within this.
@@ -63,7 +63,7 @@ pub fn run(handle: WindowHandle<Root>, quit: bool, grid: bool, cx: &mut App) {
 }
 
 fn type_and_check(
-    filter: Entity<Editor>,
+    filter: TextBox,
     handle: WindowHandle<Root>,
     quit: bool,
     grid: bool,
@@ -80,7 +80,7 @@ fn type_and_check(
         }
     }
     window.on_next_frame(move |_, cx| {
-        let text = filter.read(cx).text(cx);
+        let text = filter.text(cx);
         if text != TYPED {
             fail(&format!("the text box has {text:?}, not {TYPED:?}"));
         }

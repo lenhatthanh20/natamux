@@ -7,7 +7,6 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use editor::Editor;
 use gpui::{Entity, Focusable, TestAppContext, VisualTestContext, point, px};
 use natamux_proto::stages::prompt::{PROMPT_PLACEHOLDERS, skill_placeholder};
 use natamux_proto::stages::schema::Stage;
@@ -21,6 +20,7 @@ use super::insert_at_cursor;
 use crate::app::test_driver::{is_focused, press, text_of, type_text};
 use crate::app::test_views;
 use crate::projects::project_settings_page::ProjectSettingsPage;
+use crate::text_view::text_box::TextBox;
 
 /// A catalog stage with its default name and prompt.
 const STAGE: &str = "implement";
@@ -48,7 +48,7 @@ fn pick(page: Entity<ProjectSettingsPage>, id: &str, cx: &mut VisualTestContext)
     }
 }
 
-fn field(fields: &Fields, which: TextField, cx: &mut VisualTestContext) -> Entity<Editor> {
+fn field(fields: &Fields, which: TextField, cx: &mut VisualTestContext) -> TextBox {
     fields.sheet.read_with(cx, |sheet, _| {
         let stage = &sheet.fields;
         match which {
@@ -67,7 +67,7 @@ fn stage_of(fields: &Fields, id: &str, cx: &mut VisualTestContext) -> Stage {
     })
 }
 
-fn focus(view: &Entity<impl Focusable>, cx: &mut VisualTestContext) {
+fn focus(view: &impl Focusable, cx: &mut VisualTestContext) {
     cx.update(|window, cx| window.focus(&view.focus_handle(cx), cx));
     cx.run_until_parked();
 }

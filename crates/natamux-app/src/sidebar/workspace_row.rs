@@ -27,6 +27,7 @@ use crate::sidebar::sidebar_text::{
 use crate::sidebar::sidebar_tree::{RowTier, SubtaskCount, row_tier};
 use crate::sidebar::workspace_groups::DEFAULT_REPO_ID;
 use crate::tasks::task_time::{AgeStyle, format_age, format_exact};
+use crate::text_view::text_box::TextBox;
 
 impl WorkspaceTree {
     /// The look every focusable row shares, as Zed's `ListItem`: hover, the open task, and the
@@ -168,7 +169,7 @@ impl WorkspaceTree {
     /// handles `Back`), and leaving it saves.
     pub(super) fn rename_field(
         &self,
-        editor: gpui::Entity<editor::Editor>,
+        editor: crate::text_view::text_box::TextBox,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let colors = cx.theme().colors();

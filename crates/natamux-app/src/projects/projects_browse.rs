@@ -71,7 +71,7 @@ impl ProjectsDialog {
                 self.worktree.clone()
             }
         };
-        editor.update(cx, |editor, cx| editor.set_text(path, window, cx));
+        editor.set_text(path, window, cx);
         window.focus(&editor.focus_handle(cx), cx);
     }
 

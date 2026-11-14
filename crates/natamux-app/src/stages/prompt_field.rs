@@ -1,8 +1,7 @@
 //! The prompt of the stage sheet (T-0313 mockup B, `SkillPicker.tsx`): the placeholder buttons
 //! and Insert skill above the prompt, and the skill menu of the project's skills.
 
-use editor::Editor;
-use gpui::{AnyElement, ClickEvent, DismissEvent, Entity, Focusable, Hsla, Pixels, Point};
+use gpui::{AnyElement, ClickEvent, DismissEvent, Focusable, Hsla, Pixels, Point};
 use natamux_proto::projects::repo::SkillInfo;
 use natamux_proto::stages::prompt::{PROMPT_PLACEHOLDERS, skill_placeholder};
 use natamux_proto::stages::schema::Stage;
@@ -19,6 +18,7 @@ use crate::components::colors::signal;
 use crate::components::form::SettingsInput;
 use crate::components::menu::MenuLayer;
 use crate::components::settings_controls::changed_mark;
+use crate::text_view::text_box::TextBox;
 
 /// The fixed line under the prompt.
 const DONE_LINE: &str = "When you are done, run natamux done, unless the steps above say not to.";
@@ -39,8 +39,8 @@ fn skills_reason(skills: &Skills) -> Option<String> {
 }
 
 /// Puts `text` at the cursor of `editor` and gives it the focus.
-pub fn insert_at_cursor(editor: &Entity<Editor>, text: &str, window: &mut Window, cx: &mut App) {
-    editor.update(cx, |editor, cx| editor.insert(text, window, cx));
+pub fn insert_at_cursor(editor: &TextBox, text: &str, window: &mut Window, cx: &mut App) {
+    editor.insert_at_caret(text, window, cx);
     let focus = editor.focus_handle(cx);
     window.focus(&focus, cx);
 }

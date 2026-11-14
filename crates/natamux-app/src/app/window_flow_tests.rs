@@ -8,7 +8,6 @@
 
 use std::sync::Arc;
 
-use editor::Editor;
 use gpui::{Entity, FocusHandle, Focusable, TestAppContext, VisualTestContext};
 use natamux_proto::tasks::task::TaskState;
 
@@ -25,6 +24,7 @@ use crate::components::dialog::DialogLayer;
 use crate::sidebar::workspace_tree::WorkspaceTree;
 use crate::tasks::details_panel::DetailsPanel;
 use crate::tasks::task_view::TaskView;
+use crate::text_view::text_box::TextBox;
 
 /// The single keys of the lists and the details panel (`a r e i c n j k / ?`).
 const SINGLE_KEYS: &str = "areicnjk/?";
@@ -71,7 +71,7 @@ pub(crate) fn parts(root: &Entity<Root>, cx: &mut VisualTestContext) -> Parts {
     })
 }
 
-fn handle_of(view: &Entity<impl Focusable>, cx: &mut VisualTestContext) -> FocusHandle {
+fn handle_of(view: &impl Focusable, cx: &mut VisualTestContext) -> FocusHandle {
     cx.update(|_, cx| view.focus_handle(cx))
 }
 
@@ -111,7 +111,7 @@ fn side_effects(dashboard: &Entity<Dashboard>, cx: &mut VisualTestContext) -> Ve
 }
 
 /// Types the single keys into the emptied box; the text it has when it is not just them.
-fn typed_into(text_box: &Entity<Editor>, cx: &mut VisualTestContext) -> Option<String> {
+fn typed_into(text_box: &TextBox, cx: &mut VisualTestContext) -> Option<String> {
     let handle = handle_of(text_box, cx);
     focus(&handle, cx);
     press(cx, "mod-a backspace");

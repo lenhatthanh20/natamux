@@ -2,7 +2,6 @@
 //! or a new stage opens the stage sheet, a branch opens the branch sheet. It keeps the project's
 //! skills for the stage sheet. It draws nothing: the sheets are dialogs.
 
-use editor::Editor;
 use gpui::{Entity, FocusHandle, Subscription, WeakEntity};
 use natamux_proto::projects::repo::SkillList;
 use ui::prelude::*;
@@ -11,6 +10,9 @@ use super::branch_dialog;
 use super::editor_find::{find_branch, find_stage};
 use super::pipeline_editor::{OpenSheet, PipelineEditor};
 use super::stage_sheet::{self, Skills, StageSheet};
+
+use crate::text_view::text_box::TextBox;
+
 
 pub struct DetailsPane {
     editor: Entity<PipelineEditor>,
@@ -38,7 +40,7 @@ impl DetailsPane {
     }
 
     /// The prompt box of the open stage sheet, for the whole-app flows.
-    pub fn prompt_box(&self, cx: &App) -> Option<Entity<Editor>> {
+    pub fn prompt_box(&self, cx: &App) -> Option<TextBox> {
         let sheet = self.sheet.as_ref()?.upgrade()?;
         Some(sheet.read(cx).fields.prompt.editor.clone())
     }

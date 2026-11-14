@@ -7,7 +7,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
-use editor::{Editor, EditorEvent};
 use gpui::{Entity, FocusHandle, Focusable, KeyDownEvent, KeystrokeEvent, Subscription};
 use ui::{ToggleButtonGroup, ToggleButtonGroupStyle, ToggleButtonSimple, prelude::*};
 
@@ -26,6 +25,7 @@ use crate::components::form::text_editor;
 use crate::components::input_rules::{DialogKey, dialog_key, ring_step, segment_step};
 use crate::components::menu::press_of;
 use crate::projects::project_settings_page::{Discarded, ProjectSettingsPage};
+use crate::text_view::text_box::{TextBox, TextEvent};
 
 const NAV_WIDTH: f32 = 232.;
 /// The content of a page stays this wide on a wide window.
@@ -38,7 +38,7 @@ use nav::{NavItem, nav_items};
 pub struct SettingsView {
     dashboard: Entity<Dashboard>,
     focus: FocusHandle,
-    search: Entity<Editor>,
+    search: TextBox,
     theme_focus: FocusHandle,
     light_focus: FocusHandle,
     dark_focus: FocusHandle,
@@ -61,8 +61,8 @@ pub struct SettingsView {
 impl SettingsView {
     pub fn new(dashboard: Entity<Dashboard>, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let search = text_editor("Search settings", None, window, cx);
-        let typing = cx.subscribe(&search, |_, _, event: &EditorEvent, cx| {
-            if matches!(event, EditorEvent::BufferEdited) {
+        let typing = search.subscribe(cx, |_, _, event, cx| {
+            if event == TextEvent::Edited {
                 cx.notify();
             }
         });
@@ -154,8 +154,7 @@ impl SettingsView {
 
     /// Types `query` into the search (the shots).
     pub fn set_query(&mut self, query: &str, window: &mut Window, cx: &mut Context<Self>) {
-        self.search
-            .update(cx, |editor, cx| editor.set_text(query, window, cx));
+        self.search.set_text(query, window, cx);
     }
 
     fn page(&self, cx: &App) -> SettingsPage {
@@ -169,7 +168,7 @@ impl SettingsView {
     }
 
     fn query(&self, cx: &App) -> String {
-        self.search.read(cx).text(cx)
+        self.search.text(cx)
     }
 
     fn ensure_project(
@@ -226,8 +225,7 @@ impl SettingsView {
                 }
                 let searching = !self.query(cx).is_empty();
                 if searching && self.search.focus_handle(cx).contains_focused(window, cx) {
-                    self.search
-                        .update(cx, |editor, cx| editor.clear(window, cx));
+                    self.search.clear(window, cx);
                     return;
                 }
                 self.dashboard
@@ -308,8 +306,7 @@ impl SettingsView {
 
     /// A nav row or a search result: shows the page, and drops the search.
     fn open_page(&mut self, page: SettingsPage, window: &mut Window, cx: &mut Context<Self>) {
-        self.search
-            .update(cx, |editor, cx| editor.clear(window, cx));
+        self.search.clear(window, cx);
         if let SettingsPage::Project(id) = &page {
             self.ensure_project(id, window, cx);
         }
@@ -327,8 +324,7 @@ impl SettingsView {
 
     /// The X in the search bar.
     fn clear_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.search
-            .update(cx, |editor, cx| editor.clear(window, cx));
+        self.search.clear(window, cx);
         window.focus(&self.search.focus_handle(cx), cx);
     }
 

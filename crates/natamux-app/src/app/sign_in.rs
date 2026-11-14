@@ -6,8 +6,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use editor::Editor;
-use gpui::{Entity, EventEmitter, FocusHandle, Focusable, FontWeight, KeyDownEvent};
+use gpui::{EventEmitter, FocusHandle, Focusable, FontWeight, KeyDownEvent};
 use natamux_client::config::save_access;
 use natamux_client::{Client, ClientError, Config};
 use ui::{Tooltip, prelude::*};
@@ -19,6 +18,7 @@ use super::view_state;
 use crate::components::button_style::action_button;
 use crate::components::form::text_editor;
 use crate::components::icons::icon_path;
+use crate::text_view::text_box::TextBox;
 
 /// The file of the token typed here. The name leaves out the word the owner's tools guard.
 const ACCESS_FILE: &str = "daemon-access";
@@ -61,7 +61,7 @@ impl StartProblem {
 pub struct SignedIn(pub Arc<Source>);
 
 pub struct SignIn {
-    field: Entity<Editor>,
+    field: TextBox,
     shown: bool,
     message: Option<String>,
     connecting: bool,
@@ -81,8 +81,8 @@ impl SignIn {
     /// `rejected`: the daemon refused the token the app had.
     pub fn new(fake: bool, rejected: bool, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let field = text_editor("", None, window, cx);
-        field.update(cx, |editor, cx| editor.set_masked(true, cx));
-        cx.observe(&field, |_, _, cx| cx.notify()).detach();
+        field.set_masked(true, cx);
+        field.observe(cx, |_, _, cx| cx.notify()).detach();
         SignIn {
             field,
             shown: false,
@@ -93,19 +93,18 @@ impl SignIn {
         }
     }
 
-    pub fn field(&self) -> &Entity<Editor> {
+    pub fn field(&self) -> &TextBox {
         &self.field
     }
 
     fn typed(&self, cx: &App) -> Option<String> {
-        token_to_send(&self.field.read(cx).text(cx))
+        token_to_send(&self.field.text(cx))
     }
 
     fn toggle_shown(&mut self, cx: &mut Context<Self>) {
         self.shown = !self.shown;
         let masked = !self.shown;
-        self.field
-            .update(cx, |editor, cx| editor.set_masked(masked, cx));
+        self.field.set_masked(masked, cx);
         cx.notify();
     }
 

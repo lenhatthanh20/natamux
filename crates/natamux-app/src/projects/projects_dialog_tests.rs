@@ -6,7 +6,6 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use editor::Editor;
 use gpui::{AppContext as _, Entity, Focusable, TestAppContext, VisualTestContext};
 use natamux_client::DashboardEvent;
 
@@ -14,6 +13,7 @@ use super::{Pick, ProjectsDialog};
 use crate::app::dashboard::Dashboard;
 use crate::app::source::Source;
 use crate::app::test_views;
+use crate::text_view::text_box::TextBox;
 
 fn dialog(
     cx: &mut TestAppContext,
@@ -43,7 +43,7 @@ fn default_worktree(dashboard: &Entity<Dashboard>, dir: &str, cx: &mut VisualTes
 
 fn texts(view: &Entity<ProjectsDialog>, cx: &mut VisualTestContext) -> (String, String) {
     view.read_with(cx, |view, cx| {
-        let text = |editor: &Entity<Editor>| editor.read(cx).text(cx);
+        let text = |editor: &TextBox| editor.text(cx);
         (text(&view.folder), text(&view.worktree))
     })
 }

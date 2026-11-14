@@ -28,7 +28,7 @@ fn dialog(cx: &mut VisualTestContext) -> Entity<CustomStageDialog> {
     dialog
 }
 
-fn focus(view: &Entity<impl Focusable>, cx: &mut VisualTestContext) {
+fn focus(view: &impl Focusable, cx: &mut VisualTestContext) {
     cx.update(|window, cx| window.focus(&view.focus_handle(cx), cx));
     cx.run_until_parked();
 }

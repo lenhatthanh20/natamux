@@ -4,7 +4,6 @@
 
 use std::collections::BTreeMap;
 
-use editor::{Editor, EditorEvent};
 use gpui::{
     ClickEvent, Entity, EntityInputHandler, EventEmitter, FocusHandle, Focusable, Keystroke,
     ListAlignment, ListState, Subscription, list,
@@ -32,6 +31,7 @@ use crate::components::colors::signal;
 use crate::components::form::text_editor;
 use crate::components::icons::icon_path;
 use crate::components::input_rules::kbd_text;
+use crate::text_view::text_box::{TextBox, TextEvent};
 
 const MAC: bool = cfg!(target_os = "macos");
 const PAGE: usize = 8;
@@ -118,7 +118,7 @@ fn terminal_map(dashboard: &Dashboard) -> BTreeMap<String, Vec<String>> {
 pub struct PaletteView {
     mode: PaletteMode,
     scope: Option<PaletteScope>,
-    query: Entity<Editor>,
+    query: TextBox,
     snapshot: Snapshot,
     sections: Vec<PaletteSection>,
     rows: Vec<PaletteRow>,
@@ -132,7 +132,7 @@ pub struct PaletteView {
 
 impl Focusable for PaletteView {
     fn focus_handle(&self, cx: &App) -> FocusHandle {
-        self.query.read(cx).focus_handle(cx)
+        self.query.focus_handle(cx)
     }
 }
 
@@ -149,8 +149,8 @@ impl PaletteView {
             PaletteMode::All => "Search tasks and commands. Type > for commands, # for a task id.",
         };
         let query = text_editor(placeholder, None, window, cx);
-        let edits = cx.subscribe(&query, |this, _, event: &EditorEvent, cx| {
-            if matches!(event, EditorEvent::BufferEdited) {
+        let edits = query.subscribe(cx, |this, _, event, cx| {
+            if event == TextEvent::Edited {
                 this.refresh(cx);
             }
         });
@@ -187,7 +187,7 @@ impl PaletteView {
     }
 
     fn text(&self, cx: &App) -> String {
-        self.query.read(cx).text(cx)
+        self.query.text(cx)
     }
 
     fn refresh(&mut self, cx: &mut Context<Self>) {
@@ -229,8 +229,7 @@ impl PaletteView {
 
     /// The text as if typed; the rows follow.
     pub fn set_query(&mut self, text: &str, window: &mut Window, cx: &mut Context<Self>) {
-        self.query
-            .update(cx, |editor, cx| editor.set_text(text, window, cx));
+        self.query.set_text(text, window, cx);
     }
 
     fn active_index(&self) -> usize {
@@ -282,13 +281,11 @@ impl PaletteView {
             let this = view.read(cx);
             (this.scope.is_some(), this.query.clone())
         };
-        if key == PaletteKey::Backspace && (!has_scope || !query.read(cx).is_empty(cx)) {
+        if key == PaletteKey::Backspace && (!has_scope || !query.text(cx).is_empty()) {
             return None;
         }
         // A key of an input method composition stays with the input.
-        let composing = query.update(cx, |editor, cx| {
-            editor.marked_text_range(window, cx).is_some()
-        });
+        let composing = query.is_composing(window, cx);
         (!composing).then_some(key)
     }
 

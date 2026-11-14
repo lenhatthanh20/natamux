@@ -2,7 +2,6 @@
 //! template when templates exist. Enter adds it. Mod+Enter (or the Start a task button) closes and
 //! opens the Start a task dialog with the typed title.
 
-use editor::{Editor, EditorEvent};
 use gpui::{
     ClickEvent, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, KeyDownEvent,
     Subscription,
@@ -15,8 +14,9 @@ use super::task_view_rules::{add_blocked_reason, task_repo};
 use crate::app::dashboard::Dashboard;
 use crate::components::button_style::{action_button, key_hint};
 use crate::components::dialog::{DialogFrame, DialogLayer, DialogSize, DialogView};
-use crate::components::form::input_editor;
+use crate::components::form::text_editor;
 use crate::components::menu::MenuLayer;
+use crate::text_view::text_box::{TextBox, TextEvent};
 use crate::workspaces::new_workspace_dialog;
 
 /// Opens the dialog with the title focused, and `title` typed in it when given.
@@ -35,7 +35,7 @@ pub fn open(
 
 pub struct AddTaskDialog {
     dashboard: Entity<Dashboard>,
-    title: Entity<Editor>,
+    title: TextBox,
     /// The project picked in the select; `task_repo` falls back to the first.
     repo: Option<String>,
     template: Option<String>,
@@ -56,16 +56,12 @@ impl AddTaskDialog {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let field = cx.new(|cx| {
-            let mut editor = input_editor(None, window, cx);
-            editor.set_placeholder_text("Title", window, cx);
-            if let Some(title) = title {
-                editor.set_text(title, window, cx);
-            }
-            editor
-        });
-        let edits = cx.subscribe(&field, |_, _, event: &EditorEvent, cx| {
-            if matches!(event, EditorEvent::BufferEdited) {
+        let field = text_editor("Title", None, window, cx);
+        if let Some(title) = title {
+            field.set_text(title, window, cx);
+        }
+        let edits = field.subscribe(cx, |_, _, event, cx| {
+            if event == TextEvent::Edited {
                 cx.notify();
             }
         });
@@ -107,7 +103,7 @@ impl AddTaskDialog {
     }
 
     fn typed(&self, cx: &App) -> String {
-        self.title.read(cx).text(cx).trim().to_string()
+        self.title.text(cx).trim().to_string()
     }
 
     fn no_projects(&self, cx: &App) -> bool {

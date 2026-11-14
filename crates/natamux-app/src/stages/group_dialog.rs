@@ -5,7 +5,6 @@
 
 use std::collections::HashMap;
 
-use editor::Editor;
 use gpui::{AnyElement, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable};
 use natamux_proto::stages::capabilities::stage_name;
 use natamux_proto::stages::schema::{Stage, StageGroup, Step};
@@ -24,6 +23,7 @@ use crate::components::dialog::{
 use crate::components::form::{SettingsInput, text_editor};
 use crate::components::settings_card::{SeparatorInset, SettingsCard, SettingsGroup, SettingsRow};
 use crate::components::settings_tile::{SettingsTile, TileSize};
+use crate::text_view::text_box::TextBox;
 
 const OTHER_PLACE: &str = "A group runs in one place: the top level or one path";
 const NONE_FREE: &str = "No agent or manual stage is free to run side by side.";
@@ -69,7 +69,7 @@ fn show(
     let pipeline = pipeline.clone();
     let dialog = cx.new(|cx| {
         let name = text_editor("", None, window, cx);
-        name.update(cx, |editor, cx| editor.set_text(name_text, window, cx));
+        name.set_text(name_text, window, cx);
         let dialog = GroupDialog {
             pipeline,
             editing,
@@ -101,7 +101,7 @@ pub struct GroupDialog {
     pipeline: Entity<PipelineEditor>,
     /// The group being edited; None for a new one.
     editing: Option<String>,
-    name: Entity<Editor>,
+    name: TextBox,
     /// The checked stage ids, in the order they were checked.
     picked: Vec<String>,
     /// One focus stop per checklist row, by stage id.
@@ -139,9 +139,7 @@ impl GroupDialog {
         } else {
             join_names(&names)
         };
-        self.name.update(cx, |editor, cx| {
-            editor.set_placeholder_text(&hint, window, cx)
-        });
+        self.name.set_placeholder(&hint, window, cx);
     }
 
     fn toggle(&mut self, id: &str, window: &mut Window, cx: &mut Context<Self>) {
@@ -217,7 +215,7 @@ impl DialogView for GroupDialog {
         if self.picked.len() < 2 {
             return;
         }
-        let (name, picked) = (self.name.read(cx).text(cx), self.picked.clone());
+        let (name, picked) = (self.name.text(cx), self.picked.clone());
         let editing = self.editing.clone();
         self.pipeline.update(cx, |pipeline, cx| {
             let steps = match &editing {

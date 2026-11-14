@@ -12,6 +12,7 @@ use super::JsonTab;
 use crate::app::test_driver::{paste, press, press_now, selection_of, text_of, type_text};
 use crate::app::test_views;
 use crate::stages::pipeline_editor::PipelineEditor;
+use crate::text_view::text_box::TextBox;
 
 const DRAFT: &str = "{\n  \"agents\": {\n    \"maxSendBacks\": 2\n  }\n}\n";
 /// `DRAFT` as another part of the page sets it: one value changed, after the caret at the start.
@@ -54,7 +55,7 @@ fn t14_good_and_bad_json_go_into_the_draft(cx: &mut TestAppContext) {
     assert_eq!(draft(&pipeline, cx), (String::new(), true));
     paste(cx, CHANGED);
     assert_eq!(draft(&pipeline, cx), (CHANGED.to_string(), false));
-    assert_eq!(text_of(&editor, cx), CHANGED);
+    assert_eq!(text_of(&TextBox::of_editor(&editor), cx), CHANGED);
     let most = pipeline.read_with(cx, |pipeline, _| pipeline.max_send_backs());
     assert_eq!(most, Some(3));
 }
@@ -63,23 +64,23 @@ fn t14_good_and_bad_json_go_into_the_draft(cx: &mut TestAppContext) {
 fn t14_a_text_from_outside_keeps_the_caret_and_the_undo(cx: &mut TestAppContext) {
     let (pipeline, editor, cx) = start(cx);
     type_text(cx, " ");
-    assert_eq!(selection_of(&editor, cx), 1..1);
+    assert_eq!(selection_of(&TextBox::of_editor(&editor), cx), 1..1);
     // The buffer joins edits less than 300 ms apart (real time) into one undo step. An outside
     // change comes well after a typed key in the app, so wait longer than that here too.
     std::thread::sleep(std::time::Duration::from_millis(400));
     let outside = format!(" {CHANGED}");
     pipeline.update(cx, |pipeline, cx| pipeline.set_text(&outside, cx));
     cx.run_until_parked();
-    assert_eq!(text_of(&editor, cx), outside);
-    assert_eq!(selection_of(&editor, cx), 1..1);
+    assert_eq!(text_of(&TextBox::of_editor(&editor), cx), outside);
+    assert_eq!(selection_of(&TextBox::of_editor(&editor), cx), 1..1);
     assert_eq!(draft(&pipeline, cx), (outside.clone(), false));
 
     // The first undo takes back the outside text, the second the typed space.
     press(cx, "mod-z");
-    let once = text_of(&editor, cx);
+    let once = text_of(&TextBox::of_editor(&editor), cx);
     let once_draft = draft(&pipeline, cx).0;
     press(cx, "mod-z");
-    let twice = text_of(&editor, cx);
+    let twice = text_of(&TextBox::of_editor(&editor), cx);
     let before = format!(" {DRAFT}");
     assert_eq!(
         (once.as_str(), once_draft.as_str(), twice.as_str()),
@@ -96,7 +97,7 @@ fn t14_keys_typed_while_an_outside_text_goes_in_are_kept(cx: &mut TestAppContext
     // The outside text goes in after a diff off the main thread; these keys come first.
     press_now(cx, "z");
     cx.run_until_parked();
-    let shown = text_of(&editor, cx);
+    let shown = text_of(&TextBox::of_editor(&editor), cx);
     assert_eq!(shown, format!("z{CHANGED}"));
     assert_eq!(draft(&pipeline, cx).0, shown);
 }
@@ -136,7 +137,7 @@ fn t14_a_language_that_loads_after_typing_keeps_the_text(cx: &mut TestAppContext
             .map(|language| language.name().to_string())
     });
     assert_eq!(language.as_deref(), Some("JSON"));
-    let shown = text_of(&editor, cx);
+    let shown = text_of(&TextBox::of_editor(&editor), cx);
     assert_eq!(shown, format!("  {DRAFT}"));
     assert_eq!(draft(&pipeline, cx).0, shown);
 }

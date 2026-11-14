@@ -3,7 +3,6 @@
 //! the draft at once, a bad one shows its error, and a change from elsewhere shows in the field
 //! unless it has the focus.
 
-use editor::{Editor, EditorEvent};
 use gpui::{Entity, FocusHandle, Focusable, Subscription};
 use natamux_proto::projects::repo::DEFAULT_PAUSE_IDLE_MINUTES;
 use ui::prelude::*;
@@ -16,10 +15,11 @@ use crate::components::settings_card::SettingsRow;
 use crate::components::settings_controls::changed_mark;
 use crate::components::settings_tile::{SettingsTile, TileSize};
 use crate::stages::pipeline_editor::PipelineEditor;
+use crate::text_view::text_box::{TextBox, TextEvent};
 
 pub struct IdlePauseField {
     pipeline: Entity<PipelineEditor>,
-    editor: Entity<Editor>,
+    editor: TextBox,
     error: Option<&'static str>,
     _subscriptions: Vec<Subscription>,
 }
@@ -39,10 +39,10 @@ impl IdlePauseField {
         let placeholder = DEFAULT_PAUSE_IDLE_MINUTES.to_string();
         let editor = text_editor(&placeholder, None, window, cx);
         let text = shown(pipeline.read(cx).pause_idle_minutes());
-        editor.update(cx, |editor, cx| editor.set_text(text, window, cx));
-        let edits = cx.subscribe(&editor, |this, editor, event: &EditorEvent, cx| {
-            if matches!(event, EditorEvent::BufferEdited) {
-                let text = editor.read(cx).text(cx);
+        editor.set_text(text, window, cx);
+        let edits = editor.subscribe(cx, |this, editor, event, cx| {
+            if event == TextEvent::Edited {
+                let text = editor.text(cx);
                 this.typed(&text, cx);
             }
         });
@@ -78,8 +78,7 @@ impl IdlePauseField {
 
     /// Reset icon: an empty field is the default; the edit event writes the draft.
     fn reset(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.editor
-            .update(cx, |editor, cx| editor.set_text("", window, cx));
+        self.editor.set_text("", window, cx);
     }
 
     fn sync(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -87,19 +86,18 @@ impl IdlePauseField {
             return;
         }
         let want = self.pipeline.read(cx).pause_idle_minutes();
-        if idle_pause_field(&self.editor.read(cx).text(cx)) == Ok(want) {
+        if idle_pause_field(&self.editor.text(cx)) == Ok(want) {
             return;
         }
         self.error = None;
-        self.editor
-            .update(cx, |editor, cx| editor.set_text(shown(want), window, cx));
+        self.editor.set_text(shown(want), window, cx);
     }
 }
 
 impl Render for IdlePauseField {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let this = cx.weak_entity();
-        let changed = !self.editor.read(cx).text(cx).trim().is_empty();
+        let changed = !self.editor.text(cx).trim().is_empty();
         let mark = changed_mark(
             "idle-pause",
             changed,

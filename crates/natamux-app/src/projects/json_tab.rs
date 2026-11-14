@@ -19,6 +19,7 @@ use crate::components::toasts::toast;
 use crate::git::diff_editors::plain_switches;
 use crate::git::languages::language_for;
 use crate::stages::pipeline_editor::PipelineEditor;
+use crate::text_view::text_box::TextBox;
 
 /// The box of the editor (layout-b 5.8).
 const EDITOR_HEIGHT: f32 = 456.;
@@ -152,7 +153,7 @@ impl Render for JsonTab {
                     toast("Copied the JSON.", ToastTone::Info, cx);
                 }),
         );
-        let editor = SettingsInput::new(&self.editor)
+        let editor = SettingsInput::new(&TextBox::of_editor(&self.editor))
             .bar_edge()
             .radius(8.)
             .height(EDITOR_HEIGHT)

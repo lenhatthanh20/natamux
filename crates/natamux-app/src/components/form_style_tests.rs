@@ -34,7 +34,7 @@ fn rust_files(dir: &Path, files: &mut Vec<PathBuf>) {
 }
 
 #[test]
-fn every_input_editor_comes_from_input_editor() {
+fn every_input_comes_from_text_editor() {
     // Split so this file does not match itself.
     let banned = [
         format!("{}::{}(", "Editor", "single_line"),
@@ -50,7 +50,7 @@ fn every_input_editor_comes_from_input_editor() {
             .file_name()
             .and_then(|name| name.to_str())
             .unwrap_or("");
-        if name == "form.rs" || name.ends_with("_tests.rs") {
+        if name == "text_box.rs" || name.ends_with("_tests.rs") {
             continue;
         }
         let text = std::fs::read_to_string(&file).unwrap_or_default();
@@ -62,5 +62,5 @@ fn every_input_editor_comes_from_input_editor() {
             }
         }
     }
-    assert!(found.is_empty(), "use form::input_editor: {found:?}");
+    assert!(found.is_empty(), "use form::text_editor: {found:?}");
 }

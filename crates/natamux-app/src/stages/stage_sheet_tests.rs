@@ -121,7 +121,7 @@ fn the_stepper_moves_the_sheet_to_the_next_stage(cx: &mut TestAppContext) {
         let want = find_stage(steps, "testing").map(stage_name).unwrap();
         (
             sheet.id.clone(),
-            sheet.fields.name.editor.read(cx).text(cx),
+            sheet.fields.name.editor.text(cx),
             want,
         )
     });

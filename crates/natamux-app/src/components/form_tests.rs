@@ -5,7 +5,6 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use editor::{Editor, EditorEvent};
 use gpui::{
     AppContext as _, ClickEvent, Entity, FocusHandle, Focusable, KeyDownEvent, Modifiers,
     Subscription, TestAppContext, VisualTestContext,
@@ -16,13 +15,14 @@ use super::button_style::action_button;
 use super::form::{input_box, text_editor};
 use crate::app::test_driver::{is_focused, paste, press, text_of, type_text};
 use crate::app::test_views;
+use crate::text_view::text_box::{TextBox, TextEvent};
 
 const MAC: bool = cfg!(target_os = "macos");
 
 /// A form with one box: the keys that reach the form, the box's events as the form saw them,
 /// a button beside the box, and a place to move the focus to.
 struct Form {
-    text_box: Entity<Editor>,
+    text_box: TextBox,
     keys: Vec<String>,
     events: Vec<String>,
     clicks: usize,
@@ -33,13 +33,12 @@ struct Form {
 impl Form {
     fn new(lines: Option<(usize, usize)>, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let text_box = text_editor("", lines, window, cx);
-        let events = cx.subscribe(&text_box, |form, text_box, event: &EditorEvent, cx| {
+        let events = text_box.subscribe(cx, |form, text_box, event, cx| {
             // Reading the box here panics if the event came while the box was being changed.
-            let text = text_box.read(cx).text(cx);
+            let text = text_box.text(cx);
             match event {
-                EditorEvent::BufferEdited => form.events.push(format!("edited {text:?}")),
-                EditorEvent::Blurred => form.events.push("blurred".into()),
-                _ => {}
+                TextEvent::Edited => form.events.push(format!("edited {text:?}")),
+                TextEvent::Blurred => form.events.push("blurred".into()),
             }
         });
         Form {
@@ -72,7 +71,7 @@ impl Render for Form {
 fn form(
     cx: &mut TestAppContext,
     lines: Option<(usize, usize)>,
-) -> (Entity<Form>, Entity<Editor>, &mut VisualTestContext) {
+) -> (Entity<Form>, TextBox, &mut VisualTestContext) {
     let (form, _, cx) = test_views::init_app(cx, move |_, window, cx| {
         cx.new(|cx| Form::new(lines, window, cx))
     });
@@ -97,7 +96,7 @@ fn fill(cx: &mut VisualTestContext, lines: &[&str]) {
 /// ended, or stands in place of what was selected. Returns the cases that came out otherwise.
 fn differing(
     cx: &mut VisualTestContext,
-    text_box: &Entity<Editor>,
+    text_box: &TextBox,
     start: &[&str],
     cases: &[(String, &str)],
 ) -> Vec<String> {
@@ -255,7 +254,7 @@ fn t2_a_one_line_box_leaves_the_form_keys_to_the_form(cx: &mut TestAppContext) {
 }
 
 /// Pastes each text into the empty box; returns the pastes that came out otherwise.
-fn pasted(cx: &mut VisualTestContext, text_box: &Entity<Editor>, many: bool) -> Vec<String> {
+fn pasted(cx: &mut VisualTestContext, text_box: &TextBox, many: bool) -> Vec<String> {
     let nfc = "Vi\u{1ec7}t";
     let nfd = "Vie\u{323}\u{302}t";
     // (pasted, in one line, in many lines)
@@ -310,9 +309,7 @@ fn t5_the_form_gets_the_box_events_as_effects_with_no_timer(cx: &mut TestAppCont
     paste(cx, "cd");
     press(cx, "backspace");
     press(cx, "mod-z");
-    text_box.update_in(cx, |text_box, window, cx| {
-        text_box.set_text("new", window, cx)
-    });
+    cx.update(|window, cx| text_box.set_text("new", window, cx));
     cx.run_until_parked();
     let other = form.read_with(cx, |form, _| form.other.clone());
     cx.update(|window, cx| window.focus(&other, cx));
@@ -347,8 +344,8 @@ fn t6_a_click_on_a_button_keeps_the_focus_in_the_box(cx: &mut TestAppContext) {
 /// Every kind of box the forms make, by `text_editor`'s lines: framed by `input_box`, and two
 /// without the frame, so the frame's padding shows.
 struct Kinds {
-    framed: Vec<(&'static str, Entity<Editor>)>,
-    bare: Vec<(&'static str, Entity<Editor>)>,
+    framed: Vec<(&'static str, TextBox)>,
+    bare: Vec<(&'static str, TextBox)>,
 }
 
 const KINDS: [(&str, Option<(usize, usize)>); 8] = [
@@ -409,7 +406,7 @@ fn t8_the_size_of_each_kind_of_box(cx: &mut TestAppContext) {
     let area = kinds.read_with(cx, |kinds, _| kinds.framed[1].1.clone());
     for lines in [6, 20] {
         let text = vec!["line"; lines].join("\n");
-        area.update_in(cx, |area, window, cx| area.set_text(text, window, cx));
+        cx.update(|window, cx| area.set_text(text, window, cx));
         cx.run_until_parked();
         let bounds = cx.debug_bounds("area-4-8").expect("drawn");
         let name = format!("area-4-8 with {lines} lines");

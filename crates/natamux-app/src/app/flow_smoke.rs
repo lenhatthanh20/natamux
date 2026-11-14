@@ -100,8 +100,7 @@ async fn show_list(handle: WindowHandle<Root>, id: &str, cx: &mut AsyncApp) {
 
 fn focus_list(handle: WindowHandle<Root>, id: &str, cx: &mut AsyncApp) {
     let shown = handle.update(cx, |root, window, cx| {
-        root.filter(cx)
-            .update(cx, |filter, cx| filter.set_text("", window, cx));
+        root.filter(cx).set_text("", window, cx);
         root.dashboard().update(cx, |dashboard, cx| {
             dashboard.set_filter(String::new(), cx);
             dashboard.close_settings(cx);

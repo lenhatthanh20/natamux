@@ -8,7 +8,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
-use editor::Editor;
 use gpui::{Entity, FocusHandle, Focusable, Image, KeyContext, Subscription, WeakEntity};
 use natamux_proto::workspaces::changes::{FileDiff, ImageSide};
 use natamux_proto::workspaces::workspace::ChangeEntry;
@@ -27,6 +26,7 @@ use crate::app::view_rules::DetailsView;
 use crate::components::empty_state::EmptyState;
 use crate::components::skeleton::{Loading, SkeletonList};
 use crate::tasks::state_filter::width_probe;
+use crate::text_view::text_box::TextBox;
 use crate::workspaces::workspace_rules::GitStep;
 use crate::workspaces::workspace_view::WorkspaceView;
 
@@ -68,9 +68,9 @@ pub struct ChangesView {
     pub(super) diff: Entity<DiffView>,
     pub(super) blame: Entity<BlameMarks>,
     pub(super) svg_preview: bool,
-    pub(super) message: Option<Entity<Editor>>,
+    pub(super) message: Option<TextBox>,
     pub(super) drafting: bool,
-    pub(super) comment: Option<Entity<Editor>>,
+    pub(super) comment: Option<TextBox>,
     pub(super) quote: Option<Quote>,
     pub(super) find: Option<Entity<EditorFind>>,
     pub(super) sending: bool,
@@ -356,12 +356,12 @@ impl ChangesView {
 
     /// The commit message box, once it was drawn, for the flow tests.
     #[cfg(test)]
-    pub fn commit_box(&self) -> Option<Entity<Editor>> {
+    pub fn commit_box(&self) -> Option<TextBox> {
         self.message.clone()
     }
 
     pub(super) fn editing(&self, window: &Window, cx: &App) -> bool {
-        let focused = |editor: &Option<Entity<Editor>>| {
+        let focused = |editor: &Option<TextBox>| {
             editor
                 .as_ref()
                 .is_some_and(|editor| editor.focus_handle(cx).contains_focused(window, cx))

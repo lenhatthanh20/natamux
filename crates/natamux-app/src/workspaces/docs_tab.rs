@@ -2,19 +2,18 @@
 //! picked file as Markdown or source, and a plain edit with a draft that outlives the tab.
 //! While the details panel shows Docs, the panel draws the list and main only the picked file.
 
-use editor::{Editor, EditorEvent};
 use gpui::{Div, Entity, FocusHandle, Focusable, KeyContext, Subscription};
 use natamux_proto::stages::actions::StageFile;
 use natamux_proto::tasks::attachments::Attachment;
 use ui::prelude::*;
 
 use super::docs_rules::{DocDraft, current_doc};
-use super::docs_view::plain;
 use crate::app::dashboard::Dashboard;
 use crate::app::source::reason;
 use crate::app::view_rules::DetailsView;
 use crate::components::docs_markdown::MarkdownDoc;
 use crate::files::draft_store::DraftStore;
+use crate::text_view::text_box::{TextBox, TextEvent};
 
 /// The text of a file as read, with the `modified_at` of the list it was read for.
 pub(super) struct ShownText {
@@ -26,7 +25,7 @@ pub(super) struct ShownText {
 /// The edit box of the file that has a draft.
 pub(super) struct EditBox {
     pub name: String,
-    pub editor: Entity<Editor>,
+    pub editor: TextBox,
     _edits: Subscription,
 }
 
@@ -45,7 +44,7 @@ pub struct DocsTab {
     reading: Option<(String, String)>,
     pub(super) image: Option<super::docs_list::ShownAttachment>,
     pub(super) markdown: MarkdownDoc,
-    pub(super) source: Option<(Entity<Editor>, String)>,
+    pub(super) source: Option<(TextBox, String)>,
     pub(super) edit: Option<EditBox>,
     pub(super) focus_edit: bool,
     pub(super) saving: bool,
@@ -94,13 +93,13 @@ impl DocsTab {
     }
 
     /// The box of the Source view, once it showed, for the `--shot` states.
-    pub fn source_editor(&self) -> Option<Entity<Editor>> {
+    pub fn source_editor(&self) -> Option<TextBox> {
         self.source.as_ref().map(|(editor, _)| editor.clone())
     }
 
     /// The edit box of the shown draft, for the flow tests.
     #[cfg(test)]
-    pub fn edit_box(&self) -> Option<Entity<Editor>> {
+    pub fn edit_box(&self) -> Option<TextBox> {
         self.edit.as_ref().map(|edit| edit.editor.clone())
     }
 
@@ -278,16 +277,12 @@ impl DocsTab {
         if self.edit.as_ref().is_some_and(|edit| edit.name == name) {
             return;
         }
-        let editor = cx.new(|cx| {
-            let mut editor = Editor::multi_line(window, cx);
-            plain(&mut editor, window, cx);
-            editor.set_text(draft.text.clone(), window, cx);
-            editor
-        });
+        let editor = TextBox::plain(false, window, cx);
+        editor.set_text(draft.text.clone(), window, cx);
         let own = name.clone();
-        let edits = cx.subscribe(&editor, move |this, editor, event: &EditorEvent, cx| {
-            if matches!(event, EditorEvent::BufferEdited) {
-                let text = editor.read(cx).text(cx);
+        let edits = editor.subscribe(cx, move |this, editor, event, cx| {
+            if event == TextEvent::Edited {
+                let text = editor.text(cx);
                 this.set_draft_text(&own, text, cx);
             }
         });

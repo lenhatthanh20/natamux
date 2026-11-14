@@ -32,7 +32,7 @@ fn t7_an_ime_commit_then_enter_adds_one_task(cx: &mut TestAppContext) {
     cx.run_until_parked();
     let title = dialog.read_with(cx, |dialog, _| dialog.title.clone());
     // Telex: the marked steps of "việt", then the commit.
-    title.update_in(cx, |title, window, cx| {
+    title.editor().update_in(cx, |title, window, cx| {
         for step in ["v", "vi", "vie", "viê", "việ"] {
             title.replace_and_mark_text_in_range(None, step, None, window, cx);
         }

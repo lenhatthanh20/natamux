@@ -5,7 +5,6 @@
 
 use std::rc::Rc;
 
-use editor::{Editor, EditorEvent};
 use gpui::{
     DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, KeyDownEvent, ScrollStrategy,
     Subscription, UniformListScrollHandle, uniform_list,
@@ -17,6 +16,7 @@ use ui::{ListItem, ListItemSpacing, prelude::*};
 use super::outline_rules::{OutlineRow, empty_text, outline_rows};
 use crate::components::dialog::{DialogFrame, DialogLayer, DialogSize, DialogView};
 use crate::components::form::{input_box, text_editor};
+use crate::text_view::text_box::{TextBox, TextEvent};
 
 type OnPick = Rc<dyn Fn(u32, u32, &mut Window, &mut App)>;
 
@@ -52,15 +52,12 @@ pub fn open_outline(
     let items = outline_items(buffer, cx);
     let picker = cx.new(|cx| {
         let input = text_editor("Search symbols", None, window, cx);
-        let edits = cx.subscribe(
-            &input,
-            |this: &mut OutlinePicker, _, event: &EditorEvent, cx| {
-                if matches!(event, EditorEvent::BufferEdited) {
-                    this.active = 0;
-                    cx.notify();
-                }
-            },
-        );
+        let edits = input.subscribe(cx, |this: &mut OutlinePicker, _, event, cx| {
+            if event == TextEvent::Edited {
+                this.active = 0;
+                cx.notify();
+            }
+        });
         OutlinePicker {
             input,
             items,
@@ -77,7 +74,7 @@ pub fn open_outline(
 }
 
 pub struct OutlinePicker {
-    input: Entity<Editor>,
+    input: TextBox,
     items: Vec<OutlineRow>,
     active: usize,
     on_pick: OnPick,
@@ -88,7 +85,7 @@ pub struct OutlinePicker {
 
 impl OutlinePicker {
     fn rows(&self, cx: &App) -> Vec<OutlineRow> {
-        outline_rows(&self.items, &self.input.read(cx).text(cx))
+        outline_rows(&self.items, &self.input.text(cx))
     }
 
     fn pick(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {

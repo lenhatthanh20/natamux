@@ -17,8 +17,9 @@ use super::editor_find_rules::{count_label, find_ranges, step_match};
 use crate::app::commands_editor::EDITOR_FIND;
 use crate::app::shortcuts::{Back, FindNext, FindPrevious};
 use crate::components::chips::tip_with_keys;
-use crate::components::form::input_editor;
+use crate::components::form::text_editor;
 use crate::terminals::pane_header::icon_button;
+use crate::text_view::text_box::{TextBox, TextEvent};
 
 /// The bar closed: its owner drops it.
 pub struct FindClosed;
@@ -26,7 +27,7 @@ pub struct FindClosed;
 pub struct EditorFind {
     /// The editor searched: the focused side of the diff, or the editor tab's.
     target: Entity<Editor>,
-    field: Entity<Editor>,
+    field: TextBox,
     match_case: bool,
     regex: bool,
     invalid: bool,
@@ -42,18 +43,14 @@ impl EventEmitter<FindClosed> for EditorFind {}
 impl EditorFind {
     /// A bar on `target`. A selection within one line becomes the term.
     pub fn new(target: Entity<Editor>, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let field = cx.new(|cx| {
-            let mut editor = input_editor(None, window, cx);
-            editor.set_placeholder_text("Find", window, cx);
-            editor
-        });
+        let field = text_editor("Find", None, window, cx);
         let picked = one_line_selection(&target, cx);
         if let Some(picked) = picked {
-            field.update(cx, |editor, cx| editor.set_text(picked, window, cx));
+            field.set_text(picked, window, cx);
         }
         let subscriptions = vec![
-            cx.subscribe(&field, |find, _, event: &EditorEvent, cx| {
-                if matches!(event, EditorEvent::BufferEdited) {
+            field.subscribe(cx, |find, _, event, cx| {
+                if event == TextEvent::Edited {
                     find.run(cx);
                 }
             }),
@@ -84,20 +81,17 @@ impl EditorFind {
 
     /// Mod+F again selects the term, as the terminal's bar does.
     pub fn focus(&self, window: &mut Window, cx: &mut App) {
-        self.field.update(cx, |editor, cx| {
-            editor.select_all(&editor::actions::SelectAll, window, cx)
-        });
+        self.field.select_all(window, cx);
         window.focus(&self.field.focus_handle(cx), cx);
     }
 
     /// Types a term, as the user would: the find shots.
     pub fn set_term(&mut self, term: &str, window: &mut Window, cx: &mut Context<Self>) {
-        self.field
-            .update(cx, |editor, cx| editor.set_text(term, window, cx));
+        self.field.set_text(term, window, cx);
     }
 
     fn term(&self, cx: &App) -> String {
-        self.field.read(cx).text(cx)
+        self.field.text(cx)
     }
 
     fn run(&mut self, cx: &mut Context<Self>) {

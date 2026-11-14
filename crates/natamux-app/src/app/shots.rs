@@ -319,7 +319,7 @@ fn enter(shot: Shot, root: &mut Root, window: &mut Window, cx: &mut gpui::Contex
         Shot::TaskContextMenu => row_menu(root, window, cx),
         Shot::FilterMiss => {
             let filter = root.filter(cx);
-            filter.update(cx, |editor, cx| editor.set_text("zebra", window, cx));
+            filter.set_text("zebra", window, cx);
         }
         Shot::Drawer => root.set_drawer(true, window, cx),
         Shot::WorkspaceTerminalRunning => open(&dashboard, RUNNING, cx),

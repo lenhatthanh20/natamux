@@ -5,11 +5,13 @@
 
 use std::ops::Range;
 
-use editor::Editor;
 use gpui::{
-    ClipboardItem, Entity, EntityInputHandler, Focusable, KeyDownEvent, KeyUpEvent, Keystroke,
+    ClipboardItem, EntityInputHandler, Focusable, KeyDownEvent, KeyUpEvent, Keystroke,
     Modifiers, VisualTestContext,
 };
+
+use crate::text_view::text_box::TextBox;
+
 
 /// Types `text` into the focused view, as an input method commits it.
 pub fn type_text(cx: &mut VisualTestContext, text: &str) {
@@ -68,24 +70,25 @@ pub fn click_on(cx: &mut VisualTestContext, selector: &'static str) {
     cx.simulate_click(bounds.center(), Modifiers::none());
 }
 
-pub fn text_of(text_box: &Entity<Editor>, cx: &mut VisualTestContext) -> String {
-    cx.update(|_, cx| text_box.read(cx).text(cx))
+pub fn text_of(text_box: &TextBox, cx: &mut VisualTestContext) -> String {
+    cx.update(|_, cx| text_box.text(cx))
 }
 
 /// The selection of the box in UTF-16 units, as the platform's input method reads it.
-pub fn selection_of(text_box: &Entity<Editor>, cx: &mut VisualTestContext) -> Range<usize> {
-    text_box.update_in(cx, |text_box, window, cx| {
+pub fn selection_of(text_box: &TextBox, cx: &mut VisualTestContext) -> Range<usize> {
+    text_box.editor().update_in(cx, |text_box, window, cx| {
         let selection = text_box.selected_text_range(false, window, cx);
         selection.map_or(0..0, |selection| selection.range)
     })
 }
 
-pub fn is_focused<V: Focusable>(view: &Entity<V>, cx: &mut VisualTestContext) -> bool {
+pub fn is_focused(view: &impl Focusable, cx: &mut VisualTestContext) -> bool {
     cx.update(|window, cx| view.focus_handle(cx).is_focused(window))
 }
 
 #[cfg(test)]
 mod tests {
+    use editor::Editor;
     use gpui::{AppContext as _, TestAppContext};
     use theme::ActiveTheme;
 
@@ -107,9 +110,9 @@ mod tests {
         type_text(cx, "b");
         press(cx, "end");
         paste(cx, "d");
-        assert_eq!(text_of(&text_box, cx), "abcd");
+        assert_eq!(text_of(&TextBox::of_editor(&text_box), cx), "abcd");
         press(cx, "mod-a backspace");
-        assert_eq!(text_of(&text_box, cx), "");
+        assert_eq!(text_of(&TextBox::of_editor(&text_box), cx), "");
     }
 
     #[gpui::test]

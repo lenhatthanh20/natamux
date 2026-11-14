@@ -5,7 +5,6 @@
 // The spec names the view after its folder.
 #![allow(clippy::module_inception)]
 
-use editor::{Editor, EditorEvent};
 use gpui::{
     ClickEvent, Entity, FocusHandle, Focusable, FontWeight, Stateful, StyleRefinement, Subscription,
 };
@@ -22,17 +21,18 @@ use crate::components::agent_badge::AgentIcon;
 use crate::components::button_style::quiet_button;
 use crate::components::chips::{Kbd, tip_with_keys};
 use crate::components::colors::state_colors;
-use crate::components::form::input_editor;
+use crate::components::form::text_editor;
 use crate::components::icons::icon_path;
 use crate::components::skeleton::{Loading, SkeletonList};
 use crate::components::text_size::row_text;
 use crate::sidebar::sidebar_text::masked;
 use crate::terminals::pane_rules::agent_pane_tasks;
+use crate::text_view::text_box::{TextBox, TextEvent};
 use crate::workspaces::new_workspace_dialog;
 
 pub struct Sidebar {
     dashboard: Entity<Dashboard>,
-    filter: Entity<Editor>,
+    filter: TextBox,
     tree: Entity<WorkspaceTree>,
     /// The dashboard parts the sidebar last followed; the tree follows its own.
     seen: Seen,
@@ -41,14 +41,10 @@ pub struct Sidebar {
 
 impl Sidebar {
     pub fn new(dashboard: Entity<Dashboard>, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let filter = cx.new(|cx| {
-            let mut editor = input_editor(None, window, cx);
-            editor.set_placeholder_text("Filter tasks", window, cx);
-            editor
-        });
-        let edits = cx.subscribe(&filter, |sidebar, editor, event: &EditorEvent, cx| {
-            if matches!(event, EditorEvent::BufferEdited) {
-                let text = editor.read(cx).text(cx);
+        let filter = text_editor("Filter tasks", None, window, cx);
+        let edits = filter.subscribe(cx, |sidebar, editor, event, cx| {
+            if event == TextEvent::Edited {
+                let text = editor.text(cx);
                 sidebar
                     .dashboard
                     .update(cx, |dashboard, cx| dashboard.set_filter(text, cx));
@@ -62,10 +58,8 @@ impl Sidebar {
                 return;
             }
             let wanted = dashboard.read(cx).filter.clone();
-            if sidebar.filter.read(cx).text(cx) != wanted {
-                sidebar
-                    .filter
-                    .update(cx, |editor, cx| editor.set_text(wanted, window, cx));
+            if sidebar.filter.text(cx) != wanted {
+                sidebar.filter.set_text(wanted, window, cx);
             }
             cx.notify();
         });
@@ -80,7 +74,7 @@ impl Sidebar {
     }
 
     /// The filter field, for `--smoke`.
-    pub fn filter(&self) -> Entity<Editor> {
+    pub fn filter(&self) -> TextBox {
         self.filter.clone()
     }
 
@@ -91,26 +85,23 @@ impl Sidebar {
 
     /// Esc in the field clears it, then leaves it for the tree, where the single keys work.
     fn escape(&mut self, _: &Back, window: &mut Window, cx: &mut Context<Self>) {
-        if self.filter.read(cx).text(cx).is_empty() {
+        if self.filter.text(cx).is_empty() {
             let tree = self.tree.focus_handle(cx);
             window.focus(&tree, cx);
         } else {
-            self.filter
-                .update(cx, |editor, cx| editor.clear(window, cx));
+            self.filter.clear(window, cx);
         }
     }
 
     fn filter_field(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let colors = cx.theme().colors();
-        let empty = self.filter.read(cx).text(cx).is_empty();
+        let empty = self.filter.text(cx).is_empty();
         let clear = (!empty).then(|| {
             IconButton::new("filter-clear", IconName::Close)
                 .icon_size(IconSize::XSmall)
                 .tooltip(Tooltip::text("Clear the filter"))
                 .on_click(cx.listener(|sidebar, _: &ClickEvent, window, cx| {
-                    sidebar
-                        .filter
-                        .update(cx, |editor, cx| editor.clear(window, cx));
+                    sidebar.filter.clear(window, cx);
                 }))
         });
         let hint = empty.then(|| Kbd::new(shortcut_of("filter.focus").unwrap_or("/")));

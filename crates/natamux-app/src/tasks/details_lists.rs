@@ -100,7 +100,7 @@ impl DetailsPanel {
             .cloned()
             .collect();
         let busy = self.shown.as_ref().is_some_and(|shown| shown.busy);
-        let empty = self.subtask.read(cx).text(cx).trim().is_empty();
+        let empty = self.subtask.text(cx).trim().is_empty();
         let rows = subtasks.iter().map(|subtask| {
             let on = on.clone();
             let id = subtask.id.clone();
