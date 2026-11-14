@@ -108,6 +108,12 @@ pub(super) fn focus(handle: &impl Focusable, cx: &mut VisualTestContext) {
     cx.run_until_parked();
 }
 
+/// Moves the focus to a bare focus handle (the host's `other` stand-in).
+pub(super) fn focus_handle(handle: &FocusHandle, cx: &mut VisualTestContext) {
+    cx.update(|window, cx| window.focus(handle, cx));
+    cx.run_until_parked();
+}
+
 /// Replaces the text with `text` and puts the caret at its end.
 pub(super) fn load(text_box: &TextBox, text: &str, cx: &mut VisualTestContext) {
     cx.update(|window, cx| {
@@ -290,8 +296,8 @@ fn t_key_page_up_and_down_move_by_a_page(cx: &mut TestAppContext) {
             press_as(cx, "pagedown", mac);
             type_text(cx, "|");
             let down = caret_line(&text_of(&text_box, cx));
-            assert!(up < 59, "mac {mac}, kind {index}: Page Up stayed on line {up}");
-            assert!(down > 0, "mac {mac}, kind {index}: Page Down stayed on line 0");
+            assert!(up <= 55, "mac {mac}, kind {index}: Page Up went only to line {up}");
+            assert!(down >= 4, "mac {mac}, kind {index}: Page Down went only to line {down}");
         }
     }
 }
@@ -612,7 +618,7 @@ fn t_ev_blurred_comes_when_the_focus_leaves(cx: &mut TestAppContext) {
         focus(&text_box, cx);
         forget_events(&host, cx);
         let other = host.read_with(cx, |host, _| host.other.clone());
-        focus(&other, cx);
+        focus_handle(&other, cx);
         assert_eq!(events_of(&host, index, cx), [TextEvent::Blurred], "kind {index}");
         // Other boxes heard nothing.
         let all = host.read_with(cx, |host, _| host.events.len());

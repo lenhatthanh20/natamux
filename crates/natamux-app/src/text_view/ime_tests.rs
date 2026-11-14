@@ -203,6 +203,8 @@ fn t_ime_6_enter_while_composing_and_mod_enter_after(cx: &mut TestAppContext) {
         marked(&text_box, cx)
     );
     assert!(text_of(&text_box, cx).starts_with("việt"));
+    assert!(reached.is_empty(), "the parent heard {reached:?}");
+    assert_eq!(marked(&text_box, cx), None);
     // Mod+Enter reaches the parent, and the parent reads the committed text.
     commit(&text_box, None, "việt", cx);
     host.update(cx, |host, _| host.keys.clear());
@@ -278,7 +280,7 @@ fn t_ime_9_blur_keeps_the_text_and_unmarks(cx: &mut TestAppContext) {
     mark(&text_box, None, "viet", cx);
     assert!(marked(&text_box, cx).is_some());
     let other = host.read_with(cx, |host, _| host.other.clone());
-    focus(&other, cx);
+    focus_handle(&other, cx);
     assert_eq!(text_of(&text_box, cx), "viet");
     assert_eq!(marked(&text_box, cx), None);
     // `unmark_text` on its own keeps the text too.
