@@ -1,7 +1,7 @@
 //! The terminal matrix of the MIT move (docs/plan-mit-license.md 7.3), recorded on Zed's
-//! terminal before it was removed (S2.6): what a user does to a terminal (keys, IME text, mouse, wheel, paste, links, focus)
-//! and what reaches the shell, read back from `send_input`. The terminal must still pass the
-//! same tests. Where the facts are many, a table is kept as a golden file of the `terminal` set.
+//! terminal before it was removed (S2.6): what a user does to a terminal (keys, IME text, mouse,
+//! wheel, paste, links, focus) and what reaches the shell, read back from `send_input`. The
+//! terminal must still pass the same tests. Where the facts are many, a table is kept as a golden file of the `terminal` set.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 

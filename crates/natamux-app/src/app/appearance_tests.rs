@@ -9,7 +9,7 @@ use super::*;
 use crate::app::test_views;
 
 // Plan 6.1: the own values equal what Zed makes of the settings JSON for the UI and the buffer,
-// and the terminal font is the user's only when they name a family, at each UI size.
+// and the terminal font is the user's whenever they set one, at each UI size.
 #[gpui::test]
 fn the_own_fonts_and_sizes_equal_zeds(cx: &mut TestAppContext) {
     test_views::init(cx);
@@ -39,8 +39,10 @@ fn the_own_fonts_and_sizes_equal_zeds(cx: &mut TestAppContext) {
                     .terminal_font
                     .as_ref()
                     .map(|(family, size)| (family.to_string(), f32::from(*size)));
-                let named = font.as_ref().is_some_and(|font| font.get("family").is_some());
-                let expected = named.then(|| ("Menlo".to_string(), 12.5));
+                let expected = font.as_ref().map(|font| match font.get("family") {
+                    Some(_) => ("Menlo".to_string(), 12.5),
+                    None => ("Lilex".to_string(), 15.0),
+                });
                 assert_eq!(terminal_font, expected, "{case}");
                 assert!(!own.hide_scrollbars, "{case}");
             });

@@ -6,9 +6,9 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
+use alacritty_terminal::vte::ansi::{Color, NamedColor, Rgb};
 use gpui::{App, Hsla, Keystroke, MouseButton, Rgba, TestAppContext, VisualTestContext, px, size};
 use serde_json::{Value, json};
-use alacritty_terminal::vte::ansi::{Color, NamedColor, Rgb};
 
 use super::screen::{Content, Modes};
 
