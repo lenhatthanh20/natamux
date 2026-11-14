@@ -6,7 +6,9 @@ license.workspace = true
 publish.workspace = true
 
 [features]
-# The own text input (docs/plan-mit-license.md, S3), until it replaces Zed's editor in the boxes.
+# The own text input (docs/plan-mit-license.md, S3) is the default; without it the boxes build on
+# Zed's editor until S3.5 removes that.
+default = ["own-input"]
 own-input = ["dep:imara-diff", "dep:unicode-segmentation"]
 
 [dependencies]

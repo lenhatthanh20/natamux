@@ -1352,6 +1352,7 @@ S3.4 Flip
   - all shots exact (D14 holds the caret);
   - F1-F4; `palette_key_p95_ms` on perf (3 runs each side, 7.3 rule);
   - the owner's IME check (7.4).
+- Done in S3.4: `default = ["own-input"]`; the 8.5 step now runs clippy and the tests with `--no-default-features` (Zed's editor in the boxes), in `check` and in `app-macos-tests`, until S3.5. The code view, the diff, the file editor and the JSON tab still use Zed's `Editor` (the JSON tab framed through `TextBox::of_editor`) until S4.3 and S6.2.
 
 S3.5 Remove the old input path
 - Files: the facade drops the `Editor` arm; remove the feature and the 8.5 step. `app/text_boxes.rs` keeps the Zed half of its bindings: the code view and the diff still use Zed's `Editor` until S4.3 and S6.2. The Zed half and `by_name` go in S7.

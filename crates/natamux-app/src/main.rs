@@ -393,7 +393,7 @@ mod terminals {
     pub mod terminal_tabs;
 }
 /// The text model of the own text input (docs/plan-mit-license.md S3.3): plain Rust. Some helpers
-/// are for its tests only until the input is the default (S3.4).
+/// are for its tests only.
 #[cfg(feature = "own-input")]
 #[cfg_attr(not(test), allow(dead_code))]
 mod text {
@@ -409,7 +409,7 @@ mod text_view {
     mod code_mouse_tests;
     #[cfg(test)]
     mod code_typing_tests;
-    /// The own text input (docs/plan-mit-license.md S3.3), behind its feature until S3.4.
+    /// The own text input (docs/plan-mit-license.md S3.3), the default since S3.4.
     #[cfg(feature = "own-input")]
     #[cfg_attr(not(test), allow(dead_code))]
     pub mod element;
