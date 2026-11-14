@@ -10,7 +10,7 @@ use std::ops::Range;
 use gpui::{EntityInputHandler as _, TestAppContext, VisualTestContext};
 
 use super::text_box::TextBox;
-use super::text_box_tests::{AREA, FILL, ONE, focus, load, press_as, setup, text_box};
+use super::text_box_tests::{AREA, FILL, ONE, focus, focus_handle, load, press_as, setup, text_box};
 use crate::app::test_driver::{selection_of, text_of, type_text};
 use crate::ime::word_check::words;
 
