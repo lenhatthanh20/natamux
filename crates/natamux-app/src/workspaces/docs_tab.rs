@@ -97,8 +97,7 @@ impl DocsTab {
         self.source.as_ref().map(|(editor, _)| editor.clone())
     }
 
-    /// The edit box of the shown draft, for the flow tests.
-    #[cfg(test)]
+    /// The edit box of the shown draft, for the flow tests and the `--shot` states.
     pub fn edit_box(&self) -> Option<TextBox> {
         self.edit.as_ref().map(|edit| edit.editor.clone())
     }

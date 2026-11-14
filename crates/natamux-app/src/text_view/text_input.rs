@@ -110,7 +110,8 @@ const INPUT_FONT_SIZE: f32 = 0.875;
 const LINE_HEIGHT: f32 = 1.618;
 /// A press inside the selection held this long, then moved, drags the text (D36).
 const DRAG_DELAY: Duration = Duration::from_millis(300);
-const TAB_SIZE: usize = 4;
+/// The columns between two tab stops: a tab shows as spaces to the next one.
+pub(super) const TAB_SIZE: usize = 4;
 /// The clipboard metadata of a Copy or Cut that took the whole line (D10).
 const WHOLE_LINE: &str = "natamux-whole-line";
 
@@ -803,10 +804,11 @@ impl TextInput {
         }
     }
 
-    /// Tab in a full box: spaces to the next tab stop. With a selection, each line it touches
-    /// gets spaces to the next tab stop of its indent (a whole tab stop after a tab), at the line
-    /// start; on one line they go in at the selection when it starts inside the indent. The
-    /// selection start always moves past them, as does its end on an indented line.
+    /// Tab in a full box: spaces to the next tab stop, counted from the last tab. A selection on
+    /// one line gets spaces to the next tab stop of the line's indent (a whole tab stop after a
+    /// tab), at the selection when it starts inside the indent, else at the line start. A
+    /// selection over more rows gives every line a whole tab stop at its start. The selection
+    /// start always moves past the spaces, as does its end on an indented line.
     fn tab(&mut self, _: &mut Window, cx: &mut Context<Self>) {
         if self.read_only {
             return;
@@ -816,7 +818,7 @@ impl TextInput {
         if selection.is_empty() {
             let at = selection.head;
             let start = motion::line_start(text, at);
-            let column = text[start..at].chars().count();
+            let column = text[start..at].rsplit('\t').next().unwrap_or("").chars().count();
             let spaces = " ".repeat(TAB_SIZE - column % TAB_SIZE);
             self.edit(at..at, &spaces, EditKind::Typing, cx);
             return;
@@ -828,7 +830,11 @@ impl TextInput {
             .iter()
             .map(|&start| {
                 let (len, tabs) = indent_of(&text[start..]);
-                let spaces = if tabs { TAB_SIZE } else { TAB_SIZE - len % TAB_SIZE };
+                let spaces = if tabs || !one_line {
+                    TAB_SIZE
+                } else {
+                    TAB_SIZE - len % TAB_SIZE
+                };
                 let at = if one_line && len >= range.start - start {
                     range.start
                 } else {

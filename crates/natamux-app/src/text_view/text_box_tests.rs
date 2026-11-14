@@ -449,10 +449,14 @@ fn t_key_tab_with_a_selection_indents_its_lines_and_shift_tab_outdents_them(
             );
             // The selection start moves past the new spaces, also from the text start.
             assert_eq!(selection_of(&text_box, cx), 4..15, "mac {mac}, kind {index}");
-            // Each line goes to the next tab stop of its own indent.
+            // Over more rows each line gets a whole tab stop, whatever its indent.
             load(&text_box, "  a\nb", cx);
             press_as(cx, "mod-a tab", mac);
-            assert_eq!(text_of(&text_box, cx), "    a\n    b", "mac {mac}, kind {index}");
+            assert_eq!(text_of(&text_box, cx), "      a\n    b", "mac {mac}, kind {index}");
+            // With no selection the column counts from the last tab.
+            load(&text_box, "\tab", cx);
+            press_as(cx, "tab", mac);
+            assert_eq!(text_of(&text_box, cx), "\tab  ", "mac {mac}, kind {index}");
             // On one line the spaces go to the next tab stop, in front of the selection.
             load(&text_box, "  foo", cx);
             press_as(cx, "left shift-left shift-left tab", mac);
@@ -999,6 +1003,27 @@ fn t_look_the_wrap_row_count_at_a_fixed_width(cx: &mut TestAppContext) {
         below >= 1.,
         "the text did not wrap: {below} rows below the first"
     );
+}
+
+#[gpui::test]
+fn t_look_a_tab_shows_as_spaces_to_the_next_tab_stop(cx: &mut TestAppContext) {
+    let (host, cx) = setup(cx, false, 300.);
+    let fill = text_box(&host, FILL, cx);
+    focus(&fill, cx);
+    // A tab after 2 chars is 2 columns wide, after 3 chars 1 column.
+    for (tabbed, spaced) in [("ab\tc", "ab  c"), ("abc\td", "abc d")] {
+        load(&fill, tabbed, cx);
+        let after_tab = char_rect(&fill, tabbed.len() - 1..tabbed.len(), cx);
+        load(&fill, spaced, cx);
+        let after_spaces = char_rect(&fill, spaced.len() - 1..spaced.len(), cx);
+        eprintln!("T-LOOK-1 tab {tabbed:?}: {after_tab:?}, spaces: {after_spaces:?}");
+        assert!(
+            close(after_tab.origin.x, after_spaces.origin.x, 0.5),
+            "{tabbed:?}: the char after the tab is at {:?}, after the spaces at {:?}",
+            after_tab.origin.x,
+            after_spaces.origin.x
+        );
+    }
 }
 
 #[gpui::test]

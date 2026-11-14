@@ -15,7 +15,7 @@ use gpui::{
 };
 use theme::ActiveTheme;
 
-use super::text_input::{Mode, TextInput};
+use super::text_input::{Mode, TAB_SIZE, TextInput};
 use crate::terminals::term::element::rounded_path;
 
 /// The width of the caret.
@@ -46,9 +46,69 @@ pub struct Line {
     pub first_row: usize,
     /// The offsets in the line where its rows start; the first is 0.
     pub row_starts: Vec<usize>,
+    /// The x in the unwrapped line where each row starts.
+    row_x: Vec<Pixels>,
+    /// The line with its tabs as spaces.
     pub shaped: Rc<WrappedLine>,
+    tabs: Vec<Tab>,
     /// It is drawn in one run of the text colour, so a later layout may take it as it is.
     plain: bool,
+}
+
+/// A tab of a line, shaped as spaces to the next tab stop.
+#[derive(Clone, Copy, Debug)]
+struct Tab {
+    /// Its offset in the line.
+    at: usize,
+    /// The offset of its first space in the shaped line.
+    shown: usize,
+    /// How many spaces it shows as.
+    width: usize,
+}
+
+/// `text` with each tab as spaces to the next tab stop (in chars from the line start), `runs`
+/// stretched to match, and the tabs.
+fn expand_tabs(text: &str, runs: &[TextRun]) -> (String, Vec<TextRun>, Vec<Tab>) {
+    let mut tabs = Vec::new();
+    if !text.contains('\t') {
+        return (text.to_owned(), runs.to_vec(), tabs);
+    }
+    let mut shown = String::with_capacity(text.len() + 8);
+    let mut column = 0;
+    for (at, c) in text.char_indices() {
+        match c {
+            '\t' => {
+                let width = TAB_SIZE - column % TAB_SIZE;
+                tabs.push(Tab {
+                    at,
+                    shown: shown.len(),
+                    width,
+                });
+                shown.push_str(&" ".repeat(width));
+                column += width;
+            }
+            '\n' => {
+                shown.push(c);
+                column = 0;
+            }
+            _ => {
+                shown.push(c);
+                column += 1;
+            }
+        }
+    }
+    let mut runs = runs.to_vec();
+    let mut start = 0;
+    for run in &mut runs {
+        let end = start + run.len;
+        run.len += tabs
+            .iter()
+            .filter(|tab| (start..end).contains(&tab.at))
+            .map(|tab| tab.width - 1)
+            .sum::<usize>();
+        start = end;
+    }
+    (shown, runs, tabs)
 }
 
 impl Line {
@@ -56,11 +116,42 @@ impl Line {
         self.row_starts.get(row + 1).copied().unwrap_or(self.len)
     }
 
+    /// The offset in the shaped line of `local`.
+    fn shown(&self, local: usize) -> usize {
+        let extra: usize = self
+            .tabs
+            .iter()
+            .take_while(|tab| tab.at < local)
+            .map(|tab| tab.width - 1)
+            .sum();
+        local + extra
+    }
+
+    /// The offset in the line of `shown`. One inside a tab's spaces goes to the nearer side of
+    /// the tab, or with `ceil` to its end.
+    fn local(&self, shown: usize, ceil: bool) -> usize {
+        let mut extra = 0;
+        for tab in &self.tabs {
+            if shown <= tab.shown {
+                break;
+            }
+            if shown < tab.shown + tab.width {
+                let after = ceil || (shown - tab.shown) * 2 >= tab.width;
+                return tab.at + usize::from(after);
+            }
+            extra += tab.width - 1;
+        }
+        shown - extra
+    }
+
+    /// The x of `local` in the unwrapped line.
+    fn x(&self, local: usize) -> Pixels {
+        self.shaped.unwrapped_layout.x_for_index(self.shown(local))
+    }
+
     /// The x of `local` in `row`, from the left of the row.
     fn x_in_row(&self, row: usize, local: usize) -> Pixels {
-        let layout = &self.shaped.unwrapped_layout;
-        let start = self.row_starts.get(row).copied().unwrap_or(0);
-        layout.x_for_index(local) - layout.x_for_index(start)
+        self.x(local) - self.row_x.get(row).copied().unwrap_or_default()
     }
 }
 
@@ -137,32 +228,38 @@ impl Layout {
             let plain = line_runs
                 .iter()
                 .all(|run| run.color == key.color && run.underline.is_none());
-            let shaped = match ready.get(source) {
-                Some(shaped) if plain => Rc::clone(shaped),
-                _ => {
-                    let source = SharedString::from(source.to_string());
-                    let shaped = shape(&source, &line_runs, key.font_size, key.width, window)
-                        .into_iter()
-                        .next()
-                        .unwrap_or_default();
-                    Rc::new(shaped)
-                }
-            };
-            let mut row_starts = vec![0];
-            row_starts.extend(shaped.wrap_boundaries().iter().filter_map(|boundary| {
+            let (shown, line_runs, tabs) = expand_tabs(source, &line_runs);
+            let cached = ready.get(shown.as_str()).filter(|_| plain).copied().cloned();
+            let shaped = cached.unwrap_or_else(|| {
+                let shown = SharedString::from(shown);
+                let shaped = shape(&shown, &line_runs, key.font_size, key.width, window)
+                    .into_iter()
+                    .next()
+                    .unwrap_or_default();
+                Rc::new(shaped)
+            });
+            let mut shown_starts = vec![0];
+            shown_starts.extend(shaped.wrap_boundaries().iter().filter_map(|boundary| {
                 let run = shaped.runs().get(boundary.run_ix)?;
                 Some(run.glyphs.get(boundary.glyph_ix)?.index)
             }));
-            width = width.max(shaped.unwrapped_layout.width);
-            let count = row_starts.len();
-            lines.push(Line {
+            let layout = &shaped.unwrapped_layout;
+            let row_x = shown_starts.iter().map(|&at| layout.x_for_index(at)).collect();
+            width = width.max(layout.width);
+            let mut line = Line {
                 start,
                 len,
                 first_row: row,
-                row_starts,
+                row_starts: Vec::new(),
+                row_x,
                 shaped,
+                tabs,
                 plain,
-            });
+            };
+            // A row that starts inside a tab's spaces keeps the tab on the row above.
+            line.row_starts = shown_starts.iter().map(|&at| line.local(at, true)).collect();
+            let count = line.row_starts.len();
+            lines.push(line);
             row += count;
             start += len + 1;
         }
@@ -241,10 +338,9 @@ impl Layout {
         };
         let start = line.row_starts.get(in_line).copied().unwrap_or(0);
         let end = line.row_end(in_line);
-        let layout = &line.shaped.unwrapped_layout;
-        let local = layout
-            .closest_index_for_x(x + layout.x_for_index(start))
-            .clamp(start, end);
+        let row_x = line.row_x.get(in_line).copied().unwrap_or_default();
+        let shown = line.shaped.unwrapped_layout.closest_index_for_x(x + row_x);
+        let local = line.local(shown, false).clamp(start, end);
         let wraps = in_line + 1 < line.row_starts.len();
         (line.start + local, wraps && local == end)
     }
@@ -313,9 +409,8 @@ impl Layout {
             .map(|(at, c)| {
                 let at = range.start + at;
                 let width = self.line_at(at).map_or(px(0.), |line| {
-                    let layout = &line.shaped.unwrapped_layout;
                     let local = at - line.start;
-                    layout.x_for_index(local + c.len_utf8()) - layout.x_for_index(local)
+                    line.x(local + c.len_utf8()) - line.x(local)
                 });
                 (self.position(at, false), width, c)
             })
@@ -409,6 +504,8 @@ impl Element for TextElement {
                 let font_size = style.font_size.to_pixels(rem);
                 let (text, placeholder) = input.display();
                 let runs = input.runs(&style, text.len(), placeholder, cx);
+                let (text, runs, _) = expand_tabs(&text, &runs);
+                let text = SharedString::from(text);
                 let (min, max) = (min.max(1), max.max(min).max(1));
                 window.request_measured_layout(layout, move |known, available, window, _| {
                     let width = known.width.or(match available.width {
