@@ -86,7 +86,6 @@ task
 telemetry
 telemetry_events
 terminal
-terminal_view
 text
 theme
 theme_settings

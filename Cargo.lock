@@ -5550,8 +5550,6 @@ dependencies = [
  "settings",
  "sha2",
  "shlex",
- "terminal",
- "terminal_view",
  "text",
  "theme",
  "theme_settings",
@@ -9179,42 +9177,6 @@ dependencies = [
  "util",
  "vte",
  "windows 0.62.2",
-]
-
-[[package]]
-name = "terminal_view"
-version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
-dependencies = [
- "anyhow",
- "async-recursion",
- "breadcrumbs",
- "collections",
- "db",
- "dirs",
- "editor",
- "futures",
- "gpui",
- "itertools 0.14.0",
- "language",
- "log",
- "menu",
- "project",
- "regex",
- "schemars",
- "serde",
- "serde_json",
- "settings",
- "shellexpand",
- "shlex",
- "task",
- "terminal",
- "theme",
- "theme_settings",
- "ui",
- "util",
- "workspace",
- "zed_actions",
 ]
 
 [[package]]

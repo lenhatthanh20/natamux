@@ -1,11 +1,7 @@
-//! A shell of the daemon in Zed's terminal view (gate 3 of phase 1). Zed's `Terminal` normally
-//! owns a local PTY; here it is display-only: the socket's bytes go into its screen, and what it
-//! would write to a PTY (keys, pastes, IME text, answers to queries) goes to the socket. Our Zed
-//! fork adds three hooks for it: `Terminal::set_display_only_input` (the input),
-//! `display_only_writer` (parsing off the main thread) and `set_wakeup_pace` (how often it wakes).
-//! The `own-terminal` feature, on by default since S2.5, puts the own terminal in Zed's place,
-//! with the same names (`screen`, docs/plan-mit-license.md S2.4); without it the app builds on
-//! Zed's terminal until S2.6.
+//! A shell of the daemon in the terminal view (gate 3 of phase 1). The terminal owns no PTY; it
+//! is display-only: the socket's bytes go into its screen, and what it would write to a PTY
+//! (keys, pastes, IME text, answers to queries) goes to the socket.
+//! The terminal is the own one (`terminals/term`), under the names Zed's had (`screen`).
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -70,7 +66,7 @@ pub struct RemoteTerminal {
     drawn: bool,
     /// The screen a snapshot is being written to, while the old one stays on screen.
     incoming: Option<Screen>,
-    /// Where Zed's terminals send what they would write to a PTY.
+    /// Where the terminals send what they would write to a PTY.
     input_sink: Option<UnboundedSender<Vec<u8>>>,
     /// The window it was made in: a snapshot's screen needs it for its view.
     window: AnyWindowHandle,
@@ -90,7 +86,7 @@ pub struct RemoteTerminal {
     swap: Option<Task<()>>,
     /// A snapshot is being written: the pane shows its skeleton, not the history scrolling by.
     replaying: bool,
-    /// The history limit Zed's terminal was built with.
+    /// The history limit the terminal was built with.
     history: Option<usize>,
     _tasks: Vec<Task<()>>,
 }
@@ -184,7 +180,7 @@ impl RemoteTerminal {
         self.handle.as_ref()?.shell_id()
     }
 
-    /// Zed's terminal, for the find bar, the shots and the tests.
+    /// The terminal, for the find bar, the shots and the tests.
     pub fn terminal(&self) -> &Entity<Terminal> {
         &self.terminal
     }
@@ -360,7 +356,7 @@ impl RemoteTerminal {
         self.check_size(Some(window), cx);
     }
 
-    /// Zed's terminal keeps the history limit it was built with, and the pane's width is known
+    /// The terminal keeps the history limit it was built with, and the pane's width is known
     /// only once the view laid out. So the terminal is built again at its first size, before the
     /// shell connects and any output comes, with the daemon's rule at that width. A later resize
     /// keeps the limit.
@@ -385,7 +381,6 @@ impl RemoteTerminal {
     /// but counts as inside, as the old view's does in the tests.
     pub fn has_focus(&self, window: &Window, cx: &App) -> bool {
         let view = self.view.read(cx);
-        #[cfg(feature = "own-terminal")]
         if view.menu_holds_focus(window, cx) {
             return true;
         }
@@ -545,17 +540,7 @@ impl RemoteTerminal {
     }
 }
 
-/// The terminal a remote terminal shows its shell in: Zed's.
-#[cfg(not(feature = "own-terminal"))]
-pub(crate) mod screen {
-    #[cfg(test)]
-    pub use terminal::{Content, Event};
-    pub use terminal::{DisplayOnlyWriter, Modes, Range, Search, Terminal, TerminalBounds};
-    pub use terminal_view::TerminalView;
-}
-
-/// The terminal a remote terminal shows its shell in: the own one, under Zed's names.
-#[cfg(feature = "own-terminal")]
+/// The terminal a remote terminal shows its shell in, under the names Zed's had.
 pub(crate) mod screen {
     #[cfg(test)]
     pub use crate::terminals::term::model::{Content, TermEvent as Event};

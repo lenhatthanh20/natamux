@@ -93,8 +93,6 @@ language = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", re
 release_channel = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50" }
 settings = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50" }
 text = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50" }
-terminal = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50" }
-terminal_view = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50" }
 theme = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50" }
 theme_settings = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50" }
 # debug-embed: without it, debug builds look for the grammar queries in a Zed checkout.

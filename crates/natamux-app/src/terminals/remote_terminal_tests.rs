@@ -268,18 +268,15 @@ fn focus_moves_to_the_new_view_at_the_swap(cx: &mut TestAppContext) {
 }
 
 /// S2.5 review: with the menu open, the menu counts as the own view's focus, so the focus moves
-/// to the new view at the swap and the terminal keeps a true focused lane. Both builds run it.
-/// Zed's terminal drops the focus there: it goes back to the old view, which is no longer drawn
-/// (Bugs found); the own view does not keep that.
+/// to the new view at the swap and the terminal keeps a true focused lane. (Zed's terminal
+/// dropped the focus there, back to the old view that is no longer drawn: a bug of the old code,
+/// pending the owner's decision in the progress log.)
 #[gpui::test]
 fn focus_in_the_menu_moves_to_the_new_view_at_the_swap(cx: &mut TestAppContext) {
     let (terminal, cx) = open(cx);
     focus_view(&terminal, cx);
     let view = terminal.read_with(cx, |terminal, _| terminal.view.clone());
     view.update_in(cx, |view, window, cx| {
-        #[cfg(not(feature = "own-terminal"))]
-        view.deploy_context_menu(gpui::point(px(8.), px(8.)), true, window, cx);
-        #[cfg(feature = "own-terminal")]
         view.deploy_context_menu(gpui::point(px(8.), px(8.)), window, cx);
     });
     cx.run_until_parked();
@@ -292,17 +289,10 @@ fn focus_in_the_menu_moves_to_the_new_view_at_the_swap(cx: &mut TestAppContext) 
         let new_view = terminal.view.focus_handle(cx);
         (new_view.is_focused(window), old_view.is_focused(window))
     });
-    #[cfg(feature = "own-terminal")]
     assert_eq!(
         (on_new_view, on_old_view),
         (true, false),
         "the focus stayed in the old view or its menu"
-    );
-    #[cfg(not(feature = "own-terminal"))]
-    assert_eq!(
-        (on_new_view, on_old_view),
-        (false, true),
-        "Zed's terminal no longer drops the focus at the swap"
     );
     assert!(focused(&terminal, cx), "the terminal lost its focused lane");
 }
@@ -485,9 +475,6 @@ fn an_unfocused_swap_gives_the_new_screen_the_input_and_no_focus(cx: &mut TestAp
     // The input loop takes the key's time only for input that came through the sink.
     terminal.update(cx, |terminal, _| terminal.last_key = Some(Instant::now()));
     let zed = terminal.read_with(cx, |terminal, _| terminal.terminal().clone());
-    #[cfg(not(feature = "own-terminal"))]
-    zed.update(cx, |zed, _| zed.input(b"x".to_vec()));
-    #[cfg(feature = "own-terminal")]
     zed.update(cx, |zed, _| zed.type_bytes(b"x".to_vec()));
     cx.run_until_parked();
     let sent = terminal.read_with(cx, |terminal, _| terminal.last_key.is_none());

@@ -1,13 +1,14 @@
-//! The golden tables of the terminal (docs/plan-mit-license.md 7.3 and 7.6), made from Zed's
-//! terminal on CI: the bytes of every key (T-K1) and mouse report (T-M1), the draw list of the
-//! `terminal-look` screen (T-P1), the contrast fix (T-C1) and the colours of every theme (T-C2).
-//! The own terminal must give the same rows.
+//! The golden tables of the terminal (docs/plan-mit-license.md 7.3 and 7.6), recorded on
+//! Zed's terminal before it was removed (S2.6): the bytes of every key (T-K1) and mouse report
+//! (T-M1), the draw list of the `terminal-look` screen (T-P1), the contrast fix (T-C1) and the
+//! colours of every theme (T-C2).
+//! The terminal must still give the same rows.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use gpui::{App, Hsla, Keystroke, MouseButton, Rgba, TestAppContext, VisualTestContext, px, size};
 use serde_json::{Value, json};
-use terminal::{Color, NamedColor, Rgb};
+use alacritty_terminal::vte::ansi::{Color, NamedColor, Rgb};
 
 use super::screen::{Content, Modes};
 
@@ -167,7 +168,6 @@ fn every_key_sends_what_the_golden_holds(cx: &mut TestAppContext) {
 /// What the test window types for a key the terminal let go on: the key's own character (a
 /// capital letter with Shift) or a space, and nothing with Ctrl, Alt or Cmd, as the old code's
 /// table shows. The own view gets that text through its input handler (S2.4).
-#[cfg(feature = "own-terminal")]
 fn typed(keystroke: &Keystroke) -> String {
     let mods = &keystroke.modifiers;
     if mods.control || mods.alt || mods.platform {
@@ -182,7 +182,6 @@ fn typed(keystroke: &Keystroke) -> String {
 }
 
 /// T-K1 on the own encoder: its bytes, or the key's text when it lets the key go on.
-#[cfg(feature = "own-terminal")]
 #[test]
 fn the_own_encoder_sends_what_the_golden_holds() {
     use alacritty_terminal::term::TermMode;
@@ -217,12 +216,6 @@ fn the_own_encoder_sends_what_the_golden_holds() {
     // The mode the last frame copied is still the normal one (6.2.5).
     rows.push(row("app-cursor, no frame", "none", "up", TermMode::empty()));
     golden_files::check(SET, "press_table", &rows);
-}
-
-#[gpui::test]
-#[ignore]
-fn golden_terminal_press_table(cx: &mut TestAppContext) {
-    golden_files::write(SET, "press_table", &press_rows(cx));
 }
 
 const MOUSE_MODES: [(&str, &str); 3] = [
@@ -299,7 +292,6 @@ fn mouse_reports_match_the_golden(cx: &mut TestAppContext) {
 }
 
 /// T-M1 on the own reports: the same steps at the same cells as `mouse_rows`.
-#[cfg(feature = "own-terminal")]
 #[test]
 fn the_own_mouse_reports_match_the_golden() {
     use alacritty_terminal::term::TermMode;
@@ -345,12 +337,6 @@ fn the_own_mouse_reports_match_the_golden() {
         }
     }
     golden_files::check(SET, "mouse_reports", &rows);
-}
-
-#[gpui::test]
-#[ignore]
-fn golden_terminal_mouse_reports(cx: &mut TestAppContext) {
-    golden_files::write(SET, "mouse_reports", &mouse_rows(cx));
 }
 
 /// The 17 themes the app offers.
@@ -409,7 +395,7 @@ impl Seeded {
 }
 
 /// T-C1: the APCA 45 fix of a foreground on a background: the 16 named colours of each theme
-/// on its terminal background, then 20,000 random pairs. `fix` is Zed's or the own one.
+/// on its terminal background, then 20,000 random pairs. `fix` is the contrast fix under test.
 fn contrast_rows(cx: &mut TestAppContext, fix: fn(Hsla, Hsla, f32) -> Hsla) -> Vec<Value> {
     crate::app::test_views::init(cx);
     let mut rows = Vec::new();
@@ -446,23 +432,9 @@ fn contrast_rows(cx: &mut TestAppContext, fix: fn(Hsla, Hsla, f32) -> Hsla) -> V
 }
 
 #[gpui::test]
-fn the_contrast_fix_matches_the_golden(cx: &mut TestAppContext) {
-    let rows = contrast_rows(cx, ui::utils::ensure_minimum_contrast);
-    golden_files::check(SET, "contrast", &rows);
-}
-
-#[cfg(feature = "own-terminal")]
-#[gpui::test]
 fn the_own_contrast_fix_matches_the_golden(cx: &mut TestAppContext) {
     use crate::terminals::term::contrast::with_minimum_contrast;
     golden_files::check(SET, "contrast", &contrast_rows(cx, with_minimum_contrast));
-}
-
-#[gpui::test]
-#[ignore]
-fn golden_terminal_contrast(cx: &mut TestAppContext) {
-    let rows = contrast_rows(cx, ui::utils::ensure_minimum_contrast);
-    golden_files::write(SET, "contrast", &rows);
 }
 
 #[test]
@@ -474,106 +446,8 @@ fn the_seeded_pairs_are_fixed() {
     assert_ne!(first, [first[0]; 4]);
 }
 
-/// The text style the terminal draws with at 13 px: Zed's mono font, ligatures off.
-#[cfg(not(feature = "own-terminal"))]
-fn text_style(cx: &App) -> gpui::TextStyle {
-    use ui::ActiveTheme;
-    gpui::TextStyle {
-        font_family: ".ZedMono".into(),
-        font_features: gpui::FontFeatures::disable_ligatures(),
-        font_size: px(13.).into(),
-        color: cx.theme().colors().terminal_foreground,
-        ..gpui::TextStyle::default()
-    }
-}
-
-/// A rect's fields are private, so its debug text is kept, with each `Hsla { .. }` written as
-/// 8-bit RGBA like every other colour of the tables.
-#[cfg(not(feature = "own-terminal"))]
-fn hex_colours(text: &str) -> String {
-    const START: &str = "Hsla { h: ";
-    let mut out = String::new();
-    let mut rest = text;
-    while let Some(at) = rest.find(START) {
-        out.push_str(&rest[..at]);
-        let end = rest[at..].find('}').unwrap() + at;
-        let numbers: Vec<f32> = rest[at + START.len() - 3..end]
-            .split(", ")
-            .map(|part| part.trim().rsplit(' ').next().unwrap().parse().unwrap())
-            .collect();
-        let [h, s, l, a] = numbers[..] else {
-            panic!("not a colour: {}", &rest[at..=end]);
-        };
-        out.push_str(&hex(Hsla { h, s, l, a }));
-        rest = &rest[end + 1..];
-    }
-    out.push_str(rest);
-    out
-}
-
-#[cfg(not(feature = "own-terminal"))]
-#[test]
-fn writes_the_colours_of_a_rect_as_hex() {
-    assert_eq!(
-        hex_colours("R { n: 2, color: Hsla { h: 0.0, s: 0.0, l: 1.0, a: 1.0 } }"),
-        "R { n: 2, color: #ffffffff }"
-    );
-}
-
-/// T-P1: the draw list of the `terminal-look` screen: text runs, background rects and block
-/// rects, from the screen's cells as the last frame copied them.
-#[cfg(not(feature = "own-terminal"))]
-fn draw_rows(cx: &mut TestAppContext) -> Vec<Value> {
-    let (_, terminal, cx) = open(cx, size(px(1000.), px(500.)), false);
-    feed(&terminal, &crate::app::shots_terminal::look(), cx);
-    let screen = zed(&terminal, cx);
-    let cells = screen.read_with(cx, |screen, _| screen.last_content().cells.clone());
-    let mut rows = Vec::new();
-    cx.update(|_, cx| {
-        let style = text_style(cx);
-        let (rects, runs, blocks) = terminal_view::terminal_element::TerminalElement::layout_grid(
-            cells.into_iter(),
-            0,
-            &style,
-            None,
-            45.,
-            cx,
-        );
-        for run in &runs {
-            let style = &run.style;
-            rows.push(json!([
-                "run",
-                format!("{:?}", run.start_point),
-                run.text,
-                run.cell_count,
-                hex(style.color),
-                style.font.weight.0,
-                format!("{:?}", style.font.style),
-                style.background_color.map(hex),
-                style.underline.map(|line| (
-                    f32::from(line.thickness),
-                    line.color.map(hex),
-                    line.wavy
-                )),
-                style
-                    .strikethrough
-                    .map(|line| (f32::from(line.thickness), line.color.map(hex))),
-                format!("{:?}", run.font_size)
-            ]));
-        }
-        for rect in &rects {
-            rows.push(json!(["rect", hex_colours(&format!("{rect:?}"))]));
-        }
-        for block in &blocks {
-            rows.push(json!(["block", hex_colours(&format!("{block:?}"))]));
-        }
-    });
-    rows
-}
-
 /// T-P1 on the own layout of the cells, written in the old rows' form (the old element's debug
 /// text of its rects, with the colours as 8-bit RGBA).
-#[cfg(feature = "own-terminal")]
 fn draw_rows(cx: &mut TestAppContext) -> Vec<Value> {
     use theme::ActiveTheme;
 
@@ -638,14 +512,8 @@ fn the_draw_list_matches_the_golden(cx: &mut TestAppContext) {
     golden_files::check(SET, "draw_list", &draw_rows(cx));
 }
 
-#[gpui::test]
-#[ignore]
-fn golden_terminal_draw_list(cx: &mut TestAppContext) {
-    golden_files::write(SET, "draw_list", &draw_rows(cx));
-}
-
 /// T-C2: the colour of every named colour, all 256 indexed ones and a sample of exact ones, in
-/// each theme. `convert` is Zed's or the own one.
+/// each theme. `convert` is the colour conversion under test.
 fn colour_rows(cx: &mut TestAppContext, convert: fn(&Color, &theme::Theme) -> Hsla) -> Vec<Value> {
     crate::app::test_views::init(cx);
     let named = [
@@ -698,21 +566,7 @@ fn colour_rows(cx: &mut TestAppContext, convert: fn(&Color, &theme::Theme) -> Hs
 }
 
 #[gpui::test]
-fn the_colours_match_the_golden(cx: &mut TestAppContext) {
-    let rows = colour_rows(cx, terminal_view::terminal_element::convert_color);
-    golden_files::check(SET, "colours", &rows);
-}
-
-#[cfg(feature = "own-terminal")]
-#[gpui::test]
 fn the_own_colours_match_the_golden(cx: &mut TestAppContext) {
     use crate::terminals::term::colors::convert;
     golden_files::check(SET, "colours", &colour_rows(cx, convert));
-}
-
-#[gpui::test]
-#[ignore]
-fn golden_terminal_colours(cx: &mut TestAppContext) {
-    let rows = colour_rows(cx, terminal_view::terminal_element::convert_color);
-    golden_files::write(SET, "colours", &rows);
 }

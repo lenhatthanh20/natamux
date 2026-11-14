@@ -1312,6 +1312,7 @@ S2.6 Remove the old terminal
 - Tag: `[ci: all]`.
 - Proof: all green (`zed-lock-check.py` included); all shots exact; the goldens still pass.
 - Risk: `editor` and `language` remain in the lock (other users); that is expected.
+- Done in S2.6: `terminal_view` is gone from the workspace, from `natamux-app`, from `Cargo.lock` and from `scripts/zed-lock-crates.txt` (105 left); `Cargo.lock` is the `Tool: lock` output (run 43606720753, nothing else changed). The Zed `terminal` package stays in the lock, because `project` (under `editor`) depends on it; the app no longer does. The feature `own-terminal` and its `cfg` branches are gone, `alacritty_terminal` and `shlex` are plain dependencies, and `remote_terminal::screen` names the own terminal only. Removed: the two 8.5 CI steps (`check`, `app-macos-tests`), the Zed branch of `build_screen`, the Zed `terminal` and `terminal_view` calls of the tests, and every `golden_terminal_*` generator (they recorded the goldens from Zed's terminal; the goldens are fixed files now). Also removed, because they ran Zed's own code against the goldens: `the_contrast_fix_matches_the_golden` (Zed's `ensure_minimum_contrast`) and `the_colours_match_the_golden` (Zed's `convert_color`); the own rows of both stay. `the_own_fonts_and_sizes_equal_zeds` no longer reads Zed's `TerminalSettings`: it asserts the terminal font directly (the named family and size, else none).
 
 ### S3. Text input
 

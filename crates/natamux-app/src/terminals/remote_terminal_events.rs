@@ -182,58 +182,8 @@ pub(super) struct Screen {
     pub(super) _focus: Vec<Subscription>,
 }
 
-/// `bounds`: the grid the last screen laid out, so the new one starts at it.
-#[cfg(not(feature = "own-terminal"))]
-pub(super) fn build_screen(
-    history: Option<usize>,
-    bounds: Option<TerminalBounds>,
-    window: &mut Window,
-    cx: &mut Context<RemoteTerminal>,
-) -> Screen {
-    use gpui::WeakEntity;
-    use settings::Settings;
-    use terminal::TerminalBuilder;
-    use terminal::terminal_settings::TerminalSettings;
-    use util::paths::PathStyle;
-
-    let settings = TerminalSettings::get_global(cx).clone();
-    let terminal = cx.new(|cx| {
-        TerminalBuilder::new_display_only_with_bounds(
-            settings.cursor_shape,
-            settings.alternate_scroll,
-            history,
-            cx.entity_id().as_u64(),
-            cx.background_executor(),
-            PathStyle::local(),
-            bounds.unwrap_or_default(),
-        )
-        .subscribe(cx)
-    });
-    let view = cx.new(|cx| {
-        let mut view = TerminalView::new(
-            terminal.clone(),
-            WeakEntity::new_invalid(),
-            None,
-            WeakEntity::new_invalid(),
-            window,
-            cx,
-        );
-        // No Zed workspace here to handle New Terminal, New Center Terminal or Close Terminal Tab
-        // from the right-click menu (T-0247).
-        view.set_show_workspace_actions(false, cx);
-        view
-    });
-    let focus = view.focus_handle(cx);
-    Screen {
-        terminal,
-        view,
-        _focus: watch_focus(&focus, window, cx).into(),
-    }
-}
-
-/// The own terminal: its cursor starts as a block and alternate scroll is on (6.2.2); its menu
-/// has only what works without a Zed workspace.
-#[cfg(feature = "own-terminal")]
+/// `bounds`: the grid the last screen laid out, so the new one starts at it. The cursor starts as
+/// a block and alternate scroll is on; the menu has only what works without a workspace.
 pub(super) fn build_screen(
     history: Option<usize>,
     bounds: Option<TerminalBounds>,
@@ -281,7 +231,6 @@ pub(super) fn watch_focus(
 ) -> [Subscription; 2] {
     let focus_in = cx.on_focus_in(focus, window, |this, _, cx| {
         // Back from the own view's menu: the focus never left as far as the shell knows.
-        #[cfg(feature = "own-terminal")]
         if this.view.read(cx).back_from_menu {
             return;
         }
@@ -290,7 +239,6 @@ pub(super) fn watch_focus(
     // Not blur: focus in a child, such as the context menu, still counts as focused.
     let focus_out = cx.on_focus_out(focus, window, |this, _, _window, cx| {
         // The own view's menu is drawn outside its focus, but still counts as the view's.
-        #[cfg(feature = "own-terminal")]
         if this.view.read(cx).menu_holds_focus(_window, cx) {
             return;
         }

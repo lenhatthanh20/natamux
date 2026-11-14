@@ -3,14 +3,13 @@
 use gpui::TestAppContext;
 use serde_json::json;
 use settings::Settings;
-use terminal::terminal_settings::TerminalSettings;
 use theme_settings::ThemeSettings;
 
 use super::*;
 use crate::app::test_views;
 
-// Plan 6.1: the own values equal what Zed makes of the settings JSON, at each UI size, with and
-// without a terminal font of the user's.
+// Plan 6.1: the own values equal what Zed makes of the settings JSON for the UI and the buffer,
+// and the terminal font is the user's only when they name a family, at each UI size.
 #[gpui::test]
 fn the_own_fonts_and_sizes_equal_zeds(cx: &mut TestAppContext) {
     test_views::init(cx);
@@ -36,23 +35,13 @@ fn the_own_fonts_and_sizes_equal_zeds(cx: &mut TestAppContext) {
                 assert_eq!(own.buffer_font, zed.buffer_font, "{case}");
                 assert_eq!(own.buffer_font_size, zed.buffer_font_size(cx), "{case}");
                 assert_eq!(own.buffer_line_height, zed.line_height(), "{case}");
-                let terminal = TerminalSettings::get_global(cx);
-                let zed_font = terminal
-                    .font_family
+                let terminal_font = own
+                    .terminal_font
                     .as_ref()
-                    .map(|family| family.0.to_string());
-                assert_eq!(
-                    own.terminal_font
-                        .as_ref()
-                        .map(|(family, _)| family.to_string()),
-                    zed_font,
-                    "{case}"
-                );
-                assert_eq!(
-                    own.terminal_font.as_ref().map(|(_, size)| *size),
-                    terminal.font_size,
-                    "{case}"
-                );
+                    .map(|(family, size)| (family.to_string(), f32::from(*size)));
+                let named = font.as_ref().is_some_and(|font| font.get("family").is_some());
+                let expected = named.then(|| ("Menlo".to_string(), 12.5));
+                assert_eq!(terminal_font, expected, "{case}");
                 assert!(!own.hide_scrollbars, "{case}");
             });
         }

@@ -184,32 +184,9 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "own-terminal")]
     fn screen(cx: &mut TestAppContext) -> Entity<Terminal> {
         crate::app::test_views::init(cx);
         cx.new(|cx| Terminal::new(None, None, cx))
-    }
-
-    #[cfg(not(feature = "own-terminal"))]
-    fn screen(cx: &mut TestAppContext) -> Entity<Terminal> {
-        use settings::Settings;
-        use terminal::TerminalBuilder;
-        use terminal::terminal_settings::TerminalSettings;
-        use util::paths::PathStyle;
-
-        crate::app::test_views::init(cx);
-        cx.new(|cx| {
-            let settings = TerminalSettings::get_global(cx).clone();
-            TerminalBuilder::new_display_only(
-                settings.cursor_shape,
-                settings.alternate_scroll,
-                None,
-                0,
-                cx.background_executor(),
-                PathStyle::local(),
-            )
-            .subscribe(cx)
-        })
     }
 
     fn new_parser(

@@ -1,7 +1,7 @@
 //! The terminal matrix of the MIT move (docs/plan-mit-license.md 7.3), recorded on Zed's
-//! terminal: what a user does to a terminal (keys, IME text, mouse, wheel, paste, links, focus)
-//! and what reaches the shell, read back from `send_input`. The own terminal must pass the same
-//! tests. Where the facts are many, a table is kept as a golden file of the `terminal` set.
+//! terminal before it was removed (S2.6): what a user does to a terminal (keys, IME text, mouse, wheel, paste, links, focus)
+//! and what reaches the shell, read back from `send_input`. The terminal must still pass the
+//! same tests. Where the facts are many, a table is kept as a golden file of the `terminal` set.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
@@ -542,7 +542,6 @@ fn the_grid_of_a_pane_matches_the_golden(cx: &mut TestAppContext) {
 /// T-G1 on the own grid math. The cell size comes from the font, which the own view measures
 /// (S2.4), so here it comes from the table. The bounds are what the old view gave its grid: the
 /// pane less the 14 px scrollbar track it always keeps, in whole device pixels as gpui lays out.
-#[cfg(feature = "own-terminal")]
 #[test]
 fn the_own_grid_matches_the_golden() {
     use crate::terminals::term::grid_layout::grid;
@@ -578,12 +577,6 @@ fn the_own_grid_matches_the_golden() {
         })
         .collect();
     golden_files::check(SET, "grid_size", &rows);
-}
-
-#[gpui::test]
-#[ignore]
-fn golden_terminal_grid_size(cx: &mut TestAppContext) {
-    golden_files::write(SET, "grid_size", &grid_rows(cx));
 }
 
 // T-W1: the wheel and the trackpad: local scroll, wheel reports in mouse mode, arrows on the
@@ -666,12 +659,6 @@ fn wheel_rows(cx: &mut TestAppContext) -> Vec<Value> {
 #[gpui::test]
 fn the_wheel_matches_the_golden(cx: &mut TestAppContext) {
     golden_files::check(SET, "wheel", &wheel_rows(cx));
-}
-
-#[gpui::test]
-#[ignore]
-fn golden_terminal_wheel(cx: &mut TestAppContext) {
-    golden_files::write(SET, "wheel", &wheel_rows(cx));
 }
 
 /// A terminal pane in a parent that counts the wheel turns that reach it.
@@ -869,12 +856,6 @@ fn selection_matches_the_golden(cx: &mut TestAppContext) {
     golden_files::check(SET, "selection", &selection_rows(cx));
 }
 
-#[gpui::test]
-#[ignore]
-fn golden_terminal_selection(cx: &mut TestAppContext) {
-    golden_files::write(SET, "selection", &selection_rows(cx));
-}
-
 // T-V1: Cmd+V of text (bracketed or not), an image and files; a path dropped from the Files
 // tab.
 fn paste_rows(cx: &mut TestAppContext) -> Vec<Value> {
@@ -922,12 +903,6 @@ fn paste_rows(cx: &mut TestAppContext) -> Vec<Value> {
 #[gpui::test]
 fn paste_matches_the_golden(cx: &mut TestAppContext) {
     golden_files::check(SET, "paste", &paste_rows(cx));
-}
-
-#[gpui::test]
-#[ignore]
-fn golden_terminal_paste(cx: &mut TestAppContext) {
-    golden_files::write(SET, "paste", &paste_rows(cx));
 }
 
 // T-V1: text typed before the socket opens is sent once, when it opens.
@@ -1016,15 +991,11 @@ fn link_rows(cx: &mut TestAppContext) -> Vec<Value> {
 #[gpui::test]
 fn links_match_the_golden(cx: &mut TestAppContext) {
     let rows = link_rows(cx);
-    #[cfg(not(feature = "own-terminal"))]
-    golden_files::check(SET, "links", &rows);
-    #[cfg(feature = "own-terminal")]
     assert_eq!(rows, safe_plain_clicks(golden_files::read(SET, "links")));
 }
 
 /// The old rows as the own terminal gives them (D5): a plain click on an OSC 8 cell opens only a
 /// web or mail link, so the other targets of the old plain clicks open nothing.
-#[cfg(feature = "own-terminal")]
 fn safe_plain_clicks(golden: Vec<Value>) -> Vec<Value> {
     use crate::terminals::term::links::may_open;
 
@@ -1042,7 +1013,6 @@ fn safe_plain_clicks(golden: Vec<Value>) -> Vec<Value> {
 /// T-L1 on the own link rules: the link the own model finds under the pointer (an OSC 8 link
 /// from its cells, else a URL of the line), shown with the secondary key, and what a click with
 /// the key opens. A plain click is the view's (S2.4, D5).
-#[cfg(feature = "own-terminal")]
 #[gpui::test]
 fn the_own_links_match_the_golden(cx: &mut TestAppContext) {
     use alacritty_terminal::index::{Column, Line, Point};
@@ -1068,12 +1038,6 @@ fn the_own_links_match_the_golden(cx: &mut TestAppContext) {
         .map(|row| json!(row.as_array().unwrap()[..3]))
         .collect();
     assert_eq!(rows, golden);
-}
-
-#[gpui::test]
-#[ignore]
-fn golden_terminal_links(cx: &mut TestAppContext) {
-    golden_files::write(SET, "links", &link_rows(cx));
 }
 
 // T-M1 and T-L1, more rows (S2.4 review): mouse reports while the screen is scrolled up, the
@@ -1528,12 +1492,6 @@ fn pointer_edges_match_the_golden(cx: &mut TestAppContext) {
     golden_files::check(SET, "pointer_edges", &pointer_rows(cx));
 }
 
-#[gpui::test]
-#[ignore]
-fn golden_terminal_pointer_edges(cx: &mut TestAppContext) {
-    golden_files::write(SET, "pointer_edges", &pointer_rows(cx));
-}
-
 // T-S1, more rows (S2.4 review): drags past the right edge, below the last row, and out of the
 // screen above and below, where the screen scrolls.
 fn selection_edge_rows(cx: &mut TestAppContext) -> Vec<Value> {
@@ -1677,12 +1635,6 @@ fn selection_edges_match_the_golden(cx: &mut TestAppContext) {
     golden_files::check(SET, "selection_edges", &selection_edge_rows(cx));
 }
 
-#[gpui::test]
-#[ignore]
-fn golden_terminal_selection_edges(cx: &mut TestAppContext) {
-    golden_files::write(SET, "selection_edges", &selection_edge_rows(cx));
-}
-
 // T-F1: focus reports only with mode 1004; the size claims of focus; the cursor of an unfocused
 // view, and of a view whose context menu has the focus.
 fn focus_rows(cx: &mut TestAppContext) -> Vec<Value> {
@@ -1730,12 +1682,6 @@ fn focus_rows(cx: &mut TestAppContext) -> Vec<Value> {
 #[gpui::test]
 fn focus_matches_the_golden(cx: &mut TestAppContext) {
     golden_files::check(SET, "focus", &focus_rows(cx));
-}
-
-#[gpui::test]
-#[ignore]
-fn golden_terminal_focus(cx: &mut TestAppContext) {
-    golden_files::write(SET, "focus", &focus_rows(cx));
 }
 
 // T-F1, the menu (S2.5 review): a right click on a terminal without the focus, the focus
@@ -1858,12 +1804,6 @@ fn answers_match_the_golden(cx: &mut TestAppContext) {
     golden_files::check(SET, "answers", &answer_rows(cx));
 }
 
-#[gpui::test]
-#[ignore]
-fn golden_terminal_answers(cx: &mut TestAppContext) {
-    golden_files::write(SET, "answers", &answer_rows(cx));
-}
-
 // T-B1: the cursor blinks only when the program asks, in 500 ms phases; a key shows it; it never
 // blinks on the alternate screen.
 fn blink_rows(cx: &mut TestAppContext) -> Vec<Value> {
@@ -1911,12 +1851,6 @@ fn blink_rows(cx: &mut TestAppContext) -> Vec<Value> {
 #[gpui::test]
 fn blink_matches_the_golden(cx: &mut TestAppContext) {
     golden_files::check(SET, "blink", &blink_rows(cx));
-}
-
-#[gpui::test]
-#[ignore]
-fn golden_terminal_blink(cx: &mut TestAppContext) {
-    golden_files::write(SET, "blink", &blink_rows(cx));
 }
 
 // T-R1: a resize reflows and keeps the text; the history limit stays the one of the first
@@ -1980,10 +1914,7 @@ fn clear_keeps_the_line_of_the_cursor(cx: &mut TestAppContext) {
     let cursor = content(&terminal, cx, |content| content.cursor.point);
     let text = zed(&terminal, cx).read_with(cx, |screen, _| screen.get_content());
     assert_eq!(text.trim_end(), "prompt$ ab");
-    #[cfg(feature = "own-terminal")]
     let cursor = (cursor.line.0, cursor.column.0);
-    #[cfg(not(feature = "own-terminal"))]
-    let cursor = (cursor.line, cursor.column);
     assert_eq!(cursor, (0, 10));
     assert_eq!(sent_text(), "");
 }
@@ -2151,7 +2082,6 @@ fn queued_changes_run_in_their_order_within_one_frame(cx: &mut TestAppContext) {
 /// same goldens and facts as the old rows above. What the view adds (the size claims of focus,
 /// focus into its menu counting as no focus out, the grid of a pane) waits for the own view
 /// (S2.4).
-#[cfg(feature = "own-terminal")]
 mod own {
     use std::cell::Cell;
     use std::rc::Rc;
