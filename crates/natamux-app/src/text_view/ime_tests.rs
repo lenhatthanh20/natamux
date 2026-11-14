@@ -295,8 +295,13 @@ fn t_ime_9_blur_keeps_the_text_and_unmarks(cx: &mut TestAppContext) {
     let other = host.read_with(cx, |host, _| host.other.clone());
     focus_handle(&other, cx);
     assert_eq!(text_of(&text_box, cx), "viet");
-    // Today the mark survives a blur; the plan's rule (a blur ends it) is for S3.3.
-    assert_eq!(marked(&text_box, cx), Some(0..4));
+    // Zed's editor keeps the mark over a blur; the own input ends it and keeps the text (6.3.6).
+    let after_blur = if cfg!(feature = "own-input") {
+        None
+    } else {
+        Some(0..4)
+    };
+    assert_eq!(marked(&text_box, cx), after_blur);
     // `unmark_text` on its own keeps the text and ends the mark.
     text_box
         .editor()

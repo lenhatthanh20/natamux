@@ -91,6 +91,73 @@ pub fn bind(cx: &mut App, mac: bool) {
         .collect::<Vec<_>>();
     cx.bind_keys(bindings);
     cx.bind_keys(editor_bindings(mac));
+    #[cfg(feature = "own-input")]
+    cx.bind_keys(own_bindings(mac));
+}
+
+/// The same keys for the own text input (docs/plan-mit-license.md 6.3.1), in the same contexts.
+/// A Zed `Editor` (the code and diff views) takes Zed's action and leaves the own one; the own
+/// input takes the own one. gpui tries each binding of a key until one is handled.
+#[cfg(feature = "own-input")]
+fn own_bindings(mac: bool) -> Vec<KeyBinding> {
+    use crate::text_view::text_input::actions as own;
+    let any = Some(ANY);
+    let many = Some(MANY_LINES);
+    let full = Some(FULL);
+    let m = |keys: &str| keys.replace("mod", if mac { "cmd" } else { "ctrl" });
+    let w = |keys: &str| keys.replace("word", if mac { "alt" } else { "ctrl" });
+    let (start, end) = if mac {
+        ("cmd-up", "cmd-down")
+    } else {
+        ("ctrl-home", "ctrl-end")
+    };
+    let mut keys = vec![
+        KeyBinding::new("backspace", own::Backspace, any),
+        KeyBinding::new("delete", own::Delete, any),
+        KeyBinding::new("left", own::MoveLeft, any),
+        KeyBinding::new("right", own::MoveRight, any),
+        KeyBinding::new("shift-left", own::SelectLeft, any),
+        KeyBinding::new("shift-right", own::SelectRight, any),
+        KeyBinding::new("home", own::MoveToBeginningOfLine, any),
+        KeyBinding::new("end", own::MoveToEndOfLine, any),
+        KeyBinding::new("shift-home", own::SelectToBeginningOfLine, any),
+        KeyBinding::new("shift-end", own::SelectToEndOfLine, any),
+        KeyBinding::new(&w("word-left"), own::MoveToPreviousWordStart, any),
+        KeyBinding::new(&w("word-right"), own::MoveToNextWordEnd, any),
+        KeyBinding::new(&w("word-shift-left"), own::SelectToPreviousWordStart, any),
+        KeyBinding::new(&w("word-shift-right"), own::SelectToNextWordEnd, any),
+        KeyBinding::new(&w("word-backspace"), own::DeleteToPreviousWordStart, any),
+        KeyBinding::new(&w("word-delete"), own::DeleteToNextWordEnd, any),
+        KeyBinding::new(&m("mod-a"), own::SelectAll, any),
+        KeyBinding::new(&m("mod-c"), own::Copy, any),
+        KeyBinding::new(&m("mod-x"), own::Cut, any),
+        KeyBinding::new(&m("mod-v"), own::Paste, any),
+        KeyBinding::new(&m("mod-z"), own::Undo, any),
+        KeyBinding::new(&m("mod-shift-z"), own::Redo, any),
+        KeyBinding::new("enter", own::Newline, many),
+        KeyBinding::new("up", own::MoveUp, many),
+        KeyBinding::new("down", own::MoveDown, many),
+        KeyBinding::new("shift-up", own::SelectUp, many),
+        KeyBinding::new("shift-down", own::SelectDown, many),
+        KeyBinding::new("pageup", own::MovePageUp, many),
+        KeyBinding::new("pagedown", own::MovePageDown, many),
+        KeyBinding::new(start, own::MoveToBeginning, many),
+        KeyBinding::new(end, own::MoveToEnd, many),
+        KeyBinding::new(&format!("shift-{start}"), own::SelectToBeginning, many),
+        KeyBinding::new(&format!("shift-{end}"), own::SelectToEnd, many),
+        KeyBinding::new("tab", own::Tab, full),
+        KeyBinding::new("shift-tab", own::Backtab, full),
+    ];
+    if mac {
+        keys.extend([
+            KeyBinding::new("cmd-left", own::MoveToBeginningOfLine, any),
+            KeyBinding::new("cmd-right", own::MoveToEndOfLine, any),
+            KeyBinding::new("cmd-backspace", own::DeleteToBeginningOfLine, any),
+            KeyBinding::new("cmd-shift-left", own::SelectToBeginningOfLine, any),
+            KeyBinding::new("cmd-shift-right", own::SelectToEndOfLine, any),
+        ]);
+    }
+    keys
 }
 
 /// The keys that bind by name: (keys, action name, action data, context).
@@ -228,8 +295,70 @@ fn by_name(
 mod tests {
     use editor::Editor;
     use gpui::{Context, Focusable as _, TestAppContext, Window};
+    use ui::prelude::*;
 
     use crate::app::shortcuts;
+    use crate::text_view::text_box::TextBox;
+
+    /// A window with one text box, as the forms hold them.
+    struct BoxView {
+        text_box: TextBox,
+    }
+
+    impl Render for BoxView {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            div().size_full().child(self.text_box.clone())
+        }
+    }
+
+    /// The name of Zed's editor action `name` as the box's input carries it: the own input has
+    /// the same names in its own namespace (6.3.1).
+    fn action_name(name: &str) -> String {
+        if cfg!(feature = "own-input") {
+            name.replace("editor::", "text_input::")
+        } else {
+            name.to_string()
+        }
+    }
+
+    /// The keys that run the action `name` in the box `make` gives, with the app's bindings.
+    fn box_keys_for(
+        cx: &mut TestAppContext,
+        name: &str,
+        make: impl FnOnce(&mut Window, &mut App) -> TextBox + 'static,
+    ) -> Vec<String> {
+        crate::app::test_views::init(cx);
+        cx.update(shortcuts::bind);
+        let (view, cx) = cx.add_window_view(|window, cx| BoxView {
+            text_box: make(window, cx),
+        });
+        cx.run_until_parked();
+        let text_box = view.read_with(cx, |view, _| view.text_box.clone());
+        let name = action_name(name);
+        cx.update(|window, cx| {
+            let action = cx.build_action(&name, None).unwrap();
+            window
+                .bindings_for_action_in(action.as_ref(), &text_box.focus_handle(cx))
+                .iter()
+                .map(|binding| {
+                    binding
+                        .keystrokes()
+                        .iter()
+                        .map(|keystroke| keystroke.unparse())
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                })
+                .collect()
+        })
+    }
+
+    fn one_line(window: &mut Window, cx: &mut App) -> TextBox {
+        TextBox::one_line("", window, cx)
+    }
+
+    fn many_line_box(window: &mut Window, cx: &mut App) -> TextBox {
+        TextBox::area("", (6, 12), window, cx)
+    }
 
     /// The keys that run the action `name` in the editor `make` gives, with the app's bindings.
     fn keys_for(
@@ -276,7 +405,7 @@ mod tests {
     /// T-0186: Enter did nothing in the Notes box of Start a task.
     #[gpui::test]
     fn enter_starts_a_line_in_a_box_of_many_lines(cx: &mut TestAppContext) {
-        let keys = keys_for(cx, "editor::Newline", many_lines);
+        let keys = box_keys_for(cx, "editor::Newline", many_line_box);
         // The list can name the same key more than once.
         assert!(
             !keys.is_empty() && keys.iter().all(|key| key == "enter"),
@@ -286,7 +415,7 @@ mod tests {
 
     #[gpui::test]
     fn enter_is_left_to_the_form_in_a_one_line_box(cx: &mut TestAppContext) {
-        let keys = keys_for(cx, "editor::Newline", Editor::single_line);
+        let keys = box_keys_for(cx, "editor::Newline", one_line);
         assert!(keys.is_empty(), "{keys:?}");
     }
 
@@ -295,10 +424,13 @@ mod tests {
     fn up_moves_the_cursor_in_a_box_of_many_lines(cx: &mut TestAppContext) {
         crate::app::test_views::init(cx);
         cx.update(shortcuts::bind);
-        let (editor, cx) = cx.add_window_view(many_lines);
+        let (view, cx) = cx.add_window_view(|window, cx| BoxView {
+            text_box: many_line_box(window, cx),
+        });
+        let text_box = view.read_with(cx, |view, _| view.text_box.clone());
         cx.update(|window, cx| {
-            window.focus(&editor.focus_handle(cx), cx);
-            editor.update(cx, |editor, cx| editor.set_text("ab\ncd", window, cx));
+            window.focus(&text_box.focus_handle(cx), cx);
+            text_box.set_text("ab\ncd", window, cx);
         });
         let to_end = if cfg!(target_os = "macos") {
             "cmd-down"
@@ -307,25 +439,25 @@ mod tests {
         };
         cx.simulate_keystrokes(&format!("{to_end} up"));
         cx.simulate_input("x");
-        let text = cx.update(|_, cx| editor.read(cx).text(cx));
+        let text = cx.update(|_, cx| text_box.text(cx));
         assert_eq!(text, "abx\ncd");
     }
 
     #[gpui::test]
     fn up_is_left_to_the_list_in_a_one_line_box(cx: &mut TestAppContext) {
-        let keys = keys_for(cx, "editor::MoveUp", Editor::single_line);
+        let keys = box_keys_for(cx, "editor::MoveUp", one_line);
         assert!(keys.is_empty(), "{keys:?}");
     }
 
     #[gpui::test]
     fn word_keys_reach_a_one_line_box(cx: &mut TestAppContext) {
-        let keys = keys_for(cx, "editor::SelectToPreviousWordStart", Editor::single_line);
+        let keys = box_keys_for(cx, "editor::SelectToPreviousWordStart", one_line);
         assert!(keys.contains(&word("shift-left")), "{keys:?}");
     }
 
     #[gpui::test]
     fn word_delete_reaches_a_box_of_many_lines(cx: &mut TestAppContext) {
-        let keys = keys_for(cx, "editor::DeleteToPreviousWordStart", many_lines);
+        let keys = box_keys_for(cx, "editor::DeleteToPreviousWordStart", many_line_box);
         assert!(keys.contains(&word("backspace")), "{keys:?}");
     }
 

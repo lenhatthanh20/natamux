@@ -18,6 +18,9 @@ getrandom = "0.3.4"
 http-body-util = "0.1.3"
 hyper = { version = "1.11", features = ["client", "http1"] }
 hyper-util = { version = "0.1.17", features = ["tokio"] }
+# The fewest edits of the own text input (crates/natamux-app/src/text/minimal.rs): the version in
+# Cargo.lock, with the features Zed's crates take.
+imara-diff = { version = "0.2.0", default-features = false }
 # The own Markdown view (crates/natamux-app/src/workspaces/docs_markdown.rs): the versions in
 # Cargo.lock.
 linkify = "0.10.0"
@@ -67,6 +70,9 @@ tree-sitter-regex = "0.24.3"
 tree-sitter-rust = "0.24.2"
 tree-sitter-typescript = { git = "https://github.com/lenhatthanh20/tree-sitter-typescript", rev = "e2c53597d6a5d9cf7bbe8dccde576fe1e46c5899" }
 tree-sitter-yaml = { git = "https://github.com/lenhatthanh20/tree-sitter-yaml", rev = "dcb586e3ffe00a42b0f2d03a67ea153acb31ff09" }
+# The graphemes the own text input moves by (crates/natamux-app/src/text/motion.rs): the version
+# in Cargo.lock.
+unicode-segmentation = "1.13.3"
 url = "2.5.7"
 yaml-rust2 = "0.13.0"
 

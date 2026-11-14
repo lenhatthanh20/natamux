@@ -392,12 +392,27 @@ mod terminals {
     pub mod terminal_size;
     pub mod terminal_tabs;
 }
+/// The text model of the own text input (docs/plan-mit-license.md S3.3): plain Rust. Some helpers
+/// are for its tests only until the input is the default (S3.4).
+#[cfg(feature = "own-input")]
+#[cfg_attr(not(test), allow(dead_code))]
+mod text {
+    pub mod minimal;
+    pub mod model;
+    pub mod motion;
+}
 /// The own code view (plan S4) and its goldens, recorded on the editor it replaces.
 mod text_view {
+    #[cfg(feature = "own-input")]
+    mod blink;
     #[cfg(test)]
     mod code_mouse_tests;
     #[cfg(test)]
     mod code_typing_tests;
+    /// The own text input (docs/plan-mit-license.md S3.3), behind its feature until S3.4.
+    #[cfg(feature = "own-input")]
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub mod element;
     #[cfg(test)]
     mod ime_tests;
     #[cfg(test)]
@@ -409,7 +424,12 @@ mod text_view {
     // The code view uses it from S4.3; until then only its tests do.
     #[cfg_attr(not(test), allow(dead_code))]
     pub mod highlight;
+    #[cfg(feature = "own-input")]
+    mod ime;
     pub mod text_box;
+    #[cfg(feature = "own-input")]
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub mod text_input;
 }
 mod workspaces {
     pub mod branches;

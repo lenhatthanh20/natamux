@@ -5,6 +5,10 @@ edition.workspace = true
 license.workspace = true
 publish.workspace = true
 
+[features]
+# The own text input (docs/plan-mit-license.md, S3), until it replaces Zed's editor in the boxes.
+own-input = ["dep:imara-diff", "dep:unicode-segmentation"]
+
 [dependencies]
 alacritty_terminal.workspace = true
 anyhow.workspace = true
@@ -16,6 +20,7 @@ getrandom.workspace = true
 gpui.workspace = true
 grammars.workspace = true
 gpui_platform.workspace = true
+imara-diff = { workspace = true, optional = true }
 language.workspace = true
 linkify.workspace = true
 markdown.workspace = true
@@ -52,6 +57,7 @@ tree-sitter-rust.workspace = true
 tree-sitter-typescript.workspace = true
 tree-sitter-yaml.workspace = true
 ui = { package = "natamux-ui", path = "../natamux-ui" }
+unicode-segmentation = { workspace = true, optional = true }
 util.workspace = true
 
 [dev-dependencies]

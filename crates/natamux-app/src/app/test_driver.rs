@@ -6,8 +6,7 @@
 use std::ops::Range;
 
 use gpui::{
-    ClipboardItem, EntityInputHandler, Focusable, KeyDownEvent, KeyUpEvent, Keystroke, Modifiers,
-    VisualTestContext,
+    ClipboardItem, Focusable, KeyDownEvent, KeyUpEvent, Keystroke, Modifiers, VisualTestContext,
 };
 
 use crate::text_view::text_box::TextBox;
@@ -75,10 +74,7 @@ pub fn text_of(text_box: &TextBox, cx: &mut VisualTestContext) -> String {
 
 /// The selection of the box in UTF-16 units, as the platform's input method reads it.
 pub fn selection_of(text_box: &TextBox, cx: &mut VisualTestContext) -> Range<usize> {
-    text_box.editor().update_in(cx, |text_box, window, cx| {
-        let selection = text_box.selected_text_range(false, window, cx);
-        selection.map_or(0..0, |selection| selection.range)
-    })
+    cx.update(|window, cx| text_box.selected_range(window, cx))
 }
 
 pub fn is_focused(view: &impl Focusable, cx: &mut VisualTestContext) -> bool {

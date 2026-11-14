@@ -73,10 +73,7 @@ fn setup(cx: &mut TestAppContext) -> (Boxes, &mut VisualTestContext) {
         });
     }
     // The read-only view is read-only after its text is in, as the diff's editors are.
-    boxes
-        .read_only
-        .editor()
-        .update(cx, |editor, _| editor.set_read_only(true));
+    cx.update(|_, cx| boxes.read_only.set_read_only(true, cx));
     cx.run_until_parked();
     (boxes, cx)
 }

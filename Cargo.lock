@@ -5530,6 +5530,7 @@ dependencies = [
  "gpui_platform",
  "grammars",
  "image",
+ "imara-diff",
  "language",
  "linkify",
  "markdown",
@@ -5571,6 +5572,7 @@ dependencies = [
  "tree-sitter-rust",
  "tree-sitter-typescript",
  "tree-sitter-yaml",
+ "unicode-segmentation",
  "util",
 ]
 

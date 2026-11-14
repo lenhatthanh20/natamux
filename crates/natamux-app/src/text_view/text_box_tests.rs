@@ -5,7 +5,8 @@
 //! keys are tried on Linux too. Where the plan says "record", a test pins what Zed does today.
 //! T-WS-1 is `stages/stage_fields_tests.rs` (T12: key writes, the "Done when" placeholder) and
 //! T-MIN-1 is `projects/json_tab_tests.rs` (T14: a text from outside keeps the caret, which is
-//! what a Reset does) plus the `set_text` test below; `TextBox::replace_minimal` comes with S3.3.
+//! what a Reset does) plus the `set_text` test below, and the `replace_minimal` test of the own
+//! input (S3.3; the JSON tab and the file editor take it with the code view, S4).
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
@@ -868,4 +869,48 @@ fn t_min_set_text_puts_the_caret_where_zed_does(cx: &mut TestAppContext) {
     // Known gap: the caret after `set_text` and the scroll row are not pinned; CI never printed
     // them. The caret must stay inside the text; S3.3 adds the exact test on `replace_minimal`.
     assert!(after.start == after.end && after.end <= text.len());
+}
+
+#[cfg(feature = "own-input")]
+#[gpui::test]
+fn t_min_replace_minimal_keeps_the_caret_the_scroll_and_the_undo(cx: &mut TestAppContext) {
+    let lines: Vec<String> = (0..60).map(|n| format!("line {n}")).collect();
+    let text = lines.join("\n");
+    let (host, cx) = setup(cx, false, 300.);
+    for index in [AREA, FILL, PLAIN] {
+        let text_box = text_box(&host, index, cx);
+        focus(&text_box, cx);
+        load(&text_box, &text, cx);
+        pause(cx);
+        // The caret on line 40, scrolled into view.
+        press_as(cx, "ctrl-home", false);
+        for _ in 0..40 {
+            press_as(cx, "down", false);
+        }
+        // A key the box leaves alone: the window draws first, so the scroll follows the caret.
+        press_as(cx, "escape", false);
+        let before = selection_of(&text_box, cx);
+        let row = char_rect(&text_box, before.start..before.start + 1, cx).origin.y;
+        // A change above the caret, one in its line after it, and one at the end.
+        let changed = text
+            .replacen("line 3\n", "line three\n", 1)
+            .replacen("line 40", "line 40!", 1)
+            + "\nline 60";
+        cx.update(|window, cx| text_box.replace_minimal(&changed, window, cx));
+        cx.run_until_parked();
+        assert_eq!(text_of(&text_box, cx), changed, "kind {index}");
+        let grown = "line three".len() - "line 3".len();
+        assert_eq!(
+            selection_of(&text_box, cx),
+            before.start + grown..before.end + grown,
+            "kind {index}: the caret moved with the text above it"
+        );
+        let after = char_rect(&text_box, before.start + grown..before.start + grown + 1, cx);
+        assert!(
+            close(after.origin.y, row, 0.5),
+            "kind {index}: the caret row moved on screen"
+        );
+        press_as(cx, "ctrl-z", false);
+        assert_eq!(text_of(&text_box, cx), text, "kind {index}: one undo step");
+    }
 }
