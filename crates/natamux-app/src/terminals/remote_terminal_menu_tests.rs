@@ -26,7 +26,10 @@ fn the_first_menu_item_copies_the_selection(cx: &mut TestAppContext) {
     draw(cx);
     let view = terminal.read_with(cx, |terminal, _| terminal.view.clone());
     view.update_in(cx, |view, window, cx| {
-        view.deploy_context_menu(point(px(8.), px(8.)), true, window, cx)
+        #[cfg(not(feature = "own-terminal"))]
+        view.deploy_context_menu(point(px(8.), px(8.)), true, window, cx);
+        #[cfg(feature = "own-terminal")]
+        view.deploy_context_menu(point(px(8.), px(8.)), window, cx);
     });
     draw(cx);
 

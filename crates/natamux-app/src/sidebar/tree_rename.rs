@@ -84,3 +84,7 @@ impl WorkspaceTree {
         cx.notify();
     }
 }
+
+#[cfg(test)]
+#[path = "tree_rename_tests.rs"]
+mod tests;

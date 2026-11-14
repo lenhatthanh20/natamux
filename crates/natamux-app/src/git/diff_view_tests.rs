@@ -20,7 +20,7 @@ use crate::git::change_rules::Side;
 use crate::git::diff_editors::{add_spacer, read_only_editor, set_excerpts};
 use crate::git::diff_rules::{Spacer, revert_hunk};
 
-fn numbered(word: &str, count: u32) -> String {
+pub(super) fn numbered(word: &str, count: u32) -> String {
     (0..count).map(|line| format!("{word} {line}\n")).collect()
 }
 
@@ -34,20 +34,20 @@ fn ended(text: &str, final_break: bool) -> String {
 }
 
 /// The shape of the bug: 3 lines changed, then 147 lines deleted at the end of the file.
-fn changed_then_deleted() -> (String, String) {
+pub(super) fn changed_then_deleted() -> (String, String) {
     let original = numbered("kept", 277) + &numbered("old", 3) + &numbered("gone", 147);
     let modified = numbered("kept", 277) + &numbered("new", 3);
     (original, modified)
 }
 
-fn deleted_at_end() -> (String, String) {
+pub(super) fn deleted_at_end() -> (String, String) {
     let original = numbered("kept", 280) + &numbered("gone", 147);
     let modified = numbered("kept", 280);
     (original, modified)
 }
 
 /// Hunks in the middle (changed, added, deleted) and lines deleted at the end.
-fn several_hunks() -> (String, String) {
+pub(super) fn several_hunks() -> (String, String) {
     let original = numbered("a", 50)
         + &numbered("old", 5)
         + &numbered("b", 50)
@@ -64,13 +64,13 @@ fn several_hunks() -> (String, String) {
     (original, modified)
 }
 
-fn swapped((original, modified): (String, String)) -> (String, String) {
+pub(super) fn swapped((original, modified): (String, String)) -> (String, String) {
     (modified, original)
 }
 
 /// All shapes with a final line break in both texts, in neither, and in only one; with a name
 /// for the failure message.
-fn cases() -> Vec<(String, (String, String))> {
+pub(super) fn cases() -> Vec<(String, (String, String))> {
     let shapes = [
         ("changed then deleted", changed_then_deleted()),
         ("deleted at end", deleted_at_end()),

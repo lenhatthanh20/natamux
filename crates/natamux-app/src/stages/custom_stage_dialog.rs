@@ -234,3 +234,7 @@ impl Render for CustomStageDialog {
             .child(frame)
     }
 }
+
+#[cfg(test)]
+#[path = "custom_stage_dialog_tests.rs"]
+mod tests;

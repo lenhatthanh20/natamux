@@ -107,13 +107,22 @@ pub fn parse_ui_size(raw: &str) -> UiSize {
     }
 }
 
-fn scaled(base: f64, zoom: f32) -> f64 {
+/// A base size times the zoom, rounded to 0.1 as the settings JSON holds it.
+pub fn scaled(base: f64, zoom: f32) -> f64 {
     (base * f64::from(zoom) * 10.0).round() / 10.0
 }
 
 // The shortest text of the f32, so 13.25 stays 13.25.
 fn f64_of(size: f32) -> f64 {
     size.to_string().parse().unwrap_or(f64::from(size))
+}
+
+/// The end of the name of the `--shot` states that show the scrollbars.
+const SCROLLBAR_STATES: &str = "-scrollbar";
+
+/// Whether a `--shot` state shows the scrollbars; every other shot hides them.
+pub fn shows_scrollbars(state: &str) -> bool {
+    state.ends_with(SCROLLBAR_STATES)
 }
 
 /// The theme part of Zed's settings: `mode` is `ThemeChoice::name` (a `--theme` flag wins before
@@ -125,8 +134,10 @@ pub struct ThemeSetting<'a> {
 }
 
 /// The user settings JSON for Zed: `ui_zoom` is `UiSize::zoom`. Zed's own fonts; the terminal
-/// gets a font only when the user picked one, else Zed gives it the buffer font and size. A
-/// `--shot` hides the editors' scrollbars, which Zed shows for a moment after a scroll. The
+/// gets a font only when the user picked one, else Zed gives it the buffer font and size. `shot`
+/// is the state of a `--shot`: it hides the editors' scrollbars, which Zed shows for a moment after
+/// a scroll, and holds the editors' caret solid, so a shot never catches it in the off half of a
+/// blink. A state whose name ends in `-scrollbar` shows the scrollbars instead, always. The
 /// editors' scrollbars show only the thumb: no cursor or selection markers, which also keep the
 /// bar from fading, and no track border line. Sticky scroll shows in the editor tab only (Zed
 /// keeps it to singleton editors); whitespace shows everywhere while the diff's toggle is on.
@@ -134,7 +145,7 @@ pub fn user_settings(
     theme: ThemeSetting<'_>,
     ui_zoom: f32,
     terminal: &ResolvedFont,
-    shot: bool,
+    shot: Option<&str>,
     show_whitespace: bool,
 ) -> String {
     let terminal = if terminal.source == FontSource::Default {
@@ -153,8 +164,14 @@ pub fn user_settings(
         "sticky_scroll": {"enabled": true},
         "experimental.theme_overrides": {"scrollbar.track.border": CLEAR},
     });
-    if shot {
-        settings["scrollbar"]["show"] = json!("never");
+    if let Some(state) = shot {
+        let show = if shows_scrollbars(state) {
+            "always"
+        } else {
+            "never"
+        };
+        settings["scrollbar"]["show"] = json!(show);
+        settings["cursor_blink"] = json!(false);
     }
     if show_whitespace {
         settings["show_whitespaces"] = json!("all");

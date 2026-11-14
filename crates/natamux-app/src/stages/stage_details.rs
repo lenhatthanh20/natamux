@@ -2,6 +2,7 @@
 //! or a new stage opens the stage sheet, a branch opens the branch sheet. It keeps the project's
 //! skills for the stage sheet. It draws nothing: the sheets are dialogs.
 
+use editor::Editor;
 use gpui::{Entity, FocusHandle, Subscription, WeakEntity};
 use natamux_proto::projects::repo::SkillList;
 use ui::prelude::*;
@@ -34,6 +35,18 @@ impl DetailsPane {
             sheet: None,
             _open: open,
         }
+    }
+
+    /// The prompt box of the open stage sheet, for the whole-app flows.
+    pub fn prompt_box(&self, cx: &App) -> Option<Entity<Editor>> {
+        let sheet = self.sheet.as_ref()?.upgrade()?;
+        Some(sheet.read(cx).fields.prompt.editor.clone())
+    }
+
+    /// The open stage sheet, for the flow tests.
+    #[cfg(test)]
+    pub fn sheet(&self) -> Option<Entity<StageSheet>> {
+        self.sheet.as_ref()?.upgrade()
     }
 
     /// The sheets are dialogs with their own Tab ring: the page has no stops here.

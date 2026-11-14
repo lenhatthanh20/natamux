@@ -306,7 +306,7 @@ impl DetailsPanel {
     }
 
     /// The pencil and `e`: the form opens on the next draw, which has the window.
-    pub(super) fn start_edit(&mut self, cx: &mut Context<Self>) {
+    pub fn start_edit(&mut self, cx: &mut Context<Self>) {
         self.pending = Some(PanelRequest::Edit);
         cx.notify();
     }
@@ -338,6 +338,13 @@ impl DetailsPanel {
                     )),
             )
             .into_any_element()
+    }
+
+    /// The Add a subtask box and the open edit form, for the flow tests.
+    #[cfg(test)]
+    pub fn boxes(&self, cx: &App) -> (Entity<Editor>, Vec<Entity<Editor>>) {
+        let form = self.edit.as_ref().map(|edit| edit.read(cx).boxes());
+        (self.subtask.clone(), form.unwrap_or_default())
     }
 
     /// The panel's text boxes keep the single keys.
@@ -474,3 +481,7 @@ mod summary;
 #[cfg(test)]
 #[path = "details_panel_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "../stages/stage_actions_tests.rs"]
+mod stage_actions_tests;

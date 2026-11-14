@@ -33,6 +33,9 @@ pub struct StagePicker {
     active: usize,
     scroll: ScrollHandle,
     _search_edits: gpui::Subscription,
+    /// The ids of the rows drawn last, for the flow tests.
+    #[cfg(test)]
+    drawn: std::cell::RefCell<Vec<String>>,
 }
 
 impl EventEmitter<StageAdded> for StagePicker {}
@@ -56,7 +59,15 @@ impl StagePicker {
             active: 0,
             scroll: ScrollHandle::new(),
             _search_edits: edits,
+            #[cfg(test)]
+            drawn: Default::default(),
         }
+    }
+
+    /// The ids of the rows drawn last, for the flow tests.
+    #[cfg(test)]
+    pub fn drawn_rows(&self) -> Vec<String> {
+        self.drawn.borrow().clone()
     }
 
     pub fn search_focus(&self, cx: &App) -> FocusHandle {
@@ -140,6 +151,8 @@ impl StagePicker {
         let colors = cx.theme().colors();
         let (hover, selected) = (colors.ghost_element_hover, colors.ghost_element_selected);
         let id = entry.stage.id.clone();
+        #[cfg(test)]
+        self.drawn.borrow_mut().push(id.clone());
         let tile = SettingsTile::icon(
             button_icon(kind_tile_icon(entry.stage.kind)),
             kind_tile(&entry.stage),
@@ -183,6 +196,8 @@ impl StagePicker {
         let steps = self.pipeline.read(cx).steps().to_vec();
         let mut groups: Vec<AnyElement> = Vec::new();
         let mut index = 0;
+        #[cfg(test)]
+        self.drawn.borrow_mut().clear();
         for (phase, entries) in picker_groups(&steps, &query) {
             let mut rows = Vec::new();
             for entry in entries {
@@ -228,3 +243,7 @@ impl Render for StagePicker {
             ))
     }
 }
+
+#[cfg(test)]
+#[path = "stage_picker_tests.rs"]
+pub(super) mod tests;

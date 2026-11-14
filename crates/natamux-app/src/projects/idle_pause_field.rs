@@ -120,3 +120,7 @@ impl Render for IdlePauseField {
             .control(input)
     }
 }
+
+#[cfg(test)]
+#[path = "idle_pause_field_tests.rs"]
+mod tests;

@@ -14,7 +14,7 @@ use buffer_diff::BufferDiff;
 use editor::display_map::CustomBlockId;
 use editor::{Anchor, Editor, EditorEvent, MultiBuffer};
 use gpui::{Entity, EventEmitter, Subscription};
-use language::{Buffer, Capability};
+use language::{Buffer, Capability, ParseStatus};
 use text::Point;
 use ui::prelude::*;
 
@@ -290,6 +290,37 @@ impl DiffView {
         self.sides.is_some()
     }
 
+    /// `path` is drawn, and its language is loaded and parsed. Zed looks for the brackets around
+    /// the cursor only when the cursor moves, so a `--shot` moves it after this.
+    pub fn parsed(&self, path: &str, cx: &App) -> bool {
+        let Some(buffer) = &self.buffer else {
+            return false;
+        };
+        let buffer = buffer.read(cx);
+        let mut status = buffer.parse_status();
+        self.path.as_deref() == Some(path)
+            && self.ready()
+            && buffer.language().is_some()
+            && *status.borrow() == ParseStatus::Idle
+    }
+
+    /// The last commit's side has its language and is parsed too: an inline diff draws its
+    /// deleted lines from it, and a `--shot` of a long file caught them before (run 41073449151).
+    pub fn base_parsed(&self, cx: &App) -> bool {
+        let Some(diff) = &self.diff else {
+            return false;
+        };
+        let base = diff.read(cx).base_text_buffer().clone();
+        let base = base.read(cx);
+        let mut status = base.parse_status();
+        base.language().is_some() && *status.borrow() == ParseStatus::Idle
+    }
+
+    /// `path` is drawn: its diff is worked out and the editors are built.
+    pub fn shown(&self, path: &str) -> bool {
+        self.path.as_deref() == Some(path) && self.ready()
+    }
+
     /// The changes in Monaco's shape, for the counts and the navigator.
     pub fn changes(&self) -> Vec<LineChange> {
         self.hunks.iter().map(line_change).collect()
@@ -493,3 +524,11 @@ impl Render for DiffView {
 #[cfg(test)]
 #[path = "diff_view_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "diff_golden_tests.rs"]
+mod golden_tests;
+
+#[cfg(test)]
+#[path = "diff_mouse_tests.rs"]
+mod mouse_tests;

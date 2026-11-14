@@ -107,6 +107,11 @@ impl FileEditor {
         &self.path
     }
 
+    /// The text box, once the first text came, for the `--shot` states.
+    pub fn body(&self) -> Option<&Entity<FileEditorBody>> {
+        self.body.as_ref()
+    }
+
     /// Annotate with Git Blame on, for the shots.
     pub fn annotate(&self, cx: &mut App) {
         self.blame.update(cx, |blame, cx| blame.annotate(cx));

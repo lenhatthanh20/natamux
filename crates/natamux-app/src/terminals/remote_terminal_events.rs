@@ -5,16 +5,12 @@
 use std::time::Instant;
 
 use futures::channel::oneshot;
-use gpui::{Entity, FocusHandle, Focusable, Subscription, WeakEntity};
+use gpui::{Entity, FocusHandle, Focusable, Subscription};
 use natamux_client::{TerminalEvent, TerminalStatus};
-use settings::Settings;
-use terminal::terminal_settings::TerminalSettings;
-use terminal::{Terminal, TerminalBounds, TerminalBuilder};
-use terminal_view::TerminalView;
 use ui::prelude::*;
-use util::paths::PathStyle;
 
-use super::RemoteTerminal;
+use super::screen::{DisplayOnlyWriter, Terminal, TerminalBounds, TerminalView};
+use super::{RemoteTerminal, send_input};
 use crate::app::app_log;
 use crate::terminals::terminal_parser::{Job, lane};
 
@@ -52,7 +48,7 @@ impl RemoteTerminal {
                 TerminalEvent::Status(status) => {
                     if status == TerminalStatus::Open {
                         for text in self.pending.drain(..) {
-                            handle.input(text);
+                            send_input(&handle, text);
                         }
                     }
                     if status == TerminalStatus::Reconnecting
@@ -113,7 +109,7 @@ impl RemoteTerminal {
 
     fn writer_job(
         &mut self,
-        writer: anyhow::Result<terminal::DisplayOnlyWriter>,
+        writer: anyhow::Result<DisplayOnlyWriter>,
         cx: &mut Context<Self>,
     ) -> Option<Job> {
         match writer {
@@ -179,7 +175,7 @@ impl RemoteTerminal {
     }
 }
 
-/// Zed's terminal, its view, and the view's focus listeners.
+/// The terminal, its view, and the view's focus listeners.
 pub(super) struct Screen {
     pub(super) terminal: Entity<Terminal>,
     pub(super) view: Entity<TerminalView>,
@@ -187,12 +183,19 @@ pub(super) struct Screen {
 }
 
 /// `bounds`: the grid the last screen laid out, so the new one starts at it.
+#[cfg(not(feature = "own-terminal"))]
 pub(super) fn build_screen(
     history: Option<usize>,
     bounds: Option<TerminalBounds>,
     window: &mut Window,
     cx: &mut Context<RemoteTerminal>,
 ) -> Screen {
+    use gpui::WeakEntity;
+    use settings::Settings;
+    use terminal::TerminalBuilder;
+    use terminal::terminal_settings::TerminalSettings;
+    use util::paths::PathStyle;
+
     let settings = TerminalSettings::get_global(cx).clone();
     let terminal = cx.new(|cx| {
         TerminalBuilder::new_display_only_with_bounds(
@@ -228,6 +231,25 @@ pub(super) fn build_screen(
     }
 }
 
+/// The own terminal: its cursor starts as a block and alternate scroll is on (6.2.2); its menu
+/// has only what works without a Zed workspace.
+#[cfg(feature = "own-terminal")]
+pub(super) fn build_screen(
+    history: Option<usize>,
+    bounds: Option<TerminalBounds>,
+    window: &mut Window,
+    cx: &mut Context<RemoteTerminal>,
+) -> Screen {
+    let terminal = cx.new(|cx| Terminal::new(history, bounds, cx));
+    let view = cx.new(|cx| TerminalView::new(terminal.clone(), window, cx));
+    let focus = view.focus_handle(cx);
+    Screen {
+        terminal,
+        view,
+        _focus: watch_focus(&focus, window, cx),
+    }
+}
+
 /// Follows the focus of a screen's view. Focus claims the shell's size, as the web's textarea
 /// focus does: after a resume the shell may still have another client's size.
 pub(super) fn watch_focus(
@@ -236,12 +258,26 @@ pub(super) fn watch_focus(
     cx: &mut Context<RemoteTerminal>,
 ) -> [Subscription; 2] {
     let focus_in = cx.on_focus_in(focus, window, |this, _, cx| {
+        // Back from the own view's menu: the focus never left as far as the shell knows.
+        #[cfg(feature = "own-terminal")]
+        if this.view.read(cx).back_from_menu {
+            return;
+        }
         if let Some(handle) = &this.handle {
+            #[cfg(test)]
+            super::sent::claimed();
             handle.claim();
         }
         this.set_focused(true, cx);
     });
     // Not blur: focus in a child, such as the context menu, still counts as focused.
-    let focus_out = cx.on_focus_out(focus, window, |this, _, _, cx| this.set_focused(false, cx));
+    let focus_out = cx.on_focus_out(focus, window, |this, _, _window, cx| {
+        // The own view's menu is drawn outside its focus, but still counts as the view's.
+        #[cfg(feature = "own-terminal")]
+        if this.view.read(cx).menu_holds_focus(_window, cx) {
+            return;
+        }
+        this.set_focused(false, cx)
+    });
     [focus_in, focus_out]
 }

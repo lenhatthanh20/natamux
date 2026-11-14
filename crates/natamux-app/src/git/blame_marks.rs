@@ -10,7 +10,8 @@ use gpui::{ClipboardItem, Entity, EventEmitter, WeakEntity};
 use language::Buffer;
 use natamux_proto::workspaces::changes::{BlameAnswer, ImageSide};
 use text::Point;
-use ui::{ContextMenu, ContextMenuEntry, prelude::*};
+use ui::editor_menu::{ContextMenu, ContextMenuEntry};
+use ui::prelude::*;
 
 use super::blame_rules::{BlameItem, NOT_TRACKED, commit_at, line_labels, menu_items};
 use crate::app::source::{Source, reason};

@@ -230,5 +230,5 @@ pub fn text_editor(
 }
 
 #[cfg(test)]
-#[path = "form_tests.rs"]
+#[path = "form_style_tests.rs"]
 mod tests;

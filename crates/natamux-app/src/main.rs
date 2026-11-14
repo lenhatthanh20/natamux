@@ -30,7 +30,10 @@ mod app {
     pub mod dock_badge;
     pub mod fake_daemon;
     pub mod flow_bench;
+    pub mod flow_smoke;
     pub mod gate2;
+    #[cfg(test)]
+    pub mod golden_files;
     pub mod jobs;
     pub mod layout_mode;
     pub mod links;
@@ -51,9 +54,12 @@ mod app {
     pub mod shortcuts;
     pub mod shots;
     pub mod shots_files;
+    pub mod shots_input;
     pub mod shots_settings;
     pub mod shots_stages;
     pub mod shots_start_task;
+    pub mod shots_terminal;
+    pub mod shots_text;
     pub mod shown_cache;
     pub mod sign_in;
     pub mod sign_in_rules;
@@ -64,6 +70,8 @@ mod app {
     pub mod status_layout;
     pub mod status_limits;
     pub mod tab_rules;
+    #[cfg(test)]
+    pub mod test_driver;
     #[cfg(test)]
     pub mod test_views;
     pub mod text_boxes;
@@ -87,17 +95,27 @@ mod components {
     pub mod chips;
     pub mod colors;
     pub mod confirm;
+    #[cfg(test)]
+    mod context_menu_tests;
     pub mod detail_section;
     pub mod dialog;
     pub mod dialog_frame;
+    #[cfg(test)]
+    mod dialog_tests;
     pub mod docs_markdown;
     pub mod empty_state;
     pub mod form;
+    #[cfg(test)]
+    mod form_tests;
     pub mod glyph;
     pub mod go_to_line;
     pub mod icons;
     pub mod input_rules;
+    #[cfg(test)]
+    pub mod kit_metrics;
     pub mod menu;
+    #[cfg(test)]
+    mod menu_tests;
     pub mod motion;
     pub mod motion_rules;
     pub mod resize_handle;
@@ -346,6 +364,26 @@ mod terminals {
     pub mod paste_rules;
     pub mod remote_terminal;
     pub mod shell_panes;
+    /// The own terminal (docs/plan-mit-license.md S2), the default since S2.5 (feature
+    /// `own-terminal`): `remote_terminal::screen` picks it. Some helpers are for its tests only.
+    #[cfg(feature = "own-terminal")]
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub mod term {
+        pub mod cell_layout;
+        pub mod colors;
+        pub mod contrast;
+        pub mod element;
+        pub mod event_loop;
+        pub mod grid_layout;
+        pub mod ime;
+        pub mod input_bytes;
+        pub mod links;
+        pub mod model;
+        pub mod mouse_report;
+        pub mod scrollbar;
+        pub mod view;
+        pub mod writer;
+    }
     pub mod terminal_cache;
     pub mod terminal_find;
     pub mod terminal_font;
@@ -355,9 +393,21 @@ mod terminals {
     pub mod terminal_size;
     pub mod terminal_tabs;
 }
+/// The own code view (plan S4) and its goldens, recorded on the editor it replaces.
+mod text_view {
+    #[cfg(test)]
+    mod code_mouse_tests;
+    #[cfg(test)]
+    mod code_typing_tests;
+    // The code view uses it from S4.3; until then only its tests do.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub mod highlight;
+}
 mod workspaces {
     pub mod branches;
     pub mod docs_list;
+    #[cfg(test)]
+    mod docs_markdown_golden_tests;
     pub mod docs_rules;
     pub mod docs_tab;
     pub mod docs_view;
@@ -456,7 +506,12 @@ fn start(
         Some(folder) => perf::report::timed("view_state_ms", || view_state::load(folder)),
         None => ViewState::default(),
     };
-    app::appearance::init(options.theme, options.shot.is_some(), cx);
+    let inputs = app::appearance::Inputs {
+        flag: options.theme,
+        theme_name: options.theme_name,
+        shot: options.shot.map(app::options::Shot::name),
+    };
+    app::appearance::init(inputs, cx);
     app::appearance::apply(&view, cx);
     perf::report::timed("themes_ms", || {
         theme_settings::init(theme::LoadThemes::All(Box::new(NatamuxAssets)), cx)

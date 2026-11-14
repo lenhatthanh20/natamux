@@ -362,3 +362,7 @@ impl Render for AddTaskDialog {
             .child(frame)
     }
 }
+
+#[cfg(test)]
+#[path = "add_task_dialog_tests.rs"]
+mod tests;

@@ -30,10 +30,21 @@ pub fn open(
     window: &mut Window,
     cx: &mut App,
 ) {
+    show(workspace, files, window, cx);
+}
+
+/// `open`, and the dialog, for the `--shot` states.
+pub fn show(
+    workspace: WeakEntity<WorkspaceView>,
+    files: Vec<ChangeEntry>,
+    window: &mut Window,
+    cx: &mut App,
+) -> Entity<RollbackDialog> {
     let view = cx.new(|cx| RollbackDialog::new(workspace, files, cx));
     let cancel = view.read(cx).cancel.clone();
-    DialogLayer::open(view, window, cx);
+    DialogLayer::open(view.clone(), window, cx);
     window.focus(&cancel, cx);
+    view
 }
 
 pub struct RollbackDialog {
@@ -80,6 +91,12 @@ impl RollbackDialog {
             self.checked
                 .retain(|path| files.iter().any(|file| &file.path == path));
         }
+        cx.notify();
+    }
+
+    /// `path` unchecked, as a click on its box does, for `--shot checkbox-states`.
+    pub fn uncheck(&mut self, path: &str, cx: &mut Context<Self>) {
+        self.checked = toggle(&self.checked, path, false);
         cx.notify();
     }
 

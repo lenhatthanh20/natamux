@@ -11,6 +11,20 @@ use crate::stages::card_rules::CardButton;
 use crate::stages::stage_view_rules::finished_when;
 use crate::tasks::details_commands::{OnCommand, PanelCommand};
 
+/// Tests find a card button by `card-<button>`, such as `card-Skip`; only test builds wrap it.
+#[cfg(test)]
+fn findable(which: CardButton, button: Button) -> AnyElement {
+    div()
+        .debug_selector(|| format!("card-{which:?}"))
+        .child(button)
+        .into_any_element()
+}
+
+#[cfg(not(test))]
+fn findable(_: CardButton, button: Button) -> AnyElement {
+    button.into_any_element()
+}
+
 fn button(base: Button, on: &OnCommand, command: PanelCommand) -> Button {
     let on = on.clone();
     base.label_size(LabelSize::Small)
@@ -27,7 +41,10 @@ pub(super) fn actions_row(
     for each in &input.facts.buttons {
         match each {
             CardButton::Approve { anyway } => {
-                approve = Some(approve_button(input, *anyway, actions.busy, on))
+                approve = Some(findable(
+                    *each,
+                    approve_button(input, *anyway, actions.busy, on),
+                ))
             }
             other => row.push(row_button(input, *other, actions, on)),
         }
@@ -76,7 +93,7 @@ fn row_button(
             button(quiet("resume", "Resume"), on, PanelCommand::Resume).disabled(actions.resuming)
         }
         CardButton::PickAgent => {
-            return agent_picker(stage, &actions.agent_label, busy, on).into_any_element();
+            return findable(which, agent_picker(stage, &actions.agent_label, busy, on));
         }
         CardButton::StartAgent => button(
             act("start-agent", "Start agent"),
@@ -114,11 +131,11 @@ fn row_button(
         .disabled(busy),
         CardButton::Approve { anyway } => approve_button(input, anyway, busy, on),
     };
-    button.into_any_element()
+    findable(which, button)
 }
 
 /// "Agent to start": a menu of the agents, the picked one shown.
-fn agent_picker(stage: &str, label: &str, busy: bool, on: &OnCommand) -> impl IntoElement {
+fn agent_picker(stage: &str, label: &str, busy: bool, on: &OnCommand) -> Button {
     let on = on.clone();
     Button::new(
         SharedString::from(format!("agent-pick-{stage}")),
@@ -132,3 +149,7 @@ fn agent_picker(stage: &str, label: &str, busy: bool, on: &OnCommand) -> impl In
         crate::stages::stage_choices::open_agent_menu(event.position(), on.clone(), window, cx)
     })
 }
+
+#[cfg(test)]
+#[path = "stage_actions_row_tests.rs"]
+mod row_tests;

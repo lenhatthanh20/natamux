@@ -96,6 +96,11 @@ impl JsonTab {
     pub fn stop(&self, cx: &App) -> FocusHandle {
         self.editor.focus_handle(cx)
     }
+
+    #[cfg(test)]
+    pub fn editor(&self) -> &Entity<Editor> {
+        &self.editor
+    }
 }
 
 impl Focusable for JsonTab {
@@ -172,3 +177,7 @@ impl Render for JsonTab {
 #[cfg(test)]
 #[path = "json_tab_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "json_tab_copy_tests.rs"]
+mod copy_tests;

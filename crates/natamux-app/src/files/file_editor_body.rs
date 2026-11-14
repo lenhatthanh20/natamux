@@ -5,8 +5,8 @@
 use editor::scroll::Autoscroll;
 use editor::{CurrentLineHighlight, Editor, EditorEvent, MultiBuffer, SelectionEffects};
 use gpui::{Entity, EventEmitter, Focusable, Subscription};
-use language::Buffer;
 use language::language_settings::SoftWrap;
+use language::{Buffer, ParseStatus};
 use text::Point;
 use ui::prelude::*;
 
@@ -59,6 +59,17 @@ impl FileEditorBody {
         }
     }
 
+    pub fn editor(&self) -> &Entity<Editor> {
+        &self.editor
+    }
+
+    /// The file's language is loaded and parsed, so its colours show; a `--shot` waits for it.
+    pub fn parsed(&self, cx: &App) -> bool {
+        let buffer = self.buffer.read(cx);
+        let mut status = buffer.parse_status();
+        buffer.language().is_some() && *status.borrow() == ParseStatus::Idle
+    }
+
     pub fn text(&self, cx: &App) -> String {
         self.editor.read(cx).text(cx)
     }
@@ -78,10 +89,6 @@ impl FileEditorBody {
         self.editor
             .update(cx, |editor, cx| editor.set_soft_wrap_mode(mode, cx));
         cx.notify();
-    }
-
-    pub fn editor(&self) -> &Entity<Editor> {
-        &self.editor
     }
 
     pub fn buffer(&self) -> &Entity<Buffer> {

@@ -5518,6 +5518,7 @@ dependencies = [
 name = "natamux-app"
 version = "1.0.26"
 dependencies = [
+ "alacritty_terminal",
  "anyhow",
  "assets",
  "block2 0.6.2",
@@ -5528,28 +5529,50 @@ dependencies = [
  "gpui",
  "gpui_platform",
  "grammars",
+ "image",
  "language",
+ "linkify",
  "markdown",
  "natamux-client",
  "natamux-core",
  "natamux-proto",
+ "natamux-ui",
  "natamux-update",
  "nix",
  "objc2 0.6.3",
  "objc2-app-kit 0.3.2",
  "objc2-foundation 0.3.2",
  "objc2-user-notifications",
+ "pulldown-cmark",
  "regex",
  "release_channel",
  "serde_json",
  "settings",
  "sha2",
+ "shlex",
  "terminal",
  "terminal_view",
  "text",
  "theme",
  "theme_settings",
- "ui",
+ "tree-sitter",
+ "tree-sitter-bash",
+ "tree-sitter-c",
+ "tree-sitter-cpp",
+ "tree-sitter-css",
+ "tree-sitter-diff",
+ "tree-sitter-gitcommit",
+ "tree-sitter-go",
+ "tree-sitter-gomod",
+ "tree-sitter-gowork",
+ "tree-sitter-jsdoc",
+ "tree-sitter-json",
+ "tree-sitter-md",
+ "tree-sitter-python",
+ "tree-sitter-regex",
+ "tree-sitter-rust",
+ "tree-sitter-typescript",
+ "tree-sitter-yaml",
  "util",
 ]
 
@@ -5688,6 +5711,16 @@ dependencies = [
  "rusqlite",
  "serde_json",
  "yaml-rust2",
+]
+
+[[package]]
+name = "natamux-ui"
+version = "1.0.26"
+dependencies = [
+ "gpui",
+ "menu",
+ "theme",
+ "ui",
 ]
 
 [[package]]
