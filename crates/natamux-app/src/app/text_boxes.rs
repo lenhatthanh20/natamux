@@ -157,6 +157,18 @@ fn own_bindings(mac: bool) -> Vec<KeyBinding> {
             KeyBinding::new("cmd-shift-right", own::SelectToEndOfLine, any),
         ]);
     }
+    // The keys of the full boxes, with the keys and contexts of the registry, as Zed's above.
+    push("editor.select-next", own::SelectNext, mac, &mut keys);
+    push("editor.select-all-matches", own::SelectAllMatches, mac, &mut keys);
+    push("editor.select-larger", own::SelectLargerSyntaxNode, mac, &mut keys);
+    push("editor.select-smaller", own::SelectSmallerSyntaxNode, mac, &mut keys);
+    push("editor.add-cursor-above", own::AddSelectionAbove, mac, &mut keys);
+    push("editor.add-cursor-below", own::AddSelectionBelow, mac, &mut keys);
+    push("editor.move-line-up", own::MoveLineUp, mac, &mut keys);
+    push("editor.move-line-down", own::MoveLineDown, mac, &mut keys);
+    push("editor.duplicate-line", own::DuplicateLineDown, mac, &mut keys);
+    push("editor.delete-line", own::DeleteLine, mac, &mut keys);
+    push("editor.toggle-comments", own::ToggleComments, mac, &mut keys);
     keys
 }
 
@@ -360,6 +372,10 @@ mod tests {
         TextBox::area("", (6, 12), window, cx)
     }
 
+    fn plain_box(window: &mut Window, cx: &mut App) -> TextBox {
+        TextBox::plain(false, window, cx)
+    }
+
     /// The keys that run the action `name` in the editor `make` gives, with the app's bindings.
     fn keys_for(
         cx: &mut TestAppContext,
@@ -488,6 +504,21 @@ mod tests {
         );
         let keys = keys_for(cx, "editor::MoveLineUp", Editor::multi_line);
         assert!(keys.iter().any(|key| key == "alt-up"), "{keys:?}");
+    }
+
+    /// The keys of the full editors reach the Docs edit box, on both builds: the own input binds
+    /// and handles each of them (S3.3).
+    #[gpui::test]
+    fn the_editor_keys_reach_a_plain_box(cx: &mut TestAppContext) {
+        let more = [
+            "editor::SelectSmallerSyntaxNode",
+            "editor::AddSelectionAbove",
+            "editor::MoveLineDown",
+        ];
+        for name in EDITOR_ACTIONS.iter().chain(&more) {
+            let keys = box_keys_for(cx, name, plain_box);
+            assert!(!keys.is_empty(), "{name}");
+        }
     }
 
     #[gpui::test]

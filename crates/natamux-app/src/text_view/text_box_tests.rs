@@ -390,6 +390,96 @@ fn t_key_delete_and_backspace_by_char_in_every_kind(cx: &mut TestAppContext) {
     }
 }
 
+#[gpui::test]
+fn t_key_up_and_down_leave_a_selection_from_its_edge(cx: &mut TestAppContext) {
+    for mac in [true, false] {
+        let (host, cx) = setup(cx, mac, 300.);
+        let start = if mac { "cmd-up" } else { "ctrl-home" };
+        let down_from_start = format!("{start} right shift-down shift-down up");
+        let cases = [
+            // Up starts from the start of the selection: on the first row it goes to the start.
+            (down_from_start.as_str(), "|one two\nthree\nfour five"),
+            // Down starts from its end: on the last row it goes to the end.
+            ("shift-up shift-up down", "one two\nthree\nfour five|"),
+        ];
+        for index in [AREA, FILL, PLAIN] {
+            let text_box = text_box(&host, index, cx);
+            focus(&text_box, cx);
+            assert_none(differing(
+                cx,
+                &text_box,
+                "one two\nthree\nfour five",
+                &cases,
+                mac,
+            ));
+        }
+    }
+}
+
+#[gpui::test]
+fn t_key_tab_with_a_selection_indents_its_lines_and_shift_tab_outdents_them(
+    cx: &mut TestAppContext,
+) {
+    for mac in [true, false] {
+        let (host, cx) = setup(cx, mac, 300.);
+        for index in [FILL, PLAIN] {
+            let text_box = text_box(&host, index, cx);
+            focus(&text_box, cx);
+            load(&text_box, "one\ntwo", cx);
+            // From "tw|o" up to "on|e": both lines are touched, and the text stays.
+            press_as(cx, "left shift-up tab", mac);
+            assert_eq!(
+                text_of(&text_box, cx),
+                "    one\n    two",
+                "mac {mac}, kind {index}: tab"
+            );
+            assert_eq!(selection_of(&text_box, cx), 6..14, "mac {mac}, kind {index}");
+            press_as(cx, "shift-tab", mac);
+            assert_eq!(
+                text_of(&text_box, cx),
+                "one\ntwo",
+                "mac {mac}, kind {index}: shift-tab"
+            );
+            assert_eq!(selection_of(&text_box, cx), 2..6, "mac {mac}, kind {index}");
+            press_as(cx, "mod-a tab", mac);
+            assert_eq!(
+                text_of(&text_box, cx),
+                "    one\n    two",
+                "mac {mac}, kind {index}: tab over all"
+            );
+        }
+    }
+}
+
+#[gpui::test]
+fn t_key_the_full_box_keys_move_copy_and_delete_lines(cx: &mut TestAppContext) {
+    for mac in [true, false] {
+        let (host, cx) = setup(cx, mac, 300.);
+        let cases = [
+            ("alt-up", "one two\nfour five|\nthree"),
+            ("up alt-down", "one two\nfour five\nthree|"),
+            ("alt-shift-down", "one two\nthree\nfour five\nfour five|"),
+            ("up mod-shift-k", "one two\nfour |five"),
+            // With nothing selected, Select Next takes the word at the caret.
+            ("home mod-d", "one two\nthree\n| five"),
+            // Plain text has no syntax and no comments.
+            ("ctrl-shift-up", "one two\nthree\nfour five|"),
+            ("mod-/", "one two\nthree\nfour five|"),
+        ];
+        for index in [FILL, PLAIN] {
+            let text_box = text_box(&host, index, cx);
+            focus(&text_box, cx);
+            assert_none(differing(
+                cx,
+                &text_box,
+                "one two\nthree\nfour five",
+                &cases,
+                mac,
+            ));
+        }
+    }
+}
+
 // T-KEY-P
 
 #[gpui::test]
@@ -500,6 +590,47 @@ fn t_clip_copy_and_cut_with_an_empty_selection_take_the_line(cx: &mut TestAppCon
         press_as(cx, "up mod-x", mac);
         assert_eq!(clipboard(cx).as_deref(), Some("two\n"), "mac {mac}");
         assert_eq!(text_of(&area, cx), "one\nthree", "mac {mac}");
+    }
+}
+
+#[gpui::test]
+fn t_clip_a_copied_line_pastes_above_the_line_of_the_caret(cx: &mut TestAppContext) {
+    for mac in [true, false] {
+        let (host, cx) = setup(cx, mac, 300.);
+        for index in [ONE, AREA, FILL, PLAIN] {
+            let text_box = text_box(&host, index, cx);
+            focus(&text_box, cx);
+            // D10: a Copy with nothing selected takes the line; its paste goes in above the line
+            // and the caret stays in its text.
+            load(&text_box, "abc", cx);
+            press_as(cx, "left mod-c mod-v", mac);
+            type_text(cx, "|");
+            assert_eq!(
+                text_of(&text_box, cx),
+                "abc\nab|c",
+                "mac {mac}, kind {index}: one line"
+            );
+            if index == ONE {
+                continue;
+            }
+            load(&text_box, "one\ntwo", cx);
+            press_as(cx, "left mod-x", mac);
+            press_as(cx, "mod-v", mac);
+            type_text(cx, "|");
+            assert_eq!(
+                text_of(&text_box, cx),
+                "one\ntwo|",
+                "mac {mac}, kind {index}: cut then paste"
+            );
+            load(&text_box, "one\ntwo", cx);
+            press_as(cx, "up mod-c down mod-v", mac);
+            type_text(cx, "|");
+            assert_eq!(
+                text_of(&text_box, cx),
+                "one\none\ntwo|",
+                "mac {mac}, kind {index}: copy then paste on the next line"
+            );
+        }
     }
 }
 

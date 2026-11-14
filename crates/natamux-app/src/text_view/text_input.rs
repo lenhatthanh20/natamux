@@ -21,6 +21,7 @@ use super::element::{CARET_WIDTH, Layout, LayoutKey, TextElement};
 use super::text_box::TextEvent;
 use crate::app::appearance::Appearance;
 use crate::components::form::input_style;
+use crate::text::minimal::Edit;
 use crate::text::model::{EditKind, Selection, TextModel};
 use crate::text::motion;
 
@@ -66,6 +67,18 @@ pub mod actions {
             SelectToEnd,
             Tab,
             Backtab,
+            // The keys of the full boxes (`commands_editor.rs`).
+            SelectNext,
+            SelectAllMatches,
+            SelectLargerSyntaxNode,
+            SelectSmallerSyntaxNode,
+            AddSelectionAbove,
+            AddSelectionBelow,
+            MoveLineUp,
+            MoveLineDown,
+            DuplicateLineDown,
+            DeleteLine,
+            ToggleComments,
         ]
     );
 }
@@ -98,6 +111,8 @@ const LINE_HEIGHT: f32 = 1.618;
 /// A press inside the selection held this long, then moved, drags the text (D36).
 const DRAG_DELAY: Duration = Duration::from_millis(300);
 const TAB_SIZE: usize = 4;
+/// The clipboard metadata of a Copy or Cut that took the whole line (D10).
+const WHOLE_LINE: &str = "natamux-whole-line";
 
 /// A left press that is still down.
 struct Press {
@@ -440,7 +455,7 @@ impl TextInput {
     }
 
     /// An offset of the drawn text in the text.
-    pub(super) fn from_display(&self, at: usize) -> usize {
+    pub(super) fn text_offset(&self, at: usize) -> usize {
         let text = self.model.text();
         if text.is_empty() {
             0
@@ -479,7 +494,13 @@ impl TextInput {
         }
         let (shown, is_placeholder) = self.display();
         let runs = self.runs(&style, shown.len(), is_placeholder, cx);
-        let laid = Rc::new(Layout::build(key, &shown, &runs, window));
+        let laid = Rc::new(Layout::build(
+            key,
+            &shown,
+            &runs,
+            self.laid.as_deref(),
+            window,
+        ));
         self.laid = Some(laid.clone());
         laid
     }
@@ -528,7 +549,7 @@ impl TextInput {
         let bounds = self.last_bounds?;
         let laid = self.layout(window, cx);
         let (at, end_bias) = laid.index_at(position - bounds.origin + self.scroll);
-        Some((self.from_display(at), end_bias))
+        Some((self.text_offset(at), end_bias))
     }
 
     /// The edges of the shown row that holds `at`, as offsets of the text.
@@ -536,7 +557,7 @@ impl TextInput {
         let laid = self.layout(window, cx);
         let row = laid.row_of(self.to_display(at), self.end_bias);
         let range = laid.row_range(row);
-        (self.from_display(range.start), self.from_display(range.end))
+        (self.text_offset(range.start), self.text_offset(range.end))
     }
 
     fn line_of(&self, at: usize) -> (usize, usize) {
@@ -579,7 +600,7 @@ impl TextInput {
     }
 
     /// The start or the end of the whole text.
-    fn to_edge(&mut self, end: bool, select: bool, _: &mut Window, cx: &mut Context<Self>) {
+    fn edge(&mut self, end: bool, select: bool, _: &mut Window, cx: &mut Context<Self>) {
         let at = if end { self.model.text().len() } else { 0 };
         self.move_caret(at, select, cx);
     }
@@ -635,23 +656,42 @@ impl TextInput {
         self.end_bias = end && wraps;
     }
 
-    /// Up and Down by shown rows, keeping the x the run of moves started at.
-    fn vertical(&mut self, rows: isize, select: bool, window: &mut Window, cx: &mut Context<Self>) {
+    /// Up and Down by shown rows, keeping the x the run of moves started at. Without Shift a
+    /// selection is left from its start (up) or its end (down). A page stops at the first or the
+    /// last row and keeps the x there.
+    fn vertical(
+        &mut self,
+        rows: isize,
+        select: bool,
+        page: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let laid = self.layout(window, cx);
-        let head = self.to_display(self.model.head());
-        let row = laid.row_of(head, self.end_bias) as isize;
-        let goal = self
-            .model
-            .goal_x
-            .map_or_else(|| laid.position(head, self.end_bias).x, px);
-        let target = row + rows;
+        let selection = self.model.selection();
+        let (from, end_bias, goal) = if select || selection.is_empty() {
+            (selection.head, self.end_bias, self.model.goal_x)
+        } else if rows < 0 {
+            (selection.range().start, false, None)
+        } else {
+            (selection.range().end, false, None)
+        };
+        let from = self.to_display(from);
+        let row = laid.row_of(from, end_bias) as isize;
+        let goal = goal.map_or_else(|| laid.position(from, end_bias).x, px);
+        let last = laid.rows as isize - 1;
+        let target = if page {
+            (row + rows).clamp(0, last)
+        } else {
+            row + rows
+        };
         let (at, end_bias) = if target < 0 {
             (0, false)
-        } else if target as usize >= laid.rows {
+        } else if target > last {
             (self.model.text().len(), false)
         } else {
             let (at, end_bias) = laid.index_in_row(target as usize, goal);
-            (self.from_display(at), end_bias)
+            (self.text_offset(at), end_bias)
         };
         self.move_caret(at, select, cx);
         self.end_bias = end_bias;
@@ -667,7 +707,7 @@ impl TextInput {
 
     fn page(&mut self, down: bool, window: &mut Window, cx: &mut Context<Self>) {
         let rows = self.page_rows(window, cx);
-        self.vertical(if down { rows } else { -rows }, false, window, cx);
+        self.vertical(if down { rows } else { -rows }, false, true, window, cx);
     }
 
     fn select_all(&mut self, _: &mut Window, cx: &mut Context<Self>) {
@@ -692,9 +732,18 @@ impl TextInput {
         }
     }
 
+    /// A clip of the selection, or of the whole line, marked so a paste puts it above the line.
+    fn clip(&self, text: String) -> ClipboardItem {
+        if self.model.selection().is_empty() {
+            ClipboardItem::new_string_with_metadata(text, WHOLE_LINE.to_string())
+        } else {
+            ClipboardItem::new_string(text)
+        }
+    }
+
     fn copy(&mut self, _: &mut Window, cx: &mut Context<Self>) {
         let (text, _) = self.clip_range();
-        cx.write_to_clipboard(ClipboardItem::new_string(text));
+        cx.write_to_clipboard(self.clip(text));
     }
 
     fn cut(&mut self, _: &mut Window, cx: &mut Context<Self>) {
@@ -703,7 +752,7 @@ impl TextInput {
         if self.model.selection().is_empty() && range.end == self.model.text().len() {
             text.pop();
         }
-        cx.write_to_clipboard(ClipboardItem::new_string(text));
+        cx.write_to_clipboard(self.clip(text));
         if !self.read_only {
             self.edit(range, "", EditKind::Other, cx);
         }
@@ -713,11 +762,24 @@ impl TextInput {
         if self.read_only {
             return;
         }
-        let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) else {
+        let Some(item) = cx.read_from_clipboard() else {
             return;
         };
-        let range = self.model.selection().range();
-        self.edit(range, &text, EditKind::Other, cx);
+        let Some(text) = item.text() else {
+            return;
+        };
+        let selection = self.model.selection();
+        if selection.is_empty() && item.metadata().is_some_and(|mark| mark == WHOLE_LINE) {
+            // A whole line goes in above the caret's line; the caret stays on its text.
+            let start = motion::line_start(self.model.text(), selection.head);
+            let now = self.now(cx);
+            let edited = self.model.edit(start..start, &text, EditKind::Paste, now);
+            let len = crate::text::model::normalize(&text).len();
+            self.model.move_to(selection.head + len);
+            self.changed(edited, cx);
+            return;
+        }
+        self.edit(selection.range(), &text, EditKind::Paste, cx);
     }
 
     fn undo(&mut self, _: &mut Window, cx: &mut Context<Self>) {
@@ -741,43 +803,201 @@ impl TextInput {
         }
     }
 
-    /// Tab in a full box: spaces to the next tab stop.
+    /// Tab in a full box: spaces to the next tab stop, or with a selection one tab stop more at
+    /// the start of each line it touches.
     fn tab(&mut self, _: &mut Window, cx: &mut Context<Self>) {
         if self.read_only {
             return;
         }
-        let range = self.model.selection().range();
-        let start = motion::line_start(self.model.text(), range.start);
-        let column = self.model.text()[start..range.start].chars().count();
-        let spaces = " ".repeat(TAB_SIZE - column % TAB_SIZE);
-        self.edit(range, &spaces, EditKind::Typing, cx);
+        let selection = self.model.selection();
+        let text = self.model.text();
+        if selection.is_empty() {
+            let at = selection.head;
+            let start = motion::line_start(text, at);
+            let column = text[start..at].chars().count();
+            let spaces = " ".repeat(TAB_SIZE - column % TAB_SIZE);
+            self.edit(at..at, &spaces, EditKind::Typing, cx);
+            return;
+        }
+        let starts = self.line_starts(selection.range());
+        let edits: Vec<Edit> = starts
+            .iter()
+            .map(|&start| Edit {
+                range: start..start,
+                text: " ".repeat(TAB_SIZE),
+            })
+            .collect();
+        // An offset at a line start stays before the new spaces, so the selection grows.
+        let moved = |at: usize| at + TAB_SIZE * starts.iter().filter(|&&start| start < at).count();
+        let (anchor, head) = (moved(selection.anchor), moved(selection.head));
+        self.edit_all(&edits, anchor, head, cx);
     }
 
-    /// Shift+Tab in a full box: up to one tab stop of spaces off the start of the line.
+    /// Shift+Tab in a full box: up to one tab stop of spaces off the start of each line the
+    /// selection touches.
     fn backtab(&mut self, _: &mut Window, cx: &mut Context<Self>) {
         if self.read_only {
             return;
         }
+        let selection = self.model.selection();
         let text = self.model.text();
-        let start = motion::line_start(text, self.model.head());
-        let spaces = text[start..]
-            .chars()
-            .take(TAB_SIZE)
-            .take_while(|c| *c == ' ')
-            .count();
-        if spaces > 0 {
-            let selection = self.model.selection();
-            self.edit(start..start + spaces, "", EditKind::Other, cx);
-            let back = |at: usize| {
-                if at >= start + spaces {
-                    at - spaces
-                } else {
-                    at.min(start)
+        let edits: Vec<Edit> = self
+            .line_starts(selection.range())
+            .into_iter()
+            .filter_map(|start| {
+                let spaces = text[start..]
+                    .chars()
+                    .take(TAB_SIZE)
+                    .take_while(|c| *c == ' ')
+                    .count();
+                if spaces == 0 {
+                    return None;
                 }
-            };
-            self.model
-                .select(back(selection.anchor), back(selection.head));
+                Some(Edit {
+                    range: start..start + spaces,
+                    text: String::new(),
+                })
+            })
+            .collect();
+        if edits.is_empty() {
+            return;
         }
+        let moved = |at: usize| crate::text::minimal::map_offset(&edits, at);
+        let (anchor, head) = (moved(selection.anchor), moved(selection.head));
+        self.edit_all(&edits, anchor, head, cx);
+    }
+
+    fn edit_all(&mut self, edits: &[Edit], anchor: usize, head: usize, cx: &mut Context<Self>) {
+        let now = self.now(cx);
+        self.model.edit_all(edits, anchor, head, now);
+        self.changed(true, cx);
+    }
+
+    /// The lines `range` touches, from the start of its first to the end of its last, without
+    /// the line end. A selection that ends at a line start leaves that line out.
+    fn line_block(&self, range: Range<usize>) -> Range<usize> {
+        let text = self.model.text();
+        let end = if range.end > range.start && motion::line_start(text, range.end) == range.end {
+            range.end - 1
+        } else {
+            range.end
+        };
+        motion::line_start(text, range.start)..motion::line_end(text, end)
+    }
+
+    /// The start of each line `range` touches.
+    fn line_starts(&self, range: Range<usize>) -> Vec<usize> {
+        let block = self.line_block(range);
+        let text = self.model.text();
+        std::iter::once(block.start)
+            .chain(
+                text[block.clone()]
+                    .match_indices('\n')
+                    .map(|(at, _)| block.start + at + 1),
+            )
+            .collect()
+    }
+
+    // The keys of the full boxes (`commands_editor.rs`). One selection only (D11): the keys that
+    // add selections, and the ones that need a language, do nothing in plain text.
+
+    fn nothing(&mut self, _: &mut Window, _: &mut Context<Self>) {}
+
+    /// With nothing selected, selects the word at the caret.
+    fn select_word(&mut self, _: &mut Window, cx: &mut Context<Self>) {
+        let selection = self.model.selection();
+        if !selection.is_empty() {
+            return;
+        }
+        let (start, end) = motion::word_around(self.model.text(), selection.head);
+        if start < end {
+            self.model.select(start, end);
+            self.model.goal_x = None;
+            self.changed(false, cx);
+        }
+    }
+
+    /// Moves the lines of the selection past the line below (`down`) or above, as one step.
+    fn move_lines(&mut self, down: bool, _: &mut Window, cx: &mut Context<Self>) {
+        if self.read_only {
+            return;
+        }
+        let selection = self.model.selection();
+        let block = self.line_block(selection.range());
+        let text = self.model.text();
+        let lines = &text[block.clone()];
+        let (edit, shift) = if down {
+            if block.end >= text.len() {
+                return;
+            }
+            let below = block.end + 1..motion::line_end(text, block.end + 1);
+            let edit = Edit {
+                range: block.start..below.end,
+                text: format!("{}\n{lines}", &text[below.clone()]),
+            };
+            (edit, below.len() as isize + 1)
+        } else {
+            if block.start == 0 {
+                return;
+            }
+            let above = motion::line_start(text, block.start - 1)..block.start - 1;
+            let edit = Edit {
+                range: above.start..block.end,
+                text: format!("{lines}\n{}", &text[above.clone()]),
+            };
+            (edit, -(above.len() as isize + 1))
+        };
+        let moved = |at: usize| (at as isize + shift) as usize;
+        let (anchor, head) = (moved(selection.anchor), moved(selection.head));
+        self.edit_all(&[edit], anchor, head, cx);
+    }
+
+    /// Copies the lines of the selection below them; the selection goes with the lower copy.
+    fn duplicate_lines(&mut self, _: &mut Window, cx: &mut Context<Self>) {
+        if self.read_only {
+            return;
+        }
+        let selection = self.model.selection();
+        let block = self.line_block(selection.range());
+        let copy = format!("{}\n", &self.model.text()[block.clone()]);
+        let len = copy.len();
+        let edit = Edit {
+            range: block.start..block.start,
+            text: copy,
+        };
+        let (anchor, head) = (selection.anchor + len, selection.head + len);
+        self.edit_all(&[edit], anchor, head, cx);
+    }
+
+    /// Deletes the lines of the selection; the caret keeps its column on the line that takes
+    /// their place.
+    fn delete_lines(&mut self, _: &mut Window, cx: &mut Context<Self>) {
+        if self.read_only {
+            return;
+        }
+        let selection = self.model.selection();
+        let block = self.line_block(selection.range());
+        let text = self.model.text();
+        let head = selection.head;
+        let column = text[motion::line_start(text, head)..head].chars().count();
+        let range = if block.end < text.len() {
+            block.start..block.end + 1
+        } else {
+            block.start.saturating_sub(1)..block.end
+        };
+        let mut after = text.to_string();
+        after.replace_range(range.clone(), "");
+        let start = motion::line_start(&after, range.start.min(after.len()));
+        let end = motion::line_end(&after, start);
+        let caret = after[start..end]
+            .char_indices()
+            .nth(column)
+            .map_or(end, |(at, _)| start + at);
+        let edit = Edit {
+            range,
+            text: String::new(),
+        };
+        self.edit_all(&[edit], caret, caret, cx);
     }
 
     // The mouse (6.3.3).
@@ -998,18 +1218,29 @@ impl Render for TextInput {
             Undo => undo(),
             Redo => redo(),
             Newline => newline(),
-            MoveUp => vertical(-1, false),
-            MoveDown => vertical(1, false),
-            SelectUp => vertical(-1, true),
-            SelectDown => vertical(1, true),
+            MoveUp => vertical(-1, false, false),
+            MoveDown => vertical(1, false, false),
+            SelectUp => vertical(-1, true, false),
+            SelectDown => vertical(1, true, false),
             MovePageUp => page(false),
             MovePageDown => page(true),
-            MoveToBeginning => to_edge(false, false),
-            MoveToEnd => to_edge(true, false),
-            SelectToBeginning => to_edge(false, true),
-            SelectToEnd => to_edge(true, true),
+            MoveToBeginning => edge(false, false),
+            MoveToEnd => edge(true, false),
+            SelectToBeginning => edge(false, true),
+            SelectToEnd => edge(true, true),
             Tab => tab(),
             Backtab => backtab(),
+            SelectNext => select_word(),
+            SelectAllMatches => select_word(),
+            SelectLargerSyntaxNode => nothing(),
+            SelectSmallerSyntaxNode => nothing(),
+            AddSelectionAbove => nothing(),
+            AddSelectionBelow => nothing(),
+            MoveLineUp => move_lines(false),
+            MoveLineDown => move_lines(true),
+            DuplicateLineDown => duplicate_lines(),
+            DeleteLine => delete_lines(),
+            ToggleComments => nothing(),
         );
         root.child(TextElement::new(cx.entity()))
     }

@@ -1,15 +1,17 @@
 //! The element of the own text input (plan 6.3.3, 6.3.4): it lays the text out with gpui's text
 //! system and paints, in order, the background (full mode), the current line, the selection, the
-//! text with the input method's underline, and the caret.
+//! whitespace dots inside it (full mode), the text with the input method's underline, and the
+//! caret.
 
+use std::collections::HashMap;
 use std::ops::Range;
 use std::rc::Rc;
 
 use gpui::{
-    App, AvailableSpace, Bounds, ContentMask, DispatchPhase, Element, ElementId, ElementInputHandler,
-    Entity, Font, GlobalElementId, Hsla, InspectorElementId, IntoElement, LayoutId, MouseButton,
-    MouseMoveEvent, MouseUpEvent, Pixels, Point, SharedString, Style, TextAlign, TextRun, Window,
-    WrappedLine, fill, point, px, relative, size,
+    App, AvailableSpace, Bounds, ContentMask, Corners, DispatchPhase, Element, ElementId,
+    ElementInputHandler, Entity, Font, GlobalElementId, Hsla, InspectorElementId, IntoElement,
+    LayoutId, MouseButton, MouseMoveEvent, MouseUpEvent, Pixels, Point, SharedString, Style,
+    TextAlign, TextRun, Window, WrappedLine, fill, point, px, relative, size,
 };
 use theme::ActiveTheme;
 
@@ -43,7 +45,9 @@ pub struct Line {
     pub first_row: usize,
     /// The offsets in the line where its rows start; the first is 0.
     pub row_starts: Vec<usize>,
-    pub shaped: WrappedLine,
+    pub shaped: Rc<WrappedLine>,
+    /// It is drawn in one run of the text colour, so a later layout may take it as it is.
+    plain: bool,
 }
 
 impl Line {
@@ -86,13 +90,63 @@ pub fn shape(
         .unwrap_or_default()
 }
 
+/// The part of `runs` that covers `range` of the text.
+fn runs_in(runs: &[TextRun], range: Range<usize>) -> Vec<TextRun> {
+    let mut out = Vec::new();
+    let mut at = 0;
+    for run in runs {
+        let (start, end) = (at.max(range.start), (at + run.len).min(range.end));
+        at += run.len;
+        if start < end {
+            out.push(TextRun {
+                len: end - start,
+                ..run.clone()
+            });
+        }
+    }
+    out
+}
+
 impl Layout {
-    pub fn build(key: LayoutKey, text: &SharedString, runs: &[TextRun], window: &Window) -> Self {
-        let shaped = shape(text, runs, key.font_size, key.width, window);
-        let mut lines = Vec::with_capacity(shaped.len());
+    /// Lays `text` out line by line. A line of `previous` with the same text, drawn in one run of
+    /// the same font, size, colour and width, is taken as it is: a key shapes only the lines it
+    /// changed.
+    pub fn build(
+        key: LayoutKey,
+        text: &SharedString,
+        runs: &[TextRun],
+        previous: Option<&Layout>,
+        window: &Window,
+    ) -> Self {
+        let mut ready: HashMap<&str, &Rc<WrappedLine>> = HashMap::new();
+        if let Some(previous) = previous.filter(|previous| {
+            let old = &previous.key;
+            (old.width, &old.font, old.font_size, old.color)
+                == (key.width, &key.font, key.font_size, key.color)
+        }) {
+            for line in previous.lines.iter().filter(|line| line.plain) {
+                ready.entry(line.shaped.text.as_ref()).or_insert(&line.shaped);
+            }
+        }
+        let mut lines = Vec::new();
         let (mut start, mut row, mut width) = (0, 0, px(0.));
-        for shaped in shaped {
-            let len = shaped.len();
+        for source in text.split('\n') {
+            let len = source.len();
+            let line_runs = runs_in(runs, start..start + len);
+            let plain = line_runs
+                .iter()
+                .all(|run| run.color == key.color && run.underline.is_none());
+            let shaped = match ready.get(source) {
+                Some(shaped) if plain => Rc::clone(shaped),
+                _ => {
+                    let source = SharedString::from(source.to_string());
+                    let shaped = shape(&source, &line_runs, key.font_size, key.width, window)
+                        .into_iter()
+                        .next()
+                        .unwrap_or_default();
+                    Rc::new(shaped)
+                }
+            };
             let mut row_starts = vec![0];
             row_starts.extend(shaped.wrap_boundaries().iter().filter_map(|boundary| {
                 let run = shaped.runs().get(boundary.run_ix)?;
@@ -106,6 +160,7 @@ impl Layout {
                 first_row: row,
                 row_starts,
                 shaped,
+                plain,
             });
             row += count;
             start += len + 1;
@@ -240,6 +295,51 @@ impl Layout {
         }
         rects
     }
+
+    /// The top left of each space and tab of the selection `range` of `text`, with the char.
+    pub fn whitespace(&self, text: &str, range: Range<usize>) -> Vec<(Point<Pixels>, char)> {
+        let Some(selected) = text.get(range.clone()) else {
+            return Vec::new();
+        };
+        selected
+            .char_indices()
+            .filter(|(_, c)| matches!(c, ' ' | '\t'))
+            .map(|(at, c)| (self.position(range.start + at, false), c))
+            .collect()
+    }
+}
+
+/// The corners of each selection rect: only a corner no rect above or below covers is round, so
+/// the rows of one selection join as one shape.
+fn selection_corners(rects: &[Bounds<Pixels>], radius: Pixels) -> Vec<Corners<Pixels>> {
+    let zero = px(0.);
+    let touching = |index: usize, other: Option<usize>| {
+        let other = rects.get(other?)?;
+        let rect = &rects[index];
+        let gap = (other.top() - rect.top()).abs();
+        (gap <= rect.size.height + px(0.5)).then_some(other)
+    };
+    // A left corner at `x` is covered when the other rect reaches from `x` to the right.
+    let covers_left = |other: Option<&Bounds<Pixels>>, x: Pixels| {
+        other.is_some_and(|other| other.left() <= x && other.right() > x)
+    };
+    let covers_right = |other: Option<&Bounds<Pixels>>, x: Pixels| {
+        other.is_some_and(|other| other.left() < x && other.right() >= x)
+    };
+    (0..rects.len())
+        .map(|index| {
+            let rect = &rects[index];
+            let above = touching(index, index.checked_sub(1));
+            let below = touching(index, Some(index + 1));
+            let round = |covered: bool| if covered { zero } else { radius };
+            Corners {
+                top_left: round(covers_left(above, rect.left())),
+                top_right: round(covers_right(above, rect.right())),
+                bottom_right: round(covers_right(below, rect.right())),
+                bottom_left: round(covers_left(below, rect.left())),
+            }
+        })
+        .collect()
 }
 
 pub struct TextElement {
@@ -367,6 +467,12 @@ impl Element for TextElement {
             Mode::Full { current_line } => (true, current_line),
             _ => (false, false),
         };
+        // Spaces and tabs inside the selection of a full box show as dots and arrows.
+        let whitespace = if full && !selection.is_empty() {
+            laid.whitespace(&input.display().0, selection.clone())
+        } else {
+            Vec::new()
+        };
         let colors = cx.theme().colors();
         let (background, active_line) = (colors.editor_background, colors.editor_active_line_background);
         let player = cx.theme().players().local();
@@ -376,6 +482,7 @@ impl Element for TextElement {
             player.selection.opacity(0.5)
         };
         let cursor = player.cursor;
+        let invisible = colors.editor_invisible;
         let line_height = laid.line_height;
 
         window.handle_input(
@@ -411,14 +518,51 @@ impl Element for TextElement {
                     active_line,
                 ));
             }
-            for rect in laid.selection_rects(selection.clone()) {
+            let rects = laid.selection_rects(selection.clone());
+            let corners = selection_corners(&rects, line_height * SELECTION_ROUNDING);
+            for (rect, corners) in rects.iter().zip(corners) {
                 window.paint_quad(
                     fill(
                         Bounds::new(rect.origin + origin, rect.size),
                         selection_color,
                     )
-                    .corner_radii(line_height * SELECTION_ROUNDING),
+                    .corner_radii(corners),
                 );
+            }
+            if !whitespace.is_empty() {
+                let shape = |symbol: &'static str, window: &mut Window| {
+                    let run = TextRun {
+                        len: symbol.len(),
+                        font: laid.key.font.clone(),
+                        color: invisible,
+                        background_color: None,
+                        underline: None,
+                        strikethrough: None,
+                    };
+                    window
+                        .text_system()
+                        .shape_line(symbol.into(), laid.key.font_size, &[run], None)
+                };
+                let (dot, arrow) = (shape("\u{2022}", window), shape("\u{2192}", window));
+                for (at, c) in &whitespace {
+                    let top = origin.y + at.y;
+                    if top + line_height < bounds.top() || top > bounds.bottom() {
+                        continue;
+                    }
+                    let symbol = if *c == '\t' { &arrow } else { &dot };
+                    // The symbol sits in the middle of one em from the char's left.
+                    let inset = (laid.em - symbol.width).max(px(0.)) / 2.;
+                    symbol
+                        .paint(
+                            point(origin.x + at.x + inset, top),
+                            line_height,
+                            TextAlign::Left,
+                            None,
+                            window,
+                            cx,
+                        )
+                        .ok();
+                }
             }
             for line in &laid.lines {
                 let top = origin.y + line_height * line.first_row as f32;

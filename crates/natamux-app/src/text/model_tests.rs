@@ -139,3 +139,65 @@ fn a_selection_reads_front_to_back_and_knows_its_direction() {
     model.move_to(1);
     assert_eq!(model.head(), 0);
 }
+
+#[test]
+fn the_mark_moves_with_an_edit_before_it_and_goes_with_one_over_it() {
+    let start = Instant::now();
+    let mut model = TextModel::default();
+    model.set_text("ab việt", start);
+    model.set_marked(Some(3..model.text().len()));
+    model.edit(0..0, "xyz", EditKind::Other, later(start, 10));
+    assert_eq!(model.marked(), Some(6..model.text().len()));
+    assert_eq!(&model.text()[model.marked().unwrap()], "việt");
+    // An edit after the mark leaves it.
+    let end = model.text().len();
+    model.edit(end..end, "!", EditKind::Other, later(start, 20));
+    assert_eq!(&model.text()[model.marked().unwrap()], "việt");
+    // An edit over it ends it.
+    model.edit(5..7, "", EditKind::Other, later(start, 30));
+    assert_eq!(model.marked(), None);
+    // A mark that ends inside a char is clipped to the char's start.
+    model.set_text("việt", later(start, 40));
+    model.set_marked(Some(0..3));
+    assert_eq!(model.marked(), Some(0..2));
+}
+
+#[test]
+fn a_paste_starts_a_step_that_the_next_quick_edits_join() {
+    let start = Instant::now();
+    let mut model = TextModel::default();
+    typed(&mut model, "ab", start);
+    let range = model.selection().range();
+    model.edit(range, "cd", EditKind::Paste, start);
+    let head = model.head();
+    model.edit(head - 1..head, "", EditKind::Deleting, start);
+    assert_eq!(model.text(), "abc");
+    model.undo();
+    assert_eq!(model.text(), "ab");
+    model.undo();
+    assert_eq!(model.text(), "");
+}
+
+#[test]
+fn edit_all_is_one_step_and_puts_the_selection() {
+    let start = Instant::now();
+    let mut model = TextModel::default();
+    model.set_text("one\ntwo", start);
+    let edits = [
+        minimal::Edit {
+            range: 0..0,
+            text: "  ".into(),
+        },
+        minimal::Edit {
+            range: 4..4,
+            text: "  ".into(),
+        },
+    ];
+    model.edit_all(&edits, 0, 11, later(start, 1000));
+    assert_eq!(model.text(), "  one\n  two");
+    assert_eq!(model.selection().range(), 0..11);
+    model.undo();
+    assert_eq!(model.text(), "one\ntwo");
+    model.redo();
+    assert_eq!(model.text(), "  one\n  two");
+}

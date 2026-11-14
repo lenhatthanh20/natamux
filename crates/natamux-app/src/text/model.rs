@@ -18,7 +18,10 @@ pub enum EditKind {
     Deleting,
     /// Text of an input method, from the first mark to the commit: one step.
     Composing,
-    /// Paste, cut, `set_text` and the like: always a step of its own.
+    /// A paste: it never joins the step before it, but the edits that follow within
+    /// `GROUP_WITHIN` join it, as Zed's undo does (T5).
+    Paste,
+    /// Cut, `set_text` and the like: always a step of its own.
     Other,
 }
 
@@ -109,7 +112,9 @@ impl TextModel {
     }
 
     pub fn set_marked(&mut self, marked: Option<Range<usize>>) {
-        self.marked = marked.filter(|range| !range.is_empty());
+        self.marked = marked
+            .map(|range| self.clip(range.start)..self.clip(range.end))
+            .filter(|range| !range.is_empty());
     }
 
     /// Puts the selection from `anchor` to `head`, each on a char boundary inside the text.
@@ -171,12 +176,17 @@ impl TextModel {
             return false;
         }
         let edits = minimal::edits(&self.text, &text);
-        let before = self.selection;
         let map = |at: usize| minimal::map_offset(&edits, at);
-        let selection = Selection {
-            anchor: map(before.anchor),
-            head: map(before.head),
-        };
+        let (anchor, head) = (map(self.selection.anchor), map(self.selection.head));
+        self.edit_all(&edits, anchor, head, now);
+        self.marked = None;
+        true
+    }
+
+    /// Makes `edits` (front to back, apart, with ranges of the text before them) as one step of
+    /// its own, then selects from `anchor` to `head` (offsets of the text after them).
+    pub fn edit_all(&mut self, edits: &[minimal::Edit], anchor: usize, head: usize, now: Instant) {
+        let before = self.selection;
         // Back to front, so the earlier offsets stay right.
         let mut changes: Vec<Change> = edits
             .iter()
@@ -184,8 +194,7 @@ impl TextModel {
             .map(|edit| self.apply(edit.range.start, edit.range.end, &edit.text))
             .collect();
         changes.reverse();
-        self.select(selection.anchor, selection.head);
-        self.marked = None;
+        self.select(anchor, head);
         // The changes are kept front to back with offsets of the text after the earlier ones.
         let mut shift: isize = 0;
         for change in &mut changes {
@@ -193,7 +202,6 @@ impl TextModel {
             shift += change.inserted.len() as isize - change.removed.len() as isize;
         }
         self.record(changes, before, EditKind::Other, now);
-        true
     }
 
     /// Moves the text of `range` to `to` (an offset outside it), or copies it there, as one step;
@@ -232,6 +240,18 @@ impl TextModel {
     fn apply(&mut self, start: usize, end: usize, text: &str) -> Change {
         let removed = self.text[start..end].to_string();
         self.text.replace_range(start..end, text);
+        // The mark moves with an edit before it and goes with an edit over it.
+        self.marked = self.marked.take().and_then(|marked| {
+            if end <= marked.start {
+                let shift = text.len() as isize - (end - start) as isize;
+                let moved = |at: usize| (at as isize + shift) as usize;
+                Some(moved(marked.start)..moved(marked.end))
+            } else if start >= marked.end {
+                Some(marked)
+            } else {
+                None
+            }
+        });
         self.version += 1;
         self.goal_x = None;
         Change {
@@ -244,12 +264,15 @@ impl TextModel {
     fn record(&mut self, changes: Vec<Change>, before: Selection, kind: EditKind, now: Instant) {
         self.redo.clear();
         let after = self.selection;
+        let within = |last: &Step| now.saturating_duration_since(last.at) < GROUP_WITHIN;
         if let Some(last) = self.undo.last_mut()
             && last.open
-            && last.kind == kind
-            && (kind == EditKind::Composing
-                || (kind != EditKind::Other
-                    && now.saturating_duration_since(last.at) < GROUP_WITHIN))
+            && match (last.kind, kind) {
+                (_, EditKind::Other | EditKind::Paste) => false,
+                (EditKind::Composing, EditKind::Composing) => true,
+                (EditKind::Paste, EditKind::Typing | EditKind::Deleting) => within(last),
+                (before, now_kind) => before == now_kind && within(last),
+            }
         {
             last.changes.extend(changes);
             last.after = after;
