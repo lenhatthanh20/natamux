@@ -79,7 +79,8 @@ pub struct Laid {
 /// The scrollbar's state.
 #[derive(Default)]
 pub struct Bar {
-    /// When a scroll or a new size last showed it.
+    /// When a scroll or a new size last showed it, moved back so a bar that showed already keeps
+    /// its alpha.
     pub shown_at: Option<Instant>,
     pub hovered: bool,
     /// The pointer's distance from the thumb's top while the thumb is dragged.
@@ -671,7 +672,10 @@ impl TermView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.bar.grab.take().is_some() {
+        if self.bar.grab.is_some() {
+            // A released thumb stays for a moment, then fades.
+            self.show_bar(cx);
+            self.bar.grab = None;
             cx.notify();
             return;
         }
@@ -765,14 +769,19 @@ impl TermView {
     }
 
     /// The scrollbar shows for a moment (when it shows only then), and draws again as it fades.
-    pub(super) fn show_bar(&mut self, cx: &mut Context<Self>) {
+    /// A bar that shows already keeps how much of it shows: only its hide delay starts again.
+    pub(crate) fn show_bar(&mut self, cx: &mut Context<Self>) {
         if Self::show_scrollbar(cx) != Show::Auto {
             return;
         }
-        let at = cx.background_executor().now();
+        let shown = scrollbar::SHOW_IN.mul_f32(self.bar_alpha(cx));
+        let now = cx.background_executor().now();
+        let at = now.checked_sub(shown).unwrap_or(now);
         self.bar.shown_at = Some(at);
         cx.spawn(async move |view, cx| {
-            cx.background_executor().timer(scrollbar::SHOWN_FOR).await;
+            cx.background_executor()
+                .timer(scrollbar::SHOWN_FOR - shown)
+                .await;
             view.update(cx, |view, cx| {
                 if view.bar.shown_at == Some(at) {
                     cx.notify();
@@ -812,6 +821,10 @@ impl TermView {
         let hovered = Self::show_scrollbar(cx) != Show::Never
             && laid.thumb.is_some_and(|thumb| thumb.contains(&position));
         if hovered != self.bar.hovered {
+            // A thumb the pointer leaves stays for a moment, then fades.
+            if !hovered {
+                self.show_bar(cx);
+            }
             self.bar.hovered = hovered;
             cx.notify();
         }
@@ -849,7 +862,7 @@ impl TermView {
     }
 
     /// How much of the scrollbar shows now.
-    pub(super) fn bar_alpha(&self, cx: &App) -> f32 {
+    pub(crate) fn bar_alpha(&self, cx: &App) -> f32 {
         match Self::show_scrollbar(cx) {
             Show::Never => 0.,
             Show::Always => 1.,

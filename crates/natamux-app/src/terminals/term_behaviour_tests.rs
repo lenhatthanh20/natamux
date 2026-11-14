@@ -2328,6 +2328,89 @@ mod own {
         assert_eq!(up.size, bottom.size);
     }
 
+    // A show of a scrollbar that shows already keeps it as it is and only starts its hide delay
+    // again: a quick second scroll, and output that adds lines on each frame, keep it at 1. A
+    // thumb the pointer leaves or lets go of stays a moment, then fades.
+    #[gpui::test]
+    fn the_scrollbar_keeps_showing_while_it_is_shown_again(cx: &mut TestAppContext) {
+        use gpui::{Modifiers, MouseButton, VisualTestContext, point};
+
+        fn wait(ms: u64, cx: &mut VisualTestContext) {
+            cx.executor().advance_clock(Duration::from_millis(ms));
+            cx.run_until_parked();
+        }
+
+        let (_, terminal, cx) = super::open(cx, super::PANE, false);
+        super::feed(&terminal, &history(200), cx);
+        let view = terminal.read_with(cx, |terminal, _| terminal.view.clone());
+        let alpha = |cx: &mut VisualTestContext| view.read_with(cx, |view, cx| view.bar_alpha(cx));
+        let hide = |cx: &mut VisualTestContext| {
+            wait(2000, cx);
+            super::draw(cx);
+            assert_eq!(alpha(cx), 0.);
+        };
+
+        hide(cx);
+        view.update(cx, |view, cx| view.show_bar(cx));
+        wait(50, cx);
+        assert_eq!(alpha(cx), 1.);
+        view.update(cx, |view, cx| view.show_bar(cx));
+        wait(10, cx);
+        assert_eq!(
+            alpha(cx),
+            1.,
+            "a second show 10 ms later lowered the scrollbar"
+        );
+
+        hide(cx);
+        let screen = super::zed(&terminal, cx);
+        let mut total = super::content(&terminal, cx, |content| content.total_lines);
+        for frame in 0..8 {
+            screen.update(cx, |screen, cx| screen.write_output(b"more\r\n", cx));
+            let now = super::content(&terminal, cx, |content| content.total_lines);
+            assert!(now > total, "frame {frame} added no line");
+            total = now;
+            wait(16, cx);
+            if frame >= 3 {
+                assert_eq!(alpha(cx), 1., "frame {frame} of steady output");
+            }
+        }
+
+        let thumb_and_away = |cx: &mut VisualTestContext| {
+            super::content(&terminal, cx, |_| ());
+            let laid = view.read_with(cx, |view, _| view.laid).unwrap();
+            let thumb = laid.thumb.expect("no thumb over the history").center();
+            (thumb, point(laid.bounds.center().x, thumb.y))
+        };
+        let none = Modifiers::none();
+
+        // The pointer on a hidden thumb shows it; leaving it keeps it for a moment.
+        hide(cx);
+        let (thumb, away) = thumb_and_away(cx);
+        super::mouse_move(thumb, None, none, cx);
+        assert_eq!(alpha(cx), 1.);
+        wait(2000, cx);
+        super::mouse_move(away, None, none, cx);
+        assert_eq!(alpha(cx), 1., "the thumb hid as the pointer left it");
+        wait(900, cx);
+        assert_eq!(alpha(cx), 1.);
+        wait(600, cx);
+        assert_eq!(alpha(cx), 0.);
+
+        // A thumb let go of away from it after a long drag stays for a moment too.
+        hide(cx);
+        let (thumb, away) = thumb_and_away(cx);
+        super::mouse_move(thumb, None, none, cx);
+        super::mouse_down(thumb, MouseButton::Left, none, 1, cx);
+        super::mouse_move(away, Some(MouseButton::Left), none, cx);
+        wait(2000, cx);
+        assert_eq!(alpha(cx), 1.);
+        super::mouse_up(away, MouseButton::Left, none, 1, cx);
+        assert_eq!(alpha(cx), 1., "the thumb hid as it was let go of");
+        wait(1500, cx);
+        assert_eq!(alpha(cx), 0.);
+    }
+
     // T-E1: a scroll, a resize and a select queued before one sync run in that order, and give
     // what the old rows pinned: Select All, asked before the resize, leaves out the 9 lines the
     // resize took from the screen.
