@@ -15,8 +15,9 @@ use gpui::{
     Element, ElementId, Entity, FocusHandle, Font, FontFeatures, FontStyle, FontWeight,
     GlobalElementId, Hitbox, HitboxBehavior, Hsla, InspectorElementId, InteractiveElement,
     IntoElement, LayoutId, ModifiersChangedEvent, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
-    Path, Pixels, Point, ScrollWheelEvent, ShapedLine, StatefulInteractiveElement, Style, Styled,
-    TextAlign, TextRun, UnderlineStyle, Window, div, fill, outline, point, px, relative, size,
+    Path, PathBuilder, Pixels, Point, ScrollWheelEvent, ShapedLine, StatefulInteractiveElement,
+    Style, Styled, TextAlign, TextRun, UnderlineStyle, Window, div, fill, outline, point, px,
+    relative, size,
 };
 use theme::ActiveTheme;
 use ui::Tooltip;
@@ -183,11 +184,17 @@ impl Element for TermElement {
             content.mode.contains(TermMode::ALT_SCREEN)
                 || (content.scrolled_to_bottom && content.bottom_row_used)
         };
-        // The grid always leaves the scrollbar's track free (T-G1).
+        // The grid leaves the scrollbar's track free, unless the view hides its scrollbar (T-G1,
+        // the shots).
+        let track_width = if self.view.read(cx).keeps_track {
+            TRACK_WIDTH
+        } else {
+            px(0.)
+        };
         let area = Bounds {
             origin: bounds.origin,
             size: size(
-                (bounds.size.width - TRACK_WIDTH).max(px(0.)),
+                (bounds.size.width - track_width).max(px(0.)),
                 bounds.size.height,
             ),
         };
@@ -215,8 +222,8 @@ impl Element for TermElement {
         let focused = self.focus.is_focused(window);
         let origin = laid.origin;
         let track = Bounds {
-            origin: point(bounds.right() - TRACK_WIDTH, bounds.top()),
-            size: size(TRACK_WIDTH, bounds.size.height),
+            origin: point(bounds.right() - track_width, bounds.top()),
+            size: size(track_width, bounds.size.height),
         };
 
         let view = self.view.read(cx);
@@ -766,14 +773,18 @@ fn rounded_path(
         let out = radius.min(edge_length(here, after) / 2.);
         (toward(here, before, into), here, toward(here, after, out))
     };
+    // Tessellated, not a raw gpui path: a raw path fills a fan from its start, which is wrong
+    // for an outline with a corner turned in (a selection from the middle of a line).
     let (_, _, start) = corner_points(0);
-    let mut path = Path::new(start);
+    let mut path = PathBuilder::fill();
+    path.move_to(start);
     for index in 1..=count {
         let (enter, corner, leave) = corner_points(index % count);
         path.line_to(enter);
         path.curve_to(leave, corner);
     }
-    Some(path)
+    path.close();
+    path.build().ok()
 }
 
 fn edge_length(from: Point<Pixels>, to: Point<Pixels>) -> Pixels {

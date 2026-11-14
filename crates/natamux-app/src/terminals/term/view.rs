@@ -107,6 +107,9 @@ pub struct TermView {
     /// Where and when the pointer last looked for a link.
     hover_look: Option<(Point<Pixels>, Instant)>,
     pub(super) bar: Bar,
+    /// The grid leaves the scrollbar's track free: the scrollbar was not hidden when the view
+    /// was made. The old view keeps what it read then (T-G1 rows, the shots).
+    pub(super) keeps_track: bool,
     pub(crate) laid: Option<Laid>,
     _subscriptions: Vec<Subscription>,
 }
@@ -143,6 +146,7 @@ impl TermView {
             reported: None,
             hover_look: None,
             bar: Bar::default(),
+            keeps_track: Self::show_scrollbar(cx) != Show::Never,
             laid: None,
             _subscriptions: subscriptions,
         }
@@ -180,7 +184,11 @@ impl TermView {
         self.model.update(cx, |model, _| model.focus_in());
         self.follow_blink(cx);
         window.invalidate_character_coordinates();
-        cx.notify();
+        // Focus that goes straight into the menu changes nothing drawn, and the old view drew
+        // nothing for it: its pane keeps the look it had (`terminal-context-menu`).
+        if self.focus.is_focused(window) {
+            cx.notify();
+        }
     }
 
     fn focus_out(&mut self, cx: &mut Context<Self>) {
