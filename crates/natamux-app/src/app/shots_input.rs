@@ -12,6 +12,13 @@ use gpui::{
 
 use super::window::Root;
 
+/// The start of the text in a box of many lines (`app/text_boxes.rs`).
+pub const TEXT_START: &str = if cfg!(target_os = "macos") {
+    "cmd-up"
+} else {
+    "ctrl-home"
+};
+
 /// The end of the text in a box of many lines (`app/text_boxes.rs`).
 pub const TEXT_END: &str = if cfg!(target_os = "macos") {
     "cmd-down"

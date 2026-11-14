@@ -4,11 +4,12 @@
 
 use std::time::Duration;
 
-use gpui::{App, AsyncApp, Entity, Window, WindowHandle};
+use gpui::{App, AsyncApp, Entity, Focusable as _, Window, WindowHandle};
 
 use super::dashboard::Dashboard;
 use super::fake_daemon;
 use super::options::Shot;
+use super::shots_input::{TEXT_START, press};
 use super::view_rules::DetailsView;
 use super::window::Root;
 use crate::files::draft_store::DraftStore;
@@ -53,6 +54,7 @@ pub fn is_files_shot(shot: Shot) -> bool {
         Shot::DetailsFiles
             | Shot::WorkspaceDocs
             | Shot::WorkspaceDocsEdit
+            | Shot::WorkspaceDocsEditSelection
             | Shot::WorkspaceEditor
             | Shot::WorkspaceEditorSource
             | Shot::WorkspaceEditorDraft
@@ -90,6 +92,11 @@ pub async fn run(handle: WindowHandle<Root>, shot: Shot, cx: &mut AsyncApp) {
             .ok();
         return;
     }
+    if shot == Shot::WorkspaceDocsEditSelection {
+        cx.background_executor().timer(READ).await;
+        select_in_doc(handle, cx);
+        return;
+    }
     if shot != Shot::WorkspaceEditorConflict {
         return;
     }
@@ -110,8 +117,12 @@ fn enter(shot: Shot, dashboard: &Entity<Dashboard>, cx: &mut App) {
                 dashboard.show_view(DetailsView::Docs, cx);
             });
         }
-        Shot::WorkspaceDocsEdit => {
-            doc_draft(REVIEWED, SPEC, cx);
+        Shot::WorkspaceDocsEdit | Shot::WorkspaceDocsEditSelection => {
+            if shot == Shot::WorkspaceDocsEdit {
+                doc_draft(REVIEWED, SPEC, cx);
+            } else {
+                doc_draft_after(REVIEWED, SPEC, "\t", cx);
+            }
             panel(dashboard, REVIEWED, DetailsView::Progress, cx);
             dashboard.update(cx, |dashboard, cx| {
                 dashboard.open_stage_file(REVIEWED, SPEC, cx)
@@ -150,6 +161,24 @@ fn enter(shot: Shot, dashboard: &Entity<Dashboard>, cx: &mut App) {
         }
         _ => {}
     }
+}
+
+/// Focuses the Docs edit box and selects from after the tab and `#` down 7 rows and 5 chars on.
+fn select_in_doc(handle: WindowHandle<Root>, cx: &mut AsyncApp) {
+    let focused = handle.update(cx, |root, window, cx| {
+        let docs = root.workspace_view().read(cx).docs().cloned();
+        let edit = docs.and_then(|docs| docs.read(cx).edit_box());
+        match edit {
+            Some(edit) => window.focus(&edit.focus_handle(cx), cx),
+            None => eprintln!("shot: the Docs edit box is not on screen"),
+        }
+    });
+    if focused.is_err() {
+        return;
+    }
+    press(handle, &[TEXT_START, "right", "right"], cx);
+    press(handle, &["shift-down"; 7], cx);
+    press(handle, &["shift-right"; 5], cx);
 }
 
 /// T-0316: the find bar, Go to line or Go to symbol over the source file's editor. T-0323:
@@ -209,6 +238,11 @@ fn file_draft(task: &str, path: &str, cx: &mut App) {
 
 /// An edit of the stage file that began on its time now, so no stale line shows.
 pub(super) fn doc_draft(task: &str, name: &str, cx: &mut App) {
+    doc_draft_after(task, name, "", cx);
+}
+
+/// `doc_draft`, with `before` put in front of the text.
+fn doc_draft_after(task: &str, name: &str, before: &str, cx: &mut App) {
     let fake = fake_daemon::shared();
     let (Ok(file), Ok(list)) = (
         fake.read_stage_file(task, name),
@@ -221,7 +255,7 @@ pub(super) fn doc_draft(task: &str, name: &str, cx: &mut App) {
         .find(|entry| entry.name == name)
         .map(|entry| entry.modified_at);
     let draft = DocDraft {
-        text: format!("{}{SPEC_EDIT}", file.text),
+        text: format!("{before}{}{SPEC_EDIT}", file.text),
         original: file.text,
         base,
     };

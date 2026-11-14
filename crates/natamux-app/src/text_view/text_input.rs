@@ -803,8 +803,10 @@ impl TextInput {
         }
     }
 
-    /// Tab in a full box: spaces to the next tab stop, or with a selection one tab stop more at
-    /// the start of each line it touches.
+    /// Tab in a full box: spaces to the next tab stop. With a selection, each line it touches
+    /// gets spaces to the next tab stop of its indent (a whole tab stop after a tab), at the line
+    /// start; on one line they go in at the selection when it starts inside the indent. The
+    /// selection start always moves past them, as does its end on an indented line.
     fn tab(&mut self, _: &mut Window, cx: &mut Context<Self>) {
         if self.read_only {
             return;
@@ -819,22 +821,32 @@ impl TextInput {
             self.edit(at..at, &spaces, EditKind::Typing, cx);
             return;
         }
-        let starts = self.line_starts(selection.range());
+        let range = selection.range();
+        let starts = self.line_starts(range.clone());
+        let one_line = starts.len() == 1;
         let edits: Vec<Edit> = starts
             .iter()
-            .map(|&start| Edit {
-                range: start..start,
-                text: " ".repeat(TAB_SIZE),
+            .map(|&start| {
+                let (len, tabs) = indent_of(&text[start..]);
+                let spaces = if tabs { TAB_SIZE } else { TAB_SIZE - len % TAB_SIZE };
+                let at = if one_line && len >= range.start - start {
+                    range.start
+                } else {
+                    start
+                };
+                Edit {
+                    range: at..at,
+                    text: " ".repeat(spaces),
+                }
             })
             .collect();
-        // An offset at a line start stays before the new spaces, so the selection grows.
-        let moved = |at: usize| at + TAB_SIZE * starts.iter().filter(|&&start| start < at).count();
+        let moved = |at: usize| crate::text::minimal::map_offset(&edits, at);
         let (anchor, head) = (moved(selection.anchor), moved(selection.head));
         self.edit_all(&edits, anchor, head, cx);
     }
 
-    /// Shift+Tab in a full box: up to one tab stop of spaces off the start of each line the
-    /// selection touches.
+    /// Shift+Tab in a full box: each line the selection touches goes back to the tab stop before
+    /// its indent, or loses its leading tab.
     fn backtab(&mut self, _: &mut Window, cx: &mut Context<Self>) {
         if self.read_only {
             return;
@@ -845,16 +857,14 @@ impl TextInput {
             .line_starts(selection.range())
             .into_iter()
             .filter_map(|start| {
-                let spaces = text[start..]
-                    .chars()
-                    .take(TAB_SIZE)
-                    .take_while(|c| *c == ' ')
-                    .count();
-                if spaces == 0 {
-                    return None;
-                }
-                Some(Edit {
-                    range: start..start + spaces,
+                let (len, tabs) = indent_of(&text[start..]);
+                let remove = match (tabs, len % TAB_SIZE) {
+                    (true, _) => len.min(1),
+                    (false, 0) => len.min(TAB_SIZE),
+                    (false, rest) => rest,
+                };
+                (remove > 0).then(|| Edit {
+                    range: start..start + remove,
                     text: String::new(),
                 })
             })
@@ -1163,6 +1173,13 @@ impl TextInput {
     }
 }
 
+/// The indent of the line that starts `line`: its count of leading spaces and tabs, and
+/// whether it starts with a tab.
+fn indent_of(line: &str) -> (usize, bool) {
+    let len = line.bytes().take_while(|b| *b == b' ' || *b == b'\t').count();
+    (len, line.starts_with('\t'))
+}
+
 /// Registers each own key action on the box: `Action => method(args)` calls
 /// `method(args.., window, cx)`.
 macro_rules! keys {
@@ -1182,6 +1199,7 @@ impl Render for TextInput {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let mut context = KeyContext::new_with_defaults();
         context.add("Editor");
+        context.add(crate::app::text_boxes::OWN_INPUT);
         context.set("mode", self.mode.name());
         let root = div()
             .key_context(context)

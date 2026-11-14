@@ -741,8 +741,9 @@ impl Shown {
 }
 
 /// The outline of rows of spans (left, right) from `top`, each `line_height` high, with every
-/// corner rounded by up to `radius` (at most half of each edge).
-fn rounded_path(
+/// corner rounded by up to `radius` (at most half of each edge). The own text input paints its
+/// selection with it too.
+pub fn rounded_path(
     spans: &[(Pixels, Pixels)],
     top: Pixels,
     line_height: Pixels,

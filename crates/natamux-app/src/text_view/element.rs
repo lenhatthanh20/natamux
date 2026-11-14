@@ -8,14 +8,15 @@ use std::ops::Range;
 use std::rc::Rc;
 
 use gpui::{
-    App, AvailableSpace, Bounds, ContentMask, Corners, DispatchPhase, Element, ElementId,
+    App, AvailableSpace, Bounds, ContentMask, DispatchPhase, Element, ElementId,
     ElementInputHandler, Entity, Font, GlobalElementId, Hsla, InspectorElementId, IntoElement,
-    LayoutId, MouseButton, MouseMoveEvent, MouseUpEvent, Pixels, Point, SharedString, Style,
+    LayoutId, MouseButton, MouseMoveEvent, MouseUpEvent, Path, Pixels, Point, SharedString, Style,
     TextAlign, TextRun, Window, WrappedLine, fill, point, px, relative, size,
 };
 use theme::ActiveTheme;
 
 use super::text_input::{Mode, TextInput};
+use crate::terminals::term::element::rounded_path;
 
 /// The width of the caret.
 pub const CARET_WIDTH: Pixels = px(2.);
@@ -296,50 +297,59 @@ impl Layout {
         rects
     }
 
-    /// The top left of each space and tab of the selection `range` of `text`, with the char.
-    pub fn whitespace(&self, text: &str, range: Range<usize>) -> Vec<(Point<Pixels>, char)> {
+    /// The top left and the width of each whitespace char of the selection `range` of `text`
+    /// (line ends left out), with the char.
+    pub fn whitespace(
+        &self,
+        text: &str,
+        range: Range<usize>,
+    ) -> Vec<(Point<Pixels>, Pixels, char)> {
         let Some(selected) = text.get(range.clone()) else {
             return Vec::new();
         };
         selected
             .char_indices()
-            .filter(|(_, c)| matches!(c, ' ' | '\t'))
-            .map(|(at, c)| (self.position(range.start + at, false), c))
+            .filter(|(_, c)| c.is_whitespace() && *c != '\n')
+            .map(|(at, c)| {
+                let at = range.start + at;
+                let width = self.line_at(at).map_or(px(0.), |line| {
+                    let layout = &line.shaped.unwrapped_layout;
+                    let local = at - line.start;
+                    layout.x_for_index(local + c.len_utf8()) - layout.x_for_index(local)
+                });
+                (self.position(at, false), width, c)
+            })
             .collect()
     }
 }
 
-/// The corners of each selection rect: only a corner no rect above or below covers is round, so
-/// the rows of one selection join as one shape.
-fn selection_corners(rects: &[Bounds<Pixels>], radius: Pixels) -> Vec<Corners<Pixels>> {
-    let zero = px(0.);
-    let touching = |index: usize, other: Option<usize>| {
-        let other = rects.get(other?)?;
-        let rect = &rects[index];
-        let gap = (other.top() - rect.top()).abs();
-        (gap <= rect.size.height + px(0.5)).then_some(other)
-    };
-    // A left corner at `x` is covered when the other rect reaches from `x` to the right.
-    let covers_left = |other: Option<&Bounds<Pixels>>, x: Pixels| {
-        other.is_some_and(|other| other.left() <= x && other.right() > x)
-    };
-    let covers_right = |other: Option<&Bounds<Pixels>>, x: Pixels| {
-        other.is_some_and(|other| other.left() < x && other.right() >= x)
-    };
-    (0..rects.len())
-        .map(|index| {
-            let rect = &rects[index];
-            let above = touching(index, index.checked_sub(1));
-            let below = touching(index, Some(index + 1));
-            let round = |covered: bool| if covered { zero } else { radius };
-            Corners {
-                top_left: round(covers_left(above, rect.left())),
-                top_right: round(covers_right(above, rect.right())),
-                bottom_right: round(covers_right(below, rect.right())),
-                bottom_left: round(covers_left(below, rect.left())),
-            }
-        })
-        .collect()
+/// The selection as filled outlines with round corners, one per run of rows that touch (a first
+/// row that starts right of the end of the next is a run of its own). `rects` come one per row,
+/// top to bottom, from `Layout::selection_rects`.
+fn selection_paths(rects: &[Bounds<Pixels>], radius: Pixels) -> Vec<Path<Pixels>> {
+    let mut paths = Vec::new();
+    let mut run: Vec<(Pixels, Pixels)> = Vec::new();
+    let mut top = px(0.);
+    for (index, rect) in rects.iter().enumerate() {
+        let touches = index.checked_sub(1).is_some_and(|before| {
+            let before = &rects[before];
+            (rect.top() - before.bottom()).abs() < px(0.5)
+                && rect.left() <= before.right()
+                && rect.right() >= before.left()
+        });
+        if !touches && !run.is_empty() {
+            paths.extend(rounded_path(&run, top, rect.size.height, radius));
+            run.clear();
+        }
+        if run.is_empty() {
+            top = rect.top();
+        }
+        run.push((rect.left(), rect.right()));
+    }
+    if let Some(rect) = rects.last() {
+        paths.extend(rounded_path(&run, top, rect.size.height, radius));
+    }
+    paths
 }
 
 pub struct TextElement {
@@ -518,16 +528,13 @@ impl Element for TextElement {
                     active_line,
                 ));
             }
-            let rects = laid.selection_rects(selection.clone());
-            let corners = selection_corners(&rects, line_height * SELECTION_ROUNDING);
-            for (rect, corners) in rects.iter().zip(corners) {
-                window.paint_quad(
-                    fill(
-                        Bounds::new(rect.origin + origin, rect.size),
-                        selection_color,
-                    )
-                    .corner_radii(corners),
-                );
+            let rects: Vec<_> = laid
+                .selection_rects(selection.clone())
+                .into_iter()
+                .map(|rect| Bounds::new(rect.origin + origin, rect.size))
+                .collect();
+            for path in selection_paths(&rects, line_height * SELECTION_ROUNDING) {
+                window.paint_path(path, selection_color);
             }
             if !whitespace.is_empty() {
                 let shape = |symbol: &'static str, window: &mut Window| {
@@ -541,17 +548,17 @@ impl Element for TextElement {
                     };
                     window
                         .text_system()
-                        .shape_line(symbol.into(), laid.key.font_size, &[run], None)
+                        .shape_line(symbol.into(), laid.key.font_size / 2., &[run], None)
                 };
                 let (dot, arrow) = (shape("\u{2022}", window), shape("\u{2192}", window));
-                for (at, c) in &whitespace {
+                for (at, width, c) in &whitespace {
                     let top = origin.y + at.y;
                     if top + line_height < bounds.top() || top > bounds.bottom() {
                         continue;
                     }
                     let symbol = if *c == '\t' { &arrow } else { &dot };
-                    // The symbol sits in the middle of one em from the char's left.
-                    let inset = (laid.em - symbol.width).max(px(0.)) / 2.;
+                    // The symbol sits in the middle of the char's own width.
+                    let inset = (*width - symbol.width) / 2.;
                     symbol
                         .paint(
                             point(origin.x + at.x + inset, top),

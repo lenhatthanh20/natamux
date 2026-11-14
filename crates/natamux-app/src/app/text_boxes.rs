@@ -95,15 +95,24 @@ pub fn bind(cx: &mut App, mac: bool) {
     cx.bind_keys(own_bindings(mac));
 }
 
-/// The same keys for the own text input (docs/plan-mit-license.md 6.3.1), in the same contexts.
-/// A Zed `Editor` (the code and diff views) takes Zed's action and leaves the own one; the own
-/// input takes the own one. gpui tries each binding of a key until one is handled.
+/// The key context entry of the own text input only.
+#[cfg(feature = "own-input")]
+pub const OWN_INPUT: &str = "own_input";
+
+/// A context of Zed's editor narrowed to the own text input.
+#[cfg(feature = "own-input")]
+fn only_own(context: &str) -> String {
+    format!("({context}) && {OWN_INPUT}")
+}
+
+/// The same keys for the own text input (docs/plan-mit-license.md 6.3.1), in the same contexts
+/// narrowed to the own input. A Zed `Editor` (the code and diff views) never matches them, so
+/// its keys stay the ones gpui shows for it.
 #[cfg(feature = "own-input")]
 fn own_bindings(mac: bool) -> Vec<KeyBinding> {
     use crate::text_view::text_input::actions as own;
-    let any = Some(ANY);
-    let many = Some(MANY_LINES);
-    let full = Some(FULL);
+    let (any, many, full) = (only_own(ANY), only_own(MANY_LINES), only_own(FULL));
+    let (any, many, full) = (Some(any.as_str()), Some(many.as_str()), Some(full.as_str()));
     let m = |keys: &str| keys.replace("mod", if mac { "cmd" } else { "ctrl" });
     let w = |keys: &str| keys.replace("word", if mac { "alt" } else { "ctrl" });
     let (start, end) = if mac {
@@ -158,17 +167,17 @@ fn own_bindings(mac: bool) -> Vec<KeyBinding> {
         ]);
     }
     // The keys of the full boxes, with the keys and contexts of the registry, as Zed's above.
-    push("editor.select-next", own::SelectNext, mac, &mut keys);
-    push("editor.select-all-matches", own::SelectAllMatches, mac, &mut keys);
-    push("editor.select-larger", own::SelectLargerSyntaxNode, mac, &mut keys);
-    push("editor.select-smaller", own::SelectSmallerSyntaxNode, mac, &mut keys);
-    push("editor.add-cursor-above", own::AddSelectionAbove, mac, &mut keys);
-    push("editor.add-cursor-below", own::AddSelectionBelow, mac, &mut keys);
-    push("editor.move-line-up", own::MoveLineUp, mac, &mut keys);
-    push("editor.move-line-down", own::MoveLineDown, mac, &mut keys);
-    push("editor.duplicate-line", own::DuplicateLineDown, mac, &mut keys);
-    push("editor.delete-line", own::DeleteLine, mac, &mut keys);
-    push("editor.toggle-comments", own::ToggleComments, mac, &mut keys);
+    push_in("editor.select-next", own::SelectNext, mac, only_own, &mut keys);
+    push_in("editor.select-all-matches", own::SelectAllMatches, mac, only_own, &mut keys);
+    push_in("editor.select-larger", own::SelectLargerSyntaxNode, mac, only_own, &mut keys);
+    push_in("editor.select-smaller", own::SelectSmallerSyntaxNode, mac, only_own, &mut keys);
+    push_in("editor.add-cursor-above", own::AddSelectionAbove, mac, only_own, &mut keys);
+    push_in("editor.add-cursor-below", own::AddSelectionBelow, mac, only_own, &mut keys);
+    push_in("editor.move-line-up", own::MoveLineUp, mac, only_own, &mut keys);
+    push_in("editor.move-line-down", own::MoveLineDown, mac, only_own, &mut keys);
+    push_in("editor.duplicate-line", own::DuplicateLineDown, mac, only_own, &mut keys);
+    push_in("editor.delete-line", own::DeleteLine, mac, only_own, &mut keys);
+    push_in("editor.toggle-comments", own::ToggleComments, mac, only_own, &mut keys);
     keys
 }
 
@@ -267,15 +276,26 @@ pub fn editor_bindings(mac: bool) -> Vec<KeyBinding> {
 }
 
 fn push<A: Action + Clone>(id: &str, action: A, mac: bool, out: &mut Vec<KeyBinding>) {
+    push_in(id, action, mac, str::to_string, out);
+}
+
+/// `push`, with each registry context passed through `context` first.
+fn push_in<A: Action + Clone>(
+    id: &str,
+    action: A,
+    mac: bool,
+    context: fn(&str) -> String,
+    out: &mut Vec<KeyBinding>,
+) {
     let Some(command) = command_by_id(id) else {
         return;
     };
     for key in command.keys {
-        for context in command.contexts {
+        for registered in command.contexts {
             out.push(KeyBinding::new(
                 &keystroke(key, mac),
                 action.clone(),
-                Some(context),
+                Some(context(registered).as_str()),
             ));
         }
     }

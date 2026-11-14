@@ -175,6 +175,8 @@ pub enum Shot {
     TerminalLinkTooltip,
     TextBoxSelection,
     TextBoxSelectionUnfocused,
+    /// The Docs edit box with a selection over spaces, a tab and rows of other lengths (S3.3).
+    WorkspaceDocsEditSelection,
     WorkspaceEditorScrollbar,
     EditForm,
     TreeRename,
@@ -200,7 +202,7 @@ pub enum Shot {
 }
 
 impl Shot {
-    pub const ALL: [Shot; 164] = [
+    pub const ALL: [Shot; 165] = [
         Shot::TasksTable,
         Shot::TasksBoard,
         Shot::BoardHoverCard,
@@ -323,6 +325,7 @@ impl Shot {
         Shot::TerminalLinkTooltip,
         Shot::TextBoxSelection,
         Shot::TextBoxSelectionUnfocused,
+        Shot::WorkspaceDocsEditSelection,
         Shot::WorkspaceEditorScrollbar,
         Shot::EditForm,
         Shot::TreeRename,
@@ -491,6 +494,7 @@ impl Shot {
             Shot::TerminalLinkTooltip => "terminal-link-tooltip",
             Shot::TextBoxSelection => "text-box-selection",
             Shot::TextBoxSelectionUnfocused => "text-box-selection-unfocused",
+            Shot::WorkspaceDocsEditSelection => "workspace-docs-edit-selection",
             Shot::WorkspaceEditorScrollbar => "workspace-editor-scrollbar",
             Shot::EditForm => "edit-form",
             Shot::TreeRename => "tree-rename",

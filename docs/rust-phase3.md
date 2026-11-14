@@ -257,6 +257,7 @@ The move off Zed's GPL crates (`docs/plan-mit-license.md`) redraws the terminal,
 | `terminal-link-tooltip` | A URL held under the pointer with Cmd (Ctrl off macOS): the link drawn as hovered, the hand pointer and the tooltip with the URL |
 | `text-box-selection` | The Add a task dialog with its title typed and the last two words selected |
 | `text-box-selection-unfocused` | The same after Tab: the selection in a box without focus |
+| `workspace-docs-edit-selection` | `spec.md` in edit with a tab in front of its first line, selected from after the tab and `#` down 7 rows and 5 chars on: the whitespace marks and the joined rows of the selection |
 | `workspace-editor-scrollbar` | A 1,200-line TypeScript file paged down, four lines selected, the scrollbars shown, long lines that do not wrap |
 | `edit-form` | T-0143's details with the edit form open |
 | `tree-rename` | The sidebar rename of T-0146 in progress (F2) |

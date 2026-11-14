@@ -447,6 +447,27 @@ fn t_key_tab_with_a_selection_indents_its_lines_and_shift_tab_outdents_them(
                 "    one\n    two",
                 "mac {mac}, kind {index}: tab over all"
             );
+            // The selection start moves past the new spaces, also from the text start.
+            assert_eq!(selection_of(&text_box, cx), 4..15, "mac {mac}, kind {index}");
+            // Each line goes to the next tab stop of its own indent.
+            load(&text_box, "  a\nb", cx);
+            press_as(cx, "mod-a tab", mac);
+            assert_eq!(text_of(&text_box, cx), "    a\n    b", "mac {mac}, kind {index}");
+            // On one line the spaces go to the next tab stop, in front of the selection.
+            load(&text_box, "  foo", cx);
+            press_as(cx, "left shift-left shift-left tab", mac);
+            assert_eq!(text_of(&text_box, cx), "    foo", "mac {mac}, kind {index}");
+            assert_eq!(selection_of(&text_box, cx), 4..6, "mac {mac}, kind {index}");
+            // Shift+Tab goes back to the tab stop before the indent.
+            load(&text_box, "      foo", cx);
+            press_as(cx, "shift-tab", mac);
+            assert_eq!(text_of(&text_box, cx), "    foo", "mac {mac}, kind {index}");
+            assert_eq!(selection_of(&text_box, cx), 7..7, "mac {mac}, kind {index}");
+            // And takes a leading tab off.
+            load(&text_box, "\tfoo", cx);
+            press_as(cx, "shift-tab", mac);
+            assert_eq!(text_of(&text_box, cx), "foo", "mac {mac}, kind {index}");
+            assert_eq!(selection_of(&text_box, cx), 3..3, "mac {mac}, kind {index}");
         }
     }
 }
