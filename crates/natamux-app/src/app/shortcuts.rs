@@ -16,6 +16,10 @@ pub use super::commands_files::{CloseTab, SaveFile, ShowDocsTab, ShowOpenFile, S
 pub use super::commands_stages::{MoveStageDown, MoveStageUp, ShowTasksProgress};
 use crate::ime::ime_check::SubmitWord;
 
+// Copy and Paste of the own terminal, bound in its `Terminal` context (plan 6.2.6). Not named
+// `terminal::Copy`/`terminal::Paste`: Zed's terminal crate still names those (S2.6 removes it).
+actions!(natamux, [TerminalCopy, TerminalPaste]);
+
 actions!(
     natamux,
     [
@@ -272,6 +276,12 @@ pub fn bind(cx: &mut App) {
     } else {
         ("ctrl-shift-c", "ctrl-shift-v")
     };
+    #[cfg(feature = "own-terminal")]
+    cx.bind_keys([
+        KeyBinding::new(copy, TerminalCopy, Some("Terminal")),
+        KeyBinding::new(paste, TerminalPaste, Some("Terminal")),
+    ]);
+    #[cfg(not(feature = "own-terminal"))]
     cx.bind_keys([
         KeyBinding::new(copy, terminal::Copy, Some("Terminal")),
         KeyBinding::new(paste, terminal::Paste, Some("Terminal")),

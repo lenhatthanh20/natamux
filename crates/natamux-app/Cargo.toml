@@ -6,7 +6,9 @@ license.workspace = true
 publish.workspace = true
 
 [features]
-# The own terminal (docs/plan-mit-license.md, S2), until it replaces Zed's.
+# The own terminal (docs/plan-mit-license.md, S2) is the default; without it the app builds on
+# Zed's terminal until S2.6 removes that.
+default = ["own-terminal"]
 own-terminal = ["dep:alacritty_terminal", "dep:shlex"]
 
 [dependencies]

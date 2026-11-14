@@ -3,8 +3,9 @@
 //! would write to a PTY (keys, pastes, IME text, answers to queries) goes to the socket. Our Zed
 //! fork adds three hooks for it: `Terminal::set_display_only_input` (the input),
 //! `display_only_writer` (parsing off the main thread) and `set_wakeup_pace` (how often it wakes).
-//! With the `own-terminal` feature the own terminal takes Zed's place, with the same names
-//! (`screen`, docs/plan-mit-license.md S2.4).
+//! The `own-terminal` feature, on by default since S2.5, puts the own terminal in Zed's place,
+//! with the same names (`screen`, docs/plan-mit-license.md S2.4); without it the app builds on
+//! Zed's terminal until S2.6.
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};

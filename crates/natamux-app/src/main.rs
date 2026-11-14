@@ -364,8 +364,8 @@ mod terminals {
     pub mod paste_rules;
     pub mod remote_terminal;
     pub mod shell_panes;
-    /// The own terminal (docs/plan-mit-license.md S2), behind its feature until it replaces
-    /// Zed's: `remote_terminal::screen` picks it. Some helpers are for its tests only.
+    /// The own terminal (docs/plan-mit-license.md S2), the default since S2.5 (feature
+    /// `own-terminal`): `remote_terminal::screen` picks it. Some helpers are for its tests only.
     #[cfg(feature = "own-terminal")]
     #[cfg_attr(not(test), allow(dead_code))]
     pub mod term {

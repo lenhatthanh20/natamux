@@ -24,6 +24,7 @@ use super::mouse_report::{MouseAction, report, wheel_report};
 use super::scrollbar::{self, Show};
 use crate::app::appearance::Inputs;
 use crate::app::appearance_rules::shows_scrollbars;
+use crate::app::shortcuts::{TerminalCopy, TerminalPaste};
 
 /// One phase of a blinking cursor.
 const BLINK: Duration = Duration::from_millis(500);
@@ -348,8 +349,8 @@ impl TermView {
                 }
             };
             menu.context(focus)
-                .action("Copy", Box::new(terminal::Copy))
-                .action("Paste", Box::new(terminal::Paste))
+                .action("Copy", Box::new(TerminalCopy))
+                .action("Paste", Box::new(TerminalPaste))
                 .entry(
                     "Paste Text",
                     None,
@@ -925,8 +926,8 @@ impl Render for TermView {
             .track_focus(&self.focus)
             .size_full()
             .on_key_down(cx.listener(Self::key_down))
-            .on_action(cx.listener(|view, _: &terminal::Copy, _, cx| view.copy(cx)))
-            .on_action(cx.listener(|view, _: &terminal::Paste, window, cx| {
+            .on_action(cx.listener(|view, _: &TerminalCopy, _, cx| view.copy(cx)))
+            .on_action(cx.listener(|view, _: &TerminalPaste, window, cx| {
                 view.paste_clipboard(true, window, cx)
             }))
             .child(TermElement::new(
