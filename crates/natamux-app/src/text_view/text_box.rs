@@ -7,7 +7,7 @@ use std::sync::Arc;
 use editor::actions::{MoveToEnd, SelectAll};
 use editor::{Editor, EditorEvent};
 use gpui::{
-    App, Context, Entity, FocusHandle, Focusable, IntoElement, Subscription, TextStyleRefinement,
+    App, AppContext as _, Context, Entity, EntityInputHandler, FocusHandle, Focusable, IntoElement, Subscription, TextStyleRefinement,
     Window,
 };
 use language::language_settings::SoftWrap;
@@ -109,7 +109,10 @@ impl TextBox {
         let editor = cx.new(|cx| {
             let mut editor = make(window, cx);
             editor.set_text_style_refinement(input_style(None, None));
-            editor.set_placeholder_text(placeholder, window, cx);
+            // An empty placeholder is not the same state as none: keep today's drawing.
+            if !placeholder.is_empty() {
+                editor.set_placeholder_text(placeholder, window, cx);
+            }
             editor
         });
         Self { editor }

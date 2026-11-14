@@ -5,7 +5,7 @@
 use std::collections::BTreeMap;
 
 use gpui::{
-    ClickEvent, Entity, EntityInputHandler, EventEmitter, FocusHandle, Focusable, Keystroke,
+    ClickEvent, Entity, EventEmitter, FocusHandle, Focusable, Keystroke,
     ListAlignment, ListState, Subscription, list,
 };
 use natamux_proto::tasks::task::Task;

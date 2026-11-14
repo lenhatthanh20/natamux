@@ -3,7 +3,7 @@
 //! or a click adds its stage.
 
 use gpui::{
-    AnyElement, Entity, EntityInputHandler, EventEmitter, FocusHandle, Focusable, ScrollHandle,
+    AnyElement, Entity, EventEmitter, FocusHandle, Focusable, ScrollHandle,
 };
 use natamux_proto::stages::capabilities::stage_name;
 use natamux_proto::stages::catalog::CatalogStage;

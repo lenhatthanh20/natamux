@@ -130,9 +130,47 @@ fn edits_and_blur_come_as_events_of_the_box_that_had_them(cx: &mut TestAppContex
     assert!(events.contains(&(0, TextEvent::Edited)), "{events:?}");
     assert!(events.contains(&(1, TextEvent::Edited)), "{events:?}");
     assert!(events.contains(&(0, TextEvent::Blurred)), "{events:?}");
-    assert!(
-        events.iter().all(|(index, event)| *index <= 1
-            || *event != TextEvent::Edited),
-        "{events:?}"
-    );
+    focus(&all[2], cx);
+    type_text(cx, "c");
+    focus(&all[3], cx);
+    type_text(cx, "d");
+    let events = host.read_with(cx, |host, _| host.events.clone());
+    assert!(events.contains(&(2, TextEvent::Edited)), "{events:?}");
+    assert!(events.contains(&(3, TextEvent::Edited)), "{events:?}");
+}
+
+/// One read-only box and what it told its host.
+struct ReadOnlyHost {
+    text_box: TextBox,
+    events: Vec<TextEvent>,
+    _subscription: Subscription,
+}
+
+impl Render for ReadOnlyHost {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        div().w(px(300.)).h(px(80.)).child(self.text_box.clone())
+    }
+}
+
+#[gpui::test]
+fn a_read_only_box_takes_no_typing_and_tells_no_edit(cx: &mut TestAppContext) {
+    let (host, _, cx) = test_views::init_app(cx, |_, window, cx| {
+        cx.new(|cx| {
+            let text_box = TextBox::plain(true, window, cx);
+            let subscription = text_box.subscribe(cx, |host: &mut ReadOnlyHost, _, event, _| {
+                host.events.push(event);
+            });
+            ReadOnlyHost {
+                text_box,
+                events: Vec::new(),
+                _subscription: subscription,
+            }
+        })
+    });
+    let text_box = host.read_with(cx, |host, _| host.text_box.clone());
+    focus(&text_box, cx);
+    type_text(cx, "x");
+    assert_eq!(cx.update(|_, cx| text_box.text(cx)), "");
+    let events = host.read_with(cx, |host, _| host.events.clone());
+    assert!(!events.contains(&TextEvent::Edited), "{events:?}");
 }
