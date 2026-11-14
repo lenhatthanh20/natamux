@@ -258,6 +258,11 @@ pub(super) fn watch_focus(
     cx: &mut Context<RemoteTerminal>,
 ) -> [Subscription; 2] {
     let focus_in = cx.on_focus_in(focus, window, |this, _, cx| {
+        // Back from the own view's menu: the focus never left as far as the shell knows.
+        #[cfg(feature = "own-terminal")]
+        if this.view.read(cx).back_from_menu {
+            return;
+        }
         if let Some(handle) = &this.handle {
             #[cfg(test)]
             super::sent::claimed();
@@ -266,6 +271,13 @@ pub(super) fn watch_focus(
         this.set_focused(true, cx);
     });
     // Not blur: focus in a child, such as the context menu, still counts as focused.
-    let focus_out = cx.on_focus_out(focus, window, |this, _, _, cx| this.set_focused(false, cx));
+    let focus_out = cx.on_focus_out(focus, window, |this, _, _window, cx| {
+        // The own view's menu is drawn outside its focus, but still counts as the view's.
+        #[cfg(feature = "own-terminal")]
+        if this.view.read(cx).menu_holds_focus(_window, cx) {
+            return;
+        }
+        this.set_focused(false, cx)
+    });
     [focus_in, focus_out]
 }

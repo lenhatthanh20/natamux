@@ -99,6 +99,12 @@ pub struct TermView {
     /// The text an input method is composing, drawn at the cursor.
     pub(super) marked: Option<String>,
     menu: Option<OpenMenu>,
+    /// The focus went from the view into its menu. The menu is drawn outside the view's focus,
+    /// as the old view's is (its pane does not look focused then), yet the shell is told
+    /// nothing: no focus report, no blink change (T-F1 rows).
+    menu_focus: bool,
+    /// The focus just came back to the view from its menu; read by the owner's focus watch.
+    pub(crate) back_from_menu: bool,
     press: Option<Press>,
     /// Wheel pixels not yet a whole line.
     wheel: Pixels,
@@ -120,14 +126,23 @@ impl TermView {
         let subscriptions = vec![
             cx.subscribe_in(&model, window, Self::model_event),
             cx.observe(&model, |_, _, cx| cx.notify()),
-            cx.on_focus_in(&focus, window, Self::focus_in),
-            // The focus back on the view itself closes its menu.
+            // The focus back on the view itself closes its menu. Before the focus-in listeners,
+            // which read where the focus came from.
             cx.on_focus(&focus, window, |view, _, cx| {
+                view.back_from_menu = std::mem::take(&mut view.menu_focus);
                 if view.menu.take().is_some() {
                     cx.notify();
                 }
             }),
-            cx.on_focus_out(&focus, window, |view, _, _, cx| view.focus_out(cx)),
+            cx.on_focus_in(&focus, window, Self::focus_in),
+            cx.on_focus_out(&focus, window, |view, _, window, cx| {
+                view.back_from_menu = false;
+                if view.menu_holds_focus(window, cx) {
+                    view.menu_focus = true;
+                } else {
+                    view.focus_out(cx);
+                }
+            }),
             // A new font measures the cells again, so the shell gets the new grid size.
             cx.observe_global::<crate::app::appearance::Appearance>(|_, cx| cx.notify()),
         ];
@@ -141,6 +156,8 @@ impl TermView {
             },
             marked: None,
             menu: None,
+            menu_focus: false,
+            back_from_menu: false,
             press: None,
             wheel: px(0.),
             reported: None,
@@ -180,15 +197,14 @@ impl TermView {
     }
 
     fn focus_in(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.back_from_menu {
+            return;
+        }
         self.focused = true;
         self.model.update(cx, |model, _| model.focus_in());
         self.follow_blink(cx);
         window.invalidate_character_coordinates();
-        // Focus that goes straight into the menu changes nothing drawn, and the old view drew
-        // nothing for it: its pane keeps the look it had (`terminal-context-menu`).
-        if self.focus.is_focused(window) {
-            cx.notify();
-        }
+        cx.notify();
     }
 
     fn focus_out(&mut self, cx: &mut Context<Self>) {
@@ -329,6 +345,13 @@ impl TermView {
         }
     }
 
+    /// The view's open menu has the focus.
+    pub(crate) fn menu_holds_focus(&self, window: &Window, cx: &App) -> bool {
+        self.menu
+            .as_ref()
+            .is_some_and(|open| open.menu.focus_handle(cx).contains_focused(window, cx))
+    }
+
     fn select_all(&mut self, cx: &mut Context<Self>) {
         self.model.update(cx, |model, _| model.select_all());
         cx.notify();
@@ -370,6 +393,9 @@ impl TermView {
         let dismiss = cx.subscribe_in(&menu, window, |view, menu, _: &DismissEvent, window, cx| {
             if menu.focus_handle(cx).contains_focused(window, cx) {
                 window.focus(&view.focus, cx);
+            } else if std::mem::take(&mut view.menu_focus) {
+                // The focus went on from the menu to somewhere else.
+                view.focus_out(cx);
             }
             view.menu = None;
             cx.notify();
@@ -929,21 +955,26 @@ impl Render for TermView {
             )
             .with_priority(1)
         });
+        // The menu sits outside the screen's focus and key context, as the old view's does.
         div()
-            .key_context("Terminal")
-            .track_focus(&self.focus)
             .size_full()
             .bg(cx.theme().colors().editor_background)
-            .on_key_down(cx.listener(Self::key_down))
-            .on_action(cx.listener(|view, _: &TerminalCopy, _, cx| view.copy(cx)))
-            .on_action(cx.listener(|view, _: &TerminalPaste, window, cx| {
-                view.paste_clipboard(true, window, cx)
-            }))
-            .child(TermElement::new(
-                cx.entity(),
-                self.model.clone(),
-                self.focus.clone(),
-            ))
+            .child(
+                div()
+                    .key_context("Terminal")
+                    .track_focus(&self.focus)
+                    .size_full()
+                    .on_key_down(cx.listener(Self::key_down))
+                    .on_action(cx.listener(|view, _: &TerminalCopy, _, cx| view.copy(cx)))
+                    .on_action(cx.listener(|view, _: &TerminalPaste, window, cx| {
+                        view.paste_clipboard(true, window, cx)
+                    }))
+                    .child(TermElement::new(
+                        cx.entity(),
+                        self.model.clone(),
+                        self.focus.clone(),
+                    )),
+            )
             .children(menu)
     }
 }

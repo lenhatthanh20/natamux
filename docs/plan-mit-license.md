@@ -1297,6 +1297,11 @@ S2.5 Flip
   - perf medians within the 7.3 rule;
   - the owner's manual gates of 7.3 on the `natamux-app-macos-arm64` artifact.
 - Risk: what the gates find. Fix, then repeat the gates.
+- Done in S2.5: `default = ["own-terminal"]`; the 8.5 step now runs clippy and the tests with `--no-default-features` (Zed's terminal), in `check` and in `app-macos-tests`, until S2.6. The own build binds `natamux::TerminalCopy`/`natamux::TerminalPaste` in `Terminal` (`app/shortcuts.rs`) and the own menu's Copy and Paste rows send them; the build without the feature keeps Zed's `terminal::Copy`/`terminal::Paste`. Paint step 13: while a link shows under the pointer with the secondary key, the element lays a full-size div over itself with `Tooltip::text(<the hovered word>)` (gpui's 500 ms delay; a `file://` link shows its path). Test `a_link_shown_with_the_key_has_a_tooltip_with_its_target`; new shot state `terminal-link-tooltip` (its base is a run of the old code, 43569119749; the own view matches it exactly). What the shot compare of the flip found about the old view, now kept by the own one (DT14):
+  - The 14 px track is kept only when the scrollbar was not hidden as the view was made: no track in the shots (`show: never`), so the grid has one or two more columns there. The T-G1 rows keep the track in both states because their view is made before the shot state is set.
+  - The highlights (find matches, selection) are tessellated paths: a raw gpui path fills a fan from its start, which is wrong for an outline with a corner turned in.
+  - The screen is drawn clipped to the rows of the grid, over the view's container in `editor_background`; so a tooltip's shadow over the spare pixels below the rows stays under the screen (`button-disabled-tooltip`).
+  - The menu is outside the view's focus and key context: the pane does not look focused while the menu has the focus, yet the shell is told nothing (no focus report, no size claim on the way back, T-F1).
 
 S2.6 Remove the old terminal
 - Goal: no Zed `terminal`/`terminal_view` in the app.
