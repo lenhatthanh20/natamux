@@ -1,12 +1,16 @@
 //! The terminal `--shot` states of the MIT move (docs/plan-mit-license.md 7.2): every kind of
 //! cell, the cursor shapes, a selection over find matches, the alternate screen, history scrolled
-//! up, the context menu and the scrollbar. Each one gives a terminal a screen of its own in the
-//! fake; the steps then act as a user would: a focus, a drag, a wheel turn, a right click.
+//! up, the context menu, the scrollbar and a hovered link's tooltip. Each one gives a terminal a
+//! screen of its own in the fake; the steps then act as a user would: a focus, a drag, a wheel
+//! turn, a right click, a pointer held on a link with the secondary key.
 
 use std::fmt::Write as _;
 use std::time::Duration;
 
-use gpui::{App, AsyncApp, Focusable, MouseButton, Pixels, Point, WindowHandle, point};
+use gpui::{
+    App, AsyncApp, Focusable, Modifiers, ModifiersChangedEvent, MouseButton, MouseMoveEvent,
+    Pixels, PlatformInput, Point, WindowHandle, point, px,
+};
 
 use super::fake_daemon;
 use super::options::Shot;
@@ -45,6 +49,12 @@ const SCROLLED_LINES: f32 = 12.;
 const DRAG: ((usize, usize), (usize, usize)) = ((2, 2), (3, 20));
 /// The cell of the right click: inside `Claude` on the first line of the asking agent.
 const RIGHT_CLICK: (usize, usize) = (0, 4);
+/// The cell the pointer holds with the secondary key: inside the URL of `link_screen`.
+const LINK_CELL: (usize, usize) = (1, 16);
+/// The link under the pointer is looked up and drawn within this.
+const HOVERED: Duration = Duration::from_millis(300);
+/// The tooltip shows 500 ms after the pointer moves over it (gpui's delay).
+const TOOLTIP_SHOWN: Duration = Duration::from_millis(800);
 
 pub fn is_terminal_shot(shot: Shot) -> bool {
     matches!(
@@ -58,6 +68,7 @@ pub fn is_terminal_shot(shot: Shot) -> bool {
             | Shot::TerminalScrolled
             | Shot::TerminalContextMenu
             | Shot::TerminalScrollbar
+            | Shot::TerminalLinkTooltip
     )
 }
 
@@ -68,6 +79,7 @@ pub fn prepare(shot: Shot) {
         Shot::TerminalLook => fake.set_screen(ASKING, ONE, look()),
         Shot::TerminalAltScreen => fake.set_screen(ASKING, ONE, alt_screen()),
         Shot::TerminalScrolled | Shot::TerminalScrollbar => fake.set_screen(ASKING, ONE, history()),
+        Shot::TerminalLinkTooltip => fake.set_screen(ASKING, ONE, link_screen()),
         Shot::TerminalCursors | Shot::TerminalCursorsUnderline | Shot::TerminalCursorsBar => {
             for (terminal, shape) in group(shot) {
                 fake.set_screen(RUNNING, terminal, cursor_screen(shape));
@@ -117,8 +129,41 @@ pub async fn run(handle: WindowHandle<Root>, shot: Shot, cx: &mut AsyncApp) {
                 send(handle, click(MouseButton::Right, at), cx);
             }
         }
+        Shot::TerminalLinkTooltip => {
+            focus(handle, ASKING, ONE, cx);
+            wait(FOCUSED, cx).await;
+            if let Some(at) = cell(handle, ASKING, LINK_CELL, cx) {
+                // The key, then the pointer onto the link: it is looked up and drawn. A second
+                // move over the drawn link starts the tooltip's delay.
+                send(handle, hold_on_link(at), cx);
+                wait(HOVERED, cx).await;
+                send(handle, hold_on_link(point(at.x + px(2.), at.y)), cx);
+                wait(TOOLTIP_SHOWN, cx).await;
+            }
+        }
         _ => {}
     }
+}
+
+/// The secondary key (Cmd on macOS, Ctrl elsewhere) down, and the pointer at `position`.
+fn hold_on_link(position: Point<Pixels>) -> Vec<PlatformInput> {
+    let mac = cfg!(target_os = "macos");
+    let modifiers = Modifiers {
+        platform: mac,
+        control: !mac,
+        ..Modifiers::default()
+    };
+    vec![
+        PlatformInput::ModifiersChanged(ModifiersChangedEvent {
+            modifiers,
+            capslock: Default::default(),
+        }),
+        PlatformInput::MouseMove(MouseMoveEvent {
+            position,
+            pressed_button: None,
+            modifiers,
+        }),
+    ]
 }
 
 fn task_of(shot: Shot) -> &'static str {
@@ -268,6 +313,13 @@ pub(crate) fn look() -> String {
     );
     out.push_str("\x1b[1m❯\x1b[0m ");
     out
+}
+
+/// A line of output with a URL in it, then a prompt.
+fn link_screen() -> String {
+    "\x1b[1m❯\x1b[0m cat NOTES\r\nThe docs are at https://example.com/natamux/docs for now.\r\n\
+     \x1b[1m❯\x1b[0m "
+        .into()
 }
 
 /// A full screen program: the alternate screen in coloured rows, a title and a status line,

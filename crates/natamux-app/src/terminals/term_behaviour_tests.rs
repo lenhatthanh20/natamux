@@ -2411,6 +2411,55 @@ mod own {
         assert_eq!(alpha(cx), 0.);
     }
 
+    // A link shown with the secondary key gets a tooltip with its target after the tooltip delay
+    // (6.2.6 links, S2.5); a plain hover over it gets none.
+    #[gpui::test]
+    fn a_link_shown_with_the_key_has_a_tooltip_with_its_target(cx: &mut TestAppContext) {
+        use std::cell::RefCell;
+
+        use gpui::{Modifiers, VisualTestContext, point};
+
+        fn wait(ms: u64, cx: &mut VisualTestContext) {
+            cx.executor().advance_clock(Duration::from_millis(ms));
+            cx.run_until_parked();
+            super::draw(cx);
+        }
+
+        let (_, terminal, cx) = super::open(cx, gpui::size(px(1000.), px(340.)), false);
+        super::feed(
+            &terminal,
+            "web https://example.com/tip tail\r\nplain text",
+            cx,
+        );
+        let shown = Rc::new(RefCell::new(Vec::new()));
+        let seen = shown.clone();
+        cx.update(|_, cx| {
+            cx.observe_new(move |tooltip: &mut ui::Tooltip, _, _| {
+                seen.borrow_mut().push(tooltip.title_text());
+            })
+            .detach()
+        });
+        let at = super::cell(&terminal, (0, 10), cx);
+        let near = point(at.x + px(2.), at.y);
+
+        super::mouse_move(at, None, Modifiers::none(), cx);
+        super::mouse_move(near, None, Modifiers::none(), cx);
+        wait(1000, cx);
+        assert!(shown.borrow().is_empty(), "a plain hover showed a tooltip");
+
+        let key = super::mods(super::secondary());
+        cx.simulate_modifiers_change(key);
+        super::mouse_move(at, None, key, cx);
+        super::settle(cx);
+        super::mouse_move(near, None, key, cx);
+        wait(1000, cx);
+        assert_eq!(
+            *shown.borrow(),
+            [Some("https://example.com/tip".into())],
+            "the link's tooltip"
+        );
+    }
+
     // T-E1: a scroll, a resize and a select queued before one sync run in that order, and give
     // what the old rows pinned: Select All, asked before the resize, leaves out the 9 lines the
     // resize took from the screen.

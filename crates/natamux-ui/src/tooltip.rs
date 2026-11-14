@@ -64,6 +64,14 @@ impl Tooltip {
         }
     }
 
+    /// The title when it is text; tests read what a tooltip shows.
+    pub fn title_text(&self) -> Option<SharedString> {
+        match &self.title {
+            Title::Text(text) => Some(text.clone()),
+            Title::Element(_) => None,
+        }
+    }
+
     pub fn meta(mut self, meta: impl Into<SharedString>) -> Self {
         self.meta = Some(meta.into());
         self

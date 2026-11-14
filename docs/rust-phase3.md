@@ -254,6 +254,7 @@ The move off Zed's GPL crates (`docs/plan-mit-license.md`) redraws the terminal,
 | `terminal-scrolled` | 300 lines of history, a wheel turn of 12 lines up: Jump to latest |
 | `terminal-context-menu` | A right click on "Claude": the word selected and the terminal's menu with the Copy and Paste keys |
 | `terminal-scrollbar` | 300 lines of history with the scrollbars shown |
+| `terminal-link-tooltip` | A URL held under the pointer with Cmd (Ctrl off macOS): the link drawn as hovered, the hand pointer and the tooltip with the URL |
 | `text-box-selection` | The Add a task dialog with its title typed and the last two words selected |
 | `text-box-selection-unfocused` | The same after Tab: the selection in a box without focus |
 | `workspace-editor-scrollbar` | A 1,200-line TypeScript file paged down, four lines selected, the scrollbars shown, long lines that do not wrap |

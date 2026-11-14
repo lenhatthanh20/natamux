@@ -171,6 +171,8 @@ pub enum Shot {
     TerminalScrolled,
     TerminalContextMenu,
     TerminalScrollbar,
+    /// A link shown with the secondary key and its tooltip (S2.5).
+    TerminalLinkTooltip,
     TextBoxSelection,
     TextBoxSelectionUnfocused,
     WorkspaceEditorScrollbar,
@@ -198,7 +200,7 @@ pub enum Shot {
 }
 
 impl Shot {
-    pub const ALL: [Shot; 163] = [
+    pub const ALL: [Shot; 164] = [
         Shot::TasksTable,
         Shot::TasksBoard,
         Shot::BoardHoverCard,
@@ -318,6 +320,7 @@ impl Shot {
         Shot::TerminalScrolled,
         Shot::TerminalContextMenu,
         Shot::TerminalScrollbar,
+        Shot::TerminalLinkTooltip,
         Shot::TextBoxSelection,
         Shot::TextBoxSelectionUnfocused,
         Shot::WorkspaceEditorScrollbar,
@@ -485,6 +488,7 @@ impl Shot {
             Shot::TerminalScrolled => "terminal-scrolled",
             Shot::TerminalContextMenu => "terminal-context-menu",
             Shot::TerminalScrollbar => "terminal-scrollbar",
+            Shot::TerminalLinkTooltip => "terminal-link-tooltip",
             Shot::TextBoxSelection => "text-box-selection",
             Shot::TextBoxSelectionUnfocused => "text-box-selection-unfocused",
             Shot::WorkspaceEditorScrollbar => "workspace-editor-scrollbar",

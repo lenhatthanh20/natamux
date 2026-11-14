@@ -1,7 +1,8 @@
 //! The element of an own terminal (docs/plan-mit-license.md 6.2.6). Before each paint it lays
 //! out the grid in its bounds, gives the model the size and lets it sync, then draws the copy of
 //! the screen: the background, the cell backgrounds, the find matches and the selection, the
-//! text, the block elements, the input method's text, the cursor and the scrollbar.
+//! text, the block elements, the input method's text, the cursor, the scrollbar and the tooltip
+//! of a hovered link.
 
 use std::collections::HashMap;
 use std::ops::RangeInclusive;
@@ -10,14 +11,15 @@ use alacritty_terminal::index::Point as GridPoint;
 use alacritty_terminal::term::TermMode;
 use alacritty_terminal::vte::ansi::CursorShape;
 use gpui::{
-    App, BorderStyle, Bounds, ContentMask, Corners, CursorStyle, DispatchPhase, Element, ElementId,
-    Entity, FocusHandle, Font, FontFeatures, FontStyle, FontWeight, GlobalElementId, Hitbox,
-    HitboxBehavior, Hsla, InspectorElementId, IntoElement, LayoutId, ModifiersChangedEvent,
-    MouseDownEvent, MouseMoveEvent, MouseUpEvent, Path, Pixels, Point, ScrollWheelEvent,
-    ShapedLine, Style, TextAlign, TextRun, UnderlineStyle, Window, fill, outline, point, px,
-    relative, size,
+    AnyElement, App, BorderStyle, Bounds, ContentMask, Corners, CursorStyle, DispatchPhase,
+    Element, ElementId, Entity, FocusHandle, Font, FontFeatures, FontStyle, FontWeight,
+    GlobalElementId, Hitbox, HitboxBehavior, Hsla, InspectorElementId, InteractiveElement,
+    IntoElement, LayoutId, ModifiersChangedEvent, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
+    Path, Pixels, Point, ScrollWheelEvent, ShapedLine, StatefulInteractiveElement, Style, Styled,
+    TextAlign, TextRun, UnderlineStyle, Window, div, fill, outline, point, px, relative, size,
 };
 use theme::ActiveTheme;
+use ui::Tooltip;
 
 use super::cell_layout::{self, BLOCK_COLUMNS, BLOCK_LINES, BackgroundRect, MINIMUM_CONTRAST};
 use super::grid_layout::grid;
@@ -136,6 +138,8 @@ pub struct Frame {
     line_height: Pixels,
     /// The pointer shows a hand: a link shows under it.
     over_link: bool,
+    /// Over the whole element while a link shows: a tooltip with its target.
+    link_tooltip: Option<AnyElement>,
 }
 
 impl Element for TermElement {
@@ -444,6 +448,11 @@ impl Element for TermElement {
             content.display_offset,
         );
         let over_link = content.last_hovered_word.is_some() && window.modifiers().secondary();
+        let link_target = content
+            .last_hovered_word
+            .as_ref()
+            .filter(|_| over_link)
+            .map(|word| word.word.clone());
         let background = colours.terminal_background;
 
         let laid = Laid {
@@ -463,6 +472,15 @@ impl Element for TermElement {
         if self.view.read(cx).bar_fading(cx) {
             window.request_animation_frame();
         }
+        let link_tooltip = link_target.map(|target| {
+            let mut tooltip = div()
+                .id("terminal-link")
+                .size_full()
+                .tooltip(Tooltip::text(target))
+                .into_any_element();
+            tooltip.prepaint_as_root(bounds.origin, bounds.size.into(), window, cx);
+            tooltip
+        });
         Frame {
             hitbox,
             track,
@@ -476,6 +494,7 @@ impl Element for TermElement {
             scrollbar,
             line_height,
             over_link,
+            link_tooltip,
         }
     }
 
@@ -570,6 +589,9 @@ impl Element for TermElement {
                 window.paint_quad(
                     fill(bar.thumb, bar.thumb_colour).corner_radii(Corners::all(radius)),
                 );
+            }
+            if let Some(tooltip) = &mut frame.link_tooltip {
+                tooltip.paint(window, cx);
             }
         });
     }
