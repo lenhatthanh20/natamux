@@ -237,7 +237,10 @@ fn t_key_cmd_backspace_cuts_to_the_start_of_the_line_in_many_lines(cx: &mut Test
     for index in [AREA, FILL, PLAIN] {
         let text_box = text_box(&host, index, cx);
         focus(&text_box, cx);
-        let cases = [("cmd-backspace", "one two\n|"), ("up cmd-backspace", "|wo\nthree")];
+        let cases = [
+            ("cmd-backspace", "one two\n|"),
+            ("up cmd-backspace", "|wo\nthree"),
+        ];
         assert_none(differing(cx, &text_box, "one two\nthree", &cases, true));
     }
 }
@@ -273,7 +276,13 @@ fn t_key_many_lines_moves_selects_and_pages(cx: &mut TestAppContext) {
         for index in [AREA, FILL, PLAIN] {
             let text_box = text_box(&host, index, cx);
             focus(&text_box, cx);
-            assert_none(differing(cx, &text_box, "one two\nthree\nfour five", &cases, mac));
+            assert_none(differing(
+                cx,
+                &text_box,
+                "one two\nthree\nfour five",
+                &cases,
+                mac,
+            ));
         }
     }
 }
@@ -298,9 +307,17 @@ fn t_key_page_up_and_down_move_by_a_page(cx: &mut TestAppContext) {
             type_text(cx, "|");
             let down = caret_line(&text_of(&text_box, cx));
             // Record: the distance of a page is pinned once CI has printed it.
-            eprintln!("T-KEY-PAGE mac {mac}, kind {index}: Page Up from 59 to {up}, Page Down from 0 to {down}");
-            assert!(up < 59, "mac {mac}, kind {index}: Page Up went down to line {up}");
-            assert!(down > 0, "mac {mac}, kind {index}: Page Down went to line {down}");
+            eprintln!(
+                "T-KEY-PAGE mac {mac}, kind {index}: Page Up from 59 to {up}, Page Down from 0 to {down}"
+            );
+            assert!(
+                up < 59,
+                "mac {mac}, kind {index}: Page Up went down to line {up}"
+            );
+            assert!(
+                down > 0,
+                "mac {mac}, kind {index}: Page Down went to line {down}"
+            );
         }
     }
 }
@@ -380,13 +397,24 @@ fn t_key_p_a_one_line_box_passes_its_keys_to_the_parent(cx: &mut TestAppContext)
         let (host, cx) = setup(cx, mac, 300.);
         let one = text_box(&host, ONE, cx);
         focus(&one, cx);
-        for keys in ["enter", "up", "down", "tab", "shift-tab", "escape", "mod-enter"] {
+        for keys in [
+            "enter",
+            "up",
+            "down",
+            "tab",
+            "shift-tab",
+            "escape",
+            "mod-enter",
+        ] {
             load(&one, "abc", cx);
             host.update(cx, |host, _| host.keys.clear());
             press_as(cx, keys, mac);
             let reached = host.read_with(cx, |host, _| host.keys.clone());
             assert_eq!(reached, [read_keys(keys, mac)], "mac {mac}, {keys}");
-            assert!(one.is_focused_in(cx), "mac {mac}, {keys}: the focus left the box");
+            assert!(
+                one.is_focused_in(cx),
+                "mac {mac}, {keys}: the focus left the box"
+            );
         }
     }
 }
@@ -402,14 +430,21 @@ fn t_key_p_a_box_of_many_lines_passes_escape_and_mod_enter_only(cx: &mut TestApp
                 host.update(cx, |host, _| host.keys.clear());
                 press_as(cx, keys, mac);
                 let reached = host.read_with(cx, |host, _| host.keys.clone());
-                assert_eq!(reached, [read_keys(keys, mac)], "mac {mac}, kind {index}, {keys}");
+                assert_eq!(
+                    reached,
+                    [read_keys(keys, mac)],
+                    "mac {mac}, kind {index}, {keys}"
+                );
             }
             // Enter, Up and Down are the box's own keys: the parent does not hear them.
             for keys in ["enter", "up", "down"] {
                 host.update(cx, |host, _| host.keys.clear());
                 press_as(cx, keys, mac);
                 let reached = host.read_with(cx, |host, _| host.keys.clone());
-                assert!(reached.is_empty(), "mac {mac}, kind {index}, {keys}: {reached:?}");
+                assert!(
+                    reached.is_empty(),
+                    "mac {mac}, kind {index}, {keys}: {reached:?}"
+                );
             }
         }
     }
@@ -443,11 +478,19 @@ fn t_clip_copy_and_cut_with_an_empty_selection_take_the_line(cx: &mut TestAppCon
             press_as(cx, "left", mac);
             cx.write_to_clipboard(gpui::ClipboardItem::new_string("old".into()));
             press_as(cx, "mod-c", mac);
-            assert_eq!(clipboard(cx).as_deref(), Some("abc\n"), "mac {mac}, copy, kind {index}");
+            assert_eq!(
+                clipboard(cx).as_deref(),
+                Some("abc\n"),
+                "mac {mac}, copy, kind {index}"
+            );
             assert_eq!(text_of(&text_box, cx), "abc");
             press_as(cx, "mod-x", mac);
             // Today a cut of the last line has no line end; a copy has one.
-            assert_eq!(clipboard(cx).as_deref(), Some("abc"), "mac {mac}, cut, kind {index}");
+            assert_eq!(
+                clipboard(cx).as_deref(),
+                Some("abc"),
+                "mac {mac}, cut, kind {index}"
+            );
             assert_eq!(text_of(&text_box, cx), "", "mac {mac}, cut, kind {index}");
         }
         // In a box of many lines only the line of the caret goes.
@@ -469,7 +512,11 @@ fn t_clip_copy_and_cut_of_a_selection_and_paste_over_it(cx: &mut TestAppContext)
             load(&text_box, "abcd", cx);
             press_as(cx, "home right shift-right shift-right", mac);
             press_as(cx, "mod-c", mac);
-            assert_eq!(clipboard(cx).as_deref(), Some("bc"), "mac {mac}, kind {index}");
+            assert_eq!(
+                clipboard(cx).as_deref(),
+                Some("bc"),
+                "mac {mac}, kind {index}"
+            );
             press_as(cx, "mod-x", mac);
             assert_eq!(text_of(&text_box, cx), "ad", "mac {mac}, kind {index}");
             press_as(cx, "mod-v", mac);
@@ -516,9 +563,17 @@ fn t_undo_fast_typing_is_one_step_and_a_pause_splits_it(cx: &mut TestAppContext)
             type_text(cx, "b");
             type_text(cx, "c");
             press_as(cx, "mod-z", mac);
-            assert_eq!(text_of(&text_box, cx), "", "mac {mac}, kind {index}: fast typing");
+            assert_eq!(
+                text_of(&text_box, cx),
+                "",
+                "mac {mac}, kind {index}: fast typing"
+            );
             press_as(cx, "mod-shift-z", mac);
-            assert_eq!(text_of(&text_box, cx), "abc", "mac {mac}, kind {index}: redo");
+            assert_eq!(
+                text_of(&text_box, cx),
+                "abc",
+                "mac {mac}, kind {index}: redo"
+            );
 
             load(&text_box, "", cx);
             pause(cx);
@@ -526,11 +581,23 @@ fn t_undo_fast_typing_is_one_step_and_a_pause_splits_it(cx: &mut TestAppContext)
             pause(cx);
             type_text(cx, "c");
             press_as(cx, "mod-z", mac);
-            assert_eq!(text_of(&text_box, cx), "ab", "mac {mac}, kind {index}: after a pause");
+            assert_eq!(
+                text_of(&text_box, cx),
+                "ab",
+                "mac {mac}, kind {index}: after a pause"
+            );
             press_as(cx, "mod-z", mac);
-            assert_eq!(text_of(&text_box, cx), "", "mac {mac}, kind {index}: the first step");
+            assert_eq!(
+                text_of(&text_box, cx),
+                "",
+                "mac {mac}, kind {index}: the first step"
+            );
             press_as(cx, "mod-shift-z mod-shift-z", mac);
-            assert_eq!(text_of(&text_box, cx), "abc", "mac {mac}, kind {index}: redo twice");
+            assert_eq!(
+                text_of(&text_box, cx),
+                "abc",
+                "mac {mac}, kind {index}: redo twice"
+            );
         }
     }
 }
@@ -548,7 +615,11 @@ fn t_undo_set_text_can_be_undone(cx: &mut TestAppContext) {
             press_as(cx, "mod-z", mac);
             assert_eq!(text_of(&text_box, cx), "first", "mac {mac}, kind {index}");
             press_as(cx, "mod-shift-z", mac);
-            assert_eq!(text_of(&text_box, cx), "second", "mac {mac}, kind {index}: redo");
+            assert_eq!(
+                text_of(&text_box, cx),
+                "second",
+                "mac {mac}, kind {index}: redo"
+            );
         }
     }
 }
@@ -580,14 +651,22 @@ fn t_ev_the_events_of_typing_paste_undo_and_set_text(cx: &mut TestAppContext) {
         let edited = |count: usize| vec![TextEvent::Edited; count];
 
         type_text(cx, "ab");
-        assert_eq!(events_of(&host, index, cx), edited(2), "kind {index}: typing");
+        assert_eq!(
+            events_of(&host, index, cx),
+            edited(2),
+            "kind {index}: typing"
+        );
         // The handler read the text while the event was an effect, not inside the change.
         assert_eq!(host.read_with(cx, |host, _| host.seen.clone()), "ab");
 
         forget_events(&host, cx);
         cx.write_to_clipboard(gpui::ClipboardItem::new_string("cd".into()));
         press_as(cx, "mod-v", false);
-        assert_eq!(events_of(&host, index, cx), edited(1), "kind {index}: paste");
+        assert_eq!(
+            events_of(&host, index, cx),
+            edited(1),
+            "kind {index}: paste"
+        );
 
         forget_events(&host, cx);
         press_as(cx, "mod-z", false);
@@ -595,7 +674,11 @@ fn t_ev_the_events_of_typing_paste_undo_and_set_text(cx: &mut TestAppContext) {
 
         forget_events(&host, cx);
         load(&text_box, "other", cx);
-        assert_eq!(events_of(&host, index, cx), edited(1), "kind {index}: set_text, other text");
+        assert_eq!(
+            events_of(&host, index, cx),
+            edited(1),
+            "kind {index}: set_text, other text"
+        );
         assert_eq!(host.read_with(cx, |host, _| host.seen.clone()), "other");
 
         // The same text again: record whether it tells, but it may tell at most once.
@@ -603,14 +686,25 @@ fn t_ev_the_events_of_typing_paste_undo_and_set_text(cx: &mut TestAppContext) {
         load(&text_box, "other", cx);
         let same = events_of(&host, index, cx).len();
         eprintln!("T-EV-1 kind {index}: set_text with the same text gave {same} Edited");
-        assert!(same <= 1, "kind {index}: set_text with the same text gave {same}");
+        assert!(
+            same <= 1,
+            "kind {index}: set_text with the same text gave {same}"
+        );
 
         forget_events(&host, cx);
         cx.update(|window, cx| text_box.insert_at_caret("!", window, cx));
-        assert_eq!(events_of(&host, index, cx), edited(1), "kind {index}: insert_at_caret");
+        assert_eq!(
+            events_of(&host, index, cx),
+            edited(1),
+            "kind {index}: insert_at_caret"
+        );
         forget_events(&host, cx);
         cx.update(|window, cx| text_box.clear(window, cx));
-        assert_eq!(events_of(&host, index, cx), edited(1), "kind {index}: clear");
+        assert_eq!(
+            events_of(&host, index, cx),
+            edited(1),
+            "kind {index}: clear"
+        );
     }
 }
 
@@ -623,7 +717,11 @@ fn t_ev_blurred_comes_when_the_focus_leaves(cx: &mut TestAppContext) {
         forget_events(&host, cx);
         let other = host.read_with(cx, |host, _| host.other.clone());
         focus_handle(&other, cx);
-        assert_eq!(events_of(&host, index, cx), [TextEvent::Blurred], "kind {index}");
+        assert_eq!(
+            events_of(&host, index, cx),
+            [TextEvent::Blurred],
+            "kind {index}"
+        );
         // Other boxes heard nothing.
         let all = host.read_with(cx, |host, _| host.events.len());
         assert_eq!(all, 1, "kind {index}");
@@ -659,7 +757,11 @@ fn t_mask_the_real_text_stays_and_toggling_keeps_the_caret(cx: &mut TestAppConte
 
 /// The box of `text_box` on screen, and the window rect of the chars `range` (UTF-16 units), as
 /// the input method asks for them.
-fn char_rect(text_box: &TextBox, range: Range<usize>, cx: &mut VisualTestContext) -> Bounds<Pixels> {
+fn char_rect(
+    text_box: &TextBox,
+    range: Range<usize>,
+    cx: &mut VisualTestContext,
+) -> Bounds<Pixels> {
     text_box.editor().update_in(cx, |editor, window, cx| {
         let area = *editor.last_bounds().expect("the box was drawn");
         editor
@@ -710,8 +812,14 @@ fn t_look_a_box_of_many_lines_wraps_and_steps_by_the_line_height(cx: &mut TestAp
         eprintln!("T-LOOK-1 kind {index}: rows {rows:?}");
         assert!(f32::from(step) > 0.);
         for pair in rows.windows(2) {
-            assert!(close(pair[1].origin.y - pair[0].origin.y, step, 0.5), "kind {index}");
-            assert!(close(pair[1].origin.x, pair[0].origin.x, 0.5), "kind {index}");
+            assert!(
+                close(pair[1].origin.y - pair[0].origin.y, step, 0.5),
+                "kind {index}"
+            );
+            assert!(
+                close(pair[1].origin.x, pair[0].origin.x, 0.5),
+                "kind {index}"
+            );
         }
         // The row height is the line height: a row's box is as high as the step down.
         assert!(close(rows[0].size.height, step, 0.5), "kind {index}");
@@ -729,9 +837,15 @@ fn t_look_the_wrap_row_count_at_a_fixed_width(cx: &mut TestAppContext) {
     let first = char_rect(&area, 0..1, cx);
     let last = char_rect(&area, text.len() - 2..text.len() - 1, cx);
     let below = f32::from(last.origin.y - first.origin.y) / f32::from(first.size.height);
-    eprintln!("T-LOOK-1 wrap: {} chars in 200 px, last row is {below} below the first", text.len());
+    eprintln!(
+        "T-LOOK-1 wrap: {} chars in 200 px, last row is {below} below the first",
+        text.len()
+    );
     // 72 chars do not fit one row of 200 px: the text wrapped.
-    assert!(below >= 1., "the text did not wrap: {below} rows below the first");
+    assert!(
+        below >= 1.,
+        "the text did not wrap: {below} rows below the first"
+    );
 }
 
 #[gpui::test]

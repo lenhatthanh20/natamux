@@ -226,7 +226,8 @@ fn t12_the_done_when_placeholder_follows_the_stage(cx: &mut TestAppContext) {
         let done = fields
             .sheet
             .read_with(cx, |sheet, _| sheet.fields.done_when.editor.clone());
-        done.editor().update(cx, |editor, cx| editor.placeholder_text(cx))
+        done.editor()
+            .update(cx, |editor, cx| editor.placeholder_text(cx))
     };
     let own = |fields: &Fields, id: &str, cx: &mut VisualTestContext| {
         let stage = stage_of(fields, id, cx);

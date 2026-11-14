@@ -399,11 +399,11 @@ mod text_view {
     #[cfg(test)]
     mod code_typing_tests;
     #[cfg(test)]
-    mod text_box_facade_tests;
-    #[cfg(test)]
     mod ime_tests;
     #[cfg(test)]
     mod mouse_tests;
+    #[cfg(test)]
+    mod text_box_facade_tests;
     #[cfg(test)]
     mod text_box_tests;
     // The code view uses it from S4.3; until then only its tests do.

@@ -10,7 +10,9 @@ use std::ops::Range;
 use gpui::{EntityInputHandler as _, TestAppContext, VisualTestContext};
 
 use super::text_box::TextBox;
-use super::text_box_tests::{AREA, FILL, ONE, focus, focus_handle, load, press_as, setup, text_box};
+use super::text_box_tests::{
+    AREA, FILL, ONE, focus, focus_handle, load, press_as, setup, text_box,
+};
 use crate::app::test_driver::{selection_of, text_of, type_text};
 use crate::ime::word_check::words;
 
@@ -31,9 +33,9 @@ fn commit(text_box: &TextBox, range: Option<Range<usize>>, text: &str, cx: &mut 
 }
 
 fn marked(text_box: &TextBox, cx: &mut VisualTestContext) -> Option<Range<usize>> {
-    text_box
-        .editor()
-        .update_in(cx, |editor, window, cx| editor.marked_text_range(window, cx))
+    text_box.editor().update_in(cx, |editor, window, cx| {
+        editor.marked_text_range(window, cx)
+    })
 }
 
 /// The steps a Telex user sees while typing one syllable: each char shows in its base form, then
@@ -103,7 +105,11 @@ fn compose(text_box: &TextBox, syllable: &str, cx: &mut VisualTestContext) {
 fn boxes_with_focus(
     cx: &mut TestAppContext,
     index: usize,
-) -> (gpui::Entity<super::text_box_tests::Host>, TextBox, &mut VisualTestContext) {
+) -> (
+    gpui::Entity<super::text_box_tests::Host>,
+    TextBox,
+    &mut VisualTestContext,
+) {
     let (host, cx) = setup(cx, false, 300.);
     let text_box = text_box(&host, index, cx);
     focus(&text_box, cx);
@@ -252,7 +258,11 @@ fn t_ime_8_utf16_ranges_with_d_bar_emoji_and_cjk(cx: &mut TestAppContext) {
         press_as(cx, "mod-a", false);
         assert_eq!(selection_of(&text_box, cx), 0..5, "kind {index}");
         press_as(cx, "home right right", false);
-        assert_eq!(selection_of(&text_box, cx), 3..3, "kind {index}: after the emoji");
+        assert_eq!(
+            selection_of(&text_box, cx),
+            3..3,
+            "kind {index}: after the emoji"
+        );
         let (whole, adjusted) = text_box.editor().update_in(cx, |editor, window, cx| {
             let mut adjusted = None;
             let got = editor.text_for_range(1..3, &mut adjusted, window, cx);
@@ -266,7 +276,9 @@ fn t_ime_8_utf16_ranges_with_d_bar_emoji_and_cjk(cx: &mut TestAppContext) {
             let got = editor.text_for_range(2..3, &mut adjusted, window, cx);
             (got, adjusted)
         });
-        eprintln!("T-IME-8 kind {index}: text_for_range(2..3) gave {clipped:?}, adjusted {adjusted:?}");
+        eprintln!(
+            "T-IME-8 kind {index}: text_for_range(2..3) gave {clipped:?}, adjusted {adjusted:?}"
+        );
         commit(&text_box, Some(1..3), "x", cx);
         assert_eq!(text_of(&text_box, cx), "đx日本", "kind {index}");
         commit(&text_box, Some(2..4), "!", cx);
@@ -286,7 +298,9 @@ fn t_ime_9_blur_keeps_the_text_and_unmarks(cx: &mut TestAppContext) {
     // Today the mark survives a blur; the plan's rule (a blur ends it) is for S3.3.
     assert_eq!(marked(&text_box, cx), Some(0..4));
     // `unmark_text` on its own keeps the text and ends the mark.
-    text_box.editor().update_in(cx, |editor, window, cx| editor.unmark_text(window, cx));
+    text_box
+        .editor()
+        .update_in(cx, |editor, window, cx| editor.unmark_text(window, cx));
     assert_eq!(marked(&text_box, cx), None);
     assert_eq!(text_of(&text_box, cx), "viet");
 }
@@ -327,8 +341,14 @@ fn t_ime_10_bounds_for_range_in_one_line_area_and_full(cx: &mut TestAppContext) 
         let step = (row3.origin.y - row0.origin.y) / 3.;
         eprintln!("T-IME-10 kind {index}: row 0 {row0:?}, row 3 {row3:?}");
         assert!(f32::from(step) > 0.);
-        assert!((f32::from(step) - f32::from(row0.size.height)).abs() <= 0.5, "kind {index}");
-        assert!((f32::from(row3.origin.x) - f32::from(row0.origin.x)).abs() <= 0.5, "kind {index}");
+        assert!(
+            (f32::from(step) - f32::from(row0.size.height)).abs() <= 0.5,
+            "kind {index}"
+        );
+        assert!(
+            (f32::from(row3.origin.x) - f32::from(row0.origin.x)).abs() <= 0.5,
+            "kind {index}"
+        );
     }
 }
 
@@ -351,7 +371,11 @@ fn t_ime_words_every_word_of_the_list_composes_and_commits(cx: &mut TestAppConte
             assert_eq!(text_of(&text_box, cx), *word, "kind {index}");
             assert_eq!(marked(&text_box, cx), None, "kind {index}: {word}");
             let units = word.encode_utf16().count();
-            assert_eq!(selection_of(&text_box, cx), units..units, "kind {index}: {word}");
+            assert_eq!(
+                selection_of(&text_box, cx),
+                units..units,
+                "kind {index}: {word}"
+            );
         }
     }
 }

@@ -43,16 +43,12 @@ impl Render for Boxes {
                     .w(px(400.))
                     .h(px(60.))
                     .child(self.covered.clone())
-                    .child(
-                        div()
-                            .absolute()
-                            .top_0()
-                            .left_0()
-                            .size_full()
-                            .on_mouse_down(MouseButton::Left, |_, window, _| {
-                                window.prevent_default();
-                            }),
-                    ),
+                    .child(div().absolute().top_0().left_0().size_full().on_mouse_down(
+                        MouseButton::Left,
+                        |_, window, _| {
+                            window.prevent_default();
+                        },
+                    )),
             )
     }
 }
@@ -92,7 +88,10 @@ fn at(text_box: &TextBox, index: usize, dx: f32, cx: &mut VisualTestContext) -> 
         let rect = editor
             .bounds_for_range(index..index + 1, area, window, cx)
             .expect("the char is shown");
-        point(rect.origin.x + px(dx), rect.origin.y + rect.size.height / 2.)
+        point(
+            rect.origin.x + px(dx),
+            rect.origin.y + rect.size.height / 2.,
+        )
     })
 }
 
@@ -139,7 +138,10 @@ fn t_mouse_a_press_inside_the_selection_then_a_release_puts_the_caret_there(
     cx: &mut TestAppContext,
 ) {
     let (boxes, cx) = setup(cx);
-    for (name, text_box) in [("editable", &boxes.editable), ("read-only", &boxes.read_only)] {
+    for (name, text_box) in [
+        ("editable", &boxes.editable),
+        ("read-only", &boxes.read_only),
+    ] {
         select_world(text_box, cx);
         let inside = at(text_box, 8, 1., cx);
         down(inside, 1, cx);
@@ -147,7 +149,10 @@ fn t_mouse_a_press_inside_the_selection_then_a_release_puts_the_caret_there(
         assert_eq!(selection_of(text_box, cx), 6..11, "{name}: after the press");
         up(inside, Modifiers::default(), cx);
         let caret = selection_of(text_box, cx);
-        assert!(caret.is_empty() && (8..=9).contains(&caret.start), "{name}: {caret:?}");
+        assert!(
+            caret.is_empty() && (8..=9).contains(&caret.start),
+            "{name}: {caret:?}"
+        );
         assert_eq!(text_of(text_box, cx), TEXT, "{name}");
     }
 }
@@ -155,7 +160,10 @@ fn t_mouse_a_press_inside_the_selection_then_a_release_puts_the_caret_there(
 #[gpui::test]
 fn t_mouse_a_move_before_300_ms_selects_from_the_press(cx: &mut TestAppContext) {
     let (boxes, cx) = setup(cx);
-    for (name, text_box) in [("editable", &boxes.editable), ("read-only", &boxes.read_only)] {
+    for (name, text_box) in [
+        ("editable", &boxes.editable),
+        ("read-only", &boxes.read_only),
+    ] {
         select_world(text_box, cx);
         let from = at(text_box, 8, 1., cx);
         let to = at(text_box, 15, 0.25, cx);
@@ -236,20 +244,29 @@ fn t_mouse_a_press_after_prevent_default_does_nothing(cx: &mut TestAppContext) {
     let focused = cx.update(|window, cx| boxes.covered.is_focused(window, cx));
     let selection = selection_of(&boxes.covered, cx);
     assert!(!focused, "the press focused the covered box");
-    assert!(!(8..=9).contains(&selection.start), "the caret went to the press: {selection:?}");
+    assert!(
+        !(8..=9).contains(&selection.start),
+        "the caret went to the press: {selection:?}"
+    );
     // The same press on the free box places the caret and takes the focus.
     let free = at(&boxes.editable, 8, 1., cx);
     down(free, 1, cx);
     up(free, Modifiers::default(), cx);
     cx.run_until_parked();
     let selection = selection_of(&boxes.editable, cx);
-    assert!(selection.is_empty() && (8..=9).contains(&selection.start), "{selection:?}");
+    assert!(
+        selection.is_empty() && (8..=9).contains(&selection.start),
+        "{selection:?}"
+    );
 }
 
 #[gpui::test]
 fn t_mouse_clicks_select_a_word_and_a_line(cx: &mut TestAppContext) {
     let (boxes, cx) = setup(cx);
-    for (name, text_box) in [("editable", &boxes.editable), ("read-only", &boxes.read_only)] {
+    for (name, text_box) in [
+        ("editable", &boxes.editable),
+        ("read-only", &boxes.read_only),
+    ] {
         focus(text_box, cx);
         let word = at(text_box, 7, 1., cx);
         for clicks in 1..=2 {
@@ -259,6 +276,10 @@ fn t_mouse_clicks_select_a_word_and_a_line(cx: &mut TestAppContext) {
         assert_eq!(selection_of(text_box, cx), 6..11, "{name}: double click");
         down(word, 3, cx);
         up(word, Modifiers::default(), cx);
-        assert_eq!(selection_of(text_box, cx), 0..TEXT.len(), "{name}: triple click");
+        assert_eq!(
+            selection_of(text_box, cx),
+            0..TEXT.len(),
+            "{name}: triple click"
+        );
     }
 }
