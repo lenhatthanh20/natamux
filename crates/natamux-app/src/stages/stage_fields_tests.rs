@@ -1,7 +1,7 @@
 //! Workflow test T12 (plan 7.5), in the Project settings page of the fake's project: picking a
 //! stage opens its sheet (main's T-0313 redesign), each key in a stage field writes the draft,
 //! Use default puts the default back, a step of the sheet to another stage closes the skills
-//! menu, and the placeholder chips and Insert skill put their text at the cursor. Use default,
+//! menu, the "Done when" placeholder follows the stage, and the placeholder chips and Insert skill put their text at the cursor. Use default,
 //! the chips and the stepper have no key, so the tests call what their click calls; Insert
 //! skill's menu is used with the keyboard.
 
@@ -16,6 +16,7 @@ use super::super::editor_find::find_stage;
 use super::super::pipeline_editor::PipelineEditor;
 use super::super::stage_fields_view::change;
 use super::super::stage_sheet::StageSheet;
+use super::super::stage_view_rules::finished_when;
 use super::insert_at_cursor;
 use crate::app::test_driver::{is_focused, press, text_of, type_text};
 use crate::app::test_views;
@@ -215,4 +216,29 @@ fn t12_insert_skill_puts_the_skill_at_the_cursor(cx: &mut TestAppContext) {
             .sheet
             .read_with(cx, |sheet, _| sheet.skill_menu.is_none())
     );
+}
+
+#[gpui::test]
+fn t12_the_done_when_placeholder_follows_the_stage(cx: &mut TestAppContext) {
+    let (page, _, cx) = test_views::init_project_page(cx);
+    let fields = pick(page, STAGE, cx);
+    let shown = |fields: &Fields, cx: &mut VisualTestContext| {
+        let done = fields
+            .sheet
+            .read_with(cx, |sheet, _| sheet.fields.done_when.editor.clone());
+        done.editor().update(cx, |editor, cx| editor.placeholder_text(cx))
+    };
+    let own = |fields: &Fields, id: &str, cx: &mut VisualTestContext| {
+        let stage = stage_of(fields, id, cx);
+        finished_when(&Stage {
+            done_when: None,
+            ..stage
+        })
+    };
+    assert_eq!(shown(&fields, cx), Some(own(&fields, STAGE, cx)));
+    fields
+        .sheet
+        .update_in(cx, |sheet, window, cx| sheet.go_to(OTHER, window, cx));
+    cx.run_until_parked();
+    assert_eq!(shown(&fields, cx), Some(own(&fields, OTHER, cx)));
 }
