@@ -126,6 +126,8 @@ struct Scrollbar {
 
 pub struct Frame {
     hitbox: Hitbox,
+    /// The rows of the grid across the element: the screen is drawn clipped to them.
+    rows: Bounds<Pixels>,
     /// The scrollbar's track, which the grid leaves free.
     track: Bounds<Pixels>,
     background: Hsla,
@@ -205,6 +207,7 @@ impl Element for TermElement {
             window.scale_factor(),
             spare_on_top,
         );
+        let grid_height = laid.height;
         let width = (area.size.width - cell_width).max(cell_width * 2.);
         let term_bounds = TermBounds::new(
             line_height,
@@ -488,8 +491,13 @@ impl Element for TermElement {
             tooltip.prepaint_as_root(bounds.origin, bounds.size.into(), window, cx);
             tooltip
         });
+        let rows = Bounds {
+            origin: point(bounds.left(), origin.y),
+            size: size(bounds.size.width, grid_height),
+        };
         Frame {
             hitbox,
+            rows,
             track,
             background,
             rects,
@@ -515,7 +523,10 @@ impl Element for TermElement {
         window: &mut Window,
         cx: &mut App,
     ) {
-        window.with_content_mask(Some(ContentMask { bounds }), |window| {
+        // The screen is clipped to the rows of the grid, so what the window draws later over
+        // the spare pixels below them (a tooltip's shadow) stacks as over the old view. The
+        // view's container shows its background there.
+        window.with_content_mask(Some(ContentMask { bounds: frame.rows }), |window| {
             window.paint_quad(fill(bounds, frame.background));
             self.listen(&frame.hitbox, frame.track, window);
             let style = if frame.over_link {
@@ -585,6 +596,8 @@ impl Element for TermElement {
                     .ok();
                 }
             }
+        });
+        window.with_content_mask(Some(ContentMask { bounds }), |window| {
             if let Some(bar) = &frame.scrollbar {
                 window.paint_quad(fill(bar.track, bar.track_colour));
                 let border = Bounds {

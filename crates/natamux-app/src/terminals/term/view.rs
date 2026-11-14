@@ -933,6 +933,7 @@ impl Render for TermView {
             .key_context("Terminal")
             .track_focus(&self.focus)
             .size_full()
+            .bg(cx.theme().colors().editor_background)
             .on_key_down(cx.listener(Self::key_down))
             .on_action(cx.listener(|view, _: &TerminalCopy, _, cx| view.copy(cx)))
             .on_action(cx.listener(|view, _: &TerminalPaste, window, cx| {
