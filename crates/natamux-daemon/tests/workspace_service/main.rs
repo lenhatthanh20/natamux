@@ -56,7 +56,7 @@ pub use support::*;
 
 pub const PR_URL: &str = "https://github.com/owner/repo/pull/7";
 /// The branch of the first task, titled "Fix the bug".
-pub const BRANCH: &str = "natamux/t-0001-fix-the-bug";
+pub const BRANCH: &str = "default/t-0001-fix-the-bug";
 
 pub type Messages = Arc<Mutex<Vec<DaemonMessage>>>;
 

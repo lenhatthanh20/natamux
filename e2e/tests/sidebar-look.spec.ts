@@ -190,11 +190,12 @@ test('shows a ring, then the state the hooks give', async ({ page, request }, te
   await hook('UserPromptSubmit')
   await expect.poll(async () => (await lane()).state, { timeout: 10_000 }).toBe('running')
   await hook('Stop')
-  await expect.poll(async () => (await lane()).state, { timeout: 10_000 }).toBe('needs-input')
+  // A turn end with no question is idle, not needs-input.
+  await expect.poll(async () => (await lane()).state, { timeout: 10_000 }).toBe('idle')
 
-  const waiting = page.getByRole('button', { name: 'Terminal 2, Needs input', exact: true })
+  const waiting = page.getByRole('button', { name: 'Terminal 2, Idle', exact: true })
   await expect(waiting).toBeVisible({ timeout: 15_000 })
-  await expect(waiting.locator('[data-state="needs-input"]')).toBeVisible()
+  await expect(waiting.locator('[data-state="idle"]')).toBeVisible()
   await expect(waiting.locator('[data-tip="State not known yet"]')).toHaveCount(0)
   // The hooks of Terminal 2 leave the task alone.
   const task = (await (await request.get(`/api/tasks/${id}`, { headers })).json()).task

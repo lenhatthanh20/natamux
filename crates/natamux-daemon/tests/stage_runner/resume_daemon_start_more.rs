@@ -29,7 +29,7 @@ fn keeps_the_other_lane_of_a_group_going_when_a_lane_in_review_cannot_start() {
 
     assert_eq!(shells(&f, &task.id), ["2"]);
     assert!(script_has(&f, &task.id, "2", "--resume 's-2'"));
-    let lanes = json!({ "implement": "review", "test-spec": "needs-input" });
+    let lanes = json!({ "implement": "review", "test-spec": "idle" });
     assert_eq!(lanes_of(&f, &task.id), lanes);
 }
 
@@ -59,7 +59,7 @@ fn goes_on_with_the_session_of_each_stage_of_a_group_in_its_own_terminal() {
     assert_eq!(shells(&f, &task.id), ["1", "2"]);
     assert!(script_has(&f, &task.id, "1", "--resume 's-1'"));
     assert!(script_has(&f, &task.id, "2", "--resume 's-2'"));
-    let lanes = json!({ "implement": "needs-input", "test-spec": "needs-input" });
+    let lanes = json!({ "implement": "idle", "test-spec": "idle" });
     assert_eq!(lanes_of(&f, &task.id), lanes);
 }
 
@@ -165,7 +165,7 @@ fn adds_only_the_launch_to_the_events_and_keeps_each_state() {
 }
 
 #[test]
-fn resumes_a_running_and_a_waiting_stage_of_the_same_group() {
+fn resumes_a_running_and_an_idle_stage_of_the_same_group() {
     let f = Fixture::new();
     let task = build_after_restart(&f);
     let payload = json!({ "stage": "implement", "sessionId": "s-1" });
@@ -173,7 +173,7 @@ fn resumes_a_running_and_a_waiting_stage_of_the_same_group() {
 
     resume_all(&f);
 
-    let lanes = json!({ "implement": "running", "test-spec": "needs-input" });
+    let lanes = json!({ "implement": "running", "test-spec": "idle" });
     assert_eq!(lanes_of(&f, &task.id), lanes);
     assert!(script_has(&f, &task.id, "1", "--resume 's-1'"));
     assert!(script_has(&f, &task.id, "2", "--resume 's-2'"));

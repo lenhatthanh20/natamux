@@ -18,6 +18,23 @@ pub const KEEPS: &str = "Keeps the task, its notes, docs and history.";
 
 pub const REMOVE_ANYWAY: &str = "Remove anyway";
 
+/// What detaching a main checkout task keeps: the daemon never deletes the user's own folder.
+pub const KEEPS_CHECKOUT: &str = "Keeps the project folder, its changes and its branch.";
+
+/// The task works in the project folder: removing its workspace only detaches it.
+pub fn is_main_checkout(task: &Task) -> bool {
+    task.main_checkout == Some(true)
+}
+
+/// The Remove workspace action of the menus, the details panel and the wrap-up.
+pub fn remove_label(task: &Task) -> &'static str {
+    if is_main_checkout(task) {
+        "Detach from checkout"
+    } else {
+        "Remove workspace"
+    }
+}
+
 pub fn not_committed_title(count: usize) -> String {
     if count == 1 {
         "1 file is not committed".into()
@@ -99,8 +116,21 @@ pub fn agent_stops(task: &Task) -> Option<String> {
     })
 }
 
-pub fn remove_title(task_id: &str) -> String {
-    format!("Remove the workspace of {task_id}?")
+pub fn remove_title(task: &Task) -> String {
+    if is_main_checkout(task) {
+        format!("Detach {} from the main checkout?", task.id)
+    } else {
+        format!("Remove the workspace of {}?", task.id)
+    }
+}
+
+/// `confirm_label` of a main checkout task: nothing is discarded.
+pub fn detach_label(any_busy: bool, detaching: bool) -> &'static str {
+    match (detaching, any_busy) {
+        (true, _) => "Detaching…",
+        (false, true) => "Stop it and detach",
+        (false, false) => "Detach",
+    }
 }
 
 /// `discard`: Remove anyway was picked, so files that are not committed go too.
@@ -238,7 +268,12 @@ mod tests {
         assert_eq!(confirm_label(false, false, false), "Remove workspace");
         assert_eq!(confirm_label(true, true, false), "Removing…");
         assert_eq!(confirm_label(false, true, true), "Removing…");
-        assert_eq!(remove_title("T-1"), "Remove the workspace of T-1?");
+        let task = Task {
+            id: "T-1".into(),
+            ..Task::default()
+        };
+        assert_eq!(remove_title(&task), "Remove the workspace of T-1?");
+        assert_eq!(remove_label(&task), "Remove workspace");
     }
 
     #[test]
@@ -267,5 +302,19 @@ mod tests {
                  files), T-0005 (1 file). Those files are lost too."
         ));
         assert_eq!(remove_finished_label(true), "Remove anyway");
+    }
+
+    #[test]
+    fn a_main_checkout_task_is_detached_and_keeps_its_folder() {
+        let task = Task {
+            id: "T-1".into(),
+            main_checkout: Some(true),
+            ..Task::default()
+        };
+        assert_eq!(remove_title(&task), "Detach T-1 from the main checkout?");
+        assert_eq!(remove_label(&task), "Detach from checkout");
+        assert_eq!(detach_label(false, false), "Detach");
+        assert_eq!(detach_label(true, false), "Stop it and detach");
+        assert_eq!(detach_label(false, true), "Detaching…");
     }
 }

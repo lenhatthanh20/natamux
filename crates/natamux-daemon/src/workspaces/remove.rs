@@ -73,6 +73,10 @@ impl WorkspaceService {
         let Some(branch) = &task.branch else {
             return Ok(());
         };
+        // The branch of the main checkout is the user's.
+        if task.main_checkout == Some(true) {
+            return Ok(());
+        }
         // A removed project must not block the delete of the task.
         let repo_dir = match self.repo_dir_of(task.repo.as_deref()) {
             Ok(dir) => dir,
@@ -113,6 +117,9 @@ impl WorkspaceService {
                     "{task_id} has no workspace"
                 )));
             };
+            if task.main_checkout == Some(true) {
+                return self.detach_main_checkout(&task, &workspace);
+            }
             let folder = Path::new(&workspace);
             let repo_dir = self.repo_dir_of(task.repo.as_deref())?;
             let state = worktree_state(&repo_dir, folder)?;

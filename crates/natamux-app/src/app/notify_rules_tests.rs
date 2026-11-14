@@ -123,9 +123,61 @@ fn rings_for_tasks_that_started_waiting_and_then_for_tasks_that_finished() {
     ];
     let ids: Vec<String> = rings(&before, &now, &[])
         .into_iter()
-        .map(|(id, _)| id)
+        .map(|ring| ring.task_id)
         .collect();
     assert_eq!(ids, ["T-0003", "T-0001"]);
+}
+
+fn with_lanes(state: TaskState, lanes: serde_json::Value) -> Task {
+    Task {
+        lanes: lanes.as_object().cloned().unwrap_or_default(),
+        ..at_stage("T-0001", state, "implement")
+    }
+}
+
+#[test]
+fn rings_again_when_another_terminal_of_a_waiting_task_starts_to_wait() {
+    let one = with_lanes(
+        TaskState::NeedsInput,
+        serde_json::json!({ "implement": "needs-input", "self-check": "running" }),
+    );
+    let two = with_lanes(
+        TaskState::NeedsInput,
+        serde_json::json!({ "implement": "needs-input", "self-check": "needs-input" }),
+    );
+    let ring = rings(&states_by_id(&[one]), std::slice::from_ref(&two), &repos());
+    assert_eq!(ring.len(), 1);
+    assert_eq!(ring[0].stage.as_deref(), Some("self-check"));
+    assert_eq!(
+        ring[0].note.body,
+        "Needs your input at Self check\nT-0001 \u{b7} natamux"
+    );
+    assert!(rings(&states_by_id(std::slice::from_ref(&two)), &[two], &repos()).is_empty());
+}
+
+#[test]
+fn rings_with_the_task_stage_when_the_task_has_no_lanes() {
+    let before = states_by_id(&[at_stage("T-0001", TaskState::Running, "spec")]);
+    let now = [at_stage("T-0001", TaskState::NeedsInput, "spec")];
+    let ring = rings(&before, &now, &repos());
+    assert_eq!(ring.len(), 1);
+    assert_eq!(ring[0].stage.as_deref(), Some("spec"));
+}
+
+#[test]
+fn names_the_terminal_and_tags_the_note_with_it() {
+    let note = Notification {
+        title: "Fix it".into(),
+        body: "Needs your input at Self check\nT-0001 \u{b7} natamux".into(),
+    };
+    assert_eq!(
+        with_terminal(&note, "17").body,
+        "Needs your input at Self check \u{b7} Terminal 17\nT-0001 \u{b7} natamux"
+    );
+    assert_eq!(note_tag("T-0001", Some("17")), "T-0001#17");
+    assert_eq!(tag_target("T-0001#17"), ("T-0001", Some("17")));
+    assert_eq!(tag_target("T-0001"), ("T-0001", None));
+    assert_eq!(note_tag("T-0001", None), "T-0001");
 }
 
 #[test]
@@ -260,4 +312,63 @@ fn names_a_task_again_when_it_stops_waiting_and_then_waits_again() {
     assert_eq!(announcer.text(), "Fix login needs you");
     announcer.update(&[first(), other, later], true);
     assert_eq!(announcer.text(), "Ship docs needs you");
+}
+
+// T-0304: an agent that ends its turn with a report rings, so the user goes to read it.
+#[test]
+fn rings_once_when_an_agent_ends_its_turn_without_a_question() {
+    let one = with_lanes(
+        TaskState::Running,
+        serde_json::json!({ "implement": "running" }),
+    );
+    let two = with_lanes(TaskState::Idle, serde_json::json!({ "implement": "idle" }));
+    let ring = rings(&states_by_id(&[one]), std::slice::from_ref(&two), &repos());
+    assert_eq!(ring.len(), 1);
+    assert_eq!(ring[0].stage.as_deref(), Some("implement"));
+    assert_eq!(
+        ring[0].note.body,
+        "Finished its turn at Implement\nT-0001 \u{b7} natamux"
+    );
+    assert!(rings(&states_by_id(std::slice::from_ref(&two)), &[two], &repos()).is_empty());
+}
+
+#[test]
+fn rings_for_an_idle_task_with_no_lanes_but_not_for_one_seen_first() {
+    let before = states_by_id(&[at_stage("T-0001", TaskState::Running, "spec")]);
+    let now = [
+        at_stage("T-0001", TaskState::Idle, "spec"),
+        at_stage("T-0002", TaskState::Idle, "spec"),
+    ];
+    let ring = rings(&before, &now, &repos());
+    assert_eq!(ring.len(), 1);
+    assert_eq!(ring[0].task_id, "T-0001");
+    assert_eq!(
+        ring[0].note.body,
+        "Finished its turn at Spec\nT-0001 \u{b7} natamux"
+    );
+}
+
+#[test]
+fn an_idle_task_does_not_count_as_needing_the_user() {
+    let before = states_by_id(&[task("T-0001", TaskState::Running)]);
+    let now = [task("T-0001", TaskState::Idle)];
+    assert!(tasks_that_started_waiting(&before, &now).is_empty());
+    assert!(!needs_me(TaskState::Idle));
+}
+
+// An idle task whose report was not read yet keeps a count on the Dock until it is opened.
+#[test]
+fn counts_idle_tasks_not_seen_since_their_turn_ended() {
+    let seen = vec![
+        ("T-0001".to_string(), TaskState::Running),
+        ("T-0002".to_string(), TaskState::Idle),
+        ("T-0003".to_string(), TaskState::Running),
+    ];
+    let tasks = [
+        task("T-0001", TaskState::Idle),
+        task("T-0002", TaskState::Idle),
+        task("T-0003", TaskState::NeedsInput),
+        task("T-0004", TaskState::Idle),
+    ];
+    assert_eq!(unread_turn_ends(&tasks, &seen), 1);
 }

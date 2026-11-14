@@ -3,7 +3,7 @@
 use natamux_proto::agents::start::AgentMessage;
 use natamux_proto::tasks::task::Task;
 use natamux_proto::workspaces::changes::{
-    CommitAnswer, CommitInput, CommitMessageDraft, FileDiff, ImageSide, RollbackInput,
+    BlameAnswer, CommitAnswer, CommitInput, CommitMessageDraft, FileDiff, ImageSide, RollbackInput,
     RollbackResult,
 };
 use natamux_proto::workspaces::review_comments::{
@@ -41,6 +41,13 @@ impl Client {
         let (task_id, path) = (task_id.to_string(), path.to_string());
         self.with_config(move |config| async move {
             workspaces::api::file_image(&config, &task_id, &path, side).await
+        })
+    }
+
+    pub fn blame(&self, task_id: &str, path: &str, side: ImageSide) -> Answer<BlameAnswer> {
+        let (task_id, path) = (task_id.to_string(), path.to_string());
+        self.with_config(move |config| async move {
+            workspaces::api::blame(&config, &task_id, &path, side).await
         })
     }
 

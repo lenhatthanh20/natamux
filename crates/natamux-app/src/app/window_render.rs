@@ -27,9 +27,7 @@ fn drawer_layer(
     cx: &App,
 ) -> Div {
     let colors = cx.theme().colors();
-    // The dialog layer's scrim (components/dialog.rs).
-    let mut scrim = colors.elevated_surface_background;
-    scrim.fade_out(0.2);
+    let scrim = crate::components::dialog::scrim(cx);
     div()
         .absolute()
         .inset_0()
@@ -130,13 +128,6 @@ impl Root {
     }
 
     fn render_body(&mut self, width: f32, window: &Window, cx: &mut Context<Self>) -> Div {
-        if self.dashboard.read(cx).settings.is_some() {
-            return h_flex()
-                .flex_1()
-                .min_h_0()
-                .w_full()
-                .child(self.settings.clone());
-        }
         let layout = self.layout(window, cx);
         let docked = layout.sidebar == SidebarMode::Docked;
         self.sync_details_mode(window, cx);
@@ -250,6 +241,7 @@ impl Render for Root {
         };
         let (title_bar, status_bar) = self.render_bars(sidebar_shown, window, cx);
         let body = self.render_body(width, window, cx);
+        let settings = self.render_settings(window, cx);
         let mut context = KeyContext::new_with_defaults();
         context.add("Natamux");
         if self.focus.is_focused(window) {
@@ -288,6 +280,7 @@ impl Render for Root {
             .child(title_bar)
             .child(body)
             .child(status_bar)
+            .children(settings)
             .children(overlay::render(cx))
             .child(self.menus.clone())
             .child(self.dialogs.clone())

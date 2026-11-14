@@ -1,17 +1,14 @@
-//! The Settings page (T-0174; docs/rust-phase3.md "Lean layout"): a nav with a search, the app's
-//! pages (General, Appearance, Agents) and a page per project (`ProjectSettingsPage`). It fills
-//! the window body over main. App settings apply at once; a project page keeps its draft until Save
-//! or Discard, also while other pages show. The page owns its keys as a dialog does: Esc,
-//! Mod+Enter and a Tab ring.
+//! The Settings popup (T-0174, T-0306; docs/rust-phase3.md "Lean layout"): a nav with a search,
+//! the app's pages (General, Appearance, Agents) and a page per project (`ProjectSettingsPage`).
+//! It opens over the dashboard, which stays drawn under it. App settings apply at once; a project
+//! page keeps its draft until Save or Discard, also while other pages show. The popup owns its
+//! keys as a dialog does: Esc, Mod+Enter and a Tab ring.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
 use editor::{Editor, EditorEvent};
-use gpui::{
-    Entity, FocusHandle, Focusable, FontWeight, KeyDownEvent, KeystrokeEvent, Subscription,
-};
-use natamux_proto::projects::repo::Repo;
+use gpui::{Entity, FocusHandle, Focusable, KeyDownEvent, KeystrokeEvent, Subscription};
 use ui::{ToggleButtonGroup, ToggleButtonGroupStyle, ToggleButtonSimple, prelude::*};
 
 use super::dashboard::Dashboard;
@@ -19,9 +16,10 @@ use super::dashboard_data::{Part, Seen};
 use super::settings_agents::AgentRows;
 use super::settings_font::FontRows;
 use super::settings_rules::{
-    SearchResults, SettingRow, SettingsFocus, SettingsPage, page_title, search, shown_page,
+    SettingRow, SettingsFocus, SettingsPage, page_title, search, shown_page,
 };
 use super::shortcut_sheet;
+use super::shortcuts::AddProject;
 use super::update::UpdateChanged;
 use crate::components::dialog::DialogLayer;
 use crate::components::form::text_editor;
@@ -29,46 +27,13 @@ use crate::components::input_rules::{DialogKey, dialog_key, ring_step, segment_s
 use crate::components::menu::press_of;
 use crate::projects::project_settings_page::{Discarded, ProjectSettingsPage};
 
-const NAV_WIDTH: f32 = 220.;
-/// The rows of the app's pages stay this wide on a wide window.
+const NAV_WIDTH: f32 = 232.;
+/// The content of a page stays this wide on a wide window.
 const PAGE_MAX: f32 = 760.;
-/// General, Appearance, Agents and Keyboard shortcuts come before the projects in the nav.
-const APP_ITEMS: usize = 4;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-enum NavItem {
-    Page(SettingsPage),
-    /// Opens the shortcut sheet; not a page.
-    Shortcuts,
-}
-
-fn nav_items(repos: &[Repo]) -> Vec<(NavItem, String)> {
-    let mut items = vec![
-        (NavItem::Page(SettingsPage::General), "General".to_owned()),
-        (
-            NavItem::Page(SettingsPage::Appearance),
-            "Appearance".to_owned(),
-        ),
-        (NavItem::Page(SettingsPage::Agents), "Agents".to_owned()),
-        (NavItem::Shortcuts, "Keyboard shortcuts".to_owned()),
-    ];
-    items.extend(repos.iter().map(|repo| {
-        let page = SettingsPage::Project(repo.id.clone());
-        (NavItem::Page(page), repo.name.clone())
-    }));
-    items
-}
-
-/// A nav row stays bright while a search finds something on its page.
-fn nav_matches(item: &NavItem, found: &SearchResults) -> bool {
-    match item {
-        NavItem::Page(SettingsPage::Project(id)) => {
-            found.projects.iter().any(|(project, _)| project == id)
-        }
-        NavItem::Page(page) => found.rows.iter().any(|row| &row.page() == page),
-        NavItem::Shortcuts => false,
-    }
-}
+#[path = "settings_nav.rs"]
+mod nav;
+use nav::{NavItem, nav_items};
 
 pub struct SettingsView {
     dashboard: Entity<Dashboard>,
@@ -79,7 +44,9 @@ pub struct SettingsView {
     dark_focus: FocusHandle,
     size_focus: FocusHandle,
     notify_focus: FocusHandle,
+    notify_always_focus: FocusHandle,
     sidebar_ids_focus: FocusHandle,
+    clean_focus: FocusHandle,
     update_focus: FocusHandle,
     check_focus: FocusHandle,
     pub(super) font: FontRows,
@@ -131,7 +98,9 @@ impl SettingsView {
             dark_focus: cx.focus_handle().tab_stop(true),
             size_focus: cx.focus_handle().tab_stop(true),
             notify_focus: cx.focus_handle(),
+            notify_always_focus: cx.focus_handle(),
             sidebar_ids_focus: cx.focus_handle(),
+            clean_focus: cx.focus_handle(),
             update_focus: cx.focus_handle(),
             check_focus: cx.focus_handle(),
             font,
@@ -294,8 +263,10 @@ impl SettingsView {
         match self.page(cx) {
             SettingsPage::General => ring.extend([
                 self.notify_focus.clone(),
-                self.update_focus.clone(),
+                self.notify_always_focus.clone(),
                 self.check_focus.clone(),
+                self.update_focus.clone(),
+                self.clean_focus.clone(),
             ]),
             SettingsPage::Appearance => {
                 ring.extend([
@@ -320,9 +291,10 @@ impl SettingsView {
     fn row_stops(&self, row: SettingRow, cx: &App) -> Vec<FocusHandle> {
         match row {
             SettingRow::Notify => vec![self.notify_focus.clone()],
-            SettingRow::UpdatesVersion => Vec::new(),
+            SettingRow::NotifyAlways => vec![self.notify_always_focus.clone()],
+            SettingRow::UpdatesVersion => vec![self.check_focus.clone()],
             SettingRow::UpdatesAuto => vec![self.update_focus.clone()],
-            SettingRow::UpdatesCheck => vec![self.check_focus.clone()],
+            SettingRow::CleanOnSave => vec![self.clean_focus.clone()],
             SettingRow::Theme => vec![self.theme_focus.clone()],
             SettingRow::LightTheme => vec![self.light_focus.clone()],
             SettingRow::DarkTheme => vec![self.dark_focus.clone()],
@@ -349,7 +321,15 @@ impl SettingsView {
         match item {
             NavItem::Page(page) => self.open_page(page.clone(), window, cx),
             NavItem::Shortcuts => shortcut_sheet::open(window, cx),
+            NavItem::AddProject => window.dispatch_action(Box::new(AddProject), cx),
         }
+    }
+
+    /// The X in the search bar.
+    fn clear_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.search
+            .update(cx, |editor, cx| editor.clear(window, cx));
+        window.focus(&self.search.focus_handle(cx), cx);
     }
 
     /// Up and Down move over the nav rows; Enter and Space open the focused one.
@@ -384,6 +364,9 @@ impl SettingsView {
 #[path = "settings_view_render.rs"]
 mod render;
 
+#[path = "settings_pages.rs"]
+mod pages;
+
 /// Text-only segmented control. Arrow keys and Home / End pick, as in `Segmented`.
 fn segment<const N: usize>(
     name: &'static str,
@@ -416,13 +399,6 @@ fn segment<const N: usize>(
                 .selected_index(selected)
                 .auto_width(),
         )
-}
-
-fn heading(text: &'static str) -> Label {
-    Label::new(text)
-        .size(LabelSize::XSmall)
-        .weight(FontWeight::MEDIUM)
-        .color(Color::Muted)
 }
 
 impl Focusable for SettingsView {

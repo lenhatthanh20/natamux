@@ -94,6 +94,7 @@ pub fn fan_out(
                 "labels": labels,
                 "dependsOn": source.depends_on,
                 "repo": source.repo,
+                "model": source.model,
             })),
             &attachments,
             // The title of the source lost its id already; a word left at its start is not an id.

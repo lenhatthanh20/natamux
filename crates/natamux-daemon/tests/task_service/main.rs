@@ -17,6 +17,7 @@ mod init_from_index;
 mod is_task_ended;
 mod lookups;
 mod outside_edits;
+mod parallel_writes;
 mod polled;
 mod pull_request;
 mod record_activity;
@@ -308,6 +309,6 @@ pub fn file_task(fx: &Fixture, id: &str) -> Option<Task> {
 /// What the index of the service holds.
 pub fn index_tasks(service: &TaskService) -> Vec<Task> {
     service
-        .with(|store| Ok(store.sync.index.list_tasks(None).unwrap()))
+        .with(|store| Ok(store.sync.index().list_tasks(None).unwrap()))
         .unwrap()
 }

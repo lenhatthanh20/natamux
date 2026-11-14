@@ -5,6 +5,7 @@ use editor::{Editor, EditorEvent};
 use gpui::{Entity, Focusable, Subscription};
 use ui::prelude::*;
 
+use crate::components::form::input_editor;
 use crate::sidebar::sidebar_text::renamed_title;
 use crate::sidebar::workspace_tree::WorkspaceTree;
 
@@ -26,7 +27,7 @@ impl WorkspaceTree {
             return;
         };
         let editor = cx.new(|cx| {
-            let mut editor = Editor::single_line(window, cx);
+            let mut editor = input_editor(None, window, cx);
             editor.set_text(task.title.clone(), window, cx);
             editor.select_all(&editor::actions::SelectAll, window, cx);
             editor

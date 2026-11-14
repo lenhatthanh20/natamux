@@ -2,6 +2,7 @@
   "context": { "sources": [{ "type": "manual" }] },
   "tracker": { "type": "github", "createIssue": "on-pr", "linkInPr": true },
   "stages": [
+    { "id": "context", "kind": "context", "gate": "manual" },
     {
       "id": "build",
       "name": "Build",

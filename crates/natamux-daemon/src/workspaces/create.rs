@@ -53,6 +53,12 @@ impl WorkspaceService {
     /// step. A new workspace runs it before its answer, under a `claim` of the task.
     pub fn begin_create(&self, task_id: &str) -> WorkspaceResult<Task> {
         let task = self.tasks.get_task(task_id)?;
+        // Its work is in the project folder; a worktree would start without it.
+        if task.main_checkout == Some(true) && task.workspace.is_none() {
+            return Err(WorkspaceError::Conflict(format!(
+                "{task_id} was detached from the main checkout. Start a new task"
+            )));
+        }
         if let Some(workspace) = &task.workspace {
             return Err(WorkspaceError::Conflict(format!(
                 "{task_id} already has a workspace at {workspace}"
@@ -117,7 +123,8 @@ impl WorkspaceService {
         branch: Option<&str>,
         times: &mut StepTimes,
     ) -> WorkspaceResult<Made> {
-        let repo_dir = self.repo_dir_of(task.repo.as_deref())?;
+        let repo = self.repos.get(task.repo.as_deref())?;
+        let repo_dir = PathBuf::from(&repo.path);
         let listed = list_branches(&repo_dir)?;
         let branches = &listed.branches;
         let worktree_path = self.worktree_path_for(task);
@@ -138,7 +145,9 @@ impl WorkspaceService {
             None => {
                 let settings = self.repos.settings_of(task.repo.as_deref());
                 let pattern = settings.git.branch_name;
-                pattern.map(|pattern| branch_name_from(Some(&pattern), &task.id, &task.title))
+                pattern.map(|pattern| {
+                    branch_name_from(Some(&pattern), &repo.name, &task.id, &task.title)
+                })
             }
         };
         // A named branch that exists, here or on origin, is checked out with its work; the base
@@ -148,7 +157,7 @@ impl WorkspaceService {
         {
             return Ok(made(name.clone()));
         }
-        let branch = named.unwrap_or_else(|| branch_name_for(&task.id, &task.title));
+        let branch = named.unwrap_or_else(|| branch_name_for(&repo.name, &task.id, &task.title));
         // A base that is not a local branch can be a branch of origin, perhaps never fetched.
         if let Some(base) = base.filter(|base| !branches.iter().any(|known| known == base)) {
             let Some(name) = base.strip_prefix(ORIGIN_PREFIX) else {

@@ -4,6 +4,7 @@
 //! row (T-0257).
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::rc::Rc;
 
 use gpui::AnyElement;
 use natamux_proto::agents::activity::TaskUsage;
@@ -26,10 +27,11 @@ use natamux_proto::stages::capabilities::{can_run_workflow, offers_ci, offers_wo
 
 /// What the tab shows; the panel reads it.
 pub struct ProgressInput {
-    pub task: Task,
-    pub steps: Vec<Step>,
-    pub progress: Vec<StageProgress>,
-    pub events: Vec<TaskEvent>,
+    /// The four below are shared with the panel's cache, so a redraw does not copy them.
+    pub task: Rc<Task>,
+    pub steps: Rc<Vec<Step>>,
+    pub progress: Rc<Vec<StageProgress>>,
+    pub events: Rc<Vec<TaskEvent>>,
     pub files: Option<Result<Vec<StageFile>, String>>,
     pub usage: Option<TaskUsage>,
     /// What the agent does now, from the activity feed.

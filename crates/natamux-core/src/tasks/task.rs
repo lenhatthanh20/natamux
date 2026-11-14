@@ -7,7 +7,7 @@ use natamux_proto::tasks::task::{
 };
 use serde_json::{Map, Value, json};
 
-use crate::formats::{REPO_ID, STAGE_ID, TASK_ID};
+use crate::formats::{MODEL, REPO_ID, STAGE_ID, TASK_ID};
 use crate::tasks::task_parts::{lanes, step_refs, string_record};
 use crate::zod::{
     Issue, Issues, Length, Rule, ZodError, array, at, object, one_of, quietly, string,
@@ -90,6 +90,11 @@ fn head_fields(
                 string(Some(v), &at(path, key), &[Rule::Min(1)], issues).map(Value::from)
             }),
         );
+        if key == "agent" {
+            // A model the rule refuses reads as none, so the task still reads.
+            let model = quietly(|quiet| string(get("model"), &[], &MODEL, quiet));
+            put("model", model.map(Value::from));
+        }
     }
     put("pr", Some(caught_url(get("pr"))));
     put(
@@ -193,10 +198,9 @@ fn tail_fields(
     for key in ["ciStages", "skipStages"] {
         put(key, get(key).and_then(|v| stage_list(Some(v))));
     }
-    put(
-        "withoutAgent",
-        get("withoutAgent").filter(|v| **v == json!(true)).cloned(),
-    );
+    for key in ["withoutAgent", "mainCheckout"] {
+        put(key, get(key).filter(|v| **v == json!(true)).cloned());
+    }
     put(
         "context",
         nullable(get("context"), |v| {

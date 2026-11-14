@@ -11,6 +11,8 @@ Natamux starts Gemini CLI with hooks for that session only.
 
 Install Gemini CLI and sign in. Follow the [Gemini CLI documentation](https://geminicli.com/docs/). Check that `gemini` runs in your terminal.
 
+If you are not logged in, the task waits and asks you to sign in in its terminal. See [The agent asks me to sign in](/docs/help/troubleshooting/#the-agent-asks-me-to-sign-in).
+
 :::note
 Per `docs/agent-adapters.md`, the Gemini CLI free tier was replaced by the Antigravity CLI on 2026-06-18. Paid accounts keep `gemini`.
 :::
@@ -43,7 +45,7 @@ The daemon writes `gemini-settings.json` into its data folder. Gemini CLI reads 
 | `BeforeAgent` | A prompt was sent | running |
 | `BeforeTool`, `AfterTool` | The agent works | no change |
 | `Notification` with type `ToolPermission` | Gemini waits for permission | needs input |
-| `AfterAgent` | The turn ended | needs input |
+| `AfterAgent` | The turn ended | idle |
 
 ## Skills
 

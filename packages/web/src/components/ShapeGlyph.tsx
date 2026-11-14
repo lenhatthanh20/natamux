@@ -40,6 +40,16 @@ function StateShape({ kind, art }: { kind: ShapeKind; art: number }) {
       return <circle cx={half} cy={half} r={half} fill="currentColor" />
     case 'ready':
       return ring
+    case 'idle': {
+      const r = round(art / 8)
+      return (
+        <>
+          <circle cx={r} cy={half} r={r} fill="currentColor" />
+          <circle cx={half} cy={half} r={r} fill="currentColor" />
+          <circle cx={art - r} cy={half} r={r} fill="currentColor" />
+        </>
+      )
+    }
     case 'draft':
       return (
         <circle

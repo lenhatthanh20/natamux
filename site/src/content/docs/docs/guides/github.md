@@ -69,7 +69,7 @@ The **Progress** view of the details panel shows the context source and the issu
 
 Natamux can open a GitHub issue for a task that you made in the app, and link the two. The issue has the task title as its title. Its body is the spec (`spec.md`) when there is one, and otherwise the task notes, plus a line `Made by Natamux for T-0001.`
 
-Natamux opens no issue on its own until you turn it on. Choose when in the **Issues** tab of [Project settings](/docs/guides/project-settings/#the-issues-tab). It writes `tracker.createIssue` in the `.natamux.json` file at the root of the repository.
+Natamux opens no issue on its own until you turn it on. Choose when in the **General** tab of [Project settings](/docs/guides/project-settings/#github-issues). It writes `tracker.createIssue` in the `.natamux.json` file at the root of the repository.
 
 | Value | Natamux opens the issue |
 |---|---|

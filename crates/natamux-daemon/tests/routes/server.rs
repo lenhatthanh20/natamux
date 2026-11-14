@@ -302,8 +302,10 @@ impl TestDaemon {
     /// The pipeline of the default project: agent stages that offer no workflow, as the tests of
     /// Node have it. Write it before the first task is made.
     pub fn set_simple_pipeline(&self) {
-        let stages = ["implement", "review", "release"]
-            .map(|id| json!({ "id": id, "kind": "agent", "gate": "auto" }));
+        let stages = ["context", "implement", "review", "release"].map(|id| {
+            let kind = if id == "context" { "context" } else { "agent" };
+            json!({ "id": id, "kind": kind, "gate": "auto" })
+        });
         let file = self.root.join("repo/.natamux.json");
         std::fs::write(file, json!({ "stages": stages }).to_string()).unwrap();
     }

@@ -36,16 +36,18 @@ pub enum SheetGroup {
     ListsAndTrees,
     Panes,
     Diff,
+    Editor,
     Palette,
 }
 
 impl SheetGroup {
-    pub const ALL: [SheetGroup; 6] = [
+    pub const ALL: [SheetGroup; 7] = [
         SheetGroup::Global,
         SheetGroup::SingleKeys,
         SheetGroup::ListsAndTrees,
         SheetGroup::Panes,
         SheetGroup::Diff,
+        SheetGroup::Editor,
         SheetGroup::Palette,
     ];
 
@@ -56,6 +58,7 @@ impl SheetGroup {
             SheetGroup::ListsAndTrees => "Lists and trees",
             SheetGroup::Panes => "Panes",
             SheetGroup::Diff => "Diff",
+            SheetGroup::Editor => "Editor",
             SheetGroup::Palette => "Palette",
         }
     }

@@ -63,7 +63,7 @@ fn settings(mode: &str, zoom: f32, terminal: &ResolvedFont) -> Value {
         mode,
         names: ThemeNames::default(),
     };
-    serde_json::from_str(&user_settings(theme, zoom, terminal, None)).unwrap_or(Value::Null)
+    serde_json::from_str(&user_settings(theme, zoom, terminal, None, false)).unwrap_or(Value::Null)
 }
 
 #[test]
@@ -89,7 +89,7 @@ fn gives_zed_the_picked_theme_of_each_look() {
             dark: "Rosé Pine",
         },
     };
-    let text = user_settings(theme, 1.0, &font("Lilex", 13.0), None);
+    let text = user_settings(theme, 1.0, &font("Lilex", 13.0), None, false);
     let value: Value = serde_json::from_str(&text).unwrap_or(Value::Null);
     assert_eq!(value["theme"]["mode"], "system");
     assert_eq!(value["theme"]["light"], "Catppuccin Latte");
@@ -139,10 +139,54 @@ fn hides_the_editor_scrollbars_in_a_shot_only() {
         mode: "dark",
         names: ThemeNames::default(),
     };
-    let shot: Value = serde_json::from_str(&user_settings(theme, 1.0, &font, Some("settings")))
-        .unwrap_or(Value::Null);
+    let shot: Value =
+        serde_json::from_str(&user_settings(theme, 1.0, &font, Some("settings"), false))
+            .unwrap_or(Value::Null);
     assert_eq!(shot["scrollbar"]["show"], "never");
-    assert!(settings("dark", 1.0, &font).get("scrollbar").is_none());
+    assert!(
+        settings("dark", 1.0, &font)["scrollbar"]
+            .get("show")
+            .is_none()
+    );
+}
+
+// The JSON tab's bar drew a blue cursor line on its thumb and a track border line (T-0294).
+#[test]
+fn draws_only_the_thumb_of_the_editor_scrollbars() {
+    let font = font("Lilex", 15.0);
+    let theme = ThemeSetting {
+        mode: "dark",
+        names: ThemeNames::default(),
+    };
+    let shot: Value =
+        serde_json::from_str(&user_settings(theme, 1.0, &font, Some("settings"), false))
+            .unwrap_or(Value::Null);
+    for value in [settings("dark", 1.0, &font), shot] {
+        for marker in ["cursors", "selected_text", "selected_symbol"] {
+            assert_eq!(value["scrollbar"][marker], false, "{marker}");
+        }
+        assert_eq!(
+            value["experimental.theme_overrides"]["scrollbar.track.border"],
+            CLEAR
+        );
+    }
+}
+
+/// T-0316: sticky headers in the editor tab, whitespace only with the diff's toggle.
+#[test]
+fn turns_sticky_scroll_on_and_shows_whitespace_only_when_asked() {
+    let theme = || ThemeSetting {
+        mode: "dark",
+        names: ThemeNames::default(),
+    };
+    let font = font("Lilex", 13.0);
+    let off: Value = serde_json::from_str(&user_settings(theme(), 1.0, &font, None, false))
+        .unwrap_or(Value::Null);
+    assert_eq!(off["sticky_scroll"]["enabled"], true);
+    assert_eq!(off.get("show_whitespaces"), None);
+    let on: Value = serde_json::from_str(&user_settings(theme(), 1.0, &font, None, true))
+        .unwrap_or(Value::Null);
+    assert_eq!(on["show_whitespaces"], "all");
 }
 
 // The caret of a focused box blinks every 500 ms, so a shot had it in one run and not in the
@@ -154,8 +198,9 @@ fn holds_the_caret_solid_in_a_shot_only() {
         mode: "dark",
         names: ThemeNames::default(),
     };
-    let shot: Value = serde_json::from_str(&user_settings(theme, 1.0, &font, Some("settings")))
-        .unwrap_or(Value::Null);
+    let shot: Value =
+        serde_json::from_str(&user_settings(theme, 1.0, &font, Some("settings"), false))
+            .unwrap_or(Value::Null);
     assert_eq!(shot["cursor_blink"], false);
     assert!(settings("dark", 1.0, &font).get("cursor_blink").is_none());
 }
@@ -170,7 +215,7 @@ fn shows_the_scrollbars_in_the_scrollbar_shots_only() {
         names: ThemeNames::default(),
     };
     let shown = |state: &str| -> Value {
-        let text = user_settings(theme, 1.0, &font, Some(state));
+        let text = user_settings(theme, 1.0, &font, Some(state), false);
         let value: Value = serde_json::from_str(&text).unwrap_or(Value::Null);
         value["scrollbar"]["show"].clone()
     };
@@ -184,8 +229,13 @@ fn shows_the_scrollbars_in_the_scrollbar_shots_only() {
         1.0,
         &font,
         Some("terminal-scrollbar"),
+        false,
     ))
     .unwrap_or(Value::Null);
     assert_eq!(shot["cursor_blink"], false);
-    assert!(settings("light", 1.0, &font).get("scrollbar").is_none());
+    assert!(
+        settings("light", 1.0, &font)["scrollbar"]
+            .get("show")
+            .is_none()
+    );
 }

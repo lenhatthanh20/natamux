@@ -7,10 +7,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 /// `TASK_STATES` in `packages/core/src/tasks/task-state.ts`.
-pub const TASK_STATES: [&str; 9] = [
+pub const TASK_STATES: [&str; 10] = [
     "draft",
     "ready",
     "running",
+    "idle",
     "needs-input",
     "review",
     "blocked",
@@ -50,6 +51,8 @@ pub enum TaskState {
     Draft,
     Ready,
     Running,
+    /// The agent ended its turn without a question: nothing waits for the user.
+    Idle,
     NeedsInput,
     Review,
     Blocked,
@@ -67,6 +70,7 @@ impl TaskState {
             TaskState::Draft => "Draft",
             TaskState::Ready => "Ready",
             TaskState::Running => "Running",
+            TaskState::Idle => "Idle",
             TaskState::NeedsInput => "Needs input",
             TaskState::Review => "Review",
             TaskState::Blocked => "Blocked",
@@ -82,12 +86,21 @@ impl TaskState {
         matches!(self, TaskState::Done | TaskState::Cancelled)
     }
 
+    /// The agent is there: it works, ended its turn, or waits for an answer.
+    pub fn has_live_agent(self) -> bool {
+        matches!(
+            self,
+            TaskState::Running | TaskState::Idle | TaskState::NeedsInput
+        )
+    }
+
     /// The state's name, as the daemon writes it.
     pub fn name(self) -> &'static str {
         match self {
             TaskState::Draft => "draft",
             TaskState::Ready => "ready",
             TaskState::Running => "running",
+            TaskState::Idle => "idle",
             TaskState::NeedsInput => "needs-input",
             TaskState::Review => "review",
             TaskState::Blocked => "blocked",
@@ -115,6 +128,9 @@ pub struct Task {
     pub labels: Vec<String>,
     #[serde(default)]
     pub agent: Option<String>,
+    /// Passed to the task's agent as `--model`; None: the agent's own default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
     #[serde(default)]
     pub branch: Option<String>,
     #[serde(default)]
@@ -151,6 +167,10 @@ pub struct Task {
     pub skip_stages: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub without_agent: Option<bool>,
+    /// The task works in the project folder itself, not in a worktree: Natamux never makes a
+    /// worktree for it nor deletes that folder or its branch.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub main_checkout: Option<bool>,
     #[serde(default)]
     pub context: Option<TaskContext>,
     #[serde(default)]
@@ -242,7 +262,14 @@ pub struct TemplateTaskInput {
 }
 
 /// `EDITABLE_FIELDS`: what a person may change after a task is created.
-pub const EDITABLE_FIELDS: [&str; 5] = ["title", "description", "priority", "labels", "dependsOn"];
+pub const EDITABLE_FIELDS: [&str; 6] = [
+    "title",
+    "description",
+    "priority",
+    "labels",
+    "dependsOn",
+    "model",
+];
 
 /// The body of `PATCH /tasks/:id` (`updateTaskInputSchema`): a field left out stays as it is.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
@@ -258,6 +285,9 @@ pub struct TaskChanges {
     pub labels: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub depends_on: Option<Vec<String>>,
+    /// An empty name clears the model.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
 }
 
 /// The answer of `POST /tasks`, `POST /templates/:id/tasks`, `PATCH /tasks/:id`,
@@ -373,6 +403,14 @@ mod tests {
         ] {
             assert!(!is_task_id(id), "{id}");
         }
+    }
+
+    #[test]
+    fn reads_and_writes_the_idle_state() {
+        let task: Task = serde_json::from_str(&TASK.replace("needs-input", "idle")).unwrap();
+        assert_eq!(task.state, TaskState::Idle);
+        assert_eq!(serde_json::to_value(TaskState::Idle).unwrap(), "idle");
+        assert_eq!(TaskState::Idle.name(), "idle");
     }
 
     #[test]

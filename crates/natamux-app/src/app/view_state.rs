@@ -10,7 +10,8 @@ use serde_json::{Map, Value, json};
 use crate::app::layout_mode::{DETAILS_WIDTH, SIDEBAR_WIDTH};
 use crate::app::theme_catalog::ThemeNames;
 use crate::app::view_rules::{
-    DetailsView, Entries, MAX_RECENT, WorkspaceTab, parse_pinned, with_seen, with_tab,
+    DetailsView, Entries, MAX_RECENT, WorkspaceTab, parse_pinned, with_maximized, with_seen,
+    with_tab, with_terminal,
 };
 use crate::git::change_tree::FileViewMode;
 use crate::sidebar::sidebar_tree::{Folds, with_fold};
@@ -58,6 +59,8 @@ pub struct DiffFlags {
     pub show_moves: bool,
     pub wrap_prose: bool,
     pub wrap_code: bool,
+    /// Zed's `show_whitespaces: "all"` in every editor (T-0316).
+    pub show_whitespace: bool,
 }
 
 impl Default for DiffFlags {
@@ -69,6 +72,7 @@ impl Default for DiffFlags {
             show_moves: false,
             wrap_prose: true,
             wrap_code: false,
+            show_whitespace: false,
         }
     }
 }
@@ -84,6 +88,7 @@ impl DiffFlags {
             show_moves: get("showMoves", default.show_moves),
             wrap_prose: get("wrapProse", default.wrap_prose),
             wrap_code: get("wrapCode", default.wrap_code),
+            show_whitespace: get("showWhitespace", default.show_whitespace),
         }
     }
 
@@ -95,6 +100,7 @@ impl DiffFlags {
             "showMoves": self.show_moves,
             "wrapProse": self.wrap_prose,
             "wrapCode": self.wrap_code,
+            "showWhitespace": self.show_whitespace,
         })
     }
 }
@@ -124,10 +130,16 @@ pub struct ViewState {
     pub sections: Vec<(String, bool)>,
     /// The details dock is open, for every task at once (one flag, as a Zed dock).
     pub details_open: bool,
-    /// System notifications for tasks that start to need the user (off until switched on).
+    /// System notifications for tasks that start to need the user (on by default).
     pub notify: bool,
+    /// Notifications also while the window is in front; off, the open window is enough.
+    pub notify_always: bool,
     /// The last workspace tab of each task (`tabByTask`): terminal, changes, history or docs.
     pub tabs: Entries<WorkspaceTab>,
+    /// Tasks whose terminals show one at a time, full size, until the user restores them.
+    pub maximized: Vec<String>,
+    /// The terminal each maximized task showed last.
+    pub terminals: Entries<String>,
     /// The Docs tab shows the raw text (`natamux.docs-source`).
     pub docs_source: bool,
     pub changes_view: FileViewMode,
@@ -144,6 +156,10 @@ pub struct ViewState {
     pub terminal_font: Option<Value>,
     /// Task ids of the workspaces opened, newest first (`natamux.recent`).
     pub recent: Vec<String>,
+    /// The version whose release notes the app last showed or skipped (`whatsNewSeen`, T-0301).
+    pub whats_new_seen: Option<String>,
+    /// The editor tab trims trailing whitespace and ends the file with one newline on save.
+    pub clean_on_save: bool,
 }
 
 impl Default for ViewState {
@@ -165,8 +181,11 @@ impl Default for ViewState {
             details_view: None,
             sections: Vec::new(),
             details_open: true,
-            notify: false,
+            notify: true,
+            notify_always: false,
             tabs: Vec::new(),
+            maximized: Vec::new(),
+            terminals: Vec::new(),
             docs_source: false,
             changes_view: FileViewMode::List,
             files_width: FILES_DEFAULT,
@@ -176,6 +195,8 @@ impl Default for ViewState {
             ui_size: "default".to_owned(),
             terminal_font: None,
             recent: Vec::new(),
+            whats_new_seen: None,
+            clean_on_save: false,
         }
     }
 }
@@ -284,7 +305,17 @@ impl ViewState {
                 }),
             details_open: flag(map.get("detailsOpen"), default.details_open),
             notify: flag(map.get("notify"), default.notify),
+            notify_always: flag(map.get("notifyAlways"), default.notify_always),
             tabs: tabs_of(pairs("tabs")),
+            maximized: strings(map.get("maximized"))
+                .iter()
+                .fold(Vec::new(), |tasks, id| with_maximized(&tasks, id, true)),
+            terminals: pairs("terminals")
+                .into_iter()
+                .filter_map(|(id, name)| Some((id, name.as_str()?.to_owned())))
+                .fold(Vec::new(), |names, (id, name)| {
+                    with_terminal(&names, &id, &name)
+                }),
             docs_source: flag(map.get("docsSource"), default.docs_source),
             changes_view: map
                 .get("changesView")
@@ -303,6 +334,11 @@ impl ViewState {
                 .into_iter()
                 .take(MAX_RECENT)
                 .collect(),
+            whats_new_seen: map
+                .get("whatsNewSeen")
+                .and_then(Value::as_str)
+                .map(str::to_owned),
+            clean_on_save: flag(map.get("cleanOnSave"), default.clean_on_save),
         }
     }
 
@@ -344,10 +380,17 @@ impl ViewState {
                 .collect::<Map<String, Value>>(),
             "detailsOpen": self.details_open,
             "notify": self.notify,
+            "notifyAlways": self.notify_always,
             "tabs": self
                 .tabs
                 .iter()
                 .map(|(id, tab)| (id.clone(), Value::from(tab.name())))
+                .collect::<Map<String, Value>>(),
+            "maximized": self.maximized,
+            "terminals": self
+                .terminals
+                .iter()
+                .map(|(id, name)| (id.clone(), Value::from(name.as_str())))
                 .collect::<Map<String, Value>>(),
             "docsSource": self.docs_source,
             "changesView": self.changes_view.name(),
@@ -359,6 +402,8 @@ impl ViewState {
             "uiSize": self.ui_size,
             "terminalFont": self.terminal_font,
             "recent": self.recent,
+            "whatsNewSeen": self.whats_new_seen,
+            "cleanOnSave": self.clean_on_save,
         });
         format!("{value:#}\n")
     }
@@ -417,6 +462,25 @@ impl ViewState {
             .iter()
             .find(|(id, _)| id == task_id)
             .map(|(_, tab)| *tab)
+    }
+
+    pub fn is_maximized(&self, task_id: &str) -> bool {
+        self.maximized.iter().any(|id| id == task_id)
+    }
+
+    pub fn set_maximized(&mut self, task_id: &str, on: bool) {
+        self.maximized = with_maximized(&self.maximized, task_id, on);
+    }
+
+    pub fn remember_terminal(&mut self, task_id: &str, name: &str) {
+        self.terminals = with_terminal(&self.terminals, task_id, name);
+    }
+
+    pub fn terminal_of(&self, task_id: &str) -> Option<&str> {
+        self.terminals
+            .iter()
+            .find(|(id, _)| id == task_id)
+            .map(|(_, name)| name.as_str())
     }
 
     pub fn set_files_width(&mut self, width: u32) {

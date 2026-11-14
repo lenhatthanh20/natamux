@@ -6,36 +6,28 @@ use std::sync::Arc;
 use natamux_daemon::config::load_config;
 use natamux_daemon::shared::scheduler::Scheduler;
 use natamux_daemon::start::start;
-use natamux_daemon::terminals::login_path::{WAIT, read_path_message, wait_for_login_path};
+use natamux_daemon::terminals::login_path::{expect_login_path, read_path_message};
 use natamux_pty::{Env, spawn_shell};
 
 #[tokio::main]
 async fn main() -> std::process::ExitCode {
     let mut env: Env = std::env::vars().collect();
     let app_pipe = env.remove("NATAMUX_PARENT_PIPE").as_deref() == Some("1");
-    let (path_pipe, parent_end) =
-        if env.get("NATAMUX_PATH_PENDING").map(String::as_str) == Some("1") {
-            let (send, receive) = std::sync::mpsc::channel();
-            let (end_send, end_receive) = tokio::sync::oneshot::channel();
-            std::thread::spawn(move || {
-                read_path_message(std::io::stdin().lock(), send, end_send);
-            });
-            (Some(receive), Some(end_receive))
-        } else if app_pipe {
-            let (end_send, end_receive) = tokio::sync::oneshot::channel();
-            std::thread::spawn(move || {
-                read_parent_end(std::io::stdin().lock(), end_send);
-            });
-            (None, Some(end_receive))
-        } else {
-            (None, None)
-        };
-    // The daemon's own git and gh calls need it too: git-lfs from Homebrew is a filter of git.
-    if let Some(path) = wait_for_login_path(&mut env, path_pipe.as_ref(), WAIT) {
-        // SAFETY: Rust's own `Command` takes the same lock as `set_var`, and no service has
-        // started yet, so no C code reads the environment now.
-        unsafe { std::env::set_var("PATH", path) };
-    }
+    let parent_end = if expect_login_path(&mut env) {
+        let (end_send, end_receive) = tokio::sync::oneshot::channel();
+        std::thread::spawn(move || {
+            read_path_message(std::io::stdin().lock(), end_send);
+        });
+        Some(end_receive)
+    } else if app_pipe {
+        let (end_send, end_receive) = tokio::sync::oneshot::channel();
+        std::thread::spawn(move || {
+            read_parent_end(std::io::stdin().lock(), end_send);
+        });
+        Some(end_receive)
+    } else {
+        None
+    };
     let cwd = std::env::current_dir().unwrap_or_default();
     let config = match load_config(&env, &cwd) {
         Ok(config) => config,

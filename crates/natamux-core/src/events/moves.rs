@@ -8,7 +8,7 @@ use serde_json::Value;
 use crate::stages::position::{Paths, StagePosition, get};
 use crate::stages::terminal_lane::{PinnedTerminals, stage_of_terminal};
 
-use TaskState::{Blocked, Draft, Failed, NeedsInput, Ready, Review, Running};
+use TaskState::{Blocked, Draft, Failed, Idle, NeedsInput, Ready, Review, Running};
 
 /// Where a move leads: a state, the end of the stage, or its gate (end when the gate is auto,
 /// wait for approval when it is manual).
@@ -33,6 +33,11 @@ const fn to(from: &'static [TaskState], state: TaskState) -> Move {
     }
 }
 
+// Every state but the finished ones.
+const SKIPPABLE: [TaskState; 8] = [
+    Draft, Ready, Running, Idle, NeedsInput, Review, Blocked, Failed,
+];
+
 /// `MOVES`.
 fn table(kind: &str) -> Option<Move> {
     let finish = |from| Move {
@@ -46,21 +51,21 @@ fn table(kind: &str) -> Option<Move> {
         "task.retried" => to(&[Failed], Ready),
         "agent.started" => to(&[Ready], Running),
         "stage.started" => to(&[Draft, Ready], Running),
-        "agent.asked" => to(&[Running], NeedsInput),
-        "agent.resumed" => to(&[NeedsInput, Review, Failed], Running),
-        "agent.finished" => to(&[Running], NeedsInput),
-        "agent.failed" => to(&[Running, NeedsInput], Failed),
+        "agent.asked" => to(&[Running, Idle], NeedsInput),
+        "agent.resumed" => to(&[Idle, NeedsInput, Review, Failed], Running),
+        "agent.finished" => to(&[Running], Idle),
+        "agent.failed" => to(&[Running, Idle, NeedsInput], Failed),
         "agent.waiting" => to(&[Running], Running),
-        "agent.stopped" => to(&[Running, NeedsInput], Ready),
-        "stage.reported" => to(&[Running, NeedsInput], Running),
+        "agent.stopped" => to(&[Running, Idle, NeedsInput], Ready),
+        "stage.reported" => to(&[Running, Idle, NeedsInput], Running),
         "stage.checked" => Move {
             from: &[Running],
             to: MoveTo::Gate,
         },
-        "stage.approved" | "review.approved" => finish(&[Review, NeedsInput]),
+        "stage.approved" | "review.approved" => finish(&[Review, Idle, NeedsInput]),
         "stage.passed" => finish(&[Ready, Running, Review]),
         "stage.failed" => to(&[Running], Failed),
-        "stage.skipped" => finish(&[Draft, Ready, Running, NeedsInput, Review, Blocked, Failed]),
+        "stage.skipped" => finish(&SKIPPABLE),
         _ => return None,
     })
 }

@@ -6,7 +6,7 @@
 //! Locks: the map of sessions is only held for a lookup, never while a session is locked by the
 //! same call, and nothing is published on the bus while a lock is held.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -54,6 +54,9 @@ pub struct TerminalOptions {
     pub on_exit: Option<Arc<ShellListener>>,
     /// `NATAMUX_INPUT_TRACE=1`: log the input of every shell, see `input_trace`.
     pub trace_input: bool,
+    /// The data folder where the last screens of open shells are saved, so they show at once
+    /// after a restart (`screen_files`). None: no screens are saved.
+    pub screens_in: Option<PathBuf>,
 }
 
 #[derive(Default)]
@@ -83,6 +86,8 @@ impl TerminalService {
                 output_seen: Mutex::new(HashMap::new()),
                 next_attach: AtomicU64::new(1),
                 starting: Mutex::new(()),
+                started: Mutex::new(HashSet::new()),
+                saved_screens: Mutex::new(HashMap::new()),
                 parsing: Turns::with_lanes(parse_lanes()),
                 this: this.clone(),
             }),
@@ -123,6 +128,19 @@ impl TerminalService {
             .collect();
         names.sort_by_key(|name| name.parse::<u32>().unwrap_or(u32::MAX));
         names
+    }
+
+    /// The shell id of each open terminal of a task. A client whose ended terminal sees another
+    /// id under the same name knows a new shell took that name.
+    pub fn shell_ids(&self, task_id: &str) -> HashMap<String, String> {
+        self.inner
+            .sessions_of_task(task_id)
+            .iter()
+            .map(|session| {
+                let session = lock(session);
+                (session.terminal.clone(), session.shell_id.clone())
+            })
+            .collect()
     }
 
     /// Starts the shell when there is none. A client that is not on screen does not take the
@@ -300,6 +318,12 @@ impl TerminalService {
                 self.inner.close_when_idle(&mut guard);
             }
         }
+    }
+
+    /// The screens of all shells that printed since their last save, before the shutdown ends
+    /// them.
+    pub fn save_screens(&self) {
+        self.inner.save_all_screens();
     }
 
     /// All output so far is sent. The screen parses at once, so only the batch waits.

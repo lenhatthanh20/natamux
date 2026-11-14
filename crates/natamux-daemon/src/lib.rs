@@ -8,9 +8,12 @@ pub mod agents {
     pub mod errors;
     pub mod generic_signals;
     mod hook_activity;
+    mod hook_paths;
     pub mod hook_service;
     mod hook_usage;
+    mod hook_waits;
     pub mod idle_pause;
+    mod launch_text;
     pub mod runner;
     pub mod task_access;
     mod usage_file;
@@ -73,6 +76,7 @@ pub mod terminals {
     pub mod open_shells;
     mod open_shells_pause;
     mod open_shells_sync;
+    pub mod screen_files;
     pub mod service;
     pub mod session_input;
     pub mod session_lifecycle;
@@ -119,6 +123,7 @@ pub mod workspaces {
     pub mod errors;
     pub mod fan_out;
     pub mod files;
+    pub mod main_checkout;
     pub mod new_workspace;
     pub mod publish;
     pub mod remove;

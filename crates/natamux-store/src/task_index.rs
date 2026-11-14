@@ -10,7 +10,7 @@ use natamux_core::json::{parse_js, to_js_string, to_js_string_of};
 use natamux_core::tasks::task::validate_task;
 use natamux_proto::events::task_event::{StoredEvent, TaskEvent};
 use natamux_proto::tasks::task::Task;
-use rusqlite::{Connection, params};
+use rusqlite::{Connection, OptionalExtension, params};
 use serde_json::Value;
 
 use crate::event_log::LoggedEvent;
@@ -81,6 +81,49 @@ pub struct TaskChange<'a> {
 
 pub type IndexResult<T> = Result<T, String>;
 
+/// One change as the values its statements bind. A writer makes them before the commit, so the
+/// writer that commits a batch does no JSON work for the others.
+pub struct ChangeRows {
+    task_id: String,
+    task: Option<[String; 6]>,
+    events: Vec<EventRow>,
+    files: TaskFiles,
+}
+
+struct EventRow {
+    values: [String; 5],
+    accepted: bool,
+}
+
+impl ChangeRows {
+    pub fn new(task_id: &str, change: &TaskChange) -> ChangeRows {
+        let task = change.task.map(|task| {
+            [
+                task.id.clone(),
+                task.title.clone(),
+                task.state.name().to_string(),
+                task.priority.clone(),
+                task.updated_at.clone(),
+                to_js_string_of(task),
+            ]
+        });
+        let events = change
+            .events
+            .iter()
+            .map(|logged| EventRow {
+                values: event_values(&logged.event),
+                accepted: logged.accepted,
+            })
+            .collect();
+        ChangeRows {
+            task_id: task_id.to_string(),
+            task,
+            events,
+            files: change.files,
+        }
+    }
+}
+
 fn sql(error: rusqlite::Error) -> String {
     error.to_string()
 }
@@ -123,14 +166,16 @@ impl TaskIndex {
 
     /// One SQLite transaction per change, so a change costs one commit.
     pub fn record(&mut self, task_id: &str, change: &TaskChange) -> IndexResult<()> {
+        self.record_rows(std::slice::from_ref(&ChangeRows::new(task_id, change)))
+    }
+
+    /// Several changes in one transaction: all of them, or none.
+    pub fn record_rows(&mut self, changes: &[ChangeRows]) -> IndexResult<()> {
         self.transaction(|db| {
-            if let Some(task) = change.task {
-                upsert_task(db, task)?;
+            for change in changes {
+                write_rows(db, change)?;
             }
-            for logged in change.events {
-                append_event(db, &logged.event, logged.accepted)?;
-            }
-            store_files(db, task_id, change.files)
+            Ok(())
         })
     }
 
@@ -179,12 +224,16 @@ impl TaskIndex {
                     .map_err(sql)?
             }
         };
-        rows.iter()
-            .map(|data| {
-                let value = parse_js(data).map_err(|error| error.to_string())?;
-                validate_task(&value).map_err(|error| error.to_json_text())
-            })
-            .collect()
+        rows.iter().map(String::as_str).map(parse_row).collect()
+    }
+
+    pub fn get_task(&self, task_id: &str) -> IndexResult<Option<Task>> {
+        let data: Option<String> = self
+            .db
+            .prepare_cached("select data from tasks_index where id = ?")
+            .and_then(|mut statement| statement.query_row([task_id], |row| row.get(0)).optional())
+            .map_err(sql)?;
+        data.map(|data| parse_row(&data)).transpose()
     }
 
     pub fn task_files(&self) -> IndexResult<HashMap<String, TaskFiles>> {
@@ -290,6 +339,12 @@ impl TaskIndex {
     }
 }
 
+/// Parsed with the schema: a row written by an older version may miss newer fields.
+fn parse_row(data: &str) -> IndexResult<Task> {
+    let value = parse_js(data).map_err(|error| error.to_string())?;
+    validate_task(&value).map_err(|error| error.to_json_text())
+}
+
 fn upsert_task(db: &Connection, task: &Task) -> rusqlite::Result<usize> {
     db.prepare_cached(UPSERT_TASK)?.execute(params![
         task.id,
@@ -301,16 +356,43 @@ fn upsert_task(db: &Connection, task: &Task) -> rusqlite::Result<usize> {
     ])
 }
 
+/// Task id, source, type, time and payload, as `APPEND_EVENT` binds them.
+fn event_values(event: &TaskEvent) -> [String; 5] {
+    [
+        event.task_id.clone(),
+        event.source.clone(),
+        event.kind.clone(),
+        event.at.clone(),
+        to_js_string(&Value::Object(event.payload.clone())),
+    ]
+}
+
 fn append_event(db: &Connection, event: &TaskEvent, accepted: bool) -> rusqlite::Result<usize> {
-    let payload = to_js_string(&Value::Object(event.payload.clone()));
+    append_values(db, &event_values(event), accepted)
+}
+
+fn append_values(db: &Connection, row: &[String; 5], accepted: bool) -> rusqlite::Result<usize> {
+    let [task_id, source, kind, at, payload] = row;
     db.prepare_cached(APPEND_EVENT)?.execute(params![
-        event.task_id,
-        event.source,
-        event.kind,
-        event.at,
+        task_id,
+        source,
+        kind,
+        at,
         payload,
         i64::from(accepted),
     ])
+}
+
+/// The task row, the event rows and the file stats of one change: always together.
+fn write_rows(db: &Connection, change: &ChangeRows) -> rusqlite::Result<()> {
+    if let Some(task) = &change.task {
+        db.prepare_cached(UPSERT_TASK)?
+            .execute(rusqlite::params_from_iter(task.iter()))?;
+    }
+    for event in &change.events {
+        append_values(db, &event.values, event.accepted)?;
+    }
+    store_files(db, &change.task_id, change.files)
 }
 
 fn store_files(db: &Connection, task_id: &str, files: TaskFiles) -> rusqlite::Result<()> {

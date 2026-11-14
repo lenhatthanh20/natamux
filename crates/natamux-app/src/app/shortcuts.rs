@@ -8,9 +8,10 @@ use super::commands::{Command, is_single_key, reaches_app_from_terminal};
 use super::commands::{MenuName, all_commands, command_by_id, keystroke, menu_items};
 pub use super::commands_app::{
     AddProject, CheckForUpdates, ImportIssues, OpenJump, OpenPalette, OpenSettings,
-    RestartToUpdate, ShowShortcuts, ToggleAutomaticUpdates, UseCompactSize, UseDarkTheme,
-    UseDefaultSize, UseLargeSize, UseLightTheme, UseSystemTheme,
+    RestartToUpdate, ShowShortcuts, ShowWhatsNew, ToggleAutomaticUpdates, UseCompactSize,
+    UseDarkTheme, UseDefaultSize, UseLargeSize, UseLightTheme, UseSystemTheme,
 };
+pub use super::commands_editor::{FindInEditor, GoToLine, ShowOutline};
 pub use super::commands_files::{CloseTab, SaveFile, ShowDocsTab, ShowOpenFile, ShowWorktreeFiles};
 pub use super::commands_stages::{MoveStageDown, MoveStageUp, ShowTasksProgress};
 use crate::ime::ime_check::SubmitWord;
@@ -50,6 +51,7 @@ actions!(
         StartBench,
         StopBench,
         CheckIme,
+        CloseSettings,
         CloseTool,
         ShowAgents,
         ToggleAgents,
@@ -79,7 +81,8 @@ actions!(
         DraftCommit,
         AddReviewComment,
         SendReviewComments,
-        CommitChanges
+        CommitChanges,
+        UndoMove
     ]
 );
 
@@ -162,6 +165,7 @@ command_actions! {
     "diff.prev-change" => PrevChange,
     "diff.comment" => CommentOnDiff,
     "changes.rollback" => RollbackFile,
+    "diff.undo-move" => UndoMove,
     "diff.draft-commit" => DraftCommit,
     "diff.add-comment" => AddReviewComment,
     "diff.send-comments" => SendReviewComments,
@@ -174,6 +178,11 @@ command_actions! {
     "files.show" => ShowWorktreeFiles,
     "file.save" => SaveFile,
     "tab.close" => CloseTab,
+    "editor.find" => FindInEditor,
+    "editor.find-next" => FindNext,
+    "editor.find-previous" => FindPrevious,
+    "editor.go-to-line" => GoToLine,
+    "editor.outline" => ShowOutline,
     "palette.open" => OpenPalette,
     "jump.open" => OpenJump,
     "help.shortcuts" => ShowShortcuts,
@@ -181,6 +190,7 @@ command_actions! {
     "app.update-check" => CheckForUpdates,
     "app.update-auto" => ToggleAutomaticUpdates,
     "app.update-restart" => RestartToUpdate,
+    "app.whats-new" => ShowWhatsNew,
     "theme.system" => UseSystemTheme,
     "theme.light" => UseLightTheme,
     "theme.dark" => UseDarkTheme,
@@ -225,12 +235,37 @@ fn terminal_keeps(mac: bool) -> Vec<KeyBinding> {
         .collect()
 }
 
+/// The Settings key (Mod+,) closes the popup while focus is in it (T-0306). The menu, the
+/// palette and the account menu keep `OpenSettings`, which only opens.
+fn settings_keys(mac: bool) -> Vec<KeyBinding> {
+    command_by_id("app.settings")
+        .map(|command| command.keys)
+        .unwrap_or_default()
+        .iter()
+        .map(|key| KeyBinding::new(&keystroke(key, mac), CloseSettings, Some(SETTINGS_CONTEXT)))
+        .collect()
+}
+
+/// Mod+Z in the diff's read-only editors undoes the last revert (T-0314). The text box keys bind
+/// it to the editor's own undo at the same depth, and of two such bindings the later one wins,
+/// so this goes after them.
+fn diff_undo_keys(mac: bool) -> Vec<KeyBinding> {
+    let mut bindings = Vec::new();
+    push_bindings("diff.undo-move", UndoMove, mac, &mut bindings);
+    bindings
+}
+
+/// The key context of the Settings popup's root.
+pub const SETTINGS_CONTEXT: &str = "Settings";
+
 pub fn bind(cx: &mut App) {
     cx.on_action(|_: &Quit, cx| cx.quit());
     let mac = cfg!(target_os = "macos");
     cx.bind_keys(command_bindings(mac));
+    cx.bind_keys(settings_keys(mac));
     cx.bind_keys(terminal_keeps(mac));
     super::text_boxes::bind(cx, mac);
+    cx.bind_keys(diff_undo_keys(mac));
     // A terminal sends ctrl-c and the like to the shell; only copy and paste are the app's.
     let (copy, paste) = if mac {
         ("cmd-c", "cmd-v")
@@ -293,6 +328,7 @@ mod tests {
         assert!(action_for("app.update-check").is_some());
         assert!(action_for("app.update-auto").is_some());
         assert!(action_for("app.update-restart").is_some());
+        assert!(action_for("app.whats-new").is_some());
     }
 
     #[test]
@@ -312,6 +348,29 @@ mod tests {
             .map(|command| command.keys.len() * command.contexts.len().max(1))
             .sum();
         assert_eq!(command_bindings(true).len(), expected);
+    }
+
+    #[test]
+    fn the_settings_key_closes_settings_only_inside_it() {
+        for mac in [true, false] {
+            let keys = settings_keys(mac);
+            assert_eq!(keys.len(), 1);
+            let key = &keys[0];
+            assert_eq!(key.action().name(), "natamux::CloseSettings");
+            assert!(key.predicate().is_some());
+            let strokes = |binding: &KeyBinding| -> Vec<String> {
+                binding
+                    .keystrokes()
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect()
+            };
+            let open = command_bindings(mac)
+                .iter()
+                .find(|binding| binding.action().name() == "natamux::OpenSettings")
+                .map(strokes);
+            assert_eq!(open, Some(strokes(key)));
+        }
     }
 
     #[test]

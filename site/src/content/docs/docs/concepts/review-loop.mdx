@@ -54,9 +54,9 @@ Test spec waits for your approval because the test cases decide what **Automated
 
 **Review** is an `agent` stage with its own terminal (`"ownShell": true`). It runs in **Terminal 5**, apart from the agent that wrote the code.
 
-- It reads `spec.md` and `test-spec.md`, then the changes: what is not committed (`git status`, `git diff`) and the commits of the branch that are not on the default branch.
+- It reads `spec.md` and the reports of earlier stages, such as `test-spec.md` in this workflow, then the changes: what is not committed (`git status`, `git diff`) and the commits of the branch that are not on the default branch.
 - It does not change code.
-- It writes `review.md` with a **Findings** section: each problem that must be fixed, with its file and why, or "None".
+- It writes `review.md`. Each round adds a **Revision N** at the end of the file, with a **Findings** section: each problem that must be fixed, with its file and why, or "None". Earlier rounds stay in the file, and only the newest revision counts.
 - Its gate is `auto`. With no findings it runs `natamux done`, its checks pass, and the task goes on to **Release** without waiting for you.
 
 <Figure src="/screens/native/task-review-shell5" width={1600} height={900} alt="A native task workspace with three terminal panes: Terminal 1, Test spec in Terminal 10, and Review running in Terminal 12. The Progress panel shows Test spec and Implement completed before Review." caption="Three native task terminals beside the workflow. Review runs in its own terminal. Terminal output is scripted." />

@@ -51,37 +51,43 @@ async function detectSystem() {
   return { os: /Linux|X11/i.test(platform + ua) ? 'linux' : 'other' }
 }
 
+// Runs on the homepage (hero + install commands) and on /download/ (files, with
+// the Intel/Apple silicon buttons), so each part checks that its elements exist.
 detectSystem().then(({ os, intel, known }) => {
   const label = document.querySelector('[data-hero-label]')
   const note = document.querySelector('[data-hero-note]')
   const detected = document.querySelector('[data-dl-detect]')
-  const version = note.dataset.version
+  const version = note?.dataset.version
   if (os === 'phone' || os === 'other') {
-    label.textContent = 'Get Natamux'
-    note.textContent = `Version ${version} for macOS, Windows and Linux.`
-    if (os === 'phone') {
+    if (label) label.textContent = 'Get Natamux'
+    if (note) note.textContent = `Version ${version} for macOS, Windows and Linux.`
+    if (os === 'phone' && detected) {
       detected.textContent = 'Natamux is a desktop app. Open this page on your computer.'
       detected.hidden = false
     }
     return
   }
   const names = { mac: 'macOS', win: 'Windows', linux: 'Linux' }
-  const system = { mac: known ? intel ? 'Intel Macs' : 'Apple silicon' : 'macOS', win: 'Windows 10 and 11', linux: 'Linux (AppImage)' }[os]
-  label.textContent = `Download for ${names[os]}`
-  note.textContent = `Version ${version} for ${system}.`
-  detected.textContent = os === 'mac'
-    ? known ? `This looks like a Mac with ${intel ? 'an Intel chip' : 'Apple silicon'}.` : 'This looks like a Mac. If it has an Intel chip, pick Intel.'
-    : `This looks like ${names[os]}.`
-  detected.hidden = false
-  if (os === 'mac' && intel) {
-    const silicon = document.querySelector('[data-arch="arm64"]')
-    const intelLink = document.querySelector('[data-arch="x64"]')
+  const system = { mac: known ? intel ? 'Intel Macs' : 'Apple silicon' : 'macOS', win: 'Windows 10 and 11', linux: 'Debian and Ubuntu' }[os]
+  if (label) label.textContent = `Install on ${names[os]}`
+  if (note) note.textContent = `Version ${version} for ${system}.`
+  const silicon = document.querySelector('[data-arch="arm64"]')
+  const intelLink = document.querySelector('[data-arch="x64"]')
+  if (detected) {
+    // Only /download/ has a chip choice; install.sh picks the chip itself.
+    const guess = silicon ? 'This looks like a Mac. If it has an Intel chip, pick Intel.' : 'This looks like a Mac.'
+    detected.textContent = os === 'mac'
+      ? known ? `This looks like a Mac with ${intel ? 'an Intel chip' : 'Apple silicon'}.` : guess
+      : `This looks like ${names[os]}.`
+    detected.hidden = false
+  }
+  if (os === 'mac' && intel && silicon && intelLink) {
     silicon.classList.remove('primary')
     intelLink.classList.add('primary')
     intelLink.after(silicon)
   }
-  const tabs = [...document.querySelectorAll('.dl-tabs [role="tab"]')]
-  selectTab(tabs, document.getElementById(`tab-${os}`))
+  const tab = document.getElementById(`tab-${os}`)
+  if (tab) selectTab([...document.querySelectorAll('.dl-tabs [role="tab"]')], tab)
 })
 
 for (const button of document.querySelectorAll('[data-copy]')) {

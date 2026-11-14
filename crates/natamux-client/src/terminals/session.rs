@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
 use async_tungstenite::WebSocketStream;
-use async_tungstenite::tokio::{ConnectStream, connect_async};
+use async_tungstenite::tokio::{TokioAdapter, client_async};
 use async_tungstenite::tungstenite::Message;
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
 use futures::stream::Peekable;
@@ -14,6 +14,7 @@ use natamux_proto::terminals::messages::{
     CATCH_UP_TIMEOUT, ClientMessage, HEARTBEAT, ServerMessage,
 };
 use natamux_proto::terminals::query::encode;
+use tokio::net::TcpStream;
 use tokio::sync::mpsc;
 use tokio::time::{Instant, sleep_until};
 
@@ -26,8 +27,18 @@ use crate::terminals::api;
 /// together, so a busy shell wakes it once per burst, not once per frame.
 const JOIN_BYTES: usize = 256 * 1024;
 
-/// Why the last socket was lost, for the app's log.
-type Loss = Arc<Mutex<Option<String>>>;
+type Socket = WebSocketStream<TokioAdapter<TcpStream>>;
+
+/// What the session tells the app beside its events.
+#[derive(Debug, Default)]
+struct Notes {
+    /// Why the last socket was lost, for the app's log.
+    loss: Option<String>,
+    /// The shell of the last `Hello`, kept after the shell ends.
+    shell_id: Option<String>,
+}
+
+type Loss = Arc<Mutex<Notes>>;
 
 /// What the app asks of a terminal.
 #[derive(Debug)]
@@ -83,10 +94,16 @@ impl TerminalHandle {
 
     /// Why the socket was lost last, once a `Reconnecting` status came.
     pub fn last_loss(&self) -> Option<String> {
-        self.loss
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .clone()
+        self.notes().loss.clone()
+    }
+
+    /// The daemon's id of the shell this terminal showed last; None before its first `Hello`.
+    pub fn shell_id(&self) -> Option<String> {
+        self.notes().shell_id.clone()
+    }
+
+    fn notes(&self) -> std::sync::MutexGuard<'_, Notes> {
+        self.loss.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
     /// A handle with no socket: the app shows `events`, and what it sends goes nowhere. For the
@@ -146,7 +163,13 @@ pub fn open(
 }
 
 fn note_loss(loss: &Loss, reason: impl Into<String>) {
-    *loss.lock().unwrap_or_else(PoisonError::into_inner) = Some(reason.into());
+    loss.lock().unwrap_or_else(PoisonError::into_inner).loss = Some(reason.into());
+}
+
+fn note_shell(loss: &Loss, shell_id: Option<&str>) {
+    if let Some(shell_id) = shell_id {
+        loss.lock().unwrap_or_else(PoisonError::into_inner).shell_id = Some(shell_id.to_string());
+    }
 }
 
 enum Outcome {
@@ -216,11 +239,23 @@ async fn run(
     }
 }
 
+/// The `host:port` of a `ws://` URL, for the TCP connect.
+fn authority_of(url: &str) -> String {
+    let rest = url.strip_prefix("ws://").unwrap_or(url);
+    let authority = rest.split(['/', '?']).next().unwrap_or(rest);
+    // An IPv6 host ends with `]` when it has no port.
+    if authority.ends_with(']') || !authority.contains(':') {
+        format!("{authority}:80")
+    } else {
+        authority.to_string()
+    }
+}
+
 async fn connect(
     config: &Config,
     task_id: &str,
     protocol: &mut Protocol,
-) -> Result<WebSocketStream<ConnectStream>, String> {
+) -> Result<Socket, String> {
     // A new ticket for every socket: each is good for one use and 30 s.
     let ticket = api::terminal_ticket(config, task_id)
         .await
@@ -233,9 +268,16 @@ async fn connect(
             query.to_query_string()
         ))
         .map_err(|error| error.to_string())?;
-    let (socket, _) = connect_async(url.as_str())
+    let failed = |error: String| format!("Could not connect to the terminal: {error}");
+    let stream = TcpStream::connect(authority_of(&url))
         .await
-        .map_err(|error| format!("Could not connect to the terminal: {error}"))?;
+        .map_err(|error| failed(error.to_string()))?;
+    // Keys and output are small frames: Nagle's algorithm would hold each one until the frame
+    // before it is acked.
+    let _ = stream.set_nodelay(true);
+    let (socket, _) = client_async(url.as_str(), stream)
+        .await
+        .map_err(|error| failed(error.to_string()))?;
     Ok(socket)
 }
 
@@ -275,7 +317,7 @@ async fn wake(protocol: &mut Protocol, commands: &mut mpsc::UnboundedReceiver<Co
 }
 
 async fn drive(
-    socket: WebSocketStream<ConnectStream>,
+    socket: Socket,
     first: Step,
     heartbeat: Duration,
     protocol: &mut Protocol,
@@ -326,6 +368,7 @@ async fn drive(
                             pong_deadline = None;
                         }
                         step = protocol.server(message);
+                        note_shell(loss, protocol.shell_id());
                     }
                 }
                 Some(Ok(Message::Close(frame))) => {
@@ -421,6 +464,17 @@ fn lost(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn takes_the_host_and_port_of_a_socket_url() {
+        assert_eq!(
+            authority_of("ws://127.0.0.1:4310/tasks/T-1/terminal?a=b"),
+            "127.0.0.1:4310"
+        );
+        assert_eq!(authority_of("ws://[::1]:4310/tasks"), "[::1]:4310");
+        assert_eq!(authority_of("ws://localhost/tasks"), "localhost:80");
+        assert_eq!(authority_of("ws://[::1]?a=b"), "[::1]:80");
+    }
 
     type Frames = Peekable<futures::stream::Iter<std::vec::IntoIter<Result<Message, ()>>>>;
 

@@ -115,6 +115,7 @@ Stage files are `context.md`, `spec.md`, `plan.md`, `test-spec.md` and test outp
 - **Editing:** you can edit a stage file in the app before you approve it, for example to fix the spec by hand. This edits the working copy.
 - **Reading:** the daemon reads the working copy while the worktree exists, else the archived copy.
 - **A task without a worktree yet:** stage files are written straight to `<data dir>/tasks/T-0001/`. When the workspace is made, the daemon copies them into `.natamux-task/`.
+- **A task in the main checkout (no worktree):** its workspace is the project folder, so the files are in `<project>/.natamux-task/`. Only one open task works there at a time. When the task is detached (remove workspace, delete, or a new main checkout task after it finished), the daemon archives the files and deletes `.natamux-task/` from the project folder, unless the project commits it.
 - **Leaving the machine:** only `spec.md`, as the body of an issue Natamux opens (section 5). Nothing else is sent anywhere.
 
 With the default folders (`<data dir>` = `<repo>/.natamux/`):

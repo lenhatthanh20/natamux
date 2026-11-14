@@ -3,8 +3,8 @@
 //! each shell. Like Ghostty, the limit is memory, not lines: a wide terminal keeps fewer rows.
 
 pub const TERMINAL_HISTORY_BYTES: usize = 10_000_000;
-/// What xterm.js holds for one cell.
-const BYTES_PER_CELL: usize = 16;
+/// The size of an `alacritty_terminal` cell on 64-bit (the screen crate asserts it).
+pub const BYTES_PER_CELL: usize = 24;
 pub const TERMINAL_SCROLLBACK_MIN_LINES: usize = 1000;
 pub const TERMINAL_SCROLLBACK_MAX_LINES: usize = 10_000;
 /// History rows in a catch-up snapshot (a client that is behind or lost its place). The app swaps
@@ -26,8 +26,8 @@ mod tests {
     #[test]
     fn a_wide_terminal_keeps_fewer_rows_within_the_limits() {
         assert_eq!(scrollback_lines(1), TERMINAL_SCROLLBACK_MAX_LINES);
-        assert_eq!(scrollback_lines(80), 7812);
-        assert_eq!(scrollback_lines(200), 3125);
+        assert_eq!(scrollback_lines(80), 5208);
+        assert_eq!(scrollback_lines(200), 2083);
         assert_eq!(scrollback_lines(1000), TERMINAL_SCROLLBACK_MIN_LINES);
         assert_eq!(scrollback_lines(0), TERMINAL_SCROLLBACK_MAX_LINES);
     }

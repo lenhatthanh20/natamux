@@ -1,46 +1,49 @@
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
-
 use gpui::TestAppContext;
+use natamux_proto::stages::schema::{Gate, Stage, StageKind, Step};
 use ui::prelude::*;
 
-use super::{Row, render};
+use super::option_rows;
 use crate::app::test_views;
+use crate::stages::pipeline_editor::PipelineEditor;
+use crate::stages::sheet_rules::sheet_shows;
 
-/// One checkbox row with a note.
-struct OptionRow;
-
-impl Render for OptionRow {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        v_flex().w(px(400.)).child(render(
-            Row {
-                id: "gate-spec".into(),
-                label: "Wait for my approval",
-                note: Some("This stage is a check by a person."),
-                on: false,
-                disabled: false,
-                mark: None,
-                toggle: Box::new(|_, _, _| {}),
-            },
-            cx,
-        ))
-    }
+/// How many Options rows a stage alone in the pipeline gets.
+fn rows_of(stage: Stage, cx: &mut TestAppContext) -> usize {
+    cx.update(|cx| {
+        let editor = cx.new(|_| PipelineEditor::new("{}"));
+        let steps = vec![Step::Stage(stage.clone())];
+        let shows = sheet_shows(&stage, &steps);
+        option_rows(&stage, &shows, &editor, cx).len()
+    })
 }
 
 #[gpui::test]
-fn a_note_starts_under_its_checkbox_label(cx: &mut TestAppContext) {
-    // The note started under the box, left of the label (T-0215).
+fn an_agent_stage_has_two_options_and_a_manual_stage_none(cx: &mut TestAppContext) {
     test_views::init(cx);
-    let (_view, cx) = cx.add_window_view(|_, _| OptionRow);
-    cx.run_until_parked();
-    let [label, note] = ["option-label", "option-note"].map(|selector| {
-        cx.debug_bounds(selector)
-            .unwrap_or_else(|| panic!("{selector} was not drawn"))
-    });
-    assert_eq!(note.left(), label.left());
+    assert_eq!(
+        rows_of(Stage::new("implement", StageKind::Agent, Gate::Auto), cx),
+        2
+    );
+    assert_eq!(
+        rows_of(Stage::new("qa", StageKind::Manual, Gate::Manual), cx),
+        0
+    );
 }
 
-/// Workflow test T25 (plan 7.5): a checkbox row toggles once per click and not when disabled;
-/// Enter and Space do what they do today; the stage rows write the draft only when it changes.
+#[test]
+fn the_end_agent_switch_has_the_short_label_and_the_rest_in_its_help() {
+    use super::{END_AGENT, END_AGENT_HELP};
+    assert_eq!(END_AGENT, "End the agent when done");
+    assert_eq!(
+        END_AGENT_HELP,
+        "Closes its terminal and frees the memory of the stage. A next stage in the same \
+         terminal starts a new agent session."
+    );
+}
+
+/// Workflow test T25 (plan 7.5), on main's switch rows (T-0313): a switch row toggles once per
+/// click and not when disabled; Enter and Space do what they do today; the stage rows write the
+/// draft only when it changes.
 mod rows {
     use std::cell::RefCell;
     use std::rc::Rc;
@@ -48,19 +51,22 @@ mod rows {
     use gpui::{
         AppContext as _, Entity, Modifiers, Subscription, TestAppContext, VisualTestContext,
     };
+    use natamux_proto::stages::schema::{Gate, Stage, StageKind};
     use ui::prelude::*;
 
     use super::super::super::editor_find::find_stage;
     use super::super::super::pipeline_editor::{DraftEdited, PipelineEditor};
     use super::super::super::stage_fields_view::change;
-    use super::super::{Row, approval, render};
+    use super::super::{Flag, approval_row, flag_row};
     use crate::app::test_driver::press;
     use crate::app::test_views;
 
     type Log = Rc<RefCell<Vec<bool>>>;
 
-    /// One plain row that logs what its click asks for.
+    /// One plain row that logs what its click asks for and changes nothing.
     struct Plain {
+        pipeline: Entity<PipelineEditor>,
+        stage: Stage,
         on: bool,
         disabled: bool,
         log: Log,
@@ -69,18 +75,22 @@ mod rows {
     impl Render for Plain {
         fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
             let log = self.log.clone();
-            v_flex().w(px(400.)).child(render(
-                Row {
-                    id: "plain".into(),
-                    label: "Plain row",
-                    note: None,
-                    on: self.on,
-                    disabled: self.disabled,
-                    mark: None,
-                    toggle: Box::new(move |on, _, _| log.borrow_mut().push(on)),
-                },
-                cx,
-            ))
+            let flag = Flag {
+                key: "plain",
+                label: "Plain row",
+                help: None,
+                on: self.on,
+                default: false,
+                changed: false,
+                disabled: self.disabled,
+            };
+            let set = move |steps: &[natamux_proto::stages::schema::Step], _: &str, on: bool| {
+                log.borrow_mut().push(on);
+                steps.to_vec()
+            };
+            v_flex()
+                .w(px(400.))
+                .child(flag_row(flag, &self.stage, &self.pipeline, set, cx))
         }
     }
 
@@ -88,7 +98,10 @@ mod rows {
         let log: Log = Rc::default();
         let shown = log.clone();
         let (_, _, cx) = test_views::init_app(cx, move |_, _, cx| {
+            let pipeline = cx.new(|_| PipelineEditor::new("{}"));
             cx.new(|_| Plain {
+                pipeline,
+                stage: Stage::new("x", StageKind::Agent, Gate::Auto),
                 on: false,
                 disabled,
                 log: shown,
@@ -97,23 +110,23 @@ mod rows {
         (log, cx)
     }
 
-    fn click_label(cx: &mut VisualTestContext) {
-        let label = cx.debug_bounds("option-label").expect("the row is drawn");
-        cx.simulate_click(label.center(), Modifiers::none());
+    fn click_switch(cx: &mut VisualTestContext, selector: &'static str) {
+        let switch = cx.debug_bounds(selector).expect("the switch is drawn");
+        cx.simulate_click(switch.center(), Modifiers::none());
         cx.run_until_parked();
     }
 
     #[gpui::test]
     fn t25_a_click_asks_for_the_other_value_once(cx: &mut TestAppContext) {
         let (log, cx) = plain(false, cx);
-        click_label(cx);
+        click_switch(cx, "plain-x-switch");
         assert_eq!(*log.borrow(), [true]);
     }
 
     #[gpui::test]
     fn t25_a_disabled_row_does_nothing(cx: &mut TestAppContext) {
         let (log, cx) = plain(true, cx);
-        click_label(cx);
+        click_switch(cx, "plain-x-switch");
         press(cx, "enter space");
         assert!(log.borrow().is_empty());
     }
@@ -122,7 +135,7 @@ mod rows {
     #[gpui::test]
     fn t25_enter_and_space_reach_no_row(cx: &mut TestAppContext) {
         let (log, cx) = plain(false, cx);
-        click_label(cx);
+        click_switch(cx, "plain-x-switch");
         press(cx, "enter");
         press(cx, "space");
         assert_eq!(*log.borrow(), [true]);
@@ -141,9 +154,11 @@ mod rows {
             let stage = find_stage(&steps, self.id).cloned().expect("the stage");
             v_flex()
                 .w(px(400.))
-                .child(approval(&stage, &self.pipeline, cx))
+                .child(approval_row(&stage, &self.pipeline, cx))
         }
     }
+
+    const SWITCH_IMPLEMENT: &str = "gate-implement-switch";
 
     const DRAFT: &str = r#"{ "stages": [
         { "id": "implement", "kind": "agent", "gate": "auto" },
@@ -193,7 +208,7 @@ mod rows {
         let (pipeline, writes, cx) = approval_of("implement", cx);
         let mut seen = vec![format!("{} after 0", gate_of(&pipeline, "implement", cx))];
         for _ in 0..2 {
-            click_label(cx);
+            click_switch(cx, SWITCH_IMPLEMENT);
             seen.push(format!(
                 "{} after {}",
                 gate_of(&pipeline, "implement", cx),
@@ -207,7 +222,7 @@ mod rows {
     fn t25_a_stage_that_always_waits_has_a_disabled_row(cx: &mut TestAppContext) {
         let (pipeline, writes, cx) = approval_of("review", cx);
         let before = gate_of(&pipeline, "review", cx);
-        click_label(cx);
+        click_switch(cx, "gate-review-switch");
         assert_eq!(*writes.borrow(), 0);
         assert_eq!(gate_of(&pipeline, "review", cx), before);
     }

@@ -102,7 +102,7 @@ async fn activity(d: &Daemon, id: &str) -> Value {
     crate::clean(get(d, "/activity").await.body["activity"][id].clone())
 }
 
-/// On a running agent stage: a prompt, a tool, the end of a turn (needs-input), a new prompt
+/// On a running agent stage: a prompt, a tool, the end of a turn (idle), a new prompt
 /// (resumed), and an end of turn with background work (still running, "Waiting for ...").
 #[tokio::test]
 #[ignore = "needs both daemons: the daemon-contract CI job"]
@@ -121,7 +121,7 @@ async fn hook_turn_end() {
             t.note("tool", agent.edit().await);
             t.note("activity after the tool", activity(&d, &id).await);
             t.note("turn end", agent.claude("Stop", json!({})).await);
-            wait_at(&d, &id, "spec", "needs-input").await;
+            wait_at(&d, &id, "spec", "idle").await;
             t.note("at the turn end", task(&d, &id).await);
             t.note("activity after the turn end", activity(&d, &id).await);
             t.note(
@@ -142,7 +142,7 @@ async fn hook_turn_end() {
             t.note("while it waits", task(&d, &id).await);
             t.note("activity while it waits", activity(&d, &id).await);
             t.note("last turn end", agent.claude("Stop", json!({})).await);
-            wait_at(&d, &id, "spec", "needs-input").await;
+            wait_at(&d, &id, "spec", "idle").await;
             // Prompt, tool, turn end, prompt, turn end with work, turn end: six changes.
             events
                 .until(|messages| {
@@ -224,7 +224,7 @@ async fn hook_question() {
     .await;
 }
 
-/// A turn end with no report is "stopped early" (the stage waits for input, the agent can go
+/// A turn end with no report is "stopped early" (the stage is idle, the agent can go
 /// on). After a report, the turn end that follows applies nothing and clears the activity line.
 #[tokio::test]
 #[ignore = "needs both daemons: the daemon-contract CI job"]
@@ -239,7 +239,7 @@ async fn stopped_early() {
             let agent = Agent::new(&d, &id).await;
             wait_file(&d, &id, "spec.md", "## Scope").await;
             t.note("early stop", agent.claude("Stop", json!({})).await);
-            wait_at(&d, &id, "spec", "needs-input").await;
+            wait_at(&d, &id, "spec", "idle").await;
             t.note("stopped early", task(&d, &id).await);
             t.note("go on", agent.claude("UserPromptSubmit", json!({})).await);
             wait_at(&d, &id, "spec", "running").await;
@@ -350,7 +350,7 @@ async fn hooks_route() {
             t.note("unused hook", bare(&agent, unused).await);
             let by_cwd = json!({ "hook_event_name": "Stop", "cwd": format!("{}/src", agent.cwd) });
             t.note("task by cwd", bare(&agent, by_cwd).await);
-            wait_at(&d, &id, "spec", "needs-input").await;
+            wait_at(&d, &id, "spec", "idle").await;
             t.note("after cwd", task(&d, &id).await);
             t.note(
                 "copilot prompt",
@@ -359,7 +359,7 @@ async fn hooks_route() {
             wait_at(&d, &id, "spec", "running").await;
             t.note("after copilot prompt", task(&d, &id).await);
             t.note("copilot stop", copilot(&agent, "agentStop").await);
-            wait_at(&d, &id, "spec", "needs-input").await;
+            wait_at(&d, &id, "spec", "idle").await;
             t.note("after copilot stop", task(&d, &id).await);
             t.note("prompt", agent.claude("UserPromptSubmit", json!({})).await);
             t.note("failure", agent.claude("StopFailure", json!({})).await);

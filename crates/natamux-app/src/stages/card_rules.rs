@@ -88,22 +88,23 @@ pub fn card_buttons(
     let state = entry.state;
     let is = |states: &[TaskState]| state.is_some_and(|state| states.contains(&state));
     let mut buttons = Vec::new();
-    if is(&[TaskState::Review, TaskState::NeedsInput]) {
-        buttons.push(CardButton::Approve {
-            anyway: state == Some(TaskState::NeedsInput),
-        });
+    // An idle agent ended its turn without `natamux done`: the same choices as a question, but
+    // nothing to answer.
+    let stopped = is(&[TaskState::Idle, TaskState::NeedsInput]);
+    if is(&[TaskState::Review, TaskState::Idle, TaskState::NeedsInput]) {
+        buttons.push(CardButton::Approve { anyway: stopped });
     }
     let asking = state == Some(TaskState::NeedsInput);
     if asking && asked && can_answer {
         buttons.push(CardButton::AnswerInTerminal);
     }
-    if asking {
+    if stopped {
         buttons.push(CardButton::Resume);
     }
-    if is(&[TaskState::Failed, TaskState::NeedsInput]) && starts_itself(kind) {
+    if is(&[TaskState::Failed, TaskState::Idle, TaskState::NeedsInput]) && starts_itself(kind) {
         buttons.extend([CardButton::PickAgent, CardButton::StartAgent]);
     }
-    if is(&[TaskState::Running, TaskState::NeedsInput]) {
+    if is(&[TaskState::Running, TaskState::Idle, TaskState::NeedsInput]) {
         buttons.push(CardButton::MarkAsDone);
     }
     if is(&[TaskState::Draft, TaskState::Ready]) {

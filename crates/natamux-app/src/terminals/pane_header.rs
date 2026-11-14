@@ -29,8 +29,8 @@ pub fn icon_button(id: impl Into<ElementId>, icon: &str) -> ButtonLike {
     )
 }
 
-/// The title of a pane: "Terminal 2", or in the Agents grid the task's id and its title as a
-/// link to the workspace.
+/// The title of a pane: "Terminal 2" or "Spec · Terminal 5", or in the Agents grid the task's id
+/// and its title as a link to the workspace.
 pub enum PaneTitle {
     Terminal(String),
     Task {
@@ -186,7 +186,7 @@ fn glyph(key: &str, glyph: Option<Option<TaskState>>) -> AnyElement {
 fn title(key: &str, title: PaneTitle, color: Color, cx: &App) -> AnyElement {
     let hover = cx.theme().colors().ghost_element_hover;
     match title {
-        PaneTitle::Terminal(name) => Label::new(format!("Terminal {name}"))
+        PaneTitle::Terminal(text) => Label::new(text)
             .size(LabelSize::Small)
             .weight(FontWeight::MEDIUM)
             .color(color)

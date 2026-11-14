@@ -10,15 +10,9 @@ use crate::stages::editor_fields::{ShellField, ShellKind};
 
 /// `CREATE_ISSUE_OPTIONS`: the value and the words of each choice.
 pub const CREATE_ISSUE_OPTIONS: [(&str, &str); 4] = [
-    (
-        "manual",
-        "Only when you click Create issue in the task's Progress view",
-    ),
-    (
-        "on-spec-approved",
-        "Automatically, when you approve the Spec stage. Without a Spec stage, when the pull request opens",
-    ),
-    ("on-pr", "Automatically, just before the pull request opens"),
+    ("manual", "Manual"),
+    ("on-spec-approved", "On Spec approved"),
+    ("on-pr", "Just before PR opens"),
     ("never", "Never"),
 ];
 
@@ -145,9 +139,12 @@ pub fn home_folder() -> Option<String> {
         .ok()
 }
 
-/// The tooltip of the path: the full path, and why the file matters.
+/// After the path in the page header's summary.
+pub const SUMMARY_NOTE: &str = " \u{b7} nothing is saved until you click Save";
+
+/// The tooltip of the summary: the full path, and why the file matters.
 pub fn file_hint(path: &str) -> String {
-    format!("Commit {path} to share these settings with your team.")
+    format!("{path} \u{b7} commit this file to share the settings with your team")
 }
 
 /// `unchanged` of the dialog.

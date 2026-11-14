@@ -162,4 +162,8 @@ impl Dashboard {
             cx.show_system_notification(turned_on());
         }
     }
+
+    pub fn toggle_notify_always(&mut self, cx: &mut Context<Self>) {
+        self.update_view(cx, |state| state.notify_always = !state.notify_always);
+    }
 }

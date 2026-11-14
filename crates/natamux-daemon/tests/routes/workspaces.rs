@@ -12,7 +12,7 @@ use serde_json::{Value, json};
 use crate::git_repo::git_daemon;
 use crate::server::{TOKEN, TestDaemon, bare};
 
-const BRANCH: &str = "natamux/t-0001-fix-the-bug";
+const BRANCH: &str = "default/t-0001-fix-the-bug";
 
 async fn with_workspace(name: &str) -> (TestDaemon, PathBuf) {
     let d = git_daemon(name).await;
@@ -56,7 +56,7 @@ async fn names_the_branch_and_folder_of_a_task_with_a_chosen_id_after_that_id() 
     let (status, created) = d.post_empty("/tasks/TASK-0005/workspace").await;
 
     assert_eq!(status, 201, "{created}");
-    assert_eq!(created["task"]["branch"], "natamux/task-0005-fix-bug-xxx");
+    assert_eq!(created["task"]["branch"], "default/task-0005-fix-bug-xxx");
     let workspace = PathBuf::from(created["task"]["workspace"].as_str().unwrap());
     assert_eq!(workspace.file_name().unwrap(), "TASK-0005");
     assert!(workspace.exists());
@@ -75,7 +75,7 @@ async fn refuses_a_new_workspace_whose_id_is_used_and_makes_no_task_or_branch() 
     assert_eq!(body["message"], "Task id TASK-0005 is already used");
     let (_, tasks) = d.get("/tasks").await;
     assert_eq!(tasks["tasks"].as_array().unwrap().len(), 1);
-    assert_eq!(run_git(&d.repo(), &["branch", "--list", "natamux/*"]), "");
+    assert_eq!(run_git(&d.repo(), &["branch", "--list", "default/*"]), "");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -321,6 +321,29 @@ async fn refuses_a_new_workspace_for_an_agent_the_daemon_cannot_start() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn refuses_a_model_that_is_not_one_safe_word_and_makes_no_task() {
+    let d = git_daemon("new-ws-bad-model").await;
+    for model in ["-p", "opus; rm", "a b", "$(x)", ""] {
+        let body = json!({ "title": "Example", "model": model });
+        let (status, answer) = new_workspace(&d, &body).await;
+        assert_eq!(status, 400, "{model}: {answer}");
+        assert_eq!(answer["issues"][0]["path"], json!(["model"]), "{model}");
+    }
+    assert_eq!(task_count(&d).await, 0);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn keeps_the_model_of_a_new_workspace_trimmed() {
+    let d = git_daemon("new-ws-model").await;
+
+    let body = json!({ "title": "Example", "model": " sonnet[1m] " });
+    let (status, answer) = new_workspace(&d, &body).await;
+
+    assert_eq!(status, 202, "{answer}");
+    assert_eq!(answer["task"]["model"], "sonnet[1m]");
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn one_agent_mode_requires_a_known_agent_and_refuses_other_modes() {
     let d = git_daemon("new-ws-one-agent-validation").await;
     for body in [
@@ -365,6 +388,75 @@ async fn answers_a_new_workspace_before_its_worktree_is_made_then_lists_none_pre
     assert!(!task["task"]["workspace"].is_null());
 }
 
+#[cfg(unix)]
+fn worktree_count(d: &TestDaemon) -> usize {
+    run_git(&d.repo(), &["worktree", "list", "--porcelain"])
+        .lines()
+        .filter(|line| line.starts_with("worktree "))
+        .count()
+}
+
+// Regression: Start agent on a task made with no worktree made a worktree anyway.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread")]
+async fn works_in_the_main_checkout_when_no_worktree_is_asked_and_start_agent_makes_none() {
+    let d = git_daemon("new-ws-no-worktree").await;
+
+    let body = json!({ "title": "Example", "worktree": false });
+    let (status, answer) = new_workspace(&d, &body).await;
+
+    assert_eq!(status, 202, "{answer}");
+    assert_eq!(answer["task"]["mainCheckout"], true, "{answer}");
+    assert!(answer["task"]["workspace"].is_string(), "{answer}");
+    assert_eq!(answer["task"]["branch"], "main");
+    d.settle();
+    let (_, preparing) = d.get("/workspaces/preparing").await;
+    assert_eq!(preparing, json!({ "preparing": {} }));
+
+    let (status, started) = d
+        .post("/tasks/T-0001/agent", &json!({ "agent": "claude-code" }))
+        .await;
+    assert_eq!(status, 200, "{started}");
+    d.settle();
+
+    let (_, task) = d.get("/tasks/T-0001").await;
+    assert_eq!(task["task"]["workspace"], answer["task"]["workspace"]);
+    assert_eq!(worktree_count(&d), 1);
+    assert_eq!(run_git(&d.repo(), &["branch", "--list", "default/*"]), "");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn refuses_a_second_open_task_in_the_main_checkout_and_makes_no_task() {
+    let d = git_daemon("new-ws-main-busy").await;
+    let body = json!({ "title": "Example", "worktree": false });
+    let (first, _) = new_workspace(&d, &body).await;
+    assert_eq!(first, 202);
+
+    let (status, answer) = new_workspace(&d, &body).await;
+
+    assert_eq!(status, 409, "{answer}");
+    assert!(
+        answer["message"]
+            .as_str()
+            .is_some_and(|text| text.contains("T-0001 already works in the main checkout")),
+        "{answer}"
+    );
+    assert_eq!(task_count(&d).await, 1);
+    d.settle();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn refuses_a_worktree_that_is_not_a_boolean_and_makes_no_task() {
+    let d = git_daemon("new-ws-bad-worktree").await;
+
+    let body = json!({ "title": "Example", "worktree": "no" });
+    let (status, answer) = new_workspace(&d, &body).await;
+
+    assert_eq!(status, 400, "{answer}");
+    assert_eq!(answer["issues"][0]["path"], json!(["worktree"]));
+    assert_eq!(task_count(&d).await, 0);
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn keeps_the_skill_picked_as_the_context_of_a_new_workspace() {
     let d = git_daemon("new-ws-skill").await;
@@ -406,7 +498,7 @@ async fn deleting_a_task_deletes_its_branch_with_commits_that_are_not_merged() {
 
     assert_eq!(status, 200, "{body}");
     assert!(!workspace.exists());
-    assert_eq!(run_git(&d.repo(), &["branch", "--list", "natamux/*"]), "");
+    assert_eq!(run_git(&d.repo(), &["branch", "--list", "default/*"]), "");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -414,12 +506,12 @@ async fn deleting_a_task_without_a_workspace_deletes_its_branch() {
     let (d, _) = with_workspace("ws-delete-branch-only").await;
     let (status, _) = d.delete("/tasks/T-0001/workspace?deleteBranch=false").await;
     assert_eq!(status, 200);
-    assert_ne!(run_git(&d.repo(), &["branch", "--list", "natamux/*"]), "");
+    assert_ne!(run_git(&d.repo(), &["branch", "--list", "default/*"]), "");
 
     let (status, body) = d.delete("/tasks/T-0001").await;
 
     assert_eq!(status, 200, "{body}");
-    assert_eq!(run_git(&d.repo(), &["branch", "--list", "natamux/*"]), "");
+    assert_eq!(run_git(&d.repo(), &["branch", "--list", "default/*"]), "");
 }
 
 #[tokio::test(flavor = "multi_thread")]

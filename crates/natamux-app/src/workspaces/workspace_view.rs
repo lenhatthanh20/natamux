@@ -157,6 +157,11 @@ impl WorkspaceView {
         self.docs.as_ref()
     }
 
+    /// The open files' editors, for the `--shot` states.
+    pub fn file_editors(&self) -> &[Entity<FileEditor>] {
+        &self.editors
+    }
+
     /// The Changes tab, for the `--shot` states.
     pub fn changes_view(&self) -> &Entity<ChangesView> {
         &self.changes

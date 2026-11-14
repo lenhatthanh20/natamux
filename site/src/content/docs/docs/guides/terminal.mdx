@@ -17,21 +17,23 @@ Every task with a workspace has a **Terminal** tab. It holds real terminals that
 2. Double-click it, or press `Enter`. The workspace opens on the terminal while an agent works.
 3. From another tab of the workspace, click **Terminal** or press `1`.
 
-When you switch to another task's workspace, the keyboard goes to its first agent terminal, so you can type to the agent at once. A terminal you pick with **Jump to a workspace** gets the keyboard instead.
+When you switch to another task's workspace, the keyboard goes to its first agent terminal, so you can type to the agent at once. A maximized task goes back to the terminal you looked at last. A terminal you pick with **Jump to a workspace**, a sidebar row, **Answer** or a notification gets the keyboard instead.
 
 A task without a workspace shows **Start agent** and a way to make a workspace instead. See [Workspaces](/docs/concepts/workspaces/).
 
 ## Terminals
 
-The tab shows each terminal in its own pane. Terminal 1 is always there. The agent runs in Terminal 1. Its pane header shows the agent's icon and name, such as `Claude Code` (only the icon in a narrow pane), and the state of its stage, for example `Running · Edit a.ts`. When stages run side by side, each terminal shows the state of its own stage. In **Agents**, the grid shows Terminal 1 and names another terminal that needs you.
+The tab shows each terminal in its own pane. Terminal 1 is always there. The agent runs in Terminal 1. A pane header names the terminal, with the stage it works on first, such as `Self check · Terminal 17`. It also shows the agent's icon and name, such as `Claude Code` (only the icon in a narrow pane), and the state of its stage, for example `Running · Edit a.ts`. When stages run side by side, each terminal shows the state of its own stage. In **Agents**, the grid shows Terminal 1 and names another terminal that needs you.
 
 | To do this | Do this |
 |---|---|
 | Add a terminal | Click **New terminal**, or press ``Ctrl+Shift+` `` |
-| Maximize a pane | Click **Maximize Terminal N**, or press `Mod+Shift+Enter` in the pane |
-| Restore a pane | Click **Restore Terminal N**, or press `Mod+Shift+Enter` again |
+| Maximize the task's terminals | Click **Maximize Terminal N**, or press `Mod+Shift+Enter` in the pane |
+| Restore the split | Click **Restore Terminal N**, or press `Mod+Shift+Enter` again |
 | Close a terminal | Click **Close terminal (ends the process)** in the pane header |
 | Find text | Press `Mod+F`. On Windows and Linux, press `Ctrl+Shift+F` in a terminal |
+
+Maximize is a mode of the task. While it is on, the task shows one terminal at a time, full size: the terminal you pick in the sidebar, a new terminal, or the next one when you close the shown terminal. The task keeps the mode when you open another task, and after a restart, until you restore it. When you come back, it shows the terminal you looked at last.
 
 `Mod` is ⌘ on macOS and Ctrl elsewhere. ``Ctrl+Shift+` `` is Ctrl on every platform.
 
@@ -64,9 +66,9 @@ Like Ghostty, the history is limited by memory, about 10 MB for each terminal, n
 
 | Pane width | Lines kept above the screen |
 |---|---|
-| 80 columns | about 7,800 |
-| 120 columns | about 5,200 |
-| 200 columns | about 3,100 |
+| 80 columns | about 5,200 |
+| 120 columns | about 3,400 |
+| 200 columns | about 2,000 |
 
 A pane keeps at most 10,000 lines and at least 1,000. When a pane gets wider, its oldest lines go first. The output is gone when the terminal ends, or when Natamux restarts or updates.
 
@@ -94,9 +96,11 @@ Inside a terminal, the shell gets your keys. On macOS the ⌘ shortcuts of Natam
 
 Click in the pane and type. Your keys go straight to the agent. This is how you answer a question.
 
-When an agent asks something, the task goes to **Needs input** and the current stage card in the **Progress** view of the details shows what it asks (on a phone, a banner under the header). With the details closed, click **Needs input** in the workspace header to open them. When the workspace shows more than one agent pane, the waiting pane says **Needs input** in its header. Click **Answer in terminal** to put the cursor in Terminal 1. If you answered another way, click **Resume**. When the agent ended its turn and still runs, **Resume** asks it to go on with the stage.
+When an agent asks something, the task goes to **Needs input** and the current stage card in the **Progress** view of the details shows what it asks (on a phone, a banner under the header). With the details closed, click **Needs input** in the workspace header to open them. When the workspace shows more than one agent pane, the waiting pane says **Needs input** in its header. Click **Answer in terminal** to put the cursor in Terminal 1. If you answered another way, click **Resume**.
 
-After you quit and open the app again, Natamux starts the agent of each running, waiting or in-review task again, in its terminal. Claude Code goes on with the same conversation; other agents start again with the stage prompt. The task keeps its state. The other terminals of the task come back too, see [A terminal after a daemon restart](#a-terminal-after-a-daemon-restart).
+When an agent ends its turn without a question and without `natamux done`, the task goes to **Idle**, shown as a grey speech bubble. Idle is not red. The desktop app notifies once (**Finished its turn**) and counts the task on the Dock until you open it. Type in the terminal to give the agent its next prompt, or click **Resume** in the stage card to ask it to go on with the stage.
+
+After you quit and open the app again, Natamux starts the agent of each running, idle, waiting or in-review task again, in its terminal. Claude Code goes on with the same conversation; other agents start again with the stage prompt. The task keeps its state. The other terminals of the task come back too, see [A terminal after a daemon restart](#a-terminal-after-a-daemon-restart).
 
 ### Send a message to the agent
 
@@ -119,7 +123,7 @@ An agent that ended its turn still uses memory while it waits. When it has waite
 - After a daemon restart, a paused agent stays paused until you show it.
 - The task's activity log says **Agent paused after 30 min idle**.
 
-To change the minutes, or to turn the pause off with `0`, use **Pause idle agents after (min)** on the **Stages** tab of the [project settings](/docs/guides/project-settings/#the-stages-tab), or `agents.pauseIdleAfterMinutes` in [`.natamux.json`](/docs/reference/configuration/#agents).
+To change the minutes, or to turn the pause off with `0`, use **Pause idle agents after (minutes)** on the **General** tab of the [project settings](/docs/guides/project-settings/#the-general-tab), or `agents.pauseIdleAfterMinutes` in [`.natamux.json`](/docs/reference/configuration/#agents).
 
 ## The Agents view
 
@@ -132,7 +136,7 @@ Click **Agents** in the sidebar to watch the agents of many tasks at once. Each 
 - **Columns** sets the layout: **1**, **2**, **4** or **Auto**. Auto balances the rows, so five panes in four columns become 3 + 2.
 - The pane header shows the task id and title, the agent, and the state of its stage. Click the title, or the **Open workspace** button, to open the task.
 - When another terminal of the task needs you, for example the Test spec agent in Terminal 2, the pane says so.
-- Maximize a pane with its button or `Mod+Shift+Enter`.
+- The maximize button, or `Mod+Shift+Enter`, shows one task's pane full size. In **Agents** it applies to that pane only, not as a mode.
 - The close button removes the pane from **Agents**. The agent keeps running.
 - With no pane, the view says **No agent is working** and offers **Add a pane**.
 
@@ -144,15 +148,15 @@ Terminals belong to the daemon. When the daemon stops, it ends every terminal, a
 
 Natamux remembers the terminals of each task that is not done or cancelled. After a restart:
 
-- The agent of a running, waiting or in-review stage starts again at once, as in [Type to the agent](#type-to-the-agent).
+- The agent of a running, idle, waiting or in-review stage starts again at once, as in [Type to the agent](#type-to-the-agent).
 - Every other terminal comes back with the same name when you open its task, or when the **Agents** view shows its Terminal 1. Until then nothing runs in it, so the start stays fast.
 - An agent comes back on its last conversation, with no new prompt. It waits for you, and the task keeps its state.
 - A plain terminal, and a terminal whose agent never named its conversation, come back as a plain terminal in the workspace folder.
 - A terminal you closed, or that a stage closed with `endShell`, does not come back. A terminal whose agent you quit comes back as a plain terminal.
 
-While a terminal comes back, its pane shows a spinner and **Restoring GitHub Copilot…** (the name of its agent), or **Restoring terminal…**. The spinner goes once the agent runs, after 15 seconds at most.
+A terminal that comes back shows its old screen at once, as it was when the daemon stopped (at most 5 seconds older while its program printed), with the last 1,000 lines above it. A dim **── Restored after restart ──** line follows, and the new shell or agent starts below it. While the agent starts, a chip at the top right of the pane shows a spinner and **Restoring GitHub Copilot…** (the name of its agent), or **Restoring terminal…**. The chip goes once the agent runs, after 15 seconds at most.
 
-The old screen of a plain terminal and the programs in it, such as a dev server, are gone. Your files and your git state are not.
+The programs that ran in a terminal, such as a dev server, are gone; only their screen is kept. Your files and your git state are not lost.
 
 When a pane changes size, for example when a panel opens or a new terminal is added, Natamux hides it while the size changes and fades it in after the terminal has redrawn.
 

@@ -1,6 +1,8 @@
 //! The string formats of the schemas: ids, zod's ISO datetime and `z.url`. The regexes are written
 //! out as JS prints them, as zod puts them in its issues.
 
+use natamux_proto::agents::model::{MODEL_NAME_ERROR, is_model_name};
+
 use crate::js::js_trim;
 use crate::zod::{Pattern, Rule};
 
@@ -56,6 +58,16 @@ pub const REPO_ID: [Rule; 2] = [
         message: Some("A repository id is lower case words joined by \"-\""),
     }),
     Rule::Max(60),
+];
+
+/// A task's model: one safe word of a command line (`is_model_name`).
+pub const MODEL: [Rule; 2] = [
+    Rule::Trim,
+    Rule::Regex(Pattern {
+        test: is_model_name,
+        source: "/^[A-Za-z0-9._:/@\\[\\]][A-Za-z0-9._:/@\\[\\]-]{0,99}$/",
+        message: Some(MODEL_NAME_ERROR),
+    }),
 ];
 
 /// `templateIdSchema`.

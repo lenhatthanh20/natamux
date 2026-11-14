@@ -9,9 +9,13 @@ use natamux_proto::projects::repo::DEFAULT_PAUSE_IDLE_MINUTES;
 use ui::prelude::*;
 
 use super::settings_tab_rules::{IDLE_PAUSE_HINT, IDLE_PAUSE_LABEL, idle_pause_field};
-use crate::components::form::{input_box, text_editor};
+use crate::components::button_style::button_icon;
+use crate::components::colors::TileColor;
+use crate::components::form::{SettingsInput, text_editor};
+use crate::components::settings_card::SettingsRow;
+use crate::components::settings_controls::changed_mark;
+use crate::components::settings_tile::{SettingsTile, TileSize};
 use crate::stages::pipeline_editor::PipelineEditor;
-use crate::stages::stage_fields_view::{error_line, inline_field};
 
 pub struct IdlePauseField {
     pipeline: Entity<PipelineEditor>,
@@ -72,6 +76,12 @@ impl IdlePauseField {
         cx.notify();
     }
 
+    /// Reset icon: an empty field is the default; the edit event writes the draft.
+    fn reset(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.editor
+            .update(cx, |editor, cx| editor.set_text("", window, cx));
+    }
+
     fn sync(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.editor.focus_handle(cx).is_focused(window) {
             return;
@@ -88,19 +98,26 @@ impl IdlePauseField {
 
 impl Render for IdlePauseField {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let control = div()
-            .w(rems_from_px(120.0_f32))
-            .child(input_box(&self.editor, cx));
-        v_flex()
-            .id("idle-pause-field")
-            .gap_1()
-            .child(inline_field(
-                IDLE_PAUSE_LABEL,
-                None,
-                Some(IDLE_PAUSE_HINT.into()),
-                control,
-            ))
-            .children(self.error.map(error_line))
+        let this = cx.weak_entity();
+        let changed = !self.editor.read(cx).text(cx).trim().is_empty();
+        let mark = changed_mark(
+            "idle-pause",
+            changed,
+            move |window, cx| {
+                this.update(cx, |this, cx| this.reset(window, cx)).ok();
+            },
+            cx,
+        );
+        let tile = SettingsTile::icon(button_icon("clock"), TileColor::Yellow, TileSize::Row);
+        let input = SettingsInput::new(&self.editor)
+            .width(120.)
+            .invalid(self.error.is_some());
+        SettingsRow::new("idle-pause-field", IDLE_PAUSE_LABEL)
+            .lead(tile)
+            .help(IDLE_PAUSE_HINT)
+            .error(self.error)
+            .control(mark)
+            .control(input)
     }
 }
 

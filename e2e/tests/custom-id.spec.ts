@@ -67,7 +67,8 @@ test('a chosen id names the branch, and its terminal works', async ({ page, requ
   made.push(task.id)
   expect(task.id).toBe(`SHELL-${stamp}`)
   const saved = (await (await request.get(`/api/tasks/${task.id}`, { headers })).json()).task
-  expect(saved.branch).toBe(`natamux/shell-${stamp}-custom-id-shell-${stamp}`)
+  // The prefix is the slug of the project's name, which depends on the E2E setup.
+  expect(saved.branch).toMatch(new RegExp(`^[a-z0-9-]+/shell-${stamp}-custom-id-shell-${stamp}$`))
 
   await signIn(page)
   await page.goto(`/w/${task.id}/terminal`)

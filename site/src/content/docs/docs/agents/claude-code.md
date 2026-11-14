@@ -11,6 +11,8 @@ Claude Code is the default agent. Natamux starts it with hooks for that session 
 
 Install Claude Code and log in. Follow the [Claude Code documentation](https://code.claude.com/docs). Check that `claude` runs in your terminal.
 
+If you are not logged in, the task waits and asks you to sign in in its terminal. See [The agent asks me to sign in](/docs/help/troubleshooting/#the-agent-asks-me-to-sign-in).
+
 ## What Natamux runs
 
 | | |
@@ -61,7 +63,7 @@ GitHub Copilot CLI reads `.claude/settings.local.json` too. `natamux hook claude
 | `PreToolUse`, `PostToolUse` | The agent works | no change (a tool that ran after a question moves the task back to running) |
 | `PermissionRequest` | Claude Code is about to ask for permission | needs input |
 | `Notification` (`permission_prompt`, `elicitation_dialog`, `agent_needs_input`) | Claude Code waits for you | needs input |
-| `Stop` | The agent finished its answer | needs input. When background work is still running (a background shell, a monitor or a scheduled prompt), the agent only paused: the task stays running and says `Waiting for Bash: pnpm test`, until the work wakes the agent again. See [Waiting for background work](/docs/concepts/agents-and-hooks/#waiting-for-background-work) |
+| `Stop` | The agent finished its answer | idle. When background work is still running (a background shell, a monitor or a scheduled prompt), the agent only paused: the task stays running and says `Waiting for Bash: pnpm test`, until the work wakes the agent again. See [Waiting for background work](/docs/concepts/agents-and-hooks/#waiting-for-background-work) |
 | `StopFailure` | An API error ended the turn | failed. The session goes on: type to the agent, or click **Start agent**, and the stage runs again |
 
 Other events are ignored. A stage is done only when the agent runs `natamux done` or you mark it done. See [Stages](/docs/concepts/stages/).
@@ -130,6 +132,6 @@ Real Claude Code sessions. The permission path (`PermissionRequest` and the perm
 ## Limits
 
 - `Stop` does not fire when you interrupt Claude Code with Esc. The task stays running. After 10 minutes with no hook, the dashboard marks it quiet.
-- Because `Stop` fires after every answer, a task shows "needs input" at the end of each turn, even when the agent only asked a question in plain text.
+- Because `Stop` fires after every answer, a task shows "idle" at the end of each turn, even when the agent asked a question in plain text. Idle does not count as needing you, so check the terminal when you expect a reply.
 - `--settings` adds to your own hooks. It does not replace them.
 - In its default TUI, Claude Code may leave empty rows under its footer after a turn: when its live area gets shorter, the rows it freed stay empty. Natamux sizes the terminal right; this is how Claude Code draws. `/tui fullscreen` avoids it, and a wider pane makes the footer shorter.

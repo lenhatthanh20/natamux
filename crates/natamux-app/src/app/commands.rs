@@ -22,6 +22,9 @@ pub const CHANGES: &str = "NatamuxChanges && not_editing";
 pub const CHANGES_ANY: &str = "NatamuxChanges";
 /// The wrapper of the commit box.
 pub const COMMIT_BOX: &str = "NatamuxCommitBox";
+/// The read-only editors of the diff. Same depth as the text box keys' `Editor`, so a binding
+/// made after those wins here (`shortcuts.rs`).
+pub const DIFF_EDITOR: &str = "NatamuxDiff > Editor";
 /// The wrapper of the comment box under the diff.
 pub const COMMENT_BOX: &str = "NatamuxCommentBox";
 /// Where single keys work: outside text boxes and terminals.
@@ -31,6 +34,7 @@ pub use super::command_types::{Category, Command, MenuName, SheetGroup};
 pub(super) use super::command_types::{command, group, hidden, keys, menu, suggested, when};
 pub use super::command_when::{CommandState, When};
 pub use super::commands_app::APP_COMMANDS;
+pub use super::commands_editor::EDITOR_COMMANDS;
 pub use super::commands_files::FILE_COMMANDS;
 pub use super::commands_git::GIT_COMMANDS;
 pub use super::commands_stages::STAGE_COMMANDS;
@@ -451,6 +455,7 @@ pub fn all_commands() -> impl Iterator<Item = &'static Command> {
         .chain(GIT_COMMANDS)
         .chain(STAGE_COMMANDS)
         .chain(FILE_COMMANDS)
+        .chain(EDITOR_COMMANDS)
 }
 
 pub fn command_by_id(id: &str) -> Option<&'static Command> {

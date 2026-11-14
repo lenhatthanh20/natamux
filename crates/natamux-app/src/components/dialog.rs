@@ -10,13 +10,16 @@ use std::rc::Rc;
 
 use gpui::{
     AnyView, ClickEvent, DismissEvent, Entity, EntityId, EventEmitter, FocusHandle, Focusable,
-    Global, KeystrokeEvent, MouseButton, Subscription, anchored, deferred, point,
+    Global, Hsla, KeystrokeEvent, MouseButton, Subscription, anchored, deferred, point,
 };
 use ui::prelude::*;
 
 use super::button_style::{action_button, key_hint, quiet_button};
 use super::input_rules::{DialogKey, dialog_key, ring_step};
 use super::menu::{MenuLayer, press_of};
+use crate::app::settings_rules::sheet_fill_size;
+
+pub use super::dialog_frame::DialogFrame;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum DialogSize {
@@ -24,6 +27,11 @@ pub enum DialogSize {
     #[default]
     Medium,
     Large,
+    /// 600 px: the Add branch dialog.
+    Wide,
+    /// The stage sheet (T-0313): it fills the Settings popup, `sheet_fill_size` in px, and sits
+    /// centered in the window.
+    Fill,
 }
 
 impl DialogSize {
@@ -32,9 +40,23 @@ impl DialogSize {
             DialogSize::Small => 400_f32,
             DialogSize::Medium => 520.,
             DialogSize::Large => 640.,
+            DialogSize::Wide => 600.,
+            // The layer sizes a Fill dialog from the window; this is its widest.
+            DialogSize::Fill => 960.,
         })
     }
 }
+
+/// The colour over the window under a dialog, the Settings popup and the drawer: Zed's modal
+/// layer look, read from the theme.
+pub fn scrim(cx: &App) -> Hsla {
+    let mut scrim = cx.theme().colors().elevated_surface_background;
+    scrim.fade_out(0.2);
+    scrim
+}
+
+/// The Settings popup's corner radius in px; its content rounds 1 px less, inside the border.
+pub const POPUP_RADIUS: f32 = 10.;
 
 /// The share of the window above a dialog.
 const TOP: f32 = 0.14;
@@ -288,14 +310,21 @@ impl DialogLayer {
 impl Render for DialogLayer {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let viewport = window.viewport_size();
-        // Zed's modal layer look, read from the theme.
-        let mut scrim = cx.theme().colors().elevated_surface_background;
-        scrim.fade_out(0.2);
+        let scrim = scrim(cx);
         let top = self.open.len().saturating_sub(1);
         let layers = self.open.iter().enumerate().map(|(index, open)| {
             let size = open.handle.size(cx);
-            let panel = div()
-                .w(size.width())
+            let fill = (size == DialogSize::Fill)
+                .then(|| sheet_fill_size(f32::from(viewport.width), f32::from(viewport.height)));
+            let panel = match fill {
+                Some((width, height)) => div().w(px(width)).h(px(height)),
+                None => div().w(size.width()),
+            };
+            let pad_top = match fill {
+                Some((_, height)) => (viewport.height - px(height)) / 2.,
+                None => viewport.height * TOP,
+            };
+            let panel = panel
                 .max_w(viewport.width - px(32.))
                 .occlude()
                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
@@ -307,7 +336,7 @@ impl Render for DialogLayer {
                 .occlude()
                 .bg(scrim)
                 .items_center()
-                .pt(viewport.height * TOP)
+                .pt(pad_top)
                 .child(panel);
             // Only the top dialog closes on a click outside it.
             if index == top {
@@ -320,133 +349,6 @@ impl Render for DialogLayer {
                 .with_priority(2 + index)
         });
         div().children(layers)
-    }
-}
-
-type ClickHandler = Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
-
-/// The look of a dialog: header with title, description and a close button, a body that scrolls,
-/// and a footer with the buttons on the right. Dialog views render it.
-#[derive(IntoElement)]
-pub struct DialogFrame {
-    title: SharedString,
-    note: Option<SharedString>,
-    description: Option<SharedString>,
-    body: Vec<AnyElement>,
-    footer: Vec<AnyElement>,
-    on_close: ClickHandler,
-}
-
-impl DialogFrame {
-    /// `on_close` runs for the close button; usually it emits `DismissEvent`.
-    pub fn new(
-        title: impl Into<SharedString>,
-        on_close: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    ) -> Self {
-        Self {
-            title: title.into(),
-            note: None,
-            description: None,
-            body: Vec::new(),
-            footer: Vec::new(),
-            on_close: Rc::new(on_close),
-        }
-    }
-
-    /// A line above the footer's buttons.
-    pub fn footer_note(mut self, note: impl Into<SharedString>) -> Self {
-        self.note = Some(note.into());
-        self
-    }
-
-    /// A line under the title, for warnings only (T-0158): what a button does goes in its
-    /// tooltip, so dialogs stay short.
-    pub fn description(mut self, description: impl Into<SharedString>) -> Self {
-        self.description = Some(description.into());
-        self
-    }
-
-    /// A footer item, such as `cancel_button` and `primary_button`.
-    pub fn footer(mut self, item: impl IntoElement) -> Self {
-        self.footer.push(item.into_any_element());
-        self
-    }
-}
-
-impl ParentElement for DialogFrame {
-    fn extend(&mut self, elements: impl IntoIterator<Item = AnyElement>) {
-        self.body.extend(elements);
-    }
-}
-
-impl RenderOnce for DialogFrame {
-    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
-        let on_close = self.on_close;
-        let header = h_flex()
-            .items_start()
-            .gap(DynamicSpacing::Base08.rems(cx))
-            .px(DynamicSpacing::Base12.rems(cx))
-            .pt(DynamicSpacing::Base08.rems(cx))
-            .pb(DynamicSpacing::Base04.rems(cx))
-            .child(
-                v_flex()
-                    .min_w_0()
-                    .flex_1()
-                    .gap_1()
-                    .child(Headline::new(self.title).size(HeadlineSize::Small))
-                    .when_some(self.description, |this, text| {
-                        this.child(Label::new(text).color(Color::Muted))
-                    }),
-            )
-            .child(
-                IconButton::new("dialog-close", IconName::Close)
-                    .icon_size(IconSize::Medium)
-                    .tooltip(ui::Tooltip::text("Close"))
-                    .on_click(move |event, window, cx| on_close(event, window, cx)),
-            );
-        let has_footer = !self.footer.is_empty();
-        let height = window.viewport_size().height;
-        v_flex()
-            .w_full()
-            .max_h(height * 0.8)
-            .overflow_hidden()
-            .elevation_3(cx)
-            .child(header)
-            .when(!self.body.is_empty(), |this| {
-                this.child(
-                    v_flex()
-                        .id("dialog-body")
-                        .min_h_0()
-                        .flex_1()
-                        .overflow_y_scroll()
-                        .px(DynamicSpacing::Base12.rems(cx))
-                        .py(DynamicSpacing::Base08.rems(cx))
-                        .gap(DynamicSpacing::Base12.rems(cx))
-                        .children(self.body),
-                )
-            })
-            // Zed's `ModalFooter` spacing; the note gets a line of its own, so a long one never
-            // pushes the buttons out of the dialog.
-            .when(has_footer, |this| {
-                this.child(
-                    v_flex()
-                        .flex_none()
-                        .gap_1()
-                        .p(DynamicSpacing::Base08.rems(cx))
-                        .border_t_1()
-                        .border_color(cx.theme().colors().border_variant)
-                        .when_some(self.note, |this, note| {
-                            this.child(Label::new(note).size(LabelSize::Small).color(Color::Muted))
-                        })
-                        .child(
-                            h_flex()
-                                .flex_wrap()
-                                .justify_end()
-                                .gap_1()
-                                .children(self.footer),
-                        ),
-                )
-            })
     }
 }
 

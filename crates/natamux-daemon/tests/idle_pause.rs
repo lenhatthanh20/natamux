@@ -236,6 +236,7 @@ fn does_not_pause_an_agent_whose_last_signal_is_not_a_turn_end() {
         Signal::Activity,
         Signal::Asking,
         Signal::TurnPaused,
+        Signal::TurnAsked,
         Signal::Failed,
     ] {
         let f = fx();
@@ -329,6 +330,7 @@ fn launch(terminal: &str, restored: bool) -> AgentLaunch {
         program: "copilot".into(),
         session: Some("c-1".into()),
         restored,
+        model: None,
     }
 }
 

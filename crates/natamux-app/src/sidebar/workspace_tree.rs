@@ -7,8 +7,7 @@
 use std::collections::BTreeMap;
 
 use gpui::{
-    Entity, FocusHandle, Focusable, KeyDownEvent, ListAlignment, ListState, Pixels, Point,
-    Subscription, list,
+    Entity, FocusHandle, Focusable, ListAlignment, ListState, Pixels, Point, Subscription, list,
 };
 use natamux_proto::tasks::task::TaskState;
 use ui::prelude::*;
@@ -20,7 +19,7 @@ use crate::app::shortcuts::{
     Back, CollapseRow, ExpandRow, OpenRowMenu, OpenSelected, RemoveRow, RenameRow, SelectFirst,
     SelectLast, SelectNext, SelectPrevious,
 };
-use crate::sidebar::sidebar_text::{type_ahead_target, typed_word};
+use crate::sidebar::snapshot_memo::{SnapshotKey, SnapshotMemo};
 use crate::sidebar::tree_entries::{EntryAction, TreeKey, move_target, tree_key};
 use crate::sidebar::tree_lines::{LinesChange, changed_lines};
 use crate::sidebar::tree_model::{Line, TaskLook, TreeInput, TreeModel};
@@ -66,12 +65,14 @@ pub struct WorkspaceTree {
     list: ListState,
     /// What the rows read this frame besides the lines.
     pub(super) shown: Option<Snapshot>,
+    /// Tells whether `shown` still matches what the rows read.
+    memo: SnapshotMemo,
     /// The row with the tree's tab stop, by entry key.
     pub(super) active: Option<String>,
     hold: Hold,
     pub(super) rename: Option<Rename>,
     /// The word typed for type-ahead, and when its last letter came.
-    typed: (String, i64),
+    pub(super) typed: (String, i64),
     /// The tree as last drawn, for keys and menus.
     pub(super) model: Option<TreeModel>,
     /// The model was built after the dashboard's last change.
@@ -83,6 +84,8 @@ pub struct WorkspaceTree {
     #[cfg(test)]
     pub(super) draws: usize,
     _observe: Subscription,
+    /// Focus in and out of the tree draws it again: the ring is read in `snapshot`.
+    pub(super) focus_watch: Option<[Subscription; 2]>,
     /// Draws the tree again when the next age label changes; only while the window has focus.
     clock: Option<gpui::Task<()>>,
 }
@@ -99,6 +102,7 @@ impl WorkspaceTree {
             if changed.any(MODEL_PARTS)
                 || changed.any(&[Part::Activity, Part::Events, Part::DiffStats])
             {
+                tree.memo.invalidate();
                 cx.notify();
             }
             // The waiting box and the blur change a card's height, not the lines.
@@ -111,6 +115,7 @@ impl WorkspaceTree {
             focus: cx.focus_handle(),
             list: ListState::new(0, ListAlignment::Top, px(OVERDRAW)),
             shown: None,
+            memo: SnapshotMemo::default(),
             active: None,
             hold: Hold::default(),
             rename: None,
@@ -123,6 +128,7 @@ impl WorkspaceTree {
             #[cfg(test)]
             draws: 0,
             _observe: observe,
+            focus_watch: None,
             clock: None,
         }
     }
@@ -153,7 +159,7 @@ impl WorkspaceTree {
             .or_else(|| keys.first().cloned())
     }
 
-    fn current_stop(&self, cx: &App) -> Option<String> {
+    pub(super) fn current_stop(&self, cx: &App) -> Option<String> {
         self.stop(self.dashboard.read(cx).open_task.as_deref())
     }
 
@@ -310,31 +316,6 @@ impl WorkspaceTree {
         }
     }
 
-    /// Letters jump to the next row whose title starts with what was typed.
-    fn type_ahead(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
-        let stroke = &event.keystroke;
-        let letter = stroke.key.chars().count() == 1 && stroke.key != " ";
-        if self.rename.is_some() || !letter || stroke.modifiers.modified() {
-            return;
-        }
-        let now = now_ms();
-        let word = typed_word(&self.typed.0, self.typed.1, now, &stroke.key);
-        self.typed = (word.clone(), now);
-        let Some(model) = self.model.as_ref() else {
-            return;
-        };
-        let labels: Vec<String> = model.entries.iter().map(|e| e.label.clone()).collect();
-        let stop = self.current_stop(cx);
-        let from = stop
-            .and_then(|stop| model.entries.iter().position(|entry| entry.key == stop))
-            .unwrap_or(0);
-        if let Some(found) = type_ahead_target(&labels, &word, from) {
-            let key = model.entries[found].key.clone();
-            self.focus_key(key, window, cx);
-            cx.stop_propagation();
-        }
-    }
-
     /// The tree of the dashboard as it is now. It is built again only after the dashboard
     /// changed: the beat of a running glyph and the age clock draw the same tree.
     fn build_model(&mut self, cx: &App) {
@@ -382,10 +363,14 @@ impl WorkspaceTree {
             .model
             .as_ref()
             .and_then(|model| model.next_label_change_ms(now));
-        follow_labels(&mut self.clock, wait, cx, |tree, cx| {
-            tree.clock = None;
-            cx.notify();
-        });
+        follow_labels(&mut self.clock, wait, cx, Self::on_clock);
+    }
+
+    /// An age label or the quiet state may have changed: read the rows again.
+    fn on_clock(&mut self, cx: &mut Context<Self>) {
+        self.clock = None;
+        self.memo.invalidate();
+        cx.notify();
     }
 
     fn snapshot(&mut self, window: &Window, cx: &App) -> Snapshot {
@@ -409,6 +394,7 @@ impl WorkspaceTree {
             focused: self.focus.contains_focused(window, cx),
             stop: None,
         };
+        let counts = crate::sidebar::sidebar_tree::subtask_counts(&data.tasks);
         let lines = self.model.as_ref().map_or(&[][..], |model| &model.lines);
         for line in lines {
             let Line::Task {
@@ -420,10 +406,10 @@ impl WorkspaceTree {
             else {
                 continue;
             };
-            snapshot.add_task(data, task, *pinned_row, &view.blurred);
+            snapshot.add_task(data, task, *pinned_row, &view.blurred, &counts);
             if let TaskLook::Open { children, .. } = look {
                 for child in children {
-                    snapshot.add_task(data, child, false, &view.blurred);
+                    snapshot.add_task(data, child, false, &view.blurred, &counts);
                 }
             }
         }
@@ -451,10 +437,20 @@ impl Render for WorkspaceTree {
         {
             self.draws += 1;
         }
-        let mut snapshot = self.snapshot(window, cx);
-        snapshot.stop = self.stop(snapshot.current.as_deref());
-        self.follow_clock(snapshot.now_ms, cx);
-        self.shown = Some(snapshot);
+        self.watch_focus(window, cx);
+        let key = SnapshotKey {
+            window_active: window.is_window_active(),
+            focused: self.focus.contains_focused(window, cx),
+            current: self.dashboard.read(cx).open_task.clone(),
+            active: self.active.clone(),
+        };
+        if self.shown.is_none() || !self.memo.is_fresh(&key) {
+            let mut snapshot = self.snapshot(window, cx);
+            snapshot.stop = self.stop(snapshot.current.as_deref());
+            self.shown = Some(snapshot);
+            self.memo.built(key);
+        }
+        self.follow_clock(now_ms(), cx);
         let rows = cx.processor(|tree, index: usize, _, cx| tree.render_line(index, cx));
         // Bindings of lists stay off while the rename field takes keys.
         let context = if self.rename.is_some() {

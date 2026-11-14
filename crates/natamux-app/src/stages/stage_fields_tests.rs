@@ -1,8 +1,9 @@
-//! Workflow test T12 (plan 7.5), in the Project settings page of the fake's project: each key in
-//! a stage field writes the draft, Use default puts the default back, a switch to another stage
-//! closes the skills menu, and the placeholder chips and Insert skill put their text at the
-//! cursor. Use default and the chips have no focus stop, so the tests call what their click
-//! calls; Insert skill's menu is used with the keyboard.
+//! Workflow test T12 (plan 7.5), in the Project settings page of the fake's project: picking a
+//! stage opens its sheet (main's T-0313 redesign), each key in a stage field writes the draft,
+//! Use default puts the default back, a step of the sheet to another stage closes the skills
+//! menu, and the placeholder chips and Insert skill put their text at the cursor. Use default,
+//! the chips and the stepper have no key, so the tests call what their click calls; Insert
+//! skill's menu is used with the keyboard.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
@@ -14,8 +15,8 @@ use natamux_proto::stages::schema::Stage;
 use super::super::editor_fields::{TextField, set_text};
 use super::super::editor_find::find_stage;
 use super::super::pipeline_editor::PipelineEditor;
-use super::super::stage_details::DetailsPane;
 use super::super::stage_fields_view::change;
+use super::super::stage_sheet::StageSheet;
 use super::insert_at_cursor;
 use crate::app::test_driver::{is_focused, press, text_of, type_text};
 use crate::app::test_views;
@@ -31,7 +32,7 @@ const SKILL: &str = "natamux-stage-check";
 struct Fields {
     page: Entity<ProjectSettingsPage>,
     pipeline: Entity<PipelineEditor>,
-    details: Entity<DetailsPane>,
+    sheet: Entity<StageSheet>,
 }
 
 fn pick(page: Entity<ProjectSettingsPage>, id: &str, cx: &mut VisualTestContext) -> Fields {
@@ -39,16 +40,17 @@ fn pick(page: Entity<ProjectSettingsPage>, id: &str, cx: &mut VisualTestContext)
     let (details, _) = page.read_with(cx, |page, _| page.stage_parts().expect("read"));
     pipeline.update(cx, |pipeline, cx| pipeline.select(id, cx));
     cx.run_until_parked();
+    let sheet = details.read_with(cx, |details, _| details.sheet().expect("the sheet opened"));
     Fields {
         page,
         pipeline,
-        details,
+        sheet,
     }
 }
 
 fn field(fields: &Fields, which: TextField, cx: &mut VisualTestContext) -> Entity<Editor> {
-    fields.details.read_with(cx, |details, _| {
-        let stage = details.stage_fields.as_ref().expect("a stage is picked");
+    fields.sheet.read_with(cx, |sheet, _| {
+        let stage = &sheet.fields;
         match which {
             TextField::Name => stage.name.editor.clone(),
             TextField::Prompt => stage.prompt.editor.clone(),
@@ -125,9 +127,7 @@ fn t12_use_default_puts_the_default_back(cx: &mut TestAppContext) {
     let page = fields.page.clone();
     focus(&page, cx);
     assert_eq!(text_of(&name, cx), "Implement it");
-    fields
-        .pipeline
-        .update(cx, |pipeline, cx| pipeline.set_picking(false, cx));
+    fields.pipeline.update(cx, |_, cx| cx.notify());
     cx.run_until_parked();
     assert_eq!(text_of(&name, cx), "Implement");
 
@@ -149,28 +149,28 @@ fn t12_use_default_puts_the_default_back(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn t12_a_switch_to_another_stage_closes_the_skills_menu(cx: &mut TestAppContext) {
+fn t12_a_step_to_another_stage_closes_the_skills_menu(cx: &mut TestAppContext) {
     let (page, _, cx) = test_views::init_project_page(cx);
     let fields = pick(page, STAGE, cx);
-    fields.details.update_in(cx, |details, window, cx| {
-        details.toggle_skills(point(px(10.), px(10.)), window, cx)
+    fields.sheet.update_in(cx, |sheet, window, cx| {
+        sheet.toggle_skills(point(px(10.), px(10.)), window, cx)
     });
     cx.run_until_parked();
     assert!(
         fields
-            .details
-            .read_with(cx, |details, _| details.skill_menu.is_some())
+            .sheet
+            .read_with(cx, |sheet, _| sheet.skill_menu.is_some())
     );
+    // What the stepper's click does.
     fields
-        .pipeline
-        .update(cx, |pipeline, cx| pipeline.select(OTHER, cx));
+        .sheet
+        .update_in(cx, |sheet, window, cx| sheet.go_to(OTHER, window, cx));
     cx.run_until_parked();
-    let (menu, id) = fields.details.read_with(cx, |details, _| {
-        let id = details.stage_fields.as_ref().map(|stage| stage.id.clone());
-        (details.skill_menu.is_some(), id)
+    let (menu, id) = fields.sheet.read_with(cx, |sheet, _| {
+        (sheet.skill_menu.is_some(), sheet.fields.id.clone())
     });
     assert!(!menu);
-    assert_eq!(id.as_deref(), Some(OTHER));
+    assert_eq!(id, OTHER);
 }
 
 #[gpui::test]
@@ -201,8 +201,8 @@ fn t12_insert_skill_puts_the_skill_at_the_cursor(cx: &mut TestAppContext) {
     let before = text_of(&prompt, cx);
     focus(&prompt, cx);
     press(cx, "mod-a left");
-    fields.details.update_in(cx, |details, window, cx| {
-        details.toggle_skills(point(px(10.), px(10.)), window, cx)
+    fields.sheet.update_in(cx, |sheet, window, cx| {
+        sheet.toggle_skills(point(px(10.), px(10.)), window, cx)
     });
     cx.run_until_parked();
     press(cx, "down enter");
@@ -212,7 +212,7 @@ fn t12_insert_skill_puts_the_skill_at_the_cursor(cx: &mut TestAppContext) {
     assert!(is_focused(&prompt, cx));
     assert!(
         fields
-            .details
-            .read_with(cx, |details, _| details.skill_menu.is_none())
+            .sheet
+            .read_with(cx, |sheet, _| sheet.skill_menu.is_none())
     );
 }

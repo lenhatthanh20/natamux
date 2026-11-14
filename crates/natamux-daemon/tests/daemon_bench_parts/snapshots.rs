@@ -1,12 +1,15 @@
 //! The catch-up snapshot of T-0223 P8 against the full one, at 80 cols as the spec measures it:
 //! a catch-up sends only the newest `CATCH_UP_HISTORY_ROWS` of the history.
 
+use std::sync::Arc;
 use std::time::Instant;
 
+use natamux_daemon::terminals::service::AttachOptions;
+use natamux_daemon::terminals::types::ClientRef;
 use natamux_proto::terminals::history::{CATCH_UP_HISTORY_ROWS, scrollback_lines};
 use natamux_screen::Screen;
 
-use super::ms;
+use super::{Nobody, TASK, emit, history, ms, open, setup, size};
 
 const CATCH_UP_COLS: u16 = 80;
 const CATCH_UP_ROWS: u16 = 24;
@@ -44,4 +47,22 @@ fn full_history() -> Vec<u8> {
 
 fn kib(bytes: usize) -> f64 {
     (bytes as f64 / 1024.0 * 10.0).round() / 10.0
+}
+
+/// The time a new client waits for the snapshot of a full history.
+pub fn full_history_snapshot() -> f64 {
+    let (service, sinks) = setup();
+    open(&service, "1");
+    let sink = Arc::clone(&sinks.lock().unwrap()[0]);
+    for piece in history().chunks(64 * 1024) {
+        emit(&sink, piece);
+    }
+    service.settled(TASK, "1");
+    let client: ClientRef = Arc::new(Nobody);
+    let start = Instant::now();
+    let detach = service.attach(TASK, client, size(), "1", AttachOptions::default());
+    let held = start.elapsed();
+    drop(detach);
+    service.close_all();
+    ms(held)
 }

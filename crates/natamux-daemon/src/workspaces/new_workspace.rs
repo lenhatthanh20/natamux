@@ -39,6 +39,8 @@ pub struct NewWorkspaceInput {
     pub branch: Option<String>,
     /// The agent that works on the task's stages; none leaves a plain shell.
     pub agent: Option<String>,
+    /// Passed to the agent as `--model`; none is the agent's own default.
+    pub model: Option<String>,
     /// None uses the project's full pipeline; single-agent keeps Context and Agent only.
     pub mode: Option<String>,
     /// The task's notes. With a manual context source they are its context.
@@ -48,6 +50,8 @@ pub struct NewWorkspaceInput {
     pub context: Option<TaskContext>,
     /// Files for the agents to read, already checked.
     pub attachments: Vec<AttachmentFile>,
+    /// No worktree: the task works in the project folder itself, on the branch checked out there.
+    pub no_worktree: bool,
 }
 
 /// The branch name and the base branch are checked first, so a typo leaves no task behind. The
@@ -70,6 +74,14 @@ pub fn new_workspace(parts: &NewWorkspaceParts, input: NewWorkspaceInput) -> Wor
         }
     }
 
+    // Before the task is made, so a refusal leaves no task behind.
+    if input.no_worktree {
+        // shortcut: two requests at the same moment can both pass; the app sends one at a time.
+        parts
+            .workspaces
+            .check_main_checkout_free(input.repo.as_deref())?;
+    }
+
     let mut raw = Map::new();
     raw.insert("title".into(), json!(input.title));
     raw.insert(
@@ -81,6 +93,9 @@ pub fn new_workspace(parts: &NewWorkspaceParts, input: NewWorkspaceInput) -> Wor
     }
     if let Some(agent) = &input.agent {
         raw.insert("agent".into(), json!(agent));
+    }
+    if let Some(model) = &input.model {
+        raw.insert("model".into(), json!(model));
     }
     if let Some(mode) = &input.mode {
         raw.insert("mode".into(), json!(mode));
@@ -98,6 +113,9 @@ pub fn new_workspace(parts: &NewWorkspaceParts, input: NewWorkspaceInput) -> Wor
         // A first stage that passes by itself, such as a manual context, would start the next
         // stage's agent in the new workspace.
         (parts.leave_to_person)(&created.id).map_err(stage_failure)?;
+    }
+    if input.no_worktree {
+        return main_checkout(parts, &created.id, input.agent.is_some());
     }
     // As Node's `create` up to its first `await`: the task is taken, its job listed and its
     // `fetch` step told before the answer, so a dashboard that opens the task sees it and a
@@ -130,6 +148,31 @@ pub fn new_workspace(parts: &NewWorkspaceParts, input: NewWorkspaceInput) -> Wor
     };
     parts.workspaces.background(move || prepare.run());
     Ok(answer)
+}
+
+/// The task works in the project folder: nothing to fetch or check out, so it is ready before the
+/// answer. A failure stays on the task, as for a worktree.
+fn main_checkout(parts: &NewWorkspaceParts, task_id: &str, agent: bool) -> WorkspaceResult<Task> {
+    match parts.workspaces.use_main_checkout(task_id) {
+        Ok(task) if agent => {
+            let start = Arc::clone(&parts.start_stage);
+            let log = Arc::clone(&parts.workspaces.log);
+            let id = task_id.to_string();
+            parts.workspaces.background(move || {
+                if let Err(error) = start(&id) {
+                    log(&format!("{id}: the first stage did not start: {error}"));
+                }
+            });
+            Ok(task)
+        }
+        Ok(task) => Ok(task),
+        Err(error) => {
+            let _ = parts
+                .tasks
+                .record_workspace_failure(task_id, &error.to_string());
+            Ok(parts.tasks.get_task(task_id)?)
+        }
+    }
 }
 
 struct Prepare {

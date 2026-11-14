@@ -12,6 +12,7 @@ use crate::app::dashboard::Dashboard;
 use crate::components::dialog::{
     DialogFrame, DialogLayer, DialogSize, DialogView, cancel_button, primary_button,
 };
+use crate::components::form::input_editor;
 use crate::components::toast_rules::ToastTone;
 
 struct GlobalDashboard(WeakEntity<Dashboard>);
@@ -55,7 +56,7 @@ impl AddSubtaskDialog {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let title = cx.new(|cx| Editor::single_line(window, cx));
+        let title = cx.new(|cx| input_editor(None, window, cx));
         let edits = cx.subscribe(&title, |_, _, event: &EditorEvent, cx| {
             if matches!(event, EditorEvent::BufferEdited) {
                 cx.notify();

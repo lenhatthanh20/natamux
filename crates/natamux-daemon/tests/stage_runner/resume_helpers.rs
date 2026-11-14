@@ -73,7 +73,7 @@ pub fn last_pty(f: &Fixture) -> FakePty {
 }
 
 /// The spec agent ended its turn with this payload, then the app restarted: the agent and its
-/// shell are gone, the task still waits for you.
+/// shell are gone, the task is still idle.
 pub fn waiting_after_restart(f: &Fixture, payload: Value, agent: &str) -> Task {
     let id = f
         .created(json!({ "title": "Export tasks", "agent": agent }))

@@ -11,9 +11,9 @@ use gpui::{AnyWindowHandle, size};
 use serde_json::{Value, json};
 use ui::prelude::*;
 
-use super::docs_markdown::MarkdownDoc;
 use crate::app::golden_files;
 use crate::app::shots_text::RICH_TEXT;
+use crate::components::docs_markdown::MarkdownDoc;
 use crate::components::kit_metrics::{CONFIGS, context, redraw};
 
 const SET: &str = "markdown";

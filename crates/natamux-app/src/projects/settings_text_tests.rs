@@ -193,6 +193,14 @@ fn keeps_a_path_outside_the_home_folder() {
 fn the_file_hint_names_the_full_path() {
     assert_eq!(
         file_hint("/Users/me/a/.natamux.json"),
-        "Commit /Users/me/a/.natamux.json to share these settings with your team."
+        "/Users/me/a/.natamux.json \u{b7} commit this file to share the settings with your team"
+    );
+}
+
+#[test]
+fn the_summary_note_follows_the_path() {
+    assert_eq!(
+        SUMMARY_NOTE,
+        " \u{b7} nothing is saved until you click Save"
     );
 }

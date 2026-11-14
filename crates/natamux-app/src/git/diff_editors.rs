@@ -69,8 +69,8 @@ pub fn read_only_editor(
     })
 }
 
-/// The switches every editor of the app shares: no runnables, breakpoints, code actions, guides,
-/// predictions or minimap, and the soft wrap.
+/// The switches every editor of the app shares: no runnables, breakpoints, code actions, wrap
+/// guides, predictions or minimap; indent guides on (T-0316); and the soft wrap.
 pub fn plain_switches(
     editor: &mut Editor,
     wrap: bool,
@@ -83,7 +83,7 @@ pub fn plain_switches(
     editor.set_show_bookmarks(false, cx);
     editor.set_show_diff_review_button(false, cx);
     editor.set_show_wrap_guides(false, cx);
-    editor.set_show_indent_guides(false, cx);
+    editor.set_show_indent_guides(true, cx);
     editor.set_show_edit_predictions(Some(false), window, cx);
     editor.set_minimap_visibility(editor::MinimapVisibility::Disabled, window, cx);
     editor.set_soft_wrap_mode(

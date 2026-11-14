@@ -151,6 +151,7 @@ fn terminals_of(state: &AppState, id: &str) -> Answer {
         "programs": programs,
         "restoring": restoring,
         "closing": closing,
+        "shells": state.terminals.shell_ids(id),
     }))
 }
 

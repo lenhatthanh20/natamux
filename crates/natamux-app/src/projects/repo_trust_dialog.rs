@@ -12,9 +12,15 @@ use natamux_proto::projects::repo_trust::{RepoCommand, RepoTrustView, SetupScrip
 use ui::prelude::*;
 
 use crate::app::source::{Source, reason};
+use crate::components::button_style::button_icon;
+use crate::components::colors::TileColor;
 use crate::components::dialog::{
     DialogFrame, DialogLayer, DialogSize, DialogView, cancel_button, primary_button,
 };
+use crate::components::settings_card::{
+    SeparatorInset, SettingsCard, SettingsGroup, error_line, foot_text,
+};
+use crate::components::settings_tile::{AlertKind, SettingsAlert, SettingsTile, TileSize};
 
 #[path = "repo_trust_row.rs"]
 pub mod row;
@@ -198,9 +204,9 @@ impl DialogView for RepoTrustDialog {
 fn code_box(text: &str, cx: &App) -> Div {
     let colors = cx.theme().colors();
     div()
-        .px_2()
-        .py_1()
-        .rounded_md()
+        .px(rems_from_px(10.0_f32))
+        .py(rems_from_px(6.0_f32))
+        .rounded(rems_from_px(6.0_f32))
         .border_1()
         .border_color(colors.border_variant)
         .bg(colors.editor_background)
@@ -211,65 +217,69 @@ fn code_box(text: &str, cx: &App) -> Div {
         )
 }
 
-fn command_row(command: &RepoCommand, cx: &App) -> impl IntoElement {
+/// A block of the Commands card: where it comes from, then the text that runs.
+fn command_block(place: String, code: impl IntoElement) -> impl IntoElement {
     v_flex()
-        .gap_1()
-        .child(
-            Label::new(command.place.clone())
-                .size(LabelSize::Small)
-                .color(Color::Muted),
-        )
-        .child(code_box(&command.text, cx))
+        .w_full()
+        .px(rems_from_px(12.0_f32))
+        .py(rems_from_px(10.0_f32))
+        .child(div().mb(rems_from_px(4.0_f32)).child(foot_text(place)))
+        .child(code)
+}
+
+fn command_row(command: &RepoCommand, cx: &App) -> impl IntoElement {
+    command_block(command.place.clone(), code_box(&command.text, cx))
 }
 
 /// A script can be long: its box scrolls on its own.
 fn script_box(index: usize, script: &SetupScript, cx: &App) -> impl IntoElement {
-    v_flex()
-        .gap_1()
-        .child(
-            Label::new(format!("Setup script {}", script.file))
-                .size(LabelSize::Small)
-                .color(Color::Muted),
-        )
-        .child(
-            div()
-                .id(("repo-trust-script", index))
-                .max_h(rems_from_px(200.0_f32))
-                .overflow_y_scroll()
-                .child(code_box(&script.text, cx)),
-        )
+    let code = div()
+        .id(("repo-trust-script", index))
+        .max_h(rems_from_px(200.0_f32))
+        .overflow_y_scroll()
+        .child(code_box(&script.text, cx));
+    command_block(format!("Setup script {}", script.file), code)
+}
+
+impl RepoTrustDialog {
+    /// The commands, then the setup scripts, in one card.
+    fn commands(&self, cx: &App) -> SettingsCard {
+        let mut card = SettingsCard::new(SeparatorInset::Text);
+        for command in &self.view.commands {
+            card = card.child(command_row(command, cx));
+        }
+        for (index, script) in self.view.setup.iter().enumerate() {
+            card = card.child(script_box(index, script, cx));
+        }
+        card
+    }
 }
 
 impl Render for RepoTrustDialog {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let commands = (!self.view.commands.is_empty()).then(|| {
-            v_flex()
-                .gap_2()
-                .children(self.view.commands.iter().map(|each| command_row(each, cx)))
-        });
-        let scripts: Vec<_> = self
-            .view
-            .setup
-            .iter()
-            .enumerate()
-            .map(|(index, script)| script_box(index, script, cx))
-            .collect();
+        // A 409 shows as a warning over the new commands; any other refusal under them.
+        let changed = self.error.as_deref() == Some(CHANGED);
+        let alert = changed.then(|| SettingsAlert::new(AlertKind::Warning, CHANGED));
+        let failed = self.error.clone().filter(|_| !changed).map(error_line);
+        let commands = SettingsGroup::new("Commands")
+            .child(self.commands(cx))
+            .footnote(TRUST_NOTE);
         let close = cx.listener(|this, _, window, cx| this.close(window, cx));
         let not_now = cx.listener(|this, _, window, cx| this.close(window, cx));
         let approve = cx.listener(|this, _, window, cx| this.approve(window, cx));
+        let lead = SettingsTile::icon(button_icon("shield"), TileColor::Yellow, TileSize::Row);
+        let approve = primary_button("Approve", &self.approve, self.busy, approve)
+            .start_icon(button_icon("shield"));
         div().track_focus(&self.focus).child(
             DialogFrame::new(title(&self.name), close)
-                .description(TRUST_NOTE)
-                .child(Label::new(LEAD).color(Color::Muted))
-                .children(commands)
-                .children(scripts)
-                .children(
-                    self.error
-                        .clone()
-                        .map(|error| Label::new(error).color(Color::Error)),
-                )
+                .sheet()
+                .lead(lead)
+                .children(alert)
+                .child(div().pt(rems_from_px(14.0_f32)).child(foot_text(LEAD)))
+                .child(commands)
+                .children(failed)
                 .footer(cancel_button("Not now", &self.not_now, not_now))
-                .footer(primary_button("Approve", &self.approve, self.busy, approve)),
+                .footer(approve),
         )
     }
 }

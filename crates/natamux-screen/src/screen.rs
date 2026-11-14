@@ -206,6 +206,15 @@ mod tests {
     use super::*;
 
     #[test]
+    fn the_history_budget_covers_a_cell() {
+        let cell = std::mem::size_of::<alacritty_terminal::term::cell::Cell>();
+        assert!(
+            cell <= natamux_proto::terminals::history::BYTES_PER_CELL,
+            "{cell}"
+        );
+    }
+
+    #[test]
     fn follows_synchronized_frames_across_reads() {
         let mut screen = Screen::new(20, 4);
         screen.write(b"a\x1b[?20");

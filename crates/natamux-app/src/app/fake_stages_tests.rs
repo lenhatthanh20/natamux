@@ -293,6 +293,7 @@ fn edits_a_task() {
         labels: Some(vec!["a".into()]),
         depends_on: Some(vec!["T-0141".into()]),
         description: Some("Notes".into()),
+        model: Some("opus".into()),
     };
     let task = fake.update_task("T-0131", changes).unwrap();
     assert_eq!(
@@ -302,6 +303,12 @@ fn edits_a_task() {
     assert_eq!(task.labels, ["a"]);
     assert_eq!(task.depends_on, ["T-0141"]);
     assert_eq!(task.description, "Notes");
+    assert_eq!(task.model.as_deref(), Some("opus"));
+    let cleared = TaskChanges {
+        model: Some(String::new()),
+        ..TaskChanges::default()
+    };
+    assert_eq!(fake.update_task("T-0131", cleared).unwrap().model, None);
 }
 
 #[test]

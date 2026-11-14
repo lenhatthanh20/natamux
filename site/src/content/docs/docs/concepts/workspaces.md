@@ -34,10 +34,10 @@ Natamux refuses to create a workspace when:
 
 | Item | Name | Example |
 |---|---|---|
-| Branch | `natamux/` + task id in lower case + a slug of the title | `natamux/t-0001-fix-login-redirect` |
+| Branch | A slug of the project name + `/` + task id in lower case + a slug of the title | `my-app/t-0001-fix-login-redirect` |
 | Folder | The worktrees folder + the task id | `.natamux/worktrees/T-0001` |
 
-The slug uses lower case letters, digits and `-`. It has at most 40 characters. A title with no usable characters gives the slug `task`.
+The slug uses lower case letters, digits and `-`. It has at most 40 characters. A title or project name with no usable characters gives the slug `task`.
 
 ### Base branch
 
@@ -69,13 +69,13 @@ If a task already has a branch from an earlier workspace, and the branch still e
 
 ### Branch name
 
-By default, the branch is `natamux/<id>-<slug>`, such as `natamux/abc-12-fix-login`. You can change it in three ways. The first that applies wins:
+By default, the branch is `<project>/<id>-<slug>`, such as `my-app/abc-12-fix-login` in the project "My App". Older tasks keep their `natamux/...` branches. You can change it in three ways. The first that applies wins:
 
 1. A branch the task kept from an earlier workspace, as above.
 2. The name you give for this task.
 3. The project pattern.
 
-The project pattern is `git.branchName` in `.natamux.json`. It can use `{id}` and `{slug}`. For example, `{id}` gives `ABC-12`. See [Configuration](/docs/reference/configuration/#git).
+The project pattern is `git.branchName` in `.natamux.json`. It can use `{project}`, `{id}` and `{slug}`. For example, `{id}` gives `ABC-12`, and `{project}/{id}` gives `my-app/ABC-12`. See [Configuration](/docs/reference/configuration/#git).
 
 To name the branch of one task:
 

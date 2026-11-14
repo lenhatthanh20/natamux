@@ -73,12 +73,29 @@ pub fn evictions(entries: &[EntryState], now: u64) -> Vec<String> {
 /// The entries to free as a view shows them again: the daemon closed their shell, so the name
 /// now belongs to a new shell, which a new terminal attaches to (T-0191) once a new list read
 /// still has it (T-0211). A shell that ended with an exit code keeps its last screen, and one that
-/// stayed on screen waits for the list to drop it.
+/// stayed on screen waits for `replaced_shells`.
 pub fn reshown_closed(entries: &[EntryState]) -> Vec<String> {
     entries
         .iter()
         .filter(|entry| entry.closed && entry.shown && !entry.was_shown)
         .map(|entry| entry.key.clone())
+        .collect()
+}
+
+/// The names whose ended terminal (no exit code) showed a shell that the daemon's new list gives
+/// another id: a new shell took the name while the pane stayed on screen (T-0309). A terminal
+/// with no known id, or a name the list lacks, stays: a new socket there would start a shell.
+pub fn replaced_shells(
+    ended: &[(String, Option<String>)],
+    shells: &BTreeMap<String, String>,
+) -> Vec<String> {
+    ended
+        .iter()
+        .filter(|(name, shell_id)| {
+            let listed = shells.get(name);
+            shell_id.is_some() && listed.is_some() && listed != shell_id.as_ref()
+        })
+        .map(|(name, _)| name.clone())
         .collect()
 }
 
@@ -178,6 +195,14 @@ impl TerminalCache {
         Self::settle(cx);
     }
 
+    /// The terminals `owner` shows now, for tests of what a view draws.
+    #[cfg(test)]
+    pub fn claimed(owner: Owner, cx: &App) -> BTreeSet<String> {
+        cx.try_global::<TerminalCache>()
+            .and_then(|cache| cache.claims.get(&owner).cloned())
+            .unwrap_or_default()
+    }
+
     /// The task list changed: the terminals of tasks that are gone, finished or have no
     /// workspace are freed once hidden.
     pub fn set_live(live: BTreeSet<String>, cx: &mut App) {
@@ -187,6 +212,30 @@ impl TerminalCache {
         }
         cache.live = live;
         Self::settle(cx);
+    }
+
+    /// A new list of a task's shells: free its closed terminals whose name a new shell took, so
+    /// the next render attaches to that shell.
+    pub fn set_shells(task_id: &str, shells: &BTreeMap<String, String>, cx: &mut App) {
+        let Some(cache) = cx.try_global::<TerminalCache>() else {
+            return;
+        };
+        let prefix = terminal_key(task_id, "");
+        let ended: Vec<(String, Option<String>)> = cache
+            .entries
+            .iter()
+            .filter_map(|(key, entry)| {
+                let name = key.strip_prefix(&prefix)?;
+                let terminal = entry.terminal.read(cx);
+                matches!(terminal.status(), TerminalStatus::Ended { code: None })
+                    .then(|| (name.to_string(), terminal.shell_id()))
+            })
+            .collect();
+        for name in replaced_shells(&ended, shells) {
+            Self::global(cx)
+                .entries
+                .remove(&terminal_key(task_id, &name));
+        }
     }
 
     /// A terminal the user closed: its socket goes now.
@@ -391,6 +440,58 @@ mod tests {
             TerminalCache::terminal(&source, "T-1", "2", window, cx)
         });
         assert_eq!(first.entity_id(), second.entity_id());
+    }
+
+    #[test]
+    fn frees_an_ended_terminal_whose_name_a_new_shell_took() {
+        let ended = |name: &str, id: Option<&str>| (name.to_string(), id.map(str::to_string));
+        let shells = BTreeMap::from([
+            ("11".to_string(), "new".to_string()),
+            ("12".to_string(), "same".to_string()),
+            ("14".to_string(), "new".to_string()),
+        ]);
+        let entries = [
+            ended("11", Some("old")),
+            ended("12", Some("same")),
+            ended("13", Some("old")),
+            ended("14", None),
+        ];
+        assert_eq!(replaced_shells(&entries, &shells), ["11"]);
+    }
+
+    /// T-0309: a stage ran again in a new Terminal 11 while the pane stayed on screen; it showed
+    /// the old one, ended, until the user left the task and came back.
+    #[gpui::test]
+    fn a_shown_closed_terminal_whose_name_a_new_shell_took_is_a_new_one(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        crate::app::test_views::init(cx);
+        let source = Arc::new(Source::FakeDaemon);
+        let window = cx.add_empty_window();
+        let first = window.update(|window, cx| {
+            TerminalCache::set_live(BTreeSet::from(["T-1".to_owned()]), cx);
+            TerminalCache::claim(Owner::Workspace, BTreeSet::from(["T-1/11".to_owned()]), cx);
+            let terminal = TerminalCache::terminal(&source, "T-1", "11", window, cx);
+            terminal.update(cx, |terminal, _| terminal.set_shell_id("old"));
+            terminal
+        });
+        let list = |id: &str| BTreeMap::from([("11".to_string(), id.to_string())]);
+        window.update(|_, cx| TerminalCache::set_shells("T-1", &list("new"), cx));
+        let kept = window.update(|_, cx| TerminalCache::cached("T-1/11", cx).is_some());
+        assert!(kept, "a terminal that runs stays");
+        window.update(|_, cx| {
+            first.update(cx, |terminal, _| {
+                terminal.set_status(TerminalStatus::Ended { code: None });
+            });
+            TerminalCache::set_shells("T-1", &list("old"), cx);
+        });
+        let kept = window.update(|_, cx| TerminalCache::cached("T-1/11", cx).is_some());
+        assert!(kept, "the list still has its own shell");
+        let second = window.update(|window, cx| {
+            TerminalCache::set_shells("T-1", &list("new"), cx);
+            TerminalCache::terminal(&source, "T-1", "11", window, cx)
+        });
+        assert_ne!(first.entity_id(), second.entity_id());
     }
 
     #[test]

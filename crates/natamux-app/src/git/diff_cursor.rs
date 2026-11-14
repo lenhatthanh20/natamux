@@ -1,9 +1,10 @@
 //! The cursor and the selection of the diff view: the line under the cursor, the step to the
 //! next change (Alt+F5), the lines picked for Ask agent, and the focus.
 
-use editor::SelectionEffects;
 use editor::scroll::Autoscroll;
-use gpui::Focusable;
+use editor::{Editor, SelectionEffects};
+use gpui::{Entity, Focusable};
+use language::Buffer;
 use text::Point;
 use ui::prelude::*;
 
@@ -11,6 +12,7 @@ use super::change_rules::{Side, Step, change_anchor, change_at, step_change, who
 use super::comment_rules::Quote;
 use super::diff_view::DiffView;
 use super::review_rules::inline_old_spot;
+use crate::components::go_to_line::line_target;
 
 impl DiffView {
     /// The line of the working tree under the cursor, 1-based.
@@ -140,19 +142,42 @@ impl DiffView {
             }
             _ => (sides.right.clone(), buffer.clone(), row),
         };
-        editor.update(cx, |editor, cx| {
-            let anchor =
-                editor
-                    .buffer()
-                    .read(cx)
-                    .buffer_point_to_anchor(&buffer, Point::new(row, 0), cx);
-            if let Some(anchor) = anchor {
-                let effects = SelectionEffects::scroll(Autoscroll::center());
-                editor.change_selections(effects, window, cx, |selections| {
-                    selections.select_anchor_ranges([anchor..anchor])
-                });
-            }
-        });
+        move_to(&editor, &buffer, Point::new(row, 0), window, cx);
+    }
+
+    /// Go to line (Ctrl+G): `line` and `column` (1-based) of the working tree, clamped to its
+    /// text; the working tree's editor takes the focus.
+    pub fn go_to_new_line(
+        &mut self,
+        line: u32,
+        column: Option<u32>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let (Some(sides), Some(buffer)) = (&self.sides, &self.buffer) else {
+            return;
+        };
+        let point = line_target(&buffer.read(cx).text_snapshot(), line, column);
+        let (editor, buffer) = (sides.right.clone(), buffer.clone());
+        move_to(&editor, &buffer, point, window, cx);
+        window.focus(&editor.read(cx).focus_handle(cx), cx);
+    }
+
+    /// The side that has the focus, for find; the working tree when neither has it.
+    pub fn focused_editor(&self, window: &Window, cx: &App) -> Option<Entity<Editor>> {
+        let sides = self.sides.as_ref()?;
+        let left = sides
+            .left
+            .as_ref()
+            .filter(|left| left.read(cx).focus_handle(cx).contains_focused(window, cx));
+        Some(left.unwrap_or(&sides.right).clone())
+    }
+
+    /// `editor` is one of the shown sides.
+    pub fn shows_editor(&self, editor: &Entity<Editor>) -> bool {
+        self.sides
+            .as_ref()
+            .is_some_and(|sides| &sides.right == editor || sides.left.as_ref() == Some(editor))
     }
 
     /// The editor that takes the keyboard: the working tree.
@@ -162,4 +187,26 @@ impl DiffView {
             window.focus(&handle, cx);
         }
     }
+}
+
+/// The cursor goes to `point` of `buffer` in `editor`, centred.
+fn move_to(
+    editor: &Entity<Editor>,
+    buffer: &Entity<Buffer>,
+    point: Point,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    editor.update(cx, |editor, cx| {
+        let anchor = editor
+            .buffer()
+            .read(cx)
+            .buffer_point_to_anchor(buffer, point, cx);
+        if let Some(anchor) = anchor {
+            let effects = SelectionEffects::scroll(Autoscroll::center());
+            editor.change_selections(effects, window, cx, |selections| {
+                selections.select_anchor_ranges([anchor..anchor])
+            });
+        }
+    });
 }

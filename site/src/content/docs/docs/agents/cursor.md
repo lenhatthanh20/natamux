@@ -11,6 +11,8 @@ Natamux starts the Cursor CLI agent with a hook file in the task's worktree.
 
 Install the Cursor CLI and log in. Follow the [Cursor documentation](https://cursor.com/docs). Check that `cursor-agent` runs in your terminal. Natamux also knows the agent as `agent`, the name the Cursor installer adds, when you start it yourself in a terminal.
 
+If you are not logged in, the task waits and asks you to sign in in its terminal. See [The agent asks me to sign in](/docs/help/troubleshooting/#the-agent-asks-me-to-sign-in).
+
 ## What Natamux runs
 
 | | |
@@ -42,7 +44,7 @@ Natamux also writes the Cursor CLI's trust file for the worktree, so `cursor-age
 |---|---|---|
 | `beforeSubmitPrompt` | A prompt was sent | running |
 | `preToolUse`, `postToolUse`, `postToolUseFailure`, `beforeShellExecution`, `afterShellExecution`, `afterFileEdit` | The agent works | no change |
-| `stop` | The turn ended | needs input |
+| `stop` | The turn ended | idle |
 | `stop` with `status: error` | The turn failed | failed |
 
 The Cursor CLI has no hook for waiting on your approval. The terminal bell moves a running task to needs input instead.

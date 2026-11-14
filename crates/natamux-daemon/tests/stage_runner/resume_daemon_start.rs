@@ -72,13 +72,13 @@ fn goes_on_with_the_session_of_a_running_stage_with_no_new_prompt() {
 }
 
 #[test]
-fn goes_on_with_the_session_of_a_stage_that_waits_for_you_and_keeps_it_waiting() {
+fn goes_on_with_the_session_of_an_idle_stage_and_keeps_it_idle() {
     let f = Fixture::new();
     let task = waiting_after_restart(&f, json!({ "sessionId": "s-1" }), "claude-code");
 
     resume_all(&f);
 
-    assert_eq!(f.task(&task.id).state, TaskState::NeedsInput);
+    assert_eq!(f.task(&task.id).state, TaskState::Idle);
     assert!(script_has(&f, &task.id, "1", "--resume 's-1'"));
 }
 
@@ -168,7 +168,7 @@ fn goes_on_with_the_session_of_a_lane_in_review_and_of_a_waiting_lane() {
     let f = Fixture::new();
     let built = build_after_restart(&f);
     let task = to_review(&f, &built.id, "implement");
-    let lanes = json!({ "implement": "review", "test-spec": "needs-input" });
+    let lanes = json!({ "implement": "review", "test-spec": "idle" });
     assert_eq!(serde_json::Value::Object(task.lanes.clone()), lanes);
 
     resume_all(&f);

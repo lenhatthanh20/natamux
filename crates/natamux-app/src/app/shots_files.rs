@@ -4,7 +4,7 @@
 
 use std::time::Duration;
 
-use gpui::{App, AsyncApp, Entity, WindowHandle};
+use gpui::{App, AsyncApp, Entity, Window, WindowHandle};
 
 use super::dashboard::Dashboard;
 use super::fake_daemon;
@@ -24,6 +24,8 @@ const RUNNING: &str = "T-0146";
 const DROP_TERMINAL: &str = "1";
 const README: &str = "README.md";
 const SOURCE: &str = "src/checkout.ts";
+/// The term of the editor's find shot.
+const FOUND_IN_SOURCE: &str = "coupon";
 const SPEC: &str = "spec.md";
 const TABS: [&str; 11] = [
     README,
@@ -56,7 +58,12 @@ pub fn is_files_shot(shot: Shot) -> bool {
             | Shot::WorkspaceEditorDraft
             | Shot::WorkspaceEditorConflict
             | Shot::WorkspaceEditorTabs
+            | Shot::WorkspaceEditorMarkdown
             | Shot::TerminalDropTarget
+            | Shot::EditorFind
+            | Shot::EditorGoToLine
+            | Shot::EditorOutline
+            | Shot::EditorBlame
     )
 }
 
@@ -65,7 +72,25 @@ pub async fn run(handle: WindowHandle<Root>, shot: Shot, cx: &mut AsyncApp) {
         let dashboard = root.dashboard().clone();
         enter(shot, &dashboard, cx);
     });
-    if entered.is_err() || shot != Shot::WorkspaceEditorConflict {
+    if entered.is_err() {
+        return;
+    }
+    if matches!(
+        shot,
+        Shot::EditorFind
+            | Shot::EditorGoToLine
+            | Shot::EditorOutline
+            | Shot::EditorBlame
+            | Shot::WorkspaceEditorMarkdown
+    ) {
+        // The file is read and drawn; CI takes the picture 3 s after start.
+        cx.background_executor().timer(READ + READ / 2).await;
+        handle
+            .update(cx, |root, window, cx| editor_tool(shot, root, window, cx))
+            .ok();
+        return;
+    }
+    if shot != Shot::WorkspaceEditorConflict {
         return;
     }
     // The editor reads the draft's version first; then the agent writes the file.
@@ -92,11 +117,15 @@ fn enter(shot: Shot, dashboard: &Entity<Dashboard>, cx: &mut App) {
                 dashboard.open_stage_file(REVIEWED, SPEC, cx)
             });
         }
-        Shot::WorkspaceEditor => {
+        Shot::WorkspaceEditor | Shot::WorkspaceEditorMarkdown => {
             panel(dashboard, REVIEWED, DetailsView::Progress, cx);
             open_file(dashboard, README, cx);
         }
-        Shot::WorkspaceEditorSource => {
+        Shot::WorkspaceEditorSource
+        | Shot::EditorFind
+        | Shot::EditorGoToLine
+        | Shot::EditorOutline
+        | Shot::EditorBlame => {
             panel(dashboard, REVIEWED, DetailsView::Details, cx);
             open_file(dashboard, SOURCE, cx);
         }
@@ -121,6 +150,28 @@ fn enter(shot: Shot, dashboard: &Entity<Dashboard>, cx: &mut App) {
         }
         _ => {}
     }
+}
+
+/// T-0316: the find bar, Go to line or Go to symbol over the source file's editor. T-0323:
+/// README.md rendered.
+fn editor_tool(shot: Shot, root: &mut Root, window: &mut Window, cx: &mut gpui::Context<Root>) {
+    let path = if shot == Shot::WorkspaceEditorMarkdown {
+        README
+    } else {
+        SOURCE
+    };
+    let editors = root.workspace_view().read(cx).file_editors().to_vec();
+    let Some(editor) = editors.into_iter().find(|e| e.read(cx).path() == path) else {
+        eprintln!("shot: {path} is not open");
+        return;
+    };
+    editor.update(cx, |editor, cx| match shot {
+        Shot::WorkspaceEditorMarkdown => editor.set_rendered(true, window, cx),
+        Shot::EditorFind => editor.shot_find(FOUND_IN_SOURCE, window, cx),
+        Shot::EditorGoToLine => editor.go_to_line(window, cx),
+        Shot::EditorBlame => editor.annotate(cx),
+        _ => editor.outline(window, cx),
+    });
 }
 
 /// The task's workspace with its panel open on `view`.

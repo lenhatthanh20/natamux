@@ -81,6 +81,7 @@ pub fn count_by_state(tasks: &[Task]) -> Vec<(TaskState, usize)> {
         TaskState::Draft,
         TaskState::Ready,
         TaskState::Running,
+        TaskState::Idle,
         TaskState::NeedsInput,
         TaskState::Review,
         TaskState::Blocked,
@@ -100,6 +101,18 @@ pub fn count_by_state(tasks: &[Task]) -> Vec<(TaskState, usize)> {
 /// The tasks in this state (all when None) whose id, title, agent, branch or labels have the
 /// search text in them, ignoring case.
 pub fn filter_tasks(tasks: &[Task], state_filter: Option<TaskState>, search: &str) -> Vec<Task> {
+    filter_task_refs(tasks, state_filter, search)
+        .into_iter()
+        .cloned()
+        .collect()
+}
+
+/// `filter_tasks` without cloning: the same tasks in the same order, borrowed.
+pub fn filter_task_refs<'a>(
+    tasks: &'a [Task],
+    state_filter: Option<TaskState>,
+    search: &str,
+) -> Vec<&'a Task> {
     let needle = search.trim().to_lowercase();
     tasks
         .iter()
@@ -116,7 +129,6 @@ pub fn filter_tasks(tasks: &[Task], state_filter: Option<TaskState>, search: &st
             parts.extend(task.labels.iter().map(String::as_str));
             parts.join(" ").to_lowercase().contains(&needle)
         })
-        .cloned()
         .collect()
 }
 
@@ -154,10 +166,11 @@ mod tests {
         })
     }
 
-    const ALL_STATES: [TaskState; 9] = [
+    const ALL_STATES: [TaskState; 10] = [
         TaskState::Draft,
         TaskState::Ready,
         TaskState::Running,
+        TaskState::Idle,
         TaskState::NeedsInput,
         TaskState::Review,
         TaskState::Blocked,
@@ -202,6 +215,7 @@ mod tests {
         let states = [
             TaskState::Draft,
             TaskState::Ready,
+            TaskState::Idle,
             TaskState::NeedsInput,
             TaskState::Review,
             TaskState::Blocked,

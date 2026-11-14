@@ -8,6 +8,7 @@ pub mod hook_files;
 pub mod hooks;
 pub mod launch;
 mod paths;
+pub mod sign_in;
 pub mod skill_list;
 pub mod skill_resolve;
 pub mod skills;

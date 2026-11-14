@@ -1,6 +1,7 @@
 //! Words of the pipeline editor (`pipeline-editor/labels.ts`): kind and approval labels, names of
 //! steps, and what a screen reader says for the pipeline.
 
+use natamux_proto::agents::model::model_of;
 use natamux_proto::stages::capabilities::{stage_name, stage_name_of_id};
 use natamux_proto::stages::position::describe_condition;
 use natamux_proto::stages::resolve::active_steps;
@@ -31,23 +32,6 @@ pub fn approval_label(stage: &Stage) -> &'static str {
         (_, Gate::Manual) => "Waits for your approval",
         (_, Gate::Auto) => "Moves on by itself",
     }
-}
-
-/// The model in the words of an agent's command line: `--model x`, `--model=x` or `-m x`.
-pub fn model_of(args: Option<&str>) -> Option<String> {
-    let words: Vec<&str> = args?.split_whitespace().collect();
-    for (index, word) in words.iter().enumerate() {
-        if let Some(model) = word.strip_prefix("--model=") {
-            return (!model.is_empty()).then(|| model.to_string());
-        }
-        if *word == "--model" || *word == "-m" {
-            return words
-                .get(index + 1)
-                .filter(|next| !next.starts_with('-'))
-                .map(|next| next.to_string());
-        }
-    }
-    None
 }
 
 /// The agent and model of a stage that starts its own agent. No agent is the task's.

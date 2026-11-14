@@ -171,12 +171,19 @@ fn counts_every_subtask_of_the_task_and_the_done_ones() {
             json!({"id": "T-0003", "parentId": "T-0001", "workspace": null, "state": "ready"}),
         ),
         make_task(json!({"id": "T-0004", "parentId": "T-0009"})),
+        make_task(json!({"id": "T-0005", "parentId": "T-0003", "state": "done"})),
     ];
+    let counts = subtask_counts(&tasks);
     assert_eq!(
-        subtask_count("T-0001", &tasks),
-        Some(SubtaskCount { done: 1, total: 2 })
+        counts.get("T-0001"),
+        Some(&SubtaskCount { done: 1, total: 2 })
     );
-    assert_eq!(subtask_count("T-0004", &tasks), None);
+    assert_eq!(
+        counts.get("T-0003"),
+        Some(&SubtaskCount { done: 1, total: 1 })
+    );
+    assert_eq!(counts.get("T-0004"), None);
+    assert_eq!(counts.get("T-0002"), None);
 }
 
 fn ids(tasks: &[Task]) -> Vec<&str> {

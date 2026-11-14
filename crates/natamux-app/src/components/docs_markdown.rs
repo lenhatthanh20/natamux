@@ -1,4 +1,5 @@
-//! The rendered view of a stage file (`Markdown.tsx`), written for Natamux (plan 6.6). A text is
+//! The rendered view of a stage file (`Markdown.tsx`), of a Markdown file in the editor tab and
+//! of the release notes, written for Natamux (plan 6.6). A text is
 //! parsed once into a tree: blocks that hold blocks or runs of styled spans. Each frame draws the
 //! tree as gpui blocks and text boxes, in the look of the Markdown preview the view had before.
 //! No HTML, no Mermaid and no images (an image shows its alt text); only web and mail links
@@ -59,18 +60,22 @@ impl MarkdownDoc {
     }
 
     pub fn view(&self, window: &Window, cx: &App) -> AnyElement {
-        let area = DocArea {
-            state: self.state.clone(),
-            look: Look::of(window, cx),
-        };
         div()
             .id("docs-markdown")
             .size_full()
             .min_h_0()
             .p_4()
             .overflow_y_scroll()
-            .child(area)
+            .child(self.body(window, cx))
             .into_any_element()
+    }
+
+    /// The text alone, for a parent that scrolls (the What's new dialog).
+    pub fn body(&self, window: &Window, cx: &App) -> impl IntoElement + use<> {
+        DocArea {
+            state: self.state.clone(),
+            look: Look::of(window, cx),
+        }
     }
 }
 

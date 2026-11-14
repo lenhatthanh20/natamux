@@ -164,16 +164,17 @@ fn gives_no_shell_to_an_agent_the_stage_may_not_have() {
 
 #[test]
 fn gives_a_catalog_stage_in_terminal_1_with_its_own_agent_a_terminal_of_its_own() {
+    // Plan, not Spec: the stage right after the context keeps the task's agent (T-0333).
     let mut steps = full_pipeline();
-    let spec = Stage {
+    let plan = Stage {
         agent: Some("codex".into()),
         args: Some("--model x".into()),
-        ..writing("spec", Gate::Manual, "spec.md")
+        ..writing("plan", Gate::Manual, "plan.md")
     };
-    steps[1] = step(&spec);
+    steps[2] = step(&plan);
     assert_eq!(
         shells(&steps, &["context", "spec", "plan"]),
-        ["1", "7", "1"]
+        ["1", "1", "8"]
     );
     assert!(pipeline_issues(&steps).is_empty());
 }
@@ -210,6 +211,7 @@ fn gives_a_stage_in_a_path_the_shell_of_a_single_stage() {
         stages: stages.into_iter().map(Step::Stage).collect(),
     };
     let steps = [
+        step(&Stage::new("context", StageKind::Context, Gate::Manual)),
         step(&plan),
         Step::Branch(StageBranch {
             id: "after-plan".into(),
@@ -225,7 +227,7 @@ fn gives_a_stage_in_a_path_the_shell_of_a_single_stage() {
         }),
     ];
     let ids = ["plan", "implement", "agent-review", "write-docs", "notes"];
-    assert_eq!(shells(&steps, &ids), ["1", "1", "5", "9", "10"]);
+    assert_eq!(shells(&steps, &ids), ["1", "1", "5", "10", "11"]);
     assert!(pipeline_issues(&steps).is_empty());
 }
 

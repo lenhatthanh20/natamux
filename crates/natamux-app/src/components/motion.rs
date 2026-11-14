@@ -36,6 +36,11 @@ pub fn init(still: bool, cx: &mut App) {
     });
 }
 
+/// `--shot` is on: anything that moves or fades in on its own stays out of the picture.
+pub fn is_still(cx: &App) -> bool {
+    cx.try_global::<Motion>().is_some_and(|motion| motion.still)
+}
+
 fn elapsed_ms(motion: &Motion) -> u64 {
     u64::try_from(motion.epoch.elapsed().as_millis()).unwrap_or(u64::MAX)
 }

@@ -14,8 +14,25 @@ Four signals are enough to drive every state in the task state machine:
 |---|---|
 | The user sent a prompt, or the agent started working | running |
 | The agent waits for the user (a permission, a question) | needs input |
-| The agent ended its turn | needs input (the stage is done only when the agent runs `natamux done`; then the checks run) |
+| The agent ended its turn with a report | idle, and the app rings "Finished its turn"; the Dock counts it until you open the task (the stage is done only when the agent runs `natamux done`; then the checks run) |
+| The agent ended its turn on a question (its last line, or the line before the list of options it ends with, ends in `?`) | needs input |
+| The agent ended its turn while the task waits for an answer (`natamux ask`, a question) | stays needs input |
+| The agent ended its turn while the task waits on a hook (a permission, an options dialog) | idle: the wait ended with the turn, as after a denied permission |
 | The agent failed | failed |
+
+Permission and terminal-bell waits return to running after a tool completion hook, or to idle when the turn ends after a denied permission. A before-tool hook can fire before the permission card, so it does not clear a wait. An explicit question (`natamux ask` or a turn that ends on a question) stays waiting until a new prompt arrives, even if other tools run. The daemon reads the wait source from the stage's event log, so it also works after a restart. Unknown waits stay conservative. Each parallel stage keeps its own wait.
+
+The regression cases in `crates/natamux-daemon/tests/hook_service/resume_waits.rs` cover these adapter events with synthetic payloads:
+
+| Agent | Submitted answer | Permission or dialog wait | Tool completion |
+|---|---|---|---|
+| Claude Code | `UserPromptSubmit` | `PermissionRequest` | `PostToolUse` |
+| Codex | `UserPromptSubmit` | `PermissionRequest` | `PostToolUse` |
+| Gemini CLI | `BeforeAgent` | `Notification` (`ToolPermission`) | `AfterTool` |
+| Copilot CLI | `userPromptSubmitted` | `notification` (`permission_prompt`), or terminal bell | `postToolUse` |
+| Cursor CLI | `beforeSubmitPrompt` | Terminal bell; the CLI has no reliable permission-wait hook | `afterShellExecution` |
+
+These cases cover submitted answers, tool completion, denied permissions, duplicate hooks, restart recovery and explicit questions. They do not replace checks in live agent sessions. A custom agent uses its base agent's hooks. An agent without hooks still needs a prompt event or an explicit state change; output alone does not prove that a question was answered.
 
 ## How each agent can send them
 
@@ -52,7 +69,7 @@ All tiers end in the same task events (`agent.started`, `agent.asked`, `agent.fi
 
 - **`natamux hook <agent>`**: a command that reads a hook's JSON from stdin and forwards it to the daemon. Most agents (Codex, Gemini CLI, Cursor, Copilot CLI) can only run a command, not call a URL. A command also keeps working on a machine with a proxy: in the first real test of the Claude Code `http` hook, the proxy of the machine refused the request to the daemon until `NO_PROXY` was set. It reads the token and the task id from the environment, and it must never make the agent fail: if the daemon is down it exits 0 quietly. Claude Code can keep using its `http` hook, which needs no process.
 - **`POST /hooks/:agent`** on the daemon, where the agent name picks the adapter.
-- **An adapter interface** (done): for each agent, a function that turns the raw hook input into one of six signals: `prompt`, `activity`, `asking`, `turn-ended`, `turn-paused`, `failed` (plus the working directory and some details). The Rust adapters are in `crates/natamux-agents/src/hooks/`; `crates/natamux-daemon/src/agents/hook_service.rs` decides which task events follow and which task a hook belongs to. `claude_code.rs` is an example.
+- **An adapter interface** (done): for each agent, a function that turns the raw hook input into one of seven signals: `prompt`, `activity`, `asking`, `turn-ended`, `turn-paused`, `turn-asked`, `failed` (plus the working directory and some details). The Rust adapters are in `crates/natamux-agents/src/hooks/`; `crates/natamux-daemon/src/agents/hook_service.rs` decides which task events follow and which task a hook belongs to. `claude_code.rs` is an example.
 - **A config generator per agent**: `natamux hooks <agent>` prints the settings for that agent's own file format (Claude Code settings JSON, Codex `hooks`, Gemini `settings.json`, Cursor `hooks.json`, Copilot `.github/hooks/*.json`).
 
 ### How a hook finds its task
@@ -107,7 +124,19 @@ Notes:
 - **One copy of each hook.** An agent that Natamux starts gets its hooks from the launch command too. Claude Code's file has `command` hooks and its `--settings` file has `http` hooks: different handlers, so Claude Code would run both. A launch leaves out `--settings` when `.claude/settings.local.json` is in place, and adds it only when that file is the user's own. Codex's `-c hooks.<event>=` replaces the same key of the file. Gemini's docs do not say that it runs a hook named twice once, so a launch leaves out `GEMINI_CLI_SYSTEM_SETTINGS_PATH` when `.gemini/settings.json` is in place.
 - **A file of the user's own** at one of these places is left alone: Natamux writes a JSON file again only when every hook in it is Natamux's (a command that starts with `natamux hook`, or Claude Code's http hook with the `X-Natamux-Task` header), and keeps its other keys, such as the permissions Claude Code saved there. It writes `.codex/config.toml` again only when its first line is Natamux's. Otherwise the agent runs without Natamux's hooks and is followed by its terminal.
 - **Gemini CLI** replaced its free tier with the Antigravity CLI on 2026-06-18 (its docs say so); paid accounts keep `gemini`.
-- **An agent that does not start.** If the shell answers "command not found" (or the same in zsh, sh, fish, PowerShell, cmd) for the agent's program in the first 15 seconds, the task fails with the shell's line and the variable that sets the command (`NATAMUX_<AGENT>_COMMAND`). The stage card and the banner offer **Start agent** with a choice of agent.
+- **An agent that does not start.** If the shell answers "command not found" (or the same in zsh, sh, fish, PowerShell, cmd) for the agent's program in the first 30 seconds, the task fails with the shell's line and the variable that sets the command (`NATAMUX_<AGENT>_COMMAND`). The stage card and the banner offer **Start agent** with a choice of agent.
+- **An agent that asks to sign in.** With no login an agent shows its sign-in screen and waits, and no hook runs. If a line of that screen shows up in the first 30 seconds (the echo of the typed launch line does not count), the task gets `agent.asked` with `reason: "sign in"` and a `message` that quotes the line and names the terminal, so it moves to needs input. The agent's next hook after the login moves it back. Cursor moves count as spaces: Claude Code and Codex put the words of a line apart with them. The lines are in `crates/natamux-agents/src/sign_in.rs`. Each was seen on 2026-11-09 in the real CLI, installed fresh on Ubuntu with no login, in a 120x40 terminal. Check them again when a version changes:
+
+  | Agent | Version | Sign-in line | What the CLI did |
+  |---|---|---|---|
+  | Claude Code | 2.1.319 | `Choose the text style`, `Please run /login` | The first start shows the theme picker, then the login. Once set up, it shows no login screen: it answers the prompt with `Not logged in · Please run /login` |
+  | Codex | 0.167.0 | `Sign in with ChatGPT` | The sign-in menu |
+  | Gemini CLI | 0.67.0 | `How would you like to authenticate` | The auth dialog, in a trusted folder. In a folder it does not trust, it ends at once (code 55): the next item covers that |
+  | GitHub Copilot CLI | 1.0.107 | `Please use /login to sign in` | The message under the prompt box |
+  | Cursor CLI | 2026.11.05 | `Authentication required` | The interactive start showed a blank screen for 60 s, which Natamux cannot tell from a slow start. With `-p` it prints `Error: Authentication required. Please run 'agent login' first` and ends with code 1 |
+
+- **The task's model.** The Model field of **Start a task** (and of the task's Edit form) is empty by default: the agent uses its own default. A name is passed as `--model '<name>'` after the `NATAMUX_<AGENT>_ARGS` words and before the stage words. It goes only to the task's agent (a stage's other agent gets none), only to a built-in agent or a custom one on a built-in base, and not when the stage words name a model (`--model`, `--model=`, `-m`): the stage wins. The app and the daemon accept 1 to 100 characters of `A-Z a-z 0-9 . _ - : / @ [ ]`, with no leading `-`; anything else is refused before the task is made (400, issue at `model`). There is no list of known names: a well-formed but wrong name reaches the agent. An agent that then ends at once fails the task, and the reason names the model; one that shows an error at its first turn (Claude Code does) waits in its terminal. Fix the model in Edit, then start the agent again.
+- **An agent that ends at once.** The launch script runs `<command> || printf '\033]2;natamux-agent-failed\007'` (`||` and printf work in sh, bash, zsh and fish; fish has no `$?`); on Windows the typed line sets that title when `$LASTEXITCODE` is not 0. If the title shows up in the first 30 seconds and the agent sent no event since its launch, the task fails with the agent's last output line and where to look (`NATAMUX_<AGENT>_ARGS`, or Settings > Agents for a custom agent). An agent that came back after a restart is left alone: a session it cannot find is no failure. An exit with code 0, such as `/exit`, changes nothing.
 
 ## Skills
 
@@ -153,7 +182,7 @@ Tokens and cost per task, read from the files the agents write. Checked on 2026-
 | Agents without hooks | none (no session, no file) | | | Not supported |
 
 - **One shape.** Per model: `input` (fresh, no cache), `cacheRead`, `cacheWrite`, `output` (includes reasoning or thinking). Each reader converts its own fields.
-- **When.** After a hook with signal `turn-ended`, `turn-paused`, `failed` or `asking`. The read is async and never delays the hook answer.
+- **When.** After a hook with signal `turn-ended`, `turn-paused`, `turn-asked`, `failed` or `asking`. The read is async and never delays the hook answer.
 - **Path check.** The path must be absolute, inside the user's home folder (after links are resolved), end in `.jsonl` or `.json`, be a regular file, and be at most 200 MB. Otherwise no usage is read and the hook works as before. A bad line is skipped.
 - **Per stage.** The daemon keeps the last totals of each file. A read adds only what is new to the stage of the hook's terminal, so a resumed session, or one that goes on into the next stage, is not counted twice. A stage that is sent back and runs again adds to its own row. The stage of a hook:
   1. the stage reported from its terminal (`natamux done` or a send back), until the turn end that follows: the report moves the task on before the turn ends;
@@ -191,5 +220,5 @@ Each adapter needs a real session to check it. Until then it is tested only agai
 Any agent started in a task's first terminal is followed by its output (`generic-signals.ts`):
 
 - Output is a sign of life. A running task whose terminal stays silent for 10 minutes shows as quiet.
-- The terminal bell (`\x07`) moves a running task to needs input, unless the task's agent has hooks (Claude Code).
+- The terminal bell (`\x07`) moves a running task to needs input. Claude Code, Codex and Gemini use their wait hooks instead; Cursor and Copilot still use the bell as a fallback.
 - `natamux ask` and `natamux done` let such an agent report the rest (see the plugin skill in `plugins/natamux`).

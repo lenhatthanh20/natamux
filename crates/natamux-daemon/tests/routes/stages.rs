@@ -42,6 +42,15 @@ async fn running() -> TestDaemon {
     d
 }
 
+/// Moves the task past the context stage, which every pipeline starts with (T-0333), so
+/// Implement is the current stage. The stage runner is off in these tests, so nothing else does.
+async fn skip_context(d: &TestDaemon) {
+    let skip = json!({ "action": "skip", "stage": "context" });
+    let (status, body) = stage(d, TOKEN, skip).await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(body["task"]["stage"], "implement", "{body}");
+}
+
 fn entry(kind: &str, source: &str) -> (String, String) {
     (kind.to_string(), source.to_string())
 }
@@ -110,6 +119,7 @@ async fn sets_the_workflow_of_a_stage_and_refuses_a_stage_that_does_not_offer_on
 #[tokio::test(flavor = "multi_thread")]
 async fn marks_a_later_stage_to_skip_and_refuses_the_current_one() {
     let d = task().await;
+    skip_context(&d).await;
 
     let (status, body) = put(&d, TOKEN, "skip", json!({ "stage": "review", "on": true })).await;
     assert_eq!(status, 200);
@@ -299,6 +309,7 @@ async fn pass_with(d: &TestDaemon, token: &str, ticket: &str) -> u16 {
 #[tokio::test(flavor = "multi_thread")]
 async fn passes_a_stage_only_with_its_one_time_ticket() {
     let d = running().await;
+    skip_context(&d).await;
     let agent_token: &str = &d.agent_token("T-0001");
     let pass = json!({ "action": "pass", "stage": "implement" });
     assert_eq!(stage(&d, agent_token, pass).await.0, 403);
