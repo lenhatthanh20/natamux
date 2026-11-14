@@ -179,7 +179,7 @@ impl RemoteTerminal {
 pub(super) struct Screen {
     pub(super) terminal: Entity<Terminal>,
     pub(super) view: Entity<TerminalView>,
-    pub(super) _focus: [Subscription; 2],
+    pub(super) _focus: Vec<Subscription>,
 }
 
 /// `bounds`: the grid the last screen laid out, so the new one starts at it.
@@ -227,7 +227,7 @@ pub(super) fn build_screen(
     Screen {
         terminal,
         view,
-        _focus: watch_focus(&focus, window, cx),
+        _focus: watch_focus(&focus, window, cx).into(),
     }
 }
 
@@ -240,13 +240,19 @@ pub(super) fn build_screen(
     window: &mut Window,
     cx: &mut Context<RemoteTerminal>,
 ) -> Screen {
+    use crate::terminals::term::view::FocusLeftThroughMenu;
+
     let terminal = cx.new(|cx| Terminal::new(history, bounds, cx));
     let view = cx.new(|cx| TerminalView::new(terminal.clone(), window, cx));
     let focus = view.focus_handle(cx);
+    let mut subscriptions = Vec::from(watch_focus(&focus, window, cx));
+    subscriptions.push(cx.subscribe(&view, |this, _, _: &FocusLeftThroughMenu, cx| {
+        this.set_focused(false, cx)
+    }));
     Screen {
         terminal,
         view,
-        _focus: watch_focus(&focus, window, cx),
+        _focus: subscriptions,
     }
 }
 

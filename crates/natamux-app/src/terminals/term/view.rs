@@ -10,9 +10,9 @@ use alacritty_terminal::index::{Column, Line, Point as GridPoint, Side};
 use alacritty_terminal::selection::SelectionType;
 use alacritty_terminal::term::TermMode;
 use gpui::{
-    Bounds, ClipboardEntry, DismissEvent, Entity, FocusHandle, Focusable, KeyDownEvent,
-    ModifiersChangedEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels,
-    Point, ScrollWheelEvent, Subscription, TouchPhase, anchored, deferred,
+    Bounds, ClipboardEntry, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable,
+    KeyDownEvent, ModifiersChangedEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
+    Pixels, Point, ScrollWheelEvent, Subscription, TouchPhase, anchored, deferred,
 };
 use ui::{ContextMenu, prelude::*};
 
@@ -65,6 +65,12 @@ struct OpenMenu {
     position: Point<Pixels>,
     _dismiss: Subscription,
 }
+
+/// The focus went from the view into its menu and then somewhere else. The view's own
+/// focus-out does not fire then, as the menu is drawn outside its focus; the owner hears this.
+pub struct FocusLeftThroughMenu;
+
+impl EventEmitter<FocusLeftThroughMenu> for TermView {}
 
 /// Where the element laid out the screen at the last frame.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -396,6 +402,7 @@ impl TermView {
             } else if std::mem::take(&mut view.menu_focus) {
                 // The focus went on from the menu to somewhere else.
                 view.focus_out(cx);
+                cx.emit(FocusLeftThroughMenu);
             }
             view.menu = None;
             cx.notify();

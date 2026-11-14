@@ -1301,7 +1301,7 @@ S2.5 Flip
   - The 14 px track is kept only when the scrollbar was not hidden as the view was made: no track in the shots (`show: never`), so the grid has one or two more columns there. The T-G1 rows keep the track in both states because their view is made before the shot state is set.
   - The highlights (find matches, selection) are tessellated paths: a raw gpui path fills a fan from its start, which is wrong for an outline with a corner turned in.
   - The screen is drawn clipped to the rows of the grid, over the view's container in `editor_background`; so a tooltip's shadow over the spare pixels below the rows stays under the screen (`button-disabled-tooltip`).
-  - The menu is outside the view's focus and key context: the pane does not look focused while the menu has the focus, yet the shell is told nothing (no focus report, no size claim on the way back, T-F1).
+  - The menu is outside the view's focus and key context: the pane does not look focused while the menu has the focus, yet the shell is told nothing (no focus report, no size claim on the way back, T-F1). A right click on a terminal without the focus tells the shell nothing either; when the focus then goes from the menu to somewhere else, the view reports the focus-out and its owner leaves the focused lane (`FocusLeftThroughMenu`). Rows: `the_menu_keeps_the_focus_state_of_the_old_view` (both builds).
 
 S2.6 Remove the old terminal
 - Goal: no Zed `terminal`/`terminal_view` in the app.

@@ -34,7 +34,7 @@ pub struct RemoteTerminal {
     pub view: Entity<TerminalView>,
     terminal: Entity<Terminal>,
     /// The shown view's focus listeners: they go with their screen.
-    _focus: [Subscription; 2],
+    _focus: Vec<Subscription>,
     handle: Option<Arc<TerminalHandle>>,
     status: TerminalStatus,
     /// For the cache's tests: the fake daemon's terminals have no shell id.

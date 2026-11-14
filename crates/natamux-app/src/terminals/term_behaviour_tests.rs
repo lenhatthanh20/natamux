@@ -1738,6 +1738,68 @@ fn golden_terminal_focus(cx: &mut TestAppContext) {
     golden_files::write(SET, "focus", &focus_rows(cx));
 }
 
+// T-F1, the menu (S2.5 review): a right click on a terminal without the focus, the focus
+// leaving through the menu, and the copy key while the menu has the focus. Both builds run it.
+#[gpui::test]
+fn the_menu_keeps_the_focus_state_of_the_old_view(cx: &mut TestAppContext) {
+    let (host, terminal, cx) = open(cx, PANE, true);
+    feed(&terminal, "prompt$ \x1b[?1004h", cx);
+    let none = Modifiers::default();
+    let row = |terminal: &Entity<RemoteTerminal>, cx: &mut VisualTestContext| {
+        let shape = content(terminal, cx, |content| {
+            format!("{:?}", content.cursor.shape)
+        });
+        let focused = terminal.read_with(cx, |terminal, _| terminal.focused);
+        json!([sent_text(), sent::claims(), shape, focused])
+    };
+    blur(&host, cx);
+    assert_eq!(
+        row(&terminal, cx),
+        json!(["\x1b[O", 0, "HollowBlock", false])
+    );
+
+    click(cell(&terminal, (0, 2), cx), MouseButton::Right, none, 1, cx);
+    assert_eq!(
+        row(&terminal, cx),
+        json!(["", 0, "HollowBlock", false]),
+        "a right click without the focus"
+    );
+    focus(&terminal, cx);
+    assert_eq!(
+        row(&terminal, cx),
+        json!(["\x1b[I", 1, "Block", true]),
+        "the focus from that menu to the view"
+    );
+
+    click(cell(&terminal, (0, 2), cx), MouseButton::Right, none, 1, cx);
+    assert_eq!(
+        row(&terminal, cx),
+        json!(["", 0, "Block", true]),
+        "a right click with the focus"
+    );
+    blur(&host, cx);
+    assert_eq!(
+        row(&terminal, cx),
+        json!(["\x1b[O", 0, "HollowBlock", false]),
+        "the focus leaving through the menu"
+    );
+
+    focus(&terminal, cx);
+    row(&terminal, cx);
+    click(cell(&terminal, (0, 2), cx), MouseButton::Right, none, 1, cx);
+    cx.write_to_clipboard(ClipboardItem::new_string("before".into()));
+    cx.simulate_keystrokes(copy_chord());
+    settle(cx);
+    assert_eq!(
+        json!([
+            cx.read_from_clipboard().and_then(|item| item.text()),
+            sent_text()
+        ]),
+        json!(["before", ""]),
+        "the copy key while the menu has the focus"
+    );
+}
+
 // T-Q1: the screen answers the program's queries through the shell's input, in order.
 const ANSWER_CASES: [(&str, &str); 13] = [
     ("DA", "\x1b[c"),
