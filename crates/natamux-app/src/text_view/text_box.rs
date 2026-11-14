@@ -325,14 +325,16 @@ impl TextBox {
         mut handler: impl FnMut(&mut T, &TextBox, TextEvent, &mut Context<T>) + 'static,
     ) -> Subscription {
         match &self.inner {
-            Inner::Zed(editor) => cx.subscribe(editor, move |this, editor, event: &EditorEvent, cx| {
-                if let Some(event) = TextEvent::of(event) {
-                    let text_box = TextBox {
-                        inner: Inner::Zed(editor),
-                    };
-                    handler(this, &text_box, event, cx);
-                }
-            }),
+            Inner::Zed(editor) => {
+                cx.subscribe(editor, move |this, editor, event: &EditorEvent, cx| {
+                    if let Some(event) = TextEvent::of(event) {
+                        let text_box = TextBox {
+                            inner: Inner::Zed(editor),
+                        };
+                        handler(this, &text_box, event, cx);
+                    }
+                })
+            }
             #[cfg(feature = "own-input")]
             Inner::Own(input) => cx.subscribe(input, move |this, input, event: &TextEvent, cx| {
                 let text_box = TextBox {
@@ -409,9 +411,9 @@ impl TextBox {
                 editor.selected_text_range(false, window, cx)
             }),
             #[cfg(feature = "own-input")]
-            Inner::Own(input) => input.update(cx, |input, cx| {
-                input.selected_text_range(false, window, cx)
-            }),
+            Inner::Own(input) => {
+                input.update(cx, |input, cx| input.selected_text_range(false, window, cx))
+            }
         };
         selection.map_or(0..0, |selection| selection.range)
     }

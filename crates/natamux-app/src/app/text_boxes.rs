@@ -167,17 +167,83 @@ fn own_bindings(mac: bool) -> Vec<KeyBinding> {
         ]);
     }
     // The keys of the full boxes, with the keys and contexts of the registry, as Zed's above.
-    push_in("editor.select-next", own::SelectNext, mac, only_own, &mut keys);
-    push_in("editor.select-all-matches", own::SelectAllMatches, mac, only_own, &mut keys);
-    push_in("editor.select-larger", own::SelectLargerSyntaxNode, mac, only_own, &mut keys);
-    push_in("editor.select-smaller", own::SelectSmallerSyntaxNode, mac, only_own, &mut keys);
-    push_in("editor.add-cursor-above", own::AddSelectionAbove, mac, only_own, &mut keys);
-    push_in("editor.add-cursor-below", own::AddSelectionBelow, mac, only_own, &mut keys);
-    push_in("editor.move-line-up", own::MoveLineUp, mac, only_own, &mut keys);
-    push_in("editor.move-line-down", own::MoveLineDown, mac, only_own, &mut keys);
-    push_in("editor.duplicate-line", own::DuplicateLineDown, mac, only_own, &mut keys);
-    push_in("editor.delete-line", own::DeleteLine, mac, only_own, &mut keys);
-    push_in("editor.toggle-comments", own::ToggleComments, mac, only_own, &mut keys);
+    push_in(
+        "editor.select-next",
+        own::SelectNext,
+        mac,
+        only_own,
+        &mut keys,
+    );
+    push_in(
+        "editor.select-all-matches",
+        own::SelectAllMatches,
+        mac,
+        only_own,
+        &mut keys,
+    );
+    push_in(
+        "editor.select-larger",
+        own::SelectLargerSyntaxNode,
+        mac,
+        only_own,
+        &mut keys,
+    );
+    push_in(
+        "editor.select-smaller",
+        own::SelectSmallerSyntaxNode,
+        mac,
+        only_own,
+        &mut keys,
+    );
+    push_in(
+        "editor.add-cursor-above",
+        own::AddSelectionAbove,
+        mac,
+        only_own,
+        &mut keys,
+    );
+    push_in(
+        "editor.add-cursor-below",
+        own::AddSelectionBelow,
+        mac,
+        only_own,
+        &mut keys,
+    );
+    push_in(
+        "editor.move-line-up",
+        own::MoveLineUp,
+        mac,
+        only_own,
+        &mut keys,
+    );
+    push_in(
+        "editor.move-line-down",
+        own::MoveLineDown,
+        mac,
+        only_own,
+        &mut keys,
+    );
+    push_in(
+        "editor.duplicate-line",
+        own::DuplicateLineDown,
+        mac,
+        only_own,
+        &mut keys,
+    );
+    push_in(
+        "editor.delete-line",
+        own::DeleteLine,
+        mac,
+        only_own,
+        &mut keys,
+    );
+    push_in(
+        "editor.toggle-comments",
+        own::ToggleComments,
+        mac,
+        only_own,
+        &mut keys,
+    );
     keys
 }
 

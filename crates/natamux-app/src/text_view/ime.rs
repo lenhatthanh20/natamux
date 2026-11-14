@@ -3,7 +3,9 @@
 
 use std::ops::Range;
 
-use gpui::{Bounds, Context, EntityInputHandler, Pixels, Point, UTF16Selection, Window, point, size};
+use gpui::{
+    Bounds, Context, EntityInputHandler, Pixels, Point, UTF16Selection, Window, point, size,
+};
 
 use super::text_input::TextInput;
 use crate::text::model::EditKind;
@@ -112,7 +114,9 @@ impl EntityInputHandler for TextInput {
             (None, None) => self.model.selection().range(),
         };
         let now = self.now(cx);
-        let edited = self.model.edit(range.clone(), text, EditKind::Composing, now);
+        let edited = self
+            .model
+            .edit(range.clone(), text, EditKind::Composing, now);
         let inserted = range.start..range.start + crate::text::model::normalize(text).len();
         if inserted.is_empty() {
             self.model.set_marked(None);

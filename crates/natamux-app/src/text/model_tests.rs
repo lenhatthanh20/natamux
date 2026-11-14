@@ -59,16 +59,12 @@ fn a_composition_is_one_step_whatever_its_length() {
     let mut model = TextModel::default();
     let mut at = 0;
     for step in ["v", "vi", "vie", "viê", "việ"] {
-        let range = model
-            .marked()
-            .unwrap_or_else(|| model.selection().range());
+        let range = model.marked().unwrap_or_else(|| model.selection().range());
         model.edit(range.clone(), step, EditKind::Composing, later(start, at));
         model.set_marked(Some(range.start..range.start + step.len()));
         at += 1000;
     }
-    let range = model
-        .marked()
-        .unwrap_or_else(|| model.selection().range());
+    let range = model.marked().unwrap_or_else(|| model.selection().range());
     model.edit(range, "việt", EditKind::Composing, later(start, at));
     model.set_marked(None);
     model.seal();

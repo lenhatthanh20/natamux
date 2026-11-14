@@ -130,7 +130,9 @@ pub fn line_start(text: &str, offset: usize) -> usize {
 
 /// The end of the line that holds `offset`, before its newline.
 pub fn line_end(text: &str, offset: usize) -> usize {
-    text[offset..].find('\n').map_or(text.len(), |at| offset + at)
+    text[offset..]
+        .find('\n')
+        .map_or(text.len(), |at| offset + at)
 }
 
 /// `offset` in UTF-16 units, as the platform's input method counts.

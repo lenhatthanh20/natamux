@@ -89,9 +89,14 @@ pub mod actions {
 pub enum Mode {
     OneLine,
     /// Grows from `min` to `max` lines with its text, then scrolls inside.
-    Area { min: usize, max: usize },
+    Area {
+        min: usize,
+        max: usize,
+    },
     /// Fills its box and scrolls inside; `current_line` paints the caret's row.
-    Full { current_line: bool },
+    Full {
+        current_line: bool,
+    },
 }
 
 impl Mode {
@@ -162,7 +167,13 @@ impl Focusable for TextInput {
 
 impl TextInput {
     pub fn one_line(placeholder: &str, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        Self::new(Mode::OneLine, placeholder, input_style(None, None), window, cx)
+        Self::new(
+            Mode::OneLine,
+            placeholder,
+            input_style(None, None),
+            window,
+            cx,
+        )
     }
 
     pub fn area(
@@ -461,7 +472,9 @@ impl TextInput {
         if text.is_empty() {
             0
         } else if self.masked {
-            text.char_indices().nth(at).map_or(text.len(), |(index, _)| index)
+            text.char_indices()
+                .nth(at)
+                .map_or(text.len(), |(index, _)| index)
         } else {
             motion::floor_boundary(text, at)
         }
@@ -818,7 +831,12 @@ impl TextInput {
         if selection.is_empty() {
             let at = selection.head;
             let start = motion::line_start(text, at);
-            let column = text[start..at].rsplit('\t').next().unwrap_or("").chars().count();
+            let column = text[start..at]
+                .rsplit('\t')
+                .next()
+                .unwrap_or("")
+                .chars()
+                .count();
             let spaces = " ".repeat(TAB_SIZE - column % TAB_SIZE);
             self.edit(at..at, &spaces, EditKind::Typing, cx);
             return;
@@ -1158,7 +1176,12 @@ impl TextInput {
         }
     }
 
-    fn scroll_wheel(&mut self, event: &ScrollWheelEvent, window: &mut Window, cx: &mut Context<Self>) {
+    fn scroll_wheel(
+        &mut self,
+        event: &ScrollWheelEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let Some(bounds) = self.last_bounds else {
             return;
         };
@@ -1182,7 +1205,10 @@ impl TextInput {
 /// The indent of the line that starts `line`: its count of leading spaces and tabs, and
 /// whether it starts with a tab.
 fn indent_of(line: &str) -> (usize, bool) {
-    let len = line.bytes().take_while(|b| *b == b' ' || *b == b'\t').count();
+    let len = line
+        .bytes()
+        .take_while(|b| *b == b' ' || *b == b'\t')
+        .count();
     (len, line.starts_with('\t'))
 }
 

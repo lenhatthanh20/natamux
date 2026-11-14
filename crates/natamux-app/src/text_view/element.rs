@@ -217,7 +217,9 @@ impl Layout {
                 == (key.width, &key.font, key.font_size, key.color)
         }) {
             for line in previous.lines.iter().filter(|line| line.plain) {
-                ready.entry(line.shaped.text.as_ref()).or_insert(&line.shaped);
+                ready
+                    .entry(line.shaped.text.as_ref())
+                    .or_insert(&line.shaped);
             }
         }
         let mut lines = Vec::new();
@@ -229,7 +231,11 @@ impl Layout {
                 .iter()
                 .all(|run| run.color == key.color && run.underline.is_none());
             let (shown, line_runs, tabs) = expand_tabs(source, &line_runs);
-            let cached = ready.get(shown.as_str()).filter(|_| plain).copied().cloned();
+            let cached = ready
+                .get(shown.as_str())
+                .filter(|_| plain)
+                .copied()
+                .cloned();
             let shaped = cached.unwrap_or_else(|| {
                 let shown = SharedString::from(shown);
                 let shaped = shape(&shown, &line_runs, key.font_size, key.width, window)
@@ -244,7 +250,10 @@ impl Layout {
                 Some(run.glyphs.get(boundary.glyph_ix)?.index)
             }));
             let layout = &shaped.unwrapped_layout;
-            let row_x = shown_starts.iter().map(|&at| layout.x_for_index(at)).collect();
+            let row_x = shown_starts
+                .iter()
+                .map(|&at| layout.x_for_index(at))
+                .collect();
             width = width.max(layout.width);
             let mut line = Line {
                 start,
@@ -257,7 +266,10 @@ impl Layout {
                 plain,
             };
             // A row that starts inside a tab's spaces keeps the tab on the row above.
-            line.row_starts = shown_starts.iter().map(|&at| line.local(at, true)).collect();
+            line.row_starts = shown_starts
+                .iter()
+                .map(|&at| line.local(at, true))
+                .collect();
             let count = line.row_starts.len();
             lines.push(line);
             row += count;
@@ -581,7 +593,10 @@ impl Element for TextElement {
             Vec::new()
         };
         let colors = cx.theme().colors();
-        let (background, active_line) = (colors.editor_background, colors.editor_active_line_background);
+        let (background, active_line) = (
+            colors.editor_background,
+            colors.editor_active_line_background,
+        );
         let player = cx.theme().players().local();
         let selection_color = if focused {
             player.selection
@@ -643,9 +658,12 @@ impl Element for TextElement {
                         underline: None,
                         strikethrough: None,
                     };
-                    window
-                        .text_system()
-                        .shape_line(symbol.into(), laid.key.font_size / 2., &[run], None)
+                    window.text_system().shape_line(
+                        symbol.into(),
+                        laid.key.font_size / 2.,
+                        &[run],
+                        None,
+                    )
                 };
                 let (dot, arrow) = (shape("\u{2022}", window), shape("\u{2192}", window));
                 for (at, width, c) in &whitespace {

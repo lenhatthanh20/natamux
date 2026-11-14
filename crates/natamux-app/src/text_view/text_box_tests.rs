@@ -433,7 +433,11 @@ fn t_key_tab_with_a_selection_indents_its_lines_and_shift_tab_outdents_them(
                 "    one\n    two",
                 "mac {mac}, kind {index}: tab"
             );
-            assert_eq!(selection_of(&text_box, cx), 6..14, "mac {mac}, kind {index}");
+            assert_eq!(
+                selection_of(&text_box, cx),
+                6..14,
+                "mac {mac}, kind {index}"
+            );
             press_as(cx, "shift-tab", mac);
             assert_eq!(
                 text_of(&text_box, cx),
@@ -448,11 +452,19 @@ fn t_key_tab_with_a_selection_indents_its_lines_and_shift_tab_outdents_them(
                 "mac {mac}, kind {index}: tab over all"
             );
             // The selection start moves past the new spaces, also from the text start.
-            assert_eq!(selection_of(&text_box, cx), 4..15, "mac {mac}, kind {index}");
+            assert_eq!(
+                selection_of(&text_box, cx),
+                4..15,
+                "mac {mac}, kind {index}"
+            );
             // Over more rows each line gets a whole tab stop, whatever its indent.
             load(&text_box, "  a\nb", cx);
             press_as(cx, "mod-a tab", mac);
-            assert_eq!(text_of(&text_box, cx), "      a\n    b", "mac {mac}, kind {index}");
+            assert_eq!(
+                text_of(&text_box, cx),
+                "      a\n    b",
+                "mac {mac}, kind {index}"
+            );
             // With no selection the column counts from the last tab.
             load(&text_box, "\tab", cx);
             press_as(cx, "tab", mac);
@@ -1067,7 +1079,9 @@ fn t_min_replace_minimal_keeps_the_caret_the_scroll_and_the_undo(cx: &mut TestAp
         // A key the box leaves alone: the window draws first, so the scroll follows the caret.
         press_as(cx, "escape", false);
         let before = selection_of(&text_box, cx);
-        let row = char_rect(&text_box, before.start..before.start + 1, cx).origin.y;
+        let row = char_rect(&text_box, before.start..before.start + 1, cx)
+            .origin
+            .y;
         // A change above the caret, one in its line after it, and one at the end.
         let changed = text
             .replacen("line 3\n", "line three\n", 1)
@@ -1082,7 +1096,11 @@ fn t_min_replace_minimal_keeps_the_caret_the_scroll_and_the_undo(cx: &mut TestAp
             before.start + grown..before.end + grown,
             "kind {index}: the caret moved with the text above it"
         );
-        let after = char_rect(&text_box, before.start + grown..before.start + grown + 1, cx);
+        let after = char_rect(
+            &text_box,
+            before.start + grown..before.start + grown + 1,
+            cx,
+        );
         assert!(
             close(after.origin.y, row, 0.5),
             "kind {index}: the caret row moved on screen"

@@ -33,7 +33,11 @@ impl Default for Blink {
 
 impl TextInput {
     fn blinks(&self, cx: &App) -> bool {
-        !self.read_only && cx.try_global::<Inputs>().and_then(|inputs| inputs.shot).is_none()
+        !self.read_only
+            && cx
+                .try_global::<Inputs>()
+                .and_then(|inputs| inputs.shot)
+                .is_none()
     }
 
     pub(super) fn start_blink(&mut self, cx: &mut Context<Self>) {
