@@ -299,8 +299,8 @@ fn t_key_page_up_and_down_move_by_a_page(cx: &mut TestAppContext) {
             let down = caret_line(&text_of(&text_box, cx));
             // Record: the distance of a page is pinned once CI has printed it.
             eprintln!("T-KEY-PAGE mac {mac}, kind {index}: Page Up from 59 to {up}, Page Down from 0 to {down}");
-            assert!(up <= 59, "mac {mac}, kind {index}: Page Up went down to line {up}");
-            assert!(down < 60, "mac {mac}, kind {index}: Page Down went to line {down}");
+            assert!(up < 59, "mac {mac}, kind {index}: Page Up went down to line {up}");
+            assert!(down > 0, "mac {mac}, kind {index}: Page Down went to line {down}");
         }
     }
 }
@@ -751,4 +751,7 @@ fn t_min_set_text_puts_the_caret_where_zed_does(cx: &mut TestAppContext) {
     eprintln!("T-MIN-1 set_text of the same text: caret {before:?} before, {after:?} after");
     assert_eq!(text_of(&area, cx), text);
     assert_eq!(before, 21..21);
+    // Known gap: the caret after `set_text` and the scroll row are not pinned; CI never printed
+    // them. The caret must stay inside the text; S3.3 adds the exact test on `replace_minimal`.
+    assert!(after.start == after.end && after.end <= text.len());
 }
