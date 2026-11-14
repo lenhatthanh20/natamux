@@ -85,6 +85,18 @@ pub fn bind(cx: &mut App, mac: bool) {
             ),
         ]);
     }
+    let bindings = named(mac)
+        .into_iter()
+        .filter_map(|(keys, name, data, context)| by_name(cx, keys, name, data, context))
+        .collect::<Vec<_>>();
+    cx.bind_keys(bindings);
+    cx.bind_keys(editor_bindings(mac));
+}
+
+/// The keys that bind by name: (keys, action name, action data, context).
+type Named = (&'static str, &'static str, Option<Value>, &'static str);
+
+fn named(mac: bool) -> Vec<Named> {
     let wrap = || Some(json!({ "stop_at_soft_wraps": true }));
     let mut named = vec![
         ("up", "editor::MoveUp", None, MANY_LINES),
@@ -101,12 +113,7 @@ pub fn bind(cx: &mut App, mac: bool) {
         ));
         named.push(("cmd-shift-right", "editor::SelectToEndOfLine", wrap(), ANY));
     }
-    let bindings = named
-        .into_iter()
-        .filter_map(|(keys, name, data, context)| by_name(cx, keys, name, data, context))
-        .collect::<Vec<_>>();
-    cx.bind_keys(bindings);
-    cx.bind_keys(editor_bindings(mac));
+    named
 }
 
 /// The Zed actions of the full editors, with the keys and contexts of their registry entries
@@ -372,6 +379,23 @@ mod tests {
     fn fold_keys_only_in_the_editor_tab(cx: &mut TestAppContext) {
         let keys = keys_for(cx, "editor::FoldAll", Editor::multi_line);
         assert!(keys.is_empty(), "{keys:?}");
+    }
+
+    /// T-BIND-1: `by_name` drops a name it cannot build with no error, so a renamed action would
+    /// silently lose its key. Every entry must build.
+    #[gpui::test]
+    fn every_by_name_entry_builds_a_binding(cx: &mut TestAppContext) {
+        for mac in [true, false] {
+            let list = super::named(mac);
+            let built = cx.update(|cx| {
+                list.iter()
+                    .filter(|(keys, name, data, context)| {
+                        super::by_name(cx, keys, name, data.clone(), context).is_some()
+                    })
+                    .count()
+            });
+            assert_eq!(built, list.len(), "mac {mac}: {list:?}");
+        }
     }
 
     #[test]
