@@ -1740,6 +1740,7 @@ fn golden_terminal_focus(cx: &mut TestAppContext) {
 
 // T-F1, the menu (S2.5 review): a right click on a terminal without the focus, the focus
 // leaving through the menu, and the copy key while the menu has the focus. Both builds run it.
+// The menu counts as inside the view: the focus comes in through it.
 #[gpui::test]
 fn the_menu_keeps_the_focus_state_of_the_old_view(cx: &mut TestAppContext) {
     let (host, terminal, cx) = open(cx, PANE, true);
@@ -1761,13 +1762,13 @@ fn the_menu_keeps_the_focus_state_of_the_old_view(cx: &mut TestAppContext) {
     click(cell(&terminal, (0, 2), cx), MouseButton::Right, none, 1, cx);
     assert_eq!(
         row(&terminal, cx),
-        json!(["", 0, "HollowBlock", false]),
+        json!(["\x1b[I", 1, "Block", true]),
         "a right click without the focus"
     );
     focus(&terminal, cx);
     assert_eq!(
         row(&terminal, cx),
-        json!(["\x1b[I", 1, "Block", true]),
+        json!(["", 0, "Block", true]),
         "the focus from that menu to the view"
     );
 
@@ -1787,6 +1788,8 @@ fn the_menu_keeps_the_focus_state_of_the_old_view(cx: &mut TestAppContext) {
     focus(&terminal, cx);
     row(&terminal, cx);
     click(cell(&terminal, (0, 2), cx), MouseButton::Right, none, 1, cx);
+    let selected = selection(&terminal, cx);
+    assert!(selected.is_string(), "the right click selected nothing");
     cx.write_to_clipboard(ClipboardItem::new_string("before".into()));
     cx.simulate_keystrokes(copy_chord());
     settle(cx);
@@ -1795,7 +1798,7 @@ fn the_menu_keeps_the_focus_state_of_the_old_view(cx: &mut TestAppContext) {
             cx.read_from_clipboard().and_then(|item| item.text()),
             sent_text()
         ]),
-        json!(["before", ""]),
+        json!([selected, ""]),
         "the copy key while the menu has the focus"
     );
 }

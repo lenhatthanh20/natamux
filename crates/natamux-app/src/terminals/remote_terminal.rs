@@ -113,7 +113,7 @@ impl RemoteTerminal {
         let history = history_lines(FIRST_HISTORY_COLS);
         let screen = build_screen(history, None, window, cx);
         cx.observe_keystrokes(|this, _, window, cx| {
-            if this.view.focus_handle(cx).contains_focused(window, cx) {
+            if this.has_focus(window, cx) {
                 this.last_key = Some(Instant::now());
             }
         })
@@ -370,7 +370,7 @@ impl RemoteTerminal {
             return;
         }
         let bounds = self.terminal.read(cx).last_content().terminal_bounds;
-        let focused = self.view.focus_handle(cx).contains_focused(window, cx);
+        let focused = self.has_focus(window, cx);
         let screen = build_screen(history, Some(bounds), window, cx);
         if focused {
             window.focus(&screen.view.focus_handle(cx), cx);
@@ -379,6 +379,17 @@ impl RemoteTerminal {
         self.history = history;
         self.follow_lane(cx);
         self.changed(cx);
+    }
+
+    /// The focus is on the view or inside it. The own view's menu is drawn outside its focus,
+    /// but counts as inside, as the old view's does in the tests.
+    pub fn has_focus(&self, window: &Window, cx: &App) -> bool {
+        let view = self.view.read(cx);
+        #[cfg(feature = "own-terminal")]
+        if view.menu_holds_focus(window, cx) {
+            return true;
+        }
+        view.focus_handle(cx).contains_focused(window, cx)
     }
 
     /// Puts `screen` on the pane; the old screen goes, with its focus listeners. The old view is

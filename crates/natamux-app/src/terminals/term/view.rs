@@ -66,11 +66,12 @@ struct OpenMenu {
     _dismiss: Subscription,
 }
 
-/// The focus went from the view into its menu and then somewhere else. The view's own
-/// focus-out does not fire then, as the menu is drawn outside its focus; the owner hears this.
-pub struct FocusLeftThroughMenu;
+/// The focus went into the view's menu from outside the view (`true`), or from the menu to
+/// outside the view (`false`). The menu is drawn outside the view's focus, so the view's focus
+/// listeners miss these moves; the owner hears this.
+pub struct MenuFocus(pub bool);
 
-impl EventEmitter<FocusLeftThroughMenu> for TermView {}
+impl EventEmitter<MenuFocus> for TermView {}
 
 /// Where the element laid out the screen at the last frame.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -105,9 +106,9 @@ pub struct TermView {
     /// The text an input method is composing, drawn at the cursor.
     pub(super) marked: Option<String>,
     menu: Option<OpenMenu>,
-    /// The focus went from the view into its menu. The menu is drawn outside the view's focus,
-    /// as the old view's is (its pane does not look focused then), yet the shell is told
-    /// nothing: no focus report, no blink change (T-F1 rows).
+    /// The menu has the focus. The menu is drawn outside the view's focus, so the pane does not
+    /// look focused then (`terminal-context-menu`), yet for the shell, the keys and the owner
+    /// the menu is inside the view, as the old view's is in the tests (T-F1 rows).
     menu_focus: bool,
     /// The focus just came back to the view from its menu; read by the owner's focus watch.
     pub(crate) back_from_menu: bool,
@@ -402,11 +403,18 @@ impl TermView {
             } else if std::mem::take(&mut view.menu_focus) {
                 // The focus went on from the menu to somewhere else.
                 view.focus_out(cx);
-                cx.emit(FocusLeftThroughMenu);
+                cx.emit(MenuFocus(false));
             }
             view.menu = None;
             cx.notify();
         });
+        // From outside the view, the focus comes in through the menu.
+        if !self.focused {
+            self.back_from_menu = false;
+            self.focus_in(window, cx);
+            cx.emit(MenuFocus(true));
+        }
+        self.menu_focus = true;
         window.focus(&menu.focus_handle(cx), cx);
         self.menu = Some(OpenMenu {
             menu,
@@ -962,20 +970,21 @@ impl Render for TermView {
             )
             .with_priority(1)
         });
-        // The menu sits outside the screen's focus and key context, as the old view's does.
+        // The menu sits outside the screen's focus, so the pane does not look focused while the
+        // menu has the focus, but inside the key context: the copy and paste keys still act.
         div()
+            .key_context("Terminal")
             .size_full()
             .bg(cx.theme().colors().editor_background)
+            .on_action(cx.listener(|view, _: &TerminalCopy, _, cx| view.copy(cx)))
+            .on_action(cx.listener(|view, _: &TerminalPaste, window, cx| {
+                view.paste_clipboard(true, window, cx)
+            }))
             .child(
                 div()
-                    .key_context("Terminal")
                     .track_focus(&self.focus)
                     .size_full()
                     .on_key_down(cx.listener(Self::key_down))
-                    .on_action(cx.listener(|view, _: &TerminalCopy, _, cx| view.copy(cx)))
-                    .on_action(cx.listener(|view, _: &TerminalPaste, window, cx| {
-                        view.paste_clipboard(true, window, cx)
-                    }))
                     .child(TermElement::new(
                         cx.entity(),
                         self.model.clone(),

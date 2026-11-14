@@ -267,6 +267,31 @@ fn focus_moves_to_the_new_view_at_the_swap(cx: &mut TestAppContext) {
     assert!(focused(&terminal, cx), "the terminal lost its focused lane");
 }
 
+/// S2.5 review: with the menu open, the menu counts as the view's focus, so the focus moves to
+/// the new view at the swap and the terminal keeps a true focused lane. Both builds run it.
+#[gpui::test]
+fn focus_in_the_menu_moves_to_the_new_view_at_the_swap(cx: &mut TestAppContext) {
+    let (terminal, cx) = open(cx);
+    focus_view(&terminal, cx);
+    let view = terminal.read_with(cx, |terminal, _| terminal.view.clone());
+    view.update_in(cx, |view, window, cx| {
+        #[cfg(not(feature = "own-terminal"))]
+        view.deploy_context_menu(gpui::point(px(8.), px(8.)), true, window, cx);
+        #[cfg(feature = "own-terminal")]
+        view.deploy_context_menu(gpui::point(px(8.), px(8.)), window, cx);
+    });
+    cx.run_until_parked();
+    draw(cx);
+    assert!(focused(&terminal, cx), "the menu took the focused lane");
+
+    swap(&terminal, cx);
+    let on_new_view = terminal.update_in(cx, |terminal, window, cx| {
+        terminal.view.focus_handle(cx).is_focused(window)
+    });
+    assert!(on_new_view, "the focus stayed in the old view's menu");
+    assert!(focused(&terminal, cx), "the terminal lost its focused lane");
+}
+
 /// Regression (T-0210 review 1, finding 2): a second CaughtUp dropped the first swap, and the
 /// pane stayed on the old screen while all output went to the new one.
 #[gpui::test]

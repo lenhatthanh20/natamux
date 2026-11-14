@@ -161,7 +161,7 @@ impl RemoteTerminal {
         cx: &mut Context<Self>,
     ) {
         if let Some(screen) = incoming {
-            if self.view.focus_handle(cx).contains_focused(window, cx) {
+            if self.has_focus(window, cx) {
                 window.focus(&screen.view.focus_handle(cx), cx);
             }
             self.show(screen, cx);
@@ -240,19 +240,35 @@ pub(super) fn build_screen(
     window: &mut Window,
     cx: &mut Context<RemoteTerminal>,
 ) -> Screen {
-    use crate::terminals::term::view::FocusLeftThroughMenu;
+    use crate::terminals::term::view::MenuFocus;
 
     let terminal = cx.new(|cx| Terminal::new(history, bounds, cx));
     let view = cx.new(|cx| TerminalView::new(terminal.clone(), window, cx));
     let focus = view.focus_handle(cx);
     let mut subscriptions = Vec::from(watch_focus(&focus, window, cx));
-    subscriptions.push(cx.subscribe(&view, |this, _, _: &FocusLeftThroughMenu, cx| {
-        this.set_focused(false, cx)
-    }));
+    let menu = cx.subscribe(&view, |this, _, event: &MenuFocus, cx| {
+        if event.0 {
+            this.focus_came(cx);
+        } else {
+            this.set_focused(false, cx);
+        }
+    });
+    subscriptions.push(menu);
     Screen {
         terminal,
         view,
         _focus: subscriptions,
+    }
+}
+
+impl RemoteTerminal {
+    fn focus_came(&mut self, cx: &mut Context<Self>) {
+        if let Some(handle) = &self.handle {
+            #[cfg(test)]
+            super::sent::claimed();
+            handle.claim();
+        }
+        self.set_focused(true, cx);
     }
 }
 
@@ -269,12 +285,7 @@ pub(super) fn watch_focus(
         if this.view.read(cx).back_from_menu {
             return;
         }
-        if let Some(handle) = &this.handle {
-            #[cfg(test)]
-            super::sent::claimed();
-            handle.claim();
-        }
-        this.set_focused(true, cx);
+        this.focus_came(cx);
     });
     // Not blur: focus in a child, such as the context menu, still counts as focused.
     let focus_out = cx.on_focus_out(focus, window, |this, _, _window, cx| {

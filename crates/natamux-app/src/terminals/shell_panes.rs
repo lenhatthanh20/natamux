@@ -178,13 +178,8 @@ impl ShellPanes {
             return;
         };
         let key = terminal_key(&task_id, &name);
-        let was_focused = TerminalCache::cached(&key, cx).is_some_and(|terminal| {
-            terminal
-                .read(cx)
-                .view
-                .focus_handle(cx)
-                .contains_focused(window, cx)
-        });
+        let was_focused = TerminalCache::cached(&key, cx)
+            .is_some_and(|terminal| terminal.read(cx).has_focus(window, cx));
         let was_shown = self.shown.as_deref() == Some(name.as_str());
         if was_focused || was_shown {
             let names = self.names(self.list(cx).as_ref());
