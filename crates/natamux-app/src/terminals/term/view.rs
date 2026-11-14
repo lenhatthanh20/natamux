@@ -792,12 +792,12 @@ impl TermView {
         let Some(thumb) = laid.thumb else {
             return false;
         };
-        if self.bar_visible() && thumb.contains(&position) {
-            self.bar.grab = Some(position.y - thumb.top());
-            return true;
-        }
         if Self::show_scrollbar(cx) == Show::Never || !laid.track.contains(&position) {
             return false;
+        }
+        if thumb.contains(&position) {
+            self.bar.grab = Some(position.y - thumb.top());
+            return true;
         }
         self.scroll_bar_to(laid, thumb, position.y - thumb.size.height / 2., cx);
         true
@@ -808,8 +808,9 @@ impl TermView {
         let Some(laid) = self.laid else {
             return false;
         };
-        let hovered =
-            self.bar_visible() && laid.thumb.is_some_and(|thumb| thumb.contains(&position));
+        // A hidden thumb is hovered too, and that shows it.
+        let hovered = Self::show_scrollbar(cx) != Show::Never
+            && laid.thumb.is_some_and(|thumb| thumb.contains(&position));
         if hovered != self.bar.hovered {
             self.bar.hovered = hovered;
             cx.notify();
@@ -860,8 +861,15 @@ impl TermView {
         }
     }
 
-    fn bar_visible(&self) -> bool {
-        self.bar.grab.is_some() || self.bar.hovered || self.bar.shown_at.is_some()
+    /// Whether the scrollbar shows in or fades out now, so frames must keep coming.
+    pub(super) fn bar_fading(&self, cx: &App) -> bool {
+        Self::show_scrollbar(cx) == Show::Auto
+            && self.bar.grab.is_none()
+            && !self.bar.hovered
+            && self.bar.shown_at.is_some_and(|at| {
+                let now = cx.background_executor().now();
+                scrollbar::auto_fading(now.saturating_duration_since(at))
+            })
     }
 }
 

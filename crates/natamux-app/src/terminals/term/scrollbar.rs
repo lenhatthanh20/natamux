@@ -1,7 +1,7 @@
 //! The scrollbar of a terminal (docs/plan-mit-license.md 6.2.6): a track of 14 px on the right
 //! that the grid always leaves free, a 6 px thumb from the lines of the history, the screen and
-//! the scroll offset, and the thumb's colour per state. It shows on a scroll or a new size and
-//! hides 1 s later, unless the settings show it always or never.
+//! the scroll offset, and the thumb's colour per state. It shows on a scroll or a new size (in
+//! 50 ms) and hides 1 s later, unless the settings show it always or never.
 
 use std::time::Duration;
 
@@ -19,7 +19,9 @@ pub const BORDER_ALPHA: f32 = 0.6;
 /// When the thumb is not hovered and the track is not kept free, its colour shows at most this
 /// much.
 const MAX_ALPHA: f32 = 0.7;
-/// The time a scroll shows the scrollbar for, then how long it fades out.
+/// How long the scrollbar takes to show, the time a scroll shows it for, then how long it fades
+/// out.
+pub const SHOW_IN: Duration = Duration::from_millis(50);
 pub const SHOWN_FOR: Duration = Duration::from_secs(1);
 pub const FADE: Duration = Duration::from_millis(400);
 
@@ -117,13 +119,21 @@ pub fn thumb_colour(
     track_background.blend(colour)
 }
 
-/// How much of the scrollbar shows `since` the last scroll or new size: all of it for
-/// `SHOWN_FOR`, then less over `FADE`.
+/// How much of the scrollbar shows `since` the last scroll or new size: more over `SHOW_IN`,
+/// all of it until `SHOWN_FOR`, then less over `FADE`.
 pub fn auto_alpha(since: Duration) -> f32 {
+    if since < SHOW_IN {
+        return since.as_secs_f32() / SHOW_IN.as_secs_f32();
+    }
     match since.checked_sub(SHOWN_FOR) {
         None => 1.,
         Some(fading) => (1. - fading.as_secs_f32() / FADE.as_secs_f32()).max(0.),
     }
+}
+
+/// Whether `auto_alpha` still changes `since` the last scroll, so frames must keep coming.
+pub fn auto_fading(since: Duration) -> bool {
+    since < SHOW_IN || (since >= SHOWN_FOR && since < SHOWN_FOR + FADE)
 }
 
 #[cfg(test)]
@@ -176,6 +186,18 @@ mod tests {
         let hovered = thumb_colour(ThumbState::Hovered, colours, track, false);
         assert_eq!(hovered, over(colours.hovered));
         assert_ne!(capped, reserved(ThumbState::Idle));
+    }
+
+    #[test]
+    fn the_scrollbar_shows_in_50_ms() {
+        assert_eq!(auto_alpha(Duration::ZERO), 0.);
+        assert_eq!(auto_alpha(Duration::from_millis(25)), 0.5);
+        assert_eq!(auto_alpha(Duration::from_millis(50)), 1.);
+        assert!(auto_fading(Duration::ZERO));
+        assert!(!auto_fading(Duration::from_millis(50)));
+        assert!(!auto_fading(Duration::from_millis(900)));
+        assert!(auto_fading(Duration::from_millis(1200)));
+        assert!(!auto_fading(Duration::from_millis(1400)));
     }
 
     #[test]

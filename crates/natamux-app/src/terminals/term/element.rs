@@ -445,7 +445,6 @@ impl Element for TermElement {
         );
         let over_link = content.last_hovered_word.is_some() && window.modifiers().secondary();
         let background = colours.terminal_background;
-        let fading = bar_alpha > 0. && bar_alpha < 1.;
 
         let laid = Laid {
             bounds: area,
@@ -461,7 +460,7 @@ impl Element for TermElement {
                 view.show_bar(cx);
             }
         });
-        if fading {
+        if self.view.read(cx).bar_fading(cx) {
             window.request_animation_frame();
         }
         Frame {
