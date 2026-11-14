@@ -1739,7 +1739,8 @@ fn golden_terminal_focus(cx: &mut TestAppContext) {
 }
 
 // T-F1, the menu (S2.5 review): a right click on a terminal without the focus, the focus
-// leaving through the menu, and the copy key while the menu has the focus. Both builds run it.
+// leaving through the menu, the copy key while the menu has the focus, and the window going
+// inactive and active again while the menu has the focus. Both builds run it.
 // The menu counts as inside the view: the focus comes in through it.
 #[gpui::test]
 fn the_menu_keeps_the_focus_state_of_the_old_view(cx: &mut TestAppContext) {
@@ -1800,6 +1801,25 @@ fn the_menu_keeps_the_focus_state_of_the_old_view(cx: &mut TestAppContext) {
         ]),
         json!([selected, ""]),
         "the copy key while the menu has the focus"
+    );
+
+    focus(&terminal, cx);
+    row(&terminal, cx);
+    click(cell(&terminal, (0, 2), cx), MouseButton::Right, none, 1, cx);
+    row(&terminal, cx);
+    cx.deactivate_window();
+    settle(cx);
+    assert_eq!(
+        row(&terminal, cx),
+        json!(["\x1b[O", 0, "HollowBlock", false]),
+        "the window going inactive while the menu has the focus"
+    );
+    cx.update(|window, _| window.activate_window());
+    settle(cx);
+    assert_eq!(
+        row(&terminal, cx),
+        json!(["\x1b[I", 1, "Block", true]),
+        "the window active again"
     );
 }
 

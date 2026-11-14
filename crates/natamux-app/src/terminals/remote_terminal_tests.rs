@@ -267,8 +267,10 @@ fn focus_moves_to_the_new_view_at_the_swap(cx: &mut TestAppContext) {
     assert!(focused(&terminal, cx), "the terminal lost its focused lane");
 }
 
-/// S2.5 review: with the menu open, the menu counts as the view's focus, so the focus moves to
-/// the new view at the swap and the terminal keeps a true focused lane. Both builds run it.
+/// S2.5 review: with the menu open, the menu counts as the own view's focus, so the focus moves
+/// to the new view at the swap and the terminal keeps a true focused lane. Both builds run it.
+/// Zed's terminal drops the focus there: it goes back to the old view, which is no longer drawn
+/// (Bugs found); the own view does not keep that.
 #[gpui::test]
 fn focus_in_the_menu_moves_to_the_new_view_at_the_swap(cx: &mut TestAppContext) {
     let (terminal, cx) = open(cx);
@@ -283,12 +285,25 @@ fn focus_in_the_menu_moves_to_the_new_view_at_the_swap(cx: &mut TestAppContext) 
     cx.run_until_parked();
     draw(cx);
     assert!(focused(&terminal, cx), "the menu took the focused lane");
+    let old_view = view.read_with(cx, |view, cx| view.focus_handle(cx));
 
     swap(&terminal, cx);
-    let on_new_view = terminal.update_in(cx, |terminal, window, cx| {
-        terminal.view.focus_handle(cx).is_focused(window)
+    let (on_new_view, on_old_view) = terminal.update_in(cx, |terminal, window, cx| {
+        let new_view = terminal.view.focus_handle(cx);
+        (new_view.is_focused(window), old_view.is_focused(window))
     });
-    assert!(on_new_view, "the focus stayed in the old view's menu");
+    #[cfg(feature = "own-terminal")]
+    assert_eq!(
+        (on_new_view, on_old_view),
+        (true, false),
+        "the focus stayed in the old view or its menu"
+    );
+    #[cfg(not(feature = "own-terminal"))]
+    assert_eq!(
+        (on_new_view, on_old_view),
+        (false, true),
+        "Zed's terminal no longer drops the focus at the swap"
+    );
     assert!(focused(&terminal, cx), "the terminal lost its focused lane");
 }
 
