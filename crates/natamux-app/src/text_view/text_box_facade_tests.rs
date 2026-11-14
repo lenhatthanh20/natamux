@@ -54,7 +54,8 @@ impl Render for Host {
 }
 
 fn host(cx: &mut TestAppContext) -> (gpui::Entity<Host>, &mut VisualTestContext) {
-    let (host, _, cx) = test_views::init_app(cx, |_, window, cx| cx.new(|cx| Host::new(window, cx)));
+    let (host, _, cx) =
+        test_views::init_app(cx, |_, window, cx| cx.new(|cx| Host::new(window, cx)));
     (host, cx)
 }
 

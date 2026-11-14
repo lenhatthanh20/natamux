@@ -10,7 +10,6 @@ use super::tab_order;
 
 use crate::text_view::text_box::TextBox;
 
-
 pub fn field(label: impl Into<SharedString>, control: impl IntoElement) -> impl IntoElement {
     v_flex()
         .gap_1()

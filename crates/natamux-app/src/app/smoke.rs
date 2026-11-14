@@ -7,9 +7,8 @@
 use std::time::{Duration, Instant};
 
 use gpui::{
-    App, AppContext as _, AsyncApp, FocusHandle, Focusable, Keystroke, Modifiers,
-    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, PlatformInput, Window, WindowHandle,
-    point, px,
+    App, AppContext as _, AsyncApp, FocusHandle, Focusable, Keystroke, Modifiers, MouseButton,
+    MouseDownEvent, MouseMoveEvent, MouseUpEvent, PlatformInput, Window, WindowHandle, point, px,
 };
 
 use super::flow_smoke;

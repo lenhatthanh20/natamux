@@ -14,7 +14,6 @@ use super::form::{input_box, text_editor};
 
 use crate::text_view::text_box::TextBox;
 
-
 type OnGo = Rc<dyn Fn(u32, Option<u32>, &mut Window, &mut App)>;
 
 /// Where `line` and `column` (1-based, the column in characters) are in `text`: the row clamped

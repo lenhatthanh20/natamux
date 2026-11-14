@@ -92,20 +92,18 @@ impl ProjectsDialog {
                 cx.notify();
             }
         }));
-        subscriptions.push(
-            worktree.subscribe(cx, |this, editor, event, cx| {
-                if event != TextEvent::Edited {
-                    return;
-                }
-                // The default put into the field is not an edit.
-                let text = editor.text(cx);
-                if text != this.shown_worktree(cx) {
-                    this.typed_worktree = Some(text);
-                    this.worktree_error = None;
-                }
-                cx.notify();
-            }),
-        );
+        subscriptions.push(worktree.subscribe(cx, |this, editor, event, cx| {
+            if event != TextEvent::Edited {
+                return;
+            }
+            // The default put into the field is not an edit.
+            let text = editor.text(cx);
+            if text != this.shown_worktree(cx) {
+                this.typed_worktree = Some(text);
+                this.worktree_error = None;
+            }
+            cx.notify();
+        }));
         subscriptions.push(cx.on_blur(&folder.focus_handle(cx), window, |this, _, cx| {
             this.folder_touched = true;
             cx.notify();
@@ -366,13 +364,11 @@ impl Render for ProjectsDialog {
             empty || self.busy,
             cx.listener(|this, _, window, cx| this.add(window, cx)),
         )
-        .tooltip(Tooltip::text(
-            if self.folder.text(cx).trim().is_empty() {
-                "Enter the folder first"
-            } else {
-                DESCRIPTION
-            },
-        ));
+        .tooltip(Tooltip::text(if self.folder.text(cx).trim().is_empty() {
+            "Enter the folder first"
+        } else {
+            DESCRIPTION
+        }));
         let list = (!repos.is_empty()).then(|| {
             let mut card = SettingsCard::new(SeparatorInset::Tile);
             for (index, repo) in repos.iter().enumerate() {

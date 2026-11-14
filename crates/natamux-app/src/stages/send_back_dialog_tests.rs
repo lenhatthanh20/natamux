@@ -155,9 +155,7 @@ fn t10_an_error_keeps_the_dialog_and_the_reason(cx: &mut TestAppContext) {
     type_text(cx, "Fix it");
     press(cx, "mod-enter");
     assert!(is_open(cx));
-    let (busy, reason) = dialog.read_with(cx, |dialog, cx| {
-        (dialog.busy, dialog.reason.text(cx))
-    });
+    let (busy, reason) = dialog.read_with(cx, |dialog, cx| (dialog.busy, dialog.reason.text(cx)));
     assert!(!busy);
     assert_eq!(reason, "Fix it");
     assert!(reopened("T-9999").is_empty());

@@ -13,7 +13,6 @@ use super::stage_sheet::{self, Skills, StageSheet};
 
 use crate::text_view::text_box::TextBox;
 
-
 pub struct DetailsPane {
     editor: Entity<PipelineEditor>,
     skills: Skills,

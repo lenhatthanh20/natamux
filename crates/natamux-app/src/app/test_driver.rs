@@ -6,12 +6,11 @@
 use std::ops::Range;
 
 use gpui::{
-    ClipboardItem, EntityInputHandler, Focusable, KeyDownEvent, KeyUpEvent, Keystroke,
-    Modifiers, VisualTestContext,
+    ClipboardItem, EntityInputHandler, Focusable, KeyDownEvent, KeyUpEvent, Keystroke, Modifiers,
+    VisualTestContext,
 };
 
 use crate::text_view::text_box::TextBox;
-
 
 /// Types `text` into the focused view, as an input method commits it.
 pub fn type_text(cx: &mut VisualTestContext, text: &str) {

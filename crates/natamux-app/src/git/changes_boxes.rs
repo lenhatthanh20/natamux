@@ -113,7 +113,8 @@ impl ChangesView {
         };
         cx.spawn_in(window, async move |_, cx| {
             if answer.await.is_ok() {
-                cx.update(|window, cx| message.set_text("", window, cx)).ok();
+                cx.update(|window, cx| message.set_text("", window, cx))
+                    .ok();
             }
         })
         .detach();

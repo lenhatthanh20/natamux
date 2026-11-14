@@ -2,9 +2,7 @@
 //! stages that are not in the pipeline, a group per phase. Up and Down move the active row, Enter
 //! or a click adds its stage.
 
-use gpui::{
-    AnyElement, Entity, EventEmitter, FocusHandle, Focusable, ScrollHandle,
-};
+use gpui::{AnyElement, Entity, EventEmitter, FocusHandle, Focusable, ScrollHandle};
 use natamux_proto::stages::capabilities::stage_name;
 use natamux_proto::stages::catalog::CatalogStage;
 use ui::{ScrollAxes, prelude::*};

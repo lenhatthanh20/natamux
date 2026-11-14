@@ -5,8 +5,8 @@
 use std::collections::BTreeMap;
 
 use gpui::{
-    ClickEvent, Entity, EventEmitter, FocusHandle, Focusable, Keystroke,
-    ListAlignment, ListState, Subscription, list,
+    ClickEvent, Entity, EventEmitter, FocusHandle, Focusable, Keystroke, ListAlignment, ListState,
+    Subscription, list,
 };
 use natamux_proto::tasks::task::Task;
 use ui::{IconButton, ListItem, ListItemSpacing, Tooltip, prelude::*};

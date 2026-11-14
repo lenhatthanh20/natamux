@@ -187,18 +187,16 @@ impl NewWorkspaceDialog {
                 }
             }));
         }
-        subscriptions.push(
-            branch_name.subscribe(cx, |this, editor, event, cx| {
-                if event == TextEvent::Edited {
-                    let text = editor.text(cx);
-                    // A refill sets the text too; only another text is the user's.
-                    if text != this.filled {
-                        this.branch_edited = !text.is_empty();
-                    }
-                    cx.notify();
+        subscriptions.push(branch_name.subscribe(cx, |this, editor, event, cx| {
+            if event == TextEvent::Edited {
+                let text = editor.text(cx);
+                // A refill sets the text too; only another text is the user's.
+                if text != this.filled {
+                    this.branch_edited = !text.is_empty();
                 }
-            }),
-        );
+                cx.notify();
+            }
+        }));
         let mut dialog = NewWorkspaceDialog {
             dashboard,
             title,

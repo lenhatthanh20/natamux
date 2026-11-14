@@ -7,8 +7,8 @@ use std::sync::Arc;
 use editor::actions::{MoveToEnd, SelectAll};
 use editor::{Editor, EditorEvent};
 use gpui::{
-    App, AppContext as _, Context, Entity, EntityInputHandler, FocusHandle, Focusable, IntoElement, Subscription, TextStyleRefinement,
-    Window,
+    App, AppContext as _, Context, Entity, EntityInputHandler, FocusHandle, Focusable, IntoElement,
+    Subscription, TextStyleRefinement, Window,
 };
 use language::language_settings::SoftWrap;
 
@@ -170,8 +170,9 @@ impl TextBox {
     }
 
     pub fn set_placeholder(&self, text: &str, window: &mut Window, cx: &mut App) {
-        self.editor
-            .update(cx, |editor, cx| editor.set_placeholder_text(text, window, cx));
+        self.editor.update(cx, |editor, cx| {
+            editor.set_placeholder_text(text, window, cx)
+        });
     }
 
     /// Shows one `*` for each char; `text()` still gives the real text.
@@ -193,11 +194,14 @@ impl TextBox {
         cx: &mut Context<T>,
         mut handler: impl FnMut(&mut T, &TextBox, TextEvent, &mut Context<T>) + 'static,
     ) -> Subscription {
-        cx.subscribe(&self.editor, move |this, editor, event: &EditorEvent, cx| {
-            if let Some(event) = TextEvent::of(event) {
-                handler(this, &TextBox { editor }, event, cx);
-            }
-        })
+        cx.subscribe(
+            &self.editor,
+            move |this, editor, event: &EditorEvent, cx| {
+                if let Some(event) = TextEvent::of(event) {
+                    handler(this, &TextBox { editor }, event, cx);
+                }
+            },
+        )
     }
 
     /// `subscribe`, with the window.
@@ -212,7 +216,15 @@ impl TextBox {
             window,
             move |this, editor, event: &EditorEvent, window, cx| {
                 if let Some(event) = TextEvent::of(event) {
-                    handler(this, &TextBox { editor: editor.clone() }, event, window, cx);
+                    handler(
+                        this,
+                        &TextBox {
+                            editor: editor.clone(),
+                        },
+                        event,
+                        window,
+                        cx,
+                    );
                 }
             },
         )
