@@ -174,6 +174,15 @@ pub(super) fn sent_text() -> String {
     sent::take().concat()
 }
 
+/// The URL opened since the last look. The test platform keeps only the last URL it opened, so
+/// a mark takes its place after each look, and a URL opened twice in a row is seen both times.
+pub(super) fn opened(cx: &mut VisualTestContext) -> Option<String> {
+    const MARK: &str = "https://mark.invalid/";
+    let url = cx.opened_url().filter(|url| url != MARK);
+    cx.update(|_, cx| crate::app::links::open_link(MARK, cx));
+    url
+}
+
 /// The screen as a frame drawn now copies it. The view is cached and draws only when told, and
 /// typing, for one, tells it nothing until the shell echoes; so the view is told first.
 pub(super) fn content<R>(
@@ -978,7 +987,6 @@ fn link_rows(cx: &mut TestAppContext) -> Vec<Value> {
     let mut rows = Vec::new();
     feed(&terminal, &LINK_LINES.join("\r\n"), cx);
     let modifier = mods(secondary());
-    let opened = |cx: &mut VisualTestContext| cx.opened_url();
     for (case, at) in LINK_CASES {
         let at = cell(&terminal, at, cx);
         // Hover with the key down: the link under the pointer, if any.
@@ -991,7 +999,7 @@ fn link_rows(cx: &mut TestAppContext) -> Vec<Value> {
                 .as_ref()
                 .map(|word| word.word.clone())
         });
-        let before = opened(cx);
+        opened(cx);
         mouse_down(at, MouseButton::Left, modifier, 1, cx);
         mouse_up(at, MouseButton::Left, modifier, 1, cx);
         settle(cx);
@@ -1000,16 +1008,7 @@ fn link_rows(cx: &mut TestAppContext) -> Vec<Value> {
         // A plain click, with no key.
         click(at, MouseButton::Left, Modifiers::default(), 1, cx);
         let plain = opened(cx);
-        let changed = |old: &Option<String>, new: &Option<String>| {
-            (old != new).then(|| new.clone()).flatten()
-        };
-        rows.push(json!([
-            case,
-            hovered,
-            changed(&before, &with_key),
-            changed(&with_key, &plain),
-            sent_text()
-        ]));
+        rows.push(json!([case, hovered, with_key, plain, sent_text()]));
     }
     rows
 }
@@ -1042,8 +1041,7 @@ fn safe_plain_clicks(golden: Vec<Value>) -> Vec<Value> {
 
 /// T-L1 on the own link rules: the link the own model finds under the pointer (an OSC 8 link
 /// from its cells, else a URL of the line), shown with the secondary key, and what a click with
-/// the key opens. A plain click is the view's (S2.4, D5). As in `link_rows`, a click that opens
-/// the URL opened last counts as nothing, since the test platform keeps only the last URL.
+/// the key opens. A plain click is the view's (S2.4, D5).
 #[cfg(feature = "own-terminal")]
 #[gpui::test]
 fn the_own_links_match_the_golden(cx: &mut TestAppContext) {
@@ -1055,23 +1053,14 @@ fn the_own_links_match_the_golden(cx: &mut TestAppContext) {
     let golden = golden_files::read(SET, "links");
     let mut own = screen(cx, (128, 20));
     feed(&mut own, &LINK_LINES.join("\r\n"), cx);
-    let mut last_opened: Option<String> = None;
     let mut rows = Vec::new();
-    for ((case, (line, column)), old) in LINK_CASES.iter().zip(&golden) {
-        let at = Point::new(Line(*line as i32), Column(*column));
+    for (case, (line, column)) in LINK_CASES {
+        let at = Point::new(Line(line as i32), Column(column));
         let target = own
             .model
             .read_with(cx, |model, _| model.link_at(at))
             .map(|link| link.word);
-        let opened = target.clone().filter(|url| may_open(url));
-        let with_key = opened
-            .clone()
-            .filter(|url| last_opened.as_ref() != Some(url));
-        last_opened = opened.or(last_opened);
-        // The old plain click opened what the golden says; it is the URL opened last after it.
-        if let Some(url) = old[3].as_str() {
-            last_opened = Some(url.to_owned());
-        }
+        let with_key = target.clone().filter(|url| may_open(url));
         rows.push(json!([case, target.as_deref().map(shown), with_key]));
     }
     let golden: Vec<Value> = golden
@@ -1144,14 +1133,6 @@ fn pointer_rows(cx: &mut TestAppContext) -> Vec<Value> {
         let offset = display_offset(terminal, cx);
         json!([case, sent_text(), offset])
     };
-    let mut last_opened: Option<String> = None;
-    let mut opened = |cx: &mut VisualTestContext| {
-        let now = cx.opened_url();
-        let new = (now != last_opened).then(|| now.clone()).flatten();
-        last_opened = now;
-        new
-    };
-
     // Mouse mode on the main screen, scrolled up 5 lines with Shift.
     feed(&terminal, &sgr("1000"), cx);
     sent_text();
