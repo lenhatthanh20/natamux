@@ -398,12 +398,18 @@ impl TermView {
                 .entry("Clear", None, run(|view, _, cx| view.clear(cx)))
         });
         let dismiss = cx.subscribe_in(&menu, window, |view, menu, _: &DismissEvent, window, cx| {
-            if menu.focus_handle(cx).contains_focused(window, cx) {
+            let in_menu = menu.focus_handle(cx).contains_focused(window, cx);
+            if in_menu && window.is_window_active() {
                 window.focus(&view.focus, cx);
             } else if std::mem::take(&mut view.menu_focus) {
-                // The focus went on from the menu to somewhere else.
+                // The focus went on from the menu to somewhere else, or the window went
+                // inactive: the old view's focus-out fires then. The focus waits on the view,
+                // and coming back to it is a focus-in.
                 view.focus_out(cx);
                 cx.emit(MenuFocus(false));
+                if in_menu {
+                    window.focus(&view.focus, cx);
+                }
             }
             view.menu = None;
             cx.notify();

@@ -283,8 +283,30 @@ fn focus_in_the_menu_moves_to_the_new_view_at_the_swap(cx: &mut TestAppContext) 
     cx.run_until_parked();
     draw(cx);
     assert!(focused(&terminal, cx), "the menu took the focused lane");
+    let old_focus = view.read_with(cx, |view, cx| view.focus_handle(cx));
+    let probe = |label: &str, old: &gpui::FocusHandle, cx: &mut VisualTestContext| {
+        let line = terminal.update_in(cx, |terminal, window, cx| {
+            let new = terminal.view.focus_handle(cx);
+            format!(
+                "PROBE {label}: has_focus={} new_is={} new_contains={} old_is={} old_contains={} any_focus={} lane={} active={}",
+                terminal.has_focus(window, cx),
+                new.is_focused(window),
+                new.contains_focused(window, cx),
+                old.is_focused(window),
+                old.contains_focused(window, cx),
+                window.focused(cx).is_some(),
+                terminal.focused,
+                window.is_window_active(),
+            )
+        });
+        eprintln!("{line}");
+    };
+    probe("before", &old_focus, cx);
+    draw(cx);
+    probe("before, drawn again", &old_focus, cx);
 
     swap(&terminal, cx);
+    probe("after", &old_focus, cx);
     let on_new_view = terminal.update_in(cx, |terminal, window, cx| {
         terminal.view.focus_handle(cx).is_focused(window)
     });
