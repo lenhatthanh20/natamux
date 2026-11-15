@@ -144,7 +144,11 @@ fn the_sticky_items_match_the_outline_golden_files() {
             .filter(|row| row[0] == "sticky")
             .collect();
         let items = lang_for(&path).map_or_else(Vec::new, |lang| items_of(lang, &text));
-        problems.extend(first_difference(&name, &golden, &sticky_rows(&items, &text)));
+        problems.extend(first_difference(
+            &name,
+            &golden,
+            &sticky_rows(&items, &text),
+        ));
     }
     assert!(problems.is_empty(), "{}", problems.join("\n"));
 }
