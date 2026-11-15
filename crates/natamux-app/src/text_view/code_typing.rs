@@ -1,14 +1,14 @@
 //! What a code view does with typed text (plan 6.4): pairs that close themselves, a selection
-//! that gets surrounded, Backspace inside an empty pair, and the indent of a new line.
+//! that gets surrounded, Backspace inside an empty pair, the closing tag of JSX, and Enter
+//! (`code_enter.rs`).
 
 use gpui::Context;
-use tree_sitter::Tree;
 
+use super::code_enter::{enter, parse};
 use super::code_view::Code;
-use super::text_input::{TAB_SIZE, TextInput};
+use super::text_input::TextInput;
 use crate::git::languages::Lang;
 use crate::text::model::EditKind;
-use crate::text::motion;
 
 /// An auto-closed pair: the offsets of its opening and closing chars. Typing the closing char
 /// at it steps over it, and Backspace right after the opening char deletes both.
@@ -18,10 +18,36 @@ pub(super) struct Region {
     close: usize,
 }
 
-fn parse(lang: &Lang, text: &str) -> Option<Tree> {
-    let mut parser = tree_sitter::Parser::new();
-    parser.set_language(&(lang.grammar)()).ok()?;
-    parser.parse(text, None)
+/// The closing tag of the JSX opening tag whose `>` ends at `at` of `text`, when its element has
+/// none yet: `</name>`, or `</>` for a fragment.
+fn jsx_closing_tag(lang: &Lang, text: &str, at: usize) -> Option<String> {
+    let tree = parse(lang, text)?;
+    let mut node = tree
+        .root_node()
+        .descendant_for_byte_range(at.saturating_sub(1), at);
+    while let Some(found) = node {
+        if found.kind() == "jsx_opening_element" && found.end_byte() == at {
+            let element = found.parent().filter(|parent| parent.kind() == "jsx_element");
+            let closed = element.is_some_and(|element| {
+                let mut cursor = element.walk();
+                element.children(&mut cursor).any(|child| {
+                    child.kind() == "jsx_closing_element"
+                        && !child.is_missing()
+                        && !child.byte_range().is_empty()
+                })
+            });
+            if closed {
+                return None;
+            }
+            let name = found
+                .child_by_field_name("name")
+                .and_then(|name| text.get(name.byte_range()))
+                .unwrap_or("");
+            return Some(format!("</{name}>"));
+        }
+        node = found.parent();
+    }
+    None
 }
 
 impl TextInput {
@@ -50,8 +76,9 @@ impl TextInput {
     }
 
     /// One char typed at the selection of a code view with typing facts: a pair closes itself,
-    /// a selection gets surrounded, and the closing char of an auto-closed pair is stepped over.
-    /// False when the view leaves the text to the plain input.
+    /// a selection gets surrounded, the closing char of an auto-closed pair is stepped over, and
+    /// the `>` of a JSX opening tag adds its closing tag. False when the view leaves the text to
+    /// the plain input.
     pub(super) fn type_code(&mut self, text: &str, cx: &mut Context<Self>) -> bool {
         let Some(typing) = self.typing() else {
             return false;
@@ -89,20 +116,33 @@ impl TextInput {
             self.changed(false, cx);
             return true;
         }
-        let in_string = self
+        let scope = self
             .code
             .as_ref()
             .and_then(Code::tree)
-            .is_some_and(|tree| typing.in_string(tree, at));
-        let closer = typing.closer(self.model.text(), at, c, in_string);
-        let insert = closer.map_or_else(|| c.to_string(), |close| format!("{c}{close}"));
+            .map(|tree| typing.scope_at(tree, self.model.text(), at))
+            .unwrap_or_default();
+        let closer = typing.closer(self.model.text(), at, c, scope);
+        let lang = self.code.as_ref().and_then(|code| code.lang);
+        let tag = match lang {
+            Some(lang) if c == '>' && typing.jsx && closer.is_none() => {
+                let mut typed = self.model.text().to_owned();
+                typed.insert(at, c);
+                jsx_closing_tag(lang, &typed, at + 1)
+            }
+            _ => None,
+        };
+        let insert = format!("{c}{}{}", closer.unwrap_or(""), tag.unwrap_or_default());
         let edited = self.model.edit(at..at, &insert, EditKind::Typing, now);
         let after = at + c.len_utf8();
         self.model.move_to(after);
         for region in &mut regions {
             region.close += c.len_utf8();
         }
-        if closer.is_some() {
+        // Only a one-char closer is stepped over or deleted with its opening.
+        if let Some(close) = closer
+            && close.chars().count() == 1
+        {
             regions.push(Region {
                 open: at,
                 close: after,
@@ -136,38 +176,20 @@ impl TextInput {
         true
     }
 
-    /// Enter in a code view with typing facts: between the chars of a pair that opens a block,
-    /// the caret goes on an indented line of its own and the closing char on the next; else the
-    /// new line takes the indent the language gives it.
+    /// Enter in a code view with typing facts (`code_enter.rs`).
     pub(super) fn newline_code(&mut self, cx: &mut Context<Self>) -> bool {
         let (Some(typing), Some(lang)) = (self.typing(), self.code.as_ref().and_then(|c| c.lang))
         else {
             return false;
         };
         let range = self.model.selection().range();
-        let text = self.model.text();
-        let line_start = motion::line_start(text, range.start);
-        let lead: String = text[line_start..]
-            .chars()
-            .take_while(|c| *c == ' ' || *c == '\t')
-            .collect();
-        let (insert, caret) = if range.is_empty() && typing.expands(text, range.start) {
-            let middle = format!("\n{lead}{}", " ".repeat(TAB_SIZE));
-            let caret = range.start + middle.len();
-            (format!("{middle}\n{lead}"), caret)
-        } else {
-            let mut after = text.to_owned();
-            after.replace_range(range.clone(), "\n");
-            let row = after[..=range.start].matches('\n').count();
-            let indent =
-                parse(lang, &after).map_or(lead, |tree| typing.indent_for(&after, &tree, row));
-            let insert = format!("\n{indent}");
-            let caret = range.start + insert.len();
-            (insert, caret)
-        };
+        let tree = self.code.as_ref().and_then(Code::tree);
+        let edit = enter(typing, lang, self.model.text(), range, tree);
         let now = self.now(cx);
-        let edited = self.model.edit(range, &insert, EditKind::Typing, now);
-        self.model.move_to(caret);
+        let edited = self
+            .model
+            .edit(edit.range, &edit.text, EditKind::Typing, now);
+        self.model.move_to(edit.caret);
         self.put_regions(Vec::new());
         self.changed(edited, cx);
         true

@@ -1,6 +1,7 @@
 //! The rules of the code view that need no window (plan 6.4): the indent guides and the active
-//! guide, and the typing facts of a language with what they decide (auto-close, Enter between
-//! brackets, the indent of a new line), and the search for the other places of the selected text.
+//! guide, the typing facts of a language with what they decide (auto-close, Enter between
+//! brackets, the indent of a new line, strings and comments), and the search for the other places
+//! of the selected text.
 //! The rules give what the old editor gave: the outline and code typing golden files of the old
 //! code hold the expected results.
 
@@ -141,15 +142,47 @@ pub fn active_guides(text: &str, guides: &[Guide], row: usize) -> Vec<usize> {
         .collect()
 }
 
-/// A bracket or quote pair of a language. `newline`: Enter between the two puts the caret on an
-/// indented line of its own and the closing char on the line after.
+/// The pair closes itself when its opening is typed.
+pub const AUTO: u8 = 1;
+/// Enter between the two puts the caret on a line of its own and the closing part on the next.
+pub const NEWLINE: u8 = 2;
+/// The pair does not close itself inside a string.
+pub const NO_STRING: u8 = 4;
+/// The pair does not close itself inside a comment.
+pub const NO_COMMENT: u8 = 8;
+
+/// A bracket or quote pair of a language. The opening may be more than one char (`/*`, `f"`):
+/// it counts once its last char is typed.
 pub struct Pair {
-    pub open: char,
-    pub close: char,
+    pub open: &'static str,
+    pub close: &'static str,
+    pub auto: bool,
     pub newline: bool,
+    pub not_in_string: bool,
+    pub not_in_comment: bool,
 }
 
-/// The typing facts of a language (plan 6.4), as the old editor applied them.
+/// A pair with the flags above.
+pub const fn pair(open: &'static str, close: &'static str, flags: u8) -> Pair {
+    Pair {
+        open,
+        close,
+        auto: flags & AUTO != 0,
+        newline: flags & NEWLINE != 0,
+        not_in_string: flags & NO_STRING != 0,
+        not_in_comment: flags & NO_COMMENT != 0,
+    }
+}
+
+/// Whether a place is inside a string or a comment.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Scope {
+    pub string: bool,
+    pub comment: bool,
+}
+
+/// The typing facts of a language (plan 6.4), as the old editor applied them. The values of
+/// each language are in `code_langs.rs`.
 pub struct Typing {
     pub pairs: &'static [Pair],
     /// The chars after the caret that still let a pair close itself; a space, a line end and the
@@ -157,48 +190,28 @@ pub struct Typing {
     pub close_before: &'static str,
     /// Chars that count as word chars for word moves, next to letters, digits and `_`.
     pub word_chars: &'static str,
-    /// The node kinds whose inside is one level deeper, each with the token that ends it.
+    /// The line comment starts. Enter on a line that starts with one goes on with it.
+    pub line_comments: &'static [&'static str],
+    /// The opening of a doc comment (`/**` or `/*`). Enter in one goes on with ` * `.
+    pub doc_comment: Option<&'static str>,
+    /// A tab char instead of spaces for each indent level.
+    pub hard_tabs: bool,
+    /// Markdown lists go on at Enter (`code_enter.rs`).
+    pub lists: bool,
+    /// Typing the `>` of a JSX opening tag adds its closing tag.
+    pub jsx: bool,
+    /// The node kinds whose inside is one level deeper, each with the token that ends it (empty:
+    /// the node's own end).
     pub indent_nodes: &'static [(&'static str, &'static str)],
-    /// Inside these nodes no pair closes itself.
+    /// Any node whose children hold one of these opening tokens is such a block too, ended by
+    /// the closing token.
+    pub indent_brackets: &'static [(&'static str, &'static str)],
+    /// A line that matches this pattern makes the next line one level deeper.
+    pub indent_after: Option<&'static str>,
+    /// The node kinds that are strings and comments, for `Pair::not_in_string` and
+    /// `not_in_comment`.
     pub string_nodes: &'static [&'static str],
-}
-
-const JSON: Typing = Typing {
-    pairs: &[
-        Pair {
-            open: '{',
-            close: '}',
-            newline: true,
-        },
-        Pair {
-            open: '[',
-            close: ']',
-            newline: true,
-        },
-        Pair {
-            open: '(',
-            close: ')',
-            newline: false,
-        },
-        Pair {
-            open: '"',
-            close: '"',
-            newline: false,
-        },
-    ],
-    close_before: ",]}",
-    word_chars: "#",
-    indent_nodes: &[("object", "}"), ("array", "]")],
-    string_nodes: &["string"],
-};
-
-/// The typing facts of the language named `name`. Only the JSON tab types code so far; the
-/// editor tab brings the other languages (S4.3c).
-pub fn typing_for(name: &str) -> Option<&'static Typing> {
-    match name {
-        "JSON" => Some(&JSON),
-        _ => None,
-    }
+    pub comment_nodes: &'static [&'static str],
 }
 
 impl Typing {
@@ -206,50 +219,82 @@ impl Typing {
         c.is_alphanumeric() || c == '_' || self.word_chars.contains(c)
     }
 
-    /// The char that closes `c` typed at `at`, when the pair closes itself there: not inside a
-    /// string, only before a space, a line end, the end or a char of `close_before`, and a quote
-    /// not right after a word char.
-    pub fn closer(&self, text: &str, at: usize, c: char, in_string: bool) -> Option<char> {
-        let pair = self.pairs.iter().find(|pair| pair.open == c)?;
-        if in_string {
+    /// One indent level.
+    pub fn indent_unit(&self) -> String {
+        if self.hard_tabs {
+            "\t".to_owned()
+        } else {
+            " ".repeat(TAB_SIZE)
+        }
+    }
+
+    /// What closes the pair whose opening ends with `c` typed at `at`, when it closes itself
+    /// there: a pair that closes itself, not in a string or comment it stays out of, only before
+    /// a space, a line end, the end or a char of `close_before`, and a quote not right after a
+    /// word char. The longest opening that fits wins.
+    pub fn closer(&self, text: &str, at: usize, c: char, scope: Scope) -> Option<&'static str> {
+        let before = &text[..at];
+        let mut buffer = [0; 4];
+        let typed: &str = c.encode_utf8(&mut buffer);
+        let pair = self
+            .pairs
+            .iter()
+            .filter(|pair| {
+                pair.open.ends_with(typed)
+                    && before.ends_with(&pair.open[..pair.open.len() - typed.len()])
+            })
+            .max_by_key(|pair| pair.open.len())?;
+        if !pair.auto
+            || (pair.not_in_string && scope.string)
+            || (pair.not_in_comment && scope.comment)
+        {
             return None;
         }
         let next = text[at..].chars().next();
         if !next.is_none_or(|next| next.is_whitespace() || self.close_before.contains(next)) {
             return None;
         }
-        let after_word = text[..at]
-            .chars()
-            .next_back()
-            .is_some_and(|c| self.is_word(c));
+        let after_word = before.chars().next_back().is_some_and(|c| self.is_word(c));
         if pair.open == pair.close && after_word {
             return None;
         }
         Some(pair.close)
     }
 
-    /// The pair that surrounds a selection when its opening char is typed over it.
-    pub fn surround(&self, c: char) -> Option<char> {
+    /// The pair that surrounds a selection when its one-char opening is typed over it.
+    pub fn surround(&self, c: char) -> Option<&'static str> {
+        let mut buffer = [0; 4];
+        let typed: &str = c.encode_utf8(&mut buffer);
         self.pairs
             .iter()
-            .find(|pair| pair.open == c)
+            .find(|pair| pair.open == typed)
             .map(|pair| pair.close)
     }
 
-    /// Whether the caret at `at` sits between the two chars of a pair that opens a line of its
+    /// Whether the caret at `at` sits between the two parts of a pair that opens a line of its
     /// own on Enter.
     pub fn expands(&self, text: &str, at: usize) -> bool {
-        let before = text[..at].chars().next_back();
-        let after = text[at..].chars().next();
+        let (before, after) = text.split_at(at);
         self.pairs
             .iter()
-            .any(|pair| pair.newline && before == Some(pair.open) && after == Some(pair.close))
+            .any(|pair| pair.newline && before.ends_with(pair.open) && after.starts_with(pair.close))
+    }
+
+    /// The line comment start that `before` (a line up to the caret) begins with, after its
+    /// indent: the longest one.
+    pub fn line_comment(&self, before: &str) -> Option<&'static str> {
+        let text = before.trim_start_matches([' ', '\t']);
+        self.line_comments
+            .iter()
+            .filter(|start| text.starts_with(start.trim_end()))
+            .max_by_key(|start| start.trim_end().len())
+            .copied()
     }
 
     /// The indent of `row` of `text` (parsed as `tree`), from the row above that is not blank: one
-    /// level more when a block of `indent_nodes` starts on that row and goes on past this row's
-    /// start, the indent of a block's first row when the block ended between the two rows, else
-    /// the same.
+    /// level more when a block (`indent_nodes`, `indent_brackets`) starts on that row and goes on
+    /// past this row's start, or when that row matches `indent_after`; the indent of a block's
+    /// first row when the block ended between the two rows; else the same.
     pub fn indent_for(&self, text: &str, tree: &Tree, row: usize) -> String {
         let lines: Vec<&str> = text.split('\n').collect();
         let Some(above) = (0..row.min(lines.len()))
@@ -263,9 +308,12 @@ impl Typing {
         let blocks = self.blocks(tree, row);
         let deeper = blocks
             .iter()
-            .any(|&(first, end)| first == above && end > row_start);
+            .any(|&(first, end)| first == above && end > row_start)
+            || self.indent_after.is_some_and(|pattern| {
+                regex::Regex::new(pattern).is_ok_and(|pattern| pattern.is_match(lines[above]))
+            });
         if deeper {
-            return format!("{}{}", lead(lines[above]), " ".repeat(TAB_SIZE));
+            return format!("{}{}", lead(lines[above]), self.indent_unit());
         }
         let ended = blocks
             .iter()
@@ -288,35 +336,76 @@ impl Typing {
             if node.start_position().row >= row {
                 continue;
             }
-            if let Some((_, end)) = self
+            let children: Vec<Node> = node.children(&mut cursor).collect();
+            let end_of = |end: &str| {
+                children
+                    .iter()
+                    .rev()
+                    .find(|child| child.kind() == end && !child.is_missing())
+                    .map_or(node.end_byte(), |child| child.start_byte())
+            };
+            let kind = self
                 .indent_nodes
                 .iter()
                 .find(|(kind, _)| *kind == node.kind())
-            {
-                let children: Vec<Node> = node.children(&mut cursor).collect();
-                let end_at = children
+                .map(|(_, end)| *end);
+            let bracket = self.indent_brackets.iter().find(|(open, _)| {
+                children
                     .iter()
-                    .rev()
-                    .find(|child| child.kind() == *end && !child.is_missing())
-                    .map_or(node.end_byte(), |child| child.start_byte());
-                out.push((node.start_position().row, end_at));
+                    .any(|child| child.kind() == *open && !child.is_missing())
+            });
+            if let Some(end) = kind.or(bracket.map(|(_, close)| *close)) {
+                out.push((node.start_position().row, end_of(end)));
             }
-            nodes.extend(node.children(&mut cursor));
+            nodes.extend(children);
         }
         out
     }
 
-    /// Whether `at` is inside (not at an edge of) a string node of `tree`.
-    pub fn in_string(&self, tree: &Tree, at: usize) -> bool {
-        let mut node = tree.root_node().descendant_for_byte_range(at, at);
+    /// Whether `at` is inside a string or a comment node of `tree`: not at an edge, except the
+    /// end of a comment that runs to the line end.
+    pub fn scope_at(&self, tree: &Tree, text: &str, at: usize) -> Scope {
+        let mut scope = Scope::default();
+        let mut node = tree
+            .root_node()
+            .descendant_for_byte_range(at.saturating_sub(1), at);
         while let Some(found) = node {
-            if self.string_nodes.contains(&found.kind())
+            node = found.parent();
+            let (string, comment) = (
+                self.string_nodes.contains(&found.kind()),
+                self.comment_nodes.contains(&found.kind()),
+            );
+            let open_end = comment
+                && !text
+                    .get(found.byte_range())
+                    .is_some_and(|text| text.ends_with("*/"));
+            let inside = found.start_byte() < at
+                && (at < found.end_byte() || (at == found.end_byte() && open_end));
+            scope.string |= inside && string;
+            scope.comment |= inside && comment;
+        }
+        scope
+    }
+
+    /// Whether `at` is inside a doc comment: a comment node that starts with `doc_comment`.
+    pub fn in_doc_comment(&self, tree: &Tree, text: &str, at: usize) -> bool {
+        let Some(start) = self.doc_comment else {
+            return false;
+        };
+        let mut node = tree
+            .root_node()
+            .descendant_for_byte_range(at.saturating_sub(1), at);
+        while let Some(found) = node {
+            node = found.parent();
+            if self.comment_nodes.contains(&found.kind())
                 && found.start_byte() < at
                 && at < found.end_byte()
+                && text
+                    .get(found.byte_range())
+                    .is_some_and(|text| text.starts_with(start))
             {
                 return true;
             }
-            node = found.parent();
         }
         false
     }

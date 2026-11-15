@@ -22,7 +22,8 @@ use theme::ActiveTheme;
 use tree_sitter::{InputEdit, Tree};
 
 use super::code_bar::{BAR_WIDTH, Bar};
-use super::code_rules::{Typing, find_all, typing_for};
+use super::code_langs::typing_for;
+use super::code_rules::{Typing, find_all};
 use super::code_typing::Region;
 use super::element::Layout;
 use super::highlight::{Highlights, PARSE_BUDGET, Syntax};

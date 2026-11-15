@@ -898,8 +898,12 @@ impl TextInput {
                 .unwrap_or("")
                 .chars()
                 .count();
-            let spaces = " ".repeat(TAB_SIZE - column % TAB_SIZE);
-            self.edit(at..at, &spaces, EditKind::Typing, cx);
+            let fill = if self.typing().is_some_and(|typing| typing.hard_tabs) {
+                "\t".to_owned()
+            } else {
+                " ".repeat(TAB_SIZE - column % TAB_SIZE)
+            };
+            self.edit(at..at, &fill, EditKind::Typing, cx);
             return;
         }
         let range = selection.range();

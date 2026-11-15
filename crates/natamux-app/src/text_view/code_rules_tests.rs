@@ -3,6 +3,7 @@
 use serde_json::{Value, json};
 
 use super::*;
+use crate::text_view::code_langs::typing_for;
 use crate::app::golden_files;
 use crate::app::shots_text::{LONG_FILE, STICKY_FILE, long_file, sticky_file};
 use crate::git::languages::golden_tests::fixtures;
@@ -86,24 +87,58 @@ fn a_new_line_in_an_object_goes_one_level_deeper_than_its_first_row() {
 #[test]
 fn json_closes_brackets_and_quotes_only_where_the_old_editor_did() {
     let json = typing_for("JSON").unwrap();
-    assert_eq!(json.closer("", 0, '{', false), Some('}'));
-    assert_eq!(json.closer("x", 0, '(', false), None);
-    assert_eq!(json.closer(",", 0, '[', false), Some(']'));
-    assert_eq!(json.closer("x", 1, '"', false), None);
-    assert_eq!(json.closer("x", 1, '(', false), Some(')'));
-    assert_eq!(json.closer("", 0, '\'', false), None);
-    assert_eq!(json.closer("", 0, '"', true), None);
+    let none = Scope::default();
+    let string = Scope {
+        string: true,
+        comment: false,
+    };
+    assert_eq!(json.closer("", 0, '{', none), Some("}"));
+    assert_eq!(json.closer("x", 0, '(', none), None);
+    assert_eq!(json.closer(",", 0, '[', none), Some("]"));
+    assert_eq!(json.closer("x", 1, '"', none), None);
+    assert_eq!(json.closer("x", 1, '(', none), Some(")"));
+    assert_eq!(json.closer("", 0, '\'', none), None);
+    assert_eq!(json.closer("", 0, '"', string), None);
     let text = "{\"a\": \"ab\"}";
-    assert!(json.in_string(&json_tree(text), 9));
-    assert!(!json.in_string(&json_tree(text), 10));
+    assert!(json.scope_at(&json_tree(text), text, 9).string);
+    assert!(!json.scope_at(&json_tree(text), text, 10).string);
     assert!(json.expands("{}", 1));
     assert!(!json.expands("()", 1));
 }
 
 #[test]
-fn only_json_has_typing_facts_so_far() {
+fn a_pair_whose_opening_has_more_chars_closes_once_its_last_char_is_typed() {
+    let rust = typing_for("Rust").unwrap();
+    let none = Scope::default();
+    assert_eq!(rust.closer("/", 1, '*', none), Some(" */"));
+    assert_eq!(rust.closer("/*", 2, '*', none), None);
+    assert_eq!(rust.closer("r#", 2, '"', none), Some("\"#"));
+    let comment = Scope {
+        string: false,
+        comment: true,
+    };
+    assert_eq!(rust.closer("/", 1, '*', comment), None);
+    assert_eq!(rust.closer("", 0, '(', comment), Some(")"));
+    let python = typing_for("Python").unwrap();
+    assert_eq!(python.closer("f", 1, '"', none), Some("\""));
+    assert_eq!(python.closer("x", 1, '"', none), None);
+}
+
+#[test]
+fn a_line_comment_goes_on_with_the_longest_start_of_the_line() {
+    let rust = typing_for("Rust").unwrap();
+    assert_eq!(rust.line_comment("    // a"), Some("// "));
+    assert_eq!(rust.line_comment("/// a"), Some("/// "));
+    assert_eq!(rust.line_comment("let a = 1; // a"), None);
+    assert_eq!(typing_for("Python").unwrap().line_comment("# a"), Some("# "));
+}
+
+#[test]
+fn every_language_has_typing_facts() {
+    for lang in &LANGS {
+        assert!(typing_for(lang.name).is_some(), "{}", lang.name);
+    }
     assert!(typing_for(lang_for(".natamux.json").unwrap().name).is_some());
-    assert!(typing_for(lang_for("x.rs").unwrap().name).is_none());
 }
 
 #[test]

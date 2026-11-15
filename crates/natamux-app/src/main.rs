@@ -408,6 +408,8 @@ mod text_view {
     mod code_bar;
     #[cfg(test)]
     mod code_mouse_tests;
+    mod code_enter;
+    mod code_langs;
     mod code_paint;
     mod code_rules;
     mod code_typing;

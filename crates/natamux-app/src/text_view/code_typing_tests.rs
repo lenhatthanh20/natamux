@@ -3,7 +3,8 @@
 //! Backspace in an empty pair, Enter between brackets, `/*` + Enter, comment and Markdown list
 //! continuation, Tab, and word moves over `a#b $c d-e.f:g`. Each case records the text and the
 //! selections after each step; the own code view must give the same. The JSON tab runs on the own
-//! code view since S4.3b; the editor tab is still Zed's editor until S4.3c.
+//! code view since S4.3b; the editor tab is still Zed's editor until S4.3c, so each of its hosts
+//! also runs on the own code view (`own_typing_matches_the_golden_file`).
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
@@ -14,9 +15,11 @@ use ui::prelude::*;
 
 use crate::app::test_driver::{press, type_text};
 use crate::app::{golden_files, shortcuts, test_views};
+use crate::git::languages::lang_for;
 use crate::files::file_editor_body::FileEditorBody;
 use crate::projects::json_tab::JsonTab;
 use crate::stages::pipeline_editor::PipelineEditor;
+use crate::text_view::code_view::CodeView;
 use crate::text_view::text_input::TextInput;
 
 const SET: &str = "code_typing";
@@ -280,6 +283,34 @@ fn open_json_tab(
     (input, language)
 }
 
+/// The own code view of the editor tab with `text` (with its caret mark), focused: its input and
+/// the name of the language it colours as.
+fn open_own(
+    host: &Host,
+    text: &str,
+    slot: &Entity<Slot>,
+    cx: &mut VisualTestContext,
+) -> (Entity<TextInput>, Option<String>) {
+    let caret = text.find(CARET).unwrap_or(text.len());
+    let text = text.replace(CARET, "");
+    let (input, language) = slot.update_in(cx, |slot, window, cx| {
+        let code = CodeView::new(host.path, &text, true, window, cx);
+        let language = code.language_name(cx).map(str::to_owned);
+        let input = code.input().clone();
+        slot.view = Some(input.clone().into());
+        cx.notify();
+        (input, language)
+    });
+    cx.run_until_parked();
+    input.update_in(cx, |input, window, cx| {
+        window.focus(&input.focus_handle(cx), cx);
+        input.model.move_to(caret);
+        cx.notify();
+    });
+    cx.run_until_parked();
+    (input, language)
+}
+
 /// A text offset as `[row, column]`, the column in bytes as Zed's editor counts.
 fn row_column(text: &str, at: usize) -> [usize; 2] {
     let before = &text[..at];
@@ -316,12 +347,16 @@ impl Target {
 }
 
 /// The language of the host, then one row per case and step: `[case, step, text, selections]`.
-fn run(host: &Host, cx: &mut TestAppContext) -> Vec<Value> {
+/// `own`: the editor tab's hosts run on the own code view.
+fn run(host: &Host, own: bool, cx: &mut TestAppContext) -> Vec<Value> {
     let (slot, cx) = start(cx);
     let mut rows = Vec::new();
     for (i, case) in cases(host).into_iter().enumerate() {
         let (target, language) = if host.json_tab {
             let (input, language) = open_json_tab(&case.text, &slot, cx);
+            (Target::Own(input), language)
+        } else if own {
+            let (input, language) = open_own(host, &case.text, &slot, cx);
             (Target::Own(input), language)
         } else {
             let editor = open(host, &case.text, &slot, cx);
@@ -350,6 +385,55 @@ fn run(host: &Host, cx: &mut TestAppContext) -> Vec<Value> {
     rows
 }
 
+/// The tree of `text` in the language of `host`, for a failure message.
+fn tree_of(host: &Host, text: &str) -> String {
+    let Some(lang) = lang_for(host.path) else {
+        return "no language".to_owned();
+    };
+    let mut parser = tree_sitter::Parser::new();
+    parser.set_language(&(lang.grammar)()).unwrap();
+    parser
+        .parse(text, None)
+        .map_or_else(|| "no tree".to_owned(), |tree| tree.root_node().to_sexp())
+}
+
+/// Fails unless `rows` of the own code view equal the golden file of `host`, and names the first
+/// step that differs in every case, with the trees of the texts before and after that step as
+/// the old editor left them (what its indent rules saw).
+fn check_own(host: &Host, rows: &[Value]) {
+    let golden = golden_files::read(SET, host.name);
+    let mut problems = Vec::new();
+    if golden.first() != rows.first() {
+        problems.push(format!("header: golden {:?} now {:?}", golden.first(), rows.first()));
+    }
+    let mut failed: Vec<&Value> = Vec::new();
+    for (i, (old, new)) in golden.iter().zip(rows).enumerate().skip(1) {
+        if old == new || failed.contains(&&old[0]) {
+            continue;
+        }
+        failed.push(&old[0]);
+        let before = golden[i - 1][2].as_str().unwrap_or("");
+        let after = old[2].as_str().unwrap_or("");
+        problems.push(format!(
+            "{} step {}:\n golden: {old}\n now:    {new}\n tree before: {}\n tree after:  {}",
+            old[0],
+            old[1],
+            tree_of(host, before),
+            tree_of(host, after)
+        ));
+    }
+    if golden.len() != rows.len() {
+        problems.push(format!("rows: golden {} now {}", golden.len(), rows.len()));
+    }
+    assert!(
+        problems.is_empty(),
+        "{}: {} differences\n{}",
+        host.name,
+        problems.len(),
+        problems.join("\n")
+    );
+}
+
 const C_STRING: &str = "char *s = \"abˇ\";";
 const SLASH_COMMENT: &str = "// abˇ";
 const HASH_COMMENT: &str = "# abˇ";
@@ -364,14 +448,20 @@ macro_rules! hosts {
             #[gpui::test]
             fn typing_matches_the_golden_file(cx: &mut TestAppContext) {
                 let host = $host;
-                golden_files::check(SET, host.name, &run(&host, cx));
+                golden_files::check(SET, host.name, &run(&host, false, cx));
+            }
+
+            #[gpui::test]
+            fn own_typing_matches_the_golden_file(cx: &mut TestAppContext) {
+                let host = $host;
+                check_own(&host, &run(&host, true, cx));
             }
 
             #[gpui::test]
             #[ignore]
             fn golden_code_typing(cx: &mut TestAppContext) {
                 let host = $host;
-                golden_files::write(SET, host.name, &run(&host, cx));
+                golden_files::write(SET, host.name, &run(&host, false, cx));
             }
         }
     )*};
