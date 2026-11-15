@@ -1,7 +1,7 @@
 Licenses of the vendored query files in this folder.
 
 The `highlights*.scm` files come from the grammar repos below, each under the MIT License.
-The `extra.scm` and `outline.scm` files and `env/highlights.scm` are Natamux's own.
+The `extra.scm` and `outline.scm` files and `env/highlights.scm` are Natamux's own, written from the golden files and the grammars' node names with no Zed query file open. The outline output format is fixed by those goldens, so the patterns may resemble Zed's; the owner gate in the log asks for a check.
 
 ========================================================================
 tree-sitter-bash (bash/): https://github.com/tree-sitter/tree-sitter-bash
