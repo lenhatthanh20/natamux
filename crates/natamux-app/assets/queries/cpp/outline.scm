@@ -23,6 +23,7 @@
 ; Functions (constructors and destructors have no type): storage word, return type, then the declarator's name and "( )".
 (function_definition
   (storage_class_specifier)? @context
+  (type_qualifier)* @context
   type: (_)? @context
   declarator: (function_declarator
     declarator: (_) @name
