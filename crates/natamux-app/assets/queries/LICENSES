@@ -1,7 +1,7 @@
 Licenses of the vendored query files in this folder.
 
 The `highlights*.scm` files come from the grammar repos below, each under the MIT License.
-The `extra.scm` files and `env/highlights.scm` are Natamux's own.
+The `extra.scm` and `outline.scm` files and `env/highlights.scm` are Natamux's own.
 
 ========================================================================
 tree-sitter-bash (bash/): https://github.com/tree-sitter/tree-sitter-bash

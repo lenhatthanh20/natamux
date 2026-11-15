@@ -427,6 +427,9 @@ mod text_view {
     #[cfg_attr(not(test), allow(dead_code))]
     pub mod highlight;
     mod ime;
+    /// The outline of a text (docs/plan-mit-license.md S4.3c): Go to symbol and sticky scroll.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub mod outline;
     pub mod text_box;
     #[cfg_attr(not(test), allow(dead_code))]
     pub mod text_input;
