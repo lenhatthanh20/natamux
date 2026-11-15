@@ -671,10 +671,12 @@ impl Element for TextElement {
             }
         });
 
-        // An empty layer puts what follows one draw order higher, as deep as Zed's editor drew.
-        // A menu over the box then draws its shadow over the borders next to it, as before
-        // (start-task-branch-menu: the shadow tail on the project select's top border).
-        window.paint_layer(bounds, |_| {});
+        // Two empty layers put the text two draw orders higher, as deep as Zed's editor drew.
+        // gpui orders a shadow by its bounds without the blur, and paints a div's border after
+        // its children as strips, so a menu's shadow tail only covers a nearby border strip
+        // when what lies under the menu is this deep (start-task-branch-menu: the tail on the
+        // project select's top border).
+        window.paint_layer(bounds, |window| window.paint_layer(bounds, |_| {}));
         window.with_content_mask(Some(ContentMask { bounds }), |window| {
             if full {
                 window.paint_quad(fill(bounds, background));
