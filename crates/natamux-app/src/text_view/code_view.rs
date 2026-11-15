@@ -784,12 +784,7 @@ impl TextInput {
 
     /// The markers on the scrollbar `bar`, as Zed's editor paints them: each other place of the
     /// selected text in the middle third, then the caret over the full width.
-    fn bar_markers(
-        &self,
-        laid: &Layout,
-        bar: &BarBounds,
-        cx: &App,
-    ) -> Vec<(Bounds<Pixels>, Hsla)> {
+    fn bar_markers(&self, laid: &Layout, bar: &BarBounds, cx: &App) -> Vec<(Bounds<Pixels>, Hsla)> {
         let Some(code) = self.code.as_ref() else {
             return Vec::new();
         };
@@ -908,7 +903,10 @@ impl TextInput {
             Vec::new()
         };
         // The selected text itself shows only in the selection colour.
-        ranges.extend(code.other_occurrences(self.model.selection().range()).cloned());
+        ranges.extend(
+            code.other_occurrences(self.model.selection().range())
+                .cloned(),
+        );
         for range in ranges {
             for rect in laid.selection_rects(range) {
                 let rect = Bounds::new(rect.origin + origin, rect.size);

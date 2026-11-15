@@ -136,7 +136,11 @@ fn the_wrap_width_keeps_room_for_the_scrollbar_unless_it_never_shows(cx: &mut Te
     let (input, _, cx) = open("x.txt", &"word ".repeat(200), cx);
     let width = |cx: &mut VisualTestContext| {
         input.update_in(cx, |input, window, cx| {
-            input.layout(window, cx).key.width.expect("a full view wraps")
+            input
+                .layout(window, cx)
+                .key
+                .width
+                .expect("a full view wraps")
         })
     };
     let shown = width(cx);
@@ -165,6 +169,34 @@ fn a_click_on_the_last_shown_row_does_not_scroll_but_a_key_does(cx: &mut TestApp
 }
 
 #[gpui::test]
+fn a_drag_scrolls_only_once_the_pointer_leaves_the_text(cx: &mut TestAppContext) {
+    let (input, _, cx) = open("x.txt", &lines(60), cx);
+    let line_height = line_height(&input, cx);
+    scroll_to(&input, line_height * 10., cx);
+    let bounds = input.read_with(cx, |input, _| input.last_bounds.unwrap());
+    let x = bounds.left() + px(20.);
+    let drag_to = |y: Pixels, cx: &mut VisualTestContext| {
+        cx.simulate_mouse_move(point(x, y), MouseButton::Left, Modifiers::default());
+        cx.run_until_parked();
+    };
+    cx.simulate_event(MouseDownEvent {
+        button: MouseButton::Left,
+        position: point(x, bounds.center().y),
+        modifiers: Modifiers::default(),
+        click_count: 1,
+        first_mouse: false,
+    });
+    cx.run_until_parked();
+    drag_to(bounds.bottom() - line_height * 1.5, cx);
+    drag_to(bounds.bottom() - line_height / 2., cx);
+    assert_eq!(scroll_y(&input, cx), line_height * 10.);
+    let range = input.read_with(cx, |input, _| input.model.selection().range());
+    assert!(!range.is_empty(), "the drag selected text");
+    drag_to(bounds.bottom() + line_height, cx);
+    assert!(scroll_y(&input, cx) > line_height * 10.);
+}
+
+#[gpui::test]
 fn the_matching_brackets_count_the_edges_and_take_the_smallest_pair(cx: &mut TestAppContext) {
     let text = "{\"a\": [1, 2], \"b\": \"cd\"}";
     let (input, _, cx) = open("x.json", text, cx);
@@ -186,7 +218,9 @@ fn the_matching_brackets_count_the_edges_and_take_the_smallest_pair(cx: &mut Tes
     assert_eq!(at(5, cx), object, "between pairs");
     input.update(cx, |input, _| input.model.select(6, 8));
     assert!(
-        input.update(cx, |input, _| input.matching_brackets()).is_empty(),
+        input
+            .update(cx, |input, _| input.matching_brackets())
+            .is_empty(),
         "a selection"
     );
 }
@@ -209,12 +243,17 @@ fn the_other_places_are_searched_again_after_an_edit(cx: &mut TestAppContext) {
     select(&input, 0, 2, cx);
     wait(cx);
     let places = |cx: &mut VisualTestContext| {
-        input.read_with(cx, |input, _| input.code.as_ref().unwrap().occurrences.clone())
+        input.read_with(cx, |input, _| {
+            input.code.as_ref().unwrap().occurrences.clone()
+        })
     };
     assert_eq!(places(cx), vec![0..2, 5..7]);
     input.update(cx, |input, cx| input.replace_minimal("zz ab x AB", cx));
     cx.run_until_parked();
-    assert!(places(cx).is_empty(), "no stale places right after the edit");
+    assert!(
+        places(cx).is_empty(),
+        "no stale places right after the edit"
+    );
     wait(cx);
     assert_eq!(places(cx), vec![3..5, 8..10]);
 }
@@ -274,7 +313,11 @@ fn t_sb_1_when_the_scrollbar_shows(cx: &mut TestAppContext) {
     select(&input, 0, 3, cx);
     wait(cx);
     assert!(shows(cx), "selected text with another place");
-    assert_eq!(painted(&input, cx).1, 2, "a place marker and the caret marker");
+    assert_eq!(
+        painted(&input, cx).1,
+        2,
+        "a place marker and the caret marker"
+    );
     select(&input, 4, 10, cx);
     wait(cx);
     assert!(!shows(cx), "selected text with no other place");

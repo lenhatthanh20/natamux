@@ -343,7 +343,7 @@ impl TextInput {
     }
 
     /// A click in a code view does not scroll, as `autoscroll_on_clicks` is off in Zed's editor;
-    /// keys, edits and drags still do.
+    /// keys and edits still do, and a drag does once the pointer leaves the text.
     fn no_click_scroll(&mut self) {
         if self.code.is_some() {
             self.autoscroll = false;
@@ -1205,6 +1205,13 @@ impl TextInput {
         self.model.select(anchor, head);
         self.model.goal_x = None;
         self.changed(false, cx);
+        // Zed scrolls a drag only while the pointer is above or below the text.
+        let inside = self.last_bounds.is_some_and(|bounds| {
+            event.position.y >= bounds.top() && event.position.y < bounds.bottom()
+        });
+        if inside {
+            self.no_click_scroll();
+        }
         self.end_bias = end_bias;
     }
 
