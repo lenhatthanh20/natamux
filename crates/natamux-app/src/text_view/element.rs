@@ -671,6 +671,10 @@ impl Element for TextElement {
             }
         });
 
+        // An empty layer puts what follows one draw order higher, as deep as Zed's editor drew.
+        // A menu over the box then draws its shadow over the borders next to it, as before
+        // (start-task-branch-menu: the shadow tail on the project select's top border).
+        window.paint_layer(bounds, |_| {});
         window.with_content_mask(Some(ContentMask { bounds }), |window| {
             if full {
                 window.paint_quad(fill(bounds, background));
