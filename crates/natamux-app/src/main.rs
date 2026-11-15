@@ -403,9 +403,12 @@ mod text {
 /// The own code view (plan S4) and its goldens, recorded on the editor it replaces.
 mod text_view {
     mod blink;
+    mod code_bar;
     #[cfg(test)]
     mod code_mouse_tests;
+    mod code_paint;
     mod code_rules;
+    mod code_typing;
     #[cfg(test)]
     mod code_typing_tests;
     /// The code view (docs/plan-mit-license.md S4.3b): the JSON tab and the Docs views.

@@ -163,15 +163,32 @@ pub fn outline(lang: &'static Lang, tree: &Tree, text: &str) -> Vec<OutlineItem>
         .collect();
     items.sort_by_key(|item| (item.range.start, Reverse(item.range.end)));
     items.dedup_by(|later, earlier| later.range == earlier.range);
+    set_depths(&mut items);
+    items
+}
+
+/// The items of `items` (in text order) whose range meets `range`, each as deep as the found
+/// items around it: what sticky scroll looks at for the rows from its top row.
+pub fn containing(items: &[OutlineItem], range: Range<usize>) -> Vec<OutlineItem> {
+    let mut found: Vec<OutlineItem> = items
+        .iter()
+        .filter(|item| item.range.start < range.end && item.range.end > range.start)
+        .cloned()
+        .collect();
+    set_depths(&mut found);
+    found
+}
+
+/// An item inside another item's range is one level deeper.
+fn set_depths(items: &mut [OutlineItem]) {
     let mut ends: Vec<usize> = Vec::new();
-    for item in &mut items {
+    for item in items {
         while ends.last().is_some_and(|end| *end <= item.range.start) {
             ends.pop();
         }
         item.depth = ends.len();
         ends.push(item.range.end);
     }
-    items
 }
 
 /// The item with its text, or None when it shows no name.

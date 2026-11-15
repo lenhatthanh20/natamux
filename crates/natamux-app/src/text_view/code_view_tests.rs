@@ -12,7 +12,8 @@ use gpui::{
 };
 use ui::prelude::*;
 
-use super::code_view::{BAR_WIDTH, CodeView};
+use super::code_bar::BAR_WIDTH;
+use super::code_view::CodeView;
 use super::text_box_tests::focus_handle;
 use super::text_input::TextInput;
 use crate::app::appearance::Appearance;
