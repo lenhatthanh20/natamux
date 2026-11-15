@@ -17,6 +17,8 @@ pub(super) struct CodePaint {
     pub guides: Vec<(Bounds<Pixels>, bool)>,
     /// The matching brackets and the other places of the selected text.
     pub backgrounds: Vec<Bounds<Pixels>>,
+    /// The matches of find, and whether each is the active one.
+    pub search: Vec<(Bounds<Pixels>, bool)>,
     /// Whitespace marks for the whole text, not only inside the selection.
     pub all_whitespace: bool,
     /// The scrollbar, hovered, dragged.
@@ -90,6 +92,14 @@ impl TextInput {
                 let rect = Bounds::new(rect.origin + origin, rect.size);
                 if rect.bottom() >= bounds.top() && rect.top() <= bounds.bottom() {
                     paint.backgrounds.push(rect);
+                }
+            }
+        }
+        for (index, range) in code.search.iter().enumerate() {
+            for rect in laid.selection_rects(range.clone()) {
+                let rect = Bounds::new(rect.origin + origin, rect.size);
+                if rect.bottom() >= bounds.top() && rect.top() <= bounds.bottom() {
+                    paint.search.push((rect, code.search_active == Some(index)));
                 }
             }
         }

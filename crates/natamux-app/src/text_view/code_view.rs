@@ -79,6 +79,14 @@ impl CodeView {
         Self { input }
     }
 
+    pub(super) fn input_ref(&self) -> &Entity<TextInput> {
+        &self.input
+    }
+
+    pub(super) fn input_id(&self) -> gpui::EntityId {
+        self.input.entity_id()
+    }
+
     pub fn text_box(&self) -> TextBox {
         TextBox::of_input(&self.input)
     }
@@ -144,6 +152,10 @@ pub struct Code {
     /// they are of.
     pub(super) brackets: Vec<Range<usize>>,
     pub(super) brackets_version: u64,
+    /// The matches find shows, and the active one. Offsets of the text they were found in: find
+    /// searches again after each edit and shows them anew.
+    pub(super) search: Vec<Range<usize>>,
+    pub(super) search_active: Option<usize>,
 }
 
 impl Code {
@@ -164,6 +176,8 @@ impl Code {
             _occurrences: None,
             brackets: Vec::new(),
             brackets_version: 0,
+            search: Vec::new(),
+            search_active: None,
         }
     }
 

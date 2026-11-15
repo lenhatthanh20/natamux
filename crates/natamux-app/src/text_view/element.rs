@@ -663,6 +663,10 @@ impl Element for TextElement {
             colors.editor_indent_guide_active,
             colors.editor_document_highlight_bracket_background,
         );
+        let (search, search_active) = (
+            colors.search_match_background,
+            colors.search_active_match_background,
+        );
         let (track, track_border, thumb_border) = (
             colors.scrollbar_track_background,
             colors.scrollbar_track_border,
@@ -726,6 +730,10 @@ impl Element for TextElement {
             }
             for bounds in &code.backgrounds {
                 window.paint_quad(fill(*bounds, highlight));
+            }
+            for (bounds, active) in &code.search {
+                let color = if *active { search_active } else { search };
+                window.paint_quad(fill(*bounds, color));
             }
             let rects: Vec<_> = laid
                 .selection_rects(selection.clone())

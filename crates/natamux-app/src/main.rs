@@ -409,6 +409,7 @@ mod text_view {
     mod blink;
     mod code_bar;
     mod code_enter;
+    mod code_find;
     mod code_langs;
     #[cfg(test)]
     mod code_mouse_tests;

@@ -335,3 +335,48 @@ fn tab_over_a_selection_indents_go_with_a_tab_char(cx: &mut TestAppContext) {
     let text = input.read_with(cx, |input, _| input.model.text().to_owned());
     assert_eq!(text, "\ta\n\tb");
 }
+
+#[gpui::test]
+fn find_shows_matches_and_selects_one_in_the_middle(cx: &mut TestAppContext) {
+    use crate::git::code_target::FindTarget as _;
+
+    let text = lines(60);
+    let (host, _, cx) = test_views::init_app(cx, move |_, window, cx| {
+        let view = CodeView::new("x.txt", &text, false, window, cx);
+        cx.new(|cx| Host {
+            view,
+            other: cx.focus_handle(),
+        })
+    });
+    cx.update(|_, cx| crate::app::text_boxes::bind(cx, MAC));
+    cx.run_until_parked();
+    let (view, input) = host.read_with(cx, |host, _| (host.view.clone(), host.view.input().clone()));
+
+    let whole = input.read_with(cx, |input, _| input.text().to_owned());
+    let found: Vec<_> = whole
+        .match_indices("line 1")
+        .map(|(at, _)| at..at + 6)
+        .collect();
+    assert!(found.len() > 2);
+    cx.update(|_, cx| view.show_matches(&found, Some(1), cx));
+    cx.run_until_parked();
+    let shown = input.update_in(cx, |input, window, cx| {
+        let bounds = input.last_bounds.expect("the view was drawn");
+        let laid = input.layout(window, cx);
+        input.code_paint(&laid, bounds, bounds.origin, cx).search
+    });
+    assert!(shown.iter().any(|(_, active)| *active), "the active match is marked");
+    assert!(shown.iter().any(|(_, active)| !active), "the others are not");
+
+    let last = found[found.len() - 1].clone();
+    cx.update(|window, cx| view.select(last.clone(), window, cx));
+    cx.run_until_parked();
+    let head = input.read_with(cx, |input, _| input.model.head());
+    assert_eq!(head, last.end);
+    assert!(scroll_y(&input, cx) > px(0.), "the view scrolled to the match");
+
+    cx.update(|_, cx| view.clear_matches(cx));
+    cx.run_until_parked();
+    let none = input.read_with(cx, |input, _| input.code.as_ref().map(|c| c.search.len()));
+    assert_eq!(none, Some(0));
+}
