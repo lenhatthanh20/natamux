@@ -1,23 +1,17 @@
-; Natamux's own outline patterns, written from the grammar's node-types.json and the old editor's
-; outline (golden files T-OUT-1). Captures: @item, @name, @context, @open, @close.
+; Natamux outline patterns for JavaScript (parsed with the TSX grammar). Worked out from the old editor's output (golden files T-OUT-1)
+; and node names as the author remembers them; no grammar file was at hand.
+; Captures: @item the entry, @name shown and a name, @context shown only, @open/@close body tokens.
 
-(class_declaration
-  "class" @context
-  name: (_) @name) @item
+(public_field_definition "static"? @context name: (_) @name) @item
 
-(function_declaration
-  "async"? @context
-  "function" @context
-  name: (_) @name
+; Declarations that are a keyword and a name.
+(class_declaration "class" @context name: (_) @name) @item
+(function_declaration "async"? @context "function" @context name: (_) @name
+  parameters: (formal_parameters "(" @context ")" @context)) @item
+(generator_function_declaration "async"? @context "function" @context "*" @context name: (_) @name
   parameters: (formal_parameters "(" @context ")" @context)) @item
 
-(generator_function_declaration
-  "async"? @context
-  "function" @context
-  "*" @context
-  name: (_) @name
-  parameters: (formal_parameters "(" @context ")" @context)) @item
-
+; Members of a class. A method shows its modifiers, then the name and "( )".
 (method_definition
   "static"? @context
   "async"? @context
@@ -26,24 +20,13 @@
   name: (_) @name
   parameters: (formal_parameters "(" @context ")" @context)) @item
 
-(field_definition
-  "static"? @context
-  property: (_) @name) @item
+; Variables: the name of a declarator, or the names in an array pattern.
+(lexical_declaration ["let" "const"] @context
+  (variable_declarator name: (identifier) @name) @item)
+(lexical_declaration ["let" "const"] @context
+  (variable_declarator name: (array_pattern (identifier) @name @item)))
+(variable_declaration "var" @context
+  (variable_declarator name: (identifier) @name) @item)
 
-(lexical_declaration
-  ["let" "const"] @context
-  (variable_declarator
-    name: (identifier) @name) @item)
-
-(lexical_declaration
-  ["let" "const"] @context
-  (variable_declarator
-    name: (array_pattern (identifier) @name @item)))
-
-(variable_declaration
-  "var" @context
-  (variable_declarator
-    name: (identifier) @name) @item)
-
-(pair
-  key: (_) @name) @item
+; Keys of an object literal.
+(pair key: (_) @name) @item

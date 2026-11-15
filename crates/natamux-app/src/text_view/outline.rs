@@ -48,6 +48,7 @@ static COMPILED: [OnceLock<Option<Compiled>>; LANG_COUNT] =
 /// The outline query file of a language; the languages with none have no outline.
 fn source(lang: &Lang) -> Option<&'static str> {
     Some(match lang.name {
+        "C" => include_str!("../../assets/queries/c/outline.scm"),
         "C++" => include_str!("../../assets/queries/cpp/outline.scm"),
         "CSS" => include_str!("../../assets/queries/css/outline.scm"),
         "Go" => include_str!("../../assets/queries/go/outline.scm"),
