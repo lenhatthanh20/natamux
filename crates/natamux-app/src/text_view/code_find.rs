@@ -32,9 +32,11 @@ impl FindTarget for CodeView {
 
     fn show_matches(&self, ranges: &[Range<usize>], active: Option<usize>, cx: &mut App) {
         self.input_ref().update(cx, |input, cx| {
+            let version = input.model.version();
             if let Some(code) = input.code.as_mut() {
                 code.search = ranges.to_vec();
                 code.search_active = active;
+                code.search_version = version;
             }
             cx.notify();
         });
@@ -48,10 +50,11 @@ impl FindTarget for CodeView {
         self.input_ref().update(cx, |input, cx| {
             input.model.select(range.start, range.end);
             input.changed(false, cx);
-            // The row goes to the middle of the view, not just into it.
-            input.autoscroll = false;
+            // The row goes to the middle of the view, not just into it. Before the first draw the
+            // autoscroll of `changed` stays on, so the next paint scrolls to the caret.
             let laid = input.layout(window, cx);
             if let Some(bounds) = input.last_bounds {
+                input.autoscroll = false;
                 let at = laid.position(input.to_display(range.start), false);
                 input.scroll.y = at.y + laid.line_height / 2. - bounds.size.height / 2.;
                 input.clamp_scroll(&laid, bounds);

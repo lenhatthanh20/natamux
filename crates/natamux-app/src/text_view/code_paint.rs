@@ -95,7 +95,12 @@ impl TextInput {
                 }
             }
         }
-        for (index, range) in code.search.iter().enumerate() {
+        let search: &[Range<usize>] = if code.search_version == version {
+            &code.search
+        } else {
+            &[]
+        };
+        for (index, range) in search.iter().enumerate() {
             for rect in laid.selection_rects(range.clone()) {
                 let rect = Bounds::new(rect.origin + origin, rect.size);
                 if rect.bottom() >= bounds.top() && rect.top() <= bounds.bottom() {

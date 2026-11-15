@@ -156,6 +156,8 @@ pub struct Code {
     /// searches again after each edit and shows them anew.
     pub(super) search: Vec<Range<usize>>,
     pub(super) search_active: Option<usize>,
+    /// Model version the matches were found at; older matches are not painted.
+    pub(super) search_version: u64,
 }
 
 impl Code {
@@ -178,6 +180,7 @@ impl Code {
             brackets_version: 0,
             search: Vec::new(),
             search_active: None,
+            search_version: 0,
         }
     }
 

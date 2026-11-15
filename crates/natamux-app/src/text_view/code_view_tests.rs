@@ -354,11 +354,11 @@ fn find_shows_matches_and_selects_one_in_the_middle(cx: &mut TestAppContext) {
 
     let whole = input.read_with(cx, |input, _| input.text().to_owned());
     let found: Vec<_> = whole
-        .match_indices("line 1")
-        .map(|(at, _)| at..at + 6)
+        .match_indices("line ")
+        .map(|(at, _)| at..at + 5)
         .collect();
     assert!(found.len() > 2);
-    cx.update(|_, cx| view.show_matches(&found, Some(1), cx));
+    cx.update(|_, cx| view.show_matches(&found, Some(0), cx));
     cx.run_until_parked();
     let shown = input.update_in(cx, |input, window, cx| {
         let bounds = input.last_bounds.expect("the view was drawn");
