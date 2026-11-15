@@ -147,7 +147,7 @@ impl EntityInputHandler for TextInput {
         let at = laid.position(at, false);
         Some(Bounds::new(
             point(
-                bounds.left() + at.x - self.scroll.x,
+                bounds.left() + laid.inset + at.x - self.scroll.x,
                 bounds.top() + at.y - self.scroll.y,
             ),
             size(laid.em, laid.line_height),

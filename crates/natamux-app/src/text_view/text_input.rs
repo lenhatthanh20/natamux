@@ -17,7 +17,7 @@ use gpui::{
 use theme::ActiveTheme;
 
 use super::blink::Blink;
-use super::element::{CARET_WIDTH, Layout, LayoutKey, TextElement};
+use super::element::{CARET_WIDTH, Layout, LayoutKey, TextElement, wrap_width};
 use super::text_box::TextEvent;
 use crate::app::appearance::Appearance;
 use crate::components::form::input_style;
@@ -282,13 +282,16 @@ impl TextInput {
         let now = self.now(cx);
         let edited = self.model.set_text(text, now);
         self.changed(edited, cx);
+        // The caret goes to the end, but the view does not scroll to it, as in Zed's editor (B1
+        // shot `workspace-docs-edit` shows the top of the doc).
+        self.autoscroll = false;
     }
 
     pub fn replace_minimal(&mut self, text: &str, cx: &mut Context<Self>) {
         let now = self.now(cx);
         let edited = self.model.replace_minimal(text, now);
         if edited {
-            cx.emit(TextEvent::Edited);
+            Self::emit_edited(cx);
         }
         // The caret and the scroll stay: no autoscroll.
         cx.notify();
@@ -317,9 +320,30 @@ impl TextInput {
         self.autoscroll = true;
         self.pause_blink(cx);
         if edited {
-            cx.emit(TextEvent::Edited);
+            Self::emit_edited(cx);
         }
         cx.notify();
+    }
+
+    /// Tells `Edited` one effect later, as Zed's editor did (its event came through the buffer):
+    /// a subscription made right after `set_text` still hears it, and gpui turns a new
+    /// subscription on only in a later effect. `LiveField` relies on that.
+    fn emit_edited(cx: &mut Context<Self>) {
+        let input = cx.weak_entity();
+        cx.defer(move |cx| {
+            input.update(cx, |_, cx| cx.emit(TextEvent::Edited)).ok();
+        });
+    }
+
+    /// The rem size the text resolves its sizes with. A full box resolves them against its own
+    /// font size, as Zed's editor did: a 12.5 px font given in rems draws at 12.5 x 12.5 / 16 px
+    /// there (B1 shot `project-settings-stage-sheet`, the prompt).
+    pub(super) fn rem_size(&self, style: &TextStyle, window: &Window) -> Pixels {
+        let rem = window.rem_size();
+        match self.mode {
+            Mode::Full { .. } => style.font_size.to_pixels(rem),
+            _ => rem,
+        }
     }
 
     pub(super) fn edit(
@@ -483,18 +507,22 @@ impl TextInput {
     /// The text laid out at the width the box last had; made again only when something it
     /// depends on changed.
     pub(super) fn layout(&mut self, window: &Window, cx: &App) -> Rc<Layout> {
+        let style = self.text_style(cx);
+        let rem = self.rem_size(&style, window);
+        let font = style.font();
+        let font_size = style.font_size.to_pixels(rem);
         let width = match self.mode {
             Mode::OneLine => None,
-            _ => self.last_bounds.map(|bounds| bounds.size.width),
+            _ => self
+                .last_bounds
+                .map(|bounds| wrap_width(&font, font_size, bounds.size.width, window)),
         };
-        let style = self.text_style(cx);
-        let rem = window.rem_size();
         let shows_placeholder = self.model.text().is_empty() && !self.placeholder.is_empty();
         let key = LayoutKey {
             version: self.model.version(),
             width,
-            font: style.font(),
-            font_size: style.font_size.to_pixels(rem),
+            font,
+            font_size,
             line_height: style.line_height_in_pixels(rem),
             color: style.color,
             masked: self.masked,
@@ -523,7 +551,7 @@ impl TextInput {
     pub(super) fn scroll_to_head(&mut self, laid: &Layout, bounds: Bounds<Pixels>) {
         let at = laid.position(self.to_display(self.model.head()), self.end_bias);
         if self.mode == Mode::OneLine {
-            let width = bounds.size.width;
+            let width = bounds.size.width - laid.inset;
             if at.x + CARET_WIDTH - self.scroll.x > width {
                 self.scroll.x = at.x + CARET_WIDTH - width;
             }
@@ -545,7 +573,7 @@ impl TextInput {
     pub(super) fn clamp_scroll(&mut self, laid: &Layout, bounds: Bounds<Pixels>) {
         let zero = px(0.);
         if self.mode == Mode::OneLine {
-            let most = (laid.width + CARET_WIDTH - bounds.size.width).max(zero);
+            let most = (laid.width + CARET_WIDTH + laid.inset - bounds.size.width).max(zero);
             self.scroll = point(self.scroll.x.clamp(zero, most), zero);
         } else {
             let most = (laid.line_height * laid.rows as f32 - bounds.size.height).max(zero);
@@ -562,7 +590,8 @@ impl TextInput {
     ) -> Option<(usize, bool)> {
         let bounds = self.last_bounds?;
         let laid = self.layout(window, cx);
-        let (at, end_bias) = laid.index_at(position - bounds.origin + self.scroll);
+        let text_origin = bounds.origin + point(laid.inset, px(0.));
+        let (at, end_bias) = laid.index_at(position - text_origin + self.scroll);
         Some((self.text_offset(at), end_bias))
     }
 

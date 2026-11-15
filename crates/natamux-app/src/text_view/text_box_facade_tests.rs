@@ -140,7 +140,7 @@ fn edits_and_blur_come_as_events_of_the_box_that_had_them(cx: &mut TestAppContex
     assert!(events.contains(&(3, TextEvent::Edited)), "{events:?}");
 }
 
-/// One read-only box and what it told its host.
+/// One box and what it told its host.
 struct ReadOnlyHost {
     text_box: TextBox,
     events: Vec<TextEvent>,
@@ -174,4 +174,26 @@ fn a_read_only_box_takes_no_typing_and_tells_no_edit(cx: &mut TestAppContext) {
     assert_eq!(cx.update(|_, cx| text_box.text(cx)), "");
     let events = host.read_with(cx, |host, _| host.events.clone());
     assert!(!events.contains(&TextEvent::Edited), "{events:?}");
+}
+
+#[gpui::test]
+fn a_subscription_made_right_after_set_text_hears_the_edit(cx: &mut TestAppContext) {
+    // `LiveField` sets the start text, then subscribes; Zed's editor told it that edit.
+    let (host, _, cx) = test_views::init_app(cx, |_, window, cx| {
+        cx.new(|cx| {
+            let text_box = text_editor("name", None, window, cx);
+            text_box.set_text("Lint and types", window, cx);
+            let subscription = text_box.subscribe(cx, |host: &mut ReadOnlyHost, _, event, _| {
+                host.events.push(event);
+            });
+            ReadOnlyHost {
+                text_box,
+                events: Vec::new(),
+                _subscription: subscription,
+            }
+        })
+    });
+    cx.run_until_parked();
+    let events = host.read_with(cx, |host, _| host.events.clone());
+    assert!(events.contains(&TextEvent::Edited), "{events:?}");
 }

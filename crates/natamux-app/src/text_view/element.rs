@@ -165,6 +165,28 @@ pub struct Layout {
     pub rows: usize,
     /// The widest line, unwrapped.
     pub width: Pixels,
+    /// How far right of the box's left edge the text starts (`text_inset`).
+    pub inset: Pixels,
+}
+
+/// How far right of the box's left edge the text starts: one descent of the font, where Zed's
+/// editor drew it (measured on the B1 shots: 3.85 px for the 14 px UI font).
+pub fn text_inset(font: &Font, font_size: Pixels, window: &Window) -> Pixels {
+    let text_system = window.text_system();
+    text_system
+        .descent(text_system.resolve_font(font), font_size)
+        .abs()
+}
+
+/// The width the text of a box `width` wide wraps at: the inset and two `m` widths less, where
+/// Zed's editor wrapped (measured on the B1 shots of the Start a task notes, the edit form and the
+/// stage prompt).
+pub fn wrap_width(font: &Font, font_size: Pixels, width: Pixels, window: &Window) -> Pixels {
+    let text_system = window.text_system();
+    let em = text_system
+        .em_width(text_system.resolve_font(font), font_size)
+        .unwrap_or(font_size);
+    (width - text_inset(font, font_size, window) - em * 2.).max(px(0.))
 }
 
 /// Shapes `text` in rows of at most `wrap` px.
@@ -282,8 +304,14 @@ impl Layout {
         Layout {
             line_height: key.line_height,
             em,
-            rows: row.max(1),
+            // The placeholder may wrap, but an empty box is one row, as in Zed's editor.
+            rows: if key.placeholder.is_some() {
+                1
+            } else {
+                row.max(1)
+            },
             width,
+            inset: text_inset(&key.font, key.font_size, window),
             lines,
             key,
         }
@@ -499,7 +527,7 @@ impl Element for TextElement {
         let input = self.input.read(cx);
         let mode = input.mode;
         let style = input.text_style(cx);
-        let rem = window.rem_size();
+        let rem = input.rem_size(&style, window);
         let line_height = style.line_height_in_pixels(rem);
         let mut layout = Style::default();
         layout.size.width = relative(1.).into();
@@ -514,6 +542,7 @@ impl Element for TextElement {
             }
             Mode::Area { min, max } => {
                 let font_size = style.font_size.to_pixels(rem);
+                let font = style.font();
                 let (text, placeholder) = input.display();
                 let runs = input.runs(&style, text.len(), placeholder, cx);
                 let (text, runs, _) = expand_tabs(&text, &runs);
@@ -524,10 +553,16 @@ impl Element for TextElement {
                         AvailableSpace::Definite(width) => Some(width),
                         _ => None,
                     });
-                    let rows: usize = shape(&text, &runs, font_size, width, window)
-                        .iter()
-                        .map(|line| line.wrap_boundaries().len() + 1)
-                        .sum();
+                    // The placeholder does not grow the box: it is cut to one row, as in Zed.
+                    let rows: usize = if placeholder {
+                        1
+                    } else {
+                        let wrap = width.map(|width| wrap_width(&font, font_size, width, window));
+                        shape(&text, &runs, font_size, wrap, window)
+                            .iter()
+                            .map(|line| line.wrap_boundaries().len() + 1)
+                            .sum()
+                    };
                     size(
                         width.unwrap_or_default(),
                         line_height * rows.clamp(min, max) as f32,
@@ -575,7 +610,7 @@ impl Element for TextElement {
         let input = self.input.read(cx);
         let focus = input.focus.clone();
         let focused = focus.is_focused(window);
-        let origin = bounds.origin - input.scroll;
+        let origin = bounds.origin + point(laid.inset, px(0.)) - input.scroll;
         let selection = input.model.selection().range();
         let selection = input.to_display(selection.start)..input.to_display(selection.end);
         let head = input.to_display(input.model.head());
