@@ -1,5 +1,5 @@
 //! `TextBox`: the one place that builds and drives the app's text inputs (plan 6.3.1). It wraps
-//! Zed's `Editor`, or the own `TextInput` with the `own-input` feature (S3.3); no caller changes.
+//! the own `TextInput`, or an `Editor` that something else made (the JSON tab, until S4.3).
 //! Callers read and write through these methods and hear changes as `TextEvent`s.
 
 use std::sync::Arc;
@@ -10,12 +10,7 @@ use gpui::{
     AnyElement, App, AppContext as _, Context, Entity, EntityInputHandler, FocusHandle, Focusable,
     IntoElement, Subscription, TextStyleRefinement, Window,
 };
-#[cfg(not(feature = "own-input"))]
-use language::language_settings::SoftWrap;
 
-#[cfg(not(feature = "own-input"))]
-use crate::components::form::input_style;
-#[cfg(feature = "own-input")]
 use crate::text_view::text_input::TextInput;
 
 /// What a box tells its owner. Both come as effects, after the change, never inside it.
@@ -45,11 +40,9 @@ pub struct TextBox {
 #[derive(Clone)]
 enum Inner {
     Zed(Entity<Editor>),
-    #[cfg(feature = "own-input")]
     Own(Entity<TextInput>),
 }
 
-#[cfg(feature = "own-input")]
 impl TextBox {
     /// One line. Enter, Up and Down are left to the forms and lists around it.
     pub fn one_line(placeholder: &str, window: &mut Window, cx: &mut App) -> Self {
@@ -98,92 +91,6 @@ impl TextBox {
     }
 }
 
-#[cfg(not(feature = "own-input"))]
-impl TextBox {
-    /// One line. Enter, Up and Down are left to the forms and lists around it.
-    pub fn one_line(placeholder: &str, window: &mut Window, cx: &mut App) -> Self {
-        Self::build(placeholder, window, cx, |window, cx| {
-            Editor::single_line(window, cx)
-        })
-    }
-
-    /// A textarea of `min` to `max` lines that grows with the text and wraps long lines.
-    pub fn area(
-        placeholder: &str,
-        (min, max): (usize, usize),
-        window: &mut Window,
-        cx: &mut App,
-    ) -> Self {
-        Self::build(placeholder, window, cx, |window, cx| {
-            let mut editor = Editor::auto_height(min, max, window, cx);
-            // Zed's default setting does not wrap.
-            editor.set_soft_wrap_mode(SoftWrap::EditorWidth, cx);
-            editor
-        })
-    }
-
-    /// Many lines that fill their box and scroll inside, in the input text style: wrap on, no
-    /// gutter, no line highlight.
-    pub fn fill(placeholder: &str, window: &mut Window, cx: &mut App) -> Self {
-        Self::build(placeholder, window, cx, |window, cx| {
-            let mut editor = Editor::multi_line(window, cx);
-            editor.set_show_gutter(false, cx);
-            editor.set_show_line_numbers(false, cx);
-            editor.set_show_wrap_guides(false, cx);
-            editor.set_show_indent_guides(false, cx);
-            editor.set_current_line_highlight(Some(editor::CurrentLineHighlight::None));
-            editor.set_soft_wrap_mode(SoftWrap::EditorWidth, cx);
-            editor
-        })
-    }
-
-    /// A full text view in the buffer font: wrapped text only, no gutter. The Docs edit box and
-    /// its source view (`read_only`).
-    pub fn plain(read_only: bool, window: &mut Window, cx: &mut App) -> Self {
-        let editor = cx.new(|cx| {
-            let mut editor = Editor::multi_line(window, cx);
-            editor.set_show_gutter(false, cx);
-            editor.set_show_line_numbers(false, cx);
-            editor.set_show_runnables(false, cx);
-            editor.set_show_breakpoints(false, cx);
-            editor.set_show_code_actions(false, cx);
-            editor.set_show_bookmarks(false, cx);
-            editor.set_show_wrap_guides(false, cx);
-            editor.set_show_indent_guides(false, cx);
-            editor.set_show_edit_predictions(Some(false), window, cx);
-            editor.set_minimap_visibility(editor::MinimapVisibility::Disabled, window, cx);
-            editor.set_soft_wrap_mode(SoftWrap::EditorWidth, cx);
-            if read_only {
-                editor.set_read_only(true);
-            }
-            editor
-        });
-        Self {
-            inner: Inner::Zed(editor),
-        }
-    }
-
-    fn build(
-        placeholder: &str,
-        window: &mut Window,
-        cx: &mut App,
-        make: impl FnOnce(&mut Window, &mut Context<Editor>) -> Editor,
-    ) -> Self {
-        let editor = cx.new(|cx| {
-            let mut editor = make(window, cx);
-            editor.set_text_style_refinement(input_style(None, None));
-            // An empty placeholder is not the same state as none: keep today's drawing.
-            if !placeholder.is_empty() {
-                editor.set_placeholder_text(placeholder, window, cx);
-            }
-            editor
-        });
-        Self {
-            inner: Inner::Zed(editor),
-        }
-    }
-}
-
 impl TextBox {
     /// Wraps an editor that something else made, so the form parts can frame it. For the JSON
     /// tab until it has its own code view.
@@ -197,7 +104,6 @@ impl TextBox {
     pub fn text(&self, cx: &App) -> String {
         match &self.inner {
             Inner::Zed(editor) => editor.read(cx).text(cx),
-            #[cfg(feature = "own-input")]
             Inner::Own(input) => input.read(cx).text().to_string(),
         }
     }
@@ -208,7 +114,6 @@ impl TextBox {
             Inner::Zed(editor) => editor.update(cx, |editor, cx| {
                 editor.marked_text_range(window, cx).is_some()
             }),
-            #[cfg(feature = "own-input")]
             Inner::Own(input) => input.read(cx).is_composing(),
         }
     }
@@ -221,14 +126,12 @@ impl TextBox {
         let text = text.into();
         match &self.inner {
             Inner::Zed(editor) => editor.update(cx, |editor, cx| editor.set_text(text, window, cx)),
-            #[cfg(feature = "own-input")]
             Inner::Own(input) => input.update(cx, |input, cx| input.set_text(&text, cx)),
         }
     }
 
     /// Changes the text into `text` with the fewest edits: the caret, the scroll and the undo
     /// history stay. A wrapped `Editor` takes the whole text instead.
-    #[cfg(feature = "own-input")]
     #[cfg_attr(not(test), allow(dead_code))]
     pub fn replace_minimal(&self, text: &str, window: &mut Window, cx: &mut App) {
         match &self.inner {
@@ -240,7 +143,6 @@ impl TextBox {
     pub fn clear(&self, window: &mut Window, cx: &mut App) {
         match &self.inner {
             Inner::Zed(editor) => editor.update(cx, |editor, cx| editor.clear(window, cx)),
-            #[cfg(feature = "own-input")]
             Inner::Own(input) => input.update(cx, |input, cx| input.set_text("", cx)),
         }
     }
@@ -249,7 +151,6 @@ impl TextBox {
     pub fn insert_at_caret(&self, text: &str, window: &mut Window, cx: &mut App) {
         match &self.inner {
             Inner::Zed(editor) => editor.update(cx, |editor, cx| editor.insert(text, window, cx)),
-            #[cfg(feature = "own-input")]
             Inner::Own(input) => input.update(cx, |input, cx| input.insert_at_caret(text, cx)),
         }
     }
@@ -259,7 +160,6 @@ impl TextBox {
             Inner::Zed(editor) => {
                 editor.update(cx, |editor, cx| editor.select_all(&SelectAll, window, cx))
             }
-            #[cfg(feature = "own-input")]
             Inner::Own(input) => input.update(cx, |input, cx| input.select_everything(cx)),
         }
     }
@@ -269,7 +169,6 @@ impl TextBox {
             Inner::Zed(editor) => {
                 editor.update(cx, |editor, cx| editor.move_to_end(&MoveToEnd, window, cx))
             }
-            #[cfg(feature = "own-input")]
             Inner::Own(input) => input.update(cx, |input, cx| input.caret_to_end(cx)),
         }
     }
@@ -279,7 +178,6 @@ impl TextBox {
             Inner::Zed(editor) => editor.update(cx, |editor, cx| {
                 editor.set_placeholder_text(text, window, cx)
             }),
-            #[cfg(feature = "own-input")]
             Inner::Own(input) => input.update(cx, |input, cx| input.set_placeholder(text, cx)),
         }
     }
@@ -288,7 +186,6 @@ impl TextBox {
     pub fn set_masked(&self, masked: bool, cx: &mut App) {
         match &self.inner {
             Inner::Zed(editor) => editor.update(cx, |editor, cx| editor.set_masked(masked, cx)),
-            #[cfg(feature = "own-input")]
             Inner::Own(input) => input.update(cx, |input, cx| input.set_masked(masked, cx)),
         }
     }
@@ -298,7 +195,6 @@ impl TextBox {
     pub fn set_read_only(&self, read_only: bool, cx: &mut App) {
         match &self.inner {
             Inner::Zed(editor) => editor.update(cx, |editor, _| editor.set_read_only(read_only)),
-            #[cfg(feature = "own-input")]
             Inner::Own(input) => input.update(cx, |input, cx| {
                 input.set_read_only(read_only);
                 cx.notify();
@@ -313,7 +209,6 @@ impl TextBox {
             Inner::Zed(editor) => {
                 editor.update(cx, |editor, _| editor.set_text_style_refinement(style))
             }
-            #[cfg(feature = "own-input")]
             Inner::Own(input) => input.update(cx, |input, cx| input.set_style(style, cx)),
         }
     }
@@ -335,7 +230,6 @@ impl TextBox {
                     }
                 })
             }
-            #[cfg(feature = "own-input")]
             Inner::Own(input) => cx.subscribe(input, move |this, input, event: &TextEvent, cx| {
                 let text_box = TextBox {
                     inner: Inner::Own(input),
@@ -365,7 +259,6 @@ impl TextBox {
                     }
                 },
             ),
-            #[cfg(feature = "own-input")]
             Inner::Own(input) => cx.subscribe_in(
                 input,
                 window,
@@ -393,7 +286,6 @@ impl TextBox {
                 };
                 handler(this, &text_box, cx);
             }),
-            #[cfg(feature = "own-input")]
             Inner::Own(input) => cx.observe(input, move |this, input, cx| {
                 let text_box = TextBox {
                     inner: Inner::Own(input),
@@ -410,7 +302,6 @@ impl TextBox {
             Inner::Zed(editor) => editor.update(cx, |editor, cx| {
                 editor.selected_text_range(false, window, cx)
             }),
-            #[cfg(feature = "own-input")]
             Inner::Own(input) => {
                 input.update(cx, |input, cx| input.selected_text_range(false, window, cx))
             }
@@ -418,17 +309,8 @@ impl TextBox {
         selection.map_or(0..0, |selection| selection.range)
     }
 
-    /// The editor inside, for tests that call the input method on it.
-    #[cfg(all(test, not(feature = "own-input")))]
-    pub fn editor(&self) -> &Entity<Editor> {
-        match &self.inner {
-            Inner::Zed(editor) => editor,
-        }
-    }
-
-    /// The own input inside, for tests that call the input method on it. The tests name it
-    /// `editor()` on both builds, so they run unchanged.
-    #[cfg(all(test, feature = "own-input"))]
+    /// The own input inside, for tests that call the input method on it.
+    #[cfg(test)]
     pub fn editor(&self) -> &Entity<TextInput> {
         match &self.inner {
             Inner::Own(input) => input,
@@ -441,7 +323,6 @@ impl Focusable for TextBox {
     fn focus_handle(&self, cx: &App) -> FocusHandle {
         match &self.inner {
             Inner::Zed(editor) => editor.focus_handle(cx),
-            #[cfg(feature = "own-input")]
             Inner::Own(input) => input.focus_handle(cx),
         }
     }
@@ -453,7 +334,6 @@ impl IntoElement for TextBox {
     fn into_element(self) -> Self::Element {
         match self.inner {
             Inner::Zed(editor) => editor.into_any_element(),
-            #[cfg(feature = "own-input")]
             Inner::Own(input) => input.into_any_element(),
         }
     }

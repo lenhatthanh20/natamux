@@ -1359,6 +1359,7 @@ S3.5 Remove the old input path
 - Tag: `[ci: all]`.
 - Proof: all green and exact.
 - Risk: `editor` stays for the code and diff views until S7.
+- Done in S3.5: the `own-input` feature and the `cfg` switches are gone (`imara-diff` and `unicode-segmentation` are plain deps); `TextBox` builds only own inputs. Its `Inner::Zed` arm stays for `TextBox::of_editor` (the JSON tab, until S4.3), and the Zed half of `text_boxes.rs` stays for the code and diff views. The two `--no-default-features` steps (clippy and tests in `check`, tests in `app-macos-tests`) are removed from `rust.yml`.
 
 ### S4. Highlighting and code view
 

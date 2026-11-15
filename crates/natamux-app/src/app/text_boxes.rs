@@ -91,16 +91,13 @@ pub fn bind(cx: &mut App, mac: bool) {
         .collect::<Vec<_>>();
     cx.bind_keys(bindings);
     cx.bind_keys(editor_bindings(mac));
-    #[cfg(feature = "own-input")]
     cx.bind_keys(own_bindings(mac));
 }
 
 /// The key context entry of the own text input only.
-#[cfg(feature = "own-input")]
 pub const OWN_INPUT: &str = "own_input";
 
 /// A context of Zed's editor narrowed to the own text input.
-#[cfg(feature = "own-input")]
 fn only_own(context: &str) -> String {
     format!("({context}) && {OWN_INPUT}")
 }
@@ -108,7 +105,6 @@ fn only_own(context: &str) -> String {
 /// The same keys for the own text input (docs/plan-mit-license.md 6.3.1), in the same contexts
 /// narrowed to the own input. A Zed `Editor` (the code and diff views) never matches them, so
 /// its keys stay the ones gpui shows for it.
-#[cfg(feature = "own-input")]
 fn own_bindings(mac: bool) -> Vec<KeyBinding> {
     use crate::text_view::text_input::actions as own;
     let (any, many, full) = (only_own(ANY), only_own(MANY_LINES), only_own(FULL));
@@ -412,11 +408,7 @@ mod tests {
     /// The name of Zed's editor action `name` as the box's input carries it: the own input has
     /// the same names in its own namespace (6.3.1).
     fn action_name(name: &str) -> String {
-        if cfg!(feature = "own-input") {
-            name.replace("editor::", "text_input::")
-        } else {
-            name.to_string()
-        }
+        name.replace("editor::", "text_input::")
     }
 
     /// The keys that run the action `name` in the box `make` gives, with the app's bindings.

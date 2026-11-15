@@ -1060,7 +1060,6 @@ fn t_min_set_text_puts_the_caret_where_zed_does(cx: &mut TestAppContext) {
     assert!(after.start == after.end && after.end <= text.len());
 }
 
-#[cfg(feature = "own-input")]
 #[gpui::test]
 fn t_min_replace_minimal_keeps_the_caret_the_scroll_and_the_undo(cx: &mut TestAppContext) {
     let lines: Vec<String> = (0..60).map(|n| format!("line {n}")).collect();

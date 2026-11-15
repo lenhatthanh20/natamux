@@ -5,12 +5,6 @@ edition.workspace = true
 license.workspace = true
 publish.workspace = true
 
-[features]
-# The own text input (docs/plan-mit-license.md, S3) is the default; without it the boxes build on
-# Zed's editor until S3.5 removes that.
-default = ["own-input"]
-own-input = ["dep:imara-diff", "dep:unicode-segmentation"]
-
 [dependencies]
 alacritty_terminal.workspace = true
 anyhow.workspace = true
@@ -22,7 +16,7 @@ getrandom.workspace = true
 gpui.workspace = true
 grammars.workspace = true
 gpui_platform.workspace = true
-imara-diff = { workspace = true, optional = true }
+imara-diff.workspace = true
 language.workspace = true
 linkify.workspace = true
 markdown.workspace = true
@@ -59,7 +53,7 @@ tree-sitter-rust.workspace = true
 tree-sitter-typescript.workspace = true
 tree-sitter-yaml.workspace = true
 ui = { package = "natamux-ui", path = "../natamux-ui" }
-unicode-segmentation = { workspace = true, optional = true }
+unicode-segmentation.workspace = true
 util.workspace = true
 
 [dev-dependencies]
