@@ -42,8 +42,7 @@ struct Compiled {
     close: Option<u32>,
 }
 
-static COMPILED: [OnceLock<Option<Compiled>>; LANG_COUNT] =
-    [const { OnceLock::new() }; LANG_COUNT];
+static COMPILED: [OnceLock<Option<Compiled>>; LANG_COUNT] = [const { OnceLock::new() }; LANG_COUNT];
 
 /// The outline query file of a language; the languages with none have no outline.
 fn source(lang: &Lang) -> Option<&'static str> {
