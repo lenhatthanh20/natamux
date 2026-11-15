@@ -1,10 +1,9 @@
 //! Workflow test T14 (plan 7.5): the JSON tab writes good and bad JSON into the draft, a text set
 //! from outside keeps the caret and the undo history, keys typed while that text goes in are
-//! kept, and a language that loads after typing does not change the text.
+//! kept, and keys typed at once after the tab opens are kept, with the text coloured as JSON.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use editor::Editor;
 use gpui::{AnyView, AppContext as _, Entity, Focusable, TestAppContext, VisualTestContext};
 use ui::prelude::*;
 
@@ -22,14 +21,14 @@ fn start(
     cx: &mut TestAppContext,
 ) -> (
     Entity<PipelineEditor>,
-    Entity<Editor>,
+    TextBox,
     &mut VisualTestContext,
 ) {
     let (tab, _, cx) = test_views::init_app(cx, |_, window, cx| {
         let pipeline = cx.new(|_| PipelineEditor::new(DRAFT));
         cx.new(|cx| JsonTab::new(pipeline, window, cx))
     });
-    let (pipeline, editor) = tab.read_with(cx, |tab, _| (tab.pipeline.clone(), tab.editor.clone()));
+    let (pipeline, editor) = tab.read_with(cx, |tab, _| (tab.pipeline.clone(), tab.code.clone()));
     cx.update(|window, cx| window.focus(&editor.focus_handle(cx), cx));
     cx.run_until_parked();
     // The caret at the start.
@@ -55,7 +54,7 @@ fn t14_good_and_bad_json_go_into_the_draft(cx: &mut TestAppContext) {
     assert_eq!(draft(&pipeline, cx), (String::new(), true));
     paste(cx, CHANGED);
     assert_eq!(draft(&pipeline, cx), (CHANGED.to_string(), false));
-    assert_eq!(text_of(&TextBox::of_editor(&editor), cx), CHANGED);
+    assert_eq!(text_of(&editor, cx), CHANGED);
     let most = pipeline.read_with(cx, |pipeline, _| pipeline.max_send_backs());
     assert_eq!(most, Some(3));
 }
@@ -64,23 +63,23 @@ fn t14_good_and_bad_json_go_into_the_draft(cx: &mut TestAppContext) {
 fn t14_a_text_from_outside_keeps_the_caret_and_the_undo(cx: &mut TestAppContext) {
     let (pipeline, editor, cx) = start(cx);
     type_text(cx, " ");
-    assert_eq!(selection_of(&TextBox::of_editor(&editor), cx), 1..1);
-    // The buffer joins edits less than 300 ms apart (real time) into one undo step. An outside
-    // change comes well after a typed key in the app, so wait longer than that here too.
+    assert_eq!(selection_of(&editor, cx), 1..1);
+    // An outside change comes well after a typed key in the app; the view never joins it with
+    // the typing anyway, as it is an undo step of its own.
     std::thread::sleep(std::time::Duration::from_millis(400));
     let outside = format!(" {CHANGED}");
     pipeline.update(cx, |pipeline, cx| pipeline.set_text(&outside, cx));
     cx.run_until_parked();
-    assert_eq!(text_of(&TextBox::of_editor(&editor), cx), outside);
-    assert_eq!(selection_of(&TextBox::of_editor(&editor), cx), 1..1);
+    assert_eq!(text_of(&editor, cx), outside);
+    assert_eq!(selection_of(&editor, cx), 1..1);
     assert_eq!(draft(&pipeline, cx), (outside.clone(), false));
 
     // The first undo takes back the outside text, the second the typed space.
     press(cx, "mod-z");
-    let once = text_of(&TextBox::of_editor(&editor), cx);
+    let once = text_of(&editor, cx);
     let once_draft = draft(&pipeline, cx).0;
     press(cx, "mod-z");
-    let twice = text_of(&TextBox::of_editor(&editor), cx);
+    let twice = text_of(&editor, cx);
     let before = format!(" {DRAFT}");
     assert_eq!(
         (once.as_str(), once_draft.as_str(), twice.as_str()),
@@ -94,15 +93,15 @@ fn t14_a_text_from_outside_keeps_the_caret_and_the_undo(cx: &mut TestAppContext)
 fn t14_keys_typed_while_an_outside_text_goes_in_are_kept(cx: &mut TestAppContext) {
     let (pipeline, editor, cx) = start(cx);
     pipeline.update(cx, |pipeline, cx| pipeline.set_text(CHANGED, cx));
-    // The outside text goes in after a diff off the main thread; these keys come first.
+    // The keys come before anything else runs.
     press_now(cx, "z");
     cx.run_until_parked();
-    let shown = text_of(&TextBox::of_editor(&editor), cx);
+    let shown = text_of(&editor, cx);
     assert_eq!(shown, format!("z{CHANGED}"));
     assert_eq!(draft(&pipeline, cx).0, shown);
 }
 
-/// Holds the tab once it is made, so the test decides when its language load may run.
+/// Holds the tab once it is made, so the keys come before any task runs.
 struct Slot {
     view: Option<AnyView>,
 }
@@ -117,27 +116,21 @@ impl Render for Slot {
 fn t14_a_language_that_loads_after_typing_keeps_the_text(cx: &mut TestAppContext) {
     let (slot, _, cx) = test_views::init_app(cx, |_, _, cx| cx.new(|_| Slot { view: None }));
     cx.update(|_, cx| crate::git::languages::init(cx));
-    let (pipeline, editor) = slot.update_in(cx, |slot, window, cx| {
+    let (pipeline, editor, language) = slot.update_in(cx, |slot, window, cx| {
         let pipeline = cx.new(|_| PipelineEditor::new(DRAFT));
         let tab = cx.new(|cx| JsonTab::new(pipeline.clone(), window, cx));
-        let editor = tab.read(cx).editor.clone();
+        let editor = tab.read(cx).code.clone();
+        let language = tab.read(cx).code_view().language_name(cx);
         slot.view = Some(tab.into());
         cx.notify();
         window.focus(&editor.focus_handle(cx), cx);
-        (pipeline, editor)
+        (pipeline, editor, language)
     });
-    // Typed before the JSON language is loaded: no task has run yet.
+    // Typed before any task has run.
     press_now(cx, "space space");
     cx.run_until_parked();
-    let language = editor.read_with(cx, |editor, cx| {
-        let buffer = editor.buffer().read(cx).as_singleton().expect("one buffer");
-        buffer
-            .read(cx)
-            .language()
-            .map(|language| language.name().to_string())
-    });
-    assert_eq!(language.as_deref(), Some("JSON"));
-    let shown = text_of(&TextBox::of_editor(&editor), cx);
+    assert_eq!(language, Some("JSON"));
+    let shown = text_of(&editor, cx);
     assert_eq!(shown, format!("  {DRAFT}"));
     assert_eq!(draft(&pipeline, cx).0, shown);
 }

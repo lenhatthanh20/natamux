@@ -13,7 +13,7 @@ use crate::components::colors::signal;
 use crate::components::segmented::Segmented;
 use crate::components::skeleton::{Loading, SkeletonList};
 use crate::components::terminals_button::terminals_button;
-use crate::text_view::text_box::TextBox;
+use crate::text_view::code_view::CodeView;
 
 impl DocsTab {
     pub(super) fn source_view(
@@ -24,7 +24,7 @@ impl DocsTab {
     ) -> AnyElement {
         let editor = match &self.source {
             Some((editor, _)) => editor.clone(),
-            None => TextBox::plain(true, window, cx),
+            None => CodeView::plain(true, window, cx).text_box(),
         };
         if self.source.as_ref().is_none_or(|(_, shown)| shown != text) {
             editor.set_text(text.to_owned(), window, cx);

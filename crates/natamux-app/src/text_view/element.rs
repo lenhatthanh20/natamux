@@ -38,6 +38,8 @@ pub struct LayoutKey {
     /// How far right of the box's left edge the text starts: `text_inset` in an area or a full
     /// box, none in a one-line box (where Zed's editor drew it, B1 shots).
     pub inset: Pixels,
+    /// The colour count of a code view: its syntax colours changed with the text the same.
+    pub colors: u64,
 }
 
 /// One line of the text (between two `\n`) and the rows it wraps into.
@@ -625,9 +627,14 @@ impl Element for TextElement {
             Mode::Full { current_line } => (true, current_line),
             _ => (false, false),
         };
-        // Spaces and tabs inside the selection of a full box show as dots and arrows.
-        let whitespace = if full && !selection.is_empty() {
-            laid.whitespace(&input.display().0, selection.clone())
+        let code = input.code_paint(&laid, bounds, origin, focused, cx);
+        // Spaces and tabs inside the selection of a full box show as dots and arrows; in a code
+        // view all of them while Show whitespace is on.
+        let shown = input.display().0;
+        let whitespace = if full && code.all_whitespace {
+            laid.whitespace(&shown, 0..shown.len())
+        } else if full && !selection.is_empty() {
+            laid.whitespace(&shown, selection.clone())
         } else {
             Vec::new()
         };
@@ -651,6 +658,28 @@ impl Element for TextElement {
         };
         let invisible = colors.editor_invisible;
         let line_height = laid.line_height;
+        let (guide, active_guide, highlight) = (
+            colors.editor_indent_guide,
+            colors.editor_indent_guide_active,
+            colors.editor_document_highlight_bracket_background,
+        );
+        let (track, track_border, thumb_border) = (
+            colors.scrollbar_track_background,
+            colors.scrollbar_track_border,
+            colors.scrollbar_thumb_border,
+        );
+        let thumb_color = |hovered: bool, dragged: bool| {
+            if dragged {
+                colors.scrollbar_thumb_active_background
+            } else if hovered {
+                colors.scrollbar_thumb_hover_background
+            } else {
+                colors.scrollbar_thumb_background
+            }
+        };
+        let bar = code
+            .bar
+            .map(|(bar, hovered, dragged)| (bar, thumb_color(hovered, dragged)));
 
         window.handle_input(
             &focus,
@@ -690,6 +719,12 @@ impl Element for TextElement {
                     ),
                     active_line,
                 ));
+            }
+            for (bounds, active) in &code.guides {
+                window.paint_quad(fill(*bounds, if *active { active_guide } else { guide }));
+            }
+            for bounds in &code.backgrounds {
+                window.paint_quad(fill(*bounds, highlight));
             }
             let rects: Vec<_> = laid
                 .selection_rects(selection.clone())
@@ -761,6 +796,15 @@ impl Element for TextElement {
                     Bounds::new(origin + at, size(CARET_WIDTH, line_height)),
                     cursor,
                 ));
+            }
+            if let Some((bar, thumb)) = &bar {
+                let edge = |rect: &Bounds<Pixels>| {
+                    Bounds::new(rect.origin, size(px(1.), rect.size.height))
+                };
+                window.paint_quad(fill(bar.track, track));
+                window.paint_quad(fill(edge(&bar.track), track_border));
+                window.paint_quad(fill(bar.thumb, *thumb));
+                window.paint_quad(fill(edge(&bar.thumb), thumb_border));
             }
         });
     }

@@ -13,6 +13,7 @@ use crate::app::source::reason;
 use crate::app::view_rules::DetailsView;
 use crate::components::docs_markdown::MarkdownDoc;
 use crate::files::draft_store::DraftStore;
+use crate::text_view::code_view::CodeView;
 use crate::text_view::text_box::{TextBox, TextEvent};
 
 /// The text of a file as read, with the `modified_at` of the list it was read for.
@@ -276,7 +277,7 @@ impl DocsTab {
         if self.edit.as_ref().is_some_and(|edit| edit.name == name) {
             return;
         }
-        let editor = TextBox::plain(false, window, cx);
+        let editor = CodeView::plain(false, window, cx).text_box();
         editor.set_text(draft.text.clone(), window, cx);
         let own = name.clone();
         let edits = editor.subscribe(cx, move |this, editor, event, cx| {

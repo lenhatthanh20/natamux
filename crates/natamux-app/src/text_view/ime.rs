@@ -76,6 +76,10 @@ impl EntityInputHandler for TextInput {
             return;
         }
         let marked = self.model.marked();
+        let at_selection = range.as_ref().is_none_or(|range| range.is_empty());
+        if marked.is_none() && at_selection && self.type_code(text, cx) {
+            return;
+        }
         let (range, kind) = match (marked, range) {
             (Some(marked), _) => (marked, EditKind::Composing),
             (None, Some(range)) if !range.is_empty() => (self.bytes(&range), EditKind::Typing),

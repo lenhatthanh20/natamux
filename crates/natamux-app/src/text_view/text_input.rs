@@ -17,6 +17,7 @@ use gpui::{
 use theme::ActiveTheme;
 
 use super::blink::Blink;
+use super::code_view::{Code, FAST_SCROLL};
 use super::element::{CARET_WIDTH, Layout, LayoutKey, TextElement, text_inset, wrap_width};
 use super::text_box::TextEvent;
 use crate::app::appearance::Appearance;
@@ -154,6 +155,8 @@ pub struct TextInput {
     press: Option<Press>,
     /// Where held text would go in, while it is dragged.
     pub(super) drop_at: Option<usize>,
+    /// What a code view has more (`code_view.rs`).
+    pub(super) code: Option<Code>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -195,7 +198,17 @@ impl TextInput {
     }
 
     pub fn plain(read_only: bool, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let mode = Mode::Full { current_line: true };
+        Self::full(true, read_only, window, cx)
+    }
+
+    /// A full text view in the buffer font; `current_line` paints the caret's row.
+    pub fn full(
+        current_line: bool,
+        read_only: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let mode = Mode::Full { current_line };
         let mut input = Self::new(mode, "", TextStyleRefinement::default(), window, cx);
         input.read_only = read_only;
         input
@@ -233,6 +246,7 @@ impl TextInput {
             laid: None,
             press: None,
             drop_at: None,
+            code: None,
             _subscriptions: subscriptions,
         }
     }
@@ -293,6 +307,7 @@ impl TextInput {
         if edited {
             Self::emit_edited(cx);
         }
+        self.sync_code(cx);
         // The caret and the scroll stay: no autoscroll.
         cx.notify();
     }
@@ -322,6 +337,7 @@ impl TextInput {
         if edited {
             Self::emit_edited(cx);
         }
+        self.sync_code(cx);
         cx.notify();
     }
 
@@ -428,7 +444,8 @@ impl TextInput {
         }
     }
 
-    /// One run of the text style; the marked text of an input method is underlined.
+    /// One run of the text style, or the syntax colours of a code view; the marked text of an
+    /// input method is underlined.
     pub(super) fn runs(
         &self,
         style: &TextStyle,
@@ -449,9 +466,15 @@ impl TextInput {
             underline: None,
             strikethrough: None,
         };
+        let runs = if placeholder {
+            None
+        } else {
+            self.code_runs(&run, len, cx)
+        };
+        let runs = runs.unwrap_or_else(|| vec![run]);
         let marked = self.model.marked().filter(|_| !placeholder);
         let Some(marked) = marked else {
-            return vec![run];
+            return runs;
         };
         let marked = self.to_display(marked.start)..self.to_display(marked.end);
         let underline = UnderlineStyle {
@@ -459,24 +482,7 @@ impl TextInput {
             thickness: px(1.),
             wavy: false,
         };
-        [
-            TextRun {
-                len: marked.start,
-                ..run.clone()
-            },
-            TextRun {
-                len: marked.len(),
-                underline: Some(underline),
-                ..run.clone()
-            },
-            TextRun {
-                len: len.saturating_sub(marked.end),
-                ..run
-            },
-        ]
-        .into_iter()
-        .filter(|run| run.len > 0)
-        .collect()
+        underline_range(runs, marked, underline)
     }
 
     /// An offset of the text in the drawn text (one `*` per char when masked).
@@ -531,6 +537,7 @@ impl TextInput {
             marked: self.model.marked(),
             placeholder: shows_placeholder.then(|| self.placeholder.clone()),
             inset,
+            colors: self.code.as_ref().map_or(0, |code| code.colors),
         };
         if let Some(laid) = &self.laid
             && laid.key == key
@@ -563,11 +570,12 @@ impl TextInput {
             }
         } else {
             let height = bounds.size.height;
-            if at.y < self.scroll.y {
-                self.scroll.y = at.y;
+            let margin = self.code_margin(laid, height);
+            if at.y - margin < self.scroll.y {
+                self.scroll.y = at.y - margin;
             }
-            if at.y + laid.line_height > self.scroll.y + height {
-                self.scroll.y = at.y + laid.line_height - height;
+            if at.y + laid.line_height + margin > self.scroll.y + height {
+                self.scroll.y = at.y + laid.line_height + margin - height;
             }
         }
     }
@@ -579,7 +587,9 @@ impl TextInput {
             let most = (laid.width + CARET_WIDTH + laid.inset - bounds.size.width).max(zero);
             self.scroll = point(self.scroll.x.clamp(zero, most), zero);
         } else {
-            let most = (laid.line_height * laid.rows as f32 - bounds.size.height).max(zero);
+            let most = self.code_scroll_limit(laid).unwrap_or_else(|| {
+                (laid.line_height * laid.rows as f32 - bounds.size.height).max(zero)
+            });
             self.scroll = point(zero, self.scroll.y.clamp(zero, most));
         }
     }
@@ -614,6 +624,9 @@ impl TextInput {
     // The keys (6.3.5).
 
     fn backspace(&mut self, _: &mut Window, cx: &mut Context<Self>) {
+        if self.delete_pair(cx) {
+            return;
+        }
         let selection = self.model.selection();
         let range = if selection.is_empty() {
             motion::previous_grapheme(self.model.text(), selection.head)..selection.head
@@ -634,10 +647,11 @@ impl TextInput {
     }
 
     fn delete_word(&mut self, forward: bool, _: &mut Window, cx: &mut Context<Self>) {
+        let extra = self.word_chars();
         if forward {
-            self.delete_to(motion::next_word_end, cx);
+            self.delete_to(|text, at| motion::next_word_end_in(text, at, extra), cx);
         } else {
-            self.delete_to(motion::previous_word_start, cx);
+            self.delete_to(|text, at| motion::previous_word_start_in(text, at, extra), cx);
         }
     }
 
@@ -685,10 +699,11 @@ impl TextInput {
     fn word(&mut self, forward: bool, select: bool, _: &mut Window, cx: &mut Context<Self>) {
         let text = self.model.text();
         let head = self.model.head();
+        let extra = self.word_chars();
         let at = if forward {
-            motion::next_word_end(text, head)
+            motion::next_word_end_in(text, head, extra)
         } else {
-            motion::previous_word_start(text, head)
+            motion::previous_word_start_in(text, head, extra)
         };
         self.move_caret(at, select, cx);
     }
@@ -843,7 +858,7 @@ impl TextInput {
     }
 
     fn newline(&mut self, _: &mut Window, cx: &mut Context<Self>) {
-        if !self.read_only {
+        if !self.read_only && !self.newline_code(cx) {
             let range = self.model.selection().range();
             self.edit(range, "\n", EditKind::Typing, cx);
         }
@@ -975,7 +990,7 @@ impl TextInput {
         if !selection.is_empty() {
             return;
         }
-        let (start, end) = motion::word_around(self.model.text(), selection.head);
+        let (start, end) = motion::word_around_in(self.model.text(), selection.head, self.word_chars());
         if start < end {
             self.model.select(start, end);
             self.model.goal_x = None;
@@ -1074,6 +1089,10 @@ impl TextInput {
             return;
         }
         window.focus(&self.focus, cx);
+        if self.bar_press(event.position, window, cx) {
+            cx.stop_propagation();
+            return;
+        }
         let Some((at, end_bias)) = self.index_at(event.position, window, cx) else {
             return;
         };
@@ -1085,7 +1104,7 @@ impl TextInput {
             1 if !range.is_empty() && range.contains(&at) => inside = true,
             1 => self.model.move_to(at),
             2 => {
-                let (start, end) = motion::word_around(text, at);
+                let (start, end) = motion::word_around_in(text, at, self.word_chars());
                 self.model.select(start, end);
             }
             3 => {
@@ -1116,6 +1135,9 @@ impl TextInput {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.bar_drag(event.position, window, cx) {
+            return;
+        }
         if self.press.is_none() || event.pressed_button != Some(MouseButton::Left) {
             return;
         }
@@ -1145,7 +1167,7 @@ impl TextInput {
         let text = self.model.text();
         let (anchor, head) = match clicks {
             2 => {
-                let (start, end) = motion::word_around(text, at);
+                let (start, end) = motion::word_around_in(text, at, self.word_chars());
                 if at < origin.start {
                     (origin.end, start)
                 } else {
@@ -1176,6 +1198,9 @@ impl TextInput {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.bar_release(cx) {
+            return;
+        }
         let Some(press) = self.press.take() else {
             return;
         };
@@ -1218,7 +1243,10 @@ impl TextInput {
             return;
         };
         let laid = self.layout(window, cx);
-        let delta = event.delta.pixel_delta(laid.line_height);
+        let mut delta = event.delta.pixel_delta(laid.line_height);
+        if self.code.is_some() && event.modifiers.alt {
+            delta = point(delta.x * FAST_SCROLL, delta.y * FAST_SCROLL);
+        }
         let before = self.scroll;
         if self.mode == Mode::OneLine {
             self.scroll.x -= if delta.x == px(0.) { delta.y } else { delta.x };
@@ -1228,10 +1256,33 @@ impl TextInput {
         self.clamp_scroll(&laid, bounds);
         // A box that cannot scroll leaves the wheel to the list around it.
         if self.scroll != before {
+            self.code_scrolled(cx);
             cx.stop_propagation();
             cx.notify();
         }
     }
+}
+
+/// `runs` with `range` underlined, split where it starts and ends.
+fn underline_range(runs: Vec<TextRun>, range: Range<usize>, underline: UnderlineStyle) -> Vec<TextRun> {
+    let mut out = Vec::new();
+    let mut at = 0;
+    for run in runs {
+        let (start, end) = (at, at + run.len);
+        at = end;
+        let cuts = [start, range.start.clamp(start, end), range.end.clamp(start, end), end];
+        for part in cuts.windows(2) {
+            if part[1] > part[0] {
+                let inside = part[0] >= range.start && part[1] <= range.end;
+                out.push(TextRun {
+                    len: part[1] - part[0],
+                    underline: if inside { Some(underline) } else { run.underline },
+                    ..run.clone()
+                });
+            }
+        }
+    }
+    out
 }
 
 /// The indent of the line that starts `line`: its count of leading spaces and tabs, and

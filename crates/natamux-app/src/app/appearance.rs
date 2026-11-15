@@ -43,6 +43,10 @@ pub struct Appearance {
     /// The font the user picked for terminals, else None: they use the buffer font and size.
     pub terminal_font: Option<(SharedString, Pixels)>,
     pub hide_scrollbars: bool,
+    /// A `-scrollbar` shot: the code views show their scrollbar all the time.
+    pub always_scrollbars: bool,
+    /// The diff's Show whitespace: Zed showed the whitespace of every editor then.
+    pub show_whitespace: bool,
 }
 
 impl Global for Appearance {}
@@ -72,6 +76,8 @@ fn appearance(zoom: f32, terminal: &ResolvedFont, shot: Option<&str>) -> Appeara
             )
         }),
         hide_scrollbars: shot.is_some_and(|state| !shows_scrollbars(state)),
+        always_scrollbars: shot.is_some_and(shows_scrollbars),
+        show_whitespace: false,
     }
 }
 
@@ -103,7 +109,9 @@ pub fn apply(view: &ViewState, cx: &mut App) {
     SettingsStore::update_global(cx, |store, cx| {
         let _ = store.set_user_settings(&content, cx);
     });
-    cx.set_global(appearance(zoom, &font, shot));
+    let mut look = appearance(zoom, &font, shot);
+    look.show_whitespace = view.diff.show_whitespace;
+    cx.set_global(look);
 }
 
 #[cfg(test)]

@@ -1,5 +1,5 @@
 //! `TextBox`: the one place that builds and drives the app's text inputs (plan 6.3.1). It wraps
-//! the own `TextInput`, or an `Editor` that something else made (the JSON tab, until S4.3).
+//! the own `TextInput` (also the one of a code view), or an `Editor` that a test made.
 //! Callers read and write through these methods and hear changes as `TextEvent`s.
 
 use std::sync::Arc;
@@ -39,6 +39,7 @@ pub struct TextBox {
 
 #[derive(Clone)]
 enum Inner {
+    #[cfg_attr(not(test), allow(dead_code))]
     Zed(Entity<Editor>),
     Own(Entity<TextInput>),
 }
@@ -71,8 +72,9 @@ impl TextBox {
         })
     }
 
-    /// A full text view in the buffer font: wrapped text only, no gutter. The Docs edit box and
-    /// its source view (`read_only`).
+    /// A full text view in the buffer font: wrapped text only, no gutter. The app builds the Docs
+    /// boxes as code views (`CodeView::plain`); the tests of every box kind use this one.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn plain(read_only: bool, window: &mut Window, cx: &mut App) -> Self {
         Self::own(window, cx, |window, cx| {
             TextInput::plain(read_only, window, cx)
@@ -92,8 +94,16 @@ impl TextBox {
 }
 
 impl TextBox {
-    /// Wraps an editor that something else made, so the form parts can frame it. For the JSON
-    /// tab until it has its own code view.
+    /// The box of a code view's input.
+    pub(super) fn of_input(input: &Entity<TextInput>) -> Self {
+        Self {
+            inner: Inner::Own(input.clone()),
+        }
+    }
+
+    /// Wraps an editor that something else made, so the form parts can frame it. Only tests of
+    /// Zed's editor use it now.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn of_editor(editor: &Entity<Editor>) -> Self {
         Self {
             inner: Inner::Zed(editor.clone()),
@@ -132,7 +142,6 @@ impl TextBox {
 
     /// Changes the text into `text` with the fewest edits: the caret, the scroll and the undo
     /// history stay. A wrapped `Editor` takes the whole text instead.
-    #[cfg_attr(not(test), allow(dead_code))]
     pub fn replace_minimal(&self, text: &str, window: &mut Window, cx: &mut App) {
         match &self.inner {
             Inner::Zed(editor) => editor.update(cx, |editor, cx| editor.set_text(text, window, cx)),

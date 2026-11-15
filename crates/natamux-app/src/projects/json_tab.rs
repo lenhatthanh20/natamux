@@ -1,12 +1,11 @@
 //! The JSON tab of Project settings (`JsonTab.tsx`, layout-b 5.8): the error alert while the text
-//! cannot be read, the problems of the pipeline, then the draft text in a full Zed editor. The
-//! editor and the draft follow each other: a user edit sets the draft text, a text set from
-//! outside (Stages, Issues, Import, Reset, Reload) goes into the same buffer as an edit of the
-//! changed parts. The Copy button copies the draft as shown, also when it cannot be read.
+//! cannot be read, the problems of the pipeline, then the draft text in a code view (JSON
+//! colours, indent guides, no line highlight, wrapped). The view and the draft follow each other:
+//! a user edit sets the draft text, a text set from outside (Stages, Issues, Import, Reset,
+//! Reload) goes in as an edit of the changed parts only, so typed chars, the caret and the undo
+//! history stay. The Copy button copies the draft as shown, also when it cannot be read.
 
-use editor::{CurrentLineHighlight, Editor, EditorEvent, MultiBuffer};
 use gpui::{ClickEvent, ClipboardItem, Entity, FocusHandle, Focusable, Subscription};
-use language::Buffer;
 use natamux_proto::stages::pipeline_rules::IssueLevel;
 use ui::{Tooltip, prelude::*};
 
@@ -16,22 +15,24 @@ use crate::components::settings_card::SettingsGroup;
 use crate::components::settings_tile::{AlertKind, SettingsAlert};
 use crate::components::toast_rules::ToastTone;
 use crate::components::toasts::toast;
-use crate::git::diff_editors::plain_switches;
-use crate::git::languages::language_for;
 use crate::stages::pipeline_editor::PipelineEditor;
-use crate::text_view::text_box::TextBox;
+use crate::text_view::code_view::CodeView;
+use crate::text_view::text_box::{TextBox, TextEvent};
 
 /// The box of the editor (layout-b 5.8).
 const EDITOR_HEIGHT: f32 = 456.;
+
+/// The path the view takes its language from.
+const PATH: &str = ".natamux.json";
 
 const NOTE: &str = "The same draft as the other tabs. Nothing is saved until you click Save.";
 
 pub struct JsonTab {
     pipeline: Entity<PipelineEditor>,
-    editor: Entity<Editor>,
-    buffer: Entity<Buffer>,
+    code: TextBox,
+    #[cfg(test)]
+    view: CodeView,
     _subscriptions: Vec<Subscription>,
-    _set: Option<gpui::Task<()>>,
 }
 
 impl JsonTab {
@@ -41,66 +42,47 @@ impl JsonTab {
         cx: &mut Context<Self>,
     ) -> Self {
         let text = pipeline.read(cx).text().to_owned();
-        let buffer = cx.new(|cx| Buffer::local(text, cx));
-        color_as_json(&buffer, cx);
-        let multi = cx.new(|cx| MultiBuffer::singleton(buffer.clone(), cx));
-        let editor = cx.new(|cx| {
-            let mut editor = Editor::for_multibuffer(multi, None, window, cx);
-            // Long prompts wrap, so no horizontal bar.
-            plain_switches(&mut editor, true, window, cx);
-            editor.set_show_horizontal_scrollbar(false, cx);
-            editor.set_show_gutter(false, cx);
-            editor.set_current_line_highlight(Some(CurrentLineHighlight::None));
-            editor
-        });
+        let view = CodeView::new(PATH, &text, false, window, cx);
+        let code = view.text_box();
         let subscriptions = vec![
-            cx.subscribe(&editor, |this, editor, event: &EditorEvent, cx| {
-                if matches!(event, EditorEvent::BufferEdited) {
-                    let text = editor.read(cx).text(cx);
+            code.subscribe(cx, |this, code, event, cx| {
+                if event == TextEvent::Edited {
+                    let text = code.text(cx);
                     this.pipeline
                         .update(cx, |pipeline, cx| pipeline.set_text(&text, cx));
                 }
             }),
-            cx.observe(&pipeline, |this, _, cx| {
-                this.follow_draft(cx);
+            cx.observe_in(&pipeline, window, |this, _, window, cx| {
+                this.follow_draft(window, cx);
                 cx.notify();
             }),
         ];
         JsonTab {
             pipeline,
-            editor,
-            buffer,
+            code,
+            #[cfg(test)]
+            view,
             _subscriptions: subscriptions,
-            _set: None,
         }
     }
 
-    /// A text set from outside goes into the same buffer: only the changed parts are edited, so
-    /// the cursor and the scroll stay. The edit that follows sets the same text on the draft,
-    /// which ignores it.
-    fn follow_draft(&mut self, cx: &mut Context<Self>) {
+    /// A text set from outside goes in as an edit of the changed parts only, so the caret and the
+    /// scroll stay. The edit that follows sets the same text on the draft, which ignores it.
+    fn follow_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let text = self.pipeline.read(cx).text().to_owned();
-        if self.editor.read(cx).text(cx) == text {
-            return;
+        if self.code.text(cx) != text {
+            self.code.replace_minimal(&text, window, cx);
         }
-        let buffer = self.buffer.clone();
-        let diff = buffer.read(cx).diff(text, cx);
-        self._set = Some(cx.spawn(async move |_, cx| {
-            let diff = diff.await;
-            buffer.update(cx, |buffer, cx| {
-                buffer.apply_diff(diff, cx);
-            });
-        }));
     }
 
     /// The stop of the Tab ring.
     pub fn stop(&self, cx: &App) -> FocusHandle {
-        self.editor.focus_handle(cx)
+        self.code.focus_handle(cx)
     }
 
     #[cfg(test)]
-    pub fn editor(&self) -> &Entity<Editor> {
-        &self.editor
+    pub fn code_view(&self) -> &CodeView {
+        &self.view
     }
 }
 
@@ -108,20 +90,6 @@ impl Focusable for JsonTab {
     fn focus_handle(&self, cx: &App) -> FocusHandle {
         self.stop(cx)
     }
-}
-
-/// The buffer takes the JSON grammar once it is loaded, for colours.
-fn color_as_json(buffer: &Entity<Buffer>, cx: &mut Context<JsonTab>) {
-    let Some(language) = language_for(".natamux.json", cx) else {
-        return;
-    };
-    let buffer = buffer.clone();
-    cx.spawn(async move |_, cx| {
-        if let Some(language) = language.await {
-            buffer.update(cx, |buffer, cx| buffer.set_language(Some(language), cx));
-        }
-    })
-    .detach();
 }
 
 impl Render for JsonTab {
@@ -153,7 +121,7 @@ impl Render for JsonTab {
                     toast("Copied the JSON.", ToastTone::Info, cx);
                 }),
         );
-        let editor = SettingsInput::new(&TextBox::of_editor(&self.editor))
+        let editor = SettingsInput::new(&self.code)
             .bar_edge()
             .radius(8.)
             .height(EDITOR_HEIGHT)

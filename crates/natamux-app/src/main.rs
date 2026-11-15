@@ -405,8 +405,11 @@ mod text_view {
     mod blink;
     #[cfg(test)]
     mod code_mouse_tests;
+    mod code_rules;
     #[cfg(test)]
     mod code_typing_tests;
+    /// The code view (docs/plan-mit-license.md S4.3b): the JSON tab and the Docs views.
+    pub mod code_view;
     /// The own text input (docs/plan-mit-license.md S3.3), the default since S3.4.
     #[cfg_attr(not(test), allow(dead_code))]
     pub mod element;
@@ -418,7 +421,7 @@ mod text_view {
     mod text_box_facade_tests;
     #[cfg(test)]
     mod text_box_tests;
-    // The code view uses it from S4.3; until then only its tests do.
+    // The code view uses it; a few parts wait for the editor tab (S4.3c).
     #[cfg_attr(not(test), allow(dead_code))]
     pub mod highlight;
     mod ime;

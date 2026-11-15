@@ -12,10 +12,12 @@ enum Class {
     Newline,
 }
 
-fn class(c: char) -> Class {
+/// The class of `c`; the chars of `extra` count as word chars (a code language's own, as `#` in
+/// JSON).
+fn class(c: char, extra: &str) -> Class {
     if c == '\n' {
         Class::Newline
-    } else if c.is_alphanumeric() || c == '_' {
+    } else if c.is_alphanumeric() || c == '_' || extra.contains(c) {
         Class::Word
     } else if c.is_whitespace() {
         Class::Space
@@ -45,6 +47,12 @@ pub fn next_grapheme(text: &str, offset: usize) -> usize {
 /// Skips the spaces before `offset`, then one run of word or punctuation chars. At the start of a
 /// line it steps over the newline only.
 pub fn previous_word_start(text: &str, offset: usize) -> usize {
+    previous_word_start_in(text, offset, "")
+}
+
+/// `previous_word_start`, with the chars of `extra` as word chars.
+pub fn previous_word_start_in(text: &str, offset: usize, extra: &str) -> usize {
+    let class = |c| class(c, extra);
     let mut chars = text[..offset].char_indices().rev().peekable();
     let mut at = offset;
     while let Some(&(index, c)) = chars.peek() {
@@ -72,6 +80,12 @@ pub fn previous_word_start(text: &str, offset: usize) -> usize {
 
 /// The mirror of `previous_word_start`: the spaces after `offset`, then one run.
 pub fn next_word_end(text: &str, offset: usize) -> usize {
+    next_word_end_in(text, offset, "")
+}
+
+/// `next_word_end`, with the chars of `extra` as word chars.
+pub fn next_word_end_in(text: &str, offset: usize, extra: &str) -> usize {
+    let class = |c| class(c, extra);
     let mut chars = text[offset..]
         .char_indices()
         .map(|(index, c)| (offset + index, c))
@@ -102,6 +116,12 @@ pub fn next_word_end(text: &str, offset: usize) -> usize {
 
 /// The word or the run of spaces or punctuation around `offset`, as a double click selects it.
 pub fn word_around(text: &str, offset: usize) -> (usize, usize) {
+    word_around_in(text, offset, "")
+}
+
+/// `word_around`, with the chars of `extra` as word chars.
+pub fn word_around_in(text: &str, offset: usize, extra: &str) -> (usize, usize) {
+    let class = |c| class(c, extra);
     let after = text[offset..].chars().next();
     let before = text[..offset].chars().next_back();
     let run = match (before, after) {

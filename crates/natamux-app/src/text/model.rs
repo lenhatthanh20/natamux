@@ -91,6 +91,14 @@ pub fn normalize(text: &str) -> String {
 }
 
 impl TextModel {
+    /// A model that starts with `text`: the caret at the start and nothing to undo.
+    pub fn with_text(text: &str) -> Self {
+        TextModel {
+            text: normalize(text),
+            ..TextModel::default()
+        }
+    }
+
     pub fn text(&self) -> &str {
         &self.text
     }

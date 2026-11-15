@@ -45,7 +45,9 @@ fn the_copy_button_copies_the_draft_also_when_it_cannot_be_read(cx: &mut TestApp
 fn the_editor_fills_the_box_but_its_left_inset(cx: &mut TestAppContext) {
     let (tab, cx) = open_tab(cx);
     let outer = cx.debug_bounds("json-box").expect("the box was not drawn");
-    let inner = tab.read_with(cx, |tab, cx| tab.editor.read(cx).last_bounds().cloned());
+    let inner = tab.read_with(cx, |tab, cx| {
+        tab.code_view().input().read(cx).last_bounds().cloned()
+    });
     let inner = inner.expect("the editor was not drawn");
     let border = px(1.);
     assert!(

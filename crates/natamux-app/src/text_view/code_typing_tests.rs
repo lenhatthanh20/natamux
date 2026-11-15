@@ -2,7 +2,8 @@
 //! of brackets and quotes (and none inside strings and comments), typing over a closing char,
 //! Backspace in an empty pair, Enter between brackets, `/*` + Enter, comment and Markdown list
 //! continuation, Tab, and word moves over `a#b $c d-e.f:g`. Each case records the text and the
-//! selections after each step; the own code view must give the same.
+//! selections after each step; the own code view must give the same. The JSON tab runs on the own
+//! code view since S4.3b; the editor tab is still Zed's editor until S4.3c.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
@@ -16,6 +17,7 @@ use crate::app::{golden_files, shortcuts, test_views};
 use crate::files::file_editor_body::FileEditorBody;
 use crate::projects::json_tab::JsonTab;
 use crate::stages::pipeline_editor::PipelineEditor;
+use crate::text_view::text_input::TextInput;
 
 const SET: &str = "code_typing";
 /// Where a case's text has its caret.
@@ -201,7 +203,7 @@ pub(super) fn start(cx: &mut TestAppContext) -> (Entity<Slot>, &mut VisualTestCo
     cx.add_window_view(|_, _| Slot { view: None })
 }
 
-/// Shows `text` (with its caret mark) in the host's editor, focused, and returns that editor.
+/// Shows `text` (with its caret mark) in the editor tab, focused, and returns its editor.
 pub(super) fn open(
     host: &Host,
     text: &str,
@@ -214,16 +216,9 @@ pub(super) fn open(
     let column = (caret - before.rfind('\n').map_or(0, |at| at + 1)) as u32;
     let text = text.replace(CARET, "");
     let editor = slot.update_in(cx, |slot, window, cx| {
-        let (view, editor): (AnyView, _) = if host.json_tab {
-            let pipeline = cx.new(|_| PipelineEditor::new(&text));
-            let tab = cx.new(|cx| JsonTab::new(pipeline, window, cx));
-            let editor = tab.read(cx).editor().clone();
-            (tab.into(), editor)
-        } else {
-            let body = cx.new(|cx| FileEditorBody::new(host.path, &text, window, cx));
-            let editor = body.read(cx).editor().clone();
-            (body.into(), editor)
-        };
+        let body = cx.new(|cx| FileEditorBody::new(host.path, &text, window, cx));
+        let editor = body.read(cx).editor().clone();
+        let view: AnyView = body.into();
         slot.view = Some(view);
         cx.notify();
         editor
@@ -257,21 +252,93 @@ pub(super) fn state(editor: &Entity<Editor>, cx: &mut VisualTestContext) -> (Str
     })
 }
 
+/// The JSON tab with `text` (with its caret mark), focused: its own code view's input and the
+/// name of the language the view colours as.
+fn open_json_tab(
+    text: &str,
+    slot: &Entity<Slot>,
+    cx: &mut VisualTestContext,
+) -> (Entity<TextInput>, Option<String>) {
+    let caret = text.find(CARET).unwrap_or(text.len());
+    let text = text.replace(CARET, "");
+    let (input, language) = slot.update_in(cx, |slot, window, cx| {
+        let pipeline = cx.new(|_| PipelineEditor::new(&text));
+        let tab = cx.new(|cx| JsonTab::new(pipeline, window, cx));
+        let code = tab.read(cx).code_view().clone();
+        let language = code.language_name(cx).map(str::to_owned);
+        slot.view = Some(tab.into());
+        cx.notify();
+        (code.input().clone(), language)
+    });
+    cx.run_until_parked();
+    input.update_in(cx, |input, window, cx| {
+        window.focus(&input.focus_handle(cx), cx);
+        input.model.move_to(caret);
+        cx.notify();
+    });
+    cx.run_until_parked();
+    (input, language)
+}
+
+/// A text offset as `[row, column]`, the column in bytes as Zed's editor counts.
+fn row_column(text: &str, at: usize) -> [usize; 2] {
+    let before = &text[..at];
+    let line = before.rfind('\n').map_or(0, |at| at + 1);
+    [before.matches('\n').count(), at - line]
+}
+
+/// `state` of the own code view.
+fn own_state(input: &Entity<TextInput>, cx: &mut VisualTestContext) -> (String, Value) {
+    input.read_with(cx, |input, _| {
+        let text = input.model.text();
+        let selection = input.model.selection();
+        let ([tail_row, tail], [head_row, head]) = (
+            row_column(text, selection.anchor),
+            row_column(text, selection.head),
+        );
+        (
+            text.to_owned(),
+            json!([[tail_row, tail, head_row, head]]),
+        )
+    })
+}
+
+/// The editor of a case: Zed's (the editor tab) or the own code view (the JSON tab).
+enum Target {
+    Zed(Entity<Editor>),
+    Own(Entity<TextInput>),
+}
+
+impl Target {
+    fn state(&self, cx: &mut VisualTestContext) -> (String, Value) {
+        match self {
+            Target::Zed(editor) => state(editor, cx),
+            Target::Own(input) => own_state(input, cx),
+        }
+    }
+}
+
 /// The language of the host, then one row per case and step: `[case, step, text, selections]`.
 fn run(host: &Host, cx: &mut TestAppContext) -> Vec<Value> {
     let (slot, cx) = start(cx);
     let mut rows = Vec::new();
     for (i, case) in cases(host).into_iter().enumerate() {
-        let editor = open(host, &case.text, &slot, cx);
-        if i == 0 {
+        let (target, language) = if host.json_tab {
+            let (input, language) = open_json_tab(&case.text, &slot, cx);
+            (Target::Own(input), language)
+        } else {
+            let editor = open(host, &case.text, &slot, cx);
             let language = editor.update(cx, |editor, cx| {
                 let buffer = editor.buffer().read(cx).as_singleton()?;
                 let language = buffer.read(cx).language()?;
                 Some(language.name().to_string())
             });
+            (Target::Zed(editor), language)
+        };
+        if i == 0 {
             rows.push(json!({ "path": host.path, "language": language }));
         }
-        let (text, selections) = state(&editor, cx);
+        let (text, selections) = target.state(cx);
         rows.push(json!([case.label, 0, text, selections]));
         for (n, step) in case.steps.iter().enumerate() {
             match step {
@@ -279,7 +346,7 @@ fn run(host: &Host, cx: &mut TestAppContext) -> Vec<Value> {
                 Step::Press(keys) => press(cx, keys),
             }
             cx.run_until_parked();
-            let (text, selections) = state(&editor, cx);
+            let (text, selections) = target.state(cx);
             rows.push(json!([case.label, n + 1, text, selections]));
         }
     }
