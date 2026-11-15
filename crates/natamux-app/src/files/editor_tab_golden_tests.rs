@@ -31,8 +31,9 @@ const REVIEWED: &str = "T-0143";
 const SOURCE: &str = "src/checkout.ts";
 /// The term of the `editor-find` shot.
 const TERM: &str = "coupon";
-/// The caret row of the second find, below the first matches.
-const LATER_ROW: u32 = 12;
+/// The caret row of the second find, between the matches, so its first Enter goes to the match
+/// after the caret and not to the first one.
+const LATER_ROW: u32 = 3;
 
 /// The editor tab of `SOURCE` in the reviewed task of the fake, read and drawn, with Show
 /// whitespace on.
@@ -200,10 +201,39 @@ fn blame_with_a_draft_matches_the_golden_file(cx: &mut TestAppContext) {
     golden_files::check(SET, "blame-draft-checkout", &blocked_rows(cx));
 }
 
+/// The active matches of a find row.
+fn active(row: &Value) -> Vec<Value> {
+    let found = row[1].as_array().unwrap();
+    found.iter().filter(|found| found[2] == "active").cloned().collect()
+}
+
+/// Fails when the rows show a find that does not move: a sign that Enter and Shift+Enter did not
+/// reach the bar, which a golden file would otherwise keep as the expected result.
+fn assert_find_moves(rows: &[Value]) {
+    for label in ["start ", "later "] {
+        let steps: Vec<&Value> = rows
+            .iter()
+            .filter(|row| row[0].as_str().is_some_and(|step| step.starts_with(label)))
+            .collect();
+        let count = steps[0][1].as_array().unwrap().len();
+        assert!(count > 1, "{label}: one match or none");
+        let enters = &steps[1..=count + 1];
+        assert_ne!(enters[0][2], steps[0][2], "{label}: Enter did not move the selection");
+        for enter in enters {
+            assert_eq!(active(enter).len(), 1, "{label}: not one active match");
+        }
+        for pair in enters.windows(2) {
+            assert_ne!(active(pair[0]), active(pair[1]), "{label}: Enter did not move the match");
+        }
+        assert_eq!(active(enters[count]), active(enters[0]), "{label}: no wrap");
+        let back = steps[count + 2];
+        assert_eq!(active(back), active(enters[count - 1]), "{label}: Shift+Enter");
+    }
+}
+
 #[gpui::test]
-fn the_find_term_has_more_than_one_match(cx: &mut TestAppContext) {
-    let rows = find_rows(cx);
-    assert!(rows[0][1].as_array().is_some_and(|found| found.len() > 1));
+fn the_find_moves_through_the_matches_and_wraps(cx: &mut TestAppContext) {
+    assert_find_moves(&find_rows(cx));
 }
 
 #[gpui::test]
@@ -219,7 +249,9 @@ fn the_blame_labels_show_at_the_line_starts(cx: &mut TestAppContext) {
 #[gpui::test]
 #[ignore]
 fn golden_editor_tab_find(cx: &mut TestAppContext) {
-    golden_files::write(SET, "find-checkout", &find_rows(cx));
+    let rows = find_rows(cx);
+    assert_find_moves(&rows);
+    golden_files::write(SET, "find-checkout", &rows);
 }
 
 #[gpui::test]

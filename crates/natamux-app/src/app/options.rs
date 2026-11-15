@@ -178,10 +178,11 @@ pub enum Shot {
     /// The Docs edit box with a selection over spaces, a tab and rows of other lengths (S3.3).
     WorkspaceDocsEditSelection,
     WorkspaceEditorScrollbar,
-    /// The editor tab with Show whitespace on, and with sticky rows from three nested blocks
-    /// (S4.3a).
+    /// The editor tab with Show whitespace on, with sticky rows from three nested blocks, and
+    /// with the innermost sticky row pushed up by the end of its block (S4.3a).
     EditorWhitespace,
     EditorSticky,
+    EditorStickyEnd,
     EditForm,
     TreeRename,
     SettingsFontError,
@@ -206,7 +207,7 @@ pub enum Shot {
 }
 
 impl Shot {
-    pub const ALL: [Shot; 167] = [
+    pub const ALL: [Shot; 168] = [
         Shot::TasksTable,
         Shot::TasksBoard,
         Shot::BoardHoverCard,
@@ -333,6 +334,7 @@ impl Shot {
         Shot::WorkspaceEditorScrollbar,
         Shot::EditorWhitespace,
         Shot::EditorSticky,
+        Shot::EditorStickyEnd,
         Shot::EditForm,
         Shot::TreeRename,
         Shot::SettingsFontError,
@@ -504,6 +506,7 @@ impl Shot {
             Shot::WorkspaceEditorScrollbar => "workspace-editor-scrollbar",
             Shot::EditorWhitespace => "editor-whitespace",
             Shot::EditorSticky => "editor-sticky",
+            Shot::EditorStickyEnd => "editor-sticky-end",
             Shot::EditForm => "edit-form",
             Shot::TreeRename => "tree-rename",
             Shot::SettingsFontError => "settings-font-error",

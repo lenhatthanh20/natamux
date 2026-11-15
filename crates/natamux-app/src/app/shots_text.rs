@@ -42,6 +42,9 @@ const WRAPPED_FILE: &str = "docs/guide.md";
 pub(crate) const STICKY_FILE: &str = "src/catalog_view.ts";
 const STICKY_PARTS: usize = 120;
 const STICKY_LINE: u32 = 70;
+/// The top row of the sticky end state: half a row past the last top row where the function's
+/// head sits in its place, so the end of the function pushes it up by half a row.
+const STICKY_END_TOP: f64 = 125.5;
 /// Page Down presses and Shift+Down presses of the editor scrollbar state.
 const PAGES: usize = 12;
 const SELECTED_LINES: usize = 4;
@@ -71,6 +74,7 @@ pub fn is_text_shot(shot: Shot) -> bool {
             | Shot::TextBoxSelectionUnfocused
             | Shot::WorkspaceEditorScrollbar
             | Shot::EditorSticky
+            | Shot::EditorStickyEnd
             | Shot::EditForm
             | Shot::TreeRename
             | Shot::SettingsFontError
@@ -119,7 +123,9 @@ pub fn prepare(shot: Shot) {
         Shot::WorkspaceEditorWrapped => {
             fake.put_workspace_file(REVIEWED, WRAPPED_FILE, WRAPPED_TEXT.to_owned());
         }
-        Shot::EditorSticky => fake.put_workspace_file(REVIEWED, STICKY_FILE, sticky_file()),
+        Shot::EditorSticky | Shot::EditorStickyEnd => {
+            fake.put_workspace_file(REVIEWED, STICKY_FILE, sticky_file())
+        }
         Shot::WorkspaceDocsRich => {
             fake.write_stage_file(REVIEWED, RICH_DOC, RICH_TEXT.to_owned())
                 .ok();
@@ -190,6 +196,11 @@ pub async fn run(handle: WindowHandle<Root>, shot: Shot, cx: &mut AsyncApp) {
         Shot::EditorSticky => {
             wait_for_file(handle, STICKY_FILE, cx).await;
             go_to_line(handle, STICKY_FILE, STICKY_LINE, cx);
+        }
+        Shot::EditorStickyEnd => {
+            wait_for_file(handle, STICKY_FILE, cx).await;
+            focus_file(handle, STICKY_FILE, cx);
+            scroll_to(handle, STICKY_FILE, STICKY_END_TOP, cx);
         }
         Shot::EditForm => {
             handle
@@ -300,7 +311,7 @@ fn enter(shot: Shot, root: &mut Root, window: &mut gpui::Window, cx: &mut gpui::
             editor_tab(&dashboard, LONG_FILE, cx)
         }
         Shot::WorkspaceEditorWrapped => editor_tab(&dashboard, WRAPPED_FILE, cx),
-        Shot::EditorSticky => editor_tab(&dashboard, STICKY_FILE, cx),
+        Shot::EditorSticky | Shot::EditorStickyEnd => editor_tab(&dashboard, STICKY_FILE, cx),
         Shot::EditForm => shots::details(&dashboard, REVIEWED, cx),
         Shot::TreeRename => rename_row(root, window, cx),
         Shot::SettingsFontError => {
@@ -467,6 +478,25 @@ fn go_to_line(handle: WindowHandle<Root>, path: &str, line: u32, cx: &mut AsyncA
             let body = editor.and_then(|editor| editor.read(cx).body().cloned());
             match body {
                 Some(body) => body.update(cx, |body, cx| body.go_to(line, Some(1), window, cx)),
+                None => eprintln!("shot: {path} is not in the editor tab"),
+            }
+        })
+        .ok();
+}
+
+/// `path`'s editor scrolls so `top` (0-based, may be part of a row) is its top row.
+fn scroll_to(handle: WindowHandle<Root>, path: &str, top: f64, cx: &mut AsyncApp) {
+    handle
+        .update(cx, |root, window, cx| {
+            let editor = file_editor(root, path, cx);
+            let body = editor.and_then(|editor| editor.read(cx).body().cloned());
+            match body {
+                Some(body) => {
+                    let text = body.read(cx).editor().clone();
+                    text.update(cx, |text, cx| {
+                        text.set_scroll_position(gpui::point(0., top), window, cx);
+                    });
+                }
                 None => eprintln!("shot: {path} is not in the editor tab"),
             }
         })

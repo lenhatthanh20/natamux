@@ -168,23 +168,50 @@ fn the_outline_and_the_guides_match_the_golden_files(cx: &mut TestAppContext) {
     }
 }
 
+/// Fails when a shot file's rows miss what the shots draw: a sign that a guess about the old code
+/// (the parse, the background answer of the active guide) is wrong. The old code takes a tab size
+/// of 4, so the 2-space rows of the long file give no guide; the sticky file's 4-space rows give
+/// one, active only with the caret on some rows.
+fn assert_sane(name: &str, rows: &[Value]) {
+    assert!(rows[0]["parsed"].as_bool().unwrap(), "{name}: not parsed");
+    let has = |kind: &str| rows.iter().any(|row| row[0] == kind);
+    assert!(has("item"), "{name}: no outline item");
+    if name != "file-sticky" {
+        return;
+    }
+    assert!(has("guide"), "{name}: no indent guide");
+    let active: Vec<bool> = rows
+        .iter()
+        .filter(|row| row[0] == "active")
+        .map(|row| !row[2].as_array().unwrap().is_empty())
+        .collect();
+    assert!(active.contains(&true), "{name}: no caret row has an active guide");
+    assert!(active.contains(&false), "{name}: every caret row has an active guide");
+}
+
+/// Whether `name` is the long file or the sticky file of the editor shots.
+fn is_shot_file(name: &str) -> bool {
+    matches!(name, "file-long" | "file-sticky")
+}
+
 #[gpui::test]
-fn the_shot_files_have_outline_items_and_guides(cx: &mut TestAppContext) {
+fn the_shot_files_have_outline_items_and_an_active_guide(cx: &mut TestAppContext) {
     start(cx);
-    for (name, path, text) in files().into_iter().rev().take(2) {
-        let rows = rows(&path, &text, cx);
-        assert!(rows[0]["parsed"].as_bool().unwrap(), "{name}: not parsed");
-        let has = |kind: &str| rows.iter().any(|row| row[0] == kind);
-        assert!(has("item"), "{name}: no outline item");
-        assert!(has("guide"), "{name}: no indent guide");
+    for (name, path, text) in files().into_iter().filter(|(name, ..)| is_shot_file(name)) {
+        assert_sane(&name, &rows(&path, &text, cx));
     }
 }
 
+/// Writes nothing wrong: a shot file whose rows fail `assert_sane` stops the run.
 #[gpui::test]
 #[ignore]
 fn golden_editor_outline(cx: &mut TestAppContext) {
     start(cx);
     for (name, path, text) in files() {
-        golden_files::write(SET, &name, &rows(&path, &text, cx));
+        let rows = rows(&path, &text, cx);
+        if is_shot_file(&name) {
+            assert_sane(&name, &rows);
+        }
+        golden_files::write(SET, &name, &rows);
     }
 }

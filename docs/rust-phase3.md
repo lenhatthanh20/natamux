@@ -261,6 +261,7 @@ The move off Zed's GPL crates (`docs/plan-mit-license.md`) redraws the terminal,
 | `workspace-editor-scrollbar` | A 1,200-line TypeScript file paged down, four lines selected, the scrollbars shown, long lines that do not wrap |
 | `editor-whitespace` | `src/checkout.ts` in the editor tab with Show whitespace on: the marks of its spaces |
 | `editor-sticky` | A TypeScript file with a function in a method in a class, the caret on line 70 in the middle of the function: the class, the method and the function head as sticky rows |
+| `editor-sticky-end` | The same file scrolled to row 126 and a half, near the end of the function: the function head pushed up half a row by its last line, the one-line items not sticky |
 | `edit-form` | T-0143's details with the edit form open |
 | `tree-rename` | The sidebar rename of T-0146 in progress (F2) |
 | `settings-font-error` | The Settings search "font" with a size of 40: the error under the size field |
