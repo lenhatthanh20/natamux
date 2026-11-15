@@ -1,7 +1,6 @@
 # The Zed crates Cargo.lock may hold, one per line. scripts/zed-lock-check.py reads it.
 agent_settings
 askpass
-assets
 breadcrumbs
 buffer_diff
 client

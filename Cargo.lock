@@ -366,16 +366,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "assets"
-version = "0.1.0"
-source = "git+https://github.com/lenhatthanh20/zed?rev=2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50#2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50"
-dependencies = [
- "anyhow",
- "gpui",
- "util",
-]
-
-[[package]]
 name = "async-broadcast"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5520,7 +5510,6 @@ version = "1.0.26"
 dependencies = [
  "alacritty_terminal",
  "anyhow",
- "assets",
  "block2 0.6.2",
  "buffer_diff",
  "editor",

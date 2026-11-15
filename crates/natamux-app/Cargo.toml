@@ -8,7 +8,6 @@ publish.workspace = true
 [dependencies]
 alacritty_terminal.workspace = true
 anyhow.workspace = true
-assets.workspace = true
 buffer_diff.workspace = true
 editor.workspace = true
 futures.workspace = true

@@ -88,7 +88,6 @@ yaml-rust2 = "0.13.0"
 # A new git dependency gets the same: fork it, add the pin branch, use the fork's URL here, in the
 # Zed fork's manifests and in deny.toml. Cargo also fetches its submodules: point each one at a fork
 # too (the tree-sitter-yaml fork does it for yaml-test-suite).
-assets = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50" }
 buffer_diff = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50" }
 editor = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50" }
 grammars = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50", features = ["load-grammars"] }
