@@ -434,55 +434,55 @@ version = "0.2.17"
 criteria = "safe-to-deploy"
 
 [[exemptions.cranelift-assembler-x64]]
-version = "0.135.7"
+version = "0.135.8"
 criteria = "safe-to-deploy"
 
 [[exemptions.cranelift-assembler-x64-meta]]
-version = "0.135.7"
+version = "0.135.8"
 criteria = "safe-to-deploy"
 
 [[exemptions.cranelift-bforest]]
-version = "0.135.7"
+version = "0.135.8"
 criteria = "safe-to-deploy"
 
 [[exemptions.cranelift-bitset]]
-version = "0.135.7"
+version = "0.135.8"
 criteria = "safe-to-deploy"
 
 [[exemptions.cranelift-codegen]]
-version = "0.135.7"
+version = "0.135.8"
 criteria = "safe-to-deploy"
 
 [[exemptions.cranelift-codegen-meta]]
-version = "0.135.7"
+version = "0.135.8"
 criteria = "safe-to-deploy"
 
 [[exemptions.cranelift-codegen-shared]]
-version = "0.135.7"
+version = "0.135.8"
 criteria = "safe-to-deploy"
 
 [[exemptions.cranelift-control]]
-version = "0.135.7"
+version = "0.135.8"
 criteria = "safe-to-deploy"
 
 [[exemptions.cranelift-entity]]
-version = "0.135.7"
+version = "0.135.8"
 criteria = "safe-to-deploy"
 
 [[exemptions.cranelift-frontend]]
-version = "0.135.7"
+version = "0.135.8"
 criteria = "safe-to-deploy"
 
 [[exemptions.cranelift-isle]]
-version = "0.135.7"
+version = "0.135.8"
 criteria = "safe-to-deploy"
 
 [[exemptions.cranelift-native]]
-version = "0.135.7"
+version = "0.135.8"
 criteria = "safe-to-deploy"
 
 [[exemptions.cranelift-srcgen]]
-version = "0.135.7"
+version = "0.135.8"
 criteria = "safe-to-deploy"
 
 [[exemptions.crc32fast]]
@@ -1714,11 +1714,11 @@ version = "0.13.6"
 criteria = "safe-to-deploy"
 
 [[exemptions.pulley-interpreter]]
-version = "48.0.7"
+version = "48.0.8"
 criteria = "safe-to-deploy"
 
 [[exemptions.pulley-macros]]
-version = "48.0.7"
+version = "48.0.8"
 criteria = "safe-to-deploy"
 
 [[exemptions.pxfm]]
@@ -2574,7 +2574,7 @@ version = "0.254.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.wasmtime]]
-version = "48.0.7"
+version = "48.0.8"
 criteria = "safe-to-deploy"
 
 [[exemptions.wasmtime-c-api-impl]]
@@ -2582,7 +2582,7 @@ version = "48.0.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.wasmtime-environ]]
-version = "48.0.7"
+version = "48.0.8"
 criteria = "safe-to-deploy"
 
 [[exemptions.wasmtime-internal-c-api-macros]]
@@ -2590,35 +2590,35 @@ version = "48.0.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.wasmtime-internal-component-util]]
-version = "48.0.7"
+version = "48.0.8"
 criteria = "safe-to-deploy"
 
 [[exemptions.wasmtime-internal-core]]
-version = "48.0.7"
+version = "48.0.8"
 criteria = "safe-to-deploy"
 
 [[exemptions.wasmtime-internal-cranelift]]
-version = "48.0.7"
+version = "48.0.8"
 criteria = "safe-to-deploy"
 
 [[exemptions.wasmtime-internal-fiber]]
-version = "48.0.7"
+version = "48.0.8"
 criteria = "safe-to-deploy"
 
 [[exemptions.wasmtime-internal-jit-debug]]
-version = "48.0.7"
+version = "48.0.8"
 criteria = "safe-to-deploy"
 
 [[exemptions.wasmtime-internal-jit-icache-coherence]]
-version = "48.0.7"
+version = "48.0.8"
 criteria = "safe-to-deploy"
 
 [[exemptions.wasmtime-internal-unwinder]]
-version = "48.0.7"
+version = "48.0.8"
 criteria = "safe-to-deploy"
 
 [[exemptions.wasmtime-internal-versioned-export-macros]]
-version = "48.0.7"
+version = "48.0.8"
 criteria = "safe-to-deploy"
 
 [[exemptions.wax]]
