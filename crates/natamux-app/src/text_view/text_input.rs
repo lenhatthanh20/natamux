@@ -17,7 +17,7 @@ use gpui::{
 use theme::ActiveTheme;
 
 use super::blink::Blink;
-use super::element::{CARET_WIDTH, Layout, LayoutKey, TextElement, wrap_width};
+use super::element::{CARET_WIDTH, Layout, LayoutKey, TextElement, text_inset, wrap_width};
 use super::text_box::TextEvent;
 use crate::app::appearance::Appearance;
 use crate::components::form::input_style;
@@ -511,11 +511,13 @@ impl TextInput {
         let rem = self.rem_size(&style, window);
         let font = style.font();
         let font_size = style.font_size.to_pixels(rem);
-        let width = match self.mode {
-            Mode::OneLine => None,
-            _ => self
-                .last_bounds
-                .map(|bounds| wrap_width(&font, font_size, bounds.size.width, window)),
+        let (width, inset) = match self.mode {
+            Mode::OneLine => (None, px(0.)),
+            _ => (
+                self.last_bounds
+                    .map(|bounds| wrap_width(&font, font_size, bounds.size.width, window)),
+                text_inset(&font, font_size, window),
+            ),
         };
         let shows_placeholder = self.model.text().is_empty() && !self.placeholder.is_empty();
         let key = LayoutKey {
@@ -528,6 +530,7 @@ impl TextInput {
             masked: self.masked,
             marked: self.model.marked(),
             placeholder: shows_placeholder.then(|| self.placeholder.clone()),
+            inset,
         };
         if let Some(laid) = &self.laid
             && laid.key == key

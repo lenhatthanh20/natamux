@@ -35,6 +35,9 @@ pub struct LayoutKey {
     pub masked: bool,
     pub marked: Option<Range<usize>>,
     pub placeholder: Option<SharedString>,
+    /// How far right of the box's left edge the text starts: `text_inset` in an area or a full
+    /// box, none in a one-line box (where Zed's editor drew it, B1 shots).
+    pub inset: Pixels,
 }
 
 /// One line of the text (between two `\n`) and the rows it wraps into.
@@ -165,12 +168,13 @@ pub struct Layout {
     pub rows: usize,
     /// The widest line, unwrapped.
     pub width: Pixels,
-    /// How far right of the box's left edge the text starts (`text_inset`).
+    /// How far right of the box's left edge the text starts (`LayoutKey::inset`).
     pub inset: Pixels,
 }
 
-/// How far right of the box's left edge the text starts: one descent of the font, where Zed's
-/// editor drew it (measured on the B1 shots: 3.85 px for the 14 px UI font).
+/// How far right of the box's left edge the text of an area or a full box starts: one descent of
+/// the font, where Zed's editor drew it (measured on the B1 shots: 3.85 px for the 14 px UI font).
+/// A one-line box starts at the edge.
 pub fn text_inset(font: &Font, font_size: Pixels, window: &Window) -> Pixels {
     let text_system = window.text_system();
     text_system
@@ -311,7 +315,7 @@ impl Layout {
                 row.max(1)
             },
             width,
-            inset: text_inset(&key.font, key.font_size, window),
+            inset: key.inset,
             lines,
             key,
         }
@@ -638,7 +642,13 @@ impl Element for TextElement {
         } else {
             player.selection.opacity(0.5)
         };
-        let cursor = player.cursor;
+        // A read-only box draws a grey caret, as Zed's editor did (B1 shot
+        // `workspace-docs-source-focused`).
+        let cursor = if input.read_only {
+            cx.theme().players().read_only().cursor
+        } else {
+            player.cursor
+        };
         let invisible = colors.editor_invisible;
         let line_height = laid.line_height;
 
