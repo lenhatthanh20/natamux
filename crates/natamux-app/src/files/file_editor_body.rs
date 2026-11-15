@@ -188,6 +188,10 @@ fn color_by_language(path: &str, buffer: &Entity<Buffer>, cx: &mut Context<FileE
 #[path = "file_editor_body_tests.rs"]
 mod tests;
 
+#[cfg(test)]
+#[path = "editor_golden_tests.rs"]
+mod golden_tests;
+
 impl Render for FileEditorBody {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
         div().size_full().child(self.editor.clone())

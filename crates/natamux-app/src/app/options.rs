@@ -178,6 +178,10 @@ pub enum Shot {
     /// The Docs edit box with a selection over spaces, a tab and rows of other lengths (S3.3).
     WorkspaceDocsEditSelection,
     WorkspaceEditorScrollbar,
+    /// The editor tab with Show whitespace on, and with sticky rows from three nested blocks
+    /// (S4.3a).
+    EditorWhitespace,
+    EditorSticky,
     EditForm,
     TreeRename,
     SettingsFontError,
@@ -202,7 +206,7 @@ pub enum Shot {
 }
 
 impl Shot {
-    pub const ALL: [Shot; 165] = [
+    pub const ALL: [Shot; 167] = [
         Shot::TasksTable,
         Shot::TasksBoard,
         Shot::BoardHoverCard,
@@ -327,6 +331,8 @@ impl Shot {
         Shot::TextBoxSelectionUnfocused,
         Shot::WorkspaceDocsEditSelection,
         Shot::WorkspaceEditorScrollbar,
+        Shot::EditorWhitespace,
+        Shot::EditorSticky,
         Shot::EditForm,
         Shot::TreeRename,
         Shot::SettingsFontError,
@@ -496,6 +502,8 @@ impl Shot {
             Shot::TextBoxSelectionUnfocused => "text-box-selection-unfocused",
             Shot::WorkspaceDocsEditSelection => "workspace-docs-edit-selection",
             Shot::WorkspaceEditorScrollbar => "workspace-editor-scrollbar",
+            Shot::EditorWhitespace => "editor-whitespace",
+            Shot::EditorSticky => "editor-sticky",
             Shot::EditForm => "edit-form",
             Shot::TreeRename => "tree-rename",
             Shot::SettingsFontError => "settings-font-error",

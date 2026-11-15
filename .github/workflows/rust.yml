@@ -501,7 +501,8 @@ jobs:
             terminal-selection terminal-alt-screen terminal-scrolled terminal-context-menu
             terminal-scrollbar terminal-link-tooltip text-box-selection
             text-box-selection-unfocused workspace-docs-edit-selection
-            workspace-editor-scrollbar edit-form tree-rename settings-font-error send-back-long
+            workspace-editor-scrollbar editor-whitespace editor-sticky edit-form tree-rename
+            settings-font-error send-back-long
             workspace-docs-source workspace-docs-source-focused workspace-docs-rich
             workspace-editor-long workspace-editor-wrapped changes-diff-side-by-side
             changes-diff-collapsed changes-diff-wrapped changes-diff-deleted-only
@@ -541,7 +542,8 @@ jobs:
             terminal-selection terminal-alt-screen terminal-scrolled terminal-context-menu
             terminal-scrollbar terminal-link-tooltip text-box-selection
             text-box-selection-unfocused workspace-docs-edit-selection
-            workspace-editor-scrollbar edit-form tree-rename settings-font-error send-back-long
+            workspace-editor-scrollbar editor-whitespace editor-sticky edit-form tree-rename
+            settings-font-error send-back-long
             workspace-docs-source workspace-docs-source-focused workspace-docs-rich
             workspace-editor-long workspace-editor-wrapped changes-diff-side-by-side
             changes-diff-collapsed changes-diff-wrapped changes-diff-deleted-only

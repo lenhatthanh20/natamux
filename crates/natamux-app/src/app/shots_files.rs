@@ -66,6 +66,7 @@ pub fn is_files_shot(shot: Shot) -> bool {
             | Shot::EditorGoToLine
             | Shot::EditorOutline
             | Shot::EditorBlame
+            | Shot::EditorWhitespace
     )
 }
 
@@ -136,7 +137,8 @@ fn enter(shot: Shot, dashboard: &Entity<Dashboard>, cx: &mut App) {
         | Shot::EditorFind
         | Shot::EditorGoToLine
         | Shot::EditorOutline
-        | Shot::EditorBlame => {
+        | Shot::EditorBlame
+        | Shot::EditorWhitespace => {
             panel(dashboard, REVIEWED, DetailsView::Details, cx);
             open_file(dashboard, SOURCE, cx);
         }

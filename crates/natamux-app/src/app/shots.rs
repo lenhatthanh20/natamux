@@ -259,7 +259,7 @@ fn view_of(shot: Shot) -> ViewState {
     view.show_finished = is_scrolled_board(shot);
     view.diff.side_by_side = shot != Shot::WorkspaceChangesAsk;
     shots_text::adjust_view(shot, &mut view);
-    view.diff.show_whitespace = shot == Shot::DiffFind;
+    view.diff.show_whitespace = matches!(shot, Shot::DiffFind | Shot::EditorWhitespace);
     if shot == Shot::DiffBlame {
         // T-0318: side by side needs a 720 px diff: no sidebar, the narrowest file list.
         view.sidebar_open = false;

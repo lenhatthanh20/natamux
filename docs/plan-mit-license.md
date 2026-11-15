@@ -1391,6 +1391,7 @@ S4.3 Code view and its users
   - T14 and T-CODE-1 green;
   - `editor_type_5000` within the 7.3 rule against the S1.4 before runs.
 - Risks: syntax colours; ligatures; the JSON tab losing typed chars.
+- Split by the advisor's decision A20 (progress log) into S4.3a (goldens on the old code), S4.3b (the code view with the JSON tab and the Docs views) and S4.3c (the editor tab with outline, sticky scroll, blame and find). Done in S4.3a: T-OUT-1 `files/editor_golden_tests.rs` (set `outline`: outline items, the items sticky scroll asks for at each top row, indent guides, the active guide at each caret row, for the T-HL-1 files plus the long and the sticky shot files) and `files/editor_tab_golden_tests.rs` (set `editor_tab`: find with Show whitespace on, blame labels and menus of `src/checkout.ts`); new shot states `editor-whitespace` and `editor-sticky`, because the sticky rows a scroll position shows and the whitespace marks of the editor tab are not readable from a test.
 
 ### S5. Markdown view
 

@@ -12,6 +12,9 @@ use crate::app::dashboard::Dashboard;
 use crate::app::source::Source;
 use crate::app::test_views;
 
+#[path = "editor_tab_golden_tests.rs"]
+mod golden;
+
 /// `README.md` of the reviewed task of the fake, read and drawn, with the focus in its editor.
 fn open_readme(cx: &mut TestAppContext) -> (Entity<FileEditor>, &mut VisualTestContext) {
     test_views::init(cx);

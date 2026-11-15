@@ -186,6 +186,12 @@ impl BlameMarks {
             .and_then(|(answer, row)| commit_at(answer, row));
         menu_items(self.on, blocked, commit)
     }
+
+    /// The menu of side `index` at `row`, as a right click there would build it.
+    #[cfg(test)]
+    pub(crate) fn menu_for(&self, index: usize, row: Option<u32>, cx: &App) -> Vec<BlameItem> {
+        self.items(index, row, cx)
+    }
 }
 
 /// Draws the labels of `answer` into the side's editor, in place of the ones it had. Gives how

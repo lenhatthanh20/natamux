@@ -34,9 +34,14 @@ const TOOLTIP: Duration = Duration::from_millis(1000);
 /// The selection of the text box shots: the last two words of `TYPED`.
 const SELECTED_CHARS: usize = 11;
 /// The editor states' files: one past 1,000 lines, with long lines; a Markdown file that wraps.
-const LONG_FILE: &str = "src/catalog_rows.ts";
+pub(crate) const LONG_FILE: &str = "src/catalog_rows.ts";
 const LONG_LINES: usize = 1200;
 const WRAPPED_FILE: &str = "docs/guide.md";
+/// The sticky scroll state's file: a function in a method in a class, and the line the caret
+/// goes to, in the middle of the function at every shot size.
+pub(crate) const STICKY_FILE: &str = "src/catalog_view.ts";
+const STICKY_PARTS: usize = 120;
+const STICKY_LINE: u32 = 70;
 /// Page Down presses and Shift+Down presses of the editor scrollbar state.
 const PAGES: usize = 12;
 const SELECTED_LINES: usize = 4;
@@ -65,6 +70,7 @@ pub fn is_text_shot(shot: Shot) -> bool {
         Shot::TextBoxSelection
             | Shot::TextBoxSelectionUnfocused
             | Shot::WorkspaceEditorScrollbar
+            | Shot::EditorSticky
             | Shot::EditForm
             | Shot::TreeRename
             | Shot::SettingsFontError
@@ -113,6 +119,7 @@ pub fn prepare(shot: Shot) {
         Shot::WorkspaceEditorWrapped => {
             fake.put_workspace_file(REVIEWED, WRAPPED_FILE, WRAPPED_TEXT.to_owned());
         }
+        Shot::EditorSticky => fake.put_workspace_file(REVIEWED, STICKY_FILE, sticky_file()),
         Shot::WorkspaceDocsRich => {
             fake.write_stage_file(REVIEWED, RICH_DOC, RICH_TEXT.to_owned())
                 .ok();
@@ -179,6 +186,10 @@ pub async fn run(handle: WindowHandle<Root>, shot: Shot, cx: &mut AsyncApp) {
             focus_file(handle, LONG_FILE, cx);
             press(handle, &["pagedown"; PAGES], cx);
             press(handle, &["shift-down"; SELECTED_LINES], cx);
+        }
+        Shot::EditorSticky => {
+            wait_for_file(handle, STICKY_FILE, cx).await;
+            go_to_line(handle, STICKY_FILE, STICKY_LINE, cx);
         }
         Shot::EditForm => {
             handle
@@ -289,6 +300,7 @@ fn enter(shot: Shot, root: &mut Root, window: &mut gpui::Window, cx: &mut gpui::
             editor_tab(&dashboard, LONG_FILE, cx)
         }
         Shot::WorkspaceEditorWrapped => editor_tab(&dashboard, WRAPPED_FILE, cx),
+        Shot::EditorSticky => editor_tab(&dashboard, STICKY_FILE, cx),
         Shot::EditForm => shots::details(&dashboard, REVIEWED, cx),
         Shot::TreeRename => rename_row(root, window, cx),
         Shot::SettingsFontError => {
@@ -446,6 +458,21 @@ fn focus_file(handle: WindowHandle<Root>, path: &str, cx: &mut AsyncApp) {
         .ok();
 }
 
+/// The caret of `path`'s editor goes to `line` (1-based), centred, and the editor takes the
+/// keyboard.
+fn go_to_line(handle: WindowHandle<Root>, path: &str, line: u32, cx: &mut AsyncApp) {
+    handle
+        .update(cx, |root, window, cx| {
+            let editor = file_editor(root, path, cx);
+            let body = editor.and_then(|editor| editor.read(cx).body().cloned());
+            match body {
+                Some(body) => body.update(cx, |body, cx| body.go_to(line, Some(1), window, cx)),
+                None => eprintln!("shot: {path} is not in the editor tab"),
+            }
+        })
+        .ok();
+}
+
 /// The fixture of a `code-<lang>` state: its path in the reviewed task's worktree and its text.
 pub fn code_sample(lang: CodeLang) -> (&'static str, &'static str) {
     macro_rules! sample {
@@ -489,7 +516,7 @@ pub fn code_sample(lang: CodeLang) -> (&'static str, &'static str) {
 
 /// A TypeScript file of `LONG_LINES` lines, so the gutter has 4 digits; every 50th line is
 /// longer than any shot is wide.
-fn long_file() -> String {
+pub(crate) fn long_file() -> String {
     let mut out = String::from("// Rows of the catalog, for the long editor shots.\n");
     out.push_str("export const rows = [\n");
     for line in 3..LONG_LINES {
@@ -510,6 +537,25 @@ fn long_file() -> String {
         }
     }
     out.push_str("]\n");
+    out
+}
+
+/// A TypeScript file with a function in a method in a class: with the caret in the middle of the
+/// function, the class, the method and the function head stay at the top as sticky rows.
+pub(crate) fn sticky_file() -> String {
+    let mut out = String::from("// Nested blocks, for the sticky scroll shot.\n");
+    out.push_str("export class CatalogView {\n  rows: string[] = []\n\n");
+    out.push_str("  render(filter: string) {\n");
+    out.push_str("    const shown = this.rows.filter((row) => row.includes(filter))\n");
+    out.push_str("    function line(row: string, at: number) {\n");
+    for part in 0..STICKY_PARTS {
+        let _ = writeln!(
+            out,
+            "      const part{part} = row.slice({part}, {}) + at",
+            part + 1
+        );
+    }
+    out.push_str("      return row\n    }\n    return shown.map(line)\n  }\n}\n");
     out
 }
 
