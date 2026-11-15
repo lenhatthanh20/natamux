@@ -20,10 +20,10 @@
 (enumerator name: (_) @name) @item
 (field_declaration type: (_) @context declarator: (field_identifier) @name @item)
 
-; Functions: storage word, return type, then the declarator's name and "( )".
+; Functions (constructors and destructors have no type): storage word, return type, then the declarator's name and "( )".
 (function_definition
   (storage_class_specifier)? @context
-  type: (_) @context
+  type: (_)? @context
   declarator: (function_declarator
     declarator: (_) @name
     parameters: (parameter_list "(" @context ")" @context))) @item
