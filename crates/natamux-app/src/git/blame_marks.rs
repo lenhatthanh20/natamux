@@ -183,12 +183,7 @@ impl BlameMarks {
 }
 
 /// The right-click menu of side `index`.
-fn set_menu(
-    target: &dyn BlameTarget,
-    index: usize,
-    marks: WeakEntity<BlameMarks>,
-    cx: &mut App,
-) {
+fn set_menu(target: &dyn BlameTarget, index: usize, marks: WeakEntity<BlameMarks>, cx: &mut App) {
     let menu: RowMenu = Rc::new(
         move |row: Option<u32>, window: &mut Window, cx: &mut App| -> Option<Entity<ContextMenu>> {
             let items = marks.upgrade()?.read(cx).items(index, row, cx);

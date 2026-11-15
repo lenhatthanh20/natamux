@@ -24,7 +24,9 @@ impl ChangesView {
         let Some(target) = self.diff.read(cx).focused_editor(window, cx) else {
             return;
         };
-        open_editor_find(&mut self.find, Rc::new(target), window, cx, |view| &mut view.find);
+        open_editor_find(&mut self.find, Rc::new(target), window, cx, |view| {
+            &mut view.find
+        });
     }
 
     fn go_to_line(&mut self, window: &mut Window, cx: &mut Context<Self>) {

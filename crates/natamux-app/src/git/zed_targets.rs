@@ -13,11 +13,7 @@ use text::{Point, ToPoint};
 use super::code_target::{BlameTarget, FindTarget, RowMenu};
 use crate::files::outline_rules::OutlineRow;
 
-fn anchors(
-    editor: &Editor,
-    ranges: &[Range<usize>],
-    cx: &App,
-) -> Vec<Range<editor::Anchor>> {
+fn anchors(editor: &Editor, ranges: &[Range<usize>], cx: &App) -> Vec<Range<editor::Anchor>> {
     let snapshot = editor.buffer().read(cx).snapshot(cx);
     ranges
         .iter()
@@ -168,7 +164,12 @@ impl BlameTarget for ZedBlame {
         };
         let first_id = self.next_id.get();
         let lines = self.lines(cx) as usize;
-        let old: Vec<_> = self.shown.borrow_mut().drain(..).map(|inlay| inlay.id).collect();
+        let old: Vec<_> = self
+            .shown
+            .borrow_mut()
+            .drain(..)
+            .map(|inlay| inlay.id)
+            .collect();
         let buffer = self.buffer.clone();
         let inlays: Vec<Inlay> = editor.update(cx, |editor, cx| {
             let multi = editor.buffer().read(cx);
@@ -189,7 +190,12 @@ impl BlameTarget for ZedBlame {
     }
 
     fn clear_labels(&self, cx: &mut App) {
-        let ids: Vec<_> = self.shown.borrow_mut().drain(..).map(|inlay| inlay.id).collect();
+        let ids: Vec<_> = self
+            .shown
+            .borrow_mut()
+            .drain(..)
+            .map(|inlay| inlay.id)
+            .collect();
         if let Some(editor) = self.editor.upgrade() {
             editor.update(cx, |editor, cx| editor.splice_inlays(&ids, Vec::new(), cx));
         }

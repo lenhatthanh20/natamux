@@ -27,8 +27,7 @@ pub trait FindTarget {
 }
 
 /// Builds the right-click menu for a 0-based row of the text; None for a point on no row of it.
-pub type RowMenu =
-    Rc<dyn Fn(Option<u32>, &mut Window, &mut App) -> Option<Entity<ContextMenu>>>;
+pub type RowMenu = Rc<dyn Fn(Option<u32>, &mut Window, &mut App) -> Option<Entity<ContextMenu>>>;
 
 pub trait BlameTarget {
     /// Rows of the text.

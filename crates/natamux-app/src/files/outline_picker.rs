@@ -6,8 +6,8 @@
 use std::rc::Rc;
 
 use gpui::{
-    DismissEvent, EventEmitter, FocusHandle, Focusable, KeyDownEvent, ScrollStrategy,
-    Subscription, UniformListScrollHandle, uniform_list,
+    DismissEvent, EventEmitter, FocusHandle, Focusable, KeyDownEvent, ScrollStrategy, Subscription,
+    UniformListScrollHandle, uniform_list,
 };
 use ui::{ListItem, ListItemSpacing, prelude::*};
 
