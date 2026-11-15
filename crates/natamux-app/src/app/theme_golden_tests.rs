@@ -158,7 +158,7 @@ fn every_theme_has_all_colours_and_some_syntax(cx: &mut TestAppContext) {
     assert_eq!(themes.len(), 17);
     for (slug, rows) in themes {
         let count = |group: &str| rows.iter().filter(|row| row["group"] == group).count();
-        assert_eq!(count("colors"), 143, "{slug}: fields of ThemeColors");
+        assert_eq!(count("colors"), 144, "{slug}: fields of ThemeColors");
         assert_eq!(count("status"), 42, "{slug}: fields of StatusColors");
         for group in ["accents", "players", "syntax"] {
             assert!(count(group) > 0, "{slug}: no {group}");
