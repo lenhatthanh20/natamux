@@ -115,12 +115,16 @@ fn ci_cargo_args(options: CiOptions) -> Vec<Vec<&'static str>> {
 
 /// Views read colours from the theme, never as literals (docs/ui-spec.md, 2.3). The folders
 /// checked, each with the only files in it that may hold colour literals: in the app the colour
-/// module and the contrast test's hex data (the theme itself is JSON in `assets/`); in the UI kit
+/// module, the contrast test's hex data and the theme value dump test (the theme itself is JSON in `assets/`); in the UI kit
 /// none yet (plan D24).
 const COLOUR_ROOTS: &[(&str, &[&str])] = &[
     (
         "crates/natamux-app/src",
-        &["components/colors.rs", "components/theme_contrast.rs"],
+        &[
+            "components/colors.rs",
+            "components/theme_contrast.rs",
+            "app/theme_golden_tests.rs",
+        ],
     ),
     ("crates/natamux-ui/src", &[]),
 ];
