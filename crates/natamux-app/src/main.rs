@@ -76,6 +76,8 @@ mod app {
     pub mod test_views;
     pub mod text_boxes;
     pub mod theme_catalog;
+    #[cfg(test)]
+    mod theme_golden_tests;
     pub mod title_bar;
     pub mod update;
     pub mod update_install;
