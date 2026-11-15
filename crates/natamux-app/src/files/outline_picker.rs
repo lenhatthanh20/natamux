@@ -1,16 +1,14 @@
-//! Go to symbol (Mod+Shift+O, T-0316): a dialog that lists the outline of the file (tree-sitter,
-//! from `Buffer::outline`), filtered as you type. Up and Down move, Enter or a click picks, and
-//! the cursor goes to the start of the item. Used by the editor tab and by the working tree of
-//! the diff.
+//! Go to symbol (Mod+Shift+O, T-0316): a dialog that lists the outline of the file, given as
+//! rows by the caller, filtered as you type. Up and Down move, Enter or a click picks, and the
+//! cursor goes to the start of the item. Used by the editor tab and by the working tree of the
+//! diff.
 
 use std::rc::Rc;
 
 use gpui::{
-    DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, KeyDownEvent, ScrollStrategy,
+    DismissEvent, EventEmitter, FocusHandle, Focusable, KeyDownEvent, ScrollStrategy,
     Subscription, UniformListScrollHandle, uniform_list,
 };
-use language::Buffer;
-use text::ToPoint;
 use ui::{ListItem, ListItemSpacing, prelude::*};
 
 use super::outline_rules::{OutlineRow, empty_text, outline_rows};
@@ -23,33 +21,13 @@ type OnPick = Rc<dyn Fn(u32, u32, &mut Window, &mut App)>;
 /// Rows shown at once before the list scrolls.
 const MAX_SHOWN: f32 = 12.;
 
-/// The outline items of `buffer`, in file order.
-pub fn outline_items(buffer: &Entity<Buffer>, cx: &App) -> Vec<OutlineRow> {
-    let snapshot = buffer.read(cx).snapshot();
-    snapshot
-        .outline(None)
-        .items
-        .into_iter()
-        .map(|item| {
-            let start = item.range.start.to_point(&snapshot);
-            OutlineRow {
-                text: item.text.to_string(),
-                depth: item.depth,
-                row: start.row,
-                column: start.column,
-            }
-        })
-        .collect()
-}
-
-/// Opens the picker on `buffer`; `on_pick` gets the 0-based row and column of the picked item.
+/// Opens the picker on `items`; `on_pick` gets the 0-based row and column of the picked item.
 pub fn open_outline(
-    buffer: &Entity<Buffer>,
+    items: Vec<OutlineRow>,
     on_pick: impl Fn(u32, u32, &mut Window, &mut App) + 'static,
     window: &mut Window,
     cx: &mut App,
 ) {
-    let items = outline_items(buffer, cx);
     let picker = cx.new(|cx| {
         let input = text_editor("Search symbols", None, window, cx);
         let edits = input.subscribe(cx, |this: &mut OutlinePicker, _, event, cx| {

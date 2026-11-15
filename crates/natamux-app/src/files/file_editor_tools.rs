@@ -2,6 +2,8 @@
 //! editor tab (T-0316). The find bar sits under the header. The tools need the editor, so a
 //! rendered Markdown file goes back to Source first.
 
+use std::rc::Rc;
+
 use gpui::{ClickEvent, Stateful};
 use ui::{Tooltip, prelude::*};
 
@@ -10,6 +12,7 @@ use super::outline_picker::open_outline;
 use crate::app::shortcuts::{FindInEditor, GoToLine, ShowOutline};
 use crate::components::go_to_line::open_go_to_line;
 use crate::git::editor_find::open_editor_find;
+use crate::git::zed_targets::zed_outline_rows;
 use crate::terminals::pane_header::icon_button;
 
 impl FileEditor {
@@ -36,7 +39,7 @@ impl FileEditor {
         let Some(body) = self.body.clone() else {
             return;
         };
-        let target = body.read(cx).editor().clone();
+        let target = Rc::new(body.read(cx).editor().clone());
         open_editor_find(&mut self.find, target, window, cx, |this| &mut this.find);
     }
 
@@ -60,10 +63,10 @@ impl FileEditor {
         let Some(body) = self.body.clone() else {
             return;
         };
-        let buffer = body.read(cx).buffer().clone();
+        let items = zed_outline_rows(body.read(cx).buffer(), cx);
         let body = body.downgrade();
         open_outline(
-            &buffer,
+            items,
             move |row, column, window, cx| {
                 body.update(cx, |body, cx| {
                     body.go_to(row + 1, Some(column + 1), window, cx)

@@ -3,17 +3,16 @@
 //! need no project (Zed's own `GitBlame` needs a project and a repository) and move with the
 //! text, the excerpts and the empty rows of side by side.
 
+use std::rc::Rc;
 use std::sync::Arc;
 
-use editor::{DisplayPoint, Editor, Inlay};
 use gpui::{ClipboardItem, Entity, EventEmitter, WeakEntity};
-use language::Buffer;
 use natamux_proto::workspaces::changes::{BlameAnswer, ImageSide};
-use text::Point;
 use ui::editor_menu::{ContextMenu, ContextMenuEntry};
 use ui::prelude::*;
 
 use super::blame_rules::{BlameItem, NOT_TRACKED, commit_at, line_labels, menu_items};
+use super::code_target::{BlameTarget, RowMenu};
 use crate::app::source::{Source, reason};
 
 /// True while the file has unsaved edits: blame reads the file on disk.
@@ -22,13 +21,11 @@ pub type Blocked = Box<dyn Fn(&App) -> bool>;
 /// Why the column could not show; the owner shows it as a toast.
 pub struct BlameFailed(pub String);
 
-/// One editor that can show the column, and what it shows.
+/// One text that can show the column, and what it shows.
 struct Side {
-    editor: WeakEntity<Editor>,
-    buffer: Entity<Buffer>,
+    target: Rc<dyn BlameTarget>,
     side: ImageSide,
     answer: Option<BlameAnswer>,
-    inlays: Vec<Inlay>,
 }
 
 pub struct BlameMarks {
@@ -40,8 +37,6 @@ pub struct BlameMarks {
     blocked: Option<Blocked>,
     /// Drops an answer when a newer request, or Close, came after it.
     asked: u64,
-    /// Inlay ids far above the editor's own, so they never meet.
-    next_id: usize,
 }
 
 impl EventEmitter<BlameFailed> for BlameMarks {}
@@ -56,7 +51,6 @@ impl BlameMarks {
             sides: Vec::new(),
             blocked,
             asked: 0,
-            next_id: usize::MAX / 2,
         }
     }
 
@@ -66,7 +60,7 @@ impl BlameMarks {
         &mut self,
         source: Arc<Source>,
         (task_id, path): (&str, &str),
-        editors: Vec<(Entity<Editor>, Entity<Buffer>, ImageSide)>,
+        sides: Vec<(Rc<dyn BlameTarget>, ImageSide)>,
         cx: &mut Context<Self>,
     ) {
         // Nothing attached yet counts as the same file: a shot may turn it on first.
@@ -76,17 +70,15 @@ impl BlameMarks {
         self.task_id = task_id.to_owned();
         self.path = path.to_owned();
         let marks = cx.weak_entity();
-        self.sides = editors
+        self.sides = sides
             .into_iter()
             .enumerate()
-            .map(|(index, (editor, buffer, side))| {
-                set_menu(&editor, &buffer, index, marks.clone(), cx);
+            .map(|(index, (target, side))| {
+                set_menu(target.as_ref(), index, marks.clone(), cx);
                 Side {
-                    editor: editor.downgrade(),
-                    buffer,
+                    target,
                     side,
                     answer: None,
-                    inlays: Vec::new(),
                 }
             })
             .collect();
@@ -156,12 +148,11 @@ impl BlameMarks {
                 self.turn(false, cx);
             }
             Ok(answer) => {
-                let first_id = self.next_id;
                 let Some(side) = self.sides.get_mut(index) else {
                     return;
                 };
-                let added = show(side, &answer, first_id, cx);
-                self.next_id = first_id.wrapping_add(added);
+                let lines = side.target.lines(cx);
+                side.target.set_labels(line_labels(&answer, lines), cx);
                 side.answer = Some(answer);
             }
         }
@@ -171,10 +162,7 @@ impl BlameMarks {
     fn clear(&mut self, cx: &mut App) {
         for side in &mut self.sides {
             side.answer = None;
-            let ids: Vec<_> = side.inlays.drain(..).map(|inlay| inlay.id).collect();
-            if let Some(editor) = side.editor.upgrade() {
-                editor.update(cx, |editor, cx| editor.splice_inlays(&ids, Vec::new(), cx));
-            }
+            side.target.clear_labels(cx);
         }
     }
 
@@ -194,69 +182,23 @@ impl BlameMarks {
     }
 }
 
-/// Draws the labels of `answer` into the side's editor, in place of the ones it had. Gives how
-/// many ids it may have used.
-fn show(side: &mut Side, answer: &BlameAnswer, first_id: usize, cx: &mut App) -> usize {
-    let Some(editor) = side.editor.upgrade() else {
-        return 0;
-    };
-    let lines = side.buffer.read(cx).max_point().row + 1;
-    let labels = line_labels(answer, lines);
-    let old: Vec<_> = side.inlays.drain(..).map(|inlay| inlay.id).collect();
-    let buffer = side.buffer.clone();
-    let inlays: Vec<Inlay> = editor.update(cx, |editor, cx| {
-        let multi = editor.buffer().read(cx);
-        let inlays = labels
-            .into_iter()
-            .enumerate()
-            .filter_map(|(at, (line, label))| {
-                // A line outside every excerpt (collapsed) has no anchor and no label.
-                let anchor = multi.buffer_point_to_anchor(&buffer, Point::new(line, 0), cx)?;
-                Some(Inlay::debugger(first_id.wrapping_add(at), anchor, label))
-            })
-            .collect::<Vec<_>>();
-        editor.splice_inlays(&old, inlays.clone(), cx);
-        inlays
-    });
-    side.inlays = inlays;
-    lines as usize
-}
-
-/// The line of `buffer` at a clicked row; None for a row of another buffer (a deleted line of
-/// an inline diff).
-fn buffer_row(
-    editor: &mut Editor,
-    point: DisplayPoint,
-    buffer: &Entity<Buffer>,
-    cx: &mut Context<Editor>,
-) -> Option<u32> {
-    let snapshot = editor.display_snapshot(cx);
-    let point = point.to_point(&snapshot);
-    let multi = editor.buffer().read(cx).snapshot(cx);
-    let (found, point) = multi.point_to_buffer_point(point)?;
-    (found.remote_id() == buffer.read(cx).remote_id()).then_some(point.row)
-}
-
-/// The right-click menu of the text. Line numbers get it once the Zed fork opens a custom menu
-/// from the gutter of an editor with no project.
+/// The right-click menu of side `index`.
 fn set_menu(
-    editor: &Entity<Editor>,
-    buffer: &Entity<Buffer>,
+    target: &dyn BlameTarget,
     index: usize,
     marks: WeakEntity<BlameMarks>,
     cx: &mut App,
 ) {
-    let buffer = buffer.clone();
-    editor.update(cx, |editor, _| {
-        editor.set_custom_context_menu(move |editor, point, window, cx| {
-            let row = buffer_row(editor, point, &buffer, cx);
+    let menu: RowMenu = Rc::new(
+        move |row: Option<u32>, window: &mut Window, cx: &mut App| -> Option<Entity<ContextMenu>> {
             let items = marks.upgrade()?.read(cx).items(index, row, cx);
             let marks = marks.clone();
             Some(ContextMenu::build(window, cx, move |menu, _, _| {
                 fill(menu, items, marks)
             }))
-        });
-    });
+        },
+    );
+    target.set_menu(menu, cx);
 }
 
 fn fill(

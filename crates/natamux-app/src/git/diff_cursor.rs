@@ -3,7 +3,7 @@
 
 use editor::scroll::Autoscroll;
 use editor::{Editor, SelectionEffects};
-use gpui::{Entity, Focusable};
+use gpui::{Entity, EntityId, Focusable};
 use language::Buffer;
 use text::Point;
 use ui::prelude::*;
@@ -174,10 +174,11 @@ impl DiffView {
     }
 
     /// `editor` is one of the shown sides.
-    pub fn shows_editor(&self, editor: &Entity<Editor>) -> bool {
-        self.sides
-            .as_ref()
-            .is_some_and(|sides| &sides.right == editor || sides.left.as_ref() == Some(editor))
+    pub fn shows_editor(&self, editor: EntityId) -> bool {
+        self.sides.as_ref().is_some_and(|sides| {
+            sides.right.entity_id() == editor
+                || sides.left.as_ref().map(|left| left.entity_id()) == Some(editor)
+        })
     }
 
     /// The editor that takes the keyboard: the working tree.

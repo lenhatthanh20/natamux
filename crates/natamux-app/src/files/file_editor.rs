@@ -3,6 +3,8 @@
 //! the `DraftStore`, so it stays when this view is dropped. It covers the terminals in main, so
 //! its header ends with the Terminals button.
 
+use std::rc::Rc;
+
 use gpui::{ClickEvent, Entity, FocusHandle, Focusable, Subscription};
 use natamux_proto::workspaces::changes::ImageSide;
 use natamux_proto::workspaces::files::WorkspaceFile;
@@ -29,7 +31,9 @@ use crate::components::terminals_button::terminals_button;
 use crate::components::toast_rules::ToastTone;
 use crate::git::blame_marks::{BlameFailed, BlameMarks, Blocked};
 use crate::git::change_rules::{is_markdown, split_path};
+use crate::git::code_target::BlameTarget;
 use crate::git::editor_find::EditorFind;
+use crate::git::zed_targets::ZedBlame;
 use crate::terminals::pane_header::icon_button;
 
 pub struct FileEditor {
@@ -206,7 +210,9 @@ impl FileEditor {
             }));
         if let Some(source) = self.dashboard.read(cx).source().cloned() {
             let editor = body.read(cx).editor().clone();
-            let sides = vec![(editor, body.read(cx).buffer().clone(), ImageSide::Modified)];
+            let target = ZedBlame::new(&editor, body.read(cx).buffer().clone());
+            let sides: Vec<(Rc<dyn BlameTarget>, ImageSide)> =
+                vec![(Rc::new(target), ImageSide::Modified)];
             self.blame.update(cx, |blame, cx| {
                 blame.attach(source, (&self.task_id, &self.path), sides, cx)
             });

@@ -5,15 +5,13 @@
 //! cursor; Esc closes the bar and gives the keyboard back to the editor.
 
 use std::ops::Range;
+use std::rc::Rc;
 
-use editor::display_map::HighlightKey;
-use editor::scroll::Autoscroll;
-use editor::{Anchor, Editor, EditorEvent, MultiBufferOffset, SelectionEffects};
 use gpui::{ClickEvent, Entity, EventEmitter, FocusHandle, Focusable, KeyContext, Subscription};
-use text::Point;
 use ui::{Tooltip, prelude::*};
 
-use super::editor_find_rules::{count_label, find_ranges, step_match};
+use super::code_target::FindTarget;
+use super::editor_find_rules::{count_label, find_ranges, first_after, step_match};
 use crate::app::commands_editor::EDITOR_FIND;
 use crate::app::shortcuts::{Back, FindNext, FindPrevious};
 use crate::components::chips::tip_with_keys;
@@ -25,13 +23,13 @@ use crate::text_view::text_box::{TextBox, TextEvent};
 pub struct FindClosed;
 
 pub struct EditorFind {
-    /// The editor searched: the focused side of the diff, or the editor tab's.
-    target: Entity<Editor>,
+    /// The text searched: the focused side of the diff, or the editor tab's.
+    target: Rc<dyn FindTarget>,
     field: TextBox,
     match_case: bool,
     regex: bool,
     invalid: bool,
-    matches: Vec<Range<Anchor>>,
+    matches: Vec<Range<usize>>,
     active: Option<usize>,
     /// The first match after the cursor, where Enter goes first.
     first: usize,
@@ -42,23 +40,25 @@ impl EventEmitter<FindClosed> for EditorFind {}
 
 impl EditorFind {
     /// A bar on `target`. A selection within one line becomes the term.
-    pub fn new(target: Entity<Editor>, window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub fn new(target: Rc<dyn FindTarget>, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let field = text_editor("Find", None, window, cx);
-        let picked = one_line_selection(&target, cx);
+        let picked = target.one_line_selection(cx);
         if let Some(picked) = picked {
             field.set_text(picked, window, cx);
         }
+        let this = cx.weak_entity();
         let subscriptions = vec![
             field.subscribe(cx, |find, _, event, cx| {
                 if event == TextEvent::Edited {
                     find.run(cx);
                 }
             }),
-            cx.subscribe(&target, |find, _, event: &EditorEvent, cx| {
-                if matches!(event, EditorEvent::BufferEdited) {
-                    find.run(cx);
-                }
-            }),
+            target.on_edited(
+                Box::new(move |cx: &mut App| {
+                    this.update(cx, |find, cx| find.run(cx)).ok();
+                }),
+                cx,
+            ),
         ];
         let mut find = EditorFind {
             target,
@@ -75,7 +75,7 @@ impl EditorFind {
         find
     }
 
-    pub fn target(&self) -> &Entity<Editor> {
+    pub fn target(&self) -> &Rc<dyn FindTarget> {
         &self.target
     }
 
@@ -96,50 +96,19 @@ impl EditorFind {
 
     fn run(&mut self, cx: &mut Context<Self>) {
         let term = self.term(cx);
-        let text = self.target.read(cx).text(cx);
+        let text = self.target.text(cx);
         let found = find_ranges(&text, &term, self.match_case, self.regex);
         self.invalid = found.is_err();
-        let found = found.unwrap_or_default();
-        let (matches, first) = self.target.update(cx, |editor, cx| {
-            let snapshot = editor.buffer().read(cx).snapshot(cx);
-            let cursor = editor.selections.newest_anchor().head();
-            let matches: Vec<Range<Anchor>> = found
-                .into_iter()
-                .map(|range| {
-                    snapshot.anchor_after(MultiBufferOffset(range.start))
-                        ..snapshot.anchor_before(MultiBufferOffset(range.end))
-                })
-                .collect();
-            let first = matches
-                .iter()
-                .position(|range| range.start.cmp(&cursor, &snapshot).is_ge())
-                .unwrap_or(0);
-            (matches, first)
-        });
+        let matches = found.unwrap_or_default();
+        self.first = first_after(&matches, self.target.caret(cx));
         self.matches = matches;
-        self.first = first;
         self.active = None;
         self.draw(cx);
     }
 
     /// The matches in the theme's search colour, the active one stronger.
     fn draw(&mut self, cx: &mut Context<Self>) {
-        let active = self.active;
-        let ranges = self.matches.clone();
-        self.target.update(cx, |editor, cx| {
-            editor.highlight_background(
-                HighlightKey::BufferSearchHighlights,
-                &ranges,
-                move |index, theme| {
-                    if Some(*index) == active {
-                        theme.colors().search_active_match_background
-                    } else {
-                        theme.colors().search_match_background
-                    }
-                },
-                cx,
-            );
-        });
+        self.target.show_matches(&self.matches, self.active, cx);
         cx.notify();
     }
 
@@ -149,12 +118,7 @@ impl EditorFind {
         };
         self.active = Some(next);
         let range = self.matches[next].clone();
-        self.target.update(cx, |editor, cx| {
-            let effects = SelectionEffects::scroll(Autoscroll::center());
-            editor.change_selections(effects, window, cx, |selections| {
-                selections.select_anchor_ranges([range])
-            });
-        });
+        self.target.select(range, window, cx);
         self.draw(cx);
     }
 
@@ -173,15 +137,13 @@ impl EditorFind {
     /// Takes the matches away; the searched editor gets the keyboard back.
     pub fn shut(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.clear(cx);
-        window.focus(&self.target.read(cx).focus_handle(cx), cx);
+        window.focus(&self.target.focus_handle(cx), cx);
         cx.emit(FindClosed);
     }
 
     /// The matches go, without moving the focus: another bar replaces this one.
     pub fn clear(&mut self, cx: &mut Context<Self>) {
-        self.target.update(cx, |editor, cx| {
-            editor.clear_background_highlights(HighlightKey::BufferSearchHighlights, cx);
-        });
+        self.target.clear_matches(cx);
     }
 
     fn toggle(&mut self, regex: bool, cx: &mut Context<Self>) {
@@ -192,19 +154,6 @@ impl EditorFind {
         }
         self.run(cx);
     }
-}
-
-/// The selected text when it lies within one line, for the term.
-fn one_line_selection(target: &Entity<Editor>, cx: &mut App) -> Option<String> {
-    target.update(cx, |editor, cx| {
-        let display = editor.display_snapshot(cx);
-        let picked = editor.selections.newest::<Point>(&display);
-        if picked.is_empty() || picked.start.row != picked.end.row {
-            return None;
-        }
-        let snapshot = editor.buffer().read(cx).snapshot(cx);
-        Some(snapshot.text_for_range(picked.start..picked.end).collect())
-    })
 }
 
 impl Focusable for EditorFind {
@@ -301,14 +250,14 @@ impl Render for EditorFind {
 /// replaces the one on another editor. The owner keeps the bar in `slot` and drops it on close.
 pub fn open_editor_find<V: 'static>(
     slot: &mut Option<Entity<EditorFind>>,
-    target: Entity<Editor>,
+    target: Rc<dyn FindTarget>,
     window: &mut Window,
     cx: &mut Context<V>,
     on_close: fn(&mut V) -> &mut Option<Entity<EditorFind>>,
 ) {
     if let Some(open) = slot
         .as_ref()
-        .filter(|open| open.read(cx).target() == &target)
+        .filter(|open| open.read(cx).target().id() == target.id())
     {
         open.update(cx, |find, cx| find.focus(window, cx));
         return;

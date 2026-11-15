@@ -172,6 +172,7 @@ mod git {
     pub mod change_rules;
     pub mod change_tree;
     pub mod changes_view;
+    pub mod code_target;
     pub mod comment_rules;
     pub mod commit_rules;
     pub mod diff_arrows;
@@ -194,6 +195,7 @@ mod git {
     pub mod rollback_dialog;
     pub mod rollback_rules;
     pub mod whitespace_rules;
+    pub mod zed_targets;
 }
 mod ime {
     pub mod ime_check;

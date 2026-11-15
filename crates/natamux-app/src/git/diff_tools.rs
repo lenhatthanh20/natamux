@@ -2,6 +2,8 @@
 //! tab (T-0316). Go to line and the symbols use the working tree's side; find searches the side
 //! that has the focus. The find bar sits under the toolbar.
 
+use std::rc::Rc;
+
 use ui::prelude::*;
 
 use super::ChangesView;
@@ -9,6 +11,7 @@ use crate::app::shortcuts::{FindInEditor, GoToLine, ShowOutline};
 use crate::components::go_to_line::open_go_to_line;
 use crate::files::outline_picker::open_outline;
 use crate::git::editor_find::open_editor_find;
+use crate::git::zed_targets::zed_outline_rows;
 
 impl ChangesView {
     pub(super) fn with_editor_tools(&self, root: Div, cx: &mut Context<Self>) -> Div {
@@ -21,7 +24,7 @@ impl ChangesView {
         let Some(target) = self.diff.read(cx).focused_editor(window, cx) else {
             return;
         };
-        open_editor_find(&mut self.find, target, window, cx, |view| &mut view.find);
+        open_editor_find(&mut self.find, Rc::new(target), window, cx, |view| &mut view.find);
     }
 
     fn go_to_line(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -43,9 +46,10 @@ impl ChangesView {
         let Some(buffer) = self.diff.read(cx).buffer.clone() else {
             return;
         };
+        let items = zed_outline_rows(&buffer, cx);
         let diff = self.diff.downgrade();
         open_outline(
-            &buffer,
+            items,
             move |row, column, window, cx| {
                 diff.update(cx, |diff, cx| {
                     diff.go_to_new_line(row + 1, Some(column + 1), window, cx)
@@ -60,8 +64,8 @@ impl ChangesView {
     /// The find bar, while its editor is still one of the diff's; a rebuilt diff drops it.
     pub(super) fn find_bar(&mut self, cx: &mut Context<Self>) -> Option<AnyElement> {
         let find = self.find.clone()?;
-        let target = find.read(cx).target().clone();
-        if !self.diff.read(cx).shows_editor(&target) {
+        let target = find.read(cx).target().id();
+        if !self.diff.read(cx).shows_editor(target) {
             find.update(cx, |find, cx| find.clear(cx));
             self.find = None;
             return None;
