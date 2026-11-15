@@ -17,13 +17,7 @@ const DRAFT: &str = "{\n  \"agents\": {\n    \"maxSendBacks\": 2\n  }\n}\n";
 /// `DRAFT` as another part of the page sets it: one value changed, after the caret at the start.
 const CHANGED: &str = "{\n  \"agents\": {\n    \"maxSendBacks\": 3\n  }\n}\n";
 
-fn start(
-    cx: &mut TestAppContext,
-) -> (
-    Entity<PipelineEditor>,
-    TextBox,
-    &mut VisualTestContext,
-) {
+fn start(cx: &mut TestAppContext) -> (Entity<PipelineEditor>, TextBox, &mut VisualTestContext) {
     let (tab, _, cx) = test_views::init_app(cx, |_, window, cx| {
         let pipeline = cx.new(|_| PipelineEditor::new(DRAFT));
         cx.new(|cx| JsonTab::new(pipeline, window, cx))
@@ -116,20 +110,24 @@ impl Render for Slot {
 fn t14_a_language_that_loads_after_typing_keeps_the_text(cx: &mut TestAppContext) {
     let (slot, _, cx) = test_views::init_app(cx, |_, _, cx| cx.new(|_| Slot { view: None }));
     cx.update(|_, cx| crate::git::languages::init(cx));
-    let (pipeline, editor, language) = slot.update_in(cx, |slot, window, cx| {
+    let (pipeline, editor, view, language) = slot.update_in(cx, |slot, window, cx| {
         let pipeline = cx.new(|_| PipelineEditor::new(DRAFT));
         let tab = cx.new(|cx| JsonTab::new(pipeline.clone(), window, cx));
         let editor = tab.read(cx).code.clone();
-        let language = tab.read(cx).code_view().language_name(cx);
+        let view = tab.read(cx).code_view().clone();
+        let language = view.language_name(cx);
         slot.view = Some(tab.into());
         cx.notify();
         window.focus(&editor.focus_handle(cx), cx);
-        (pipeline, editor, language)
+        (pipeline, editor, view, language)
     });
     // Typed before any task has run.
     press_now(cx, "space space");
     cx.run_until_parked();
     assert_eq!(language, Some("JSON"));
+    // Keys, strings and numbers each have their own colour once the text is parsed.
+    let colors = cx.update(|_, cx| view.run_colors(cx));
+    assert!(colors > 1, "the JSON tab shows {colors} colour(s)");
     let shown = text_of(&editor, cx);
     assert_eq!(shown, format!("  {DRAFT}"));
     assert_eq!(draft(&pipeline, cx).0, shown);

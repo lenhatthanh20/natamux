@@ -1,7 +1,10 @@
 //! The rules of the code view that need no window (plan 6.4): the indent guides and the active
 //! guide, and the typing facts of a language with what they decide (auto-close, Enter between
-//! brackets, the indent of a new line). The rules give what the old editor gave: the outline and
-//! code typing golden files of the old code hold the expected results.
+//! brackets, the indent of a new line), and the search for the other places of the selected text.
+//! The rules give what the old editor gave: the outline and code typing golden files of the old
+//! code hold the expected results.
+
+use std::ops::Range;
 
 use tree_sitter::{Node, Tree};
 
@@ -215,7 +218,10 @@ impl Typing {
         if !next.is_none_or(|next| next.is_whitespace() || self.close_before.contains(next)) {
             return None;
         }
-        let after_word = text[..at].chars().next_back().is_some_and(|c| self.is_word(c));
+        let after_word = text[..at]
+            .chars()
+            .next_back()
+            .is_some_and(|c| self.is_word(c));
         if pair.open == pair.close && after_word {
             return None;
         }
@@ -246,7 +252,10 @@ impl Typing {
     /// the same.
     pub fn indent_for(&self, text: &str, tree: &Tree, row: usize) -> String {
         let lines: Vec<&str> = text.split('\n').collect();
-        let Some(above) = (0..row.min(lines.len())).rev().find(|&at| !blank(lines[at])) else {
+        let Some(above) = (0..row.min(lines.len()))
+            .rev()
+            .find(|&at| !blank(lines[at]))
+        else {
             return String::new();
         };
         let start_of = |at: usize| -> usize { lines[..at].iter().map(|line| line.len() + 1).sum() };
@@ -311,6 +320,42 @@ impl Typing {
         }
         false
     }
+}
+
+/// The places of `query` in `text`, without overlaps. The case does not count, as in Zed's
+/// search for the selected text: only ASCII letters for an ASCII query, else by lower case.
+pub fn find_all(text: &str, query: &str) -> Vec<Range<usize>> {
+    let ascii = query.is_ascii();
+    let same = |a: char, b: char| {
+        if ascii {
+            a.eq_ignore_ascii_case(&b)
+        } else {
+            a == b || a.to_lowercase().eq(b.to_lowercase())
+        }
+    };
+    let mut found = Vec::new();
+    let mut from = 0;
+    while let Some(first) = text[from..].chars().next() {
+        let mut rest = text[from..].char_indices();
+        let mut end = Some(from);
+        for wanted in query.chars() {
+            end = match rest.next() {
+                Some((at, c)) if same(c, wanted) => Some(from + at + c.len_utf8()),
+                _ => None,
+            };
+            if end.is_none() {
+                break;
+            }
+        }
+        match end {
+            Some(end) if end > from => {
+                found.push(from..end);
+                from = end;
+            }
+            _ => from += first.len_utf8(),
+        }
+    }
+    found
 }
 
 #[cfg(test)]

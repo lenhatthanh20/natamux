@@ -28,7 +28,11 @@ fn guide_rows(text: &str) -> Vec<Value> {
 fn the_guides_match_the_outline_golden_files() {
     let mut files = fixtures();
     files.push(("file-long".to_owned(), LONG_FILE.to_owned(), long_file()));
-    files.push(("file-sticky".to_owned(), STICKY_FILE.to_owned(), sticky_file()));
+    files.push((
+        "file-sticky".to_owned(),
+        STICKY_FILE.to_owned(),
+        sticky_file(),
+    ));
     let mut problems = Vec::new();
     for (name, _, text) in files {
         let golden: Vec<Value> = golden_files::read("outline", &name)
@@ -36,7 +40,8 @@ fn the_guides_match_the_outline_golden_files() {
             .filter(|row| row[0] == "guide" || row[0] == "active")
             .collect();
         let own = guide_rows(&text);
-        if let Some(at) = (0..golden.len().max(own.len())).find(|&at| golden.get(at) != own.get(at)) {
+        if let Some(at) = (0..golden.len().max(own.len())).find(|&at| golden.get(at) != own.get(at))
+        {
             problems.push(format!(
                 "{name}: row {at}: old {:?}, own {:?}",
                 golden.get(at),
@@ -99,4 +104,17 @@ fn json_closes_brackets_and_quotes_only_where_the_old_editor_did() {
 fn only_json_has_typing_facts_so_far() {
     assert!(typing_for(lang_for(".natamux.json").unwrap().name).is_some());
     assert!(typing_for(lang_for("x.rs").unwrap().name).is_none());
+}
+
+#[test]
+fn the_selected_text_is_found_whatever_its_case() {
+    assert_eq!(
+        find_all("name Name NAME nam", "name"),
+        vec![0..4, 5..9, 10..14]
+    );
+    assert_eq!(find_all("aaaa", "aa"), vec![0..2, 2..4]);
+    // An ASCII query matches ASCII letters only: the Kelvin sign is not a `k`.
+    assert_eq!(find_all("\u{212a} k K", "k"), vec![4..5, 6..7]);
+    assert_eq!(find_all("Été été ÉTÉ", "été"), vec![0..5, 6..11, 12..17]);
+    assert!(find_all("abc", "x").is_empty());
 }

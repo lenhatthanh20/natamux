@@ -5,7 +5,8 @@
 //! - the whitespace marks of the whole text while the diff's Show whitespace is on (that switch
 //!   was Zed's `show_whitespaces` for every editor);
 //! - the matching bracket and the other places of the selected text;
-//! - the editor's scrollbar, one page of scroll past the end and a scroll margin of 3 lines;
+//! - the editor's scrollbar with its markers, one page of scroll past the end and a scroll margin
+//!   of 3 lines (keys and edits only: a click does not scroll);
 //! - the typing facts of its language (`code_rules.rs`).
 //!
 //! The JSON tab and the Docs views use it; the editor tab follows in S4.3c.
@@ -15,12 +16,12 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use gpui::{
-    App, AppContext as _, Bounds, Context, Entity, Pixels, Task, TextRun, Window, point, px,
+    App, AppContext as _, Bounds, Context, Entity, Hsla, Pixels, Task, TextRun, Window, point, px,
 };
 use theme::ActiveTheme;
 use tree_sitter::{InputEdit, Tree};
 
-use super::code_rules::{Typing, typing_for};
+use super::code_rules::{Typing, find_all, typing_for};
 use super::element::Layout;
 use super::highlight::{Highlights, PARSE_BUDGET, Syntax};
 use super::text_box::TextBox;
@@ -36,6 +37,10 @@ const SCROLL_MARGIN: f32 = 3.;
 pub const BAR_WIDTH: Pixels = px(15.);
 /// The shortest thumb.
 const MIN_THUMB: Pixels = px(25.);
+/// The height of a cursor marker on the scrollbar.
+const CURSOR_MARKER: Pixels = px(2.);
+/// The shortest marker of a selected-text place.
+const MIN_MARKER: Pixels = px(5.);
 /// How long the scrollbar stays after a scroll.
 const BAR_SHOWS_FOR: Duration = Duration::from_secs(1);
 /// The wait before the other places of the selected text show.
@@ -52,7 +57,13 @@ pub struct CodeView {
 impl CodeView {
     /// `text` in the language of `path`, with indent guides, the caret at the start and nothing
     /// to undo, as a new Zed editor had it.
-    pub fn new(path: &str, text: &str, current_line: bool, window: &mut Window, cx: &mut App) -> Self {
+    pub fn new(
+        path: &str,
+        text: &str,
+        current_line: bool,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Self {
         let lang = lang_for(path);
         let input = cx.new(|cx| {
             let mut input = TextInput::full(current_line, false, window, cx);
@@ -89,6 +100,30 @@ impl CodeView {
     #[cfg(test)]
     pub fn input(&self) -> &Entity<TextInput> {
         &self.input
+    }
+
+    /// How many colours the runs of the text have: more than one once it is parsed.
+    #[cfg(test)]
+    pub fn run_colors(&self, cx: &App) -> usize {
+        let input = self.input.read(cx);
+        let base = TextRun {
+            len: 0,
+            font: gpui::font(".ZedMono"),
+            color: Hsla::default(),
+            background_color: None,
+            underline: None,
+            strikethrough: None,
+        };
+        let runs = input
+            .code_runs(&base, input.model.text().len(), cx)
+            .unwrap_or_default();
+        let mut colors: Vec<Hsla> = Vec::new();
+        for run in runs {
+            if !colors.contains(&run.color) {
+                colors.push(run.color);
+            }
+        }
+        colors.len()
     }
 }
 
@@ -130,10 +165,16 @@ pub struct Code {
     /// The text version the regions belong to: any other edit drops them.
     regions_version: u64,
     pub(super) bar: Bar,
-    /// The other places of the selected text, and the selected text they are of.
+    /// The places of the selected text (the selection among them), the selected text and the
+    /// text version they are of.
     pub(super) occurrences: Vec<Range<usize>>,
     occurrences_of: Option<String>,
+    occurrences_version: u64,
     _occurrences: Option<Task<()>>,
+    /// The matching brackets, found at the last change of the selection, and the text version
+    /// they are of.
+    brackets: Vec<Range<usize>>,
+    brackets_version: u64,
 }
 
 impl Code {
@@ -150,7 +191,10 @@ impl Code {
             bar: Bar::default(),
             occurrences: Vec::new(),
             occurrences_of: None,
+            occurrences_version: 0,
             _occurrences: None,
+            brackets: Vec::new(),
+            brackets_version: 0,
         }
     }
 
@@ -160,6 +204,16 @@ impl Code {
 
     fn typing(&self) -> Option<&'static Typing> {
         typing_for(self.lang?.name)
+    }
+
+    /// The places of the selected text other than `selected` itself.
+    pub(super) fn other_occurrences(
+        &self,
+        selected: Range<usize>,
+    ) -> impl Iterator<Item = &Range<usize>> {
+        self.occurrences
+            .iter()
+            .filter(move |range| **range != selected)
     }
 }
 
@@ -192,7 +246,10 @@ fn input_edit(old: &str, new: &str) -> InputEdit {
 fn ts_point(text: &str, at: usize) -> tree_sitter::Point {
     let before = &text.as_bytes()[..at];
     let row = before.iter().filter(|b| **b == b'\n').count();
-    let line = before.iter().rposition(|b| *b == b'\n').map_or(0, |at| at + 1);
+    let line = before
+        .iter()
+        .rposition(|b| *b == b'\n')
+        .map_or(0, |at| at + 1);
     tree_sitter::Point::new(row, at - line)
 }
 
@@ -219,7 +276,8 @@ impl TextInput {
     }
 
     /// After any change of the text or the selection: the tree follows the text, and the other
-    /// places of a new selected text show after a short wait.
+    /// places of the selected text show after a short wait, searched again after each edit as
+    /// Zed's editor does.
     pub(super) fn sync_code(&mut self, cx: &mut Context<Self>) {
         let Some(code) = self.code.as_mut() else {
             return;
@@ -251,23 +309,23 @@ impl TextInput {
         }
         let selection = self.model.selection().range();
         let selected = &text[selection];
-        let query = (!selected.trim().is_empty() && !selected.contains('\n'))
-            .then(|| selected.to_owned());
-        if query != code.occurrences_of {
+        let query =
+            (!selected.trim().is_empty() && !selected.contains('\n')).then(|| selected.to_owned());
+        let version = self.model.version();
+        if query != code.occurrences_of || version != code.occurrences_version {
             code.occurrences.clear();
             code.occurrences_of = query.clone();
+            code.occurrences_version = version;
             code._occurrences = query.map(|query| {
                 cx.spawn(async move |input, cx| {
                     cx.background_executor().timer(OCCURRENCE_DELAY).await;
                     input
                         .update(cx, |input, cx| {
-                            let text = input.model.text();
-                            let found = text
-                                .match_indices(query.as_str())
-                                .map(|(at, found)| at..at + found.len())
-                                .collect();
+                            let found = find_all(input.model.text(), &query);
+                            let version = input.model.version();
                             if let Some(code) = input.code.as_mut()
                                 && code.occurrences_of.as_deref() == Some(query.as_str())
+                                && code.occurrences_version == version
                             {
                                 code.occurrences = found;
                                 cx.notify();
@@ -376,7 +434,9 @@ impl TextInput {
             let range = selection.range();
             let inner = self.model.text()[range.clone()].to_owned();
             let wrapped = format!("{c}{inner}{close}");
-            let edited = self.model.edit(range.clone(), &wrapped, EditKind::Typing, now);
+            let edited = self
+                .model
+                .edit(range.clone(), &wrapped, EditKind::Typing, now);
             let start = range.start + c.len_utf8();
             self.model.select(start, start + inner.len());
             self.put_regions(Vec::new());
@@ -434,9 +494,9 @@ impl TextInput {
         };
         let region = regions.remove(index);
         let now = self.now(cx);
-        let edited =
-            self.model
-                .edit(region.open..region.close + 1, "", EditKind::Deleting, now);
+        let edited = self
+            .model
+            .edit(region.open..region.close + 1, "", EditKind::Deleting, now);
         self.changed(edited, cx);
         true
     }
@@ -464,7 +524,8 @@ impl TextInput {
             let mut after = text.to_owned();
             after.replace_range(range.clone(), "\n");
             let row = after[..=range.start].matches('\n').count();
-            let indent = parse(lang, &after).map_or(lead, |tree| typing.indent_for(&after, &tree, row));
+            let indent =
+                parse(lang, &after).map_or(lead, |tree| typing.indent_for(&after, &tree, row));
             let insert = format!("\n{indent}");
             let caret = range.start + insert.len();
             (insert, caret)
@@ -481,6 +542,19 @@ impl TextInput {
     pub(super) fn code_scroll_limit(&self, laid: &Layout) -> Option<Pixels> {
         self.code.as_ref()?;
         Some(laid.line_height * laid.rows.saturating_sub(1) as f32)
+    }
+
+    /// The width the scrollbar takes from the wrap width of a code view: Zed's editor keeps room
+    /// for it unless its scrollbars never show (the shots).
+    pub(super) fn bar_room(&self, cx: &App) -> Pixels {
+        let never = cx
+            .try_global::<Appearance>()
+            .is_some_and(|look| look.hide_scrollbars);
+        if self.code.is_some() && matches!(self.mode, Mode::Full { .. }) && !never {
+            BAR_WIDTH
+        } else {
+            px(0.)
+        }
     }
 
     /// The scroll margin of a code view at `height`: 3 lines, less when the view is short.
@@ -506,8 +580,8 @@ impl TextInput {
     }
 
     /// Where the scrollbar of a code view is, when it shows: always in a `-scrollbar` shot, never
-    /// in other shots, else while it is dragged, for 1 s after a scroll, and while the caret is
-    /// out of view.
+    /// in other shots, else while it is dragged, for 1 s after a scroll, while the caret is out
+    /// of view, and while the selected text has other places.
     pub(super) fn bar_bounds(
         &self,
         laid: &Layout,
@@ -523,7 +597,9 @@ impl TextInput {
             return None;
         }
         let height = bounds.size.height;
-        let caret = laid.position(self.to_display(self.model.head()), self.end_bias).y;
+        let caret = laid
+            .position(self.to_display(self.model.head()), self.end_bias)
+            .y;
         let caret_hidden =
             caret + laid.line_height <= self.scroll.y || caret >= self.scroll.y + height;
         let recent = code
@@ -531,7 +607,11 @@ impl TextInput {
             .scrolled_at
             .is_some_and(|at| self.now(cx).saturating_duration_since(at) < BAR_SHOWS_FOR);
         let always = look.is_some_and(|look| look.always_scrollbars);
-        if !(always || recent || caret_hidden || code.bar.grab.is_some()) {
+        let occurrences = code
+            .other_occurrences(self.model.selection().range())
+            .next()
+            .is_some();
+        if !(always || recent || caret_hidden || occurrences || code.bar.grab.is_some()) {
             return None;
         }
         let limit = self.code_scroll_limit(laid).unwrap_or_default();
@@ -558,7 +638,9 @@ impl TextInput {
     }
 
     pub(super) fn bar_dragged(&self) -> bool {
-        self.code.as_ref().is_some_and(|code| code.bar.grab.is_some())
+        self.code
+            .as_ref()
+            .is_some_and(|code| code.bar.grab.is_some())
     }
 
     /// A press on the scrollbar: on the thumb it takes it, on the track the thumb jumps there
@@ -604,7 +686,9 @@ impl TextInput {
         };
         let laid = self.layout(window, cx);
         let bar = self.bar_bounds(&laid, bounds, cx);
-        let hovered = bar.as_ref().is_some_and(|bar| bar.thumb.contains(&position));
+        let hovered = bar
+            .as_ref()
+            .is_some_and(|bar| bar.thumb.contains(&position));
         let Some(code) = self.code.as_mut() else {
             return false;
         };
@@ -639,8 +723,8 @@ impl TextInput {
         taken
     }
 
-    /// The innermost bracket pair around the caret, while the view is focused: the ranges of its
-    /// two chars.
+    /// The smallest bracket pair around an empty caret, its edges included as in Zed's editor
+    /// (`|{}` and `{}|` count): the ranges of its two chars.
     pub(super) fn matching_brackets(&self) -> Vec<Range<usize>> {
         let (Some(typing), Some(tree)) = (self.typing(), self.code.as_ref().and_then(Code::tree))
         else {
@@ -650,31 +734,106 @@ impl TextInput {
         if !selection.is_empty() {
             return Vec::new();
         }
-        let at = selection.head;
-        let mut node = tree.root_node().descendant_for_byte_range(at, at);
-        while let Some(found) = node {
-            let count = found.child_count();
-            if count >= 2
-                && let (Some(first), Some(last)) = (found.child(0), found.child(count - 1))
-                && !last.is_missing()
-                && first.end_byte() <= at
-                && at <= last.start_byte()
-            {
-                let open = self.model.text()[first.byte_range()].chars().next();
-                let close = self.model.text()[last.byte_range()].chars().next();
-                let pairs = typing.pairs.iter().any(|pair| {
-                    Some(pair.open) == open
-                        && Some(pair.close) == close
-                        && first.byte_range().len() == 1
-                        && last.byte_range().len() == 1
-                });
-                if pairs {
-                    return vec![first.byte_range(), last.byte_range()];
+        let (at, text) = (selection.head, self.model.text());
+        let mut best: Option<(Range<usize>, Range<usize>)> = None;
+        // From the node before the caret too: right after `}` the caret is outside its node.
+        for from in [at.saturating_sub(1), at] {
+            let mut node = tree.root_node().descendant_for_byte_range(from, from);
+            while let Some(found) = node {
+                node = found.parent();
+                let count = found.child_count();
+                let (Some(first), Some(last)) = (found.child(0), found.child(count.max(1) - 1))
+                else {
+                    continue;
+                };
+                let (open, close) = (first.byte_range(), last.byte_range());
+                let pair = count >= 2
+                    && !last.is_missing()
+                    && open.len() == 1
+                    && close.len() == 1
+                    && open.start <= at
+                    && at <= close.end
+                    && typing.pairs.iter().any(|pair| {
+                        text[open.clone()].starts_with(pair.open)
+                            && text[close.clone()].starts_with(pair.close)
+                    });
+                let shorter = best
+                    .as_ref()
+                    .is_none_or(|(o, c)| close.end - open.start < c.end - o.start);
+                if pair && shorter {
+                    best = Some((open, close));
                 }
             }
-            node = found.parent();
         }
-        Vec::new()
+        best.map_or_else(Vec::new, |(open, close)| vec![open, close])
+    }
+
+    /// After a change of the selection: the matching brackets of the new caret. They stay after
+    /// a blur, as in Zed's editor, and go when the text changes without the selection.
+    pub(super) fn refresh_brackets(&mut self) {
+        if self.code.is_none() {
+            return;
+        }
+        let found = self.matching_brackets();
+        let version = self.model.version();
+        if let Some(code) = self.code.as_mut() {
+            code.brackets = found;
+            code.brackets_version = version;
+        }
+    }
+
+    /// The markers on the scrollbar `bar`, as Zed's editor paints them: each other place of the
+    /// selected text in the middle third, then the caret over the full width.
+    fn bar_markers(
+        &self,
+        laid: &Layout,
+        bar: &BarBounds,
+        cx: &App,
+    ) -> Vec<(Bounds<Pixels>, Hsla)> {
+        let Some(code) = self.code.as_ref() else {
+            return Vec::new();
+        };
+        let line_height = laid.line_height;
+        let scroll_rows = laid.rows.saturating_sub(1) as f32;
+        let unit = if scroll_rows > 0. {
+            (bar.track.size.height - bar.thumb.size.height) / scroll_rows
+        } else {
+            line_height
+        };
+        let row = |at: usize| (laid.position(self.to_display(at), false).y / line_height).round();
+        let border = px(1.);
+        let column = ((BAR_WIDTH - border) / 3.).floor();
+        let (left, top) = (bar.track.left(), bar.track.top());
+        let mut markers: Vec<(Bounds<Pixels>, Hsla)> = Vec::new();
+        let info = cx.theme().status().info;
+        let selected = self.model.selection().range();
+        for range in code.other_occurrences(selected) {
+            let start = top + unit * row(range.start);
+            let end = top + unit * row(range.end) + unit.max(MIN_MARKER);
+            // Touching places merge into one marker.
+            if let Some((last, _)) = markers.last_mut()
+                && last.bottom() >= start - px(1.)
+            {
+                last.size.height = end.max(last.bottom()) - last.top();
+                continue;
+            }
+            markers.push((
+                Bounds::from_corners(
+                    point(left + border + column, start),
+                    point(left + border + column * 2., end),
+                ),
+                info,
+            ));
+        }
+        let head = top + unit * row(self.model.head());
+        markers.push((
+            Bounds::from_corners(
+                point(left + border, head),
+                point(left + BAR_WIDTH, head + CURSOR_MARKER),
+            ),
+            cx.theme().players().local().cursor,
+        ));
+        markers
     }
 }
 
@@ -689,6 +848,8 @@ pub(super) struct CodePaint {
     pub all_whitespace: bool,
     /// The scrollbar, hovered, dragged.
     pub bar: Option<(BarBounds, bool, bool)>,
+    /// The markers on the scrollbar, painted before its thumb.
+    pub markers: Vec<(Bounds<Pixels>, Hsla)>,
 }
 
 impl TextInput {
@@ -698,7 +859,6 @@ impl TextInput {
         laid: &Layout,
         bounds: Bounds<Pixels>,
         origin: gpui::Point<Pixels>,
-        focused: bool,
         cx: &App,
     ) -> CodePaint {
         let Some(code) = self.code.as_ref() else {
@@ -715,12 +875,16 @@ impl TextInput {
                 .map(|bar| (bar, self.bar_hovered(), self.bar_dragged())),
             ..CodePaint::default()
         };
+        if let Some((bar, _, _)) = &paint.bar {
+            paint.markers = self.bar_markers(laid, bar, cx);
+        }
         if code.guides {
             let found = super::code_rules::guides(text);
             let caret_row = text[..self.model.head()].matches('\n').count();
             let active = super::code_rules::active_guides(text, &found, caret_row);
             for (index, guide) in found.iter().enumerate() {
-                let (Some(first), Some(last)) = (laid.lines.get(guide.start), laid.lines.get(guide.end))
+                let (Some(first), Some(last)) =
+                    (laid.lines.get(guide.start), laid.lines.get(guide.end))
                 else {
                     continue;
                 };
@@ -737,14 +901,14 @@ impl TextInput {
                 ));
             }
         }
-        let mut ranges = if focused {
-            self.matching_brackets()
+        let version = self.model.version();
+        let mut ranges: Vec<Range<usize>> = if code.brackets_version == version {
+            code.brackets.clone()
         } else {
             Vec::new()
         };
         // The selected text itself shows only in the selection colour.
-        let selected = self.model.selection().range();
-        ranges.extend(code.occurrences.iter().filter(|range| **range != selected).cloned());
+        ranges.extend(code.other_occurrences(self.model.selection().range()).cloned());
         for range in ranges {
             for rect in laid.selection_rects(range) {
                 let rect = Bounds::new(rect.origin + origin, rect.size);

@@ -338,7 +338,16 @@ impl TextInput {
             Self::emit_edited(cx);
         }
         self.sync_code(cx);
+        self.refresh_brackets();
         cx.notify();
+    }
+
+    /// A click in a code view does not scroll, as `autoscroll_on_clicks` is off in Zed's editor;
+    /// keys, edits and drags still do.
+    fn no_click_scroll(&mut self) {
+        if self.code.is_some() {
+            self.autoscroll = false;
+        }
     }
 
     /// Tells `Edited` one effect later, as Zed's editor did (its event came through the buffer):
@@ -517,11 +526,13 @@ impl TextInput {
         let rem = self.rem_size(&style, window);
         let font = style.font();
         let font_size = style.font_size.to_pixels(rem);
+        let room = self.bar_room(cx);
         let (width, inset) = match self.mode {
             Mode::OneLine => (None, px(0.)),
             _ => (
-                self.last_bounds
-                    .map(|bounds| wrap_width(&font, font_size, bounds.size.width, window)),
+                self.last_bounds.map(|bounds| {
+                    (wrap_width(&font, font_size, bounds.size.width, window) - room).max(px(0.))
+                }),
                 text_inset(&font, font_size, window),
             ),
         };
@@ -651,7 +662,10 @@ impl TextInput {
         if forward {
             self.delete_to(|text, at| motion::next_word_end_in(text, at, extra), cx);
         } else {
-            self.delete_to(|text, at| motion::previous_word_start_in(text, at, extra), cx);
+            self.delete_to(
+                |text, at| motion::previous_word_start_in(text, at, extra),
+                cx,
+            );
         }
     }
 
@@ -990,7 +1004,8 @@ impl TextInput {
         if !selection.is_empty() {
             return;
         }
-        let (start, end) = motion::word_around_in(self.model.text(), selection.head, self.word_chars());
+        let (start, end) =
+            motion::word_around_in(self.model.text(), selection.head, self.word_chars());
         if start < end {
             self.model.select(start, end);
             self.model.goal_x = None;
@@ -1125,6 +1140,7 @@ impl TextInput {
             origin: self.model.selection(),
         });
         self.changed(false, cx);
+        self.no_click_scroll();
         self.end_bias = end_bias && !inside;
         cx.stop_propagation();
     }
@@ -1230,6 +1246,7 @@ impl TextInput {
         }
         if press.inside && !press.moved {
             self.move_caret(press.at, false, cx);
+            self.no_click_scroll();
         }
     }
 
@@ -1264,19 +1281,32 @@ impl TextInput {
 }
 
 /// `runs` with `range` underlined, split where it starts and ends.
-fn underline_range(runs: Vec<TextRun>, range: Range<usize>, underline: UnderlineStyle) -> Vec<TextRun> {
+fn underline_range(
+    runs: Vec<TextRun>,
+    range: Range<usize>,
+    underline: UnderlineStyle,
+) -> Vec<TextRun> {
     let mut out = Vec::new();
     let mut at = 0;
     for run in runs {
         let (start, end) = (at, at + run.len);
         at = end;
-        let cuts = [start, range.start.clamp(start, end), range.end.clamp(start, end), end];
+        let cuts = [
+            start,
+            range.start.clamp(start, end),
+            range.end.clamp(start, end),
+            end,
+        ];
         for part in cuts.windows(2) {
             if part[1] > part[0] {
                 let inside = part[0] >= range.start && part[1] <= range.end;
                 out.push(TextRun {
                     len: part[1] - part[0],
-                    underline: if inside { Some(underline) } else { run.underline },
+                    underline: if inside {
+                        Some(underline)
+                    } else {
+                        run.underline
+                    },
                     ..run.clone()
                 });
             }

@@ -296,10 +296,7 @@ fn own_state(input: &Entity<TextInput>, cx: &mut VisualTestContext) -> (String, 
             row_column(text, selection.anchor),
             row_column(text, selection.head),
         );
-        (
-            text.to_owned(),
-            json!([[tail_row, tail, head_row, head]]),
-        )
+        (text.to_owned(), json!([[tail_row, tail, head_row, head]]))
     })
 }
 

@@ -410,6 +410,8 @@ mod text_view {
     mod code_typing_tests;
     /// The code view (docs/plan-mit-license.md S4.3b): the JSON tab and the Docs views.
     pub mod code_view;
+    #[cfg(test)]
+    mod code_view_tests;
     /// The own text input (docs/plan-mit-license.md S3.3), the default since S3.4.
     #[cfg_attr(not(test), allow(dead_code))]
     pub mod element;

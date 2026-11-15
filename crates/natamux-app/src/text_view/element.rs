@@ -627,7 +627,7 @@ impl Element for TextElement {
             Mode::Full { current_line } => (true, current_line),
             _ => (false, false),
         };
-        let code = input.code_paint(&laid, bounds, origin, focused, cx);
+        let code = input.code_paint(&laid, bounds, origin, cx);
         // Spaces and tabs inside the selection of a full box show as dots and arrows; in a code
         // view all of them while Show whitespace is on.
         let shown = input.display().0;
@@ -680,6 +680,7 @@ impl Element for TextElement {
         let bar = code
             .bar
             .map(|(bar, hovered, dragged)| (bar, thumb_color(hovered, dragged)));
+        let markers = code.markers;
 
         window.handle_input(
             &focus,
@@ -803,6 +804,9 @@ impl Element for TextElement {
                 };
                 window.paint_quad(fill(bar.track, track));
                 window.paint_quad(fill(edge(&bar.track), track_border));
+                for (marker, color) in &markers {
+                    window.paint_quad(fill(*marker, *color));
+                }
                 window.paint_quad(fill(bar.thumb, *thumb));
                 window.paint_quad(fill(edge(&bar.thumb), thumb_border));
             }
