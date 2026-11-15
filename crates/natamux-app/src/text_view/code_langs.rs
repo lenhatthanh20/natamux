@@ -1,8 +1,10 @@
 //! The typing facts of each language of the code view (plan 6.4), as values: the pairs and where
 //! they close themselves, the comments that go on at Enter, the word chars, and what makes a new
 //! line one level deeper. The pair, comment and word facts are the ones the old editor took from
-//! each language's settings; the indent facts give what the code typing golden files of the old
-//! editor recorded. Every editor indents by 4 columns here (the app's tab size), Go with a tab.
+//! each language's settings (plan 6.4). The indent facts are our own: node kinds of each grammar
+//! chosen so the code typing golden files of the old editor hold, and for Shell, Python and YAML
+//! a small rule of our own for the line that opens a block (`shell_opens`, `python_opens`,
+//! `yaml_opens`). Every editor indents by 4 columns here (the app's tab size), Go with a tab.
 
 use super::code_rules::{AUTO, NEWLINE, NO_COMMENT, NO_STRING, Pair, Typing, pair};
 
@@ -26,8 +28,58 @@ const BASE: Typing = Typing {
 const CODE_CLOSE: &str = ";:.,=}])>";
 const SLASHES: &[&str] = &["// "];
 const HASH: &[&str] = &["# "];
-/// Any node with these tokens as children is a block.
+/// Any node with both tokens of one of these as children is a block.
 const ALL_BRACKETS: &[(&str, &str)] = &[("(", ")"), ("[", "]"), ("{", "}")];
+
+/// `line` without its `#` comment: from the first `#` outside quotes, and with `after_space`
+/// only a `#` at the line start or after a space or tab (as in Shell and YAML).
+// shortcut: a quote char after a backslash still counts; good enough for one line's indent.
+fn before_hash(line: &str, after_space: bool) -> &str {
+    let mut quote = None;
+    let mut last = ' ';
+    for (at, c) in line.char_indices() {
+        match quote {
+            Some(open) if c == open => quote = None,
+            Some(_) => {}
+            None if c == '"' || c == '\'' => quote = Some(c),
+            None if c == '#' && (!after_space || last == ' ' || last == '\t') => {
+                return &line[..at];
+            }
+            None => {}
+        }
+        last = c;
+    }
+    line
+}
+
+/// Shell: a line that ends with `then`, `do`, `else` or the `in` of `case`, or a `case` pattern
+/// such as `a|b)`, opens a block.
+fn shell_opens(line: &str) -> bool {
+    let code = before_hash(line, true).trim();
+    let last = code
+        .rsplit(|c: char| c.is_whitespace() || c == ';')
+        .next()
+        .unwrap_or("");
+    matches!(last, "then" | "do" | "else" | "in")
+        || (code.len() > 1 && code.ends_with(')') && !code.contains('('))
+}
+
+/// Python: a line whose code ends with `:` (`def f():`, `else:`) opens a block.
+fn python_opens(line: &str) -> bool {
+    before_hash(line, false).trim_end().ends_with(':')
+}
+
+/// YAML: a key with no value on its line (`a:`, `- a:`), or with only a block scalar mark
+/// (`a: |`, `a: >-`), opens a block.
+fn yaml_opens(line: &str) -> bool {
+    let code = before_hash(line, true).trim_end();
+    let mark = code.trim_end_matches(|c: char| c == '-' || c == '+' || c.is_ascii_digit());
+    let key = match mark.strip_suffix(['|', '>']) {
+        Some(key) => key.trim_end(),
+        None => code,
+    };
+    key.ends_with(':')
+}
 
 const SHELL_STRINGS: &[&str] = &["string", "raw_string", "ansi_c_string"];
 const COMMENT: &[&str] = &["comment"];
@@ -43,7 +95,7 @@ const SHELL: Typing = Typing {
     close_before: "}])",
     line_comments: HASH,
     indent_nodes: &[("subshell", ")"), ("compound_statement", "}")],
-    indent_after: Some(r"^\s*(\b(else|elif)\b|([^#]+\b(do|then|in)\b)|([\w\*]+\)))\s*$"),
+    indent_after: Some(shell_opens),
     string_nodes: SHELL_STRINGS,
     comment_nodes: COMMENT,
     ..BASE
@@ -82,6 +134,7 @@ const C_INDENT: &[(&str, &str)] = &[
     ("declaration_list", "}"),
     ("init_declarator", ""),
     ("concatenated_string", ""),
+    ("string_literal", ""),
 ];
 
 const C: Typing = Typing {
@@ -289,7 +342,7 @@ const PYTHON: Typing = Typing {
     close_before: CODE_CLOSE,
     line_comments: HASH,
     indent_brackets: ALL_BRACKETS,
-    indent_after: Some(r"^[^#].*:\s*(#.*)?$"),
+    indent_after: Some(python_opens),
     string_nodes: &["string"],
     comment_nodes: COMMENT,
     ..BASE
@@ -342,7 +395,7 @@ const YAML: Typing = Typing {
     ],
     close_before: ",]}",
     line_comments: HASH,
-    indent_after: Some(r"(:?^[^#]*:\s*[|>]?\s*$)|(:?^\s*-[^#]*:\s*(:?#+.*)$)"),
+    indent_after: Some(yaml_opens),
     string_nodes: &["double_quote_scalar", "single_quote_scalar"],
     comment_nodes: COMMENT,
     ..BASE
@@ -375,3 +428,7 @@ pub fn typing_for(name: &str) -> Option<&'static Typing> {
         _ => return None,
     })
 }
+
+#[cfg(test)]
+#[path = "code_langs_tests.rs"]
+mod tests;

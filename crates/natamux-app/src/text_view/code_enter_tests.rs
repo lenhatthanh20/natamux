@@ -73,3 +73,16 @@ fn a_block_pair_puts_the_caret_on_a_deeper_line_of_its_own() {
 fn a_line_after_a_colon_in_python_goes_one_level_deeper() {
     assert_eq!(after_enter("a.py", "def f():|"), "def f():\n    |");
 }
+
+#[test]
+fn a_shell_or_yaml_line_that_opens_a_block_goes_one_level_deeper() {
+    assert_eq!(after_enter("a.sh", "if a; then|"), "if a; then\n    |");
+    assert_eq!(after_enter("a.sh", "echo a|"), "echo a\n|");
+    assert_eq!(after_enter("a.yaml", "a:|"), "a:\n    |");
+    assert_eq!(after_enter("a.yaml", "a: b|"), "a: b\n|");
+}
+
+#[test]
+fn a_top_level_c_string_goes_on_one_level_deeper() {
+    assert_eq!(after_enter("a.c", "\"|\""), "\"\n    |\"");
+}

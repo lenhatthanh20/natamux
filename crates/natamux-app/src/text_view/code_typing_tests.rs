@@ -497,3 +497,16 @@ hosts! {
     typescript: Host::new("typescript", "x.ts").string(JS_STRING).comment(SLASH_COMMENT),
     yaml: Host::new("yaml", "x.yaml").string("a: \"abˇ\"").comment(HASH_COMMENT),
 }
+
+/// Regression: a pair typed inside another moved the outer close by one char only, so `]`
+/// stepped over the wrong pair and `}` was typed again (`{[]}}`).
+#[gpui::test]
+fn nested_pairs_step_over_their_own_closing_chars(cx: &mut TestAppContext) {
+    let (slot, cx) = start(cx);
+    let (input, _) = open_json_tab("ˇ", &slot, cx);
+    for c in ["{", "[", "]", "}"] {
+        type_text(cx, c);
+        cx.run_until_parked();
+    }
+    assert_eq!(own_state(&input, cx), ("{[]}".to_owned(), json!([[0, 4, 0, 4]])));
+}

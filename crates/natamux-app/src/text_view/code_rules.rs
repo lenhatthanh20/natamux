@@ -203,11 +203,11 @@ pub struct Typing {
     /// The node kinds whose inside is one level deeper, each with the token that ends it (empty:
     /// the node's own end).
     pub indent_nodes: &'static [(&'static str, &'static str)],
-    /// Any node whose children hold one of these opening tokens is such a block too, ended by
-    /// the closing token.
+    /// Any node whose children hold one of these opening tokens and its closing token is such a
+    /// block too, ended by the closing token.
     pub indent_brackets: &'static [(&'static str, &'static str)],
-    /// A line that matches this pattern makes the next line one level deeper.
-    pub indent_after: Option<&'static str>,
+    /// True for a line that makes the next line one level deeper (`code_langs.rs`).
+    pub indent_after: Option<fn(&str) -> bool>,
     /// The node kinds that are strings and comments, for `Pair::not_in_string` and
     /// `not_in_comment`.
     pub string_nodes: &'static [&'static str],
@@ -293,7 +293,7 @@ impl Typing {
 
     /// The indent of `row` of `text` (parsed as `tree`), from the row above that is not blank: one
     /// level more when a block (`indent_nodes`, `indent_brackets`) starts on that row and goes on
-    /// past this row's start, or when that row matches `indent_after`; the indent of a block's
+    /// past this row's start, or when `indent_after` holds for that row; the indent of a block's
     /// first row when the block ended between the two rows; else the same.
     pub fn indent_for(&self, text: &str, tree: &Tree, row: usize) -> String {
         let lines: Vec<&str> = text.split('\n').collect();
@@ -309,9 +309,7 @@ impl Typing {
         let deeper = blocks
             .iter()
             .any(|&(first, end)| first == above && end > row_start)
-            || self.indent_after.is_some_and(|pattern| {
-                regex::Regex::new(pattern).is_ok_and(|pattern| pattern.is_match(lines[above]))
-            });
+            || self.indent_after.is_some_and(|opens| opens(lines[above]));
         if deeper {
             return format!("{}{}", lead(lines[above]), self.indent_unit());
         }
@@ -349,10 +347,11 @@ impl Typing {
                 .iter()
                 .find(|(kind, _)| *kind == node.kind())
                 .map(|(_, end)| *end);
-            let bracket = self.indent_brackets.iter().find(|(open, _)| {
+            let bracket = self.indent_brackets.iter().find(|(open, close)| {
                 children
                     .iter()
                     .any(|child| child.kind() == *open && !child.is_missing())
+                    && children.iter().any(|child| child.kind() == *close)
             });
             if let Some(end) = kind.or(bracket.map(|(_, close)| *close)) {
                 out.push((node.start_position().row, end_of(end)));

@@ -882,7 +882,8 @@ impl TextInput {
     /// one line gets spaces to the next tab stop of the line's indent (a whole tab stop after a
     /// tab), at the selection when it starts inside the indent, else at the line start. A
     /// selection over more rows gives every line a whole tab stop at its start. The selection
-    /// start always moves past the spaces, as does its end on an indented line.
+    /// start always moves past the spaces, as does its end on an indented line. A language with
+    /// hard tabs gets one tab char instead of the spaces.
     fn tab(&mut self, _: &mut Window, cx: &mut Context<Self>) {
         if self.read_only {
             return;
@@ -909,6 +910,7 @@ impl TextInput {
         let range = selection.range();
         let starts = self.line_starts(range.clone());
         let one_line = starts.len() == 1;
+        let hard_tabs = self.typing().is_some_and(|typing| typing.hard_tabs);
         let edits: Vec<Edit> = starts
             .iter()
             .map(|&start| {
@@ -925,7 +927,11 @@ impl TextInput {
                 };
                 Edit {
                     range: at..at,
-                    text: " ".repeat(spaces),
+                    text: if hard_tabs {
+                        "\t".to_owned()
+                    } else {
+                        " ".repeat(spaces)
+                    },
                 }
             })
             .collect();

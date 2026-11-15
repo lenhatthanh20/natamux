@@ -136,8 +136,9 @@ impl TextInput {
         let edited = self.model.edit(at..at, &insert, EditKind::Typing, now);
         let after = at + c.len_utf8();
         self.model.move_to(after);
+        // Every kept region holds `at`, so its close moves by all the inserted text.
         for region in &mut regions {
-            region.close += c.len_utf8();
+            region.close += insert.len();
         }
         // Only a one-char closer is stepped over or deleted with its opening.
         if let Some(close) = closer

@@ -323,3 +323,15 @@ fn t_sb_1_when_the_scrollbar_shows(cx: &mut TestAppContext) {
     wait(cx);
     assert!(!shows(cx), "selected text with no other place");
 }
+
+#[gpui::test]
+fn tab_over_a_selection_indents_go_with_a_tab_char(cx: &mut TestAppContext) {
+    let (input, _, cx) = open("x.go", "a\nb", cx);
+    let own = input.read_with(cx, |input, _| input.focus.clone());
+    focus_handle(&own, cx);
+    select(&input, 0, 3, cx);
+    press(cx, "tab");
+    cx.run_until_parked();
+    let text = input.read_with(cx, |input, _| input.model.text().to_owned());
+    assert_eq!(text, "\ta\n\tb");
+}
