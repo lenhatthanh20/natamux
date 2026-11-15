@@ -29,7 +29,11 @@ const STICKY_ROWS: u32 = 10;
 fn files() -> Vec<(String, String, String)> {
     let mut out = fixtures();
     out.push(("file-long".to_owned(), LONG_FILE.to_owned(), long_file()));
-    out.push(("file-sticky".to_owned(), STICKY_FILE.to_owned(), sticky_file()));
+    out.push((
+        "file-sticky".to_owned(),
+        STICKY_FILE.to_owned(),
+        sticky_file(),
+    ));
     out
 }
 
@@ -185,8 +189,14 @@ fn assert_sane(name: &str, rows: &[Value]) {
         .filter(|row| row[0] == "active")
         .map(|row| !row[2].as_array().unwrap().is_empty())
         .collect();
-    assert!(active.contains(&true), "{name}: no caret row has an active guide");
-    assert!(active.contains(&false), "{name}: every caret row has an active guide");
+    assert!(
+        active.contains(&true),
+        "{name}: no caret row has an active guide"
+    );
+    assert!(
+        active.contains(&false),
+        "{name}: every caret row has an active guide"
+    );
 }
 
 /// Whether `name` is the long file or the sticky file of the editor shots.

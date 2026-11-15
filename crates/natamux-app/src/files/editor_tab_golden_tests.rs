@@ -16,7 +16,6 @@ use serde_json::{Value, json};
 use text::Point;
 use theme::ActiveTheme;
 
-use crate::files::file_editor::FileEditor;
 use crate::app::dashboard::Dashboard;
 use crate::app::golden_files;
 use crate::app::options::ThemeMode;
@@ -24,6 +23,7 @@ use crate::app::shortcuts::{Back, FindNext, FindPrevious};
 use crate::app::source::Source;
 use crate::app::test_views;
 use crate::app::view_state::ViewState;
+use crate::files::file_editor::FileEditor;
 use crate::git::languages::golden_tests::hex;
 
 const SET: &str = "editor_tab";
@@ -101,11 +101,7 @@ fn find_row(step: &str, target: &Entity<Editor>, cx: &mut VisualTestContext) -> 
 
 /// The term typed into a new bar, then Enter one time more than there are matches, then
 /// Shift+Enter twice.
-fn find_steps(
-    label: &str,
-    editor: &Entity<FileEditor>,
-    cx: &mut VisualTestContext,
-) -> Vec<Value> {
+fn find_steps(label: &str, editor: &Entity<FileEditor>, cx: &mut VisualTestContext) -> Vec<Value> {
     let target = text_editor(editor, cx);
     editor.update_in(cx, |editor, window, cx| editor.shot_find(TERM, window, cx));
     cx.run_until_parked();
@@ -119,7 +115,11 @@ fn find_steps(
     for press in 1..=2 {
         cx.dispatch_action(FindPrevious);
         cx.run_until_parked();
-        rows.push(find_row(&format!("{label} shift-enter {press}"), &target, cx));
+        rows.push(find_row(
+            &format!("{label} shift-enter {press}"),
+            &target,
+            cx,
+        ));
     }
     rows
 }
@@ -134,7 +134,9 @@ fn find_rows(cx: &mut TestAppContext) -> Vec<Value> {
     rows.push(find_row("closed", &target, cx));
     editor.update_in(cx, |editor, window, cx| {
         let body = editor.body.clone().expect("the body is drawn");
-        body.update(cx, |body, cx| body.go_to(LATER_ROW + 1, Some(1), window, cx));
+        body.update(cx, |body, cx| {
+            body.go_to(LATER_ROW + 1, Some(1), window, cx)
+        });
     });
     cx.run_until_parked();
     rows.extend(find_steps("later", &editor, cx));
@@ -142,11 +144,7 @@ fn find_rows(cx: &mut TestAppContext) -> Vec<Value> {
 }
 
 /// The blame menu of every line of the file, and of a row of no line of it.
-fn menu_rows(
-    label: &str,
-    editor: &Entity<FileEditor>,
-    cx: &mut VisualTestContext,
-) -> Vec<Value> {
+fn menu_rows(label: &str, editor: &Entity<FileEditor>, cx: &mut VisualTestContext) -> Vec<Value> {
     let lines = editor.read_with(cx, |editor, cx| {
         let body = editor.body.as_ref().expect("the body is drawn");
         body.read(cx).buffer().read(cx).max_point().row
@@ -204,7 +202,11 @@ fn blame_with_a_draft_matches_the_golden_file(cx: &mut TestAppContext) {
 /// The active matches of a find row.
 fn active(row: &Value) -> Vec<Value> {
     let found = row[1].as_array().unwrap();
-    found.iter().filter(|found| found[2] == "active").cloned().collect()
+    found
+        .iter()
+        .filter(|found| found[2] == "active")
+        .cloned()
+        .collect()
 }
 
 /// Fails when the rows show a find that does not move: a sign that Enter and Shift+Enter did not
@@ -218,16 +220,27 @@ fn assert_find_moves(rows: &[Value]) {
         let count = steps[0][1].as_array().unwrap().len();
         assert!(count > 1, "{label}: one match or none");
         let enters = &steps[1..=count + 1];
-        assert_ne!(enters[0][2], steps[0][2], "{label}: Enter did not move the selection");
+        assert_ne!(
+            enters[0][2], steps[0][2],
+            "{label}: Enter did not move the selection"
+        );
         for enter in enters {
             assert_eq!(active(enter).len(), 1, "{label}: not one active match");
         }
         for pair in enters.windows(2) {
-            assert_ne!(active(pair[0]), active(pair[1]), "{label}: Enter did not move the match");
+            assert_ne!(
+                active(pair[0]),
+                active(pair[1]),
+                "{label}: Enter did not move the match"
+            );
         }
         assert_eq!(active(enters[count]), active(enters[0]), "{label}: no wrap");
         let back = steps[count + 2];
-        assert_eq!(active(back), active(enters[count - 1]), "{label}: Shift+Enter");
+        assert_eq!(
+            active(back),
+            active(enters[count - 1]),
+            "{label}: Shift+Enter"
+        );
     }
 }
 
@@ -243,7 +256,10 @@ fn the_blame_labels_show_at_the_line_starts(cx: &mut TestAppContext) {
         rows.iter()
             .any(|row| row[0] == "shown" && row[2].as_str().is_some_and(|l| l.contains(author)))
     };
-    assert!(shown("Sam Doe"), "the fake's second commit labels its lines");
+    assert!(
+        shown("Sam Doe"),
+        "the fake's second commit labels its lines"
+    );
 }
 
 #[gpui::test]

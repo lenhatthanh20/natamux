@@ -1,0 +1,21 @@
+[
+{"path":"src/checkout.ts","language":"TypeScript","parsed":true},
+["item",0,"function checkout( )",[[2,7],[4,1]],[[2,16],[2,24]],[[2,7],[2,51]],null,[[9,17]]],
+["item",0,"const roundMoney",[[6,13],[6,74]],[[6,13],[6,23]],[[6,7],[6,23]],null,[[6,16]]],
+["sticky",0,[[0,"function checkout( )",[2,16],[2,7],[4,1]],[0,"const roundMoney",[6,13],[6,7],[6,74]]]],
+["sticky",1,[[0,"function checkout( )",[2,16],[2,7],[4,1]],[0,"const roundMoney",[6,13],[6,7],[6,74]]]],
+["sticky",2,[[0,"function checkout( )",[2,16],[2,7],[4,1]],[0,"const roundMoney",[6,13],[6,7],[6,74]]]],
+["sticky",3,[[0,"function checkout( )",[2,16],[2,7],[4,1]],[0,"const roundMoney",[6,13],[6,7],[6,74]]]],
+["sticky",4,[[0,"function checkout( )",[2,16],[2,7],[4,1]],[0,"const roundMoney",[6,13],[6,7],[6,74]]]],
+["sticky",5,[[0,"const roundMoney",[6,13],[6,7],[6,74]]]],
+["sticky",6,[[0,"const roundMoney",[6,13],[6,7],[6,74]]]],
+["sticky",7,[]],
+["active",0,[]],
+["active",1,[]],
+["active",2,[]],
+["active",3,[]],
+["active",4,[]],
+["active",5,[]],
+["active",6,[]],
+["active",7,[]]
+]
