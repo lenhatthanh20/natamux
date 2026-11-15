@@ -319,7 +319,12 @@ mod tests {
 
     #[test]
     fn prefix_lists_fonts_icons_and_themes() {
-        assert_eq!(paths_with_prefix("fonts/").filter(|p| p.ends_with(".ttf")).count(), 8);
+        assert_eq!(
+            paths_with_prefix("fonts/")
+                .filter(|p| p.ends_with(".ttf"))
+                .count(),
+            8
+        );
         assert!(paths_with_prefix("icons/lucide/").any(|p| p.ends_with("/diamond.svg")));
         assert_eq!(paths_with_prefix("themes/").count(), 11);
         assert_eq!(paths_with_prefix("nothing/").count(), 0);
@@ -344,10 +349,22 @@ mod tests {
     fn fonts_are_the_exact_files_of_the_plan() {
         use sha2::{Digest, Sha256};
         let expected = [
-            ("fonts/ibm-plex-sans/IBMPlexSans-Regular.ttf", "975dcda37d80f038"),
-            ("fonts/ibm-plex-sans/IBMPlexSans-Italic.ttf", "a9c6ef9942c49e49"),
-            ("fonts/ibm-plex-sans/IBMPlexSans-SemiBold.ttf", "a20caf8286023a6a"),
-            ("fonts/ibm-plex-sans/IBMPlexSans-SemiBoldItalic.ttf", "147106b619423a82"),
+            (
+                "fonts/ibm-plex-sans/IBMPlexSans-Regular.ttf",
+                "975dcda37d80f038",
+            ),
+            (
+                "fonts/ibm-plex-sans/IBMPlexSans-Italic.ttf",
+                "a9c6ef9942c49e49",
+            ),
+            (
+                "fonts/ibm-plex-sans/IBMPlexSans-SemiBold.ttf",
+                "a20caf8286023a6a",
+            ),
+            (
+                "fonts/ibm-plex-sans/IBMPlexSans-SemiBoldItalic.ttf",
+                "147106b619423a82",
+            ),
             ("fonts/lilex/Lilex-Regular.ttf", "8a467ad5a1941dc7"),
             ("fonts/lilex/Lilex-Bold.ttf", "3369214e2ecddb45"),
             ("fonts/lilex/Lilex-Italic.ttf", "a6e52046b91ed12a"),
