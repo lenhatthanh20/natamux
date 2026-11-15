@@ -15,8 +15,8 @@ use ui::prelude::*;
 
 use crate::app::test_driver::{press, type_text};
 use crate::app::{golden_files, shortcuts, test_views};
-use crate::git::languages::lang_for;
 use crate::files::file_editor_body::FileEditorBody;
+use crate::git::languages::lang_for;
 use crate::projects::json_tab::JsonTab;
 use crate::stages::pipeline_editor::PipelineEditor;
 use crate::text_view::code_view::CodeView;
@@ -404,7 +404,11 @@ fn check_own(host: &Host, rows: &[Value]) {
     let golden = golden_files::read(SET, host.name);
     let mut problems = Vec::new();
     if golden.first() != rows.first() {
-        problems.push(format!("header: golden {:?} now {:?}", golden.first(), rows.first()));
+        problems.push(format!(
+            "header: golden {:?} now {:?}",
+            golden.first(),
+            rows.first()
+        ));
     }
     let mut failed: Vec<&Value> = Vec::new();
     for (i, (old, new)) in golden.iter().zip(rows).enumerate().skip(1) {
@@ -508,5 +512,8 @@ fn nested_pairs_step_over_their_own_closing_chars(cx: &mut TestAppContext) {
         type_text(cx, c);
         cx.run_until_parked();
     }
-    assert_eq!(own_state(&input, cx), ("{[]}".to_owned(), json!([[0, 4, 0, 4]])));
+    assert_eq!(
+        own_state(&input, cx),
+        ("{[]}".to_owned(), json!([[0, 4, 0, 4]]))
+    );
 }

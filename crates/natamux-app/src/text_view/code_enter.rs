@@ -87,13 +87,7 @@ pub fn enter(
     let spaces = rest.len() - rest.trim_start_matches([' ', '\t']).len();
     let end = range.end + spaces;
     let after = format!("{}\n{}", &text[..range.start], &text[end..]);
-    let new_indent = indent(
-        typing,
-        lang,
-        &after,
-        row_of(text, range.start) + 1,
-        &lead,
-    );
+    let new_indent = indent(typing, lang, &after, row_of(text, range.start) + 1, &lead);
     let inserted = format!("\n{new_indent}");
     Enter {
         range: range.start..end,
@@ -104,7 +98,10 @@ pub fn enter(
 
 /// The indent of `row` of `text` by the language's rules, `lead` when it does not parse.
 fn indent(typing: &Typing, lang: &Lang, text: &str, row: usize, lead: &str) -> String {
-    parse(lang, text).map_or_else(|| lead.to_owned(), |tree| typing.indent_for(text, &tree, row))
+    parse(lang, text).map_or_else(
+        || lead.to_owned(),
+        |tree| typing.indent_for(text, &tree, row),
+    )
 }
 
 /// Enter in a doc comment: on its first line, the next line starts with ` * ` and an end right

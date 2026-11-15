@@ -27,7 +27,9 @@ fn jsx_closing_tag(lang: &Lang, text: &str, at: usize) -> Option<String> {
         .descendant_for_byte_range(at.saturating_sub(1), at);
     while let Some(found) = node {
         if found.kind() == "jsx_opening_element" && found.end_byte() == at {
-            let element = found.parent().filter(|parent| parent.kind() == "jsx_element");
+            let element = found
+                .parent()
+                .filter(|parent| parent.kind() == "jsx_element");
             let closed = element.is_some_and(|element| {
                 let mut cursor = element.walk();
                 element.children(&mut cursor).any(|child| {

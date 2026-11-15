@@ -406,10 +406,10 @@ mod text {
 mod text_view {
     mod blink;
     mod code_bar;
-    #[cfg(test)]
-    mod code_mouse_tests;
     mod code_enter;
     mod code_langs;
+    #[cfg(test)]
+    mod code_mouse_tests;
     mod code_paint;
     mod code_rules;
     mod code_typing;

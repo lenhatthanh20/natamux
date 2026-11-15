@@ -275,9 +275,9 @@ impl Typing {
     /// own on Enter.
     pub fn expands(&self, text: &str, at: usize) -> bool {
         let (before, after) = text.split_at(at);
-        self.pairs
-            .iter()
-            .any(|pair| pair.newline && before.ends_with(pair.open) && after.starts_with(pair.close))
+        self.pairs.iter().any(|pair| {
+            pair.newline && before.ends_with(pair.open) && after.starts_with(pair.close)
+        })
     }
 
     /// The line comment start that `before` (a line up to the caret) begins with, after its

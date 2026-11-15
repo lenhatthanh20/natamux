@@ -3,11 +3,11 @@
 use serde_json::{Value, json};
 
 use super::*;
-use crate::text_view::code_langs::typing_for;
 use crate::app::golden_files;
 use crate::app::shots_text::{LONG_FILE, STICKY_FILE, long_file, sticky_file};
 use crate::git::languages::golden_tests::fixtures;
 use crate::git::languages::{LANGS, lang_for};
+use crate::text_view::code_langs::typing_for;
 
 /// The `guide` and `active` rows of an outline golden file (T-OUT-1, Zed's editor), as the own
 /// rules give them.
@@ -130,7 +130,10 @@ fn a_line_comment_goes_on_with_the_longest_start_of_the_line() {
     assert_eq!(rust.line_comment("    // a"), Some("// "));
     assert_eq!(rust.line_comment("/// a"), Some("/// "));
     assert_eq!(rust.line_comment("let a = 1; // a"), None);
-    assert_eq!(typing_for("Python").unwrap().line_comment("# a"), Some("# "));
+    assert_eq!(
+        typing_for("Python").unwrap().line_comment("# a"),
+        Some("# ")
+    );
 }
 
 #[test]
