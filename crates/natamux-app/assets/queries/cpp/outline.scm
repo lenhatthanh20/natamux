@@ -2,6 +2,7 @@
 ; and node names as the author remembers them; no grammar file was at hand.
 ; Captures: @item the entry, @name shown and a name, @context shown only, @open/@close body tokens.
 
+(concept_definition "concept" @context name: (_) @name) @item
 (namespace_definition "namespace" @context name: (_) @name) @item
 (class_specifier "class" @context name: (_) @name body: (_)) @item
 (enum_specifier "enum" @context "class"? @context name: (_) @name body: (_)) @item

@@ -39,4 +39,5 @@
   (variable_declarator name: (identifier) @name) @item)
 
 ; Keys of an object literal.
-(pair key: (_) @name) @item
+(pair key: (string (string_fragment) @name)) @item
+(pair key: [(property_identifier) (number) (computed_property_name)] @name) @item

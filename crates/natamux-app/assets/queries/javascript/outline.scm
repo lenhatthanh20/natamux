@@ -21,12 +21,21 @@
   parameters: (formal_parameters "(" @context ")" @context)) @item
 
 ; Variables: the name of a declarator, or the names in an array pattern.
-(lexical_declaration ["let" "const"] @context
-  (variable_declarator name: (identifier) @name) @item)
-(lexical_declaration ["let" "const"] @context
-  (variable_declarator name: (array_pattern (identifier) @name @item)))
+(program (lexical_declaration ["let" "const"] @context
+  (variable_declarator name: (identifier) @name) @item))
+(statement_block (lexical_declaration ["let" "const"] @context
+  (variable_declarator name: (identifier) @name) @item))
+(export_statement (lexical_declaration ["let" "const"] @context
+  (variable_declarator name: (identifier) @name) @item))
+(program (lexical_declaration ["let" "const"] @context
+  (variable_declarator name: (array_pattern (identifier) @name @item))))
+(statement_block (lexical_declaration ["let" "const"] @context
+  (variable_declarator name: (array_pattern (identifier) @name @item))))
+(export_statement (lexical_declaration ["let" "const"] @context
+  (variable_declarator name: (array_pattern (identifier) @name @item))))
 (variable_declaration "var" @context
   (variable_declarator name: (identifier) @name) @item)
 
 ; Keys of an object literal.
-(pair key: (_) @name) @item
+(pair key: (string (string_fragment) @name)) @item
+(pair key: [(property_identifier) (number) (computed_property_name)] @name) @item

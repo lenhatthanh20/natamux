@@ -5,7 +5,7 @@
 ; Package level: one entry per spec, named by the spec's name.
 (type_declaration "type" @context (type_spec name: (_) @name) @item)
 (var_declaration "var" @context (var_spec name: (identifier) @name @item))
-(const_declaration "const" @context (const_spec name: (identifier) @name @item))
+(const_declaration "const" @context (const_spec name: (identifier) @name) @item)
 
 ; Struct fields.
 (field_declaration name: (field_identifier) @name @item)
