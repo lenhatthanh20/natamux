@@ -30,10 +30,7 @@ struct Host {
 
 impl Render for Host {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-        div()
-            .w(px(400.))
-            .h(px(200.))
-            .child(self.view.text_box())
+        div().w(px(400.)).h(px(200.)).child(self.view.text_box())
     }
 }
 
@@ -79,7 +76,10 @@ fn set_look(cx: &mut VisualTestContext, change: impl FnOnce(&mut Appearance)) {
 fn labels_go_before_their_rows_and_map_offsets_both_ways() {
     let text = "ab\ncd\n";
     let mut labels = Labels::default();
-    labels.set(vec![(1, "L1 ".into()), (0, "L0 ".into()), (9, "gone".into())], text);
+    labels.set(
+        vec![(1, "L1 ".into()), (0, "L0 ".into()), (9, "gone".into())],
+        text,
+    );
     assert_eq!(labels.insert(text), "L0 ab\nL1 cd\n");
     assert_eq!(labels.total(), 6);
     assert_eq!(labels.shown_ranges(), vec![0..3, 6..9]);
@@ -164,15 +164,12 @@ fn blame_labels_shift_their_rows_and_the_menu_opens_on_a_right_click(cx: &mut Te
     let asked: Rc<Cell<Option<Option<u32>>>> = Rc::default();
     let seen = asked.clone();
     let menu: RowMenu = Rc::new(
-        move |row: Option<u32>,
-              window: &mut Window,
-              cx: &mut App|
-              -> Option<Entity<ContextMenu>> {
-        seen.set(Some(row));
-        Some(ContextMenu::build(window, cx, |menu, _, _| {
-            menu.entry("Close Annotations", None, |_, _| {})
-        }))
-    },
+        move |row: Option<u32>, window: &mut Window, cx: &mut App| -> Option<Entity<ContextMenu>> {
+            seen.set(Some(row));
+            Some(ContextMenu::build(window, cx, |menu, _, _| {
+                menu.entry("Close Annotations", None, |_, _| {})
+            }))
+        },
     );
     cx.update(|_, cx| view.set_menu(menu, cx));
     let (gutter_at, at) = input.update_in(cx, |input, window, cx| {
@@ -236,7 +233,9 @@ fn a_view_that_does_not_wrap_scrolls_sideways_with_its_own_bar(cx: &mut TestAppC
     assert_eq!(rows(cx), 3, "a .rs file does not wrap");
     assert!(!cx.update(|_, cx| view.wraps(cx)));
     set_look(cx, |look| look.always_scrollbars = true);
-    let hbar = paint(&input, cx).hbar.expect("a line is wider than the view");
+    let hbar = paint(&input, cx)
+        .hbar
+        .expect("a line is wider than the view");
     assert!(hbar.0.thumb.size.width < hbar.0.track.size.width);
 
     cx.simulate_event(ScrollWheelEvent {
@@ -302,10 +301,15 @@ fn the_guides_are_kept_until_the_text_changes(cx: &mut TestAppContext) {
     };
     let (first, active) = guides(1, cx);
     let (again, _) = guides(1, cx);
-    assert!(Rc::ptr_eq(&first, &again), "the same text gives the kept guides");
+    assert!(
+        Rc::ptr_eq(&first, &again),
+        "the same text gives the kept guides"
+    );
     assert_eq!(first.len(), 1);
     assert_eq!(*active, vec![0]);
-    input.update(cx, |input, cx| input.replace_minimal("def a():\n    b = 1\n", cx));
+    input.update(cx, |input, cx| {
+        input.replace_minimal("def a():\n    b = 1\n", cx)
+    });
     cx.run_until_parked();
     let (after, _) = guides(1, cx);
     assert!(!Rc::ptr_eq(&first, &after), "an edit finds them again");
@@ -317,7 +321,9 @@ fn the_colours_are_asked_for_the_lines_around_the_shown_ones(cx: &mut TestAppCon
     cx.executor().advance_clock(Duration::from_millis(50));
     cx.run_until_parked();
     let asked = |cx: &mut VisualTestContext| {
-        input.update_in(cx, |input, window, cx| input.layout(window, cx).key.lines.clone())
+        input.update_in(cx, |input, window, cx| {
+            input.layout(window, cx).key.lines.clone()
+        })
     };
     assert_eq!(asked(cx), Some(0..200), "the top two blocks");
     let line_height = input.update_in(cx, |input, window, cx| input.layout(window, cx).line_height);
@@ -334,6 +340,8 @@ fn the_colours_are_asked_for_the_lines_around_the_shown_ones(cx: &mut TestAppCon
 #[gpui::test]
 fn a_view_with_nothing_to_colour_asks_for_no_lines(cx: &mut TestAppContext) {
     let (_, input, cx) = open("notes.txt", &lines(1000), cx);
-    let asked = input.update_in(cx, |input, window, cx| input.layout(window, cx).key.lines.clone());
+    let asked = input.update_in(cx, |input, window, cx| {
+        input.layout(window, cx).key.lines.clone()
+    });
     assert_eq!(asked, None);
 }

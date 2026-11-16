@@ -66,7 +66,9 @@ pub(super) fn line_bytes(text: &str, lines: &Range<usize>) -> Range<usize> {
     let mut starts = std::iter::once(0).chain(text.match_indices('\n').map(|(at, _)| at + 1));
     let start = starts.by_ref().nth(lines.start).unwrap_or(text.len());
     let end = if lines.end > lines.start {
-        starts.nth(lines.end - lines.start - 1).unwrap_or(text.len())
+        starts
+            .nth(lines.end - lines.start - 1)
+            .unwrap_or(text.len())
     } else {
         start
     };
@@ -115,7 +117,9 @@ impl TextInput {
         let mut cache = code.run_cache.borrow_mut();
         let stale = cache.colors != code.colors || cache.theme != theme_name;
         if stale || cache.lines != lines || cache.runs.is_empty() {
-            let bytes = lines.as_ref().map_or(0..len, |lines| line_bytes(text, lines));
+            let bytes = lines
+                .as_ref()
+                .map_or(0..len, |lines| line_bytes(text, lines));
             let keys = highlights.theme_keys(|key| theme.style_for_name(key).is_some());
             *cache = RunCache {
                 colors: code.colors,

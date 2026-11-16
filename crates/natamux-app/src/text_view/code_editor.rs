@@ -230,15 +230,19 @@ impl TextInput {
         let Some(menu) = menu(Some(row), window, cx) else {
             return;
         };
-        let dismiss = cx.subscribe_in(&menu, window, |input, menu, _: &DismissEvent, window, cx| {
-            if menu.focus_handle(cx).contains_focused(window, cx) {
-                window.focus(&input.focus, cx);
-            }
-            if let Some(code) = input.code.as_mut() {
-                code.open_menu = None;
-            }
-            cx.notify();
-        });
+        let dismiss = cx.subscribe_in(
+            &menu,
+            window,
+            |input, menu, _: &DismissEvent, window, cx| {
+                if menu.focus_handle(cx).contains_focused(window, cx) {
+                    window.focus(&input.focus, cx);
+                }
+                if let Some(code) = input.code.as_mut() {
+                    code.open_menu = None;
+                }
+                cx.notify();
+            },
+        );
         window.focus(&menu.focus_handle(cx), cx);
         if let Some(code) = self.code.as_mut() {
             code.open_menu = Some(OpenMenu {

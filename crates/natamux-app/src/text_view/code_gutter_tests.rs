@@ -48,7 +48,10 @@ fn a_sticky_row_is_pushed_up_as_its_item_ends() {
     let text: String = (0..10).map(|n| format!("line {n}\n")).collect();
     let start = |line: usize| line * 7;
     // An outer item over lines 0 to 8 and an inner one over lines 2 to 5.
-    let items = vec![item(start(0)..start(8), 0), item(start(2)..start(5), start(2))];
+    let items = vec![
+        item(start(0)..start(8), 0),
+        item(start(2)..start(5), start(2)),
+    ];
     let rows = |top: f32| sticky_rows(&items, &text, top, line_of(&text));
     assert!(rows(0.).is_empty(), "the head is still in its place");
     let at_3 = rows(3.);

@@ -163,9 +163,8 @@ fn run_own(cx: &mut TestAppContext) -> Vec<Value> {
         ..Modifiers::default()
     };
     let mut rows = Vec::new();
-    let open = |caret: usize, cx: &mut VisualTestContext| {
-        open_own_editor("x.rs", TEXT, caret, &slot, cx)
-    };
+    let open =
+        |caret: usize, cx: &mut VisualTestContext| open_own_editor("x.rs", TEXT, caret, &slot, cx);
 
     let input = open(0, cx);
     let at = own_gutter(&input, 2, cx);

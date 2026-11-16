@@ -844,9 +844,8 @@ impl Element for TextElement {
             }
             // The horizontal bar has its border line on top.
             if let Some((bar, thumb)) = &hbar {
-                let edge = |rect: &Bounds<Pixels>| {
-                    Bounds::new(rect.origin, size(rect.size.width, px(1.)))
-                };
+                let edge =
+                    |rect: &Bounds<Pixels>| Bounds::new(rect.origin, size(rect.size.width, px(1.)));
                 window.paint_quad(fill(bar.track, track));
                 window.paint_quad(fill(edge(&bar.track), track_border));
                 window.paint_quad(fill(bar.thumb, *thumb));

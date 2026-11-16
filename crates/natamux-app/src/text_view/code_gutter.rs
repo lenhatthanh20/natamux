@@ -66,10 +66,17 @@ pub(super) struct Sticky {
 
 /// The gutter's width and the room right of its numbers, for `lines` lines, from the width and
 /// the advance of `0`.
-pub(super) fn gutter_widths(lines: usize, ch_width: Pixels, ch_advance: Pixels) -> (Pixels, Pixels) {
+pub(super) fn gutter_widths(
+    lines: usize,
+    ch_width: Pixels,
+    ch_advance: Pixels,
+) -> (Pixels, Pixels) {
     let digits = lines.max(1).to_string().len().max(MIN_DIGITS);
     let right = ch_width * RIGHT_PAD;
-    (ch_advance * digits as f32 + ch_width * LEFT_PAD + right, right)
+    (
+        ch_advance * digits as f32 + ch_width * LEFT_PAD + right,
+        right,
+    )
 }
 
 /// `gutter_widths` in `font`.
@@ -81,7 +88,9 @@ pub(super) fn gutter_size(
 ) -> (Pixels, Pixels) {
     let text_system = window.text_system();
     let id = text_system.resolve_font(font);
-    let ch_width = text_system.ch_width(id, font_size).unwrap_or(font_size / 2.);
+    let ch_width = text_system
+        .ch_width(id, font_size)
+        .unwrap_or(font_size / 2.);
     let ch_advance = text_system.ch_advance(id, font_size).unwrap_or(ch_width);
     gutter_widths(lines, ch_width, ch_advance)
 }

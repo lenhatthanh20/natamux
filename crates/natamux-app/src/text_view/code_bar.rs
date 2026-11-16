@@ -147,7 +147,9 @@ impl TextInput {
         let left = bounds.left() + laid.key.gutter;
         let width = (bounds.right() - BAR_WIDTH - left).max(px(0.));
         let content = laid.width.max(px(1.));
-        let thumb_width = (width * (laid.key.view / content)).max(MIN_THUMB).min(width);
+        let thumb_width = (width * (laid.key.view / content))
+            .max(MIN_THUMB)
+            .min(width);
         let x = (width - thumb_width) * (self.scroll.x / most);
         let track = Bounds::new(
             point(left, bounds.bottom() - BAR_WIDTH),
