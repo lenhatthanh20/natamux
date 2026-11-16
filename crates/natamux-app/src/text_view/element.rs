@@ -380,51 +380,81 @@ impl Layout {
         previous: Option<&Layout>,
         window: &Window,
     ) -> Self {
-        let mut ready: HashMap<&str, Vec<&Rc<Rows>>> = HashMap::new();
-        if let Some(previous) = previous.filter(|previous| {
-            let old = &previous.key;
-            (old.width, &old.font, old.font_size, old.color)
-                == (key.width, &key.font, key.font_size, key.color)
-        }) {
-            for line in &previous.lines {
-                ready
-                    .entry(line.rows.text.as_str())
-                    .or_default()
-                    .push(&line.rows);
-            }
-        }
+        let old_lines: &[Line] = previous
+            .filter(|previous| {
+                let old = &previous.key;
+                (old.width, &old.font, old.font_size, old.color)
+                    == (key.width, &key.font, key.font_size, key.color)
+            })
+            .map_or(&[], |previous| previous.lines.as_slice());
+        // After an edit, the lines below it moved by the lines it added or removed.
+        let shift = old_lines.len() as isize - (text.matches('\n').count() + 1) as isize;
+        // Every old line by its text, made only when a line is not found at its place.
+        let mut ready: Option<HashMap<&str, Vec<&Rc<Rows>>>> = None;
         let mut lines = Vec::new();
         let (mut start, mut row, mut width) = (0, 0, px(0.));
         let mut cursor = RunCursor::new(runs);
-        for source in text.split('\n') {
+        for (index, source) in text.split('\n').enumerate() {
             let len = source.len();
             let line_runs = cursor.take(start..start + len);
-            let (shown, line_runs, tabs) = expand_tabs(source, &line_runs);
-            let cached = ready.get(shown.as_str()).and_then(|found| {
-                found
+            let same = |old: &&Line| *old.rows.text == *source && old.rows.runs == line_runs;
+            // A line with no tab shows as it is: compare it with the old line at its place.
+            let kept = if source.contains('\t') {
+                None
+            } else {
+                old_lines.get(index).filter(same).or_else(|| {
+                    let moved = index.checked_add_signed(shift)?;
+                    old_lines.get(moved).filter(same)
+                })
+            };
+            let line = if let Some(old) = kept {
+                Line {
+                    start,
+                    len,
+                    first_row: row,
+                    row_starts: old.row_starts.clone(),
+                    rows: old.rows.clone(),
+                    tabs: Vec::new(),
+                }
+            } else {
+                let (shown, line_runs, tabs) = expand_tabs(source, &line_runs);
+                let ready = ready.get_or_insert_with(|| {
+                    let mut ready: HashMap<&str, Vec<&Rc<Rows>>> = HashMap::new();
+                    for line in old_lines {
+                        ready
+                            .entry(line.rows.text.as_str())
+                            .or_default()
+                            .push(&line.rows);
+                    }
+                    ready
+                });
+                let cached = ready.get(shown.as_str()).and_then(|found| {
+                    found
+                        .iter()
+                        .find(|rows| rows.runs == line_runs)
+                        .map(|rows| (*rows).clone())
+                });
+                let rows = cached
+                    .unwrap_or_else(|| Rc::new(shape_rows(shown, &line_runs, &key, window)));
+                let shown_starts: Vec<usize> = rows.rows.iter().map(|row| row.shown).collect();
+                let mut line = Line {
+                    start,
+                    len,
+                    first_row: row,
+                    row_starts: Vec::new(),
+                    rows,
+                    tabs,
+                };
+                // A row that starts inside a tab's spaces keeps the tab on the row above.
+                line.row_starts = shown_starts
                     .iter()
-                    .find(|rows| rows.runs == line_runs)
-                    .map(|rows| (*rows).clone())
-            });
-            let rows =
-                cached.unwrap_or_else(|| Rc::new(shape_rows(shown, &line_runs, &key, window)));
-            width = rows.rows.iter().fold(width, |width, row| {
+                    .map(|&at| line.local(at, true))
+                    .collect();
+                line
+            };
+            width = line.rows.rows.iter().fold(width, |width, row| {
                 width.max(row.indent + row.shaped.unwrapped_layout.width)
             });
-            let shown_starts: Vec<usize> = rows.rows.iter().map(|row| row.shown).collect();
-            let mut line = Line {
-                start,
-                len,
-                first_row: row,
-                row_starts: Vec::new(),
-                rows,
-                tabs,
-            };
-            // A row that starts inside a tab's spaces keeps the tab on the row above.
-            line.row_starts = shown_starts
-                .iter()
-                .map(|&at| line.local(at, true))
-                .collect();
             let count = line.row_starts.len();
             lines.push(line);
             row += count;
@@ -1044,5 +1074,50 @@ mod tests {
                 .collect();
             assert_eq!(cut, from_the_start(&runs, range.clone()), "{range:?}");
         }
+    }
+
+    /// A key lays out only the lines it changed: the others keep their shaped rows, also below
+    /// an added line.
+    #[gpui::test]
+    fn a_layout_keeps_the_rows_of_the_lines_an_edit_did_not_touch(cx: &mut gpui::TestAppContext) {
+        let cx = cx.add_empty_window();
+        cx.update(|window, _| {
+            let key = |version| LayoutKey {
+                version,
+                width: None,
+                font: font("Mono"),
+                font_size: px(14.),
+                line_height: px(20.),
+                color: Hsla::default(),
+                masked: false,
+                marked: None,
+                placeholder: None,
+                inset: px(0.),
+                colors: 0,
+                gutter: px(0.),
+                gutter_pad: px(0.),
+                view: px(400.),
+                lines: None,
+                heads: Vec::new(),
+                marks: Vec::new(),
+            };
+            let run = |len| TextRun {
+                len,
+                font: font("Mono"),
+                color: Hsla::default(),
+                background_color: None,
+                underline: None,
+                strikethrough: None,
+            };
+            let before = SharedString::from("a\nb\nc");
+            let old = Layout::build(key(1), &before, &[run(before.len())], None, window);
+            let after = SharedString::from("a\nx\nb\nc");
+            let new = Layout::build(key(2), &after, &[run(after.len())], Some(&old), window);
+            let kept = |old_line: usize, new_line: usize| {
+                Rc::ptr_eq(&old.lines[old_line].rows, &new.lines[new_line].rows)
+            };
+            assert!(kept(0, 0) && kept(1, 2) && kept(2, 3));
+            assert_eq!(new.lines[1].rows.text, "x");
+        });
     }
 }
