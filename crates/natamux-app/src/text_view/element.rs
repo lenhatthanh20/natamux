@@ -40,6 +40,13 @@ pub struct LayoutKey {
     pub inset: Pixels,
     /// The colour count of a code view: its syntax colours changed with the text the same.
     pub colors: u64,
+    /// The gutter's width (part of `inset`) and the room right of its numbers; zero without one.
+    pub gutter: Pixels,
+    pub gutter_pad: Pixels,
+    /// The width the text has room for: the wrap width, also when the lines do not wrap.
+    pub view: Pixels,
+    /// The lines the syntax colours were asked for (`TextInput::query_lines`).
+    pub lines: Option<Range<usize>>,
 }
 
 /// One line of the text (between two `\n`) and the rows it wraps into.
@@ -328,7 +335,15 @@ impl Layout {
         self.lines.get(index.checked_sub(1)?)
     }
 
-    fn line_of_row(&self, row: usize) -> Option<(&Line, usize)> {
+    /// The index of the line that holds shown row `row`.
+    pub fn line_index_of_row(&self, row: usize) -> usize {
+        self.lines
+            .partition_point(|line| line.first_row <= row)
+            .saturating_sub(1)
+    }
+
+    /// The line that holds shown row `row`, and the row inside it.
+    pub(super) fn line_of_row(&self, row: usize) -> Option<(&Line, usize)> {
         let index = self.lines.partition_point(|line| line.first_row <= row);
         let line = self.lines.get(index.checked_sub(1)?)?;
         let in_line = (row - line.first_row).min(line.row_starts.len() - 1);
@@ -595,7 +610,8 @@ impl Element for TextElement {
                 input.scroll_to_head(&laid, bounds);
             }
             input.clamp_scroll(&laid, bounds);
-            laid
+            // A scroll may move the lines a code view colours: lay out again (only then).
+            input.layout(window, cx)
         });
         Some(laid)
     }
@@ -683,8 +699,12 @@ impl Element for TextElement {
         };
         let bar = code
             .bar
-            .map(|(bar, hovered, dragged)| (bar, thumb_color(hovered, dragged)));
-        let markers = code.markers;
+            .as_ref()
+            .map(|(bar, hovered, dragged)| (bar, thumb_color(*hovered, *dragged)));
+        let hbar = code
+            .hbar
+            .as_ref()
+            .map(|(bar, hovered, dragged)| (bar, thumb_color(*hovered, *dragged)));
 
         window.handle_input(
             &focus,
@@ -806,15 +826,29 @@ impl Element for TextElement {
                     cursor,
                 ));
             }
+            if let Some(gutter) = &code.gutter {
+                super::code_gutter::paint_gutter(gutter, &laid, window, cx);
+            }
+            super::code_gutter::paint_sticky(&code, &laid, bounds, origin, window, cx);
             if let Some((bar, thumb)) = &bar {
                 let edge = |rect: &Bounds<Pixels>| {
                     Bounds::new(rect.origin, size(px(1.), rect.size.height))
                 };
                 window.paint_quad(fill(bar.track, track));
                 window.paint_quad(fill(edge(&bar.track), track_border));
-                for (marker, color) in &markers {
+                for (marker, color) in &code.markers {
                     window.paint_quad(fill(*marker, *color));
                 }
+                window.paint_quad(fill(bar.thumb, *thumb));
+                window.paint_quad(fill(edge(&bar.thumb), thumb_border));
+            }
+            // The horizontal bar has its border line on top.
+            if let Some((bar, thumb)) = &hbar {
+                let edge = |rect: &Bounds<Pixels>| {
+                    Bounds::new(rect.origin, size(rect.size.width, px(1.)))
+                };
+                window.paint_quad(fill(bar.track, track));
+                window.paint_quad(fill(edge(&bar.track), track_border));
                 window.paint_quad(fill(bar.thumb, *thumb));
                 window.paint_quad(fill(edge(&bar.thumb), thumb_border));
             }

@@ -151,7 +151,7 @@ pub struct TextInput {
     /// A caret at a wrap point shows at the end of the row above (after End).
     pub(super) end_bias: bool,
     pub(super) last_bounds: Option<Bounds<Pixels>>,
-    laid: Option<Rc<Layout>>,
+    pub(super) laid: Option<Rc<Layout>>,
     press: Option<Press>,
     /// Where held text would go in, while it is dragged.
     pub(super) drop_at: Option<usize>,
@@ -344,7 +344,7 @@ impl TextInput {
 
     /// A click in a code view does not scroll, as `autoscroll_on_clicks` is off in Zed's editor;
     /// keys and edits still do, and a drag does once the pointer leaves the text.
-    fn no_click_scroll(&mut self) {
+    pub(super) fn no_click_scroll(&mut self) {
         if self.code.is_some() {
             self.autoscroll = false;
         }
@@ -448,6 +448,8 @@ impl TextInput {
             (self.placeholder.clone(), true)
         } else if self.masked {
             (SharedString::from("*".repeat(text.chars().count())), false)
+        } else if let Some(labels) = self.labels() {
+            (SharedString::from(labels.insert(text)), false)
         } else {
             (SharedString::from(text.to_string()), false)
         }
@@ -467,8 +469,10 @@ impl TextInput {
         } else {
             style.color
         };
+        let labels = self.labels().filter(|_| !placeholder);
+        let text_len = len - labels.map_or(0, |labels| labels.total());
         let run = TextRun {
-            len,
+            len: text_len,
             font: style.font(),
             color,
             background_color: None,
@@ -478,9 +482,13 @@ impl TextInput {
         let runs = if placeholder {
             None
         } else {
-            self.code_runs(&run, len, cx)
+            self.code_runs(&run, text_len, self.query_lines(), cx)
         };
-        let runs = runs.unwrap_or_else(|| vec![run]);
+        let label = labels.map(|_| self.label_run(&run, cx));
+        let mut runs = runs.unwrap_or_else(|| vec![run]);
+        if let (Some(labels), Some(label)) = (labels, label) {
+            runs = labels.splice(runs, &label);
+        }
         let marked = self.model.marked().filter(|_| !placeholder);
         let Some(marked) = marked else {
             return runs;
@@ -500,6 +508,8 @@ impl TextInput {
             self.model.text()[..at.min(self.model.text().len())]
                 .chars()
                 .count()
+        } else if let Some(labels) = self.labels() {
+            labels.shown(at)
         } else {
             at
         }
@@ -515,6 +525,7 @@ impl TextInput {
                 .nth(at)
                 .map_or(text.len(), |(index, _)| index)
         } else {
+            let at = self.labels().map_or(at, |labels| labels.text_at(at));
             motion::floor_boundary(text, at)
         }
     }
@@ -527,14 +538,24 @@ impl TextInput {
         let font = style.font();
         let font_size = style.font_size.to_pixels(rem);
         let room = self.bar_room(cx);
-        let (width, inset) = match self.mode {
-            Mode::OneLine => (None, px(0.)),
-            _ => (
-                self.last_bounds.map(|bounds| {
-                    (wrap_width(&font, font_size, bounds.size.width, window) - room).max(px(0.))
-                }),
-                text_inset(&font, font_size, window),
-            ),
+        let full = matches!(self.mode, Mode::Full { .. });
+        let (gutter, gutter_pad) = if full && self.code.as_ref().is_some_and(|code| code.gutter) {
+            let lines = self.model.text().split('\n').count();
+            super::code_gutter::gutter_size(lines, &font, font_size, window)
+        } else {
+            (px(0.), px(0.))
+        };
+        let (width, view, inset) = match self.mode {
+            Mode::OneLine => (None, px(0.), px(0.)),
+            _ => {
+                let view = self.last_bounds.map(|bounds| {
+                    let width = bounds.size.width - gutter;
+                    (wrap_width(&font, font_size, width, window) - room).max(px(0.))
+                });
+                let width = if self.scrolls_sideways() { None } else { view };
+                let inset = text_inset(&font, font_size, window) + gutter;
+                (width, view.unwrap_or_default(), inset)
+            }
         };
         let shows_placeholder = self.model.text().is_empty() && !self.placeholder.is_empty();
         let key = LayoutKey {
@@ -549,6 +570,10 @@ impl TextInput {
             placeholder: shows_placeholder.then(|| self.placeholder.clone()),
             inset,
             colors: self.code.as_ref().map_or(0, |code| code.colors),
+            gutter,
+            gutter_pad,
+            view,
+            lines: self.query_lines(),
         };
         if let Some(laid) = &self.laid
             && laid.key == key
@@ -588,6 +613,17 @@ impl TextInput {
             if at.y + laid.line_height + margin > self.scroll.y + height {
                 self.scroll.y = at.y + laid.line_height + margin - height;
             }
+            // shortcut: no side margin, unlike Zed's horizontal autoscroll; match it when a
+            // golden or shot of the editor tab shows the difference.
+            if self.scrolls_sideways() {
+                let room = laid.key.view;
+                if at.x + CARET_WIDTH - self.scroll.x > room {
+                    self.scroll.x = at.x + CARET_WIDTH - room;
+                }
+                if at.x < self.scroll.x {
+                    self.scroll.x = at.x;
+                }
+            }
         }
     }
 
@@ -601,7 +637,11 @@ impl TextInput {
             let most = self.code_scroll_limit(laid).unwrap_or_else(|| {
                 (laid.line_height * laid.rows as f32 - bounds.size.height).max(zero)
             });
-            self.scroll = point(zero, self.scroll.y.clamp(zero, most));
+            let most_x = self.code_scroll_x_limit(laid);
+            self.scroll = point(
+                self.scroll.x.clamp(zero, most_x),
+                self.scroll.y.clamp(zero, most),
+            );
         }
     }
 
@@ -1124,7 +1164,17 @@ impl TextInput {
         let range = self.model.selection().range();
         let text = self.model.text();
         let mut inside = false;
-        match event.click_count {
+        // A press on the line numbers takes whole lines, as a triple click does.
+        let in_gutter = self.in_gutter(event.position);
+        let clicks = if in_gutter { 3 } else { event.click_count };
+        match clicks {
+            _ if in_gutter && event.modifiers.shift => {
+                let (start, end) = (motion::line_start(text, at), motion::line_end(text, at));
+                let end = if end < text.len() { end + 1 } else { end };
+                let anchor = self.model.selection().anchor;
+                self.model
+                    .select(anchor, if start >= anchor { end } else { start });
+            }
             1 if event.modifiers.shift => self.model.select_to(at),
             1 if !range.is_empty() && range.contains(&at) => inside = true,
             1 => self.model.move_to(at),
@@ -1143,7 +1193,7 @@ impl TextInput {
         self.press = Some(Press {
             at,
             time: self.now(cx),
-            clicks: event.click_count,
+            clicks,
             inside,
             moved: false,
             moving_text: false,
@@ -1286,6 +1336,8 @@ impl TextInput {
             self.scroll.x -= if delta.x == px(0.) { delta.y } else { delta.x };
         } else {
             self.scroll.y -= delta.y;
+            // Kept at 0 unless the lines do not wrap (`clamp_scroll`).
+            self.scroll.x -= delta.x;
         }
         self.clamp_scroll(&laid, bounds);
         // A box that cannot scroll leaves the wheel to the list around it.
@@ -1372,6 +1424,7 @@ impl Render for TextInput {
                 _ => root.w_full(),
             })
             .on_mouse_down(MouseButton::Left, cx.listener(Self::mouse_down))
+            .on_mouse_down(MouseButton::Right, cx.listener(Self::right_down))
             .on_scroll_wheel(cx.listener(Self::scroll_wheel));
         let root = keys!(root, cx,
             Backspace => backspace(),
@@ -1423,5 +1476,6 @@ impl Render for TextInput {
             ToggleComments => nothing(),
         );
         root.child(TextElement::new(cx.entity()))
+            .children(self.menu_element())
     }
 }

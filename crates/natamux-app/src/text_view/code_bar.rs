@@ -1,4 +1,5 @@
-//! The scrollbar of a code view (plan 6.4): Zed's editor values, its markers and its drag.
+//! The scrollbars of a code view (plan 6.4): Zed's editor values, the markers and the drag of
+//! the vertical bar, and the horizontal bar of a view whose lines do not wrap.
 
 use std::time::{Duration, Instant};
 
@@ -27,6 +28,9 @@ pub(super) struct Bar {
     hovered: bool,
     /// While the thumb is dragged: where it was taken, from its top.
     grab: Option<Pixels>,
+    /// The same for the horizontal bar, from the thumb's left.
+    hhovered: bool,
+    hgrab: Option<Pixels>,
     _hide: Option<Task<()>>,
 }
 
@@ -50,22 +54,19 @@ impl TextInput {
         }));
     }
 
-    /// Where the scrollbar of a code view is, when it shows: always in a `-scrollbar` shot, never
-    /// in other shots, else while it is dragged, for 1 s after a scroll, while the caret is out
-    /// of view, and while the selected text has other places.
-    pub(super) fn bar_bounds(
-        &self,
-        laid: &Layout,
-        bounds: Bounds<Pixels>,
-        cx: &App,
-    ) -> Option<BarBounds> {
-        let code = self.code.as_ref()?;
+    /// Whether the scrollbars of a code view show: always in a `-scrollbar` shot, never in
+    /// other shots, else while one is dragged, for 1 s after a scroll, while the caret is out of
+    /// view, and while the selected text has other places.
+    fn bars_show(&self, laid: &Layout, bounds: Bounds<Pixels>, cx: &App) -> bool {
+        let Some(code) = self.code.as_ref() else {
+            return false;
+        };
         if !matches!(self.mode, Mode::Full { .. }) {
-            return None;
+            return false;
         }
         let look = cx.try_global::<Appearance>();
         if look.is_some_and(|look| look.hide_scrollbars) {
-            return None;
+            return false;
         }
         let height = bounds.size.height;
         let caret = laid
@@ -82,9 +83,21 @@ impl TextInput {
             .other_occurrences(self.model.selection().range())
             .next()
             .is_some();
-        if !(always || recent || caret_hidden || occurrences || code.bar.grab.is_some()) {
+        let held = code.bar.grab.is_some() || code.bar.hgrab.is_some();
+        always || recent || caret_hidden || occurrences || held
+    }
+
+    /// Where the vertical scrollbar of a code view is, when it shows (`bars_show`).
+    pub(super) fn bar_bounds(
+        &self,
+        laid: &Layout,
+        bounds: Bounds<Pixels>,
+        cx: &App,
+    ) -> Option<BarBounds> {
+        if !self.bars_show(laid, bounds, cx) {
             return None;
         }
+        let height = bounds.size.height;
         let limit = self.code_scroll_limit(laid).unwrap_or_default();
         let content = limit + height;
         let thumb_height = (height * (height / content)).max(MIN_THUMB).min(height);
@@ -102,6 +115,59 @@ impl TextInput {
             gpui::size(BAR_WIDTH, thumb_height),
         );
         Some(BarBounds { track, thumb })
+    }
+
+    /// The most a code view whose lines do not wrap scrolls sideways: until the end of its
+    /// widest line is at the right of the text's room. Zero for every other view.
+    pub(super) fn code_scroll_x_limit(&self, laid: &Layout) -> Pixels {
+        if self.scrolls_sideways() {
+            (laid.width - laid.key.view).max(px(0.))
+        } else {
+            px(0.)
+        }
+    }
+
+    /// The lines do not wrap: a code view with wrap off.
+    pub(super) fn scrolls_sideways(&self) -> bool {
+        matches!(self.mode, Mode::Full { .. }) && self.code.as_ref().is_some_and(|code| !code.wrap)
+    }
+
+    /// Where the horizontal scrollbar is, when it shows: with the vertical one, while a line is
+    /// wider than the view. It runs from the gutter to the vertical bar, along the bottom.
+    pub(super) fn hbar_bounds(
+        &self,
+        laid: &Layout,
+        bounds: Bounds<Pixels>,
+        cx: &App,
+    ) -> Option<BarBounds> {
+        let most = self.code_scroll_x_limit(laid);
+        if most <= px(0.) || !self.bars_show(laid, bounds, cx) {
+            return None;
+        }
+        let left = bounds.left() + laid.key.gutter;
+        let width = (bounds.right() - BAR_WIDTH - left).max(px(0.));
+        let content = laid.width.max(px(1.));
+        let thumb_width = (width * (laid.key.view / content)).max(MIN_THUMB).min(width);
+        let x = (width - thumb_width) * (self.scroll.x / most);
+        let track = Bounds::new(
+            point(left, bounds.bottom() - BAR_WIDTH),
+            gpui::size(width, BAR_WIDTH),
+        );
+        let thumb = Bounds::new(
+            point(left + x, track.top()),
+            gpui::size(thumb_width, BAR_WIDTH),
+        );
+        Some(BarBounds { track, thumb })
+    }
+
+    pub(super) fn hbar_hovered(&self) -> bool {
+        self.code.as_ref().is_some_and(|code| code.bar.hhovered)
+    }
+
+    pub(super) fn hbar_dragged(&self) -> bool {
+        self.code
+            .as_ref()
+            .is_some_and(|code| code.bar.hgrab.is_some())
     }
 
     pub(super) fn bar_hovered(&self) -> bool {
@@ -126,6 +192,20 @@ impl TextInput {
             return false;
         };
         let laid = self.layout(window, cx);
+        if let Some(hbar) = self.hbar_bounds(&laid, bounds, cx)
+            && hbar.track.contains(&position)
+        {
+            let grab = if hbar.thumb.contains(&position) {
+                position.x - hbar.thumb.left()
+            } else {
+                hbar.thumb.size.width / 2.
+            };
+            if let Some(code) = self.code.as_mut() {
+                code.bar.hgrab = Some(grab);
+            }
+            self.bar_drag(position, window, cx);
+            return true;
+        }
         let Some(bar) = self.bar_bounds(&laid, bounds, cx) else {
             return false;
         };
@@ -157,15 +237,31 @@ impl TextInput {
         };
         let laid = self.layout(window, cx);
         let bar = self.bar_bounds(&laid, bounds, cx);
-        let hovered = bar
-            .as_ref()
-            .is_some_and(|bar| bar.thumb.contains(&position));
+        let hbar = self.hbar_bounds(&laid, bounds, cx);
+        let on_thumb = |bar: &Option<BarBounds>| {
+            bar.as_ref()
+                .is_some_and(|bar| bar.thumb.contains(&position))
+        };
+        let (hovered, hhovered) = (on_thumb(&bar), on_thumb(&hbar));
+        let most_x = self.code_scroll_x_limit(&laid);
         let Some(code) = self.code.as_mut() else {
             return false;
         };
-        if code.bar.hovered != hovered {
+        if (code.bar.hovered, code.bar.hhovered) != (hovered, hhovered) {
             code.bar.hovered = hovered;
+            code.bar.hhovered = hhovered;
             cx.notify();
+        }
+        if let (Some(grab), Some(hbar)) = (code.bar.hgrab, hbar) {
+            let room = hbar.track.size.width - hbar.thumb.size.width;
+            if room > px(0.) {
+                let left = (position.x - grab - hbar.track.left()).clamp(px(0.), room);
+                self.scroll.x = most_x * (left / room);
+            }
+            self.clamp_scroll(&laid, bounds);
+            self.code_scrolled(cx);
+            cx.notify();
+            return true;
         }
         let (Some(grab), Some(bar)) = (code.bar.grab, bar) else {
             return false;
@@ -187,7 +283,7 @@ impl TextInput {
         let Some(code) = self.code.as_mut() else {
             return false;
         };
-        let taken = code.bar.grab.take().is_some();
+        let taken = code.bar.grab.take().is_some() | code.bar.hgrab.take().is_some();
         if taken {
             cx.notify();
         }

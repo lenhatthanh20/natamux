@@ -9,30 +9,35 @@
 //!   of 3 lines (keys and edits only: a click does not scroll);
 //! - the typing facts of its language (`code_rules.rs`, `code_typing.rs`).
 //!
-//! The scrollbar is in `code_bar.rs`, what it paints in `code_paint.rs`.
+//! The scrollbar is in `code_bar.rs`, what it paints in `code_paint.rs`, the colours in
+//! `code_runs.rs`, the gutter and the sticky rows in `code_gutter.rs`, and what the editor tab
+//! has more (no wrap, blame labels, the right-click menu) in `code_editor.rs`.
 //!
 //! The JSON tab and the Docs views use it; the editor tab follows in S4.3c.
 
+use std::cell::RefCell;
 use std::ops::Range;
 use std::sync::Arc;
 use std::time::Duration;
 
-use gpui::{App, AppContext as _, Context, Entity, Pixels, Task, TextRun, Window, px};
-use theme::ActiveTheme;
-use tree_sitter::{InputEdit, Tree};
+use gpui::{App, AppContext as _, Context, Entity, Pixels, Task, Window, px};
+use tree_sitter::Tree;
 
 use super::code_bar::{BAR_WIDTH, Bar};
+use super::code_editor::{Labels, OpenMenu};
+use super::code_gutter::Caches;
 use super::code_langs::typing_for;
 use super::code_rules::{Typing, find_all};
+use super::code_runs::{RunCache, input_edit};
 use super::code_typing::Region;
 use super::element::Layout;
-use super::highlight::{Highlights, PARSE_BUDGET, Syntax};
+use super::highlight::{PARSE_BUDGET, Syntax};
 use super::text_box::TextBox;
 use super::text_input::{Mode, TextInput};
 use crate::app::appearance::Appearance;
+use crate::git::code_target::RowMenu;
 use crate::git::languages::{Lang, lang_for};
 use crate::text::model::TextModel;
-use crate::text::motion;
 
 /// The scroll margin of the editor, in lines.
 const SCROLL_MARGIN: f32 = 3.;
@@ -107,7 +112,7 @@ impl CodeView {
     #[cfg(test)]
     pub fn run_colors(&self, cx: &App) -> usize {
         let input = self.input.read(cx);
-        let base = TextRun {
+        let base = gpui::TextRun {
             len: 0,
             font: gpui::font(".ZedMono"),
             color: gpui::Hsla::default(),
@@ -116,7 +121,7 @@ impl CodeView {
             strikethrough: None,
         };
         let runs = input
-            .code_runs(&base, input.model.text().len(), cx)
+            .code_runs(&base, input.model.text().len(), None, cx)
             .unwrap_or_default();
         let mut colors: Vec<gpui::Hsla> = Vec::new();
         for run in runs {
@@ -132,7 +137,13 @@ impl CodeView {
 pub struct Code {
     pub(super) lang: Option<&'static Lang>,
     pub(super) guides: bool,
-    syntax: Option<Syntax>,
+    /// Line numbers left of the text (the editor tab).
+    pub(super) gutter: bool,
+    /// The rows of the outline items the top row is inside stay pinned at the top.
+    pub(super) sticky: bool,
+    /// Long lines wrap; off, the view scrolls sideways (the editor tab's toggle).
+    pub(super) wrap: bool,
+    pub(super) syntax: Option<Syntax>,
     /// The text the tree was last moved to.
     parsed: Arc<str>,
     /// Goes up when the colours change with the text the same (a parse landed).
@@ -158,6 +169,14 @@ pub struct Code {
     pub(super) search_active: Option<usize>,
     /// Model version the matches were found at; older matches are not painted.
     pub(super) search_version: u64,
+    pub(super) run_cache: RefCell<RunCache>,
+    /// The guides and the outline, kept until the text changes.
+    pub(super) caches: RefCell<Caches>,
+    /// Blame labels at the start of their rows.
+    pub(super) labels: Labels,
+    /// Builds the right-click menu for a row; the open menu.
+    pub(super) menu: Option<RowMenu>,
+    pub(super) open_menu: Option<OpenMenu>,
 }
 
 impl Code {
@@ -165,6 +184,9 @@ impl Code {
         Code {
             lang,
             guides,
+            gutter: false,
+            sticky: false,
+            wrap: true,
             syntax: lang.and_then(|lang| Syntax::new(lang).ok()),
             parsed: Arc::from(""),
             colors: 0,
@@ -181,6 +203,11 @@ impl Code {
             search: Vec::new(),
             search_active: None,
             search_version: 0,
+            run_cache: RefCell::default(),
+            caches: RefCell::default(),
+            labels: Labels::default(),
+            menu: None,
+            open_menu: None,
         }
     }
 
@@ -201,47 +228,6 @@ impl Code {
             .iter()
             .filter(move |range| **range != selected)
     }
-}
-
-/// The edit that turns `old` into `new`, as one change between their common start and end.
-fn input_edit(old: &str, new: &str) -> InputEdit {
-    let prefix = old
-        .bytes()
-        .zip(new.bytes())
-        .take_while(|(a, b)| a == b)
-        .count();
-    let room = old.len().min(new.len()) - prefix;
-    let suffix = old
-        .bytes()
-        .rev()
-        .zip(new.bytes().rev())
-        .take(room)
-        .take_while(|(a, b)| a == b)
-        .count();
-    let (old_end, new_end) = (old.len() - suffix, new.len() - suffix);
-    InputEdit {
-        start_byte: prefix,
-        old_end_byte: old_end,
-        new_end_byte: new_end,
-        start_position: ts_point(old, prefix),
-        old_end_position: ts_point(old, old_end),
-        new_end_position: ts_point(new, new_end),
-    }
-}
-
-fn ts_point(text: &str, at: usize) -> tree_sitter::Point {
-    let before = &text.as_bytes()[..at];
-    let row = before.iter().filter(|b| **b == b'\n').count();
-    let line = before
-        .iter()
-        .rposition(|b| *b == b'\n')
-        .map_or(0, |at| at + 1);
-    tree_sitter::Point::new(row, at - line)
-}
-
-/// `at` moved down to a char boundary of `text`.
-fn boundary(text: &str, at: usize) -> usize {
-    motion::floor_boundary(text, at)
 }
 
 impl TextInput {
@@ -287,6 +273,7 @@ impl TextInput {
                 }));
             }
         }
+        code.labels.place(text);
         let selection = self.model.selection().range();
         let selected = &text[selection];
         let query =
@@ -315,59 +302,6 @@ impl TextInput {
                 })
             });
         }
-    }
-
-    /// The runs of the coloured text, from `base`; None when the text has no colours (no
-    /// language, no tree yet, or the shown text is not the text).
-    pub(super) fn code_runs(&self, base: &TextRun, len: usize, cx: &App) -> Option<Vec<TextRun>> {
-        let code = self.code.as_ref()?;
-        let syntax = code.syntax.as_ref()?;
-        let tree = syntax.tree()?;
-        let text = self.model.text();
-        if text.len() != len {
-            return None;
-        }
-        let highlights = Highlights::of(syntax.lang()).ok()?;
-        let theme = cx.theme().syntax();
-        let keys = highlights.theme_keys(|key| theme.style_for_name(key).is_some());
-        let mut runs = Vec::new();
-        let mut at = 0;
-        for (range, key) in highlights.runs(tree, text, 0..len, &keys) {
-            // An older tree, moved by the edits, may cut into a char.
-            let start = boundary(text, range.start.min(len)).max(at);
-            let end = boundary(text, range.end.min(len));
-            if start >= end {
-                continue;
-            }
-            if start > at {
-                runs.push(TextRun {
-                    len: start - at,
-                    ..base.clone()
-                });
-            }
-            let style = theme.style_for_name(&key).unwrap_or_default();
-            let mut font = base.font.clone();
-            if let Some(weight) = style.font_weight {
-                font.weight = weight;
-            }
-            if let Some(slant) = style.font_style {
-                font.style = slant;
-            }
-            runs.push(TextRun {
-                len: end - start,
-                font,
-                color: style.color.unwrap_or(base.color),
-                ..base.clone()
-            });
-            at = end;
-        }
-        if at < len {
-            runs.push(TextRun {
-                len: len - at,
-                ..base.clone()
-            });
-        }
-        Some(runs)
     }
 
     /// The most a code view scrolls: until its last row is at the top.

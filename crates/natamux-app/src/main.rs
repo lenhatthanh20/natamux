@@ -408,13 +408,18 @@ mod text {
 mod text_view {
     mod blink;
     mod code_bar;
+    // The editor tab's parts of the code view: used once the tab moves to it (S4.3c part 6).
+    #[cfg_attr(not(test), allow(dead_code))]
+    mod code_editor;
     mod code_enter;
     mod code_find;
+    mod code_gutter;
     mod code_langs;
     #[cfg(test)]
     mod code_mouse_tests;
     mod code_paint;
     mod code_rules;
+    mod code_runs;
     mod code_typing;
     #[cfg(test)]
     mod code_typing_tests;

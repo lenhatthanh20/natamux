@@ -1,11 +1,13 @@
 //! What a code view paints past the plain input (plan 6.4): indent guides, the matching
-//! brackets, the other places of the selected text and the scrollbar.
+//! brackets, the other places of the selected text, the matches of find, the gutter, the sticky
+//! rows and the scrollbars.
 
 use std::ops::Range;
 
 use gpui::{App, Bounds, Hsla, Pixels, point, px};
 
 use super::code_bar::BarBounds;
+use super::code_gutter::{GutterPaint, StickyPaint};
 use super::element::Layout;
 use super::text_input::{TAB_SIZE, TextInput};
 use crate::app::appearance::Appearance;
@@ -25,6 +27,11 @@ pub(super) struct CodePaint {
     pub bar: Option<(BarBounds, bool, bool)>,
     /// The markers on the scrollbar, painted before its thumb.
     pub markers: Vec<(Bounds<Pixels>, Hsla)>,
+    /// The horizontal scrollbar, hovered, dragged.
+    pub hbar: Option<(BarBounds, bool, bool)>,
+    pub gutter: Option<GutterPaint>,
+    /// The pinned rows, outermost first.
+    pub sticky: Vec<StickyPaint>,
 }
 
 impl TextInput {
@@ -48,15 +55,18 @@ impl TextInput {
             bar: self
                 .bar_bounds(laid, bounds, cx)
                 .map(|bar| (bar, self.bar_hovered(), self.bar_dragged())),
+            hbar: self
+                .hbar_bounds(laid, bounds, cx)
+                .map(|bar| (bar, self.hbar_hovered(), self.hbar_dragged())),
             ..CodePaint::default()
         };
+        self.gutter_paint(laid, bounds, origin, &mut paint);
         if let Some((bar, _, _)) = &paint.bar {
             paint.markers = self.bar_markers(laid, bar, cx);
         }
         if code.guides {
-            let found = super::code_rules::guides(text);
             let caret_row = text[..self.model.head()].matches('\n').count();
-            let active = super::code_rules::active_guides(text, &found, caret_row);
+            let (found, active) = self.cached_guides(caret_row);
             for (index, guide) in found.iter().enumerate() {
                 let (Some(first), Some(last)) =
                     (laid.lines.get(guide.start), laid.lines.get(guide.end))
@@ -87,8 +97,10 @@ impl TextInput {
             code.other_occurrences(self.model.selection().range())
                 .cloned(),
         );
+        // Offsets of the shown text: blame labels come before their rows.
+        let shown = |range: &Range<usize>| self.to_display(range.start)..self.to_display(range.end);
         for range in ranges {
-            for rect in laid.selection_rects(range) {
+            for rect in laid.selection_rects(shown(&range)) {
                 let rect = Bounds::new(rect.origin + origin, rect.size);
                 if rect.bottom() >= bounds.top() && rect.top() <= bounds.bottom() {
                     paint.backgrounds.push(rect);
@@ -101,7 +113,7 @@ impl TextInput {
             &[]
         };
         for (index, range) in search.iter().enumerate() {
-            for rect in laid.selection_rects(range.clone()) {
+            for rect in laid.selection_rects(shown(range)) {
                 let rect = Bounds::new(rect.origin + origin, rect.size);
                 if rect.bottom() >= bounds.top() && rect.top() <= bounds.bottom() {
                     paint.search.push((rect, code.search_active == Some(index)));

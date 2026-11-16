@@ -311,6 +311,31 @@ fn open_own(
     (input, language)
 }
 
+/// The editor tab's own code view (gutter, sticky rows) with `text`, focused, the caret at
+/// `caret`: its input.
+pub(super) fn open_own_editor(
+    path: &str,
+    text: &str,
+    caret: usize,
+    slot: &Entity<Slot>,
+    cx: &mut VisualTestContext,
+) -> Entity<TextInput> {
+    let input = slot.update_in(cx, |slot, window, cx| {
+        let input = CodeView::editor(path, text, window, cx).input().clone();
+        slot.view = Some(input.clone().into());
+        cx.notify();
+        input
+    });
+    cx.run_until_parked();
+    input.update_in(cx, |input, window, cx| {
+        window.focus(&input.focus_handle(cx), cx);
+        input.model.move_to(caret);
+        cx.notify();
+    });
+    cx.run_until_parked();
+    input
+}
+
 /// A text offset as `[row, column]`, the column in bytes as Zed's editor counts.
 fn row_column(text: &str, at: usize) -> [usize; 2] {
     let before = &text[..at];
@@ -319,7 +344,7 @@ fn row_column(text: &str, at: usize) -> [usize; 2] {
 }
 
 /// `state` of the own code view.
-fn own_state(input: &Entity<TextInput>, cx: &mut VisualTestContext) -> (String, Value) {
+pub(super) fn own_state(input: &Entity<TextInput>, cx: &mut VisualTestContext) -> (String, Value) {
     input.read_with(cx, |input, _| {
         let text = input.model.text();
         let selection = input.model.selection();
