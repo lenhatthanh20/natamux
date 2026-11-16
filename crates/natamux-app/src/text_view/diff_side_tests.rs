@@ -283,6 +283,11 @@ fn scroll_y(input: &Entity<TextInput>, cx: &mut VisualTestContext) -> Pixels {
     input.read_with(cx, |input, _| input.scroll.y)
 }
 
+/// The scroll a side was last laid out at.
+fn drawn_y(input: &Entity<TextInput>, cx: &mut VisualTestContext) -> Option<Pixels> {
+    input.read_with(cx, |input, _| input.code.as_ref()?.diff.as_ref()?.drawn)
+}
+
 #[gpui::test]
 fn the_two_sides_scroll_as_one(cx: &mut TestAppContext) {
     let (left, right, cx) = long_pair(cx);
@@ -295,12 +300,16 @@ fn the_two_sides_scroll_as_one(cx: &mut TestAppContext) {
     });
     cx.run_until_parked();
     assert_eq!(scroll_y(left.input(), cx), lh * 5.);
+    // The left side is drawn first, before the right one takes the scroll: it is drawn again,
+    // with no other notify.
+    assert_eq!(drawn_y(left.input(), cx), Some(lh * 5.));
     left.input().update(cx, |input, cx| {
         input.scroll = point(px(0.), lh * 2.);
         cx.notify();
     });
     cx.run_until_parked();
     assert_eq!(scroll_y(right.input(), cx), lh * 2.);
+    assert_eq!(drawn_y(right.input(), cx), Some(lh * 2.));
 }
 
 /// T-SB-1, the diff case (plan 6.5): other places of the selected text do not keep the bar of a
@@ -347,4 +356,55 @@ fn t_sb_1_the_scrollbar_of_a_diff_side(cx: &mut TestAppContext) {
     });
     cx.run_until_parked();
     assert!(shows(cx), "caret out of view");
+}
+
+/// With wrap off and a scroll to the right, the selection and the guides reach into the gutter;
+/// the whole text layer is clipped at the text's left, the hunk boxes are not.
+#[gpui::test]
+fn the_text_layer_of_a_side_scrolled_right_keeps_out_of_the_gutter(cx: &mut TestAppContext) {
+    let (_, right, cx) = open(cx);
+    let old = format!("fn a() {{\n    let x = \"{}\";\n}}\n", "y".repeat(300));
+    let new = old.replace("x =", "z =");
+    let diff = diff(Some(&old), &new, &[]);
+    let rows = inline_rows(&diff.hunk_rows(), diff.new_rows(), false);
+    show(&right, "x.rs", &diff, &rows, true, cx);
+    right.input().update(cx, |input, cx| {
+        if let Some(code) = input.code.as_mut() {
+            code.wrap = false;
+        }
+        input.model.select(0, input.model.text().len());
+        input.scroll = point(px(200.), px(0.));
+        cx.notify();
+    });
+    cx.run_until_parked();
+    right.input().update_in(cx, |input, window, cx| {
+        let bounds = input.last_bounds.expect("the side was drawn");
+        let laid = input.layout(window, cx);
+        assert_eq!(input.scroll.x, px(200.), "the line is long enough to scroll");
+        let origin = bounds.origin + point(laid.inset, px(0.)) - input.scroll;
+        let paint = input.code_paint(&laid, bounds, origin, cx);
+        let diff = paint.diff.as_ref().expect("a diff side paints its hunks");
+        let text_left = bounds.left() + laid.key.gutter;
+        assert_eq!(diff.text_left, text_left);
+        let selection_left = laid
+            .selection_rects(0..input.model.text().len())
+            .iter()
+            .map(|rect| rect.left() + origin.x)
+            .fold(bounds.right(), Pixels::min);
+        assert!(selection_left < text_left, "the selection reaches into the gutter");
+        let guide_left = paint
+            .guides
+            .iter()
+            .map(|(rect, _)| rect.left())
+            .fold(bounds.right(), Pixels::min);
+        assert!(guide_left < text_left, "a guide reaches into the gutter");
+        let mask = diff.text_mask(bounds).bounds;
+        assert_eq!(mask.left(), text_left);
+        assert_eq!(mask.bottom_right(), bounds.bottom_right());
+        assert_eq!(mask.top(), bounds.top());
+        assert!(
+            diff.backs.iter().all(|(rect, _)| rect.left() < text_left),
+            "the hunk boxes start at the strip, left of the mask"
+        );
+    });
 }

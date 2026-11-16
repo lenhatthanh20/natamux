@@ -935,104 +935,101 @@ impl Element for TextElement {
                     window.paint_quad(fill(*rect, *color));
                 }
             }
-            for (bounds, active) in &code.guides {
-                // Snapped to device pixels, as Zed's editor drew its guides.
-                let bounds = window.pixel_snap_bounds(*bounds);
-                window.paint_quad(fill(bounds, if *active { active_guide } else { guide }));
-            }
-            for bounds in &code.backgrounds {
-                window.paint_quad(fill(*bounds, highlight));
-            }
-            // As paths, as Zed's editor drew its highlighted ranges: a part-covered pixel at an
-            // edge gets part of the colour.
-            for (bounds, active) in &code.search {
-                let color = if *active { search_active } else { search };
-                for path in selection_paths(&[*bounds], px(0.)) {
-                    window.paint_path(path, color);
-                }
-            }
-            let rects: Vec<_> = laid
-                // The selection runs twice its corner radius past a line end, as in Zed's editor.
-                .rects_past(selection.clone(), line_height * SELECTION_ROUNDING * 2.)
-                .into_iter()
-                .map(|rect| Bounds::new(rect.origin + origin, rect.size))
-                .collect();
-            for path in selection_paths(&rects, line_height * SELECTION_ROUNDING) {
-                window.paint_path(path, selection_color);
-            }
-            if !whitespace.is_empty() {
-                let shape = |symbol: &'static str, window: &mut Window| {
-                    let run = TextRun {
-                        len: symbol.len(),
-                        font: laid.key.font.clone(),
-                        color: invisible,
-                        background_color: None,
-                        underline: None,
-                        strikethrough: None,
-                    };
-                    window.text_system().shape_line(
-                        symbol.into(),
-                        laid.key.font_size / 2.,
-                        &[run],
-                        None,
-                    )
-                };
-                let (dot, arrow) = (shape("\u{2022}", window), shape("\u{2192}", window));
-                for (at, width, c) in &whitespace {
-                    let top = origin.y + at.y;
-                    if top + line_height < bounds.top() || top > bounds.bottom() {
-                        continue;
+            // A diff side's gutter has no background to cover the text layer scrolled under it.
+            let text_mask = code.diff.as_ref().map(|diff| diff.text_mask(bounds));
+            window.with_content_mask(text_mask, |window| {
+                if let Some(diff) = &code.diff {
+                    for (rect, color) in &diff.words {
+                        window.paint_quad(fill(*rect, *color));
                     }
-                    let symbol = if *c == '\t' { &arrow } else { &dot };
-                    // The symbol sits in the middle of the char's own width.
-                    let inset = (*width - symbol.width) / 2.;
-                    symbol
-                        .paint(
-                            point(origin.x + at.x + inset, top),
-                            line_height,
-                            TextAlign::Left,
+                }
+                for (bounds, active) in &code.guides {
+                    // Snapped to device pixels, as Zed's editor drew its guides.
+                    let bounds = window.pixel_snap_bounds(*bounds);
+                    window.paint_quad(fill(bounds, if *active { active_guide } else { guide }));
+                }
+                for bounds in &code.backgrounds {
+                    window.paint_quad(fill(*bounds, highlight));
+                }
+                // As paths, as Zed's editor drew its highlighted ranges: a part-covered pixel at an
+                // edge gets part of the colour.
+                for (bounds, active) in &code.search {
+                    let color = if *active { search_active } else { search };
+                    for path in selection_paths(&[*bounds], px(0.)) {
+                        window.paint_path(path, color);
+                    }
+                }
+                let rects: Vec<_> = laid
+                    // The selection runs twice its corner radius past a line end, as in Zed's
+                    // editor.
+                    .rects_past(selection.clone(), line_height * SELECTION_ROUNDING * 2.)
+                    .into_iter()
+                    .map(|rect| Bounds::new(rect.origin + origin, rect.size))
+                    .collect();
+                for path in selection_paths(&rects, line_height * SELECTION_ROUNDING) {
+                    window.paint_path(path, selection_color);
+                }
+                if !whitespace.is_empty() {
+                    let shape = |symbol: &'static str, window: &mut Window| {
+                        let run = TextRun {
+                            len: symbol.len(),
+                            font: laid.key.font.clone(),
+                            color: invisible,
+                            background_color: None,
+                            underline: None,
+                            strikethrough: None,
+                        };
+                        window.text_system().shape_line(
+                            symbol.into(),
+                            laid.key.font_size / 2.,
+                            &[run],
                             None,
-                            window,
-                            cx,
                         )
-                        .ok();
+                    };
+                    let (dot, arrow) = (shape("\u{2022}", window), shape("\u{2192}", window));
+                    for (at, width, c) in &whitespace {
+                        let top = origin.y + at.y;
+                        if top + line_height < bounds.top() || top > bounds.bottom() {
+                            continue;
+                        }
+                        let symbol = if *c == '\t' { &arrow } else { &dot };
+                        // The symbol sits in the middle of the char's own width.
+                        let inset = (*width - symbol.width) / 2.;
+                        symbol
+                            .paint(
+                                point(origin.x + at.x + inset, top),
+                                line_height,
+                                TextAlign::Left,
+                                None,
+                                window,
+                                cx,
+                            )
+                            .ok();
+                    }
                 }
-            }
-            let text_mask = code.diff.as_ref().map(|diff| ContentMask {
-                bounds: Bounds::from_corners(
-                    point(diff.text_left, bounds.top()),
-                    bounds.bottom_right(),
-                ),
-            });
-            for line in &laid.lines {
-                let top = origin.y + line_height * line.first_row as f32;
-                let bottom = top + line_height * line.row_starts.len() as f32;
-                if bottom < bounds.top() || top > bounds.bottom() {
-                    continue;
-                }
-                for row in 0..line.row_starts.len() {
-                    let top = top + line_height * row as f32;
-                    if top + line_height < bounds.top() || top > bounds.bottom() {
+                for line in &laid.lines {
+                    let top = origin.y + line_height * line.first_row as f32;
+                    let bottom = top + line_height * line.row_starts.len() as f32;
+                    if bottom < bounds.top() || top > bounds.bottom() {
                         continue;
                     }
-                    let at = point(origin.x, top);
-                    // A diff side's gutter has no background to cover the text scrolled under it.
-                    match &text_mask {
-                        Some(mask) => window.with_content_mask(Some(mask.clone()), |window| {
-                            line.paint_row(row, at, line_height, window, cx)
-                        }),
-                        None => line.paint_row(row, at, line_height, window, cx),
+                    for row in 0..line.row_starts.len() {
+                        let top = top + line_height * row as f32;
+                        if top + line_height < bounds.top() || top > bounds.bottom() {
+                            continue;
+                        }
+                        line.paint_row(row, point(origin.x, top), line_height, window, cx);
                     }
                 }
-            }
-            let carets = caret.then_some((head, end_bias)).into_iter();
-            for (at, bias) in carets.chain(drop_at.map(|at| (at, false))) {
-                let at = laid.position(at, bias);
-                window.paint_quad(fill(
-                    Bounds::new(origin + at, size(CARET_WIDTH, line_height)),
-                    cursor,
-                ));
-            }
+                let carets = caret.then_some((head, end_bias)).into_iter();
+                for (at, bias) in carets.chain(drop_at.map(|at| (at, false))) {
+                    let at = laid.position(at, bias);
+                    window.paint_quad(fill(
+                        Bounds::new(origin + at, size(CARET_WIDTH, line_height)),
+                        cursor,
+                    ));
+                }
+            });
             if let Some(gutter) = &code.gutter {
                 super::code_gutter::paint_gutter(gutter, &laid, window, cx);
             }

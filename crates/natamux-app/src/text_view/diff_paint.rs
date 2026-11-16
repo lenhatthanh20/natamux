@@ -7,7 +7,7 @@
 //! - a 1 px `border_variant` line half a row down a gap row;
 //! - the changed words, and the marker of a hunk with no lines on the side.
 
-use gpui::{App, Bounds, Hsla, Pixels, Point, Window, fill, point, px};
+use gpui::{App, Bounds, ContentMask, Hsla, Pixels, Point, Window, fill, point, px};
 use theme::{ActiveTheme, ThemeColors};
 
 use super::element::Layout;
@@ -26,12 +26,27 @@ const STRIP_FILL: f32 = 0.3;
 #[derive(Default)]
 pub(super) struct DiffPaint {
     /// Over the line of the caret, before the guides: the rows of each hunk, the lines at the top
-    /// and the bottom of its box, the lines of the gaps, then the changed words.
+    /// and the bottom of its box, then the lines of the gaps.
     pub backs: Vec<(Bounds<Pixels>, Hsla)>,
+    /// The changed words, after `backs`, kept out of the gutter as the text is.
+    pub words: Vec<(Bounds<Pixels>, Hsla)>,
     /// The strips and markers in the gutter, painted hollow.
     pub strips: Vec<(Bounds<Pixels>, Hsla)>,
     /// The text keeps to the right of this, out of the gutter.
     pub text_left: Pixels,
+}
+
+impl DiffPaint {
+    /// What the text layer of a side drawn over `bounds` is clipped to: the gutter has no
+    /// background to cover text, guides, selection or carets scrolled under it.
+    pub fn text_mask(&self, bounds: Bounds<Pixels>) -> ContentMask<Pixels> {
+        ContentMask {
+            bounds: Bounds::from_corners(
+                point(self.text_left, bounds.top()),
+                bounds.bottom_right(),
+            ),
+        }
+    }
 }
 
 /// Where a diff side is drawn, for the parts of `DiffPaint`.
@@ -113,12 +128,11 @@ impl Frame<'_> {
             if !self.shown(top, bottom) {
                 continue;
             }
-            for at in first..=last {
-                if let Some(line) = laid.lines.get(at) {
-                    let height = laid.line_height * line.row_starts.len() as f32;
-                    let rect = self.across(self.row_top(line.first_row), height);
-                    paint.backs.push((rect, self.box_colours(lines[at].status).0));
-                }
+            let laid_lines = laid.lines.get(first..=last).unwrap_or_default();
+            for (line, side_line) in laid_lines.iter().zip(&lines[first..=last]) {
+                let height = laid.line_height * line.row_starts.len() as f32;
+                let rect = self.across(self.row_top(line.first_row), height);
+                paint.backs.push((rect, self.box_colours(side_line.status).0));
             }
             let one = px(1.);
             let (top_colour, bottom_colour) = (
@@ -172,7 +186,7 @@ impl Frame<'_> {
             for rect in self.laid.selection_rects(range.clone()) {
                 let rect = Bounds::new(rect.origin + self.origin, rect.size);
                 if self.shown(rect.top(), rect.bottom()) {
-                    paint.backs.push((rect, color));
+                    paint.words.push((rect, color));
                 }
             }
         }

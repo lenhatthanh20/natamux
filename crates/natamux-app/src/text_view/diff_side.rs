@@ -22,7 +22,7 @@ use std::sync::Arc;
 
 use gpui::{
     App, AppContext as _, Context, Entity, Pixels, SharedString, Task, TextRun, WeakEntity,
-    Window, px,
+    Window,
 };
 use theme::ActiveTheme;
 
@@ -62,6 +62,9 @@ pub(super) struct DiffDecor {
     peer: Option<WeakEntity<TextInput>>,
     /// The scroll both sides were last set to.
     synced: Option<Pixels>,
+    /// The scroll this side was last laid out at, for the tests.
+    #[cfg(test)]
+    pub(super) drawn: Option<Pixels>,
     _parses: Vec<Task<()>>,
 }
 
@@ -73,6 +76,8 @@ impl DiffDecor {
             cache: RefCell::default(),
             peer: None,
             synced: None,
+            #[cfg(test)]
+            drawn: None,
             _parses: Vec::new(),
         }
     }
@@ -166,6 +171,10 @@ impl TextInput {
         let Some(diff) = self.code.as_mut().and_then(|code| code.diff.as_mut()) else {
             return;
         };
+        #[cfg(test)]
+        {
+            diff.drawn = Some(y);
+        }
         if diff.synced == Some(y) {
             return;
         }
@@ -173,15 +182,19 @@ impl TextInput {
         let Some(peer) = diff.peer.as_ref().and_then(WeakEntity::upgrade) else {
             return;
         };
-        peer.update(cx, |peer, cx| {
+        let moved = peer.update(cx, |peer, _| {
             if let Some(diff) = peer.code.as_mut().and_then(|code| code.diff.as_mut()) {
                 diff.synced = Some(y);
             }
-            if peer.scroll.y != y {
-                peer.scroll.y = y;
-                cx.notify();
-            }
+            let moved = peer.scroll.y != y;
+            peer.scroll.y = y;
+            moved
         });
+        // This runs in a draw, where gpui keeps a notify from drawing the window again; the peer
+        // may already be laid out at its old scroll, so ask for its new draw after this frame.
+        if moved {
+            cx.defer(move |cx| peer.update(cx, |_, cx| cx.notify()));
+        }
     }
 }
 
@@ -280,15 +293,6 @@ impl DiffSide {
         });
     }
 
-    pub fn set_wrap(&self, wrap: bool, cx: &mut App) {
-        self.input.update(cx, |input, cx| {
-            if let Some(code) = input.code.as_mut() {
-                code.wrap = wrap;
-            }
-            input.scroll.x = px(0.);
-            cx.notify();
-        });
-    }
 
     /// Both files of the shown diff are parsed (or have no language), so every line has its
     /// colours; a `--shot` waits for it.
