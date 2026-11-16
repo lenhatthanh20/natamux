@@ -7,6 +7,8 @@
 
 use std::sync::Arc;
 
+use super::diff_model::line_diff;
+
 /// Over this many lines on a side, whitespace counts again: the line diff would be slow.
 const MAX_LINES: usize = 20_000;
 
@@ -30,7 +32,7 @@ pub fn whitespace_base(original: &str, modified: &str) -> String {
     }
     let trimmed =
         |lines: &[&str]| -> String { lines.iter().flat_map(|line| [line.trim(), "\n"]).collect() };
-    let hunks = language::line_diff(&trimmed(&old), &trimmed(&new));
+    let hunks = line_diff(&trimmed(&old), &trimmed(&new));
     let end = (
         old.len() as u32..old.len() as u32,
         new.len() as u32..new.len() as u32,

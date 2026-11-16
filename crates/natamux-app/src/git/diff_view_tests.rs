@@ -17,79 +17,9 @@ use super::{DiffEvent, DiffOptions, DiffView};
 use crate::app::shortcuts::UndoMove;
 use crate::app::test_views;
 use crate::git::change_rules::Side;
+use crate::git::diff_cases::{cases, changed_then_deleted, ended, numbered, several_hunks, swapped};
 use crate::git::diff_editors::{add_spacer, read_only_editor, set_excerpts};
 use crate::git::diff_rules::{Spacer, revert_hunk};
-
-pub(super) fn numbered(word: &str, count: u32) -> String {
-    (0..count).map(|line| format!("{word} {line}\n")).collect()
-}
-
-/// The text without its final line break, when `final_break` is false.
-fn ended(text: &str, final_break: bool) -> String {
-    if final_break {
-        text.to_owned()
-    } else {
-        text.trim_end_matches('\n').to_owned()
-    }
-}
-
-/// The shape of the bug: 3 lines changed, then 147 lines deleted at the end of the file.
-pub(super) fn changed_then_deleted() -> (String, String) {
-    let original = numbered("kept", 277) + &numbered("old", 3) + &numbered("gone", 147);
-    let modified = numbered("kept", 277) + &numbered("new", 3);
-    (original, modified)
-}
-
-pub(super) fn deleted_at_end() -> (String, String) {
-    let original = numbered("kept", 280) + &numbered("gone", 147);
-    let modified = numbered("kept", 280);
-    (original, modified)
-}
-
-/// Hunks in the middle (changed, added, deleted) and lines deleted at the end.
-pub(super) fn several_hunks() -> (String, String) {
-    let original = numbered("a", 50)
-        + &numbered("old", 5)
-        + &numbered("b", 50)
-        + &numbered("c", 50)
-        + &numbered("gone", 20)
-        + &numbered("d", 30)
-        + &numbered("tail", 100);
-    let modified = numbered("a", 50)
-        + &numbered("new", 2)
-        + &numbered("b", 50)
-        + &numbered("added", 10)
-        + &numbered("c", 50)
-        + &numbered("d", 30);
-    (original, modified)
-}
-
-pub(super) fn swapped((original, modified): (String, String)) -> (String, String) {
-    (modified, original)
-}
-
-/// All shapes with a final line break in both texts, in neither, and in only one; with a name
-/// for the failure message.
-pub(super) fn cases() -> Vec<(String, (String, String))> {
-    let shapes = [
-        ("changed then deleted", changed_then_deleted()),
-        ("deleted at end", deleted_at_end()),
-        ("changed then added", swapped(changed_then_deleted())),
-        ("added at end", swapped(deleted_at_end())),
-        ("several hunks", several_hunks()),
-        ("several hunks added", swapped(several_hunks())),
-    ];
-    let mut cases = Vec::new();
-    for (name, (original, modified)) in shapes {
-        for (old_break, new_break) in [(true, true), (false, false), (true, false), (false, true)] {
-            cases.push((
-                format!("{name}, final breaks {old_break} {new_break}"),
-                (ended(&original, old_break), ended(&modified, new_break)),
-            ));
-        }
-    }
-    cases
-}
 
 fn open(cx: &mut TestAppContext) -> (Entity<DiffView>, &mut VisualTestContext) {
     test_views::init(cx);

@@ -179,9 +179,12 @@ mod git {
     pub mod commit_rules;
     pub mod diff_arrows;
     pub mod diff_blame;
+    #[cfg(test)]
+    pub mod diff_cases;
     pub mod diff_cursor;
     pub mod diff_editors;
     pub mod diff_hunk_controls;
+    pub mod diff_model;
     pub mod diff_rules;
     pub mod diff_view;
     pub mod editor_find;
