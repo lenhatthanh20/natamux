@@ -322,7 +322,13 @@ pub(super) fn paint_sticky(
             window.paint_quad(fill(text_box, background));
             if let Some((line, in_line)) = laid.line_of_row(sticky.row) {
                 window.with_content_mask(Some(gpui::ContentMask { bounds: text_box }), |window| {
-                    line.paint_row(in_line, point(origin.x, sticky.top), line_height, window, cx);
+                    line.paint_row(
+                        in_line,
+                        point(origin.x, sticky.top),
+                        line_height,
+                        window,
+                        cx,
+                    );
                 });
             }
             if gutter > px(0.) {

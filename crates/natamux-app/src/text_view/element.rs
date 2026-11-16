@@ -294,10 +294,16 @@ fn shape_rows(text: String, runs: &[TextRun], key: &LayoutKey, window: &Window) 
         .map(|(index, &(start, indent))| {
             let end = starts.get(index + 1).map_or(text.len(), |next| next.0);
             let part = SharedString::from(text[start..end].to_owned());
-            let shaped = shape(&part, &runs_in(runs, start..end), key.font_size, None, window)
-                .into_iter()
-                .next()
-                .unwrap_or_default();
+            let shaped = shape(
+                &part,
+                &runs_in(runs, start..end),
+                key.font_size,
+                None,
+                window,
+            )
+            .into_iter()
+            .next()
+            .unwrap_or_default();
             Row {
                 shown: start,
                 indent: space * indent as f32,
@@ -343,9 +349,7 @@ impl Layout {
                 == (key.width, &key.font, key.font_size, key.color)
         }) {
             for line in previous.lines.iter().filter(|line| line.plain) {
-                ready
-                    .entry(line.rows.text.as_str())
-                    .or_insert(&line.rows);
+                ready.entry(line.rows.text.as_str()).or_insert(&line.rows);
             }
         }
         let mut lines = Vec::new();
@@ -477,7 +481,11 @@ impl Layout {
         let start = line.row_starts.get(in_line).copied().unwrap_or(0);
         let end = line.row_end(in_line);
         let shown = line.rows.rows.get(in_line).map_or(0, |row| {
-            row.shown + row.shaped.unwrapped_layout.closest_index_for_x(x - row.indent)
+            row.shown
+                + row
+                    .shaped
+                    .unwrapped_layout
+                    .closest_index_for_x(x - row.indent)
         });
         let local = line.local(shown, false).clamp(start, end);
         let wraps = in_line + 1 < line.row_starts.len();

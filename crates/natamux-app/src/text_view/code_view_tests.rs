@@ -406,7 +406,10 @@ fn the_row_after_a_wrap_inside_a_bold_mark_is_shaped_alone(cx: &mut TestAppConte
         (width / char_width).floor() as usize
     });
     // The last `*` that fits is the first of the two; the second starts the next row.
-    let text = format!("{} [**bold link**](https://example.com).", "a".repeat(fit - 3));
+    let text = format!(
+        "{} [**bold link**](https://example.com).",
+        "a".repeat(fit - 3)
+    );
     input.update(cx, |input, cx| input.set_text(&text, cx));
     cx.run_until_parked();
     input.update_in(cx, |input, window, cx| {
@@ -427,7 +430,10 @@ fn the_row_after_a_wrap_inside_a_bold_mark_is_shaped_alone(cx: &mut TestAppConte
             .shape_line(rest.clone(), laid.key.font_size, &[run], None);
         for at in 0..rest.len() {
             let position = laid.position(fit + at, false);
-            assert_eq!(position.y, laid.line_height, "char {at} is on the second row");
+            assert_eq!(
+                position.y, laid.line_height,
+                "char {at} is on the second row"
+            );
             assert_eq!(position.x, alone.x_for_index(at), "char {at}");
         }
         // A click finds the char by the same row.
@@ -455,6 +461,10 @@ fn a_row_after_a_wrap_keeps_the_indent_of_its_line(cx: &mut TestAppContext) {
         assert_eq!(rects[1].left(), px(0.), "the selection covers the indent");
         // Its first rect is the bit past the end of the row above.
         let rects = laid.selection_rects(start..text.len());
-        assert_eq!(rects[1].left(), indent, "a selection from the row start does not");
+        assert_eq!(
+            rects[1].left(),
+            indent,
+            "a selection from the row start does not"
+        );
     });
 }
