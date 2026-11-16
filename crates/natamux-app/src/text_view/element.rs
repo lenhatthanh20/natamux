@@ -434,8 +434,8 @@ impl Layout {
                         .find(|rows| rows.runs == line_runs)
                         .map(|rows| (*rows).clone())
                 });
-                let rows = cached
-                    .unwrap_or_else(|| Rc::new(shape_rows(shown, &line_runs, &key, window)));
+                let rows =
+                    cached.unwrap_or_else(|| Rc::new(shape_rows(shown, &line_runs, &key, window)));
                 let shown_starts: Vec<usize> = rows.rows.iter().map(|row| row.shown).collect();
                 let mut line = Line {
                     start,
