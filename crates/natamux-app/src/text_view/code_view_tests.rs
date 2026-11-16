@@ -453,7 +453,8 @@ fn a_row_after_a_wrap_keeps_the_indent_of_its_line(cx: &mut TestAppContext) {
         assert_eq!(laid.position(start, false).x, indent);
         let rects = laid.selection_rects(0..text.len());
         assert_eq!(rects[1].left(), px(0.), "the selection covers the indent");
+        // Its first rect is the bit past the end of the row above.
         let rects = laid.selection_rects(start..text.len());
-        assert_eq!(rects[0].left(), indent, "a selection from the row start does not");
+        assert_eq!(rects[1].left(), indent, "a selection from the row start does not");
     });
 }
