@@ -34,7 +34,7 @@ pub(super) fn tops(rows: &[StickyPaint]) -> Vec<Pixels> {
 
 /// What a code view puts over its box in prepaint for the pointer: a hitbox of the box, for the
 /// pinned row under the pointer, and one of its gutter, for the arrow.
-pub(super) struct Pointer {
+pub struct Pointer {
     area: Hitbox,
     gutter: Option<Hitbox>,
 }

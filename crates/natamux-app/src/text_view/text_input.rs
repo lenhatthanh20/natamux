@@ -158,6 +158,9 @@ pub struct TextInput {
     pub(super) drop_at: Option<usize>,
     /// What a code view has more (`code_view.rs`).
     pub(super) code: Option<Code>,
+    /// The pinned row last painted as under the pointer, for tests.
+    #[cfg(test)]
+    pub(super) sticky_hovered: std::cell::Cell<Option<usize>>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -248,6 +251,8 @@ impl TextInput {
             press: None,
             drop_at: None,
             code: None,
+            #[cfg(test)]
+            sticky_hovered: Default::default(),
             _subscriptions: subscriptions,
         }
     }

@@ -506,3 +506,57 @@ fn a_press_on_a_pinned_row_goes_to_its_line(cx: &mut TestAppContext) {
         );
     }
 }
+
+#[gpui::test]
+fn a_pinned_row_takes_no_right_press_and_is_tinted_under_the_pointer(cx: &mut TestAppContext) {
+    let (view, input, cx) = open("src/catalog_view.ts", &sticky_file(), cx);
+    cx.executor().advance_clock(Duration::from_millis(50));
+    cx.run_until_parked();
+    let asked: Rc<Cell<Option<Option<u32>>>> = Rc::default();
+    let seen = asked.clone();
+    let menu: RowMenu = Rc::new(
+        move |row: Option<u32>, window: &mut Window, cx: &mut App| -> Option<Entity<ContextMenu>> {
+            seen.set(Some(row));
+            Some(ContextMenu::build(window, cx, |menu, _, _| {
+                menu.entry("Close Annotations", None, |_, _| {})
+            }))
+        },
+    );
+    cx.update(|_, cx| view.set_menu(menu, cx));
+    let line_height = input.update_in(cx, |input, window, cx| input.layout(window, cx).line_height);
+    input.update(cx, |input, cx| {
+        input.scroll = point(px(0.), line_height * 125.5);
+        cx.notify();
+    });
+    cx.run_until_parked();
+    assert_eq!(paint(&input, cx).sticky.len(), 3);
+    let bounds = input.read_with(cx, |input, _| input.last_bounds.unwrap());
+    let at = |rows: f32| point(bounds.right() - px(60.), bounds.top() + line_height * rows);
+
+    let hovered = |position, cx: &mut VisualTestContext| {
+        cx.simulate_mouse_move(position, None, Modifiers::default());
+        input.update(cx, |_, cx| cx.notify());
+        cx.run_until_parked();
+        input.read_with(cx, |input, _| input.sticky_hovered.get())
+    };
+    assert_eq!(hovered(at(1.5), cx), Some(1), "the row under the pointer");
+    assert_eq!(hovered(at(4.5), cx), None, "none off the pinned rows");
+
+    let right_press = |position, cx: &mut VisualTestContext| {
+        cx.simulate_event(MouseDownEvent {
+            button: MouseButton::Right,
+            position,
+            modifiers: Modifiers::default(),
+            click_count: 1,
+            first_mouse: false,
+        });
+        cx.run_until_parked();
+        input.read_with(cx, |input, _| {
+            input.code.as_ref().unwrap().open_menu.is_some()
+        })
+    };
+    assert!(!right_press(at(0.5), cx), "a pinned row opens no menu");
+    assert_eq!(asked.get(), None, "no menu asked for on a pinned row");
+    assert!(right_press(at(4.5), cx), "the text below the rows opens the menu");
+    assert!(asked.get().is_some(), "the menu of the clicked row");
+}

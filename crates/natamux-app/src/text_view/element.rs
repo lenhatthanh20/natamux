@@ -1050,6 +1050,8 @@ impl Element for TextElement {
                 let tops = super::code_sticky::tops(&code.sticky);
                 pointer.paint(tops, (bounds.left(), right), line_height, window)
             });
+            #[cfg(test)]
+            self.input.read(cx).sticky_hovered.set(hovered);
             super::code_gutter::paint_sticky(&code, &laid, bounds, origin, hovered, window, cx);
             if let Some((bar, thumb)) = &bar {
                 let edge = |rect: &Bounds<Pixels>| {
