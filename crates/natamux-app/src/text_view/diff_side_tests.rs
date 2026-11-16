@@ -390,7 +390,11 @@ fn the_taller_side_scrolls_to_its_end(cx: &mut TestAppContext) {
         cx.notify();
     });
     cx.run_until_parked();
-    assert_eq!(scroll_y(left.input(), cx), left_end, "the left side stays at its end");
+    assert_eq!(
+        scroll_y(left.input(), cx),
+        left_end,
+        "the left side stays at its end"
+    );
     assert_eq!(drawn_y(left.input(), cx), Some(left_end));
     assert_eq!(scroll_y(right.input(), cx), right_end);
     assert_eq!(drawn_y(right.input(), cx), Some(right_end));
