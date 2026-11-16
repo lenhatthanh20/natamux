@@ -30,6 +30,7 @@ use super::code_langs::typing_for;
 use super::code_rules::{Typing, find_all};
 use super::code_runs::{RunCache, input_edit};
 use super::code_typing::Region;
+use super::diff_side::DiffDecor;
 use super::element::Layout;
 use super::highlight::{PARSE_BUDGET, Syntax};
 use super::text_box::TextBox;
@@ -183,10 +184,12 @@ pub struct Code {
     /// The line a closing word moved back: its start, its indent before, and the text version
     /// after the move.
     pub(super) dedented: Option<(usize, String, u64)>,
+    /// The rows, colours and marks of one side of a diff (`diff_side.rs`).
+    pub(super) diff: Option<DiffDecor>,
 }
 
 impl Code {
-    fn new(lang: Option<&'static Lang>, guides: bool) -> Self {
+    pub(super) fn new(lang: Option<&'static Lang>, guides: bool) -> Self {
         Code {
             lang,
             guides,
@@ -217,6 +220,7 @@ impl Code {
             grows: Vec::new(),
             grows_version: 0,
             dedented: None,
+            diff: None,
         }
     }
 

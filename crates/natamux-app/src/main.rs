@@ -185,6 +185,7 @@ mod git {
     pub mod diff_editors;
     pub mod diff_hunk_controls;
     pub mod diff_model;
+    pub mod diff_rows;
     pub mod diff_rules;
     pub mod diff_view;
     pub mod editor_find;
@@ -434,6 +435,9 @@ mod text_view {
     pub mod code_view;
     #[cfg(test)]
     mod code_view_tests;
+    mod diff_paint;
+    /// One side of the own diff view (docs/plan-mit-license.md S6.2).
+    pub mod diff_side;
     /// The own text input (docs/plan-mit-license.md S3.3), the default since S3.4.
     #[cfg_attr(not(test), allow(dead_code))]
     pub mod element;

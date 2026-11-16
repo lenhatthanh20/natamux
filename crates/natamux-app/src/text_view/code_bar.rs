@@ -56,7 +56,7 @@ impl TextInput {
 
     /// Whether the scrollbars of a code view show: always in a `-scrollbar` shot, never in
     /// other shots, else while one is dragged, for 1 s after a scroll, while the caret is out of
-    /// view, and while the selected text has other places.
+    /// view, and (not on a diff side) while the selected text has other places.
     fn bars_show(&self, laid: &Layout, bounds: Bounds<Pixels>, cx: &App) -> bool {
         let Some(code) = self.code.as_ref() else {
             return false;
@@ -79,10 +79,13 @@ impl TextInput {
             .scrolled_at
             .is_some_and(|at| self.now(cx).saturating_duration_since(at) < BAR_SHOWS_FOR);
         let always = look.is_some_and(|look| look.always_scrollbars);
-        let occurrences = code
-            .other_occurrences(self.model.selection().range())
-            .next()
-            .is_some();
+        // The sides of a diff are not single-file buffers in Zed's editor: other places of the
+        // selected text do not keep the bar there (plan 6.5).
+        let occurrences = code.diff.is_none()
+            && code
+                .other_occurrences(self.model.selection().range())
+                .next()
+                .is_some();
         let held = code.bar.grab.is_some() || code.bar.hgrab.is_some();
         always || recent || caret_hidden || occurrences || held
     }

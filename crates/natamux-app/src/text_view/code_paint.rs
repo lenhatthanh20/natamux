@@ -1,6 +1,6 @@
 //! What a code view paints past the plain input (plan 6.4): indent guides, the matching
 //! brackets, the other places of the selected text, the matches of find, the gutter, the sticky
-//! rows and the scrollbars.
+//! rows, the scrollbars, and the hunks of a diff side.
 
 use std::ops::Range;
 
@@ -8,6 +8,7 @@ use gpui::{App, Bounds, Hsla, Pixels, point, px};
 
 use super::code_bar::BarBounds;
 use super::code_gutter::{GutterPaint, StickyPaint};
+use super::diff_paint::DiffPaint;
 use super::element::Layout;
 use super::text_input::{TAB_SIZE, TextInput};
 use crate::app::appearance::Appearance;
@@ -32,6 +33,8 @@ pub(super) struct CodePaint {
     pub gutter: Option<GutterPaint>,
     /// The pinned rows, outermost first.
     pub sticky: Vec<StickyPaint>,
+    /// The hunks, gaps and words of a diff side.
+    pub diff: Option<DiffPaint>,
 }
 
 impl TextInput {
@@ -61,6 +64,7 @@ impl TextInput {
             ..CodePaint::default()
         };
         self.gutter_paint(laid, bounds, origin, &mut paint);
+        paint.diff = self.diff_paint(laid, bounds, origin, cx);
         if let Some((bar, _, _)) = &paint.bar {
             paint.markers = self.bar_markers(laid, bar, cx);
         }

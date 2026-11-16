@@ -52,6 +52,9 @@ pub struct LayoutKey {
     pub heads: Vec<usize>,
     /// The painted backgrounds the text keeps its contrast with (`code_contrast.rs`).
     pub marks: Vec<(Range<usize>, Hsla)>,
+    /// Empty rows above each line, and one more entry for the rows below the last line: the
+    /// spacers and gaps of a diff side (`diff_side.rs`). None for every other view.
+    pub blocks: Option<Rc<[usize]>>,
 }
 
 /// One line of the text (between two `\n`) and the rows it wraps into.
@@ -394,8 +397,11 @@ impl Layout {
         let mut lines = Vec::new();
         let (mut start, mut row, mut width) = (0, 0, px(0.));
         let mut cursor = RunCursor::new(runs);
+        let blocks = key.blocks.clone();
+        let above = |index: usize| blocks.as_ref().and_then(|b| b.get(index).copied());
         for (index, source) in text.split('\n').enumerate() {
             let len = source.len();
+            row += above(index).unwrap_or(0);
             let line_runs = cursor.take(start..start + len);
             let same = |old: &&Line| *old.rows.text == *source && old.rows.runs == line_runs;
             // A line with no tab shows as it is: compare it with the old line at its place.
@@ -460,6 +466,7 @@ impl Layout {
             row += count;
             start += len + 1;
         }
+        row += above(lines.len()).unwrap_or(0);
         let text_system = window.text_system();
         let em = text_system
             .em_advance(text_system.resolve_font(&key.font), key.font_size)
@@ -478,6 +485,19 @@ impl Layout {
             lines,
             key,
         }
+    }
+
+    /// The first shown row of the empty rows above line `index`, or of the rows below the last
+    /// line for `index == lines.len()`.
+    pub fn blocks_top(&self, index: usize) -> usize {
+        let above = self
+            .key
+            .blocks
+            .as_ref()
+            .and_then(|blocks| blocks.get(index).copied())
+            .unwrap_or(0);
+        let row = self.lines.get(index).map_or(self.rows, |line| line.first_row);
+        row.saturating_sub(above)
     }
 
     fn line_at(&self, at: usize) -> Option<&Line> {
@@ -773,6 +793,7 @@ impl Element for TextElement {
                 input.scroll_to_head(&laid, bounds);
             }
             input.clamp_scroll(&laid, bounds);
+            input.sync_peer(cx);
             // A scroll may move the lines a code view colours: lay out again (only then).
             input.layout(window, cx)
         });
@@ -908,6 +929,12 @@ impl Element for TextElement {
                     active_line,
                 ));
             }
+            // A diff side's hunks lie over the line of the caret (B2 `changes-diff-deleted-only`).
+            if let Some(diff) = &code.diff {
+                for (rect, color) in &diff.backs {
+                    window.paint_quad(fill(*rect, *color));
+                }
+            }
             for (bounds, active) in &code.guides {
                 // Snapped to device pixels, as Zed's editor drew its guides.
                 let bounds = window.pixel_snap_bounds(*bounds);
@@ -971,6 +998,12 @@ impl Element for TextElement {
                         .ok();
                 }
             }
+            let text_mask = code.diff.as_ref().map(|diff| ContentMask {
+                bounds: Bounds::from_corners(
+                    point(diff.text_left, bounds.top()),
+                    bounds.bottom_right(),
+                ),
+            });
             for line in &laid.lines {
                 let top = origin.y + line_height * line.first_row as f32;
                 let bottom = top + line_height * line.row_starts.len() as f32;
@@ -982,7 +1015,14 @@ impl Element for TextElement {
                     if top + line_height < bounds.top() || top > bounds.bottom() {
                         continue;
                     }
-                    line.paint_row(row, point(origin.x, top), line_height, window, cx);
+                    let at = point(origin.x, top);
+                    // A diff side's gutter has no background to cover the text scrolled under it.
+                    match &text_mask {
+                        Some(mask) => window.with_content_mask(Some(mask.clone()), |window| {
+                            line.paint_row(row, at, line_height, window, cx)
+                        }),
+                        None => line.paint_row(row, at, line_height, window, cx),
+                    }
                 }
             }
             let carets = caret.then_some((head, end_bias)).into_iter();
@@ -995,6 +1035,11 @@ impl Element for TextElement {
             }
             if let Some(gutter) = &code.gutter {
                 super::code_gutter::paint_gutter(gutter, &laid, window, cx);
+            }
+            if let Some(diff) = &code.diff {
+                for (rect, color) in &diff.strips {
+                    super::diff_paint::paint_hollow(*rect, *color, window);
+                }
             }
             super::code_gutter::paint_sticky(&code, &laid, bounds, origin, window, cx);
             if let Some((bar, thumb)) = &bar {
@@ -1100,6 +1145,7 @@ mod tests {
                 lines: None,
                 heads: Vec::new(),
                 marks: Vec::new(),
+                blocks: None,
             };
             let run = |len| TextRun {
                 len,

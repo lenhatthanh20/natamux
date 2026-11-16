@@ -484,7 +484,9 @@ impl TextInput {
         let runs = if placeholder {
             None
         } else {
-            self.code_runs(&run, text_len, self.query_lines(), &self.sticky_heads(), cx)
+            let lines = self.query_lines();
+            self.diff_runs(&run, text_len, lines.clone(), cx)
+                .or_else(|| self.code_runs(&run, text_len, lines, &self.sticky_heads(), cx))
         };
         let label = labels.map(|_| self.label_run(&run, cx));
         let mut runs = runs.unwrap_or_else(|| vec![run]);
@@ -544,9 +546,20 @@ impl TextInput {
         let font_size = style.font_size.to_pixels(rem);
         let room = self.bar_room(cx);
         let full = matches!(self.mode, Mode::Full { .. });
+        let diff = self.code.as_ref().and_then(|code| code.diff.as_ref());
         let (gutter, gutter_pad) = if full && self.code.as_ref().is_some_and(|code| code.gutter) {
-            let lines = self.model.text().split('\n').count();
-            super::code_gutter::gutter_size(lines, &font, font_size, window)
+            match diff {
+                Some(diff) => super::code_gutter::diff_gutter_size(
+                    diff.widest_number(),
+                    &font,
+                    font_size,
+                    window,
+                ),
+                None => {
+                    let lines = self.model.text().split('\n').count();
+                    super::code_gutter::gutter_size(lines, &font, font_size, window)
+                }
+            }
         } else {
             (px(0.), px(0.))
         };
@@ -581,6 +594,7 @@ impl TextInput {
             lines: self.query_lines(),
             heads: self.sticky_heads(),
             marks: self.contrast_marks(self.focus.is_focused(window), cx),
+            blocks: diff.map(|diff| diff.rows.above.clone()),
         };
         if let Some(laid) = &self.laid
             && laid.key == key

@@ -4,7 +4,7 @@
 
 use std::ops::Range;
 
-use gpui::{App, TextRun};
+use gpui::{App, HighlightStyle, TextRun};
 use theme::ActiveTheme;
 use tree_sitter::InputEdit;
 
@@ -89,8 +89,12 @@ impl TextInput {
     /// The lines whose colours a layout asks for: the shown lines and a block more on each side,
     /// as whole blocks. None when there is nothing to colour (no language or no tree yet).
     pub(super) fn query_lines(&self) -> Option<Range<usize>> {
-        // A view with nothing to colour keeps one layout for all its lines.
-        self.code.as_ref()?.syntax.as_ref()?.tree()?;
+        // A view with nothing to colour keeps one layout for all its lines. A diff side colours
+        // its lines from the parses of its two files.
+        let code = self.code.as_ref()?;
+        if code.diff.is_none() {
+            code.syntax.as_ref()?.tree()?;
+        }
         let Some(laid) = self.laid.as_ref() else {
             // The first layout: the top lines, so a view drawn at the top lays out once.
             return Some(0..2 * BLOCK);
@@ -176,43 +180,56 @@ impl TextInput {
                     .collect(),
             };
         }
-        let mut runs = Vec::new();
-        let mut at = 0;
-        for (range, key) in &cache.runs {
-            // An older tree, moved by the edits, may cut into a char.
-            let start = motion::floor_boundary(text, range.start.min(len)).max(at);
-            let end = motion::floor_boundary(text, range.end.min(len));
-            if start >= end {
-                continue;
-            }
-            if start > at {
-                runs.push(TextRun {
-                    len: start - at,
-                    ..base.clone()
-                });
-            }
-            let style = theme.style_for_name(key).unwrap_or_default();
-            let mut font = base.font.clone();
-            if let Some(weight) = style.font_weight {
-                font.weight = weight;
-            }
-            if let Some(slant) = style.font_style {
-                font.style = slant;
-            }
-            runs.push(TextRun {
-                len: end - start,
-                font,
-                color: style.color.unwrap_or(base.color),
-                ..base.clone()
-            });
-            at = end;
-        }
-        if at < len {
-            runs.push(TextRun {
-                len: len - at,
-                ..base.clone()
-            });
-        }
-        Some(runs)
+        let style_for = |key: &str| theme.style_for_name(key).unwrap_or_default();
+        Some(styled_runs(&cache.runs, base, text, style_for))
     }
+}
+
+/// The runs of `text` from `base`, with each span in `spans` (in order, offsets of `text`) in its
+/// theme key's style: colour, weight and slant.
+pub(super) fn styled_runs(
+    spans: &[(Range<usize>, String)],
+    base: &TextRun,
+    text: &str,
+    style_for: impl Fn(&str) -> HighlightStyle,
+) -> Vec<TextRun> {
+    let len = text.len();
+    let mut runs = Vec::new();
+    let mut at = 0;
+    for (range, key) in spans {
+        // An older tree, moved by the edits, may cut into a char.
+        let start = motion::floor_boundary(text, range.start.min(len)).max(at);
+        let end = motion::floor_boundary(text, range.end.min(len));
+        if start >= end {
+            continue;
+        }
+        if start > at {
+            runs.push(TextRun {
+                len: start - at,
+                ..base.clone()
+            });
+        }
+        let style = style_for(key);
+        let mut font = base.font.clone();
+        if let Some(weight) = style.font_weight {
+            font.weight = weight;
+        }
+        if let Some(slant) = style.font_style {
+            font.style = slant;
+        }
+        runs.push(TextRun {
+            len: end - start,
+            font,
+            color: style.color.unwrap_or(base.color),
+            ..base.clone()
+        });
+        at = end;
+    }
+    if at < len {
+        runs.push(TextRun {
+            len: len - at,
+            ..base.clone()
+        });
+    }
+    runs
 }

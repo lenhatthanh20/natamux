@@ -18,6 +18,7 @@ use super::code_runs::line_bytes;
 use super::element::Layout;
 use super::outline::{OutlineItem, containing, outline, outline_in};
 use super::text_input::TextInput;
+use crate::git::diff_model::Status;
 use crate::text::motion;
 
 /// The digits the gutter always has room for.
@@ -26,6 +27,10 @@ const MIN_DIGITS: usize = 4;
 const LEFT_PAD: f32 = 2.;
 /// Right of the numbers, in ch: the room of the fold markers.
 const RIGHT_PAD: f32 = 4.;
+/// Left and right of the numbers of a diff side, in ch: there the numbers sit nearer the text
+/// (measured on the `changes-diff-*` shots; recheck at the S6.2 flip).
+const DIFF_LEFT_PAD: f32 = 4.;
+const DIFF_RIGHT_PAD: f32 = 3.;
 /// Sticky scroll looks for items this many lines below the top one.
 pub(super) const STICKY_LINES: usize = 10;
 
@@ -43,11 +48,14 @@ pub(super) struct Caches {
 }
 
 /// The gutter as painted: its box, the x the numbers end at, and each shown number with its top
-/// and whether it is on a line of the selection.
+/// and whether it is on a line of the selection. A diff side has no background of its own (its
+/// hunk boxes reach under the numbers) and shows the numbers of added lines in their colour.
 pub(super) struct GutterPaint {
     pub bounds: Bounds<Pixels>,
     pub right: Pixels,
     pub numbers: Vec<(Pixels, usize, bool)>,
+    pub added: Vec<bool>,
+    pub background: bool,
 }
 
 /// A pinned row: the shown row, its line number and its top.
@@ -73,12 +81,30 @@ pub(super) fn gutter_widths(
     ch_width: Pixels,
     ch_advance: Pixels,
 ) -> (Pixels, Pixels) {
+    widths(lines, ch_width, ch_advance, (LEFT_PAD, RIGHT_PAD))
+}
+
+/// The gutter's width and the room right of its numbers, with `pads` ch left and right of them.
+fn widths(
+    lines: usize,
+    ch_width: Pixels,
+    ch_advance: Pixels,
+    (left, right): (f32, f32),
+) -> (Pixels, Pixels) {
     let digits = lines.max(1).to_string().len().max(MIN_DIGITS);
-    let right = ch_width * RIGHT_PAD;
-    (
-        ch_advance * digits as f32 + ch_width * LEFT_PAD + right,
-        right,
-    )
+    let right = ch_width * right;
+    (ch_advance * digits as f32 + ch_width * left + right, right)
+}
+
+/// The width and the advance of `0` in `font`.
+fn ch_sizes(font: &Font, font_size: Pixels, window: &Window) -> (Pixels, Pixels) {
+    let text_system = window.text_system();
+    let id = text_system.resolve_font(font);
+    let ch_width = text_system
+        .ch_width(id, font_size)
+        .unwrap_or(font_size / 2.);
+    let ch_advance = text_system.ch_advance(id, font_size).unwrap_or(ch_width);
+    (ch_width, ch_advance)
 }
 
 /// `gutter_widths` in `font`.
@@ -88,13 +114,19 @@ pub(super) fn gutter_size(
     font_size: Pixels,
     window: &Window,
 ) -> (Pixels, Pixels) {
-    let text_system = window.text_system();
-    let id = text_system.resolve_font(font);
-    let ch_width = text_system
-        .ch_width(id, font_size)
-        .unwrap_or(font_size / 2.);
-    let ch_advance = text_system.ch_advance(id, font_size).unwrap_or(ch_width);
+    let (ch_width, ch_advance) = ch_sizes(font, font_size, window);
     gutter_widths(lines, ch_width, ch_advance)
+}
+
+/// The gutter of a diff side whose largest line number is `most`.
+pub(super) fn diff_gutter_size(
+    most: usize,
+    font: &Font,
+    font_size: Pixels,
+    window: &Window,
+) -> (Pixels, Pixels) {
+    let (ch_width, ch_advance) = ch_sizes(font, font_size, window);
+    widths(most, ch_width, ch_advance, (DIFF_LEFT_PAD, DIFF_RIGHT_PAD))
 }
 
 /// The rows sticky scroll pins with the view scrolled `scroll_top` rows down. `items` are the
@@ -252,6 +284,8 @@ impl TextInput {
         let line_height = laid.line_height;
         if laid.key.gutter > px(0.) {
             let selected = selected_lines(text, self.model.selection().range());
+            let diff = code.diff.as_ref();
+            let mut added = Vec::new();
             let numbers = laid
                 .lines
                 .iter()
@@ -259,13 +293,25 @@ impl TextInput {
                 .filter_map(|(index, line)| {
                     let top = origin.y + line_height * line.first_row as f32;
                     let shown = top + line_height >= bounds.top() && top <= bounds.bottom();
-                    shown.then(|| (top, index + 1, selected.contains(&index)))
+                    // A diff side numbers its lines as in their file; deleted lines have none.
+                    let (number, is_added) = match diff {
+                        Some(diff) => {
+                            let line = diff.rows.lines.get(index)?;
+                            (line.number? as usize, line.status == Status::Added)
+                        }
+                        None => (index + 1, false),
+                    };
+                    let number = shown.then(|| (top, number, selected.contains(&index)))?;
+                    added.push(is_added);
+                    Some(number)
                 })
                 .collect();
             paint.gutter = Some(GutterPaint {
                 bounds: Bounds::new(bounds.origin, size(laid.key.gutter, bounds.size.height)),
                 right: bounds.left() + laid.key.gutter - laid.key.gutter_pad,
                 numbers,
+                added,
+                background: diff.is_none(),
             });
         }
         if !code.sticky || line_height <= px(0.) {
@@ -295,14 +341,24 @@ impl TextInput {
 /// lines of the selection in the active colour.
 pub(super) fn paint_gutter(gutter: &GutterPaint, laid: &Layout, window: &mut Window, cx: &mut App) {
     let colors = cx.theme().colors();
-    let (background, normal, active) = (
+    let (background, normal, active, added) = (
         colors.editor_gutter_background,
         colors.editor_line_number,
         colors.editor_active_line_number,
+        colors.version_control_added,
     );
-    window.paint_quad(fill(gutter.bounds, background));
-    for (top, number, selected) in &gutter.numbers {
-        let color = if *selected { active } else { normal };
+    if gutter.background {
+        window.paint_quad(fill(gutter.bounds, background));
+    }
+    for (index, (top, number, selected)) in gutter.numbers.iter().enumerate() {
+        // A line of the selection beats an added line (shot `changes-diff-focused`).
+        let color = if *selected {
+            active
+        } else if gutter.added.get(index).copied().unwrap_or(false) {
+            added
+        } else {
+            normal
+        };
         paint_number(*number, color, gutter.right, *top, laid, window, cx);
     }
 }
