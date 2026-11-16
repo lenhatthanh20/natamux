@@ -248,6 +248,10 @@ impl TextInput {
         let Some(code) = self.code.as_mut() else {
             return;
         };
+        let edits = self.model.take_edits();
+        if !code.labels.is_empty() {
+            self.model.track_edits();
+        }
         let text = self.model.text();
         if let Some(syntax) = code.syntax.as_mut()
             && (*code.parsed != *text || syntax.tree().is_none())
@@ -273,7 +277,7 @@ impl TextInput {
                 }));
             }
         }
-        code.labels.follow(text);
+        code.labels.follow(text, edits.as_deref());
         let selection = self.model.selection().range();
         let selected = &text[selection];
         let query =

@@ -33,6 +33,15 @@ struct Change {
     inserted: String,
 }
 
+/// One replace as it was made: `removed` bytes from `start` of the text then became `inserted`
+/// bytes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Splice {
+    pub start: usize,
+    pub removed: usize,
+    pub inserted: usize,
+}
+
 #[derive(Clone, Debug)]
 struct Step {
     changes: Vec<Change>,
@@ -83,6 +92,9 @@ pub struct TextModel {
     redo: Vec<Step>,
     /// Goes up by one on each change of the text, so a view knows when to lay it out again.
     version: u64,
+    /// The replaces since `track_edits`, in the order they were made; None when no one follows
+    /// them, or after `set_text`.
+    log: Option<Vec<Splice>>,
 }
 
 /// `\r\n` and `\r` become `\n`.
@@ -170,6 +182,8 @@ impl TextModel {
         }
         let before = self.selection;
         let change = self.apply(0, self.text.len(), &text);
+        // A whole new text: what moved where is not known.
+        self.log = None;
         self.selection = Selection::caret(self.text.len());
         self.marked = None;
         self.record(vec![change], before, EditKind::Other, now);
@@ -245,9 +259,30 @@ impl TextModel {
         true
     }
 
+    /// Starts a new list of the replaces made from now on.
+    pub fn track_edits(&mut self) {
+        self.log = Some(Vec::new());
+    }
+
+    /// The replaces since `track_edits`, and ends the list; None when they are not known.
+    pub fn take_edits(&mut self) -> Option<Vec<Splice>> {
+        self.log.take()
+    }
+
+    fn note(&mut self, start: usize, removed: usize, inserted: usize) {
+        if let Some(log) = self.log.as_mut() {
+            log.push(Splice {
+                start,
+                removed,
+                inserted,
+            });
+        }
+    }
+
     fn apply(&mut self, start: usize, end: usize, text: &str) -> Change {
         let removed = self.text[start..end].to_string();
         self.text.replace_range(start..end, text);
+        self.note(start, end - start, text.len());
         // The mark moves with an edit before it and goes with an edit over it.
         self.marked = self.marked.take().and_then(|marked| {
             if end <= marked.start {
@@ -314,6 +349,7 @@ impl TextModel {
         for change in step.changes.iter().rev() {
             let end = change.start + change.inserted.len();
             self.text.replace_range(change.start..end, &change.removed);
+            self.note(change.start, change.inserted.len(), change.removed.len());
         }
         self.after_history(step.before);
         self.redo.push(Step {
@@ -330,6 +366,7 @@ impl TextModel {
         for change in &step.changes {
             let end = change.start + change.removed.len();
             self.text.replace_range(change.start..end, &change.inserted);
+            self.note(change.start, change.removed.len(), change.inserted.len());
         }
         self.after_history(step.after);
         self.undo.push(step);

@@ -20,6 +20,7 @@ use crate::app::appearance::Appearance;
 use crate::app::shots_text::sticky_file;
 use crate::app::test_views;
 use crate::git::code_target::RowMenu;
+use crate::text::model::TextModel;
 
 const MAC: bool = cfg!(target_os = "macos");
 
@@ -101,18 +102,61 @@ fn labels_move_with_their_lines_when_the_text_changes() {
     let mut labels = Labels::default();
     labels.set(vec![(0, "L0 ".into()), (1, "L1 ".into())], "ab\ncd\n");
     // A line typed at the top: the labels stay with their lines.
-    labels.follow("x\nab\ncd\n");
+    labels.follow("x\nab\ncd\n", None);
     assert_eq!(labels.insert("x\nab\ncd\n"), "x\nL0 ab\nL1 cd\n");
     // A typed letter inside a line moves the next line's label only.
-    labels.follow("x\naYb\ncd\n");
+    labels.follow("x\naYb\ncd\n", None);
     assert_eq!(labels.insert("x\naYb\ncd\n"), "x\nL0 aYb\nL1 cd\n");
     // The labelled first line deleted: its label goes where the line was.
-    labels.follow("x\ncd\n");
+    labels.follow("x\ncd\n", None);
     assert_eq!(labels.insert("x\ncd\n"), "x\nL0 L1 cd\n");
     // A delete in the middle of a line before a label.
     labels.set(vec![(1, "L1 ".into())], "abc\nde\n");
-    labels.follow("ac\nde\n");
+    labels.follow("ac\nde\n", None);
     assert_eq!(labels.insert("ac\nde\n"), "ac\nL1 de\n");
+}
+
+#[test]
+fn labels_follow_each_edit_of_a_change_with_many() {
+    let start = std::time::Instant::now();
+    let mut model = TextModel::with_text("ab\ncd\n");
+    let mut labels = Labels::default();
+    labels.set(vec![(0, "L0 ".into()), (1, "L1 ".into())], model.text());
+    model.track_edits();
+    // Tab on both lines: one change of two inserts, made back to front.
+    let indent = |at: usize| crate::text::minimal::Edit {
+        range: at..at,
+        text: "    ".into(),
+    };
+    model.edit_all(&[indent(0), indent(3)], 0, 14, start);
+    let edits = model.take_edits();
+    labels.follow(model.text(), edits.as_deref());
+    assert_eq!(labels.insert(model.text()), "    L0 ab\n    L1 cd\n");
+    // Undo takes both inserts out again.
+    model.track_edits();
+    assert!(model.undo());
+    let edits = model.take_edits();
+    labels.follow(model.text(), edits.as_deref());
+    assert_eq!(labels.insert(model.text()), "L0 ab\nL1 cd\n");
+    // A whole new text: no edits are known, so one is guessed.
+    model.track_edits();
+    model.set_text("x\nab\ncd\n", start);
+    let edits = model.take_edits();
+    assert_eq!(edits, None);
+    labels.follow(model.text(), edits.as_deref());
+    assert_eq!(labels.insert(model.text()), "x\nL0 ab\nL1 cd\n");
+}
+
+#[test]
+fn a_guessed_edit_keeps_labels_on_whole_chars() {
+    // á (C3 A1) and ạ (E1 BA A1) end with the same byte.
+    let mut labels = Labels::default();
+    let rows = vec![(0, "L0 ".into()), (1, "L1 ".into()), (2, "L2 ".into())];
+    labels.set(rows, "ab\nlá\n");
+    labels.follow("aạ\n", None);
+    assert_eq!(labels.insert("aạ\n"), "L0 aạL1 L2 \n");
+    let edit = input_edit("ab\nlá\n", "aạ\n");
+    assert_eq!((edit.start_byte, edit.old_end_byte, edit.new_end_byte), (1, 6, 4));
 }
 
 #[test]

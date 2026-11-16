@@ -40,6 +40,13 @@ pub(super) fn input_edit(old: &str, new: &str) -> InputEdit {
         .take(room)
         .take_while(|(a, b)| a == b)
         .count();
+    // Whole chars only: a common byte may be the last byte of two different chars. The bytes at
+    // both ends are the same in the two texts, so a char boundary of `old` is one of `new` too.
+    let prefix = motion::floor_boundary(old, prefix);
+    let mut suffix = suffix;
+    while !old.is_char_boundary(old.len() - suffix) {
+        suffix -= 1;
+    }
     let (old_end, new_end) = (old.len() - suffix, new.len() - suffix);
     InputEdit {
         start_byte: prefix,

@@ -15,6 +15,7 @@ use super::code_view::CodeView;
 use super::text_input::TextInput;
 use crate::git::change_rules::wraps_by_default;
 use crate::git::code_target::{BlameTarget, RowMenu};
+use crate::text::model::Splice;
 
 /// The labels of a text, each at its offset in the text now. Each moves with the text as a
 /// right-bias anchor does, so it stays at the start of its line when lines come or go above it.
@@ -45,23 +46,43 @@ impl Labels {
         };
     }
 
-    /// Moves the labels with the edit that turned the text before into `text`. A label in a
-    /// removed part goes to the end of what came in its place, as Zed's anchors did.
-    pub fn follow(&mut self, text: &str) {
-        if self.spots.is_empty() || self.text == text {
+    pub fn is_empty(&self) -> bool {
+        self.spots.is_empty()
+    }
+
+    /// Moves the labels with `edits`, the replaces that turned the text before into `text`, in
+    /// the order they were made. Without them (a whole new text) one edit is guessed from the two
+    /// texts; blame is asked again then anyway.
+    pub fn follow(&mut self, text: &str, edits: Option<&[Splice]>) {
+        if self.spots.is_empty() {
             return;
         }
-        // shortcut: the edit is guessed from the two texts, so a typed copy of a labelled
-        // line's start may land on the other side of the label; take the real edit if it shows.
-        let edit = input_edit(&self.text, text);
-        for (spot, _) in &mut self.spots {
-            if *spot >= edit.old_end_byte {
-                *spot = *spot - edit.old_end_byte + edit.new_end_byte;
-            } else if *spot >= edit.start_byte {
-                *spot = edit.new_end_byte;
+        match edits {
+            Some(edits) => edits.iter().for_each(|edit| self.shift(edit)),
+            None if self.text != text => {
+                let edit = input_edit(&self.text, text);
+                self.shift(&Splice {
+                    start: edit.start_byte,
+                    removed: edit.old_end_byte - edit.start_byte,
+                    inserted: edit.new_end_byte - edit.start_byte,
+                });
             }
+            None => {}
         }
         self.text = text.to_owned();
+    }
+
+    /// Moves the labels with one replace, as right-bias anchors: text put in at a label goes
+    /// before it, and a label in a removed part goes to the end of what came in its place.
+    fn shift(&mut self, edit: &Splice) {
+        let end = edit.start + edit.removed;
+        for (spot, _) in &mut self.spots {
+            if *spot >= end {
+                *spot = *spot - edit.removed + edit.inserted;
+            } else if *spot >= edit.start {
+                *spot = edit.start + edit.inserted;
+            }
+        }
     }
 
     pub fn total(&self) -> usize {
@@ -323,6 +344,7 @@ impl BlameTarget for CodeView {
                 code.labels.set(labels, text);
                 // The shown text changed with the text the same: lay it out again.
                 code.colors += 1;
+                input.model.track_edits();
             }
             cx.notify();
         });
