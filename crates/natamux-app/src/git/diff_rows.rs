@@ -190,10 +190,7 @@ fn add_lines(
         old,
         next: 0,
     });
-    let mut shown = [
-        vec![None; sources[0].len()],
-        vec![None; sources[1].len()],
-    ];
+    let mut shown = [vec![None; sources[0].len()], vec![None; sources[1].len()]];
     side.line_starts.clear();
     for row in rows {
         let (old, row, status) = match *row {

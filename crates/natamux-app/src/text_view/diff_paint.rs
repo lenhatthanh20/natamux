@@ -132,7 +132,9 @@ impl Frame<'_> {
             for (line, side_line) in laid_lines.iter().zip(&lines[first..=last]) {
                 let height = laid.line_height * line.row_starts.len() as f32;
                 let rect = self.across(self.row_top(line.first_row), height);
-                paint.backs.push((rect, self.box_colours(side_line.status).0));
+                paint
+                    .backs
+                    .push((rect, self.box_colours(side_line.status).0));
             }
             let one = px(1.);
             let (top_colour, bottom_colour) = (
@@ -140,7 +142,9 @@ impl Frame<'_> {
                 self.box_colours(lines[last].status).1,
             );
             paint.backs.push((self.across(top, one), top_colour));
-            paint.backs.push((self.across(bottom - one, one), bottom_colour));
+            paint
+                .backs
+                .push((self.across(bottom - one, one), bottom_colour));
             let left = self.bounds.left();
             paint.strips.push((
                 Bounds::from_corners(point(left, top), point(left + self.strip, bottom)),
@@ -254,6 +258,4 @@ impl TextInput {
         frame.markers(&diff.rows, &mut paint);
         Some(paint)
     }
-
 }
-

@@ -42,7 +42,10 @@ fn inline_puts_the_deleted_lines_of_a_hunk_above_its_added_ones() {
     let (_, side) = inline("a\nb\nc", "a\nx\ny\nc", false);
     assert_eq!(side.text, "a\nb\nx\ny\nc");
     assert_eq!(side.line_starts, vec![0, 2, 4, 6, 8]);
-    assert_eq!(numbers(&side), vec![Some(1), None, Some(2), Some(3), Some(4)]);
+    assert_eq!(
+        numbers(&side),
+        vec![Some(1), None, Some(2), Some(3), Some(4)]
+    );
     use Status::*;
     assert_eq!(
         statuses(&side),
@@ -142,4 +145,3 @@ fn changed_words_land_on_the_lines_that_show_them() {
     let (_, new) = beside("let a = 1;\n", "let b = 1;\n", Side::New);
     assert_eq!(new.words, vec![(4..5, Status::Added)]);
 }
-

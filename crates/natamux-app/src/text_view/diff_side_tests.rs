@@ -142,11 +142,31 @@ fn a_hunk_shows_in_one_box_with_a_strip_of_its_kind(cx: &mut TestAppContext) {
     assert_eq!(
         backs,
         vec![
-            (row_y(1), lh, colors.editor_diff_hunk_deleted_hollow_background),
-            (row_y(2), lh, colors.editor_diff_hunk_added_hollow_background),
-            (row_y(3), lh, colors.editor_diff_hunk_added_hollow_background),
-            (row_y(1), px(1.), colors.editor_diff_hunk_deleted_hollow_border),
-            (row_y(4) - px(1.), px(1.), colors.editor_diff_hunk_added_hollow_border),
+            (
+                row_y(1),
+                lh,
+                colors.editor_diff_hunk_deleted_hollow_background
+            ),
+            (
+                row_y(2),
+                lh,
+                colors.editor_diff_hunk_added_hollow_background
+            ),
+            (
+                row_y(3),
+                lh,
+                colors.editor_diff_hunk_added_hollow_background
+            ),
+            (
+                row_y(1),
+                px(1.),
+                colors.editor_diff_hunk_deleted_hollow_border
+            ),
+            (
+                row_y(4) - px(1.),
+                px(1.),
+                colors.editor_diff_hunk_added_hollow_border
+            ),
         ]
     );
     let left = drawn.paint.backs[0].0.left();
@@ -222,11 +242,11 @@ fn a_hunk_with_no_lines_on_the_side_has_a_marker(cx: &mut TestAppContext) {
     assert_eq!(color, colors(cx).version_control_deleted);
     assert_eq!(bounds.size, gpui::size(size, size));
     // Line `c` is below the empty row of the deleted line.
-    assert_eq!(
-        bounds.top(),
-        drawn.origin.y + lh * 2. - (size / 2.).floor()
+    assert_eq!(bounds.top(), drawn.origin.y + lh * 2. - (size / 2.).floor());
+    assert!(
+        drawn.paint.backs.is_empty(),
+        "no box: the side has no line of it"
     );
-    assert!(drawn.paint.backs.is_empty(), "no box: the side has no line of it");
 }
 
 #[gpui::test]
@@ -335,10 +355,7 @@ fn t_sb_1_the_scrollbar_of_a_diff_side(cx: &mut TestAppContext) {
     cx.executor().advance_clock(Duration::from_millis(150));
     cx.run_until_parked();
     let places = input.read_with(cx, |input, _| {
-        input
-            .code
-            .as_ref()
-            .map_or(0, |code| code.occurrences.len())
+        input.code.as_ref().map_or(0, |code| code.occurrences.len())
     });
     assert_eq!(places, 2, "the places are found");
     assert!(!shows(cx), "other places of the selected text");
@@ -380,7 +397,11 @@ fn the_text_layer_of_a_side_scrolled_right_keeps_out_of_the_gutter(cx: &mut Test
     right.input().update_in(cx, |input, window, cx| {
         let bounds = input.last_bounds.expect("the side was drawn");
         let laid = input.layout(window, cx);
-        assert_eq!(input.scroll.x, px(200.), "the line is long enough to scroll");
+        assert_eq!(
+            input.scroll.x,
+            px(200.),
+            "the line is long enough to scroll"
+        );
         let origin = bounds.origin + point(laid.inset, px(0.)) - input.scroll;
         let paint = input.code_paint(&laid, bounds, origin, cx);
         let diff = paint.diff.as_ref().expect("a diff side paints its hunks");
@@ -391,7 +412,10 @@ fn the_text_layer_of_a_side_scrolled_right_keeps_out_of_the_gutter(cx: &mut Test
             .iter()
             .map(|rect| rect.left() + origin.x)
             .fold(bounds.right(), Pixels::min);
-        assert!(selection_left < text_left, "the selection reaches into the gutter");
+        assert!(
+            selection_left < text_left,
+            "the selection reaches into the gutter"
+        );
         let guide_left = paint
             .guides
             .iter()

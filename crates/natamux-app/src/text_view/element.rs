@@ -496,7 +496,10 @@ impl Layout {
             .as_ref()
             .and_then(|blocks| blocks.get(index).copied())
             .unwrap_or(0);
-        let row = self.lines.get(index).map_or(self.rows, |line| line.first_row);
+        let row = self
+            .lines
+            .get(index)
+            .map_or(self.rows, |line| line.first_row);
         row.saturating_sub(above)
     }
 

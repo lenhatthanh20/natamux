@@ -21,8 +21,7 @@ use std::ops::Range;
 use std::sync::Arc;
 
 use gpui::{
-    App, AppContext as _, Context, Entity, Pixels, SharedString, Task, TextRun, WeakEntity,
-    Window,
+    App, AppContext as _, Context, Entity, Pixels, SharedString, Task, TextRun, WeakEntity, Window,
 };
 use theme::ActiveTheme;
 
@@ -129,7 +128,8 @@ impl TextInput {
                     break;
                 };
                 let side = usize::from(!line.old);
-                let (Some(Some(source)), Some(Some(keys))) = (diff.sources.get(side), keys.get(side))
+                let (Some(Some(source)), Some(Some(keys))) =
+                    (diff.sources.get(side), keys.get(side))
                 else {
                     continue;
                 };
@@ -292,7 +292,6 @@ impl DiffSide {
             cx.notify();
         });
     }
-
 
     /// Both files of the shown diff are parsed (or have no language), so every line has its
     /// colours; a `--shot` waits for it.
