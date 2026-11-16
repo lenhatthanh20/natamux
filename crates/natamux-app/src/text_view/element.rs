@@ -974,14 +974,14 @@ impl Element for TextElement {
                 window.paint_quad(fill(bar.thumb, *thumb));
                 window.paint_quad(fill(edge(&bar.thumb), thumb_border));
             }
-            // The horizontal bar has its border line on top.
+            // The horizontal bar has its border line on top; its thumb has none, as in Zed's
+            // editor (B1 shot `workspace-editor-scrollbar`).
             if let Some((bar, thumb)) = &hbar {
                 let edge =
                     |rect: &Bounds<Pixels>| Bounds::new(rect.origin, size(rect.size.width, px(1.)));
                 window.paint_quad(fill(bar.track, track));
                 window.paint_quad(fill(edge(&bar.track), track_border));
                 window.paint_quad(fill(bar.thumb, *thumb));
-                window.paint_quad(fill(edge(&bar.thumb), thumb_border));
             }
         });
     }

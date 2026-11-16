@@ -314,10 +314,12 @@ fn t_sb_1_when_the_scrollbar_shows(cx: &mut TestAppContext) {
     select(&input, 0, 3, cx);
     wait(cx);
     assert!(shows(cx), "selected text with another place");
+    // No caret marker for the head of a selection, as Zed's editor drew none (B1 shot
+    // `workspace-editor-scrollbar`).
     assert_eq!(
         painted(&input, cx).1,
-        2,
-        "a place marker and the caret marker"
+        1,
+        "a place marker and no caret marker"
     );
     select(&input, 4, 10, cx);
     wait(cx);

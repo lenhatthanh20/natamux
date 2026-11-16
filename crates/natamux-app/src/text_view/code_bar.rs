@@ -133,7 +133,8 @@ impl TextInput {
     }
 
     /// Where the horizontal scrollbar is, when it shows: with the vertical one, while a line is
-    /// wider than the view. It runs from the gutter to the vertical bar, along the bottom.
+    /// wider than the view. It runs from the left of the text to the vertical bar, along the
+    /// bottom, where Zed's editor drew it (B1 shot `workspace-editor-scrollbar`).
     pub(super) fn hbar_bounds(
         &self,
         laid: &Layout,
@@ -144,7 +145,7 @@ impl TextInput {
         if most <= px(0.) || !self.bars_show(laid, bounds, cx) {
             return None;
         }
-        let left = bounds.left() + laid.key.gutter;
+        let left = bounds.left() + laid.inset;
         let width = (bounds.right() - BAR_WIDTH - left).max(px(0.));
         let content = laid.width.max(px(1.));
         let thumb_width = (width * (laid.key.view / content))
@@ -317,7 +318,7 @@ impl TextInput {
         let mut markers: Vec<(Bounds<Pixels>, Hsla)> = Vec::new();
         let info = cx.theme().status().info;
         let selected = self.model.selection().range();
-        for range in code.other_occurrences(selected) {
+        for range in code.other_occurrences(selected.clone()) {
             let start = top + unit * row(range.start);
             let end = top + unit * row(range.end) + unit.max(MIN_MARKER);
             // Touching places merge into one marker.
@@ -335,14 +336,18 @@ impl TextInput {
                 info,
             ));
         }
-        let head = top + unit * row(self.model.head());
-        markers.push((
-            Bounds::from_corners(
-                point(left + border, head),
-                point(left + BAR_WIDTH, head + CURSOR_MARKER),
-            ),
-            cx.theme().players().local().cursor,
-        ));
+        // Only a caret has a marker: Zed's editor drew none for the head of a selection (B1 shot
+        // `workspace-editor-scrollbar`, where the thumb shows no marker under it).
+        if selected.is_empty() {
+            let head = top + unit * row(self.model.head());
+            markers.push((
+                Bounds::from_corners(
+                    point(left + border, head),
+                    point(left + BAR_WIDTH, head + CURSOR_MARKER),
+                ),
+                cx.theme().players().local().cursor,
+            ));
+        }
         markers
     }
 }
