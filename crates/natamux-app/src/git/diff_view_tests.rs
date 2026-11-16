@@ -481,7 +481,7 @@ fn a_closed_change_has_no_box_or_buttons_and_its_marker_opens_it(cx: &mut TestAp
     let shown = rows(&view, cx);
     assert!(shown.lines.iter().any(|line| line.old && line.hunk == Some(0)));
     assert!(!shown.lines.iter().any(|line| line.old && line.hunk == Some(1)));
-    let line = marker(&shown).expect("the closed deletion has its marker");
+    assert!(marker(&shown).is_some(), "the closed deletion has its marker");
 
     // Change 0 closes: its added line keeps the hunk (the strip) but shows as unchanged.
     view.update(cx, |view, cx| view.toggle(0, cx));
@@ -492,6 +492,8 @@ fn a_closed_change_has_no_box_or_buttons_and_its_marker_opens_it(cx: &mut TestAp
     assert!(!of_0[0].old && of_0[0].status == Status::Unchanged);
     assert!(shown.words.is_empty(), "{:?}", shown.words);
     assert_eq!(buttons(&view, cx), 0, "a closed change shows no buttons");
+    // Change 0's deleted line went, so the marker sits one line higher.
+    let line = marker(&shown).expect("the closed deletion keeps its marker");
 
     // A press on the marker opens change 1 again; change 0 stays closed.
     let at = view.update_in(cx, |view, window, cx| {

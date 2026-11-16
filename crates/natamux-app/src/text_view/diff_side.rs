@@ -606,6 +606,7 @@ impl DiffSide {
         TextBox::of_input(&self.input)
     }
 
+    #[cfg(test)]
     pub fn input(&self) -> &Entity<TextInput> {
         &self.input
     }
