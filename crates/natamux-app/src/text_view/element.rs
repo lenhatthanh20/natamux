@@ -9,9 +9,10 @@ use std::rc::Rc;
 
 use gpui::{
     App, AvailableSpace, Bounds, ContentMask, DispatchPhase, Element, ElementId,
-    ElementInputHandler, Entity, Font, GlobalElementId, Hsla, InspectorElementId, IntoElement,
-    LayoutId, MouseButton, MouseMoveEvent, MouseUpEvent, Path, Pixels, Point, SharedString, Style,
-    TextAlign, TextRun, Window, WrappedLine, fill, point, px, relative, size,
+    ElementInputHandler, Entity, Font, GlobalElementId, Hsla, IndentAdjustment, InspectorElementId,
+    IntoElement, LayoutId, LineFragment, MouseButton, MouseMoveEvent, MouseUpEvent, Path, Pixels,
+    Point, SharedString, Style, TextAlign, TextRun, Window, WrappedLine, fill, point, px, relative,
+    size,
 };
 use theme::ActiveTheme;
 
@@ -62,13 +63,26 @@ pub struct Line {
     pub first_row: usize,
     /// The offsets in the line where its rows start; the first is 0.
     pub row_starts: Vec<usize>,
-    /// The x in the unwrapped line where each row starts.
-    row_x: Vec<Pixels>,
-    /// The line with its tabs as spaces.
-    pub shaped: Rc<WrappedLine>,
+    /// The line with its tabs as spaces, in rows.
+    rows: Rc<Rows>,
     tabs: Vec<Tab>,
     /// It is drawn in one run of the text colour, so a later layout may take it as it is.
     plain: bool,
+}
+
+/// A line with its tabs as spaces, and its rows, each shaped alone as Zed's editor shaped its
+/// display rows: a glyph at a wrap point does not join the glyph across it.
+struct Rows {
+    text: String,
+    rows: Vec<Row>,
+}
+
+struct Row {
+    /// The offset of its first char in the line with its tabs as spaces.
+    shown: usize,
+    /// The room left of its text: the line's indent on a row after a wrap.
+    indent: Pixels,
+    shaped: WrappedLine,
 }
 
 /// A tab of a line, shaped as spaces to the next tab stop.
@@ -160,14 +174,35 @@ impl Line {
         shown - extra
     }
 
-    /// The x of `local` in the unwrapped line.
-    fn x(&self, local: usize) -> Pixels {
-        self.shaped.unwrapped_layout.x_for_index(self.shown(local))
-    }
-
     /// The x of `local` in `row`, from the left of the row.
     fn x_in_row(&self, row: usize, local: usize) -> Pixels {
-        self.x(local) - self.row_x.get(row).copied().unwrap_or_default()
+        self.rows.rows.get(row).map_or(px(0.), |row| {
+            let at = self.shown(local).saturating_sub(row.shown);
+            row.indent + row.shaped.unwrapped_layout.x_for_index(at)
+        })
+    }
+
+    /// Paints `row` with its top left at `origin` (the left of the text).
+    pub fn paint_row(
+        &self,
+        row: usize,
+        origin: Point<Pixels>,
+        line_height: Pixels,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        if let Some(row) = self.rows.rows.get(row) {
+            row.shaped
+                .paint(
+                    origin + point(row.indent, px(0.)),
+                    line_height,
+                    TextAlign::Left,
+                    None,
+                    window,
+                    cx,
+                )
+                .ok();
+        }
     }
 }
 
@@ -221,6 +256,58 @@ pub fn shape(
         .unwrap_or_default()
 }
 
+/// Where a line of `text` (tabs as spaces) wraps at `wrap` px, as Zed's editor wrapped it: by
+/// the widths of the chars in `font`, and a row after a wrap indented as far as the line. One
+/// item per row: the offset it starts at and its indent in spaces; the first is (0, 0).
+pub fn wrap_rows(
+    text: &str,
+    font: &Font,
+    font_size: Pixels,
+    wrap: Option<Pixels>,
+    window: &Window,
+) -> Vec<(usize, u32)> {
+    let mut rows = vec![(0, 0)];
+    if let Some(wrap) = wrap {
+        let mut wrapper = window.text_system().line_wrapper(font.clone(), font_size);
+        let fragments = [LineFragment::text(text)];
+        rows.extend(
+            wrapper
+                .wrap_line(&fragments, wrap, IndentAdjustment::SameIndent)
+                .map(|boundary| (boundary.ix, boundary.next_indent)),
+        );
+    }
+    rows
+}
+
+/// Shapes the rows of a line of `text` (tabs as spaces), each alone.
+fn shape_rows(text: String, runs: &[TextRun], key: &LayoutKey, window: &Window) -> Rows {
+    let starts = wrap_rows(&text, &key.font, key.font_size, key.width, window);
+    let space = if starts.len() > 1 {
+        let text_system = window.text_system();
+        text_system.layout_width(text_system.resolve_font(&key.font), key.font_size, ' ')
+    } else {
+        px(0.)
+    };
+    let rows = starts
+        .iter()
+        .enumerate()
+        .map(|(index, &(start, indent))| {
+            let end = starts.get(index + 1).map_or(text.len(), |next| next.0);
+            let part = SharedString::from(text[start..end].to_owned());
+            let shaped = shape(&part, &runs_in(runs, start..end), key.font_size, None, window)
+                .into_iter()
+                .next()
+                .unwrap_or_default();
+            Row {
+                shown: start,
+                indent: space * indent as f32,
+                shaped,
+            }
+        })
+        .collect();
+    Rows { text, rows }
+}
+
 /// The part of `runs` that covers `range` of the text.
 fn runs_in(runs: &[TextRun], range: Range<usize>) -> Vec<TextRun> {
     let mut out = Vec::new();
@@ -249,7 +336,7 @@ impl Layout {
         previous: Option<&Layout>,
         window: &Window,
     ) -> Self {
-        let mut ready: HashMap<&str, &Rc<WrappedLine>> = HashMap::new();
+        let mut ready: HashMap<&str, &Rc<Rows>> = HashMap::new();
         if let Some(previous) = previous.filter(|previous| {
             let old = &previous.key;
             (old.width, &old.font, old.font_size, old.color)
@@ -257,8 +344,8 @@ impl Layout {
         }) {
             for line in previous.lines.iter().filter(|line| line.plain) {
                 ready
-                    .entry(line.shaped.text.as_ref())
-                    .or_insert(&line.shaped);
+                    .entry(line.rows.text.as_str())
+                    .or_insert(&line.rows);
             }
         }
         let mut lines = Vec::new();
@@ -275,32 +362,18 @@ impl Layout {
                 .filter(|_| plain)
                 .copied()
                 .cloned();
-            let shaped = cached.unwrap_or_else(|| {
-                let shown = SharedString::from(shown);
-                let shaped = shape(&shown, &line_runs, key.font_size, key.width, window)
-                    .into_iter()
-                    .next()
-                    .unwrap_or_default();
-                Rc::new(shaped)
+            let rows =
+                cached.unwrap_or_else(|| Rc::new(shape_rows(shown, &line_runs, &key, window)));
+            width = rows.rows.iter().fold(width, |width, row| {
+                width.max(row.indent + row.shaped.unwrapped_layout.width)
             });
-            let mut shown_starts = vec![0];
-            shown_starts.extend(shaped.wrap_boundaries().iter().filter_map(|boundary| {
-                let run = shaped.runs().get(boundary.run_ix)?;
-                Some(run.glyphs.get(boundary.glyph_ix)?.index)
-            }));
-            let layout = &shaped.unwrapped_layout;
-            let row_x = shown_starts
-                .iter()
-                .map(|&at| layout.x_for_index(at))
-                .collect();
-            width = width.max(layout.width);
+            let shown_starts: Vec<usize> = rows.rows.iter().map(|row| row.shown).collect();
             let mut line = Line {
                 start,
                 len,
                 first_row: row,
                 row_starts: Vec::new(),
-                row_x,
-                shaped,
+                rows,
                 tabs,
                 plain,
             };
@@ -403,8 +476,9 @@ impl Layout {
         };
         let start = line.row_starts.get(in_line).copied().unwrap_or(0);
         let end = line.row_end(in_line);
-        let row_x = line.row_x.get(in_line).copied().unwrap_or_default();
-        let shown = line.shaped.unwrapped_layout.closest_index_for_x(x + row_x);
+        let shown = line.rows.rows.get(in_line).map_or(0, |row| {
+            row.shown + row.shaped.unwrapped_layout.closest_index_for_x(x - row.indent)
+        });
         let local = line.local(shown, false).clamp(start, end);
         let wraps = in_line + 1 < line.row_starts.len();
         (line.start + local, wraps && local == end)
@@ -479,7 +553,8 @@ impl Layout {
                 let at = range.start + at;
                 let width = self.line_at(at).map_or(px(0.), |line| {
                     let local = at - line.start;
-                    line.x(local + c.len_utf8()) - line.x(local)
+                    let row = Self::row_in_line(line, local, false);
+                    line.x_in_row(row, local + c.len_utf8()) - line.x_in_row(row, local)
                 });
                 (self.position(at, false), width, c)
             })
@@ -573,10 +648,7 @@ impl Element for TextElement {
                 let font_size = style.font_size.to_pixels(rem);
                 let font = style.font();
                 let (text, placeholder) = input.display();
-                // An area is no code view: no painted backgrounds to keep contrast with.
-                let runs = input.runs(&style, text.len(), placeholder, &[], cx);
-                let (text, runs, _) = expand_tabs(&text, &runs);
-                let text = SharedString::from(text);
+                let (text, _, _) = expand_tabs(&text, &[]);
                 let (min, max) = (min.max(1), max.max(min).max(1));
                 window.request_measured_layout(layout, move |known, available, window, _| {
                     let width = known.width.or(match available.width {
@@ -588,9 +660,8 @@ impl Element for TextElement {
                         1
                     } else {
                         let wrap = width.map(|width| wrap_width(&font, font_size, width, window));
-                        shape(&text, &runs, font_size, wrap, window)
-                            .iter()
-                            .map(|line| line.wrap_boundaries().len() + 1)
+                        text.split('\n')
+                            .map(|line| wrap_rows(line, &font, font_size, wrap, window).len())
                             .sum()
                     };
                     size(
@@ -823,16 +894,13 @@ impl Element for TextElement {
                 if bottom < bounds.top() || top > bounds.bottom() {
                     continue;
                 }
-                line.shaped
-                    .paint(
-                        point(origin.x, top),
-                        line_height,
-                        TextAlign::Left,
-                        None,
-                        window,
-                        cx,
-                    )
-                    .ok();
+                for row in 0..line.row_starts.len() {
+                    let top = top + line_height * row as f32;
+                    if top + line_height < bounds.top() || top > bounds.bottom() {
+                        continue;
+                    }
+                    line.paint_row(row, point(origin.x, top), line_height, window, cx);
+                }
             }
             let carets = caret.then_some((head, end_bias)).into_iter();
             for (at, bias) in carets.chain(drop_at.map(|at| (at, false))) {

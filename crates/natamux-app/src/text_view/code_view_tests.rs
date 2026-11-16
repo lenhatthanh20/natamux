@@ -390,3 +390,48 @@ fn find_shows_matches_and_selects_one_in_the_middle(cx: &mut TestAppContext) {
     let none = input.read_with(cx, |input, _| input.code.as_ref().map(|c| c.search.len()));
     assert_eq!(none, Some(0));
 }
+
+/// A wrap point inside `[**` falls between the two `*`, by the widths of the chars, as Zed's
+/// editor wrapped, and the row after it is shaped alone: its glyphs sit where that row's text
+/// shaped by itself puts them (B1 shot `code-markdown-inline` at 1024 x 720).
+#[gpui::test]
+fn the_row_after_a_wrap_inside_a_bold_mark_is_shaped_alone(cx: &mut TestAppContext) {
+    let (input, _, cx) = open("x.txt", "x", cx);
+    let fit = input.update_in(cx, |input, window, cx| {
+        let laid = input.layout(window, cx);
+        let width = laid.key.width.expect("a full view wraps");
+        let text_system = window.text_system();
+        let font = text_system.resolve_font(&laid.key.font);
+        let char_width = text_system.layout_width(font, laid.key.font_size, 'a');
+        (width / char_width).floor() as usize
+    });
+    // The last `*` that fits is the first of the two; the second starts the next row.
+    let text = format!("{} [**bold link**](https://example.com).", "a".repeat(fit - 3));
+    input.update(cx, |input, cx| input.set_text(&text, cx));
+    cx.run_until_parked();
+    input.update_in(cx, |input, window, cx| {
+        let laid = input.layout(window, cx);
+        assert_eq!(laid.row_range(0), 0..fit, "the wrap point");
+        assert_eq!(&text[fit - 1..fit + 1], "**");
+        let rest = SharedString::from(text[fit..].to_owned());
+        let run = gpui::TextRun {
+            len: rest.len(),
+            font: laid.key.font.clone(),
+            color: laid.key.color,
+            background_color: None,
+            underline: None,
+            strikethrough: None,
+        };
+        let alone = window
+            .text_system()
+            .shape_line(rest.clone(), laid.key.font_size, &[run], None);
+        for at in 0..rest.len() {
+            let position = laid.position(fit + at, false);
+            assert_eq!(position.y, laid.line_height, "char {at} is on the second row");
+            assert_eq!(position.x, alone.x_for_index(at), "char {at}");
+        }
+        // A click finds the char by the same row.
+        let x = alone.x_for_index(2) + px(1.);
+        assert_eq!(laid.index_in_row(1, x), (fit + 2, false));
+    });
+}
