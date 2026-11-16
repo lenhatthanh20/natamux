@@ -14,8 +14,9 @@ use super::text_input::TextInput;
 use crate::text::motion;
 
 /// The query window moves by whole blocks of this many lines, so a scroll lays the text out again
-/// only when it crosses a block.
-const BLOCK: usize = 100;
+/// only when it crosses a block. Small, as each key queries the whole window again
+/// (`editor_type_5000`).
+const BLOCK: usize = 20;
 
 /// The runs of the last query: the colour count, the theme and the lines they are of.
 #[derive(Default)]

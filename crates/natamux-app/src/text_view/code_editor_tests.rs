@@ -372,7 +372,7 @@ fn the_colours_are_asked_for_the_lines_around_the_shown_ones(cx: &mut TestAppCon
             input.layout(window, cx).key.lines.clone()
         })
     };
-    assert_eq!(asked(cx), Some(0..200), "the top two blocks");
+    assert_eq!(asked(cx), Some(0..40), "the top two blocks");
     let line_height = input.update_in(cx, |input, window, cx| input.layout(window, cx).line_height);
     input.update(cx, |input, cx| {
         input.scroll = point(px(0.), line_height * 450.);
@@ -381,7 +381,9 @@ fn the_colours_are_asked_for_the_lines_around_the_shown_ones(cx: &mut TestAppCon
     cx.run_until_parked();
     let lines = asked(cx).expect("a window");
     assert!(lines.start <= 450 && lines.end > 460, "{lines:?}");
-    assert_eq!(lines, 300..600);
+    // A block before the first shown line, and whole blocks to one past the last shown one.
+    assert_eq!(lines.start, 420, "{lines:?}");
+    assert!(lines.end % 20 == 0 && lines.end <= 500, "{lines:?}");
 }
 
 /// Regression (S4.3c flip, `workspace-editor-long`): the pinned row of an item far above the
