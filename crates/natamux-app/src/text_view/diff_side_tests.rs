@@ -282,7 +282,10 @@ fn every_line_takes_the_colours_of_its_own_file(cx: &mut TestAppContext) {
     let (text, colours, plain) = colours_of(&right, cx);
     assert_eq!(text, "fn a() {}\nfn b() {}\n");
     // `fn` starts both lines.
-    assert_eq!(colours[0], plain, "the deleted line of an inline diff is plain");
+    assert_eq!(
+        colours[0], plain,
+        "the deleted line of an inline diff is plain"
+    );
     assert_ne!(colours[10], plain, "the added line is coloured");
 
     let (text, colours, plain) = colours_of(&left, cx);

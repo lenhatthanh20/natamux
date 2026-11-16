@@ -94,7 +94,14 @@ impl DiffView {
             let other = two_sides.then_some(if mine == LEFT { RIGHT } else { LEFT });
             let count = block_rows(&comment.body) as usize;
             let own = rows_of(mine).and_then(|rows| {
-                extra_at(rows, mine, last[mine], place.spot, count, BlockKind::Comment)
+                extra_at(
+                    rows,
+                    mine,
+                    last[mine],
+                    place.spot,
+                    count,
+                    BlockKind::Comment,
+                )
             });
             let matching = match (other, place.other) {
                 (Some(other), Some(spot)) => rows_of(other)

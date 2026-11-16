@@ -330,7 +330,8 @@ impl DiffView {
         let (old_rows, new_rows) = (diff.old_rows(), diff.new_rows());
         let hunks = &self.hunks;
         if two_sides {
-            let rows = |side| diff_model::side_rows(hunks, side, old_rows, new_rows, options.collapse);
+            let rows =
+                |side| diff_model::side_rows(hunks, side, old_rows, new_rows, options.collapse);
             return vec![
                 (LEFT, diff_rows::side_rows(diff, &rows(Side::Old), false)),
                 (RIGHT, diff_rows::side_rows(diff, &rows(Side::New), true)),
@@ -398,7 +399,12 @@ impl DiffView {
     /// A press on the strip of a change in the gutter, or on the marker of a closed change of
     /// deleted lines only (the side left it to the view): an inline diff closes or opens the
     /// change, as Zed's editor did (T-MOUSE-1); side by side keeps it.
-    fn strip_press(&mut self, position: Point<Pixels>, window: &mut Window, cx: &mut Context<Self>) {
+    fn strip_press(
+        &mut self,
+        position: Point<Pixels>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let Some(sides) = &self.sides else {
             return;
         };
@@ -435,7 +441,12 @@ impl DiffView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(side) = self.sides.as_ref().and_then(|sides| sides.get(index)).cloned() else {
+        let Some(side) = self
+            .sides
+            .as_ref()
+            .and_then(|sides| sides.get(index))
+            .cloned()
+        else {
             return;
         };
         let hunk = side.place(window, cx).and_then(|place| {
@@ -496,9 +507,11 @@ impl DiffView {
                     view.strip_press(event.position, window, cx)
                 }),
             )
-            .on_mouse_move(cx.listener(move |view, event: &MouseMoveEvent, window, cx| {
-                view.hover(index, event.position, window, cx)
-            }))
+            .on_mouse_move(
+                cx.listener(move |view, event: &MouseMoveEvent, window, cx| {
+                    view.hover(index, event.position, window, cx)
+                }),
+            )
             .on_hover(cx.listener(move |view, hovered: &bool, _, cx| {
                 if !*hovered {
                     view.set_hovered(index, None, cx);
@@ -561,7 +574,8 @@ impl DiffView {
             let Some((first, last, old, row)) = span else {
                 continue;
             };
-            let (Some((top, _)), Some((last_top, last_rows))) = (place.line(first), place.line(last))
+            let (Some((top, _)), Some((last_top, last_rows))) =
+                (place.line(first), place.line(last))
             else {
                 continue;
             };

@@ -19,8 +19,8 @@ use serde_json::{Value, json};
 use ui::prelude::*;
 
 use super::ZedDiff;
-use crate::git::diff_view::DiffOptions;
 use crate::app::{golden_files, test_views};
+use crate::git::diff_view::DiffOptions;
 
 const SET: &str = "diff";
 const NAME: &str = "mouse";

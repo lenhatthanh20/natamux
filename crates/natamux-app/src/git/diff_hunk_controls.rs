@@ -72,8 +72,8 @@ impl DiffView {
         };
         // The last line with text: a final line break leaves an empty row at the end.
         let breaks = diff.new.matches('\n').count() as u32;
-        let last_line = (breaks + u32::from(!diff.new.ends_with('\n') && !diff.new.is_empty()))
-            .max(1);
+        let last_line =
+            (breaks + u32::from(!diff.new.ends_with('\n') && !diff.new.is_empty())).max(1);
         let first = (hunk.new.start + 1).min(last_line);
         let last = hunk.new.end.clamp(first, last_line);
         self.select_lines(first, last, window, cx);

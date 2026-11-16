@@ -21,9 +21,9 @@ use text::ToOffset;
 use ui::prelude::*;
 
 use super::ZedDiff;
-use crate::git::diff_view::DiffOptions;
 use crate::app::{golden_files, test_views};
 use crate::git::diff_cases::{cases, random_cases, word_fixtures};
+use crate::git::diff_view::DiffOptions;
 use crate::git::languages::{self, language_for};
 
 const SET: &str = "diff";

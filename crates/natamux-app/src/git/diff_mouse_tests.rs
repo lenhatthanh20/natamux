@@ -135,7 +135,11 @@ struct Target {
 /// Shows the texts side by side or inline and returns the sides. The rows: the old side has
 /// `three four` at 1; the new side `three FOUR` at 1; the inline side shows the deleted line at 1
 /// and `three FOUR` at 2.
-fn show(view: &gpui::Entity<DiffView>, side_by_side: bool, cx: &mut VisualTestContext) -> Vec<Target> {
+fn show(
+    view: &gpui::Entity<DiffView>,
+    side_by_side: bool,
+    cx: &mut VisualTestContext,
+) -> Vec<Target> {
     view.update_in(cx, |view, window, cx| {
         view.show(
             if side_by_side { "side" } else { "inline" },

@@ -159,21 +159,17 @@ impl ZedDiff {
     }
 
     /// The empty rows that keep the two sides level; none when inline.
-    fn add_spacers(
-        &self,
-        right: &Entity<Editor>,
-        left: Option<&Entity<Editor>>,
-        cx: &mut App,
-    ) {
+    fn add_spacers(&self, right: &Entity<Editor>, left: Option<&Entity<Editor>>, cx: &mut App) {
         let (Some(left), Some(buffer), Some(diff)) = (left, &self.buffer, &self.diff) else {
             return;
         };
         let base = diff.read(cx).base_text_buffer().clone();
         let old_rows = base.read(cx).max_point().row + 1;
         let new_rows = buffer.read(cx).max_point().row + 1;
-        for spacer in spacers(&self.hunks)
-            .into_iter()
-            .chain(end_spacer(&self.hunks, old_rows, new_rows))
+        for spacer in
+            spacers(&self.hunks)
+                .into_iter()
+                .chain(end_spacer(&self.hunks, old_rows, new_rows))
         {
             let (editor, side_buffer) = match spacer.side {
                 Side::Old => (left, &base),

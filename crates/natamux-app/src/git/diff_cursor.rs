@@ -54,7 +54,10 @@ impl DiffView {
         };
         let row = change_anchor(&changes[index]).0.saturating_sub(1);
         let right = sides.right.clone();
-        if let Some(at) = right.rows(cx, |rows| offset_of(rows, false, row, 0)).flatten() {
+        if let Some(at) = right
+            .rows(cx, |rows| offset_of(rows, false, row, 0))
+            .flatten()
+        {
             right.select(at..at, Reveal::Top, window, cx);
         }
     }
@@ -154,7 +157,11 @@ impl DiffView {
             _ => (sides.right.clone(), false, row),
         };
         // A row past the end goes to the last one, as an anchor of Zed's editor clips.
-        let rows = if old { diff.old_rows() } else { diff.new_rows() };
+        let rows = if old {
+            diff.old_rows()
+        } else {
+            diff.new_rows()
+        };
         move_to(&target, old, row.min(rows.saturating_sub(1)), 0, window, cx);
     }
 
@@ -209,15 +216,11 @@ impl DiffView {
 }
 
 /// The cursor goes to `column` of row `row` of a file of `side`, centred.
-fn move_to(
-    side: &DiffSide,
-    old: bool,
-    row: u32,
-    column: usize,
-    window: &mut Window,
-    cx: &mut App,
-) {
-    if let Some(at) = side.rows(cx, |rows| offset_of(rows, old, row, column)).flatten() {
+fn move_to(side: &DiffSide, old: bool, row: u32, column: usize, window: &mut Window, cx: &mut App) {
+    if let Some(at) = side
+        .rows(cx, |rows| offset_of(rows, old, row, column))
+        .flatten()
+    {
         side.select(at..at, Reveal::Center, window, cx);
     }
 }

@@ -108,11 +108,7 @@ fn shown(view: &Entity<DiffView>, cx: &mut VisualTestContext) -> Shown {
     let (left, right) = sides(view, cx);
     let (hunks, last_old, last_new) = view.read_with(cx, |view, _| {
         let diff = view.diff.as_ref().expect("a diff");
-        (
-            view.hunks.clone(),
-            diff.old_rows() - 1,
-            diff.new_rows() - 1,
-        )
+        (view.hunks.clone(), diff.old_rows() - 1, diff.new_rows() - 1)
     });
     let mut after_hunks = Vec::new();
     for hunk in &hunks {
@@ -229,7 +225,13 @@ fn identical_texts_get_no_empty_rows(cx: &mut TestAppContext) {
 #[gpui::test]
 fn a_spacer_past_the_last_row_goes_below_the_end(cx: &mut TestAppContext) {
     let (view, cx) = open(cx);
-    show(&view, "file", &("a\nb\nc".into(), "a\nb\nc".into()), false, cx);
+    show(
+        &view,
+        "file",
+        &("a\nb\nc".into(), "a\nb\nc".into()),
+        false,
+        cx,
+    );
     let (_, right) = sides(&view, cx);
     let before = last_row(&right, cx);
     let rows = [
@@ -280,7 +282,11 @@ fn scrolling_one_side_to_the_end_is_not_pulled_back(cx: &mut TestAppContext) {
             }
             for side in [&left, &right] {
                 let top = cx.update(|_, cx| side.scroll(cx).y);
-                assert_eq!(top, line_height * end, "{name}: a side did not stay at the end");
+                assert_eq!(
+                    top,
+                    line_height * end,
+                    "{name}: a side did not stay at the end"
+                );
             }
             cx.update(|_, cx| scrolled.set_scroll(point(px(0.), px(0.)), cx));
             cx.run_until_parked();
@@ -405,7 +411,12 @@ fn mod_z_in_a_diff_editor_undoes_the_last_revert(cx: &mut TestAppContext) {
 fn buttons(view: &Entity<DiffView>, cx: &mut VisualTestContext) -> usize {
     cx.run_until_parked();
     view.update_in(cx, |view, window, cx| {
-        let side = view.sides.as_ref().expect("the diff is drawn").right.clone();
+        let side = view
+            .sides
+            .as_ref()
+            .expect("the diff is drawn")
+            .right
+            .clone();
         let place = side.place(window, cx).expect("the side was drawn");
         view.hunk_buttons(&side, RIGHT, &place, cx).len()
     })
@@ -437,7 +448,11 @@ fn a_caret_move_is_told_once_and_shows_the_buttons_of_its_change(cx: &mut TestAp
         view.update(cx, |view, cx| view.cursor_line(cx)),
         Some(hunk.new.start + 1)
     );
-    assert_eq!(buttons(&view, cx), 1, "the caret's change shows its buttons");
+    assert_eq!(
+        buttons(&view, cx),
+        1,
+        "the caret's change shows its buttons"
+    );
     // The side's box tells a change with no move: nothing more to tell.
     let (_, right) = sides(&view, cx);
     right.input().update(cx, |_, cx| cx.notify());
@@ -459,7 +474,16 @@ fn a_closed_change_has_no_box_or_buttons_and_its_marker_opens_it(cx: &mut TestAp
             side_by_side: false,
             ..options(false)
         };
-        view.show("inline", "notes.txt", 1, Some(original), modified, options, window, cx);
+        view.show(
+            "inline",
+            "notes.txt",
+            1,
+            Some(original),
+            modified,
+            options,
+            window,
+            cx,
+        );
         view.set_movable(true);
         view.go_to_line(Side::New, 2, window, cx);
     });
@@ -473,21 +497,41 @@ fn a_closed_change_has_no_box_or_buttons_and_its_marker_opens_it(cx: &mut TestAp
         })
     };
     let marker = |rows: &crate::git::diff_rows::SideRows| {
-        rows.markers.iter().find(|(_, hunk)| *hunk == 1).map(|(line, _)| *line)
+        rows.markers
+            .iter()
+            .find(|(_, hunk)| *hunk == 1)
+            .map(|(line, _)| *line)
     };
 
     // Change 1 closes while change 0 still shows its deleted line: change 1 has its marker.
     view.update(cx, |view, cx| view.toggle(1, cx));
     let shown = rows(&view, cx);
-    assert!(shown.lines.iter().any(|line| line.old && line.hunk == Some(0)));
-    assert!(!shown.lines.iter().any(|line| line.old && line.hunk == Some(1)));
-    assert!(marker(&shown).is_some(), "the closed deletion has its marker");
+    assert!(
+        shown
+            .lines
+            .iter()
+            .any(|line| line.old && line.hunk == Some(0))
+    );
+    assert!(
+        !shown
+            .lines
+            .iter()
+            .any(|line| line.old && line.hunk == Some(1))
+    );
+    assert!(
+        marker(&shown).is_some(),
+        "the closed deletion has its marker"
+    );
 
     // Change 0 closes: its added line keeps the hunk (the strip) but shows as unchanged.
     view.update(cx, |view, cx| view.toggle(0, cx));
     let shown = rows(&view, cx);
     assert_eq!(shown.closed, vec![1, 0]);
-    let of_0: Vec<_> = shown.lines.iter().filter(|line| line.hunk == Some(0)).collect();
+    let of_0: Vec<_> = shown
+        .lines
+        .iter()
+        .filter(|line| line.hunk == Some(0))
+        .collect();
     assert_eq!(of_0.len(), 1, "{of_0:?}");
     assert!(!of_0[0].old && of_0[0].status == Status::Unchanged);
     assert!(shown.words.is_empty(), "{:?}", shown.words);
@@ -497,7 +541,12 @@ fn a_closed_change_has_no_box_or_buttons_and_its_marker_opens_it(cx: &mut TestAp
 
     // A press on the marker opens change 1 again; change 0 stays closed.
     let at = view.update_in(cx, |view, window, cx| {
-        let side = view.sides.as_ref().expect("the diff is drawn").right.clone();
+        let side = view
+            .sides
+            .as_ref()
+            .expect("the diff is drawn")
+            .right
+            .clone();
         let place = side.place(window, cx).expect("the side was drawn");
         let top = match place.line(line) {
             Some((top, _)) => top,
@@ -522,6 +571,11 @@ fn a_closed_change_has_no_box_or_buttons_and_its_marker_opens_it(cx: &mut TestAp
     cx.run_until_parked();
     assert_eq!(view.read_with(cx, |view, _| view.closed.clone()), vec![0]);
     let shown = rows(&view, cx);
-    assert!(shown.lines.iter().any(|line| line.old && line.hunk == Some(1)));
+    assert!(
+        shown
+            .lines
+            .iter()
+            .any(|line| line.old && line.hunk == Some(1))
+    );
     assert_eq!(marker(&shown), None);
 }

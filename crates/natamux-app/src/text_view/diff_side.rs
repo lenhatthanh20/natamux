@@ -216,14 +216,18 @@ impl TextInput {
         };
         let at = selection.head;
         let index = diff.rows.line_at(at);
-        let (Some(line), Some(&start)) = (diff.rows.lines.get(index), diff.rows.line_starts.get(index))
+        let (Some(line), Some(&start)) =
+            (diff.rows.lines.get(index), diff.rows.line_starts.get(index))
         else {
             return Some(Vec::new());
         };
         if !diff.own_line(index) {
             return Some(Vec::new());
         }
-        let Some(source) = diff.sources.get(usize::from(!line.old)).and_then(Option::as_ref)
+        let Some(source) = diff
+            .sources
+            .get(usize::from(!line.old))
+            .and_then(Option::as_ref)
         else {
             return Some(Vec::new());
         };
