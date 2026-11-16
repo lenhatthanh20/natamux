@@ -1,28 +1,23 @@
-//! The review comments inside the diff editors: one block under the last line of each comment,
-//! with a fixed height (one row per body line, no wrap), and in side by side the empty rows of
-//! the same height at the matching row of the other editor. Zed balances only its own split
-//! view, not our two editors, so the heights must be known up front and equal on both sides.
+//! The review comments inside the diff: rows under the last line of each comment, with a fixed
+//! height (one row per body line, no wrap), and in side by side the empty rows of the same height
+//! at the matching row of the other side, so both stay level. The diff view draws each comment
+//! over its rows.
 
-use std::sync::Arc;
-
-use editor::display_map::{
-    BlockContext, BlockPlacement, BlockProperties, BlockStyle, CustomBlockId, RenderBlock,
-};
-use editor::{Anchor, Editor};
-use gpui::{Entity, WeakEntity};
-use language::Buffer;
+use gpui::{Pixels, WeakEntity};
 use natamux_proto::workspaces::review_comments::{CommentState, ReviewComment};
-use text::Point;
 use ui::prelude::*;
 
 use super::changes_view::ChangesView;
-use super::diff_editors::empty_rows;
-use super::diff_rules::HunkRows;
-use super::diff_view::DiffView;
+use super::diff_rows::{BlockKind, Extra, SideRows};
+use super::diff_view::{DiffView, LEFT, RIGHT};
 use super::review_rules::{
     MORE_TEXT, Spot, actions, block_rows, body_lines, has_block, placement, state_label,
 };
 use crate::components::button_style::quiet_button;
+use crate::text_view::diff_side::Place;
+
+/// The room a comment is laid out in: more than any comment needs.
+const FIXED_ROOM: Pixels = px(8192.);
 
 /// The comments the diff draws, and the view their buttons call.
 #[derive(Default)]
@@ -31,17 +26,9 @@ pub(super) struct ReviewInput {
     owner: Option<WeakEntity<ChangesView>>,
 }
 
-type Placed = Vec<(Entity<Editor>, CustomBlockId)>;
-
-/// One editor with the buffer it shows.
-struct Pane {
-    editor: Entity<Editor>,
-    buffer: Entity<Buffer>,
-}
-
 impl DiffView {
-    /// The comments to draw (the visible ones of the task). The blocks follow at once when the
-    /// editors are there; else the next `build` places them.
+    /// The comments to draw (the visible ones of the task). Their rows follow at once when the
+    /// sides are there; else the next build puts them in.
     pub fn set_comments(
         &mut self,
         comments: Vec<ReviewComment>,
@@ -54,164 +41,158 @@ impl DiffView {
         self.review.comments = comments;
         self.review.owner = Some(owner);
         if self.sides.is_some() {
-            self.remove_comment_blocks(cx);
-            self.place_comments(cx);
+            self.refresh_rows(cx);
+            cx.notify();
         }
     }
 
-    /// The editors show this file.
+    /// The sides show this file.
     pub fn shows(&self, path: &str) -> bool {
         self.sides
             .as_ref()
             .is_some_and(|sides| sides.path.as_deref() == Some(path))
     }
 
-    pub(super) fn remove_comment_blocks(&mut self, cx: &mut Context<Self>) {
-        let Some(sides) = self.sides.as_mut() else {
-            return;
-        };
-        for (editor, id) in std::mem::take(&mut sides.comment_blocks) {
-            editor.update(cx, |editor, cx| {
-                editor.remove_blocks([id].into_iter().collect(), None, cx)
-            });
-        }
-    }
-
-    /// A block for each comment of the shown file that has its lines in the excerpts.
-    pub(super) fn place_comments(&mut self, cx: &mut Context<Self>) {
-        let (Some(buffer), Some(diff), Some(owner)) = (
-            self.buffer.clone(),
-            self.diff.clone(),
-            self.review.owner.clone(),
+    /// Puts the rows of each comment of the shown file into the rows of the sides (`shown`,
+    /// (side, rows)), and gives for each side the comments it draws with the block of each. A
+    /// comment whose row does not show (collapsed) has no rows.
+    pub(super) fn comment_blocks(
+        &self,
+        shown: &mut [(usize, SideRows)],
+    ) -> [Vec<(usize, ReviewComment)>; 2] {
+        let mut drawn: [Vec<(usize, ReviewComment)>; 2] = [Vec::new(), Vec::new()];
+        let (Some(path), Some(diff)) = (
+            self.sides.as_ref().and_then(|sides| sides.path.clone()),
+            self.diff.as_ref(),
         ) else {
-            return;
+            return drawn;
         };
-        let Some(sides) = self.sides.as_ref() else {
-            return;
+        if self.review.owner.is_none() {
+            return drawn;
+        }
+        let two_sides = shown.len() == 2;
+        // The last row of each file: the last commit's (left) and the working tree's.
+        let last = [
+            diff.old_rows().saturating_sub(1),
+            diff.new_rows().saturating_sub(1),
+        ];
+        let rows_of = |side: usize| {
+            shown
+                .iter()
+                .find(|(index, _)| *index == side)
+                .map(|(_, rows)| rows)
         };
-        let Some(path) = sides.path.clone() else {
-            return;
-        };
-        let base = diff.read(cx).base_text_buffer().clone();
-        let right = Pane {
-            editor: sides.right.clone(),
-            buffer,
-        };
-        let left = sides.left.clone().map(|editor| Pane {
-            editor,
-            buffer: base,
-        });
-        let mut placed: Placed = Vec::new();
+        let mut extra: [Vec<(Extra, Option<ReviewComment>)>; 2] = [Vec::new(), Vec::new()];
         for comment in self
             .review
             .comments
             .iter()
             .filter(|comment| comment.path == path && has_block(comment))
         {
-            let more = place_one(comment, &owner, &self.hunks, &right, left.as_ref(), cx);
-            placed.extend(more);
+            let place = placement(comment, &self.hunks, two_sides);
+            let mine = if two_sides && place.left { LEFT } else { RIGHT };
+            let other = two_sides.then_some(if mine == LEFT { RIGHT } else { LEFT });
+            let count = block_rows(&comment.body) as usize;
+            let own = rows_of(mine).and_then(|rows| {
+                extra_at(rows, mine, last[mine], place.spot, count, BlockKind::Comment)
+            });
+            let matching = match (other, place.other) {
+                (Some(other), Some(spot)) => rows_of(other)
+                    .and_then(|rows| {
+                        extra_at(rows, other, last[other], spot, count, BlockKind::Spacer)
+                    })
+                    .map(|more| (other, more)),
+                _ => None,
+            };
+            let Some(own) = own else {
+                continue;
+            };
+            if other.is_some() && matching.is_none() {
+                continue;
+            }
+            extra[mine].push((own, Some(comment.clone())));
+            if let Some((other, more)) = matching {
+                extra[other].push((more, None));
+            }
         }
-        if let Some(sides) = self.sides.as_mut() {
-            sides.comment_blocks = placed;
+        for (index, rows) in shown.iter_mut() {
+            let list = &extra[*index];
+            let blocks: Vec<Extra> = list.iter().map(|(more, _)| *more).collect();
+            let placed = rows.add_blocks(&blocks);
+            for ((_, comment), block) in list.iter().zip(placed) {
+                if let Some(comment) = comment {
+                    drawn[*index].push((block, comment.clone()));
+                }
+            }
         }
+        drawn
+    }
+
+    /// The comments of side `index`, each over its rows.
+    pub(super) fn comment_elements(
+        &self,
+        index: usize,
+        place: &Place,
+        cx: &mut Context<Self>,
+    ) -> Vec<AnyElement> {
+        let (Some(sides), Some(owner)) = (self.sides.as_ref(), self.review.owner.as_ref()) else {
+            return Vec::new();
+        };
+        let Some(side) = sides.get(index) else {
+            return Vec::new();
+        };
+        let line_height = place.line_height();
+        let mut out = Vec::new();
+        for (block, comment) in &sides.comments[index] {
+            let Some((line, offset)) = side.rows(cx, |rows| rows.block_offset(*block)).flatten()
+            else {
+                continue;
+            };
+            let top = place.block_top(line, offset);
+            let height = line_height * block_rows(&comment.body) as f32;
+            if top + height <= px(0.) || top >= place.size.height {
+                continue;
+            }
+            // From the side's left edge, over the gutter, as Zed's editor drew a fixed block; it
+            // moves with a scroll to the right. Zed laid a fixed block out with no width limit,
+            // so it is as wide as its text even past the side's edge (cut there).
+            out.push(
+                h_flex()
+                    .absolute()
+                    .top(top)
+                    .left(-place.scroll().x)
+                    .w(FIXED_ROOM)
+                    .items_start()
+                    .child(render_block(comment, owner, line_height, cx))
+                    .into_any_element(),
+            );
+        }
+        out
     }
 }
 
-/// The comment's block and its empty rows; nothing when a row is outside the excerpts.
-fn place_one(
-    comment: &ReviewComment,
-    owner: &WeakEntity<ChangesView>,
-    hunks: &[HunkRows],
-    right: &Pane,
-    left: Option<&Pane>,
-    cx: &mut App,
-) -> Placed {
-    let place = placement(comment, hunks, left.is_some());
-    let (mine, other) = match left {
-        Some(left) if place.left => (left, Some(right)),
-        Some(left) => (right, Some(left)),
-        None => (right, None),
-    };
-    let own = anchor_at(mine, place.spot, cx);
-    let matching = match (other, place.other) {
-        (Some(pane), Some(spot)) => anchor_at(pane, spot, cx).map(|anchor| (pane, anchor)),
-        _ => None,
-    };
-    let Some(own) = own else {
-        return Vec::new();
-    };
-    if other.is_some() && matching.is_none() {
-        return Vec::new();
-    }
-    let rows = block_rows(&comment.body);
-    let render = renderer(comment.clone(), owner.clone());
-    let mut placed = Vec::new();
-    placed.extend(insert(
-        &mine.editor,
-        own,
-        rows,
-        BlockStyle::Fixed,
-        render,
-        cx,
-    ));
-    if let Some((pane, anchor)) = matching {
-        placed.extend(insert(
-            &pane.editor,
-            anchor,
-            rows,
-            BlockStyle::Spacer,
-            empty_rows(),
-            cx,
-        ));
-    }
-    placed
-}
-
-/// A spot as a placement in the editor's own rows; None when the row is not in an excerpt.
-fn anchor_at(pane: &Pane, spot: Spot, cx: &mut App) -> Option<BlockPlacement<Anchor>> {
-    let last = pane.buffer.read(cx).max_point().row;
+/// A spot as rows put in on side `side` (the left side shows the last commit's file); None when
+/// its row does not show.
+fn extra_at(
+    rows: &SideRows,
+    side: usize,
+    last: u32,
+    spot: Spot,
+    count: usize,
+    kind: BlockKind,
+) -> Option<Extra> {
     let (row, below) = match spot {
         Spot::Above(row) if row > last => (last, true),
         Spot::Above(row) => (row, false),
         Spot::Below(row) => (row.min(last), true),
     };
-    let multi = pane.editor.read(cx).buffer().read(cx);
-    let anchor = multi.buffer_point_to_anchor(&pane.buffer, Point::new(row, 0), cx)?;
-    Some(if below {
-        BlockPlacement::Below(anchor)
-    } else {
-        BlockPlacement::Above(anchor)
+    let line = rows.line_of(side == LEFT, row)?;
+    Some(Extra {
+        line: if below { line + 1 } else { line },
+        rows: count,
+        kind,
+        early: below,
     })
-}
-
-fn insert(
-    editor: &Entity<Editor>,
-    placement: BlockPlacement<Anchor>,
-    rows: u32,
-    style: BlockStyle,
-    render: RenderBlock,
-    cx: &mut App,
-) -> Option<(Entity<Editor>, CustomBlockId)> {
-    let id = editor.update(cx, |editor, cx| {
-        editor
-            .insert_blocks(
-                [BlockProperties {
-                    placement,
-                    height: Some(rows),
-                    style,
-                    render,
-                    priority: 0,
-                }],
-                None,
-                cx,
-            )
-            .pop()
-    })?;
-    Some((editor.clone(), id))
-}
-
-fn renderer(comment: ReviewComment, owner: WeakEntity<ChangesView>) -> RenderBlock {
-    Arc::new(move |cx: &mut BlockContext| render_block(&comment, &owner, cx))
 }
 
 fn state_color(state: CommentState) -> Color {
@@ -226,9 +207,9 @@ fn state_color(state: CommentState) -> Color {
 fn render_block(
     comment: &ReviewComment,
     owner: &WeakEntity<ChangesView>,
-    cx: &mut BlockContext,
+    line: Pixels,
+    cx: &App,
 ) -> AnyElement {
-    let line = cx.line_height;
     let (background, accent) = {
         let colors = cx.theme().colors();
         (colors.surface_background, colors.border_variant)
@@ -293,7 +274,7 @@ fn render_block(
         rows.push(text_row(MORE_TEXT, Color::Muted));
     }
     v_flex()
-        .w_full()
+        .flex_none()
         .h(line * block_rows(&comment.body) as f32)
         .overflow_hidden()
         .bg(background)

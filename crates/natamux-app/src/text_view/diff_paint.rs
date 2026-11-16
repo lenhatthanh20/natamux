@@ -16,7 +16,7 @@ use crate::git::diff_model::Status;
 use crate::git::diff_rows::{BlockKind, Kind, SideRows};
 
 /// The width of the strip of a hunk in the gutter, per line height.
-const STRIP: f32 = 0.275;
+pub(super) const STRIP: f32 = 0.275;
 /// The size of the marker of a hunk with no rows on a side, per line height.
 const MARKER: f32 = 0.35;
 /// The strip and the marker are filled with their colour at this opacity, inside a line of it.

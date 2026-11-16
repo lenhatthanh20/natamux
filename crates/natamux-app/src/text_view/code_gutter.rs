@@ -28,7 +28,7 @@ const LEFT_PAD: f32 = 2.;
 /// Right of the numbers, in ch: the room of the fold markers.
 const RIGHT_PAD: f32 = 4.;
 /// Left and right of the numbers of a diff side, in ch: there the numbers sit nearer the text
-/// (measured on the `changes-diff-*` shots; recheck at the S6.2 flip).
+/// (measured on the `changes-diff-*` shots).
 const DIFF_LEFT_PAD: f32 = 4.;
 const DIFF_RIGHT_PAD: f32 = 3.;
 /// Sticky scroll looks for items this many lines below the top one.

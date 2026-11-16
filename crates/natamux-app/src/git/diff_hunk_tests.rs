@@ -3,7 +3,6 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use editor::Editor;
 use gpui::{Entity, TestAppContext, VisualTestContext};
 use ui::prelude::*;
 
@@ -11,6 +10,7 @@ use crate::app::shortcuts::CommentOnDiff;
 use crate::app::test_views;
 use crate::git::change_rules::Side;
 use crate::git::diff_view::{DiffOptions, DiffView};
+use crate::text_view::diff_side::DiffSide;
 
 fn numbered(word: &str, count: u32) -> String {
     (0..count).map(|line| format!("{word} {line}\n")).collect()
@@ -100,23 +100,25 @@ fn comment_on_a_deletion_quotes_the_line_after_it(cx: &mut TestAppContext) {
     assert!(quote.start >= 30 && quote.end >= quote.start, "{quote:?}");
 }
 
-fn expanded(editor: &Entity<Editor>, cx: &mut VisualTestContext) -> bool {
-    editor.update(cx, |editor, cx| {
-        let range = editor::Anchor::Min..editor::Anchor::Max;
-        editor
-            .buffer()
-            .read(cx)
-            .has_expanded_diff_hunks_in_ranges(&[range], cx)
+/// No change is closed, and the deleted lines show: inline in the working tree's side, side by
+/// side in the last commit's.
+fn expanded(view: &Entity<DiffView>, cx: &mut VisualTestContext) -> bool {
+    view.read_with(cx, |view, cx| {
+        let Some(sides) = view.sides.as_ref() else {
+            return false;
+        };
+        let side: &DiffSide = sides.left.as_ref().unwrap_or(&sides.right);
+        let deleted_shows = side
+            .rows(cx, |rows| rows.lines.iter().any(|line| line.old))
+            .unwrap_or(false);
+        view.closed.is_empty() && deleted_shows
     })
 }
 
 #[gpui::test]
 fn one_change_of_an_inline_diff_closes_and_opens_again(cx: &mut TestAppContext) {
     let (_, view, cx) = open(cx, false, false, (numbered("x", 3), numbered("y", 3)));
-    let right = view.read_with(cx, |view, _| {
-        view.sides.as_ref().expect("drawn").right.clone()
-    });
-    assert!(expanded(&right, cx));
+    assert!(expanded(&view, cx));
     view.update_in(cx, |view, window, cx| {
         view.go_to_line(Side::New, 1, window, cx);
         view.focus(window, cx);
@@ -129,18 +131,15 @@ fn one_change_of_an_inline_diff_closes_and_opens_again(cx: &mut TestAppContext) 
     };
     cx.simulate_keystrokes(toggle);
     cx.run_until_parked();
-    assert!(!expanded(&right, cx));
+    assert!(!expanded(&view, cx));
     cx.simulate_keystrokes(toggle);
     cx.run_until_parked();
-    assert!(expanded(&right, cx));
+    assert!(expanded(&view, cx));
 }
 
 #[gpui::test]
 fn side_by_side_keeps_every_change_open(cx: &mut TestAppContext) {
     let (_, view, cx) = open(cx, true, false, (numbered("x", 3), numbered("y", 3)));
-    let right = view.read_with(cx, |view, _| {
-        view.sides.as_ref().expect("drawn").right.clone()
-    });
     view.update_in(cx, |view, window, cx| view.focus(window, cx));
     cx.run_until_parked();
     let toggle = if cfg!(target_os = "macos") {
@@ -150,7 +149,7 @@ fn side_by_side_keeps_every_change_open(cx: &mut TestAppContext) {
     };
     cx.simulate_keystrokes(toggle);
     cx.run_until_parked();
-    assert!(expanded(&right, cx));
+    assert!(expanded(&view, cx));
 }
 
 fn indent_texts() -> (String, String) {

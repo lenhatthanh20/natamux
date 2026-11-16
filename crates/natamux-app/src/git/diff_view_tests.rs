@@ -6,11 +6,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use editor::display_map::ToDisplayPoint;
-use editor::{Editor, MultiBuffer};
-use gpui::{Entity, TestAppContext, VisualTestContext};
-use language::{Buffer, Capability};
-use text::Point;
+use gpui::{Entity, TestAppContext, VisualTestContext, point};
 use ui::prelude::*;
 
 use super::{DiffEvent, DiffOptions, DiffView};
@@ -20,8 +16,10 @@ use crate::git::change_rules::Side;
 use crate::git::diff_cases::{
     cases, changed_then_deleted, ended, numbered, several_hunks, swapped,
 };
-use crate::git::diff_editors::{add_spacer, read_only_editor, set_excerpts};
-use crate::git::diff_rules::{Spacer, revert_hunk};
+use crate::git::diff_model::Row;
+use crate::git::diff_rows::BlockKind;
+use crate::git::diff_rules::revert_hunk;
+use crate::text_view::diff_side::DiffSide;
 
 fn open(cx: &mut TestAppContext) -> (Entity<DiffView>, &mut VisualTestContext) {
     test_views::init(cx);
@@ -70,79 +68,86 @@ fn show(
     show_read(view, key, 1, texts, collapse, cx);
 }
 
-fn last_row(editor: &Entity<Editor>, cx: &mut App) -> u32 {
-    editor.update(cx, |editor, cx| editor.max_point(cx).row().0)
+fn sides(view: &Entity<DiffView>, cx: &mut VisualTestContext) -> (DiffSide, DiffSide) {
+    view.read_with(cx, |view, _| {
+        let sides = view.sides.as_ref().expect("the diff is drawn");
+        (
+            sides.left.clone().expect("side by side"),
+            sides.right.clone(),
+        )
+    })
 }
 
-/// The display row of `row` of `buffer` in `editor`; None when no excerpt holds it.
-fn display_row(
-    editor: &Entity<Editor>,
-    buffer: &Entity<Buffer>,
-    row: u32,
-    cx: &mut App,
-) -> Option<u32> {
-    editor.update(cx, |editor, cx| {
-        let anchor =
-            editor
-                .buffer()
-                .read(cx)
-                .buffer_point_to_anchor(buffer, Point::new(row, 0), cx)?;
-        let snapshot = editor.display_snapshot(cx);
-        Some(anchor.to_display_point(&snapshot).row().0)
-    })
+/// The last shown row of a side, empty rows included.
+fn last_row(side: &DiffSide, cx: &mut VisualTestContext) -> usize {
+    cx.update(|window, cx| side.place(window, cx).expect("the side was drawn").rows() - 1)
+}
+
+/// The shown row of row `row` of the side's file (`old`: the last commit's); None when it does
+/// not show.
+fn shown_row(side: &DiffSide, old: bool, row: u32, cx: &mut VisualTestContext) -> Option<usize> {
+    let line = cx.update(|_, cx| side.rows(cx, |rows| rows.line_of(old, row)).flatten())?;
+    cx.update(|window, cx| side.place(window, cx)?.first_row(line))
 }
 
 /// What the failure message needs: the last rows of both sides, the hunks and the spacers.
 struct Shown {
-    left: u32,
-    right: u32,
-    /// The display rows of the first row after each hunk, left and right, where both sides
-    /// have that row.
-    after_hunks: Vec<(u32, u32)>,
+    left: usize,
+    right: usize,
+    /// The shown rows of the first row after each hunk, left and right, where both sides have
+    /// that row.
+    after_hunks: Vec<(usize, usize)>,
     spacers: usize,
     report: String,
 }
 
 fn shown(view: &Entity<DiffView>, cx: &mut VisualTestContext) -> Shown {
-    view.update(cx, |view, cx| {
-        let sides = view.sides.as_ref().expect("the diff is drawn");
-        let left = sides.left.clone().expect("side by side");
-        let right = sides.right.clone();
-        let buffer = view.buffer.clone().expect("a buffer");
-        let base = view
-            .diff
-            .as_ref()
-            .expect("a diff")
-            .read(cx)
-            .base_text_buffer()
-            .clone();
-        let last_old = base.read(cx).max_point().row;
-        let last_new = buffer.read(cx).max_point().row;
-        let mut after_hunks = Vec::new();
-        for hunk in &view.hunks {
-            if hunk.old.end > last_old || hunk.new.end > last_new {
-                continue;
-            }
-            let old = display_row(&left, &base, hunk.old.end, cx);
-            let new = display_row(&right, &buffer, hunk.new.end, cx);
-            if let (Some(old), Some(new)) = (old, new) {
-                after_hunks.push((old, new));
-            }
+    let (left, right) = sides(view, cx);
+    let (hunks, last_old, last_new) = view.read_with(cx, |view, _| {
+        let diff = view.diff.as_ref().expect("a diff");
+        (
+            view.hunks.clone(),
+            diff.old_rows() - 1,
+            diff.new_rows() - 1,
+        )
+    });
+    let mut after_hunks = Vec::new();
+    for hunk in &hunks {
+        if hunk.old.end > last_old || hunk.new.end > last_new {
+            continue;
         }
-        let report = format!(
-            "hunks {:?}, spacers {:?}, blocks placed {}, last rows old {last_old} new {last_new}",
-            view.hunks,
-            super::spacers(&view.hunks),
-            sides.spacer_blocks.len(),
-        );
-        Shown {
-            left: last_row(&left, cx),
-            right: last_row(&right, cx),
-            after_hunks,
-            spacers: sides.spacer_blocks.len(),
-            report,
+        let old = shown_row(&left, true, hunk.old.end, cx);
+        let new = shown_row(&right, false, hunk.new.end, cx);
+        if let (Some(old), Some(new)) = (old, new) {
+            after_hunks.push((old, new));
         }
-    })
+    }
+    let spacers: usize = cx.update(|_, cx| {
+        [&left, &right]
+            .iter()
+            .map(|side| {
+                side.rows(cx, |rows| {
+                    rows.blocks
+                        .iter()
+                        .filter(|block| block.kind == BlockKind::Spacer)
+                        .count()
+                })
+                .unwrap_or(0)
+            })
+            .sum()
+    });
+    let report = format!(
+        "hunks {hunks:?}, spacers {:?}, blocks placed {spacers}, last rows old {last_old} new \
+         {last_new}",
+        super::super::diff_rules::spacers(&hunks),
+    );
+    Shown {
+        left: last_row(&left, cx),
+        right: last_row(&right, cx),
+        after_hunks,
+        spacers,
+        report,
+    }
 }
 
 fn assert_level(name: &str, shown: &Shown) {
@@ -217,38 +222,32 @@ fn identical_texts_get_no_empty_rows(cx: &mut TestAppContext) {
     }
 }
 
-/// A spacer whose row no excerpt holds, or past the last row, still takes its rows below the
-/// end, so it is never dropped.
+/// Empty rows past the last row still take their rows below the end, so they are never dropped.
 #[gpui::test]
-fn a_spacer_with_no_anchor_goes_below_the_end(cx: &mut TestAppContext) {
-    let (_, cx) = open(cx);
-    let (editor, shown_buffer, other) = cx.update(|window, cx| {
-        let shown_buffer = cx.new(|cx| Buffer::local("a\nb\nc", cx));
-        let other = cx.new(|cx| Buffer::local("x\ny", cx));
-        let multi = cx.new(|cx| {
-            let mut multi = MultiBuffer::new(Capability::ReadOnly);
-            set_excerpts(&mut multi, &shown_buffer, Vec::new(), false, cx);
-            multi
-        });
-        let editor = read_only_editor(multi, &shown_buffer, false, window, cx);
-        (editor, shown_buffer, other)
-    });
-    for (name, buffer, before_row) in [
-        ("no excerpt holds the buffer", &other, 1),
-        ("past the last row", &shown_buffer, 10),
-    ] {
-        let before = cx.update(|_, cx| last_row(&editor, cx));
-        let spacer = Spacer {
-            side: Side::New,
-            before_row,
-            rows: 5,
-        };
-        let id = cx.update(|_, cx| add_spacer(&editor, buffer, spacer, cx));
-        cx.run_until_parked();
-        assert!(id.is_some(), "{name}: the spacer was dropped");
-        let after = cx.update(|_, cx| last_row(&editor, cx));
-        assert_eq!(after, before + 5, "{name}: the spacer took no rows");
-    }
+fn a_spacer_past_the_last_row_goes_below_the_end(cx: &mut TestAppContext) {
+    let (view, cx) = open(cx);
+    show(&view, "file", &("a\nb\nc".into(), "a\nb\nc".into()), false, cx);
+    let (_, right) = sides(&view, cx);
+    let before = last_row(&right, cx);
+    let rows = [
+        Row::Line {
+            row: 0,
+            status: crate::git::diff_model::Status::Unchanged,
+        },
+        Row::Line {
+            row: 1,
+            status: crate::git::diff_model::Status::Unchanged,
+        },
+        Row::Line {
+            row: 2,
+            status: crate::git::diff_model::Status::Unchanged,
+        },
+        Row::Spacer { rows: 5 },
+    ];
+    let diff = view.read_with(cx, |view, _| view.diff.clone().expect("a diff"));
+    cx.update(|_, cx| right.show("notes.txt", &diff, &rows, true, cx));
+    cx.run_until_parked();
+    assert_eq!(last_row(&right, cx), before + 5, "the spacer took no rows");
 }
 
 /// Scrolling the longer side to its end leaves both sides there: the other side follows and
@@ -262,29 +261,25 @@ fn scrolling_one_side_to_the_end_is_not_pulled_back(cx: &mut TestAppContext) {
         ("added", swapped(changed_then_deleted())),
     ] {
         show(&view, name, &texts, false, cx);
-        let (left, right) = view.read_with(cx, |view, _| {
-            let sides = view.sides.as_ref().expect("the diff is drawn");
-            (
-                sides.left.clone().expect("side by side"),
-                sides.right.clone(),
-            )
+        let (left, right) = sides(&view, cx);
+        let end = shown(&view, cx).left as f32;
+        let line_height = cx.update(|window, cx| {
+            right
+                .place(window, cx)
+                .expect("the side was drawn")
+                .line_height()
         });
-        let end = shown(&view, cx).left as f64;
         for scrolled in [&left, &right] {
             // Pass the empty rows on the way, as a wheel does, so they are drawn and measured.
             for top in [270., end] {
-                scrolled.update_in(cx, |editor, window, cx| {
-                    editor.set_scroll_position(gpui::point(0., top), window, cx);
-                });
+                cx.update(|_, cx| scrolled.set_scroll(point(px(0.), line_height * top), cx));
                 cx.run_until_parked();
             }
-            for editor in [&left, &right] {
-                let top = editor.update(cx, |editor, cx| editor.scroll_position(cx).y);
-                assert_eq!(top, end, "{name}: a side did not stay at the end");
+            for side in [&left, &right] {
+                let top = cx.update(|_, cx| side.scroll(cx).y);
+                assert_eq!(top, line_height * end, "{name}: a side did not stay at the end");
             }
-            scrolled.update_in(cx, |editor, window, cx| {
-                editor.set_scroll_position(gpui::point(0., 0.), window, cx);
-            });
+            cx.update(|_, cx| scrolled.set_scroll(point(px(0.), px(0.)), cx));
             cx.run_until_parked();
         }
     }
@@ -305,16 +300,13 @@ fn each_hunk_has_an_arrow_on_both_sides_that_asks_for_its_revert(cx: &mut TestAp
     });
     show(&view, "file", &several_hunks(), false, cx);
     view.update(cx, |view, cx| {
-        let buffer = view.buffer.clone().expect("a buffer").read(cx).remote_id();
-        let diff = view.diff.clone().expect("a diff");
-        let base = diff.read(cx).base_text_buffer().read(cx).remote_id();
         let hunks = view.hunks.clone();
         assert!(hunks.len() >= 3, "{hunks:?}");
-        assert_eq!(view.arrow_at(buffer, hunks[0].new.start, cx), None);
+        assert_eq!(view.arrow_at(Side::New, hunks[0].new.start), None);
         view.set_movable(true);
         for (index, hunk) in hunks.iter().enumerate() {
-            for (side, row) in [(base, hunk.old.start), (buffer, hunk.new.start)] {
-                let arrow = view.arrow_at(side, row, cx).expect("an arrow");
+            for (side, row) in [(Side::Old, hunk.old.start), (Side::New, hunk.new.start)] {
+                let arrow = view.arrow_at(side, row).expect("an arrow");
                 assert_eq!(arrow.index, index, "{hunk:?}");
                 assert!(!arrow.moving);
                 view.ask_revert(arrow.index, arrow.version, cx);
@@ -383,7 +375,7 @@ impl Render for Host {
     }
 }
 
-/// T-0314: Mod+Z in the read-only diff editor undoes the last revert; the editor's own undo,
+/// T-0314: Mod+Z in a read-only side of the diff undoes the last revert; the box's own undo,
 /// bound for every text box, does not take the key.
 #[gpui::test]
 fn mod_z_in_a_diff_editor_undoes_the_last_revert(cx: &mut TestAppContext) {
@@ -404,4 +396,36 @@ fn mod_z_in_a_diff_editor_undoes_the_last_revert(cx: &mut TestAppContext) {
     };
     cx.simulate_keystrokes(undo);
     assert_eq!(host.read_with(cx, |host, _| host.undos), 1);
+}
+
+/// The caret moving in a side tells the Changes tab once, and puts the buttons on its change.
+#[gpui::test]
+fn a_caret_move_is_told_once_and_shows_the_buttons_of_its_change(cx: &mut TestAppContext) {
+    let (view, cx) = open(cx);
+    let told = Rc::new(RefCell::new(0));
+    let seen = told.clone();
+    cx.update(|_, cx| {
+        cx.subscribe(&view, move |_, event: &DiffEvent, _| {
+            if *event == DiffEvent::CursorMoved {
+                *seen.borrow_mut() += 1;
+            }
+        })
+        .detach();
+    });
+    show(&view, "file", &several_hunks(), false, cx);
+    let hunk = view.read_with(cx, |view, _| view.hunks[1].clone());
+    view.update_in(cx, |view, window, cx| {
+        view.set_movable(true);
+        view.go_to_line(Side::New, hunk.new.start + 1, window, cx);
+    });
+    cx.run_until_parked();
+    assert_eq!(*told.borrow(), 1);
+    assert_eq!(
+        view.update(cx, |view, cx| view.cursor_line(cx)),
+        Some(hunk.new.start + 1)
+    );
+    // Drawn again with no move: nothing more to tell.
+    view.update(cx, |_, cx| cx.notify());
+    cx.run_until_parked();
+    assert_eq!(*told.borrow(), 1);
 }

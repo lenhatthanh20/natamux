@@ -81,6 +81,8 @@ pub mod actions {
             DuplicateLineDown,
             DeleteLine,
             ToggleComments,
+            // Taken by the diff view around the box (`git/diff_view.rs`).
+            ToggleSelectedDiffHunks,
         ]
     );
 }
@@ -1190,6 +1192,15 @@ impl TextInput {
         if self.bar_press(event.position, window, cx) {
             cx.stop_propagation();
             return;
+        }
+        // A diff side's line numbers take no press; its strips are left to the diff view.
+        match self.diff_gutter_press(event.position, window, cx) {
+            Some(super::diff_side::GutterPress::Number) => {
+                cx.stop_propagation();
+                return;
+            }
+            Some(super::diff_side::GutterPress::Strip) => return,
+            None => {}
         }
         // A press on a pinned row puts a caret on its line, whatever the clicks and keys.
         let pinned = self.sticky_press(event.position, window, cx);

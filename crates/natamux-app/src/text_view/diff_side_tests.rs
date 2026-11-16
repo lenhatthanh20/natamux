@@ -249,37 +249,46 @@ fn a_hunk_with_no_lines_on_the_side_has_a_marker(cx: &mut TestAppContext) {
     );
 }
 
-#[gpui::test]
-fn every_line_takes_the_colours_of_its_own_file(cx: &mut TestAppContext) {
-    let (_, right, cx) = open(cx);
-    let diff = diff(Some("fn a() {}\n"), "fn b() {}\n", &[]);
-    let rows = inline_rows(&diff.hunk_rows(), diff.new_rows(), false);
-    show(&right, "x.rs", &diff, &rows, true, cx);
-    cx.executor().advance_clock(Duration::from_millis(50));
-    cx.run_until_parked();
-    assert!(cx.update(|_, cx| right.parsed(cx)));
-    let input = right.input().clone();
-    let (text, runs, plain) = input.update_in(cx, |input, _, cx| {
+/// The colour of each byte of a side's text, as its runs give it, and the plain colour.
+fn colours_of(side: &DiffSide, cx: &mut VisualTestContext) -> (String, Vec<Hsla>, Hsla) {
+    let input = side.input().clone();
+    input.update_in(cx, |input, _, cx| {
         let style = input.text_style(cx);
         let text = input.model.text().to_owned();
         let runs = input.runs(&style, text.len(), false, &[], cx);
-        (text, runs, style.color)
-    });
+        let colours = runs
+            .iter()
+            .flat_map(|run| std::iter::repeat_n(run.color, run.len))
+            .collect();
+        (text, colours, style.color)
+    })
+}
+
+/// Each line takes the colours of its own file: the last commit's side of side by side from the
+/// last commit's parse, the working tree's lines from theirs. The deleted lines of an inline diff
+/// stay plain, as the B2 shots show them (`changes-diff-focused`, a `.ts` file).
+#[gpui::test]
+fn every_line_takes_the_colours_of_its_own_file(cx: &mut TestAppContext) {
+    let (left, right, cx) = open(cx);
+    let diff = diff(Some("fn a() {}\n"), "fn b() {}\n", &[]);
+    let rows = inline_rows(&diff.hunk_rows(), diff.new_rows(), false);
+    show(&right, "x.rs", &diff, &rows, true, cx);
+    let old_rows = model::side_rows(&diff.hunk_rows(), Side::Old, 2, 2, false);
+    show(&left, "x.rs", &diff, &old_rows, false, cx);
+    cx.executor().advance_clock(Duration::from_millis(50));
+    cx.run_until_parked();
+    assert!(cx.update(|_, cx| right.parsed(cx) && left.parsed(cx)));
+
+    let (text, colours, plain) = colours_of(&right, cx);
     assert_eq!(text, "fn a() {}\nfn b() {}\n");
-    // `fn` starts both lines: the deleted line (from the last commit's parse) and the added one.
-    let color_at = |at: usize| {
-        let mut start = 0;
-        runs.iter()
-            .find(|run| {
-                let found = (start..start + run.len).contains(&at);
-                start += run.len;
-                found
-            })
-            .map(|run| run.color)
-    };
-    assert_ne!(color_at(0), Some(plain), "the deleted line is coloured");
-    assert_ne!(color_at(10), Some(plain), "the added line is coloured");
-    assert_eq!(color_at(0), color_at(10));
+    // `fn` starts both lines.
+    assert_eq!(colours[0], plain, "the deleted line of an inline diff is plain");
+    assert_ne!(colours[10], plain, "the added line is coloured");
+
+    let (text, colours, plain) = colours_of(&left, cx);
+    assert_eq!(text, "fn a() {}\n");
+    assert_ne!(colours[0], plain, "the last commit's line is coloured");
+    assert_eq!(colours[0], colours_of(&right, cx).1[10]);
 }
 
 /// The two sides of `old` to `new`, paired.

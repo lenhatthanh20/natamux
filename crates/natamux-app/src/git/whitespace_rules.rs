@@ -1,5 +1,5 @@
 //! Ignore whitespace in the diff (T-0316), as Monaco's `ignoreTrimWhitespace`: the leading and
-//! trailing whitespace of each line does not count. `buffer_diff` diffs the real working-tree text
+//! trailing whitespace of each line does not count. The diff model diffs the real working-tree text
 //! against a base, so the base it gets is the last commit's text with each line that equals its
 //! working-tree line after trimming taken from the working tree. Such a line then makes no hunk.
 //! The base keeps the last commit's line count, so the rows of the hunks are real rows of both
@@ -12,7 +12,7 @@ use super::diff_model::line_diff;
 /// Over this many lines on a side, whitespace counts again: the line diff would be slow.
 const MAX_LINES: usize = 20_000;
 
-/// The base for `buffer_diff`: the last commit's text, or the effective base when `ignore`.
+/// The base of the diff model: the last commit's text, or the effective base when `ignore`.
 pub fn diff_base(original: Option<&str>, modified: &str, ignore: bool) -> Option<Arc<str>> {
     let original = original?;
     Some(if ignore {

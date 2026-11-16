@@ -1,6 +1,7 @@
-//! The read-only editors of the diff view: their excerpts (the whole file, or 3 lines around
-//! each change), their settings (no runnables, breakpoints or hunk buttons), and the empty rows
-//! that keep the two sides of a side by side diff level.
+//! Test only: the read-only Zed editors of the old diff view (`zed_diff.rs`) and the old editor
+//! tab (`files/zed_body.rs`): their excerpts (the whole file, or 3 lines around each change),
+//! their settings (no runnables, breakpoints or hunk buttons), and the empty rows that keep the
+//! two sides of a side by side diff level. It goes with the editor stack (S7).
 
 use std::ops::Range;
 use std::sync::Arc;
@@ -33,20 +34,6 @@ pub fn set_excerpts(
         let all = Point::zero()..buffer.read(cx).max_point();
         multi.set_excerpts_for_buffer(buffer.clone(), [all], 0, cx);
     }
-}
-
-/// The excerpts of an editor's multibuffer again, after a newer read changed the hunks.
-pub fn refit_excerpts(
-    editor: &Entity<Editor>,
-    buffer: &Entity<Buffer>,
-    ranges: Vec<Range<Point>>,
-    collapse: bool,
-    cx: &mut App,
-) {
-    let multi = editor.read(cx).buffer().clone();
-    multi.update(cx, |multi, cx| {
-        set_excerpts(multi, buffer, ranges, collapse, cx)
-    });
 }
 
 /// A read-only editor of `multi`, which shows `buffer`. The file's name is in the toolbar, so the

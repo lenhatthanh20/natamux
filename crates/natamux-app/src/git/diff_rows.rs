@@ -4,9 +4,6 @@
 //! lines on the side, and the changed words as ranges of the text. `text_view/diff_side.rs` draws
 //! it.
 
-// The diff view moves onto it in S6.2 part 3; until then only the tests use it.
-#![cfg_attr(not(test), allow(dead_code))]
-
 use std::ops::Range;
 use std::rc::Rc;
 
@@ -37,6 +34,19 @@ pub enum BlockKind {
     Spacer,
     /// The unchanged lines between two collapsed parts.
     Gap,
+    /// A review comment, drawn over its rows by the diff view.
+    Comment,
+}
+
+/// Rows put in after `side_rows`: a comment, or the empty rows that match it on the other side.
+/// `early` rows (under the line above) come before the spacers and gaps above `line`, the
+/// others after them, as Zed's editor ordered its blocks.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Extra {
+    pub line: usize,
+    pub rows: usize,
+    pub kind: BlockKind,
+    pub early: bool,
 }
 
 /// Empty rows above line `line` of the side's text (`lines.len()`: below the last line).
@@ -79,6 +89,65 @@ pub struct SideRows {
 }
 
 impl SideRows {
+    /// The line of the side's text that shows row `row` of the last commit's file (`old`) or of
+    /// the working tree's; None when it does not show.
+    pub fn line_of(&self, old: bool, row: u32) -> Option<usize> {
+        self.lines
+            .iter()
+            .position(|line| line.old == old && line.row == row)
+    }
+
+    /// The line that holds offset `at` of the text.
+    pub fn line_at(&self, at: usize) -> usize {
+        self.line_starts
+            .partition_point(|&start| start <= at)
+            .saturating_sub(1)
+    }
+
+    /// Puts `extra` in among the blocks, and gives the index in `blocks` of each.
+    pub fn add_blocks(&mut self, extra: &[Extra]) -> Vec<usize> {
+        let mut blocks = Vec::with_capacity(self.blocks.len() + extra.len());
+        let mut placed = vec![0; extra.len()];
+        let mut old = self.blocks.iter().peekable();
+        for line in 0..=self.lines.len() {
+            let mut put = |early: bool, blocks: &mut Vec<Block>| {
+                for (index, more) in extra.iter().enumerate() {
+                    if more.line == line && more.early == early {
+                        placed[index] = blocks.len();
+                        blocks.push(Block {
+                            line,
+                            rows: more.rows,
+                            kind: more.kind,
+                        });
+                    }
+                }
+            };
+            put(true, &mut blocks);
+            while let Some(block) = old.next_if(|block| block.line == line) {
+                blocks.push(*block);
+            }
+            put(false, &mut blocks);
+        }
+        self.blocks = blocks;
+        let mut above = vec![0; self.lines.len() + 1];
+        for block in &self.blocks {
+            above[block.line] += block.rows;
+        }
+        self.above = Rc::from(above);
+        placed
+    }
+
+    /// The line block `index` is above, and the rows of the blocks before it there.
+    pub fn block_offset(&self, index: usize) -> Option<(usize, usize)> {
+        let block = self.blocks.get(index)?;
+        let before = self.blocks[..index]
+            .iter()
+            .filter(|other| other.line == block.line)
+            .map(|other| other.rows)
+            .sum();
+        Some((block.line, before))
+    }
+
     pub fn empty() -> Self {
         SideRows {
             text: String::new(),

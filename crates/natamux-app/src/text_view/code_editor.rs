@@ -1,7 +1,7 @@
 //! What the editor tab's code view has more (plan 6.4, S4.3c): line numbers, sticky rows, long
 //! lines that wrap only where the file's kind wraps by default, and the code view's side of
 //! `BlameTarget`: the labels at the start of their rows, drawn in the hint style as Zed's inlays
-//! were, and the right-click menu of a row.
+//! were, and the right-click menu of a row (a diff side shares both, `diff_side.rs`).
 
 use gpui::{
     AnyElement, App, DismissEvent, Entity, Focusable, IntoElement, MouseDownEvent, ParentElement,
@@ -266,8 +266,13 @@ impl TextInput {
             self.no_click_scroll();
         }
         let row = self.model.text()[..at].matches('\n').count() as u32;
+        // A diff side's rows are rows of its own file; a deleted line of an inline diff is none.
+        let row = match self.code.as_ref().and_then(|code| code.diff.as_ref()) {
+            Some(diff) => diff.file_row(row as usize),
+            None => Some(row),
+        };
         cx.stop_propagation();
-        let Some(menu) = menu(Some(row), window, cx) else {
+        let Some(menu) = menu(row, window, cx) else {
             return;
         };
         let dismiss = cx.subscribe_in(
