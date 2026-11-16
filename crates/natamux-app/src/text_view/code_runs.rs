@@ -10,7 +10,6 @@ use tree_sitter::InputEdit;
 
 use super::code_gutter::{STICKY_LINES, head_offset};
 use super::highlight::Highlights;
-use super::outline::containing;
 use super::text_input::TextInput;
 use crate::text::motion;
 
@@ -120,7 +119,8 @@ impl TextInput {
         let last_line = laid.lines.len().saturating_sub(1);
         let text = self.model.text();
         let near = line_bytes(text, &(first..(first + STICKY_LINES).min(last_line)));
-        let mut heads: Vec<usize> = containing(&self.cached_outline(), near)
+        let mut heads: Vec<usize> = self
+            .near_outline(near)
             .iter()
             .map(|item| text[..head_offset(text, item)].matches('\n').count())
             .filter(|line| *line < window.start)

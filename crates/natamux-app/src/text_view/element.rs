@@ -316,19 +316,52 @@ fn shape_rows(text: String, runs: &[TextRun], key: &LayoutKey, window: &Window) 
 
 /// The part of `runs` that covers `range` of the text.
 fn runs_in(runs: &[TextRun], range: Range<usize>) -> Vec<TextRun> {
-    let mut out = Vec::new();
-    let mut at = 0;
-    for run in runs {
-        let (start, end) = (at.max(range.start), (at + run.len).min(range.end));
-        at += run.len;
-        if start < end {
-            out.push(TextRun {
-                len: end - start,
-                ..run.clone()
-            });
+    RunCursor::new(runs).take(range)
+}
+
+/// Gives the parts of `runs` for ranges of the text that come one after the other, without
+/// walking the runs again from the start for each: a layout cuts them line by line.
+struct RunCursor<'a> {
+    runs: &'a [TextRun],
+    /// The first run that may still meet a later range, and the offset it starts at.
+    index: usize,
+    at: usize,
+}
+
+impl<'a> RunCursor<'a> {
+    fn new(runs: &'a [TextRun]) -> Self {
+        Self {
+            runs,
+            index: 0,
+            at: 0,
         }
     }
-    out
+
+    /// The part of the runs that covers `range`, which starts at or after the last one's start.
+    fn take(&mut self, range: Range<usize>) -> Vec<TextRun> {
+        while let Some(run) = self.runs.get(self.index)
+            && self.at + run.len <= range.start
+        {
+            self.at += run.len;
+            self.index += 1;
+        }
+        let mut out = Vec::new();
+        let mut at = self.at;
+        for run in &self.runs[self.index.min(self.runs.len())..] {
+            if at >= range.end {
+                break;
+            }
+            let (start, end) = (at.max(range.start), (at + run.len).min(range.end));
+            at += run.len;
+            if start < end {
+                out.push(TextRun {
+                    len: end - start,
+                    ..run.clone()
+                });
+            }
+        }
+        out
+    }
 }
 
 impl Layout {
@@ -354,9 +387,10 @@ impl Layout {
         }
         let mut lines = Vec::new();
         let (mut start, mut row, mut width) = (0, 0, px(0.));
+        let mut cursor = RunCursor::new(runs);
         for source in text.split('\n') {
             let len = source.len();
-            let line_runs = runs_in(runs, start..start + len);
+            let line_runs = cursor.take(start..start + len);
             let plain = line_runs
                 .iter()
                 .all(|run| run.color == key.color && run.underline.is_none());
@@ -950,5 +984,54 @@ impl Element for TextElement {
                 window.paint_quad(fill(edge(&bar.thumb), thumb_border));
             }
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use gpui::font;
+
+    use super::*;
+
+    /// The parts of `runs` over `range`, walked from the start: what the cursor must give.
+    fn from_the_start(runs: &[TextRun], range: Range<usize>) -> Vec<(usize, f32)> {
+        let mut out = Vec::new();
+        let mut at = 0;
+        for run in runs {
+            let (start, end) = (at.max(range.start), (at + run.len).min(range.end));
+            at += run.len;
+            if start < end {
+                out.push((end - start, run.color.h));
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn the_run_cursor_cuts_lines_as_a_walk_from_the_start_does() {
+        let run = |len: usize, hue: f32| TextRun {
+            len,
+            font: font("Mono"),
+            color: Hsla {
+                h: hue,
+                s: 0.,
+                l: 0.,
+                a: 1.,
+            },
+            background_color: None,
+            underline: None,
+            strikethrough: None,
+        };
+        let runs = vec![run(3, 0.1), run(0, 0.2), run(5, 0.3), run(2, 0.4), run(4, 0.5)];
+        let lines = [0..2, 3..3, 4..9, 10..10, 11..14, 15..15];
+        let mut cursor = RunCursor::new(&runs);
+        for range in lines {
+            let cut: Vec<(usize, f32)> = cursor
+                .take(range.clone())
+                .iter()
+                .map(|run| (run.len, run.color.h))
+                .collect();
+            assert_eq!(cut, from_the_start(&runs, range.clone()), "{range:?}");
+        }
     }
 }

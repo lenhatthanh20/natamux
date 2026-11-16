@@ -9,6 +9,7 @@
 //! item inside another item's range is one level deeper.
 
 use std::cmp::Reverse;
+use std::collections::HashMap;
 use std::ops::Range;
 use std::sync::OnceLock;
 
@@ -105,11 +106,27 @@ struct Found {
 
 /// The outline of `text`, parsed as `tree`, in text order.
 pub fn outline(lang: &'static Lang, tree: &Tree, text: &str) -> Vec<OutlineItem> {
+    outline_in(lang, tree, text, None)
+}
+
+/// The outline items whose nodes meet `range` (all of them for None), in text order. An item
+/// that meets it keeps the parts outside it: the query gives every match it meets.
+pub fn outline_in(
+    lang: &'static Lang,
+    tree: &Tree,
+    text: &str,
+    range: Option<Range<usize>>,
+) -> Vec<OutlineItem> {
     let Some(compiled) = compiled(lang) else {
         return Vec::new();
     };
     let mut found: Vec<Found> = Vec::new();
+    // Each item's place in `found`, by its pattern and range.
+    let mut places: HashMap<(usize, usize, usize), usize> = HashMap::new();
     let mut cursor = QueryCursor::new();
+    if let Some(range) = range {
+        cursor.set_byte_range(range);
+    }
     let mut matches = cursor.matches(&compiled.query, tree.root_node(), text.as_bytes());
     while let Some(matched) = matches.next() {
         let mut this = Found {
@@ -141,10 +158,8 @@ pub fn outline(lang: &'static Lang, tree: &Tree, text: &str) -> Vec<OutlineItem>
         }
         // A pattern that matches one child at a time (a selector list) gives one match per
         // child: they are one item.
-        match found
-            .iter_mut()
-            .find(|old| old.pattern == this.pattern && old.item == this.item)
-        {
+        let place = (this.pattern, this.item.start, this.item.end);
+        match places.get(&place).and_then(|&index| found.get_mut(index)) {
             Some(old) => {
                 for part in this.parts {
                     if !old.parts.contains(&part) {
@@ -154,7 +169,10 @@ pub fn outline(lang: &'static Lang, tree: &Tree, text: &str) -> Vec<OutlineItem>
                 old.open = old.open.or(this.open);
                 old.close = old.close.or(this.close);
             }
-            None => found.push(this),
+            None => {
+                places.insert(place, found.len());
+                found.push(this);
+            }
         }
     }
     let mut items: Vec<OutlineItem> = found

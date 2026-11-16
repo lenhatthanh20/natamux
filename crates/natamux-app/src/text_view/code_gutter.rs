@@ -16,7 +16,7 @@ use super::code_paint::CodePaint;
 use super::code_rules::{Guide, active_guides, guides};
 use super::code_runs::line_bytes;
 use super::element::Layout;
-use super::outline::{OutlineItem, containing, outline};
+use super::outline::{OutlineItem, containing, outline, outline_in};
 use super::text_input::TextInput;
 use crate::text::motion;
 
@@ -38,6 +38,8 @@ pub(super) struct Caches {
     active: Option<(u64, usize, Rc<Vec<usize>>)>,
     /// By the colour count, which goes up with each new tree.
     outline: Option<(u64, Rc<Vec<OutlineItem>>)>,
+    /// The items around the top rows, by the colour count and their bytes.
+    near: Option<(u64, Range<usize>, Rc<Vec<OutlineItem>>)>,
 }
 
 /// The gutter as painted: its box, the x the numbers end at, and each shown number with its top
@@ -202,6 +204,29 @@ impl TextInput {
         items
     }
 
+    /// The outline items that meet `near` (the bytes of the top rows), each as deep as the found
+    /// items around it: what sticky scroll looks at. Only the items there are looked for, so a
+    /// key in a big file does not find the whole outline again.
+    pub(super) fn near_outline(&self, near: Range<usize>) -> Rc<Vec<OutlineItem>> {
+        let Some(code) = self.code.as_ref() else {
+            return Rc::default();
+        };
+        let (Some(lang), Some(tree)) = (code.lang, code.tree()) else {
+            return Rc::default();
+        };
+        let mut caches = code.caches.borrow_mut();
+        if let Some((colors, bytes, items)) = &caches.near
+            && *colors == code.colors
+            && *bytes == near
+        {
+            return items.clone();
+        }
+        let found = outline_in(lang, tree, self.model.text(), Some(near.clone()));
+        let items = Rc::new(containing(&found, near.clone()));
+        caches.near = Some((code.colors, near, items.clone()));
+        items
+    }
+
     /// A point left of the text, in the gutter.
     pub(super) fn in_gutter(&self, position: gpui::Point<Pixels>) -> bool {
         let gutter = self.laid.as_ref().map_or(px(0.), |laid| laid.key.gutter);
@@ -246,15 +271,14 @@ impl TextInput {
         if !code.sticky || line_height <= px(0.) {
             return;
         }
-        let items = self.cached_outline();
-        if items.is_empty() {
-            return;
-        }
         let scroll_top = self.scroll.y / line_height;
         let top_line = laid.line_index_of_row(scroll_top as usize);
         let last_line = laid.lines.len().saturating_sub(1);
         let near = line_bytes(text, &(top_line..(top_line + STICKY_LINES).min(last_line)));
-        let around = containing(&items, near);
+        let around = self.near_outline(near);
+        if around.is_empty() {
+            return;
+        }
         let row_of = |at: usize| laid.row_of(self.to_display(at), false);
         paint.sticky = sticky_rows(&around, text, scroll_top, row_of)
             .into_iter()
