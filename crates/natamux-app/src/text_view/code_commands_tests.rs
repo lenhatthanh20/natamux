@@ -16,8 +16,8 @@ use gpui::TestAppContext;
 use serde_json::Value;
 
 use super::code_typing_tests::{
-    C_STRING, Case, HASH_COMMENT, Host, JS_STRING, JSON_STRING, SLASH_COMMENT, Step, case, p,
-    run_cases, t,
+    C_STRING, Case, HASH_COMMENT, Host, JS_STRING, JSON_STRING, SLASH_COMMENT, Step, case,
+    check_own, p, run_cases, t,
 };
 use crate::app::golden_files;
 
@@ -115,8 +115,9 @@ fn cases(host: &Host) -> Vec<Case> {
     out
 }
 
-fn run(host: &Host, cx: &mut TestAppContext) -> Vec<Value> {
-    run_cases(host, false, cases(host), cx)
+/// `own`: the cases run on the own code view of the editor tab.
+fn run(host: &Host, own: bool, cx: &mut TestAppContext) -> Vec<Value> {
+    run_cases(host, own, cases(host), cx)
 }
 
 macro_rules! hosts {
@@ -127,14 +128,20 @@ macro_rules! hosts {
             #[gpui::test]
             fn commands_match_the_golden_file(cx: &mut TestAppContext) {
                 let host = $host;
-                golden_files::check(SET, host.name, &run(&host, cx));
+                golden_files::check(SET, host.name, &run(&host, false, cx));
+            }
+
+            #[gpui::test]
+            fn own_commands_match_the_golden_file(cx: &mut TestAppContext) {
+                let host = $host;
+                check_own(SET, &host, &run(&host, true, cx));
             }
 
             #[gpui::test]
             #[ignore]
             fn golden_code_commands(cx: &mut TestAppContext) {
                 let host = $host;
-                golden_files::write(SET, host.name, &run(&host, cx));
+                golden_files::write(SET, host.name, &run(&host, false, cx));
             }
         }
     )*};

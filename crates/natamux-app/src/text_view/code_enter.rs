@@ -5,8 +5,10 @@
 //! - a doc comment goes on with ` * `, and its end moves to a line of its own;
 //! - between the two parts of a pair that opens a block, the caret goes on a line of its own and
 //!   the closing part on the next;
-//! - else the new line takes the indent the language gives it, and the spaces after the caret
-//!   go.
+//! - after the one statement of a body with no braces (`if (a)` + `b`), the new line goes back
+//!   to the indent of the `if`;
+//! - else the new line takes the indent the language gives it; the spaces after the caret stay
+//!   as part of it when they fit, else they go.
 
 use std::ops::Range;
 
@@ -87,13 +89,67 @@ pub fn enter(
     let spaces = rest.len() - rest.trim_start_matches([' ', '\t']).len();
     let end = range.end + spaces;
     let after = format!("{}\n{}", &text[..range.start], &text[end..]);
-    let new_indent = indent(typing, lang, &after, row_of(text, range.start) + 1, &lead);
+    let new_indent = match tree.and_then(|tree| after_braceless(text, tree, range.start)) {
+        Some(lead) => lead,
+        None => indent(typing, lang, &after, row_of(text, range.start) + 1, &lead),
+    };
+    // Spaces after the caret that fit in the new indent stay, as part of it.
+    let kept = &rest[..spaces];
+    if !kept.is_empty()
+        && kept.len() <= new_indent.len()
+        && kept
+            .bytes()
+            .chain(new_indent.bytes())
+            .all(|byte| byte == b' ')
+    {
+        let inserted = format!("\n{}", &new_indent[kept.len()..]);
+        return Enter {
+            caret: range.start + inserted.len(),
+            range,
+            text: inserted,
+        };
+    }
     let inserted = format!("\n{new_indent}");
     Enter {
         range: range.start..end,
         caret: range.start + inserted.len(),
         text: inserted,
     }
+}
+
+/// The statements that may hold one statement with no braces as their body.
+const BRACELESS: [&str; 6] = [
+    "if_statement",
+    "else_clause",
+    "for_statement",
+    "for_in_statement",
+    "while_statement",
+    "do_statement",
+];
+/// The bodies in braces, which keep the next line inside.
+const BLOCKS: [&str; 3] = ["compound_statement", "statement_block", "block"];
+
+/// When `at` ends the one statement of a body with no braces (`if (a)` then `b;` on the line
+/// below), the indent of the line that holds its `if`: the line after the body goes back there.
+fn after_braceless(text: &str, tree: &Tree, at: usize) -> Option<String> {
+    let from = at.checked_sub(1)?;
+    let mut node = tree.root_node().descendant_for_byte_range(from, from)?;
+    while let Some(parent) = node.parent() {
+        if BRACELESS.contains(&parent.kind()) {
+            let mut cursor = parent.walk();
+            let body = parent
+                .children(&mut cursor)
+                .filter(|child| child.end_byte() > child.start_byte())
+                .last()?;
+            let statement = body.kind().ends_with("_statement") && !BLOCKS.contains(&body.kind());
+            if statement && body.end_byte() == at {
+                let start = motion::line_start(text, parent.start_byte());
+                return Some(lead_of(&text[start..]).to_owned());
+            }
+        }
+        node = parent;
+    }
+    None
 }
 
 /// The indent of `row` of `text` by the language's rules, `lead` when it does not parse.

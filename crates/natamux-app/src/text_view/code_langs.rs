@@ -5,8 +5,10 @@
 //! chosen so the code typing golden files of the old editor hold, and for Shell, Python and YAML
 //! a small rule of our own for the line that opens a block (`shell_opens`, `python_opens`,
 //! `yaml_opens`). Every editor indents by 4 columns here (the app's tab size), Go with a tab.
+//! The comment Mod+/ puts on and the closing words and brackets that move a line back follow the
+//! old editor's results in the `code_commands` golden files.
 
-use super::code_rules::{AUTO, NEWLINE, NO_COMMENT, NO_STRING, Pair, Typing, pair};
+use super::code_rules::{AUTO, Closer, NEWLINE, NO_COMMENT, NO_STRING, Pair, Typing, pair};
 
 const BASE: Typing = Typing {
     pairs: &[],
@@ -22,12 +24,60 @@ const BASE: Typing = Typing {
     indent_after: None,
     string_nodes: &[],
     comment_nodes: &[],
+    comment_toggle: None,
+    dedent: &[],
 };
 
 /// The chars that let a pair close itself in most languages.
 const CODE_CLOSE: &str = ";:.,=}])>";
 const SLASHES: &[&str] = &["// "];
 const HASH: &[&str] = &["# "];
+const HASH_TOGGLE: Option<(&str, &str)> = Some(("# ", ""));
+const SLASH_TOGGLE: Option<(&str, &str)> = Some(("// ", ""));
+fn opens_brace(line: &str) -> bool {
+    line.contains('{')
+}
+
+fn opens_square(line: &str) -> bool {
+    line.contains('[')
+}
+
+fn opens_paren(line: &str) -> bool {
+    line.contains('(')
+}
+
+/// C and script `else`: after an `if (...)` line.
+fn opens_if(line: &str) -> bool {
+    line.trim_start()
+        .strip_prefix("if")
+        .is_some_and(|rest| rest.trim_start().starts_with('('))
+}
+
+/// Shell `fi`, `else` and `elif`: after a line with `then`, or an `else` line.
+fn opens_then(line: &str) -> bool {
+    line.split_whitespace().any(|word| word == "then") || line.trim() == "else"
+}
+
+/// Shell `done`: after a line with `do`.
+fn opens_do(line: &str) -> bool {
+    line.split(|c: char| c.is_whitespace() || c == ';')
+        .any(|word| word == "do")
+}
+
+/// Shell `esac`: after a `case` line.
+fn opens_case(line: &str) -> bool {
+    line.trim_start().starts_with("case ")
+}
+
+/// The closing brackets that move their line back.
+const CLOSE_BRACKETS: &[Closer] = &[("}", opens_brace), ("]", opens_square), (")", opens_paren)];
+const CLOSE_C: &[Closer] = &[("}", opens_brace), (")", opens_paren), ("else", opens_if)];
+const CLOSE_SCRIPT: &[Closer] = &[
+    ("}", opens_brace),
+    ("]", opens_square),
+    (")", opens_paren),
+    ("else", opens_if),
+];
 /// Any node with both tokens of one of these as children is a block.
 const ALL_BRACKETS: &[(&str, &str)] = &[("(", ")"), ("[", "]"), ("{", "}")];
 
@@ -98,6 +148,15 @@ const SHELL: Typing = Typing {
     indent_after: Some(shell_opens),
     string_nodes: SHELL_STRINGS,
     comment_nodes: COMMENT,
+    comment_toggle: HASH_TOGGLE,
+    dedent: &[
+        ("fi", opens_then),
+        ("else", opens_then),
+        // Any line: the old editor moved `elif` back with no test of the line above.
+        ("elif", |_| true),
+        ("done", opens_do),
+        ("esac", opens_case),
+    ],
     ..BASE
 };
 
@@ -111,6 +170,7 @@ const ENV: Typing = Typing {
     line_comments: HASH,
     string_nodes: SHELL_STRINGS,
     comment_nodes: COMMENT,
+    comment_toggle: HASH_TOGGLE,
     ..BASE
 };
 
@@ -145,6 +205,8 @@ const C: Typing = Typing {
     indent_nodes: C_INDENT,
     string_nodes: &["string_literal", "char_literal", "system_lib_string"],
     comment_nodes: COMMENT,
+    comment_toggle: SLASH_TOGGLE,
+    dedent: CLOSE_C,
     ..BASE
 };
 
@@ -172,6 +234,8 @@ const CSS: Typing = Typing {
     indent_nodes: &[("block", "}")],
     string_nodes: &["string_value"],
     comment_nodes: COMMENT,
+    comment_toggle: Some(("/*", "*/")),
+    dedent: &[("}", opens_brace)],
     ..BASE
 };
 
@@ -186,6 +250,7 @@ const GIT_COMMIT: Typing = Typing {
     ],
     line_comments: HASH,
     comment_nodes: COMMENT,
+    comment_toggle: HASH_TOGGLE,
     ..BASE
 };
 
@@ -212,6 +277,8 @@ const GO: Typing = Typing {
     indent_nodes: &[("block", "}")],
     string_nodes: GO_STRINGS,
     comment_nodes: COMMENT,
+    comment_toggle: SLASH_TOGGLE,
+    dedent: CLOSE_BRACKETS,
     ..BASE
 };
 
@@ -222,6 +289,7 @@ const GO_FILE: Typing = Typing {
     line_comments: SLASHES,
     string_nodes: GO_STRINGS,
     comment_nodes: COMMENT,
+    comment_toggle: SLASH_TOGGLE,
     ..BASE
 };
 
@@ -247,6 +315,8 @@ const TYPESCRIPT: Typing = Typing {
     indent_brackets: ALL_BRACKETS,
     string_nodes: SCRIPT_STRINGS,
     comment_nodes: COMMENT,
+    comment_toggle: SLASH_TOGGLE,
+    dedent: CLOSE_SCRIPT,
     ..BASE
 };
 
@@ -287,6 +357,8 @@ const JSONC: Typing = Typing {
     indent_nodes: &[("object", "}"), ("array", "]")],
     string_nodes: &["string"],
     comment_nodes: COMMENT,
+    comment_toggle: SLASH_TOGGLE,
+    dedent: &[("}", opens_brace), ("]", opens_square)],
     ..BASE
 };
 
@@ -309,6 +381,7 @@ const MARKDOWN: Typing = Typing {
     ],
     close_before: CODE_CLOSE,
     lists: true,
+    comment_toggle: Some(("<!--", "-->")),
     ..BASE
 };
 
@@ -345,6 +418,16 @@ const PYTHON: Typing = Typing {
     indent_after: Some(python_opens),
     string_nodes: &["string"],
     comment_nodes: COMMENT,
+    comment_toggle: HASH_TOGGLE,
+    dedent: &[
+        ("}", opens_brace),
+        ("]", opens_square),
+        (")", opens_paren),
+        ("else", python_opens),
+        ("elif", python_opens),
+        ("except", python_opens),
+        ("finally", python_opens),
+    ],
     ..BASE
 };
 
@@ -383,6 +466,8 @@ const RUST: Typing = Typing {
     indent_brackets: ALL_BRACKETS,
     string_nodes: &["string_literal", "raw_string_literal", "char_literal"],
     comment_nodes: &["line_comment", "block_comment"],
+    comment_toggle: SLASH_TOGGLE,
+    dedent: CLOSE_BRACKETS,
     ..BASE
 };
 
@@ -398,6 +483,7 @@ const YAML: Typing = Typing {
     indent_after: Some(yaml_opens),
     string_nodes: &["double_quote_scalar", "single_quote_scalar"],
     comment_nodes: COMMENT,
+    comment_toggle: HASH_TOGGLE,
     ..BASE
 };
 

@@ -91,6 +91,7 @@ impl TextInput {
         };
         let selection = self.model.selection();
         let now = self.now(cx);
+        let version = self.model.version();
         if !selection.is_empty() {
             let Some(close) = typing.surround(c) else {
                 return false;
@@ -152,6 +153,7 @@ impl TextInput {
             });
         }
         self.put_regions(regions);
+        self.dedent_closer(typing, now, version);
         self.changed(edited, cx);
         true
     }

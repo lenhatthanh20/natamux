@@ -177,6 +177,12 @@ pub struct Code {
     /// Builds the right-click menu for a row; the open menu.
     pub(super) menu: Option<RowMenu>,
     pub(super) open_menu: Option<OpenMenu>,
+    /// The ranges before each grow (Ctrl+Shift+Up), and the text version they are of.
+    pub(super) grows: Vec<Range<usize>>,
+    pub(super) grows_version: u64,
+    /// The line a closing word moved back: its start, its indent before, and the text version
+    /// after the move.
+    pub(super) dedented: Option<(usize, String, u64)>,
 }
 
 impl Code {
@@ -208,6 +214,9 @@ impl Code {
             labels: Labels::default(),
             menu: None,
             open_menu: None,
+            grows: Vec::new(),
+            grows_version: 0,
+            dedented: None,
         }
     }
 

@@ -420,23 +420,47 @@ pub(super) fn run_cases(
     rows
 }
 
-/// The tree of `text` in the language of `host`, for a failure message.
+/// The tree of `text` in the language of `host`, for a failure message: each node with its
+/// byte range, unnamed tokens quoted.
 fn tree_of(host: &Host, text: &str) -> String {
+    fn write_node(node: tree_sitter::Node, out: &mut String) {
+        let kind = if node.is_named() {
+            node.kind().to_owned()
+        } else {
+            format!("{:?}", node.kind())
+        };
+        out.push_str(&format!(
+            "({kind} {}..{}",
+            node.start_byte(),
+            node.end_byte()
+        ));
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            out.push(' ');
+            write_node(child, out);
+        }
+        out.push(')');
+    }
     let Some(lang) = lang_for(host.path) else {
         return "no language".to_owned();
     };
     let mut parser = tree_sitter::Parser::new();
     parser.set_language(&(lang.grammar)()).unwrap();
-    parser
-        .parse(text, None)
-        .map_or_else(|| "no tree".to_owned(), |tree| tree.root_node().to_sexp())
+    parser.parse(text, None).map_or_else(
+        || "no tree".to_owned(),
+        |tree| {
+            let mut out = String::new();
+            write_node(tree.root_node(), &mut out);
+            out
+        },
+    )
 }
 
 /// Fails unless `rows` of the own code view equal the golden file of `host`, and names the first
 /// step that differs in every case, with the trees of the texts before and after that step as
 /// the old editor left them (what its indent rules saw).
-fn check_own(host: &Host, rows: &[Value]) {
-    let golden = golden_files::read(SET, host.name);
+pub(super) fn check_own(set: &str, host: &Host, rows: &[Value]) {
+    let golden = golden_files::read(set, host.name);
     let mut problems = Vec::new();
     if golden.first() != rows.first() {
         problems.push(format!(
@@ -493,7 +517,7 @@ macro_rules! hosts {
             #[gpui::test]
             fn own_typing_matches_the_golden_file(cx: &mut TestAppContext) {
                 let host = $host;
-                check_own(&host, &run(&host, true, cx));
+                check_own(SET, &host, &run(&host, true, cx));
             }
 
             #[gpui::test]

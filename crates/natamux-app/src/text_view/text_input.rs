@@ -1012,7 +1012,13 @@ impl TextInput {
         self.edit_all(&edits, anchor, head, cx);
     }
 
-    fn edit_all(&mut self, edits: &[Edit], anchor: usize, head: usize, cx: &mut Context<Self>) {
+    pub(super) fn edit_all(
+        &mut self,
+        edits: &[Edit],
+        anchor: usize,
+        head: usize,
+        cx: &mut Context<Self>,
+    ) {
         let now = self.now(cx);
         self.model.edit_all(edits, anchor, head, now);
         self.changed(true, cx);
@@ -1020,7 +1026,7 @@ impl TextInput {
 
     /// The lines `range` touches, from the start of its first to the end of its last, without
     /// the line end. A selection that ends at a line start leaves that line out.
-    fn line_block(&self, range: Range<usize>) -> Range<usize> {
+    pub(super) fn line_block(&self, range: Range<usize>) -> Range<usize> {
         let text = self.model.text();
         let end = if range.end > range.start && motion::line_start(text, range.end) == range.end {
             range.end - 1
@@ -1465,15 +1471,15 @@ impl Render for TextInput {
             Backtab => backtab(),
             SelectNext => select_word(),
             SelectAllMatches => select_word(),
-            SelectLargerSyntaxNode => nothing(),
-            SelectSmallerSyntaxNode => nothing(),
+            SelectLargerSyntaxNode => grow_selection(),
+            SelectSmallerSyntaxNode => shrink_selection(),
             AddSelectionAbove => nothing(),
             AddSelectionBelow => nothing(),
             MoveLineUp => move_lines(false),
             MoveLineDown => move_lines(true),
             DuplicateLineDown => duplicate_lines(),
             DeleteLine => delete_lines(),
-            ToggleComments => nothing(),
+            ToggleComments => toggle_comments(),
         );
         root.child(TextElement::new(cx.entity()))
             .children(self.menu_element())

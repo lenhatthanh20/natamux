@@ -183,6 +183,9 @@ pub struct Scope {
 
 /// The typing facts of a language (plan 6.4), as the old editor applied them. The values of
 /// each language are in `code_langs.rs`.
+/// A closing word or bracket, and the test of the line that opened its block.
+pub type Closer = (&'static str, fn(&str) -> bool);
+
 pub struct Typing {
     pub pairs: &'static [Pair],
     /// The chars after the caret that still let a pair close itself; a space, a line end and the
@@ -212,6 +215,11 @@ pub struct Typing {
     /// `not_in_comment`.
     pub string_nodes: &'static [&'static str],
     pub comment_nodes: &'static [&'static str],
+    /// Mod+/: the line comment start with its space, or the two ends of a block comment.
+    pub comment_toggle: Option<(&'static str, &'static str)>,
+    /// What, typed at the start of a line, closes a block and moves the line back, each with a
+    /// test of the line that opened the block.
+    pub dedent: &'static [Closer],
 }
 
 impl Typing {
