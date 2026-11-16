@@ -6,17 +6,20 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use gpui::{Entity, TestAppContext, VisualTestContext, point};
+use gpui::{
+    Entity, Modifiers, MouseButton, MouseDownEvent, MouseUpEvent, TestAppContext,
+    VisualTestContext, point,
+};
 use ui::prelude::*;
 
-use super::{DiffEvent, DiffOptions, DiffView};
+use super::{DiffEvent, DiffOptions, DiffView, RIGHT};
 use crate::app::shortcuts::UndoMove;
 use crate::app::test_views;
 use crate::git::change_rules::Side;
 use crate::git::diff_cases::{
     cases, changed_then_deleted, ended, numbered, several_hunks, swapped,
 };
-use crate::git::diff_model::Row;
+use crate::git::diff_model::{Row, Status};
 use crate::git::diff_rows::BlockKind;
 use crate::git::diff_rules::revert_hunk;
 use crate::text_view::diff_side::DiffSide;
@@ -398,6 +401,16 @@ fn mod_z_in_a_diff_editor_undoes_the_last_revert(cx: &mut TestAppContext) {
     assert_eq!(host.read_with(cx, |host, _| host.undos), 1);
 }
 
+/// The buttons of changes drawn over the working tree's side.
+fn buttons(view: &Entity<DiffView>, cx: &mut VisualTestContext) -> usize {
+    cx.run_until_parked();
+    view.update_in(cx, |view, window, cx| {
+        let side = view.sides.as_ref().expect("the diff is drawn").right.clone();
+        let place = side.place(window, cx).expect("the side was drawn");
+        view.hunk_buttons(&side, RIGHT, &place, cx).len()
+    })
+}
+
 /// The caret moving in a side tells the Changes tab once, and puts the buttons on its change.
 #[gpui::test]
 fn a_caret_move_is_told_once_and_shows_the_buttons_of_its_change(cx: &mut TestAppContext) {
@@ -424,8 +437,89 @@ fn a_caret_move_is_told_once_and_shows_the_buttons_of_its_change(cx: &mut TestAp
         view.update(cx, |view, cx| view.cursor_line(cx)),
         Some(hunk.new.start + 1)
     );
-    // Drawn again with no move: nothing more to tell.
-    view.update(cx, |_, cx| cx.notify());
+    assert_eq!(buttons(&view, cx), 1, "the caret's change shows its buttons");
+    // The side's box tells a change with no move: nothing more to tell.
+    let (_, right) = sides(&view, cx);
+    right.input().update(cx, |_, cx| cx.notify());
     cx.run_until_parked();
     assert_eq!(*told.borrow(), 1);
+}
+
+/// A closed change of an inline diff shows as unchanged lines, as Zed's collapsed hunks: no box
+/// and no buttons, only its strip. A closed change of deleted lines only gets its marker, whatever
+/// the other changes show, and a press on that marker opens it again.
+#[gpui::test]
+fn a_closed_change_has_no_box_or_buttons_and_its_marker_opens_it(cx: &mut TestAppContext) {
+    let (view, cx) = open(cx);
+    // Change 0 changes row 1, change 1 deletes the last row.
+    let original = "a 0\nold 0\nb 0\nb 1\ngone 0\n";
+    let modified = "a 0\nnew 0\nb 0\nb 1\n";
+    view.update_in(cx, |view, window, cx| {
+        let options = DiffOptions {
+            side_by_side: false,
+            ..options(false)
+        };
+        view.show("inline", "notes.txt", 1, Some(original), modified, options, window, cx);
+        view.set_movable(true);
+        view.go_to_line(Side::New, 2, window, cx);
+    });
+    cx.run_until_parked();
+    assert_eq!(view.read_with(cx, |view, _| view.hunks.len()), 2);
+    assert_eq!(buttons(&view, cx), 1, "an open change shows its buttons");
+    let rows = |view: &Entity<DiffView>, cx: &mut VisualTestContext| {
+        view.read_with(cx, |view, cx| {
+            let sides = view.sides.as_ref().expect("the diff is drawn");
+            sides.right.rows(cx, Clone::clone).expect("a diff side")
+        })
+    };
+    let marker = |rows: &crate::git::diff_rows::SideRows| {
+        rows.markers.iter().find(|(_, hunk)| *hunk == 1).map(|(line, _)| *line)
+    };
+
+    // Change 1 closes while change 0 still shows its deleted line: change 1 has its marker.
+    view.update(cx, |view, cx| view.toggle(1, cx));
+    let shown = rows(&view, cx);
+    assert!(shown.lines.iter().any(|line| line.old && line.hunk == Some(0)));
+    assert!(!shown.lines.iter().any(|line| line.old && line.hunk == Some(1)));
+    let line = marker(&shown).expect("the closed deletion has its marker");
+
+    // Change 0 closes: its added line keeps the hunk (the strip) but shows as unchanged.
+    view.update(cx, |view, cx| view.toggle(0, cx));
+    let shown = rows(&view, cx);
+    assert_eq!(shown.closed, vec![1, 0]);
+    let of_0: Vec<_> = shown.lines.iter().filter(|line| line.hunk == Some(0)).collect();
+    assert_eq!(of_0.len(), 1, "{of_0:?}");
+    assert!(!of_0[0].old && of_0[0].status == Status::Unchanged);
+    assert!(shown.words.is_empty(), "{:?}", shown.words);
+    assert_eq!(buttons(&view, cx), 0, "a closed change shows no buttons");
+
+    // A press on the marker opens change 1 again; change 0 stays closed.
+    let at = view.update_in(cx, |view, window, cx| {
+        let side = view.sides.as_ref().expect("the diff is drawn").right.clone();
+        let place = side.place(window, cx).expect("the side was drawn");
+        let top = match place.line(line) {
+            Some((top, _)) => top,
+            None => place.block_top(line, 0),
+        };
+        place.origin + point(px(1.), top)
+    });
+    let none = Modifiers::default();
+    cx.simulate_event(MouseDownEvent {
+        button: MouseButton::Left,
+        position: at,
+        modifiers: none,
+        click_count: 1,
+        first_mouse: false,
+    });
+    cx.simulate_event(MouseUpEvent {
+        button: MouseButton::Left,
+        position: at,
+        modifiers: none,
+        click_count: 1,
+    });
+    cx.run_until_parked();
+    assert_eq!(view.read_with(cx, |view, _| view.closed.clone()), vec![0]);
+    let shown = rows(&view, cx);
+    assert!(shown.lines.iter().any(|line| line.old && line.hunk == Some(1)));
+    assert_eq!(marker(&shown), None);
 }

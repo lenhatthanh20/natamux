@@ -103,11 +103,9 @@ impl Frame<'_> {
     /// the box's top and bottom, and the strip.
     fn hunks(&self, rows: &SideRows, paint: &mut DiffPaint) {
         let (laid, lines) = (self.laid, &rows.lines);
-        let changed = |at: usize, hunk: usize| {
-            lines
-                .get(at)
-                .is_some_and(|line| line.hunk == Some(hunk) && line.status != Status::Unchanged)
-        };
+        // Unchanged lines have no hunk, but those of a closed hunk.
+        let changed =
+            |at: usize, hunk: usize| lines.get(at).is_some_and(|line| line.hunk == Some(hunk));
         let mut index = 0;
         while index < lines.len() {
             let Some(hunk) = lines[index].hunk.filter(|&hunk| changed(index, hunk)) else {
@@ -128,6 +126,16 @@ impl Frame<'_> {
             if !self.shown(top, bottom) {
                 continue;
             }
+            let left = self.bounds.left();
+            let strip = (
+                Bounds::from_corners(point(left, top), point(left + self.strip, bottom)),
+                self.strip_colour(rows.kinds.get(hunk)),
+            );
+            // A closed hunk's lines show as unchanged: only its strip.
+            if rows.closed.contains(&hunk) {
+                paint.strips.push(strip);
+                continue;
+            }
             let laid_lines = laid.lines.get(first..=last).unwrap_or_default();
             for (line, side_line) in laid_lines.iter().zip(&lines[first..=last]) {
                 let height = laid.line_height * line.row_starts.len() as f32;
@@ -145,11 +153,7 @@ impl Frame<'_> {
             paint
                 .backs
                 .push((self.across(bottom - one, one), bottom_colour));
-            let left = self.bounds.left();
-            paint.strips.push((
-                Bounds::from_corners(point(left, top), point(left + self.strip, bottom)),
-                self.strip_colour(rows.kinds.get(hunk)),
-            ));
+            paint.strips.push(strip);
         }
     }
 
@@ -213,6 +217,31 @@ impl Frame<'_> {
             }
         }
     }
+}
+
+/// The closed hunk whose marker is at `x`, `y` from the side's left edge and the top of its text
+/// (rows scrolled away included): a press there opens it.
+pub(super) fn closed_marker_at(
+    laid: &Layout,
+    rows: &SideRows,
+    x: Pixels,
+    y: Pixels,
+) -> Option<usize> {
+    let size = (laid.line_height * MARKER).floor();
+    if x < px(0.) || x >= size {
+        return None;
+    }
+    rows.markers
+        .iter()
+        .find(|(line, hunk)| {
+            let row = laid
+                .lines
+                .get(*line)
+                .map_or_else(|| laid.blocks_top(laid.lines.len()), |line| line.first_row);
+            let top = laid.line_height * row as f32 - (size / 2.).floor();
+            rows.closed.contains(hunk) && y >= top && y < top + size
+        })
+        .map(|(_, hunk)| *hunk)
 }
 
 /// Paints a strip or a marker: filled with its colour at `STRIP_FILL`, inside a 1 px line of it.

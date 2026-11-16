@@ -281,7 +281,7 @@ impl DiffView {
 
     /// A side's selection moved: the Changes tab hears it, and the buttons follow the caret.
     fn watch(side: &DiffSide, index: usize, cx: &mut Context<Self>) -> Subscription {
-        cx.observe(side.input(), move |view, _, cx| {
+        side.observe(cx, move |view, cx| {
             let Some(sides) = view.sides.as_mut() else {
                 return;
             };
@@ -345,7 +345,9 @@ impl DiffView {
             .into_iter()
             .filter(|row| !matches!(row, Row::Deleted { row } if closed(*row)))
             .collect();
-        vec![(RIGHT, diff_rows::side_rows(diff, &rows, true))]
+        let mut side = diff_rows::side_rows(diff, &rows, true);
+        side.close(&self.closed);
+        vec![(RIGHT, side)]
     }
 
     /// Mod+' in an inline diff: the change at the caret closes or opens its deleted lines. Side
@@ -358,10 +360,10 @@ impl DiffView {
             return;
         }
         let head = sides.right.selection(cx).1;
+        // A closed hunk's lines keep their hunk, so the caret on one opens it again.
         let at = sides.right.rows(cx, |rows| {
             let line = rows.lines.get(rows.line_at(head))?;
-            let hunk = line.hunk.filter(|_| line.status != Status::Unchanged);
-            Some((hunk, line.old, line.row))
+            Some((line.hunk, line.old, line.row))
         });
         let Some((hunk, old, row)) = at.flatten() else {
             return;
@@ -393,8 +395,9 @@ impl DiffView {
         cx.notify();
     }
 
-    /// A press on the strip of a change in the gutter (the side left it to the view): an inline
-    /// diff closes or opens the change, as Zed's editor did (T-MOUSE-1); side by side keeps it.
+    /// A press on the strip of a change in the gutter, or on the marker of a closed change of
+    /// deleted lines only (the side left it to the view): an inline diff closes or opens the
+    /// change, as Zed's editor did (T-MOUSE-1); side by side keeps it.
     fn strip_press(&mut self, position: Point<Pixels>, window: &mut Window, cx: &mut Context<Self>) {
         let Some(sides) = &self.sides else {
             return;
@@ -407,16 +410,15 @@ impl DiffView {
             return;
         };
         let at = position - place.origin;
-        if at.x < px(0.) || at.x >= place.strip() {
-            return;
-        }
-        let Some(line) = place.line_at(at.y) else {
-            return;
-        };
+        let on_strip = at.x >= px(0.) && at.x < place.strip();
         let hunk = side
             .rows(cx, |rows| {
-                let line = rows.lines.get(line)?;
-                line.hunk.filter(|_| line.status != Status::Unchanged)
+                // Unchanged lines have no hunk, but those of a closed change.
+                let on_line = place
+                    .line_at(at.y)
+                    .filter(|_| on_strip)
+                    .and_then(|line| rows.lines.get(line)?.hunk);
+                on_line.or_else(|| place.closed_marker_at(rows, at))
             })
             .flatten();
         if let Some(hunk) = hunk {

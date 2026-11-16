@@ -86,15 +86,43 @@ pub struct SideRows {
     pub markers: Vec<(usize, usize)>,
     /// The changed words, as ranges of `text`, deleted or added.
     pub words: Vec<(Range<usize>, Status)>,
+    /// Per file (the last commit's, the working tree's), the line each of its rows shows on.
+    pub shown: [Vec<Option<usize>>; 2],
+    /// The hunks of an inline diff whose deleted lines are closed: their lines show as unchanged
+    /// (no box, no words, no buttons), only their strip stays, as Zed's collapsed hunks.
+    pub closed: Vec<usize>,
 }
 
 impl SideRows {
     /// The line of the side's text that shows row `row` of the last commit's file (`old`) or of
     /// the working tree's; None when it does not show.
     pub fn line_of(&self, old: bool, row: u32) -> Option<usize> {
-        self.lines
-            .iter()
-            .position(|line| line.old == old && line.row == row)
+        self.shown[usize::from(!old)]
+            .get(row as usize)
+            .copied()
+            .flatten()
+    }
+
+    /// Closes `closed` hunks of an inline diff (their deleted lines are left out already): their
+    /// lines keep the hunk but show as unchanged, and their words go.
+    pub fn close(&mut self, closed: &[usize]) {
+        self.closed = closed.to_vec();
+        if closed.is_empty() {
+            return;
+        }
+        let is_closed = |line: &SideLine| line.hunk.is_some_and(|hunk| closed.contains(&hunk));
+        for line in &mut self.lines {
+            if is_closed(&*line) {
+                line.status = Status::Unchanged;
+            }
+        }
+        let (lines, starts) = (&self.lines, &self.line_starts);
+        self.words.retain(|(range, _)| {
+            let at = starts.partition_point(|&start| start <= range.start);
+            lines
+                .get(at.saturating_sub(1))
+                .is_none_or(|line| !is_closed(line))
+        });
     }
 
     /// The line that holds offset `at` of the text.
@@ -158,6 +186,8 @@ impl SideRows {
             kinds: Vec::new(),
             markers: Vec::new(),
             words: Vec::new(),
+            shown: [Vec::new(), Vec::new()],
+            closed: Vec::new(),
         }
     }
 }
@@ -224,12 +254,15 @@ pub fn side_rows(diff: &FileDiff, rows: &[Row], new_side: bool) -> SideRows {
         above[block.line] += block.rows;
     }
     side.above = Rc::from(above);
-    // Inline shows the old lines of every hunk; side by side the working tree's side marks where
-    // a hunk's deleted lines were.
-    let inline = rows.iter().any(|row| matches!(row, Row::Deleted { .. }));
-    if new_side && !inline {
+    // The working tree's side marks where a hunk's deleted lines were when none of them shows:
+    // always side by side, and inline when the hunk is closed.
+    if new_side {
         for (index, hunk) in hunks.iter().enumerate() {
-            if hunk.new.is_empty() && !hunk.old.is_empty() {
+            let old_shows = hunk
+                .old
+                .clone()
+                .any(|row| shown[0].get(row as usize).is_some_and(Option::is_some));
+            if hunk.new.is_empty() && !hunk.old.is_empty() && !old_shows {
                 let line = side
                     .lines
                     .iter()
@@ -240,6 +273,7 @@ pub fn side_rows(diff: &FileDiff, rows: &[Row], new_side: bool) -> SideRows {
         }
     }
     add_words(&mut side, diff, &sources, &shown);
+    side.shown = shown;
     side
 }
 

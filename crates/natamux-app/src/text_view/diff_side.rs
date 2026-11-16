@@ -36,7 +36,7 @@ use super::text_box::TextBox;
 use super::text_input::TextInput;
 use crate::files::outline_rules::OutlineRow;
 use crate::git::code_target::{BlameTarget, FindTarget, RowMenu};
-use crate::git::diff_model::{FileDiff, Status};
+use crate::git::diff_model::FileDiff;
 #[cfg(test)]
 use crate::git::diff_model::Row;
 #[cfg(test)]
@@ -271,16 +271,21 @@ impl TextInput {
         if y < px(0.) {
             return None;
         }
+        let diff = self.code.as_ref()?.diff.as_ref()?;
+        let x = position.x - bounds.left();
+        if super::diff_paint::closed_marker_at(&laid, &diff.rows, x, y).is_some() {
+            return Some(GutterPress::Strip);
+        }
         let row = (y / line_height) as usize;
         let index = laid.line_index_of_row(row);
         let laid_line = laid.lines.get(index)?;
         if row >= laid_line.first_row + laid_line.row_starts.len() {
             return None;
         }
-        let diff = self.code.as_ref()?.diff.as_ref()?;
         let line = diff.rows.lines.get(index)?;
         let strip = (line_height * super::diff_paint::STRIP).floor();
-        if line.status != Status::Unchanged && position.x < bounds.left() + strip {
+        // A changed line, or a line of a closed hunk (the only unchanged lines with a hunk).
+        if line.hunk.is_some() && x < strip {
             return Some(GutterPress::Strip);
         }
         let number = line.number?.to_string();
@@ -452,6 +457,11 @@ impl Place {
         (self.laid.line_height * super::diff_paint::STRIP).floor()
     }
 
+    /// The closed hunk whose gutter marker is at `at` from the side's top left.
+    pub fn closed_marker_at(&self, rows: &SideRows, at: Point<Pixels>) -> Option<usize> {
+        super::diff_paint::closed_marker_at(&self.laid, rows, at.x, at.y + self.scroll.y)
+    }
+
     /// The line whose rows are at `y` from the side's top; None on an empty row.
     pub fn line_at(&self, y: Pixels) -> Option<usize> {
         let at = y + self.scroll.y;
@@ -598,6 +608,15 @@ impl DiffSide {
 
     pub fn input(&self) -> &Entity<TextInput> {
         &self.input
+    }
+
+    /// Calls `changed` each time the side's box tells it changed (a caret move among others).
+    pub fn observe<T: 'static>(
+        &self,
+        cx: &mut Context<T>,
+        mut changed: impl FnMut(&mut T, &mut Context<T>) + 'static,
+    ) -> Subscription {
+        cx.observe(&self.input, move |this, _, cx| changed(this, cx))
     }
 
     pub fn id(&self) -> EntityId {

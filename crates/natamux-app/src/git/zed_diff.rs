@@ -7,7 +7,6 @@
 use std::ops::Range;
 
 use buffer_diff::BufferDiff;
-use editor::display_map::CustomBlockId;
 use editor::{Anchor, Editor, MultiBuffer};
 use gpui::Entity;
 use language::{Buffer, Capability};
@@ -24,7 +23,6 @@ use super::whitespace_rules::diff_base;
 pub struct ZedSides {
     pub right: Entity<Editor>,
     pub left: Option<Entity<Editor>>,
-    pub spacer_blocks: Vec<(Entity<Editor>, CustomBlockId)>,
 }
 
 #[derive(Default)]
@@ -155,12 +153,8 @@ impl ZedDiff {
             });
             read_only_editor(left_buffer, &base, options.wrap, window, cx)
         });
-        let spacer_blocks = self.add_spacers(&right, left.as_ref(), cx);
-        self.sides = Some(ZedSides {
-            right,
-            left,
-            spacer_blocks,
-        });
+        self.add_spacers(&right, left.as_ref(), cx);
+        self.sides = Some(ZedSides { right, left });
         cx.notify();
     }
 
@@ -170,25 +164,23 @@ impl ZedDiff {
         right: &Entity<Editor>,
         left: Option<&Entity<Editor>>,
         cx: &mut App,
-    ) -> Vec<(Entity<Editor>, CustomBlockId)> {
+    ) {
         let (Some(left), Some(buffer), Some(diff)) = (left, &self.buffer, &self.diff) else {
-            return Vec::new();
+            return;
         };
         let base = diff.read(cx).base_text_buffer().clone();
         let old_rows = base.read(cx).max_point().row + 1;
         let new_rows = buffer.read(cx).max_point().row + 1;
-        spacers(&self.hunks)
+        for spacer in spacers(&self.hunks)
             .into_iter()
             .chain(end_spacer(&self.hunks, old_rows, new_rows))
-            .filter_map(|spacer| {
-                let (editor, side_buffer) = match spacer.side {
-                    Side::Old => (left, &base),
-                    Side::New => (right, buffer),
-                };
-                let id = add_spacer(editor, side_buffer, spacer, cx)?;
-                Some((editor.clone(), id))
-            })
-            .collect()
+        {
+            let (editor, side_buffer) = match spacer.side {
+                Side::Old => (left, &base),
+                Side::New => (right, buffer),
+            };
+            add_spacer(editor, side_buffer, spacer, cx);
+        }
     }
 
     /// The rows of one side around each change, or the whole file.
