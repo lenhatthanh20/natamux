@@ -96,50 +96,55 @@ pub(super) fn gutter_size(
 }
 
 /// The rows sticky scroll pins with the view scrolled `scroll_top` rows down. `items` are the
-/// outline items around the top lines, in text order; `row_of` gives the shown row of an
-/// offset. An item pins the row of its name (from its first shown part when that is on the same
-/// line) while its last row is below the pinned rows above it; the last row it may take is the one
-/// before its end, so it is pushed up as its item ends.
+/// outline items around the top lines, in text order (outer items first); `row_of` gives the
+/// shown row of an offset. The rule:
+/// - each item with more than its head row and the row before its end pins its head row once;
+/// - pinned rows stack: an item sits below the pinned items still open on its head row;
+/// - it is pinned while its head row is scrolled above its slot and its end is below it;
+/// - it never goes below the row before its end, so it moves up as its item ends.
 pub(super) fn sticky_rows(
     items: &[OutlineItem],
     text: &str,
     scroll_top: f32,
     row_of: impl Fn(usize) -> usize,
 ) -> Vec<Sticky> {
-    let mut ends: Vec<usize> = Vec::new();
-    let mut rows: Vec<Sticky> = Vec::new();
+    // Each pinned row with the shown row its item ends on.
+    let mut pinned: Vec<(Sticky, usize)> = Vec::new();
     for item in items {
-        let line_start = motion::line_start(text, item.selection.start);
-        let from = if motion::line_start(text, item.source.start) == line_start {
-            item.source.start
-        } else {
-            line_start
-        };
-        let row = row_of(from);
-        if rows.last().is_some_and(|last| last.row == row) {
+        let head = head_offset(text, item);
+        let row = row_of(head);
+        let end = row_of(item.range.end);
+        let same_head = pinned.last().is_some_and(|(last, _)| last.row == row);
+        if same_head || end < row + 2 {
             continue;
         }
-        let end_row = row_of(item.range.end);
-        let last_row = end_row.saturating_sub(1);
-        if last_row <= row {
-            continue;
+        // Outline ranges nest or follow each other: the open ones are the items around this one.
+        let above = pinned.iter().filter(|(_, ends)| *ends > row).count() as f32;
+        let slot = scroll_top + above;
+        let scrolled_past = (row as f32) < slot;
+        let still_open = slot < end as f32;
+        if scrolled_past && still_open {
+            let lowest = (end - 1) as f32 - scroll_top;
+            let sticky = Sticky {
+                row,
+                line: text[..head].matches('\n').count(),
+                offset: above.min(lowest),
+            };
+            pinned.push((sticky, end));
         }
-        while ends.last().is_some_and(|&end| end <= row) {
-            ends.pop();
-        }
-        let depth = ends.len() as f32;
-        let top = scroll_top + depth;
-        if row as f32 >= top || end_row as f32 <= top {
-            continue;
-        }
-        ends.push(end_row);
-        rows.push(Sticky {
-            row,
-            line: text[..from].matches('\n').count(),
-            offset: depth.min(last_row as f32 - scroll_top),
-        });
     }
-    rows
+    pinned.into_iter().map(|(sticky, _)| sticky).collect()
+}
+
+/// Where a pinned row starts: the item's first shown part when it is on the line of its name,
+/// else the start of that line.
+fn head_offset(text: &str, item: &OutlineItem) -> usize {
+    let name_line = motion::line_start(text, item.selection.start);
+    if motion::line_start(text, item.source.start) == name_line {
+        item.source.start
+    } else {
+        name_line
+    }
 }
 
 /// The lines the selection `range` of `text` touches, both ends included.

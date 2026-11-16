@@ -156,7 +156,10 @@ fn a_guessed_edit_keeps_labels_on_whole_chars() {
     labels.follow("aạ\n", None);
     assert_eq!(labels.insert("aạ\n"), "L0 aạL1 \nL2 ");
     let edit = input_edit("ab\nlá\n", "aạ\n");
-    assert_eq!((edit.start_byte, edit.old_end_byte, edit.new_end_byte), (1, 6, 4));
+    assert_eq!(
+        (edit.start_byte, edit.old_end_byte, edit.new_end_byte),
+        (1, 6, 4)
+    );
 }
 
 #[test]
