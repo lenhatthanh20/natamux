@@ -43,7 +43,7 @@ pub(super) async fn editor_type(handle: WindowHandle<Root>, cx: &mut AsyncApp) -
     })?;
     let body = parsed_body(handle, cx).await?;
     in_window(handle, cx, |window, cx| {
-        let focus = body.read(cx).editor().focus_handle(cx);
+        let focus = body.read(cx).focus_handle(cx);
         window.focus(&focus, cx);
     })?;
     sleep(SETTLE, cx).await;

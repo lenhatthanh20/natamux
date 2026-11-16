@@ -1,7 +1,8 @@
 //! T-HL-1 (plan 6.4, 7.6): the syntax colours of the editor tab, as runs of `(byte range, theme
 //! key, colour, font weight, font style)` under Natamux Dark, for the `code-<lang>` shot files,
 //! three files of the reviewed task's shots and the fixtures in `tests/fixtures/code/`. The own
-//! highlighter must give the same runs.
+//! highlighter must give the same runs. The rows come from the editor tab as it was on Zed's
+//! editor (`ZedBody`).
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
@@ -16,7 +17,7 @@ use crate::app::golden_files;
 use crate::app::options::Shot;
 use crate::app::shots_text::code_sample;
 use crate::app::test_views;
-use crate::files::file_editor_body::FileEditorBody;
+use crate::files::zed_body::ZedBody;
 
 const SET: &str = "highlight";
 
@@ -70,7 +71,7 @@ pub(crate) fn hex(color: Hsla) -> String {
 
 /// The rows of one file: a head with its language, then one row per run of one theme key.
 fn rows(path: &str, text: &str, cx: &mut TestAppContext) -> Vec<Value> {
-    let (body, cx) = cx.add_window_view(|window, cx| FileEditorBody::new(path, text, window, cx));
+    let (body, cx) = cx.add_window_view(|window, cx| ZedBody::new(path, text, window, cx));
     cx.run_until_parked();
     cx.update(|_, cx| {
         let body = body.read(cx);

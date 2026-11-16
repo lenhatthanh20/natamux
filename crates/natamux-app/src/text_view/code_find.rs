@@ -50,13 +50,18 @@ impl FindTarget for CodeView {
         self.input_ref().update(cx, |input, cx| {
             input.model.select(range.start, range.end);
             input.changed(false, cx);
-            // The row goes to the middle of the view, not just into it. Before the first draw the
-            // autoscroll of `changed` stays on, so the next paint scrolls to the caret.
+            // The row goes to the middle of the view, not just into it, as Zed's editor centred
+            // it: the top row is that row less half the other rows in view, rounded down. Before
+            // the first draw the autoscroll of `changed` stays on, so the next paint scrolls to
+            // the caret.
             let laid = input.layout(window, cx);
             if let Some(bounds) = input.last_bounds {
                 input.autoscroll = false;
-                let at = laid.position(input.to_display(range.start), false);
-                input.scroll.y = at.y + laid.line_height / 2. - bounds.size.height / 2.;
+                let line_height = laid.line_height.max(gpui::px(1.));
+                let row = laid.position(input.to_display(range.start), false).y / line_height;
+                let shown = bounds.size.height / line_height;
+                let above = ((shown - 1.) / 2.).floor().max(0.);
+                input.scroll.y = line_height * (row.round() - above).max(0.);
                 input.clamp_scroll(&laid, bounds);
             }
             cx.notify();

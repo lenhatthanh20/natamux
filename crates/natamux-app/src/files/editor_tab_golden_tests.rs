@@ -1,5 +1,5 @@
-//! The find bar and the blame column of the editor tab on Zed's editor (advisor A20, S4.3a), so
-//! the code view of S4.3c must give the same rows:
+//! The find bar and the blame column of the editor tab (advisor A20). The golden files were
+//! written on Zed's editor (S4.3a); the own code view (S4.3c) must give the same rows:
 //! - find, with Show whitespace on: the highlighted ranges (active match or other match) and the
 //!   selection after the term is typed and after each Enter and Shift+Enter, from the start of the
 //!   file and from a caret further down;
@@ -10,10 +10,10 @@
 
 use std::sync::Arc;
 
-use editor::{Editor, MultiBufferOffset};
+use std::time::Duration;
+
 use gpui::{AppContext as _, Entity, TestAppContext, VisualTestContext};
 use serde_json::{Value, json};
-use text::Point;
 use theme::ActiveTheme;
 
 use crate::app::dashboard::Dashboard;
@@ -24,7 +24,9 @@ use crate::app::source::Source;
 use crate::app::test_views;
 use crate::app::view_state::ViewState;
 use crate::files::file_editor::FileEditor;
+use crate::git::code_target::BlameTarget as _;
 use crate::git::languages::golden_tests::hex;
+use crate::text_view::code_view::CodeView;
 
 const SET: &str = "editor_tab";
 const REVIEWED: &str = "T-0143";
@@ -52,50 +54,53 @@ fn open(cx: &mut TestAppContext) -> (Entity<FileEditor>, &mut VisualTestContext)
     (editor, cx)
 }
 
-fn text_editor(editor: &Entity<FileEditor>, cx: &mut VisualTestContext) -> Entity<Editor> {
+fn text_editor(editor: &Entity<FileEditor>, cx: &mut VisualTestContext) -> CodeView {
     editor.read_with(cx, |editor, cx| {
         let body = editor.body.as_ref().expect("the body is drawn");
-        body.read(cx).editor().clone()
+        body.read(cx).view().clone()
     })
 }
 
-fn at(point: Point) -> Value {
-    json!([point.row, point.column])
+/// Row and byte column of `offset`, as a Zed `Point`.
+fn at(text: &str, offset: usize) -> Value {
+    let row = text[..offset].matches('\n').count();
+    let start = text[..offset].rfind('\n').map_or(0, |at| at + 1);
+    json!([row, offset - start])
 }
 
 /// The highlighted ranges in file order, each as active, match or its colour, and the selection.
-fn find_row(step: &str, target: &Entity<Editor>, cx: &mut VisualTestContext) -> Value {
-    target.update(cx, |editor, cx| {
-        let snapshot = editor.display_snapshot(cx);
-        let buffer = snapshot.buffer_snapshot();
-        let all = buffer.anchor_before(MultiBufferOffset(0))..buffer.anchor_after(buffer.len());
-        let theme = cx.theme().clone();
-        let colors = theme.colors();
-        let mut found: Vec<(Point, Point, String)> = editor
-            .background_highlights_in_range(all, &snapshot, &theme)
+fn find_row(step: &str, target: &CodeView, cx: &mut VisualTestContext) -> Value {
+    // The other places of the selected text show after a short wait.
+    cx.executor().advance_clock(Duration::from_millis(200));
+    cx.run_until_parked();
+    cx.update(|_, cx| {
+        let text = target.text_box().text(cx);
+        let other = hex(cx
+            .theme()
+            .colors()
+            .editor_document_highlight_bracket_background);
+        let (marks, selection) = target.marks(cx);
+        let mut found: Vec<(usize, usize, String)> = marks
             .into_iter()
-            .map(|(range, color)| {
-                let kind = if color == colors.search_active_match_background {
-                    "active".to_owned()
-                } else if color == colors.search_match_background {
-                    "match".to_owned()
-                } else {
-                    hex(color)
+            .map(|(range, kind)| {
+                let kind = match kind {
+                    Some(true) => "active".to_owned(),
+                    Some(false) => "match".to_owned(),
+                    None => other.clone(),
                 };
-                (
-                    range.start.to_point(&snapshot),
-                    range.end.to_point(&snapshot),
-                    kind,
-                )
+                (range.start, range.end, kind)
             })
             .collect();
         found.sort();
         let found: Vec<Value> = found
             .into_iter()
-            .map(|(start, end, kind)| json!([at(start), at(end), kind]))
+            .map(|(start, end, kind)| json!([at(&text, start), at(&text, end), kind]))
             .collect();
-        let selection = editor.selections.newest::<Point>(&snapshot);
-        json!([step, found, [at(selection.start), at(selection.end)]])
+        json!([
+            step,
+            found,
+            [at(&text, selection.start), at(&text, selection.end)]
+        ])
     })
 }
 
@@ -147,7 +152,7 @@ fn find_rows(cx: &mut TestAppContext) -> Vec<Value> {
 fn menu_rows(label: &str, editor: &Entity<FileEditor>, cx: &mut VisualTestContext) -> Vec<Value> {
     let lines = editor.read_with(cx, |editor, cx| {
         let body = editor.body.as_ref().expect("the body is drawn");
-        body.read(cx).buffer().read(cx).max_point().row
+        body.read(cx).view().lines(cx) - 1
     });
     let blame = editor.read_with(cx, |editor, _| editor.blame.clone());
     let rows = (0..=lines).map(Some).chain([None]);
@@ -165,7 +170,7 @@ fn blame_rows(cx: &mut TestAppContext) -> Vec<Value> {
     editor.update(cx, |editor, cx| editor.annotate(cx));
     cx.run_until_parked();
     let target = text_editor(&editor, cx);
-    let shown = target.update(cx, |editor, cx| editor.display_text(cx));
+    let shown = cx.update(|_, cx| target.shown_text(cx));
     rows.extend(
         shown
             .lines()
@@ -179,7 +184,7 @@ fn blame_rows(cx: &mut TestAppContext) -> Vec<Value> {
 fn blocked_rows(cx: &mut TestAppContext) -> Vec<Value> {
     let (editor, cx) = open(cx);
     let target = text_editor(&editor, cx);
-    target.update_in(cx, |editor, window, cx| editor.insert("x", window, cx));
+    cx.update(|window, cx| target.text_box().insert_at_caret("x", window, cx));
     cx.run_until_parked();
     menu_rows("menu with a draft", &editor, cx)
 }

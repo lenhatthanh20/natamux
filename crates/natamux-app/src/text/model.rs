@@ -342,6 +342,12 @@ impl TextModel {
         }
     }
 
+    /// Drops every undo and redo step.
+    pub fn forget_history(&mut self) {
+        self.undo.clear();
+        self.redo.clear();
+    }
+
     pub fn undo(&mut self) -> bool {
         let Some(step) = self.undo.pop() else {
             return false;

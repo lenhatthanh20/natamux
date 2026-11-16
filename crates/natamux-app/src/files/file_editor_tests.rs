@@ -28,7 +28,7 @@ fn open_readme(cx: &mut TestAppContext) -> (Entity<FileEditor>, &mut VisualTestC
     cx.run_until_parked();
     editor.update_in(cx, |editor, window, cx| {
         let body = editor.body.clone().expect("the body is drawn");
-        window.focus(&body.read(cx).editor().focus_handle(cx), cx);
+        window.focus(&body.read(cx).focus_handle(cx), cx);
     });
     cx.run_until_parked();
     (editor, cx)
@@ -74,7 +74,7 @@ fn source_gives_the_focus_back_to_the_editor(cx: &mut TestAppContext) {
     let in_editor = editor.update_in(cx, |editor, window, cx| {
         editor.set_rendered(false, window, cx);
         let body = editor.body.clone().expect("the body is kept");
-        body.read(cx).editor().focus_handle(cx).is_focused(window)
+        body.read(cx).focus_handle(cx).is_focused(window)
     });
     assert!(in_editor);
 }

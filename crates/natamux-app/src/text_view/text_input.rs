@@ -10,13 +10,14 @@ use std::time::{Duration, Instant};
 use gpui::prelude::*;
 use gpui::{
     AbsoluteLength, App, Bounds, ClipboardItem, Context, CursorStyle, EventEmitter, FocusHandle,
-    Focusable, Font, KeyContext, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels,
-    Point, Render, ScrollWheelEvent, SharedString, Subscription, TextRun, TextStyle,
+    Focusable, Font, Hsla, KeyContext, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
+    Pixels, Point, Render, ScrollWheelEvent, SharedString, Subscription, TextRun, TextStyle,
     TextStyleRefinement, UnderlineStyle, Window, div, font, point, px, relative, rems,
 };
 use theme::ActiveTheme;
 
 use super::blink::Blink;
+use super::code_contrast::with_contrast;
 use super::code_view::{Code, FAST_SCROLL};
 use super::element::{CARET_WIDTH, Layout, LayoutKey, TextElement, text_inset, wrap_width};
 use super::text_box::TextEvent;
@@ -455,13 +456,14 @@ impl TextInput {
         }
     }
 
-    /// One run of the text style, or the syntax colours of a code view; the marked text of an
-    /// input method is underlined.
+    /// One run of the text style, or the syntax colours of a code view, kept in contrast with
+    /// the backgrounds of `marks`; the marked text of an input method is underlined.
     pub(super) fn runs(
         &self,
         style: &TextStyle,
         len: usize,
         placeholder: bool,
+        marks: &[(Range<usize>, Hsla)],
         cx: &App,
     ) -> Vec<TextRun> {
         let color = if placeholder {
@@ -482,12 +484,15 @@ impl TextInput {
         let runs = if placeholder {
             None
         } else {
-            self.code_runs(&run, text_len, self.query_lines(), cx)
+            self.code_runs(&run, text_len, self.query_lines(), &self.sticky_heads(), cx)
         };
         let label = labels.map(|_| self.label_run(&run, cx));
         let mut runs = runs.unwrap_or_else(|| vec![run]);
         if let (Some(labels), Some(label)) = (labels, label) {
             runs = labels.splice(runs, &label);
+        }
+        if !placeholder {
+            runs = with_contrast(runs, marks, cx.theme().colors().editor_background);
         }
         let marked = self.model.marked().filter(|_| !placeholder);
         let Some(marked) = marked else {
@@ -574,6 +579,8 @@ impl TextInput {
             gutter_pad,
             view,
             lines: self.query_lines(),
+            heads: self.sticky_heads(),
+            marks: self.contrast_marks(self.focus.is_focused(window), cx),
         };
         if let Some(laid) = &self.laid
             && laid.key == key
@@ -581,7 +588,7 @@ impl TextInput {
             return laid.clone();
         }
         let (shown, is_placeholder) = self.display();
-        let runs = self.runs(&style, shown.len(), is_placeholder, cx);
+        let runs = self.runs(&style, shown.len(), is_placeholder, &key.marks, cx);
         let laid = Rc::new(Layout::build(
             key,
             &shown,
@@ -813,11 +820,12 @@ impl TextInput {
         self.model.goal_x = Some(goal.into());
     }
 
-    /// The rows the box shows at once.
+    /// The rows a page key moves: the rows the box shows at once, less one.
     fn page_rows(&mut self, window: &Window, cx: &App) -> isize {
         let laid = self.layout(window, cx);
         let height = self.last_bounds.map_or(px(0.), |bounds| bounds.size.height);
-        ((height / laid.line_height) as isize).max(1)
+        // One row less than the rows in view, as Zed's editor paged.
+        ((height / laid.line_height) as isize - 1).max(1)
     }
 
     fn page(&mut self, down: bool, window: &mut Window, cx: &mut Context<Self>) {

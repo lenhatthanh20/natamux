@@ -2,12 +2,12 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use editor::actions::Undo;
-use gpui::{Entity, TestAppContext, VisualTestContext};
-use text::Point;
+use gpui::{Entity, Focusable as _, TestAppContext, VisualTestContext};
 
-use super::FileEditorBody;
+use super::{FileEditorBody, cleaned, line_offset};
 use crate::app::test_views;
+use crate::git::code_target::FindTarget as _;
+use crate::text_view::text_input::actions::Undo;
 
 fn open<'a>(
     cx: &'a mut TestAppContext,
@@ -23,14 +23,17 @@ fn text(body: &Entity<FileEditorBody>, cx: &mut VisualTestContext) -> String {
 }
 
 fn type_text(body: &Entity<FileEditorBody>, typed: &str, cx: &mut VisualTestContext) {
-    let editor = body.read_with(cx, |body, _| body.editor().clone());
-    editor.update_in(cx, |editor, window, cx| editor.insert(typed, window, cx));
+    body.update_in(cx, |body, window, cx| {
+        body.view().text_box().insert_at_caret(typed, window, cx)
+    });
     cx.run_until_parked();
 }
 
 fn undo(body: &Entity<FileEditorBody>, cx: &mut VisualTestContext) {
-    let editor = body.read_with(cx, |body, _| body.editor().clone());
-    editor.update_in(cx, |editor, window, cx| editor.undo(&Undo, window, cx));
+    body.update_in(cx, |body, window, cx| {
+        window.focus(&body.focus_handle(cx), cx)
+    });
+    cx.dispatch_action(Undo);
     cx.run_until_parked();
 }
 
@@ -97,12 +100,9 @@ fn clean_keeps_an_empty_file_empty(cx: &mut TestAppContext) {
     assert_eq!(text(&body, cx), "");
 }
 
-fn cursor(body: &Entity<FileEditorBody>, cx: &mut VisualTestContext) -> Point {
-    let editor = body.read_with(cx, |body, _| body.editor().clone());
-    editor.update(cx, |editor, cx| {
-        let snapshot = editor.display_snapshot(cx);
-        editor.selections.newest::<Point>(&snapshot).head()
-    })
+/// The caret, as a byte offset.
+fn cursor(body: &Entity<FileEditorBody>, cx: &mut VisualTestContext) -> usize {
+    body.update(cx, |body, cx| body.view().caret(cx))
 }
 
 /// Review 2: the column counts characters, not bytes; a byte column inside `ế` panicked.
@@ -110,20 +110,33 @@ fn cursor(body: &Entity<FileEditorBody>, cx: &mut VisualTestContext) -> Point {
 fn go_to_counts_the_column_in_characters(cx: &mut TestAppContext) {
     let (body, cx) = open(cx, "tiếng\n");
     body.update_in(cx, |body, window, cx| body.go_to(1, Some(3), window, cx));
-    assert_eq!(cursor(&body, cx), Point::new(0, 2));
+    assert_eq!(cursor(&body, cx), 2);
     body.update_in(cx, |body, window, cx| body.go_to(1, Some(4), window, cx));
-    assert_eq!(cursor(&body, cx), Point::new(0, 5));
+    assert_eq!(cursor(&body, cx), 5);
     body.update_in(cx, |body, window, cx| body.go_to(1, Some(99), window, cx));
-    assert_eq!(cursor(&body, cx), Point::new(0, 7));
+    assert_eq!(cursor(&body, cx), 7);
 }
 
 #[gpui::test]
 fn go_to_clamps_the_line_and_the_column(cx: &mut TestAppContext) {
     let (body, cx) = open(cx, "ab\ncdef\ng\n");
     body.update_in(cx, |body, window, cx| body.go_to(2, Some(3), window, cx));
-    assert_eq!(cursor(&body, cx), Point::new(1, 2));
+    assert_eq!(cursor(&body, cx), 5);
     body.update_in(cx, |body, window, cx| body.go_to(2, Some(99), window, cx));
-    assert_eq!(cursor(&body, cx), Point::new(1, 4));
+    assert_eq!(cursor(&body, cx), 7);
     body.update_in(cx, |body, window, cx| body.go_to(99, None, window, cx));
-    assert_eq!(cursor(&body, cx), Point::new(3, 0));
+    assert_eq!(cursor(&body, cx), 10);
+}
+
+#[test]
+fn cleaned_turns_trailing_whitespace_at_the_end_into_one_line_break() {
+    assert_eq!(cleaned("a \n\t\n \n"), "a\n");
+    assert_eq!(cleaned("  \n"), "\n");
+    assert_eq!(cleaned("a\r\n"), "a\n");
+}
+
+#[test]
+fn line_offset_clamps_past_the_last_line() {
+    assert_eq!(line_offset("ab\ncd", 9, Some(9)), 5);
+    assert_eq!(line_offset("ab\ncd", 0, None), 0);
 }

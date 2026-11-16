@@ -33,7 +33,6 @@ use crate::git::blame_marks::{BlameFailed, BlameMarks, Blocked};
 use crate::git::change_rules::{is_markdown, split_path};
 use crate::git::code_target::BlameTarget;
 use crate::git::editor_find::EditorFind;
-use crate::git::zed_targets::ZedBlame;
 use crate::terminals::pane_header::icon_button;
 
 pub struct FileEditor {
@@ -138,7 +137,7 @@ impl FileEditor {
         }
         self.rendered = rendered;
         match self.body.as_ref().filter(|_| !rendered) {
-            Some(body) => window.focus(&body.read(cx).editor().focus_handle(cx), cx),
+            Some(body) => window.focus(&body.read(cx).focus_handle(cx), cx),
             None => window.focus(&self.focus, cx),
         }
         cx.notify();
@@ -209,8 +208,7 @@ impl FileEditor {
                 this.edited(&edited.0, cx)
             }));
         if let Some(source) = self.dashboard.read(cx).source().cloned() {
-            let editor = body.read(cx).editor().clone();
-            let target = ZedBlame::new(&editor, body.read(cx).buffer().clone());
+            let target = body.read(cx).view().clone();
             let sides: Vec<(Rc<dyn BlameTarget>, ImageSide)> =
                 vec![(Rc::new(target), ImageSide::Modified)];
             self.blame.update(cx, |blame, cx| {

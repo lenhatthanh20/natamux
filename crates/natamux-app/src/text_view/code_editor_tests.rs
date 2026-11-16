@@ -384,6 +384,53 @@ fn the_colours_are_asked_for_the_lines_around_the_shown_ones(cx: &mut TestAppCon
     assert_eq!(lines, 300..600);
 }
 
+/// Regression (S4.3c flip, `workspace-editor-long`): the pinned row of an item far above the
+/// coloured lines showed in the plain text colour.
+#[gpui::test]
+fn the_head_line_of_a_pinned_item_far_above_is_coloured(cx: &mut TestAppContext) {
+    let body: String = (0..1000).map(|n| format!("  a{n}: {n},\n")).collect();
+    let text = format!("// rows\nexport const rows = {{\n{body}}}\n");
+    let (_, input, cx) = open("x.ts", &text, cx);
+    cx.executor().advance_clock(Duration::from_millis(50));
+    cx.run_until_parked();
+    let line_height = input.update_in(cx, |input, window, cx| input.layout(window, cx).line_height);
+    input.update(cx, |input, cx| {
+        input.scroll = point(px(0.), line_height * 900.);
+        cx.notify();
+    });
+    cx.run_until_parked();
+    let (lines, heads) = input.update_in(cx, |input, window, cx| {
+        let laid = input.layout(window, cx);
+        (laid.key.lines.clone(), laid.key.heads.clone())
+    });
+    assert!(lines.is_some_and(|lines| lines.start > 1));
+    assert_eq!(heads, vec![1]);
+    let painted = paint(&input, cx);
+    assert_eq!(painted.sticky.len(), 1);
+    let runs = input.read_with(cx, |input, cx| {
+        let base = gpui::TextRun {
+            len: 0,
+            font: gpui::font(".ZedMono"),
+            color: Hsla::default(),
+            background_color: None,
+            underline: None,
+            strikethrough: None,
+        };
+        let len = input.model.text().len();
+        input
+            .code_runs(&base, len, input.query_lines(), &input.sticky_heads(), cx)
+            .unwrap()
+    });
+    // `export` (bytes 8..14 of the text) has a colour of its own.
+    let mut at = 0;
+    let export = runs.iter().find(|run| {
+        let start = at;
+        at += run.len;
+        start <= 8 && 8 < at
+    });
+    assert!(export.is_some_and(|run| run.color != Hsla::default()));
+}
+
 #[gpui::test]
 fn a_view_with_nothing_to_colour_asks_for_no_lines(cx: &mut TestAppContext) {
     let (_, input, cx) = open("notes.txt", &lines(1000), cx);

@@ -27,7 +27,7 @@ const LEFT_PAD: f32 = 2.;
 /// Right of the numbers, in ch: the room of the fold markers.
 const RIGHT_PAD: f32 = 4.;
 /// Sticky scroll looks for items this many lines below the top one.
-const STICKY_LINES: usize = 10;
+pub(super) const STICKY_LINES: usize = 10;
 
 /// The guides and the outline of the text, kept until it changes.
 #[derive(Default)]
@@ -138,7 +138,7 @@ pub(super) fn sticky_rows(
 
 /// Where a pinned row starts: the item's first shown part when it is on the line of its name,
 /// else the start of that line.
-fn head_offset(text: &str, item: &OutlineItem) -> usize {
+pub(super) fn head_offset(text: &str, item: &OutlineItem) -> usize {
     let name_line = motion::line_start(text, item.selection.start);
     if motion::line_start(text, item.source.start) == name_line {
         item.source.start
@@ -184,7 +184,7 @@ impl TextInput {
     }
 
     /// The outline items of the text, once it has a tree.
-    fn cached_outline(&self) -> Rc<Vec<OutlineItem>> {
+    pub(super) fn cached_outline(&self) -> Rc<Vec<OutlineItem>> {
         let Some(code) = self.code.as_ref() else {
             return Rc::default();
         };

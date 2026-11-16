@@ -45,8 +45,12 @@ pub struct LayoutKey {
     pub gutter_pad: Pixels,
     /// The width the text has room for: the wrap width, also when the lines do not wrap.
     pub view: Pixels,
-    /// The lines the syntax colours were asked for (`TextInput::query_lines`).
+    /// The lines the syntax colours were asked for (`TextInput::query_lines`), and the head
+    /// lines of the items sticky scroll may pin (`TextInput::sticky_heads`).
     pub lines: Option<Range<usize>>,
+    pub heads: Vec<usize>,
+    /// The painted backgrounds the text keeps its contrast with (`code_contrast.rs`).
+    pub marks: Vec<(Range<usize>, Hsla)>,
 }
 
 /// One line of the text (between two `\n`) and the rows it wraps into.
@@ -416,14 +420,18 @@ impl Layout {
         self.index_in_row(row, at.x)
     }
 
-    /// The rects of the selection `range`, one per row it covers, from the top left of the text.
-    /// A row the selection runs past (its line end or wrap point) gets a bit more on the right.
+    /// The rects of a highlighted `range`, one per row it covers, from the top left of the text.
+    /// A row the range runs past (its line end or wrap point) gets a bit more on the right.
     pub fn selection_rects(&self, range: Range<usize>) -> Vec<Bounds<Pixels>> {
+        self.rects_past(range, self.line_height * SELECTION_ROUNDING)
+    }
+
+    /// `selection_rects` with `overshoot` more on the right of a row the range runs past.
+    pub fn rects_past(&self, range: Range<usize>, overshoot: Pixels) -> Vec<Bounds<Pixels>> {
         let mut rects = Vec::new();
         if range.is_empty() {
             return rects;
         }
-        let overshoot = self.line_height * SELECTION_ROUNDING;
         for line in &self.lines {
             if line.start + line.len < range.start || line.start > range.end {
                 continue;
@@ -565,7 +573,8 @@ impl Element for TextElement {
                 let font_size = style.font_size.to_pixels(rem);
                 let font = style.font();
                 let (text, placeholder) = input.display();
-                let runs = input.runs(&style, text.len(), placeholder, cx);
+                // An area is no code view: no painted backgrounds to keep contrast with.
+                let runs = input.runs(&style, text.len(), placeholder, &[], cx);
                 let (text, runs, _) = expand_tabs(&text, &runs);
                 let text = SharedString::from(text);
                 let (min, max) = (min.max(1), max.max(min).max(1));
@@ -746,17 +755,24 @@ impl Element for TextElement {
                 ));
             }
             for (bounds, active) in &code.guides {
-                window.paint_quad(fill(*bounds, if *active { active_guide } else { guide }));
+                // Snapped to device pixels, as Zed's editor drew its guides.
+                let bounds = window.pixel_snap_bounds(*bounds);
+                window.paint_quad(fill(bounds, if *active { active_guide } else { guide }));
             }
             for bounds in &code.backgrounds {
                 window.paint_quad(fill(*bounds, highlight));
             }
+            // As paths, as Zed's editor drew its highlighted ranges: a part-covered pixel at an
+            // edge gets part of the colour.
             for (bounds, active) in &code.search {
                 let color = if *active { search_active } else { search };
-                window.paint_quad(fill(*bounds, color));
+                for path in selection_paths(&[*bounds], px(0.)) {
+                    window.paint_path(path, color);
+                }
             }
             let rects: Vec<_> = laid
-                .selection_rects(selection.clone())
+                // The selection runs twice its corner radius past a line end, as in Zed's editor.
+                .rects_past(selection.clone(), line_height * SELECTION_ROUNDING * 2.)
                 .into_iter()
                 .map(|rect| Bounds::new(rect.origin + origin, rect.size))
                 .collect();

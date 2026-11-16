@@ -12,7 +12,6 @@ use super::outline_picker::open_outline;
 use crate::app::shortcuts::{FindInEditor, GoToLine, ShowOutline};
 use crate::components::go_to_line::open_go_to_line;
 use crate::git::editor_find::open_editor_find;
-use crate::git::zed_targets::zed_outline_rows;
 use crate::terminals::pane_header::icon_button;
 
 impl FileEditor {
@@ -39,7 +38,7 @@ impl FileEditor {
         let Some(body) = self.body.clone() else {
             return;
         };
-        let target = Rc::new(body.read(cx).editor().clone());
+        let target = Rc::new(body.read(cx).view().clone());
         open_editor_find(&mut self.find, target, window, cx, |this| &mut this.find);
     }
 
@@ -63,7 +62,7 @@ impl FileEditor {
         let Some(body) = self.body.clone() else {
             return;
         };
-        let items = zed_outline_rows(body.read(cx).buffer(), cx);
+        let items = body.read(cx).view().outline_rows(cx);
         let body = body.downgrade();
         open_outline(
             items,
@@ -83,7 +82,7 @@ impl FileEditor {
         if self.rendered {
             return None;
         }
-        let on = self.body.as_ref()?.read(cx).wraps();
+        let on = self.body.as_ref()?.read(cx).wraps(cx);
         Some(
             icon_button("file-wrap", "text-wrap")
                 .toggle_state(on)

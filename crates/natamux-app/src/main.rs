@@ -165,6 +165,8 @@ mod files {
     pub mod open_files;
     pub mod outline_picker;
     pub mod outline_rules;
+    #[cfg(test)]
+    pub mod zed_body;
 }
 mod git {
     pub mod blame_marks;
@@ -411,8 +413,7 @@ mod text_view {
     mod code_commands;
     #[cfg(test)]
     mod code_commands_tests;
-    // The editor tab's parts of the code view: used once the tab moves to it (S4.3c part 6).
-    #[cfg_attr(not(test), allow(dead_code))]
+    mod code_contrast;
     mod code_editor;
     mod code_enter;
     mod code_find;

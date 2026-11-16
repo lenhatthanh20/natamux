@@ -8,7 +8,9 @@ use gpui::{App, TextRun};
 use theme::ActiveTheme;
 use tree_sitter::InputEdit;
 
+use super::code_gutter::{STICKY_LINES, head_offset};
 use super::highlight::Highlights;
+use super::outline::containing;
 use super::text_input::TextInput;
 use crate::text::motion;
 
@@ -22,6 +24,7 @@ pub(super) struct RunCache {
     colors: u64,
     theme: gpui::SharedString,
     lines: Option<Range<usize>>,
+    heads: Vec<usize>,
     runs: Vec<(Range<usize>, String)>,
 }
 
@@ -101,14 +104,41 @@ impl TextInput {
         Some(start..(last / BLOCK + 2) * BLOCK)
     }
 
+    /// The head lines of the outline items whose rows sticky scroll may pin over the shown ones,
+    /// above the coloured window: they are coloured too, so a pinned row shows its colours.
+    pub(super) fn sticky_heads(&self) -> Vec<usize> {
+        let (Some(code), Some(laid), Some(window)) =
+            (self.code.as_ref(), self.laid.as_ref(), self.query_lines())
+        else {
+            return Vec::new();
+        };
+        if !code.sticky {
+            return Vec::new();
+        }
+        let line_height = laid.line_height.max(gpui::px(1.));
+        let first = laid.line_index_of_row((self.scroll.y / line_height).max(0.) as usize);
+        let last_line = laid.lines.len().saturating_sub(1);
+        let text = self.model.text();
+        let near = line_bytes(text, &(first..(first + STICKY_LINES).min(last_line)));
+        let mut heads: Vec<usize> = containing(&self.cached_outline(), near)
+            .iter()
+            .map(|item| text[..head_offset(text, item)].matches('\n').count())
+            .filter(|line| *line < window.start)
+            .collect();
+        heads.sort_unstable();
+        heads.dedup();
+        heads
+    }
+
     /// The runs of the coloured text, from `base`; None when the text has no colours (no
-    /// language, no tree yet, or the shown text is not the text). Only `lines` are coloured
-    /// (every line for None); the others keep the base run.
+    /// language, no tree yet, or the shown text is not the text). Only `lines` and the lines in
+    /// `heads` are coloured (every line for None); the others keep the base run.
     pub(super) fn code_runs(
         &self,
         base: &TextRun,
         len: usize,
         lines: Option<Range<usize>>,
+        heads: &[usize],
         cx: &App,
     ) -> Option<Vec<TextRun>> {
         let code = self.code.as_ref()?;
@@ -123,16 +153,26 @@ impl TextInput {
         let theme = cx.theme().syntax();
         let mut cache = code.run_cache.borrow_mut();
         let stale = cache.colors != code.colors || cache.theme != theme_name;
-        if stale || cache.lines != lines || cache.runs.is_empty() {
-            let bytes = lines
-                .as_ref()
-                .map_or(0..len, |lines| line_bytes(text, lines));
+        if stale || cache.lines != lines || cache.heads != heads || cache.runs.is_empty() {
+            let mut parts: Vec<Range<usize>> = heads
+                .iter()
+                .map(|line| line_bytes(text, &(*line..*line + 1)))
+                .collect();
+            parts.push(
+                lines
+                    .as_ref()
+                    .map_or(0..len, |lines| line_bytes(text, lines)),
+            );
             let keys = highlights.theme_keys(|key| theme.style_for_name(key).is_some());
             *cache = RunCache {
                 colors: code.colors,
                 theme: theme_name,
                 lines: lines.clone(),
-                runs: highlights.runs(tree, text, bytes, &keys),
+                heads: heads.to_vec(),
+                runs: parts
+                    .into_iter()
+                    .flat_map(|bytes| highlights.runs(tree, text, bytes, &keys))
+                    .collect(),
             };
         }
         let mut runs = Vec::new();

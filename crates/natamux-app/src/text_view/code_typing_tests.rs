@@ -3,8 +3,9 @@
 //! Backspace in an empty pair, Enter between brackets, `/*` + Enter, comment and Markdown list
 //! continuation, Tab, and word moves over `a#b $c d-e.f:g`. Each case records the text and the
 //! selections after each step; the own code view must give the same. The JSON tab runs on the own
-//! code view since S4.3b; the editor tab is still Zed's editor until S4.3c, so each of its hosts
-//! also runs on the own code view (`own_typing_matches_the_golden_file`).
+//! code view since S4.3b and the editor tab since S4.3c; the editor tab hosts run on the old
+//! editor (`ZedBody`, the golden record) and on the own code view
+//! (`own_typing_matches_the_golden_file`).
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
@@ -15,7 +16,7 @@ use ui::prelude::*;
 
 use crate::app::test_driver::{press, type_text};
 use crate::app::{golden_files, shortcuts, test_views};
-use crate::files::file_editor_body::FileEditorBody;
+use crate::files::zed_body::ZedBody;
 use crate::git::languages::lang_for;
 use crate::projects::json_tab::JsonTab;
 use crate::stages::pipeline_editor::PipelineEditor;
@@ -219,7 +220,7 @@ pub(super) fn open(
     let column = (caret - before.rfind('\n').map_or(0, |at| at + 1)) as u32;
     let text = text.replace(CARET, "");
     let editor = slot.update_in(cx, |slot, window, cx| {
-        let body = cx.new(|cx| FileEditorBody::new(host.path, &text, window, cx));
+        let body = cx.new(|cx| ZedBody::new(host.path, &text, window, cx));
         let editor = body.read(cx).editor().clone();
         let view: AnyView = body.into();
         slot.view = Some(view);

@@ -13,7 +13,7 @@
 //! `code_runs.rs`, the gutter and the sticky rows in `code_gutter.rs`, and what the editor tab
 //! has more (no wrap, blame labels, the right-click menu) in `code_editor.rs`.
 //!
-//! The JSON tab and the Docs views use it; the editor tab follows in S4.3c.
+//! The JSON tab, the Docs views and the editor tab use it.
 
 use std::cell::RefCell;
 use std::ops::Range;
@@ -121,7 +121,7 @@ impl CodeView {
             strikethrough: None,
         };
         let runs = input
-            .code_runs(&base, input.model.text().len(), None, cx)
+            .code_runs(&base, input.model.text().len(), None, &[], cx)
             .unwrap_or_default();
         let mut colors: Vec<gpui::Hsla> = Vec::new();
         for run in runs {

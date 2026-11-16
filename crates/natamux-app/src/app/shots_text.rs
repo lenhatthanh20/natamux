@@ -460,7 +460,7 @@ fn focus_file(handle: WindowHandle<Root>, path: &str, cx: &mut AsyncApp) {
             let body = editor.and_then(|editor| editor.read(cx).body().cloned());
             match body {
                 Some(body) => {
-                    let focus = body.read(cx).editor().focus_handle(cx);
+                    let focus = body.read(cx).focus_handle(cx);
                     window.focus(&focus, cx);
                 }
                 None => eprintln!("shot: {path} is not in the editor tab"),
@@ -492,10 +492,8 @@ fn scroll_to(handle: WindowHandle<Root>, path: &str, top: f64, cx: &mut AsyncApp
             let body = editor.and_then(|editor| editor.read(cx).body().cloned());
             match body {
                 Some(body) => {
-                    let text = body.read(cx).editor().clone();
-                    text.update(cx, |text, cx| {
-                        text.set_scroll_position(gpui::point(0., top), window, cx);
-                    });
+                    let view = body.read(cx).view().clone();
+                    view.scroll_to_row(top, window, cx);
                 }
                 None => eprintln!("shot: {path} is not in the editor tab"),
             }

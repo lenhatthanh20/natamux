@@ -13,8 +13,9 @@ use ui::editor_menu::ContextMenu;
 use super::code_runs::input_edit;
 use super::code_view::CodeView;
 use super::text_input::TextInput;
+use crate::files::outline_rules::OutlineRow;
 use crate::git::change_rules::wraps_by_default;
-use crate::git::code_target::{BlameTarget, RowMenu};
+use crate::git::code_target::{BlameTarget, FindTarget, RowMenu};
 use crate::text::model::Splice;
 
 /// The labels of a text, each at its offset in the text now. Each moves with the text as a
@@ -182,6 +183,11 @@ impl Labels {
     }
 }
 
+/// A range painted behind the text: a find match (`Some(true)` when active) or another place of
+/// the selected text (`None`).
+#[cfg(test)]
+pub type Mark = (std::ops::Range<usize>, Option<bool>);
+
 /// The right-click menu as it is open.
 pub(super) struct OpenMenu {
     menu: Entity<ContextMenu>,
@@ -310,6 +316,101 @@ impl CodeView {
     pub fn wraps(&self, cx: &App) -> bool {
         let input = self.input_ref().read(cx);
         input.code.as_ref().is_none_or(|code| code.wrap)
+    }
+
+    /// The text is parsed in its language, so its colours show; a `--shot` waits for it. False
+    /// for a file with no language, as the old editor's check was.
+    pub fn parsed(&self, cx: &App) -> bool {
+        let input = self.input_ref().read(cx);
+        let syntax = input.code.as_ref().and_then(|code| code.syntax.as_ref());
+        syntax.is_some_and(|syntax| syntax.tree().is_some() && syntax.is_done())
+    }
+
+    /// The items of Go to symbol, in text order; none until the text has a tree.
+    pub fn outline_rows(&self, cx: &App) -> Vec<OutlineRow> {
+        let input = self.input_ref().read(cx);
+        let text = input.model.text();
+        input
+            .cached_outline()
+            .iter()
+            .map(|item| {
+                let start = item.range.start;
+                let line_start = text[..start].rfind('\n').map_or(0, |at| at + 1);
+                OutlineRow {
+                    text: item.text.clone(),
+                    depth: item.depth,
+                    row: text[..start].matches('\n').count() as u32,
+                    column: (start - line_start) as u32,
+                }
+            })
+            .collect()
+    }
+
+    /// A new text from disk, with the fewest edits so the caret and the scroll stay. The undo
+    /// history goes with it (T-0316): an undo would edit the disk text back toward the old one.
+    pub fn set_disk_text(&self, text: &str, cx: &mut App) {
+        self.input_ref().update(cx, |input, cx| {
+            input.replace_minimal(text, cx);
+            input.model.forget_history();
+        });
+    }
+
+    /// Changes the text into `text` with the fewest edits, as one undo step.
+    pub fn replace_minimal(&self, text: &str, cx: &mut App) {
+        self.input_ref()
+            .update(cx, |input, cx| input.replace_minimal(text, cx));
+    }
+
+    /// The caret goes to `at` with its row in the middle of the view, and the view takes the
+    /// focus.
+    pub fn go_to_offset(&self, at: usize, window: &mut Window, cx: &mut App) {
+        self.select(at..at, window, cx);
+        let focus = self.input_ref().read(cx).focus.clone();
+        window.focus(&focus, cx);
+    }
+
+    /// Scrolls so `top` (0-based, may be part of a row) is the top row, for the `--shot` states.
+    pub fn scroll_to_row(&self, top: f64, window: &mut Window, cx: &mut App) {
+        self.input_ref().update(cx, |input, cx| {
+            let laid = input.layout(window, cx);
+            input.scroll.y = laid.line_height * top as f32;
+            input.autoscroll = false;
+            cx.notify();
+        });
+    }
+
+    /// The text with the blame labels in, as it shows.
+    #[cfg(test)]
+    pub fn shown_text(&self, cx: &App) -> String {
+        let input = self.input_ref().read(cx);
+        match input.labels() {
+            Some(labels) => labels.insert(input.model.text()),
+            None => input.model.text().to_owned(),
+        }
+    }
+
+    /// What is painted behind the text past the selection: each find match (`Some(true)` for
+    /// the active one) and each other place of the selected text (`None`); and the selection.
+    #[cfg(test)]
+    pub fn marks(&self, cx: &App) -> (Vec<Mark>, std::ops::Range<usize>) {
+        let input = self.input_ref().read(cx);
+        let selection = input.model.selection().range();
+        let Some(code) = input.code.as_ref() else {
+            return (Vec::new(), selection);
+        };
+        let mut marks: Vec<_> = code
+            .other_occurrences(selection.clone())
+            .map(|range| (range.clone(), None))
+            .collect();
+        if code.search_version == input.model.version() {
+            marks.extend(
+                code.search
+                    .iter()
+                    .enumerate()
+                    .map(|(index, range)| (range.clone(), Some(code.search_active == Some(index)))),
+            );
+        }
+        (marks, selection)
     }
 
     /// The header's Wrap long lines toggle.

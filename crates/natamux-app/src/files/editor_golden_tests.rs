@@ -15,7 +15,7 @@ use gpui::{Entity, TestAppContext, VisualTestContext};
 use serde_json::{Value, json};
 use text::{Point, ToPoint};
 
-use super::FileEditorBody;
+use super::ZedBody;
 use crate::app::golden_files;
 use crate::app::shots_text::{LONG_FILE, STICKY_FILE, long_file, sticky_file};
 use crate::app::test_views;
@@ -42,11 +42,7 @@ fn at(point: Point) -> Value {
 }
 
 /// The head, the outline items and the sticky items of the file.
-fn outline_rows(
-    path: &str,
-    body: &Entity<FileEditorBody>,
-    cx: &mut VisualTestContext,
-) -> Vec<Value> {
+fn outline_rows(path: &str, body: &Entity<ZedBody>, cx: &mut VisualTestContext) -> Vec<Value> {
     cx.update(|_, cx| {
         let body = body.read(cx);
         let buffer = body.buffer().read(cx);
@@ -107,7 +103,7 @@ fn outline_rows(
 }
 
 /// The indent guides of the whole file, then the active ones with the caret on each row.
-fn guide_rows(body: &Entity<FileEditorBody>, cx: &mut VisualTestContext) -> Vec<Value> {
+fn guide_rows(body: &Entity<ZedBody>, cx: &mut VisualTestContext) -> Vec<Value> {
     let editor = body.read_with(cx, |body, _| body.editor().clone());
     let guides = editor.update(cx, |editor, cx| {
         let snapshot = editor.display_snapshot(cx);
@@ -152,7 +148,7 @@ fn guide_rows(body: &Entity<FileEditorBody>, cx: &mut VisualTestContext) -> Vec<
 }
 
 fn rows(path: &str, text: &str, cx: &mut TestAppContext) -> Vec<Value> {
-    let (body, cx) = cx.add_window_view(|window, cx| FileEditorBody::new(path, text, window, cx));
+    let (body, cx) = cx.add_window_view(|window, cx| ZedBody::new(path, text, window, cx));
     cx.run_until_parked();
     let mut rows = outline_rows(path, &body, cx);
     rows.extend(guide_rows(&body, cx));
