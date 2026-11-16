@@ -104,7 +104,10 @@ fn json_closes_brackets_and_quotes_only_where_the_old_editor_did() {
     assert!(!json.scope_at(&json_tree(text), text, 10).string);
     assert!(json.expands("{}", 1, Scope::default()));
     assert!(!json.expands("()", 1, Scope::default()));
-    assert!(json.expands("{ \t}", 2, Scope::default()), "spaces do not count");
+    assert!(
+        json.expands("{ \t}", 2, Scope::default()),
+        "spaces do not count"
+    );
 }
 
 #[test]

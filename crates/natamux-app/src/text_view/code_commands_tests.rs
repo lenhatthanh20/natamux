@@ -129,7 +129,11 @@ fn cases(host: &Host) -> Vec<Case> {
                 ("enter before", format!("{open} ˇ{close}")),
                 ("enter after", format!("{open}ˇ {close}")),
             ] {
-                out.push(case(format!("{name} {open} {close}"), text, vec![p("enter")]));
+                out.push(case(
+                    format!("{name} {open} {close}"),
+                    text,
+                    vec![p("enter")],
+                ));
             }
         }
         out.push(case(

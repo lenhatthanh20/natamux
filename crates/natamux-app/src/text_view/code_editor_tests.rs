@@ -446,7 +446,12 @@ fn a_view_with_nothing_to_colour_asks_for_no_lines(cx: &mut TestAppContext) {
 fn the_deeper_pinned_row_takes_the_pointer_where_two_meet() {
     let tops = [px(0.), px(20.), px(30.)];
     let under = |x: f32, y: f32| {
-        super::super::code_sticky::sticky_under(&tops, (px(0.), px(100.)), px(20.), point(px(x), px(y)))
+        super::super::code_sticky::sticky_under(
+            &tops,
+            (px(0.), px(100.)),
+            px(20.),
+            point(px(x), px(y)),
+        )
     };
     assert_eq!(under(50., 10.), Some(0));
     assert_eq!(under(50., 25.), Some(1));
@@ -476,7 +481,10 @@ fn a_press_on_a_pinned_row_goes_to_its_line(cx: &mut TestAppContext) {
             shift: true,
             ..Modifiers::default()
         };
-        let position = point(bounds.right() - px(60.), bounds.top() + line_height * offset);
+        let position = point(
+            bounds.right() - px(60.),
+            bounds.top() + line_height * offset,
+        );
         cx.simulate_event(MouseDownEvent {
             button: MouseButton::Left,
             position,
@@ -495,9 +503,17 @@ fn a_press_on_a_pinned_row_goes_to_its_line(cx: &mut TestAppContext) {
             let text = input.model.text();
             let head = input.model.head();
             let line = text[..head].matches('\n').count();
-            (line, input.model.selection().range().is_empty(), input.scroll.y)
+            (
+                line,
+                input.model.selection().range().is_empty(),
+                input.scroll.y,
+            )
         });
-        assert_eq!(line + 1, number, "row {place}: the caret is on the pinned line");
+        assert_eq!(
+            line + 1,
+            number,
+            "row {place}: the caret is on the pinned line"
+        );
         assert!(empty, "row {place}: a caret, no selection");
         assert_eq!(
             scroll,
@@ -531,7 +547,8 @@ fn a_pinned_row_takes_no_right_press_and_is_tinted_under_the_pointer(cx: &mut Te
     cx.run_until_parked();
     assert_eq!(paint(&input, cx).sticky.len(), 3);
     let bounds = input.read_with(cx, |input, _| input.last_bounds.unwrap());
-    let at = |rows: f32| point(bounds.right() - px(60.), bounds.top() + line_height * rows);
+    let x = bounds.right() - px(60.);
+    let at = |rows: f32| point(x, bounds.top() + line_height * rows);
 
     let hovered = |position, cx: &mut VisualTestContext| {
         cx.simulate_mouse_move(position, None, Modifiers::default());
@@ -557,6 +574,6 @@ fn a_pinned_row_takes_no_right_press_and_is_tinted_under_the_pointer(cx: &mut Te
     };
     assert!(!right_press(at(0.5), cx), "a pinned row opens no menu");
     assert_eq!(asked.get(), None, "no menu asked for on a pinned row");
-    assert!(right_press(at(4.5), cx), "the text below the rows opens the menu");
+    assert!(right_press(at(4.5), cx), "the text below opens the menu");
     assert!(asked.get().is_some(), "the menu of the clicked row");
 }

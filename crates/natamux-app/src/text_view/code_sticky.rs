@@ -4,8 +4,8 @@
 //! was pinned at. Over the rest of the gutter the pointer is an arrow (`element.rs`).
 
 use gpui::{
-    App, Bounds, CursorStyle, DispatchPhase, Hitbox, HitboxBehavior, MouseMoveEvent, Pixels,
-    Point, Window, point, px, size,
+    App, Bounds, CursorStyle, DispatchPhase, Hitbox, HitboxBehavior, MouseMoveEvent, Pixels, Point,
+    Window, point, px, size,
 };
 
 use super::code_gutter::StickyPaint;
