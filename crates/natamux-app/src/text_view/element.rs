@@ -16,6 +16,7 @@ use gpui::{
 };
 use theme::ActiveTheme;
 
+use super::code_sticky::Pointer;
 use super::text_input::{Mode, TAB_SIZE, TextInput};
 use crate::terminals::term::element::rounded_path;
 
@@ -717,7 +718,7 @@ impl IntoElement for TextElement {
 
 impl Element for TextElement {
     type RequestLayoutState = ();
-    type PrepaintState = Option<Rc<Layout>>;
+    type PrepaintState = Option<(Rc<Layout>, Option<Pointer>)>;
 
     fn id(&self) -> Option<ElementId> {
         None
@@ -801,7 +802,8 @@ impl Element for TextElement {
             // A scroll may move the lines a code view colours: lay out again (only then).
             input.layout(window, cx)
         });
-        Some(laid)
+        let pointer = Pointer::insert(self.input.read(cx), &laid, bounds, window);
+        Some((laid, pointer))
     }
 
     fn paint(
@@ -814,7 +816,7 @@ impl Element for TextElement {
         window: &mut Window,
         cx: &mut App,
     ) {
-        let Some(laid) = laid.take() else {
+        let Some((laid, pointer)) = laid.take() else {
             return;
         };
         let input = self.input.read(cx);
@@ -1042,7 +1044,13 @@ impl Element for TextElement {
                     super::diff_paint::paint_hollow(*rect, *color, window);
                 }
             }
-            super::code_gutter::paint_sticky(&code, &laid, bounds, origin, window, cx);
+            // The scrollbar's track is not part of a pinned row for the pointer.
+            let right = bar.map_or(bounds.right(), |(bar, _)| bar.track.left());
+            let hovered = pointer.and_then(|pointer| {
+                let tops = super::code_sticky::tops(&code.sticky);
+                pointer.paint(tops, (bounds.left(), right), line_height, window)
+            });
+            super::code_gutter::paint_sticky(&code, &laid, bounds, origin, hovered, window, cx);
             if let Some((bar, thumb)) = &bar {
                 let edge = |rect: &Bounds<Pixels>| {
                     Bounds::new(rect.origin, size(px(1.), rect.size.height))

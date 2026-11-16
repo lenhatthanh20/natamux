@@ -428,6 +428,7 @@ mod text_view {
     mod code_paint;
     mod code_rules;
     mod code_runs;
+    mod code_sticky;
     mod code_typing;
     #[cfg(test)]
     mod code_typing_tests;

@@ -3,8 +3,8 @@
 //!   its marker at the first level;
 //! - a line comment goes on with its start;
 //! - a doc comment goes on with ` * `, and its end moves to a line of its own;
-//! - between the two parts of a pair that opens a block, the caret goes on a line of its own and
-//!   the closing part on the next;
+//! - between the two parts of a pair that opens a block (spaces between do not count), the caret
+//!   goes on a line of its own and the closing part on the next;
 //! - after the one statement of a body with no braces (`if (a)` + `b`), the new line goes back
 //!   to the indent of the `if`;
 //! - else the new line takes the indent the language gives it; the spaces after the caret stay
@@ -74,13 +74,19 @@ pub fn enter(
     if let Some(edit) = doc_comment(typing, text, &range, tree, &lead) {
         return edit;
     }
-    if range.is_empty() && typing.expands(text, range.start) {
+    let scope = tree.map_or_else(Default::default, |tree| {
+        typing.scope_at(tree, text, range.start)
+    });
+    if range.is_empty() && typing.expands(text, range.start, scope) {
+        // The spaces after the caret go; the ones before it stay on the line.
         let at = range.start;
-        let after = format!("{}\n\n{lead}{}", &text[..at], &text[at..]);
+        let rest = &text[at..];
+        let end = at + rest.len() - rest.trim_start_matches([' ', '\t']).len();
+        let after = format!("{}\n\n{lead}{}", &text[..at], &text[end..]);
         let middle = indent(typing, lang, &after, row_of(text, at) + 1, &lead);
         let inserted = format!("\n{middle}\n{lead}");
         return Enter {
-            range: at..at,
+            range: at..end,
             caret: at + 1 + middle.len(),
             text: inserted,
         };

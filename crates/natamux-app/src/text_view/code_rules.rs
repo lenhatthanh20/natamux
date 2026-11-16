@@ -279,12 +279,19 @@ impl Typing {
             .map(|pair| pair.close)
     }
 
-    /// Whether the caret at `at` sits between the two parts of a pair that opens a line of its
-    /// own on Enter.
-    pub fn expands(&self, text: &str, at: usize) -> bool {
+    /// Whether the caret at `at`, in `scope`, sits between the two parts of a pair that opens a
+    /// line of its own on Enter. Spaces between the caret and either part do not count (Bash
+    /// `then ˇfi`).
+    pub fn expands(&self, text: &str, at: usize, scope: Scope) -> bool {
         let (before, after) = text.split_at(at);
+        let before = before.trim_end_matches([' ', '\t']);
+        let after = after.trim_start_matches([' ', '\t']);
         self.pairs.iter().any(|pair| {
-            pair.newline && before.ends_with(pair.open) && after.starts_with(pair.close)
+            pair.newline
+                && !(pair.not_in_string && scope.string)
+                && !(pair.not_in_comment && scope.comment)
+                && before.ends_with(pair.open)
+                && after.starts_with(pair.close)
         })
     }
 

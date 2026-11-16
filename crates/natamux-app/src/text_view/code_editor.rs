@@ -239,9 +239,22 @@ impl TextInput {
         let Some(menu) = self.code.as_ref().and_then(|code| code.menu.clone()) else {
             return;
         };
-        // As in the Zed editor, the line numbers open no menu.
+        // As in the Zed editor, the line numbers open no menu, and a pinned row takes no right
+        // press.
         if self.in_gutter(event.position) {
             return;
+        }
+        if let Some(bounds) = self.last_bounds {
+            let laid = self.layout(window, cx);
+            let rows = self.sticky_paint(&laid, bounds);
+            let edges = (bounds.left(), bounds.right());
+            let tops = super::code_sticky::tops(&rows);
+            if super::code_sticky::sticky_under(&tops, edges, laid.line_height, event.position)
+                .is_some()
+            {
+                cx.stop_propagation();
+                return;
+            }
         }
         let Some((at, _)) = self.index_at(event.position, window, cx) else {
             return;

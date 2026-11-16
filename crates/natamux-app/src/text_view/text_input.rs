@@ -1186,16 +1186,26 @@ impl TextInput {
             cx.stop_propagation();
             return;
         }
-        let Some((at, end_bias)) = self.index_at(event.position, window, cx) else {
+        // A press on a pinned row puts a caret on its line, whatever the clicks and keys.
+        let pinned = self.sticky_press(event.position, window, cx);
+        let Some((at, end_bias)) = pinned
+            .map(|at| (at, false))
+            .or_else(|| self.index_at(event.position, window, cx))
+        else {
             return;
         };
         let range = self.model.selection().range();
         let text = self.model.text();
         let mut inside = false;
         // A press on the line numbers takes whole lines, as a triple click does.
-        let in_gutter = self.in_gutter(event.position);
-        let clicks = if in_gutter { 3 } else { event.click_count };
+        let in_gutter = pinned.is_none() && self.in_gutter(event.position);
+        let clicks = match (pinned, in_gutter) {
+            (Some(_), _) => 1,
+            (None, true) => 3,
+            (None, false) => event.click_count,
+        };
         match clicks {
+            _ if pinned.is_some() => self.model.move_to(at),
             _ if in_gutter && event.modifiers.shift => {
                 let (start, end) = (motion::line_start(text, at), motion::line_end(text, at));
                 let end = if end < text.len() { end + 1 } else { end };

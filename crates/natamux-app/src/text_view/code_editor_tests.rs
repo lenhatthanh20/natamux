@@ -441,3 +441,68 @@ fn a_view_with_nothing_to_colour_asks_for_no_lines(cx: &mut TestAppContext) {
     });
     assert_eq!(asked, None);
 }
+
+#[test]
+fn the_deeper_pinned_row_takes_the_pointer_where_two_meet() {
+    let tops = [px(0.), px(20.), px(30.)];
+    let under = |x: f32, y: f32| {
+        super::super::code_sticky::sticky_under(&tops, (px(0.), px(100.)), px(20.), point(px(x), px(y)))
+    };
+    assert_eq!(under(50., 10.), Some(0));
+    assert_eq!(under(50., 25.), Some(1));
+    assert_eq!(under(50., 35.), Some(2), "rows 1 and 2 meet");
+    assert_eq!(under(50., 60.), None, "below the rows");
+    assert_eq!(under(150., 10.), None, "right of the rows");
+}
+
+#[gpui::test]
+fn a_press_on_a_pinned_row_goes_to_its_line(cx: &mut TestAppContext) {
+    let (_, input, cx) = open("src/catalog_view.ts", &sticky_file(), cx);
+    cx.executor().advance_clock(Duration::from_millis(50));
+    cx.run_until_parked();
+    let line_height = input.update_in(cx, |input, window, cx| input.layout(window, cx).line_height);
+    for (place, offset) in [(0, 0.5), (2, 2.2)] {
+        input.update(cx, |input, cx| {
+            input.scroll = point(px(0.), line_height * 125.5);
+            cx.notify();
+        });
+        cx.run_until_parked();
+        let painted = paint(&input, cx);
+        assert_eq!(painted.sticky.len(), 3);
+        let (row, number) = (painted.sticky[place].row, painted.sticky[place].number);
+        let bounds = input.read_with(cx, |input, _| input.last_bounds.unwrap());
+        // Shift is held: a pinned row still gives a caret, as in Zed.
+        let shift = Modifiers {
+            shift: true,
+            ..Modifiers::default()
+        };
+        let position = point(bounds.right() - px(60.), bounds.top() + line_height * offset);
+        cx.simulate_event(MouseDownEvent {
+            button: MouseButton::Left,
+            position,
+            modifiers: shift,
+            click_count: 1,
+            first_mouse: false,
+        });
+        cx.simulate_event(gpui::MouseUpEvent {
+            button: MouseButton::Left,
+            position,
+            modifiers: shift,
+            click_count: 1,
+        });
+        cx.run_until_parked();
+        let (line, empty, scroll) = input.read_with(cx, |input, _| {
+            let text = input.model.text();
+            let head = input.model.head();
+            let line = text[..head].matches('\n').count();
+            (line, input.model.selection().range().is_empty(), input.scroll.y)
+        });
+        assert_eq!(line + 1, number, "row {place}: the caret is on the pinned line");
+        assert!(empty, "row {place}: a caret, no selection");
+        assert_eq!(
+            scroll,
+            line_height * (row - place) as f32,
+            "row {place}: the line shows where it was pinned"
+        );
+    }
+}

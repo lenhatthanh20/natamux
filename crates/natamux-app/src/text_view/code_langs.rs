@@ -106,8 +106,9 @@ fn before_hash(line: &str, after_space: bool) -> &str {
 /// such as `a|b)`, opens a block.
 fn shell_opens(line: &str) -> bool {
     let code = before_hash(line, true).trim();
+    // The word at the end, as a regex `\b` cuts it: `echo "then` ends with `then`.
     let last = code
-        .rsplit(|c: char| c.is_whitespace() || c == ';')
+        .rsplit(|c: char| !(c.is_alphanumeric() || c == '_'))
         .next()
         .unwrap_or("");
     matches!(last, "then" | "do" | "else" | "in")
@@ -141,6 +142,12 @@ const SHELL: Typing = Typing {
         pair("{", "}", AUTO | NEWLINE),
         pair("\"", "\"", AUTO | NO_STRING | NO_COMMENT),
         pair("'", "'", AUTO | NO_STRING | NO_COMMENT),
+        // Block words: they never close themselves, but Enter between them opens the block.
+        pair("do", "done", NEWLINE | NO_STRING | NO_COMMENT),
+        pair("then", "fi", NEWLINE | NO_STRING | NO_COMMENT),
+        pair("then", "else", NEWLINE | NO_STRING | NO_COMMENT),
+        pair("then", "elif", NEWLINE | NO_STRING | NO_COMMENT),
+        pair("in", "esac", NEWLINE | NO_STRING | NO_COMMENT),
     ],
     close_before: "}])",
     line_comments: HASH,

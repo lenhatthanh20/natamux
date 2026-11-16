@@ -314,26 +314,33 @@ impl TextInput {
                 background: diff.is_none(),
             });
         }
-        if !code.sticky || line_height <= px(0.) {
-            return;
+        paint.sticky = self.sticky_paint(laid, bounds);
+    }
+
+    /// The pinned rows of a code view with sticky scroll, drawn over `bounds`.
+    pub(super) fn sticky_paint(&self, laid: &Layout, bounds: Bounds<Pixels>) -> Vec<StickyPaint> {
+        let line_height = laid.line_height;
+        if !self.code.as_ref().is_some_and(|code| code.sticky) || line_height <= px(0.) {
+            return Vec::new();
         }
+        let text = self.model.text();
         let scroll_top = self.scroll.y / line_height;
         let top_line = laid.line_index_of_row(scroll_top as usize);
         let last_line = laid.lines.len().saturating_sub(1);
         let near = line_bytes(text, &(top_line..(top_line + STICKY_LINES).min(last_line)));
         let around = self.near_outline(near);
         if around.is_empty() {
-            return;
+            return Vec::new();
         }
         let row_of = |at: usize| laid.row_of(self.to_display(at), false);
-        paint.sticky = sticky_rows(&around, text, scroll_top, row_of)
+        sticky_rows(&around, text, scroll_top, row_of)
             .into_iter()
             .map(|sticky| StickyPaint {
                 row: sticky.row,
                 number: sticky.line + 1,
                 top: bounds.top() + line_height * sticky.offset,
             })
-            .collect();
+            .collect()
     }
 }
 
@@ -364,12 +371,14 @@ pub(super) fn paint_gutter(gutter: &GutterPaint, laid: &Layout, window: &mut Win
 }
 
 /// Paints the pinned rows over the text, deepest first, each with the gutter and the text
-/// background, its line number, and a line under the last one.
+/// background (tinted on the `hovered` one, as Zed's sticky scroll did), its line number, and a
+/// line under the last one.
 pub(super) fn paint_sticky(
     paint: &CodePaint,
     laid: &Layout,
     bounds: Bounds<Pixels>,
     origin: gpui::Point<Pixels>,
+    hovered: Option<usize>,
     window: &mut Window,
     cx: &mut App,
 ) {
@@ -377,29 +386,32 @@ pub(super) fn paint_sticky(
         return;
     };
     let colors = cx.theme().colors();
-    let (gutter_background, background, number, border) = (
+    let (gutter_background, background, number, border, overlay) = (
         colors.editor_gutter_background,
         colors.editor_background,
         colors.editor_line_number,
         colors.border_variant,
+        colors.panel_overlay_hover,
     );
     let line_height = laid.line_height;
     let gutter = laid.key.gutter;
-    for sticky in paint.sticky.iter().rev() {
+    for (index, sticky) in paint.sticky.iter().enumerate().rev() {
         let row = Bounds::new(
             point(bounds.left(), sticky.top),
             size(bounds.size.width, line_height),
         );
         window.paint_layer(row, |window| {
-            window.paint_quad(fill(
-                Bounds::new(row.origin, size(gutter, line_height)),
-                gutter_background,
-            ));
+            let gutter_box = Bounds::new(row.origin, size(gutter, line_height));
+            window.paint_quad(fill(gutter_box, gutter_background));
             let text_box = Bounds::from_corners(
                 point(bounds.left() + gutter, sticky.top),
                 point(bounds.right(), sticky.top + line_height),
             );
             window.paint_quad(fill(text_box, background));
+            if hovered == Some(index) {
+                window.paint_quad(fill(gutter_box, overlay));
+                window.paint_quad(fill(text_box, overlay));
+            }
             if let Some((line, in_line)) = laid.line_of_row(sticky.row) {
                 window.with_content_mask(Some(gpui::ContentMask { bounds: text_box }), |window| {
                     line.paint_row(
