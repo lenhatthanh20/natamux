@@ -556,7 +556,9 @@ fn a_pinned_row_takes_no_right_press_and_is_tinted_under_the_pointer(cx: &mut Te
         cx.run_until_parked();
         input.read_with(cx, |input, _| input.sticky_hovered.get())
     };
-    assert_eq!(hovered(at(1.5), cx), Some(1), "the row under the pointer");
+    // Row 2 is pushed up half a row and starts at 1.5, so probe above it.
+    assert_eq!(hovered(at(1.25), cx), Some(1), "the row under the pointer");
+    assert_eq!(hovered(at(1.75), cx), Some(2), "the deeper row where two meet");
     assert_eq!(hovered(at(4.5), cx), None, "none off the pinned rows");
 
     let right_press = |position, cx: &mut VisualTestContext| {
