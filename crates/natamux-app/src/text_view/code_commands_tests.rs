@@ -5,7 +5,9 @@
 //! - Ctrl+Shift+Up and Ctrl+Shift+Down (grow and shrink the selection by the syntax tree);
 //! - the gaps of part 3: a closing word or bracket typed on the new line after Enter (Bash
 //!   `fi`/`done`/`esac`, Python `else:`, C `else`, `}`, `]`, `)`), and the block comments that
-//!   do not end in `*/` (`<!--`, `"""`, `{/*`) + Enter.
+//!   do not end in `*/` (`<!--`, `"""`, `{/*`) + Enter;
+//! - Enter between the Shell block words on one line (`then ˇfi`, `doˇ done`), also in a comment
+//!   and a string.
 //!
 //! Each case runs in every editor tab host, so a language with no rule for a case records that it
 //! does nothing.
@@ -40,6 +42,15 @@ const CLOSERS: [(&str, &str); 13] = [
     ("if a:", "elif b:"),
     ("try:", "except:"),
     ("try:", "finally:"),
+];
+
+/// Shell words that open and close a block, which Enter between them puts on lines of their own.
+const WORD_PAIRS: [(&str, &str); 5] = [
+    ("if a; then", "fi"),
+    ("if a; then", "else"),
+    ("if a; then", "elif"),
+    ("for x in y; do", "done"),
+    ("case x in", "esac"),
 ];
 
 /// Mod+/.
@@ -111,6 +122,26 @@ fn cases(host: &Host) -> Vec<Case> {
                 vec![t(start), p("enter")],
             ));
         }
+    }
+    if host.name == "bash" {
+        for (open, close) in WORD_PAIRS {
+            for (name, text) in [
+                ("enter before", format!("{open} ˇ{close}")),
+                ("enter after", format!("{open}ˇ {close}")),
+            ] {
+                out.push(case(format!("{name} {open} {close}"), text, vec![p("enter")]));
+            }
+        }
+        out.push(case(
+            "enter between words in a comment",
+            "# if a; then ˇfi",
+            vec![p("enter")],
+        ));
+        out.push(case(
+            "enter between words in a string",
+            "echo \"then ˇfi\"",
+            vec![p("enter")],
+        ));
     }
     out
 }
