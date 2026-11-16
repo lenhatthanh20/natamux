@@ -66,14 +66,15 @@ pub struct Line {
     /// The line with its tabs as spaces, in rows.
     rows: Rc<Rows>,
     tabs: Vec<Tab>,
-    /// It is drawn in one run of the text colour, so a later layout may take it as it is.
-    plain: bool,
 }
 
 /// A line with its tabs as spaces, and its rows, each shaped alone as Zed's editor shaped its
 /// display rows: a glyph at a wrap point does not join the glyph across it.
 struct Rows {
     text: String,
+    /// The runs it was shaped with: a later layout takes the rows as they are for the same text
+    /// and runs.
+    runs: Vec<TextRun>,
     rows: Vec<Row>,
 }
 
@@ -311,7 +312,11 @@ fn shape_rows(text: String, runs: &[TextRun], key: &LayoutKey, window: &Window) 
             }
         })
         .collect();
-    Rows { text, rows }
+    Rows {
+        text,
+        runs: runs.to_vec(),
+        rows,
+    }
 }
 
 /// The part of `runs` that covers `range` of the text.
@@ -365,9 +370,9 @@ impl<'a> RunCursor<'a> {
 }
 
 impl Layout {
-    /// Lays `text` out line by line. A line of `previous` with the same text, drawn in one run of
-    /// the same font, size, colour and width, is taken as it is: a key shapes only the lines it
-    /// changed.
+    /// Lays `text` out line by line. A line of `previous` with the same text and runs, at the same
+    /// font, size, colour and width, is taken as it is: a key shapes only the lines it changed,
+    /// also the coloured ones, whose shapes gpui keeps only from one frame to the next.
     pub fn build(
         key: LayoutKey,
         text: &SharedString,
@@ -375,14 +380,17 @@ impl Layout {
         previous: Option<&Layout>,
         window: &Window,
     ) -> Self {
-        let mut ready: HashMap<&str, &Rc<Rows>> = HashMap::new();
+        let mut ready: HashMap<&str, Vec<&Rc<Rows>>> = HashMap::new();
         if let Some(previous) = previous.filter(|previous| {
             let old = &previous.key;
             (old.width, &old.font, old.font_size, old.color)
                 == (key.width, &key.font, key.font_size, key.color)
         }) {
-            for line in previous.lines.iter().filter(|line| line.plain) {
-                ready.entry(line.rows.text.as_str()).or_insert(&line.rows);
+            for line in &previous.lines {
+                ready
+                    .entry(line.rows.text.as_str())
+                    .or_default()
+                    .push(&line.rows);
             }
         }
         let mut lines = Vec::new();
@@ -391,15 +399,13 @@ impl Layout {
         for source in text.split('\n') {
             let len = source.len();
             let line_runs = cursor.take(start..start + len);
-            let plain = line_runs
-                .iter()
-                .all(|run| run.color == key.color && run.underline.is_none());
             let (shown, line_runs, tabs) = expand_tabs(source, &line_runs);
-            let cached = ready
-                .get(shown.as_str())
-                .filter(|_| plain)
-                .copied()
-                .cloned();
+            let cached = ready.get(shown.as_str()).and_then(|found| {
+                found
+                    .iter()
+                    .find(|rows| rows.runs == line_runs)
+                    .map(|rows| (*rows).clone())
+            });
             let rows =
                 cached.unwrap_or_else(|| Rc::new(shape_rows(shown, &line_runs, &key, window)));
             width = rows.rows.iter().fold(width, |width, row| {
@@ -413,7 +419,6 @@ impl Layout {
                 row_starts: Vec::new(),
                 rows,
                 tabs,
-                plain,
             };
             // A row that starts inside a tab's spaces keeps the tab on the row above.
             line.row_starts = shown_starts
