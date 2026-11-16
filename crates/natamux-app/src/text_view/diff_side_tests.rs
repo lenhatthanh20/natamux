@@ -5,7 +5,7 @@
 
 use std::time::Duration;
 
-use gpui::{Entity, Hsla, Pixels, TestAppContext, VisualTestContext, point};
+use gpui::{Entity, Hsla, Pixels, Point, TestAppContext, VisualTestContext, point};
 use theme::ActiveTheme;
 use ui::prelude::*;
 
@@ -282,12 +282,14 @@ fn every_line_takes_the_colours_of_its_own_file(cx: &mut TestAppContext) {
     assert_eq!(color_at(0), color_at(10));
 }
 
-/// Two long sides, paired.
-fn long_pair(cx: &mut TestAppContext) -> (DiffSide, DiffSide, &mut VisualTestContext) {
+/// The two sides of `old` to `new`, paired.
+fn pair_of<'a>(
+    old: &str,
+    new: &str,
+    cx: &'a mut TestAppContext,
+) -> (DiffSide, DiffSide, &'a mut VisualTestContext) {
     let (left, right, cx) = open(cx);
-    let old: String = (0..60).map(|n| format!("line {n}\n")).collect();
-    let new = format!("one\n{old}one\n");
-    let diff = diff(Some(&old), &new, &[]);
+    let diff = diff(Some(old), new, &[]);
     let hunks = diff.hunk_rows();
     let (old_rows, new_rows) = (diff.old_rows(), diff.new_rows());
     let left_rows = model::side_rows(&hunks, Side::Old, old_rows, new_rows, false);
@@ -299,21 +301,40 @@ fn long_pair(cx: &mut TestAppContext) -> (DiffSide, DiffSide, &mut VisualTestCon
     (left, right, cx)
 }
 
+/// Two long sides, paired. The first line is long, so the sides scroll to the right with wrap
+/// off.
+fn long_pair(cx: &mut TestAppContext) -> (DiffSide, DiffSide, &mut VisualTestContext) {
+    let lines: String = (0..60).map(|n| format!("line {n}\n")).collect();
+    let old = format!("{}\n{lines}", "x".repeat(300));
+    let new = format!("one\n{old}one\n");
+    pair_of(&old, &new, cx)
+}
+
 fn scroll_y(input: &Entity<TextInput>, cx: &mut VisualTestContext) -> Pixels {
     input.read_with(cx, |input, _| input.scroll.y)
 }
 
 /// The scroll a side was last laid out at.
-fn drawn_y(input: &Entity<TextInput>, cx: &mut VisualTestContext) -> Option<Pixels> {
+fn drawn_at(input: &Entity<TextInput>, cx: &mut VisualTestContext) -> Option<Point<Pixels>> {
     input.read_with(cx, |input, _| input.code.as_ref()?.diff.as_ref()?.drawn)
+}
+
+fn drawn_y(input: &Entity<TextInput>, cx: &mut VisualTestContext) -> Option<Pixels> {
+    drawn_at(input, cx).map(|at| at.y)
+}
+
+/// The line height and the row count of a side, as laid out now.
+fn rows_of(side: &DiffSide, cx: &mut VisualTestContext) -> (Pixels, usize) {
+    side.input().update_in(cx, |input, window, cx| {
+        let laid = input.layout(window, cx);
+        (laid.line_height, laid.rows)
+    })
 }
 
 #[gpui::test]
 fn the_two_sides_scroll_as_one(cx: &mut TestAppContext) {
     let (left, right, cx) = long_pair(cx);
-    let lh = right
-        .input()
-        .update_in(cx, |input, window, cx| input.layout(window, cx).line_height);
+    let (lh, _) = rows_of(&right, cx);
     right.input().update(cx, |input, cx| {
         input.scroll = point(px(0.), lh * 5.);
         cx.notify();
@@ -330,6 +351,49 @@ fn the_two_sides_scroll_as_one(cx: &mut TestAppContext) {
     cx.run_until_parked();
     assert_eq!(scroll_y(right.input(), cx), lh * 2.);
     assert_eq!(drawn_y(right.input(), cx), Some(lh * 2.));
+
+    // Wrap off: a scroll to the right moves the other side too.
+    for side in [&left, &right] {
+        side.input().update(cx, |input, cx| {
+            if let Some(code) = input.code.as_mut() {
+                code.wrap = false;
+            }
+            cx.notify();
+        });
+    }
+    cx.run_until_parked();
+    let at = point(px(100.), lh * 2.);
+    left.input().update(cx, |input, cx| {
+        input.scroll = at;
+        cx.notify();
+    });
+    cx.run_until_parked();
+    assert_eq!(left.input().read_with(cx, |input, _| input.scroll), at);
+    assert_eq!(right.input().read_with(cx, |input, _| input.scroll), at);
+    assert_eq!(drawn_at(right.input(), cx), Some(at));
+}
+
+/// Wrap on, the sides can have a different row count (D17). The taller side still scrolls to its
+/// end: the shorter side stops at its own end and does not pull the taller one back.
+#[gpui::test]
+fn the_taller_side_scrolls_to_its_end(cx: &mut TestAppContext) {
+    let lines: String = (0..20).map(|n| format!("line {n}\n")).collect();
+    let old = format!("{}\n{lines}", "word ".repeat(600));
+    let (left, right, cx) = pair_of(&old, &lines, cx);
+    let (lh, left_rows) = rows_of(&left, cx);
+    let (_, right_rows) = rows_of(&right, cx);
+    assert!(left_rows > right_rows + 20, "the deleted line wraps");
+    let left_end = lh * (left_rows - 1) as f32;
+    let right_end = lh * (right_rows - 1) as f32;
+    left.input().update(cx, |input, cx| {
+        input.scroll = point(px(0.), left_end);
+        cx.notify();
+    });
+    cx.run_until_parked();
+    assert_eq!(scroll_y(left.input(), cx), left_end, "the left side stays at its end");
+    assert_eq!(drawn_y(left.input(), cx), Some(left_end));
+    assert_eq!(scroll_y(right.input(), cx), right_end);
+    assert_eq!(drawn_y(right.input(), cx), Some(right_end));
 }
 
 /// T-SB-1, the diff case (plan 6.5): other places of the selected text do not keep the bar of a

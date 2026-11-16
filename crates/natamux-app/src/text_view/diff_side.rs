@@ -21,7 +21,8 @@ use std::ops::Range;
 use std::sync::Arc;
 
 use gpui::{
-    App, AppContext as _, Context, Entity, Pixels, SharedString, Task, TextRun, WeakEntity, Window,
+    App, AppContext as _, Context, Entity, Pixels, Point, SharedString, Task, TextRun, WeakEntity,
+    Window,
 };
 use theme::ActiveTheme;
 
@@ -33,7 +34,6 @@ use super::text_input::TextInput;
 use crate::git::diff_model::{FileDiff, Row};
 use crate::git::diff_rows::{SideRows, line_ranges, side_rows};
 use crate::git::languages::lang_for;
-use crate::text::model::TextModel;
 
 /// One file of a diff: its text, its lines, and its parse.
 struct Source {
@@ -59,11 +59,14 @@ pub(super) struct DiffDecor {
     cache: RefCell<RunCache>,
     /// The other side of a side by side diff, which scrolls with this one.
     peer: Option<WeakEntity<TextInput>>,
-    /// The scroll both sides were last set to.
-    synced: Option<Pixels>,
+    /// The scroll this side last had after a draw or a sync.
+    synced: Option<Point<Pixels>>,
+    /// The scroll the peer last gave this side. When the side clamps it, the clamped value is not
+    /// sent back, so the taller side can still scroll to its end (wrap on, D17).
+    given: Option<Point<Pixels>>,
     /// The scroll this side was last laid out at, for the tests.
     #[cfg(test)]
-    pub(super) drawn: Option<Pixels>,
+    pub(super) drawn: Option<Point<Pixels>>,
     _parses: Vec<Task<()>>,
 }
 
@@ -75,6 +78,7 @@ impl DiffDecor {
             cache: RefCell::default(),
             peer: None,
             synced: None,
+            given: None,
             #[cfg(test)]
             drawn: None,
             _parses: Vec::new(),
@@ -164,30 +168,34 @@ impl TextInput {
         Some(styled_runs(&cache.spans, base, text, style_for))
     }
 
-    /// After a scroll of a diff side: the other side takes the same scroll, as both have the same
-    /// rows.
-    pub(super) fn sync_peer(&mut self, cx: &mut Context<Self>) {
-        let y = self.scroll.y;
+    /// After a scroll of a diff side: the other side takes the same scroll, x and y, as both have
+    /// the same rows. `before` is the scroll before this draw clamped it.
+    pub(super) fn sync_peer(&mut self, before: Point<Pixels>, cx: &mut Context<Self>) {
+        let scroll = self.scroll;
         let Some(diff) = self.code.as_mut().and_then(|code| code.diff.as_mut()) else {
             return;
         };
         #[cfg(test)]
         {
-            diff.drawn = Some(y);
+            diff.drawn = Some(scroll);
         }
-        if diff.synced == Some(y) {
+        if diff.given.take() == Some(before) {
+            diff.synced = Some(scroll);
             return;
         }
-        diff.synced = Some(y);
+        if diff.synced == Some(scroll) {
+            return;
+        }
+        diff.synced = Some(scroll);
         let Some(peer) = diff.peer.as_ref().and_then(WeakEntity::upgrade) else {
             return;
         };
         let moved = peer.update(cx, |peer, _| {
+            let moved = peer.scroll != scroll;
             if let Some(diff) = peer.code.as_mut().and_then(|code| code.diff.as_mut()) {
-                diff.synced = Some(y);
+                diff.given = Some(scroll);
             }
-            let moved = peer.scroll.y != y;
-            peer.scroll.y = y;
+            peer.scroll = scroll;
             moved
         });
         // This runs in a draw, where gpui keeps a notify from drawing the window again; the peer
@@ -239,13 +247,16 @@ impl DiffSide {
         let lang = lang_for(path);
         let texts = [diff.old.clone(), diff.new.clone()];
         self.input.update(cx, |input, cx| {
+            let now = input.now(cx);
             if input.model.text().is_empty() {
-                input.model = TextModel::with_text(&side.text);
+                // Not a new model: its version would start again at 0, and the caches kept by
+                // version (guides, outline) would keep showing the empty text.
+                input.model.set_text(&side.text, now);
+                input.model.move_to(0);
             } else {
-                let now = input.now(cx);
                 input.model.replace_minimal(&side.text, now);
-                input.model.forget_history();
             }
+            input.model.forget_history();
             let mut parses = Vec::new();
             let sources = [0, 1].map(|index| {
                 let text: Arc<str> = Arc::from(texts[index].as_str());

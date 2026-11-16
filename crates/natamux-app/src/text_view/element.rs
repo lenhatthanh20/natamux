@@ -795,8 +795,9 @@ impl Element for TextElement {
             if std::mem::take(&mut input.autoscroll) {
                 input.scroll_to_head(&laid, bounds);
             }
+            let before = input.scroll;
             input.clamp_scroll(&laid, bounds);
-            input.sync_peer(cx);
+            input.sync_peer(before, cx);
             // A scroll may move the lines a code view colours: lay out again (only then).
             input.layout(window, cx)
         });
