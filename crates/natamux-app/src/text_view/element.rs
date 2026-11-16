@@ -1027,7 +1027,13 @@ mod tests {
             underline: None,
             strikethrough: None,
         };
-        let runs = vec![run(3, 0.1), run(0, 0.2), run(5, 0.3), run(2, 0.4), run(4, 0.5)];
+        let runs = vec![
+            run(3, 0.1),
+            run(0, 0.2),
+            run(5, 0.3),
+            run(2, 0.4),
+            run(4, 0.5),
+        ];
         let lines = [0..2, 3..3, 4..9, 10..10, 11..14, 15..15];
         let mut cursor = RunCursor::new(&runs);
         for range in lines {
