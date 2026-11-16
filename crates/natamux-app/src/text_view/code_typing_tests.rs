@@ -59,32 +59,32 @@ impl Host {
         }
     }
 
-    const fn string(mut self, text: &'static str) -> Host {
+    pub(super) const fn string(mut self, text: &'static str) -> Host {
         self.string = Some(text);
         self
     }
 
-    const fn comment(mut self, text: &'static str) -> Host {
+    pub(super) const fn comment(mut self, text: &'static str) -> Host {
         self.comment = Some(text);
         self
     }
 
-    const fn base(mut self, text: &'static str) -> Host {
+    pub(super) const fn base(mut self, text: &'static str) -> Host {
         self.base = Some(text);
         self
     }
 }
 
-enum Step {
+pub(super) enum Step {
     Type(String),
     Press(String),
 }
 
-fn t(text: &str) -> Step {
+pub(super) fn t(text: &str) -> Step {
     Step::Type(text.to_owned())
 }
 
-fn p(keys: &str) -> Step {
+pub(super) fn p(keys: &str) -> Step {
     Step::Press(keys.to_owned())
 }
 
@@ -98,13 +98,13 @@ fn word(key: &str) -> Step {
     p(&format!("{held}-{key}"))
 }
 
-struct Case {
+pub(super) struct Case {
     label: String,
     text: String,
     steps: Vec<Step>,
 }
 
-fn case(label: impl Into<String>, text: impl Into<String>, steps: Vec<Step>) -> Case {
+pub(super) fn case(label: impl Into<String>, text: impl Into<String>, steps: Vec<Step>) -> Case {
     Case {
         label: label.into(),
         text: text.into(),
@@ -374,9 +374,19 @@ impl Target {
 /// The language of the host, then one row per case and step: `[case, step, text, selections]`.
 /// `own`: the editor tab's hosts run on the own code view.
 fn run(host: &Host, own: bool, cx: &mut TestAppContext) -> Vec<Value> {
+    run_cases(host, own, cases(host), cx)
+}
+
+/// `run` with other cases.
+pub(super) fn run_cases(
+    host: &Host,
+    own: bool,
+    cases: Vec<Case>,
+    cx: &mut TestAppContext,
+) -> Vec<Value> {
     let (slot, cx) = start(cx);
     let mut rows = Vec::new();
-    for (i, case) in cases(host).into_iter().enumerate() {
+    for (i, case) in cases.into_iter().enumerate() {
         let (target, language) = if host.json_tab {
             let (input, language) = open_json_tab(&case.text, &slot, cx);
             (Target::Own(input), language)
@@ -463,11 +473,11 @@ fn check_own(host: &Host, rows: &[Value]) {
     );
 }
 
-const C_STRING: &str = "char *s = \"abˇ\";";
-const SLASH_COMMENT: &str = "// abˇ";
-const HASH_COMMENT: &str = "# abˇ";
-const JS_STRING: &str = "const s = \"abˇ\"";
-const JSON_STRING: &str = "{\"a\": \"abˇ\"}";
+pub(super) const C_STRING: &str = "char *s = \"abˇ\";";
+pub(super) const SLASH_COMMENT: &str = "// abˇ";
+pub(super) const HASH_COMMENT: &str = "# abˇ";
+pub(super) const JS_STRING: &str = "const s = \"abˇ\"";
+pub(super) const JSON_STRING: &str = "{\"a\": \"abˇ\"}";
 
 macro_rules! hosts {
     ($($module:ident: $host:expr,)*) => {$(
