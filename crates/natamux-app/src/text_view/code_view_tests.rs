@@ -350,7 +350,8 @@ fn find_shows_matches_and_selects_one_in_the_middle(cx: &mut TestAppContext) {
     });
     cx.update(|_, cx| crate::app::text_boxes::bind(cx, MAC));
     cx.run_until_parked();
-    let (view, input) = host.read_with(cx, |host, _| (host.view.clone(), host.view.input().clone()));
+    let (view, input) =
+        host.read_with(cx, |host, _| (host.view.clone(), host.view.input().clone()));
 
     let whole = input.read_with(cx, |input, _| input.text().to_owned());
     let found: Vec<_> = whole
@@ -365,15 +366,24 @@ fn find_shows_matches_and_selects_one_in_the_middle(cx: &mut TestAppContext) {
         let laid = input.layout(window, cx);
         input.code_paint(&laid, bounds, bounds.origin, cx).search
     });
-    assert!(shown.iter().any(|(_, active)| *active), "the active match is marked");
-    assert!(shown.iter().any(|(_, active)| !active), "the others are not");
+    assert!(
+        shown.iter().any(|(_, active)| *active),
+        "the active match is marked"
+    );
+    assert!(
+        shown.iter().any(|(_, active)| !active),
+        "the others are not"
+    );
 
     let last = found[found.len() - 1].clone();
     cx.update(|window, cx| view.select(last.clone(), window, cx));
     cx.run_until_parked();
     let head = input.read_with(cx, |input, _| input.model.head());
     assert_eq!(head, last.end);
-    assert!(scroll_y(&input, cx) > px(0.), "the view scrolled to the match");
+    assert!(
+        scroll_y(&input, cx) > px(0.),
+        "the view scrolled to the match"
+    );
 
     cx.update(|_, cx| view.clear_matches(cx));
     cx.run_until_parked();
