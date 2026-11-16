@@ -17,7 +17,9 @@ use super::{DiffEvent, DiffOptions, DiffView};
 use crate::app::shortcuts::UndoMove;
 use crate::app::test_views;
 use crate::git::change_rules::Side;
-use crate::git::diff_cases::{cases, changed_then_deleted, ended, numbered, several_hunks, swapped};
+use crate::git::diff_cases::{
+    cases, changed_then_deleted, ended, numbered, several_hunks, swapped,
+};
 use crate::git::diff_editors::{add_spacer, read_only_editor, set_excerpts};
 use crate::git::diff_rules::{Spacer, revert_hunk};
 

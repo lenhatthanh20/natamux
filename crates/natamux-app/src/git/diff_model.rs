@@ -192,42 +192,38 @@ pub fn line_diff(old: &str, new: &str) -> Vec<(Range<u32>, Range<u32>)> {
         .collect()
 }
 
+/// What a char counts as when text is cut into tokens. Each punctuation char is its own class,
+/// so only a repeat of the same char stays in one token.
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum CharKind {
+enum Class {
     Word,
     Space,
-    Punct,
+    Punct(char),
 }
 
-/// Runs of chars of one kind; a run of punctuation holds one repeated char, so `==` is one token
-/// and `=>` two.
+/// Runs of chars of one class: `==` is one token and `=>` two.
 fn tokens<'a>(text: &'a str, word_chars: &[char]) -> Vec<&'a str> {
-    let kind = |c: char| {
+    let class_of = |c: char| {
         if c.is_alphanumeric() || c == '_' || word_chars.contains(&c) {
-            CharKind::Word
+            Class::Word
         } else if c.is_whitespace() {
-            CharKind::Space
+            Class::Space
         } else {
-            CharKind::Punct
+            Class::Punct(c)
         }
     };
-    let mut tokens = Vec::new();
-    let mut start = 0;
-    let mut prev: Option<(char, CharKind)> = None;
-    for (at, c) in text.char_indices() {
-        let now = kind(c);
-        if let Some((prev_char, prev_kind)) = prev
-            && (now != prev_kind || (now == CharKind::Punct && c != prev_char))
-        {
-            tokens.push(&text[start..at]);
-            start = at;
-        }
-        prev = Some((c, now));
-    }
-    if start < text.len() {
-        tokens.push(&text[start..]);
-    }
-    tokens
+    let mut cuts: Vec<usize> = text
+        .char_indices()
+        .zip(text.chars().skip(1))
+        .filter(|((_, a), b)| class_of(*a) != class_of(*b))
+        .map(|((at, a), _)| at + a.len_utf8())
+        .collect();
+    cuts.insert(0, 0);
+    cuts.push(text.len());
+    cuts.windows(2)
+        .filter(|w| w[0] < w[1])
+        .map(|w| &text[w[0]..w[1]])
+        .collect()
 }
 
 /// The bytes where each token starts, plus the end.
@@ -267,9 +263,8 @@ pub fn word_diff(
     let new_at = token_starts(&new_tokens);
     let (mut old_ranges, mut new_ranges) = (Vec::new(), Vec::new());
     for hunk in Diff::compute(Algorithm::Histogram, &input).hunks() {
-        let range = |at: &[usize], tokens: Range<u32>| {
-            at[tokens.start as usize]..at[tokens.end as usize]
-        };
+        let range =
+            |at: &[usize], tokens: Range<u32>| at[tokens.start as usize]..at[tokens.end as usize];
         push_merged(&mut old_ranges, range(&old_at, hunk.before));
         push_merged(&mut new_ranges, range(&new_at, hunk.after));
     }
@@ -344,7 +339,11 @@ struct ChangeCursor<'a> {
 
 impl ChangeCursor<'_> {
     fn holds(&mut self, row: u32) -> bool {
-        while self.changes.get(self.next).is_some_and(|change| change.end <= row) {
+        while self
+            .changes
+            .get(self.next)
+            .is_some_and(|change| change.end <= row)
+        {
             self.next += 1;
         }
         self.changes
@@ -420,20 +419,24 @@ pub fn inline_rows(hunks: &[HunkRows], new_rows: u32, collapse: bool) -> Vec<Row
     };
     let mut next = 0;
     let mut out = Vec::new();
-    walk(&parts(&changes, new_rows, collapse), &mut out, |row, out| {
-        while let Some(hunk) = hunks.get(next).filter(|hunk| hunk.new.start <= row) {
-            if hunk.new.start == row {
-                deleted(hunk, out);
+    walk(
+        &parts(&changes, new_rows, collapse),
+        &mut out,
+        |row, out| {
+            while let Some(hunk) = hunks.get(next).filter(|hunk| hunk.new.start <= row) {
+                if hunk.new.start == row {
+                    deleted(hunk, out);
+                }
+                next += 1;
             }
-            next += 1;
-        }
-        let status = if cursor.holds(row) {
-            Status::Added
-        } else {
-            Status::Unchanged
-        };
-        out.push(Row::Line { row, status });
-    });
+            let status = if cursor.holds(row) {
+                Status::Added
+            } else {
+                Status::Unchanged
+            };
+            out.push(Row::Line { row, status });
+        },
+    );
     for hunk in hunks.get(next..).unwrap_or_default() {
         deleted(hunk, &mut out);
     }

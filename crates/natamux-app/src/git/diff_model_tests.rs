@@ -183,17 +183,41 @@ fn line_endings_become_line_breaks() {
 #[test]
 fn an_emptied_file_is_one_hunk_of_every_old_line() {
     let diff = diff(Some("a\nb\n"), "\n", &[]);
-    assert_eq!(diff.hunk_rows(), [HunkRows { old: 0..2, new: 0..0 }]);
+    assert_eq!(
+        diff.hunk_rows(),
+        [HunkRows {
+            old: 0..2,
+            new: 0..0
+        }]
+    );
     let diff = super::diff(Some("a\nb\n\n"), "\n", &[]);
-    assert_eq!(diff.hunk_rows(), [HunkRows { old: 0..2, new: 0..0 }]);
+    assert_eq!(
+        diff.hunk_rows(),
+        [HunkRows {
+            old: 0..2,
+            new: 0..0
+        }]
+    );
 }
 
 #[test]
 fn a_new_file_is_one_hunk_of_every_line() {
     let diff = diff(None, "a\nb\n", &[]);
-    assert_eq!(diff.hunk_rows(), [HunkRows { old: 0..0, new: 0..2 }]);
+    assert_eq!(
+        diff.hunk_rows(),
+        [HunkRows {
+            old: 0..0,
+            new: 0..2
+        }]
+    );
     let diff = super::diff(None, "a\nb", &[]);
-    assert_eq!(diff.hunk_rows(), [HunkRows { old: 0..0, new: 0..2 }]);
+    assert_eq!(
+        diff.hunk_rows(),
+        [HunkRows {
+            old: 0..0,
+            new: 0..2
+        }]
+    );
     assert_eq!(super::diff(None, "", &[]).hunk_rows()[0].new, 0..0);
 }
 
@@ -201,8 +225,14 @@ fn a_new_file_is_one_hunk_of_every_line() {
 fn a_word_diff_needs_the_same_line_count_on_both_sides() {
     let diff = diff(Some("a\nold x\nb\n"), "a\nnew x\nb\n", &[]);
     let hunk = &diff.hunks[0];
-    assert_eq!((hunk.old_words.len(), hunk.old_words.first()), (1, Some(&(0..3))));
-    assert_eq!((hunk.new_words.len(), hunk.new_words.first()), (1, Some(&(2..5))));
+    assert_eq!(
+        (hunk.old_words.len(), hunk.old_words.first()),
+        (1, Some(&(0..3)))
+    );
+    assert_eq!(
+        (hunk.new_words.len(), hunk.new_words.first()),
+        (1, Some(&(2..5)))
+    );
     let diff = super::diff(Some("a\nold\nb\n"), "a\nnew\nmore\nb\n", &[]);
     assert!(diff.hunks[0].old_words.is_empty() && diff.hunks[0].new_words.is_empty());
 }
@@ -215,7 +245,10 @@ fn parts_that_touch_are_joined() {
     assert_eq!(parts(&[3..4, 12..13], 30, true), [0..=7, 9..=16]);
     let one = |range: Range<u32>| parts(std::slice::from_ref(&range), 30, true);
     assert_eq!(one(28..30).first(), Some(&(25..=29)));
-    assert_eq!(parts(std::slice::from_ref(&(3..4)), 30, false).first(), Some(&(0..=29)));
+    assert_eq!(
+        parts(std::slice::from_ref(&(3..4)), 30, false).first(),
+        Some(&(0..=29))
+    );
     assert_eq!(parts(&[], 30, true).first(), Some(&(0..=29)));
 }
 
@@ -226,9 +259,18 @@ fn a_gap_counts_the_rows_it_hides() {
         new: 20..21,
     }];
     let rows = side_rows(&hunks, Side::New, 40, 40, true);
-    assert_eq!(rows.first(), Some(&Row::Line { row: 17, status: Status::Unchanged }));
+    assert_eq!(
+        rows.first(),
+        Some(&Row::Line {
+            row: 17,
+            status: Status::Unchanged
+        })
+    );
     let hunks = [
-        HunkRows { old: 5..6, new: 5..6 },
+        HunkRows {
+            old: 5..6,
+            new: 5..6,
+        },
         HunkRows {
             old: 20..21,
             new: 20..21,
