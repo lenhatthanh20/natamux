@@ -435,3 +435,25 @@ fn the_row_after_a_wrap_inside_a_bold_mark_is_shaped_alone(cx: &mut TestAppConte
         assert_eq!(laid.index_in_row(1, x), (fit + 2, false));
     });
 }
+
+/// A row after a wrap starts as far in as its line, and a selection that goes on from the row
+/// above covers that indent too, as in Zed's editor (S3.3 shot `workspace-docs-edit-selection`
+/// at 1024 x 720).
+#[gpui::test]
+fn a_row_after_a_wrap_keeps_the_indent_of_its_line(cx: &mut TestAppContext) {
+    let text = format!("    {}", "word ".repeat(200));
+    let (input, _, cx) = open("x.txt", &text, cx);
+    input.update_in(cx, |input, window, cx| {
+        let laid = input.layout(window, cx);
+        let start = laid.row_range(1).start;
+        assert!(start > 4, "the line wraps");
+        let text_system = window.text_system();
+        let font = text_system.resolve_font(&laid.key.font);
+        let indent = text_system.layout_width(font, laid.key.font_size, ' ') * 4.;
+        assert_eq!(laid.position(start, false).x, indent);
+        let rects = laid.selection_rects(0..text.len());
+        assert_eq!(rects[1].left(), px(0.), "the selection covers the indent");
+        let rects = laid.selection_rects(start..text.len());
+        assert_eq!(rects[0].left(), indent, "a selection from the row start does not");
+    });
+}

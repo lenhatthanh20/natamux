@@ -519,7 +519,13 @@ impl Layout {
                 if start > end || (start == end && !past) {
                     continue;
                 }
-                let left = line.x_in_row(row, start - line.start);
+                // A range that goes on from the row above covers the row's indent too, as in
+                // Zed's editor (S3.3 shot `workspace-docs-edit-selection` at 1024 x 720).
+                let left = if range.start < row_start {
+                    px(0.)
+                } else {
+                    line.x_in_row(row, start - line.start)
+                };
                 let mut right = line.x_in_row(row, end - line.start);
                 if past {
                     right += overshoot;
