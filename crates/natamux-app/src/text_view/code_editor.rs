@@ -10,41 +10,58 @@ use gpui::{
 use theme::ActiveTheme;
 use ui::editor_menu::ContextMenu;
 
+use super::code_runs::input_edit;
 use super::code_view::CodeView;
 use super::text_input::TextInput;
 use crate::git::change_rules::wraps_by_default;
 use crate::git::code_target::{BlameTarget, RowMenu};
 
-/// The labels of a text: per row as given, and at their offsets in the text now.
+/// The labels of a text, each at its offset in the text now. Each moves with the text as a
+/// right-bias anchor does, so it stays at the start of its line when lines come or go above it.
 #[derive(Default)]
 pub(super) struct Labels {
-    rows: Vec<(u32, String)>,
     /// Each label at the start of its row, in text order.
     spots: Vec<(usize, String)>,
+    /// The text the spots are of; kept only while there are labels.
+    text: String,
 }
 
 impl Labels {
-    /// New labels for `text`, in place of the ones before.
+    /// New labels for `text`, in place of the ones before: each at the start of its row; a row
+    /// past the end has none.
     pub fn set(&mut self, rows: Vec<(u32, String)>, text: &str) {
-        self.rows = rows;
-        self.place(text);
-    }
-
-    /// Puts each label at the start of its row of `text`; a row past the end has none.
-    pub fn place(&mut self, text: &str) {
-        self.spots.clear();
-        if self.rows.is_empty() {
-            return;
-        }
         let starts: Vec<usize> = std::iter::once(0)
             .chain(text.match_indices('\n').map(|(at, _)| at + 1))
             .collect();
-        self.spots = self
-            .rows
-            .iter()
-            .filter_map(|(row, label)| Some((*starts.get(*row as usize)?, label.clone())))
+        self.spots = rows
+            .into_iter()
+            .filter_map(|(row, label)| Some((*starts.get(row as usize)?, label)))
             .collect();
         self.spots.sort_by_key(|(at, _)| *at);
+        self.text = if self.spots.is_empty() {
+            String::new()
+        } else {
+            text.to_owned()
+        };
+    }
+
+    /// Moves the labels with the edit that turned the text before into `text`. A label in a
+    /// removed part goes to the end of what came in its place, as Zed's anchors did.
+    pub fn follow(&mut self, text: &str) {
+        if self.spots.is_empty() || self.text == text {
+            return;
+        }
+        // shortcut: the edit is guessed from the two texts, so a typed copy of a labelled
+        // line's start may land on the other side of the label; take the real edit if it shows.
+        let edit = input_edit(&self.text, text);
+        for (spot, _) in &mut self.spots {
+            if *spot >= edit.old_end_byte {
+                *spot = *spot - edit.old_end_byte + edit.new_end_byte;
+            } else if *spot >= edit.start_byte {
+                *spot = edit.new_end_byte;
+            }
+        }
+        self.text = text.to_owned();
     }
 
     pub fn total(&self) -> usize {
@@ -184,8 +201,8 @@ impl TextInput {
         }
     }
 
-    /// A right press in a code view with a menu: the caret goes there unless it is inside the
-    /// selection, then the menu of its row opens at the pointer.
+    /// A right press on the text of a code view with a menu: the caret goes there unless it is
+    /// inside the selection, then the menu of its row opens at the pointer.
     pub(super) fn right_down(
         &mut self,
         event: &MouseDownEvent,
@@ -195,6 +212,10 @@ impl TextInput {
         let Some(menu) = self.code.as_ref().and_then(|code| code.menu.clone()) else {
             return;
         };
+        // As in the Zed editor, the line numbers open no menu.
+        if self.in_gutter(event.position) {
+            return;
+        }
         let Some((at, _)) = self.index_at(event.position, window, cx) else {
             return;
         };
@@ -206,7 +227,7 @@ impl TextInput {
         }
         let row = self.model.text()[..at].matches('\n').count() as u32;
         cx.stop_propagation();
-        let Some(menu) = menu(Some(row), window, &mut **cx) else {
+        let Some(menu) = menu(Some(row), window, cx) else {
             return;
         };
         let dismiss = cx.subscribe_in(&menu, window, |input, menu, _: &DismissEvent, window, cx| {

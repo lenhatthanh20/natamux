@@ -19,7 +19,7 @@ use super::*;
 use crate::app::appearance::Appearance;
 use crate::app::shots_text::sticky_file;
 use crate::app::test_views;
-use crate::git::code_target::{BlameTarget as _, RowMenu};
+use crate::git::code_target::RowMenu;
 
 const MAC: bool = cfg!(target_os = "macos");
 
@@ -94,9 +94,25 @@ fn labels_go_before_their_rows_and_map_offsets_both_ways() {
     for at in 0..=text.len() {
         assert_eq!(labels.text_at(labels.shown(at)), at, "round trip at {at}");
     }
-    // An edit moves them with their rows.
-    labels.place("x\nab\ncd\n");
-    assert_eq!(labels.insert("x\nab\ncd\n"), "L0 x\nL1 ab\ncd\n");
+}
+
+#[test]
+fn labels_move_with_their_lines_when_the_text_changes() {
+    let mut labels = Labels::default();
+    labels.set(vec![(0, "L0 ".into()), (1, "L1 ".into())], "ab\ncd\n");
+    // A line typed at the top: the labels stay with their lines.
+    labels.follow("x\nab\ncd\n");
+    assert_eq!(labels.insert("x\nab\ncd\n"), "x\nL0 ab\nL1 cd\n");
+    // A typed letter inside a line moves the next line's label only.
+    labels.follow("x\naYb\ncd\n");
+    assert_eq!(labels.insert("x\naYb\ncd\n"), "x\nL0 aYb\nL1 cd\n");
+    // The labelled first line deleted: its label goes where the line was.
+    labels.follow("x\ncd\n");
+    assert_eq!(labels.insert("x\ncd\n"), "x\nL0 L1 cd\n");
+    // A delete in the middle of a line before a label.
+    labels.set(vec![(1, "L1 ".into())], "abc\nde\n");
+    labels.follow("ac\nde\n");
+    assert_eq!(labels.insert("ac\nde\n"), "ac\nL1 de\n");
 }
 
 #[test]
@@ -159,20 +175,29 @@ fn blame_labels_shift_their_rows_and_the_menu_opens_on_a_right_click(cx: &mut Te
     },
     );
     cx.update(|_, cx| view.set_menu(menu, cx));
-    let at = input.update_in(cx, |input, window, cx| {
+    let (gutter_at, at) = input.update_in(cx, |input, window, cx| {
         let bounds = input.last_bounds.unwrap();
         let laid = input.layout(window, cx);
-        let y = laid.line_height * 1.5;
-        point(bounds.right() - px(40.), bounds.top() + y)
+        let y = bounds.top() + laid.line_height * 1.5;
+        (
+            point(bounds.left() + px(2.), y),
+            point(bounds.right() - px(40.), y),
+        )
     });
-    cx.simulate_event(MouseDownEvent {
-        button: MouseButton::Right,
-        position: at,
-        modifiers: Modifiers::default(),
-        click_count: 1,
-        first_mouse: false,
-    });
-    cx.run_until_parked();
+    let right_press = |position, cx: &mut VisualTestContext| {
+        cx.simulate_event(MouseDownEvent {
+            button: MouseButton::Right,
+            position,
+            modifiers: Modifiers::default(),
+            click_count: 1,
+            first_mouse: false,
+        });
+        cx.run_until_parked();
+    };
+    // The line numbers open no menu, as in the Zed editor.
+    right_press(gutter_at, cx);
+    assert_eq!(asked.get(), None, "no menu from the gutter");
+    right_press(at, cx);
     assert_eq!(asked.get(), Some(Some(1)), "the menu of the clicked row");
     let open = input.read_with(cx, |input, _| {
         input.code.as_ref().unwrap().open_menu.is_some()
@@ -209,6 +234,7 @@ fn a_view_that_does_not_wrap_scrolls_sideways_with_its_own_bar(cx: &mut TestAppC
         input.update_in(cx, |input, window, cx| input.layout(window, cx).rows)
     };
     assert_eq!(rows(cx), 3, "a .rs file does not wrap");
+    assert!(!cx.update(|_, cx| view.wraps(cx)));
     set_look(cx, |look| look.always_scrollbars = true);
     let hbar = paint(&input, cx).hbar.expect("a line is wider than the view");
     assert!(hbar.0.thumb.size.width < hbar.0.track.size.width);
@@ -238,6 +264,7 @@ fn a_view_that_does_not_wrap_scrolls_sideways_with_its_own_bar(cx: &mut TestAppC
     cx.update(|_, cx| view.set_wrap(true, cx));
     cx.run_until_parked();
     assert!(rows(cx) > 3, "wrapped");
+    assert!(cx.update(|_, cx| view.wraps(cx)));
     assert_eq!(input.read_with(cx, |input, _| input.scroll.x), px(0.));
     assert!(paint(&input, cx).hbar.is_none());
 }
@@ -287,6 +314,8 @@ fn the_guides_are_kept_until_the_text_changes(cx: &mut TestAppContext) {
 #[gpui::test]
 fn the_colours_are_asked_for_the_lines_around_the_shown_ones(cx: &mut TestAppContext) {
     let (_, input, cx) = open("x.rs", &lines(1000), cx);
+    cx.executor().advance_clock(Duration::from_millis(50));
+    cx.run_until_parked();
     let asked = |cx: &mut VisualTestContext| {
         input.update_in(cx, |input, window, cx| input.layout(window, cx).key.lines.clone())
     };
@@ -300,4 +329,11 @@ fn the_colours_are_asked_for_the_lines_around_the_shown_ones(cx: &mut TestAppCon
     let lines = asked(cx).expect("a window");
     assert!(lines.start <= 450 && lines.end > 460, "{lines:?}");
     assert_eq!(lines, 300..600);
+}
+
+#[gpui::test]
+fn a_view_with_nothing_to_colour_asks_for_no_lines(cx: &mut TestAppContext) {
+    let (_, input, cx) = open("notes.txt", &lines(1000), cx);
+    let asked = input.update_in(cx, |input, window, cx| input.layout(window, cx).key.lines.clone());
+    assert_eq!(asked, None);
 }

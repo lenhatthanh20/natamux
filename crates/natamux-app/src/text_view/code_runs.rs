@@ -75,10 +75,14 @@ pub(super) fn line_bytes(text: &str, lines: &Range<usize>) -> Range<usize> {
 
 impl TextInput {
     /// The lines whose colours a layout asks for: the shown lines and a block more on each side,
-    /// as whole blocks. None means every line (no earlier layout to tell which are shown).
+    /// as whole blocks. None when there is nothing to colour (no language or no tree yet).
     pub(super) fn query_lines(&self) -> Option<Range<usize>> {
-        self.code.as_ref()?;
-        let laid = self.laid.as_ref()?;
+        // A view with nothing to colour keeps one layout for all its lines.
+        self.code.as_ref()?.syntax.as_ref()?.tree()?;
+        let Some(laid) = self.laid.as_ref() else {
+            // The first layout: the top lines, so a view drawn at the top lays out once.
+            return Some(0..2 * BLOCK);
+        };
         let bounds = self.last_bounds?;
         let line_height = laid.line_height.max(gpui::px(1.));
         let row = |y: gpui::Pixels| (y / line_height).max(0.) as usize;
