@@ -179,7 +179,10 @@ impl ChangesView {
         if changed && let Some(list) = &list {
             // The colours of the listed files' languages are ready before a file is picked.
             let mut langs: Vec<&'static super::languages::Lang> = Vec::new();
-            for lang in list.iter().filter_map(|entry| super::languages::lang_for(&entry.path)) {
+            for lang in list
+                .iter()
+                .filter_map(|entry| super::languages::lang_for(&entry.path))
+            {
                 if !langs.iter().any(|known| std::ptr::eq(*known, lang)) {
                     langs.push(lang);
                 }
