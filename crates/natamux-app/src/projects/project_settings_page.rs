@@ -8,7 +8,7 @@
 
 use gpui::{Entity, EventEmitter, FocusHandle, Focusable, ScrollHandle, Subscription};
 use natamux_proto::projects::repo::{LoadedSettings, SkillList};
-use ui::{ScrollAxes, prelude::*};
+use ui::prelude::*;
 
 use super::branch_name_field::BranchNameField;
 use super::idle_pause_field::IdlePauseField;
@@ -366,7 +366,6 @@ impl Render for ProjectSettingsPage {
                         .px(rems_from_px(32.0_f32))
                         .pb(rems_from_px(32.0_f32))
                         .children(body),
-                    ScrollAxes::Vertical,
                     &self.body_scroll,
                     window,
                     cx,

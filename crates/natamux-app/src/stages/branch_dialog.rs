@@ -7,7 +7,7 @@ use gpui::{
     Subscription,
 };
 use natamux_proto::stages::schema::{StageBranch, Step};
-use ui::{ScrollAxes, prelude::*};
+use ui::prelude::*;
 
 use super::branch_dialog_fields::BranchFields;
 use super::branch_dialog_paths::path_cards;
@@ -199,7 +199,7 @@ impl Render for BranchDialog {
             .child(name)
             .child(paths_title)
             .children(cards);
-        let body = scroll_area(body, ScrollAxes::Vertical, &self.scroll, window, cx);
+        let body = scroll_area(body, &self.scroll, window, cx);
         let frame = DialogFrame::new(title, cx.listener(|_, _, _, cx| cx.emit(DismissEvent)))
             .sheet()
             .footer_note(note)
