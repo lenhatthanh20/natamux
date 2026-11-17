@@ -52,7 +52,7 @@ fn gives_the_file_to_read_to_an_agent_that_has_no_call_or_not_the_skill() {
     let f = Fixture::new();
     skill_help(&f.repo.join(".claude/skills"), "review");
     let want = file(".claude/skills/review/SKILL.md");
-    for agent in ["gemini", "cursor", "codex", "aider"] {
+    for agent in ["gemini", "cursor", "codex", "nano-agent"] {
         assert_eq!(
             resolve_skill("review", &context(&f, agent)),
             want,

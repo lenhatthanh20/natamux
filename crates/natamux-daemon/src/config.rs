@@ -215,12 +215,16 @@ mod tests {
         let set = env(&[
             ("NATAMUX_CLAUDE_COMMAND", "/opt/fake-agent.sh"),
             ("NATAMUX_CODEX_ARGS", "--model x"),
+            ("NATAMUX_KIRO_COMMAND", "/opt/kiro-cli"),
+            ("NATAMUX_OPENCODE_ARGS", "--port 0"),
             ("NATAMUX_BIN_DIR", "/app/bin"),
         ]);
         let config = load_config(&set, Path::new("/")).unwrap().agents;
         assert_eq!(config.programs["claude-code"], "/opt/fake-agent.sh");
         assert_eq!(config.extra_args["codex"], "--model x");
-        assert_eq!(config.programs.len() + config.extra_args.len(), 2);
+        assert_eq!(config.programs["kiro"], "/opt/kiro-cli");
+        assert_eq!(config.extra_args["opencode"], "--port 0");
+        assert_eq!(config.programs.len() + config.extra_args.len(), 4);
         assert_eq!(config.bin_dir.as_deref(), Some("/app/bin"));
     }
 

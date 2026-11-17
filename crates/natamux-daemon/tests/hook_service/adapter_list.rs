@@ -15,3 +15,11 @@ fn knows_claude_code() {
 fn knows_no_adapter_for_another_name() {
     assert!(find_adapter("nope").is_none());
 }
+
+#[test]
+fn knows_opencode_qwen_and_droid() {
+    for id in ["opencode", "qwen", "droid"] {
+        assert!(known_agent_ids().contains(&id));
+        assert_eq!(find_adapter(id).map(|adapter| adapter.id()), Some(id));
+    }
+}

@@ -23,7 +23,7 @@
     },
     {
       "id": "T-0148", "title": "Port the task table", "state": "done", "stage": "review",
-      "repo": "natamux", "agent": "claude-code", "parentId": "T-0146",
+      "repo": "natamux", "agent": "opencode", "parentId": "T-0146",
       "branch": "natamux/t-0148-port-the-task-table",
       "createdAt": "2026-10-22T08:00:00.000Z", "updatedAt": "2026-10-22T09:10:00.000Z"
     },
@@ -55,7 +55,7 @@
     },
     {
       "id": "T-0136", "title": "Sign the macOS build", "state": "blocked", "stage": "spec",
-      "repo": "natamux", "agent": "claude-code",
+      "repo": "natamux", "agent": "muse",
       "createdAt": "2026-10-20T08:00:00.000Z", "updatedAt": "2026-10-21T16:00:00.000Z"
     },
     {

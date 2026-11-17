@@ -1,6 +1,15 @@
 //! The model of a task: typed by the person, passed to the task's agent as `--model <name>`.
 //! There is no list of known models: the agent itself says when a name is wrong.
 
+/// Built-in agents with no `--model` flag in their interactive mode: Amp has none, Goose reads
+/// `GOOSE_MODEL`, Crush takes one only in `crush run`. The task's model does not go to them.
+pub const NO_MODEL_AGENTS: [&str; 3] = ["amp", "goose", "crush"];
+
+/// Whether the task's model can go to this built-in agent as `--model <name>`.
+pub fn takes_model(agent: &str) -> bool {
+    !NO_MODEL_AGENTS.contains(&agent)
+}
+
 /// The longest model name the daemon takes.
 pub const MAX_MODEL_LENGTH: usize = 100;
 

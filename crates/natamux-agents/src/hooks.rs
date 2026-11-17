@@ -13,8 +13,11 @@ pub mod claude_code;
 pub mod codex;
 pub mod copilot;
 pub mod cursor;
+pub mod droid;
 mod fields;
 pub mod gemini;
+pub mod opencode;
+pub mod qwen;
 
 pub use copilot::COPILOT_EVENT_FIELD;
 
@@ -102,7 +105,7 @@ impl Adapter {
 }
 
 // Add an agent here: write its adapter, then list it.
-const ADAPTERS: [Adapter; 5] = [
+const ADAPTERS: [Adapter; 8] = [
     Adapter {
         id: "claude-code",
         run: claude_code::normalize,
@@ -122,6 +125,18 @@ const ADAPTERS: [Adapter; 5] = [
     Adapter {
         id: "cursor",
         run: cursor::normalize,
+    },
+    Adapter {
+        id: "opencode",
+        run: opencode::normalize,
+    },
+    Adapter {
+        id: "qwen",
+        run: qwen::normalize,
+    },
+    Adapter {
+        id: "droid",
+        run: droid::normalize,
     },
 ];
 
@@ -364,6 +379,7 @@ pub fn tool_summary(
     let file = text("file_path")
         .or_else(|| text("notebook_path"))
         .or_else(|| text("absolute_path"))
+        .or_else(|| text("filePath"))
         .or_else(|| text("path"))
         .filter(|file| !file.is_empty());
     if let Some(file) = file {
@@ -392,3 +408,7 @@ mod tests;
 #[cfg(test)]
 #[path = "hooks/adapters_tests.rs"]
 mod adapters_tests;
+
+#[cfg(test)]
+#[path = "hooks/new_agents_tests.rs"]
+mod new_agents_tests;

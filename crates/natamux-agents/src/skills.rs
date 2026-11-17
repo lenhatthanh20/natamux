@@ -75,8 +75,19 @@ const CURSOR_FOLDERS: &[&str] = &[
     ".codex/skills",
 ];
 
-/// In the order of the launchable agents.
-pub const SKILL_SOURCES: [(&str, SkillSource); 5] = [
+/// An agent whose docs say nothing of calling a skill by name: it reads the file.
+const fn reads(project: &'static [&'static str], user: &'static [&'static str]) -> SkillSource {
+    SkillSource {
+        project,
+        user,
+        plugins: None,
+        call: no_call,
+    }
+}
+
+/// In the order of the launchable agents. The folders of the agents after Cursor were read from
+/// their docs on 2026-11-17 (`docs/agent-adapters.md`). Goose and Aider document none.
+pub const SKILL_SOURCES: [(&str, SkillSource); 16] = [
     (
         "claude-code",
         SkillSource {
@@ -123,6 +134,74 @@ pub const SKILL_SOURCES: [(&str, SkillSource); 5] = [
             plugins: None,
             call: no_call,
         },
+    ),
+    (
+        "opencode",
+        reads(
+            &[".opencode/skills", ".claude/skills", ".agents/skills"],
+            &[
+                ".config/opencode/skills",
+                ".claude/skills",
+                ".agents/skills",
+            ],
+        ),
+    ),
+    (
+        "qwen",
+        reads(&[".qwen/skills"], &[".qwen/skills", ".agents/skills"]),
+    ),
+    ("droid", reads(&[".factory/skills"], &[".factory/skills"])),
+    (
+        "amp",
+        reads(
+            &[".agents/skills", ".claude/skills"],
+            &[
+                ".config/agents/skills",
+                ".agents/skills",
+                ".config/amp/skills",
+                ".claude/skills",
+            ],
+        ),
+    ),
+    (
+        "kimi",
+        reads(
+            &[
+                ".kimi/skills",
+                ".claude/skills",
+                ".codex/skills",
+                ".agents/skills",
+            ],
+            &[
+                ".kimi/skills",
+                ".claude/skills",
+                ".config/agents/skills",
+                ".agents/skills",
+            ],
+        ),
+    ),
+    ("goose", reads(&[], &[])),
+    ("aider", reads(&[], &[])),
+    (
+        "crush",
+        reads(
+            &[
+                ".agents/skills",
+                ".crush/skills",
+                ".claude/skills",
+                ".cursor/skills",
+            ],
+            &[".config/crush/skills", ".agents/skills", ".claude/skills"],
+        ),
+    ),
+    ("cline", reads(&[".cline/skills"], &[".cline/skills"])),
+    ("kiro", reads(&[".kiro/skills"], &[".kiro/skills"])),
+    (
+        "muse",
+        reads(
+            &[".agents/skills", ".codex/skills", ".claude/skills"],
+            &[".config/muse/skills", ".agents/skills", ".claude/skills"],
+        ),
     ),
 ];
 

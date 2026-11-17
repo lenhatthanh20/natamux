@@ -430,7 +430,7 @@ async fn lists_the_skills_of_the_agents_for_a_repository() {
             "name": "review",
             "description": "Reviews a diff",
             "origin": "project",
-            "agents": ["claude-code", "copilot", "cursor"],
+            "agents": ["claude-code", "copilot", "cursor", "opencode", "amp", "kimi", "crush", "muse"],
             "path": ".claude/skills/review/SKILL.md",
         }])
     );

@@ -387,3 +387,80 @@ fn writes_no_hook_file_through_a_link_in_the_worktree() {
     assert!(!outside.path().join("missing").exists());
     assert_eq!(fs::read_dir(outside.path()).unwrap().count(), 1);
 }
+
+#[test]
+fn writes_the_files_of_qwen_droid_and_opencode_with_natamuxs_command() {
+    let repo = TempDir::new("launch");
+    let path = repo.path();
+    for agent in ["qwen", "droid", "opencode"] {
+        assert!(prepare_workspace(agent, path, none()), "{agent}");
+    }
+    let qwen: Value = parse_js(&read(path, ".qwen/settings.json")).unwrap();
+    let hook = &qwen["hooks"]["StopFailure"][0]["hooks"][0];
+    assert_eq!(hook["command"], "natamux hook qwen");
+    assert_eq!(hook["timeout"], 5000);
+    // Droid has the events at the top and a matcher on the tool events only.
+    let droid: Value = parse_js(&read(path, ".factory/hooks.json")).unwrap();
+    assert!(droid.get("hooks").is_none());
+    assert_eq!(droid["PreToolUse"][0]["matcher"], "*");
+    assert!(droid["Stop"][0].get("matcher").is_none());
+    assert_eq!(
+        droid["Notification"][0]["hooks"][0]["command"],
+        "natamux hook droid"
+    );
+    let plugin = read(path, ".opencode/plugins/natamux.js");
+    assert!(plugin.starts_with(OPENCODE_FILE_MARK));
+    assert!(plugin.contains("export const NatamuxPlugin"));
+    assert!(plugin.contains("NATAMUX_TOKEN"));
+}
+
+#[test]
+fn keeps_the_users_own_files_of_qwen_droid_and_opencode() {
+    let repo = TempDir::new("launch");
+    let path = repo.path();
+    let own = [
+        (".qwen/settings.json", r#"{"model":{"name":"qwen3"}}"#),
+        (
+            ".factory/hooks.json",
+            r#"{"Stop":[{"hooks":[{"type":"command","command":"say done"}]}]}"#,
+        ),
+        (
+            ".opencode/plugins/natamux.js",
+            "export const Mine = async () => ({});\n",
+        ),
+    ];
+    for (file, text) in own {
+        write(path, file, text);
+    }
+    for agent in ["qwen", "droid", "opencode"] {
+        assert!(!prepare_workspace(agent, path, none()), "{agent}");
+    }
+    for (file, text) in own {
+        assert_eq!(read(path, file), text);
+    }
+}
+
+#[test]
+fn writes_a_droid_file_and_a_plugin_of_an_older_natamux_again() {
+    let repo = TempDir::new("launch");
+    let path = repo.path();
+    write(
+        path,
+        ".factory/hooks.json",
+        r#"{"Stop":[{"hooks":[{"type":"command","command":"natamux hook droid"}]}]}"#,
+    );
+    write(
+        path,
+        ".opencode/plugins/natamux.js",
+        &format!("{OPENCODE_FILE_MARK}\nexport const Old = 1;\n"),
+    );
+    assert!(prepare_workspace("droid", path, none()));
+    assert!(prepare_workspace("opencode", path, none()));
+    // The events of the older file keep their place, so only the content counts.
+    let written: Value = serde_json::from_str(&read(path, ".factory/hooks.json")).unwrap();
+    assert_eq!(written, droid_hook_file());
+    assert_eq!(
+        read(path, ".opencode/plugins/natamux.js"),
+        opencode_plugin()
+    );
+}

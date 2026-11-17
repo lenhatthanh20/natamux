@@ -41,9 +41,10 @@ pub fn agent_kind(id: &str) -> String {
     }
 }
 
-/// A built-in agent, or a custom one on a built-in base: it has hooks and can be resumed.
+/// A built-in agent with hooks, or a custom one on such a base: it reports its session, so it
+/// can be resumed. A built-in agent followed by its terminal only (Aider, Amp, ...) has none.
 pub fn has_adapter(id: &str) -> bool {
-    LAUNCHABLE_AGENTS.contains(&agent_kind(id).as_str())
+    crate::hooks::find_adapter(&agent_kind(id)).is_some()
 }
 
 /// Every id an agent can be started with: the built-ins, then the custom ones.
@@ -71,16 +72,21 @@ mod tests {
         set_custom_agents(vec![
             agent("claude-qwen", "claude-code", "cq"),
             agent("my-agent", "other", "my-agent"),
+            agent("my-aider", "aider", "aider --dark-mode"),
         ]);
         assert_eq!(agent_kind("claude-qwen"), "claude-code");
         assert_eq!(agent_kind("my-agent"), "my-agent");
         assert_eq!(agent_kind("codex"), "codex");
         assert_eq!(agent_kind("aider"), "aider");
-        assert!(has_adapter("claude-qwen") && has_adapter("cursor"));
-        assert!(!has_adapter("my-agent") && !has_adapter("aider"));
-        assert!(crate::launch::is_launchable("my-agent"));
-        assert!(!crate::launch::is_launchable("aider"));
-        assert_eq!(known_agents().last().map(String::as_str), Some("my-agent"));
+        assert_eq!(agent_kind("my-aider"), "aider");
+        assert_eq!(agent_kind("nano-agent"), "nano-agent");
+        assert!(has_adapter("claude-qwen") && has_adapter("cursor") && has_adapter("opencode"));
+        assert!(!has_adapter("my-agent") && !has_adapter("nano-agent"));
+        // Built in, but followed by its terminal only: no hooks, no session.
+        assert!(!has_adapter("aider") && !has_adapter("my-aider"));
+        assert!(crate::launch::is_launchable("my-agent") && crate::launch::is_launchable("aider"));
+        assert!(!crate::launch::is_launchable("nano-agent"));
+        assert_eq!(known_agents().last().map(String::as_str), Some("my-aider"));
         assert_eq!(custom_agent("claude-qwen").unwrap().command, "cq");
     }
 }

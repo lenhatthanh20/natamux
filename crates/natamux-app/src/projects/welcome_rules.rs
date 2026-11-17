@@ -2,7 +2,8 @@
 
 use natamux_proto::projects::repo::Repo;
 
-/// One row of step 2. `agent` is an `AGENT_CHOICES` id.
+/// One row of step 2. `agent` is an `AGENT_CHOICES` id. Only the agents with hooks have a row,
+/// so the step stays short; the docs list how to sign in to the others.
 pub struct SignIn {
     // Only the test that ties the rows to AGENT_CHOICES reads it.
     #[cfg_attr(not(test), allow(dead_code))]
@@ -12,7 +13,7 @@ pub struct SignIn {
     pub note: Option<&'static str>,
 }
 
-pub const SIGN_INS: [SignIn; 5] = [
+pub const SIGN_INS: [SignIn; 8] = [
     SignIn {
         agent: "claude-code",
         label: "Claude Code",
@@ -42,6 +43,24 @@ pub const SIGN_INS: [SignIn; 5] = [
         label: "Cursor",
         command: "cursor-agent login",
         note: None,
+    },
+    SignIn {
+        agent: "opencode",
+        label: "OpenCode",
+        command: "opencode auth login",
+        note: None,
+    },
+    SignIn {
+        agent: "qwen",
+        label: "Qwen Code",
+        command: "qwen",
+        note: Some("then /auth"),
+    },
+    SignIn {
+        agent: "droid",
+        label: "Factory Droid",
+        command: "droid",
+        note: Some("then sign in"),
     },
 ];
 

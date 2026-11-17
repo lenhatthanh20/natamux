@@ -163,6 +163,104 @@ pub fn cursor_hook_file() -> Value {
     })
 }
 
+/// Qwen Code's project settings. Its timeout is in milliseconds, as in Gemini CLI, which it forks.
+pub fn qwen_hook_settings() -> Value {
+    let hook = json!({
+        "type": "command", "name": "natamux", "command": format!("{HOOK} qwen"), "timeout": 5000,
+    });
+    let events = [
+        "UserPromptSubmit",
+        "PreToolUse",
+        "PostToolUse",
+        "PostToolUseFailure",
+        "PermissionRequest",
+        "Notification",
+        "Stop",
+        "StopFailure",
+    ];
+    json!({ "hooks": events_object(&events, |_| json!([{ "hooks": [hook.clone()] }])) })
+}
+
+/// Droid's `.factory/hooks.json` holds the events at the top, with no `hooks` key. Only its tool
+/// events take a matcher. Timeouts are in seconds.
+pub fn droid_hook_file() -> Value {
+    let hook = json!({ "type": "command", "command": format!("{HOOK} droid"), "timeout": 5 });
+    let events = [
+        "UserPromptSubmit",
+        "PreToolUse",
+        "PostToolUse",
+        "Notification",
+        "Stop",
+    ];
+    events_object(&events, |event| {
+        if event.ends_with("ToolUse") {
+            json!([{ "matcher": "*", "hooks": [hook.clone()] }])
+        } else {
+            json!([{ "hooks": [hook.clone()] }])
+        }
+    })
+}
+
+/// The first line of the OpenCode plugin Natamux writes; a file without it is the user's.
+const OPENCODE_FILE_MARK: &str = "// Natamux hooks: Natamux writes this file again.";
+
+/// The OpenCode plugin. Each hook runs `natamux hook opencode <event>` with a JSON body (see
+/// `hooks::opencode`). It never throws and never waits: a failed hook must not stop OpenCode.
+pub fn opencode_plugin() -> String {
+    format!("{OPENCODE_FILE_MARK}\n{OPENCODE_PLUGIN_BODY}")
+}
+
+const OPENCODE_PLUGIN_BODY: &str = r#"const EVENTS = {
+  "permission.asked": "permissionAsked",
+  "permission.v2.asked": "permissionV2Asked",
+  "session.idle": "sessionIdle",
+  "session.error": "sessionError",
+};
+
+const send = async (name, body) => {
+  try {
+    if (!process.env.NATAMUX_TOKEN) return;
+    const args = ["natamux", "hook", "opencode", name];
+    const text = JSON.stringify(body);
+    if (globalThis.Bun) {
+      Bun.spawn(args, { stdin: new Blob([text]), stdout: "ignore", stderr: "ignore" });
+      return;
+    }
+    const { spawn } = await import("node:child_process");
+    const child = spawn(args[0], args.slice(1), { stdio: ["pipe", "ignore", "ignore"] });
+    child.on("error", () => {});
+    child.stdin.on("error", () => {});
+    child.stdin.end(text);
+  } catch {}
+};
+
+const message = (error) => {
+  const text = error?.data?.message ?? error?.message ?? error?.name;
+  return typeof text === "string" ? text : undefined;
+};
+
+export const NatamuxPlugin = async (ctx) => {
+  const cwd = ctx?.directory ?? ctx?.worktree;
+  return {
+    "chat.message": async (input) => {
+      await send("chatMessage", { sessionID: input?.sessionID, cwd });
+    },
+    "tool.execute.before": async (input, output) => {
+      await send("toolBefore", { sessionID: input?.sessionID, cwd, tool: input?.tool, args: output?.args });
+    },
+    "tool.execute.after": async (input) => {
+      await send("toolAfter", { sessionID: input?.sessionID, cwd, tool: input?.tool, args: input?.args });
+    },
+    event: async ({ event }) => {
+      const name = EVENTS[event?.type];
+      if (!name) return;
+      const props = event.properties ?? {};
+      await send(name, { sessionID: props.sessionID, cwd, error: message(props.error) });
+    },
+  };
+};
+"#;
+
 /// A file an agent reads from the workspace, so an agent the user starts by hand reports too.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct WorkspaceFile {
@@ -201,6 +299,12 @@ pub fn workspace_file(agent: &str, hooks: WorkspaceHooks) -> Option<WorkspaceFil
             hook_file_text_of(&copilot_hook_file()),
         ),
         "cursor" => (".cursor/hooks.json", hook_file_text_of(&cursor_hook_file())),
+        "qwen" => (
+            ".qwen/settings.json",
+            hook_file_text_of(&qwen_hook_settings()),
+        ),
+        "droid" => (".factory/hooks.json", hook_file_text_of(&droid_hook_file())),
+        "opencode" => (".opencode/plugins/natamux.js", opencode_plugin()),
         _ => return None,
     };
     Some(WorkspaceFile { path, content })
@@ -237,8 +341,11 @@ pub fn natamux_hook_json(text: &str) -> Option<Map<String, Value>> {
     let Value::Object(parsed) = parse_js(text).ok()? else {
         return None;
     };
-    let Some(Value::Object(hooks)) = parsed.get("hooks") else {
-        return None;
+    // Droid's file has the events at the top, all lists; any other file needs a `hooks` key.
+    let hooks = match parsed.get("hooks") {
+        Some(Value::Object(hooks)) => hooks,
+        None if !parsed.is_empty() && parsed.values().all(Value::is_array) => &parsed,
+        _ => return None,
     };
     let mut handlers: Vec<&Value> = Vec::new();
     for value in hooks.values() {
@@ -261,10 +368,13 @@ pub fn hook_file_text(file: &WorkspaceFile, current: &str) -> Option<String> {
     if current == file.content {
         return Some(current.to_string());
     }
-    if file.path.ends_with(".toml") {
-        return current
-            .starts_with(CODEX_FILE_MARK)
-            .then(|| file.content.clone());
+    let mark = match file.path {
+        path if path.ends_with(".toml") => Some(CODEX_FILE_MARK),
+        path if path.ends_with(".js") => Some(OPENCODE_FILE_MARK),
+        _ => None,
+    };
+    if let Some(mark) = mark {
+        return current.starts_with(mark).then(|| file.content.clone());
     }
     let mut merged = natamux_hook_json(current)?;
     let Value::Object(new) = parse_js(&file.content).ok()? else {

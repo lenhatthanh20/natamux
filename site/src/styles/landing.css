@@ -91,6 +91,9 @@ code { padding: 0.12em 0.35em; border-radius: 2px; background: var(--raise); col
 .agents-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; list-style: none; margin: 0; padding: 0; }
 .agents-list a { position: relative; display: grid; gap: 10px; height: 100%; padding: 20px; border: 1px solid var(--line); background: var(--panel); text-decoration: none; font-size: 0.8125rem; }
 .agents-list a:hover { border-color: var(--accent); }
+.agents-list strong { display: flex; align-items: center; gap: 8px; }
+.agent-icon { flex: none; width: 16px; height: 16px; }
+:root[data-theme='light'] .agent-icon-dark, :root:not([data-theme='light']) .agent-icon-light { display: none; }
 .agents-list code { justify-self: start; padding: 0; background: none; color: var(--muted); font-size: 0.6875rem; }
 .agents-list a > span { position: absolute; right: 12px; bottom: 16px; color: var(--muted); }
 .project-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; gap: 72px; }

@@ -241,10 +241,11 @@ impl StageRun {
             .map(str::to_string)
     }
 
-    /// Output of a terminal of a task. On Windows an agent started here counts as running until
-    /// its launch line sets the window title that says it has ended (/exit, a crash). Nothing
-    /// else runs on the output path.
+    /// Output of a terminal of a task. A held first prompt waits for it (see `pasted_prompt`).
+    /// On Windows an agent started here counts as running until its launch line sets the window
+    /// title that says it has ended (/exit, a crash). Nothing else runs on the output path.
     pub fn on_output(&self, task_id: &str, terminal: &str, data: &[u8]) {
+        self.options.agents.on_output(task_id, terminal, data);
         if !self.options.windows {
             return;
         }
