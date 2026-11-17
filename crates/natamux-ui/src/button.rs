@@ -3,22 +3,21 @@
 use std::time::Duration;
 
 use gpui::{
-    Animation, AnimationExt, AnyView, App, ClickEvent, CursorStyle, DefiniteLength, ElementId,
-    FocusHandle, IntoElement, ParentElement, RenderOnce, SharedString, Styled, Transformation,
-    Window, percentage, prelude::FluentBuilder,
+    Animation, AnimationExt, AnyElement, App, Div, ElementId, IntoElement, ParentElement,
+    RenderOnce, SharedString, Styled, Transformation, Window, percentage,
 };
 
-use crate::button_like::{ButtonCommon, ButtonLike, ButtonSize, ButtonStyle, SelectableButton};
+use crate::button_like::ButtonLike;
+use crate::button_setters::forward_button_setters;
 use crate::color::Color;
 use crate::icon::{Icon, IconSize};
 use crate::icon_name::IconName;
 use crate::label::{Label, LabelCommon, LabelSize};
 use crate::shortcut_hint::KeyBinding;
 use crate::spacing::{DynamicSpacing, h_flex};
-use crate::traits::{Clickable, Disableable, FixedWidth, Toggleable};
 
 /// Which side of the label the key hint is on.
-#[derive(Default, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
+#[derive(Clone, Copy, Debug, Default, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub enum KeybindingPosition {
     Start,
     #[default]
@@ -28,247 +27,210 @@ pub enum KeybindingPosition {
 #[derive(IntoElement)]
 pub struct Button {
     base: ButtonLike,
-    label: SharedString,
-    label_color: Option<Color>,
-    label_size: Option<LabelSize>,
-    selected_label: Option<SharedString>,
-    selected_label_color: Option<Color>,
-    start_icon: Option<Icon>,
-    end_icon: Option<Icon>,
-    key_binding: Option<KeyBinding>,
-    key_binding_position: KeybindingPosition,
-    alpha: Option<f32>,
-    truncate: bool,
-    loading: bool,
+    text: SharedString,
+    /// The text colour while the button is enabled and not selected.
+    text_color: Option<Color>,
+    text_size: Option<LabelSize>,
+    before: Option<Icon>,
+    after: Option<Icon>,
+    hint: Option<KeyBinding>,
+    hint_first: bool,
+    shrinks: bool,
+    spinning: bool,
 }
+
+forward_button_setters!(Button, base);
 
 impl Button {
     pub fn new(id: impl Into<ElementId>, label: impl Into<SharedString>) -> Self {
         Self {
             base: ButtonLike::new(id),
-            label: label.into(),
-            label_color: None,
-            label_size: None,
-            selected_label: None,
-            selected_label_color: None,
-            start_icon: None,
-            end_icon: None,
-            key_binding: None,
-            key_binding_position: KeybindingPosition::default(),
-            alpha: None,
-            truncate: false,
-            loading: false,
+            text: label.into(),
+            text_color: None,
+            text_size: None,
+            before: None,
+            after: None,
+            hint: None,
+            hint_first: false,
+            shrinks: false,
+            spinning: false,
         }
     }
 
-    /// The label colour while the button is enabled and not selected.
-    pub fn color(mut self, label_color: impl Into<Option<Color>>) -> Self {
-        self.label_color = label_color.into();
-        self
+    pub fn color(self, label_color: impl Into<Option<Color>>) -> Self {
+        Self {
+            text_color: label_color.into(),
+            ..self
+        }
     }
 
-    pub fn label_size(mut self, label_size: impl Into<Option<LabelSize>>) -> Self {
-        self.label_size = label_size.into();
-        self
+    pub fn label_size(self, label_size: impl Into<Option<LabelSize>>) -> Self {
+        Self {
+            text_size: label_size.into(),
+            ..self
+        }
     }
 
-    pub fn selected_label<L: Into<SharedString>>(mut self, label: impl Into<Option<L>>) -> Self {
-        self.selected_label = label.into().map(Into::into);
-        self
+    pub fn start_icon(self, icon: impl Into<Option<Icon>>) -> Self {
+        Self {
+            before: icon.into(),
+            ..self
+        }
     }
 
-    pub fn selected_label_color(mut self, color: impl Into<Option<Color>>) -> Self {
-        self.selected_label_color = color.into();
-        self
+    pub fn end_icon(self, icon: impl Into<Option<Icon>>) -> Self {
+        Self {
+            after: icon.into(),
+            ..self
+        }
     }
 
-    pub fn start_icon(mut self, icon: impl Into<Option<Icon>>) -> Self {
-        self.start_icon = icon.into();
-        self
+    pub fn key_binding(self, key_binding: impl Into<Option<KeyBinding>>) -> Self {
+        Self {
+            hint: key_binding.into(),
+            ..self
+        }
     }
 
-    pub fn end_icon(mut self, icon: impl Into<Option<Icon>>) -> Self {
-        self.end_icon = icon.into();
-        self
-    }
-
-    pub fn key_binding(mut self, key_binding: impl Into<Option<KeyBinding>>) -> Self {
-        self.key_binding = key_binding.into();
-        self
-    }
-
-    pub fn key_binding_position(mut self, position: KeybindingPosition) -> Self {
-        self.key_binding_position = position;
-        self
-    }
-
-    pub fn alpha(mut self, alpha: f32) -> Self {
-        self.alpha = Some(alpha);
-        self
+    pub fn key_binding_position(self, position: KeybindingPosition) -> Self {
+        Self {
+            hint_first: position == KeybindingPosition::Start,
+            ..self
+        }
     }
 
     /// Lets the label shrink and end in an ellipsis.
-    pub fn truncate(mut self, truncate: bool) -> Self {
-        self.truncate = truncate;
-        self
+    pub fn truncate(self, truncate: bool) -> Self {
+        Self {
+            shrinks: truncate,
+            ..self
+        }
     }
 
     /// A turning spinner in place of the start icon.
-    pub fn loading(mut self, loading: bool) -> Self {
-        self.loading = loading;
-        self
-    }
-
-    pub fn aria_label(mut self, label: impl Into<SharedString>) -> Self {
-        self.base = self.base.aria_label(label);
-        self
+    pub fn loading(self, loading: bool) -> Self {
+        Self {
+            spinning: loading,
+            ..self
+        }
     }
 }
 
-impl Toggleable for Button {
-    fn toggle_state(mut self, selected: bool) -> Self {
-        self.base = self.base.toggle_state(selected);
-        self
+/// The text colour: grey while off, the accent while selected, else the colour the caller set.
+fn text_colour(disabled: bool, selected: bool, set: Option<Color>) -> Color {
+    match (disabled, selected) {
+        (true, _) => Color::Disabled,
+        (false, true) => Color::Selected,
+        (false, false) => set.unwrap_or_default(),
     }
 }
 
-impl SelectableButton for Button {
-    fn selected_style(mut self, style: ButtonStyle) -> Self {
-        self.base = self.base.selected_style(style);
-        self
-    }
-}
-
-impl Disableable for Button {
-    fn disabled(mut self, disabled: bool) -> Self {
-        self.base = self.base.disabled(disabled);
-        self
-    }
-}
-
-impl Clickable for Button {
-    fn on_click(mut self, handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static) -> Self {
-        self.base = self.base.on_click(handler);
-        self
-    }
-
-    fn cursor_style(mut self, cursor_style: CursorStyle) -> Self {
-        self.base = self.base.cursor_style(cursor_style);
-        self
-    }
-}
-
-impl FixedWidth for Button {
-    fn width(mut self, width: impl Into<DefiniteLength>) -> Self {
-        self.base = self.base.width(width);
-        self
-    }
-
-    fn full_width(mut self) -> Self {
-        self.base = self.base.full_width();
-        self
-    }
-}
-
-impl ButtonCommon for Button {
-    fn id(&self) -> &ElementId {
-        self.base.id()
-    }
-
-    fn style(mut self, style: ButtonStyle) -> Self {
-        self.base = self.base.style(style);
-        self
-    }
-
-    fn size(mut self, size: ButtonSize) -> Self {
-        self.base = self.base.size(size);
-        self
-    }
-
-    fn tooltip(mut self, tooltip: impl Fn(&mut Window, &mut App) -> AnyView + 'static) -> Self {
-        self.base = self.base.tooltip(tooltip);
-        self
-    }
-
-    fn tab_index(mut self, tab_index: impl Into<isize>) -> Self {
-        self.base = self.base.tab_index(tab_index);
-        self
-    }
-
-    fn track_focus(mut self, focus_handle: &FocusHandle) -> Self {
-        self.base = self.base.track_focus(focus_handle);
-        self
+/// A row that may shrink below its content, so a label inside it can end in an ellipsis.
+fn may_shrink(row: Div, shrinks: bool) -> Div {
+    if shrinks {
+        row.min_w_0().overflow_hidden()
+    } else {
+        row
     }
 }
 
 impl RenderOnce for Button {
-    #[allow(refining_impl_trait)]
-    fn render(mut self, _: &mut Window, cx: &mut App) -> ButtonLike {
-        let disabled = self.base.disabled;
-        let selected = self.base.selected;
-        let label = self
-            .selected_label
-            .filter(|_| selected)
-            .unwrap_or(self.label);
-        if self.base.aria_label.is_none() {
-            self.base.aria_label = Some(label.clone());
+    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+        let Self {
+            mut base,
+            text,
+            text_color,
+            text_size,
+            before,
+            after,
+            hint,
+            hint_first,
+            shrinks,
+            spinning,
+        } = self;
+        let off = base.setup.disabled;
+        let colour = text_colour(off, base.setup.is_on(), text_color);
+        // Screen readers say the label and the keys unless the caller named them.
+        if base.setup.spoken.is_none() {
+            base.setup.spoken = Some(text.clone());
         }
-        if self.base.aria_keyshortcuts.is_none() {
-            self.base.aria_keyshortcuts = self.key_binding.as_ref().map(KeyBinding::text);
+        if base.setup.shortcut.is_none() {
+            base.setup.shortcut = hint.as_ref().map(KeyBinding::text);
         }
-        let label_color = if disabled {
-            Color::Disabled
-        } else if selected {
-            self.selected_label_color.unwrap_or(Color::Selected)
-        } else {
-            self.label_color.unwrap_or_default()
-        };
-        let dim = |icon: Icon| {
-            if disabled {
-                icon.color(Color::Disabled)
-            } else {
-                icon
-            }
-        };
-        let truncate = self.truncate;
-        let spinner = self.loading.then(|| {
-            Icon::new(IconName::LoadCircle)
+
+        let grey_if_off = |icon: Icon| if off { icon.color(Color::Disabled) } else { icon };
+        let lead: Option<AnyElement> = if spinning {
+            let spinner = Icon::new(IconName::LoadCircle)
                 .size(IconSize::Small)
                 .color(Color::Muted)
                 .with_animation(
-                    (self.base.id().clone(), "loading"),
+                    (base.setup.id.clone(), "loading"),
                     Animation::new(Duration::from_secs(2)).repeat_synced(),
                     |icon, turn| icon.transform(Transformation::rotate(percentage(turn))),
-                )
-        });
+                );
+            Some(spinner.into_any_element())
+        } else {
+            before.map(|icon| grey_if_off(icon).into_any_element())
+        };
 
-        let text = h_flex()
-            .when(truncate, |this| this.min_w_0().overflow_hidden())
-            .when(
-                self.key_binding_position == KeybindingPosition::Start,
-                |this| this.flex_row_reverse(),
-            )
+        let mut caption = Label::new(text)
+            .color(colour)
+            .size(text_size.unwrap_or_default());
+        if shrinks {
+            caption = caption.truncate();
+        }
+        let mut words = h_flex()
             .gap(DynamicSpacing::Base06.rems(cx))
             .justify_between()
-            .child(
-                Label::new(label)
-                    .color(label_color)
-                    .size(self.label_size.unwrap_or_default())
-                    .when_some(self.alpha, |this, alpha| this.alpha(alpha))
-                    .when(truncate, |this| this.truncate()),
-            )
-            .children(self.key_binding);
+            .child(caption)
+            .children(hint);
+        if hint_first {
+            words = words.flex_row_reverse();
+        }
+        let row = h_flex()
+            .gap(DynamicSpacing::Base04.rems(cx))
+            .children(lead)
+            .child(may_shrink(words, shrinks))
+            .children(after.map(grey_if_off));
+        base.child(may_shrink(row, shrinks))
+    }
+}
 
-        self.base.child(
-            h_flex()
-                .when(truncate, |this| this.min_w_0().overflow_hidden())
-                .gap(DynamicSpacing::Base04.rems(cx))
-                .map(|this| match spinner {
-                    Some(spinner) => this.child(spinner),
-                    None => this.when_some(self.start_icon, |this, icon| this.child(dim(icon))),
-                })
-                .child(text)
-                .when_some(self.end_icon, |this, icon| this.child(dim(icon))),
-        )
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::button_like::{ButtonCommon, ButtonSize, ButtonStyle};
+    use crate::traits::{Disableable, FixedWidth, Toggleable};
+
+    #[test]
+    fn the_text_colour_follows_off_then_selected_then_the_set_colour() {
+        assert_eq!(text_colour(true, true, Some(Color::Error)), Color::Disabled);
+        assert_eq!(text_colour(false, true, Some(Color::Error)), Color::Selected);
+        assert_eq!(text_colour(false, false, Some(Color::Error)), Color::Error);
+        assert_eq!(text_colour(false, false, None), Color::Default);
+    }
+
+    #[test]
+    fn a_button_hands_its_box_setters_to_the_box() {
+        let button = Button::new("b", "Go")
+            .disabled(true)
+            .toggle_state(true)
+            .style(ButtonStyle::Outlined)
+            .size(ButtonSize::Large)
+            .full_width()
+            .tab_index(3_isize);
+        assert!(button.base.setup.disabled);
+        assert!(button.base.setup.is_on());
+        assert_eq!(button.id(), &ElementId::from("b"));
+    }
+
+    #[test]
+    fn the_hint_goes_first_only_at_the_start() {
+        let button = Button::new("b", "Go");
+        assert!(!button.hint_first);
+        let button = button.key_binding_position(KeybindingPosition::Start);
+        assert!(button.hint_first);
+        let button = button.key_binding_position(KeybindingPosition::End);
+        assert!(!button.hint_first);
     }
 }

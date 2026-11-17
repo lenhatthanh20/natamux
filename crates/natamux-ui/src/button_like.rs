@@ -3,18 +3,17 @@
 
 use gpui::{
     AnyElement, AnyView, App, ClickEvent, CursorStyle, DefiniteLength, Div, ElementId, FocusHandle,
-    Hsla, InteractiveElement, IntoElement, MouseButton, ParentElement, RenderOnce, Role,
-    SharedString, StatefulInteractiveElement, StyleRefinement, Styled, Toggled, Window, div,
-    prelude::FluentBuilder, relative, transparent_black,
+    Hsla, InteractiveElement, IntoElement, MouseButton, ParentElement, Rems, RenderOnce, Role,
+    SharedString, StatefulInteractiveElement, Styled, Toggled, Window, div, px, relative,
+    transparent_black,
 };
 use theme::ActiveTheme;
 
-use crate::color::Color;
 use crate::spacing::{DynamicSpacing, rems_from_px};
 use crate::traits::{Clickable, Disableable, FixedWidth, Toggleable, VisibleOnHover};
 
 /// The colour family of a tinted button.
-#[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
+#[derive(Clone, Copy, Debug, Default, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub enum TintColor {
     #[default]
     Accent,
@@ -23,19 +22,8 @@ pub enum TintColor {
     Success,
 }
 
-impl From<TintColor> for Color {
-    fn from(tint: TintColor) -> Self {
-        match tint {
-            TintColor::Accent => Color::Accent,
-            TintColor::Error => Color::Error,
-            TintColor::Warning => Color::Warning,
-            TintColor::Success => Color::Success,
-        }
-    }
-}
-
 /// How a button looks at rest, under the pointer and when pressed.
-#[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
+#[derive(Clone, Copy, Debug, Default, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ButtonStyle {
     Filled,
     Tinted(TintColor),
@@ -47,8 +35,15 @@ pub enum ButtonStyle {
     Transparent,
 }
 
+impl ButtonStyle {
+    /// The styles drawn with a 1 px frame.
+    fn framed(self) -> bool {
+        matches!(self, Self::Outlined | Self::OutlinedGhost | Self::OutlinedCustom(_))
+    }
+}
+
 /// The height of a button.
-#[derive(Debug, Default, PartialEq, Eq, Clone, Copy)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ButtonSize {
     Large,
     Medium,
@@ -56,6 +51,30 @@ pub enum ButtonSize {
     Default,
     Compact,
     None,
+}
+
+impl ButtonSize {
+    /// The box height: 32, 28, 22, 18 or 16 px at UI size 16.
+    fn height(self) -> Rems {
+        let px = match self {
+            Self::Large => 32_f32,
+            Self::Medium => 28_f32,
+            Self::Default => 22_f32,
+            Self::Compact => 18_f32,
+            Self::None => 16_f32,
+        };
+        rems_from_px(px)
+    }
+
+    /// The room left and right of the content: 8 px for the tall sizes, 4 px for the short ones,
+    /// and a fixed 1 px for `None`.
+    fn side_room(self, cx: &App) -> DefiniteLength {
+        match self {
+            Self::Large | Self::Medium => DynamicSpacing::Base08.rems(cx).into(),
+            Self::Default | Self::Compact => DynamicSpacing::Base04.rems(cx).into(),
+            Self::None => px(1.).into(),
+        }
+    }
 }
 
 /// A button that takes another style while it is selected.
@@ -66,379 +85,385 @@ pub trait SelectableButton: Toggleable {
 /// The setters every button takes.
 pub trait ButtonCommon: Clickable + Disableable {
     fn id(&self) -> &ElementId;
-    fn style(self, style: ButtonStyle) -> Self;
     fn size(self, size: ButtonSize) -> Self;
-    fn tooltip(self, tooltip: impl Fn(&mut Window, &mut App) -> AnyView + 'static) -> Self;
-    fn tab_index(self, tab_index: impl Into<isize>) -> Self;
-    fn track_focus(self, focus_handle: &FocusHandle) -> Self;
+    fn style(self, look: ButtonStyle) -> Self;
+    fn track_focus(self, handle: &FocusHandle) -> Self;
+    fn tab_index(self, index: impl Into<isize>) -> Self;
+    fn tooltip(self, build: impl Fn(&mut Window, &mut App) -> AnyView + 'static) -> Self;
 }
 
-/// Background and border of a style in one state.
-struct Look {
-    background: Hsla,
-    border: Hsla,
+/// The colours of one style: its box at rest, and its fill under the pointer and while pressed.
+/// A disabled button keeps the rest colours; only its text and cursor change.
+struct Palette {
+    fill: Hsla,
+    edge: Hsla,
+    hover: Hsla,
+    press: Hsla,
 }
 
-fn tint(tint: TintColor, cx: &App) -> Look {
-    let status = cx.theme().status();
-    let (background, border) = match tint {
-        TintColor::Accent => (status.info_background, status.info_border),
-        TintColor::Error => (status.error_background, status.error_border),
-        TintColor::Warning => (status.warning_background, status.warning_border),
-        TintColor::Success => (status.success_background, status.success_border),
+fn palette(style: ButtonStyle, cx: &App) -> Palette {
+    let c = cx.theme().colors();
+    let none = transparent_black();
+    let row = |fill, edge, hover, press| Palette {
+        fill,
+        edge,
+        hover,
+        press,
     };
-    Look { background, border }
-}
-
-/// At rest. A disabled button keeps this look too; only its text and cursor change.
-fn resting(style: ButtonStyle, cx: &App) -> Look {
-    let colors = cx.theme().colors();
     match style {
-        ButtonStyle::Filled => Look {
-            background: colors.element_background,
-            border: transparent_black(),
-        },
-        ButtonStyle::Tinted(color) => tint(color, cx),
-        ButtonStyle::Outlined => Look {
-            background: colors.element_background,
-            border: colors.border_variant,
-        },
-        ButtonStyle::OutlinedGhost => Look {
-            background: transparent_black(),
-            border: colors.border_variant,
-        },
-        ButtonStyle::OutlinedCustom(border) => Look {
-            background: transparent_black(),
-            border,
-        },
-        ButtonStyle::Subtle => Look {
-            background: colors.ghost_element_background,
-            border: transparent_black(),
-        },
-        ButtonStyle::Transparent => Look {
-            background: transparent_black(),
-            border: transparent_black(),
-        },
+        ButtonStyle::Subtle => row(
+            c.ghost_element_background,
+            none,
+            c.ghost_element_hover,
+            c.ghost_element_active,
+        ),
+        ButtonStyle::Outlined => row(
+            c.element_background,
+            c.border_variant,
+            c.ghost_element_hover,
+            c.element_active,
+        ),
+        ButtonStyle::OutlinedGhost => row(none, c.border_variant, c.ghost_element_hover, none),
+        ButtonStyle::OutlinedCustom(edge) => {
+            row(none, edge, c.ghost_element_hover, c.element_active)
+        }
+        ButtonStyle::Filled => row(
+            c.element_background,
+            none,
+            c.element_background.opacity(0.5),
+            c.element_active,
+        ),
+        ButtonStyle::Tinted(family) => {
+            let status = cx.theme().status();
+            let (fill, edge) = match family {
+                TintColor::Accent => (status.info_background, status.info_border),
+                TintColor::Error => (status.error_background, status.error_border),
+                TintColor::Warning => (status.warning_background, status.warning_border),
+                TintColor::Success => (status.success_background, status.success_border),
+            };
+            row(fill, edge, cx.theme().darken(fill, 0.05, 0.2), fill)
+        }
+        ButtonStyle::Transparent => row(none, none, none, none),
     }
 }
 
-/// Under the pointer (and, for the styles with no border, with keyboard focus).
-fn hovered_background(style: ButtonStyle, cx: &App) -> Hsla {
-    let colors = cx.theme().colors();
-    match style {
-        ButtonStyle::Filled => {
-            let mut background = colors.element_background;
-            background.fade_out(0.5);
-            background
-        }
-        ButtonStyle::Tinted(color) => {
-            let theme = cx.theme();
-            theme.darken(tint(color, cx).background, 0.05, 0.2)
-        }
-        ButtonStyle::Outlined
-        | ButtonStyle::OutlinedGhost
-        | ButtonStyle::OutlinedCustom(_)
-        | ButtonStyle::Subtle => colors.ghost_element_hover,
-        ButtonStyle::Transparent => transparent_black(),
-    }
+type OnClick = Box<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
+type MakeTooltip = Box<dyn Fn(&mut Window, &mut App) -> AnyView>;
+
+/// Everything a button was told before it is drawn. `Button` and `IconButton` read it to pick
+/// their text and icon colours and the names screen readers say.
+pub(crate) struct Setup {
+    pub(crate) id: ElementId,
+    style: ButtonStyle,
+    style_when_on: Option<ButtonStyle>,
+    size: ButtonSize,
+    pub(crate) disabled: bool,
+    /// Unset until `toggle_state` is called; screen readers hear a toggle only once it is set.
+    toggled: Option<bool>,
+    expanded: Option<bool>,
+    pub(crate) spoken: Option<SharedString>,
+    pub(crate) shortcut: Option<SharedString>,
+    width: Option<DefiniteLength>,
+    height: Option<DefiniteLength>,
+    tab_index: Option<isize>,
+    focus: Option<FocusHandle>,
+    cursor: CursorStyle,
+    on_click: Option<OnClick>,
+    tooltip: Option<MakeTooltip>,
+    /// Round corners on the left and on the right; a cell inside a toggle group has square inner
+    /// sides.
+    rounded: (bool, bool),
 }
 
-/// While the mouse button is held down on it.
-fn pressed_background(style: ButtonStyle, cx: &App) -> Hsla {
-    let colors = cx.theme().colors();
-    match style {
-        ButtonStyle::Filled | ButtonStyle::Outlined | ButtonStyle::OutlinedCustom(_) => {
-            colors.element_active
-        }
-        ButtonStyle::Tinted(color) => tint(color, cx).background,
-        ButtonStyle::Subtle => colors.ghost_element_active,
-        ButtonStyle::OutlinedGhost | ButtonStyle::Transparent => transparent_black(),
+impl Setup {
+    pub(crate) fn is_on(&self) -> bool {
+        self.toggled == Some(true)
     }
 }
-
-type ClickHandler = Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>;
-type TooltipBuilder = Box<dyn Fn(&mut Window, &mut App) -> AnyView + 'static>;
 
 /// A box that acts as a button around any children.
 #[derive(IntoElement)]
 pub struct ButtonLike {
-    base: Div,
-    id: ElementId,
-    style: ButtonStyle,
-    pub(crate) disabled: bool,
-    pub(crate) selected: bool,
-    selected_style: Option<ButtonStyle>,
-    width: Option<DefiniteLength>,
-    height: Option<DefiniteLength>,
-    size: ButtonSize,
-    tab_index: Option<isize>,
-    focus_handle: Option<FocusHandle>,
-    pub(crate) aria_label: Option<SharedString>,
-    pub(crate) aria_keyshortcuts: Option<SharedString>,
-    toggled: Option<bool>,
-    expanded: Option<bool>,
-    tooltip: Option<TooltipBuilder>,
-    cursor_style: CursorStyle,
-    on_click: Option<ClickHandler>,
-    children: Vec<AnyElement>,
-    /// Rounded left and right corners; a cell inside a toggle group has square inner sides.
-    round_left: bool,
-    round_right: bool,
+    pub(crate) setup: Setup,
+    /// Takes the opacity and the hover visibility set before the box is drawn.
+    outer: Div,
+    content: Vec<AnyElement>,
 }
 
 impl ButtonLike {
     pub fn new(id: impl Into<ElementId>) -> Self {
-        Self {
-            base: div(),
+        let setup = Setup {
             id: id.into(),
             style: ButtonStyle::default(),
+            style_when_on: None,
+            size: ButtonSize::default(),
             disabled: false,
-            selected: false,
-            selected_style: None,
-            width: None,
-            height: None,
-            size: ButtonSize::Default,
-            tab_index: None,
-            focus_handle: None,
-            aria_label: None,
-            aria_keyshortcuts: None,
             toggled: None,
             expanded: None,
-            tooltip: None,
-            cursor_style: CursorStyle::PointingHand,
+            spoken: None,
+            shortcut: None,
+            width: None,
+            height: None,
+            tab_index: None,
+            focus: None,
+            cursor: CursorStyle::PointingHand,
             on_click: None,
-            children: Vec::new(),
-            round_left: true,
-            round_right: true,
+            tooltip: None,
+            rounded: (true, true),
+        };
+        Self {
+            setup,
+            outer: div(),
+            content: Vec::new(),
         }
     }
 
-    pub(crate) fn round_sides(mut self, left: bool, right: bool) -> Self {
-        self.round_left = left;
-        self.round_right = right;
+    fn with(mut self, change: impl FnOnce(&mut Setup)) -> Self {
+        change(&mut self.setup);
         self
     }
 
-    pub fn height(mut self, height: DefiniteLength) -> Self {
-        self.height = Some(height);
-        self
+    pub(crate) fn round_sides(self, left: bool, right: bool) -> Self {
+        self.with(|s| s.rounded = (left, right))
+    }
+
+    pub fn height(self, height: DefiniteLength) -> Self {
+        self.with(|s| s.height = Some(height))
     }
 
     pub fn opacity(mut self, opacity: f32) -> Self {
-        self.base = self.base.opacity(opacity);
+        self.outer = self.outer.opacity(opacity);
         self
     }
 
     /// The name screen readers say for the button.
-    pub fn aria_label(mut self, label: impl Into<SharedString>) -> Self {
-        self.aria_label = Some(label.into());
-        self
+    pub fn aria_label(self, label: impl Into<SharedString>) -> Self {
+        self.with(|s| s.spoken = Some(label.into()))
     }
 
     /// Whether the part the button opens is open, for screen readers.
-    pub fn aria_expanded(mut self, expanded: bool) -> Self {
-        self.expanded = Some(expanded);
-        self
+    pub fn aria_expanded(self, expanded: bool) -> Self {
+        self.with(|s| s.expanded = Some(expanded))
     }
 }
 
 impl Disableable for ButtonLike {
-    fn disabled(mut self, disabled: bool) -> Self {
-        self.disabled = disabled;
-        self
+    fn disabled(self, disabled: bool) -> Self {
+        self.with(|s| s.disabled = disabled)
     }
 }
 
 impl Toggleable for ButtonLike {
-    fn toggle_state(mut self, selected: bool) -> Self {
-        self.selected = selected;
-        self.toggled = Some(selected);
-        self
+    fn toggle_state(self, selected: bool) -> Self {
+        self.with(|s| s.toggled = Some(selected))
     }
 }
 
 impl SelectableButton for ButtonLike {
-    fn selected_style(mut self, style: ButtonStyle) -> Self {
-        self.selected_style = Some(style);
-        self
+    fn selected_style(self, style: ButtonStyle) -> Self {
+        self.with(|s| s.style_when_on = Some(style))
     }
 }
 
 impl Clickable for ButtonLike {
-    fn on_click(mut self, handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static) -> Self {
-        self.on_click = Some(Box::new(handler));
-        self
+    fn on_click(self, then: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static) -> Self {
+        self.with(|s| s.on_click = Some(Box::new(then)))
     }
 
-    fn cursor_style(mut self, cursor_style: CursorStyle) -> Self {
-        self.cursor_style = cursor_style;
-        self
+    fn cursor_style(self, cursor_style: CursorStyle) -> Self {
+        self.with(|s| s.cursor = cursor_style)
     }
 }
 
 impl FixedWidth for ButtonLike {
-    fn width(mut self, width: impl Into<DefiniteLength>) -> Self {
-        self.width = Some(width.into());
-        self
+    fn width(self, width: impl Into<DefiniteLength>) -> Self {
+        self.with(|s| s.width = Some(width.into()))
     }
 
-    fn full_width(mut self) -> Self {
-        self.width = Some(relative(1.));
-        self
+    fn full_width(self) -> Self {
+        self.with(|s| s.width = Some(relative(1.)))
     }
 }
 
 impl ButtonCommon for ButtonLike {
     fn id(&self) -> &ElementId {
-        &self.id
+        &self.setup.id
     }
 
-    fn style(mut self, style: ButtonStyle) -> Self {
-        self.style = style;
-        self
+    fn size(self, size: ButtonSize) -> Self {
+        self.with(|s| s.size = size)
     }
 
-    fn size(mut self, size: ButtonSize) -> Self {
-        self.size = size;
-        self
+    fn style(self, look: ButtonStyle) -> Self {
+        self.with(|s| s.style = look)
     }
 
-    fn tooltip(mut self, tooltip: impl Fn(&mut Window, &mut App) -> AnyView + 'static) -> Self {
-        self.tooltip = Some(Box::new(tooltip));
-        self
+    fn track_focus(self, handle: &FocusHandle) -> Self {
+        self.with(|s| s.focus = Some(handle.clone()))
     }
 
-    fn tab_index(mut self, tab_index: impl Into<isize>) -> Self {
-        self.tab_index = Some(tab_index.into());
-        self
+    fn tab_index(self, index: impl Into<isize>) -> Self {
+        self.with(|s| s.tab_index = Some(index.into()))
     }
 
-    fn track_focus(mut self, focus_handle: &FocusHandle) -> Self {
-        self.focus_handle = Some(focus_handle.clone());
-        self
+    fn tooltip(self, build: impl Fn(&mut Window, &mut App) -> AnyView + 'static) -> Self {
+        self.with(|s| s.tooltip = Some(Box::new(build)))
     }
 }
 
 impl VisibleOnHover for ButtonLike {
-    fn visible_on_hover(mut self, group_name: impl Into<SharedString>) -> Self {
-        self.base = self.base.visible_on_hover(group_name);
-        self
+    fn visible_on_hover(self, group: impl Into<SharedString>) -> Self {
+        Self {
+            outer: self.outer.visible_on_hover(group),
+            ..self
+        }
     }
 }
 
 impl ParentElement for ButtonLike {
-    fn extend(&mut self, elements: impl IntoIterator<Item = AnyElement>) {
-        self.children.extend(elements)
+    fn extend(&mut self, items: impl IntoIterator<Item = AnyElement>) {
+        self.content.extend(items)
     }
 }
 
-/// The height of a button size.
-fn height_of(size: ButtonSize) -> DefiniteLength {
-    let px = match size {
-        ButtonSize::Large => 32_f32,
-        ButtonSize::Medium => 28_f32,
-        ButtonSize::Default => 22_f32,
-        ButtonSize::Compact => 18_f32,
-        ButtonSize::None => 16_f32,
-    };
-    rems_from_px(px).into()
-}
-
 impl RenderOnce for ButtonLike {
-    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
-        // The selected style changes the colours; the border follows the button's own style.
-        let style = self
-            .selected_style
-            .filter(|_| self.selected)
-            .unwrap_or(self.style);
-        let outlined = matches!(
-            self.style,
-            ButtonStyle::Outlined | ButtonStyle::OutlinedGhost | ButtonStyle::OutlinedCustom(_)
-        );
-        let rest = resting(style, cx);
-        let hover = hovered_background(style, cx);
-        let pressed = pressed_background(style, cx);
-        let focus_border = cx.theme().colors().border_focused;
-        let ui_font = theme::theme_settings(cx).ui_font(cx).family.clone();
-        let disabled = self.disabled;
-        let cursor = self.cursor_style;
+    fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let Self {
+            setup,
+            outer,
+            content,
+        } = self;
+        // A selected style changes only the colours; the frame follows the button's own style.
+        let shown = match setup.style_when_on {
+            Some(style) if setup.is_on() => style,
+            _ => setup.style,
+        };
+        let colours = palette(shown, cx);
+        let framed = setup.style.framed();
+        let font = theme::theme_settings(cx).ui_font(cx).family.clone();
 
-        self.base
+        let mut frame = outer
+            .id(setup.id)
+            .role(Role::Button)
+            .group("")
             .flex()
+            .flex_none()
             .flex_row()
             .items_center()
-            .id(self.id)
-            .role(Role::Button)
-            .when_some(self.aria_label, |this, label| this.aria_label(label))
-            .when_some(self.aria_keyshortcuts, |this, keys| {
-                this.aria_keyshortcuts(keys)
-            })
-            .when_some(self.expanded, |this, expanded| this.aria_expanded(expanded))
-            .when_some(self.toggled, |this, toggled| {
-                this.aria_toggled(if toggled {
-                    Toggled::True
-                } else {
-                    Toggled::False
-                })
-            })
-            // A disabled button is not a tab stop, so Tab skips it.
-            .when_some(self.tab_index, |this, index| {
-                this.tab_index(index).tab_stop(!disabled)
-            })
-            .when_some(self.focus_handle, |this, handle| this.track_focus(&handle))
-            .font_family(ui_font)
-            .group("")
-            .flex_none()
-            .h(self.height.unwrap_or(height_of(self.size)))
-            .when_some(self.width, |this, width| {
-                this.w(width).justify_center().text_center()
-            })
-            .when(outlined, |this| this.border_1())
-            .when(self.round_left, |this| this.rounded_tl_sm().rounded_bl_sm())
-            .when(self.round_right, |this| {
-                this.rounded_tr_sm().rounded_br_sm()
-            })
+            .font_family(font)
+            .h(setup.height.unwrap_or_else(|| setup.size.height().into()))
+            .px(setup.size.side_room(cx))
             .gap(DynamicSpacing::Base04.rems(cx))
-            .map(|this| match self.size {
-                ButtonSize::Large | ButtonSize::Medium => this.px(DynamicSpacing::Base08.rems(cx)),
-                ButtonSize::Default | ButtonSize::Compact => {
-                    this.px(DynamicSpacing::Base04.rems(cx))
-                }
-                ButtonSize::None => this.px_px(),
-            })
-            .border_color(rest.border)
-            .bg(rest.background)
-            .when(disabled, |this| {
-                if cursor == CursorStyle::PointingHand {
-                    this.cursor_not_allowed()
-                } else {
-                    this.cursor(cursor)
-                }
-            })
-            .when(!disabled, |this| {
-                let hover_style = move |look: StyleRefinement| look.bg(hover);
-                this.cursor(cursor)
-                    .hover(hover_style)
-                    .map(|this| {
-                        if outlined {
-                            this.focus_visible(move |look| look.border_color(focus_border))
-                        } else {
-                            this.focus_visible(hover_style)
-                        }
-                    })
-                    .active(move |look| look.bg(pressed))
-            })
-            .when_some(self.on_click.filter(|_| !disabled), |this, on_click| {
-                // A press does not take the focus from a text box; a click goes no further.
-                this.on_mouse_down(MouseButton::Left, |_, window, _| window.prevent_default())
-                    .on_click(move |event, window, cx| {
-                        cx.stop_propagation();
-                        on_click(event, window, cx)
-                    })
-            })
-            .when_some(self.tooltip, |this, tooltip| {
-                this.tooltip(move |window, cx| tooltip(window, cx))
-            })
-            .children(self.children)
+            .bg(colours.fill)
+            .border_color(colours.edge);
+
+        if let Some(spoken) = setup.spoken {
+            frame = frame.aria_label(spoken);
+        }
+        if let Some(shortcut) = setup.shortcut {
+            frame = frame.aria_keyshortcuts(shortcut);
+        }
+        if let Some(open) = setup.expanded {
+            frame = frame.aria_expanded(open);
+        }
+        if let Some(on) = setup.toggled {
+            frame = frame.aria_toggled(if on { Toggled::True } else { Toggled::False });
+        }
+        // Tab skips a disabled button.
+        if let Some(index) = setup.tab_index {
+            frame = frame.tab_index(index).tab_stop(!setup.disabled);
+        }
+        if let Some(handle) = &setup.focus {
+            frame = frame.track_focus(handle);
+        }
+        if let Some(width) = setup.width {
+            frame = frame.w(width).justify_center().text_center();
+        }
+        if framed {
+            frame = frame.border_1();
+        }
+        frame = match setup.rounded {
+            (true, true) => frame.rounded_sm(),
+            (true, false) => frame.rounded_l_sm(),
+            (false, true) => frame.rounded_r_sm(),
+            (false, false) => frame,
+        };
+
+        if setup.disabled {
+            // The hand turns into "not allowed"; a cursor the caller chose stays.
+            frame = match setup.cursor {
+                CursorStyle::PointingHand => frame.cursor_not_allowed(),
+                other => frame.cursor(other),
+            };
+        } else {
+            let Palette { hover, press, .. } = colours;
+            let focus_edge = cx.theme().colors().border_focused;
+            frame = frame
+                .cursor(setup.cursor)
+                .hover(move |look| look.bg(hover))
+                .active(move |look| look.bg(press));
+            // Keyboard focus shows on the frame where there is one, else as the hover fill.
+            frame = if framed {
+                frame.focus_visible(move |look| look.border_color(focus_edge))
+            } else {
+                frame.focus_visible(move |look| look.bg(hover))
+            };
+            if let Some(handler) = setup.on_click {
+                // A press keeps the focus in a text box; the click goes no further.
+                frame = frame
+                    .on_mouse_down(MouseButton::Left, |_, w, _| w.prevent_default())
+                    .on_click(move |click, w, app| {
+                        app.stop_propagation();
+                        handler(click, w, app)
+                    });
+            }
+        }
+        if let Some(tooltip) = setup.tooltip {
+            frame = frame.tooltip(move |window, cx| tooltip(window, cx));
+        }
+        frame.children(content)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sizes_give_the_heights_of_the_plan() {
+        let px = |size: ButtonSize| size.height().0 * 16.;
+        assert_eq!(px(ButtonSize::Large), 32.);
+        assert_eq!(px(ButtonSize::Medium), 28.);
+        assert_eq!(px(ButtonSize::Default), 22.);
+        assert_eq!(px(ButtonSize::Compact), 18.);
+        assert_eq!(px(ButtonSize::None), 16.);
+    }
+
+    #[test]
+    fn only_the_outlined_styles_have_a_frame() {
+        assert!(ButtonStyle::Outlined.framed());
+        assert!(ButtonStyle::OutlinedGhost.framed());
+        assert!(ButtonStyle::OutlinedCustom(transparent_black()).framed());
+        assert!(!ButtonStyle::Subtle.framed());
+        assert!(!ButtonStyle::Filled.framed());
+        assert!(!ButtonStyle::Tinted(TintColor::Accent).framed());
+        assert!(!ButtonStyle::Transparent.framed());
+    }
+
+    #[test]
+    fn a_box_is_on_only_once_toggled_on() {
+        assert!(!ButtonLike::new("b").setup.is_on());
+        assert!(!ButtonLike::new("b").toggle_state(false).setup.is_on());
+        assert!(ButtonLike::new("b").toggle_state(true).setup.is_on());
+    }
+
+    #[test]
+    fn a_box_starts_subtle_default_and_round() {
+        let setup = ButtonLike::new("b").setup;
+        assert_eq!(setup.style, ButtonStyle::Subtle);
+        assert_eq!(setup.size, ButtonSize::Default);
+        assert_eq!(setup.cursor, CursorStyle::PointingHand);
+        assert_eq!(setup.rounded, (true, true));
+        assert!(!setup.disabled && setup.toggled.is_none());
     }
 }

@@ -1,18 +1,16 @@
 //! A button that shows one icon.
 
-use gpui::{
-    AnyView, App, ClickEvent, CursorStyle, DefiniteLength, ElementId, FocusHandle, IntoElement,
-    ParentElement, Pixels, RenderOnce, SharedString, Window, prelude::FluentBuilder,
-};
+use gpui::{App, ElementId, IntoElement, ParentElement, Pixels, RenderOnce, SharedString, Window};
 
-use crate::button_like::{ButtonCommon, ButtonLike, ButtonSize, ButtonStyle, SelectableButton};
+use crate::button_like::ButtonLike;
+use crate::button_setters::forward_button_setters;
 use crate::color::Color;
 use crate::icon::{Icon, IconSize};
 use crate::icon_name::IconName;
 use crate::spacing::DynamicSpacing;
-use crate::traits::{Clickable, Disableable, FixedWidth, Toggleable, VisibleOnHover};
+use crate::traits::{FixedWidth, VisibleOnHover};
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub enum IconButtonShape {
     /// As wide and as high as the icon plus a little room on each side.
     Square,
@@ -23,193 +21,145 @@ pub enum IconButtonShape {
 #[derive(IntoElement)]
 pub struct IconButton {
     base: ButtonLike,
-    shape: IconButtonShape,
-    icon: IconName,
-    icon_size: IconSize,
-    icon_color: Color,
-    selected_icon: Option<IconName>,
-    selected_icon_color: Option<Color>,
-    selected_style: Option<ButtonStyle>,
-    alpha: Option<f32>,
+    glyph: IconName,
+    glyph_size: IconSize,
+    tint: Color,
+    tint_when_on: Option<Color>,
+    square: bool,
 }
+
+forward_button_setters!(IconButton, base);
 
 impl IconButton {
     pub fn new(id: impl Into<ElementId>, icon: IconName) -> Self {
         Self {
             base: ButtonLike::new(id),
-            shape: IconButtonShape::Wide,
-            icon,
-            icon_size: IconSize::default(),
-            icon_color: Color::Default,
-            selected_icon: None,
-            selected_icon_color: None,
-            selected_style: None,
-            alpha: None,
+            glyph: icon,
+            glyph_size: IconSize::default(),
+            tint: Color::Default,
+            tint_when_on: None,
+            square: false,
         }
     }
 
-    pub fn shape(mut self, shape: IconButtonShape) -> Self {
-        self.shape = shape;
-        self
+    pub fn shape(self, shape: IconButtonShape) -> Self {
+        Self {
+            square: shape == IconButtonShape::Square,
+            ..self
+        }
     }
 
-    pub fn icon_size(mut self, icon_size: IconSize) -> Self {
-        self.icon_size = icon_size;
-        self
+    pub fn icon_size(self, icon_size: IconSize) -> Self {
+        Self {
+            glyph_size: icon_size,
+            ..self
+        }
     }
 
-    pub fn icon_color(mut self, icon_color: Color) -> Self {
-        self.icon_color = icon_color;
-        self
+    pub fn icon_color(self, icon_color: Color) -> Self {
+        Self {
+            tint: icon_color,
+            ..self
+        }
     }
 
-    pub fn alpha(mut self, alpha: f32) -> Self {
-        self.alpha = Some(alpha);
-        self
+    pub fn selected_icon_color(self, color: impl Into<Option<Color>>) -> Self {
+        Self {
+            tint_when_on: color.into(),
+            ..self
+        }
     }
 
-    pub fn selected_icon(mut self, icon: impl Into<Option<IconName>>) -> Self {
-        self.selected_icon = icon.into();
-        self
+    pub fn aria_label(self, label: impl Into<SharedString>) -> Self {
+        self.on_inner(|b| b.aria_label(label))
     }
 
-    pub fn selected_icon_color(mut self, color: impl Into<Option<Color>>) -> Self {
-        self.selected_icon_color = color.into();
-        self
-    }
-
-    pub fn aria_label(mut self, label: impl Into<SharedString>) -> Self {
-        self.base = self.base.aria_label(label);
-        self
-    }
-
-    pub fn aria_expanded(mut self, expanded: bool) -> Self {
-        self.base = self.base.aria_expanded(expanded);
-        self
-    }
-}
-
-impl Disableable for IconButton {
-    fn disabled(mut self, disabled: bool) -> Self {
-        self.base = self.base.disabled(disabled);
-        self
-    }
-}
-
-impl Toggleable for IconButton {
-    fn toggle_state(mut self, selected: bool) -> Self {
-        self.base = self.base.toggle_state(selected);
-        self
-    }
-}
-
-impl SelectableButton for IconButton {
-    fn selected_style(mut self, style: ButtonStyle) -> Self {
-        self.selected_style = Some(style);
-        self.base = self.base.selected_style(style);
-        self
-    }
-}
-
-impl Clickable for IconButton {
-    fn on_click(mut self, handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static) -> Self {
-        self.base = self.base.on_click(handler);
-        self
-    }
-
-    fn cursor_style(mut self, cursor_style: CursorStyle) -> Self {
-        self.base = self.base.cursor_style(cursor_style);
-        self
-    }
-}
-
-impl FixedWidth for IconButton {
-    fn width(mut self, width: impl Into<DefiniteLength>) -> Self {
-        self.base = self.base.width(width);
-        self
-    }
-
-    fn full_width(mut self) -> Self {
-        self.base = self.base.full_width();
-        self
-    }
-}
-
-impl ButtonCommon for IconButton {
-    fn id(&self) -> &ElementId {
-        self.base.id()
-    }
-
-    fn style(mut self, style: ButtonStyle) -> Self {
-        self.base = self.base.style(style);
-        self
-    }
-
-    fn size(mut self, size: ButtonSize) -> Self {
-        self.base = self.base.size(size);
-        self
-    }
-
-    fn tooltip(mut self, tooltip: impl Fn(&mut Window, &mut App) -> AnyView + 'static) -> Self {
-        self.base = self.base.tooltip(tooltip);
-        self
-    }
-
-    fn tab_index(mut self, tab_index: impl Into<isize>) -> Self {
-        self.base = self.base.tab_index(tab_index);
-        self
-    }
-
-    fn track_focus(mut self, focus_handle: &FocusHandle) -> Self {
-        self.base = self.base.track_focus(focus_handle);
-        self
+    pub fn aria_expanded(self, expanded: bool) -> Self {
+        self.on_inner(|b| b.aria_expanded(expanded))
     }
 }
 
 impl VisibleOnHover for IconButton {
-    fn visible_on_hover(mut self, group_name: impl Into<SharedString>) -> Self {
-        self.base = self.base.visible_on_hover(group_name);
-        self
+    fn visible_on_hover(self, group_name: impl Into<SharedString>) -> Self {
+        self.on_inner(|b| b.visible_on_hover(group_name))
     }
 }
 
-/// The side of a square button: the icon plus room on each side. The room is 2 px at the default
-/// UI size (none for an indicator); a custom size gets its own size as room.
+/// The icon colour: grey while off, the selected colour (the accent unless set) while selected,
+/// else the icon's own colour.
+fn glyph_colour(
+    disabled: bool,
+    selected: bool,
+    tint: Color,
+    tint_when_on: Option<Color>,
+) -> Color {
+    match (disabled, selected) {
+        (true, _) => Color::Disabled,
+        (false, true) => tint_when_on.unwrap_or(Color::Selected),
+        (false, false) => tint,
+    }
+}
+
+/// The side of a square button: the icon and the same room on each side, 2 px at UI size 16.
+/// An indicator gets no room; a custom size gets its own size as room.
 fn square_side(size: IconSize, window: &Window, cx: &App) -> Pixels {
-    let icon = size.rems() * window.rem_size();
+    let rem = window.rem_size();
     let room = match size {
+        IconSize::Custom(length) => length.to_pixels(rem),
         IconSize::Indicator => DynamicSpacing::Base00.px(cx),
-        IconSize::Custom(custom) => custom.to_pixels(window.rem_size()),
         _ => DynamicSpacing::Base02.px(cx),
     };
-    icon + room * 2.
+    size.rems() * rem + room * 2.
 }
 
 impl RenderOnce for IconButton {
-    #[allow(refining_impl_trait)]
-    fn render(self, window: &mut Window, cx: &mut App) -> ButtonLike {
-        let disabled = self.base.disabled;
-        let selected = self.base.selected;
-        let icon = self.selected_icon.filter(|_| selected).unwrap_or(self.icon);
-        let color = if disabled {
-            Color::Disabled
-        } else if let Some(style) = self.selected_style.filter(|_| selected) {
-            match style {
-                ButtonStyle::Tinted(tint) => tint.into(),
-                _ => Color::Default,
-            }
-        } else if selected {
-            self.selected_icon_color.unwrap_or(Color::Selected)
-        } else {
-            Color::Custom(self.icon_color.color(cx).opacity(self.alpha.unwrap_or(1.)))
-        };
-        let shown = Icon::new(icon).size(self.icon_size).color(color);
-        let side = match self.shape {
-            IconButtonShape::Square => Some(square_side(self.icon_size, window, cx)),
-            IconButtonShape::Wide => None,
-        };
-        self.base
-            .when_some(side, |this, side| this.width(side).height(side.into()))
-            .child(shown)
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let colour = glyph_colour(
+            self.base.setup.disabled,
+            self.base.setup.is_on(),
+            self.tint,
+            self.tint_when_on,
+        );
+        let mut base = self.base;
+        if self.square {
+            let side = square_side(self.glyph_size, window, cx);
+            base = base.width(side).height(side.into());
+        }
+        base.child(Icon::new(self.glyph).size(self.glyph_size).color(colour))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::button_like::ButtonCommon;
+    use crate::traits::{Disableable, Toggleable};
+
+    #[test]
+    fn the_icon_colour_follows_off_then_selected_then_the_icon_colour() {
+        let muted = Color::Muted;
+        assert_eq!(glyph_colour(true, true, muted, Some(Color::Accent)), Color::Disabled);
+        assert_eq!(glyph_colour(false, true, muted, Some(Color::Accent)), Color::Accent);
+        assert_eq!(glyph_colour(false, true, muted, None), Color::Selected);
+        assert_eq!(glyph_colour(false, false, muted, Some(Color::Accent)), muted);
+    }
+
+    #[test]
+    fn an_icon_button_is_wide_unless_made_square() {
+        let button = IconButton::new("i", IconName::Close);
+        assert!(!button.square);
+        let button = button.shape(IconButtonShape::Square);
+        assert!(button.square);
+        assert!(!button.shape(IconButtonShape::Wide).square);
+    }
+
+    #[test]
+    fn an_icon_button_hands_its_box_setters_to_the_box() {
+        let button = IconButton::new("i", IconName::Close)
+            .disabled(true)
+            .toggle_state(true);
+        assert!(button.base.setup.disabled);
+        assert!(button.base.setup.is_on());
+        assert_eq!(button.id(), &ElementId::from("i"));
     }
 }
