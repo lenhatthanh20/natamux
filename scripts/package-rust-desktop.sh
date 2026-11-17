@@ -28,6 +28,7 @@ case "$platform" in
     done
     cp crates/natamux-app/resources/icon.png "$appdir/natamux.png"
     cp "$appdir/natamux.png" "$appdir/usr/share/icons/hicolor/256x256/apps/natamux.png"
+    cp LICENSE THIRD-PARTY-NOTICES.md "$appdir/"
     cat > "$appdir/natamux.desktop" <<'DESKTOP'
 [Desktop Entry]
 Type=Application
@@ -43,6 +44,7 @@ here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 exec "${APPDIR:-$here}/usr/bin/natamux-app" "$@"
 RUN
     chmod +x "$appdir/AppRun"
+    cp LICENSE THIRD-PARTY-NOTICES.md "$appdir/usr/bin/"
     tar -czf "$out/Natamux-linux-x64.tar.gz" -C "$appdir/usr/bin" .
     deb="$out/deb"
     mkdir -p "$deb/DEBIAN" "$deb/opt/Natamux" "$deb/usr/share/applications" \
@@ -50,6 +52,7 @@ RUN
     for name in natamux-app natamux-daemon natamux nmx; do
       cp "$binary/$name" "$deb/opt/Natamux/$name"
     done
+    cp LICENSE THIRD-PARTY-NOTICES.md "$deb/opt/Natamux/"
     cp "$appdir/natamux.desktop" "$deb/usr/share/applications/natamux.desktop"
     cp "$appdir/natamux.png" "$deb/usr/share/icons/hicolor/256x256/apps/natamux.png"
     ln -s ../../opt/Natamux/natamux "$deb/usr/bin/natamux"
