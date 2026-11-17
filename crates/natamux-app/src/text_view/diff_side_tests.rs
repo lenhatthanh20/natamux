@@ -249,37 +249,49 @@ fn a_hunk_with_no_lines_on_the_side_has_a_marker(cx: &mut TestAppContext) {
     );
 }
 
-#[gpui::test]
-fn every_line_takes_the_colours_of_its_own_file(cx: &mut TestAppContext) {
-    let (_, right, cx) = open(cx);
-    let diff = diff(Some("fn a() {}\n"), "fn b() {}\n", &[]);
-    let rows = inline_rows(&diff.hunk_rows(), diff.new_rows(), false);
-    show(&right, "x.rs", &diff, &rows, true, cx);
-    cx.executor().advance_clock(Duration::from_millis(50));
-    cx.run_until_parked();
-    assert!(cx.update(|_, cx| right.parsed(cx)));
-    let input = right.input().clone();
-    let (text, runs, plain) = input.update_in(cx, |input, _, cx| {
+/// The colour of each byte of a side's text, as its runs give it, and the plain colour.
+fn colours_of(side: &DiffSide, cx: &mut VisualTestContext) -> (String, Vec<Hsla>, Hsla) {
+    let input = side.input().clone();
+    input.update_in(cx, |input, _, cx| {
         let style = input.text_style(cx);
         let text = input.model.text().to_owned();
         let runs = input.runs(&style, text.len(), false, &[], cx);
-        (text, runs, style.color)
-    });
+        let colours = runs
+            .iter()
+            .flat_map(|run| std::iter::repeat_n(run.color, run.len))
+            .collect();
+        (text, colours, style.color)
+    })
+}
+
+/// Each line takes the colours of its own file: the last commit's side of side by side from the
+/// last commit's parse, the working tree's lines from theirs. The deleted lines of an inline diff
+/// stay plain, as the B2 shots show them (`changes-diff-focused`, a `.ts` file).
+#[gpui::test]
+fn every_line_takes_the_colours_of_its_own_file(cx: &mut TestAppContext) {
+    let (left, right, cx) = open(cx);
+    let diff = diff(Some("fn a() {}\n"), "fn b() {}\n", &[]);
+    let rows = inline_rows(&diff.hunk_rows(), diff.new_rows(), false);
+    show(&right, "x.rs", &diff, &rows, true, cx);
+    let old_rows = model::side_rows(&diff.hunk_rows(), Side::Old, 2, 2, false);
+    show(&left, "x.rs", &diff, &old_rows, false, cx);
+    cx.executor().advance_clock(Duration::from_millis(50));
+    cx.run_until_parked();
+    assert!(cx.update(|_, cx| right.parsed(cx) && left.parsed(cx)));
+
+    let (text, colours, plain) = colours_of(&right, cx);
     assert_eq!(text, "fn a() {}\nfn b() {}\n");
-    // `fn` starts both lines: the deleted line (from the last commit's parse) and the added one.
-    let color_at = |at: usize| {
-        let mut start = 0;
-        runs.iter()
-            .find(|run| {
-                let found = (start..start + run.len).contains(&at);
-                start += run.len;
-                found
-            })
-            .map(|run| run.color)
-    };
-    assert_ne!(color_at(0), Some(plain), "the deleted line is coloured");
-    assert_ne!(color_at(10), Some(plain), "the added line is coloured");
-    assert_eq!(color_at(0), color_at(10));
+    // `fn` starts both lines.
+    assert_eq!(
+        colours[0], plain,
+        "the deleted line of an inline diff is plain"
+    );
+    assert_ne!(colours[10], plain, "the added line is coloured");
+
+    let (text, colours, plain) = colours_of(&left, cx);
+    assert_eq!(text, "fn a() {}\n");
+    assert_ne!(colours[0], plain, "the last commit's line is coloured");
+    assert_eq!(colours[0], colours_of(&right, cx).1[10]);
 }
 
 /// The two sides of `old` to `new`, paired.
@@ -499,4 +511,83 @@ fn the_text_layer_of_a_side_scrolled_right_keeps_out_of_the_gutter(cx: &mut Test
             "the hunk boxes start at the strip, left of the mask"
         );
     });
+}
+
+/// 30 lines, line 10 changed: inline, rows 0-9 unchanged, row 10 deleted, row 11 added.
+fn long_change(cx: &mut TestAppContext) -> (DiffSide, &mut VisualTestContext) {
+    let (_, right, cx) = open(cx);
+    let old: Vec<String> = (0..30).map(|i| format!("l{i}")).collect();
+    let old = old.join("\n");
+    let new = old.replace("l10\n", "x\n");
+    let diff = diff(Some(&old), &new, &[]);
+    let rows = inline_rows(&diff.hunk_rows(), diff.new_rows(), false);
+    show(&right, "x.txt", &diff, &rows, true, cx);
+    (right, cx)
+}
+
+#[gpui::test]
+fn a_box_scrolled_above_the_top_has_its_top_line_on_the_first_row_in_view(cx: &mut TestAppContext) {
+    let (right, cx) = long_change(cx);
+    let lh = drawn(right.input(), cx).line_height;
+    cx.update(|_, cx| right.set_scroll(point(px(0.), lh * 11.), cx));
+    cx.run_until_parked();
+    assert_eq!(
+        right.input().read_with(cx, |input, _| input.scroll.y),
+        lh * 11.
+    );
+    let drawn = drawn(right.input(), cx);
+    let colors = colors(cx);
+    let row_y = |row: usize| drawn.origin.y + lh * row as f32;
+    let lines: Vec<(Pixels, Hsla)> = drawn
+        .paint
+        .backs
+        .iter()
+        .filter(|(rect, _)| rect.size.height == px(1.))
+        .map(|(rect, color)| (rect.top(), *color))
+        .collect();
+    assert_eq!(
+        lines,
+        vec![
+            (row_y(11), colors.editor_diff_hunk_added_hollow_border),
+            (
+                row_y(12) - px(1.),
+                colors.editor_diff_hunk_added_hollow_border
+            ),
+        ],
+        "the deleted row above the top has no line"
+    );
+    let (strip, _) = drawn.paint.strips[0];
+    assert_eq!((strip.top(), strip.bottom()), (row_y(11), row_y(12)));
+}
+
+#[gpui::test]
+fn a_side_pins_its_header_once_its_top_row_is_at_or_below_a_gap(cx: &mut TestAppContext) {
+    let (_, right, cx) = open(cx);
+    let text: Vec<String> = (0..40).map(|i| format!("l{i}")).collect();
+    let text = text.join("\n");
+    let diff = diff(Some(&text), &text, &[]);
+    let line = |row: u32| Row::Line {
+        row,
+        status: Status::Unchanged,
+    };
+    // Rows 0-19 lines, row 20 the gap, then 19 more lines.
+    let mut rows: Vec<Row> = (0..20).map(line).collect();
+    rows.push(Row::Gap { hidden: 1 });
+    rows.extend((21..40).map(line));
+    show(&right, "x.txt", &diff, &rows, true, cx);
+    let lh = drawn(right.input(), cx).line_height;
+    let pins = |scroll: Pixels, cx: &mut VisualTestContext| {
+        cx.update(|_, cx| right.set_scroll(point(px(0.), scroll), cx));
+        cx.run_until_parked();
+        cx.update(|window, cx| {
+            let place = right.place(window, cx).expect("the side was drawn");
+            right
+                .rows(cx, |rows| place.pins_header(rows))
+                .expect("a diff side has rows")
+        })
+    };
+    assert!(!pins(px(0.), cx), "at the top");
+    assert!(!pins(lh * 19.5, cx), "the top row is above the gap");
+    assert!(pins(lh * 20., cx), "the gap is the top row");
+    assert!(pins(lh * 25., cx), "below the gap");
 }

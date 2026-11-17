@@ -55,6 +55,7 @@ pub use tooltip::{Tooltip, tooltip_container};
 pub use traits::{
     Clickable, Disableable, FixedWidth, StyledExt, ToggleState, Toggleable, VisibleOnHover,
 };
+pub use with_rem_size::WithRemSize;
 
 /// Zed's scrollbars, until an own one takes their place (after S7).
 pub use zed_ui::{ScrollAxes, ScrollableHandle, Scrollbars, WithScrollbar, scrollbars};

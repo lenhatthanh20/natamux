@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use futures::FutureExt;
 use gpui::{App, Global};
-use language::{Language, LanguageRegistry, LoadedLanguage};
+use language::{LanguageRegistry, LoadedLanguage};
 use theme::{ActiveTheme, GlobalTheme};
 
 /// The languages of the `grammars` crate that have a grammar here.
@@ -77,11 +77,13 @@ pub fn init(cx: &mut App) {
     .detach();
 }
 
-/// The language of `path` by its extension or name, None when no grammar fits.
+/// The language of `path` by its extension or name, None when no grammar fits. Only the old
+/// code of the tests (`zed_diff.rs`, `files/zed_body.rs`) still asks; it goes in S7.
+#[cfg(test)]
 pub fn language_for(
     path: &str,
     cx: &App,
-) -> Option<impl Future<Output = Option<Arc<Language>>> + use<>> {
+) -> Option<impl Future<Output = Option<Arc<language::Language>>> + use<>> {
     let registry = cx.try_global::<GlobalLanguages>()?.0.clone();
     let name = path.rsplit('/').next().unwrap_or(path);
     let key = name

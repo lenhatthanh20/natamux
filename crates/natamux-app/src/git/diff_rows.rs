@@ -4,9 +4,6 @@
 //! lines on the side, and the changed words as ranges of the text. `text_view/diff_side.rs` draws
 //! it.
 
-// The diff view moves onto it in S6.2 part 3; until then only the tests use it.
-#![cfg_attr(not(test), allow(dead_code))]
-
 use std::ops::Range;
 use std::rc::Rc;
 
@@ -37,6 +34,19 @@ pub enum BlockKind {
     Spacer,
     /// The unchanged lines between two collapsed parts.
     Gap,
+    /// A review comment, drawn over its rows by the diff view.
+    Comment,
+}
+
+/// Rows put in after `side_rows`: a comment, or the empty rows that match it on the other side.
+/// `early` rows (under the line above) come before the spacers and gaps above `line`, the
+/// others after them, as Zed's editor ordered its blocks.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Extra {
+    pub line: usize,
+    pub rows: usize,
+    pub kind: BlockKind,
+    pub early: bool,
 }
 
 /// Empty rows above line `line` of the side's text (`lines.len()`: below the last line).
@@ -76,9 +86,96 @@ pub struct SideRows {
     pub markers: Vec<(usize, usize)>,
     /// The changed words, as ranges of `text`, deleted or added.
     pub words: Vec<(Range<usize>, Status)>,
+    /// Per file (the last commit's, the working tree's), the line each of its rows shows on.
+    pub shown: [Vec<Option<usize>>; 2],
+    /// The hunks of an inline diff whose deleted lines are closed: their lines show as unchanged
+    /// (no box, no words, no buttons), only their strip stays, as Zed's collapsed hunks.
+    pub closed: Vec<usize>,
 }
 
 impl SideRows {
+    /// The line of the side's text that shows row `row` of the last commit's file (`old`) or of
+    /// the working tree's; None when it does not show.
+    pub fn line_of(&self, old: bool, row: u32) -> Option<usize> {
+        self.shown[usize::from(!old)]
+            .get(row as usize)
+            .copied()
+            .flatten()
+    }
+
+    /// Closes `closed` hunks of an inline diff (their deleted lines are left out already): their
+    /// lines keep the hunk but show as unchanged, and their words go.
+    pub fn close(&mut self, closed: &[usize]) {
+        self.closed = closed.to_vec();
+        if closed.is_empty() {
+            return;
+        }
+        let is_closed = |line: &SideLine| line.hunk.is_some_and(|hunk| closed.contains(&hunk));
+        for line in &mut self.lines {
+            if is_closed(&*line) {
+                line.status = Status::Unchanged;
+            }
+        }
+        let (lines, starts) = (&self.lines, &self.line_starts);
+        self.words.retain(|(range, _)| {
+            let at = starts.partition_point(|&start| start <= range.start);
+            lines
+                .get(at.saturating_sub(1))
+                .is_none_or(|line| !is_closed(line))
+        });
+    }
+
+    /// The line that holds offset `at` of the text.
+    pub fn line_at(&self, at: usize) -> usize {
+        self.line_starts
+            .partition_point(|&start| start <= at)
+            .saturating_sub(1)
+    }
+
+    /// Puts `extra` in among the blocks, and gives the index in `blocks` of each.
+    pub fn add_blocks(&mut self, extra: &[Extra]) -> Vec<usize> {
+        let mut blocks = Vec::with_capacity(self.blocks.len() + extra.len());
+        let mut placed = vec![0; extra.len()];
+        let mut old = self.blocks.iter().peekable();
+        for line in 0..=self.lines.len() {
+            let mut put = |early: bool, blocks: &mut Vec<Block>| {
+                for (index, more) in extra.iter().enumerate() {
+                    if more.line == line && more.early == early {
+                        placed[index] = blocks.len();
+                        blocks.push(Block {
+                            line,
+                            rows: more.rows,
+                            kind: more.kind,
+                        });
+                    }
+                }
+            };
+            put(true, &mut blocks);
+            while let Some(block) = old.next_if(|block| block.line == line) {
+                blocks.push(*block);
+            }
+            put(false, &mut blocks);
+        }
+        self.blocks = blocks;
+        let mut above = vec![0; self.lines.len() + 1];
+        for block in &self.blocks {
+            above[block.line] += block.rows;
+        }
+        self.above = Rc::from(above);
+        placed
+    }
+
+    /// The line block `index` is above, and the rows of the blocks before it there.
+    pub fn block_offset(&self, index: usize) -> Option<(usize, usize)> {
+        let block = self.blocks.get(index)?;
+        let before = self.blocks[..index]
+            .iter()
+            .filter(|other| other.line == block.line)
+            .map(|other| other.rows)
+            .sum();
+        Some((block.line, before))
+    }
+
     pub fn empty() -> Self {
         SideRows {
             text: String::new(),
@@ -89,6 +186,8 @@ impl SideRows {
             kinds: Vec::new(),
             markers: Vec::new(),
             words: Vec::new(),
+            shown: [Vec::new(), Vec::new()],
+            closed: Vec::new(),
         }
     }
 }
@@ -155,12 +254,15 @@ pub fn side_rows(diff: &FileDiff, rows: &[Row], new_side: bool) -> SideRows {
         above[block.line] += block.rows;
     }
     side.above = Rc::from(above);
-    // Inline shows the old lines of every hunk; side by side the working tree's side marks where
-    // a hunk's deleted lines were.
-    let inline = rows.iter().any(|row| matches!(row, Row::Deleted { .. }));
-    if new_side && !inline {
+    // The working tree's side marks where a hunk's deleted lines were when none of them shows:
+    // always side by side, and inline when the hunk is closed.
+    if new_side {
         for (index, hunk) in hunks.iter().enumerate() {
-            if hunk.new.is_empty() && !hunk.old.is_empty() {
+            let old_shows = hunk
+                .old
+                .clone()
+                .any(|row| shown[0].get(row as usize).is_some_and(Option::is_some));
+            if hunk.new.is_empty() && !hunk.old.is_empty() && !old_shows {
                 let line = side
                     .lines
                     .iter()
@@ -171,6 +273,7 @@ pub fn side_rows(diff: &FileDiff, rows: &[Row], new_side: bool) -> SideRows {
         }
     }
     add_words(&mut side, diff, &sources, &shown);
+    side.shown = shown;
     side
 }
 
@@ -252,7 +355,11 @@ fn add_words(
     shown: &[Vec<Option<usize>>; 2],
 ) {
     for hunk in &diff.hunks {
-        let old_start = diff.old_start(hunk);
+        // From the line table, not `FileDiff::old_start`: that walks the text from its start, for
+        // each hunk.
+        let old_start = sources[0]
+            .get(hunk.rows.old.start as usize)
+            .map_or(diff.old.len(), |line| line.start);
         let words = hunk
             .old_words
             .iter()

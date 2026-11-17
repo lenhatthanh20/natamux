@@ -4,6 +4,7 @@
 use std::rc::Rc;
 
 use gpui::{DismissEvent, EventEmitter, FocusHandle, Focusable, KeyDownEvent};
+#[cfg(test)]
 use text::Point;
 use ui::prelude::*;
 
@@ -18,7 +19,9 @@ type OnGo = Rc<dyn Fn(u32, Option<u32>, &mut Window, &mut App)>;
 
 /// Where `line` and `column` (1-based, the column in characters) are in `text`: the row clamped
 /// to the last one, and the column as the byte column of that row, clamped to its end. A
-/// `Point`'s column is in bytes, so a character column must not be used as one (T-0316).
+/// `Point`'s column is in bytes, so a character column must not be used as one (T-0316). Only the
+/// old editor tab of the tests (`files/zed_body.rs`) still asks; it goes with it in S7.
+#[cfg(test)]
 pub fn line_target(text: &text::BufferSnapshot, line: u32, column: Option<u32>) -> Point {
     let row = line.saturating_sub(1).min(text.max_point().row);
     let end = Point::new(row, text.line_len(row));
@@ -28,6 +31,7 @@ pub fn line_target(text: &text::BufferSnapshot, line: u32, column: Option<u32>) 
 }
 
 /// The byte offset of character `chars` of `line`, or the line's length past its end.
+#[cfg(test)]
 fn byte_column(line: &str, chars: usize) -> u32 {
     let bytes = line
         .char_indices()

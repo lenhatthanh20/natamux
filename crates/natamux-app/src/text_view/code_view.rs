@@ -85,6 +85,11 @@ impl CodeView {
         Self { input }
     }
 
+    /// The code view of an input built as one (a diff side).
+    pub(super) fn of_input(input: Entity<TextInput>) -> Self {
+        Self { input }
+    }
+
     pub(super) fn input_ref(&self) -> &Entity<TextInput> {
         &self.input
     }
@@ -132,6 +137,46 @@ impl CodeView {
         }
         colors.len()
     }
+}
+
+/// The smallest bracket pair of `tree` around offset `at` of `text`, its edges included as in
+/// Zed's editor (`|{}` and `{}|` count): the ranges of its two chars.
+pub(super) fn brackets_around(
+    typing: &Typing,
+    tree: &Tree,
+    text: &str,
+    at: usize,
+) -> Vec<Range<usize>> {
+    let mut best: Option<(Range<usize>, Range<usize>)> = None;
+    // From the node before the caret too: right after `}` the caret is outside its node.
+    for from in [at.saturating_sub(1), at] {
+        let mut node = tree.root_node().descendant_for_byte_range(from, from);
+        while let Some(found) = node {
+            node = found.parent();
+            let count = found.child_count();
+            let (Some(first), Some(last)) = (found.child(0), found.child(count.max(1) - 1)) else {
+                continue;
+            };
+            let (open, close) = (first.byte_range(), last.byte_range());
+            let pair = count >= 2
+                && !last.is_missing()
+                && open.len() == 1
+                && close.len() == 1
+                && open.start <= at
+                && at <= close.end
+                && typing.pairs.iter().any(|pair| {
+                    text[open.clone()].starts_with(pair.open)
+                        && text[close.clone()].starts_with(pair.close)
+                });
+            let shorter = best
+                .as_ref()
+                .is_none_or(|(o, c)| close.end - open.start < c.end - o.start);
+            if pair && shorter {
+                best = Some((open, close));
+            }
+        }
+    }
+    best.map_or_else(Vec::new, |(open, close)| vec![open, close])
 }
 
 /// What a text input has more as a code view.
@@ -350,8 +395,12 @@ impl TextInput {
     }
 
     /// The smallest bracket pair around an empty caret, its edges included as in Zed's editor
-    /// (`|{}` and `{}|` count): the ranges of its two chars.
+    /// (`|{}` and `{}|` count): the ranges of its two chars. A diff side looks in the parse of
+    /// the caret's own file.
     pub(super) fn matching_brackets(&self) -> Vec<Range<usize>> {
+        if let Some(found) = self.diff_brackets() {
+            return found;
+        }
         let (Some(typing), Some(tree)) = (self.typing(), self.code.as_ref().and_then(Code::tree))
         else {
             return Vec::new();
@@ -360,38 +409,7 @@ impl TextInput {
         if !selection.is_empty() {
             return Vec::new();
         }
-        let (at, text) = (selection.head, self.model.text());
-        let mut best: Option<(Range<usize>, Range<usize>)> = None;
-        // From the node before the caret too: right after `}` the caret is outside its node.
-        for from in [at.saturating_sub(1), at] {
-            let mut node = tree.root_node().descendant_for_byte_range(from, from);
-            while let Some(found) = node {
-                node = found.parent();
-                let count = found.child_count();
-                let (Some(first), Some(last)) = (found.child(0), found.child(count.max(1) - 1))
-                else {
-                    continue;
-                };
-                let (open, close) = (first.byte_range(), last.byte_range());
-                let pair = count >= 2
-                    && !last.is_missing()
-                    && open.len() == 1
-                    && close.len() == 1
-                    && open.start <= at
-                    && at <= close.end
-                    && typing.pairs.iter().any(|pair| {
-                        text[open.clone()].starts_with(pair.open)
-                            && text[close.clone()].starts_with(pair.close)
-                    });
-                let shorter = best
-                    .as_ref()
-                    .is_none_or(|(o, c)| close.end - open.start < c.end - o.start);
-                if pair && shorter {
-                    best = Some((open, close));
-                }
-            }
-        }
-        best.map_or_else(Vec::new, |(open, close)| vec![open, close])
+        brackets_around(typing, tree, self.model.text(), selection.head)
     }
 
     /// After a change of the selection: the matching brackets of the new caret. They stay after

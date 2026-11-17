@@ -1,7 +1,7 @@
 //! What find and Annotate with Git Blame need of a code view, as two small interfaces. The
-//! editor tab's own code view sits behind them (`text_view/code_find.rs`, `code_editor.rs`), and
-//! Zed's editor of the diff until it moves too (`zed_targets.rs`). Positions are byte offsets of
-//! the whole text, rows are 0-based.
+//! editor tab's code view (`text_view/code_find.rs`, `code_editor.rs`) and the sides of the diff
+//! (`text_view/diff_side.rs`) sit behind them. Positions are byte offsets of the whole text, rows
+//! are 0-based.
 
 use std::ops::Range;
 use std::rc::Rc;

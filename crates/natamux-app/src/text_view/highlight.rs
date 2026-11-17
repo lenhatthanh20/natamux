@@ -54,6 +54,19 @@ impl Highlights {
             .map_err(String::as_str)
     }
 
+    /// Compiles the queries of `langs` on a background thread, so the first file of a language
+    /// that shows does not wait for them in a frame (Zed's editor loaded its languages in the
+    /// background too). A view that asks meanwhile waits for that compile, never does it twice.
+    pub fn compile_in_background(langs: Vec<&'static Lang>, cx: &gpui::App) {
+        cx.background_executor()
+            .spawn(async move {
+                for lang in langs {
+                    Self::of(lang).ok();
+                }
+            })
+            .detach();
+    }
+
     /// Per capture, the theme key that styles it (see `theme_key`).
     pub fn theme_keys(&self, has_key: impl Fn(&str) -> bool) -> Vec<Option<String>> {
         self.names

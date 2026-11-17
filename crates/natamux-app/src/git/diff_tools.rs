@@ -11,7 +11,6 @@ use crate::app::shortcuts::{FindInEditor, GoToLine, ShowOutline};
 use crate::components::go_to_line::open_go_to_line;
 use crate::files::outline_picker::open_outline;
 use crate::git::editor_find::open_editor_find;
-use crate::git::zed_targets::zed_outline_rows;
 
 impl ChangesView {
     pub(super) fn with_editor_tools(&self, root: Div, cx: &mut Context<Self>) -> Div {
@@ -21,7 +20,7 @@ impl ChangesView {
     }
 
     pub(super) fn find(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(target) = self.diff.read(cx).focused_editor(window, cx) else {
+        let Some(target) = self.diff.read(cx).focused_side(window, cx) else {
             return;
         };
         open_editor_find(&mut self.find, Rc::new(target), window, cx, |view| {
@@ -45,10 +44,9 @@ impl ChangesView {
     }
 
     fn outline(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(buffer) = self.diff.read(cx).buffer.clone() else {
+        let Some(items) = self.diff.read(cx).outline_rows(cx) else {
             return;
         };
-        let items = zed_outline_rows(&buffer, cx);
         let diff = self.diff.downgrade();
         open_outline(
             items,
@@ -63,11 +61,11 @@ impl ChangesView {
         );
     }
 
-    /// The find bar, while its editor is still one of the diff's; a rebuilt diff drops it.
+    /// The find bar, while its side is still one of the diff's; a rebuilt diff drops it.
     pub(super) fn find_bar(&mut self, cx: &mut Context<Self>) -> Option<AnyElement> {
         let find = self.find.clone()?;
         let target = find.read(cx).target().id();
-        if !self.diff.read(cx).shows_editor(target) {
+        if !self.diff.read(cx).shows_side(target) {
             find.update(cx, |find, cx| find.clear(cx));
             self.find = None;
             return None;

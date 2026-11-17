@@ -3,16 +3,18 @@
 //! whitespace dots inside it (full mode), the text with the input method's underline, and the
 //! caret.
 
+use std::cell::OnceCell;
 use std::collections::HashMap;
 use std::ops::Range;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use gpui::{
     App, AvailableSpace, Bounds, ContentMask, DispatchPhase, Element, ElementId,
     ElementInputHandler, Entity, Font, GlobalElementId, Hsla, IndentAdjustment, InspectorElementId,
     IntoElement, LayoutId, LineFragment, MouseButton, MouseMoveEvent, MouseUpEvent, Path, Pixels,
-    Point, SharedString, Style, TextAlign, TextRun, Window, WrappedLine, fill, point, px, relative,
-    size,
+    Point, SharedString, Style, TextAlign, TextRun, Window, WindowTextSystem, WrappedLine, fill,
+    point, px, relative, size,
 };
 use theme::ActiveTheme;
 
@@ -76,18 +78,45 @@ pub struct Line {
 /// display rows: a glyph at a wrap point does not join the glyph across it.
 struct Rows {
     text: String,
-    /// The runs it was shaped with: a later layout takes the rows as they are for the same text
+    /// The runs it is shaped with: a later layout takes the rows as they are for the same text
     /// and runs.
     runs: Vec<TextRun>,
     rows: Vec<Row>,
+    font_size: Pixels,
+    text_system: Arc<WindowTextSystem>,
 }
 
 struct Row {
     /// The offset of its first char in the line with its tabs as spaces.
     shown: usize,
+    /// Its chars: the row with the most gives the width of the text.
+    chars: usize,
     /// The room left of its text: the line's indent on a row after a wrap.
     indent: Pixels,
-    shaped: WrappedLine,
+    /// Shaped the first time it is drawn or measured, so a long text shapes only the rows in
+    /// view, as Zed's editor did.
+    shaped: OnceCell<WrappedLine>,
+}
+
+impl Rows {
+    /// Row `index` and its shape.
+    fn row(&self, index: usize) -> Option<(&Row, &WrappedLine)> {
+        let row = self.rows.get(index)?;
+        let shaped = row.shaped.get_or_init(|| {
+            let end = self
+                .rows
+                .get(index + 1)
+                .map_or(self.text.len(), |next| next.shown);
+            let part = SharedString::from(self.text[row.shown..end].to_owned());
+            shape(
+                &part,
+                &runs_in(&self.runs, row.shown..end),
+                self.font_size,
+                &self.text_system,
+            )
+        });
+        Some((row, shaped))
+    }
 }
 
 /// A tab of a line, shaped as spaces to the next tab stop.
@@ -181,9 +210,9 @@ impl Line {
 
     /// The x of `local` in `row`, from the left of the row.
     fn x_in_row(&self, row: usize, local: usize) -> Pixels {
-        self.rows.rows.get(row).map_or(px(0.), |row| {
+        self.rows.row(row).map_or(px(0.), |(row, shaped)| {
             let at = self.shown(local).saturating_sub(row.shown);
-            row.indent + row.shaped.unwrapped_layout.x_for_index(at)
+            row.indent + shaped.unwrapped_layout.x_for_index(at)
         })
     }
 
@@ -196,8 +225,8 @@ impl Line {
         window: &mut Window,
         cx: &mut App,
     ) {
-        if let Some(row) = self.rows.rows.get(row) {
-            row.shaped
+        if let Some((row, shaped)) = self.rows.row(row) {
+            shaped
                 .paint(
                     origin + point(row.indent, px(0.)),
                     line_height,
@@ -246,18 +275,17 @@ pub fn wrap_width(font: &Font, font_size: Pixels, width: Pixels, window: &Window
     (width - text_inset(font, font_size, window) - em * 2.).max(px(0.))
 }
 
-/// Shapes `text` in rows of at most `wrap` px.
-pub fn shape(
+/// Shapes `text` as one row.
+fn shape(
     text: &SharedString,
     runs: &[TextRun],
     font_size: Pixels,
-    wrap: Option<Pixels>,
-    window: &Window,
-) -> Vec<WrappedLine> {
-    window
-        .text_system()
-        .shape_text(text.clone(), font_size, runs, wrap, None)
-        .map(|lines| lines.into_iter().collect())
+    text_system: &WindowTextSystem,
+) -> WrappedLine {
+    text_system
+        .shape_text(text.clone(), font_size, runs, None, None)
+        .ok()
+        .and_then(|lines| lines.into_iter().next())
         .unwrap_or_default()
 }
 
@@ -284,7 +312,7 @@ pub fn wrap_rows(
     rows
 }
 
-/// Shapes the rows of a line of `text` (tabs as spaces), each alone.
+/// The rows of a line of `text` (tabs as spaces), each to be shaped alone.
 fn shape_rows(text: String, runs: &[TextRun], key: &LayoutKey, window: &Window) -> Rows {
     let starts = wrap_rows(&text, &key.font, key.font_size, key.width, window);
     let space = if starts.len() > 1 {
@@ -298,21 +326,11 @@ fn shape_rows(text: String, runs: &[TextRun], key: &LayoutKey, window: &Window) 
         .enumerate()
         .map(|(index, &(start, indent))| {
             let end = starts.get(index + 1).map_or(text.len(), |next| next.0);
-            let part = SharedString::from(text[start..end].to_owned());
-            let shaped = shape(
-                &part,
-                &runs_in(runs, start..end),
-                key.font_size,
-                None,
-                window,
-            )
-            .into_iter()
-            .next()
-            .unwrap_or_default();
             Row {
                 shown: start,
+                chars: text[start..end].chars().count(),
                 indent: space * indent as f32,
-                shaped,
+                shaped: OnceCell::new(),
             }
         })
         .collect();
@@ -320,6 +338,8 @@ fn shape_rows(text: String, runs: &[TextRun], key: &LayoutKey, window: &Window) 
         text,
         runs: runs.to_vec(),
         rows,
+        font_size: key.font_size,
+        text_system: window.text_system().clone(),
     }
 }
 
@@ -396,7 +416,7 @@ impl Layout {
         // Every old line by its text, made only when a line is not found at its place.
         let mut ready: Option<HashMap<&str, Vec<&Rc<Rows>>>> = None;
         let mut lines = Vec::new();
-        let (mut start, mut row, mut width) = (0, 0, px(0.));
+        let (mut start, mut row) = (0, 0);
         let mut cursor = RunCursor::new(runs);
         let blocks = key.blocks.clone();
         let above = |index: usize| blocks.as_ref().and_then(|b| b.get(index).copied());
@@ -459,15 +479,27 @@ impl Layout {
                     .collect();
                 line
             };
-            width = line.rows.rows.iter().fold(width, |width, row| {
-                width.max(row.indent + row.shaped.unwrapped_layout.width)
-            });
             let count = line.row_starts.len();
             lines.push(line);
             row += count;
             start += len + 1;
         }
         row += above(lines.len()).unwrap_or(0);
+        // The text is as wide as its row with the most chars, as Zed's editor measured it: only
+        // that row is shaped for it (the first of equal ones).
+        let mut longest: Option<(&Line, usize, usize)> = None;
+        for line in &lines {
+            for (index, shown) in line.rows.rows.iter().enumerate() {
+                if longest.is_none_or(|(_, _, chars)| shown.chars > chars) {
+                    longest = Some((line, index, shown.chars));
+                }
+            }
+        }
+        let width = longest
+            .and_then(|(line, index, _)| line.rows.row(index))
+            .map_or(px(0.), |(row, shaped)| {
+                row.indent + shaped.unwrapped_layout.width
+            });
         let text_system = window.text_system();
         let em = text_system
             .em_advance(text_system.resolve_font(&key.font), key.font_size)
@@ -573,12 +605,8 @@ impl Layout {
         };
         let start = line.row_starts.get(in_line).copied().unwrap_or(0);
         let end = line.row_end(in_line);
-        let shown = line.rows.rows.get(in_line).map_or(0, |row| {
-            row.shown
-                + row
-                    .shaped
-                    .unwrapped_layout
-                    .closest_index_for_x(x - row.indent)
+        let shown = line.rows.row(in_line).map_or(0, |(row, shaped)| {
+            row.shown + shaped.unwrapped_layout.closest_index_for_x(x - row.indent)
         });
         let local = line.local(shown, false).clamp(start, end);
         let wraps = in_line + 1 < line.row_starts.len();
@@ -849,19 +877,19 @@ impl Element for TextElement {
             colors.editor_background,
             colors.editor_active_line_background,
         );
-        let player = cx.theme().players().local();
+        // A read-only box draws in the grey player colours, caret and selection, as Zed's editor
+        // did (B1 shot `workspace-docs-source-focused`, B2 shot `changes-diff-focused`).
+        let player = if input.read_only {
+            cx.theme().players().read_only()
+        } else {
+            cx.theme().players().local()
+        };
         let selection_color = if focused {
             player.selection
         } else {
             player.selection.opacity(0.5)
         };
-        // A read-only box draws a grey caret, as Zed's editor did (B1 shot
-        // `workspace-docs-source-focused`).
-        let cursor = if input.read_only {
-            cx.theme().players().read_only().cursor
-        } else {
-            player.cursor
-        };
+        let cursor = player.cursor;
         let invisible = colors.editor_invisible;
         let line_height = laid.line_height;
         let (guide, active_guide, highlight) = (
@@ -925,12 +953,18 @@ impl Element for TextElement {
             if full {
                 window.paint_quad(fill(bounds, background));
             }
+            // Every row of the caret's line, wrapped rows too, as Zed's editor did (B2 shot
+            // `changes-diff-deleted-only` at 800x560).
             if current_line && selection.is_empty() {
-                let y = laid.position(head, end_bias).y;
+                let row = laid.row_of(head, end_bias);
+                let line = laid.line_of_row(row).map(|(line, _)| line);
+                let (first, rows) = line.map_or((row, 1), |line| {
+                    (line.first_row, line.row_starts.len().max(1))
+                });
                 window.paint_quad(fill(
                     Bounds::new(
-                        point(bounds.left(), origin.y + y),
-                        size(bounds.size.width, line_height),
+                        point(bounds.left(), origin.y + line_height * first as f32),
+                        size(bounds.size.width, line_height * rows as f32),
                     ),
                     active_line,
                 ));
@@ -1041,7 +1075,7 @@ impl Element for TextElement {
             }
             if let Some(diff) = &code.diff {
                 for (rect, color) in &diff.strips {
-                    super::diff_paint::paint_hollow(*rect, *color, window);
+                    super::diff_paint::paint_hollow(*rect, *color, background, window);
                 }
             }
             // The scrollbar's track is not part of a pinned row for the pointer.
@@ -1175,6 +1209,54 @@ mod tests {
             };
             assert!(kept(0, 0) && kept(1, 2) && kept(2, 3));
             assert_eq!(new.lines[1].rows.text, "x");
+        });
+    }
+
+    /// A long text shapes only the row that gives its width, then each row it measures or draws.
+    #[gpui::test]
+    fn a_layout_shapes_a_row_only_when_it_is_asked_for(cx: &mut gpui::TestAppContext) {
+        let cx = cx.add_empty_window();
+        cx.update(|window, _| {
+            let key = LayoutKey {
+                version: 1,
+                width: None,
+                font: font("Mono"),
+                font_size: px(14.),
+                line_height: px(20.),
+                color: Hsla::default(),
+                masked: false,
+                marked: None,
+                placeholder: None,
+                inset: px(0.),
+                colors: 0,
+                gutter: px(0.),
+                gutter_pad: px(0.),
+                view: px(400.),
+                lines: None,
+                heads: Vec::new(),
+                marks: Vec::new(),
+                blocks: None,
+            };
+            let lines: Vec<String> = (0..1000).map(|n| format!("line {n}")).collect();
+            let text = SharedString::from(lines.join("\n"));
+            let run = TextRun {
+                len: text.len(),
+                font: font("Mono"),
+                color: Hsla::default(),
+                background_color: None,
+                underline: None,
+                strikethrough: None,
+            };
+            let laid = Layout::build(key, &text, &[run], None, window);
+            let shaped = |laid: &Layout| -> Vec<usize> {
+                (0..laid.lines.len())
+                    .filter(|&index| laid.lines[index].rows.rows[0].shaped.get().is_some())
+                    .collect()
+            };
+            // "line 100" is the first line with the most chars.
+            assert_eq!(shaped(&laid), vec![100]);
+            laid.position(laid.lines[500].start + 3, false);
+            assert_eq!(shaped(&laid), vec![100, 500]);
         });
     }
 }

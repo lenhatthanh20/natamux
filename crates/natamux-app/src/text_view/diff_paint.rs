@@ -7,6 +7,8 @@
 //! - a 1 px `border_variant` line half a row down a gap row;
 //! - the changed words, and the marker of a hunk with no lines on the side.
 
+use std::ops::Range;
+
 use gpui::{App, Bounds, ContentMask, Hsla, Pixels, Point, Window, fill, point, px};
 use theme::{ActiveTheme, ThemeColors};
 
@@ -16,7 +18,7 @@ use crate::git::diff_model::Status;
 use crate::git::diff_rows::{BlockKind, Kind, SideRows};
 
 /// The width of the strip of a hunk in the gutter, per line height.
-const STRIP: f32 = 0.275;
+pub(super) const STRIP: f32 = 0.275;
 /// The size of the marker of a hunk with no rows on a side, per line height.
 const MARKER: f32 = 0.35;
 /// The strip and the marker are filled with their colour at this opacity, inside a line of it.
@@ -98,16 +100,29 @@ impl Frame<'_> {
         )
     }
 
+    /// The rows in view, the last one cut by the bottom edge included: Zed's editor drew a box
+    /// and a strip only over these, so a box scrolled partly above the top gets its top line on
+    /// the top row (B2 shot `workspace-changes-diff`).
+    fn rows_in_view(&self) -> Range<usize> {
+        let line_height = self.laid.line_height.max(px(1.));
+        let first = ((self.bounds.top() - self.origin.y) / line_height)
+            .floor()
+            .max(0.);
+        let end = ((self.bounds.bottom() - self.origin.y) / line_height)
+            .ceil()
+            .max(0.);
+        first as usize..end as usize
+    }
+
     /// Each run of changed lines of one hunk: its lines in the background of their own kind
     /// (inline, a hunk's deleted lines come right above its added ones, in one box), a line at
-    /// the box's top and bottom, and the strip.
+    /// the top and bottom of the box's rows in view, and the strip.
     fn hunks(&self, rows: &SideRows, paint: &mut DiffPaint) {
         let (laid, lines) = (self.laid, &rows.lines);
-        let changed = |at: usize, hunk: usize| {
-            lines
-                .get(at)
-                .is_some_and(|line| line.hunk == Some(hunk) && line.status != Status::Unchanged)
-        };
+        let in_view = self.rows_in_view();
+        // Unchanged lines have no hunk, but those of a closed hunk.
+        let changed =
+            |at: usize, hunk: usize| lines.get(at).is_some_and(|line| line.hunk == Some(hunk));
         let mut index = 0;
         while index < lines.len() {
             let Some(hunk) = lines[index].hunk.filter(|&hunk| changed(index, hunk)) else {
@@ -123,12 +138,29 @@ impl Frame<'_> {
             else {
                 continue;
             };
-            let top = self.row_top(top_line.first_row);
-            let bottom = self.row_top(bottom_line.first_row + bottom_line.row_starts.len());
-            if !self.shown(top, bottom) {
+            let top_row = top_line.first_row.max(in_view.start);
+            let end_row = (bottom_line.first_row + bottom_line.row_starts.len()).min(in_view.end);
+            if top_row >= end_row {
                 continue;
             }
+            let (top, bottom) = (self.row_top(top_row), self.row_top(end_row));
+            // The kinds of the box's first and last lines in view give its top and bottom lines.
+            let in_rows = |line: &&super::element::Line| {
+                line.first_row < end_row && line.first_row + line.row_starts.len() > top_row
+            };
             let laid_lines = laid.lines.get(first..=last).unwrap_or_default();
+            let top_index = first + laid_lines.iter().position(|l| in_rows(&l)).unwrap_or(0);
+            let bottom_index = first + laid_lines.iter().rposition(|l| in_rows(&l)).unwrap_or(0);
+            let left = self.bounds.left();
+            let strip = (
+                Bounds::from_corners(point(left, top), point(left + self.strip, bottom)),
+                self.strip_colour(rows.kinds.get(hunk)),
+            );
+            // A closed hunk's lines show as unchanged: only its strip.
+            if rows.closed.contains(&hunk) {
+                paint.strips.push(strip);
+                continue;
+            }
             for (line, side_line) in laid_lines.iter().zip(&lines[first..=last]) {
                 let height = laid.line_height * line.row_starts.len() as f32;
                 let rect = self.across(self.row_top(line.first_row), height);
@@ -138,34 +170,21 @@ impl Frame<'_> {
             }
             let one = px(1.);
             let (top_colour, bottom_colour) = (
-                self.box_colours(lines[first].status).1,
-                self.box_colours(lines[last].status).1,
+                self.box_colours(lines[top_index].status).1,
+                self.box_colours(lines[bottom_index].status).1,
             );
             paint.backs.push((self.across(top, one), top_colour));
             paint
                 .backs
                 .push((self.across(bottom - one, one), bottom_colour));
-            let left = self.bounds.left();
-            paint.strips.push((
-                Bounds::from_corners(point(left, top), point(left + self.strip, bottom)),
-                self.strip_colour(rows.kinds.get(hunk)),
-            ));
+            paint.strips.push(strip);
         }
     }
 
     /// A gap row has a line across it, half a row down.
     fn gaps(&self, rows: &SideRows, paint: &mut DiffPaint) {
-        let mut before: Option<(usize, usize)> = None;
-        for block in &rows.blocks {
-            let offset = match before {
-                Some((line, rows)) if line == block.line => rows,
-                _ => 0,
-            };
-            before = Some((block.line, offset + block.rows));
-            if block.kind != BlockKind::Gap {
-                continue;
-            }
-            let top = self.row_top(self.laid.blocks_top(block.line) + offset);
+        for row in gap_rows(self.laid, rows) {
+            let top = self.row_top(row);
             let y = top + (self.laid.line_height / 2.).floor();
             if self.shown(y, y + px(1.)) {
                 paint.backs.push((
@@ -182,7 +201,16 @@ impl Frame<'_> {
     // shortcut: the changed words as plain rects and the marker as a square centred on the row
     // boundary; no B2 shot shows either, so check them on the first shot that does.
     fn words(&self, rows: &SideRows, paint: &mut DiffPaint) {
+        let in_view = self.rows_in_view();
         for (range, status) in &rows.words {
+            // Only words in view: measuring one shapes its row.
+            let (first, last) = (
+                self.laid.row_of(range.start, false),
+                self.laid.row_of(range.end, true),
+            );
+            if last < in_view.start || first >= in_view.end {
+                continue;
+            }
             let color = match status {
                 Status::Deleted => self.colors.version_control_word_deleted,
                 _ => self.colors.version_control_word_added,
@@ -215,9 +243,58 @@ impl Frame<'_> {
     }
 }
 
-/// Paints a strip or a marker: filled with its colour at `STRIP_FILL`, inside a 1 px line of it.
-pub(super) fn paint_hollow(bounds: Bounds<Pixels>, color: Hsla, window: &mut Window) {
-    window.paint_quad(fill(bounds, color.opacity(STRIP_FILL)));
+/// The shown row of each gap, in order.
+pub(super) fn gap_rows<'a>(
+    laid: &'a Layout,
+    rows: &'a SideRows,
+) -> impl Iterator<Item = usize> + 'a {
+    // Blocks above the same line lie one under the other.
+    let mut before: Option<(usize, usize)> = None;
+    rows.blocks.iter().filter_map(move |block| {
+        let offset = match before {
+            Some((line, rows)) if line == block.line => rows,
+            _ => 0,
+        };
+        before = Some((block.line, offset + block.rows));
+        (block.kind == BlockKind::Gap).then(|| laid.blocks_top(block.line) + offset)
+    })
+}
+
+/// The closed hunk whose marker is at `x`, `y` from the side's left edge and the top of its text
+/// (rows scrolled away included): a press there opens it.
+pub(super) fn closed_marker_at(
+    laid: &Layout,
+    rows: &SideRows,
+    x: Pixels,
+    y: Pixels,
+) -> Option<usize> {
+    let size = (laid.line_height * MARKER).floor();
+    if x < px(0.) || x >= size {
+        return None;
+    }
+    rows.markers
+        .iter()
+        .find(|(line, hunk)| {
+            let row = laid
+                .lines
+                .get(*line)
+                .map_or_else(|| laid.blocks_top(laid.lines.len()), |line| line.first_row);
+            let top = laid.line_height * row as f32 - (size / 2.).floor();
+            rows.closed.contains(hunk) && y >= top && y < top + size
+        })
+        .map(|(_, hunk)| *hunk)
+}
+
+/// Paints a strip or a marker: filled with its colour at `STRIP_FILL` laid over `background`,
+/// inside a 1 px line of it. The fill hides what is under it, as in Zed's editor: the line of the
+/// caret does not show through (B2 shot `workspace-changes-diff`).
+pub(super) fn paint_hollow(
+    bounds: Bounds<Pixels>,
+    color: Hsla,
+    background: Hsla,
+    window: &mut Window,
+) {
+    window.paint_quad(fill(bounds, background.blend(color.opacity(STRIP_FILL))));
     let one = px(1.);
     let (left, top, right, bottom) = (bounds.left(), bounds.top(), bounds.right(), bounds.bottom());
     for edge in [
@@ -226,7 +303,7 @@ pub(super) fn paint_hollow(bounds: Bounds<Pixels>, color: Hsla, window: &mut Win
         Bounds::from_corners(point(left, top + one), point(left + one, bottom - one)),
         Bounds::from_corners(point(right - one, top + one), point(right, bottom - one)),
     ] {
-        window.paint_quad(fill(edge, color));
+        window.paint_quad(fill(edge, background.blend(color)));
     }
 }
 

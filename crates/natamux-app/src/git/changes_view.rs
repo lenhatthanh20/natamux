@@ -176,6 +176,19 @@ impl ChangesView {
         }
         let changed = self.list != list;
         self.prefetch = self.prefetch.take().filter(|_| !changed);
+        if changed && let Some(list) = &list {
+            // The colours of the listed files' languages are ready before a file is picked.
+            let mut langs: Vec<&'static super::languages::Lang> = Vec::new();
+            for lang in list
+                .iter()
+                .filter_map(|entry| super::languages::lang_for(&entry.path))
+            {
+                if !langs.iter().any(|known| std::ptr::eq(*known, lang)) {
+                    langs.push(lang);
+                }
+            }
+            crate::text_view::highlight::Highlights::compile_in_background(langs, cx);
+        }
         self.list = list;
         if changed || self.file.is_none() {
             self.read_file(cx);

@@ -20,9 +20,10 @@ use serde_json::{Value, json};
 use text::ToOffset;
 use ui::prelude::*;
 
-use super::{DiffOptions, DiffView};
+use super::ZedDiff;
 use crate::app::{golden_files, test_views};
 use crate::git::diff_cases::{cases, random_cases, word_fixtures};
+use crate::git::diff_view::DiffOptions;
 use crate::git::languages::{self, language_for};
 
 const SET: &str = "diff";
@@ -35,14 +36,14 @@ const MODES: [(&str, bool, bool); 4] = [
     ("inline collapsed", false, true),
 ];
 
-fn open(cx: &mut TestAppContext) -> (Entity<DiffView>, &mut VisualTestContext) {
+fn open(cx: &mut TestAppContext) -> (Entity<ZedDiff>, &mut VisualTestContext) {
     test_views::init(cx);
     cx.update(languages::init);
-    cx.add_window_view(|_, _| DiffView::new())
+    cx.add_window_view(|_, _| ZedDiff::default())
 }
 
 fn show(
-    view: &Entity<DiffView>,
+    view: &Entity<ZedDiff>,
     key: &str,
     path: &str,
     (original, modified): &(String, String),
@@ -53,7 +54,6 @@ fn show(
         view.show(
             key,
             path,
-            1,
             Some(original),
             modified,
             DiffOptions {
@@ -186,7 +186,7 @@ fn words_language_first(
 }
 
 /// The hunks as `[old start, old end, new start, new end]`.
-fn hunks(view: &Entity<DiffView>, cx: &mut VisualTestContext) -> Value {
+fn hunks(view: &Entity<ZedDiff>, cx: &mut VisualTestContext) -> Value {
     view.read_with(cx, |view, _| {
         Value::Array(
             view.hunks
@@ -197,7 +197,7 @@ fn hunks(view: &Entity<DiffView>, cx: &mut VisualTestContext) -> Value {
     })
 }
 
-fn app_words(view: &Entity<DiffView>, cx: &mut VisualTestContext) -> Value {
+fn app_words(view: &Entity<ZedDiff>, cx: &mut VisualTestContext) -> Value {
     view.read_with(cx, |view, cx| {
         let diff = view.diff.clone().expect("a diff");
         let buffer = view.buffer.clone().expect("a buffer");
@@ -208,7 +208,7 @@ fn app_words(view: &Entity<DiffView>, cx: &mut VisualTestContext) -> Value {
 /// Records one case: hunks, the app's word diffs, and the rows of each side in every mode.
 fn record(
     rows: &mut Vec<Value>,
-    view: &Entity<DiffView>,
+    view: &Entity<ZedDiff>,
     name: &str,
     path: &str,
     texts: &(String, String),

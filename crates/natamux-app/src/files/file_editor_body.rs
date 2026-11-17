@@ -101,7 +101,7 @@ fn cleaned(text: &str) -> String {
 
 /// The byte offset of `line` and `column` (1-based, the column in characters) in `text`: the
 /// line clamped to the last one, the column to the end of its line.
-fn line_offset(text: &str, line: u32, column: Option<u32>) -> usize {
+pub(crate) fn line_offset(text: &str, line: u32, column: Option<u32>) -> usize {
     let row = line.saturating_sub(1) as usize;
     let mut start = 0;
     for _ in 0..row {

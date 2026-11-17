@@ -240,6 +240,13 @@ fn own_bindings(mac: bool) -> Vec<KeyBinding> {
         only_own,
         &mut keys,
     );
+    push_in(
+        "editor.toggle-hunk",
+        own::ToggleSelectedDiffHunks,
+        mac,
+        only_own,
+        &mut keys,
+    );
     keys
 }
 

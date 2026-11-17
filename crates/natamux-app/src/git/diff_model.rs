@@ -5,9 +5,6 @@
 //! Both texts have their line endings made `\n` first, as an editor buffer keeps them, so rows
 //! and byte offsets are those of the shown text.
 
-// The view moves onto this model in the next part of S6.2; until then only `line_diff` is used.
-#![cfg_attr(not(test), allow(dead_code))]
-
 use std::ops::{Range, RangeInclusive};
 
 use imara_diff::{Algorithm, Diff, InternedInput};
@@ -49,6 +46,7 @@ impl FileDiff {
     }
 
     /// The byte where the hunk's old text starts.
+    #[cfg(test)]
     pub fn old_start(&self, hunk: &Hunk) -> usize {
         line_start(&self.old, hunk.rows.old.start)
     }
@@ -86,6 +84,7 @@ fn line_starts(text: &str) -> Vec<usize> {
 }
 
 /// The byte where line `row` starts, or the end of the text past the last line.
+#[cfg(test)]
 fn line_start(text: &str, row: u32) -> usize {
     if row == 0 {
         return 0;

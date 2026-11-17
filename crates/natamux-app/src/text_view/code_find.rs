@@ -1,6 +1,6 @@
 //! The code view's side of `FindTarget` (plan 6.4, S4.3c part 5): find draws its matches in the
-//! theme's search colours and selects one with its row in the middle. The editor tab uses it
-//! once it moves to the code view; the diff stays on Zed's editor until S6.2.
+//! theme's search colours and selects one with its row in the middle. The editor tab and the
+//! sides of the diff (`diff_side.rs`) use it.
 
 use std::ops::Range;
 

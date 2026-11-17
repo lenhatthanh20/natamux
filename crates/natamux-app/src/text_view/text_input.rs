@@ -81,6 +81,8 @@ pub mod actions {
             DuplicateLineDown,
             DeleteLine,
             ToggleComments,
+            // Taken by the diff view around the box (`git/diff_view.rs`).
+            ToggleSelectedDiffHunks,
         ]
     );
 }
@@ -1191,6 +1193,15 @@ impl TextInput {
             cx.stop_propagation();
             return;
         }
+        // A diff side's line numbers take no press; its strips are left to the diff view.
+        match self.diff_gutter_press(event.position, window, cx) {
+            Some(super::diff_side::GutterPress::Number) => {
+                cx.stop_propagation();
+                return;
+            }
+            Some(super::diff_side::GutterPress::Strip) => return,
+            None => {}
+        }
         // A press on a pinned row puts a caret on its line, whatever the clicks and keys.
         let pinned = self.sticky_press(event.position, window, cx);
         let Some((at, end_bias)) = pinned
@@ -1337,9 +1348,12 @@ impl TextInput {
                 .map(|(at, _)| at)
                 .or(drop_at);
             let range = self.model.selection().range();
+            // A diff side's text never changes, as the old diff's read-only buffers did not: the
+            // drop only puts the caret there (T-MOUSE-1, diff cases).
+            let fixed = self.code.as_ref().is_some_and(|code| code.diff.is_some());
             match at {
                 // Today's code moves text in a read-only box too (Bugs found, T-MOUSE-1).
-                Some(at) if at < range.start || at > range.end => {
+                Some(at) if !fixed && (at < range.start || at > range.end) => {
                     let copy = if cfg!(target_os = "macos") {
                         event.modifiers.alt
                     } else {

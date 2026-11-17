@@ -1,30 +1,44 @@
 //! The cursor and the selection of the diff view: the line under the cursor, the step to the
 //! next change (Alt+F5), the lines picked for Ask agent, and the focus.
 
-use editor::scroll::Autoscroll;
-use editor::{Editor, SelectionEffects};
-use gpui::{Entity, EntityId, Focusable};
-use language::Buffer;
-use text::Point;
+use gpui::EntityId;
 use ui::prelude::*;
 
 use super::change_rules::{Side, Step, change_anchor, change_at, step_change, whole_lines};
 use super::comment_rules::Quote;
+use super::diff_rows::{SideRows, line_ranges};
 use super::diff_view::DiffView;
 use super::review_rules::inline_old_spot;
-use crate::components::go_to_line::line_target;
+use crate::files::file_editor_body::line_offset;
+use crate::text_view::diff_side::{DiffSide, Reveal};
+
+/// The offset of `column` (bytes, clamped to the line) of row `row` of a file of the side: the
+/// last commit's (`old`) or the working tree's. None when the row does not show.
+fn offset_of(rows: &SideRows, old: bool, row: u32, column: usize) -> Option<usize> {
+    let index = rows.line_of(old, row)?;
+    let start = *rows.line_starts.get(index)?;
+    Some(start + column.min(line_end(rows, index) - start))
+}
+
+/// The offset where line `index` of the side's text ends, its line break left out.
+fn line_end(rows: &SideRows, index: usize) -> usize {
+    rows.line_starts
+        .get(index + 1)
+        .map_or(rows.text.len(), |next| next - 1)
+}
 
 impl DiffView {
-    /// The line of the working tree under the cursor, 1-based.
+    /// The line of the working tree under the cursor, 1-based. On a deleted line of an inline
+    /// diff it is that line's row in the last commit, as Zed's editor gave it.
     pub fn cursor_line(&self, cx: &mut App) -> Option<u32> {
-        let right = self.sides.as_ref()?.right.clone();
-        right.update(cx, |editor, cx| {
-            let snapshot = editor.display_snapshot(cx);
-            let head = editor.selections.newest::<Point>(&snapshot).head();
-            let multi = editor.buffer().read(cx).snapshot(cx);
-            let (_, point) = multi.point_to_buffer_point(head)?;
-            Some(point.row + 1)
-        })
+        let right = &self.sides.as_ref()?.right;
+        let head = right.selection(cx).1;
+        right
+            .rows(cx, |rows| {
+                let line = rows.lines.get(rows.line_at(head))?;
+                Some(line.row + 1)
+            })
+            .flatten()
     }
 
     /// Alt+F5 and Shift+Alt+F5: the cursor goes to the next or the previous change, which
@@ -35,24 +49,17 @@ impl DiffView {
         let Some(index) = step_change(&changes, line, by) else {
             return;
         };
-        let (Some(sides), Some(buffer)) = (&self.sides, &self.buffer) else {
+        let Some(sides) = &self.sides else {
             return;
         };
         let row = change_anchor(&changes[index]).0.saturating_sub(1);
-        let buffer = buffer.clone();
-        sides.right.update(cx, |editor, cx| {
-            let anchor =
-                editor
-                    .buffer()
-                    .read(cx)
-                    .buffer_point_to_anchor(&buffer, Point::new(row, 0), cx);
-            if let Some(anchor) = anchor {
-                let effects = SelectionEffects::scroll(Autoscroll::top_relative(0.));
-                editor.change_selections(effects, window, cx, |selections| {
-                    selections.select_anchor_ranges([anchor..anchor])
-                });
-            }
-        });
+        let right = sides.right.clone();
+        if let Some(at) = right
+            .rows(cx, |rows| offset_of(rows, false, row, 0))
+            .flatten()
+        {
+            right.select(at..at, Reveal::Top, window, cx);
+        }
     }
 
     /// The change the cursor is in, for "2 of 7".
@@ -64,32 +71,42 @@ impl DiffView {
     /// The whole lines picked in either side, for Ask agent. None without a selection.
     pub fn selection(&self, window: &Window, cx: &mut App) -> Option<Quote> {
         let sides = self.sides.as_ref()?;
+        let diff = self.diff.as_ref()?;
         let left_focused = sides
             .left
             .as_ref()
-            .is_some_and(|left| left.read(cx).focus_handle(cx).contains_focused(window, cx));
-        let (editor, side) = match (&sides.left, left_focused) {
-            (Some(left), true) => (left.clone(), Side::Old),
-            _ => (sides.right.clone(), Side::New),
+            .is_some_and(|left| left.focus_handle(cx).contains_focused(window, cx));
+        let (side, which) = match (&sides.left, left_focused) {
+            (Some(left), true) => (left, Side::Old),
+            _ => (&sides.right, Side::New),
         };
-        editor.update(cx, |editor, cx| {
-            let snapshot = editor.display_snapshot(cx);
-            let picked = editor.selections.newest::<Point>(&snapshot);
-            if picked.is_empty() {
+        let (anchor, head) = side.selection(cx);
+        if anchor == head {
+            return None;
+        }
+        let (start, end) = (anchor.min(head), anchor.max(head));
+        side.rows(cx, |rows| {
+            let (first_index, last_index) = (rows.line_at(start), rows.line_at(end));
+            let (first, last) = (rows.lines.get(first_index)?, rows.lines.get(last_index)?);
+            let column = end - rows.line_starts.get(last_index)?;
+            let (from, to) = whole_lines(first.row + 1, last.row + 1, column as u32 + 1);
+            // The text of the file the selection starts in, as Zed's editor took it.
+            let text = if first.old { &diff.old } else { &diff.new };
+            let lines = line_ranges(text);
+            let (Some(top), Some(bottom)) = (
+                lines.get(from.saturating_sub(1) as usize),
+                lines.get(to.saturating_sub(1) as usize),
+            ) else {
                 return None;
-            }
-            let multi = editor.buffer().read(cx).snapshot(cx);
-            let (text, start) = multi.point_to_buffer_point(picked.start)?;
-            let (_, end) = multi.point_to_buffer_point(picked.end)?;
-            let (first, last) = whole_lines(start.row + 1, end.row + 1, end.column + 1);
-            let range = Point::new(first - 1, 0)..Point::new(last - 1, text.line_len(last - 1));
+            };
             Some(Quote {
-                side,
-                start: first,
-                end: last,
-                text: text.text_for_range(range).collect(),
+                side: which,
+                start: from,
+                end: to,
+                text: text.get(top.start..bottom.end)?.to_owned(),
             })
         })
+        .flatten()
     }
 
     /// Picks whole lines `first` to `last` (1-based) of the working tree, as a drag does.
@@ -100,22 +117,21 @@ impl DiffView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let (Some(sides), Some(buffer)) = (&self.sides, &self.buffer) else {
+        let Some(sides) = &self.sides else {
             return;
         };
-        let buffer = buffer.clone();
+        let right = sides.right.clone();
         let (first, last) = (first.saturating_sub(1), last.saturating_sub(1));
-        let end_column = buffer.read(cx).text_snapshot().line_len(last);
-        sides.right.update(cx, |editor, cx| {
-            let multi = editor.buffer().read(cx);
-            let start = multi.buffer_point_to_anchor(&buffer, Point::new(first, 0), cx);
-            let end = multi.buffer_point_to_anchor(&buffer, Point::new(last, end_column), cx);
-            if let (Some(start), Some(end)) = (start, end) {
-                editor.change_selections(SelectionEffects::no_scroll(), window, cx, |selections| {
-                    selections.select_anchor_ranges([start..end])
-                });
-            }
-        });
+        let range = right
+            .rows(cx, |rows| {
+                let start = offset_of(rows, false, first, 0)?;
+                let index = rows.line_of(false, last)?;
+                Some(start..line_end(rows, index))
+            })
+            .flatten();
+        if let Some(range) = range {
+            right.select(range, Reveal::No, window, cx);
+        }
     }
 
     /// The cursor goes to `line` (1-based) of a side and the view scrolls to it. An old line of
@@ -127,26 +143,30 @@ impl DiffView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let (Some(sides), Some(buffer), Some(diff)) = (&self.sides, &self.buffer, &self.diff)
-        else {
+        let (Some(sides), Some(diff)) = (&self.sides, &self.diff) else {
             return;
         };
         let row = line.saturating_sub(1);
-        let (editor, buffer, row) = match (side, &sides.left) {
-            (Side::Old, Some(left)) => {
-                (left.clone(), diff.read(cx).base_text_buffer().clone(), row)
-            }
-            (Side::Old, None) => {
-                let row = inline_old_spot(row, &self.hunks).row();
-                (sides.right.clone(), buffer.clone(), row)
-            }
-            _ => (sides.right.clone(), buffer.clone(), row),
+        let (target, old, row) = match (side, &sides.left) {
+            (Side::Old, Some(left)) => (left.clone(), true, row),
+            (Side::Old, None) => (
+                sides.right.clone(),
+                false,
+                inline_old_spot(row, &self.hunks).row(),
+            ),
+            _ => (sides.right.clone(), false, row),
         };
-        move_to(&editor, &buffer, Point::new(row, 0), window, cx);
+        // A row past the end goes to the last one, as an anchor of Zed's editor clips.
+        let rows = if old {
+            diff.old_rows()
+        } else {
+            diff.new_rows()
+        };
+        move_to(&target, old, row.min(rows.saturating_sub(1)), 0, window, cx);
     }
 
     /// Go to line (Ctrl+G): `line` and `column` (1-based) of the working tree, clamped to its
-    /// text; the working tree's editor takes the focus.
+    /// text; the working tree's side takes the focus.
     pub fn go_to_new_line(
         &mut self,
         line: u32,
@@ -154,60 +174,53 @@ impl DiffView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let (Some(sides), Some(buffer)) = (&self.sides, &self.buffer) else {
+        let (Some(sides), Some(diff)) = (&self.sides, &self.diff) else {
             return;
         };
-        let point = line_target(&buffer.read(cx).text_snapshot(), line, column);
-        let (editor, buffer) = (sides.right.clone(), buffer.clone());
-        move_to(&editor, &buffer, point, window, cx);
-        window.focus(&editor.read(cx).focus_handle(cx), cx);
+        let at = line_offset(&diff.new, line, column);
+        let row = diff.new[..at].matches('\n').count() as u32;
+        let line_start = diff.new[..at].rfind('\n').map_or(0, |found| found + 1);
+        let right = sides.right.clone();
+        move_to(&right, false, row, at - line_start, window, cx);
+        right.focus(window, cx);
     }
 
     /// The side that has the focus, for find; the working tree when neither has it.
-    pub fn focused_editor(&self, window: &Window, cx: &App) -> Option<Entity<Editor>> {
+    pub fn focused_side(&self, window: &Window, cx: &App) -> Option<DiffSide> {
         let sides = self.sides.as_ref()?;
         let left = sides
             .left
             .as_ref()
-            .filter(|left| left.read(cx).focus_handle(cx).contains_focused(window, cx));
+            .filter(|left| left.focus_handle(cx).contains_focused(window, cx));
         Some(left.unwrap_or(&sides.right).clone())
     }
 
-    /// `editor` is one of the shown sides.
-    pub fn shows_editor(&self, editor: EntityId) -> bool {
+    /// `side` is one of the shown sides.
+    pub fn shows_side(&self, side: EntityId) -> bool {
         self.sides.as_ref().is_some_and(|sides| {
-            sides.right.entity_id() == editor
-                || sides.left.as_ref().map(|left| left.entity_id()) == Some(editor)
+            sides.right.id() == side || sides.left.as_ref().map(DiffSide::id) == Some(side)
         })
     }
 
-    /// The editor that takes the keyboard: the working tree.
+    /// The side that takes the keyboard: the working tree.
     pub fn focus(&self, window: &mut Window, cx: &mut App) {
         if let Some(sides) = &self.sides {
-            let handle = sides.right.read(cx).focus_handle(cx);
-            window.focus(&handle, cx);
+            sides.right.focus(window, cx);
         }
+    }
+
+    /// The items of Go to symbol: those of the working tree's file.
+    pub fn outline_rows(&self, cx: &App) -> Option<Vec<crate::files::outline_rules::OutlineRow>> {
+        Some(self.sides.as_ref()?.right.outline_rows(cx))
     }
 }
 
-/// The cursor goes to `point` of `buffer` in `editor`, centred.
-fn move_to(
-    editor: &Entity<Editor>,
-    buffer: &Entity<Buffer>,
-    point: Point,
-    window: &mut Window,
-    cx: &mut App,
-) {
-    editor.update(cx, |editor, cx| {
-        let anchor = editor
-            .buffer()
-            .read(cx)
-            .buffer_point_to_anchor(buffer, point, cx);
-        if let Some(anchor) = anchor {
-            let effects = SelectionEffects::scroll(Autoscroll::center());
-            editor.change_selections(effects, window, cx, |selections| {
-                selections.select_anchor_ranges([anchor..anchor])
-            });
-        }
-    });
+/// The cursor goes to `column` of row `row` of a file of `side`, centred.
+fn move_to(side: &DiffSide, old: bool, row: u32, column: usize, window: &mut Window, cx: &mut App) {
+    if let Some(at) = side
+        .rows(cx, |rows| offset_of(rows, old, row, column))
+        .flatten()
+    {
+        side.select(at..at, Reveal::Center, window, cx);
+    }
 }
