@@ -1,11 +1,10 @@
-//! The kit's own scrollbar against Zed's `ui` one (A35): the scroll areas the app builds, drawn
-//! by each bar under the kit's metrics capture, through the same pointer steps (enter, hover the
-//! thumb, press and drag it, let go, wheel, press the lane, leave). Every step must paint the same
-//! frame and leave the same scroll offset. A fading bar depends on the wall clock, so the `Auto`
-//! test compares only the frames after a fade has ended; the hide wait runs on the test clock.
-//! The fade itself and the show rules are unit tests of the kit (`scrollbar_state_tests.rs`).
-//! Zed's bar leaves with the `zed_ui` dependency: before that, freeze its rows into a golden file
-//! and compare the own rows with it.
+//! The metrics golden of the scrollbar (A35): the scroll areas the app builds, drawn under the
+//! kit's metrics capture, through pointer steps (enter, hover the thumb, press and drag it, let
+//! go, wheel, press the lane, leave). Each step's frame and scroll offset must equal the golden,
+//! which `Tool: golden` made from Zed's `ui` bar before it left (S8.4). A fading bar depends on
+//! the wall clock, so the `Auto` rows hold only the frames after a fade has ended; the hide wait
+//! runs on the test clock. The fade itself and the show rules are unit tests of the kit
+//! (`scrollbar_state_tests.rs`).
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
@@ -19,7 +18,6 @@ use gpui::{
     ScrollWheelEvent, Stateful, TouchPhase, point, size,
 };
 use ui::prelude::*;
-use ui::zed_scrollbars as zed;
 use ui::{ScrollAxes, ScrollbarShow, Scrollbars, WithScrollbar};
 
 use crate::components::kit_metrics::{CONFIGS, Capture, Config, context, redraw};
@@ -28,12 +26,6 @@ use crate::components::kit_metrics::{CONFIGS, Capture, Config, context, redraw};
 const PAD: f32 = 16.;
 const WIDTH: f32 = 200.;
 const HEIGHT: f32 = 100.;
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-enum Side {
-    Zed,
-    Own,
-}
 
 /// The app's kinds of scroll area.
 #[derive(Clone, Copy, Debug)]
@@ -71,36 +63,8 @@ impl Sample {
     }
 }
 
-#[derive(Default)]
-struct AlwaysShown;
-
-impl zed::ScrollbarVisibility for AlwaysShown {
-    fn visibility(&self, _: &App) -> zed::ShowScrollbar {
-        zed::ShowScrollbar::Always
-    }
-}
-
-#[derive(Default)]
-struct NeverShown;
-
-#[derive(Default)]
-struct AutoShown;
-
-impl zed::ScrollbarVisibility for AutoShown {
-    fn visibility(&self, _: &App) -> zed::ShowScrollbar {
-        zed::ShowScrollbar::Auto
-    }
-}
-
-impl zed::ScrollbarVisibility for NeverShown {
-    fn visibility(&self, _: &App) -> zed::ShowScrollbar {
-        zed::ShowScrollbar::Never
-    }
-}
-
 struct Area {
     sample: Sample,
-    side: Side,
     handle: ScrollHandle,
     /// `scroll_area` shows and hides on its own, as in the app.
     auto: bool,
@@ -115,61 +79,35 @@ fn squares(count: usize) -> Vec<Div> {
 impl Area {
     /// What `scroll_area` builds: the scroll div in a wrapper that carries the bars.
     fn scroll_area(&self, area: Stateful<Div>, window: &mut Window, cx: &mut App) -> AnyElement {
-        let never = matches!(self.sample, Sample::Never);
-        let wrapper = div().child(area);
-        let wrapper = match self.side {
-            Side::Zed => {
-                let bars = if never {
-                    zed::Scrollbars::for_settings::<NeverShown>()
-                } else if self.auto {
-                    zed::Scrollbars::for_settings::<AutoShown>()
-                } else {
-                    zed::Scrollbars::for_settings::<AlwaysShown>()
-                };
-                let bars = bars
-                    .show_along(zed::ScrollAxes::Vertical)
-                    .tracked_scroll_handle(&self.handle)
-                    .id("area-bar");
-                zed::WithScrollbar::custom_scrollbars(wrapper, bars, window, cx)
-            }
-            Side::Own => {
-                let show = if never {
-                    ScrollbarShow::Never
-                } else if self.auto {
-                    ScrollbarShow::Auto
-                } else {
-                    ScrollbarShow::Always
-                };
-                let bars = Scrollbars::shown(ScrollAxes::Both, show)
-                    .tracked_scroll_handle(&self.handle)
-                    .id("area-bar");
-                WithScrollbar::custom_scrollbars(wrapper, bars, window, cx)
-            }
+        let show = if matches!(self.sample, Sample::Never) {
+            ScrollbarShow::Never
+        } else if self.auto {
+            ScrollbarShow::Auto
+        } else {
+            ScrollbarShow::Always
         };
-        wrapper.size_full().into_any_element()
+        let bars = Scrollbars::shown(ScrollAxes::Both, show)
+            .tracked_scroll_handle(&self.handle)
+            .id("area-bar");
+        div()
+            .child(area)
+            .custom_scrollbars(bars, window, cx)
+            .size_full()
+            .into_any_element()
     }
 
     /// The Markdown code block: a sideways bar with a track, put on the frame (a plain div).
     fn code_block(&self, track: Hsla, window: &mut Window, cx: &mut App) -> AnyElement {
-        let frame = div().relative().size_full().rounded_lg();
-        let frame = match self.side {
-            Side::Zed => {
-                let bars = zed::Scrollbars::always_visible(zed::ScrollAxes::Horizontal)
-                    .id("code-bar")
-                    .tracked_scroll_handle(&self.handle)
-                    .with_track_along(zed::ScrollAxes::Horizontal, track)
-                    .notify_content();
-                zed::WithScrollbar::custom_scrollbars(frame, bars, window, cx)
-            }
-            Side::Own => {
-                let bars = Scrollbars::always_visible(ScrollAxes::Horizontal)
-                    .id("code-bar")
-                    .tracked_scroll_handle(&self.handle)
-                    .with_track_along(ScrollAxes::Horizontal, track)
-                    .notify_content();
-                WithScrollbar::custom_scrollbars(frame, bars, window, cx)
-            }
-        };
+        let bars = Scrollbars::always_visible(ScrollAxes::Horizontal)
+            .id("code-bar")
+            .tracked_scroll_handle(&self.handle)
+            .with_track_along(ScrollAxes::Horizontal, track)
+            .notify_content();
+        let frame = div()
+            .relative()
+            .size_full()
+            .rounded_lg()
+            .custom_scrollbars(bars, window, cx);
         let body = div()
             .id("code")
             .flex()
@@ -188,26 +126,17 @@ impl Area {
 
     /// The Markdown table: a sideways bar on a scroll div of its own, with its own handle.
     fn table(&self, window: &mut Window, cx: &mut App) -> AnyElement {
-        let grid = div()
+        let bars = Scrollbars::always_visible(ScrollAxes::Horizontal)
+            .id("table-bar")
+            .notify_content();
+        div()
             .id("table")
             .size_full()
             .flex()
-            .restrict_scroll_to_axis();
-        let grid = match self.side {
-            Side::Zed => {
-                let bars = zed::Scrollbars::always_visible(zed::ScrollAxes::Horizontal)
-                    .id("table-bar")
-                    .notify_content();
-                zed::WithScrollbar::custom_scrollbars(grid, bars, window, cx)
-            }
-            Side::Own => {
-                let bars = Scrollbars::always_visible(ScrollAxes::Horizontal)
-                    .id("table-bar")
-                    .notify_content();
-                WithScrollbar::custom_scrollbars(grid, bars, window, cx)
-            }
-        };
-        grid.children(squares(30)).into_any_element()
+            .restrict_scroll_to_axis()
+            .custom_scrollbars(bars, window, cx)
+            .children(squares(30))
+            .into_any_element()
     }
 }
 
@@ -338,8 +267,8 @@ fn step(name: &str, axis: Axis, window: &mut Window, cx: &mut App) {
     window.refresh();
 }
 
-/// Each step's frame and scroll offset for `sample` drawn by `side`.
-fn rows(config: &Config, sample: Sample, side: Side) -> Vec<String> {
+/// Each step's frame and scroll offset for `sample`.
+fn rows(config: &Config, sample: Sample) -> Vec<String> {
     let (mut cx, capture, _) = context(config);
     let handle = ScrollHandle::new();
     let shared = handle.clone();
@@ -347,7 +276,6 @@ fn rows(config: &Config, sample: Sample, side: Side) -> Vec<String> {
         .open_window(size(px(480.), px(400.)), move |_, cx| {
             cx.new(|_| Area {
                 sample,
-                side,
                 handle: shared,
                 auto: false,
             })
@@ -392,56 +320,26 @@ fn rows(config: &Config, sample: Sample, side: Side) -> Vec<String> {
     rows
 }
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-#[test]
-fn the_own_scrollbar_draws_and_acts_as_zeds() {
-    let mut differ = Vec::new();
-    for config in &CONFIGS[..2] {
-        for sample in Sample::ALL {
-            let zed = rows(config, sample, Side::Zed);
-            let own = rows(config, sample, Side::Own);
-            assert_eq!(zed.len(), own.len());
-            differ.extend(
-                zed.iter()
-                    .zip(&own)
-                    .filter(|(zed, own)| zed != own)
-                    .map(|(zed, own)| format!("zed: {zed}\nown: {own}")),
-            );
-        }
-    }
-    assert!(
-        differ.is_empty(),
-        "{} steps differ; first ones:\n{}",
-        differ.len(),
-        differ
-            .iter()
-            .take(4)
-            .cloned()
-            .collect::<Vec<_>>()
-            .join("\n")
-    );
-}
-
 /// The offset and the frame of a row, apart.
 fn parts(row: &str) -> (&str, &str) {
     let (head, painted) = row.split_once(", painted ").unwrap();
     (head.split_once(": ").unwrap().1, painted)
 }
 
-/// The steps must reach the bars, else the compare above proves nothing: the hover paints
+/// The steps must reach the bars, else the golden proves nothing: the hover paints
 /// another thumb, the drag scrolls, and a press on a lane scrolls only where a track is drawn.
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 #[test]
 fn the_pointer_steps_reach_the_bars() {
-    let column = rows(&CONFIGS[0], Sample::Column, Side::Own);
+    let column = rows(&CONFIGS[0], Sample::Column);
     let at = |name: &str| STEPS.iter().position(|step| *step == name).unwrap();
     let (rest, rest_painted) = parts(&column[at("rest")]);
     assert_eq!(rest, "offset 0.0 0.0");
     assert_ne!(rest_painted, parts(&column[at("hover")]).1);
     assert_ne!(parts(&column[at("drag")]).0, rest);
-    let row = rows(&CONFIGS[0], Sample::Row, Side::Own);
+    let row = rows(&CONFIGS[0], Sample::Row);
     assert_eq!(parts(&row[at("lane")]).0, parts(&row[at("wheel")]).0);
-    let track = rows(&CONFIGS[0], Sample::Track, Side::Own);
+    let track = rows(&CONFIGS[0], Sample::Track);
     assert_ne!(parts(&track[at("lane")]).0, parts(&track[at("wheel")]).0);
 }
 
@@ -487,7 +385,7 @@ const AUTO_STEPS: [&str; 6] = [
 
 /// The column area on `Auto`, through the steps of `AUTO_STEPS`: each one's offset and the frame
 /// once its fade has ended.
-fn auto_rows(config: &Config, side: Side) -> Vec<String> {
+fn auto_rows(config: &Config) -> Vec<String> {
     let rise = Duration::from_millis(50);
     let fall = Duration::from_millis(400);
     // The hide wait is 1 s on the test clock.
@@ -499,7 +397,6 @@ fn auto_rows(config: &Config, side: Side) -> Vec<String> {
         .open_window(size(px(480.), px(400.)), move |_, cx| {
             cx.new(|_| Area {
                 sample: Sample::Column,
-                side,
                 handle: shared,
                 auto: true,
             })
@@ -578,11 +475,11 @@ fn auto_rows(config: &Config, side: Side) -> Vec<String> {
 
 /// On `Auto` (the app's mode) the bar shows at first, hides a second after the last show, shows
 /// again when the pointer comes in, stays while its thumb is hovered, hides after the pointer
-/// leaves, and shows on a scroll: the same frames as Zed's bar once each fade has ended.
+/// leaves, and shows on a scroll. The golden holds the frames; this checks the steps reach it.
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 #[test]
-fn the_own_auto_scrollbar_shows_and_hides_as_zeds() {
-    let own = auto_rows(&CONFIGS[0], Side::Own);
+fn the_auto_steps_reach_the_bar() {
+    let own = auto_rows(&CONFIGS[0]);
     let at = |name: &str| AUTO_STEPS.iter().position(|step| *step == name).unwrap();
     let painted = |name: &str| parts(&own[at(name)]).1.to_string();
     // The steps reach the bar: hidden after each wait unless hovered, shown again otherwise.
@@ -593,32 +490,31 @@ fn the_own_auto_scrollbar_shows_and_hides_as_zeds() {
     assert_eq!(painted("left-waited"), painted("waited"));
     assert_ne!(painted("wheel"), painted("waited"));
     assert_ne!(parts(&own[at("wheel")]).0, parts(&own[at("shown")]).0);
-
-    let zed = auto_rows(&CONFIGS[0], Side::Zed);
-    let differ: Vec<String> = zed
-        .iter()
-        .zip(&own)
-        .filter(|(zed, own)| zed != own)
-        .map(|(zed, own)| format!("zed: {zed}\nown: {own}"))
-        .collect();
-    assert!(differ.is_empty(), "{}", differ.join("\n"));
 }
 
-/// Every row of a side: the pointer steps of each sample under the first two configs, then the
-/// `Auto` steps. One row per line.
-fn golden_rows(side: Side) -> String {
+/// Every row: the pointer steps of each sample under the first two configs, then the `Auto`
+/// steps. One row per line.
+fn golden_rows() -> String {
     let mut out = Vec::new();
     for config in &CONFIGS[..2] {
         for sample in Sample::ALL {
-            out.extend(rows(config, sample, side));
+            out.extend(rows(config, sample));
         }
     }
-    out.extend(auto_rows(&CONFIGS[0], side));
+    out.extend(auto_rows(&CONFIGS[0]));
     out.join("\n") + "\n"
 }
 
-/// Writes Zed's rows to `$NATAMUX_GOLDEN_OUT/kit/scrollbar.txt` (`Tool: golden`, plan 8.4), so
-/// the own bar keeps a target once Zed's `ui` leaves.
+/// The committed golden of this OS.
+fn golden_path() -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/golden/kit")
+        .join(std::env::consts::OS)
+        .join("scrollbar.txt")
+}
+
+/// Writes the rows to `$NATAMUX_GOLDEN_OUT/kit/scrollbar.txt` (`Tool: golden`, plan 8.4). The
+/// committed file was made on Zed's bar.
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 #[test]
 #[ignore = "makes the golden file; run by the Tool: golden workflow"]
@@ -626,7 +522,30 @@ fn golden_kit_scrollbar() {
     let out = std::env::var("NATAMUX_GOLDEN_OUT").expect("NATAMUX_GOLDEN_OUT is set");
     let dir = std::path::Path::new(&out).join("kit");
     std::fs::create_dir_all(&dir).expect("the output folder");
-    std::fs::write(dir.join("scrollbar.txt"), golden_rows(Side::Zed)).expect("the golden file");
+    std::fs::write(dir.join("scrollbar.txt"), golden_rows()).expect("the golden file");
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[test]
+fn the_scrollbar_draws_and_acts_as_the_golden_holds() {
+    let path = golden_path();
+    let golden = std::fs::read_to_string(&path).expect("the golden file of this OS");
+    let now = golden_rows();
+    let differ: Vec<String> = golden
+        .lines()
+        .zip(now.lines())
+        .filter(|(want, got)| want != got)
+        .take(4)
+        .map(|(want, got)| format!("golden: {want}\nnow:    {got}"))
+        .collect();
+    assert!(
+        differ.is_empty() && golden.lines().count() == now.lines().count(),
+        "{} differs ({} rows in the golden, {} now); first rows that differ:\n{}",
+        path.display(),
+        golden.lines().count(),
+        now.lines().count(),
+        differ.join("\n")
+    );
 }
 
 #[path = "scrollbar_cached_tests.rs"]

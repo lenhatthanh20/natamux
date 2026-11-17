@@ -9,9 +9,6 @@ use gpui::{
     StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder, px, relative,
 };
 use theme::BufferLineHeight;
-use zed_menu::{
-    Cancel, Confirm, SelectChild, SelectFirst, SelectLast, SelectNext, SelectParent, SelectPrevious,
-};
 
 use super::rows::record_box;
 use super::{
@@ -19,6 +16,9 @@ use super::{
     SUBMENU_ROOM, row_above, row_below,
 };
 use crate::list::List;
+use crate::menu::{
+    Cancel, Confirm, SelectChild, SelectFirst, SelectLast, SelectNext, SelectParent, SelectPrevious,
+};
 use crate::shortcut_hint::KeyBinding;
 use crate::spacing::{rems_from_px, v_flex};
 use crate::traits::StyledExt;

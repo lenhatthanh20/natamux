@@ -46,7 +46,6 @@ fn a_bar_in_a_cached_view_hovers_and_hides() {
         .open_window(size(px(480.), px(400.)), move |_, cx| {
             let area = cx.new(|_| Area {
                 sample: Sample::Column,
-                side: Side::Own,
                 handle,
                 auto: true,
             });

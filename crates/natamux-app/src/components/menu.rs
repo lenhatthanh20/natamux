@@ -94,9 +94,8 @@ impl MenuLayer {
             layer.close(window, cx);
         });
         let focus = menu.focus_handle(cx);
-        // The app binds only its own keys, not Zed's `menu` keymap (the `menu` crate is not a
-        // dependency), so the open menu gets its keys here, before any binding of the views
-        // under it.
+        // The app binds no keys to the `menu` actions, so the open menu gets its keys here,
+        // before any binding of the views under it.
         let keys = cx.intercept_keystrokes({
             let focus = focus.clone();
             move |event: &KeystrokeEvent, window, cx| {

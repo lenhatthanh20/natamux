@@ -1,6 +1,6 @@
 //! The parts a menu is made of besides its rows: the list around them, a separator line and a
-//! small heading. The rows are `ListItem` (Zed's until S8.4). Element values from plan 6.7.2 and
-//! the menu metrics golden.
+//! small heading. The rows are the kit's `ListItem`. Element values from plan 6.7.2 and the menu
+//! metrics golden.
 
 use gpui::{
     AnyElement, App, IntoElement, ParentElement, RenderOnce, SharedString, Styled, Window, div,

@@ -1,4 +1,5 @@
-//! The scrollbar of the app's scroll areas: the kit's own (A35), drawn as Zed's `ui` one was.
+//! The scrollbar of the app's scroll areas: the kit's own (A35), drawn as Zed's `ui` one was
+//! (`scrollbar_golden_tests.rs`).
 //! It reads no setting, so this asks `--shot` and the still motion setting itself.
 
 use std::panic::Location;
@@ -61,5 +62,5 @@ pub fn scroll_area(
 mod tests;
 
 #[cfg(test)]
-#[path = "scrollbar_compare_tests.rs"]
-mod compare_tests;
+#[path = "scrollbar_golden_tests.rs"]
+mod golden_tests;

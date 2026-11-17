@@ -1,9 +1,7 @@
 //! The context menu: a raised list of rows that takes the keyboard focus, shows the keys of the
 //! actions it runs, opens submenus on the side and closes when it loses the focus.
 //!
-//! It handles the `menu::*` actions of Zed's `menu` crate (plan 6.7.1): the app sends them by
-//! name, and two actions with one name would stop the app at start. Rows are Zed's `ListItem`
-//! until S8.4.
+//! It handles the kit's `menu::*` actions (plan 6.7.1): the app sends them by name.
 //!
 //! Natamux's own code, written from plan 6.7.2, the menu metrics golden, the shots and the menu
 //! tests (T23, `context_menu_tests.rs`). The builder names are the ones the app's call sites use.
@@ -19,12 +17,12 @@ use gpui::{
     EventEmitter, FocusHandle, Focusable, Pixels, SharedString, Subscription, Window,
     prelude::FluentBuilder, px,
 };
-use zed_menu::Cancel;
 
 use crate::color::Color;
 use crate::icon::IconPosition;
 use crate::icon_name::IconName;
 use crate::list_item::ListItemSpacing;
+use crate::menu::Cancel;
 
 #[path = "context_menu_nav.rs"]
 mod nav;

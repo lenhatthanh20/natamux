@@ -8,8 +8,6 @@ publish.workspace = true
 [dependencies]
 gpui.workspace = true
 theme.workspace = true
-zed_menu.workspace = true
-zed_ui.workspace = true
 
 [lints]
 workspace = true

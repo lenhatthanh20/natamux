@@ -164,11 +164,11 @@ jobs:
           powershell -NoProfile -Command "Start-Process -Wait -FilePath '$(cygpath -w "$RUNNER_TEMP/nsis-setup.exe")' -ArgumentList '/S'"
           test -f "C:/Program Files (x86)/NSIS/makensis.exe"
       # The cache comes from app-macos on macos-15, and cargo does not rerun the build script of
-      # a git crate. The build scripts of ui and natamux-ui read the SDK; natamux-ui's sizes the
-      # traffic light gutter.
+      # a git crate. The build script of natamux-ui reads the SDK to size the traffic light
+      # gutter.
       - name: Rebuild ui for this SDK
         if: runner.os == 'macOS'
-        run: cargo clean --release -p ui -p natamux-ui
+        run: cargo clean --release -p natamux-ui
       - name: Build the app and its daemon
         env:
           NATAMUX_REQUIRE_WEB: "1"

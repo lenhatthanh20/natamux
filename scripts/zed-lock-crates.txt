@@ -3,7 +3,6 @@ askpass
 clock
 cloud_llm_client
 collections
-component
 derive_refineable
 file_content
 fs
@@ -20,9 +19,7 @@ gpui_web
 gpui_wgpu
 gpui_windows
 http_client
-icons
 language_model_core
-menu
 migrator
 net
 path
@@ -43,8 +40,6 @@ telemetry_events
 text
 theme
 theme_settings
-ui
-ui_macros
 util
 ztracing
 ztracing_macro
