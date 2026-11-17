@@ -43,7 +43,9 @@ fn the_delete_button_works_before_the_read_ends(cx: &mut TestAppContext) {
     // A job that never ends holds the queue, so the delete never reaches the fake daemon, which
     // all tests of the process share: T-0137 stays for them.
     dashboard.update(cx, |dashboard, _| {
-        dashboard.deletes.push(vec!["T-HOLD".into()], Vec::new(), false);
+        dashboard
+            .deletes
+            .push(vec!["T-HOLD".into()], Vec::new(), false);
         dashboard.deletes.start_next();
     });
 
