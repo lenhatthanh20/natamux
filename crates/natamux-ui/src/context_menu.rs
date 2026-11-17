@@ -15,7 +15,6 @@ use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use gpui::{
-use gpui::{
     Action, AnyElement, App, AppContext, Bounds, Context, DefiniteLength, DismissEvent, Entity,
     EventEmitter, FocusHandle, Focusable, Pixels, SharedString, Subscription, Window,
     prelude::FluentBuilder, px,
