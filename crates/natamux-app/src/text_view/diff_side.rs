@@ -563,17 +563,23 @@ impl DiffSide {
                 .code
                 .as_ref()
                 .is_some_and(|code| code.lang.map(|lang| lang.name) == lang.map(|lang| lang.name));
+            // Only the side's own file colours its lines: the deleted lines of an inline diff
+            // stay plain, so no side needs the other file's parse.
+            let needed = [!new_side, new_side];
             let kept = same_lang
                 && input
                     .code
                     .as_ref()
                     .and_then(|code| code.diff.as_ref())
                     .is_some_and(|decor| {
-                        decor.sources.iter().zip(texts).all(|(source, text)| {
-                            source.as_ref().is_some_and(|source| *source.text == *text)
-                        })
+                        decor.sources.iter().zip(texts).zip(needed).all(
+                            |((source, text), needed)| {
+                                !needed
+                                    || source.as_ref().is_some_and(|source| *source.text == *text)
+                            },
+                        )
                     });
-            let parsed = (!kept).then(|| parse_sources(texts, lang, cx));
+            let parsed = (!kept).then(|| parse_sources(texts, needed, lang, cx));
             if let Some(code) = input.code.as_mut() {
                 code.lang = lang;
                 code.colors += 1;
@@ -592,8 +598,8 @@ impl DiffSide {
         });
     }
 
-    /// Both files of the shown diff are parsed (or have no language), so every line has its
-    /// colours; a `--shot` waits for it.
+    /// The side's own file is parsed (or has no language), so every line has its colours; a
+    /// `--shot` waits for it.
     pub fn parsed(&self, cx: &App) -> bool {
         let input = self.input.read(cx);
         let Some(diff) = input.code.as_ref().and_then(|code| code.diff.as_ref()) else {
@@ -754,15 +760,19 @@ impl DiffSide {
     }
 }
 
-/// The two files of a diff with their parse: drawn at once; a parse that runs out of time ends
-/// on a background thread and draws the side again (A5).
+/// The `needed` files of a diff with their parse: drawn at once; a parse that runs out of time
+/// ends on a background thread and draws the side again (A5).
 fn parse_sources(
     texts: [&str; 2],
+    needed: [bool; 2],
     lang: Option<&'static Lang>,
     cx: &mut Context<TextInput>,
 ) -> ([Option<Source>; 2], Vec<Task<()>>) {
     let mut parses = Vec::new();
     let sources = [0, 1].map(|index| {
+        if !needed[index] {
+            return None;
+        }
         let text: Arc<str> = Arc::from(texts[index]);
         let mut syntax = lang.and_then(|lang| Syntax::new(lang).ok());
         if let Some(syntax) = syntax.as_mut()
