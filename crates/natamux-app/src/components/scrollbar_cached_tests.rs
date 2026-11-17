@@ -11,9 +11,11 @@ struct Cached {
 
 impl Render for Cached {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-        div()
-            .size_full()
-            .child(self.area.clone().cached(gpui::StyleRefinement::default().size_full()))
+        div().size_full().child(
+            self.area
+                .clone()
+                .cached(gpui::StyleRefinement::default().size_full()),
+        )
     }
 }
 
@@ -23,8 +25,13 @@ fn last_frame(
     capture: &Rc<RefCell<Capture>>,
     window: AnyWindowHandle,
 ) -> String {
-    cx.capture_screenshot(window).expect("the recorder captures");
-    let painted = capture.borrow_mut().painted.take().expect("a captured frame");
+    cx.capture_screenshot(window)
+        .expect("the recorder captures");
+    let painted = capture
+        .borrow_mut()
+        .painted
+        .take()
+        .expect("a captured frame");
     painted.to_string()
 }
 
@@ -65,12 +72,18 @@ fn a_bar_in_a_cached_view_hovers_and_hides() {
     let shown = last_frame(&mut cx, &capture, window);
     pointer(on_bar(Axis::Vertical, 10.), &mut cx);
     let hovered = last_frame(&mut cx, &capture, window);
-    assert_ne!(hovered, shown, "hovering the thumb paints it in the hover colour");
+    assert_ne!(
+        hovered, shown,
+        "hovering the thumb paints it in the hover colour"
+    );
     pointer(point(px(400.), px(380.)), &mut cx);
     cx.advance_clock(Duration::from_millis(1100));
     cx.run_until_parked();
     let waited = last_frame(&mut cx, &capture, window);
-    assert_ne!(waited, shown, "the bar hides a second after the pointer left");
+    assert_ne!(
+        waited, shown,
+        "the bar hides a second after the pointer left"
+    );
     assert_ne!(waited, hovered);
     cx.update_window(window, |_, window, _| window.remove_window())
         .expect("the window is open");
