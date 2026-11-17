@@ -1,5 +1,5 @@
-//! T-MOUSE-1, diff cases (plan 6.5, 7.4), on the own diff view: the same presses as the old
-//! diff's record (`zed_diff_mouse_tests.rs`) must give the same selections, in the rows and bytes
+//! T-MOUSE-1, diff cases (plan 6.5, 7.4), on the own diff view: the same presses as the record
+//! made on Zed's editor before S7 must give the same selections, in the rows and bytes
 //! of each side's text: a click, 2 and 3 clicks, a drag, a shift click, presses along the gutter
 //! (line numbers, the marker strip, the rest), and a press inside a selection with and without a
 //! move, before and after 300 ms.

@@ -165,8 +165,6 @@ mod files {
     pub mod open_files;
     pub mod outline_picker;
     pub mod outline_rules;
-    #[cfg(test)]
-    pub mod zed_body;
 }
 mod git {
     pub mod blame_marks;
@@ -182,8 +180,6 @@ mod git {
     #[cfg(test)]
     pub mod diff_cases;
     pub mod diff_cursor;
-    #[cfg(test)]
-    pub mod diff_editors;
     pub mod diff_header;
     pub mod diff_hunk_controls;
     pub mod diff_model;
@@ -203,8 +199,6 @@ mod git {
     pub mod rollback_dialog;
     pub mod rollback_rules;
     pub mod whitespace_rules;
-    #[cfg(test)]
-    pub mod zed_diff;
 }
 mod ime {
     pub mod ime_check;
@@ -577,8 +571,6 @@ fn start(
     perf::report::timed("themes_ms", || {
         theme_settings::init(theme::LoadThemes::All(Box::new(NatamuxAssets)), cx)
     });
-    editor::init(cx);
-    git::languages::init(cx);
     app::shortcuts::bind(cx);
     app::shortcuts::set_menus(cx);
     perf::overlay::init(cx);

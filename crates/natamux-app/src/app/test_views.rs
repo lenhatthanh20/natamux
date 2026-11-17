@@ -42,7 +42,6 @@ pub fn init_with(mode: ThemeMode, view: &ViewState, cx: &mut App) {
     appearance::init(inputs, cx);
     appearance::apply(view, cx);
     theme_settings::init(theme::LoadThemes::All(Box::new(NatamuxAssets)), cx);
-    editor::init(cx);
     crate::components::motion::init(false, cx);
     crate::perf::overlay::init(cx);
 }

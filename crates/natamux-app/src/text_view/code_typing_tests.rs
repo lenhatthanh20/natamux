@@ -2,21 +2,18 @@
 //! of brackets and quotes (and none inside strings and comments), typing over a closing char,
 //! Backspace in an empty pair, Enter between brackets, `/*` + Enter, comment and Markdown list
 //! continuation, Tab, and word moves over `a#b $c d-e.f:g`. Each case records the text and the
-//! selections after each step; the own code view must give the same. The JSON tab runs on the own
-//! code view since S4.3b and the editor tab since S4.3c; the editor tab hosts run on the old
-//! editor (`ZedBody`, the golden record) and on the own code view
-//! (`own_typing_matches_the_golden_file`).
+//! selections after each step; the own code view must give the same as the golden record made on
+//! Zed's editor before S7 (`own_typing_matches_the_golden_file`). The JSON tab and the editor tab
+//! both run on the own code view.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use editor::Editor;
 use gpui::{AnyView, Entity, Focusable as _, TestAppContext, VisualTestContext};
 use serde_json::{Value, json};
 use ui::prelude::*;
 
 use crate::app::test_driver::{press, type_text};
 use crate::app::{golden_files, shortcuts, test_views};
-use crate::files::zed_body::ZedBody;
 use crate::git::languages::lang_for;
 use crate::projects::json_tab::JsonTab;
 use crate::stages::pipeline_editor::PipelineEditor;
@@ -199,61 +196,11 @@ impl Render for Slot {
     }
 }
 
-/// The app's globals, key bindings and languages, and the window of the cases.
+/// The app's globals and key bindings, and the window of the cases.
 pub(super) fn start(cx: &mut TestAppContext) -> (Entity<Slot>, &mut VisualTestContext) {
     test_views::init(cx);
     cx.update(shortcuts::bind);
-    cx.update(crate::git::languages::init);
     cx.add_window_view(|_, _| Slot { view: None })
-}
-
-/// Shows `text` (with its caret mark) in the editor tab, focused, and returns its editor.
-pub(super) fn open(
-    host: &Host,
-    text: &str,
-    slot: &Entity<Slot>,
-    cx: &mut VisualTestContext,
-) -> Entity<Editor> {
-    let caret = text.find(CARET).unwrap_or(text.len());
-    let before = &text[..caret];
-    let row = before.matches('\n').count() as u32;
-    let column = (caret - before.rfind('\n').map_or(0, |at| at + 1)) as u32;
-    let text = text.replace(CARET, "");
-    let editor = slot.update_in(cx, |slot, window, cx| {
-        let body = cx.new(|cx| ZedBody::new(host.path, &text, window, cx));
-        let editor = body.read(cx).editor().clone();
-        let view: AnyView = body.into();
-        slot.view = Some(view);
-        cx.notify();
-        editor
-    });
-    cx.run_until_parked();
-    editor.update_in(cx, |editor, window, cx| {
-        window.focus(&editor.focus_handle(cx), cx);
-        let point = text::Point::new(row, column);
-        editor.change_selections(Default::default(), window, cx, |selections| {
-            selections.select_ranges([point..point])
-        });
-    });
-    cx.run_until_parked();
-    editor
-}
-
-/// The text and each selection as `[tail row, tail column, head row, head column]`.
-pub(super) fn state(editor: &Entity<Editor>, cx: &mut VisualTestContext) -> (String, Value) {
-    editor.update(cx, |editor, cx| {
-        let snapshot = editor.display_snapshot(cx);
-        let selections: Vec<Value> = editor
-            .selections
-            .all_adjusted(&snapshot)
-            .iter()
-            .map(|selection| {
-                let (tail, head) = (selection.tail(), selection.head());
-                json!([tail.row, tail.column, head.row, head.column])
-            })
-            .collect();
-        (editor.text(cx), Value::Array(selections))
-    })
 }
 
 /// The JSON tab with `text` (with its caret mark), focused: its own code view's input and the
@@ -357,56 +304,29 @@ pub(super) fn own_state(input: &Entity<TextInput>, cx: &mut VisualTestContext) -
     })
 }
 
-/// The editor of a case: Zed's (the editor tab) or the own code view (the JSON tab).
-enum Target {
-    Zed(Entity<Editor>),
-    Own(Entity<TextInput>),
-}
-
-impl Target {
-    fn state(&self, cx: &mut VisualTestContext) -> (String, Value) {
-        match self {
-            Target::Zed(editor) => state(editor, cx),
-            Target::Own(input) => own_state(input, cx),
-        }
-    }
-}
-
 /// The language of the host, then one row per case and step: `[case, step, text, selections]`.
-/// `own`: the editor tab's hosts run on the own code view.
-fn run(host: &Host, own: bool, cx: &mut TestAppContext) -> Vec<Value> {
-    run_cases(host, own, cases(host), cx)
+fn run(host: &Host, cx: &mut TestAppContext) -> Vec<Value> {
+    run_cases(host, cases(host), cx)
 }
 
 /// `run` with other cases.
 pub(super) fn run_cases(
     host: &Host,
-    own: bool,
     cases: Vec<Case>,
     cx: &mut TestAppContext,
 ) -> Vec<Value> {
     let (slot, cx) = start(cx);
     let mut rows = Vec::new();
     for (i, case) in cases.into_iter().enumerate() {
-        let (target, language) = if host.json_tab {
-            let (input, language) = open_json_tab(&case.text, &slot, cx);
-            (Target::Own(input), language)
-        } else if own {
-            let (input, language) = open_own(host, &case.text, &slot, cx);
-            (Target::Own(input), language)
+        let (input, language) = if host.json_tab {
+            open_json_tab(&case.text, &slot, cx)
         } else {
-            let editor = open(host, &case.text, &slot, cx);
-            let language = editor.update(cx, |editor, cx| {
-                let buffer = editor.buffer().read(cx).as_singleton()?;
-                let language = buffer.read(cx).language()?;
-                Some(language.name().to_string())
-            });
-            (Target::Zed(editor), language)
+            open_own(host, &case.text, &slot, cx)
         };
         if i == 0 {
             rows.push(json!({ "path": host.path, "language": language }));
         }
-        let (text, selections) = target.state(cx);
+        let (text, selections) = own_state(&input, cx);
         rows.push(json!([case.label, 0, text, selections]));
         for (n, step) in case.steps.iter().enumerate() {
             match step {
@@ -414,7 +334,7 @@ pub(super) fn run_cases(
                 Step::Press(keys) => press(cx, keys),
             }
             cx.run_until_parked();
-            let (text, selections) = target.state(cx);
+            let (text, selections) = own_state(&input, cx);
             rows.push(json!([case.label, n + 1, text, selections]));
         }
     }
@@ -510,22 +430,9 @@ macro_rules! hosts {
             use super::*;
 
             #[gpui::test]
-            fn typing_matches_the_golden_file(cx: &mut TestAppContext) {
-                let host = $host;
-                golden_files::check(SET, host.name, &run(&host, false, cx));
-            }
-
-            #[gpui::test]
             fn own_typing_matches_the_golden_file(cx: &mut TestAppContext) {
                 let host = $host;
-                check_own(SET, &host, &run(&host, true, cx));
-            }
-
-            #[gpui::test]
-            #[ignore]
-            fn golden_code_typing(cx: &mut TestAppContext) {
-                let host = $host;
-                golden_files::write(SET, host.name, &run(&host, false, cx));
+                check_own(SET, &host, &run(&host, cx));
             }
         }
     )*};

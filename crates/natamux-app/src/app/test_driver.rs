@@ -83,18 +83,35 @@ pub fn is_focused(view: &impl Focusable, cx: &mut VisualTestContext) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use editor::Editor;
-    use gpui::{AppContext as _, TestAppContext};
+    use gpui::{
+        AppContext as _, Context, FocusHandle, IntoElement, ParentElement as _, Render,
+        TestAppContext, Window, div,
+    };
     use theme::ActiveTheme;
 
     use super::*;
     use crate::app::test_views;
     use crate::components::dialog::DialogLayer;
 
+    /// A window with one one-line box.
+    struct OneBox(TextBox);
+
+    impl Render for OneBox {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            div().child(self.0.clone())
+        }
+    }
+
+    impl Focusable for OneBox {
+        fn focus_handle(&self, cx: &gpui::App) -> FocusHandle {
+            self.0.focus_handle(cx)
+        }
+    }
+
     #[gpui::test]
     fn types_presses_and_pastes_in_a_focused_box(cx: &mut TestAppContext) {
         let (text_box, _, cx) = test_views::init_app(cx, |_, window, cx| {
-            cx.new(|cx| Editor::single_line(window, cx))
+            cx.new(|cx| OneBox(TextBox::one_line("", window, cx)))
         });
         assert!(!is_focused(&text_box, cx));
         cx.update(|window, cx| window.focus(&text_box.focus_handle(cx), cx));
@@ -105,15 +122,15 @@ mod tests {
         type_text(cx, "b");
         press(cx, "end");
         paste(cx, "d");
-        assert_eq!(text_of(&TextBox::of_editor(&text_box), cx), "abcd");
+        assert_eq!(text_of(&text_box.read_with(cx, |view, _| view.0.clone()), cx), "abcd");
         press(cx, "mod-a backspace");
-        assert_eq!(text_of(&TextBox::of_editor(&text_box), cx), "");
+        assert_eq!(text_of(&text_box.read_with(cx, |view, _| view.0.clone()), cx), "");
     }
 
     #[gpui::test]
     fn the_app_window_has_natamux_dark_and_the_layers(cx: &mut TestAppContext) {
         let (_, _, cx) = test_views::init_app(cx, |_, window, cx| {
-            cx.new(|cx| Editor::single_line(window, cx))
+            cx.new(|cx| OneBox(TextBox::one_line("", window, cx)))
         });
         cx.update(|_, cx| {
             assert_eq!(cx.theme().name.as_ref(), "Natamux Dark");

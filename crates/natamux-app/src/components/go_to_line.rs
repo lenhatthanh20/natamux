@@ -4,8 +4,6 @@
 use std::rc::Rc;
 
 use gpui::{DismissEvent, EventEmitter, FocusHandle, Focusable, KeyDownEvent};
-#[cfg(test)]
-use text::Point;
 use ui::prelude::*;
 
 use super::dialog::{
@@ -16,29 +14,6 @@ use super::form::{input_box, text_editor};
 use crate::text_view::text_box::TextBox;
 
 type OnGo = Rc<dyn Fn(u32, Option<u32>, &mut Window, &mut App)>;
-
-/// Where `line` and `column` (1-based, the column in characters) are in `text`: the row clamped
-/// to the last one, and the column as the byte column of that row, clamped to its end. A
-/// `Point`'s column is in bytes, so a character column must not be used as one (T-0316). Only the
-/// old editor tab of the tests (`files/zed_body.rs`) still asks; it goes with it in S7.
-#[cfg(test)]
-pub fn line_target(text: &text::BufferSnapshot, line: u32, column: Option<u32>) -> Point {
-    let row = line.saturating_sub(1).min(text.max_point().row);
-    let end = Point::new(row, text.line_len(row));
-    let line_text: String = text.text_for_range(Point::new(row, 0)..end).collect();
-    let chars = column.map_or(0, |column| column.saturating_sub(1)) as usize;
-    Point::new(row, byte_column(&line_text, chars))
-}
-
-/// The byte offset of character `chars` of `line`, or the line's length past its end.
-#[cfg(test)]
-fn byte_column(line: &str, chars: usize) -> u32 {
-    let bytes = line
-        .char_indices()
-        .nth(chars)
-        .map_or(line.len(), |(at, _)| at);
-    u32::try_from(bytes).unwrap_or(u32::MAX)
-}
 
 /// `120` or `120:5`, spaces allowed around the parts. None for anything else, and for 0.
 pub fn parse_line_target(text: &str) -> Option<(u32, Option<u32>)> {
@@ -161,14 +136,6 @@ mod tests {
         assert_eq!(parse_line_target("120"), Some((120, None)));
         assert_eq!(parse_line_target("120:5"), Some((120, Some(5))));
         assert_eq!(parse_line_target(" 120 : 5 "), Some((120, Some(5))));
-    }
-
-    #[test]
-    fn counts_the_column_in_characters() {
-        assert_eq!(byte_column("tiếng", 0), 0);
-        assert_eq!(byte_column("tiếng", 2), 2);
-        assert_eq!(byte_column("tiếng", 3), 5);
-        assert_eq!(byte_column("tiếng", 99), 7);
     }
 
     #[test]

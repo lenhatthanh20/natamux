@@ -109,7 +109,6 @@ impl Render for Slot {
 #[gpui::test]
 fn t14_a_language_that_loads_after_typing_keeps_the_text(cx: &mut TestAppContext) {
     let (slot, _, cx) = test_views::init_app(cx, |_, _, cx| cx.new(|_| Slot { view: None }));
-    cx.update(|_, cx| crate::git::languages::init(cx));
     let (pipeline, editor, view, language) = slot.update_in(cx, |slot, window, cx| {
         let pipeline = cx.new(|_| PipelineEditor::new(DRAFT));
         let tab = cx.new(|cx| JsonTab::new(pipeline.clone(), window, cx));

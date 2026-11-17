@@ -1,11 +1,7 @@
-//! Text box keys, as a web `<textarea>` and `<input>` have them. The app does not load Zed's
-//! keymap (see `shortcuts.rs`), so each editor key is bound here.
+//! Text box keys, as a web `<textarea>` and `<input>` have them. The app does not load a keymap
+//! file (see `shortcuts.rs`), so each text box key is bound here.
 
-use std::rc::Rc;
-
-use editor::actions as edit;
-use gpui::{Action, App, DummyKeyboardMapper, KeyBinding, KeyBindingContextPredicate};
-use serde_json::{Value, json};
+use gpui::{Action, App, KeyBinding};
 
 use super::commands::{command_by_id, keystroke};
 
@@ -16,95 +12,19 @@ const MANY_LINES: &str = "Editor && (mode == auto_height || mode == full)";
 const FULL: &str = super::commands_editor::FULL_EDITOR;
 
 pub fn bind(cx: &mut App, mac: bool) {
-    let any = Some(ANY);
-    let many = Some(MANY_LINES);
-    let full = Some(FULL);
-    let m = |keys: &str| keys.replace("mod", if mac { "cmd" } else { "ctrl" });
-    // Word keys: Alt on macOS, Ctrl elsewhere.
-    let w = |keys: &str| keys.replace("word", if mac { "alt" } else { "ctrl" });
-    // A textarea's Home and End stop at the edge of the shown row of a wrapped line.
-    let line_start = edit::MoveToBeginningOfLine {
-        stop_at_soft_wraps: true,
-        stop_at_indent: false,
-    };
-    let line_end = edit::MoveToEndOfLine {
-        stop_at_soft_wraps: true,
-    };
-    let (start, end) = if mac {
-        ("cmd-up", "cmd-down")
-    } else {
-        ("ctrl-home", "ctrl-end")
-    };
-    cx.bind_keys([
-        KeyBinding::new("backspace", edit::Backspace, any),
-        KeyBinding::new("delete", edit::Delete, any),
-        KeyBinding::new("left", edit::MoveLeft, any),
-        KeyBinding::new("right", edit::MoveRight, any),
-        KeyBinding::new("shift-left", edit::SelectLeft, any),
-        KeyBinding::new("shift-right", edit::SelectRight, any),
-        KeyBinding::new("home", line_start.clone(), any),
-        KeyBinding::new("end", line_end.clone(), any),
-        KeyBinding::new(&w("word-left"), edit::MoveToPreviousWordStart, any),
-        KeyBinding::new(&w("word-right"), edit::MoveToNextWordEnd, any),
-        KeyBinding::new(&w("word-shift-left"), edit::SelectToPreviousWordStart, any),
-        KeyBinding::new(&w("word-shift-right"), edit::SelectToNextWordEnd, any),
-        KeyBinding::new(
-            &w("word-backspace"),
-            edit::DeleteToPreviousWordStart::default(),
-            any,
-        ),
-        KeyBinding::new(&w("word-delete"), edit::DeleteToNextWordEnd::default(), any),
-        KeyBinding::new(&m("mod-a"), edit::SelectAll, any),
-        KeyBinding::new(&m("mod-c"), edit::Copy, any),
-        KeyBinding::new(&m("mod-x"), edit::Cut, any),
-        KeyBinding::new(&m("mod-v"), edit::Paste, any),
-        KeyBinding::new(&m("mod-z"), edit::Undo, any),
-        KeyBinding::new(&m("mod-shift-z"), edit::Redo, any),
-        // The forms around a box of many lines submit on Mod+Enter.
-        KeyBinding::new("enter", edit::Newline, many),
-        KeyBinding::new("shift-up", edit::SelectUp, many),
-        KeyBinding::new("shift-down", edit::SelectDown, many),
-        KeyBinding::new("pageup", edit::MovePageUp::default(), many),
-        KeyBinding::new("pagedown", edit::MovePageDown::default(), many),
-        KeyBinding::new(start, edit::MoveToBeginning, many),
-        KeyBinding::new(end, edit::MoveToEnd, many),
-        KeyBinding::new(&format!("shift-{start}"), edit::SelectToBeginning, many),
-        KeyBinding::new(&format!("shift-{end}"), edit::SelectToEnd, many),
-        // In a box of many lines Tab moves the focus, as in a textarea.
-        KeyBinding::new("tab", edit::Tab, full),
-        KeyBinding::new("shift-tab", edit::Backtab, full),
-    ]);
-    if mac {
-        cx.bind_keys([
-            KeyBinding::new("cmd-left", line_start, any),
-            KeyBinding::new("cmd-right", line_end, any),
-            KeyBinding::new(
-                "cmd-backspace",
-                edit::DeleteToBeginningOfLine::default(),
-                any,
-            ),
-        ]);
-    }
-    let bindings = named(mac)
-        .into_iter()
-        .filter_map(|(keys, name, data, context)| by_name(cx, keys, name, data, context))
-        .collect::<Vec<_>>();
-    cx.bind_keys(bindings);
-    cx.bind_keys(editor_bindings(mac));
     cx.bind_keys(own_bindings(mac));
 }
 
 /// The key context entry of the own text input only.
 pub const OWN_INPUT: &str = "own_input";
 
-/// A context of Zed's editor narrowed to the own text input.
+/// A key context narrowed to the own text input.
 fn only_own(context: &str) -> String {
     format!("({context}) && {OWN_INPUT}")
 }
 
-/// The same keys for the own text input (docs/plan-mit-license.md 6.3.1), in the same contexts
-/// narrowed to the own input. A Zed `Editor` (the code and diff views) never matches them, so
-/// its keys stay the ones gpui shows for it.
+/// The keys of the own text input (docs/plan-mit-license.md 6.3.1), each in its context narrowed
+/// to the own input.
 fn own_bindings(mac: bool) -> Vec<KeyBinding> {
     use crate::text_view::text_input::actions as own;
     let (any, many, full) = (only_own(ANY), only_own(MANY_LINES), only_own(FULL));
@@ -162,7 +82,7 @@ fn own_bindings(mac: bool) -> Vec<KeyBinding> {
             KeyBinding::new("cmd-shift-right", own::SelectToEndOfLine, any),
         ]);
     }
-    // The keys of the full boxes, with the keys and contexts of the registry, as Zed's above.
+    // The keys of the full boxes, with the keys and contexts of the registry.
     push_in(
         "editor.select-next",
         own::SelectNext,
@@ -250,105 +170,7 @@ fn own_bindings(mac: bool) -> Vec<KeyBinding> {
     keys
 }
 
-/// The keys that bind by name: (keys, action name, action data, context).
-type Named = (&'static str, &'static str, Option<Value>, &'static str);
-
-fn named(mac: bool) -> Vec<Named> {
-    let wrap = || Some(json!({ "stop_at_soft_wraps": true }));
-    let mut named = vec![
-        ("up", "editor::MoveUp", None, MANY_LINES),
-        ("down", "editor::MoveDown", None, MANY_LINES),
-        ("shift-home", "editor::SelectToBeginningOfLine", wrap(), ANY),
-        ("shift-end", "editor::SelectToEndOfLine", wrap(), ANY),
-    ];
-    if mac {
-        named.push((
-            "cmd-shift-left",
-            "editor::SelectToBeginningOfLine",
-            wrap(),
-            ANY,
-        ));
-        named.push(("cmd-shift-right", "editor::SelectToEndOfLine", wrap(), ANY));
-    }
-    named
-}
-
-/// The Zed actions of the full editors, with the keys and contexts of their registry entries
-/// (`commands_editor.rs`), so the shortcut sheet shows what is bound.
-pub fn editor_bindings(mac: bool) -> Vec<KeyBinding> {
-    let mut out = Vec::new();
-    push(
-        "editor.select-next",
-        edit::SelectNext::default(),
-        mac,
-        &mut out,
-    );
-    push(
-        "editor.select-all-matches",
-        edit::SelectAllMatches,
-        mac,
-        &mut out,
-    );
-    push(
-        "editor.select-larger",
-        edit::SelectLargerSyntaxNode,
-        mac,
-        &mut out,
-    );
-    push(
-        "editor.select-smaller",
-        edit::SelectSmallerSyntaxNode,
-        mac,
-        &mut out,
-    );
-    push(
-        "editor.add-cursor-above",
-        edit::AddSelectionAbove {
-            skip_soft_wrap: true,
-        },
-        mac,
-        &mut out,
-    );
-    push(
-        "editor.add-cursor-below",
-        edit::AddSelectionBelow {
-            skip_soft_wrap: true,
-        },
-        mac,
-        &mut out,
-    );
-    push("editor.move-line-up", edit::MoveLineUp, mac, &mut out);
-    push("editor.move-line-down", edit::MoveLineDown, mac, &mut out);
-    push(
-        "editor.duplicate-line",
-        edit::DuplicateLineDown,
-        mac,
-        &mut out,
-    );
-    push("editor.delete-line", edit::DeleteLine, mac, &mut out);
-    push(
-        "editor.toggle-comments",
-        edit::ToggleComments::default(),
-        mac,
-        &mut out,
-    );
-    push("editor.toggle-fold", edit::ToggleFold, mac, &mut out);
-    push("editor.fold-all", edit::FoldAll, mac, &mut out);
-    push("editor.unfold-all", edit::UnfoldAll, mac, &mut out);
-    push(
-        "editor.toggle-hunk",
-        edit::ToggleSelectedDiffHunks,
-        mac,
-        &mut out,
-    );
-    out
-}
-
-fn push<A: Action + Clone>(id: &str, action: A, mac: bool, out: &mut Vec<KeyBinding>) {
-    push_in(id, action, mac, str::to_string, out);
-}
-
-/// `push`, with each registry context passed through `context` first.
+/// Binds `action` to each key of the registry entry `id`, each context passed through `context`.
 fn push_in<A: Action + Clone>(
     id: &str,
     action: A,
@@ -370,31 +192,8 @@ fn push_in<A: Action + Clone>(
     }
 }
 
-/// Zed's MoveUp and MoveDown live in a crate the app does not take, and the line-select actions
-/// keep `stop_at_soft_wraps` private: these bind by name.
-fn by_name(
-    cx: &App,
-    keys: &str,
-    name: &str,
-    data: Option<Value>,
-    context: &str,
-) -> Option<KeyBinding> {
-    let action = cx.build_action(name, data).ok()?;
-    let predicate = KeyBindingContextPredicate::parse(context).ok()?;
-    KeyBinding::load(
-        keys,
-        action,
-        Some(Rc::new(predicate)),
-        false,
-        None,
-        &DummyKeyboardMapper,
-    )
-    .ok()
-}
-
 #[cfg(test)]
 mod tests {
-    use editor::Editor;
     use gpui::{Context, Focusable as _, TestAppContext, Window};
     use ui::prelude::*;
 
@@ -412,8 +211,8 @@ mod tests {
         }
     }
 
-    /// The name of Zed's editor action `name` as the box's input carries it: the own input has
-    /// the same names in its own namespace (6.3.1).
+    /// The name of the action `name` as the box's input carries it: the registry names its
+    /// actions `editor::...`, the own input has them in its own namespace (6.3.1).
     fn action_name(name: &str) -> String {
         name.replace("editor::", "text_input::")
     }
@@ -459,38 +258,6 @@ mod tests {
 
     fn plain_box(window: &mut Window, cx: &mut App) -> TextBox {
         TextBox::plain(false, window, cx)
-    }
-
-    /// The keys that run the action `name` in the editor `make` gives, with the app's bindings.
-    fn keys_for(
-        cx: &mut TestAppContext,
-        name: &str,
-        make: impl FnOnce(&mut Window, &mut Context<Editor>) -> Editor + 'static,
-    ) -> Vec<String> {
-        crate::app::test_views::init(cx);
-        cx.update(shortcuts::bind);
-        let (editor, cx) = cx.add_window_view(make);
-        cx.run_until_parked();
-        cx.update(|window, cx| {
-            let action = cx.build_action(name, None).unwrap();
-            window
-                .bindings_for_action_in(action.as_ref(), &editor.focus_handle(cx))
-                .iter()
-                .map(|binding| {
-                    // `unparse`, not `to_string`: on macOS the display form is glyphs (⌥⇧←).
-                    binding
-                        .keystrokes()
-                        .iter()
-                        .map(|keystroke| keystroke.unparse())
-                        .collect::<Vec<_>>()
-                        .join(" ")
-                })
-                .collect()
-        })
-    }
-
-    fn many_lines(window: &mut Window, cx: &mut Context<Editor>) -> Editor {
-        Editor::auto_height(6, 12, window, cx)
     }
 
     /// The platform's word key: Alt on macOS, Ctrl elsewhere.
@@ -562,7 +329,7 @@ mod tests {
         assert!(keys.contains(&word("backspace")), "{keys:?}");
     }
 
-    /// T-0316: the Zed keys of the full editors.
+    /// T-0316: the keys of the full editors.
     const EDITOR_ACTIONS: &[&str] = &[
         "editor::SelectNext",
         "editor::SelectAllMatches",
@@ -575,8 +342,8 @@ mod tests {
     ];
 
     #[gpui::test]
-    fn the_editor_keys_reach_a_full_editor(cx: &mut TestAppContext) {
-        let keys = keys_for(cx, "editor::DeleteLine", Editor::multi_line);
+    fn the_editor_keys_reach_a_full_box(cx: &mut TestAppContext) {
+        let keys = box_keys_for(cx, "editor::DeleteLine", plain_box);
         let delete = if cfg!(target_os = "macos") {
             "cmd-shift-k"
         } else {
@@ -587,12 +354,12 @@ mod tests {
             keys.iter().any(|key| key.eq_ignore_ascii_case(delete)),
             "{keys:?}"
         );
-        let keys = keys_for(cx, "editor::MoveLineUp", Editor::multi_line);
+        let keys = box_keys_for(cx, "editor::MoveLineUp", plain_box);
         assert!(keys.iter().any(|key| key == "alt-up"), "{keys:?}");
     }
 
-    /// The keys of the full editors reach the Docs edit box, on both builds: the own input binds
-    /// and handles each of them (S3.3).
+    /// The keys of the full editors reach the Docs edit box: the own input binds and handles each
+    /// of them (S3.3).
     #[gpui::test]
     fn the_editor_keys_reach_a_plain_box(cx: &mut TestAppContext) {
         let more = [
@@ -609,7 +376,7 @@ mod tests {
     #[gpui::test]
     fn the_editor_keys_stay_out_of_a_one_line_box(cx: &mut TestAppContext) {
         for name in EDITOR_ACTIONS {
-            let keys = keys_for(cx, name, Editor::single_line);
+            let keys = box_keys_for(cx, name, one_line);
             assert!(keys.is_empty(), "{name}: {keys:?}");
         }
     }
@@ -617,45 +384,8 @@ mod tests {
     #[gpui::test]
     fn the_editor_keys_stay_out_of_a_box_of_many_lines(cx: &mut TestAppContext) {
         for name in EDITOR_ACTIONS {
-            let keys = keys_for(cx, name, many_lines);
+            let keys = box_keys_for(cx, name, many_line_box);
             assert!(keys.is_empty(), "{name}: {keys:?}");
-        }
-    }
-
-    /// Folds are for the editor tab: a plain full editor (the Docs box, the diff) has none.
-    #[gpui::test]
-    fn fold_keys_only_in_the_editor_tab(cx: &mut TestAppContext) {
-        let keys = keys_for(cx, "editor::FoldAll", Editor::multi_line);
-        assert!(keys.is_empty(), "{keys:?}");
-    }
-
-    /// T-BIND-1: `by_name` drops a name it cannot build with no error, so a renamed action would
-    /// silently lose its key. Every entry must build.
-    #[gpui::test]
-    fn every_by_name_entry_builds_a_binding(cx: &mut TestAppContext) {
-        for mac in [true, false] {
-            let list = super::named(mac);
-            let built = cx.update(|cx| {
-                list.iter()
-                    .filter(|(keys, name, data, context)| {
-                        super::by_name(cx, keys, name, data.clone(), context).is_some()
-                    })
-                    .count()
-            });
-            assert_eq!(built, list.len(), "mac {mac}: {list:?}");
-        }
-    }
-
-    #[test]
-    fn binds_every_editor_entry_of_the_registry() {
-        use crate::app::commands::EDITOR_COMMANDS;
-        let documented: usize = EDITOR_COMMANDS
-            .iter()
-            .filter(|command| command.documents_only)
-            .map(|command| command.keys.len() * command.contexts.len())
-            .sum();
-        for mac in [true, false] {
-            assert_eq!(super::editor_bindings(mac).len(), documented);
         }
     }
 }
