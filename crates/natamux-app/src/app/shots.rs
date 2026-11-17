@@ -136,6 +136,10 @@ pub fn run(handle: WindowHandle<Root>, shot: Shot, cx: &mut App) {
     if fixed.is_err() {
         return;
     }
+    if matches!(shot, Shot::DiffFind | Shot::EditorWhitespace) {
+        // `use_view` only stores the view; Show whitespace reaches the views through `apply`.
+        super::appearance::apply(&view_of(shot), cx);
+    }
     cx.spawn(async move |cx| {
         for _ in 0..REDRAWS {
             cx.background_executor().timer(REDRAW_EVERY).await;
