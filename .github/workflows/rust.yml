@@ -509,6 +509,9 @@ jobs:
             changes-diff-collapsed changes-diff-wrapped changes-diff-deleted-only
             changes-diff-focused changes-diff-scrollbar menu-keyboard button-focus
             button-disabled-tooltip checkbox-states
+            project-settings-scrollbar project-settings-tab-stages-scrollbar
+            project-settings-stage-sheet-scrollbar project-settings-branch-scrollbar
+            project-settings-add-stage-scrollbar workspace-docs-rich-scrollbar
             code-bash code-c code-cpp code-css code-diff code-env code-gitcommit code-go
             code-gomod code-gowork code-javascript code-jsdoc code-json code-jsonc code-markdown
             code-markdown-inline code-python code-regex code-rust code-tsx code-typescript
@@ -550,6 +553,9 @@ jobs:
             changes-diff-collapsed changes-diff-wrapped changes-diff-deleted-only
             changes-diff-focused changes-diff-scrollbar menu-keyboard button-focus
             button-disabled-tooltip checkbox-states
+            project-settings-scrollbar project-settings-tab-stages-scrollbar
+            project-settings-stage-sheet-scrollbar project-settings-branch-scrollbar
+            project-settings-add-stage-scrollbar workspace-docs-rich-scrollbar
             code-bash code-c code-cpp code-css code-diff code-env code-gitcommit code-go
             code-gomod code-gowork code-javascript code-jsdoc code-json code-jsonc code-markdown
             code-markdown-inline code-python code-regex code-rust code-tsx code-typescript

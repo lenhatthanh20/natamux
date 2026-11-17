@@ -12,8 +12,7 @@ use gpui::{
     Entity, Hsla, Modifiers, MouseButton, MouseDownEvent, ScrollDelta, ScrollWheelEvent,
     TestAppContext, UpdateGlobal as _, VisualTestContext, point,
 };
-use ui::editor_menu::ContextMenu;
-use ui::prelude::*;
+use ui::{ContextMenu, prelude::*};
 
 use super::*;
 use crate::app::appearance::Appearance;

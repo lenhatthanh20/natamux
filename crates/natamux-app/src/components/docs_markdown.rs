@@ -24,8 +24,9 @@ use pulldown_cmark::{
 };
 use settings::Settings as _;
 use theme_settings::ThemeSettings;
-use ui::{Checkbox, ScrollAxes, Scrollbars, ToggleState, WithScrollbar, prelude::*};
+use ui::{Checkbox, ScrollAxes, ToggleState, WithScrollbar, prelude::*};
 
+use super::scrollbars::plain_scrollbars;
 use crate::app::links::open_link;
 
 /// One view per shown file; a new text goes in with `set_text`.
@@ -979,7 +980,7 @@ impl Draw<'_> {
         let start = block.range.start;
         let scroll = self.scrolls.entry(start).or_default().clone();
         self.used_scrolls.insert(start);
-        let bar = Scrollbars::new(ScrollAxes::Horizontal)
+        let bar = plain_scrollbars(ScrollAxes::Horizontal, cx)
             .id(("doc-code-scrollbar", start))
             .tracked_scroll_handle(&scroll)
             .with_track_along(ScrollAxes::Horizontal, look.code_background)
@@ -1080,7 +1081,7 @@ impl Draw<'_> {
         let look = self.look;
         let start = block.range.start;
         let columns = u16::try_from(aligns.len()).unwrap_or(u16::MAX);
-        let bar = Scrollbars::new(ScrollAxes::Horizontal)
+        let bar = plain_scrollbars(ScrollAxes::Horizontal, cx)
             .id(("doc-table-scrollbar", start))
             .notify_content();
         let grid = div()

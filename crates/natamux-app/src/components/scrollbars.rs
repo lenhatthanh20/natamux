@@ -9,18 +9,39 @@ use ui::scrollbars::{ScrollbarVisibility, ShowScrollbar};
 use ui::{ScrollAxes, ScrollableHandle, Scrollbars, WithScrollbar};
 
 use super::motion::is_still;
+use crate::app::appearance::Inputs;
+use crate::app::appearance_rules::shows_scrollbars;
 
-/// Auto-hide in the app, never in a `--shot`, so shots do not catch a fading thumb.
+/// Auto-hide in the app. A `--shot` shows it only in a `-scrollbar` state, so other shots do not
+/// catch a fading thumb.
 #[derive(Default)]
 pub struct AppScrollbar;
 
 impl ScrollbarVisibility for AppScrollbar {
     fn visibility(&self, cx: &App) -> ShowScrollbar {
-        if is_still(cx) {
+        if shot_shows_bars(cx) {
+            ShowScrollbar::Always
+        } else if is_still(cx) {
             ShowScrollbar::Never
         } else {
             ShowScrollbar::Auto
         }
+    }
+}
+
+/// A `-scrollbar` shot state is on.
+fn shot_shows_bars(cx: &App) -> bool {
+    let shot = cx.try_global::<Inputs>().and_then(|inputs| inputs.shot);
+    shot.is_some_and(shows_scrollbars)
+}
+
+/// Zed's `Scrollbars::new(axes)`, which shows and hides on its own, always shown in a
+/// `-scrollbar` shot state.
+pub fn plain_scrollbars(axes: ScrollAxes, cx: &App) -> Scrollbars {
+    if shot_shows_bars(cx) {
+        Scrollbars::always_visible(axes)
+    } else {
+        Scrollbars::new(axes)
     }
 }
 

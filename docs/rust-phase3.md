@@ -282,6 +282,12 @@ The move off Zed's GPL crates (`docs/plan-mit-license.md`) redraws the terminal,
 | `button-focus` | The Add a task dialog after Shift+Tab: the Add button focused |
 | `button-disabled-tooltip` | The Agents grid with the pointer on the status bar's details toggle, which is off: its tooltip |
 | `checkbox-states` | Roll back with one file checked, one unchecked and a conflict whose box is off and disabled |
+| `project-settings-scrollbar` | `project-settings` with the scrollbars shown |
+| `project-settings-tab-stages-scrollbar` | `project-settings-tab-stages` with the scrollbars shown (the pipeline preview) |
+| `project-settings-stage-sheet-scrollbar` | `project-settings-stage-sheet` with the scrollbars shown (the sheet's right column) |
+| `project-settings-branch-scrollbar` | `project-settings-branch` with the scrollbars shown (the branch sheet) |
+| `project-settings-add-stage-scrollbar` | `project-settings-add-stage` with the scrollbars shown (the stage picker) |
+| `workspace-docs-rich-scrollbar` | `workspace-docs-rich` with the scrollbars shown (code blocks and tables) |
 
 `--theme-name NAME` shows one theme of the app in its own look; the name is the theme's in lower case with a dash for a space (`rose-pine-dawn`). A run of every state shoots `tasks-table`, `workspace-changes-diff` and `workspace-terminal-running` in each theme but Natamux Light and Natamux Dark, at 1000x680 only, named `<state>-<theme>-1000x680.png` (D19 of the plan). A state whose name ends in `-scrollbar` shows the scrollbars, which every other shot hides.
 
