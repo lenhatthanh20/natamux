@@ -1,56 +1,63 @@
-//! A box that sets the rem size of its children. A menu drawn deferred would otherwise take the
-//! rem size of whatever element draws it, so it sets the UI font size itself.
+//! A rem size for one subtree. gpui reads rems from the element that draws a deferred menu, so a
+//! menu sets its own rem (the UI font size); the diff sets the rem of its side's font.
 
 use gpui::{
-    AnyElement, App, Bounds, Div, DivFrameState, Element, ElementId, GlobalElementId, Hitbox,
-    InspectorElementId, InteractiveElement, IntoElement, LayoutId, ParentElement, Pixels,
-    StyleRefinement, Styled, Window, div,
+    AnyElement, App, Bounds, Div, Element, ElementId, GlobalElementId, InspectorElementId,
+    InteractiveElement, IntoElement, LayoutId, ParentElement, Pixels, StyleRefinement, Styled,
+    Window, div,
 };
 
-/// A `div` whose children are laid out and drawn with `rem_size` as one rem.
-pub struct WithRemSize {
-    inner: Div,
-    rem_size: Pixels,
+/// Lays out and paints `inner` with `rem` as the size of one rem.
+pub struct RemScope<E> {
+    rem: Pixels,
+    inner: E,
 }
 
-impl WithRemSize {
-    pub fn new(rem_size: impl Into<Pixels>) -> Self {
-        Self {
+/// The box call sites build: a `div` under its own rem size.
+pub type WithRemSize = RemScope<Div>;
+
+impl RemScope<Div> {
+    pub fn new(rem: impl Into<Pixels>) -> Self {
+        RemScope {
+            rem: rem.into(),
             inner: div(),
-            rem_size: rem_size.into(),
         }
     }
 
-    /// Blocks the pointer from reaching what is under the box.
-    pub fn occlude(mut self) -> Self {
-        self.inner = self.inner.occlude();
-        self
+    /// Stops the pointer from reaching what lies under the box.
+    pub fn occlude(self) -> Self {
+        RemScope {
+            inner: self.inner.occlude(),
+            ..self
+        }
     }
 }
 
-impl Styled for WithRemSize {
+impl<E: Styled> Styled for RemScope<E> {
     fn style(&mut self) -> &mut StyleRefinement {
         self.inner.style()
     }
 }
 
-impl ParentElement for WithRemSize {
+impl<E: ParentElement> ParentElement for RemScope<E> {
     fn extend(&mut self, elements: impl IntoIterator<Item = AnyElement>) {
-        self.inner.extend(elements)
+        self.inner.extend(elements);
     }
 }
 
-impl IntoElement for WithRemSize {
+impl<E: Element> IntoElement for RemScope<E> {
     type Element = Self;
 
-    fn into_element(self) -> Self {
+    fn into_element(self) -> Self::Element {
         self
     }
 }
 
-impl Element for WithRemSize {
-    type RequestLayoutState = DivFrameState;
-    type PrepaintState = Option<Hitbox>;
+// Each phase runs the inner element's phase with the rem pushed, so every length in the subtree
+// resolves against it.
+impl<E: Element> Element for RemScope<E> {
+    type RequestLayoutState = E::RequestLayoutState;
+    type PrepaintState = E::PrepaintState;
 
     fn id(&self) -> Option<ElementId> {
         Element::id(&self.inner)
@@ -67,9 +74,8 @@ impl Element for WithRemSize {
         window: &mut Window,
         cx: &mut App,
     ) -> (LayoutId, Self::RequestLayoutState) {
-        let rem = self.rem_size;
-        let inner = &mut self.inner;
-        window.with_rem_size(Some(rem), |window| {
+        let Self { rem, inner } = self;
+        window.with_rem_size(Some(*rem), |window| {
             inner.request_layout(id, inspector_id, window, cx)
         })
     }
@@ -79,14 +85,13 @@ impl Element for WithRemSize {
         id: Option<&GlobalElementId>,
         inspector_id: Option<&InspectorElementId>,
         bounds: Bounds<Pixels>,
-        state: &mut Self::RequestLayoutState,
+        layout: &mut Self::RequestLayoutState,
         window: &mut Window,
         cx: &mut App,
     ) -> Self::PrepaintState {
-        let rem = self.rem_size;
-        let inner = &mut self.inner;
-        window.with_rem_size(Some(rem), |window| {
-            inner.prepaint(id, inspector_id, bounds, state, window, cx)
+        let Self { rem, inner } = self;
+        window.with_rem_size(Some(*rem), |window| {
+            inner.prepaint(id, inspector_id, bounds, layout, window, cx)
         })
     }
 
@@ -95,15 +100,14 @@ impl Element for WithRemSize {
         id: Option<&GlobalElementId>,
         inspector_id: Option<&InspectorElementId>,
         bounds: Bounds<Pixels>,
-        state: &mut Self::RequestLayoutState,
-        hitbox: &mut Self::PrepaintState,
+        layout: &mut Self::RequestLayoutState,
+        prepaint: &mut Self::PrepaintState,
         window: &mut Window,
         cx: &mut App,
     ) {
-        let rem = self.rem_size;
-        let inner = &mut self.inner;
-        window.with_rem_size(Some(rem), |window| {
-            inner.paint(id, inspector_id, bounds, state, hitbox, window, cx)
-        })
+        let Self { rem, inner } = self;
+        window.with_rem_size(Some(*rem), |window| {
+            inner.paint(id, inspector_id, bounds, layout, prepaint, window, cx)
+        });
     }
 }

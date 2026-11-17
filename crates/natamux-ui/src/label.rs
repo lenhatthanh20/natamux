@@ -1,8 +1,10 @@
-//! Text: a label in the UI font (or the buffer font), and a headline.
+//! Text widgets: `Label` for a line of UI text and `Headline` for a title.
+
+use std::borrow::Cow;
 
 use gpui::{
     App, Div, FontWeight, IntoElement, ParentElement, Pixels, Rems, RenderOnce, SharedString,
-    Styled, TextAlign, UnderlineStyle, Window, div, prelude::FluentBuilder, px, relative, rems,
+    Styled, TextAlign, Window, div, px, relative, rems,
 };
 use theme::ActiveTheme;
 
@@ -10,7 +12,7 @@ use crate::color::Color;
 use crate::control_chars;
 use crate::spacing::rems_from_px;
 
-/// The text size of a label.
+/// How big the text of a label is.
 #[derive(Debug, Default, PartialEq, Clone, Copy)]
 pub enum LabelSize {
     /// 14 px.
@@ -25,7 +27,20 @@ pub enum LabelSize {
     Custom(Rems),
 }
 
-/// A text size by name, for text that is not a label.
+impl LabelSize {
+    fn text_rems(self) -> Rems {
+        let px: f32 = match self {
+            Self::Custom(size) => return size,
+            Self::XSmall => 10.,
+            Self::Small => 12.,
+            Self::Default => 14.,
+            Self::Large => 16.,
+        };
+        rems_from_px(px)
+    }
+}
+
+/// A named text size, for text drawn without a label.
 #[derive(Debug, Default, Clone)]
 pub enum TextSize {
     /// 14 px.
@@ -44,87 +59,89 @@ pub enum TextSize {
 }
 
 impl TextSize {
-    /// The size in rems, so it follows the UI size.
+    /// In rems, so the size grows and shrinks with the UI size.
     pub fn rems(self, cx: &App) -> Rems {
         rems_from_px(self.pixels(cx))
     }
 
-    /// The size in px. The named sizes are fixed: they do not follow the UI size.
+    /// In px. The four named sizes stay the same at every UI size; the state filter counts on it.
     pub fn pixels(self, cx: &App) -> Pixels {
-        let settings = theme::theme_settings(cx);
-        match self {
-            Self::Large => px(16.),
-            Self::Default => px(14.),
-            Self::Small => px(12.),
-            Self::XSmall => px(10.),
-            Self::Ui => settings.ui_font_size(cx),
-            Self::Editor => settings.buffer_font_size(cx),
-        }
+        let fixed: f32 = match self {
+            Self::XSmall => 10.,
+            Self::Small => 12.,
+            Self::Default => 14.,
+            Self::Large => 16.,
+            Self::Ui => return theme::theme_settings(cx).ui_font_size(cx),
+            Self::Editor => return theme::theme_settings(cx).buffer_font_size(cx),
+        };
+        px(fixed)
     }
 }
 
-/// The line height of a label.
+/// How tall one line of a label is.
 #[derive(Default, PartialEq, Copy, Clone)]
 pub enum LineHeightStyle {
-    /// The text's own line height (1.618 times its size, from gpui).
+    /// gpui's line height for the text: 1.618 times the text size.
     #[default]
     TextLabel,
-    /// One line is exactly as high as the text size.
+    /// The line is exactly as tall as the text size.
     UiLabel,
 }
 
-/// The setters every label takes.
+/// The setters the app calls on a label.
 pub trait LabelCommon {
     fn size(self, size: LabelSize) -> Self;
     fn weight(self, weight: FontWeight) -> Self;
     fn line_height_style(self, line_height_style: LineHeightStyle) -> Self;
     fn color(self, color: Color) -> Self;
+    /// A line through the text.
     fn strikethrough(self) -> Self;
-    fn italic(self) -> Self;
-    fn underline(self) -> Self;
-    /// The colour's alpha times this.
+    /// Multiplies the alpha of the text colour.
     fn alpha(self, alpha: f32) -> Self;
-    /// One line, cut with an ellipsis at the end when it does not fit.
+    /// Keeps the text on one line and ends it with "…" where it does not fit.
     fn truncate(self) -> Self;
-    /// One line; control characters show as symbols.
+    /// Keeps the text on one line; a new line or another control character shows as a symbol.
     fn single_line(self) -> Self;
-    /// The buffer font. It also takes the buffer font's weight, so a `weight` set before it is
-    /// lost (the key chip relies on this).
+    /// Draws in the buffer font, at its weight. A weight set earlier is replaced; one set later
+    /// wins (the key chip draws at 400 because of this).
     fn buffer_font(self, cx: &App) -> Self;
 }
 
-/// A line of UI text. Size 14 and the default text colour unless set.
+/// How a label treats text wider than its box. A later setter can only make it stricter.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum Flow {
+    Wrap,
+    OneLine,
+    Ellipsis,
+}
+
+/// UI text: 14 px in the theme's text colour, unless a setter says otherwise.
 #[derive(IntoElement)]
 pub struct Label {
-    base: Div,
     text: SharedString,
+    /// Holds what is set straight on the box: the buffer font, a line clamp, centring.
+    frame: Div,
     size: LabelSize,
+    tone: Color,
+    fade: Option<f32>,
     weight: Option<FontWeight>,
-    line_height_style: LineHeightStyle,
-    color: Color,
-    strikethrough: bool,
-    italic: bool,
-    underline: bool,
-    alpha: Option<f32>,
-    single_line: bool,
-    truncate: bool,
+    tight_lines: bool,
+    struck: bool,
+    flow: Flow,
 }
 
 impl Label {
     pub fn new(text: impl Into<SharedString>) -> Self {
-        Self {
-            base: div(),
+        Label {
             text: text.into(),
-            size: LabelSize::Default,
+            frame: div(),
+            size: LabelSize::default(),
+            tone: Color::Default,
+            fade: None,
             weight: None,
-            line_height_style: LineHeightStyle::TextLabel,
-            color: Color::Default,
-            strikethrough: false,
-            italic: false,
-            underline: false,
-            alpha: None,
-            single_line: false,
-            truncate: false,
+            tight_lines: false,
+            struck: false,
+            flow: Flow::Wrap,
         }
     }
 
@@ -132,126 +149,110 @@ impl Label {
         self.text = text.into();
     }
 
-    /// Wraps, and cuts with an ellipsis at the end of the last of `lines` lines.
-    pub fn line_clamp(mut self, lines: usize) -> Self {
-        self.base = self.base.line_clamp(lines).text_ellipsis();
-        self
+    /// Wraps up to `lines` lines; the last one ends with "…" when the text goes on.
+    pub fn line_clamp(self, lines: usize) -> Self {
+        let frame = self.frame.line_clamp(lines).text_ellipsis();
+        Label { frame, ..self }
     }
 
     pub fn text_center(mut self) -> Self {
-        self.base.style().text.text_align = Some(TextAlign::Center);
+        self.frame.style().text.text_align = Some(TextAlign::Center);
+        self
+    }
+
+    fn with_flow(mut self, flow: Flow) -> Self {
+        self.flow = self.flow.max(flow);
         self
     }
 }
 
 impl LabelCommon for Label {
-    fn size(mut self, size: LabelSize) -> Self {
-        self.size = size;
-        self
+    fn size(self, size: LabelSize) -> Self {
+        Label { size, ..self }
     }
 
-    fn weight(mut self, weight: FontWeight) -> Self {
-        self.weight = Some(weight);
-        self
+    fn weight(self, weight: FontWeight) -> Self {
+        Label {
+            weight: Some(weight),
+            ..self
+        }
     }
 
-    fn line_height_style(mut self, line_height_style: LineHeightStyle) -> Self {
-        self.line_height_style = line_height_style;
-        self
+    fn line_height_style(self, line_height_style: LineHeightStyle) -> Self {
+        Label {
+            tight_lines: line_height_style == LineHeightStyle::UiLabel,
+            ..self
+        }
     }
 
-    fn color(mut self, color: Color) -> Self {
-        self.color = color;
-        self
+    fn color(self, color: Color) -> Self {
+        Label {
+            tone: color,
+            ..self
+        }
     }
 
-    fn strikethrough(mut self) -> Self {
-        self.strikethrough = true;
-        self
+    fn strikethrough(self) -> Self {
+        Label {
+            struck: true,
+            ..self
+        }
     }
 
-    fn italic(mut self) -> Self {
-        self.italic = true;
-        self
+    fn alpha(self, alpha: f32) -> Self {
+        Label {
+            fade: Some(alpha),
+            ..self
+        }
     }
 
-    fn underline(mut self) -> Self {
-        self.underline = true;
-        self
-    }
-
-    fn alpha(mut self, alpha: f32) -> Self {
-        self.alpha = Some(alpha);
-        self
-    }
-
-    fn truncate(mut self) -> Self {
-        self.truncate = true;
-        self
+    fn truncate(self) -> Self {
+        self.with_flow(Flow::Ellipsis)
     }
 
     fn single_line(mut self) -> Self {
-        if let std::borrow::Cow::Owned(shown) = control_chars::visible(&self.text) {
-            self.text = shown.into();
+        if let Cow::Owned(shown) = control_chars::visible(&self.text) {
+            self.text = SharedString::from(shown);
         }
-        self.single_line = true;
-        self
+        self.with_flow(Flow::OneLine)
     }
 
     fn buffer_font(mut self, cx: &App) -> Self {
         let font = theme::theme_settings(cx).buffer_font(cx).clone();
         self.weight = Some(font.weight);
-        self.base = self.base.font(font);
+        self.frame = self.frame.font(font);
         self
-    }
-}
-
-/// The text size of a label size.
-fn text_size(size: LabelSize) -> Rems {
-    match size {
-        LabelSize::Large => rems_from_px(16_f32),
-        LabelSize::Default => rems_from_px(14_f32),
-        LabelSize::Small => rems_from_px(12_f32),
-        LabelSize::XSmall => rems_from_px(10_f32),
-        LabelSize::Custom(size) => size,
     }
 }
 
 impl RenderOnce for Label {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
-        let mut color = self.color.color(cx);
-        if let Some(alpha) = self.alpha {
-            color.fade_out(1. - alpha);
+        let mut tone = self.tone.color(cx);
+        if let Some(alpha) = self.fade {
+            tone.fade_out(1. - alpha);
         }
         let weight = self
             .weight
-            .unwrap_or(theme::theme_settings(cx).ui_font(cx).weight);
-        let underline = UnderlineStyle {
-            thickness: px(1.),
-            color: Some(cx.theme().colors().text_muted.opacity(0.4)),
-            wavy: false,
-        };
-        self.base
-            .text_size(text_size(self.size))
-            .when(self.line_height_style == LineHeightStyle::UiLabel, |this| {
-                this.line_height(relative(1.))
-            })
-            .when(self.italic, |this| this.italic())
-            .when(self.underline, |mut this| {
-                this.text_style().underline = Some(underline);
-                this
-            })
-            .when(self.strikethrough, |this| this.line_through())
-            .when(self.single_line, |this| this.whitespace_nowrap())
-            .when(self.truncate, |this| {
-                this.min_w_0()
-                    .overflow_x_hidden()
-                    .whitespace_nowrap()
-                    .text_ellipsis()
-            })
-            .text_color(color)
-            .font_weight(weight)
-            .child(self.text)
+            .unwrap_or_else(|| theme::theme_settings(cx).ui_font(cx).weight);
+
+        let mut el = self
+            .frame
+            .text_size(self.size.text_rems())
+            .text_color(tone)
+            .font_weight(weight);
+        if self.tight_lines {
+            el = el.line_height(relative(1.));
+        }
+        if self.struck {
+            el = el.line_through();
+        }
+        if self.flow >= Flow::OneLine {
+            el = el.whitespace_nowrap();
+        }
+        if self.flow == Flow::Ellipsis {
+            el = el.min_w_0().overflow_x_hidden().text_ellipsis();
+        }
+        el.child(self.text)
     }
 }
 
@@ -268,54 +269,73 @@ pub enum HeadlineSize {
 
 impl HeadlineSize {
     pub fn rems(self) -> Rems {
-        match self {
-            HeadlineSize::XSmall => rems(0.88),
-            HeadlineSize::Small => rems(1.),
-            HeadlineSize::Medium => rems(1.125),
-            HeadlineSize::Large => rems(1.27),
-            HeadlineSize::XLarge => rems(1.43),
-        }
+        rems(match self {
+            Self::XSmall => 0.88,
+            Self::Small => 1.,
+            Self::Medium => 1.125,
+            Self::Large => 1.27,
+            Self::XLarge => 1.43,
+        })
     }
 
+    /// The same at every size.
     pub fn line_height(self) -> Rems {
         rems(1.6)
     }
 }
 
-/// A title in the UI font, always in the theme's text colour.
+/// A title in the UI font. It is always drawn in the theme's text colour.
 #[derive(IntoElement)]
 pub struct Headline {
-    size: HeadlineSize,
     text: SharedString,
+    size: HeadlineSize,
 }
 
 impl Headline {
     pub fn new(text: impl Into<SharedString>) -> Self {
-        Self {
-            size: HeadlineSize::default(),
+        Headline {
             text: text.into(),
+            size: HeadlineSize::Medium,
         }
     }
 
-    pub fn size(mut self, size: HeadlineSize) -> Self {
-        self.size = size;
-        self
+    pub fn size(self, size: HeadlineSize) -> Self {
+        Headline { size, ..self }
     }
 
-    /// Takes a colour like the other text widgets, but a headline keeps the text colour.
-    pub fn color(self, _color: Color) -> Self {
+    /// There for call sites that colour every text widget; a headline ignores it.
+    pub fn color(self, _: Color) -> Self {
         self
     }
 }
 
 impl RenderOnce for Headline {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
-        let font = theme::theme_settings(cx).ui_font(cx).clone();
+        let ui_font = theme::theme_settings(cx).ui_font(cx).clone();
+        let text = cx.theme().colors().text;
         div()
-            .font(font)
-            .line_height(self.size.line_height())
             .text_size(self.size.rems())
-            .text_color(cx.theme().colors().text)
+            .line_height(self.size.line_height())
+            .font(ui_font)
+            .text_color(text)
             .child(self.text)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn truncate_and_single_line_give_an_ellipsis_in_either_order() {
+        assert!(Label::new("a").truncate().single_line().flow == Flow::Ellipsis);
+        assert!(Label::new("a").single_line().truncate().flow == Flow::Ellipsis);
+        assert!(Label::new("a").single_line().flow == Flow::OneLine);
+        assert!(Label::new("a").flow == Flow::Wrap);
+    }
+
+    #[test]
+    fn single_line_shows_control_characters_as_symbols() {
+        assert_eq!(Label::new("a\nb").single_line().text.as_ref(), "a\u{23ce}b");
     }
 }
