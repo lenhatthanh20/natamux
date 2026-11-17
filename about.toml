@@ -16,5 +16,7 @@ accepted = [
 ignore-dev-dependencies = true
 ignore-build-dependencies = false
 ignore-transitive-dependencies = false
+
 # Private crates are Natamux's own and the Zed crates, which THIRD-PARTY-NOTICES.md lists by hand.
-ignore-private = true
+[private]
+ignore = true
