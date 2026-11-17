@@ -4,6 +4,7 @@
 
 mod button;
 mod button_like;
+mod button_setters;
 mod checkbox;
 mod chip;
 mod color;
