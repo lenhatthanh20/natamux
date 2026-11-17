@@ -33,7 +33,11 @@ fn the_own_fonts_and_sizes_equal_the_theme_settings(cx: &mut TestAppContext) {
                 assert_eq!(own.ui_font, settings.ui_font, "{case}");
                 assert_eq!(own.ui_font_size, settings.ui_font_size(cx), "{case}");
                 assert_eq!(own.buffer_font, settings.buffer_font, "{case}");
-                assert_eq!(own.buffer_font_size, settings.buffer_font_size(cx), "{case}");
+                assert_eq!(
+                    own.buffer_font_size,
+                    settings.buffer_font_size(cx),
+                    "{case}"
+                );
                 assert_eq!(own.buffer_line_height, settings.line_height(), "{case}");
                 let terminal_font = own
                     .terminal_font
@@ -91,9 +95,15 @@ fn terminal_of(font: &ResolvedFont) -> Option<(String, f32)> {
 // The terminal size is the font's own, not scaled; the family is kept as typed.
 #[test]
 fn takes_the_picked_terminal_font_as_it_is() {
-    assert_eq!(terminal_of(&custom("Iosevka", 14.0)), Some(("Iosevka".into(), 14.0)));
+    assert_eq!(
+        terminal_of(&custom("Iosevka", 14.0)),
+        Some(("Iosevka".into(), 14.0))
+    );
     let family = "Fira \"Code\\";
-    assert_eq!(terminal_of(&custom(family, 13.5)), Some((family.into(), 13.5)));
+    assert_eq!(
+        terminal_of(&custom(family, 13.5)),
+        Some((family.into(), 13.5))
+    );
 }
 
 // A terminal with no font of its own takes the buffer font and its size, so the UI size scales
@@ -186,7 +196,10 @@ impl gpui::Render for Kit {
             .font(font)
             .bg(cx.theme().colors().background)
             .child(part("kit-label", Label::new("Plan").into_any_element()))
-            .child(part("kit-button", Button::new("go", "Go").into_any_element()))
+            .child(part(
+                "kit-button",
+                Button::new("go", "Go").into_any_element(),
+            ))
             .child(part(
                 "kit-checkbox",
                 ui::Checkbox::new("on", ui::ToggleState::Selected).into_any_element(),

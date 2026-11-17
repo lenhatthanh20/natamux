@@ -59,8 +59,14 @@ fn builds_the_settings_with_the_theme_and_the_sizes() {
     assert_eq!(value.buffer_font, font(".ZedMono"));
     assert_eq!(f32::from(value.ui_font_size), 16.0);
     assert_eq!(f32::from(value.buffer_font_size), 13.0);
-    let modes: Vec<_> = ThemeChoice::ALL.iter().map(|choice| choice.mode()).collect();
-    assert_eq!(modes, [ThemeMode::System, ThemeMode::Light, ThemeMode::Dark]);
+    let modes: Vec<_> = ThemeChoice::ALL
+        .iter()
+        .map(|choice| choice.mode())
+        .collect();
+    assert_eq!(
+        modes,
+        [ThemeMode::System, ThemeMode::Light, ThemeMode::Dark]
+    );
 }
 
 #[test]
@@ -79,7 +85,10 @@ fn gives_the_picked_theme_of_each_look() {
 fn scales_the_ui_and_buffer_sizes_by_the_zoom_to_one_decimal() {
     let sizes = |size: UiSize| {
         let value = theme_settings(ThemeChoice::System, ThemeNames::default(), size.zoom());
-        (f32::from(value.ui_font_size), f32::from(value.buffer_font_size))
+        (
+            f32::from(value.ui_font_size),
+            f32::from(value.buffer_font_size),
+        )
     };
     assert_eq!(sizes(UiSize::Compact), (14.7, 12.0));
     assert_eq!(sizes(UiSize::Large), (17.2, 14.0));
