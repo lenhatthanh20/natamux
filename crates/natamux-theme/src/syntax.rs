@@ -93,10 +93,8 @@ mod tests {
 
     #[test]
     fn a_name_given_twice_is_found_at_its_last_entry() {
-        let theme = SyntaxTheme::new([
-            ("a".to_string(), weight(1.)),
-            ("a".to_string(), weight(2.)),
-        ]);
+        let theme =
+            SyntaxTheme::new([("a".to_string(), weight(1.)), ("a".to_string(), weight(2.))]);
         assert_eq!(theme.style_for_name("a"), Some(weight(2.)));
         assert_eq!(theme.highlight_id("a.b"), Some(1));
     }

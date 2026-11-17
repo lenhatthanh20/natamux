@@ -296,7 +296,8 @@ mod tests {
 
     #[test]
     fn reads_the_syntax_entries_in_file_order() {
-        let text = r#"{"zeta": {"color": null}, "alpha": {"font_weight": 700, "font_style": "italic"}}"#;
+        let text =
+            r#"{"zeta": {"color": null}, "alpha": {"font_weight": 700, "font_style": "italic"}}"#;
         let syntax: SyntaxFile = serde_json::from_str(text).unwrap();
         let names: Vec<_> = syntax.0.iter().map(|(name, _)| name.as_str()).collect();
         assert_eq!(names, ["zeta", "alpha"]);

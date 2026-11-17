@@ -113,7 +113,10 @@ pub fn init_for_tests(assets: impl AssetSource, cx: &mut App) -> Result<()> {
 
 /// Changes the settings, then shows the theme they pick.
 pub fn set_appearance(cx: &mut App, change: impl FnOnce(&mut ThemeSettings)) {
-    let mut settings = cx.try_global::<ThemeSettings>().cloned().unwrap_or_default();
+    let mut settings = cx
+        .try_global::<ThemeSettings>()
+        .cloned()
+        .unwrap_or_default();
     change(&mut settings);
     cx.set_global(settings);
     reload_theme(cx);

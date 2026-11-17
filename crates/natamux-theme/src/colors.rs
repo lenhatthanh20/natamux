@@ -314,7 +314,10 @@ pub struct AccentColors(pub Arc<[Hsla]>);
 impl AccentColors {
     pub fn color_for_index(&self, index: u32) -> Hsla {
         let len = self.0.len().max(1);
-        self.0.get(index as usize % len).copied().unwrap_or_default()
+        self.0
+            .get(index as usize % len)
+            .copied()
+            .unwrap_or_default()
     }
 }
 

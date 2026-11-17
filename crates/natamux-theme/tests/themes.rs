@@ -24,7 +24,9 @@ fn assets_folder() -> PathBuf {
 
 impl AssetSource for AppAssets {
     fn load(&self, path: &str) -> anyhow::Result<Option<Cow<'static, [u8]>>> {
-        Ok(std::fs::read(assets_folder().join(path)).ok().map(Cow::Owned))
+        Ok(std::fs::read(assets_folder().join(path))
+            .ok()
+            .map(Cow::Owned))
     }
 
     fn list(&self, path: &str) -> anyhow::Result<Vec<SharedString>> {
@@ -97,7 +99,9 @@ fn theme_rows(theme: &Theme) -> Vec<Value> {
         ("status", theme.status().fields()),
     ] {
         for (field, value) in fields {
-            rows.push(json!({"theme": name, "group": group, "field": field, "value": value.map(hsla)}));
+            rows.push(
+                json!({"theme": name, "group": group, "field": field, "value": value.map(hsla)}),
+            );
         }
     }
     for (i, color) in theme.accents().0.iter().enumerate() {
@@ -144,7 +148,11 @@ fn every_theme_holds_every_value_of_the_dump() {
         let own = theme_rows(&theme);
         let want = golden(&slug(name));
         if own.len() != want.len() {
-            wrong.push(format!("{name}: {} rows, the dump has {}", own.len(), want.len()));
+            wrong.push(format!(
+                "{name}: {} rows, the dump has {}",
+                own.len(),
+                want.len()
+            ));
         }
         for (own, want) in own.iter().zip(&want) {
             if own != want {

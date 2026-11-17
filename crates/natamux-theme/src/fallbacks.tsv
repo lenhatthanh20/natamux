@@ -1,6 +1,6 @@
 # Every colour field a bundled theme file does not set: theme, field, then h s l a (or none for an
 # unset optional field), as the theme value dump holds them
-# (crates/natamux-app/tests/golden/theme). Made from that dump; tests/golden.rs checks it.
+# (crates/natamux-app/tests/golden/theme). Made from that dump; tests/themes.rs checks it.
 Natamux Light	drop_target_border	0.13333334 0.081967235 0.11960785 1.0
 Natamux Light	debugger_accent	0.99578065 0.6929825 0.5529412 1.0
 Natamux Light	panel_indent_guide	0.12903227 1.0 0.060784314 0.12941177
