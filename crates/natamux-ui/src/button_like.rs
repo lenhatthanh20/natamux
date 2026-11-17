@@ -38,7 +38,10 @@ pub enum ButtonStyle {
 impl ButtonStyle {
     /// The styles drawn with a 1 px frame.
     fn framed(self) -> bool {
-        matches!(self, Self::Outlined | Self::OutlinedGhost | Self::OutlinedCustom(_))
+        matches!(
+            self,
+            Self::Outlined | Self::OutlinedGhost | Self::OutlinedCustom(_)
+        )
     }
 }
 

@@ -158,7 +158,13 @@ impl RenderOnce for Button {
             base.setup.shortcut = hint.as_ref().map(KeyBinding::text);
         }
 
-        let grey_if_off = |icon: Icon| if off { icon.color(Color::Disabled) } else { icon };
+        let grey_if_off = |icon: Icon| {
+            if off {
+                icon.color(Color::Disabled)
+            } else {
+                icon
+            }
+        };
         let lead: Option<AnyElement> = if spinning {
             let spinner = Icon::new(IconName::LoadCircle)
                 .size(IconSize::Small)
@@ -205,7 +211,10 @@ mod tests {
     #[test]
     fn the_text_colour_follows_off_then_selected_then_the_set_colour() {
         assert_eq!(text_colour(true, true, Some(Color::Error)), Color::Disabled);
-        assert_eq!(text_colour(false, true, Some(Color::Error)), Color::Selected);
+        assert_eq!(
+            text_colour(false, true, Some(Color::Error)),
+            Color::Selected
+        );
         assert_eq!(text_colour(false, false, Some(Color::Error)), Color::Error);
         assert_eq!(text_colour(false, false, None), Color::Default);
     }

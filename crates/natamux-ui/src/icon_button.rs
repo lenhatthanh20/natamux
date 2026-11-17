@@ -87,12 +87,7 @@ impl VisibleOnHover for IconButton {
 
 /// The icon colour: grey while off, the selected colour (the accent unless set) while selected,
 /// else the icon's own colour.
-fn glyph_colour(
-    disabled: bool,
-    selected: bool,
-    tint: Color,
-    tint_when_on: Option<Color>,
-) -> Color {
+fn glyph_colour(disabled: bool, selected: bool, tint: Color, tint_when_on: Option<Color>) -> Color {
     match (disabled, selected) {
         (true, _) => Color::Disabled,
         (false, true) => tint_when_on.unwrap_or(Color::Selected),
@@ -138,10 +133,19 @@ mod tests {
     #[test]
     fn the_icon_colour_follows_off_then_selected_then_the_icon_colour() {
         let muted = Color::Muted;
-        assert_eq!(glyph_colour(true, true, muted, Some(Color::Accent)), Color::Disabled);
-        assert_eq!(glyph_colour(false, true, muted, Some(Color::Accent)), Color::Accent);
+        assert_eq!(
+            glyph_colour(true, true, muted, Some(Color::Accent)),
+            Color::Disabled
+        );
+        assert_eq!(
+            glyph_colour(false, true, muted, Some(Color::Accent)),
+            Color::Accent
+        );
         assert_eq!(glyph_colour(false, true, muted, None), Color::Selected);
-        assert_eq!(glyph_colour(false, false, muted, Some(Color::Accent)), muted);
+        assert_eq!(
+            glyph_colour(false, false, muted, Some(Color::Accent)),
+            muted
+        );
     }
 
     #[test]
