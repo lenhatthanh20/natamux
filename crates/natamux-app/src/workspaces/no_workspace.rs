@@ -44,6 +44,12 @@ pub fn step_text(step: PreparingStep) -> &'static str {
     }
 }
 
+/// The step the view shows instead of its buttons: the daemon's, else the first one while a
+/// click on Create workspace or Start agent waits for its answer.
+pub fn shown_step(preparing: Option<PreparingStep>, busy: bool) -> Option<PreparingStep> {
+    preparing.or(busy.then_some(PreparingStep::Fetch))
+}
+
 /// What a task that left the main checkout says: the daemon gives it no worktree, so it offers
 /// no Create workspace nor Start agent.
 pub const DETACHED: &str = "Detached from the main checkout. Start a new task to work on it again.";
@@ -136,7 +142,7 @@ impl NoWorkspace {
 
 impl RenderOnce for NoWorkspace {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
-        let body: AnyElement = match self.preparing {
+        let body: AnyElement = match shown_step(self.preparing, self.busy) {
             Some(step) => v_flex()
                 .items_center()
                 .gap_1()
@@ -240,6 +246,15 @@ mod tests {
             waits_text(&["T-2".into(), "T-3".into(), "T-4".into()]).as_deref(),
             Some("Waits for T-2, T-3, T-4 to be done")
         );
+    }
+
+    #[test]
+    fn shows_the_first_step_while_a_new_workspace_waits_for_its_answer() {
+        let checkout = Some(PreparingStep::Checkout);
+        assert_eq!(shown_step(checkout, false), checkout);
+        assert_eq!(shown_step(checkout, true), checkout);
+        assert_eq!(shown_step(None, true), Some(PreparingStep::Fetch));
+        assert_eq!(shown_step(None, false), None);
     }
 
     #[test]
