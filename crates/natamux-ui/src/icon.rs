@@ -4,8 +4,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use gpui::{
-    AbsoluteLength, App, Hsla, IntoElement, Rems, RenderOnce, SharedString, Styled,
-    Transformation, Window, img, svg,
+    AbsoluteLength, App, Hsla, IntoElement, Rems, RenderOnce, SharedString, Styled, Transformation,
+    Window, img, svg,
 };
 
 use crate::color::Color;
@@ -131,11 +131,9 @@ impl RenderOnce for Icon {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let tint = self.tint.color(cx);
         match self.art {
-            Art::Svg(path) => {
-                fit(svg().path(path), self.side, tint)
-                    .with_transformation(self.turn)
-                    .into_any_element()
-            }
+            Art::Svg(path) => fit(svg().path(path), self.side, tint)
+                .with_transformation(self.turn)
+                .into_any_element(),
             Art::Picture(file) => fit(img(file), self.side, tint).into_any_element(),
         }
     }
