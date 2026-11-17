@@ -1,0 +1,157 @@
+name: MIT tools
+
+# Temporary tools of the MIT move (docs/plan-mit-license.md 8.4). Never on the PR branch.
+on:
+  push:
+    branches: ['natamux-ci/mit-tools']
+
+permissions:
+  contents: read
+
+env:
+  CARGO_INCREMENTAL: "0"
+  CARGO_PROFILE_DEV_DEBUG: "0"
+  CARGO_PROFILE_TEST_DEBUG: "0"
+
+jobs:
+  golden:
+    if: "${{ contains(github.event.head_commit.message, 'Tool: golden') }}"
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: linux
+            cache: rust-check-Linux
+          - os: macos-15
+            name: macos
+            cache: rust-app-macOS
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Make room and install the GPUI libraries
+        if: ${{ matrix.name == 'linux' }}
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libasound2-dev libfontconfig-dev \
+            libglib2.0-dev libssl-dev libva-dev libvulkan1 libwayland-dev libx11-xcb-dev \
+            libxkbcommon-x11-dev libzstd-dev libsqlite3-dev
+      - run: rustup toolchain install
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ matrix.cache }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-${{ github.sha }}
+          restore-keys: |
+            ${{ matrix.cache }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-
+            ${{ matrix.cache }}-
+      - run: python3 scripts/ci-changes.py mtimes
+      - run: cargo test -p natamux-app --locked -- --ignored golden_kit_scrollbar
+        env:
+          NATAMUX_GOLDEN_OUT: ${{ github.workspace }}/golden
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: golden-${{ matrix.name }}
+          path: golden/
+
+  lock:
+    if: "${{ contains(github.event.head_commit.message, 'Tool: lock') }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install
+      - run: cargo metadata --format-version 1 > /dev/null
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: lock
+          path: Cargo.lock
+
+  notices:
+    if: "${{ contains(github.event.head_commit.message, 'Tool: notices') }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install
+      - run: cargo install --locked cargo-about --version 0.8.2
+      - run: |
+          set -o pipefail
+          cargo about generate --locked --fail about.hbs -o THIRD-PARTY-RUST.md 2>&1 | tee about.log
+      - run: wc -l THIRD-PARTY-RUST.md
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: notices
+          path: |
+            THIRD-PARTY-RUST.md
+            about.log
+
+  npm-licenses:
+    if: "${{ contains(github.event.head_commit.message, 'Tool: npm-licenses') }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm licenses list --prod --json > "$RUNNER_TEMP/npm-licenses.json"
+        working-directory: packages/web
+      - run: python3 scripts/npm-licenses-check.py "$RUNNER_TEMP/npm-licenses.json"
+      - name: License texts of the bundled packages
+        working-directory: packages/web
+        run: |
+          python3 - "$RUNNER_TEMP/npm-licenses.json" "$RUNNER_TEMP/npm-texts" <<'PY'
+          import json, os, pathlib, sys
+          data = json.load(open(sys.argv[1]))
+          out = pathlib.Path(sys.argv[2]); out.mkdir()
+          for lic, pkgs in data.items():
+              for p in pkgs:
+                  for path in p.get("paths", []):
+                      d = pathlib.Path(path)
+                      for f in sorted(d.iterdir()) if d.is_dir() else []:
+                          if f.name.upper().startswith(("LICENSE", "LICENCE", "COPYING", "NOTICE", "OFL")):
+                              dst = out / f"{p['name'].replace('/', '__')}@{p['versions'][0] if p.get('versions') else p.get('version','')}__{f.name}"
+                              dst.write_bytes(f.read_bytes())
+          PY
+          find node_modules/.pnpm -path '*@fontsource*' \( -iname 'LICENSE*' -o -iname 'OFL*' \) | head -20
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: npm-licenses
+          path: |
+            ${{ runner.temp }}/npm-licenses.json
+            ${{ runner.temp }}/npm-texts/
+
+  vet:
+    if: "${{ contains(github.event.head_commit.message, 'Tool: vet') }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install
+      - run: cargo install --locked cargo-vet --version 0.10.0
+      - run: cargo vet prune
+      - run: cargo vet --locked
+      - run: git diff --stat
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: vet
+          path: supply-chain/
