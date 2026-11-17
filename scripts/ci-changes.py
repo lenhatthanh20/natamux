@@ -53,6 +53,7 @@ TERMINAL_PATHS = [
 ]
 APP_PATHS = [
     "crates/natamux-app/",
+    "crates/natamux-theme/",
     "crates/natamux-ui/",
     "crates/natamux-update/",
     "crates/natamux-daemon/src/main.rs",

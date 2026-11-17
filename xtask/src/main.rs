@@ -4,7 +4,13 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Output};
 
 /// The L4 crates of docs/plan-rust-migration.md. Only they may use the UI framework.
-const UI_CRATES: &[&str] = &["natamux-app", "natamux-cli", "natamux-ui", "natamux-update"];
+const UI_CRATES: &[&str] = &[
+    "natamux-app",
+    "natamux-cli",
+    "natamux-theme",
+    "natamux-ui",
+    "natamux-update",
+];
 
 const USAGE: &str = "usage: cargo xtask <task>
   ci      fmt, clippy, tests, layers, colour literals
@@ -116,7 +122,7 @@ fn ci_cargo_args(options: CiOptions) -> Vec<Vec<&'static str>> {
 /// Views read colours from the theme, never as literals (docs/ui-spec.md, 2.3). The folders
 /// checked, each with the only files in it that may hold colour literals: in the app the colour
 /// module, the contrast test's hex data and the theme value dump test (the theme itself is JSON in `assets/`); in the UI kit
-/// none yet (plan D24).
+/// none yet; in the theme crate its file loader, which makes colours of the theme files (plan D24).
 const COLOUR_ROOTS: &[(&str, &[&str])] = &[
     (
         "crates/natamux-app/src",
@@ -127,6 +133,7 @@ const COLOUR_ROOTS: &[(&str, &[&str])] = &[
         ],
     ),
     ("crates/natamux-ui/src", &[]),
+    ("crates/natamux-theme/src", &["loader.rs"]),
 ];
 
 fn colours() -> Result<(), String> {
@@ -442,6 +449,17 @@ let f = hsla(0.1, 0.2, 0.3, 1.0);
         assert!(!colour_literals_allowed(Path::new(
             "crates/natamux-ui/src/components/colors.rs"
         )));
+    }
+
+    #[test]
+    fn checks_the_theme_crate_with_only_its_loader_allowed() {
+        assert!(colour_literals_allowed(Path::new(
+            "crates/natamux-theme/src/loader.rs"
+        )));
+        assert!(!colour_literals_allowed(Path::new(
+            "crates/natamux-theme/src/colors.rs"
+        )));
+        assert!(UI_CRATES.contains(&"natamux-theme"));
     }
 
     #[test]
