@@ -15,9 +15,10 @@ use crate::app::dashboard::Dashboard;
 use crate::app::source::read_uncommitted;
 use crate::components::confirm::{Confirm, ConfirmDialog};
 
-/// Asks before the task, its notes, its history and its worktree are deleted. The confirm opens
-/// at once (T-0307); the files that are not committed are read meanwhile, and the main button
-/// waits for that read: the confirm then names them, and only then the delete discards them.
+/// Asks before the task, its notes, its history and its worktree are deleted. The confirm and its
+/// main button work at once (T-0307, T-0337); the files that are not committed are read meanwhile.
+/// When there are any, the confirm then names them and only then the delete discards them. A
+/// delete confirmed before is not forced: the daemon refuses a worktree with such files.
 pub fn confirm_delete_task(
     dashboard: &Entity<Dashboard>,
     task: &Task,
@@ -44,7 +45,7 @@ pub(crate) fn open_confirm_delete_task(
     let (Some(source), Some(_)) = (source, &task.workspace) else {
         return confirm.open_view(window, cx);
     };
-    let dialog = confirm.checking().open_view(window, cx);
+    let dialog = confirm.open_view(window, cx);
     let changes = source.list_changes(&task.id);
     let (dashboard, id, weak) = (dashboard.clone(), task.id.clone(), dialog.downgrade());
     cx.spawn(async move |cx| {

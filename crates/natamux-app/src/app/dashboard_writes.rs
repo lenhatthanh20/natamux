@@ -103,8 +103,12 @@ impl Dashboard {
                     this.save_view(cx);
                 }
                 this.toast(&made_toast(&task.id, worktree), ToastTone::Info, None, cx);
-                if let Some(notice) = this.data.announce(&task.id) {
-                    this.toast(&notice.text, notice.tone, None, cx);
+                match this.data.announce(&task.id) {
+                    Some(notice) => this.toast(&notice.text, notice.tone, None, cx),
+                    None if worktree != Some(false) && task.workspace.is_none() => {
+                        this.data.expect_preparing(&task.id);
+                    }
+                    None => {}
                 }
             },
         )
