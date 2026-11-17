@@ -549,11 +549,6 @@ fn start(
     cx: &mut App,
 ) -> anyhow::Result<()> {
     perf::report::timed("fonts_ms", || NatamuxAssets.load_fonts(cx))?;
-    release_channel::init(
-        release_channel::AppVersion::load(env!("CARGO_PKG_VERSION"), None, None),
-        cx,
-    );
-    settings::init(cx);
     // The theme, the UI size and the terminal font of view.json apply before the first frame.
     let fake = options.fake_daemon || options.shot.is_some();
     let folder = view_state::folder().filter(|_| !fake);
@@ -568,9 +563,7 @@ fn start(
     };
     app::appearance::init(inputs, cx);
     app::appearance::apply(&view, cx);
-    perf::report::timed("themes_ms", || {
-        theme_settings::init(theme::LoadThemes::All(Box::new(NatamuxAssets)), cx)
-    });
+    perf::report::timed("themes_ms", || theme::init(NatamuxAssets, cx))?;
     app::shortcuts::bind(cx);
     app::shortcuts::set_menus(cx);
     perf::overlay::init(cx);

@@ -160,4 +160,6 @@ pub fn reload_theme(cx: &mut App) {
         Arc::new(theme)
     };
     cx.set_global(GlobalTheme { theme, made_from });
+    // Cached views keep their last frame until a refresh; they must take the new colours.
+    cx.refresh_windows();
 }

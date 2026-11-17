@@ -7,7 +7,7 @@ publish.workspace = true
 
 [dependencies]
 gpui.workspace = true
-theme.workspace = true
+theme = { package = "natamux-theme", path = "../natamux-theme" }
 
 [lints]
 workspace = true

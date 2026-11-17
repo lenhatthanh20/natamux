@@ -22,8 +22,6 @@ use linkify::{LinkFinder, LinkKind};
 use pulldown_cmark::{
     Alignment, BlockQuoteKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd,
 };
-use settings::Settings as _;
-use theme_settings::ThemeSettings;
 use ui::{Checkbox, ScrollAxes, ToggleState, WithScrollbar, prelude::*};
 
 use super::scrollbars::plain_scrollbars;
@@ -602,12 +600,12 @@ struct Look {
 
 impl Look {
     fn of(window: &Window, cx: &App) -> Self {
-        let settings = ThemeSettings::get_global(cx);
+        let settings = theme::theme_settings(cx);
         let colors = cx.theme().colors();
         let status = cx.theme().status();
         let buffer = &settings.buffer_font;
         let code_font = TextStyleRefinement {
-            font_family: Some(settings.markdown_preview_code_font_family().clone()),
+            font_family: Some(buffer.family.clone()),
             font_fallbacks: buffer.fallbacks.clone(),
             font_features: Some(buffer.features.clone()),
             font_weight: Some(buffer.weight),
@@ -615,14 +613,15 @@ impl Look {
         };
         let mut base = window.text_style();
         base.refine(&TextStyleRefinement {
-            font_family: Some(settings.markdown_preview_font_family().clone()),
+            font_family: Some(settings.ui_font.family.clone()),
             font_fallbacks: settings.ui_font.fallbacks.clone(),
             font_features: Some(settings.ui_font.features.clone()),
             ..Default::default()
         });
         base.color = colors.text;
         base.line_height = relative(1.5);
-        let weight = settings.markdown_preview_heading_font_weight();
+        // Zed's Markdown preview: UI font for text, buffer font for code, headings at 600.
+        let weight = FontWeight::SEMIBOLD;
         let heading = |color: Option<Hsla>| TextStyleRefinement {
             font_weight: Some(weight),
             line_height: Some(relative(1.25)),

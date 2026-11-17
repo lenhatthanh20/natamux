@@ -1,13 +1,12 @@
-//! Theme, UI size and terminal font as Zed settings: the app rebuilds its user settings from
-//! `view.json` and sets them again, so a change applies at once (`lib/theme.ts`,
-//! `lib/ui-size.ts`, `terminal-font.ts` of the web).
+//! Theme, UI size and terminal font: the app rebuilds its theme settings from `view.json` and
+//! sets them again, so a change applies at once (`lib/theme.ts`, `lib/ui-size.ts`,
+//! `terminal-font.ts` of the web).
 
-use gpui::{App, Font, FontFeatures, Global, Pixels, SharedString, UpdateGlobal, font, px};
-use settings::SettingsStore;
+use gpui::{App, Font, Global, Pixels, SharedString, px};
+use theme::ThemeSettings;
 
 use super::appearance_rules::{
-    BASE_BUFFER_FONT_SIZE, BASE_UI_FONT_SIZE, ThemeSetting, parse_theme, parse_ui_size, scaled,
-    shows_scrollbars, user_settings,
+    ThemeChoice, parse_theme, parse_ui_size, shows_scrollbars, theme_settings,
 };
 use super::options::ThemeMode;
 use super::theme_catalog::ThemeKind;
@@ -27,10 +26,8 @@ pub struct Inputs {
 
 impl Global for Inputs {}
 
-/// The fonts and sizes of the own terminal and text views (docs/plan-mit-license.md 6.1), from
-/// the same inputs as the settings JSON, so they equal what Zed makes of it.
-// The own terminal view reads the terminal and buffer fonts (S2.4, behind its feature); the
-// rest waits for the own text views (S3, S9), so only the parity test reads it until then.
+/// The fonts and sizes of the own terminal and text views (docs/plan-mit-license.md 6.1): the
+/// fonts and sizes of the theme settings, and the terminal font and the shot rules.
 #[cfg_attr(not(test), allow(dead_code))]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Appearance {
@@ -51,24 +48,13 @@ pub struct Appearance {
 
 impl Global for Appearance {}
 
-/// Zed's "comfortable" line height.
-const BUFFER_LINE_HEIGHT: f32 = 1.618;
-
-/// A font size as Zed keeps it: from the JSON's number, within 6 to 100.
-fn font_size(size: f64) -> Pixels {
-    px((size as f32).clamp(6., 100.))
-}
-
-fn appearance(zoom: f32, terminal: &ResolvedFont, shot: Option<&str>) -> Appearance {
+fn appearance(settings: &ThemeSettings, terminal: &ResolvedFont, shot: Option<&str>) -> Appearance {
     Appearance {
-        ui_font: Font {
-            features: FontFeatures::disable_ligatures(),
-            ..font(".ZedSans")
-        },
-        ui_font_size: font_size(scaled(BASE_UI_FONT_SIZE, zoom)),
-        buffer_font: font(".ZedMono"),
-        buffer_font_size: font_size(scaled(BASE_BUFFER_FONT_SIZE, zoom)),
-        buffer_line_height: BUFFER_LINE_HEIGHT,
+        ui_font: settings.ui_font.clone(),
+        ui_font_size: settings.ui_font_size,
+        buffer_font: settings.buffer_font.clone(),
+        buffer_font_size: settings.buffer_font_size,
+        buffer_line_height: settings.line_height(),
         terminal_font: (terminal.source == FontSource::Custom).then(|| {
             (
                 SharedString::from(terminal.family.clone()),
@@ -92,10 +78,10 @@ pub fn apply(view: &ViewState, cx: &mut App) {
     let (flag, theme_name, shot) = inputs.map_or((None, None, None), |inputs| {
         (inputs.flag, inputs.theme_name, inputs.shot)
     });
-    let mode = match (theme_name, flag) {
-        (Some((_, ThemeKind::Light)), _) | (None, Some(ThemeMode::Light)) => "light",
-        (Some((_, ThemeKind::Dark)), _) | (None, Some(ThemeMode::Dark)) => "dark",
-        (None, None) => parse_theme(&view.theme).name(),
+    let choice = match (theme_name, flag) {
+        (Some((_, ThemeKind::Light)), _) | (None, Some(ThemeMode::Light)) => ThemeChoice::Light,
+        (Some((_, ThemeKind::Dark)), _) | (None, Some(ThemeMode::Dark)) => ThemeChoice::Dark,
+        (None, None) => parse_theme(&view.theme),
     };
     let names = match theme_name {
         Some((name, kind)) => view.themes.with(kind, name),
@@ -103,14 +89,10 @@ pub fn apply(view: &ViewState, cx: &mut App) {
     };
     let custom = view.terminal_font.as_ref().and_then(parse_terminal_font);
     let font = terminal_font(custom.as_ref());
-    let theme = ThemeSetting { mode, names };
-    let zoom = parse_ui_size(&view.ui_size).zoom();
-    let content = user_settings(theme, zoom, &font, shot, view.diff.show_whitespace);
-    SettingsStore::update_global(cx, |store, cx| {
-        let _ = store.set_user_settings(&content, cx);
-    });
-    let mut look = appearance(zoom, &font, shot);
+    let settings = theme_settings(choice, names, parse_ui_size(&view.ui_size).zoom());
+    let mut look = appearance(&settings, &font, shot);
     look.show_whitespace = view.diff.show_whitespace;
+    theme::set_appearance(cx, |shown| *shown = settings);
     cx.set_global(look);
 }
 

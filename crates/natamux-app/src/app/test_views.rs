@@ -22,18 +22,13 @@ use crate::components::menu::MenuLayer;
 use crate::projects::project_settings_page::ProjectSettingsPage;
 
 /// The globals of `start`, with the app's own themes. Natamux Dark is set through the same
-/// settings JSON the app writes, as `--theme dark` does.
+/// theme settings the app sets, as `--theme dark` does.
 pub fn init(cx: &mut TestAppContext) {
     cx.update(|cx| init_with(ThemeMode::Dark, &ViewState::default(), cx));
 }
 
 /// `init` with another theme mode, or a view state with another UI size.
 pub fn init_with(mode: ThemeMode, view: &ViewState, cx: &mut App) {
-    release_channel::init(
-        release_channel::AppVersion::load(env!("CARGO_PKG_VERSION"), None, None),
-        cx,
-    );
-    settings::init(cx);
     let inputs = Inputs {
         flag: Some(mode),
         theme_name: None,
@@ -41,7 +36,7 @@ pub fn init_with(mode: ThemeMode, view: &ViewState, cx: &mut App) {
     };
     appearance::init(inputs, cx);
     appearance::apply(view, cx);
-    theme_settings::init(theme::LoadThemes::All(Box::new(NatamuxAssets)), cx);
+    theme::init(NatamuxAssets, cx).expect("the bundled themes load");
     crate::components::motion::init(false, cx);
     crate::perf::overlay::init(cx);
 }
@@ -56,7 +51,7 @@ pub struct TestRoot {
 
 impl Render for TestRoot {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let font = theme_settings::setup_ui_font(window, cx);
+        let font = theme::setup_ui_font(window, cx);
         div()
             .size_full()
             .font(font)

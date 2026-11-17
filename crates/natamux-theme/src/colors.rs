@@ -296,6 +296,15 @@ impl PlayerColors {
         self.0.first().copied().unwrap_or_default()
     }
 
+    /// The colours of another person: the entries after the local one, in turn.
+    pub fn color_for_participant(&self, index: u32) -> PlayerColor {
+        let others = self.0.get(1..).unwrap_or_default();
+        others
+            .get(index as usize % others.len().max(1))
+            .copied()
+            .unwrap_or_default()
+    }
+
     /// The local colours in grey, for text the person cannot edit.
     pub fn read_only(&self) -> PlayerColor {
         let local = self.local();
@@ -370,5 +379,17 @@ mod tests {
         let players = PlayerColors(vec![local, PlayerColor::default()]);
         assert_eq!(players.local().cursor, white());
         assert_eq!(players.read_only().cursor, white().grayscale());
+        let other = PlayerColor {
+            cursor: black(),
+            ..PlayerColor::default()
+        };
+        let players = PlayerColors(vec![local, other, local]);
+        assert_eq!(players.color_for_participant(0).cursor, black());
+        assert_eq!(players.color_for_participant(1).cursor, white());
+        assert_eq!(players.color_for_participant(2).cursor, black());
+        assert_eq!(
+            PlayerColors(vec![local]).color_for_participant(4).cursor,
+            Hsla::default()
+        );
     }
 }

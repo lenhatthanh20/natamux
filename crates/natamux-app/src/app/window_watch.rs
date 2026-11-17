@@ -52,7 +52,7 @@ impl Root {
         cx.observe_window_appearance(window, |_, window, cx| {
             *theme::SystemAppearance::global_mut(cx) =
                 theme::SystemAppearance(window.appearance().into());
-            theme_settings::reload_theme(cx);
+            theme::reload_theme(cx);
         })
         .detach();
         if overlay::enabled(cx) {

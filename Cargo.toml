@@ -90,10 +90,6 @@ yaml-rust2 = "0.13.0"
 # too (the tree-sitter-yaml fork does it for yaml-test-suite).
 gpui = { version = "0.2.2", git = "https://github.com/lenhatthanh20/zed", rev = "2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50" }
 gpui_platform = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50", features = ["font-kit", "wayland", "x11"] }
-release_channel = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50" }
-settings = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50" }
-theme = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50" }
-theme_settings = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50" }
 # debug-embed: without it, debug builds look for the default settings in a Zed checkout.
 util = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50", features = ["debug-embed"] }
 

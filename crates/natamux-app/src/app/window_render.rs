@@ -219,7 +219,7 @@ impl Root {
 impl Render for Root {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         draws::count();
-        let font = theme_settings::setup_ui_font(window, cx);
+        let font = theme::setup_ui_font(window, cx);
         if let Some(sign_in) = &self.sign_in {
             return div()
                 .size_full()

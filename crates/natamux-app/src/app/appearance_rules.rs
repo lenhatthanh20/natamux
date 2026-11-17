@@ -1,16 +1,10 @@
-//! Theme and UI size, and the settings JSON the app gives Zed's settings store
-//! (`lib/theme.ts`, `lib/ui-size.ts`, `apply_default_settings` of `main.rs`).
+//! Theme and UI size, and the theme settings the app makes of them (`lib/theme.ts`,
+//! `lib/ui-size.ts` of the web).
 
-use serde_json::json;
+use theme::{ThemeMode, ThemeSettings};
 
 use crate::app::theme_catalog::ThemeNames;
 use crate::components::colors::CLEAR;
-use crate::terminals::terminal_font::{FontSource, ResolvedFont};
-
-// The base the UI size scales. The UI is Zed's default; code (terminal, diff, editors) is 13, not
-// Zed's 15, so it sits beside the 13 px rows of the lists (owner, 2026-10-24: 15 looked big).
-pub const BASE_UI_FONT_SIZE: f64 = 16.0;
-pub const BASE_BUFFER_FONT_SIZE: f64 = 13.0;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ThemeChoice {
@@ -23,7 +17,7 @@ pub enum ThemeChoice {
 impl ThemeChoice {
     pub const ALL: [ThemeChoice; 3] = [Self::System, Self::Light, Self::Dark];
 
-    /// The name stored in `view.json` and written as `theme.mode`.
+    /// The name stored in `view.json`.
     pub fn name(self) -> &'static str {
         match self {
             Self::System => "system",
@@ -39,6 +33,14 @@ impl ThemeChoice {
             Self::Dark => "Dark",
         }
     }
+
+    pub fn mode(self) -> ThemeMode {
+        match self {
+            Self::System => ThemeMode::System,
+            Self::Light => ThemeMode::Light,
+            Self::Dark => ThemeMode::Dark,
+        }
+    }
 }
 
 /// Anything but `light` or `dark` is `system`.
@@ -51,7 +53,8 @@ pub fn parse_theme(raw: &str) -> ThemeChoice {
 }
 
 /// True for dark. The system look counts only when the choice is System.
-// Zed's theme setting follows the system itself; the web's rule is kept with its test.
+// The theme settings follow the system themselves (`ThemeChoice::mode`); the web's rule is kept
+// with its test.
 #[cfg_attr(not(test), allow(dead_code))]
 pub fn resolve_theme(choice: ThemeChoice, system_is_dark: bool) -> bool {
     match choice {
@@ -107,16 +110,6 @@ pub fn parse_ui_size(raw: &str) -> UiSize {
     }
 }
 
-/// A base size times the zoom, rounded to 0.1 as the settings JSON holds it.
-pub fn scaled(base: f64, zoom: f32) -> f64 {
-    (base * f64::from(zoom) * 10.0).round() / 10.0
-}
-
-// The shortest text of the f32, so 13.25 stays 13.25.
-fn f64_of(size: f32) -> f64 {
-    size.to_string().parse().unwrap_or(f64::from(size))
-}
-
 /// The end of the name of the `--shot` states that show the scrollbars.
 const SCROLLBAR_STATES: &str = "-scrollbar";
 
@@ -125,58 +118,17 @@ pub fn shows_scrollbars(state: &str) -> bool {
     state.ends_with(SCROLLBAR_STATES)
 }
 
-/// The theme part of Zed's settings: `mode` is `ThemeChoice::name` (a `--theme` flag wins before
-/// this), and the theme Zed shows in each mode.
-#[derive(Clone, Copy, Debug)]
-pub struct ThemeSetting<'a> {
-    pub mode: &'a str,
-    pub names: ThemeNames,
-}
-
-/// The user settings JSON for Zed: `ui_zoom` is `UiSize::zoom`. Zed's own fonts; the terminal
-/// gets a font only when the user picked one, else Zed gives it the buffer font and size. `shot`
-/// is the state of a `--shot`: it hides the editors' scrollbars, which Zed shows for a moment after
-/// a scroll, and holds the editors' caret solid, so a shot never catches it in the off half of a
-/// blink. A state whose name ends in `-scrollbar` shows the scrollbars instead, always. The
-/// editors' scrollbars show only the thumb: no cursor or selection markers, which also keep the
-/// bar from fading, and no track border line. Sticky scroll shows in the editor tab only (Zed
-/// keeps it to singleton editors); whitespace shows everywhere while the diff's toggle is on.
-pub fn user_settings(
-    theme: ThemeSetting<'_>,
-    ui_zoom: f32,
-    terminal: &ResolvedFont,
-    shot: Option<&str>,
-    show_whitespace: bool,
-) -> String {
-    let terminal = if terminal.source == FontSource::Default {
-        json!({})
-    } else {
-        json!({"font_family": terminal.family, "font_size": f64_of(terminal.size)})
-    };
-    let mut settings = json!({
-        "theme": {"mode": theme.mode, "light": theme.names.light, "dark": theme.names.dark},
-        "ui_font_family": ".ZedSans",
-        "ui_font_size": scaled(BASE_UI_FONT_SIZE, ui_zoom),
-        "buffer_font_family": ".ZedMono",
-        "buffer_font_size": scaled(BASE_BUFFER_FONT_SIZE, ui_zoom),
-        "terminal": terminal,
-        "scrollbar": {"cursors": false, "selected_text": false, "selected_symbol": false},
-        "sticky_scroll": {"enabled": true},
-        "experimental.theme_overrides": {"scrollbar.track.border": CLEAR},
-    });
-    if let Some(state) = shot {
-        let show = if shows_scrollbars(state) {
-            "always"
-        } else {
-            "never"
-        };
-        settings["scrollbar"]["show"] = json!(show);
-        settings["cursor_blink"] = json!(false);
+/// The theme settings: `choice` picks the look (a `--theme` flag wins before this), `names` the
+/// theme of each look, and the UI and code fonts follow `ui_zoom` (`UiSize::zoom`). The code
+/// views' scrollbar track has no border line (T-0294).
+pub fn theme_settings(choice: ThemeChoice, names: ThemeNames, ui_zoom: f32) -> ThemeSettings {
+    ThemeSettings {
+        mode: choice.mode(),
+        light_theme: names.light.into(),
+        dark_theme: names.dark.into(),
+        color_overrides: vec![("scrollbar_track_border".into(), CLEAR)],
+        ..ThemeSettings::at_zoom(ui_zoom)
     }
-    if show_whitespace {
-        settings["show_whitespaces"] = json!("all");
-    }
-    settings.to_string()
 }
 
 #[cfg(test)]

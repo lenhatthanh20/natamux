@@ -750,7 +750,7 @@ struct Stage {
 
 impl Render for Stage {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let font = theme_settings::setup_ui_font(window, cx);
+        let font = theme::setup_ui_font(window, cx);
         let shown = match (self.piece, self.view.clone()) {
             (Piece::Element(build), _) => build(window, cx),
             (Piece::View(_), Some(view)) => view.into_any_element(),

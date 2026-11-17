@@ -1,7 +1,6 @@
-use serde_json::Value;
+use gpui::{SharedString, font};
 
 use super::*;
-use crate::terminals::terminal_font::FontSource;
 
 #[test]
 fn keeps_light_and_dark_and_treats_anything_else_as_system() {
@@ -50,192 +49,48 @@ fn maps_the_sizes_to_the_zoom_of_the_spec() {
     }
 }
 
-fn font(family: &str, size: f32) -> ResolvedFont {
-    ResolvedFont {
-        family: family.into(),
-        size,
-        source: FontSource::Custom,
-    }
-}
-
-fn settings(mode: &str, zoom: f32, terminal: &ResolvedFont) -> Value {
-    let theme = ThemeSetting {
-        mode,
-        names: ThemeNames::default(),
-    };
-    serde_json::from_str(&user_settings(theme, zoom, terminal, None, false)).unwrap_or(Value::Null)
+#[test]
+fn builds_the_settings_with_the_theme_and_the_sizes() {
+    let value = theme_settings(ThemeChoice::Dark, ThemeNames::default(), 1.0);
+    assert_eq!(value.mode, ThemeMode::Dark);
+    assert_eq!(value.light_theme, "Natamux Light");
+    assert_eq!(value.dark_theme, "Natamux Dark");
+    assert_eq!(value.ui_font.family, ".ZedSans");
+    assert_eq!(value.buffer_font, font(".ZedMono"));
+    assert_eq!(f32::from(value.ui_font_size), 16.0);
+    assert_eq!(f32::from(value.buffer_font_size), 13.0);
+    let modes: Vec<_> = ThemeChoice::ALL.iter().map(|choice| choice.mode()).collect();
+    assert_eq!(modes, [ThemeMode::System, ThemeMode::Light, ThemeMode::Dark]);
 }
 
 #[test]
-fn builds_the_settings_with_the_theme_the_sizes_and_the_terminal_font() {
-    let value = settings("dark", 1.0, &font("Iosevka", 14.0));
-    assert_eq!(value["theme"]["mode"], "dark");
-    assert_eq!(value["theme"]["light"], "Natamux Light");
-    assert_eq!(value["theme"]["dark"], "Natamux Dark");
-    assert_eq!(value["ui_font_family"], ".ZedSans");
-    assert_eq!(value["buffer_font_family"], ".ZedMono");
-    assert_eq!(value["ui_font_size"], 16.0);
-    assert_eq!(value["buffer_font_size"], 13.0);
-    assert_eq!(value["terminal"]["font_family"], "Iosevka");
-    assert_eq!(value["terminal"]["font_size"], 14.0);
-}
-
-#[test]
-fn gives_zed_the_picked_theme_of_each_look() {
-    let theme = ThemeSetting {
-        mode: "system",
-        names: ThemeNames {
-            light: "Catppuccin Latte",
-            dark: "Rosé Pine",
-        },
+fn gives_the_picked_theme_of_each_look() {
+    let names = ThemeNames {
+        light: "Catppuccin Latte",
+        dark: "Rosé Pine",
     };
-    let text = user_settings(theme, 1.0, &font("Lilex", 13.0), None, false);
-    let value: Value = serde_json::from_str(&text).unwrap_or(Value::Null);
-    assert_eq!(value["theme"]["mode"], "system");
-    assert_eq!(value["theme"]["light"], "Catppuccin Latte");
-    assert_eq!(value["theme"]["dark"], "Rosé Pine");
+    let value = theme_settings(ThemeChoice::System, names, 1.0);
+    assert_eq!(value.mode, ThemeMode::System);
+    assert_eq!(value.light_theme, "Catppuccin Latte");
+    assert_eq!(value.dark_theme, "Rosé Pine");
 }
 
 #[test]
 fn scales_the_ui_and_buffer_sizes_by_the_zoom_to_one_decimal() {
-    let terminal = font("Lilex", 13.0);
-    let compact = settings("system", UiSize::Compact.zoom(), &terminal);
-    assert_eq!(compact["ui_font_size"], 14.7);
-    assert_eq!(compact["buffer_font_size"], 12.0);
-    let large = settings("system", UiSize::Large.zoom(), &terminal);
-    assert_eq!(large["ui_font_size"], 17.2);
-    assert_eq!(large["buffer_font_size"], 14.0);
-    // The terminal size is the font's own, not scaled.
-    assert_eq!(large["terminal"]["font_size"], 13.0);
-}
-
-#[test]
-fn escapes_the_font_family() {
-    let value = settings("light", 1.0, &font("Fira \"Code\\", 13.5));
-    assert_eq!(value["terminal"]["font_family"], "Fira \"Code\\");
-    assert_eq!(value["terminal"]["font_size"], 13.5);
-}
-
-// Zed's terminal with no font of its own takes the buffer font and its size, so the UI size
-// scales it.
-#[test]
-fn leaves_the_built_in_terminal_font_to_zed() {
-    let built_in = ResolvedFont {
-        family: "Lilex".into(),
-        size: 15.0,
-        source: FontSource::Default,
+    let sizes = |size: UiSize| {
+        let value = theme_settings(ThemeChoice::System, ThemeNames::default(), size.zoom());
+        (f32::from(value.ui_font_size), f32::from(value.buffer_font_size))
     };
-    let value = settings("dark", UiSize::Large.zoom(), &built_in);
-    assert!(value["terminal"].get("font_family").is_none());
-    assert!(value["terminal"].get("font_size").is_none());
+    assert_eq!(sizes(UiSize::Compact), (14.7, 12.0));
+    assert_eq!(sizes(UiSize::Large), (17.2, 14.0));
 }
 
-// Zed shows an editor's scrollbar for a moment after it scrolls, so a shot caught it or not
-// (run 40008781483, the Changes shots).
+// The JSON tab's bar drew a track border line (T-0294).
 #[test]
-fn hides_the_editor_scrollbars_in_a_shot_only() {
-    let font = font("Lilex", 15.0);
-    let theme = ThemeSetting {
-        mode: "dark",
-        names: ThemeNames::default(),
-    };
-    let shot: Value =
-        serde_json::from_str(&user_settings(theme, 1.0, &font, Some("settings"), false))
-            .unwrap_or(Value::Null);
-    assert_eq!(shot["scrollbar"]["show"], "never");
-    assert!(
-        settings("dark", 1.0, &font)["scrollbar"]
-            .get("show")
-            .is_none()
-    );
-}
-
-// The JSON tab's bar drew a blue cursor line on its thumb and a track border line (T-0294).
-#[test]
-fn draws_only_the_thumb_of_the_editor_scrollbars() {
-    let font = font("Lilex", 15.0);
-    let theme = ThemeSetting {
-        mode: "dark",
-        names: ThemeNames::default(),
-    };
-    let shot: Value =
-        serde_json::from_str(&user_settings(theme, 1.0, &font, Some("settings"), false))
-            .unwrap_or(Value::Null);
-    for value in [settings("dark", 1.0, &font), shot] {
-        for marker in ["cursors", "selected_text", "selected_symbol"] {
-            assert_eq!(value["scrollbar"][marker], false, "{marker}");
-        }
-        assert_eq!(
-            value["experimental.theme_overrides"]["scrollbar.track.border"],
-            CLEAR
-        );
+fn hides_the_scrollbar_track_border_of_the_code_views() {
+    for choice in ThemeChoice::ALL {
+        let value = theme_settings(choice, ThemeNames::default(), 1.0);
+        let clear = (SharedString::from("scrollbar_track_border"), CLEAR);
+        assert_eq!(value.color_overrides, vec![clear]);
     }
-}
-
-/// T-0316: sticky headers in the editor tab, whitespace only with the diff's toggle.
-#[test]
-fn turns_sticky_scroll_on_and_shows_whitespace_only_when_asked() {
-    let theme = || ThemeSetting {
-        mode: "dark",
-        names: ThemeNames::default(),
-    };
-    let font = font("Lilex", 13.0);
-    let off: Value = serde_json::from_str(&user_settings(theme(), 1.0, &font, None, false))
-        .unwrap_or(Value::Null);
-    assert_eq!(off["sticky_scroll"]["enabled"], true);
-    assert_eq!(off.get("show_whitespaces"), None);
-    let on: Value = serde_json::from_str(&user_settings(theme(), 1.0, &font, None, true))
-        .unwrap_or(Value::Null);
-    assert_eq!(on["show_whitespaces"], "all");
-}
-
-// The caret of a focused box blinks every 500 ms, so a shot had it in one run and not in the
-// next (the search box of the Settings shots, runs 40985373281 and 41004951875).
-#[test]
-fn holds_the_caret_solid_in_a_shot_only() {
-    let font = font("Lilex", 15.0);
-    let theme = ThemeSetting {
-        mode: "dark",
-        names: ThemeNames::default(),
-    };
-    let shot: Value =
-        serde_json::from_str(&user_settings(theme, 1.0, &font, Some("settings"), false))
-            .unwrap_or(Value::Null);
-    assert_eq!(shot["cursor_blink"], false);
-    assert!(settings("dark", 1.0, &font).get("cursor_blink").is_none());
-}
-
-// Every shot hides the scrollbars, so the states whose name ends in `-scrollbar` show them, to
-// pin their look (docs/plan-mit-license.md 7.2). Never in real use.
-#[test]
-fn shows_the_scrollbars_in_the_scrollbar_shots_only() {
-    let font = font("Lilex", 15.0);
-    let theme = ThemeSetting {
-        mode: "light",
-        names: ThemeNames::default(),
-    };
-    let shown = |state: &str| -> Value {
-        let text = user_settings(theme, 1.0, &font, Some(state), false);
-        let value: Value = serde_json::from_str(&text).unwrap_or(Value::Null);
-        value["scrollbar"]["show"].clone()
-    };
-    assert_eq!(shown("terminal-scrollbar"), "always");
-    assert_eq!(shown("changes-diff-scrollbar"), "always");
-    assert_eq!(shown("workspace-editor-scrollbar"), "always");
-    assert_eq!(shown("workspace-changes-diff"), "never");
-    assert_eq!(shown("scrollbar-later"), "never");
-    let shot: Value = serde_json::from_str(&user_settings(
-        theme,
-        1.0,
-        &font,
-        Some("terminal-scrollbar"),
-        false,
-    ))
-    .unwrap_or(Value::Null);
-    assert_eq!(shot["cursor_blink"], false);
-    assert!(
-        settings("light", 1.0, &font)["scrollbar"]
-            .get("show")
-            .is_none()
-    );
 }

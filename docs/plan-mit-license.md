@@ -1491,6 +1491,7 @@ S9.2 `natamux-theme`
 - Risks:
   - a missing fallback changes one colour (the dump test finds it);
   - a crate still on Zed's `theme` reads an unset `GlobalTheme` and panics at run time; `zed-lock-check.py` fails while Zed's `theme` is in the lock.
+- Done in S9.2: S9.2a built `crates/natamux-theme/` against the S9.1 dump, not wired. S9.2b wired it: the key rename in `natamux-app` and `natamux-ui`; `theme`, `theme_settings`, `settings` and `release_channel` are gone from both manifests, the root `Cargo.toml`, `Cargo.lock` (hand edit: only packages nothing reaches left; 23 Zed crates and 45 others) and `scripts/zed-lock-crates.txt`, which now holds the 21 crates of 3.3. `appearance_rules::theme_settings` gives a typed `ThemeSettings` (mode, the theme of each look, the fonts at the zoom, the track border override) and `apply` sets it with `theme::set_appearance`; the editor keys of the old JSON (`scrollbar`, `cursor_blink`, `sticky_scroll`, `show_whitespaces`, `terminal`) had no reader since S7 and are gone; their rules live in `Appearance` and `Inputs::shot`, tested in `appearance_tests.rs`. The Markdown view takes Zed's preview defaults (UI family, buffer family for code, headings at 600). `reload_theme` refreshes the windows when the shown theme changes, as Zed's did, so cached views draw in the new colours. `PlayerColors::color_for_participant` (the kit's `Color::Player`) was added. `util`'s `debug-embed` feature stays (3.2; left for S11).
 
 ### S10. Assets (the one planned pixel change)
 

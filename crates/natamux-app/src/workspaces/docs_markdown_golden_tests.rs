@@ -31,7 +31,7 @@ struct Doc {
 
 impl Render for Doc {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let font = theme_settings::setup_ui_font(window, cx);
+        let font = theme::setup_ui_font(window, cx);
         div()
             .size_full()
             .font(font)
