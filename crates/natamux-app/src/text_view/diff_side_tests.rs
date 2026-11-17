@@ -512,3 +512,78 @@ fn the_text_layer_of_a_side_scrolled_right_keeps_out_of_the_gutter(cx: &mut Test
         );
     });
 }
+
+/// 30 lines, line 10 changed: inline, rows 0-9 unchanged, row 10 deleted, row 11 added.
+fn long_change(cx: &mut TestAppContext) -> (DiffSide, &mut VisualTestContext) {
+    let (_, right, cx) = open(cx);
+    let old: Vec<String> = (0..30).map(|i| format!("l{i}")).collect();
+    let old = old.join("\n");
+    let new = old.replace("l10\n", "x\n");
+    let diff = diff(Some(&old), &new, &[]);
+    let rows = inline_rows(&diff.hunk_rows(), diff.new_rows(), false);
+    show(&right, "x.txt", &diff, &rows, true, cx);
+    (right, cx)
+}
+
+#[gpui::test]
+fn a_box_scrolled_above_the_top_has_its_top_line_on_the_first_row_in_view(
+    cx: &mut TestAppContext,
+) {
+    let (right, cx) = long_change(cx);
+    let lh = drawn(right.input(), cx).line_height;
+    cx.update(|_, cx| right.set_scroll(point(px(0.), lh * 11.), cx));
+    cx.run_until_parked();
+    assert_eq!(right.input().read_with(cx, |input, _| input.scroll.y), lh * 11.);
+    let drawn = drawn(right.input(), cx);
+    let colors = colors(cx);
+    let row_y = |row: usize| drawn.origin.y + lh * row as f32;
+    let lines: Vec<(Pixels, Hsla)> = drawn
+        .paint
+        .backs
+        .iter()
+        .filter(|(rect, _)| rect.size.height == px(1.))
+        .map(|(rect, color)| (rect.top(), *color))
+        .collect();
+    assert_eq!(
+        lines,
+        vec![
+            (row_y(11), colors.editor_diff_hunk_added_hollow_border),
+            (row_y(12) - px(1.), colors.editor_diff_hunk_added_hollow_border),
+        ],
+        "the deleted row above the top has no line"
+    );
+    let (strip, _) = drawn.paint.strips[0];
+    assert_eq!((strip.top(), strip.bottom()), (row_y(11), row_y(12)));
+}
+
+#[gpui::test]
+fn a_side_pins_its_header_once_its_top_row_is_at_or_below_a_gap(cx: &mut TestAppContext) {
+    let (_, right, cx) = open(cx);
+    let text: Vec<String> = (0..40).map(|i| format!("l{i}")).collect();
+    let text = text.join("\n");
+    let diff = diff(Some(&text), &text, &[]);
+    let line = |row: u32| Row::Line {
+        row,
+        status: Status::Unchanged,
+    };
+    // Rows 0-19 lines, row 20 the gap, then 19 more lines.
+    let mut rows: Vec<Row> = (0..20).map(line).collect();
+    rows.push(Row::Gap { hidden: 1 });
+    rows.extend((21..40).map(line));
+    show(&right, "x.txt", &diff, &rows, true, cx);
+    let lh = drawn(right.input(), cx).line_height;
+    let pins = |scroll: Pixels, cx: &mut VisualTestContext| {
+        cx.update(|_, cx| right.set_scroll(point(px(0.), scroll), cx));
+        cx.run_until_parked();
+        cx.update(|window, cx| {
+            let place = right.place(window, cx).expect("the side was drawn");
+            right
+                .rows(cx, |rows| place.pins_header(rows))
+                .expect("a diff side has rows")
+        })
+    };
+    assert!(!pins(px(0.), cx), "at the top");
+    assert!(!pins(lh * 19.5, cx), "the top row is above the gap");
+    assert!(pins(lh * 20., cx), "the gap is the top row");
+    assert!(pins(lh * 25., cx), "below the gap");
+}

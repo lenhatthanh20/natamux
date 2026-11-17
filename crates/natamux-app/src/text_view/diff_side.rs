@@ -456,6 +456,21 @@ impl Place {
         self.laid.rows
     }
 
+    /// The rem size of what the diff view draws over the side: Zed's editor drew its blocks, the
+    /// buttons of a change and its pinned header with one rem 1.125 times its font size (B2
+    /// shots `workspace-changes-comments`, `changes-diff-focused`).
+    pub fn rem_size(&self) -> Pixels {
+        self.laid.key.font_size * 1.125
+    }
+
+    /// Whether the side pins a file header over its top: Zed's editor did so once the top row
+    /// lay at or below the row of a gap, the line between two collapsed parts. As the buffer had
+    /// no file, the header said "untitled" (B2 shot `changes-diff-scrollbar`).
+    pub fn pins_header(&self, rows: &SideRows) -> bool {
+        let top = (self.scroll.y / self.laid.line_height.max(px(1.))).floor().max(0.) as usize;
+        super::diff_paint::gap_rows(&self.laid, rows).any(|row| row <= top)
+    }
+
     /// The width of a change's strip at the gutter's left edge.
     pub fn strip(&self) -> Pixels {
         (self.laid.line_height * super::diff_paint::STRIP).floor()

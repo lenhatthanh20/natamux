@@ -28,6 +28,7 @@ pub use label::{Headline, HeadlineSize, Label, LabelCommon, LineHeightStyle};
 pub use shortcut_hint::KeyBinding;
 pub use spacing::{DynamicSpacing, h_flex, rems_from_px, v_flex};
 pub use tooltip::{Tooltip, tooltip_container};
+pub use with_rem_size::WithRemSize;
 
 /// Zed's menu, for the menu Zed's editor opens itself (`Editor::set_custom_context_menu`), until
 /// the own editor takes its place.

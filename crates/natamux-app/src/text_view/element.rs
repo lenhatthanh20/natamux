@@ -849,19 +849,19 @@ impl Element for TextElement {
             colors.editor_background,
             colors.editor_active_line_background,
         );
-        let player = cx.theme().players().local();
+        // A read-only box draws in the grey player colours, caret and selection, as Zed's editor
+        // did (B1 shot `workspace-docs-source-focused`, B2 shot `changes-diff-focused`).
+        let player = if input.read_only {
+            cx.theme().players().read_only()
+        } else {
+            cx.theme().players().local()
+        };
         let selection_color = if focused {
             player.selection
         } else {
             player.selection.opacity(0.5)
         };
-        // A read-only box draws a grey caret, as Zed's editor did (B1 shot
-        // `workspace-docs-source-focused`).
-        let cursor = if input.read_only {
-            cx.theme().players().read_only().cursor
-        } else {
-            player.cursor
-        };
+        let cursor = player.cursor;
         let invisible = colors.editor_invisible;
         let line_height = laid.line_height;
         let (guide, active_guide, highlight) = (
@@ -925,12 +925,18 @@ impl Element for TextElement {
             if full {
                 window.paint_quad(fill(bounds, background));
             }
+            // Every row of the caret's line, wrapped rows too, as Zed's editor did (B2 shot
+            // `changes-diff-deleted-only` at 800x560).
             if current_line && selection.is_empty() {
-                let y = laid.position(head, end_bias).y;
+                let row = laid.row_of(head, end_bias);
+                let line = laid.line_of_row(row).map(|(line, _)| line);
+                let (first, rows) = line.map_or((row, 1), |line| {
+                    (line.first_row, line.row_starts.len().max(1))
+                });
                 window.paint_quad(fill(
                     Bounds::new(
-                        point(bounds.left(), origin.y + y),
-                        size(bounds.size.width, line_height),
+                        point(bounds.left(), origin.y + line_height * first as f32),
+                        size(bounds.size.width, line_height * rows as f32),
                     ),
                     active_line,
                 ));
@@ -1041,7 +1047,7 @@ impl Element for TextElement {
             }
             if let Some(diff) = &code.diff {
                 for (rect, color) in &diff.strips {
-                    super::diff_paint::paint_hollow(*rect, *color, window);
+                    super::diff_paint::paint_hollow(*rect, *color, background, window);
                 }
             }
             // The scrollbar's track is not part of a pinned row for the pointer.

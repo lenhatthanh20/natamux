@@ -482,10 +482,18 @@ impl DiffView {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let mut over: Vec<AnyElement> = Vec::new();
+        let mut rem = window.rem_size();
         match side.place(window, cx) {
             Some(place) => {
+                rem = place.rem_size();
+                let pinned = side
+                    .rows(cx, |rows| place.pins_header(rows))
+                    .unwrap_or(false);
                 over.extend(self.comment_elements(index, &place, cx));
-                over.extend(self.hunk_buttons(side, index, &place, cx));
+                over.extend(self.hunk_buttons(side, index, &place, pinned, cx));
+                if pinned {
+                    over.push(super::diff_header::pinned_header(&place, cx));
+                }
             }
             // Not drawn yet: what lies over it needs its rows, so draw once more.
             None => cx.on_next_frame(window, |_, _, cx| cx.notify()),
@@ -519,7 +527,7 @@ impl DiffView {
             }))
             .child(side.text_box())
             .child(
-                div()
+                ui::WithRemSize::new(rem)
                     .absolute()
                     .top_0()
                     .left_0()
@@ -531,15 +539,21 @@ impl DiffView {
     }
 
     /// The buttons of the change the caret is in and of the one under the pointer, at the right
-    /// of its first row (or of the top row, while that row is scrolled above it), as Zed's editor
-    /// placed them: 10 px left of the scrollbar's room.
+    /// of its first row (or of the top row, while that row is scrolled above it or under the
+    /// `pinned` header), as Zed's editor placed them: 10 px left of the scrollbar's room.
     fn hunk_buttons(
         &self,
         side: &DiffSide,
         index: usize,
         place: &Place,
+        pinned: bool,
         cx: &mut Context<Self>,
     ) -> Vec<AnyElement> {
+        let top_edge = if pinned {
+            super::diff_header::header_bottom(place)
+        } else {
+            px(0.)
+        };
         let head = side.selection(cx).1;
         let caret = side
             .rows(cx, |rows| {
@@ -583,10 +597,10 @@ impl DiffView {
             if bottom <= px(0.) || top >= place.size.height {
                 continue;
             }
-            let y = if top >= px(0.) {
+            let y = if top >= top_edge {
                 top
             } else {
-                px(0.).min(bottom - line_height)
+                top_edge.min(bottom - line_height)
             };
             let file_side = if old { Side::Old } else { Side::New };
             let Some(arrow) = self.arrow_at(file_side, row) else {

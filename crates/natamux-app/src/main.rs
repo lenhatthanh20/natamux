@@ -184,6 +184,7 @@ mod git {
     pub mod diff_cursor;
     #[cfg(test)]
     pub mod diff_editors;
+    pub mod diff_header;
     pub mod diff_hunk_controls;
     pub mod diff_model;
     pub mod diff_rows;

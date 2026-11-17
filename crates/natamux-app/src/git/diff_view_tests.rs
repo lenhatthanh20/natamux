@@ -418,7 +418,7 @@ fn buttons(view: &Entity<DiffView>, cx: &mut VisualTestContext) -> usize {
             .right
             .clone();
         let place = side.place(window, cx).expect("the side was drawn");
-        view.hunk_buttons(&side, RIGHT, &place, cx).len()
+        view.hunk_buttons(&side, RIGHT, &place, false, cx).len()
     })
 }
 

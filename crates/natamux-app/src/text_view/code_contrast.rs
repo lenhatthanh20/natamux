@@ -1,6 +1,6 @@
 //! In a code view, text over a painted background keeps an APCA contrast of at least 45 with the
 //! colour under it, as in Zed's editor (its `minimum_contrast_for_highlights` default): the
-//! matching brackets, the other places of the selected text, the find matches and the selection.
+//! other places of the selected text, the find matches and the selection.
 //! Where they overlap, their colours lie over the editor background in that order. The contrast
 //! rule itself is the terminal's (`terminals/term/contrast.rs`).
 
@@ -30,10 +30,9 @@ impl TextInput {
         let version = self.model.version();
         let selection = self.model.selection().range();
         let shown = |range: &Range<usize>| self.to_display(range.start)..self.to_display(range.end);
-        let mut marks = Vec::new();
-        if code.brackets_version == version {
-            marks.extend(code.brackets.iter().map(|range| (shown(range), highlight)));
-        }
+        // The matching brackets keep their colour: Zed's editor drew their background with the
+        // text, outside this rule (B2 shot `workspace-changes-diff-solarized-dark`, the `}`).
+        let mut marks: Vec<(Range<usize>, Hsla)> = Vec::new();
         marks.extend(
             code.other_occurrences(selection.clone())
                 .map(|range| (shown(range), highlight)),
@@ -49,7 +48,11 @@ impl TextInput {
             }));
         }
         if !selection.is_empty() {
-            let player = cx.theme().players().local();
+            let player = if self.read_only {
+                cx.theme().players().read_only()
+            } else {
+                cx.theme().players().local()
+            };
             let color = if focused {
                 player.selection
             } else {

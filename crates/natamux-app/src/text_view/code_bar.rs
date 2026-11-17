@@ -14,8 +14,6 @@ use crate::app::appearance::Appearance;
 pub const BAR_WIDTH: Pixels = px(15.);
 /// The shortest thumb.
 const MIN_THUMB: Pixels = px(25.);
-/// The height of a cursor marker on the scrollbar.
-const CURSOR_MARKER: Pixels = px(2.);
 /// The shortest marker of a selected-text place.
 const MIN_MARKER: Pixels = px(5.);
 /// How long the scrollbar stays after a scroll.
@@ -297,7 +295,7 @@ impl TextInput {
     }
 
     /// The markers on the scrollbar `bar`, as Zed's editor paints them: each other place of the
-    /// selected text in the middle third, then the caret over the full width.
+    /// selected text in the middle third.
     pub(super) fn bar_markers(
         &self,
         laid: &Layout,
@@ -321,7 +319,7 @@ impl TextInput {
         let mut markers: Vec<(Bounds<Pixels>, Hsla)> = Vec::new();
         let info = cx.theme().status().info;
         let selected = self.model.selection().range();
-        for range in code.other_occurrences(selected.clone()) {
+        for range in code.other_occurrences(selected) {
             let start = top + unit * row(range.start);
             let end = top + unit * row(range.end) + unit.max(MIN_MARKER);
             // Touching places merge into one marker.
@@ -339,18 +337,9 @@ impl TextInput {
                 info,
             ));
         }
-        // Only a caret has a marker: Zed's editor drew none for the head of a selection (B1 shot
-        // `workspace-editor-scrollbar`, where the thumb shows no marker under it).
-        if selected.is_empty() {
-            let head = top + unit * row(self.model.head());
-            markers.push((
-                Bounds::from_corners(
-                    point(left + border, head),
-                    point(left + BAR_WIDTH, head + CURSOR_MARKER),
-                ),
-                cx.theme().players().local().cursor,
-            ));
-        }
+        // No caret marker: the app turns Zed's `scrollbar.cursors` off (`app/appearance_rules.rs`),
+        // so its editors drew none (B1 shot `workspace-editor-scrollbar`, B2 shot
+        // `changes-diff-scrollbar`).
         markers
     }
 }
