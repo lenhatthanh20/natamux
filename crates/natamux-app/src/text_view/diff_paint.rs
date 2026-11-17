@@ -105,8 +105,12 @@ impl Frame<'_> {
     /// the top row (B2 shot `workspace-changes-diff`).
     fn rows_in_view(&self) -> Range<usize> {
         let line_height = self.laid.line_height.max(px(1.));
-        let first = ((self.bounds.top() - self.origin.y) / line_height).floor().max(0.);
-        let end = ((self.bounds.bottom() - self.origin.y) / line_height).ceil().max(0.);
+        let first = ((self.bounds.top() - self.origin.y) / line_height)
+            .floor()
+            .max(0.);
+        let end = ((self.bounds.bottom() - self.origin.y) / line_height)
+            .ceil()
+            .max(0.);
         first as usize..end as usize
     }
 

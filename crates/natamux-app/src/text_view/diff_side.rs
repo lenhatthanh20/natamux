@@ -467,7 +467,9 @@ impl Place {
     /// lay at or below the row of a gap, the line between two collapsed parts. As the buffer had
     /// no file, the header said "untitled" (B2 shot `changes-diff-scrollbar`).
     pub fn pins_header(&self, rows: &SideRows) -> bool {
-        let top = (self.scroll.y / self.laid.line_height.max(px(1.))).floor().max(0.) as usize;
+        let top = (self.scroll.y / self.laid.line_height.max(px(1.)))
+            .floor()
+            .max(0.) as usize;
         super::diff_paint::gap_rows(&self.laid, rows).any(|row| row <= top)
     }
 

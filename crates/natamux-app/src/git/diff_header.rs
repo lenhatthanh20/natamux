@@ -39,11 +39,16 @@ pub fn pinned_header(place: &Place, cx: &App) -> AnyElement {
         .flex_col()
         // A fade to the editor background behind the box, so the rows under it do not show.
         .child(
-            div().absolute().top_0().w(width).h(height).bg(linear_gradient(
-                0.,
-                linear_color_stop(background.opacity(0.), 0.),
-                linear_color_stop(background, 0.6),
-            )),
+            div()
+                .absolute()
+                .top_0()
+                .w(width)
+                .h(height)
+                .bg(linear_gradient(
+                    0.,
+                    linear_color_stop(background.opacity(0.), 0.),
+                    linear_color_stop(background, 0.6),
+                )),
         )
         .child(
             div().p(rems(PADDING)).w_full().h(height).child(

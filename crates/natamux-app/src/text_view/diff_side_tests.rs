@@ -526,14 +526,15 @@ fn long_change(cx: &mut TestAppContext) -> (DiffSide, &mut VisualTestContext) {
 }
 
 #[gpui::test]
-fn a_box_scrolled_above_the_top_has_its_top_line_on_the_first_row_in_view(
-    cx: &mut TestAppContext,
-) {
+fn a_box_scrolled_above_the_top_has_its_top_line_on_the_first_row_in_view(cx: &mut TestAppContext) {
     let (right, cx) = long_change(cx);
     let lh = drawn(right.input(), cx).line_height;
     cx.update(|_, cx| right.set_scroll(point(px(0.), lh * 11.), cx));
     cx.run_until_parked();
-    assert_eq!(right.input().read_with(cx, |input, _| input.scroll.y), lh * 11.);
+    assert_eq!(
+        right.input().read_with(cx, |input, _| input.scroll.y),
+        lh * 11.
+    );
     let drawn = drawn(right.input(), cx);
     let colors = colors(cx);
     let row_y = |row: usize| drawn.origin.y + lh * row as f32;
@@ -548,7 +549,10 @@ fn a_box_scrolled_above_the_top_has_its_top_line_on_the_first_row_in_view(
         lines,
         vec![
             (row_y(11), colors.editor_diff_hunk_added_hollow_border),
-            (row_y(12) - px(1.), colors.editor_diff_hunk_added_hollow_border),
+            (
+                row_y(12) - px(1.),
+                colors.editor_diff_hunk_added_hollow_border
+            ),
         ],
         "the deleted row above the top has no line"
     );
