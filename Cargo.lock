@@ -5703,6 +5703,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "natamux-theme"
+version = "1.0.26"
+dependencies = [
+ "anyhow",
+ "gpui",
+ "palette",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "natamux-ui"
 version = "1.0.26"
 dependencies = [
