@@ -310,11 +310,7 @@ fn run(host: &Host, cx: &mut TestAppContext) -> Vec<Value> {
 }
 
 /// `run` with other cases.
-pub(super) fn run_cases(
-    host: &Host,
-    cases: Vec<Case>,
-    cx: &mut TestAppContext,
-) -> Vec<Value> {
+pub(super) fn run_cases(host: &Host, cases: Vec<Case>, cx: &mut TestAppContext) -> Vec<Value> {
     let (slot, cx) = start(cx);
     let mut rows = Vec::new();
     for (i, case) in cases.into_iter().enumerate() {

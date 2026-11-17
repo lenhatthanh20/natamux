@@ -122,9 +122,15 @@ mod tests {
         type_text(cx, "b");
         press(cx, "end");
         paste(cx, "d");
-        assert_eq!(text_of(&text_box.read_with(cx, |view, _| view.0.clone()), cx), "abcd");
+        assert_eq!(
+            text_of(&text_box.read_with(cx, |view, _| view.0.clone()), cx),
+            "abcd"
+        );
         press(cx, "mod-a backspace");
-        assert_eq!(text_of(&text_box.read_with(cx, |view, _| view.0.clone()), cx), "");
+        assert_eq!(
+            text_of(&text_box.read_with(cx, |view, _| view.0.clone()), cx),
+            ""
+        );
     }
 
     #[gpui::test]
