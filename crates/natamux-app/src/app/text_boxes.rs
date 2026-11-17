@@ -388,4 +388,30 @@ mod tests {
             assert!(keys.is_empty(), "{name}: {keys:?}");
         }
     }
+
+    /// A registry id that is renamed or removed must not silently drop its keys.
+    #[test]
+    fn every_registry_entry_of_the_own_input_builds_its_bindings() {
+        use crate::app::commands::command_by_id;
+        use crate::text_view::text_input::actions as own;
+        use gpui::Action as _;
+        let entries = [
+            ("editor.delete-line", own::DeleteLine.name()),
+            ("editor.toggle-comments", own::ToggleComments.name()),
+            ("editor.toggle-hunk", own::ToggleSelectedDiffHunks.name()),
+        ];
+        for mac in [true, false] {
+            let bindings = super::own_bindings(mac);
+            for (id, action) in entries {
+                let command = command_by_id(id).unwrap_or_else(|| panic!("{id} left the registry"));
+                let want = command.keys.len() * command.contexts.len();
+                assert!(want > 0, "{id} has no key");
+                let got = bindings
+                    .iter()
+                    .filter(|binding| binding.action().name() == action)
+                    .count();
+                assert_eq!(got, want, "{id}, mac {mac}");
+            }
+        }
+    }
 }

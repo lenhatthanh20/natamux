@@ -4263,6 +4263,7 @@ dependencies = [
  "tree-sitter-typescript",
  "tree-sitter-yaml",
  "unicode-segmentation",
+ "util",
 ]
 
 [[package]]
