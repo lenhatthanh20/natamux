@@ -43,7 +43,7 @@ fn settings_target_is_the_first_id() {
 
 #[test]
 fn sign_ins_follow_the_agent_choices() {
-    assert_eq!(SIGN_INS.len(), AGENT_CHOICES.len());
+    // The first agents of the list, the ones with hooks.
     for (row, choice) in SIGN_INS.iter().zip(AGENT_CHOICES.iter()) {
         assert_eq!(row.agent, choice.id);
         assert_eq!(row.label, choice.label);
@@ -61,6 +61,9 @@ fn sign_ins_have_the_exact_commands_and_notes() {
             ("gemini", Some("then pick a sign-in")),
             ("copilot", Some("then /login")),
             ("cursor-agent login", None),
+            ("opencode auth login", None),
+            ("qwen", Some("then /auth")),
+            ("droid", Some("then sign in")),
         ]
     );
 }

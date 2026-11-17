@@ -25,7 +25,18 @@ Set these in the environment where the daemon starts.
 | `NATAMUX_GEMINI_COMMAND` | `gemini` | Program that starts Gemini CLI |
 | `NATAMUX_COPILOT_COMMAND` | `copilot` | Program that starts Copilot CLI |
 | `NATAMUX_CURSOR_COMMAND` | `cursor-agent` | Program that starts the Cursor CLI |
-| `NATAMUX_CLAUDE_ARGS`, `NATAMUX_CODEX_ARGS`, `NATAMUX_GEMINI_ARGS`, `NATAMUX_COPILOT_ARGS`, `NATAMUX_CURSOR_ARGS` | none | Words added to that agent's command line |
+| `NATAMUX_OPENCODE_COMMAND` | `opencode` | Program that starts OpenCode |
+| `NATAMUX_QWEN_COMMAND` | `qwen` | Program that starts Qwen Code |
+| `NATAMUX_DROID_COMMAND` | `droid` | Program that starts Factory Droid |
+| `NATAMUX_AMP_COMMAND` | `amp` | Program that starts Amp |
+| `NATAMUX_KIMI_COMMAND` | `kimi` | Program that starts Kimi |
+| `NATAMUX_GOOSE_COMMAND` | `goose` | Program that starts Goose |
+| `NATAMUX_AIDER_COMMAND` | `aider` | Program that starts Aider |
+| `NATAMUX_CRUSH_COMMAND` | `crush` | Program that starts Crush |
+| `NATAMUX_CLINE_COMMAND` | `cline` | Program that starts Cline |
+| `NATAMUX_KIRO_COMMAND` | `kiro-cli` | Program that starts Kiro |
+| `NATAMUX_MUSE_COMMAND` | `muse` | Program that starts Muse Code |
+| `NATAMUX_CLAUDE_ARGS`, `NATAMUX_CODEX_ARGS`, `NATAMUX_GEMINI_ARGS`, `NATAMUX_COPILOT_ARGS`, `NATAMUX_CURSOR_ARGS`, `NATAMUX_OPENCODE_ARGS`, `NATAMUX_QWEN_ARGS`, `NATAMUX_DROID_ARGS`, `NATAMUX_AMP_ARGS`, `NATAMUX_KIMI_ARGS`, `NATAMUX_GOOSE_ARGS`, `NATAMUX_AIDER_ARGS`, `NATAMUX_CRUSH_ARGS`, `NATAMUX_CLINE_ARGS`, `NATAMUX_KIRO_ARGS`, `NATAMUX_MUSE_ARGS` | none | Words added to that agent's command line |
 
 See [Agents](/docs/agents/claude-code/) for how each agent is started. **Generate** in the commit box runs the same program, without the extra words.
 

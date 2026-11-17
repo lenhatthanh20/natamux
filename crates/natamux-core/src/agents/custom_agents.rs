@@ -107,12 +107,12 @@ mod tests {
             row("Claude Qwen", "claude-code", "cq"),
             row("claude-code", "claude-code", "cq"),
             row("other", "other", "x"),
-            row("qwen", "aider", "cq"),
-            row("qwen", "claude-code", "   "),
-            row("qwen", "claude-code", "cq\nrm -rf /"),
+            row("qwen-x", "nano", "cq"),
+            row("qwen-x", "claude-code", "   "),
+            row("qwen-x", "claude-code", "cq\nrm -rf /"),
             row(&"a".repeat(33), "claude-code", "cq"),
-            row("qwen", "claude-code", &"a".repeat(501)),
-            json!({ "id": "qwen", "base": "claude-code", "command": "cq", "env": {} }),
+            row("qwen-x", "claude-code", &"a".repeat(501)),
+            json!({ "id": "qwen-x", "base": "claude-code", "command": "cq", "env": {} }),
         ] {
             assert!(parse(json!({ "agents": [bad.clone()] })).is_err(), "{bad}");
         }

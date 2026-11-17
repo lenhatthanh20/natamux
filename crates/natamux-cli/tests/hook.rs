@@ -195,6 +195,29 @@ fn names_the_event_of_a_copilot_hook_in_the_address() {
 }
 
 #[test]
+fn forwards_the_hooks_of_qwen_droid_and_opencode() {
+    let token = Env::from([("NATAMUX_TOKEN", "secret")]);
+    for (argv, line) in [
+        (
+            vec!["hook", "qwen"],
+            "POST http://127.0.0.1:4317/hooks/qwen",
+        ),
+        (
+            vec!["hook", "droid"],
+            "POST http://127.0.0.1:4317/hooks/droid",
+        ),
+        (
+            vec!["hook", "opencode", "sessionIdle"],
+            "POST http://127.0.0.1:4317/hooks/opencode?event=sessionIdle",
+        ),
+    ] {
+        let result = hook(&argv, token.clone());
+        assert_eq!(result.lines(), [line]);
+        assert_eq!(result.stdout, "");
+    }
+}
+
+#[test]
 fn answers_empty_json_for_the_agents_that_read_json_even_outside_a_natamux_session() {
     for agent in ["cursor", "gemini"] {
         assert_eq!(hook(&["hook", agent], Env::default()).stdout, "{}\n");

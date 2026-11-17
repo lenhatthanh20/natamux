@@ -2,7 +2,7 @@
 
 Natamux is a product for the public, so it must work with the agents people already use, not only one. This file records how the main agents can report progress, and how Natamux is built to cover them.
 
-Researched on 2026-10-08. Agents change quickly: re-check before building an adapter.
+Researched on 2026-10-08. The agents OpenCode, Qwen Code, Factory Droid, Amp, Kimi, Goose, Aider, Crush, Cline, Kiro and Muse Code were researched on 2026-11-17 (see "Added on 2026-11-17"). Agents change quickly: re-check before building an adapter.
 
 Verification labels: **docs** = the vendor's documentation page, **source** = the vendor's open source repository, **third party** = a blog or article, **unverified** = not read.
 
@@ -43,8 +43,11 @@ These cases cover submitted answers, tool completion, denied permissions, duplic
 | **Gemini CLI** | `BeforeAgent` | `Notification` with type `ToolPermission` | `AfterAgent` | none documented | command only | docs |
 | **Cursor** | `beforeSubmitPrompt` | permission answers `ask` on `preToolUse`, `beforeShellExecution` and others | `stop` | `postToolUseFailure` for a tool | command (cloud agents: command only) | docs |
 | **GitHub Copilot CLI** | `userPromptSubmitted` | `notification` with `notification_type` `permission_prompt` or `elicitation_dialog`. Not `permissionRequest`: it fires before the permission rules, so also for each tool that `--allow-all-tools` approves | `agentStop` | `errorOccurred` | command (`bash` or `powershell`) | docs |
-| **OpenCode** | not documented | `permission.asked` | `session.idle` | `session.error` | a JavaScript or TypeScript plugin, which can make HTTP calls | docs (the event payload is not documented) |
-| **Aider** and other agents without hooks | no | no | no | no | none | unverified |
+| **OpenCode** | `chat.message` plugin hook | `permission.asked` (`permission.v2.asked` in v2) | `session.idle` | `session.error` | a JavaScript or TypeScript plugin in `.opencode/plugins/`, which can make HTTP calls | docs (https://opencode.ai/docs/plugins/) and source (`packages/plugin/src/index.ts`, tag v1.19.6) |
+| **Qwen Code** | `UserPromptSubmit` | `PermissionRequest`, `Notification` (`permission_prompt`) | `Stop` | `StopFailure` | command | docs (`docs/users/features/hooks.md` in `QwenLM/qwen-code`) |
+| **Factory Droid** | `UserPromptSubmit` | `Notification` (`permission_prompt`, `elicitation_dialog`). No `PermissionRequest` | `Stop` | none | command | docs (https://docs.factory.com/cli/configuration/hooks-guide) |
+| **Muse Code** | `UserPromptSubmit` | `PermissionRequest`, `Notification` | `Stop` | `StopFailure` | command. Natamux does not use them yet: hooks run with a cleared environment (see "Muse hooks") | docs (https://dev.meta.ai/docs/muse-code/extending); the file format is **orca** (`src/main/muse/hook-settings.ts`) |
+| **Amp**, **Kimi**, **Goose**, **Aider**, **Crush**, **Cline**, **Kiro** | no | no | no | no | none found | docs (their CLI pages); see "Agents followed by their terminal" |
 
 Details worth knowing:
 
@@ -112,6 +115,9 @@ Each agent starts from the dashboard (**Start a task**, or **Start agent** on a 
 | Gemini CLI | `GEMINI_CLI_TRUST_WORKSPACE=true GEMINI_CLI_SYSTEM_SETTINGS_PATH=<file> gemini --approval-mode yolo -i '<prompt>'` | its system settings file, in the data folder | `BeforeAgent` | `Notification` (`ToolPermission`) | `AfterAgent` | none | its docs, not run |
 | GitHub Copilot CLI | `copilot --allow-all-tools -i '<prompt>'` | `.github/hooks/natamux.json` in the worktree, kept out of git | `userPromptSubmitted` | `notification` (`permission_prompt`, `elicitation_dialog`) | `agentStop` | `errorOccurred` that is not recoverable | a real 1.0.94 session |
 | Cursor CLI | `cursor-agent --force '<prompt>'` | `.cursor/hooks.json` in the worktree, kept out of git | `beforeSubmitPrompt` | none (the bell instead) | `stop` | `stop` with `status: error` | its docs, not run |
+| OpenCode | `opencode --auto [extra args] --prompt '<prompt>'` | the plugin `.opencode/plugins/natamux.js` in the worktree, kept out of git | `chat.message` | `permission.asked`, `permission.v2.asked` | `session.idle` | `session.error` | its docs and source, not run |
+| Qwen Code | `qwen --approval-mode yolo [extra args] -i '<prompt>'` | `.qwen/settings.json` in the worktree, kept out of git | `UserPromptSubmit` | `PermissionRequest`, `Notification` (`permission_prompt`) | `Stop` | `StopFailure` | its docs, not run |
+| Factory Droid | `droid --auto high [extra args] '<prompt>'` | `.factory/hooks.json` in the worktree, kept out of git | `UserPromptSubmit` | `Notification` (`permission_prompt`, `elicitation_dialog`); the bell still counts | `Stop` | none | its docs, not run |
 
 Notes:
 
@@ -137,6 +143,73 @@ Notes:
 
 - **The task's model.** The Model field of **Start a task** (and of the task's Edit form) is empty by default: the agent uses its own default. A name is passed as `--model '<name>'` after the `NATAMUX_<AGENT>_ARGS` words and before the stage words. It goes only to the task's agent (a stage's other agent gets none), only to a built-in agent or a custom one on a built-in base, and not when the stage words name a model (`--model`, `--model=`, `-m`): the stage wins. The app and the daemon accept 1 to 100 characters of `A-Z a-z 0-9 . _ - : / @ [ ]`, with no leading `-`; anything else is refused before the task is made (400, issue at `model`). There is no list of known names: a well-formed but wrong name reaches the agent. An agent that then ends at once fails the task, and the reason names the model; one that shows an error at its first turn (Claude Code does) waits in its terminal. Fix the model in Edit, then start the agent again.
 - **An agent that ends at once.** The launch script runs `<command> || printf '\033]2;natamux-agent-failed\007'` (`||` and printf work in sh, bash, zsh and fish; fish has no `$?`); on Windows the typed line sets that title when `$LASTEXITCODE` is not 0. If the title shows up in the first 30 seconds and the agent sent no event since its launch, the task fails with the agent's last output line and where to look (`NATAMUX_<AGENT>_ARGS`, or Settings > Agents for a custom agent). An agent that came back after a restart is left alone: a session it cannot find is no failure. An exit with code 0, such as `/exit`, changes nothing.
+- **OpenCode, Qwen Code and Droid** were added on 2026-11-17. Each gets a file in the worktree, written by Natamux and kept out of git, as Copilot and Cursor do. A file of the user's own at that place is left alone, as above (the OpenCode plugin is Natamux's only when its first line is `// Natamux hooks: Natamux writes this file again.`).
+- **Qwen Code asks to approve project hooks.** Project hooks do not run until approved. Qwen asks once per workspace and binds the approval to the exact file, so an edit asks again. Only `--yolo` or `--approval-mode yolo` on the command line skips the question; the `auto` mode passes it. With `ask`, the first start waits at that question. **docs** (`docs/users/features/hooks.md`, "Approving project hooks").
+- **Qwen's prompt flag.** `qwen -i '<prompt>'` runs the prompt and stays open. A prompt with no `-i`, or with `-p`, runs once and ends. **source** (`packages/cli/src/config/top-level-options.ts`).
+- **OpenCode's plugin folder.** v1 reads `.opencode/plugin/` and `.opencode/plugins/`; the docs of v2 name only `.opencode/plugins/`, so Natamux writes there. Orca treats v2 as another program (`opencode2`); set `NATAMUX_OPENCODE_COMMAND` for it. **source** (`packages/opencode/src/config/plugin.ts`, v1.19.6) and **orca** (`src/shared/agent-launch/catalog/tui-agent-config.ts`).
+- **Droid's flag.** `--auto high` is documented for `droid exec`. Orca passes it to the interactive mode too, and so does Natamux. **docs** and **orca** (`permissions/tui-agent-permissions.ts`).
+- **Droid and the bell.** Droid's hooks do send a `Notification` for a permission, but the daemon still counts the bell for it as a fallback (`AGENTS_WITH_HOOKS` in `generic_signals.rs`).
+- **Skills.** OpenCode, Qwen Code and Droid read their own folders, listed in "Skills of the new agents" below.
+
+## Added on 2026-11-17
+
+Checked on 2026-11-17 by reading each vendor's docs and source. None of the 11 new agents was run for this; "Checked" says "its docs, not run". The facts of each agent are labelled: **docs** = vendor docs, **source** = vendor repository, **orca** = `stablyai/orca` (`src/shared/agent-launch/...`), which launches most of these agents as a bare terminal program and pastes the prompt once it is up.
+
+### Agents followed by their terminal
+
+Amp, Kimi, Goose, Aider, Crush, Cline, Kiro and Muse Code have no hooks in Natamux. They are followed as in "Agents without hooks" below: output, the terminal bell, quiet time, `natamux ask` and `natamux done`. They send no session, so a task cannot come back on its session after a restart unless the line has a resume flag (last column).
+
+| Agent | Command line | Auto flag | Model | Resume | Checked |
+|---|---|---|---|---|---|
+| Amp | `amp --dangerously-allow-all` | `--dangerously-allow-all` (**orca**, `permissions/tui-agent-permissions.ts`; not in the docs) | none (no flag found) | none | its docs, not run |
+| Kimi | `kimi --yolo` | `--yolo` (**docs**, `docs/en/reference/kimi-command.md` in `MoonshotAI/kimi-cli`) | `--model` | `--session <id>`, `--continue` | its docs, not run |
+| Goose | `GOOSE_MODE=auto goose session` (PowerShell: `$env:GOOSE_MODE='auto';`) | the `GOOSE_MODE=auto` variable, set only in the `auto` mode; a user's config may set `approve` (**docs**, **orca**) | none (`GOOSE_MODEL` in the environment) | `--resume --session-id <id>`, `--resume` | its docs, not run |
+| Aider | `aider --yes-always` | `--yes-always` (**docs**) | `--model` | `--restore-chat-history` for the newest only | its docs, not run |
+| Crush | `crush --yolo` | `--yolo` (**source**, `internal/cmd/root.go`) | none (only `crush run` takes `--model`) | `--session <id>`, `--continue` | its source, not run |
+| Cline | `cline --auto-approve true` | `--auto-approve true` (**docs**) | `--model` | `--id <session>` | its docs, not run |
+| Kiro | `kiro-cli chat --trust-all-tools` | `--trust-all-tools` (**docs**) | `--model` | `--resume-id <id>`, `--resume` | its docs, not run |
+| Muse Code | `muse --trust-workspace --yolo` | `--yolo` (**docs**, https://dev.meta.ai/docs/muse-code/permissions) | `--model` | `muse resume <id>` | its docs, not run |
+
+- **Model.** The Model field of **Start a task** goes to the agent as `--model '<name>'`, except for Amp, Goose and Crush (`NO_MODEL_AGENTS` in `crates/natamux-proto/src/agents/model.rs`). The app hides the field for them.
+- **The prompt is pasted.** None of these takes a first prompt on its line and stays open. Amp, Kimi, Aider, Crush and Muse have no flag for it. A prompt on Cline's line runs it headless. The flags of Goose (`run -s -t`) and Kiro (`chat "<text>"`) are not documented to keep the screen open. Natamux starts the agent with no prompt and pastes the prompt into its terminal when its first screen has settled: the agent is in front of the shell (the terminal's foreground process is not a shell), it printed, then 1.5 s with no output. The shell's echo of the launch line does not count. An agent in front that printed nothing gets it after 30 s. The prompt is dropped, never typed into the shell, when the agent ended (the shell is in front again, or the launch line's title of a failed or ended agent came) or never came up in 30 s: the shell would run it as a command, and it can hold the text of an imported issue. Windows does not tell the foreground process, so there only the titles tell. Each prompt is pasted once (`crates/natamux-daemon/src/agents/pasted_prompt.rs`). Orca pastes for the same agents.
+- **The bell.** The bell counts for every agent in this section (`AGENTS_WITH_HOOKS` in `generic_signals.rs` lists the agents that ignore it).
+- **A short answer** (a commit message draft) must run no tools. It runs the agent's one-shot mode where that mode cannot change files: `qwen -p`, `droid exec` (read-only without `--auto`, **docs**), `GOOSE_MODE=chat goose run -t` (the `chat` mode runs no tools, **docs**), `kiro-cli chat --no-interactive`. The others have no mode that only answers, so their drafts fall back to Claude Code (`has_one_shot`): Aider's `--message` and a prompt on Cline's line run a whole turn; `kimi --print` turns on `--afk`, which approves every tool call (**docs**, https://moonshotai.github.io/kimi-cli/en/reference/kimi-command.html); `crush run` approves each permission of its session (**source**, `internal/cmd/run.go`); `amp -x` runs a whole turn with tools (**docs**, https://ampcode.com/docs/cli/execute-mode); `opencode run` uses the `build` agent, which allows every tool by default (**docs**, https://opencode.ai/docs/permissions/); Muse's docs do not say that `muse exec` runs no tools.
+- **Usage.** No token numbers for any of the 11 new agents. The dashboard shows none.
+- **Sign-in.** No known sign-in screen line for them, so a task that waits on a login is not marked "sign in".
+- **Kimi.** Two products share the name: the Python Kimi Code CLI (docs above) and a newer Kimi Code 2.x with the program `kimi-code` and the flag `--auto` (**orca**). Natamux accepts both programs and passes `--yolo`. The difference is not resolved.
+- **Muse hooks.** Meta's docs name a project file `.muse/hooks.json` (**docs**, https://dev.meta.ai/docs/muse-code/extending), and it runs only in a trusted folder. Muse runs hooks with a cleared environment: only a short list of variables passes, and others must be named in the settings key `managed_hooks_env_vars` (**orca**, `src/main/muse/hook-config-json.ts`). So `natamux hook` would not see `NATAMUX_TOKEN`, and Natamux does not write the file yet. Orca writes the Claude-shaped format `{"hooks":{"<Event>":[{"hooks":[{"type":"command","command":"..."}]}]}}`; the docs do not show the format.
+- **Not verified.** Cline's `-i` with a prompt (keeps the TUI open?) was not found, Kiro's `--tui` is in Orca but not in its docs, and the Amp flag could have changed in the newest release.
+
+### Skills of the new agents
+
+| Agent | Project folders | User folders | Label |
+|---|---|---|---|
+| OpenCode | `.opencode/skills`, `.claude/skills`, `.agents/skills` | `~/.config/opencode/skills`, `~/.claude/skills`, `~/.agents/skills` | docs |
+| Qwen Code | `.qwen/skills` | `~/.qwen/skills`, `~/.agents/skills` | docs |
+| Droid | `.factory/skills` | `~/.factory/skills` | docs |
+| Amp | `.agents/skills`, `.claude/skills` | `~/.config/agents/skills`, `~/.agents/skills`, `~/.config/amp/skills`, `~/.claude/skills` | docs |
+| Kimi | `.kimi/skills`, `.claude/skills`, `.codex/skills`, `.agents/skills` | `~/.kimi/skills`, `~/.claude/skills`, `~/.config/agents/skills`, `~/.agents/skills` | docs |
+| Crush | `.agents/skills`, `.crush/skills`, `.claude/skills`, `.cursor/skills` | `~/.config/crush/skills`, `~/.agents/skills`, `~/.claude/skills` | source (README) |
+| Cline | `.cline/skills` | `~/.cline/skills` | docs |
+| Kiro | `.kiro/skills` | `~/.kiro/skills` | docs |
+| Muse Code | `.agents/skills`, `.codex/skills`, `.claude/skills` | `~/.config/muse/skills`, `~/.agents/skills`, `~/.claude/skills` | docs |
+
+Goose and Aider: no skill folder found (Aider has no skills). The current code is `crates/natamux-agents/src/skills.rs`.
+
+### Sources
+
+- OpenCode: https://opencode.ai/docs/plugins/ , https://opencode.ai/docs/cli/ , https://opencode.ai/docs/skills/ , https://github.com/anomalyco/opencode
+- Qwen Code: https://github.com/QwenLM/qwen-code (`docs/users/features/hooks.md`, `approval-mode.md`, `headless.md`, `skills.md`)
+- Factory Droid: https://docs.factory.com/reference/cli-reference , https://docs.factory.com/cli/configuration/hooks-guide , https://docs.factory.com/cli/droid-exec/overview
+- Amp: https://ampcode.com/docs/cli , https://ampcode.com/docs/cli/execute-mode
+- Kimi: https://github.com/MoonshotAI/kimi-cli
+- Goose: https://goose-docs.ai/docs/guides/goose-cli-commands , https://github.com/aaif-goose/goose
+- Aider: https://aider.chat/docs/config/options.html
+- Crush: https://github.com/charmbracelet/crush
+- Cline: https://docs.cline.bot/cline-cli/cli-reference
+- Kiro: https://kiro.dev/docs/reference/cli-commands/ , https://kiro.dev/docs/skills/
+- Muse Code: https://dev.meta.ai/docs/muse-code
+- Orca: https://github.com/stablyai/orca (`src/shared/agent-launch/`)
 
 ## Skills
 
@@ -201,7 +274,8 @@ Tokens and cost per task, read from the files the agents write. Checked on 2026-
 4. (Done) A "no sign of life" rule for running tasks, shown as "quiet" on the dashboard.
 5. Add Cursor and Copilot CLI after reading their payloads in full.
 6. The agent runner with Tier 1 detection (output quiet, bell, OSC 9).
-7. OpenCode plugin, then ACP.
+7. (Done 2026-11-17) OpenCode plugin, Qwen Code and Droid hooks; the agent runner follows Amp, Kimi, Goose, Aider, Crush, Cline, Kiro and Muse Code by their terminal.
+8. A Muse Code hook file (needs `managed_hooks_env_vars` so `natamux hook` sees `NATAMUX_TOKEN`), then ACP.
 
 Each adapter needs a real session to check it. Until then it is tested only against fake input.
 
@@ -213,6 +287,7 @@ Each adapter needs a real session to check it. Until then it is tested only agai
 - Cursor hooks: https://cursor.com/docs/agent/hooks
 - GitHub Copilot CLI hooks: https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-hooks-reference
 - OpenCode plugins: https://opencode.ai/docs/plugins/
+- The 11 agents added on 2026-11-17: see "Added on 2026-11-17" above.
 - Agent Client Protocol: https://agentclientprotocol.com/overview/introduction
 
 ## Agents without hooks
@@ -220,5 +295,5 @@ Each adapter needs a real session to check it. Until then it is tested only agai
 Any agent started in a task's first terminal is followed by its output (`generic-signals.ts`):
 
 - Output is a sign of life. A running task whose terminal stays silent for 10 minutes shows as quiet.
-- The terminal bell (`\x07`) moves a running task to needs input. Claude Code, Codex and Gemini use their wait hooks instead; Cursor and Copilot still use the bell as a fallback.
+- The terminal bell (`\x07`) moves a running task to needs input. Claude Code, Codex, Gemini and OpenCode use their wait hooks instead; Cursor, Copilot, Qwen Code and Droid still use the bell as a fallback. Qwen Code runs project hooks only after the user approved them, so until then only the bell tells that it waits.
 - `natamux ask` and `natamux done` let such an agent report the rest (see the plugin skill in `plugins/natamux`).

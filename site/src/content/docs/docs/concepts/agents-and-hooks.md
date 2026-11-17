@@ -28,6 +28,10 @@ The default program for each agent:
 | [Gemini CLI](/docs/agents/gemini/) | `gemini` | `gemini` | `NATAMUX_GEMINI_COMMAND` | `NATAMUX_GEMINI_ARGS` |
 | [Copilot CLI](/docs/agents/copilot/) | `copilot` | `copilot` | `NATAMUX_COPILOT_COMMAND` | `NATAMUX_COPILOT_ARGS` |
 | [Cursor CLI](/docs/agents/cursor/) | `cursor` | `cursor-agent` | `NATAMUX_CURSOR_COMMAND` | `NATAMUX_CURSOR_ARGS` |
+| [OpenCode](/docs/agents/opencode/) | `opencode` | `opencode` | `NATAMUX_OPENCODE_COMMAND` | `NATAMUX_OPENCODE_ARGS` |
+| [Qwen Code](/docs/agents/qwen/) | `qwen` | `qwen` | `NATAMUX_QWEN_COMMAND` | `NATAMUX_QWEN_ARGS` |
+| [Factory Droid](/docs/agents/droid/) | `droid` | `droid` | `NATAMUX_DROID_COMMAND` | `NATAMUX_DROID_ARGS` |
+| [More terminal agents](/docs/agents/more-agents/) | `amp`, `kimi`, `goose`, `aider`, `crush`, `cline`, `kiro`, `muse` | `amp`, `kimi`, `goose`, `aider`, `crush`, `cline`, `kiro-cli`, `muse` | `NATAMUX_<ID>_COMMAND` | `NATAMUX_<ID>_ARGS` |
 
 Set these variables when you start the daemon. See [Environment variables](/docs/reference/environment-variables/). For any other agent, see [Other agents](/docs/agents/other-agents/).
 
@@ -77,13 +81,16 @@ Natamux adds the hooks for one run of the agent. It does not change your own age
 | Gemini CLI | The variable `GEMINI_CLI_SYSTEM_SETTINGS_PATH` points to a settings file | `gemini-settings.json` in the data folder | No |
 | Copilot CLI | A hook file in the worktree | `.github/hooks/natamux.json` | Kept out of git |
 | Cursor CLI | A hook file in the worktree | `.cursor/hooks.json` | Kept out of git |
+| OpenCode | A plugin file in the worktree | `.opencode/plugins/natamux.js` | Kept out of git |
+| Qwen Code | A hook file in the worktree | `.qwen/settings.json` | Kept out of git |
+| Factory Droid | A hook file in the worktree | `.factory/hooks.json` | Kept out of git |
 
 Notes:
 
 - With `--settings`, Claude Code reads the token and the task id from its environment when it sends a hook.
 - Every other hook runs `natamux hook <agent>` as a command. It reads the hook JSON from stdin and sends it to the daemon. It prints nothing, and it never makes the agent fail. If the daemon is down, it exits quietly. Outside a Natamux terminal it does nothing.
 - Codex asks you to trust every hook it has not seen, and Natamux hooks change with the daemon. `--dangerously-bypass-hook-trust` skips that question for runs that Natamux starts.
-- For Claude Code, Copilot and Cursor, Natamux writes the hook file in the worktree and adds its path to the ignore list of your repository (`.git/info/exclude`). The file never reaches a commit.
+- For Claude Code, Copilot, Cursor, OpenCode, Qwen Code and Droid, Natamux writes the hook file in the worktree and adds its path to the ignore list of your repository (`.git/info/exclude`). The file never reaches a commit.
 - If the worktree already has a hook file at that path with any hook of your own, Natamux leaves it alone. The agent then runs without Natamux hooks. The terminal still works. Natamux updates the file only when every hook in it runs `natamux hook`.
 - Copilot CLI also runs the hooks in `.claude/settings.local.json`. `natamux hook claude-code` does nothing unless Claude Code runs it (Claude Code sets `CLAUDECODE=1`), so a Copilot session never reports as Claude Code.
 
@@ -100,6 +107,9 @@ Most agents ask whether you trust a folder the first time they start in it. Each
 | Gemini CLI | Sets `GEMINI_CLI_TRUST_WORKSPACE=true` for this run. It matters only when you turned on folder trust. |
 | Copilot CLI | Adds the worktree to `trustedFolders` in `~/.copilot/config.json` (or `$COPILOT_HOME`), unless the worktree or a parent is there. A missing or broken file is left alone. |
 | Cursor CLI | Writes `~/.cursor/projects/<folder>/.workspace-trusted` (or under `$CURSOR_DATA_DIR`), the file it writes when you trust the folder. One that exists is left alone. |
+| Muse Code | Passes `--trust-workspace` for this run. |
+| Qwen Code | Nothing: folder trust is off by default. Its approval of project hooks is a separate question, skipped by `--approval-mode yolo`. |
+| The others | Nothing. No trust question is documented. |
 
 If a file cannot be written, the agent starts and asks as before. Natamux does not remove these entries when it removes a task.
 
@@ -115,7 +125,7 @@ Fix the problem, then start the agent again.
 
 You can use any command line agent in a task terminal. Without hooks, Natamux has less to go on. Two fallbacks help:
 
-- **The terminal bell.** Many tools ring the bell when they wait for you. A `running` task whose agent has no hooks that report waiting becomes `needs-input` when the bell rings. This applies to Copilot CLI, Cursor CLI and unknown agents. Natamux ignores a bell in the first 15 seconds after the launch, because some agents ring it at start. Agents with hooks (Claude Code, Codex, Gemini CLI) do not use the bell.
+- **The terminal bell.** Many tools ring the bell when they wait for you. A `running` task whose agent has no hooks that report waiting becomes `needs-input` when the bell rings. This applies to Copilot CLI, Cursor CLI, Qwen Code, Factory Droid, the eight terminal agents (Amp, Kimi, Goose, Aider, Crush, Cline, Kiro, Muse Code) and unknown agents. Natamux ignores a bell in the first 15 seconds after the launch, because some agents ring it at start. Agents with hooks that report a wait (Claude Code, Codex, Gemini CLI, OpenCode) do not use the bell. Qwen Code runs its project hooks only after you approve them, so the bell still counts for it.
 - **Commands the agent can run.** Tell the agent to run these in its terminal:
 
 | Command | Effect |

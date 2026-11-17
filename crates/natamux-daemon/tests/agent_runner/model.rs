@@ -179,3 +179,13 @@ fn tells_the_watchers_which_model_it_passed() {
     let launches = launches.lock().unwrap();
     assert_eq!(launches[0].model.as_deref(), Some("sonnet[1m]"));
 }
+
+#[test]
+fn gives_no_model_to_an_agent_without_a_model_flag() {
+    for agent in ["amp", "goose", "crush"] {
+        let task = task_of(Some(agent), Some("opus"));
+        assert_eq!(task_model(&task, agent, None), None, "{agent}");
+    }
+    let task = task_of(Some("muse"), Some("muse-spark-1.2"));
+    assert_eq!(task_model(&task, "muse", None), Some("muse-spark-1.2"));
+}

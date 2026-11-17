@@ -12,7 +12,7 @@ use super::settings_view::SettingsView;
 use super::source::reason;
 use crate::agents::agent_choices::{AGENT_CHOICES, custom_agents, custom_agents_known};
 use crate::components::button_style::{action_button, button_icon};
-use crate::components::colors::{TileColor, accent};
+use crate::components::colors::accent;
 use crate::components::settings_card::{
     SeparatorInset, SettingsCard, SettingsGroup, SettingsRow, foot_text,
 };
@@ -295,7 +295,7 @@ fn custom_row(index: usize, agent: &CustomAgent, cx: &App) -> SettingsRow {
 
 fn built_in_group(cx: &App) -> SettingsGroup {
     let rows = AGENT_CHOICES.iter().map(|choice| {
-        let lead = SettingsTile::icon(button_icon("bot"), TileColor::Gray, TileSize::Row);
+        let lead = SettingsTile::agent(choice.id, TileSize::Row);
         let program = Label::new(default_program(choice.id))
             .size(LabelSize::Small)
             .color(Color::Muted)

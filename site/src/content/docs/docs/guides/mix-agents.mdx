@@ -43,7 +43,7 @@ For example, a stage configured for Cursor can look like this:
   "ownShell": true, "agent": "cursor", "args": "--model gpt-5" }
 ```
 
-- `agent` is `claude-code`, `codex`, `gemini`, `copilot` or `cursor`.
+- `agent` is `claude-code`, `codex`, `gemini`, `copilot`, `cursor`, `opencode`, `qwen`, `droid`, `amp`, `kimi`, `goose`, `aider`, `crush`, `cline`, `kiro` or `muse`.
 - `args` adds words to the command line of that agent, such as a model flag. See [Choose a model](/docs/concepts/stages/#choose-a-model).
 - Any `agent` or `testing` stage can have them, from the catalog or your own. A stage that would run in Terminal 1, such as Spec or Implement, then runs in a terminal of its own, from Terminal 6, as Follow CI does in the Team example. Terminal 1 keeps the task's agent and its session.
 - The [configuration reference](/docs/reference/configuration/) lists where `agent` and `args` are allowed.
@@ -100,6 +100,10 @@ Details per agent:
 - [Gemini CLI](/docs/agents/gemini/)
 - [Copilot CLI](/docs/agents/copilot/)
 - [Cursor CLI](/docs/agents/cursor/)
+- [OpenCode](/docs/agents/opencode/)
+- [Qwen Code](/docs/agents/qwen/)
+- [Factory Droid](/docs/agents/droid/)
+- [More terminal agents](/docs/agents/more-agents/): Amp, Kimi, Goose, Aider, Crush, Cline, Kiro and Muse Code, followed by their terminal
 - [Other agents](/docs/agents/other-agents/): without hooks, Natamux sees less
 
 ## The agent token

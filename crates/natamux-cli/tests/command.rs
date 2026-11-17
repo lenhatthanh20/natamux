@@ -416,6 +416,18 @@ fn prints_the_claude_code_settings() {
 fn rejects_an_unknown_tool_and_extra_arguments() {
     fails_with(&["hooks"], "Unknown hooks command");
     fails_with(&["hooks", "cursor"], "Unknown hooks command");
+    fails_with(
+        &["hooks", "aider"],
+        "Use claude-code, opencode, qwen, droid",
+    );
+    fails_with(&["hooks", "qwen", "extra"], "Unexpected argument");
+}
+
+#[test]
+fn prints_the_hook_file_of_an_agent_with_one_in_the_worktree() {
+    for agent in ["opencode", "qwen", "droid"] {
+        assert_eq!(ok(&["hooks", agent]), Command::HooksFile(agent.into()));
+    }
     fails_with(&["hooks", "claude-code", "extra"], "Unexpected argument");
 }
 

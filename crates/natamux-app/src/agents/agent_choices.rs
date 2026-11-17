@@ -15,7 +15,7 @@ pub struct AgentChoice {
     pub icon: &'static str,
 }
 
-pub const AGENT_CHOICES: [AgentChoice; 5] = [
+pub const AGENT_CHOICES: [AgentChoice; 16] = [
     AgentChoice {
         id: "claude-code",
         label: "Claude Code",
@@ -40,6 +40,61 @@ pub const AGENT_CHOICES: [AgentChoice; 5] = [
         id: "cursor",
         label: "Cursor",
         icon: "cursor",
+    },
+    AgentChoice {
+        id: "opencode",
+        label: "OpenCode",
+        icon: "opencode",
+    },
+    AgentChoice {
+        id: "qwen",
+        label: "Qwen Code",
+        icon: "qwen",
+    },
+    AgentChoice {
+        id: "droid",
+        label: "Factory Droid",
+        icon: "droid",
+    },
+    AgentChoice {
+        id: "amp",
+        label: "Amp",
+        icon: "amp",
+    },
+    AgentChoice {
+        id: "kimi",
+        label: "Kimi CLI",
+        icon: "kimi",
+    },
+    AgentChoice {
+        id: "goose",
+        label: "Goose",
+        icon: "goose",
+    },
+    AgentChoice {
+        id: "aider",
+        label: "Aider",
+        icon: "aider",
+    },
+    AgentChoice {
+        id: "crush",
+        label: "Crush",
+        icon: "crush",
+    },
+    AgentChoice {
+        id: "cline",
+        label: "Cline CLI",
+        icon: "cline",
+    },
+    AgentChoice {
+        id: "kiro",
+        label: "Kiro CLI",
+        icon: "kiro",
+    },
+    AgentChoice {
+        id: "muse",
+        label: "Muse Code (Meta)",
+        icon: "muse",
     },
 ];
 
@@ -184,7 +239,11 @@ mod tests {
             agent_icon_path(Some("claude-code"), true).as_deref(),
             Some("icons/agents/claude.svg")
         );
-        assert_eq!(agent_icon_path(Some("aider"), false), None);
+        assert_eq!(
+            agent_icon_path(Some("muse"), true).as_deref(),
+            Some("icons/agents/muse.svg")
+        );
+        assert_eq!(agent_icon_path(Some("my-agent"), false), None);
     }
 
     #[test]
@@ -195,6 +254,8 @@ mod tests {
             ("copilot", "copilot"),
             ("cursor", "cursor"),
             ("codex", "codex"),
+            ("droid", "droid"),
+            ("muse", "muse"),
         ] {
             assert_eq!(agent_icon(Some(id)), Some(icon));
         }
@@ -225,13 +286,33 @@ mod tests {
     fn agent_icon_names_lists_each_icon_once() {
         assert_eq!(
             agent_icon_names(),
-            ["claude", "codex", "gemini-ai", "copilot", "cursor"]
+            [
+                "claude",
+                "codex",
+                "gemini-ai",
+                "copilot",
+                "cursor",
+                "opencode",
+                "qwen",
+                "droid",
+                "amp",
+                "kimi",
+                "goose",
+                "aider",
+                "crush",
+                "cline",
+                "kiro",
+                "muse",
+            ]
         );
     }
 
     #[test]
     fn names_a_known_agent_and_shows_an_unknown_id_as_it_is() {
         assert_eq!(agent_label(Some("claude-code")), "Claude Code");
+        assert_eq!(agent_label(Some("muse")), "Muse Code (Meta)");
+        assert_eq!(agent_label(Some("kiro")), "Kiro CLI");
+        assert_eq!(agent_label(Some("cline")), "Cline CLI");
         assert_eq!(agent_label(Some("my-agent")), "my-agent");
         assert_eq!(agent_label(None), "No agent");
     }
@@ -277,7 +358,7 @@ mod tests {
             ("claude-code".to_owned(), "Claude Code".to_owned())
         );
         assert_eq!(
-            picks[5],
+            picks[AGENT_CHOICES.len()],
             ("claude-qwen".to_owned(), "claude-qwen".to_owned())
         );
         assert!(can_start_in(Some("claude-qwen"), &list));

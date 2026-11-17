@@ -230,6 +230,7 @@ fn labels_states_and_agents_like_the_dashboard() {
     assert_eq!(state_label(TaskState::Review), "In review");
     assert_eq!(state_label(TaskState::NeedsInput), "Needs input");
     assert_eq!(agent_label(Some("claude-code")), "Claude Code");
+    assert_eq!(agent_label(Some("muse")), "Muse Code (Meta)");
     assert_eq!(agent_label(Some("mystery")), "mystery");
     assert_eq!(agent_label(None), "No agent");
 }

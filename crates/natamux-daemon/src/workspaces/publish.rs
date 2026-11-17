@@ -4,12 +4,12 @@
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 
 use natamux_agents::custom::agent_kind;
+use natamux_agents::launch::has_one_shot;
 use natamux_git::changes::list_changes;
 use natamux_git::commit_drafter::{DraftInput, MAX_DIFF_CHARS, draft_commit_message};
 use natamux_git::commit_push::{commit_all, push_branch, read_commit_diff};
 use natamux_git::gh::create_pull_request;
 use natamux_git::graph::has_remote_branch;
-use natamux_proto::agents::start::LAUNCHABLE_AGENTS;
 use natamux_proto::tasks::task::Task;
 use natamux_proto::workspaces::changes::{CommitMessageDraft, DraftSource};
 use serde_json::json;
@@ -140,12 +140,13 @@ impl WorkspaceService {
         let workspace = self.workspace_of(task_id)?;
         let task = self.tasks.get_task(task_id)?;
         // A custom agent drafts as its base with the base's own program: its command may be a
-        // function of the user's interactive shell, which this run does not load.
+        // function of the user's interactive shell, which this run does not load. An agent with
+        // no mode that only answers drafts with Claude Code.
         let agent = task
             .agent
             .as_deref()
             .map(agent_kind)
-            .filter(|agent| LAUNCHABLE_AGENTS.contains(&agent.as_str()))
+            .filter(|agent| has_one_shot(agent))
             .unwrap_or_else(|| "claude-code".to_string());
         let diff = read_commit_diff(&workspace, MAX_DIFF_CHARS)?;
         let changes = list_changes(&workspace, false)?;

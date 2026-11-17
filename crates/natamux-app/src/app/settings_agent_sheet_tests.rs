@@ -26,7 +26,24 @@ fn shows_the_default_program_of_each_built_in_agent() {
         .collect();
     assert_eq!(
         programs,
-        ["claude", "codex", "gemini", "copilot", "cursor-agent"]
+        [
+            "claude",
+            "codex",
+            "gemini",
+            "copilot",
+            "cursor-agent",
+            "opencode",
+            "qwen",
+            "droid",
+            "amp",
+            "kimi",
+            "goose",
+            "aider",
+            "crush",
+            "cline",
+            "kiro-cli",
+            "muse",
+        ]
     );
 }
 
@@ -46,6 +63,10 @@ fn the_footnote_says_what_natamux_does_with_the_base() {
     assert_eq!(
         base_footnote("codex"),
         "Natamux starts it like Codex, with its hooks."
+    );
+    assert_eq!(
+        base_footnote("aider"),
+        "Natamux starts it like Aider, and follows its terminal."
     );
 }
 
@@ -75,8 +96,8 @@ fn an_empty_or_badly_written_id_gets_the_daemon_s_message() {
 
 #[test]
 fn an_id_of_a_built_in_agent_or_another_row_is_taken() {
-    let others = [agent("qwen", "codex", "q")];
-    for id in ["claude-code", "other", "qwen"] {
+    let others = [agent("qwen-x", "codex", "q")];
+    for id in ["claude-code", "other", "qwen-x"] {
         let errors = sheet_errors(&agent(id, "codex", "cq"), &others);
         assert_eq!(
             errors.id,
@@ -88,10 +109,10 @@ fn an_id_of_a_built_in_agent_or_another_row_is_taken() {
 
 #[test]
 fn an_empty_or_too_long_command_is_refused() {
-    let errors = sheet_errors(&agent("qwen", "other", ""), &[]);
+    let errors = sheet_errors(&agent("qwen-x", "other", ""), &[]);
     assert_eq!(errors.command.as_deref(), Some(NO_COMMAND));
     assert_eq!(errors.id, None);
     let long = "a".repeat(501);
-    let errors = sheet_errors(&agent("qwen", "other", &long), &[]);
+    let errors = sheet_errors(&agent("qwen-x", "other", &long), &[]);
     assert_eq!(errors.command.as_deref(), Some(COMMAND_LONG));
 }

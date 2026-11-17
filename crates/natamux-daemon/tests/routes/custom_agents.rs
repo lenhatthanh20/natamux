@@ -97,13 +97,13 @@ async fn saves_the_custom_agents_and_starts_them() {
     assert_eq!(launch_line(&d, "T-0002"), "my-agent 'Write docs'");
 
     // An unknown id names every agent that can start.
-    let start = json!({ "agent": "aider" });
+    let start = json!({ "agent": "nano-agent" });
     let (status, body) = d
         .send(Method::POST, "/tasks/T-0002/agent", Some(TOKEN), &start)
         .await;
     assert_eq!(status, 404);
     let text = body.to_string();
-    assert!(text.contains("cursor, claude-qwen, my-agent"), "{text}");
+    assert!(text.contains("muse, claude-qwen, my-agent"), "{text}");
 
     // A saved change counts for the next start, with no restart.
     let renamed = json!({ "agents": [
