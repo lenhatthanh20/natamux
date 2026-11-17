@@ -1,5 +1,5 @@
-//! The own diff model against T-DIFF-1 (the rows the old view gave, `diff_golden_tests.rs`), and
-//! the small rules it is made of.
+//! The own diff model against T-DIFF-1 (the rows the old view gave on Zed's editor, recorded
+//! before S7), and the small rules it is made of.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
@@ -9,7 +9,7 @@ use super::*;
 use crate::app::golden_files;
 use crate::git::diff_cases::{cases, random_cases, word_fixtures};
 
-/// `(name, side by side, collapse)`, as in `diff_golden_tests.rs`.
+/// `(name, side by side, collapse)`, as recorded.
 const MODES: [(&str, bool, bool); 4] = [
     ("side whole", true, false),
     ("side collapsed", true, true),
@@ -126,7 +126,7 @@ fn record(
     diff
 }
 
-/// The rows of `diff_golden_tests.rs::run`, in its order, from the own model.
+/// The rows of the record, in its order, from the own model.
 fn run() -> Vec<Value> {
     let mut rows = Vec::new();
     for (name, texts) in cases() {

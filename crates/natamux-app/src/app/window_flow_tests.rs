@@ -37,10 +37,7 @@ pub(crate) fn root(
     cx: &mut TestAppContext,
 ) -> (Entity<Root>, Entity<Dashboard>, &mut VisualTestContext) {
     test_views::init(cx);
-    cx.update(|cx| {
-        shortcuts::bind(cx);
-        crate::git::languages::init(cx);
-    });
+    cx.update(shortcuts::bind);
     let (root, cx) = cx.add_window_view(|window, cx| {
         let source = Ok(Arc::new(Source::FakeDaemon));
         Root::new(source, SavedView::default(), window, cx)

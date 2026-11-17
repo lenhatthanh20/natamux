@@ -1,5 +1,5 @@
-//! The editor tab commands that T-CODE-1 does not record (advisor A25, part 6), written on Zed's
-//! editor so the own code view can be held to them:
+//! The editor tab commands that T-CODE-1 does not record (advisor A25, part 6), recorded on Zed's
+//! editor before S7 so the own code view is held to them:
 //! - Mod+/ (comment or uncomment the lines) on one line, an indented line, part of a line, lines
 //!   with an empty one between, and a commented line;
 //! - Ctrl+Shift+Up and Ctrl+Shift+Down (grow and shrink the selection by the syntax tree);
@@ -21,7 +21,6 @@ use super::code_typing_tests::{
     C_STRING, Case, HASH_COMMENT, Host, JS_STRING, JSON_STRING, SLASH_COMMENT, Step, case,
     check_own, p, run_cases, t,
 };
-use crate::app::golden_files;
 
 const SET: &str = "code_commands";
 const LARGER: &str = "ctrl-shift-up";
@@ -150,9 +149,8 @@ fn cases(host: &Host) -> Vec<Case> {
     out
 }
 
-/// `own`: the cases run on the own code view of the editor tab.
-fn run(host: &Host, own: bool, cx: &mut TestAppContext) -> Vec<Value> {
-    run_cases(host, own, cases(host), cx)
+fn run(host: &Host, cx: &mut TestAppContext) -> Vec<Value> {
+    run_cases(host, cases(host), cx)
 }
 
 macro_rules! hosts {
@@ -161,22 +159,9 @@ macro_rules! hosts {
             use super::*;
 
             #[gpui::test]
-            fn commands_match_the_golden_file(cx: &mut TestAppContext) {
-                let host = $host;
-                golden_files::check(SET, host.name, &run(&host, false, cx));
-            }
-
-            #[gpui::test]
             fn own_commands_match_the_golden_file(cx: &mut TestAppContext) {
                 let host = $host;
-                check_own(SET, &host, &run(&host, true, cx));
-            }
-
-            #[gpui::test]
-            #[ignore]
-            fn golden_code_commands(cx: &mut TestAppContext) {
-                let host = $host;
-                golden_files::write(SET, host.name, &run(&host, false, cx));
+                check_own(SET, &host, &run(&host, cx));
             }
         }
     )*};
