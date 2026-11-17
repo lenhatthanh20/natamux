@@ -61,6 +61,16 @@ pub fn changes_badge(count: Option<usize>) -> Option<usize> {
     count.filter(|count| *count > 0)
 }
 
+/// The badge's text: from 1000 files a short "1k+", as "1000" wraps inside the 32 px button
+/// (T-0341). The tooltip keeps the exact count.
+pub fn badge_text(count: usize) -> String {
+    if count < 1000 {
+        count.to_string()
+    } else {
+        "1k+".to_owned()
+    }
+}
+
 /// A view's tooltip: Changes adds its count, as the tab did ("Changes, 5 files to commit").
 pub fn view_tip(label: &str, badge: Option<usize>) -> String {
     match badge {
@@ -129,11 +139,12 @@ impl DetailsRail {
                 .right(px(-4.))
                 .px_1()
                 .rounded_full()
+                .whitespace_nowrap()
                 .bg(cx.theme().colors().element_background)
                 .border_1()
                 .border_color(cx.theme().colors().border)
                 .child(
-                    Label::new(count.to_string())
+                    Label::new(badge_text(count))
                         .size(LabelSize::XSmall)
                         .color(Color::Warning),
                 )
@@ -203,9 +214,21 @@ mod tests {
     }
 
     #[test]
+    fn shortens_the_changes_badge_from_1000_files() {
+        assert_eq!(badge_text(1), "1");
+        assert_eq!(badge_text(999), "999");
+        assert_eq!(badge_text(1000), "1k+");
+        assert_eq!(badge_text(12345), "1k+");
+    }
+
+    #[test]
     fn says_the_count_in_the_tooltip_of_changes() {
         assert_eq!(view_tip("Changes", Some(1)), "Changes, 1 file to commit");
         assert_eq!(view_tip("Changes", Some(57)), "Changes, 57 files to commit");
+        assert_eq!(
+            view_tip("Changes", Some(1000)),
+            "Changes, 1000 files to commit"
+        );
         assert_eq!(view_tip("History", None), "History");
     }
 }
