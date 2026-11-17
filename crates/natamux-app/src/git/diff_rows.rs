@@ -355,7 +355,11 @@ fn add_words(
     shown: &[Vec<Option<usize>>; 2],
 ) {
     for hunk in &diff.hunks {
-        let old_start = diff.old_start(hunk);
+        // From the line table, not `FileDiff::old_start`: that walks the text from its start, for
+        // each hunk.
+        let old_start = sources[0]
+            .get(hunk.rows.old.start as usize)
+            .map_or(diff.old.len(), |line| line.start);
         let words = hunk
             .old_words
             .iter()

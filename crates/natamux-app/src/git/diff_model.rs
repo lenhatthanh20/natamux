@@ -46,6 +46,7 @@ impl FileDiff {
     }
 
     /// The byte where the hunk's old text starts.
+    #[cfg(test)]
     pub fn old_start(&self, hunk: &Hunk) -> usize {
         line_start(&self.old, hunk.rows.old.start)
     }
@@ -83,6 +84,7 @@ fn line_starts(text: &str) -> Vec<usize> {
 }
 
 /// The byte where line `row` starts, or the end of the text past the last line.
+#[cfg(test)]
 fn line_start(text: &str, row: u32) -> usize {
     if row == 0 {
         return 0;
