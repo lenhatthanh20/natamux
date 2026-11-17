@@ -143,7 +143,10 @@ mod tests {
         assert_eq!(&*IconName::Check.path(), "icons/check.svg");
         assert_eq!(&*IconName::TerminalAlt.path(), "icons/terminal_alt.svg");
         assert_eq!(&*IconName::XCircle.path(), "icons/x_circle.svg");
-        assert_eq!(&*IconName::ChevronDownUp.path(), "icons/chevron_down_up.svg");
+        assert_eq!(
+            &*IconName::ChevronDownUp.path(),
+            "icons/chevron_down_up.svg"
+        );
         assert_eq!(IconName::ALL.len(), 88);
     }
 }

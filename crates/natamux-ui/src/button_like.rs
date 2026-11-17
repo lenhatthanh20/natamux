@@ -395,7 +395,9 @@ impl RenderOnce for ButtonLike {
             })
             .when(outlined, |this| this.border_1())
             .when(self.round_left, |this| this.rounded_tl_sm().rounded_bl_sm())
-            .when(self.round_right, |this| this.rounded_tr_sm().rounded_br_sm())
+            .when(self.round_right, |this| {
+                this.rounded_tr_sm().rounded_br_sm()
+            })
             .gap(DynamicSpacing::Base04.rems(cx))
             .map(|this| match self.size {
                 ButtonSize::Large | ButtonSize::Medium => this.px(DynamicSpacing::Base08.rems(cx)),

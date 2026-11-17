@@ -145,6 +145,9 @@ mod tests {
         assert_eq!(ToggleState::Selected.inverse(), ToggleState::Unselected);
         assert_eq!(ToggleState::from(None), ToggleState::Indeterminate);
         assert_eq!(ToggleState::from(Some(true)), ToggleState::Selected);
-        assert_eq!(ToggleState::from_any_and_all(true, false), ToggleState::Indeterminate);
+        assert_eq!(
+            ToggleState::from_any_and_all(true, false),
+            ToggleState::Indeterminate
+        );
     }
 }

@@ -227,15 +227,18 @@ impl RenderOnce for ListItem {
                 row.aria_active_descendant()
             })
             .when_some(self.label, |row, label| row.aria_label(label))
-            .when_some(self.shortcut, |row, shortcut| row.aria_keyshortcuts(shortcut))
+            .when_some(self.shortcut, |row, shortcut| {
+                row.aria_keyshortcuts(shortcut)
+            })
             .when(has_role, |row| {
-                row.aria_selected(selected).when_some(checked, |row, checked| {
-                    row.aria_toggled(if checked {
-                        Toggled::True
-                    } else {
-                        Toggled::False
+                row.aria_selected(selected)
+                    .when_some(checked, |row, checked| {
+                        row.aria_toggled(if checked {
+                            Toggled::True
+                        } else {
+                            Toggled::False
+                        })
                     })
-                })
             })
             .group("list_item")
             .w_full()

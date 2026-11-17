@@ -3,9 +3,8 @@
 use std::rc::Rc;
 
 use gpui::{
-    App, ElementId, InteractiveElement, IntoElement, ParentElement, RenderOnce, Role,
-    SharedString, StatefulInteractiveElement, Styled, Toggled, Window, div,
-    prelude::FluentBuilder, px,
+    App, ElementId, InteractiveElement, IntoElement, ParentElement, RenderOnce, Role, SharedString,
+    StatefulInteractiveElement, Styled, Toggled, Window, div, prelude::FluentBuilder, px,
 };
 use theme::{ActiveTheme, Appearance};
 

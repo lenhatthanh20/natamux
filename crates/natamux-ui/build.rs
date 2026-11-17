@@ -15,7 +15,11 @@ fn main() {
         return;
     };
     let version = String::from_utf8_lossy(&output.stdout);
-    let major = version.trim().split('.').next().and_then(|major| major.parse::<u32>().ok());
+    let major = version
+        .trim()
+        .split('.')
+        .next()
+        .and_then(|major| major.parse::<u32>().ok());
     if major.is_some_and(|major| major >= 26) {
         println!("cargo::rustc-cfg=macos_sdk_26_or_later");
     }

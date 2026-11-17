@@ -3,8 +3,8 @@
 use std::cmp::Ordering;
 
 use gpui::{
-    AnyElement, App, Div, ElementId, InteractiveElement, Interactivity, IntoElement,
-    ParentElement, Pixels, RenderOnce, Stateful, StatefulInteractiveElement, Styled, Window, div,
+    AnyElement, App, Div, ElementId, InteractiveElement, Interactivity, IntoElement, ParentElement,
+    Pixels, RenderOnce, Stateful, StatefulInteractiveElement, Styled, Window, div,
     prelude::FluentBuilder, px,
 };
 use theme::ActiveTheme;
@@ -37,7 +37,9 @@ impl Tab {
         let id = id.into();
         Self {
             // Tests find a tab by this selector.
-            base: div().id(id.clone()).debug_selector(move || format!("TAB-{id}")),
+            base: div()
+                .id(id.clone())
+                .debug_selector(move || format!("TAB-{id}")),
             selected: false,
             position: TabPosition::First,
             start_slot: None,

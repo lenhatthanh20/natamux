@@ -41,17 +41,15 @@ pub use icon::{Icon, IconPosition, IconSize};
 pub use icon_button::{IconButton, IconButtonShape};
 pub use icon_name::IconName;
 pub use indicator::Indicator;
-pub use label::{
-    Headline, HeadlineSize, Label, LabelCommon, LabelSize, LineHeightStyle, TextSize,
-};
+pub use label::{Headline, HeadlineSize, Label, LabelCommon, LabelSize, LineHeightStyle, TextSize};
 pub use list_item::{ListItem, ListItemSpacing};
 pub use shortcut_hint::KeyBinding;
 pub use spacing::{DynamicSpacing, h_flex, rems_from_px, v_flex};
 pub use switch::Switch;
 pub use tab::{Tab, TabPosition};
 pub use toggle_group::{
-    ToggleButton, ToggleButtonCell, ToggleButtonGroup, ToggleButtonGroupStyle,
-    ToggleButtonSimple, ToggleButtonWithIcon,
+    ToggleButton, ToggleButtonCell, ToggleButtonGroup, ToggleButtonGroupStyle, ToggleButtonSimple,
+    ToggleButtonWithIcon,
 };
 pub use tooltip::{Tooltip, tooltip_container};
 pub use traits::{

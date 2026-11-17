@@ -1,8 +1,8 @@
 //! A segmented control: one row of buttons, one of them selected.
 
 use gpui::{
-    AnyView, App, ClickEvent, DefiniteLength, IntoElement, ParentElement, RenderOnce,
-    SharedString, Styled, Window, div, prelude::FluentBuilder, relative,
+    AnyView, App, ClickEvent, DefiniteLength, IntoElement, ParentElement, RenderOnce, SharedString,
+    Styled, Window, div, prelude::FluentBuilder, relative,
 };
 use theme::ActiveTheme;
 
