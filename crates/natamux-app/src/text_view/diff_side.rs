@@ -226,9 +226,13 @@ impl TextInput {
                         if bytes.start >= range.end {
                             break;
                         }
-                        let (start, stop) = (range.start.max(bytes.start), range.end.min(bytes.end));
+                        let (start, stop) =
+                            (range.start.max(bytes.start), range.end.min(bytes.end));
                         if start < stop {
-                            spans.push((at + start - bytes.start..at + stop - bytes.start, key.clone()));
+                            spans.push((
+                                at + start - bytes.start..at + stop - bytes.start,
+                                key.clone(),
+                            ));
                         }
                         part += 1;
                     }
