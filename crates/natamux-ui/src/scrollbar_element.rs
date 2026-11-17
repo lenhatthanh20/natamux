@@ -35,8 +35,9 @@ pub(crate) struct BarHost {
     owns_handle: bool,
     pub(crate) lanes: Lanes,
     pub(crate) track: Option<Hsla>,
-    /// The view to draw again when the bar scrolls the area.
-    redraw: Option<EntityId>,
+    /// The view that draws the bar. The host is no view, so its own notify reaches no cached
+    /// view: every change of the bar notifies this one.
+    view: EntityId,
     last: Option<Drawn>,
     wait: Option<(u32, Task<()>)>,
 }
@@ -49,7 +50,7 @@ impl BarHost {
             handle: bars.handle.unwrap_or_default(),
             lanes: bars.lanes,
             track: bars.track,
-            redraw: bars.redraw_view.then_some(view),
+            view,
             last: None,
             wait: None,
         }
@@ -73,7 +74,7 @@ impl BarHost {
         let stop = self.model.apply(input, Instant::now());
         self.sync_wait(cx);
         if seen != (self.model.look, self.model.grip) {
-            cx.notify();
+            redraw_view(self.view, cx);
         }
         stop
     }
@@ -84,7 +85,11 @@ impl BarHost {
             return;
         }
         let round = self.model.round;
-        if self.wait.as_ref().is_some_and(|(running, _)| *running == round) {
+        if self
+            .wait
+            .as_ref()
+            .is_some_and(|(running, _)| *running == round)
+        {
             return;
         }
         let task = cx.spawn(async move |this, cx| {
@@ -112,10 +117,7 @@ impl BarHost {
     fn scroll(&mut self, axis: Axis, to: Pixels, cx: &mut Context<Self>) {
         let offset = self.handle.offset().apply_along(axis, |_| to);
         self.handle.set_offset(offset);
-        if let Some(view) = self.redraw {
-            redraw_view(view, cx);
-        }
-        cx.notify();
+        redraw_view(self.view, cx);
     }
 
     fn on_down(&mut self, at: Point<Pixels>, cx: &mut Context<Self>) {
@@ -256,7 +258,9 @@ impl Element for BarElement {
         let targets = layout
             .pieces
             .iter()
-            .map(|piece| window.insert_hitbox(piece.target(), HitboxBehavior::BlockMouseExceptScroll))
+            .map(|piece| {
+                window.insert_hitbox(piece.target(), HitboxBehavior::BlockMouseExceptScroll)
+            })
             .collect();
         let area = window.insert_hitbox(bounds, HitboxBehavior::Normal);
         let still = cx.reduce_motion();

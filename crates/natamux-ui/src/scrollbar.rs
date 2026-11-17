@@ -58,7 +58,6 @@ pub struct Scrollbars {
     pub(crate) handle: Option<ScrollHandle>,
     pub(crate) lanes: Lanes,
     pub(crate) track: Option<Hsla>,
-    pub(crate) redraw_view: bool,
 }
 
 impl Scrollbars {
@@ -80,7 +79,6 @@ impl Scrollbars {
             handle: None,
             lanes,
             track: None,
-            redraw_view: false,
         }
     }
 
@@ -90,9 +88,9 @@ impl Scrollbars {
         self
     }
 
-    /// Draws the view again when the bar scrolls the area.
-    pub fn notify_content(mut self) -> Self {
-        self.redraw_view = true;
+    /// Draws the view again when the bar scrolls the area. Every bar does that now: the call
+    /// stays so the callers read as Zed's bar does.
+    pub fn notify_content(self) -> Self {
         self
     }
 
@@ -113,8 +111,12 @@ impl Scrollbars {
 
 /// Puts a bar over a div.
 pub trait WithScrollbar: Sized {
-    fn custom_scrollbars(self, bars: Scrollbars, window: &mut Window, cx: &mut App)
-    -> Stateful<Div>;
+    fn custom_scrollbars(
+        self,
+        bars: Scrollbars,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Stateful<Div>;
 }
 
 impl WithScrollbar for Div {

@@ -228,11 +228,17 @@ impl Render for Area {
         };
         let shown = match self.sample {
             Sample::Column | Sample::Never => {
-                let area = scroll_div().flex_col().overflow_y_scroll().children(squares(20));
+                let area = scroll_div()
+                    .flex_col()
+                    .overflow_y_scroll()
+                    .children(squares(20));
                 self.scroll_area(area, window, cx)
             }
             Sample::Row => {
-                let area = scroll_div().flex_row().overflow_x_scroll().children(squares(20));
+                let area = scroll_div()
+                    .flex_row()
+                    .overflow_x_scroll()
+                    .children(squares(20));
                 self.scroll_area(area, window, cx)
             }
             Sample::Grid => {
@@ -359,12 +365,19 @@ fn rows(config: &Config, sample: Sample, side: Side) -> Vec<String> {
     }
     let mut rows = Vec::new();
     for name in STEPS {
-        cx.update_window(window, |_, window, cx| step(name, sample.axis(), window, cx))
-            .expect("the window is open");
+        cx.update_window(window, |_, window, cx| {
+            step(name, sample.axis(), window, cx)
+        })
+        .expect("the window is open");
         cx.run_until_parked();
         redraw(&mut cx, window);
-        cx.capture_screenshot(window).expect("the recorder captures");
-        let painted = capture.borrow_mut().painted.take().expect("a captured frame");
+        cx.capture_screenshot(window)
+            .expect("the recorder captures");
+        let painted = capture
+            .borrow_mut()
+            .painted
+            .take()
+            .expect("a captured frame");
         let offset = handle.offset();
         rows.push(format!(
             "{} {sample:?} {name}: offset {:?} {:?}, painted {painted}",
@@ -400,7 +413,12 @@ fn the_own_scrollbar_draws_and_acts_as_zeds() {
         differ.is_empty(),
         "{} steps differ; first ones:\n{}",
         differ.len(),
-        differ.iter().take(4).cloned().collect::<Vec<_>>().join("\n")
+        differ
+            .iter()
+            .take(4)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join("\n")
     );
 }
 
@@ -434,8 +452,13 @@ fn frame(
     window: AnyWindowHandle,
 ) -> String {
     redraw(cx, window);
-    cx.capture_screenshot(window).expect("the recorder captures");
-    let painted = capture.borrow_mut().painted.take().expect("a captured frame");
+    cx.capture_screenshot(window)
+        .expect("the recorder captures");
+    let painted = capture
+        .borrow_mut()
+        .painted
+        .take()
+        .expect("a captured frame");
     painted.to_string()
 }
 
@@ -453,7 +476,14 @@ fn settle(
     frame(cx, capture, window)
 }
 
-const AUTO_STEPS: [&str; 6] = ["shown", "waited", "enter", "hover-waited", "left-waited", "wheel"];
+const AUTO_STEPS: [&str; 6] = [
+    "shown",
+    "waited",
+    "enter",
+    "hover-waited",
+    "left-waited",
+    "wheel",
+];
 
 /// The column area on `Auto`, through the steps of `AUTO_STEPS`: each one's offset and the frame
 /// once its fade has ended.
@@ -522,8 +552,10 @@ fn auto_rows(config: &Config, side: Side) -> Vec<String> {
                 fall
             }
             "wheel" => {
-                cx.update_window(window, |_, window, cx| wheel(inside, Axis::Vertical, window, cx))
-                    .expect("the window is open");
+                cx.update_window(window, |_, window, cx| {
+                    wheel(inside, Axis::Vertical, window, cx)
+                })
+                .expect("the window is open");
                 cx.run_until_parked();
                 rise
             }
@@ -571,3 +603,6 @@ fn the_own_auto_scrollbar_shows_and_hides_as_zeds() {
         .collect();
     assert!(differ.is_empty(), "{}", differ.join("\n"));
 }
+
+#[path = "scrollbar_cached_tests.rs"]
+mod cached;

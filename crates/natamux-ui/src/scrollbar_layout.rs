@@ -181,7 +181,9 @@ impl Layout {
 
     /// The bar whose thumb is under `at`.
     pub(crate) fn thumb_at(&self, at: Point<Pixels>) -> Option<usize> {
-        self.pieces.iter().position(|piece| piece.thumb.contains(&at))
+        self.pieces
+            .iter()
+            .position(|piece| piece.thumb.contains(&at))
     }
 
     pub(crate) fn along(&self, axis: Axis) -> Option<&Piece> {

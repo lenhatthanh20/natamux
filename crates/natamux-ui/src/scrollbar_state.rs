@@ -48,7 +48,11 @@ impl Fade {
 
     fn done(&self, now: Instant) -> bool {
         let level = self.level(now);
-        if self.rising { level >= 1. } else { level <= 0. }
+        if self.rising {
+            level >= 1.
+        } else {
+            level <= 0.
+        }
     }
 
     /// Heads the other way from where it is now; the same way changes nothing.
@@ -209,10 +213,7 @@ impl Model {
     /// Where a frame at `now` has the bar. With `still` (reduced motion) a running fade ends at
     /// once. `animate` asks for the next frame.
     pub(crate) fn frame(&mut self, now: Instant, still: bool) -> (Sight, bool) {
-        let sight = |drawn| Sight {
-            drawn,
-            alpha: None,
-        };
+        let sight = |drawn| Sight { drawn, alpha: None };
         let Look::Auto(fade) = &mut self.look else {
             return (sight(self.look == Look::Always), false);
         };

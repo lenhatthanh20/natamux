@@ -23,7 +23,7 @@ fn a_bar_shows_by_its_builder() {
     assert_eq!(Scrollbars::always_visible(axes).show, ScrollbarShow::Always);
     let never = Scrollbars::shown(axes, ScrollbarShow::Never);
     assert_eq!(never.show, ScrollbarShow::Never);
-    assert!(never.key.is_none() && never.handle.is_none() && !never.redraw_view);
+    assert!(never.key.is_none() && never.handle.is_none());
     let keyed = never.id("bar").notify_content();
-    assert!(keyed.key.is_some() && keyed.redraw_view);
+    assert!(keyed.key.is_some());
 }

@@ -103,7 +103,10 @@ fn a_held_thumb_follows_the_pointer_within_its_way() {
         thumb: piece.way,
         ..piece
     };
-    assert_eq!(full.offset_at(point(px(12.), px(60.)), px(0.), px(9.)), px(0.));
+    assert_eq!(
+        full.offset_at(point(px(12.), px(60.)), px(0.), px(9.)),
+        px(0.)
+    );
 }
 
 #[test]
