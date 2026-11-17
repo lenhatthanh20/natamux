@@ -160,14 +160,31 @@ impl TextInput {
                 .collect();
             let mut spans = Vec::new();
             let shown = lines.clone().unwrap_or(0..diff.rows.lines.len());
-            for index in shown {
-                let Some(line) = diff.rows.lines.get(index) else {
-                    break;
-                };
-                // The deleted lines of an inline diff stay plain (see the module comment).
-                if line.old && diff.new_side {
+            let side_lines = &diff.rows.lines;
+            // The deleted lines of an inline diff stay plain (see the module comment).
+            let coloured = |index: usize| {
+                side_lines
+                    .get(index)
+                    .filter(|line| !(line.old && diff.new_side))
+            };
+            let mut index = shown.start;
+            while index < shown.end {
+                let Some(line) = coloured(index) else {
+                    index += 1;
                     continue;
+                };
+                // One query for the lines that are the next rows of the same file, as a code
+                // view asks for its lines: a query per line costs a walk of the tree each.
+                let mut end = index + 1;
+                while end < shown.end
+                    && coloured(end).is_some_and(|next| {
+                        next.old == line.old && next.row as usize == line.row as usize + end - index
+                    })
+                {
+                    end += 1;
                 }
+                let first = index;
+                index = end;
                 let side = usize::from(!line.old);
                 let (Some(Some(source)), Some(Some(keys))) =
                     (diff.sources.get(side), keys.get(side))
@@ -181,16 +198,39 @@ impl TextInput {
                 else {
                     continue;
                 };
-                let (Some(bytes), Some(&at)) = (
-                    source.lines.get(line.row as usize),
-                    diff.rows.line_starts.get(index),
-                ) else {
+                let rows = line.row as usize..line.row as usize + (end - first);
+                let (Some(first_bytes), Some(last_bytes)) =
+                    (source.lines.get(rows.start), source.lines.get(rows.end - 1))
+                else {
                     continue;
                 };
-                for (range, key) in highlights.runs(tree, &source.text, bytes.clone(), keys) {
-                    let (start, end) = (range.start.max(bytes.start), range.end.min(bytes.end));
-                    if start < end {
-                        spans.push((at + start - bytes.start..at + end - bytes.start, key));
+                let all = first_bytes.start..last_bytes.end;
+                let mut at_line = 0;
+                for (range, key) in highlights.runs(tree, &source.text, all, keys) {
+                    // Cut at each line end, into offsets of the side's text.
+                    while source
+                        .lines
+                        .get(rows.start + at_line)
+                        .is_some_and(|bytes| bytes.end <= range.start && at_line + 1 < end - first)
+                    {
+                        at_line += 1;
+                    }
+                    let mut part = at_line;
+                    while part < end - first {
+                        let (Some(bytes), Some(&at)) = (
+                            source.lines.get(rows.start + part),
+                            diff.rows.line_starts.get(first + part),
+                        ) else {
+                            break;
+                        };
+                        if bytes.start >= range.end {
+                            break;
+                        }
+                        let (start, stop) = (range.start.max(bytes.start), range.end.min(bytes.end));
+                        if start < stop {
+                            spans.push((at + start - bytes.start..at + stop - bytes.start, key.clone()));
+                        }
+                        part += 1;
                     }
                 }
             }
