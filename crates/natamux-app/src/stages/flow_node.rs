@@ -218,7 +218,7 @@ fn struck_name(input: &CardInput, tone: NodeTone, cx: &App) -> Div {
     let layout = text.layout().clone();
     div()
         .relative()
-        .text_ui_sm(cx)
+        .text_size(TextSize::Small.rems(cx))
         .font_weight(theme::theme_settings(cx).ui_font(cx).weight)
         .text_color(color)
         .child(text)

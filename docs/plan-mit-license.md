@@ -1468,6 +1468,7 @@ S8.4 Form and list widgets, own enums, drop Zed `ui`
 - Files also: `Cargo.lock` and `scripts/zed-lock-crates.txt` (whatever leaves the lock).
 - Tag: `[ci: all]`.
 - Proof: all green; all shots exact.
+- Done in S8.4a (side track, before S7): `crates/natamux-ui/src/` holds the own `Checkbox`, `Switch`, `ToggleButtonGroup` (+ `ToggleButtonSimple`, `ToggleButtonWithIcon`, `ToggleButtonGroupStyle`; one row only, the app has no other), `Tab`/`TabPosition`, `Disclosure`, `Chip`, `Indicator` (dot only), `ListItem`/`ListItemSpacing`, `TextSize`, `utils::TRAFFIC_LIGHT_PADDING` with the own `build.rs` (D21; `release.yml` cleans and checks `natamux-ui` now), the own enums `Color`, `LabelSize`, `IconSize`, `IconPosition`, `ButtonStyle`, `ButtonSize`, `TintColor`, `ToggleState` (Zed's variants), `IconName` (only the 88 icons the app draws, each with an asset; `IconName::ALL`, `path()` = `icons/<snake_case>.svg`), and the own traits `Clickable`, `Disableable`, `Toggleable`, `FixedWidth`, `VisibleOnHover`, `StyledExt` (`elevation_2`/`elevation_3`) in the prelude. The one `text_ui_sm` call became `text_size(TextSize::Small.rems(cx))`. Left for the rest of S8.4 after S7: the own `actions!(menu, ...)` (the `menu` module re-exports Zed's), Zed's scrollbars (`ScrollAxes`, `Scrollbars`, `WithScrollbar`, `ScrollableHandle`, `scrollbars::*`; not in 6.7.1, they need an own scrollbar), `editor_menu` (Zed's menu for Zed's editor, goes with S7), then the `zed_ui`/`zed_menu` dependencies and the lock.
 
 ### S9. Theme and settings
 

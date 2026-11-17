@@ -8,11 +8,12 @@ use gpui::{
     SharedString, Styled, Window, div, prelude::FluentBuilder,
 };
 use theme::ActiveTheme;
-use zed_ui::{Color, LabelSize, StyledExt};
 
-use crate::label::{Label, LabelCommon};
+use crate::color::Color;
+use crate::label::{Label, LabelCommon, LabelSize};
 use crate::shortcut_hint::KeyBinding;
 use crate::spacing::{h_flex, rems_from_px, v_flex};
+use crate::traits::StyledExt;
 
 type BuildTitle = Rc<dyn Fn(&mut Window, &mut App) -> AnyElement>;
 
