@@ -2,10 +2,10 @@
 title: Other agents
 description: Use any command line agent in a Natamux task, with the terminal bell and the ask and done commands.
 sidebar:
-  order: 6
+  order: 10
 ---
 
-Natamux has hook support for five agents: Claude Code, Codex, Gemini CLI, GitHub Copilot CLI and Cursor. Any other command line agent still works. Add it as a [custom agent](#custom-agents-a-built-in-agent-with-your-own-command), or start it in the task's first terminal.
+Natamux has hook support for eight agents: Claude Code, Codex, Gemini CLI, GitHub Copilot CLI, Cursor, OpenCode, Qwen Code and Factory Droid. It starts eight more without hooks: see [More terminal agents](/docs/agents/more-agents/). Any other command line agent still works. Add it as a [custom agent](#custom-agents-a-built-in-agent-with-your-own-command), or start it in the task's first terminal.
 
 ## Custom agents (a built-in agent with your own command)
 
@@ -52,13 +52,13 @@ The list is in `custom-agents.json` in the data folder, readable only by you. A 
 | `natamux ask` | Moves a running task to needs input, with your question. |
 | `natamux done` | Says the stage is done, so the daemon runs its checks. |
 
-The bell counts only for agents without hooks, or whose hooks do not report a wait (Copilot and Cursor). A bell in the first 15 seconds after an agent launch is ignored.
+The bell counts only for agents without hooks, or whose hooks do not report a wait (Copilot, Cursor and Droid). A bell in the first 15 seconds after an agent launch is ignored.
 
 ## Skills
 
 Natamux does not know where another agent keeps its skills, so it has no sure call for one. For `{skill:<name>}` in a stage prompt, and for a `skill` context source, it follows two rules:
 
-1. When a `SKILL.md` of that name exists in the worktree, in your main checkout or on your machine (in the folder of any of the five agents), the prompt says `the skill in <path> (read that file and follow it)`. Most agents can read a file and follow it.
+1. When a `SKILL.md` of that name exists in the worktree, in your main checkout or on your machine (in the folder of any built-in agent), the prompt says `the skill in <path> (read that file and follow it)`. Most agents can read a file and follow it.
 2. Otherwise the prompt says `the <name> skill`, and the stage card says "The skill <name> was not found for <agent>." The stage still starts.
 
 See [Skills in a prompt](/docs/concepts/stages/#skills-in-a-prompt).
@@ -89,7 +89,7 @@ natamux hook <agent> [event]
 - Set `NATAMUX_DEBUG` to any value to see problems on stderr.
 
 :::caution
-The daemon turns a hook into task events only for agents it has an adapter for: `claude-code`, `codex`, `gemini`, `copilot` and `cursor`. For any other name it answers 404, and the hook has no effect. For other agents, use the bell, `natamux ask` and `natamux done`, or send events with `natamux event`.
+The daemon turns a hook into task events only for agents it has an adapter for: `claude-code`, `codex`, `gemini`, `copilot`, `cursor`, `opencode`, `qwen` and `droid`. For any other name it answers 404, and the hook has no effect. For other agents, use the bell, `natamux ask` and `natamux done`, or send events with `natamux event`.
 :::
 
 ## Send events yourself

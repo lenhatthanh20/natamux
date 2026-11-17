@@ -22,6 +22,10 @@ fn runs_each_agent_once_with_the_prompt_on_stdin_or_as_a_word() {
             "cursor-agent -p --output-format text 'Write it'",
             "",
         ),
+        ("qwen", "qwen -p 'Answer the request above.'", "Write it"),
+        ("droid", "droid exec", "Write it"),
+        ("goose", "GOOSE_MODE=chat goose run -t 'Write it'", ""),
+        ("kiro", "kiro-cli chat --no-interactive 'Write it'", ""),
     ] {
         let got = one_shot_command(agent, default_program(agent), "Write it", POSIX);
         assert_eq!(
@@ -259,4 +263,46 @@ fn doubles_the_typographic_single_quotes_for_powershell_too() {
     );
     // A POSIX shell has only the ASCII quote.
     assert_eq!(quote_argument("Don\u{2019}t", POSIX), "'Don\u{2019}t'");
+}
+
+#[test]
+fn drafts_with_claude_code_for_agents_whose_one_run_may_change_files() {
+    for agent in ["aider", "cline", "kimi", "crush", "amp", "opencode", "muse"] {
+        assert!(!has_one_shot(agent), "{agent}");
+    }
+    for agent in ["claude-code", "qwen", "droid", "goose", "kiro"] {
+        assert!(has_one_shot(agent), "{agent}");
+    }
+    assert!(!has_one_shot("my-agent"));
+}
+
+#[test]
+fn names_the_new_agents_by_their_programs() {
+    let none = |_: &str| String::new();
+    for (line, agent) in [
+        ("opencode --prompt x", "opencode"),
+        ("qwen -i x", "qwen"),
+        ("droid", "droid"),
+        ("amp", "amp"),
+        ("kimi --yolo", "kimi"),
+        ("kimi-code", "kimi"),
+        ("goose session", "goose"),
+        ("aider --model sonnet", "aider"),
+        ("crush", "crush"),
+        ("node /usr/lib/node_modules/cline/bin/cline", "cline"),
+        ("kiro-cli chat", "kiro"),
+        ("muse --trust-workspace", "muse"),
+    ] {
+        assert_eq!(agent_of_command(line, none), Some(agent), "{line}");
+    }
+}
+
+#[test]
+fn drafts_with_goose_in_its_chat_mode_which_runs_no_tools() {
+    let windows = one_shot_command("goose", "goose", "Write it", WIN);
+    assert_eq!(
+        windows.line,
+        "$env:GOOSE_MODE='chat'; goose run -t 'Write it'"
+    );
+    assert!(has_one_shot("goose"));
 }

@@ -11,7 +11,7 @@ No. Natamux has no account, no server of its own and no telemetry. Your code lea
 
 ## Which agents does it support?
 
-Claude Code, Codex, Gemini CLI, GitHub Copilot CLI and Cursor. Natamux starts each one in the task's terminal and adds hooks, so the dashboard shows when it works, asks or finishes. Other terminal agents can report with `natamux ask` and `natamux done`. See [Agents](/docs/agents/other-agents/).
+Claude Code, Codex, Gemini CLI, GitHub Copilot CLI, Cursor, OpenCode, Qwen Code, Factory Droid, Amp, Kimi, Goose, Aider, Crush, Cline, Kiro and Muse Code. Natamux starts each one in the task's terminal. The first eight get hooks, so the dashboard shows when they work, ask or finish. The other eight are followed by their terminal. Other terminal agents can report with `natamux ask` and `natamux done`. See [Agents](/docs/agents/other-agents/).
 
 ## Does it run on Windows?
 

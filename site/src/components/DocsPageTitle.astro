@@ -2,10 +2,22 @@
 import DocsPageContents from './DocsPageContents.astro'
 const { entry } = Astro.locals.starlightRoute
 const overview = entry.id.replace(/\/$/, '') === 'docs'
+// Agent page -> icon file; `light` marks a `<icon>_light.svg` for the light theme.
+const icons: Record<string, { icon: string; light?: boolean }> = {
+  'docs/agents/claude-code': { icon: 'claude' },
+  'docs/agents/codex': { icon: 'codex' },
+  'docs/agents/gemini': { icon: 'gemini-ai' },
+  'docs/agents/copilot': { icon: 'copilot', light: true },
+  'docs/agents/cursor': { icon: 'cursor', light: true },
+  'docs/agents/opencode': { icon: 'opencode', light: true },
+  'docs/agents/qwen': { icon: 'qwen' },
+  'docs/agents/droid': { icon: 'droid', light: true },
+}
+const agent = icons[entry.id.replace(/\/$/, '')]
 ---
 
 <div class="doc-heading-row">
   <p class="doc-kicker">Documentation / {overview ? 'Overview' : entry.data.title}</p>
   <DocsPageContents />
 </div>
-<h1 id="_top" class:list={{ 'docs-overview-title': overview }}>{entry.data.title}</h1>
+<h1 id="_top" class:list={{ 'docs-overview-title': overview }}>{agent && <img class={agent.light ? 'agent-icon doc-agent-icon agent-icon-dark' : 'agent-icon doc-agent-icon'} src={`/agents/${agent.icon}.svg`} alt="" />}{agent?.light && <img class="agent-icon doc-agent-icon agent-icon-light" src={`/agents/${agent.icon}_light.svg`} alt="" />}{entry.data.title}</h1>

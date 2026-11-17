@@ -57,7 +57,8 @@ pub fn add_counts(usage: &mut ModelUsage, model: &str, counts: &UsageCounts) {
     total.output += counts.output;
 }
 
-/// Cursor writes no usage, so it has no reader.
+/// Cursor writes no usage, so it has no reader. The agents after Cursor have none yet: their
+/// session files are not read.
 pub fn usage_reader(agent: &str) -> Option<fn(&Path) -> ModelUsage> {
     match agent {
         "claude-code" => Some(readers::read_claude_usage),

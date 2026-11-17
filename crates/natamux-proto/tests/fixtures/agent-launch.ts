@@ -5,7 +5,24 @@ import { CLAUDE_CODE_HOOK_EVENTS, type PermissionMode, TASK_ID_HEADER } from '@n
 import { SHELLS } from '../terminals/terminal-limits.js'
 
 // Agents that Natamux can start. Each one also has an adapter that reads its hooks.
-export const LAUNCHABLE_AGENTS = ['claude-code', 'codex', 'gemini', 'copilot', 'cursor'] as const
+export const LAUNCHABLE_AGENTS = [
+  'claude-code',
+  'codex',
+  'gemini',
+  'copilot',
+  'cursor',
+  'opencode',
+  'qwen',
+  'droid',
+  'amp',
+  'kimi',
+  'goose',
+  'aider',
+  'crush',
+  'cline',
+  'kiro',
+  'muse',
+] as const
 
 export type LaunchableAgent = (typeof LAUNCHABLE_AGENTS)[number]
 

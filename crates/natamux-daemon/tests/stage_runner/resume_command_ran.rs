@@ -101,7 +101,7 @@ fn runs_the_command_again_in_a_new_shell_with_no_agent() {
 
 #[test]
 fn runs_the_command_again_for_a_task_with_no_agent_or_one_natamux_cannot_start() {
-    for agent in [Value::Null, json!("aider")] {
+    for agent in [Value::Null, json!("nano-agent")] {
         let mut f = Fixture::new();
         let task = testing_after_restart(&mut f, agent.clone());
 

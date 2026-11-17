@@ -10,6 +10,9 @@ use crate::args::{Parsed, parse_args};
 /// `back` is the daemon's `reopen`.
 pub const STAGE_COMMANDS: [&str; 6] = ["approve", "back", "skip", "pass", "fail", "start"];
 
+/// `natamux hooks <agent>` prints the file Natamux writes into a worktree for these agents.
+pub const HOOK_FILE_AGENTS: [&str; 3] = ["opencode", "qwen", "droid"];
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct TaskChanges {
     pub title: Option<String>,
@@ -123,6 +126,8 @@ pub enum Command {
         json: bool,
     },
     HooksClaudeCode,
+    /// The hook file of an agent whose hooks Natamux writes into the worktree.
+    HooksFile(String),
     WorkspaceCreate {
         id: String,
         base: Option<String>,
@@ -291,14 +296,21 @@ pub fn parse_command(argv: &[String]) -> Result<Command, UsageError> {
             })
         }
         "hooks" => {
-            if line.second != Some("claude-code") {
-                return usage(format!(
-                    "Unknown hooks command \"{}\". Use claude-code",
-                    line.second.unwrap_or_default()
-                ));
-            }
+            let command = match line.second {
+                Some("claude-code") => Command::HooksClaudeCode,
+                Some(agent) if HOOK_FILE_AGENTS.contains(&agent) => {
+                    Command::HooksFile(agent.to_string())
+                }
+                other => {
+                    return usage(format!(
+                        "Unknown hooks command \"{}\". Use claude-code, {}",
+                        other.unwrap_or_default(),
+                        HOOK_FILE_AGENTS.join(", ")
+                    ));
+                }
+            };
             no_extra_arguments(line.rest)?;
-            Ok(Command::HooksClaudeCode)
+            Ok(command)
         }
         "workspace" => workspace_command(&line),
         "repo" => crate::repo_trust::parse(line.second, line.rest, line.values, line.json)

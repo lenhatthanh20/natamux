@@ -235,6 +235,10 @@ pub fn model_hint(base: &str) -> String {
         "gemini" => "gemini-2.5-pro",
         "copilot" => "gpt-5",
         "cursor" => "sonnet-4",
+        "opencode" => "anthropic/claude-sonnet-4-5",
+        "qwen" => "qwen3-coder-plus",
+        "kimi" => "kimi-k2",
+        "muse" => "muse-spark-1.2",
         _ => "sonnet",
     };
     format!("Agent default (e.g. {example})")

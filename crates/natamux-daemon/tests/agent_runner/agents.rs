@@ -359,3 +359,21 @@ fn starts_copilot_in_interactive_mode_with_the_prompt_and_the_extra_words() {
         Some("copilot")
     );
 }
+
+#[test]
+fn starts_an_agent_that_takes_no_prompt_on_its_line_and_holds_the_prompt_to_paste() {
+    let env = Env::new();
+    let task = env.task();
+    env.start(&task, "aider", "Fix it");
+    assert_eq!(env.script_text(&task.id), "aider --yes-always\n");
+    assert!(env.runner.pasted_prompts().is_held(&task.id, "1"));
+}
+
+#[test]
+fn holds_no_prompt_for_an_agent_that_takes_it_on_its_line() {
+    let env = Env::new();
+    let task = env.task();
+    env.start(&task, "droid", "Fix it");
+    assert_eq!(env.script_text(&task.id), "droid --auto high 'Fix it'\n");
+    assert!(!env.runner.pasted_prompts().is_held(&task.id, "1"));
+}

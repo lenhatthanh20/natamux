@@ -205,7 +205,7 @@ fn leaves_alone_a_task_that_is_done_cancelled_failed_blocked_or_a_draft() {
 #[test]
 fn leaves_alone_a_task_whose_agent_natamux_cannot_start() {
     let f = Fixture::new();
-    let task = running_after_restart(&f, "s-1", "opencode");
+    let task = running_after_restart(&f, "s-1", "nano-agent");
     let before = event_count(&f, &task.id);
 
     resume_all(&f);

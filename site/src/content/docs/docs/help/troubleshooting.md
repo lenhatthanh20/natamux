@@ -36,11 +36,11 @@ An AppImage mounts itself with FUSE, which some systems do not have. Either inst
 
 **Start agent** types the agent's command into the task's terminal. If the program is not installed, or not on the PATH, the shell prints `command not found`.
 
-The commands are `claude`, `codex`, `gemini`, `copilot` and `cursor-agent`.
+The commands are `claude`, `codex`, `gemini`, `copilot`, `cursor-agent`, `opencode`, `qwen`, `droid`, `amp`, `kimi`, `goose`, `aider`, `crush`, `cline`, `kiro-cli` and `muse`.
 
 1. Check in your own terminal: `command -v claude`.
 2. Install the agent and log in to it once, outside Natamux.
-3. If the program has another name or path, set `NATAMUX_<AGENT>_COMMAND` for the daemon, with `<AGENT>` one of `CLAUDE`, `CODEX`, `GEMINI`, `COPILOT` or `CURSOR`:
+3. If the program has another name or path, set `NATAMUX_<AGENT>_COMMAND` for the daemon, with `<AGENT>` one of `CLAUDE`, `CODEX`, `GEMINI`, `COPILOT`, `CURSOR`, `OPENCODE`, `QWEN`, `DROID`, `AMP`, `KIMI`, `GOOSE`, `AIDER`, `CRUSH`, `CLINE`, `KIRO` or `MUSE`:
 
    ```sh
    export NATAMUX_CLAUDE_COMMAND=/opt/tools/claude

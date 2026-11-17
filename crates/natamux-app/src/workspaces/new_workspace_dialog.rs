@@ -6,6 +6,7 @@ use gpui::{
     DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, ScrollHandle, Subscription,
 };
 use natamux_client::Answer;
+use natamux_proto::agents::model::takes_model as agent_takes_model;
 use natamux_proto::projects::repo::{BranchList, LoadedSettings, RemoteBranchList, SkillList};
 use ui::prelude::*;
 
@@ -319,9 +320,11 @@ impl NewWorkspaceDialog {
         }
     }
 
-    /// A built-in agent, or a custom one on a built-in base: Natamux knows it takes `--model`.
+    /// A built-in agent, or a custom one on a built-in base, that Natamux knows takes `--model`.
     fn takes_model(&self) -> bool {
-        !self.agent.is_empty() && is_agent_id(Some(base_in(&self.agent, &custom_agents())))
+        let custom = custom_agents();
+        let base = base_in(&self.agent, &custom);
+        !self.agent.is_empty() && is_agent_id(Some(base)) && agent_takes_model(base)
     }
 
     /// The project's `git.branchName`, once its settings are loaded.
