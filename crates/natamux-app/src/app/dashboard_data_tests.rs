@@ -109,6 +109,28 @@ fn toasts_a_workspace_that_ended_before_it_was_announced() {
 }
 
 #[test]
+fn a_new_worktree_shows_its_first_step_before_the_daemon_tells_it() {
+    let mut data = DashboardData::default();
+    let before = data.gens;
+    data.expect_preparing("T-1");
+    assert_eq!(data.preparing.get("T-1"), Some(&PreparingStep::Fetch));
+    assert_eq!(bumped(before, data.gens), vec![Part::Preparing]);
+
+    // A step the daemon told already stays, and changes nothing.
+    data.apply(step("T-2", Some(PreparingStep::Checkout), None));
+    let before = data.gens;
+    data.expect_preparing("T-2");
+    assert_eq!(data.preparing.get("T-2"), Some(&PreparingStep::Checkout));
+    assert_eq!(bumped(before, data.gens), Vec::<Part>::new());
+
+    // The daemon's steps take over, and its end leaves no spinner.
+    data.apply(step("T-1", Some(PreparingStep::Checkout), None));
+    assert_eq!(data.preparing.get("T-1"), Some(&PreparingStep::Checkout));
+    data.apply(step("T-1", None, Some("checkout failed")));
+    assert_eq!(data.preparing.get("T-1"), None);
+}
+
+#[test]
 fn keeps_only_the_last_workspaces_that_ended_unannounced() {
     let mut data = DashboardData::default();
     for n in 0..ENDED_KEPT + 8 {
