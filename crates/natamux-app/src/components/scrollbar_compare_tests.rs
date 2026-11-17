@@ -604,5 +604,30 @@ fn the_own_auto_scrollbar_shows_and_hides_as_zeds() {
     assert!(differ.is_empty(), "{}", differ.join("\n"));
 }
 
+/// Every row of a side: the pointer steps of each sample under the first two configs, then the
+/// `Auto` steps. One row per line.
+fn golden_rows(side: Side) -> String {
+    let mut out = Vec::new();
+    for config in &CONFIGS[..2] {
+        for sample in Sample::ALL {
+            out.extend(rows(config, sample, side));
+        }
+    }
+    out.extend(auto_rows(&CONFIGS[0], side));
+    out.join("\n") + "\n"
+}
+
+/// Writes Zed's rows to `$NATAMUX_GOLDEN_OUT/kit/scrollbar.txt` (`Tool: golden`, plan 8.4), so
+/// the own bar keeps a target once Zed's `ui` leaves.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[test]
+#[ignore = "makes the golden file; run by the Tool: golden workflow"]
+fn golden_kit_scrollbar() {
+    let out = std::env::var("NATAMUX_GOLDEN_OUT").expect("NATAMUX_GOLDEN_OUT is set");
+    let dir = std::path::Path::new(&out).join("kit");
+    std::fs::create_dir_all(&dir).expect("the output folder");
+    std::fs::write(dir.join("scrollbar.txt"), golden_rows(Side::Zed)).expect("the golden file");
+}
+
 #[path = "scrollbar_cached_tests.rs"]
 mod cached;
