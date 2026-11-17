@@ -22,6 +22,7 @@ pub mod prelude;
 mod shortcut_hint;
 mod scrollbar;
 mod scrollbar_element;
+mod scrollbar_layout;
 mod scrollbar_state;
 mod spacing;
 mod switch;

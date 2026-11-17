@@ -1,408 +1,268 @@
-//! The state of a scroll area's bars from frame to frame: how much of them shows, the thumb under
-//! the pointer, the last frame's bars, and what the pointer does to them.
+//! What a scroll area's bars are doing, as a plain value that moves on one input at a time: how
+//! visible they are, what the pointer does with a thumb, and whether the wait to hide them runs.
+//! The element feeds it inputs and acts on what it then reads; time comes in as an argument, so
+//! tests can run it without a window.
 
-use std::ops::Range;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-use gpui::prelude::*;
-use gpui::{
-    Along, App, Axis, Bounds, Context, EntityId, Hitbox, Hsla, MouseMoveEvent, Pixels, Point,
-    ScrollHandle, Task, Window, px,
-};
+use gpui::{Axis, Pixels, ease_in_out};
 
-use crate::scrollbar::{Room, ScrollbarShow, Scrollbars, slot};
-use crate::scrollbar_element::BarElement;
+use crate::scrollbar::ScrollbarShow;
 
-pub(crate) const THUMB: Pixels = px(6.);
-pub(crate) const INSET: Pixels = px(4.);
-const LEAST: Pixels = px(25.);
-const SHOW_IN: Duration = Duration::from_millis(50);
-const HIDE_AFTER: Duration = Duration::from_secs(1);
-const FADE_OUT: Duration = Duration::from_millis(400);
+const RISE: Duration = Duration::from_millis(50);
+const FALL: Duration = Duration::from_millis(400);
+/// How long a shown bar waits before it starts to hide.
+pub(crate) const HIDE_AFTER: Duration = Duration::from_secs(1);
 
-/// How much of the bar is drawn.
+/// A fade of an `Auto` bar: from `from` (0 hidden, 1 shown) toward shown or hidden, counted from
+/// `start`. A fade gets its start from the first frame that draws it.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) enum Seen {
-    Shown,
-    /// Fading in (`showing`) or out, `done` of the way (0 to 1).
-    Fading {
-        showing: bool,
-        done: f32,
-    },
-    Hidden,
-    /// `Never`: no bar, no room, no pointer.
-    Off,
+pub(crate) struct Fade {
+    pub(crate) rising: bool,
+    from: f32,
+    start: Option<Instant>,
 }
 
-impl Seen {
-    pub(crate) fn first(show: ScrollbarShow) -> Self {
-        match show {
-            ScrollbarShow::Always => Seen::Shown,
-            ScrollbarShow::Never => Seen::Off,
-            ScrollbarShow::Auto => Seen::Fading {
-                showing: true,
-                done: 0.,
-            },
+impl Fade {
+    fn new(rising: bool, from: f32) -> Fade {
+        Fade {
+            rising,
+            from,
+            start: None,
         }
     }
 
-    pub(crate) fn drawn(self) -> bool {
-        matches!(self, Seen::Shown | Seen::Fading { .. })
-    }
-
-    /// Shown again: a hidden bar starts to show, one fading out turns back from where it is.
-    pub(crate) fn again(self, show: ScrollbarShow) -> Self {
-        match self {
-            Seen::Hidden if show == ScrollbarShow::Auto => Seen::Fading {
-                showing: true,
-                done: 0.,
-            },
-            Seen::Hidden => Seen::Shown,
-            Seen::Fading {
-                showing: false,
-                done,
-            } => Seen::Fading {
-                showing: true,
-                done: 1. - done,
-            },
-            other => other,
+    /// How visible the bar is at `now`, 0 to 1, before easing.
+    pub(crate) fn level(&self, now: Instant) -> f32 {
+        let Some(start) = self.start else {
+            return self.from;
+        };
+        let length = if self.rising { RISE } else { FALL };
+        let moved = now.saturating_duration_since(start).as_secs_f32() / length.as_secs_f32();
+        if self.rising {
+            (self.from + moved).min(1.)
+        } else {
+            (self.from - moved).max(0.)
         }
     }
 
-    /// A fade `done` of the way; at the end it is shown or hidden.
-    pub(crate) fn at(self, done: f32) -> Self {
-        match self {
-            Seen::Fading { showing, .. } if done >= 1. => {
-                if showing {
-                    Seen::Shown
-                } else {
-                    Seen::Hidden
-                }
-            }
-            Seen::Fading { showing, .. } => Seen::Fading { showing, done },
-            other => other,
-        }
+    fn done(&self, now: Instant) -> bool {
+        let level = self.level(now);
+        if self.rising { level >= 1. } else { level <= 0. }
     }
 
-    /// How long a fade takes.
-    pub(crate) fn length(showing: bool) -> Duration {
-        if showing { SHOW_IN } else { FADE_OUT }
+    /// Heads the other way from where it is now; the same way changes nothing.
+    fn head(&mut self, rising: bool, now: Instant) {
+        if self.rising != rising {
+            *self = Fade::new(rising, self.level(now));
+        }
     }
 }
 
-/// The thumb under the pointer.
+/// How the bar shows.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum Look {
+    Always,
+    /// No bar, no room, no pointer.
+    Never,
+    Auto(Fade),
+}
+
+/// What the pointer does with a thumb.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub(crate) enum Thumb {
+pub(crate) enum Grip {
     #[default]
-    Idle,
-    Hover(Axis),
-    /// Held at `grab` px from its start.
-    Drag(Axis, Pixels),
+    Free,
+    Over(Axis),
+    /// Held `grab` px from the thumb's start.
+    Held(Axis, Pixels),
 }
 
-/// Where the pointer is against the area, from one move to the next.
-enum Pointer {
-    Entered,
-    Within,
-    Exited,
-    Away,
+/// Something that happened to the bar. `over` is the bar whose thumb is under the pointer.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum Input {
+    /// A frame laid the bars out; `moved` when a thumb lies elsewhere than in the last frame.
+    Drawn { moved: bool },
+    /// The pointer moved with no thumb held.
+    Pointer {
+        inside: bool,
+        button: bool,
+        over: Option<Axis>,
+    },
+    /// The wheel turned with the pointer in the area.
+    Wheel { over: Option<Axis> },
+    /// A left press took a thumb.
+    Grab(Axis, Pixels),
+    /// A button came up.
+    Release { inside: bool, over: Option<Axis> },
+    /// The wait numbered `round` ended.
+    Waited { round: u32 },
 }
 
-/// One bar of the last frame.
-pub(crate) struct Bar {
-    pub(crate) axis: Axis,
-    pub(crate) thumb: Bounds<Pixels>,
-    /// The way the thumb moves in: the lane less its inset.
-    pub(crate) way: Bounds<Pixels>,
-    pub(crate) hitbox: Hitbox,
-    pub(crate) room: Room,
-    /// The whole lane and its colour, when a track is painted.
-    pub(crate) track: Option<(Bounds<Pixels>, Hsla)>,
+/// What a frame draws.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct Sight {
+    pub(crate) drawn: bool,
+    /// The bar's colours times this, while a fade runs.
+    pub(crate) alpha: Option<f32>,
 }
 
-impl Bar {
-    /// Same axis, thumb start (from the way's start) and thumb length.
-    fn same_place(&self, other: &Bar) -> bool {
-        let start = |bar: &Bar| bar.thumb.origin.along(bar.axis) - bar.way.origin.along(bar.axis);
-        self.axis == other.axis
-            && start(self) == start(other)
-            && self.thumb.size.along(self.axis) == other.thumb.size.along(other.axis)
-    }
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct Model {
+    pub(crate) look: Look,
+    pub(crate) grip: Grip,
+    /// The pointer was in the area at the last move. True at first, so a first move inside is
+    /// not an entry.
+    inside: bool,
+    /// The wait to hide runs, as number `round`.
+    pub(crate) waiting: bool,
+    pub(crate) round: u32,
 }
 
-/// The bars and the area's hitbox, as the last frame drew them.
-pub(crate) struct Frame {
-    pub(crate) area: Hitbox,
-    pub(crate) bars: Vec<Bar>,
-}
-
-impl Frame {
-    /// A thumb moved or changed length since `last` (or there was no last frame).
-    pub(crate) fn moved_from(&self, last: Option<&Frame>) -> bool {
-        last.is_none_or(|last| {
-            self.bars.len() != last.bars.len()
-                || self.bars.iter().zip(&last.bars).any(|(a, b)| !a.same_place(b))
-        })
-    }
-}
-
-pub(crate) struct BarState {
-    pub(crate) show: ScrollbarShow,
-    pub(crate) seen: Seen,
-    pub(crate) thumb: Thumb,
-    pub(crate) handle: ScrollHandle,
-    /// The caller scrolls its own div with `handle`.
-    pub(crate) tracked: bool,
-    pub(crate) rooms: [Room; 2],
-    pub(crate) track: Option<Hsla>,
-    notify: Option<EntityId>,
-    pointer_in: bool,
-    pub(crate) last: Option<Frame>,
-    hide: Option<Task<()>>,
-}
-
-impl BarState {
-    pub(crate) fn new(bars: Scrollbars, view: EntityId) -> Self {
-        BarState {
-            show: bars.show,
-            seen: Seen::first(bars.show),
-            thumb: Thumb::Idle,
-            tracked: bars.handle.is_some(),
-            handle: bars.handle.unwrap_or_default(),
-            rooms: bars.rooms,
-            track: bars.track,
-            notify: bars.notify.then_some(view),
-            pointer_in: true,
-            last: None,
-            hide: None,
-        }
-    }
-
-    pub(crate) fn room_kept(&self, axis: Axis) -> Option<Pixels> {
-        let keeps = self.rooms[slot(axis)] == Room::Track
-            && self.handle.max_offset().along(axis) != Pixels::ZERO;
-        (self.seen != Seen::Off && keeps).then_some(THUMB + INSET * 2.)
-    }
-
-    /// Each axis with a bar and something to scroll: its thumb as a part of the viewport.
-    pub(crate) fn spans(&self) -> Vec<(Axis, Range<f32>, Room)> {
-        let max = self.handle.max_offset();
-        let viewport = self.handle.bounds().size;
-        let offset = self.handle.offset();
-        [Axis::Horizontal, Axis::Vertical]
-            .into_iter()
-            .filter(|&axis| self.rooms[slot(axis)] != Room::None)
-            .filter_map(|axis| {
-                let span = thumb_span(max.along(axis), viewport.along(axis), offset.along(axis))?;
-                Some((axis, span, self.rooms[slot(axis)]))
-            })
-            .collect()
-    }
-
-    pub(crate) fn set_seen(&mut self, seen: Seen, cx: &mut Context<Self>) {
-        if self.seen != seen {
-            self.seen = seen;
-            cx.notify();
-        }
-    }
-
-    /// Shows the bar and starts the wait before it hides again.
-    pub(crate) fn reveal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.set_seen(self.seen.again(self.show), cx);
-        self.hide = None;
-        self.hide_later(window, cx);
-    }
-
-    /// On `Auto`, hides the bar a second from now unless a wait already runs or the thumb is
-    /// under the pointer by then.
-    pub(crate) fn hide_later(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.hide.is_some() || !self.seen.drawn() || self.show != ScrollbarShow::Auto {
-            return;
-        }
-        self.hide = Some(cx.spawn_in(window, async move |this, cx| {
-            cx.background_executor().timer(HIDE_AFTER).await;
-            this.update(cx, |bar, cx| {
-                if bar.thumb == Thumb::Idle {
-                    let fade = Seen::Fading {
-                        showing: false,
-                        done: 0.,
-                    };
-                    bar.set_seen(fade, cx);
-                }
-                bar.hide = None;
-            })
-            .ok();
-        }));
-    }
-
-    fn set_thumb(&mut self, thumb: Thumb, window: &mut Window, cx: &mut Context<Self>) {
-        if self.thumb == thumb {
-            return;
-        }
-        if thumb == Thumb::Idle {
-            self.hide_later(window, cx);
-        } else {
-            self.set_seen(self.seen.again(self.show), cx);
-            self.hide = None;
-        }
-        self.thumb = thumb;
-        cx.notify();
-    }
-
-    /// The thumb under `at`, if its hitbox is the one the pointer is over.
-    pub(crate) fn hover_at(&mut self, at: Point<Pixels>, window: &mut Window, cx: &mut Context<Self>) {
-        let under = self.last.as_ref().and_then(|frame| {
-            frame.bars.iter().find(|bar| bar.thumb.contains(&at))
-        });
-        let thumb = match under {
-            Some(bar) if bar.hitbox.is_hovered(window) => Thumb::Hover(bar.axis),
-            _ => Thumb::Idle,
+impl Model {
+    pub(crate) fn new(show: ScrollbarShow) -> Model {
+        let look = match show {
+            ScrollbarShow::Always => Look::Always,
+            ScrollbarShow::Never => Look::Never,
+            ScrollbarShow::Auto => Look::Auto(Fade::new(true, 0.)),
         };
-        self.set_thumb(thumb, window, cx);
-    }
-
-    pub(crate) fn area_hovered(&self, window: &Window) -> bool {
-        self.last
-            .as_ref()
-            .is_some_and(|frame| frame.area.is_hovered(window))
-    }
-
-    fn pointer(&mut self, window: &Window) -> Pointer {
-        let was_in = self.pointer_in;
-        self.pointer_in = self.area_hovered(window);
-        match (was_in, self.pointer_in) {
-            (false, true) => Pointer::Entered,
-            (true, true) => Pointer::Within,
-            (true, false) => Pointer::Exited,
-            (false, false) => Pointer::Away,
+        Model {
+            look,
+            grip: Grip::Free,
+            inside: true,
+            waiting: false,
+            round: 0,
         }
     }
 
-    pub(crate) fn scroll_to(&mut self, offset: Point<Pixels>, cx: &mut Context<Self>) {
-        self.handle.set_offset(offset);
-        if let Some(view) = self.notify {
-            notify_view(cx, view);
+    pub(crate) fn off(&self) -> bool {
+        self.look == Look::Never
+    }
+
+    pub(crate) fn drawn(&self, now: Instant) -> bool {
+        match self.look {
+            Look::Always => true,
+            Look::Never => false,
+            Look::Auto(fade) => fade.rising || fade.level(now) > 0.,
         }
-        cx.notify();
     }
 
-    /// A left press: on a thumb it starts a drag; elsewhere in a track it scrolls so the thumb's
-    /// middle is at the pointer. Either way the press goes no further.
-    pub(crate) fn press(&mut self, at: Point<Pixels>, window: &mut Window, cx: &mut Context<Self>) {
-        let hit = self.last.as_ref().and_then(|frame| {
-            frame.bars.iter().find(|bar| match bar.room {
-                Room::Track => bar.way.contains(&at),
-                _ => bar.thumb.contains(&at),
-            })
-        });
-        let Some(&Bar {
-            axis, thumb, way, ..
-        }) = hit
-        else {
-            return;
-        };
-        if thumb.contains(&at) {
-            let grab = at.along(axis) - thumb.origin.along(axis);
-            self.set_thumb(Thumb::Drag(axis, grab), window, cx);
-        } else {
-            let length = thumb.size.along(axis);
-            let max = self.handle.max_offset().along(axis);
-            let to = offset_for(way, length, at, length / 2., max, axis);
-            let offset = self.handle.offset().apply_along(axis, |_| to);
-            self.scroll_to(offset, cx);
-        }
-        cx.stop_propagation();
-    }
-
-    /// A move with the thumb held: the area follows the thumb.
-    pub(crate) fn drag(&mut self, at: Point<Pixels>, axis: Axis, grab: Pixels, cx: &mut Context<Self>) -> bool {
-        let Some(bar) = self
-            .last
-            .as_ref()
-            .and_then(|frame| frame.bars.iter().find(|bar| bar.axis == axis))
-        else {
-            return false;
-        };
-        let max = self.handle.max_offset().along(axis);
-        let to = offset_for(bar.way, bar.thumb.size.along(axis), at, grab, max, axis);
-        let offset = self.handle.offset().apply_along(axis, |_| to);
-        self.scroll_to(offset, cx);
-        true
-    }
-
-    /// A move with no thumb held: coming into the area shows the bar; over it the thumb under
-    /// the pointer is hovered, and a move over a thumb goes no further; leaving lets go.
-    pub(crate) fn moved(&mut self, event: &MouseMoveEvent, window: &mut Window, cx: &mut Context<Self>) {
-        match self.pointer(window) {
-            pointer @ (Pointer::Entered | Pointer::Within) if event.pressed_button.is_none() => {
-                if matches!(pointer, Pointer::Entered) {
-                    self.reveal(window, cx);
+    /// Takes one input; true when the event behind it should go no further.
+    pub(crate) fn apply(&mut self, input: Input, now: Instant) -> bool {
+        match input {
+            Input::Drawn { moved } => {
+                if moved {
+                    self.show(now);
+                    self.restart_wait(now);
                 }
-                self.hover_at(event.position, window, cx);
-                if self.thumb != Thumb::Idle {
-                    cx.stop_propagation();
-                }
+                false
             }
-            Pointer::Exited => self.set_thumb(Thumb::Idle, window, cx),
-            _ => {}
+            Input::Pointer {
+                inside,
+                button,
+                over,
+            } => {
+                let was_inside = std::mem::replace(&mut self.inside, inside);
+                if inside && !button {
+                    if !was_inside {
+                        self.show(now);
+                        self.restart_wait(now);
+                    }
+                    self.grip_to(over.map_or(Grip::Free, Grip::Over), now);
+                    return self.grip != Grip::Free;
+                }
+                if was_inside && !inside {
+                    self.grip_to(Grip::Free, now);
+                }
+                false
+            }
+            Input::Wheel { over } => {
+                self.grip_to(over.map_or(Grip::Free, Grip::Over), now);
+                false
+            }
+            Input::Grab(axis, grab) => {
+                self.grip_to(Grip::Held(axis, grab), now);
+                true
+            }
+            Input::Release { inside, over } => {
+                if inside {
+                    self.grip_to(over.map_or(Grip::Free, Grip::Over), now);
+                } else {
+                    self.wait(now);
+                }
+                false
+            }
+            Input::Waited { round } => {
+                if self.waiting && round == self.round {
+                    self.waiting = false;
+                    if self.grip == Grip::Free
+                        && let Look::Auto(fade) = &mut self.look
+                    {
+                        fade.head(false, now);
+                    }
+                }
+                false
+            }
         }
     }
 
-    /// A release: outside the area the bar may hide; inside the thumb under it is hovered.
-    pub(crate) fn released(&mut self, at: Point<Pixels>, window: &mut Window, cx: &mut Context<Self>) {
-        if self.area_hovered(window) {
-            self.hover_at(at, window, cx);
+    /// Where a frame at `now` has the bar. With `still` (reduced motion) a running fade ends at
+    /// once. `animate` asks for the next frame.
+    pub(crate) fn frame(&mut self, now: Instant, still: bool) -> (Sight, bool) {
+        let sight = |drawn| Sight {
+            drawn,
+            alpha: None,
+        };
+        let Look::Auto(fade) = &mut self.look else {
+            return (sight(self.look == Look::Always), false);
+        };
+        if still && !fade.done(now) {
+            *fade = Fade::new(fade.rising, if fade.rising { 1. } else { 0. });
+        }
+        if fade.done(now) {
+            return (sight(fade.rising), false);
+        }
+        if fade.start.is_none() {
+            fade.start = Some(now);
+        }
+        let alpha = Some(ease_in_out(fade.level(now)));
+        (Sight { drawn: true, alpha }, true)
+    }
+
+    fn show(&mut self, now: Instant) {
+        if let Look::Auto(fade) = &mut self.look {
+            fade.head(true, now);
+        }
+    }
+
+    /// Starts the wait to hide unless one runs: only for a drawn `Auto` bar.
+    fn wait(&mut self, now: Instant) {
+        if !self.waiting && matches!(self.look, Look::Auto(_)) && self.drawn(now) {
+            self.waiting = true;
+            self.round = self.round.wrapping_add(1);
+        }
+    }
+
+    fn restart_wait(&mut self, now: Instant) {
+        self.waiting = false;
+        self.wait(now);
+    }
+
+    /// A thumb taken or hovered shows the bar and stops the wait; let go, the wait starts.
+    fn grip_to(&mut self, grip: Grip, now: Instant) {
+        if self.grip == grip {
+            return;
+        }
+        if grip == Grip::Free {
+            self.wait(now);
         } else {
-            self.hide_later(window, cx);
+            self.show(now);
+            self.waiting = false;
         }
+        self.grip = grip;
     }
-}
-
-/// `Context::notify` takes no id, so the view goes through `App`.
-fn notify_view(cx: &mut App, view: EntityId) {
-    cx.notify(view);
-}
-
-impl Render for BarState {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        BarElement::new(cx.entity())
-    }
-}
-
-/// The thumb over a viewport of `viewport` that scrolls up to `max` (offset `offset`, 0 or
-/// below), as the part of the viewport it covers; None when nothing scrolls or the thumb would
-/// not fit.
-pub(crate) fn thumb_span(max: Pixels, viewport: Pixels, offset: Pixels) -> Option<Range<f32>> {
-    if max == Pixels::ZERO || viewport == Pixels::ZERO {
-        return None;
-    }
-    let length = (viewport * (viewport / (viewport + max))).max(LEAST);
-    if length > viewport {
-        return None;
-    }
-    let scrolled = offset.max(-max).min(Pixels::ZERO).abs();
-    let start = (scrolled / max) * (viewport - length);
-    Some(start / viewport..(start + length) / viewport)
-}
-
-/// The offset (0 or below) that puts the thumb, held `grab` px from its start, at `at` within
-/// `way`.
-pub(crate) fn offset_for(
-    way: Bounds<Pixels>,
-    length: Pixels,
-    at: Point<Pixels>,
-    grab: Pixels,
-    max: Pixels,
-    axis: Axis,
-) -> Pixels {
-    let room = way.size.along(axis) - length;
-    let start = (at.along(axis) - way.origin.along(axis) - grab)
-        .max(px(0.))
-        .min(room);
-    let part = if room > px(0.) { start / room } else { 0. };
-    -max * part
 }
 
 #[cfg(test)]
-#[path = "scrollbar_tests.rs"]
+#[path = "scrollbar_state_tests.rs"]
 mod tests;

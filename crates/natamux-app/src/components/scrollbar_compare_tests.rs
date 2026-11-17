@@ -1,23 +1,28 @@
 //! The kit's own scrollbar against Zed's `ui` one (A35): the scroll areas the app builds, drawn
 //! by each bar under the kit's metrics capture, through the same pointer steps (enter, hover the
 //! thumb, press and drag it, let go, wheel, press the lane, leave). Every step must paint the same
-//! frame and leave the same scroll offset. Shown bars only: a fading bar depends on the clock, so
-//! the fade, the hide timing and the show rules are unit tests of the kit (`scrollbar_tests.rs`).
+//! frame and leave the same scroll offset. A fading bar depends on the wall clock, so the `Auto`
+//! test compares only the frames after a fade has ended; the hide wait runs on the test clock.
+//! The fade itself and the show rules are unit tests of the kit (`scrollbar_state_tests.rs`).
 //! Zed's bar leaves with the `zed_ui` dependency: before that, freeze its rows into a golden file
 //! and compare the own rows with it.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
+use std::cell::RefCell;
+use std::rc::Rc;
+use std::time::Duration;
+
 use gpui::{
-    AnyWindowHandle, Axis, Hsla, Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent,
-    MouseUpEvent, PlatformInput, Point, ScrollDelta, ScrollHandle, ScrollWheelEvent, TouchPhase,
-    point, size,
+    AnyWindowHandle, Axis, HeadlessAppContext, Hsla, Modifiers, MouseButton, MouseDownEvent,
+    MouseMoveEvent, MouseUpEvent, PlatformInput, Point, ScrollDelta, ScrollHandle,
+    ScrollWheelEvent, Stateful, TouchPhase, point, size,
 };
 use ui::prelude::*;
 use ui::zed_scrollbars as zed;
 use ui::{ScrollAxes, ScrollbarShow, Scrollbars, WithScrollbar};
 
-use crate::components::kit_metrics::{CONFIGS, Config, context, redraw};
+use crate::components::kit_metrics::{CONFIGS, Capture, Config, context, redraw};
 
 /// The area: 200 x 100 px, 16 px from the window's top left.
 const PAD: f32 = 16.;
@@ -78,6 +83,15 @@ impl zed::ScrollbarVisibility for AlwaysShown {
 #[derive(Default)]
 struct NeverShown;
 
+#[derive(Default)]
+struct AutoShown;
+
+impl zed::ScrollbarVisibility for AutoShown {
+    fn visibility(&self, _: &App) -> zed::ShowScrollbar {
+        zed::ShowScrollbar::Auto
+    }
+}
+
 impl zed::ScrollbarVisibility for NeverShown {
     fn visibility(&self, _: &App) -> zed::ShowScrollbar {
         zed::ShowScrollbar::Never
@@ -88,6 +102,8 @@ struct Area {
     sample: Sample,
     side: Side,
     handle: ScrollHandle,
+    /// `scroll_area` shows and hides on its own, as in the app.
+    auto: bool,
 }
 
 fn squares(count: usize) -> Vec<Div> {
@@ -105,6 +121,8 @@ impl Area {
             Side::Zed => {
                 let bars = if never {
                     zed::Scrollbars::for_settings::<NeverShown>()
+                } else if self.auto {
+                    zed::Scrollbars::for_settings::<AutoShown>()
                 } else {
                     zed::Scrollbars::for_settings::<AlwaysShown>()
                 };
@@ -117,6 +135,8 @@ impl Area {
             Side::Own => {
                 let show = if never {
                     ScrollbarShow::Never
+                } else if self.auto {
+                    ScrollbarShow::Auto
                 } else {
                     ScrollbarShow::Always
                 };
@@ -323,6 +343,7 @@ fn rows(config: &Config, sample: Sample, side: Side) -> Vec<String> {
                 sample,
                 side,
                 handle: shared,
+                auto: false,
             })
         })
         .expect("a window")
@@ -404,4 +425,149 @@ fn the_pointer_steps_reach_the_bars() {
     assert_eq!(parts(&row[at("lane")]).0, parts(&row[at("wheel")]).0);
     let track = rows(&CONFIGS[0], Sample::Track, Side::Own);
     assert_ne!(parts(&track[at("lane")]).0, parts(&track[at("wheel")]).0);
+}
+
+/// Draws one frame and returns what it painted.
+fn frame(
+    cx: &mut HeadlessAppContext,
+    capture: &Rc<RefCell<Capture>>,
+    window: AnyWindowHandle,
+) -> String {
+    redraw(cx, window);
+    cx.capture_screenshot(window).expect("the recorder captures");
+    let painted = capture.borrow_mut().painted.take().expect("a captured frame");
+    painted.to_string()
+}
+
+/// Frames until a fade of at most `fade` has ended. A fade counts from the frame that starts it
+/// on the wall clock, and a bar may show a fade one frame late, so: a frame, the wait, two more.
+fn settle(
+    cx: &mut HeadlessAppContext,
+    capture: &Rc<RefCell<Capture>>,
+    window: AnyWindowHandle,
+    fade: Duration,
+) -> String {
+    frame(cx, capture, window);
+    std::thread::sleep(fade + Duration::from_millis(50));
+    frame(cx, capture, window);
+    frame(cx, capture, window)
+}
+
+const AUTO_STEPS: [&str; 6] = ["shown", "waited", "enter", "hover-waited", "left-waited", "wheel"];
+
+/// The column area on `Auto`, through the steps of `AUTO_STEPS`: each one's offset and the frame
+/// once its fade has ended.
+fn auto_rows(config: &Config, side: Side) -> Vec<String> {
+    let rise = Duration::from_millis(50);
+    let fall = Duration::from_millis(400);
+    // The hide wait is 1 s on the test clock.
+    let wait = Duration::from_millis(1100);
+    let (mut cx, capture, _) = context(config);
+    let handle = ScrollHandle::new();
+    let shared = handle.clone();
+    let window: AnyWindowHandle = cx
+        .open_window(size(px(480.), px(400.)), move |_, cx| {
+            cx.new(|_| Area {
+                sample: Sample::Column,
+                side,
+                handle: shared,
+                auto: true,
+            })
+        })
+        .expect("a window")
+        .into();
+    redraw(&mut cx, window);
+    let scale = cx
+        .update_window(window, |_, window, _| window.scale_factor())
+        .expect("the window is open");
+    {
+        let mut capture = capture.borrow_mut();
+        capture.origin = (0., 0.);
+        capture.scale = scale;
+    }
+    let inside = point(px(PAD + 60.), px(PAD + 40.));
+    let outside = point(px(400.), px(380.));
+    let thumb = on_bar(Axis::Vertical, 10.);
+    let mut rows = Vec::new();
+    for name in AUTO_STEPS {
+        let pointer = |at: Point<Pixels>, cx: &mut HeadlessAppContext| {
+            cx.update_window(window, |_, window, cx| mouse_move(at, None, window, cx))
+                .expect("the window is open");
+            cx.run_until_parked();
+        };
+        let wait_out = |cx: &mut HeadlessAppContext| {
+            cx.advance_clock(wait);
+            cx.run_until_parked();
+        };
+        let fade = match name {
+            // The first frames fade the bar in.
+            "shown" => rise,
+            "waited" => {
+                wait_out(&mut cx);
+                fall
+            }
+            "enter" => {
+                pointer(outside, &mut cx);
+                pointer(inside, &mut cx);
+                rise
+            }
+            "hover-waited" => {
+                pointer(thumb, &mut cx);
+                wait_out(&mut cx);
+                fall
+            }
+            "left-waited" => {
+                pointer(outside, &mut cx);
+                wait_out(&mut cx);
+                fall
+            }
+            "wheel" => {
+                cx.update_window(window, |_, window, cx| wheel(inside, Axis::Vertical, window, cx))
+                    .expect("the window is open");
+                cx.run_until_parked();
+                rise
+            }
+            other => panic!("no step {other}"),
+        };
+        let painted = settle(&mut cx, &capture, window, fade);
+        let offset = handle.offset();
+        rows.push(format!(
+            "{} auto {name}: offset {:?} {:?}, painted {painted}",
+            config.name,
+            f32::from(offset.x),
+            f32::from(offset.y),
+        ));
+    }
+    cx.update_window(window, |_, window, _| window.remove_window())
+        .expect("the window is open");
+    cx.run_until_parked();
+    rows
+}
+
+/// On `Auto` (the app's mode) the bar shows at first, hides a second after the last show, shows
+/// again when the pointer comes in, stays while its thumb is hovered, hides after the pointer
+/// leaves, and shows on a scroll: the same frames as Zed's bar once each fade has ended.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[test]
+fn the_own_auto_scrollbar_shows_and_hides_as_zeds() {
+    let own = auto_rows(&CONFIGS[0], Side::Own);
+    let at = |name: &str| AUTO_STEPS.iter().position(|step| *step == name).unwrap();
+    let painted = |name: &str| parts(&own[at(name)]).1.to_string();
+    // The steps reach the bar: hidden after each wait unless hovered, shown again otherwise.
+    assert_ne!(painted("shown"), painted("waited"));
+    assert_eq!(painted("shown"), painted("enter"));
+    assert_ne!(painted("hover-waited"), painted("waited"));
+    assert_ne!(painted("hover-waited"), painted("enter"));
+    assert_eq!(painted("left-waited"), painted("waited"));
+    assert_ne!(painted("wheel"), painted("waited"));
+    assert_ne!(parts(&own[at("wheel")]).0, parts(&own[at("shown")]).0);
+
+    let zed = auto_rows(&CONFIGS[0], Side::Zed);
+    let differ: Vec<String> = zed
+        .iter()
+        .zip(&own)
+        .filter(|(zed, own)| zed != own)
+        .map(|(zed, own)| format!("zed: {zed}\nown: {own}"))
+        .collect();
+    assert!(differ.is_empty(), "{}", differ.join("\n"));
 }

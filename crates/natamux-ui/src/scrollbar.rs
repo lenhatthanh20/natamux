@@ -3,13 +3,17 @@
 //! a scroll, a new size or the pointer coming into the area, fades in over 50 ms, and on `Auto`
 //! fades out over 400 ms a second after the last of these while the thumb is not under the
 //! pointer. The thumb drags; a press on a drawn track puts the thumb's middle at the pointer.
+//!
+//! `scrollbar_layout.rs` places the bars, `scrollbar_state.rs` keeps what they are doing, and
+//! `scrollbar_element.rs` draws them and feeds the pointer to the state.
 
 use std::panic::Location;
 
 use gpui::prelude::*;
 use gpui::{App, Axis, Div, ElementId, Entity, Hsla, ScrollHandle, Stateful, Window};
 
-use crate::scrollbar_state::BarState;
+use crate::scrollbar_element::{BarElement, BarHost};
+use crate::scrollbar_layout::{LANE, Lane, Lanes};
 
 /// The axes a bar is drawn along.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -17,6 +21,24 @@ pub enum ScrollAxes {
     Horizontal,
     Vertical,
     Both,
+}
+
+impl ScrollAxes {
+    fn has(self, axis: Axis) -> bool {
+        match self {
+            ScrollAxes::Both => true,
+            ScrollAxes::Horizontal => axis == Axis::Horizontal,
+            ScrollAxes::Vertical => axis == Axis::Vertical,
+        }
+    }
+
+    fn mark(self, lanes: &mut Lanes, lane: Lane) {
+        for axis in [Axis::Horizontal, Axis::Vertical] {
+            if self.has(axis) {
+                lanes.set(axis, lane);
+            }
+        }
+    }
 }
 
 /// When a bar shows. Read once, when the bar is first drawn.
@@ -28,44 +50,15 @@ pub enum ScrollbarShow {
     Never,
 }
 
-/// What a bar holds on its axis: nothing, a thumb, or a thumb on a painted track that also takes
-/// presses and the room for itself while the area scrolls.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(crate) enum Room {
-    #[default]
-    None,
-    Thumb,
-    Track,
-}
-
-/// Index of an axis in a `[Room; 2]`.
-pub(crate) fn slot(axis: Axis) -> usize {
-    match axis {
-        Axis::Horizontal => 0,
-        Axis::Vertical => 1,
-    }
-}
-
-impl ScrollAxes {
-    fn give(self, rooms: &mut [Room; 2], room: Room) {
-        if self != ScrollAxes::Vertical {
-            rooms[0] = room;
-        }
-        if self != ScrollAxes::Horizontal {
-            rooms[1] = room;
-        }
-    }
-}
-
 /// How a scroll area's bars look and act; hand it to `custom_scrollbars`.
 #[derive(Clone)]
 pub struct Scrollbars {
-    pub(crate) id: Option<ElementId>,
+    pub(crate) key: Option<ElementId>,
     pub(crate) show: ScrollbarShow,
     pub(crate) handle: Option<ScrollHandle>,
-    pub(crate) rooms: [Room; 2],
+    pub(crate) lanes: Lanes,
     pub(crate) track: Option<Hsla>,
-    pub(crate) notify: bool,
+    pub(crate) redraw_view: bool,
 }
 
 impl Scrollbars {
@@ -79,46 +72,40 @@ impl Scrollbars {
     }
 
     pub fn shown(axes: ScrollAxes, show: ScrollbarShow) -> Self {
-        let mut rooms = [Room::None; 2];
-        axes.give(&mut rooms, Room::Thumb);
+        let mut lanes = Lanes::default();
+        axes.mark(&mut lanes, Lane::Bare);
         Scrollbars {
-            id: None,
+            key: None,
             show,
             handle: None,
-            rooms,
+            lanes,
             track: None,
-            notify: false,
+            redraw_view: false,
         }
     }
 
     /// The key of the bar's state; else the caller of `custom_scrollbars`.
-    pub fn id(self, id: impl Into<ElementId>) -> Self {
-        Scrollbars {
-            id: Some(id.into()),
-            ..self
-        }
+    pub fn id(mut self, id: impl Into<ElementId>) -> Self {
+        self.key = Some(id.into());
+        self
     }
 
     /// Draws the view again when the bar scrolls the area.
-    pub fn notify_content(self) -> Self {
-        Scrollbars {
-            notify: true,
-            ..self
-        }
+    pub fn notify_content(mut self) -> Self {
+        self.redraw_view = true;
+        self
     }
 
     /// The bars follow `handle`, which the caller puts on its own scroll div. Without one the
     /// div the bars are put on scrolls by a handle of the bar's own.
-    pub fn tracked_scroll_handle(self, handle: &ScrollHandle) -> Self {
-        Scrollbars {
-            handle: Some(handle.clone()),
-            ..self
-        }
+    pub fn tracked_scroll_handle(mut self, handle: &ScrollHandle) -> Self {
+        self.handle = Some(handle.clone());
+        self
     }
 
     /// A track in `background` under the thumb along `axes`.
     pub fn with_track_along(mut self, axes: ScrollAxes, background: Hsla) -> Self {
-        axes.give(&mut self.rooms, Room::Track);
+        axes.mark(&mut self.lanes, Lane::Tracked);
         self.track = Some(background);
         self
     }
@@ -138,9 +125,9 @@ impl WithScrollbar for Div {
         window: &mut Window,
         cx: &mut App,
     ) -> Stateful<Div> {
-        let state = bar_state(bars, Location::caller(), window, cx);
-        let area = self.id(("scroll-area", state.entity_id()));
-        put_on(state, area, cx)
+        let host = host_of(bars, Location::caller(), window, cx);
+        let area = self.id(("scroll-area", host.entity_id()));
+        dress(area, host, cx)
     }
 }
 
@@ -152,46 +139,52 @@ impl WithScrollbar for Stateful<Div> {
         window: &mut Window,
         cx: &mut App,
     ) -> Stateful<Div> {
-        let state = bar_state(bars, Location::caller(), window, cx);
-        put_on(state, self, cx)
+        let host = host_of(bars, Location::caller(), window, cx);
+        dress(self, host, cx)
     }
 }
 
-/// The bar's state of the last frames, made at its first frame. The track colour follows every
-/// frame; the rest of `bars` counts only at the start.
-fn bar_state(
+/// The bar's state, made at its first frame and kept while the bar is drawn. Only the track
+/// colour of later `bars` counts.
+fn host_of(
     bars: Scrollbars,
     caller: &'static Location<'static>,
     window: &mut Window,
     cx: &mut App,
-) -> Entity<BarState> {
-    let key = bars.id.clone().unwrap_or_else(|| caller.into());
+) -> Entity<BarHost> {
+    let key = bars.key.clone().unwrap_or_else(|| caller.into());
     let track = bars.track;
     let view = window.current_view();
-    let state = window.use_keyed_state(key, cx, |_, _| BarState::new(bars, view));
-    state.update(cx, |state, _| state.track = track);
-    state
+    let host = window.use_keyed_state(key, cx, |_, _| BarHost::new(bars, view));
+    host.update(cx, |host, _| host.track = track);
+    host
 }
 
-/// The area with its bar on top. A bar with its own handle makes the area scroll; a track keeps
-/// its room at the area's edge while there is something to scroll.
-fn put_on(state: Entity<BarState>, area: Stateful<Div>, cx: &App) -> Stateful<Div> {
-    let bar = state.read(cx);
+/// The area with the bars drawn over it. With no handle of the caller's the area scrolls by the
+/// bar's own; a track takes its room from the area while there is something to scroll.
+fn dress(area: Stateful<Div>, host: Entity<BarHost>, cx: &App) -> Stateful<Div> {
+    let bar = host.read(cx);
+    let lanes = bar.lanes;
     let mut area = area;
-    if !bar.tracked {
-        area = area.track_scroll(&bar.handle);
-        area = match (bar.rooms[0], bar.rooms[1]) {
-            (Room::None, Room::None) => area,
-            (Room::None, _) => area.overflow_y_scroll(),
-            (_, Room::None) => area.overflow_x_scroll(),
-            _ => area.overflow_scroll(),
+    if let Some(handle) = bar.own_handle() {
+        let along = |axis| lanes.of(axis) != Lane::Off;
+        area = area.track_scroll(handle);
+        area = match (along(Axis::Horizontal), along(Axis::Vertical)) {
+            (true, true) => area.overflow_scroll(),
+            (true, false) => area.overflow_x_scroll(),
+            (false, true) => area.overflow_y_scroll(),
+            (false, false) => area,
         };
     }
-    if let Some(room) = bar.room_kept(Axis::Horizontal) {
-        area = area.pb(room);
+    if bar.keeps_room(Axis::Horizontal) {
+        area = area.pb(LANE);
     }
-    if let Some(room) = bar.room_kept(Axis::Vertical) {
-        area = area.pr(room);
+    if bar.keeps_room(Axis::Vertical) {
+        area = area.pr(LANE);
     }
-    area.child(state.clone())
+    area.child(BarElement::new(host))
 }
+
+#[cfg(test)]
+#[path = "scrollbar_tests.rs"]
+mod tests;
