@@ -1,5 +1,7 @@
 The Natamux themes take their colours from these palettes. Colours that failed a contrast
 pair were made lighter (dark themes) or darker (light themes).
+The JSON layout of natamux.json, ayu.json and gruvbox.json follows Zed's One, Ayu and Gruvbox
+theme files, which Zed ships with the MIT texts of those palettes.
 
 ## [Natamux Light, Natamux Dark: from One Light and One Dark](https://github.com/atom/atom/tree/master/packages/one-dark-ui)
 
