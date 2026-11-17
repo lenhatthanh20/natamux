@@ -1,0 +1,787 @@
+# Every colour field a bundled theme file does not set: theme, field, then h s l a (or none for an
+# unset optional field), as the theme value dump holds them
+# (crates/natamux-app/tests/golden/theme). Made from that dump; tests/golden.rs checks it.
+Natamux Light	drop_target_border	0.13333334 0.081967235 0.11960785 1.0
+Natamux Light	debugger_accent	0.99578065 0.6929825 0.5529412 1.0
+Natamux Light	panel_indent_guide	0.12903227 1.0 0.060784314 0.12941177
+Natamux Light	panel_indent_guide_hover	0.12666667 1.0 0.04901961 0.16078432
+Natamux Light	panel_indent_guide_active	0.12666667 1.0 0.04901961 0.16078432
+Natamux Light	panel_overlay_background	0.6666667 0.025641015 0.9235294 1.0
+Natamux Light	panel_overlay_hover	0.6666667 0.015873011 0.87647057 1.0
+Natamux Light	pane_group_border	0.6666667 0.009345793 0.79019606 1.0
+Natamux Light	scrollbar_thumb_active_background	0.6296297 0.07438019 0.23725492 0.29803923
+Natamux Light	minimap_thumb_background	0.6296297 0.07438019 0.23725492 0.29803923
+Natamux Light	minimap_thumb_hover_background	0.6666667 0.015873011 0.87647057 0.7
+Natamux Light	minimap_thumb_active_background	0.6296297 0.07438019 0.23725492 0.29803923
+Natamux Light	minimap_thumb_border	0.6666667 0.015873011 0.87647057 1.0
+Natamux Light	vim_normal_background	0.0 0.0 0.0 0.0
+Natamux Light	vim_insert_background	0.0 0.0 0.0 0.0
+Natamux Light	vim_replace_background	0.0 0.0 0.0 0.0
+Natamux Light	vim_visual_background	0.0 0.0 0.0 0.0
+Natamux Light	vim_visual_line_background	0.0 0.0 0.0 0.0
+Natamux Light	vim_visual_block_background	0.0 0.0 0.0 0.0
+Natamux Light	vim_yank_background	0.63184077 0.6979167 0.62352943 0.14509805
+Natamux Light	vim_helix_jump_label_foreground	0.02183908 0.70048314 0.40588236 1.0
+Natamux Light	vim_helix_normal_background	0.0 0.0 0.0 0.0
+Natamux Light	vim_helix_select_background	0.0 0.0 0.0 0.0
+Natamux Light	vim_normal_foreground	0.0 0.0 0.0 0.0
+Natamux Light	vim_insert_foreground	0.0 0.0 0.0 0.0
+Natamux Light	vim_replace_foreground	0.0 0.0 0.0 0.0
+Natamux Light	vim_visual_foreground	0.0 0.0 0.0 0.0
+Natamux Light	vim_visual_line_foreground	0.0 0.0 0.0 0.0
+Natamux Light	vim_visual_block_foreground	0.0 0.0 0.0 0.0
+Natamux Light	vim_helix_normal_foreground	0.0 0.0 0.0 0.0
+Natamux Light	vim_helix_select_foreground	0.0 0.0 0.0 0.0
+Natamux Light	editor_code_lens_foreground	none
+Natamux Light	editor_debugger_active_line_background	0.11111111 1.0 0.5 0.11764706
+Natamux Light	editor_indent_guide	0.12903227 1.0 0.060784314 0.12941177
+Natamux Light	editor_indent_guide_active	0.12666667 1.0 0.04901961 0.16078432
+Natamux Light	editor_document_highlight_bracket_background	0.63184077 0.6979167 0.62352943 0.14509805
+Natamux Light	editor_diff_hunk_added_background	0.39632547 0.6195122 0.4019608 0.16
+Natamux Light	editor_diff_hunk_added_hollow_background	0.39632547 0.6195122 0.4019608 0.08
+Natamux Light	editor_diff_hunk_added_hollow_border	0.39632547 0.6195122 0.4019608 0.48
+Natamux Light	editor_diff_hunk_deleted_background	0.9856322 0.6516854 0.6509804 0.16
+Natamux Light	editor_diff_hunk_deleted_hollow_background	0.9856322 0.6516854 0.6509804 0.08
+Natamux Light	editor_diff_hunk_deleted_hollow_border	0.9856322 0.6516854 0.6509804 0.48
+Natamux Light	terminal_ansi_background	0.16666667 0.20000061 0.9901961 1.0
+Natamux Light	version_control_renamed	0.12711865 0.7662338 0.3019608 1.0
+Natamux Light	version_control_conflict	0.6 0.076142125 0.38627452 1.0
+Natamux Light	version_control_ignored	0.6 0.076142125 0.38627452 1.0
+Natamux Light	version_control_conflict_marker_ours	0.42192194 0.5634518 0.38627452 0.5
+Natamux Light	version_control_conflict_marker_theirs	0.57375884 0.9591837 0.48039216 0.5
+Ayu Light	drop_target_border	0.13333334 0.081967235 0.11960785 1.0
+Ayu Light	debugger_accent	0.99578065 0.6929825 0.5529412 1.0
+Ayu Light	panel_indent_guide	0.12903227 1.0 0.060784314 0.12941177
+Ayu Light	panel_indent_guide_hover	0.12666667 1.0 0.04901961 0.16078432
+Ayu Light	panel_indent_guide_active	0.12666667 1.0 0.04901961 0.16078432
+Ayu Light	panel_overlay_background	0.6666667 0.027027039 0.927451 1.0
+Ayu Light	panel_overlay_hover	0.6666667 0.035714287 0.8901961 1.0
+Ayu Light	pane_group_border	0.6111111 0.03225807 0.8176471 1.0
+Ayu Light	scrollbar_thumb_active_background	0.5833333 0.051546387 0.38039216 0.29803923
+Ayu Light	minimap_thumb_background	0.5833333 0.051546387 0.38039216 0.29803923
+Ayu Light	minimap_thumb_hover_background	0.6666667 0.035714287 0.8901961 0.7
+Ayu Light	minimap_thumb_active_background	0.5833333 0.051546387 0.38039216 0.29803923
+Ayu Light	minimap_thumb_border	0.6666667 0.035714287 0.8901961 1.0
+Ayu Light	vim_normal_background	0.0 0.0 0.0 0.0
+Ayu Light	vim_insert_background	0.0 0.0 0.0 0.0
+Ayu Light	vim_replace_background	0.0 0.0 0.0 0.0
+Ayu Light	vim_visual_background	0.0 0.0 0.0 0.0
+Ayu Light	vim_visual_line_background	0.0 0.0 0.0 0.0
+Ayu Light	vim_visual_block_background	0.0 0.0 0.0 0.0
+Ayu Light	vim_yank_background	0.5696078 0.76576585 0.5647059 0.101960786
+Ayu Light	vim_helix_jump_label_foreground	0.002057613 0.36 0.44117647 1.0
+Ayu Light	vim_helix_normal_background	0.0 0.0 0.0 0.0
+Ayu Light	vim_helix_select_background	0.0 0.0 0.0 0.0
+Ayu Light	vim_normal_foreground	0.0 0.0 0.0 0.0
+Ayu Light	vim_insert_foreground	0.0 0.0 0.0 0.0
+Ayu Light	vim_replace_foreground	0.0 0.0 0.0 0.0
+Ayu Light	vim_visual_foreground	0.0 0.0 0.0 0.0
+Ayu Light	vim_visual_line_foreground	0.0 0.0 0.0 0.0
+Ayu Light	vim_visual_block_foreground	0.0 0.0 0.0 0.0
+Ayu Light	vim_helix_normal_foreground	0.0 0.0 0.0 0.0
+Ayu Light	vim_helix_select_foreground	0.0 0.0 0.0 0.0
+Ayu Light	editor_code_lens_foreground	none
+Ayu Light	editor_debugger_active_line_background	0.11111111 1.0 0.5 0.11764706
+Ayu Light	editor_indent_guide	0.12903227 1.0 0.060784314 0.12941177
+Ayu Light	editor_indent_guide_active	0.12666667 1.0 0.04901961 0.16078432
+Ayu Light	editor_document_highlight_bracket_background	0.5696078 0.76576585 0.5647059 0.101960786
+Ayu Light	editor_diff_hunk_added_background	0.21047619 0.95628417 0.35882354 0.16
+Ayu Light	editor_diff_hunk_added_hollow_background	0.21047619 0.95628417 0.35882354 0.08
+Ayu Light	editor_diff_hunk_added_hollow_border	0.21047619 0.95628417 0.35882354 0.48
+Ayu Light	editor_diff_hunk_deleted_background	0.0013227513 0.7974684 0.6901961 0.16
+Ayu Light	editor_diff_hunk_deleted_hollow_background	0.0013227513 0.7974684 0.6901961 0.08
+Ayu Light	editor_diff_hunk_deleted_hollow_border	0.0013227513 0.7974684 0.6901961 0.48
+Ayu Light	terminal_ansi_background	0.16666667 0.20000061 0.9901961 1.0
+Ayu Light	version_control_renamed	0.10034012 0.53260875 0.36078432 1.0
+Ayu Light	version_control_conflict	0.5952381 0.037037034 0.37058824 1.0
+Ayu Light	version_control_ignored	0.5952381 0.037037034 0.37058824 1.0
+Catppuccin Latte	drop_target_border	0.13333334 0.081967235 0.11960785 1.0
+Catppuccin Latte	debugger_accent	0.99578065 0.6929825 0.5529412 1.0
+Catppuccin Latte	panel_indent_guide	0.12903227 1.0 0.060784314 0.12941177
+Catppuccin Latte	panel_indent_guide_hover	0.12666667 1.0 0.04901961 0.16078432
+Catppuccin Latte	panel_indent_guide_active	0.12666667 1.0 0.04901961 0.16078432
+Catppuccin Latte	panel_overlay_background	0.6111111 0.21951228 0.9196079 1.0
+Catppuccin Latte	panel_overlay_hover	0.6212121 0.1803279 0.8803922 1.0
+Catppuccin Latte	pane_group_border	0.6282052 0.13131312 0.80588233 1.0
+Catppuccin Latte	scrollbar_thumb_active_background	0.64942527 0.16022098 0.35490197 0.29803923
+Catppuccin Latte	minimap_thumb_background	0.64942527 0.16022098 0.35490197 0.29803923
+Catppuccin Latte	minimap_thumb_hover_background	0.6212121 0.1803279 0.8803922 0.7
+Catppuccin Latte	minimap_thumb_active_background	0.64942527 0.16022098 0.35490197 0.29803923
+Catppuccin Latte	minimap_thumb_border	0.6212121 0.1803279 0.8803922 1.0
+Catppuccin Latte	vim_normal_background	0.0 0.0 0.0 0.0
+Catppuccin Latte	vim_insert_background	0.0 0.0 0.0 0.0
+Catppuccin Latte	vim_replace_background	0.0 0.0 0.0 0.0
+Catppuccin Latte	vim_visual_background	0.0 0.0 0.0 0.0
+Catppuccin Latte	vim_visual_line_background	0.0 0.0 0.0 0.0
+Catppuccin Latte	vim_visual_block_background	0.0 0.0 0.0 0.0
+Catppuccin Latte	vim_yank_background	0.6108527 0.9148936 0.5392157 0.101960786
+Catppuccin Latte	vim_helix_jump_label_foreground	0.9626437 0.8787879 0.3882353 1.0
+Catppuccin Latte	vim_helix_normal_background	0.0 0.0 0.0 0.0
+Catppuccin Latte	vim_helix_select_background	0.0 0.0 0.0 0.0
+Catppuccin Latte	vim_normal_foreground	0.0 0.0 0.0 0.0
+Catppuccin Latte	vim_insert_foreground	0.0 0.0 0.0 0.0
+Catppuccin Latte	vim_replace_foreground	0.0 0.0 0.0 0.0
+Catppuccin Latte	vim_visual_foreground	0.0 0.0 0.0 0.0
+Catppuccin Latte	vim_visual_line_foreground	0.0 0.0 0.0 0.0
+Catppuccin Latte	vim_visual_block_foreground	0.0 0.0 0.0 0.0
+Catppuccin Latte	vim_helix_normal_foreground	0.0 0.0 0.0 0.0
+Catppuccin Latte	vim_helix_select_foreground	0.0 0.0 0.0 0.0
+Catppuccin Latte	editor_code_lens_foreground	none
+Catppuccin Latte	editor_debugger_active_line_background	0.11111111 1.0 0.5 0.11764706
+Catppuccin Latte	editor_indent_guide	0.12903227 1.0 0.060784314 0.12941177
+Catppuccin Latte	editor_indent_guide_active	0.12666667 1.0 0.04901961 0.16078432
+Catppuccin Latte	editor_document_highlight_bracket_background	0.6108527 0.9148936 0.5392157 0.101960786
+Catppuccin Latte	editor_diff_hunk_added_background	0.3034188 0.5763547 0.39803922 0.16
+Catppuccin Latte	editor_diff_hunk_added_hollow_background	0.3034188 0.5763547 0.39803922 0.08
+Catppuccin Latte	editor_diff_hunk_added_hollow_border	0.3034188 0.5763547 0.39803922 0.48
+Catppuccin Latte	editor_diff_hunk_deleted_background	0.9641026 0.8666667 0.44117647 0.16
+Catppuccin Latte	editor_diff_hunk_deleted_hollow_background	0.9641026 0.8666667 0.44117647 0.08
+Catppuccin Latte	editor_diff_hunk_deleted_hollow_border	0.9641026 0.8666667 0.44117647 0.48
+Catppuccin Latte	terminal_ansi_background	0.16666667 0.20000061 0.9901961 1.0
+Catppuccin Latte	version_control_renamed	0.098118275 0.77500004 0.3137255 1.0
+Catppuccin Latte	version_control_conflict	0.6481481 0.12796208 0.4137255 1.0
+Catppuccin Latte	version_control_ignored	0.6481481 0.12796208 0.4137255 1.0
+GitHub Light	drop_target_border	0.13333334 0.081967235 0.11960785 1.0
+GitHub Light	debugger_accent	0.99578065 0.6929825 0.5529412 1.0
+GitHub Light	panel_indent_guide	0.12903227 1.0 0.060784314 0.12941177
+GitHub Light	panel_indent_guide_hover	0.12666667 1.0 0.04901961 0.16078432
+GitHub Light	panel_indent_guide_active	0.12666667 1.0 0.04901961 0.16078432
+GitHub Light	panel_overlay_background	0.5833333 0.2857143 0.972549 1.0
+GitHub Light	panel_overlay_hover	0.5833333 0.09090909 0.9137255 1.0
+GitHub Light	pane_group_border	0.6 0.050505042 0.80588233 1.0
+GitHub Light	scrollbar_thumb_active_background	0.59259254 0.12676057 0.1392157 0.29803923
+GitHub Light	minimap_thumb_background	0.59259254 0.12676057 0.1392157 0.29803923
+GitHub Light	minimap_thumb_hover_background	0.5833333 0.09090909 0.9137255 0.7
+GitHub Light	minimap_thumb_active_background	0.59259254 0.12676057 0.1392157 0.29803923
+GitHub Light	minimap_thumb_border	0.5833333 0.09090909 0.9137255 1.0
+GitHub Light	vim_normal_background	0.0 0.0 0.0 0.0
+GitHub Light	vim_insert_background	0.0 0.0 0.0 0.0
+GitHub Light	vim_replace_background	0.0 0.0 0.0 0.0
+GitHub Light	vim_visual_background	0.0 0.0 0.0 0.0
+GitHub Light	vim_visual_line_background	0.0 0.0 0.0 0.0
+GitHub Light	vim_visual_block_background	0.0 0.0 0.0 0.0
+GitHub Light	vim_yank_background	0.5901117 0.92070484 0.44509804 0.101960786
+GitHub Light	vim_helix_jump_label_foreground	0.98895586 0.7155173 0.45490196 1.0
+GitHub Light	vim_helix_normal_background	0.0 0.0 0.0 0.0
+GitHub Light	vim_helix_select_background	0.0 0.0 0.0 0.0
+GitHub Light	vim_normal_foreground	0.0 0.0 0.0 0.0
+GitHub Light	vim_insert_foreground	0.0 0.0 0.0 0.0
+GitHub Light	vim_replace_foreground	0.0 0.0 0.0 0.0
+GitHub Light	vim_visual_foreground	0.0 0.0 0.0 0.0
+GitHub Light	vim_visual_line_foreground	0.0 0.0 0.0 0.0
+GitHub Light	vim_visual_block_foreground	0.0 0.0 0.0 0.0
+GitHub Light	vim_helix_normal_foreground	0.0 0.0 0.0 0.0
+GitHub Light	vim_helix_select_foreground	0.0 0.0 0.0 0.0
+GitHub Light	editor_code_lens_foreground	none
+GitHub Light	editor_debugger_active_line_background	0.11111111 1.0 0.5 0.11764706
+GitHub Light	editor_indent_guide	0.12903227 1.0 0.060784314 0.12941177
+GitHub Light	editor_indent_guide_active	0.12666667 1.0 0.04901961 0.16078432
+GitHub Light	editor_document_highlight_bracket_background	0.5901117 0.92070484 0.44509804 0.101960786
+GitHub Light	editor_diff_hunk_added_background	0.38118812 0.6601307 0.3 0.16
+GitHub Light	editor_diff_hunk_added_hollow_background	0.38118812 0.6601307 0.3 0.08
+GitHub Light	editor_diff_hunk_added_hollow_border	0.38118812 0.6601307 0.3 0.48
+GitHub Light	editor_diff_hunk_deleted_background	0.9884393 0.71784234 0.47254902 0.16
+GitHub Light	editor_diff_hunk_deleted_hollow_background	0.9884393 0.71784234 0.47254902 0.08
+GitHub Light	editor_diff_hunk_deleted_hollow_border	0.9884393 0.71784234 0.47254902 0.48
+GitHub Light	terminal_ansi_background	0.16666667 0.20000061 0.9901961 1.0
+GitHub Light	version_control_renamed	0.11150234 1.0 0.2784314 1.0
+GitHub Light	version_control_conflict	0.58730155 0.10552763 0.39019608 1.0
+GitHub Light	version_control_ignored	0.58730155 0.10552763 0.39019608 1.0
+Gruvbox Light	drop_target_border	0.13333334 0.081967235 0.11960785 1.0
+Gruvbox Light	debugger_accent	0.99578065 0.6929825 0.5529412 1.0
+Gruvbox Light	panel_indent_guide	0.12903227 1.0 0.060784314 0.12941177
+Gruvbox Light	panel_indent_guide_hover	0.12666667 1.0 0.04901961 0.16078432
+Gruvbox Light	panel_indent_guide_active	0.12666667 1.0 0.04901961 0.16078432
+Gruvbox Light	panel_overlay_background	0.12654321 0.675 0.84313726 1.0
+Gruvbox Light	panel_overlay_hover	0.12666667 0.49019608 0.8 1.0
+Gruvbox Light	pane_group_border	0.12222222 0.31468529 0.71960783 1.0
+Gruvbox Light	scrollbar_thumb_active_background	0.055555556 0.052631576 0.22352941 0.29803923
+Gruvbox Light	minimap_thumb_background	0.055555556 0.052631576 0.22352941 0.29803923
+Gruvbox Light	minimap_thumb_hover_background	0.12666667 0.49019608 0.8 0.7
+Gruvbox Light	minimap_thumb_active_background	0.055555556 0.052631576 0.22352941 0.29803923
+Gruvbox Light	minimap_thumb_border	0.12666667 0.49019608 0.8 1.0
+Gruvbox Light	vim_normal_background	0.0 0.0 0.0 0.0
+Gruvbox Light	vim_insert_background	0.0 0.0 0.0 0.0
+Gruvbox Light	vim_replace_background	0.0 0.0 0.0 0.0
+Gruvbox Light	vim_visual_background	0.0 0.0 0.0 0.0
+Gruvbox Light	vim_visual_line_background	0.0 0.0 0.0 0.0
+Gruvbox Light	vim_visual_block_background	0.0 0.0 0.0 0.0
+Gruvbox Light	vim_yank_background	0.5265487 0.8897638 0.24901961 0.101960786
+Gruvbox Light	vim_helix_jump_label_foreground	0.9936305 1.0 0.30784315 1.0
+Gruvbox Light	vim_helix_normal_background	0.0 0.0 0.0 0.0
+Gruvbox Light	vim_helix_select_background	0.0 0.0 0.0 0.0
+Gruvbox Light	vim_normal_foreground	0.0 0.0 0.0 0.0
+Gruvbox Light	vim_insert_foreground	0.0 0.0 0.0 0.0
+Gruvbox Light	vim_replace_foreground	0.0 0.0 0.0 0.0
+Gruvbox Light	vim_visual_foreground	0.0 0.0 0.0 0.0
+Gruvbox Light	vim_visual_line_foreground	0.0 0.0 0.0 0.0
+Gruvbox Light	vim_visual_block_foreground	0.0 0.0 0.0 0.0
+Gruvbox Light	vim_helix_normal_foreground	0.0 0.0 0.0 0.0
+Gruvbox Light	vim_helix_select_foreground	0.0 0.0 0.0 0.0
+Gruvbox Light	editor_code_lens_foreground	none
+Gruvbox Light	editor_debugger_active_line_background	0.11111111 1.0 0.5 0.11764706
+Gruvbox Light	editor_indent_guide	0.12903227 1.0 0.060784314 0.12941177
+Gruvbox Light	editor_indent_guide_active	0.12666667 1.0 0.04901961 0.16078432
+Gruvbox Light	editor_document_highlight_bracket_background	0.5265487 0.8897638 0.24901961 0.101960786
+Gruvbox Light	editor_diff_hunk_added_background	0.1588785 0.7925926 0.2647059 0.16
+Gruvbox Light	editor_diff_hunk_added_hollow_background	0.1588785 0.7925926 0.2647059 0.08
+Gruvbox Light	editor_diff_hunk_added_hollow_border	0.1588785 0.7925926 0.2647059 0.48
+Gruvbox Light	editor_diff_hunk_deleted_background	0.9936305 1.0 0.30784315 0.16
+Gruvbox Light	editor_diff_hunk_deleted_hollow_background	0.9936305 1.0 0.30784315 0.08
+Gruvbox Light	editor_diff_hunk_deleted_hollow_border	0.9936305 1.0 0.30784315 0.48
+Gruvbox Light	terminal_ansi_background	0.16666667 0.20000061 0.9901961 1.0
+Gruvbox Light	version_control_renamed	0.101626016 0.82550335 0.29215688 1.0
+Gruvbox Light	version_control_conflict	0.074074075 0.09677418 0.3647059 1.0
+Gruvbox Light	version_control_ignored	0.074074075 0.09677418 0.3647059 1.0
+Rosé Pine Dawn	drop_target_border	0.13333334 0.081967235 0.11960785 1.0
+Rosé Pine Dawn	debugger_accent	0.99578065 0.6929825 0.5529412 1.0
+Rosé Pine Dawn	panel_indent_guide	0.12903227 1.0 0.060784314 0.12941177
+Rosé Pine Dawn	panel_indent_guide_hover	0.12666667 1.0 0.04901961 0.16078432
+Rosé Pine Dawn	panel_indent_guide_active	0.12666667 1.0 0.04901961 0.16078432
+Rosé Pine Dawn	panel_overlay_background	0.097222224 1.0 0.9764706 1.0
+Rosé Pine Dawn	panel_overlay_hover	0.074074075 0.2727274 0.93529415 1.0
+Rosé Pine Dawn	pane_group_border	0.9 0.068493165 0.8568628 1.0
+Rosé Pine Dawn	scrollbar_thumb_active_background	0.68803424 0.19211821 0.39803922 0.29803923
+Rosé Pine Dawn	minimap_thumb_background	0.68803424 0.19211821 0.39803922 0.29803923
+Rosé Pine Dawn	minimap_thumb_hover_background	0.074074075 0.2727274 0.93529415 0.7
+Rosé Pine Dawn	minimap_thumb_active_background	0.68803424 0.19211821 0.39803922 0.29803923
+Rosé Pine Dawn	minimap_thumb_border	0.074074075 0.2727274 0.93529415 1.0
+Rosé Pine Dawn	vim_normal_background	0.0 0.0 0.0 0.0
+Rosé Pine Dawn	vim_insert_background	0.0 0.0 0.0 0.0
+Rosé Pine Dawn	vim_replace_background	0.0 0.0 0.0 0.0
+Rosé Pine Dawn	vim_visual_background	0.0 0.0 0.0 0.0
+Rosé Pine Dawn	vim_visual_line_background	0.0 0.0 0.0 0.0
+Rosé Pine Dawn	vim_visual_block_background	0.0 0.0 0.0 0.0
+Rosé Pine Dawn	vim_yank_background	0.5476191 0.5321638 0.33529413 0.101960786
+Rosé Pine Dawn	vim_helix_jump_label_foreground	0.95202017 0.28947368 0.44705886 1.0
+Rosé Pine Dawn	vim_helix_normal_background	0.0 0.0 0.0 0.0
+Rosé Pine Dawn	vim_helix_select_background	0.0 0.0 0.0 0.0
+Rosé Pine Dawn	vim_normal_foreground	0.0 0.0 0.0 0.0
+Rosé Pine Dawn	vim_insert_foreground	0.0 0.0 0.0 0.0
+Rosé Pine Dawn	vim_replace_foreground	0.0 0.0 0.0 0.0
+Rosé Pine Dawn	vim_visual_foreground	0.0 0.0 0.0 0.0
+Rosé Pine Dawn	vim_visual_line_foreground	0.0 0.0 0.0 0.0
+Rosé Pine Dawn	vim_visual_block_foreground	0.0 0.0 0.0 0.0
+Rosé Pine Dawn	vim_helix_normal_foreground	0.0 0.0 0.0 0.0
+Rosé Pine Dawn	vim_helix_select_foreground	0.0 0.0 0.0 0.0
+Rosé Pine Dawn	editor_code_lens_foreground	none
+Rosé Pine Dawn	editor_debugger_active_line_background	0.11111111 1.0 0.5 0.11764706
+Rosé Pine Dawn	editor_indent_guide	0.12903227 1.0 0.060784314 0.12941177
+Rosé Pine Dawn	editor_indent_guide_active	0.12666667 1.0 0.04901961 0.16078432
+Rosé Pine Dawn	editor_document_highlight_bracket_background	0.5476191 0.5321638 0.33529413 0.101960786
+Rosé Pine Dawn	editor_diff_hunk_added_background	0.5476191 0.5321638 0.33529413 0.16
+Rosé Pine Dawn	editor_diff_hunk_added_hollow_background	0.5476191 0.5321638 0.33529413 0.08
+Rosé Pine Dawn	editor_diff_hunk_added_hollow_border	0.5476191 0.5321638 0.33529413 0.48
+Rosé Pine Dawn	editor_diff_hunk_deleted_background	0.95267487 0.35064936 0.5470588 0.16
+Rosé Pine Dawn	editor_diff_hunk_deleted_hollow_background	0.95267487 0.35064936 0.5470588 0.08
+Rosé Pine Dawn	editor_diff_hunk_deleted_hollow_border	0.95267487 0.35064936 0.5470588 0.48
+Rosé Pine Dawn	terminal_ansi_background	0.16666667 0.20000061 0.9901961 1.0
+Rosé Pine Dawn	version_control_renamed	0.09523808 0.6363637 0.34509805 1.0
+Rosé Pine Dawn	version_control_conflict	0.68666667 0.111111104 0.44117647 1.0
+Rosé Pine Dawn	version_control_ignored	0.68666667 0.111111104 0.44117647 1.0
+Solarized Light	drop_target_border	0.13333334 0.081967235 0.11960785 1.0
+Solarized Light	debugger_accent	0.99578065 0.6929825 0.5529412 1.0
+Solarized Light	panel_indent_guide	0.12903227 1.0 0.060784314 0.12941177
+Solarized Light	panel_indent_guide_hover	0.12666667 1.0 0.04901961 0.16078432
+Solarized Light	panel_indent_guide_active	0.12666667 1.0 0.04901961 0.16078432
+Solarized Light	panel_overlay_background	0.12666667 0.4237287 0.8843137 1.0
+Solarized Light	panel_overlay_hover	0.1491228 0.22352946 0.8333334 1.0
+Solarized Light	pane_group_border	0.2222222 0.092307694 0.74509805 1.0
+Solarized Light	scrollbar_thumb_active_background	0.53389835 0.8082192 0.14313726 0.29803923
+Solarized Light	minimap_thumb_background	0.53389835 0.8082192 0.14313726 0.29803923
+Solarized Light	minimap_thumb_hover_background	0.1491228 0.22352946 0.8333334 0.7
+Solarized Light	minimap_thumb_active_background	0.53389835 0.8082192 0.14313726 0.29803923
+Solarized Light	minimap_thumb_border	0.1491228 0.22352946 0.8333334 1.0
+Solarized Light	vim_normal_background	0.0 0.0 0.0 0.0
+Solarized Light	vim_insert_background	0.0 0.0 0.0 0.0
+Solarized Light	vim_replace_background	0.0 0.0 0.0 0.0
+Solarized Light	vim_visual_background	0.0 0.0 0.0 0.0
+Solarized Light	vim_visual_line_background	0.0 0.0 0.0 0.0
+Solarized Light	vim_visual_block_background	0.0 0.0 0.0 0.0
+Solarized Light	vim_yank_background	0.5687984 0.6935484 0.4862745 0.101960786
+Solarized Light	vim_helix_jump_label_foreground	0.0034965032 0.6589862 0.4254902 1.0
+Solarized Light	vim_helix_normal_background	0.0 0.0 0.0 0.0
+Solarized Light	vim_helix_select_background	0.0 0.0 0.0 0.0
+Solarized Light	vim_normal_foreground	0.0 0.0 0.0 0.0
+Solarized Light	vim_insert_foreground	0.0 0.0 0.0 0.0
+Solarized Light	vim_replace_foreground	0.0 0.0 0.0 0.0
+Solarized Light	vim_visual_foreground	0.0 0.0 0.0 0.0
+Solarized Light	vim_visual_line_foreground	0.0 0.0 0.0 0.0
+Solarized Light	vim_visual_block_foreground	0.0 0.0 0.0 0.0
+Solarized Light	vim_helix_normal_foreground	0.0 0.0 0.0 0.0
+Solarized Light	vim_helix_select_foreground	0.0 0.0 0.0 0.0
+Solarized Light	editor_code_lens_foreground	none
+Solarized Light	editor_debugger_active_line_background	0.11111111 1.0 0.5 0.11764706
+Solarized Light	editor_indent_guide	0.12903227 1.0 0.060784314 0.12941177
+Solarized Light	editor_indent_guide_active	0.12666667 1.0 0.04901961 0.16078432
+Solarized Light	editor_document_highlight_bracket_background	0.5687984 0.6935484 0.4862745 0.101960786
+Solarized Light	editor_diff_hunk_added_background	0.18845317 1.0 0.3 0.16
+Solarized Light	editor_diff_hunk_added_hollow_background	0.18845317 1.0 0.3 0.08
+Solarized Light	editor_diff_hunk_added_hollow_border	0.18845317 1.0 0.3 0.48
+Solarized Light	editor_diff_hunk_deleted_background	0.0028901729 0.71193415 0.5235294 0.16
+Solarized Light	editor_diff_hunk_deleted_hollow_background	0.0028901729 0.71193415 0.5235294 0.08
+Solarized Light	editor_diff_hunk_deleted_hollow_border	0.0028901729 0.71193415 0.5235294 0.48
+Solarized Light	terminal_ansi_background	0.16666667 0.20000061 0.9901961 1.0
+Solarized Light	version_control_renamed	0.12722646 1.0 0.25686276 1.0
+Solarized Light	version_control_conflict	0.5384615 0.14285713 0.35686275 1.0
+Solarized Light	version_control_ignored	0.5384615 0.14285713 0.35686275 1.0
+Natamux Dark	drop_target_border	0.16666667 0.055555556 0.92941177 1.0
+Natamux Dark	debugger_accent	0.99578065 0.6929825 0.5529412 1.0
+Natamux Dark	panel_indent_guide	0.16666667 0.8461548 0.97450984 0.105882354
+Natamux Dark	panel_indent_guide_hover	0.120370366 1.0 0.9647059 0.1764706
+Natamux Dark	panel_indent_guide_active	0.120370366 1.0 0.9647059 0.1764706
+Natamux Dark	panel_overlay_background	0.6111111 0.13761467 0.21372549 1.0
+Natamux Dark	panel_overlay_hover	0.6041667 0.12903227 0.24313727 1.0
+Natamux Dark	pane_group_border	0.61764705 0.10828024 0.30784315 1.0
+Natamux Dark	scrollbar_thumb_active_background	0.6111111 0.12244898 0.80784315 0.29803923
+Natamux Dark	minimap_thumb_background	0.6111111 0.12244898 0.80784315 0.29803923
+Natamux Dark	minimap_thumb_hover_background	0.6041667 0.12903227 0.24313727 0.7
+Natamux Dark	minimap_thumb_active_background	0.6111111 0.12244898 0.80784315 0.29803923
+Natamux Dark	minimap_thumb_border	0.6041667 0.12903227 0.24313727 1.0
+Natamux Dark	vim_normal_background	0.0 0.0 0.0 0.0
+Natamux Dark	vim_insert_background	0.0 0.0 0.0 0.0
+Natamux Dark	vim_replace_background	0.0 0.0 0.0 0.0
+Natamux Dark	vim_visual_background	0.0 0.0 0.0 0.0
+Natamux Dark	vim_visual_line_background	0.0 0.0 0.0 0.0
+Natamux Dark	vim_visual_block_background	0.0 0.0 0.0 0.0
+Natamux Dark	vim_yank_background	0.58477014 0.71604943 0.68235296 0.101960786
+Natamux Dark	vim_helix_jump_label_foreground	0.018518519 1.0 0.7529412 1.0
+Natamux Dark	vim_helix_normal_background	0.0 0.0 0.0 0.0
+Natamux Dark	vim_helix_select_background	0.0 0.0 0.0 0.0
+Natamux Dark	vim_normal_foreground	0.0 0.0 0.0 0.0
+Natamux Dark	vim_insert_foreground	0.0 0.0 0.0 0.0
+Natamux Dark	vim_replace_foreground	0.0 0.0 0.0 0.0
+Natamux Dark	vim_visual_foreground	0.0 0.0 0.0 0.0
+Natamux Dark	vim_visual_line_foreground	0.0 0.0 0.0 0.0
+Natamux Dark	vim_visual_block_foreground	0.0 0.0 0.0 0.0
+Natamux Dark	vim_helix_normal_foreground	0.0 0.0 0.0 0.0
+Natamux Dark	vim_helix_select_foreground	0.0 0.0 0.0 0.0
+Natamux Dark	editor_code_lens_foreground	none
+Natamux Dark	editor_debugger_active_line_background	0.11111111 1.0 0.5 0.11764706
+Natamux Dark	editor_indent_guide	0.16666667 0.8461548 0.97450984 0.105882354
+Natamux Dark	editor_indent_guide_active	0.120370366 1.0 0.9647059 0.1764706
+Natamux Dark	editor_document_highlight_bracket_background	0.58477014 0.71604943 0.68235296 0.101960786
+Natamux Dark	editor_diff_hunk_added_background	0.39632547 0.6195122 0.4019608 0.12
+Natamux Dark	editor_diff_hunk_added_hollow_background	0.39632547 0.6195122 0.4019608 0.06
+Natamux Dark	editor_diff_hunk_added_hollow_border	0.39632547 0.6195122 0.4019608 0.36
+Natamux Dark	editor_diff_hunk_deleted_background	0.9856322 0.6516854 0.6509804 0.12
+Natamux Dark	editor_diff_hunk_deleted_hollow_background	0.9856322 0.6516854 0.6509804 0.06
+Natamux Dark	editor_diff_hunk_deleted_hollow_border	0.9856322 0.6516854 0.6509804 0.36
+Natamux Dark	terminal_ansi_background	0.16666667 0.030303027 0.064705886 1.0
+Natamux Dark	version_control_renamed	0.112962954 0.5769231 0.69411767 1.0
+Natamux Dark	version_control_conflict	0.5714286 0.042424247 0.67647064 1.0
+Natamux Dark	version_control_ignored	0.5714286 0.042424247 0.67647064 1.0
+Ayu Dark	drop_target_border	0.16666667 0.055555556 0.92941177 1.0
+Ayu Dark	debugger_accent	0.99578065 0.6929825 0.5529412 1.0
+Ayu Dark	panel_indent_guide	0.16666667 0.8461548 0.97450984 0.105882354
+Ayu Dark	panel_indent_guide_hover	0.120370366 1.0 0.9647059 0.1764706
+Ayu Dark	panel_indent_guide_active	0.120370366 1.0 0.9647059 0.1764706
+Ayu Dark	panel_overlay_background	0.6111111 0.23076923 0.10196079 1.0
+Ayu Dark	panel_overlay_hover	0.60606056 0.14666665 0.14705883 1.0
+Ayu Dark	pane_group_border	0.6041667 0.06896551 0.22745098 1.0
+Ayu Dark	scrollbar_thumb_active_background	0.12962963 0.06569344 0.7313726 0.29803923
+Ayu Dark	minimap_thumb_background	0.12962963 0.06569344 0.7313726 0.29803923
+Ayu Dark	minimap_thumb_hover_background	0.60606056 0.14666665 0.14705883 0.7
+Ayu Dark	minimap_thumb_active_background	0.12962963 0.06569344 0.7313726 0.29803923
+Ayu Dark	minimap_thumb_border	0.60606056 0.14666665 0.14705883 1.0
+Ayu Dark	vim_normal_background	0.0 0.0 0.0 0.0
+Ayu Dark	vim_insert_background	0.0 0.0 0.0 0.0
+Ayu Dark	vim_replace_background	0.0 0.0 0.0 0.0
+Ayu Dark	vim_visual_background	0.0 0.0 0.0 0.0
+Ayu Dark	vim_visual_line_background	0.0 0.0 0.0 0.0
+Ayu Dark	vim_visual_block_background	0.0 0.0 0.0 0.0
+Ayu Dark	vim_yank_background	0.5619918 0.9879518 0.6745098 0.101960786
+Ayu Dark	vim_helix_jump_label_foreground	0.99206346 0.7974684 0.6901961 1.0
+Ayu Dark	vim_helix_normal_background	0.0 0.0 0.0 0.0
+Ayu Dark	vim_helix_select_background	0.0 0.0 0.0 0.0
+Ayu Dark	vim_normal_foreground	0.0 0.0 0.0 0.0
+Ayu Dark	vim_insert_foreground	0.0 0.0 0.0 0.0
+Ayu Dark	vim_replace_foreground	0.0 0.0 0.0 0.0
+Ayu Dark	vim_visual_foreground	0.0 0.0 0.0 0.0
+Ayu Dark	vim_visual_line_foreground	0.0 0.0 0.0 0.0
+Ayu Dark	vim_visual_block_foreground	0.0 0.0 0.0 0.0
+Ayu Dark	vim_helix_normal_foreground	0.0 0.0 0.0 0.0
+Ayu Dark	vim_helix_select_foreground	0.0 0.0 0.0 0.0
+Ayu Dark	editor_code_lens_foreground	none
+Ayu Dark	editor_debugger_active_line_background	0.11111111 1.0 0.5 0.11764706
+Ayu Dark	editor_indent_guide	0.16666667 0.8461548 0.97450984 0.105882354
+Ayu Dark	editor_indent_guide_active	0.120370366 1.0 0.9647059 0.1764706
+Ayu Dark	editor_document_highlight_bracket_background	0.5619918 0.9879518 0.6745098 0.101960786
+Ayu Dark	editor_diff_hunk_added_background	0.22142856 0.64220184 0.57254905 0.12
+Ayu Dark	editor_diff_hunk_added_hollow_background	0.22142856 0.64220184 0.57254905 0.06
+Ayu Dark	editor_diff_hunk_added_hollow_border	0.22142856 0.64220184 0.57254905 0.36
+Ayu Dark	editor_diff_hunk_deleted_background	0.99206346 0.7974684 0.6901961 0.12
+Ayu Dark	editor_diff_hunk_deleted_hollow_background	0.99206346 0.7974684 0.6901961 0.06
+Ayu Dark	editor_diff_hunk_deleted_hollow_border	0.99206346 0.7974684 0.6901961 0.36
+Ayu Dark	terminal_ansi_background	0.16666667 0.030303027 0.064705886 1.0
+Ayu Dark	version_control_renamed	0.09411765 0.9883721 0.6627451 1.0
+Ayu Dark	version_control_conflict	0.125 0.016806724 0.53333336 1.0
+Ayu Dark	version_control_ignored	0.125 0.016806724 0.53333336 1.0
+Catppuccin Mocha	drop_target_border	0.16666667 0.055555556 0.92941177 1.0
+Catppuccin Mocha	debugger_accent	0.99578065 0.6929825 0.5529412 1.0
+Catppuccin Mocha	panel_indent_guide	0.16666667 0.8461548 0.97450984 0.105882354
+Catppuccin Mocha	panel_indent_guide_hover	0.120370366 1.0 0.9647059 0.1764706
+Catppuccin Mocha	panel_indent_guide_active	0.120370366 1.0 0.9647059 0.1764706
+Catppuccin Mocha	panel_overlay_background	0.6666667 0.21311475 0.11960785 1.0
+Catppuccin Mocha	panel_overlay_hover	0.6666667 0.15909089 0.17254902 1.0
+Catppuccin Mocha	pane_group_border	0.6481481 0.1304348 0.27058825 1.0
+Catppuccin Mocha	scrollbar_thumb_active_background	0.6282052 0.6393444 0.8803922 0.29803923
+Catppuccin Mocha	minimap_thumb_background	0.6282052 0.6393444 0.8803922 0.29803923
+Catppuccin Mocha	minimap_thumb_hover_background	0.6666667 0.15909089 0.17254902 0.7
+Catppuccin Mocha	minimap_thumb_active_background	0.6282052 0.6393444 0.8803922 0.29803923
+Catppuccin Mocha	minimap_thumb_border	0.6666667 0.15909089 0.17254902 1.0
+Catppuccin Mocha	vim_normal_background	0.0 0.0 0.0 0.0
+Catppuccin Mocha	vim_insert_background	0.0 0.0 0.0 0.0
+Catppuccin Mocha	vim_replace_background	0.0 0.0 0.0 0.0
+Catppuccin Mocha	vim_visual_background	0.0 0.0 0.0 0.0
+Catppuccin Mocha	vim_visual_line_background	0.0 0.0 0.0 0.0
+Catppuccin Mocha	vim_visual_block_background	0.0 0.0 0.0 0.0
+Catppuccin Mocha	vim_yank_background	0.60324484 0.9186991 0.7588235 0.101960786
+Catppuccin Mocha	vim_helix_jump_label_foreground	0.9535256 0.8125 0.7490196 1.0
+Catppuccin Mocha	vim_helix_normal_background	0.0 0.0 0.0 0.0
+Catppuccin Mocha	vim_helix_select_background	0.0 0.0 0.0 0.0
+Catppuccin Mocha	vim_normal_foreground	0.0 0.0 0.0 0.0
+Catppuccin Mocha	vim_insert_foreground	0.0 0.0 0.0 0.0
+Catppuccin Mocha	vim_replace_foreground	0.0 0.0 0.0 0.0
+Catppuccin Mocha	vim_visual_foreground	0.0 0.0 0.0 0.0
+Catppuccin Mocha	vim_visual_line_foreground	0.0 0.0 0.0 0.0
+Catppuccin Mocha	vim_visual_block_foreground	0.0 0.0 0.0 0.0
+Catppuccin Mocha	vim_helix_normal_foreground	0.0 0.0 0.0 0.0
+Catppuccin Mocha	vim_helix_select_foreground	0.0 0.0 0.0 0.0
+Catppuccin Mocha	editor_code_lens_foreground	none
+Catppuccin Mocha	editor_debugger_active_line_background	0.11111111 1.0 0.5 0.11764706
+Catppuccin Mocha	editor_indent_guide	0.16666667 0.8461548 0.97450984 0.105882354
+Catppuccin Mocha	editor_indent_guide_active	0.120370366 1.0 0.9647059 0.1764706
+Catppuccin Mocha	editor_document_highlight_bracket_background	0.60324484 0.9186991 0.7588235 0.101960786
+Catppuccin Mocha	editor_diff_hunk_added_background	0.32070705 0.5409836 0.7607843 0.12
+Catppuccin Mocha	editor_diff_hunk_added_hollow_background	0.32070705 0.5409836 0.7607843 0.06
+Catppuccin Mocha	editor_diff_hunk_added_hollow_border	0.32070705 0.5409836 0.7607843 0.36
+Catppuccin Mocha	editor_diff_hunk_deleted_background	0.9535256 0.8125 0.7490196 0.12
+Catppuccin Mocha	editor_diff_hunk_deleted_hollow_background	0.9535256 0.8125 0.7490196 0.06
+Catppuccin Mocha	editor_diff_hunk_deleted_hollow_border	0.9535256 0.8125 0.7490196 0.36
+Catppuccin Mocha	terminal_ansi_background	0.16666667 0.030303027 0.064705886 1.0
+Catppuccin Mocha	version_control_renamed	0.11486487 0.8604651 0.83137256 1.0
+Catppuccin Mocha	version_control_conflict	0.63235295 0.2361111 0.7176471 1.0
+Catppuccin Mocha	version_control_ignored	0.63235295 0.2361111 0.7176471 1.0
+Dracula	drop_target_border	0.16666667 0.055555556 0.92941177 1.0
+Dracula	debugger_accent	0.99578065 0.6929825 0.5529412 1.0
+Dracula	panel_indent_guide	0.16666667 0.8461548 0.97450984 0.105882354
+Dracula	panel_indent_guide_hover	0.120370366 1.0 0.9647059 0.1764706
+Dracula	panel_indent_guide_active	0.120370366 1.0 0.9647059 0.1764706
+Dracula	panel_overlay_background	0.6515151 0.14285713 0.1509804 1.0
+Dracula	panel_overlay_hover	0.65 0.09433962 0.20784314 1.0
+Dracula	pane_group_border	0.6458333 0.049999997 0.3137255 1.0
+Dracula	scrollbar_thumb_active_background	0.16666667 0.3 0.9607843 0.29803923
+Dracula	minimap_thumb_background	0.16666667 0.3 0.9607843 0.29803923
+Dracula	minimap_thumb_hover_background	0.65 0.09433962 0.20784314 0.7
+Dracula	minimap_thumb_active_background	0.16666667 0.3 0.9607843 0.29803923
+Dracula	minimap_thumb_border	0.65 0.09433962 0.20784314 1.0
+Dracula	vim_normal_background	0.0 0.0 0.0 0.0
+Dracula	vim_insert_background	0.0 0.0 0.0 0.0
+Dracula	vim_replace_background	0.0 0.0 0.0 0.0
+Dracula	vim_visual_background	0.0 0.0 0.0 0.0
+Dracula	vim_visual_line_background	0.0 0.0 0.0 0.0
+Dracula	vim_visual_block_background	0.0 0.0 0.0 0.0
+Dracula	vim_yank_background	0.7352941 0.8947368 0.7764706 0.101960786
+Dracula	vim_helix_jump_label_foreground	0.0 1.0 0.7294118 1.0
+Dracula	vim_helix_normal_background	0.0 0.0 0.0 0.0
+Dracula	vim_helix_select_background	0.0 0.0 0.0 0.0
+Dracula	vim_normal_foreground	0.0 0.0 0.0 0.0
+Dracula	vim_insert_foreground	0.0 0.0 0.0 0.0
+Dracula	vim_replace_foreground	0.0 0.0 0.0 0.0
+Dracula	vim_visual_foreground	0.0 0.0 0.0 0.0
+Dracula	vim_visual_line_foreground	0.0 0.0 0.0 0.0
+Dracula	vim_visual_block_foreground	0.0 0.0 0.0 0.0
+Dracula	vim_helix_normal_foreground	0.0 0.0 0.0 0.0
+Dracula	vim_helix_select_foreground	0.0 0.0 0.0 0.0
+Dracula	editor_code_lens_foreground	none
+Dracula	editor_debugger_active_line_background	0.11111111 1.0 0.5 0.11764706
+Dracula	editor_indent_guide	0.16666667 0.8461548 0.97450984 0.105882354
+Dracula	editor_indent_guide_active	0.120370366 1.0 0.9647059 0.1764706
+Dracula	editor_document_highlight_bracket_background	0.7352941 0.8947368 0.7764706 0.101960786
+Dracula	editor_diff_hunk_added_background	0.3754902 0.9444444 0.64705884 0.12
+Dracula	editor_diff_hunk_added_hollow_background	0.3754902 0.9444444 0.64705884 0.06
+Dracula	editor_diff_hunk_added_hollow_border	0.3754902 0.9444444 0.64705884 0.36
+Dracula	editor_diff_hunk_deleted_background	0.0 1.0 0.6666667 0.12
+Dracula	editor_diff_hunk_deleted_hollow_background	0.0 1.0 0.6666667 0.06
+Dracula	editor_diff_hunk_deleted_hollow_border	0.0 1.0 0.6666667 0.36
+Dracula	terminal_ansi_background	0.16666667 0.030303027 0.064705886 1.0
+Dracula	version_control_renamed	0.18030302 0.9166667 0.7647059 1.0
+Dracula	version_control_conflict	0.6666667 0.14545454 0.78431374 1.0
+Dracula	version_control_ignored	0.6666667 0.14545454 0.78431374 1.0
+GitHub Dark	drop_target_border	0.16666667 0.055555556 0.92941177 1.0
+GitHub Dark	debugger_accent	0.99578065 0.6929825 0.5529412 1.0
+GitHub Dark	panel_indent_guide	0.16666667 0.8461548 0.97450984 0.105882354
+GitHub Dark	panel_indent_guide_hover	0.120370366 1.0 0.9647059 0.1764706
+GitHub Dark	panel_indent_guide_active	0.120370366 1.0 0.9647059 0.1764706
+GitHub Dark	panel_overlay_background	0.59722227 0.21428572 0.10980393 1.0
+GitHub Dark	panel_overlay_hover	0.5972222 0.13953488 0.16862746 1.0
+GitHub Dark	pane_group_border	0.5972222 0.08571427 0.27450982 1.0
+GitHub Dark	scrollbar_thumb_active_background	0.576923 0.3513515 0.927451 0.29803923
+GitHub Dark	minimap_thumb_background	0.576923 0.3513515 0.927451 0.29803923
+GitHub Dark	minimap_thumb_hover_background	0.5972222 0.13953488 0.16862746 0.7
+GitHub Dark	minimap_thumb_active_background	0.576923 0.3513515 0.927451 0.29803923
+GitHub Dark	minimap_thumb_border	0.5972222 0.13953488 0.16862746 1.0
+GitHub Dark	vim_normal_background	0.0 0.0 0.0 0.0
+GitHub Dark	vim_insert_background	0.0 0.0 0.0 0.0
+GitHub Dark	vim_replace_background	0.0 0.0 0.0 0.0
+GitHub Dark	vim_visual_background	0.0 0.0 0.0 0.0
+GitHub Dark	vim_visual_line_background	0.0 0.0 0.0 0.0
+GitHub Dark	vim_visual_block_background	0.0 0.0 0.0 0.0
+GitHub Dark	vim_yank_background	0.5935185 0.92783505 0.61960787 0.101960786
+GitHub Dark	vim_helix_jump_label_foreground	0.010638297 1.0 0.7235294 1.0
+GitHub Dark	vim_helix_normal_background	0.0 0.0 0.0 0.0
+GitHub Dark	vim_helix_select_background	0.0 0.0 0.0 0.0
+GitHub Dark	vim_normal_foreground	0.0 0.0 0.0 0.0
+GitHub Dark	vim_insert_foreground	0.0 0.0 0.0 0.0
+GitHub Dark	vim_replace_foreground	0.0 0.0 0.0 0.0
+GitHub Dark	vim_visual_foreground	0.0 0.0 0.0 0.0
+GitHub Dark	vim_visual_line_foreground	0.0 0.0 0.0 0.0
+GitHub Dark	vim_visual_block_foreground	0.0 0.0 0.0 0.0
+GitHub Dark	vim_helix_normal_foreground	0.0 0.0 0.0 0.0
+GitHub Dark	vim_helix_select_foreground	0.0 0.0 0.0 0.0
+GitHub Dark	editor_code_lens_foreground	none
+GitHub Dark	editor_debugger_active_line_background	0.11111111 1.0 0.5 0.11764706
+GitHub Dark	editor_indent_guide	0.16666667 0.8461548 0.97450984 0.105882354
+GitHub Dark	editor_indent_guide_active	0.120370366 1.0 0.9647059 0.1764706
+GitHub Dark	editor_document_highlight_bracket_background	0.5935185 0.92783505 0.61960787 0.101960786
+GitHub Dark	editor_diff_hunk_added_background	0.35655737 0.49193552 0.4862745 0.12
+GitHub Dark	editor_diff_hunk_added_hollow_background	0.35655737 0.49193552 0.4862745 0.06
+GitHub Dark	editor_diff_hunk_added_hollow_border	0.35655737 0.49193552 0.4862745 0.36
+GitHub Dark	editor_diff_hunk_deleted_background	0.010638297 1.0 0.7235294 0.12
+GitHub Dark	editor_diff_hunk_deleted_hollow_background	0.010638297 1.0 0.7235294 0.06
+GitHub Dark	editor_diff_hunk_deleted_hollow_border	0.010638297 1.0 0.7235294 0.36
+GitHub Dark	terminal_ansi_background	0.16666667 0.030303027 0.064705886 1.0
+GitHub Dark	version_control_renamed	0.1126894 0.7213115 0.47843137 1.0
+GitHub Dark	version_control_conflict	0.59375 0.078431375 0.6 1.0
+GitHub Dark	version_control_ignored	0.59375 0.078431375 0.6 1.0
+Gruvbox Dark	drop_target_border	0.16666667 0.055555556 0.92941177 1.0
+Gruvbox Dark	debugger_accent	0.99578065 0.6929825 0.5529412 1.0
+Gruvbox Dark	panel_indent_guide	0.16666667 0.8461548 0.97450984 0.105882354
+Gruvbox Dark	panel_indent_guide_hover	0.120370366 1.0 0.9647059 0.1764706
+Gruvbox Dark	panel_indent_guide_active	0.120370366 1.0 0.9647059 0.1764706
+Gruvbox Dark	panel_overlay_background	0.055555556 0.030927833 0.19019608 1.0
+Gruvbox Dark	panel_overlay_hover	0.095238104 0.058823526 0.23333333 1.0
+Gruvbox Dark	pane_group_border	0.10714285 0.08749999 0.3137255 1.0
+Gruvbox Dark	scrollbar_thumb_active_background	0.11988304 0.58762896 0.80980396 0.29803923
+Gruvbox Dark	minimap_thumb_background	0.11988304 0.58762896 0.80980396 0.29803923
+Gruvbox Dark	minimap_thumb_hover_background	0.095238104 0.058823526 0.23333333 0.7
+Gruvbox Dark	minimap_thumb_active_background	0.11988304 0.58762896 0.80980396 0.29803923
+Gruvbox Dark	minimap_thumb_border	0.095238104 0.058823526 0.23333333 1.0
+Gruvbox Dark	vim_normal_background	0.0 0.0 0.0 0.0
+Gruvbox Dark	vim_insert_background	0.0 0.0 0.0 0.0
+Gruvbox Dark	vim_replace_background	0.0 0.0 0.0 0.0
+Gruvbox Dark	vim_visual_background	0.0 0.0 0.0 0.0
+Gruvbox Dark	vim_visual_line_background	0.0 0.0 0.0 0.0
+Gruvbox Dark	vim_visual_block_background	0.0 0.0 0.0 0.0
+Gruvbox Dark	vim_yank_background	0.43627456 0.1588785 0.5803922 0.101960786
+Gruvbox Dark	vim_helix_jump_label_foreground	0.017482515 0.9470199 0.70392156 1.0
+Gruvbox Dark	vim_helix_normal_background	0.0 0.0 0.0 0.0
+Gruvbox Dark	vim_helix_select_background	0.0 0.0 0.0 0.0
+Gruvbox Dark	vim_normal_foreground	0.0 0.0 0.0 0.0
+Gruvbox Dark	vim_insert_foreground	0.0 0.0 0.0 0.0
+Gruvbox Dark	vim_replace_foreground	0.0 0.0 0.0 0.0
+Gruvbox Dark	vim_visual_foreground	0.0 0.0 0.0 0.0
+Gruvbox Dark	vim_visual_line_foreground	0.0 0.0 0.0 0.0
+Gruvbox Dark	vim_visual_block_foreground	0.0 0.0 0.0 0.0
+Gruvbox Dark	vim_helix_normal_foreground	0.0 0.0 0.0 0.0
+Gruvbox Dark	vim_helix_select_foreground	0.0 0.0 0.0 0.0
+Gruvbox Dark	editor_code_lens_foreground	none
+Gruvbox Dark	editor_debugger_active_line_background	0.11111111 1.0 0.5 0.11764706
+Gruvbox Dark	editor_indent_guide	0.16666667 0.8461548 0.97450984 0.105882354
+Gruvbox Dark	editor_indent_guide_active	0.120370366 1.0 0.9647059 0.1764706
+Gruvbox Dark	editor_document_highlight_bracket_background	0.43627456 0.1588785 0.5803922 0.101960786
+Gruvbox Dark	editor_diff_hunk_added_background	0.17002237 0.66222227 0.44117647 0.12
+Gruvbox Dark	editor_diff_hunk_added_hollow_background	0.17002237 0.66222227 0.44117647 0.06
+Gruvbox Dark	editor_diff_hunk_added_hollow_border	0.17002237 0.66222227 0.44117647 0.36
+Gruvbox Dark	editor_diff_hunk_deleted_background	0.017587941 0.96135265 0.59411764 0.12
+Gruvbox Dark	editor_diff_hunk_deleted_hollow_background	0.017587941 0.96135265 0.59411764 0.06
+Gruvbox Dark	editor_diff_hunk_deleted_hollow_border	0.017587941 0.96135265 0.59411764 0.36
+Gruvbox Dark	terminal_ansi_background	0.16666667 0.030303027 0.064705886 1.0
+Gruvbox Dark	version_control_renamed	0.11658457 0.9530516 0.58235294 1.0
+Gruvbox Dark	version_control_conflict	0.10714285 0.2413793 0.65882355 1.0
+Gruvbox Dark	version_control_ignored	0.10714285 0.2413793 0.65882355 1.0
+Nord	drop_target_border	0.16666667 0.055555556 0.92941177 1.0
+Nord	debugger_accent	0.99578065 0.6929825 0.5529412 1.0
+Nord	panel_indent_guide	0.16666667 0.8461548 0.97450984 0.105882354
+Nord	panel_indent_guide_hover	0.120370366 1.0 0.9647059 0.1764706
+Nord	panel_indent_guide_active	0.120370366 1.0 0.9647059 0.1764706
+Nord	panel_overlay_background	0.6166667 0.15873016 0.24705884 1.0
+Nord	panel_overlay_hover	0.61403507 0.1258278 0.29607844 1.0
+Nord	pane_group_border	0.61764705 0.08629441 0.38627452 1.0
+Nord	scrollbar_thumb_active_background	0.6041667 0.26666668 0.9411765 0.29803923
+Nord	minimap_thumb_background	0.6041667 0.26666668 0.9411765 0.29803923
+Nord	minimap_thumb_hover_background	0.61403507 0.1258278 0.29607844 0.7
+Nord	minimap_thumb_active_background	0.6041667 0.26666668 0.9411765 0.29803923
+Nord	minimap_thumb_border	0.61403507 0.1258278 0.29607844 1.0
+Nord	vim_normal_background	0.0 0.0 0.0 0.0
+Nord	vim_insert_background	0.0 0.0 0.0 0.0
+Nord	vim_replace_background	0.0 0.0 0.0 0.0
+Nord	vim_visual_background	0.0 0.0 0.0 0.0
+Nord	vim_visual_line_background	0.0 0.0 0.0 0.0
+Nord	vim_visual_block_background	0.0 0.0 0.0 0.0
+Nord	vim_yank_background	0.5370371 0.43373495 0.6745098 0.101960786
+Nord	vim_helix_jump_label_foreground	0.98511904 0.43076923 0.74509805 1.0
+Nord	vim_helix_normal_background	0.0 0.0 0.0 0.0
+Nord	vim_helix_select_background	0.0 0.0 0.0 0.0
+Nord	vim_normal_foreground	0.0 0.0 0.0 0.0
+Nord	vim_insert_foreground	0.0 0.0 0.0 0.0
+Nord	vim_replace_foreground	0.0 0.0 0.0 0.0
+Nord	vim_visual_foreground	0.0 0.0 0.0 0.0
+Nord	vim_visual_line_foreground	0.0 0.0 0.0 0.0
+Nord	vim_visual_block_foreground	0.0 0.0 0.0 0.0
+Nord	vim_helix_normal_foreground	0.0 0.0 0.0 0.0
+Nord	vim_helix_select_foreground	0.0 0.0 0.0 0.0
+Nord	editor_code_lens_foreground	none
+Nord	editor_debugger_active_line_background	0.11111111 1.0 0.5 0.11764706
+Nord	editor_indent_guide	0.16666667 0.8461548 0.97450984 0.105882354
+Nord	editor_indent_guide_active	0.120370366 1.0 0.9647059 0.1764706
+Nord	editor_document_highlight_bracket_background	0.5370371 0.43373495 0.6745098 0.101960786
+Nord	editor_diff_hunk_added_background	0.25666666 0.2777778 0.64705884 0.12
+Nord	editor_diff_hunk_added_hollow_background	0.25666666 0.2777778 0.64705884 0.06
+Nord	editor_diff_hunk_added_hollow_border	0.25666666 0.2777778 0.64705884 0.36
+Nord	editor_diff_hunk_deleted_background	0.9840425 0.42342347 0.5647059 0.12
+Nord	editor_diff_hunk_deleted_hollow_background	0.9840425 0.42342347 0.5647059 0.06
+Nord	editor_diff_hunk_deleted_hollow_border	0.9840425 0.42342347 0.5647059 0.36
+Nord	terminal_ansi_background	0.16666667 0.030303027 0.064705886 1.0
+Nord	version_control_renamed	0.11111111 0.7058824 0.73333335 1.0
+Nord	version_control_conflict	0.6078431 0.27868858 0.8803922 1.0
+Nord	version_control_ignored	0.6078431 0.27868858 0.8803922 1.0
+Rosé Pine	drop_target_border	0.16666667 0.055555556 0.92941177 1.0
+Rosé Pine	debugger_accent	0.99578065 0.6929825 0.5529412 1.0
+Rosé Pine	panel_indent_guide	0.16666667 0.8461548 0.97450984 0.105882354
+Rosé Pine	panel_indent_guide_hover	0.120370366 1.0 0.9647059 0.1764706
+Rosé Pine	panel_indent_guide_active	0.120370366 1.0 0.9647059 0.1764706
+Rosé Pine	panel_overlay_background	0.6862745 0.22666667 0.14705883 1.0
+Rosé Pine	panel_overlay_hover	0.6862745 0.16504852 0.20196079 1.0
+Rosé Pine	pane_group_border	0.6851852 0.11688311 0.3019608 1.0
+Rosé Pine	scrollbar_thumb_active_background	0.6818182 0.5 0.9137255 0.29803923
+Rosé Pine	minimap_thumb_background	0.6818182 0.5 0.9137255 0.29803923
+Rosé Pine	minimap_thumb_hover_background	0.6862745 0.16504852 0.20196079 0.7
+Rosé Pine	minimap_thumb_active_background	0.6818182 0.5 0.9137255 0.29803923
+Rosé Pine	minimap_thumb_border	0.6862745 0.16504852 0.20196079 1.0
+Rosé Pine	vim_normal_background	0.0 0.0 0.0 0.0
+Rosé Pine	vim_insert_background	0.0 0.0 0.0 0.0
+Rosé Pine	vim_replace_background	0.0 0.0 0.0 0.0
+Rosé Pine	vim_visual_background	0.0 0.0 0.0 0.0
+Rosé Pine	vim_visual_line_background	0.0 0.0 0.0 0.0
+Rosé Pine	vim_visual_block_background	0.0 0.0 0.0 0.0
+Rosé Pine	vim_yank_background	0.7421875 0.5714286 0.78039217 0.101960786
+Rosé Pine	vim_helix_jump_label_foreground	0.952957 0.7560976 0.6784314 1.0
+Rosé Pine	vim_helix_normal_background	0.0 0.0 0.0 0.0
+Rosé Pine	vim_helix_select_background	0.0 0.0 0.0 0.0
+Rosé Pine	vim_normal_foreground	0.0 0.0 0.0 0.0
+Rosé Pine	vim_insert_foreground	0.0 0.0 0.0 0.0
+Rosé Pine	vim_replace_foreground	0.0 0.0 0.0 0.0
+Rosé Pine	vim_visual_foreground	0.0 0.0 0.0 0.0
+Rosé Pine	vim_visual_line_foreground	0.0 0.0 0.0 0.0
+Rosé Pine	vim_visual_block_foreground	0.0 0.0 0.0 0.0
+Rosé Pine	vim_helix_normal_foreground	0.0 0.0 0.0 0.0
+Rosé Pine	vim_helix_select_foreground	0.0 0.0 0.0 0.0
+Rosé Pine	editor_code_lens_foreground	none
+Rosé Pine	editor_debugger_active_line_background	0.11111111 1.0 0.5 0.11764706
+Rosé Pine	editor_indent_guide	0.16666667 0.8461548 0.97450984 0.105882354
+Rosé Pine	editor_indent_guide_active	0.120370366 1.0 0.9647059 0.1764706
+Rosé Pine	editor_document_highlight_bracket_background	0.7421875 0.5714286 0.78039217 0.101960786
+Rosé Pine	editor_diff_hunk_added_background	0.54787236 0.48958337 0.3764706 0.12
+Rosé Pine	editor_diff_hunk_added_hollow_background	0.54787236 0.48958337 0.3764706 0.06
+Rosé Pine	editor_diff_hunk_added_hollow_border	0.54787236 0.48958337 0.3764706 0.36
+Rosé Pine	editor_diff_hunk_deleted_background	0.952957 0.7560976 0.6784314 0.12
+Rosé Pine	editor_diff_hunk_deleted_hollow_background	0.952957 0.7560976 0.6784314 0.06
+Rosé Pine	editor_diff_hunk_deleted_hollow_border	0.952957 0.7560976 0.6784314 0.36
+Rosé Pine	terminal_ansi_background	0.16666667 0.030303027 0.064705886 1.0
+Rosé Pine	version_control_renamed	0.097112864 0.875862 0.71568626 1.0
+Rosé Pine	version_control_conflict	0.6888889 0.15 0.60784316 1.0
+Rosé Pine	version_control_ignored	0.6888889 0.15 0.60784316 1.0
+Solarized Dark	drop_target_border	0.16666667 0.055555556 0.92941177 1.0
+Solarized Dark	debugger_accent	0.99578065 0.6929825 0.5529412 1.0
+Solarized Dark	panel_indent_guide	0.16666667 0.8461548 0.97450984 0.105882354
+Solarized Dark	panel_indent_guide_hover	0.120370366 1.0 0.9647059 0.1764706
+Solarized Dark	panel_indent_guide_active	0.120370366 1.0 0.9647059 0.1764706
+Solarized Dark	panel_overlay_background	0.53389835 0.8082192 0.14313726 1.0
+Solarized Dark	panel_overlay_hover	0.5314465 0.53535354 0.19411765 1.0
+Solarized Dark	pane_group_border	0.51984125 0.2837838 0.2901961 1.0
+Solarized Dark	scrollbar_thumb_active_background	0.12666667 0.4237287 0.8843137 0.29803923
+Solarized Dark	minimap_thumb_background	0.12666667 0.4237287 0.8843137 0.29803923
+Solarized Dark	minimap_thumb_hover_background	0.5314465 0.53535354 0.19411765 0.7
+Solarized Dark	minimap_thumb_active_background	0.12666667 0.4237287 0.8843137 0.29803923
+Solarized Dark	minimap_thumb_border	0.5314465 0.53535354 0.19411765 1.0
+Solarized Dark	vim_normal_background	0.0 0.0 0.0 0.0
+Solarized Dark	vim_insert_background	0.0 0.0 0.0 0.0
+Solarized Dark	vim_replace_background	0.0 0.0 0.0 0.0
+Solarized Dark	vim_visual_background	0.0 0.0 0.0 0.0
+Solarized Dark	vim_visual_line_background	0.0 0.0 0.0 0.0
+Solarized Dark	vim_visual_block_background	0.0 0.0 0.0 0.0
+Solarized Dark	vim_yank_background	0.5687984 0.6935484 0.4862745 0.101960786
+Solarized Dark	vim_helix_jump_label_foreground	0.0016025641 0.6933333 0.7058824 1.0
+Solarized Dark	vim_helix_normal_background	0.0 0.0 0.0 0.0
+Solarized Dark	vim_helix_select_background	0.0 0.0 0.0 0.0
+Solarized Dark	vim_normal_foreground	0.0 0.0 0.0 0.0
+Solarized Dark	vim_insert_foreground	0.0 0.0 0.0 0.0
+Solarized Dark	vim_replace_foreground	0.0 0.0 0.0 0.0
+Solarized Dark	vim_visual_foreground	0.0 0.0 0.0 0.0
+Solarized Dark	vim_visual_line_foreground	0.0 0.0 0.0 0.0
+Solarized Dark	vim_visual_block_foreground	0.0 0.0 0.0 0.0
+Solarized Dark	vim_helix_normal_foreground	0.0 0.0 0.0 0.0
+Solarized Dark	vim_helix_select_foreground	0.0 0.0 0.0 0.0
+Solarized Dark	editor_code_lens_foreground	none
+Solarized Dark	editor_debugger_active_line_background	0.11111111 1.0 0.5 0.11764706
+Solarized Dark	editor_indent_guide	0.16666667 0.8461548 0.97450984 0.105882354
+Solarized Dark	editor_indent_guide_active	0.120370366 1.0 0.9647059 0.1764706
+Solarized Dark	editor_document_highlight_bracket_background	0.5687984 0.6935484 0.4862745 0.101960786
+Solarized Dark	editor_diff_hunk_added_background	0.18845317 1.0 0.3 0.12
+Solarized Dark	editor_diff_hunk_added_hollow_background	0.18845317 1.0 0.3 0.06
+Solarized Dark	editor_diff_hunk_added_hollow_border	0.18845317 1.0 0.3 0.36
+Solarized Dark	editor_diff_hunk_deleted_background	0.0028901729 0.71193415 0.5235294 0.12
+Solarized Dark	editor_diff_hunk_deleted_hollow_background	0.0028901729 0.71193415 0.5235294 0.06
+Solarized Dark	editor_diff_hunk_deleted_hollow_border	0.0028901729 0.71193415 0.5235294 0.36
+Solarized Dark	terminal_ansi_background	0.16666667 0.030303027 0.064705886 1.0
+Solarized Dark	version_control_renamed	0.126294 0.7351598 0.42941177 1.0
+Solarized Dark	version_control_conflict	0.5 0.072164945 0.61960787 1.0
+Solarized Dark	version_control_ignored	0.5 0.072164945 0.61960787 1.0
+Tokyo Night	drop_target_border	0.16666667 0.055555556 0.92941177 1.0
+Tokyo Night	debugger_accent	0.99578065 0.6929825 0.5529412 1.0
+Tokyo Night	panel_indent_guide	0.16666667 0.8461548 0.97450984 0.105882354
+Tokyo Night	panel_indent_guide_hover	0.120370366 1.0 0.9647059 0.1764706
+Tokyo Night	panel_indent_guide_active	0.120370366 1.0 0.9647059 0.1764706
+Tokyo Night	panel_overlay_background	0.6666667 0.15384614 0.101960786 1.0
+Tokyo Night	panel_overlay_hover	0.6515151 0.13924049 0.15490197 1.0
+Tokyo Night	pane_group_border	0.64705884 0.13178296 0.2529412 1.0
+Tokyo Night	scrollbar_thumb_active_background	0.6352201 0.72602755 0.8568628 0.29803923
+Tokyo Night	minimap_thumb_background	0.6352201 0.72602755 0.8568628 0.29803923
+Tokyo Night	minimap_thumb_hover_background	0.6515151 0.13924049 0.15490197 0.7
+Tokyo Night	minimap_thumb_active_background	0.6352201 0.72602755 0.8568628 0.29803923
+Tokyo Night	minimap_thumb_border	0.6515151 0.13924049 0.15490197 1.0
+Tokyo Night	vim_normal_background	0.0 0.0 0.0 0.0
+Tokyo Night	vim_insert_background	0.0 0.0 0.0 0.0
+Tokyo Night	vim_replace_background	0.0 0.0 0.0 0.0
+Tokyo Night	vim_visual_background	0.0 0.0 0.0 0.0
+Tokyo Night	vim_visual_line_background	0.0 0.0 0.0 0.0
+Tokyo Night	vim_visual_block_background	0.0 0.0 0.0 0.0
+Tokyo Night	vim_yank_background	0.6133333 0.8865248 0.7235294 0.101960786
+Tokyo Night	vim_helix_jump_label_foreground	0.9689923 0.8896552 0.71568626 1.0
+Tokyo Night	vim_helix_normal_background	0.0 0.0 0.0 0.0
+Tokyo Night	vim_helix_select_background	0.0 0.0 0.0 0.0
+Tokyo Night	vim_normal_foreground	0.0 0.0 0.0 0.0
+Tokyo Night	vim_insert_foreground	0.0 0.0 0.0 0.0
+Tokyo Night	vim_replace_foreground	0.0 0.0 0.0 0.0
+Tokyo Night	vim_visual_foreground	0.0 0.0 0.0 0.0
+Tokyo Night	vim_visual_line_foreground	0.0 0.0 0.0 0.0
+Tokyo Night	vim_visual_block_foreground	0.0 0.0 0.0 0.0
+Tokyo Night	vim_helix_normal_foreground	0.0 0.0 0.0 0.0
+Tokyo Night	vim_helix_select_foreground	0.0 0.0 0.0 0.0
+Tokyo Night	editor_code_lens_foreground	none
+Tokyo Night	editor_debugger_active_line_background	0.11111111 1.0 0.5 0.11764706
+Tokyo Night	editor_indent_guide	0.16666667 0.8461548 0.97450984 0.105882354
+Tokyo Night	editor_indent_guide_active	0.120370366 1.0 0.9647059 0.1764706
+Tokyo Night	editor_document_highlight_bracket_background	0.6133333 0.8865248 0.7235294 0.101960786
+Tokyo Night	editor_diff_hunk_added_background	0.24666667 0.50505054 0.6117647 0.12
+Tokyo Night	editor_diff_hunk_added_hollow_background	0.24666667 0.50505054 0.6117647 0.06
+Tokyo Night	editor_diff_hunk_added_hollow_border	0.24666667 0.50505054 0.6117647 0.36
+Tokyo Night	editor_diff_hunk_deleted_background	0.9689923 0.8896552 0.71568626 0.12
+Tokyo Night	editor_diff_hunk_deleted_hollow_background	0.9689923 0.8896552 0.71568626 0.06
+Tokyo Night	editor_diff_hunk_deleted_hollow_border	0.9689923 0.8896552 0.71568626 0.36
+Tokyo Night	terminal_ansi_background	0.16666667 0.030303027 0.064705886 1.0
+Tokyo Night	version_control_renamed	0.09861111 0.6593407 0.6431373 1.0
+Tokyo Night	version_control_conflict	0.63703704 0.35433066 0.7509804 1.0
+Tokyo Night	version_control_ignored	0.63703704 0.35433066 0.7509804 1.0
