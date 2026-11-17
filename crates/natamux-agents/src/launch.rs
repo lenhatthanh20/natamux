@@ -7,6 +7,7 @@ use natamux_proto::terminals::list::SHELL_PROGRAMS;
 
 use crate::hook_files::{CODEX_EVENTS, codex_hook_value};
 
+pub use natamux_proto::agents::model::takes_model;
 pub use natamux_proto::agents::start::{DEFAULT_PROGRAMS, LAUNCHABLE_AGENTS};
 
 /// What the hooks run. `natamux hook` does nothing outside a Natamux terminal (no token).
@@ -43,9 +44,38 @@ pub fn default_program(agent: &str) -> &'static str {
 }
 
 /// Other names an agent is installed under. Cursor's installer adds `agent` next to
-/// `cursor-agent`.
+/// `cursor-agent`; Kimi Code installs `kimi-code` next to `kimi`.
 fn other_programs(agent: &str) -> &'static [&'static str] {
-    if agent == "cursor" { &["agent"] } else { &[] }
+    match agent {
+        "cursor" => &["agent"],
+        "kimi" => &["kimi-code"],
+        _ => &[],
+    }
+}
+
+/// How an agent gets its first prompt.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PromptMode {
+    /// On its command line, and it stays open afterwards.
+    Argument,
+    /// It takes none on the line (or a prompt there makes it run once and end), so the prompt is
+    /// pasted into its terminal once it is up.
+    Pasted,
+}
+
+/// Agents that start without a prompt: Amp, Kimi, Aider, Crush, Muse have no flag for it; a
+/// prompt on Cline's line runs it headless; Goose's and Kiro's flags for it are not documented
+/// to keep the screen open. Orca pastes for all of them too.
+const PASTED_PROMPT_AGENTS: [&str; 8] = [
+    "amp", "kimi", "goose", "aider", "crush", "cline", "kiro", "muse",
+];
+
+pub fn prompt_mode(agent: &str) -> PromptMode {
+    if PASTED_PROMPT_AGENTS.contains(&agent) {
+        PromptMode::Pasted
+    } else {
+        PromptMode::Argument
+    }
 }
 
 /// Programs that run the script of an agent: one installed with npm runs as `node <path>/codex`.
@@ -98,8 +128,9 @@ pub fn agent_of_command(line: &str, program_of: impl Fn(&str) -> String) -> Opti
 }
 
 /// The flags of the `auto` permission mode. Only Claude Code checks each action in its auto mode;
-/// the others have no such check, so their closest flag lets them run (almost) anything.
-pub const AUTO_FLAGS: [(&str, &[&str]); 5] = [
+/// the others have no such check, so their closest flag lets them run (almost) anything. Goose
+/// has no flag for its mode, so its arm in `launch_command` sets `GOOSE_MODE=auto` instead.
+pub const AUTO_FLAGS: [(&str, &[&str]); 15] = [
     ("claude-code", &["--permission-mode", "auto"]),
     // Codex dropped `--full-auto`. The first two flags mean the same and exist in old and new
     // versions. Its `workspace-write` sandbox blocks the network, and with it the daemon on
@@ -118,6 +149,17 @@ pub const AUTO_FLAGS: [(&str, &[&str]); 5] = [
     ("gemini", &["--approval-mode", "yolo"]),
     ("copilot", &["--allow-all-tools"]),
     ("cursor", &["--force"]),
+    ("opencode", &["--auto"]),
+    ("qwen", &["--approval-mode", "yolo"]),
+    // Documented for `droid exec`; the interactive mode takes it too.
+    ("droid", &["--auto", "high"]),
+    ("amp", &["--dangerously-allow-all"]),
+    ("kimi", &["--yolo"]),
+    ("aider", &["--yes-always"]),
+    ("crush", &["--yolo"]),
+    ("cline", &["--auto-approve", "true"]),
+    ("kiro", &["--trust-all-tools"]),
+    ("muse", &["--yolo"]),
 ];
 
 pub fn auto_flags(agent: &str) -> &'static [&'static str] {
@@ -263,6 +305,52 @@ pub fn launch_command(agent: &str, options: &LaunchOptions) -> String {
             words.extend(prompt);
             words
         }
+        "opencode" | "qwen" | "droid" => {
+            let mut words = vec![program];
+            words.extend(mode);
+            words.extend(extra);
+            words.extend(other_resume(agent, session, &quote));
+            if !prompt.is_empty() {
+                match agent {
+                    "opencode" => words.push("--prompt".into()),
+                    // Without -i Qwen Code runs the prompt once and ends.
+                    "qwen" => words.push("-i".into()),
+                    _ => {}
+                }
+                words.extend(prompt);
+            }
+            words
+        }
+        // Muse reads its subcommand first, and a prompt only once it is up (pasted).
+        "muse" => {
+            let mut words = vec![program];
+            words.extend(other_resume(agent, session, &quote));
+            if options.trust {
+                words.push("--trust-workspace".into());
+            }
+            words.extend(mode);
+            words.extend(extra);
+            words
+        }
+        // The prompt of these is pasted once they are up.
+        "amp" | "kimi" | "goose" | "aider" | "crush" | "cline" | "kiro" => {
+            // Goose has no flag for its mode, and a user's config may set `approve`.
+            let goose_auto = agent == "goose" && options.auto;
+            let mut words = Vec::new();
+            if goose_auto {
+                words.push(goose_mode("auto", options.platform));
+            }
+            words.push(program);
+            match agent {
+                "goose" => words.push("session".into()),
+                "kiro" => words.push("chat".into()),
+                _ => {}
+            }
+            words.extend(mode);
+            words.extend(extra);
+            words.extend(other_resume(agent, session, &quote));
+            words
+        }
         // Any other CLI (a custom agent on base "other"): the prompt is its last word.
         _ => {
             let mut words = vec![program];
@@ -272,6 +360,34 @@ pub fn launch_command(agent: &str, options: &LaunchOptions) -> String {
         }
     };
     words.join(" ")
+}
+
+/// The resume words of the agents added after the first five: by id, or the newest session of
+/// the folder (`LAST_SESSION`). None where the agent has no such flag.
+fn other_resume(agent: &str, session: Option<&str>, quote: &dyn Fn(&str) -> String) -> Vec<String> {
+    let Some(session) = session else {
+        return Vec::new();
+    };
+    let newest = session == LAST_SESSION;
+    let (by_id, last): (&[&str], &[&str]) = match agent {
+        "opencode" => (&["--session"], &["--continue"]),
+        "qwen" => (&["--resume"], &["--continue"]),
+        "droid" => (&["--resume"], &["--resume"]),
+        "kimi" => (&["--session"], &["--continue"]),
+        "goose" => (&["--resume", "--session-id"], &["--resume"]),
+        "aider" => (&[], &["--restore-chat-history"]),
+        "crush" => (&["--session"], &["--continue"]),
+        "cline" => (&["--id"], &[]),
+        "kiro" => (&["--resume-id"], &["--resume"]),
+        "muse" => (&["resume"], &[]),
+        _ => (&[], &[]),
+    };
+    let flags = if newest { last } else { by_id };
+    let mut words: Vec<String> = flags.iter().map(|word| (*word).to_string()).collect();
+    if !newest && !words.is_empty() {
+        words.push(quote(session));
+    }
+    words
 }
 
 fn codex_words(
@@ -383,9 +499,49 @@ pub fn one_shot_command(agent: &str, program: &str, prompt: &str, platform: Plat
             format!("{program} -p --output-format text {}", quote(prompt)),
             String::new(),
         ),
+        // Qwen Code puts what it reads on stdin before the text of -p, as Gemini does.
+        "qwen" => (
+            format!("{program} -p {}", quote("Answer the request above.")),
+            prompt.to_string(),
+        ),
+        // Without `--auto`, `droid exec` is read-only.
+        "droid" => (format!("{program} exec"), prompt.to_string()),
+        // `chat` mode runs no tools, so the draft cannot change files.
+        "goose" => (
+            format!(
+                "{} {program} run -t {}",
+                goose_mode("chat", platform),
+                quote(prompt)
+            ),
+            String::new(),
+        ),
+        "kiro" => (
+            format!("{program} chat --no-interactive {}", quote(prompt)),
+            String::new(),
+        ),
         _ => (program.to_string(), String::new()),
     };
     OneShot { line, stdin }
+}
+
+/// Sets Goose's mode for the command after it, in the shell of the terminal.
+fn goose_mode(mode: &str, platform: Platform) -> String {
+    match platform {
+        Platform::Windows => format!("$env:GOOSE_MODE='{mode}';"),
+        Platform::Posix => format!("GOOSE_MODE={mode}"),
+    }
+}
+
+/// Agents with no mode that only answers: their one run is a whole turn with tools, which may
+/// change files. Aider's `--message`, Cline's prompt, `kimi --print` (it turns on `--afk`),
+/// `crush run` (it approves each permission), `amp -x`, and `opencode run` (every tool allowed by
+/// default) do so; Muse's docs do not say that `muse exec` runs no tools. A short answer of
+/// theirs comes from Claude Code.
+const NO_ONE_SHOT_AGENTS: [&str; 7] =
+    ["aider", "cline", "kimi", "crush", "amp", "opencode", "muse"];
+
+pub fn has_one_shot(agent: &str) -> bool {
+    LAUNCHABLE_AGENTS.contains(&agent) && !NO_ONE_SHOT_AGENTS.contains(&agent)
 }
 
 #[cfg(test)]

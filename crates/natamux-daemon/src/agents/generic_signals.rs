@@ -29,8 +29,10 @@ use crate::tasks::service::TaskService;
 use crate::terminals::limits::MAIN_TERMINAL;
 
 /// Agents whose hooks tell when they wait for the user. Copilot's hooks may be off until its
-/// folder is trusted, and Cursor's CLI has no such hook, so the bell still counts for them.
-const AGENTS_WITH_HOOKS: [&str; 3] = ["claude-code", "codex", "gemini"];
+/// folder is trusted, and Qwen Code's until the user approved them, and Cursor's and Droid's have
+/// no such hook, so the bell still counts for them, and for every agent followed by its terminal
+/// only.
+const AGENTS_WITH_HOOKS: [&str; 4] = ["claude-code", "codex", "gemini", "opencode"];
 
 /// Output comes in many small pieces. Looking at the task for each would read its file each time.
 const LOOK_EVERY_MS: i64 = 10_000;

@@ -24,10 +24,7 @@ fn summary_of(hook: Option<NormalizedHook>) -> Option<String> {
 
 #[test]
 fn the_adapters_cover_every_agent_natamux_starts() {
-    assert_eq!(
-        known_agent_ids(),
-        ["claude-code", "codex", "gemini", "copilot", "cursor"]
-    );
+    assert_eq!(known_agent_ids(), natamux_proto::agents::start::HOOK_AGENTS);
     assert!(find_adapter("nope").is_none());
     assert_eq!(
         find_adapter("codex").map(|adapter| adapter.id()),

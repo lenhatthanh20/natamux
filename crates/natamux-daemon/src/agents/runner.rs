@@ -8,8 +8,8 @@ use std::sync::Arc;
 use natamux_agents::custom::{agent_kind, custom_agent};
 use natamux_agents::hook_files::{WorkspaceHooks, prepare_workspace};
 use natamux_agents::launch::{
-    LAST_SESSION, LaunchOptions, Platform, default_program, is_launchable, launch_command,
-    quote_argument,
+    LAST_SESSION, LaunchOptions, Platform, PromptMode, default_program, is_launchable,
+    launch_command, prompt_mode, quote_argument, takes_model,
 };
 use natamux_agents::trust::{TrustPaths, trust_workspace};
 use natamux_core::js::is_js_space;
@@ -21,8 +21,10 @@ use natamux_proto::terminals::text::plain_text;
 use natamux_stages::prompts::{arg_values, fill};
 
 use crate::agents::errors::AgentError;
+use crate::agents::pasted_prompt::PastedPrompts;
 use crate::github::issue_importer::imported_url;
 use crate::projects::repo_trust::TrustedOf;
+use crate::shared::jobs::system_clock;
 use crate::stages::launcher::write_private;
 use crate::tasks::service::TaskService;
 use crate::terminals::limits::MAIN_TERMINAL;
@@ -66,12 +68,13 @@ pub fn quoted_words(args: &str, values: &[(&str, &str)], platform: Platform) -> 
 }
 
 /// The task's model for this start: only for the task's agent (or the agent picked for a task
-/// without one), a built-in kind (a custom agent counts by its base), and a stage whose own words
-/// name no model, since the stage's `--model` wins.
+/// without one), a built-in kind that takes `--model` (a custom agent counts by its base), and a
+/// stage whose own words name no model, since the stage's `--model` wins.
 pub fn task_model<'a>(task: &'a Task, agent: &str, stage_args: Option<&str>) -> Option<&'a str> {
     let model = task.model.as_deref().filter(|model| is_model_name(model))?;
     let its_agent = task.agent.as_deref().is_none_or(|own| own == agent);
-    let built_in = LAUNCHABLE_AGENTS.contains(&agent_kind(agent).as_str());
+    let kind = agent_kind(agent);
+    let built_in = LAUNCHABLE_AGENTS.contains(&kind.as_str()) && takes_model(&kind);
     (its_agent && built_in && model_of(stage_args).is_none()).then_some(model)
 }
 
@@ -157,6 +160,8 @@ pub struct AgentRunner {
     extra_args: HashMap<String, String>,
     gemini_settings_path: PathBuf,
     launch_dir: PathBuf,
+    /// First prompts of agents that take none on their command line.
+    pasted: Arc<PastedPrompts>,
 }
 
 impl AgentRunner {
@@ -181,7 +186,18 @@ impl AgentRunner {
             .filter(|(agent, _)| is_launchable(agent))
             .map(|(agent, words)| (agent.clone(), words.trim().to_string()))
             .collect();
+        let terminals = options.terminals.clone();
+        let fronts = options.terminals.clone();
+        let pasted = PastedPrompts::new(
+            system_clock(),
+            Arc::new(move |task_id: &str, terminal: &str, text: &str| {
+                // The terminal may have closed since the start: then there is no one to tell.
+                let _ = terminals.paste(task_id, text, terminal);
+            }),
+            Arc::new(move |task_id: &str, terminal: &str| fronts.foreground(task_id, terminal)),
+        );
         AgentRunner {
+            pasted,
             gemini_settings_path: options
                 .gemini_settings_path
                 .clone()
@@ -191,6 +207,16 @@ impl AgentRunner {
             extra_args,
             options,
         }
+    }
+
+    /// Output of a terminal: a held first prompt waits until the agent's screen settled.
+    pub fn on_output(&self, task_id: &str, terminal: &str, data: &[u8]) {
+        self.pasted.on_output(task_id, terminal, data);
+    }
+
+    /// The first prompts that wait to be pasted.
+    pub fn pasted_prompts(&self) -> &Arc<PastedPrompts> {
+        &self.pasted
     }
 
     fn platform(&self) -> Platform {
@@ -242,12 +268,15 @@ impl AgentRunner {
             });
         }
         let program = self.program_of(agent);
-        let command = self.command_of(&task, agent, prompt, session, own);
+        let (command, pasted) = self.command_of(&task, agent, prompt, session, own);
         let shell = terminal.unwrap_or(MAIN_TERMINAL);
         let line = self.launch_line(task_id, &command, terminal)?;
         self.options
             .terminals
             .run(task_id, &line, shell, DEFAULT_SIZE)?;
+        if let Some(text) = pasted {
+            self.pasted.hold(task_id, shell, &text);
+        }
         if let Some(on_launch) = &self.options.on_launch {
             let resumed = session.filter(|session| *session != LAST_SESSION);
             on_launch(&AgentLaunch {
@@ -282,7 +311,8 @@ impl AgentRunner {
         task_model(task, agent, stage_args).map(str::to_string)
     }
 
-    /// The command line of a start, with the agent's hook file and trust in place first.
+    /// The command line of a start, with the agent's hook file and trust in place first, and
+    /// the prompt to paste once the agent is up, for an agent that takes none on the line.
     fn command_of(
         &self,
         task: &Task,
@@ -290,7 +320,7 @@ impl AgentRunner {
         prompt: Option<&str>,
         session: Option<&str>,
         own: &OwnAgent,
-    ) -> String {
+    ) -> (String, Option<String>) {
         let trusted = (self.options.trusted_of)(task.repo.as_deref());
         // A custom agent starts as its base, with its own program.
         let kind = agent_kind(agent);
@@ -326,7 +356,11 @@ impl AgentRunner {
             (Some(_), Some(prompt)) => one_line(&plain_text(prompt)),
             (Some(_), None) => String::new(),
         };
-        launch_command(
+        let (text, pasted) = match prompt_mode(&kind) {
+            PromptMode::Pasted if !text.is_empty() => (String::new(), Some(text)),
+            _ => (text, None),
+        };
+        let command = launch_command(
             &kind,
             &LaunchOptions {
                 program: self.program_of(agent),
@@ -342,7 +376,8 @@ impl AgentRunner {
                 trust: trusted,
                 workspace_hooks,
             },
-        )
+        );
+        (command, pasted)
     }
 
     /// What is typed into the terminal. The terminal echoes it, so the long command (settings

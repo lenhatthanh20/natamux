@@ -54,7 +54,7 @@ An array of **steps**. A step is a stage, a group of stages that run side by sid
 | `doneWhen` | string | no | A sentence made from the checks | Text shown in the progress view before the stage starts. |
 | `enabled` | boolean | no | `true` | `false` turns the stage off: it stays in the file, but new tasks do not get it. |
 | `workflow` | boolean | no | `true` for `plan` and `implement` of the catalog, else `false` | Tasks get a **Run with a workflow** checkbox on this stage. Only for `agent` stages. See [Run a stage as a workflow](/docs/concepts/stages/#run-a-stage-as-a-workflow). |
-| `agent` | string | no | The task's agent | The agent this stage starts: `claude-code`, `codex`, `gemini`, `copilot` or `cursor`. Only on an `agent` or `testing` stage, of the catalog or your own. |
+| `agent` | string | no | The task's agent | The agent this stage starts: `claude-code`, `codex`, `gemini`, `copilot`, `cursor`, `opencode`, `qwen`, `droid`, `amp`, `kimi`, `goose`, `aider`, `crush`, `cline`, `kiro` or `muse`. Only on an `agent` or `testing` stage, of the catalog or your own. |
 | `ci` | boolean | no | `true` for `implement` and `testing` of the catalog, else `false` | Tasks get a **Check on CI** checkbox on this stage. Only for a testing stage or an agent stage without an `output`. See [Check a stage on CI](/docs/concepts/stages/#check-a-stage-on-ci). |
 | `ownShell` | boolean | no | `true` for the catalog's report stages (Review, Test spec, Security review, Performance check, Accessibility check) | The stage runs in its own terminal (Terminal 5) with a new session, or in a terminal of its own from Terminal 6 when it has its own `agent` or `args`. The stage then does not use Terminal 1, so the task's agent starts there only at the next stage that does. Only for an `agent` stage with an `output`, and not on the stage right after the context. |
 | `endShell` | boolean | no | `false` | When the stage is done or sends the task back, end its agent or command and close its terminal. Without it, the terminal stays open until the task ends or you close it. Only for `context`, `agent` and `testing` stages. Ignored on a stage in Terminal 1, which is never closed. See [End a stage's terminal](/docs/concepts/stages/#end-a-stages-terminal). |
@@ -335,6 +335,17 @@ The flag of each agent in `auto`:
 | Gemini CLI | `--approval-mode yolo` | Every tool call, without asking. |
 | Copilot CLI | `--allow-all-tools` | Every tool, without asking. It still checks paths and URLs. |
 | Cursor CLI | `--force` | Every command that is not denied in its settings, without asking. |
+| OpenCode | `--auto` | Every permission that is not explicitly denied. |
+| Qwen Code | `--approval-mode yolo` | Every tool call, without asking. It also skips the approval of project hooks. |
+| Factory Droid | `--auto high` | Edits and commands up to high risk, without asking. |
+| Amp | `--dangerously-allow-all` | Every tool call, without asking. |
+| Kimi | `--yolo` | Every tool call, without asking. |
+| Goose | `GOOSE_MODE=auto` | Goose has no flag for its mode, so Natamux sets the variable for it. |
+| Aider | `--yes-always` | Every question with yes. |
+| Crush | `--yolo` | Every permission prompt, without asking. |
+| Cline | `--auto-approve true` | Every tool call, without asking. |
+| Kiro | `--trust-all-tools` | Every tool, without asking. |
+| Muse Code | `--yolo` | No approval and no sandbox, and the workspace is trusted. |
 
 Only Claude Code has a check on each action in this mode. The other agents run commands without asking, in the task's worktree with your user rights. Use `ask` for a repository where that is not safe:
 

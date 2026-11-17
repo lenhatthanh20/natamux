@@ -15,6 +15,7 @@ path = "src/bin/nmx.rs"
 
 [dependencies]
 base64.workspace = true
+natamux-agents.workspace = true
 natamux-client.workspace = true
 natamux-proto.workspace = true
 serde.workspace = true

@@ -37,6 +37,7 @@ Task ids look like `T-42`. Inside a Natamux terminal, the token, the daemon addr
 | `workspace remove <id>` | Remove the worktree of a task (needs `--yes`) |
 | `repo trust <repo>` | Show the commands a project runs, or approve them (`--approve`) |
 | `hooks claude-code` | Print Claude Code settings that report a task's progress |
+| `hooks opencode\|qwen\|droid` | Print the hook file Natamux writes into a task's worktree (`.opencode/plugins/natamux.js`, `.qwen/settings.json`, `.factory/hooks.json`) |
 | `hook <agent> [event]` | For an agent's hook: send the JSON on stdin to the daemon |
 | `help` | Show the help |
 
@@ -101,7 +102,7 @@ natamux agent start T-42 --agent codex --prompt "Add tests for the parser"
 natamux agent start T-42 --base develop
 ```
 
-The agent is one of `claude-code`, `codex`, `gemini`, `copilot` or `cursor`. If the task has no workspace, `agent start` creates one first, from `--base` when you give it. See [Agents and hooks](/docs/concepts/agents-and-hooks/).
+The agent is one of `claude-code`, `codex`, `gemini`, `copilot`, `cursor`, `opencode`, `qwen`, `droid`, `amp`, `kimi`, `goose`, `aider`, `crush`, `cline`, `kiro` or `muse`. If the task has no workspace, `agent start` creates one first, from `--base` when you give it. See [Agents and hooks](/docs/concepts/agents-and-hooks/).
 
 ## ask and done
 
@@ -185,6 +186,7 @@ natamux hook codex
 natamux hook copilot agentStop
 ```
 
+- `hooks opencode`, `hooks qwen` and `hooks droid` print the hook file that Natamux writes into each task's worktree, to use in a folder of your own. They need no token and do not call the daemon.
 - `hooks claude-code` prints settings JSON. It needs no token and does not call the daemon. Use it only outside a task terminal, or when the worktree's `.claude/settings.local.json` is your own: a task terminal already has the hooks, and both would send each event twice.
 - `hook <agent> [event]` is for an agent's own hook. It reads JSON on stdin and posts it to the daemon. It prints nothing (`{}` for `cursor` and `gemini`), always exits 0, and does nothing without `NATAMUX_TOKEN`. Even a usage mistake exits 0, because agents treat exit code 2 as "block this action". See [Other agents](/docs/agents/other-agents/).
 

@@ -5558,6 +5558,7 @@ name = "natamux-cli"
 version = "1.0.26"
 dependencies = [
  "base64",
+ "natamux-agents",
  "natamux-client",
  "natamux-proto",
  "serde",

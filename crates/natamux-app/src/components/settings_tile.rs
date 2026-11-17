@@ -3,12 +3,13 @@
 
 use std::rc::Rc;
 
-use gpui::{AnyElement, FontWeight};
+use gpui::{AnyElement, FontWeight, img};
 use ui::prelude::*;
 
 use super::button_style::button_icon;
 use super::chips::tip_with_keys;
 use super::colors::{StateColors, TileColor, avatar_color, avatar_letter, tile_colors};
+use crate::agents::agent_choices::agent_icon_path;
 
 /// 16 px inside a select, 20 px in the nav, 24 px in a row or a dialog header, 32 px in the
 /// page header.
@@ -35,6 +36,8 @@ impl TileSize {
 enum Glyph {
     Icon(Icon),
     Letter(SharedString),
+    /// A built-in agent's own logo, in its own colours.
+    Agent(SharedString),
 }
 
 /// A rounded square with an icon or a letter in a tile colour.
@@ -66,6 +69,17 @@ impl SettingsTile {
         Self {
             glyph: Glyph::Letter(avatar_letter(name).into()),
             color: Some(avatar_color(name)),
+            size,
+            glyph_px: None,
+            dim: false,
+        }
+    }
+
+    /// A built-in agent's logo on a gray tile; the generic bot for an agent with no logo.
+    pub fn agent(id: &str, size: TileSize) -> Self {
+        Self {
+            glyph: Glyph::Agent(id.to_owned().into()),
+            color: Some(TileColor::Gray),
             size,
             glyph_px: None,
             dim: false,
@@ -110,6 +124,18 @@ impl RenderOnce for SettingsTile {
                 .size(IconSize::Custom(rems_from_px(icon_px)))
                 .color(Color::Custom(fg))
                 .into_any_element(),
+            Glyph::Agent(id) => {
+                match agent_icon_path(Some(&id), cx.theme().appearance.is_light()) {
+                    Some(path) => img(SharedString::from(path))
+                        .flex_none()
+                        .size(rems_from_px(icon_px))
+                        .into_any_element(),
+                    None => button_icon("bot")
+                        .size(IconSize::Custom(rems_from_px(icon_px)))
+                        .color(Color::Custom(fg))
+                        .into_any_element(),
+                }
+            }
             Glyph::Letter(letter) => Label::new(letter)
                 .size(LabelSize::Custom(rems_from_px(letter_px)))
                 .weight(FontWeight::SEMIBOLD)
