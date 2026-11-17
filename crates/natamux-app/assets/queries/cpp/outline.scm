@@ -1,36 +1,39 @@
-; Natamux outline patterns for C++. Worked out from the old editor's output (golden files T-OUT-1)
-; and node names as the author remembers them; no grammar file was at hand.
-; Captures: @item the entry, @name shown and a name, @context shown only, @open/@close body tokens.
+; Natamux outline patterns for C++: Natamux's own file, in the capture names of
+; text_view/outline.rs. The facts (which nodes are items, which words show) come from the
+; outline golden files (T-OUT-1, the old editor's output) and the grammar's node names.
+; @entry: the item. @title: shown, and part of the name. @word: shown only.
 
-(concept_definition "concept" @context name: (_) @name) @item
-(namespace_definition "namespace" @context name: (_) @name) @item
-(class_specifier "class" @context name: (_) @name body: (_)) @item
-(enum_specifier "enum" @context "class"? @context name: (_) @name body: (_)) @item
+; A keyword and a name; struct, union and enum count only with a body.
+[
+  (enum_specifier "enum" @word "class"? @word name: (_) @title body: (_))
+  (class_specifier "class" @word name: (_) @title body: (_))
+  (namespace_definition "namespace" @word name: (_) @title)
+  (concept_definition "concept" @word name: (_) @title)
+  (struct_specifier "struct" @word name: (_) @title body: (_))
+  (union_specifier "union" @word name: (_) @title body: (_))
+  (type_definition "typedef" @word declarator: (_) @title)
+  (preproc_def "#define" @word name: (_) @title)
+  (preproc_function_def "#define" @word name: (_) @title
+    parameters: (preproc_params "(" @word ")" @word))
+  (enumerator name: (_) @title)
+] @entry
 
-; Preprocessor definitions.
-(preproc_def "#define" @context name: (_) @name) @item
-(preproc_function_def "#define" @context name: (_) @name
-  parameters: (preproc_params "(" @context ")" @context)) @item
+; Struct fields: the type, then the name.
+(field_declaration type: (_) @word declarator: (field_identifier) @title @entry)
 
-(type_definition "typedef" @context declarator: (_) @name) @item
-
-; Types with a body.
-(struct_specifier "struct" @context name: (_) @name body: (_)) @item
-(union_specifier "union" @context name: (_) @name body: (_)) @item
-(enumerator name: (_) @name) @item
-(field_declaration type: (_) @context declarator: (field_identifier) @name @item)
-
-; Functions (constructors and destructors have no type): storage word, return type, then the declarator's name and "( )".
+; Functions: the storage word, qualifiers such as constexpr and the return type (constructors and
+; destructors have none), then the declarator's name and "( )".
 (function_definition
-  (storage_class_specifier)? @context
-  (type_qualifier)* @context
-  type: (_)? @context
+  (storage_class_specifier)? @word
+  (type_qualifier)* @word
+  type: (_)? @word
   declarator: (function_declarator
-    declarator: (_) @name
-    parameters: (parameter_list "(" @context ")" @context))) @item
+    declarator: (_) @title
+    parameters: (parameter_list "(" @word ")" @word))) @entry
 
-; Variables at any level.
-(declaration (storage_class_specifier)? @context type: (_) @context
-  declarator: (init_declarator declarator: (_) @name) @item)
-(declaration (storage_class_specifier)? @context type: (_) @context
-  declarator: (identifier) @name @item)
+; Variables at any level, one entry per declarator.
+(declaration (storage_class_specifier)? @word type: (_) @word
+  declarator: [
+    (init_declarator declarator: (_) @title) @entry
+    (identifier) @title @entry
+  ])

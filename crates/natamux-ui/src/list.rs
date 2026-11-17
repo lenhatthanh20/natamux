@@ -1,5 +1,6 @@
 //! The parts a menu is made of besides its rows: the list around them, a separator line and a
-//! small heading. The rows are `ListItem` (Zed's until S8.4).
+//! small heading. The rows are `ListItem` (Zed's until S8.4). Element values from plan 6.7.2 and
+//! the menu metrics golden.
 
 use gpui::{
     AnyElement, App, IntoElement, ParentElement, RenderOnce, SharedString, Styled, Window, div,
@@ -14,7 +15,7 @@ use crate::spacing::{DynamicSpacing, h_flex, v_flex};
 /// A column of rows, 4 px above and below. With no rows it says "No items".
 #[derive(Default, IntoElement)]
 pub struct List {
-    children: Vec<AnyElement>,
+    rows: Vec<AnyElement>,
 }
 
 impl List {
@@ -24,22 +25,21 @@ impl List {
 }
 
 impl ParentElement for List {
-    fn extend(&mut self, elements: impl IntoIterator<Item = AnyElement>) {
-        self.children.extend(elements)
+    fn extend(&mut self, rows: impl IntoIterator<Item = AnyElement>) {
+        self.rows.extend(rows)
     }
 }
 
 impl RenderOnce for List {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
-        let empty = self.children.is_empty();
-        v_flex()
-            .w_full()
-            .py(DynamicSpacing::Base04.rems(cx))
-            .when(!empty, |this| this.children(self.children))
-            .when(empty, |this| {
-                this.px_2()
-                    .child(Label::new("No items").color(Color::Muted))
-            })
+        let column = v_flex().w_full().py(DynamicSpacing::Base04.rems(cx));
+        if self.rows.is_empty() {
+            column
+                .px_2()
+                .child(Label::new("No items").color(Color::Muted))
+        } else {
+            column.children(self.rows)
+        }
     }
 }
 
@@ -49,61 +49,58 @@ pub struct ListSeparator;
 
 impl RenderOnce for ListSeparator {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+        let colors = cx.theme().colors();
         div()
-            .h_px()
             .w_full()
+            .h_px()
+            .bg(colors.border_variant)
             .my(DynamicSpacing::Base06.rems(cx))
-            .bg(cx.theme().colors().border_variant)
     }
 }
 
 /// A heading line: small muted text, 20 px high.
 #[derive(IntoElement)]
 pub struct ListSubHeader {
-    label: SharedString,
+    text: SharedString,
     inset: bool,
 }
 
 impl ListSubHeader {
     pub fn new(label: impl Into<SharedString>) -> Self {
-        Self {
-            label: label.into(),
+        ListSubHeader {
+            text: label.into(),
             inset: false,
         }
     }
 
     /// 8 px of space before the text, as the rows of an inset list have.
-    pub fn inset(mut self, inset: bool) -> Self {
-        self.inset = inset;
-        self
+    pub fn inset(self, inset: bool) -> Self {
+        ListSubHeader { inset, ..self }
     }
 }
 
 impl RenderOnce for ListSubHeader {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
-        h_flex()
+        let text = Label::new(self.text)
+            .size(LabelSize::Small)
+            .color(Color::Muted);
+        // The 20 px line, its text centred in height.
+        let line = div()
+            .flex()
             .flex_1()
             .w_full()
+            .h_5()
+            .items_center()
+            .justify_between()
+            .gap_1()
+            .when(self.inset, |line| line.px_2())
+            .child(div().flex().items_center().gap_1().child(text));
+        h_flex()
             .relative()
-            .pb(DynamicSpacing::Base04.rems(cx))
+            .flex_1()
+            .w_full()
             .px(DynamicSpacing::Base02.rems(cx))
-            .child(
-                div()
-                    .h_5()
-                    .when(self.inset, |this| this.px_2())
-                    .flex()
-                    .flex_1()
-                    .w_full()
-                    .gap_1()
-                    .items_center()
-                    .justify_between()
-                    .child(
-                        div().flex().gap_1().items_center().child(
-                            Label::new(self.label)
-                                .color(Color::Muted)
-                                .size(LabelSize::Small),
-                        ),
-                    ),
-            )
+            .pb(DynamicSpacing::Base04.rems(cx))
+            .child(line)
     }
 }

@@ -1,6 +1,9 @@
-; Natamux outline patterns. Worked out from the old editor output (golden files T-OUT-1)
-; and node names as the author remembers them; no grammar file was at hand.
+; Natamux outline patterns for Markdown: Natamux's own file, in the capture names of
+; text_view/outline.rs. The facts (which nodes are items, which words show) come from the
+; outline golden files (T-OUT-1, the old editor's output) and the grammar's node names.
+; @entry: the item. @title: shown, and part of the name. @word: shown only.
 
+; A section: its heading marker, then the heading text.
 (section
   (atx_heading
     [
@@ -10,5 +13,5 @@
       (atx_h4_marker)
       (atx_h5_marker)
       (atx_h6_marker)
-    ] @context
-    heading_content: (_) @name)) @item
+    ] @word
+    heading_content: (_) @title)) @entry
