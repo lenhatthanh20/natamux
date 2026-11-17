@@ -22,9 +22,6 @@ pub struct Confirm {
     pub on_confirm: Run,
     /// The Settings sheet look (header 44, footer 48), for confirms opened from Settings.
     pub sheet: bool,
-    /// A read the text depends on is still running: the main button and Mod+Enter wait for
-    /// `ConfirmDialog::resolve`. Cancel, Esc and the scrim still close.
-    pub checking: bool,
 }
 
 impl Confirm {
@@ -42,7 +39,6 @@ impl Confirm {
             rows: Vec::new(),
             on_confirm: Rc::new(on_confirm),
             sheet: false,
-            checking: false,
         }
     }
 
@@ -53,11 +49,6 @@ impl Confirm {
 
     pub fn sheet(mut self) -> Self {
         self.sheet = true;
-        self
-    }
-
-    pub fn checking(mut self) -> Self {
-        self.checking = true;
         self
     }
 
@@ -109,7 +100,7 @@ pub struct ConfirmDialog {
 impl EventEmitter<DismissEvent> for ConfirmDialog {}
 
 impl ConfirmDialog {
-    /// The read is done: the text and action it decided, and the main button works.
+    /// A read that ended after the confirm opened: the text and action it decided.
     pub fn resolve(
         &mut self,
         description: impl Into<SharedString>,
@@ -120,7 +111,6 @@ impl ConfirmDialog {
         self.confirm.description = description.into();
         self.confirm.confirm_label = confirm_label.into();
         self.confirm.on_confirm = Rc::new(on_confirm);
-        self.confirm.checking = false;
         cx.notify();
     }
 }
@@ -137,9 +127,6 @@ impl DialogView for ConfirmDialog {
     }
 
     fn submit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.confirm.checking {
-            return;
-        }
         // Close first, so a dialog the action opens is not closed with this one.
         let run = self.confirm.on_confirm.clone();
         cx.emit(DismissEvent);
@@ -195,7 +182,7 @@ impl Render for ConfirmDialog {
                 .footer(primary_button(
                     confirm.confirm_label.clone(),
                     &self.submit,
-                    confirm.checking,
+                    false,
                     submit,
                 )),
         )
