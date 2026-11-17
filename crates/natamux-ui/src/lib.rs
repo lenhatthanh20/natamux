@@ -1,6 +1,6 @@
 //! The UI kit of the desktop app. The app uses it under the name `ui`. The MIT move
-//! (docs/plan-mit-license.md, S8) puts Natamux's own widgets here; only the scrollbars and the menu
-//! actions still come from Zed's `ui` and `menu` crates.
+//! (docs/plan-mit-license.md, S8) puts Natamux's own widgets here; only the menu actions still
+//! come from Zed's `menu` crate.
 
 mod button;
 mod button_like;
@@ -20,6 +20,9 @@ mod list;
 mod list_item;
 pub mod prelude;
 mod shortcut_hint;
+mod scrollbar;
+mod scrollbar_element;
+mod scrollbar_state;
 mod spacing;
 mod switch;
 mod tab;
@@ -58,8 +61,15 @@ pub use traits::{
 };
 pub use with_rem_size::WithRemSize;
 
-/// Zed's scrollbars, until an own one takes their place (after S7).
-pub use zed_ui::{ScrollAxes, ScrollableHandle, Scrollbars, WithScrollbar, scrollbars};
+pub use scrollbar::{ScrollAxes, ScrollbarShow, Scrollbars, WithScrollbar};
+
+/// Zed's scrollbars, only for the app test that checks the own bar draws and acts as they do.
+/// It goes with the `zed_ui` dependency (S8.4).
+#[doc(hidden)]
+pub mod zed_scrollbars {
+    pub use zed_ui::scrollbars::{ScrollbarVisibility, ShowScrollbar};
+    pub use zed_ui::{ScrollAxes, Scrollbars, WithScrollbar};
+}
 
 /// The actions of an open menu, Zed's types until S8.4 (plan 6.7.1).
 pub mod menu {

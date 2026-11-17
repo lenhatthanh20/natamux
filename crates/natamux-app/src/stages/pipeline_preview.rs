@@ -8,7 +8,7 @@ use gpui::{AnyElement, Div, Entity, FontWeight, ScrollHandle, Stateful};
 use natamux_proto::stages::capabilities::stage_name;
 use natamux_proto::stages::resolve::active_steps;
 use natamux_proto::stages::schema::{Stage, Step};
-use ui::{ScrollAxes, Tooltip, prelude::*};
+use ui::{Tooltip, prelude::*};
 
 use super::editor_catalog::is_custom;
 use super::editor_labels::{StageRunner, stage_runner};
@@ -326,7 +326,6 @@ pub fn pipeline_preview(
     let top = if branches.is_empty() { 22. } else { 40. };
     let row = scroll_area(
         chart_row(&chart, &shown, top, scroll, cx),
-        ScrollAxes::Horizontal,
         scroll,
         window,
         cx,

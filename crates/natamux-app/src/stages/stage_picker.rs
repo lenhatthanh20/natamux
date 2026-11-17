@@ -5,7 +5,7 @@
 use gpui::{AnyElement, Entity, EventEmitter, FocusHandle, Focusable, ScrollHandle};
 use natamux_proto::stages::capabilities::stage_name;
 use natamux_proto::stages::catalog::CatalogStage;
-use ui::{ScrollAxes, prelude::*};
+use ui::prelude::*;
 
 use super::editor_catalog::{add_catalog_stage, picker_detail, picker_empty_text, picker_groups};
 use super::list_rules::{kind_tile, kind_tile_icon};
@@ -230,13 +230,7 @@ impl Render for StagePicker {
         v_flex()
             .pt(rems_from_px(12.0_f32))
             .child(SettingsInput::new(&self.search))
-            .child(scroll_area(
-                list,
-                ScrollAxes::Vertical,
-                &self.scroll,
-                window,
-                cx,
-            ))
+            .child(scroll_area(list, &self.scroll, window, cx))
     }
 }
 
