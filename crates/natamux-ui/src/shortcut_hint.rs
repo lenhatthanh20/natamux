@@ -8,9 +8,10 @@ use gpui::{
     AbsoluteLength, AnyElement, App, IntoElement, KeybindingKeystroke, Modifiers, ParentElement,
     RenderOnce, SharedString, Styled, Window, prelude::FluentBuilder, px, relative,
 };
-use zed_ui::{Color, IconName};
 
+use crate::color::Color;
 use crate::icon::Icon;
+use crate::icon_name::IconName;
 use crate::spacing::{h_flex, rems_from_px};
 
 /// The keys of a command, drawn in muted text (disabled text when the command is off).

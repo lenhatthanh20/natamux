@@ -24,7 +24,7 @@ use pulldown_cmark::{
 };
 use settings::Settings as _;
 use theme_settings::ThemeSettings;
-use ui::{Checkbox, ScrollAxes, Scrollbars, WithScrollbar, prelude::*};
+use ui::{Checkbox, ScrollAxes, Scrollbars, ToggleState, WithScrollbar, prelude::*};
 
 use crate::app::links::open_link;
 

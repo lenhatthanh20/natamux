@@ -7,14 +7,17 @@ use gpui::{
     SharedString, StatefulInteractiveElement, Styled, Window, anchored, canvas, div,
     prelude::FluentBuilder, px,
 };
-use zed_ui::{Color, Disableable, IconName, IconPosition, IconSize, ListItem, Toggleable};
 
 use super::{BoxCell, ContextMenu, ContextMenuEntry, Handler, Row, SAFETY_ZONE};
-use crate::icon::Icon;
+use crate::color::Color;
+use crate::icon::{Icon, IconPosition, IconSize};
+use crate::icon_name::IconName;
+use crate::list_item::ListItem;
 use crate::label::{Label, LabelCommon};
 use crate::list::{ListSeparator, ListSubHeader};
 use crate::shortcut_hint::KeyBinding;
 use crate::spacing::h_flex;
+use crate::traits::{Disableable, Toggleable};
 
 /// A pointer that moves over a submenu's row puts the guard this far left of itself.
 const GUARD_BACK: Pixels = px(100.);

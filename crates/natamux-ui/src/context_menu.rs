@@ -15,12 +15,17 @@ use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use gpui::{
+use gpui::{
     Action, AnyElement, App, AppContext, Bounds, Context, DefiniteLength, DismissEvent, Entity,
     EventEmitter, FocusHandle, Focusable, Pixels, SharedString, Subscription, Window,
     prelude::FluentBuilder, px,
 };
 use zed_menu::Cancel;
-use zed_ui::{Color, IconName, IconPosition, ListItemSpacing};
+
+use crate::color::Color;
+use crate::icon::IconPosition;
+use crate::icon_name::IconName;
+use crate::list_item::ListItemSpacing;
 
 #[path = "context_menu_nav.rs"]
 mod nav;

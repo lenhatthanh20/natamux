@@ -8,12 +8,55 @@ use gpui::{
     prelude::FluentBuilder, relative, transparent_black,
 };
 use theme::ActiveTheme;
-use zed_ui::{
-    ButtonSize, ButtonStyle, Clickable, Disableable, FixedWidth, TintColor, Toggleable,
-    VisibleOnHover,
-};
 
+use crate::color::Color;
 use crate::spacing::{DynamicSpacing, rems_from_px};
+use crate::traits::{Clickable, Disableable, FixedWidth, Toggleable, VisibleOnHover};
+
+/// The colour family of a tinted button.
+#[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
+pub enum TintColor {
+    #[default]
+    Accent,
+    Error,
+    Warning,
+    Success,
+}
+
+impl From<TintColor> for Color {
+    fn from(tint: TintColor) -> Self {
+        match tint {
+            TintColor::Accent => Color::Accent,
+            TintColor::Error => Color::Error,
+            TintColor::Warning => Color::Warning,
+            TintColor::Success => Color::Success,
+        }
+    }
+}
+
+/// How a button looks at rest, under the pointer and when pressed.
+#[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
+pub enum ButtonStyle {
+    Filled,
+    Tinted(TintColor),
+    Outlined,
+    OutlinedGhost,
+    OutlinedCustom(Hsla),
+    #[default]
+    Subtle,
+    Transparent,
+}
+
+/// The height of a button.
+#[derive(Debug, Default, PartialEq, Eq, Clone, Copy)]
+pub enum ButtonSize {
+    Large,
+    Medium,
+    #[default]
+    Default,
+    Compact,
+    None,
+}
 
 /// A button that takes another style while it is selected.
 pub trait SelectableButton: Toggleable {
@@ -133,10 +176,14 @@ pub struct ButtonLike {
     pub(crate) aria_label: Option<SharedString>,
     pub(crate) aria_keyshortcuts: Option<SharedString>,
     toggled: Option<bool>,
+    expanded: Option<bool>,
     tooltip: Option<TooltipBuilder>,
     cursor_style: CursorStyle,
     on_click: Option<ClickHandler>,
     children: Vec<AnyElement>,
+    /// Rounded left and right corners; a cell inside a toggle group has square inner sides.
+    round_left: bool,
+    round_right: bool,
 }
 
 impl ButtonLike {
@@ -156,11 +203,20 @@ impl ButtonLike {
             aria_label: None,
             aria_keyshortcuts: None,
             toggled: None,
+            expanded: None,
             tooltip: None,
             cursor_style: CursorStyle::PointingHand,
             on_click: None,
             children: Vec::new(),
+            round_left: true,
+            round_right: true,
         }
+    }
+
+    pub(crate) fn round_sides(mut self, left: bool, right: bool) -> Self {
+        self.round_left = left;
+        self.round_right = right;
+        self
     }
 
     pub fn height(mut self, height: DefiniteLength) -> Self {
@@ -176,6 +232,12 @@ impl ButtonLike {
     /// The name screen readers say for the button.
     pub fn aria_label(mut self, label: impl Into<SharedString>) -> Self {
         self.aria_label = Some(label.into());
+        self
+    }
+
+    /// Whether the part the button opens is open, for screen readers.
+    pub fn aria_expanded(mut self, expanded: bool) -> Self {
+        self.expanded = Some(expanded);
         self
     }
 }
@@ -311,6 +373,7 @@ impl RenderOnce for ButtonLike {
             .when_some(self.aria_keyshortcuts, |this, keys| {
                 this.aria_keyshortcuts(keys)
             })
+            .when_some(self.expanded, |this, expanded| this.aria_expanded(expanded))
             .when_some(self.toggled, |this, toggled| {
                 this.aria_toggled(if toggled {
                     Toggled::True
@@ -331,7 +394,10 @@ impl RenderOnce for ButtonLike {
                 this.w(width).justify_center().text_center()
             })
             .when(outlined, |this| this.border_1())
-            .rounded_sm()
+            .when(self.round_left, |this| this.rounded_tl_sm().rounded_bl_sm())
+            .when(self.round_right, |this| {
+                this.rounded_tr_sm().rounded_br_sm()
+            })
             .gap(DynamicSpacing::Base04.rems(cx))
             .map(|this| match self.size {
                 ButtonSize::Large | ButtonSize::Medium => this.px(DynamicSpacing::Base08.rems(cx)),

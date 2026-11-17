@@ -7,16 +7,15 @@ use gpui::{
     FocusHandle, IntoElement, ParentElement, RenderOnce, SharedString, Styled, Transformation,
     Window, percentage, prelude::FluentBuilder,
 };
-use zed_ui::{
-    ButtonSize, ButtonStyle, Clickable, Color, Disableable, FixedWidth, IconName, IconSize,
-    LabelSize, Toggleable,
-};
 
-use crate::button_like::{ButtonCommon, ButtonLike, SelectableButton};
-use crate::icon::Icon;
-use crate::label::{Label, LabelCommon};
+use crate::button_like::{ButtonCommon, ButtonLike, ButtonSize, ButtonStyle, SelectableButton};
+use crate::color::Color;
+use crate::icon::{Icon, IconSize};
+use crate::icon_name::IconName;
+use crate::label::{Label, LabelCommon, LabelSize};
 use crate::shortcut_hint::KeyBinding;
 use crate::spacing::{DynamicSpacing, h_flex};
+use crate::traits::{Clickable, Disableable, FixedWidth, Toggleable};
 
 /// Which side of the label the key hint is on.
 #[derive(Default, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
