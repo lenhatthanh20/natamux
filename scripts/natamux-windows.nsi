@@ -1,6 +1,9 @@
 !ifndef BIN
   !error "BIN is required"
 !endif
+!ifndef ROOT
+  !error "ROOT is required"
+!endif
 !ifndef OUT
   !error "OUT is required"
 !endif
@@ -18,6 +21,8 @@ Section "Install"
   File "${BIN}\natamux-daemon.exe"
   File "${BIN}\natamux.exe"
   File "${BIN}\nmx.exe"
+  File "${ROOT}\LICENSE"
+  File "${ROOT}\THIRD-PARTY-NOTICES.md"
   CreateShortcut "$DESKTOP\Natamux.lnk" "$INSTDIR\natamux-app.exe"
   CreateShortcut "$SMPROGRAMS\Natamux.lnk" "$INSTDIR\natamux-app.exe"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
@@ -30,6 +35,8 @@ Section "Uninstall"
   Delete "$INSTDIR\natamux-daemon.exe"
   Delete "$INSTDIR\natamux.exe"
   Delete "$INSTDIR\nmx.exe"
+  Delete "$INSTDIR\LICENSE"
+  Delete "$INSTDIR\THIRD-PARTY-NOTICES.md"
   Delete "$INSTDIR\Uninstall.exe"
   RMDir "$INSTDIR"
 SectionEnd

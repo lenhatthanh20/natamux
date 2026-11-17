@@ -20,7 +20,7 @@
 <p align="center">
   <a href="https://github.com/lenhatthanh20/natamux/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/lenhatthanh20/natamux?style=flat-square&label=release"></a>
   <a href="https://github.com/lenhatthanh20/natamux/actions/workflows/rust.yml"><img alt="Rust CI" src="https://img.shields.io/github/actions/workflow/status/lenhatthanh20/natamux/rust.yml?branch=main&style=flat-square&label=Rust%20CI"></a>
-  <a href="LICENSE"><img alt="GPL-3.0 license" src="https://img.shields.io/github/license/lenhatthanh20/natamux?style=flat-square"></a>
+  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/github/license/lenhatthanh20/natamux?style=flat-square"></a>
 </p>
 
 <p align="center">
@@ -98,4 +98,5 @@ Natamux has no account or telemetry. Task data stays in each repository's `.nata
 - [Documentation](https://natamux.github.io/docs/)
 - [Contributing](docs/dev-setup.md)
 - [Security](SECURITY.md)
-- [License](LICENSE) · GPL-3.0-or-later
+- [License](LICENSE) · MIT
+- Releases `native-beta.1` and `v1.0.0` to the last `v1.0.x` were released under GPL-3.0-or-later and stay under it. The first release after the move to MIT is MIT.

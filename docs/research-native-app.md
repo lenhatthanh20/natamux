@@ -45,7 +45,7 @@ Every option must meet these, or say what it gives up:
 | Deno Desktop (Deno 2.9) | A | TypeScript on Deno | Experimental since 2026-06-25 | MIT | arm64, x64 | x64 only | x64, arm64 (WebKit) | Web; daemon only if node-pty loads (not confirmed) |
 | Wails v3 (v3.0.0-beta.28) | A | Go | Beta; v2 is the stable line | MIT | arm64, x64 (not checked per arch) | x64 (arm64 not checked) | Unknown: not checked, because Wails was not on the shortlist | Web; daemon rewritten in Go or kept as a sidecar |
 | Swift/AppKit + WinUI 3 / C# | B | Swift, C# | Stable platforms | Swift Apache-2.0, Windows App SDK MIT | arm64, x64 | x64, arm64 | No: needs a third UI (Ghostty uses GTK4 for this) | Daemon, CLI |
-| Rust + GPUI (0.2.2) | B | Rust | Pre-1.0, "frequent breaking changes" | `gpui` crate Apache-2.0; Zed editor GPL | arm64, x64 (Metal) | x64 (Direct3D 11) | Yes (wgpu on Vulkan; Wayland or X11) | Daemon, CLI |
+| Rust + GPUI (0.2.2) | B | Rust | Pre-1.0, "frequent breaking changes" | `gpui` crate Apache-2.0; Zed editor GPL (at the time; the MIT move of 2026-10-30 replaced the GPL crates) | arm64, x64 (Metal) | x64 (Direct3D 11) | Yes (wgpu on Vulkan; Wayland or X11) | Daemon, CLI |
 | Flutter | B | Dart | Stable | BSD-3-Clause | arm64, x64 | x64 | Yes ([supported platforms](https://docs.flutter.dev/reference/supported-platforms)) | Daemon, CLI |
 | libghostty (terminal engine for B or C) | B, C | Zig, C API | `libghostty-vt` usable; API still changing; no tagged release | MIT | Ghostty app ships here | Parser only; no Windows renderer or app | Ghostty app ships here (GTK4) | Not a shell; replaces xterm.js only |
 
