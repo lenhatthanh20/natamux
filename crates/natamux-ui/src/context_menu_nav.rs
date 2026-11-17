@@ -19,9 +19,9 @@ use super::{
     SUBMENU_ROOM, row_above, row_below,
 };
 use crate::list::List;
-use crate::traits::StyledExt;
 use crate::shortcut_hint::KeyBinding;
 use crate::spacing::{rems_from_px, v_flex};
+use crate::traits::StyledExt;
 use crate::with_rem_size::WithRemSize;
 
 impl ContextMenu {
