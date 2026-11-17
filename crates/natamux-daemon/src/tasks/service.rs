@@ -134,6 +134,9 @@ impl TaskService {
                 return;
             };
             if let Ok(mut store) = store.lock() {
+                if store.sync.closed() {
+                    return;
+                }
                 for id in ids {
                     store.sync.try_reload(&id);
                 }
