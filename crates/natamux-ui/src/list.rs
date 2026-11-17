@@ -6,9 +6,9 @@ use gpui::{
     prelude::FluentBuilder,
 };
 use theme::ActiveTheme;
-use zed_ui::{Color, LabelSize};
 
-use crate::label::{Label, LabelCommon};
+use crate::color::Color;
+use crate::label::{Label, LabelCommon, LabelSize};
 use crate::spacing::{DynamicSpacing, h_flex, v_flex};
 
 /// A column of rows, 4 px above and below. With no rows it says "No items".

@@ -4,10 +4,52 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use gpui::{
-    AbsoluteLength, App, IntoElement, RenderOnce, SharedString, Styled, Transformation, Window,
-    img, svg,
+    AbsoluteLength, App, IntoElement, Rems, RenderOnce, SharedString, Styled, Transformation,
+    Window, img, svg,
 };
-use zed_ui::{Color, IconName, IconSize};
+
+use crate::color::Color;
+use crate::icon_name::IconName;
+use crate::spacing::rems_from_px;
+
+/// The side of its label an icon sits on.
+#[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
+pub enum IconPosition {
+    #[default]
+    Start,
+    End,
+}
+
+/// The side of a square icon.
+#[derive(Debug, Default, PartialEq, Clone, Copy)]
+pub enum IconSize {
+    /// 10 px.
+    Indicator,
+    /// 12 px.
+    XSmall,
+    /// 14 px.
+    Small,
+    /// 16 px.
+    #[default]
+    Medium,
+    /// 48 px.
+    XLarge,
+    Custom(Rems),
+}
+
+impl IconSize {
+    pub fn rems(self) -> Rems {
+        let px = match self {
+            IconSize::Indicator => 10_f32,
+            IconSize::XSmall => 12_f32,
+            IconSize::Small => 14_f32,
+            IconSize::Medium => 16_f32,
+            IconSize::XLarge => 48_f32,
+            IconSize::Custom(size) => return size,
+        };
+        rems_from_px(px)
+    }
+}
 
 #[derive(Clone)]
 enum Source {

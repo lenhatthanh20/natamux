@@ -1,14 +1,67 @@
 //! Text: a label in the UI font (or the buffer font), and a headline.
 
 use gpui::{
-    App, Div, FontWeight, IntoElement, ParentElement, Rems, RenderOnce, SharedString, Styled,
-    TextAlign, UnderlineStyle, Window, div, prelude::FluentBuilder, px, relative, rems,
+    App, Div, FontWeight, IntoElement, ParentElement, Pixels, Rems, RenderOnce, SharedString,
+    Styled, TextAlign, UnderlineStyle, Window, div, prelude::FluentBuilder, px, relative, rems,
 };
 use theme::ActiveTheme;
-use zed_ui::{Color, LabelSize};
 
+use crate::color::Color;
 use crate::control_chars;
 use crate::spacing::rems_from_px;
+
+/// The text size of a label.
+#[derive(Debug, Default, PartialEq, Clone, Copy)]
+pub enum LabelSize {
+    /// 14 px.
+    #[default]
+    Default,
+    /// 16 px.
+    Large,
+    /// 12 px.
+    Small,
+    /// 10 px.
+    XSmall,
+    Custom(Rems),
+}
+
+/// A text size by name, for text that is not a label.
+#[derive(Debug, Default, Clone)]
+pub enum TextSize {
+    /// 14 px.
+    #[default]
+    Default,
+    /// 16 px.
+    Large,
+    /// 12 px.
+    Small,
+    /// 10 px.
+    XSmall,
+    /// The UI font size of the settings.
+    Ui,
+    /// The buffer font size of the settings.
+    Editor,
+}
+
+impl TextSize {
+    /// The size in rems, so it follows the UI size.
+    pub fn rems(self, cx: &App) -> Rems {
+        rems_from_px(self.pixels(cx))
+    }
+
+    /// The size in px. The named sizes are fixed: they do not follow the UI size.
+    pub fn pixels(self, cx: &App) -> Pixels {
+        let settings = theme::theme_settings(cx);
+        match self {
+            Self::Large => px(16.),
+            Self::Default => px(14.),
+            Self::Small => px(12.),
+            Self::XSmall => px(10.),
+            Self::Ui => settings.ui_font_size(cx),
+            Self::Editor => settings.buffer_font_size(cx),
+        }
+    }
+}
 
 /// The line height of a label.
 #[derive(Default, PartialEq, Copy, Clone)]

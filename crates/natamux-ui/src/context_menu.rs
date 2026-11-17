@@ -20,16 +20,16 @@ use theme::BufferLineHeight;
 use zed_menu::{
     Cancel, Confirm, SelectChild, SelectFirst, SelectLast, SelectNext, SelectParent, SelectPrevious,
 };
-use zed_ui::{
-    Color, Disableable, IconName, IconPosition, IconSize, ListItem, ListItemSpacing, StyledExt,
-    Toggleable,
-};
 
-use crate::icon::Icon;
+use crate::color::Color;
+use crate::icon::{Icon, IconPosition, IconSize};
+use crate::icon_name::IconName;
 use crate::label::{Label, LabelCommon};
 use crate::list::{List, ListSeparator, ListSubHeader};
+use crate::list_item::{ListItem, ListItemSpacing};
 use crate::shortcut_hint::KeyBinding;
 use crate::spacing::{h_flex, rems_from_px, v_flex};
+use crate::traits::{Disableable, StyledExt, Toggleable};
 use crate::with_rem_size::WithRemSize;
 
 type RowRender = Box<dyn Fn(&mut Window, &mut App) -> AnyElement>;

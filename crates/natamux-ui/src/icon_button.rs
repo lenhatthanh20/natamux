@@ -4,14 +4,13 @@ use gpui::{
     AnyView, App, ClickEvent, CursorStyle, DefiniteLength, ElementId, FocusHandle, IntoElement,
     ParentElement, Pixels, RenderOnce, SharedString, Window, prelude::FluentBuilder,
 };
-use zed_ui::{
-    ButtonSize, ButtonStyle, Clickable, Color, Disableable, FixedWidth, IconName, IconSize,
-    Toggleable, VisibleOnHover,
-};
 
-use crate::button_like::{ButtonCommon, ButtonLike, SelectableButton};
-use crate::icon::Icon;
+use crate::button_like::{ButtonCommon, ButtonLike, ButtonSize, ButtonStyle, SelectableButton};
+use crate::color::Color;
+use crate::icon::{Icon, IconSize};
+use crate::icon_name::IconName;
 use crate::spacing::DynamicSpacing;
+use crate::traits::{Clickable, Disableable, FixedWidth, Toggleable, VisibleOnHover};
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
 pub enum IconButtonShape {
@@ -81,6 +80,11 @@ impl IconButton {
 
     pub fn aria_label(mut self, label: impl Into<SharedString>) -> Self {
         self.base = self.base.aria_label(label);
+        self
+    }
+
+    pub fn aria_expanded(mut self, expanded: bool) -> Self {
+        self.base = self.base.aria_expanded(expanded);
         self
     }
 }
