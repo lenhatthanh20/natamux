@@ -7,7 +7,7 @@ use std::ops::Range;
 use std::rc::Rc;
 
 use gpui::{App, Entity, EntityId, FocusHandle, Subscription, Window};
-use ui::editor_menu::ContextMenu;
+use ui::ContextMenu;
 
 pub trait FindTarget {
     /// The same view gives the same id: a second Mod+F on it only refocuses the bar.

@@ -8,7 +8,7 @@ use gpui::{
     Pixels, Point, Subscription, TextRun, Window, anchored, deferred,
 };
 use theme::ActiveTheme;
-use ui::editor_menu::ContextMenu;
+use ui::ContextMenu;
 
 use super::code_runs::input_edit;
 use super::code_view::CodeView;

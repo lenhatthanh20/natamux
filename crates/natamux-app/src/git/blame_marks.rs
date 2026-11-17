@@ -8,8 +8,7 @@ use std::sync::Arc;
 
 use gpui::{ClipboardItem, Entity, EventEmitter, WeakEntity};
 use natamux_proto::workspaces::changes::{BlameAnswer, ImageSide};
-use ui::editor_menu::{ContextMenu, ContextMenuEntry};
-use ui::prelude::*;
+use ui::{ContextMenu, ContextMenuEntry, prelude::*};
 
 use super::blame_rules::{BlameItem, NOT_TRACKED, commit_at, line_labels, menu_items};
 use super::code_target::{BlameTarget, RowMenu};
