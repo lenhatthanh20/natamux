@@ -1,41 +1,36 @@
-; Natamux outline patterns for Rust. Worked out from the old editor's output (golden files T-OUT-1)
-; and node names as the author remembers them; no grammar file was at hand.
-; Captures: @item the entry, @name shown and a name, @context shown only, @open/@close body tokens.
+; Natamux outline patterns for Rust: Natamux's own file, in the capture names of
+; text_view/outline.rs. The facts (which nodes are items, which words show) come from the
+; outline golden files (T-OUT-1, the old editor's output) and the grammar's node names.
+; @entry: the item. @title: shown, and part of the name. @word: shown only.
+; @body_start, @body_end: the tokens around the body.
 
-; Values.
-(const_item (visibility_modifier)? @context "const" @context name: (_) @name) @item
-(static_item (visibility_modifier)? @context "static" @context name: (_) @name) @item
-(type_item (visibility_modifier)? @context "type" @context name: (_) @name) @item
-(macro_definition "macro_rules!" @context name: (_) @name) @item
+; A keyword and a name, after an optional visibility.
+[
+  (const_item (visibility_modifier)? @word "const" @word name: (_) @title)
+  (static_item (visibility_modifier)? @word "static" @word name: (_) @title)
+  (type_item (visibility_modifier)? @word "type" @word name: (_) @title)
+  (struct_item (visibility_modifier)? @word "struct" @word name: (_) @title)
+  (union_item (visibility_modifier)? @word "union" @word name: (_) @title)
+  (enum_item (visibility_modifier)? @word "enum" @word name: (_) @title)
+  (trait_item (visibility_modifier)? @word "trait" @word name: (_) @title)
+  (mod_item (visibility_modifier)? @word "mod" @word name: (_) @title)
+] @entry
 
-; Types and their members.
-(struct_item (visibility_modifier)? @context "struct" @context name: (_) @name) @item
-(union_item (visibility_modifier)? @context "union" @context name: (_) @name) @item
-(enum_item (visibility_modifier)? @context "enum" @context name: (_) @name) @item
-(enum_variant name: (_) @name) @item
-(field_declaration (visibility_modifier)? @context name: (_) @name) @item
+; Members and macros: the name, after a visibility or "macro_rules!".
+[
+  (enum_variant name: (_) @title)
+  (field_declaration (visibility_modifier)? @word name: (_) @title)
+  (macro_definition "macro_rules!" @word name: (_) @title)
+] @entry
 
-; The shown text of an impl is "impl", an optional trait, "for", and the type.
-(impl_item
-  "impl" @context
-  trait: (_)? @name
-  "for"? @context
-  type: (_) @name
-  body: (declaration_list "{" @open "}" @close)) @item
+; "impl", the trait and "for" when there is a trait, then the type.
+(impl_item "impl" @word trait: (_)? @title "for"? @word type: (_) @title
+  body: (declaration_list "{" @body_start "}" @body_end)) @entry
 
-(trait_item (visibility_modifier)? @context "trait" @context name: (_) @name) @item
-(mod_item (visibility_modifier)? @context "mod" @context name: (_) @name) @item
-
-; Functions: the word list before "fn" is visibility, then async/unsafe and the like.
-(function_item
-  (visibility_modifier)? @context
-  (function_modifiers)? @context
-  "fn" @context
-  name: (_) @name
-  body: (block "{" @open "}" @close)) @item
-
-(function_signature_item
-  (visibility_modifier)? @context
-  (function_modifiers)? @context
-  "fn" @context
-  name: (_) @name) @item
+; Functions, with a body or without: visibility, words such as async, "fn", the name.
+[
+  (function_item (visibility_modifier)? @word (function_modifiers)? @word "fn" @word
+    name: (_) @title body: (block "{" @body_start "}" @body_end))
+  (function_signature_item (visibility_modifier)? @word (function_modifiers)? @word "fn" @word
+    name: (_) @title)
+] @entry

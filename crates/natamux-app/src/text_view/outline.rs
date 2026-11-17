@@ -1,9 +1,9 @@
 //! The outline of a text (plan 6.4, S4.3c): the items Go to symbol lists and sticky scroll pins.
 //! The own `assets/queries/<lang>/outline.scm` files name them with these captures:
-//! - `@item`: the node of the item;
-//! - `@name`: a part of the shown text that is also the name; `@context`: a part that is only
+//! - `@entry`: the node of the item;
+//! - `@title`: a part of the shown text that is also the name; `@word`: a part that is only
 //!   shown (a keyword, a type);
-//! - `@open` and `@close`: the tokens around the item's body.
+//! - `@body_start` and `@body_end`: the tokens around the item's body.
 //!
 //! The shown text joins its parts in source order with one space where the source has a gap. An
 //! item inside another item's range is one level deeper.
@@ -28,7 +28,7 @@ pub struct OutlineItem {
     pub selection: Range<usize>,
     /// From the start of the first shown part to the end of the last one.
     pub source: Range<usize>,
-    /// Between the `@open` and the `@close` token.
+    /// Between the `@body_start` and the `@body_end` token.
     pub body: Option<Range<usize>>,
     /// The names inside `text`.
     pub names: Vec<Range<usize>>,
@@ -71,11 +71,11 @@ fn compile(lang: &Lang) -> Result<Option<Compiled>, String> {
         .map_err(|error| format!("{} outline: {error}", lang.name))?;
     let at = |name: &str| query.capture_index_for_name(name);
     Ok(Some(Compiled {
-        item: at("item"),
-        name: at("name"),
-        context: at("context"),
-        open: at("open"),
-        close: at("close"),
+        item: at("entry"),
+        name: at("title"),
+        context: at("word"),
+        open: at("body_start"),
+        close: at("body_end"),
         query,
     }))
 }
