@@ -6,20 +6,20 @@ Other notices are in `THIRD-PARTY-NOTICES.md`.
 ## Licenses used
 
 {{#each overview}}
-- [{{name}}](#{{id}}) ({{count}} crates)
+- [{{{name}}}](#{{id}}) ({{count}} crates)
 {{/each}}
 
 {{#each licenses}}
-## {{name}} {#{{id}}}
+## {{{name}}} {#{{id}}}
 
 Used by:
 
 {{#each used_by}}
-- {{crate.name}} {{crate.version}}{{#if crate.repository}} ({{crate.repository}}){{/if}}
+- {{crate.name}} {{crate.version}}{{#if crate.repository}} ({{{crate.repository}}}){{/if}}
 {{/each}}
 
 ```
-{{text}}
+{{{text}}}
 ```
 
 {{/each}}
