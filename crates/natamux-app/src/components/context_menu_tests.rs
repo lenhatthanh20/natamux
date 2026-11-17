@@ -21,7 +21,11 @@ fn open(
 ) -> (Entity<ContextMenu>, VisualTestContext) {
     test_views::init(cx);
     let window = cx
-        .update(|cx| cx.open_window(Default::default(), |window, cx| ContextMenu::build(window, cx, fill)))
+        .update(|cx| {
+            cx.open_window(Default::default(), |window, cx| {
+                ContextMenu::build(window, cx, fill)
+            })
+        })
         .expect("the window opens");
     let menu = window.root(cx).expect("the menu is the root view");
     let mut window_cx = VisualTestContext::from_window(window.into(), cx);
@@ -56,10 +60,18 @@ fn picks_on_focus(cx: &mut TestAppContext, a11y: bool) {
     });
     let on_focus = if a11y { Some(2) } else { None };
     assert_eq!(cx.update(|window, _| window.is_a11y_enabled()), a11y);
-    assert_eq!(picked(&menu, &mut cx), None, "nothing is picked before the focus");
+    assert_eq!(
+        picked(&menu, &mut cx),
+        None,
+        "nothing is picked before the focus"
+    );
 
     refocus(&menu, &mut cx);
-    assert_eq!(picked(&menu, &mut cx), on_focus, "the checked row, with a11y only");
+    assert_eq!(
+        picked(&menu, &mut cx),
+        on_focus,
+        "the checked row, with a11y only"
+    );
 
     // From here the keys walk the same way in both cases: Down first goes to the top row.
     for (key, want) in [("down", 1), ("down", 2), ("up", 1)] {
@@ -71,14 +83,22 @@ fn picks_on_focus(cx: &mut TestAppContext, a11y: bool) {
     }
 
     refocus(&menu, &mut cx);
-    assert_eq!(picked(&menu, &mut cx), Some(1), "a new focus keeps the pick");
+    assert_eq!(
+        picked(&menu, &mut cx),
+        Some(1),
+        "a new focus keeps the pick"
+    );
 
     menu.update(&mut cx, |menu, cx| {
         menu.clear_selected();
         cx.notify();
     });
     refocus(&menu, &mut cx);
-    assert_eq!(picked(&menu, &mut cx), on_focus, "with no pick, the focus picks again");
+    assert_eq!(
+        picked(&menu, &mut cx),
+        on_focus,
+        "with no pick, the focus picks again"
+    );
 }
 
 #[gpui::test]
@@ -109,7 +129,9 @@ fn confirm_with_nothing_picked_closes_the_menu_and_runs_nothing(cx: &mut TestApp
     });
 
     assert_eq!(picked(&menu, &mut cx), None);
-    menu.update_in(&mut cx, |menu, window, cx| menu.confirm(&Confirm, window, cx));
+    menu.update_in(&mut cx, |menu, window, cx| {
+        menu.confirm(&Confirm, window, cx)
+    });
     cx.run_until_parked();
     assert_eq!(closed.get(), 1, "the menu closes once");
     assert!(!ran.get(), "no row runs");

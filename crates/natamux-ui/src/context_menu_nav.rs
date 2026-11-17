@@ -161,12 +161,10 @@ impl ContextMenu {
     }
 
     pub(super) fn submenu_has_focus(&self, window: &Window, cx: &App) -> bool {
-        self.side.open.as_ref().is_some_and(|open| {
-            open.menu
-                .read(cx)
-                .focus_handle
-                .contains_focused(window, cx)
-        })
+        self.side
+            .open
+            .as_ref()
+            .is_some_and(|open| open.menu.read(cx).focus_handle.contains_focused(window, cx))
     }
 
     /// Clears the pick and takes the focus back, as the pointer does when it comes over a row.
@@ -394,8 +392,9 @@ impl Render for ContextMenu {
             .flex_row()
             .flex_shrink_0()
             .child(self.column(window, cx));
-        let submenu =
-            place.map(|(row, submenu, top, on_left)| self.render_submenu(row, submenu, top, on_left, cx));
+        let submenu = place.map(|(row, submenu, top, on_left)| {
+            self.render_submenu(row, submenu, top, on_left, cx)
+        });
 
         let wide = window.viewport_size().width / window.rem_size() > rems_from_px(800_f32).0;
         if wide {

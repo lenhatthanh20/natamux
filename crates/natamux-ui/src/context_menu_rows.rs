@@ -2,7 +2,7 @@
 //! beside its row. Element values from plan 6.7.2 and the menu shots.
 
 use gpui::{
-    Anchor, AnyElement, App, Context, Div, DismissEvent, Entity, InteractiveElement, IntoElement,
+    Anchor, AnyElement, App, Context, DismissEvent, Div, Entity, InteractiveElement, IntoElement,
     MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement, Pixels, Role,
     SharedString, StatefulInteractiveElement, Styled, Window, anchored, canvas, div,
     prelude::FluentBuilder, px,
@@ -185,7 +185,9 @@ impl ContextMenu {
             .aria_role(role)
             .aria_label(entry.label.clone())
             .when(lit, |item| item.aria_active_descendant())
-            .when_some(entry.toggle, |item, (_, checked)| item.aria_checked(checked))
+            .when_some(entry.toggle, |item, (_, checked)| {
+                item.aria_checked(checked)
+            })
             .when_some(shortcut, |item, shortcut| item.aria_keyshortcuts(shortcut))
             .when_some(entry.toggle, |item, (side, checked)| {
                 let mark = entry.check_mark(tint, checked);
@@ -283,9 +285,9 @@ impl ContextMenu {
             .on_hover(cx.listener(move |this, hovered: &bool, window, cx| {
                 this.on_opener_hover(ix, *hovered, window, cx)
             }))
-            .on_click(cx.listener(move |this, _, window, cx| {
-                this.open_submenu(ix, false, window, cx)
-            }))
+            .on_click(
+                cx.listener(move |this, _, window, cx| this.open_submenu(ix, false, window, cx)),
+            )
             .child(record_box(self.side.opener_box.clone(), lit))
             .child(text);
         div()
