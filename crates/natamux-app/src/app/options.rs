@@ -202,12 +202,14 @@ pub enum Shot {
     ButtonFocus,
     ButtonDisabledTooltip,
     CheckboxStates,
+    /// Another state with the bars of its scroll areas shown (`-scrollbar`).
+    Bars(Bars),
     /// One code sample in the editor tab, per language of `git/languages.rs`.
     Code(CodeLang),
 }
 
 impl Shot {
-    pub const ALL: [Shot; 168] = [
+    pub const ALL: [Shot; 174] = [
         Shot::TasksTable,
         Shot::TasksBoard,
         Shot::BoardHoverCard,
@@ -354,6 +356,12 @@ impl Shot {
         Shot::ButtonFocus,
         Shot::ButtonDisabledTooltip,
         Shot::CheckboxStates,
+        Shot::Bars(Bars::ProjectSettings),
+        Shot::Bars(Bars::TabStages),
+        Shot::Bars(Bars::StageSheet),
+        Shot::Bars(Bars::Branch),
+        Shot::Bars(Bars::AddStage),
+        Shot::Bars(Bars::DocsRich),
         Shot::Code(CodeLang::Bash),
         Shot::Code(CodeLang::C),
         Shot::Code(CodeLang::Cpp),
@@ -526,7 +534,17 @@ impl Shot {
             Shot::ButtonFocus => "button-focus",
             Shot::ButtonDisabledTooltip => "button-disabled-tooltip",
             Shot::CheckboxStates => "checkbox-states",
+            Shot::Bars(bars) => bars.state(),
             Shot::Code(lang) => lang.state(),
+        }
+    }
+
+    /// The state whose files and steps this one takes: a `-scrollbar` state takes those of the
+    /// state it shows.
+    pub fn steps_of(self) -> Shot {
+        match self {
+            Shot::Bars(bars) => bars.of(),
+            shot => shot,
         }
     }
 
@@ -535,6 +553,50 @@ impl Shot {
             .into_iter()
             .find(|shot| shot.name() == text)
             .ok_or_else(|| format!("--shot does not know the state {text:?}"))
+    }
+}
+
+/// The states that show the bars of another state's scroll areas: the Zed scrollbars of
+/// `components/scrollbars.rs` and the Markdown view (docs/plan-mit-license.md, A35).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Bars {
+    /// The page of Project settings.
+    ProjectSettings,
+    /// The pipeline preview of the Stages tab.
+    TabStages,
+    /// The right column of the stage sheet.
+    StageSheet,
+    /// The branch sheet.
+    Branch,
+    /// The stage picker of the Add stage sheet.
+    AddStage,
+    /// The code blocks and tables of the Markdown view.
+    DocsRich,
+}
+
+impl Bars {
+    /// The name of its `--shot` state.
+    pub fn state(self) -> &'static str {
+        match self {
+            Bars::ProjectSettings => "project-settings-scrollbar",
+            Bars::TabStages => "project-settings-tab-stages-scrollbar",
+            Bars::StageSheet => "project-settings-stage-sheet-scrollbar",
+            Bars::Branch => "project-settings-branch-scrollbar",
+            Bars::AddStage => "project-settings-add-stage-scrollbar",
+            Bars::DocsRich => "workspace-docs-rich-scrollbar",
+        }
+    }
+
+    /// The state it shows.
+    pub fn of(self) -> Shot {
+        match self {
+            Bars::ProjectSettings => Shot::ProjectSettings,
+            Bars::TabStages => Shot::ProjectSettingsTabStages,
+            Bars::StageSheet => Shot::ProjectSettingsStageSheet,
+            Bars::Branch => Shot::ProjectSettingsBranch,
+            Bars::AddStage => Shot::ProjectSettingsAddStage,
+            Bars::DocsRich => Shot::WorkspaceDocsRich,
+        }
     }
 }
 

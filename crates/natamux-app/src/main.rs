@@ -585,7 +585,7 @@ fn start(
     })
     .detach();
     if let Some(shot) = options.shot {
-        app::shots::prepare(shot);
+        app::shots::prepare(shot.steps_of());
     }
     if options.fake_daemon && options.open_task.is_some() {
         app::fake_daemon::shared().clear_jobs();
@@ -618,7 +618,7 @@ fn start(
 /// The CI and bench modes of the flags, on the open window.
 fn run_modes(options: &Options, window: WindowHandle<Root>, cx: &mut App) {
     if let Some(shot) = options.shot {
-        app::shots::run(window, shot, cx);
+        app::shots::run(window, shot.steps_of(), cx);
     }
     if options.smoke {
         app::smoke::run(

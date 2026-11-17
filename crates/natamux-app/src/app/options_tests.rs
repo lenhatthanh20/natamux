@@ -211,3 +211,20 @@ fn names_a_code_state_after_each_language() {
     assert!(names.contains(&"code-markdown-inline"));
     assert!(names.contains(&"code-typescript"));
 }
+
+#[test]
+fn a_bars_state_takes_the_steps_of_the_state_it_shows() {
+    let mut count = 0;
+    for shot in Shot::ALL {
+        match shot {
+            Shot::Bars(bars) => {
+                count += 1;
+                assert_eq!(shot.name(), format!("{}-scrollbar", bars.of().name()));
+                assert!(crate::app::appearance_rules::shows_scrollbars(shot.name()));
+                assert_eq!(shot.steps_of(), bars.of());
+            }
+            _ => assert_eq!(shot.steps_of(), shot),
+        }
+    }
+    assert_eq!(count, 6);
+}
