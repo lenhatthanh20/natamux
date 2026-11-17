@@ -9,6 +9,7 @@ use gpui::{
 };
 use theme::ActiveTheme;
 
+use crate::color::Color;
 use crate::spacing::{DynamicSpacing, rems_from_px};
 use crate::traits::{Clickable, Disableable, FixedWidth, Toggleable, VisibleOnHover};
 
@@ -20,6 +21,17 @@ pub enum TintColor {
     Error,
     Warning,
     Success,
+}
+
+impl From<TintColor> for Color {
+    fn from(tint: TintColor) -> Self {
+        match tint {
+            TintColor::Accent => Color::Accent,
+            TintColor::Error => Color::Error,
+            TintColor::Warning => Color::Warning,
+            TintColor::Success => Color::Success,
+        }
+    }
 }
 
 /// How a button looks at rest, under the pointer and when pressed.
