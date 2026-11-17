@@ -19,6 +19,7 @@ ignore = [
   { id = "RUSTSEC-2026-0371", reason = "zbus_names unmaintained; a Zed dependency (Linux only), no known hole. Review by 2026-12-31." },
   { id = "RUSTSEC-2026-0370", reason = "zvariant unmaintained; a Zed dependency (Linux only), no known hole. Review by 2026-12-31." },
   { id = "RUSTSEC-2026-0372", reason = "zvariant_derive unmaintained; a Zed dependency (Linux only), no known hole. Review by 2026-12-31." },
+  { id = "RUSTSEC-2026-0543", reason = "chrono unmaintained, no maintained release exists; only Zed crates (gpui, ui, workspace, client, cloud_api_types, node_runtime, scheduler, zlog) and Zed's trash fork use it, no known hole. Review by 2026-12-31." },
 ]
 
 [licenses]
