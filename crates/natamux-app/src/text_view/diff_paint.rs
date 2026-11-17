@@ -201,7 +201,16 @@ impl Frame<'_> {
     // shortcut: the changed words as plain rects and the marker as a square centred on the row
     // boundary; no B2 shot shows either, so check them on the first shot that does.
     fn words(&self, rows: &SideRows, paint: &mut DiffPaint) {
+        let in_view = self.rows_in_view();
         for (range, status) in &rows.words {
+            // Only words in view: measuring one shapes its row.
+            let (first, last) = (
+                self.laid.row_of(range.start, false),
+                self.laid.row_of(range.end, true),
+            );
+            if last < in_view.start || first >= in_view.end {
+                continue;
+            }
             let color = match status {
                 Status::Deleted => self.colors.version_control_word_deleted,
                 _ => self.colors.version_control_word_added,

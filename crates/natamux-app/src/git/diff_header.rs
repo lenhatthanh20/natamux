@@ -14,9 +14,10 @@ pub const UNTITLED: &str = "untitled";
 const HEADER_ROWS: f32 = 2.;
 /// The room around the header's box, in rems.
 const PADDING: f32 = 0.25;
-/// The room left of the text inside the box, in rems: where the fold button and the gap after
-/// it were.
-const TEXT_LEFT: f32 = 2.625;
+/// The room left of the text inside the box, in rems: where the fold button and the gaps around
+/// it were. Measured on the shot: the text starts 1 px further right than their sum of 2.625
+/// rems, so the text's left edge lands on the same whole pixel.
+const TEXT_LEFT: f32 = 2.6875;
 
 /// How far down from the side's top what lies under the header starts to show: the buttons of
 /// a change scrolled under it go below this.
