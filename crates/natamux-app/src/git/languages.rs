@@ -1,101 +1,9 @@
-//! Syntax colours of the diff: Zed's built-in tree-sitter grammars and their highlight queries
-//! (the `grammars` crate), with no language servers. A file takes its language by extension.
+//! The languages of the own highlighter (`text_view/highlight.rs`): how a path finds one, its
+//! tree-sitter grammar and the query files that name its parts. A file takes its language by
+//! extension.
 
-use std::sync::Arc;
-
-use futures::FutureExt;
-use gpui::{App, Global};
-use language::{LanguageRegistry, LoadedLanguage};
-use theme::{ActiveTheme, GlobalTheme};
-
-/// The languages of the `grammars` crate that have a grammar here.
-const LANGUAGES: [&str; 22] = [
-    "bash",
-    "c",
-    "cpp",
-    "css",
-    "diff",
-    "env",
-    "gitcommit",
-    "go",
-    "gomod",
-    "gowork",
-    "javascript",
-    "jsdoc",
-    "json",
-    "jsonc",
-    "markdown",
-    "markdown-inline",
-    "python",
-    "regex",
-    "rust",
-    "tsx",
-    "typescript",
-    "yaml",
-];
-
-struct GlobalLanguages(Arc<LanguageRegistry>);
-
-impl Global for GlobalLanguages {}
-
-/// Registers the grammars once, and follows the theme so the colours change with it.
-pub fn init(cx: &mut App) {
-    let registry = Arc::new(LanguageRegistry::new(cx.background_executor().clone()));
-    registry.register_native_grammars(grammars::native_grammars());
-    for name in LANGUAGES {
-        let config = grammars::load_config(name);
-        let loaded = config.clone();
-        registry.register_language(
-            config.name.clone(),
-            config.grammar.clone(),
-            config.matcher.clone(),
-            config.hidden,
-            None,
-            Arc::new(move || {
-                let config = loaded.clone();
-                async move {
-                    Ok(LoadedLanguage {
-                        config,
-                        queries: grammars::load_queries(name),
-                        context_provider: None,
-                        toolchain_provider: None,
-                        manifest_name: None,
-                    })
-                }
-                .boxed()
-            }),
-        );
-    }
-    registry.set_theme(cx.theme().clone());
-    cx.set_global(GlobalLanguages(registry));
-    cx.observe_global::<GlobalTheme>(|cx| {
-        let theme = cx.theme().clone();
-        if let Some(languages) = cx.try_global::<GlobalLanguages>() {
-            languages.0.set_theme(theme);
-        }
-    })
-    .detach();
-}
-
-/// The language of `path` by its extension or name, None when no grammar fits. Only the old
-/// code of the tests (`zed_diff.rs`, `files/zed_body.rs`) still asks; it goes in S7.
-#[cfg(test)]
-pub fn language_for(
-    path: &str,
-    cx: &App,
-) -> Option<impl Future<Output = Option<Arc<language::Language>>> + use<>> {
-    let registry = cx.try_global::<GlobalLanguages>()?.0.clone();
-    let name = path.rsplit('/').next().unwrap_or(path);
-    let key = name
-        .rsplit_once('.')
-        .map_or(name, |(_, ext)| ext)
-        .to_owned();
-    Some(async move { registry.language_for_name_or_extension(&key).await.ok() })
-}
-
-/// A language of the own highlighter (`text_view/highlight.rs`): how a path finds it, its
-/// tree-sitter grammar and the query files that name its parts. The same 22 languages as
-/// `LANGUAGES`; the Zed registry above goes once the code view and the diff view use this table.
+/// A language: how a path finds it, its tree-sitter grammar and the query files that name its
+/// parts.
 pub struct Lang {
     /// The name the editor knows it by ("Shell Script").
     pub name: &'static str,
@@ -141,8 +49,8 @@ const C: QueryFile = query!("c", "highlights");
 
 pub const LANG_COUNT: usize = 22;
 
-/// The languages in the order of `LANGUAGES`. A lookup takes the last one that fits, as the Zed
-/// registry does: that is why a `.c` file gets C++ (its suffix `C` fits without case).
+/// The languages in alphabetical order of their ids. A lookup takes the last one that fits: that
+/// is why a `.c` file gets C++ (its suffix `C` fits without case).
 pub static LANGS: [Lang; LANG_COUNT] = [
     Lang {
         name: "Shell Script",
@@ -399,8 +307,7 @@ pub static LANGS: [Lang; LANG_COUNT] = [
 ];
 
 /// The language of `path`: its extension (or its whole name when it has no dot) equals a
-/// language name or suffix, without case. As in `language_for`, `.env` gives `env`.
-#[cfg_attr(not(test), allow(dead_code))]
+/// language name or suffix, without case. A `.env` file gives `env`.
 pub fn lang_for(path: &str) -> Option<&'static Lang> {
     let name = path.rsplit('/').next().unwrap_or(path);
     let key = name.rsplit_once('.').map_or(name, |(_, ext)| ext);
