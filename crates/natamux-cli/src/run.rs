@@ -3,6 +3,8 @@
 
 use std::collections::HashMap;
 
+use natamux_agents::hook_files::{WorkspaceHooks, workspace_file};
+
 use crate::command::{Command, parse_command};
 use crate::daemon::{DaemonClient, Transport};
 use crate::execute::{execute, print_json};
@@ -124,6 +126,12 @@ pub async fn run_cli<T: Transport>(
         // It only prints settings, so it needs no token and does not call the daemon.
         Command::HooksClaudeCode => {
             print_json(io, &claude_code_hook_settings(&daemon_url(env)));
+            return EXIT_OK;
+        }
+        Command::HooksFile(agent) => {
+            if let Some(file) = workspace_file(agent, WorkspaceHooks::default()) {
+                io.stdout(&file.content);
+            }
             return EXIT_OK;
         }
         _ => {}

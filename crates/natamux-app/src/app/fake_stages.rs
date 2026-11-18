@@ -45,6 +45,7 @@ pub(super) fn reference_pipeline() -> Vec<Step> {
     let investigate = Stage {
         name: Some("Investigate".into()),
         output: Some("investigate.md".into()),
+        agent: Some("opencode".into()),
         prompt: Some(
             "Find where the bug comes from. Write what you found to investigate.md.".into(),
         ),

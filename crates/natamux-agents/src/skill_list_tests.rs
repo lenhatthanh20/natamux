@@ -15,18 +15,32 @@ fn merges_the_skills_of_all_agents_by_name_the_shared_ones_first() {
                 name: "review".into(),
                 description: "review help".into(),
                 origin: SkillOrigin::Project,
-                agents: ["claude-code", "codex", "gemini", "copilot", "cursor"]
-                    .map(String::from)
-                    .to_vec(),
+                agents: [
+                    "claude-code",
+                    "codex",
+                    "gemini",
+                    "copilot",
+                    "cursor",
+                    "opencode",
+                    "amp",
+                    "kimi",
+                    "crush",
+                    "muse",
+                ]
+                .map(String::from)
+                .to_vec(),
                 path: ".claude/skills/review/SKILL.md".into(),
             },
             SkillEntry {
                 name: "mine".into(),
                 description: "mine help".into(),
                 origin: SkillOrigin::User,
-                agents: ["codex", "gemini", "copilot", "cursor"]
-                    .map(String::from)
-                    .to_vec(),
+                agents: [
+                    "codex", "gemini", "copilot", "cursor", "opencode", "qwen", "amp", "kimi",
+                    "crush", "muse",
+                ]
+                .map(String::from)
+                .to_vec(),
                 path: f
                     .home
                     .join(".agents/skills")

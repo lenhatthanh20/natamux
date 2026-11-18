@@ -118,7 +118,7 @@ pub async fn execute<T: Transport>(
     let mut cx = Ctx { client, io, env };
     let cx = &mut cx;
     match command {
-        Command::Help | Command::HooksClaudeCode => Ok(()),
+        Command::Help | Command::HooksClaudeCode | Command::HooksFile(_) => Ok(()),
         Command::TaskCreate(task) => create_task(task, cx).await,
         Command::TaskList { state, json } => list_tasks(state.as_deref(), *json, cx).await,
         Command::TaskShow { id, json } => {

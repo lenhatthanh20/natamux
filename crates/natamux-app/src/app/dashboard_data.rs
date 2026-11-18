@@ -287,6 +287,17 @@ impl DashboardData {
         }
     }
 
+    /// This app asked for the worktree of `id`: its first step shows at once, since the daemon's
+    /// step event can come after the answer. The daemon's steps and end take over.
+    /// shortcut: a new task whose create fails before its first step gets no end event and keeps
+    /// the spinner until the app connects again; the daemon never fails there for a new task.
+    pub fn expect_preparing(&mut self, id: &str) {
+        if !self.preparing.contains_key(id) {
+            self.preparing.insert(id.to_owned(), PreparingStep::Fetch);
+            self.gens.bump(Part::Preparing);
+        }
+    }
+
     /// Tasks with an attention card whose event log is older than the task: (id, updatedAt).
     pub fn events_to_read(&self) -> Vec<(String, String)> {
         self.tasks

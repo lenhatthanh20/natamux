@@ -35,7 +35,7 @@
 Natamux gives each task its own git worktree, branch, and terminal. A shared workflow in `.natamux.json` assigns agents to stages, runs independent work in parallel, and pauses for approvals when needed. The dashboard brings tasks, live terminals, questions, and diffs together.
 
 - **Keep work isolated.** Agents on different tasks never edit the same checkout.
-- **Coordinate agents.** Use Claude Code, Codex, Gemini CLI, GitHub Copilot CLI, Cursor, or another terminal agent.
+- **Coordinate agents.** Use Claude Code, Codex, Gemini CLI, GitHub Copilot CLI, Cursor, OpenCode, Qwen Code, Factory Droid, Amp, Kimi, Goose, Aider, Crush, Cline, Kiro, Muse Code, or another terminal agent.
 - **Make progress visible.** Track stages and terminals, and see what needs your attention.
 - **Review before shipping.** Inspect diffs, send feedback, commit, push, and open a pull request from the task.
 - **Share the process.** Commit `.natamux.json` so the team uses the same workflow.

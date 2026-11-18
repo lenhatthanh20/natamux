@@ -247,14 +247,24 @@ fn quotes_the_session_of_every_agent_so_it_cannot_run_as_a_command() {
             ..base()
         };
         let command = launch(agent, options);
-        assert!(command.ends_with(&format!(" {}", quote_argument(session, POSIX))));
+        // Amp and Aider have no resume by id: the session is left out.
+        if ["amp", "aider"].contains(&agent) {
+            assert!(!command.contains("rm -rf"), "{agent}: {command}");
+            continue;
+        }
+        let quoted = format!(" {}", quote_argument(session, POSIX));
+        assert!(command.contains(&quoted), "{agent}: {command}");
     }
 }
 
 // A paused agent woken by a stage or a review comment goes on with its session and that prompt.
 #[test]
 fn goes_on_with_the_session_and_the_prompt_for_every_agent() {
-    for agent in LAUNCHABLE_AGENTS {
+    // The prompt of the others is pasted once they are up (`pasted_prompt` in the daemon).
+    let on_the_line = LAUNCHABLE_AGENTS
+        .into_iter()
+        .filter(|agent| prompt_mode(agent) == PromptMode::Argument);
+    for agent in on_the_line {
         let options = LaunchOptions {
             prompt: "Review it".into(),
             session: Some("s-1".into()),
@@ -551,5 +561,130 @@ fn starts_a_claude_code_variant_with_its_own_program() {
     assert_eq!(
         launch("claude-code", with(auto(), "cq")),
         "cq --settings '/data/claude.json' --permission-mode auto 'Fix it'"
+    );
+}
+
+fn new_agent(agent: &str, options: LaunchOptions) -> String {
+    launch(agent, with(options, default_program(agent)))
+}
+
+fn resumed(agent: &str, session: &str) -> String {
+    let options = LaunchOptions {
+        prompt: String::new(),
+        session: Some(session.into()),
+        ..base()
+    };
+    new_agent(agent, options)
+}
+
+#[test]
+fn starts_the_agents_with_hooks_with_their_prompt_flag() {
+    assert_eq!(
+        new_agent("opencode", auto()),
+        "opencode --auto --prompt 'Fix it'"
+    );
+    assert_eq!(
+        new_agent("qwen", auto()),
+        "qwen --approval-mode yolo -i 'Fix it'"
+    );
+    assert_eq!(new_agent("droid", auto()), "droid --auto high 'Fix it'");
+    assert_eq!(new_agent("opencode", base()), "opencode --prompt 'Fix it'");
+    assert_eq!(new_agent("qwen", base()), "qwen -i 'Fix it'");
+    assert_eq!(new_agent("droid", base()), "droid 'Fix it'");
+}
+
+#[test]
+fn starts_the_agents_whose_prompt_is_pasted_without_it() {
+    let cases = [
+        ("amp", "amp --dangerously-allow-all"),
+        ("kimi", "kimi --yolo"),
+        ("goose", "GOOSE_MODE=auto goose session"),
+        ("aider", "aider --yes-always"),
+        ("crush", "crush --yolo"),
+        ("cline", "cline --auto-approve true"),
+        ("kiro", "kiro-cli chat --trust-all-tools"),
+        ("muse", "muse --trust-workspace --yolo"),
+    ];
+    for (agent, line) in cases {
+        assert_eq!(prompt_mode(agent), PromptMode::Pasted, "{agent}");
+        assert_eq!(new_agent(agent, auto()), line);
+        assert!(!new_agent(agent, base()).contains("Fix it"), "{agent}");
+    }
+}
+
+#[test]
+fn muse_trusts_the_folder_only_when_the_project_is_trusted() {
+    let untrusted = LaunchOptions {
+        trust: false,
+        ..base()
+    };
+    assert_eq!(new_agent("muse", untrusted), "muse");
+}
+
+#[test]
+fn resumes_the_new_agents_by_id_or_on_the_newest_session() {
+    let cases = [
+        (
+            "opencode",
+            "opencode --session 's-1'",
+            "opencode --continue",
+        ),
+        ("qwen", "qwen --resume 's-1'", "qwen --continue"),
+        ("droid", "droid --resume 's-1'", "droid --resume"),
+        ("kimi", "kimi --session 's-1'", "kimi --continue"),
+        (
+            "goose",
+            "goose session --resume --session-id 's-1'",
+            "goose session --resume",
+        ),
+        ("aider", "aider", "aider --restore-chat-history"),
+        ("crush", "crush --session 's-1'", "crush --continue"),
+        ("cline", "cline --id 's-1'", "cline"),
+        (
+            "kiro",
+            "kiro-cli chat --resume-id 's-1'",
+            "kiro-cli chat --resume",
+        ),
+        (
+            "muse",
+            "muse resume 's-1' --trust-workspace",
+            "muse --trust-workspace",
+        ),
+        ("amp", "amp", "amp"),
+    ];
+    for (agent, by_id, newest) in cases {
+        assert_eq!(resumed(agent, "s-1"), by_id);
+        assert_eq!(resumed(agent, LAST_SESSION), newest);
+    }
+}
+
+#[test]
+fn passes_a_model_only_to_agents_with_a_model_flag() {
+    for agent in ["amp", "goose", "crush"] {
+        assert!(!takes_model(agent), "{agent}");
+    }
+    for agent in [
+        "claude-code",
+        "opencode",
+        "qwen",
+        "droid",
+        "kimi",
+        "kiro",
+        "muse",
+    ] {
+        assert!(takes_model(agent), "{agent}");
+    }
+}
+
+#[test]
+fn sets_gooses_mode_only_in_the_auto_mode_and_for_powershell_too() {
+    assert_eq!(new_agent("goose", base()), "goose session");
+    let windows = LaunchOptions {
+        platform: WIN,
+        ..auto()
+    };
+    assert_eq!(
+        new_agent("goose", windows),
+        "$env:GOOSE_MODE='auto'; goose session"
     );
 }

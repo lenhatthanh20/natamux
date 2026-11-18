@@ -939,3 +939,26 @@ fn does_not_print_the_token_of_the_environment() {
     let (_, settings) = printed_settings(Env::from([("NATAMUX_TOKEN", "super-secret-value")]));
     assert!(!settings.to_string().contains("super-secret-value"));
 }
+
+// hooks <agent> with a file in the worktree
+
+#[test]
+fn prints_the_worktree_hook_file_without_a_token_and_without_calling_the_daemon() {
+    for (agent, word) in [
+        ("opencode", r#"["natamux", "hook", "opencode", name]"#),
+        ("qwen", "natamux hook qwen"),
+        ("droid", "natamux hook droid"),
+    ] {
+        let result = run_with(&["hooks", agent], Env::default(), b"", |_| {
+            panic!("The daemon must not be called")
+        });
+        assert_eq!(result.code, EXIT_OK, "{agent}");
+        assert!(result.calls.is_empty());
+        assert!(result.stdout.contains(word), "{agent}: {}", result.stdout);
+    }
+    let qwen = run_with(&["hooks", "qwen"], Env::default(), b"", |_| {
+        panic!("The daemon must not be called")
+    });
+    let settings: Value = serde_json::from_str(&qwen.stdout).unwrap();
+    assert!(settings["hooks"]["Stop"].is_array());
+}

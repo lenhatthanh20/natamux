@@ -99,16 +99,9 @@ pub fn state_label(state: TaskState) -> &'static str {
 }
 
 /// `agentLabel` in `lib/agents.ts`: the name the pickers show, else the id, else "No agent".
+/// The names come from the pickers' list, so the two cannot drift apart.
 pub fn agent_label(id: Option<&str>) -> String {
-    match id {
-        Some("claude-code") => "Claude Code".into(),
-        Some("codex") => "Codex".into(),
-        Some("gemini") => "Gemini CLI".into(),
-        Some("copilot") => "GitHub Copilot".into(),
-        Some("cursor") => "Cursor".into(),
-        Some(other) => other.to_owned(),
-        None => "No agent".into(),
-    }
+    crate::agents::agent_choices::agent_label(id)
 }
 
 /// `stageName` in core, for a stage with no name of its own (the rules are in `natamux_proto`).

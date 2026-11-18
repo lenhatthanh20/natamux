@@ -9,7 +9,7 @@ use gpui::{
 };
 use natamux_core::formats::is_slug;
 use natamux_proto::agents::custom::{CustomAgent, OTHER_BASE};
-use natamux_proto::agents::start::{DEFAULT_PROGRAMS, LAUNCHABLE_AGENTS};
+use natamux_proto::agents::start::{DEFAULT_PROGRAMS, HOOK_AGENTS, LAUNCHABLE_AGENTS};
 use ui::{ButtonLike, prelude::*};
 
 use super::super::settings_view::SettingsView;
@@ -72,18 +72,27 @@ pub(super) fn agent_tile(base: &str) -> (&'static str, TileColor) {
     }
 }
 
+/// A custom agent on a built-in base shows the base's logo.
 pub(super) fn tile(base: &str) -> SettingsTile {
-    let (icon, color) = agent_tile(base);
-    SettingsTile::icon(button_icon(icon), color, TileSize::Row)
+    if base == OTHER_BASE {
+        let (icon, color) = agent_tile(base);
+        return SettingsTile::icon(button_icon(icon), color, TileSize::Row);
+    }
+    SettingsTile::agent(base, TileSize::Row)
 }
 
 /// The footnote under the sheet's card: what Natamux does with the base.
 pub(super) fn base_footnote(base: &str) -> String {
     if base == OTHER_BASE {
         OTHER_NOTE.to_owned()
-    } else {
+    } else if HOOK_AGENTS.contains(&base) {
         format!(
             "Natamux starts it like {}, with its hooks.",
+            base_label(base)
+        )
+    } else {
+        format!(
+            "Natamux starts it like {}, and follows its terminal.",
             base_label(base)
         )
     }

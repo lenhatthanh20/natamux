@@ -3,16 +3,57 @@
 use serde::Serialize;
 
 /// `LAUNCHABLE_AGENTS` in `packages/daemon/src/agents/agent-launch.ts`: the agents the daemon can
-/// start.
-pub const LAUNCHABLE_AGENTS: [&str; 5] = ["claude-code", "codex", "gemini", "copilot", "cursor"];
+/// start. No id has a `-`: it is part of the variables `NATAMUX_<ID>_COMMAND` and `_ARGS`.
+pub const LAUNCHABLE_AGENTS: [&str; 16] = [
+    "claude-code",
+    "codex",
+    "gemini",
+    "copilot",
+    "cursor",
+    "opencode",
+    "qwen",
+    "droid",
+    "amp",
+    "kimi",
+    "goose",
+    "aider",
+    "crush",
+    "cline",
+    "kiro",
+    "muse",
+];
+
+/// The built-in agents with hooks: they report each state and their session. The others are
+/// followed by their terminal only. `natamux_agents::hooks` has an adapter for each.
+pub const HOOK_AGENTS: [&str; 8] = [
+    "claude-code",
+    "codex",
+    "gemini",
+    "copilot",
+    "cursor",
+    "opencode",
+    "qwen",
+    "droid",
+];
 
 /// The command each agent is started with when no other is configured. The app shows it too.
-pub const DEFAULT_PROGRAMS: [(&str, &str); 5] = [
+pub const DEFAULT_PROGRAMS: [(&str, &str); 16] = [
     ("claude-code", "claude"),
     ("codex", "codex"),
     ("gemini", "gemini"),
     ("copilot", "copilot"),
     ("cursor", "cursor-agent"),
+    ("opencode", "opencode"),
+    ("qwen", "qwen"),
+    ("droid", "droid"),
+    ("amp", "amp"),
+    ("kimi", "kimi"),
+    ("goose", "goose"),
+    ("aider", "aider"),
+    ("crush", "crush"),
+    ("cline", "cline"),
+    ("kiro", "kiro-cli"),
+    ("muse", "muse"),
 ];
 
 /// `prompt` of a start: at most this many characters.
@@ -41,6 +82,15 @@ pub struct AgentMessage {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn has_a_program_for_each_agent_and_no_dash_in_an_id_but_claude_code() {
+        let names: Vec<&str> = DEFAULT_PROGRAMS.iter().map(|(name, _)| *name).collect();
+        assert_eq!(names, LAUNCHABLE_AGENTS);
+        for agent in LAUNCHABLE_AGENTS.iter().skip(1) {
+            assert!(!agent.contains('-'), "{agent}");
+        }
+    }
 
     #[test]
     fn sends_the_message_as_text() {

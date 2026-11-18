@@ -59,11 +59,22 @@ const useCases = [
   { number: '04', title: 'Larger organizations', text: 'Share project settings and keep human decisions at clear gates.', anchor: 'shared-settings-and-human-approvals' },
 ]
 const agents = [
-  { name: 'Claude Code', command: 'claude', link: 'agents/claude-code/' },
-  { name: 'Codex', command: 'codex', link: 'agents/codex/' },
-  { name: 'Gemini CLI', command: 'gemini', link: 'agents/gemini/' },
-  { name: 'GitHub Copilot CLI', command: 'copilot', link: 'agents/copilot/' },
-  { name: 'Cursor', command: 'cursor-agent', link: 'agents/cursor/' },
+  { name: 'Claude Code', command: 'claude', link: 'agents/claude-code/', icon: 'claude' },
+  { name: 'Codex', command: 'codex', link: 'agents/codex/', icon: 'codex' },
+  { name: 'Gemini CLI', command: 'gemini', link: 'agents/gemini/', icon: 'gemini-ai' },
+  { name: 'GitHub Copilot CLI', command: 'copilot', link: 'agents/copilot/', icon: 'copilot', light: true },
+  { name: 'Cursor', command: 'cursor-agent', link: 'agents/cursor/', icon: 'cursor', light: true },
+  { name: 'OpenCode', command: 'opencode', link: 'agents/opencode/', icon: 'opencode', light: true },
+  { name: 'Qwen Code', command: 'qwen', link: 'agents/qwen/', icon: 'qwen' },
+  { name: 'Factory Droid', command: 'droid', link: 'agents/droid/', icon: 'droid', light: true },
+  { name: 'Amp', command: 'amp', link: 'agents/more-agents/', icon: 'amp' },
+  { name: 'Kimi', command: 'kimi', link: 'agents/more-agents/', icon: 'kimi', light: true },
+  { name: 'Goose', command: 'goose', link: 'agents/more-agents/', icon: 'goose', light: true },
+  { name: 'Aider', command: 'aider', link: 'agents/more-agents/', icon: 'aider', light: true },
+  { name: 'Crush', command: 'crush', link: 'agents/more-agents/', icon: 'crush' },
+  { name: 'Cline', command: 'cline', link: 'agents/more-agents/', icon: 'cline', light: true },
+  { name: 'Kiro', command: 'kiro-cli', link: 'agents/more-agents/', icon: 'kiro' },
+  { name: 'Muse Code', command: 'muse', link: 'agents/more-agents/', icon: 'muse' },
   { name: 'Other terminal agents', command: 'your-agent', link: 'agents/other-agents/' },
 ]
 ---
@@ -180,8 +191,8 @@ const agents = [
 
       <section class="section" id="agents" aria-labelledby="agents-title">
         <div class="wrap agents-row">
-          <div class="agents-copy"><p class="section-kicker">04 / Your agents</p><h2 id="agents-title">Bring the tools you already use.</h2><p>Natamux starts the agent in the task's terminal. Hooks report when it works, asks or finishes. Give each stage its own agent and model.</p><p>A plain terminal agent works too. Its bell, <code>natamux ask</code> and <code>natamux done</code> report back.</p><p class="more"><a href={`${docs}concepts/agents-and-hooks/`}>How agent status works <span aria-hidden="true">↗</span></a></p></div>
-          <ul class="agents-list">{agents.map((agent) => <li><a href={`${docs}${agent.link}`}><strong>{agent.name}</strong><code>{agent.command}</code><span aria-hidden="true">↗</span></a></li>)}</ul>
+          <div class="agents-copy"><p class="section-kicker">04 / Your agents</p><h2 id="agents-title">Bring the tools you already use.</h2><p>Natamux starts the agent in the task's terminal. Hooks report when it works, asks or finishes, for eight of the sixteen agents. Give each stage its own agent and model.</p><p>The other eight, and any plain terminal agent, are followed by their terminal. Their bell, <code>natamux ask</code> and <code>natamux done</code> report back.</p><p class="more"><a href={`${docs}concepts/agents-and-hooks/`}>How agent status works <span aria-hidden="true">↗</span></a></p></div>
+          <ul class="agents-list">{agents.map((agent) => <li><a href={`${docs}${agent.link}`}><strong>{agent.icon && <img class={agent.light ? 'agent-icon agent-icon-dark' : 'agent-icon'} src={`${base}agents/${agent.icon}.svg`} width="16" height="16" alt="" />}{agent.icon && agent.light && <img class="agent-icon agent-icon-light" src={`${base}agents/${agent.icon}_light.svg`} width="16" height="16" alt="" />}{agent.name}</strong><code>{agent.command}</code><span aria-hidden="true">↗</span></a></li>)}</ul>
         </div>
       </section>
 

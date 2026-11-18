@@ -76,6 +76,7 @@ fn hints_a_model_the_agent_knows() {
     assert_eq!(model_hint("claude-code"), "Agent default (e.g. sonnet)");
     assert_eq!(model_hint("codex"), "Agent default (e.g. gpt-5-codex)");
     assert_eq!(model_hint("gemini"), "Agent default (e.g. gemini-2.5-pro)");
+    assert_eq!(model_hint("muse"), "Agent default (e.g. muse-spark-1.2)");
 }
 
 fn file(id: u64, name: &str, size: u64) -> PickedFile {
