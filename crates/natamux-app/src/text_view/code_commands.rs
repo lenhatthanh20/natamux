@@ -59,11 +59,11 @@ fn line_changes(text: &str, block: Range<usize>, start: &str) -> Vec<Change> {
     let commented = lines
         .iter()
         .filter(|(_, line)| !line.trim().is_empty())
-        .all(|(_, line)| line.trim_start().starts_with(mark));
+        .all(|(_, line)| line[indent_len(line)..].starts_with(mark));
     if commented {
         return lines
             .iter()
-            .filter(|(_, line)| line.trim_start().starts_with(mark))
+            .filter(|(_, line)| line[indent_len(line)..].starts_with(mark))
             .map(|(start_at, line)| {
                 let from = start_at + indent_len(line);
                 let rest = &text[from + mark.len()..start_at + line.len()];
@@ -259,7 +259,11 @@ impl TextInput {
         let start = motion::line_start(text, caret);
         let before = &text[start..caret];
         let indent = indent_len(before);
-        let opener = opener_above(text, start, indent);
+        let opener = if indent > 0 {
+            opener_above(text, start, indent)
+        } else {
+            None
+        };
         let closers = || {
             typing
                 .dedent
@@ -359,6 +363,13 @@ mod tests {
         assert_eq!(moved(&on, 0), 3);
         let off = line_changes(&commented, 0..commented.len(), "// ");
         assert_eq!(apply(&commented, &off), text);
+    }
+
+    #[test]
+    fn a_line_with_nbsp_before_the_mark_does_not_panic() {
+        let text = "\u{a0}# a";
+        let on = line_changes(text, 0..text.len(), "# ");
+        assert_eq!(apply(text, &on), "# \u{a0}# a");
     }
 
     #[test]

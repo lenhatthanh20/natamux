@@ -12,6 +12,7 @@ use ui::ContextMenu;
 
 use super::code_runs::input_edit;
 use super::code_view::CodeView;
+use super::outline::rows;
 use super::text_input::TextInput;
 use crate::files::outline_rules::OutlineRow;
 use crate::git::change_rules::wraps_by_default;
@@ -348,20 +349,7 @@ impl CodeView {
     pub fn outline_rows(&self, cx: &App) -> Vec<OutlineRow> {
         let input = self.input_ref().read(cx);
         let text = input.model.text();
-        input
-            .cached_outline()
-            .iter()
-            .map(|item| {
-                let start = item.range.start;
-                let line_start = text[..start].rfind('\n').map_or(0, |at| at + 1);
-                OutlineRow {
-                    text: item.text.clone(),
-                    depth: item.depth,
-                    row: text[..start].matches('\n').count() as u32,
-                    column: (start - line_start) as u32,
-                }
-            })
-            .collect()
+        rows(&input.cached_outline(), text)
     }
 
     /// A new text from disk, with the fewest edits so the caret and the scroll stay. The undo

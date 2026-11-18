@@ -15,6 +15,7 @@ use std::sync::OnceLock;
 
 use tree_sitter::{Query, QueryCursor, StreamingIterator, Tree};
 
+use crate::files::outline_rules::OutlineRow;
 use crate::git::languages::{LANG_COUNT, LANGS, Lang};
 
 /// One item of the outline. Every range is in bytes of the text.
@@ -85,6 +86,40 @@ fn compiled(lang: &'static Lang) -> Option<&'static Compiled> {
     COMPILED[index]
         .get_or_init(|| compile(lang).unwrap_or(None))
         .as_ref()
+}
+
+/// Compiles the outline query of `lang` now, so a later paint does not wait for it.
+pub(super) fn warm(lang: &'static Lang) {
+    let _ = compiled(lang);
+}
+
+/// The picker rows of `items` (in text order) of `text`: 0-based row, and column in chars.
+pub fn rows(items: &[OutlineItem], text: &str) -> Vec<OutlineRow> {
+    let (mut at, mut row, mut line_start) = (0usize, 0u32, 0usize);
+    items
+        .iter()
+        .map(|item| {
+            let start = item.range.start;
+            if start < at {
+                // Out of order: count again from the top.
+                (at, row, line_start) = (0, 0, 0);
+            }
+            let gap = text.get(at..start).unwrap_or_default();
+            row += gap.matches('\n').count() as u32;
+            if let Some(found) = gap.rfind('\n') {
+                line_start = at + found + 1;
+            }
+            at = start;
+            OutlineRow {
+                text: item.text.clone(),
+                depth: item.depth,
+                row,
+                column: text
+                    .get(line_start..start)
+                    .map_or(0, |part| part.chars().count()) as u32,
+            }
+        })
+        .collect()
 }
 
 /// Why the outline query of `lang` does not compile; None when it does or there is none. For the
