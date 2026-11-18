@@ -71,7 +71,7 @@ pub struct Icon {
 
 impl Icon {
     pub fn new(icon: IconName) -> Self {
-        Self::drawing(Art::Svg(SharedString::from(icon.path())))
+        Self::drawing(Art::Svg(icon.shared_path()))
     }
 
     /// A path under `icons/` names an asset SVG; any other path is a picture file on disk.

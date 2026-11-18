@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 use std::fmt;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use anyhow::{Context as _, Result, bail};
 use gpui::{FontStyle, FontWeight, HighlightStyle, Hsla, Rgba, WindowBackgroundAppearance, hsla};
@@ -222,13 +222,20 @@ fn fill<T: Fields>(
 
 /// The fallback rows of `theme`: field and value, None for an unset optional field.
 fn fallbacks(theme: &str) -> Result<HashMap<&'static str, Option<Hsla>>> {
-    let mut out = HashMap::new();
-    for (name, field, value) in fallback_rows()? {
-        if name == theme {
-            out.insert(field, value);
+    type Table = HashMap<&'static str, HashMap<&'static str, Option<Hsla>>>;
+    // The rows hold every theme: parse them once, not once per theme.
+    static ALL: OnceLock<std::result::Result<Table, String>> = OnceLock::new();
+    let all = ALL.get_or_init(|| {
+        let mut all = Table::new();
+        for (name, field, value) in fallback_rows().map_err(|error| format!("{error:#}"))? {
+            all.entry(name).or_default().insert(field, value);
         }
+        Ok(all)
+    });
+    match all {
+        Ok(all) => Ok(all.get(theme).cloned().unwrap_or_default()),
+        Err(message) => bail!("{message}"),
     }
-    Ok(out)
 }
 
 fn fallback_rows() -> Result<Vec<(&'static str, &'static str, Option<Hsla>)>> {
