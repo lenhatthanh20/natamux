@@ -1,0 +1,8 @@
+go 1.23
+
+use (
+	./shop
+	./tools // local tools
+)
+
+replace example.com/old v1.2.3 => ./old

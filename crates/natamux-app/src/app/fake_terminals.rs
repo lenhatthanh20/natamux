@@ -79,7 +79,9 @@ fn script(task_id: &str, terminal: &str) -> &'static str {
 impl FakeDaemon {
     /// The screen of one terminal: open at once, with its script.
     pub fn terminal(&self, task_id: &str, terminal: &str) -> UnboundedReceiver<TerminalEvent> {
-        let screen = script(task_id, terminal);
+        let key = (task_id.to_owned(), terminal.to_owned());
+        let own = self.data().screens.get(&key).cloned();
+        let screen = own.unwrap_or_else(|| script(task_id, terminal).to_owned());
         events([
             TerminalEvent::Status(TerminalStatus::Open),
             TerminalEvent::Output {
@@ -87,6 +89,12 @@ impl FakeDaemon {
                 end: Some(screen.len() as u64),
             },
         ])
+    }
+
+    /// A terminal `--shot` state: the terminal shows `screen` instead of its script.
+    pub fn set_screen(&self, task_id: &str, terminal: &str, screen: String) {
+        let key = (task_id.to_owned(), terminal.to_owned());
+        self.data().screens.insert(key, screen);
     }
 
     /// The `workspace-preparing` shot: the daemon is at this step of the task's new workspace.

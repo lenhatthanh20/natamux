@@ -1,0 +1,18 @@
+{
+  "name": "storefront",
+  "version": "0.3.0",
+  "private": true,
+  "currency": "USD",
+  "taxRate": 0.0825,
+  "coupons": {
+    "enabled": true,
+    "maxPercent": 50,
+    "codes": ["WELCOME", "SPRING", "VIP"]
+  },
+  "shipping": [
+    { "zone": "domestic", "price": 4.99, "freeFrom": 50 },
+    { "zone": "world", "price": 19.0, "freeFrom": null }
+  ],
+  "escapes": "line\nnext \"quoted\" é",
+  "nested": { "a": { "b": { "c": [1, 2.5, -3e2, false] } } }
+}

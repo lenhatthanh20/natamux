@@ -68,9 +68,7 @@ fn the_bar_searches_the_screen_a_snapshot_swapped_in(cx: &mut TestAppContext) {
 
     find.update_in(cx, |find, window, cx| find.set_term("needle", window, cx));
     cx.run_until_parked();
-    let found = terminal.read_with(cx, |terminal, cx| {
-        terminal.terminal().read(cx).matches.len()
-    });
+    let found = terminal.read_with(cx, |terminal, cx| terminal.match_count(cx));
     assert_eq!(found, 1);
     assert_eq!(
         find.read_with(cx, |find, _| find.results),

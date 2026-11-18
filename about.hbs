@@ -1,0 +1,25 @@
+# Third-party Rust crates
+
+This file is made by `cargo about` from `Cargo.lock` (`about.toml`, `about.hbs`). Do not edit it by hand.
+Other notices are in `THIRD-PARTY-NOTICES.md`.
+
+## Licenses used
+
+{{#each overview}}
+- [{{{name}}}](#{{id}}) ({{count}} crates)
+{{/each}}
+
+{{#each licenses}}
+## {{{name}}} {#{{id}}}
+
+Used by:
+
+{{#each used_by}}
+- {{crate.name}} {{crate.version}}{{#if crate.repository}} ({{{crate.repository}}}){{/if}}
+{{/each}}
+
+```
+{{{text}}}
+```
+
+{{/each}}

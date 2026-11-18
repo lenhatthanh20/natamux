@@ -2,9 +2,7 @@
 //! Generate and Commit all) and the comment box under the diff (`AgentComment.tsx`: Add comment,
 //! Send now, with the lines that Ask agent quoted).
 
-use editor::Editor;
-use editor::actions::MoveToEnd;
-use gpui::{ClickEvent, Entity, Focusable, KeyContext};
+use gpui::{ClickEvent, Focusable, KeyContext};
 use ui::{Tooltip, prelude::*};
 
 use super::ChangesView;
@@ -17,16 +15,17 @@ use crate::git::comment_rules::{
     send_reason,
 };
 use crate::git::commit_rules::{commit_reason, draft_result, draft_tip};
+use crate::text_view::text_box::TextBox;
 use crate::workspaces::workspace_rules::GitStep;
 
 impl ChangesView {
-    fn message_box(&mut self, window: &mut Window, cx: &mut App) -> Entity<Editor> {
+    fn message_box(&mut self, window: &mut Window, cx: &mut App) -> TextBox {
         self.message
             .get_or_insert_with(|| text_editor("Commit message", Some((3, 3)), window, cx))
             .clone()
     }
 
-    pub(super) fn comment_box(&mut self, window: &mut Window, cx: &mut App) -> Entity<Editor> {
+    pub(super) fn comment_box(&mut self, window: &mut Window, cx: &mut App) -> TextBox {
         self.comment
             .get_or_insert_with(|| {
                 text_editor("What should change, and why", Some((1, 4)), window, cx)
@@ -56,7 +55,7 @@ impl ChangesView {
             }
             let message = view.message_box(window, cx);
             window.focus(&message.focus_handle(cx), cx);
-            if message.read(cx).text(cx).trim().is_empty() {
+            if message.text(cx).trim().is_empty() {
                 view.draft(window, cx);
             }
         });
@@ -69,7 +68,7 @@ impl ChangesView {
             return;
         };
         let message = self.message_box(window, cx);
-        let before = message.read(cx).text(cx);
+        let before = message.text(cx);
         self.drafting = true;
         let answer = self
             .dashboard
@@ -79,12 +78,10 @@ impl ChangesView {
             view.update_in(cx, |view, window, cx| {
                 view.drafting = false;
                 if let Ok(draft) = drafted {
-                    let now = message.read(cx).text(cx);
+                    let now = message.text(cx);
                     let text = draft_result(&before, &now, &draft.message);
-                    message.update(cx, |editor, cx| {
-                        editor.set_text(text, window, cx);
-                        editor.move_to_end(&MoveToEnd, window, cx);
-                    });
+                    message.set_text(text, window, cx);
+                    message.move_to_end(window, cx);
                     window.focus(&message.focus_handle(cx), cx);
                 }
                 cx.notify();
@@ -98,7 +95,7 @@ impl ChangesView {
     /// Commit all (Mod+Enter in the box): the box empties only when the commit worked.
     pub(super) fn commit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let message = self.message_box(window, cx);
-        let text = message.read(cx).text(cx).trim().to_owned();
+        let text = message.text(cx).trim().to_owned();
         let committing = self.pending == Some(GitStep::Commit);
         if commit_reason(&text, self.drafting, self.git_busy(), committing).is_some() {
             return;
@@ -116,8 +113,7 @@ impl ChangesView {
         };
         cx.spawn_in(window, async move |_, cx| {
             if answer.await.is_ok() {
-                message
-                    .update_in(cx, |editor, window, cx| editor.set_text("", window, cx))
+                cx.update(|window, cx| message.set_text("", window, cx))
                     .ok();
             }
         })
@@ -131,7 +127,7 @@ impl ChangesView {
             return;
         };
         let comment = self.comment_box(window, cx);
-        let written = comment.read(cx).text(cx);
+        let written = comment.text(cx);
         if self.sending || send_reason(&written).is_some() {
             return;
         }
@@ -150,7 +146,7 @@ impl ChangesView {
                     Ok(_) => {
                         view.quote = None;
                         view.sent = Some(Ok(()));
-                        comment.update(cx, |editor, cx| editor.set_text("", window, cx));
+                        comment.set_text("", window, cx);
                     }
                     Err(error) => view.sent = Some(Err(reason(&error))),
                 }
@@ -179,7 +175,7 @@ impl ChangesView {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let message = self.message_box(window, cx);
-        let text = message.read(cx).text(cx);
+        let text = message.text(cx);
         let committing = self.pending == Some(GitStep::Commit);
         let reason = commit_reason(&text, self.drafting, self.git_busy(), committing);
         let agent = self
@@ -278,10 +274,8 @@ impl ChangesView {
     ) -> AnyElement {
         let comment = self.comment_box(window, cx);
         let shown_placeholder = placeholder(self.quote.as_ref());
-        comment.update(cx, |editor, cx| {
-            editor.set_placeholder_text(shown_placeholder, window, cx)
-        });
-        let written = comment.read(cx).text(cx);
+        comment.set_placeholder(shown_placeholder, window, cx);
+        let written = comment.text(cx);
         let line = self.diff.update(cx, |diff, cx| diff.cursor_line(cx));
         let label = match &self.review.editing {
             Some(id) => format!("Edit comment {id}"),

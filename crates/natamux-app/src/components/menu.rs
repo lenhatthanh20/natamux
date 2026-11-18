@@ -71,6 +71,13 @@ impl MenuLayer {
         layer.open.as_ref()?.opener.clone()
     }
 
+    /// The open menu, for the flow tests.
+    #[cfg(test)]
+    pub fn open_menu(cx: &App) -> Option<Entity<ContextMenu>> {
+        let layer = cx.try_global::<GlobalMenuLayer>()?.0.read(cx);
+        layer.open.as_ref().map(|open| open.menu.clone())
+    }
+
     fn show(
         &mut self,
         menu: Entity<ContextMenu>,
@@ -87,9 +94,8 @@ impl MenuLayer {
             layer.close(window, cx);
         });
         let focus = menu.focus_handle(cx);
-        // The app binds only its own keys, not Zed's `menu` keymap (the `menu` crate is not a
-        // dependency), so the open menu gets its keys here, before any binding of the views
-        // under it.
+        // The app binds no keys to the `menu` actions, so the open menu gets its keys here,
+        // before any binding of the views under it.
         let keys = cx.intercept_keystrokes({
             let focus = focus.clone();
             move |event: &KeystrokeEvent, window, cx| {

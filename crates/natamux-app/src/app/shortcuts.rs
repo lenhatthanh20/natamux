@@ -16,6 +16,9 @@ pub use super::commands_files::{CloseTab, SaveFile, ShowDocsTab, ShowOpenFile, S
 pub use super::commands_stages::{MoveStageDown, MoveStageUp, ShowTasksProgress};
 use crate::ime::ime_check::SubmitWord;
 
+// Copy and Paste of the terminal, bound in its `Terminal` context.
+actions!(natamux, [TerminalCopy, TerminalPaste]);
+
 actions!(
     natamux,
     [
@@ -273,8 +276,8 @@ pub fn bind(cx: &mut App) {
         ("ctrl-shift-c", "ctrl-shift-v")
     };
     cx.bind_keys([
-        KeyBinding::new(copy, terminal::Copy, Some("Terminal")),
-        KeyBinding::new(paste, terminal::Paste, Some("Terminal")),
+        KeyBinding::new(copy, TerminalCopy, Some("Terminal")),
+        KeyBinding::new(paste, TerminalPaste, Some("Terminal")),
     ]);
 }
 

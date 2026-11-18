@@ -39,6 +39,12 @@ impl AddStageDialog {
         }
     }
 
+    /// The picker, for the flow tests.
+    #[cfg(test)]
+    pub fn picker(&self) -> Entity<StagePicker> {
+        self.picker.clone()
+    }
+
     /// Up, Down and Enter in the search field move in the list and add, before the field's own
     /// bindings take them.
     fn watch_keys(picker: Entity<StagePicker>, cx: &mut Context<Self>) -> Subscription {

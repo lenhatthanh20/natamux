@@ -1,0 +1,12 @@
+[
+{"path":".natamux.json","language":"JSON","parsed":true},
+[0,1,"punctuation.bracket","#b2b9c6ff",null,null],
+[4,13,"property","#d27a7fff",null,null],
+[13,14,"punctuation.delimiter","#b2b9c6ff",null,null],
+[15,16,"punctuation.bracket","#b2b9c6ff",null,null],
+[17,23,"property","#d27a7fff",null,null],
+[23,24,"punctuation.delimiter","#b2b9c6ff",null,null],
+[25,31,"string","#a1c181ff",null,null],
+[32,33,"punctuation.bracket","#b2b9c6ff",null,null],
+[34,35,"punctuation.bracket","#b2b9c6ff",null,null]
+]

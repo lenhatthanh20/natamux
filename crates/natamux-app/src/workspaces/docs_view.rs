@@ -1,9 +1,7 @@
 //! The shown file of the Docs tab: its header, the stale line, and the body (edit box, source,
 //! Markdown, or the empty state). The header ends with the Terminals button (T-0183).
 
-use editor::Editor;
 use gpui::Entity;
-use language::language_settings::SoftWrap;
 use ui::prelude::*;
 
 use super::docs_rules::{EMPTY_TEXT, STALE_LINE, is_stale};
@@ -15,6 +13,7 @@ use crate::components::colors::signal;
 use crate::components::segmented::Segmented;
 use crate::components::skeleton::{Loading, SkeletonList};
 use crate::components::terminals_button::terminals_button;
+use crate::text_view::code_view::CodeView;
 
 impl DocsTab {
     pub(super) fn source_view(
@@ -25,17 +24,10 @@ impl DocsTab {
     ) -> AnyElement {
         let editor = match &self.source {
             Some((editor, _)) => editor.clone(),
-            None => cx.new(|cx| {
-                let mut editor = Editor::multi_line(window, cx);
-                plain(&mut editor, window, cx);
-                editor.set_read_only(true);
-                editor
-            }),
+            None => CodeView::plain(true, window, cx).text_box(),
         };
         if self.source.as_ref().is_none_or(|(_, shown)| shown != text) {
-            editor.update(cx, |editor, cx| {
-                editor.set_text(text.to_owned(), window, cx)
-            });
+            editor.set_text(text.to_owned(), window, cx);
             self.source = Some((editor.clone(), text.to_owned()));
         }
         div()
@@ -208,19 +200,4 @@ pub(super) fn terminals_to_main(dashboard: &Entity<Dashboard>) -> Button {
     terminals_button("docs-terminals").on_click(move |_, _, cx| {
         dashboard.update(cx, |d, cx| d.pick_tab(WorkspaceTab::Terminal, cx));
     })
-}
-
-/// The switches of the editors of this tab: text only, wrapped, no gutter.
-pub(super) fn plain(editor: &mut Editor, window: &mut Window, cx: &mut Context<Editor>) {
-    editor.set_show_gutter(false, cx);
-    editor.set_show_line_numbers(false, cx);
-    editor.set_show_runnables(false, cx);
-    editor.set_show_breakpoints(false, cx);
-    editor.set_show_code_actions(false, cx);
-    editor.set_show_bookmarks(false, cx);
-    editor.set_show_wrap_guides(false, cx);
-    editor.set_show_indent_guides(false, cx);
-    editor.set_show_edit_predictions(Some(false), window, cx);
-    editor.set_minimap_visibility(editor::MinimapVisibility::Disabled, window, cx);
-    editor.set_soft_wrap_mode(SoftWrap::EditorWidth, cx);
 }

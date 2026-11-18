@@ -1,6 +1,6 @@
 # Plan: move Natamux to Rust
 
-Status: approved by the owner, 2026-10-22, with the switch to GPL-3.0-or-later. It reverses the "stay on Electron" advice in `research-native-app.md`; `plan-tech-stack.md` section 6 points here.
+Status: approved by the owner, 2026-10-22, with the switch to GPL-3.0-or-later. Later the license moved to MIT (decision of 2026-10-30, `docs/plan-mit-license.md`). It reverses the "stay on Electron" advice in `research-native-app.md`; `plan-tech-stack.md` section 6 points here.
 
 ## Goals
 
@@ -8,6 +8,8 @@ Status: approved by the owner, 2026-10-22, with the switch to GPL-3.0-or-later. 
 2. **Beautiful.** It looks at least as good as Zed.
 
 License is not a constraint (owner, 2026-10-22). That lets Natamux reuse Zed's GPL-3.0 crates, and Natamux becomes GPL-3.0.
+
+Update 2026-10-30: the license moves to MIT. The GPL Zed crates are replaced by Natamux's own code, and only Zed's Apache-2.0 crates stay (`docs/plan-mit-license.md`). The text above is the history of the first decision.
 
 ## What we learned
 
@@ -111,6 +113,7 @@ natamux-app (GPUI, desktop)   web dashboard (React, browser and phone)   natamux
 | L3 | `natamux-client` | Typed API client with reconnect and a live cache from `/events` | `reqwest`, `async-tungstenite` |
 | L4 | `natamux-app` | The desktop app | `gpui`, Zed's `ui`, `theme`, `workspace`, `terminal_view`, `editor`, `buffer_diff`, `git_ui`, `markdown`, `picker` |
 | L4 | `natamux-cli` | `natamux` and `nmx`, including the fast hook forwarder | `clap`, `ureq` |
+| L4 | `natamux-ui` | The app's UI kit, used as `ui`; Zed's `ui` re-exported until the MIT move replaces it (`docs/plan-mit-license.md`, S8) | `gpui` |
 | L4 | `natamux-update` | Self-update with the pinned minisign key | `minisign-verify` |
 
 - `cargo xtask layers` fails if a crate below L4 uses `gpui`.
@@ -358,7 +361,7 @@ A macOS VM (Tart, UTM) gives stronger isolation, but GPU access in guests is lim
 | Long feature freeze | Electron gets fixes only; the native app ships screen by screen as a beta |
 | Two UIs to keep (GPUI desktop, React web) | Same commands and API in both; new features land in the API first; the web stays the phone and browser UI |
 | Windows maturity (no screen reader in GPUI on Windows) | Windows build in every phase gate; keep Electron for Windows until parity |
-| GPL-3.0 switch | Owner decision in phase 0 |
+| GPL-3.0 switch | Owner decision in phase 0; replaced by the MIT move on 2026-10-30 |
 | Slow UI loop: push, wait for the CI build, download, run | Cache the cargo registry and `target/` in CI; build only macOS arm64 per PR. If it still slows phase 1 down, move UI work to a personal Mac with a `natamux-dev` user |
 | Unsigned app blocked by the company MDM | Ask IT before phase 1; signing comes with the Apple account |
 

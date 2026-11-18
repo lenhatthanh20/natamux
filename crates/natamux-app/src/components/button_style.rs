@@ -29,7 +29,7 @@ pub fn button_icon(name: &str) -> Icon {
         .color(Color::Muted)
 }
 
-/// Zed's key hint for keys of the command registry ("mod-enter", "a"), the size of a Zed modal
+/// The kit's key hint for keys of the command registry ("mod-enter", "a"), the size of a Zed modal
 /// footer's hint. None for keys gpui cannot read.
 pub fn key_hint(keys: &str, disabled: bool) -> Option<KeyBinding> {
     let strokes = keys
@@ -44,7 +44,7 @@ pub fn key_hint(keys: &str, disabled: bool) -> Option<KeyBinding> {
         return None;
     }
     Some(
-        KeyBinding::from_keystrokes(strokes.into(), false)
+        KeyBinding::from_keystrokes(strokes.into())
             .size(rems_from_px(12_f32))
             .disabled(disabled),
     )

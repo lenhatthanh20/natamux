@@ -3,6 +3,8 @@
 //! the `DraftStore`, so it stays when this view is dropped. It covers the terminals in main, so
 //! its header ends with the Terminals button.
 
+use std::rc::Rc;
+
 use gpui::{ClickEvent, Entity, FocusHandle, Focusable, Subscription};
 use natamux_proto::workspaces::changes::ImageSide;
 use natamux_proto::workspaces::files::WorkspaceFile;
@@ -10,8 +12,8 @@ use ui::{Tooltip, prelude::*};
 
 use super::draft_store::DraftStore;
 use super::file_drafts::{
-    FileDraft, body_notice, can_save, close_question, edit_draft, is_stale, keep_mine,
-    revert_question,
+    FileDraft, body_notice, can_save, close_question, edit_draft, editor_text, is_crlf, is_stale,
+    keep_mine, revert_question,
 };
 use super::file_editor_body::{Edited, FileEditorBody};
 use super::file_icon_view::file_icon;
@@ -29,6 +31,7 @@ use crate::components::terminals_button::terminals_button;
 use crate::components::toast_rules::ToastTone;
 use crate::git::blame_marks::{BlameFailed, BlameMarks, Blocked};
 use crate::git::change_rules::{is_markdown, split_path};
+use crate::git::code_target::BlameTarget;
 use crate::git::editor_find::EditorFind;
 use crate::terminals::pane_header::icon_button;
 
@@ -39,6 +42,8 @@ pub struct FileEditor {
     pub(super) store: Entity<DraftStore>,
     /// The last good read of the file; a failed refresh keeps it.
     pub(super) disk: Option<WorkspaceFile>,
+    /// The last read had CRLF line breaks only: a save writes them back.
+    pub(super) crlf: bool,
     /// The error of the first read, shown while there is no text.
     error: Option<String>,
     pub(super) body: Option<Entity<FileEditorBody>>,
@@ -84,6 +89,7 @@ impl FileEditor {
             path,
             store,
             disk: None,
+            crlf: false,
             error: None,
             body: None,
             find: None,
@@ -105,6 +111,11 @@ impl FileEditor {
 
     pub fn path(&self) -> &str {
         &self.path
+    }
+
+    /// The text box, once the first text came, for the `--shot` states.
+    pub fn body(&self) -> Option<&Entity<FileEditorBody>> {
+        self.body.as_ref()
     }
 
     /// Annotate with Git Blame on, for the shots.
@@ -129,14 +140,19 @@ impl FileEditor {
         }
         self.rendered = rendered;
         match self.body.as_ref().filter(|_| !rendered) {
-            Some(body) => window.focus(&body.read(cx).editor().focus_handle(cx), cx),
+            Some(body) => window.focus(&body.read(cx).focus_handle(cx), cx),
             None => window.focus(&self.focus, cx),
         }
         cx.notify();
     }
 
     pub(super) fn draft(&self, cx: &App) -> Option<FileDraft> {
-        self.store.read(cx).file(&self.task_id, &self.path).cloned()
+        self.draft_ref(cx).cloned()
+    }
+
+    /// The draft without a copy of its text, for what only looks at it.
+    pub(super) fn draft_ref<'a>(&self, cx: &'a App) -> Option<&'a FileDraft> {
+        self.store.read(cx).file(&self.task_id, &self.path)
     }
 
     /// Reads the file again; a new text goes into the editor when there is no draft.
@@ -165,9 +181,10 @@ impl FileEditor {
         let shown = file.text.clone().filter(|_| notice_of(&file).is_none());
         match shown {
             // A draft stays; the banner shows when the version moved.
-            Some(text) if self.draft(cx).is_none() => {
+            Some(text) if self.draft_ref(cx).is_none() => {
+                let text = editor_text(&text);
                 if let Some(body) = &self.body
-                    && body.read(cx).text(cx) != text
+                    && body.read(cx).text(cx).as_str() != &*text
                 {
                     body.update(cx, |body, cx| body.set_disk_text(&text, cx));
                     self.blame.update(cx, |blame, cx| blame.refresh(cx));
@@ -176,6 +193,7 @@ impl FileEditor {
             Some(_) => {}
             None => self.body = None,
         }
+        self.crlf = file.text.as_deref().is_some_and(is_crlf);
         self.disk = Some(file);
         cx.notify();
     }
@@ -200,8 +218,9 @@ impl FileEditor {
                 this.edited(&edited.0, cx)
             }));
         if let Some(source) = self.dashboard.read(cx).source().cloned() {
-            let editor = body.read(cx).editor().clone();
-            let sides = vec![(editor, body.read(cx).buffer().clone(), ImageSide::Modified)];
+            let target = body.read(cx).view().clone();
+            let sides: Vec<(Rc<dyn BlameTarget>, ImageSide)> =
+                vec![(Rc::new(target), ImageSide::Modified)];
             self.blame.update(cx, |blame, cx| {
                 blame.attach(source, (&self.task_id, &self.path), sides, cx)
             });
@@ -215,9 +234,9 @@ impl FileEditor {
             return;
         };
         let draft = edit_draft(
-            disk.text.as_deref().unwrap_or_default(),
+            &editor_text(disk.text.as_deref().unwrap_or_default()),
             &disk.version,
-            self.draft(cx).as_ref(),
+            self.draft_ref(cx),
             text,
         );
         let (task, path) = (self.task_id.clone(), self.path.clone());
@@ -227,7 +246,7 @@ impl FileEditor {
 
     pub(super) fn stale_now(&self, cx: &App) -> bool {
         is_stale(
-            self.draft(cx).as_ref(),
+            self.draft_ref(cx),
             self.disk.as_ref().map(|file| file.version.as_str()),
         )
     }
@@ -243,7 +262,7 @@ impl FileEditor {
         self.set_draft(None, cx);
         let text = self.disk.as_ref().and_then(|file| file.text.clone());
         if let (Some(text), Some(body)) = (text, &self.body) {
-            body.update(cx, |body, cx| body.set_disk_text(&text, cx));
+            body.update(cx, |body, cx| body.set_disk_text(&editor_text(&text), cx));
         }
     }
 
@@ -330,9 +349,8 @@ impl Render for FileEditor {
 
 impl FileEditor {
     fn render_header(&self, stale: bool, cx: &mut Context<Self>) -> impl IntoElement {
-        let draft = self.draft(cx);
-        let has_draft = draft.is_some();
-        let can = can_save(draft.as_ref(), stale, self.saving);
+        let has_draft = self.draft_ref(cx).is_some();
+        let can = can_save(self.draft_ref(cx), stale, self.saving);
         let colors = cx.theme().colors();
         let dashboard = self.dashboard.clone();
         h_flex()

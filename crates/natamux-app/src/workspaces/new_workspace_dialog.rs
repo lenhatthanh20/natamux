@@ -2,7 +2,6 @@
 //! git worktree on a new branch, and an agent in it. It closes once the daemon made the task; the
 //! dashboard toasts "being prepared", then ready or failed (ui-spec 5.4).
 
-use editor::{Editor, EditorEvent};
 use gpui::{
     DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, ScrollHandle, Subscription,
 };
@@ -22,6 +21,7 @@ use crate::app::source::reason;
 use crate::components::dialog::{DialogLayer, DialogSize, DialogView};
 use crate::components::form::{input_style, text_editor};
 use crate::components::toast_rules::ToastTone;
+use crate::text_view::text_box::{TextBox, TextEvent};
 
 /// The Branch field's placeholder when the project sets no `git.branchName`.
 const DEFAULT_BRANCH_HINT: &str = "{project}/{id}-{slug}";
@@ -75,7 +75,7 @@ pub fn open_with(
     let view = cx.new(|cx| NewWorkspaceDialog::new(dashboard, repo, window, cx));
     let field = view.read(cx).title.clone();
     if let Some(title) = title {
-        field.update(cx, |editor, cx| editor.set_text(title, window, cx));
+        field.set_text(title, window, cx);
     }
     DialogLayer::open(view.clone(), window, cx);
     window.focus(&field.focus_handle(cx), cx);
@@ -87,16 +87,16 @@ pub struct Created;
 
 pub struct NewWorkspaceDialog {
     dashboard: Entity<Dashboard>,
-    title: Entity<Editor>,
-    notes: Entity<Editor>,
-    branch_name: Entity<Editor>,
+    title: TextBox,
+    notes: TextBox,
+    branch_name: TextBox,
     /// What the field holds from a refill: a text equal to it is not an edit by the user.
     filled: String,
     /// The user typed a branch: the title and project no longer refill it, until the reset
     /// button makes it follow the title again.
     branch_edited: bool,
     branch_hint: String,
-    reference: Entity<Editor>,
+    reference: TextBox,
     /// The Reference field's placeholder now: the hint of the source and skill.
     ref_hint: String,
     picked_repo: String,
@@ -104,7 +104,7 @@ pub struct NewWorkspaceDialog {
     agent: String,
     single_agent: bool,
     /// Passed to the agent as `--model`; empty: its own default.
-    model: Entity<Editor>,
+    model: TextBox,
     /// The Model field's placeholder now: an example for the picked agent.
     model_hint: String,
     /// "Create a worktree": unchecked makes the task only.
@@ -146,11 +146,9 @@ struct Stops {
 }
 
 /// Branch names read in the buffer font, 12 px as the mockup's mono inputs.
-fn set_mono(editor: &Entity<Editor>, cx: &mut App) {
+fn set_mono(editor: &TextBox, cx: &mut App) {
     let font = theme::theme_settings(cx).buffer_font(cx).family.clone();
-    editor.update(cx, |editor, _| {
-        editor.set_text_style_refinement(input_style(Some(font), Some(12.0)))
-    });
+    editor.set_style(input_style(Some(font), Some(12.0)), cx);
 }
 
 impl NewWorkspaceDialog {
@@ -184,24 +182,22 @@ impl NewWorkspaceDialog {
         });
         let mut subscriptions = vec![follow];
         for field in [&title, &notes, &reference, &model] {
-            subscriptions.push(cx.subscribe(field, |_, _, event: &EditorEvent, cx| {
-                if matches!(event, EditorEvent::BufferEdited) {
+            subscriptions.push(field.subscribe(cx, |_, _, event, cx| {
+                if event == TextEvent::Edited {
                     cx.notify();
                 }
             }));
         }
-        subscriptions.push(
-            cx.subscribe(&branch_name, |this, editor, event: &EditorEvent, cx| {
-                if matches!(event, EditorEvent::BufferEdited) {
-                    let text = editor.read(cx).text(cx);
-                    // A refill sets the text too; only another text is the user's.
-                    if text != this.filled {
-                        this.branch_edited = !text.is_empty();
-                    }
-                    cx.notify();
+        subscriptions.push(branch_name.subscribe(cx, |this, editor, event, cx| {
+            if event == TextEvent::Edited {
+                let text = editor.text(cx);
+                // A refill sets the text too; only another text is the user's.
+                if text != this.filled {
+                    this.branch_edited = !text.is_empty();
                 }
-            }),
-        );
+                cx.notify();
+            }
+        }));
         let mut dialog = NewWorkspaceDialog {
             dashboard,
             title,
@@ -306,18 +302,18 @@ impl NewWorkspaceDialog {
 
     fn form(&self, cx: &App) -> StartForm {
         StartForm {
-            title: self.title.read(cx).text(cx),
+            title: self.title.text(cx),
             repo: self.repo(cx),
             base: self.base.clone(),
-            branch: self.branch_name.read(cx).text(cx),
+            branch: self.branch_name.text(cx),
             agent: self.agent.clone(),
             single_agent: self.single_agent,
-            notes: self.notes.read(cx).text(cx),
-            reference: self.reference.read(cx).text(cx),
+            notes: self.notes.text(cx),
+            reference: self.reference.text(cx),
             skill: self.skill.clone(),
             no_worktree: !self.worktree,
             model: if self.takes_model() {
-                self.model.read(cx).text(cx)
+                self.model.text(cx)
             } else {
                 String::new()
             },
@@ -446,6 +442,14 @@ fn read_remote(
     })
 }
 
+impl NewWorkspaceDialog {
+    /// The title box, for the flow tests.
+    #[cfg(test)]
+    pub fn title_box(&self) -> &TextBox {
+        &self.title
+    }
+}
+
 impl EventEmitter<DismissEvent> for NewWorkspaceDialog {}
 
 impl EventEmitter<Created> for NewWorkspaceDialog {}
@@ -504,3 +508,7 @@ impl DialogView for NewWorkspaceDialog {
         self.start_checked(window, cx);
     }
 }
+
+#[cfg(test)]
+#[path = "new_workspace_dialog_tests.rs"]
+mod tests;

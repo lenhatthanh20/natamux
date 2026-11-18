@@ -4,7 +4,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use gpui::{Point, ScrollHandle, TestAppContext};
-use ui::{ScrollAxes, prelude::*};
+use ui::prelude::*;
 
 use super::scroll_area;
 use crate::app::test_views;
@@ -26,15 +26,15 @@ impl Render for Area {
             .py_3()
             .track_scroll(&self.handle)
             .children((0..self.rows).map(|_| div().flex_none().size(px(20.))));
-        let (area, axes) = if self.sideways {
-            (area.flex_row().overflow_x_scroll(), ScrollAxes::Horizontal)
+        let area = if self.sideways {
+            area.flex_row().overflow_x_scroll()
         } else {
-            (area.flex_col().overflow_y_scroll(), ScrollAxes::Vertical)
+            area.flex_col().overflow_y_scroll()
         };
         div()
             .w(px(200.))
             .h(px(100.))
-            .child(scroll_area(area, axes, &self.handle, window, cx).size_full())
+            .child(scroll_area(area, &self.handle, window, cx).size_full())
     }
 }
 

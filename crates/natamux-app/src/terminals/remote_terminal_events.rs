@@ -5,16 +5,12 @@
 use std::time::Instant;
 
 use futures::channel::oneshot;
-use gpui::{Entity, FocusHandle, Focusable, Subscription, WeakEntity};
+use gpui::{Entity, FocusHandle, Focusable, Subscription};
 use natamux_client::{TerminalEvent, TerminalStatus};
-use settings::Settings;
-use terminal::terminal_settings::TerminalSettings;
-use terminal::{Terminal, TerminalBounds, TerminalBuilder};
-use terminal_view::TerminalView;
 use ui::prelude::*;
-use util::paths::PathStyle;
 
-use super::RemoteTerminal;
+use super::screen::{DisplayOnlyWriter, Terminal, TerminalBounds, TerminalView};
+use super::{RemoteTerminal, send_input};
 use crate::app::app_log;
 use crate::terminals::terminal_parser::{Job, lane};
 
@@ -52,7 +48,7 @@ impl RemoteTerminal {
                 TerminalEvent::Status(status) => {
                     if status == TerminalStatus::Open {
                         for text in self.pending.drain(..) {
-                            handle.input(text);
+                            send_input(&handle, text);
                         }
                     }
                     if status == TerminalStatus::Reconnecting
@@ -113,7 +109,7 @@ impl RemoteTerminal {
 
     fn writer_job(
         &mut self,
-        writer: anyhow::Result<terminal::DisplayOnlyWriter>,
+        writer: anyhow::Result<DisplayOnlyWriter>,
         cx: &mut Context<Self>,
     ) -> Option<Job> {
         match writer {
@@ -165,7 +161,7 @@ impl RemoteTerminal {
         cx: &mut Context<Self>,
     ) {
         if let Some(screen) = incoming {
-            if self.view.focus_handle(cx).contains_focused(window, cx) {
+            if self.has_focus(window, cx) {
                 window.focus(&screen.view.focus_handle(cx), cx);
             }
             self.show(screen, cx);
@@ -179,52 +175,50 @@ impl RemoteTerminal {
     }
 }
 
-/// Zed's terminal, its view, and the view's focus listeners.
+/// The terminal, its view, and the view's focus listeners.
 pub(super) struct Screen {
     pub(super) terminal: Entity<Terminal>,
     pub(super) view: Entity<TerminalView>,
-    pub(super) _focus: [Subscription; 2],
+    pub(super) _focus: Vec<Subscription>,
 }
 
-/// `bounds`: the grid the last screen laid out, so the new one starts at it.
+/// `bounds`: the grid the last screen laid out, so the new one starts at it. The cursor starts as
+/// a block and alternate scroll is on; the menu has only what works without a workspace.
 pub(super) fn build_screen(
     history: Option<usize>,
     bounds: Option<TerminalBounds>,
     window: &mut Window,
     cx: &mut Context<RemoteTerminal>,
 ) -> Screen {
-    let settings = TerminalSettings::get_global(cx).clone();
-    let terminal = cx.new(|cx| {
-        TerminalBuilder::new_display_only_with_bounds(
-            settings.cursor_shape,
-            settings.alternate_scroll,
-            history,
-            cx.entity_id().as_u64(),
-            cx.background_executor(),
-            PathStyle::local(),
-            bounds.unwrap_or_default(),
-        )
-        .subscribe(cx)
-    });
-    let view = cx.new(|cx| {
-        let mut view = TerminalView::new(
-            terminal.clone(),
-            WeakEntity::new_invalid(),
-            None,
-            WeakEntity::new_invalid(),
-            window,
-            cx,
-        );
-        // No Zed workspace here to handle New Terminal, New Center Terminal or Close Terminal Tab
-        // from the right-click menu (T-0247).
-        view.set_show_workspace_actions(false, cx);
-        view
-    });
+    use crate::terminals::term::view::MenuFocus;
+
+    let terminal = cx.new(|cx| Terminal::new(history, bounds, cx));
+    let view = cx.new(|cx| TerminalView::new(terminal.clone(), window, cx));
     let focus = view.focus_handle(cx);
+    let mut subscriptions = Vec::from(watch_focus(&focus, window, cx));
+    let menu = cx.subscribe(&view, |this, _, event: &MenuFocus, cx| {
+        if event.0 {
+            this.focus_came(cx);
+        } else {
+            this.set_focused(false, cx);
+        }
+    });
+    subscriptions.push(menu);
     Screen {
         terminal,
         view,
-        _focus: watch_focus(&focus, window, cx),
+        _focus: subscriptions,
+    }
+}
+
+impl RemoteTerminal {
+    fn focus_came(&mut self, cx: &mut Context<Self>) {
+        if let Some(handle) = &self.handle {
+            #[cfg(test)]
+            super::sent::claimed();
+            handle.claim();
+        }
+        self.set_focused(true, cx);
     }
 }
 
@@ -236,12 +230,19 @@ pub(super) fn watch_focus(
     cx: &mut Context<RemoteTerminal>,
 ) -> [Subscription; 2] {
     let focus_in = cx.on_focus_in(focus, window, |this, _, cx| {
-        if let Some(handle) = &this.handle {
-            handle.claim();
+        // Back from the own view's menu: the focus never left as far as the shell knows.
+        if this.view.read(cx).back_from_menu {
+            return;
         }
-        this.set_focused(true, cx);
+        this.focus_came(cx);
     });
     // Not blur: focus in a child, such as the context menu, still counts as focused.
-    let focus_out = cx.on_focus_out(focus, window, |this, _, _, cx| this.set_focused(false, cx));
+    let focus_out = cx.on_focus_out(focus, window, |this, _, _window, cx| {
+        // The own view's menu is drawn outside its focus, but still counts as the view's.
+        if this.view.read(cx).menu_holds_focus(_window, cx) {
+            return;
+        }
+        this.set_focused(false, cx)
+    });
     [focus_in, focus_out]
 }

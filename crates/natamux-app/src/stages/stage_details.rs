@@ -11,6 +11,8 @@ use super::editor_find::{find_branch, find_stage};
 use super::pipeline_editor::{OpenSheet, PipelineEditor};
 use super::stage_sheet::{self, Skills, StageSheet};
 
+use crate::text_view::text_box::TextBox;
+
 pub struct DetailsPane {
     editor: Entity<PipelineEditor>,
     skills: Skills,
@@ -34,6 +36,18 @@ impl DetailsPane {
             sheet: None,
             _open: open,
         }
+    }
+
+    /// The prompt box of the open stage sheet, for the whole-app flows.
+    pub fn prompt_box(&self, cx: &App) -> Option<TextBox> {
+        let sheet = self.sheet.as_ref()?.upgrade()?;
+        Some(sheet.read(cx).fields.prompt.editor.clone())
+    }
+
+    /// The open stage sheet, for the flow tests.
+    #[cfg(test)]
+    pub fn sheet(&self) -> Option<Entity<StageSheet>> {
+        self.sheet.as_ref()?.upgrade()
     }
 
     /// The sheets are dialogs with their own Tab ring: the page has no stops here.

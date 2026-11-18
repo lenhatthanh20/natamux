@@ -8,7 +8,7 @@
 
 use gpui::{Entity, EventEmitter, FocusHandle, Focusable, ScrollHandle, Subscription};
 use natamux_proto::projects::repo::{LoadedSettings, SkillList};
-use ui::{ScrollAxes, prelude::*};
+use ui::prelude::*;
 
 use super::branch_name_field::BranchNameField;
 use super::idle_pause_field::IdlePauseField;
@@ -26,6 +26,7 @@ use crate::stages::pipeline_editor::{DraftEdited, PipelineEditor};
 use crate::stages::stage_details::DetailsPane;
 use crate::stages::stage_list::StageList;
 use crate::stages::stages_tab::stages_tab;
+use crate::text_view::text_box::TextBox;
 
 /// The content width of the General tab; Stages and JSON are wider.
 const CONTENT_MAX: f32 = 760.;
@@ -183,6 +184,18 @@ impl ProjectSettingsPage {
         self.stages.as_ref().map(|stages| stages.editor.clone())
     }
 
+    /// The details pane and the stage list of the Stages tab, for the flow tests.
+    #[cfg(test)]
+    pub fn stage_parts(&self) -> Option<(Entity<DetailsPane>, Entity<StageList>)> {
+        let stages = self.stages.as_ref()?;
+        Some((stages.details.clone(), stages.list.clone()))
+    }
+
+    /// The prompt box of the picked stage, for the whole-app flows.
+    pub fn stage_prompt(&self, cx: &App) -> Option<TextBox> {
+        self.stages.as_ref()?.details.read(cx).prompt_box(cx)
+    }
+
     /// The draft differs from the file as read.
     pub fn dirty(&self, cx: &App) -> bool {
         match (&self.base, &self.stages) {
@@ -268,6 +281,10 @@ impl ProjectSettingsPage {
 
 impl EventEmitter<Discarded> for ProjectSettingsPage {}
 
+#[cfg(test)]
+#[path = "project_settings_page_tests.rs"]
+mod tests;
+
 impl Focusable for ProjectSettingsPage {
     fn focus_handle(&self, _: &App) -> FocusHandle {
         self.focus.clone()
@@ -349,7 +366,6 @@ impl Render for ProjectSettingsPage {
                         .px(rems_from_px(32.0_f32))
                         .pb(rems_from_px(32.0_f32))
                         .children(body),
-                    ScrollAxes::Vertical,
                     &self.body_scroll,
                     window,
                     cx,

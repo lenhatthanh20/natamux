@@ -1,14 +1,14 @@
 //! Form parts shared by dialogs and the edit form: a labelled field, a bordered text box, and a
 //! text editor with a placeholder. `SettingsInput` is the Settings screen's smaller box.
-//! Every input editor comes from `input_editor`, so all inputs share one text style.
+//! Every input comes from `text_editor` (a `TextBox`), so all inputs share one text style.
 
-use editor::{CurrentLineHighlight, Editor};
 use gpui::Focusable;
-use gpui::{Entity, FontWeight, TextStyleRefinement, relative};
-use language::language_settings::SoftWrap;
+use gpui::{FontWeight, TextStyleRefinement, relative};
 use ui::prelude::*;
 
 use super::tab_order;
+
+use crate::text_view::text_box::TextBox;
 
 pub fn field(label: impl Into<SharedString>, control: impl IntoElement) -> impl IntoElement {
     v_flex()
@@ -22,7 +22,7 @@ pub fn field(label: impl Into<SharedString>, control: impl IntoElement) -> impl 
         .child(control)
 }
 
-pub fn input_box(editor: &Entity<Editor>, cx: &App) -> impl IntoElement {
+pub fn input_box(editor: &TextBox, cx: &App) -> impl IntoElement {
     tab_order::push(&editor.focus_handle(cx));
     let colors = cx.theme().colors();
     div()
@@ -39,7 +39,7 @@ pub fn input_box(editor: &Entity<Editor>, cx: &App) -> impl IntoElement {
 /// focus or error colour on its border. `area()` makes it a textarea: radius 6, padding 8 10.
 #[derive(IntoElement)]
 pub struct SettingsInput {
-    editor: Entity<Editor>,
+    editor: TextBox,
     width: Option<f32>,
     height: Option<f32>,
     radius: Option<f32>,
@@ -50,7 +50,7 @@ pub struct SettingsInput {
 }
 
 impl SettingsInput {
-    pub fn new(editor: &Entity<Editor>) -> Self {
+    pub fn new(editor: &TextBox) -> Self {
         Self {
             editor: editor.clone(),
             width: None,
@@ -182,53 +182,24 @@ pub fn input_style(family: Option<SharedString>, size: Option<f32>) -> TextStyle
     }
 }
 
-/// `lines` of an editor that fills its box and scrolls inside (`SettingsInput::fill`).
+/// `lines` of a box that fills its frame and scrolls inside (`SettingsInput::fill`).
 pub const FILL_LINES: (usize, usize) = (0, 0);
 
-/// An input editor with the input text style: one line, `lines` (min, max) that grow, or
-/// `FILL_LINES`.
-pub fn input_editor(
-    lines: Option<(usize, usize)>,
-    window: &mut Window,
-    cx: &mut Context<Editor>,
-) -> Editor {
-    let mut editor = match lines {
-        Some(FILL_LINES) => {
-            let mut editor = Editor::multi_line(window, cx);
-            editor.set_show_gutter(false, cx);
-            editor.set_show_line_numbers(false, cx);
-            editor.set_show_wrap_guides(false, cx);
-            editor.set_show_indent_guides(false, cx);
-            editor.set_current_line_highlight(Some(CurrentLineHighlight::None));
-            editor.set_soft_wrap_mode(SoftWrap::EditorWidth, cx);
-            editor
-        }
-        Some((min, max)) => {
-            let mut editor = Editor::auto_height(min, max, window, cx);
-            // A textarea wraps long lines; Zed's default setting does not.
-            editor.set_soft_wrap_mode(SoftWrap::EditorWidth, cx);
-            editor
-        }
-        None => Editor::single_line(window, cx),
-    };
-    editor.set_text_style_refinement(input_style(None, None));
-    editor
-}
-
-/// One line, or `lines` (min, max) of text that grows with what is typed.
+/// An input with the input text style: one line, `lines` (min, max) of text that grows with what
+/// is typed, or `FILL_LINES`.
 pub fn text_editor(
     placeholder: &str,
     lines: Option<(usize, usize)>,
     window: &mut Window,
     cx: &mut App,
-) -> Entity<Editor> {
-    cx.new(|cx| {
-        let mut editor = input_editor(lines, window, cx);
-        editor.set_placeholder_text(placeholder, window, cx);
-        editor
-    })
+) -> TextBox {
+    match lines {
+        Some(FILL_LINES) => TextBox::fill(placeholder, window, cx),
+        Some(lines) => TextBox::area(placeholder, lines, window, cx),
+        None => TextBox::one_line(placeholder, window, cx),
+    }
 }
 
 #[cfg(test)]
-#[path = "form_tests.rs"]
+#[path = "form_style_tests.rs"]
 mod tests;

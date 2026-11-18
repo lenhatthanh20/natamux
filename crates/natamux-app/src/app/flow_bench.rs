@@ -196,6 +196,8 @@ async fn time_runs(
     Ok(())
 }
 
+#[path = "flow_bench_big.rs"]
+mod big;
 #[path = "flow_bench_steps.rs"]
 mod steps;
 

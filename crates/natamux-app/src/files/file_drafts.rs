@@ -1,7 +1,10 @@
 //! Unsaved edits of files of the worktree, and the rules of the editor tab around them
 //! (`features/files/file-drafts.ts`, `FileEditor.tsx`).
 
+use std::borrow::Cow;
 use std::collections::BTreeMap;
+
+use crate::text::model::normalize;
 
 /// An unsaved edit. `version` is the version of the file the edit began on; a save sends it, so a
 /// file that changed since is not replaced unseen.
@@ -76,6 +79,30 @@ pub fn edit_draft(
             text: text.to_string(),
             version: version.to_string(),
         })
+    }
+}
+
+/// True when every line break of `text` is CRLF: such a file is written back with CRLF. A file
+/// with mixed endings is not: it is written with LF, as the editor shows it.
+pub fn is_crlf(text: &str) -> bool {
+    text.contains("\r\n") && !text.replace("\r\n", "").contains(['\r', '\n'])
+}
+
+/// The text as the editor holds it (every line break is LF).
+pub fn editor_text(text: &str) -> Cow<'_, str> {
+    if text.contains('\r') {
+        Cow::Owned(normalize(text))
+    } else {
+        Cow::Borrowed(text)
+    }
+}
+
+/// The editor's text with the line endings of the file it came from.
+pub fn disk_text(text: &str, crlf: bool) -> Cow<'_, str> {
+    if crlf {
+        Cow::Owned(text.replace('\n', "\r\n"))
+    } else {
+        Cow::Borrowed(text)
     }
 }
 

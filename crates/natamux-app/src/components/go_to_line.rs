@@ -3,9 +3,7 @@
 
 use std::rc::Rc;
 
-use editor::Editor;
-use gpui::{DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, KeyDownEvent};
-use text::Point;
+use gpui::{DismissEvent, EventEmitter, FocusHandle, Focusable, KeyDownEvent};
 use ui::prelude::*;
 
 use super::dialog::{
@@ -13,27 +11,9 @@ use super::dialog::{
 };
 use super::form::{input_box, text_editor};
 
+use crate::text_view::text_box::TextBox;
+
 type OnGo = Rc<dyn Fn(u32, Option<u32>, &mut Window, &mut App)>;
-
-/// Where `line` and `column` (1-based, the column in characters) are in `text`: the row clamped
-/// to the last one, and the column as the byte column of that row, clamped to its end. A
-/// `Point`'s column is in bytes, so a character column must not be used as one (T-0316).
-pub fn line_target(text: &text::BufferSnapshot, line: u32, column: Option<u32>) -> Point {
-    let row = line.saturating_sub(1).min(text.max_point().row);
-    let end = Point::new(row, text.line_len(row));
-    let line_text: String = text.text_for_range(Point::new(row, 0)..end).collect();
-    let chars = column.map_or(0, |column| column.saturating_sub(1)) as usize;
-    Point::new(row, byte_column(&line_text, chars))
-}
-
-/// The byte offset of character `chars` of `line`, or the line's length past its end.
-fn byte_column(line: &str, chars: usize) -> u32 {
-    let bytes = line
-        .char_indices()
-        .nth(chars)
-        .map_or(line.len(), |(at, _)| at);
-    u32::try_from(bytes).unwrap_or(u32::MAX)
-}
 
 /// `120` or `120:5`, spaces allowed around the parts. None for anything else, and for 0.
 pub fn parse_line_target(text: &str) -> Option<(u32, Option<u32>)> {
@@ -73,7 +53,7 @@ pub fn open_go_to_line(
 }
 
 pub struct GoToLine {
-    input: Entity<Editor>,
+    input: TextBox,
     on_go: OnGo,
     focus: FocusHandle,
     cancel_focus: FocusHandle,
@@ -104,7 +84,7 @@ impl DialogView for GoToLine {
     /// Bad input does nothing: the dialog stays for a fix. The dialog closes first, so the focus
     /// that the jump gives the editor is not taken back to the opener.
     fn submit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some((line, column)) = parse_line_target(&self.input.read(cx).text(cx)) else {
+        let Some((line, column)) = parse_line_target(&self.input.text(cx)) else {
             return;
         };
         cx.emit(DismissEvent);
@@ -156,14 +136,6 @@ mod tests {
         assert_eq!(parse_line_target("120"), Some((120, None)));
         assert_eq!(parse_line_target("120:5"), Some((120, Some(5))));
         assert_eq!(parse_line_target(" 120 : 5 "), Some((120, Some(5))));
-    }
-
-    #[test]
-    fn counts_the_column_in_characters() {
-        assert_eq!(byte_column("tiếng", 0), 0);
-        assert_eq!(byte_column("tiếng", 2), 2);
-        assert_eq!(byte_column("tiếng", 3), 5);
-        assert_eq!(byte_column("tiếng", 99), 7);
     }
 
     #[test]

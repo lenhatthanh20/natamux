@@ -2,7 +2,6 @@
 //! labels, the tasks it waits for and the model. Save (Mod+Enter from any field) makes
 //! `PATCH /tasks/:id`; Cancel and a save close it.
 
-use editor::Editor;
 use gpui::{ClickEvent, Entity, EventEmitter, FocusHandle, Focusable, KeyDownEvent};
 use natamux_proto::tasks::task::{TASK_PRIORITIES, Task, TaskChanges};
 use ui::{ContextMenu, prelude::*};
@@ -13,6 +12,7 @@ use crate::components::button_style::{action_button, key_hint, quiet_button};
 use crate::components::form::{field, input_box, text_editor};
 use crate::components::menu::MenuLayer;
 use crate::components::settings_card::error_line;
+use crate::text_view::text_box::TextBox;
 use crate::workspaces::new_workspace_rules::model_error;
 
 /// The form is done: saved or cancelled.
@@ -21,11 +21,11 @@ pub struct Saved;
 pub struct EditForm {
     task: Task,
     dashboard: Entity<Dashboard>,
-    title: Entity<Editor>,
-    notes: Entity<Editor>,
-    labels: Entity<Editor>,
-    depends_on: Entity<Editor>,
-    model: Entity<Editor>,
+    title: TextBox,
+    notes: TextBox,
+    labels: TextBox,
+    depends_on: TextBox,
+    model: TextBox,
     priority: String,
     busy: bool,
     priority_focus: FocusHandle,
@@ -39,9 +39,9 @@ fn filled(
     lines: Option<(usize, usize)>,
     window: &mut Window,
     cx: &mut App,
-) -> Entity<Editor> {
+) -> TextBox {
     let editor = text_editor(placeholder, lines, window, cx);
-    editor.update(cx, |editor, cx| editor.set_text(text, window, cx));
+    editor.set_text(text, window, cx);
     editor
 }
 
@@ -87,13 +87,22 @@ impl EditForm {
     pub fn focus(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let handle = self.title.focus_handle(cx);
         window.focus(&handle, cx);
-        self.title.update(cx, |editor, cx| {
-            editor.select_all(&editor::actions::SelectAll, window, cx)
-        });
+        self.title.select_all(window, cx);
     }
 
-    fn text(editor: &Entity<Editor>, cx: &App) -> String {
-        editor.read(cx).text(cx)
+    /// Title, notes, labels and the tasks it waits for, for the flow tests.
+    #[cfg(test)]
+    pub fn boxes(&self) -> Vec<TextBox> {
+        vec![
+            self.title.clone(),
+            self.notes.clone(),
+            self.labels.clone(),
+            self.depends_on.clone(),
+        ]
+    }
+
+    fn text(editor: &TextBox, cx: &App) -> String {
+        editor.text(cx)
     }
 
     fn save(&mut self, cx: &mut Context<Self>) {
@@ -228,3 +237,7 @@ impl Render for EditForm {
             )
     }
 }
+
+#[cfg(test)]
+#[path = "edit_form_tests.rs"]
+mod tests;

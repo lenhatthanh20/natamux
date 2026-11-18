@@ -267,6 +267,36 @@ fn focus_moves_to_the_new_view_at_the_swap(cx: &mut TestAppContext) {
     assert!(focused(&terminal, cx), "the terminal lost its focused lane");
 }
 
+/// S2.5 review: with the menu open, the menu counts as the own view's focus, so the focus moves
+/// to the new view at the swap and the terminal keeps a true focused lane. (Zed's terminal
+/// dropped the focus there, back to the old view that is no longer drawn: a bug of the old code,
+/// pending the owner's decision in the progress log.)
+#[gpui::test]
+fn focus_in_the_menu_moves_to_the_new_view_at_the_swap(cx: &mut TestAppContext) {
+    let (terminal, cx) = open(cx);
+    focus_view(&terminal, cx);
+    let view = terminal.read_with(cx, |terminal, _| terminal.view.clone());
+    view.update_in(cx, |view, window, cx| {
+        view.deploy_context_menu(gpui::point(px(8.), px(8.)), window, cx);
+    });
+    cx.run_until_parked();
+    draw(cx);
+    assert!(focused(&terminal, cx), "the menu took the focused lane");
+    let old_view = view.read_with(cx, |view, cx| view.focus_handle(cx));
+
+    swap(&terminal, cx);
+    let (on_new_view, on_old_view) = terminal.update_in(cx, |terminal, window, cx| {
+        let new_view = terminal.view.focus_handle(cx);
+        (new_view.is_focused(window), old_view.is_focused(window))
+    });
+    assert_eq!(
+        (on_new_view, on_old_view),
+        (true, false),
+        "the focus stayed in the old view or its menu"
+    );
+    assert!(focused(&terminal, cx), "the terminal lost its focused lane");
+}
+
 /// Regression (T-0210 review 1, finding 2): a second CaughtUp dropped the first swap, and the
 /// pane stayed on the old screen while all output went to the new one.
 #[gpui::test]
@@ -445,7 +475,7 @@ fn an_unfocused_swap_gives_the_new_screen_the_input_and_no_focus(cx: &mut TestAp
     // The input loop takes the key's time only for input that came through the sink.
     terminal.update(cx, |terminal, _| terminal.last_key = Some(Instant::now()));
     let zed = terminal.read_with(cx, |terminal, _| terminal.terminal().clone());
-    zed.update(cx, |zed, _| zed.input(b"x".to_vec()));
+    zed.update(cx, |zed, _| zed.type_bytes(b"x".to_vec()));
     cx.run_until_parked();
     let sent = terminal.read_with(cx, |terminal, _| terminal.last_key.is_none());
     assert!(sent, "input on the new screen did not reach the socket");

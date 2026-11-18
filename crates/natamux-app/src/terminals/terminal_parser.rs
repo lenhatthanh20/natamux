@@ -13,7 +13,8 @@ use futures::channel::mpsc::UnboundedReceiver;
 use futures::channel::oneshot;
 use gpui::{BackgroundExecutor, Priority, Task};
 use natamux_client::TerminalHandle;
-use terminal::DisplayOnlyWriter;
+
+use super::remote_terminal::screen::DisplayOnlyWriter;
 
 /// The most output parsed before the parser lets other work of the thread pool run. The paint
 /// waits for the terminal's lock while a piece is parsed.
@@ -109,7 +110,7 @@ impl Acks for TerminalHandle {
 }
 
 /// Pending once, so other work of the thread pool runs between two pieces of a flood.
-struct YieldNow(bool);
+pub(crate) struct YieldNow(pub(crate) bool);
 
 impl Future for YieldNow {
     type Output = ();
@@ -159,12 +160,9 @@ mod tests {
     use futures::channel::mpsc::unbounded;
     use futures::executor::block_on;
     use gpui::{AppContext as _, Entity, TestAppContext};
-    use settings::Settings;
-    use terminal::terminal_settings::TerminalSettings;
-    use terminal::{Terminal, TerminalBuilder};
-    use util::paths::PathStyle;
 
     use super::*;
+    use crate::terminals::remote_terminal::screen::Terminal;
 
     /// What the parser acked, in order.
     #[derive(Default)]
@@ -188,18 +186,7 @@ mod tests {
 
     fn screen(cx: &mut TestAppContext) -> Entity<Terminal> {
         crate::app::test_views::init(cx);
-        cx.new(|cx| {
-            let settings = TerminalSettings::get_global(cx).clone();
-            TerminalBuilder::new_display_only(
-                settings.cursor_shape,
-                settings.alternate_scroll,
-                None,
-                0,
-                cx.background_executor(),
-                PathStyle::local(),
-            )
-            .subscribe(cx)
-        })
+        cx.new(|cx| Terminal::new(None, None, cx))
     }
 
     fn new_parser(

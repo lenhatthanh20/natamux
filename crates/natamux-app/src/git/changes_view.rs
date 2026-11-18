@@ -8,7 +8,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
-use editor::Editor;
 use gpui::{Entity, FocusHandle, Focusable, Image, KeyContext, Subscription, WeakEntity};
 use natamux_proto::workspaces::changes::{FileDiff, ImageSide};
 use natamux_proto::workspaces::workspace::ChangeEntry;
@@ -27,6 +26,7 @@ use crate::app::view_rules::DetailsView;
 use crate::components::empty_state::EmptyState;
 use crate::components::skeleton::{Loading, SkeletonList};
 use crate::tasks::state_filter::width_probe;
+use crate::text_view::text_box::TextBox;
 use crate::workspaces::workspace_rules::GitStep;
 use crate::workspaces::workspace_view::WorkspaceView;
 
@@ -68,9 +68,9 @@ pub struct ChangesView {
     pub(super) diff: Entity<DiffView>,
     pub(super) blame: Entity<BlameMarks>,
     pub(super) svg_preview: bool,
-    pub(super) message: Option<Entity<Editor>>,
+    pub(super) message: Option<TextBox>,
     pub(super) drafting: bool,
-    pub(super) comment: Option<Entity<Editor>>,
+    pub(super) comment: Option<TextBox>,
     pub(super) quote: Option<Quote>,
     pub(super) find: Option<Entity<EditorFind>>,
     pub(super) sending: bool,
@@ -162,6 +162,7 @@ impl ChangesView {
             self.reset_review();
             self.moves.undo.clear();
             self.diff.update(cx, |diff, _| diff.clear());
+            self.blame.update(cx, |marks, _| marks.detach());
         }
         self.pending = pending;
         if list.is_some() {
@@ -176,6 +177,19 @@ impl ChangesView {
         }
         let changed = self.list != list;
         self.prefetch = self.prefetch.take().filter(|_| !changed);
+        if changed && let Some(list) = &list {
+            // The colours of the listed files' languages are ready before a file is picked.
+            let mut langs: Vec<&'static super::languages::Lang> = Vec::new();
+            for lang in list
+                .iter()
+                .filter_map(|entry| super::languages::lang_for(&entry.path))
+            {
+                if !langs.iter().any(|known| std::ptr::eq(*known, lang)) {
+                    langs.push(lang);
+                }
+            }
+            crate::text_view::highlight::Highlights::compile_in_background(langs, cx);
+        }
         self.list = list;
         if changed || self.file.is_none() {
             self.read_file(cx);
@@ -354,8 +368,14 @@ impl ChangesView {
         self.pending.is_some()
     }
 
+    /// The commit message box, once it was drawn, for the flow tests.
+    #[cfg(test)]
+    pub fn commit_box(&self) -> Option<TextBox> {
+        self.message.clone()
+    }
+
     pub(super) fn editing(&self, window: &Window, cx: &App) -> bool {
-        let focused = |editor: &Option<Entity<Editor>>| {
+        let focused = |editor: &Option<TextBox>| {
             editor
                 .as_ref()
                 .is_some_and(|editor| editor.focus_handle(cx).contains_focused(window, cx))

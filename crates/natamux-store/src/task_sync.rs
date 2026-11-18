@@ -47,6 +47,8 @@ pub struct TaskSync {
     folder_checked_at: i64,
     pub started: bool,
     watch: Option<TaskWatch>,
+    /// Set by `close`. A dropped watch may still call back once on some systems (Windows).
+    closed: bool,
     on_changed: Box<dyn Fn(&Task) + Send>,
 }
 
@@ -74,6 +76,7 @@ impl TaskSync {
             folder_checked_at: 0,
             started: false,
             watch: None,
+            closed: false,
             on_changed,
         }
     }
@@ -158,11 +161,18 @@ impl TaskSync {
     /// Keeps the watch of the task files until `close`.
     pub fn set_watch(&mut self, watch: TaskWatch) {
         self.watch = Some(watch);
+        self.closed = false;
     }
 
     /// Stops watching the task files.
     pub fn close(&mut self) {
         self.watch = None;
+        self.closed = true;
+    }
+
+    /// Whether `close` ran, so a late call of the watch must change nothing.
+    pub fn closed(&self) -> bool {
+        self.closed
     }
 
     /// The tasks as the index holds them. A row of an older version may not parse; then every

@@ -1,6 +1,6 @@
 //! One text scale for the app (T-0158), so the sidebar, the lists, the tabs and the code agree:
-//! 13 px for the main text of a row or a tab (code is 13 too, `BASE_BUFFER_FONT_SIZE`), Zed's
-//! Small (12) for meta text such as ids, ages and counts, 11 for the uppercase section heads.
+//! 13 px for the main text of a row or a tab (code is 13 too, `theme::BASE_BUFFER_FONT_SIZE`),
+//! Zed's Small (12) for meta text such as ids, ages and counts, 11 for the uppercase section heads.
 
 use ui::prelude::*;
 

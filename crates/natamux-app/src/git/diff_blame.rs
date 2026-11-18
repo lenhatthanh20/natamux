@@ -1,14 +1,15 @@
-//! Annotate with Git Blame in the Changes tab: each time the diff view has new editors or a new
+//! Annotate with Git Blame in the Changes tab: each time the diff view has new sides or a new
 //! text, they get the blame menu (and the labels again while it is on). A failure is a toast.
 
-use editor::Editor;
+use std::rc::Rc;
+
 use gpui::{Entity, Subscription};
-use language::Buffer;
 use natamux_proto::workspaces::changes::ImageSide;
 use ui::prelude::*;
 
 use super::blame_marks::{BlameFailed, BlameMarks};
 use super::changes_view::ChangesView;
+use super::code_target::BlameTarget;
 use super::diff_view::{DiffEvent, DiffView};
 use crate::components::toast_rules::ToastTone;
 
@@ -47,15 +48,14 @@ impl ChangesView {
 
 impl DiffView {
     /// The working tree at the right (or alone), and the last commit at the left.
-    fn blame_editors(&self, cx: &App) -> Vec<(Entity<Editor>, Entity<Buffer>, ImageSide)> {
-        let (Some(sides), Some(buffer), Some(diff)) = (&self.sides, &self.buffer, &self.diff)
-        else {
+    fn blame_editors(&self, _: &App) -> Vec<(Rc<dyn BlameTarget>, ImageSide)> {
+        let Some(sides) = &self.sides else {
             return Vec::new();
         };
-        let mut editors = vec![(sides.right.clone(), buffer.clone(), ImageSide::Modified)];
+        let right: Rc<dyn BlameTarget> = Rc::new(sides.right.clone());
+        let mut editors = vec![(right, ImageSide::Modified)];
         if let Some(left) = &sides.left {
-            let base = diff.read(cx).base_text_buffer().clone();
-            editors.push((left.clone(), base, ImageSide::Original));
+            editors.push((Rc::new(left.clone()), ImageSide::Original));
         }
         editors
     }

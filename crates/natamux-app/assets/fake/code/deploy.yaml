@@ -1,0 +1,31 @@
+# Deploys the shop on every tag.
+name: deploy
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch: {}
+
+env:
+  NODE_VERSION: 22
+  CACHE: true
+  RETRIES: 3
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: ${{ github.ref_type == 'tag' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: |
+          make build
+          make test
+      - name: Upload
+        run: >-
+          rsync -az dist/ deploy@www.example.com:/srv/shop
+        env:
+          TARGET: &target production
+      - name: Tell the team
+        env: { TARGET: *target, NOTE: null, PRICE: 12.50 }
+        run: echo "deployed ${{ github.ref_name }} to $TARGET"

@@ -119,11 +119,7 @@ fn the_stepper_moves_the_sheet_to_the_next_stage(cx: &mut TestAppContext) {
     let (id, name, want) = sheet.read_with(cx, |sheet, cx| {
         let steps = sheet.pipeline.read(cx).steps();
         let want = find_stage(steps, "testing").map(stage_name).unwrap();
-        (
-            sheet.id.clone(),
-            sheet.fields.name.editor.read(cx).text(cx),
-            want,
-        )
+        (sheet.id.clone(), sheet.fields.name.editor.text(cx), want)
     });
     assert_eq!(id, "testing");
     assert_eq!(name, want);

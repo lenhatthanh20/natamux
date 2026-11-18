@@ -2,23 +2,23 @@
 //! `--fake-daemon` it also checks that the terminal grid of a workspace does not scroll when its
 //! panes fit (T-0162), that a click on the status bar's sidebar and details toggles hides and
 //! shows them (T-0175), and that the pipeline chart of Project settings scrolls sideways to its
-//! last step (T-0163).
+//! last step (T-0163), then the whole-app flows F1 to F4 (`flow_smoke`).
 
 use std::time::{Duration, Instant};
 
-use editor::Editor;
 use gpui::{
-    App, AppContext as _, AsyncApp, Entity, FocusHandle, Focusable, Keystroke, Modifiers,
-    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, PlatformInput, Window, WindowHandle,
-    point, px,
+    App, AppContext as _, AsyncApp, FocusHandle, Focusable, Keystroke, Modifiers, MouseButton,
+    MouseDownEvent, MouseMoveEvent, MouseUpEvent, PlatformInput, Window, WindowHandle, point, px,
 };
 
+use super::flow_smoke;
 use super::settings_rules::SettingsPage;
 use super::shots::{self, RUNNING};
 use super::shots_stages::{PROJECT, READ};
 use super::title_bar::title_bar_height;
 use super::window::Root;
 use crate::perf::report::{start_steps, start_times};
+use crate::text_view::text_box::TextBox;
 
 const TYPED: &str = "abc";
 /// The fake's terminal list comes at once; the grid is drawn well within this.
@@ -62,7 +62,7 @@ pub fn run(handle: WindowHandle<Root>, quit: bool, grid: bool, cx: &mut App) {
 }
 
 fn type_and_check(
-    filter: Entity<Editor>,
+    filter: TextBox,
     handle: WindowHandle<Root>,
     quit: bool,
     grid: bool,
@@ -79,7 +79,7 @@ fn type_and_check(
         }
     }
     window.on_next_frame(move |_, cx| {
-        let text = filter.read(cx).text(cx);
+        let text = filter.text(cx);
         if text != TYPED {
             fail(&format!("the text box has {text:?}, not {TYPED:?}"));
         }
@@ -282,11 +282,12 @@ async fn check_chart(handle: WindowHandle<Root>, quit: bool, cx: &mut AsyncApp) 
             ));
         }
         println!("smoke: the pipeline chart scrolls to its last step");
-        pass(quit, cx);
     });
     if let Err(error) = result {
         fail(&format!("the window is gone: {error}"));
     }
+    flow_smoke::run(handle, dialog, cx).await;
+    cx.update(|cx| pass(quit, cx));
 }
 
 fn pass(quit: bool, cx: &mut App) {
@@ -320,7 +321,7 @@ fn start_line(frame: Option<f64>, data: Option<f64>, steps: &[(&str, f64)]) -> S
     line
 }
 
-fn fail(message: &str) -> ! {
+pub(crate) fn fail(message: &str) -> ! {
     eprintln!("smoke: {message}");
     std::process::exit(1);
 }

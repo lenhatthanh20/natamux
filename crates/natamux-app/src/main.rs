@@ -30,7 +30,10 @@ mod app {
     pub mod dock_badge;
     pub mod fake_daemon;
     pub mod flow_bench;
+    pub mod flow_smoke;
     pub mod gate2;
+    #[cfg(test)]
+    pub mod golden_files;
     pub mod jobs;
     pub mod layout_mode;
     pub mod links;
@@ -51,9 +54,12 @@ mod app {
     pub mod shortcuts;
     pub mod shots;
     pub mod shots_files;
+    pub mod shots_input;
     pub mod shots_settings;
     pub mod shots_stages;
     pub mod shots_start_task;
+    pub mod shots_terminal;
+    pub mod shots_text;
     pub mod shown_cache;
     pub mod sign_in;
     pub mod sign_in_rules;
@@ -65,9 +71,13 @@ mod app {
     pub mod status_limits;
     pub mod tab_rules;
     #[cfg(test)]
+    pub mod test_driver;
+    #[cfg(test)]
     pub mod test_views;
     pub mod text_boxes;
     pub mod theme_catalog;
+    #[cfg(test)]
+    mod theme_golden_tests;
     pub mod title_bar;
     pub mod update;
     pub mod update_install;
@@ -87,17 +97,27 @@ mod components {
     pub mod chips;
     pub mod colors;
     pub mod confirm;
+    #[cfg(test)]
+    mod context_menu_tests;
     pub mod detail_section;
     pub mod dialog;
     pub mod dialog_frame;
+    #[cfg(test)]
+    mod dialog_tests;
     pub mod docs_markdown;
     pub mod empty_state;
     pub mod form;
+    #[cfg(test)]
+    mod form_tests;
     pub mod glyph;
     pub mod go_to_line;
     pub mod icons;
     pub mod input_rules;
+    #[cfg(test)]
+    pub mod kit_metrics;
     pub mod menu;
+    #[cfg(test)]
+    mod menu_tests;
     pub mod motion;
     pub mod motion_rules;
     pub mod resize_handle;
@@ -152,13 +172,18 @@ mod git {
     pub mod change_rules;
     pub mod change_tree;
     pub mod changes_view;
+    pub mod code_target;
     pub mod comment_rules;
     pub mod commit_rules;
     pub mod diff_arrows;
     pub mod diff_blame;
+    #[cfg(test)]
+    pub mod diff_cases;
     pub mod diff_cursor;
-    pub mod diff_editors;
+    pub mod diff_header;
     pub mod diff_hunk_controls;
+    pub mod diff_model;
+    pub mod diff_rows;
     pub mod diff_rules;
     pub mod diff_view;
     pub mod editor_find;
@@ -346,6 +371,25 @@ mod terminals {
     pub mod paste_rules;
     pub mod remote_terminal;
     pub mod shell_panes;
+    /// The terminal (docs/plan-mit-license.md S2): `remote_terminal::screen` names it. Some
+    /// helpers are for its tests only.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub mod term {
+        pub mod cell_layout;
+        pub mod colors;
+        pub mod contrast;
+        pub mod element;
+        pub mod event_loop;
+        pub mod grid_layout;
+        pub mod ime;
+        pub mod input_bytes;
+        pub mod links;
+        pub mod model;
+        pub mod mouse_report;
+        pub mod scrollbar;
+        pub mod view;
+        pub mod writer;
+    }
     pub mod terminal_cache;
     pub mod terminal_find;
     pub mod terminal_font;
@@ -355,9 +399,72 @@ mod terminals {
     pub mod terminal_size;
     pub mod terminal_tabs;
 }
+/// The text model of the own text input (docs/plan-mit-license.md S3.3): plain Rust. Some helpers
+/// are for its tests only.
+#[cfg_attr(not(test), allow(dead_code))]
+mod text {
+    pub mod minimal;
+    pub mod model;
+    pub mod motion;
+}
+/// The own code view (plan S4) and its goldens, recorded on the editor it replaces.
+mod text_view {
+    mod blink;
+    mod code_bar;
+    mod code_commands;
+    #[cfg(test)]
+    mod code_commands_tests;
+    mod code_contrast;
+    mod code_editor;
+    mod code_enter;
+    mod code_find;
+    mod code_gutter;
+    mod code_langs;
+    #[cfg(test)]
+    mod code_mouse_tests;
+    mod code_paint;
+    #[cfg(test)]
+    mod code_parse_tests;
+    mod code_rules;
+    mod code_runs;
+    mod code_sticky;
+    mod code_typing;
+    #[cfg(test)]
+    mod code_typing_tests;
+    /// The code view (docs/plan-mit-license.md S4.3b): the JSON tab and the Docs views.
+    pub mod code_view;
+    #[cfg(test)]
+    mod code_view_tests;
+    mod diff_paint;
+    /// One side of the own diff view (docs/plan-mit-license.md S6.2).
+    pub mod diff_side;
+    /// The own text input (docs/plan-mit-license.md S3.3), the default since S3.4.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub mod element;
+    #[cfg(test)]
+    mod ime_tests;
+    #[cfg(test)]
+    mod mouse_tests;
+    #[cfg(test)]
+    mod text_box_facade_tests;
+    #[cfg(test)]
+    mod text_box_tests;
+    // The code view uses it; a few parts wait for the editor tab (S4.3c).
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub mod highlight;
+    mod ime;
+    /// The outline of a text (docs/plan-mit-license.md S4.3c): Go to symbol and sticky scroll.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub mod outline;
+    pub mod text_box;
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub mod text_input;
+}
 mod workspaces {
     pub mod branches;
     pub mod docs_list;
+    #[cfg(test)]
+    mod docs_markdown_golden_tests;
     pub mod docs_rules;
     pub mod docs_tab;
     pub mod docs_view;
@@ -444,11 +551,6 @@ fn start(
     cx: &mut App,
 ) -> anyhow::Result<()> {
     perf::report::timed("fonts_ms", || NatamuxAssets.load_fonts(cx))?;
-    release_channel::init(
-        release_channel::AppVersion::load(env!("CARGO_PKG_VERSION"), None, None),
-        cx,
-    );
-    settings::init(cx);
     // The theme, the UI size and the terminal font of view.json apply before the first frame.
     let fake = options.fake_daemon || options.shot.is_some();
     let folder = view_state::folder().filter(|_| !fake);
@@ -456,13 +558,14 @@ fn start(
         Some(folder) => perf::report::timed("view_state_ms", || view_state::load(folder)),
         None => ViewState::default(),
     };
-    app::appearance::init(options.theme, options.shot.is_some(), cx);
+    let inputs = app::appearance::Inputs {
+        flag: options.theme,
+        theme_name: options.theme_name,
+        shot: options.shot.map(app::options::Shot::name),
+    };
+    app::appearance::init(inputs, cx);
     app::appearance::apply(&view, cx);
-    perf::report::timed("themes_ms", || {
-        theme_settings::init(theme::LoadThemes::All(Box::new(NatamuxAssets)), cx)
-    });
-    editor::init(cx);
-    git::languages::init(cx);
+    perf::report::timed("themes_ms", || theme::init(NatamuxAssets, cx))?;
     app::shortcuts::bind(cx);
     app::shortcuts::set_menus(cx);
     perf::overlay::init(cx);
@@ -477,7 +580,7 @@ fn start(
     })
     .detach();
     if let Some(shot) = options.shot {
-        app::shots::prepare(shot);
+        app::shots::prepare(shot.steps_of());
     }
     if options.fake_daemon && options.open_task.is_some() {
         app::fake_daemon::shared().clear_jobs();
@@ -510,7 +613,7 @@ fn start(
 /// The CI and bench modes of the flags, on the open window.
 fn run_modes(options: &Options, window: WindowHandle<Root>, cx: &mut App) {
     if let Some(shot) = options.shot {
-        app::shots::run(window, shot, cx);
+        app::shots::run(window, shot.steps_of(), cx);
     }
     if options.smoke {
         app::smoke::run(

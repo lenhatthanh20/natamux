@@ -1,0 +1,11 @@
+[
+["focused","",0,"Block",true,true],
+["blurred, no mode","",0,"HollowBlock",false,false],
+["focused, no mode","",1,"Block",true,true],
+["mode 1004 on","",0,"Block",true,true],
+["blurred, mode 1004","\u001b[O",0,"HollowBlock",false,false],
+["focused, mode 1004","\u001b[I",1,"Block",true,true],
+["context menu open","",0,"Block",true,false],
+["focused after the menu","",0,"Block",true,true],
+["blurred, mode 1004 off","",0,"HollowBlock",false,false]
+]

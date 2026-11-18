@@ -133,7 +133,7 @@ pub struct Press<'a> {
     pub other: bool,
 }
 
-/// The gpui action name of Zed's `menu` crate for a key in an open context menu (4.13). Tab
+/// The gpui action name of the kit's `menu` actions for a key in an open context menu (4.13). Tab
 /// closes the menu, as Esc does. Keys with modifiers stay with the app (Mod+Q still quits).
 pub fn menu_action(press: Press) -> Option<&'static str> {
     if press.secondary || press.other {
@@ -250,7 +250,7 @@ mod tests {
     }
 
     #[test]
-    fn maps_menu_keys_to_zed_menu_actions() {
+    fn maps_menu_keys_to_menu_actions() {
         assert_eq!(menu_action(press("down")), Some("menu::SelectNext"));
         assert_eq!(menu_action(press("up")), Some("menu::SelectPrevious"));
         assert_eq!(menu_action(press("home")), Some("menu::SelectFirst"));

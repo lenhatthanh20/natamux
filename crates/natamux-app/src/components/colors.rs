@@ -10,8 +10,14 @@ use super::theme_contrast::{StatusKey, state_status};
 
 use crate::git::change_rules::StatusTone;
 
-/// A theme override value that hides a theme colour (the editors' scrollbar track border).
-pub const CLEAR: &str = "#00000000";
+/// A theme override value that hides a theme colour (the code views' scrollbar track border):
+/// the colour Zed made of `#00000000`.
+pub const CLEAR: Hsla = Hsla {
+    h: 0.,
+    s: 0.,
+    l: 0.,
+    a: 0.,
+};
 
 /// Text and glyph colour, fill (a chip) and border of one state.
 #[derive(Clone, Copy, Debug)]

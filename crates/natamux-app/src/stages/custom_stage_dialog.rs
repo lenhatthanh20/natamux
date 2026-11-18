@@ -2,7 +2,6 @@
 //! file of a stage of your own. Add stage writes it before the release and opens its sheet; the
 //! rules are `custom_stage_problems`, shown once the person tried or typed.
 
-use editor::{Editor, EditorEvent};
 use gpui::{DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, Subscription};
 use ui::prelude::*;
 
@@ -17,6 +16,7 @@ use crate::components::dialog::{
 use crate::components::form::{SettingsInput, text_editor};
 use crate::components::segmented::Segmented;
 use crate::components::settings_card::{SeparatorInset, SettingsCard, SettingsGroup, SettingsRow};
+use crate::text_view::text_box::{TextBox, TextEvent};
 
 /// Opens the dialog with the focus in Name.
 pub fn open(pipeline: &Entity<PipelineEditor>, window: &mut Window, cx: &mut App) {
@@ -29,9 +29,9 @@ pub fn open(pipeline: &Entity<PipelineEditor>, window: &mut Window, cx: &mut App
 
 pub struct CustomStageDialog {
     pipeline: Entity<PipelineEditor>,
-    name: Entity<Editor>,
-    id: Entity<Editor>,
-    output: Entity<Editor>,
+    name: TextBox,
+    id: TextBox,
+    output: TextBox,
     /// The id typed by hand; None while it follows the name.
     own_id: Option<String>,
     kind: CustomKind,
@@ -49,18 +49,18 @@ impl CustomStageDialog {
         let id = text_editor("changelog", None, window, cx);
         let output = text_editor("notes.md", None, window, cx);
         let edits = vec![
-            cx.subscribe_in(&name, window, |this, _, event: &EditorEvent, window, cx| {
-                if matches!(event, EditorEvent::BufferEdited) {
+            name.subscribe_in(window, cx, |this, _, event, window, cx| {
+                if event == TextEvent::Edited {
                     this.name_edited(window, cx);
                 }
             }),
-            cx.subscribe(&id, |this, _, event: &EditorEvent, cx| {
-                if matches!(event, EditorEvent::BufferEdited) {
+            id.subscribe(cx, |this, _, event, cx| {
+                if event == TextEvent::Edited {
                     this.id_edited(cx);
                 }
             }),
-            cx.subscribe(&output, |_, _, event: &EditorEvent, cx| {
-                if matches!(event, EditorEvent::BufferEdited) {
+            output.subscribe(cx, |_, _, event, cx| {
+                if event == TextEvent::Edited {
                     cx.notify();
                 }
             }),
@@ -84,16 +84,15 @@ impl CustomStageDialog {
     /// The id follows the name until it is edited.
     fn name_edited(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.own_id.is_none() {
-            let id = id_from_name(&self.name.read(cx).text(cx));
-            self.id
-                .update(cx, |editor, cx| editor.set_text(id, window, cx));
+            let id = id_from_name(&self.name.text(cx));
+            self.id.set_text(id, window, cx);
         }
         cx.notify();
     }
 
     fn id_edited(&mut self, cx: &mut Context<Self>) {
-        let text = self.id.read(cx).text(cx);
-        let followed = form_id(&self.name.read(cx).text(cx), self.own_id.as_deref());
+        let text = self.id.text(cx);
+        let followed = form_id(&self.name.text(cx), self.own_id.as_deref());
         if text != followed {
             self.own_id = Some(text);
         }
@@ -102,10 +101,10 @@ impl CustomStageDialog {
 
     fn input(&self, cx: &App) -> CustomStageInput {
         CustomStageInput {
-            name: self.name.read(cx).text(cx),
-            id: self.id.read(cx).text(cx),
+            name: self.name.text(cx),
+            id: self.id.text(cx),
             kind: self.kind,
-            output: self.output.read(cx).text(cx),
+            output: self.output.text(cx),
         }
     }
 
@@ -234,3 +233,7 @@ impl Render for CustomStageDialog {
             .child(frame)
     }
 }
+
+#[cfg(test)]
+#[path = "custom_stage_dialog_tests.rs"]
+mod tests;

@@ -1,0 +1,14 @@
+[
+["off","text","a\rb\rc\u001bd\te"],
+["off","image","\u0016"],
+["off","files"," '/tmp/a b.txt' \"/tmp/it's.md\" /tmp/plain "],
+["off","empty",""],
+["off","drop file","src/main.rs "],
+["off","drop folder","'src/my dir/' "],
+["bracketed","text","\u001b[200~a\r\nb\ncd\te\u001b[201~"],
+["bracketed","image","\u0016"],
+["bracketed","files","\u001b[200~ '/tmp/a b.txt' \"/tmp/it's.md\" /tmp/plain \u001b[201~"],
+["bracketed","empty",""],
+["bracketed","drop file","\u001b[200~src/main.rs \u001b[201~"],
+["bracketed","drop folder","\u001b[200~'src/my dir/' \u001b[201~"]
+]

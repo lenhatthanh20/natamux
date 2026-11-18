@@ -159,3 +159,7 @@ impl Render for FanOutDialog {
             .child(frame)
     }
 }
+
+#[cfg(test)]
+#[path = "fan_out_dialog_tests.rs"]
+mod tests;

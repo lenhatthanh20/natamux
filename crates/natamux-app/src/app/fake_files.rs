@@ -371,6 +371,18 @@ impl FakeDaemon {
         Ok(attachment_bytes(name).to_vec())
     }
 
+    /// A file of a `--shot` state that only that state shows, such as a code sample.
+    pub fn put_workspace_file(&self, task_id: &str, path: &str, text: String) {
+        let file = FileState {
+            text: Some(text),
+            too_large: false,
+            generation: 1,
+        };
+        let mut data = self.data();
+        let tree = data.files.trees.entry(task_id.into()).or_default();
+        tree.insert(path.into(), file);
+    }
+
     /// Moves a file on as if the agent wrote it: a new version, so a save with the old one gets
     /// 409. For the conflict shot.
     pub fn set_changed_on_disk(&self, task_id: &str, path: &str) {

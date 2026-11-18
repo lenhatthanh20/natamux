@@ -1,0 +1,22 @@
+# The Zed crates Cargo.lock may hold, one per line. scripts/zed-lock-check.py reads it.
+collections
+derive_refineable
+gpui
+gpui_apple
+gpui_linux
+gpui_macos
+gpui_macros
+gpui_platform
+gpui_shared_string
+gpui_util
+gpui_web
+gpui_wgpu
+gpui_windows
+http_client
+path
+refineable
+scheduler
+sum_tree
+util
+ztracing
+ztracing_macro

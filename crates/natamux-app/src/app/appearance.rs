@@ -1,47 +1,101 @@
-//! Theme, UI size and terminal font as Zed settings: the app rebuilds its user settings from
-//! `view.json` and sets them again, so a change applies at once (`lib/theme.ts`,
-//! `lib/ui-size.ts`, `terminal-font.ts` of the web).
+//! Theme, UI size and terminal font: the app rebuilds its theme settings from `view.json` and
+//! sets them again, so a change applies at once (`lib/theme.ts`, `lib/ui-size.ts`,
+//! `terminal-font.ts` of the web).
 
-use gpui::{App, Global, UpdateGlobal};
-use settings::SettingsStore;
+use gpui::{App, Font, Global, Pixels, SharedString, px};
+use theme::ThemeSettings;
 
-use super::appearance_rules::{ThemeSetting, parse_theme, parse_ui_size, user_settings};
+use super::appearance_rules::{
+    ThemeChoice, parse_theme, parse_ui_size, shows_scrollbars, theme_settings,
+};
 use super::options::ThemeMode;
+use super::theme_catalog::ThemeKind;
 use super::view_state::ViewState;
-use crate::terminals::terminal_font::{parse_terminal_font, terminal_font};
+use crate::terminals::terminal_font::{
+    FontSource, ResolvedFont, parse_terminal_font, terminal_font,
+};
 
-/// What the settings come from besides `view.json`: the `--theme` flag, and whether the app
-/// takes a `--shot`.
-struct Inputs {
-    flag: Option<ThemeMode>,
-    shot: bool,
+/// What the settings come from besides `view.json`: the `--theme` and `--theme-name` flags, and
+/// the state of a `--shot`.
+#[derive(Clone, Copy)]
+pub struct Inputs {
+    pub flag: Option<ThemeMode>,
+    pub theme_name: Option<(&'static str, ThemeKind)>,
+    pub shot: Option<&'static str>,
 }
 
 impl Global for Inputs {}
 
-pub fn init(flag: Option<ThemeMode>, shot: bool, cx: &mut App) {
-    cx.set_global(Inputs { flag, shot });
+/// The fonts and sizes of the own terminal and text views (docs/plan-mit-license.md 6.1): the
+/// fonts and sizes of the theme settings, and the terminal font and the shot rules.
+#[cfg_attr(not(test), allow(dead_code))]
+#[derive(Clone, Debug, PartialEq)]
+pub struct Appearance {
+    pub ui_font: Font,
+    pub ui_font_size: Pixels,
+    pub buffer_font: Font,
+    pub buffer_font_size: Pixels,
+    /// A factor of the font size.
+    pub buffer_line_height: f32,
+    /// The font the user picked for terminals, else None: they use the buffer font and size.
+    pub terminal_font: Option<(SharedString, Pixels)>,
+    pub hide_scrollbars: bool,
+    /// A `-scrollbar` shot: the code views show their scrollbar all the time.
+    pub always_scrollbars: bool,
+    /// The diff's Show whitespace: Zed showed the whitespace of every editor then.
+    pub show_whitespace: bool,
 }
 
-/// The flag wins over the stored theme, as the shots need.
+impl Global for Appearance {}
+
+fn appearance(settings: &ThemeSettings, terminal: &ResolvedFont, shot: Option<&str>) -> Appearance {
+    Appearance {
+        ui_font: settings.ui_font.clone(),
+        ui_font_size: settings.ui_font_size,
+        buffer_font: settings.buffer_font.clone(),
+        buffer_font_size: settings.buffer_font_size,
+        buffer_line_height: settings.line_height(),
+        terminal_font: (terminal.source == FontSource::Custom).then(|| {
+            (
+                SharedString::from(terminal.family.clone()),
+                px(terminal.size.clamp(6., 100.)),
+            )
+        }),
+        hide_scrollbars: shot.is_some_and(|state| !shows_scrollbars(state)),
+        always_scrollbars: shot.is_some_and(shows_scrollbars),
+        show_whitespace: false,
+    }
+}
+
+pub fn init(inputs: Inputs, cx: &mut App) {
+    cx.set_global(inputs);
+}
+
+/// The flags win over the stored theme, as the shots need: `--theme-name` shows that theme in
+/// its own look.
 pub fn apply(view: &ViewState, cx: &mut App) {
-    let (flag, shot) = cx
-        .try_global::<Inputs>()
-        .map_or((None, false), |inputs| (inputs.flag, inputs.shot));
-    let mode = match flag {
-        Some(ThemeMode::Light) => "light",
-        Some(ThemeMode::Dark) => "dark",
-        None => parse_theme(&view.theme).name(),
+    let inputs = cx.try_global::<Inputs>().copied();
+    let (flag, theme_name, shot) = inputs.map_or((None, None, None), |inputs| {
+        (inputs.flag, inputs.theme_name, inputs.shot)
+    });
+    let choice = match (theme_name, flag) {
+        (Some((_, ThemeKind::Light)), _) | (None, Some(ThemeMode::Light)) => ThemeChoice::Light,
+        (Some((_, ThemeKind::Dark)), _) | (None, Some(ThemeMode::Dark)) => ThemeChoice::Dark,
+        (None, None) => parse_theme(&view.theme),
+    };
+    let names = match theme_name {
+        Some((name, kind)) => view.themes.with(kind, name),
+        None => view.themes,
     };
     let custom = view.terminal_font.as_ref().and_then(parse_terminal_font);
     let font = terminal_font(custom.as_ref());
-    let theme = ThemeSetting {
-        mode,
-        names: view.themes,
-    };
-    let zoom = parse_ui_size(&view.ui_size).zoom();
-    let content = user_settings(theme, zoom, &font, shot, view.diff.show_whitespace);
-    SettingsStore::update_global(cx, |store, cx| {
-        let _ = store.set_user_settings(&content, cx);
-    });
+    let settings = theme_settings(choice, names, parse_ui_size(&view.ui_size).zoom());
+    let mut look = appearance(&settings, &font, shot);
+    look.show_whitespace = view.diff.show_whitespace;
+    theme::set_appearance(cx, |shown| *shown = settings);
+    cx.set_global(look);
 }
+
+#[cfg(test)]
+#[path = "appearance_tests.rs"]
+mod tests;

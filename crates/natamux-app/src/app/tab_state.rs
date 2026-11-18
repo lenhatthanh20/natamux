@@ -178,7 +178,7 @@ impl Dashboard {
     pub fn set_diff_flags(&mut self, change: impl FnOnce(&mut DiffFlags), cx: &mut Context<Self>) {
         let before = self.view.diff.show_whitespace;
         self.update_view(cx, |view| change(&mut view.diff));
-        // Show whitespace is a Zed setting of every editor.
+        // Every code view reads Show whitespace from the Appearance global.
         if self.view.diff.show_whitespace != before {
             crate::app::appearance::apply(&self.view, cx);
         }

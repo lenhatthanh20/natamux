@@ -3,7 +3,6 @@
 
 use std::rc::Rc;
 
-use editor::{Editor, EditorEvent};
 use gpui::{Entity, Focusable, Pixels, Point, Subscription};
 use natamux_proto::stages::schema::Step;
 use ui::{ButtonLike, ContextMenu, prelude::*};
@@ -11,6 +10,7 @@ use ui::{ButtonLike, ContextMenu, prelude::*};
 use super::pipeline_editor::PipelineEditor;
 use crate::components::form::text_editor;
 use crate::components::menu::MenuLayer;
+use crate::text_view::text_box::{TextBox, TextEvent};
 
 /// Writes new steps into the draft, unless nothing changed.
 pub fn change(
@@ -32,7 +32,7 @@ type Read = Box<dyn Fn(&[Step]) -> String>;
 /// draft from elsewhere (Use default, Reset, Import) shows in the field unless it has the focus,
 /// so a re-format never moves the cursor.
 pub struct LiveField {
-    pub editor: Entity<Editor>,
+    pub editor: TextBox,
     read: Read,
     _edits: Subscription,
 }
@@ -50,12 +50,12 @@ impl LiveField {
     ) -> Self {
         let text = read(pipeline.read(cx).steps());
         let editor = text_editor(placeholder, lines, window, cx);
-        editor.update(cx, |editor, cx| editor.set_text(text, window, cx));
+        editor.set_text(text, window, cx);
         let pipeline = pipeline.clone();
         // The start text comes back as an edit event; it writes the same steps, so nothing changes.
-        let edits = cx.subscribe(&editor, move |_, editor, event: &EditorEvent, cx| {
-            if matches!(event, EditorEvent::BufferEdited) {
-                let text = editor.read(cx).text(cx);
+        let edits = editor.subscribe(cx, move |_, editor, event, cx| {
+            if event == TextEvent::Edited {
+                let text = editor.text(cx);
                 change(&pipeline, cx, |steps| write(steps, &text));
             }
         });
@@ -69,11 +69,10 @@ impl LiveField {
     pub fn sync(&self, steps: &[Step], window: &mut Window, cx: &mut App) {
         let want = (self.read)(steps);
         let focused = self.editor.focus_handle(cx).is_focused(window);
-        if focused || self.editor.read(cx).text(cx) == want {
+        if focused || self.editor.text(cx) == want {
             return;
         }
-        self.editor
-            .update(cx, |editor, cx| editor.set_text(want, window, cx));
+        self.editor.set_text(want, window, cx);
     }
 }
 

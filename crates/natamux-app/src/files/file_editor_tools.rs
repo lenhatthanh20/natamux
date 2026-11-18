@@ -2,6 +2,8 @@
 //! editor tab (T-0316). The find bar sits under the header. The tools need the editor, so a
 //! rendered Markdown file goes back to Source first.
 
+use std::rc::Rc;
+
 use gpui::{ClickEvent, Stateful};
 use ui::{Tooltip, prelude::*};
 
@@ -36,7 +38,7 @@ impl FileEditor {
         let Some(body) = self.body.clone() else {
             return;
         };
-        let target = body.read(cx).editor().clone();
+        let target = Rc::new(body.read(cx).view().clone());
         open_editor_find(&mut self.find, target, window, cx, |this| &mut this.find);
     }
 
@@ -60,10 +62,10 @@ impl FileEditor {
         let Some(body) = self.body.clone() else {
             return;
         };
-        let buffer = body.read(cx).buffer().clone();
+        let items = body.read(cx).view().outline_rows(cx);
         let body = body.downgrade();
         open_outline(
-            &buffer,
+            items,
             move |row, column, window, cx| {
                 body.update(cx, |body, cx| {
                     body.go_to(row + 1, Some(column + 1), window, cx)
@@ -80,7 +82,7 @@ impl FileEditor {
         if self.rendered {
             return None;
         }
-        let on = self.body.as_ref()?.read(cx).wraps();
+        let on = self.body.as_ref()?.read(cx).wraps(cx);
         Some(
             icon_button("file-wrap", "text-wrap")
                 .toggle_state(on)

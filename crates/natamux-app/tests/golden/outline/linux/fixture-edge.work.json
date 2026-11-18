@@ -1,0 +1,22 @@
+[
+{"path":"fixtures/edge.work","language":"Go Work","parsed":true},
+["sticky",0,[]],
+["sticky",1,[]],
+["sticky",2,[]],
+["sticky",3,[]],
+["sticky",4,[]],
+["sticky",5,[]],
+["sticky",6,[]],
+["sticky",7,[]],
+["sticky",8,[]],
+["guide",3,4,0,4],
+["active",0,[]],
+["active",1,[]],
+["active",2,[0]],
+["active",3,[0]],
+["active",4,[0]],
+["active",5,[]],
+["active",6,[]],
+["active",7,[]],
+["active",8,[]]
+]

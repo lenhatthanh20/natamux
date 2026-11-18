@@ -61,6 +61,21 @@ impl StageList {
         self.stops.clone()
     }
 
+    /// The focus of the Add button, for the flow tests.
+    #[cfg(test)]
+    pub fn add_stage_focus(&self) -> FocusHandle {
+        self.add_stage.clone()
+    }
+
+    /// The focus of each row by stage id, for the flow tests.
+    #[cfg(test)]
+    pub fn row_focuses(&self) -> Vec<(String, FocusHandle)> {
+        self.focuses
+            .iter()
+            .map(|(id, handle)| (id.clone(), handle.clone()))
+            .collect()
+    }
+
     pub(super) fn focus_of(&mut self, id: &str, cx: &mut Context<Self>) -> FocusHandle {
         self.focuses
             .entry(id.to_owned())
@@ -263,3 +278,7 @@ pub(super) fn issue_lines(issues: &[PipelineIssue], cx: &App) -> impl IntoElemen
             )
     }))
 }
+
+#[cfg(test)]
+#[path = "stage_list_tests.rs"]
+mod tests;

@@ -328,7 +328,7 @@ impl NewWorkspaceDialog {
             .flex_none()
             .when(loading, |wrap| wrap.tooltip(Tooltip::text(tip)))
             .child(select);
-        let title = self.title.read(cx).text(cx);
+        let title = self.title.text(cx);
         let project = self.project_name(cx);
         let follows = prefill_branch(self.branch_pattern().as_deref(), &project, &title).is_some();
         let help = branch_help(self.branch_edited, follows);
@@ -424,7 +424,7 @@ impl NewWorkspaceDialog {
 
     /// The Model input under the agent row, with its red line when the name has bad signs.
     pub(super) fn model_row(&self, cx: &App) -> AnyElement {
-        let error = model_error(&self.model.read(cx).text(cx));
+        let error = model_error(&self.model.text(cx));
         let row = line()
             .child(tip_label("new-task-model-label", "Model", MODEL_TIP))
             .child(
@@ -445,9 +445,7 @@ impl NewWorkspaceDialog {
         let hint = model_hint(base_in(&self.agent, &custom_agents()));
         if hint != self.model_hint {
             self.model_hint = hint.clone();
-            self.model.update(cx, |editor, cx| {
-                editor.set_placeholder_text(hint.as_str(), window, cx)
-            });
+            self.model.set_placeholder(hint.as_str(), window, cx);
         }
     }
 
@@ -460,20 +458,17 @@ impl NewWorkspaceDialog {
             .unwrap_or_else(|| DEFAULT_BRANCH_HINT.into());
         if hint != self.branch_hint {
             self.branch_hint = hint.clone();
-            self.branch_name.update(cx, |editor, cx| {
-                editor.set_placeholder_text(hint.as_str(), window, cx)
-            });
+            self.branch_name.set_placeholder(hint.as_str(), window, cx);
         }
         if self.branch_edited {
             return;
         }
-        let title = self.title.read(cx).text(cx);
+        let title = self.title.text(cx);
         let project = self.project_name(cx);
         let value = prefill_branch(pattern.as_deref(), &project, &title).unwrap_or_default();
-        if self.branch_name.read(cx).text(cx) != value {
+        if self.branch_name.text(cx) != value {
             self.filled = value.clone();
-            self.branch_name
-                .update(cx, |editor, cx| editor.set_text(value, window, cx));
+            self.branch_name.set_text(value, window, cx);
         }
     }
 
@@ -482,9 +477,7 @@ impl NewWorkspaceDialog {
         let hint = self.choice().ref_hint(&self.skill);
         if hint != self.ref_hint {
             self.ref_hint = hint.clone();
-            self.reference.update(cx, |editor, cx| {
-                editor.set_placeholder_text(hint.as_str(), window, cx)
-            });
+            self.reference.set_placeholder(hint.as_str(), window, cx);
         }
     }
 }

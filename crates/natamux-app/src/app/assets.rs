@@ -1,9 +1,7 @@
-//! The app's asset source: its own files first, Zed's for the rest (its icons and fonts). Only
-//! the app's own themes are listed.
+//! The app's asset source: only the app's own files (fonts, icons, themes).
 
 use std::borrow::Cow;
 
-use ::assets::Assets;
 use gpui::{App, AssetSource, Result, SharedString};
 
 use super::asset_table;
@@ -12,28 +10,18 @@ pub struct NatamuxAssets;
 
 impl AssetSource for NatamuxAssets {
     fn load(&self, path: &str) -> Result<Option<Cow<'static, [u8]>>> {
-        match asset_table::find(path) {
-            Some(bytes) => Ok(Some(Cow::Borrowed(bytes))),
-            None => Assets.load(path),
-        }
+        Ok(asset_table::find(path).map(Cow::Borrowed))
     }
 
     fn list(&self, path: &str) -> Result<Vec<SharedString>> {
-        let mut paths: Vec<SharedString> = asset_table::paths_with_prefix(path)
+        Ok(asset_table::paths_with_prefix(path)
             .map(SharedString::from)
-            .collect();
-        paths.extend(
-            Assets
-                .list(path)?
-                .into_iter()
-                .filter(|each| asset_table::keeps_zed_path(each)),
-        );
-        Ok(paths)
+            .collect())
     }
 }
 
 impl NatamuxAssets {
-    /// Adds every `.ttf` of `fonts/` (ours and Zed's) to the text system.
+    /// Adds every `.ttf` of `fonts/` to the text system.
     pub fn load_fonts(&self, cx: &App) -> anyhow::Result<()> {
         let mut fonts = Vec::new();
         for path in self.list("fonts")? {

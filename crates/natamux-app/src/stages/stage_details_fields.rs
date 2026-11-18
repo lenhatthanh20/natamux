@@ -54,9 +54,7 @@ fn set_font(field: &LiveField, mono: bool, cx: &mut App) {
     } else {
         (None, 13.0_f32)
     };
-    field.editor.update(cx, |editor, _| {
-        editor.set_text_style_refinement(input_style(family, Some(size)))
-    });
+    field.editor.set_style(input_style(family, Some(size)), cx);
 }
 
 impl StageFields {
@@ -129,12 +127,13 @@ impl StageFields {
         }
         // Mockup B: the prompt reads as code, 12.5 px on 19 px lines.
         let font = theme::theme_settings(cx).buffer_font(cx).family.clone();
-        fields.prompt.editor.update(cx, |editor, _| {
-            editor.set_text_style_refinement(TextStyleRefinement {
+        fields.prompt.editor.set_style(
+            TextStyleRefinement {
                 line_height: Some(px(19.).into()),
                 ..input_style(Some(font), Some(12.5))
-            })
-        });
+            },
+            cx,
+        );
         fields
     }
 
@@ -157,9 +156,7 @@ impl StageFields {
                 done_when: None,
                 ..stage.clone()
             });
-            self.done_when.editor.update(cx, |editor, cx| {
-                editor.set_placeholder_text(&sentence, window, cx)
-            });
+            self.done_when.editor.set_placeholder(&sentence, window, cx);
         }
     }
 }

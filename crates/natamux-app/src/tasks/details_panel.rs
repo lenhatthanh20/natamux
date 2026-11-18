@@ -8,7 +8,6 @@
 use std::collections::BTreeSet;
 use std::time::Duration;
 
-use editor::Editor;
 use gpui::{Entity, FocusHandle, Focusable, KeyContext, ScrollHandle, Subscription};
 use natamux_proto::events::task_event::StoredEvent;
 use natamux_proto::projects::repo::{BranchList, LoadedSettings};
@@ -26,10 +25,11 @@ use crate::app::shown_cache::ShownCache;
 use crate::app::tab_rules::ShowWatch;
 use crate::app::view_rules::DetailsView;
 use crate::components::empty_state::EmptyState;
-use crate::components::form::input_editor;
+use crate::components::form::text_editor;
 use crate::components::motion;
 use crate::files::file_tree::FileTree;
 use crate::stages::flow_lines::dot_grid;
+use crate::text_view::text_box::TextBox;
 use crate::workspaces::workspace_view::WorkspaceView;
 use reads::ReadPaces;
 
@@ -86,7 +86,7 @@ pub struct DetailsPanel {
     pub(super) files: Option<Entity<FileTree>>,
     /// The Files tab showed in the last draw: a hidden tree reads again when it shows.
     pub(super) tree_shown: ShowWatch,
-    pub(super) subtask: Entity<Editor>,
+    pub(super) subtask: TextBox,
     pub(super) mode: DetailsMode,
     /// A request that needs the window: done on the next draw.
     pending: Option<PanelRequest>,
@@ -107,11 +107,7 @@ impl DetailsPanel {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let subtask = cx.new(|cx| {
-            let mut editor = input_editor(None, window, cx);
-            editor.set_placeholder_text("Add a subtask", window, cx);
-            editor
-        });
+        let subtask = text_editor("Add a subtask", None, window, cx);
         let changes = cx.subscribe(&dashboard, |panel, _, change: &DashboardChange, cx| {
             panel.on_change(change, cx)
         });
@@ -306,7 +302,7 @@ impl DetailsPanel {
     }
 
     /// The pencil and `e`: the form opens on the next draw, which has the window.
-    pub(super) fn start_edit(&mut self, cx: &mut Context<Self>) {
+    pub fn start_edit(&mut self, cx: &mut Context<Self>) {
         self.pending = Some(PanelRequest::Edit);
         cx.notify();
     }
@@ -340,9 +336,16 @@ impl DetailsPanel {
             .into_any_element()
     }
 
+    /// The Add a subtask box and the open edit form, for the flow tests.
+    #[cfg(test)]
+    pub fn boxes(&self, cx: &App) -> (TextBox, Vec<TextBox>) {
+        let form = self.edit.as_ref().map(|edit| edit.read(cx).boxes());
+        (self.subtask.clone(), form.unwrap_or_default())
+    }
+
     /// The panel's text boxes keep the single keys.
     fn editing(&self, window: &Window, cx: &App) -> bool {
-        self.edit.is_some() || self.subtask.focus_handle(cx).is_focused(window)
+        self.edit.is_some() || self.subtask.is_focused(window, cx)
     }
 }
 
@@ -474,3 +477,7 @@ mod summary;
 #[cfg(test)]
 #[path = "details_panel_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "../stages/stage_actions_tests.rs"]
+mod stage_actions_tests;

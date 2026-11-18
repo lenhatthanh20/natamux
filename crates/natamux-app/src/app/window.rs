@@ -6,7 +6,6 @@
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
-use editor::Editor;
 use gpui::{
     App, Bounds, Entity, FocusHandle, Focusable, TitlebarOptions, WindowBounds, WindowOptions,
     point, px, size,
@@ -43,6 +42,7 @@ use crate::tasks::details_rail::DetailsRail;
 use crate::tasks::task_view::TaskView;
 use crate::terminals::agent_panes::AgentPanes;
 use crate::terminals::terminal_cache::{Owner, TerminalCache};
+use crate::text_view::text_box::TextBox;
 use crate::workspaces::new_workspace_dialog;
 use crate::workspaces::workspace_view::WorkspaceView;
 use crate::workspaces::wrap_up_rules::is_finished_state;
@@ -207,13 +207,13 @@ impl Root {
     }
 
     /// The text box of the sidebar.
-    pub fn filter(&self, cx: &App) -> Entity<Editor> {
-        self.sidebar.read(cx).filter().clone()
+    pub fn filter(&self, cx: &App) -> TextBox {
+        self.sidebar.read(cx).filter()
     }
 
     /// The first text box on screen, which the smoke test types into: the token of Sign in, else
     /// the sidebar filter.
-    pub fn text_box(&self, cx: &App) -> Entity<Editor> {
+    pub fn text_box(&self, cx: &App) -> TextBox {
         match &self.sign_in {
             Some(sign_in) => sign_in.read(cx).field().clone(),
             None => self.filter(cx),
@@ -446,6 +446,14 @@ mod watch;
 
 #[path = "window_follow.rs"]
 mod follow;
+
+#[cfg(test)]
+#[path = "window_flow_tests.rs"]
+pub(crate) mod flow_tests;
+
+#[cfg(test)]
+#[path = "window_menu_tests.rs"]
+mod menu_tests;
 
 pub fn open(
     options: &Options,

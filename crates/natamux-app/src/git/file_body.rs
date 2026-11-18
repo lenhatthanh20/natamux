@@ -40,7 +40,7 @@ impl ChangesView {
                     .into_any_element();
             }
             Some(Err(message)) => return notice(message.clone(), Color::Error),
-            Some(Ok(read)) => read.clone(),
+            Some(Ok(read)) => read,
         };
         let kind = self.body_kind();
         let same_text = read.original == read.modified;
@@ -48,17 +48,19 @@ impl ChangesView {
             BodyKind::Pending => div().flex_1().into_any_element(),
             BodyKind::Notice => {
                 self.diff.update(cx, |diff, _| diff.clear());
-                let text = notice_text(&read, same_text).unwrap_or_default();
+                self.blame.update(cx, |marks, _| marks.detach());
+                let text = notice_text(read, same_text).unwrap_or_default();
                 notice(text.to_owned(), Color::Muted)
             }
             BodyKind::Image => {
                 self.diff.update(cx, |diff, _| diff.clear());
+                self.blame.update(cx, |marks, _| marks.detach());
                 self.render_images(read.status, cx)
             }
             BodyKind::Whole | BodyKind::Text => {
                 let key = format!("{}\u{0}{}", file.task_id, file.path);
                 let version = file.version;
-                let (original, modified) = texts_of(&read);
+                let (original, modified) = texts_of(read);
                 let (options, _) = self.diff_options(kind == BodyKind::Whole, cx);
                 let comments = self.shown_comments();
                 let owner = cx.weak_entity();
@@ -68,14 +70,7 @@ impl ChangesView {
                     diff.set_comments(comments, owner, cx);
                     diff.set_movable(movable);
                     diff.show(
-                        &key,
-                        &file.path,
-                        version,
-                        original.as_deref(),
-                        &modified,
-                        options,
-                        window,
-                        cx,
+                        &key, &file.path, version, original, modified, options, window, cx,
                     )
                 });
                 let shown = self.diff.read(cx);
@@ -137,16 +132,13 @@ impl ChangesView {
 
 /// The two texts the diff compares: a new file against nothing, a deleted one against an
 /// empty file.
-pub(super) fn texts_of(read: &FileDiff) -> (Option<String>, String) {
+pub(super) fn texts_of(read: &FileDiff) -> (Option<&str>, &str) {
     match whole_file_kind(read.status) {
-        Some(WholeKind::Added) => (None, whole_text(read, WholeKind::Added).to_owned()),
-        Some(WholeKind::Removed) => (
-            Some(whole_text(read, WholeKind::Removed).to_owned()),
-            String::new(),
-        ),
+        Some(WholeKind::Added) => (None, whole_text(read, WholeKind::Added)),
+        Some(WholeKind::Removed) => (Some(whole_text(read, WholeKind::Removed)), ""),
         None => (
-            read.original.clone(),
-            read.modified.clone().unwrap_or_default(),
+            read.original.as_deref(),
+            read.modified.as_deref().unwrap_or_default(),
         ),
     }
 }

@@ -2,7 +2,6 @@
 //! go back to and what should change. Send back (Mod+Enter) makes `POST /tasks/:id/stage` with
 //! `reopen`; the dialog closes only when the daemon took it.
 
-use editor::Editor;
 use gpui::{ClickEvent, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable};
 use natamux_proto::stages::actions::{StageAction, StageActionInput};
 use natamux_proto::stages::progress::StageProgress;
@@ -16,6 +15,7 @@ use crate::components::dialog::{
 };
 use crate::components::form::{field, input_box, text_editor};
 use crate::components::menu::MenuLayer;
+use crate::text_view::text_box::TextBox;
 
 /// Opens the dialog for `stage` of `task`, with the stages it can go back to.
 pub fn open(
@@ -67,7 +67,7 @@ pub struct SendBackDialog {
     /// The earlier stages as (id, name).
     options: Vec<(String, String)>,
     to: String,
-    reason: Entity<Editor>,
+    reason: TextBox,
     busy: bool,
     focus: FocusHandle,
     pick_focus: FocusHandle,
@@ -78,8 +78,7 @@ pub struct SendBackDialog {
 impl SendBackDialog {
     /// `--shot send-back` types a reason.
     pub fn set_reason(&mut self, text: &str, window: &mut Window, cx: &mut Context<Self>) {
-        self.reason
-            .update(cx, |editor, cx| editor.set_text(text, window, cx));
+        self.reason.set_text(text, window, cx);
     }
 
     fn name_of(&self, id: &str) -> String {
@@ -142,7 +141,7 @@ impl DialogView for SendBackDialog {
             action: StageAction::Reopen,
             stage: None,
             to: Some(self.to.clone()),
-            reason: send_back_reason(&self.reason.read(cx).text(cx)),
+            reason: send_back_reason(&self.reason.text(cx)),
         };
         let id = self.task_id.clone();
         let written = self.dashboard.update(cx, |dashboard, cx| {
@@ -201,3 +200,7 @@ impl Render for SendBackDialog {
             .child(frame)
     }
 }
+
+#[cfg(test)]
+#[path = "send_back_dialog_tests.rs"]
+mod tests;

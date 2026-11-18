@@ -2,7 +2,6 @@
 //! and a form to add one by its folder on the daemon's machine. The list follows the feed's
 //! `repos.changed`, so the dialog stays open after an add.
 
-use editor::{Editor, EditorEvent};
 use gpui::{DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, FontWeight, Subscription};
 use natamux_proto::projects::repo::{AddRepo, Repo};
 use ui::{Tooltip, prelude::*};
@@ -22,6 +21,7 @@ use crate::components::form::{SettingsInput, text_editor};
 use crate::components::icons::icon_path;
 use crate::components::settings_card::{SeparatorInset, SettingsCard, SettingsGroup, SettingsRow};
 use crate::components::settings_tile::{SettingsTile, TileSize};
+use crate::text_view::text_box::{TextBox, TextEvent};
 
 /// What a project is, in the Add project tooltip.
 const DESCRIPTION: &str = "Git repositories on the daemon's machine. The workspace of each task is a git worktree of one of them.";
@@ -36,9 +36,9 @@ pub fn open(dashboard: &Entity<Dashboard>, window: &mut Window, cx: &mut App) {
 
 pub struct ProjectsDialog {
     dashboard: Entity<Dashboard>,
-    folder: Entity<Editor>,
-    name: Entity<Editor>,
-    worktree: Entity<Editor>,
+    folder: TextBox,
+    name: TextBox,
+    worktree: TextBox,
     /// None until the Worktree folder is edited, so the daemon's default shows even when it comes
     /// after the dialog opened.
     typed_worktree: Option<String>,
@@ -81,31 +81,29 @@ impl ProjectsDialog {
             }
         });
         let mut subscriptions = vec![follow];
-        subscriptions.push(cx.subscribe(&folder, |this, _, event: &EditorEvent, cx| {
-            if matches!(event, EditorEvent::BufferEdited) {
+        subscriptions.push(folder.subscribe(cx, |this, _, event, cx| {
+            if event == TextEvent::Edited {
                 this.folder_error = None;
                 cx.notify();
             }
         }));
-        subscriptions.push(cx.subscribe(&name, |_, _, event: &EditorEvent, cx| {
-            if matches!(event, EditorEvent::BufferEdited) {
+        subscriptions.push(name.subscribe(cx, |_, _, event, cx| {
+            if event == TextEvent::Edited {
                 cx.notify();
             }
         }));
-        subscriptions.push(
-            cx.subscribe(&worktree, |this, editor, event: &EditorEvent, cx| {
-                if !matches!(event, EditorEvent::BufferEdited) {
-                    return;
-                }
-                // The default put into the field is not an edit.
-                let text = editor.read(cx).text(cx);
-                if text != this.shown_worktree(cx) {
-                    this.typed_worktree = Some(text);
-                    this.worktree_error = None;
-                }
-                cx.notify();
-            }),
-        );
+        subscriptions.push(worktree.subscribe(cx, |this, editor, event, cx| {
+            if event != TextEvent::Edited {
+                return;
+            }
+            // The default put into the field is not an edit.
+            let text = editor.text(cx);
+            if text != this.shown_worktree(cx) {
+                this.typed_worktree = Some(text);
+                this.worktree_error = None;
+            }
+            cx.notify();
+        }));
         subscriptions.push(cx.on_blur(&folder.focus_handle(cx), window, |this, _, cx| {
             this.folder_touched = true;
             cx.notify();
@@ -153,9 +151,8 @@ impl ProjectsDialog {
     /// The field shows the daemon's default until the user edits it.
     fn show_default_worktree(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let wanted = self.shown_worktree(cx);
-        if self.worktree.read(cx).text(cx) != wanted {
-            self.worktree
-                .update(cx, |editor, cx| editor.set_text(wanted, window, cx));
+        if self.worktree.text(cx) != wanted {
+            self.worktree.set_text(wanted, window, cx);
         }
         cx.notify();
     }
@@ -163,8 +160,8 @@ impl ProjectsDialog {
     /// The text under a field: the full-path rule after the field was left, and the daemon's
     /// answer at once.
     fn problems(&self, cx: &App) -> (Option<String>, Option<String>) {
-        let rule = |touched: bool, editor: &Entity<Editor>| {
-            let text = editor.read(cx).text(cx);
+        let rule = |touched: bool, editor: &TextBox| {
+            let text = editor.text(cx);
             touched
                 .then(|| repo_path_problem(&text))
                 .flatten()
@@ -177,14 +174,14 @@ impl ProjectsDialog {
     }
 
     fn can_add(&self, cx: &App) -> bool {
-        !self.folder.read(cx).text(cx).trim().is_empty() && !self.busy
+        !self.folder.text(cx).trim().is_empty() && !self.busy
     }
 
     fn add(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let (path, name, tree) = (
-            self.folder.read(cx).text(cx),
-            self.name.read(cx).text(cx),
-            self.worktree.read(cx).text(cx),
+            self.folder.text(cx),
+            self.name.text(cx),
+            self.worktree.text(cx),
         );
         if !self.can_add(cx) {
             return;
@@ -230,9 +227,8 @@ impl ProjectsDialog {
 
     /// The fields start again; the worktree folder is back to the default.
     fn reset(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.folder
-            .update(cx, |editor, cx| editor.clear(window, cx));
-        self.name.update(cx, |editor, cx| editor.clear(window, cx));
+        self.folder.clear(window, cx);
+        self.name.clear(window, cx);
         self.typed_worktree = None;
         self.folder_touched = false;
         self.worktree_touched = false;
@@ -368,13 +364,11 @@ impl Render for ProjectsDialog {
             empty || self.busy,
             cx.listener(|this, _, window, cx| this.add(window, cx)),
         )
-        .tooltip(Tooltip::text(
-            if self.folder.read(cx).text(cx).trim().is_empty() {
-                "Enter the folder first"
-            } else {
-                DESCRIPTION
-            },
-        ));
+        .tooltip(Tooltip::text(if self.folder.text(cx).trim().is_empty() {
+            "Enter the folder first"
+        } else {
+            DESCRIPTION
+        }));
         let list = (!repos.is_empty()).then(|| {
             let mut card = SettingsCard::new(SeparatorInset::Tile);
             for (index, repo) in repos.iter().enumerate() {

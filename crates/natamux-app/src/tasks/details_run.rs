@@ -311,7 +311,7 @@ impl DetailsPanel {
     }
 
     fn add_subtask(&mut self, task: &Task, window: &mut Window, cx: &mut Context<Self>) {
-        let title = self.subtask.read(cx).text(cx).trim().to_owned();
+        let title = self.subtask.text(cx).trim().to_owned();
         if title.is_empty() || self.shown.as_ref().is_some_and(|shown| shown.busy) {
             return;
         }
@@ -324,8 +324,7 @@ impl DetailsPanel {
         // `create_task` selects the new task; the web keeps the selection.
         let selected = dashboard.read(cx).selected.clone();
         let written = dashboard.update(cx, |d, cx| d.create_task(input, None, cx));
-        self.subtask
-            .update(cx, |editor, cx| editor.set_text("", window, cx));
+        self.subtask.set_text("", window, cx);
         cx.spawn(async move |_, cx| {
             if written.await.is_ok() {
                 dashboard.update(cx, |d, cx| d.select(selected, cx));

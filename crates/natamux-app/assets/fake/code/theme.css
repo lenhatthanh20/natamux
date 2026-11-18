@@ -1,0 +1,35 @@
+/* The shop's colours and the cart layout. */
+@import url("fonts.css");
+
+:root {
+  --accent: #2563eb;
+  --danger: rgb(220 38 38 / 90%);
+  --radius: 6px;
+}
+
+.cart > .item:not(:last-child) {
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
+  padding: 0.5rem 1rem;
+}
+
+.cart .total::after {
+  content: " USD";
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .cart {
+    grid-template-columns: 1fr;
+    gap: calc(var(--radius) * 2);
+  }
+}
+
+button:hover,
+button:focus-visible {
+  background: hsl(221deg 83% 53%);
+  transition: background 120ms ease-in-out;
+}
+
+#coupon[aria-invalid="true"] {
+  outline: 2px dashed var(--danger) !important;
+}

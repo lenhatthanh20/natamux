@@ -168,7 +168,7 @@ impl WorkspaceTree {
     /// handles `Back`), and leaving it saves.
     pub(super) fn rename_field(
         &self,
-        editor: gpui::Entity<editor::Editor>,
+        editor: crate::text_view::text_box::TextBox,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let colors = cx.theme().colors();

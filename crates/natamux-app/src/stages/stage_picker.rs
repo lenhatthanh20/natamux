@@ -2,13 +2,10 @@
 //! stages that are not in the pipeline, a group per phase. Up and Down move the active row, Enter
 //! or a click adds its stage.
 
-use editor::{Editor, EditorEvent};
-use gpui::{
-    AnyElement, Entity, EntityInputHandler, EventEmitter, FocusHandle, Focusable, ScrollHandle,
-};
+use gpui::{AnyElement, Entity, EventEmitter, FocusHandle, Focusable, ScrollHandle};
 use natamux_proto::stages::capabilities::stage_name;
 use natamux_proto::stages::catalog::CatalogStage;
-use ui::{ScrollAxes, prelude::*};
+use ui::prelude::*;
 
 use super::editor_catalog::{add_catalog_stage, picker_detail, picker_empty_text, picker_groups};
 use super::list_rules::{kind_tile, kind_tile_icon};
@@ -19,6 +16,7 @@ use crate::components::scrollbars::scroll_area;
 use crate::components::settings_card::{SeparatorInset, SettingsCard, SettingsGroup, foot_text};
 use crate::components::settings_tile::{SettingsTile, TileSize};
 use crate::components::text_size::row_text;
+use crate::text_view::text_box::{TextBox, TextEvent};
 
 /// The body of the Add stage sheet is 460 px; the search field and its space take the rest.
 const LIST_HEIGHT: f32 = 412.;
@@ -28,11 +26,14 @@ pub struct StageAdded;
 
 pub struct StagePicker {
     pipeline: Entity<PipelineEditor>,
-    search: Entity<Editor>,
+    search: TextBox,
     /// The row Enter adds, as an index into the shown stages.
     active: usize,
     scroll: ScrollHandle,
     _search_edits: gpui::Subscription,
+    /// The ids of the rows drawn last, for the flow tests.
+    #[cfg(test)]
+    drawn: std::cell::RefCell<Vec<String>>,
 }
 
 impl EventEmitter<StageAdded> for StagePicker {}
@@ -44,8 +45,8 @@ impl StagePicker {
         cx: &mut Context<Self>,
     ) -> Self {
         let search = text_editor("Search stages", None, window, cx);
-        let edits = cx.subscribe(&search, |this: &mut Self, _, event: &EditorEvent, cx| {
-            if matches!(event, EditorEvent::BufferEdited) {
+        let edits = search.subscribe(cx, |this: &mut Self, _, event, cx| {
+            if event == TextEvent::Edited {
                 this.active = 0;
                 cx.notify();
             }
@@ -56,7 +57,15 @@ impl StagePicker {
             active: 0,
             scroll: ScrollHandle::new(),
             _search_edits: edits,
+            #[cfg(test)]
+            drawn: Default::default(),
         }
+    }
+
+    /// The ids of the rows drawn last, for the flow tests.
+    #[cfg(test)]
+    pub fn drawn_rows(&self) -> Vec<String> {
+        self.drawn.borrow().clone()
     }
 
     pub fn search_focus(&self, cx: &App) -> FocusHandle {
@@ -66,14 +75,12 @@ impl StagePicker {
     /// The search field is composing text: its keys stay with it.
     pub fn composing(this: &Entity<Self>, window: &mut Window, cx: &mut App) -> bool {
         let search = this.read(cx).search.clone();
-        search.update(cx, |editor, cx| {
-            editor.marked_text_range(window, cx).is_some()
-        })
+        search.is_composing(window, cx)
     }
 
     /// The stages shown, in list order.
     fn shown(&self, cx: &App) -> Vec<&'static CatalogStage> {
-        let query = self.search.read(cx).text(cx);
+        let query = self.search.text(cx);
         picker_groups(self.pipeline.read(cx).steps(), &query)
             .into_iter()
             .flat_map(|(_, entries)| entries)
@@ -98,7 +105,7 @@ impl StagePicker {
 
     /// The child of the list (one group per phase) that holds the shown stage `index`.
     fn child_of(&self, index: usize, cx: &App) -> usize {
-        let query = self.search.read(cx).text(cx);
+        let query = self.search.text(cx);
         let mut seen = 0;
         for (child, (_, entries)) in picker_groups(self.pipeline.read(cx).steps(), &query)
             .into_iter()
@@ -140,6 +147,8 @@ impl StagePicker {
         let colors = cx.theme().colors();
         let (hover, selected) = (colors.ghost_element_hover, colors.ghost_element_selected);
         let id = entry.stage.id.clone();
+        #[cfg(test)]
+        self.drawn.borrow_mut().push(id.clone());
         let tile = SettingsTile::icon(
             button_icon(kind_tile_icon(entry.stage.kind)),
             kind_tile(&entry.stage),
@@ -179,10 +188,12 @@ impl StagePicker {
 
     /// One group per phase, each a card of rows; the active row is the one Enter adds.
     fn render_list(&self, cx: &mut Context<Self>) -> Vec<AnyElement> {
-        let query = self.search.read(cx).text(cx);
+        let query = self.search.text(cx);
         let steps = self.pipeline.read(cx).steps().to_vec();
         let mut groups: Vec<AnyElement> = Vec::new();
         let mut index = 0;
+        #[cfg(test)]
+        self.drawn.borrow_mut().clear();
         for (phase, entries) in picker_groups(&steps, &query) {
             let mut rows = Vec::new();
             for entry in entries {
@@ -219,12 +230,10 @@ impl Render for StagePicker {
         v_flex()
             .pt(rems_from_px(12.0_f32))
             .child(SettingsInput::new(&self.search))
-            .child(scroll_area(
-                list,
-                ScrollAxes::Vertical,
-                &self.scroll,
-                window,
-                cx,
-            ))
+            .child(scroll_area(list, &self.scroll, window, cx))
     }
 }
+
+#[cfg(test)]
+#[path = "stage_picker_tests.rs"]
+pub(super) mod tests;

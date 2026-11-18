@@ -94,7 +94,7 @@ impl ChangesView {
             return;
         };
         let comment = self.comment_box(window, cx);
-        let text = comment.read(cx).text(cx);
+        let text = comment.text(cx);
         if self.sending || send_reason(&text).is_some() {
             return;
         }
@@ -118,7 +118,7 @@ impl ChangesView {
                     Ok(_) => {
                         view.quote = None;
                         view.review.editing = None;
-                        comment.update(cx, |editor, cx| editor.set_text("", window, cx));
+                        comment.set_text("", window, cx);
                         view.read_comments(cx);
                     }
                     Err(error) => view.sent = Some(Err(reason(&error))),
@@ -146,7 +146,7 @@ impl ChangesView {
         self.quote = None;
         self.sent = None;
         let comment = self.comment_box(window, cx);
-        comment.update(cx, |editor, cx| editor.set_text(body, window, cx));
+        comment.set_text(body, window, cx);
         window.focus(&comment.focus_handle(cx), cx);
         cx.notify();
     }
@@ -155,7 +155,7 @@ impl ChangesView {
         self.review.editing = None;
         self.sent = None;
         let comment = self.comment_box(window, cx);
-        comment.update(cx, |editor, cx| editor.set_text("", window, cx));
+        comment.set_text("", window, cx);
         cx.notify();
     }
 

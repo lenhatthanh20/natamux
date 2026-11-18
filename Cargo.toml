@@ -4,7 +4,7 @@ resolver = "3"
 
 [workspace.package]
 edition = "2024"
-license = "GPL-3.0-or-later"
+license = "MIT"
 publish = false
 
 [workspace.dependencies]
@@ -18,6 +18,12 @@ getrandom = "0.3.4"
 http-body-util = "0.1.3"
 hyper = { version = "1.11", features = ["client", "http1"] }
 hyper-util = { version = "0.1.17", features = ["tokio"] }
+# The fewest edits of the own text input (crates/natamux-app/src/text/minimal.rs): the version in
+# Cargo.lock, with the features Zed's crates take.
+imara-diff = { version = "0.2.0", default-features = false }
+# The own Markdown view (crates/natamux-app/src/workspaces/docs_markdown.rs): the versions in
+# Cargo.lock.
+linkify = "0.10.0"
 memchr = "2.8.3"
 natamux-agents = { path = "crates/natamux-agents" }
 natamux-client = { path = "crates/natamux-client" }
@@ -30,7 +36,13 @@ natamux-stages = { path = "crates/natamux-stages" }
 natamux-store = { path = "crates/natamux-store" }
 nix = "0.30.1"
 notify = "9.0.0-rc.4"
+pulldown-cmark = { version = "0.13.6", default-features = false }
+# The link regex of the own terminal (crates/natamux-app/src/terminals/term/links.rs): the version
+# in Cargo.lock.
 regex = "1.12.3"
+# The quoted paths a paste of files types in the own terminal (terminals/term/view.rs): the version
+# in Cargo.lock.
+shlex = "2.0.1"
 rusqlite = { version = "0.41.0", default-features = false, features = ["bundled", "cache"] }
 ring = "0.17.14"
 serde = { version = "1.0", features = ["derive"] }
@@ -38,6 +50,29 @@ serde_json = "1.0.144"
 sha2 = "0.10.9"
 subtle = "2.6.1"
 tokio = { version = "1.53.3", features = ["macros", "net", "rt-multi-thread", "sync", "time"] }
+# The own highlighter (crates/natamux-app/src/text_view/highlight.rs): the versions and forks Zed
+# locks at the rev below, so Cargo.lock keeps one copy of each.
+tree-sitter = { git = "https://github.com/lenhatthanh20/tree-sitter", rev = "43623ec9bf0eaaf7113285c46e8a09018f181b18" }
+tree-sitter-bash = "0.25.1"
+tree-sitter-c = "0.24.2"
+tree-sitter-cpp = { git = "https://github.com/lenhatthanh20/tree-sitter-cpp", rev = "5cb9b693cfd7bfacab1d9ff4acac1a4150700609" }
+tree-sitter-css = "0.23.2"
+tree-sitter-diff = "0.1.0"
+tree-sitter-gitcommit = { git = "https://github.com/lenhatthanh20/tree-sitter-git-commit", rev = "88309716a69dd13ab83443721ba6e0b491d37ee9" }
+tree-sitter-go = "0.25.0"
+tree-sitter-gomod = { git = "https://github.com/lenhatthanh20/tree-sitter-go-mod", rev = "2e886870578eeba1927a2dc4bd2e2b3f598c5f9a" }
+tree-sitter-gowork = { git = "https://github.com/lenhatthanh20/tree-sitter-go-work", rev = "acb0617bf7f4fda02c6217676cc64acb89536dc7" }
+tree-sitter-jsdoc = "0.23.2"
+tree-sitter-json = "0.24.8"
+tree-sitter-md = { git = "https://github.com/lenhatthanh20/tree-sitter-markdown", rev = "b596e737286780d7bfa9fcddceaeeb754574b352" }
+tree-sitter-python = "0.25.0"
+tree-sitter-regex = "0.24.3"
+tree-sitter-rust = "0.24.2"
+tree-sitter-typescript = { git = "https://github.com/lenhatthanh20/tree-sitter-typescript", rev = "e2c53597d6a5d9cf7bbe8dccde576fe1e46c5899" }
+tree-sitter-yaml = { git = "https://github.com/lenhatthanh20/tree-sitter-yaml", rev = "dcb586e3ffe00a42b0f2d03a67ea153acb31ff09" }
+# The graphemes the own text input moves by (crates/natamux-app/src/text/motion.rs): the version
+# in Cargo.lock.
+unicode-segmentation = "1.13.3"
 url = "2.5.7"
 yaml-rust2 = "0.13.0"
 
@@ -53,24 +88,9 @@ yaml-rust2 = "0.13.0"
 # A new git dependency gets the same: fork it, add the pin branch, use the fork's URL here, in the
 # Zed fork's manifests and in deny.toml. Cargo also fetches its submodules: point each one at a fork
 # too (the tree-sitter-yaml fork does it for yaml-test-suite).
-assets = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50" }
-buffer_diff = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50" }
-editor = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50" }
-grammars = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50", features = ["load-grammars"] }
 gpui = { version = "0.2.2", git = "https://github.com/lenhatthanh20/zed", rev = "2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50" }
 gpui_platform = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50", features = ["font-kit", "wayland", "x11"] }
-markdown = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50" }
-language = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50" }
-release_channel = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50" }
-settings = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50" }
-text = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50" }
-terminal = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50" }
-terminal_view = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50" }
-theme = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50" }
-theme_settings = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50" }
-ui = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50" }
-# debug-embed: without it, debug builds look for the grammar queries in a Zed checkout.
-util = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50", features = ["debug-embed"] }
+util = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "2cd7126f2c01eb06ce4622ff3dd02d3ecf256d50" }
 
 [workspace.lints.clippy]
 unwrap_used = "deny"

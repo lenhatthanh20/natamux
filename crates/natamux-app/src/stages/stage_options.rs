@@ -61,6 +61,12 @@ fn flag_row(
         .on_click(move |_: &ToggleState, _, cx| {
             change(&pipeline, cx, |steps| set(steps, &stage_id, !on))
         });
+    // The flow tests click the switch by this name.
+    #[cfg(test)]
+    let switch = {
+        let name = format!("{id}-switch");
+        div().debug_selector(move || name).child(switch)
+    };
     let row = SettingsRow::new(SharedString::from(format!("{id}-row")), flag.label)
         .label_size(LabelSize::Small)
         .spacing(36., 8.)

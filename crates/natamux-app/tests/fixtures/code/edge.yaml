@@ -1,0 +1,27 @@
+%YAML 1.2
+---
+# Edge cases of YAML colours.
+defaults: &defaults
+  retries: 3
+  timeout: 1.5e1
+  enabled: yes
+service:
+  <<: *defaults
+  name: "shop"
+  path: 'C:\data'
+  tags: [web, "api", 42]
+  limits: { cpu: 0.5, memory: 512Mi }
+  date: 2026-10-31
+  nothing: ~
+  script: |
+    echo one
+    echo two
+  folded: >-
+    a long line
+    folded together
+  binary: !!binary aGVsbG8=
+...
+---
+- second document
+- ? complex name
+  : complex value

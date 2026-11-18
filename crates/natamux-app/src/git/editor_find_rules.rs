@@ -31,6 +31,7 @@ pub fn find_ranges(
     };
     let found = RegexBuilder::new(&pattern)
         .case_insensitive(!match_case)
+        .multi_line(true)
         .build()
         .map_err(|_| BadRegex)?;
     Ok(found
@@ -54,6 +55,14 @@ pub fn count_label(term: &str, results: Option<FindResults>, invalid: bool) -> S
         Some((Some(index), MAX_MATCHES)) => format!("{} of {MAX_MATCHES}+", index + 1),
         _ => find_count_label(term, results),
     }
+}
+
+/// The first match that starts at or after the caret, or the first one when none does.
+pub fn first_after(matches: &[Range<usize>], caret: usize) -> usize {
+    matches
+        .iter()
+        .position(|range| range.start >= caret)
+        .unwrap_or(0)
 }
 
 /// The match Enter (`forward`) or Shift+Enter goes to: from `active`, or from `first` (the first
@@ -122,6 +131,12 @@ mod tests {
     }
 
     #[test]
+    fn a_caret_matches_at_each_line_start() {
+        assert_eq!(found("a\na", "^a", false, true), [0..1, 2..3]);
+        assert_eq!(found("a;\nb;", ";$", false, true), [1..2, 4..5]);
+    }
+
+    #[test]
     fn skips_matches_of_no_width() {
         assert!(found("bbb", "a*", false, true).is_empty());
         assert!(found("abc\ndef", "^", false, true).is_empty());
@@ -158,5 +173,15 @@ mod tests {
         assert_eq!(step_match(Some(4), 0, 5, true), Some(0));
         assert_eq!(step_match(Some(0), 0, 5, false), Some(4));
         assert_eq!(step_match(None, 0, 0, true), None);
+    }
+
+    #[test]
+    fn the_first_match_is_the_one_at_or_after_the_caret() {
+        let matches = [0..3, 4..7, 8..11];
+        assert_eq!(first_after(&matches, 0), 0);
+        assert_eq!(first_after(&matches, 4), 1);
+        assert_eq!(first_after(&matches, 5), 2);
+        assert_eq!(first_after(&matches, 9), 0);
+        assert_eq!(first_after(&[], 3), 0);
     }
 }

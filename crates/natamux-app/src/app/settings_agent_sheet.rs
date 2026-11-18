@@ -2,7 +2,6 @@
 //! agent of the page's draft (id, base, command). Done puts it in the draft; Save on the page
 //! sends the list. The rules the page and the sheet share are here too.
 
-use editor::{Editor, EditorEvent};
 use gpui::{
     ClickEvent, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, Subscription,
     WeakEntity,
@@ -24,6 +23,7 @@ use crate::components::form::{SettingsInput, input_style, text_editor};
 use crate::components::settings_card::{SeparatorInset, SettingsCard, SettingsGroup, SettingsRow};
 use crate::components::settings_tile::{SettingsTile, TileSize};
 use crate::stages::stage_fields_view::{Choice, SELECT_WIDTH, open_choices, select};
+use crate::text_view::text_box::{TextBox, TextEvent};
 
 const OTHER_LABEL: &str = "Other CLI";
 const OTHER_NOTE: &str = "No hooks: Natamux sees the bell, natamux ask and natamux done.";
@@ -150,11 +150,9 @@ pub(super) fn sheet_errors(agent: &CustomAgent, others: &[CustomAgent]) -> Sheet
 }
 
 /// Commands and ids read in the buffer font, at 13 px as the other inputs.
-fn set_mono(editor: &Entity<Editor>, cx: &mut App) {
+fn set_mono(editor: &TextBox, cx: &mut App) {
     let font = theme::theme_settings(cx).buffer_font(cx).family.clone();
-    editor.update(cx, |editor, _| {
-        editor.set_text_style_refinement(input_style(Some(font), Some(13.0)))
-    });
+    editor.set_style(input_style(Some(font), Some(13.0)), cx);
 }
 
 /// Opens the sheet on row `index` of the page's draft, or on a new agent when None.
@@ -193,8 +191,8 @@ pub struct AgentSheet {
     /// The draft row being edited; None for a new agent.
     index: Option<usize>,
     others: Vec<CustomAgent>,
-    id: Entity<Editor>,
-    command: Entity<Editor>,
+    id: TextBox,
+    command: TextBox,
     base: String,
     /// Done was pressed: the errors show from now on.
     tried: bool,
@@ -219,11 +217,11 @@ impl AgentSheet {
         let command = text_editor("cq", None, window, cx);
         for (editor, text) in [(&id, &agent.id), (&command, &agent.command)] {
             set_mono(editor, cx);
-            editor.update(cx, |editor, cx| editor.set_text(text.clone(), window, cx));
+            editor.set_text(text.clone(), window, cx);
         }
         let typing = [&id, &command].map(|editor| {
-            cx.subscribe(editor, |_, _, event: &EditorEvent, cx| {
-                if matches!(event, EditorEvent::BufferEdited) {
+            editor.subscribe(cx, |_, _, event, cx| {
+                if event == TextEvent::Edited {
                     cx.notify();
                 }
             })
@@ -246,7 +244,7 @@ impl AgentSheet {
     }
 
     fn agent(&self, cx: &App) -> CustomAgent {
-        let text = |editor: &Entity<Editor>| editor.read(cx).text(cx).trim().to_owned();
+        let text = |editor: &TextBox| editor.text(cx).trim().to_owned();
         CustomAgent {
             id: text(&self.id),
             base: self.base.clone(),

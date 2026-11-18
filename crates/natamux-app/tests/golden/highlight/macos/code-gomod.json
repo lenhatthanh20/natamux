@@ -1,0 +1,17 @@
+[
+{"path":"fixtures/go.mod","language":"Go Mod","parsed":true},
+[0,6,"keyword","#b87fd1ff",null,null],
+[25,27,"keyword","#b87fd1ff",null,null],
+[28,32,"string","#a1c181ff",null,null],
+[34,43,"keyword","#b87fd1ff",null,null],
+[54,61,"keyword","#b87fd1ff",null,null],
+[88,94,"string","#a1c181ff",null,null],
+[114,121,"string","#a1c181ff",null,null],
+[125,132,"keyword","#b87fd1ff",null,null],
+[151,158,"string","#a1c181ff",null,null],
+[159,170,"comment","#8f95a1ff",null,null],
+[172,179,"keyword","#b87fd1ff",null,null],
+[203,205,"operator","#6eb4bfff",null,null],
+[215,222,"keyword","#b87fd1ff",null,null],
+[240,247,"string","#a1c181ff",null,null]
+]

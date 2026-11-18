@@ -1,8 +1,7 @@
-//! A shell of the daemon in Zed's terminal view (gate 3 of phase 1). Zed's `Terminal` normally
-//! owns a local PTY; here it is display-only: the socket's bytes go into its screen, and what it
-//! would write to a PTY (keys, pastes, IME text, answers to queries) goes to the socket. Our Zed
-//! fork adds three hooks for it: `Terminal::set_display_only_input` (the input),
-//! `display_only_writer` (parsing off the main thread) and `set_wakeup_pace` (how often it wakes).
+//! A shell of the daemon in the terminal view (gate 3 of phase 1). The terminal owns no PTY; it
+//! is display-only: the socket's bytes go into its screen, and what it would write to a PTY
+//! (keys, pastes, IME text, answers to queries) goes to the socket.
+//! The terminal is the own one (`terminals/term`), under the names Zed's had (`screen`).
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -11,9 +10,9 @@ use futures::StreamExt;
 use futures::channel::mpsc::{UnboundedSender, unbounded};
 use gpui::{AnyWindowHandle, App, Entity, Focusable, Priority, Subscription, Task};
 use natamux_client::{SessionOptions, TerminalHandle, TerminalStatus};
-use terminal::{Modes, Terminal};
-use terminal_view::TerminalView;
 use ui::prelude::*;
+
+use self::screen::{Modes, Range, Search, Terminal, TerminalView};
 
 use self::events::{Screen, build_screen};
 use super::paste_rules::bracketed;
@@ -31,7 +30,7 @@ pub struct RemoteTerminal {
     pub view: Entity<TerminalView>,
     terminal: Entity<Terminal>,
     /// The shown view's focus listeners: they go with their screen.
-    _focus: [Subscription; 2],
+    _focus: Vec<Subscription>,
     handle: Option<Arc<TerminalHandle>>,
     status: TerminalStatus,
     /// For the cache's tests: the fake daemon's terminals have no shell id.
@@ -67,7 +66,7 @@ pub struct RemoteTerminal {
     drawn: bool,
     /// The screen a snapshot is being written to, while the old one stays on screen.
     incoming: Option<Screen>,
-    /// Where Zed's terminals send what they would write to a PTY.
+    /// Where the terminals send what they would write to a PTY.
     input_sink: Option<UnboundedSender<Vec<u8>>>,
     /// The window it was made in: a snapshot's screen needs it for its view.
     window: AnyWindowHandle,
@@ -87,7 +86,7 @@ pub struct RemoteTerminal {
     swap: Option<Task<()>>,
     /// A snapshot is being written: the pane shows its skeleton, not the history scrolling by.
     replaying: bool,
-    /// The history limit Zed's terminal was built with.
+    /// The history limit the terminal was built with.
     history: Option<usize>,
     _tasks: Vec<Task<()>>,
 }
@@ -110,7 +109,7 @@ impl RemoteTerminal {
         let history = history_lines(FIRST_HISTORY_COLS);
         let screen = build_screen(history, None, window, cx);
         cx.observe_keystrokes(|this, _, window, cx| {
-            if this.view.focus_handle(cx).contains_focused(window, cx) {
+            if this.has_focus(window, cx) {
                 this.last_key = Some(Instant::now());
             }
         })
@@ -181,9 +180,51 @@ impl RemoteTerminal {
         self.handle.as_ref()?.shell_id()
     }
 
-    /// Zed's terminal, for the find bar.
+    /// The terminal, for the find bar, the shots and the tests.
     pub fn terminal(&self) -> &Entity<Terminal> {
         &self.terminal
+    }
+
+    /// Searches the shown screen for `pattern`, on a background task. None when the pattern is
+    /// not a valid search.
+    pub fn find(&self, pattern: &str, cx: &mut App) -> Option<Task<Vec<Range>>> {
+        let search = Search::new(pattern)?;
+        Some(
+            self.terminal
+                .update(cx, |terminal, cx| terminal.find_matches(search, cx)),
+        )
+    }
+
+    /// Shows the matches of a find, the first one active.
+    pub fn set_matches(&self, matches: Vec<Range>, cx: &mut App) {
+        self.terminal.update(cx, |terminal, cx| {
+            let found = !matches.is_empty();
+            terminal.matches = matches;
+            if found {
+                terminal.activate_match(0);
+            }
+            cx.notify();
+        });
+    }
+
+    /// Selects match `index` and scrolls it into view.
+    pub fn activate_match(&self, index: usize, cx: &mut App) {
+        self.terminal.update(cx, |terminal, cx| {
+            terminal.activate_match(index);
+            cx.notify();
+        });
+    }
+
+    pub fn clear_matches(&self, cx: &mut App) {
+        self.terminal.update(cx, |terminal, cx| {
+            terminal.matches.clear();
+            cx.notify();
+        });
+    }
+
+    #[cfg(test)]
+    pub fn match_count(&self, cx: &App) -> usize {
+        self.terminal.read(cx).matches.len()
     }
 
     /// For the cache's tests: the fake daemon's terminals never end.
@@ -276,7 +317,9 @@ impl RemoteTerminal {
     /// Types into the shell, as keys would; waits until the socket is open. A paused one wakes.
     pub fn type_text(&mut self, text: &str) {
         match (&self.handle, &self.status) {
-            (Some(h), TerminalStatus::Open | TerminalStatus::Paused { .. }) => h.input(text),
+            (Some(h), TerminalStatus::Open | TerminalStatus::Paused { .. }) => {
+                send_input(h, text.to_string())
+            }
             _ => self.pending.push(text.to_string()),
         }
     }
@@ -313,7 +356,7 @@ impl RemoteTerminal {
         self.check_size(Some(window), cx);
     }
 
-    /// Zed's terminal keeps the history limit it was built with, and the pane's width is known
+    /// The terminal keeps the history limit it was built with, and the pane's width is known
     /// only once the view laid out. So the terminal is built again at its first size, before the
     /// shell connects and any output comes, with the daemon's rule at that width. A later resize
     /// keeps the limit.
@@ -323,7 +366,7 @@ impl RemoteTerminal {
             return;
         }
         let bounds = self.terminal.read(cx).last_content().terminal_bounds;
-        let focused = self.view.focus_handle(cx).contains_focused(window, cx);
+        let focused = self.has_focus(window, cx);
         let screen = build_screen(history, Some(bounds), window, cx);
         if focused {
             window.focus(&screen.view.focus_handle(cx), cx);
@@ -332,6 +375,16 @@ impl RemoteTerminal {
         self.history = history;
         self.follow_lane(cx);
         self.changed(cx);
+    }
+
+    /// The focus is on the view or inside it. The own view's menu is drawn outside its focus,
+    /// but counts as inside, as the old view's does in the tests.
+    pub fn has_focus(&self, window: &Window, cx: &App) -> bool {
+        let view = self.view.read(cx);
+        if view.menu_holds_focus(window, cx) {
+            return true;
+        }
+        view.focus_handle(cx).contains_focused(window, cx)
     }
 
     /// Puts `screen` on the pane; the old screen goes, with its focus listeners. The old view is
@@ -455,7 +508,7 @@ impl RemoteTerminal {
         let typed = handle.clone();
         self._tasks.push(cx.spawn(async move |this, cx| {
             while let Some(bytes) = input.next().await {
-                typed.input(String::from_utf8_lossy(&bytes).into_owned());
+                send_input(&typed, String::from_utf8_lossy(&bytes).into_owned());
                 // Only a key that sent input here counts for key to glyph.
                 let counted = this.update(cx, |this, cx| {
                     if let Some(at) = this.last_key.take() {
@@ -487,8 +540,67 @@ impl RemoteTerminal {
     }
 }
 
+/// The terminal a remote terminal shows its shell in, under the names Zed's had.
+pub(crate) mod screen {
+    #[cfg(test)]
+    pub use crate::terminals::term::model::{Content, TermEvent as Event};
+    pub use crate::terminals::term::model::{
+        Search, TermBounds as TerminalBounds, TermModel as Terminal,
+    };
+    pub use crate::terminals::term::view::TermView as TerminalView;
+    pub use crate::terminals::term::writer::TermWriter as DisplayOnlyWriter;
+    pub use alacritty_terminal::term::TermMode as Modes;
+
+    /// A find match: the cells from its first to its last.
+    pub type Range = std::ops::RangeInclusive<alacritty_terminal::index::Point>;
+}
+
+/// Every text that goes to a shell passes here (plan D35): the screen's keys, pastes and
+/// answers, `type_text`, and the text typed before the socket opened. Tests read it back.
+pub fn send_input(handle: &TerminalHandle, text: String) {
+    #[cfg(test)]
+    sent::record(&text);
+    handle.input(text);
+}
+
+/// What `send_input` sent on this test's thread, in order, and how often focus claimed the
+/// shell's size.
+#[cfg(test)]
+pub mod sent {
+    use std::cell::{Cell, RefCell};
+
+    thread_local! {
+        static SENT: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+        static CLAIMS: Cell<usize> = const { Cell::new(0) };
+    }
+
+    pub fn record(text: &str) {
+        SENT.with(|sent| sent.borrow_mut().push(text.to_owned()));
+    }
+
+    /// What was sent since the last take.
+    pub fn take() -> Vec<String> {
+        SENT.with(|sent| std::mem::take(&mut *sent.borrow_mut()))
+    }
+
+    pub fn claimed() {
+        CLAIMS.with(|claims| claims.set(claims.get() + 1));
+    }
+
+    /// The size claims since the last look.
+    pub fn claims() -> usize {
+        CLAIMS.with(|claims| claims.take())
+    }
+}
+
+#[cfg(test)]
+#[path = "term_behaviour_tests.rs"]
+mod behaviour_tests;
 #[path = "remote_terminal_events.rs"]
 mod events;
+#[cfg(test)]
+#[path = "term_golden_tests.rs"]
+mod golden_tests;
 #[cfg(test)]
 #[path = "remote_terminal_tests.rs"]
 mod tests;

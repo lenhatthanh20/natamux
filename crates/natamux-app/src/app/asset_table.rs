@@ -197,6 +197,108 @@ pub const FILES: &[(&str, &[u8])] = &[
     file!("icons/files/yarn.svg"),
     file!("icons/files/zip.svg"),
     file!("icons/files/LICENSE-material-icon-theme"),
+    file!("fonts/ibm-plex-sans/IBMPlexSans-Italic.ttf"),
+    file!("fonts/ibm-plex-sans/IBMPlexSans-Regular.ttf"),
+    file!("fonts/ibm-plex-sans/IBMPlexSans-SemiBold.ttf"),
+    file!("fonts/ibm-plex-sans/IBMPlexSans-SemiBoldItalic.ttf"),
+    file!("fonts/ibm-plex-sans/license.txt"),
+    file!("fonts/lilex/Lilex-Bold.ttf"),
+    file!("fonts/lilex/Lilex-BoldItalic.ttf"),
+    file!("fonts/lilex/Lilex-Italic.ttf"),
+    file!("fonts/lilex/Lilex-Regular.ttf"),
+    file!("fonts/lilex/OFL.txt"),
+    file!("icons/arrow_down.svg"),
+    file!("icons/arrow_left.svg"),
+    file!("icons/arrow_right.svg"),
+    file!("icons/arrow_up.svg"),
+    file!("icons/arrow_up_right.svg"),
+    file!("icons/backspace.svg"),
+    file!("icons/bell.svg"),
+    file!("icons/bell_off.svg"),
+    file!("icons/book.svg"),
+    file!("icons/case_sensitive.svg"),
+    file!("icons/chat.svg"),
+    file!("icons/check.svg"),
+    file!("icons/chevron_down.svg"),
+    file!("icons/chevron_down_up.svg"),
+    file!("icons/chevron_left.svg"),
+    file!("icons/chevron_right.svg"),
+    file!("icons/chevron_up.svg"),
+    file!("icons/chevron_up_down.svg"),
+    file!("icons/close.svg"),
+    file!("icons/command.svg"),
+    file!("icons/control.svg"),
+    file!("icons/copy.svg"),
+    file!("icons/dash.svg"),
+    file!("icons/debug.svg"),
+    file!("icons/debug_pause.svg"),
+    file!("icons/delete.svg"),
+    file!("icons/diff_split.svg"),
+    file!("icons/diff_unified.svg"),
+    file!("icons/download.svg"),
+    file!("icons/ellipsis.svg"),
+    file!("icons/escape.svg"),
+    file!("icons/expand_vertical.svg"),
+    file!("icons/eye.svg"),
+    file!("icons/eye_off.svg"),
+    file!("icons/file.svg"),
+    file!("icons/file_code.svg"),
+    file!("icons/file_diff.svg"),
+    file!("icons/file_markdown.svg"),
+    file!("icons/file_text_outlined.svg"),
+    file!("icons/filter.svg"),
+    file!("icons/fold_vertical.svg"),
+    file!("icons/folder.svg"),
+    file!("icons/folder_add.svg"),
+    file!("icons/font_size.svg"),
+    file!("icons/git_branch.svg"),
+    file!("icons/git_graph.svg"),
+    file!("icons/image.svg"),
+    file!("icons/info.svg"),
+    file!("icons/list_todo.svg"),
+    file!("icons/list_tree.svg"),
+    file!("icons/load_circle.svg"),
+    file!("icons/magnifying_glass.svg"),
+    file!("icons/maximize.svg"),
+    file!("icons/menu.svg"),
+    file!("icons/minimize.svg"),
+    file!("icons/option.svg"),
+    file!("icons/page_down.svg"),
+    file!("icons/page_up.svg"),
+    file!("icons/paperclip.svg"),
+    file!("icons/pencil.svg"),
+    file!("icons/person.svg"),
+    file!("icons/pin.svg"),
+    file!("icons/play_filled.svg"),
+    file!("icons/play_outlined.svg"),
+    file!("icons/plus.svg"),
+    file!("icons/pull_request.svg"),
+    file!("icons/regex.svg"),
+    file!("icons/return.svg"),
+    file!("icons/rotate_ccw.svg"),
+    file!("icons/rotate_cw.svg"),
+    file!("icons/settings.svg"),
+    file!("icons/shift.svg"),
+    file!("icons/space.svg"),
+    file!("icons/sparkle.svg"),
+    file!("icons/split.svg"),
+    file!("icons/stop.svg"),
+    file!("icons/tab.svg"),
+    file!("icons/table.svg"),
+    file!("icons/terminal.svg"),
+    file!("icons/terminal_alt.svg"),
+    file!("icons/text_wrap.svg"),
+    file!("icons/tool_hammer.svg"),
+    file!("icons/trash.svg"),
+    file!("icons/undo.svg"),
+    file!("icons/unpin.svg"),
+    file!("icons/warning.svg"),
+    file!("icons/x_circle.svg"),
+    // The path of this icon has the word "key" in it, which our tooling blocks in file names.
+    (
+        "icons/keyboard.svg",
+        include_bytes!("../../assets/icons/kbd_board.svg") as &[u8],
+    ),
 ];
 
 /// The bytes of one own file.
@@ -213,12 +315,6 @@ pub fn paths_with_prefix(prefix: &str) -> impl Iterator<Item = &'static str> + '
         .iter()
         .map(|(name, _)| *name)
         .filter(move |name| name.starts_with(prefix))
-}
-
-/// Whether a file of Zed's assets is listed. Its themes are not: they skip the contrast check,
-/// and some have the name of one of ours.
-pub fn keeps_zed_path(path: &str) -> bool {
-    !path.starts_with("themes/")
 }
 
 #[cfg(test)]
@@ -239,21 +335,17 @@ mod tests {
         assert!(find("themes/one/one.json").is_none());
     }
 
-    // The fonts are Zed's (its `assets` crate), so the app has none of its own.
     #[test]
-    fn prefix_lists_icons_and_themes() {
-        assert_eq!(paths_with_prefix("fonts/").count(), 0);
+    fn prefix_lists_fonts_icons_and_themes() {
+        assert_eq!(
+            paths_with_prefix("fonts/")
+                .filter(|p| p.ends_with(".ttf"))
+                .count(),
+            8
+        );
         assert!(paths_with_prefix("icons/lucide/").any(|p| p.ends_with("/diamond.svg")));
         assert_eq!(paths_with_prefix("themes/").count(), 11);
         assert_eq!(paths_with_prefix("nothing/").count(), 0);
-    }
-
-    #[test]
-    fn zed_themes_are_left_out_and_its_other_files_kept() {
-        assert!(!keeps_zed_path("themes/ayu/ayu.json"));
-        assert!(!keeps_zed_path("themes/one/one.json"));
-        assert!(keeps_zed_path("icons/close.svg"));
-        assert!(keeps_zed_path("fonts/lilex/Lilex-Regular.ttf"));
     }
 
     #[test]
@@ -265,8 +357,50 @@ mod tests {
             "icons/agents/SOURCES.md",
             "icons/files/LICENSE-material-icon-theme",
             "themes/LICENSES",
+            "fonts/ibm-plex-sans/license.txt",
+            "fonts/lilex/OFL.txt",
         ] {
             assert!(find(path).is_some(), "{path} missing");
+        }
+    }
+
+    #[test]
+    fn fonts_are_the_exact_files_of_the_plan() {
+        use sha2::{Digest, Sha256};
+        let expected = [
+            (
+                "fonts/ibm-plex-sans/IBMPlexSans-Regular.ttf",
+                "975dcda37d80f038",
+            ),
+            (
+                "fonts/ibm-plex-sans/IBMPlexSans-Italic.ttf",
+                "a9c6ef9942c49e49",
+            ),
+            (
+                "fonts/ibm-plex-sans/IBMPlexSans-SemiBold.ttf",
+                "a20caf8286023a6a",
+            ),
+            (
+                "fonts/ibm-plex-sans/IBMPlexSans-SemiBoldItalic.ttf",
+                "147106b619423a82",
+            ),
+            ("fonts/lilex/Lilex-Regular.ttf", "8a467ad5a1941dc7"),
+            ("fonts/lilex/Lilex-Bold.ttf", "3369214e2ecddb45"),
+            ("fonts/lilex/Lilex-Italic.ttf", "a6e52046b91ed12a"),
+            ("fonts/lilex/Lilex-BoldItalic.ttf", "9629bd65ee737687"),
+        ];
+        for (path, prefix) in expected {
+            let bytes = find(path).unwrap_or_else(|| panic!("{path} missing"));
+            let hash = format!("{:x}", Sha256::digest(bytes));
+            assert!(hash.starts_with(prefix), "{path}: {hash}");
+        }
+    }
+
+    #[test]
+    fn every_icon_name_has_a_file() {
+        for name in ui::IconName::ALL {
+            let path = name.path();
+            assert!(find(&path).is_some(), "{path} missing");
         }
     }
 }

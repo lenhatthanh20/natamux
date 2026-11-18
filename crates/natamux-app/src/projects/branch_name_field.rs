@@ -3,7 +3,6 @@
 //! leaves the draft as it was. A change of the draft from elsewhere (the JSON tab, Import, Reset)
 //! shows in the field unless it has the focus, so typing never moves the cursor.
 
-use editor::{Editor, EditorEvent};
 use gpui::{Entity, FocusHandle, Focusable, Subscription};
 use ui::prelude::*;
 
@@ -16,10 +15,11 @@ use crate::components::settings_card::SettingsRow;
 use crate::components::settings_controls::changed_mark;
 use crate::components::settings_tile::{SettingsTile, TileSize};
 use crate::stages::pipeline_editor::PipelineEditor;
+use crate::text_view::text_box::{TextBox, TextEvent};
 
 pub struct BranchNameField {
     pipeline: Entity<PipelineEditor>,
-    editor: Entity<Editor>,
+    editor: TextBox,
     error: Option<String>,
     _subscriptions: Vec<Subscription>,
 }
@@ -36,10 +36,10 @@ impl BranchNameField {
     ) -> Self {
         let editor = text_editor(BRANCH_NAME_PLACEHOLDER, None, window, cx);
         let text = shown(pipeline.read(cx).branch_name());
-        editor.update(cx, |editor, cx| editor.set_text(text, window, cx));
-        let edits = cx.subscribe(&editor, |this, editor, event: &EditorEvent, cx| {
-            if matches!(event, EditorEvent::BufferEdited) {
-                let text = editor.read(cx).text(cx);
+        editor.set_text(text, window, cx);
+        let edits = editor.subscribe(cx, |this, editor, event, cx| {
+            if event == TextEvent::Edited {
+                let text = editor.text(cx);
                 this.typed(&text, cx);
             }
         });
@@ -75,8 +75,7 @@ impl BranchNameField {
 
     /// Reset icon: an empty field is the default; the edit event writes the draft.
     fn reset(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.editor
-            .update(cx, |editor, cx| editor.set_text("", window, cx));
+        self.editor.set_text("", window, cx);
     }
 
     fn sync(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -84,19 +83,18 @@ impl BranchNameField {
             return;
         }
         let want = self.pipeline.read(cx).branch_name();
-        if branch_name_field(&self.editor.read(cx).text(cx)) == Ok(want.clone()) {
+        if branch_name_field(&self.editor.text(cx)) == Ok(want.clone()) {
             return;
         }
         self.error = None;
-        self.editor
-            .update(cx, |editor, cx| editor.set_text(shown(want), window, cx));
+        self.editor.set_text(shown(want), window, cx);
     }
 }
 
 impl Render for BranchNameField {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let this = cx.weak_entity();
-        let changed = !self.editor.read(cx).text(cx).trim().is_empty();
+        let changed = !self.editor.text(cx).trim().is_empty();
         let mark = changed_mark(
             "branch-name",
             changed,

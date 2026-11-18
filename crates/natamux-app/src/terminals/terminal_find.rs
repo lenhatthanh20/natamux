@@ -3,9 +3,7 @@
 //! types or flips Match case or Use regular expression; Enter and Shift+Enter step through the
 //! matches, Esc closes it and gives the keyboard back to the terminal.
 
-use editor::{Editor, EditorEvent};
 use gpui::{ClickEvent, Entity, EventEmitter, FocusHandle, Focusable, KeyContext, Subscription};
-use terminal::{Search, Terminal};
 use ui::{Tooltip, prelude::*};
 
 use super::find_rules::{FindResults, find_count_label, find_pattern};
@@ -15,7 +13,8 @@ use super::terminal_cache::TerminalCache;
 use crate::app::commands::TERMINAL_FIND;
 use crate::app::shortcuts::{Back, FindNext, FindPrevious};
 use crate::components::chips::tip_with_keys;
-use crate::components::form::input_editor;
+use crate::components::form::text_editor;
+use crate::text_view::text_box::{TextBox, TextEvent};
 
 /// The bar closed: the pane gives the keyboard back to its terminal.
 pub struct FindClosed;
@@ -52,7 +51,7 @@ pub fn open_find<V: 'static>(
 pub struct TerminalFind {
     /// Not Zed's terminal: a snapshot can swap the shown screen (T-0210).
     terminal: Entity<RemoteTerminal>,
-    field: Entity<Editor>,
+    field: TextBox,
     match_case: bool,
     regex: bool,
     results: Option<FindResults>,
@@ -69,13 +68,9 @@ impl TerminalFind {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let field = cx.new(|cx| {
-            let mut editor = input_editor(None, window, cx);
-            editor.set_placeholder_text("Find", window, cx);
-            editor
-        });
-        let edits = cx.subscribe(&field, |find, _, event: &EditorEvent, cx| {
-            if matches!(event, EditorEvent::BufferEdited) {
+        let field = text_editor("Find", None, window, cx);
+        let edits = field.subscribe(cx, |find, _, event, cx| {
+            if event == TextEvent::Edited {
                 find.run(cx);
             }
         });
@@ -92,47 +87,38 @@ impl TerminalFind {
 
     /// Opening again keeps the term and selects it, as the web's bar does on Mod+F.
     pub fn focus(&self, window: &mut Window, cx: &mut App) {
-        self.field.update(cx, |editor, cx| {
-            editor.select_all(&editor::actions::SelectAll, window, cx)
-        });
+        self.field.select_all(window, cx);
         let focus = self.field.focus_handle(cx);
         window.focus(&focus, cx);
     }
 
     /// Types a term, as the user would: the `terminal-find` shot.
     pub fn set_term(&mut self, term: &str, window: &mut Window, cx: &mut Context<Self>) {
-        self.field
-            .update(cx, |editor, cx| editor.set_text(term, window, cx));
+        self.field.set_text(term, window, cx);
     }
 
     fn term(&self, cx: &App) -> String {
-        self.field.read(cx).text(cx)
-    }
-
-    fn screen(&self, cx: &App) -> Entity<Terminal> {
-        self.terminal.read(cx).terminal().clone()
+        self.field.text(cx)
     }
 
     fn run(&mut self, cx: &mut Context<Self>) {
         self.search += 1;
         let search = self.search;
         let pattern = find_pattern(&self.term(cx), self.match_case, self.regex);
-        let searcher = (!pattern.is_empty())
-            .then(|| Search::new(&pattern))
+        let found = (!pattern.is_empty())
+            .then(|| {
+                self.terminal
+                    .update(cx, |terminal, cx| terminal.find(&pattern, cx))
+            })
             .flatten();
-        let Some(searcher) = searcher else {
+        let Some(found) = found else {
             // No term, or a regex that does not parse: nothing matches.
-            self.screen(cx).update(cx, |terminal, cx| {
-                terminal.matches.clear();
-                cx.notify();
-            });
+            self.terminal
+                .update(cx, |terminal, cx| terminal.clear_matches(cx));
             self.results = (!pattern.is_empty()).then_some((None, 0));
             cx.notify();
             return;
         };
-        let found = self
-            .screen(cx)
-            .update(cx, |terminal, cx| terminal.find_matches(searcher, cx));
         cx.spawn(async move |find, cx| {
             let matches = found.await;
             find.update(cx, |find, cx| {
@@ -140,13 +126,8 @@ impl TerminalFind {
                     return;
                 }
                 let count = matches.len();
-                find.screen(cx).update(cx, |terminal, cx| {
-                    terminal.matches = matches;
-                    if count > 0 {
-                        terminal.activate_match(0);
-                    }
-                    cx.notify();
-                });
+                find.terminal
+                    .update(cx, |terminal, cx| terminal.set_matches(matches, cx));
                 find.results = Some(((count > 0).then_some(0), count));
                 cx.notify();
             })
@@ -168,10 +149,8 @@ impl TerminalFind {
             (Some(index), true) => (index + 1) % count,
             (Some(index), false) => (index + count - 1) % count,
         };
-        self.screen(cx).update(cx, |terminal, cx| {
-            terminal.activate_match(next);
-            cx.notify();
-        });
+        self.terminal
+            .update(cx, |terminal, cx| terminal.activate_match(next, cx));
         self.results = Some((Some(next), count));
         cx.notify();
     }
@@ -190,10 +169,8 @@ impl TerminalFind {
 
     fn shut(&mut self, cx: &mut Context<Self>) {
         self.search += 1;
-        self.screen(cx).update(cx, |terminal, cx| {
-            terminal.matches.clear();
-            cx.notify();
-        });
+        self.terminal
+            .update(cx, |terminal, cx| terminal.clear_matches(cx));
         cx.emit(FindClosed);
     }
 

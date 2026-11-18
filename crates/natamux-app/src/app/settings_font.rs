@@ -3,7 +3,6 @@
 //! with the reset. A field applies on Enter or when it loses focus, so a terminal does not lay out
 //! again on each key.
 
-use editor::{Editor, EditorEvent};
 use gpui::{Entity, FocusHandle, Focusable, KeyDownEvent, Subscription};
 use ui::{Tooltip, prelude::*};
 
@@ -16,11 +15,12 @@ use crate::terminals::terminal_font::{
     BUILT_IN_FAMILY, BUILT_IN_SIZE, PREVIEW, RESET_LABEL, SIZE_REASON, TerminalFont, clean_family,
     dialog_description, font_to_save, parse_terminal_font, size_ok,
 };
+use crate::text_view::text_box::{TextBox, TextEvent};
 
 pub struct FontRows {
     dashboard: Entity<Dashboard>,
-    pub family: Entity<Editor>,
-    size: Entity<Editor>,
+    pub family: TextBox,
+    size: TextBox,
     smaller: FocusHandle,
     bigger: FocusHandle,
     reset: FocusHandle,
@@ -37,21 +37,18 @@ impl FontRows {
         let size = text_editor(&BUILT_IN_SIZE.to_string(), None, window, cx);
         if let Some(font) = saved(&dashboard, cx) {
             if let Some(name) = &font.family {
-                family.update(cx, |editor, cx| editor.set_text(name.clone(), window, cx));
+                family.set_text(name.clone(), window, cx);
             }
             if let Some(points) = font.size {
-                size.update(cx, |editor, cx| {
-                    editor.set_text(points.to_string(), window, cx)
-                });
+                size.set_text(points.to_string(), window, cx);
             }
         }
         let typing = [&family, &size]
             .into_iter()
             .map(|editor| {
-                cx.subscribe(editor, |view, _, event: &EditorEvent, cx| match event {
-                    EditorEvent::BufferEdited => cx.notify(),
-                    EditorEvent::Blurred => view.font.apply(cx),
-                    _ => {}
+                editor.subscribe(cx, |view, _, event, cx| match event {
+                    TextEvent::Edited => cx.notify(),
+                    TextEvent::Blurred => view.font.apply(cx),
                 })
             })
             .collect();
@@ -66,8 +63,13 @@ impl FontRows {
         }
     }
 
+    /// Types `text` into the size field, for `--shot settings-font-error`.
+    pub fn set_size_text(&self, text: &str, window: &mut Window, cx: &mut Context<SettingsView>) {
+        self.size.set_text(text, window, cx);
+    }
+
     fn size_text(&self, cx: &App) -> String {
-        self.size.read(cx).text(cx)
+        self.size.text(cx)
     }
 
     fn size_valid(&self, cx: &App) -> bool {
@@ -80,7 +82,7 @@ impl FontRows {
             cx.notify();
             return;
         }
-        let font = font_to_save(&self.family.read(cx).text(cx), &self.size_text(cx));
+        let font = font_to_save(&self.family.text(cx), &self.size_text(cx));
         if font == saved(&self.dashboard, cx) {
             return;
         }
@@ -92,17 +94,13 @@ impl FontRows {
     fn step(&self, delta: f32, window: &mut Window, cx: &mut Context<SettingsView>) {
         let saved_size = saved(&self.dashboard, cx).and_then(|font| font.size);
         let next = font_size_step(&self.size_text(cx), saved_size, delta);
-        self.size.update(cx, |editor, cx| {
-            editor.set_text(next.to_string(), window, cx)
-        });
+        self.size.set_text(next.to_string(), window, cx);
         self.apply(cx);
     }
 
     fn use_built_in(&self, window: &mut Window, cx: &mut Context<SettingsView>) {
-        self.family
-            .update(cx, |editor, cx| editor.set_text("", window, cx));
-        self.size
-            .update(cx, |editor, cx| editor.set_text("", window, cx));
+        self.family.set_text("", window, cx);
+        self.size.set_text("", window, cx);
         self.dashboard
             .update(cx, |dashboard, cx| dashboard.set_terminal_font(None, cx));
     }
@@ -179,7 +177,7 @@ impl FontRows {
 
     /// The preview row: one line in the typed font (the saved size while the field is wrong).
     pub fn preview(&self, cx: &mut Context<SettingsView>) -> AnyElement {
-        let typed = clean_family(&self.family.read(cx).text(cx));
+        let typed = clean_family(&self.family.text(cx));
         let family = if typed.is_empty() {
             BUILT_IN_FAMILY.to_owned()
         } else {

@@ -4,7 +4,7 @@
 
 use gpui::{AnyElement, ClickEvent, FontWeight, KeyDownEvent};
 use natamux_proto::stages::schema::{Stage, Step};
-use ui::{ScrollAxes, prelude::*};
+use ui::prelude::*;
 
 use super::advanced_rules::{SheetGroup, changed_in, group_summary};
 use super::editor_fields::{TextField, set_text};
@@ -108,7 +108,7 @@ impl StageSheet {
             .pb(rems_from_px(12.0_f32))
             // Each part keeps its height; the column scrolls instead of squeezing a card.
             .children(body.into_iter().map(|part| div().flex_none().child(part)));
-        scroll_area(list, ScrollAxes::Vertical, &self.column_scroll, window, cx)
+        scroll_area(list, &self.column_scroll, window, cx)
             .debug_selector(|| "stage-sheet-column".into())
             .flex()
             .flex_col()
