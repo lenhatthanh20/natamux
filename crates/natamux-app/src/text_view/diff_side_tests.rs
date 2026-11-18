@@ -591,3 +591,26 @@ fn a_side_pins_its_header_once_its_top_row_is_at_or_below_a_gap(cx: &mut TestApp
     assert!(pins(lh * 20., cx), "the gap is the top row");
     assert!(pins(lh * 25., cx), "below the gap");
 }
+
+/// P-08: a long hunk paints a back rect only for its lines near the rows in view, not one per
+/// line of the hunk.
+#[gpui::test]
+fn a_long_hunk_paints_boxes_only_for_its_rows_in_view(cx: &mut TestAppContext) {
+    let (_, right, cx) = open(cx);
+    let added: String = (0..3000).map(|n| format!("line {n}\n")).collect();
+    let diff = diff(Some("a\n"), &format!("a\n{added}"), &[]);
+    let rows = inline_rows(&diff.hunk_rows(), diff.new_rows(), false);
+    show(&right, "x.txt", &diff, &rows, true, cx);
+    let lh = drawn(right.input(), cx).line_height;
+    cx.update(|_, cx| right.set_scroll(point(px(0.), lh * 1000.), cx));
+    cx.run_until_parked();
+    let bounds = right.input().read_with(cx, |input, _| input.last_bounds);
+    let height = bounds.expect("the side was drawn").size.height;
+    let in_view = (height / lh).ceil() as usize;
+    let backs = drawn(right.input(), cx).paint.backs.len();
+    // The rows in view, one line of slack above and below, and the box's top and bottom lines.
+    assert!(
+        backs <= in_view + 4,
+        "{backs} back rects for {in_view} rows in view"
+    );
+}

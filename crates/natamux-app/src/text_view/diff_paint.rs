@@ -148,9 +148,21 @@ impl Frame<'_> {
             let in_rows = |line: &&super::element::Line| {
                 line.first_row < end_row && line.first_row + line.row_starts.len() > top_row
             };
-            let laid_lines = laid.lines.get(first..=last).unwrap_or_default();
-            let top_index = first + laid_lines.iter().position(|l| in_rows(&l)).unwrap_or(0);
-            let bottom_index = first + laid_lines.iter().rposition(|l| in_rows(&l)).unwrap_or(0);
+            // Only the hunk's lines near the rows in view (one row of slack each side): the
+            // others lie outside the box.
+            let lo = laid
+                .line_index_of_row(top_row.saturating_sub(1))
+                .clamp(first, last);
+            let hi = laid.line_index_of_row(end_row).clamp(first, last);
+            let laid_lines = laid.lines.get(lo..=hi).unwrap_or_default();
+            let top_index = laid_lines
+                .iter()
+                .position(|l| in_rows(&l))
+                .map_or(first, |at| lo + at);
+            let bottom_index = laid_lines
+                .iter()
+                .rposition(|l| in_rows(&l))
+                .map_or(first, |at| lo + at);
             let left = self.bounds.left();
             let strip = (
                 Bounds::from_corners(point(left, top), point(left + self.strip, bottom)),
@@ -161,7 +173,8 @@ impl Frame<'_> {
                 paint.strips.push(strip);
                 continue;
             }
-            for (line, side_line) in laid_lines.iter().zip(&lines[first..=last]) {
+            let side_lines = lines.get(lo..=hi).unwrap_or_default();
+            for (line, side_line) in laid_lines.iter().zip(side_lines) {
                 let height = laid.line_height * line.row_starts.len() as f32;
                 let rect = self.across(self.row_top(line.first_row), height);
                 paint

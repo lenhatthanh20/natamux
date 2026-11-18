@@ -7,8 +7,8 @@
 use std::time::Duration;
 
 use gpui::{
-    Entity, FocusHandle, Modifiers, MouseButton, MouseDownEvent, MouseUpEvent, Pixels, Point,
-    TestAppContext, UpdateGlobal as _, VisualTestContext, point,
+    Entity, FocusHandle, Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
+    Pixels, Point, TestAppContext, UpdateGlobal as _, VisualTestContext, point,
 };
 use ui::prelude::*;
 
@@ -469,4 +469,61 @@ fn a_row_after_a_wrap_keeps_the_indent_of_its_line(cx: &mut TestAppContext) {
             "a selection from the row start does not"
         );
     });
+}
+
+/// P-text-4: a mouse move outside a code view, with no thumb held or hovered, does not lay the
+/// view out.
+#[gpui::test]
+fn a_mouse_move_outside_a_code_view_does_not_lay_it_out(cx: &mut TestAppContext) {
+    let (input, _, cx) = open("x.txt", &lines(50), cx);
+    let version = |cx: &mut VisualTestContext| {
+        input.read_with(cx, |input, _| {
+            input.laid.as_ref().map(|laid| laid.key.version)
+        })
+    };
+    let drawn = version(cx);
+    assert!(drawn.is_some(), "the view was drawn");
+    // A new text, not drawn yet: a layout now would take its version.
+    input.update(cx, |input, _| {
+        assert!(input.model.set_text("other", std::time::Instant::now()));
+    });
+    let outside = MouseMoveEvent {
+        position: point(px(450.), px(300.)),
+        pressed_button: None,
+        modifiers: Modifiers::default(),
+    };
+    input.update_in(cx, |input, window, cx| {
+        input.mouse_move(&outside, window, cx)
+    });
+    assert_eq!(version(cx), drawn, "no layout ran");
+    assert!(
+        input.read_with(cx, |input, _| !input.bar_hovered() && !input.hbar_hovered()),
+        "no thumb is hovered"
+    );
+}
+
+/// P-code-1: in a long text, the other places of the selected text near the rows in view paint
+/// the same rects as when every place was measured.
+#[gpui::test]
+fn the_other_places_in_view_paint_as_before_in_a_long_text(cx: &mut TestAppContext) {
+    let (input, _, cx) = open("x.txt", &lines(5000), cx);
+    select(&input, 0, 4, cx);
+    wait(cx);
+    let (got, want) = input.update_in(cx, |input, window, cx| {
+        let bounds = input.last_bounds.expect("the view was drawn");
+        let laid = input.layout(window, cx);
+        // As if scrolled a bit past line 2,000.
+        let origin = bounds.origin - point(px(0.), laid.line_height * 2000.4);
+        let got = input.code_paint(&laid, bounds, origin, cx).backgrounds;
+        let code = input.code.as_ref().expect("a code view");
+        let want: Vec<gpui::Bounds<Pixels>> = code
+            .other_occurrences(input.model.selection().range())
+            .flat_map(|range| laid.selection_rects(range.clone()))
+            .map(|rect| gpui::Bounds::new(rect.origin + origin, rect.size))
+            .filter(|rect| rect.bottom() >= bounds.top() && rect.top() <= bounds.bottom())
+            .collect();
+        (got, want)
+    });
+    assert!(want.len() > 5, "places in view: {}", want.len());
+    assert_eq!(got, want);
 }

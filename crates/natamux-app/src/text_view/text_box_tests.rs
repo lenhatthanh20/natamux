@@ -1108,3 +1108,19 @@ fn t_min_replace_minimal_keeps_the_caret_the_scroll_and_the_undo(cx: &mut TestAp
         assert_eq!(text_of(&text_box, cx), text, "kind {index}: one undo step");
     }
 }
+
+/// P-text-3: an area drawn again with no change takes its rows from its last layout, and wraps
+/// its text again once the text changed.
+#[gpui::test]
+fn an_area_drawn_again_without_a_change_does_not_wrap_its_text(cx: &mut TestAppContext) {
+    let (host, cx) = setup(cx, false, 300.);
+    let area = text_box(&host, AREA, cx);
+    load(&area, "one\ntwo\nthree", cx);
+    let wraps = || super::element::WRAPS.with(|wraps| wraps.get());
+    super::element::WRAPS.with(|wraps| wraps.set(0));
+    host.update(cx, |_, cx| cx.notify());
+    cx.run_until_parked();
+    assert_eq!(wraps(), 0, "the same text and width: no wrap");
+    load(&area, "four\nfive", cx);
+    assert!(wraps() > 0, "a new text is wrapped");
+}

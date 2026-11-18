@@ -289,6 +289,12 @@ fn shape(
         .unwrap_or_default()
 }
 
+#[cfg(test)]
+thread_local! {
+    /// How many lines `wrap_rows` wrapped on this thread, for tests.
+    pub(super) static WRAPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// Where a line of `text` (tabs as spaces) wraps at `wrap` px, as Zed's editor wrapped it: by
 /// the widths of the chars in `font`, and a row after a wrap indented as far as the line. One
 /// item per row: the offset it starts at and its indent in spaces; the first is (0, 0).
@@ -299,6 +305,8 @@ pub fn wrap_rows(
     wrap: Option<Pixels>,
     window: &Window,
 ) -> Vec<(usize, u32)> {
+    #[cfg(test)]
+    WRAPS.with(|wraps| wraps.set(wraps.get() + 1));
     let mut rows = vec![(0, 0)];
     if let Some(wrap) = wrap {
         let mut wrapper = window.text_system().line_wrapper(font.clone(), font_size);
@@ -626,20 +634,44 @@ impl Layout {
     /// The rects of a highlighted `range`, one per row it covers, from the top left of the text.
     /// A row the range runs past (its line end or wrap point) gets a bit more on the right.
     pub fn selection_rects(&self, range: Range<usize>) -> Vec<Bounds<Pixels>> {
-        self.rects_past(range, self.line_height * SELECTION_ROUNDING)
+        self.selection_rects_in(range, 0..usize::MAX)
     }
 
-    /// `selection_rects` with `overshoot` more on the right of a row the range runs past.
-    pub fn rects_past(&self, range: Range<usize>, overshoot: Pixels) -> Vec<Bounds<Pixels>> {
+    /// `selection_rects` only on the shown rows `rows`.
+    pub fn selection_rects_in(
+        &self,
+        range: Range<usize>,
+        rows: Range<usize>,
+    ) -> Vec<Bounds<Pixels>> {
+        self.rects_past(range, self.line_height * SELECTION_ROUNDING, rows)
+    }
+
+    /// `selection_rects` with `overshoot` more on the right of a row the range runs past, only on
+    /// the shown rows `rows`. Each row still sees the whole `range`, so its rect is the same as
+    /// without the window.
+    pub fn rects_past(
+        &self,
+        range: Range<usize>,
+        overshoot: Pixels,
+        rows: Range<usize>,
+    ) -> Vec<Bounds<Pixels>> {
         let mut rects = Vec::new();
-        if range.is_empty() {
+        if range.is_empty() || rows.is_empty() {
             return rects;
         }
-        for line in &self.lines {
-            if line.start + line.len < range.start || line.start > range.end {
-                continue;
+        // Lines are in order of offset and of row: skip those before the range or the rows.
+        let skip = self
+            .lines
+            .partition_point(|line| line.start + line.len < range.start);
+        let from = self.line_index_of_row(rows.start).max(skip);
+        for line in self.lines.get(from..).unwrap_or_default() {
+            if line.first_row >= rows.end || line.start > range.end {
+                break;
             }
             for row in 0..line.row_starts.len() {
+                if !rows.contains(&(line.first_row + row)) {
+                    continue;
+                }
                 let row_start = line.start + line.row_starts[row];
                 let row_end = line.start + line.row_end(row);
                 let start = range.start.max(row_start);
@@ -669,6 +701,26 @@ impl Layout {
             }
         }
         rects
+    }
+
+    /// The offsets that shown rows `rows` cover; a row past the end gives the text's end.
+    pub fn rows_span(&self, rows: Range<usize>) -> Range<usize> {
+        let start = self.row_range(rows.start).start;
+        let end = self.row_range(rows.end.saturating_sub(1)).end;
+        start..end.max(start)
+    }
+
+    /// The shown rows that meet `bounds` when the text starts at `origin`, with slack: a
+    /// selection corner on a row depends on the rows next to it, and the division may land a
+    /// hair off a row edge.
+    pub fn rows_near(&self, bounds: Bounds<Pixels>, origin: Point<Pixels>) -> Range<usize> {
+        let lh = self.line_height;
+        if lh <= px(0.) {
+            return 0..usize::MAX;
+        }
+        let first = ((bounds.top() - origin.y) / lh).floor().max(0.) as usize;
+        let end = ((bounds.bottom() - origin.y) / lh).ceil().max(0.) as usize;
+        first.saturating_sub(2)..end.saturating_add(2)
     }
 
     /// The top left and the width of each whitespace char of the selection `range` of `text`
@@ -782,22 +834,41 @@ impl Element for TextElement {
             Mode::Area { min, max } => {
                 let font_size = style.font_size.to_pixels(rem);
                 let font = style.font();
-                let (text, placeholder) = input.display();
-                let (text, _, _) = expand_tabs(&text, &[]);
                 let (min, max) = (min.max(1), max.max(min).max(1));
-                window.request_measured_layout(layout, move |known, available, window, _| {
+                let entity = self.input.clone();
+                window.request_measured_layout(layout, move |known, available, window, cx| {
                     let width = known.width.or(match available.width {
                         AvailableSpace::Definite(width) => Some(width),
                         _ => None,
                     });
-                    // The placeholder does not grow the box: it is cut to one row, as in Zed.
-                    let rows: usize = if placeholder {
-                        1
-                    } else {
-                        let wrap = width.map(|width| wrap_width(&font, font_size, width, window));
-                        text.split('\n')
-                            .map(|line| wrap_rows(line, &font, font_size, wrap, window).len())
-                            .sum()
+                    let wrap = width.map(|width| wrap_width(&font, font_size, width, window));
+                    let input = entity.read(cx);
+                    // The last layout at this text and wrap width has the rows already: wrap
+                    // the text again only when it is stale.
+                    let cached = input.laid.as_ref().filter(|laid| {
+                        laid.key.version == input.model.version()
+                            && laid.key.masked == input.masked
+                            && laid.key.width == wrap
+                            && laid.key.font == font
+                            && laid.key.font_size == font_size
+                    });
+                    let rows: usize = match cached {
+                        Some(laid) => laid.rows,
+                        None => {
+                            let (text, placeholder) = input.display();
+                            // The placeholder does not grow the box: it is cut to one row, as
+                            // in Zed.
+                            if placeholder {
+                                1
+                            } else {
+                                let (text, _, _) = expand_tabs(&text, &[]);
+                                text.split('\n')
+                                    .map(|line| {
+                                        wrap_rows(line, &font, font_size, wrap, window).len()
+                                    })
+                                    .sum()
+                            }
+                        }
                     };
                     size(
                         width.unwrap_or_default(),
@@ -862,15 +933,21 @@ impl Element for TextElement {
             _ => (false, false),
         };
         let code = input.code_paint(&laid, bounds, origin, cx);
+        // Only the rows near the box: the others draw nothing, and measuring them shapes them.
+        let near = laid.rows_near(bounds, origin);
+        let span = laid.rows_span(near.clone());
         // Spaces and tabs inside the selection of a full box show as dots and arrows; in a code
         // view all of them while Show whitespace is on.
-        let shown = input.display().0;
-        let whitespace = if full && code.all_whitespace {
-            laid.whitespace(&shown, 0..shown.len())
+        let wanted = if full && code.all_whitespace {
+            Some(span)
         } else if full && !selection.is_empty() {
-            laid.whitespace(&shown, selection.clone())
+            Some(selection.start.max(span.start)..selection.end.min(span.end))
         } else {
-            Vec::new()
+            None
+        };
+        let whitespace = match wanted.filter(|range| range.start < range.end) {
+            Some(range) => laid.whitespace(&input.display_text(), range),
+            None => Vec::new(),
         };
         let colors = cx.theme().colors();
         let (background, active_line) = (
@@ -1002,7 +1079,11 @@ impl Element for TextElement {
                 let rects: Vec<_> = laid
                     // The selection runs twice its corner radius past a line end, as in Zed's
                     // editor.
-                    .rects_past(selection.clone(), line_height * SELECTION_ROUNDING * 2.)
+                    .rects_past(
+                        selection.clone(),
+                        line_height * SELECTION_ROUNDING * 2.,
+                        near.clone(),
+                    )
                     .into_iter()
                     .map(|rect| Bounds::new(rect.origin + origin, rect.size))
                     .collect();
@@ -1257,6 +1338,94 @@ mod tests {
             assert_eq!(shaped(&laid), vec![100]);
             laid.position(laid.lines[500].start + 3, false);
             assert_eq!(shaped(&laid), vec![100, 500]);
+        });
+    }
+
+    /// 1,000 lines `line N`, one row each, 20 px high, not wrapped.
+    fn long_layout(window: &Window) -> (Layout, SharedString) {
+        let key = LayoutKey {
+            version: 1,
+            width: None,
+            font: font("Mono"),
+            font_size: px(14.),
+            line_height: px(20.),
+            color: Hsla::default(),
+            masked: false,
+            marked: None,
+            placeholder: None,
+            inset: px(0.),
+            colors: 0,
+            gutter: px(0.),
+            gutter_pad: px(0.),
+            view: px(400.),
+            lines: None,
+            heads: Vec::new(),
+            marks: Vec::new(),
+            blocks: None,
+        };
+        let lines: Vec<String> = (0..1000).map(|n| format!("line {n}")).collect();
+        let text = SharedString::from(lines.join("\n"));
+        let run = TextRun {
+            len: text.len(),
+            font: font("Mono"),
+            color: Hsla::default(),
+            background_color: None,
+            underline: None,
+            strikethrough: None,
+        };
+        (Layout::build(key, &text, &[run], None, window), text)
+    }
+
+    /// The lines whose first row is shaped.
+    fn shaped_lines(laid: &Layout) -> Vec<usize> {
+        (0..laid.lines.len())
+            .filter(|&index| laid.lines[index].rows.rows[0].shaped.get().is_some())
+            .collect()
+    }
+
+    /// P-text-1: a selection of the whole text measures only the rows of the window, and their
+    /// rects are the ones the whole selection has on those rows.
+    #[gpui::test]
+    fn a_selection_of_all_shapes_only_the_rows_asked_for(cx: &mut gpui::TestAppContext) {
+        let cx = cx.add_empty_window();
+        cx.update(|window, _| {
+            let (laid, text) = long_layout(window);
+            let rects = laid.rects_past(0..text.len(), px(3.), 500..510);
+            let mut want = vec![100];
+            want.extend(500..510);
+            assert_eq!(shaped_lines(&laid), want);
+            let (whole, _) = long_layout(window);
+            let all: Vec<Bounds<Pixels>> = whole
+                .rects_past(0..text.len(), px(3.), 0..usize::MAX)
+                .into_iter()
+                .filter(|rect| rect.top() >= px(10000.) && rect.top() < px(10200.))
+                .collect();
+            assert_eq!(rects.len(), 10);
+            assert_eq!(rects, all);
+            // A range that starts and ends inside the window gives the same rects too.
+            let inside = laid.lines[503].start + 2..laid.lines[506].start + 3;
+            let near: Vec<Bounds<Pixels>> = whole
+                .rects_past(inside.clone(), px(3.), 0..usize::MAX)
+                .into_iter()
+                .filter(|rect| rect.top() >= px(10000.) && rect.top() < px(10200.))
+                .collect();
+            assert_eq!(laid.rects_past(inside, px(3.), 500..510), near);
+        });
+    }
+
+    #[gpui::test]
+    fn rows_span_covers_the_rows_asked_for(cx: &mut gpui::TestAppContext) {
+        let cx = cx.add_empty_window();
+        cx.update(|window, _| {
+            let (laid, text) = long_layout(window);
+            assert_eq!(
+                laid.rows_span(10..12),
+                laid.lines[10].start..laid.lines[11].start + laid.lines[11].len
+            );
+            assert_eq!(laid.rows_span(990..2000), laid.lines[990].start..text.len());
+            // Rows 5 to 14 meet a box 100 to 300 px down, with two rows of slack each side.
+            let bounds = Bounds::new(point(px(0.), px(100.)), size(px(50.), px(200.)));
+            assert_eq!(laid.rows_near(bounds, point(px(0.), px(0.))), 3..17);
         });
     }
 }

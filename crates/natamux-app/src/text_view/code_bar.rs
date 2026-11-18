@@ -239,6 +239,17 @@ impl TextInput {
         let Some(bounds) = self.last_bounds.filter(|_| self.code.is_some()) else {
             return false;
         };
+        // The thumbs lie inside the view: outside it, with none held or hovered, nothing can
+        // change, so skip the layout.
+        if let Some(code) = self.code.as_ref()
+            && code.bar.grab.is_none()
+            && code.bar.hgrab.is_none()
+            && !code.bar.hovered
+            && !code.bar.hhovered
+            && !bounds.contains(&position)
+        {
+            return false;
+        }
         let laid = self.layout(window, cx);
         let bar = self.bar_bounds(&laid, bounds, cx);
         let hbar = self.hbar_bounds(&laid, bounds, cx);

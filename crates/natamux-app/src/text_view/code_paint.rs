@@ -103,8 +103,10 @@ impl TextInput {
         );
         // Offsets of the shown text: blame labels come before their rows.
         let shown = |range: &Range<usize>| self.to_display(range.start)..self.to_display(range.end);
+        // Only the rows near the box: a place off screen draws nothing.
+        let near = laid.rows_near(bounds, origin);
         for range in ranges {
-            for rect in laid.selection_rects(shown(&range)) {
+            for rect in laid.selection_rects_in(shown(&range), near.clone()) {
                 let rect = Bounds::new(rect.origin + origin, rect.size);
                 if rect.bottom() >= bounds.top() && rect.top() <= bounds.bottom() {
                     paint.backgrounds.push(rect);
@@ -117,7 +119,7 @@ impl TextInput {
             &[]
         };
         for (index, range) in search.iter().enumerate() {
-            for rect in laid.selection_rects(shown(range)) {
+            for rect in laid.selection_rects_in(shown(range), near.clone()) {
                 let rect = Bounds::new(rect.origin + origin, rect.size);
                 if rect.bottom() >= bounds.top() && rect.top() <= bounds.bottom() {
                     paint.search.push((rect, code.search_active == Some(index)));
