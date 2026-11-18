@@ -109,3 +109,4 @@ tree-sitter-language = { git = "https://github.com/lenhatthanh20/tree-sitter", r
 
 [profile.release]
 debug = "limited"
+lto = "thin"
