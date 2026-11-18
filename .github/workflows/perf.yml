@@ -37,7 +37,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          fetch-depth: 0
       - run: rustup toolchain install
       # The cache app-macos saves on main (rust.yml).
       - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -50,7 +49,6 @@ jobs:
           restore-keys: |
             rust-app-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-
             rust-app-${{ runner.os }}-
-      - run: python3 scripts/ci-changes.py mtimes
       - run: cargo build --release --locked -p natamux-app -p natamux-daemon -p natamux-cli
       - run: mkdir -p perf
       # Each run quits by itself; a run that hangs ends at the step's timeout.
