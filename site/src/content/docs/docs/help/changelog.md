@@ -7,6 +7,13 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v1.0.27 (2026-11-18)
+
+- Natamux starts 16 coding agents, was 5: OpenCode, Qwen Code and Factory Droid with hooks, and Amp, Kimi, Goose, Aider, Crush, Cline, Kiro and Muse Code by their terminal, with the first prompt pasted. See [Agents](/docs/agents/).
+- A new task shows **Preparing workspace** as soon as it opens. See [Quick start](/docs/getting-started/quick-start/).
+- The **Delete task** button works at once, while the app still reads uncommitted changes; a delete confirmed before that read ends fails on a dirty worktree. See [Sidebar](/docs/guides/dashboard/#sidebar).
+- Fix: the **Changes** badge shows **1k+** from 1000 files, and no longer wraps.
+
 ## v1.0.26 (2026-11-12)
 
 - **Start a task** and the task **Edit** form have a **Model** field; Natamux starts the task's agent with `--model '<model>'`. See [Models](/docs/reference/http-api/#models).
