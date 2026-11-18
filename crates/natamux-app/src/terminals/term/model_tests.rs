@@ -259,6 +259,24 @@ fn a_link_comes_from_its_osc8_cells_or_from_its_line(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
+fn an_osc8_link_wrapped_over_two_rows_is_one_range(cx: &mut TestAppContext) {
+    let mut screen = screen(cx, (20, 10));
+    feed(
+        &mut screen,
+        "\x1b]8;;https://a.b/\x1b\\xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\x1b]8;;\x1b\\ tail",
+        cx,
+    );
+    let link = |screen: &Screen, point: Point, cx: &mut TestAppContext| {
+        screen.model.read_with(cx, |model, _| model.link_at(point))
+    };
+    for point in [at(1, 5), at(0, 3)] {
+        let found = link(&screen, point, cx).unwrap();
+        assert_eq!(found.word, "https://a.b/");
+        assert_eq!(found.range, at(0, 0)..=at(1, 9));
+    }
+}
+
+#[gpui::test]
 fn a_scroll_looks_for_the_link_under_the_pointer_again(cx: &mut TestAppContext) {
     let mut screen = screen(cx, (40, 5));
     feed(&mut screen, &lines(10), cx);

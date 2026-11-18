@@ -16,13 +16,15 @@ use gpui::{
     GlobalElementId, Hitbox, HitboxBehavior, Hsla, InspectorElementId, InteractiveElement,
     IntoElement, LayoutId, ModifiersChangedEvent, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
     Path, PathBuilder, Pixels, Point, ScrollWheelEvent, ShapedLine, StatefulInteractiveElement,
-    Style, Styled, TextAlign, TextRun, UnderlineStyle, Window, div, fill, outline, point, px,
-    relative, size,
+    Style, Styled, TextAlign, TextRun, UnderlineStyle, Window, WindowTextSystem, div, fill,
+    outline, point, px, relative, size,
 };
 use theme::ActiveTheme;
 use ui::Tooltip;
 
-use super::cell_layout::{self, BLOCK_COLUMNS, BLOCK_LINES, BackgroundRect, MINIMUM_CONTRAST};
+use super::cell_layout::{
+    self, BLOCK_COLUMNS, BLOCK_LINES, BackgroundRect, CellLayout, MINIMUM_CONTRAST,
+};
 use super::grid_layout::grid;
 use super::ime::TermInput;
 use super::model::{TermBounds, TermModel};
@@ -98,6 +100,40 @@ fn metrics(window: &Window, cx: &App) -> Metrics {
         cell_width,
         line_height: font_size * LINE_HEIGHT,
     }
+}
+
+/// The input method's text keeps its own glyph advances, as in Zed: a forced cell width would
+/// draw each wide glyph one cell after the last, over its neighbour.
+fn shape_marked(
+    text_system: &WindowTextSystem,
+    text: String,
+    metrics: &Metrics,
+    colour: Hsla,
+) -> ShapedLine {
+    let run = TextRun {
+        len: text.len(),
+        font: metrics.font.clone(),
+        color: colour,
+        background_color: None,
+        underline: Some(UnderlineStyle {
+            thickness: px(1.),
+            color: Some(colour),
+            wavy: false,
+        }),
+        strikethrough: None,
+    };
+    text_system.shape_line(text.into(), metrics.font_size, &[run], None)
+}
+
+#[cfg(test)]
+thread_local! {
+    static LAYOUTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How many times this thread laid out the cells of a screen.
+#[cfg(test)]
+pub fn layouts() -> usize {
+    LAYOUTS.with(std::cell::Cell::get)
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -228,6 +264,12 @@ impl Element for TermElement {
             origin: point(bounds.right() - track_width, bounds.top()),
             size: size(track_width, bounds.size.height),
         };
+        let rows = Bounds {
+            origin: point(bounds.left(), origin.y),
+            size: size(bounds.size.width, grid_height),
+        };
+        // A pane scrolled out of its box: the paint would drop all of the screen anyway.
+        let clipped_out = window.content_mask().bounds.intersect(&rows).is_empty();
 
         let view = self.view.read(cx);
         let show_cursor = view.should_show_cursor(focused, cx) && view.marked.is_none();
@@ -252,13 +294,19 @@ impl Element for TermElement {
         };
 
         let hovered = content.last_hovered_word.as_ref().map(|word| &word.range);
-        let cells = cell_layout::layout(
-            &content.cells,
-            content.display_offset,
-            theme,
-            hovered,
-            MINIMUM_CONTRAST,
-        );
+        let cells = if clipped_out {
+            CellLayout::default()
+        } else {
+            #[cfg(test)]
+            LAYOUTS.with(|count| count.set(count.get() + 1));
+            cell_layout::layout(
+                &content.cells,
+                content.display_offset,
+                theme,
+                hovered,
+                MINIMUM_CONTRAST,
+            )
+        };
         let at = |line: usize, column: usize| {
             point(
                 origin.x + cell_width * column as f32,
@@ -341,15 +389,26 @@ impl Element for TermElement {
             offset: content.display_offset,
         };
         let mut highlights = Vec::new();
-        for found in &model.matches {
-            for path in shown.highlight(found, false) {
-                highlights.push((path, colours.search_match_background));
+        if !clipped_out {
+            // Matches are in grid order, so only the shown ones are walked.
+            let top = -(content.display_offset as i32);
+            let bottom = top + content.screen_lines as i32 - 1;
+            let matches = &model.matches;
+            let first = matches.partition_point(|found| found.end().line.0 < top);
+            for found in matches
+                .iter()
+                .skip(first)
+                .take_while(|found| found.start().line.0 <= bottom)
+            {
+                for path in shown.highlight(found, false) {
+                    highlights.push((path, colours.search_match_background));
+                }
             }
-        }
-        if let Some(selection) = &content.selection {
-            let range = selection.start..=selection.end;
-            for path in shown.highlight(&range, selection.is_block) {
-                highlights.push((path, theme.players().local().selection));
+            if let Some(selection) = &content.selection {
+                let range = selection.start..=selection.end;
+                for path in shown.highlight(&range, selection.is_block) {
+                    highlights.push((path, theme.players().local().selection));
+                }
             }
         }
 
@@ -374,7 +433,8 @@ impl Element for TermElement {
             CursorShape::Beam => Some(CursorKind::Bar),
             CursorShape::HollowBlock => Some(CursorKind::Hollow),
         };
-        let cursor = kind.filter(|_| on_screen && show_cursor).map(|kind| {
+        let draw_cursor = on_screen && show_cursor && !clipped_out;
+        let cursor = kind.filter(|_| draw_cursor).map(|kind| {
             let c = content.cursor_char;
             let text = (!c.is_whitespace()).then(|| {
                 shape(
@@ -415,12 +475,7 @@ impl Element for TermElement {
         });
         let marked = marked_text.map(|text| {
             let foreground = colours.terminal_foreground;
-            let underline = UnderlineStyle {
-                thickness: px(1.),
-                color: Some(foreground),
-                wavy: false,
-            };
-            let line = shape(text, metrics.font.clone(), foreground, Some(underline));
+            let line = shape_marked(&text_system, text, &metrics, foreground);
             let bounds = Bounds {
                 origin: cursor_origin,
                 size: size(line.width(), line_height),
@@ -491,10 +546,6 @@ impl Element for TermElement {
             tooltip.prepaint_as_root(bounds.origin, bounds.size.into(), window, cx);
             tooltip
         });
-        let rows = Bounds {
-            origin: point(bounds.left(), origin.y),
-            size: size(bounds.size.width, grid_height),
-        };
         Frame {
             hitbox,
             rows,
@@ -871,5 +922,30 @@ mod tests {
             at(0., 5.),
         ]);
         assert_eq!(kept, [at(0., 0.), at(10., 0.), at(10., 10.), at(0., 10.)]);
+    }
+
+    /// Catches the bug only where the fallback font of CJK text is wider than a cell (macOS,
+    /// or CI with CJK fonts); elsewhere both lines are the same either way.
+    #[gpui::test]
+    fn marked_text_keeps_its_own_glyph_advances(cx: &mut gpui::TestAppContext) {
+        let window = cx.add_empty_window();
+        let (marked, own) = window.update(|window, cx| {
+            let metrics = metrics(window, cx);
+            let text_system = window.text_system();
+            let colour = gpui::black();
+            let marked = shape_marked(text_system, "日本".into(), &metrics, colour);
+            let run = TextRun {
+                len: "日本".len(),
+                font: metrics.font.clone(),
+                color: colour,
+                background_color: None,
+                underline: None,
+                strikethrough: None,
+            };
+            let own = text_system.shape_line("日本".into(), metrics.font_size, &[run], None);
+            let second = "日".len();
+            (marked.x_for_index(second), own.x_for_index(second))
+        });
+        assert_eq!(marked, own);
     }
 }

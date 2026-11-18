@@ -13,7 +13,7 @@ use std::time::Duration;
 use alacritty_terminal::Term;
 use alacritty_terminal::event::{Event, WindowSize};
 use alacritty_terminal::grid::{Dimensions, Scroll};
-use alacritty_terminal::index::{Column, Direction, Line, Point, Side};
+use alacritty_terminal::index::{Boundary, Column, Direction, Line, Point, Side};
 use alacritty_terminal::selection::{Selection, SelectionRange, SelectionType};
 use alacritty_terminal::sync::FairMutex;
 use alacritty_terminal::term::cell::{Cell, Flags};
@@ -187,6 +187,7 @@ pub struct Content {
     pub columns: usize,
     pub screen_lines: usize,
     pub selection: Option<SelectionRange>,
+    #[cfg(test)]
     pub selection_text: Option<String>,
     pub cursor: RenderableCursor,
     pub cursor_char: char,
@@ -825,6 +826,7 @@ fn copy_content(
         columns: term.columns(),
         screen_lines,
         selection: content.selection,
+        #[cfg(test)]
         selection_text: term.selection_to_string(),
         cursor: content.cursor,
         cursor_char: grid[content.cursor.point].c,
@@ -847,20 +849,28 @@ fn link_at(term: &Term<Listener>, point: Point) -> Option<HoveredWord> {
         return None;
     }
     let grid = term.grid();
-    let row = &grid[point.line];
-    if let Some(link) = row[point.column].hyperlink() {
-        let same = |column: usize| row[Column(column)].hyperlink().as_ref() == Some(&link);
-        let mut start = point.column.0;
-        while start > 0 && same(start - 1) {
-            start -= 1;
+    if let Some(link) = grid[point].hyperlink() {
+        let same = |at: Point| grid[at].hyperlink().as_ref() == Some(&link);
+        // Grid, not None: None wraps around, so a screen full of one link would loop forever.
+        let mut start = point;
+        loop {
+            let before = start.sub(term, Boundary::Grid, 1);
+            if before == start || !same(before) {
+                break;
+            }
+            start = before;
         }
-        let mut end = point.column.0;
-        while end + 1 < columns && same(end + 1) {
-            end += 1;
+        let mut end = point;
+        loop {
+            let after = end.add(term, Boundary::Grid, 1);
+            if after == end || !same(after) {
+                break;
+            }
+            end = after;
         }
         return Some(HoveredWord {
             word: link.uri().to_owned(),
-            range: Point::new(point.line, Column(start))..=Point::new(point.line, Column(end)),
+            range: start..=end,
         });
     }
     let last = Column(columns - 1);

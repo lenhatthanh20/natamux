@@ -81,6 +81,8 @@ pub fn layout(
 ) -> CellLayout {
     let mut out = CellLayout::default();
     let mut blocks = Blocks::default();
+    // The contrast search is slow and most cells share a few colour pairs.
+    let mut fixed = HashMap::new();
     // The cell before had zero-width characters, such as an emoji's presentation selector.
     let mut after_extras = false;
     let mut open_run = false;
@@ -142,20 +144,32 @@ pub fn layout(
             continue;
         }
         let hover = hovered.is_some_and(|range| range.contains(&indexed.point));
-        let style = cell_style(cell, fg, bg_colour, link, hover, theme, minimum_contrast);
-        let mut text = String::from(cell.c);
-        if let Some(extras) = cell.zerowidth() {
-            text.extend(extras);
-        }
+        let style = cell_style(
+            cell,
+            fg,
+            bg_colour,
+            link,
+            hover,
+            theme,
+            minimum_contrast,
+            &mut fixed,
+        );
         if open_run
             && let Some(run) = out.runs.last_mut()
             && run.line == line
             && run.column + run.cells == column
             && run.style == style
         {
-            run.text.push_str(&text);
+            run.text.push(cell.c);
+            if let Some(extras) = cell.zerowidth() {
+                run.text.extend(extras);
+            }
             run.cells += 1;
             continue;
+        }
+        let mut text = String::from(cell.c);
+        if let Some(extras) = cell.zerowidth() {
+            text.extend(extras);
         }
         out.runs.push(TextRun {
             line,
@@ -186,6 +200,8 @@ fn push_rect(rects: &mut Vec<BackgroundRect>, line: usize, column: usize, color:
     });
 }
 
+/// `fixed` keeps the contrast result of each (text, background) pair of one layout.
+#[allow(clippy::too_many_arguments)]
 fn cell_style(
     cell: &alacritty_terminal::term::cell::Cell,
     fg: Color,
@@ -194,11 +210,14 @@ fn cell_style(
     hover: bool,
     theme: &Theme,
     minimum_contrast: f32,
+    fixed: &mut HashMap<(Hsla, Hsla), Hsla>,
 ) -> CellStyle {
     let mut color = convert(&fg, theme);
     let chosen_by_app = matches!(fg, Color::Spec(_) | Color::Indexed(16..=255));
     if !chosen_by_app && !decorative(cell.c) {
-        color = with_minimum_contrast(color, background, minimum_contrast);
+        color = *fixed
+            .entry((color, background))
+            .or_insert_with(|| with_minimum_contrast(color, background, minimum_contrast));
     }
     if cell.flags.intersects(Flags::DIM) {
         color.a *= DIM_ALPHA;
