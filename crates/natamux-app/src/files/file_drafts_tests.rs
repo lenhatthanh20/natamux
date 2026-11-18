@@ -143,3 +143,19 @@ fn shows_a_notice_instead_of_a_binary_or_a_too_large_file() {
     );
     assert_eq!(body_notice(false, false, false), None);
 }
+
+#[test]
+fn a_crlf_file_that_is_not_edited_is_not_modified() {
+    let disk = "a\r\nb\r\n";
+    assert!(is_crlf(disk));
+    // The editor holds LF text; it is compared with the disk text through the same normalize.
+    assert_eq!(edit_draft(&editor_text(disk), "v1", None, "a\nb\n"), None);
+}
+
+#[test]
+fn a_crlf_file_is_written_back_with_crlf_and_a_mixed_one_with_lf() {
+    assert_eq!(disk_text("a\nb\n", is_crlf("x\r\ny\r\n")), "a\r\nb\r\n");
+    assert!(!is_crlf("x\r\ny\nz\n"));
+    assert!(!is_crlf("x\ny\n"));
+    assert_eq!(disk_text("a\nb\n", is_crlf("x\r\ny\nz\n")), "a\nb\n");
+}

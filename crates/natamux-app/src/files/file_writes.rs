@@ -6,7 +6,7 @@ use natamux_client::ClientError;
 use natamux_proto::workspaces::files::SavedFile;
 use ui::prelude::*;
 
-use super::file_drafts::{FileDraft, after_save, can_save};
+use super::file_drafts::{FileDraft, after_save, can_save, disk_text};
 use super::file_editor::FileEditor;
 use crate::app::source::reason;
 use crate::components::toast_rules::ToastTone;
@@ -16,7 +16,7 @@ impl FileEditor {
     /// Mod+S or the Save button. Ignored while a save runs.
     pub(super) fn save(&mut self, cx: &mut Context<Self>) {
         let clean = self.dashboard.read(cx).view().clean_on_save;
-        let ready = clean && !self.saving && !self.stale_now(cx) && self.draft(cx).is_some();
+        let ready = clean && !self.saving && !self.stale_now(cx) && self.draft_ref(cx).is_some();
         let body = self.body.clone().filter(|_| ready);
         let Some(body) = body else {
             self.write(cx);
@@ -43,7 +43,7 @@ impl FileEditor {
         let answer = source.write_workspace_file(
             &self.task_id,
             &self.path,
-            draft.text.clone(),
+            disk_text(&draft.text, self.crlf).into_owned(),
             draft.version.clone(),
         );
         self.saving = true;
@@ -71,8 +71,9 @@ impl FileEditor {
             .to_owned();
         match answer {
             Ok(saved) => {
+                let written = disk_text(&sent.text, self.crlf).into_owned();
                 if let Some(disk) = self.disk.as_mut() {
-                    disk.text = Some(sent.text.clone());
+                    disk.text = Some(written);
                     disk.version = saved.version.clone();
                 }
                 let now = self.draft(cx);
