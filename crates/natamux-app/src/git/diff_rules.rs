@@ -107,8 +107,8 @@ pub fn end_spacer(hunks: &[HunkRows], old_rows: u32, new_rows: u32) -> Option<Sp
 /// The working tree's text with one hunk's lines put back to the last commit's lines (T-0314).
 /// Each line keeps its own ending, so CRLF and a missing final line break stay as they were.
 pub fn revert_hunk(original: &str, modified: &str, hunk: &HunkRows) -> String {
-    let old: Vec<&str> = original.split_inclusive('\n').collect();
-    let new: Vec<&str> = modified.split_inclusive('\n').collect();
+    let old = raw_lines(original);
+    let new = raw_lines(modified);
     let rows = |lines: &[&str], range: Range<u32>| -> String {
         let end = (range.end as usize).min(lines.len());
         let start = (range.start as usize).min(end);
@@ -121,6 +121,28 @@ pub fn revert_hunk(original: &str, modified: &str, hunk: &HunkRows) -> String {
         rows(&new, hunk.new.end.max(hunk.new.start)..total),
     ]
     .concat()
+}
+
+/// The lines of `text`, each with its own ending, split where `normalize` breaks lines: at
+/// `\r\n`, a lone `\r` and `\n`.
+fn raw_lines(text: &str) -> Vec<&str> {
+    let bytes = text.as_bytes();
+    let (mut lines, mut start, mut at) = (Vec::new(), 0, 0);
+    while at < bytes.len() {
+        let end = match bytes.get(at) {
+            Some(b'\n') => at + 1,
+            Some(b'\r') if bytes.get(at + 1) == Some(&b'\n') => at + 2,
+            Some(b'\r') => at + 1,
+            _ => {
+                at += 1;
+                continue;
+            }
+        };
+        lines.extend(text.get(start..end));
+        (start, at) = (end, end);
+    }
+    lines.extend(text.get(start..).filter(|rest| !rest.is_empty()));
+    lines
 }
 
 /// The hunk whose rows on `side` start at `row`, else the one that holds it.
@@ -331,6 +353,15 @@ mod tests {
         let original = "a\r\nold\r\nb\r\n";
         let modified = "a\r\nnew\r\nb\r\n";
         assert_eq!(revert_hunk(original, modified, &hunk(1..2, 1..2)), original);
+    }
+
+    #[test]
+    fn reverting_keeps_lines_after_a_lone_cr() {
+        let original = "a\rb\nc\n";
+        let modified = "a\rb\nNEW\nc\n";
+        let d = crate::git::diff_model::diff(Some(original), modified, &[]);
+        assert_eq!(revert_hunk(original, modified, &d.hunk_rows()[0]), original);
+        assert_eq!(raw_lines("a\rb\r\nc"), ["a\r", "b\r\n", "c"]);
     }
 
     #[test]

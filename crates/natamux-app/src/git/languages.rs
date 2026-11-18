@@ -316,8 +316,16 @@ pub fn lang_for(path: &str) -> Option<&'static Lang> {
             || lang
                 .suffixes
                 .iter()
-                .any(|suffix| suffix.eq_ignore_ascii_case(key))
+                .any(|suffix| suffix.eq_ignore_ascii_case(key) || has_dotted_suffix(name, suffix))
     })
+}
+
+/// A suffix with a dot (`tsconfig.json`) matches the end of the name after a dot, or the whole name.
+fn has_dotted_suffix(name: &str, suffix: &str) -> bool {
+    let (name, suffix) = (name.as_bytes(), suffix.as_bytes());
+    name.len() >= suffix.len()
+        && name[name.len() - suffix.len()..].eq_ignore_ascii_case(suffix)
+        && (name.len() == suffix.len() || name[name.len() - suffix.len() - 1] == b'.')
 }
 
 #[cfg(test)]

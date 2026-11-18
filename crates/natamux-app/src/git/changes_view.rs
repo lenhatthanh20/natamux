@@ -162,6 +162,7 @@ impl ChangesView {
             self.reset_review();
             self.moves.undo.clear();
             self.diff.update(cx, |diff, _| diff.clear());
+            self.blame.update(cx, |marks, _| marks.detach());
         }
         self.pending = pending;
         if list.is_some() {

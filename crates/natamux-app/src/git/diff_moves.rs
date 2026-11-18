@@ -42,11 +42,11 @@ impl ChangesView {
             return;
         };
         let (original, modified) = texts_of(read);
-        let after = revert_hunk(original.as_deref().unwrap_or_default(), &modified, &hunk);
+        let after = revert_hunk(original.unwrap_or_default(), modified, &hunk);
         let step = UndoStep {
             task_id,
             path: file.path.clone(),
-            before: modified,
+            before: modified.to_owned(),
             after,
         };
         self.write_step(step, false, cx);
