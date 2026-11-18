@@ -51,6 +51,9 @@ jobs:
             rust-app-${{ runner.os }}-
       - run: python3 scripts/ci-changes.py mtimes
       - run: cargo build --release --locked -p natamux-app -p natamux-daemon -p natamux-cli
+      - name: Binary sizes
+        run: |
+          ls -l target/release/natamux-app target/release/natamux-daemon target/release/natamux | awk '{printf "binary_size: %s %.2f MB\n", $NF, $5/1048576}'
       - run: mkdir -p perf
       # Each run quits by itself; a run that hangs ends at the step's timeout.
       - name: Flows (5 runs)
