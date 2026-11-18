@@ -20,13 +20,22 @@ static URL: LazyLock<Option<Regex>> = LazyLock::new(|| {
 /// Trailing `.` `,` `:` `;` `(` and a `)` with no `(` before it are left out.
 pub fn url_at(line: &str, column: usize) -> Option<(Range<usize>, String)> {
     let regex = URL.as_ref()?;
-    let char_of = |byte: usize| line[..byte].chars().count();
-    regex.find_iter(line).find_map(|found| {
+    // Chars before byte `counted`, counted once while the matches go right.
+    let (mut counted, mut chars) = (0, 0);
+    for found in regex.find_iter(line) {
+        chars += line[counted..found.start()].chars().count();
+        counted = found.start();
+        if chars > column {
+            // Matches do not overlap, so no later one covers the column.
+            return None;
+        }
         let url = trim(found.as_str());
-        let start = char_of(found.start());
-        let range = start..start + url.chars().count();
-        range.contains(&column).then(|| (range, url.to_owned()))
-    })
+        let range = chars..chars + url.chars().count();
+        if range.contains(&column) {
+            return Some((range, url.to_owned()));
+        }
+    }
+    None
 }
 
 fn trim(mut url: &str) -> &str {
@@ -84,6 +93,38 @@ mod tests {
         ] {
             assert_eq!(url(line, 9).as_deref(), Some("https://x.y/z"), "{line}");
         }
+    }
+
+    /// The old quadratic scan, kept to check that `url_at` gives the same results.
+    fn url_at_slow(line: &str, column: usize) -> Option<(Range<usize>, String)> {
+        let regex = URL.as_ref()?;
+        let char_of = |byte: usize| line[..byte].chars().count();
+        regex.find_iter(line).find_map(|found| {
+            let url = trim(found.as_str());
+            let start = char_of(found.start());
+            let range = start..start + url.chars().count();
+            range.contains(&column).then(|| (range, url.to_owned()))
+        })
+    }
+
+    #[test]
+    fn url_at_matches_the_plain_scan_on_every_column() {
+        let line = "é https://a.b/x. ü http://c.d/(p) ⟨https://e.f⟩ end";
+        for column in 0..line.chars().count() + 2 {
+            assert_eq!(url_at(line, column), url_at_slow(line, column), "{column}");
+        }
+    }
+
+    #[test]
+    fn url_at_finds_the_last_of_many_links() {
+        let line: String = (0..20_000).map(|n| format!("https://x.y/{n} ")).collect();
+        let last = "https://x.y/19999";
+        let start = line.chars().count() - last.len() - 1;
+        assert_eq!(
+            url_at(&line, start),
+            Some((start..start + last.len(), last.to_owned()))
+        );
+        assert_eq!(url_at(&line, start + last.len()), None);
     }
 
     #[test]

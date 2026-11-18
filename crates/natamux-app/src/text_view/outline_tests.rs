@@ -183,3 +183,26 @@ fn a_language_with_no_query_has_no_items() {
     let lang = lang_for("deploy.sh").unwrap();
     assert!(item_rows(lang, "echo hi\n").is_empty());
 }
+
+#[test]
+fn rows_count_rows_and_chars_in_one_pass() {
+    let text = "\u{e9}; fn a() {}\nfn b() {}";
+    let item = |range: Range<usize>| OutlineItem {
+        depth: 0,
+        text: "fn".into(),
+        selection: range.clone(),
+        source: range.clone(),
+        range,
+        body: None,
+        names: Vec::new(),
+    };
+    let items = [item(4..8), item(5..8), item(14..16)];
+    let got = rows(&items, text);
+    assert_eq!((got[0].row, got[0].column), (0, 3));
+    assert_eq!((got[1].row, got[1].column), (0, 4));
+    assert_eq!((got[2].row, got[2].column), (1, 0));
+    let reversed = [items[2].clone(), items[0].clone()];
+    let back = rows(&reversed, text);
+    assert_eq!((back[0].row, back[0].column), (1, 0));
+    assert_eq!((back[1].row, back[1].column), (0, 3));
+}

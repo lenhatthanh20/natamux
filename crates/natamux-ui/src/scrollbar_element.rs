@@ -264,9 +264,11 @@ impl Element for BarElement {
             .collect();
         let area = window.insert_hitbox(bounds, HitboxBehavior::Normal);
         let still = cx.reduce_motion();
-        let (sight, animate) = self.host.update(cx, |host, cx| {
-            host.feed(Input::Drawn { moved }, cx);
-            host.model.frame(Instant::now(), still)
+        let (sight, animate) = see(&layout, || {
+            self.host.update(cx, |host, cx| {
+                host.feed(Input::Drawn { moved }, cx);
+                host.model.frame(Instant::now(), still)
+            })
         });
         if animate {
             window.request_animation_frame();
@@ -319,6 +321,20 @@ impl Element for BarElement {
             self.listen(phase, window);
         });
     }
+}
+
+/// How a frame with `layout` sees the bar, and whether it asks for the next frame. `feed` gives
+/// the state the frame and reads it. With nothing to scroll the state is not fed: no fade, no
+/// wait, no animation frames.
+fn see(layout: &Layout, feed: impl FnOnce() -> (Sight, bool)) -> (Sight, bool) {
+    if layout.pieces.is_empty() {
+        let hidden = Sight {
+            drawn: false,
+            alpha: None,
+        };
+        return (hidden, false);
+    }
+    feed()
 }
 
 impl BarElement {
@@ -416,4 +432,56 @@ fn paint_piece(
         Hsla::transparent_black(),
         BorderStyle::default(),
     ));
+}
+
+#[cfg(test)]
+mod tests {
+    use std::cell::Cell;
+
+    use gpui::point;
+
+    use super::*;
+    use crate::scrollbar::{ScrollAxes, ScrollbarShow};
+
+    /// A 200 x 100 column with an `Auto` bar whose content scrolls `max` px.
+    fn column(max: f32) -> Layout {
+        Layout::of(
+            Bounds::new(point(px(0.), px(0.)), size(px(200.), px(100.))),
+            Scrollbars::new(ScrollAxes::Vertical).lanes,
+            point(px(0.), px(max)),
+            size(px(200.), px(100.)),
+            point(px(0.), px(0.)),
+        )
+    }
+
+    #[test]
+    fn a_fitting_column_asks_for_no_animation_frame() {
+        let now = Instant::now();
+        let fed = Cell::new(0);
+        let mut model = Model::new(ScrollbarShow::Auto);
+
+        // Content that fits: no bar, so no fade, no wait to hide and no next frame.
+        let (sight, animate) = see(&column(0.), || {
+            fed.set(fed.get() + 1);
+            model.apply(Input::Drawn { moved: true }, now);
+            model.frame(now, false)
+        });
+        assert_eq!(fed.get(), 0);
+        assert!(!animate);
+        assert!(!sight.drawn);
+        assert!(!model.waiting);
+        assert_eq!(model.round, 0);
+
+        // Content that overflows: the same first frame fades the bar in and starts the wait.
+        let (sight, animate) = see(&column(324.), || {
+            fed.set(fed.get() + 1);
+            model.apply(Input::Drawn { moved: true }, now);
+            model.frame(now, false)
+        });
+        assert_eq!(fed.get(), 1);
+        assert!(animate);
+        assert!(sight.drawn);
+        assert!(model.waiting);
+        assert_eq!(model.round, 1);
+    }
 }

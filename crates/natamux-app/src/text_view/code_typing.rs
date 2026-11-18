@@ -128,7 +128,12 @@ impl TextInput {
         let closer = typing.closer(self.model.text(), at, c, scope);
         let lang = self.code.as_ref().and_then(|code| code.lang);
         let tag = match lang {
-            Some(lang) if c == '>' && typing.jsx && closer.is_none() => {
+            Some(lang)
+                if c == '>'
+                    && typing.jsx
+                    && closer.is_none()
+                    && !self.model.text()[..at].ends_with(['=', '-']) =>
+            {
                 let mut typed = self.model.text().to_owned();
                 typed.insert(at, c);
                 jsx_closing_tag(lang, &typed, at + 1)

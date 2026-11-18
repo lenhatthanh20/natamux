@@ -423,6 +423,8 @@ mod text_view {
     #[cfg(test)]
     mod code_mouse_tests;
     mod code_paint;
+    #[cfg(test)]
+    mod code_parse_tests;
     mod code_rules;
     mod code_runs;
     mod code_sticky;

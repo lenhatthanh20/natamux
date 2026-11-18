@@ -31,7 +31,7 @@ use super::code_runs::styled_runs;
 use super::code_view::{Code, CodeView, brackets_around};
 use super::element::Layout;
 use super::highlight::{Highlights, PARSE_BUDGET, Syntax};
-use super::outline::outline;
+use super::outline::{outline, rows};
 use super::text_box::TextBox;
 use super::text_input::TextInput;
 use crate::files::outline_rules::OutlineRow;
@@ -753,19 +753,7 @@ impl DiffSide {
             return Vec::new();
         };
         let text = &*source.text;
-        outline(lang, tree, text)
-            .iter()
-            .map(|item| {
-                let start = item.range.start;
-                let line_start = text[..start].rfind('\n').map_or(0, |at| at + 1);
-                OutlineRow {
-                    text: item.text.clone(),
-                    depth: item.depth,
-                    row: text[..start].matches('\n').count() as u32,
-                    column: (start - line_start) as u32,
-                }
-            })
-            .collect()
+        rows(&outline(lang, tree, text), text)
     }
 
     /// For the mouse tests: the side's left edge and the middle of shown row `row` in window

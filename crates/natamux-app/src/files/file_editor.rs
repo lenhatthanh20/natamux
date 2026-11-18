@@ -12,8 +12,8 @@ use ui::{Tooltip, prelude::*};
 
 use super::draft_store::DraftStore;
 use super::file_drafts::{
-    FileDraft, body_notice, can_save, close_question, edit_draft, is_stale, keep_mine,
-    revert_question,
+    FileDraft, body_notice, can_save, close_question, edit_draft, editor_text, is_crlf, is_stale,
+    keep_mine, revert_question,
 };
 use super::file_editor_body::{Edited, FileEditorBody};
 use super::file_icon_view::file_icon;
@@ -42,6 +42,8 @@ pub struct FileEditor {
     pub(super) store: Entity<DraftStore>,
     /// The last good read of the file; a failed refresh keeps it.
     pub(super) disk: Option<WorkspaceFile>,
+    /// The last read had CRLF line breaks only: a save writes them back.
+    pub(super) crlf: bool,
     /// The error of the first read, shown while there is no text.
     error: Option<String>,
     pub(super) body: Option<Entity<FileEditorBody>>,
@@ -87,6 +89,7 @@ impl FileEditor {
             path,
             store,
             disk: None,
+            crlf: false,
             error: None,
             body: None,
             find: None,
@@ -144,7 +147,12 @@ impl FileEditor {
     }
 
     pub(super) fn draft(&self, cx: &App) -> Option<FileDraft> {
-        self.store.read(cx).file(&self.task_id, &self.path).cloned()
+        self.draft_ref(cx).cloned()
+    }
+
+    /// The draft without a copy of its text, for what only looks at it.
+    pub(super) fn draft_ref<'a>(&self, cx: &'a App) -> Option<&'a FileDraft> {
+        self.store.read(cx).file(&self.task_id, &self.path)
     }
 
     /// Reads the file again; a new text goes into the editor when there is no draft.
@@ -173,9 +181,10 @@ impl FileEditor {
         let shown = file.text.clone().filter(|_| notice_of(&file).is_none());
         match shown {
             // A draft stays; the banner shows when the version moved.
-            Some(text) if self.draft(cx).is_none() => {
+            Some(text) if self.draft_ref(cx).is_none() => {
+                let text = editor_text(&text);
                 if let Some(body) = &self.body
-                    && body.read(cx).text(cx) != text
+                    && body.read(cx).text(cx).as_str() != &*text
                 {
                     body.update(cx, |body, cx| body.set_disk_text(&text, cx));
                     self.blame.update(cx, |blame, cx| blame.refresh(cx));
@@ -184,6 +193,7 @@ impl FileEditor {
             Some(_) => {}
             None => self.body = None,
         }
+        self.crlf = file.text.as_deref().is_some_and(is_crlf);
         self.disk = Some(file);
         cx.notify();
     }
@@ -224,9 +234,9 @@ impl FileEditor {
             return;
         };
         let draft = edit_draft(
-            disk.text.as_deref().unwrap_or_default(),
+            &editor_text(disk.text.as_deref().unwrap_or_default()),
             &disk.version,
-            self.draft(cx).as_ref(),
+            self.draft_ref(cx),
             text,
         );
         let (task, path) = (self.task_id.clone(), self.path.clone());
@@ -236,7 +246,7 @@ impl FileEditor {
 
     pub(super) fn stale_now(&self, cx: &App) -> bool {
         is_stale(
-            self.draft(cx).as_ref(),
+            self.draft_ref(cx),
             self.disk.as_ref().map(|file| file.version.as_str()),
         )
     }
@@ -252,7 +262,7 @@ impl FileEditor {
         self.set_draft(None, cx);
         let text = self.disk.as_ref().and_then(|file| file.text.clone());
         if let (Some(text), Some(body)) = (text, &self.body) {
-            body.update(cx, |body, cx| body.set_disk_text(&text, cx));
+            body.update(cx, |body, cx| body.set_disk_text(&editor_text(&text), cx));
         }
     }
 
@@ -339,9 +349,8 @@ impl Render for FileEditor {
 
 impl FileEditor {
     fn render_header(&self, stale: bool, cx: &mut Context<Self>) -> impl IntoElement {
-        let draft = self.draft(cx);
-        let has_draft = draft.is_some();
-        let can = can_save(draft.as_ref(), stale, self.saving);
+        let has_draft = self.draft_ref(cx).is_some();
+        let can = can_save(self.draft_ref(cx), stale, self.saving);
         let colors = cx.theme().colors();
         let dashboard = self.dashboard.clone();
         h_flex()

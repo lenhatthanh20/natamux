@@ -88,6 +88,15 @@ impl BlameMarks {
         }
     }
 
+    /// The editors are gone (the body shows a notice or an image): let go of them.
+    pub fn detach(&mut self) {
+        if !self.sides.is_empty() {
+            // Drops answers still on their way.
+            self.asked += 1;
+            self.sides.clear();
+        }
+    }
+
     /// A newer text of the same editors.
     pub fn refresh(&mut self, cx: &mut Context<Self>) {
         if self.on {
@@ -219,4 +228,44 @@ fn fill(
         };
     }
     menu
+}
+
+#[cfg(test)]
+mod tests {
+    use gpui::TestAppContext;
+
+    use super::*;
+
+    /// Only its life counts: the test watches when the `Rc` is dropped.
+    #[allow(dead_code)]
+    struct Probe(Rc<()>);
+
+    impl BlameTarget for Probe {
+        fn lines(&self, _: &App) -> u32 {
+            0
+        }
+        fn set_menu(&self, _: RowMenu, _: &mut App) {}
+        fn set_labels(&self, _: Vec<(u32, String)>, _: &mut App) {}
+        fn clear_labels(&self, _: &mut App) {}
+    }
+
+    #[gpui::test]
+    fn detaching_lets_go_of_the_editors(cx: &mut TestAppContext) {
+        let token = Rc::new(());
+        let weak = Rc::downgrade(&token);
+        let marks = cx.new(|_| BlameMarks::new(None));
+        let target: Rc<dyn BlameTarget> = Rc::new(Probe(token));
+        marks.update(cx, |marks, cx| {
+            let source = Arc::new(Source::FakeDaemon);
+            marks.attach(
+                source,
+                ("T-1", "a.txt"),
+                vec![(target, ImageSide::Modified)],
+                cx,
+            );
+        });
+        assert!(weak.upgrade().is_some());
+        marks.update(cx, |marks, _| marks.detach());
+        assert!(weak.upgrade().is_none());
+    }
 }

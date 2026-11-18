@@ -143,7 +143,7 @@ pub struct TextInput {
     pub(super) model: TextModel,
     pub(super) mode: Mode,
     placeholder: SharedString,
-    masked: bool,
+    pub(super) masked: bool,
     pub(super) read_only: bool,
     style: TextStyleRefinement,
     pub(super) blink: Blink,
@@ -460,6 +460,16 @@ impl TextInput {
             (SharedString::from(labels.insert(text)), false)
         } else {
             (SharedString::from(text.to_string()), false)
+        }
+    }
+
+    /// The text `display` gives, borrowed when it is the text itself.
+    pub(super) fn display_text(&self) -> std::borrow::Cow<'_, str> {
+        let text = self.model.text();
+        if text.is_empty() || self.masked || self.labels().is_some() {
+            std::borrow::Cow::Owned(self.display().0.to_string())
+        } else {
+            std::borrow::Cow::Borrowed(text)
         }
     }
 

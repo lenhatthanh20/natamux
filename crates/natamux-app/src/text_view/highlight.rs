@@ -62,6 +62,7 @@ impl Highlights {
             .spawn(async move {
                 for lang in langs {
                     Self::of(lang).ok();
+                    super::outline::warm(lang);
                 }
             })
             .detach();

@@ -94,6 +94,11 @@ fn a_path_finds_its_language_as_the_old_registry_did() {
     assert_eq!(name("a.jsonc"), Some("JSONC"));
     assert_eq!(name("notes.txt"), None);
     assert_eq!(name("Makefile"), None);
+    assert_eq!(name("tsconfig.json"), Some("JSONC"));
+    assert_eq!(name("a/b/flake.lock"), Some("JSON"));
+    assert_eq!(name("pixi.lock"), Some("YAML"));
+    assert_eq!(name("x.tsconfig.json"), Some("JSONC"));
+    assert_eq!(name("Cargo.lock"), None);
 }
 
 #[test]

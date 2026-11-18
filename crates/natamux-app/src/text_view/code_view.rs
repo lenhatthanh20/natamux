@@ -312,7 +312,7 @@ impl TextInput {
         }
         let text = self.model.text();
         if let Some(syntax) = code.syntax.as_mut()
-            && (*code.parsed != *text || syntax.tree().is_none())
+            && (*code.parsed != *text || (syntax.tree().is_none() && code._parse.is_none()))
         {
             syntax.edit(&input_edit(&code.parsed, text));
             code.parsed = Arc::from(text);

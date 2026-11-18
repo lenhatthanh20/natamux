@@ -1,7 +1,7 @@
 //! The names of the app's SVG icons. Only icons the app or the kit draws are here; each has a file
 //! `assets/icons/<snake_case name>.svg` in the app (the app's asset test checks every name).
 
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 macro_rules! icon_names {
     ($($name:ident),* $(,)?) => {
@@ -120,6 +120,20 @@ impl IconName {
     pub fn path(&self) -> Arc<str> {
         format!("icons/{}.svg", snake_case(self.camel_name())).into()
     }
+
+    /// The asset path as a cheap clone: built once per icon.
+    pub(crate) fn shared_path(self) -> gpui::SharedString {
+        static PATHS: OnceLock<Vec<gpui::SharedString>> = OnceLock::new();
+        let all = PATHS.get_or_init(|| {
+            IconName::ALL
+                .iter()
+                .map(|name| gpui::SharedString::from(name.path()))
+                .collect()
+        });
+        all.get(self as usize)
+            .cloned()
+            .unwrap_or_else(|| gpui::SharedString::from(self.path()))
+    }
 }
 
 /// `TerminalAlt` -> `terminal_alt`. The names have no digits or runs of capitals.
@@ -137,6 +151,13 @@ fn snake_case(camel: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shared_path_equals_path_for_every_name() {
+        for name in IconName::ALL {
+            assert_eq!(&*name.shared_path(), &*name.path());
+        }
+    }
 
     #[test]
     fn paths_are_snake_case_svg_files() {

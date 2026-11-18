@@ -713,6 +713,58 @@ fn a_terminal_pane_keeps_the_wheel(cx: &mut TestAppContext) {
     assert_eq!(wheels.get(), 0, "the wheel went on past the pane");
 }
 
+/// A terminal in a box that hides it while `hidden`: a pane scrolled out of the grid.
+struct ClipHost {
+    terminal: Entity<RemoteTerminal>,
+    hidden: bool,
+}
+
+impl Render for ClipHost {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let height = if self.hidden { px(0.) } else { PANE.height };
+        div().w(PANE.width).h(height).overflow_hidden().child(
+            div()
+                .w(PANE.width)
+                .h(PANE.height)
+                .child(terminal_screen(&self.terminal, false, cx)),
+        )
+    }
+}
+
+// P-term-4: a pane fully outside the content mask skips the cell layout, and lays out again
+// once shown.
+#[gpui::test]
+fn a_pane_outside_the_scroll_box_lays_out_nothing(cx: &mut TestAppContext) {
+    use crate::terminals::term::element::layouts;
+
+    test_views::init(cx);
+    fake_daemon::shared().set_screen(TASK, "1", String::new());
+    let source = Arc::new(Source::FakeDaemon);
+    let (host, cx) = cx.add_window_view(move |window, cx| {
+        let target = Target {
+            task_id: TASK.into(),
+            terminal: "1".into(),
+        };
+        let terminal = cx.new(|cx| RemoteTerminal::new(source, target, window, cx));
+        ClipHost {
+            terminal,
+            hidden: true,
+        }
+    });
+    cx.update(|window, _| window.activate_window());
+    settle(cx);
+    let terminal = host.read_with(cx, |host, _| host.terminal.clone());
+    let before = layouts();
+    feed(&terminal, "hidden output\r\n", cx);
+    assert_eq!(layouts(), before, "a pane out of sight laid out its cells");
+    host.update(cx, |host, cx| {
+        host.hidden = false;
+        cx.notify();
+    });
+    feed(&terminal, "shown output\r\n", cx);
+    assert!(layouts() > before, "a shown pane laid out nothing");
+}
+
 // T-S1: selection by click, drag, double and triple click, Shift+click, a right click; copy
 // keeps it, typing clears it and scrolls to the bottom.
 fn selection_rows(cx: &mut TestAppContext) -> Vec<Value> {

@@ -31,6 +31,7 @@ pub fn find_ranges(
     };
     let found = RegexBuilder::new(&pattern)
         .case_insensitive(!match_case)
+        .multi_line(true)
         .build()
         .map_err(|_| BadRegex)?;
     Ok(found
@@ -127,6 +128,12 @@ mod tests {
         assert_eq!(count_label("(", None, true), "Invalid regex");
         // A plain term with the same text is fine.
         assert_eq!(found("f(x)", "(", false, false), [1..2]);
+    }
+
+    #[test]
+    fn a_caret_matches_at_each_line_start() {
+        assert_eq!(found("a\na", "^a", false, true), [0..1, 2..3]);
+        assert_eq!(found("a;\nb;", ";$", false, true), [1..2, 4..5]);
     }
 
     #[test]
