@@ -3,7 +3,7 @@
 //! the counts in the stage headers, the Next column and the links between the cells. `now_ms` is
 //! passed in, so no rule reads the clock.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use natamux_proto::stages::capabilities::stage_name;
 use natamux_proto::stages::position::{step_index, step_to_run};
@@ -76,30 +76,32 @@ pub fn board_sections(
         }
         let loaded = pipelines.get(&repo.id);
         let pipeline: &[Step] = loaded.map_or(&[], Vec::as_slice);
-        let mut keys: Vec<String> = Vec::new();
-        for task in &own {
+        // One pass: each task is keyed once, and the groups keep the order the keys first show.
+        let mut at: HashMap<String, usize> = HashMap::new();
+        let mut groups: Vec<(String, Vec<&Task>)> = Vec::new();
+        for task in own {
             let key = steps_key(task);
-            if !keys.contains(&key) {
-                keys.push(key);
+            let index = *at.entry(key.clone()).or_insert_with(|| {
+                groups.push((key, Vec::new()));
+                groups.len() - 1
+            });
+            if let Some((_, members)) = groups.get_mut(index) {
+                members.push(task);
             }
         }
         // New tasks get the stages that are on, so tasks made since the last change carry these.
         let current = current_key(pipeline);
-        keys.sort_by_key(|key| *key != current);
-        for (index, key) in keys.iter().enumerate() {
-            let group: Vec<Task> = own
-                .iter()
-                .filter(|task| steps_key(task) == *key)
-                .map(|task| (*task).clone())
-                .collect();
-            let Some(first) = group.first() else {
+        groups.sort_by_key(|(key, _)| *key != current);
+        for (index, (key, members)) in groups.iter().enumerate() {
+            let Some(first) = members.first() else {
                 continue;
             };
             let steps = resolve_steps(&steps_of(first), pipeline);
-            let (done, open): (Vec<Task>, Vec<Task>) = group
-                .into_iter()
+            let (done, open): (Vec<Task>, Vec<Task>) = members
+                .iter()
+                .map(|task| (*task).clone())
                 .partition(|task| task.state == TaskState::Done);
-            let title = if index == 0 && (loaded.is_none() || *key == current) {
+            let title = if index == 0 && (loaded.is_none() || key == &current) {
                 repo.name.clone()
             } else {
                 format!("{}, earlier pipeline", repo.name)

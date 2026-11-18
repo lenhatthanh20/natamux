@@ -2,6 +2,9 @@
 //! and where it stands against `origin`.
 
 use std::collections::HashSet;
+use std::fs;
+use std::hash::{DefaultHasher, Hash, Hasher};
+use std::io::ErrorKind;
 use std::path::Path;
 use std::time::Duration;
 
@@ -9,7 +12,7 @@ use natamux_core::js::js_trim;
 use natamux_proto::workspaces::changes::MAX_GRAPH_COMMITS;
 use natamux_proto::workspaces::workspace::{GitGraph, GraphCommit, PushStatus};
 
-use crate::exec::{GitError, checked_ref, current_branch, git};
+use crate::exec::{GitError, checked_ref, current_branch, git, git_dirs};
 
 /// `FIELD`: the separator of the fields of one log record.
 pub const FIELD: &str = "\u{1f}";
@@ -239,6 +242,70 @@ pub fn read_git_graph(
         commits,
         truncated,
     })
+}
+
+/// A hash of what `read_git_graph` reads besides the commits, which never change: the HEAD of
+/// the worktree, every ref (loose and packed), the files that name the remotes, and the shallow
+/// list. The same hash gives the same graph, so a caller may keep a graph without running git.
+/// None when a file cannot be read or the refs are kept in a way this does not read: ask git.
+pub fn graph_inputs(worktree: &Path, base: Option<&str>) -> Option<u64> {
+    let (git_dir, common) = git_dirs(worktree)?;
+    // The reftable ref store keeps refs in binary tables that change in place.
+    if common.join("reftable").exists() {
+        return None;
+    }
+    let mut hasher = DefaultHasher::new();
+    base.hash(&mut hasher);
+    git_dir.hash(&mut hasher);
+    fs::read(git_dir.join("HEAD")).ok()?.hash(&mut hasher);
+    for file in ["packed-refs", "config", "shallow", "info/grafts"] {
+        read_if_there(&common.join(file))?.hash(&mut hasher);
+    }
+    read_if_there(&git_dir.join("config.worktree"))?.hash(&mut hasher);
+    for folder in ["refs", "remotes", "branches"] {
+        hash_folder(&common.join(folder), &mut hasher)?;
+    }
+    // Refs of one worktree only, such as `refs/bisect`.
+    if git_dir != common {
+        hash_folder(&git_dir.join("refs"), &mut hasher)?;
+    }
+    Some(hasher.finish())
+}
+
+// Some(None) for a file that is not there; None for one that cannot be read.
+fn read_if_there(path: &Path) -> Option<Option<Vec<u8>>> {
+    match fs::read(path) {
+        Ok(bytes) => Some(Some(bytes)),
+        Err(error) if error.kind() == ErrorKind::NotFound => Some(None),
+        Err(_) => None,
+    }
+}
+
+// Every file under `folder`, by name and content, in a fixed order.
+fn hash_folder(folder: &Path, hasher: &mut DefaultHasher) -> Option<()> {
+    let entries = match fs::read_dir(folder) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == ErrorKind::NotFound => {
+            0u8.hash(hasher);
+            return Some(());
+        }
+        Err(_) => return None,
+    };
+    let mut entries = entries.collect::<Result<Vec<_>, _>>().ok()?;
+    entries.sort_by_key(|entry| entry.file_name());
+    1u8.hash(hasher);
+    for entry in entries {
+        entry.file_name().hash(hasher);
+        if entry.file_type().ok()?.is_dir() {
+            2u8.hash(hasher);
+            hash_folder(&entry.path(), hasher)?;
+        } else {
+            3u8.hash(hasher);
+            fs::read(entry.path()).ok()?.hash(hasher);
+        }
+    }
+    4u8.hash(hasher);
+    Some(())
 }
 
 /// `MAX_GRAPH_COMMITS`, for callers that take the default limit.

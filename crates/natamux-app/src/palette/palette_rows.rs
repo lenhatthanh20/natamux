@@ -9,7 +9,7 @@ use natamux_proto::tasks::task::Task;
 use super::fuzzy::{Range, fuzzy_match};
 use super::task_match::ranked_tasks;
 use crate::sidebar::workspace_groups::DEFAULT_REPO_ID;
-use crate::tasks::task_attention::{is_quiet, needs_me_tasks};
+use crate::tasks::task_attention::is_quiet;
 use crate::tasks::task_rules::needs_me;
 use crate::tasks::task_sort::task_number;
 use crate::terminals::pane_rules::MAX_PANES;
@@ -213,21 +213,24 @@ fn tasks_by_id(input: &AllInput, query: &str) -> Vec<PaletteSection> {
 }
 
 fn empty_query(input: &AllInput) -> Vec<PaletteSection> {
-    let in_scope: Vec<Task> = scoped(input.tasks.iter(), input.scope, input.now_ms)
+    // Same order as `needs_me_tasks`, but on references: only the five shown are cloned.
+    let mut waiting: Vec<&Task> = scoped(input.tasks.iter(), input.scope, input.now_ms)
         .into_iter()
-        .cloned()
+        .filter(|task| needs_me(task.state) || is_quiet(task, input.now_ms))
         .collect();
-    let waiting: Vec<Task> = needs_me_tasks(&in_scope, input.now_ms)
-        .into_iter()
-        .take(MAX_NEEDS_YOU)
-        .collect();
+    waiting.sort_by(|a, b| {
+        a.updated_at
+            .cmp(&b.updated_at)
+            .then_with(|| a.id.cmp(&b.id))
+    });
+    waiting.truncate(MAX_NEEDS_YOU);
     let waiting_ids: BTreeSet<&str> = waiting.iter().map(|task| task.id.as_str()).collect();
     let mut sections = Vec::new();
     if !waiting.is_empty() {
         sections.push(PaletteSection {
             id: "needs-you",
             title: Some("Needs you"),
-            rows: waiting.iter().map(task_row).collect(),
+            rows: waiting.iter().copied().map(task_row).collect(),
         });
     }
     if input.scope.is_none() {

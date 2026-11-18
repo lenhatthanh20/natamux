@@ -210,6 +210,27 @@ fn keys_the_sets_by_the_stages_a_task_carries() {
 }
 
 #[test]
+fn groups_many_tasks_by_their_stages_in_the_order_the_sets_first_show() {
+    let with = |id: &str, extra: &str| {
+        let mut made = task(id, "x");
+        made.stages.push(json!(extra));
+        made
+    };
+    let tasks = [
+        with("a", "plan"),
+        with("b", "release"),
+        with("c", "plan"),
+        with("d", "release"),
+        with("e", "plan"),
+    ];
+    let sections = board_sections(&tasks, &[], &BTreeMap::new(), NOW);
+    assert_eq!(sections.len(), 2);
+    assert_eq!(ids(&sections[0].open), ["a", "c", "e"]);
+    assert_eq!(ids(&sections[1].open), ["b", "d"]);
+    assert_eq!(sections[1].title, "default, earlier pipeline");
+}
+
+#[test]
 fn labels_the_next_button_by_state() {
     assert_eq!(next_label(TaskState::NeedsInput), Some("Answer"));
     assert_eq!(next_label(TaskState::Review), Some("Review"));

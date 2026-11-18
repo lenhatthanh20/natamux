@@ -52,7 +52,7 @@ impl ShellPanes {
         };
         let unconfirmed = {
             let app: &App = cx;
-            unconfirmed_shells(&list, visible, |name| {
+            unconfirmed_shells(list, visible, |name| {
                 TerminalCache::cached(&terminal_key(task_id, name), app).is_some()
             })
         };

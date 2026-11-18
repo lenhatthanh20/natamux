@@ -192,6 +192,17 @@ fn keeps_an_open_subtask_of_a_finished_parent_at_the_top_so_it_never_hides() {
 }
 
 #[test]
+fn a_held_parent_that_finished_still_holds_its_subtasks() {
+    let held = Task {
+        state: TaskState::Done,
+        ..parent()
+    };
+    let result = workspace_groups_of(&repos(), &[&held, &first()], &[], Some("T-0001"));
+    assert_eq!(ids(&result.groups[0].open), ["T-0001"]);
+    assert_eq!(result.children["T-0001"], [first()]);
+}
+
+#[test]
 fn nests_one_level_only_and_never_under_itself() {
     let grandchild = make_task(json!({"id": "T-0004", "parentId": "T-0002"}));
     let own = make_task(json!({"id": "T-0005", "parentId": "T-0005"}));

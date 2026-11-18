@@ -97,6 +97,14 @@ class Check(unittest.TestCase):
         finally:
             perf.HIGHER_IS_BETTER.discard("gated_ms")
 
+    def test_a_reported_number_shows_and_never_fails(self):
+        rows = perf.check({"gated_ms": [1], "shown_ms": [1]}, {})
+        self.assertEqual(failed(rows), [])
+        self.assertEqual(result(rows, "term_draws_per_wake"), "no data")
+        rows = perf.check({"gated_ms": [1], "shown_ms": [1], "term_draws_per_wake": [900]}, {})
+        self.assertEqual(failed(rows), [])
+        self.assertEqual(result(rows, "term_draws_per_wake"), "ok")
+
     def test_a_missing_gated_number_fails(self):
         rows = perf.check({"shown_ms": [1]}, {})
         self.assertEqual(failed(rows), ["gated_ms"])

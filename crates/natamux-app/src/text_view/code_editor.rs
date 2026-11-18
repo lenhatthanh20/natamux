@@ -25,6 +25,8 @@ use crate::text::model::Splice;
 pub(super) struct Labels {
     /// Each label at the start of its row, in text order.
     spots: Vec<(usize, String)>,
+    /// `sums[i]` is the length of the first `i` labels together, so an offset maps by a search.
+    sums: Vec<usize>,
     /// The text the spots are of; kept only while there are labels.
     text: String,
 }
@@ -41,6 +43,7 @@ impl Labels {
             .filter_map(|(row, label)| Some((*starts.get(row as usize)?, label)))
             .collect();
         self.spots.sort_by_key(|(at, _)| *at);
+        self.rebuild_sums();
         self.text = if self.spots.is_empty() {
             String::new()
         } else {
@@ -74,6 +77,21 @@ impl Labels {
         self.text = text.to_owned();
     }
 
+    fn rebuild_sums(&mut self) {
+        self.sums.clear();
+        self.sums.push(0);
+        let mut total = 0;
+        for (_, label) in &self.spots {
+            total += label.len();
+            self.sums.push(total);
+        }
+    }
+
+    /// The length of the first `count` labels.
+    fn before(&self, count: usize) -> usize {
+        self.sums.get(count).copied().unwrap_or(0)
+    }
+
     /// Moves the labels with one replace, as right-bias anchors: text put in at a label goes
     /// before it, and a label in a removed part goes to the end of what came in its place.
     fn shift(&mut self, edit: &Splice) {
@@ -88,7 +106,7 @@ impl Labels {
     }
 
     pub fn total(&self) -> usize {
-        self.spots.iter().map(|(_, label)| label.len()).sum()
+        self.before(self.spots.len())
     }
 
     /// `text` with the labels in.
@@ -106,28 +124,31 @@ impl Labels {
 
     /// The offset in the shown text of `at`: a label at a row start comes before the caret there.
     pub fn shown(&self, at: usize) -> usize {
-        at + self
-            .spots
-            .iter()
-            .take_while(|(spot, _)| *spot <= at)
-            .map(|(_, label)| label.len())
-            .sum::<usize>()
+        // The spots are in text order, so those at or before `at` are a prefix.
+        at + self.before(self.spots.partition_point(|(spot, _)| *spot <= at))
     }
 
     /// The offset in the text of `shown`; one inside a label is its row's start.
     pub fn text_at(&self, shown: usize) -> usize {
-        let mut extra = 0;
-        for (spot, label) in &self.spots {
-            let start = spot + extra;
-            if shown < start {
-                break;
+        // Where each label starts in the shown text is in order too.
+        let (mut low, mut high) = (0, self.spots.len());
+        while low < high {
+            let mid = low + (high - low) / 2;
+            if self.spots[mid].0 + self.before(mid) <= shown {
+                low = mid + 1;
+            } else {
+                high = mid;
             }
-            if shown < start + label.len() {
-                return *spot;
-            }
-            extra += label.len();
         }
-        shown - extra
+        let count = low;
+        let inside = count
+            .checked_sub(1)
+            .and_then(|at| self.spots.get(at).map(|spot| (at, spot)))
+            .filter(|(at, (spot, label))| shown < spot + self.before(*at) + label.len());
+        match inside {
+            Some((_, (spot, _))) => *spot,
+            None => shown - self.before(count),
+        }
     }
 
     /// `runs` of the text with a `label` run in at each label.

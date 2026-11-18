@@ -422,13 +422,13 @@ fn daemon_benchmark() {
     }
     // First, while no other thread allocates.
     let (serialize_ms, allocations, allocated) = serialize();
+    // The idle shells come first: memory the busy shells freed stays in the process RSS.
     let (rss_mib, per_shell_kib) = idle_shells();
+    // Before the other benches, for the same reason. The growth is the number to read.
+    let (busy_mib, busy_grown_mib) = loads::busy_shells();
     let (echo_p50, echo_p95) = echo_while_flooding();
     let (agent_p50, agent_p95) = echo_while_agents_print();
     let snapshot_ms = snapshots::full_history_snapshot();
-    // Before `opens`: the memory its 30 full screens took may not go back to
-    // the system, and this number is the RSS of the whole process.
-    let busy_mib = loads::busy_shells();
     let opens = opens::measure();
     let ((full_kib, full_ms), (tail_kib, tail_ms)) = snapshots::catch_up();
     let (init_500, init_500_warm) = loads::task_init(500);
@@ -450,7 +450,7 @@ fn daemon_benchmark() {
          | save of 30 screens at shutdown | {} ms |\n\
          | first output of a new login shell, p50 | {} |\n\
          | snapshot at 80 cols, full / catch-up | {full_kib} / {tail_kib} KiB, {full_ms} / {tail_ms} ms |\n\
-         | RSS after {busy} shells printed 20 MB each | {busy_mib} MiB |\n\
+         | RSS after {busy} shells printed 20 MB each | {busy_mib} MiB (grew {busy_grown_mib}) |\n\
          | `TaskSync::init`, 500 / 2,000 tasks, cold / warm | {init_500} / {init_500_warm}, {init_2000} / {init_2000_warm} ms |\n\
          | hook with {agents} agents at once, p50 / p95 | {} / {} ms |\n\
          | hook from one thread, p50 / p95 | {} / {} ms |\n\
@@ -482,6 +482,7 @@ fn daemon_benchmark() {
         "serialize_80_full_ms": full_ms,
         "serialize_80_catch_up_ms": tail_ms,
         "daemon_busy_rss_mb": busy_mib,
+        "daemon_busy_grown_mb": busy_grown_mib,
         "task_init_500_ms": init_500,
         "task_init_500_warm_ms": init_500_warm,
         "task_init_2000_ms": init_2000,

@@ -1,11 +1,15 @@
 //! The list sections of the Details tab: Usage (`UsageSection.tsx`), Subtasks (`Subtasks.tsx`),
 //! Tries (`CompareTries.tsx`), Details and Activity (`Timeline.tsx`).
 
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use gpui::{AnyElement, FontWeight};
+use natamux_proto::events::task_event::StoredEvent;
 use natamux_proto::tasks::task::Task;
 use ui::{ButtonLike, Tooltip, prelude::*};
 
-use super::DetailsPanel;
+use super::{DetailsPanel, Shown};
 use crate::app::clock::now_ms;
 use crate::components::button_style::{action_button, quiet_button};
 use crate::components::chips::StateChip;
@@ -14,7 +18,9 @@ use crate::components::form::input_box;
 use crate::tasks::details_commands::{OnCommand, PanelCommand};
 use crate::tasks::details_rules::{details_fields, subtasks_aside};
 use crate::tasks::table_rules::pull_request_number;
-use crate::tasks::task_events_rules::{IGNORED_EVENT, NO_ACTIVITY, describe_line, timeline_lines};
+use crate::tasks::task_events_rules::{
+    ActivityLine, IGNORED_EVENT, NO_ACTIVITY, describe_line, timeline_lines,
+};
 use crate::tasks::task_time::{AgeStyle, format_age};
 use crate::tasks::tries_rules::{can_keep, diff_stat_text, tries_of, try_group};
 use crate::tasks::usage_rules::{NO_USAGE, usage_section};
@@ -259,17 +265,20 @@ impl DetailsPanel {
             self.open_of("activity", true, cx),
             self.fold("activity", cx),
         );
-        let events = self.shown.as_ref().and_then(|shown| shown.events.as_ref());
-        let lines = match events {
-            None => return section.child(small("Loading activity.").color(Color::Muted)),
+        let loading = || small("Loading activity.").color(Color::Muted);
+        let Some(shown) = self.shown.as_ref() else {
+            return section.child(loading());
+        };
+        let lines = match &shown.events {
+            None => return section.child(loading()),
             Some(Err(error)) => return section.child(small(error.clone()).color(Color::Error)),
-            Some(Ok(events)) => timeline_lines(events),
+            Some(Ok(events)) => shown.activity_lines(events),
         };
         if lines.is_empty() {
             return section.child(small(NO_ACTIVITY).color(Color::Muted));
         }
         let now = now_ms();
-        section.children(lines.into_iter().map(|line| {
+        section.children(lines.iter().map(|line| {
             let color = if line.accepted {
                 Color::Default
             } else {
@@ -283,7 +292,7 @@ impl DetailsPanel {
                     div()
                         .flex_1()
                         .min_w_0()
-                        .child(small(format!("{}{ignored}", describe_line(&line))).color(color)),
+                        .child(small(format!("{}{ignored}", describe_line(line))).color(color)),
                 )
                 .child(
                     Label::new(format_age(&line.at, now, AgeStyle::Long, 0))
@@ -291,5 +300,23 @@ impl DetailsPanel {
                         .color(Color::Muted),
                 )
         }))
+    }
+}
+
+/// The Activity lines with the `Shown::rev` they were made for.
+pub(super) type KeptLines = RefCell<Option<(u64, Rc<Vec<ActivityLine>>)>>;
+
+impl Shown {
+    /// The Activity lines, made again only when a read changed the events (`rev`): a long log
+    /// has thousands of events, and the panel draws on every tick of its clocks.
+    pub(super) fn activity_lines(&self, events: &[StoredEvent]) -> Rc<Vec<ActivityLine>> {
+        if let Some((rev, lines)) = self.lines.borrow().as_ref()
+            && *rev == self.rev
+        {
+            return Rc::clone(lines);
+        }
+        let lines = Rc::new(timeline_lines(events));
+        *self.lines.borrow_mut() = Some((self.rev, Rc::clone(&lines)));
+        lines
     }
 }

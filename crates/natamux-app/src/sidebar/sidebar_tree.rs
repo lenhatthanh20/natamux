@@ -4,7 +4,7 @@
 // Ported with their tests (spec D11); the stage rules serve the details panel of screen 3.
 #![cfg_attr(not(test), allow(dead_code))]
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use natamux_proto::stages::capabilities::stage_name_of_id;
 pub use natamux_proto::stages::schema::{PathRef, StepRef};
@@ -252,17 +252,25 @@ pub fn subtask_counts(tasks: &[Task]) -> BTreeMap<&str, SubtaskCount> {
 }
 
 /// The filtered tasks plus the parent of each subtask among them, so a match is shown in its place.
-pub fn with_parents(shown: &[Task], all: &[Task]) -> Vec<Task> {
+/// Borrows, and looks parents up by id, so a rebuild stays linear in the number of tasks.
+pub fn with_parents<'a>(shown: &[&'a Task], all: &'a [Task]) -> Vec<&'a Task> {
+    let mut by_id: HashMap<&str, &Task> = HashMap::with_capacity(all.len());
+    for task in all {
+        // The first task with an id wins, as a search from the start would find it.
+        by_id.entry(task.id.as_str()).or_insert(task);
+    }
+    let mut present: HashSet<&str> = shown.iter().map(|task| task.id.as_str()).collect();
     let mut result = shown.to_vec();
     for task in shown {
-        let parent = all
-            .iter()
-            .find(|other| Some(other.id.as_str()) == task.parent_id.as_deref());
+        let parent = task
+            .parent_id
+            .as_deref()
+            .and_then(|id| by_id.get(id).copied());
         if let Some(parent) = parent
             && parent.workspace.is_some()
-            && !result.iter().any(|each| each.id == parent.id)
+            && present.insert(parent.id.as_str())
         {
-            result.push(parent.clone());
+            result.push(parent);
         }
     }
     result

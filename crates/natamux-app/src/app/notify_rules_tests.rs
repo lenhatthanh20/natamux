@@ -372,3 +372,14 @@ fn counts_idle_tasks_not_seen_since_their_turn_ended() {
     ];
     assert_eq!(unread_turn_ends(&tasks, &seen), 1);
 }
+
+#[test]
+fn reads_a_lane_state_like_serde_does() {
+    let lanes = serde_json::json!({
+        "a": "needs-input", "b": "idle", "c": "from-the-future", "d": 7, "e": "done"
+    });
+    for (stage, lane) in lanes.as_object().into_iter().flatten() {
+        let old = serde_json::from_value::<TaskState>(lane.clone()).ok();
+        assert_eq!(lane_state(lane), old, "{stage}");
+    }
+}

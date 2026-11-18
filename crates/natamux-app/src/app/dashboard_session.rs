@@ -176,10 +176,28 @@ impl Dashboard {
         cx.notify();
     }
 
-    /// The notify of the dashboard's own state (filter, sort, selection, open task, view state,
-    /// settings, toasts): views that read it draw again.
+    /// The notify of the dashboard's own state (filter, sort, open task, view state, settings,
+    /// toasts): views that read it draw again.
     pub(super) fn touch_view(&mut self, cx: &mut Context<Self>) {
         self.data.gens.bump(Part::View);
+        cx.notify();
+    }
+
+    /// A key move or a click picked a task: only what shows the selection draws again.
+    pub(super) fn touch_selection(&mut self, cx: &mut Context<Self>) {
+        self.data.gens.bump(Part::Selection);
+        cx.notify();
+    }
+
+    /// A panel edge moved: saved, and only what reads the widths draws again.
+    pub(super) fn update_widths(
+        &mut self,
+        cx: &mut Context<Self>,
+        change: impl FnOnce(&mut ViewState),
+    ) {
+        change(&mut self.view);
+        self.save_view(cx);
+        self.data.gens.bump(Part::Widths);
         cx.notify();
     }
 }

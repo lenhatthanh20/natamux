@@ -12,11 +12,11 @@ use alacritty_terminal::term::TermMode;
 use gpui::{
     Bounds, ClipboardEntry, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable,
     KeyDownEvent, ModifiersChangedEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
-    Pixels, Point, ScrollWheelEvent, Subscription, TouchPhase, anchored, deferred,
+    Pixels, Point, ScrollWheelEvent, Subscription, Task, TouchPhase, anchored, deferred,
 };
 use ui::{ContextMenu, prelude::*};
 
-use super::element::TermElement;
+use super::element::{FrameMemo, TermElement};
 use super::input_bytes::encode;
 use super::links;
 use super::model::{HoveredWord, TermEvent, TermModel};
@@ -95,6 +95,9 @@ pub struct Bar {
     pub grab: Option<Pixels>,
     /// The lines of the history, the screen and the offset at the last frame.
     pub seen: (usize, usize, usize),
+    /// Draws again when the hide delay of the last show is over. A new show takes its place,
+    /// which ends the timer of the one before.
+    _hide: Option<Task<()>>,
 }
 
 pub struct TermView {
@@ -124,6 +127,8 @@ pub struct TermView {
     /// was made. The old view keeps what it read then (T-G1 rows, the shots).
     pub(super) keeps_track: bool,
     pub(crate) laid: Option<Laid>,
+    /// The cells the last frame laid out, kept for a frame made from the same.
+    pub(super) frame_memo: Option<FrameMemo>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -172,6 +177,7 @@ impl TermView {
             bar: Bar::default(),
             keeps_track: Self::show_scrollbar(cx) != Show::Never,
             laid: None,
+            frame_memo: None,
             _subscriptions: subscriptions,
         }
     }
@@ -834,7 +840,7 @@ impl TermView {
         let now = cx.background_executor().now();
         let at = now.checked_sub(shown).unwrap_or(now);
         self.bar.shown_at = Some(at);
-        cx.spawn(async move |view, cx| {
+        self.bar._hide = Some(cx.spawn(async move |view, cx| {
             cx.background_executor()
                 .timer(scrollbar::SHOWN_FOR - shown)
                 .await;
@@ -844,8 +850,7 @@ impl TermView {
                 }
             })
             .ok();
-        })
-        .detach();
+        }));
     }
 
     /// A left press on the thumb starts its drag; one elsewhere in the track moves the thumb's

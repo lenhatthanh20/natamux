@@ -65,6 +65,9 @@ pub struct TaskView {
     clock: Option<gpui::Task<()>>,
     /// The dashboard parts this view last followed.
     seen: Seen,
+    /// The dashboard changed while main showed a workspace or the Agents grid: the rows are
+    /// made and drawn once the list shows again.
+    stale: bool,
     #[cfg(test)]
     refreshes: usize,
     _hold: Option<gpui::Task<()>>,
@@ -109,6 +112,7 @@ impl TaskView {
             next_change: None,
             clock: None,
             seen: Seen::default(),
+            stale: false,
             #[cfg(test)]
             refreshes: 0,
             _hold: None,
@@ -134,13 +138,22 @@ impl TaskView {
     /// A dashboard notify: sorts again only when what the order reads changed, and draws only
     /// what reads the parts that changed. The board and the progress are cached, so each is
     /// told on its own.
+    /// While main shows something else nothing is sorted or drawn; the step back to the list
+    /// bumps View, so this runs again before the list's first frame.
     fn follow(&mut self, cx: &mut Context<Self>) {
-        let (changed, layout, sort) = {
+        let (changed, layout, sort, hidden) = {
             let dashboard = self.dashboard.read(cx);
             let changed = self.seen.take(&dashboard.data.gens);
-            (changed, dashboard.view().layout, dashboard.sort)
+            let hidden = dashboard.open_task.is_some() || dashboard.agents_open;
+            (changed, dashboard.view().layout, dashboard.sort, hidden)
         };
-        if changed.any(&order_parts(sort)) {
+        if hidden {
+            self.stale = true;
+            return;
+        }
+        let stale = std::mem::take(&mut self.stale);
+        // Exact: the order reads neither the selection nor the panel widths.
+        if stale || changed.any_exact(&order_parts(sort)) {
             // Counted here, not in `refresh`: the label clock and the width refresh too.
             #[cfg(test)]
             {
@@ -149,10 +162,10 @@ impl TaskView {
             self.refresh(cx);
         }
         // The header, the empty states and the table under this view.
-        if changed.any(&[Part::Tasks, Part::View, Part::Link, Part::Repos]) {
+        if stale || changed.any(&[Part::Tasks, Part::View, Part::Link, Part::Repos]) {
             cx.notify();
         }
-        if changed.any(row_parts(layout)) {
+        if stale || changed.any(row_parts(layout)) {
             match layout {
                 Layout::Table => self.table.update(cx, |table, cx| table.data_changed(cx)),
                 Layout::Board => self.board.update(cx, |_, cx| cx.notify()),

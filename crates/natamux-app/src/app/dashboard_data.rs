@@ -186,7 +186,18 @@ impl DashboardData {
             }
             DashboardEvent::Jobs(jobs) => self.jobs = jobs,
             DashboardEvent::Activity(activity) => self.activity = activity,
+            // As `GET /activity` gives it: a task with no line is left out.
+            DashboardEvent::ActivityOf { task_id, activity } => {
+                if activity.is_empty() {
+                    self.activity.remove(&task_id);
+                } else {
+                    self.activity.insert(task_id, activity);
+                }
+            }
             DashboardEvent::Usage(usage) => self.usage = usage,
+            DashboardEvent::UsageOf { task_id, usage } => {
+                self.usage.insert(task_id, usage);
+            }
             DashboardEvent::Limits(limits) => return self.set_limits(limits),
             DashboardEvent::DiffStats(stats) => self.diff_stats = stats,
             DashboardEvent::Terminals { task_id, terminals } => {

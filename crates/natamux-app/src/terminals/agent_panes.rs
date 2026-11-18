@@ -84,8 +84,8 @@ impl AgentPanes {
     pub fn new(dashboard: Entity<Dashboard>, cx: &mut Context<Self>) -> Self {
         let width = cx.new(|_| None);
         let observe = cx.observe(&width, |_, _, cx| cx.notify());
-        // Root caches the grid: its tasks, their terminals and the agents' lines come from the
-        // dashboard.
+        // The grid's tasks, their terminals and the agents' lines come from the dashboard. Root
+        // does not draw for those, so the grid asks for its own draw.
         let parts = &[Part::Tasks, Part::Terminals, Part::Activity, Part::View];
         let follow = Dashboard::redraw_on(&dashboard, parts, cx);
         AgentPanes {

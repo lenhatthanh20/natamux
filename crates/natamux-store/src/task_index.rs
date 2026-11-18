@@ -64,6 +64,9 @@ on conflict (task_id, kind) do update set mtime = excluded.mtime, size = exclude
 const APPEND_EVENT: &str =
     "insert into events (task_id, source, type, at, payload, accepted) values (?, ?, ?, ?, ?, ?)";
 
+const STAGE_STARTS: &str = "select * from events \
+     where task_id = ? and type = 'stage.started' and accepted = 1 order by seq";
+
 /// The task file and the event log of a task, as they were when the index last matched them.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct TaskFiles {
@@ -295,10 +298,20 @@ impl TaskIndex {
     }
 
     pub fn list_events(&self, task_id: &str) -> IndexResult<Vec<StoredEvent>> {
-        let mut statement = self
-            .db
-            .prepare_cached("select * from events where task_id = ? order by seq")
-            .map_err(sql)?;
+        self.events_by(
+            "select * from events where task_id = ? order by seq",
+            task_id,
+        )
+    }
+
+    /// The accepted `stage.started` events of a task, oldest first: all the pinned terminals are
+    /// made of. A hook asks for them on every call, so the other events are not read.
+    pub fn stage_starts(&self, task_id: &str) -> IndexResult<Vec<StoredEvent>> {
+        self.events_by(STAGE_STARTS, task_id)
+    }
+
+    fn events_by(&self, query: &str, task_id: &str) -> IndexResult<Vec<StoredEvent>> {
+        let mut statement = self.db.prepare_cached(query).map_err(sql)?;
         let rows = statement
             .query_map([task_id], |row| {
                 Ok((

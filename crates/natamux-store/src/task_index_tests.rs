@@ -166,6 +166,46 @@ fn lists_events_of_a_task_in_the_order_they_were_added_with_the_accepted_flag() 
 }
 
 #[test]
+fn the_stage_starts_are_the_accepted_stage_started_events_of_the_list() {
+    let mut index = index();
+    let started = |stage: &str, terminal: &str| {
+        event(
+            "stage.started",
+            json!({ "stage": stage, "terminal": terminal }),
+        )
+    };
+    index.append_event(&started("spec", "1"), true).unwrap();
+    index
+        .append_event(&event("agent.active", json!({})), true)
+        .unwrap();
+    // Refused: it pins no terminal.
+    index.append_event(&started("spec", "7"), false).unwrap();
+    index.append_event(&started("build", "2"), true).unwrap();
+    let other = TaskEvent {
+        task_id: "T-0002".into(),
+        ..started("spec", "9")
+    };
+    index.append_event(&other, true).unwrap();
+    index.append_event(&started("spec", "5"), true).unwrap();
+
+    let starts = index.stage_starts("T-0001").unwrap();
+
+    let wanted: Vec<StoredEvent> = index
+        .list_events("T-0001")
+        .unwrap()
+        .into_iter()
+        .filter(|stored| stored.accepted && stored.event.kind == "stage.started")
+        .collect();
+    assert_eq!(starts, wanted);
+    let terminals: Vec<&str> = starts
+        .iter()
+        .filter_map(|stored| stored.event.payload.get("terminal")?.as_str())
+        .collect();
+    assert_eq!(terminals, ["1", "2", "5"]);
+    assert!(index.stage_starts("T-0099").unwrap().is_empty());
+}
+
+#[test]
 fn returns_no_events_for_an_unknown_task() {
     assert!(index().list_events("T-0099").unwrap().is_empty());
 }

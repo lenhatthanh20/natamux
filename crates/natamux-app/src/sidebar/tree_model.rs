@@ -13,9 +13,9 @@ use crate::sidebar::shell_rows::{ShellRow, shell_rows};
 use crate::sidebar::sidebar_tree::{RowTier, is_fold_open, row_tier, with_parents};
 use crate::sidebar::tree_entries::{Entry, TreeSource, tree_entries};
 use crate::sidebar::workspace_groups::{
-    DEFAULT_REPO_ID, RepoGroup, RepoRef, WorkspaceGroups, next_hint_change_ms, workspace_groups,
+    DEFAULT_REPO_ID, RepoGroup, RepoRef, WorkspaceGroups, next_hint_change_ms, workspace_groups_of,
 };
-use crate::tasks::task_attention::{filter_tasks, next_row_change_ms};
+use crate::tasks::task_attention::{filter_task_refs, next_row_change_ms};
 
 /// What the tree reads from the dashboard and the saved view.
 pub struct TreeInput<'a> {
@@ -147,10 +147,11 @@ fn repo_of(task: &Task) -> &str {
 impl TreeModel {
     pub fn build(input: &TreeInput) -> TreeModel {
         let filtered = !input.filter.trim().is_empty();
-        let searched = if filtered {
-            filter_tasks(input.tasks, None, input.filter)
+        // Borrowed: only the tasks that end up in a group are cloned.
+        let searched: Vec<&Task> = if filtered {
+            filter_task_refs(input.tasks, None, input.filter)
         } else {
-            input.tasks.to_vec()
+            input.tasks.iter().collect()
         };
         let repos: Vec<RepoRef> = input
             .repos
@@ -160,7 +161,7 @@ impl TreeModel {
                 name: repo.name.clone(),
             })
             .collect();
-        let groups = workspace_groups(
+        let groups = workspace_groups_of(
             &repos,
             &with_parents(&searched, input.tasks),
             input.pinned,

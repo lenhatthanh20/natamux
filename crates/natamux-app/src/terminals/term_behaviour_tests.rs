@@ -2576,4 +2576,86 @@ mod own {
         assert_eq!(apart, json!([14, 48, 11, lines(1)]));
         assert_eq!(together, json!([14, 48, 11, lines(10)]));
     }
+
+    // A frame made from the same cells, grid, hover and theme as the last one keeps the cells it
+    // laid out: a frame for the cursor, the focus or the scrollbar's fade lays out nothing.
+    #[gpui::test]
+    fn a_frame_with_no_change_lays_out_nothing(cx: &mut TestAppContext) {
+        use crate::terminals::term::element::layouts;
+
+        let (host, terminal, cx) = super::open(cx, super::PANE, false);
+        super::feed(&terminal, "prompt$ \x1b[31mred\x1b[0m \u{2588}", cx);
+        super::content(&terminal, cx, |_| ());
+        let before = layouts();
+        super::content(&terminal, cx, |_| ());
+        assert_eq!(layouts(), before, "a frame with no change laid out cells");
+        super::blur(&host, cx);
+        super::content(&terminal, cx, |_| ());
+        assert_eq!(layouts(), before, "a frame for the focus laid out cells");
+        super::feed(&terminal, "more", cx);
+        assert!(layouts() > before, "new output laid out nothing");
+    }
+
+    // The version of the copied cells changes only when a cell does, and a sync copies into the
+    // buffer of the copy before.
+    #[gpui::test]
+    fn the_cells_version_changes_only_with_the_cells(cx: &mut TestAppContext) {
+        let mut own = screen(cx, (40, 5));
+        let model = own.model.clone();
+        let copy = |cx: &mut TestAppContext| {
+            model.read_with(cx, |model, _| {
+                let content = model.last_content();
+                (content.cells_version, content.cells.as_ptr())
+            })
+        };
+        feed(&mut own, "abc", cx);
+        let (version, buffer) = copy(cx);
+        settle(&model, cx);
+        assert_eq!(copy(cx), (version, buffer), "a sync with no change");
+        model.update(cx, |model, _| model.select_all());
+        settle(&model, cx);
+        assert_eq!(
+            copy(cx),
+            (version, buffer),
+            "a selection is not in the cells"
+        );
+        feed(&mut own, "d", cx);
+        let (next, same_buffer) = copy(cx);
+        assert_ne!(next, version, "new output kept the version");
+        assert_eq!(same_buffer, buffer, "a sync made a new buffer");
+        feed(&mut own, "\x1b[2J", cx);
+        assert_ne!(copy(cx).0, next, "an erased screen kept the version");
+    }
+
+    // Each show of the scrollbar starts the hide delay again on its one timer: shows in a row
+    // ask for one new frame, when the delay of the last one is over.
+    #[gpui::test]
+    fn the_scrollbar_has_one_hide_timer(cx: &mut TestAppContext) {
+        use gpui::VisualTestContext;
+
+        fn wait(ms: u64, cx: &mut VisualTestContext) {
+            cx.executor().advance_clock(Duration::from_millis(ms));
+            cx.run_until_parked();
+        }
+
+        let (_, terminal, cx) = super::open(cx, super::PANE, false);
+        super::feed(&terminal, &history(200), cx);
+        let view = terminal.read_with(cx, |terminal, _| terminal.view.clone());
+        wait(2000, cx);
+        super::draw(cx);
+        let frames = Rc::new(Cell::new(0));
+        let count = frames.clone();
+        let _watch = cx.update(|_, cx| cx.observe(&view, move |_, _| count.set(count.get() + 1)));
+        for _ in 0..3 {
+            view.update(cx, |view, cx| view.show_bar(cx));
+        }
+        wait(999, cx);
+        assert_eq!(
+            frames.get(),
+            0,
+            "a new frame before the hide delay was over"
+        );
+        wait(1, cx);
+        assert_eq!(frames.get(), 1, "three shows at once ask for one new frame");
+    }
 }

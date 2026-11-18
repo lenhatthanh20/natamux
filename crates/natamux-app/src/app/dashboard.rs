@@ -308,7 +308,7 @@ impl Dashboard {
 
     pub fn select(&mut self, id: Option<String>, cx: &mut Context<Self>) {
         self.selected = id;
-        self.touch_view(cx);
+        self.touch_selection(cx);
     }
 
     /// Opens the task in main and records the state the user now saw.
@@ -424,7 +424,7 @@ impl Dashboard {
     }
 
     pub fn set_sidebar_width(&mut self, width: f32, cx: &mut Context<Self>) {
-        self.update_view(cx, |view| view.set_sidebar_width(width));
+        self.update_widths(cx, |view| view.set_sidebar_width(width));
     }
 
     pub fn set_fold(&mut self, key: &str, open: bool, cx: &mut Context<Self>) {

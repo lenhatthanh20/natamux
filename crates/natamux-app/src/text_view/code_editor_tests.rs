@@ -97,6 +97,47 @@ fn labels_go_before_their_rows_and_map_offsets_both_ways() {
 }
 
 #[test]
+fn labels_map_offsets_like_a_walk_over_every_label() {
+    let text = "ab\n".repeat(40);
+    let rows: Vec<(u32, String)> = (0..40u32)
+        .filter(|row| row % 3 != 1)
+        .map(|row| (row, "x".repeat(1 + row as usize % 4)))
+        .collect();
+    let mut labels = Labels::default();
+    labels.set(rows, &text);
+    for at in 0..=text.len() {
+        let walked: usize = labels
+            .spots
+            .iter()
+            .take_while(|(spot, _)| *spot <= at)
+            .map(|(_, label)| label.len())
+            .sum();
+        assert_eq!(labels.shown(at), at + walked, "shown {at}");
+    }
+    let shown_len = text.len() + labels.total();
+    for shown in 0..=shown_len {
+        let mut extra = 0;
+        let mut want = None;
+        for (spot, label) in &labels.spots {
+            let start = spot + extra;
+            if shown < start {
+                break;
+            }
+            if shown < start + label.len() {
+                want = Some(*spot);
+                break;
+            }
+            extra += label.len();
+        }
+        assert_eq!(
+            labels.text_at(shown),
+            want.unwrap_or(shown - extra),
+            "text_at {shown}"
+        );
+    }
+}
+
+#[test]
 fn labels_move_with_their_lines_when_the_text_changes() {
     let mut labels = Labels::default();
     labels.set(vec![(0, "L0 ".into()), (1, "L1 ".into())], "ab\ncd\n");

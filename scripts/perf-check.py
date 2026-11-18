@@ -54,6 +54,8 @@ TARGETS = {
     "table_background_draws": (0.2, True),
 }
 HIGHER_IS_BETTER = set()
+# Shown with no target and no baseline until a few CI runs show what they hold.
+REPORTED = {"term_draws_per_wake", "term_flood_frame_p95_ms"}
 
 
 def parse_line(line):
@@ -114,7 +116,7 @@ def over(value, target, higher):
 def check(runs, baseline):
     """Rows of (name, median, runs, target, baseline, result, failed), sorted by name."""
     rows = []
-    for name in sorted(set(runs) | set(TARGETS) | set(baseline)):
+    for name in sorted(set(runs) | set(TARGETS) | set(baseline) | REPORTED):
         values = runs.get(name, [])
         target, gated = TARGETS.get(name, (None, False))
         base = baseline.get(name)

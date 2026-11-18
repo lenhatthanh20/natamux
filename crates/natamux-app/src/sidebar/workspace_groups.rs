@@ -1,7 +1,7 @@
 //! The sidebar's workspaces by project (`lib/workspace-groups.ts`). Times are passed in as epoch
 //! milliseconds; nothing here reads the clock.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 
 use natamux_proto::tasks::task::{Task, TaskState};
 
@@ -73,6 +73,13 @@ pub fn is_quiet(task: &Task, now_ms: i64) -> bool {
 
 /// The repositories, then the ones only tasks still name (removed ones). Their id is their name.
 pub fn known_repos(repos: &[RepoRef], tasks: &[Task]) -> Vec<RepoRef> {
+    known_repos_of(repos, tasks)
+}
+
+fn known_repos_of<'a>(
+    repos: &[RepoRef],
+    tasks: impl IntoIterator<Item = &'a Task>,
+) -> Vec<RepoRef> {
     let mut known = repos.to_vec();
     for task in tasks {
         let id = repo_of(task);
@@ -95,16 +102,34 @@ pub fn workspace_groups(
     pinned_ids: &[String],
     held_id: Option<&str>,
 ) -> WorkspaceGroups {
+    let tasks: Vec<&Task> = tasks.iter().collect();
+    workspace_groups_of(repos, &tasks, pinned_ids, held_id)
+}
+
+/// `workspace_groups` on borrowed tasks: only the tasks that end up in a group are cloned.
+pub fn workspace_groups_of(
+    repos: &[RepoRef],
+    tasks: &[&Task],
+    pinned_ids: &[String],
+    held_id: Option<&str>,
+) -> WorkspaceGroups {
     let is_finished = |task: &Task| is_finished_task(task) && Some(task.id.as_str()) != held_id;
     let is_pinned = |id: &str| pinned_ids.iter().any(|pinned| pinned == id);
     let with_workspace: Vec<&Task> = tasks
         .iter()
+        .copied()
         .filter(|task| task.workspace.is_some())
         .collect();
     let pinned: Vec<Task> = pinned_ids
         .iter()
         .filter_map(|id| with_workspace.iter().find(|task| &task.id == id))
         .map(|task| (*task).clone())
+        .collect();
+    // The tasks that can hold subtasks, by id and project: one lookup per subtask, not a scan.
+    let can_hold: HashSet<(&str, &str)> = with_workspace
+        .iter()
+        .filter(|task| task.parent_id.is_none() && !is_finished(task))
+        .map(|task| (task.id.as_str(), repo_of(task)))
         .collect();
     // A finished or pinned subtask stays where the user expects it. An open one stays out of a
     // finished parent, which is folded away in "N finished". One level only.
@@ -113,15 +138,9 @@ pub fn workspace_groups(
         if is_finished(task) || is_pinned(&task.id) {
             return None;
         }
-        with_workspace
-            .iter()
-            .find(|other| {
-                other.id == parent_id
-                    && other.parent_id.is_none()
-                    && !is_finished(other)
-                    && repo_of(other) == repo_of(task)
-            })
-            .map(|other| other.id.clone())
+        can_hold
+            .contains(&(parent_id, repo_of(task)))
+            .then(|| parent_id.to_owned())
     };
     let mut oldest_first = with_workspace.clone();
     oldest_first.sort_by(|a, b| newest_first(a, b));
@@ -132,12 +151,12 @@ pub fn workspace_groups(
             children.entry(parent).or_default().push(task.clone());
         }
     }
-    let mut rest: Vec<Task> = with_workspace
+    let mut rest: Vec<&Task> = with_workspace
         .iter()
+        .copied()
         .filter(|task| !is_pinned(&task.id) && parent_of(task).is_none())
-        .map(|task| (*task).clone())
         .collect();
-    rest.sort_by(newest_first);
+    rest.sort_by(|a, b| newest_first(a, b));
 
     let groups = repo_groups(repos, &rest, &children, is_finished);
     WorkspaceGroups {
@@ -150,15 +169,16 @@ pub fn workspace_groups(
 /// One group per repository: its open and finished rows, and the subtasks under them.
 fn repo_groups(
     repos: &[RepoRef],
-    rest: &[Task],
+    rest: &[&Task],
     children: &BTreeMap<String, Vec<Task>>,
     is_finished: impl Fn(&Task) -> bool,
 ) -> Vec<RepoGroup> {
-    known_repos(repos, rest)
+    known_repos_of(repos, rest.iter().copied())
         .into_iter()
         .map(|repo| {
             let own: Vec<&Task> = rest
                 .iter()
+                .copied()
                 .filter(|task| repo_of(task) == repo.id)
                 .collect();
             let split = |finished: bool| -> Vec<Task> {

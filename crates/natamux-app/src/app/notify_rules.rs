@@ -27,11 +27,36 @@ pub struct Seen {
 /// Each task at the last look.
 pub type States = HashMap<String, Seen>;
 
+const KNOWN_STATES: [TaskState; 10] = [
+    TaskState::Draft,
+    TaskState::Ready,
+    TaskState::Running,
+    TaskState::Idle,
+    TaskState::NeedsInput,
+    TaskState::Review,
+    TaskState::Blocked,
+    TaskState::Failed,
+    TaskState::Done,
+    TaskState::Cancelled,
+];
+
+/// The state a lane holds, read without cloning the value: as serde reads it, a name this build
+/// does not know is `Unknown`, and a value that is no string is none.
+fn lane_state(lane: &serde_json::Value) -> Option<TaskState> {
+    let name = lane.as_str()?;
+    Some(
+        KNOWN_STATES
+            .into_iter()
+            .find(|state| state.name() == name)
+            .unwrap_or(TaskState::Unknown),
+    )
+}
+
 /// The stages whose lane is in a state `keep` takes.
 fn stages_where(task: &Task, keep: impl Fn(TaskState) -> bool) -> BTreeSet<String> {
     task.lanes
         .iter()
-        .filter(|(_, state)| serde_json::from_value::<TaskState>((*state).clone()).is_ok_and(&keep))
+        .filter(|(_, state)| lane_state(state).is_some_and(&keep))
         .map(|(stage, _)| stage.clone())
         .collect()
 }
@@ -163,7 +188,7 @@ pub fn rings(previous: &States, tasks: &[Task], repos: &[Repo]) -> Vec<Ring> {
         let mut new: Vec<(String, TaskState)> = waiting_stages(task)
             .difference(&before.waits)
             .filter_map(|stage| {
-                let state = serde_json::from_value(task.lanes.get(stage)?.clone()).ok()?;
+                let state = lane_state(task.lanes.get(stage)?)?;
                 Some((stage.clone(), state))
             })
             .collect();

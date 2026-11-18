@@ -2,7 +2,12 @@
 //! terminal, the ended terminals of a finished task, and Create workspace, Push, Create PR and
 //! Reopen agent, which change the fake data as the daemon would.
 
-use futures::channel::mpsc::UnboundedReceiver;
+use std::collections::BTreeMap;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::time::Duration;
+
+use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
 use natamux_client::{DashboardEvent, TerminalEvent, TerminalStatus};
 use natamux_proto::events::kind::PreparingMessage;
 use natamux_proto::tasks::task::Task;
@@ -76,19 +81,121 @@ fn script(task_id: &str, terminal: &str) -> &'static str {
     }
 }
 
+type FloodKey = (String, String);
+/// The feed of one open terminal, and the offset after the last bytes it got.
+type Feed = (UnboundedSender<TerminalEvent>, u64);
+
+/// `--bench-flows` only: the terminals that print lines, by task and terminal. Shared by the
+/// fakes of all test threads, so each test floods a task of its own. The shots never add one.
+static FLOODS: Mutex<BTreeMap<FloodKey, Vec<Feed>>> = Mutex::new(BTreeMap::new());
+
+fn floods() -> MutexGuard<'static, BTreeMap<FloodKey, Vec<Feed>>> {
+    FLOODS.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// One line to each open terminal of `key`; false when none was open to take it.
+fn feed(key: &FloodKey, line: &[u8]) -> bool {
+    let mut floods = floods();
+    let Some(feeds) = floods.get_mut(key) else {
+        return false;
+    };
+    feeds.retain_mut(|(sender, end)| {
+        *end += line.len() as u64;
+        let output = TerminalEvent::Output {
+            bytes: line.to_vec(),
+            end: Some(*end),
+        };
+        sender.unbounded_send(output).is_ok()
+    });
+    !feeds.is_empty()
+}
+
+/// A terminal that prints lines while printing is on. Dropped: it stops, and its feeds end.
+pub struct FakeFlood {
+    key: FloodKey,
+    printing: Arc<AtomicBool>,
+    stop: Arc<AtomicBool>,
+    sent: Arc<AtomicU64>,
+}
+
+impl FakeFlood {
+    pub fn set_printing(&self, on: bool) {
+        self.printing.store(on, Ordering::Relaxed);
+    }
+
+    /// The lines an open terminal took so far: each is one output event.
+    pub fn sent(&self) -> u64 {
+        self.sent.load(Ordering::Relaxed)
+    }
+}
+
+impl Drop for FakeFlood {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::Relaxed);
+        floods().remove(&self.key);
+    }
+}
+
 impl FakeDaemon {
-    /// The screen of one terminal: open at once, with its script.
+    /// The screen of one terminal: open at once, with its script. A flooded terminal's feed
+    /// stays open for its lines; any other feed ends after the screen.
     pub fn terminal(&self, task_id: &str, terminal: &str) -> UnboundedReceiver<TerminalEvent> {
         let key = (task_id.to_owned(), terminal.to_owned());
         let own = self.data().screens.get(&key).cloned();
         let screen = own.unwrap_or_else(|| script(task_id, terminal).to_owned());
-        events([
+        let end = screen.len() as u64;
+        let open = [
             TerminalEvent::Status(TerminalStatus::Open),
             TerminalEvent::Output {
-                bytes: screen.as_bytes().to_vec(),
-                end: Some(screen.len() as u64),
+                bytes: screen.into_bytes(),
+                end: Some(end),
             },
-        ])
+        ];
+        let mut floods = floods();
+        let Some(feeds) = floods.get_mut(&key) else {
+            return events(open);
+        };
+        let (sender, receiver) = unbounded();
+        for event in open {
+            // The receiver is right here: a send cannot fail.
+            sender.unbounded_send(event).ok();
+        }
+        feeds.push((sender, end));
+        receiver
+    }
+
+    /// `--bench-flows` only: the terminals opened from now on for this task and terminal print
+    /// `per_second` lines a second while the result prints, on a thread of their own. Terminals
+    /// open already keep their ended feed.
+    pub fn flood(&self, task_id: &str, terminal: &str, per_second: u32) -> FakeFlood {
+        let key = (task_id.to_owned(), terminal.to_owned());
+        floods().insert(key.clone(), Vec::new());
+        let flood = FakeFlood {
+            key: key.clone(),
+            printing: Arc::default(),
+            stop: Arc::default(),
+            sent: Arc::default(),
+        };
+        let printing = Arc::clone(&flood.printing);
+        let stop = Arc::clone(&flood.stop);
+        let sent = Arc::clone(&flood.sent);
+        let gap = Duration::from_secs(1) / per_second.max(1);
+        std::thread::spawn(move || {
+            let mut number = 0_u64;
+            while !stop.load(Ordering::Relaxed) {
+                if printing.load(Ordering::Relaxed) {
+                    let line = format!(
+                        "\x1b[32m✓\x1b[0m bench line {number}: cargo test -p natamux-app\r\n"
+                    );
+                    if feed(&key, line.as_bytes()) {
+                        sent.fetch_add(1, Ordering::Relaxed);
+                        number += 1;
+                    }
+                }
+                std::thread::sleep(gap);
+            }
+        });
+        flood
     }
 
     /// A terminal `--shot` state: the terminal shows `screen` instead of its script.
@@ -202,3 +309,7 @@ impl FakeDaemon {
         Ok(task)
     }
 }
+
+#[cfg(test)]
+#[path = "fake_terminals_tests.rs"]
+mod tests;

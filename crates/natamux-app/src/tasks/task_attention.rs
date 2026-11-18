@@ -76,7 +76,7 @@ pub fn needs_me_tasks(tasks: &[Task], now_ms: i64) -> Vec<Task> {
 }
 
 /// Every state with its count, zero for the empty ones, in the order of `TASK_STATES`.
-pub fn count_by_state(tasks: &[Task]) -> Vec<(TaskState, usize)> {
+pub fn count_by_state<'a>(tasks: impl IntoIterator<Item = &'a Task>) -> Vec<(TaskState, usize)> {
     let mut counts = [
         TaskState::Draft,
         TaskState::Ready,
@@ -99,7 +99,8 @@ pub fn count_by_state(tasks: &[Task]) -> Vec<(TaskState, usize)> {
 }
 
 /// The tasks in this state (all when None) whose id, title, agent, branch or labels have the
-/// search text in them, ignoring case.
+/// search text in them, ignoring case. Only the tests still want the clones.
+#[cfg(test)]
 pub fn filter_tasks(tasks: &[Task], state_filter: Option<TaskState>, search: &str) -> Vec<Task> {
     filter_task_refs(tasks, state_filter, search)
         .into_iter()
@@ -362,6 +363,24 @@ mod tests {
         assert_eq!(count(TaskState::Done), Some(0));
         let order: Vec<TaskState> = counts.iter().map(|(state, _)| *state).collect();
         assert_eq!(order, ALL_STATES);
+    }
+
+    #[test]
+    fn counts_borrowed_tasks_as_their_clones() {
+        let tasks = [
+            with("T-0001", TaskState::Running, ""),
+            with("T-0002", TaskState::Review, ""),
+            with("T-0012", TaskState::Running, ""),
+        ];
+        let borrowed = count_by_state(filter_task_refs(&tasks, None, "T-000"));
+        assert_eq!(
+            borrowed,
+            count_by_state(&filter_tasks(&tasks, None, "T-000"))
+        );
+        let running = borrowed
+            .iter()
+            .find(|(state, _)| *state == TaskState::Running);
+        assert_eq!(running, Some(&(TaskState::Running, 1)));
     }
 
     fn filter_ids(state: Option<TaskState>, search: &str) -> Vec<String> {

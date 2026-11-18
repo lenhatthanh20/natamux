@@ -20,7 +20,12 @@ impl DashboardData {
             } => self.repos != *repos || self.worktrees_dir != *worktrees_dir,
             DashboardEvent::Jobs(jobs) => self.jobs != *jobs,
             DashboardEvent::Activity(activity) => self.activity != *activity,
+            DashboardEvent::ActivityOf { task_id, activity } => match self.activity.get(task_id) {
+                Some(held) => held != activity,
+                None => !activity.is_empty(),
+            },
             DashboardEvent::Usage(usage) => self.usage != *usage,
+            DashboardEvent::UsageOf { task_id, usage } => self.usage.get(task_id) != Some(usage),
             DashboardEvent::Limits(limits) => self.limits != *limits,
             DashboardEvent::DiffStats(stats) => self.diff_stats != *stats,
             DashboardEvent::Terminals { task_id, terminals } => {
@@ -48,8 +53,8 @@ impl DashboardData {
             }
             DashboardEvent::Repos { .. } => &[Part::Repos],
             DashboardEvent::Jobs(_) => &[Part::Jobs],
-            DashboardEvent::Activity(_) => &[Part::Activity],
-            DashboardEvent::Usage(_) => &[Part::Usage],
+            DashboardEvent::Activity(_) | DashboardEvent::ActivityOf { .. } => &[Part::Activity],
+            DashboardEvent::Usage(_) | DashboardEvent::UsageOf { .. } => &[Part::Usage],
             DashboardEvent::Limits(_) => &[Part::Limits],
             DashboardEvent::DiffStats(_) => &[Part::DiffStats],
             DashboardEvent::Terminals { .. } => &[Part::Terminals],
@@ -91,6 +96,7 @@ impl DashboardData {
 #[cfg(test)]
 mod tests {
     use natamux_client::LinkStatus;
+    use natamux_proto::agents::activity::{AgentActivity, TaskActivity, TaskUsage};
     use natamux_proto::events::kind::PreparingMessage;
     use natamux_proto::tasks::task::{Task, TaskState};
     use natamux_proto::terminals::list::TerminalList;
@@ -190,6 +196,62 @@ mod tests {
         let asks = task("T-1", TaskState::NeedsInput, "b");
         data.apply(DashboardEvent::TaskChanged(Box::new(asks)));
         assert_eq!(data.events_to_read(), [("T-1".into(), "b".into())]);
+    }
+
+    #[test]
+    fn one_task_of_activity_or_usage_ends_as_the_whole_part_would() {
+        let lines = |text: &str| -> TaskActivity {
+            let line = AgentActivity {
+                text: text.into(),
+                at: "t".into(),
+            };
+            [("1".to_string(), line)].into()
+        };
+        let activity_of = |id: &str, activity: TaskActivity| DashboardEvent::ActivityOf {
+            task_id: id.into(),
+            activity,
+        };
+        let mut data = DashboardData::default();
+        data.apply(DashboardEvent::Activity(
+            [
+                ("T-1".to_string(), lines("a")),
+                ("T-2".to_string(), lines("b")),
+            ]
+            .into(),
+        ));
+        let before = data.gens;
+        let same = activity_of("T-1", lines("a"));
+        assert!(!data.changes(&same));
+        data.apply(same);
+        // A task with no line that holds none: nothing to draw.
+        let none = activity_of("T-3", TaskActivity::new());
+        assert!(!data.changes(&none));
+        data.apply(none);
+        assert_eq!(data.gens, before);
+
+        data.apply(activity_of("T-1", lines("c")));
+        data.apply(activity_of("T-2", TaskActivity::new()));
+        let whole = DashboardEvent::Activity([("T-1".to_string(), lines("c"))].into());
+        assert!(!data.changes(&whole));
+        assert_eq!(
+            data.gens.get(Part::Activity),
+            before.get(Part::Activity) + 2
+        );
+
+        let usage = TaskUsage {
+            tokens: 3,
+            ..TaskUsage::default()
+        };
+        let one = DashboardEvent::UsageOf {
+            task_id: "T-1".into(),
+            usage: usage.clone(),
+        };
+        assert!(data.changes(&one));
+        data.apply(one.clone());
+        assert!(!data.changes(&one));
+        let whole = DashboardEvent::Usage([("T-1".to_string(), usage)].into());
+        assert!(!data.changes(&whole));
+        assert_eq!(data.gens.get(Part::Usage), before.get(Part::Usage) + 1);
     }
 
     #[test]

@@ -24,8 +24,10 @@ const BUSY_BYTES: usize = 20 * 1024 * 1024;
 pub const AGENTS_AT_ONCE: usize = 30;
 const HOOKS_PER_AGENT: usize = 40;
 
-/// The daemon's RSS in MiB once 30 shells each printed 20 MB, from 30 threads at once.
-pub fn busy_shells() -> f64 {
+/// The daemon's RSS in MiB once 30 shells each printed 20 MB, from 30 threads at once, and how
+/// much it grew over the RSS before the shells.
+pub fn busy_shells() -> (f64, f64) {
+    let before = rss_kib().unwrap_or(0);
     let (service, sinks) = setup();
     let shells = BUSY_SHELLS.min(MAX_SESSIONS);
     let names: Vec<String> = (1..=shells).map(|index| format!("busy-{index}")).collect();
@@ -54,7 +56,8 @@ pub fn busy_shells() -> f64 {
     }
     let rss = rss_kib().unwrap_or(0);
     service.close_all();
-    (rss as f64 / 1024.0 * 10.0).round() / 10.0
+    let mib = |kib: u64| (kib as f64 / 1024.0 * 10.0).round() / 10.0;
+    (mib(rss), mib(rss.saturating_sub(before)))
 }
 
 /// `TaskSync::init` with `count` task files, in ms: cold (a new index, every file read) and
