@@ -173,3 +173,64 @@ fn whitespace_counts_while_the_toggle_is_off(cx: &mut TestAppContext) {
     assert_eq!(hunks.len(), 1, "{hunks:?}");
     assert_eq!((hunks[0].old.clone(), hunks[0].new.clone()), (1..3, 1..3));
 }
+
+/// T-0345: with the caret outside a change, the pointer on that change's buttons keeps them
+/// drawn; before, the side lost its hover under the buttons and they flickered without end.
+fn hover_buttons_stay(index: usize, selector: &'static str, cx: &mut TestAppContext) {
+    let (_, view, cx) = open(cx, true, false, texts());
+    view.update_in(cx, |view, window, cx| {
+        view.set_movable(true);
+        view.go_to_line(Side::New, 1, window, cx);
+    });
+    cx.run_until_parked();
+    let side = view.read_with(cx, |view, _| {
+        view.sides
+            .as_ref()
+            .and_then(|sides| sides.get(index))
+            .cloned()
+    });
+    let side = side.expect("the side is shown");
+    let text = cx.update(|window, cx| {
+        let place = side.place(window, cx).expect("the side was drawn");
+        let first = side
+            .rows(cx, |rows| {
+                rows.lines
+                    .iter()
+                    .position(|line| line.status != crate::git::diff_model::Status::Unchanged)
+            })
+            .flatten()
+            .expect("a changed line");
+        let (top, _) = place.line(first).expect("the line is laid out");
+        let y = place.origin.y + top + place.line_height() / 2.;
+        gpui::point(place.origin.x + place.gutter() + px(20.), y)
+    });
+    let none = gpui::Modifiers::default();
+    let hovered = |cx: &mut VisualTestContext| view.read_with(cx, |view, _| view.hovered[index]);
+    assert!(
+        cx.debug_bounds(selector).is_none(),
+        "no buttons before hover"
+    );
+    cx.simulate_mouse_move(text, None, none);
+    cx.run_until_parked();
+    assert_eq!(hovered(cx), Some(0));
+    let buttons = cx
+        .debug_bounds(selector)
+        .expect("the hover shows the buttons");
+    cx.simulate_mouse_move(buttons.center(), None, none);
+    for _ in 0..3 {
+        assert_eq!(hovered(cx), Some(0));
+        assert!(cx.debug_bounds(selector).is_some(), "the buttons stay");
+        cx.update(|window, _| window.refresh());
+        cx.run_until_parked();
+    }
+}
+
+#[gpui::test]
+fn hover_buttons_of_the_working_tree_side_stay(cx: &mut TestAppContext) {
+    hover_buttons_stay(crate::git::diff_view::RIGHT, "DIFF-HUNK-BUTTONS-NEW", cx);
+}
+
+#[gpui::test]
+fn hover_buttons_of_the_last_commit_side_stay(cx: &mut TestAppContext) {
+    hover_buttons_stay(crate::git::diff_view::LEFT, "DIFF-HUNK-BUTTONS-OLD", cx);
+}
