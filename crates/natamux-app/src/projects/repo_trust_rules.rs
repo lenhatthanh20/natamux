@@ -25,7 +25,8 @@ pub fn title(name: &str) -> String {
 /// The dialog opens only when there is something to approve; the daemon approves a project with
 /// no commands on its own.
 pub fn needs_review(view: &RepoTrustView) -> bool {
-    !view.trusted && (!view.commands.is_empty() || !view.setup.is_empty())
+    !view.trusted
+        && (!view.commands.is_empty() || !view.setup.is_empty() || !view.agent_files.is_empty())
 }
 
 /// The name the dialog shows; the id while the project list has not caught up with an add.

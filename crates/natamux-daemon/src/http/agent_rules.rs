@@ -101,6 +101,8 @@ pub fn agent_may(
     is_child: impl FnOnce(&str) -> bool,
 ) -> bool {
     match parts {
+        // Fan-out makes top-level tasks and starts their agents, past the subtasks-only rule.
+        ["tasks", _, "fan-out"] => false,
         ["tasks", id, ..] if *id == own => *method != Method::DELETE,
         ["tasks", id, ..] => *method == Method::GET && is_child(id),
         ["tasks"] => *method == Method::GET || *method == Method::POST,
@@ -161,6 +163,8 @@ mod tests {
         assert!(!may(Method::DELETE, "/tasks/T-1"));
         assert!(!may(Method::DELETE, "/tasks/T-1/workspace"));
         assert!(!may(Method::DELETE, "/tasks/T-1/terminals/2"));
+        // Security T-0346 (F-02).
+        assert!(!may(Method::POST, "/tasks/T-1/fan-out"));
     }
 
     #[test]

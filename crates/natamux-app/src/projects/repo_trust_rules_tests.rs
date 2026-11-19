@@ -20,6 +20,7 @@ fn view(trusted: bool, commands: usize, scripts: usize) -> RepoTrustView {
                 text: "pnpm install\n".into(),
             })
             .collect(),
+        agent_files: Vec::new(),
     }
 }
 
@@ -33,6 +34,16 @@ fn repo(id: &str, name: &str) -> Repo {
 fn an_untrusted_project_with_commands_or_a_setup_script_is_reviewed() {
     assert!(needs_review(&view(false, 1, 0)));
     assert!(needs_review(&view(false, 0, 1)));
+}
+
+#[test]
+fn an_untrusted_project_with_only_an_agent_config_file_is_reviewed() {
+    let mut view = view(false, 0, 0);
+    view.agent_files.push(SetupScript {
+        file: ".mcp.json".into(),
+        text: "{}\n".into(),
+    });
+    assert!(needs_review(&view));
 }
 
 #[test]

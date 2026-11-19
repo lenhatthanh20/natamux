@@ -17,7 +17,7 @@ use natamux_proto::terminals::text::plain_text;
 use natamux_pty::Env;
 
 use super::input_trace::{Step, trace};
-use super::limits::parse_lanes;
+use super::limits::{MAX_OPEN_TICKETS, parse_lanes};
 use super::session_input::{set_size, submit, touch, write};
 use super::session_lifecycle::{EndWait, SpawnPty, session_key};
 use super::session_output::{flush_output, ring_since};
@@ -102,7 +102,9 @@ impl TerminalService {
     pub fn issue_ticket(&self, task_id: &str) -> Result<String, TerminalError> {
         (self.inner.options.workspace_of)(task_id)?;
         let now = self.inner.now();
-        Ok(lock(&self.inner.tickets).issue(task_id, now))
+        lock(&self.inner.tickets)
+            .issue(task_id, now)
+            .ok_or(TerminalError::Limit(MAX_OPEN_TICKETS))
     }
 
     pub fn redeem_ticket(&self, ticket: &str, task_id: &str) -> bool {

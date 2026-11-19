@@ -5,7 +5,9 @@ use natamux_core::stages::position::StagePosition;
 use natamux_proto::events::task_event::TaskEvent;
 use natamux_proto::stages::schema::{Gate, Stage, StageKind, Step};
 use natamux_proto::tasks::task::{Task, TaskState};
-use serde_json::{Map, Value};
+use serde_json::{Map, Value, json};
+
+use crate::tasks::errors::{TaskError, TaskResult};
 
 /// How often a running task's sign of life is written down at most.
 pub const ACTIVITY_INTERVAL_MS: i64 = 30_000;
@@ -95,5 +97,20 @@ pub fn background_since_after(task: &Task, event: &TaskEvent, state: TaskState) 
         None
     } else {
         task.background_since.clone()
+    }
+}
+
+/// A subtask is part of its parent's work, so it is in the same project: no repo means the
+/// parent's, another one is refused. Else an agent could start work in a project it may not use.
+pub fn subtask_repo(parent: &Task, input: &mut Map<String, Value>) -> TaskResult<()> {
+    match input.get("repo").filter(|repo| !repo.is_null()).cloned() {
+        None => {
+            input.insert("repo".into(), json!(parent.repo));
+            Ok(())
+        }
+        Some(repo) if repo.as_str() == parent.repo.as_deref() => Ok(()),
+        Some(_) => Err(TaskError::Edit(
+            "A subtask is in its parent's project".into(),
+        )),
     }
 }

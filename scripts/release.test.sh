@@ -146,6 +146,14 @@ check "Release does not build on a pull request" \
   '! sed -n "/^on:/,/^permissions:/p" .github/workflows/release.yml | grep -q "^  pull_request:"'
 check "manual Release validates its branch before checkout" \
   'sed -n "/^  web:/,/^  package:/p" .github/workflows/release.yml | grep -q "Validate release ref"'
+check "release.yml fails a release commit that is not on main" \
+  'sed -n "/^  web:/,/^  package:/p" .github/workflows/release.yml | grep -q "merge-base --is-ancestor HEAD origin/main"'
+check "the web job of release.yml checks out full history for the ancestor check" \
+  'sed -n "/^  web:/,/^  package:/p" .github/workflows/release.yml | grep -q "fetch-depth: 0"'
+check "the ancestor check has no if, so it runs for tag pushes" \
+  '! sed -n "/Check the release commit is on main/,/run:/p" .github/workflows/release.yml | grep -q "if:"'
+check "the macOS signing job needs the job that checks the commit" \
+  'grep -q MACOS_SIGN_P12 .github/workflows/release.yml && sed -n "/^  package:/,/^  release:/p" .github/workflows/release.yml | grep -q "^    needs: web$"'
 check "the package job of release.yml does not restore target on every runner" \
   '! sed -n "/^  package:/,/^  release:/p" .github/workflows/release.yml | grep -qE "^ +target$"'
 check "the package job of release.yml restores target only on Intel and Windows" \

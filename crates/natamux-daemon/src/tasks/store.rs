@@ -34,7 +34,9 @@ pub struct WorkspaceRef {
 use crate::shared::event_bus::{DaemonMessage, EventBus};
 use crate::shared::jobs::Clock;
 use crate::tasks::errors::{TaskError, TaskResult};
-use crate::tasks::helpers::{background_since_after, compare_text, move_task, position_of};
+use crate::tasks::helpers::{
+    background_since_after, compare_text, move_task, position_of, subtask_repo,
+};
 
 /// The stages of a repository (`.natamux.json`); None is the default project.
 pub type SettingsOf = Arc<dyn Fn(Option<&str>) -> Vec<Step> + Send + Sync>;
@@ -234,11 +236,7 @@ impl Store {
         };
         if let Some(parent) = &parent {
             check_not_on_parent(&parent.id, &ids(input.get("dependsOn")))?;
-            // A subtask is part of its parent's work, so it is in the same project.
-            let no_repo = input.get("repo").is_none_or(|repo| repo.is_null());
-            if no_repo {
-                input.insert("repo".into(), json!(parent.repo));
-            }
+            subtask_repo(parent, &mut input)?;
         }
         let title = input
             .get("title")

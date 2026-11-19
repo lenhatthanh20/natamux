@@ -70,7 +70,7 @@ jobs:
   # Its own job, because package scripts of pnpm install can set BASH_ENV for later steps of
   # the build job and read the deploy key there. This job runs no code from the repo or packages.
   deploy:
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-latest
     steps:

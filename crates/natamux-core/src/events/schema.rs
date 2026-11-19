@@ -17,6 +17,15 @@ pub const GATE_EVENT_TYPES: [&str; 5] = [
     "state.overridden",
 ];
 
+/// Events only the daemon sends: they start or pass a stage, count a send-back or end the task.
+/// The agent token may not send them. Not in the gate list, which also marks a person's decision.
+pub const DAEMON_ONLY_EVENT_TYPES: [&str; 4] = [
+    "stage.checked",
+    "stage.started",
+    "stage.reopened",
+    "pr.merged",
+];
+
 pub fn validate_task_event(value: &Value) -> Result<TaskEvent, ZodError> {
     let mut issues = Issues::default();
     let mut out = Map::new();
@@ -130,5 +139,13 @@ mod tests {
                 "state.overridden"
             ]
         );
+    }
+
+    // Security T-0346 (F-03, F-04, F-05): `is_person_decision` reads only the gate list.
+    #[test]
+    fn daemon_only_event_types_are_not_gate_event_types() {
+        for kind in DAEMON_ONLY_EVENT_TYPES {
+            assert!(!GATE_EVENT_TYPES.contains(&kind), "{kind}");
+        }
     }
 }

@@ -187,3 +187,39 @@ mod links {
         assert!(outside_is_empty(&outside));
     }
 }
+
+#[cfg(unix)]
+#[test]
+fn ignores_a_linked_stage_file_or_folder_and_refuses_a_file_over_1_mb() {
+    use std::os::unix::fs::symlink;
+    let data = TempDir::new("data");
+    let work = TempDir::new("work");
+    let workspace = work.path().to_str().unwrap();
+    let secret = work.path().join("secret.txt");
+    std::fs::write(&secret, "secret").unwrap();
+    let dir = work.path().join(".natamux-task");
+    std::fs::create_dir(&dir).unwrap();
+    symlink(&secret, dir.join("spec.md")).unwrap();
+    std::fs::write(dir.join("plan.md"), "p").unwrap();
+    assert_eq!(
+        read_stage_file(data.path(), "T-1", Some(workspace), "spec.md"),
+        Ok(None)
+    );
+    let files = list_stage_files(data.path(), "T-1", Some(workspace));
+    assert_eq!(files.len(), 1);
+    archive_stage_files(data.path(), "T-1", Some(workspace)).unwrap();
+    assert!(!archive_dir(data.path(), "T-1").join("spec.md").exists());
+    assert!(archive_dir(data.path(), "T-1").join("plan.md").exists());
+
+    std::fs::write(dir.join("big.md"), "x".repeat(MAX_STAGE_FILE_BYTES + 1)).unwrap();
+    assert!(read_stage_file(data.path(), "T-1", Some(workspace), "big.md").is_err());
+
+    let other = TempDir::new("other");
+    let other_workspace = other.path().to_str().unwrap();
+    symlink(&dir, other.path().join(".natamux-task")).unwrap();
+    assert_eq!(
+        read_stage_file(data.path(), "T-1", Some(other_workspace), "plan.md"),
+        Ok(None)
+    );
+    assert!(list_stage_files(data.path(), "T-1", Some(other_workspace)).is_empty());
+}

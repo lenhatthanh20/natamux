@@ -66,6 +66,13 @@ impl StageRun {
             input,
             &[TaskState::Running, TaskState::Idle, TaskState::NeedsInput],
         )?;
+        // Only the stage's script passes it, with its ticket; else the agent skips the command.
+        if input.by_agent && stage.command.is_some() {
+            return Err(action(format!(
+                "{}: the {} stage passes when its command passes. Stop here.",
+                task.id, stage.id
+            )));
+        }
         let reporter = if input.terminal.is_none() {
             source
         } else {
@@ -86,14 +93,16 @@ impl StageRun {
         if let Some(to) = &input.to {
             self.check_target(task, to)?;
         }
-        // A person can type the command in a task shell too; only an agent there counts.
-        let by_agent = input
+        // An agent in the terminal named counts, and so does any call with the agent token, so
+        // leaving the terminal out does not skip `maxSendBacks`.
+        let agent_there = input
             .terminal
             .as_deref()
             .is_some_and(|terminal| self.agent_runs(task_id, terminal));
-        let from = match (by_agent, input.terminal.as_deref()) {
-            (true, Some(terminal)) => Some(self.agent_sends_back(task, step, terminal)?),
-            _ => None,
+        let from = if agent_there || input.by_agent {
+            Some(self.agent_sends_back(task, step, input.terminal.as_deref())?)
+        } else {
+            None
         };
         let mut payload = Map::new();
         if let Some(to) = &input.to {
@@ -111,7 +120,7 @@ impl StageRun {
         let shell = input
             .terminal
             .as_deref()
-            .filter(|_| from.is_some())
+            .filter(|_| agent_there)
             .map(|terminal| key(task_id, terminal));
         let before = match (&shell, &from) {
             (Some(shell), Some(from)) => self.state().reported.insert(shell.clone(), from.clone()),
@@ -245,10 +254,16 @@ impl StageRun {
     /// An agent that reviews sends the task back by itself, at most `agents.maxSendBacks` times
     /// from its stage since a person last stepped in (no limit when it is left out); then the
     /// stage waits for you, so two agents that disagree do not loop.
-    fn agent_sends_back(&self, task: &Task, step: &Step, terminal: &str) -> StageResult<String> {
+    fn agent_sends_back(
+        &self,
+        task: &Task,
+        step: &Step,
+        terminal: Option<&str>,
+    ) -> StageResult<String> {
         let steps = self.steps(task)?;
         let pinned = self.pinned(&task.id);
-        let from = stage_of_terminal(&steps, step, terminal, &pinned)
+        let from = terminal
+            .and_then(|terminal| stage_of_terminal(&steps, step, terminal, &pinned))
             .map_or_else(|| task.stage.clone(), |stage| stage.id);
         let before = self.send_backs_from(&task.id, &from);
         if send_back_limit_reached(self.max_send_backs(task), before) {
