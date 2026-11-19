@@ -1,8 +1,8 @@
 ---
 // The state glyphs and stage markers of the dashboard, drawn the same way as the app, so the docs
 // stay sharp and follow the site theme.
-// shortcut: the geometry is copied from packages/web/src/components/ShapeGlyph.tsx and
-// StageMarker.tsx, so a shape change must touch both; move to one shared SVG source if they drift.
+// shortcut: the geometry is copied from the app's shape glyphs and
+// the StageMarker component, so a shape change must touch both; move to one shared SVG source if they drift.
 type Kind =
   | 'draft'
   | 'ready'
@@ -26,7 +26,7 @@ interface Props {
   marker?: Marker
   // Stage marker size in px.
   node?: number
-  // Draw the busy button spinner instead (packages/web/src/components/ui/Spinner.tsx).
+  // Draw the busy button spinner instead (as the app's spinner does).
   spinner?: boolean
   label?: string
 }
@@ -170,7 +170,7 @@ const spinnerSvg = `<svg class="si-spin" width="14" height="14" viewBox="0 0 24 
 }
 
 <style is:global>
-  /* The state colors of the app (packages/web/src/styles.css), dark first as the site. */
+  /* The state colors of the app (as in the app), dark first as the site. */
   .si,
   .si-node {
     --si-fg: #8d919a;

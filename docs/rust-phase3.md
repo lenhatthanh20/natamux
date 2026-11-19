@@ -117,7 +117,7 @@ Shots run on demand. A line `Shots: <state> <state> …` in the head commit mess
 
 ### Screen-2 states
 
-The fake daemon's tasks stand in for the storefront tasks of `docs/ui-reference/shots/`.
+The fake daemon's tasks stand in for the storefront tasks of the old web screenshots (removed).
 
 | State | Shows |
 |---|---|

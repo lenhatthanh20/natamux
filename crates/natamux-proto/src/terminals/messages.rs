@@ -1,4 +1,4 @@
-//! Messages on the WebSocket of a task terminal, as in `packages/core/src/terminals/terminal.ts`.
+//! Messages on the WebSocket of a task terminal.
 //! Output comes in binary frames: the raw bytes for the screen. Every other message is one JSON
 //! object in a text frame.
 
@@ -165,7 +165,7 @@ pub fn input_chunks(text: &str) -> Vec<String> {
 mod tests {
     use super::*;
 
-    // JSON as the TypeScript client and daemon write it (terminal.ts in @natamux/core).
+    // JSON as the TypeScript client and daemon write it (as the old web client did).
     #[test]
     fn client_messages_match_the_typescript_schema() {
         let cases = [

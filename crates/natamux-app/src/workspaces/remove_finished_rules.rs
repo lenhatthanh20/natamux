@@ -1,4 +1,4 @@
-//! Port of `removeEach` and `removeSummary` in `packages/web/src/features/workspaces/remove-finished.ts`.
+//! `removeEach` and `removeSummary`: how the remove dialog removes tasks one by one.
 
 use natamux_proto::workspaces::workspace::RemoveWorkspaceAnswer;
 

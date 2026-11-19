@@ -1,4 +1,4 @@
-//! How Claude Code reports to the daemon (`packages/core/src/agents/claude-code-hooks.ts`).
+//! How Claude Code reports to the daemon.
 
 /// The hook events Natamux listens to, in core's order.
 pub const CLAUDE_CODE_HOOK_EVENTS: [&str; 7] = [

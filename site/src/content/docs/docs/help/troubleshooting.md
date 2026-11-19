@@ -72,15 +72,13 @@ The agent exited with an error in the first 30 seconds, before it reported anyth
 The dashboard shows "The daemon rejected that token. Paste the token it printed when it started."
 
 - **Desktop app:** you are signed in automatically. If you see the token field anyway, quit and open the app again.
-- **Browser, Docker:** use the value of `NATAMUX_TOKEN` you set.
-- **Browser, daemon you started yourself without `NATAMUX_TOKEN`:** the daemon makes a new random token on every run and prints it once. Use the one from the latest start, or set `NATAMUX_TOKEN` to keep it.
+- **Daemon you started yourself without `NATAMUX_TOKEN`:** the daemon makes a new random token on every run and prints it once. Use the one from the latest start, or set `NATAMUX_TOKEN` to keep it.
 - **CLI:** `natamux` needs `NATAMUX_TOKEN` and, when the daemon is not on `http://127.0.0.1:4317`, `NATAMUX_URL`. The desktop app's token is in `daemon-token` in its [user data folder](/docs/guides/desktop-app/#where-things-are).
 
 ## The port is in use
 
 - **Desktop app:** it uses port 4317 when free and any free port otherwise, so it starts anyway. The CLI looks at 4317 by default, so set `NATAMUX_URL` to the real address. The log line "starting the daemon on port N" shows it.
 - **Daemon you started yourself:** set another port with `NATAMUX_PORT`.
-- **Docker:** set `NATAMUX_PORT` (default 8080).
 - Only one copy of the desktop app runs. Opening it twice focuses the first window.
 
 ## The daemon stopped
@@ -92,7 +90,7 @@ The desktop app shows "The Natamux daemon stopped" with the last lines of the lo
 Natamux learns an agent's state from its hooks. If the task stays "ready" or never reaches "needs input":
 
 1. Start the agent with **Start agent** in the task, not by hand. Natamux adds the hook settings only for sessions it starts.
-2. Check that the `natamux` command exists in the task's terminal: `command -v natamux`. The desktop app puts it first on the PATH. In Docker, hooks need `NATAMUX_URL=http://host:8080/api`.
+2. Check that the `natamux` command exists in the task's terminal: `command -v natamux`. The desktop app puts it first on the PATH.
 3. Set `NATAMUX_DEBUG=1` in the terminal to see why a hook did not arrive. `natamux hook` is silent otherwise and never blocks the agent.
 4. A proxy on your machine can refuse calls to the daemon. Add `127.0.0.1` to `NO_PROXY`.
 
@@ -134,5 +132,4 @@ The branch is deleted only when it is fully merged. Otherwise it stays, and you 
 | What | Where |
 |---|---|
 | Desktop app, daemon | `logs/daemon.log` in the user data folder, or **File → Show Daemon Log**. macOS: `~/Library/Application Support/Natamux`. Windows: `%APPDATA%\Natamux`. Linux: `~/.config/Natamux` |
-| Docker | `docker compose -f compose.prod.yaml logs` |
 | A task's history | The **Activity** section in the **Details** view of the task, or `natamux events T-0001` |

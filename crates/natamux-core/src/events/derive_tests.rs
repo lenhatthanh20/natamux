@@ -1,4 +1,4 @@
-//! Ports `packages/core/src/events/__tests__/derive.test.ts`.
+//! Tests of `derive.rs`.
 
 use natamux_proto::stages::schema::{Gate, Stage, Step};
 use natamux_proto::tasks::task::TaskState::{

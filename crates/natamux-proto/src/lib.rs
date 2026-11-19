@@ -1,5 +1,5 @@
-//! Wire types of the Natamux daemon's HTTP and WebSocket API (L0). Names and values match the
-//! TypeScript schemas in `packages/core`, which stay the source of truth until phase 4.
+//! Wire types of the Natamux daemon's HTTP and WebSocket API (L0). These Rust types are the source
+//! of truth; names and values are kept from the old TypeScript schemas, so clients stay compatible.
 
 pub mod agents {
     pub mod activity;

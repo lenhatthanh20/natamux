@@ -1,4 +1,4 @@
-//! GitHub issues the daemon lists and imports (`packages/core/src/projects/github.ts`).
+//! GitHub issues the daemon lists and imports.
 
 use serde::{Deserialize, Serialize};
 

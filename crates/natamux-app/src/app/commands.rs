@@ -1,4 +1,4 @@
-//! The command registry (`packages/web/src/lib/commands`): each command's id, title, keys, where
+//! The command registry: each command's id, title, keys, where
 //! the keys work and when it applies. Key bindings, the menu bar and the key text of menus and
 //! tooltips all read it, so a key is defined once. `app/shortcuts.rs` gives each id its action.
 

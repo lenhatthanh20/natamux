@@ -1,4 +1,4 @@
-//! `plainText` in `packages/core/src/terminals/terminal.ts`: text with no escape sequences or
+//! `plainText`: text with no escape sequences or
 //! control characters except tabs and line breaks, with LF line ends. Pasted into an agent, an
 //! escape can end the paste early, so its Enter is not a submit.
 

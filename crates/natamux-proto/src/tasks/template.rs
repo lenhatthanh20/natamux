@@ -1,4 +1,4 @@
-//! Task templates (`packages/core/src/tasks/template.ts`), as `GET /templates` sends them.
+//! Task templates, as `GET /templates` sends them.
 
 use serde::{Deserialize, Serialize};
 

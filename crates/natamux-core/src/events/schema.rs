@@ -1,4 +1,4 @@
-//! `taskEventSchema` and `GATE_EVENT_TYPES` (`packages/core/src/events/schema.ts`). The lists of
+//! `taskEventSchema` and `GATE_EVENT_TYPES`. The lists of
 //! types and sources are in `natamux-proto`.
 
 use natamux_proto::events::task_event::{EVENT_SOURCES, EVENT_TYPES, TaskEvent};

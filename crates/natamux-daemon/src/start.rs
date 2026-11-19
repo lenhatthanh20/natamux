@@ -24,7 +24,6 @@ use crate::agents::runner::{AgentLaunch, AgentRunner, AgentRunnerOptions};
 use crate::agents::usage_service::{UsageOptions, UsageService};
 use crate::config::{Config, shell_env};
 use crate::http::server::{AppState, bind, serve};
-use crate::http::web::WebAssets;
 use crate::projects::repos::Repos;
 use crate::shared::event_bus::EventBus;
 use crate::shared::jobs::Jobs;
@@ -478,7 +477,6 @@ fn app_state(
         big_bodies: Arc::new(tokio::sync::Semaphore::new(2)),
         data_dir: config.data_dir.clone(),
         home,
-        web: WebAssets::new(config.web_dir.clone()),
         terminals: built.terminals,
         open_shells: built.open_shells,
         silent_close: config.silent_close,

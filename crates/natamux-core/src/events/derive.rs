@@ -1,4 +1,4 @@
-//! `entersBranch` and `deriveTaskState` (`packages/core/src/events/derive.ts`).
+//! `entersBranch` and `deriveTaskState`.
 
 use natamux_proto::events::task_event::TaskEvent;
 use natamux_proto::stages::schema::{StageBranch, Step};

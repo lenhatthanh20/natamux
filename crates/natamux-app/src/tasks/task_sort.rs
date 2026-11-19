@@ -1,5 +1,4 @@
-//! The order of the task table (`sortTasks`, `nextSort`, `STATE_ORDER` in `packages/web/src/lib/
-//! tasks.ts`).
+//! The order of the task table (`sortTasks`, `nextSort`, `STATE_ORDER`).
 
 use std::borrow::Borrow;
 use std::cmp::Ordering;

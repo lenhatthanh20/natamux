@@ -1,6 +1,6 @@
 ---
 name: terminal
-description: How Natamux terminals work, end to end (PTY shell, daemon screen, WebSocket, xterm.js pane or the app's pane), and the known issues that come from Claude Code, not from Natamux. Use before changing terminal code, or when the user reports broken, duplicated, lost or garbled text, resize trouble, typing problems (Vietnamese input), memory use of shells, or shells that do not end.
+description: How Natamux terminals work, end to end (PTY shell, daemon screen, WebSocket and the app's pane), and the known issues that come from Claude Code, not from Natamux. Use before changing terminal code, or when the user reports broken, duplicated, lost or garbled text, resize trouble, typing problems (Vietnamese input), memory use of shells, or shells that do not end.
 ---
 
 # Terminals
@@ -10,10 +10,8 @@ description: How Natamux terminals work, end to end (PTY shell, daemon screen, W
 ```
 PTY shell (daemon) ───────output──▶ Screen (alacritty_terminal) ──sliced snapshot on attach──▶ client
         ▲                     └─▶ batch ─▶ binary frames (+ 2 MiB ring) ── live output ────────────▶ client
-        └── write() queue ◀── input / run / paste ◀── WebSocket /api/tasks/:id/terminal ◀── TerminalSession (xterm 6)
+        └── write() queue ◀── input / run / paste ◀── WebSocket /api/tasks/:id/terminal ◀── client (the app's pane)
 ```
-
-The dashboard keeps live terminals in a cache (`terminal-cache.ts`). A pane that comes back takes its terminal from the cache: the element moves into the pane. No new socket, no snapshot replay.
 
 ## Files
 
@@ -23,17 +21,8 @@ The dashboard keeps live terminals in a cache (`terminal-cache.ts`). A pane that
 | `crates/natamux-screen/src/` | The screen of a shell on `alacritty_terminal`, the frames and the snapshot text. `crates/natamux-daemon/src/terminals/limits.rs` and `types.rs`: the tuning constants, the shared types and errors |
 | `crates/natamux-pty/src/` | The PTY: `pty.rs`, `unix.rs`, `windows.rs`. `process_table.rs` parses `ps` once for all shells; `process_tree.rs` signals the whole process tree, then the shell. `input_gap.rs` keeps the DEL gap |
 | `crates/natamux-pty/src/shell_command.rs` | Which shell: `$SHELL` or bash, as a login shell |
-| `crates/natamux-daemon/src/http/terminal_socket.rs`, `tickets.rs` in `terminals/` | WebSocket route. A one-time ticket (`POST /tasks/:id/terminal/ticket`, 30 s) replaces the token, because a browser cannot set headers. Answers `ping`, drops a silent socket, closes a resume of a gone shell with the gone close code |
+| `crates/natamux-daemon/src/http/terminal_socket.rs`, `tickets.rs` in `terminals/` | WebSocket route. A one-time ticket (`POST /tasks/:id/terminal/ticket`, 30 s) replaces the token, because a WebSocket client cannot always set headers. Answers `ping`, drops a silent socket, closes a resume of a gone shell with the gone close code |
 | `crates/natamux-daemon/src/agents/runner.rs`, `stages/runner.rs` (`stages/shells.rs`) | An agent starts by sourcing `<dataDir>/agent-launch-<id>.sh` in shell 1. The agent counts as running while the foreground program is not a shell |
-| `packages/core/src/terminals/terminal.ts` | Message schemas, close codes, `shellIdSchema`. `ACK_EVERY_BYTES` (64 KB). Heartbeat and reconnect constants. `TERMINAL_HISTORY_BYTES` (10 MB), `scrollbackLines(cols)` (1,000 to 10,000 rows; 16 bytes a cell, the xterm.js figure; Rust `scrollback_lines` in `natamux-proto` uses 24, the alacritty cell) |
-| `packages/web/src/features/terminals/TerminalView.tsx` | React view: takes a session from the cache in a layout effect, shows it in a second one, shows status (an overlay strip), find, "Jump to latest" |
-| `packages/web/src/features/terminals/session/` | One live terminal outside React: xterm 6, fit, Unicode 11, search, links, socket, reconnect and heartbeat, `sendSize`/`claimSize`, `show`/`hide`. Only `TerminalView.tsx` imports it, so xterm stays out of the first load. `session.search()` makes the `SearchAddon` at the first find (`TerminalFind` calls it); `importWebgl()` loads `@xterm/addon-webgl` with the first GPU renderer |
-| `packages/web/src/features/terminals/terminal-cache.ts` | Live terminals by key, `KEEP_ALIVE_TERMINALS` (8), the hidden holder `#terminal-holder`, dispose rules. Never imports xterm (it is in the first load) |
-| `packages/web/src/features/terminals/gpu-renderer.ts` | WebGL budget for the page: `GPU_CONTEXTS` (8), `GIVE_BACK_DELAY_MS` (10 s), `MAX_CONTEXT_LOSSES` (2), `watchVisible` |
-| `packages/web/src/lib/prefetch.ts` | `prefetchWhenIdle`: the dashboard loads the TerminalView chunk when the page is idle, or after 3 s at most. Pointing at or focusing Agents in the sidebar loads it too |
-| `packages/web/src/features/terminals/terminal-theme.ts` | Palettes, scrollbar colors, `TERMINAL_LOOK` (cursor, bold, line height, contrast, fast scroll, scrollbar width through `overviewRuler.width`) |
-| `packages/web/src/lib/fonts.ts`, `src/assets/fonts/` | `TERMINAL_FONT`: JetBrains Mono, then the bundled Nerd Font icons (`ICON_FONT`, `@font-face` in `styles.css`) |
-| `packages/web/src/features/terminals/terminal-font.ts`, `TerminalFontDialog.tsx` | Font: the user's choice, then Ghostty's, then the default. localStorage `natamux.terminal-font` and `natamux.ghostty-font` |
 | `crates/natamux-app/src/terminals/terminal_font.rs` | The desktop app's terminal font, also from `font-family` and `font-size` of the Ghostty config files |
 
 ## Rules the code keeps
@@ -50,44 +39,9 @@ The daemon sections below were written for the Node daemon, so they use its name
   - The shell of an ended task with no client ends after `ENDED_IDLE_MS` (60 s), unless a non-shell program runs in it. It is checked again later.
   - `closeOne` sends SIGHUP, then SIGKILL after `KILL_GRACE_MS`. The SIGKILL still goes out when the shell ended but a program that ignored SIGHUP (`leftover`) runs on; `closeAndWait` and `closeAllAndWait` wait for it.
   - Daemon shutdown awaits `closeAllAndWait`, so no shell outlives a quit. The desktop app waits for the daemon to exit (at most `DAEMON_STOP_WAIT_MS`, 5 s) before it quits.
-- **Pane.** Resizes work like VS Code's `terminalResizeDebouncer` (`resizeNow`, `settle`).
-  - While the pane changes size, the rows change in xterm at once (`fit.proposeDimensions()`). The columns change at once too while the buffer (`buffer.normal.length`) has fewer than `REFLOW_WAIT_ROWS` (200) rows; a longer one waits, because columns reflow every wrapped line.
-  - These resizes are local: `holdSize` keeps `onResize` from sending them. When the pane settles (`FIT_DELAY_MS`, 100 ms after the last change), `settle` fits (the columns catch up) and sends one resize. A hide or dispose before that sends nothing.
-  - `onResize` sets the scrollback for the new width and, outside a local resize, sends the size.
-  - Disposal closes the socket at once and frees xterm after `DISPOSE_DELAY_MS`, because xterm still has a frame queued.
-  - **Cover (T-0089).** A pane change that changes the cells (New shell, Close shell, a panel) hides the screen in the `ResizeObserver` callback, before paint: `host` `opacity: 0`, not `visibility: hidden`, so a click in the pane still reaches xterm and focuses it (a hidden element gets no click; the `terminal-look` cursor E2E clicks right after New shell). No skeleton. The frame and its background stay.
-    - At `settle`: a resize that went out while covered (`redrawWanted`) waits for the redraw: shown once the shell printed nothing for `REDRAW_QUIET_MS` (60 ms), at most `REDRAW_MAX_MS` (400 ms) after the resize. No resize (same cells, ended shell, catch-up): shown at once.
-    - Shown with `hm-fade-in` on `host`, removed on its `animationend`, so a move to the holder and back does not fade again.
-    - A change while covered keeps it covered; the wait starts again at the next `settle`.
-    - Cover (`covered`, opacity) and catch-up (`catchUpHidden`, visibility) are separate flags; `applyScreen` sets both.
-    - `stopObserving` (`show`, `hide`, `dispose`) and a `settle` while off screen (`watchVisible`) end the cover without a fade.
-  - The status strip ("Connecting.", "Reconnecting.", error) is drawn over the top of the screen, so the screen box does not change when the socket opens.
-- **Cache (web).**
-  - Key `taskId/terminal` (`terminalKey`). Shell 1 in the agents grid and in the task view share a key, so the terminal moves between them.
-  - A task switch mounts the task view again (`key={task.id}`). `ShellPanes` mounts its panes only once the grid has its width (`useElementWidth` measures in a layout effect, before paint), so each terminal is first shown in its final box and sends no resize. A guessed layout (2 × 2 before a 1 × 4) sent two resizes per shell. "New shell" adds its name to the `['terminals', id]` query, so the next mount lists it at once.
-  - The `['terminals', id]` list read before a mount may still have a shell the daemon closed meanwhile (a stage that ends its shell while another task is shown). A pane for it would attach and start a new shell, so when a listed shell other than 1 has no live terminal in the cache (`hasTerminal`), the grid waits for the list read on mount (`isFetchedAfterMount`). The native grid does the same: `ShellPanes` reads the list once more when a shown listed shell other than 1 (not `restoring`) has no cached terminal, and waits for the answer (`unconfirmed_shells`, `shell_panes_list.rs`).
-  - A pane that unmounts hides its terminal in `#terminal-holder` (hidden, `aria-hidden`). The socket stays open and output is still written.
-  - At most 8 hidden. The one hidden longest is disposed. The count runs in a microtask, because React runs the old view's cleanup before the new view's effect: task A → B → A with 8 others hidden keeps A.
-  - Disposed at once (or when it leaves the screen, if shown): exit, error, failed first connect or a final close code such as `CLOSE_GONE` (`onEnd`), a shell the user closes (`disposeTerminal`), "Start a new shell", a done or cancelled task, a task gone from the list, a removed workspace (`syncTaskTerminals`), sign-out or a rejected token (`disposeAllTerminals`). A hidden client would keep the daemon's idle close from ending the shell.
-  - A discard never starts a new shell by itself.
-  - The same key on screen twice: the second mount gets its own terminal, disposed with it.
-  - Settings (theme, font, UI size) reach a hidden terminal at its next `show`, not at once: it cannot measure cells while hidden.
-  - `show` fits once and calls `refresh`. Nothing fits while hidden: the `ResizeObserver` is off, because a fit of a box with no size sends a tiny resize.
-  - Scroll state goes to React at most once per frame, and never while hidden. `state()` returns the same object until something changes (`useSyncExternalStore`).
-- **GPU budget (web).**
-  - `@xterm/addon-webgl` is not in the TerminalView chunk. The first renderer loads it with `import()` (`importWebgl`), so that first load is async: it settles later and fits again (`onSwitch`). After it, every renderer starts in the same call. A failed import counts as no WebGL: the terminal draws with the DOM.
-  - At most 8 WebGL renderers per page: a full grid (`MAX_PANES`, 6), and two tasks of 4 shells switch with no new context. Chrome allows 16. Each holds a GPU context and glyph textures, tens of MB at Retina.
-  - A hidden terminal (in the holder, or off screen for `watchVisible`) keeps its renderer for `GIVE_BACK_DELAY_MS` (10 s), so a quick switch back is instant. Then it gives the renderer back and draws with the DOM. A show before that cancels the give-back; a show after it takes a renderer again if the budget allows.
-  - When the budget is full, the terminal hidden longest gives its renderer back at once. With none hidden, a new terminal draws with the DOM.
-  - A renderer given back or disposed also drops its WebGL context (`WEBGL_lose_context`): xterm removes the canvas but keeps the context, which would hold GPU memory until garbage collection and count toward Chrome's limit of 16 contexts. The addon's loss listener is gone by then, so this is not counted as a lost context. The addon adds two canvases, `xterm-link-layer` (2D) and then its WebGL one; `loadWebgl` keeps the WebGL one.
-  - A slot is reserved before the load runs. A load that ends after a newer take or a dispose (load id) only disposes its result.
-  - After 2 lost contexts, no WebGL for the rest of the page session.
-  - After a renderer switch, the terminal fits again on screen, or at its next show when hidden. A renderer taken during `show` needs no fit of its own: `setOnScreen` calls the GPU before it marks the terminal on screen, and fits once after.
-  - A web font already loaded when the terminal opens (`document.fonts.check`) is not measured again: that would redraw every glyph of each terminal a view opens.
-
 ## Protocol
 
-Output is binary. Everything else is one JSON text frame. Schemas: `packages/core/src/terminals/terminal.ts`. Socket: `server.ts` (ticket, then `?cols&rows&terminal&visible=0|1`, and for a resume `&shellId[&offset]`). The daemon ignores binary frames from the client.
+Output is binary. Everything else is one JSON text frame. Socket: `server.ts` (ticket, then `?cols&rows&terminal&visible=0|1`, and for a resume `&shellId[&offset]`). The daemon ignores binary frames from the client.
 
 | Message | Dir | Meaning |
 |---|---|---|
@@ -105,7 +59,7 @@ Output is binary. Everything else is one JSON text frame. Schemas: `packages/cor
 | `ack` `{offset}` | to daemon | Output parsed so far, every `ACK_EVERY_BYTES` and after each catch-up. Drives flow control |
 | `ping` | to daemon | Heartbeat, every `HEARTBEAT_MS` while the page is visible |
 
-Close codes (core): `CLOSE_UNAUTHORIZED` 4401 (bad ticket or query), `CLOSE_REFUSED` 4409 (after `error`: the shell could not start), `CLOSE_GONE` 4410 (a resume whose shell no longer runs). The dashboard never reconnects after them.
+Close codes (core): `CLOSE_UNAUTHORIZED` 4401 (bad ticket or query), `CLOSE_REFUSED` 4409 (after `error`: the shell could not start), `CLOSE_GONE` 4410 (a resume whose shell no longer runs). The client never reconnects after them.
 
 - Query `visible=0` (page hidden at connect): the client does not claim the size.
 - Attach order: `hello`, then `snapshot`, snapshot frames, frames that waited, `replayed`, then live frames.
@@ -136,7 +90,7 @@ Close codes (core): `CLOSE_UNAUTHORIZED` 4401 (bad ticket or query), `CLOSE_REFU
 - **History length** = `buffer.length - rows`. Pieces use `serialize({ range, excludeAltBuffer: true, excludeModes: true })`.
 - **Join (`historyJoin(count, rows)`).** The serializer writes each piece as if from the top of an empty screen. A terminal that scrolls fills the new row with the current background, and the serializer expects that only from the second screen of a piece on. So each piece is at most `rows` rows (`sliceEnd` never cuts a wrapped line; a wrapped line longer than `rows` stays whole), and between pieces: reset style, move to the last row, `count` newlines (scrolls the piece into history), cursor home.
 - **k.** The last part starts at a row that is not the rest of a wrapped line. `k` = rows of the history that go into the last part (can be 0). It is serialized with `serialize({ scrollback: k })`: those rows, the screen, the cursor, the alternate screen and the modes.
-- **Hidden cursor.** `@xterm/addon-serialize` 0.14 leaves out DECTCEM, and the dashboard resets before a snapshot, so a program that hid the cursor to draw its own (Cursor CLI, Codex) showed two. `ScreenState` tracks it with parser handlers (`?25h`/`?25l`, also grouped; RIS and DECSTR show it) and `cursorMode()` adds `\x1b[?25l` to the last part (or the one piece). The cursor shape a program sets (DECSCUSR) is still lost.
+- **Hidden cursor.** `@xterm/addon-serialize` 0.14 leaves out DECTCEM, and the client resets before a snapshot, so a program that hid the cursor to draw its own (Cursor CLI, Codex) showed two. `ScreenState` tracks it with parser handlers (`?25h`/`?25l`, also grouped; RIS and DECSTR show it) and `cursorMode()` adds `\x1b[?25l` to the last part (or the one piece). The cursor shape a program sets (DECSCUSR) is still lost.
 - **Short history** (`history <= sliceRows`, or the whole history is one wrapped line): one `serialize()` call, no join.
 - **Shared snapshot.** `SnapshotJob` has the clients and the cut offset. A new client joins the running job, unless its frames are being sent, when `cut === -1` (still waiting for a frame), or when nothing was sent since the cut (`cut === session.offset`, empty batch) and the shell size is the same. Otherwise it goes to `nextSnapshot`; its output is dropped until that cut. When the job ends (`endSnapshot`), the next job starts with all of them.
 - **Send.** `snapshot` to every client of the job, then the frames (`splitFrames`) over several turns: at most `SNAPSHOT_SEND_BYTES` (256 KB) or `SERIALIZE_SLICE_MS` per turn, then `setImmediate`. Meanwhile the clients stay in the snapshot phase (new output goes to `waiting`), the job is `sending` (a new client waits for the next job instead of joining), and a client that leaves gets nothing more. Then per client: its `waiting` frames, `replayed {offset}`; then phase `live`.
@@ -144,7 +98,7 @@ Close codes (core): `CLOSE_UNAUTHORIZED` 4401 (bad ticket or query), `CLOSE_REFU
 
 ## Flow control (daemon)
 
-Two separate limits. Only the daemon's own screen pauses a shell; a slow or hidden dashboard never does.
+Two separate limits. Only the daemon's own screen pauses a shell; a slow or hidden client never does.
 
 | Constant | Value | Meaning |
 |---|---|---|
@@ -158,11 +112,11 @@ Two separate limits. Only the daemon's own screen pauses a shell; a slow or hidd
 - **Screen marks.** `ScreenState` counts bytes from `write` to xterm's write callback, the freeze queue of a snapshot included, so a long snapshot pauses the shell by itself. Two marks, so no flapping. Input still goes to a paused pty (Ctrl+C works). `closeOne` resumes before SIGHUP; `onExit` resumes too.
 - **Unacked** = `sent - acked` per client, in stream offsets. An ack above `sent` is clamped, an older one is ignored. Bytes of a catch-up (snapshot, waiting frames, ring frames of a resume) never count: at `replayed`, `sent = acked = offset`.
 - **Behind.** A live frame that would take a client past `CLIENT_HIGH_WATER`, or a hidden client past its window's budget, is dropped, not queued. The client becomes `behind` with `behindFrom` (first missed byte) and `behindSince`. Other clients are not affected.
-- **Hidden budget.** Fixed windows from the moment it went hidden (`visible: false`, or attach with `visible=0`). A status line at 2 KB/s never hits it; a flood does. The web uses it.
+- **Hidden budget.** Fixed windows from the moment it went hidden (`visible: false`, or attach with `visible=0`). A status line at 2 KB/s never hits it; a flood does. 
 - **Park** (native app, T-0210). `visible: false` with `park: true` sets `parked`: `admits` takes no frame, so the client goes behind at its first frame, as one over its budget does. `visible: true` sets `show_now` when it was parked and behind: that one catch-up skips rule 3 below (quiet or max wait) and goes at once, from the ring when `behindFrom` is still in it, else a snapshot. A parked client that missed nothing gets an empty catch-up (`resume` and `replayed` at its offset), so every show of a parked terminal ends at `replayed`: the app times the show to it (show latency in the perf report). Later catch-ups keep the flood limit. Without `park` a hidden client keeps the budget. When the shell ends, every behind client (parked or not) and every waiting snapshot is caught up at once (`catch_up_at_exit`), then gets `exit`, so an ended terminal keeps a current last screen.
 - **`waiting` cap.** Output during a snapshot waits up to `CLIENT_HIGH_WATER`. Past it, `waiting` is dropped: the client still gets the snapshot, then `replayed{cut}`, and is behind from the cut.
 - **Catch-up** (`catchUpBehind`, run on `ack`, on `visible: true`, after a snapshot, and on a timer at the earliest time a client could be ready). All of:
-  1. Acked everything: `sent - acked < ACK_EVERY_BYTES`. The dashboard acks only every 64 KB, so a smaller rest is all it can have parsed.
+  1. Acked everything: `sent - acked < ACK_EVERY_BYTES`. The client acks only every 64 KB, so a smaller rest is all it can have parsed.
   2. Visible (last `visible` true; one without a size counts).
   3. The shell is quiet, or the client has been behind `RESYNC_MAX_WAIT_MS`.
 - **Stalled acks.** A behind, visible client with `ACK_EVERY_BYTES` or more unacked and no ack progress for `ACK_STALL_MS` (`ackedAt`) gets a snapshot once the shell is quiet, still at most one per `RESYNC_MAX_WAIT_MS`: its offset cannot be trusted, so never a resume. Hidden clients wait for `visible`. Going behind plans a look on a 0 ms timer, so this works with no ack at all.
@@ -171,7 +125,7 @@ Two separate limits. Only the daemon's own screen pauses a shell; a slow or hidd
 
 ## Reconnect
 
-A dropped socket does not end the shell. The dashboard comes back by itself and gets only what it missed.
+A dropped socket does not end the shell. The client comes back by itself and gets only what it missed.
 
 | Constant (core) | Value | Meaning |
 |---|---|---|
@@ -207,7 +161,7 @@ A dropped socket does not end the shell. The dashboard comes back by itself and 
   - A hidden terminal sends `visible: false` with `park: true` (also right after a hidden connect): the daemon sends it nothing until it is shown, then catches it up at once. The cache keeps 30 hidden terminals (`KEEP_ALIVE_TERMINALS`).
   - `natamux-client` `session.rs` joins binary frames that already wait in the socket into one `Output` (at most 256 KiB); a text frame ends the join, so control messages keep their place. The client runtime has 4 worker threads.
   - The first snapshot shows the skeleton. A later one (a terminal that already showed a screen) is written to a screen and view of its own (`remote_terminal_events.rs` `reset`); the old screen stays until the parser wrote the whole catch-up (`Job::CaughtUp` tells it), then the new one takes its place, its input sink, and the focus when the old view had it. The old view is notified first: it is the one in the drawn tree, so the cached views around the pane draw again.
-  - Logs: a terminal reconnect (with `TerminalHandle::last_loss`) and every change of the dashboard link go to `<data folder>/logs/app.log`, cut to its last 1 MB at start. A slow dashboard read no longer shows "Reconnecting": only a lost `/events` socket, or 3 failed task-list reads in a row, do.
+  - Logs: a terminal reconnect (with `TerminalHandle::last_loss`) and every change of the client link go to `<data folder>/logs/app.log`, cut to its last 1 MB at start. A slow client read no longer shows "Reconnecting": only a lost `/events` socket, or 3 failed task-list reads in a row, do.
   - The history keeps the daemon's rule, `scrollback_lines(cols)` at the pane's own width (`terminal_size.rs` `history_lines`), so a snapshot loses no row. Zed's terminal has no setter for the limit, so `RemoteTerminal::build_at` builds the terminal and its view again at the first grid size, before connect and before any output. A later resize keeps the limit of that first width. Code that focuses the view later reads `view` then, as the first layout replaces it.
 - Daemon:
   - Shells parse in lanes (`parsing` in `shells.rs`, `Turns::with_lanes(parse_lanes())`): up to half the cores, 2 to 4, at once. Turns go in ticket order, in pieces of at most `PARSE_TURN_BYTES` (16 KiB), so a flood in one shell does not hold the others for a whole 64 KiB read. A turn is a slice of the read, not a copy. Order inside one shell holds: one reader thread per shell, and `take_output` runs under the session lock.
@@ -216,17 +170,6 @@ A dropped socket does not end the shell. The dashboard comes back by itself and 
   - Focus on the terminal view claims (`claim_size`); during a catch-up it claims at its end.
   - The terminal list has `closing`: the shells of ended stages that wait for their agent's turn end (`StageRun::closing_shells`). `ShellPanes` leaves them out (`without_closing`, never Terminal 1). Kept, a new stage terminal first took their place, then changed width when they closed, and Claude Code printed its prompt again (T-0234).
   - A visible resume sends its size when the catch-up ends, unless its `snapshot` came at that same size. Hidden: nothing.
-
-## Client catch-up (web)
-
-- **Start.** `snapshot` or `resume` begins a `CatchUp` and a `CATCH_UP_TIMEOUT_MS` (10 s) timer. When it fires, `finishCatchUp(null)` ends it, so a missing `replayed` never leaves a blank pane.
-- **Snapshot.** The host is hidden (`visibility: hidden`) and `TerminalView` shows the skeleton (`aria-label="Loading the terminal"`, `catchingUp` state). The textarea stays visible, so it keeps focus and keys are not lost. In xterm's write queue: `reset()`, then `terminal.resize(cols, rows)` to the snapshot size (local only).
-- **Resume.** Drawn in place; hidden only when it is larger than `HIDDEN_RESUME_BYTES` (64 KB).
-- **No resize during it.** `sendSize` returns while `catchUp !== null`; `fitNow` does not fit during a snapshot. The local resizes are not the user's.
-- **Typing queue.** `onData` during a catch-up pushes to `typed`, sent in order after it. Exception: query replies. `isQueryReply(data)` (DA, CPR, DSR, DECRQM, window size, DCS, OSC) is dropped unless `fromUser` is set: the program asked long ago. `fromUser` is set by a capture `keydown` on the xterm element (`markUser`) and cleared by the textarea listener or a 0 ms timer.
-- **End.** `replayed` sets `offset = at` at once (in frame order) and marks the catch-up `replayed`, then writes `''` and finishes in its callback, so the last chunk is parsed first. `finishCatchUp(at)`: `ack(at)`; `safeFit` back to the pane size (sends nothing, still in catch-up); `scrollToBottom` for a snapshot; show the screen; send the size if claimed; claim if the terminal came on screen meanwhile (`claimAfterCatchUp`); send `typed`.
-- **Acks.** Outside a catch-up, `offset` counts bytes; after a write is parsed, `ack(offset)` when `offset - acked >= ACK_EVERY_BYTES` (64 KB). Bytes during a catch-up are not counted, but bytes after `replayed` are, even before xterm parsed the catch-up: live output comes right after `replayed`, and leaving it out made the client ack too little forever, so the daemon never caught it up once behind (the e2e flood froze on this).
-- `exit` and `error` end a catch-up without an offset.
 
 ## Input trace
 
@@ -257,37 +200,18 @@ Before calling something a Natamux bug, check whether the bytes are wrong (daemo
   - Clients are `client()`: `frames` holds binary and control frames. Helpers: `bytesOf`, `outputOf`, `controls`, `isBytes`, `numbered(count)`, `screenOf(frames, size)`, `headless(size)`, `mixedLines(cols, count)` (colors, wide, emoji, wraps, Vietnamese), `nextTurn()`.
   - `onEachSlice(between)` spies on `SerializeAddon.serialize` and calls `between` on every history slice: use it to send output or resize while a sliced snapshot runs.
   - `fakeSpawner()` and `FakePty` (`terminal-fake.fixture.ts`) record `written`, `sizes`, `signals`, and `flow` (`pause`/`resume` calls in order) with `paused`. `emit()` takes text or bytes and delivers a Buffer, as the real pty; it still delivers while paused. Set `program` to fake the foreground, `stubborn` to ignore SIGHUP, and `orphan` for a program that ignores SIGHUP while the shell ends.
-  - Flow control helpers: `frameOf(i)` (one full 64 KB frame of numbered lines), `ackingClient(service, terminal?)` (acks like the dashboard, a microtask later; `arrivals` has live bytes and times), `catchUps(frames)` (catch-ups after the attach snapshot), `sinceSnapshot(frames)`, `sentTo(frames)`, `expectSameScreen(frames, daemonFrames)` (compares as deep as the daemon's history), `flood(pty, ms, bytes?)` (fake timers), `first(items)`.
+  - Flow control helpers: `frameOf(i)` (one full 64 KB frame of numbered lines), `ackingClient(service, terminal?)` (acks like the client, a microtask later; `arrivals` has live bytes and times), `catchUps(frames)` (catch-ups after the attach snapshot), `sinceSnapshot(frames)`, `sentTo(frames)`, `expectSameScreen(frames, daemonFrames)` (compares as deep as the daemon's history), `flood(pty, ms, bytes?)` (fake timers), `first(items)`.
   - A file-level `afterEach` runs `closeAll()` on every service made by `setup()`, so resync timers and snapshots of one test never run in the next.
   - `screenOf()` replays a client's output into a headless xterm to compare screens. Use Unicode 11, as the code does.
   - Timers (idle close, input gap, kill grace): `vi.useFakeTimers()` before `setup()`, and `vi.useRealTimers()` in `afterEach`.
   - Use `LONG_TEST_MS` for tests that print thousands of lines.
 - **Daemon benchmark:** `terminal-bench.test.ts` records snapshot size and time, parse speed and frames per flood. It asserts the snapshot loop delay (≤ 50 ms). Per snapshot case it also records the longest synchronous run per phase (`sliceMs`, `lastPartMs`, `sendTurnMs`, `timerMs`, `otherMs`, by wrapping the global timers during the measure) and the longest GC pause (`gcMs`). The history is printed with no client attached, and services are closed after each case, so no garbage of earlier work lands in the measure. It runs only with `NATAMUX_BENCH=1`, which the CI `test` jobs set. The table goes to the job's step summary and a `TERMINAL_BENCH_JSON` log line.
-- **Web:**
-  - `xterm-fake.fixture.ts`: a fake xterm, addons and socket. Mock `@xterm/*` with it (see `terminal-session.test.ts`). `vi.mock` covers the `import()` of `@xterm/addon-webgl` too; the test files `await importWebgl()` in `beforeAll`, so every renderer starts in the same call. `FakeFitAddon.proposeDimensions()` gives `fitSize`; set `buffer.normal.length` to test the column wait.
-  - `TerminalFind.test.tsx`: the find bar asks for the search addon once.
-  - `terminal-session.test.ts`: show, hide, fit, dispose, scroll state, settings, GPU, catch-up. Uses fake timers and stubs `ResizeObserver` and `requestAnimationFrame`. Helpers: `shown()` (session on screen, socket open), `snapshotOf(socket, size, chunks, offset?)` (the daemon's side of an attach; no `replayed` without an offset), `setPageHidden`.
-  - `fakeSocket()` (`xterm-fake.fixture.ts`): `message(obj)`, `bytes(text)` (a fresh `ArrayBuffer`, as with `binaryType = 'arraybuffer'`), `open`, `drop(code = 1006)`, `sent`. Pings are not in `sent`: they count in `pings` and get a `pong` at once while `answerPings` is true. `FakeTerminal`: `write` records `written`/`writes`; write callbacks wait for `parse()`; `fire('data', x)`, `keyData`, `fitSize`, `resets`.
-  - Reconnect tests: `reconnecting(random?)` gives a new socket per connect (`last()`), `attached()` is that session on screen and caught up at offset 6, `wait(ms)` advances fake time and lets `connect()` resolve. `random` fixes the jitter (0.5: none).
-  - `terminal-cache.test.ts`: limits, eviction order, dispose rules. Call `resetTerminalCache()` in `afterEach`.
-  - `gpu-renderer.test.ts`: make a budget with `createGpuBudget()`, or call `gpuBudget.reset()`.
-  - Other components mock TerminalView.
 - **Daemon resume:** `describe('a client that comes back')` in `terminal-service.test.ts` (`lost()`: a client that saw the screen, then detached). `server.test.ts` covers the query, `CLOSE_GONE`, `pong` and the silent close (fake `setTimeout` only after the first socket opened, so its timer stays real).
-- **E2E:** `e2e/tests/workspace.spec.ts` types in a shell and reads `.xterm-rows`, with WebGL off. `terminal-protocol.spec.ts` drops and blocks sockets with `controlTerminalSockets` (`routeWebSocket`): reconnect, exit, and query replies in a resume. `terminal-measures.spec.ts` (baseline) and `terminal-cache.spec.ts` (cache) record numbers through `measures.ts`. `terminal-gpu.spec.ts` runs with WebGL (SwiftShader) for the GPU budget and lost contexts. `daemon-rss.ts` samples the daemon's memory. See `docs/e2e.md` and the `e2e` skill.
 
 ## Pitfalls
 
-- The icon font loads on the first icon drawn (`unicode-range`). WebGL has cached that glyph as an empty box by then, so the session clears the texture atlas on `document.fonts` `loadingdone`.
-- Keep ligatures, `allowTransparency` and `smoothScrollDuration` off. Each one costs drawing time.
-- No CSS `:has()` on an element that holds terminals. The DOM renderer rewrites rows all the time, and a `:has()` dim rule tripled the echo p95 in E2E (T-0005).
 
-- xterm 6 scrolls with its own scrollable element. CSS on `.xterm-viewport` no longer reaches the scrollbar.
-- `reflowCursorLine` is false by default in xterm 6. Tests that resize narrower must not expect the cursor line to reflow.
 - Add a resize only where the size really changes. Each one costs a redraw, and in Claude Code's classic renderer a duplicate block.
-- Hidden terminals still parse their output on the main thread. The hidden budget caps that at 256 KiB per second per terminal (`HIDDEN_BUDGET_BYTES`); past it the terminal is behind until shown.
 - A test client that never acks goes behind after 512 KB of live output, or past 512 KB of output during its snapshot. Use `ackingClient` when a test needs all the bytes.
-- In tests, find `.xterm-rows` inside a pane region. The holder has rows of the hidden terminals too.
-- Client code checks `typeof event.data !== 'string'`, not `instanceof ArrayBuffer`: a buffer from another realm (jsdom in tests) fails `instanceof`.
-- A hidden parent (`visibility: hidden`) unfocuses the textarea. `hideScreen` hides the host and sets the textarea back to `visible`; `showScreen` undoes both.
 - The serializer fills new rows with the current background only past the first screen of a piece. Do not change the slice size or `historyJoin` without the "colored rows" tests.
 - Windows: node-pty reports only the shell as the foreground program, and there are no signals. An agent's exit is seen through the window title (`AGENT_EXITED_TITLE`).

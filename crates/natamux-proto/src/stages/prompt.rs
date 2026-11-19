@@ -1,4 +1,4 @@
-//! The prompt of a stage (`packages/core/src/stages/prompt.ts`).
+//! The prompt of a stage.
 
 use crate::stages::capabilities::stage_name;
 use crate::stages::catalog::catalog_entry;

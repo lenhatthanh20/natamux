@@ -1,5 +1,4 @@
-//! The rules of a pipeline (`pipeline-schema.ts` and `pipeline-issues.ts` in
-//! `packages/core/src/stages`), as the messages the settings screen shows next to a stage.
+//! The rules of a pipeline, as the messages the settings screen shows next to a stage.
 //!
 //! The rules work on steps that were read, so a field of a wrong JSON type is refused at read
 //! time, not shown here.

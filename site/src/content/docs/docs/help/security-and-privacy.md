@@ -14,7 +14,6 @@ This page summarizes [SECURITY.md](https://github.com/lenhatthanh20/natamux/blob
   - Tasks, history and stage files: `.natamux/` in each repository.
   - Worktrees: `.natamux/worktrees/`, or the folder you set.
   - Desktop app token, update setting, downloaded updates and logs: its user data folder (`~/Library/Application Support/Natamux` on macOS, `%APPDATA%\Natamux` on Windows, `~/.config/Natamux` on Linux).
-  - Dashboard preferences and the token: your browser's `localStorage`.
 - Data leaves your machine only when you or an agent you start makes it happen:
   - Coding agents send your prompts and code to their own companies, under their terms. Natamux does not see or change that.
   - GitHub actions (push, pull request, issue import) use your own `git` and `gh` login.
@@ -28,10 +27,10 @@ Each task works in its own git worktree. Natamux never pushes, merges or deletes
 
 ## The daemon
 
-- It listens on `127.0.0.1` (loopback) by default. Only the Docker setup listens on all interfaces inside its container, and `compose.prod.yaml` publishes the port to loopback only.
-- Every API request needs a token in an `Authorization: Bearer` header. `/health` and the static dashboard files are the only exceptions.
+- It listens on `127.0.0.1` (loopback) by default. Only the CI test container listens on all interfaces inside its container, and `compose.prod.yaml` publishes the port to loopback only.
+- Every API request needs a token in an `Authorization: Bearer` header. `/health` is the only exception.
 - Without `NATAMUX_TOKEN`, the daemon makes a random token for each run and prints it once.
-- The token travels in a header, never a cookie, so other websites cannot use your session. Terminals open with a one-time ticket that expires after 30 seconds. Only the legacy web dashboard sends `?token=` on `/events`.
+- The token travels in a header, never a cookie, so other websites cannot use your session. Terminals open with a one-time ticket that expires after 30 seconds.
 - The daemon checks the `Host` header against an allow-list (`127.0.0.1`, `localhost`, `::1`, plus `NATAMUX_ALLOWED_HOSTS`) and the `Origin` of WebSocket handshakes. A web page on another site cannot reach it, not even by DNS rebinding.
 - Do not run the daemon on a network address without TLS. Put a reverse proxy with TLS in front of it.
 - Task terminals get an [agent token](/docs/reference/http-api/#the-agent-token), not the daemon's token. It is per task and lives in memory only. An agent cannot approve, skip or pass a stage, change project settings or approve repo commands, and what it does is recorded as the agent's. The `natamux` command in a task terminal uses it too. This stops an agent that follows bad instructions, for example from a web page or an issue. A subtask stays in its parent's project, and an agent cannot fan out a task, send the events only the daemon sends (`stage.checked`, `stage.started`, `stage.reopened`, `pr.merged`) or report a command stage done. Every send-back by an agent counts for `maxSendBacks`. It is not a sandbox: an agent runs as your user, so it can still read the daemon's token file.
@@ -50,7 +49,7 @@ Each task works in its own git worktree. Natamux never pushes, merges or deletes
 - The app folder and the daemon data folder are private to your user (mode `0700`).
 - The desktop app keeps its token in its user data folder, readable only by your user (mode `0600`).
 - The scripts that start agents are written with mode `0600`.
-- In a browser, Sign out in the dashboard's account menu removes the token from that browser. The desktop app is native: it has no page and no Sign out.
+- The desktop app is native: it has no web page and no Sign out.
 
 ## Updates
 

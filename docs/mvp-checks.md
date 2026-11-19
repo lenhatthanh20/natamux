@@ -4,7 +4,7 @@ How to check the success criteria of `plan-features.md` section 8 by hand in the
 
 ## Setup
 
-Install and open the desktop app. Add a git project and make sure Claude Code is installed and logged in on the same machine. For a fake-agent browser demo, use `scripts/e2e.sh build` and `E2E_LOCAL=1 scripts/e2e.sh up` in a codespace.
+Install and open the desktop app. Add a git project and make sure Claude Code is installed and logged in on the same machine.
 
 ## 1. Start 3 agents on 3 tasks from one repo in under 2 minutes
 

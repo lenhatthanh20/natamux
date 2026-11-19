@@ -13,7 +13,7 @@ The daemon owns all task state. The dashboard, the `natamux` command and the age
 
 ## Base URL and auth
 
-- Base URL: `http://127.0.0.1:4317` by default (`NATAMUX_PORT` changes the port). When the daemon serves the dashboard (the desktop app, or Docker), the API is also under `/api` on the dashboard's address.
+- Base URL: `http://127.0.0.1:4317` by default (`NATAMUX_PORT` changes the port). In the Docker test stack, the API is also under `/api` on the published port.
 - Send the token in a header on every request:
 
   ```sh

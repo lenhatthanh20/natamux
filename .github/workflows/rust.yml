@@ -43,7 +43,6 @@ jobs:
       client: ${{ steps.flags.outputs.client }}
       lock: ${{ steps.flags.outputs.lock }}
       e2e: ${{ steps.flags.outputs.e2e }}
-      e2e_groups: ${{ steps.flags.outputs.e2e_groups }}
       crates: ${{ steps.flags.outputs.crates }}
       daemon_crates: ${{ steps.flags.outputs.daemon_crates }}
       check: ${{ steps.flags.outputs.check }}
@@ -168,7 +167,6 @@ jobs:
       - run: python3 scripts/compare-shots.test.py
       - run: python3 scripts/shots-exact.test.py
       - run: python3 scripts/zed-lock-check.test.py
-      - run: python3 scripts/npm-licenses-check.test.py
       # For the MIT move: no Zed crate may come back into Cargo.lock unlisted.
       - run: python3 scripts/zed-lock-check.py
       - run: bash scripts/sign-release.test.sh
@@ -786,7 +784,7 @@ jobs:
           path: dist/natamux-cli-windows-x64.zip
           compression-level: 0
 
-  # natamux-client against the real daemon: the checked images of main, as scripts/e2e.sh starts them.
+  # natamux-client against the real daemon: the image of this run, as scripts/e2e.sh starts it.
   # `--ignored` runs every ignored test of live_daemon.rs, live_daemon_git.rs,
   # live_daemon_settings.rs, live_daemon_files.rs and live_daemon_projects.rs: the terminal test, the live list, and the
   # flows of phase 3: screen 1 (create, rename, subtask, workspace, preparing, remove, delete),
@@ -805,7 +803,7 @@ jobs:
   # It builds while e2e-image builds the images, then waits for them (scripts/ci-wait-artifact.sh).
   live-daemon:
     needs: changes
-    if: ${{ !endsWith(github.ref, '-check') && needs.changes.outputs.client == 'true' }}
+    if: ${{ !endsWith(github.ref, '-check') && needs.changes.outputs.e2e == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 40
     permissions:
@@ -816,7 +814,6 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       NATAMUX_URL: http://127.0.0.1:8080/api
       NATAMUX_TOKEN: e2e-token
-      E2E_LOCAL: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -829,11 +826,11 @@ jobs:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: rust-production-images
-      - name: Start the Rust daemon and dashboard of this run
+      - name: Start the Rust daemon of this run
         run: |
           docker load -i images.tar.zst
           scripts/e2e.sh up
-      # As makeShellTask in e2e/tests/terminal-helpers.ts: a task past its agent, with a workspace.
+      # A task past its agent, with a workspace.
       - name: Make a task with a workspace
         id: task
         run: |
@@ -861,8 +858,7 @@ jobs:
       - if: always()
         run: scripts/e2e.sh down
 
-  # The static Rust CLI for Linux. The CLI in the production images is checked by the e2e jobs:
-  # the rest group runs the agent hook specs (needs-input, shell-agent, ask-agent).
+  # The static Rust CLI for Linux.
   cli:
     needs: changes
     if: ${{ !endsWith(github.ref, '-check') && needs.changes.outputs.client == 'true' }}
@@ -921,204 +917,26 @@ jobs:
         run: cargo test --locked ${{ needs.changes.outputs.daemon_crates }} --no-run
       - run: cargo test --locked ${{ needs.changes.outputs.daemon_crates }}
 
-  # Build the production Rust daemon image once for the four E2E groups.
+  # Build the Rust daemon image once for live-daemon.
   e2e-image:
     needs: changes
-    if: ${{ !endsWith(github.ref, '-check') && (needs.changes.outputs.e2e == 'true' || needs.changes.outputs.client == 'true') }}
+    if: ${{ !endsWith(github.ref, '-check') && needs.changes.outputs.e2e == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 50
-    outputs:
-      daemon: ${{ steps.save.outputs.daemon }}
-      web: ${{ steps.save.outputs.web }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Build the production images
+      - name: Build the daemon image
         run: scripts/e2e.sh build
-      - id: save
-        run: |
-          docker save natamux-daemon:local natamux-web:local | zstd -T0 --fast=1 > images.tar.zst
-          for name in daemon web; do
-            echo "$name=$(docker image inspect --format '{{.Id}}' "natamux-$name:local")" >> "$GITHUB_OUTPUT"
-          done
+      - name: Save the daemon image
+        run: docker save natamux-daemon:local | zstd -T0 --fast=1 > images.tar.zst
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: rust-production-images
           path: images.tar.zst
           compression-level: 0
           retention-days: 3
-
-  # Each group runs on a real image built from docker/prod.Dockerfile. It installs Playwright while
-  # e2e-image builds the images, then waits for them.
-  e2e:
-    name: e2e (${{ matrix.group }})
-    needs: changes
-    if: ${{ !endsWith(github.ref, '-check') && needs.changes.outputs.e2e == 'true' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    permissions:
-      contents: read
-      actions: read
-    strategy:
-      fail-fast: false
-      matrix:
-        group: ${{ fromJSON(needs.changes.outputs.e2e_groups) }}
-    env:
-      GH_TOKEN: ${{ github.token }}
-      NATAMUX_TOKEN: e2e-token
-      NATAMUX_REPO: e2e-repo
-      E2E_LOCAL: "1"
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 22
-      # The browser's system packages came from the Ubuntu mirror at times at 28 kB/s: up to 16
-      # minutes for 20 MB. apt takes a cached .deb only when it matches the hash in its signed lists.
-      - name: Key of the Playwright packages
-        id: apt-key
-        run: echo "key=playwright-apt-$ImageOS-$ImageVersion-${{ hashFiles('e2e/package.json') }}" >> "$GITHUB_OUTPUT"
-      - id: apt-cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/playwright-apt
-          key: ${{ steps.apt-key.outputs.key }}
-      - name: Give apt the cached packages
-        run: |
-          echo 'APT::Keep-Downloaded-Packages "true";' | sudo tee /etc/apt/apt.conf.d/99keep-debs >/dev/null
-          if compgen -G "$HOME/playwright-apt/*.deb" >/dev/null; then
-            sudo cp "$HOME"/playwright-apt/*.deb /var/cache/apt/archives/
-          fi
-      # e2e/ is not part of the pnpm workspace; its only dependency is pinned to an exact version.
-      - name: Install Playwright
-        working-directory: e2e
-        run: |
-          pnpm install --ignore-workspace --frozen-lockfile
-          pnpm exec playwright install --with-deps chromium
-      # One group saves, so the four do not race for the same key.
-      - name: Keep the downloaded packages
-        id: apt-keep
-        if: ${{ env.SAVE_CACHE == 'true' && matrix.group == 'rest' && steps.apt-cache.outputs.cache-hit != 'true' }}
-        run: |
-          if compgen -G "/var/cache/apt/archives/*.deb" >/dev/null; then
-            mkdir -p ~/playwright-apt
-            cp /var/cache/apt/archives/*.deb ~/playwright-apt/
-            echo "kept=true" >> "$GITHUB_OUTPUT"
-          fi
-      - if: steps.apt-keep.outputs.kept == 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/playwright-apt
-          key: ${{ steps.apt-key.outputs.key }}
-      - name: Wait for the images of e2e-image
-        run: scripts/ci-wait-artifact.sh rust-production-images e2e-image
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: rust-production-images
-      - name: Start the production Rust daemon and dashboard
-        run: |
-          docker load -i images.tar.zst
-          scripts/e2e.sh up
-      - name: The daemon is the Rust one
-        run: |
-          cmdline=$(docker compose -p natamux-e2e -f compose.prod.yaml -f compose.e2e.yaml \
-            exec -T daemon cat /proc/1/cmdline | tr '\0' ' ')
-          echo "$cmdline"
-          echo "$cmdline" | grep -q natamux-daemon
-      - name: The agents' PATH finds the Rust CLI
-        run: |
-          docker compose -p natamux-e2e -f compose.prod.yaml -f compose.e2e.yaml \
-            exec -T daemon sh -c 'PATH="$NATAMUX_BIN_DIR:$PATH"; command -v natamux; natamux help | head -n 1'
-      - name: The specs of the group
-        working-directory: e2e
-        run: E2E_GROUP=${{ matrix.group }} PLAYWRIGHT_JSON_OUTPUT_NAME=results.json pnpm e2e --reporter=list,html,json
-      - name: One row per spec file
-        if: always()
-        run: |
-          [ -f e2e/results.json ] || exit 0
-          {
-            echo "### E2E on the Rust daemon, group ${{ matrix.group }}"
-            echo
-            echo "| spec file | passed | flaky | failed | skipped |"
-            echo "|---|---|---|---|---|"
-            jq -r '[.. | objects | select(has("specs")) | .specs[] | {file, status: [.tests[].status]}]
-              | group_by(.file)[]
-              | {file: .[0].file, s: [.[].status[]]}
-              | "| \(.file) | \([.s[] | select(. == "expected")] | length) | \([.s[] | select(. == "flaky")] | length) | \([.s[] | select(. == "unexpected")] | length) | \([.s[] | select(. == "skipped")] | length) |"' e2e/results.json
-          } >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: always()
-        with:
-          name: rust-e2e-measures-${{ matrix.group }}
-          path: e2e/test-results/terminal-measures.json
-          if-no-files-found: ignore
-      - name: Report, pictures and traces
-        if: failure()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: rust-e2e-report-${{ matrix.group }}
-          path: |
-            e2e/playwright-report
-            e2e/test-results
-            e2e/results.json
-          retention-days: 7
-          if-no-files-found: ignore
-      - name: Logs on failure
-        if: failure()
-        run: scripts/e2e.sh logs
-      - name: Stop
-        if: always()
-        run: scripts/e2e.sh down
-
-  e2e-publish:
-    needs: [e2e-image, e2e]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-      attestations: write
-    steps:
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: rust-production-images
-      - name: Load the tested images
-        env:
-          DAEMON_ID: ${{ needs.e2e-image.outputs.daemon }}
-          WEB_ID: ${{ needs.e2e-image.outputs.web }}
-        run: |
-          docker load -i images.tar.zst
-          test "$(docker image inspect --format '{{.Id}}' natamux-daemon:local)" = "$DAEMON_ID"
-          test "$(docker image inspect --format '{{.Id}}' natamux-web:local)" = "$WEB_ID"
-      - name: Publish the images
-        id: push
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          IMAGES: ghcr.io/${{ github.repository_owner }}/natamux
-        run: |
-          echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
-          for name in daemon web; do
-            for tag in main "sha-${GITHUB_SHA::7}"; do
-              docker tag "natamux-$name:local" "$IMAGES-$name:$tag"
-              docker push --quiet "$IMAGES-$name:$tag"
-            done
-            digest=$(docker image inspect --format '{{index .RepoDigests 0}}' "$IMAGES-$name:main")
-            echo "$name=${digest#*@}" >> "$GITHUB_OUTPUT"
-          done
-      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
-        with:
-          subject-name: ghcr.io/${{ github.repository_owner }}/natamux-daemon
-          subject-digest: ${{ steps.push.outputs.daemon }}
-      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
-        with:
-          subject-name: ghcr.io/${{ github.repository_owner }}/natamux-web
-          subject-digest: ${{ steps.push.outputs.web }}
 
   # Keep the Rust terminal bench runnable after the Node comparison has been retired.
   daemon-bench:
@@ -1205,8 +1023,6 @@ jobs:
       - cli
       - daemon-os
       - e2e-image
-      - e2e
-      - e2e-publish
       - daemon-bench
       - supply-chain
     if: ${{ always() }}

@@ -67,7 +67,6 @@ As Markdown files with a small header, in `<data folder>/tasks/T-0001.md`. A SQL
 | Desktop app, Windows | `%APPDATA%\Natamux\data` |
 | Desktop app, Linux | `~/.config/Natamux/data` |
 | A daemon started in a repository | `.natamux/` in that folder, unless you set `NATAMUX_DATA_DIR` |
-| Docker | The volume `natamux-data`, at `/data` |
 
 Worktrees are in `worktrees/` inside the data folder, unless you set `NATAMUX_WORKTREES_DIR`.
 
@@ -78,10 +77,6 @@ No. Each task works in its own git worktree and branch. Natamux never pushes, me
 ## What happens when I quit the app?
 
 Quitting stops the daemon and every agent and terminal. The app asks first. Tasks, worktrees and changes stay, and the agents of running, idle, waiting and in-review tasks start again when you open the app. The other terminals of a task come back when you open the task, and each agent in them goes on with its last conversation. See [A terminal after a daemon restart](/docs/guides/terminal/#a-terminal-after-a-daemon-restart). Closing the window quits too, after the same question. See [Desktop app](/docs/guides/desktop-app/).
-
-## Can I use it in a browser instead of the desktop app?
-
-Yes. The dashboard is a web page served by the daemon. Open it and paste the daemon token. See [Install Natamux](/docs/getting-started/install/) and [Self-host with Docker](/docs/guides/self-host-docker/).
 
 ## Does it update itself?
 

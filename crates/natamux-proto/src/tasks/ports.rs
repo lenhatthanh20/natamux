@@ -1,4 +1,4 @@
-//! `portRange` in `packages/core/src/terminals/ports.ts`: each task gets its own block of ports,
+//! `portRange`: each task gets its own block of ports,
 //! so the dev servers of tasks that run side by side do not clash.
 
 pub const PORT_BASE: u32 = 20_000;

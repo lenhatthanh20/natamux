@@ -1,5 +1,5 @@
 //! The phase, sentence, default prompt and `needsCommand` of each stage of `STAGE_CATALOG`
-//! (`packages/core/src/stages/stage-catalog.ts`), in its order. `tests/core_values_stages.rs`
+//! in its order. `tests/core_values_stages.rs`
 //! checks every text against the TypeScript.
 
 use crate::stages::catalog::StagePhase;

@@ -1,4 +1,4 @@
-//! The progress of every stage of a task (`packages/core/src/events/progress.ts`).
+//! The progress of every stage of a task.
 
 use serde_json::{Map, Value};
 

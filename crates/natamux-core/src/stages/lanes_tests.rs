@@ -1,4 +1,4 @@
-//! Ports the `terminalLane` cases of `packages/core/src/stages/__tests__/terminal-lane.test.ts`:
+//! The `terminalLane` cases:
 //! the 8 of 'terminalLane' and the lane checks inside 'a stage with its own agent', 'a stage in its
 //! own shell', 'a branch' and 'a terminal pinned at the start of its stage'.
 

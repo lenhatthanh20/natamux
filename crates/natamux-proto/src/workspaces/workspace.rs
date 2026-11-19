@@ -1,5 +1,5 @@
-//! Workspaces: the routes of `packages/daemon/src/http/routes/workspaces.ts`, and the git types of
-//! `packages/core/src/git/` that the Start a task and Remove workspace dialogs read.
+//! Workspaces: the routes of `packages/daemon/src/http/routes/workspaces.ts`, and the git types
+//! that the Start a task and Remove workspace dialogs read.
 
 use std::collections::BTreeMap;
 
@@ -14,7 +14,7 @@ pub const MAX_BASE_LENGTH: usize = 255;
 /// `prompt` of a new workspace: at most this many characters, after trimming.
 pub const MAX_PROMPT_LENGTH: usize = 20_000;
 
-/// `CHANGE_STATUSES` in `packages/core/src/git/changes.ts`: M modified, A added, D deleted,
+/// `CHANGE_STATUSES`: M modified, A added, D deleted,
 /// R renamed, U not tracked yet, C conflict.
 pub const CHANGE_STATUSES: [&str; 6] = ["M", "A", "D", "R", "U", "C"];
 

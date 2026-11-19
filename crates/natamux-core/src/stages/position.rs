@@ -1,4 +1,4 @@
-//! Where a task is in its steps (`packages/core/src/stages/position.ts`): what `natamux-proto`'s
+//! Where a task is in its steps: what `natamux-proto`'s
 //! `position.rs` lacks. Lanes and paths keep the order of a JS object.
 
 use natamux_proto::stages::schema::{Stage, StageKind, Step};

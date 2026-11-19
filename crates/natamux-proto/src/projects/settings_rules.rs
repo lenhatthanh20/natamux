@@ -1,6 +1,6 @@
-//! The rules of `projectSettingsSchema` outside `stages` (`packages/core/src/projects/
-//! project-settings.ts`), as the daemon words them: `<path>: <message>`, joined by "; ". The
-//! rules of `stages` are in `stages/pipeline_rules.rs`.
+//! The rules of `projectSettingsSchema` outside `stages`, as the daemon words
+//! them: `<path>: <message>`, joined by "; ".
+//! The rules of `stages` are in `stages/pipeline_rules.rs`.
 
 use serde_json::{Map, Value};
 
