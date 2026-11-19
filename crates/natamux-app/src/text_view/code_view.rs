@@ -335,7 +335,7 @@ impl TextInput {
                 }));
             }
         }
-        code.labels.follow(text, edits.as_deref());
+        code.labels.follow(text, edits.as_deref(), self.model.version());
         let selection = self.model.selection().range();
         let selected = &text[selection];
         let query =

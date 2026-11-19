@@ -2,14 +2,17 @@
 //! `capRows`, `nextScope`, `digitOf` of `CommandPalette.tsx`). No window here: the caller passes
 //! the commands that can run now, in registry order, and the time.
 
+use std::borrow::Borrow;
 use std::collections::BTreeSet;
+use std::sync::Arc;
 
 use natamux_proto::tasks::task::Task;
 
 use super::fuzzy::{Range, fuzzy_match};
 use super::task_match::ranked_tasks;
 use crate::sidebar::workspace_groups::DEFAULT_REPO_ID;
-use crate::tasks::task_attention::{is_quiet, needs_me_tasks};
+use crate::tasks::task_attention::is_quiet;
+use crate::tasks::task_changes::task_of;
 use crate::tasks::task_rules::needs_me;
 use crate::tasks::task_sort::task_number;
 use crate::terminals::pane_rules::MAX_PANES;
@@ -93,6 +96,21 @@ impl PaletteRow {
         }
     }
 
+    /// Whether `key()` is `key`, with no text made: the view asks it of each row.
+    pub fn has_key(&self, key: &str) -> bool {
+        let after = |prefix: &str| key.strip_prefix(prefix);
+        match self {
+            Self::Command { command, .. } => after("command:") == Some(command.id),
+            Self::Task { task, .. } => after("task:") == Some(task.id.as_str()),
+            Self::Shell { task, name } => after("shell:")
+                .and_then(|rest| rest.strip_prefix(task.id.as_str()))
+                .is_some_and(|rest| rest.strip_prefix(':') == Some(name.as_str())),
+            Self::Repo { repo, .. } => after("repo:") == Some(repo.id.as_str()),
+            Self::CreateTask { .. } => key == "create-task",
+            Self::NewWorkspace { .. } => key == "new-workspace",
+        }
+    }
+
     /// The text of a create row: `Add task “q”` or `Start task “q”`.
     pub fn create_label(&self) -> Option<String> {
         match self {
@@ -112,7 +130,8 @@ pub struct PaletteSection {
 
 pub struct AllInput<'a> {
     pub query: &'a str,
-    pub tasks: &'a [Task],
+    /// Shared with the dashboard: the palette copies only the tasks of the rows it shows.
+    pub tasks: &'a [Arc<Task>],
     pub commands: &'a [PaletteCommand],
     pub repos: &'a [RepoItem],
     /// Ids of the workspaces that were opened, newest first.
@@ -199,7 +218,8 @@ fn commands_only(commands: &[PaletteCommand], query: &str) -> Vec<PaletteSection
 
 fn tasks_by_id(input: &AllInput, query: &str) -> Vec<PaletteSection> {
     let needle = query.to_lowercase();
-    let mut found: Vec<&Task> = scoped(input.tasks.iter(), input.scope, input.now_ms)
+    let tasks = input.tasks.iter().map(task_of);
+    let mut found: Vec<&Task> = scoped(tasks, input.scope, input.now_ms)
         .into_iter()
         .filter(|task| task.id.to_lowercase().contains(&needle))
         .collect();
@@ -213,21 +233,25 @@ fn tasks_by_id(input: &AllInput, query: &str) -> Vec<PaletteSection> {
 }
 
 fn empty_query(input: &AllInput) -> Vec<PaletteSection> {
-    let in_scope: Vec<Task> = scoped(input.tasks.iter(), input.scope, input.now_ms)
+    // Same order as `needs_me_tasks`, but on references: only the five shown are cloned.
+    let tasks = input.tasks.iter().map(task_of);
+    let mut waiting: Vec<&Task> = scoped(tasks, input.scope, input.now_ms)
         .into_iter()
-        .cloned()
+        .filter(|task| needs_me(task.state) || is_quiet(task, input.now_ms))
         .collect();
-    let waiting: Vec<Task> = needs_me_tasks(&in_scope, input.now_ms)
-        .into_iter()
-        .take(MAX_NEEDS_YOU)
-        .collect();
+    waiting.sort_by(|a, b| {
+        a.updated_at
+            .cmp(&b.updated_at)
+            .then_with(|| a.id.cmp(&b.id))
+    });
+    waiting.truncate(MAX_NEEDS_YOU);
     let waiting_ids: BTreeSet<&str> = waiting.iter().map(|task| task.id.as_str()).collect();
     let mut sections = Vec::new();
     if !waiting.is_empty() {
         sections.push(PaletteSection {
             id: "needs-you",
             title: Some("Needs you"),
-            rows: waiting.iter().map(task_row).collect(),
+            rows: waiting.iter().copied().map(task_row).collect(),
         });
     }
     if input.scope.is_none() {
@@ -235,6 +259,7 @@ fn empty_query(input: &AllInput) -> Vec<PaletteSection> {
             .recent
             .iter()
             .filter_map(|id| input.tasks.iter().find(|task| &task.id == id))
+            .map(task_of)
             .filter(|task| task.workspace.is_some() && !waiting_ids.contains(task.id.as_str()))
             .take(MAX_RECENT)
             .map(task_row)
@@ -268,7 +293,7 @@ fn empty_query(input: &AllInput) -> Vec<PaletteSection> {
 }
 
 fn typed(input: &AllInput, raw: &str) -> Vec<PaletteSection> {
-    let in_scope = scoped(input.tasks.iter(), input.scope, input.now_ms);
+    let in_scope = scoped(input.tasks.iter().map(task_of), input.scope, input.now_ms);
     let task_matches = ranked_tasks(&in_scope, raw);
     let task_top = task_matches.first().map(|(_, found)| found.score);
     let task_rows: Vec<PaletteRow> = task_matches
@@ -358,6 +383,8 @@ pub fn all_sections(input: &AllInput) -> Vec<PaletteSection> {
     typed(input, raw)
 }
 
+/// The rows of the sections, copied: only the tests still want the copies (`into_rows`).
+#[cfg(test)]
 pub fn flat_rows(sections: &[PaletteSection]) -> Vec<PaletteRow> {
     sections
         .iter()
@@ -386,10 +413,10 @@ pub fn cap_rows(sections: Vec<PaletteSection>) -> Vec<PaletteSection> {
 }
 
 /// The projects that have a task, in project order: the ones Tab cycles over.
-pub fn repos_with_tasks(repos: &[RepoItem], tasks: &[Task]) -> Vec<RepoItem> {
+pub fn repos_with_tasks<T: Borrow<Task>>(repos: &[RepoItem], tasks: &[T]) -> Vec<RepoItem> {
     repos
         .iter()
-        .filter(|repo| tasks.iter().any(|task| repo_of(task) == repo.id))
+        .filter(|repo| tasks.iter().any(|task| repo_of(task_of(task)) == repo.id))
         .cloned()
         .collect()
 }

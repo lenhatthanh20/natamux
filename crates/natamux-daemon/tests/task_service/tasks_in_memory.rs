@@ -27,6 +27,24 @@ fn reads_no_task_file_for_get_task_and_list_tasks_after_init() {
 }
 
 #[test]
+fn scans_every_task_for_the_fields_it_picks() {
+    let fx = Fixture::new();
+    let first = create(&fx.service, "First");
+    let second = create(&fx.service, "Second");
+    human(&fx.service, &first.id, "task.readied");
+
+    let mut drafts = fx
+        .service
+        .scan(|task| (task.state == TaskState::Draft).then(|| task.id.clone()))
+        .unwrap();
+    drafts.sort_unstable();
+    assert_eq!(drafts, std::slice::from_ref(&second.id));
+    let mut all = fx.service.scan(|task| Some(task.id.clone())).unwrap();
+    all.sort_unstable();
+    assert_eq!(all, [first.id, second.id]);
+}
+
+#[test]
 fn lists_the_newest_updated_task_first_as_the_index_did() {
     let fx = Fixture::new();
     let first = create(&fx.service, "First");

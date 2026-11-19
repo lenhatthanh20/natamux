@@ -10,12 +10,63 @@ fn after_enter(path: &str, marked: &str) -> String {
     let text = marked.replace('|', "");
     let lang = lang_for(path).unwrap();
     let typing = typing_for(lang.name).unwrap();
-    let tree = parse(lang, &text);
+    let tree = parse(lang, &text, None);
     let edit = enter(typing, lang, &text, at..at, tree.as_ref());
     let mut out = text.clone();
     out.replace_range(edit.range, &edit.text);
     out.insert(edit.caret, '|');
     out
+}
+
+/// Each node of `tree` in order: its kind, byte range, and whether it is missing or an error.
+fn nodes(tree: &Tree) -> Vec<String> {
+    fn walk(node: tree_sitter::Node, out: &mut Vec<String>) {
+        out.push(format!(
+            "{} {:?} {} {}",
+            node.kind(),
+            node.byte_range(),
+            node.is_missing(),
+            node.is_error()
+        ));
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            walk(child, out);
+        }
+    }
+    let mut out = Vec::new();
+    walk(tree.root_node(), &mut out);
+    out
+}
+
+#[test]
+fn a_parse_from_the_tree_before_the_edit_equals_a_whole_parse() {
+    // `marked` is the text before the edit; `|` is where `typed` goes in.
+    let cases = [
+        ("a.rs", "fn f() {|}", "\n"),
+        ("a.rs", "fn f() {\n    let a = 1;|\n}", "\n    "),
+        ("a.ts", "if (a)\n    b;|", "\n"),
+        ("a.go", "func f() {|", "\n"),
+        ("a.py", "def f():|", "\n"),
+        ("a.json", "[|]", "\n\n"),
+        ("a.tsx", "const a = <div|", ">"),
+        ("a.tsx", "const a = <div><span|</div>;", ">"),
+        ("a.tsx", "const a = <>|", "\n"),
+    ];
+    for (path, marked, typed) in cases {
+        let at = marked.find('|').unwrap();
+        let old = marked.replace('|', "");
+        let mut new = old.clone();
+        new.insert_str(at, typed);
+        let lang = lang_for(path).unwrap();
+        let tree = parse(lang, &old, None).unwrap();
+        let whole = parse(lang, &new, None).unwrap();
+        let reused = parse(lang, &new, Some((old.as_str(), &tree))).unwrap();
+        assert_eq!(
+            nodes(&reused),
+            nodes(&whole),
+            "{path}: {marked:?} + {typed:?}"
+        );
+    }
 }
 
 #[test]

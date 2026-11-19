@@ -2,6 +2,7 @@
 //! base has not, one 28 px row per commit with the lanes drawn at the left. The panel shows it
 //! narrow; its expand button shows it over main at full width (T-0231).
 
+use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui::{ClickEvent, FontWeight, ListSizingBehavior, PathBuilder, canvas, point, uniform_list};
@@ -30,7 +31,7 @@ const OFFSET_MINUTES: i32 = 0;
 pub struct HistoryView {
     pub id: String,
     /// None while read.
-    pub graph: Option<GitGraph>,
+    pub graph: Option<Rc<GitGraph>>,
     pub error: Option<String>,
     /// Files that are not committed, which no commit below shows yet.
     pub uncommitted: usize,
@@ -325,20 +326,20 @@ fn commit_row(
 /// graph is read every few seconds, the frames come much more often.
 #[derive(Clone)]
 struct Layout {
-    graph: Arc<GitGraph>,
+    graph: Rc<GitGraph>,
     rows: Arc<Vec<GraphRow>>,
     width: usize,
 }
 
-fn layout_of(id: &str, graph: &GitGraph, window: &mut Window, cx: &mut App) -> Layout {
+fn layout_of(id: &str, graph: &Rc<GitGraph>, window: &mut Window, cx: &mut App) -> Layout {
     let key = SharedString::from(format!("{id}-layout"));
     let state = window.use_keyed_state(key, cx, |_, _| None::<Layout>);
-    if let Some(kept) = state.read(cx).clone().filter(|kept| *kept.graph == *graph) {
+    if let Some(kept) = state.read(cx).clone().filter(|kept| Rc::ptr_eq(&kept.graph, graph)) {
         return kept;
     }
     let (rows, width) = layout_graph(&graph.commits);
     let layout = Layout {
-        graph: Arc::new(graph.clone()),
+        graph: graph.clone(),
         rows: Arc::new(rows),
         width,
     };
@@ -348,7 +349,7 @@ fn layout_of(id: &str, graph: &GitGraph, window: &mut Window, cx: &mut App) -> L
 
 fn commit_list(
     id: &str,
-    graph: &GitGraph,
+    graph: &Rc<GitGraph>,
     narrow: bool,
     window: &mut Window,
     cx: &mut App,

@@ -93,7 +93,18 @@ fn read_pipe<R: Read + Send + 'static>(
 }
 
 fn bytes_of(buffer: &Buffer) -> Vec<u8> {
-    buffer.lock().map(|held| held.clone()).unwrap_or_default()
+    // Taken, not cloned: a reader that is still running after the grace only fills a buffer
+    // nobody reads.
+    buffer
+        .lock()
+        .map(|mut held| std::mem::take(&mut *held))
+        .unwrap_or_default()
+}
+
+/// Text from bytes; the bytes are reused when they are valid UTF-8.
+pub(crate) fn text_of(bytes: Vec<u8>) -> String {
+    String::from_utf8(bytes)
+        .unwrap_or_else(|error| String::from_utf8_lossy(error.as_bytes()).into_owned())
 }
 
 /// Runs `command` (program, args, cwd and env already set) to its end, the timeout or the limit.
@@ -101,7 +112,7 @@ pub fn capture(command: Command, timeout: Duration, limit: usize) -> Captured {
     let ran = capture_bytes(command, timeout, limit);
     Captured {
         code: ran.code,
-        stdout: String::from_utf8_lossy(&ran.stdout).into_owned(),
+        stdout: text_of(ran.stdout),
         stderr: ran.stderr,
         timed_out: ran.timed_out,
         overflow: ran.overflow,
@@ -192,7 +203,7 @@ pub fn capture_bytes(mut command: Command, timeout: Duration, limit: usize) -> C
     CapturedBytes {
         code: status.and_then(|status| status.code()),
         stdout: bytes_of(&out),
-        stderr: String::from_utf8_lossy(&bytes_of(&err)).into_owned(),
+        stderr: text_of(bytes_of(&err)),
         timed_out,
         overflow: overflow.load(Ordering::SeqCst),
         not_found: false,

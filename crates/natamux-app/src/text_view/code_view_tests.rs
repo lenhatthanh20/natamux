@@ -356,6 +356,13 @@ fn find_shows_matches_and_selects_one_in_the_middle(cx: &mut TestAppContext) {
         host.read_with(cx, |host, _| (host.view.clone(), host.view.input().clone()));
 
     let whole = input.read_with(cx, |input, _| input.text().to_owned());
+    // Find reads the text where it is, without a copy.
+    let kept = input.read_with(cx, |input, _| input.text().as_ptr());
+    cx.update(|_, cx| {
+        view.read_text(cx, &mut |text: &str| {
+            assert_eq!((text, text.as_ptr()), (&*whole, kept))
+        })
+    });
     let found: Vec<_> = whole
         .match_indices("line ")
         .map(|(at, _)| at..at + 5)

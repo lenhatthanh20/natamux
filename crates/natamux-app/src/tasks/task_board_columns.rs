@@ -1,6 +1,8 @@
 //! The columns of the task board. Each column draws its cards through a `list`: only the cards
 //! on screen are built, so hundreds of tasks cost a few cards a frame.
 
+use std::sync::Arc;
+
 use gpui::{ListAlignment, ListOffset, ListState, list};
 use natamux_proto::tasks::task::{Task, TaskState};
 use ui::{Tooltip, prelude::*};
@@ -176,7 +178,7 @@ impl TaskBoard {
                                         .rows
                                         .iter()
                                         .filter(|task| task.state == state)
-                                        .cloned()
+                                        .map(|task| Task::clone(task))
                                         .collect();
                                     confirm_delete_all(&this.dashboard, state, &tasks, window, cx)
                                 })),
@@ -228,7 +230,7 @@ impl TaskBoard {
             return folded.into_any_element();
         }
         let cards: Vec<usize> = {
-            let tasks: Vec<&Task> = in_column.iter().map(|at| &self.rows[*at]).collect();
+            let tasks: Vec<&Arc<Task>> = in_column.iter().map(|at| &self.rows[*at]).collect();
             let drawn = self.limits.drawn(state, &tasks);
             in_column
                 .iter()

@@ -1,12 +1,14 @@
 //! The plan limits of the agents as the status bar, its menu, the warning toast and the agent
 //! picker show them. Rules only: the caller passes `now_ms`.
 
+use std::borrow::Borrow;
 use std::collections::BTreeSet;
 
 use natamux_proto::agents::limits::{AgentLimits, LimitWindow};
 use natamux_proto::tasks::task::Task;
 
 use super::agent_choices::agent_label;
+use crate::tasks::task_changes::task_of;
 use crate::tasks::task_time::parse_iso_ms;
 
 /// A window at or above this share is a warning.
@@ -140,9 +142,10 @@ pub fn limits_chip(limits: &[AgentLimits]) -> Option<Chip> {
 const WEEK_MS: i64 = 7 * 86_400_000;
 
 /// The agents of the tasks that changed in the last week.
-pub fn agents_in_use(tasks: &[Task], now_ms: i64) -> BTreeSet<String> {
+pub fn agents_in_use<T: Borrow<Task>>(tasks: &[T], now_ms: i64) -> BTreeSet<String> {
     tasks
         .iter()
+        .map(task_of)
         .filter(|task| parse_iso_ms(&task.updated_at).is_some_and(|at| now_ms - at < WEEK_MS))
         .filter_map(|task| task.agent.clone())
         .collect()

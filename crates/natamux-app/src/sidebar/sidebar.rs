@@ -51,18 +51,24 @@ impl Sidebar {
             }
         });
         // Clear filter in main's empty state changes the dashboard's filter: the field follows.
-        let observe = cx.observe_in(&dashboard, window, |sidebar, dashboard, window, cx| {
-            let parts = [Part::Tasks, Part::Repos, Part::Link, Part::View];
-            let gens = dashboard.read(cx).data.gens;
-            if !sidebar.seen.changed(&gens, &parts) {
-                return;
-            }
-            let wanted = dashboard.read(cx).filter.clone();
-            if sidebar.filter.text(cx) != wanted {
-                sidebar.filter.set_text(wanted, window, cx);
-            }
-            cx.notify();
-        });
+        let observe = Dashboard::observe_in(
+            &dashboard,
+            window,
+            cx,
+            |sidebar, dashboard, window, cx| {
+                let parts = [Part::Tasks, Part::Repos, Part::Link, Part::View];
+                let gens = dashboard.read(cx).data.gens;
+                // Neither the selection nor a panel width shows here.
+                if !sidebar.seen.take(&gens).any_exact(&parts) {
+                    return;
+                }
+                let wanted = dashboard.read(cx).filter.clone();
+                if sidebar.filter.text(cx) != wanted {
+                    sidebar.filter.set_text(wanted, window, cx);
+                }
+                cx.notify();
+            },
+        );
         let tree = cx.new(|cx| WorkspaceTree::new(dashboard.clone(), cx));
         Sidebar {
             dashboard,

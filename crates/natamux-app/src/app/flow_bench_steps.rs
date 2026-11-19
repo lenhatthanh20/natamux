@@ -12,8 +12,8 @@ use super::super::fake_daemon;
 use super::super::view_state::Layout;
 use super::super::window::Root;
 use super::{
-    POLL, RUNS, SETTLE, WAIT_FOR_TASKS, any_frame, drawn_when, in_window, note, record, sleep,
-    time_runs,
+    MANY_RUNS, POLL, RUNS, SETTLE, WAIT_FOR_TASKS, any_frame, drawn_when, in_window, note, record,
+    sleep, time_runs, time_runs_n,
 };
 use crate::palette::palette_layer::PaletteLayer;
 use crate::palette::palette_rows::PaletteMode;
@@ -37,6 +37,9 @@ const PANES_OPEN: Duration = Duration::from_millis(1500);
 const RESIZES: usize = 40;
 const RESIZE_EVERY: Duration = Duration::from_millis(50);
 const SIZES: [(f32, f32); 2] = [(1280., 800.), (1100., 700.)];
+
+#[path = "flow_bench_term.rs"]
+mod term;
 
 pub(super) async fn all(
     handle: WindowHandle<Root>,
@@ -77,6 +80,15 @@ pub(super) async fn all(
     // Last: they add a file and a change to the fake's reviewed task.
     note("editor typing", super::big::editor_type(handle, cx).await);
     note("diff open", super::big::diff_open(handle, cx).await);
+    super::note_rss(extra);
+    note("terminal flood", term::flood(handle, extra, cx).await);
+    let idle = term::key(handle, "terminal_key", false, extra, cx).await;
+    note("terminal key", idle);
+    let flooding = term::key(handle, "terminal_key_flood", true, extra, cx).await;
+    note("terminal key in a flood", flooding);
+    note("terminal memory", term::memory(handle, true, extra, cx).await);
+    let empty = term::memory(handle, false, extra, cx).await;
+    note("terminal memory, empty screens", empty);
     Ok(())
 }
 
@@ -207,9 +219,8 @@ fn event_count(cx: &mut AsyncApp) -> usize {
     })
 }
 
-/// Click to diff: a file picked in the Changes tab, to the end of the next frame drawn. The
-/// fake answers the read at once, so that frame has the diff; the diff view has no state a
-/// bench can read to check it.
+/// Click to diff: a file picked in the Changes tab, to the end of the first frame drawn with
+/// its diff shown (no wait for a language parse).
 async fn diff_click(handle: WindowHandle<Root>, cx: &mut AsyncApp) -> Result<()> {
     let fake = fake_daemon::shared();
     let ids = handle.update(cx, |root, _, cx| {
@@ -232,7 +243,9 @@ async fn diff_click(handle: WindowHandle<Root>, cx: &mut AsyncApp) -> Result<()>
     let changes = handle.update(cx, |root, _, cx| {
         root.workspace_view().read(cx).changes_view().clone()
     })?;
-    time_runs(
+    let (shown_paths, shown_view) = (paths.clone(), changes.clone());
+    time_runs_n(
+        MANY_RUNS,
         "diff_click",
         handle,
         cx,
@@ -241,7 +254,11 @@ async fn diff_click(handle: WindowHandle<Root>, cx: &mut AsyncApp) -> Result<()>
             let path = &paths[(index + 1) % paths.len()];
             changes.update(cx, |changes, cx| changes.shot_change(path, 0, window, cx));
         },
-        any_frame,
+        |index| {
+            let path = shown_paths[(index + 1) % shown_paths.len()].clone();
+            let view = shown_view.clone();
+            Box::new(move |_: &mut Window, cx: &mut App| view.read(cx).shot_shown(&path, cx))
+        },
     )
     .await?;
     back(handle, cx)

@@ -40,7 +40,7 @@ pub struct FileEditor {
     pub(super) task_id: String,
     pub(super) path: String,
     pub(super) store: Entity<DraftStore>,
-    /// The last good read of the file; a failed refresh keeps it.
+    /// The last good read of the file, its text with LF breaks; a failed refresh keeps it.
     pub(super) disk: Option<WorkspaceFile>,
     /// The last read had CRLF line breaks only: a save writes them back.
     pub(super) crlf: bool,
@@ -176,15 +176,19 @@ impl FileEditor {
         .detach();
     }
 
-    fn got(&mut self, file: WorkspaceFile, cx: &mut Context<Self>) {
+    fn got(&mut self, mut file: WorkspaceFile, cx: &mut Context<Self>) {
         self.error = None;
+        self.crlf = file.text.as_deref().is_some_and(is_crlf);
+        // Kept as the editor holds it, so each edit compares with it as it is.
+        if file.text.as_deref().is_some_and(|text| text.contains('\r')) {
+            file.text = file.text.as_deref().map(|text| editor_text(text).into_owned());
+        }
         let shown = file.text.clone().filter(|_| notice_of(&file).is_none());
         match shown {
             // A draft stays; the banner shows when the version moved.
             Some(text) if self.draft_ref(cx).is_none() => {
-                let text = editor_text(&text);
                 if let Some(body) = &self.body
-                    && body.read(cx).text(cx).as_str() != &*text
+                    && body.read(cx).text(cx) != text
                 {
                     body.update(cx, |body, cx| body.set_disk_text(&text, cx));
                     self.blame.update(cx, |blame, cx| blame.refresh(cx));
@@ -193,7 +197,6 @@ impl FileEditor {
             Some(_) => {}
             None => self.body = None,
         }
-        self.crlf = file.text.as_deref().is_some_and(is_crlf);
         self.disk = Some(file);
         cx.notify();
     }
@@ -234,7 +237,7 @@ impl FileEditor {
             return;
         };
         let draft = edit_draft(
-            &editor_text(disk.text.as_deref().unwrap_or_default()),
+            disk.text.as_deref().unwrap_or_default(),
             &disk.version,
             self.draft_ref(cx),
             text,
@@ -262,7 +265,7 @@ impl FileEditor {
         self.set_draft(None, cx);
         let text = self.disk.as_ref().and_then(|file| file.text.clone());
         if let (Some(text), Some(body)) = (text, &self.body) {
-            body.update(cx, |body, cx| body.set_disk_text(&editor_text(&text), cx));
+            body.update(cx, |body, cx| body.set_disk_text(&text, cx));
         }
     }
 

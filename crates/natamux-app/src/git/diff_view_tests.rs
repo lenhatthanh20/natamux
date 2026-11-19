@@ -221,6 +221,21 @@ fn identical_texts_get_no_empty_rows(cx: &mut TestAppContext) {
     }
 }
 
+#[gpui::test]
+fn a_shown_side_keeps_its_text_only_in_its_model(cx: &mut TestAppContext) {
+    let (view, cx) = open(cx);
+    show(&view, "file", &("a\nb\n".into(), "a\nB\nc".into()), false, cx);
+    let (left, right) = sides(&view, cx);
+    for side in [left, right] {
+        let (kept, len) = cx.update(|_, cx| {
+            side.rows(cx, |rows| (rows.text.len(), rows.text_len()))
+                .expect("a diff side")
+        });
+        let text_len = side.input().read_with(cx, |input, _| input.text().len());
+        assert_eq!((kept, len), (0, text_len));
+    }
+}
+
 /// Empty rows past the last row still take their rows below the end, so they are never dropped.
 #[gpui::test]
 fn a_spacer_past_the_last_row_goes_below_the_end(cx: &mut TestAppContext) {

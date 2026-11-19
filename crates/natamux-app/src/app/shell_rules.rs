@@ -2,10 +2,13 @@
 //! needs-you text, and the status bar's items (`features/app/TitleBar.tsx`, `StatusBar.tsx` and
 //! the document title of `Dashboard.tsx`).
 
+use std::borrow::Borrow;
+
 use natamux_proto::projects::repo::Repo;
 use natamux_proto::tasks::task::{Task, TaskState};
 
 use super::dashboard_data::Link;
+use crate::tasks::task_changes::task_of;
 
 /// "1 needs you", "3 need you".
 pub fn needs_you_text(count: usize) -> String {
@@ -27,9 +30,10 @@ pub fn running_text(count: usize) -> String {
     format!("{count} running")
 }
 
-pub fn running_count(tasks: &[Task]) -> usize {
+pub fn running_count<T: Borrow<Task>>(tasks: &[T]) -> usize {
     tasks
         .iter()
+        .map(task_of)
         .filter(|task| task.state == TaskState::Running)
         .count()
 }

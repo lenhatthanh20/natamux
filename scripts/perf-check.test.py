@@ -97,6 +97,57 @@ class Check(unittest.TestCase):
         finally:
             perf.HIGHER_IS_BETTER.discard("gated_ms")
 
+    def test_a_reported_number_shows_and_never_fails(self):
+        rows = perf.check({"gated_ms": [1], "shown_ms": [1]}, {})
+        self.assertEqual(failed(rows), [])
+        self.assertEqual(result(rows, "term_draws_per_wake"), "no data")
+        rows = perf.check({"gated_ms": [1], "shown_ms": [1], "term_draws_per_wake": [900]}, {})
+        self.assertEqual(failed(rows), [])
+        self.assertEqual(result(rows, "term_draws_per_wake"), "ok")
+
+    def test_the_daemon_bench_rows_are_reported_and_a_slower_parse_is_worse(self):
+        line = 'terminal_bench: {"parse_sgr_mb_s": 80.5, "flood_frames_per_s": 60, "snapshot_200_sgr_bytes": 9}'
+        numbers = perf.parse_line(line)
+        self.assertEqual(
+            numbers, {"parse_sgr_mb_s": 80.5, "flood_frames_per_s": 60.0, "snapshot_200_sgr_bytes": 9.0}
+        )
+        staged = {"hook_staged_single_p50_ms", "hook_staged_paced_p95_ms", "hook_staged_paced_max_ms"}
+        shells = {
+            "daemon_idle_30_shells_rss_mb",
+            "daemon_idle_shell_kib",
+            "daemon_busy_grown_mb",
+            "daemon_busy_shell_mb",
+        }
+        self.assertTrue(set(numbers) | staged | shells <= perf.REPORTED)
+        self.assertNotIn("flood_frames_per_s", perf.HIGHER_IS_BETTER)
+        rows = perf.check({"gated_ms": [1], "shown_ms": [1]}, {})
+        self.assertEqual(failed(rows), [])
+        self.assertEqual(result(rows, "tui_wire_over_raw"), "no data")
+        rows = perf.check({"gated_ms": [1], "shown_ms": [1], "parse_sgr_mb_s": [70]}, {"parse_sgr_mb_s": 100})
+        self.assertEqual(failed(rows), ["parse_sgr_mb_s"])
+        rows = perf.check({"gated_ms": [1], "shown_ms": [1], "parse_sgr_mb_s": [130]}, {"parse_sgr_mb_s": 100})
+        self.assertEqual(failed(rows), [])
+
+    def test_the_app_rows_are_reported_and_read_from_their_lines(self):
+        lines = [
+            "motion_cost: task_focus_cpu_pct=2.4 task_background_cpu_pct=0.6 "
+            "task_focus_draws=2.1 task_background_draws=0.1",
+            "binary_size: app_binary_mb=61.25 daemon_binary_mb=20.5 cli_binary_mb=9.75",
+            "gate2: gate2_key_to_glyph_p95_ms=18.50 gate2_hidden_draws_per_s=0.10",
+            'flow_bench: {"terminal_key_flood_to_glyph_p95_ms": 24.1, '
+            '"app_rss_per_hidden_terminal_mb": 9.5}',
+            "smoke: first_frame_ms=120.0 first_data_ms=200.0 keymap_ms=1.5 first_draw_ms=40.2 "
+            "app_rss_smoke_mb=150.3",
+        ]
+        runs = perf.collect(["\n".join(lines)])
+        self.assertTrue(set(runs) - {"first_frame_ms", "first_data_ms"} <= perf.REPORTED)
+        self.assertEqual(runs["app_binary_mb"], [61.25])
+        self.assertEqual(runs["gate2_key_to_glyph_p95_ms"], [18.5])
+        rows = perf.check({"gated_ms": [1], "shown_ms": [1], **runs}, {})
+        self.assertEqual(failed(rows), [])
+        self.assertEqual(result(rows, "terminal_key_to_echo_p95_ms"), "no data")
+        self.assertEqual(result(rows, "task_focus_draws"), "ok")
+
     def test_a_missing_gated_number_fails(self):
         rows = perf.check({"shown_ms": [1]}, {})
         self.assertEqual(failed(rows), ["gated_ms"])

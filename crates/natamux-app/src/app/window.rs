@@ -116,7 +116,7 @@ impl Root {
         let settings = cx.new(|cx| SettingsView::new(dashboard.clone(), window, cx));
         cx.subscribe_in(&dashboard, window, Self::on_dashboard)
             .detach();
-        cx.observe_in(&dashboard, window, Self::follow_dashboard)
+        Dashboard::observe_in(&dashboard, window, cx, Self::follow_dashboard)
             .detach();
         Self::watch_window(window, cx);
         notify::follow_clicks(&dashboard, window.window_handle(), cx);
@@ -171,7 +171,7 @@ impl Root {
         cx: &mut Context<Self>,
     ) {
         match change {
-            DashboardChange::Tasks => {
+            DashboardChange::Tasks(one) => {
                 // A task that is gone, finished or has no workspace keeps no hidden terminal.
                 let live: BTreeSet<String> = self
                     .dashboard
@@ -183,7 +183,7 @@ impl Root {
                     .map(|task| task.id.clone())
                     .collect();
                 TerminalCache::set_live(live, cx);
-                self.notifier.after_tasks(&self.dashboard, window, cx);
+                self.notifier.after_tasks(&self.dashboard, one, window, cx);
             }
             DashboardChange::Opened(_) | DashboardChange::AgentsOpened => {
                 self.notifier.after_open(&self.dashboard, cx);

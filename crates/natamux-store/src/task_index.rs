@@ -64,6 +64,11 @@ on conflict (task_id, kind) do update set mtime = excluded.mtime, size = exclude
 const APPEND_EVENT: &str =
     "insert into events (task_id, source, type, at, payload, accepted) values (?, ?, ?, ?, ?, ?)";
 
+const STAGE_STARTS: &str = "select * from events \
+     where task_id = ? and type = 'stage.started' and accepted = 1 order by seq";
+
+const LAST_EVENTS: &str = "select * from events where task_id = ? order by seq desc limit ?";
+
 /// The task file and the event log of a task, as they were when the index last matched them.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct TaskFiles {
@@ -295,12 +300,35 @@ impl TaskIndex {
     }
 
     pub fn list_events(&self, task_id: &str) -> IndexResult<Vec<StoredEvent>> {
-        let mut statement = self
-            .db
-            .prepare_cached("select * from events where task_id = ? order by seq")
-            .map_err(sql)?;
+        self.events_by(
+            "select * from events where task_id = ? order by seq",
+            [task_id],
+        )
+    }
+
+    /// The accepted `stage.started` events of a task, oldest first: all the pinned terminals are
+    /// made of. A hook asks for them on every call, so the other events are not read.
+    pub fn stage_starts(&self, task_id: &str) -> IndexResult<Vec<StoredEvent>> {
+        self.events_by(STAGE_STARTS, [task_id])
+    }
+
+    /// The last `limit` events of `list_events`, oldest first. A reader that walks the log from
+    /// its end back, such as the wait of a lane, seldom needs more.
+    pub fn last_events(&self, task_id: &str, limit: usize) -> IndexResult<Vec<StoredEvent>> {
+        let limit = i64::try_from(limit).unwrap_or(i64::MAX);
+        let mut events = self.events_by(LAST_EVENTS, params![task_id, limit])?;
+        events.reverse();
+        Ok(events)
+    }
+
+    fn events_by(
+        &self,
+        query: &str,
+        values: impl rusqlite::Params,
+    ) -> IndexResult<Vec<StoredEvent>> {
+        let mut statement = self.db.prepare_cached(query).map_err(sql)?;
         let rows = statement
-            .query_map([task_id], |row| {
+            .query_map(values, |row| {
                 Ok((
                     row.get::<_, i64>("seq")?,
                     row.get::<_, String>("task_id")?,

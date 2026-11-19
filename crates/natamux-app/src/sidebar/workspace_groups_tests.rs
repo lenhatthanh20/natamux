@@ -2,7 +2,7 @@ use serde_json::{Value, json};
 
 use super::*;
 
-fn make_task(overrides: Value) -> Task {
+pub(super) fn make_task(overrides: Value) -> Task {
     let mut base = json!({
         "id": "T-0001", "title": "Example", "state": "running", "workspace": "/work/T-0001",
         "stage": "implement", "stages": ["implement", "review", "release"],
@@ -22,6 +22,56 @@ fn repos() -> Vec<RepoRef> {
             name: name.into(),
         })
         .collect()
+}
+
+/// The groups with their tasks by value again, so a test can compare them with the tasks it made.
+struct Plain {
+    pinned: Vec<Task>,
+    groups: Vec<PlainGroup>,
+    children: BTreeMap<String, Vec<Task>>,
+}
+
+struct PlainGroup {
+    repo: RepoRef,
+    open: Vec<Task>,
+    finished: Vec<Task>,
+    nested: Vec<Task>,
+}
+
+fn plain(tasks: &[Arc<Task>]) -> Vec<Task> {
+    tasks.iter().map(|task| Task::clone(task)).collect()
+}
+
+fn plain_groups(result: WorkspaceGroups) -> Plain {
+    Plain {
+        pinned: plain(&result.pinned),
+        groups: result
+            .groups
+            .iter()
+            .map(|group| PlainGroup {
+                repo: group.repo.clone(),
+                open: plain(&group.open),
+                finished: plain(&group.finished),
+                nested: plain(&group.nested),
+            })
+            .collect(),
+        children: result
+            .children
+            .iter()
+            .map(|(parent, children)| (parent.clone(), plain(children)))
+            .collect(),
+    }
+}
+
+/// The rule on tasks held by value: the dashboard shares them, a test has plain ones.
+fn workspace_groups(
+    repos: &[RepoRef],
+    tasks: &[Task],
+    pinned_ids: &[String],
+    held_id: Option<&str>,
+) -> Plain {
+    let shared: Vec<Arc<Task>> = tasks.iter().cloned().map(Arc::new).collect();
+    plain_groups(super::workspace_groups(repos, &shared, pinned_ids, held_id))
 }
 
 fn ids(tasks: &[Task]) -> Vec<&str> {
@@ -192,6 +242,19 @@ fn keeps_an_open_subtask_of_a_finished_parent_at_the_top_so_it_never_hides() {
 }
 
 #[test]
+fn a_held_parent_that_finished_still_holds_its_subtasks() {
+    let held = Task {
+        state: TaskState::Done,
+        ..parent()
+    };
+    let (held, first_child) = (Arc::new(held), Arc::new(first()));
+    let shared = [&held, &first_child];
+    let result = plain_groups(workspace_groups_of(&repos(), &shared, &[], Some("T-0001")));
+    assert_eq!(ids(&result.groups[0].open), ["T-0001"]);
+    assert_eq!(result.children["T-0001"], [first()]);
+}
+
+#[test]
 fn nests_one_level_only_and_never_under_itself() {
     let grandchild = make_task(json!({"id": "T-0004", "parentId": "T-0002"}));
     let own = make_task(json!({"id": "T-0005", "parentId": "T-0005"}));
@@ -295,7 +358,7 @@ fn adds_the_repositories_that_only_tasks_name_default_for_tasks_without_one() {
         name: name.into(),
     };
     assert_eq!(known, [web, pair("default", "default"), pair("api", "api")]);
-    assert!(known_repos(&[], &[]).is_empty());
+    assert!(known_repos::<Task>(&[], &[]).is_empty());
 }
 
 #[test]
@@ -320,170 +383,13 @@ fn drops_the_part_that_names_the_task() {
     assert_eq!(branch("T-0012", None), "");
 }
 
-fn now() -> i64 {
-    parse_iso_ms("2026-10-08T09:01:00.000Z").unwrap_or_default()
-}
-
-fn group(open: Vec<Task>, finished: Vec<Task>) -> RepoGroup {
-    RepoGroup {
-        repo: RepoRef {
-            id: "default".into(),
-            name: "natamux".into(),
-        },
-        open,
-        finished,
-        nested: Vec::new(),
-    }
-}
-
 #[test]
-fn shows_a_workspace_that_needs_the_user_in_its_own_state() {
-    let waiting = make_task(json!({"id": "T-0001", "state": "review"}));
-    let other = make_task(json!({"id": "T-0002", "updatedAt": "2026-10-08T09:00:30.000Z"}));
-    let hint = collapsed_hint(&group(vec![other, waiting], vec![]), None, now());
-    assert_eq!(hint, Some(TaskState::Review));
-}
-
-#[test]
-fn shows_a_quiet_workspace_as_one_that_needs_the_user() {
-    let quiet = make_task(json!({"state": "running", "updatedAt": "2026-10-08T08:00:00.000Z"}));
-    assert_eq!(
-        collapsed_hint(&group(vec![quiet], vec![]), None, now()),
-        Some(TaskState::NeedsInput)
-    );
-}
-
-#[test]
-fn shows_the_open_workspace_when_nothing_waits_finished_or_not() {
-    let running = make_task(json!({"id": "T-0001", "updatedAt": "2026-10-08T09:00:30.000Z"}));
-    let done = make_task(json!({"id": "T-0002", "state": "done"}));
-    let group = group(vec![running], vec![done]);
-    assert_eq!(
-        collapsed_hint(&group, Some("T-0001"), now()),
-        Some(TaskState::Running)
-    );
-    assert_eq!(
-        collapsed_hint(&group, Some("T-0002"), now()),
-        Some(TaskState::Done)
-    );
-}
-
-#[test]
-fn shows_nothing_when_the_group_hides_nothing_of_interest() {
-    let running = make_task(json!({"updatedAt": "2026-10-08T09:00:30.000Z"}));
-    assert_eq!(
-        collapsed_hint(&group(vec![running], vec![]), None, now()),
-        None
-    );
-}
-
-#[test]
-fn collapsed_hint_looks_at_nested_subtasks_too() {
-    let waiting = make_task(json!({"id": "T-0002", "state": "failed"}));
-    let mut folded = group(
-        vec![make_task(json!({"updatedAt": "2026-10-08T09:00:30.000Z"}))],
-        vec![],
-    );
-    folded.nested = vec![waiting];
-    assert_eq!(
-        collapsed_hint(&folded, None, now()),
-        Some(TaskState::Failed)
-    );
-}
-
-#[test]
-fn a_task_waiting_for_background_work_is_not_quiet() {
-    let task = make_task(
-        json!({"updatedAt": "2026-10-08T08:00:00.000Z", "backgroundSince": "2026-10-08T08:00:00.000Z"}),
-    );
-    assert!(!is_quiet(&task, now()));
-}
-
-#[test]
-fn reads_iso_times_in_utc() {
-    assert_eq!(parse_iso_ms("1970-01-01T00:00:00.000Z"), Some(0));
-    assert_eq!(
-        parse_iso_ms("2026-10-08T09:00:00.500Z"),
-        Some(1_791_450_000_500)
-    );
-    assert_eq!(
-        parse_iso_ms("2024-02-29T00:00:00Z"),
-        Some(1_709_164_800_000)
-    );
-    assert_eq!(parse_iso_ms("soon"), None);
-    // A fraction that starts with a character of more than one byte.
-    assert_eq!(parse_iso_ms("2026-10-08T09:00:00.é5Z"), None);
-}
-
-fn hold(id: Option<&str>, open: bool) -> Hold {
-    Hold {
-        id: id.map(str::to_owned),
-        open,
-    }
-}
-
-#[test]
-fn holds_the_current_task_when_it_finishes_while_it_is_current() {
-    let running = make_task(json!({"id": "T-0001"}));
-    let done = Task {
-        state: TaskState::Done,
-        ..running.clone()
-    };
-    let opened = next_hold(&hold(None, false), Some("T-0001"), &[running]);
-    let finished = next_hold(&opened, Some("T-0001"), &[done]);
-
-    assert_eq!(held_id(&finished), Some("T-0001"));
-}
-
-#[test]
-fn lets_it_go_once_another_task_is_current() {
-    let running = make_task(json!({"id": "T-0001"}));
-    let done = Task {
-        state: TaskState::Done,
-        ..running.clone()
-    };
-    let opened = next_hold(&hold(None, false), Some("T-0001"), &[running]);
-    let finished = next_hold(&opened, Some("T-0001"), std::slice::from_ref(&done));
-
-    assert_eq!(
-        held_id(&next_hold(&finished, Some("T-0002"), &[done])),
-        None
-    );
-}
-
-#[test]
-fn does_not_hold_a_task_that_was_finished_when_it_was_opened() {
-    let done = make_task(json!({"id": "T-0001", "state": "done"}));
-    assert_eq!(
-        held_id(&next_hold(&hold(None, false), Some("T-0001"), &[done])),
-        None
-    );
-}
-
-#[test]
-fn holds_a_task_whose_row_came_after_the_selection() {
-    let running = make_task(json!({"id": "T-0001"}));
-    let done = Task {
-        state: TaskState::Done,
-        ..running.clone()
-    };
-    let early = next_hold(&hold(None, false), Some("T-0001"), &[]);
-    let loaded = next_hold(&early, Some("T-0001"), &[running]);
-
-    assert_eq!(
-        held_id(&next_hold(&loaded, Some("T-0001"), &[done])),
-        Some("T-0001")
-    );
-}
-
-#[test]
-fn the_hint_of_a_folded_group_changes_when_its_first_task_turns_quiet() {
-    let running = make_task(json!({"id": "T-0001", "updatedAt": "2026-10-08T09:00:30.000Z"}));
-    let waiting = make_task(json!({"id": "T-0002", "state": "review"}));
-    let mut nested = make_task(json!({"id": "T-0003", "updatedAt": "2026-10-08T09:00:10.000Z"}));
-    nested.parent_id = Some("T-0001".into());
-    let mut group = group(vec![running, waiting], vec![]);
-    assert_eq!(next_hint_change_ms(&group, now()), Some(570_000));
-    group.nested = vec![nested];
-    assert_eq!(next_hint_change_ms(&group, now()), Some(550_000));
+fn the_groups_hold_the_tasks_they_were_given_not_copies() {
+    let pinned = make_task(json!({"id": "T-0009", "state": "done"}));
+    let shared = [parent(), first(), pinned].map(Arc::new);
+    let result = super::workspace_groups(&repos(), &shared, &pins(&["T-0009"]), None);
+    assert!(Arc::ptr_eq(&result.groups[0].open[0], &shared[0]));
+    assert!(Arc::ptr_eq(&result.children["T-0001"][0], &shared[1]));
+    assert!(Arc::ptr_eq(&result.groups[0].nested[0], &shared[1]));
+    assert!(Arc::ptr_eq(&result.pinned[0], &shared[2]));
 }

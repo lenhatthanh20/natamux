@@ -36,6 +36,8 @@ struct Pane {
     terminal: Entity<RemoteTerminal>,
     finished: bool,
     restoring: Option<String>,
+    /// The task has all the panes it can have.
+    full: bool,
 }
 
 type OnClick = Rc<dyn Fn(&mut Window, &mut App)>;
@@ -119,9 +121,9 @@ impl ShellPanes {
         cx.notify();
     }
 
-    fn list(&self, cx: &App) -> Option<TerminalList> {
+    fn list<'a>(&self, cx: &'a App) -> Option<&'a TerminalList> {
         let id = self.task_id.as_ref()?;
-        self.dashboard.read(cx).data.terminals.get(id).cloned()
+        self.dashboard.read(cx).data.terminals.get(id)
     }
 
     fn names(&self, list: Option<&TerminalList>) -> Vec<String> {
@@ -156,13 +158,9 @@ impl ShellPanes {
         self.scroll.max_offset().y
     }
 
-    pub fn is_full(&self, cx: &App) -> bool {
-        self.names(self.list(cx).as_ref()).len() >= MAX_PANES
-    }
-
     /// New terminal (Ctrl+Shift+`): the next number; its pane's socket starts the shell.
     pub fn add(&mut self, cx: &mut Context<Self>) {
-        let names = self.names(self.list(cx).as_ref());
+        let names = self.names(self.list(cx));
         if self.task_id.is_none() || names.len() >= MAX_PANES {
             return;
         }
@@ -182,7 +180,7 @@ impl ShellPanes {
             .is_some_and(|terminal| terminal.read(cx).has_focus(window, cx));
         let was_shown = self.shown.as_deref() == Some(name.as_str());
         if was_focused || was_shown {
-            let names = self.names(self.list(cx).as_ref());
+            let names = self.names(self.list(cx));
             let next = focus_after_close(&names, &name);
             if was_shown {
                 self.shown = next.clone();
@@ -324,6 +322,7 @@ impl ShellPanes {
             terminal,
             finished,
             restoring,
+            full,
         } = pane;
         let key = terminal_key(task_id, &fact.name);
         let focused = terminal
@@ -340,7 +339,6 @@ impl ShellPanes {
             .data
             .task(task_id)
             .is_some_and(|task| task.agent.is_some());
-        let full = self.is_full(cx);
         let mut header = PaneHeader::new(key.clone(), PaneTitle::Terminal(fact.title.clone()))
             .narrow(self.narrow)
             .state_text(fact.state_text)
@@ -413,6 +411,8 @@ impl Render for ShellPanes {
             TerminalCache::claim(Owner::Workspace, BTreeSet::new(), cx);
             return skeleton();
         };
+        // Once for the grid: every pane header asks. Nothing below changes the names.
+        let full = names.len() >= MAX_PANES;
         self.take_request(&task_id, &names, first_agent.clone(), cx);
         let maximized = self
             .is_maximized(cx)
@@ -462,6 +462,7 @@ impl Render for ShellPanes {
                 terminal,
                 finished,
                 restoring,
+                full,
             };
             panes.push(self.pane(&task_id, pane, window, cx));
         }

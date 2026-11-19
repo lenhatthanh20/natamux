@@ -3,6 +3,7 @@
 //! (`code_enter.rs`).
 
 use gpui::Context;
+use tree_sitter::Tree;
 
 use super::code_enter::{enter, parse};
 use super::code_view::Code;
@@ -19,9 +20,15 @@ pub(super) struct Region {
 }
 
 /// The closing tag of the JSX opening tag whose `>` ends at `at` of `text`, when its element has
-/// none yet: `</name>`, or `</>` for a fragment.
-fn jsx_closing_tag(lang: &Lang, text: &str, at: usize) -> Option<String> {
-    let tree = parse(lang, text)?;
+/// none yet: `</name>`, or `</>` for a fragment. `old` is the text before the `>` with its tree,
+/// when there is one.
+fn jsx_closing_tag(
+    lang: &Lang,
+    text: &str,
+    at: usize,
+    old: Option<(&str, &Tree)>,
+) -> Option<String> {
+    let tree = parse(lang, text, old)?;
     let mut node = tree
         .root_node()
         .descendant_for_byte_range(at.saturating_sub(1), at);
@@ -134,9 +141,11 @@ impl TextInput {
                     && closer.is_none()
                     && !self.model.text()[..at].ends_with(['=', '-']) =>
             {
-                let mut typed = self.model.text().to_owned();
+                let before = self.model.text();
+                let mut typed = before.to_owned();
                 typed.insert(at, c);
-                jsx_closing_tag(lang, &typed, at + 1)
+                let tree = self.code.as_ref().and_then(Code::tree);
+                jsx_closing_tag(lang, &typed, at + 1, tree.map(|tree| (before, tree)))
             }
             _ => None,
         };

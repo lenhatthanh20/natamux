@@ -208,6 +208,37 @@ mod side {
     }
 
     #[test]
+    fn reads_the_old_side_with_one_git_process() {
+        let (_root, path) = worktree();
+        commit_file(&path, "a.txt", b"one\n", "add a");
+
+        let before = crate::exec::thread_spawn_count();
+        let old = read_side(&path, "a.txt", None, CommentSide::Old).unwrap();
+        let spawned = crate::exec::thread_spawn_count() - before;
+
+        assert_eq!((old.as_deref(), spawned), (Some("one\n"), 1));
+    }
+
+    #[test]
+    fn finds_a_file_the_same_with_a_root_resolved_once() {
+        let (_root, path) = worktree();
+        std::fs::write(path.join("a.txt"), "x").unwrap();
+        let real_root = path.canonicalize().unwrap();
+
+        let once = read_inside_real(&path, &real_root, "a.txt")
+            .unwrap()
+            .unwrap();
+        let each = read_inside(&path, "a.txt").unwrap().unwrap();
+
+        assert_eq!((once.real, once.size), (each.real, each.size));
+        assert!(
+            read_inside_real(&path, &real_root, "none.txt")
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[test]
     fn has_no_text_for_a_binary_file() {
         let (_root, path) = worktree();
         std::fs::write(path.join("x.bin"), [1u8, 0, 2]).unwrap();
@@ -257,6 +288,22 @@ mod image {
 
         assert_eq!(before, ("image/png".to_string(), png(1)));
         assert_eq!(after, ("image/png".to_string(), png(2)));
+    }
+
+    #[test]
+    fn reads_the_original_image_with_one_git_process() {
+        let (_root, path) = prepared();
+
+        let before = crate::exec::thread_spawn_count();
+        let original = read(
+            &path,
+            "logo.png",
+            ChangeStatus::Modified,
+            ImageSide::Original,
+        );
+        let spawned = crate::exec::thread_spawn_count() - before;
+
+        assert_eq!((original.unwrap().1, spawned), (png(1), 1));
     }
 
     #[test]

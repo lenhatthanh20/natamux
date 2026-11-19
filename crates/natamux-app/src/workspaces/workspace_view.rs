@@ -4,20 +4,23 @@
 //! tab row and the body of its tab: the terminal panes (or the wrap-up of a finished task),
 //! Changes, History, Docs, or the open file.
 
+use std::rc::Rc;
 use std::time::Duration;
 
 use gpui::{Entity, Subscription};
+use natamux_proto::agents::activity::TaskActivity;
 use natamux_proto::events::task_event::StoredEvent;
 use natamux_proto::projects::repo::BranchList;
 use natamux_proto::tasks::task::{Task, TaskState};
 use natamux_proto::terminals::ended::EndedShell;
+use natamux_proto::terminals::list::TerminalList;
 use natamux_proto::workspaces::workspace::{ChangeEntry, GitGraph};
 use ui::prelude::*;
 
 use super::workspace_rules::GitStep;
 use super::wrap_up_rules::{finished_text, is_finished_state};
 use crate::app::dashboard::{Dashboard, DashboardChange, TerminalReader};
-use crate::app::dashboard_data::Part;
+use crate::app::dashboard_data::{DashboardData, Part, Seen};
 use crate::app::read_pace::ReadPace;
 use crate::app::shown_cache::ShownCache;
 use crate::app::view_rules::WorkspaceTab;
@@ -36,7 +39,7 @@ const POLL: Duration = Duration::from_secs(60);
 #[derive(Default)]
 struct Shown {
     task_id: String,
-    graph: Option<GitGraph>,
+    graph: Option<Rc<GitGraph>>,
     /// A failed first read of the graph, for History.
     graph_error: Option<String>,
     changes: Option<Vec<ChangeEntry>>,
@@ -55,6 +58,33 @@ struct Shown {
     git_reads: ReadPace,
 }
 
+/// The terminals and the agents' lines of the shown task, as the dashboard last had them. Every
+/// agent hook of any task changes those two parts; only a change of the shown task's draws here.
+#[derive(Default)]
+struct OwnParts {
+    task_id: Option<String>,
+    terminals: Option<TerminalList>,
+    activity: Option<TaskActivity>,
+}
+
+impl OwnParts {
+    /// Whether the shown task or one of its two parts is another one now. Keeps the new ones.
+    fn changed(&mut self, task_id: Option<&str>, data: &DashboardData) -> bool {
+        let terminals = task_id.and_then(|id| data.terminals.get(id));
+        let activity = task_id.and_then(|id| data.activity.get(id));
+        if self.task_id.as_deref() == task_id
+            && self.terminals.as_ref() == terminals
+            && self.activity.as_ref() == activity
+        {
+            return false;
+        }
+        self.task_id = task_id.map(str::to_owned);
+        self.terminals = terminals.cloned();
+        self.activity = activity.cloned();
+        true
+    }
+}
+
 pub struct WorkspaceView {
     dashboard: Entity<Dashboard>,
     panes: Entity<ShellPanes>,
@@ -67,6 +97,7 @@ pub struct WorkspaceView {
     /// The active file as last drawn: a tab picked again reads its file again.
     editor_shown: Option<String>,
     shown: Option<Shown>,
+    own_parts: OwnParts,
     cache: ShownCache<Shown>,
     width: Entity<Option<f32>>,
     /// A poll came while the window had no focus: it reads once when the focus comes back.
@@ -85,16 +116,21 @@ impl WorkspaceView {
             view.on_change(change, cx)
         });
         let observe = cx.observe(&width, |_, _, cx| cx.notify());
-        // Root caches this view: the task, its terminals and their lines come from the dashboard.
-        // The terminal panes and the docs tab inside it have no observer of their own.
-        let parts = &[
-            Part::Tasks,
-            Part::Terminals,
-            Part::Activity,
-            Part::Preparing,
-            Part::View,
-        ];
-        let follow = Dashboard::redraw_on(&dashboard, parts, cx);
+        // The task, its terminals and their lines come from the dashboard, and the terminal panes
+        // inside this view have no observer of their own. The details panel draws on each notify
+        // of this view too, so the terminals and lines of the other tasks do not notify.
+        let mut seen = Seen::default();
+        let follow = Dashboard::observe(&dashboard, cx, move |view, dashboard, cx| {
+            let data = &dashboard.read(cx).data;
+            let parts = [Part::Tasks, Part::Preparing, Part::View];
+            let whole = seen.take(&data.gens).any(&parts);
+            let shown = view.shown.as_ref().map(|shown| shown.task_id.as_str());
+            // Looked at also when `whole` is set, so the kept parts are the newest.
+            let own = view.own_parts.changed(shown, data);
+            if whole || own {
+                cx.notify();
+            }
+        });
         let poll = cx.spawn(async move |view, cx| {
             loop {
                 cx.background_executor().timer(POLL).await;
@@ -119,6 +155,7 @@ impl WorkspaceView {
             file_tab_shown: None,
             editor_shown: None,
             shown: None,
+            own_parts: OwnParts::default(),
             cache: ShownCache::default(),
             width,
             missed_poll: false,
@@ -202,7 +239,7 @@ impl WorkspaceView {
             DashboardChange::WorkspaceChanged(id) | DashboardChange::TaskLogged(id) => {
                 self.cache.mark_stale(id)
             }
-            DashboardChange::Tasks => self.after_tasks(cx),
+            DashboardChange::Tasks(_) => self.after_tasks(cx),
             DashboardChange::UndoRollback(id) => self.undo_rollback(id, cx),
             _ => {}
         }
@@ -298,16 +335,21 @@ impl WorkspaceView {
 
 impl Render for WorkspaceView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let Some(task) = self.task(cx) else {
-            return div().size_full().into_any_element();
-        };
         let Some(shown) = self.shown.take() else {
             return div().size_full().into_any_element();
         };
-        let element = if task.workspace.is_none() {
-            self.render_no_workspace(task, &shown, cx)
-        } else {
-            self.render_workspace(task, &shown, window, cx)
+        // This runs on every frame of the window. A running task with a workspace needs no more
+        // than these facts, so its record is copied only for the other views.
+        let data = &self.dashboard.read(cx).data;
+        let read = data.task(&shown.task_id).map(|task| {
+            let has_workspace = task.workspace.is_some();
+            let whole = !has_workspace || is_finished_state(task.state);
+            (has_workspace, whole.then(|| task.clone()))
+        });
+        let element = match read {
+            Some((true, finished)) => self.render_workspace(finished, &shown, window, cx),
+            Some((false, Some(task))) => self.render_no_workspace(task, &shown, cx),
+            _ => div().size_full().into_any_element(),
         };
         self.shown = Some(shown);
         element

@@ -32,7 +32,7 @@ impl RepoTrustRow {
     ) -> Self {
         let mut seen = Seen::default();
         seen.take(&dashboard.read(cx).data.gens);
-        let follow = cx.observe(dashboard, move |this, dashboard, cx| {
+        let follow = Dashboard::observe(dashboard, cx, move |this, dashboard, cx| {
             let gens = dashboard.read(cx).data.gens;
             if seen.changed(&gens, &[Part::Repos]) {
                 this.reload(cx);

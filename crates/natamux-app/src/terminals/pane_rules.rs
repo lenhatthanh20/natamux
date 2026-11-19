@@ -1,6 +1,7 @@
 //! Port of `packages/web/src/lib/panes.ts`: which tasks the agents grid shows, its columns, and the
 //! text of a pane. `terminalState` is `sidebar/shell_rows.rs::terminal_state`.
 
+use std::borrow::Borrow;
 use std::collections::BTreeMap;
 
 use natamux_proto::tasks::task::{Task, TaskState};
@@ -8,6 +9,7 @@ use natamux_proto::terminals::list::TerminalLane;
 
 use crate::sidebar::shell_rows::terminal_state;
 use crate::sidebar::sidebar_tree::state_label;
+use crate::tasks::task_changes::task_of;
 use crate::tasks::task_sort::task_number;
 
 /// More panes than this make each terminal too small to read.
@@ -20,9 +22,16 @@ fn has_agent(task: &Task) -> bool {
 /// The tasks in the agents grid. Until the user picks (`chosen` is None), the ones whose agent
 /// works or waits. The task list comes newest first, so each update would move a pane: the default
 /// grid sorts by task id, which does not change.
-pub fn agent_pane_tasks<'a>(chosen: Option<&[String]>, tasks: &'a [Task]) -> Vec<&'a Task> {
+pub fn agent_pane_tasks<'a, T: Borrow<Task>>(
+    chosen: Option<&[String]>,
+    tasks: &'a [T],
+) -> Vec<&'a Task> {
     let Some(chosen) = chosen else {
-        let mut found: Vec<&Task> = tasks.iter().filter(|task| has_agent(task)).collect();
+        let mut found: Vec<&Task> = tasks
+            .iter()
+            .map(task_of)
+            .filter(|task| has_agent(task))
+            .collect();
         found.sort_by(|a, b| {
             task_number(&a.id)
                 .cmp(&task_number(&b.id))
@@ -33,7 +42,7 @@ pub fn agent_pane_tasks<'a>(chosen: Option<&[String]>, tasks: &'a [Task]) -> Vec
     };
     chosen
         .iter()
-        .filter_map(|id| tasks.iter().find(|task| task.id == *id))
+        .filter_map(|id| tasks.iter().map(task_of).find(|task| task.id == *id))
         .filter(|task| task.workspace.is_some())
         .collect()
 }

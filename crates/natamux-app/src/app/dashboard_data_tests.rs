@@ -1,6 +1,7 @@
 use natamux_proto::tasks::task::TaskState;
 
 use super::*;
+use crate::tasks::table_rules::waits_for;
 
 #[test]
 fn a_bulk_run_does_not_start_twice_while_it_runs() {
@@ -308,4 +309,94 @@ fn bumps_only_the_parts_an_event_changed() {
     data.forget_task("T-1");
     let gone = [Part::Tasks, Part::Terminals, Part::Events];
     assert_eq!(bumped(before, data.gens), gone);
+}
+
+#[test]
+fn a_task_that_did_not_change_keeps_its_arc_and_is_found_by_its_id() {
+    let mut data = DashboardData::default();
+    data.apply(DashboardEvent::Tasks(vec![
+        task("T-1", TaskState::Running, "a"),
+        task("T-2", TaskState::Draft, "a"),
+    ]));
+    let held = |data: &DashboardData, id: &str| data.shared_task(id).cloned();
+    let (one, two) = (held(&data, "T-1"), held(&data, "T-2"));
+    assert!(one.is_some() && two.is_some());
+    let same = |a: &Option<Arc<Task>>, b: &Option<Arc<Task>>| match (a, b) {
+        (Some(a), Some(b)) => Arc::ptr_eq(a, b),
+        _ => false,
+    };
+
+    // One task of the feed: the other task is the one held, not a copy.
+    data.apply(DashboardEvent::TaskChanged(Box::new(task(
+        "T-1",
+        TaskState::Review,
+        "b",
+    ))));
+    assert!(!same(&held(&data, "T-1"), &one));
+    assert!(same(&held(&data, "T-2"), &two));
+    let listed = data.tasks.iter().find(|task| task.id == "T-2").cloned();
+    assert!(same(&listed, &two));
+    let one = held(&data, "T-1");
+
+    // An equal task, and a list with one new task: what did not change stays.
+    data.merge_task(task("T-1", TaskState::Review, "b"));
+    assert!(same(&held(&data, "T-1"), &one));
+    data.apply(DashboardEvent::Tasks(vec![
+        task("T-3", TaskState::Draft, "c"),
+        task("T-1", TaskState::Review, "b"),
+        task("T-2", TaskState::Ready, "b"),
+    ]));
+    assert!(same(&held(&data, "T-1"), &one));
+    assert!(!same(&held(&data, "T-2"), &two));
+    let ids: Vec<&str> = data.tasks.iter().map(|task| task.id.as_str()).collect();
+    assert_eq!(ids, ["T-3", "T-1", "T-2"]);
+
+    // The lookup follows every change of the list.
+    for task in &data.tasks {
+        assert!(same(&held(&data, &task.id), &Some(task.clone())));
+    }
+    let state = |data: &DashboardData, id: &str| data.task(id).map(|task| task.state);
+    data.hide_task("T-3");
+    assert_eq!(state(&data, "T-3"), None);
+    data.restore_task("T-3");
+    assert_eq!(state(&data, "T-3"), Some(TaskState::Draft));
+    data.forget_task("T-1");
+    assert_eq!(state(&data, "T-1"), None);
+    assert!(data.shared_task("T-1").is_none());
+    assert_eq!(state(&data, "T-2"), Some(TaskState::Ready));
+}
+
+#[test]
+fn what_a_task_waits_for_follows_every_change_of_the_list() {
+    let child = |id: &str, state: TaskState, updated_at: &str| Task {
+        parent_id: Some("T-1".into()),
+        ..task(id, state, updated_at)
+    };
+    let mut data = DashboardData::default();
+    let mut parent = task("T-1", TaskState::Ready, "a");
+    parent.depends_on = vec!["T-4".into()];
+    data.apply(DashboardEvent::Tasks(vec![
+        parent.clone(),
+        child("T-2", TaskState::Running, "a"),
+        task("T-4", TaskState::Review, "a"),
+    ]));
+    let waits = |data: &DashboardData| {
+        let waits = data.waits_for(&parent);
+        // The lookups give what a read of the whole list gives.
+        assert_eq!(waits, waits_for(&parent, &data.tasks));
+        waits
+    };
+    assert_eq!(waits(&data), ["T-4", "T-2"]);
+    data.merge_task(child("T-3", TaskState::Draft, "b"));
+    assert_eq!(waits(&data), ["T-4", "T-3", "T-2"]);
+    data.merge_task(task("T-4", TaskState::Done, "c"));
+    assert_eq!(waits(&data), ["T-3", "T-2"]);
+    data.hide_task("T-3");
+    assert_eq!(waits(&data), ["T-2"]);
+    data.restore_task("T-3");
+    assert_eq!(waits(&data), ["T-3", "T-2"]);
+    data.forget_task("T-2");
+    assert_eq!(waits(&data), ["T-3"]);
+    data.apply(DashboardEvent::Tasks(vec![parent.clone()]));
+    assert!(waits(&data).is_empty());
 }

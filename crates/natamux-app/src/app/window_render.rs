@@ -103,22 +103,21 @@ impl Root {
         drawer_layer(self.sidebar.clone(), viewport, close, cx)
     }
 
-    /// Main is drawn again only when what it shows changed: output of one terminal, a blink in
-    /// the bars or a dashboard event draws Root, not the other views.
+    /// The task list is drawn again only when it changed. The workspace and the Agents grid
+    /// draw with Root: a cached view that draws again also draws every cached view inside it,
+    /// so on the way to a terminal only the terminal's own view is cached (`terminal_screen`).
+    /// Output of one terminal then draws that terminal, not the panes beside it. The heavy
+    /// bodies of the workspace that are no terminals are cached inside it.
     fn render_main(&self, cx: &App) -> AnyElement {
         match &self.tool {
             Tool::Bench(bench) => bench.clone().into_any_element(),
             Tool::Ime(check) => check.clone().into_any_element(),
-            Tool::None if self.dashboard.read(cx).open_task.is_some() => self
-                .workspace
-                .clone()
-                .cached(StyleRefinement::default().size_full())
-                .into_any_element(),
-            Tool::None if self.dashboard.read(cx).agents_open => self
-                .agents
-                .clone()
-                .cached(StyleRefinement::default().size_full())
-                .into_any_element(),
+            Tool::None if self.dashboard.read(cx).open_task.is_some() => {
+                self.workspace.clone().into_any_element()
+            }
+            Tool::None if self.dashboard.read(cx).agents_open => {
+                self.agents.clone().into_any_element()
+            }
             Tool::None => self
                 .tasks
                 .clone()

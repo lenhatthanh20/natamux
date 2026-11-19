@@ -157,6 +157,23 @@ fn a_crlf_file_with_its_own_text_again_is_not_modified(cx: &mut TestAppContext) 
 }
 
 #[gpui::test]
+fn a_crlf_file_is_kept_with_lf_breaks_once_read(cx: &mut TestAppContext) {
+    let (editor, cx) = open_text(cx, "crlf.txt", "a\r\nb\r\n");
+    let kept = editor.read_with(cx, |editor, _| {
+        let disk = editor.disk.as_ref().expect("the file was read");
+        (disk.text.clone(), editor.crlf)
+    });
+    // An edit compares with the disk text as it is, with no new LF copy each time.
+    assert_eq!(kept, (Some("a\nb\n".to_owned()), true));
+    type_text(&editor, "a\nB\n", cx);
+    save(&editor, cx);
+    let saved = editor.read_with(cx, |editor, _| {
+        editor.disk.as_ref().and_then(|disk| disk.text.clone())
+    });
+    assert_eq!(saved.as_deref(), Some("a\nB\n"));
+}
+
+#[gpui::test]
 fn a_crlf_file_is_saved_with_crlf(cx: &mut TestAppContext) {
     let (editor, cx) = open_text(cx, "crlf.txt", "a\r\nb\r\n");
     type_text(&editor, "a\nB\n", cx);

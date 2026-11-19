@@ -16,28 +16,22 @@ const PAGE_CSP: &str = "default-src 'self'; connect-src 'self'; img-src 'self' d
 
 pub struct WebAssets {
     dir: Option<PathBuf>,
-    embedded: HashMap<String, Vec<u8>>,
+    embedded: HashMap<&'static str, &'static [u8]>,
 }
 
 impl WebAssets {
     pub fn new(dir: Option<PathBuf>) -> Self {
         Self {
             dir,
-            embedded: EMBEDDED_WEB
-                .iter()
-                .map(|(name, bytes)| (String::from(*name), bytes.to_vec()))
-                .collect(),
+            embedded: EMBEDDED_WEB.iter().copied().collect(),
         }
     }
 
     #[cfg(test)]
-    pub(super) fn for_test(files: &[(&str, &[u8])]) -> Self {
+    pub(super) fn for_test(files: &[(&'static str, &'static [u8])]) -> Self {
         Self {
             dir: None,
-            embedded: files
-                .iter()
-                .map(|(name, bytes)| (String::from(*name), bytes.to_vec()))
-                .collect(),
+            embedded: files.iter().copied().collect(),
         }
     }
 
@@ -47,7 +41,7 @@ impl WebAssets {
         self
     }
 
-    pub(super) fn bytes_for(&self, url: &str) -> Option<Vec<u8>> {
+    pub(super) fn bytes_for(&self, url: &str) -> Option<Bytes> {
         let path = clean_path(url)?;
         match &self.dir {
             Some(root) => {
@@ -56,11 +50,12 @@ impl WebAssets {
                 file.starts_with(&root)
                     .then(|| std::fs::read(file).ok())
                     .flatten()
+                    .map(Bytes::from)
             }
             None => self
                 .embedded
-                .get(&path.to_string_lossy().replace('\\', "/"))
-                .cloned(),
+                .get(path.to_string_lossy().replace('\\', "/").as_str())
+                .map(|bytes| Bytes::from_static(bytes)),
         }
     }
 
@@ -85,7 +80,7 @@ impl WebAssets {
             None => return None,
         };
         let kind = content_type(name);
-        let mut answer = Answer::new(Full::new(Bytes::from(bytes)));
+        let mut answer = Answer::new(Full::new(bytes));
         let headers = answer.headers_mut();
         headers.insert(CONTENT_TYPE, HeaderValue::from_static(kind));
         headers.insert(
@@ -111,7 +106,7 @@ impl WebAssets {
         Some(answer)
     }
 
-    fn index(&self) -> Option<Vec<u8>> {
+    fn index(&self) -> Option<Bytes> {
         self.bytes_for("/index.html")
     }
 }

@@ -215,7 +215,19 @@ impl PastedPrompts {
         }
     }
 
-    /// One thread for all held prompts, started at the first one. It ends with the service.
+    /// Clears the running flag when nothing is held. Decided under the map's lock: a `hold` that
+    /// comes after finds the flag false and starts a new thread, one before is seen as held.
+    fn stop_if_idle(&self) -> bool {
+        let held = self.lock();
+        let idle = held.is_empty();
+        if idle {
+            self.ticking.store(false, Ordering::SeqCst);
+        }
+        idle
+    }
+
+    /// One thread for all held prompts, started by a hold. It ends when nothing is held, and
+    /// with the service.
     fn start_ticking(self: &Arc<Self>) {
         if self.ticking.swap(true, Ordering::SeqCst) {
             return;
@@ -226,6 +238,9 @@ impl PastedPrompts {
             .spawn(move || {
                 while let Some(prompts) = weak.upgrade() {
                     prompts.tick();
+                    if prompts.stop_if_idle() {
+                        return;
+                    }
                     drop(prompts);
                     std::thread::sleep(TICK);
                 }
