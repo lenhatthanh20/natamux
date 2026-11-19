@@ -1,4 +1,4 @@
-//! Port of `packages/web/src/features/app/background-jobs.ts`: the footer's words about the jobs
+//! The footer's words about the jobs
 //! that run now. The clock is a parameter (`now_ms`, Unix milliseconds).
 
 use natamux_proto::tasks::job::Job;

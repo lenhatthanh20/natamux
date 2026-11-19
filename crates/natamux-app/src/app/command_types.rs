@@ -1,4 +1,4 @@
-//! The shape of a registry command (`packages/web/src/lib/commands/types.ts`) and the `const`
+//! The shape of a registry command and the `const`
 //! builders the lists use. The lists are in `commands*.rs`.
 
 use super::command_when::When;

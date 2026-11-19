@@ -1,4 +1,4 @@
-//! Ports `packages/core/src/events/__tests__/apply.test.ts`.
+//! Tests of `apply.rs`.
 
 use natamux_proto::stages::schema::Step;
 use natamux_proto::tasks::task::TaskState::{

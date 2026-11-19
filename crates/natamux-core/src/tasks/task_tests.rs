@@ -1,4 +1,4 @@
-//! Ports `packages/core/src/tasks/__tests__/task.test.ts`.
+//! Tests of `task.rs`.
 
 use serde_json::{Map, Value, json};
 

@@ -1,6 +1,6 @@
 ---
 title: Environment variables
-description: Every NATAMUX_* variable that the daemon, the CLI, the desktop app and Docker read or set.
+description: Every NATAMUX_* variable that the daemon, the CLI and the desktop app read or set.
 sidebar:
   order: 3
 ---
@@ -18,7 +18,6 @@ Set these in the environment where the daemon starts.
 | `NATAMUX_DATA_DIR` | `<current folder>/.natamux` | Task files and the SQLite index |
 | `NATAMUX_REPO_DIR` | none | A git repository to add once as the first project, with the id `default`. Without it the daemon starts with no project. A project removed later does not come back |
 | `NATAMUX_WORKTREES_DIR` | `<data dir>/worktrees` | Where worktrees go, one folder per task |
-| `NATAMUX_WEB_DIR` | none | Override the dashboard embedded in the Rust daemon with files from this folder. The API stays under `/api` |
 | `NATAMUX_INPUT_TRACE` | none | `1` writes every key sent to a terminal to the daemon log, for finding typing problems such as lost Vietnamese letters. It logs passwords too: turn it off after use |
 | `NATAMUX_CLAUDE_COMMAND` | `claude` | Program that starts Claude Code |
 | `NATAMUX_CODEX_COMMAND` | `codex` | Program that starts Codex |
@@ -75,21 +74,10 @@ The desktop app starts the daemon and sets these for it. It passes your other `N
 | `NATAMUX_TOKEN` | A token kept in the app's user data folder |
 | `NATAMUX_DATA_DIR` | `<user data>/data` |
 | `NATAMUX_REPO_DIR` | The repository an older version asked for, if any. Not set on a new install |
-| `NATAMUX_WEB_DIR` | Optional override for the dashboard embedded in the daemon |
 | `NATAMUX_PATH_PENDING` | `1` on macOS and Linux: the PATH of your login shell comes after the start. The daemon serves at once and waits for it only before it runs a program, and does not pass the variable on |
 
 The Rust app uses `--smoke` and `--shot` for CI checks. `NATAMUX_UPDATE_AS_VERSION` overrides the running version for update tests.
 
-## Docker
+## Test stack in Docker
 
-| Variable | Used by | Meaning |
-|---|---|---|
-| `NATAMUX_TOKEN` | `compose.prod.yaml` | Required. A long random value |
-| `NATAMUX_REPO` | `compose.prod.yaml` | Required. The git repository to mount at `/repo` |
-| `NATAMUX_BIND` | `compose.prod.yaml` | Address the dashboard port is published on. Default `127.0.0.1` |
-| `NATAMUX_PORT` | `compose.prod.yaml` | Published dashboard port. Default `8080` |
-| `NATAMUX_ALLOWED_HOSTS` | `compose.prod.yaml` | Host names the daemon accepts. Default `daemon,web`. Add the name you open the dashboard with when it is not `localhost` or `127.0.0.1` |
-
-The production image sets `NATAMUX_HOST=0.0.0.0`, `NATAMUX_DATA_DIR=/data`, `NATAMUX_REPO_DIR=/repo` and `NATAMUX_WORKTREES_DIR=/data/worktrees` inside the container. See [Self-host with Docker](/docs/guides/self-host-docker/).
-
-The production compose file is `compose.prod.yaml`. Development builds run in Codespaces or CI.
+`compose.prod.yaml` runs the daemon alone for CI and codespace tests. It is not a supported self-host: the images hold no coding agent and have no UI. It reads `NATAMUX_TOKEN`, `NATAMUX_REPO`, `NATAMUX_BIND` (default `127.0.0.1`), `NATAMUX_PORT` (default `8080`) and `NATAMUX_ALLOWED_HOSTS` (default `daemon`). See `docs/docker.md` in the repository.

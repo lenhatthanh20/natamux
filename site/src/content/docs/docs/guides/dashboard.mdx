@@ -7,7 +7,7 @@ sidebar:
 
 import Figure from '../../../../components/Figure.astro'
 
-The dashboard is the web app of the Natamux daemon. It shows every task, every workspace and every agent on one page, and it updates live.
+The dashboard is the main view of the Natamux desktop app. It shows every task, every workspace and every agent on one page, and it updates live.
 
 <Figure src="/screens/native/table" width={1600} height={900} alt="The native All tasks table with seven tasks, state counts, agent and branch columns, changes and last activity. The sidebar shows workspaces and questions with Answer buttons." caption="The native task table keeps state, agents, branches and recent activity in view." />
 
@@ -26,8 +26,6 @@ The window has five parts.
 The details panel is open by default beside a workspace, so the stages stay in sight next to the terminal. In a narrow window, where the panel would cover the terminal, and for a task with no workspace, it starts closed. Open or close it with the title bar button (**Show details** / **Hide details**) or `Mod+Alt+B`. Natamux remembers your choice for each task. The palette command **Show the task progress** opens the details on **Progress**. The old link `/w/<id>/progress` does the same.
 
 <Figure src="/screens/native/task-details" width={1600} height={900} alt="The native Details panel beside three task terminals. It shows task notes, approval and restart actions, context, usage and the Activity list. Workspace and Subtasks are collapsed; no development ports are shown." caption="Task notes, actions and activity stay beside the native task terminals. Terminal output is scripted." />
-
-Under 768 px wide the status bar is hidden and the sidebar becomes a drawer. The status items move to the foot of the drawer.
 
 ### In the desktop app
 
@@ -53,7 +51,7 @@ The **Files** view of the details panel lists the files and folders of the task'
 - Click a file, or press `Enter`, to open it in a tab of the workspace named after the file (in the desktop app, over the terminals). Edit it and press `Mod+S` or **Save**. **Revert** drops your changes and **Close the file** closes the tab.
 - In the desktop app, each file you open gets its own tab above the editor, in the order you opened them. Opening a file that is already open shows its tab. Click a tab to show its file; each file keeps its cursor and scroll. Tabs that do not fit wrap to the next row. Two files with the same name show their folder. A dot on a tab means an edit that is not saved.
 - The **x** on a tab or in the header closes that file and asks first when it has an edit that is not saved. `Mod+W` closes the shown file and keeps its edit. Closing the shown file shows the tab at its place. After the last one, the workspace goes back to the screen you used before.
-- An edit that is not saved stays when you switch tabs, files or tasks. The file shows **edited** in the list. The browser asks before you close the page.
+- An edit that is not saved stays when you switch tabs, files or tasks. The file shows **edited** in the list.
 - In the desktop app the editor has Find (`Mod+F`), Go to line (`Ctrl+G`), Go to symbol (`Mod+Shift+O`), folds, multiple cursors and line moves; see [Shortcuts](/docs/reference/shortcuts/#editor). **Wrap long lines** in the header wraps or unwraps the file until you close it. A Markdown file (`.md`) also has **Source | Rendered** in the header: pick **Rendered** to read it formatted, with your unsaved edits; it opens on Source again after you close it. Turn on **Clean on save** in **Settings → General** to trim trailing whitespace and end the file with one line break each time you save. It is off by default, so agent files keep their diffs small.
 - When the agent changes the file after you began to edit it, **This file changed on disk.** asks what to keep: **Reload** shows the new file and drops your changes, **Keep mine** lets the next save replace it.
 - A binary file or a file over 1 MB is not shown. `.git` is never listed. The editor cannot make, rename or delete files.
@@ -74,7 +72,7 @@ In the workspace list:
 
 - Each project is a card in its own color, with its workspaces inside. The color comes from the project id, so it stays the same. Click a project to fold or unfold it. Click **+** next to it for **Start a task in** that project, or the gear for its **Settings**. **Add a project** and **Start a task** are in the section header. With no project, the sidebar says **No projects yet** and offers **Add project**.
 - Right-click a project, press `Shift+F10`, or click **...** next to it for **Start a task**, **Settings**, **Blur names**, **Remove finished workspaces** and **Remove project**.
-- To hide a project while you share your screen, click the eye next to it (**Blur names**). The names of the project, its tasks, subtasks, agents and finished workspaces blur, also in **Pinned**. The state of each task stays visible. Click the eye again (**Show names**) to see them. Natamux remembers the choice in this browser.
+- To hide a project while you share your screen, click the eye next to it (**Blur names**). The names of the project, its tasks, subtasks, agents and finished workspaces blur, also in **Pinned**. The state of each task stays visible. Click the eye again (**Show names**) to see them. Natamux remembers the choice.
 - Finished workspaces (done or cancelled) are folded under "N finished". To clear them, click **Remove finished workspaces** on that row, or choose it in the menu of the project. Natamux asks first and lists the tasks. When a workspace has files that are not committed, the confirm names it and reads **Remove anyway**: those files are lost. It removes the workspaces one after the other. Pinned workspaces and other projects are not touched. One message reports the result. The tasks stay, and a branch with commits that are not merged stays.
 - Only the open workspace shows the work under it: one row per terminal, then its open subtasks. A folded task still shows its subtasks that wait on you, failed or are blocked. Click a task, or press `Right` on it, to open it; the task that was open before folds. A terminal row shows the state, the agent's icon, the stage (or **Terminal 2** for an agent you started yourself), what the agent does and the terminal (**T1**). A terminal with no agent shows a terminal icon and its program, such as **zsh**. Click a terminal row to open the task's terminal on it. While a subtask is open, its parent stays open too. Natamux reads the terminals of tasks that work or wait, and of the open workspace.
 - In the desktop app, opening a task card keeps its title, state icon, and age at the same size and position. The title can use a second line when the card is open.
@@ -90,7 +88,7 @@ When a task is done or cancelled, Natamux says so once with a message. When the 
 - A banner under the header says **Task done.** or **Task cancelled.** and what is left, with the next step as its main button: **Commit…** for files that are not committed, **Push** for commits that origin does not have, **Create PR**, or **Open pull request** while it is open. When nothing is left, the main button is **Remove workspace**. The banner shows on every tab.
 - The **Terminal** tab (in the desktop app, the main area) shows the wrap-up instead of the terminals; once you open a terminal there, **Back to wrap-up** in a terminal's header goes back to it. It lists the changes, the push, the pull request and the branch, each with a mark and a button when there is something to do. Under **Terminals** are the terminals that still run and the terminals the task ended, with their agent and stage, and **Show last screen**. **Reopen agent** starts the task's agent again in Terminal 1, on its last conversation; the task keeps its state. It is not there while an agent runs in Terminal 1.
 - **Remove workspace** asks first. The dialog lists what goes and what stays:
-  - The dialog lists files that are not committed and offers **View changes** and **Commit…**. In the web dashboard they stop it. In the desktop app, **Remove anyway** discards them and removes the workspace.
+  - The dialog lists files that are not committed and offers **View changes** and **Commit…**. **Remove anyway** discards them and removes the workspace.
   - It names a program that still runs, such as `node` in Terminal 7, and the button then reads **Stop it and remove**.
   - **Also delete the branch** is on when the branch is merged. A branch with commits that are not merged always stays. A branch that GitHub merged with a squash goes too, once origin has all of its commits.
   - The task, its notes, docs and history stay.
@@ -211,9 +209,8 @@ See [Status icons](/docs/guides/status-icons/) for every icon and what to do abo
 
 A task needs you when it is in Needs input, In review, Failed or Blocked state, or when it is running but has shown no sign of life for 10 minutes (it shows as quiet).
 
-- In the browser dashboard, the title bar shows a chip such as "2 need you". The status bar shows it too. Click either one to open a palette of those tasks, tasks without a workspace too. The chip ignores the filter.
+- In the title bar, a chip such as "2 need you" counts them. The status bar shows it too. Click either one to open a palette of those tasks, tasks without a workspace too. The chip ignores the filter.
 - In the sidebar, a task that waits on you, failed or is blocked is a tinted card with the agent's question. See [Sidebar](#sidebar).
-- The browser tab title shows the count: `(2) Natamux`.
 
 <Figure src="/screens/native/task-needs-you" width={1600} height={900} alt="A native task waiting at Spec. Its terminal asks: Should a negative coupon be rejected or treated as zero? The sidebar repeats the question with an Answer button, and Progress marks Spec as needing input." caption="The native workspace keeps the question in its sidebar and terminal. Progress marks the waiting stage. Terminal output is scripted." />
 
@@ -227,16 +224,8 @@ Click it to see each job with its task and how long it has run. Click a job to o
 
 ## Notifications
 
-Click **Notify me** in the status bar to allow system notifications. When a task starts to wait for you, or is done, while the dashboard is not in front, you get a notification titled with the task id and state, such as `T-0003: Needs input` or `T-0003: Done`, with the task title as text. Click it to bring the dashboard forward and open the task. A cancelled task does not notify.
-
-Natamux does not notify about tasks that already waited when you opened the dashboard.
-
-The button is gone once you decide. If you blocked notifications, the status bar says **Notifications are blocked**. Allow them in the site settings of your browser.
-
-### Notifications in the desktop app
 
 **Notify me** is on by default. On the first launch macOS asks once to allow notifications from Natamux. To turn them off or on again, use **Notify me** in the account menu, or in **Settings → General**; turning it on shows a first notification, **Notifications are on**. If you clicked **Don't Allow**, turn Natamux on in **System Settings → Notifications**.
-
 When a task starts to wait for you, or is done, while the app is not in front, macOS shows a notification and plays your alert sound once:
 
 - The title is the task title.
@@ -299,8 +288,3 @@ The account icon at the right of the status bar opens a menu.
 - **Terminal font…**: the font family and size of the terminals. See [Font and drawing](/docs/guides/terminal/#font-and-drawing).
 - **Keyboard shortcuts**, also on `?`.
 - **Report an issue**: opens a new issue on the Natamux repository on GitHub, in your browser.
-- **Sign out**, in a browser only: removes the daemon token from this browser. Natamux asks first. Your tasks keep running. The desktop app has no Sign out, because it signs in by itself.
-
-## Sign in
-
-The first time, the dashboard asks for the **Daemon token**. Paste the token the daemon printed when it started. It stays in this browser. Sign out removes it. The desktop app signs in by itself and never asks.

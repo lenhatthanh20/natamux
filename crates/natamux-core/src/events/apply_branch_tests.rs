@@ -1,4 +1,4 @@
-//! Ports the `a branch` cases of `packages/core/src/events/__tests__/apply.test.ts`.
+//! The `a branch` cases of the event rules.
 
 use natamux_proto::stages::schema::{StageBranch, Step};
 use natamux_proto::tasks::task::TaskState::{Done, Ready, Review, Running};

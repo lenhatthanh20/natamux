@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Runs inside the codespace, read from stdin: checks one pushed branch in its own worktree.
-# Usage: gh codespace ssh -c <name> -- bash -l -s -- <branch> [--fix] < remote-check.sh
+# Usage: gh codespace ssh -c <name> -- bash -l -s -- <branch> < remote-check.sh
+# Rust checks run in CI only (`cargo xtask ci`). This script runs the fake agent test and the site build.
 set -euo pipefail
 
 branch="$1"
-fix="${2:-}"
 repo=/workspaces/natamux
 dir="/tmp/v-${branch//\//-}"
 log=/tmp/v-check.log
@@ -27,22 +27,10 @@ fi
 cd "$dir"
 echo "Checking $branch at $(git rev-parse --short HEAD)"
 
-step install pnpm install --frozen-lockfile --prefer-offline
-if [ "$fix" = --fix ]; then
-  step format pnpm format
-fi
-step build pnpm build
-step lint pnpm lint
-step test pnpm test
 step fake-agent scripts/fake-agent.test.sh
 if ! git diff --quiet origin/main...HEAD -- site; then
   step site-install pnpm --dir site install --ignore-workspace --frozen-lockfile
   step site-build pnpm --dir site build
 fi
 
-if [ "$fix" = --fix ] && ! git diff --quiet; then
-  echo "=== PATCH ==="
-  git diff
-  echo "=== END ==="
-fi
 echo "ALL CHECKS PASSED"

@@ -26,10 +26,10 @@ Natamux runs coding agents on your machine. An agent can read and change files a
 - An agent token may call only the routes of its own task (not `DELETE`), reads of its direct subtasks, a short list of global reads, `POST /tasks` for its own subtasks (a subtask stays in its parent's project), and the hook and limits posts that agents send. Every other route answers 403. The list is in [the HTTP API reference](https://github.com/lenhatthanh20/natamux/blob/main/site/src/content/docs/docs/reference/http-api.md) and in `agent_may` in `crates/natamux-daemon/src/http/agent_rules.rs`.
 - An agent cannot approve, skip or pass a stage, change project settings, or approve repo commands. Its events are recorded as the agent's. A command stage passes with a one-time ticket (`NATAMUX_STAGE_TICKET`) that only that stage's script gets: an agent cannot report such a stage done. An agent cannot fan out a task, and it cannot send the events that only the daemon sends (`stage.checked`, `stage.started`, `stage.reopened`, `pr.merged`). Every send-back by an agent counts for `maxSendBacks`.
 - The `natamux` command in a task terminal uses only `NATAMUX_TOKEN`, so it runs with the agent token. The app ignores its saved token file when it starts inside a task terminal.
-- The token travels in a header, never in a cookie, so another website you visit cannot use your session (no cross-site request forgery). A browser cannot add the header to a WebSocket, so terminals open with a one-time ticket that expires after 30 seconds. `/events` takes the header too. Only the legacy web dashboard still sends the token as `?token=` on `/events`, because a browser cannot set a header there. Do not use that dashboard on a shared machine or behind a proxy that logs URLs.
+- The token travels in a header, never in a cookie, so another website you visit cannot use your session (no cross-site request forgery). A browser cannot add the header to a WebSocket, so terminals open with a one-time ticket that expires after 30 seconds. `/events` takes the header too.
 - The daemon checks the `Host` header against an allow-list: `127.0.0.1`, `localhost` and `::1`, plus the names in `NATAMUX_ALLOWED_HOSTS` (comma list). A WebSocket handshake with an `Origin` header needs an allowed host name too. So a web page on another site cannot reach the daemon, not even by DNS rebinding.
-- The dashboard is served with a strict Content Security Policy (`default-src 'self'`, `connect-src 'self'`, `frame-ancestors 'none'`). Files from a workspace that the Changes tab shows, such as images, get `sandbox` and `nosniff`.
-- File paths from requests are checked so they cannot leave the workspace or the dashboard folder. The daemon writes into a worktree through a symlink-safe path, so a link inside a repo cannot send a write outside it.
+- Files from a workspace that the Changes tab shows, such as images, get `sandbox` and `nosniff`.
+- File paths from requests are checked so they cannot leave the workspace. The daemon writes into a worktree through a symlink-safe path, so a link inside a repo cannot send a write outside it.
 
 ### Repo trust
 
@@ -47,7 +47,6 @@ Natamux runs coding agents on your machine. An agent can read and change files a
 - The app folder and the daemon data folder are private to your user (mode `0700`), and Natamux tightens a wider folder when it starts.
 - The desktop app keeps its daemon token in its user data folder, readable only by your user (file mode `0600`).
 - The scripts that start agents (`agent-launch-<task>.sh`) are written with mode `0600`, so the prompt and settings in them are not readable by other users.
-- The dashboard keeps the token in the browser's `localStorage` for its own address only. In a browser, Sign out in the account menu removes it. The desktop app is a native app: it has no page and no Sign out.
 
 ### Agents and hooks
 

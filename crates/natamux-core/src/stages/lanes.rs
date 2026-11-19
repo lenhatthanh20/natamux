@@ -1,4 +1,4 @@
-//! `terminalLane` of `packages/core/src/stages/terminal-lane.ts`: the stage a terminal works or
+//! `terminalLane`: the stage a terminal works or
 //! worked on, and its state.
 
 use natamux_proto::stages::position::step_to_run;

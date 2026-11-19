@@ -112,7 +112,7 @@ work() {
   tool Edit file_path "$PWD/$notes"
   printf '  \e[32m+1 line\e[0m\n'
   pause
-  tool Bash command "pnpm --filter @natamux/web test"
+  tool Bash command "cargo test -p natamux-app"
   pause
   printf '  \e[32m✓ %s passed\e[0m\n\n' "$((120 + round))"
 }

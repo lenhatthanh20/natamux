@@ -1,5 +1,5 @@
-//! One time format for the whole app (`formatAge` and `formatExact` in `packages/web/src/lib/
-//! tasks.ts`). Times are ISO 8601 in UTC. Rules never read the clock or the time zone: the caller
+//! One time format for the whole app (`formatAge` and `formatExact`). Times are ISO 8601 in UTC.
+//! Rules never read the clock or the time zone: the caller
 //! passes `now_ms` and the offset of the local zone, so the output is the same in every test.
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

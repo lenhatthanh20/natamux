@@ -1,5 +1,4 @@
-//! The files explorer and editor routes (`packages/core/src/git/changes.ts`: `treeEntrySchema`,
-//! `workspaceFileSchema`; `http/routes/workspaces.ts`).
+//! The files explorer and editor routes (`treeEntrySchema`, `workspaceFileSchema`).
 
 use serde::{Deserialize, Serialize};
 

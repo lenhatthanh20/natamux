@@ -1,5 +1,4 @@
-//! The texts and choices of the Details tab (`features/tasks/TaskDetail.tsx`, `Subtasks.tsx`,
-//! `packages/core/src/terminals/ports.ts`, `packages/web/src/lib/pull-request.ts`).
+//! The texts and choices of the Details tab (details, subtasks, ports and pull request).
 
 // Ported with their tests (spec D14); the details panel calls them.
 #![cfg_attr(not(test), allow(dead_code))]

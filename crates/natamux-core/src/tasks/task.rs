@@ -1,4 +1,4 @@
-//! `taskSchema` and its parts (`packages/core/src/tasks/task.ts`): what a task file, an index row
+//! `taskSchema` and its parts: what a task file, an index row
 //! or a new task must hold, with zod's defaults, fallbacks and texts.
 
 use natamux_proto::projects::repo::CONTEXT_SOURCE_TYPES;

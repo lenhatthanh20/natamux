@@ -1,4 +1,4 @@
-//! The fuzzy matcher of the palettes (`packages/web/src/features/palette/fuzzy.ts`). Every
+//! The fuzzy matcher of the palettes. Every
 //! character of the query must appear in the text, in order. Starts of words and runs of
 //! neighbours score higher. Ranges are byte offsets on char boundaries, so a caller can slice.
 

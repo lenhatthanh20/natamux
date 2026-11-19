@@ -1,5 +1,5 @@
 //! The live dashboard data: each part is read again whenever `/events` says it changed, as the
-//! dashboard's live feed (packages/web/src/features/app/useLiveTasks.ts and lib/live.ts).
+//! dashboard's live feed does.
 
 use std::collections::BTreeSet;
 use std::convert::Infallible;

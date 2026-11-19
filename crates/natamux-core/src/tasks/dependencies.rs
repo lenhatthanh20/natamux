@@ -1,4 +1,4 @@
-//! `waitingOn`, `openSubtasks`, `waitsFor` and `makesCycle` (`packages/core/src/tasks/dependencies.ts`).
+//! `waitingOn`, `openSubtasks`, `waitsFor` and `makesCycle`.
 
 use std::collections::{HashMap, HashSet};
 

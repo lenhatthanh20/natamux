@@ -1,4 +1,4 @@
-//! The parts of `packages/core/src/stages/capabilities.ts` that `natamux-proto` lacks:
+//! The parts that `natamux-proto` lacks:
 //! `stagesBefore`, `codeStageBefore`, `runsWorkflow`.
 
 use natamux_proto::stages::capabilities::{can_run_workflow, offers_workflow};

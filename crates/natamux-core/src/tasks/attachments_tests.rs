@@ -1,5 +1,4 @@
-//! Ports `packages/core/src/tasks/__tests__/attachments.test.ts` (`attachmentLimitError` is tested
-//! in `natamux-proto`).
+//! Tests of `attachments.rs` (`attachmentLimitError` is tested in `natamux-proto`).
 
 use natamux_proto::tasks::attachments::{
     MAX_ATTACHMENT_COUNT, MAX_ATTACHMENT_SIZE, MAX_TASK_ATTACHMENT_SIZE,

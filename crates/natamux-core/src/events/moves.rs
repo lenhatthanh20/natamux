@@ -1,4 +1,4 @@
-//! The move an event makes in one stage (`packages/core/src/events/moves.ts`).
+//! The move an event makes in one stage.
 
 use natamux_proto::events::task_event::TaskEvent;
 use natamux_proto::stages::schema::Step;

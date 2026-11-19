@@ -1,4 +1,4 @@
-//! The terminal of a stage from the settings (`packages/core/src/stages/terminal-lane.ts`). The
+//! The terminal of a stage from the settings. The
 //! pinned terminals, the lane of a terminal and `endsShell1` are daemon rules (phase 4).
 
 use crate::stages::position::{code_stage, step_to_run};

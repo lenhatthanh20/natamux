@@ -1,4 +1,4 @@
-//! Projects (`packages/core/src/projects/repo.ts` and `project-settings.ts`).
+//! Projects and their settings.
 
 use serde::{Deserialize, Serialize};
 
@@ -255,7 +255,7 @@ pub struct SavedSettings {
     pub version: Option<String>,
 }
 
-/// A skill an agent can use (`SkillInfo` in `packages/core/src/agents/skills.ts`).
+/// A skill an agent can use (`SkillInfo`).
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 pub struct SkillInfo {
     pub name: String,

@@ -1,6 +1,6 @@
 # End-to-end test of task stages
 
-Historical record of testing stages, context, issues and pull requests on a real repository. First run: 2026-10-09 on `lenhatthanh20/natamux-test`, with the last Node build, a fake agent and GitHub Copilot. The setup below belongs to `legacy/electron`; use [End-to-end tests](e2e.md) for the current Rust build.
+Historical record of testing stages, context, issues and pull requests on a real repository. First run: 2026-10-09 on `lenhatthanh20/natamux-test`, with the last Node build, a fake agent and GitHub Copilot. The setup below belongs to `legacy/electron`. The Playwright E2E guide was removed with the web dashboard.
 
 ## Set up
 

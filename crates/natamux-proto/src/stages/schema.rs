@@ -1,4 +1,4 @@
-//! The stages of a pipeline (`packages/core/src/stages/schema.ts`): stages, groups that run side by
+//! The stages of a pipeline: stages, groups that run side by
 //! side, and branches of exclusive paths. Only what the app reads; a stage's prompt is left out.
 
 use serde::{Deserialize, Serialize};

@@ -1,4 +1,4 @@
-//! The Natamux daemon used by the app, CLI, and browser dashboard.
+//! The Natamux daemon used by the app and the CLI.
 
 use std::io::{IsTerminal, Read};
 use std::sync::Arc;

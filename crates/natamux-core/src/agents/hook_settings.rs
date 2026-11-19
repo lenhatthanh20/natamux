@@ -1,4 +1,4 @@
-//! `claudeCodeHookSettings` of `packages/core/src/agents/claude-code-hooks.ts`: the Claude Code
+//! `claudeCodeHookSettings`: the Claude Code
 //! settings (`--settings`) whose hooks post to the daemon.
 
 use natamux_proto::agents::claude_code::{

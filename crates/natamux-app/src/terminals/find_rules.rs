@@ -1,4 +1,4 @@
-//! Port of `findCountLabel` in `packages/web/src/features/terminals/terminal-find.ts`, and the
+//! `findCountLabel`, and the
 //! pattern the find bar gives to the terminal search.
 
 /// The matches of a search: the index of the active one (None when the matches are counted but

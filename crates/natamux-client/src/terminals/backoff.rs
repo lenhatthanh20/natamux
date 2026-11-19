@@ -2,8 +2,8 @@ use std::time::Duration;
 
 use natamux_proto::terminals::messages::{RECONNECT_BASE, RECONNECT_JITTER, RECONNECT_MAX};
 
-/// The wait before try `tries` (0 first) to bring back a lost socket, as `reconnectDelay` in
-/// packages/web/src/features/terminals/terminal.ts. `random` is in [0, 1): 0 waits
+/// The wait before try `tries` (0 first) to bring back a lost socket, as `reconnectDelay`.
+/// `random` is in [0, 1): 0 waits
 /// RECONNECT_JITTER less, and near 1 that much more.
 pub fn reconnect_delay(tries: u32, random: f64) -> Duration {
     let max = RECONNECT_MAX.as_millis() as f64;

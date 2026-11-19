@@ -92,7 +92,6 @@ export default defineConfig({
           items: [
             { slug: 'docs/help/troubleshooting' },
             { slug: 'docs/help/faq' },
-            { slug: 'docs/guides/self-host-docker' },
             { slug: 'docs/help/security-and-privacy' },
             { slug: 'docs/help/changelog' },
           ],

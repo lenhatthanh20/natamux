@@ -7,7 +7,7 @@
 <p align="center"><b>One workflow for every coding task.</b></p>
 
 <p align="center">
-  Run coding agents in isolated worktrees, follow their progress in one dashboard, and review every change before it ships.
+  Run coding agents in isolated worktrees, follow their progress in one app, and review every change before it ships.
 </p>
 
 <p align="center">
@@ -32,7 +32,7 @@
 
 ## What it does
 
-Natamux gives each task its own git worktree, branch, and terminal. A shared workflow in `.natamux.json` assigns agents to stages, runs independent work in parallel, and pauses for approvals when needed. The dashboard brings tasks, live terminals, questions, and diffs together.
+Natamux gives each task its own git worktree, branch, and terminal. A shared workflow in `.natamux.json` assigns agents to stages, runs independent work in parallel, and pauses for approvals when needed. The app brings tasks, live terminals, questions, and diffs together.
 
 - **Keep work isolated.** Agents on different tasks never edit the same checkout.
 - **Coordinate agents.** Use Claude Code, Codex, Gemini CLI, GitHub Copilot CLI, Cursor, OpenCode, Qwen Code, Factory Droid, Amp, Kimi, Goose, Aider, Crush, Cline, Kiro, Muse Code, or another terminal agent.

@@ -1,4 +1,4 @@
-//! Sending a task back to a stage (`packages/core/src/events/reopen.ts`).
+//! Sending a task back to a stage.
 
 use natamux_proto::events::task_event::TaskEvent;
 use natamux_proto::stages::position::{path_of, step_to_run};

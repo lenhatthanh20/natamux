@@ -1,4 +1,4 @@
-//! What a stage can do (`packages/core/src/stages/capabilities.ts`) and what it is called.
+//! What a stage can do and what it is called.
 
 use crate::stages::catalog::catalog_stage;
 use crate::stages::schema::{Stage, StageKind};
