@@ -91,6 +91,8 @@ pub struct SideRows {
     /// The hunks of an inline diff whose deleted lines are closed: their lines show as unchanged
     /// (no box, no words, no buttons), only their strip stays, as Zed's collapsed hunks.
     pub closed: Vec<usize>,
+    /// The length of `text` once `take_text` gave it away.
+    taken_len: usize,
 }
 
 impl SideRows {
@@ -188,7 +190,19 @@ impl SideRows {
             words: Vec::new(),
             shown: [Vec::new(), Vec::new()],
             closed: Vec::new(),
+            taken_len: 0,
         }
+    }
+
+    /// The text, for the side's model to hold, so a shown diff does not keep it twice.
+    pub fn take_text(&mut self) -> String {
+        self.taken_len = self.text.len();
+        std::mem::take(&mut self.text)
+    }
+
+    /// The length of the side's text, also after `take_text`.
+    pub fn text_len(&self) -> usize {
+        self.text.len().max(self.taken_len)
     }
 }
 

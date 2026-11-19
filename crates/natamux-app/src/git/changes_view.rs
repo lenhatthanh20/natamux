@@ -15,7 +15,6 @@ use ui::prelude::*;
 
 use super::blame_marks::BlameMarks;
 use super::change_rules::{BodyKind, body_kind, shows_image, wraps_by_default};
-use super::change_tree::file_order;
 use super::comment_rules::Quote;
 use super::diff_rules::{WIDE_FROM, files_width, side_by_side};
 use super::diff_view::{DiffEvent, DiffOptions, DiffView};
@@ -55,6 +54,7 @@ pub struct ChangesView {
     pub(super) workspace: WeakEntity<WorkspaceView>,
     pub(super) task_id: Option<String>,
     pub(super) list: Option<Vec<ChangeEntry>>,
+    kept: kept::Kept,
     pub(super) error: Option<String>,
     pub(super) pending: Option<GitStep>,
     pub(super) picked: Option<String>,
@@ -112,6 +112,7 @@ impl ChangesView {
             workspace,
             task_id: None,
             list: None,
+            kept: kept::Kept::default(),
             error: None,
             pending: None,
             picked: None,
@@ -177,6 +178,9 @@ impl ChangesView {
         }
         let changed = self.list != list;
         self.prefetch = self.prefetch.take().filter(|_| !changed);
+        if changed {
+            self.kept = kept::Kept::default();
+        }
         if changed && let Some(list) = &list {
             // The colours of the listed files' languages are ready before a file is picked.
             let mut langs: Vec<&'static super::languages::Lang> = Vec::new();
@@ -205,30 +209,6 @@ impl ChangesView {
 
     pub(super) fn mode(&self, cx: &App) -> super::change_tree::FileViewMode {
         self.dashboard.read(cx).view().changes_view
-    }
-
-    /// The files in the order of the panel: depth first in the tree, as listed otherwise.
-    pub(super) fn order(&self, cx: &App) -> Vec<String> {
-        self.list
-            .as_deref()
-            .map(|list| file_order(list, self.mode(cx)))
-            .unwrap_or_default()
-    }
-
-    /// The file the diff shows: the picked one, else the first of the panel.
-    pub(super) fn shown_path(&self, cx: &App) -> Option<String> {
-        self.picked
-            .clone()
-            .or_else(|| self.order(cx).into_iter().next())
-    }
-
-    pub(super) fn shown_entry(&self, cx: &App) -> Option<ChangeEntry> {
-        let path = self.shown_path(cx)?;
-        self.list
-            .as_ref()?
-            .iter()
-            .find(|entry| entry.path == path)
-            .cloned()
     }
 
     pub(super) fn pick(&mut self, path: &str, cx: &mut Context<Self>) {
@@ -487,6 +467,9 @@ mod prefetch;
 
 #[path = "changes_files.rs"]
 mod files;
+
+#[path = "changes_kept.rs"]
+mod kept;
 
 #[path = "changes_rows.rs"]
 mod rows;

@@ -20,6 +20,7 @@ use super::super::source::{Feed, Rows, Source};
 use super::super::theme_catalog::ThemeKind;
 use super::super::view_rules::with_seen;
 use super::super::view_state::ViewState;
+use super::saves::Wait;
 use super::{Dashboard, DashboardChange};
 use crate::agents::agent_choices::{custom_agents_set_count, set_custom_agents};
 
@@ -176,11 +177,36 @@ impl Dashboard {
         cx.notify();
     }
 
-    /// The notify of the dashboard's own state (filter, sort, selection, open task, view state,
-    /// settings, toasts): views that read it draw again.
+    /// The notify of the dashboard's own state (filter, sort, open task, view state, settings,
+    /// toasts): views that read it draw again.
     pub(super) fn touch_view(&mut self, cx: &mut Context<Self>) {
         self.data.gens.bump(Part::View);
         cx.notify();
+    }
+
+    /// A key move or a click picked a task: only what shows the selection draws again.
+    pub(super) fn touch_selection(&mut self, cx: &mut Context<Self>) {
+        self.data.gens.bump(Part::Selection);
+        cx.notify();
+    }
+
+    /// A panel edge moved: only what reads the widths draws again, and the file is written
+    /// when the drag ended.
+    pub(super) fn update_widths(
+        &mut self,
+        cx: &mut Context<Self>,
+        change: impl FnOnce(&mut ViewState),
+    ) {
+        change(&mut self.view);
+        self.save_view_after(Wait::Settled, cx);
+        self.data.gens.bump(Part::Widths);
+        cx.notify();
+    }
+
+    /// Tells the followers without a notify of the dashboard itself, so the window draws only
+    /// when one of them asks for it.
+    pub(super) fn tell(&mut self, cx: &mut Context<Self>) {
+        self.signal.update(cx, |_, cx| cx.notify());
     }
 }
 
@@ -192,10 +218,42 @@ impl Dashboard {
         cx: &mut Context<V>,
     ) -> Subscription {
         let mut seen = Seen::default();
-        cx.observe(dashboard, move |_, dashboard, cx| {
+        Self::observe(dashboard, cx, move |_, dashboard, cx| {
             let gens = dashboard.read(cx).data.gens;
             if seen.changed(&gens, parts) {
                 cx.notify();
+            }
+        })
+    }
+
+    /// Calls `on_change` after each change of the dashboard, as `cx.observe` would. A view
+    /// must follow the dashboard this way: a change of the feed notifies only the signal.
+    pub fn observe<V: 'static>(
+        dashboard: &Entity<Self>,
+        cx: &mut Context<V>,
+        mut on_change: impl FnMut(&mut V, Entity<Self>, &mut Context<V>) + 'static,
+    ) -> Subscription {
+        let signal = dashboard.read(cx).signal.clone();
+        let dashboard = dashboard.downgrade();
+        cx.observe(&signal, move |view, _, cx| {
+            if let Some(dashboard) = dashboard.upgrade() {
+                on_change(view, dashboard, cx);
+            }
+        })
+    }
+
+    /// `observe` for a follower that needs the window.
+    pub fn observe_in<V: 'static>(
+        dashboard: &Entity<Self>,
+        window: &mut Window,
+        cx: &mut Context<V>,
+        mut on_change: impl FnMut(&mut V, Entity<Self>, &mut Window, &mut Context<V>) + 'static,
+    ) -> Subscription {
+        let signal = dashboard.read(cx).signal.clone();
+        let dashboard = dashboard.downgrade();
+        cx.observe_in(&signal, window, move |view, _, window, cx| {
+            if let Some(dashboard) = dashboard.upgrade() {
+                on_change(view, dashboard, window, cx);
             }
         })
     }
@@ -228,3 +286,7 @@ impl Dashboard {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "dashboard_signal_tests.rs"]
+mod signal_tests;

@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use gpui::EventEmitter;
+use gpui::{Entity, EventEmitter};
 use natamux_client::DashboardEvent;
 use natamux_proto::tasks::task::{Task, TaskState};
 use ui::prelude::*;
@@ -22,7 +22,7 @@ use super::view_rules::{
     ShellRequest, WorkspaceTab, request_on_open, seen_after_list, toggle_pin, with_recent,
     with_seen,
 };
-use super::view_state::{self, Layout, ViewState};
+use super::view_state::{Layout, ViewState};
 use crate::components::toast_rules::{ToastTone, Toasts, toast_duration};
 use crate::sidebar::card_rules::opened_folds;
 use crate::sidebar::sidebar_tree::with_fold;
@@ -34,8 +34,8 @@ use crate::terminals::terminal_cache::TerminalCache;
 /// What views and Root follow besides `cx.notify()`.
 #[derive(Clone, Debug)]
 pub enum DashboardChange {
-    /// The daemon sent a new task list, or one task of it.
-    Tasks,
+    /// The daemon sent a new task list, or one task of it (`DashboardData::tasks_news`).
+    Tasks(Option<String>),
     /// The user opened a task in main.
     Opened(Box<Task>),
     /// Main shows All tasks again.
@@ -69,18 +69,18 @@ pub enum TerminalReader {
     Palette,
 }
 
-/// The view file is written at most this often, off the main thread.
-const SAVE_AFTER: Duration = Duration::from_millis(300);
-
 pub struct Dashboard {
     source: Option<Arc<Source>>,
     pub data: DashboardData,
+    /// Notified on each change. The views follow it (`Dashboard::observe`) and not the
+    /// dashboard: every view reads the dashboard when it draws, so a notify of the dashboard
+    /// itself draws a window frame, also for a change no view on screen shows.
+    signal: Entity<()>,
     rows: Option<Rows>,
     _feed: Option<gpui::Task<()>>,
     view: ViewState,
     view_folder: Option<PathBuf>,
-    view_dirty: bool,
-    saving: Option<gpui::Task<()>>,
+    saves: saves::Saves,
     events_reading: BTreeSet<String>,
     pub toasts: Toasts,
     pub selected: Option<String>,
@@ -130,12 +130,12 @@ impl Dashboard {
         let mut dashboard = Dashboard {
             source: source.ok(),
             data,
+            signal: cx.new(|_| ()),
             rows: None,
             _feed: None,
             view: saved.view,
             view_folder: saved.folder,
-            view_dirty: false,
-            saving: None,
+            saves: saves::Saves::default(),
             events_reading: BTreeSet::new(),
             toasts: Toasts::default(),
             selected: None,
@@ -158,6 +158,13 @@ impl Dashboard {
             deletes: DeleteQueue::default(),
             window_active: true,
         };
+        // A notify of the dashboard itself reaches the followers too.
+        cx.observe_self(|this, cx| this.tell(cx)).detach();
+        cx.on_app_quit(|this, _| {
+            this.flush_view();
+            async {}
+        })
+        .detach();
         dashboard.watch(cx);
         dashboard
     }
@@ -179,11 +186,12 @@ impl Dashboard {
     }
 
     /// `data.apply` bumps the parts the event changed; an event that changes nothing notifies
-    /// nobody. The three workspace events only go to their subscribers.
+    /// nobody. The three workspace events only go to their subscribers. The followers are told
+    /// by the signal alone, so the window draws only when one of them asks for it.
     fn apply(&mut self, event: DashboardEvent, cx: &mut Context<Self>) {
         super::app_log::log_status(&event, &mut self.data.link_down, &self.source, cx);
         let before = self.data.gens;
-        let brings_tasks = DashboardData::brings_tasks(&event);
+        let news = self.data.tasks_news(&event);
         match &event {
             DashboardEvent::WorkspaceChanged { task_id } => {
                 cx.emit(DashboardChange::WorkspaceChanged(task_id.clone()))
@@ -205,15 +213,17 @@ impl Dashboard {
         if let Some(notice) = self.data.apply(event) {
             self.toast(&notice.text, notice.tone, None, cx);
         }
-        if brings_tasks && self.data.gens.get(Part::Tasks) != before.get(Part::Tasks) {
-            self.after_tasks(cx);
+        if let Some(one) = news
+            && self.data.gens.get(Part::Tasks) != before.get(Part::Tasks)
+        {
+            self.after_tasks(one, cx);
         }
         if self.data.gens != before {
-            cx.notify();
+            self.tell(cx);
         }
     }
 
-    fn after_tasks(&mut self, cx: &mut Context<Self>) {
+    fn after_tasks(&mut self, one: Option<String>, cx: &mut Context<Self>) {
         let gone =
             |id: &Option<String>| id.as_deref().is_some_and(|id| self.data.task(id).is_none());
         if gone(&self.selected) {
@@ -226,10 +236,10 @@ impl Dashboard {
         let seen = seen_after_list(&self.view.seen, &self.data.tasks, open);
         if seen != self.view.seen {
             self.view.seen = seen;
-            self.save_view(cx);
+            self.save_view_after(saves::Wait::Later, cx);
         }
         self.read_events(cx);
-        cx.emit(DashboardChange::Tasks);
+        cx.emit(DashboardChange::Tasks(one));
     }
 
     /// The question or failure reason of each attention card (the web's `LOG_KEYS` reads).
@@ -296,19 +306,20 @@ impl Dashboard {
             .detach();
         }
         // Only Root reads the toasts, by their ids: no part of the views changed.
-        cx.notify();
+        self.tell(cx);
     }
 
+    /// The window's own stack shows the toast, so nothing draws for this.
     pub fn dismiss_toast(&mut self, id: u64, cx: &mut Context<Self>) {
         self.toasts.dismiss(id);
-        cx.notify();
+        self.tell(cx);
     }
 
     // What the user picked
 
     pub fn select(&mut self, id: Option<String>, cx: &mut Context<Self>) {
         self.selected = id;
-        self.touch_view(cx);
+        self.touch_selection(cx);
     }
 
     /// Opens the task in main and records the state the user now saw.
@@ -424,7 +435,7 @@ impl Dashboard {
     }
 
     pub fn set_sidebar_width(&mut self, width: f32, cx: &mut Context<Self>) {
-        self.update_view(cx, |view| view.set_sidebar_width(width));
+        self.update_widths(cx, |view| view.set_sidebar_width(width));
     }
 
     pub fn set_fold(&mut self, key: &str, open: bool, cx: &mut Context<Self>) {
@@ -453,35 +464,6 @@ impl Dashboard {
         self.save_view(cx);
         self.touch_view(cx);
     }
-
-    /// Writes the newest view state after a short wait, one write at a time.
-    fn save_view(&mut self, cx: &mut Context<Self>) {
-        self.view_dirty = true;
-        if self.saving.is_some() || self.view_folder.is_none() {
-            return;
-        }
-        self.saving = Some(cx.spawn(async move |this, cx| {
-            loop {
-                cx.background_executor().timer(SAVE_AFTER).await;
-                let next = this.update(cx, |this, _| {
-                    let dirty = std::mem::take(&mut this.view_dirty);
-                    let folder = this.view_folder.clone();
-                    dirty.then(|| folder.map(|folder| (folder, this.view.clone())))
-                });
-                let Ok(Some(Some((folder, view)))) = next else {
-                    break;
-                };
-                let saved = cx
-                    .background_executor()
-                    .spawn(async move { view_state::save(&folder, &view) })
-                    .await;
-                if let Err(error) = saved {
-                    eprintln!("natamux-app: could not save the view state: {error}");
-                }
-            }
-            this.update(cx, |this, _| this.saving = None).ok();
-        }));
-    }
 }
 
 #[path = "dashboard_writes.rs"]
@@ -508,6 +490,9 @@ mod git_writes;
 
 #[path = "tab_state.rs"]
 pub mod tabs;
+
+#[path = "dashboard_saves.rs"]
+mod saves;
 
 #[path = "dashboard_session.rs"]
 mod session;

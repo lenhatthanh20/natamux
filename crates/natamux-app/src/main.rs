@@ -566,8 +566,8 @@ fn start(
     app::appearance::init(inputs, cx);
     app::appearance::apply(&view, cx);
     perf::report::timed("themes_ms", || theme::init(NatamuxAssets, cx))?;
-    app::shortcuts::bind(cx);
-    app::shortcuts::set_menus(cx);
+    perf::report::timed("keymap_ms", || app::shortcuts::bind(cx));
+    perf::report::timed("menus_ms", || app::shortcuts::set_menus(cx));
     perf::overlay::init(cx);
     components::motion::init(options.shot.is_some(), cx);
 
@@ -592,7 +592,9 @@ fn start(
     })
     .detach();
     let source = source(options, started.is_some());
-    let window = app::window::open(options, source, SavedView { view, folder }, cx)?;
+    let saved = SavedView { view, folder };
+    let open = || app::window::open(options, source, saved, cx);
+    let window = perf::report::timed("window_open_ms", open)?;
     app::update::set_window(window, cx);
     if !fake && !options.smoke {
         app::update::start_timers(cx);
@@ -607,6 +609,7 @@ fn start(
     })?;
     run_modes(options, window, cx);
     cx.activate(true);
+    perf::report::mark_start_done();
     Ok(())
 }
 

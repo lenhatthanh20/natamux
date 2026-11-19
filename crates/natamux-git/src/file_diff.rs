@@ -8,7 +8,7 @@ use natamux_proto::workspaces::changes::{ChangeStatus, FileDiff, ImageSide, imag
 use natamux_proto::workspaces::review_comments::CommentSide;
 use natamux_proto::workspaces::workspace::ChangeEntry;
 
-use crate::exec::{BlobRead, GitError, OutsideWorkspaceError, git, git_blob_limited, git_bytes};
+use crate::exec::{BlobRead, GitError, OutsideWorkspaceError, git, git_blob_limited};
 
 /// A file bigger than this is not sent to the dashboard (`MAX_FILE_BYTES`).
 pub use natamux_proto::workspaces::changes::{MAX_FILE_BYTES, MAX_IMAGE_BYTES};
@@ -43,13 +43,22 @@ pub fn read_inside(
     root: &Path,
     path: &str,
 ) -> Result<Option<FileInWorktree>, OutsideWorkspaceError> {
-    let Ok(real) = root.join(path).canonicalize() else {
-        return Ok(None);
-    };
     let Ok(real_root) = root.canonicalize() else {
         return Ok(None);
     };
-    if !real.starts_with(&real_root) {
+    read_inside_real(root, &real_root, path)
+}
+
+/// `read_inside` for a caller that looks at many files of one worktree and resolved the root once.
+pub(crate) fn read_inside_real(
+    root: &Path,
+    real_root: &Path,
+    path: &str,
+) -> Result<Option<FileInWorktree>, OutsideWorkspaceError> {
+    let Ok(real) = root.join(path).canonicalize() else {
+        return Ok(None);
+    };
+    if !real.starts_with(real_root) {
         return Err(OutsideWorkspaceError(path.to_string()));
     }
     let Ok(stats) = std::fs::metadata(&real) else {
@@ -170,13 +179,10 @@ pub fn read_side(
         CommentSide::Old => {
             let source = format!("HEAD:{}", original_path.unwrap_or(path));
             // A path that is not in the last commit has no old side; git fails for it.
-            if git(worktree, &["cat-file", "-e", &source], None, &[]).is_err() {
-                return Ok(None);
+            match git_blob_limited(worktree, &source, MAX_FILE_BYTES) {
+                Ok(BlobRead::Content(bytes)) => bytes,
+                Ok(BlobRead::TooLarge) | Err(_) => return Ok(None),
             }
-            if object_size(worktree, &source)? > MAX_FILE_BYTES {
-                return Ok(None);
-            }
-            git_bytes(worktree, &["show", &source])?
         }
     };
     if looks_binary(&bytes) {
@@ -258,13 +264,12 @@ pub fn read_file_image(
             return Err(missing());
         };
         let from = format!("HEAD:{source}");
-        if object_size(worktree, &from)? > MAX_IMAGE_BYTES {
-            return Err(FileImageError::TooLarge(path.clone()));
-        }
-        return Ok((
-            original_type.to_string(),
-            git_bytes(worktree, &["show", &from])?,
-        ));
+        return match git_blob_limited(worktree, &from, MAX_IMAGE_BYTES) {
+            Ok(BlobRead::Content(bytes)) => Ok((original_type.to_string(), bytes)),
+            Ok(BlobRead::TooLarge) => Err(FileImageError::TooLarge(path.clone())),
+            // Ask git once more so the error text stays the one `cat-file -s` gives.
+            Err(error) => Err(object_size(worktree, &from).err().unwrap_or(error).into()),
+        };
     }
 
     if change.status == ChangeStatus::Deleted {

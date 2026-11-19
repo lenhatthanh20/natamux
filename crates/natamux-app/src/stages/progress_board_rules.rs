@@ -3,7 +3,9 @@
 //! the counts in the stage headers, the Next column and the links between the cells. `now_ms` is
 //! passed in, so no rule reads the clock.
 
-use std::collections::BTreeMap;
+use std::borrow::Borrow;
+use std::collections::{BTreeMap, HashMap};
+use std::sync::Arc;
 
 use natamux_proto::stages::capabilities::stage_name;
 use natamux_proto::stages::position::{step_index, step_to_run};
@@ -17,16 +19,18 @@ use super::stage_view_rules::{LinkKind, link_kind, same_lane};
 use crate::sidebar::sidebar_tree::steps_of;
 use crate::sidebar::workspace_groups::{DEFAULT_REPO_ID, RepoRef, known_repos};
 use crate::tasks::task_attention::is_quiet;
+use crate::tasks::task_changes::task_of;
 use crate::tasks::task_rules::{needs_me, state_from_name};
 
-/// One box of the board: the open and the done tasks that share a set of steps.
+/// One box of the board: the open and the done tasks that share a set of steps. The board
+/// shares its tasks with the dashboard, so a section costs no copy of a task.
 #[derive(Clone, Debug, PartialEq)]
-pub struct Section {
+pub struct Section<T = Arc<Task>> {
     pub key: String,
     pub title: String,
     pub steps: Vec<Step>,
-    pub open: Vec<Task>,
-    pub done: Vec<Task>,
+    pub open: Vec<T>,
+    pub done: Vec<T>,
 }
 
 /// The steps a task carries, as text: tasks with the same text share a section.
@@ -46,27 +50,31 @@ fn step_position(steps: &[Step], stage: &str) -> i64 {
 
 /// Waiting for you first, then the furthest along. Equal rows keep the order of `tasks`, which the
 /// view freezes, so a row never moves under the pointer.
-pub fn sort_rows(tasks: &[Task], steps: &[Step], now_ms: i64) -> Vec<Task> {
+pub fn sort_rows<T: Borrow<Task> + Clone>(tasks: &[T], steps: &[Step], now_ms: i64) -> Vec<T> {
     let waits = |task: &Task| needs_me(task.state) || is_quiet(task, now_ms);
     let mut rows = tasks.to_vec();
-    rows.sort_by_key(|task| (!waits(task), -step_position(steps, &task.stage)));
+    rows.sort_by_key(|held| {
+        let task = task_of(held);
+        (!waits(task), -step_position(steps, &task.stage))
+    });
     rows
 }
 
 /// One section per project with open tasks (cancelled ones are left out), and one more for its
 /// tasks made before its pipeline changed. Without the settings the tasks show the stages they
-/// carry.
-pub fn board_sections(
-    tasks: &[Task],
+/// carry. The tasks are held by value or shared, and a section holds them the same way.
+pub fn board_sections<T: Borrow<Task> + Clone>(
+    tasks: &[T],
     repos: &[RepoRef],
     pipelines: &BTreeMap<String, Vec<Step>>,
     now_ms: i64,
-) -> Vec<Section> {
+) -> Vec<Section<T>> {
     let mut sections = Vec::new();
     for repo in known_repos(repos, tasks) {
-        let own: Vec<&Task> = tasks
+        let own: Vec<&T> = tasks
             .iter()
-            .filter(|task| {
+            .filter(|held| {
+                let task = task_of(*held);
                 task.repo.as_deref().unwrap_or(DEFAULT_REPO_ID) == repo.id
                     && task.state != TaskState::Cancelled
             })
@@ -76,30 +84,33 @@ pub fn board_sections(
         }
         let loaded = pipelines.get(&repo.id);
         let pipeline: &[Step] = loaded.map_or(&[], Vec::as_slice);
-        let mut keys: Vec<String> = Vec::new();
-        for task in &own {
-            let key = steps_key(task);
-            if !keys.contains(&key) {
-                keys.push(key);
+        // One pass: each task is keyed once, and the groups keep the order the keys first show.
+        let mut at: HashMap<String, usize> = HashMap::new();
+        let mut groups: Vec<(String, Vec<&T>)> = Vec::new();
+        for task in own {
+            let key = steps_key(task_of(task));
+            let index = *at.entry(key.clone()).or_insert_with(|| {
+                groups.push((key, Vec::new()));
+                groups.len() - 1
+            });
+            if let Some((_, members)) = groups.get_mut(index) {
+                members.push(task);
             }
         }
         // New tasks get the stages that are on, so tasks made since the last change carry these.
         let current = current_key(pipeline);
-        keys.sort_by_key(|key| *key != current);
-        for (index, key) in keys.iter().enumerate() {
-            let group: Vec<Task> = own
-                .iter()
-                .filter(|task| steps_key(task) == *key)
-                .map(|task| (*task).clone())
-                .collect();
-            let Some(first) = group.first() else {
+        groups.sort_by_key(|(key, _)| *key != current);
+        for (index, (key, members)) in groups.iter().enumerate() {
+            let Some(first) = members.first() else {
                 continue;
             };
-            let steps = resolve_steps(&steps_of(first), pipeline);
-            let (done, open): (Vec<Task>, Vec<Task>) = group
-                .into_iter()
-                .partition(|task| task.state == TaskState::Done);
-            let title = if index == 0 && (loaded.is_none() || *key == current) {
+            let steps = resolve_steps(&steps_of(task_of(*first)), pipeline);
+            let (done, open): (Vec<T>, Vec<T>) = members
+                .iter()
+                .copied()
+                .cloned()
+                .partition(|task| task_of(task).state == TaskState::Done);
+            let title = if index == 0 && (loaded.is_none() || key == &current) {
                 repo.name.clone()
             } else {
                 format!("{}, earlier pipeline", repo.name)
@@ -137,7 +148,7 @@ fn lane_state(task: &Task, stage_id: &str) -> TaskState {
         .map_or(TaskState::Done, state_from_name)
 }
 
-pub fn stage_columns(steps: &[Step], open: &[Task]) -> Vec<StageColumn> {
+pub fn stage_columns<T: Borrow<Task>>(steps: &[Step], open: &[T]) -> Vec<StageColumn> {
     steps
         .iter()
         .flat_map(|step| {
@@ -152,6 +163,7 @@ pub fn stage_columns(steps: &[Step], open: &[Task]) -> Vec<StageColumn> {
             let in_group = group.is_some();
             let here: Vec<&Task> = open
                 .iter()
+                .map(task_of)
                 .filter(|task| {
                     let Some(step) = step_index(steps, &task.stage).and_then(|at| steps.get(at))
                     else {

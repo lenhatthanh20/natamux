@@ -4,6 +4,7 @@
 //! rules are `progress_board_rules.rs`; the settings are read by `app/settings_reads.rs`.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
 
 use gpui::{Entity, FocusHandle, Focusable, FontWeight, Hsla, Subscription};
 use natamux_proto::stages::schema::Step;
@@ -30,7 +31,7 @@ pub struct ProgressBoard {
     dashboard: Entity<Dashboard>,
     reads: Option<Entity<SettingsReads>>,
     /// In the order to show, filtered; the task view holds the order still.
-    rows: Vec<Task>,
+    rows: Vec<Arc<Task>>,
     /// Sections whose done tasks are shown (not kept).
     expanded: BTreeSet<String>,
     hovered: Option<String>,
@@ -76,7 +77,7 @@ impl ProgressBoard {
     }
 
     /// False: the rows are the ones shown, so nothing draws.
-    pub fn set_rows(&mut self, rows: Vec<Task>, cx: &mut Context<Self>) -> bool {
+    pub fn set_rows(&mut self, rows: Vec<Arc<Task>>, cx: &mut Context<Self>) -> bool {
         if self.rows == rows {
             return false;
         }
@@ -184,9 +185,9 @@ impl ProgressBoard {
     fn section(&self, section: &Section, now: i64, cx: &Context<Self>) -> AnyElement {
         let colors = cx.theme().colors();
         let columns = stage_columns(&section.steps, &section.open);
-        let mut rows: Vec<&Task> = section.open.iter().collect();
+        let mut rows: Vec<&Task> = section.open.iter().map(|task| &**task).collect();
         if self.expanded.contains(&section.key) {
-            rows.extend(section.done.iter());
+            rows.extend(section.done.iter().map(|task| &**task));
         }
         let head_border = colors.border_variant;
         let (surface, border) = (colors.surface_background, colors.border);

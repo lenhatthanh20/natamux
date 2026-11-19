@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use gpui::{Entity, FocusHandle, Focusable, PathPromptOptions, StyleRefinement, Subscription};
 use natamux_proto::projects::repo::AddRepo;
-use natamux_proto::tasks::task::Task;
+use natamux_proto::tasks::task::TaskState;
 use ui::prelude::*;
 
 use super::add_subtask_dialog;
@@ -59,12 +59,15 @@ pub struct TaskView {
     held_at: Option<i64>,
     /// The order last shown, and what it was sorted and filtered by.
     shown_ids: Vec<String>,
-    shown_key: String,
+    shown_key: (TaskSort, Option<TaskState>, String),
     /// When a row shown next changes a time label, in Unix ms, and the timer that draws it.
     next_change: Option<i64>,
     clock: Option<gpui::Task<()>>,
     /// The dashboard parts this view last followed.
     seen: Seen,
+    /// The dashboard changed while main showed a workspace or the Agents grid: the rows are
+    /// made and drawn once the list shows again.
+    stale: bool,
     #[cfg(test)]
     refreshes: usize,
     _hold: Option<gpui::Task<()>>,
@@ -91,7 +94,7 @@ impl TaskView {
         let progress = cx.new(|cx| ProgressBoard::new(dashboard.clone(), cx));
         let main_width = cx.new(|_| None);
         let subscriptions = vec![
-            cx.observe(&dashboard, |this, _, cx| this.follow(cx)),
+            Dashboard::observe(&dashboard, cx, |this, _, cx| this.follow(cx)),
             cx.observe(&main_width, |this, _, cx| this.refresh(cx)),
             cx.subscribe(&table, |this, _, _: &KeyMoved, cx| this.hold(cx)),
         ];
@@ -105,10 +108,11 @@ impl TaskView {
             pointer_inside: false,
             held_at: None,
             shown_ids: Vec::new(),
-            shown_key: String::new(),
+            shown_key: (None, None, String::new()),
             next_change: None,
             clock: None,
             seen: Seen::default(),
+            stale: false,
             #[cfg(test)]
             refreshes: 0,
             _hold: None,
@@ -134,13 +138,22 @@ impl TaskView {
     /// A dashboard notify: sorts again only when what the order reads changed, and draws only
     /// what reads the parts that changed. The board and the progress are cached, so each is
     /// told on its own.
+    /// While main shows something else nothing is sorted or drawn; the step back to the list
+    /// bumps View, so this runs again before the list's first frame.
     fn follow(&mut self, cx: &mut Context<Self>) {
-        let (changed, layout, sort) = {
+        let (changed, layout, sort, hidden) = {
             let dashboard = self.dashboard.read(cx);
             let changed = self.seen.take(&dashboard.data.gens);
-            (changed, dashboard.view().layout, dashboard.sort)
+            let hidden = dashboard.open_task.is_some() || dashboard.agents_open;
+            (changed, dashboard.view().layout, dashboard.sort, hidden)
         };
-        if changed.any(&order_parts(sort)) {
+        if hidden {
+            self.stale = true;
+            return;
+        }
+        let stale = std::mem::take(&mut self.stale);
+        // Exact: the order reads neither the selection nor the panel widths.
+        if stale || changed.any_exact(&order_parts(sort)) {
             // Counted here, not in `refresh`: the label clock and the width refresh too.
             #[cfg(test)]
             {
@@ -149,10 +162,10 @@ impl TaskView {
             self.refresh(cx);
         }
         // The header, the empty states and the table under this view.
-        if changed.any(&[Part::Tasks, Part::View, Part::Link, Part::Repos]) {
+        if stale || changed.any(&[Part::Tasks, Part::View, Part::Link, Part::Repos]) {
             cx.notify();
         }
-        if changed.any(row_parts(layout)) {
+        if stale || changed.any(row_parts(layout)) {
             match layout {
                 Layout::Table => self.table.update(cx, |table, cx| table.data_changed(cx)),
                 Layout::Board => self.board.update(cx, |_, cx| cx.notify()),
@@ -165,32 +178,34 @@ impl TaskView {
     /// Draws again only when the rows or the next label change moved.
     fn refresh(&mut self, cx: &mut Context<Self>) {
         let now = now_ms();
-        let (ordered, key) = {
+        let (ordered, same_key) = {
             let dashboard = self.dashboard.read(cx);
             let data = &dashboard.data;
             let visible = filter_task_refs(&data.tasks, dashboard.state_filter, &dashboard.filter);
             let sorted = sort_task_refs(visible, dashboard.sort, &data.diff_stats, &data.usage);
-            let key = format!(
-                "{:?}|{:?}|{}",
-                dashboard.sort, dashboard.state_filter, dashboard.filter
-            );
-            let frozen = is_frozen(
-                self.pointer_inside,
-                self.held_at,
-                now,
-                key == self.shown_key,
-            );
-            let shown: Vec<&Task> = if frozen {
+            let (sort, state, filter) = &self.shown_key;
+            let same = *sort == dashboard.sort && *state == dashboard.state_filter;
+            let same = same && *filter == dashboard.filter;
+            let frozen = is_frozen(self.pointer_inside, self.held_at, now, same);
+            let shown = if frozen {
                 freeze_order(&self.shown_ids, &sorted, |task| task.id.as_str())
             } else {
                 sorted
             };
-            // The one clone of each shown task.
-            (shown.into_iter().cloned().collect::<Vec<Task>>(), key)
+            // Shared with the dashboard: a row costs no copy of its task.
+            (shown.into_iter().cloned().collect::<Vec<_>>(), same)
         };
-        self.shown_ids = ordered.iter().map(|task| task.id.clone()).collect();
-        self.shown_key = key;
-        let next_change = next_row_change_ms(&ordered, now).map(|wait| now + wait);
+        let ids = ordered.iter().map(|task| &task.id);
+        if !self.shown_ids.iter().eq(ids) {
+            self.shown_ids = ordered.iter().map(|task| task.id.clone()).collect();
+        }
+        if !same_key {
+            let dashboard = self.dashboard.read(cx);
+            let filter = dashboard.filter.clone();
+            self.shown_key = (dashboard.sort, dashboard.state_filter, filter);
+        }
+        let rows = ordered.iter().map(|task| &**task);
+        let next_change = next_row_change_ms(rows, now).map(|wait| now + wait);
         let width = *self.main_width.read(cx);
         // Only the layout on screen gets the rows. A switch of layout changes the dashboard,
         // which refreshes again for the new one.

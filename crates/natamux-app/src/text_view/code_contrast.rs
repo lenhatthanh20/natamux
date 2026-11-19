@@ -4,6 +4,7 @@
 //! Where they overlap, their colours lie over the editor background in that order. The contrast
 //! rule itself is the terminal's (`terminals/term/contrast.rs`).
 
+use std::collections::BTreeMap;
 use std::ops::Range;
 
 use gpui::{App, Hsla, TextRun};
@@ -81,79 +82,83 @@ pub(super) fn with_contrast(
         .collect();
     cuts.sort_unstable();
     cuts.dedup();
-    let under = |at: usize| {
-        let mut covered = marks
-            .iter()
-            .filter(|(range, _)| range.contains(&at))
-            .peekable();
-        covered.peek()?;
-        Some(covered.fold(background, |color, (_, mark)| color.blend(*mark)))
-    };
+    let under = colors_from_cuts(&cuts, marks, background);
     let mut out = Vec::with_capacity(runs.len() + cuts.len());
     let mut at = 0;
     for run in runs {
         let end = at + run.len;
-        let inner = cuts.iter().copied().filter(|cut| at < *cut && *cut < end);
+        // The number of cuts at or before `start`: the last of them gives the colour under it.
+        let mut next = cuts.partition_point(|cut| *cut <= at);
         let mut start = at;
-        for cut in inner.chain(std::iter::once(end)) {
-            let color = under(start).map_or(run.color, |under| {
-                with_minimum_contrast(run.color, under, MINIMUM)
-            });
+        loop {
+            let cut = match cuts.get(next) {
+                Some(&cut) if cut < end => cut,
+                _ => end,
+            };
+            let color = match next.checked_sub(1).and_then(|last| under.get(last)) {
+                Some(Some(mark)) => with_minimum_contrast(run.color, *mark, MINIMUM),
+                _ => run.color,
+            };
             out.push(TextRun {
                 len: cut - start,
                 color,
                 ..run.clone()
             });
+            if cut == end {
+                break;
+            }
             start = cut;
+            next += 1;
         }
         at = end;
     }
     out
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use gpui::font;
-
-    /// A grey of lightness `l`.
-    fn grey(l: f32) -> Hsla {
-        Hsla {
-            h: 0.,
-            s: 0.,
-            l,
-            a: 1.,
+/// For each of the sorted `cuts`, the colour under the text from it to the next cut: the marks
+/// over that span laid over `background` in mark order, or `None` where no mark lies.
+fn colors_from_cuts(
+    cuts: &[usize],
+    marks: &[(Range<usize>, Hsla)],
+    background: Hsla,
+) -> Vec<Option<Hsla>> {
+    let mut events: Vec<(usize, usize, Option<Hsla>)> = Vec::with_capacity(marks.len() * 2);
+    for (index, (range, color)) in marks.iter().enumerate() {
+        // An empty or reversed range contains no offset, so it never lies under text.
+        if range.start < range.end {
+            events.push((range.start, index, Some(*color)));
+            events.push((range.end, index, None));
         }
     }
-
-    fn run(len: usize, color: Hsla) -> TextRun {
-        TextRun {
-            len,
-            font: font(".ZedMono"),
-            color,
-            background_color: None,
-            underline: None,
-            strikethrough: None,
+    events.sort_unstable_by_key(|(at, _, _)| *at);
+    let mut events = events.into_iter().peekable();
+    // Keyed by mark index, so the fold below keeps the order the marks are laid in.
+    let mut over: BTreeMap<usize, Hsla> = BTreeMap::new();
+    let mut out = Vec::with_capacity(cuts.len());
+    for &cut in cuts {
+        while let Some((_, index, color)) = events.next_if(|(at, _, _)| *at == cut) {
+            match color {
+                Some(color) => {
+                    over.insert(index, color);
+                }
+                None => {
+                    over.remove(&index);
+                }
+            }
         }
+        let color = if over.is_empty() {
+            None
+        } else {
+            Some(
+                over.values()
+                    .fold(background, |color, mark| color.blend(*mark)),
+            )
+        };
+        out.push(color);
     }
-
-    #[test]
-    fn text_under_a_mark_gets_the_least_contrast_and_the_rest_keeps_its_colour() {
-        let (dark, text) = (grey(0.15), grey(0.4));
-        let marks = [(2..5, grey(0.35))];
-        let out = with_contrast(vec![run(8, text)], &marks, dark);
-        let lens: Vec<usize> = out.iter().map(|run| run.len).collect();
-        assert_eq!(lens, vec![2, 3, 3]);
-        assert_eq!(out[0].color, text);
-        assert_eq!(out[2].color, text);
-        assert_ne!(out[1].color, text);
-    }
-
-    #[test]
-    fn no_marks_leave_the_runs_as_they_are() {
-        let runs = vec![run(3, grey(0.5))];
-        let out = with_contrast(runs.clone(), &[], grey(0.));
-        assert_eq!(out.len(), 1);
-        assert_eq!(out[0].color, runs[0].color);
-    }
+    out
 }
+
+#[cfg(test)]
+#[path = "code_contrast_tests.rs"]
+mod tests;

@@ -3,6 +3,8 @@
 //! items show is `table_rules::row_menu`; this file gives them icons and handlers. Titles and keys
 //! come from the command registry (`app/commands.rs`).
 
+use std::sync::Arc;
+
 use gpui::{ClipboardItem, Entity, FocusHandle};
 use natamux_proto::tasks::task::Task;
 use ui::{ContextMenu, ContextMenuEntry, prelude::*};
@@ -143,7 +145,7 @@ fn entry(task: &Task, item: RowItem, dashboard: &Entity<Dashboard>) -> Option<Co
 /// and focus goes back to the list.
 pub fn build_row_menu(
     task: &Task,
-    tasks: &[Task],
+    tasks: &[Arc<Task>],
     dashboard: &Entity<Dashboard>,
     list: FocusHandle,
     window: &mut Window,

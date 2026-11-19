@@ -125,7 +125,8 @@ pub fn agent_icon(id: Option<&str>) -> Option<&'static str> {
 /// The asset of an agent's icon. Some icons are dark on dark; the theme has a lighter one, made
 /// for light editors, used in the light theme (`iconUrl`).
 pub fn agent_icon_path(id: Option<&str>, light: bool) -> Option<String> {
-    icon_path_in(id, light, &custom_agents())
+    let custom = CUSTOM.read().unwrap_or_else(PoisonError::into_inner);
+    icon_path_in(id, light, &custom)
 }
 
 /// As `agent_icon_path`; a custom agent has the icon of its base, and "Other CLI" none.
@@ -244,6 +245,14 @@ mod tests {
             Some("icons/agents/muse.svg")
         );
         assert_eq!(agent_icon_path(Some("my-agent"), false), None);
+    }
+
+    #[test]
+    fn agent_icon_path_matches_icon_path_in_with_the_list_it_holds() {
+        let list = custom_agents();
+        for id in [Some("claude-code"), Some("nope"), None] {
+            assert_eq!(agent_icon_path(id, false), icon_path_in(id, false, &list));
+        }
     }
 
     #[test]

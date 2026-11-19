@@ -45,7 +45,7 @@ fn children(dashboard: &Entity<Dashboard>, cx: &mut VisualTestContext) -> Vec<Ta
         let tasks = dashboard.data.tasks.iter();
         tasks
             .filter(|task| task.parent_id.as_deref() == Some(PARENT))
-            .cloned()
+            .map(|task| Task::clone(task))
             .collect()
     })
 }

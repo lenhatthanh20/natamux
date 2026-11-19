@@ -5,7 +5,11 @@
 // Ported with their tests (spec D11); the details and tab rules serve screens 2 and 3.
 #![cfg_attr(not(test), allow(dead_code))]
 
+use std::borrow::Borrow;
+
 use natamux_proto::tasks::task::{Task, TaskState};
+
+use crate::tasks::task_changes::task_of;
 
 /// A task id with a remembered value, oldest first.
 pub type Entries<T> = Vec<(String, T)>;
@@ -94,7 +98,11 @@ pub fn with_seen(
 ) -> Entries<TaskState> {
     let mut next = current.to_vec();
     for &(id, state) in tasks {
-        if overwrite || find(&next, id).is_none() {
+        let recorded = find(&next, id);
+        // An overwrite with the same value still moves the entry to the end, so only a task that
+        // is last already can skip the copy.
+        let in_place = recorded == Some(&state) && next.last().is_some_and(|(last, _)| last == id);
+        if !in_place && (overwrite || recorded.is_none()) {
             next = with_entry(&next, id, state, MAX_REMEMBERED_SEEN);
         }
     }
@@ -106,13 +114,14 @@ pub fn with_seen(
 /// backlog task is not recorded, or it would start unseen once it runs. The open task is being
 /// looked at, so its new state is seen whatever it does. A running task counts as seen running,
 /// so the next turn end shows as unseen even when the user had seen the last one.
-pub fn seen_after_list(
+pub fn seen_after_list<T: Borrow<Task>>(
     current: &[(String, TaskState)],
-    tasks: &[Task],
+    tasks: &[T],
     open: Option<&str>,
 ) -> Entries<TaskState> {
     let baseline: Vec<(&str, TaskState)> = tasks
         .iter()
+        .map(task_of)
         .filter(|task| task.workspace.is_some())
         .map(|task| (task.id.as_str(), task.state))
         .collect();
@@ -125,7 +134,7 @@ pub fn seen_after_list(
         .copied()
         .collect();
     let next = with_seen(&next, &running, true);
-    match open.and_then(|id| tasks.iter().find(|task| task.id == id)) {
+    match open.and_then(|id| tasks.iter().map(task_of).find(|task| task.id == id)) {
         Some(task) => with_seen(&next, &[(task.id.as_str(), task.state)], true),
         None => next,
     }
@@ -253,6 +262,18 @@ mod tests {
             true,
         );
         assert_eq!(next, seen(&[("T-0001", TaskState::Review)]));
+    }
+
+    #[test]
+    fn with_seen_overwrite_with_the_same_state_still_moves_the_entry_to_the_end() {
+        let seen = vec![
+            ("T-1".to_owned(), TaskState::Idle),
+            ("T-2".to_owned(), TaskState::Idle),
+        ];
+        let same_last = with_seen(&seen, &[("T-2", TaskState::Idle)], true);
+        assert_eq!(same_last, seen);
+        let same_first = with_seen(&seen, &[("T-1", TaskState::Idle)], true);
+        assert_eq!(same_first[1].0, "T-1");
     }
 
     #[test]

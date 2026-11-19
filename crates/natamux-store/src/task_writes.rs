@@ -131,6 +131,20 @@ impl TaskSlot {
         }
     }
 
+    /// How many tickets were taken so far: what `wait_done` takes.
+    pub fn issued(&self) -> u64 {
+        self.state().issued
+    }
+
+    /// Waits until the first `issued` writes are done. Unlike `wait_idle` it needs no store lock
+    /// to end: a ticket taken later is not waited for.
+    pub fn wait_done(&self, issued: u64) {
+        let mut state = self.state();
+        while state.done < issued {
+            state = self.wait(state);
+        }
+    }
+
     pub fn wait_turn(&self, ticket: u64) -> Turn<'_> {
         let mut state = self.state();
         while state.done != ticket {

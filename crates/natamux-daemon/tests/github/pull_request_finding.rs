@@ -16,7 +16,7 @@ use serde_json::{Map, Value, json};
 
 use super::pull_request_watcher::{
     Found, bus_with_client, count, counting_no_branch, fails, github, github_with, logged,
-    on_origin, options, pr_events, started, status, task_on_branch, tick,
+    on_origin, options, origin_with, pr_events, started, status, task_on_branch, tick,
 };
 use super::{Fx, GhCall};
 
@@ -56,7 +56,7 @@ fn found(state: &'static str) -> Vec<Found> {
 
 fn finding(fx: &Fx, gh: RunGh) -> PullRequestWatcherOptions {
     let mut options = options(fx, gh);
-    options.has_remote_branch = Some(on_origin());
+    options.remote_branches = Some(on_origin());
     options
 }
 
@@ -132,6 +132,30 @@ fn lists_the_pull_requests_once_per_project_in_the_workspace_of_one_of_its_tasks
 }
 
 #[test]
+fn reads_the_branches_of_origin_once_per_project_and_once_per_task_without_one() {
+    let fx = Fx::new();
+    for branch in ["natamux/t-1", "natamux/t-2", "natamux/t-3"] {
+        task_on_branch(&fx, branch, Some("web"));
+    }
+    let alone = task_on_branch(&fx, "natamux/t-4", None);
+    task_on_branch(&fx, "natamux/t-5", None);
+    let (gh, calls) = github(vec![]);
+    let looks = Arc::new(AtomicUsize::new(0));
+    let mut options = options(&fx, gh);
+    options.remote_branches = Some(origin_with(&["natamux/t-2", "natamux/t-4"], &looks));
+
+    let watcher = PullRequestWatcher::new(options);
+    watcher.check_all();
+
+    assert_eq!(looks.load(Ordering::SeqCst), 3);
+    // One gh list for each project that has a pushed branch.
+    assert_eq!(count(&calls), 2);
+    looks.store(0, Ordering::SeqCst);
+    watcher.check(&alone.id).unwrap();
+    assert_eq!(looks.load(Ordering::SeqCst), 1);
+}
+
+#[test]
 fn goes_on_with_the_other_projects_when_gh_fails_for_one() {
     let fx = Fx::new();
     task_on_branch(&fx, "natamux/t-1", None);
@@ -183,7 +207,7 @@ fn asks_github_nothing_while_origin_does_not_have_the_branch() {
     let task = task_on_branch(&fx, "natamux/t-1", None);
     let (gh, calls) = github(found("OPEN"));
     let mut options = options(&fx, gh);
-    options.has_remote_branch = Some(counting_no_branch(&Arc::default()));
+    options.remote_branches = Some(counting_no_branch(&Arc::default()));
 
     PullRequestWatcher::new(options).check_all();
 
@@ -273,7 +297,7 @@ fn asks_every_5_minutes_while_origin_does_not_have_the_branch() {
     let (gh, _) = github(vec![]);
     let looks = Arc::new(AtomicUsize::new(0));
     let mut options = options(&fx, gh);
-    options.has_remote_branch = Some(counting_no_branch(&looks));
+    options.remote_branches = Some(counting_no_branch(&looks));
     options.bus = Some(bus_with_client());
 
     let watcher = started(options);

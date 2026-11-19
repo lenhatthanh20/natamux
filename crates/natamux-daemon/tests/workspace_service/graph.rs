@@ -2,6 +2,8 @@
 
 use std::fs;
 
+use natamux_git::exec::spawn_count;
+
 use super::*;
 
 #[test]
@@ -41,6 +43,28 @@ fn keeps_the_graph_for_a_moment_and_reads_it_again_after_a_commit_made_here() {
     fs::write(workspace.join("fix.txt"), "fixed\n").unwrap();
     fx.ws.commit(&task.id, "Fix the bug").unwrap();
     assert_eq!(fx.ws.graph(&task.id, false).unwrap().ahead, Some(2));
+}
+
+#[test]
+fn runs_no_git_after_a_touch_that_moved_no_ref_and_reads_again_after_one_that_did() {
+    let fx = Fx::exclusive();
+    let task = fx.with_workspace("Fix the bug");
+    let workspace = PathBuf::from(task.workspace.clone().unwrap());
+    let first = fx.ws.graph(&task.id, false).unwrap();
+
+    // As a hook does after the agent edits a file.
+    fs::write(workspace.join("notes.txt"), "draft\n").unwrap();
+    fx.ws.touch(&task.id);
+    let before = spawn_count();
+    assert_eq!(fx.ws.graph(&task.id, false).unwrap(), first);
+    assert_eq!(spawn_count() - before, 0);
+
+    // A commit by the agent reaches the daemon only as a touch.
+    run_git(&workspace, &["commit", "--allow-empty", "-m", "work"]);
+    fx.ws.touch(&task.id);
+    let graph = fx.ws.graph(&task.id, false).unwrap();
+    assert_eq!(graph.ahead, Some(1));
+    assert_eq!(graph.commits[0].subject, "work");
 }
 
 #[test]

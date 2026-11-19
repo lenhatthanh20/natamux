@@ -586,21 +586,22 @@ impl DiffSide {
         &self,
         path: &str,
         diff: &FileDiff,
-        side: SideRows,
+        mut side: SideRows,
         new_side: bool,
         cx: &mut App,
     ) {
         let lang = lang_for(path);
         let texts = [diff.old.as_str(), diff.new.as_str()];
+        let text = side.take_text();
         self.input.update(cx, |input, cx| {
             let now = input.now(cx);
             if input.model.text().is_empty() {
                 // Not a new model: its version would start again at 0, and the caches kept by
                 // version (guides, outline) would keep showing the empty text.
-                input.model.set_text(&side.text, now);
+                input.model.set_text(&text, now);
                 input.model.move_to(0);
             } else {
-                input.model.replace_minimal(&side.text, now);
+                input.model.replace_minimal(&text, now);
             }
             input.model.forget_history();
             let same_lang = input
@@ -843,8 +844,8 @@ impl FindTarget for DiffSide {
         self.input.entity_id()
     }
 
-    fn text(&self, cx: &App) -> String {
-        FindTarget::text(&self.code_view(), cx)
+    fn read_text(&self, cx: &App, read: &mut dyn FnMut(&str)) {
+        FindTarget::read_text(&self.code_view(), cx, read)
     }
 
     fn one_line_selection(&self, cx: &mut App) -> Option<String> {

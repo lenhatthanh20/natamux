@@ -7,7 +7,6 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, MutexGuard};
 
-use natamux_proto::events::task_event::StoredEvent;
 use natamux_proto::tasks::task::Task;
 
 use crate::event_log::{LoggedEvent, event_log_path, read_event_log, write_event_log};
@@ -487,13 +486,10 @@ impl TaskSync {
             slot.wait_idle();
         }
     }
-
-    /// The events of a task, oldest first, with those of every change decided so far.
-    pub fn list_events(&mut self, task_id: &str) -> Result<Vec<StoredEvent>, String> {
-        self.settle(task_id);
-        self.index().list_events(task_id)
-    }
 }
+
+#[path = "task_sync_reads.rs"]
+pub mod reads;
 
 #[cfg(test)]
 #[path = "task_sync_tests.rs"]

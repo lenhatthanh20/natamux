@@ -262,7 +262,7 @@ fn says_nothing_for_the_tasks_that_wait_when_the_page_opens() {
 #[test]
 fn says_nothing_for_the_tasks_that_wait_when_the_task_list_first_loads() {
     let mut announcer = NeedsYouAnnouncer::default();
-    announcer.update(&[], false);
+    announcer.update::<Task>(&[], false);
     announcer.update(&[first()], true);
     assert_eq!(announcer.text(), "");
 }
@@ -371,4 +371,64 @@ fn counts_idle_tasks_not_seen_since_their_turn_ended() {
         task("T-0004", TaskState::Idle),
     ];
     assert_eq!(unread_turn_ends(&tasks, &seen), 1);
+}
+
+#[test]
+fn reads_a_lane_state_like_serde_does() {
+    let lanes = serde_json::json!({
+        "a": "needs-input", "b": "idle", "c": "from-the-future", "d": 7, "e": "done"
+    });
+    for (stage, lane) in lanes.as_object().into_iter().flatten() {
+        let old = serde_json::from_value::<TaskState>(lane.clone()).ok();
+        assert_eq!(lane_state(lane), old, "{stage}");
+    }
+}
+
+#[test]
+fn a_look_at_one_changed_task_rings_as_a_look_at_the_whole_list() {
+    let lanes = |state: TaskState, lanes: serde_json::Value| Task {
+        id: "T-0002".into(),
+        ..with_lanes(state, lanes)
+    };
+    let before = [
+        at_stage("T-0001", TaskState::Running, "spec"),
+        lanes(
+            TaskState::NeedsInput,
+            serde_json::json!({ "implement": "needs-input", "self-check": "running" }),
+        ),
+        at_stage("T-0003", TaskState::Review, "plan"),
+    ];
+    // Each change of one task: a new wait, a second terminal that waits, a turn end, done, a
+    // task seen for the first time, and no change at all.
+    let changes = [
+        at_stage("T-0001", TaskState::NeedsInput, "spec"),
+        lanes(
+            TaskState::NeedsInput,
+            serde_json::json!({ "implement": "needs-input", "self-check": "idle" }),
+        ),
+        lanes(
+            TaskState::NeedsInput,
+            serde_json::json!({ "implement": "needs-input", "self-check": "review" }),
+        ),
+        at_stage("T-0003", TaskState::Done, "plan"),
+        at_stage("T-0001", TaskState::Idle, "spec"),
+        at_stage("T-0004", TaskState::Failed, "spec"),
+        at_stage("T-0003", TaskState::Review, "plan"),
+    ];
+    let mut rang = 0;
+    for changed in changes {
+        let mut now = before.to_vec();
+        match now.iter_mut().find(|task| task.id == changed.id) {
+            Some(held) => *held = changed.clone(),
+            None => now.push(changed.clone()),
+        }
+        let whole = rings(&states_by_id(&before), &now, &repos());
+        let mut previous = states_by_id(&before);
+        let was = look_at_one(&mut previous, &changed);
+        let one = rings(&was, std::slice::from_ref(&changed), &repos());
+        assert_eq!(one, whole, "{} {:?}", changed.id, changed.state);
+        assert_eq!(previous, states_by_id(&now), "{}", changed.id);
+        rang += one.len();
+    }
+    assert_eq!(rang, 5);
 }

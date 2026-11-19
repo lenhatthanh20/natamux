@@ -268,3 +268,27 @@ fn a_daemon_that_is_not_there_fails_the_first_connect() {
         ));
     });
 }
+
+#[test]
+fn a_looped_handle_hands_each_input_over_and_drops_the_other_commands() {
+    let (sender, mut heard) = futures::channel::mpsc::unbounded();
+    let (_events, events) = futures::channel::mpsc::unbounded();
+    let handle = TerminalHandle::looped(events, move |text| {
+        sender.unbounded_send(text).unwrap();
+    });
+    handle.resize(80, 24);
+    handle.input("a");
+    handle.claim();
+    handle.input("b");
+    let rt = runtime();
+    rt.block_on(async {
+        assert_eq!(within(heard.next()).await.as_deref(), Some("a"));
+        assert_eq!(within(heard.next()).await.as_deref(), Some("b"));
+        drop(handle);
+        assert_eq!(
+            within(heard.next()).await,
+            None,
+            "the thread ends with the handle"
+        );
+    });
+}

@@ -262,6 +262,9 @@ impl RemoteTerminal {
         }
         self.visible = visible;
         self.shown_at = visible.then(Instant::now);
+        if !visible {
+            self.view.update(cx, |view, _| view.drop_frame());
+        }
         if let Some(handle) = &self.handle {
             handle.set_visible(visible);
         }

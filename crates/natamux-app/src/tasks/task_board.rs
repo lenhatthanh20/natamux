@@ -3,6 +3,8 @@
 //! only with Show finished, and their columns can delete all their tasks. Those two draw their
 //! newest cards first (`task_board_cap.rs`).
 
+use std::sync::Arc;
+
 use gpui::{ClickEvent, Entity, FocusHandle, Focusable, FontWeight, KeyContext, ScrollHandle};
 use natamux_proto::tasks::task::{Task, TaskState};
 use ui::{Tooltip, prelude::*};
@@ -32,7 +34,7 @@ use columns::Column;
 pub struct TaskBoard {
     dashboard: Entity<Dashboard>,
     /// In the order to show, filtered; the task view holds the order still.
-    rows: Vec<Task>,
+    rows: Vec<Arc<Task>>,
     folds: BoardFolds,
     /// The cards Done and Cancelled draw.
     limits: CardLimits,
@@ -84,7 +86,7 @@ impl TaskBoard {
     }
 
     /// False: the rows are the ones shown, so nothing draws.
-    pub fn set_rows(&mut self, rows: Vec<Task>, cx: &mut Context<Self>) -> bool {
+    pub fn set_rows(&mut self, rows: Vec<Arc<Task>>, cx: &mut Context<Self>) -> bool {
         if self.rows == rows {
             return false;
         }
@@ -105,12 +107,12 @@ impl TaskBoard {
     }
 
     /// The cards in reading order: column by column, top to bottom.
-    fn shown(&self, cx: &App) -> Vec<Task> {
+    fn shown(&self, cx: &App) -> Vec<Arc<Task>> {
         let dashboard = self.dashboard.read(cx);
         let states = board_states(dashboard.state_filter, dashboard.view().show_finished);
         let mut shown = Vec::new();
         for state in states {
-            let column: Vec<&Task> = self
+            let column: Vec<&Arc<Task>> = self
                 .rows
                 .iter()
                 .filter(|task| task.state == state)
@@ -118,7 +120,7 @@ impl TaskBoard {
             let drawn = self.limits.drawn(state, &column);
             for (task, drawn) in column.into_iter().zip(drawn) {
                 if drawn {
-                    shown.push(task.clone());
+                    shown.push(Arc::clone(task));
                 }
             }
         }

@@ -17,7 +17,7 @@ use super::shots::{self, RUNNING};
 use super::shots_stages::{PROJECT, READ};
 use super::title_bar::title_bar_height;
 use super::window::Root;
-use crate::perf::report::{start_steps, start_times};
+use crate::perf::report::{process_usage, start_steps, start_times};
 use crate::text_view::text_box::TextBox;
 
 const TYPED: &str = "abc";
@@ -298,7 +298,13 @@ fn pass(quit: bool, cx: &mut App) {
             cx.background_executor().timer(GRID_POLL).await;
         }
         let (frame, data) = start_times();
-        println!("{}", start_line(frame, data, &start_steps()));
+        let mut steps = start_steps();
+        // Not a start step: the app's memory once the smoke is done, beside the start numbers.
+        if let Some(usage) = process_usage() {
+            let mb = usage.rss_bytes as f64 / 1024.0 / 1024.0;
+            steps.push(("app_rss_smoke_mb", mb));
+        }
+        println!("{}", start_line(frame, data, &steps));
         // Report only: one cold start after a build is slow; perf.yml gates the median of 5.
         if quit {
             cx.update(|cx| cx.quit());

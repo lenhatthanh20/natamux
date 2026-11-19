@@ -49,9 +49,10 @@ impl Fixture {
     }
 
     fn model(&self) -> TreeModel {
+        let tasks: Vec<Arc<Task>> = self.tasks.iter().cloned().map(Arc::new).collect();
         TreeModel::build(&TreeInput {
             repos: &self.repos,
-            tasks: &self.tasks,
+            tasks: &tasks,
             filter: &self.filter,
             current_id: self.current.as_deref(),
             held_id: None,
@@ -372,4 +373,37 @@ fn a_folded_group_waits_for_its_tasks_to_turn_quiet() {
     assert_eq!(fixture.model().next_label_change_ms(now), Some(300_000));
     fixture.tasks = vec![task("T-0001", TaskState::Done)];
     assert_eq!(fixture.model().next_label_change_ms(now), None);
+}
+
+#[test]
+fn a_task_line_shares_its_task_with_the_list_it_was_built_from() {
+    let mut child = task("T-0002", TaskState::Ready);
+    child.parent_id = Some("T-0001".into());
+    let done = task("T-0003", TaskState::Done);
+    let tasks = [task("T-0001", TaskState::Running), child, done].map(Arc::new);
+    let fixture = Fixture::new(Vec::new());
+    let model = TreeModel::build(&TreeInput {
+        repos: &fixture.repos,
+        tasks: &tasks,
+        filter: "",
+        current_id: Some("T-0001"),
+        held_id: None,
+        pinned: &[],
+        folds: &[("finished:a".into(), true)],
+        terminals: &fixture.terminals,
+    });
+    let held = |task: &Arc<Task>| tasks.iter().any(|each| Arc::ptr_eq(each, task));
+    let mut shared = 0;
+    for line in &model.lines {
+        let Line::Task { task, look, .. } = line else {
+            continue;
+        };
+        assert!(held(task), "{}", task.id);
+        shared += 1;
+        if let TaskLook::Open { children, .. } = look {
+            assert!(children.iter().all(held));
+            shared += children.len();
+        }
+    }
+    assert_eq!(shared, 3);
 }

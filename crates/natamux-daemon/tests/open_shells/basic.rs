@@ -1,5 +1,7 @@
 //! describe 'OpenShells'.
 
+use std::sync::atomic::Ordering;
+
 use natamux_daemon::shared::event_bus::DaemonMessage;
 use natamux_daemon::terminals::open_shells::{
     EXIT_CONFIRM_MS, RESTORE_POLL_MS, RESTORE_SPINNER_MS,
@@ -86,6 +88,44 @@ fn writes_only_when_a_shell_changes_not_on_every_hook() {
     }
 
     assert_eq!(s.writes.lock().unwrap().len(), before);
+}
+
+#[test]
+fn a_hook_that_names_the_known_session_does_not_ask_whether_the_task_ended() {
+    let dir = TempDir::new();
+    let s = setup(dir.path());
+    s.terminals.start_shell(T, "6");
+    s.terminals.set_program_quiet(T, "6", Some("copilot"));
+    s.shells.note_session(T, "6", "copilot", "c-1");
+    let asks = || s.ended_asks.load(Ordering::SeqCst);
+    let asked = asks();
+
+    for _ in 0..20 {
+        s.shells.note_session(T, "6", "copilot", "c-1");
+    }
+    assert_eq!(asks(), asked);
+    assert_eq!(s.read(T), vec![copilot()]);
+
+    // A new session is a change: the task may have ended meanwhile.
+    s.shells.note_session(T, "6", "copilot", "c-2");
+    assert_eq!(asks(), asked + 1);
+    assert_eq!(s.read(T), vec![open("6", Some("copilot"), Some("c-2"))]);
+}
+
+#[test]
+fn a_hook_that_names_the_known_session_still_watches_for_the_quit_of_the_agent() {
+    let dir = TempDir::new();
+    let s = setup(dir.path());
+    s.terminals.start_shell(T, "6");
+    s.terminals.set_program_quiet(T, "6", Some("copilot"));
+    s.shells.note_session(T, "6", "copilot", "c-1");
+
+    // The agent left the foreground, and no message told so.
+    s.terminals.set_program_quiet(T, "6", None);
+    s.shells.note_session(T, "6", "copilot", "c-1");
+    s.advance(EXIT_CONFIRM_MS);
+
+    assert_eq!(s.read(T), vec![plain("6")]);
 }
 
 #[test]

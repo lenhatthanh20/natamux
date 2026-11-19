@@ -6,17 +6,16 @@
 //! allows badges (`dock_badge.rs`). The screen-reader announcement text is kept too; GPUI has no live region to speak it yet (`docs/rust-phase3.md`).
 
 use gpui::{AnyWindowHandle, Entity, SystemNotification};
-use natamux_proto::tasks::task::Task;
 use natamux_proto::terminals::list::TerminalList;
 use ui::prelude::*;
 
 use super::dashboard::Dashboard;
 use super::dock_badge::set_dock_badge;
 use super::notify_rules::{
-    NeedsYouAnnouncer, Notification, Ring, States, badge_label, note_tag, plays_sound, rings,
-    states_by_id, tag_target, unread_turn_ends, with_terminal,
+    NeedsYouAnnouncer, Notification, Ring, States, badge_label, look_at_one, note_tag, plays_sound,
+    rings, states_by_id, tag_target, unread_turn_ends, with_terminal,
 };
-use crate::tasks::task_attention::needs_me_tasks;
+use crate::tasks::task_attention::{needs_me_count, needs_me_refs};
 use crate::tasks::task_rules::needs_me;
 
 #[derive(Default)]
@@ -30,8 +29,15 @@ pub struct Notifier {
 
 impl Notifier {
     /// After each task list: the Dock count, and a ring for what changed while the window is not
-    /// active. `window` is the main window, which plays the sound.
-    pub fn after_tasks(&mut self, dashboard: &Entity<Dashboard>, window: &Window, cx: &mut App) {
+    /// active. `window` is the main window, which plays the sound. `changed`: the one task that
+    /// changed since the last call, so only it is looked at again; None looks at every task.
+    pub fn after_tasks(
+        &mut self,
+        dashboard: &Entity<Dashboard>,
+        changed: &Option<String>,
+        window: &Window,
+        cx: &mut App,
+    ) {
         // Borrowed from the dashboard in this block: the posts below need `cx` mutably.
         let ring = {
             let board = dashboard.read(cx);
@@ -39,17 +45,26 @@ impl Notifier {
             let (on, loaded) = (board.view().notify, board.data.loaded);
             let always = board.view().notify_always;
             let now = super::clock::now_ms();
-            let waiting: Vec<Task> = needs_me_tasks(tasks, now);
+            let waiting = needs_me_refs(tasks, now);
             self.announcer.update(&waiting, loaded);
             let unread = unread_turn_ends(tasks, &board.view().seen);
             self.set_badge(badge_label(waiting.len() + unread));
-            let Some(previous) = self.previous.replace(states_by_id(tasks)) else {
-                return;
+            let one = changed.as_deref().and_then(|id| board.data.task(id));
+            // With one changed task, `before` holds only that task as it was.
+            let before = match (one, &mut self.previous) {
+                (Some(task), Some(previous)) => look_at_one(previous, task),
+                (_, previous) => match previous.replace(states_by_id(tasks)) {
+                    Some(previous) => previous,
+                    None => return,
+                },
             };
             if !on || (window.is_window_active() && !always) {
                 return;
             }
-            rings(&previous, tasks, repos)
+            match one {
+                Some(task) => rings(&before, std::slice::from_ref(task), repos),
+                None => rings(&before, tasks, repos),
+            }
         };
         for each in &ring {
             post_naming_terminal(dashboard, each, cx);
@@ -63,7 +78,7 @@ impl Notifier {
     pub fn after_open(&mut self, dashboard: &Entity<Dashboard>, cx: &App) {
         let board = dashboard.read(cx);
         let now = super::clock::now_ms();
-        let waiting = needs_me_tasks(&board.data.tasks, now).len();
+        let waiting = needs_me_count(&board.data.tasks, now);
         let unread = unread_turn_ends(&board.data.tasks, &board.view().seen);
         self.set_badge(badge_label(waiting + unread));
     }

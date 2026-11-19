@@ -1,16 +1,23 @@
 //! A switch back to a task seen lately draws what the view kept, before any read answers
-//! (T-0223, P5).
+//! (T-0223, P5). The lines and terminals of the other tasks do not draw the view, and the Docs
+//! view it caches follows the dashboard by itself.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
+use std::cell::Cell;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui::{AppContext as _, Entity, TestAppContext, VisualTestContext};
+use natamux_proto::agents::activity::AgentActivity;
+use natamux_proto::terminals::list::TerminalList;
 
 use super::WorkspaceView;
 use crate::app::dashboard::{Dashboard, DashboardChange};
+use crate::app::dashboard_data::Part;
 use crate::app::source::Source;
 use crate::app::test_views;
+use crate::workspaces::docs_tab::DocsTab;
 
 // Seed tasks with a workspace; T-0137 has two changed files and a git graph.
 const KEPT: &str = "T-0137";
@@ -98,4 +105,91 @@ fn the_eleventh_task_leaves_the_kept_ones(cx: &mut TestAppContext) {
     assert!(!kept[0]);
     assert!(kept[1..11].iter().all(|kept| *kept));
     assert!(!kept[11]);
+}
+
+/// A new line of Terminal 1 of `id`, as a hook of its agent gives it.
+fn agent_line(dashboard: &Entity<Dashboard>, id: &str, text: &str, cx: &mut VisualTestContext) {
+    dashboard.update(cx, |dashboard, cx| {
+        let line = AgentActivity {
+            text: text.into(),
+            at: String::new(),
+        };
+        let lines = dashboard.data.activity.entry(id.to_owned()).or_default();
+        lines.insert("1".into(), line);
+        dashboard.data.gens.bump(Part::Activity);
+        cx.notify();
+    });
+}
+
+/// How often `view` tells that it changed from now on. A cached view draws only then, and the
+/// details panel draws each time the workspace view tells.
+fn notifies<T: 'static>(view: &Entity<T>, cx: &mut VisualTestContext) -> Rc<Cell<usize>> {
+    let count = Rc::new(Cell::new(0));
+    let seen = Rc::clone(&count);
+    cx.update(|_, cx| {
+        cx.observe(view, move |_, _| seen.set(seen.get() + 1))
+            .detach();
+    });
+    count
+}
+
+#[gpui::test]
+fn only_the_lines_and_terminals_of_the_shown_task_tell_the_view(cx: &mut TestAppContext) {
+    let (view, cx) = open_view(cx);
+    show(&view, KEPT, cx);
+    cx.run_until_parked();
+    let dashboard = view.read_with(cx, |view, _| view.dashboard.clone());
+    // The first change after the switch tells the view that it shows another task.
+    agent_line(&dashboard, OTHER, "Read a.rs", cx);
+    cx.run_until_parked();
+    let told = notifies(&view, cx);
+
+    agent_line(&dashboard, OTHER, "Edit a.rs", cx);
+    dashboard.update(cx, |dashboard, cx| {
+        let list = TerminalList {
+            terminals: vec!["1".into(), "9".into()],
+            ..TerminalList::default()
+        };
+        dashboard.data.terminals.insert(OTHER.into(), list);
+        dashboard.data.gens.bump(Part::Terminals);
+        cx.notify();
+    });
+    cx.run_until_parked();
+    assert_eq!(
+        told.get(),
+        0,
+        "another task's agent drew the open workspace"
+    );
+
+    agent_line(&dashboard, KEPT, "Edit b.rs", cx);
+    cx.run_until_parked();
+    assert!(told.get() > 0, "the line of the shown task did not draw it");
+}
+
+/// The workspace caches the Docs view, so what the view draws from the dashboard must tell it.
+#[gpui::test]
+fn the_cached_docs_view_follows_the_source_switch_and_no_agent_line(cx: &mut TestAppContext) {
+    test_views::init(cx);
+    let source = Arc::new(Source::FakeDaemon);
+    let dashboard = cx.new(|cx| Dashboard::new(Ok(source), Default::default(), cx));
+    cx.run_until_parked();
+    let shown = dashboard.clone();
+    let (docs, cx) =
+        cx.add_window_view(move |window, cx| DocsTab::new(shown, KEPT.into(), window, cx));
+    cx.run_until_parked();
+    // The first change a new observer sees counts as one of its parts.
+    agent_line(&dashboard, OTHER, "Read a.rs", cx);
+    cx.run_until_parked();
+    let told = notifies(&docs, cx);
+
+    agent_line(&dashboard, OTHER, "Edit a.rs", cx);
+    cx.run_until_parked();
+    assert_eq!(told.get(), 0, "an agent's line drew the Docs view");
+
+    dashboard.update(cx, |dashboard, cx| dashboard.set_docs_source(true, cx));
+    cx.run_until_parked();
+    assert!(
+        told.get() > 0,
+        "the Source switch did not draw the Docs view"
+    );
 }

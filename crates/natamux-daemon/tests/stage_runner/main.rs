@@ -35,6 +35,7 @@ mod group_skip;
 mod issue_pipeline;
 mod own_agent;
 mod own_pipeline;
+mod pinned_terminals;
 mod reopen;
 mod repo_trust;
 mod report_other_step;

@@ -3,6 +3,7 @@
 //! callback: the view runs the action it names.
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use natamux_proto::tasks::task::Task;
 
@@ -31,14 +32,14 @@ pub struct Entry {
 
 /// What the tree reads from the sidebar's state.
 pub struct TreeSource<'a> {
-    pub pinned: &'a [Task],
+    pub pinned: &'a [Arc<Task>],
     pub groups: &'a [RepoGroup],
-    pub children: &'a BTreeMap<String, Vec<Task>>,
+    pub children: &'a BTreeMap<String, Vec<Arc<Task>>>,
     pub repo_open: &'a dyn Fn(&str) -> bool,
     pub finished_shown: &'a dyn Fn(&str) -> bool,
     pub task_open: &'a dyn Fn(&Task) -> bool,
     pub rows_of: &'a dyn Fn(&Task) -> Vec<ShellRow>,
-    pub waiting_children: &'a dyn Fn(&Task) -> Vec<Task>,
+    pub waiting_children: &'a dyn Fn(&Task) -> Vec<Arc<Task>>,
 }
 
 fn entry(key: String, parent: Option<&str>, label: &str) -> Entry {
@@ -81,7 +82,7 @@ fn push_task(
         }
     }
     let waiting;
-    let shown: &[Task] = if open {
+    let shown: &[Arc<Task>] = if open {
         source.children.get(&task.id).map_or(&[], Vec::as_slice)
     } else {
         waiting = (source.waiting_children)(task);

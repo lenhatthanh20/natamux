@@ -29,7 +29,7 @@ The existing targets are in [plan-rust-migration.md, "Target numbers"](plan-rust
 | Background | App CPU, window in the background, idle | `table_background_cpu_pct` | ≤ 0.5% | Yes, at 1.0% (the CI "after" + 20%) |
 | Focused idle | App CPU with focus, nothing moving | `table_focus_cpu_pct` | ≤ 1% | Yes, at 2.5% (the CI "after" + 20%) |
 | Background | Draws a second behind Finder | `table_background_draws` | ≤ 0.2 | Yes (also in `motion-cost.sh`) |
-| Memory | App RSS at the end of the flows | `app_rss_mb` | Draft ≤ 800 MB | Yes |
+| Memory | App RSS after the flows, before the terminal flood | `app_rss_mb` | Draft ≤ 800 MB | Yes |
 | Memory | Daemon RSS after 30 shells printed 20 MB each | `daemon_busy_rss_mb` | Draft ≤ 1 GB | Yes |
 | Daemon start | `TaskSync::init` with 2,000 task files, cold index | `task_init_2000_ms` | ≤ 300 ms (P4 threshold) | Yes |
 | Hooks | `HookService::handle` with 30 agents at once, back to back | `hook_p95_ms` | ≤ 5 ms p95 | No: 18–43 ms on CI. 30 threads with no pause on 4 cores queue on the store lock; a hook's own work is 0.3 ms (`hook_single_p50_ms`). Meeting it needs task file writes outside the one store lock: its own task |
@@ -62,7 +62,7 @@ The existing targets are in [plan-rust-migration.md, "Target numbers"](plan-rust
 | `palette_key_*` | the jump palette's query grows by one letter, 1,000 tasks | the next frame drawn |
 | `<flow>_draw_p50_ms`, `<flow>_draw_p95_ms` (`task_switch_seen`, `task_switch_unseen`, `diff_click`, `palette_key`) | start of the frame that shows the change | end of its draw: the frame alone, without the wait for the display's next refresh |
 | `board_frame_*` | the board with Show finished, 300 Done tasks and the 200 open tasks of the event flows, told to draw again | frame start to the end of its draw (main-thread time) |
-| `app_rss_mb` | `ps` RSS of the app at the end | |
+| `app_rss_mb` | `ps` RSS of the app after the flows, before the terminal flood | |
 
 Known limits of the flow timers:
 
@@ -72,7 +72,7 @@ Known limits of the flow timers:
 
 ### Start: `natamux-app --smoke`
 
-`--smoke` prints `smoke: first_frame_ms=… first_data_ms=…` and the start steps before the first frame: `log_trim_ms`, `fonts_ms`, `view_state_ms`, `themes_ms`. It waits up to 5 s for the task list before it prints (`none` when it never came). Every perf report has the same numbers under `start`.
+`--smoke` prints `smoke: first_frame_ms=… first_data_ms=…` and the start steps before the first frame: `log_trim_ms`, `fonts_ms`, `view_state_ms`, `themes_ms`, `keymap_ms`, `menus_ms`, `window_open_ms`, then `first_draw_ms` (the end of the start code to the first frame) and `app_rss_smoke_mb`. It waits up to 5 s for the task list before it prints (`none` when it never came). Every perf report has the same numbers under `start`.
 
 Where the start is gated (a change from the spec, which put the gate in the `app-macos` smoke):
 
@@ -83,7 +83,7 @@ Where the start is gated (a change from the spec, which put the gate in the `app
 
 ### Idle cost: `scripts/motion-cost.sh`
 
-CPU and draws a second of the fake's task table with focus and behind Finder; it prints a `motion_cost: table_…` line. With `PROFILE=1`, macOS `sample` profiles the app for 10 s after the background phase, still in the background, into `PROFILE_FILE`; perf.yml uploads it in the `perf-app` artifact. The CPU numbers do not include the sampling.
+CPU and draws a second of the fake's task table with focus and behind Finder; it prints a `motion_cost: table_…` line. With `PROFILE=1`, macOS `sample` profiles the app for 10 s after the focused phase, still with focus, into `PROFILE_FOCUS_FILE`, and for 10 s after the background phase, still in the background, into `PROFILE_FILE`; perf.yml uploads both in the `perf-app` artifact. The CPU numbers do not include the sampling.
 
 ### Daemon: `tests/daemon_bench.rs`
 
@@ -186,6 +186,117 @@ Notes on the numbers:
 | `task_switch_unseen` | 16.8 / 29.3 | 6.7 / 11.6 |
 | `diff_click` | 18.9 / 31.6 | 9.1 / 12.9 |
 
+## Third round: the big performance audit (2026-11-19)
+
+T-0344 read the whole Rust source for cost (160 findings) and fixed the confirmed ones that keep pixels, dependencies and the gpui fork as they are, in two rounds. Before: `main` at c0ca30ce on `natamux-ci/perf-t0344-before`, 15 runs. After: the task's final tree, 11 runs, by turns with the runs before. macOS 15 runner at 60 Hz for the app, Linux for the daemon. The table has the median and, in brackets, the lowest and the highest run.
+
+| CI name | Before | After |
+|---|---|---|
+| `task_switch_seen_draw_p50_ms` | 8.23 (6.9–11.28) | 7.17 (6.34–8.52) |
+| `task_switch_seen_p50_ms` | 18.44 (14.43–23.82) | 18.6 (15.13–21.39) |
+| `task_switch_seen_p95_ms` | 27.05 (23.09–33.95) | 26.61 (23.34–32.83) |
+| `task_switch_unseen_p50_ms` | 17.15 (14.06–22.53) | 18.42 (12.11–22.75) |
+| `task_switch_unseen_p95_ms` | 27 (20.52–32.37) | 26.03 (19.59–40.08) |
+| `diff_click_draw_p50_ms` | 7.85 (5.95–10.41) | 5.14 (3.62–6.42) |
+| `diff_click_draw_p95_ms` | 12.3 (6.77–16.54) | 10.03 (7.33–12.03) |
+| `event_ui_p95_ms` | 0.97 (0.82–1.46) | 0.36 (0.27–0.54) |
+| `event_to_row_p95_ms` | 29.93 (25.32–40.79) | 33.08 (24.5–41.81) |
+| `board_frame_p50_ms` | 8.24 (5.66–12.63) | 8.46 (7.28–13.79) |
+| `board_frame_p95_ms` | 13.78 (6.21–20.11) | 15.91 (11.2–19.95) |
+| `palette_key_p50_ms` | 16.85 (11.52–19.2) | 18.13 (14.86–20.84) |
+| `palette_key_p95_ms` | 23.32 (17.19–34.6) | 25.63 (22.56–34.64) |
+| `editor_type_5000_p50_ms` | 16.63 (15.13–20.16) | 17.95 (15.06–19.77) |
+| `diff_open_10000_p50_ms` | 33.58 (28.76–36.56) | 37.59 (30.42–43.8) |
+| `resize_frame_p99_ms` | 37.12 (32.09–50.19) | 39.47 (35.15–42.34) |
+| `first_frame_ms` | 160 (98–245) | 156.7 (111.8–180.6) |
+| `first_data_ms` | 232.4 (136.1–377.5) | 231.4 (164.5–266.9) |
+| `slow_shell_first_frame_ms` | 192 (98.8–430.2) | 158 (116.7–324.2) |
+| `app_rss_mb` | 189.44 (186.61–190.67) | 179.73 (178.08–181.56) |
+| `table_focus_cpu_pct` | 1.9 (1.3–3.1) | 2.1 (1.6–2.2) |
+| `table_background_cpu_pct` | 0.9 (0.6–1.2) | 0.9 (0.8–1.3) |
+| `daemon_busy_rss_mb` | 538.6 (533–552.8) | 424.6 (421.1–426) |
+| `daemon_idle_rss_mb` | 11.4 (11.3–11.5) | 12 (11.8–12.1) |
+| `task_init_2000_ms` | 199.43 (121.18–293.83) | 201.01 (138.54–291.15) |
+| `hook_p50_ms` | 0.88 (0.67–1.02) | 0.81 (0.51–1.21) |
+| `hook_p95_ms` | 7.58 (4.41–11.95) | 9.04 (6.71–20.44) |
+| `hook_single_p50_ms` | 0.28 (0.11–0.29) | 0.28 (0.22–0.29) |
+| `hook_single_p95_ms` | 0.38 (0.22–0.63) | 0.42 (0.27–0.61) |
+| `hook_paced_p95_ms` | 0.92 (0.33–6.06) | 1.19 (0.66–4.4) |
+| `echo_flood_p95_ms` | 0.8 (0.6–1) | 0.9 (0.6–1) |
+| `echo_agents_p95_ms` | 0 (0–0.2) | 0 (0–0) |
+
+What was done (the report of the task has the finding ids):
+
+- Terminal path: only the terminal's own view is a cached view. Before, the workspace and the grid were cached views around it, and gpui does not reuse a cached view inside one that draws again, so each terminal wake drew the whole path. The Changes, Docs and editor bodies are cached inside the workspace view instead.
+- Terminal frame: the laid-out cells are kept while the screen, the size and the theme are the same, so a frame for a cursor blink or the scrollbar fade does not lay the cells out again. A sync copies into the buffer of the copy before. The scrollbar fade keeps one timer.
+- Views that drew for data they do not show: the workspace view, the details panel and the task list follow only their own parts of the dashboard. A selection or a column width has its own part.
+- Changes panel: the tree, the folder keys and the rows are built once per list, not per frame. The picker builds its menu on click.
+- Files tree, sidebar tree, code view contrast pass, the text layout build, a new line in the editor: less work and fewer copies per frame or key.
+- Daemon: a hook reads only the `stage.started` events (one narrow query) and reads them after the store lock; the web assets are served from static bytes; the git graph is kept until a ref changes; the pasted-prompt ticker thread ends when nothing is held; the old side of a diff and an original image are read with one git process (was 3 and 2).
+- Tasks are shared pointers (`Arc<Task>`) from the dashboard data to the table, the board, the sidebar and the palette: a task event copies no task, and a row compares by address first. A task event names its task, so the notifier checks one task.
+- Second round, app: the History graph is shared, not copied per frame; a shown diff keeps its texts once; a CRLF file is normalized once per read; the editor's find borrows the text; a new code view lays out once; `view.json` is written at the end of a panel drag and 5 s after a seen mark (flushed at quit); the dashboard tells its followers through one signal, so a change of Activity, Usage, Terminals or Preparing draws no window frame by itself; a hidden terminal drops its kept frame.
+- Second round, daemon: a hook that asks for input reads the last events, not the whole log; the PR watcher runs one `git for-each-ref` per project, not one per task; the launch watch reads a chunk outside the lock every terminal shares.
+- Release profile: `strip = "symbols"`. The app binary of a perf build goes from 47.6 to 38.2 MB, the daemon from 11.2 to 8.9 MB. LTO was tried and not kept (no gain, the build takes 2.7 to 3.7 times as long). `perf.yml` builds with `CARGO_PROFILE_RELEASE_STRIP=none`, because its profiles need the function names, and reads the binary sizes on a stripped copy.
+- Bench: `diff_click` waits for the frame that shows the diff and has 20 runs (was the next frame of any kind, 5 runs). `daemon_busy_grown_mb` is the growth of the busy-shells bench alone. `app_rss_mb` is read before the new terminal flood flow.
+
+Notes on the numbers:
+
+- New rows, shown with no target yet (`REPORTED` in `scripts/perf-check.py`): `term_draws_per_wake` is the window's draws per output event of one printing pane in a grid of 6, and `term_flood_frame_p95_ms` the frame times while it prints (`app/flow_bench_term.rs`).
+- `diff_click_p50_ms` / `_p95_ms` do not compare with earlier runs: 33.1 / 42.4 ms now against 18.7 / 24.8, because the flow now ends at the frame with the diff, one frame later than the frame it timed before. Read `diff_click_draw_*`.
+- `daemon_busy_rss_mb` 539 to 425 MB is the bench order, not the daemon: the busy-shells bench now runs right after the idle shells, before the benches whose freed memory stayed in the process RSS. `daemon_busy_grown_mb` (412.6) is the number to follow.
+- New daemon row `daemon_idle_shell_kib`: the RSS growth for one of the 30 idle shells. `daemon_idle_30_shells_rss_mb` is `daemon_idle_rss_mb` (the RSS of the whole test process) under a clearer name; the old name stays for the baselines.
+- New daemon row `daemon_busy_shell_mb`: `daemon_busy_grown_mb` for one of the 30 busy shells, to read against the 10 MB history budget of a terminal.
+- New daemon rows `hook_staged_single_p50_ms`, `hook_staged_paced_p95_ms`, `hook_staged_paced_max_ms`: the hook on the wiring of `start.rs` (`daemon_bench_parts/staged_hooks.rs`): the stage runner finds the lane from a `.natamux.json` with prompts, a dashboard listens on the event bus, the open shells keep the session, the usage service hears each turn end, each task has 500 events and the store 2,000 finished tasks. The runner is not started, so no agent launches. The `hook_*` rows stay the bare service.
+- New app rows `terminal_key_to_glyph_p95_ms`, `terminal_key_to_echo_p95_ms` and the same with `terminal_key_flood_`: 60 letters typed 150 ms apart into a pane whose fake terminal echoes them, in a quiet grid of 6 and while another pane prints; the same definition as gate 2, so the glyph time holds one more refresh (`app/flow_bench_term.rs`).
+- New app rows `app_rss_per_terminal_mb` and `app_rss_per_hidden_terminal_mb`: the RSS growth per terminal for 6 panes whose screens come with a full history (120-col lines, `scrollback_lines(120)` of them), once shown and once hidden with `set_visible(false)`; `app_rss_per_empty_terminal_mb` and `app_rss_per_hidden_empty_terminal_mb` the same with empty screens. One run per flows run, so read the median of the 5.
+- New start steps `keymap_ms`, `menus_ms`, `window_open_ms`, and `first_draw_ms` (the end of the start code to the first frame), and `app_rss_smoke_mb`, the RSS at the end of `--smoke`.
+- New idle rows `table_focus_draws` and the `task_*` case of `motion-cost.sh` (task T-0146 open), now a perf.yml step that may fail on the script's own limits; both cases also save a 10 s profile with focus (`perf/motion*-focus-sample.txt`).
+- New rows `app_binary_mb`, `daemon_binary_mb`, `cli_binary_mb`: read on a stripped copy of a build with no debug info.
+- New rows `gate2_*` (key to glyph and echo, hidden draws and CPU, show latency, pane frames): `scripts/gate2-ci.sh` runs `--gate2 --terminals 30 --output agent` on a real daemon with a temp `HOME`, repo and data folder; the step may fail without failing the job.
+- New daemon rows from `tests/terminal_bench.rs`, now a step of the perf.yml daemon job: `parse_plain_mb_s` and `parse_sgr_mb_s` (higher is better), `flood_*` and `tui_*` (`frames_per_s`, `bytes_per_frame`, `wire_over_raw`), and `snapshot_<cols>_<style>_bytes` / `_serialize_ms` at 80, 120 and 200 cols.
+- Start: the three start rows moved with the runner on both sides (98 to 245 ms before, 112 to 181 ms after for `first_frame_ms`) and failed their gate in runs of both sides. No fix adds work before the first frame.
+- `task_switch_seen_p50_ms` and the other whole-action times hold the wait for the display's next refresh and moved with the runner between the batches of runs (15 to 20 ms before). Read the `_draw` rows: the frame of a seen switch went from 8.2 to 7.2 ms, of a diff click from 7.9 to 5.1 ms.
+- `event_ui_p95_ms` 0.97 to 0.36 ms: the task list as shared pointers. It is under its 1 ms target in every run.
+- `app_rss_mb` 189.4 to 179.7 MB. It is now read before the terminal flows.
+- Hooks: `hook_p95_ms` 7.6 to 9.0 ms and `hook_paced_p95_ms` 0.92 to 1.19 ms on the median, with every value after inside the range before. The hook bench (`NoStages`) does not reach the hook code this round changed; the values come in two groups on both sides, which points at two kinds of runner. Stalls over 50 ms showed on both sides. The new `hook_staged_*` rows run the real path.
+- A terminal with a full history costs the app about 11.7 MB and the daemon about 13.8 MB; hidden, the app still holds 11.9 MB. The history is the cost, not the view.
+- Focused idle draws (`table_focus_draws`, about 1.9 a second): the focused profile shows the sidebar's workspace tree and a skeleton view under the frame step, about 0.5% of the main thread. This is the motion of a running row.
+
+The new rows, median of the 11 runs after:
+
+| CI name | Final tree, 11 runs |
+|---|---|
+| `term_draws_per_wake` | 0.68 (0.64–0.73) |
+| `term_flood_frame_p95_ms` | 19.13 (18.67–20.19) |
+| `terminal_key_to_glyph_p95_ms` | 33.8 (33.27–34.11) |
+| `terminal_key_to_echo_p95_ms` | 3.31 (2.1–5.85) |
+| `app_rss_per_terminal_mb` | 11.72 (11.51–11.81) |
+| `app_rss_per_hidden_terminal_mb` | 11.85 (11.62–12.01) |
+| `app_rss_per_empty_terminal_mb` | 0.47 (0.39–0.81) |
+| `app_rss_smoke_mb` | 72.1 (71.8–72.9) |
+| `daemon_idle_shell_kib` | 241 (237–249) |
+| `daemon_busy_shell_mb` | 13.8 (13.6–13.8) |
+| `hook_staged_single_p50_ms` | 0.49 (0.39–0.56) |
+| `hook_staged_paced_p95_ms` | 3.2 (1.9–7.69) |
+| `first_draw_ms` | 11 (8.7–15.2) |
+| `window_open_ms` | 59.8 (42.8–68.4) |
+| `menus_ms` | 18.5 (12.3–26.8) |
+| `keymap_ms` | 0.2 (0.2–0.3) |
+| `task_focus_cpu_pct` | 2.5 (2.2–3) |
+| `task_focus_draws` | 1.79 (1.43–2) |
+| `gate2_key_to_glyph_p95_ms` | 34.04 (33.5–34.67) |
+| `gate2_key_to_echo_p95_ms` | 2.63 (1.19–4.32) |
+| `gate2_panes_frame_p99_ms` | 24.24 (23.42–25.01) |
+| `gate2_hidden_cpu_pct` | 1.1 (0.92–1.53) |
+| `gate2_hidden_draws_per_s` | 0.09 (0.09–0.09) |
+| `parse_plain_mb_s` | 95.3 (73.9–201.5) |
+| `parse_sgr_mb_s` | 122.4 (81.2–203.9) |
+| `flood_frames_per_s` | 574.4 (498.2–602.2) |
+| `tui_frames_per_s` | 785.9 (649.7–847.1) |
+| `app_binary_mb` | 40.29 (40.29–40.29) |
+| `daemon_binary_mb` | 8.94 (8.94–8.94) |
+| `cli_binary_mb` | 1.86 (1.86–1.86) |
+
 ## On the owner's Mac
 
 Cargo does not run on the owner's Mac, so these use a built app: the installed one, or the `app-binary` artifact of a `rust.yml` run.
@@ -274,7 +385,7 @@ The spec of T-0223 builds some steps only when a "before" number is over a thres
   - App views are about half of busy time: the 6 terminal panes 42% of the draw (grid element about 330 samples, pane header about 235, the rest layout); the sidebar 20% (the workspace tree builds its row data again: `row_texts` 94, `add_task` 115); bars 3%. The terminal grid resize itself (`Term::resize`) is not visible.
   - Possible next steps, not a need: one draw per size step in the gpui fork; keep the sidebar tree's row data when only the size changed; pane headers that do not measure text again.
 - The task switch path is synchronous. Its number (`task_switch_seen_p95_ms`, 26–33 ms) is one vsync wait plus one draw.
-- A hook takes the global store lock once to read (was 3 takes) and once more only when it writes. A throttled activity bump takes no write lock. The lookup by working directory no longer allocates per task. A hook clones the task 1 to 4 times (was 3 to 5).
+- In the bench with no stages, a hook takes the global store lock once to read (was 3 takes) and once more only when it writes; in the daemon the lane lookup and the session take it more (`hook_staged_*`). A throttled activity bump takes no write lock. The lookup by working directory no longer allocates per task. A hook clones the task 1 to 4 times (was 3 to 5).
 - `hook_p50_ms` / `hook_p95_ms` did not move: 4.2 / 21.8 ms in run 42972562275, the same run as the resize profile. So the store lock was not the cause. The bench runs 30 threads on a 4-core runner, so its p95 is the scheduler. Where the 4 ms of a hook go is not known; it needs a profile of the daemon bench on Linux.
 - Per hook, under the one store lock, a hook that logs an event (2 of the bench's 4) writes the task file (YAML, tmp file, rename, stat), appends a log line and commits one SQLite transaction; no fsync. `steps_of` (in `natamux-proto` `resolve_steps`) copies the whole stage catalog on each event; not changed, outside this task's files. Read `hook_single_*` for the work and `hook_paced_*` for the wait.
 - `hook_paced_p95_ms` was 5.4 ms in one CI run and 157 ms in the next, with p50 at 0.32 ms both times: about 60 of 1,200 hooks waited, so one or two stalls of about 150 ms under the store lock. By reading, the likely cause is the SQLite WAL auto-checkpoint (default 1,000 pages, `task_index.rs` `open`): it runs inside the commit that passes the limit and fsyncs the WAL and the database file. The tmp-file rename over an existing task file (`write_atomic`, ext4 forces the new data out) is a second candidate. Tried and dropped: with `wal_autocheckpoint=0`, a passive checkpoint from a worker thread after every 64 commits, and no index commit for an activity-only change, the next run was not better (paced p95 57.7 ms with 65 hooks over 50 ms, and one hook from ONE thread took 34 ms). So the stall is disk I/O of the runner on the task file write, not the checkpoint and not queueing; the two changes were not kept.
